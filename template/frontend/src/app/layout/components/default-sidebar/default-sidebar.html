@@ -14,7 +14,7 @@
       <app-logo size="normal" />
 
       <span
-        class="font-semibold text-base tracking-tight text-color whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out"
+        class="font-bold text-lg tracking-tight bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out"
         [class.max-w-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
         [class.opacity-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
         [class.max-w-40]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
@@ -35,7 +35,7 @@
     </p-button>
   </div>
 
-  <nav class="flex-1 px-3 py-4 overflow-y-auto overflow-x-hidden">
+  <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar overflow-x-hidden">
     <ul class="list-none p-0 m-0">
       @for (group of menuGroups(); track $index) {
         @if (group.label) {
