@@ -13,7 +13,7 @@
   -->
   <PropertyGroup>
     <LeistdUseLocalFramework Condition="'$(LeistdUseLocalFramework)' == ''">false</LeistdUseLocalFramework>
-    <LeistdFrameworkVersion>1.11.6</LeistdFrameworkVersion>
+    <LeistdFrameworkVersion>0.8.0</LeistdFrameworkVersion>
   </PropertyGroup>
 
 </Project>

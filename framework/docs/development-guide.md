@@ -57,7 +57,7 @@
 新项目创建后，加入框架解决方案：
 
 ```bash
-dotnet sln framework/leistd-framework.slnx add framework/components/<分组>/Leistd.Xxx/Leistd.Xxx.csproj
+dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Leistd.Xxx/Leistd.Xxx.csproj
 ```
 
 `.slnx` 会按目录自动归入对应解决方案文件夹。
@@ -83,7 +83,7 @@ dotnet sln framework/leistd-framework.slnx add framework/components/<分组>/Lei
 ## 6. 提交前自检
 
 ```bash
-dotnet build framework/leistd-framework.slnx -c Release   # 0 错误
+dotnet build framework/Leistd.Framework.slnx -c Release   # 0 错误
 pwsh framework/build/pack.ps1                              # 每个可打包项目产出 nupkg（PDB 内嵌）
 ```
 

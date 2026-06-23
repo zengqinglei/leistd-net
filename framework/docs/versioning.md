@@ -23,7 +23,7 @@ framework/common.props  →  <Version>X.Y.Z</Version>
 
 ## 发布检查清单
 
-1. 确认 `dotnet build framework/leistd-framework.slnx -c Release` 0 错误。
+1. 确认 `dotnet build framework/Leistd.Framework.slnx -c Release` 0 错误。
 2. 按变更性质更新 `framework/common.props` 的 `<Version>`。
 3. 同步更新 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>`。
 4. `pwsh framework/build/pack.ps1`，核对 `artifacts/` 下 nupkg 数量与版本（PDB 已内嵌）。

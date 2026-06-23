@@ -26,7 +26,7 @@ $ErrorActionPreference = "Stop"
 
 # 脚本所在目录 = framework/build，向上一级为 framework 根
 $FrameworkRoot = Split-Path -Parent $PSScriptRoot
-$Solution = Join-Path $FrameworkRoot "leistd-framework.slnx"
+$Solution = Join-Path $FrameworkRoot "Leistd.Framework.slnx"
 
 if ([string]::IsNullOrWhiteSpace($Output)) {
     $Output = Join-Path $FrameworkRoot "artifacts"

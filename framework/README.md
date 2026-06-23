@@ -13,7 +13,7 @@ framework/
 ├── common.props                # 共享构建属性 + NuGet 元数据 + Source Link（单点 <Version>）
 ├── Directory.Build.props       # 自动导入 common.props 到所有框架项目
 ├── Directory.Packages.props    # CPM：第三方包版本集中声明
-├── leistd-framework.slnx       # 框架解决方案（26 个项目）
+├── Leistd.Framework.slnx       # 框架解决方案（26 个项目）
 ├── NuGet.md                    # 各包的 NuGet 自述
 ├── build/
 │   ├── pack.ps1                # 打包为 nupkg（PDB 内嵌）
@@ -46,7 +46,7 @@ framework/
 
 ```bash
 # 编译整个框架
-dotnet build framework/leistd-framework.slnx -c Release
+dotnet build framework/Leistd.Framework.slnx -c Release
 
 # 打包（输出 framework/artifacts/，每个项目产出 .nupkg，PDB 已内嵌）
 pwsh framework/build/pack.ps1
