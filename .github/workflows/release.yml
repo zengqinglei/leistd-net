@@ -1,65 +1,65 @@
 name: Release
 
-# 单一发布流水线，内部按触发来源分通道：
-#   push main      → stable  : 按提交推算正式版 x.y.z → 回写 VERSION+打 tag → nuget.org + GitHub Release（全自动）
-#   push develop   → beta    : x.y.z-beta.<N>           → nuget.org（预发布）
-#   schedule(工作日)→ nightly : x.y.z-preview.<date>     → GitHub Packages（内部 feed）
-# 版本推算（Conventional Commits）、模板同步、打包均内联于此，仓库不再有独立脚本。
+# 单一发布流水线：
+#   push main    -> stable  : vX.Y.Z，发布 nuget.org + GitHub 正式 Release
+#   push develop -> beta    : vX.Y.Z-beta.N，发布 nuget.org 预发布包 + GitHub prerelease
+#   schedule     -> nightly : vX.Y.Z-preview.YYYYMMDD.RUN，发布 GitHub Packages + tag
+# 发布原则：所有通道都打唯一 tag；stable Release Notes 从上一个 stable tag 累积所有 beta/nightly 期间变更。
 on:
   push:
     branches: [main, develop]
   schedule:
-    - cron: '0 18 * * 1-5'   # UTC 18:00（北京次日 02:00），工作日 → nightly
+    - cron: '0 18 * * 1-5'   # UTC 18:00（北京次日 02:00），工作日 -> nightly
   workflow_dispatch:
 
 jobs:
   release:
-    # 跳过机器人自身回写提交与 [skip ci]，避免死循环
-    if: "github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')"
+    # 跳过机器人自身回写提交与 [skip ci]，避免死循环；schedule/dispatch 没有 head_commit。
+    if: github.event_name != 'push' || (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]'))
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # 回写 VERSION / 打 tag / 建 Release（stable）
-      id-token: write       # nuget.org Trusted Publishing（stable/beta）
-      packages: write       # GitHub Packages（nightly）
+      contents: write      # 回写 VERSION / 打 tag / 建 Release
+      id-token: write      # nuget.org Trusted Publishing（stable/beta）
+      packages: write      # GitHub Packages（nightly）
     steps:
       - uses: actions/checkout@v4
         with:
-          # nightly 固定构建 develop；其余构建触发分支
+          # nightly 固定构建 develop；其余构建触发分支。
           ref: ${{ (github.event_name == 'schedule') && 'develop' || github.ref }}
-          fetch-depth: 0     # 需完整历史与 tag 推算版本
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 1) 判定通道
       - name: 判定发布通道
         id: ch
         shell: pwsh
         run: |
           if ('${{ github.event_name }}' -eq 'schedule') {
             $channel = 'nightly'
-          } elseif ('${{ github.ref }}' -eq 'refs/heads/develop') {
-            $channel = 'beta'
           } elseif ('${{ github.ref }}' -eq 'refs/heads/main') {
             $channel = 'stable'
+          } elseif ('${{ github.ref }}' -eq 'refs/heads/develop') {
+            $channel = 'beta'
           } else {
-            $channel = 'beta'   # 手动 dispatch 默认 beta
+            $channel = 'beta'
           }
+
           "channel=$channel" | Out-File $env:GITHUB_OUTPUT -Append
           Write-Host "发布通道: $channel"
 
-      # 2) stable 仅在框架/脚本/版本相关变更时才发；纯文档跳过
       - name: 判断是否需要发版（stable）
         id: gate
         if: steps.ch.outputs.channel == 'stable' && github.event_name == 'push'
         shell: pwsh
         run: |
           $changed = git diff --name-only HEAD~1..HEAD
-          # 仅框架源码或 VERSION 变更才发正式版；排除 framework/docs 与 *.md，模板/文档改动不误发
+          # 仅框架源码或 VERSION 变更才发正式版；排除 framework/docs 与 *.md，模板/文档改动不误发。
           $hit = $changed | Where-Object {
             ($_ -eq 'VERSION') -or
             ($_ -match '^framework/' -and $_ -notmatch '^framework/docs/' -and $_ -notmatch '\.md$')
           }
+
           "needed=$([bool]$hit ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
-          Write-Host ($hit ? "需要发版" : "仅非框架变更，跳过 stable")
+          Write-Host ($hit ? '需要发版' : '仅非框架变更，跳过 stable')
 
       - name: 是否继续
         id: go
@@ -67,6 +67,7 @@ jobs:
         run: |
           $go = '${{ steps.ch.outputs.channel }}' -ne 'stable' -or '${{ github.event_name }}' -ne 'push' -or '${{ steps.gate.outputs.needed }}' -eq 'true'
           "go=$($go ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "go=$go"
 
       - name: 安装 .NET 10 SDK
         if: steps.go.outputs.go == 'true'
@@ -74,70 +75,165 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # 3) 按 Conventional Commits 推算版本（内联，零外部工具）
-      - name: 推算版本
+      - name: 推算版本与 tag
         id: ver
         if: steps.go.outputs.go == 'true'
         shell: pwsh
         run: |
+          git fetch --tags --force
+
           $base = (Get-Content VERSION -Raw).Trim()
           if ($base -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION 非法: $base" }
-          $p = $base.Split('.'); [int]$maj=$p[0]; [int]$min=$p[1]; [int]$pat=$p[2]
 
-          $lastTag = git describe --tags --abbrev=0 --match 'v*' 2>$null
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($lastTag)) {
-            $lastTag = $null; $count = git rev-list --count HEAD
-            $log = git log --pretty=format:'%s%n%b' --no-merges
-          } else {
-            $count = git rev-list --count "$lastTag..HEAD"
-            $log = git log "$lastTag..HEAD" --pretty=format:'%s%n%b' --no-merges
-          }
-          $log = ($log -join "`n")
+          $stableTags = @(git tag --merged HEAD | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } | Sort-Object { [version]($_ -replace '^v', '') })
+          $lastStableTag = if ($stableTags.Count -gt 0) { $stableTags[-1] } else { '' }
+          $range = if ([string]::IsNullOrWhiteSpace($lastStableTag)) { 'HEAD' } else { "$lastStableTag..HEAD" }
+          $commitCount = [int](git rev-list --count $range)
+          $log = git log $range --pretty=format:'%s%n%b' --no-merges
+          $logText = ($log -join "`n")
+
+          $p = $base.Split('.')
+          [int]$maj = $p[0]
+          [int]$min = $p[1]
+          [int]$pat = $p[2]
 
           $bump = 'patch'
-          if ($log -match '(?im)(BREAKING CHANGE)|(^[a-z]+(\([^)]*\))?!:)') { $bump = 'major' }
-          elseif ($log -match '(?im)^feat(\([^)]*\))?:') { $bump = 'minor' }
+          if ($logText -match '(?im)(BREAKING CHANGE)|(^[a-z]+(\([^)]*\))?!:)') { $bump = 'major' }
+          elseif ($logText -match '(?im)^feat(\([^)]*\))?:') { $bump = 'minor' }
 
           switch ($bump) {
-            'major' { $maj++; $min=0; $pat=0 }
-            'minor' { $min++; $pat=0 }
-            'patch' { $pat++ }
+            'major' { $maj++; $min = 0; $pat = 0 }
+            'minor' { $min++; $pat = 0 }
+            default { $pat++ }
           }
-          $next = "$maj.$min.$pat"
 
+          $baseVersion = "$maj.$min.$pat"
+          $preNumber = [Math]::Max($commitCount, 1)
           switch ('${{ steps.ch.outputs.channel }}') {
-            'beta'    { $version = "$next-beta.$count" }
-            'nightly' { $version = "$next-preview.$(Get-Date -Format 'yyyyMMdd')" }
-            default   { $version = $next }   # stable
+            'beta' {
+              $version = "$baseVersion-beta.$preNumber"
+            }
+            'nightly' {
+              # NuGet SemVer2 兼容：日期与 run_number 都是不带前导 0 的数字标识符。
+              $version = "$baseVersion-preview.$(Get-Date -Format 'yyyyMMdd').${{ github.run_number }}"
+            }
+            default {
+              $version = $baseVersion
+            }
           }
-          "version=$version" | Out-File $env:GITHUB_OUTPUT -Append
-          "baseVersion=$next" | Out-File $env:GITHUB_OUTPUT -Append
-          Write-Host "通道=${{ steps.ch.outputs.channel }} 递增=$bump 版本=$version"
 
-      # 4) 同步版本到模板（写入字面值，供生成项目自包含引用）
-      - name: 同步版本到模板
+          $tag = "v$version"
+          "version=$version" | Out-File $env:GITHUB_OUTPUT -Append
+          "baseVersion=$baseVersion" | Out-File $env:GITHUB_OUTPUT -Append
+          "tag=$tag" | Out-File $env:GITHUB_OUTPUT -Append
+          "lastStableTag=$lastStableTag" | Out-File $env:GITHUB_OUTPUT -Append
+          "bump=$bump" | Out-File $env:GITHUB_OUTPUT -Append
+          "commitCount=$commitCount" | Out-File $env:GITHUB_OUTPUT -Append
+
+          Write-Host "通道=${{ steps.ch.outputs.channel }} bump=$bump version=$version tag=$tag lastStable=$lastStableTag"
+
+      - name: 检查 tag 是否已存在
         if: steps.go.outputs.go == 'true'
         shell: pwsh
         run: |
+          $tag = '${{ steps.ver.outputs.tag }}'
+          if (git rev-parse -q --verify "refs/tags/$tag") {
+            throw "tag 已存在: $tag。请检查是否重复运行同一发布。"
+          }
+
+      - name: 生成发布说明
+        id: notes
+        if: steps.go.outputs.go == 'true'
+        shell: pwsh
+        run: |
+          $lastStableTag = '${{ steps.ver.outputs.lastStableTag }}'
+          $range = if ([string]::IsNullOrWhiteSpace($lastStableTag)) { 'HEAD' } else { "$lastStableTag..HEAD" }
+          $commits = @(git log $range --pretty=format:'%s' --no-merges)
+
+          $breaking = New-Object System.Collections.Generic.List[string]
+          $features = New-Object System.Collections.Generic.List[string]
+          $fixes = New-Object System.Collections.Generic.List[string]
+          $others = New-Object System.Collections.Generic.List[string]
+
+          foreach ($commit in $commits) {
+            if ([string]::IsNullOrWhiteSpace($commit)) { continue }
+            if ($commit -match '(?i)bump version|发布 v|chore:.*version') { continue }
+
+            if ($commit -match '(?i)BREAKING CHANGE|^[a-z]+(\([^)]*\))?!:') {
+              $breaking.Add("- $commit")
+            } elseif ($commit -match '^feat(\([^)]*\))?:\s*(.+)$') {
+              $features.Add("- $($Matches[2])")
+            } elseif ($commit -match '^fix(\([^)]*\))?:\s*(.+)$') {
+              $fixes.Add("- $($Matches[2])")
+            } else {
+              $others.Add("- $commit")
+            }
+          }
+
+          $preTags = @()
+          if (-not [string]::IsNullOrWhiteSpace($lastStableTag)) {
+            $preTags = @(git tag --merged HEAD | Where-Object { $_ -match '^v\d+\.\d+\.\d+-(beta|alpha|rc|preview|nightly)\.' } | ForEach-Object {
+              $tag = $_
+              $sha = git rev-list -n 1 $tag
+              git merge-base --is-ancestor $lastStableTag $sha
+              if ($LASTEXITCODE -eq 0) { $tag }
+            } | Sort-Object)
+          }
+
+          $lines = New-Object System.Collections.Generic.List[string]
+          $lines.Add('## NuGet')
+          $lines.Add('')
+          $lines.Add('```bash')
+          $lines.Add("dotnet add package Leistd.Core --version ${{ steps.ver.outputs.version }}")
+          $lines.Add('```')
+          $lines.Add('')
+          $lines.Add('## 变更范围')
+          $lines.Add('')
+          if ([string]::IsNullOrWhiteSpace($lastStableTag)) {
+            $lines.Add('- 首个稳定版本，包含当前历史中的所有提交。')
+          } else {
+            $lines.Add("- $lastStableTag..${{ steps.ver.outputs.tag }}")
+          }
+          $lines.Add('')
+
+          if ($breaking.Count -gt 0) { $lines.Add('## Breaking Changes'); $lines.Add(''); $breaking | ForEach-Object { $lines.Add($_) }; $lines.Add('') }
+          if ($features.Count -gt 0) { $lines.Add('## 新功能'); $lines.Add(''); $features | ForEach-Object { $lines.Add($_) }; $lines.Add('') }
+          if ($fixes.Count -gt 0) { $lines.Add('## 修复'); $lines.Add(''); $fixes | ForEach-Object { $lines.Add($_) }; $lines.Add('') }
+          if ($others.Count -gt 0) { $lines.Add('## 其他更新'); $lines.Add(''); $others | ForEach-Object { $lines.Add($_) }; $lines.Add('') }
+          if ($breaking.Count + $features.Count + $fixes.Count + $others.Count -eq 0) { $lines.Add('## 更新内容'); $lines.Add(''); $lines.Add('- 代码优化和维护更新。'); $lines.Add('') }
+
+          if ($preTags.Count -gt 0 -and '${{ steps.ch.outputs.channel }}' -eq 'stable') {
+            $lines.Add('## 已验证的预发布版本')
+            $lines.Add('')
+            $preTags | ForEach-Object { $lines.Add("- $_") }
+            $lines.Add('')
+          }
+
+          $content = $lines -join "`n"
+          "content<<EOF" | Out-File $env:GITHUB_OUTPUT -Append
+          $content | Out-File $env:GITHUB_OUTPUT -Append
+          "EOF" | Out-File $env:GITHUB_OUTPUT -Append
+
+      - name: 准备 stable 版本提交
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'stable'
+        shell: pwsh
+        run: |
+          Set-Content -NoNewline -Path VERSION -Value '${{ steps.ver.outputs.version }}'
           $f = 'template/backend/Directory.Build.props'
           $t = Get-Content $f -Raw
           $t = [regex]::Replace($t, '<LeistdFrameworkVersion>\s*[^<]*?\s*</LeistdFrameworkVersion>', '<LeistdFrameworkVersion>${{ steps.ver.outputs.version }}</LeistdFrameworkVersion>')
           [System.IO.File]::WriteAllText((Resolve-Path $f), $t)
 
-      # 5) stable：回写 VERSION（升基准）、提交、打 tag
-      - name: 回写 VERSION 并打 tag（stable）
-        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'stable'
-        run: |
-          echo -n "${{ steps.ver.outputs.version }}" > VERSION
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add VERSION template/backend/Directory.Build.props
-          git commit -m "chore: 发布 v${{ steps.ver.outputs.version }} [skip ci]"
-          git tag -a "v${{ steps.ver.outputs.version }}" -m "Release v${{ steps.ver.outputs.version }}"
-          git push origin HEAD:main
-          git push origin "v${{ steps.ver.outputs.version }}"
+          if (git diff --cached --quiet) {
+            Write-Host '没有需要回写的版本文件变更。'
+          } else {
+            git commit -m 'chore: 发布 ${{ steps.ver.outputs.tag }} [skip ci]'
+          }
+          git tag -a '${{ steps.ver.outputs.tag }}' -m 'Release ${{ steps.ver.outputs.tag }}'
 
-      # 6) 打包（内联 pack 逻辑）
       - name: 打包
         if: steps.go.outputs.go == 'true'
         shell: pwsh
@@ -146,10 +242,10 @@ jobs:
           dotnet pack framework/Leistd.Framework.slnx -c Release `
             -o framework/artifacts `
             -p:Version="${{ steps.ver.outputs.version }}" `
+            -p:PackageVersion="${{ steps.ver.outputs.version }}" `
             -p:ContinuousIntegrationBuild=true
-          if ($LASTEXITCODE -ne 0) { throw "dotnet pack 失败" }
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet pack 失败' }
 
-      # 7a) stable / beta → nuget.org（Trusted Publishing）
       - name: 登录 nuget.org
         if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel != 'nightly'
         uses: NuGet/login@v1
@@ -165,7 +261,6 @@ jobs:
           --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
           --skip-duplicate
 
-      # 7b) nightly → GitHub Packages
       - name: 推送到 GitHub Packages（nightly）
         if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'nightly'
         run: >
@@ -174,12 +269,38 @@ jobs:
           --api-key ${{ secrets.GITHUB_TOKEN }}
           --skip-duplicate
 
-      # 8) stable → GitHub Release
+      - name: 推送 stable 提交与 tag
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'stable'
+        shell: pwsh
+        run: |
+          git push origin HEAD:main
+          git push origin '${{ steps.ver.outputs.tag }}'
+
+      - name: 推送 tag（beta/nightly）
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel != 'stable'
+        shell: pwsh
+        run: |
+          git tag -a '${{ steps.ver.outputs.tag }}' -m 'Release ${{ steps.ver.outputs.tag }}'
+          git push origin '${{ steps.ver.outputs.tag }}'
+
       - name: 创建 GitHub Release（stable）
         if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'stable'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ steps.ver.outputs.version }}"
-          name: "Release v${{ steps.ver.outputs.version }}"
-          generate_release_notes: true
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Release ${{ steps.ver.outputs.tag }}
+          body: ${{ steps.notes.outputs.content }}
           files: framework/artifacts/*.nupkg
+          prerelease: false
+          make_latest: true
+
+      - name: 创建 GitHub Prerelease（beta）
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'beta'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Prerelease ${{ steps.ver.outputs.tag }}
+          body: ${{ steps.notes.outputs.content }}
+          files: framework/artifacts/*.nupkg
+          prerelease: true
+          make_latest: false
