@@ -28,7 +28,7 @@ leistd-net/
 │   ├── backend/        #   .NET 10 + DDD 后端
 │   └── frontend/       #   Angular 21 前端
 ├── scripts/            # 版本同步、框架引用切换等辅助脚本
-├── GitVersion.yml      # 版本号推算规则（唯一版本来源）
+├── VERSION             # 版本基准（唯一版本来源，x.y.z）
 └── .github/workflows/  # CI 与多通道发布流水线
 ```
 
@@ -71,12 +71,12 @@ pwsh framework/build/pack.ps1     # 打包到 framework/artifacts/
 
 ## 版本与发布
 
-版本号由 [GitVersion](https://gitversion.net)（配置见 [`GitVersion.yml`](GitVersion.yml)）从 git 历史按 **Conventional Commits** 自动推算——`fix:`→patch、`feat:`→minor、`BREAKING CHANGE`→major（默认 patch）。
+版本基准存于仓库根 [`VERSION`](VERSION) 文件；发布时由 [`scripts/compute-version.ps1`](scripts/compute-version.ps1) 按 **Conventional Commits** 推算递增——`fix:`→patch、`feat:`→minor、`BREAKING CHANGE`→major（默认 patch）。零外部版本工具，纯 git + PowerShell。
 
 | 分支 / 触发 | 版本形态 | 发布目标 |
 | --- | --- | --- |
-| tag `v*.*.*` | `x.y.z`（正式） | nuget.org |
-| 推送 `develop` | `x.y.z-beta.N` | nuget.org（预发布） |
+| push `main` | `x.y.z`（正式，自动递增） | nuget.org |
+| push `develop` | `x.y.z-beta.N` | nuget.org（预发布） |
 | 每工作日定时 | `x.y.z-preview.<date>` | GitHub Packages（内部） |
 
 提交请遵循 [Conventional Commits](https://www.conventionalcommits.org/)（它直接决定版本递增）。完整发布流程见 [版本与发布](framework/docs/versioning.md)。

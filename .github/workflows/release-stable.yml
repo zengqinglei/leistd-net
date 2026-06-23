@@ -1,54 +1,80 @@
 name: Release Stable
 
-# 正式版：人工打 tag（如 v0.8.0）推送时触发。
-# GitVersion 在 tagged commit 上产出干净的 x.y.z（无预发布后缀）。
+# 正式版：push 到 main 时全自动发布（ai-relay 式）。
+# 流程：按提交推算版本 → 回写 VERSION 并提交 [skip ci] → 打 tag → 打包 → 发 nuget.org → 建 GitHub Release。
 on:
   push:
-    tags: ['v*.*.*']
+    branches: [main]
+  workflow_dispatch:
 
+# 跳过机器人自身提交与 [skip ci]，避免回写提交触发死循环
 jobs:
   release:
-    name: 打包并发布正式版到 nuget.org
+    if: "github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # 创建 GitHub Release
-      id-token: write       # NuGet Trusted Publishing (OIDC)
+      contents: write       # 回写 VERSION、打 tag、建 Release
+      id-token: write        # NuGet Trusted Publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0    # GitVersion 需要完整历史与 tag
+          fetch-depth: 0     # 需完整历史与 tag 来推算版本
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 仅在框架/脚本/版本相关文件变更时才发版，纯文档变更跳过
+      - name: 判断是否需要发版
+        id: check
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") { "needed=true" | Out-File $env:GITHUB_OUTPUT -Append; exit 0 }
+          $changed = git diff --name-only HEAD~1..HEAD
+          $hit = $changed | Where-Object { $_ -match '^(framework|scripts)/' -or $_ -eq 'VERSION' -or $_ -match '\.github/workflows/release-' }
+          "needed=$([bool]$hit ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host ($hit ? "需要发版：$($hit -join ', ')" : "仅非框架变更，跳过")
 
       - name: 安装 .NET 10 SDK
+        if: steps.check.outputs.needed == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: 安装 GitVersion
-        uses: gittools/actions/gitversion/setup@v4
-        with:
-          versionSpec: '6.7.x'
-
-      - name: 计算版本（GitVersion）
-        id: gv
-        uses: gittools/actions/gitversion/execute@v4
-        with:
-          useConfigFile: true
-
-      - name: 同步版本到模板
+      - name: 推算新版本
+        if: steps.check.outputs.needed == 'true'
+        id: ver
         shell: pwsh
-        run: pwsh scripts/sync-version.ps1 -Version "${{ steps.gv.outputs.majorMinorPatch }}"
+        run: pwsh scripts/compute-version.ps1   # 默认正式版；按 commit 推算 patch/minor/major
+
+      - name: 回写 VERSION 并同步模板
+        if: steps.check.outputs.needed == 'true'
+        shell: pwsh
+        run: |
+          "${{ steps.ver.outputs.version }}" | Out-File -FilePath VERSION -NoNewline -Encoding ascii
+          pwsh scripts/sync-version.ps1 -Version "${{ steps.ver.outputs.version }}"
+
+      - name: 提交版本变更并打 tag
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION template/backend/Directory.Build.props
+          git commit -m "chore: 发布 v${{ steps.ver.outputs.version }} [skip ci]"
+          git tag -a "v${{ steps.ver.outputs.version }}" -m "Release v${{ steps.ver.outputs.version }}"
+          git push origin HEAD:main
+          git push origin "v${{ steps.ver.outputs.version }}"
 
       - name: 打包
+        if: steps.check.outputs.needed == 'true'
         run: pwsh framework/build/pack.ps1
 
-      # Trusted Publishing：从 nuget.org 换取 1 小时一次性临时 key（无需长期 API Key）
       - name: 登录 nuget.org（Trusted Publishing）
+        if: steps.check.outputs.needed == 'true'
         uses: NuGet/login@v1
         id: nuget-login
         with:
           user: ${{ secrets.NUGET_USER }}
 
       - name: 推送到 nuget.org
+        if: steps.check.outputs.needed == 'true'
         run: >
           dotnet nuget push "framework/artifacts/*.nupkg"
           --source https://api.nuget.org/v3/index.json
@@ -56,7 +82,10 @@ jobs:
           --skip-duplicate
 
       - name: 创建 GitHub Release
+        if: steps.check.outputs.needed == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "v${{ steps.ver.outputs.version }}"
+          name: "Release v${{ steps.ver.outputs.version }}"
           generate_release_notes: true
           files: framework/artifacts/*.nupkg

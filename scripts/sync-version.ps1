@@ -4,25 +4,25 @@
     将框架版本写入模板的 <LeistdFrameworkVersion>。
 
 .DESCRIPTION
-    版本号的【唯一来源】是仓库根 GitVersion.yml（由 GitVersion 从 git tag/历史/提交信息推算）。
-    模板生成的项目必须自包含，无法在构建时跑 GitVersion，因此其引用的框架版本
+    版本号的【唯一来源】是仓库根 VERSION 文件（发布时按提交由 compute-version.ps1 推算递增）。
+    模板生成的项目必须自包含，无法读取仓库根的 VERSION，因此其引用的框架版本
     （template/backend/Directory.Build.props 的 <LeistdFrameworkVersion>）以字面值保存，
-    在【正式发布时】由流水线把 GitVersion 算出的版本通过本脚本回写。
+    在发布时由流水线通过本脚本回写。
 
     版本来源优先级：
-      1. -Version 参数（发布流水线传入 GitVersion 结果）——推荐用法。
-      2. 缺省时回退读取 framework/common.props 的 <VersionPrefix>（本地手动场景）。
+      1. -Version 参数（发布流水线传入计算出的版本，含预发布后缀）——推荐用法。
+      2. 缺省时回退读取仓库根 VERSION 文件（本地手动场景）。
 
 .PARAMETER Version
-    要写入模板的版本号。流水线应传入 GitVersion 的 MajorMinorPatch（正式版）或完整 SemVer。
+    要写入模板的版本号（正式 x.y.z 或带后缀的预发布版）。
 
 .PARAMETER Check
     仅校验模板当前值是否等于 -Version（或回退值），不修改文件。不一致退出码 1。
 
 .EXAMPLE
-    pwsh scripts/sync-version.ps1 -Version 0.8.0      # 发布时写入正式版本
+    pwsh scripts/sync-version.ps1 -Version 0.8.0      # 发布时写入指定版本
 .EXAMPLE
-    pwsh scripts/sync-version.ps1                      # 本地：用 common.props 的 VersionPrefix 回退
+    pwsh scripts/sync-version.ps1                      # 本地：用 VERSION 文件回退
 #>
 [CmdletBinding()]
 param(
@@ -33,19 +33,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$CommonProps = Join-Path $RepoRoot "framework/common.props"
+$VersionFile = Join-Path $RepoRoot "VERSION"
 $TemplateFile = Join-Path $RepoRoot "template/backend/Directory.Build.props"
 
 if (-not (Test-Path $TemplateFile)) { throw "找不到模板文件: $TemplateFile" }
 
-# 确定目标版本：优先 -Version，否则回退 common.props 的 <VersionPrefix>
+# 确定目标版本：优先 -Version，否则回退仓库根 VERSION 文件
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    if (-not (Test-Path $CommonProps)) { throw "未提供 -Version，且找不到回退源: $CommonProps" }
-    $cp = Get-Content $CommonProps -Raw
-    $m = [regex]::Match($cp, '<VersionPrefix>\s*([^<]+?)\s*</VersionPrefix>')
-    if (-not $m.Success) { throw "未提供 -Version，且 $CommonProps 中无 <VersionPrefix> 可回退" }
-    $Version = $m.Groups[1].Value.Trim()
-    Write-Host "未指定 -Version，回退使用 common.props 的 VersionPrefix: $Version" -ForegroundColor DarkYellow
+    if (-not (Test-Path $VersionFile)) { throw "未提供 -Version，且找不到回退源: $VersionFile" }
+    $Version = (Get-Content $VersionFile -Raw).Trim()
+    Write-Host "未指定 -Version，回退使用 VERSION 文件: $Version" -ForegroundColor DarkYellow
 }
 
 # 读取模板当前引用版本

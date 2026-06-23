@@ -4,9 +4,9 @@
     打包所有 Leistd.* 框架项目为 NuGet 包（PDB 内嵌）。
 
 .DESCRIPTION
-    版本：CI 中由 GitVersion 注入（见 GitVersion.yml）；本地无 GitVersion 时回退
-    common.props 的 <VersionPrefix>。输出到 framework/artifacts/，每个可打包项目产出
-    内嵌 PDB 的 .nupkg（无独立 snupkg）。发布流水线见 .github/workflows/release-*.yml。
+    版本：默认取仓库根 VERSION 文件（common.props 读取它作 VersionPrefix）；发布预发布版时
+    由流水线用 dotnet pack -p:Version=... 覆盖。输出到 framework/artifacts/，每个可打包项目
+    产出内嵌 PDB 的 .nupkg（无独立 snupkg）。发布流水线见 .github/workflows/release-*.yml。
 
 .PARAMETER Configuration
     构建配置，默认 Release。
@@ -35,7 +35,7 @@ if ([string]::IsNullOrWhiteSpace($Output)) {
 }
 
 # 打包前同步版本到模板。本地调用不带 -Version，回退用 common.props 的 VersionPrefix；
-# CI 发布流水线会显式传入 GitVersion 算出的版本（见 release-*.yml）。
+# CI 发布流水线会显式传入计算出的版本（见 release-*.yml）。
 Write-Host "==> 同步版本到模板" -ForegroundColor Cyan
 & (Join-Path $RepoRoot "scripts/sync-version.ps1")
 if ($LASTEXITCODE -ne 0) { throw "版本同步失败 (exit $LASTEXITCODE)" }
