@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  framework:
+    name: 构建框架并校验版本一致性
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 版本守门：framework/common.props 的 <Version> 是唯一源，
+      # 校验它与 template 的 LeistdFrameworkVersion 一致，不一致则 CI 失败。
+      - name: 校验版本一致性
+        shell: pwsh
+        run: pwsh scripts/sync-version.ps1 -Check
+
+      - name: 还原与构建框架
+        run: dotnet build framework/Leistd.Framework.slnx -c Release
