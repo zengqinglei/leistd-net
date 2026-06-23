@@ -1,25 +1,19 @@
 <div
   [ngClass]="{
-    'h-10 w-10': size() === 'normal',
-    'h-14 w-14': size() === 'large'
+    'h-8 w-8 rounded-lg': size() === 'normal',
+    'h-14 w-14 rounded-xl': size() === 'large'
   }"
-  class="flex items-center justify-center group-hover:scale-105 transition-transform duration-300"
+  class="flex items-center justify-center bg-gradient-to-tr from-primary-900/40 to-primary-800/40 backdrop-blur-md border border-primary-400/30 shadow-[0_0_15px_rgba(var(--p-primary-500),0.2)] group-hover:scale-105 transition-transform duration-300"
 >
   <svg
     [ngClass]="{
-      'w-7 h-7': size() === 'normal',
+      'w-6 h-6': size() === 'normal',
       'w-10 h-10': size() === 'large'
     }"
-    viewBox="0 0 512 512"
+    class="drop-shadow-[0_0_8px_rgba(var(--p-primary-400),0.8)]"
+    viewBox="0 0 100 100"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <defs>
-      <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#134cff" />
-        <stop offset="100%" stop-color="#0d31c2" />
-      </linearGradient>
-    </defs>
-    <rect width="512" height="512" rx="108" fill="url(#logoGrad)" />
-    <text x="256" y="320" font-size="280" font-weight="bold" fill="white" text-anchor="middle" font-family="Arial, sans-serif">T</text>
+    <text x="50" y="72" font-size="60" font-weight="bold" fill="white" text-anchor="middle" font-family="Arial, sans-serif">T</text>
   </svg>
 </div>

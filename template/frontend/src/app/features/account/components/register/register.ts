@@ -8,10 +8,13 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
+import { StyleClassModule } from 'primeng/styleclass';
 import { TooltipModule } from 'primeng/tooltip';
 import { lastValueFrom } from 'rxjs';
 
+import { LayoutService } from '../../../../layout/services/layout-service';
 import { LogoComponent } from '../../../../shared/components/logo/logo';
+import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 
@@ -26,6 +29,8 @@ import { AccountService } from '../../services/account-service';
     InputTextModule,
     PasswordModule,
     ButtonModule,
+    StyleClassModule,
+    ThemeConfigurator,
     LogoComponent,
     TooltipModule
   ],
@@ -39,6 +44,7 @@ export class Register implements OnInit {
   private router = inject(Router);
   private messageService = inject(MessageService);
   private destroyRef = inject(DestroyRef);
+  public layoutService = inject(LayoutService);
 
   // returnUrl：注册成功后跳转 login 时传递
   returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');

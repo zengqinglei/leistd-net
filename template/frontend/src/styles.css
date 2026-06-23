@@ -72,3 +72,8 @@ body,
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Header icon buttons: improve hover visibility in light theme only */
+:root:not(.dark) .p-button-text:not(:disabled):hover {
+  background: var(--p-surface-100);
+}

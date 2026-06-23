@@ -37,6 +37,7 @@
           <div class="flex flex-col gap-2">
             <label class="font-bold">应用名称</label>
             <input pInputText
+
               [ngModel]="formModel().displayName"
               (ngModelChange)="formModel.update(model => ({ ...model, displayName: $event }))"
               placeholder="例如 AiRelay Desktop" />
@@ -45,6 +46,7 @@
             <label class="font-bold">Client ID</label>
             <input
               pInputText
+
               [ngModel]="formModel().clientId"
               (ngModelChange)="formModel.update(model => ({ ...model, clientId: $event }))"
               placeholder="例如 ai-relay-desktop"
@@ -57,7 +59,7 @@
           <div class="flex flex-col gap-2">
             <label class="font-bold">应用类型</label>
             @if (isTemplateLocked()) {
-              <p-tag [value]="applicationTypeLabels[formModel().applicationType]" severity="info" />
+              <p-tag [value]="applicationTypeLabels[formModel().applicationType] ?? formModel().applicationType" severity="info" />
             } @else {
               <p-select
                 [options]="applicationTypeOptions"
@@ -66,13 +68,14 @@
                 optionLabel="label"
                 optionValue="value"
                 appendTo="body"
-                styleClass="w-full" />
+
+            styleClass="w-full" />
             }
           </div>
           <div class="flex flex-col gap-2">
             <label class="font-bold">客户端类型</label>
             @if (isTemplateLocked()) {
-              <p-tag [value]="clientTypeLabels[formModel().clientType]" [severity]="isConfidentialClient() ? 'warn' : 'info'" />
+              <p-tag [value]="clientTypeLabels[formModel().clientType] ?? formModel().clientType" [severity]="isConfidentialClient() ? 'warn' : 'info'" />
             } @else {
               <p-select
                 [options]="clientTypeOptions"
@@ -81,13 +84,14 @@
                 optionLabel="label"
                 optionValue="value"
                 appendTo="body"
-                styleClass="w-full" />
+
+            styleClass="w-full" />
             }
           </div>
           <div class="flex flex-col gap-2">
             <label class="font-bold">授权确认</label>
             @if (isTemplateLocked()) {
-              <p-tag [value]="consentTypeLabels[formModel().consentType]" severity="secondary" />
+              <p-tag [value]="consentTypeLabels[formModel().consentType] ?? formModel().consentType" severity="secondary" />
             } @else {
               <p-select
                 [options]="consentTypeOptions"
@@ -96,7 +100,8 @@
                 optionLabel="label"
                 optionValue="value"
                 appendTo="body"
-                styleClass="w-full" />
+
+            styleClass="w-full" />
             }
           </div>
         </div>
@@ -116,6 +121,7 @@
           <div class="flex flex-col gap-2 sm:flex-row">
             <input
               pInputText
+
               [ngModel]="formModel().redirectUriInput"
               (ngModelChange)="formModel.update(model => ({ ...model, redirectUriInput: $event }))"
               placeholder="https://example.com/callback 或 ai-relay-desktop://oauth/callback"
@@ -125,7 +131,7 @@
               icon="pi pi-plus"
               (onClick)="addRedirectUri()"
               [disabled]="!formModel().redirectUriInput || isRedirectUriInputInvalid()"
-              styleClass="whitespace-nowrap" />
+              styleClass="h-10 min-w-24 whitespace-nowrap" />
           </div>
           @if (isRedirectUriInputInvalid()) {
             <small class="mt-2 block text-red-500">请输入合法的绝对 URI，且不能包含 fragment。</small>
@@ -144,7 +150,7 @@
           </div>
         </div>
 
-        <div class="rounded-lg border border-surface-200 bg-surface-50/70 p-4 dark:border-surface-700 dark:bg-surface-800/40">
+        <div class="rounded-xl border border-surface-200 bg-surface-50/70 p-4 dark:border-surface-700 dark:bg-surface-800/40">
           <div class="mb-3 flex items-center justify-between gap-3">
             <label class="font-bold">Post Logout Redirect URIs</label>
             <span class="text-xs text-muted-color">登出后的跳转地址</span>
@@ -152,6 +158,7 @@
           <div class="flex flex-col gap-2 sm:flex-row">
             <input
               pInputText
+
               [ngModel]="formModel().postLogoutRedirectUriInput"
               (ngModelChange)="formModel.update(model => ({ ...model, postLogoutRedirectUriInput: $event }))"
               placeholder="https://example.com/logout-callback"
@@ -161,7 +168,7 @@
               icon="pi pi-plus"
               (onClick)="addPostLogoutRedirectUri()"
               [disabled]="!formModel().postLogoutRedirectUriInput || isPostLogoutRedirectUriInputInvalid()"
-              styleClass="whitespace-nowrap" />
+              styleClass="h-10 min-w-24 whitespace-nowrap" />
           </div>
           @if (isPostLogoutRedirectUriInputInvalid()) {
             <small class="mt-2 block text-red-500">请输入合法的绝对 URI，且不能包含 fragment。</small>

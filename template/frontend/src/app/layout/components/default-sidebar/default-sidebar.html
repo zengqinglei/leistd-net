@@ -1,5 +1,5 @@
 <aside
-  class="bg-surface-50 dark:bg-surface-900 border-r border-surface-200 dark:border-surface-800 flex flex-col h-full transition-all duration-300 ease-in-out"
+  class="bg-surface-0 dark:bg-surface-900 border-r border-surface-200 dark:border-surface-800 flex flex-col h-full transition-all duration-300 ease-in-out"
   [ngClass]="{
     'w-64': !layoutService.sidebarCollapsed() || isMobileMenuOpen(),
     'w-20': layoutService.sidebarCollapsed() && !isMobileMenuOpen()
@@ -53,18 +53,16 @@
               [routerLink]="item.route"
               [pTooltip]="layoutService.sidebarCollapsed() && !isMobileMenuOpen() ? item.label : undefined"
               tooltipPosition="right"
-              class="flex items-center cursor-pointer px-3 py-4 md:py-3 rounded-md text-muted-color hover:bg-surface-100 dark:hover:bg-surface-800 transition-all duration-300 ease-in-out focus:outline-none min-h-[44px] md:min-h-0"
+              class="flex items-center cursor-pointer px-3 py-4 md:py-3 rounded-md text-color hover:bg-surface-100 dark:hover:bg-surface-800 transition-all duration-300 ease-in-out focus:outline-none min-h-[44px] md:min-h-0"
               [class.gap-3]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
               [class.gap-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
               [class.!text-primary-600]="isItemActive(item)"
               [class.dark:!text-primary-400]="isItemActive(item)"
-              [class.bg-primary-50]="isItemActive(item)"
-              [class.dark:bg-primary-500/10]="isItemActive(item)"
-              [class.font-semibold]="isItemActive(item)"
+              [class.font-bold]="isItemActive(item)"
               (click)="isMobileMenuOpen() && mobileMenuClosed.emit()"
             >
               <div class="w-8 h-8 flex items-center justify-center shrink-0">
-                <i class="pi {{ item.icon }} text-base"></i>
+                <i class="pi {{ item.icon }} text-xl"></i>
               </div>
               <span
                 class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out"
