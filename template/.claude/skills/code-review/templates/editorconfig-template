@@ -1,0 +1,251 @@
+# EditorConfig 模板
+
+> 通用编辑器配置，保持跨编辑器的编码风格一致
+
+---
+
+## 通用模板
+
+```editorconfig
+# https://EditorConfig.org
+
+# 顶层 EditorConfig 文件
+root = true
+
+# 所有文件的默认设置
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Unix 系统使用 lf，Windows 系统使用 crlf
+# [*.{js,ts,jsx,tsx}]
+# end_of_line = lf
+
+# Markdown 文件保留尾随空格（用于换行）
+[*.md]
+trim_trailing_whitespace = false
+```
+
+---
+
+## .NET 项目模板
+
+```editorconfig
+# https://EditorConfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# C# 代码特定设置
+[*.cs]
+indent_size = 4
+csharp_new_line_before_open_brace_type = all
+csharp_new_line_before_open_brace_method = all
+csharp_new_line_before_open_brace_property = all
+csharp_new_line_before_open_brace_event = all
+csharp_new_line_before_open_brace_field = all
+csharp_new_line_before_open_brace_anonymous_types = all
+csharp_new_line_before_open_brace_anonymous_methods = all
+csharp_new_line_before_open_brace_control_blocks = all
+csharp_new_line_before_open_brace_accessors = all
+csharp_new_line_before_open_brace_lambda_expressions = all
+
+# C# 命名规则
+csharp_style_var_for_built_in_types = false
+csharp_style_var_when_type_is_apparent = true
+csharp_style_var_elsewhere = false
+
+# C# 代码风格
+csharp_style_expression_bodied_methods = when_on_single_line
+csharp_style_expression_bodied_constructors = when_on_single_line
+csharp_style_expression_bodied_operators = when_on_single_line
+csharp_style_expression_bodied_properties = true
+csharp_style_expression_bodied_indexers = true
+csharp_style_expression_bodied_accessors = true
+
+# C# 空格规则
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_parentheses = false
+csharp_space_between_square_brackets = false
+
+# C# 换行规则
+csharp_using_directive_placement = outside_namespace:silent
+```
+
+---
+
+## Node.js 项目模板
+
+```editorconfig
+# https://EditorConfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# JavaScript/TypeScript 特定设置
+[*.{js,ts,jsx,tsx}]
+indent_size = 2
+
+# JSON 文件
+[*.json]
+indent_size = 2
+
+# YAML 文件
+[*.{yml,yaml}]
+indent_size = 2
+
+# Markdown 文件
+[*.md]
+trim_trailing_whitespace = false
+
+# Shell 脚本
+[*.{sh,bash}]
+indent_style = space
+indent_size = 2
+
+# Makefile
+[Makefile]
+indent_style = tab
+```
+
+---
+
+## Python 项目模板
+
+```editorconfig
+# https://EditorConfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python 文件
+[*.py]
+indent_style = space
+indent_size = 4
+
+# Python 特定设置
+max_line_length = 88
+
+# Markdown 文件
+[*.md]
+trim_trailing_whitespace = false
+```
+
+---
+
+## 使用方式
+
+### 1. 创建配置文件
+
+```bash
+# 在项目根目录创建
+cat > .editorconfig << 'EOF'
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+EOF
+```
+
+### 2. 编辑器支持
+
+**VS Code**：
+- ✅ 原生支持 EditorConfig
+- 安装插件：EditorConfig for VS Code
+
+**WebStorm / IntelliJ IDEA**：
+- ✅ 原生支持 EditorConfig
+
+**Vim**：
+- ✅ 原生支持（较新版本）
+- 或使用插件：editorconfig/editorconfig-vim
+
+**Sublime Text**：
+- 安装插件：editorconfig/editorconfig-sublime
+
+---
+
+## 配置说明
+
+### 核心属性
+
+| 属性 | 说明 | 可选值 |
+|------|------|--------|
+| `charset` | 字符编码 | `utf-8`, `latin1`, `utf-16be`, `utf-16le` |
+| `end_of_line` | 换行符 | `lf`, `cr`, `crlf` |
+| `indent_style` | 缩进风格 | `space`, `tab` |
+| `indent_size` | 缩进大小 | 整数，或 `tab` |
+| `trim_trailing_whitespace` | 删除行尾空格 | `true`, `false` |
+| `insert_final_newline` | 插入文件末尾换行 | `true`, `false` |
+| `max_line_length` | 最大行长度 | 整数 |
+
+### 通配符模式
+
+| 模式 | 说明 | 示例 |
+|------|------|------|
+| `*` | 匹配任意字符 | `*.js` |
+| `?` | 匹配单个字符 | `?.ts` |
+| `[abc]` | 匹配字符集 | `*.{js,ts}` |
+| `[!abc]` | 匹配非字符集 | `*.{!json}` |
+| `{pattern,pattern}` | 匹配多个模式 | `*.{js,ts,jsx,tsx}` |
+
+---
+
+## 最佳实践
+
+### 团队项目
+
+- ✅ **统一配置**：团队使用相同的 EditorConfig
+- ✅ **版本控制**：将 `.editorconfig` 纳入版本管理
+- ✅ **文档说明**：在 README 中说明编码规范
+- ✅ **自动格式化**：配合 Prettier、black 等工具使用
+
+### 跨平台项目
+
+- ✅ **统一换行符**：使用 `lf`（Unix 风格）
+- ✅ **统一编码**：使用 `utf-8`
+- ✅ **末尾换行**：插入文件末尾换行
+- ✅ **删除尾随空格**：保持代码整洁
+
+### 多语言项目
+
+- ✅ **分语言配置**：不同语言使用不同缩进
+- ✅ **通用默认**：设置通用默认值
+- ✅ **特殊文件**：为特殊文件设置例外（如 Makefile 使用 Tab）
+
+---
+
+*模板版本：v1.0.0*
+*最后更新：2026-06-07*
+*维护：lint Skill*
