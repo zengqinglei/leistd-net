@@ -7,15 +7,28 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenIddict.Abstractions" Version="7.5.0" />
-    <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.2" />
+    <PackageReference Include="OpenIddict.Abstractions" />
+    <PackageReference Include="System.Linq.Dynamic.Core" />
   </ItemGroup>
 
+  <!-- Leistd 框架引用：NuGet 模式（默认） -->
+  <ItemGroup Condition="'$(LeistdUseLocalFramework)' != 'true'">
+    <PackageReference Include="Leistd.ObjectMapping.Mapster" />
+    <PackageReference Include="Leistd.Security.Core" />
+    <PackageReference Include="Leistd.Ddd.Application" />
+    <PackageReference Include="Leistd.Ddd.Application.Contracts" />
+  </ItemGroup>
+
+  <!-- Leistd 框架引用：本地源码模式（可断点调试） -->
+  <ItemGroup Condition="'$(LeistdUseLocalFramework)' == 'true'">
+    <ProjectReference Include="..\..\..\..\framework\components\object-mapping\Leistd.ObjectMapping.Mapster\Leistd.ObjectMapping.Mapster.csproj" />
+    <ProjectReference Include="..\..\..\..\framework\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\framework\ddd-struct\Leistd.Ddd.Application\Leistd.Ddd.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\framework\ddd-struct\Leistd.Ddd.Application.Contracts\Leistd.Ddd.Application.Contracts.csproj" />
+  </ItemGroup>
+
+  <!-- 业务项目内部引用 -->
   <ItemGroup>
-    <ProjectReference Include="..\..\components\object-mapping\Leistd.ObjectMapping.Mapster\Leistd.ObjectMapping.Mapster.csproj" />
-    <ProjectReference Include="..\..\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
-    <ProjectReference Include="..\..\ddd-struct\Leistd.Ddd.Application\Leistd.Ddd.Application.csproj" />
-    <ProjectReference Include="..\..\ddd-struct\Leistd.Ddd.Application.Contracts\Leistd.Ddd.Application.Contracts.csproj" />
     <ProjectReference Include="..\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
     <ProjectReference Include="..\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />
   </ItemGroup>

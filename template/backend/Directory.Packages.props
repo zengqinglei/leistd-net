@@ -1,0 +1,51 @@
+<Project>
+
+  <!--
+    生成项目后端的中央包管理（CPM）。
+    src/*.csproj 仅写 version-less 的 PackageReference，版本在此统一声明。
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!-- Leistd.* 框架包（NuGet 模式下使用；本地源码模式由 ProjectReference 取代）。
+       版本统一取 $(LeistdFrameworkVersion)，单点维护。 -->
+  <ItemGroup>
+    <PackageVersion Include="Leistd.Exception.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Exception.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Lock.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Lock.Memory" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Lock.Redis" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Security.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Security.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.ObjectMapping.Mapster" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.EventBus.Local" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Tracing.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Tracing.HttpClient" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Ddd.Domain" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Ddd.Application" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Ddd.Application.Contracts" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Ddd.Infrastructure" Version="$(LeistdFrameworkVersion)" />
+  </ItemGroup>
+
+  <!-- 业务第三方包 -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
+    <PackageVersion Include="MailKit" Version="4.17.0" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />
+    <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
+    <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
+    <PackageVersion Include="System.Linq.Dynamic.Core" Version="1.7.2" />
+  </ItemGroup>
+
+</Project>

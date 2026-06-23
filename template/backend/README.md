@@ -15,9 +15,16 @@ backend/
 │   ├── CompanyName.ProjectName.Application/      # 应用层（服务、初始化）
 │   ├── CompanyName.ProjectName.Domain/           # 领域层（实体、领域服务）
 │   └── CompanyName.ProjectName.Infrastructure/   # 基础设施层（EF Core、OAuth、Redis）
-├── components/                    # 共享 Leistd 组件
-└── ddd-struct/                    # DDD 基础类
+├── Directory.Build.props          # 框架引用开关（LeistdUseLocalFramework）
+└── Directory.Packages.props       # 中央包管理（CPM）：Leistd.* 与第三方包版本
 ```
+
+> **Leistd 框架引用**：共享组件（`components`）与 DDD 基础层（`ddd-struct`）已抽取为独立的
+> [Leistd 框架](../../framework/README.md)，以 **NuGet 包**形式引用，不再随项目源码分发。
+>
+> - 默认（`LeistdUseLocalFramework=false`）：通过 `PackageReference` 引用 `Leistd.*` 包。
+> - 联调（`LeistdUseLocalFramework=true`）：切换为指向 `framework/` 源码的 `ProjectReference`，可断点调试框架。
+>   切换：`pwsh scripts/switch-framework.ps1 local`（详见框架文档）。
 
 ---
 

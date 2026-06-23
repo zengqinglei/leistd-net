@@ -1,0 +1,9 @@
+<Project>
+
+  <!--
+    MSBuild 在编译 framework/ 下任意项目时自动导入此文件。
+    统一导入 common.props，省去各 csproj 手工 <Import>。
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)common.props" />
+
+</Project>

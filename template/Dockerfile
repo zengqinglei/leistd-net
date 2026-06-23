@@ -38,9 +38,12 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
 WORKDIR /src
 
 # 复制后端代码（.dockerignore 已排除 bin/obj）
+# 注意：Leistd.* 框架以 NuGet 包形式引用（见 backend/Directory.Packages.props），
+# publish 期间从 NuGet 源还原，无需将 framework 源码拷入镜像。
+# 如使用私有 NuGet 源，请在 backend/NuGet.Config 中配置。
 COPY backend/ ./backend/
 
-# Build
+# Build（还原会自动拉取 Leistd.* 框架包）
 WORKDIR "/src/backend/src/CompanyName.ProjectName.Api"
 RUN dotnet publish "CompanyName.ProjectName.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
 

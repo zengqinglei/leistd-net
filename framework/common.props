@@ -1,0 +1,56 @@
+<Project>
+
+  <!--
+    Leistd 框架共享构建属性（参考 Volo.ABP common.props 模式）。
+    由 framework/Directory.Build.props 自动导入到所有框架项目。
+    框架版本单点维护：修改下面的 <Version> 即同步到所有 Leistd.* 包。
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Version>1.11.6</Version>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- NuGet 包元数据 -->
+  <PropertyGroup>
+    <Authors>Lehman Holding</Authors>
+    <Company>Lehman Holding</Company>
+    <Product>Leistd Framework</Product>
+    <PackageProjectUrl>https://github.com/lehmanholding/leistd-net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/lehmanholding/leistd-net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>leistd ddd aspnetcore framework dotnet</PackageTags>
+    <PackageReadmeFile>NuGet.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: 缺少 XML 注释；CS0436: 类型冲突（生成文档时容忍） -->
+    <NoWarn>$(NoWarn);CS1591;CS0436</NoWarn>
+    <!-- 默认所有框架项目可打包，纯内部项目可在自身 csproj 覆盖为 false -->
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <!-- 源码调试：Source Link + 独立 snupkg 符号包 + 确定性构建 -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- 每个项目的 NuGet 自述文件（指向 framework 根的 NuGet.md） -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)NuGet.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

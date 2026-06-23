@@ -34,10 +34,14 @@ TestResult.xml
 
 # NuGet
 *.nupkg
+*.snupkg
 **/packages/*
 !**/packages/build/
 *.nuget.props
 *.nuget.targets
+
+# Framework 打包产物
+framework/artifacts/
 
 # Misc build artifacts
 *.ilk

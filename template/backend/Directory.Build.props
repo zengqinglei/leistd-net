@@ -1,0 +1,19 @@
+<Project>
+
+  <!--
+    生成项目的后端构建开关。
+
+    LeistdUseLocalFramework:
+      false（默认）—— 通过 NuGet PackageReference 引用 Leistd.* 框架包（发布/CI 模式）。
+      true          —— 通过 ProjectReference 指向 ../../../../framework 源码，可断点步进框架（本地联调模式）。
+      切换方式：设置环境变量 LeistdUseLocalFramework=true，或运行 scripts/switch-framework.ps1。
+
+    LeistdFrameworkVersion:
+      引用的 Leistd.* 框架包版本，需与 framework/common.props 的 <Version> 对应。
+  -->
+  <PropertyGroup>
+    <LeistdUseLocalFramework Condition="'$(LeistdUseLocalFramework)' == ''">false</LeistdUseLocalFramework>
+    <LeistdFrameworkVersion>1.11.6</LeistdFrameworkVersion>
+  </PropertyGroup>
+
+</Project>

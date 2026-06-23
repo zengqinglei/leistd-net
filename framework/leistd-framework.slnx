@@ -1,0 +1,53 @@
+<Solution>
+  <Folder Name="/components/" />
+  <Folder Name="/components/aop/">
+    <Project Path="components/aop/Leistd.DynamicProxy/Leistd.DynamicProxy.csproj" />
+  </Folder>
+  <Folder Name="/components/core/">
+    <Project Path="components/core/Leistd.Core/Leistd.Core.csproj" />
+  </Folder>
+  <Folder Name="/components/dependency-injection/">
+    <Project Path="components/dependency-injection/Leistd.DependencyInjection/Leistd.DependencyInjection.csproj" />
+  </Folder>
+  <Folder Name="/components/event-bus/">
+    <Project Path="components/event-bus/Leistd.EventBus.Core/Leistd.EventBus.Core.csproj" />
+    <Project Path="components/event-bus/Leistd.EventBus.Local/Leistd.EventBus.Local.csproj" />
+  </Folder>
+  <Folder Name="/components/exception/">
+    <Project Path="components/exception/Leistd.Exception.AspNetCore/Leistd.Exception.AspNetCore.csproj" />
+    <Project Path="components/exception/Leistd.Exception.Core/Leistd.Exception.Core.csproj" />
+  </Folder>
+  <Folder Name="/components/lock/">
+    <Project Path="components/lock/Leistd.Lock.Core/Leistd.Lock.Core.csproj" />
+    <Project Path="components/lock/Leistd.Lock.Memory/Leistd.Lock.Memory.csproj" />
+    <Project Path="components/lock/Leistd.Lock.Redis/Leistd.Lock.Redis.csproj" />
+  </Folder>
+  <Folder Name="/components/object-mapping/">
+    <Project Path="components/object-mapping/Leistd.ObjectMapping.AutoMapper/Leistd.ObjectMapping.AutoMapper.csproj" />
+    <Project Path="components/object-mapping/Leistd.ObjectMapping.Core/Leistd.ObjectMapping.Core.csproj" />
+    <Project Path="components/object-mapping/Leistd.ObjectMapping.Mapster/Leistd.ObjectMapping.Mapster.csproj" />
+  </Folder>
+  <Folder Name="/components/response/">
+    <Project Path="components/response/Leistd.Response.AspNetCore/Leistd.Response.AspNetCore.csproj" />
+    <Project Path="components/response/Leistd.Response.Core/Leistd.Response.Core.csproj" />
+  </Folder>
+  <Folder Name="/components/security/">
+    <Project Path="components/security/Leistd.Security.AspNetCore/Leistd.Security.AspNetCore.csproj" />
+    <Project Path="components/security/Leistd.Security.Core/Leistd.Security.Core.csproj" />
+  </Folder>
+  <Folder Name="/components/tracing/">
+    <Project Path="components/tracing/Leistd.Tracing.AspNetCore/Leistd.Tracing.AspNetCore.csproj" />
+    <Project Path="components/tracing/Leistd.Tracing.Core/Leistd.Tracing.Core.csproj" />
+    <Project Path="components/tracing/Leistd.Tracing.HttpClient/Leistd.Tracing.HttpClient.csproj" />
+  </Folder>
+  <Folder Name="/components/unit-of-work/">
+    <Project Path="components/unit-of-work/Leistd.UnitOfWork.Core/Leistd.UnitOfWork.Core.csproj" />
+    <Project Path="components/unit-of-work/Leistd.UnitOfWork.EfCore/Leistd.UnitOfWork.EfCore.csproj" />
+  </Folder>
+  <Folder Name="/ddd-struct/">
+    <Project Path="ddd-struct/Leistd.Ddd.Application.Contracts/Leistd.Ddd.Application.Contracts.csproj" />
+    <Project Path="ddd-struct/Leistd.Ddd.Application/Leistd.Ddd.Application.csproj" />
+    <Project Path="ddd-struct/Leistd.Ddd.Domain/Leistd.Ddd.Domain.csproj" />
+    <Project Path="ddd-struct/Leistd.Ddd.Infrastructure/Leistd.Ddd.Infrastructure.csproj" />
+  </Folder>
+</Solution>
