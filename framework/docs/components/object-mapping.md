@@ -1,98 +1,150 @@
-# 对象映射（`object-mapping`）
-> 统一的对象映射抽象 `IObjectMapper`，可在 AutoMapper 与 Mapster 两种实现间切换。
+# 对象映射
 
-## 包
+在分层架构中，实体（Entity）、领域模型、DTO、视图模型之间需要频繁地相互转换。手写赋值代码冗长、易漏字段、难维护。对象映射组件把「把 A 类型的字段拷贝到 B 类型」这件事统一抽象成一个服务，业务代码只依赖 `IObjectMapper` 接口调用 `Map`，而具体用 AutoMapper 还是 Mapster 完成转换，由 DI 注册决定。
 
-| 包 | 角色 | 何时引用 |
-| --- | --- | --- |
-| `Leistd.ObjectMapping.Core` | 映射抽象与扩展，定义 `IObjectMapper` | 业务代码只依赖抽象时引用 |
-| `Leistd.ObjectMapping.AutoMapper` | 基于 AutoMapper 的实现 | 需要 AutoMapper 及其 `ProjectTo` 投影时引用 |
-| `Leistd.ObjectMapping.Mapster` | 基于 Mapster 的实现 | 需要 Mapster（编译期生成、`Profile` 风格配置）时引用 |
+典型场景：应用服务把领域实体转换为返回给前端的 DTO、把入参 DTO 物化为待持久化的实体、批量列表转换、以及在仓储查询中将映射下推到数据库（投影）。Leistd 通过 `IObjectMapper` 屏蔽底层映射库——切换实现只需更换注册方法，不改业务调用代码。
 
-## 核心抽象
+## 何时使用
 
-`IObjectMapper`（命名空间 `Leistd.ObjectMapping.Core`）——对象映射器接口。
+| 场景 | 推荐 |
+| --- | --- |
+| 需要成熟的 `Profile` 配置体系、`ProjectTo` 查询投影（EF Core 下推数据库） | `Leistd.ObjectMapping.AutoMapper` |
+| 追求高性能、零配置约定映射、运行时编译 | `Leistd.ObjectMapping.Mapster` |
+| 仅在领域/应用层依赖映射抽象编写业务代码 | 只引用 `Leistd.ObjectMapping.Core` |
 
-```csharp
-TDestination Map<TSource, TDestination>(TSource source);
+> 两个实现都注册到同一个 `IObjectMapper`，业务代码无需感知差异。`ProjectTo` 查询投影是 AutoMapper 实现独有的能力（见[实现行为](#实现行为)）。
+
+## 安装
+
+```bash
+# 抽象（业务代码引用；实现包已传递引用，通常无需单独添加）
+dotnet add package Leistd.ObjectMapping.Core
+
+# 二选一：AutoMapper 或 Mapster
+dotnet add package Leistd.ObjectMapping.AutoMapper
+dotnet add package Leistd.ObjectMapping.Mapster
 ```
-将 `source` 映射为新建的 `TDestination` 实例并返回。
+
+> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
+
+## 配置 Provider
+
+在 `Program.cs` 注册其中一种实现，两者都将实现绑定到 `IObjectMapper`（Singleton），并各自注册底层映射库的 `IMapper`：
 
 ```csharp
-TDestination Map<TSource, TDestination>(TSource source, IDictionary<string, object> contextItems);
-```
-带上下文数据的映射，`contextItems` 作为映射过程中的额外参数传入。
-
-```csharp
-TDestination Map<TSource, TDestination>(TSource source, TDestination destination);
-```
-将 `source` 映射到已存在的 `destination` 实例（就地更新）并返回。
-
-`ObjectMapperExtensions`（命名空间 `Leistd.ObjectMapping.Core.Extensions`）——`IObjectMapper` 扩展方法。
-
-```csharp
-List<TDestination> MapList<TSource, TDestination>(this IObjectMapper mapper, IEnumerable<TSource> sources);
-```
-批量映射，逐个调用 `Map` 并收集为 `List`；`mapper` 或 `sources` 为 null 时抛 `ArgumentNullException`。
-
-## 能力实现
-
-### `Leistd.ObjectMapping.AutoMapper`
-
-- 注册：`IServiceCollection.AddAutoMapperObjectMapper(Action<AutoMapperOptions>? configure = null)`（命名空间 `Leistd.ObjectMapping.AutoMapper`）。
-- `IMapper` 与 `IObjectMapper`（实现类 `AutoMapperObjectMapper`）均注册为 **Singleton**；`MapperConfiguration` 通过 `ConstructServicesUsing(sp.GetService)` 接入 DI 容器构造映射依赖。
-- 配置选项 `AutoMapperOptions`：`Configurators`（`List<Action<IMapperConfigurationExpression>>`，添加 AutoMapper 配置委托）；`ValidateMappings`（默认 `false`，为 `true` 时启动期调用 `AssertConfigurationIsValid()` 校验并记录日志）。
-- `contextItems` 写入 AutoMapper 的 `opt.Items`。
-- 特有扩展（命名空间 `Leistd.ObjectMapping.AutoMapper.Extensions`，`AutoMapperExtensions`）：
-  - `IObjectMapper.GetAutoMapper()` 取回底层 `IMapper`；若当前实现不是 `AutoMapperObjectMapper` 抛 `InvalidOperationException`。
-  - `IQueryable<TSource>.ProjectTo<TSource, TDestination>(IObjectMapper)` 将映射下推为数据库查询（基于 AutoMapper `ProjectTo`）。
-
-### `Leistd.ObjectMapping.Mapster`
-
-- 注册：`IServiceCollection.AddMapsterObjectMapper(Action<MapsterOptions>? configure = null)`（命名空间 `Leistd.ObjectMapping.Mapster`）。
-- `IMapper`（MapsterMapper）与 `IObjectMapper`（实现类 `MapsterObjectMapper`）均注册为 **Singleton**；`TypeAdapterConfig` 默认开启 `PreserveReference(true)`（保留引用，处理循环引用）。
-- 配置选项 `MapsterOptions`：`Configurators`（`List<Action<TypeAdapterConfig>>`）；`ValidateMappings`（默认 `false`，为 `true` 时启动期调用 `config.Compile()` 预编译校验并记录日志）。
-- `contextItems` 通过 `MapContextScope` + `MapContext.Current.Parameters` 传入。
-- `MapsterProfile`（抽象基类，类似 AutoMapper 的 `Profile`）：重写 `ConfigureMappings()`，在其中用 `CreateMap<TSource, TDestination>()` 声明映射。
-- `MapsterOptions.AddProfiles(params Assembly[] assemblies)` 扫描程序集中所有 `MapsterProfile` 子类并自动注册。
-
-## 最小可用示例
-
-```csharp
-using Leistd.ObjectMapping.Core;
-using Leistd.ObjectMapping.Mapster;
-using Microsoft.Extensions.DependencyInjection;
-
-// 1. 定义映射 Profile
-public class UserProfile : MapsterProfile
+// AutoMapper —— 在 Configurators 中添加 Profile 或内联映射配置
+builder.Services.AddAutoMapperObjectMapper(options =>
 {
-    protected override void ConfigureMappings()
-    {
-        CreateMap<User, UserDto>();
-    }
-}
-
-// 2. 注册（也可换成 AddAutoMapperObjectMapper）
-var services = new ServiceCollection();
-services.AddLogging();
-services.AddMapsterObjectMapper(options =>
-{
-    options.AddProfiles(typeof(UserProfile).Assembly);
-    options.ValidateMappings = true;
+    options.Configurators.Add(cfg => cfg.AddProfile<OrderProfile>());
+    options.ValidateMappings = true; // 启动时校验配置完整性
 });
-var provider = services.BuildServiceProvider();
 
-// 3. 使用
-var mapper = provider.GetRequiredService<IObjectMapper>();
-var dto = mapper.Map<User, UserDto>(user);
+// 或：Mapster —— 可从程序集扫描 MapsterProfile
+builder.Services.AddMapsterObjectMapper(options =>
+{
+    options.AddProfiles(typeof(OrderMapsterProfile).Assembly);
+    options.ValidateMappings = true; // 启动时 Compile 校验
+});
 ```
 
-## 依赖
+`configure` 参数可选，省略时使用默认配置（无映射规则）。
 
-无（仅依赖第三方映射库 AutoMapper / Mapster 与 Microsoft.Extensions.* 基础包，不依赖其它 Leistd 组件）。
+## 使用
 
-## 备注
+注入 `IObjectMapper`，调用 `Map` 完成转换：
 
-- AutoMapper 固定使用 14.x：源码注释说明「AutoMapper 15.0 开始收费需要配置 license，这里不升级」。
-- `MapsterObjectMapper` 额外提供 `Map<TDestination>(object source)`（按源对象运行时类型映射），但该方法不在 `IObjectMapper` 接口中，需直接持有实现类才能调用。
-- `MapsterProfile` 暴露的 `CreateMap` 仅声明配置，不做返回值链式约定的额外封装；进一步的成员映射规则直接使用 Mapster 原生 API。
+```csharp
+public class OrderAppService(IObjectMapper mapper)
+{
+    // 创建新实例：实体 -> DTO
+    public OrderDto ToDto(Order order)
+        => mapper.Map<Order, OrderDto>(order);
+
+    // 映射到现有实例：用 DTO 更新已加载的实体（返回同一 destination）
+    public void Apply(UpdateOrderDto dto, Order order)
+        => mapper.Map(dto, order);
+
+    // 批量映射（Core 扩展方法）
+    public List<OrderDto> ToDtos(IEnumerable<Order> orders)
+        => mapper.MapList<Order, OrderDto>(orders);
+}
+```
+
+批量映射 `MapList` 是 `Leistd.ObjectMapping.Core.Extensions` 命名空间下的扩展方法，需 `using Leistd.ObjectMapping.Core.Extensions;`。
+
+AutoMapper 实现下可将映射下推到数据库查询（投影），仅查询目标字段：
+
+```csharp
+using Leistd.ObjectMapping.AutoMapper.Extensions;
+
+IQueryable<OrderDto> query = dbContext.Orders
+    .Where(o => o.IsPaid)
+    .ProjectTo<Order, OrderDto>(mapper);
+```
+
+## 接口参考
+
+`Leistd.ObjectMapping.Core` 命名空间：
+
+| 成员 | 说明 |
+| --- | --- |
+| `IObjectMapper` | 对象映射器统一接口 |
+| `IObjectMapper.Map<TSource, TDestination>(source)` | 映射并创建新的目标实例 |
+| `IObjectMapper.Map<TSource, TDestination>(source, contextItems)` | 带上下文数据（`IDictionary<string, object>`）的映射，供自定义解析器读取 |
+| `IObjectMapper.Map<TSource, TDestination>(source, destination)` | 映射到现有目标实例（就地更新），返回该实例 |
+| `ObjectMapperExtensions.MapList<TSource, TDestination>(sources)` | 扩展方法，批量映射为 `List<TDestination>`；`mapper`/`sources` 为 null 抛 `ArgumentNullException` |
+
+`Leistd.ObjectMapping.AutoMapper.Extensions` 命名空间（AutoMapper 专有）：
+
+| 成员 | 说明 |
+| --- | --- |
+| `GetAutoMapper(this IObjectMapper)` | 取出底层 AutoMapper `IMapper`；实现非 `AutoMapperObjectMapper` 时抛 `InvalidOperationException` |
+| `ProjectTo<TSource, TDestination>(this IQueryable, mapper)` | LINQ 查询投影，将映射下推到 `IQueryable` 提供方（如 EF Core）；参数为 null 抛 `ArgumentNullException` |
+
+## 实现行为
+
+### Leistd.ObjectMapping.AutoMapper
+
+- 以 Singleton 注册 `IMapper`：用 `MapperConfiguration` 构建，`ConstructServicesUsing(sp.GetService)` 使自定义解析器/转换器可从 DI 解析。
+- `AutoMapperOptions.Configurators` 中的每个委托接收 `IMapperConfigurationExpression`，用于 `AddProfile`、`CreateMap` 等。
+- `ValidateMappings = true` 时在构建阶段调用 `AssertConfigurationIsValid()` 校验所有映射，配置不完整即抛异常并记录日志。
+- `AutoMapperObjectMapper.GetMapper()` 暴露底层 `IMapper`，是 `ProjectTo` / `GetAutoMapper` 的基础。
+
+> 注：csproj 注释说明 AutoMapper 自 15.0 起需配置 license，故此处刻意不升级到收费版本。
+
+### Leistd.ObjectMapping.Mapster
+
+- 以 Singleton 注册 `IMapper`（`new Mapper(config)`）：基础配置 `config.Default.PreserveReference(true)` 启用循环引用保护。
+- `MapsterOptions.Configurators` 中的每个委托接收 `TypeAdapterConfig`；`ValidateMappings = true` 时在启动阶段调用 `config.Compile()` 提前编译并校验。
+- 提供 `MapsterProfile` 抽象基类（类似 AutoMapper 的 `Profile`）：子类重写 `ConfigureMappings()`，用 `CreateMap<TSource, TDestination>()` 声明映射。
+- `MapsterOptions.AddProfiles(params Assembly[])` 扫描程序集中所有非抽象的 `MapsterProfile` 子类并自动注册。
+- 带上下文的 `Map(source, contextItems)` 通过 `MapContextScope` 将上下文写入 `MapContext.Current.Parameters`。
+- 额外提供 `MapsterObjectMapper.Map<TDestination>(object source)`（按运行时类型映射），不属于 `IObjectMapper` 接口，需引用具体类型才能调用。
+
+## 配置项 / Options
+
+### AutoMapperOptions
+
+| 属性 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Configurators` | 空列表 | `List<Action<IMapperConfigurationExpression>>`，注册映射配置委托 |
+| `ValidateMappings` | `false` | 启动时是否调用 `AssertConfigurationIsValid()` 校验 |
+
+### MapsterOptions
+
+| 属性 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Configurators` | 空列表 | `List<Action<TypeAdapterConfig>>`，注册映射配置委托 |
+| `ValidateMappings` | `false` | 启动时是否调用 `Compile()` 编译校验 |
+
+## 注意事项
+
+- 业务代码应只依赖 `Leistd.ObjectMapping.Core` 的 `IObjectMapper`，便于在两种实现间切换。
+- `ProjectTo` / `GetAutoMapper` 是 AutoMapper 实现专有能力；若当前注册的是 Mapster，调用 `GetAutoMapper` 会抛 `InvalidOperationException`。
+- `ValidateMappings` 默认关闭；建议在开发/测试环境开启，尽早暴露未配置的映射，避免运行时才发现缺字段。
+- AutoMapper 刻意停留在 15.0 之前版本以规避商业 license 要求（见 csproj 注释）。
+
+## 相关
+
+- [组件总览](./README.md)
+- [依赖注入](./dependency-injection.md)

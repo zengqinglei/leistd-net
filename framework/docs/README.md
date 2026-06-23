@@ -1,46 +1,68 @@
 # Leistd 框架文档
 
-> 提示：组件文档由源码生成，新增或修改组件后应同步更新文档，以保证文档与代码一致。具体流程见 [开发规范](./development-guide.md)。
+Leistd 是面向 .NET 10 的 DDD 应用框架基座。本套文档面向「人 + AI 协作」编写：既便于开发者按任务查阅，也便于 AI 助手作为上下文检索引用。
 
-本套文档面向「人 + AI 协作」编写：既便于开发者快速查阅，也便于 AI 助手作为上下文检索与引用。每篇文档遵循统一的[模板规范](./_doc-template.md)，结构稳定、信息密度可控，方便人机双方按需取用。
+> 🧭 **不知道从哪看起？** 看下面的「我想……」表，按你的目标直接跳转。
 
-## 文档结构
+## 我想……
 
-- **快速导航**：开发规范与版本发布等总体性约定。
-- **组件分组**：按功能分组的组件文档，每组对应一个包集合，由源码生成。
-- **DDD 四层**：领域驱动设计的分层结构说明。
-- **规范模板**：文档编写所遵循的内部模板。
+| 我想…… | 看这里 |
+| --- | --- |
+| 了解某个能力怎么用（锁、事件、响应、追踪……） | [组件总览](./components/README.md) → 对应组件 |
+| 在业务项目里引用框架 / 切换本地源码调试 | 下方[「在项目中使用框架」](#在项目中使用框架) |
+| 给框架新增或修改一个组件 | [开发规范](./development-guide.md) |
+| 发布框架新版本 / 调整版本号 | [版本与发布](./versioning.md) |
+| 编译、打包、推送框架本身 | [framework/README.md](../README.md) |
+| 了解 DDD 四层基础类型 | [DDD 四层基础类型](./ddd-struct/README.md) |
 
-## 快速导航
+## 文档地图
 
-- [开发规范](./development-guide.md)
-- [版本与发布](./versioning.md)
-- [组件总览](./components/README.md)
-- [DDD 四层结构](./ddd-struct/README.md)
-- [文档模板规范（内部）](./_doc-template.md)
+```
+docs/
+├── README.md              # 你在这里——文档首页与导航
+├── components/            # 各组件用法文档（按功能分组）
+│   ├── README.md          #   组件总览 + 依赖关系图
+│   └── <分组>.md          #   lock / security / tracing / …
+├── ddd-struct/README.md   # DDD 四层基础类型
+├── development-guide.md   # 新增/修改组件的规范（人 + AI 均按此开发）
+├── versioning.md          # 版本机制与发布检查清单
+└── _doc-template.md       # 组件文档模板规范（写文档时遵循，内部）
+```
 
-## 组件分组
+## 组件文档
 
-详见[组件总览](./components/README.md)，下含各分组文档：
+按功能分组，每篇遵循统一结构（概念 → 何时使用 → 安装 → 配置 → 使用 → 接口参考 → 注意事项）。完整索引与依赖图见 **[组件总览](./components/README.md)**。
 
-- [AOP / 动态代理](./components/aop.md)
-- [核心原语](./components/core.md)
-- [依赖注入](./components/dependency-injection.md)
+- [动态代理拦截器基类](./components/aop.md)
+- [核心原语：时钟与通用异常](./components/core.md)
+- [服务注册回调与拦截器织入](./components/dependency-injection.md)
 - [事件总线](./components/event-bus.md)
-- [异常处理](./components/exception.md)
-- [分布式/本地锁](./components/lock.md)
+- [业务异常与全局异常处理](./components/exception.md)
+- [分布式锁与本地锁](./components/lock.md)
 - [对象映射](./components/object-mapping.md)
-- [统一响应](./components/response.md)
-- [安全 / 当前用户](./components/security.md)
+- [统一 API 响应](./components/response.md)
+- [当前用户与身份信息](./components/security.md)
 - [链路追踪](./components/tracing.md)
-- [工作单元](./components/unit-of-work.md)
+- [工作单元与事务](./components/unit-of-work.md)
+- [DDD 四层基础类型](./ddd-struct/README.md)
 
-## DDD
+## 在项目中使用框架
 
-- [DDD 四层结构](./ddd-struct/README.md)
+模板生成的后端项目通过 MSBuild 属性 `LeistdUseLocalFramework` 在两种模式间切换：
 
-## 规范
+| 模式 | 取值 | 引用方式 | 适用 |
+| --- | --- | --- | --- |
+| NuGet（默认） | `false` | `PackageReference Include="Leistd.*"` | 发布、CI、日常开发 |
+| 本地源码 | `true` | `ProjectReference` 指向 `framework/` 源码 | 联调、断点步进框架 |
 
-- [开发规范](./development-guide.md)
-- [版本与发布](./versioning.md)
-- [文档模板规范（内部）](./_doc-template.md)
+```bash
+pwsh scripts/switch-framework.ps1 local     # 切到本地源码模式（可断点调试框架）
+pwsh scripts/switch-framework.ps1 nuget     # 切回 NuGet 模式
+pwsh scripts/switch-framework.ps1 status    # 查看当前模式
+```
+
+各组件包名见对应组件文档的「安装」一节；框架包版本由 `template/backend/Directory.Build.props` 的 `LeistdFrameworkVersion` 统一指定。
+
+---
+
+> 📌 组件文档由源码生成。**新增或修改组件后请同步更新对应文档**，流程见[开发规范](./development-guide.md)。

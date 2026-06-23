@@ -1,103 +1,111 @@
-# 分布式/本地锁（`lock`）
-> 统一的加锁抽象 `ILock`，可在内存（单机）与 Redis（分布式）实现间按 DI 注册切换。
+# 分布式锁与本地锁
 
-## 包
+分布式锁用于协调多个应用实例对**同一资源**的并发访问，确保同一时刻只有一个执行者进入临界区。典型场景包括：防止定时任务在多副本下重复执行、避免并发下单超卖、保护需要串行化的状态更新等。
 
-| 包 | 角色 | 何时引用 |
-| --- | --- | --- |
-| `Leistd.Lock.Core` | 锁抽象接口与句柄定义 | 业务代码与所有实现包都引用 |
-| `Leistd.Lock.Memory` | 基于 `SemaphoreSlim` 的内存本地锁实现 | 单机部署、集成测试场景 |
-| `Leistd.Lock.Redis` | 基于 StackExchange.Redis 的分布式锁实现 | 多实例部署需要跨进程互斥时 |
+Leistd 通过统一的 `ILock` 抽象屏蔽底层实现，使业务代码无需关心锁是基于内存（单机）还是 Redis（分布式）——切换实现只需更换 DI 注册，不改调用代码。
 
-## 核心抽象
+## 何时使用
 
-命名空间均为 `Leistd.Lock.Core`。
+| 场景 | 推荐实现 |
+| --- | --- |
+| 多实例部署，需跨进程/跨节点互斥（如分布式定时任务、库存扣减） | `Leistd.Lock.Redis` |
+| 单机部署或单元/集成测试，只需进程内互斥 | `Leistd.Lock.Memory` |
+| 仅依赖抽象编写业务代码（领域服务、应用服务） | 只引用 `Leistd.Lock.Core` |
 
-```csharp
-public interface ILock
+> ⚠️ 内存实现仅在**单进程内**有效，多实例部署时**不能**用它做分布式互斥（详见[注意事项](#注意事项)）。
+
+## 安装
+
+```bash
+# 抽象（业务代码引用；实现包已传递引用，通常无需单独添加）
+dotnet add package Leistd.Lock.Core
+
+# 二选一：分布式（Redis） 或 本地（内存）
+dotnet add package Leistd.Lock.Redis
+dotnet add package Leistd.Lock.Memory
 ```
-锁服务统一接口（对应 Java `IDistributedLock` / `ILocalLock`），实现可为分布式或本地，由 DI 注册决定。
+
+> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
+
+## 配置 Provider
+
+在 `Program.cs` 注册其中一种实现：
 
 ```csharp
-Task<ILockHandle> LockAsync(string key, CancellationToken cancellationToken = default);
+// 分布式锁（Redis）——传入连接串，内部按需创建 IConnectionMultiplexer
+builder.Services.AddRedisDistributedLock("localhost:6379");
+
+// 或：本地内存锁（单机/测试）——同时注册后台清理服务
+builder.Services.AddMemoryLocalLock();
 ```
-阻塞加锁直到成功，返回锁句柄；取消令牌触发时抛出取消异常。
+
+两种注册均把实现绑定到 `ILock`：`AddRedisDistributedLock` 额外绑定 `IDistributedLock`；`AddMemoryLocalLock` 额外绑定 `ILocalLock` 与 `IDistributedLock`。按需注入对应接口即可表达依赖意图。
+
+## 使用
+
+注入 `ILock`（或语义更明确的 `IDistributedLock` / `ILocalLock`），通过 `await using` 让锁在离开作用域时自动释放：
 
 ```csharp
-Task<ILockHandle?> TryLockAsync(string key, TimeSpan timeout, CancellationToken cancellationToken = default);
-```
-尝试加锁，超时仍未获取则返回 `null`（非异常，调用方自行降级）。
-
-```csharp
-Task UnlockAsync(string key, CancellationToken cancellationToken = default);
-```
-显式解锁，用于异常兜底；正常情况下应通过 `ILockHandle` 释放，无需手动调用。
-
-```csharp
-public interface IDistributedLock : ILock
-public interface ILocalLock : ILock
-```
-两个标记接口，分别表达"需要分布式锁 / 本地锁"的依赖意图，本身不新增成员。
-
-```csharp
-public interface ILockHandle : IAsyncDisposable
-```
-锁句柄，`await using` 离开作用域时自动释放锁（对应 Java `AutoCloseable`）。
-
-## 能力实现
-
-### `Leistd.Lock.Memory`
-注册扩展：`services.AddMemoryLocalLock()`。
-
-- 以 Singleton 注册 `MemoryLocalLock`，同时绑定到 `ILocalLock`、`ILock`、`IDistributedLock`（注意：内存实现也满足 `IDistributedLock` 接口，但仅在单进程内有效）。
-- 每个 key 对应一个 `SemaphoreSlim(1,1)`，按 key 互斥；`TryLockAsync` 用信号量的超时等待实现。
-- 同时注册 `MemoryLockCleanupHostedService`：每 1 分钟扫描，回收空闲超过 5 分钟（`CurrentCount == 1`）的信号量，防止内存泄漏。
-- 仅适用于单机/测试，跨进程不提供互斥保证。
-
-### `Leistd.Lock.Redis`
-注册扩展：`services.AddRedisDistributedLock(connectionString)`。
-
-- 以 Singleton 注册 `RedisDistributedLock`，绑定到 `IDistributedLock` 与 `ILock`；若未注册 `IConnectionMultiplexer`，会用传入连接串 `TryAddSingleton` 创建一个。
-- 基于 StackExchange.Redis 的 `LockTake` / `LockRelease`（内部为 SET NX + Lua 原子校验删除），每次加锁生成随机 token，释放时校验 token 后删除。
-- 锁默认过期 30 秒（`DefaultLockExpiry`），`LockAsync` / `TryLockAsync` 以 50ms 轮询间隔重试获取。
-- `UnlockAsync` 直接 `KeyDelete`，不校验 token，仅用于异常兜底。
-
-## 最小可用示例
-
-```csharp
-using Leistd.Lock.Core;
-using Leistd.Lock.Redis;       // 或 Leistd.Lock.Memory
-using Microsoft.Extensions.DependencyInjection;
-
-var services = new ServiceCollection();
-services.AddLogging();
-
-// 分布式锁
-services.AddRedisDistributedLock("localhost:6379");
-// 单机/测试：services.AddMemoryLocalLock();
-
-var provider = services.BuildServiceProvider();
-var @lock = provider.GetRequiredService<IDistributedLock>();
-
-// 阻塞加锁，离开作用域自动释放
-await using (await @lock.LockAsync("order:1001"))
+public class OrderService(IDistributedLock distributedLock)
 {
-    // 临界区
-}
+    // 阻塞加锁：直到拿到锁为止
+    public async Task PlaceOrderAsync(string orderKey)
+    {
+        await using var handle = await distributedLock.LockAsync($"order:{orderKey}");
+        // —— 临界区：同一 key 全局串行 ——
+    }
 
-// 尝试加锁，3 秒拿不到则降级
-await using (var handle = await @lock.TryLockAsync("order:1001", TimeSpan.FromSeconds(3)))
-{
-    if (handle is null) return; // 锁被占用
-    // 临界区
+    // 尝试加锁：超时拿不到则返回 null，调用方自行降级（不抛异常）
+    public async Task<bool> TryPlaceOrderAsync(string orderKey)
+    {
+        await using var handle = await distributedLock.TryLockAsync(
+            $"order:{orderKey}", TimeSpan.FromSeconds(3));
+        if (handle is null) return false; // 锁被占用，降级处理
+        // —— 临界区 ——
+        return true;
+    }
 }
 ```
 
-## 依赖
-无（仅依赖 .NET 运行时与 `Microsoft.Extensions.*`、StackExchange.Redis 等第三方包，不依赖其它 Leistd 组件）。
+`ILockHandle` 实现 `IAsyncDisposable`，`await using` 释放时自动解锁，正常路径无需手动调用 `UnlockAsync`。
 
-## 备注
-- 接口注释明确对应 Java 侧的 `IDistributedLock` / `ILocalLock` / `AutoCloseable`。
-- `TryLockAsync` 返回 `null` 是约定的"未抢到锁"信号，不会抛异常，调用方必须判空。
-- Redis 实现的默认锁过期为 30 秒、轮询间隔 50ms，均为源码硬编码常量，当前未提供 Options 配置。
-- 内存实现绑定了 `IDistributedLock`，但其互斥范围仅限单进程，切勿在多实例部署中将其当作分布式锁使用。
+## 接口参考
+
+`Leistd.Lock.Core` 命名空间：
+
+| 成员 | 说明 |
+| --- | --- |
+| `ILock` | 锁服务统一接口，下列三个方法的定义方 |
+| `ILock.LockAsync(key, ct)` | 阻塞加锁直到成功，返回 `ILockHandle`；取消时抛 `OperationCanceledException` |
+| `ILock.TryLockAsync(key, timeout, ct)` | 尝试加锁，超时返回 `null`（非异常） |
+| `ILock.UnlockAsync(key, ct)` | 显式解锁，异常兜底用；常态由句柄自动释放 |
+| `IDistributedLock : ILock` | 标记接口，表达"需要分布式锁"的依赖意图 |
+| `ILocalLock : ILock` | 标记接口，表达"需要本地锁"的依赖意图 |
+| `ILockHandle : IAsyncDisposable` | 锁句柄，`await using` 离开作用域时自动释放 |
+
+## 实现行为
+
+### Leistd.Lock.Memory（内存本地锁）
+
+- 每个 key 对应一个 `SemaphoreSlim(1,1)`，按 key 互斥；`TryLockAsync` 用信号量超时等待实现。
+- 随注册自动启用 `MemoryLockCleanupHostedService`：每 **1 分钟**扫描，回收空闲超过 **5 分钟**的信号量，防止 key 无限增长导致内存泄漏。
+- 以 Singleton 注册，进程内有效；进程重启后锁状态丢失。
+
+### Leistd.Lock.Redis（分布式锁）
+
+- 基于 StackExchange.Redis 的 `LockTake` / `LockRelease`（SET NX + Lua 原子校验删除）。每次加锁生成随机 token，由 `ILockHandle` 释放时校验 token 再删除，避免误删他人持有的锁。
+- 锁默认过期 **30 秒**（`DefaultLockExpiry`，硬编码），即使持有者崩溃也会自动释放，避免死锁。
+- `LockAsync` / `TryLockAsync` 以 **50ms**（`PollInterval`）间隔轮询重试获取。
+- `UnlockAsync` 为异常兜底接口，直接 `KeyDelete` **不校验 token**；正常释放请依赖 `await using` 触发句柄的带 token 校验释放。
+
+## 注意事项
+
+- `TryLockAsync` 返回 `null` 是约定的"未抢到锁"信号，**不抛异常**，调用方必须判空并处理降级。
+- 内存实现也绑定了 `IDistributedLock` 接口，但其互斥范围**仅限单进程**——多实例部署中切勿将其当作分布式锁，否则不同节点会同时进入临界区。
+- Redis 实现的 30 秒过期、50ms 轮询为源码硬编码常量，当前**未提供 Options 配置**；若临界区耗时可能超过 30 秒，需评估锁过期风险。
+- 接口注释标注了对应的 Java 侧 `IDistributedLock` / `ILocalLock` / `AutoCloseable`，便于跨语言对照。
+
+## 相关
+
+- [组件总览](./README.md)
+- [依赖注入](./dependency-injection.md)

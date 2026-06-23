@@ -1,107 +1,134 @@
-# 统一响应（`response`）
-> 为 ASP.NET Core 接口提供统一的 `{ code, message, data }` 响应结构与自动包装。
+# 统一 API 响应
 
-## 包
+Web API 通常需要一个一致的返回结构，让前端无论成功失败都能用同一套逻辑解析：业务状态码、提示消息、数据负载、字段级错误。如果每个接口各写各的，前端就要为每个接口适配不同形状，错误处理也无从统一。
 
-| 包 | 角色 | 何时引用 |
-| --- | --- | --- |
-| `Leistd.Response.Core` | 响应模型（`Result` / `Result<T>` / `ErrorResult`），不依赖 Web 框架 | 任何需要构造统一响应对象的项目（含类库） |
-| `Leistd.Response.AspNetCore` | DI 扩展、自动包装过滤器、Controller 扩展方法 | ASP.NET Core Web 项目 |
+Leistd 通过 `Result` / `Result<T>` 这套响应模型统一返回结构，并在 ASP.NET Core 侧提供一个结果过滤器，自动把控制器返回的普通对象包装成统一响应——业务代码可以照常 `return data`，框架负责包装，无需手写包装代码。
 
-## 核心抽象
+## 何时使用
 
-均位于命名空间 `Leistd.Response.Core.Wrapper`，全部为 `record`。
+| 场景 | 用法 |
+| --- | --- |
+| 只需要统一响应的数据模型（如在应用层/领域层构造返回结构、跨项目共享契约） | 只引用 `Leistd.Response.Core` |
+| ASP.NET Core Web API 需要自动包装控制器返回值 | 引用 `Leistd.Response.AspNetCore` 并注册过滤器 |
+| 个别接口（如文件下载、第三方回调、健康检查）不希望被包装 | 在 action 或 controller 上标注 `[NoWrap]` |
+| 想显式构造成功/失败响应而非依赖自动包装 | 使用 `OkResult` / `FailResult` 等 Controller 扩展方法 |
 
-```csharp
-public record Result { int Code; string? Message; string? Details; }
+## 安装
+
+```bash
+# 抽象与响应模型（可单独引用）
+dotnet add package Leistd.Response.Core
+
+# ASP.NET Core 集成（自动包装过滤器、Controller 扩展、NoWrap 特性）
+dotnet add package Leistd.Response.AspNetCore
 ```
-统一响应基类。`Code` 为 0 表示成功，非 0 表示业务/错误码。`Details` 可写，用于附加详情。
+
+`Leistd.Response.AspNetCore` 已通过项目引用传递依赖 `Leistd.Response.Core`，Web 项目通常只需添加前者。
+
+> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
+
+## 配置 Provider
+
+在 `Program.cs` 注册响应包装过滤器：
 
 ```csharp
-public static Result Result.Ok(string? message = null)
+// 内部调用 AddControllers 并注册全局结果过滤器 ResultWrapperFilter
+builder.Services.AddResponseWrapper();
 ```
-构造成功结果（`Code = 0`）。
+
+`AddResponseWrapper` 会把 `ResultWrapperFilter`（一个 `IAsyncResultFilter`）加入 MVC 过滤器管线。注册后，控制器返回的普通对象会被自动包装为 `Result<object?>`。
+
+> `AddResponseWrapper` 已内部调用 `AddControllers`，无需再单独调用。
+
+## 使用
+
+注册过滤器后，控制器可以直接返回业务对象，框架自动包装：
 
 ```csharp
-public static Result Result.Fail(int code, string message)
-```
-构造失败结果，指定错误码与消息。
-
-```csharp
-public record Result<T> : Result { T? Data; }
-```
-带数据的响应。`Data` 在失败时为 `null`。
-
-```csharp
-public static Result<T> Result<T>.Ok(T data, string? message = null)
-public static Result<T> Result<T>.Fail(int code, string? message = null)  // new，隐藏基类同名方法
-```
-分别构造成功（携带 `Data`）与失败（不带 `Data`）结果。
-
-```csharp
-public record ErrorResult : Result { List<Dictionary<string, string>>? Errors; }
-public static ErrorResult ErrorResult.Fail(int code, string message, List<Dictionary<string, string>> errors)
-```
-带结构化错误明细的失败结果，`Errors` 为键值对列表（适用于字段级校验错误）。
-
-## 能力实现
-
-### `Leistd.Response.AspNetCore`
-
-命名空间 `Leistd.Response.AspNetCore`。
-
-- **DI 注册**：`IServiceCollection.AddResponseWrapper()` —— 调用 `AddControllers` 并注册全局结果过滤器 `ResultWrapperFilter`。
-- **自动包装**（`ResultWrapperFilter`，实现 `IAsyncResultFilter`）：对返回的 `ObjectResult` 自动包装为 `Result<object?>.Ok(...)`，仅当满足以下条件：
-  - Action / Controller 未标注 `NoWrapAttribute`；
-  - 返回值本身不是 `Result`（即不重复包装）；
-  - HTTP 状态码为空或处于 `200`–`299`（非 2xx 不包装，由原始结果直接返回）。
-- **禁用包装**：`Leistd.Response.AspNetCore.Attributes.NoWrapAttribute`，可标注在方法或类上（`AttributeUsage = Method | Class`）。
-- **Controller 扩展方法**（`Leistd.Response.AspNetCore.Extensions.ControllerExtensions`，`this ControllerBase`）：
-  - `OkResult<T>(T data, string? message = null)` —— 返回 200 + `Result<T>.Ok`。
-  - `OkResult(string? message = null)` —— 返回 200 + `Result.Ok`。
-  - `FailResult(int code, string message)` —— 返回失败结果，HTTP 状态码由错误码推导。
-  - `FailResultWithErrors(int code, string message, List<Dictionary<string,string>> errors)` —— 返回 `ErrorResult`，HTTP 状态码由错误码推导。
-
-> HTTP 状态码推导规则：取错误码字符串的前 3 位解析为整数，若落在 `100`–`599` 区间则用作 HTTP 状态码，否则回退为 `500`。例如错误码 `40001` 对应 HTTP `400`。
-
-## 最小可用示例
-
-```csharp
-using Leistd.Response.AspNetCore;            // AddResponseWrapper
-using Leistd.Response.AspNetCore.Attributes; // NoWrapAttribute
-using Leistd.Response.AspNetCore.Extensions; // OkResult / FailResult
-using Microsoft.AspNetCore.Mvc;
-
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddResponseWrapper();       // 注册全局自动包装
-var app = builder.Build();
-app.MapControllers();
-app.Run();
-
 [ApiController]
-[Route("users")]
-public class UserController : ControllerBase
+[Route("api/users")]
+public class UserController(IUserService userService) : ControllerBase
 {
-    // 直接返回业务对象，过滤器自动包装为 { code:0, message:null, data:{...} }
+    // 直接返回数据，过滤器自动包成 Result<object?>
+    // 客户端收到：{ "code": 0, "message": null, "data": { ... } }
     [HttpGet("{id}")]
-    public IActionResult Get(int id) => Ok(new { Id = id, Name = "Alice" });
+    public async Task<IActionResult> GetAsync(long id)
+        => Ok(await userService.GetAsync(id));
 
-    // 显式构造失败响应：错误码 40001 -> HTTP 400
-    [HttpGet("fail")]
-    public IActionResult Fail() => this.FailResult(40001, "参数错误");
-
-    // 跳过自动包装，原样返回
-    [HttpGet("raw"), NoWrap]
-    public IActionResult Raw() => Ok("plain text");
+    // 不希望被包装的接口（如导出文件），标注 NoWrap
+    [HttpGet("export")]
+    [NoWrap]
+    public IActionResult Export() => File(bytes, "text/csv", "users.csv");
 }
 ```
 
-## 依赖
+也可以用 Controller 扩展方法显式构造响应，尤其是返回失败时：
 
-无 Leistd 内部组件依赖（仅依赖 ASP.NET Core 框架）。
+```csharp
+public class OrderController(IOrderService service) : ControllerBase
+{
+    [HttpPost]
+    public IActionResult Create(CreateOrderInput input)
+    {
+        if (!ModelState.IsValid)
+            // code 的前三位作为 HTTP 状态码（此处 400），整体作为业务码
+            return this.FailResult(40001, "参数不合法");
 
-## 备注
+        var order = service.Create(input);
+        return this.OkResult(order, "下单成功"); // 包成 Result<Order>，HTTP 200
+    }
+}
+```
 
-- `AddResponseWrapper` 内部调用 `AddControllers`，无需再单独调用；若已自行配置 controllers，注意避免重复注册导致行为叠加。
-- 自动包装仅作用于 `ObjectResult`（如 `Ok(value)`）；返回 `StatusCodeResult`、`FileResult` 等非 `ObjectResult` 不会被包装。
-- 非 2xx 响应不会被自动包装，需要统一错误结构时使用 `FailResult` / `FailResultWithErrors` 显式返回。
+## 接口参考
+
+`Leistd.Response.Core.Wrapper` 命名空间（响应模型，均为 `record`）：
+
+| 成员 | 说明 |
+| --- | --- |
+| `Result` | 统一响应基类型；含 `Code`、`Message`、可写的 `Details`。`Code = 0` 约定为成功 |
+| `Result.Ok(message?)` | 构造成功响应，`Code = 0` |
+| `Result.Fail(code, message)` | 构造失败响应，指定业务码与消息 |
+| `Result<T>` | 带数据负载的响应，继承 `Result`，新增 `Data`（失败时为 `null`） |
+| `Result<T>.Ok(data, message?)` | 构造带数据的成功响应，`Code = 0` |
+| `Result<T>.Fail(code, message?)` | 构造带数据类型但无数据的失败响应（`new` 隐藏基类同名方法） |
+| `ErrorResult` | 带字段级错误明细的失败响应，继承 `Result`，新增 `Errors` |
+| `ErrorResult.Fail(code, message, errors)` | 构造含 `Errors`（`List<Dictionary<string,string>>`）的失败响应 |
+
+`Leistd.Response.AspNetCore` 命名空间（ASP.NET Core 集成）：
+
+| 成员 | 说明 |
+| --- | --- |
+| `AddResponseWrapper(services)` | 注册 `ResultWrapperFilter` 到 MVC 管线（`DependencyInjection` 扩展方法） |
+| `NoWrapAttribute`（`[NoWrap]`） | 标注在 action 或 controller 上跳过自动包装；`AttributeUsage = Method \| Class` |
+| `ControllerExtensions.OkResult<T>(data, message?)` | 返回 HTTP 200 的 `Result<T>` 成功响应 |
+| `ControllerExtensions.OkResult(message?)` | 返回 HTTP 200 的无数据 `Result` 成功响应 |
+| `ControllerExtensions.FailResult(code, message)` | 返回失败响应，HTTP 状态码由 `code` 前三位推导 |
+| `ControllerExtensions.FailResultWithErrors(code, message, errors)` | 返回带 `Errors` 明细的 `ErrorResult` 失败响应 |
+
+> Controller 扩展方法均为 `this ControllerBase` 扩展，调用时写作 `this.OkResult(...)`。
+
+## 实现行为
+
+### Leistd.Response.AspNetCore（自动包装过滤器）
+
+- `ResultWrapperFilter` 仅包装满足以下全部条件的结果：结果为 `ObjectResult`、其 `Value` **不是** `Result`（避免重复包装）、且 HTTP 状态码为 `null` 或落在 **200–299** 区间（即只包装成功响应）。
+- 命中包装时，原值被包成 `Result<object?>.Ok(value)`，状态码保留原值（无则取 200）；包装时输出一条 `Debug` 级日志。
+- 标注了 `[NoWrap]`（通过 `EndpointMetadata` 检测）的接口直接放行，不做包装。
+- `FailResult` / `FailResultWithErrors` 的 HTTP 状态码由业务 `code` 的**前三位**整数推导：取字符串前三位解析为整数，若落在 100–599 区间则采用，否则回退为 **500**。例如 `code = 40001` 对应 HTTP 400。
+
+## 配置项 / Options
+
+当前无配置项。过滤器的包装条件（仅包装 2xx、跳过已是 `Result` 的值）与 `FailResult` 的状态码推导规则均为源码固定行为，未提供 Options 配置。
+
+## 注意事项
+
+- 自动包装只作用于成功（2xx）的 `ObjectResult`。非 2xx 状态码，以及 `FileResult`、`StatusCodeResult`、`ContentResult` 等非 `ObjectResult` 不会被自动包装；如需失败响应的统一结构，请显式使用 `FailResult` / `FailResultWithErrors`。
+- `FailResult` 依赖 `code` 前三位作为 HTTP 状态码，因此业务错误码需遵循「前三位为 HTTP 状态码」的约定，否则将回退为 500。
+- `Result.Code = 0` 约定表示成功；失败时由调用方指定非 0 业务码。
+- 返回值本身已是 `Result`（如自行调用 `OkResult` / `FailResult`）时不会被二次包装，可放心混用自动包装与显式构造。
+
+## 相关
+
+- [组件总览](./README.md)
+- [依赖注入](./dependency-injection.md)

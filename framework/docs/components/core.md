@@ -1,88 +1,108 @@
-# 核心原语（`core`）
-> Leistd 框架的零依赖基础原语：时钟抽象与通用异常基类，供其它组件复用。
+# 核心原语：时钟与通用异常
 
-## 包
+`Leistd.Core` 是整个框架最底层的零依赖基础包，只提供两类被反复复用的原语：**时钟抽象**（`IClock`）与**通用异常基类**（`CommonException`）。它不引入任何业务概念，也几乎不引入第三方依赖（仅引用 `Microsoft.Extensions.Logging.Abstractions`），因此可以被其它所有 Leistd 组件安全地共同引用而不会带来依赖膨胀。
 
-| 包 | 角色 | 何时引用 |
-| --- | --- | --- |
-| `Leistd.Core` | 框架核心原语库，提供时间抽象（`IClock`）与通用异常基类（`CommonException`） | 需要可测试的时间获取、统一的 UTC 时间策略，或需要抛出框架级通用异常时 |
+为什么需要它：直接调用 `DateTime.UtcNow` 会让代码与系统时钟强耦合，单元测试无法控制"现在"，按天统计还容易踩到时区漂移的坑；而散落在各处、各自继承 `System.Exception` 的异常类型则无法被框架统一识别和处理。`Leistd.Core` 把这两件事收敛为可注入、可替换的抽象：时间统一通过 `IClock` 获取，框架级异常统一从 `CommonException` 派生，使上层组件（异常处理、DDD 审计等）能据此做统一的可测试与可拦截设计。
 
-## 核心抽象
+## 何时使用
 
-### `IClock`（命名空间 `Leistd.Timing`）
+| 场景 | 用法 |
+| --- | --- |
+| 需要获取当前时间且希望单元测试可控（mock 时间） | 注入 `IClock`，不要直接用 `DateTime.UtcNow` |
+| 按"自然日"做统计，需消除时区漂移 | `IClock` + `ClockExtensions.GetLocalMidnightInUtc()` |
+| 标准化外部传入的 `DateTime`（统一为 UTC） | `IClock.Normalize(dateTime)` |
+| 定义框架/业务异常的根基类型 | 派生自 `CommonException`（如异常处理组件的 `BusinessException`） |
 
-时间获取的抽象接口，目的在于可测试性（单测可 mock 时间）、统一时区策略、集中管理时间来源。
+> `Leistd.Core` 是被依赖项，通常无需直接添加——你引用的上层组件（异常处理、DDD 等）已传递引用它。
 
-```csharp
-DateTime Now { get; }
+## 安装
+
+```bash
+# 核心原语（基础包，通常由上层组件传递引用，一般无需单独添加）
+dotnet add package Leistd.Core
 ```
-返回当前时间；具体取值（UTC/本地）由实现决定。
+
+> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
+
+## 配置 Provider
+
+`Leistd.Core` 自身**不提供** DI 扩展方法。`IClock` 的默认实现 `UtcClockProvider` 由上层的 DDD 基础设施包注册（参见 `Leistd.Ddd.Infrastructure`）：
 
 ```csharp
-DateTimeKind Kind { get; }
-```
-返回该时钟产出时间的类型（`Utc` / `Local` / `Unspecified`）。
-
-```csharp
-DateTime Normalize(DateTime dateTime);
-```
-将传入时间标准化到本时钟的时间类型并返回，确保时间类型一致。
-
-### `CommonException`（命名空间 `Leistd.Exception`）
-
-框架通用异常基类，继承自 `System.Exception`，支持携带消息与可选内部异常。
-
-```csharp
-public class CommonException(string message, System.Exception? innerException = null);
-```
-构造一个通用异常；`innerException` 可选，默认 `null`。
-
-## 能力实现
-
-### `Leistd.Core`
-
-本包不提供 DI 注册扩展方法（源码中无 `IServiceCollection` 扩展），`IClock` 的默认实现需由使用方自行注册。
-
-- **`UtcClockProvider`（`IClock` 默认实现）**：始终返回 UTC 时间。
-  - `Now` => `DateTime.UtcNow`，`Kind` => `DateTimeKind.Utc`。
-  - `Normalize`：`Unspecified` 类型被假定为 UTC 并打上 UTC 标记；`Local` 类型转换为 UTC；已是 UTC 则原样返回。
-  - 设计理由（源码注释）：数据库统一存 UTC、前端按用户时区展示、规避夏令时问题。
-
-- **`ClockExtensions`（`IClock` 静态扩展，用于时区边界计算）**：
-  - `GetLocalMidnightInUtc(this IClock)`：返回"本地今日零点"对应的 UTC 时间，作为按天统计的锚点，消除直接比较本地时间/UTC 日期带来的时区漂移。示例：北京时间 `2026-05-28 00:00:00` -> `UTC 2026-05-27 16:00:00Z`。
-  - `GetLocalUtcOffsetHours(this IClock)`：返回当前本地时区相对 UTC 的偏移小时数（基于 `TimeZoneInfo.Local`）。
-
-## 最小可用示例
-
-```csharp
-using Leistd.Timing;
-using Leistd.Exception;
-using Microsoft.Extensions.DependencyInjection;
-
-// 注册（本包无内置 DI 扩展，手动登记默认实现）
-var services = new ServiceCollection();
+// 在基础设施层注册（已由 Leistd.Ddd.Infrastructure 完成）
 services.AddSingleton<IClock, UtcClockProvider>();
-var provider = services.BuildServiceProvider();
-
-// 使用
-var clock = provider.GetRequiredService<IClock>();
-DateTime nowUtc = clock.Now;                          // 当前 UTC 时间
-DateTime midnight = clock.GetLocalMidnightInUtc();    // 本地今日零点（UTC 锚点）
-double offset = clock.GetLocalUtcOffsetHours();       // 本地时区偏移小时数
-
-// 标准化外部传入的时间
-DateTime normalized = clock.Normalize(DateTime.Now);  // Local -> UTC
-
-// 抛出框架通用异常
-throw new CommonException("业务校验失败");
 ```
 
-## 依赖
+若你的项目未引用 DDD 分组而需要单独使用 `IClock`，按上面这行手动注册即可。`CommonException` 无需注册，按需 `throw` 或派生使用。
 
-无 Leistd 组件依赖（仅引用 `Microsoft.Extensions.Logging.Abstractions`）。
+## 使用
 
-## 备注
+注入 `IClock` 获取当前时间，避免直接依赖系统时钟，从而让逻辑可测试：
 
-- 本包**未提供** DI 注册扩展方法，`IClock` 的实现需使用方手动注册（如 `AddSingleton<IClock, UtcClockProvider>()`）。
-- `UtcClockProvider.Normalize` 对 `DateTimeKind.Unspecified` 的处理是**假定为 UTC**，若上游存的是本地时间需自行先转换，避免出现 8 小时偏差。
-- `ClockExtensions` 中的本地时区基于运行环境的 `TimeZoneInfo.Local`，部署环境时区需与业务自然日预期一致。
+```csharp
+public class DailyReportService(IClock clock)
+{
+    public DateTime NowUtc() => clock.Now; // 默认实现始终返回 UTC
+
+    // 统计"今天"的数据：用本地自然日零点的 UTC 锚点做范围下界，避免时区漂移
+    public (DateTime from, DateTime to) TodayRangeUtc()
+    {
+        var from = clock.GetLocalMidnightInUtc();   // 本地今日 00:00 对应的 UTC 时刻
+        return (from, clock.Now);
+    }
+
+    // 标准化外部传入时间：Unspecified 视为 UTC，Local 转 UTC
+    public DateTime NormalizeInput(DateTime input) => clock.Normalize(input);
+}
+```
+
+定义框架/业务异常时派生自 `CommonException`，上层异常处理组件可据此统一识别：
+
+```csharp
+public class InsufficientStockException(string sku)
+    : CommonException($"库存不足: {sku}");
+```
+
+## 接口参考
+
+`Leistd.Timing` 命名空间：
+
+| 成员 | 说明 |
+| --- | --- |
+| `IClock` | 时钟抽象接口，统一时间获取入口，便于测试 mock 与时区策略统一 |
+| `IClock.Now` | 当前时间（`DateTime`）；默认实现返回 UTC |
+| `IClock.Kind` | 时间类型（`DateTimeKind`）；默认实现为 `Utc` |
+| `IClock.Normalize(dateTime)` | 标准化时间，确保 `Kind` 一致；默认实现：`Unspecified` 视为 UTC，`Local` 转 UTC，`Utc` 原样返回 |
+| `UtcClockProvider : IClock` | 默认实现，`Now` 返回 `DateTime.UtcNow`，`Kind` 为 `Utc` |
+| `ClockExtensions.GetLocalMidnightInUtc(this IClock)` | 扩展方法，返回"系统本地今日零点"对应的 UTC 时刻，按天统计的基准锚点 |
+| `ClockExtensions.GetLocalUtcOffsetHours(this IClock)` | 扩展方法，返回当前时区相对 UTC 的偏移小时数（`double`） |
+
+`Leistd.Exception` 命名空间：
+
+| 成员 | 说明 |
+| --- | --- |
+| `CommonException(message, innerException?)` | 框架通用异常基类，继承 `System.Exception`；上层异常体系（如 `BusinessException`）由它派生 |
+
+## 实现行为
+
+### Leistd.Core（UtcClockProvider）
+
+- `Now` 直接返回 `DateTime.UtcNow`，`Kind` 固定为 `DateTimeKind.Utc`；推荐数据库统一以 UTC 存储、展示时再按用户时区转换，可规避夏令时问题。
+- `Normalize` 的规则：`Unspecified` 假定为 UTC（`SpecifyKind`）；`Local` 调用 `ToUniversalTime()` 转 UTC；`Utc` 原样返回。
+- `GetLocalMidnightInUtc` 基于 `TimeZoneInfo.Local` 计算：取当前 UTC → 转本地 → 取本地日期零点 → 再转回 UTC。例如北京时间 `2026-05-28 00:00:00` 返回 UTC `2026-05-27 16:00:00Z`。
+- 该实现无状态，以 Singleton 注册即可。
+
+## 配置项 / Options
+
+当前无配置项。`UtcClockProvider` 与 `CommonException` 均无 Options 类，时区行为由系统 `TimeZoneInfo.Local` 决定。
+
+## 注意事项
+
+- 默认 `IClock` 实现始终基于 **UTC**；`GetLocalMidnightInUtc` / `GetLocalUtcOffsetHours` 依赖**进程所在主机的本地时区**（`TimeZoneInfo.Local`），容器化部署时需确认容器时区设置是否符合预期。
+- `Leistd.Core` 本身不注册任何服务；`IClock` 的注册由 `Leistd.Ddd.Infrastructure` 完成。脱离 DDD 分组单独使用时务必手动 `AddSingleton<IClock, UtcClockProvider>()`，否则注入会失败。
+- `CommonException` 是一个轻量基类（仅 `message` + 可选 `innerException`），不携带错误码等元数据；语义化的业务异常请使用[异常处理](./exception.md)组件的 `BusinessException` 体系。
+
+## 相关
+
+- [组件总览](./README.md)
+- [异常处理](./exception.md)
