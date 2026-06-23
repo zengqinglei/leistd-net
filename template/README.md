@@ -147,6 +147,23 @@ npm start
 - 用户名：`admin`
 - 密码：`Admin@123456`（请在生产环境修改）
 
+### 联调本地框架（开发者）
+
+生成的项目默认通过 NuGet `PackageReference` 引用 [Leistd 框架](../framework/README.md) 包。若你**同时在改框架源码**，想验证"改过的框架 + 模板生成的项目"，用**本地 NuGet feed**（保持模板纯净，等同最终用户的真实消费路径）：
+
+```bash
+# 1. 在框架打本地包到一个临时 feed 目录
+dotnet pack framework/Leistd.Framework.slnx -c Release -o ./local-feed
+
+# 2. 把该目录加为 NuGet 源（一次性）
+dotnet nuget add source "$(pwd)/local-feed" --name leistd-local
+
+# 3. 生成项目，其 PackageReference 即可从本地 feed 拉到刚打的框架包
+dotnet new fullstack-app -n Acme.Shop
+```
+
+> 若只想验证框架功能本身（不经过模板），更简单的方式是在仓库内的 demo / 测试项目里用 `ProjectReference` 直接指向 `framework/` 源码，可断点步进。
+
 ## Docker 部署
 
 ### Docker Compose（推荐）
