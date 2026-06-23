@@ -1,0 +1,29 @@
+<div class="min-h-screen flex flex-col items-center justify-center bg-surface-ground px-6">
+  <div class="max-w-2xl text-center space-y-8">
+    <h1 class="text-5xl font-bold text-color">Template Project</h1>
+    <p class="text-xl text-muted-color"> A full-stack application template built with Angular + PrimeNG + .NET 10 DDD architecture. </p>
+
+    <div class="flex items-center justify-center gap-4">
+      <p-button label="Login" routerLink="/auth/login" />
+      <p-button label="Register" routerLink="/auth/register" [outlined]="true" />
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
+      <div class="p-6 rounded-xl bg-surface-card border border-surface">
+        <i class="pi pi-shield text-3xl text-primary mb-3"></i>
+        <h3 class="font-semibold text-color">Authentication</h3>
+        <p class="text-sm text-muted-color mt-2">Cookie-based auth with role management</p>
+      </div>
+      <div class="p-6 rounded-xl bg-surface-card border border-surface">
+        <i class="pi pi-users text-3xl text-primary mb-3"></i>
+        <h3 class="font-semibold text-color">User Management</h3>
+        <p class="text-sm text-muted-color mt-2">CRUD operations with permission control</p>
+      </div>
+      <div class="p-6 rounded-xl bg-surface-card border border-surface">
+        <i class="pi pi-palette text-3xl text-primary mb-3"></i>
+        <h3 class="font-semibold text-color">Theme System</h3>
+        <p class="text-sm text-muted-color mt-2">Dark mode with Tailwind CSS + PrimeNG</p>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,126 @@
+# ============================================================
+# leistd-net — root .gitignore (covers .NET backend + Angular/Node frontend)
+# ============================================================
+
+# ---------- .NET / Visual Studio ----------
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options
+.vs/
+*.[Cc]ache
+!*.[Cc]ache/
+
+# Test results
+[Tt]est[Rr]esult*/
+*.VisualState.xml
+TestResult.xml
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+
+# Misc build artifacts
+*.ilk
+*.meta
+*.obj
+*.pch
+*.pdb
+*.tmp
+*.tmp_proj
+*.log
+*.tlog
+*.vspscc
+*.vssscc
+
+# Publish output
+publish/
+*.[Pp]ublish.xml
+*.azurePubxml
+*.pubxml
+*.publishproj
+PublishScripts/
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# SQL Server
+*.mdf
+*.ldf
+
+# ---------- App secrets / runtime ----------
+appsettings.debug.json
+appsettings.*.local.json
+DataProtection-Keys/
+certs/*.crt
+certs/*.pem
+certs/*.pfx
+certs/*.p12
+
+# ---------- Node / Angular frontend ----------
+node_modules/
+dist/
+tmp/
+out-tsc/
+.angular/
+.nx/cache
+
+# Angular / build caches
+*.ngfactory.ts
+*.ngsummary.json
+.angular/cache/
+
+# Coverage / tests
+coverage/
+*.lcov
+.nyc_output/
+
+# npm / yarn / pnpm logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ---------- Environment files ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Editors ----------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*~
+
+# ---------- OS ----------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store

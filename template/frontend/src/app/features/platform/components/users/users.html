@@ -1,0 +1,115 @@
+<div class="flex flex-col h-full overflow-hidden">
+  <div class="flex-1 overflow-y-auto p-6">
+    <div class="mb-6 flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
+      <div class="flex flex-1 flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        <p-select
+          [options]="activeOptions"
+          [ngModel]="selectedIsActive()"
+          (ngModelChange)="onActiveChange($event)"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="状态"
+          [showClear]="true"
+          appendTo="body"
+          styleClass="w-full sm:w-48"
+          size="small"
+        />
+
+        <p-select
+          [options]="emailVerifiedOptions"
+          [ngModel]="selectedIsEmailVerified()"
+          (ngModelChange)="onEmailVerifiedChange($event)"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="邮箱状态"
+          [showClear]="true"
+          appendTo="body"
+          styleClass="w-full sm:w-48"
+          size="small"
+        />
+
+        <p-select
+          [options]="roleOptions"
+          [ngModel]="selectedRole()"
+          (ngModelChange)="onRoleChange($event)"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="角色"
+          [showClear]="true"
+          appendTo="body"
+          styleClass="w-full sm:w-48"
+          size="small"
+        />
+
+        <p-iconfield class="w-full sm:max-w-xs sm:flex-1">
+          <p-inputicon class="pi pi-search" />
+          <input
+            pInputText
+            type="text"
+            placeholder="搜索用户名 / 邮箱 / 显示名称..."
+            [ngModel]="searchQuery()"
+            (ngModelChange)="onSearchQueryChange($event)"
+            class="w-full"
+            pSize="small"
+          />
+        </p-iconfield>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 shrink-0">
+        <p-button
+          icon="pi pi-refresh"
+          label="刷新"
+          (onClick)="onFilter()"
+          styleClass="w-full sm:w-auto"
+          pTooltip="刷新"
+          tooltipPosition="top"
+          size="small"
+        />
+        <p-button
+          label="新建用户"
+          icon="pi pi-plus"
+          (onClick)="openAddDialog()"
+          [outlined]="true"
+          severity="primary"
+          styleClass="w-full sm:w-auto"
+          size="small"
+        />
+      </div>
+    </div>
+
+    <app-user-table
+      [users]="users()"
+      [totalRecords]="totalRecords()"
+      [loading]="loading()"
+      (filterChange)="onPageChange($event)"
+      (edit)="openEditDialog($event)"
+      (toggleActive)="handleToggleActive($event)"
+      (resetPassword)="openResetPasswordDialog($event)"
+      (delete)="handleDelete($event)"
+    />
+  </div>
+</div>
+
+<app-user-edit-dialog
+  [(visible)]="editDialogVisible"
+  [loading]="editDialogLoading()"
+  [saving]="editDialogSaving()"
+  [user]="selectedUser()"
+  (saved)="handleSave($event)"
+/>
+
+<app-reset-user-password-dialog
+  [(visible)]="resetPasswordDialogVisible"
+  [(saving)]="resetPasswordSaving"
+  (saved)="handleResetPassword($event)"
+/>
+
+<p-confirmDialog
+  header="确认"
+  icon="pi pi-exclamation-triangle"
+  acceptLabel="确定"
+  rejectLabel="取消"
+  acceptButtonStyleClass="p-button-danger p-button-text"
+  rejectButtonStyleClass="p-button-text p-button-secondary"
+>
+</p-confirmDialog>

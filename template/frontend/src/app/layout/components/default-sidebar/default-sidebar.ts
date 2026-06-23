@@ -1,0 +1,87 @@
+import { NgClass } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterModule } from '@angular/router';
+import { ButtonModule } from 'primeng/button';
+import { TooltipModule } from 'primeng/tooltip';
+import { filter, map, startWith } from 'rxjs/operators';
+
+import { AuthService } from '../../../core/services/auth-service';
+import { LogoComponent } from '../../../shared/components/logo/logo';
+import { LayoutService } from '../../services/layout-service';
+
+interface MenuItem {
+  label: string;
+  icon: string;
+  route: string;
+  superAdminOnly?: boolean;
+}
+
+interface MenuGroup {
+  label?: string;
+  items: MenuItem[];
+}
+
+@Component({
+  selector: 'app-default-sidebar',
+  standalone: true,
+  imports: [NgClass, RouterModule, ButtonModule, TooltipModule, LogoComponent],
+  templateUrl: './default-sidebar.html',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class DefaultSidebar {
+  readonly layoutService = inject(LayoutService);
+  private readonly router = inject(Router);
+  private readonly authService = inject(AuthService);
+
+  isMobileMenuOpen = input<boolean>(false);
+  readonly mobileMenuClosed = output<void>();
+
+  private readonly platformMenuGroups: MenuGroup[] = [
+    { items: [{ label: '仪表盘', icon: 'pi-gauge', route: '/platform' }] },
+    {
+      label: '系统',
+      items: [
+        { label: '用户管理', icon: 'pi-users', route: '/platform/users' },
+        { label: '开发应用', icon: 'pi-id-card', route: '/platform/open-applications' }
+      ]
+    }
+  ];
+
+  private readonly workspaceMenuGroups: MenuGroup[] = [
+    {
+      items: [{ label: '工作台', icon: 'pi-gauge', route: '/workspace/dashboard' }]
+    }
+  ];
+
+  private readonly currentUrl = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map(event => event.urlAfterRedirects ?? event.url),
+      startWith(this.router.url)
+    ),
+    { initialValue: this.router.url }
+  );
+
+  readonly menuGroups = computed(() => {
+    const url = this.currentUrl();
+    const groups = url.startsWith('/platform') ? this.platformMenuGroups : this.workspaceMenuGroups;
+    const isSuperAdmin = this.authService.currentUser()?.isSuperAdmin === true;
+
+    return groups
+      .map(group => ({
+        ...group,
+        items: group.items.filter(item => !item.superAdminOnly || isSuperAdmin)
+      }))
+      .filter(group => group.items.length > 0);
+  });
+
+  isItemActive(item: MenuItem) {
+    const currentUrl = this.currentUrl();
+    if (item.route === '/platform') {
+      return currentUrl === item.route;
+    }
+
+    return currentUrl === item.route || currentUrl.startsWith(`${item.route}/`);
+  }
+}

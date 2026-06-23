@@ -1,0 +1,32 @@
+using CompanyName.ProjectName.Application.Auth.Dtos;
+using Leistd.Ddd.Application.Contracts.AppService;
+
+namespace CompanyName.ProjectName.Application.Auth.AppServices;
+
+/// <summary>
+/// 认证服务接口
+/// </summary>
+public interface IAuthAppService : IAppService
+{
+
+
+    /// <summary>
+    /// 用户注册
+    /// </summary>
+    Task<UserOutputDto> RegisterAsync(RegisterInputDto request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取当前用户信息
+    /// </summary>
+    Task<UserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 更新个人信息
+    /// </summary>
+    Task<UserOutputDto> UpdateCurrentUserAsync(UpdateCurrentUserInputDto input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 修改密码
+    /// </summary>
+    Task ChangePasswordAsync(ChangePasswordInputDto input, CancellationToken cancellationToken = default);
+}

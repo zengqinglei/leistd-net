@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json.schemastore.org/template.json",
+  "author": "Fullstack Template",
+  "classifications": ["Web", "Fullstack", "Angular", ".NET", "DDD"],
+  "identity": "FullstackApp.Template.CSharp",
+  "name": "Fullstack App (.NET + Angular)",
+  "description": ".NET 10 + Angular 21 全栈项目模板，DDD 四层架构，支持条件裁剪认证和权限模块",
+  "shortName": "fullstack-app",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "CompanyName.ProjectName",
+  "preferNameDirectory": true,
+  "forms": {
+    "LastSegment": {
+      "identifier": "replace",
+      "pattern": "^(.*\\.)?",
+      "replacement": ""
+    },
+    "DotToHyphen": {
+      "identifier": "replace",
+      "pattern": "\\.",
+      "replacement": "-"
+    },
+    "FullKebab": {
+      "identifier": "chain",
+      "steps": ["DotToHyphen", "kebabCase"]
+    }
+  },
+  "symbols": {
+    "ProjectName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "LastSegment",
+      "replaces": "MyProject"
+    },
+    "KebabName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "FullKebab",
+      "replaces": "my-project"
+    },
+    "IncludeIdentity": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含认证模块（登录/注册/JWT）",
+      "defaultValue": "true"
+    },
+    "IncludeRoles": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含角色权限系统",
+      "defaultValue": "true",
+      "isEnabled": "IncludeIdentity"
+    }
+  },
+  "sources": [
+    {
+      "exclude": [
+        "**/bin/**",
+        "**/obj/**",
+        "**/.vs/**",
+        "**/.claude/**",
+        "frontend/node_modules/**",
+        "test-scenarios/**",
+        ".pid"
+      ],
+      "modifiers": [
+        {
+          "condition": "!IncludeIdentity",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/AuthorizationController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/**",
+            "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/**",
+            "backend/src/CompanyName.ProjectName.Domain/Users/Options/UserRegistrationOptions.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Shared/Email/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Email/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260102000000_AddIdentityFields.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260102000000_AddIdentityFields.Designer.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.Designer.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.Designer.cs",
+            "frontend/src/app/features/platform/components/open-applications/**",
+            "frontend/src/app/features/platform/services/open-application-service.ts",
+            "frontend/src/app/features/platform/models/open-application.dto.ts",
+            "frontend/_mock/api/open-application.ts"
+          ]
+        },
+        {
+          "condition": "!IncludeIdentity",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/Permissions/**",
+            "backend/src/CompanyName.ProjectName.Domain/Permissions/**"
+          ]
+        },
+        {
+          "condition": "IncludeIdentity && !IncludeRoles",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/Permissions/**",
+            "backend/src/CompanyName.ProjectName.Domain/Permissions/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.Designer.cs"
+          ]
+        }
+      ]
+    }
+  ]
+}

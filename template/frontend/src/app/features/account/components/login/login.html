@@ -1,0 +1,124 @@
+<div class="min-h-screen w-full flex items-center justify-center p-6 bg-surface-ground relative overflow-hidden">
+  <!-- Centered Content Block -->
+  <div class="w-full max-w-4xl flex flex-col lg:flex-row items-center gap-8 lg:gap-10">
+    <!-- Left: Brand + Features -->
+    <div class="w-full max-w-[500px] flex-shrink-0 flex flex-col gap-8">
+      <!-- Brand -->
+      <div class="text-center">
+        <div class="flex items-center gap-3 justify-center mb-3">
+          <app-logo size="large" />
+          <h1 class="text-3xl font-bold text-color">模板项目</h1>
+        </div>
+        <p class="text-lg text-muted-color">基于 Angular + .NET 的全栈开发模板</p>
+        <div class="flex items-center gap-2 mt-2 justify-center">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+          </span>
+          <span class="text-xs text-muted-color">系统运行中</span>
+        </div>
+      </div>
+
+      <!-- Features -->
+      <div class="space-y-3">
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-card border border-surface">
+          <div class="flex-shrink-0 w-9 h-9 rounded-lg bg-primary-100 dark:bg-primary-500/15 flex items-center justify-center">
+            <i class="pi pi-bolt text-primary-600 dark:text-primary-400"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-color">快速开发</h3>
+            <p class="text-xs text-muted-color">预置常用功能模块，开箱即用</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-card border border-surface">
+          <div class="flex-shrink-0 w-9 h-9 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center">
+            <i class="pi pi-shield text-cyan-600 dark:text-cyan-400"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-color">安全可靠</h3>
+            <p class="text-xs text-muted-color">内置完善的认证授权与安全机制</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-surface-card border border-surface">
+          <div class="flex-shrink-0 w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center">
+            <i class="pi pi-code text-indigo-600 dark:text-indigo-400"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-color">现代架构</h3>
+            <p class="text-xs text-muted-color">Angular 21 + .NET 10 + PrimeNG + Tailwind CSS</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Login Form Card -->
+    <div class="w-full max-w-sm flex-shrink-0 bg-surface-card border border-surface rounded-2xl p-8 shadow-sm">
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="flex flex-col gap-5">
+        <!-- Form Header -->
+        <div class="mb-2 text-center">
+          <h2 class="text-2xl font-bold text-color mb-1">欢迎回来</h2>
+          <p class="text-sm text-muted-color">登录以访问您的控制台</p>
+        </div>
+
+        <!-- Username/Email -->
+        <div class="flex flex-col gap-2">
+          <label for="usernameOrEmail" class="font-medium text-color">用户名或邮箱</label>
+          <input
+            pInputText
+            id="usernameOrEmail"
+            formControlName="usernameOrEmail"
+            class="w-full"
+            placeholder="请输入用户名或邮箱"
+            [ngClass]="{ 'ng-invalid ng-dirty': loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched }"
+          />
+          @if (loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched) {
+            <small class="text-red-500"> 请输入用户名或邮箱 </small>
+          }
+        </div>
+
+        <!-- Password -->
+        <div class="flex flex-col gap-2">
+          <label for="password" class="font-medium text-color">密码</label>
+          <p-password
+            id="password"
+            formControlName="password"
+            [feedback]="false"
+            [toggleMask]="true"
+            [fluid]="true"
+            inputClass="w-full"
+            placeholder="请输入密码"
+          >
+          </p-password>
+          @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
+            <small class="text-red-500"> 请输入密码 </small>
+          }
+        </div>
+
+        <div class="flex items-center justify-end gap-1 text-sm text-color">
+          <span>没有账号？</span>
+          <a
+            [routerLink]="['/auth/register']"
+            [queryParams]="returnUrl ? { returnUrl: returnUrl } : null"
+            class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
+            >立即注册</a
+          >
+        </div>
+
+        <!-- Submit Button -->
+        <p-button label="登录" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true"> </p-button>
+      </form>
+
+      <!-- Test Account Hint -->
+      @if (isMockEnabled()) {
+        <div class="mt-6 p-4 bg-surface-0 dark:bg-surface-800 rounded-xl border border-surface shadow-md">
+          <h4 class="font-bold text-color mb-2 flex items-center gap-2"> <i class="pi pi-info-circle text-primary"></i> 测试账号 </h4>
+          <div class="text-sm">
+            <span class="font-mono text-color">admin</span>
+            <span class="text-muted-color mx-1">/</span>
+            <span class="font-mono text-color">Admin&#64;123456</span>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

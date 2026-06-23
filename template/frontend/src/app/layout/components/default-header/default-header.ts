@@ -1,0 +1,143 @@
+import { ChangeDetectionStrategy, Component, OnDestroy, ViewChild, computed, inject, output, signal } from '@angular/core';
+import { Router, RouterModule } from '@angular/router';
+import { MenuItem } from 'primeng/api';
+import { AvatarModule } from 'primeng/avatar';
+import { BadgeModule } from 'primeng/badge';
+import { ButtonModule } from 'primeng/button';
+import { MenuModule, Menu } from 'primeng/menu';
+import { StyleClassModule } from 'primeng/styleclass';
+import { TooltipModule } from 'primeng/tooltip';
+
+import { AuthService } from '../../../core/services/auth-service';
+import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
+import { ProfileSettingsDialogComponent } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
+import { LayoutService } from '../../services/layout-service';
+
+@Component({
+  selector: 'app-default-header',
+  standalone: true,
+  imports: [
+    RouterModule,
+    ButtonModule,
+    AvatarModule,
+    BadgeModule,
+    StyleClassModule,
+    TooltipModule,
+    MenuModule,
+    ProfileSettingsDialogComponent,
+    ChangePasswordDialogComponent
+  ],
+  templateUrl: './default-header.html',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class DefaultHeader implements OnDestroy {
+  readonly layoutService = inject(LayoutService);
+  readonly authService = inject(AuthService);
+  readonly router = inject(Router);
+
+  @ViewChild('userMenu') userMenu!: Menu;
+
+  readonly toggleMobileMenu = output<void>();
+  readonly notificationCount = signal(1);
+  readonly profileDialogVisible = signal(false);
+  readonly changePasswordDialogVisible = signal(false);
+
+  readonly userMenuItems = computed<MenuItem[]>(() => {
+    const currentUser = this.authService.currentUser();
+    const items: MenuItem[] = [];
+
+    if (this.router.url.startsWith('/platform')) {
+      items.push({
+        label: '工作空间',
+        icon: 'pi pi-home',
+        command: () => this.closeMenuAndNavigate('/workspace')
+      });
+    } else if (this.router.url.startsWith('/workspace') && currentUser?.isAdmin()) {
+      items.push({
+        label: '管理平台',
+        icon: 'pi pi-cog',
+        command: () => this.closeMenuAndNavigate('/platform')
+      });
+    }
+
+    if (items.length > 0) {
+      items.push({ separator: true });
+    }
+
+    items.push(
+      {
+        label: '个人信息',
+        icon: 'pi pi-user-edit',
+        command: () => this.openProfileDialog()
+      },
+      {
+        label: '修改密码',
+        icon: 'pi pi-lock',
+        command: () => this.openChangePasswordDialog()
+      },
+      {
+        separator: true
+      },
+      {
+        label: '退出登录',
+        icon: 'pi pi-sign-out',
+        command: () => this.handleLogout()
+      }
+    );
+
+    return items;
+  });
+
+  openProfileDialog(): void {
+    this.forceCloseMenu();
+    this.profileDialogVisible.set(true);
+  }
+
+  openChangePasswordDialog(): void {
+    this.forceCloseMenu();
+    this.profileDialogVisible.set(false);
+    this.changePasswordDialogVisible.set(true);
+  }
+
+  handleLogout(): void {
+    this.forceCloseMenu();
+    this.authService.logout();
+  }
+
+  handleMenuToggle(): void {
+    if (this.layoutService.isMobileSidebarMode()) {
+      this.toggleMobileMenu.emit();
+      return;
+    }
+
+    this.layoutService.toggleSidebarCollapse();
+  }
+
+  private closeMenuAndNavigate(path: string): void {
+    this.forceCloseMenu();
+    this.router.navigate([path]);
+  }
+
+  private forceCloseMenu(): void {
+    try {
+      if (this.userMenu) {
+        this.userMenu.hide();
+      }
+    } catch {
+      // 忽略关闭异常，由兜底清理机制处理
+    } finally {
+      setTimeout(() => this.cleanupOverlay(), 50);
+    }
+  }
+
+  private cleanupOverlay(): void {
+    const overlays = document.querySelectorAll('.p-menu-overlay, .p-component-overlay');
+    if (overlays.length > 0) {
+      overlays.forEach(overlay => overlay.remove());
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.forceCloseMenu();
+  }
+}

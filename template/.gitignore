@@ -1,0 +1,63 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code local settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Claude local settings
+**/.claude/settings.local.json
+**/.claude/scheduled_tasks.json
+
+# .NET
+**/bin/
+**/obj/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Node
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.template
+backend/**/appsettings.Development.json
+backend/**/appsettings.Debug.json
+backend/**/appsettings.Local.json
+backend/**/appsettings.*.local.json
+frontend/src/environments/environment.debug.ts
+frontend/src/environments/environment.local.ts
+
+# Logs
+*.log
+logs/
+Logs/
+
+# Runtime uploads
+backend/src/CompanyName.ProjectName.Api/wwwroot/uploads/
+
+# Temporary
+*.tmp
+*.temp
+*.bak

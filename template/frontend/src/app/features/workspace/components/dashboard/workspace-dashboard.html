@@ -1,0 +1,37 @@
+<div class="p-4 md:p-6">
+  <p-card>
+    <ng-template pTemplate="header">
+      <div class="px-6 pt-6">
+        <h2 class="text-2xl font-bold m-0 text-color">工作台</h2>
+      </div>
+    </ng-template>
+    <div class="px-6 pb-6">
+      @if (authService.currentUser(); as user) {
+        <div class="space-y-3">
+          <div class="flex items-center gap-3">
+            <span class="text-muted-color w-20">用户名</span>
+            <span class="font-medium text-color">{{ user.username }}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-muted-color w-20">昵称</span>
+            <span class="font-medium text-color">{{ user.nickname || '-' }}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-muted-color w-20">邮箱</span>
+            <span class="font-medium text-color">{{ user.email || '-' }}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-muted-color w-20">角色</span>
+            <div class="flex gap-1">
+              @for (role of user.roles; track role) {
+                <p-tag [value]="role | roleLabel" severity="info" />
+              }
+            </div>
+          </div>
+        </div>
+      } @else {
+        <p class="text-muted-color">未获取到用户信息</p>
+      }
+    </div>
+  </p-card>
+</div>

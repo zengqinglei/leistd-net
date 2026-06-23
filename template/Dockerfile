@@ -1,0 +1,63 @@
+# -----------------------------------
+# Stage 1: Build Frontend (Angular)
+# -----------------------------------
+FROM node:20-alpine AS frontend-build
+WORKDIR /app
+
+# 配置 npm 使用淘宝镜像（加速国内构建）
+RUN npm config set registry https://registry.npmmirror.com
+
+# 升级 npm 到最新版本
+RUN npm install -g npm@latest
+
+# 复制 package.json 并安装依赖（利用 Docker 层缓存）
+COPY frontend/package.json ./
+RUN npm install --prefer-offline --no-audit
+
+# 支持构建时传入 API Gateway 地址（用于前后端分离部署）
+# 使用方式: docker build --build-arg API_GATEWAY=https://api.example.com .
+ARG API_GATEWAY=""
+
+# 复制源代码
+COPY frontend/ ./
+
+# 替换环境变量占位符并构建
+RUN if [ -n "$API_GATEWAY" ]; then \
+      echo "🔧 替换 API_GATEWAY: $API_GATEWAY"; \
+      sed -i "s|__API_GATEWAY__|${API_GATEWAY}|g" src/environments/environment.prod.ts; \
+    else \
+      echo "🔧 使用默认配置（空 gateway）"; \
+      sed -i "s|__API_GATEWAY__||g" src/environments/environment.prod.ts; \
+    fi && \
+    npm run build -- --configuration=production
+
+# -----------------------------------
+# Stage 2: Build Backend (.NET)
+# -----------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+WORKDIR /src
+
+# 复制后端代码（.dockerignore 已排除 bin/obj）
+COPY backend/ ./backend/
+
+# Build
+WORKDIR "/src/backend/src/CompanyName.ProjectName.Api"
+RUN dotnet publish "CompanyName.ProjectName.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# -----------------------------------
+# Stage 3: Final Runtime Image
+# -----------------------------------
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+
+EXPOSE 8080
+
+# 1. 拷贝后端构建结果
+COPY --from=backend-build /app/publish .
+
+# 2. 拷贝前端构建结果到后端的 wwwroot 目录，让 ASP.NET Core 直接托管静态 SPA 文件
+# Angular >= 17 生产构建会输出到 dist/<project>/browser 目录
+COPY --from=frontend-build /app/dist/my-project-web/browser ./wwwroot
+
+# 启动程序（Program.cs 会在应用启动前自动执行数据库迁移）
+ENTRYPOINT ["dotnet", "CompanyName.ProjectName.Api.dll"]
