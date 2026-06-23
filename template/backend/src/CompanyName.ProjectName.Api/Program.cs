@@ -51,6 +51,8 @@ try
 #if (IncludeIdentity)
     builder.Services.AddOptions<OAuthOptions>()
         .Bind(builder.Configuration.GetSection(OAuthOptions.SectionName));
+    builder.Services.AddOptions<ExternalAuthOptions>()
+        .Bind(builder.Configuration.GetSection(ExternalAuthOptions.SectionName));
     builder.Services.AddOptions<UserRegistrationOptions>()
         .Bind(builder.Configuration.GetSection(UserRegistrationOptions.SectionName))
         .ValidateDataAnnotations()

@@ -1,6 +1,10 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Microsoft.Extensions.DependencyInjection;
 
+#if (IncludeIdentity)
+using CompanyName.ProjectName.Domain.Auth.DomainServices;
+#endif
+
 namespace CompanyName.ProjectName.Domain;
 
 /// <summary>
@@ -15,6 +19,11 @@ public static class DependencyInjection
     {
         // 用户管理领域服务
         services.AddTransient<UserDomainService>();
+
+#if (IncludeIdentity)
+        // 外部认证领域服务
+        services.AddTransient<ExternalAuthDomainService>();
+#endif
 
         return services;
     }

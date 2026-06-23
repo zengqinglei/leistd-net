@@ -35,6 +35,9 @@ public static class DependencyInjection
 
         // OAuth 应用管理
         services.AddScoped<IOpenApplicationAppService, OpenApplicationAppService>();
+
+        // 外部认证
+        services.AddScoped<IExternalAuthAppService, ExternalAuthAppService>();
 #endif
 
         // 用户管理

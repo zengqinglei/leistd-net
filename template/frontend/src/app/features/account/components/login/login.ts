@@ -135,4 +135,37 @@ export class Login {
     }
     return null;
   }
+
+  loginWithGitHub() {
+    this.loginWithExternalProvider('github', 'GitHub');
+  }
+
+  loginWithGoogle() {
+    this.loginWithExternalProvider('google', 'Google');
+  }
+
+  /**
+   * 通用第三方登录
+   */
+  private async loginWithExternalProvider(provider: 'github' | 'google', label: string) {
+    this._isLoading.set(true);
+    try {
+      const response = await lastValueFrom(this.accountService.getExternalLoginUrl(provider));
+
+      if (!response.loginUrl) {
+        throw new Error('未获取到有效的登录 URL');
+      }
+
+      window.location.href = response.loginUrl;
+    } catch (error) {
+      console.error(`${label} 登录失败`, error);
+      this.messageService.add({
+        severity: 'error',
+        summary: '登录失败',
+        detail: `无法连接到 ${label} 登录服务，请稍后重试`,
+        life: 3000
+      });
+      this._isLoading.set(false);
+    }
+  }
 }

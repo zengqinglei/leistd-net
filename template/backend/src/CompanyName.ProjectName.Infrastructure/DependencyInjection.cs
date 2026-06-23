@@ -16,7 +16,10 @@ using CompanyName.ProjectName.Infrastructure.Shared.Security.Aes;
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
 #if (IncludeIdentity)
+using CompanyName.ProjectName.Domain.Auth.Abstractions;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Shared.Email;
+using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 using CompanyName.ProjectName.Infrastructure.Email;
 #endif
 using StackExchange.Redis;
@@ -115,6 +118,11 @@ public static class DependencyInjection
 #if (IncludeIdentity)
         // 邮件发送服务
         services.AddTransient<IEmailSender, MailKitEmailSender>();
+
+        // 外部认证 OAuth 提供商（Keyed DI）
+        services.AddHttpClient();
+        services.AddKeyedScoped<IOAuthProvider, GitHubOAuthProvider>("github");
+        services.AddKeyedScoped<IOAuthProvider, GoogleOAuthProvider>("google");
 #endif
 
         return services;

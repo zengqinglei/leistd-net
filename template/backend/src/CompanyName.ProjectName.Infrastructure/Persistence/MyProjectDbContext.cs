@@ -1,4 +1,7 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
+#if (IncludeIdentity)
+using CompanyName.ProjectName.Domain.Auth.Entities;
+#endif
 #if (IncludeRoles)
 using CompanyName.ProjectName.Domain.Permissions.Entities;
 #endif
@@ -18,6 +21,7 @@ public class MyProjectDbContext(
     // Identity（认证模块）
     public DbSet<Role> Roles { get; set; } = null!;
     public DbSet<UserRole> UserRoles { get; set; } = null!;
+    public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif
 #if (IncludeRoles)
     public DbSet<PermissionGrant> PermissionGrants { get; set; } = null!;
