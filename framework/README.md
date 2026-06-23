@@ -18,9 +18,13 @@ framework/
 ├── build/
 │   ├── pack.ps1                # 打包为 nupkg（PDB 内嵌）
 │   └── push.ps1                # 推送到 NuGet 源
-├── docs/
+├── docs/                       # 文档体系（详见 docs/README.md）
+│   ├── README.md               # 文档总索引
 │   ├── development-guide.md    # 新增/修改组件的规范（AI 与人均按此开发）
-│   └── versioning.md           # 版本与发布规范
+│   ├── versioning.md           # 版本与发布规范
+│   ├── _doc-template.md        # 组件文档模板规范（人+AI 协作）
+│   ├── components/             # 各组件分组文档（README 总览 + 11 个分组，由源码生成）
+│   └── ddd-struct/             # DDD 四层基础类型文档
 ├── components/                 # 共享组件（按领域分组）
 │   ├── aop/                    # Leistd.DynamicProxy（动态代理/拦截器）
 │   ├── core/                   # Leistd.Core（基础原语、时钟、异常）
