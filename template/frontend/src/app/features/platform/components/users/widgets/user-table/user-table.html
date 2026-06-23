@@ -135,7 +135,6 @@
               [disabled]="isOtherSuperAdmin(item)"
               [pTooltip]="isOtherSuperAdmin(item) ? '系统内置超级管理员不允许被其他管理员更新' : '编辑'"
               tooltipPosition="top"
-              size="small"
             />
             <p-button
               (onClick)="toggleActive.emit(item)"
@@ -155,7 +154,6 @@
                       : '启用'
               "
               tooltipPosition="top"
-              size="small"
             />
             <p-button
               (onClick)="resetPassword.emit(item.id)"
@@ -167,7 +165,6 @@
               [disabled]="isOtherSuperAdmin(item)"
               [pTooltip]="isOtherSuperAdmin(item) ? '系统内置超级管理员的密码不允许被其他管理员重置' : '重置密码'"
               tooltipPosition="top"
-              size="small"
             />
             <p-button
               (onClick)="delete.emit(item)"
@@ -179,7 +176,6 @@
               [disabled]="isSuperAdmin(item)"
               [pTooltip]="isSuperAdmin(item) ? '系统内置超级管理员不允许删除' : '删除'"
               tooltipPosition="top"
-              size="small"
             />
           </div>
         </td>

@@ -116,8 +116,7 @@
                   [value]="'+' + getHiddenRedirectUris(item).length"
                   severity="secondary"
                   styleClass="text-xs cursor-pointer shrink-0"
-                  (click)="openPopover($event, detailPopover, 'redirectUris', getHiddenRedirectUris(item))"
-                />
+                  (click)="openPopover($event, detailPopover, 'redirectUris', getHiddenRedirectUris(item))" />
               }
             </div>
           } @else {
@@ -131,8 +130,7 @@
             <p-tag
               [value]="item.hasClientSecret ? 'Secret 已设置' : '无 Secret'"
               [severity]="item.hasClientSecret ? 'warn' : 'secondary'"
-              styleClass="text-xs hidden 2xl:inline-flex"
-            />
+              styleClass="text-xs hidden 2xl:inline-flex" />
           </div>
         </td>
 
@@ -150,8 +148,7 @@
               icon="pi pi-pencil"
               styleClass="w-8 h-8 !p-0"
               pTooltip="编辑"
-              tooltipPosition="top"
-             size="small"/>
+              tooltipPosition="top" />
             <p-button
               (onClick)="resetSecret.emit(item.id)"
               [text]="true"
@@ -161,8 +158,7 @@
               styleClass="w-8 h-8 !p-0"
               pTooltip="重置密钥"
               tooltipPosition="top"
-              [disabled]="item.clientType !== 'confidential'"
-             size="small"/>
+              [disabled]="item.clientType !== 'confidential'" />
             <p-button
               (onClick)="delete.emit(item.id)"
               [text]="true"
@@ -171,8 +167,7 @@
               icon="pi pi-trash"
               styleClass="w-8 h-8 !p-0"
               pTooltip="删除"
-              tooltipPosition="top"
-             size="small"/>
+              tooltipPosition="top" />
           </div>
         </td>
       </tr>

@@ -11,6 +11,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../../core/services/auth-service';
 import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialogComponent } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
+import { ThemeConfigurator } from '../../../shared/components/theme-configurator/theme-configurator';
 import { LayoutService } from '../../services/layout-service';
 
 @Component({
@@ -24,6 +25,7 @@ import { LayoutService } from '../../services/layout-service';
     StyleClassModule,
     TooltipModule,
     MenuModule,
+    ThemeConfigurator,
     ProfileSettingsDialogComponent,
     ChangePasswordDialogComponent
   ],

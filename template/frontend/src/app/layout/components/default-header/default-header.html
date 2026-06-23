@@ -25,6 +25,35 @@
 
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
+    <!-- Theme Toggle -->
+    <p-button
+      [icon]="layoutService.isDarkTheme() ? 'pi pi-moon' : 'pi pi-sun'"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      styleClass="min-w-[44px] min-h-[44px]"
+      (onClick)="layoutService.toggleDarkMode()"
+    >
+    </p-button>
+
+    <!-- Configurator: 桌面端显示 -->
+    <div class="relative hidden md:block">
+      <p-button
+        icon="pi pi-palette"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pStyleClass="@next"
+        enterFromClass="hidden"
+        enterActiveClass="animate-scalein"
+        leaveToClass="hidden"
+        leaveActiveClass="animate-fadeout"
+        [hideOnOutsideClick]="true"
+      >
+      </p-button>
+      <app-theme-configurator />
+    </div>
+
     <!-- Notifications -->
     <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="relative min-w-[44px] min-h-[44px]">
       <i class="pi pi-bell text-base md:text-lg"></i>
