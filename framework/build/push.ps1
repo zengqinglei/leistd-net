@@ -1,12 +1,12 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    将 framework/artifacts 下的 NuGet 包（含符号包）推送到 NuGet 源。
+    将 framework/artifacts 下的 NuGet 包推送到 NuGet 源。
 
 .DESCRIPTION
     API Key 从环境变量 NUGET_API_KEY 读取，脚本不硬编码密钥。
     默认推送到 nuget.org；可用 -Source 指定私有源。
-    .snupkg 会随 .nupkg 一并推送（nuget.org 支持符号服务器）。
+    PDB 已内嵌在 .nupkg 中（无独立 .snupkg），无需符号服务器即可调试。
 
 .PARAMETER Source
     NuGet 源 URL，默认 https://api.nuget.org/v3/index.json。
@@ -47,7 +47,7 @@ if ($packages.Count -eq 0) { throw "未找到 .nupkg，请先运行 pack.ps1。"
 Write-Host "==> 推送 $($packages.Count) 个包到 $Source" -ForegroundColor Cyan
 foreach ($pkg in $packages) {
     Write-Host "    push $($pkg.Name)" -ForegroundColor DarkGray
-    # --skip-duplicate 容忍重复版本；nuget push 会自动带上同名 .snupkg
+    # --skip-duplicate 容忍重复版本；PDB 已内嵌在 .nupkg 中，无独立 .snupkg 需推送
     dotnet nuget push $pkg.FullName --source $Source --api-key $ApiKey --skip-duplicate
     if ($LASTEXITCODE -ne 0) { throw "推送失败: $($pkg.Name) (exit $LASTEXITCODE)" }
 }

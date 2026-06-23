@@ -26,7 +26,7 @@ framework/common.props  →  <Version>X.Y.Z</Version>
 1. 确认 `dotnet build framework/leistd-framework.slnx -c Release` 0 错误。
 2. 按变更性质更新 `framework/common.props` 的 `<Version>`。
 3. 同步更新 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>`。
-4. `pwsh framework/build/pack.ps1`，核对 `artifacts/` 下 nupkg + snupkg 数量与版本。
+4. `pwsh framework/build/pack.ps1`，核对 `artifacts/` 下 nupkg 数量与版本（PDB 已内嵌）。
 5. 配置 git 远程并推送代码（Source Link 需要远程提交可达，否则消费方无法步进源码）。
 6. `$env:NUGET_API_KEY=...; pwsh framework/build/push.ps1`（或指定 `-Source` 私有源）。
 7. 记录变更（CHANGELOG / release notes）。

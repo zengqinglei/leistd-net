@@ -37,12 +37,11 @@ if (Test-Path $Output) { Remove-Item -Recurse -Force $Output }
 New-Item -ItemType Directory -Force -Path $Output | Out-Null
 
 Write-Host "==> dotnet pack ($Configuration) -> $Output" -ForegroundColor Cyan
-# snupkg 由 common.props 的 IncludeSymbols/SymbolPackageFormat 控制，无需在此重复传参
+# PDB 随主 .nupkg 内嵌（由 common.props 的 AllowedOutputExtensionsInPackageBuildOutputFolder 控制），不产独立 snupkg
 dotnet pack $Solution -c $Configuration -o $Output /p:ContinuousIntegrationBuild=true
 if ($LASTEXITCODE -ne 0) { throw "dotnet pack 失败 (exit $LASTEXITCODE)" }
 
 $nupkgs = Get-ChildItem $Output -Filter *.nupkg
-$snupkgs = Get-ChildItem $Output -Filter *.snupkg
 Write-Host ""
-Write-Host "==> 完成: $($nupkgs.Count) 个 .nupkg, $($snupkgs.Count) 个 .snupkg" -ForegroundColor Green
+Write-Host "==> 完成: $($nupkgs.Count) 个 .nupkg（PDB 已内嵌）" -ForegroundColor Green
 $nupkgs | ForEach-Object { Write-Host "    $($_.Name)" }

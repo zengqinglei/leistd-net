@@ -84,7 +84,7 @@ dotnet sln framework/leistd-framework.slnx add framework/components/<分组>/Lei
 
 ```bash
 dotnet build framework/leistd-framework.slnx -c Release   # 0 错误
-pwsh framework/build/pack.ps1                              # 每个可打包项目产出 nupkg + snupkg
+pwsh framework/build/pack.ps1                              # 每个可打包项目产出 nupkg（PDB 内嵌）
 ```
 
 新增第三方包时确认已在 `Directory.Packages.props` 登记；新增包发布前确认 `PackageId` 唯一。
