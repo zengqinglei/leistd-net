@@ -15,12 +15,12 @@
 
   <!-- NuGet 包元数据 -->
   <PropertyGroup>
-    <Authors>Lehman Holding</Authors>
-    <Company>Lehman Holding</Company>
+    <Authors>zengql</Authors>
     <Product>Leistd Framework</Product>
     <PackageProjectUrl>https://github.com/zengqinglei/leistd-net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/zengqinglei/leistd-net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>leistd ddd aspnetcore framework dotnet</PackageTags>
     <PackageReadmeFile>NuGet.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
