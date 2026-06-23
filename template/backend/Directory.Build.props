@@ -9,7 +9,8 @@
       切换方式：设置环境变量 LeistdUseLocalFramework=true，或运行 scripts/switch-framework.ps1。
 
     LeistdFrameworkVersion:
-      引用的 Leistd.* 框架包版本，需与 framework/common.props 的 <Version> 对应。
+      引用的 Leistd.* 框架包版本。唯一事实来源是 framework/common.props 的 <Version>；
+      此处为字面值（生成项目需自包含），由 scripts/sync-version.ps1 从唯一源单向同步，勿手工改。
   -->
   <PropertyGroup>
     <LeistdUseLocalFramework Condition="'$(LeistdUseLocalFramework)' == ''">false</LeistdUseLocalFramework>

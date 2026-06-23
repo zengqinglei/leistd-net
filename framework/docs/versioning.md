@@ -10,7 +10,14 @@ framework/common.props  →  <Version>X.Y.Z</Version>
 
 所有 26 个 `Leistd.*` 包共享此版本。修改这一处即同步全部包。
 
-模板侧引用版本在 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 声明，发布新框架版本后需同步更新该值（并在 `template/backend/Directory.Packages.props` 通过 `$(LeistdFrameworkVersion)` 自动生效）。
+模板侧引用版本在 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 以**字面值**保存（生成项目需自包含，无法 import 仓库根文件），它**不是**第二个版本源，而是由唯一源单向同步的副本：
+
+```bash
+pwsh scripts/sync-version.ps1          # 读 framework <Version> 回写模板
+pwsh scripts/sync-version.ps1 -Check   # 校验两处一致（CI / 发布前），不一致退出码 1
+```
+
+模板的 `Directory.Packages.props` 再通过 `$(LeistdFrameworkVersion)` 应用到各 `Leistd.*` 包引用。
 
 ## SemVer 约定
 
@@ -24,8 +31,8 @@ framework/common.props  →  <Version>X.Y.Z</Version>
 ## 发布检查清单
 
 1. 确认 `dotnet build framework/Leistd.Framework.slnx -c Release` 0 错误。
-2. 按变更性质更新 `framework/common.props` 的 `<Version>`。
-3. 同步更新 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>`。
+2. 按变更性质更新**唯一源** `framework/common.props` 的 `<Version>`。
+3. 运行 `pwsh scripts/sync-version.ps1` 将版本同步到模板（随后可 `-Check` 复核）。
 4. `pwsh framework/build/pack.ps1`，核对 `artifacts/` 下 nupkg 数量与版本（PDB 已内嵌）。
 5. 配置 git 远程并推送代码（Source Link 需要远程提交可达，否则消费方无法步进源码）。
 6. `$env:NUGET_API_KEY=...; pwsh framework/build/push.ps1`（或指定 `-Source` 私有源）。
