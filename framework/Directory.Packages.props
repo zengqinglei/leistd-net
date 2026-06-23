@@ -28,8 +28,9 @@
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
     <PackageVersion Include="System.Linq.Dynamic.Core" Version="1.7.2" />
 
-    <!-- 构建期（源码调试） -->
+    <!-- 构建期（源码调试 + 版本推算） -->
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
+    <PackageVersion Include="GitVersion.MsBuild" Version="6.7.0" />
   </ItemGroup>
 
 </Project>

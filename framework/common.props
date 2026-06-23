@@ -3,11 +3,14 @@
   <!--
     Leistd 框架共享构建属性（参考 Volo.ABP common.props 模式）。
     由 framework/Directory.Build.props 自动导入到所有框架项目。
-    框架版本单点维护：修改下面的 <Version> 即同步到所有 Leistd.* 包。
+
+    版本：唯一来源是仓库根 GitVersion.yml（从 git tag/历史/提交信息推算），
+    CI 中由 GitVersion.MsBuild 注入 Version 覆盖。下面的 <VersionPrefix> 仅作
+    本地无 GitVersion 时的回退基准，不是发布版本来源——勿据此发版。
   -->
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
-    <Version>0.8.0</Version>
+    <VersionPrefix>0.8.0</VersionPrefix>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

@@ -6,4 +6,17 @@
   -->
   <Import Project="$(MSBuildThisFileDirectory)common.props" />
 
+  <!--
+    GitVersion：版本号的唯一来源（从 git 历史/tag/提交信息推算，配置见仓库根 GitVersion.yml）。
+    构建时自动注入 Version/AssemblyVersion 等，覆盖 common.props 的回退版本。
+    仅在 CI 启用（GITHUB_ACTIONS=true），避免本地无网/浅克隆时拖慢或算错——
+    本地构建回退到 common.props 的 <VersionPrefix>。
+  -->
+  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <PackageReference Include="GitVersion.MsBuild">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
 </Project>

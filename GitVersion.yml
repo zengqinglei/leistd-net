@@ -1,0 +1,36 @@
+# GitVersion v6 配置 —— 版本号的唯一来源（从 git 历史 + tag + 提交信息推算）
+# 文档：https://gitversion.net/docs/reference/configuration
+#
+# 策略：
+#   - 默认递增 Patch（"优先尽量小版本"）。
+#   - 提交信息含 Conventional Commits 语义时升级：feat→minor，fix→patch，BREAKING CHANGE/feat!→major。
+#   - 也兼容 GitVersion 原生的 "+semver: minor|major|none" 显式标记。
+#   - 分支 → 版本形态：main=正式（无后缀），develop=beta。nightly 由流水线追加 -preview.<date> 后缀。
+workflow: GitFlow/v1
+
+# 基准版本：首个 tag 之前从此起算（与历史 0.8.0 衔接）
+next-version: 0.8.0
+
+# 默认递增最小版本
+increment: Patch
+
+# 启用基于提交信息的版本递增
+commit-message-incrementing: Enabled
+
+# Conventional Commits + GitVersion 原生标记 双兼容的 bump 正则
+# major：BREAKING CHANGE / 类型后带 ! （如 feat!: ） / +semver:breaking|major
+major-version-bump-message: '(\+semver:\s?(breaking|major))|(^[a-zA-Z]+(\([^)]*\))?!:)|(BREAKING CHANGE:)'
+# minor：feat: / +semver:feature|minor
+minor-version-bump-message: '(\+semver:\s?(feature|minor))|(^feat(\([^)]*\))?:)'
+# patch：fix: / +semver:fix|patch
+patch-version-bump-message: '(\+semver:\s?(fix|patch))|(^fix(\([^)]*\))?:)'
+# 不升版本：+semver:none|skip
+no-bump-message: '\+semver:\s?(none|skip)'
+
+branches:
+  main:
+    label: ''          # 正式版，无预发布后缀
+    increment: Patch
+  develop:
+    label: beta         # develop 产出 x.y.z-beta.N
+    increment: Patch

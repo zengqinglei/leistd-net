@@ -1,11 +1,12 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    打包所有 Leistd.* 框架项目为 NuGet 包（含 snupkg 符号包）。
+    打包所有 Leistd.* 框架项目为 NuGet 包（PDB 内嵌）。
 
 .DESCRIPTION
-    版本由 framework/common.props 的 <Version> 单点控制。
-    输出到 framework/artifacts/，每个可打包项目产出 .nupkg + .snupkg。
+    版本：CI 中由 GitVersion 注入（见 GitVersion.yml）；本地无 GitVersion 时回退
+    common.props 的 <VersionPrefix>。输出到 framework/artifacts/，每个可打包项目产出
+    内嵌 PDB 的 .nupkg（无独立 snupkg）。发布流水线见 .github/workflows/release-*.yml。
 
 .PARAMETER Configuration
     构建配置，默认 Release。
@@ -33,7 +34,8 @@ if ([string]::IsNullOrWhiteSpace($Output)) {
     $Output = Join-Path $FrameworkRoot "artifacts"
 }
 
-# 打包前自动将版本（唯一源 = framework/common.props 的 <Version>）同步到模板，杜绝漂移
+# 打包前同步版本到模板。本地调用不带 -Version，回退用 common.props 的 VersionPrefix；
+# CI 发布流水线会显式传入 GitVersion 算出的版本（见 release-*.yml）。
 Write-Host "==> 同步版本到模板" -ForegroundColor Cyan
 & (Join-Path $RepoRoot "scripts/sync-version.ps1")
 if ($LASTEXITCODE -ne 0) { throw "版本同步失败 (exit $LASTEXITCODE)" }

@@ -1,0 +1,62 @@
+name: Release Stable
+
+# 正式版：人工打 tag（如 v0.8.0）推送时触发。
+# GitVersion 在 tagged commit 上产出干净的 x.y.z（无预发布后缀）。
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  release:
+    name: 打包并发布正式版到 nuget.org
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # 创建 GitHub Release
+      id-token: write       # NuGet Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # GitVersion 需要完整历史与 tag
+
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 安装 GitVersion
+        uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.7.x'
+
+      - name: 计算版本（GitVersion）
+        id: gv
+        uses: gittools/actions/gitversion/execute@v4
+        with:
+          useConfigFile: true
+
+      - name: 同步版本到模板
+        shell: pwsh
+        run: pwsh scripts/sync-version.ps1 -Version "${{ steps.gv.outputs.majorMinorPatch }}"
+
+      - name: 打包
+        run: pwsh framework/build/pack.ps1
+
+      # Trusted Publishing：从 nuget.org 换取 1 小时一次性临时 key（无需长期 API Key）
+      - name: 登录 nuget.org（Trusted Publishing）
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: 推送到 nuget.org
+        run: >
+          dotnet nuget push "framework/artifacts/*.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+          --skip-duplicate
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: framework/artifacts/*.nupkg

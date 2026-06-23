@@ -1,0 +1,62 @@
+name: Release Nightly
+
+# Nightly 预览：每个工作日定时从 develop 构建，产出 x.y.z-preview.<yyyyMMdd>，
+# 发布到 GitHub Packages（内部 feed，需 PAT 拉取），不污染 nuget.org。
+on:
+  schedule:
+    - cron: '0 18 * * 1-5'   # UTC 18:00（北京次日 02:00），周一至周五
+  workflow_dispatch:           # 也可手动触发
+
+jobs:
+  nightly:
+    name: 打包 nightly 到 GitHub Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # 推送到 GitHub Packages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 安装 GitVersion
+        uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.7.x'
+
+      - name: 计算版本（GitVersion）
+        id: gv
+        uses: gittools/actions/gitversion/execute@v4
+        with:
+          useConfigFile: true
+
+      - name: 组装 nightly 版本号
+        id: ver
+        shell: pwsh
+        run: |
+          $date = (Get-Date).ToString('yyyyMMdd')
+          $v = "${{ steps.gv.outputs.majorMinorPatch }}-preview.$date"
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "nightly 版本: $v"
+
+      - name: 打包（显式版本号）
+        shell: pwsh
+        run: |
+          pwsh scripts/sync-version.ps1 -Version "${{ steps.ver.outputs.version }}"
+          dotnet pack framework/Leistd.Framework.slnx -c Release `
+            -o framework/artifacts `
+            -p:Version="${{ steps.ver.outputs.version }}" `
+            -p:ContinuousIntegrationBuild=true
+
+      - name: 推送到 GitHub Packages
+        run: >
+          dotnet nuget push "framework/artifacts/*.nupkg"
+          --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
