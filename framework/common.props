@@ -18,8 +18,8 @@
     <Authors>Lehman Holding</Authors>
     <Company>Lehman Holding</Company>
     <Product>Leistd Framework</Product>
-    <PackageProjectUrl>https://github.com/lehmanholding/leistd-net</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/lehmanholding/leistd-net</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/zengqinglei/leistd-net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/zengqinglei/leistd-net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>leistd ddd aspnetcore framework dotnet</PackageTags>
     <PackageReadmeFile>NuGet.md</PackageReadmeFile>
