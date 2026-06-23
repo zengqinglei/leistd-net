@@ -5,11 +5,11 @@
 框架版本的**唯一来源**是仓库根的 **`VERSION`** 文件（基准 `x.y.z`），它存的是**最近一次已发布的正式版**。
 
 - `framework/common.props` 在构建时自动读取 `VERSION` 作为 `VersionPrefix`，所有 `Leistd.*` 包同步该版本（无外部工具依赖）。
-- 模板 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 是字面值副本（生成项目需自包含），由发布流水线调用 `scripts/sync-version.ps1` 回写。
+- 模板 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 是字面值副本（生成项目需自包含），由发布流水线 `release.yml` 在发版时回写。
 
 ## 提交规范决定版本递增（Conventional Commits）
 
-发版时由 `scripts/compute-version.ps1` 分析"自上个 `v*` tag 以来"的提交信息，算出下一个版本（默认"优先最小版本"）：
+发版时流水线（`release.yml`）分析"自上个 `v*` tag 以来"的提交信息，算出下一个版本（默认"优先最小版本"）：
 
 | 提交 | 递增 | 例 |
 | --- | --- | --- |
@@ -23,9 +23,11 @@
 
 | 分支 / 触发 | 版本形态 | 发布目标 | 工作流 |
 | --- | --- | --- | --- |
-| push `main` | `x.y.z`（正式，自动递增） | nuget.org | `release-stable.yml` |
-| push `develop` | `x.y.z-beta.<N>` | nuget.org（预发布） | `release-beta.yml` |
-| 每工作日定时（develop） | `x.y.z-preview.<yyyyMMdd>` | GitHub Packages（内部） | `release-nightly.yml` |
+| push `main` | `x.y.z`（正式，自动递增） | nuget.org | `release.yml`（stable 通道） |
+| push `develop` | `x.y.z-beta.<N>` | nuget.org（预发布） | `release.yml`（beta 通道） |
+| 每工作日定时（develop） | `x.y.z-preview.<yyyyMMdd>` | GitHub Packages（内部） | `release.yml`（nightly 通道） |
+
+> 三个通道由**单个** `release.yml` 内部按 `github.ref` / `github.event_name` 自动判定。
 
 > 预发布后缀用**点分数字**（`-beta.12`、`-preview.20260623`），保证 NuGet 数值排序正确。
 
@@ -33,20 +35,20 @@
 
 **push 到 `main` 即自动发布**，无需手动打 tag：
 
-1. `compute-version.ps1` 按提交推算新正式版本；
+1. 按提交推算新正式版本；
 2. 回写 `VERSION` + 同步模板，提交 `chore: 发布 vX.Y.Z [skip ci]`；
 3. 打 tag `vX.Y.Z`；
 4. 打包 → 经 Trusted Publishing 推 nuget.org；
 5. 创建 GitHub Release（自动生成 release notes）。
 
 机制要点：
-- 仅 `framework/`、`scripts/`、`VERSION`、release workflow 变更才触发发版；纯文档变更跳过。
+- 仅 `framework/`、`template/`、`VERSION`、`release.yml` 变更才触发发版；纯文档变更跳过。
 - 回写提交带 `[skip ci]` 且过滤 `github-actions[bot]`，避免死循环。
 - ⚠️ NuGet 包不可删（只能 unlist）。main 上每次有效变更都会产出一个正式版，请把控合入 main 的节奏。
 
 ## 鉴权
 
-- **nuget.org**（stable / beta）：Trusted Publishing（OIDC，免长期 API Key）。需在 nuget.org 配置信任策略（仓库 + 工作流文件名 `release-stable.yml` / `release-beta.yml`），并设 `NUGET_USER` secret。
+- **nuget.org**（stable / beta）：Trusted Publishing（OIDC，免长期 API Key）。需在 nuget.org 配置信任策略（仓库 + 工作流文件名 `release.yml`），并设 `NUGET_USER` secret。
 - **GitHub Packages**（nightly）：用内置 `GITHUB_TOKEN`，无需额外配置。
 
 ### 引用 nightly 包（内部测试）
@@ -65,14 +67,12 @@ dotnet add package Leistd.Core --prerelease
 
 ```bash
 # 打包（用 VERSION 文件的版本，产出到 framework/artifacts）
-pwsh framework/build/pack.ps1
+dotnet pack framework/Leistd.Framework.slnx -c Release -o framework/artifacts
 
-# 预览将推算出的版本（不修改任何文件）
-pwsh scripts/compute-version.ps1                  # 正式版
-pwsh scripts/compute-version.ps1 -PreRelease beta # beta
-
-# 手动升基准版本：直接编辑 VERSION 文件即可
+# 想发布更高的基准版本：直接编辑 VERSION 文件即可（CI 在此基础上按提交递增）
 ```
+
+> 版本推算、模板同步、打包发布逻辑全部内联于 `.github/workflows/release.yml`，仓库不再有独立脚本——发布由 push 自动触发，本地通常无需手动介入。
 
 ## 注意
 

@@ -11,22 +11,13 @@
     <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 
-  <!-- Leistd 框架引用：NuGet 模式（默认） -->
-  <ItemGroup Condition="'$(LeistdUseLocalFramework)' != 'true'">
+  <!-- Leistd 框架引用 -->
+  <ItemGroup>
     <PackageReference Include="Leistd.Exception.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
     <PackageReference Include="Leistd.Security.Core" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Domain" />
-  </ItemGroup>
-
-  <!-- Leistd 框架引用：本地源码模式（可断点调试） -->
-  <ItemGroup Condition="'$(LeistdUseLocalFramework)' == 'true'">
-    <ProjectReference Include="..\..\..\..\framework\components\exception\Leistd.Exception.Core\Leistd.Exception.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\lock\Leistd.Lock.Core\Leistd.Lock.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\ddd-struct\Leistd.Ddd.Application\Leistd.Ddd.Application.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\ddd-struct\Leistd.Ddd.Domain\Leistd.Ddd.Domain.csproj" />
   </ItemGroup>
 
 </Project>

@@ -21,20 +21,12 @@
     <ProjectReference Include="..\CompanyName.ProjectName.Application\CompanyName.ProjectName.Application.csproj" />
   </ItemGroup>
 
-  <!-- Leistd 框架引用：NuGet 模式（默认） -->
-  <ItemGroup Condition="'$(LeistdUseLocalFramework)' != 'true'">
+  <!-- Leistd 框架引用 -->
+  <ItemGroup>
     <PackageReference Include="Leistd.Exception.AspNetCore" />
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />
-  </ItemGroup>
-
-  <!-- Leistd 框架引用：本地源码模式（可断点调试） -->
-  <ItemGroup Condition="'$(LeistdUseLocalFramework)' == 'true'">
-    <ProjectReference Include="..\..\..\..\framework\components\exception\Leistd.Exception.AspNetCore\Leistd.Exception.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\security\Leistd.Security.AspNetCore\Leistd.Security.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\tracing\Leistd.Tracing.AspNetCore\Leistd.Tracing.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\tracing\Leistd.Tracing.HttpClient\Leistd.Tracing.HttpClient.csproj" />
   </ItemGroup>
 
 </Project>

@@ -25,20 +25,12 @@
     <ProjectReference Include="..\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
   </ItemGroup>
 
-  <!-- Leistd 框架引用：NuGet 模式（默认） -->
-  <ItemGroup Condition="'$(LeistdUseLocalFramework)' != 'true'">
+  <!-- Leistd 框架引用 -->
+  <ItemGroup>
     <PackageReference Include="Leistd.Ddd.Infrastructure" />
     <PackageReference Include="Leistd.EventBus.Local" />
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />
-  </ItemGroup>
-
-  <!-- Leistd 框架引用：本地源码模式（可断点调试） -->
-  <ItemGroup Condition="'$(LeistdUseLocalFramework)' == 'true'">
-    <ProjectReference Include="..\..\..\..\framework\ddd-struct\Leistd.Ddd.Infrastructure\Leistd.Ddd.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\event-bus\Leistd.EventBus.Local\Leistd.EventBus.Local.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\lock\Leistd.Lock.Redis\Leistd.Lock.Redis.csproj" />
-    <ProjectReference Include="..\..\..\..\framework\components\lock\Leistd.Lock.Memory\Leistd.Lock.Memory.csproj" />
   </ItemGroup>
 
 </Project>

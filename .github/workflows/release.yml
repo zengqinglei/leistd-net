@@ -1,0 +1,181 @@
+name: Release
+
+# 单一发布流水线，内部按触发来源分通道：
+#   push main      → stable  : 按提交推算正式版 x.y.z → 回写 VERSION+打 tag → nuget.org + GitHub Release（全自动）
+#   push develop   → beta    : x.y.z-beta.<N>           → nuget.org（预发布）
+#   schedule(工作日)→ nightly : x.y.z-preview.<date>     → GitHub Packages（内部 feed）
+# 版本推算（Conventional Commits）、模板同步、打包均内联于此，仓库不再有独立脚本。
+on:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 18 * * 1-5'   # UTC 18:00（北京次日 02:00），工作日 → nightly
+  workflow_dispatch:
+
+jobs:
+  release:
+    # 跳过机器人自身回写提交与 [skip ci]，避免死循环
+    if: "github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # 回写 VERSION / 打 tag / 建 Release（stable）
+      id-token: write       # nuget.org Trusted Publishing（stable/beta）
+      packages: write       # GitHub Packages（nightly）
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # nightly 固定构建 develop；其余构建触发分支
+          ref: ${{ (github.event_name == 'schedule') && 'develop' || github.ref }}
+          fetch-depth: 0     # 需完整历史与 tag 推算版本
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 1) 判定通道
+      - name: 判定发布通道
+        id: ch
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'schedule') {
+            $channel = 'nightly'
+          } elseif ('${{ github.ref }}' -eq 'refs/heads/develop') {
+            $channel = 'beta'
+          } elseif ('${{ github.ref }}' -eq 'refs/heads/main') {
+            $channel = 'stable'
+          } else {
+            $channel = 'beta'   # 手动 dispatch 默认 beta
+          }
+          "channel=$channel" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "发布通道: $channel"
+
+      # 2) stable 仅在框架/脚本/版本相关变更时才发；纯文档跳过
+      - name: 判断是否需要发版（stable）
+        id: gate
+        if: steps.ch.outputs.channel == 'stable' && github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $changed = git diff --name-only HEAD~1..HEAD
+          $hit = $changed | Where-Object { $_ -match '^(framework|template)/' -or $_ -eq 'VERSION' -or $_ -match '^\.github/workflows/release\.yml$' }
+          "needed=$([bool]$hit ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host ($hit ? "需要发版" : "仅非框架变更，跳过 stable")
+
+      - name: 是否继续
+        id: go
+        shell: pwsh
+        run: |
+          $go = '${{ steps.ch.outputs.channel }}' -ne 'stable' -or '${{ github.event_name }}' -ne 'push' -or '${{ steps.gate.outputs.needed }}' -eq 'true'
+          "go=$($go ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
+
+      - name: 安装 .NET 10 SDK
+        if: steps.go.outputs.go == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 3) 按 Conventional Commits 推算版本（内联，零外部工具）
+      - name: 推算版本
+        id: ver
+        if: steps.go.outputs.go == 'true'
+        shell: pwsh
+        run: |
+          $base = (Get-Content VERSION -Raw).Trim()
+          if ($base -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION 非法: $base" }
+          $p = $base.Split('.'); [int]$maj=$p[0]; [int]$min=$p[1]; [int]$pat=$p[2]
+
+          $lastTag = git describe --tags --abbrev=0 --match 'v*' 2>$null
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($lastTag)) {
+            $lastTag = $null; $count = git rev-list --count HEAD
+            $log = git log --pretty=format:'%s%n%b' --no-merges
+          } else {
+            $count = git rev-list --count "$lastTag..HEAD"
+            $log = git log "$lastTag..HEAD" --pretty=format:'%s%n%b' --no-merges
+          }
+          $log = ($log -join "`n")
+
+          $bump = 'patch'
+          if ($log -match '(?im)(BREAKING CHANGE)|(^[a-z]+(\([^)]*\))?!:)') { $bump = 'major' }
+          elseif ($log -match '(?im)^feat(\([^)]*\))?:') { $bump = 'minor' }
+
+          switch ($bump) {
+            'major' { $maj++; $min=0; $pat=0 }
+            'minor' { $min++; $pat=0 }
+            'patch' { $pat++ }
+          }
+          $next = "$maj.$min.$pat"
+
+          switch ('${{ steps.ch.outputs.channel }}') {
+            'beta'    { $version = "$next-beta.$count" }
+            'nightly' { $version = "$next-preview.$(Get-Date -Format 'yyyyMMdd')" }
+            default   { $version = $next }   # stable
+          }
+          "version=$version" | Out-File $env:GITHUB_OUTPUT -Append
+          "baseVersion=$next" | Out-File $env:GITHUB_OUTPUT -Append
+          Write-Host "通道=${{ steps.ch.outputs.channel }} 递增=$bump 版本=$version"
+
+      # 4) 同步版本到模板（写入字面值，供生成项目自包含引用）
+      - name: 同步版本到模板
+        if: steps.go.outputs.go == 'true'
+        shell: pwsh
+        run: |
+          $f = 'template/backend/Directory.Build.props'
+          $t = Get-Content $f -Raw
+          $t = [regex]::Replace($t, '<LeistdFrameworkVersion>\s*[^<]*?\s*</LeistdFrameworkVersion>', '<LeistdFrameworkVersion>${{ steps.ver.outputs.version }}</LeistdFrameworkVersion>')
+          [System.IO.File]::WriteAllText((Resolve-Path $f), $t)
+
+      # 5) stable：回写 VERSION（升基准）、提交、打 tag
+      - name: 回写 VERSION 并打 tag（stable）
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'stable'
+        run: |
+          echo -n "${{ steps.ver.outputs.version }}" > VERSION
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION template/backend/Directory.Build.props
+          git commit -m "chore: 发布 v${{ steps.ver.outputs.version }} [skip ci]"
+          git tag -a "v${{ steps.ver.outputs.version }}" -m "Release v${{ steps.ver.outputs.version }}"
+          git push origin HEAD:main
+          git push origin "v${{ steps.ver.outputs.version }}"
+
+      # 6) 打包（内联 pack 逻辑）
+      - name: 打包
+        if: steps.go.outputs.go == 'true'
+        shell: pwsh
+        run: |
+          if (Test-Path framework/artifacts) { Remove-Item -Recurse -Force framework/artifacts }
+          dotnet pack framework/Leistd.Framework.slnx -c Release `
+            -o framework/artifacts `
+            -p:Version="${{ steps.ver.outputs.version }}" `
+            -p:ContinuousIntegrationBuild=true
+          if ($LASTEXITCODE -ne 0) { throw "dotnet pack 失败" }
+
+      # 7a) stable / beta → nuget.org（Trusted Publishing）
+      - name: 登录 nuget.org
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel != 'nightly'
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: 推送到 nuget.org
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel != 'nightly'
+        run: >
+          dotnet nuget push "framework/artifacts/*.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+          --skip-duplicate
+
+      # 7b) nightly → GitHub Packages
+      - name: 推送到 GitHub Packages（nightly）
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'nightly'
+        run: >
+          dotnet nuget push "framework/artifacts/*.nupkg"
+          --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
+
+      # 8) stable → GitHub Release
+      - name: 创建 GitHub Release（stable）
+        if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel == 'stable'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.ver.outputs.version }}"
+          name: "Release v${{ steps.ver.outputs.version }}"
+          generate_release_notes: true
+          files: framework/artifacts/*.nupkg

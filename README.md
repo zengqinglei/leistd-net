@@ -2,8 +2,7 @@
 
 > .NET 10 + Angular 21 全栈 DDD 脚手架：一套可独立版本化、NuGet 发布的 **Leistd 框架**，加一个 `dotnet new` **项目模板**。
 
-[![CI](https://github.com/zengqinglei/leistd-net/actions/workflows/ci.yml/badge.svg)](https://github.com/zengqinglei/leistd-net/actions/workflows/ci.yml)
-[![Release Stable](https://github.com/zengqinglei/leistd-net/actions/workflows/release-stable.yml/badge.svg)](https://github.com/zengqinglei/leistd-net/actions/workflows/release-stable.yml)
+[![Release](https://github.com/zengqinglei/leistd-net/actions/workflows/release.yml/badge.svg)](https://github.com/zengqinglei/leistd-net/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 leistd-net 把"可复用的框架能力"与"业务项目脚手架"分离：
@@ -71,7 +70,7 @@ pwsh framework/build/pack.ps1     # 打包到 framework/artifacts/
 
 ## 版本与发布
 
-版本基准存于仓库根 [`VERSION`](VERSION) 文件；发布时由 [`scripts/compute-version.ps1`](scripts/compute-version.ps1) 按 **Conventional Commits** 推算递增——`fix:`→patch、`feat:`→minor、`BREAKING CHANGE`→major（默认 patch）。零外部版本工具，纯 git + PowerShell。
+版本基准存于仓库根 [`VERSION`](VERSION) 文件；发布流水线（[`release.yml`](.github/workflows/release.yml)）按 **Conventional Commits** 推算递增——`fix:`→patch、`feat:`→minor、`BREAKING CHANGE`→major（默认 patch）。零外部版本工具，纯 git + PowerShell，逻辑内联于 workflow。
 
 | 分支 / 触发 | 版本形态 | 发布目标 |
 | --- | --- | --- |

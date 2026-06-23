@@ -48,20 +48,24 @@ docs/
 
 ## 在项目中使用框架
 
-模板生成的后端项目通过 MSBuild 属性 `LeistdUseLocalFramework` 在两种模式间切换：
+模板生成的后端项目通过 NuGet `PackageReference` 引用 `Leistd.*` 框架包（模板保持纯净，与最终用户所得一致）。各组件包名见对应组件文档的「安装」一节；框架包版本由 `template/backend/Directory.Build.props` 的 `LeistdFrameworkVersion` 统一指定。
 
-| 模式 | 取值 | 引用方式 | 适用 |
-| --- | --- | --- | --- |
-| NuGet（默认） | `false` | `PackageReference Include="Leistd.*"` | 发布、CI、日常开发 |
-| 本地源码 | `true` | `ProjectReference` 指向 `framework/` 源码 | 联调、断点步进框架 |
+### 本地联调（同时改框架 + 模板）
+
+需要本地验证"改过的框架 + 模板生成的项目"时，用**本地 NuGet feed**（而非在模板里塞源码引用，保持模板纯净）：
 
 ```bash
-pwsh scripts/switch-framework.ps1 local     # 切到本地源码模式（可断点调试框架）
-pwsh scripts/switch-framework.ps1 nuget     # 切回 NuGet 模式
-pwsh scripts/switch-framework.ps1 status    # 查看当前模式
+# 1. 在框架打本地包到一个临时 feed 目录
+dotnet pack framework/Leistd.Framework.slnx -c Release -o ./local-feed
+
+# 2. 把该目录加为 NuGet 源
+dotnet nuget add source "$(pwd)/local-feed" --name leistd-local
+
+# 3. 生成项目并指定较高的本地版本，即可拉到刚打的框架包
+dotnet new fullstack-app -n Acme.Shop
 ```
 
-各组件包名见对应组件文档的「安装」一节；框架包版本由 `template/backend/Directory.Build.props` 的 `LeistdFrameworkVersion` 统一指定。
+> 仅"验证框架功能"则更简单：直接在仓库内的 demo / 测试项目里用 `ProjectReference` 指向 `framework/` 源码，可断点步进。
 
 ---
 

@@ -83,8 +83,8 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 ## 6. 提交前自检
 
 ```bash
-dotnet build framework/Leistd.Framework.slnx -c Release   # 0 错误
-pwsh framework/build/pack.ps1                              # 每个可打包项目产出 nupkg（PDB 内嵌）
+dotnet build framework/Leistd.Framework.slnx -c Release                         # 0 错误
+dotnet pack  framework/Leistd.Framework.slnx -c Release -o framework/artifacts   # 产出 nupkg（PDB 内嵌）
 ```
 
 新增第三方包时确认已在 `Directory.Packages.props` 登记；新增包发布前确认 `PackageId` 唯一。
