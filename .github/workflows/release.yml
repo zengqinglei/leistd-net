@@ -53,7 +53,11 @@ jobs:
         shell: pwsh
         run: |
           $changed = git diff --name-only HEAD~1..HEAD
-          $hit = $changed | Where-Object { $_ -match '^(framework|template)/' -or $_ -eq 'VERSION' -or $_ -match '^\.github/workflows/release\.yml$' }
+          # 仅框架源码或 VERSION 变更才发正式版；排除 framework/docs 与 *.md，模板/文档改动不误发
+          $hit = $changed | Where-Object {
+            ($_ -eq 'VERSION') -or
+            ($_ -match '^framework/' -and $_ -notmatch '^framework/docs/' -and $_ -notmatch '\.md$')
+          }
           "needed=$([bool]$hit ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
           Write-Host ($hit ? "需要发版" : "仅非框架变更，跳过 stable")
 

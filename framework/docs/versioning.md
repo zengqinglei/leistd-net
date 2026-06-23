@@ -42,9 +42,9 @@
 5. 创建 GitHub Release（自动生成 release notes）。
 
 机制要点：
-- 仅 `framework/`、`template/`、`VERSION`、`release.yml` 变更才触发发版；纯文档变更跳过。
+- 仅 **`framework/` 源码**或 `VERSION` 变更才触发发版；`framework/docs/`、所有 `*.md`、`template/` 改动均**不**发版。
 - 回写提交带 `[skip ci]` 且过滤 `github-actions[bot]`，避免死循环。
-- ⚠️ NuGet 包不可删（只能 unlist）。main 上每次有效变更都会产出一个正式版，请把控合入 main 的节奏。
+- ⚠️ NuGet 包不可删（只能 unlist）。框架源码每次有效变更都会产出一个正式版，请把控合入 main 的节奏。
 
 ## 鉴权
 
