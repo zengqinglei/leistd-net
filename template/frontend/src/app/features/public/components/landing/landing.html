@@ -1,4 +1,32 @@
-<div class="min-h-screen flex flex-col items-center justify-center bg-surface-ground px-6">
+<div class="min-h-screen flex flex-col items-center justify-center bg-surface-ground px-6 relative">
+  <!-- Theme Toggle -->
+  <div class="absolute top-4 right-4 flex gap-2 z-50">
+    <p-button
+      [icon]="layoutService.isDarkTheme() ? 'pi pi-moon' : 'pi pi-sun'"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      (onClick)="layoutService.toggleDarkMode()"
+    >
+    </p-button>
+    <div class="relative">
+      <p-button
+        icon="pi pi-palette"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pStyleClass="@next"
+        enterFromClass="hidden"
+        enterActiveClass="animate-scalein"
+        leaveToClass="hidden"
+        leaveActiveClass="animate-fadeout"
+        [hideOnOutsideClick]="true"
+      >
+      </p-button>
+      <app-theme-configurator />
+    </div>
+  </div>
+
   <div class="max-w-2xl text-center space-y-8">
     <h1 class="text-5xl font-bold text-color">模板项目</h1>
     <p class="text-xl text-muted-color"> 基于 Angular + PrimeNG + .NET 10 DDD 架构的全栈应用开发模板 </p>
