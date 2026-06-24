@@ -6,7 +6,7 @@
 **位置**：`docs/standards/agent-workflow.md`
 
 **设计原则**：
-- ✅ 符合参考项目结构（claw-server 项目的 `docs/standards/` 目录）
+- ✅ 符合参考项目结构（参考项目的 `docs/standards/` 目录）
 - ✅ 与 README.md 分离：README 面向人类，本文件面向 Agent
 - ✅ 纳入版本控制，团队共同维护
 

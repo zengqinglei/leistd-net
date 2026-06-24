@@ -1,4 +1,4 @@
-# 项目架构规范 (architect-spec.md)
+# 项目架构规范 (agent-workflow.md)
 
 > 本文件定义项目的文档结构、命名规范、工作流程等架构约定。
 > 通用 Skill 启动时会读取本文件，按项目规范执行任务。
@@ -165,7 +165,7 @@ defaults:
 ### 完整示例
 
 ```yaml
-# docs/architect-spec.md
+# docs/standards/agent-workflow.md
 
 requirements:
   directory: "docs/requirements"

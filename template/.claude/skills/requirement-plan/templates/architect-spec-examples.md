@@ -1,13 +1,13 @@
-# 规范文档示例 (architect-spec.md)
+# 规范文档示例 (agent-workflow.md)
 
-> 本文件提供 `docs/architect-spec.md` 的完整示例，供新项目参考。
+> 本文件提供 `docs/standards/agent-workflow.md` 的完整示例，供新项目参考。
 
 ---
 
 ## 示例 1：Node.js + Vue 全栈项目
 
 ```yaml
-# docs/architect-spec.md
+# docs/standards/agent-workflow.md
 
 ## 文档结构
 
@@ -100,7 +100,7 @@ compliance:
 ## 示例 2：.NET + Angular 企业项目
 
 ```yaml
-# docs/architect-spec.md
+# docs/standards/agent-workflow.md
 
 requirements:
   directory: "docs/requirements"
@@ -165,7 +165,7 @@ git:
 ## 示例 3：Python 数据科学项目
 
 ```yaml
-# docs/architect-spec.md
+# docs/standards/agent-workflow.md
 
 requirements:
   directory: "docs/requirements"
@@ -224,7 +224,7 @@ git:
 ## 示例 4：最小化配置（仅核心字段）
 
 ```yaml
-# docs/architect-spec.md
+# docs/standards/agent-workflow.md
 
 # 仅定义核心字段，其他使用默认值
 
@@ -261,7 +261,7 @@ techStack:
 
 ### 多项目组织
 
-- **每个项目独立规范**：不要共享 `architect-spec.md`
+- **每个项目独立规范**：不要共享 `agent-workflow.md`
 - **规范即文档**：新人通过规范了解项目结构
 - **规范即配置**：通用 Skill 自动适配
 
@@ -271,10 +271,10 @@ techStack:
 
 ```bash
 # 检查规范文档是否存在
-test -f docs/architect-spec.md && echo "✅ 规范文档存在" || echo "❌ 规范文档缺失"
+test -f docs/standards/agent-workflow.md && echo "✅ 规范文档存在" || echo "❌ 规范文档缺失"
 
 # 验证 YAML 语法
-node -e "require('yaml').parse(require('fs').readFileSync('docs/architect-spec.md', 'utf8'))" && echo "✅ YAML 语法正确"
+node -e "require('yaml').parse(require('fs').readFileSync('docs/standards/agent-workflow.md', 'utf8'))" && echo "✅ YAML 语法正确"
 ```
 
 ---
