@@ -137,9 +137,13 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ steps.ver.outputs.tag }}'
-          if (git rev-parse -q --verify "refs/tags/$tag") {
+          # git rev-parse 在 tag 不存在时退出码为 1，会污染 $LASTEXITCODE，
+          # 导致 GitHub Actions 误判步骤失败。用 git tag -l 判定是否存在，并显式吞掉退出码。
+          $exists = (git tag -l $tag) -ne $null -and (git tag -l $tag) -ne ''
+          if ($exists) {
             throw "tag 已存在: $tag。请检查是否重复运行同一发布。"
           }
+          $global:LASTEXITCODE = 0
 
       - name: 生成发布说明
         id: notes
@@ -227,10 +231,15 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add VERSION template/backend/Directory.Build.props
-          if (git diff --cached --quiet) {
-            Write-Host '没有需要回写的版本文件变更。'
-          } else {
+          # git diff --cached --quiet 无 stdout，PowerShell 的 if 只看输出真伪会误判；
+          # 应按退出码判定：0=无暂存变更，非 0=有变更。再显式归零 $LASTEXITCODE 防污染。
+          git diff --cached --quiet
+          $hasChanges = $LASTEXITCODE -ne 0
+          $global:LASTEXITCODE = 0
+          if ($hasChanges) {
             git commit -m 'chore: 发布 ${{ steps.ver.outputs.tag }} [skip ci]'
+          } else {
+            Write-Host '没有需要回写的版本文件变更。'
           }
           git tag -a '${{ steps.ver.outputs.tag }}' -m 'Release ${{ steps.ver.outputs.tag }}'
 
