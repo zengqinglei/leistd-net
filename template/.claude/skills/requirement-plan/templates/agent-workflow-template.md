@@ -12,7 +12,9 @@
 
 ---
 
-## 文档结构
+## 项目文档索引
+
+> 通用 Skill 先读取本文件，再按索引读取当前任务需要的项目级文档；不要默认读取全部文档。
 
 ### 需求文档
 
@@ -22,49 +24,73 @@ requirements:
   directory: "docs/requirements"           # 需求文档存放目录
   planFile: "{req-id}-plan.md"             # Plan.md 命名模板
   registryFile: "registry.md"              # 需求登记册文件名
+  contextDirectory: "docs/requirements/context" # 任务上下文目录
   modules:
     directory: "docs/modules"              # 模块文档目录
-    statusFile: "status.md"                # 模块状态文件名
 ```
 
-### 代码规范
+### 规范文档
 
 ```yaml
-code:
-  # 代码目录结构
-  directories:
-    src: "src"                             # 源代码目录
-    tests: "tests"                         # 测试代码目录
-    docs: "docs"                           # 项目文档目录
-  
-  # 命名规范
-  naming:
-    modules: "kebab-case"                  # 模块名：小写 + 连字符
-    classes: "PascalCase"                  # 类名：大驼峰
-    functions: "camelCase"                 # 函数名：小驼峰
-    constants: "UPPER_SNAKE_CASE"          # 常量：大写 + 下划线
-  
-  # 代码模板（可选）
-  templates:
-    controller: "templates/controller.ts"
-    service: "templates/service.ts"
-    repository: "templates/repository.ts"
+standards:
+  techStack: "docs/standards/tech-stack.md"
+  backendCode: "docs/standards/code-standard/backend-develop.md"
+  frontendCode: "docs/standards/code-standard/frontend-develop.md"
+  test: "docs/standards/test.md"
+  documentNaming: "docs/standards/document-naming.md"
+```
+
+### 报告文档
+
+```yaml
+reports:
+  development: "docs/reports/development/{req-id}-dev-report.md"
+  codeReview: "docs/reports/code-review/{req-id}-code-review.md"
+  tests: "docs/reports/tests/{req-id}-test-report.md"
+  deploy: "docs/reports/deploy/{req-id}-deploy-report.md"
+  acceptance: "docs/reports/acceptance/{req-id}-acceptance.md"
 ```
 
 ### 技术栈
 
 ```yaml
 techStack:
-  frontend: "Vue 3 + TypeScript"           # 前端技术栈
-  backend: "Node.js 20 + TypeScript"       # 后端技术栈
-  database: "PostgreSQL 15"                # 数据库
-  cache: "Redis 7"                         # 缓存
-  messageQueue: "RabbitMQ"                 # 消息队列
+  frontend: "按项目填写"                   # 前端技术栈
+  backend: "按项目填写"                    # 后端技术栈
+  database: "按项目填写"                   # 数据库
+  cache: "按项目填写"                      # 缓存
+  messageQueue: "按项目填写"               # 消息队列
+  commands:
+    build: "按项目填写"
+    lint: "按项目填写"
+    test: "按项目填写"
+```
+
+### 部署文档
+
+```yaml
+deploy:
+  directory: "docs/deploy"
+  serverConfig: "docs/deploy/server-config.md"
+  releasePolicy: "docs/deploy/release-policy.md"
 ```
 
 ---
 
 ## 工作流程
+
+### 阶段状态机
+
+| Phase | 阶段 | 主 Skill | 输入 | 必须产物 | 完成条件 | 下一阶段 |
+|---|---|---|---|---|---|---|
+| 0 | 需求进入 | `requirement-plan` | 用户想法/背景/需求 | `docs/requirements/{req-id}-plan.md` | Plan 草案生成并等待用户确认 | 1 |
+| 1 | 需求登记 | `task-manager` | 确认后的 Plan.md | `registry.md` + `context/{req-id}.md` | 任务 ID、registry、context 已创建或更新 | 2 |
+| 2 | 任务拆解 | `task-manager` | Plan.md + context | 子任务清单 + Must have 映射 | 子任务清单已确认或简单任务自动通过 | 3 |
+| 3 | 开发自测 | `coding` | Plan.md + 子任务清单 | `docs/reports/development/{req-id}-dev-report.md` | 代码完成，最小验证通过或明确阻塞 | 4 |
+| 4 | 代码审查 | `code-review` | 代码变更 + Plan.md + dev report | `docs/reports/code-review/{req-id}-code-review.md` | 无 P0 问题 | 5 |
+| 5 | 测试验证 | `test-runner` | Plan.md + 测试配置 + review report | `docs/reports/tests/{req-id}-test-report.md` | 测试通过，Must have 覆盖已标记 | 6 |
+| 6 | 部署 | `deploy` | 部署配置 + test report + review report | `docs/reports/deploy/{req-id}-deploy-report.md` | 健康检查通过，部署报告生成 | 7 |
+| 7 | 验收收口 | `task-manager` | Plan.md + 所有阶段报告 | `docs/reports/acceptance/{req-id}-acceptance.md` | registry/context 更新为 completed 或 blocked | Done |
 
 ### 需求开发流程
 
@@ -82,19 +108,30 @@ workflow:
       - name: "任务拆解"
         agent: "architect"
         skill: "task-manager"
-        output: "模块子文档"
+        output: "registry + context + 子任务清单"
       - name: "开发实现"
         agent: "architect"
         skill: "coding"
-        output: "代码 + 测试"
+        output: "代码 + dev report"
       - name: "代码审查"
         agent: "architect"
-        skill: "lint"
+        skill: "code-review"
         output: "审查报告"
+      - name: "测试验证"
+        agent: "architect"
+        skill: "test-runner"
+        output: "测试报告"
       - name: "部署上线"
         agent: "architect"
         skill: "deploy"
-        output: "生产环境"
+      - name: "验收收口"
+        agent: "architect"
+        skill: "task-manager"
+        output: "部署报告"
+      - name: "验收收口"
+        agent: "architect"
+        skill: "task-manager"
+        output: "验收报告 + registry/context 更新"
 ```
 
 ### Git 工作流
@@ -147,20 +184,21 @@ defaults:
     directory: "docs/requirements"
     planFile: "{req-id}-plan.md"
     registryFile: "registry.md"
+    contextDirectory: "docs/requirements/context"
+  reports:
+    development: "docs/reports/development/{req-id}-dev-report.md"
+    codeReview: "docs/reports/code-review/{req-id}-code-review.md"
+    tests: "docs/reports/tests/{req-id}-test-report.md"
+    deploy: "docs/reports/deploy/{req-id}-deploy-report.md"
+    acceptance: "docs/reports/acceptance/{req-id}-acceptance.md"
     modules:
       directory: "docs/modules"
-      statusFile: "status.md"
   
-  code:
-    directories:
-      src: "src"
-      tests: "tests"
-      docs: "docs"
-    naming:
-      modules: "kebab-case"
-      classes: "PascalCase"
-      functions: "camelCase"
-      constants: "UPPER_SNAKE_CASE"
+  standards:
+    techStack: "docs/standards/tech-stack.md"
+    backendCode: "docs/standards/code-standard/backend-develop.md"
+    frontendCode: "docs/standards/code-standard/frontend-develop.md"
+    test: "docs/standards/test.md"
   
   git:
     branchNaming: "feature/{req-id}"
@@ -178,9 +216,9 @@ defaults:
 |-----------|------|---------|
 | `requirement-plan` | 需求分析 → Plan.md | 用户提出新需求 |
 | `task-manager` | 任务管理、进度跟踪 | 查询进度、更新状态 |
-| `coding` | 代码开发、测试 | Plan.md 确认后 |
-| `lint` | 代码规范检查 | 代码提交前 |
-| `deploy` | 部署上线 | 代码审查通过后 |
+| `coding` | 代码开发、最小验证 | Plan.md 确认后 |
+| `code-review` | 代码规范检查 | 代码提交前 |
+| `deploy` | 部署上线 | 测试通过且用户确认后 |
 | `test-runner` | 运行测试套件 | 代码开发完成后 |
 
 ---
@@ -196,27 +234,36 @@ requirements:
   directory: "docs/requirements"
   planFile: "{req-id}-plan.md"
   registryFile: "registry.md"
+  contextDirectory: "docs/requirements/context"
   modules:
     directory: "docs/modules"
-    statusFile: "status.md"
 
-code:
-  directories:
-    src: "src"
-    tests: "tests"
-    docs: "docs"
-  naming:
-    modules: "kebab-case"
-    classes: "PascalCase"
-    functions: "camelCase"
-  templates:
-    controller: "templates/controller.ts"
-    service: "templates/service.ts"
+reports:
+  development: "docs/reports/development/{req-id}-dev-report.md"
+  codeReview: "docs/reports/code-review/{req-id}-code-review.md"
+  tests: "docs/reports/tests/{req-id}-test-report.md"
+  deploy: "docs/reports/deploy/{req-id}-deploy-report.md"
+  acceptance: "docs/reports/acceptance/{req-id}-acceptance.md"
+
+standards:
+  techStack: "docs/standards/tech-stack.md"
+  backendCode: "docs/standards/code-standard/backend-develop.md"
+  frontendCode: "docs/standards/code-standard/frontend-develop.md"
+  test: "docs/standards/test.md"
 
 techStack:
-  frontend: "Vue 3 + TypeScript"
-  backend: "Node.js 20 + TypeScript"
-  database: "PostgreSQL 15"
+  frontend: "按项目填写"
+  backend: "按项目填写"
+  database: "按项目填写"
+  commands:
+    build: "按项目填写"
+    lint: "按项目填写"
+    test: "按项目填写"
+
+deploy:
+  directory: "docs/deploy"
+  serverConfig: "docs/deploy/server-config.md"
+  releasePolicy: "docs/deploy/release-policy.md"
 
 workflow:
   requirement:
@@ -231,7 +278,10 @@ workflow:
         skill: "coding"
       - name: "代码审查"
         agent: "architect"
-        skill: "lint"
+        skill: "code-review"
+      - name: "测试验证"
+        agent: "architect"
+        skill: "test-runner"
       - name: "部署上线"
         agent: "architect"
         skill: "deploy"
@@ -257,3 +307,4 @@ git:
 
 *最后更新：模板版本*
 *维护：通用架构规范*
+

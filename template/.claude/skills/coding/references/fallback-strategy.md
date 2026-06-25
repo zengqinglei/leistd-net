@@ -9,13 +9,13 @@
 ### 1. 优雅降级
 
 - ✅ **有规范**：按项目规范执行
-- ✅ **无规范**：使用本 Skill 提供的技术栈模板
+- ✅ **无规范**：基于现有代码和配置推断最小规则，不套用固定技术栈
 - ❌ **不报错停止**：继续执行，但告知用户
 
 ### 2. 提示而非阻塞
 
 - ✅ **提示一次**：首次检测到缺失时提示
-- ✅ **继续执行**：使用模板完成当前任务
+- ✅ **继续执行**：使用项目现有模式和最小通用原则完成当前任务
 - ✅ **提供指引**：告诉用户如何创建规范文档
 
 ---
@@ -35,12 +35,12 @@
 
 **降级行为**：
 ```markdown
-1. 使用本 Skill 模板：`templates/code-standard-backend.md`
+1. 读取项目现有配置和邻近代码风格，推断最小服务端规则
 2. 提示用户：
-   "⚠️ 检测到项目未配置后端开发规范，已使用通用 .NET 10 规范。
+   "⚠️ 检测到项目未配置后端开发规范，已按现有代码风格和最小通用原则执行。
    建议创建 docs/standards/code-standard/backend-develop.md 以声明项目特定的后端规范。
-   参考模板：templates/code-standard-backend.md（本 Skill 提供）"
-3. 继续执行，使用默认技术栈（.NET 10 + EF Core 10）
+   参考示例：examples/code-standard-backend.md（本 Skill 提供，仅作项目级规范样例）"
+3. 继续执行，不假定具体语言、框架或版本
 ```
 
 ---
@@ -49,12 +49,12 @@
 
 **降级行为**：
 ```markdown
-1. 使用本 Skill 模板：`templates/code-standard-frontend.md`
+1. 读取项目现有配置和邻近代码风格，推断最小前端规则
 2. 提示用户：
-   "⚠️ 检测到项目未配置前端开发规范，已使用通用 Angular 21 规范。
+   "⚠️ 检测到项目未配置前端开发规范，已按现有代码风格和最小通用原则执行。
    建议创建 docs/standards/code-standard/frontend-develop.md 以声明项目特定的前端规范。
-   参考模板：templates/code-standard-frontend.md（本 Skill 提供）"
-3. 继续执行，使用默认技术栈（Angular 21 + PrimeNG 21）
+   参考示例：examples/code-standard-frontend.md（本 Skill 提供，仅作项目级规范样例）"
+3. 继续执行，不假定具体框架、组件库或版本
 ```
 
 ---
@@ -63,11 +63,11 @@
 
 **降级行为**：
 ```markdown
-1. 使用本 Skill 综合模板：`templates/techstack-dotnet-angular.md`
+1. 读取项目配置文件识别技术栈（如 package.json、*.csproj、pyproject.toml、go.mod 等）
 2. 提示用户：
-   "⚠️ 检测到项目未声明技术栈，已使用默认技术栈（.NET 10 + Angular 21）。
+   "⚠️ 检测到项目未声明技术栈，已根据项目配置和现有代码推断技术栈。
    如项目使用其他技术栈，请创建 docs/standards/agent-workflow.md 声明。
-   参考模板：templates/techstack-dotnet-angular.md（本 Skill 提供）"
+   参考示例：examples/techstack-dotnet-angular.md（本 Skill 提供，仅作项目级规范样例）"
 ```
 
 ---
@@ -77,7 +77,7 @@
 ### 规范文档缺失
 
 ```markdown
-⚠️ 检测到项目未配置{规范类型}规范文档，已使用通用默认规范。
+⚠️ 检测到项目未配置{规范类型}规范文档，已基于现有代码和配置推断最小规则。
 
 建议创建 {文件路径} 以声明项目特定的：
 - 技术栈版本
@@ -85,7 +85,7 @@
 - 命名规范
 - 编码风格
 
-参考模板：templates/{模板名称}（本 Skill 提供）
+参考示例：examples/{模板名称}（本 Skill 提供，仅作项目级规范样例）
 ```
 
 ---
@@ -106,7 +106,7 @@
 
 ### 3. 降级执行
 
-- ✅ **使用模板**：确保任务能继续
+- ✅ **使用现有模式**：确保任务能继续且不引入错误技术栈假设
 - ✅ **记录日志**：在任务上下文中记录降级行为
 - ✅ **可追溯**：用户后续可以补充规范文档
 
@@ -114,3 +114,5 @@
 
 *最后更新：2026-06-07*
 *维护：coding Skill*
+
+

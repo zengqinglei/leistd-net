@@ -1,7 +1,7 @@
 ---
 name: task-manager
 description: |
-  任务管家 Skill，用于任务识别、状态更新、上下文恢复和进度跟踪。
+  任务管家 Skill，用于 Plan 确认后的流程主控、任务识别、状态更新、上下文恢复、进度跟踪和验收收口。
 
   **当以下情况时使用此 Skill**:
   (1) 用户查询任务进度（如"定时发布功能进度如何？"）
@@ -11,6 +11,8 @@ description: |
   (5) 需要记录决策或阻塞问题
   (6) 对话结束时需要保存上下文
   (7) 需求包含多个子任务时，自动编排派发
+  (8) Plan.md 已确认，需要初始化 registry/context 并推进 coding → code-review → test-runner → deploy → acceptance
+  (9) 部署或测试完成后需要生成验收报告并收口任务
 
   **调用 Agent**：规划助手、开发助手、质量助手（所有 Agent 共用）
 metadata:
@@ -24,7 +26,7 @@ disable-model-invocation: false
 
 # 任务管家 (task-manager)
 
-> 任务识别、状态更新、上下文恢复、进度跟踪
+> Plan 确认后的流程主控：登记、拆解、编排、状态更新、验收收口
 
 ## 🚨 执行前必读
 
@@ -32,10 +34,11 @@ disable-model-invocation: false
 - ✅ **任务 ID 格式**：`REQ-YYYYMMDD-XXX` (全局) 或 `REQ-YYYYMMDD-XXX-FE/BE/QA` (模块)
 - ✅ **进度范围**：0-100 整数
 - ✅ **状态枚举**：`pending`, `in_progress`, `waiting_review`, `blocked`, `completed`
-- ✅ **上下文文件位置**：`~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
+- ✅ **上下文文件位置**：优先使用项目级路径 `docs/requirements/context/{taskId}.md`；个人私有上下文可使用 `~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
 - ✅ **项目路径**：任务上下文中必须包含 `projectRoot` 字段
 - ⚠️ **降级提示**：当项目无规范文档时，**必须提示用户**建议创建规范文档
 - ✅ **自动保存**：对话结束时保存上下文
+- ✅ **主控职责**：Plan 确认后必须初始化 registry/context，并按阶段状态机推进
 
 ---
 
@@ -55,6 +58,9 @@ disable-model-invocation: false
    → 查询进度：返回状态
    → 更新进度：编辑上下文文件
    → 保存对话：追加对话摘要
+   → Plan 已确认：初始化任务并进入任务拆解
+   → 阶段完成：更新 context、registry 和阶段报告索引
+   → 全部完成：生成 acceptance report 并收口
 
 4. 保存上下文
    → 更新任务上下文文件
@@ -63,6 +69,32 @@ disable-model-invocation: false
 ---
 
 ## 🎯 核心能力
+
+### 0. Plan 确认后的流程主控
+
+**时机**：用户确认 Plan.md，或明确要求“开始实施/继续执行计划”。
+
+**必须执行**：
+1. 读取 Plan.md，提取 `req-id`、范围、实施步骤、Must have、风险。
+2. 创建或更新 `docs/requirements/registry.md`。
+3. 创建或更新 `docs/requirements/context/{req-id}.md`。
+4. 生成子任务清单和 Must have 映射；复杂任务先让用户确认。
+5. 按阶段状态机推进：`coding → code-review → test-runner → deploy → acceptance`。
+6. 每个阶段完成后更新 context 的阶段、进度、报告路径和时间线。
+7. 全部完成或阻塞时生成收口报告。
+
+**阶段产物路径**：
+| 阶段 | 报告路径 |
+|------|----------|
+| 开发自测 | `docs/reports/development/{req-id}-dev-report.md` |
+| 代码审查 | `docs/reports/code-review/{req-id}-code-review.md` |
+| 测试验证 | `docs/reports/tests/{req-id}-test-report.md` |
+| 部署 | `docs/reports/deploy/{req-id}-deploy-report.md` |
+| 验收收口 | `docs/reports/acceptance/{req-id}-acceptance.md` |
+
+**收口条件**：
+- `completed`：Must have 均有证据，测试/审查/部署满足项目门槛，用户验收或项目约定允许自动完成。
+- `blocked`：任一阶段失败且无法自动恢复，或需要用户/外部系统决策。
 
 ### 1. 识别任务
 
@@ -124,7 +156,8 @@ disable-model-invocation: false
 **操作**：
 ```markdown
 1. 读取任务上下文文件
-   - 路径：`~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
+   - 优先路径：`{projectRoot}/docs/requirements/context/{taskId}.md`
+   - 兼容路径：`~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
 
 2. 读取 Plan.md（五段闭环结构）
    - 路径：`{projectRoot}/docs/requirements/{req-id}-plan.md`
@@ -307,44 +340,11 @@ disable-model-invocation: false
 
 **前置条件**：用户已确认任务清单。
 
-**流程**：
+**流程**：制定子任务清单 → 用户确认 → 顺序执行 → 失败暂停 → 汇总验收 → 更新 registry。
 
-```
-1. 制定子任务清单
-   → 从 Plan.md `## 3. 实施步骤` 提取子任务
-   → 结合 `## 2. 核心策略` 的目录树识别模块边界
-   → 从 `## 5. 验收闭环` 提取验收项并映射到子任务
-   → 标注依赖关系和执行顺序
-   → 向用户展示清单（含验收项映射），等待确认
+**详细规则**：如需多子任务编排，读取 `references/task-orchestration.md`。
 
-2. 派发第一个子任务
-   → 调用 sessions_spawn（指定 agentId）
-   → 调用 sessions_yield，等待完成
-
-3. 收到 completion event
-   → 判断执行结果
-   → ✅ 成功：更新任务上下文，派发下一个
-   → ❌ 失败：暂停编排，报告用户等待决策
-
-4. 循环直到所有子任务完成
-
-5. 汇总报告（Phase 6 验收场景）
-   → 读取清单：
-      - Plan.md `## 5. 验收闭环`：验收项列表
-      - 测试报告（Phase 4 输出）：测试结果
-      - 部署报告（Phase 5 输出）：部署 URL、健康检查结果
-   → 一次性向用户报告所有子任务完成情况
-   → 输出验收对照表：
-   ```
-   | 验收项 | 状态 | 验证方式 | 证据 |
-   |--------|------|---------|------|
-   | xxx    | ✅/⚠️/❌ | 测试/构建/页面验证 | 路径/URL/日志 |
-   ```
-   → 更新任务状态为 `completed`
-   → 更新 `registry.md`
-```
-
-**编排规则**：
+**核心规则**：
 - 每次只派发一个子任务，等完成后再派发下一个
 - 中间不向用户发送进度更新（避免打扰）
 - 仅在以下情况暂停编排，等待用户：
@@ -352,33 +352,6 @@ disable-model-invocation: false
   - 需要用户确认方案（如技术选型、接口设计）
   - 发现需求不明确需要澄清
 - 全部完成后发送一次性的汇总报告
-
-**子任务派发格式**：
-```markdown
-sessions_spawn(
-  task = "<子任务描述，包含验收标准和约束>",
-  taskName = "<稳定的任务标识>",
-  agentId = "architect",
-  mode = "run"
-)
-sessions_yield()  # 等待完成
-```
-
-**失败处理**：
-- 收到失败的 completion event 后，提取失败原因
-- 向用户报告：失败原因 + 建议（重试/跳过/修改方案）
-- 等用户决策后继续编排
-
-**流水线编排**：
-
-当需求涉及代码变更且需要多步骤执行时，编排清单应包含以下标准流水线：
-
-| 阶段 | 子任务 | Skill | 完成后衔接 |
-|------|--------|-------|----------|
-| 1. 开发 | 代码实现 + 规范审查 + 构建验证 | coding + code-review | → 2 |
-| 2. 测试 | 运行测试套件 + 覆盖率报告 | test-runner | → 3 或 → 1（失败重试） |
-| 3. 部署 | 构建镜像 + 部署 + 健康检查 | deploy | → 4 或 → 1（失败修复） |
-| 4. 验收 | 汇报用户 + 等待验收 | task-manager | 流程结束 |
 
 **单 Agent 自驱动场景**：
 
@@ -394,79 +367,30 @@ sessions_yield()  # 等待完成
 
 ### 任务上下文文件
 
-```markdown
-# Task Context: REQ-20260531-001-FE
+默认项目级路径：`docs/requirements/context/{taskId}.md`
 
-## 基本信息
-- **任务名称**: 定时发布功能 - 前端 UI
-- **任务 ID**: REQ-20260531-001-FE
-- **进度**: 80%
-- **状态**: in_progress
-- **最后更新**: 2026-06-07T12:00:00+08:00
-- **更新者**: architect
+个人私有兼容路径：`~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
 
-## 项目路径
-- **项目路径**: /root/ai-workspace/projects/baiying
-- **项目名称**: baiying
-
-## 完成项
-- ✅ 数据库设计
-- ✅ 后端 API
-- ✅ 列表页面
-
-## 进行中
-- 🔄 时间选择器 (80%)
-
-## 待开始
-- ⏳ 发布预览功能
-
-## 决策记录
-### 决策 1: 定时任务调度方案选择
-- **问题**: 定时任务调度方案选择
-- **选项**: RabbitMQ, 数据库轮询，Redis cron
-- **决策**: RabbitMQ
-- **原因**: 长期可维护性好，支持重试和监控
-- **决策者**: boss
-- **时间**: 2026-06-06
-
-## 阻塞问题
-### 阻塞 1: 小红书 API 权限
-- **类型**: resource
-- **描述**: 小红书 API 需要企业账号授权
-- **状态**: open
-
-## 时间线
-- 2026-06-06 10:00 - 开发开始
-- 2026-06-06 11:30 - 进度 50%
-- 2026-06-07 12:00 - 进度 80%
-
-## 最近对话
-1. 2026-06-07 11:45 - 讨论了时间选择器实现
-2. 2026-06-07 12:00 - 报告进度 80%
-```
+格式见 `templates/task-context-template.md`。创建或修复上下文文件时读取该模板。
 
 ### registry.md
 
-```markdown
-# 需求登记册
+默认路径：`docs/requirements/registry.md`
 
-| 需求 ID | 名称 | 状态 | 优先级 | 创建时间 | 模块 |
-|---------|------|------|--------|----------|------|
-| REQ-20260531-001 | 定时发布功能 | active | P0 | 2026-05-31 | content-management |
-| REQ-20260601-001 | 用户登录 | active | P1 | 2026-06-01 | platform-accounts |
-```
+必备列：需求 ID、名称、状态、优先级、创建时间、模块。
 
 ### Registry 更新时机
 
 | 阶段 | 更新内容 | 说明 |
 |------|----------|------|
-| Phase 0 | 注册新任务（状态：active） | 生成任务 ID，创建 registry 记录 |
-| Phase 1 完成 | 更新进度（进度：20%） | Plan.md 生成完成 |
-| Phase 2 完成 | 更新进度（进度：30%） | 任务拆解完成 |
-| Phase 3 完成 | 更新进度（进度：60%） | 代码实现完成 |
-| Phase 4 完成 | 更新进度（进度：80%） | 测试验证完成 |
-| Phase 5 完成 | 更新进度（进度：90%） | 部署上线完成 |
-| Phase 6 完成 | 更新状态（状态：completed，进度：100%） | 验收完成 |
+| Phase 0 | Plan 草案生成 | 记录为 `pending` 或等待确认 |
+| Phase 1 | 需求登记完成 | 创建 registry/context，状态 `active` |
+| Phase 2 | 任务拆解完成 | 写入子任务清单和 Must have 映射 |
+| Phase 3 | 开发自测完成 | 写入 dev report 路径，进度建议 50%-60% |
+| Phase 4 | 代码审查完成 | 写入 code-review report 路径，无 P0 才继续 |
+| Phase 5 | 测试验证完成 | 写入 test report 路径，进度建议 80% |
+| Phase 6 | 部署完成 | 写入 deploy report 路径，进度建议 90% |
+| Phase 7 | 验收收口 | 写入 acceptance report，状态 `completed` 或 `blocked` |
 
 ---
 
@@ -478,7 +402,8 @@ sessions_yield()  # 等待完成
 使用 `read` 工具：
 - registry.md: `{projectRoot}/docs/requirements/registry.md`
 - Plan.md: `{projectRoot}/docs/requirements/{req-id}-plan.md`
-- 上下文文件：`~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
+- 上下文文件：优先 `{projectRoot}/docs/requirements/context/{taskId}.md`，兼容 `~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
+- 阶段报告：`{projectRoot}/docs/reports/{development|code-review|tests|deploy|acceptance}/...`
 ```
 
 ### 编辑文件
@@ -496,6 +421,7 @@ sessions_yield()  # 等待完成
 使用 `write` 工具：
 - 创建新任务上下文文件
 - 创建新的 registry.md（如不存在）
+- 创建阶段报告目录和验收收口报告
 ```
 
 ---
@@ -507,7 +433,8 @@ sessions_yield()  # 等待完成
 | 模板 | 路径 | 用途 |
 |------|------|------|
 | **任务上下文模板** | `templates/task-context-template.md` | 任务上下文文件格式 |
-| **降级策略** | `templates/fallback-strategy.md` | 无规范时的降级处理 |
+| **验收收口模板** | `templates/acceptance-report-template.md` | 最终验收报告格式 |
+| **降级策略** | `references/fallback-strategy.md` | 无规范时的降级处理 |
 
 ---
 
@@ -545,3 +472,5 @@ sessions_yield()  # 等待完成
 
 *最后更新：2026-06-07 文档驱动版 v4.0.0*
 *维护：通用任务管家*
+
+

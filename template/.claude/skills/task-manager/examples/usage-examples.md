@@ -13,10 +13,8 @@
    - 匹配度：0.95
 
 2. 调用 `restoreContext()` 恢复上下文
-   - 读取 `~/.openclaw/agents/architect/task-context/req-20260531-001.md`
+   - 读取 `docs/requirements/context/req-20260531-001.md`
    - 读取 `docs/requirements/req-20260531-001-plan.md`
-   - 读取 `docs/modules/content-management/status.md`
-
 3. 回复用户：
 ```
 📊 定时发布功能进度：75% 🔄
@@ -127,9 +125,7 @@
 
 3. 恢复内容：
    - 任务基本信息（进度 80%，状态 in_progress）
-   - Plan.md 全文
-   - 模块 status.md
-   - 最近 5 条对话转录
+   - Plan.md 全文   - 最近 5 条对话转录
    - 决策记录（使用 BullMQ）
    - 阻塞问题（API 权限）
    - 时间线事件
@@ -308,3 +304,6 @@
 ---
 
 *最后更新：2026-06-06*
+
+
+

@@ -1,6 +1,6 @@
-# 项目架构规范 (agent-workflow.md)
+# Agent 工作流规范 (agent-workflow.md)
 
-> 本文件定义项目的文档结构、命名规范、工作流程等架构约定。
+> 本文件定义项目的文档结构、命名规范、工作流程等协作约定。
 > 通用 Skill 启动时会读取本文件，按项目规范执行任务。
 
 ---
@@ -17,7 +17,6 @@ requirements:
   registryFile: "registry.md"              # 需求登记册文件名
   modules:
     directory: "docs/modules"              # 模块文档目录
-    statusFile: "status.md"                # 模块状态文件名
 ```
 
 ### 代码规范
@@ -39,9 +38,9 @@ code:
   
   # 代码模板（可选，项目级 Skill 使用）
   templates:
-    controller: "templates/controller.ts"
-    service: "templates/service.ts"
-    repository: "templates/repository.ts"
+    controller: "project-template-files/controller.ts"
+    service: "project-template-files/service.ts"
+    repository: "project-template-files/repository.ts"
 ```
 
 ### 技术栈
@@ -137,7 +136,6 @@ defaults:
     registryFile: "registry.md"
     modules:
       directory: "docs/modules"
-      statusFile: "status.md"
   
   code:
     directories:
@@ -173,7 +171,6 @@ requirements:
   registryFile: "registry.md"
   modules:
     directory: "docs/modules"
-    statusFile: "status.md"
 
 code:
   directories:
@@ -185,8 +182,8 @@ code:
     classes: "PascalCase"
     functions: "camelCase"
   templates:
-    controller: "templates/controller.ts"
-    service: "templates/service.ts"
+    controller: "project-template-files/controller.ts"
+    service: "project-template-files/service.ts"
 
 techStack:
   frontend: "Vue 3 + TypeScript"
@@ -225,3 +222,7 @@ git:
 
 *最后更新：模板版本*
 *维护：通用架构规范*
+
+
+
+

@@ -67,7 +67,7 @@
 2. 提示用户：
    "⚠️ 检测到项目未配置 .editorconfig，已使用 .NET 默认规范。
    建议创建 .editorconfig 声明项目的 C# 代码规范。
-   参考模板：templates/editorconfig-dotnet（本 Skill 提供）"
+   参考模板：templates/editorconfig-template（本 Skill 提供）"
 ```
 
 ---
@@ -127,4 +127,6 @@
 ---
 
 *最后更新：2026-06-07*
-*维护：lint Skill*
+*维护：code-review Skill*
+
+

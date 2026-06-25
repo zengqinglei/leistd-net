@@ -17,7 +17,6 @@ requirements:
   registryFile: "registry.md"
   modules:
     directory: "docs/modules"
-    statusFile: "status.md"
 
 ## 代码规范
 
@@ -34,10 +33,10 @@ code:
     constants: "UPPER_SNAKE_CASE"
   
   templates:
-    controller: "templates/controller.ts"
-    service: "templates/service.ts"
-    repository: "templates/repository.ts"
-    component: "templates/vue-component.vue"
+    controller: "project-template-files/controller.ts"
+    service: "project-template-files/service.ts"
+    repository: "project-template-files/repository.ts"
+    component: "project-template-files/vue-component.vue"
 
 ## 技术栈
 
@@ -108,7 +107,6 @@ requirements:
   registryFile: "registry.md"
   modules:
     directory: "docs/modules"
-    statusFile: "status.md"
 
 code:
   directories:
@@ -123,9 +121,9 @@ code:
     constants: "UPPER_SNAKE_CASE"
   
   templates:
-    controller: "templates/Controller.cs"
-    service: "templates/Service.cs"
-    component: "templates/angular-component.ts"
+    controller: "project-template-files/Controller.cs"
+    service: "project-template-files/Service.cs"
+    component: "project-template-files/angular-component.ts"
 
 techStack:
   frontend: "Angular 17 + TypeScript"
@@ -173,7 +171,6 @@ requirements:
   registryFile: "registry.md"
   modules:
     directory: "docs/modules"
-    statusFile: "status.md"
 
 code:
   directories:
@@ -188,8 +185,8 @@ code:
     constants: "UPPER_SNAKE_CASE"
   
   templates:
-    pipeline: "templates/pipeline.py"
-    model: "templates/model.py"
+    pipeline: "project-template-files/pipeline.py"
+    model: "project-template-files/model.py"
 
 techStack:
   language: "Python 3.11"
@@ -281,3 +278,7 @@ node -e "require('yaml').parse(require('fs').readFileSync('docs/standards/agent-
 
 *最后更新：2026-06-07*
 *维护：通用架构规范*
+
+
+
+

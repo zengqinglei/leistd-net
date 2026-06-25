@@ -183,3 +183,4 @@ coverage report
 *模板版本：v1.0.0*
 *最后更新：2026-06-07*
 *维护：test-runner Skill*
+

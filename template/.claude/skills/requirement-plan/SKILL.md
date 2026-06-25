@@ -37,12 +37,13 @@ disable-model-invocation: false
 
 ```
 1. 读取项目规范（如有）
-   → 扫描 `docs/standards/` 目录，读取所有相关规范文档
-   → 提取文档结构、命名规范、技术栈、模块目录
+   → 优先读取 `docs/standards/agent-workflow.md` 作为项目级索引
+   → 按索引读取必要的命名、需求、技术栈和模块文档
+   → 索引不存在时再扫描 `docs/standards/` 常见路径
 
 2. 无项目规范时
    → 使用本 Skill 默认五段闭环模板
-   → 提示用户建议创建项目规范文档
+   → 提示用户建议创建 `docs/standards/agent-workflow.md`
 
 3. 解析用户需求
    → 背景：为什么做
@@ -268,7 +269,18 @@ Plan.md 草案已生成。
 | 模板 | 路径 | 用途 |
 |------|------|------|
 | **Plan.md 模板** | `templates/plan.md.template` | 默认五段闭环 Plan 模板 |
-| **Agent 工作流模板** | `templates/agent-workflow-template.md` | 项目级 agent-workflow.md 模板 |
+| **Agent 工作流模板** | `templates/agent-workflow-template.md` | 项目级规范索引模板 |
+
+## 按需参考
+
+仅在需要迁移旧规范、查看完整示例或处理无规范降级时读取：
+
+| 参考 | 路径 | 用途 |
+|------|------|------|
+| **Agent 工作流结构参考** | `references/agent-workflow-schema-template.md` | 项目级规范字段说明 |
+| **Agent 工作流示例** | `references/agent-workflow-examples.md` | 多技术栈项目示例 |
+| **迁移指南** | `references/migration-guide.md` | 从旧项目级 Skill/规范迁移 |
+| **降级策略** | `references/fallback-strategy.md` | 无项目规范时的处理 |
 
 ---
 
@@ -281,3 +293,5 @@ Plan.md 草案已生成。
 - ❌ 不要贴大段代码到 Plan.md
 - ❌ 不要重复描述同一信息（如背景写在两处）
 - ❌ 不要新增平级大章，除非用户明确要求
+
+

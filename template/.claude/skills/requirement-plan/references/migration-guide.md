@@ -38,7 +38,7 @@ cp ~/.openclaw/shared-skills/templates/agent-workflow-template.md docs/standards
 **说明**：
 - ✅ 优先使用 `docs/standards/agent-workflow.md`（符合项目规范体系）
 - ✅ 备选使用 `docs/README.md`（如果项目已有此文件）
-- ❌ 不再使用 `docs/architect-spec.md`
+- ❌ 不再使用旧的分散项目级 Skill 作为唯一规范来源
 
 **编辑 `docs/standards/agent-workflow.md`**：
 1. 填写技术栈
@@ -101,8 +101,8 @@ projects/baiying/skills/project-codegen/
    ```yaml
    code:
      templates:
-       controller: "templates/controller.ts"
-       service: "templates/service.ts"
+       controller: "project-template-files/controller.ts"
+       service: "project-template-files/service.ts"
    ```
 
 3. 删除项目级 Skill：
@@ -144,7 +144,7 @@ projects/baiying/skills/project-codegen/
 
 **说明**：任务上下文格式不变，但通用 Skill 会：
 1. 从任务上下文读取 `projectRoot`
-2. 加载 `{projectRoot}/docs/architect-spec.md`
+2. 加载 `{projectRoot}/docs/standards/agent-workflow.md`
 3. 按规范执行任务
 
 ---
@@ -215,7 +215,7 @@ techStack:
 **A**: 
 - ✅ **推荐**：`docs/standards/agent-workflow.md`
 - ✅ **备选**：`docs/README.md`
-- ❌ **不再使用**：`docs/architect-spec.md`
+- ❌ **不再使用**：旧的分散项目级 Skill 作为唯一规范来源
 
 ---
 
@@ -255,11 +255,11 @@ defaults:
 ```
 projects/
 ├── project-a/
-│   └── docs/architect-spec.md  # 项目 A 规范
+│   └── docs/standards/agent-workflow.md  # 项目 A 规范
 ├── project-b/
-│   └── docs/architect-spec.md  # 项目 B 规范
+│   └── docs/standards/agent-workflow.md  # 项目 B 规范
 └── project-c/
-    └── docs/architect-spec.md  # 项目 C 规范
+    └── docs/standards/agent-workflow.md  # 项目 C 规范
 ```
 
 通用 Skill 通过任务上下文区分项目。
@@ -269,7 +269,7 @@ projects/
 ### Q5: 规范变更如何同步团队？
 
 **A**: 
-1. 更新 `docs/architect-spec.md`
+1. 更新 `docs/standards/agent-workflow.md`
 2. Git commit 并推送
 3. 通知团队成员
 4. 通用 Skill 自动适配新规范
@@ -278,7 +278,7 @@ projects/
 
 ## 📊 迁移检查清单
 
-- [ ] 创建 `docs/architect-spec.md`
+- [ ] 创建 `docs/standards/agent-workflow.md`
 - [ ] 验证 YAML 语法
 - [ ] 更新环境变量为 `PROJECT_ROOT`
 - [ ] 迁移项目级 Skill 模板（如有）
@@ -291,11 +291,18 @@ projects/
 
 ## 📚 相关文档
 
-- [ARCHITECT-SPEC-TEMPLATE.md](baiying:shared-skills/templates/architect-spec-template.md) - 规范文档模板
-- [ARCHITECT-SPEC-EXAMPLES.md](baiying:shared-skills/templates/architect-spec-examples.md) - 规范文档示例
+- [AGENT-WORKFLOW-TEMPLATE.md](baiying:shared-skills/template-files/AGENT-WORKFLOW-TEMPLATE.md) - 规范文档模板
+- [AGENT-WORKFLOW-EXAMPLES.md](baiying:shared-skills/template-files/AGENT-WORKFLOW-EXAMPLES.md) - 规范文档示例
 - [SPEC-LOADER.md](baiying:shared-skills/lib/spec-loader.js) - 规范文档加载器
 
 ---
 
 *最后更新：2026-06-07*
 *维护：通用架构规范*
+
+
+
+
+
+
+

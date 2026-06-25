@@ -45,7 +45,6 @@
 1. 使用内置默认值：
    - 需求目录：docs/requirements/
    - Plan 文件：{req-id}-plan.md
-   - 模块目录：docs/modules/
    - 命名规范：REQ-YYYYMMDD-NNN
 
 2. 提示用户：
@@ -140,3 +139,5 @@
 
 *最后更新：2026-06-07*
 *维护：requirement-plan Skill*
+
+

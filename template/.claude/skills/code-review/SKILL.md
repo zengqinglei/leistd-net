@@ -26,7 +26,7 @@ disable-model-invocation: false
 
 - ✅ **直接操作文件**：使用 `read/exec` 工具，不调用脚本
 - ✅ **读取项目规范**：优先读取项目内的规范文档及其附录检查清单
-- ⚠️ **无规范用默认**：无规范文档时使用本 Skill 模板的默认规则
+- ⚠️ **无规范用通用原则**：无规范文档时根据项目现有配置和代码风格推断最小规则
 - ⚠️ **降级提示**：当项目无规范文档时，**必须提示用户**建议创建规范文档
 - ✅ **违规分级**：P0（阻塞）/ P1（严重）/ P2（建议）
 - ✅ **检查报告**：生成详细的检查报告
@@ -37,12 +37,13 @@ disable-model-invocation: false
 
 ```
 1. 读取项目规范文档（见下方索引）
+   → 优先读取 `docs/standards/agent-workflow.md` 的项目文档索引
    → 提取文档末尾的"附录：规范检查清单"
-   → 如无规范文档，使用本 Skill 模板默认规则
+   → 如无规范文档，根据现有代码和配置推断最小规则，并提示补齐项目规范
 
 2. 自动化工具检查
-   → .NET: dotnet format --verify-no-changes
-   → Angular: npx eslint / npx prettier --check
+   → 优先使用项目声明的 lint/format/build 命令
+   → 无声明时按检测到的技术栈选择最小检查命令
 
 3. 规范检查清单审查
    → 逐条对照代码变更与检查清单
@@ -54,29 +55,30 @@ disable-model-invocation: false
    → P2：风格建议
 
 5. 生成报告
-   → 写入 docs/reviews/{feature}-code-review.md
+   → 写入 docs/reports/code-review/{req-id}-code-review.md
 ```
 
 ---
 
 ## 📂 项目规范索引
 
-**本 Skill 通过扫描项目文档来应用具体项目的规范规则。**
+**本 Skill 通过项目级文档索引应用具体项目的规范规则。**
 
-扫描项目 `docs/standards/` 目录，读取所有相关规范文档。常见文档结构：
+优先读取 `docs/standards/agent-workflow.md`，按其中索引读取必要文档；索引不存在时，再扫描 `docs/standards/` 的常见路径：
 
 | 类型 | 常见路径 | 包含内容 |
 |------|----------|----------|
-| **后端规范** | `docs/standards/code-standard/backend-develop.md` | 分层架构、编码规范、命名规范、DTO 规范、Controller 规范 |
-| **前端规范** | `docs/standards/code-standard/frontend-develop.md` | Angular 规范、PrimeNG 使用、Tailwind CSS、组件规范 |
+| **技术栈规范** | `docs/standards/tech-stack.md` | 技术栈、版本、构建/检查命令 |
+| **后端规范** | `docs/standards/code-standard/backend-develop.md` | 服务端分层、编码规范、命名规范、检查清单 |
+| **前端规范** | `docs/standards/code-standard/frontend-develop.md` | 客户端框架、组件、样式、检查清单 |
 | **文档命名** | `docs/standards/document-naming.md` | 文档命名规范 |
 | **测试规范** | `docs/standards/test.md` | 测试类型、覆盖率和命令 |
 
 **检查清单来源**：每个规范文档末尾的 `## 附录：规范检查清单` 章节。
 
-**降级处理**：当项目无规范文档时，使用本 Skill 模板：
-- 后端模板：`templates/code-standard-backend.md`
-- 前端模板：`templates/code-standard-frontend.md`
+**降级处理**：当项目无规范文档时，根据现有代码、配置文件和邻近实现推断最小规则；本 Skill 模板仅作为创建项目级规范的示例：
+- 后端示例模板：`examples/code-standard-backend.md`
+- 前端示例模板：`examples/code-standard-frontend.md`
 
 ---
 
@@ -100,23 +102,24 @@ disable-model-invocation: false
 **操作**：
 ```markdown
 使用 `read` 工具读取：
-1. `{project}/docs/standards/code-standard/backend-develop.md`（后端）
-2. `{project}/docs/standards/code-standard/frontend-develop.md`（前端）
+1. `{project}/docs/standards/agent-workflow.md`（项目级索引，如存在）
+2. 索引指定的技术栈、编码规范、测试规范和文档规范
+3. 索引不存在时读取 `{project}/docs/standards/code-standard/` 下的规范文档
 
 提取文档末尾的"附录：规范检查清单"章节。
 该清单由项目维护，包含该项目特定的编码规范检查项。
 
 如无规范文档：
-- 使用本 Skill 模板：`templates/code-standard-backend.md` 和 `templates/code-standard-frontend.md`
+- 根据项目现有配置和代码风格推断最小规则
 - 提示用户创建项目规范文档
 ```
 
 **提取信息**：
 ```markdown
 从规范文档中提取：
-- 分层架构规则
-- 编码规范（record/主构造函数/namespace 等）
-- 命名规范（DTO/Service/Component 等）
+- 技术栈和检查命令
+- 目录结构和分层规则
+- 编码规范和命名规范
 - 检查清单（逐条可勾选的规范项）
 ```
 
@@ -124,12 +127,19 @@ disable-model-invocation: false
 
 ### 2. 自动化工具检查
 
-**.NET 项目**：
+**自动化检查原则**：
+```markdown
+优先使用项目规范或配置中声明的命令。
+未声明时，检查 package.json、*.csproj、pyproject.toml、go.mod 等配置后选择最小可用命令。
+不要把示例命令当作所有项目的默认事实。
+```
+
+**.NET 项目示例**：
 ```bash
 dotnet format --verify-no-changes --verbosity detailed
 ```
 
-**Angular/Node.js 项目**：
+**Node.js/前端项目示例**：
 ```bash
 npx eslint . --ext .ts
 npx prettier --check "src/**/*.{ts,html,css}"
@@ -168,7 +178,7 @@ cd apps/web && npm run lint:fix
 ```markdown
 ## 规范检查清单审查结果
 
-### 后端规范（backend-develop.md）
+### 服务端规范（backend-develop.md 或项目对应规范）
 
 #### ✅ 分层架构检查
 - [x] HTTP 相关处理保留在 API 层
@@ -178,19 +188,17 @@ cd apps/web && npm run lint:fix
 - [x] Domain 层无 EF Core 引用
 
 #### ✅ 编码规范检查
-- [x] 使用主构造函数
-- [x] 使用文件范围 namespace
-- [ ] DTO 使用 record 类型 ← ❌ 违规：使用了 class
-- [x] 异步方法名以 Async 结尾
-- [x] 实体使用充血模型
+- [x] 命名与项目规范一致
+- [x] 错误处理使用项目统一机制
+- [ ] 接口响应结构与项目契约不一致 ← ❌ 违规：缺少错误码字段
 
-### 前端规范（frontend-develop.md）
+### 客户端规范（frontend-develop.md 或项目对应规范）
 
 #### ✅ 组件规范检查
-- [x] 优先使用 PrimeNG v21 组件
-- [ ] 自定义样式使用 Tailwind CSS v4 ← ❌ 违规：手写了 176 行 CSS
+- [x] 优先使用项目既有组件库
+- [ ] 自定义样式未复用项目主题变量 ← ❌ 违规：新增硬编码颜色
 - [x] 组件遵循单一职责原则
-- [x] 展示型组件使用 OnPush 策略
+- [x] 状态和副作用边界清晰
 ```
 
 ---
@@ -199,15 +207,15 @@ cd apps/web && npm run lint:fix
 
 | 等级 | 说明 | 处理方式 | 示例 |
 |------|------|---------|------|
-| **P0** | 违反强制规则 | ❌ 必须修复，阻塞提交 | DTO 用 class 而非 record |
-| **P1** | 违反推荐规则 | ⚠️ 尽快修复 | 缺少 `[Display]` 标注 |
+| **P0** | 违反强制规则 | ❌ 必须修复，阻塞提交 | Must have 未实现 / 安全规则被破坏 |
+| **P1** | 违反推荐规则 | ⚠️ 尽快修复 | 命名或错误处理不符合项目规范 |
 | **P2** | 风格建议 | 💡 有空时修复 | 颜色硬编码而非主题变量 |
 
 ---
 
 ### 5. 生成报告
 
-**报告存储路径**：`{project}/docs/reviews/{feature}-code-review.md`
+**报告存储路径**：`{project}/docs/reports/code-review/{req-id}-code-review.md`
 
 **报告格式**：
 ```markdown
@@ -260,7 +268,7 @@ cd apps/web && npm run lint:fix
 2. **逐条对照**：检查清单的每一项都必须有明确的 ✅ 或 ❌
 3. **引用原文**：报告中引用规范文档的原文作为依据
 4. **修复建议具体**：给出具体的代码修改建议，而非笼统的"请修复"
-5. **报告留存**：报告写入 docs/reviews/，供后续参考
+5. **报告留存**：报告写入 docs/reports/code-review/，供后续参考
 
 ---
 
@@ -282,3 +290,7 @@ cd apps/web && npm run lint:fix
 
 *最后更新：2026-06-14 通用规范审查版 v3.1.0*
 *维护：通用质量助手*
+
+
+
+
