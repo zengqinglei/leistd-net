@@ -1,6 +1,6 @@
 # 后端项目
 
-AI-Relay 后端是一个基于 .NET 10.0 构建的应用程序，采用整洁架构（DDD）原则。它提供高性能的 AI 模型代理网关，支持 Claude、Gemini、OpenAI、Antigravity，具备多账户负载均衡和 OAuth 令牌管理功能。
+基于 .NET 10.0 与自研 Leistd 框架构建的应用程序，采用整洁架构（DDD）原则，内置基于 OpenIddict 的认证授权、EF Core 数据访问与本地开发 SPA 代理。
 
 ---
 
@@ -50,38 +50,61 @@ cd backend/src/CompanyName.ProjectName.Api
 
 ### 2. 配置应用
 
-创建 `appsettings.Debug.json` 用于本地开发：
+本地开发的环境名为 `debug`（见 `Properties/launchSettings.json`），创建 `appsettings.debug.json` 覆盖本地配置（该文件已被 `.gitignore` 忽略，不会入库）：
 
 ```json
 {
   "ConnectionStrings": {
-    "Default": "Host=localhost;Port=5432;Database=CompanyName.ProjectName_Debug;Username=postgres;Password=YourPassword",
+    "Default": "Host=localhost;Port={pg-port};Database=CompanyName.ProjectName;Username=postgres;Password=YourPassword",
     "Redis": "127.0.0.1:6379"
   },
+  "SpaProxy": {
+    "Enabled": true,
+    "Target": "http://localhost:4200"
+  },
   "Cors": {
-    "AllowAnyLocalhost": true,
+    "AllowAnyLocalhost": false,
     "AllowedOrigins": []
-  },
-  "DefaultAdmin": {
-    "Username": "admin",
-    "Password": "Admin@123456",
-    "Email": "admin@company-name-project-name.com",
-    "Nickname": "系统管理员"
-  },
-  "Jwt": {
-    "SecretKey": "YourSecretKey-MinimumLength32Characters!",
-    "Issuer": "CompanyName.ProjectName",
-    "Audience": "CompanyName.ProjectName"
   }
 }
 ```
 
 > **注意**：
-> - `ConnectionStrings` 为可选配置。未配置时，应用使用内存存储。
-> - Redis 连接字符串格式：`host:port,password=xxx,ssl=true`（密码和 SSL 可选）
-> - 生产环境请修改 `DefaultAdmin.Password` 和 `Jwt.SecretKey`
+> - `ConnectionStrings.Default` 为可选配置。未配置（留空）时应用使用内存存储，重启即丢。`{pg-port}` 按本机 PostgreSQL 实际端口填写（默认 5432）。
+> - `Redis` 可选，未配置时自动回退内存缓存。
+> - `SpaProxy` / `Cors` 的取舍见下方「前后端联调」。
+> - 默认管理员账号等开发默认值在 `appsettings.json` 中，生产环境务必用环境变量覆盖。认证基于 OpenIddict + Cookie，无需配置 JWT 密钥。
 
-### 3. 运行应用
+### 3. 前后端联调（两种模式，二选一）
+
+前端是独立的 Angular dev server（4200），后端是 API（5240）。两者联调有两种方式：
+
+#### 模式一：SPA 同源访问（推荐）
+
+后端内置 SPA 反向代理：`/api/**` 由后端处理，其余请求代理到前端 dev server。**浏览器只访问后端地址，前后端同源，无跨域、cookie 正常。**
+
+- 后端：`SpaProxy.Enabled=true`、`SpaProxy.Target=http://localhost:4200`（如上配置）。
+- 前端：`environment.debug.ts` 里 `api.gateway=''`（同源相对路径）。
+- 访问：浏览器打开 **`http://localhost:5240/`**（不是 4200）。
+
+```text
+浏览器 → http://localhost:5240
+           ├─ /api/**  → 后端 Controller
+           └─ 其他     → SPA 代理转发到 Angular(4200)
+```
+
+#### 模式二：CORS 分离访问
+
+浏览器直接访问前端（4200），API 跨域打到后端。
+
+- 后端：`SpaProxy.Enabled=false`、`Cors.AllowAnyLocalhost=true`（开发放行本地端口）。
+- 前端：`environment.debug.ts` 里 `api.gateway='http://localhost:5240'`。
+- 访问：浏览器打开 `http://localhost:4200/`。
+- 提示：跨域携带 cookie 受 SameSite/Secure 限制更严，登录态异常时优先改用模式一。
+
+> 常见错误：浏览器访问 4200、API 打 5240，但后端 `Cors.AllowAnyLocalhost=false` 且 `AllowedOrigins` 为空 → CORS 预检无 `Access-Control-Allow-Origin`，请求被浏览器拦截（curl 不受影响，故命令行能通、浏览器不通）。改用模式一或开启 CORS 即可。
+
+### 4. 运行应用
 
 ```bash
 dotnet run
@@ -92,12 +115,11 @@ dotnet run
 - 创建默认管理员用户
 - 开始监听 `http://localhost:5240`
 
-### 4. 访问 API
+### 5. 访问
 
+- **前端控制台**（模式一）: `http://localhost:5240/`
 - **健康检查**: `http://localhost:5240/api/health`
-- **Gemini Api Key 代理**: `http://localhost:5240/gemini-api/*`
-- **Claude Api Key 代理**: `http://localhost:5240/claude-api/*`
-- **OpenAI Api Key 代理**: `http://localhost:5240/openai-api/*`
+- **业务 API**: `http://localhost:5240/api/v1/*`
 
 ---
 
@@ -105,9 +127,9 @@ dotnet run
 
 ### 配置文件
 
-- `appsettings.json` - 基础配置
-- `appsettings.Debug.json` - 本地开发
-- `appsettings.Development.json` - 开发环境
+- `appsettings.json` - 基础配置（含开发默认值，入库）
+- `appsettings.debug.json` - 本地开发覆盖（环境名 `debug`，已 gitignore）
+- `appsettings.Development.json` - 开发环境（已 gitignore）
 - `appsettings.Production.json` - 生产环境
 
 ### 主要配置项
@@ -127,6 +149,8 @@ dotnet run
 ConnectionStrings__Default="Host=localhost;Port=5432;Database=CompanyName.ProjectName;Username=postgres;Password=YourPassword"
 ```
 
+> 留空则使用内存数据库。
+
 #### Redis 缓存
 
 ```json
@@ -142,7 +166,20 @@ ConnectionStrings__Default="Host=localhost;Port=5432;Database=CompanyName.Projec
 ConnectionStrings__Redis="localhost:6379,password=your-password,ssl=true"
 ```
 
-#### CORS
+#### SPA 代理（本地联调，模式一）
+
+```json
+{
+  "SpaProxy": {
+    "Enabled": true,
+    "Target": "http://localhost:4200"
+  }
+}
+```
+
+> `Enabled=true` 时，后端把非 `/api` 请求代理到 `Target`（前端 dev server），实现同源访问；生产/部署一般关闭，由后端直接托管前端构建产物。详见上方「前后端联调」。
+
+#### CORS（本地联调，模式二）
 
 ```json
 {
@@ -153,6 +190,8 @@ ConnectionStrings__Redis="localhost:6379,password=your-password,ssl=true"
 }
 ```
 
+> 开发用 `AllowAnyLocalhost=true` 放行任意 localhost 端口；生产用 `AllowedOrigins` 精确白名单。仅在采用「模式二：CORS 分离访问」时需要。
+
 #### 默认管理员用户
 
 ```json
@@ -160,23 +199,13 @@ ConnectionStrings__Redis="localhost:6379,password=your-password,ssl=true"
   "DefaultAdmin": {
     "Username": "admin",
     "Password": "Admin@123456",
-    "Email": "admin@company-name-project-name.com",
+    "Email": "admin@example.com",
     "Nickname": "系统管理员"
   }
 }
 ```
 
-#### JWT 认证
-
-```json
-{
-  "Jwt": {
-    "SecretKey": "YourSecretKey-MinimumLength32Characters!",
-    "Issuer": "CompanyName.ProjectName",
-    "Audience": "CompanyName.ProjectName"
-  }
-}
-```
+> 认证基于 OpenIddict（OAuth2/OIDC）+ Cookie，无需配置 JWT 密钥。
 
 #### 外部 OAuth（可选）
 
@@ -186,12 +215,12 @@ ConnectionStrings__Redis="localhost:6379,password=your-password,ssl=true"
     "GitHub": {
       "ClientId": "your-github-client-id",
       "ClientSecret": "your-github-client-secret",
-      "RedirectUri": "http://localhost:5240/api/external-auth/github/callback"
+      "RedirectUri": "http://localhost:5240/api/v1/external-auth/github/callback"
     },
     "Google": {
       "ClientId": "your-google-client-id",
       "ClientSecret": "your-google-client-secret",
-      "RedirectUri": "http://localhost:5240/api/external-auth/google/callback"
+      "RedirectUri": "http://localhost:5240/api/v1/external-auth/google/callback"
     }
   }
 }
@@ -294,10 +323,9 @@ docker run -d \
   --name company-name-project-name \
   -p 5240:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
-  -e ConnectionStrings__Default="Host=your-db;Database=CompanyName.ProjectName;Username=postgres;Password=YourPassword" \
+  -e ConnectionStrings__Default="Host=your-db;Port=5432;Database=CompanyName.ProjectName;Username=postgres;Password=YourPassword" \
   -e ConnectionStrings__Redis="your-redis:6379" \
   -e DefaultAdmin__Password="YourAdminPassword" \
-  -e Jwt__SecretKey="YourSecretKey-MinimumLength32Characters!" \
   company-name-project-name:latest
 ```
 
@@ -305,12 +333,11 @@ docker run -d \
 
 ## 核心功能
 
-- **多提供商支持**：Gemini、Claude、OpenAI
-- **多账户负载均衡**：基于使用量的智能账户选择
-- **OAuth 令牌管理**：自动刷新访问令牌
-- **API Key 认证**：加密存储，支持过期控制
-- **使用量追踪**：分布式缓存 + 数据库审计日志
-- **整洁架构**：DDD 职责清晰分离
+- **认证授权**：OpenIddict（OAuth2/OIDC）+ Cookie，基于角色/权限
+- **用户与权限管理**：内置用户、角色、权限体系
+- **外部登录**：可选 GitHub / Google OAuth 接入
+- **整洁架构**：基于 Leistd 框架的 DDD 分层
+- **本地 SPA 代理**：开发期前后端同源联调
 - **自动数据库迁移**：启动时无缝更新架构
 
 ---
