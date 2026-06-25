@@ -1,4 +1,6 @@
 using CompanyName.ProjectName.Api.Options;
+using Microsoft.Extensions.Http.Resilience;
+using Polly;
 
 namespace CompanyName.ProjectName.Api.Extensions;
 
@@ -21,8 +23,36 @@ public static class SpaProxyApplicationBuilderExtensions
 
     public static IServiceCollection AddMyProjectSpaProxy(this IServiceCollection services)
     {
-        services.AddHttpClient(HttpClientName);
+        // SPA 代理转发前端 dev server（vite）的大量并发静态资源请求时，dev server 偶发关闭
+        // 连接（SocketException 10053），导致单次转发失败、Angular 无法 bootstrap。按 .NET 官方
+        // 弹性处理最佳实践（Microsoft.Extensions.Http.Resilience）挂一个针对“连接类瞬时故障”
+        // 的重试管道：只重试网络层异常（HttpRequestException/IOException/SocketException），
+        // 不依赖业务幂等（dev 资源转发均为可重放的 GET）。生产关闭 SpaProxy，不受影响。
+        services.AddHttpClient(HttpClientName)
+            .AddResilienceHandler("spa-proxy", builder =>
+            {
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 3,
+                    Delay = TimeSpan.FromMilliseconds(50),
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    ShouldHandle = args => ValueTask.FromResult(IsTransientConnectionFailure(args.Outcome.Exception))
+                });
+                builder.AddTimeout(TimeSpan.FromSeconds(30));
+            });
         return services;
+    }
+
+    private static bool IsTransientConnectionFailure(Exception? ex)
+    {
+        return ex switch
+        {
+            HttpRequestException => true,
+            IOException => true,
+            System.Net.Sockets.SocketException => true,
+            _ => ex?.InnerException is not null && IsTransientConnectionFailure(ex.InnerException)
+        };
     }
 
     public static IEndpointRouteBuilder MapMyProjectSpaFallback(this WebApplication app)
