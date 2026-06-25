@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   backend:
-    image: ghcr.io/zengqinglei/myproject:latest
-    container_name: myproject
+    image: ghcr.io/zengqinglei/companyname-projectname:latest
+    container_name: companyname-projectname
     ports:
       - "80:8080"
     environment:
@@ -20,7 +20,7 @@ services:
       # Default Admin User (Change in production!)
       - DefaultAdmin__Username=admin（可选）
       - DefaultAdmin__Password=Admin@123456
-      - DefaultAdmin__Email=admin@myproject.com（可选）
+      - DefaultAdmin__Email=admin@companyname-projectname.com（可选）
       - DefaultAdmin__Nickname=系统管理员（可选）
 
       # JWT Configuration (Change SecretKey in production!)
@@ -65,11 +65,11 @@ services:
     restart: unless-stopped
 
     networks:
-      - myproject-network
+      - companyname-projectname-network
 
   db:
     image: postgres:15-alpine
-    container_name: myproject-db
+    container_name: companyname-projectname-db
     environment:
       TZ: Asia/Shanghai
       POSTGRES_USER: postgres
@@ -90,11 +90,11 @@ services:
     restart: unless-stopped
 
     networks:
-      - myproject-network
+      - companyname-projectname-network
 
   redis:
     image: redis:7-alpine
-    container_name: myproject-redis
+    container_name: companyname-projectname-redis
     environment:
       TZ: Asia/Shanghai
     command: redis-server --appendonly yes
@@ -112,7 +112,7 @@ services:
     restart: unless-stopped
 
     networks:
-      - myproject-network
+      - companyname-projectname-network
 
 volumes:
   pgdata:
@@ -123,5 +123,5 @@ volumes:
     driver: local
 
 networks:
-  myproject-network:
+  companyname-projectname-network:
     driver: bridge

@@ -1,5 +1,5 @@
 {
-  "name": "myproject-web",
+  "name": "companyname-projectname-web",
   "version": "1.0.2",
   "scripts": {
     "ng": "ng",

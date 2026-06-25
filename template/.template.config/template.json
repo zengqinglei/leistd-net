@@ -18,9 +18,14 @@
       "pattern": "^(.*\\.)?",
       "replacement": ""
     },
-    "ProjectNameLower": {
+    "DotToHyphen": {
+      "identifier": "replace",
+      "pattern": "\\.",
+      "replacement": "-"
+    },
+    "FullNameKebab": {
       "identifier": "chain",
-      "steps": ["LastSegment", "lowerCaseInvariant"]
+      "steps": ["lowerCaseInvariant", "DotToHyphen"]
     }
   },
   "symbols": {
@@ -33,8 +38,8 @@
     "KebabName": {
       "type": "derived",
       "valueSource": "name",
-      "valueTransform": "ProjectNameLower",
-      "replaces": "myproject"
+      "valueTransform": "FullNameKebab",
+      "replaces": "companyname-projectname"
     },
     "IncludeIdentity": {
       "type": "parameter",

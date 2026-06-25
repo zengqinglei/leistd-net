@@ -180,7 +180,7 @@ cd deploy && docker-compose up -d
 
 ```bash
 # 构建镜像
-docker build -t myproject .
+docker build -t companyname-projectname .
 
 # 运行
 docker run -d \
@@ -188,7 +188,7 @@ docker run -d \
   -e ConnectionStrings__Default="Host=your-db;Database=MyProject;Username=postgres;Password=xxx" \
   -e DefaultAdmin__Password="YourPassword" \
   -e Jwt__SecretKey="YourSecretKey-MinimumLength32Characters!" \
-  myproject
+  companyname-projectname
 ```
 
 ## 卸载模板

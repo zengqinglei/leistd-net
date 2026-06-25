@@ -60,7 +60,7 @@ COPY --from=backend-build /app/publish .
 
 # 2. 拷贝前端构建结果到后端的 wwwroot 目录，让 ASP.NET Core 直接托管静态 SPA 文件
 # Angular >= 17 生产构建会输出到 dist/<project>/browser 目录
-COPY --from=frontend-build /app/dist/myproject-web/browser ./wwwroot
+COPY --from=frontend-build /app/dist/companyname-projectname-web/browser ./wwwroot
 
 # 启动程序（Program.cs 会在应用启动前自动执行数据库迁移）
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.Api.dll"]
