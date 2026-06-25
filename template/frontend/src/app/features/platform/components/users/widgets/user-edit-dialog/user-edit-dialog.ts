@@ -85,8 +85,13 @@ export class UserEditDialogComponent {
   roleOptions = Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value }));
 
   constructor() {
+    // 同时依赖 visible 与 user：每次对话框打开都重置表单，避免新建模式残留上次输入
+    // （user 信号从 null 到 null 不变化时 effect 不会重跑，需借 visible 触发）
     effect(() => {
       const user = this.user();
+      if (!this.visible()) {
+        return;
+      }
       const avatar = user?.avatar ?? '';
       this.form.reset({
         username: user?.username ?? '',
