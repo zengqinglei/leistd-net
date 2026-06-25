@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "my-project-web": {
+    "myproject-web": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -88,19 +88,19 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "my-project-web:build:production"
+              "buildTarget": "myproject-web:build:production"
             },
             "debug": {
-              "buildTarget": "my-project-web:build:debug"
+              "buildTarget": "myproject-web:build:debug"
             },
             "dev": {
-              "buildTarget": "my-project-web:build:dev"
+              "buildTarget": "myproject-web:build:dev"
             },
             "test": {
-              "buildTarget": "my-project-web:build:test"
+              "buildTarget": "myproject-web:build:test"
             },
             "uat": {
-              "buildTarget": "my-project-web:build:uat"
+              "buildTarget": "myproject-web:build:uat"
             }
           },
           "defaultConfiguration": "debug"

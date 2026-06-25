@@ -18,14 +18,9 @@
       "pattern": "^(.*\\.)?",
       "replacement": ""
     },
-    "DotToHyphen": {
-      "identifier": "replace",
-      "pattern": "\\.",
-      "replacement": "-"
-    },
-    "FullKebab": {
+    "ProjectNameLower": {
       "identifier": "chain",
-      "steps": ["DotToHyphen", "kebabCase"]
+      "steps": ["LastSegment", "lowerCaseInvariant"]
     }
   },
   "symbols": {
@@ -38,8 +33,8 @@
     "KebabName": {
       "type": "derived",
       "valueSource": "name",
-      "valueTransform": "FullKebab",
-      "replaces": "my-project"
+      "valueTransform": "ProjectNameLower",
+      "replaces": "myproject"
     },
     "IncludeIdentity": {
       "type": "parameter",
@@ -62,8 +57,10 @@
         "**/obj/**",
         "**/.vs/**",
         "**/.claude/**",
+        "**/.template.config/**",
         "**/artifacts/**",
         "frontend/node_modules/**",
+        "frontend/dist/**",
         "test-scenarios/**",
         ".pid"
       ],

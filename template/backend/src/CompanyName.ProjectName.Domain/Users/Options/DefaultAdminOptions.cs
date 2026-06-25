@@ -23,7 +23,7 @@ public class DefaultAdminOptions
     /// <summary>
     /// 邮箱
     /// </summary>
-    public string Email { get; set; } = "admin@my-project.com";
+    public string Email { get; set; } = "admin@myproject.com";
 
     /// <summary>
     /// 昵称
