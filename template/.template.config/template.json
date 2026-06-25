@@ -33,7 +33,8 @@
       "type": "derived",
       "valueSource": "name",
       "valueTransform": "LastSegment",
-      "replaces": "MyProject"
+      "replaces": "MyProject",
+      "fileRename": "MyProject"
     },
     "KebabName": {
       "type": "derived",
@@ -76,11 +77,13 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/AuthorizationController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/**",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/**",
             "backend/src/CompanyName.ProjectName.Domain/Users/Options/UserRegistrationOptions.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Email/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Email/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260102000000_AddIdentityFields.cs",
@@ -89,6 +92,8 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.Designer.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.Designer.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260105000000_AddExternalLoginConnections.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260105000000_AddExternalLoginConnections.Designer.cs",
             "frontend/src/app/features/platform/components/open-applications/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
             "frontend/src/app/features/platform/models/open-application.dto.ts",
