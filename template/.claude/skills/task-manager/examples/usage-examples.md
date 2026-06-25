@@ -42,7 +42,7 @@
 {
   "taskId": "REQ-20260531-001-FE",
   "progress": 80,
-  "status": "in_progress",
+  "status": "in-progress",
   "updatedBy": "architect",
   "completedItems": ["列表页面", "创建表单", "时间选择器"],
   "note": "前端 UI 发布预览功能进行中"
@@ -112,7 +112,7 @@
 **触发**：凌晨 4 点会话重置，Agent 重新启动
 
 **Agent 处理流程**：
-1. 启动时调用 `listTasks({ filter: "active" })`:
+1. 启动时调用 `listTasks({ filter: "open" })`:
    - 获取 3 个活跃任务
 
 2. 对每个活跃任务调用 `restoreContext()`:
@@ -124,7 +124,7 @@
 ```
 
 3. 恢复内容：
-   - 任务基本信息（进度 80%，状态 in_progress）
+   - 任务基本信息（进度 80%，状态 in-progress）
    - Plan.md 全文   - 最近 5 条对话转录
    - 决策记录（使用 BullMQ）
    - 阻塞问题（API 权限）
@@ -160,7 +160,7 @@
 {
   "taskId": "REQ-20260531-001",
   "event": "技术决策",
-  "agent": "baiying-architect",
+  "agent": "architect",
   "details": "确定使用 BullMQ 作为定时任务调度方案"
 }
 ```
@@ -172,26 +172,26 @@
 **用户消息**：/task-manager listTasks
 
 **Agent 处理流程**：
-1. 调用 `listTasks({ filter: "active" })`
+1. 调用 `listTasks({ filter: "open" })`
 
 2. 读取 `docs/requirements/registry.md`
 
-3. 解析表格，筛选 `status=active` 的任务
+3. 解析表格，筛选 `status 为未归档且未完成` 的任务
 
 4. 回复用户：
 ```
 📋 活跃任务清单 (3 个)
 
 1. REQ-20260531-001 - 定时发布功能
-   进度：75% | 状态：in_progress | 模块：内容管理
+   进度：75% | 状态：in-progress | 模块：内容管理
    最后更新：2026-06-06 12:00
 
 2. REQ-20260601-001 - 用户登录
-   进度：30% | 状态：in_progress | 模块：平台账号
+   进度：30% | 状态：in-progress | 模块：平台账号
    最后更新：2026-06-06 10:30
 
 3. REQ-20260602-001 - 数据看板
-   进度：10% | 状态：pending | 模块：数据分析
+   进度：10% | 状态：planned | 模块：数据分析
    最后更新：2026-06-06 09:00
 ```
 
@@ -213,11 +213,11 @@
 }
 ```
 
-2. 恢复任务状态为 `in_progress`:
+2. 恢复任务状态为 `in-progress`:
 ```json
 {
   "taskId": "REQ-20260531-001-FE",
-  "status": "in_progress",
+  "status": "in-progress",
   "updatedBy": "architect",
   "note": "阻塞已解决，继续开发"
 }
@@ -271,7 +271,7 @@
 ```markdown
 ## 基本信息
 - **进度**: 50%
-- **状态**: in_progress
+- **状态**: in-progress
 
 ## 进行中
 - 🔄 列表页面 (50%)
@@ -282,7 +282,7 @@
 ```markdown
 ## 基本信息
 - **进度**: 80%
-- **状态**: in_progress
+- **状态**: in-progress
 - **最后更新**: 2026-06-06T12:00:00+08:00
 - **更新者**: architect
 
@@ -304,6 +304,7 @@
 ---
 
 *最后更新：2026-06-06*
+
 
 
 

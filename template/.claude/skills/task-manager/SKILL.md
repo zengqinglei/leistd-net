@@ -1,7 +1,7 @@
 ---
 name: task-manager
 description: |
-  任务管家 Skill，用于 Plan 确认后的流程主控、任务识别、状态更新、上下文恢复、进度跟踪和验收收口。
+  任务管家 Skill，用于 Plan 确认后的流程状态管理、任务识别、状态更新、上下文恢复、进度跟踪和验收收口。
 
   **当以下情况时使用此 Skill**:
   (1) 用户查询任务进度（如"定时发布功能进度如何？"）
@@ -11,7 +11,7 @@ description: |
   (5) 需要记录决策或阻塞问题
   (6) 对话结束时需要保存上下文
   (7) 需求包含多个子任务时，自动编排派发
-  (8) Plan.md 已确认，需要初始化 registry/context 并推进 coding → code-review → test-runner → deploy → acceptance
+  (8) Plan.md 已确认，需要初始化 registry/context，并维护 coding → code-review → test-runner → deploy → acceptance 阶段上下文
   (9) 部署或测试完成后需要生成验收报告并收口任务
 
   **调用 Agent**：规划助手、开发助手、质量助手（所有 Agent 共用）
@@ -26,19 +26,19 @@ disable-model-invocation: false
 
 # 任务管家 (task-manager)
 
-> Plan 确认后的流程主控：登记、拆解、编排、状态更新、验收收口
+> Plan 确认后的流程状态管理：登记、拆解、编排、状态更新、验收收口
 
 ## 🚨 执行前必读
 
 - ✅ **直接操作文件**：使用 `read/write/edit` 工具，不调用脚本
 - ✅ **任务 ID 格式**：`REQ-YYYYMMDD-XXX` (全局) 或 `REQ-YYYYMMDD-XXX-FE/BE/QA` (模块)
 - ✅ **进度范围**：0-100 整数
-- ✅ **状态枚举**：`pending`, `in_progress`, `waiting_review`, `blocked`, `completed`
+- ✅ **Registry 状态枚举**：`candidate`, `planned`, `in-progress`, `blocked`, `review`, `done`, `archived`；context 单独记录 `phase` 和 `progress`
 - ✅ **上下文文件位置**：优先使用项目级路径 `docs/requirements/context/{taskId}.md`；个人私有上下文可使用 `~/.openclaw/agents/{agentId}/task-context/{taskId}.md`
 - ✅ **项目路径**：任务上下文中必须包含 `projectRoot` 字段
 - ⚠️ **降级提示**：当项目无规范文档时，**必须提示用户**建议创建规范文档
 - ✅ **自动保存**：对话结束时保存上下文
-- ✅ **主控职责**：Plan 确认后必须初始化 registry/context，并按阶段状态机推进
+- ✅ **状态职责**：Plan 确认后必须初始化 registry/context，并维护阶段状态、进度、报告索引和阻塞信息
 
 ---
 
@@ -70,7 +70,7 @@ disable-model-invocation: false
 
 ## 🎯 核心能力
 
-### 0. Plan 确认后的流程主控
+### 0. Plan 确认后的流程状态管理
 
 **时机**：用户确认 Plan.md，或明确要求“开始实施/继续执行计划”。
 
@@ -79,7 +79,7 @@ disable-model-invocation: false
 2. 创建或更新 `docs/requirements/registry.md`。
 3. 创建或更新 `docs/requirements/context/{req-id}.md`。
 4. 生成子任务清单和 Must have 映射；复杂任务先让用户确认。
-5. 按阶段状态机推进：`coding → code-review → test-runner → deploy → acceptance`。
+5. 维护阶段状态机上下文：`coding → code-review → test-runner → deploy → acceptance`，实际能力触发由模型根据上下文和 Skill metadata/description 判断。
 6. 每个阶段完成后更新 context 的阶段、进度、报告路径和时间线。
 7. 全部完成或阻塞时生成收口报告。
 
@@ -93,7 +93,7 @@ disable-model-invocation: false
 | 验收收口 | `docs/reports/acceptance/{req-id}-acceptance.md` |
 
 **收口条件**：
-- `completed`：Must have 均有证据，测试/审查/部署满足项目门槛，用户验收或项目约定允许自动完成。
+- `done`：Must have 均有证据，测试/审查/部署满足项目门槛，用户验收或项目约定允许自动完成。
 - `blocked`：任一阶段失败且无法自动恢复，或需要用户/外部系统决策。
 
 ### 1. 识别任务
@@ -181,7 +181,7 @@ disable-model-invocation: false
 任务上下文：
 - 任务名称：定时发布功能 - 前端 UI
 - 进度：80%
-- 状态：in_progress
+- 状态：in-progress
 - 完成项：["数据库设计", "后端 API", "列表页面"]
 - 进行中：["时间选择器 (80%)"]
 - 决策记录：[使用 BullMQ 延迟队列]
@@ -258,7 +258,7 @@ disable-model-invocation: false
 
 2. 计算变更
    - 进度变更：50% → 80%
-   - 状态变更：in_progress → in_progress
+   - 状态变更：in-progress → in-progress
 
 3. 编辑上下文文件
    - 更新进度字段
@@ -307,7 +307,7 @@ disable-model-invocation: false
 
 ### 5. 列出任务
 
-**输入**：过滤条件（active/completed/all）
+**输入**：过滤条件（open/done/all）
 
 **操作**：
 ```markdown
@@ -317,8 +317,8 @@ disable-model-invocation: false
    - 提取需求 ID、名称、状态、优先级
 
 3. 根据过滤条件筛选
-   - active: 状态为 active 的任务
-   - completed: 状态为 completed 的任务
+   - open: 状态为 candidate/planned/in-progress/review/blocked 的未归档任务
+   - done: 状态为 done 的任务
    - all: 所有任务
 
 4. 格式化输出
@@ -327,9 +327,9 @@ disable-model-invocation: false
 **输出**：
 ```markdown
 活跃任务清单 (3 个)：
-1. REQ-20260531-001 - 定时发布功能 - 75% - in_progress
-2. REQ-20260601-001 - 用户登录 - 30% - in_progress
-3. REQ-20260602-001 - 数据看板 - 10% - pending
+1. REQ-20260531-001 - 定时发布功能 - 75% - in-progress
+2. REQ-20260601-001 - 用户登录 - 30% - in-progress
+3. REQ-20260602-001 - 数据看板 - 10% - planned
 ```
 
 ---
@@ -355,11 +355,11 @@ disable-model-invocation: false
 
 **单 Agent 自驱动场景**：
 
-小架作为单一 Agent 执行全流程时，按 AGENTS.md 的 Phase 0-6 顺序执行，不需要 `sessions_spawn` 派发子任务。详见 `AGENTS.md ## 自驱动工作流`。
+单一 Agent 执行全流程时，仍以 `docs/standards/agent-workflow.md` 的 Phase 0-7 为准，通过上下文和 Skill metadata/description 选择下一阶段能力；不依赖非标准调度机制。
 
 **衔接规则**：
-- 阶段失败时，先分析根因（见 `AGENTS.md ## 失败根因分析`），再决定回退方向
-- 不要默认回退到阶段 1，可能是当前阶段的配置/环境问题
+- 阶段失败时，先分析根因，再决定回退方向。
+- 不要默认回退到阶段 1，可能是当前阶段的配置/环境问题。
 
 ---
 
@@ -383,14 +383,14 @@ disable-model-invocation: false
 
 | 阶段 | 更新内容 | 说明 |
 |------|----------|------|
-| Phase 0 | Plan 草案生成 | 记录为 `pending` 或等待确认 |
-| Phase 1 | 需求登记完成 | 创建 registry/context，状态 `active` |
+| Phase 0 | Plan 草案生成 | 记录为 `planned` 或等待确认 |
+| Phase 1 | 需求登记完成 | 创建 registry/context，状态 `in-progress` |
 | Phase 2 | 任务拆解完成 | 写入子任务清单和 Must have 映射 |
 | Phase 3 | 开发自测完成 | 写入 dev report 路径，进度建议 50%-60% |
 | Phase 4 | 代码审查完成 | 写入 code-review report 路径，无 P0 才继续 |
 | Phase 5 | 测试验证完成 | 写入 test report 路径，进度建议 80% |
 | Phase 6 | 部署完成 | 写入 deploy report 路径，进度建议 90% |
-| Phase 7 | 验收收口 | 写入 acceptance report，状态 `completed` 或 `blocked` |
+| Phase 7 | 验收收口 | 写入 acceptance report，状态 `done` 或 `blocked` |
 
 ---
 
@@ -472,5 +472,10 @@ disable-model-invocation: false
 
 *最后更新：2026-06-07 文档驱动版 v4.0.0*
 *维护：通用任务管家*
+
+
+
+
+
 
 

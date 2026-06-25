@@ -60,9 +60,15 @@ docs/
 ├── standards/
 │   └── code-standard/
 ├── requirements/
+│   └── context/
 ├── modules/
 ├── deploy/
-├── reviews/
+├── reports/
+│   ├── development/
+│   ├── code-review/
+│   ├── tests/
+│   ├── deploy/
+│   └── acceptance/
 └── reference/
 ```
 
@@ -76,10 +82,11 @@ docs/
     └── {skill-name}/
         ├── SKILL.md
         ├── templates/
+        ├── references/
         └── examples/
 ```
 
-Skill 应优先读取 `docs/standards/`，不要把长期规范散落在 skill 内部模板中。
+Skill 应优先读取 `docs/standards/`，不要把长期规范散落在 skill 内部模板中。每个 Skill 应按职责独立闭环，不依赖非标准共享目录。
 
 ## 5. 模块文档结构
 
@@ -98,6 +105,7 @@ docs/modules/{module-name}/
 - Markdown 文件：小写 kebab-case，`README.md` 除外。
 - 需求文件：`req-yyyymmdd-nnn-plan.md`。
 - 模块目录：`{module-name}`，不使用数字前缀。
+- 阶段报告按 `docs/reports/{type}/{req-id}-{type}.md` 的项目约定命名。
 - 不把一次性报告放入 `standards/`。
 
 ## 7. AI 协作要求

@@ -4,7 +4,7 @@
 
 - 需求 ID：{req-id}
 - Plan 文档：docs/requirements/{req-id}-plan.md
-- 状态：completed / blocked
+- 状态：done / blocked
 - 收口时间：{iso-datetime}
 
 ## 阶段报告
@@ -28,6 +28,7 @@
 
 ## 结论
 
-- completed：所有 Must have 均有证据且无阻塞。
+- done：所有 Must have 均有证据且无阻塞。
 - blocked：存在未解决阻塞，说明原因和下一步。
+
 

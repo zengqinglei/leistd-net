@@ -81,56 +81,50 @@ deploy:
 
 ### 阶段状态机
 
-| Phase | 阶段 | 主 Skill | 输入 | 必须产物 | 完成条件 | 下一阶段 |
+> 阶段表描述推荐能力与产物契约。实际触发由大模型根据当前上下文、用户意图和各 Skill metadata/description 自动选择；Skill 之间不直接调用或依赖彼此。
+
+| Phase | 阶段 | 推荐能力 | 输入 | 必须产物 | 完成条件 | 后续上下文 |
 |---|---|---|---|---|---|---|
-| 0 | 需求进入 | `requirement-plan` | 用户想法/背景/需求 | `docs/requirements/{req-id}-plan.md` | Plan 草案生成并等待用户确认 | 1 |
-| 1 | 需求登记 | `task-manager` | 确认后的 Plan.md | `registry.md` + `context/{req-id}.md` | 任务 ID、registry、context 已创建或更新 | 2 |
-| 2 | 任务拆解 | `task-manager` | Plan.md + context | 子任务清单 + Must have 映射 | 子任务清单已确认或简单任务自动通过 | 3 |
-| 3 | 开发自测 | `coding` | Plan.md + 子任务清单 | `docs/reports/development/{req-id}-dev-report.md` | 代码完成，最小验证通过或明确阻塞 | 4 |
-| 4 | 代码审查 | `code-review` | 代码变更 + Plan.md + dev report | `docs/reports/code-review/{req-id}-code-review.md` | 无 P0 问题 | 5 |
-| 5 | 测试验证 | `test-runner` | Plan.md + 测试配置 + review report | `docs/reports/tests/{req-id}-test-report.md` | 测试通过，Must have 覆盖已标记 | 6 |
-| 6 | 部署 | `deploy` | 部署配置 + test report + review report | `docs/reports/deploy/{req-id}-deploy-report.md` | 健康检查通过，部署报告生成 | 7 |
-| 7 | 验收收口 | `task-manager` | Plan.md + 所有阶段报告 | `docs/reports/acceptance/{req-id}-acceptance.md` | registry/context 更新为 completed 或 blocked | Done |
+| 0 | 需求进入 | `requirement-plan` | 用户想法/背景/需求 | `docs/requirements/{req-id}-plan.md` | Plan 草案生成并等待用户确认 | 需要确认或登记需求 |
+| 1 | 需求登记 | `task-manager` | 确认后的 Plan.md | `registry.md` + `context/{req-id}.md` | registry/context 已创建或更新 | 需要任务拆解 |
+| 2 | 任务拆解 | `task-manager` | Plan.md + context | 子任务清单 + Must have 映射 | 子任务清单已确认或简单任务自动通过 | 需要开发实现 |
+| 3 | 开发自测 | `coding` | Plan.md + 子任务清单 | `docs/reports/development/{req-id}-dev-report.md` | 代码完成，最小验证通过或明确阻塞 | 需要正式代码审查 |
+| 4 | 代码审查 | `code-review` | 代码变更 + Plan.md + dev report | `docs/reports/code-review/{req-id}-code-review.md` | 无 P0 问题；有 P0 记录修复要求 | 需要测试验证或开发修复 |
+| 5 | 测试验证 | `test-runner` | Plan.md + 测试配置 + review report | `docs/reports/tests/{req-id}-test-report.md` | 测试通过，Must have 覆盖已标记；失败记录修复要求 | 需要部署发布或开发修复 |
+| 6 | 部署 | `deploy` | 部署配置 + test report + review report | `docs/reports/deploy/{req-id}-deploy-report.md` | 健康检查通过，或因缺配置生成部署方案等待确认 | 需要验收收口 |
+| 7 | 验收收口 | `task-manager` | Plan.md + 所有阶段报告 | `docs/reports/acceptance/{req-id}-acceptance.md` | registry/context 更新为 done 或 blocked | Done |
 
 ### 需求开发流程
 
 ```yaml
 workflow:
+  triggerMode: "context-driven"
+  rule: "模型根据当前上下文、用户意图和 Skill metadata/description 自动选择能力；Skill 不直接调用其他 Skill。"
   requirement:
     steps:
       - name: "需求分析"
-        agent: "architect"
-        skill: "requirement-plan"
-        output: "Plan.md 草案"
+        capability: "requirement-plan"
+        output: "Plan.md 草案 + 等待确认上下文"
       - name: "需求确认"
-        agent: "user"
+        capability: "user-decision"
         output: "确认的 Plan.md"
       - name: "任务拆解"
-        agent: "architect"
-        skill: "task-manager"
+        capability: "task-manager"
         output: "registry + context + 子任务清单"
       - name: "开发实现"
-        agent: "architect"
-        skill: "coding"
-        output: "代码 + dev report"
+        capability: "coding"
+        output: "代码 + dev report + 需要正式代码审查上下文"
       - name: "代码审查"
-        agent: "architect"
-        skill: "code-review"
-        output: "审查报告"
+        capability: "code-review"
+        output: "审查报告 + 是否具备测试验证条件"
       - name: "测试验证"
-        agent: "architect"
-        skill: "test-runner"
-        output: "测试报告"
+        capability: "test-runner"
+        output: "测试报告 + 是否具备部署条件"
       - name: "部署上线"
-        agent: "architect"
-        skill: "deploy"
+        capability: "deploy"
+        output: "部署报告或部署方案 + 是否具备验收收口条件"
       - name: "验收收口"
-        agent: "architect"
-        skill: "task-manager"
-        output: "部署报告"
-      - name: "验收收口"
-        agent: "architect"
-        skill: "task-manager"
+        capability: "task-manager"
         output: "验收报告 + registry/context 更新"
 ```
 
@@ -212,14 +206,14 @@ defaults:
 
 ## Skill 清单
 
-| Skill 名称 | 职责 | 调用时机 |
+| Skill 名称 | 职责 | 触发上下文 |
 |-----------|------|---------|
 | `requirement-plan` | 需求分析 → Plan.md | 用户提出新需求 |
 | `task-manager` | 任务管理、进度跟踪 | 查询进度、更新状态 |
 | `coding` | 代码开发、最小验证 | Plan.md 确认后 |
-| `code-review` | 代码规范检查 | 代码提交前 |
-| `deploy` | 部署上线 | 测试通过且用户确认后 |
-| `test-runner` | 运行测试套件 | 代码开发完成后 |
+| `code-review` | 代码规范检查 | 上下文标记需要正式代码审查 |
+| `deploy` | 部署上线 | 上下文标记具备部署条件，且高风险动作已确认 |
+| `test-runner` | 运行测试套件 | 上下文标记需要测试验证 |
 
 ---
 
@@ -269,22 +263,17 @@ workflow:
   requirement:
     steps:
       - name: "需求分析"
-        agent: "architect"
-        skill: "requirement-plan"
+        capability: "requirement-plan"
       - name: "需求确认"
-        agent: "user"
+        capability: "user-decision"
       - name: "开发实现"
-        agent: "architect"
-        skill: "coding"
+        capability: "coding"
       - name: "代码审查"
-        agent: "architect"
-        skill: "code-review"
+        capability: "code-review"
       - name: "测试验证"
-        agent: "architect"
-        skill: "test-runner"
+        capability: "test-runner"
       - name: "部署上线"
-        agent: "architect"
-        skill: "deploy"
+        capability: "deploy"
 
 git:
   branchNaming: "feature/{req-id}"
@@ -307,4 +296,10 @@ git:
 
 *最后更新：模板版本*
 *维护：通用架构规范*
+
+
+
+
+
+
 

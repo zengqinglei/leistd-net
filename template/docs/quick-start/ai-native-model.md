@@ -46,7 +46,7 @@ AI 执行前应优先读取项目文档，而不是依赖历史对话：
 - `docs/requirements/`：当前需求和验收标准。
 - `docs/modules/`：模块边界、设计、API、测试。
 - `docs/deploy/`：环境和发布约束。
-- `docs/reviews/`：历史审查结论。
+- `docs/reports/code-review/`：历史审查结论。
 
 ## 质量原则
 

@@ -65,22 +65,22 @@ workflow:
   requirement:
     steps:
       - name: "需求分析"
-        agent: "architect"
+        capability: "agent-capability"
         output: "Plan.md 草案"
       - name: "需求确认"
-        agent: "user"
+        capability: "user-decision"
         output: "确认的 Plan.md"
       - name: "任务拆解"
-        agent: "architect"
+        capability: "agent-capability"
         output: "模块子文档"
       - name: "开发实现"
-        agent: "architect"
+        capability: "agent-capability"
         output: "代码 + 测试"
       - name: "代码审查"
-        agent: "architect"
+        capability: "agent-capability"
         output: "审查报告"
       - name: "部署上线"
-        agent: "architect"
+        capability: "agent-capability"
         output: "生产环境"
 ```
 
@@ -194,13 +194,13 @@ workflow:
   requirement:
     steps:
       - name: "需求分析"
-        agent: "architect"
+        capability: "agent-capability"
       - name: "需求确认"
-        agent: "user"
+        capability: "user-decision"
       - name: "开发实现"
-        agent: "architect"
+        capability: "agent-capability"
       - name: "代码审查"
-        agent: "architect"
+        capability: "agent-capability"
 
 git:
   branchNaming: "feature/{req-id}"
@@ -222,6 +222,7 @@ git:
 
 *最后更新：模板版本*
 *维护：通用架构规范*
+
 
 
 

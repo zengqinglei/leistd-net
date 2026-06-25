@@ -2,7 +2,7 @@
 
 ## 1. 目录命名
 
-- 使用小写 kebab-case：`code-standard`、`quick-start`。
+- 使用小写 kebab-case：`code-standard`、`quick-start`、`code-review`。
 - 不使用数字前缀排序。
 - 不使用项目名作为模板目录名。
 
@@ -11,6 +11,7 @@
 - 使用小写 kebab-case：`api-standard.md`。
 - 需求 Plan 使用 `{req-id}-plan.md`。
 - 模块固定文档名：`design.md`、`api.md`、`plan.md`、`test-plan.md`、`status.md`。
+- 阶段报告使用 `{req-id}-{report-type}.md`，例如 `req-20260625-001-code-review.md`。
 
 ## 3. 需求编号
 
@@ -36,7 +37,8 @@ req-yyyymmdd-nnn-plan.md
 | --- | --- |
 | 长期规范 | `docs/standards/` |
 | 单需求方案 | `docs/requirements/` |
+| 任务上下文 | `docs/requirements/context/` |
 | 模块设计/API/测试 | `docs/modules/{module}/` |
 | 部署流程 | `docs/deploy/` |
-| 审查结果 | `docs/reviews/` |
+| 阶段报告与验收证据 | `docs/reports/` |
 | 外部资料索引 | `docs/reference/` |
