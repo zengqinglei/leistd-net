@@ -1,6 +1,5 @@
 #if (IncludeRoles)
 using CompanyName.ProjectName.Application.Permissions.Provider;
-using Leistd.Ddd.Application.Permission;
 #endif
 using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Application.Users.Dtos;
@@ -22,7 +21,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// </summary>
     [HttpGet]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Default)]
+    [Authorize(Policy = PermissionConstant.Users.Default)]
 #endif
     public async Task<PagedResultDto<UserManagementOutputDto>> GetPagedListAsync(
         [FromQuery] GetUserPagedInputDto input,
@@ -36,7 +35,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// </summary>
     [HttpGet("{id}")]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Default)]
+    [Authorize(Policy = PermissionConstant.Users.Default)]
 #endif
     public async Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -48,7 +47,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// </summary>
     [HttpPost]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Create)]
+    [Authorize(Policy = PermissionConstant.Users.Create)]
 #endif
     public async Task<UserManagementOutputDto> CreateAsync(
         [FromBody] CreateUserInputDto input,
@@ -62,7 +61,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// </summary>
     [HttpPut("{id}")]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Update)]
+    [Authorize(Policy = PermissionConstant.Users.Update)]
 #endif
     public async Task<UserManagementOutputDto> UpdateAsync(
         Guid id,
@@ -77,7 +76,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// </summary>
     [HttpPatch("{id}/enable")]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Update)]
+    [Authorize(Policy = PermissionConstant.Users.Update)]
 #endif
     public async Task EnableAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -89,7 +88,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// </summary>
     [HttpPatch("{id}/disable")]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Update)]
+    [Authorize(Policy = PermissionConstant.Users.Update)]
 #endif
     public async Task DisableAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -102,7 +101,7 @@ public class UserController(IUserAppService userAppService) : BaseController
 #if (IncludeIdentity)
     [HttpPost("{id}/reset-password")]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Update)]
+    [Authorize(Policy = PermissionConstant.Users.Update)]
 #endif
     public async Task ResetPasswordAsync(
         Guid id,
@@ -118,7 +117,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// </summary>
     [HttpDelete("{id}")]
 #if (IncludeRoles)
-    [Permission(PermissionConstant.Users.Delete)]
+    [Authorize(Policy = PermissionConstant.Users.Delete)]
 #endif
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {

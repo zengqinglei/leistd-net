@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IncludeExternalLogin)
 using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 

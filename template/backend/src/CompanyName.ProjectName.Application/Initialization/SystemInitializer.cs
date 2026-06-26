@@ -5,7 +5,7 @@ using CompanyName.ProjectName.Domain.Users.Options;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-#if (IncludeIdentity)
+#if (IncludeOpenIddict)
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 #endif
@@ -21,6 +21,8 @@ public class SystemInitializer(
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
     IPasswordHasher passwordHasher,
+#endif
+#if (IncludeOpenIddict)
     IOpenIddictScopeManager scopeManager,
 #endif
     IOptions<DefaultAdminOptions> adminOptions,
@@ -39,7 +41,9 @@ public class SystemInitializer(
 
         await InitializeDefaultAdminAsync(adminRole, cancellationToken);
 
+#if (IncludeOpenIddict)
         await InitializeOpenIddictAsync(cancellationToken);
+#endif
 
         logger.LogInformation("Admin 角色通过代码逻辑自动拥有所有权限，无需插入数据库");
 #else
@@ -125,6 +129,7 @@ public class SystemInitializer(
         }
     }
 
+#if (IncludeOpenIddict)
     private async Task InitializeOpenIddictAsync(CancellationToken cancellationToken)
     {
         await EnsureScopeAsync(Scopes.OpenId, "OpenID", cancellationToken);
@@ -145,6 +150,7 @@ public class SystemInitializer(
             DisplayName = displayName
         }, cancellationToken);
     }
+#endif
 #else
     private async Task InitializeDefaultAdminAsync(CancellationToken cancellationToken)
     {

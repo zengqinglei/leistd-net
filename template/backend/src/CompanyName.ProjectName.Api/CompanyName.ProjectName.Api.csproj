@@ -7,7 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+<!--#if (IncludeOpenIddict)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
+<!--#endif-->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Serilog.AspNetCore" />

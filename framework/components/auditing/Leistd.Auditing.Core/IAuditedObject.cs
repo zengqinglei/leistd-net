@@ -1,4 +1,4 @@
-namespace Leistd.Ddd.Domain.Entities.Auditing;
+namespace Leistd.Auditing;
 
 /// <summary>
 /// 有创建时间的对象

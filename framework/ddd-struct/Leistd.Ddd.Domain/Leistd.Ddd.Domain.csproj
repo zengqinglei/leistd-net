@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\components\auditing\Leistd.Auditing.Core\Leistd.Auditing.Core.csproj" />
     <ProjectReference Include="..\..\components\core\Leistd.Core\Leistd.Core.csproj" />
     <ProjectReference Include="..\..\components\event-bus\Leistd.EventBus.Core\Leistd.EventBus.Core.csproj" />
   </ItemGroup>

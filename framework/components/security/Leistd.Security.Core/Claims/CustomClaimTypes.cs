@@ -26,4 +26,12 @@ public static class CustomClaimTypes
     /// 值示例: github, google, microsoft
     /// </remarks>
     public const string IdentityProvider = "idp";
+
+    /// <summary>
+    /// 是否超级管理员（值: "true" / "false"）
+    /// </summary>
+    /// <remarks>
+    /// 由认证端在签发主体时写入，便于授权策略基于 claim 判定而无需查库。
+    /// </remarks>
+    public const string IsSuperAdmin = "is_super_admin";
 }

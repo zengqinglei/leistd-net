@@ -1,5 +1,5 @@
+using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
-using Leistd.Ddd.Infrastructure.Auditing;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.EventBus.Local;
 using Leistd.Lock.Redis;
@@ -16,11 +16,12 @@ using CompanyName.ProjectName.Infrastructure.Shared.Security.Aes;
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
 #if (IncludeIdentity)
-using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Shared.Email;
-using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 using CompanyName.ProjectName.Infrastructure.Email;
+#endif
+#if (IncludeExternalLogin)
+using CompanyName.ProjectName.Domain.Auth.Abstractions;
+using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 #endif
 using StackExchange.Redis;
 
@@ -64,7 +65,7 @@ public static class DependencyInjection
                 options.UseInMemoryDatabase("MyProject");
             }
 
-#if (IncludeIdentity)
+#if (IncludeOpenIddict)
             // 注册 OpenIddict EF Core 实体映射
             options.UseOpenIddict();
 #endif
@@ -118,7 +119,9 @@ public static class DependencyInjection
 #if (IncludeIdentity)
         // 邮件发送服务
         services.AddTransient<IEmailSender, MailKitEmailSender>();
+#endif
 
+#if (IncludeExternalLogin)
         // 外部认证 OAuth 提供商（Keyed DI）
         services.AddHttpClient();
         services.AddKeyedScoped<IOAuthProvider, GitHubOAuthProvider>("github");

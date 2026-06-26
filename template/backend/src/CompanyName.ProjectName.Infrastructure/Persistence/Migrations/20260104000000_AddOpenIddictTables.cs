@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IncludeOpenIddict)
 using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 

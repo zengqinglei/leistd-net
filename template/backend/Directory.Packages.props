@@ -18,6 +18,10 @@
     <PackageVersion Include="Leistd.Lock.Redis" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Auditing.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Notifications.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Notifications.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ObjectMapping.Mapster" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.EventBus.Local" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.AspNetCore" Version="$(LeistdFrameworkVersion)" />

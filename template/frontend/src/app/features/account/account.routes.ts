@@ -13,10 +13,12 @@ export const AUTH_ROUTES: Routes = [
     path: 'register',
     loadComponent: () => import('./components/register/register').then(m => m.Register)
   },
+//#if (IncludeExternalLogin)
   {
     path: 'external-callback',
     loadComponent: () => import('./components/external-auth-callback/external-auth-callback').then(m => m.ExternalAuthCallback)
   },
+//#endif
   {
     path: '',
     redirectTo: 'login',

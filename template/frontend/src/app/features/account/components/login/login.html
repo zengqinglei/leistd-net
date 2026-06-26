@@ -234,6 +234,7 @@
         <!-- Submit Button -->
         <p-button label="登录" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true"> </p-button>
 
+<!--#if (IncludeExternalLogin)-->
         <!-- Divider -->
         <div class="relative flex py-2 items-center my-2">
           <div class="flex-grow border-t border-surface"></div>
@@ -273,6 +274,7 @@
             <span class="font-medium text-color">Google</span>
           </p-button>
         </div>
+<!--#endif-->
       </form>
 
       <!-- Test Account Hint -->

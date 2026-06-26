@@ -1,5 +1,5 @@
+using Leistd.Auditing;
 using Leistd.Ddd.Domain.DataFilters;
-using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

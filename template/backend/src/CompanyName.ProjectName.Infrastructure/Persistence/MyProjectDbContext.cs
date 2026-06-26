@@ -1,11 +1,14 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
-#if (IncludeIdentity)
+#if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 #if (IncludeRoles)
 using CompanyName.ProjectName.Domain.Permissions.Entities;
 #endif
 using Leistd.Ddd.Infrastructure.Persistence;
+#if (IncludeNotifications)
+using Leistd.Notifications.EntityFrameworkCore;
+#endif
 using Microsoft.EntityFrameworkCore;
 using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
 
@@ -21,6 +24,8 @@ public class MyProjectDbContext(
     // Identity（认证模块）
     public DbSet<Role> Roles { get; set; } = null!;
     public DbSet<UserRole> UserRoles { get; set; } = null!;
+#endif
+#if (IncludeExternalLogin)
     public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif
 #if (IncludeRoles)
@@ -41,6 +46,10 @@ public class MyProjectDbContext(
 #if (IncludeIdentity)
         // 认证相关实体配置
         modelBuilder.ConfigureIdentity();
+#endif
+#if (IncludeNotifications)
+        // 通知实体配置
+        modelBuilder.ApplyLeistdNotificationsConfiguration();
 #endif
     }
 }

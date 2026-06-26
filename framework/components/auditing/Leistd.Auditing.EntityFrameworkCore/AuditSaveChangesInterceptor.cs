@@ -1,9 +1,7 @@
-using Leistd.Ddd.Domain.Auditing;
-using Leistd.Ddd.Domain.Entities.Auditing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
-namespace Leistd.Ddd.Infrastructure.Auditing;
+namespace Leistd.Auditing.EntityFrameworkCore;
 
 /// <summary>
 /// 审计字段自动填充拦截器

@@ -1,10 +1,8 @@
-using Leistd.Ddd.Domain.Auditing;
-using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.Security.Users;
 using Leistd.Timing;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
-namespace Leistd.Ddd.Infrastructure.Auditing;
+namespace Leistd.Auditing.EntityFrameworkCore;
 
 /// <summary>
 /// 审计属性设置器实现

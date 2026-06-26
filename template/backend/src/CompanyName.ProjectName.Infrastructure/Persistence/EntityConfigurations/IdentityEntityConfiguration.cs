@@ -2,7 +2,9 @@
 #if (IncludeRoles)
 using CompanyName.ProjectName.Domain.Permissions.Entities;
 #endif
+#if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
+#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +18,9 @@ internal static class IdentityEntityConfiguration
         builder.ConfigureUserIdentity();
         builder.ConfigureRoles();
         builder.ConfigureUserRoles();
+#if (IncludeExternalLogin)
         builder.ConfigureExternalLoginConnections();
+#endif
 #if (IncludeRoles)
         builder.ConfigurePermissionGrants();
 #endif
@@ -46,6 +50,7 @@ internal static class IdentityEntityConfiguration
         });
     }
 
+#if (IncludeExternalLogin)
     private static void ConfigureExternalLoginConnections(this ModelBuilder builder)
     {
         builder.Entity<ExternalLoginConnection>(b =>
@@ -66,6 +71,7 @@ internal static class IdentityEntityConfiguration
             b.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
+#endif
 
     private static void ConfigureUserRoles(this ModelBuilder builder)
     {

@@ -6,6 +6,7 @@ using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Leistd.Ddd.Domain.Repositories;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Exception.Core;
+using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -66,6 +67,7 @@ public class AuthController(
         var identity = new ClaimsIdentity("MyProjectCookie");
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
+        identity.AddClaim(new Claim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false"));
 
         foreach (var roleName in await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
         {
