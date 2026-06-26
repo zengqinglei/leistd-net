@@ -5,5 +5,3 @@
 ```text
 docs/reports/code-review/{req-id}-code-review.md
 ```
-
-旧目录 `docs/reviews/` 仅作为历史兼容，不再作为新报告默认输出位置。

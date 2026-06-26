@@ -39,7 +39,7 @@
 2. 提示用户：
    "⚠️ 检测到项目未配置后端开发规范，已按现有代码风格和最小通用原则执行。
    建议创建 docs/standards/code-standard/backend-develop.md 以声明项目特定的后端规范。
-   参考示例：examples/code-standard-backend.md（本 Skill 提供，仅作项目级规范样例）"
+   可参考项目模板中的 docs/standards/code-standard/backend-develop.md，并按实际技术栈改写。"
 3. 继续执行，不假定具体语言、框架或版本
 ```
 
@@ -53,7 +53,7 @@
 2. 提示用户：
    "⚠️ 检测到项目未配置前端开发规范，已按现有代码风格和最小通用原则执行。
    建议创建 docs/standards/code-standard/frontend-develop.md 以声明项目特定的前端规范。
-   参考示例：examples/code-standard-frontend.md（本 Skill 提供，仅作项目级规范样例）"
+   可参考项目模板中的 docs/standards/code-standard/frontend-develop.md，并按实际技术栈改写。"
 3. 继续执行，不假定具体框架、组件库或版本
 ```
 
@@ -114,5 +114,6 @@
 
 *最后更新：2026-06-07*
 *维护：coding Skill*
+
 
 
