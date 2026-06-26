@@ -119,6 +119,39 @@ public class UserAppService(
 - **命名约定**: 异步方法名必须以 `Async` 结尾
 - **禁止阻塞**: 不得使用 `.Result` 或 `.Wait()`
 
+### 3.2.1 时间获取（IClock）
+
+- **禁止直接使用** `DateTime.Now` / `DateTime.UtcNow`：它们隐藏依赖、不可测、易引入时区/时钟问题。
+- **统一通过** `Leistd.Timing.IClock` 获取当前时间（`clock.Now`）。`IClock` 由框架注册，直接注入即可。
+- **领域对象（实体）保持 POCO，不注入服务**：实体的时间赋值方法应接收 `DateTime now` 参数，由调用方（领域服务/应用服务）注入 `IClock` 后传入。
+
+```csharp
+// ✅ 领域服务/应用服务：注入 IClock
+public class UserDomainService(
+    IRepository<User, Guid> userRepository,
+    IClock clock)
+{
+    public async Task RecordLoginAsync(User user, string? ip)
+    {
+        user.RecordLoginSuccess(clock.Now, ip); // 把 now 传给实体
+        await userRepository.UpdateAsync(user);
+    }
+}
+
+// ✅ 实体：接收 now 参数，不注入服务
+public void RecordLoginSuccess(DateTime now, string? ip = null)
+{
+    LastLoginTime = now;
+    LastLoginIp = ip;
+}
+
+// ❌ 错误：实体内部直接取时间
+public void RecordLoginSuccess(string? ip = null)
+{
+    LastLoginTime = DateTime.UtcNow; // 隐藏依赖、不可测
+}
+```
+
 ### 3.3 充血模型设计
 
 **实体设计原则**:
@@ -688,6 +721,8 @@ var roles = ["Admin", "User"];
 - [ ] DTO 使用 record 类型
 - [ ] 异步方法名以 `Async` 结尾
 - [ ] 实体使用充血模型
+- [ ] 时间通过 `IClock` 获取，无 `DateTime.Now/UtcNow` 直用
+- [ ] 实体时间方法接收 `now` 参数（不在实体内取时间）
 
 ### ✅ 命名规范检查
 
