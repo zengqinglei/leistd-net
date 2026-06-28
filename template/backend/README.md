@@ -21,7 +21,8 @@ backend/
 
 > **Leistd 框架引用**：共享组件（`components`）与 DDD 基础层（`ddd-struct`）已抽取为独立的
 > [Leistd 框架](../../framework/README.md)，以 **NuGet 包**形式通过 `PackageReference` 引用，不随项目源码分发。
-> 需要本地联调"改过的框架"时用本地 NuGet feed，见[模板文档 · 联调本地框架](../README.md#联调本地框架开发者)。
+> 生成项目不会内置本仓库的本地 NuGet 源，默认使用用户环境中的 NuGet 源（通常是 `nuget.org`）。
+> 需要本地联调"改过的框架"时用仓库根目录 `NuGet.Config` + `local-feed`，见[模板文档 · 联调本地框架](../README.md#联调本地框架开发者)。
 
 ---
 

@@ -16,7 +16,7 @@ import { OverlayBadgeModule } from 'primeng/overlaybadge';
 
 import { AuthService } from '../../../core/services/auth-service';
 //#if (IncludeNotifications)
-import { NotificationService, AppNotification } from '../../../core/services/notification-service';
+import { NotificationService, NotificationOutputDto } from '../../../core/services/notification-service';
 //#endif
 //#if (IncludeIdentity)
 import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
@@ -77,7 +77,7 @@ export class DefaultHeader implements OnDestroy {
     this.notificationPopover?.toggle(event);
   }
 
-  async onNotificationClick(item: AppNotification): Promise<void> {
+  async onNotificationClick(item: NotificationOutputDto): Promise<void> {
     if (!item.isRead) {
       await this.notificationService.markAsRead(item.id);
     }

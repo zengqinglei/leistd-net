@@ -49,7 +49,7 @@ public class MyProjectDbContext(
 #endif
 #if (IncludeNotifications)
         // 通知实体配置
-        modelBuilder.ApplyLeistdNotificationsConfiguration();
+        modelBuilder.ConfigureNotifications();
 #endif
     }
 }

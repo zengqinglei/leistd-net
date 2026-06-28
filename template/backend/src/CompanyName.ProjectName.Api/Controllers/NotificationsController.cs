@@ -16,7 +16,7 @@ public class NotificationsController(
 {
     /// <summary>获取当前用户通知列表（按创建时间倒序）。</summary>
     [HttpGet]
-    public async Task<IReadOnlyList<AppNotification>> GetListAsync(
+    public async Task<IReadOnlyList<NotificationOutputDto>> GetListAsync(
         [FromQuery] int maxCount = 50,
         CancellationToken cancellationToken = default)
     {

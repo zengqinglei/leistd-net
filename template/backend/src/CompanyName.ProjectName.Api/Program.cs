@@ -13,7 +13,6 @@ using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
-using Leistd.Notifications.EntityFrameworkCore;
 #endif
 #if (IncludeIdentity)
 using Microsoft.AspNetCore.Authentication;
@@ -221,15 +220,14 @@ try
     });
 
     // 4.5. Leistd Security 服务
-    builder.Services.AddLeistdSecurity();
+    builder.Services.AddSecurity();
 
 #if (IncludeNotifications)
     // 4.5.1 Leistd Notifications — SignalR 实时通知 + EF Core 持久化
-    builder.Services.AddLeistdNotificationsSignalR(opt =>
+    builder.Services.AddNotificationsSignalR(opt =>
     {
         opt.EnableDetailedErrors = builder.Environment.IsDevelopment();
     });
-    builder.Services.AddNotificationsEfCoreStore<MyProjectDbContext>();
 #endif
 
     // 4.6. DataProtection 配置（生产环境必需）
@@ -358,7 +356,7 @@ try
 
     app.UseCors();
 
-    app.UseLeistdSecurity();
+    app.UseSecurity();
 #if (IncludeIdentity)
     app.UseAuthentication();
 #endif
@@ -368,7 +366,7 @@ try
 
 #if (IncludeNotifications)
     // SignalR 通知 / 实时业务事件 Hub 端点
-    app.MapLeistdNotificationsHubs();
+    app.MapNotificationsHubs();
 #endif
 
     app.MapMyProjectSpaFallback();

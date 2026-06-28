@@ -55,7 +55,7 @@ public static class DependencyInjection
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
         services.AddSingleton<IPermissionDefinitionManager, PermissionDefinitionManager>();
         // 将权限定义接入微软授权 Policy 管道，使 [Authorize(Policy = "权限名")] 生效
-        services.AddLeistdPermissionAuthorization();
+        services.AddPermissionAuthorization();
 #endif
 
         return services;

@@ -33,7 +33,6 @@
     <PackageReference Include="Leistd.Auditing.EntityFrameworkCore" />
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.EntityFrameworkCore" />
-    <PackageReference Include="Leistd.Notifications.AspNetCore.SignalR" />
 <!--#endif-->
     <PackageReference Include="Leistd.EventBus.Local" />
     <PackageReference Include="Leistd.Lock.Redis" />

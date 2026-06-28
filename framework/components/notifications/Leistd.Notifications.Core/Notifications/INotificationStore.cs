@@ -6,10 +6,10 @@ namespace Leistd.Notifications;
 public interface INotificationStore
 {
     /// <summary>保存通知。</summary>
-    Task SaveAsync(AppNotification notification, string userId, CancellationToken ct = default);
+    Task SaveAsync(NotificationOutputDto notification, string userId, CancellationToken ct = default);
 
     /// <summary>获取用户通知列表（按创建时间倒序）。</summary>
-    Task<IReadOnlyList<AppNotification>> GetByUserAsync(string userId, int maxCount = 50, CancellationToken ct = default);
+    Task<IReadOnlyList<NotificationOutputDto>> GetByUserAsync(string userId, int maxCount = 50, CancellationToken ct = default);
 
     /// <summary>标记单条通知为已读。</summary>
     Task MarkAsReadAsync(string notificationId, string userId, CancellationToken ct = default);

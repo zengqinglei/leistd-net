@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Leistd.RealTime;
 
 namespace Leistd.RealTime.AspNetCore.SignalR;
 

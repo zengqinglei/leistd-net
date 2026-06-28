@@ -11,16 +11,16 @@ public class EfCoreNotificationStore<TDbContext>(TDbContext dbContext, IClock cl
     where TDbContext : DbContext
 {
     /// <inheritdoc/>
-    public async Task SaveAsync(AppNotification notification, string userId, CancellationToken ct = default)
+    public async Task SaveAsync(NotificationOutputDto notification, string userId, CancellationToken ct = default)
     {
-        var record = NotificationRecord.FromAppNotification(notification, userId);
+        var record = NotificationRecord.FromDto(notification, userId);
         dbContext.Set<NotificationRecord>().Add(record);
         // CreationTime / CreatorId 由审计拦截器在 SaveChanges 时填充
         await dbContext.SaveChangesAsync(ct);
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<AppNotification>> GetByUserAsync(string userId, int maxCount = 50, CancellationToken ct = default)
+    public async Task<IReadOnlyList<NotificationOutputDto>> GetByUserAsync(string userId, int maxCount = 50, CancellationToken ct = default)
     {
         var records = await dbContext.Set<NotificationRecord>()
             .Where(x => x.UserId == userId)
@@ -28,7 +28,7 @@ public class EfCoreNotificationStore<TDbContext>(TDbContext dbContext, IClock cl
             .Take(maxCount)
             .ToListAsync(ct);
 
-        return records.Select(r => r.ToAppNotification()).ToList();
+        return records.Select(r => r.ToDto()).ToList();
     }
 
     /// <inheritdoc/>

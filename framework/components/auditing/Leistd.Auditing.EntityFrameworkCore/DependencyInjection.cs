@@ -5,7 +5,7 @@ namespace Leistd.Auditing.EntityFrameworkCore;
 /// <summary>
 /// 审计组件依赖注入扩展
 /// </summary>
-public static class AuditingServiceCollectionExtensions
+public static class DependencyInjection
 {
     /// <summary>
     /// 注册 Leistd 审计能力（审计属性设置器 + 审计拦截器）。
@@ -16,10 +16,11 @@ public static class AuditingServiceCollectionExtensions
     /// 本方法依赖 <see cref="Leistd.Timing.IClock"/> 与
     /// <see cref="Leistd.Security.Users.ICurrentUser"/> 已在容器中注册。
     /// </remarks>
-    public static IServiceCollection AddLeistdAuditing(this IServiceCollection services)
+    public static IServiceCollection AddAuditingEfcore(this IServiceCollection services)
     {
         services.AddScoped<IAuditPropertySetter, AuditPropertySetter>();
         services.AddScoped<AuditSaveChangesInterceptor>();
         return services;
     }
+
 }

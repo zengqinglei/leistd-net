@@ -33,7 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<IClock, UtcClockProvider>();
 
         // 注册审计能力（审计属性设置器 + 审计拦截器）
-        services.AddLeistdAuditing();
+        services.AddAuditingEfcore();
 
         // 注册 DataFilter 服务
         services.AddSingleton<IDataFilter, DataFilter>(); // 非泛型版本，单例

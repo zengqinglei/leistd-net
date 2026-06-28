@@ -2,8 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { lastValueFrom } from 'rxjs';
 
-import { SignalRService, AppNotification } from './signalr-service';
-export type { AppNotification } from './signalr-service';
+import { SignalRService, NotificationOutputDto } from './signalr-service';
+export type { NotificationOutputDto } from './signalr-service';
 
 /**
  * 通知管理服务：通知列表/已读（HTTP）+ SignalR 实时推送桥接。
@@ -34,7 +34,7 @@ export class NotificationService {
     this.loading.set(true);
     try {
       const items = await lastValueFrom(
-        this.http.get<AppNotification[]>('/api/v1/notifications', {
+        this.http.get<NotificationOutputDto[]>('/api/v1/notifications', {
           params: { maxCount: maxCount.toString() }
         })
       );

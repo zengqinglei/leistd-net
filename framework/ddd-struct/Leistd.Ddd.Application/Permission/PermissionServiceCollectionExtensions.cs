@@ -15,7 +15,7 @@ public static class PermissionServiceCollectionExtensions
     /// 依赖调用方已注册 <see cref="IPermissionChecker"/> 与
     /// <see cref="IPermissionDefinitionManager"/>，并已调用 <c>AddAuthorization()</c>。
     /// </remarks>
-    public static IServiceCollection AddLeistdPermissionAuthorization(this IServiceCollection services)
+    public static IServiceCollection AddPermissionAuthorization(this IServiceCollection services)
     {
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();

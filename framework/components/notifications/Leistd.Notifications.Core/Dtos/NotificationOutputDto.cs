@@ -3,7 +3,7 @@ namespace Leistd.Notifications;
 /// <summary>
 /// 通知传输对象（DTO）—— 不含持久化细节。
 /// </summary>
-public record AppNotification
+public record NotificationOutputDto
 {
     /// <summary>通知 ID（默认有序 Guid v7）。</summary>
     public string Id { get; init; } = Guid.CreateVersion7().ToString("N");

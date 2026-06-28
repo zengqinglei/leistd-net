@@ -6,8 +6,8 @@ import {
   HttpTransportType
 } from '@microsoft/signalr';
 
-/** 通知 DTO（与后端 Leistd.Notifications.AppNotification 对应，类型为字符串） */
-export interface AppNotification {
+/** 通知 DTO（与后端 Leistd.Notifications.NotificationOutputDto 对应，类型为字符串） */
+export interface NotificationOutputDto {
   id: string;
   title: string;
   content?: string;
@@ -31,7 +31,7 @@ export class SignalRService {
   private businessConnection: HubConnection | null = null;
 
   // ── 通知状态 ──
-  readonly notifications = signal<AppNotification[]>([]);
+  readonly notifications = signal<NotificationOutputDto[]>([]);
   readonly unreadCount = computed(() => this.notifications().filter(n => !n.isRead).length);
 
   // ── 业务事件（通用）：最近一次收到的资源事件 ──
@@ -110,7 +110,7 @@ export class SignalRService {
       .configureLogging(LogLevel.Information)
       .build();
 
-    this.notificationConnection.on('NotificationReceived', (notification: AppNotification) => {
+    this.notificationConnection.on('NotificationReceived', (notification: NotificationOutputDto) => {
       this.notifications.update(list => [notification, ...list]);
     });
 

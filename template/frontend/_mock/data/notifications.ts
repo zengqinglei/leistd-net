@@ -1,7 +1,7 @@
-import type { AppNotification } from '../../src/app/core/services/signalr-service';
+import type { NotificationOutputDto } from '../../src/app/core/services/signalr-service';
 
 /** Mock 通知数据（内存）。 */
-export const NOTIFICATIONS: AppNotification[] = [
+export const NOTIFICATIONS: NotificationOutputDto[] = [
   {
     id: '00000000-0000-0000-0000-000000000001',
     title: '欢迎使用',

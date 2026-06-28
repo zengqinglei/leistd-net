@@ -53,9 +53,9 @@ public class NotificationRecord : ICreationAuditedObject
     public string? CreatorId { get; set; }
 
     /// <summary>
-    /// 从 <see cref="AppNotification"/> 创建持久化实体。
+    /// 从 <see cref="NotificationOutputDto"/> 创建持久化实体。
     /// </summary>
-    public static NotificationRecord FromAppNotification(AppNotification notification, string userId)
+    public static NotificationRecord FromDto(NotificationOutputDto notification, string userId)
     {
         return new NotificationRecord
         {
@@ -77,11 +77,11 @@ public class NotificationRecord : ICreationAuditedObject
     }
 
     /// <summary>
-    /// 转换为 <see cref="AppNotification"/> DTO。
+    /// 转换为 <see cref="NotificationOutputDto"/> DTO。
     /// </summary>
-    public AppNotification ToAppNotification()
+    public NotificationOutputDto ToDto()
     {
-        return new AppNotification
+        return new NotificationOutputDto
         {
             Id = Id.ToString("N"),
             Title = Title,

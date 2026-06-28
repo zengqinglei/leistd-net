@@ -31,4 +31,9 @@ public class RealTimeOptions
 
     /// <summary>Redis 连接字符串（启用 Backplane 时使用）。预留。</summary>
     public string? RedisConnectionString { get; set; }
+
+    /// <summary>
+    /// 是否在客户端订阅资源时启用授权校验。默认关闭，以兼容公共资源订阅场景。
+    /// </summary>
+    public bool RequireSubscriptionAuthorization { get; set; }
 }

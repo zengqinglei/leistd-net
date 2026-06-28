@@ -3,13 +3,14 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Leistd.RealTime;
 
 namespace Leistd.RealTime.AspNetCore.SignalR;
 
 /// <summary>
-/// Leistd 实时（SignalR）依赖注入与端点映射扩展。
+/// Leistd 实时（SignalR）依赖注入与端点映射配置。
 /// </summary>
-public static class RealTimeServiceCollectionExtensions
+public static class DependencyInjection
 {
     /// <summary>
     /// 注册 SignalR 实时基础设施：UserIdProvider、在线状态、业务事件推送器。
@@ -18,7 +19,7 @@ public static class RealTimeServiceCollectionExtensions
     /// 内部调用 <c>AddSignalR()</c>。通知组件（Leistd.Notifications.AspNetCore.SignalR）
     /// 可在此基础上叠加自己的 Hub 与发布器。
     /// </remarks>
-    public static IServiceCollection AddLeistdRealTimeSignalR(
+    public static IServiceCollection AddRealTimeSignalR(
         this IServiceCollection services,
         Action<RealTimeOptions>? configure = null)
     {
@@ -33,8 +34,10 @@ public static class RealTimeServiceCollectionExtensions
             opt.UserIdClaimTypes = options.UserIdClaimTypes;
             opt.EnableRedisBackplane = options.EnableRedisBackplane;
             opt.RedisConnectionString = options.RedisConnectionString;
+            opt.RequireSubscriptionAuthorization = options.RequireSubscriptionAuthorization;
         });
 
+        services.AddRealTime();
         services.AddSignalR(opt =>
         {
             opt.EnableDetailedErrors = options.EnableDetailedErrors;
@@ -42,7 +45,7 @@ public static class RealTimeServiceCollectionExtensions
             opt.ClientTimeoutInterval = options.ClientTimeoutInterval;
         });
 
-        services.AddSingleton<IUserIdProvider, ClaimUserIdProvider>();
+        services.AddSingleton<IUserIdProvider, ClaimsSignalRUserIdProvider>();
         services.AddSingleton<IPresenceService, SignalRPresenceService>();
         services.AddSingleton<IBusinessEventPublisher, SignalRBusinessEventPublisher>();
 
@@ -50,7 +53,7 @@ public static class RealTimeServiceCollectionExtensions
     }
 
     /// <summary>映射实时业务事件 Hub 端点（需登录）。</summary>
-    public static IEndpointRouteBuilder MapLeistdRealTimeHub(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapRealTimeHub(this IEndpointRouteBuilder endpoints)
     {
         var options = endpoints.ServiceProvider.GetService<IOptions<RealTimeOptions>>()?.Value ?? new RealTimeOptions();
         endpoints.MapHub<RealTimeHub>(options.RealTimeHubPath).RequireAuthorization();

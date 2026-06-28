@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+#if (IncludeNotifications)
+using Leistd.Notifications.EntityFrameworkCore;
+#endif
 
 using CompanyName.ProjectName.Domain.Shared.Security.Aes;
 using CompanyName.ProjectName.Domain.Shared.Security.Aes.Options;
@@ -83,6 +86,10 @@ public static class DependencyInjection
                 sp.GetRequiredService<AuditSaveChangesInterceptor>(),
                 sp.GetRequiredService<LocalEventSaveChangesInterceptor>());
         });
+
+#if (IncludeNotifications)
+        services.AddNotificationsEfcore<MyProjectDbContext>();
+#endif
 
         // 注册 DDD Infrastructure 基础服务（UnitOfWork + 自动仓储注册）
         services.AddDddInfrastructure();

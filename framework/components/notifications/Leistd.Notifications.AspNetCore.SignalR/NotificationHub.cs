@@ -1,16 +1,17 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Leistd.Security.Users;
 
 namespace Leistd.Notifications.AspNetCore.SignalR;
 
 /// <summary>
 /// 通知 Hub —— 推送用户铃铛通知。连接时自动加入 user:{userId} 组。
 /// </summary>
-public class NotificationHub(ILogger<NotificationHub> logger) : Hub
+public class NotificationHub(ICurrentUser currentUser, ILogger<NotificationHub> logger) : Hub
 {
     public override async Task OnConnectedAsync()
     {
-        var userId = Context.UserIdentifier;
+        var userId = currentUser.Id?.ToString() ?? Context.UserIdentifier;
         if (!string.IsNullOrEmpty(userId))
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"user:{userId}");
