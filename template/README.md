@@ -151,14 +151,16 @@ npm start
 
 生成的项目默认通过 NuGet `PackageReference` 引用 [Leistd 框架](../framework/README.md) 包。模板不会把本仓库的本地 NuGet 源写入生成项目；生成项目默认使用用户环境中的 NuGet 源（通常是 `nuget.org`）。
 
-若你**同时在改框架源码**，想在本仓库内验证"改过的框架 + 模板项目"，用仓库根目录的 `NuGet.Config` 和本地 `local-feed`（保持模板纯净，等同最终用户的真实消费路径）：
+若你**同时在改框架源码**，想在本仓库内验证"改过的框架 + 模板项目"，临时指定本地 `local-feed`（保持模板纯净，等同最终用户的真实消费路径）。仓库根 `NuGet.Config` 只保留 `nuget.org`，避免 CI/发布环境因不存在的本地源失败：
 
 ```bash
 # 1. 在仓库根目录执行，打本地包到 local-feed
 dotnet pack framework/Leistd.Framework.slnx -c Debug -o ./local-feed
 
-# 2. 在仓库内验证模板后端还原
-dotnet restore template/backend/CompanyName.ProjectName.sln
+# 2. 在仓库内验证模板后端还原，显式指定本地 feed + nuget.org
+dotnet restore template/backend/CompanyName.ProjectName.sln \
+  --source ./local-feed \
+  --source https://api.nuget.org/v3/index.json
 
 # 3. 生成项目后若要继续消费本地包，可在生成项目根目录自行添加本地源
 dotnet new fullstack-app -n Acme.Shop
