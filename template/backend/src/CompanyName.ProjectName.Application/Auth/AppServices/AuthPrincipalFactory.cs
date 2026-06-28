@@ -4,6 +4,7 @@ using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using Leistd.Security.Claims;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
@@ -32,6 +33,7 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
         }
 
         identity.SetClaims(Claims.Role, roleNames.ToImmutableArray());
+        identity.SetClaim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false");
 
         var principal = new ClaimsPrincipal(identity);
         principal.SetScopes(scopes?.Where(scope => !string.IsNullOrWhiteSpace(scope)) ??
@@ -72,6 +74,10 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
             [
                 Destinations.AccessToken,
                 Destinations.IdentityToken
+            ],
+            CustomClaimTypes.IsSuperAdmin =>
+            [
+                Destinations.AccessToken
             ],
             _ => []
         };

@@ -179,8 +179,13 @@ export class OpenApplicationEditDialogComponent {
   }
 
   constructor() {
+    // 同时依赖 visible 与 application：每次对话框打开都重置表单，避免新建模式残留上次输入
+    // （application 信号从 null 到 null 不变化时 effect 不会重跑，需借 visible 触发）
     effect(() => {
       const application = this.application();
+      if (!this.visible()) {
+        return;
+      }
       if (application) {
         this.formModel.set({
           clientId: application.clientId,

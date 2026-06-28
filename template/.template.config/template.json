@@ -23,9 +23,9 @@
       "pattern": "\\.",
       "replacement": "-"
     },
-    "FullKebab": {
+    "FullNameKebab": {
       "identifier": "chain",
-      "steps": ["DotToHyphen", "kebabCase"]
+      "steps": ["lowerCaseInvariant", "DotToHyphen"]
     }
   },
   "symbols": {
@@ -33,13 +33,14 @@
       "type": "derived",
       "valueSource": "name",
       "valueTransform": "LastSegment",
-      "replaces": "MyProject"
+      "replaces": "MyProject",
+      "fileRename": "MyProject"
     },
     "KebabName": {
       "type": "derived",
       "valueSource": "name",
-      "valueTransform": "FullKebab",
-      "replaces": "my-project"
+      "valueTransform": "FullNameKebab",
+      "replaces": "companyname-projectname"
     },
     "IncludeIdentity": {
       "type": "parameter",
@@ -53,6 +54,27 @@
       "description": "是否包含角色权限系统",
       "defaultValue": "true",
       "isEnabled": "IncludeIdentity"
+    },
+    "IncludeNotifications": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含实时通知和通知中心（SignalR）",
+      "defaultValue": "false",
+      "isEnabled": "IncludeIdentity"
+    },
+    "IncludeOpenIddict": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含 OpenIddict OAuth2/OIDC Server（第三方应用接入、开放应用管理）",
+      "defaultValue": "true",
+      "isEnabled": "IncludeIdentity"
+    },
+    "IncludeExternalLogin": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含外部登录（GitHub / Google 等第三方身份提供商）",
+      "defaultValue": "false",
+      "isEnabled": "IncludeIdentity"
     }
   },
   "sources": [
@@ -62,8 +84,10 @@
         "**/obj/**",
         "**/.vs/**",
         "**/.claude/**",
+        "**/.template.config/**",
         "**/artifacts/**",
         "frontend/node_modules/**",
+        "frontend/dist/**",
         "test-scenarios/**",
         ".pid"
       ],
@@ -74,23 +98,42 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/AuthorizationController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/**",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/**",
             "backend/src/CompanyName.ProjectName.Domain/Users/Options/UserRegistrationOptions.cs",
             "backend/src/CompanyName.ProjectName.Domain/Shared/Email/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Email/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260102000000_AddIdentityFields.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260102000000_AddIdentityFields.Designer.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.Designer.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.Designer.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260105000000_AddExternalLoginConnections.cs",
             "frontend/src/app/features/platform/components/open-applications/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
             "frontend/src/app/features/platform/models/open-application.dto.ts",
-            "frontend/_mock/api/open-application.ts"
+            "frontend/_mock/api/open-application.ts",
+            "frontend/_mock/data/open-applications.ts",
+            "frontend/src/app/features/account/**",
+            "frontend/src/app/core/guards/auth-guard.ts",
+            "frontend/src/app/core/guards/role-guard.ts",
+            "frontend/src/app/core/guards/super-admin-guard.ts",
+            "frontend/_mock/api/auth.ts",
+            "frontend/_mock/api/user.ts",
+            "frontend/_mock/data/user.ts",
+            "frontend/_mock/utils/current-user.ts",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260106000000_AddNotifications.cs",
+            "frontend/src/app/core/services/signalr-service.ts",
+            "frontend/src/app/core/services/notification-service.ts",
+            "frontend/_mock/api/notification.ts",
+            "frontend/_mock/data/notifications.ts",
+            "frontend/src/app/features/platform/components/users/**",
+            "frontend/src/app/features/platform/services/platform-user-service.ts",
+            "frontend/src/app/features/platform/services/user-management-service.ts",
+            "frontend/src/app/features/platform/models/user-management.dto.ts"
           ]
         },
         {
@@ -101,12 +144,56 @@
           ]
         },
         {
+          "condition": "!IncludeIdentity || !IncludeNotifications",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260106000000_AddNotifications.cs",
+            "frontend/src/app/core/services/signalr-service.ts",
+            "frontend/src/app/core/services/notification-service.ts",
+            "frontend/_mock/api/notification.ts",
+            "frontend/_mock/data/notifications.ts"
+          ]
+        },
+        {
           "condition": "IncludeIdentity && !IncludeRoles",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Permissions/**",
             "backend/src/CompanyName.ProjectName.Domain/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.Designer.cs"
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.cs"
+          ]
+        },
+        {
+          "condition": "IncludeIdentity && !IncludeOpenIddict",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Api/Controllers/AuthorizationController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/AuthPrincipalFactory.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IAuthPrincipalFactory.cs",
+            "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptions.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.cs",
+            "frontend/src/app/features/platform/components/open-applications/**",
+            "frontend/src/app/features/platform/services/open-application-service.ts",
+            "frontend/src/app/features/platform/models/open-application.dto.ts",
+            "frontend/_mock/api/open-application.ts",
+            "frontend/_mock/data/open-applications.ts"
+          ]
+        },
+        {
+          "condition": "IncludeIdentity && !IncludeExternalLogin",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/ExternalAuthAppService.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IExternalAuthAppService.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginCallbackInputDto.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginUrlOutputDto.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/DomainServices/ExternalAuthDomainService.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/Entities/ExternalLoginConnection.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/ExternalAuthOptions.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/Abstractions/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260105000000_AddExternalLoginConnections.cs",
+            "frontend/src/app/features/account/components/external-auth-callback/**"
           ]
         }
       ]

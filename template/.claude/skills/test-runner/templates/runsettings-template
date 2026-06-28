@@ -1,0 +1,225 @@
+# .runsettings 模板（.NET 测试配置）
+
+> xUnit/NUnit 测试运行配置文件
+
+---
+
+## 基础模板
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <!-- 测试运行器配置 -->
+  <RunConfiguration>
+    <!-- 测试超时时间（毫秒） -->
+    <TestSessionTimeout>600000</TestSessionTimeout>
+    
+    <!-- 失败后继续运行 -->
+    <ContinueOnError>false</ContinueOnError>
+    
+    <!-- 并行运行测试 -->
+    <MaxCpuCount>4</MaxCpuCount>
+    
+    <!-- 测试运行平台 -->
+    <TargetPlatform>x64</TargetPlatform>
+    
+    <!-- .NET 版本 -->
+    <TargetFrameworkVersion>net8.0</TargetFrameworkVersion>
+  </RunConfiguration>
+
+  <!-- 数据收集器配置 -->
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <!-- 代码覆盖率收集器 -->
+      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0" assemblyQualifiedName="Microsoft.VisualStudio.Coverage.DynamicCoverageDataCollector, Microsoft.VisualStudio.TraceCollector, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+        <Configuration>
+          <CodeCoverage>
+            <!-- 包含的模块 -->
+            <ModulePaths>
+              <Include>
+                <ModulePath>.*\.dll$</ModulePath>
+              </Include>
+            </ModulePaths>
+            
+            <!-- 排除的模块 -->
+            <ModulePaths>
+              <Exclude>
+                <ModulePath>.*Tests\.dll$</ModulePath>
+              </Exclude>
+            </ModulePaths>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
+```
+
+---
+
+## 完整模板（含覆盖率阈值）
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <!-- 测试运行器配置 -->
+  <RunConfiguration>
+    <TestSessionTimeout>600000</TestSessionTimeout>
+    <ContinueOnError>false</ContinueOnError>
+    <MaxCpuCount>4</MaxCpuCount>
+    <TargetPlatform>x64</TargetPlatform>
+    <TargetFrameworkVersion>net8.0</TargetFrameworkVersion>
+    
+    <!-- 日志配置 -->
+    <ResultsDirectory>./TestResults</ResultsDirectory>
+  </RunConfiguration>
+
+  <!-- xUnit 特定配置 -->
+  <XUnit>
+    <!-- 并行运行测试类 -->
+    <MaxParallelThreads>4</MaxParallelThreads>
+    
+    <!-- 测试发现超时（毫秒） -->
+    <DiscoveryTimeout>300000</DiscoveryTimeout>
+  </XUnit>
+
+  <!-- 代码覆盖率配置 -->
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0" assemblyQualifiedName="Microsoft.VisualStudio.Coverage.DynamicCoverageDataCollector, Microsoft.VisualStudio.TraceCollector, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+        <Configuration>
+          <CodeCoverage>
+            <!-- 包含的模块 -->
+            <ModulePaths>
+              <Include>
+                <ModulePath>.*AiRelay\.(Api|Application|Domain|Infrastructure)\.dll$</ModulePath>
+              </Include>
+            </ModulePaths>
+            
+            <!-- 排除的模块 -->
+            <ModulePaths>
+              <Exclude>
+                <ModulePath>.*Tests\.dll$</ModulePath>
+                <ModulePath>.*\.Test\.dll$</ModulePath>
+              </Exclude>
+            </ModulePaths>
+            
+            <!-- 包含的源代码文件 -->
+            <Sources>
+              <Include>
+                <SourcePath>.*\\(Api|Application|Domain|Infrastructure)\\</SourcePath>
+              </Include>
+            </Sources>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+
+  <!-- 覆盖率阈值（通过测试插件检查） -->
+  <CoverageThresholds>
+    <LineCoverage>80</LineCoverage>
+    <BranchCoverage>70</BranchCoverage>
+    <MethodCoverage>80</MethodCoverage>
+  </CoverageThresholds>
+</RunSettings>
+```
+
+---
+
+## 使用方式
+
+### 1. 创建配置文件
+
+```bash
+# 在项目根目录创建
+cp templates/runsettings-template .runsettings
+
+# 编辑配置
+vim .runsettings
+```
+
+### 2. 运行测试
+
+```bash
+# 使用配置文件运行测试
+dotnet test --settings:.runsettings
+
+# 运行测试并生成覆盖率报告
+dotnet test --settings:.runsettings --collect:"XPlat Code Coverage"
+
+# 运行特定测试
+dotnet test --settings:.runsettings --filter "FullyQualifiedName~UserService"
+```
+
+### 3. 查看覆盖率报告
+
+```bash
+# 查看 HTML 报告
+open TestResults/*/coverage.html
+
+# 查看 XML 报告
+cat TestResults/*/coverage.cobertura.xml
+```
+
+---
+
+## 配置说明
+
+### RunConfiguration
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `TestSessionTimeout` | 测试会话超时时间（毫秒） | `600000` |
+| `ContinueOnError` | 失败后继续运行 | `false` |
+| `MaxCpuCount` | 并行运行的 CPU 核心数 | `4` |
+| `TargetPlatform` | 目标平台 | `x64` |
+| `TargetFrameworkVersion` | 目标 .NET 版本 | `net8.0` |
+| `ResultsDirectory` | 测试结果目录 | `./TestResults` |
+
+### XUnit 配置
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `MaxParallelThreads` | 并行运行的最大线程数 | `4` |
+| `DiscoveryTimeout` | 测试发现超时（毫秒） | `300000` |
+
+### 代码覆盖率
+
+| 配置项 | 说明 | 示例 |
+|--------|------|------|
+| `ModulePaths/Include` | 包含的模块 | `.*AiRelay\.Api\.dll$` |
+| `ModulePaths/Exclude` | 排除的模块 | `.*Tests\.dll$` |
+| `Sources/Include` | 包含的源代码路径 | `.*\\Api\\` |
+
+---
+
+## 最佳实践
+
+### 测试配置
+
+- ✅ **设置超时**：防止测试无限期运行
+- ✅ **并行运行**：提高测试执行速度
+- ✅ **失败停止**：快速发现严重问题
+- ✅ **日志目录**：保存测试结果便于分析
+
+### 代码覆盖率
+
+- ✅ **包含核心模块**：Api、Application、Domain、Infrastructure
+- ✅ **排除测试项目**：不统计测试代码的覆盖率
+- ✅ **排除第三方库**：不统计外部依赖的覆盖率
+- ✅ **设置阈值**：定义覆盖率门槛
+
+### 持续集成
+
+- ✅ **CI 配置**：在 CI/CD 中使用相同的配置
+- ✅ **报告上传**：将测试报告上传到 CI 系统
+- ✅ **覆盖率检查**：在 PR 中检查覆盖率变化
+- ✅ **失败通知**：测试失败时通知团队
+
+---
+
+*模板版本：v1.0.0*
+*最后更新：2026-06-07*
+*维护：test-runner Skill*
+

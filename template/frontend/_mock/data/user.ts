@@ -23,7 +23,7 @@ export const USERS: MockUser[] = [
     username: 'admin',
     email: 'admin@example.com',
     password: 'Admin@123456',
-    nickname: '系统管理员',
+    nickname: '管理员',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
     isActive: true,
     isSuperAdmin: true,

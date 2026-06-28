@@ -28,8 +28,7 @@
             optionValue="value"
             placeholder="选择模板快速填充"
             appendTo="body"
-            styleClass="w-full"
-           size="small"/>
+            styleClass="w-full" />
         </div>
       }
 
@@ -38,21 +37,21 @@
           <div class="flex flex-col gap-2">
             <label class="font-bold">应用名称</label>
             <input pInputText
+
               [ngModel]="formModel().displayName"
               (ngModelChange)="formModel.update(model => ({ ...model, displayName: $event }))"
-              placeholder="例如 AiRelay Desktop"
-              pSize="small"/>
+              placeholder="例如 AiRelay Desktop" />
           </div>
           <div class="flex flex-col gap-2">
             <label class="font-bold">Client ID</label>
             <input
               pInputText
+
               [ngModel]="formModel().clientId"
               (ngModelChange)="formModel.update(model => ({ ...model, clientId: $event }))"
               placeholder="例如 ai-relay-desktop"
               [disabled]="isEditMode()"
-              class="font-mono"
-              pSize="small"/>
+              class="font-mono" />
           </div>
         </div>
 
@@ -69,8 +68,8 @@
                 optionLabel="label"
                 optionValue="value"
                 appendTo="body"
-                styleClass="w-full"
-              size="small"/>
+
+            styleClass="w-full" />
             }
           </div>
           <div class="flex flex-col gap-2">
@@ -85,8 +84,8 @@
                 optionLabel="label"
                 optionValue="value"
                 appendTo="body"
-                styleClass="w-full"
-              size="small"/>
+
+            styleClass="w-full" />
             }
           </div>
           <div class="flex flex-col gap-2">
@@ -101,8 +100,8 @@
                 optionLabel="label"
                 optionValue="value"
                 appendTo="body"
-                styleClass="w-full"
-              size="small"/>
+
+            styleClass="w-full" />
             }
           </div>
         </div>
@@ -122,18 +121,17 @@
           <div class="flex flex-col gap-2 sm:flex-row">
             <input
               pInputText
+
               [ngModel]="formModel().redirectUriInput"
               (ngModelChange)="formModel.update(model => ({ ...model, redirectUriInput: $event }))"
               placeholder="https://example.com/callback 或 ai-relay-desktop://oauth/callback"
-              class="w-full font-mono"
-              pSize="small"/>
+              class="w-full font-mono" />
             <p-button
               label="添加"
               icon="pi pi-plus"
               (onClick)="addRedirectUri()"
               [disabled]="!formModel().redirectUriInput || isRedirectUriInputInvalid()"
-              styleClass="whitespace-nowrap"
-             size="small"/>
+              styleClass="h-10 min-w-24 whitespace-nowrap" />
           </div>
           @if (isRedirectUriInputInvalid()) {
             <small class="mt-2 block text-red-500">请输入合法的绝对 URI，且不能包含 fragment。</small>
@@ -152,7 +150,7 @@
           </div>
         </div>
 
-        <div class="rounded-lg border border-surface-200 bg-surface-50/70 p-4 dark:border-surface-700 dark:bg-surface-800/40">
+        <div class="rounded-xl border border-surface-200 bg-surface-50/70 p-4 dark:border-surface-700 dark:bg-surface-800/40">
           <div class="mb-3 flex items-center justify-between gap-3">
             <label class="font-bold">Post Logout Redirect URIs</label>
             <span class="text-xs text-muted-color">登出后的跳转地址</span>
@@ -160,18 +158,17 @@
           <div class="flex flex-col gap-2 sm:flex-row">
             <input
               pInputText
+
               [ngModel]="formModel().postLogoutRedirectUriInput"
               (ngModelChange)="formModel.update(model => ({ ...model, postLogoutRedirectUriInput: $event }))"
               placeholder="https://example.com/logout-callback"
-              class="w-full font-mono"
-              pSize="small"/>
+              class="w-full font-mono" />
             <p-button
               label="添加"
               icon="pi pi-plus"
               (onClick)="addPostLogoutRedirectUri()"
               [disabled]="!formModel().postLogoutRedirectUriInput || isPostLogoutRedirectUriInputInvalid()"
-              styleClass="whitespace-nowrap"
-             size="small"/>
+              styleClass="h-10 min-w-24 whitespace-nowrap" />
           </div>
           @if (isPostLogoutRedirectUriInputInvalid()) {
             <small class="mt-2 block text-red-500">请输入合法的绝对 URI，且不能包含 fragment。</small>
@@ -246,8 +243,7 @@
               display="chip"
               appendTo="body"
               styleClass="w-full"
-              placeholder="选择安全要求"
-            />
+              placeholder="选择安全要求" />
             @if (
               (formModel().applicationType === 'native' || formModel().clientType === 'public') &&
               !formModel().requirements.includes('ft:pkce')
@@ -264,7 +260,7 @@
   }
 
   <ng-template pTemplate="footer">
-    <p-button label="取消" [text]="true" severity="secondary" (onClick)="visible.set(false)" [disabled]="saving()"  size="small"/>
-    <p-button label="保存" icon="pi pi-check" (onClick)="save()" [disabled]="!isValid() || saving()" [loading]="saving()"  size="small"/>
+    <p-button label="取消" [text]="true" severity="secondary" (onClick)="visible.set(false)" [disabled]="saving()"/>
+    <p-button label="保存" icon="pi pi-check" (onClick)="save()" [disabled]="!isValid() || saving()" [loading]="saving()"/>
   </ng-template>
 </p-dialog>

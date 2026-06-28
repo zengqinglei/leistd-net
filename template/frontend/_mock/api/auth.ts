@@ -184,6 +184,29 @@ function register(req: MockRequest): 'ok' {
   return 'ok';
 }
 
+function getExternalLoginUrl(provider: string): { loginUrl: string; state: string } {
+  const state = Math.random().toString(36).substring(7);
+  const redirectUri = encodeURIComponent(`${window.location.origin}/#/auth/external-callback`);
+
+  const urls: Record<string, string> = {
+    github: `https://github.com/login/oauth/authorize?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&scope=user:email`,
+    google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&response_type=code&scope=email%20profile`
+  };
+
+  const loginUrl = urls[provider];
+  if (!loginUrl) {
+    throw new MockException(400, { code: 40020, message: `不支持的登录提供商: ${provider}` });
+  }
+
+  return { loginUrl, state };
+}
+
+function externalLoginCallback(): 'ok' {
+  // Mock: 直接登录为第一个测试用户
+  setMockSessionUserId(USERS[0].id);
+  return 'ok';
+}
+
 export const AUTH_API = {
   'POST /api/v1/auth/register': (req: MockRequest) => register(req),
   'GET /api/v1/auth/security-config': () => getSecurityConfig(),
@@ -193,5 +216,7 @@ export const AUTH_API = {
   'POST /api/v1/auth/session-login': (req: MockRequest) => sessionLogin(req.body.usernameOrEmail, req.body.password),
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
   'PUT /api/v1/auth/me': (req: MockRequest) => updateCurrentUser(req),
-  'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req)
+  'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
+  'GET /api/v1/external-auth/:provider/login-url': (req: MockRequest) => getExternalLoginUrl(req.params.provider),
+  'POST /api/v1/external-auth/:provider/callback': () => externalLoginCallback()
 };

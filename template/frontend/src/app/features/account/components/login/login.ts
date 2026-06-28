@@ -7,17 +7,31 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
+import { StyleClassModule } from 'primeng/styleclass';
 import { lastValueFrom } from 'rxjs';
 
 import { environment } from '../../../../../environments/environment';
 import { AuthService } from '../../../../core/services/auth-service';
+import { LayoutService } from '../../../../layout/services/layout-service';
 import { LogoComponent } from '../../../../shared/components/logo/logo';
+import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { AccountService } from '../../services/account-service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, CardModule, InputTextModule, PasswordModule, ButtonModule, LogoComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    RouterModule,
+    CardModule,
+    InputTextModule,
+    PasswordModule,
+    ButtonModule,
+    StyleClassModule,
+    ThemeConfigurator,
+    LogoComponent
+  ],
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -28,6 +42,8 @@ export class Login {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private messageService = inject(MessageService);
+  public layoutService = inject(LayoutService);
+
   // 加载状态
   private _isLoading = signal(false);
   public readonly isLoading = this._isLoading.asReadonly();
@@ -40,9 +56,6 @@ export class Login {
     usernameOrEmail: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(256)]],
     password: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]]
   });
-
-  // returnUrl 供模板使用（注册链接传递）
-  returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
   constructor() {
     // 进入登录页面时清理旧的认证信息
@@ -122,4 +135,39 @@ export class Login {
     }
     return null;
   }
+
+//#if (IncludeExternalLogin)
+  loginWithGitHub() {
+    this.loginWithExternalProvider('github', 'GitHub');
+  }
+
+  loginWithGoogle() {
+    this.loginWithExternalProvider('google', 'Google');
+  }
+
+  /**
+   * 通用第三方登录
+   */
+  private async loginWithExternalProvider(provider: 'github' | 'google', label: string) {
+    this._isLoading.set(true);
+    try {
+      const response = await lastValueFrom(this.accountService.getExternalLoginUrl(provider));
+
+      if (!response.loginUrl) {
+        throw new Error('未获取到有效的登录 URL');
+      }
+
+      window.location.href = response.loginUrl;
+    } catch (error) {
+      console.error(`${label} 登录失败`, error);
+      this.messageService.add({
+        severity: 'error',
+        summary: '登录失败',
+        detail: `无法连接到 ${label} 登录服务，请稍后重试`,
+        life: 3000
+      });
+      this._isLoading.set(false);
+    }
+  }
+//#endif
 }

@@ -1,0 +1,22 @@
+# Docker Compose 部署模板
+#
+# 用途：项目缺少部署配置时，作为创建项目级 docker-compose.yml 的参考。
+# 使用前必须按项目实际服务、镜像、端口、环境变量和数据卷调整。
+
+services:
+  app:
+    image: ${APP_IMAGE:-example/app:latest}
+    container_name: ${APP_NAME:-example-app}
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    env_file:
+      - .env.deploy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+

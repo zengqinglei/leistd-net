@@ -76,7 +76,7 @@
         <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-color">用户名</label>
-            <input pInputText formControlName="username" placeholder="请输入用户名" class="w-full" pSize="small" />
+            <input pInputText formControlName="username" placeholder="请输入用户名" class="w-full" />
             @if (form.controls.username.hasError('required') && form.controls.username.touched) {
               <small class="text-red-500">用户名不能为空</small>
             }
@@ -92,7 +92,7 @@
 
           <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-color">邮箱</label>
-            <input pInputText type="email" formControlName="email" placeholder="请输入邮箱" class="w-full" pSize="small" />
+            <input pInputText type="email" formControlName="email" placeholder="请输入邮箱" class="w-full" />
             @if (
               (form.controls.email.hasError('required') ||
                 form.controls.email.hasError('email') ||
@@ -105,7 +105,7 @@
 
           <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-color">显示名称</label>
-            <input pInputText formControlName="displayName" placeholder="请输入显示名称" class="w-full" pSize="small" />
+            <input pInputText formControlName="displayName" placeholder="请输入显示名称" class="w-full" />
             @if (form.controls.displayName.invalid && form.controls.displayName.touched) {
               <small class="text-red-500">显示名称长度不能超过 128 个字符</small>
             }
@@ -120,7 +120,6 @@
                 [toggleMask]="true"
                 [fluid]="true"
                 inputStyleClass="w-full"
-                size="small"
               />
               @if (form.controls.password.hasError('required') && form.controls.password.touched) {
                 <small class="text-red-500">请输入初始密码</small>
@@ -178,8 +177,8 @@
 
   <ng-template pTemplate="footer">
     <div class="flex justify-end gap-2">
-      <p-button label="取消" severity="secondary" [text]="true" (onClick)="visible.set(false)" size="small" />
-      <p-button [label]="isEditMode() ? '保存' : '创建'" [loading]="saving()" (onClick)="save()" size="small" />
+      <p-button label="取消" severity="secondary" [text]="true" (onClick)="visible.set(false)" />
+      <p-button [label]="isEditMode() ? '保存' : '创建'" [loading]="saving()" (onClick)="save()" />
     </div>
   </ng-template>
 </p-dialog>

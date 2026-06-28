@@ -10,7 +10,6 @@
       [text]="true"
       [rounded]="true"
       severity="secondary"
-      styleClass="min-w-[44px] min-h-[44px]"
       (onClick)="handleMenuToggle()"
     >
     </p-button>
@@ -19,20 +18,101 @@
     <div class="flex items-center gap-2 text-sm overflow-hidden">
       <span class="text-muted-color hidden sm:inline">工作区</span>
       <span class="text-muted-color hidden sm:inline">/</span>
-      <h2 class="text-lg font-semibold text-color truncate">{{ layoutService.title() }}</h2>
+      <h2 class="font-semibold text-color truncate">{{ layoutService.title() }}</h2>
     </div>
   </div>
 
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
-    <!-- Notifications -->
-    <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="relative min-w-[44px] min-h-[44px]">
-      <i class="pi pi-bell text-base md:text-lg"></i>
-      <span class="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-surface-0"></span>
+    <!-- Theme Toggle -->
+    <p-button
+      [icon]="layoutService.isDarkTheme() ? 'pi pi-moon' : 'pi pi-sun'"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      (onClick)="layoutService.toggleDarkMode()"
+    >
     </p-button>
+
+    <!-- Configurator: 桌面端显示 -->
+    <div class="relative hidden md:block">
+      <p-button
+        icon="pi pi-palette"
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        pStyleClass="@next"
+        enterFromClass="hidden"
+        enterActiveClass="animate-scalein"
+        leaveToClass="hidden"
+        leaveActiveClass="animate-fadeout"
+        [hideOnOutsideClick]="true"
+      >
+      </p-button>
+      <app-theme-configurator />
+    </div>
+
+    <!-- Notifications -->
+<!--#if (IncludeNotifications)-->
+    <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="min-w-[36px] min-h-[36px] !overflow-visible"
+      (onClick)="toggleNotifications($event)" pTooltip="通知" tooltipPosition="bottom">
+      <p-overlay-badge
+        [value]="notificationCount() > 99 ? '99+' : notificationCount()"
+        [badgeDisabled]="notificationCount() === 0"
+        severity="danger"
+        badgeSize="small">
+        <i class="pi pi-bell text-base md:text-lg"></i>
+      </p-overlay-badge>
+    </p-button>
+
+    <p-popover #notificationPopover>
+      <div class="w-[340px] max-w-[90vw]">
+        <div class="flex items-center justify-between px-1 pb-2 mb-2 border-b border-surface-200 dark:border-surface-700">
+          <span class="font-semibold text-color">通知</span>
+          @if (notificationCount() > 0) {
+            <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()">全部已读</button>
+          }
+        </div>
+        @if (notifications().length === 0) {
+          <div class="py-8 text-center text-muted-color text-sm">
+            <i class="pi pi-inbox text-2xl block mb-2 opacity-60"></i>
+            暂无通知
+          </div>
+        } @else {
+          <div class="max-h-[360px] overflow-y-auto flex flex-col gap-1">
+            @for (n of notifications(); track n.id) {
+              <button type="button"
+                class="flex items-start gap-3 w-full text-left p-2 rounded-md hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+                [class.opacity-60]="n.isRead"
+                (click)="onNotificationClick(n)">
+                <i class="pi {{ notificationIcon(n.type) }} {{ notificationColor(n.type) }} mt-0.5"></i>
+                <span class="flex-1 min-w-0">
+                  <span class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-color truncate">{{ n.title }}</span>
+                    @if (!n.isRead) {
+                      <span class="w-2 h-2 bg-red-500 rounded-full shrink-0"></span>
+                    }
+                  </span>
+                  @if (n.content) {
+                    <span class="block text-xs text-muted-color truncate">{{ n.content }}</span>
+                  }
+                  <span class="block text-[11px] text-muted-color mt-0.5">{{ n.creationTime | date:'MM-dd HH:mm' }}</span>
+                </span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </p-popover>
+<!--#else-->
+    <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="relative min-w-[36px] min-h-[36px]">
+      <i class="pi pi-bell text-base md:text-lg"></i>
+    </p-button>
+<!--#endif-->
 
     <div class="h-6 w-px bg-surface-200 dark:bg-surface-700 mx-1"></div>
 
+    <!--#if (IncludeIdentity)-->
     <!-- User Dropdown: 始终显示用户名 -->
     @if (authService.currentUser(); as user) {
       <div class="relative">
@@ -57,9 +137,12 @@
         </p-button>
       </div>
     }
+    <!--#endif-->
   </div>
 </header>
 
+<!--#if (IncludeIdentity)-->
 <app-profile-settings-dialog [visible]="profileDialogVisible()" (visibleChange)="profileDialogVisible.set($event)" />
 
 <app-change-password-dialog [visible]="changePasswordDialogVisible()" (visibleChange)="changePasswordDialogVisible.set($event)" />
+<!--#endif-->

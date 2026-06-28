@@ -8,12 +8,10 @@
           (ngModelChange)="onActiveChange($event)"
           optionLabel="label"
           optionValue="value"
-          placeholder="状态"
+          placeholder="全部状态"
           [showClear]="true"
           appendTo="body"
-          styleClass="w-full sm:w-48"
-          size="small"
-        />
+          styleClass="w-full sm:w-48" />
 
         <p-select
           [options]="emailVerifiedOptions"
@@ -21,12 +19,10 @@
           (ngModelChange)="onEmailVerifiedChange($event)"
           optionLabel="label"
           optionValue="value"
-          placeholder="邮箱状态"
+          placeholder="全部邮箱状态"
           [showClear]="true"
           appendTo="body"
-          styleClass="w-full sm:w-48"
-          size="small"
-        />
+          styleClass="w-full sm:w-48" />
 
         <p-select
           [options]="roleOptions"
@@ -34,12 +30,10 @@
           (ngModelChange)="onRoleChange($event)"
           optionLabel="label"
           optionValue="value"
-          placeholder="角色"
+          placeholder="全部角色"
           [showClear]="true"
           appendTo="body"
-          styleClass="w-full sm:w-48"
-          size="small"
-        />
+          styleClass="w-full sm:w-48" />
 
         <p-iconfield class="w-full sm:max-w-xs sm:flex-1">
           <p-inputicon class="pi pi-search" />
@@ -49,9 +43,7 @@
             placeholder="搜索用户名 / 邮箱 / 显示名称..."
             [ngModel]="searchQuery()"
             (ngModelChange)="onSearchQueryChange($event)"
-            class="w-full"
-            pSize="small"
-          />
+            class="w-full" />
         </p-iconfield>
       </div>
 
@@ -62,18 +54,14 @@
           (onClick)="onFilter()"
           styleClass="w-full sm:w-auto"
           pTooltip="刷新"
-          tooltipPosition="top"
-          size="small"
-        />
+          tooltipPosition="top" />
         <p-button
           label="新建用户"
           icon="pi pi-plus"
           (onClick)="openAddDialog()"
           [outlined]="true"
           severity="primary"
-          styleClass="w-full sm:w-auto"
-          size="small"
-        />
+          styleClass="w-full sm:w-auto" />
       </div>
     </div>
 
@@ -85,8 +73,7 @@
       (edit)="openEditDialog($event)"
       (toggleActive)="handleToggleActive($event)"
       (resetPassword)="openResetPasswordDialog($event)"
-      (delete)="handleDelete($event)"
-    />
+      (delete)="handleDelete($event)" />
   </div>
 </div>
 
@@ -95,14 +82,12 @@
   [loading]="editDialogLoading()"
   [saving]="editDialogSaving()"
   [user]="selectedUser()"
-  (saved)="handleSave($event)"
-/>
+  (saved)="handleSave($event)" />
 
 <app-reset-user-password-dialog
   [(visible)]="resetPasswordDialogVisible"
   [(saving)]="resetPasswordSaving"
-  (saved)="handleResetPassword($event)"
-/>
+  (saved)="handleResetPassword($event)" />
 
 <p-confirmDialog
   header="确认"

@@ -1,0 +1,11 @@
+<Project>
+
+  <!--
+    仓库内直接构建模板源码时，启用所有模板条件符号。
+    dotnet new 生成的项目不会包含此文件，仍由模板参数裁剪功能。
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectName.StartsWith('CompanyName.ProjectName')) and Exists('$(MSBuildThisFileDirectory)template\.template.config\template.json')">
+    <DefineConstants>$(DefineConstants);IncludeIdentity;IncludeRoles;IncludeOpenIddict;IncludeExternalLogin;IncludeNotifications</DefineConstants>
+  </PropertyGroup>
+
+</Project>

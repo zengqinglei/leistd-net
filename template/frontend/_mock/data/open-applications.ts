@@ -6,8 +6,8 @@ export interface MockOpenApplication extends OpenApplicationOutputDto {
 
 export const OPEN_APPLICATIONS: MockOpenApplication[] = [
   {
-    id: 'my-project-web',
-    clientId: 'my-project-web',
+    id: 'companyname-projectname-web',
+    clientId: 'companyname-projectname-web',
     displayName: 'MyProject Web',
     applicationType: 'web',
     clientType: 'public',
@@ -34,14 +34,14 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     creationTime: '2026-05-01T09:00:00Z'
   },
   {
-    id: 'my-project-desktop',
-    clientId: 'my-project-desktop',
+    id: 'companyname-projectname-desktop',
+    clientId: 'companyname-projectname-desktop',
     displayName: 'MyProject Desktop',
     applicationType: 'native',
     clientType: 'public',
     consentType: 'explicit',
-    redirectUris: ['my-project-desktop://oauth/callback'],
-    postLogoutRedirectUris: ['my-project-desktop://oauth/logout-callback'],
+    redirectUris: ['companyname-projectname-desktop://oauth/callback'],
+    postLogoutRedirectUris: ['companyname-projectname-desktop://oauth/logout-callback'],
     permissions: [
       'ept:authorization',
       'ept:end_session',
@@ -62,8 +62,8 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     creationTime: '2026-05-02T10:30:00Z'
   },
   {
-    id: 'my-project-service',
-    clientId: 'my-project-service',
+    id: 'companyname-projectname-service',
+    clientId: 'companyname-projectname-service',
     displayName: 'MyProject Service Client',
     applicationType: 'service',
     clientType: 'confidential',

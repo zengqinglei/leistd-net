@@ -13,7 +13,7 @@
 1.  **定义数据 (可选)**: 如果需要，可以在 `frontend/_mock/data/` 目录下创建 `*.data.ts` 文件来存放纯粹的模拟数据。
     ```typescript
     // in: frontend/_mock/data/product.data.ts
-    export const PRODUCTS = [{ id: '1', name: 'Leistd-AI' }];
+    export const PRODUCTS = [{ id: '1', name: '{ProductName}' }];
     ```
 
 2.  **创建 API 处理器**: 在 `frontend/_mock/api/` 目录下创建一个新的 `*.ts` 文件（例如 `product.ts`）。在该文件中，定义并导出一个 `*_API` 对象。对象的键是 API 路径（支持 `METHOD /path` 格式），值是一个处理函数。

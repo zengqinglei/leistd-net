@@ -31,25 +31,50 @@ ng version
 npm install
 ```
 
-### 2. 复制环境配置文件
+### 2. 配置环境与选择联调模式
 
-复制 `src/environments/environment.dev.ts` 并重命名为 `environment.debug.ts`，内容如下：
+本地开发使用 `src/environments/environment.debug.ts`（`npm start` 默认加载）。**关键是 `api.gateway` 怎么填，取决于你用哪种前后端联调模式**：
+
+#### 模式一：SPA 同源访问（推荐）
+
+后端开启内置 SPA 代理（`SpaProxy`），浏览器**只访问后端地址**，前端请求由后端代理转发到 Angular dev server。前后端同源，**没有跨域、cookie 正常**。
 
 ```typescript
 export const environment = {
   ...environmentBase,
   useMock: {
     enable: false,
-    exclude: 'api/v1/users/1',
     delay: 500,
-    log: true // 在开发环境默认开启日志
+    exclude: '',
+    include: ''
   },
   api: {
     ...environmentBase.api,
-    gateway: 'http://localhost:5240'
+    gateway: '' // 留空 = 同源相对路径，请求经后端 SPA 代理
   }
 };
 ```
+
+> 配套：后端需开启 `SpaProxy.Enabled=true`、`SpaProxy.Target=http://localhost:4200`，详见 [后端 README · 前后端联调](../backend/README.md)。
+> 访问方式：浏览器打开**后端地址**（如 `http://localhost:5240/`），不是 4200。
+
+#### 模式二：CORS 分离访问
+
+浏览器直接访问前端 dev server（4200），API 跨域打到后端。需后端开启 CORS 放行本地端口。
+
+```typescript
+export const environment = {
+  ...environmentBase,
+  useMock: { enable: false, delay: 500, exclude: '', include: '' },
+  api: {
+    ...environmentBase.api,
+    gateway: 'http://localhost:5240' // 后端完整地址，跨域访问
+  }
+};
+```
+
+> 配套：后端需设 `Cors.AllowAnyLocalhost=true`（开发用）。访问方式：浏览器打开 `http://localhost:4200/`。
+> 注意：跨域携带 cookie 对 SameSite/Secure 要求更严，若登录后 cookie 不生效，优先改用模式一。
 
 ### 3. 启动开发服务器
 
@@ -68,7 +93,7 @@ export const environment = {
   ng serve -c prod    # 生产环境
   ```
 
-服务器启动后，请在浏览器中打开 `http://localhost:4200/`。应用支持热重载，任何对源文件的修改都会自动刷新页面。
+服务器启动后：**模式一**（SPA 同源）在浏览器打开后端地址 `http://localhost:5240/`；**模式二**（CORS 分离）打开 `http://localhost:4200/`。应用支持热重载，任何对源文件的修改都会自动刷新页面。
 
 ---
 

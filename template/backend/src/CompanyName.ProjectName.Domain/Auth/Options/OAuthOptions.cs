@@ -36,6 +36,6 @@ public class OAuthOptions
     /// <summary>
     /// OpenIddict 资源标识符（API audience）
     /// </summary>
-    public string Resource { get; set; } = "my-project-api";
+    public string Resource { get; set; } = "companyname-projectname-api";
 }
 #endif

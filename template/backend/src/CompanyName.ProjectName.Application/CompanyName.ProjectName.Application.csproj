@@ -7,7 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+<!--#if (IncludeOpenIddict)-->
     <PackageReference Include="OpenIddict.Abstractions" />
+<!--#endif-->
     <PackageReference Include="System.Linq.Dynamic.Core" />
   </ItemGroup>
 

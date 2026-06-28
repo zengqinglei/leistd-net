@@ -1,7 +1,6 @@
 import { isPlatformBrowser } from '@angular/common';
 import { Injectable, PLATFORM_ID, inject } from '@angular/core';
 
-import { AuthService } from './auth-service';
 import { SSE_MOCK_REGISTRY } from '../../../../_mock/core/sse-mock-registry';
 import { environment } from '../../../environments/environment';
 
@@ -10,7 +9,6 @@ import { environment } from '../../../environments/environment';
 })
 export class NativeFetchService {
   private readonly platformId = inject(PLATFORM_ID);
-  private readonly authService = inject(AuthService);
 
   private buildFullUrl(url: string): string {
     if (url.startsWith('http://') || url.startsWith('https://')) {

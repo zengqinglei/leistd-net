@@ -1,10 +1,9 @@
 using System.Reflection;
+using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.DependencyInjection;
-using Leistd.Ddd.Domain.Auditing;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Ddd.Infrastructure.Auditing;
 using Leistd.Timing;
 using Leistd.UnitOfWork.Core;
 using Leistd.UnitOfWork.Core.Options;
@@ -33,8 +32,8 @@ public static class DependencyInjection
         // 注册时钟服务
         services.AddSingleton<IClock, UtcClockProvider>();
 
-        // 注册审计属性设置器
-        services.AddScoped<IAuditPropertySetter, AuditPropertySetter>();
+        // 注册审计能力（审计属性设置器 + 审计拦截器）
+        services.AddAuditingEfcore();
 
         // 注册 DataFilter 服务
         services.AddSingleton<IDataFilter, DataFilter>(); // 非泛型版本，单例

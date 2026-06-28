@@ -78,3 +78,20 @@ export interface ChangePasswordInputDto {
   newPassword: string;
   confirmPassword: string;
 }
+
+/**
+ * 外部登录 URL 输出 DTO
+ */
+export interface ExternalLoginUrlOutputDto {
+  loginUrl: string;
+  state: string;
+}
+
+/**
+ * 外部登录回调请求 DTO
+ */
+export interface ExternalLoginCallbackInputDto {
+  provider: string;
+  code: string;
+  state: string;
+}

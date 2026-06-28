@@ -8,7 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="MailKit" />
+<!--#if (IncludeOpenIddict)-->
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+<!--#endif-->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http" />
@@ -28,6 +30,10 @@
   <!-- Leistd 框架引用 -->
   <ItemGroup>
     <PackageReference Include="Leistd.Ddd.Infrastructure" />
+    <PackageReference Include="Leistd.Auditing.EntityFrameworkCore" />
+<!--#if (IncludeNotifications)-->
+    <PackageReference Include="Leistd.Notifications.EntityFrameworkCore" />
+<!--#endif-->
     <PackageReference Include="Leistd.EventBus.Local" />
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />

@@ -38,8 +38,10 @@ export class LayoutService {
    * 控制侧边栏的折叠状态
    * true: 折叠（仅显示图标）
    * false: 展开（显示完整内容）
+   *
+   * 默认折叠：首屏仅显示图标，节省空间。
    */
-  sidebarCollapsed = signal<boolean>(false);
+  sidebarCollapsed = signal<boolean>(true);
 
   /**
    * 页面标题
