@@ -289,6 +289,8 @@ jobs:
         if: steps.go.outputs.go == 'true' && steps.ch.outputs.channel != 'stable'
         shell: pwsh
         run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
           git tag -a '${{ steps.ver.outputs.tag }}' -m 'Release ${{ steps.ver.outputs.tag }}'
           git push origin '${{ steps.ver.outputs.tag }}'
 
