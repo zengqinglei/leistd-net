@@ -5,11 +5,13 @@ using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Leistd.Ddd.Domain.Repositories;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.Options;
 using Leistd.Exception.Core;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -23,7 +25,7 @@ public class AuthController(
     IEmailVerificationAppService emailVerificationAppService,
     UserDomainService userDomainService,
     IRepository<User, Guid> userRepository,
-    Microsoft.Extensions.Options.IOptions<CompanyName.ProjectName.Domain.Users.Options.UserRegistrationOptions> securityOptions) : BaseController
+    IOptions<UserRegistrationOptions> securityOptions) : BaseController
 {
     [AllowAnonymous]
     [HttpPost("session-login")]

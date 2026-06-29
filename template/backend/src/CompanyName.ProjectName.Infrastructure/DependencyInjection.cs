@@ -5,6 +5,7 @@ using Leistd.EventBus.Local;
 using Leistd.Lock.Redis;
 using Leistd.Lock.Memory;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CompanyName.ProjectName.Infrastructure.Persistence;
@@ -76,10 +77,8 @@ public static class DependencyInjection
             // 抑制多集合 Include 警告（已全局启用 SplitQuery）
             // 抑制 PendingModelChangesWarning（OpenIddict 通过 UseOpenIddict() 动态注册实体，不在 Migration 快照中）
             options.ConfigureWarnings(w => w
-                .Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId
-                    .MultipleCollectionIncludeWarning)
-                .Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId
-                    .PendingModelChangesWarning));
+                .Ignore(RelationalEventId.MultipleCollectionIncludeWarning)
+                .Ignore(RelationalEventId.PendingModelChangesWarning));
 
             // ✅ 添加 SaveChanges 拦截器（EF Core 官方推荐的最佳实践）
             options.AddInterceptors(

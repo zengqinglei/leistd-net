@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Authentication;
 using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
 #if (IncludeOpenIddict)
+using System.Security.Cryptography.X509Certificates;
 using OpenIddict.Abstractions;
 #endif
 #endif
@@ -122,14 +123,14 @@ try
                 if (!string.IsNullOrEmpty(oauthOpts.EncryptionCertificatePath))
                 {
                     options.AddEncryptionCertificate(
-                        System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(
+                        X509CertificateLoader.LoadPkcs12FromFile(
                             oauthOpts.EncryptionCertificatePath,
                             oauthOpts.EncryptionCertificatePassword));
                 }
                 if (!string.IsNullOrEmpty(oauthOpts.SigningCertificatePath))
                 {
                     options.AddSigningCertificate(
-                        System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(
+                        X509CertificateLoader.LoadPkcs12FromFile(
                             oauthOpts.SigningCertificatePath,
                             oauthOpts.SigningCertificatePassword));
                 }

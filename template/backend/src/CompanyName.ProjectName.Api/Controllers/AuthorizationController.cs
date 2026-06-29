@@ -1,4 +1,5 @@
 #if (IncludeIdentity)
+using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -41,7 +42,7 @@ public class AuthorizationController(
         }
 
         var subject = result.Principal.GetClaim(Claims.Subject) ??
-                      result.Principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                      result.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(subject, out var userId))
         {
             return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
@@ -99,16 +100,16 @@ public class AuthorizationController(
         if (request.IsClientCredentialsGrantType())
         {
             // client_credentials 流程：token 代表客户端应用自身，无用户上下文
-            var identity = new System.Security.Claims.ClaimsIdentity(
+            var identity = new ClaimsIdentity(
                 OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
                 Claims.Name,
                 Claims.Role);
 
             // subject = client_id
-            identity.AddClaim(new System.Security.Claims.Claim(Claims.Subject, request.ClientId!));
-            identity.AddClaim(new System.Security.Claims.Claim(Claims.Name, request.ClientId!));
+            identity.AddClaim(new Claim(Claims.Subject, request.ClientId!));
+            identity.AddClaim(new Claim(Claims.Name, request.ClientId!));
 
-            var principal = new System.Security.Claims.ClaimsPrincipal(identity);
+            var principal = new ClaimsPrincipal(identity);
             principal.SetScopes(request.GetScopes());
 
             var resources = new[] { oauthOptions.Value.Resource };

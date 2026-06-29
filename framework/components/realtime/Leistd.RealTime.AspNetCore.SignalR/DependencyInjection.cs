@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
@@ -35,7 +36,7 @@ public static class DependencyInjection
             // Core 保持中立不携带该默认值。调用方显式配置时以其为准。
             opt.UserIdClaimTypes = options.UserIdClaimTypes.Count > 0
                 ? options.UserIdClaimTypes
-                : ["sub", System.Security.Claims.ClaimTypes.NameIdentifier];
+                : ["sub", ClaimTypes.NameIdentifier];
             opt.EnableRedisBackplane = options.EnableRedisBackplane;
             opt.RedisConnectionString = options.RedisConnectionString;
             opt.RequireSubscriptionAuthorization = options.RequireSubscriptionAuthorization;

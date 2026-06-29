@@ -10,8 +10,7 @@ public class NotificationRecordConfiguration : IEntityTypeConfiguration<Notifica
 {
     public void Configure(EntityTypeBuilder<NotificationRecord> builder)
     {
-        builder.ToTable("LeistdNotifications");
-
+        // 表名沿用 EF Core 默认约定（实体名 NotificationRecord），不显式指定，避免框架前缀污染宿主库。
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.UserId)
@@ -44,12 +43,10 @@ public class NotificationRecordConfiguration : IEntityTypeConfiguration<Notifica
         builder.Property(x => x.CreatorId)
             .HasMaxLength(64);
 
-        // 按用户 + 创建时间查询（最频繁：拉取用户通知列表）
-        builder.HasIndex(x => new { x.UserId, x.CreationTime })
-            .HasDatabaseName("IX_LeistdNotifications_UserId_CreationTime");
+        // 按用户 + 创建时间查询（最频繁：拉取用户通知列表）。索引名沿用 EF Core 默认约定。
+        builder.HasIndex(x => new { x.UserId, x.CreationTime });
 
-        // 按用户 + 已读状态查询（未读数）
-        builder.HasIndex(x => new { x.UserId, x.IsRead })
-            .HasDatabaseName("IX_LeistdNotifications_UserId_IsRead");
+        // 按用户 + 已读状态查询（未读数）。
+        builder.HasIndex(x => new { x.UserId, x.IsRead });
     }
 }
