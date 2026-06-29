@@ -6,7 +6,7 @@
     由发布流水线（.github/workflows/release.yml）从唯一源同步，勿手工改。
   -->
   <PropertyGroup>
-    <LeistdFrameworkVersion>0.9.0</LeistdFrameworkVersion>
+    <LeistdFrameworkVersion>0.10.0</LeistdFrameworkVersion>
   </PropertyGroup>
 
 </Project>
