@@ -40,7 +40,7 @@
 
               [ngModel]="formModel().displayName"
               (ngModelChange)="formModel.update(model => ({ ...model, displayName: $event }))"
-              placeholder="例如 AiRelay Desktop" />
+              placeholder="例如 我的桌面应用" />
           </div>
           <div class="flex flex-col gap-2">
             <label class="font-bold">Client ID</label>
@@ -49,7 +49,7 @@
 
               [ngModel]="formModel().clientId"
               (ngModelChange)="formModel.update(model => ({ ...model, clientId: $event }))"
-              placeholder="例如 ai-relay-desktop"
+              placeholder="例如 my-desktop-app"
               [disabled]="isEditMode()"
               class="font-mono" />
           </div>
@@ -124,7 +124,7 @@
 
               [ngModel]="formModel().redirectUriInput"
               (ngModelChange)="formModel.update(model => ({ ...model, redirectUriInput: $event }))"
-              placeholder="https://example.com/callback 或 ai-relay-desktop://oauth/callback"
+              placeholder="https://example.com/callback 或 my-desktop-app://oauth/callback"
               class="w-full font-mono" />
             <p-button
               label="添加"

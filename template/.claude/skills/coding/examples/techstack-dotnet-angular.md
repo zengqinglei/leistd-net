@@ -35,7 +35,7 @@
 
 ```
 ┌─────────────────────────────────────────┐
-│         API Layer (AiRelay.Api)         │  ← HTTP 相关处理
+│           API Layer (Api)               │  ← HTTP 相关处理
 ├─────────────────────────────────────────┤
 │   Application Layer (Application)       │  ← 业务流程编排
 ├─────────────────────────────────────────┤
@@ -78,7 +78,7 @@ public record CreateUserInputDto
 
 **文件范围 namespace**：
 ```csharp
-namespace AiRelay.Application.Users;
+namespace CompanyName.ProjectName.Application.Users;
 
 public class UserAppService { }
 ```

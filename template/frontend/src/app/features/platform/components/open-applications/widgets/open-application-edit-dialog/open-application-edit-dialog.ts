@@ -227,13 +227,13 @@ export class OpenApplicationEditDialogComponent {
     if (template === 'desktop') {
       this.formModel.update(model => ({
         ...model,
-        clientId: model.clientId || 'ai-relay-desktop',
-        displayName: model.displayName || 'AiRelay Desktop',
+        clientId: model.clientId || 'my-desktop-app',
+        displayName: model.displayName || '我的桌面应用',
         applicationType: 'native',
         clientType: 'public',
         consentType: 'explicit',
-        redirectUris: ['ai-relay-desktop://oauth/callback'],
-        postLogoutRedirectUris: ['ai-relay-desktop://oauth/logout-callback'],
+        redirectUris: ['my-desktop-app://oauth/callback'],
+        postLogoutRedirectUris: ['my-desktop-app://oauth/logout-callback'],
         permissions: [...authorizationCodePermissions],
         requirements: ['ft:pkce']
       }));
