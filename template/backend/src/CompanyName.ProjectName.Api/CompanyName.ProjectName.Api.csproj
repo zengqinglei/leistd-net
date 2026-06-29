@@ -33,6 +33,7 @@
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.Core" />
     <PackageReference Include="Leistd.Notifications.AspNetCore.SignalR" />
+    <PackageReference Include="Leistd.RealTime.AspNetCore.SignalR" />
 <!--#endif-->
   </ItemGroup>
 

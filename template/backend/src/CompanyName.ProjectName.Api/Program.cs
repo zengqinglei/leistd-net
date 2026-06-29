@@ -13,6 +13,7 @@ using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
+using Leistd.RealTime.AspNetCore.SignalR;
 #endif
 #if (IncludeIdentity)
 using Microsoft.AspNetCore.Authentication;
@@ -300,16 +301,28 @@ try
 
         if (db.Database.IsRelational())
         {
-            var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
-            if (pendingMigrations.Any())
+            // 模板默认不内置迁移：
+            // - 已添加迁移（dotnet ef migrations add）→ 走 Migrate 应用迁移（推荐用于生产）；
+            // - 尚无任何迁移 → 走 EnsureCreated 直接按当前模型建表（开箱即用 / 快速试跑）。
+            // 注意：同一数据库不要在两种方式间切换。
+            var hasMigrations = db.Database.GetMigrations().Any();
+            if (hasMigrations)
             {
-                logger.LogInformation("检测到关系型数据库，正在应用 {Count} 个待执行迁移...", pendingMigrations.Count());
-                await db.Database.MigrateAsync();
-                logger.LogInformation("数据库迁移完成");
+                var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
+                if (pendingMigrations.Count > 0)
+                {
+                    logger.LogInformation("检测到关系型数据库，正在应用 {Count} 个待执行迁移...", pendingMigrations.Count);
+                    await db.Database.MigrateAsync();
+                    logger.LogInformation("数据库迁移完成");
+                }
+                else
+                {
+                    logger.LogInformation("检测到关系型数据库，迁移已是最新，无需处理");
+                }
             }
             else
             {
-                logger.LogInformation("检测到关系型数据库，无待执行迁移，使用 EnsureCreated 创建表结构...");
+                logger.LogInformation("检测到关系型数据库且无迁移，使用 EnsureCreated 按当前模型创建表结构...");
                 await db.Database.EnsureCreatedAsync();
                 logger.LogInformation("数据库表结构创建完成");
             }
@@ -365,8 +378,9 @@ try
     app.MapControllers();
 
 #if (IncludeNotifications)
-    // SignalR 通知 / 实时业务事件 Hub 端点
-    app.MapNotificationsHubs();
+    // SignalR 端点：通知 Hub 与实时业务事件 Hub 各自显式映射
+    app.MapNotificationHub();
+    app.MapRealTimeHub();
 #endif
 
     app.MapMyProjectSpaFallback();

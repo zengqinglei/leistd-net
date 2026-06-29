@@ -1,7 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/template.json",
   "author": "Fullstack Template",
-  "classifications": ["Web", "Fullstack", "Angular", ".NET", "DDD"],
+  "classifications": [
+    "Web",
+    "Fullstack",
+    "Angular",
+    ".NET",
+    "DDD"
+  ],
   "identity": "FullstackApp.Template.CSharp",
   "name": "Fullstack App (.NET + Angular)",
   "description": ".NET 10 + Angular 21 全栈项目模板，DDD 四层架构，支持条件裁剪认证和权限模块",
@@ -25,7 +31,10 @@
     },
     "FullNameKebab": {
       "identifier": "chain",
-      "steps": ["lowerCaseInvariant", "DotToHyphen"]
+      "steps": [
+        "lowerCaseInvariant",
+        "DotToHyphen"
+      ]
     }
   },
   "symbols": {
@@ -107,10 +116,6 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Email/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260102000000_AddIdentityFields.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260105000000_AddExternalLoginConnections.cs",
             "frontend/src/app/features/platform/components/open-applications/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
             "frontend/src/app/features/platform/models/open-application.dto.ts",
@@ -125,7 +130,6 @@
             "frontend/_mock/data/user.ts",
             "frontend/_mock/utils/current-user.ts",
             "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260106000000_AddNotifications.cs",
             "frontend/src/app/core/services/signalr-service.ts",
             "frontend/src/app/core/services/notification-service.ts",
             "frontend/_mock/api/notification.ts",
@@ -147,7 +151,6 @@
           "condition": "!IncludeIdentity || !IncludeNotifications",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260106000000_AddNotifications.cs",
             "frontend/src/app/core/services/signalr-service.ts",
             "frontend/src/app/core/services/notification-service.ts",
             "frontend/_mock/api/notification.ts",
@@ -158,8 +161,7 @@
           "condition": "IncludeIdentity && !IncludeRoles",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Domain/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260103000000_AddRolesAndPermissions.cs"
+            "backend/src/CompanyName.ProjectName.Domain/Permissions/**"
           ]
         },
         {
@@ -171,7 +173,6 @@
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IAuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptions.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260104000000_AddOpenIddictTables.cs",
             "frontend/src/app/features/platform/components/open-applications/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
             "frontend/src/app/features/platform/models/open-application.dto.ts",
@@ -192,7 +193,6 @@
             "backend/src/CompanyName.ProjectName.Domain/Auth/Options/ExternalAuthOptions.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Abstractions/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/20260105000000_AddExternalLoginConnections.cs",
             "frontend/src/app/features/account/components/external-auth-callback/**"
           ]
         }
