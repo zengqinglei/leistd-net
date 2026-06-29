@@ -44,8 +44,9 @@ public class RealTimeHub(
     {
         if (options.Value.RequireSubscriptionAuthorization)
         {
+            var userId = currentUser.Id?.ToString() ?? Context.UserIdentifier;
             var allowed = await subscriptionAuthorizer.AuthorizeAsync(
-                new RealtimeSubscriptionContext(resourceKey, currentUser),
+                new RealtimeSubscriptionContext(resourceKey, userId),
                 Context.ConnectionAborted);
 
             if (!allowed)

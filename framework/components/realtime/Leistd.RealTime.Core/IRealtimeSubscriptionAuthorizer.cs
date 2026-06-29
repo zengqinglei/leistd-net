@@ -1,5 +1,3 @@
-using Leistd.Security.Users;
-
 namespace Leistd.RealTime;
 
 /// <summary>
@@ -18,9 +16,11 @@ public interface IRealtimeSubscriptionAuthorizer
 /// <summary>
 /// 实时资源订阅上下文。
 /// </summary>
+/// <param name="ResourceKey">资源标识（如 "product-profile:{id}"）。</param>
+/// <param name="UserId">当前连接用户标识；匿名连接为 null。具体身份解析由宿主层负责，Core 保持中立。</param>
 public sealed record RealtimeSubscriptionContext(
     string ResourceKey,
-    ICurrentUser CurrentUser);
+    string? UserId);
 
 /// <summary>
 /// 默认订阅授权器。默认允许订阅，避免影响公共资源订阅场景。

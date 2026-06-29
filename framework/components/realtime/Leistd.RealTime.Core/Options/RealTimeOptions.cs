@@ -19,10 +19,9 @@ public class RealTimeOptions
 
     /// <summary>
     /// 用于解析 SignalR UserIdentifier 的 claim 类型（按顺序取第一个非空）。
-    /// 默认兼容 OpenIddict/OAuth2 的 "sub" 及标准 nameidentifier。
+    /// Core 保持中立、默认为空；具体默认值（如 "sub" / nameidentifier）由 Web 宿主层注入。
     /// </summary>
-    public IReadOnlyList<string> UserIdClaimTypes { get; set; } =
-        ["sub", System.Security.Claims.ClaimTypes.NameIdentifier];
+    public IReadOnlyList<string> UserIdClaimTypes { get; set; } = [];
 
     /// <summary>
     /// 是否启用 Redis Backplane（多实例扩展）。当前为预留，未实现。

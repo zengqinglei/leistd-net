@@ -31,13 +31,18 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>映射通知 Hub 与实时业务事件 Hub 端点（均需登录）。</summary>
-    public static IEndpointRouteBuilder MapNotificationsHubs(
+    /// <summary>
+    /// 映射通知 Hub 端点（需登录）。
+    /// </summary>
+    /// <remarks>
+    /// 只负责通知自身的 Hub。实时业务事件 Hub 由实时组件的 <c>MapRealTimeHub()</c> 显式映射，
+    /// 避免通知组件越权代映射、以及与调用方重复映射 /hubs/realtime。
+    /// </remarks>
+    public static IEndpointRouteBuilder MapNotificationHub(
         this IEndpointRouteBuilder endpoints,
         string notificationHubPath = DefaultNotificationHubPath)
     {
         endpoints.MapHub<NotificationHub>(notificationHubPath).RequireAuthorization();
-        endpoints.MapRealTimeHub();
         return endpoints;
     }
 }
