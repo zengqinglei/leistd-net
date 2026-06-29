@@ -33,10 +33,10 @@ dotnet add package Leistd.Security.AspNetCore
 在 Web 宿主的 `Program.cs` 注册：
 
 ```csharp
-builder.Services.AddLeistdSecurity();
+builder.Services.AddSecurity();
 ```
 
-`AddLeistdSecurity` 完成以下注册：
+`AddSecurity` 完成以下注册：
 
 | 接口 | 实现 | 生命周期 |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ builder.Services.AddLeistdSecurity();
 | `ICurrentUser` | `CurrentUser` | Transient |
 | `ICurrentClient` | `CurrentClient` | Transient |
 
-同时内部调用 `AddHttpContextAccessor()` 注册 `IHttpContextAccessor`。另提供 `UseLeistdSecurity(this IApplicationBuilder)` 作为预留的中间件扩展点（当前为空实现，可不调用）。
+同时内部调用 `AddHttpContextAccessor()` 注册 `IHttpContextAccessor`。另提供 `UseSecurity(this IApplicationBuilder)` 作为预留的中间件扩展点（当前为空实现，可不调用）。
 
 ## 使用
 

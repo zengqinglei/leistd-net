@@ -40,7 +40,7 @@ WORKDIR /src
 # 复制后端代码（.dockerignore 已排除 bin/obj）
 # 注意：Leistd.* 框架以 NuGet 包形式引用（见 backend/Directory.Packages.props），
 # publish 期间从 NuGet 源还原，无需将 framework 源码拷入镜像。
-# 如使用私有 NuGet 源，请在 backend/NuGet.Config 中配置。
+# 如使用私有 NuGet 源，请在构建环境或项目根目录 NuGet.Config 中配置。
 COPY backend/ ./backend/
 
 # Build（还原会自动拉取 Leistd.* 框架包）

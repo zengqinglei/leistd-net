@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Permissions.Entities;
 using CompanyName.ProjectName.Domain.Permissions.Specifications;
 using CompanyName.ProjectName.Domain.Users.Constants;
@@ -19,15 +18,7 @@ public class PermissionChecker(
     IRepository<UserRole, Guid> userRoleRepository,
     IRepository<Role, Guid> roleRepository) : IPermissionChecker
 {
-    public Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)
-    {
-        return IsGrantedAsync(null, name, cancellationToken);
-    }
-
-    public async Task<bool> IsGrantedAsync(
-        ClaimsPrincipal? claimsPrincipal,
-        string name,
-        CancellationToken cancellationToken = default)
+    public async Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
             return false;
@@ -85,15 +76,7 @@ public class PermissionChecker(
         return false;
     }
 
-    public Task<MultiplePermissionGrantResult> IsGrantedAsync(
-        string[] names,
-        CancellationToken cancellationToken = default)
-    {
-        return IsGrantedAsync(null, names, cancellationToken);
-    }
-
     public async Task<MultiplePermissionGrantResult> IsGrantedAsync(
-        ClaimsPrincipal? claimsPrincipal,
         string[] names,
         CancellationToken cancellationToken = default)
     {
@@ -104,7 +87,7 @@ public class PermissionChecker(
 
         foreach (var name in names)
         {
-            results[name] = await IsGrantedAsync(claimsPrincipal, name, cancellationToken);
+            results[name] = await IsGrantedAsync(name, cancellationToken);
         }
 
         return new MultiplePermissionGrantResult(results);

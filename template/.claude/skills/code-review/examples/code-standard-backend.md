@@ -70,7 +70,7 @@
 | **record 类型** | 所有 DTO | `public record CreateUserInputDto { }` |
 | **init 属性** | DTO 属性 | `public string Name { get; init; }` |
 | **required 修饰符** | DTO 必填属性 | `public required string Name { get; init; }` |
-| **文件范围 namespace** | 所有文件 | `namespace AiRelay.Application.Users;` |
+| **文件范围 namespace** | 所有文件 | `namespace CompanyName.ProjectName.Application.Users;` |
 
 ### 3.2 异步编程
 
@@ -89,7 +89,7 @@
 
 **示例**:
 ```csharp
-namespace AiRelay.Domain.Users.Entities;
+namespace CompanyName.ProjectName.Domain.Users.Entities;
 
 public class User : FullAuditedEntity<Guid>
 {

@@ -16,7 +16,6 @@
     <PackageReference Include="Leistd.Exception.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
     <PackageReference Include="Leistd.Security.Core" />
-    <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Domain" />
   </ItemGroup>
 

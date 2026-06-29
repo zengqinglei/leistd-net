@@ -1,3 +1,5 @@
+using Leistd.Auditing;
+
 namespace Leistd.Ddd.Domain.Entities.Auditing;
 
 /// <summary>

@@ -7,10 +7,21 @@ import { ButtonModule } from 'primeng/button';
 import { MenuModule, Menu } from 'primeng/menu';
 import { StyleClassModule } from 'primeng/styleclass';
 import { TooltipModule } from 'primeng/tooltip';
+//#if (IncludeNotifications)
+import { OnInit } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { PopoverModule, Popover } from 'primeng/popover';
+import { OverlayBadgeModule } from 'primeng/overlaybadge';
+//#endif
 
 import { AuthService } from '../../../core/services/auth-service';
+//#if (IncludeNotifications)
+import { NotificationService, NotificationOutputDto } from '../../../core/services/notification-service';
+//#endif
+//#if (IncludeIdentity)
 import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialogComponent } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
+//#endif
 import { ThemeConfigurator } from '../../../shared/components/theme-configurator/theme-configurator';
 import { LayoutService } from '../../services/layout-service';
 
@@ -26,13 +37,24 @@ import { LayoutService } from '../../services/layout-service';
     TooltipModule,
     MenuModule,
     ThemeConfigurator,
+//#if (IncludeNotifications)
+    PopoverModule,
+    OverlayBadgeModule,
+    DatePipe,
+//#endif
+//#if (IncludeIdentity)
     ProfileSettingsDialogComponent,
     ChangePasswordDialogComponent
+//#endif
   ],
   templateUrl: './default-header.html',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
+//#if (IncludeNotifications)
+export class DefaultHeader implements OnInit, OnDestroy {
+//#else
 export class DefaultHeader implements OnDestroy {
+//#endif
   readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
   readonly router = inject(Router);
@@ -40,9 +62,49 @@ export class DefaultHeader implements OnDestroy {
   @ViewChild('userMenu') userMenu!: Menu;
 
   readonly toggleMobileMenu = output<void>();
-  readonly notificationCount = signal(1);
+//#if (IncludeNotifications)
+  readonly notificationService = inject(NotificationService);
+  readonly notificationCount = this.notificationService.unreadCount;
+  readonly notifications = this.notificationService.notifications;
+  @ViewChild('notificationPopover') notificationPopover!: Popover;
+
+  ngOnInit(): void {
+    // 登录后初始化：连接 SignalR + 加载历史通知
+    void this.notificationService.init();
+  }
+
+  toggleNotifications(event: Event): void {
+    this.notificationPopover?.toggle(event);
+  }
+
+  async onNotificationClick(item: NotificationOutputDto): Promise<void> {
+    if (!item.isRead) {
+      await this.notificationService.markAsRead(item.id);
+    }
+    if (item.link) {
+      this.notificationPopover?.hide();
+      this.router.navigateByUrl(item.link);
+    }
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    await this.notificationService.markAllAsRead();
+  }
+
+  notificationIcon(type: string): string {
+    return this.notificationService.getIcon(type);
+  }
+
+  notificationColor(type: string): string {
+    return this.notificationService.getColor(type);
+  }
+//#else
+  readonly notificationCount = signal(0);
+//#endif
+//#if (IncludeIdentity)
   readonly profileDialogVisible = signal(false);
   readonly changePasswordDialogVisible = signal(false);
+//#endif
 
   readonly userMenuItems = computed<MenuItem[]>(() => {
     const currentUser = this.authService.currentUser();
@@ -62,6 +124,7 @@ export class DefaultHeader implements OnDestroy {
       });
     }
 
+//#if (IncludeIdentity)
     if (items.length > 0) {
       items.push({ separator: true });
     }
@@ -86,10 +149,12 @@ export class DefaultHeader implements OnDestroy {
         command: () => this.handleLogout()
       }
     );
+//#endif
 
     return items;
   });
 
+//#if (IncludeIdentity)
   openProfileDialog(): void {
     this.forceCloseMenu();
     this.profileDialogVisible.set(true);
@@ -105,6 +170,7 @@ export class DefaultHeader implements OnDestroy {
     this.forceCloseMenu();
     this.authService.logout();
   }
+//#endif
 
   handleMenuToggle(): void {
     if (this.layoutService.isMobileSidebarMode()) {

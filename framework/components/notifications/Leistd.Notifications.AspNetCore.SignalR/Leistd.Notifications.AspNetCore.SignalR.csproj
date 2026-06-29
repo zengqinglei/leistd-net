@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Leistd.Notifications.AspNetCore.SignalR</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Leistd.Notifications.Core\Leistd.Notifications.Core.csproj" />
+    <ProjectReference Include="..\..\realtime\Leistd.RealTime.AspNetCore.SignalR\Leistd.RealTime.AspNetCore.SignalR.csproj" />
+    <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
+    <!-- NotificationHub 在 Web 边界用 ICurrentUser 解析当前用户 -->
+    <ProjectReference Include="..\..\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+  </ItemGroup>
+
+</Project>

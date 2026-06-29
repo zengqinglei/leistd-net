@@ -21,7 +21,8 @@ backend/
 
 > **Leistd 框架引用**：共享组件（`components`）与 DDD 基础层（`ddd-struct`）已抽取为独立的
 > [Leistd 框架](../../framework/README.md)，以 **NuGet 包**形式通过 `PackageReference` 引用，不随项目源码分发。
-> 需要本地联调"改过的框架"时用本地 NuGet feed，见[模板文档 · 联调本地框架](../README.md#联调本地框架开发者)。
+> 生成项目不会内置本仓库的本地 NuGet 源，默认使用用户环境中的 NuGet 源（通常是 `nuget.org`）。
+> 需要本地联调"改过的框架"时临时指定 `local-feed`，见[模板文档 · 联调本地框架](../README.md#联调本地框架开发者)。
 
 ---
 
@@ -111,7 +112,7 @@ dotnet run
 ```
 
 应用将：
-- 自动应用数据库迁移（如果配置了 PostgreSQL）
+- 初始化数据库（未生成迁移时用 EnsureCreated 按当前模型建表；已生成迁移则自动应用，详见“数据库迁移”）
 - 创建默认管理员用户
 - 开始监听 `http://localhost:5240`
 
@@ -230,13 +231,37 @@ ConnectionStrings__Redis="localhost:6379,password=your-password,ssl=true"
 
 ## 数据库迁移
 
-### 自动迁移（推荐）
+> **模板默认不内置任何 EF Core 迁移。** 这是刻意的最佳实践（与 ABP、微软官方模板一致）：
+> 迁移应由你的项目按**实际启用的功能组合**自行生成，而不是在模板里预置再按开关裁剪——后者
+> 极易产生模型与迁移不一致、孤儿迁移类等问题。
 
-应用启动时会自动应用待执行的迁移。无需手动操作。
+### 首次运行：EnsureCreated（开箱即用）
 
-### 手动迁移命令
+未生成任何迁移时，应用启动会自动用 `EnsureCreated` 按当前模型直接建表，**无需先生成迁移**即可跑起来，
+适合本地快速试跑。`EnsureCreated` 不走迁移历史，不适合需要持续演进表结构的生产环境。
 
-**生成新迁移：**
+### 生产环境：生成并使用迁移（推荐）
+
+一旦你确定了功能组合、准备长期演进表结构，生成首个迁移：
+
+```bash
+dotnet ef migrations add InitialCreate \
+  --project src/CompanyName.ProjectName.Infrastructure \
+  --startup-project src/CompanyName.ProjectName.Api \
+  --output-dir Persistence/Migrations
+```
+
+生成的迁移会精确匹配你当前启用的功能（Identity / Roles / OpenIddict / ExternalLogin / Notifications），
+不含任何条件编译。此后应用启动会**自动应用待执行迁移**（见下）。
+
+> 注意：同一数据库不要在 `EnsureCreated` 与迁移两种方式间来回切换。决定用迁移后，建议从一个干净的库开始。
+
+### 自动应用迁移
+
+存在迁移时，应用启动会自动应用待执行的迁移，无需手动 `database update`。
+
+### 后续新增/修改表结构
+
 ```bash
 dotnet ef migrations add MigrationName \
   --project src/CompanyName.ProjectName.Infrastructure \

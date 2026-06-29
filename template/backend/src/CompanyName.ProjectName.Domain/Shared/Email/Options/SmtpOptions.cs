@@ -18,7 +18,7 @@ public class SmtpOptions
     public string Password { get; set; } = "";
 
     [Required]
-    public string FromName { get; set; } = "AI Relay";
+    public string FromName { get; set; } = "系统通知";
 
     [Required]
     [EmailAddress]

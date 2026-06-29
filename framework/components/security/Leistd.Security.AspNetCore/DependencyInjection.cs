@@ -17,7 +17,7 @@ public static class DependencyInjection
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <returns>服务集合</returns>
-    public static IServiceCollection AddLeistdSecurity(this IServiceCollection services)
+    public static IServiceCollection AddSecurity(this IServiceCollection services)
     {
         // HTTP 上下文访问器
         services.AddHttpContextAccessor();
@@ -35,7 +35,7 @@ public static class DependencyInjection
     /// </summary>
     /// <param name="app">应用程序构建器</param>
     /// <returns>应用程序构建器</returns>
-    public static IApplicationBuilder UseLeistdSecurity(this IApplicationBuilder app)
+    public static IApplicationBuilder UseSecurity(this IApplicationBuilder app)
     {
         // 预留中间件扩展点
         return app;

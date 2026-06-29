@@ -8,9 +8,20 @@
 leistd-net 把"可复用的框架能力"与"业务项目脚手架"分离：
 
 - **`framework/`** —— Leistd 框架基座（26 个 `Leistd.*` 包：AOP、DI、事件总线、异常、分布式锁、对象映射、统一响应、安全、链路追踪、工作单元 + DDD 四层基础类型）。统一版本、中央包管理（CPM）、Source Link 源码调试，以 NuGet 包发布。
-- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 21 前端，DDD 四层，支持条件裁剪认证/权限）。生成的项目通过 NuGet 引用 framework。
+- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 21 前端，DDD 四层，支持条件裁剪认证/权限），内置 AI 协作开发规范与 Skill 流程。生成的项目通过 NuGet 引用 framework。
 
 参考 [Volo.ABP](https://abp.io) 的工程化模式构建。
+
+---
+
+## AI 协作开发
+
+模板内置面向 AI Agent 的开发闭环，帮助业务项目把“想法 → 方案 → 开发 → 审查 → 测试 → 部署 → 验收”沉淀为可追溯文档：
+
+- **项目级规范**：`docs/standards/agent-workflow.md` 定义阶段产物、路径、状态和高风险确认点。
+- **上下文驱动**：Skill 不直接互相调用，由模型根据上下文、用户意图和 Skill metadata/description 选择能力。
+- **证据闭环**：需求 Plan、任务上下文、开发/审查/测试/部署/验收报告统一沉淀到 `docs/`。
+- **通用降级**：没有项目级规范时，Skill 按自身默认规则执行，并提示补齐项目规范。
 
 ---
 
@@ -25,7 +36,8 @@ leistd-net/
 │   └── build/          #   pack / push 脚本
 ├── template/           # dotnet new 项目模板
 │   ├── backend/        #   .NET 10 + DDD 后端
-│   └── frontend/       #   Angular 21 前端
+│   ├── frontend/       #   Angular 21 前端
+│   └── docs/           #   AI 协作、需求、规范、报告与部署文档
 ├── scripts/            # 版本同步、框架引用切换等辅助脚本
 ├── VERSION             # 版本基准（唯一版本来源，x.y.z）
 └── .github/workflows/  # CI 与多通道发布流水线
@@ -62,6 +74,7 @@ pwsh framework/build/pack.ps1     # 打包到 framework/artifacts/
 | --- | --- |
 | 用框架的某个能力（锁 / 事件 / 响应 / 追踪……） | [框架文档首页](framework/docs/README.md) → [组件总览](framework/docs/components/README.md) |
 | 用模板生成 / 配置项目 | [模板文档](template/README.md) |
+| 在业务项目中使用 AI 协作开发闭环 | [AI Native 开发模式](template/docs/quick-start/ai-native-model.md) · [Agent 工作流规范](template/docs/standards/agent-workflow.md) |
 | 给框架新增或修改组件 | [开发规范](framework/docs/development-guide.md) |
 | 了解版本与发布机制 | [版本与发布](framework/docs/versioning.md) |
 | 在业务项目里切换"框架源码调试" | [框架文档首页](framework/docs/README.md#在项目中使用框架) |

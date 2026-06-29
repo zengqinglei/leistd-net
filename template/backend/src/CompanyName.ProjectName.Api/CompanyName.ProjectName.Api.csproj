@@ -7,7 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+<!--#if (IncludeOpenIddict)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
+<!--#endif-->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Serilog.AspNetCore" />
@@ -28,6 +30,11 @@
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />
+<!--#if (IncludeNotifications)-->
+    <PackageReference Include="Leistd.Notifications.Core" />
+    <PackageReference Include="Leistd.Notifications.AspNetCore.SignalR" />
+    <PackageReference Include="Leistd.RealTime.AspNetCore.SignalR" />
+<!--#endif-->
   </ItemGroup>
 
 </Project>

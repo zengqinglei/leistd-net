@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using Leistd.Ddd.Domain.Entities.Auditing;
+using Leistd.Auditing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Query;

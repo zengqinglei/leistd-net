@@ -74,8 +74,9 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 ## 5. 依赖方向（不可违反）
 
 - `Leistd.<...>.Core` / `Leistd.Ddd.Domain` 是底层，**不得**反向依赖上层或具体实现。
-- `components` 可被 `ddd-struct` 依赖；`ddd-struct` 内部 `Domain ← Application(.Contracts) ← Infrastructure` 单向。
-- 已存在的跨域引用（如 `Leistd.Security.Core → Leistd.Ddd.Domain`）保持相对路径，迁移后不变。
+- `components` 可被 `ddd-struct` 依赖；**`components` 不得依赖 `ddd-struct`**（单向）。`ddd-struct` 内部 `Domain ← Application(.Contracts) ← Infrastructure` 单向。
+- **`*.Core` 必须平台无关，不得依赖 Web（ASP.NET Core）或重型 AOP 实现（Castle 等）。** Web/AOP/EF 等具体技术只能出现在对应实现层（`*.AspNetCore*`、`*.EntityFrameworkCore`）。身份等概念在 `*.Core` 抽象里用中立类型（`string userId` / `ClaimsPrincipal`），不要把富身份模型（如 `ICurrentUser`）焊进核心接口签名；带技术细节的默认值（如 claim 类型）由宿主层注入而非写死在 Core。
+- 一个组件**不得替另一个组件做端点映射 / 基础设施注册**（如通知组件不代映射实时 Hub）；跨组件复用通过显式调用各自的 `Add*/Map*` 完成。
 - 新增跨域依赖前先评估是否会引入环，框架解决方案编译会暴露环依赖。
 
 ---

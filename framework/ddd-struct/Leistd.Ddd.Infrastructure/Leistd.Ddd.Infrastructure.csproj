@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Leistd.Ddd.Domain\Leistd.Ddd.Domain.csproj" />
+    <ProjectReference Include="..\..\components\auditing\Leistd.Auditing.EntityFrameworkCore\Leistd.Auditing.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\components\unit-of-work\Leistd.UnitOfWork.EfCore\Leistd.UnitOfWork.EfCore.csproj" />
     <ProjectReference Include="..\..\components\dependency-injection\Leistd.DependencyInjection\Leistd.DependencyInjection.csproj" />
     <ProjectReference Include="..\..\components\core\Leistd.Core\Leistd.Core.csproj" />

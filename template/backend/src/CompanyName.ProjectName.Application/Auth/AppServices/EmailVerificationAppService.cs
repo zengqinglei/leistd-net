@@ -43,11 +43,11 @@ public class EmailVerificationAppService(
         }
 
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var subject = "【AI Relay】账号注册验证码";
+        var subject = "账号注册验证码";
         var htmlBody = $@"
 <div style='font-family: Arial, sans-serif; max-w-md: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;'>
     <div style='background-color: #0f172a; padding: 20px; text-align: center; color: white;'>
-        <h2 style='margin: 0;'>AI Relay 验证码</h2>
+        <h2 style='margin: 0;'>账号注册验证码</h2>
     </div>
     <div style='padding: 30px; background-color: #f8fafc; color: #334155;'>
         <p>您好，</p>

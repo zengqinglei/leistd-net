@@ -5,7 +5,9 @@ import { MessageService } from 'primeng/api';
 import { catchError, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
+//#if (IncludeIdentity)
 import { AuthService } from '../services/auth-service';
+//#endif
 
 /**
  * HTTP 错误拦截器
@@ -19,7 +21,9 @@ import { AuthService } from '../services/auth-service';
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const messageService = inject(MessageService);
   const router = inject(Router);
+//#if (IncludeIdentity)
   const authService = inject(AuthService);
+//#endif
 
   const CODE_MESSAGES: Record<number, string> = {
     400: '发出的请求有错误，服务器没有进行新建或修改数据的操作。',
@@ -76,6 +80,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           });
         }
 
+//#if (IncludeIdentity)
         // 处理 401 未授权情况：保留当前 URL 作为 returnUrl
         if (error.status === 401) {
           authService.clearAuthData();
@@ -88,6 +93,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
             queryParams: returnUrl ? { returnUrl } : undefined
           });
         }
+//#endif
 
         // 重新抛出错误，避免下游（如 lastValueFrom）收不到数据直接 complete 导致 EmptyError
         return throwError(() => error);

@@ -1,8 +1,9 @@
-#if (IncludeIdentity)
+#if (IncludeExternalLogin)
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -52,6 +53,7 @@ public class ExternalAuthController(
         var identity = new ClaimsIdentity("MyProjectCookie");
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
+        identity.AddClaim(new Claim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false"));
 
         foreach (var roleName in await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
         {

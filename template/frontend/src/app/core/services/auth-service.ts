@@ -1,3 +1,4 @@
+//#if (IncludeIdentity)
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, lastValueFrom, tap } from 'rxjs';
@@ -53,3 +54,22 @@ export class AuthService {
     });
   }
 }
+//#else
+import { Injectable, signal } from '@angular/core';
+
+import { User } from '../../shared/models/user.model';
+
+/**
+ * 未启用认证模块时的占位实现：始终无登录用户。
+ * 保留 currentUser 信号与 isAuthenticated()，供布局/仪表盘等只读消费。
+ */
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private readonly _currentUser = signal<User | null>(null);
+  public readonly currentUser = this._currentUser.asReadonly();
+
+  isAuthenticated(): boolean {
+    return false;
+  }
+}
+//#endif

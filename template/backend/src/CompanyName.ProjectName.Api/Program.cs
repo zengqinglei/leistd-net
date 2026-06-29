@@ -11,10 +11,18 @@ using Leistd.DependencyInjection;
 using Leistd.Exception.AspNetCore;
 using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
+#if (IncludeNotifications)
+using Leistd.Notifications.AspNetCore.SignalR;
+using Leistd.RealTime.AspNetCore.SignalR;
+#endif
 #if (IncludeIdentity)
-using CompanyName.ProjectName.Domain.Auth.Options;
 using Microsoft.AspNetCore.Authentication;
+#if (IncludeOpenIddict || IncludeExternalLogin)
+using CompanyName.ProjectName.Domain.Auth.Options;
+#endif
+#if (IncludeOpenIddict)
 using OpenIddict.Abstractions;
+#endif
 #endif
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -49,10 +57,14 @@ try
     builder.Services.AddOptions<DefaultAdminOptions>()
         .Bind(builder.Configuration.GetSection(DefaultAdminOptions.SectionName));
 #if (IncludeIdentity)
+#if (IncludeOpenIddict)
     builder.Services.AddOptions<OAuthOptions>()
         .Bind(builder.Configuration.GetSection(OAuthOptions.SectionName));
+#endif
+#if (IncludeExternalLogin)
     builder.Services.AddOptions<ExternalAuthOptions>()
         .Bind(builder.Configuration.GetSection(ExternalAuthOptions.SectionName));
+#endif
     builder.Services.AddOptions<UserRegistrationOptions>()
         .Bind(builder.Configuration.GetSection(UserRegistrationOptions.SectionName))
         .ValidateDataAnnotations()
@@ -63,7 +75,7 @@ try
         .ValidateOnStart();
 #endif
 
-#if (IncludeIdentity)
+#if (IncludeOpenIddict)
     // 2.6. OpenIddict OAuth 2.0 / OIDC 服务端
     builder.Services.AddOpenIddict()
         .AddCore(options =>
@@ -148,6 +160,7 @@ try
             options.UseAspNetCore();
         });
 #endif
+// (IncludeOpenIddict)
 
     // 3. 注册应用启动引导程序 (替代手动 InitializeApplicationAsync)
     builder.Services.AddHostedService<ApplicationBootstrapper>();
@@ -208,7 +221,15 @@ try
     });
 
     // 4.5. Leistd Security 服务
-    builder.Services.AddLeistdSecurity();
+    builder.Services.AddSecurity();
+
+#if (IncludeNotifications)
+    // 4.5.1 Leistd Notifications — SignalR 实时通知 + EF Core 持久化
+    builder.Services.AddNotificationsSignalR(opt =>
+    {
+        opt.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    });
+#endif
 
     // 4.6. DataProtection 配置（生产环境必需）
     builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
@@ -217,8 +238,14 @@ try
 #if (IncludeIdentity)
     builder.Services.AddAuthentication(options =>
     {
+#if (IncludeOpenIddict)
+        // 启用 OpenIddict 时，默认走其 Bearer 校验；未启用时默认走 Cookie。
         options.DefaultAuthenticateScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+#else
+        options.DefaultAuthenticateScheme = "MyProjectCookie";
+        options.DefaultChallengeScheme = "MyProjectCookie";
+#endif
     })
     .AddCookie("MyProjectCookie", options =>
     {
@@ -229,19 +256,35 @@ try
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.IsEssential = true;
 
+#if (IncludeOpenIddict)
         var oauthConfig = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
         options.ExpireTimeSpan = TimeSpan.FromDays(oauthConfig.CookieExpireDays);
+#else
+        options.ExpireTimeSpan = TimeSpan.FromDays(7);
+#endif
         options.SlidingExpiration = true;
     });
 
     builder.Services.AddAuthorization(options =>
     {
+        var schemes = new[]
+        {
+#if (IncludeOpenIddict)
+            OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme,
+#endif
+            "MyProjectCookie"
+        };
+
         options.DefaultPolicy = new AuthorizationPolicyBuilder()
-            .AddAuthenticationSchemes(
-                OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme,
-                "MyProjectCookie")
+            .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
             .Build();
+
+        // 超级管理员策略：基于 is_super_admin claim 判定（无需查库）
+        options.AddPolicy("SuperAdmin", policy => policy
+            .AddAuthenticationSchemes(schemes)
+            .RequireAuthenticatedUser()
+            .RequireClaim(Leistd.Security.Claims.CustomClaimTypes.IsSuperAdmin, "true"));
     });
 #else
     builder.Services.AddAuthorization();
@@ -258,16 +301,28 @@ try
 
         if (db.Database.IsRelational())
         {
-            var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
-            if (pendingMigrations.Any())
+            // 模板默认不内置迁移：
+            // - 已添加迁移（dotnet ef migrations add）→ 走 Migrate 应用迁移（推荐用于生产）；
+            // - 尚无任何迁移 → 走 EnsureCreated 直接按当前模型建表（开箱即用 / 快速试跑）。
+            // 注意：同一数据库不要在两种方式间切换。
+            var hasMigrations = db.Database.GetMigrations().Any();
+            if (hasMigrations)
             {
-                logger.LogInformation("检测到关系型数据库，正在应用 {Count} 个待执行迁移...", pendingMigrations.Count());
-                await db.Database.MigrateAsync();
-                logger.LogInformation("数据库迁移完成");
+                var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
+                if (pendingMigrations.Count > 0)
+                {
+                    logger.LogInformation("检测到关系型数据库，正在应用 {Count} 个待执行迁移...", pendingMigrations.Count);
+                    await db.Database.MigrateAsync();
+                    logger.LogInformation("数据库迁移完成");
+                }
+                else
+                {
+                    logger.LogInformation("检测到关系型数据库，迁移已是最新，无需处理");
+                }
             }
             else
             {
-                logger.LogInformation("检测到关系型数据库，无待执行迁移，使用 EnsureCreated 创建表结构...");
+                logger.LogInformation("检测到关系型数据库且无迁移，使用 EnsureCreated 按当前模型创建表结构...");
                 await db.Database.EnsureCreatedAsync();
                 logger.LogInformation("数据库表结构创建完成");
             }
@@ -314,13 +369,19 @@ try
 
     app.UseCors();
 
-    app.UseLeistdSecurity();
+    app.UseSecurity();
 #if (IncludeIdentity)
     app.UseAuthentication();
 #endif
     app.UseAuthorization();
 
     app.MapControllers();
+
+#if (IncludeNotifications)
+    // SignalR 端点：通知 Hub 与实时业务事件 Hub 各自显式映射
+    app.MapNotificationHub();
+    app.MapRealTimeHub();
+#endif
 
     app.MapMyProjectSpaFallback();
 

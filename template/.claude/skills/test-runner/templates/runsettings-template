@@ -92,7 +92,7 @@
             <!-- 包含的模块 -->
             <ModulePaths>
               <Include>
-                <ModulePath>.*AiRelay\.(Api|Application|Domain|Infrastructure)\.dll$</ModulePath>
+                <ModulePath>.*CompanyName\.ProjectName\.(Api|Application|Domain|Infrastructure)\.dll$</ModulePath>
               </Include>
             </ModulePaths>
             
@@ -188,7 +188,7 @@ cat TestResults/*/coverage.cobertura.xml
 
 | 配置项 | 说明 | 示例 |
 |--------|------|------|
-| `ModulePaths/Include` | 包含的模块 | `.*AiRelay\.Api\.dll$` |
+| `ModulePaths/Include` | 包含的模块 | `.*CompanyName\.ProjectName\.Api\.dll$` |
 | `ModulePaths/Exclude` | 排除的模块 | `.*Tests\.dll$` |
 | `Sources/Include` | 包含的源代码路径 | `.*\\Api\\` |
 

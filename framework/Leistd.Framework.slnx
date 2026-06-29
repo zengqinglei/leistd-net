@@ -3,6 +3,10 @@
   <Folder Name="/components/aop/">
     <Project Path="components/aop/Leistd.DynamicProxy/Leistd.DynamicProxy.csproj" />
   </Folder>
+  <Folder Name="/components/auditing/">
+    <Project Path="components/auditing/Leistd.Auditing.Core/Leistd.Auditing.Core.csproj" />
+    <Project Path="components/auditing/Leistd.Auditing.EntityFrameworkCore/Leistd.Auditing.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/components/core/">
     <Project Path="components/core/Leistd.Core/Leistd.Core.csproj" />
   </Folder>
@@ -22,10 +26,19 @@
     <Project Path="components/lock/Leistd.Lock.Memory/Leistd.Lock.Memory.csproj" />
     <Project Path="components/lock/Leistd.Lock.Redis/Leistd.Lock.Redis.csproj" />
   </Folder>
+  <Folder Name="/components/notifications/">
+    <Project Path="components/notifications/Leistd.Notifications.Core/Leistd.Notifications.Core.csproj" />
+    <Project Path="components/notifications/Leistd.Notifications.EntityFrameworkCore/Leistd.Notifications.EntityFrameworkCore.csproj" />
+    <Project Path="components/notifications/Leistd.Notifications.AspNetCore.SignalR/Leistd.Notifications.AspNetCore.SignalR.csproj" />
+  </Folder>
   <Folder Name="/components/object-mapping/">
     <Project Path="components/object-mapping/Leistd.ObjectMapping.AutoMapper/Leistd.ObjectMapping.AutoMapper.csproj" />
     <Project Path="components/object-mapping/Leistd.ObjectMapping.Core/Leistd.ObjectMapping.Core.csproj" />
     <Project Path="components/object-mapping/Leistd.ObjectMapping.Mapster/Leistd.ObjectMapping.Mapster.csproj" />
+  </Folder>
+  <Folder Name="/components/realtime/">
+    <Project Path="components/realtime/Leistd.RealTime.Core/Leistd.RealTime.Core.csproj" />
+    <Project Path="components/realtime/Leistd.RealTime.AspNetCore.SignalR/Leistd.RealTime.AspNetCore.SignalR.csproj" />
   </Folder>
   <Folder Name="/components/response/">
     <Project Path="components/response/Leistd.Response.AspNetCore/Leistd.Response.AspNetCore.csproj" />
