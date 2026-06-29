@@ -6,6 +6,8 @@ import {
   HttpTransportType
 } from '@microsoft/signalr';
 
+import { environment } from '../../../environments/environment';
+
 /** 通知 DTO（与后端 Leistd.Notifications.NotificationOutputDto 对应，类型为字符串） */
 export interface NotificationOutputDto {
   id: string;
@@ -23,7 +25,8 @@ export interface NotificationOutputDto {
 /**
  * SignalR 全局服务：管理通知 Hub 与实时业务事件 Hub。
  *
- * 认证：模板使用 Cookie 会话，WebSocket 同源连接自动携带 Cookie，无需手动传 token。
+ * 地址：Hub 经 resolveHubUrl 拼接 environment.api.gateway，与 HTTP 请求走同一后端（HubConnectionBuilder 不经过 HTTP 拦截器）。
+ * 认证：模板使用 Cookie 会话，withUrl 默认 withCredentials=true 自动携带 Cookie（跨源时需后端 CORS 允许该源 + AllowCredentials）。
  */
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
@@ -101,9 +104,22 @@ export class SignalRService {
 
   // ── 内部 ──
 
+  /**
+   * 解析 Hub 绝对地址。
+   *
+   * SignalR 的 HubConnectionBuilder 不经过 Angular HTTP 拦截器，
+   * 因此需在此手动拼接 `environment.api.gateway` 前缀（与 urlFormatInterceptor 一致）。
+   * 网关为空时返回相对路径，由浏览器按当前源解析（同源托管场景）。
+   */
+  private resolveHubUrl(path: string): string {
+    const gateway = environment.api.gateway || '';
+    const gatewayPart = gateway.endsWith('/') ? gateway.slice(0, -1) : gateway;
+    return gatewayPart ? `${gatewayPart}${path}` : path;
+  }
+
   private async connectNotificationHub(): Promise<void> {
     this.notificationConnection = new HubConnectionBuilder()
-      .withUrl('/hubs/notifications', {
+      .withUrl(this.resolveHubUrl('/hubs/notifications'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
@@ -122,7 +138,7 @@ export class SignalRService {
 
   private async connectBusinessHub(): Promise<void> {
     this.businessConnection = new HubConnectionBuilder()
-      .withUrl('/hubs/realtime', {
+      .withUrl(this.resolveHubUrl('/hubs/realtime'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
