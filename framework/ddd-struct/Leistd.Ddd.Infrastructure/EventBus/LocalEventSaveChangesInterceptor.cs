@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.EventBus.Core.Event;
 using Leistd.EventBus.Core.EventBus;
@@ -12,14 +13,24 @@ namespace Leistd.Ddd.Infrastructure.EventBus;
 /// 本地事件收集和发布拦截器
 /// </summary>
 /// <remarks>
-/// 在 SaveChanges 完成后收集实体的本地事件，并通过 UnitOfWork 或 EventBus 发布。
-/// 这是 EF Core 官方推荐的方式，确保事件发布与数据保存在同一事务上下文中。
+/// 关键时序：
+/// - <b>收集</b>在 <c>SavingChanges</c>（保存前）进行：此时新增/修改实体仍为
+///   Added/Modified/Deleted，能被正确收集；若在 <c>SavedChanges</c>（保存后）收集，
+///   EF Core 默认已执行 AcceptAllChangesOnSuccess，实体变为 Unchanged，会被状态过滤器漏掉，导致事件丢失。
+/// - <b>发布</b>在 <c>SavedChanges</c>（保存成功后）进行：保证“先持久化成功、再发事件”的语义。
+/// 收集到的事件按 DbContext 实例暂存，发布后清理。
 /// </remarks>
 public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
 {
     private readonly ILocalEventBus? _localEventBus;
     private readonly IUnitOfWorkManager? _unitOfWorkManager;
     private readonly ILogger<LocalEventSaveChangesInterceptor> _logger;
+
+    /// <summary>
+    /// 按 DbContext 实例暂存“保存前已收集”的事件，等保存成功后发布。
+    /// 使用 ConditionalWeakTable 避免持有 DbContext 引用导致的泄漏，并天然隔离并发的不同 DbContext。
+    /// </summary>
+    private static readonly ConditionalWeakTable<DbContext, List<ILocalEvent>> _pendingByContext = new();
 
     public LocalEventSaveChangesInterceptor(
         ILocalEventBus? localEventBus,
@@ -31,9 +42,28 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
         _logger = logger;
     }
 
+    // ---- 保存前：收集事件（此时实体状态仍为 Added/Modified/Deleted）----
+
+    public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+    {
+        CollectInto(eventData.Context);
+        return result;
+    }
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        CollectInto(eventData.Context);
+        return new ValueTask<InterceptionResult<int>>(result);
+    }
+
+    // ---- 保存成功后：发布事件 ----
+
     public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
     {
-        PublishLocalEvents(eventData.Context);
+        PublishCollected(eventData.Context);
         return result;
     }
 
@@ -42,22 +72,66 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
         int result,
         CancellationToken cancellationToken = default)
     {
-        await PublishLocalEventsAsync(eventData.Context, cancellationToken);
+        await PublishCollectedAsync(eventData.Context, cancellationToken);
         return result;
+    }
+
+    // ---- 保存失败：丢弃本次收集，避免泄漏到下一次 ----
+
+    public override void SaveChangesFailed(DbContextErrorEventData eventData)
+        => Discard(eventData.Context);
+
+    public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+    {
+        Discard(eventData.Context);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 保存前：从 ChangeTracker 收集本地事件并暂存（同时清空实体上的事件，避免重复收集）。
+    /// </summary>
+    private void CollectInto(DbContext? context)
+    {
+        if (context == null)
+            return;
+
+        var events = CollectLocalEvents(context);
+        ClearLocalEvents(context);
+
+        if (events.Count == 0)
+            return;
+
+        // 同一保存周期内可能多次进入（极少见），累加而非覆盖。
+        var list = _pendingByContext.GetOrCreateValue(context);
+        list.AddRange(events);
+    }
+
+    private void Discard(DbContext? context)
+    {
+        if (context != null)
+            _pendingByContext.Remove(context);
+    }
+
+    private List<ILocalEvent> TakePending(DbContext context)
+    {
+        if (_pendingByContext.TryGetValue(context, out var list))
+        {
+            _pendingByContext.Remove(context);
+            return list;
+        }
+        return [];
     }
 
     /// <summary>
     /// 同步发布本地事件
     /// </summary>
-    private void PublishLocalEvents(DbContext? context)
+    private void PublishCollected(DbContext? context)
     {
         if (context == null)
             return;
 
-        var localEvents = CollectLocalEvents(context);
-        ClearLocalEvents(context);
-
-        if (!localEvents.Any())
+        var localEvents = TakePending(context);
+        if (localEvents.Count == 0)
             return;
 
         var currentUow = _unitOfWorkManager?.Current;
@@ -83,15 +157,13 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
     /// <summary>
     /// 异步发布本地事件
     /// </summary>
-    private async Task PublishLocalEventsAsync(DbContext? context, CancellationToken cancellationToken)
+    private async Task PublishCollectedAsync(DbContext? context, CancellationToken cancellationToken)
     {
         if (context == null)
             return;
 
-        var localEvents = CollectLocalEvents(context);
-        ClearLocalEvents(context);
-
-        if (!localEvents.Any())
+        var localEvents = TakePending(context);
+        if (localEvents.Count == 0)
             return;
 
         var currentUow = _unitOfWorkManager?.Current;
@@ -112,7 +184,7 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
     }
 
     /// <summary>
-    /// 收集实体中的本地事件
+    /// 收集实体中的本地事件（仅保存前调用，此时状态为 Added/Modified/Deleted）
     /// </summary>
     private static List<ILocalEvent> CollectLocalEvents(DbContext context)
     {
