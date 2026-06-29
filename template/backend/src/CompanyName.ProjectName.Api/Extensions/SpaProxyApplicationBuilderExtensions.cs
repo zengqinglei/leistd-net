@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using CompanyName.ProjectName.Api.Options;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
@@ -50,7 +51,7 @@ public static class SpaProxyApplicationBuilderExtensions
         {
             HttpRequestException => true,
             IOException => true,
-            System.Net.Sockets.SocketException => true,
+            SocketException => true,
             _ => ex?.InnerException is not null && IsTransientConnectionFailure(ex.InnerException)
         };
     }

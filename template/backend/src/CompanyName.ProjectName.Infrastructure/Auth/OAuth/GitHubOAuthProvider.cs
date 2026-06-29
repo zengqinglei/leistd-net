@@ -1,6 +1,7 @@
 #if (IncludeIdentity)
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Web;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using Leistd.Exception.Core;
 using Microsoft.Extensions.Configuration;
@@ -52,7 +53,7 @@ public class GitHubOAuthProvider(
         response.EnsureSuccessStatusCode();
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        var queryParams = System.Web.HttpUtility.ParseQueryString(responseContent);
+        var queryParams = HttpUtility.ParseQueryString(responseContent);
         var accessToken = queryParams["access_token"];
 
         if (string.IsNullOrEmpty(accessToken))
