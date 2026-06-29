@@ -64,6 +64,7 @@
     <Project Path="ddd-struct/Leistd.Ddd.Infrastructure/Leistd.Ddd.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Leistd.Ddd.Infrastructure.Tests/Leistd.Ddd.Infrastructure.Tests.csproj" />
     <Project Path="tests/Leistd.EventBus.Tests/Leistd.EventBus.Tests.csproj" />
   </Folder>
 </Solution>
