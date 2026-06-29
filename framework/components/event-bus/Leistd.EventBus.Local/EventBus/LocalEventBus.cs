@@ -1,10 +1,9 @@
 using Leistd.EventBus.Core.Event;
 using Leistd.EventBus.Core.EventBus;
-using Leistd.EventBus.Core.EventHandler;
 using Leistd.EventBus.Local.Wrapper;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace Leistd.EventBus.Local.EventBus;
 
@@ -12,44 +11,27 @@ namespace Leistd.EventBus.Local.EventBus;
 /// 本地事件总线实现（Singleton 生命周期）
 /// 支持 Web、Console、BackgroundService 等多种应用场景
 /// </summary>
-public class LocalEventBus(IServiceScopeFactory serviceScopeFactory, ILogger<LocalEventBus> logger) : ILocalEventBus
+public class LocalEventBus(IServiceScopeFactory serviceScopeFactory) : ILocalEventBus
 {
     private static readonly ConcurrentDictionary<Type, EventHandlerWrapper> _wrapperCache = new();
 
-    public async Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 发布事件（泛型重载）。
+    /// </summary>
+    /// <remarks>
+    /// 重要：始终按事件的 <b>运行时类型</b> 路由到具体 <c>IEventHandler&lt;具体事件&gt;</c>，
+    /// 而非编译期的 <typeparamref name="TEvent"/>。否则当调用方以基接口（如 ILocalEvent/IEvent）
+    /// 的静态类型发布时，会去解析 IEventHandler&lt;基接口&gt; 而漏掉所有具体 handler（静默丢事件）。
+    /// 故此重载直接委托给运行时路由的非泛型实现，保证选中哪个重载行为都一致。
+    /// </remarks>
+    public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
         where TEvent : IEvent
-    {
-        // 创建独立的 Scope 来解析 Scoped 的 EventHandler
-        using var scope = serviceScopeFactory.CreateScope();
-        var handlers = scope.ServiceProvider.GetServices<IEventHandler<TEvent>>().ToList();
+        => PublishAsync((IEvent)@event!, cancellationToken);
 
-        if (handlers.Count == 0)
-        {
-            // 调试级别日志，避免生产环境刷屏
-            if (logger.IsEnabled(LogLevel.Debug))
-            {
-                logger.LogDebug("未找到事件处理器: {EventType} (ID: {EventId})",
-                    typeof(TEvent).Name, @event.EventId);
-            }
-            return;
-        }
-
-        foreach (var handler in handlers)
-        {
-            try
-            {
-                await handler.HandleAsync(@event, cancellationToken);
-            }
-            catch (System.Exception ex)
-            {
-                // 记录关键错误信息并抛出，确保事务一致性
-                logger.LogError(ex, "事件处理失败: {EventType} (ID: {EventId}, Handler: {Handler})",
-                    typeof(TEvent).Name, @event.EventId, handler.GetType().Name);
-                throw;
-            }
-        }
-    }
-
+    /// <summary>
+    /// 发布事件（非泛型）。按事件运行时类型解析并调用对应的 <c>IEventHandler&lt;T&gt;</c>。
+    /// </summary>
+    [OverloadResolutionPriority(1)]
     public Task PublishAsync(IEvent @event, CancellationToken cancellationToken = default)
     {
         var eventType = @event.GetType();
@@ -60,7 +42,7 @@ public class LocalEventBus(IServiceScopeFactory serviceScopeFactory, ILogger<Loc
             return (EventHandlerWrapper)Activator.CreateInstance(wrapperType)!;
         });
 
-        // 委托给包装器执行，恢复泛型上下文
+        // 委托给包装器执行，恢复泛型上下文（运行时类型）
         return wrapper.HandleAsync(@event, serviceScopeFactory, cancellationToken);
     }
 }
