@@ -6,8 +6,7 @@ namespace Leistd.DependencyInjection;
 public record class OnServiceRegisteredContext(Type ServiceType, Type ImplementationType) : IOnServiceRegisteredContext
 {
     /// <summary>
-    /// 拦截器列表
+    /// 扩展数据。
     /// </summary>
-    public List<Type> Interceptors { get; } = [];
+    public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>();
 }
-

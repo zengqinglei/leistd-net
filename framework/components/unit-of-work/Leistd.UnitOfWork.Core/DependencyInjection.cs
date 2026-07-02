@@ -1,7 +1,7 @@
-using Castle.DynamicProxy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.DependencyInjection;
+using Leistd.DependencyInjection.DynamicProxy;
 using Leistd.EventBus.Core.EventHandler;
 using Leistd.UnitOfWork.Core.Uow;
 using Leistd.UnitOfWork.Core.Options;
@@ -23,9 +23,6 @@ public static class DependencyInjection
         this IServiceCollection services,
         Action<UnitOfWorkOptions>? configureOptions = null)
     {
-        // 注册 Castle DynamicProxy（如果未注册）
-        services.TryAddSingleton<IProxyGenerator, ProxyGenerator>();
-
         // 注册工作单元选项
         var options = new UnitOfWorkOptions();
         configureOptions?.Invoke(options);
@@ -46,7 +43,7 @@ public static class DependencyInjection
         {
             if (ShouldInterceptUnitOfWork(context.ImplementationType))
             {
-                context.Interceptors.Add(typeof(UnitOfWorkInterceptor));
+                context.AddInterceptor(typeof(UnitOfWorkInterceptor));
             }
         });
 
@@ -55,7 +52,7 @@ public static class DependencyInjection
         {
             if (ShouldInterceptEventHandler(context))
             {
-                context.Interceptors.Add(typeof(UnitOfWorkEventHandlerInterceptor));
+                context.AddInterceptor(typeof(UnitOfWorkEventHandlerInterceptor));
             }
         });
 

@@ -12,7 +12,7 @@ namespace Leistd.EventBus.Tests;
 /// </summary>
 /// <remarks>
 /// 防止重载陷阱回归：以基接口（ILocalEvent）的静态类型发布时，曾误选泛型重载
-/// PublishAsync&lt;ILocalEvent&gt; → 解析 IEventHandler&lt;ILocalEvent&gt; → 找不到具体 handler → 静默丢事件。
+/// 泛型发布重载曾按基接口类型解析处理器，导致找不到具体 handler 并静默丢事件。
 /// </remarks>
 public class LocalEventBusPublishRoutingTests
 {

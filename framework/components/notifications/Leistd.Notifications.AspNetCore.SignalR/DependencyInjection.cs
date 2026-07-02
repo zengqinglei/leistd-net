@@ -22,7 +22,7 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 内部只注册通知传输所需的 SignalR 能力，不注册实时业务 Hub、在线状态或业务事件发布器。
-    /// 通知持久化请另行调用 <c>AddNotificationsEfCore&lt;TDbContext&gt;()</c>。
+    /// 通知持久化请另行调用通知 EF Core 包提供的 AddNotificationsEfCore 泛型方法。
     /// </remarks>
     public static IServiceCollection AddNotificationsSignalR(
         this IServiceCollection services,

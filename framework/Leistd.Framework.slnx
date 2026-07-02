@@ -12,6 +12,7 @@
   </Folder>
   <Folder Name="/components/dependency-injection/">
     <Project Path="components/dependency-injection/Leistd.DependencyInjection/Leistd.DependencyInjection.csproj" />
+    <Project Path="components/dependency-injection/Leistd.DependencyInjection.DynamicProxy/Leistd.DependencyInjection.DynamicProxy.csproj" />
   </Folder>
   <Folder Name="/components/event-bus/">
     <Project Path="components/event-bus/Leistd.EventBus.Core/Leistd.EventBus.Core.csproj" />

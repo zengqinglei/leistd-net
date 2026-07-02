@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | 动态代理拦截器基类 | 基于 Castle DynamicProxy 的异步拦截器基类，统一同步/异步方法拦截入口并按 Order 排序织入 | `Leistd.DynamicProxy` | [`aop`](./aop.md) |
 | 核心原语：时钟与通用异常 | Leistd 框架的零依赖基础原语：时钟抽象（IClock/UtcClockProvider）与通用异常基类（CommonException），供其它组件复用。 | `Leistd.Core` | [`core`](./core.md) |
-| 服务注册回调与拦截器织入 | 类似 ABP OnRegistered 的服务注册回调机制，在构建 IServiceProvider 时按约定为已注册服务动态织入 AOP 拦截器。 | `Leistd.DependencyInjection` | [`dependency-injection`](./dependency-injection.md) |
+| 服务注册回调与拦截器织入 | DI 包只提供类似 ABP OnRegistered 的注册回调；DynamicProxy 扩展包在此基础上按约定织入 AOP 拦截器。 | `Leistd.DependencyInjection`、`Leistd.DependencyInjection.DynamicProxy` | [`dependency-injection`](./dependency-injection.md) |
 | 事件总线 | 进程内发布/订阅事件总线，发布方与 IEventHandler 处理器解耦，由 DI 同步消费 | `Leistd.EventBus.Core`、`Leistd.EventBus.Local` | [`event-bus`](./event-bus.md) |
 | 业务异常与全局异常处理 | 语义化业务异常体系 + ASP.NET Core 全局处理器，统一转换为 RFC 7807 ProblemDetails 响应 | `Leistd.Exception.Core`、`Leistd.Exception.AspNetCore` | [`exception`](./exception.md) |
 | 分布式锁与本地锁 | 统一的加锁抽象 ILock，可在内存（单机）与 Redis（分布式）实现间按 DI 注册切换。 | `Leistd.Lock.Core`、`Leistd.Lock.Memory`、`Leistd.Lock.Redis` | [`lock`](./lock.md) |
@@ -24,15 +24,16 @@
 
 ```mermaid
 graph TD
-    dependency-injection[服务注册回调与拦截器织入] --> aop[动态代理拦截器基类]
+    dependency-injection-dynamic-proxy[DI DynamicProxy 织入] --> dependency-injection[服务注册回调]
+    dependency-injection-dynamic-proxy --> aop[动态代理拦截器基类]
 
     event-bus[事件总线] --> core[核心原语：时钟与通用异常]
     exception[业务异常与全局异常处理] --> core
     tracing[链路追踪] --> core
-    tracing --> dependency-injection
+    tracing --> dependency-injection-dynamic-proxy
 
     unit-of-work[工作单元与事务] --> aop
-    unit-of-work --> dependency-injection
+    unit-of-work --> dependency-injection-dynamic-proxy
     unit-of-work --> event-bus
 
     security[当前用户与身份信息] --> ddd-struct[ddd-struct]

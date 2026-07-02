@@ -1,5 +1,5 @@
-using Castle.DynamicProxy;
 using Leistd.DependencyInjection;
+using Leistd.DependencyInjection.DynamicProxy;
 using Leistd.Tracing.Core.Attributes;
 using Leistd.Tracing.Core.Interceptors;
 using Leistd.Tracing.Core.Options;
@@ -35,14 +35,13 @@ public static class DependencyInjection
 
         // 注册拦截器
         services.TryAddTransient<CorrelationIdInterceptor>();
-        services.TryAddSingleton<IProxyGenerator, ProxyGenerator>();
 
         // 注册服务回调，扫描带有 [CorrelationId] 特性的服务
         services.OnServiceRegistered(context =>
         {
             if (ShouldIntercept(context.ImplementationType))
             {
-                context.Interceptors.Add(typeof(CorrelationIdInterceptor));
+                context.AddInterceptor(typeof(CorrelationIdInterceptor));
             }
         });
 

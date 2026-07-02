@@ -7,7 +7,7 @@ using CompanyName.ProjectName.Domain.Users.Options;
 using CompanyName.ProjectName.Domain.Shared.Json;
 using CompanyName.ProjectName.Infrastructure;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.DependencyInjection;
+using Leistd.DependencyInjection.DynamicProxy;
 using Leistd.Exception.AspNetCore;
 using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
@@ -45,7 +45,7 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // 1. 基础架构设置 (DI Factory, Logging, WebServer, HttpClient)
-    builder.Host.UseServiceProviderFactory(new ServiceRegistrationCallbackFactory());
+    builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
 
     builder.AddMyProjectInfrastructure();
     builder.Services.AddMyProjectWebServer();
