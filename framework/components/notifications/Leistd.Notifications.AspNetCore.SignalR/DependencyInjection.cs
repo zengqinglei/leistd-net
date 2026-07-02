@@ -1,8 +1,11 @@
-using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
+using Leistd.RealTime;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Security.Claims;
 
 namespace Leistd.Notifications.AspNetCore.SignalR;
 
@@ -15,19 +18,53 @@ public static class DependencyInjection
     public const string DefaultNotificationHubPath = "/hubs/notifications";
 
     /// <summary>
-    /// 注册基于 SignalR 的通知发布器，并复用 Leistd 实时基础设施（在线状态、UserId 解析、业务事件）。
+    /// 注册基于 SignalR 的通知发布器。
     /// </summary>
     /// <remarks>
-    /// 内部调用实时 SignalR 基础设施（含 AddSignalR）。
-    /// 通知持久化请另行调用 <c>AddNotificationsEfcore&lt;TDbContext&gt;()</c>。
+    /// 内部只注册通知传输所需的 SignalR 能力，不注册实时业务 Hub、在线状态或业务事件发布器。
+    /// 通知持久化请另行调用 <c>AddNotificationsEfCore&lt;TDbContext&gt;()</c>。
     /// </remarks>
     public static IServiceCollection AddNotificationsSignalR(
         this IServiceCollection services,
         Action<RealTimeOptions>? configure = null)
     {
         services.AddNotifications();
-        services.AddRealTimeSignalR(configure);
+        services.AddNotificationSignalRTransport(configure);
         services.AddSingleton<INotificationSender, SignalRNotificationSender>();
+        return services;
+    }
+
+    /// <summary>
+    /// 注册通知 SignalR 传输所需的最小基础设施。
+    /// </summary>
+    public static IServiceCollection AddNotificationSignalRTransport(
+        this IServiceCollection services,
+        Action<RealTimeOptions>? configure = null)
+    {
+        var options = new RealTimeOptions();
+        configure?.Invoke(options);
+        services.Configure<RealTimeOptions>(opt =>
+        {
+            opt.RealTimeHubPath = options.RealTimeHubPath;
+            opt.KeepAliveInterval = options.KeepAliveInterval;
+            opt.ClientTimeoutInterval = options.ClientTimeoutInterval;
+            opt.EnableDetailedErrors = options.EnableDetailedErrors;
+            opt.UserIdClaimTypes = options.UserIdClaimTypes.Count > 0
+                ? options.UserIdClaimTypes
+                : ["sub", ClaimTypes.NameIdentifier];
+            opt.EnableRedisBackplane = options.EnableRedisBackplane;
+            opt.RedisConnectionString = options.RedisConnectionString;
+            opt.RequireSubscriptionAuthorization = options.RequireSubscriptionAuthorization;
+        });
+
+        services.AddSignalR(opt =>
+        {
+            opt.EnableDetailedErrors = options.EnableDetailedErrors;
+            opt.KeepAliveInterval = options.KeepAliveInterval;
+            opt.ClientTimeoutInterval = options.ClientTimeoutInterval;
+        });
+
+        services.TryAddSingleton<IUserIdProvider, ClaimsSignalRUserIdProvider>();
         return services;
     }
 

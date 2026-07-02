@@ -3,7 +3,7 @@ namespace Leistd.DependencyInjection;
 /// <summary>
 /// 服务注册上下文接口
 /// </summary>
-public interface IOnServiceRegistredContext
+public interface IOnServiceRegisteredContext
 {
     /// <summary>
     /// 服务类型

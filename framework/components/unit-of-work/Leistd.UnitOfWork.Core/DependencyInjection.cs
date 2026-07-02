@@ -81,7 +81,7 @@ public static class DependencyInjection
     /// <summary>
     /// 判断是否需要拦截事件处理器
     /// </summary>
-    private static bool ShouldInterceptEventHandler(IOnServiceRegistredContext context)
+    private static bool ShouldInterceptEventHandler(IOnServiceRegisteredContext context)
     {
         // 检查是否是 IEventHandler<> 接口
         if (!context.ServiceType.IsGenericType)

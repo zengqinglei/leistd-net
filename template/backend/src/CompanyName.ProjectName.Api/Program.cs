@@ -13,6 +13,7 @@ using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
+using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
 #endif
 #if (IncludeIdentity)
@@ -225,11 +226,16 @@ try
     builder.Services.AddSecurity();
 
 #if (IncludeNotifications)
-    // 4.5.1 Leistd Notifications — SignalR 实时通知 + EF Core 持久化
-    builder.Services.AddNotificationsSignalR(opt =>
+    // 4.5.1 Leistd Notifications — 通知 Hub 与业务实时 Hub 显式注册
+    // AddNotificationsSignalR 只注册通知传输；模板前端还会连接 /hubs/realtime 订阅业务事件，
+    // 因此业务实时能力需要显式调用 AddRealTimeSignalR。
+    void ConfigureSignalR(RealTimeOptions opt)
     {
         opt.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    });
+    }
+
+    builder.Services.AddRealTimeSignalR(ConfigureSignalR);
+    builder.Services.AddNotificationsSignalR(ConfigureSignalR);
 #endif
 
     // 4.6. DataProtection 配置（生产环境必需）
@@ -379,7 +385,8 @@ try
     app.MapControllers();
 
 #if (IncludeNotifications)
-    // SignalR 端点：通知 Hub 与实时业务事件 Hub 各自显式映射
+    // SignalR 端点：通知 Hub 与实时业务事件 Hub 各自显式映射。
+    // 若项目只保留通知能力，可删除 MapRealTimeHub 以及上面的 AddRealTimeSignalR。
     app.MapNotificationHub();
     app.MapRealTimeHub();
 #endif

@@ -79,12 +79,12 @@ var orderService = host.Services.GetRequiredService<IOrderService>();
 | --- | --- |
 | `IServiceCollection.OnServiceRegistered(action)` | 扩展方法。注册一个回调，构建 `IServiceProvider` 时对每个服务执行一次；返回 `services` 支持链式调用 |
 | `IServiceCollection.GetRegistrationActionList()` | 扩展方法。返回当前回调列表，不存在时创建并以单例注册，始终非空 |
-| `IOnServiceRegistredContext` | 单个被回调服务的上下文 |
-| `IOnServiceRegistredContext.ServiceType` | 注册的服务类型 |
-| `IOnServiceRegistredContext.ImplementationType` | 实现类型 |
-| `IOnServiceRegistredContext.Interceptors` | 拦截器类型列表（`List<Type>`）；向其 `Add` 即为该服务织入对应拦截器 |
-| `OnServiceRegistredContext` | 上下文的 `record` 实现，`Interceptors` 初始为空列表 |
-| `ServiceRegistrationActionList` | 回调集合，本质为 `List<Action<IOnServiceRegistredContext>>`，以单例存放在 `IServiceCollection` 中 |
+| `IOnServiceRegisteredContext` | 单个被回调服务的上下文 |
+| `IOnServiceRegisteredContext.ServiceType` | 注册的服务类型 |
+| `IOnServiceRegisteredContext.ImplementationType` | 实现类型 |
+| `IOnServiceRegisteredContext.Interceptors` | 拦截器类型列表（`List<Type>`）；向其 `Add` 即为该服务织入对应拦截器 |
+| `OnServiceRegisteredContext` | 上下文的 `record` 实现，`Interceptors` 初始为空列表 |
+| `ServiceRegistrationActionList` | 回调集合，本质为 `List<Action<IOnServiceRegisteredContext>>`，以单例存放在 `IServiceCollection` 中 |
 | `ServiceRegistrationCallbackFactory` | `IServiceProviderFactory<IServiceCollection>` 实现，回调与织入的执行入口 |
 | `ServiceRegistrationCallbackFactory.CreateBuilder(services)` | 原样返回 `services` |
 | `ServiceRegistrationCallbackFactory.CreateServiceProvider(services)` | 执行所有回调（并按需织入拦截器）后 `BuildServiceProvider` |
@@ -113,7 +113,7 @@ var orderService = host.Services.GetRequiredService<IOrderService>();
 - 纯 `ImplementationFactory` 注册（无 `ImplementationType` / `ImplementationInstance`）无法推断实现类型，会在遍历中被跳过，不会被织入。
 - 织入的代理为 `WithTarget` 形式，作用于已创建的目标实例，不改变服务原本的生命周期。
 - 拦截器类型必须能被容器解析（需自行 `Add*` 注册），否则 `GetRequiredService` 会抛异常。
-- 源码注释明确该机制「类似 ABP 的 `OnRegistered`」，接口名 `IOnServiceRegistredContext` 沿用了该拼写（注意 `Registred`）。
+- 源码注释明确该机制「类似 ABP 的 `OnRegistered`」，接口名为 `IOnServiceRegisteredContext`。
 
 ## 相关
 

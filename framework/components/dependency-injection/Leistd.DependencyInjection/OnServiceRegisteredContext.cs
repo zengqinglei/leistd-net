@@ -3,7 +3,7 @@ namespace Leistd.DependencyInjection;
 /// <summary>
 /// 服务注册上下文实现
 /// </summary>
-public record class OnServiceRegistredContext(Type ServiceType, Type ImplementationType) : IOnServiceRegistredContext
+public record class OnServiceRegisteredContext(Type ServiceType, Type ImplementationType) : IOnServiceRegisteredContext
 {
     /// <summary>
     /// 拦截器列表

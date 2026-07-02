@@ -60,7 +60,7 @@ public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServi
             }
 
             // 创建上下文
-            var context = new OnServiceRegistredContext(
+            var context = new OnServiceRegisteredContext(
                 descriptor.ServiceType,
                 implementationType);
 

@@ -16,7 +16,7 @@ public static class DependencyInjection
     /// 本方法依赖 <see cref="Leistd.Timing.IClock"/> 与
     /// <see cref="Leistd.Security.Users.ICurrentUser"/> 已在容器中注册。
     /// </remarks>
-    public static IServiceCollection AddAuditingEfcore(this IServiceCollection services)
+    public static IServiceCollection AddAuditingEfCore(this IServiceCollection services)
     {
         services.AddScoped<IAuditPropertySetter, AuditPropertySetter>();
         services.AddScoped<AuditSaveChangesInterceptor>();

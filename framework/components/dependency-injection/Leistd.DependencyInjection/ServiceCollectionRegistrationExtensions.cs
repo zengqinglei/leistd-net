@@ -16,7 +16,7 @@ public static class ServiceCollectionRegistrationExtensions
     /// <returns>服务集合</returns>
     public static IServiceCollection OnServiceRegistered(
         this IServiceCollection services,
-        Action<IOnServiceRegistredContext> registrationAction)
+        Action<IOnServiceRegisteredContext> registrationAction)
     {
         GetOrCreateRegistrationActionList(services).Add(registrationAction);
         return services;

@@ -2,7 +2,7 @@ using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.ObjectMapping.Core;
 using Leistd.ObjectMapping.Core.Extensions;
 
-namespace Leistd.Ddd.Application.Contracts.Extensions;
+namespace Leistd.Ddd.Application.Extensions;
 
 /// <summary>
 /// 应用层对象映射器扩展方法
