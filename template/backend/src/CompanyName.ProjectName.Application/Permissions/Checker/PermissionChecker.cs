@@ -1,4 +1,3 @@
-using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
@@ -13,8 +12,7 @@ public class PermissionChecker(
     ICurrentUser currentUser,
     IPermissionGrantStore permissionGrantStore,
     IRepository<User, Guid> userRepository,
-    IRepository<UserRole, Guid> userRoleRepository,
-    IRepository<Role, Guid> roleRepository) : IPermissionChecker
+    IRepository<UserRole, Guid> userRoleRepository) : IPermissionChecker
 {
     public async Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)
     {
@@ -25,7 +23,7 @@ public class PermissionChecker(
         if (subject == null)
             return false;
 
-        if (subject.HasAllPermissions)
+        if (subject.IsSuperAdmin)
             return true;
 
         var results = await permissionGrantStore.IsGrantedToUserOrRolesAsync(
@@ -59,7 +57,7 @@ public class PermissionChecker(
         if (subject == null)
             return new MultiplePermissionGrantResult(results);
 
-        if (subject.HasAllPermissions)
+        if (subject.IsSuperAdmin)
         {
             foreach (var name in permissionNames)
             {
@@ -93,30 +91,21 @@ public class PermissionChecker(
         var user = await userRepository.GetByIdAsync(userIdValue, cancellationToken);
         if (user?.IsSuperAdmin == true)
         {
-            return new PermissionSubject(userIdValue.ToString(), [], HasAllPermissions: true);
+            return new PermissionSubject(userIdValue.ToString(), [], IsSuperAdmin: true);
         }
 
-        var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == userIdValue, cancellationToken)).ToList();
-        var roleIds = userRoles.Select(ur => ur.RoleId).ToList();
-        var roleNames = currentUser.GetRoles().ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        if (roleIds.Count > 0)
-        {
-            var dbRoles = await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken);
-            foreach (var roleName in dbRoles.Select(role => role.Name))
-            {
-                roleNames.Add(roleName);
-            }
-        }
+        var roleIds = (await userRoleRepository.GetListAsync(ur => ur.UserId == userIdValue, cancellationToken))
+            .Select(ur => ur.RoleId.ToString())
+            .ToArray();
 
         return new PermissionSubject(
             userIdValue.ToString(),
-            roleIds.Select(x => x.ToString()).ToArray(),
-            roleNames.Contains(AdminConstant.RoleName));
+            roleIds,
+            IsSuperAdmin: false);
     }
 
     private sealed record PermissionSubject(
         string UserId,
         IReadOnlyCollection<string> RoleIds,
-        bool HasAllPermissions);
+        bool IsSuperAdmin);
 }
