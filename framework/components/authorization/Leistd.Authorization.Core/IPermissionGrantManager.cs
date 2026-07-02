@@ -1,41 +1,40 @@
 namespace Leistd.Authorization;
 
 /// <summary>
-/// 权限授予存储。
+/// 权限授予管理器。
 /// </summary>
-public interface IPermissionGrantStore
+public interface IPermissionGrantManager
 {
     /// <summary>
-    /// 检查用户是否被授予权限。
+    /// 将权限授予用户。
     /// </summary>
-    Task<bool> IsGrantedToUserAsync(
+    Task GrantToUserAsync(
         string permissionName,
         string userId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 检查角色是否被授予权限。
+    /// 将权限授予角色。
     /// </summary>
-    Task<bool> IsGrantedToRoleAsync(
+    Task GrantToRoleAsync(
         string permissionName,
         string roleId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 检查任一角色是否被授予权限。
+    /// 撤销用户权限。
     /// </summary>
-    Task<bool> IsGrantedToAnyRoleAsync(
+    Task RevokeFromUserAsync(
         string permissionName,
-        IReadOnlyCollection<string> roleIds,
+        string userId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 批量检查用户或其角色是否被授予权限。
+    /// 撤销角色权限。
     /// </summary>
-    Task<IReadOnlyDictionary<string, bool>> IsGrantedToUserOrRolesAsync(
-        IReadOnlyCollection<string> permissionNames,
-        string userId,
-        IReadOnlyCollection<string> roleIds,
+    Task RevokeFromRoleAsync(
+        string permissionName,
+        string roleId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

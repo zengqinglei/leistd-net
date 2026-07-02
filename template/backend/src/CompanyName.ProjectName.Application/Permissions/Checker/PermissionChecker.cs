@@ -21,22 +21,84 @@ public class PermissionChecker(
         if (string.IsNullOrWhiteSpace(name))
             return false;
 
-        var userId = currentUser.Id;
-        var roles = currentUser.GetRoles();
-
-        if (!userId.HasValue)
+        var subject = await GetCurrentSubjectAsync(cancellationToken);
+        if (subject == null)
             return false;
+
+        if (subject.HasAllPermissions)
+            return true;
+
+        var results = await permissionGrantStore.IsGrantedToUserOrRolesAsync(
+            [name],
+            subject.UserId,
+            subject.RoleIds,
+            cancellationToken);
+
+        return results.TryGetValue(name, out var isGranted) && isGranted;
+    }
+
+    public async Task<MultiplePermissionGrantResult> IsGrantedAsync(
+        string[] names,
+        CancellationToken cancellationToken = default)
+    {
+        if (names == null || names.Length == 0)
+            return new MultiplePermissionGrantResult(new Dictionary<string, bool>());
+
+        var results = names
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(x => x, _ => false, StringComparer.Ordinal);
+
+        var permissionNames = results.Keys
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToArray();
+
+        if (permissionNames.Length == 0)
+            return new MultiplePermissionGrantResult(results);
+
+        var subject = await GetCurrentSubjectAsync(cancellationToken);
+        if (subject == null)
+            return new MultiplePermissionGrantResult(results);
+
+        if (subject.HasAllPermissions)
+        {
+            foreach (var name in permissionNames)
+            {
+                results[name] = true;
+            }
+
+            return new MultiplePermissionGrantResult(results);
+        }
+
+        var grants = await permissionGrantStore.IsGrantedToUserOrRolesAsync(
+            permissionNames,
+            subject.UserId,
+            subject.RoleIds,
+            cancellationToken);
+
+        foreach (var (name, isGranted) in grants)
+        {
+            results[name] = isGranted;
+        }
+
+        return new MultiplePermissionGrantResult(results);
+    }
+
+    private async Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken)
+    {
+        var userId = currentUser.Id;
+        if (!userId.HasValue)
+            return null;
 
         var userIdValue = userId.Value;
         var user = await userRepository.GetByIdAsync(userIdValue, cancellationToken);
         if (user?.IsSuperAdmin == true)
         {
-            return true;
+            return new PermissionSubject(userIdValue.ToString(), [], HasAllPermissions: true);
         }
 
         var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == userIdValue, cancellationToken)).ToList();
         var roleIds = userRoles.Select(ur => ur.RoleId).ToList();
-        var roleNames = roles.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var roleNames = currentUser.GetRoles().ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         if (roleIds.Count > 0)
         {
@@ -47,49 +109,14 @@ public class PermissionChecker(
             }
         }
 
-        if (roleNames.Contains(AdminConstant.RoleName))
-        {
-            return true;
-        }
-
-        var userGrant = await permissionGrantStore.IsGrantedAsync(
-            name,
-            PermissionGrantProviderNames.User,
+        return new PermissionSubject(
             userIdValue.ToString(),
-            cancellationToken);
-
-        if (userGrant)
-            return true;
-
-        foreach (var roleId in roleIds)
-        {
-            var roleGrant = await permissionGrantStore.IsGrantedAsync(
-                name,
-                PermissionGrantProviderNames.Role,
-                roleId.ToString(),
-                cancellationToken);
-
-            if (roleGrant)
-                return true;
-        }
-
-        return false;
+            roleIds.Select(x => x.ToString()).ToArray(),
+            roleNames.Contains(AdminConstant.RoleName));
     }
 
-    public async Task<MultiplePermissionGrantResult> IsGrantedAsync(
-        string[] names,
-        CancellationToken cancellationToken = default)
-    {
-        if (names == null || names.Length == 0)
-            return new MultiplePermissionGrantResult(new Dictionary<string, bool>());
-
-        var results = new Dictionary<string, bool>();
-
-        foreach (var name in names)
-        {
-            results[name] = await IsGrantedAsync(name, cancellationToken);
-        }
-
-        return new MultiplePermissionGrantResult(results);
-    }
+    private sealed record PermissionSubject(
+        string UserId,
+        IReadOnlyCollection<string> RoleIds,
+        bool HasAllPermissions);
 }

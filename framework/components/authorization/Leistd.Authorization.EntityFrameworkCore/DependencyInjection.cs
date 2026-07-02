@@ -17,6 +17,7 @@ public static class DependencyInjection
     {
         services.AddAuthorizationCore();
         services.AddScoped<IPermissionGrantStore, EfCorePermissionGrantStore<TDbContext>>();
+        services.AddScoped<IPermissionGrantManager, EfCorePermissionGrantManager<TDbContext>>();
         return services;
     }
 
