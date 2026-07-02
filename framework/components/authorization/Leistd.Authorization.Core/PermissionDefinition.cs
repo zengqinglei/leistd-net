@@ -1,4 +1,4 @@
-namespace Leistd.Ddd.Application.Permission;
+namespace Leistd.Authorization;
 
 /// <summary>
 /// 权限定义
@@ -170,3 +170,4 @@ internal class PermissionDefinitionContext : IPermissionDefinitionContext
         }
     }
 }
+

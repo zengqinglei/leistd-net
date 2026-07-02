@@ -1,4 +1,5 @@
 using Leistd.Auditing.EntityFrameworkCore;
+using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.EventBus.Local;
@@ -84,6 +85,9 @@ public static class DependencyInjection
 
 #if (IncludeNotifications)
         services.AddNotificationsEfCore<MyProjectDbContext>();
+#endif
+#if (IncludeRoles)
+        services.AddAuthorizationEfCore<MyProjectDbContext>();
 #endif
 
         // 注册 DDD Infrastructure 基础服务（UnitOfWork + 自动仓储注册）

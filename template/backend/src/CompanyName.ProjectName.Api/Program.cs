@@ -11,6 +11,9 @@ using Leistd.DependencyInjection.DynamicProxy;
 using Leistd.Exception.AspNetCore;
 using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
+#if (IncludeRoles)
+using Leistd.Authorization.AspNetCore;
+#endif
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
 using Leistd.RealTime;
@@ -295,6 +298,10 @@ try
     });
 #else
     builder.Services.AddAuthorization();
+#endif
+#if (IncludeRoles)
+    // 将权限定义接入微软授权 Policy 管道，使 [Authorize(Policy = "权限名")] 生效
+    builder.Services.AddPermissionAuthorization();
 #endif
 
     // --- 构建应用 ---

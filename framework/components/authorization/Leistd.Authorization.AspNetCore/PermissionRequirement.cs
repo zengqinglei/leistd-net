@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
+using Leistd.Authorization;
 
-namespace Leistd.Ddd.Application.Permission;
+namespace Leistd.Authorization.AspNetCore;
 
 /// <summary>
 /// 权限授权需求：表示访问某资源所需的单个权限。
@@ -17,3 +18,4 @@ public class PermissionRequirement(string permissionName) : IAuthorizationRequir
     /// </summary>
     public string PermissionName { get; } = permissionName;
 }
+

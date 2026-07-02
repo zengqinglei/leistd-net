@@ -7,6 +7,11 @@
     <Project Path="components/auditing/Leistd.Auditing.Core/Leistd.Auditing.Core.csproj" />
     <Project Path="components/auditing/Leistd.Auditing.EntityFrameworkCore/Leistd.Auditing.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/components/authorization/">
+    <Project Path="components/authorization/Leistd.Authorization.Core/Leistd.Authorization.Core.csproj" />
+    <Project Path="components/authorization/Leistd.Authorization.AspNetCore/Leistd.Authorization.AspNetCore.csproj" />
+    <Project Path="components/authorization/Leistd.Authorization.EntityFrameworkCore/Leistd.Authorization.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/components/core/">
     <Project Path="components/core/Leistd.Core/Leistd.Core.csproj" />
   </Folder>

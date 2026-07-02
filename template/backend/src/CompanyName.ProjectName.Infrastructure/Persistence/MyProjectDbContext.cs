@@ -2,9 +2,7 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 #if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
-#if (IncludeRoles)
-using CompanyName.ProjectName.Domain.Permissions.Entities;
-#endif
+using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
@@ -29,7 +27,7 @@ public class MyProjectDbContext(
     public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif
 #if (IncludeRoles)
-    public DbSet<PermissionGrant> PermissionGrants { get; set; } = null!;
+    public DbSet<PermissionGrantRecord> PermissionGrantRecords { get; set; } = null!;
 #endif
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -46,6 +44,10 @@ public class MyProjectDbContext(
 #if (IncludeIdentity)
         // 认证相关实体配置
         modelBuilder.ConfigureIdentity();
+#endif
+#if (IncludeRoles)
+        // 权限授予实体配置
+        modelBuilder.ConfigureAuthorization();
 #endif
 #if (IncludeNotifications)
         // 通知实体配置

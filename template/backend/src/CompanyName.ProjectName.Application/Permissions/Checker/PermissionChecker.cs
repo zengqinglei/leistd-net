@@ -1,8 +1,6 @@
-using CompanyName.ProjectName.Domain.Permissions.Entities;
-using CompanyName.ProjectName.Domain.Permissions.Specifications;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Ddd.Application.Permission;
+using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Users;
 
@@ -13,7 +11,7 @@ namespace CompanyName.ProjectName.Application.Permissions.Checker;
 /// </summary>
 public class PermissionChecker(
     ICurrentUser currentUser,
-    IRepository<PermissionGrant, Guid> permissionGrantRepository,
+    IPermissionGrantStore permissionGrantStore,
     IRepository<User, Guid> userRepository,
     IRepository<UserRole, Guid> userRoleRepository,
     IRepository<Role, Guid> roleRepository) : IPermissionChecker
@@ -54,22 +52,24 @@ public class PermissionChecker(
             return true;
         }
 
-        var userGrant = await permissionGrantRepository.GetFirstAsync(
-            PermissionGrantSpecifications.ByPermissionAndProvider(name, "User", userIdValue.ToString()),
-            cancellationToken: cancellationToken
-        );
+        var userGrant = await permissionGrantStore.IsGrantedAsync(
+            name,
+            PermissionGrantProviderNames.User,
+            userIdValue.ToString(),
+            cancellationToken);
 
-        if (userGrant != null)
+        if (userGrant)
             return true;
 
         foreach (var roleId in roleIds)
         {
-            var roleGrant = await permissionGrantRepository.GetFirstAsync(
-                PermissionGrantSpecifications.ByPermissionAndProvider(name, "Role", roleId.ToString()),
-                cancellationToken: cancellationToken
-            );
+            var roleGrant = await permissionGrantStore.IsGrantedAsync(
+                name,
+                PermissionGrantProviderNames.Role,
+                roleId.ToString(),
+                cancellationToken);
 
-            if (roleGrant != null)
+            if (roleGrant)
                 return true;
         }
 
