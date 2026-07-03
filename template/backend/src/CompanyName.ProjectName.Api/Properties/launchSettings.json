@@ -1,4 +1,4 @@
-﻿{
+{
   "$schema": "http://json.schemastore.org/launchsettings.json",
   "profiles": {
     "http": {
@@ -9,7 +9,7 @@
       "applicationUrl": "http://localhost:5240",
       "environmentVariables": {
         "TZ": "Asia/Shanghai",
-        "ASPNETCORE_ENVIRONMENT": "debug"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     }
   }

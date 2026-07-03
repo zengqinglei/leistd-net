@@ -259,8 +259,7 @@ try
     })
     .AddCookie("MyProjectCookie", options =>
     {
-        var isLocalDevelopment = builder.Environment.IsDevelopment()
-            || builder.Environment.IsEnvironment("debug");
+        var isLocalDevelopment = builder.Environment.IsDevelopment();
 
         options.LoginPath = "/auth/login";
         options.Cookie.Name = "CompanyName.ProjectName.Auth";
