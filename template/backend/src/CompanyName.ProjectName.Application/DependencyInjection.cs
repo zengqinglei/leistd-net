@@ -52,7 +52,7 @@ public static class DependencyInjection
 #if (IncludeRoles)
         // 权限
         services.AddAuthorizationCore();
-        services.AddScoped<IPermissionChecker, PermissionChecker>();
+        services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
 #endif
 

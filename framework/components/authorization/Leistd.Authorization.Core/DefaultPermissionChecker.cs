@@ -1,25 +1,18 @@
-using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Authorization;
-using Leistd.Ddd.Domain.Repositories;
-using Leistd.Security.Users;
-
-namespace CompanyName.ProjectName.Application.Permissions.Checker;
+namespace Leistd.Authorization;
 
 /// <summary>
-/// 权限检查器实现
+/// 默认权限检查器。
 /// </summary>
-public class PermissionChecker(
-    ICurrentUser currentUser,
-    IPermissionGrantStore permissionGrantStore,
-    IRepository<User, Guid> userRepository,
-    IRepository<UserRole, Guid> userRoleRepository) : IPermissionChecker
+public class DefaultPermissionChecker(
+    IPermissionSubjectProvider subjectProvider,
+    IPermissionGrantStore permissionGrantStore) : IPermissionChecker
 {
     public async Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
             return false;
 
-        var subject = await GetCurrentSubjectAsync(cancellationToken);
+        var subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
         if (subject == null)
             return false;
 
@@ -53,7 +46,7 @@ public class PermissionChecker(
         if (permissionNames.Length == 0)
             return new MultiplePermissionGrantResult(results);
 
-        var subject = await GetCurrentSubjectAsync(cancellationToken);
+        var subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
         if (subject == null)
             return new MultiplePermissionGrantResult(results);
 
@@ -80,32 +73,4 @@ public class PermissionChecker(
 
         return new MultiplePermissionGrantResult(results);
     }
-
-    private async Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken)
-    {
-        var userId = currentUser.Id;
-        if (!userId.HasValue)
-            return null;
-
-        var userIdValue = userId.Value;
-        var user = await userRepository.GetByIdAsync(userIdValue, cancellationToken);
-        if (user?.IsSuperAdmin == true)
-        {
-            return new PermissionSubject(userIdValue.ToString(), [], IsSuperAdmin: true);
-        }
-
-        var roleIds = (await userRoleRepository.GetListAsync(ur => ur.UserId == userIdValue, cancellationToken))
-            .Select(ur => ur.RoleId.ToString())
-            .ToArray();
-
-        return new PermissionSubject(
-            userIdValue.ToString(),
-            roleIds,
-            IsSuperAdmin: false);
-    }
-
-    private sealed record PermissionSubject(
-        string UserId,
-        IReadOnlyCollection<string> RoleIds,
-        bool IsSuperAdmin);
 }
