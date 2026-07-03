@@ -30,29 +30,29 @@ public static class DependencyInjection
 
 #if (IncludeIdentity)
         // 认证
-        services.AddScoped<ICaptchaAppService, CaptchaAppService>();
-        services.AddScoped<IEmailVerificationAppService, EmailVerificationAppService>();
-        services.AddScoped<IAuthAppService, AuthAppService>();
+        services.AddTransient<ICaptchaAppService, CaptchaAppService>();
+        services.AddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
+        services.AddTransient<IAuthAppService, AuthAppService>();
 
 #if (IncludeOpenIddict)
         // OAuth token 主体工厂 + 开放应用管理（仅 OpenIddict）
-        services.AddScoped<IAuthPrincipalFactory, AuthPrincipalFactory>();
-        services.AddScoped<IOpenApplicationAppService, OpenApplicationAppService>();
+        services.AddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
+        services.AddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
 #endif
 
 #if (IncludeExternalLogin)
         // 外部认证（仅 ExternalLogin）
-        services.AddScoped<IExternalAuthAppService, ExternalAuthAppService>();
+        services.AddTransient<IExternalAuthAppService, ExternalAuthAppService>();
 #endif
 #endif
 
         // 用户管理
-        services.AddScoped<IUserAppService, UserAppService>();
+        services.AddTransient<IUserAppService, UserAppService>();
 
 #if (IncludeRoles)
         // 权限
         services.AddAuthorizationCore();
-        services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
+        services.AddTransient<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
 #endif
 

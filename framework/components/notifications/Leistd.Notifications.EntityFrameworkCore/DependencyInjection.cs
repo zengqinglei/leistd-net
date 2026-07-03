@@ -14,7 +14,7 @@ public static class DependencyInjection
     public static IServiceCollection AddNotificationsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        services.AddScoped<INotificationStore, EfCoreNotificationStore<TDbContext>>();
+        services.AddTransient<INotificationStore, EfCoreNotificationStore<TDbContext>>();
         return services;
     }
 

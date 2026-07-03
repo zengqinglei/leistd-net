@@ -18,8 +18,8 @@ public static class DependencyInjection
     /// </remarks>
     public static IServiceCollection AddAuditingEfCore(this IServiceCollection services)
     {
-        services.AddScoped<IAuditPropertySetter, AuditPropertySetter>();
-        services.AddScoped<AuditSaveChangesInterceptor>();
+        services.AddTransient<IAuditPropertySetter, AuditPropertySetter>();
+        services.AddTransient<AuditSaveChangesInterceptor>();
         return services;
     }
 

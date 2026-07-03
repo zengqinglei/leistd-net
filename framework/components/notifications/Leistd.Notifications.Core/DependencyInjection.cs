@@ -12,7 +12,7 @@ public static class DependencyInjection
     /// </summary>
     public static IServiceCollection AddNotifications(this IServiceCollection services)
     {
-        services.AddScoped<INotificationPublisher, NotificationPublisher>();
+        services.AddTransient<INotificationPublisher, NotificationPublisher>();
         return services;
     }
 }

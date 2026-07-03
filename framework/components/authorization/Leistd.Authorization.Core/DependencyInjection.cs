@@ -14,7 +14,7 @@ public static class DependencyInjection
     public static IServiceCollection AddAuthorizationCore(this IServiceCollection services)
     {
         services.TryAddSingleton<IPermissionDefinitionManager, PermissionDefinitionManager>();
-        services.TryAddScoped<IPermissionChecker, DefaultPermissionChecker>();
+        services.TryAddTransient<IPermissionChecker, DefaultPermissionChecker>();
         return services;
     }
 }

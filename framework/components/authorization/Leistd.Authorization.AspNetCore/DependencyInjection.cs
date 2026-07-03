@@ -20,7 +20,7 @@ public static class DependencyInjection
     {
         services.AddAuthorizationCore();
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
-        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        services.AddTransient<IAuthorizationHandler, PermissionAuthorizationHandler>();
         return services;
     }
 }
