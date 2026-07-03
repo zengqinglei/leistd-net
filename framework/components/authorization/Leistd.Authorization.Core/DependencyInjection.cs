@@ -11,7 +11,7 @@ public static class DependencyInjection
     /// <summary>
     /// 注册权限定义管理器。
     /// </summary>
-    public static IServiceCollection AddAuthorizationCore(this IServiceCollection services)
+    public static IServiceCollection AddPermissionAuthorizationCore(this IServiceCollection services)
     {
         services.TryAddSingleton<IPermissionDefinitionManager, PermissionDefinitionManager>();
         services.TryAddTransient<IPermissionChecker, DefaultPermissionChecker>();

@@ -15,7 +15,7 @@ public static class DependencyInjection
     public static IServiceCollection AddAuthorizationEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        services.AddAuthorizationCore();
+        services.AddPermissionAuthorizationCore();
         services.AddTransient<IPermissionGrantStore, EfCorePermissionGrantStore<TDbContext>>();
         services.AddTransient<IPermissionGrantManager, EfCorePermissionGrantManager<TDbContext>>();
         return services;

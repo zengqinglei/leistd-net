@@ -259,11 +259,14 @@ try
     })
     .AddCookie("MyProjectCookie", options =>
     {
+        var isLocalDevelopment = builder.Environment.IsDevelopment()
+            || builder.Environment.IsEnvironment("debug");
+
         options.LoginPath = "/auth/login";
         options.Cookie.Name = "CompanyName.ProjectName.Auth";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.None;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = isLocalDevelopment ? SameSiteMode.Lax : SameSiteMode.None;
+        options.Cookie.SecurePolicy = isLocalDevelopment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         options.Cookie.IsEssential = true;
 
 #if (IncludeOpenIddict)

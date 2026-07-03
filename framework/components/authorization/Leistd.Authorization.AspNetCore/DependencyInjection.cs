@@ -18,7 +18,7 @@ public static class DependencyInjection
     /// </remarks>
     public static IServiceCollection AddPermissionAuthorization(this IServiceCollection services)
     {
-        services.AddAuthorizationCore();
+        services.AddPermissionAuthorizationCore();
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         services.AddTransient<IAuthorizationHandler, PermissionAuthorizationHandler>();
         return services;

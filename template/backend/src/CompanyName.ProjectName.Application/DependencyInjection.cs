@@ -51,7 +51,7 @@ public static class DependencyInjection
 
 #if (IncludeRoles)
         // 权限
-        services.AddAuthorizationCore();
+        services.AddPermissionAuthorizationCore();
         services.AddTransient<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
 #endif
