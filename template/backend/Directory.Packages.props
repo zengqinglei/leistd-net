@@ -13,11 +13,15 @@
   <ItemGroup>
     <PackageVersion Include="Leistd.Exception.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Exception.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.DependencyInjection.DynamicProxy" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Memory" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Redis" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Security.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Authorization.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Authorization.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Authorization.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.Core" Version="$(LeistdFrameworkVersion)" />

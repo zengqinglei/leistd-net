@@ -10,11 +10,12 @@
     <ProjectReference Include="..\..\aop\Leistd.DynamicProxy\Leistd.DynamicProxy.csproj" />
     <ProjectReference Include="..\..\event-bus\Leistd.EventBus.Core\Leistd.EventBus.Core.csproj" />
     <ProjectReference Include="..\..\dependency-injection\Leistd.DependencyInjection\Leistd.DependencyInjection.csproj" />
+    <ProjectReference Include="..\..\dependency-injection\Leistd.DependencyInjection.DynamicProxy\Leistd.DependencyInjection.DynamicProxy.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Castle.Core" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>

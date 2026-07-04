@@ -27,6 +27,8 @@
   <!-- Leistd 框架引用 -->
   <ItemGroup>
     <PackageReference Include="Leistd.Exception.AspNetCore" />
+    <PackageReference Include="Leistd.DependencyInjection.DynamicProxy" />
+    <PackageReference Include="Leistd.Authorization.AspNetCore" />
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />

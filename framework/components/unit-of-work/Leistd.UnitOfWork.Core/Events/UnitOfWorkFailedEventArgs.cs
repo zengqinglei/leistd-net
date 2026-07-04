@@ -3,7 +3,7 @@ using Leistd.UnitOfWork.Core.Uow;
 namespace Leistd.UnitOfWork.Core.Events;
 
 /// <summary>
-/// Used as event arguments on <see cref="IUnitOfWork.Failed"/> event.
+/// Used as event arguments when a unit of work fails.
 /// </summary>
 public class UnitOfWorkFailedEventArgs(IUnitOfWork unitOfWork, System.Exception? exception, bool isRolledback)
     : UnitOfWorkEventArgs(unitOfWork)

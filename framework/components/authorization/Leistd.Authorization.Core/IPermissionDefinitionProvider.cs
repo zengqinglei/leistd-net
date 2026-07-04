@@ -1,4 +1,4 @@
-namespace Leistd.Ddd.Application.Permission;
+namespace Leistd.Authorization;
 
 /// <summary>
 /// 权限定义提供者
@@ -114,3 +114,4 @@ public interface IPermissionDefinition
     /// <returns>子权限定义</returns>
     IPermissionDefinition AddChild(string name, string? displayName = null);
 }
+

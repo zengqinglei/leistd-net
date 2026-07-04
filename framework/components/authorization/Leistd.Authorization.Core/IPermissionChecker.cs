@@ -1,4 +1,4 @@
-namespace Leistd.Ddd.Application.Permission;
+namespace Leistd.Authorization;
 
 /// <summary>
 /// 权限检查器
@@ -42,3 +42,4 @@ public readonly record struct MultiplePermissionGrantResult(
     /// </summary>
     public bool AnyGranted => Results.Values.Any(x => x);
 }
+

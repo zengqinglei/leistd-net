@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
+using Leistd.Authorization;
 
-namespace Leistd.Ddd.Application.Permission;
+namespace Leistd.Authorization.AspNetCore;
 
 /// <summary>
 /// 权限授权处理器：将 <see cref="PermissionRequirement"/> 委托给
@@ -24,3 +25,4 @@ public class PermissionAuthorizationHandler(IPermissionChecker permissionChecker
         }
     }
 }
+

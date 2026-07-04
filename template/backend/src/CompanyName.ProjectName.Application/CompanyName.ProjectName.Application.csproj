@@ -17,6 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Leistd.ObjectMapping.Mapster" />
     <PackageReference Include="Leistd.Security.Core" />
+    <PackageReference Include="Leistd.Authorization.Core" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />
   </ItemGroup>

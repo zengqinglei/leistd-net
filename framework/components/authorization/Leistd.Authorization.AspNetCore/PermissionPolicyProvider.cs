@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using Leistd.Authorization;
 using Microsoft.Extensions.Options;
 
-namespace Leistd.Ddd.Application.Permission;
+namespace Leistd.Authorization.AspNetCore;
 
 /// <summary>
 /// 权限策略提供器：把"权限名"当作授权策略（ABP 风格）。
@@ -46,3 +47,4 @@ public class PermissionPolicyProvider : IAuthorizationPolicyProvider
     public Task<AuthorizationPolicy?> GetFallbackPolicyAsync()
         => _fallbackPolicyProvider.GetFallbackPolicyAsync();
 }
+

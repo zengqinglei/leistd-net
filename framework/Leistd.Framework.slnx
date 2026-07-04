@@ -7,11 +7,17 @@
     <Project Path="components/auditing/Leistd.Auditing.Core/Leistd.Auditing.Core.csproj" />
     <Project Path="components/auditing/Leistd.Auditing.EntityFrameworkCore/Leistd.Auditing.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/components/authorization/">
+    <Project Path="components/authorization/Leistd.Authorization.Core/Leistd.Authorization.Core.csproj" />
+    <Project Path="components/authorization/Leistd.Authorization.AspNetCore/Leistd.Authorization.AspNetCore.csproj" />
+    <Project Path="components/authorization/Leistd.Authorization.EntityFrameworkCore/Leistd.Authorization.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/components/core/">
     <Project Path="components/core/Leistd.Core/Leistd.Core.csproj" />
   </Folder>
   <Folder Name="/components/dependency-injection/">
     <Project Path="components/dependency-injection/Leistd.DependencyInjection/Leistd.DependencyInjection.csproj" />
+    <Project Path="components/dependency-injection/Leistd.DependencyInjection.DynamicProxy/Leistd.DependencyInjection.DynamicProxy.csproj" />
   </Folder>
   <Folder Name="/components/event-bus/">
     <Project Path="components/event-bus/Leistd.EventBus.Core/Leistd.EventBus.Core.csproj" />
@@ -64,7 +70,9 @@
     <Project Path="ddd-struct/Leistd.Ddd.Infrastructure/Leistd.Ddd.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Leistd.Authorization.Tests/Leistd.Authorization.Tests.csproj" />
     <Project Path="tests/Leistd.Ddd.Infrastructure.Tests/Leistd.Ddd.Infrastructure.Tests.csproj" />
     <Project Path="tests/Leistd.EventBus.Tests/Leistd.EventBus.Tests.csproj" />
+    <Project Path="tests/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />
   </Folder>
 </Solution>

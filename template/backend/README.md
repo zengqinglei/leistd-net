@@ -361,6 +361,7 @@ docker run -d \
 - **认证授权**：OpenIddict（OAuth2/OIDC）+ Cookie，基于角色/权限
 - **用户与权限管理**：内置用户、角色、权限体系
 - **外部登录**：可选 GitHub / Google OAuth 接入
+- **通知与实时推送**：可选 Notifications 使用通知 Hub；模板前端也连接业务实时 Hub，因此后端显式注册 `AddRealTimeSignalR` 并映射 `MapRealTimeHub`
 - **整洁架构**：基于 Leistd 框架的 DDD 分层
 - **本地 SPA 代理**：开发期前后端同源联调
 - **自动数据库迁移**：启动时无缝更新架构

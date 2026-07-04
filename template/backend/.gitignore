@@ -253,7 +253,7 @@ paket-files/
 # Custom
 [lL]og
 [lL]ogs
-appsettings.debug.json
+appsettings.Development.json
 
 # DataProtection 运行时密钥
 DataProtection-Keys/

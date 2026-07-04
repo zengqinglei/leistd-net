@@ -8,7 +8,7 @@ using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using Leistd.ObjectMapping.Mapster;
 #if (IncludeRoles)
-using Leistd.Ddd.Application.Permission;
+using Leistd.Authorization;
 using CompanyName.ProjectName.Application.Permissions.Checker;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 #endif
@@ -30,32 +30,30 @@ public static class DependencyInjection
 
 #if (IncludeIdentity)
         // 认证
-        services.AddScoped<ICaptchaAppService, CaptchaAppService>();
-        services.AddScoped<IEmailVerificationAppService, EmailVerificationAppService>();
-        services.AddScoped<IAuthAppService, AuthAppService>();
+        services.AddTransient<ICaptchaAppService, CaptchaAppService>();
+        services.AddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
+        services.AddTransient<IAuthAppService, AuthAppService>();
 
 #if (IncludeOpenIddict)
         // OAuth token 主体工厂 + 开放应用管理（仅 OpenIddict）
-        services.AddScoped<IAuthPrincipalFactory, AuthPrincipalFactory>();
-        services.AddScoped<IOpenApplicationAppService, OpenApplicationAppService>();
+        services.AddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
+        services.AddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
 #endif
 
 #if (IncludeExternalLogin)
         // 外部认证（仅 ExternalLogin）
-        services.AddScoped<IExternalAuthAppService, ExternalAuthAppService>();
+        services.AddTransient<IExternalAuthAppService, ExternalAuthAppService>();
 #endif
 #endif
 
         // 用户管理
-        services.AddScoped<IUserAppService, UserAppService>();
+        services.AddTransient<IUserAppService, UserAppService>();
 
 #if (IncludeRoles)
         // 权限
-        services.AddScoped<IPermissionChecker, PermissionChecker>();
+        services.AddPermissionAuthorizationCore();
+        services.AddTransient<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
-        services.AddSingleton<IPermissionDefinitionManager, PermissionDefinitionManager>();
-        // 将权限定义接入微软授权 Policy 管道，使 [Authorize(Policy = "权限名")] 生效
-        services.AddPermissionAuthorization();
 #endif
 
         return services;

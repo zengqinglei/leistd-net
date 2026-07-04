@@ -247,7 +247,7 @@ public class OrderReportService(IDataFilter dataFilter, IRepository<Order, Guid>
 - 仓储写操作在 UnitOfWork 内不会立即落库——依赖工作单元提交；脱离 UnitOfWork 调用时才即时 `SaveChanges`。
 - 仓储注册依赖 `DbContext` 暴露 `DbSet<>` 属性；未声明为 `DbSet<>` 的实体不会被自动注册仓储。
 - 审计者 ID 列经 `ConfigureByConvention` 约定为最大长度 **64**；请在实体配置中调用该扩展以生成正确的列约束。
-- 应用服务标记接口有两个：契约层 `Leistd.Ddd.Application.Contracts.AppService.IAppService` 与领域层 `Leistd.Ddd.Application.Services.IApplicationService`，二者均为空标记接口。
+- 应用服务标记接口有两个：契约层 `Leistd.Ddd.Application.Contracts.AppService.IAppService` 与应用层 `Leistd.Ddd.Application.Services.IApplicationService`，二者均为空标记接口。
 - 本地事件请通过实体的 `AddLocalEvent` 登记，并使用 `SaveChangesAsync` 触发发布，避免同步路径的线程饥饿警告。
 
 ## 相关

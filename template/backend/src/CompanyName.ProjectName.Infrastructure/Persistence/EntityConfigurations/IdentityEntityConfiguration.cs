@@ -1,7 +1,4 @@
 #if (IncludeIdentity)
-#if (IncludeRoles)
-using CompanyName.ProjectName.Domain.Permissions.Entities;
-#endif
 #if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
@@ -20,9 +17,6 @@ internal static class IdentityEntityConfiguration
         builder.ConfigureUserRoles();
 #if (IncludeExternalLogin)
         builder.ConfigureExternalLoginConnections();
-#endif
-#if (IncludeRoles)
-        builder.ConfigurePermissionGrants();
 #endif
     }
 
@@ -87,21 +81,5 @@ internal static class IdentityEntityConfiguration
         });
     }
 
-#if (IncludeRoles)
-    private static void ConfigurePermissionGrants(this ModelBuilder builder)
-    {
-        builder.Entity<PermissionGrant>(b =>
-        {
-            b.ConfigureByConvention();
-
-            b.Property(e => e.PermissionName).IsRequired().HasMaxLength(256);
-            b.Property(e => e.ProviderName).IsRequired().HasMaxLength(32);
-            b.Property(e => e.ProviderKey).IsRequired().HasMaxLength(128);
-
-            b.HasIndex(e => new { e.PermissionName, e.ProviderName, e.ProviderKey }).IsUnique();
-            b.HasIndex(e => new { e.ProviderName, e.ProviderKey });
-        });
-    }
-#endif
 }
 #endif

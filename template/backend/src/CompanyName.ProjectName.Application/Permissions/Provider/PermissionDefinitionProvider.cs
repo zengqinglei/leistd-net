@@ -1,4 +1,4 @@
-using Leistd.Ddd.Application.Permission;
+using Leistd.Authorization;
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 

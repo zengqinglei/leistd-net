@@ -7,12 +7,16 @@ using CompanyName.ProjectName.Domain.Users.Options;
 using CompanyName.ProjectName.Domain.Shared.Json;
 using CompanyName.ProjectName.Infrastructure;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.DependencyInjection;
+using Leistd.DependencyInjection.DynamicProxy;
 using Leistd.Exception.AspNetCore;
 using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
+#if (IncludeRoles)
+using Leistd.Authorization.AspNetCore;
+#endif
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
+using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
 #endif
 #if (IncludeIdentity)
@@ -44,7 +48,7 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // 1. 基础架构设置 (DI Factory, Logging, WebServer, HttpClient)
-    builder.Host.UseServiceProviderFactory(new ServiceRegistrationCallbackFactory());
+    builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
 
     builder.AddMyProjectInfrastructure();
     builder.Services.AddMyProjectWebServer();
@@ -225,11 +229,16 @@ try
     builder.Services.AddSecurity();
 
 #if (IncludeNotifications)
-    // 4.5.1 Leistd Notifications — SignalR 实时通知 + EF Core 持久化
-    builder.Services.AddNotificationsSignalR(opt =>
+    // 4.5.1 Leistd Notifications — 通知 Hub 与业务实时 Hub 显式注册
+    // AddNotificationsSignalR 只注册通知传输；模板前端还会连接 /hubs/realtime 订阅业务事件，
+    // 因此业务实时能力需要显式调用 AddRealTimeSignalR。
+    void ConfigureSignalR(RealTimeOptions opt)
     {
         opt.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    });
+    }
+
+    builder.Services.AddRealTimeSignalR(ConfigureSignalR);
+    builder.Services.AddNotificationsSignalR(ConfigureSignalR);
 #endif
 
     // 4.6. DataProtection 配置（生产环境必需）
@@ -250,11 +259,13 @@ try
     })
     .AddCookie("MyProjectCookie", options =>
     {
+        var isDevelopmentEnvironment = builder.Environment.IsDevelopment();
+
         options.LoginPath = "/auth/login";
         options.Cookie.Name = "CompanyName.ProjectName.Auth";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.None;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = isDevelopmentEnvironment ? SameSiteMode.Lax : SameSiteMode.None;
+        options.Cookie.SecurePolicy = isDevelopmentEnvironment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         options.Cookie.IsEssential = true;
 
 #if (IncludeOpenIddict)
@@ -289,6 +300,10 @@ try
     });
 #else
     builder.Services.AddAuthorization();
+#endif
+#if (IncludeRoles)
+    // 将权限定义接入微软授权 Policy 管道，使 [Authorize(Policy = "权限名")] 生效
+    builder.Services.AddPermissionAuthorization();
 #endif
 
     // --- 构建应用 ---
@@ -379,7 +394,8 @@ try
     app.MapControllers();
 
 #if (IncludeNotifications)
-    // SignalR 端点：通知 Hub 与实时业务事件 Hub 各自显式映射
+    // SignalR 端点：通知 Hub 与实时业务事件 Hub 各自显式映射。
+    // 若项目只保留通知能力，可删除 MapRealTimeHub 以及上面的 AddRealTimeSignalR。
     app.MapNotificationHub();
     app.MapRealTimeHub();
 #endif

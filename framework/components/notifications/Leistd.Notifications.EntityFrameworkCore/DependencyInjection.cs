@@ -11,10 +11,10 @@ public static class DependencyInjection
     /// <summary>
     /// 注册 EF Core 通知持久化存储（基于指定 DbContext）。
     /// </summary>
-    public static IServiceCollection AddNotificationsEfcore<TDbContext>(this IServiceCollection services)
+    public static IServiceCollection AddNotificationsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        services.AddScoped<INotificationStore, EfCoreNotificationStore<TDbContext>>();
+        services.AddTransient<INotificationStore, EfCoreNotificationStore<TDbContext>>();
         return services;
     }
 

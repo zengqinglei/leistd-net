@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace Leistd.Ddd.Application.Permission;
+namespace Leistd.Authorization;
 
 /// <summary>
 /// 权限定义管理器接口
@@ -74,3 +74,4 @@ public class PermissionDefinitionManager : IPermissionDefinitionManager
         return _context.GetAllPermissions();
     }
 }
+

@@ -1,4 +1,5 @@
 using Leistd.Auditing.EntityFrameworkCore;
+using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.EventBus.Local;
@@ -46,10 +47,6 @@ public static class DependencyInjection
         // 注册本地事件总线
         services.AddLocalEventBus();
 
-        // ✅ 注册 SaveChanges 拦截器（必须在 AddDbContext 之前）
-        services.AddScoped<AuditSaveChangesInterceptor>();
-        services.AddScoped<LocalEventSaveChangesInterceptor>();
-
         // ✅ 注册基础设施服务
         services.AddMemoryCache();
 
@@ -87,7 +84,10 @@ public static class DependencyInjection
         });
 
 #if (IncludeNotifications)
-        services.AddNotificationsEfcore<MyProjectDbContext>();
+        services.AddNotificationsEfCore<MyProjectDbContext>();
+#endif
+#if (IncludeRoles)
+        services.AddAuthorizationEfCore<MyProjectDbContext>();
 #endif
 
         // 注册 DDD Infrastructure 基础服务（UnitOfWork + 自动仓储注册）

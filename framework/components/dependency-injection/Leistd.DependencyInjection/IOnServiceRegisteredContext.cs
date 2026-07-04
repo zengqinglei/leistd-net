@@ -3,7 +3,7 @@ namespace Leistd.DependencyInjection;
 /// <summary>
 /// 服务注册上下文接口
 /// </summary>
-public interface IOnServiceRegistredContext
+public interface IOnServiceRegisteredContext
 {
     /// <summary>
     /// 服务类型
@@ -16,7 +16,7 @@ public interface IOnServiceRegistredContext
     Type ImplementationType { get; }
 
     /// <summary>
-    /// 拦截器列表
+    /// 扩展数据。上层集成组件可在不污染核心 DI 抽象的前提下挂载自定义信息。
     /// </summary>
-    List<Type> Interceptors { get; }
+    IDictionary<string, object?> Items { get; }
 }

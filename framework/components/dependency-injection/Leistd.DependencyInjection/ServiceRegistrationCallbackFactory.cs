@@ -1,12 +1,10 @@
-using Castle.DynamicProxy;
-using Leistd.DynamicProxy;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.DependencyInjection;
 
 /// <summary>
-/// 服务注册回调工厂
-/// 在构建 IServiceProvider 时自动执行所有已注册的回调
+/// 服务注册回调工厂。
+/// 在构建 IServiceProvider 前自动执行所有已注册的回调。
 /// </summary>
 public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServiceCollection>
 {
@@ -60,7 +58,7 @@ public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServi
             }
 
             // 创建上下文
-            var context = new OnServiceRegistredContext(
+            var context = new OnServiceRegisteredContext(
                 descriptor.ServiceType,
                 implementationType);
 
@@ -70,86 +68,17 @@ public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServi
                 action.Invoke(context);
             }
 
-            // 如果回调添加了拦截器，应用装饰器
-            if (context.Interceptors.Any())
-            {
-                ApplyInterceptors(services, descriptor, context.Interceptors);
-            }
+            OnRegistrationProcessed(services, descriptor, context);
         }
     }
 
     /// <summary>
-    /// 应用拦截器装饰器
+    /// 单个服务注册回调执行完成后的扩展点。
     /// </summary>
-    private void ApplyInterceptors(
+    protected virtual void OnRegistrationProcessed(
         IServiceCollection services,
         ServiceDescriptor descriptor,
-        List<Type> interceptorTypes)
+        IOnServiceRegisteredContext context)
     {
-        // 找到原始服务的索引
-        var index = services.IndexOf(descriptor);
-        if (index < 0) return;
-
-        // 替换为装饰后的服务
-        services[index] = ServiceDescriptor.Describe(
-            descriptor.ServiceType,
-            sp =>
-            {
-                // 创建原始实例
-                object instance = CreateOriginalInstance(descriptor, sp);
-
-                // 应用拦截器
-                var proxyGenerator = sp.GetRequiredService<IProxyGenerator>();
-
-                // 创建拦截器实例并按 Order 排序
-                var interceptors = interceptorTypes
-                    .Select(t => sp.GetRequiredService(t))
-                    .Cast<IInterceptor>()
-                    .OrderBy(interceptor =>
-                        interceptor is BaseAsyncInterceptor asyncInterceptor
-                            ? asyncInterceptor.Order
-                            : 0)
-                    .ToArray();
-
-                // 生成代理
-                if (descriptor.ServiceType.IsInterface)
-                {
-                    return proxyGenerator.CreateInterfaceProxyWithTarget(
-                        descriptor.ServiceType,
-                        instance,
-                        interceptors);
-                }
-                else
-                {
-                    return proxyGenerator.CreateClassProxyWithTarget(
-                        descriptor.ServiceType,
-                        instance,
-                        interceptors);
-                }
-            },
-            descriptor.Lifetime);
-    }
-
-    /// <summary>
-    /// 创建原始实例
-    /// </summary>
-    private object CreateOriginalInstance(ServiceDescriptor descriptor, IServiceProvider sp)
-    {
-        if (descriptor.ImplementationInstance != null)
-        {
-            return descriptor.ImplementationInstance;
-        }
-
-        if (descriptor.ImplementationFactory != null)
-        {
-            return descriptor.ImplementationFactory(sp);
-        }
-
-        if (descriptor.ImplementationType != null)
-        {
-            return ActivatorUtilities.CreateInstance(sp, descriptor.ImplementationType);
-        }
-
-        throw new InvalidOperationException($"Cannot create instance for {descriptor.ServiceType}");
     }
 }

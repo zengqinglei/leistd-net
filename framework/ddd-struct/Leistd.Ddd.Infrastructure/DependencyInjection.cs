@@ -4,6 +4,7 @@ using Leistd.DependencyInjection;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Repositories;
+using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Timing;
 using Leistd.UnitOfWork.Core;
 using Leistd.UnitOfWork.Core.Options;
@@ -33,7 +34,10 @@ public static class DependencyInjection
         services.AddSingleton<IClock, UtcClockProvider>();
 
         // 注册审计能力（审计属性设置器 + 审计拦截器）
-        services.AddAuditingEfcore();
+        services.AddAuditingEfCore();
+
+        // 注册 SaveChanges 拦截器具体类型，DbContext 可按需显式挂载。
+        services.AddScoped<LocalEventSaveChangesInterceptor>();
 
         // 注册 DataFilter 服务
         services.AddSingleton<IDataFilter, DataFilter>(); // 非泛型版本，单例

@@ -9,11 +9,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Castle.Core" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\aop\Leistd.DynamicProxy\Leistd.DynamicProxy.csproj" />
   </ItemGroup>
 
 </Project>
