@@ -94,10 +94,6 @@ export class DefaultHeader implements OnDestroy {
   notificationIcon(type: string): string {
     return this.notificationService.getIcon(type);
   }
-
-  notificationColor(type: string): string {
-    return this.notificationService.getColor(type);
-  }
 //#else
   readonly notificationCount = signal(0);
 //#endif

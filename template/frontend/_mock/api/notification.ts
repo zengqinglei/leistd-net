@@ -1,3 +1,4 @@
+import { MockRequest } from '../core/models';
 import { NOTIFICATIONS } from '../data/notifications';
 
 /** 通知中心 Mock API（对应 NotificationsController）。 */
@@ -12,8 +13,8 @@ export const NOTIFICATION_API = {
     return NOTIFICATIONS.filter(n => !n.isRead).length;
   },
 
-  'PUT /api/v1/notifications/:id/read': (_options: unknown, params: Record<string, string>) => {
-    const item = NOTIFICATIONS.find(n => n.id === params['id']);
+  'PUT /api/v1/notifications/:id/read': (req: MockRequest) => {
+    const item = NOTIFICATIONS.find(n => n.id === req.params.id);
     if (item) item.isRead = true;
     return null;
   },

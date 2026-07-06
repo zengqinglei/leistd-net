@@ -79,23 +79,13 @@ export class NotificationService {
     }
   }
 
-  /** 通知类型图标。 */
+  /** 通知类型图标（仅区分形状，颜色统一由视图控制）。 */
   getIcon(type: string): string {
     switch (type) {
       case 'DataChange': return 'pi pi-database';
       case 'Workflow': return 'pi pi-sitemap';
       case 'System':
       default: return 'pi pi-info-circle';
-    }
-  }
-
-  /** 通知类型颜色。 */
-  getColor(type: string): string {
-    switch (type) {
-      case 'DataChange': return 'text-blue-500';
-      case 'Workflow': return 'text-orange-500';
-      case 'System':
-      default: return 'text-gray-500';
     }
   }
 }
