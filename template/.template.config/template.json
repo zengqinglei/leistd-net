@@ -92,7 +92,7 @@
         "**/bin/**",
         "**/obj/**",
         "**/.vs/**",
-        "**/.claude/**",
+        "**/.claude/scripts/**",
         "**/.template.config/**",
         "**/artifacts/**",
         "frontend/node_modules/**",

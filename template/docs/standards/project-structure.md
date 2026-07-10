@@ -101,12 +101,7 @@ docs/modules/{module-name}/
 
 ## 6. 命名规则
 
-- 目录：小写 kebab-case。
-- Markdown 文件：小写 kebab-case，`README.md` 除外。
-- 需求文件：`req-yyyymmdd-nnn-plan.md`。
-- 模块目录：`{module-name}`，不使用数字前缀。
-- 阶段报告按 `docs/reports/{type}/{req-id}-{type}.md` 的项目约定命名。
-- 不把一次性报告放入 `standards/`。
+命名规范以 `document-naming.md` 为单一权威来源（目录/文件 kebab-case、需求 `req-yyyymmdd-nnn-plan.md`、阶段报告 `{req-id}-{report-type}.md`、禁止项等），此处不重复维护。
 
 ## 7. AI 协作要求
 

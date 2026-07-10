@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  框架测试覆盖率配置（P8 骨架）。
+  - 收集器：coverlet.collector（cobertura 格式），配合 dotnet test 的 XPlat Code Coverage 收集器。
+  - 排除：接口/DTO/marker、生成代码、测试项目自身。
+  - 阈值策略（分层，见 docs/assessments 单测评估）：
+      Tier A（UnitOfWork.Core / Exception.* / Security.Core / Auditing.EfCore /
+              DI.DynamicProxy / Tracing.Core）目标 95% 行 / 90% 分支；
+      Tier B 其余有逻辑组件 80% / 70%；Tier C（接口/DTO）不设门槛。
+    骨架阶段：此处不启用全局 fail-under（否则当前稀疏覆盖会全红挡住 CI）。
+    待各家族 P0 测试补齐后，再在 CI 的覆盖率汇总步骤按分层启用 fail-under。
+    分层阈值的启用点是 CI（reportgenerator + 阈值校验脚本），不是本文件的全局 Threshold。
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Exclude>[*.Tests]*,[*]*.Migrations.*</Exclude>
+          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+          <ExcludeByFile>**/GlobalUsings.cs,**/*.g.cs</ExcludeByFile>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

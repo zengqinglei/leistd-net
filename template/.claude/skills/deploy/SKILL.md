@@ -1,15 +1,17 @@
 ---
 name: deploy
 description: |
-  准备或执行部署、健康检查、日志/状态检查和回滚，并生成部署报告。
+  在需要准备/执行部署、健康检查、日志/状态检查或回滚时使用；验收收口交给 task-manager，生产变更须先获用户显式确认。
 
   使用时机：
   (1) Plan/context 指向 Phase 6 部署发布
   (2) 测试和代码审查通过后需要发布、重启或健康检查
-  (3) 用户要求部署、发布、回滚、查看日志或服务状态
+  (3) 用户自然语言：「部署上线」「发布一下」「回滚」「看服务日志 / 状态」「重启服务」
+
+  不适用：仅需汇总验收（用 task-manager）；测试/审查尚未通过（先用 test-runner / code-review）。
 metadata:
   openclaw:
-    requires: ["docker"]
+    requires: []
     skillKey: "deploy"
 user-invocable: true
 disable-model-invocation: false
@@ -21,7 +23,7 @@ disable-model-invocation: false
 
 ## 必读顺序
 
-1. `docs/standards/agent-workflow.md`：Phase 6 门禁、确认点和交接包。
+1. `docs/standards/agent-workflow.md`：Phase 6 门禁、确认点和交接包。**先按其 §2.0 定位「项目根」**（含 `docs/`+`backend/`+`frontend/` 的那一层），本 skill 所有 `docs/xxx` 均相对该根解析——monorepo 布局下项目根是 `apps/<name>/` 而非仓库根。
 2. Plan、context、code-review report、test report。
 3. `docs/deploy/`、compose、Dockerfile、CI/CD 或项目声明的部署配置。
 
@@ -82,7 +84,7 @@ handoff:
 | 资源 | 路径 | 读取时机 |
 | --- | --- | --- |
 | 部署工作流参考 | `references/deploy-workflow.md` | 执行 deploy/rollback 或生成详细报告时 |
-| 降级策略 | `references/fallback-strategy.md` | 缺少部署配置时 |
+| 对齐与降级策略 | `references/reconcile-strategy.md` | 缺少部署配置，或实际与部署文档冲突时 |
 | 服务器配置模板 | `templates/server-config-template.md` | 用户要求创建部署文档时 |
 | Docker Compose 模板 | `templates/docker-compose-template.yml` | 用户要求创建 compose 示例时 |
 

@@ -20,10 +20,4 @@
 
 ## 状态说明
 
-- candidate：候选需求，尚未形成 Plan。
-- planned：已形成 Plan，等待确认或排期。
-- in-progress：实施中。
-- blocked：阻塞。
-- review：待审查或验收。
-- done：完成。
-- archived：归档。
+状态枚举与阶段定义以 `docs/standards/agent-workflow.md` §7 为准，此处不重复维护。

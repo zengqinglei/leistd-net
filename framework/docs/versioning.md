@@ -42,7 +42,8 @@
 5. 创建 GitHub Release（自动生成 release notes）。
 
 机制要点：
-- 仅 **`framework/` 源码**或 `VERSION` 变更才触发发版；`framework/docs/`、所有 `*.md`、`template/` 改动均**不**发版。
+- 触发发版的变更：`VERSION`、**`framework/` 源码**（框架内非 docs 的 `.md` 除外）、或 **`framework/docs/` 组件文档**（文档随包分发，故文档更新也发一版送达）。
+- **不**触发发版：`template/` 与仓库根的 `*.md`（模板文档、仓库元文档），避免文档改动误发。
 - 回写提交带 `[skip ci]` 且过滤 `github-actions[bot]`，避免死循环。
 - ⚠️ NuGet 包不可删（只能 unlist）。框架源码每次有效变更都会产出一个正式版，请把控合入 main 的节奏。
 

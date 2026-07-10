@@ -1,0 +1,40 @@
+name: CI
+
+# PR 与非发布推送的质量闸门（与 release.yml 分离，不发包）：
+#   - docs-sync：组件/文档/索引一致性（P7 / L3+L4）+ 文档 API 引用与源码不漂移
+#   - test：框架单元测试 + 覆盖率（P8）
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  docs-sync:
+    name: 文档同步闸门
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 校验组件文档与索引一致
+        shell: pwsh
+        run: pwsh framework/build/check-docs-sync.ps1
+      - name: 校验文档 API 引用与源码不漂移
+        shell: pwsh
+        run: pwsh framework/build/check-docs-api-drift.ps1
+
+  test:
+    name: 框架单元测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: 还原
+        run: dotnet restore framework/Leistd.Framework.slnx
+      - name: 构建
+        run: dotnet build framework/Leistd.Framework.slnx -c Release --no-restore
+      - name: 测试 + 覆盖率
+        run: dotnet test framework/Leistd.Framework.slnx -c Release --no-build --settings framework/build/coverage.runsettings --collect:"XPlat Code Coverage"

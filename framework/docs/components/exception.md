@@ -55,17 +55,17 @@ app.UseGlobalExceptionHandler();
 业务代码只需 `throw` 语义对应的异常，无需关心响应格式：
 
 ```csharp
-public class OrderService(IOrderRepository repo)
+public class OrderService(IOrderStore store)
 {
-    public async Task<Order> GetAsync(long id)
+    public async Task<Order> GetAsync(Guid id)
     {
-        var order = await repo.FindAsync(id);
+        var order = await store.FindAsync(id);
         if (order is null)
             throw new NotFoundException($"订单 {id} 不存在");   // -> HTTP 404
         return order;
     }
 
-    public async Task PayAsync(long id, decimal amount)
+    public async Task PayAsync(Guid id, decimal amount)
     {
         if (amount <= 0)
             // 链式覆盖错误码 + 附加 details
@@ -113,6 +113,7 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 | `UnauthorizedException(message)` | 未授权，错误码 `40100`（HTTP 401） |
 | `ForbiddenException(message)` | 禁止访问，错误码 `40300`（HTTP 403） |
 | `NotFoundException(message)` | 资源未找到，错误码 `40400`（HTTP 404） |
+| `ConflictException(message)` | 资源冲突，错误码 `40900`（HTTP 409） |
 | `UnsupportedMediaTypeException(message)` | 不支持的媒体类型，错误码 `41500`（HTTP 415） |
 | `UnprocessableEntityException(...)` | 实体校验失败，错误码 `42200`（HTTP 422），承载逐字段错误 |
 | `InternalServerException(message)` | 服务器内部错误，错误码 `50000`（HTTP 500） |
@@ -144,7 +145,7 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 ### Leistd.Exception.AspNetCore（全局处理器）
 
 - **开关与排除**：`Options.Enable` 为 `false`（默认）时处理器直接放行（返回 `false`，交回框架）。`ExcludePatterns` 命中的路径同样放行；模式支持 `前缀/**` 与含 `*` 的通配匹配，匹配大小写不敏感。
-- **异常归一化**：非 `BusinessException` 的异常会被映射——`System.ComponentModel.DataAnnotations.ValidationException` → `UnprocessableEntityException`；`CommonException` → `BadRequestException`；`OperationCanceledException`（内含 `TimeoutException`）/ `TimeoutException` / `HttpRequestException` → `ServiceUnavailableException`；其余 → `InternalServerException`。
+- **异常归一化**：非 `BusinessException` 的异常会被映射——`System.ComponentModel.DataAnnotations.ValidationException` → `UnprocessableEntityException`；`CommonException` → `BadRequestException`；`TimeoutException` / `HttpRequestException`（及内含 `TimeoutException` 的 `OperationCanceledException`）→ `ServiceUnavailableException`；**不含超时的普通 `OperationCanceledException`（客户端主动取消）→ `BadRequestException`**；其余 → `InternalServerException`。
 - **状态码推导**：取 `Code` 的前 3 位作为 HTTP 状态码（须落在 100–599），否则回退 500。
 - **响应体**：标准异常输出 `ProblemDetails`，`UnprocessableEntityException` 输出 `ValidationProblemDetails`；两者都在 `Extensions` 中写入 `message`、`traceId`（取 `Activity.Current?.Id`，否则 `TraceIdentifier`）、`code`。
 - **详情可见性**：由 `IsShowDetails` 决定（`null` 时按是否开发环境）。可见时写入 `details` 或 `stackTrace`；不可见时仅在有 `Details` 的情况下写入 `details`。

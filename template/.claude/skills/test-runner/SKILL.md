@@ -1,12 +1,14 @@
 ---
 name: test-runner
 description: |
-  运行项目声明的单元、集成、业务场景或 E2E 测试，收集结果并生成测试报告。
+  在需要运行项目声明的单元、集成、业务场景或 E2E 测试并产出测试报告时使用；静态规范审查交给 code-review，改被测代码交给 coding。
 
   使用时机：
   (1) Plan/context 指向 Phase 5 测试验证
   (2) 代码审查通过后需要验证 Must have 覆盖
-  (3) 用户要求运行测试、覆盖率、集成测试或业务场景测试
+  (3) 用户自然语言：「跑一下测试」「看覆盖率」「跑集成 / 场景测试」「验证功能是否正常」
+
+  不适用：需要静态规范/缺陷审查（用 code-review）；需要修改实现（用 coding）。
 metadata:
   openclaw:
     requires: []
@@ -21,7 +23,7 @@ disable-model-invocation: false
 
 ## 必读顺序
 
-1. `docs/standards/agent-workflow.md`：Phase 5 门禁和交接包。
+1. `docs/standards/agent-workflow.md`：Phase 5 门禁和交接包。**先按其 §2.0 定位「项目根」**（含 `docs/`+`backend/`+`frontend/` 的那一层），本 skill 所有 `docs/xxx` 均相对该根解析——monorepo 布局下项目根是 `apps/<name>/` 而非仓库根。
 2. Plan、context、code-review report、dev report。
 3. 项目测试规范和测试配置：`package.json`、`*.csproj`、`pyproject.toml`、`go.mod`、测试框架配置等。
 
@@ -53,6 +55,8 @@ disable-model-invocation: false
 | Must have 未覆盖 | fail 或 needs-confirmation | 补测试或用户确认风险 |
 | 无项目覆盖率门槛但覆盖率偏低 | pass + 风险记录 | 继续但记录建议 |
 
+> 降级说明：无项目门槛/命令而使用默认时，在 handoff `verification.degraded: true` 标注；未执行的测试不得写成通过（见 agent-workflow §4 verifier 规则）。
+
 ## 输出
 
 - 执行的命令和结果。
@@ -74,7 +78,7 @@ handoff:
 | 资源 | 路径 | 读取时机 |
 | --- | --- | --- |
 | 测试报告模板 | `references/test-report-template.md` | 生成详细报告时 |
-| 降级策略 | `references/fallback-strategy.md` | 无测试配置或命令失败时 |
+| 对齐与降级策略 | `references/reconcile-strategy.md` | 无测试配置/命令失败，或门槛与项目配置冲突时 |
 | runsettings 模板 | `templates/runsettings-template` | 用户要求 .NET 测试配置时 |
 | Vitest 配置模板 | `templates/vitest-config-template.ts` | 用户要求 Vitest 配置时 |
 | 覆盖率门槛模板 | `templates/coverage-thresholds-template.md` | 用户要求创建覆盖率规范时 |

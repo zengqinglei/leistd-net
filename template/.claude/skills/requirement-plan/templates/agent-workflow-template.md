@@ -147,10 +147,10 @@ git:
 
 ```yaml
 moduleDependencies:
-  # 定义模块间的依赖关系（可选）
-  content-management:
-    dependsOn: ["platform-accounts"]
-  platform-accounts:
+  # 定义模块间的依赖关系（可选，按本项目真实模块填写）
+  {module-a}:
+    dependsOn: ["{module-b}"]
+  {module-b}:
     dependsOn: []
 ```
 
@@ -158,12 +158,12 @@ moduleDependencies:
 
 ```yaml
 compliance:
-  # 特殊合规要求（可选）
-  payment:
-    requiresReview: true                   # 支付模块需要额外评审
-    reviewers: ["security-team"]
-  data-export:
-    requiresApproval: true                 # 数据导出需要审批
+  # 特殊合规要求（可选，按本项目真实模块与规则填写）
+  {module-x}:
+    requiresReview: true                   # 该模块需要额外评审
+    reviewers: ["{review-team}"]
+  {module-y}:
+    requiresApproval: true                 # 该模块变更需要审批
 ```
 
 ---

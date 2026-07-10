@@ -6,24 +6,13 @@
 
 ---
 
-## 目录
-
-1. [核心技术栈](#1-核心技术栈)
-2. [分层架构规范](#2-分层架构规范)
-3. [编码规范](#3-编码规范)
-4. [命名规范](#4-命名规范)
-5. [数据访问规范](#5-数据访问规范)
-6. [异常处理与日志](#6-异常处理与日志)
-
----
-
 ## 1. 核心技术栈
 
 - **框架**: .NET 10+
 - **ORM**: EF Core 10+
 - **数据库**: PostgreSQL 15+
 - **缓存**: Redis 7+
-- **对象映射**: AutoMapper
+- **对象映射**: Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）
 - **依赖注入**: Microsoft.Extensions.DependencyInjection
 - **日志**: Serilog
 
@@ -35,7 +24,7 @@
 
 ```
 ┌─────────────────────────────────────────┐
-│         API Layer ({ProjectName}.Api)         │  ← HTTP 相关处理
+│         API Layer ({ProjectName}.Api)   │  ← HTTP 相关处理
 ├─────────────────────────────────────────┤
 │   Application Layer (Application)       │  ← 业务流程编排
 ├─────────────────────────────────────────┤
@@ -152,6 +141,11 @@ public void RecordLoginSuccess(string? ip = null)
 }
 ```
 
+补充约定：
+
+- **契约里的时间字段写明单位**，避免消费方误判量级（普通事件用秒、需亚秒精度的用毫秒），字段名或文档标注单位。
+- **对外的线缆时间戳明确用 UTC**。若 `IClock` 不保证 UTC 语义，此类**边界**时间戳直接用明确的 UTC 取法属**合理例外**（仅限对外序列化边界，不下沉进领域）。
+
 ### 3.3 充血模型设计
 
 **实体设计原则**:
@@ -184,7 +178,8 @@ public class User : FullAuditedEntity<Guid>
         Id = Guid.NewGuid();
         Username = username;
         Email = email;
-        CreationTime = DateTime.UtcNow;
+        // CreationTime 等审计字段由框架审计拦截器在保存时自动填充，
+        // 不在实体内手写；如需业务时间字段，方法应接收 DateTime now 参数（见 §3.2.1）
     }
 
     // 业务方法
@@ -248,7 +243,7 @@ public class UserDomainService(
 - ✅ 接收/返回 DTO
 - ✅ 调用领域服务和仓储
 - ✅ 事务管理（通过 UnitOfWork）
-- ✅ DTO 映射（使用 AutoMapper）
+- ✅ DTO 映射（使用 Mapster `IObjectMapper`）
 - ✅ 数据查询和聚合
 - ❌ 核心业务规则（应在领域层）
 
@@ -297,14 +292,7 @@ public class UserAppService(
 **基类**: 继承 `BaseController`
 **返回值**: 直接返回对象，不使用 `ActionResult<T>` 包装
 
-**方法命名规范**:
-| 操作类型 | 方法名 | HTTP 方法 | 路由 |
-|---------|-------|----------|------|
-| 分页查询 | `GetPageAsync` | GET | `/api/xxx` |
-| 单个查询 | `GetAsync` | GET | `/api/xxx/{id}` |
-| 创建 | `CreateAsync` | POST | `/api/xxx` |
-| 更新 | `UpdateAsync` | PUT | `/api/xxx/{id}` |
-| 删除 | `DeleteAsync` | DELETE | `/api/xxx/{id}` |
+**方法命名与路由**：以 [api-standard.md](../api-standard.md) §7 的操作→方法名→路由映射表为**单一权威**（分页 `GetPagedListAsync`、查询 `GetAsync`、创建 `CreateAsync`、更新 `UpdateAsync`/`PatchAsync`、删除 `DeleteAsync`，均 `/api/v1/{resource}` 前缀），此处不重复表格。
 
 **示例**:
 ```csharp
@@ -314,7 +302,7 @@ namespace {ProjectName}.Api.Controllers;
 public class UserController(IUserAppService userAppService) : BaseController
 {
     [HttpGet]
-    public async Task<PagedResultDto<UserOutputDto>> GetPageAsync(
+    public async Task<PagedResultDto<UserOutputDto>> GetPagedListAsync(
         [FromQuery] GetUserPagedInputDto input,
         CancellationToken cancellationToken)
     {
@@ -337,6 +325,22 @@ public class UserController(IUserAppService userAppService) : BaseController
 }
 ```
 
+### 3.7 枚举持久化用字符串
+
+枚举**一律以字符串持久化**（可读、可演进、不怕重排序），不存序数值。这是 [common-develop §5.7](./common-develop.md) 「枚举边界转换」在 EF Core 的落地：
+
+```csharp
+// ✅ EF 配置：枚举转字符串列
+builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+```
+
+- 数据迁移里做数据转换时**按字符串比较**，不要对字符串列用整数比较（如对 varchar 列写 `Status = 3` 会在 PostgreSQL 报 42883 崩溃；应用 `Status = 'Active'` 或 `::text` 比较）。
+
+### 3.8 授权/策略标识符用常量
+
+- 授权策略名、权限名等**跨处引用的标识符用常量**，禁裸魔法串在多处各写——否则单侧改动漂移会致授权静默失配，且无编译报错。
+- 参见 [api-standard.md](../api-standard.md) 的权限命名约定。
+
 ---
 
 ## 4. 命名规范
@@ -349,6 +353,8 @@ public class UserController(IUserAppService userAppService) : BaseController
 | 创建输入 | `Create{Entity}InputDto` | `CreateUserInputDto` |
 | 更新输入 | `Update{Entity}InputDto` | `UpdateUserInputDto` |
 | 输出 | `{Entity}OutputDto` | `UserOutputDto` |
+
+> 分页输入 DTO 继承 `PagedRequestDto`、字段约定见 [api-standard.md](../api-standard.md) §6。
 
 **分页 DTO 示例**:
 ```csharp
@@ -373,43 +379,14 @@ public record GetUserPagedInputDto : PagedRequestDto
 - ✅ 错误消息使用占位符（`{0}不能为空`）
 - ✅ 所有属性必须添加 `[Display(Name = "xxx")]`
 - ✅ 必填属性使用 `required` 修饰符
+- ✅ 字段验证只在入口 DTO 做，内层信任（见 [common-develop §5.2](./common-develop.md)）
 
-### 4.2 变量命名规范
+**DTO 文件组织**：**一个用途一个 DTO 文件**；仅作为某父 DTO 内嵌成员的 item 类型可留在父文件中。业务入参 DTO 放应用层对应模块，**不落在表现层**（Api 层）。
 
-**方法参数**:
-```csharp
-// ✅ 正确：Dto 参数统一命名为 input
-public async Task<UserOutputDto> CreateAsync(
-    CreateUserInputDto input,
-    CancellationToken cancellationToken = default)
-```
+### 4.2 变量与注入命名规范
 
-**返回变量**:
-```csharp
-// ✅ 正确：返回对象统一命名为 result
-var result = objectMapper.Map<User, UserOutputDto>(user);
-return result;
-```
-
-**查询变量**:
-```csharp
-// ✅ 正确：query 变量命名为 query 或 xxxQuery
-var query = await userRepository.GetQueryableAsync();
-var users = await query.Where(...).ToListAsync();
-```
-
-### 4.3 仓储注入命名规范
-
-```csharp
-// ✅ 正确
-public class UserAppService(
-    IRepository<User, Guid> userRepository,          // ✅
-    IRepository<Role, Guid> roleRepository,          // ✅
-    UserDomainService userDomainService,             // ✅
-    IObjectMapper objectMapper) : IAppService
-{
-}
-```
+- DTO 参数统一命名 `input`；返回对象统一命名 `result`；`IQueryable` 变量命名 `query` / `xxxQuery`。
+- 仓储注入命名 `{entity}Repository`（如 `userRepository`）；领域服务命名 `{Entity}DomainService`。
 
 ---
 
@@ -421,7 +398,7 @@ public class UserAppService(
 - ✅ 分页查询使用 `GetPagedListAsync`（来自 `Leistd.Ddd.Infrastructure.Repositories.EfCoreRepository`）
 - ✅ IQueryable 异步扩展使用 `Leistd.Ddd.Infrastructure.Repositories` 提供的方法
 - ✅ 实体基类使用 `Entity<TKey>`、`FullAuditedEntity<TKey>` 等
-- ✅ DTO 映射使用 AutoMapper（参考 `Mappings/*Profile`）
+- ✅ DTO 映射使用 Mapster（继承 `MapsterProfile` 声明映射，注册结构参考现有 Profile）
 
 ### 5.2 仓储常用方法
 
@@ -457,41 +434,13 @@ var apiKeys = await query
     .ToListAsync(cancellationToken);
 ```
 
-### 5.4 分页查询命名规范
+### 5.4 分页查询命名
 
-**方法命名**: 必须使用 `GetPagedListAsync`（而非 `GetListAsync`）
-
-```csharp
-// ✅ 正确
-public async Task<PagedResultDto<UserOutputDto>> GetPagedListAsync(
-    GetUserPagedInputDto input,
-    CancellationToken cancellationToken = default)
-{
-    // ...
-    return new PagedResultDto<UserOutputDto>(totalCount, result);
-}
-```
+分页查询方法命名 / 路由 / 分页参数 / 输入 DTO 命名，以 [api-standard.md](../api-standard.md) §6/§7 为单一权威（必须 `GetPagedListAsync`、`/api/v1/{resource}`、`offset/limit`、`Get{Entity}PagedInputDto`）；完整应用服务示例见 §3.5。
 
 ### 5.5 避免重复验证
 
-**原则**: DTO 已通过 Data Annotations 验证时，领域实体无需重复验证
-
-```csharp
-// DTO 层已验证
-public record CreateUserInputDto
-{
-    [Required(ErrorMessage = "{0}不能为空")]
-    [StringLength(64, MinimumLength = 3)]
-    public required string Username { get; init; }
-}
-
-// 领域实体无需重复验证
-public User(string username)
-{
-    Id = Guid.NewGuid();
-    Username = username;  // 无需 Check.NotNullOrWhiteSpace
-}
-```
+验证只在入口 DTO 做、内层信任（含"第二条调用路径"例外），以 [common-develop.md](./common-develop.md) §5.2 为准，此处不重复展开。
 
 ---
 
@@ -499,14 +448,7 @@ public User(string username)
 
 ### 6.1 异常类型
 
-使用 `Leistd.Exception.Core` 提供的异常类型:
-
-| 异常类型 | HTTP 状态码 | 使用场景 |
-|---------|-----------|---------|
-| `BadRequestException` | 400 | 业务规则验证失败 |
-| `NotFoundException` | 404 | 资源不存在 |
-| `UnauthorizedException` | 401 | 未授权 |
-| `ForbiddenException` | 403 | 无权限 |
+使用 `Leistd.Exception.Core` 提供的异常类型。**异常类型 → HTTP 状态码的完整映射以 `api-standard.md` §4「异常类型映射」为单一权威来源**（含 `ConflictException`/409 等），此处不重复维护，避免不一致。
 
 **示例**:
 ```csharp
@@ -541,166 +483,39 @@ logger.LogError(ex, "创建用户失败: {Username}", input.Username);
 
 ---
 
-## 7. 代码重构优先级指南
+## 7. 表现层（API）目录组织
 
-### 7.1 API 层重构要点
+表现层文件**按功能域归类收纳**，避免随业务增长在 Api 根目录平铺散乱；新增代码按分类归位。命名空间跟随目录层级。
 
-**Controller 方法返回值规范**:
-```csharp
-// ❌ 错误：使用 ActionResult 包装
-public async Task<ActionResult<PagedResultDto<UserOutputDto>>> GetPageAsync(...)
+### 7.1 按功能域分类
 
-// ✅ 正确：直接返回对象
-public async Task<PagedResultDto<UserOutputDto>> GetPageAsync(...)
-```
+把表现层文件按关注点归入少数几个顶层分类，每类下再按模块收纳。通用分类思路（按项目实际有的才建，没有的不强建）：
 
-**Controller 方法命名统一**:
-| 当前命名 | 标准命名 | 说明 |
-|---------|---------|------|
-| `GetListAsync` | `GetPageAsync` | 分页查询 |
-| `GetByIdAsync` | `GetAsync` | 单个查询 |
-| `CreateAsync` | `CreateAsync` | ✅ 已符合 |
-| `UpdateAsync` | `UpdateAsync` | ✅ 已符合 |
-| `DeleteAsync` | `DeleteAsync` | ✅ 已符合 |
+- **实时/长连类**：WebSocket 端点、推送 Hub、连接注册表 → 一个"实时通信"大类。
+- **网关/代理类**：反向代理转发、网关中间件。
+- **鉴权类**：授权策略、授权特性、身份/凭据组装。
+- **配置/组装类**：强类型 Options、DI/管道扩展方法。
+- **后台服务类**：见 §7.2。
 
-### 7.2 Application 层重构要点
+已是清晰单一关注点的目录保持顶层，不强行再套壳。
 
-**移除 EF Core 依赖**:
-```csharp
-// ❌ 错误：Application 层引用 EF Core
-using Microsoft.EntityFrameworkCore;
+### 7.2 后台服务按运行形态三分 + 后缀统一
 
-// ✅ 正确：使用 Leistd 扩展方法
-using Leistd.Ddd.Infrastructure.Repositories;
-```
+后台服务（`IHostedService`/`BackgroundService`）按**运行形态**分类，类名后缀与目录对齐：
 
-**DTO 命名规范化**:
-```csharp
-// ❌ 错误命名
-public record GetUserListInputDto { }
-public record UserDto { }
+- **一次性启动引导** → `Initializer/`，类名 `*Initializer`。
+- **常驻消费者**（持有队列/长循环消费）→ `Workers/`，类名 `*Worker`。
+- **周期任务**（定时触发跑一轮）→ `BackgroundJobs/`，类名 `*Job`。
 
-// ✅ 正确命名
-public record GetUserPagedInputDto : PagedRequestDto { }
-public record UserOutputDto { }
-```
+> 机制上"周期编排器"与"周期 Job"无区别（都是定时器+循环+每 tick 干活），故**统一 `*Job` 后缀**，不混用 `*Orchestrator`/`*Service`。
 
-**变量命名统一**:
-```csharp
-// ❌ 错误：参数命名不一致
-public async Task CreateAsync(CreateUserInputDto dto, ...)
-public async Task UpdateAsync(UpdateUserInputDto request, ...)
+### 7.3 表现层职责红线（呼应 §2.1）
 
-// ✅ 正确：统一使用 input
-public async Task CreateAsync(CreateUserInputDto input, ...)
-public async Task UpdateAsync(UpdateUserInputDto input, ...)
-```
-
-### 7.3 Domain 层重构要点
-
-**充血模型改造**:
-```csharp
-// ❌ 贫血模型
-public class User : Entity<Guid>
-{
-    public string Username { get; set; }
-    public bool IsActive { get; set; }
-}
-
-// ✅ 充血模型
-public class User : Entity<Guid>
-{
-    public string Username { get; private set; }
-    public bool IsActive { get; private set; }
-
-    private User() { }
-
-    public User(string username)
-    {
-        Id = Guid.NewGuid();
-        Username = username;
-        IsActive = true;
-    }
-
-    public void Enable() => IsActive = true;
-    public void Disable() => IsActive = false;
-}
-```
-
-**规约模式应用**:
-```csharp
-// 定义规约
-public class ActiveUserSpecification : Specification<User>
-{
-    public override Expression<Func<User, bool>> ToExpression()
-        => user => user.IsActive;
-}
-
-// 使用规约
-var activeUsers = await userRepository.GetListAsync(
-    new ActiveUserSpecification(), cancellationToken);
-```
-
-### 7.4 .NET 10 新特性应用
-
-**主构造函数**:
-```csharp
-// ❌ 旧写法
-public class UserAppService : IAppService
-{
-    private readonly IRepository<User, Guid> _userRepository;
-
-    public UserAppService(IRepository<User, Guid> userRepository)
-    {
-        _userRepository = userRepository;
-    }
-}
-
-// ✅ 新写法
-public class UserAppService(
-    IRepository<User, Guid> userRepository) : IAppService
-{
-    // 直接使用 userRepository
-}
-```
-
-**集合表达式**:
-```csharp
-// ❌ 旧写法
-var roles = new List<string> { "Admin", "User" };
-
-// ✅ 新写法
-var roles = ["Admin", "User"];
-```
-
-### 7.5 重构检查清单
-
-#### API 层检查
-- [ ] 移除所有 `ActionResult<T>` 包装
-- [ ] 统一方法命名（GetPageAsync、GetAsync 等）
-- [ ] 使用主构造函数
-- [ ] 参数命名统一为 `input`
-
-#### Application 层检查
-- [ ] 移除 `using Microsoft.EntityFrameworkCore;`
-- [ ] 使用 `using Leistd.Ddd.Infrastructure.Repositories;`
-- [ ] DTO 命名符合规范（*InputDto、*OutputDto）
-- [ ] 分页查询方法命名为 `GetPagedListAsync`
-- [ ] 变量命名统一（input、result、query）
-
-#### Domain 层检查
-- [ ] 实体属性使用 `private set`
-- [ ] 包含 `private` 无参构造函数
-- [ ] 通过公共方法修改状态
-- [ ] 无 EF Core 引用
-- [ ] 应用规约模式
-
-#### 全局检查
-- [ ] 使用文件范围 namespace
-- [ ] DTO 使用 record 类型
-- [ ] 使用 .NET 10 集合表达式
-- [ ] 代码注释完善
-- [ ] 单元测试覆盖
+- **Controller/端点只做路由 + 鉴权 + 调应用服务**，不含业务校验/编排/直接操作实体或仓储；参数解析、越权守卫编排、多步领域调用下沉应用服务。
+- **业务入参 DTO 不落表现层**，放应用层对应模块（见 §4.1）。
+- **授权策略名等标识符用常量**，禁裸魔法串多处各写（见 §3.8）。
+- **Controller 统一继承 `BaseController`**（见 §3.6）；确有特殊性的（视图渲染、纯透传代理、机器对机器端点）可用不同基类，属合理例外，就近注释说明。
+- **以下留在表现层属合理边界、不算越层**（避免过度下沉）：后台服务取请求作用域服务推进工单状态机（调度编排）、连接/端点准入的存在性探针（等价鉴权）、后台 Worker 直写技术性日志实体（fire-and-forget 技术数据）、下发外部的 UTC 线缆时间戳直接用明确 UTC 取法（见 §3.2.1）。
 
 ---
 
@@ -737,11 +552,8 @@ var roles = ["Admin", "User"];
 - [ ] 优先使用 Leistd 框架已有能力
 - [ ] 应用服务继承自 `IAppService`
 - [ ] 分页查询使用 `GetPagedListAsync`
-- [ ] DTO 映射使用 AutoMapper
+- [ ] DTO 映射使用 Mapster（`IObjectMapper` + `MapsterProfile`）
 - [ ] 使用 Leistd 提供的异步扩展方法
 
 ---
-
-**文档版本**: v3.1
-**维护者**: 开发团队
 

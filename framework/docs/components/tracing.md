@@ -50,7 +50,7 @@ app.UseCorrelationId();
 
 `AddCorrelationId` 内部调用 `AddCorrelationIdCore`，注册：
 - `ICorrelationIdProvider` → `CorrelationIdProvider`（Singleton）
-- `CorrelationIdInterceptor`（Transient）与 `IProxyGenerator`，并通过 `OnServiceRegistered` 回调为带 `[CorrelationId]` 特性的服务挂载 AOP 拦截器。
+- `CorrelationIdInterceptor`（Transient），并通过 `OnServiceRegistered` 回调为带 `[CorrelationId]` 特性的服务挂载 AOP 拦截器。
 
 ### 非 Web 宿主
 
