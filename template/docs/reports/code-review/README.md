@@ -1,7 +1,3 @@
-# 代码审查报告目录
+# code-review reports
 
-代码审查报告统一写入：
-
-```text
-docs/reports/code-review/{req-id}-code-review.md
-```
+本目录保存 code-review 阶段报告。报告路径以 docs/standards/agent-workflow.md 为准。

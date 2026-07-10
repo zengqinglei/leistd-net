@@ -52,10 +52,13 @@ jobs:
         shell: pwsh
         run: |
           $changed = git diff --name-only HEAD~1..HEAD
-          # 仅框架源码或 VERSION 变更才发正式版；排除 framework/docs 与 *.md，模板/文档改动不误发。
+          # 触发正式版的变更：VERSION、框架源码、或 framework/docs 组件文档
+          # （组件文档随包分发 P5/L4，文档更新需能触发发版以随新包送达消费者）。
+          # 仍排除非框架的 *.md（模板 docs、仓库根 docs），避免文档改动误发。
           $hit = $changed | Where-Object {
             ($_ -eq 'VERSION') -or
-            ($_ -match '^framework/' -and $_ -notmatch '^framework/docs/' -and $_ -notmatch '\.md$')
+            ($_ -match '^framework/docs/') -or
+            ($_ -match '^framework/' -and $_ -notmatch '\.md$')
           }
 
           "needed=$([bool]$hit ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append

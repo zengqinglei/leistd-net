@@ -21,8 +21,9 @@
 | 设计 API | `standards/api-standard.md`、`modules/_template/api.md` |
 | 编写模块文档 | `modules/README.md`、`modules/_template/` |
 | 执行测试 | `standards/test.md` |
-| 部署发布 | `deploy/README.md`、`deploy/server-config.md` |
+| 部署发布 | `deploy/README.md`、`deploy/release-policy.md`、`deploy/server-config.md` |
 | 代码审查 | `standards/agent-workflow.md`、`standards/code-standard/` |
+| 文档规范本身（分类/命名） | `standards/document-classification.md`、`standards/document-naming.md` |
 
 ## 3. 目录结构
 
@@ -60,3 +61,4 @@ docs/
 - 阶段报告写入 `reports/{development|code-review|tests|deploy|acceptance}/`。
 - 部署相关变更同步更新 `deploy/`。
 - 规范变化优先修改 `standards/`，不要在需求文档中重复定义长期规则。
+- 文档分类边界与冗余判定见 `standards/document-classification.md`；命名与存放见 `standards/document-naming.md`。

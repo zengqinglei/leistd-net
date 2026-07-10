@@ -51,7 +51,7 @@ builder.Services.AddSecurity();
 注入 `ICurrentUser`，直接读取强类型属性与方法：
 
 ```csharp
-public class OrderAppService(ICurrentUser currentUser)
+public class OrderService(ICurrentUser currentUser)
 {
     public Task PlaceOrderAsync()
     {
@@ -73,7 +73,7 @@ public class OrderAppService(ICurrentUser currentUser)
 API Key 场景识别调用方客户端：
 
 ```csharp
-public class ReportAppService(ICurrentClient currentClient)
+public class ReportService(ICurrentClient currentClient)
 {
     public void Export()
     {
@@ -143,6 +143,7 @@ public class SystemJob(ICurrentPrincipalAccessor accessor, ICurrentUser currentU
 | `ClientId` | `client_id` | 客户端标识符（API Key 认证） |
 | `SessionId` | `sid` | 会话标识符（OIDC 标准） |
 | `IdentityProvider` | `idp` | 身份提供者（如 github / google / microsoft） |
+| `IsSuperAdmin` | `is_super_admin` | 是否超级管理员（权限授权的超管判定约定来源） |
 
 > 仅定义与 `System.Security.Claims.ClaimTypes` 不同的自定义字段；标准字段请直接用 `ClaimTypes`。
 

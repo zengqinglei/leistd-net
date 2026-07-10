@@ -1,8 +1,10 @@
 # DDD 四层基础类型
 
-构建中大型业务系统时，最难统一的不是某个框架，而是**分层约定**：实体放哪、审计字段谁来填、仓储接口长什么样、应用服务怎么映射 DTO、权限怎么声明。各团队各写一套，代码就难以复用与维护。
+> 完整、已核对源码的使用文档见 [`ddd-struct.md`](./ddd-struct.md)（四层基座用法总文档）；本页内容与源码存在偏差之处已在下文标注，以 `ddd-struct.md` 为准。
 
-Leistd 的 DDD 分组提供一套 Volo.ABP 风格的领域驱动设计基础类型，按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分职责：Domain 定义实体基类、仓储抽象、审计接口与数据过滤器；Application.Contracts 提供 DTO 基类与分页约定；Application 提供应用服务基类与权限模型；Infrastructure 基于 EF Core 落地仓储、自动审计、软删除过滤与本地事件发布。业务项目只需继承这些基类、注册 `AddDddInfrastructure()`，即可获得审计字段自动填充、软删除、仓储自动注册、领域事件随保存发布等开箱能力。
+构建中大型业务系统时，最难统一的不是某个框架，而是**分层约定**：实体放哪、审计字段谁来填、仓储接口长什么样、应用服务怎么映射 DTO。各团队各写一套，代码就难以复用与维护。
+
+Leistd 的 DDD 分组提供一套 Volo.ABP 风格的领域驱动设计基础类型，按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分职责：Domain 定义实体基类、仓储抽象、审计接口与数据过滤器；Application.Contracts 提供 DTO 基类与分页约定；Application 提供应用服务基类；Infrastructure 基于 EF Core 落地仓储、自动审计、软删除过滤与本地事件发布。业务项目只需继承这些基类、注册 `AddDddInfrastructure()`，即可获得审计字段自动填充、软删除、仓储自动注册、领域事件随保存发布等开箱能力。权限模型不属于本分组，见[权限授权组件](../components/authorization.md)。
 
 ## 何时使用
 
@@ -10,7 +12,7 @@ Leistd 的 DDD 分组提供一套 Volo.ABP 风格的领域驱动设计基础类�
 | --- | --- |
 | 定义领域实体、仓储接口、审计/软删除模型（领域层代码） | `Leistd.Ddd.Domain` |
 | 定义对外 DTO、分页请求/结果、应用服务契约 | `Leistd.Ddd.Application.Contracts` |
-| 编写应用服务、声明权限、对 Controller 加权限校验 | `Leistd.Ddd.Application` |
+| 编写应用服务 | `Leistd.Ddd.Application` |
 | 用 EF Core 落地仓储、启用自动审计与软删除、注册基础设施 | `Leistd.Ddd.Infrastructure` |
 
 > 四层按依赖方向引用：Application 依赖 Application.Contracts 与 Domain，Infrastructure 依赖 Domain。业务项目通常每层各建一个工程，分别引用对应的 Leistd.Ddd.* 包。
@@ -61,7 +63,7 @@ builder.Services.AddDddInfrastructure(uow =>
 
 同时内部调用 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()` 接入工作单元。仓储注册通过 `OnServiceRegistered` 钩子在容器构建时自动扫描所有已注册的 `DbContext` 的 `DbSet<>` 属性完成——业务侧无需逐个手工注册仓储。
 
-> `IPermissionChecker`、`IPermissionDefinitionProvider` 的具体实现由业务项目自行注册，框架只提供抽象与 `PermissionDefinitionManager`。
+> 权限检查/定义（`IPermissionChecker`、`IPermissionDefinitionProvider` 等）不属于 ddd-struct，由独立的[权限授权组件](../components/authorization.md)（`Leistd.Authorization.*`）提供。
 
 ## 使用
 
@@ -116,14 +118,7 @@ public class OrderAppService(IRepository<Order, Guid> repo, IObjectMapper mapper
 }
 ```
 
-### 声明并校验权限（Application）
-
-```csharp
-[Permission("Orders.View")]                          // 单权限
-[Permission("Orders.View", "Orders.Edit")]           // 多权限，默认任一即可
-[Permission("Orders.View", "Orders.Edit", RequireAll = true)]  // 要求全部
-public class OrderController : ControllerBase { }
-```
+> 权限声明与校验（`[Permission(...)]`、`IPermissionChecker` 等）不属于 ddd-struct，见[权限授权组件](../components/authorization.md)。
 
 ### 临时禁用软删除过滤器（Domain）
 
@@ -193,23 +188,19 @@ public class OrderReportService(IDataFilter dataFilter, IRepository<Order, Guid>
 | `IAppService` | 应用服务标记接口 |
 | `EntityDto<TKey>` / `EntityDto` | DTO 基类记录；`EntityDto` 默认 `Guid` 主键 |
 | `PagedRequestDto` | 分页请求：`Offset`、`Limit`（默认 10）、`Sorting` |
-| `PagedResultDto<T>` | 分页结果：`TotalCount` + 只读 `Items` |
-| `ObjectMapperExtensions.MapPagedResult<TSource,TDest>` | 对 `PagedResultDto` 整体做条目映射；入参为 `null` 抛 `ArgumentNullException` |
+| `PagedResultDto<T>` | 分页结果：`TotalCount` + 只读 `Items`；提供接受 `IEnumerable<T>` 的构造函数，**`items` 为 `null` 时不抛异常**，回退为空集合（null-tolerant，详见 [`ddd-struct.md`](./ddd-struct.md#leistdddapplicationcontracts)） |
+| `ObjectMapperExtensions.MapPagedResult<TSource,TDest>` | 对 `PagedResultDto` 整体做条目映射；`mapper` 或 `pagedSource` 为 `null` 时抛 `ArgumentNullException`（与 `PagedResultDto` 自身的 null 容错策略不同，注意区分） |
 
 ### Leistd.Ddd.Application
 
-`Leistd.Ddd.Application.AppService` / `.Permission`：
+`Leistd.Ddd.Application.AppService` / `.Services`：
 
 | 成员 | 说明 |
 | --- | --- |
 | `BaseAppService` | 应用服务基类 |
 | `IApplicationService` | 应用服务标记接口（位于 `Leistd.Ddd.Application.Services` 命名空间） |
-| `IPermissionChecker` | 权限检查；`IsGrantedAsync` 单/多权限重载，返回 `bool` 或 `MultiplePermissionGrantResult` |
-| `MultiplePermissionGrantResult` | 多权限结果；`AllGranted` / `AnyGranted` |
-| `IPermissionDefinitionProvider` | 业务侧实现以声明权限（`Define(context)`） |
-| `IPermissionDefinitionContext` / `IPermissionGroupDefinition` / `IPermissionDefinition` | 权限定义上下文/组/项 |
-| `IPermissionDefinitionManager` | 加载并查询所有权限定义（`GetOrNull` / `GetAll`） |
-| `PermissionAttribute` | 权限校验特性，继承 `AuthorizeAttribute`；`RequireAll` 控制全部/任一 |
+
+> 权限相关类型（`IPermissionChecker`、`IPermissionDefinitionProvider`、`PermissionAttribute` 等）**不属于** ddd-struct，已归属独立的[权限授权组件](../components/authorization.md)（`Leistd.Authorization.*`）；本页早前版本曾将其列在 `Leistd.Ddd.Application` 下，为过时信息，已更正。
 
 ### Leistd.Ddd.Infrastructure
 
@@ -252,9 +243,12 @@ public class OrderReportService(IDataFilter dataFilter, IRepository<Order, Guid>
 
 ## 相关
 
-- [组件总览](./README.md)
+- [四层基座用法总文档](./ddd-struct.md)
+- [组件总览](../components/README.md)
 - [工作单元](../components/unit-of-work.md)
 - [事件总线](../components/event-bus.md)
 - [对象映射](../components/object-mapping.md)
 - [安全与当前用户](../components/security.md)
 - [依赖注入](../components/dependency-injection.md)
+- [审计](../components/auditing.md)
+- [权限授权](../components/authorization.md)

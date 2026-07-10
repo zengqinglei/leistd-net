@@ -1,5 +1,7 @@
 # 文档路径命名规范
 
+> 分类边界与"是什么"见 `document-classification.md`；本文件只管"叫什么、放哪"。
+
 ## 1. 目录命名
 
 - 使用小写 kebab-case：`code-standard`、`quick-start`、`code-review`。
@@ -32,6 +34,8 @@ req-yyyymmdd-nnn-plan.md
 - 禁止同一规则在多个文档中重复维护。
 
 ## 5. 文档归属
+
+> 分类边界与生命周期见 `document-classification.md` §1；下表仅列存放位置速查。
 
 | 内容 | 推荐位置 |
 | --- | --- |

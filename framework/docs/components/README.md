@@ -7,12 +7,16 @@
 | 分组 | 一句话定位 | 包 | 文档 |
 | --- | --- | --- | --- |
 | 动态代理拦截器基类 | 基于 Castle DynamicProxy 的异步拦截器基类，统一同步/异步方法拦截入口并按 Order 排序织入 | `Leistd.DynamicProxy` | [`aop`](./aop.md) |
+| 审计 | 通过标记接口声明实体的创建/修改/删除审计能力，EF Core 拦截器在保存时自动填充审计字段并把软删除转为逻辑删除 | `Leistd.Auditing.Core`、`Leistd.Auditing.EntityFrameworkCore` | [`auditing`](./auditing.md) |
+| 权限授权 | 基于具名权限的细粒度授权：`IPermissionChecker` 统一检查入口，声明式定义权限并接入 ASP.NET Core 策略管道 | `Leistd.Authorization.Core`、`Leistd.Authorization.AspNetCore`、`Leistd.Authorization.EntityFrameworkCore` | [`authorization`](./authorization.md) |
 | 核心原语：时钟与通用异常 | Leistd 框架的零依赖基础原语：时钟抽象（IClock/UtcClockProvider）与通用异常基类（CommonException），供其它组件复用。 | `Leistd.Core` | [`core`](./core.md) |
 | 服务注册回调与拦截器织入 | DI 包只提供类似 ABP OnRegistered 的注册回调；DynamicProxy 扩展包在此基础上按约定织入 AOP 拦截器。 | `Leistd.DependencyInjection`、`Leistd.DependencyInjection.DynamicProxy` | [`dependency-injection`](./dependency-injection.md) |
 | 事件总线 | 进程内发布/订阅事件总线，发布方与 IEventHandler 处理器解耦，由 DI 同步消费 | `Leistd.EventBus.Core`、`Leistd.EventBus.Local` | [`event-bus`](./event-bus.md) |
 | 业务异常与全局异常处理 | 语义化业务异常体系 + ASP.NET Core 全局处理器，统一转换为 RFC 7807 ProblemDetails 响应 | `Leistd.Exception.Core`、`Leistd.Exception.AspNetCore` | [`exception`](./exception.md) |
 | 分布式锁与本地锁 | 统一的加锁抽象 ILock，可在内存（单机）与 Redis（分布式）实现间按 DI 注册切换。 | `Leistd.Lock.Core`、`Leistd.Lock.Memory`、`Leistd.Lock.Redis` | [`lock`](./lock.md) |
+| 通知 | 站内通知统一发布入口，可选持久化历史记录并通过 SignalR 实时推送给指定用户/分组/全体在线用户 | `Leistd.Notifications.Core`、`Leistd.Notifications.EntityFrameworkCore`、`Leistd.Notifications.AspNetCore.SignalR` | [`notifications`](./notifications.md) |
 | 对象映射 | 统一的 IObjectMapper 对象映射抽象，可在 AutoMapper 与 Mapster 两种实现间无缝切换。 | `Leistd.ObjectMapping.Core`、`Leistd.ObjectMapping.AutoMapper`、`Leistd.ObjectMapping.Mapster` | [`object-mapping`](./object-mapping.md) |
+| 实时通信 | 通用业务事件实时推送通道：按 resourceKey 订阅、在线状态跟踪与订阅授权扩展点，基于 SignalR 实现 | `Leistd.RealTime.Core`、`Leistd.RealTime.AspNetCore.SignalR` | [`realtime`](./realtime.md) |
 | 统一 API 响应 | 统一 {code, message, data} 响应模型与 ASP.NET Core 自动包装过滤器 | `Leistd.Response.Core`、`Leistd.Response.AspNetCore` | [`response`](./response.md) |
 | 当前用户与身份信息 | 通过 ICurrentUser / ICurrentClient / ICurrentPrincipalAccessor 强类型读取当前登录用户与客户端身份，并支持临时切换主体。 | `Leistd.Security.Core`、`Leistd.Security.AspNetCore` | [`security`](./security.md) |
 | 链路追踪 | 基于 TraceId（CorrelationId）的全链路标识：用 AsyncLocal 在异步上下文中传递，自动注入日志 Scope，并在 ASP.NET Core 入站与 HttpClient 出站之间透传。 | `Leistd.Tracing.Core`、`Leistd.Tracing.AspNetCore`、`Leistd.Tracing.HttpClient` | [`tracing`](./tracing.md) |
@@ -36,9 +40,15 @@ graph TD
     unit-of-work --> dependency-injection-dynamic-proxy
     unit-of-work --> event-bus
 
-    security[当前用户与身份信息] --> ddd-struct[ddd-struct]
+    auditing[审计] --> core
+    authorization[权限授权] --> auditing
+    notifications[通知] --> core
+    notifications --> auditing
+    notifications --> security[当前用户与身份信息]
+    notifications --> realtime[实时通信]
+    realtime --> security
 ```
 
-无外部 Leistd 依赖的独立分组：`aop`（动态代理）、`core`（核心原语）、`lock`（分布式锁与本地锁）、`object-mapping`（对象映射）、`response`（统一 API 响应）。
+无外部 Leistd 依赖的独立分组：`aop`（动态代理）、`core`（核心原语）、`lock`（分布式锁与本地锁）、`object-mapping`（对象映射）、`response`（统一 API 响应）。注意 `auditing`/`authorization`/`realtime` 的 `.Core` 抽象包本身无 Leistd 组件依赖；图中的入边来自它们各自的 EF Core / SignalR 子包（如 `Leistd.Authorization.EntityFrameworkCore` 引用 `Leistd.Auditing.Core`）。
 
-> 注：`security` 依赖的 `Leistd.Ddd.Domain` 属于 `ddd-struct`，未列入本组件总览，仅作依赖标注。
+> 注：图中标注真实的 `ProjectReference` 依赖（含各家族的 EF Core / SignalR 子包边）。`notifications`/`realtime` 的实时推送实现另依赖 `Microsoft.AspNetCore.SignalR`（外部依赖，未单独列出）。组件与 `ddd-struct` **无正向编译期依赖**——实际方向相反：`Leistd.Ddd.Infrastructure` 引用 `Leistd.Auditing.EntityFrameworkCore`、`Leistd.Security.Core`。

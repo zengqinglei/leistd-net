@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    tests/ 下所有项目的共享配置（P8）。
+    先链父级（framework/Directory.Build.props → common.props），再注入测试通用项。
+    覆盖率收集器 coverlet.collector 注入到真正的测试项目；
+    共享基座 Leistd.TestBase 不是测试项目（无测试 SDK），跳过。
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Leistd.TestBase'">
+    <PackageReference Include="coverlet.collector">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

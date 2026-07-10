@@ -83,6 +83,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 | `IOnServiceRegisteredContext.ImplementationType` | 实现类型 |
 | `IOnServiceRegisteredContext.Items` | 扩展数据字典，供上层集成组件挂载自定义信息 |
 | `ServiceRegistrationCallbackFactory` | 只执行回调，不做 AOP 织入 |
+| `ServiceRegistrationCallbackFactory.OnRegistrationProcessed(context, services)`（`protected virtual`）| 每个服务回调处理完成后的扩展点；`DynamicProxy` 子类正是重写它完成拦截器织入，也可自行继承重写做自定义后处理 |
 
 `Leistd.DependencyInjection.DynamicProxy`：
 

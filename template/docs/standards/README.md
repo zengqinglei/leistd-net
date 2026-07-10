@@ -8,6 +8,7 @@
 | --- | --- |
 | `agent-workflow.md` | AI 协作工作流、需求编号、Plan 结构 |
 | `api-standard.md` | API 响应、错误、分页、安全规范 |
+| `document-classification.md` | 每类文档的定义、边界与生命周期 |
 | `document-naming.md` | 文档目录、文件名、需求编号规范 |
 | `project-structure.md` | 项目与文档目录结构 |
 | `tech-stack.md` | 模板默认技术栈与变更流程 |

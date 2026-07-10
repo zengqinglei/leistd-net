@@ -61,4 +61,26 @@
     <None Include="$(MSBuildThisFileDirectory)NuGet.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
+  <!--
+    组件用法文档随包分发（P5 / 引用链路 L4）。
+    项目目录布局：
+    - 通用组件：components/<家族>/<项目>/  → 项目目录的父目录名即家族名（如 lock），文档 docs/components/<家族>.md。
+    - DDD 基座：ddd-struct/<项目>/         → 父目录名为 ddd-struct，统一文档 docs/ddd-struct/ddd-struct.md。
+    统一：_LeistdParentDir = 项目目录的父目录名。
+      component 分支打包 docs/components/<父目录名>.md（仅真实家族存在，Exists 保护）；
+      ddd-struct 分支在父目录名为 ddd-struct 时打包统一文档。
+    同家族多个包都内置该家族文档（用户装任一包即可就地拿到用法），打进包内 docs/ 目录。
+  -->
+  <PropertyGroup>
+    <_LeistdParentDir>$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName($(MSBuildProjectDirectory)))))</_LeistdParentDir>
+    <_LeistdComponentDocPath>$(MSBuildThisFileDirectory)docs\components\$(_LeistdParentDir).md</_LeistdComponentDocPath>
+    <_LeistdDddDocPath>$(MSBuildThisFileDirectory)docs\ddd-struct\ddd-struct.md</_LeistdDddDocPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(_LeistdComponentDocPath)" Pack="true" PackagePath="docs\" Visible="false"
+          Condition="Exists('$(_LeistdComponentDocPath)')" />
+    <None Include="$(_LeistdDddDocPath)" Pack="true" PackagePath="docs\" Visible="false"
+          Condition="'$(_LeistdParentDir)' == 'ddd-struct' And Exists('$(_LeistdDddDocPath)')" />
+  </ItemGroup>
+
 </Project>

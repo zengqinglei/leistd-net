@@ -12,6 +12,13 @@
     3. AI 友好——章节固定、关键事实用表格/签名块，便于人机检索。
     4. 简洁可信——只描述源码中真实存在的公共 API；DI 方法名、接口名、命名空间、常量必须与源码一致，禁止臆造。
     5. 可操作——「使用」给出可直接复制的业务类示例（注入→调用）。
+    6. 示例自包含——示例只用「本组件自身 API + 原生 .NET/EF Core 类型」，
+       严禁引用组件并不依赖的其它组件或 ddd-struct 类型
+       （IRepository<>/BaseAppService/IAppService/Entity<>/PagedResultDto 等一律不得出现）。
+       EF 集成组件用原生 DbContext/DbSet 演示即可；无关持久化的组件用中性普通类
+       （OrderNotifier/OrderService 之类，勿取名 OrderAppService 强套分层基类）。
+       需指引 DDD 项目做法时，仅用一句叙述性 cross-link 指向 ddd-struct.md，不在示例代码里引入其类型。
+       详见 development-guide.md §5.1。
 
   ============ 章节骨架（按此顺序，标题用 ## ） ============
 

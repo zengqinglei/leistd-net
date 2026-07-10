@@ -1,12 +1,15 @@
 ---
 name: requirement-plan
 description: |
-  将用户的想法、背景或自然语言需求整理为可执行的五段闭环 Plan.md。
+  在需要把想法/背景/自然语言需求整理为项目规范的五段闭环 Plan.md（并可登记到 registry）时使用；只产出 Plan 与验收标准，不写实现代码（coding），不登记推进（task-manager）。本 Skill 的特点是输出本项目 docs/requirements 下的规范化 Plan，而非通用设计/实现计划。
 
   使用时机：
   (1) 用户提出新想法、需求、目标或业务背景
   (2) 需要澄清范围、目标、风险和验收标准
   (3) 需要生成或修订 docs/requirements/{req-id}-plan.md
+  (4) 用户自然语言：「我想做一个…」「新需求」「帮我理一下方案 / Plan」「这个功能怎么拆」
+
+  不适用：只想要通用设计头脑风暴（不产出规范化 Plan 时）；Plan 已确认要推进（用 task-manager）。
 metadata:
   openclaw:
     requires: []
@@ -21,8 +24,8 @@ disable-model-invocation: false
 
 ## 必读顺序
 
-1. 先读 `docs/standards/agent-workflow.md`，获取路径、Plan 结构、阶段交接包和人工确认规则。
-2. 如索引存在，按需读取文档命名、技术栈、模块或业务规范；不要一次性加载无关文档。
+1. 先读 `docs/standards/agent-workflow.md`，获取路径、Plan 结构、阶段交接包和人工确认规则。**并按其 §2.0 定位「项目根」**（含 `docs/`+`backend/`+`frontend/` 的那一层），本 skill 所有 `docs/xxx` 均相对该根解析——monorepo 布局下项目根是 `apps/<name>/` 而非仓库根。
+2. 如索引存在，按需读取文档命名、技术栈、模块或业务规范；不要一次性加载无关文档。需求涉及界面/交互时，读 `docs/standards/ui-design-strategy.md`。
 3. 无项目规范时，使用本 Skill 模板，并在输出中说明假设和建议补齐项目规范。
 
 ## 输入
@@ -76,9 +79,8 @@ handoff:
 | --- | --- | --- |
 | Plan 模板 | `templates/plan.md.template` | 创建 Plan 时 |
 | Agent 工作流模板 | `templates/agent-workflow-template.md` | 项目缺少规范且用户要求创建规范时 |
-| Agent 工作流字段说明 | `references/agent-workflow-schema-template.md` | 需要解释或修复规范索引时 |
-| 示例 | `references/agent-workflow-examples.md` | 用户要求示例或复杂项目结构参考时 |
-| 降级策略 | `references/fallback-strategy.md` | 项目无规范且需要说明降级时 |
+| Agent 工作流字段/状态机说明 | `docs/standards/agent-workflow.md`（单一权威） | 需要解释工作流字段/阶段时 |
+| 对齐与降级策略 | `references/reconcile-strategy.md` | 项目无规范，或需求与既有规范冲突时 |
 
 ## 禁止事项
 

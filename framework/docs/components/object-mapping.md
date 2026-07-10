@@ -54,7 +54,7 @@ builder.Services.AddMapsterObjectMapper(options =>
 注入 `IObjectMapper`，调用 `Map` 完成转换：
 
 ```csharp
-public class OrderAppService(IObjectMapper mapper)
+public class OrderMapping(IObjectMapper mapper)
 {
     // 创建新实例：实体 -> DTO
     public OrderDto ToDto(Order order)
@@ -72,12 +72,13 @@ public class OrderAppService(IObjectMapper mapper)
 
 批量映射 `MapList` 是 `Leistd.ObjectMapping.Core.Extensions` 命名空间下的扩展方法，需 `using Leistd.ObjectMapping.Core.Extensions;`。
 
-AutoMapper 实现下可将映射下推到数据库查询（投影），仅查询目标字段：
+AutoMapper 实现下可将映射下推到数据库查询（投影），仅查询目标字段。`ProjectTo` 作用于任意 `IQueryable<TSource>`（如 EF Core 的 `DbSet<T>` 或仓储返回的可查询对象）：
 
 ```csharp
 using Leistd.ObjectMapping.AutoMapper.Extensions;
 
-IQueryable<OrderDto> query = dbContext.Orders
+// orders 为任意 IQueryable<Order>（如 dbContext.Set<Order>()）
+IQueryable<OrderDto> query = orders
     .Where(o => o.IsPaid)
     .ProjectTo<Order, OrderDto>(mapper);
 ```

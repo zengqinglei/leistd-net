@@ -1,4 +1,6 @@
-// ESLint 配置模板（Angular 21 + TypeScript）
+// ESLint 配置参考样例（仅 Angular + TypeScript 栈；非通用默认、不自动套用）
+// 定位：仅当项目确为 Angular/TS 栈、且用户要求生成 lint 配置时参考；其它栈请按同类思路生成。
+//       其中的具体规则以项目 code-standard/frontend-develop.md 约定为准，套用前核对替换。
 
 module.exports = {
   root: true,
