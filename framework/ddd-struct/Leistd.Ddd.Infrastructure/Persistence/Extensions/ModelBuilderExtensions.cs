@@ -12,7 +12,7 @@ namespace Leistd.Ddd.Infrastructure.Persistence.Extensions;
 public static class ModelBuilderExtensions
 {
     /// <summary>
-    /// 按 ABP 约定配置实体基类属性（审计字段长度约束）
+    /// 配置实体基类属性和审计字段长度约束。
     /// 应在每个实体的 Fluent API 配置块中优先调用
     /// </summary>
     public static void ConfigureByConvention<TEntity>(this EntityTypeBuilder<TEntity> b)

@@ -13,7 +13,7 @@
 1. `template/docs/` 全部 standards/reports 文档 —— 逐份分类判定"该做 skill 还是留 doc"。
 2. `framework/docs/components/` 与组件源码 —— 文档质量与交付形态（doc / skill / MCP）。
 3. `framework/` 全部 33 源项目 + 4 测试项目 —— 单测缺口、优先级、覆盖率、性能、共享基类。
-4. 业界参考 —— Anthropic Agent Skills、ABP Framework、PrimeNG/Angular Material、context7/MCP、Microsoft EF Core testing。来源见附录 B。
+4. 业界参考 —— Anthropic Agent Skills、PrimeNG/Angular Material、context7/MCP、Microsoft EF Core testing。来源见附录 B。
 
 三项彼此独立、体量差异极大（第 1 项分钟级、第 3 项约 2 周/人）。**结论：不合并为一份 Plan；本报告是共享评估，后续拆三份独立 Plan 各自 spec→plan→执行。**
 
@@ -40,7 +40,7 @@
 
 ### 业界印证
 
-Anthropic：标准值不值得做成 skill = 是否是"反复调用的可执行流程"（→skill）vs"参考知识/少用/需判断"（→doc）；ABP 把约定留作 reference docs，用**模板生成器**去"执行"约定。你们的分工与之一致。
+Anthropic：标准值不值得做成 skill = 是否是"反复调用的可执行流程"（→skill）vs"参考知识/少用/需判断"（→doc）；工程约定留作 reference docs，用**模板生成器**去"执行"约定。
 
 ### 唯一动作（→ 第 1 项 Plan，分钟级）
 
@@ -115,9 +115,9 @@ PrimeNG/Angular Material 的 API 表**从源码生成**（decorator/JSDoc）以�
 | 议题 | 方案 | 依据 |
 | --- | --- | --- |
 | **先修 CI** | 加 PR 触发 `dotnet test` 步骤，优先级高于补测本身 | 实测 CI 缺口 |
-| **DB 测试选型** | 弃用 EF InMemory（现状）；纯逻辑用手写 fake；EF 逻辑用 InMemory 仅限非事务分支；**事务分支用 SQLite in-memory** | Microsoft + ABP 均明确 discourage InMemory provider |
+| **DB 测试选型** | 弃用 EF InMemory（现状）；纯逻辑用手写 fake；EF 逻辑用 InMemory 仅限非事务分支；**事务分支用 SQLite in-memory** | Microsoft 明确不建议将 InMemory provider 用于数据库行为测试 |
 | **覆盖率门槛** | 分层：Tier A 95%/90%（UnitOfWork.Core、Exception.*、Security.Core、Auditing.EfCore、DI.DynamicProxy、Tracing.Core）；Tier B 80%/70%；Tier C 不设（接口/DTO/marker）。coverlet + `.runsettings` + CI fail-under | 模板 coverage-thresholds-template + coverlet 惯例 |
-| **共享测试基类** | 要但小：`Leistd.TestBase` 只放已被重复发明的 fake `IClock`/`ICurrentUser`、InMemory DbContext 工厂、`ILocalEventBus`/`IUnitOfWork` fake；不做通用 mega-fixture | ABP 分层 TestBase，按你们轻量风格裁剪 |
+| **共享测试基类** | 要但小：`Leistd.TestBase` 只放已被重复发明的 fake `IClock`/`ICurrentUser`、InMemory DbContext 工厂、`ILocalEventBus`/`IUnitOfWork` fake；不做通用 mega-fixture | 按现有重复需求提取分层测试基座 |
 | **Mock 库** | 不引入 NSubstitute/Moq；续用手写 fake（接口 2-6 成员，`RealTime.Tests/TestDoubles.cs` 已证明够用） | 现状一致性 |
 | **性能** | 全程内存态，全套应 &lt;1min；注意两处静态缓存污染（LocalEventBus `_wrapperCache`、SignalRPresenceService 静态字典），新测试用 per-test 唯一 key | 实测风险点 |
 
@@ -184,13 +184,12 @@ UnitOfWork.Core → Exception.*（`ConvertToBusinessException` 分支顺序风�
 - **CI 无 `dotnet test`**（`.github/workflows/release.yml` 仅 pack/push）。无 `.runsettings`、无 coverlet 配置。
 - 组件文档 12 份，质量高但 4 家族（auditing/authorization/notifications/realtime）零文档、无机读元数据、无 CI 同步闸门。
 - `ui-design-strategy.md` 是唯一未被任何 skill 引用的 standards 文档。
-- Microsoft + ABP 均 discourage EF Core InMemory provider，推荐 SQLite in-memory / Testcontainers。
+- Microsoft 不建议用 EF Core InMemory provider 验证数据库行为，推荐 SQLite in-memory / Testcontainers。
 
 ## 附录 B：来源
 
 - Anthropic：Equipping agents with Agent Skills；Effective context engineering；Code execution with MCP；Complete Guide to Building Skills。
 - Red Hat Developer：MCP servers vs. skills。
-- ABP.IO：Module Best Practices & Conventions；Automated Testing / Integration Tests / Unit Tests。
 - PrimeNG（primeng.dev/table）；Angular Material（material.angular.dev；angular/components）。
 - Context7（upstash/context7）。
 - Microsoft Learn：Choosing a testing strategy (EF Core)；Use code coverage for unit testing (.NET)。

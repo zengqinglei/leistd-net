@@ -2,7 +2,7 @@
 
 本项目基于 Angular、PrimeNG 和 Tailwind CSS 构建。
 
-有关详细的开发规范、目录结构和编码准则，请参阅项目根目录下的 [前端项目开发规范](/docs/standards/code_standard/frontend_develop.md) 文件。
+有关详细的开发规范、目录结构和编码准则，请参阅项目根目录下的 [前端开发规范](../docs/standards/coding-frontend.md)。
 
 ---
 

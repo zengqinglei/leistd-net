@@ -1,223 +1,110 @@
-# Fullstack App Template
+# CompanyName.ProjectName
 
-> **面向 AI 协作开发的 .NET 10 + Angular 21 全栈模板**：不只生成 DDD 四层代码骨架，更生成一套让 AI 端到端交付需求、且全程可追溯的**人机协作工作流**。
+基于 .NET 10、Angular 21 和 Leistd.* 组件构建的全栈项目，后端采用 Domain、Application、Infrastructure、Api 四层结构。
 
-`dotnet new` 生成的项目开箱即带：DDD 四层后端 + Angular 前端、通过 NuGet 引用的 [Leistd 框架](../framework/README.md)、以及一套 **AI 协作工作流骨架**（`.claude/skills/` + `docs/standards/`）。
+## 项目结构
 
-## 有什么不一样：AI 协作开发
-
-普通模板只给你代码起点；本模板还给 AI 一套「怎么在这个项目里正确干活」的规范与流程——AI 不再凭记忆猜测，而是读项目规范、按阶段推进、留下可追溯证据：
-
-- **6 个阶段 Skill**（随项目一起生成到 `.claude/skills/`）：`requirement-plan`（需求→Plan）· `task-manager`（登记/推进/验收）· `coding`（按 Plan 开发）· `code-review`（分级审查）· `test-runner`（测试验证）· `deploy`（部署发布）。各司其职，由 AI 按你的意图自动选择。
-- **工作流事实源** `docs/standards/agent-workflow.md`：定义 8 阶段状态机、阶段门禁、交接包（换会话可无损接续）、以及生产部署等高风险动作的人工确认红线。
-- **证据闭环**：需求 Plan、任务上下文、开发/审查/测试/部署/验收报告统一沉淀到 `docs/`，一个需求可从 plan 完整追溯到 acceptance。
-- **规范即护栏**：技术栈、编码规范、API 契约、文档分类既给人看，也是 AI 行动的依据；缺失时 Skill 用内置默认继续并提示补齐，不阻塞。
-
-> 上手指引见项目内 [`docs/quick-start/ai-native-model.md`](docs/quick-start/ai-native-model.md)。生成项目后，对 AI 说「用 requirement-plan 帮我把这个需求理成方案」「按 Plan 开发」「帮我 review」即可进入闭环。
-
-## 技术栈
-
-| 层 | 技术 |
-|---|------|
-| 前端 | Angular 21 + PrimeNG 21 + Tailwind CSS 4 |
-| 后端 | .NET 10 + ASP.NET Core + EF Core |
-| 数据库 | PostgreSQL 15+ / 内存数据库（开发） |
-| 缓存 | Redis 7+（可选） |
-| 部署 | Docker + Docker Compose |
-
-## 安装模板
-
-```bash
-# 从本地目录安装
-dotnet new install ./template
-
-# 从 NuGet 安装（发布后）
-dotnet new install FullstackApp.Template
+```text
+CompanyName.ProjectName/
+|-- backend/                 # .NET 后端
+|-- frontend/                # Angular 前端
+|-- deploy/                  # Docker Compose 配置
+|-- docs/                    # 项目规范与按需沉淀文档
+|-- .agents/skills/          # 跨工具项目 Skill
+`-- Dockerfile
 ```
 
-## 创建项目
+## 已启用能力
 
-### 基本用法
+- EF Core 数据访问、审计字段、软删除、仓储与应用服务基座。
+<!--#if (IncludeIdentity)-->
+- 本地账号、登录、注册和 Cookie 认证。
+<!--#if (IncludeRoles)-->
+- 用户、角色、权限以及超级管理员授权模型。
+<!--#endif-->
+<!--#if (IncludeOpenIddict)-->
+- OpenIddict OAuth 2.0/OIDC Server。
+<!--#endif-->
+<!--#if (IncludeExternalLogin)-->
+- GitHub、Google 等外部身份提供方登录。
+<!--#endif-->
+<!--#if (IncludeNotifications)-->
+- 通知持久化、未读状态、通知 Hub 和业务实时 Hub。
+<!--#endif-->
+<!--#endif-->
 
-```bash
-# 创建项目（命名空间为 MyApp.Api, MyApp.Domain 等）
-dotnet new fullstack-app -n MyApp
-
-# 带公司前缀（命名空间为 Acme.MyApp.Api, Acme.MyApp.Domain 等）
-dotnet new fullstack-app -n Acme.MyApp
-```
-
-### 可选参数
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `-n` / `--name` | string | 必填 | 项目名称/命名空间前缀，支持点分隔（如 `Acme.MyApp`） |
-| `--include-identity` | bool | `true` | 是否包含认证模块（登录/注册/JWT） |
-| `--include-roles` | bool | `true` | 是否包含角色权限系统 |
-
-### 示例
-
-```bash
-# 完整项目（认证 + 权限）
-dotnet new fullstack-app -n MyProject
-
-# 带公司前缀
-dotnet new fullstack-app -n Acme.MyProject
-
-# 不需要认证模块
-dotnet new fullstack-app -n MyProject --include-identity false
-
-# 最小化项目（无认证、无权限）
-dotnet new fullstack-app -n MyProject --include-identity false --include-roles false
-```
-
-## 生成的项目结构
-
-```
-MyProject/
-├── backend/                                # 后端
-│   ├── src/
-│   │   ├── MyProject.Api/                  # API 层（Controllers、中间件）
-│   │   ├── MyProject.Application/          # 应用层（AppService、权限）
-│   │   ├── MyProject.Domain/              # 领域层（实体、领域服务）
-│   │   └── MyProject.Infrastructure/      # 基础设施层（EF Core、邮件）
-│   ├── Directory.Build.props               # 框架版本 / 本地调试切换
-│   ├── Directory.Packages.props            # 中央包管理（CPM）
-│   └── MyProject.sln
-├── frontend/                               # 前端 Angular
-│   └── src/app/{core,features,layout,shared}/
-├── docs/                                   # 📄 项目文档 + AI 协作规范
-│   ├── standards/                          #   工作流事实源、编码/API/测试规范
-│   ├── requirements/                       #   需求 Plan 与登记册
-│   ├── reports/                            #   各阶段证据报告
-│   └── modules/                            #   模块文档
-├── .claude/skills/                         # 🤖 6 个 AI 阶段 Skill（随项目分发）
-├── deploy/                                 # 部署配置（docker-compose）
-└── Dockerfile                              # 多阶段构建
-```
-
-> 项目根 = 含 `backend/`、`frontend/`、`docs/` 的这一层。把本模板并入 monorepo（如 `apps/<name>/`）时，AI 的 Skill 会按 `docs/standards/agent-workflow.md` §2.0 相对这一层解析所有文档路径。
-
-### 条件裁剪说明
-
-| 参数 | 裁剪的后端内容 | 前端影响 |
-|------|---------------|---------|
-| `--include-identity false` | AuthController、Auth/、Email/、UserRegistrationOptions | 前端保留但登录/注册功能不可用 |
-| `--include-roles false` | Permissions/（PermissionConstant 等） | 前端保留但角色权限功能不可用 |
-
-## 本地开发
+## 本地运行
 
 ### 后端
 
+未配置 `ConnectionStrings:Default` 时使用内存数据库，可直接启动：
+
 ```bash
-cd backend/src/MyProject.Api
-
-# 使用内存数据库（无需配置，开箱即用）
-dotnet run
-
-# 使用 PostgreSQL
-# 1. 在 appsettings.json 中配置 ConnectionStrings:Default
-# 2. 生成初始迁移
-# 3. 启动应用（自动执行迁移）
+cd backend/src/CompanyName.ProjectName.Api
 dotnet run
 ```
 
-启动后访问 `http://localhost:5240`。
+健康检查地址为 `http://localhost:5240/api/health`。
 
-### 数据库迁移
+如需 PostgreSQL，在被 Git 忽略的 `backend/src/CompanyName.ProjectName.Api/appsettings.Development.json` 中配置：
 
-模板不包含 EF Core 迁移文件（不同用户可能使用不同数据库）。使用 PostgreSQL 等关系型数据库时，需要先生成迁移：
+```json
+{
+  "ConnectionStrings": {
+    "Default": "Host=localhost;Port=5432;Database=companyname-projectname;Username=postgres;Password=postgres"
+  }
+}
+```
+
+模板不预置迁移。应用在所有环境启动时自动初始化关系型数据库：已有迁移文件则执行 `MigrateAsync`，没有迁移文件则执行 `EnsureCreatedAsync` 创建数据库。修改模型后只需生成并审查迁移文件，无需再执行 `dotnet ef database update`：
 
 ```bash
-# 在 backend/ 目录执行
+cd backend
 dotnet ef migrations add InitialCreate \
-  --project src/MyProject.Infrastructure \
-  --startup-project src/MyProject.Api \
+  --project src/CompanyName.ProjectName.Infrastructure \
+  --startup-project src/CompanyName.ProjectName.Api \
   --output-dir Persistence/Migrations
-
-# 应用迁移（或启动应用时自动执行）
-dotnet ef database update \
-  --project src/MyProject.Infrastructure \
-  --startup-project src/MyProject.Api
 ```
 
-> **提示**：不配置连接字符串时，应用自动使用内存数据库，无需执行迁移。
+由 `EnsureCreated` 创建的数据库没有迁移历史，不能直接切换为迁移管理。计划持续演进结构的数据库应在首次启动前随应用包含初始迁移；否则后续启用迁移时需要重建数据库或制定基线方案。生产部署会随应用启动自动创建或迁移数据库，因此部署前必须审查模型或迁移，并准备备份和失败恢复方案。
+
+<!--#if (IncludeIdentity)-->
+开发环境首次启动会创建管理员账号：
+
+- 用户名：`admin`
+- 密码：`Admin@123456`
+
+部署前必须通过安全配置覆盖默认密码。
+<!--#endif-->
 
 ### 前端
 
 ```bash
 cd frontend
-
-# 安装依赖
-npm install
-
-# 启动开发服务器（自动代理到后端 5240 端口）
+npm ci
 npm start
 ```
 
-启动后访问 `http://localhost:4200`。
+默认开发服务器地址为 `http://localhost:4200`。Mock、同源代理和跨域联调方式见 [前端说明](frontend/README.md)。
 
-### 默认管理员
-
-首次启动时自动创建：
-- 用户名：`admin`
-- 密码：`Admin@123456`（请在生产环境修改）
-
-### 联调本地框架（开发者）
-
-生成的项目默认通过 NuGet `PackageReference` 引用 [Leistd 框架](../framework/README.md) 包。模板不会把本仓库的本地 NuGet 源写入生成项目；生成项目默认使用用户环境中的 NuGet 源（通常是 `nuget.org`）。
-
-若你**同时在改框架源码**，想在本仓库内验证"改过的框架 + 模板项目"，临时指定本地 `local-feed`（保持模板纯净，等同最终用户的真实消费路径）。仓库根 `NuGet.Config` 只保留 `nuget.org`，避免 CI/发布环境因不存在的本地源失败：
+## 验证
 
 ```bash
-# 1. 在仓库根目录执行，打本地包到 local-feed
-dotnet pack framework/Leistd.Framework.slnx -c Debug -o ./local-feed
-
-# 2. 在仓库内验证模板后端还原，显式指定本地 feed + nuget.org
-dotnet restore template/backend/CompanyName.ProjectName.sln \
-  --source ./local-feed \
-  --source https://api.nuget.org/v3/index.json
-
-# 3. 生成项目后若要继续消费本地包，可在生成项目根目录自行添加本地源
-dotnet new fullstack-app -n Acme.Shop
-dotnet nuget add source "<repo>/local-feed" --name leistd-local
+dotnet test backend/CompanyName.ProjectName.sln
+npm --prefix frontend run lint
+npm --prefix frontend run build
 ```
 
-> 若只想验证框架功能本身（不经过模板），更简单的方式是在仓库内的 demo / 测试项目里用 `ProjectReference` 直接指向 `framework/` 源码，可断点步进。
+## AI 协作
 
-## Docker 部署
+项目级 Skill 位于 [`.agents/skills/leistd-project-workflow/`](.agents/skills/leistd-project-workflow/SKILL.md)，统一覆盖规划、实现、审查、测试、协调和部署，并按场景加载必要 reference。它以 [项目文档入口](docs/README.md)、源码、配置和测试为事实，不依赖特定 AI 工具的入口文件。
 
-### Docker Compose（推荐）
+使用 `Leistd.*` 组件时，按 [后端说明](backend/README.md#leistd-框架-api) 定位当前 NuGet 包版本的文档和 XML，不根据模型记忆猜测 API。
+
+## 部署
 
 ```bash
-# 编辑配置
-nano deploy/docker-compose.yml
-
-# 启动
-cd deploy && docker-compose up -d
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up --build
 ```
 
-### 单独构建
-
-```bash
-# 构建镜像
-docker build -t companyname-projectname .
-
-# 运行
-docker run -d \
-  -p 8080:8080 \
-  -e ConnectionStrings__Default="Host=your-db;Database=MyProject;Username=postgres;Password=xxx" \
-  -e DefaultAdmin__Password="YourPassword" \
-  -e Jwt__SecretKey="YourSecretKey-MinimumLength32Characters!" \
-  companyname-projectname
-```
-
-## 卸载模板
-
-```bash
-dotnet new uninstall FullstackApp.Template
-```
-
-## 许可证
-
-MIT License
+生产部署前应确认数据库迁移、密钥、管理员密码、HTTPS、健康检查和回滚方案。

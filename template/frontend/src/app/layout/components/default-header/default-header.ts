@@ -1,18 +1,23 @@
+//#if (IncludeNotifications)
+import { DatePipe } from '@angular/common';
+//#endif
+//#if (IncludeNotifications)
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, ViewChild, computed, inject, output, signal } from '@angular/core';
+//#else
 import { ChangeDetectionStrategy, Component, OnDestroy, ViewChild, computed, inject, output, signal } from '@angular/core';
+//#endif
 import { Router, RouterModule } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { AvatarModule } from 'primeng/avatar';
 import { BadgeModule } from 'primeng/badge';
 import { ButtonModule } from 'primeng/button';
 import { MenuModule, Menu } from 'primeng/menu';
+//#if (IncludeNotifications)
+import { OverlayBadgeModule } from 'primeng/overlaybadge';
+import { PopoverModule, Popover } from 'primeng/popover';
+//#endif
 import { StyleClassModule } from 'primeng/styleclass';
 import { TooltipModule } from 'primeng/tooltip';
-//#if (IncludeNotifications)
-import { OnInit } from '@angular/core';
-import { DatePipe } from '@angular/common';
-import { PopoverModule, Popover } from 'primeng/popover';
-import { OverlayBadgeModule } from 'primeng/overlaybadge';
-//#endif
 
 import { AuthService } from '../../../core/services/auth-service';
 //#if (IncludeNotifications)
@@ -37,15 +42,15 @@ import { LayoutService } from '../../services/layout-service';
     TooltipModule,
     MenuModule,
     ThemeConfigurator,
-//#if (IncludeNotifications)
+    //#if (IncludeNotifications)
     PopoverModule,
     OverlayBadgeModule,
     DatePipe,
-//#endif
-//#if (IncludeIdentity)
+    //#endif
+    //#if (IncludeIdentity)
     ProfileSettingsDialogComponent,
     ChangePasswordDialogComponent
-//#endif
+    //#endif
   ],
   templateUrl: './default-header.html',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -62,7 +67,7 @@ export class DefaultHeader implements OnDestroy {
   @ViewChild('userMenu') userMenu!: Menu;
 
   readonly toggleMobileMenu = output<void>();
-//#if (IncludeNotifications)
+  //#if (IncludeNotifications)
   readonly notificationService = inject(NotificationService);
   readonly notificationCount = this.notificationService.unreadCount;
   readonly notifications = this.notificationService.notifications;
@@ -94,13 +99,13 @@ export class DefaultHeader implements OnDestroy {
   notificationIcon(type: string): string {
     return this.notificationService.getIcon(type);
   }
-//#else
+  //#else
   readonly notificationCount = signal(0);
-//#endif
-//#if (IncludeIdentity)
+  //#endif
+  //#if (IncludeIdentity)
   readonly profileDialogVisible = signal(false);
   readonly changePasswordDialogVisible = signal(false);
-//#endif
+  //#endif
 
   readonly userMenuItems = computed<MenuItem[]>(() => {
     const currentUser = this.authService.currentUser();
@@ -120,7 +125,7 @@ export class DefaultHeader implements OnDestroy {
       });
     }
 
-//#if (IncludeIdentity)
+    //#if (IncludeIdentity)
     if (items.length > 0) {
       items.push({ separator: true });
     }
@@ -145,12 +150,12 @@ export class DefaultHeader implements OnDestroy {
         command: () => this.handleLogout()
       }
     );
-//#endif
+    //#endif
 
     return items;
   });
 
-//#if (IncludeIdentity)
+  //#if (IncludeIdentity)
   openProfileDialog(): void {
     this.forceCloseMenu();
     this.profileDialogVisible.set(true);
@@ -166,7 +171,7 @@ export class DefaultHeader implements OnDestroy {
     this.forceCloseMenu();
     this.authService.logout();
   }
-//#endif
+  //#endif
 
   handleMenuToggle(): void {
     if (this.layoutService.isMobileSidebarMode()) {

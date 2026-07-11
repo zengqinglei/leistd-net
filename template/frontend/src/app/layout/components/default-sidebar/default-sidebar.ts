@@ -38,20 +38,18 @@ export class DefaultSidebar {
   readonly mobileMenuClosed = output<void>();
 
   private readonly platformMenuGroups: MenuGroup[] = [
-    { items: [{ label: '仪表盘', icon: 'pi-gauge', route: '/platform' }] }
-//#if (IncludeIdentity)
-    ,
+    { items: [{ label: '仪表盘', icon: 'pi-gauge', route: '/platform' }] },
+    //#if (IncludeIdentity)
     {
       label: '系统',
       items: [
-        { label: '用户管理', icon: 'pi-users', route: '/platform/users' }
-//#if (IncludeOpenIddict)
-        ,
+        { label: '用户管理', icon: 'pi-users', route: '/platform/users' },
+        //#if (IncludeOpenIddict)
         { label: '开发应用', icon: 'pi-id-card', route: '/platform/open-applications' }
-//#endif
+        //#endif
       ]
     }
-//#endif
+    //#endif
   ];
 
   private readonly workspaceMenuGroups: MenuGroup[] = [

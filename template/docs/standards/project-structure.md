@@ -1,113 +1,60 @@
-# 项目目录规范
+# 项目目录
 
-## 1. 顶层结构
+## 1. 项目根
 
 ```text
 {project-root}/
-├── backend/                  # 后端应用，可按项目调整
-├── frontend/                 # 前端应用，可按项目调整
-├── docs/                     # 项目文档
-├── tests/                    # 跨端或端到端测试，可选
-├── scripts/                  # 本地脚本和自动化工具
-├── template/                 # 模板项目场景可选
+├── .agents/skills/          # 跨工具项目 Skill
+├── backend/                 # .NET 后端
+├── frontend/                # Angular 前端
+├── deploy/                  # 容器编排配置
+├── docs/                    # 长期规范与按需沉淀文档
+├── Dockerfile
 └── README.md
 ```
 
-## 2. 应用代码目录
+项目根是同时包含 `backend/`、`frontend/` 和 `docs/` 的目录；monorepo 中所有项目相对路径仍以该层为准。
 
-### 2.1 前端目录
+## 2. 后端分层
+
+```text
+backend/src/
+├── {ProjectName}.Domain/
+├── {ProjectName}.Application/
+├── {ProjectName}.Infrastructure/
+└── {ProjectName}.Api/
+```
+
+- Domain 保存领域模型和内层抽象。
+- Application 编排用例并依赖 Domain，不依赖 Infrastructure。
+- Infrastructure 实现持久化和外部适配。
+- Api 是组合根，负责注册服务、映射端点和启动应用。
+
+测试项目按实际测试类型放在 `backend/tests/` 或解决方案现有位置，不为目录完整性创建空项目。
+
+## 3. 前端分层
 
 ```text
 frontend/
 ├── _mock/
-│   ├── api/
-│   ├── data/
-│   └── index.ts
-├── src/
-│   ├── app/
-│   │   ├── core/
-│   │   ├── features/
-│   │   ├── layout/
-│   │   └── shared/
-│   ├── assets/
-│   └── environments/
+├── public/
+├── src/app/
+│   ├── core/
+│   ├── features/
+│   ├── layout/
+│   └── shared/
 └── package.json
 ```
 
-### 2.2 后端目录
+- `core/` 保存单例服务、认证和全局基础设施。
+- `features/` 按业务能力组织页面和局部服务。
+- `layout/` 保存应用壳与导航。
+- `shared/` 只保存可跨功能复用的展示组件和工具。
 
-```text
-backend/
-├── src/
-│   ├── {ProjectName}.Api/
-│   ├── {ProjectName}.Application/
-│   ├── {ProjectName}.Domain/
-│   └── {ProjectName}.Infrastructure/
-├── tests/
-│   ├── UnitTests/
-│   └── IntegrationTests/
-└── {ProjectName}.sln
-```
+## 4. 文档与 Skill
 
-## 3. 文档目录
+`docs/README.md` 是唯一文档索引。`docs/standards/` 保存长期规则；`docs/modules/`、`docs/requirements/` 和额外部署文档按需创建。
 
-```text
-docs/
-├── quick-start/
-├── guides/
-│   ├── create-app/
-│   └── frontend/
-├── standards/
-│   └── code-standard/
-├── requirements/
-│   └── context/
-├── modules/
-├── deploy/
-├── reports/
-│   ├── development/
-│   ├── code-review/
-│   ├── tests/
-│   ├── deploy/
-│   └── acceptance/
-└── reference/
-```
+项目协作能力位于 `.agents/skills/leistd-project-workflow/`。`SKILL.md` 定义通用闭环，`references/` 按场景加载细节；不依赖 `CLAUDE.md`、`AGENTS.md` 等工具专属入口，也不携带固定文档模板。
 
-## 4. Skill 目录
-
-如项目内置 Claude/Codex skill，可使用：
-
-```text
-.claude/
-└── skills/
-    └── {skill-name}/
-        ├── SKILL.md
-        ├── templates/
-        ├── references/
-        └── examples/
-```
-
-Skill 应优先读取 `docs/standards/`，不要把长期规范散落在 skill 内部模板中。每个 Skill 应按职责独立闭环，不依赖非标准共享目录。
-
-## 5. 模块文档结构
-
-```text
-docs/modules/{module-name}/
-├── design.md
-├── api.md
-├── plan.md
-├── test-plan.md
-└── status.md
-```
-
-## 6. 命名规则
-
-命名规范以 `document-naming.md` 为单一权威来源（目录/文件 kebab-case、需求 `req-yyyymmdd-nnn-plan.md`、阶段报告 `{req-id}-{report-type}.md`、禁止项等），此处不重复维护。
-
-## 7. AI 协作要求
-
-AI 修改目录结构前必须说明：
-
-- 为什么需要调整。
-- 影响哪些引用、构建、部署和测试。
-- 如何迁移旧路径。
-- 如何回滚。
+目录和普通 Markdown 文件使用小写 kebab-case；目录入口统一命名为 `README.md`。代码命名遵循对应语言规范。调整现有目录时同步检查项目引用、导入、构建、部署、测试和文档链接。

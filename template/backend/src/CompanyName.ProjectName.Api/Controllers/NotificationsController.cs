@@ -1,3 +1,4 @@
+using Leistd.Exception.Core;
 using Leistd.Notifications;
 using Leistd.Security.Users;
 using Microsoft.AspNetCore.Authorization;
@@ -40,25 +41,23 @@ public class NotificationsController(
 
     /// <summary>标记单条通知为已读。</summary>
     [HttpPut("{id}/read")]
-    public async Task<IActionResult> MarkAsReadAsync(string id, CancellationToken cancellationToken = default)
+    public async Task MarkAsReadAsync(string id, CancellationToken cancellationToken = default)
     {
         var userId = currentUser.Id?.ToString();
         if (string.IsNullOrEmpty(userId))
-            return Forbid();
+            throw new ForbiddenException("当前身份不能操作用户通知。");
 
         await notificationStore.MarkAsReadAsync(id, userId, cancellationToken);
-        return NoContent();
     }
 
     /// <summary>标记当前用户所有通知为已读。</summary>
     [HttpPut("read-all")]
-    public async Task<IActionResult> MarkAllAsReadAsync(CancellationToken cancellationToken = default)
+    public async Task MarkAllAsReadAsync(CancellationToken cancellationToken = default)
     {
         var userId = currentUser.Id?.ToString();
         if (string.IsNullOrEmpty(userId))
-            return Forbid();
+            throw new ForbiddenException("当前身份不能操作用户通知。");
 
         await notificationStore.MarkAllAsReadAsync(userId, cancellationToken);
-        return NoContent();
     }
 }

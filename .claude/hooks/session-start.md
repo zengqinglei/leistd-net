@@ -1,3 +1,3 @@
-本仓库（leistd-net 模板）有项目级开发工作流。动手实现需求前，请先读技能 `using-leistd-workflow`（位于 .claude/skills/），它是工作流发现入口，会指引你按意图选择 requirement-plan / task-manager / coding / code-review / test-runner / deploy，并要求先读 template/docs/standards/agent-workflow.md。
+本仓库包含框架、项目模板和可分发 Skill 三个交付面。先按用户最终意图选择拥有交付责任的专项 Skill：Framework 使用 `developing-leistd-framework`，Template 使用 `developing-leistd-template`。
 
-如果任务涉及 `framework/components`、`framework/ddd-struct` 或任何 `Leistd.*` 组件 API / DI / Options / 运行时语义，请同时读技能 `using-leistd-net-framework`，按 `framework/docs/` 与源码核对组件事实源，不要凭记忆臆造 API。
+只有变更跨 Framework、Template、Skills、CI、版本或发布流程时才使用 `maintaining-leistd-repository` 统筹，并按范围组合专项 Skill。`template/.agents/skills/leistd-project-workflow` 只服务生成后的业务项目，不作为本仓库维护流程。

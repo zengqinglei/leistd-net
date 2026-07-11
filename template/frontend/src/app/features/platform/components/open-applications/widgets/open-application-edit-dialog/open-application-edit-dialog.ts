@@ -157,21 +157,21 @@ export class OpenApplicationEditDialogComponent {
   };
 
   readonly applicationTypeLabels: Record<string, string> = {
-    'web': 'Web',
-    'native': '桌面/原生',
-    'service': '服务端'
+    web: 'Web',
+    native: '桌面/原生',
+    service: '服务端'
   };
 
   readonly clientTypeLabels: Record<string, string> = {
-    'public': 'Public（公开）',
-    'confidential': 'Confidential（机密）'
+    public: 'Public（公开）',
+    confidential: 'Confidential（机密）'
   };
 
   readonly consentTypeLabels: Record<string, string> = {
-    'implicit': '隐式同意',
-    'explicit': '显式同意',
-    'external': '外部同意',
-    'systematic': '系统同意'
+    implicit: '隐式同意',
+    explicit: '显式同意',
+    external: '外部同意',
+    systematic: '系统同意'
   };
 
   getPermissionLabel(value: string): string {

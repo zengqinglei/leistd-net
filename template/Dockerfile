@@ -62,5 +62,5 @@ COPY --from=backend-build /app/publish .
 # Angular >= 17 生产构建会输出到 dist/<project>/browser 目录
 COPY --from=frontend-build /app/dist/companyname-projectname-web/browser ./wwwroot
 
-# 启动程序（Program.cs 会在应用启动前自动执行数据库迁移）
+# Production 启动会自动创建或迁移数据库，部署前必须审查并准备失败恢复方案
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.Api.dll"]

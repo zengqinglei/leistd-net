@@ -34,7 +34,7 @@ public class ExternalAuthController(
     [AllowAnonymous]
     [HttpPost("{provider}/callback")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> CallbackAsync(
+    public async Task CallbackAsync(
         string provider,
         [FromBody] ExternalLoginCallbackInputDto request,
         CancellationToken cancellationToken)
@@ -45,7 +45,6 @@ public class ExternalAuthController(
 
         await HttpContext.SignInAsync("MyProjectCookie", principal,
             new AuthenticationProperties { IsPersistent = true });
-        return NoContent();
     }
 
     private async Task<ClaimsPrincipal> CreateCookiePrincipalAsync(CompanyName.ProjectName.Domain.Users.Entities.User user, CancellationToken cancellationToken)

@@ -135,8 +135,8 @@ export class Login {
     }
     return null;
   }
+  //#if (IncludeExternalLogin)
 
-//#if (IncludeExternalLogin)
   loginWithGitHub() {
     this.loginWithExternalProvider('github', 'GitHub');
   }
@@ -169,5 +169,5 @@ export class Login {
       this._isLoading.set(false);
     }
   }
-//#endif
+  //#endif
 }

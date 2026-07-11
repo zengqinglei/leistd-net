@@ -114,13 +114,7 @@
           @if (!isEditMode()) {
             <div class="flex flex-col gap-2">
               <label class="text-sm font-medium text-color">初始密码</label>
-              <p-password
-                formControlName="password"
-                [feedback]="false"
-                [toggleMask]="true"
-                [fluid]="true"
-                inputStyleClass="w-full"
-              />
+              <p-password formControlName="password" [feedback]="false" [toggleMask]="true" [fluid]="true" inputStyleClass="w-full" />
               @if (form.controls.password.hasError('required') && form.controls.password.touched) {
                 <small class="text-red-500">请输入初始密码</small>
               }

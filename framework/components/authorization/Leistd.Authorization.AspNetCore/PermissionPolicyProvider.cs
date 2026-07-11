@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 namespace Leistd.Authorization.AspNetCore;
 
 /// <summary>
-/// 权限策略提供器：把"权限名"当作授权策略（ABP 风格）。
+/// 权限策略提供器：把"权限名"作为授权策略名。
 /// </summary>
 /// <remarks>
 /// 当 <c>[Authorize(Policy = name)]</c> 的 policy 名命中

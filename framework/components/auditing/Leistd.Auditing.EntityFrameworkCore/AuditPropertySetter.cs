@@ -9,7 +9,7 @@ namespace Leistd.Auditing.EntityFrameworkCore;
 /// </summary>
 /// <remarks>
 /// 使用 EF Core EntityEntry API 直接设置审计属性，避免反射带来的性能问题和代理类兼容性问题。
-/// 基于 ABP 框架的审计属性设置逻辑，简化版本（无多租户、无 API Key 审计）
+/// 当前实现不包含多租户或 API Key 审计。
 /// </remarks>
 public class AuditPropertySetter(
     IClock clock,

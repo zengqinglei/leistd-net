@@ -1,10 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
-import {
-  HubConnectionBuilder,
-  HubConnection,
-  LogLevel,
-  HttpTransportType
-} from '@microsoft/signalr';
+import { HubConnectionBuilder, HubConnection, LogLevel, HttpTransportType } from '@microsoft/signalr';
 
 import { environment } from '../../../environments/environment';
 
@@ -75,9 +70,7 @@ export class SignalRService {
   registerResourceEvent(eventName: string): void {
     if (this.resourceEventNames.has(eventName)) return;
     this.resourceEventNames.add(eventName);
-    this.businessConnection?.on(eventName, (payload: unknown) =>
-      this.lastResourceEvent.set({ eventName, payload })
-    );
+    this.businessConnection?.on(eventName, (payload: unknown) => this.lastResourceEvent.set({ eventName, payload }));
   }
 
   /** 订阅资源变更。 */
@@ -147,9 +140,7 @@ export class SignalRService {
 
     // 重新挂载已注册的事件监听
     for (const eventName of this.resourceEventNames) {
-      this.businessConnection.on(eventName, (payload: unknown) =>
-        this.lastResourceEvent.set({ eventName, payload })
-      );
+      this.businessConnection.on(eventName, (payload: unknown) => this.lastResourceEvent.set({ eventName, payload }));
     }
 
     this.businessConnection.onreconnected(async () => {

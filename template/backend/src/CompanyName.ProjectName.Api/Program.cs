@@ -309,7 +309,7 @@ try
     // --- 构建应用 ---
     var app = builder.Build();
 
-    // ✅ 在应用启动前执行数据库迁移（确保数据库就绪后再接收请求）
+    // 在应用启动前自动迁移或创建数据库，确保数据库就绪后再接收请求。
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
@@ -318,8 +318,8 @@ try
         if (db.Database.IsRelational())
         {
             // 模板默认不内置迁移：
-            // - 已添加迁移（dotnet ef migrations add）→ 走 Migrate 应用迁移（推荐用于生产）；
-            // - 尚无任何迁移 → 走 EnsureCreated 直接按当前模型建表（开箱即用 / 快速试跑）。
+            // - 已添加迁移（dotnet ef migrations add）-> 走 Migrate 应用迁移；
+            // - 尚无任何迁移 -> 走 EnsureCreated 直接按当前模型建表。
             // 注意：同一数据库不要在两种方式间切换。
             var hasMigrations = db.Database.GetMigrations().Any();
             if (hasMigrations)
@@ -411,4 +411,9 @@ catch (Exception ex) when (ex is not HostAbortedException)
 finally
 {
     Log.CloseAndFlush();
+}
+
+// 向 WebApplicationFactory 集成测试公开顶层语句生成的入口类型。
+public partial class Program
+{
 }

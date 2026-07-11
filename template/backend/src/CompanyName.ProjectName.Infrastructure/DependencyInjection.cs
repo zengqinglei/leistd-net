@@ -63,7 +63,8 @@ public static class DependencyInjection
             }
             else
             {
-                options.UseInMemoryDatabase("MyProject");
+                var databaseName = configuration["Database:InMemoryName"];
+                options.UseInMemoryDatabase(string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName);
             }
 
 #if (IncludeOpenIddict)

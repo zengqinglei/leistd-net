@@ -2,7 +2,7 @@
 
 一个业务操作往往跨多个仓储、多次数据库写入，必须**要么全部成功、要么全部回滚**。如果让每个方法各自管理 `DbContext`、显式开启/提交事务、再手动 `SaveChanges`，业务代码会被基础设施细节淹没，且很难保证嵌套调用时复用同一个事务边界。
 
-Leistd 的工作单元（Unit of Work）借鉴 Volo.ABP 的设计，把「一个请求 / 一个业务方法」内的所有数据库操作收敛到一个统一的事务边界：通过 `[UnitOfWork]` 特性声明边界，由拦截器自动 `Begin → SaveChanges → Commit`，异常时自动回滚；嵌套调用自动复用外层工作单元（不重复开事务）。同时它还提供与领域事件的集成——可让事件处理器精确地在「提交前 / 提交后 / 回滚后 / 完成后」等阶段运行。
+Leistd 的工作单元（Unit of Work）把「一个请求 / 一个业务方法」内的所有数据库操作收敛到统一事务边界：通过 `[UnitOfWork]` 特性声明边界，由拦截器自动 `Begin → SaveChanges → Commit`，异常时自动回滚；嵌套调用自动复用外层工作单元（不重复开事务）。同时它还提供与领域事件的集成，可让事件处理器精确地在「提交前 / 提交后 / 回滚后 / 完成后」等阶段运行。
 
 ## 何时使用
 
@@ -208,7 +208,6 @@ public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 - 嵌套调用中只有最外层工作单元真正提交/回滚，内层 `ChildUnitOfWork.CompleteAsync` 不做任何事——不要依赖内层「提交」来落库。
 - `BeforeCommit` 阶段的事件处理器异常会触发整体回滚；只有确实希望影响事务结果的逻辑才放在该阶段，发通知、刷缓存等副作用应放 `AfterCommit`。
 - `RollbackAsync` 是幂等的；`CompleteAsync` 不可重复调用，否则抛 `InvalidOperationException`。
-- 部分接口注释采用英文并对照 ABP 设计（如 `UnitOfWorkFailedEventArgs`、`ITransactionApi`），命名与 ABP 工作单元保持一致以便迁移参考。
 
 ## 相关
 

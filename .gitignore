@@ -42,10 +42,7 @@ TestResult.xml
 
 # Framework 打包产物
 framework/artifacts/
-local-feed/
-.tmp-nuget-packages/
-.tmp-generated/
-.tmp-template-hive/
+.tmp/
 
 # Misc build artifacts
 *.ilk

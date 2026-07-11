@@ -101,7 +101,7 @@ public class UnitOfWork : IUnitOfWork
         {
             _isCompleting = true;
 
-            // ABP 风格的循环处理：SaveChanges → 发布 BeforeCommit → 重复直到无新事件
+            // SaveChanges 后发布 BeforeCommit，并重复处理事件产生的新变更。
             var databaseApi = (_databaseApi as ISupportsSavingChanges);
             if (databaseApi != null)
             {

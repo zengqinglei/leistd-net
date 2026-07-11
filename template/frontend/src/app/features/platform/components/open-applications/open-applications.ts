@@ -195,7 +195,7 @@ export class OpenApplicationsPage implements OnInit {
         finalize(() => this.editDialogSaving.set(false))
       )
       .subscribe({
-        next: (result) => {
+        next: result => {
           this.messageService.add({
             severity: 'success',
             summary: '成功',

@@ -4,7 +4,7 @@
 
 构建中大型业务系统时，最难统一的不是某个框架，而是**分层约定**：实体放哪、审计字段谁来填、仓储接口长什么样、应用服务怎么映射 DTO。各团队各写一套，代码就难以复用与维护。
 
-Leistd 的 DDD 分组提供一套 Volo.ABP 风格的领域驱动设计基础类型，按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分职责：Domain 定义实体基类、仓储抽象、审计接口与数据过滤器；Application.Contracts 提供 DTO 基类与分页约定；Application 提供应用服务基类；Infrastructure 基于 EF Core 落地仓储、自动审计、软删除过滤与本地事件发布。业务项目只需继承这些基类、注册 `AddDddInfrastructure()`，即可获得审计字段自动填充、软删除、仓储自动注册、领域事件随保存发布等开箱能力。权限模型不属于本分组，见[权限授权组件](../components/authorization.md)。
+Leistd 的 DDD 分组提供一套领域驱动设计基础类型，按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分职责：Domain 定义实体基类、仓储抽象、审计接口与数据过滤器；Application.Contracts 提供 DTO 基类与分页约定；Application 提供应用服务基类；Infrastructure 基于 EF Core 落地仓储、自动审计、软删除过滤与本地事件发布。业务项目只需继承这些基类、注册 `AddDddInfrastructure()`，即可获得审计字段自动填充、软删除、仓储自动注册、领域事件随保存发布等开箱能力。权限模型不属于本分组，见[权限授权组件](../components/authorization.md)。
 
 ## 何时使用
 

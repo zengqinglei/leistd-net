@@ -113,7 +113,7 @@ function createOpenApplication(req: MockRequest) {
     properties: {},
     hasClientSecret: body.clientType === 'confidential',
     creationTime: new Date().toISOString(),
-    clientSecret: body.clientType === 'confidential' ? 'mock-secret-' + crypto.randomUUID() : undefined
+    clientSecret: body.clientType === 'confidential' ? `mock-secret-${crypto.randomUUID()}` : undefined
   };
 
   applications.unshift(newApplication);

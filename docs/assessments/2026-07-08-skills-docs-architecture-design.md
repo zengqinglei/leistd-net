@@ -201,5 +201,5 @@ leistd-net/
 - Anthropic Agent Skills 开放标准(2025-12-18)、authoring best practices、progressive disclosure。
 - Vercel Labs `npx skills`(GitHub 即注册表);daisyUI(`npx skills add` + llms.txt + Blueprint MCP)。
 - dotnet/skills(官方,2026-03)+ nuget-skills + managedcode/dotnet-skills:.NET 原生随包分发、git-tag 版本锁定。
-- ABP:分层 TestBase、约定即模板生成器执行。Red Hat/Speakeasy:MCP vs skills 选型。
+- 成熟 .NET 项目通常使用分层 TestBase，并由模板生成器执行约定。Red Hat/Speakeasy:MCP vs skills 选型。
 - 完整 URL 见本会话评审 agent 报告。

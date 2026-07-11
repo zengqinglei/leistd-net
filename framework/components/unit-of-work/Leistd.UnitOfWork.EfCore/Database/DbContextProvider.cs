@@ -29,7 +29,7 @@ public class DbContextProvider<TDbContext>(
         }
 
         // 模式 2：有 UnitOfWork - 从 UnitOfWork 的 Scope 获取
-        // 从 UnitOfWork 获取 ServiceProvider（参考 ABP 设计）
+        // 从当前工作单元的作用域获取 ServiceProvider。
         var uowServiceProvider = GetServiceProvider(unitOfWork);
 
         // 在 UnitOfWork 内，从 UnitOfWork 获取或创建 DbContext
@@ -112,7 +112,7 @@ public class DbContextProvider<TDbContext>(
     }
 
     /// <summary>
-    /// 从 UnitOfWork 获取 ServiceProvider（参考 ABP 设计）
+    /// 从 UnitOfWork 获取 ServiceProvider。
     /// 由于 IUnitOfWork 接口不暴露 ServiceProvider，需要转换为具体类型
     /// </summary>
     private static IServiceProvider GetServiceProvider(IUnitOfWork unitOfWork)

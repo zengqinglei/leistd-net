@@ -32,7 +32,7 @@ internal class ChildUnitOfWork : IUnitOfWork
     {
         _parent = parent;
 
-        // 订阅父工作单元的事件并转发（与 ABP 框架保持一致）
+        // 订阅父工作单元的事件并转发。
         if (_parent is UnitOfWork concreteParent)
         {
             concreteParent.Failed += (sender, args) => Failed?.Invoke(sender, args);
