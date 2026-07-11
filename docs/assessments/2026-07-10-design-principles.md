@@ -117,6 +117,6 @@
 
 - 新增/修改**组件文档**：查 A3 + B（撰写规范见 `framework/docs/_doc-template.md`）。
 - 新增/修改**组件代码**：查 A1/A2/A4 + `framework/docs/development-guide.md`。
-- 新增/修改**任何 skill**：查 C0–C6 + `template/docs/standards/skill-authoring.md`。
+- 新增/修改**任何 skill**：查 C0–C6，并对照现有 `.claude/skills/*/SKILL.md` 与 `template/.claude/skills/*/SKILL.md` 的结构和边界。
 - 演进**文档分发/索引机制**：查 D0/D3/D4/D5 + `2026-07-10-manifest-driven-doc-discovery.md`。
 - 做任何**审查/修复**：查 D1/D2/D6。

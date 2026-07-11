@@ -25,6 +25,19 @@ disable-model-invocation: false
 
 组件用法的权威文档在 `framework/docs/`，按源码撰写、逐一核对公共 API。**文档缺失或存疑时，先读源码 `framework/components/<家族>/**/*.cs`（含 XML 注释与公共类型），再按 `framework/docs/_doc-template.md` 骨架补文档，不要凭空回答。** 新增/修改组件的规范见 `framework/docs/development-guide.md`。
 
+## 修改组件前置原则
+
+在 `framework/components` 或 `framework/ddd-struct` 内动手前，先按以下原则自检：
+
+- **依赖方向**：`components` 不依赖 `ddd-struct`；`*.Core` / `Leistd.Ddd.Domain` 不依赖 Web、EF、Castle 等具体实现；DDD 内部保持 `Domain ← Application(.Contracts) ← Infrastructure`。
+- **组件闭环**：每个家族只做自己的职责，不替其它组件注册基础设施、映射端点或隐式挂载拦截器；跨组件组合由宿主显式调用各自的 `Add*` / `Map*`。
+- **实现分层**：抽象放 `.Core`；ASP.NET Core 放 `.AspNetCore*`；EF Core 放 `.EntityFrameworkCore` / `.EfCore`；SignalR 放 `.AspNetCore.SignalR`。
+- **目录与命名**：服务注册文件统一 `DependencyInjection.cs`；实体放 `Entities`；Options 放 `Options`；DTO 使用 `XxxInputDto` / `XxxOutputDto`；EF 持久化实现优先使用 `XxxStore` / `XxxManager`。
+- **身份读取**：业务/组件优先使用 `ICurrentUser` / `ICurrentPrincipalAccessor` 等统一抽象，避免散落 `ClaimsPrincipal user`、`Context.User!` 或重复用户抽象。
+- **文档示例自包含**：组件文档示例只能使用该组件真实引用的类型 + 原生 .NET/EF Core；DDD 分层示例归 `framework/docs/ddd-struct/ddd-struct.md`。
+
+框架组件改动后，必须同步审视 `template/backend`、`template/frontend`、`template/docs` 是否需要适配；模板是组件组合的端到端示范，不应与框架 API 漂移。
+
 ## 通用组件（components）
 
 | 组件 | 定位 | 文档 |
@@ -79,5 +92,19 @@ disable-model-invocation: false
 ## 与其它 skill 的边界
 
 - **项目治理工作流**（需求→开发→审查→测试→部署→验收）：用 `using-leistd-workflow` 及其阶段 skill，不在本 skill 范围。
+- **框架仓开发流程**：先用 `using-leistd-workflow` 确认需求/开发/审查/测试闭环；一旦涉及 `framework/components`、`framework/ddd-struct` 或 `Leistd.*` API 边界，再回到本 skill 查组件事实源。
 - **通用工程方法**（TDD/头脑风暴/代码审查方法论）：不在本 skill 范围，按你现有的通用工程实践处理。
 - 本 skill 只负责"框架组件/基座怎么用、去哪查"，是知识发现入口，不执行开发流程。
+
+## 最小验证
+
+组件代码或文档改完后，优先运行与改动匹配的最小验证：
+
+```bash
+dotnet build framework/Leistd.Framework.slnx -c Release
+dotnet pack framework/Leistd.Framework.slnx -c Release -o framework/artifacts
+pwsh framework/build/check-docs-sync.ps1
+pwsh framework/build/check-docs-api-drift.ps1
+```
+
+未执行的验证必须说明原因；不要把未运行写成已通过。

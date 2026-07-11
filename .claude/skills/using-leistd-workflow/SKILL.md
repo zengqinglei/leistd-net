@@ -38,6 +38,8 @@ disable-model-invocation: false
 
 本套 skill 提供**特定项目治理闭环**（需求登记→开发→审查→测试→部署→验收，含报告沉淀与人工确认）。通用工程方法（头脑风暴、计划撰写、TDD、代码审查方法论等）不在本套范围，按你现有的通用工程实践处理。相邻能力的边界见各 skill description 的"不适用"段。
 
+涉及 `framework/components`、`framework/ddd-struct` 或任何 `Leistd.*` 组件 API / DI / Options / 运行时语义时，同时读取 `using-leistd-net-framework`：本 skill 管"怎么推进工作流"，`using-leistd-net-framework` 管"框架组件事实源和边界"。
+
 ## 高风险动作必须人工确认
 
 生产部署/回滚、数据迁移/删除、修改认证授权/密钥、引入外部费用——见 `agent-workflow.md` §8。
