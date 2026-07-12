@@ -130,5 +130,7 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 
-# ---------- Claude Code (personal/local overrides) ----------
+# ---------- AI CLI local adapters ----------
+.claude/skills/
 .claude/settings.local.json
+skills-lock.json

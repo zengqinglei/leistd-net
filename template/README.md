@@ -99,6 +99,20 @@ npm --prefix frontend run build
 
 项目级 Skill 位于 [`.agents/skills/leistd-project-workflow/`](.agents/skills/leistd-project-workflow/SKILL.md)，统一覆盖规划、实现、审查、测试、协调和部署，并按场景加载必要 reference。它以 [项目文档入口](docs/README.md)、源码、配置和测试为事实，不依赖特定 AI 工具的入口文件。
 
+[Codex](https://developers.openai.com/codex/skills) 等原生发现 `.agents/skills/` 的 AI CLI 无需安装。使用只识别其他项目目录的 CLI 时，按需生成本地适配；例如项目 Skill 位于 `.claude/skills/` 的 [Claude Code](https://code.claude.com/docs/en/skills#where-skills-live) 执行：
+
+```bash
+npx skills add ./.agents/skills/leistd-project-workflow --agent claude-code --skill leistd-project-workflow -y
+```
+
+`npx skills` 会根据平台能力选择链接或复制，并在结果中标明实际方式。需要强制复制时执行：
+
+```bash
+npx skills add ./.agents/skills/leistd-project-workflow --agent claude-code --skill leistd-project-workflow --copy -y
+```
+
+复制的适配不会自动跟随权威源更新，修改项目 Skill 后应重新执行命令。生成的 `.claude/skills/` 和 `skills-lock.json` 是本地适配产物，不提交到仓库。AI CLI 完全不支持 Skill 时，在当前会话中明确要求它先读取 `.agents/skills/leistd-project-workflow/SKILL.md`。
+
 使用 `Leistd.*` 组件时，按 [后端说明](backend/README.md#leistd-框架-api) 定位当前 NuGet 包版本的文档和 XML，不根据模型记忆猜测 API。
 
 ## 部署

@@ -71,6 +71,7 @@
 | 范围 | 权威入口 |
 | --- | --- |
 | 三层场景与文档读写链路 | `docs/architecture/collaboration-scenarios.md` |
+| 仓库内部 AI 协作 | `.agents/skills/developing-leistd-framework/SKILL.md`、`.agents/skills/developing-leistd-template/SKILL.md`、`.agents/skills/maintaining-leistd-repository/SKILL.md` |
 | 框架开发 | `docs/framework/development-guide.md` |
 | 框架版本与发布 | `docs/framework/versioning.md` |
 | 模板维护 | `docs/template/development-guide.md` |

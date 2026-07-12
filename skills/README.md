@@ -2,7 +2,7 @@
 
 本目录存放供 `Leistd.*` NuGet 消费项目安装的框架 Skill。它遵循 [Agent Skills 开放标准](https://agentskills.io/specification)，可用于支持该标准的编码代理。
 
-> 与 `.claude/skills/`（本仓库自身开发用的内部 skill）区分：本目录的 skill 是给**下游消费者**的。
+> 与根 `.agents/skills/`（本仓库自身开发用的内部 Skill）区分：本目录的 Skill 面向**下游消费者**。
 
 ## 能力
 

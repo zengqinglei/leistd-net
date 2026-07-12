@@ -18,7 +18,7 @@ function Get-RepoRelativePath([string]$Path) {
 }
 
 $skillSets = @(
-    @{ Path = ".claude/skills"; Kind = "repository"; Expected = @("developing-leistd-framework", "developing-leistd-template", "maintaining-leistd-repository") },
+    @{ Path = ".agents/skills"; Kind = "repository"; Expected = @("developing-leistd-framework", "developing-leistd-template", "maintaining-leistd-repository") },
     @{ Path = "template/.agents/skills"; Kind = "template"; Expected = @("leistd-project-workflow") },
     @{ Path = "skills"; Kind = "distribution"; Expected = @("leistd-net-framework") }
 )
@@ -175,7 +175,7 @@ if (-not (Test-Path -LiteralPath $scenarioMapPath)) {
 }
 else {
     $scenarioMapText = Get-Content -LiteralPath $scenarioMapPath -Raw -Encoding UTF8
-    foreach ($marker in @("## 6. Skill 验收", "template/.agents/skills/leistd-project-workflow", "在模板项目中实现订单管理")) {
+    foreach ($marker in @("## 6. Skill 验收", ".agents/skills/developing-leistd-framework", "template/.agents/skills/leistd-project-workflow", "在模板项目中实现订单管理")) {
         if (-not $scenarioMapText.Contains($marker)) {
             Add-ValidationError "Skill scenario map is missing required marker: $marker"
         }

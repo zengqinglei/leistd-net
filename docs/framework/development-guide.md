@@ -68,7 +68,7 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 
 - `GenerateDocumentationFile` 已全局开启，**公共 API 应写 XML 文档注释**（`///`）。
 - `cref` 必须可解析（避免 CS1574）。缺注释的告警（CS1591）已被 `NoWarn` 容忍，但鼓励补全。
-- 组件用法文档位于 `framework/docs/components/` 与 `framework/docs/ddd-struct/`，必须与源码同步；文档不套固定模板，AI 编写流程与同类文档选择见 [`developing-leistd-framework`](../../.claude/skills/developing-leistd-framework/SKILL.md) skill。
+- 组件用法文档位于 `framework/docs/components/` 与 `framework/docs/ddd-struct/`，必须与源码同步；文档不套固定模板，AI 编写流程与同类文档选择见 [`developing-leistd-framework`](../../.agents/skills/developing-leistd-framework/SKILL.md) Skill。
 
 ---
 
