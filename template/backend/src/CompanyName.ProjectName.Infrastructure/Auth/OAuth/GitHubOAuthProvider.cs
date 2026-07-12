@@ -1,6 +1,7 @@
 #if (IncludeIdentity)
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using System.Web;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using Leistd.Exception.Core;
@@ -24,7 +25,7 @@ public class GitHubOAuthProvider(
     public string GetAuthorizationUrl(string redirectUri, string state)
     {
         var clientId = configuration["ExternalAuth:Github:ClientId"]
-            ?? throw new NotFoundException("GitHub ClientId 未配置");
+            ?? throw CreateMissingConfigurationException("ExternalAuth:Github:ClientId");
 
         return $"{AuthorizationEndpoint}?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&state={state}&scope=user:email";
     }
@@ -35,9 +36,9 @@ public class GitHubOAuthProvider(
         CancellationToken cancellationToken = default)
     {
         var clientId = configuration["ExternalAuth:Github:ClientId"]
-            ?? throw new NotFoundException("GitHub ClientId 未配置");
+            ?? throw CreateMissingConfigurationException("ExternalAuth:Github:ClientId");
         var clientSecret = configuration["ExternalAuth:Github:ClientSecret"]
-            ?? throw new NotFoundException("GitHub ClientSecret 未配置");
+            ?? throw CreateMissingConfigurationException("ExternalAuth:Github:ClientSecret");
 
         var httpClient = httpClientFactory.CreateClient();
 
@@ -59,7 +60,9 @@ public class GitHubOAuthProvider(
         if (string.IsNullOrEmpty(accessToken))
         {
             logger.LogError("获取 GitHub Access Token 失败: {Response}", responseContent);
-            throw new BadRequestException("获取 GitHub Access Token 失败");
+            throw new BadRequestException("GitHub access token exchange failed.")
+                .WithCode(BusinessErrorCodes.OAuthTokenExchangeFailed)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OAuthTokenExchangeFailed}", "GitHub");
         }
 
         return new OAuthTokenInfo
@@ -81,7 +84,9 @@ public class GitHubOAuthProvider(
 
         var userInfo = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>(cancellationToken);
         if (userInfo == null)
-            throw new BadRequestException("获取 GitHub 用户信息失败");
+            throw new BadRequestException("GitHub user information could not be retrieved.")
+                .WithCode(BusinessErrorCodes.OAuthUserInfoFailed)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OAuthUserInfoFailed}", "GitHub");
 
         return new ExternalUserInfo
         {
@@ -91,6 +96,13 @@ public class GitHubOAuthProvider(
             Nickname = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("avatar_url", out var avatar) ? avatar.GetString() : null
         };
+    }
+
+    private static BusinessException CreateMissingConfigurationException(string configurationKey)
+    {
+        return new NotFoundException($"OAuth configuration '{configurationKey}' is missing.")
+            .WithCode(BusinessErrorCodes.OAuthConfigurationMissing)
+            .WithLocalization($"Exception:{BusinessErrorCodes.OAuthConfigurationMissing}", configurationKey);
     }
 }
 #endif

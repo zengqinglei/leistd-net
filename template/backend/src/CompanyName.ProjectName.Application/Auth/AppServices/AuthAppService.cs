@@ -1,4 +1,5 @@
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppService;
@@ -32,13 +33,15 @@ public class AuthAppService(
         {
             if (string.IsNullOrWhiteSpace(input.EmailVerificationCode))
             {
-                throw new BadRequestException("请输入邮箱验证码");
+                throw new BadRequestException("Email verification code is required.")
+                    .WithCode(BusinessErrorCodes.EmailVerificationCodeRequired);
             }
 
             var isValidEmailCode = await emailVerificationAppService.ValidateEmailCodeAsync(input.Email, input.EmailVerificationCode, cancellationToken);
             if (!isValidEmailCode)
             {
-                throw new BadRequestException("邮箱验证码不正确或已过期");
+                throw new BadRequestException("The email verification code is incorrect or has expired.")
+                    .WithCode(BusinessErrorCodes.EmailVerificationCodeInvalid);
             }
         }
         else
@@ -46,7 +49,8 @@ public class AuthAppService(
             var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
             if (!isValidCaptcha)
             {
-                throw new BadRequestException("图形验证码不正确或已过期");
+                throw new BadRequestException("The captcha is incorrect or has expired.")
+                    .WithCode(BusinessErrorCodes.CaptchaInvalid);
             }
         }
 
@@ -76,7 +80,7 @@ public class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"用户 '{userId}' 不存在");
+            throw CreateUserNotFoundException(userId);
         }
 
         logger.LogInformation("开始更新当前用户资料 (ID: {UserId})", user.Id);
@@ -105,7 +109,7 @@ public class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"用户 '{userId}' 不存在");
+            throw CreateUserNotFoundException(userId);
         }
 
         logger.LogInformation("开始修改当前用户密码 (ID: {UserId})", user.Id);
@@ -121,7 +125,7 @@ public class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"用户 '{userId}' 不存在");
+            throw CreateUserNotFoundException(userId);
         }
 
         var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);
@@ -140,6 +144,12 @@ public class AuthAppService(
             Roles = [.. roleNames]
         };
     }
-}
 
+    private static BusinessException CreateUserNotFoundException(Guid userId)
+    {
+        return new NotFoundException($"User '{userId}' was not found.")
+            .WithCode(BusinessErrorCodes.UserNotFound)
+            .WithLocalization($"Exception:{BusinessErrorCodes.UserNotFound}", userId);
+    }
+}
 

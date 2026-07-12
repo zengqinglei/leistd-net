@@ -101,7 +101,7 @@ export class ChangePasswordDialogComponent {
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '密码已更新' });
+          this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`密码已更新` });
           this.visible.set(false);
         }
       });

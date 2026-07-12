@@ -24,16 +24,23 @@ import { ThemeService } from './core/services/theme-service';
       }
       @case ('loading') {
         <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
-          <p-progressSpinner ariaLabel="正在加载..."></p-progressSpinner>
+          <p-progressSpinner ariaLabel="正在加载..." i18n-ariaLabel></p-progressSpinner>
         </div>
       }
       @case ('failed') {
         <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
           @if (startupService.error(); as error) {
-            <p-card header="应用加载失败" [style]="{ width: '360px', textAlign: 'center' }">
+            <p-card header="应用加载失败" [style]="{ width: '360px', textAlign: 'center' }" i18n-header>
               <p>{{ formatHttpError(error) }}</p>
               <ng-template pTemplate="footer">
-                <p-button label="重试" icon="pi pi-refresh" (click)="onRetryClick()" [loading]="isRetrying()" [disabled]="isRetrying()">
+                <p-button
+                  label="重试"
+                  icon="pi pi-refresh"
+                  (click)="onRetryClick()"
+                  [loading]="isRetrying()"
+                  [disabled]="isRetrying()"
+                  i18n-label
+                >
                 </p-button>
               </ng-template>
             </p-card>
@@ -61,22 +68,22 @@ export class App {
     if (error instanceof HttpErrorResponse) {
       if (error.error instanceof ErrorEvent) {
         // 客户端或网络错误
-        return `客户端错误: ${error.error.message}`;
+        return $localize`客户端错误: ${error.error.message}`;
       } else {
         // 后端返回的错误
         const contentType = error.headers.get('Content-Type');
         if (contentType?.includes('application/json') && error.error?.message) {
-          return `请求失败: ${error.error.message} (代码: ${error.error.code})`;
+          return $localize`请求失败: ${error.error.message} (代码: ${error.error.code})`;
         }
-        return `未知服务端错误: ${error.status} - ${error.statusText}`;
+        return $localize`未知服务端错误: ${error.status} - ${error.statusText}`;
       }
     }
 
     // 处理非 HttpErrorResponse 的其他未知错误
     if (error instanceof Error) {
-      return `发生未知错误: ${error.message}`;
+      return $localize`发生未知错误: ${error.message}`;
     }
 
-    return `发生未知错误，请稍后重试。`;
+    return $localize`发生未知错误，请稍后重试。`;
   }
 }

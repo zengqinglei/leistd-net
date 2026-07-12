@@ -14,5 +14,5 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DialogLoadingComponent {
-  readonly text = input('正在加载...');
+  readonly text = input($localize`正在加载...`);
 }

@@ -11,29 +11,29 @@ public record UpdateOpenApplicationInputDto
     /// <summary>
     /// 显示名称
     /// </summary>
-    [Display(Name = "显示名称")]
-    [MaxLength(256, ErrorMessage = "{0}长度不能超过 {1} 个字符")]
+    [Display(Name = "Display name")]
+    [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 
     /// <summary>
     /// 应用类型
     /// </summary>
-    [Display(Name = "应用类型")]
-    [Required(ErrorMessage = "{0}不能为空")]
+    [Display(Name = "Application type")]
+    [Required(ErrorMessage = "{0} is required.")]
     public required string ApplicationType { get; init; }
 
     /// <summary>
     /// 客户端类型
     /// </summary>
-    [Display(Name = "客户端类型")]
-    [Required(ErrorMessage = "{0}不能为空")]
+    [Display(Name = "Client type")]
+    [Required(ErrorMessage = "{0} is required.")]
     public required string ClientType { get; init; }
 
     /// <summary>
     /// 同意类型
     /// </summary>
-    [Display(Name = "同意类型")]
-    [Required(ErrorMessage = "{0}不能为空")]
+    [Display(Name = "Consent type")]
+    [Required(ErrorMessage = "{0} is required.")]
     public required string ConsentType { get; init; }
 
     /// <summary>

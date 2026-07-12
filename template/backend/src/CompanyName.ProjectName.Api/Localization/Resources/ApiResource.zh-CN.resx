@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="ProblemDetails.Title:400" xml:space="preserve"><value>请求错误</value></data>
+  <data name="ProblemDetails.Title:401" xml:space="preserve"><value>未认证</value></data>
+  <data name="ProblemDetails.Title:403" xml:space="preserve"><value>无权访问</value></data>
+  <data name="ProblemDetails.Title:404" xml:space="preserve"><value>资源不存在</value></data>
+  <data name="ProblemDetails.Title:409" xml:space="preserve"><value>资源冲突</value></data>
+  <data name="ProblemDetails.Title:422" xml:space="preserve"><value>输入内容无法处理</value></data>
+  <data name="ProblemDetails.Title:500" xml:space="preserve"><value>服务器内部错误</value></data>
+  <data name="ProblemDetails.Title:502" xml:space="preserve"><value>上游服务错误</value></data>
+  <data name="ProblemDetails.Title:503" xml:space="preserve"><value>服务暂不可用</value></data>
+  <data name="Exception.UpstreamTimeout" xml:space="preserve"><value>上游服务响应超时，请稍后重试。</value></data>
+  <data name="Exception.RequestCanceled" xml:space="preserve"><value>请求已取消。</value></data>
+  <data name="Exception.RequestTimeout" xml:space="preserve"><value>请求超时，请稍后重试。</value></data>
+  <data name="Exception.UpstreamConnectionFailed" xml:space="preserve"><value>无法连接上游服务。</value></data>
+  <data name="Exception.Unhandled" xml:space="preserve"><value>系统发生异常，请联系管理员。</value></data>
+  <data name="Exception.ValidationFailed" xml:space="preserve"><value>一个或多个字段验证失败。</value></data>
+  <data name="Exception:40001" xml:space="preserve"><value>用户名“{0}”已存在。</value></data>
+  <data name="Exception:40002" xml:space="preserve"><value>邮箱“{0}”已被使用。</value></data>
+  <data name="Exception:40003" xml:space="preserve"><value>当前账号未设置本地密码，无法修改密码。</value></data>
+  <data name="Exception:40004" xml:space="preserve"><value>当前密码不正确。</value></data>
+  <data name="Exception:40005" xml:space="preserve"><value>密码不能为空。</value></data>
+  <data name="Exception:40006" xml:space="preserve"><value>哈希密码不能为空。</value></data>
+  <data name="Exception:40007" xml:space="preserve"><value>待验证密码不能为空。</value></data>
+  <data name="Exception:40008" xml:space="preserve"><value>请输入邮箱验证码。</value></data>
+  <data name="Exception:40009" xml:space="preserve"><value>邮箱验证码不正确或已过期。</value></data>
+  <data name="Exception:40010" xml:space="preserve"><value>图形验证码不正确或已过期。</value></data>
+  <data name="Exception:40011" xml:space="preserve"><value>发送过于频繁，请稍后再试。</value></data>
+  <data name="Exception:40012" xml:space="preserve"><value>不支持的外部身份提供商：“{0}”。</value></data>
+  <data name="Exception:40013" xml:space="preserve"><value>获取 {0} Access Token 失败。</value></data>
+  <data name="Exception:40014" xml:space="preserve"><value>解析 {0} Access Token 失败。</value></data>
+  <data name="Exception:40015" xml:space="preserve"><value>{0} Access Token 为空。</value></data>
+  <data name="Exception:40016" xml:space="preserve"><value>获取 {0} 用户信息失败。</value></data>
+  <data name="Exception:40017" xml:space="preserve"><value>{0} 用户 ID 为空。</value></data>
+  <data name="Exception:40020" xml:space="preserve"><value>不支持的授权类型：“{0}”。</value></data>
+  <data name="Exception:40030" xml:space="preserve"><value>Client ID 不能为空。</value></data>
+  <data name="Exception:40031" xml:space="preserve"><value>Client ID“{0}”已存在。</value></data>
+  <data name="Exception:40032" xml:space="preserve"><value>客户端创建失败。</value></data>
+  <data name="Exception:40033" xml:space="preserve"><value>只有 Confidential 客户端可以重置密钥。</value></data>
+  <data name="Exception:40034" xml:space="preserve"><value>不支持的应用类型：“{0}”。</value></data>
+  <data name="Exception:40035" xml:space="preserve"><value>不支持的客户端类型：“{0}”。</value></data>
+  <data name="Exception:40036" xml:space="preserve"><value>不支持的同意类型：“{0}”。</value></data>
+  <data name="Exception:40037" xml:space="preserve"><value>Native/Public 客户端必须启用 PKCE。</value></data>
+  <data name="Exception:40038" xml:space="preserve"><value>URI“{0}”不合法。</value></data>
+  <data name="Exception:40050" xml:space="preserve"><value>系统内置超级管理员不允许被其他管理员更新。</value></data>
+  <data name="Exception:40051" xml:space="preserve"><value>系统内置超级管理员不允许被其他管理员操作。</value></data>
+  <data name="Exception:40052" xml:space="preserve"><value>系统内置超级管理员不允许被其他管理员禁用。</value></data>
+  <data name="Exception:40053" xml:space="preserve"><value>系统内置超级管理员不允许禁用自己。</value></data>
+  <data name="Exception:40054" xml:space="preserve"><value>系统内置超级管理员的密码不允许被其他管理员重置。</value></data>
+  <data name="Exception:40055" xml:space="preserve"><value>系统内置超级管理员不允许删除。</value></data>
+  <data name="Exception:40056" xml:space="preserve"><value>请至少选择一个角色。</value></data>
+  <data name="Exception:40057" xml:space="preserve"><value>角色不存在：{0}。</value></data>
+  <data name="Exception:40101" xml:space="preserve"><value>用户名、邮箱或密码不正确。</value></data>
+  <data name="Exception:40102" xml:space="preserve"><value>用户“{0}”已被禁用。</value></data>
+  <data name="Exception:40103" xml:space="preserve"><value>用户“{0}”已被锁定至 {1}。</value></data>
+  <data name="Exception:40301" xml:space="preserve"><value>当前身份不能操作用户通知。</value></data>
+  <data name="Exception:40401" xml:space="preserve"><value>用户“{0}”不存在。</value></data>
+  <data name="Exception:40410" xml:space="preserve"><value>外部身份提供商“{0}”未配置。</value></data>
+  <data name="Exception:40411" xml:space="preserve"><value>外部身份提供商“{0}”未配置 Redirect URI。</value></data>
+  <data name="Exception:40412" xml:space="preserve"><value>OAuth 配置“{0}”缺失。</value></data>
+  <data name="Exception:40420" xml:space="preserve"><value>开放应用“{0}”不存在。</value></data>
+  <data name="{0} is required." xml:space="preserve"><value>{0}不能为空。</value></data>
+  <data name="{0} must be between {2} and {1} characters." xml:space="preserve"><value>{0}长度必须在 {2} 到 {1} 个字符之间。</value></data>
+  <data name="{0} must be at least 6 characters and contain both letters and numbers." xml:space="preserve"><value>{0}至少需要 6 个字符，并且必须同时包含字母和数字。</value></data>
+  <data name="{0} can contain only letters, numbers, and underscores." xml:space="preserve"><value>{0}只能包含字母、数字和下划线。</value></data>
+  <data name="{0} has an invalid format." xml:space="preserve"><value>{0}格式不正确。</value></data>
+  <data name="{0} cannot exceed {1} characters." xml:space="preserve"><value>{0}长度不能超过 {1} 个字符。</value></data>
+  <data name="{0} is too large. Compress it and try again." xml:space="preserve"><value>{0}内容过大，请压缩后重试。</value></data>
+  <data name="Authorization code is required." xml:space="preserve"><value>授权码不能为空。</value></data>
+  <data name="Authorization code cannot exceed 500 characters." xml:space="preserve"><value>授权码长度不能超过 500 个字符。</value></data>
+  <data name="State cannot exceed 100 characters." xml:space="preserve"><value>状态参数长度不能超过 100 个字符。</value></data>
+  <data name="The captcha has expired. Refresh it and try again." xml:space="preserve"><value>图形验证码已失效，请刷新后重试。</value></data>
+  <data name="Active status" xml:space="preserve"><value>是否启用</value></data>
+  <data name="Application type" xml:space="preserve"><value>应用类型</value></data>
+  <data name="Avatar" xml:space="preserve"><value>头像</value></data>
+  <data name="Captcha" xml:space="preserve"><value>图形验证码</value></data>
+  <data name="Captcha token" xml:space="preserve"><value>验证码凭据</value></data>
+  <data name="Client ID" xml:space="preserve"><value>Client ID</value></data>
+  <data name="Client type" xml:space="preserve"><value>客户端类型</value></data>
+  <data name="Confirm password" xml:space="preserve"><value>确认密码</value></data>
+  <data name="Consent type" xml:space="preserve"><value>同意类型</value></data>
+  <data name="Current password" xml:space="preserve"><value>当前密码</value></data>
+  <data name="Display name" xml:space="preserve"><value>显示名称</value></data>
+  <data name="Email" xml:space="preserve"><value>邮箱</value></data>
+  <data name="Email verification code" xml:space="preserve"><value>邮箱验证码</value></data>
+  <data name="Email verification status" xml:space="preserve"><value>邮箱是否已验证</value></data>
+  <data name="New password" xml:space="preserve"><value>新密码</value></data>
+  <data name="Nickname" xml:space="preserve"><value>昵称</value></data>
+  <data name="Password" xml:space="preserve"><value>密码</value></data>
+  <data name="Phone number" xml:space="preserve"><value>手机号</value></data>
+  <data name="Role" xml:space="preserve"><value>角色</value></data>
+  <data name="Search keyword" xml:space="preserve"><value>搜索关键字</value></data>
+  <data name="Username" xml:space="preserve"><value>用户名</value></data>
+  <data name="Username or email" xml:space="preserve"><value>用户名或邮箱</value></data>
+</root>

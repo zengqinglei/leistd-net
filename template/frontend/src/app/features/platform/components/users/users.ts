@@ -81,13 +81,13 @@ export class UsersPage implements OnInit {
   sorting = signal('username asc');
 
   activeOptions = [
-    { label: '启用', value: true },
-    { label: '禁用', value: false }
+    { label: $localize`启用`, value: true },
+    { label: $localize`禁用`, value: false }
   ];
 
   emailVerifiedOptions = [
-    { label: '已验证', value: true },
-    { label: '未验证', value: false }
+    { label: $localize`已验证`, value: true },
+    { label: $localize`未验证`, value: false }
   ];
 
   roleOptions = Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value }));
@@ -99,7 +99,7 @@ export class UsersPage implements OnInit {
   }
 
   ngOnInit() {
-    this.layoutService.title.set('用户管理');
+    this.layoutService.title.set($localize`用户管理`);
 
     const saved = this.filterStateService.load<{
       searchQuery: string;
@@ -204,7 +204,11 @@ export class UsersPage implements OnInit {
       )
       .subscribe({
         next: () => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: selected ? '用户更新成功' : '用户创建成功' });
+          this.messageService.add({
+            severity: 'success',
+            summary: $localize`成功`,
+            detail: selected ? $localize`用户更新成功` : $localize`用户创建成功`
+          });
           this.editDialogVisible.set(false);
           this.reloadList();
         }
@@ -213,13 +217,17 @@ export class UsersPage implements OnInit {
 
   handleToggleActive(user: UserManagementOutputDto) {
     this.confirmationService.confirm({
-      message: user.isActive ? `确定要禁用用户 ${user.username} 吗？` : `确定要启用用户 ${user.username} 吗？`,
-      header: user.isActive ? '确认禁用' : '确认启用',
+      message: user.isActive ? $localize`确定要禁用用户 ${user.username} 吗？` : $localize`确定要启用用户 ${user.username} 吗？`,
+      header: user.isActive ? $localize`确认禁用` : $localize`确认启用`,
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         const request = user.isActive ? this.service.disableUser(user.id) : this.service.enableUser(user.id);
         request.subscribe(() => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: user.isActive ? '用户已禁用' : '用户已启用' });
+          this.messageService.add({
+            severity: 'success',
+            summary: $localize`成功`,
+            detail: user.isActive ? $localize`用户已禁用` : $localize`用户已启用`
+          });
           this.reloadList();
         });
       }
@@ -228,17 +236,17 @@ export class UsersPage implements OnInit {
 
   handleDelete(user: UserManagementOutputDto) {
     if (user.isSuperAdmin) {
-      this.messageService.add({ severity: 'warn', summary: '无法删除', detail: '系统内置超级管理员不允许删除' });
+      this.messageService.add({ severity: 'warn', summary: $localize`无法删除`, detail: $localize`系统内置超级管理员不允许删除` });
       return;
     }
 
     this.confirmationService.confirm({
-      message: `确定要删除用户 ${user.username} 吗？删除后该用户将无法继续登录。`,
-      header: '确认删除',
+      message: $localize`确定要删除用户 ${user.username} 吗？删除后该用户将无法继续登录。`,
+      header: $localize`确认删除`,
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         this.service.deleteUser(user.id).subscribe(() => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '用户已删除' });
+          this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`用户已删除` });
           this.reloadList();
         });
       }
@@ -264,7 +272,7 @@ export class UsersPage implements OnInit {
         finalize(() => this.resetPasswordSaving.set(false))
       )
       .subscribe(() => {
-        this.messageService.add({ severity: 'success', summary: '成功', detail: '密码已重置' });
+        this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`密码已重置` });
         this.resetPasswordDialogVisible.set(false);
         this.resettingUserId.set(null);
       });

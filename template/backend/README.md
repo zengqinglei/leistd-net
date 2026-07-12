@@ -14,6 +14,12 @@ src/
 
 `Api` 显式引用并组合 Application 与 Infrastructure；Application 不依赖 Infrastructure。
 
+<!--#if (IncludeLocalization)-->
+## 多语言边界
+
+请求文化和资源解析只位于 Api 层：默认 `en-US`，支持 `zh-CN`，使用 .NET 内置 `AddLocalization`、`UseRequestLocalization` 和 `.resx`。Domain/Application 只抛出带稳定错误码、英文回退消息以及可选资源键的业务异常，不依赖 `IStringLocalizer`。客户端通过 `Accept-Language` 或 ASP.NET Core 文化 Cookie 选择语言，资源缺失时回退英文消息。
+<!--#endif-->
+
 ## Leistd 框架 API
 
 `Directory.Build.props` 统一声明 `LeistdFrameworkVersion`。使用 `Leistd.*` API 前，优先使用 `leistd-net-framework` Skill 按实际还原版本定位包内文档；未安装该 Skill 时，先用 `dotnet nuget locals global-packages --list` 找到 NuGet 缓存，再读取对应包版本的 `docs/*.md` 和 `lib/{tfm}/*.xml`。不要根据模型记忆猜测类型、签名或注册方法。

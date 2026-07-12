@@ -83,6 +83,7 @@ export class OpenApplicationEditDialogComponent {
   selectedTemplate = signal<OpenApplicationTemplate | null>(null);
 
   isEditMode = computed(() => !!this.application());
+  readonly dialogTitle = computed(() => (this.isEditMode() ? $localize`编辑开放应用` : $localize`新建开放应用`));
   isTemplateLocked = computed(() => !!this.selectedTemplate() && !this.isEditMode());
   isConfidentialClient = computed(() => this.formModel().clientType === 'confidential');
   isServiceType = computed(() => this.formModel().applicationType === 'service');
@@ -101,15 +102,15 @@ export class OpenApplicationEditDialogComponent {
   });
 
   templateOptions = [
-    { label: 'Web PKCE 客户端', value: 'web' },
-    { label: '桌面端 PKCE 客户端', value: 'desktop' },
-    { label: '服务端机密客户端', value: 'service' }
+    { label: $localize`Web PKCE 客户端`, value: 'web' },
+    { label: $localize`桌面端 PKCE 客户端`, value: 'desktop' },
+    { label: $localize`服务端机密客户端`, value: 'service' }
   ];
 
   applicationTypeOptions = [
     { label: 'Web', value: 'web' },
-    { label: '桌面/原生', value: 'native' },
-    { label: '服务端', value: 'service' }
+    { label: $localize`桌面/原生`, value: 'native' },
+    { label: $localize`服务端`, value: 'service' }
   ];
 
   clientTypeOptions = [
@@ -118,20 +119,20 @@ export class OpenApplicationEditDialogComponent {
   ];
 
   consentTypeOptions = [
-    { label: '隐式同意', value: 'implicit' },
-    { label: '显式同意', value: 'explicit' },
-    { label: '外部同意', value: 'external' },
-    { label: '系统同意', value: 'systematic' }
+    { label: $localize`隐式同意`, value: 'implicit' },
+    { label: $localize`显式同意`, value: 'explicit' },
+    { label: $localize`外部同意`, value: 'external' },
+    { label: $localize`系统同意`, value: 'systematic' }
   ];
 
   permissionOptions = [
-    { label: '授权端点', value: 'ept:authorization', group: 'Endpoints' },
-    { label: 'Token 端点', value: 'ept:token', group: 'Endpoints' },
-    { label: '登出端点', value: 'ept:end_session', group: 'Endpoints' },
-    { label: '授权码', value: 'gt:authorization_code', group: 'Grant Types' },
-    { label: '刷新令牌', value: 'gt:refresh_token', group: 'Grant Types' },
-    { label: '客户端凭据', value: 'gt:client_credentials', group: 'Grant Types' },
-    { label: 'Code 响应', value: 'rst:code', group: 'Response Types' },
+    { label: $localize`授权端点`, value: 'ept:authorization', group: 'Endpoints' },
+    { label: $localize`Token 端点`, value: 'ept:token', group: 'Endpoints' },
+    { label: $localize`登出端点`, value: 'ept:end_session', group: 'Endpoints' },
+    { label: $localize`授权码`, value: 'gt:authorization_code', group: 'Grant Types' },
+    { label: $localize`刷新令牌`, value: 'gt:refresh_token', group: 'Grant Types' },
+    { label: $localize`客户端凭据`, value: 'gt:client_credentials', group: 'Grant Types' },
+    { label: $localize`Code 响应`, value: 'rst:code', group: 'Response Types' },
     { label: 'openid', value: 'scp:openid', group: 'Scopes' },
     { label: 'profile', value: 'scp:profile', group: 'Scopes' },
     { label: 'email', value: 'scp:email', group: 'Scopes' },
@@ -139,39 +140,39 @@ export class OpenApplicationEditDialogComponent {
     { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' }
   ];
 
-  requirementOptions = [{ label: '强制 PKCE', value: 'ft:pkce' }];
+  requirementOptions = [{ label: $localize`强制 PKCE`, value: 'ft:pkce' }];
 
   readonly permissionLabels: Record<string, string> = {
-    'ept:authorization': '授权端点',
-    'ept:token': 'Token 端点',
-    'ept:end_session': '登出端点',
-    'gt:authorization_code': '授权码流程',
-    'gt:refresh_token': '刷新令牌',
-    'gt:client_credentials': '客户端凭据',
-    'rst:code': 'Code 响应',
-    'scp:openid': '身份标识',
-    'scp:profile': '个人资料',
-    'scp:email': '邮箱',
-    'scp:roles': '角色',
-    'scp:offline_access': '离线访问'
+    'ept:authorization': $localize`授权端点`,
+    'ept:token': $localize`Token 端点`,
+    'ept:end_session': $localize`登出端点`,
+    'gt:authorization_code': $localize`授权码流程`,
+    'gt:refresh_token': $localize`刷新令牌`,
+    'gt:client_credentials': $localize`客户端凭据`,
+    'rst:code': $localize`Code 响应`,
+    'scp:openid': $localize`身份标识`,
+    'scp:profile': $localize`个人资料`,
+    'scp:email': $localize`邮箱`,
+    'scp:roles': $localize`角色`,
+    'scp:offline_access': $localize`离线访问`
   };
 
   readonly applicationTypeLabels: Record<string, string> = {
     web: 'Web',
-    native: '桌面/原生',
-    service: '服务端'
+    native: $localize`桌面/原生`,
+    service: $localize`服务端`
   };
 
   readonly clientTypeLabels: Record<string, string> = {
-    public: 'Public（公开）',
-    confidential: 'Confidential（机密）'
+    public: $localize`Public（公开）`,
+    confidential: $localize`Confidential（机密）`
   };
 
   readonly consentTypeLabels: Record<string, string> = {
-    implicit: '隐式同意',
-    explicit: '显式同意',
-    external: '外部同意',
-    systematic: '系统同意'
+    implicit: $localize`隐式同意`,
+    explicit: $localize`显式同意`,
+    external: $localize`外部同意`,
+    systematic: $localize`系统同意`
   };
 
   getPermissionLabel(value: string): string {
@@ -228,7 +229,7 @@ export class OpenApplicationEditDialogComponent {
       this.formModel.update(model => ({
         ...model,
         clientId: model.clientId || 'my-desktop-app',
-        displayName: model.displayName || '我的桌面应用',
+        displayName: model.displayName || $localize`我的桌面应用`,
         applicationType: 'native',
         clientType: 'public',
         consentType: 'explicit',

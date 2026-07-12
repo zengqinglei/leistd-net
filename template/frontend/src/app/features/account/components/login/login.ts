@@ -13,6 +13,9 @@ import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 import { AuthService } from '../../../../core/services/auth-service';
 import { ThemeService } from '../../../../core/services/theme-service';
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
+//#endif
 import { LogoComponent } from '../../../../shared/components/logo/logo';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { AccountService } from '../../services/account-service';
@@ -30,6 +33,9 @@ import { AccountService } from '../../services/account-service';
     ButtonModule,
     StyleClassModule,
     ThemeConfigurator,
+    //#if (IncludeLocalization)
+    LanguageSwitcher,
+    //#endif
     LogoComponent
   ],
   templateUrl: './login.html',
@@ -88,8 +94,8 @@ export class Login {
       // 登录成功提示
       this.messageService.add({
         severity: 'success',
-        summary: '登录成功',
-        detail: '欢迎回来！',
+        summary: $localize`登录成功`,
+        detail: $localize`欢迎回来！`,
         life: 3000
       });
 
@@ -127,11 +133,11 @@ export class Login {
     }
 
     if (field.errors['required']) {
-      return '此字段不能为空';
+      return $localize`此字段不能为空`;
     }
     if (field.errors['minlength']) {
       const minLength = field.errors['minlength'].requiredLength;
-      return `至少需要 ${minLength} 个字符`;
+      return $localize`至少需要 ${minLength} 个字符`;
     }
     return null;
   }
@@ -154,7 +160,7 @@ export class Login {
       const response = await lastValueFrom(this.accountService.getExternalLoginUrl(provider));
 
       if (!response.loginUrl) {
-        throw new Error('未获取到有效的登录 URL');
+        throw new Error($localize`未获取到有效的登录 URL`);
       }
 
       window.location.href = response.loginUrl;
@@ -162,8 +168,8 @@ export class Login {
       console.error(`${label} 登录失败`, error);
       this.messageService.add({
         severity: 'error',
-        summary: '登录失败',
-        detail: `无法连接到 ${label} 登录服务，请稍后重试`,
+        summary: $localize`登录失败`,
+        detail: $localize`无法连接到 ${label} 登录服务，请稍后重试`,
         life: 3000
       });
       this._isLoading.set(false);

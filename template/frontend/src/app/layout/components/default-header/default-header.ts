@@ -28,6 +28,9 @@ import { ThemeService } from '../../../core/services/theme-service';
 import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialogComponent } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
 //#endif
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../shared/components/language-switcher/language-switcher';
+//#endif
 import { ThemeConfigurator } from '../../../shared/components/theme-configurator/theme-configurator';
 import { LayoutService } from '../../services/layout-service';
 
@@ -43,6 +46,9 @@ import { LayoutService } from '../../services/layout-service';
     TooltipModule,
     MenuModule,
     ThemeConfigurator,
+    //#if (IncludeLocalization)
+    LanguageSwitcher,
+    //#endif
     //#if (IncludeNotifications)
     PopoverModule,
     OverlayBadgeModule,
@@ -115,13 +121,13 @@ export class DefaultHeader implements OnDestroy {
 
     if (this.router.url.startsWith('/platform')) {
       items.push({
-        label: '工作空间',
+        label: $localize`工作空间`,
         icon: 'pi pi-home',
         command: () => this.closeMenuAndNavigate('/workspace')
       });
     } else if (this.router.url.startsWith('/workspace') && currentUser?.isAdmin()) {
       items.push({
-        label: '管理平台',
+        label: $localize`管理平台`,
         icon: 'pi pi-cog',
         command: () => this.closeMenuAndNavigate('/platform')
       });
@@ -134,12 +140,12 @@ export class DefaultHeader implements OnDestroy {
 
     items.push(
       {
-        label: '个人信息',
+        label: $localize`个人信息`,
         icon: 'pi pi-user-edit',
         command: () => this.openProfileDialog()
       },
       {
-        label: '修改密码',
+        label: $localize`修改密码`,
         icon: 'pi pi-lock',
         command: () => this.openChangePasswordDialog()
       },
@@ -147,7 +153,7 @@ export class DefaultHeader implements OnDestroy {
         separator: true
       },
       {
-        label: '退出登录',
+        label: $localize`退出登录`,
         icon: 'pi pi-sign-out',
         command: () => this.handleLogout()
       }

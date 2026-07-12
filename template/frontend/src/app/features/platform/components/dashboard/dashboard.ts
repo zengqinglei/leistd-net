@@ -16,6 +16,6 @@ export class Dashboard implements OnInit {
   readonly authService = inject(AuthService);
 
   ngOnInit() {
-    this.layoutService.title.set('仪表盘');
+    this.layoutService.title.set($localize`仪表盘`);
   }
 }

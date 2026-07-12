@@ -17,22 +17,22 @@ export const routes: Routes = [
     loadChildren: () => import('./features/public/public.routes').then(r => r.PUBLIC_ROUTES)
   },
 
-//#if (IncludeIdentity)
+  //#if (IncludeIdentity)
   // Empty Layout - 认证相关页面（登录、注册等）
   {
     path: 'auth',
     component: EmptyLayout,
     loadChildren: () => import('./features/account/account.routes').then(r => r.AUTH_ROUTES)
   },
-//#endif
+  //#endif
 
   // Default Layout - 用户工作区
   {
     path: 'workspace',
     component: DefaultLayout,
-//#if (IncludeIdentity)
+    //#if (IncludeIdentity)
     canActivate: [authGuard],
-//#endif
+    //#endif
     loadChildren: () => import('./features/workspace/workspace.routes').then(r => r.WORKSPACE_ROUTES)
   },
 
@@ -40,10 +40,10 @@ export const routes: Routes = [
   {
     path: 'platform',
     component: DefaultLayout,
-//#if (IncludeIdentity)
+    //#if (IncludeIdentity)
     canActivate: [authGuard, roleGuard],
     data: { role: 'Admin' },
-//#endif
+    //#endif
     loadChildren: () => import('./features/platform/platform.routes').then(r => r.PLATFORM_ROUTES)
   },
 

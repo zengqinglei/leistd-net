@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
@@ -13,6 +13,9 @@ import { TooltipModule } from 'primeng/tooltip';
 import { lastValueFrom } from 'rxjs';
 
 import { ThemeService } from '../../../../core/services/theme-service';
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
+//#endif
 import { LogoComponent } from '../../../../shared/components/logo/logo';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
@@ -31,6 +34,9 @@ import { AccountService } from '../../services/account-service';
     ButtonModule,
     StyleClassModule,
     ThemeConfigurator,
+    //#if (IncludeLocalization)
+    LanguageSwitcher,
+    //#endif
     LogoComponent,
     TooltipModule
   ],
@@ -56,6 +62,7 @@ export class Register implements OnInit {
   public captchaData = signal<CaptchaOutputDto | null>(null);
 
   public countdown = signal(0);
+  readonly emailCodeButtonLabel = computed(() => (this.countdown() > 0 ? $localize`${this.countdown()}s 后重发` : $localize`获取验证码`));
   private countdownIntervalId: ReturnType<typeof setInterval> | null = null;
   private _isSendingEmailCode = signal(false);
   public readonly isSendingEmailCode = this._isSendingEmailCode.asReadonly();
@@ -156,12 +163,12 @@ export class Register implements OnInit {
     const captchaToken = this.captchaData()?.captchaToken;
 
     if (!email || this.registerForm.get('email')?.invalid) {
-      this.messageService.add({ severity: 'warn', summary: '提示', detail: '请先输入有效的邮箱' });
+      this.messageService.add({ severity: 'warn', summary: $localize`提示`, detail: $localize`请先输入有效的邮箱` });
       return;
     }
 
     if (!captchaCode || !captchaToken) {
-      this.messageService.add({ severity: 'warn', summary: '提示', detail: '请先输入图形验证码' });
+      this.messageService.add({ severity: 'warn', summary: $localize`提示`, detail: $localize`请先输入图形验证码` });
       return;
     }
 
@@ -174,7 +181,7 @@ export class Register implements OnInit {
           captchaToken
         })
       );
-      this.messageService.add({ severity: 'success', summary: '成功', detail: '验证码已发送，请查收邮件' });
+      this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`验证码已发送，请查收邮件` });
       this.startCountdown();
     } catch {
       this.refreshCaptcha(); // 如果验证码错误，刷新图形验证码
@@ -216,7 +223,7 @@ export class Register implements OnInit {
       const captchaToken = this.captchaData()?.captchaToken;
 
       if (!captchaToken) {
-        this.messageService.add({ severity: 'error', summary: '错误', detail: '请刷新获取图形验证码' });
+        this.messageService.add({ severity: 'error', summary: $localize`错误`, detail: $localize`请刷新获取图形验证码` });
         return;
       }
 
@@ -231,7 +238,7 @@ export class Register implements OnInit {
         })
       );
 
-      this.messageService.add({ severity: 'success', summary: '注册成功', detail: '账号创建成功，请登录' });
+      this.messageService.add({ severity: 'success', summary: $localize`注册成功`, detail: $localize`账号创建成功，请登录` });
       this.router.navigate(['/auth/login'], {
         queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined
       });
@@ -249,23 +256,23 @@ export class Register implements OnInit {
     }
 
     if (field.errors['required']) {
-      return '此字段不能为空';
+      return $localize`此字段不能为空`;
     }
     if (field.errors['email']) {
-      return '邮箱格式不正确';
+      return $localize`邮箱格式不正确`;
     }
     if (field.errors['pattern'] && fieldName === 'username') {
-      return '只能包含字母、数字和下划线';
+      return $localize`只能包含字母、数字和下划线`;
     }
     if (field.errors['pattern'] && fieldName === 'password') {
-      return '密码需 6 位以上，包含字母和数字';
+      return $localize`密码需 6 位以上，包含字母和数字`;
     }
     if (field.errors['minlength']) {
       const minLength = field.errors['minlength'].requiredLength;
-      return `至少需要 ${minLength} 个字符`;
+      return $localize`至少需要 ${minLength} 个字符`;
     }
     if (field.errors['passwordMismatch']) {
-      return '两次输入的密码不一致';
+      return $localize`两次输入的密码不一致`;
     }
     return null;
   }

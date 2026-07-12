@@ -38,13 +38,17 @@ export class OpenApplicationTable {
   sortOrder = signal(1);
   activeItems = signal<string[]>([]);
   popoverMode = signal<PopoverMode>('permissions');
+  readonly pkceLabel = 'PKCE';
+  readonly noPkceLabel = $localize`无 PKCE`;
+  readonly secretConfiguredLabel = $localize`Secret 已设置`;
+  readonly noSecretLabel = $localize`无 Secret`;
 
   popoverTitle = computed(() => {
     switch (this.popoverMode()) {
       case 'redirectUris':
         return 'Redirect URIs';
       default:
-        return '授权能力';
+        return $localize`授权能力`;
     }
   });
 
@@ -71,8 +75,8 @@ export class OpenApplicationTable {
   getApplicationTypeLabel(value: string) {
     const labels: Record<string, string> = {
       web: 'Web',
-      native: '桌面/原生',
-      service: '服务端'
+      native: $localize`桌面/原生`,
+      service: $localize`服务端`
     };
     return labels[value] ?? value;
   }
@@ -83,17 +87,17 @@ export class OpenApplicationTable {
 
   getConsentTypeLabel(value: string) {
     const labels: Record<string, string> = {
-      implicit: '隐式同意',
-      explicit: '显式同意',
-      external: '外部同意',
-      systematic: '系统同意'
+      implicit: $localize`隐式同意`,
+      explicit: $localize`显式同意`,
+      external: $localize`外部同意`,
+      systematic: $localize`系统同意`
     };
     return labels[value] ?? value;
   }
 
   getPermissionSummary(item: OpenApplicationOutputDto) {
     const grants = item.permissions.filter(permission => permission.startsWith('gt:')).map(permission => permission.replace('gt:', ''));
-    return grants.length ? grants.join(' / ') : '未配置';
+    return grants.length ? grants.join(' / ') : $localize`未配置`;
   }
 
   getVisibleRedirectUris(item: OpenApplicationOutputDto) {

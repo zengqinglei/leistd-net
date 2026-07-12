@@ -7,12 +7,12 @@ namespace Leistd.Exception.Core;
 /// </summary>
 public class UnprocessableEntityException(
     Dictionary<string, string[]> validationErrors,
-    string message = "输入的信息有误",
+    string message = "One or more validation errors occurred.",
     System.Exception? innerException = null)
     : BusinessException("422", message, innerException)
 {
     /// <summary>
-    /// 实体验证错误集合（符合 RFC 7807 ValidationProblemDetails 格式）
+    /// 实体验证错误集合（作为 RFC 9457 Problem Details 扩展成员输出）
     /// </summary>
     public Dictionary<string, string[]>? ValidationErrors { get; private set; } = validationErrors;
 
@@ -20,7 +20,7 @@ public class UnprocessableEntityException(
     /// 便捷构造函数：单个字段单个错误
     /// </summary>
     public UnprocessableEntityException(string field, string error, System.Exception? innerException = null)
-        : this(new Dictionary<string, string[]> { { field, new[] { error } } }, "输入的信息有误", innerException)
+        : this(new Dictionary<string, string[]> { { field, new[] { error } } }, "One or more validation errors occurred.", innerException)
     {
     }
 
@@ -28,7 +28,7 @@ public class UnprocessableEntityException(
     /// 便捷构造函数：单个字段多个错误
     /// </summary>
     public UnprocessableEntityException(string field, string[] errors, System.Exception? innerException = null)
-        : this(new Dictionary<string, string[]> { { field, errors } }, "输入的信息有误", innerException)
+        : this(new Dictionary<string, string[]> { { field, errors } }, "One or more validation errors occurred.", innerException)
     {
     }
 

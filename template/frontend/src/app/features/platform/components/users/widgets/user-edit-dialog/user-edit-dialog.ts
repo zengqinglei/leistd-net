@@ -44,13 +44,16 @@ export class UserEditDialogComponent {
   saving = input(false);
   user = input<UserManagementOutputDto | null>(null);
   readonly saved = output<CreateUserInputDto | UpdateUserInputDto>();
+  readonly dialogTitle = computed(() => (this.isEditMode() ? $localize`编辑用户` : $localize`新建用户`));
+  readonly submitLabel = computed(() => (this.isEditMode() ? $localize`保存` : $localize`创建`));
+  readonly unsetEmailLabel = $localize`未设置邮箱`;
 
   private readonly fb = inject(FormBuilder);
 
   dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly avatarPreview = signal('');
   readonly displayName = computed(
-    () => this.form.controls.displayName.value.trim() || this.form.controls.username.value.trim() || '未命名用户'
+    () => this.form.controls.displayName.value.trim() || this.form.controls.username.value.trim() || $localize`未命名用户`
   );
   readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
   readonly avatarStyle = computed(() => {

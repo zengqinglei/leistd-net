@@ -12,8 +12,8 @@ public record GetOpenApplicationPagedInputDto : PagedRequestDto
     /// <summary>
     /// 搜索关键字
     /// </summary>
-    [Display(Name = "搜索关键字")]
-    [MaxLength(256, ErrorMessage = "{0}长度不能超过 {1} 个字符")]
+    [Display(Name = "Search keyword")]
+    [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
     /// <summary>

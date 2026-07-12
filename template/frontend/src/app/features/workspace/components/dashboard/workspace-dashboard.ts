@@ -18,6 +18,6 @@ export class WorkspaceDashboardPage implements OnInit {
   readonly authService = inject(AuthService);
 
   ngOnInit() {
-    this.layoutService.title.set('工作台');
+    this.layoutService.title.set($localize`工作台`);
   }
 }

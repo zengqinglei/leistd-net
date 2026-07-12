@@ -27,7 +27,7 @@ interface PaletteOption<TName extends string> {
   template: `
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-2">
-        <span class="text-sm text-muted-color font-semibold">主题模式</span>
+        <span class="text-sm text-muted-color font-semibold" i18n>主题模式</span>
         <p-selectbutton
           [options]="themeModes"
           optionLabel="label"
@@ -44,6 +44,7 @@ interface PaletteOption<TName extends string> {
           <button
             type="button"
             title="默认"
+            i18n-title
             (click)="onPrimaryChange($event, null)"
             [class.outline-primary]="themeService.preferences().primary === null"
             class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
@@ -68,6 +69,7 @@ interface PaletteOption<TName extends string> {
           <button
             type="button"
             title="默认"
+            i18n-title
             (click)="onSurfaceChange($event, null)"
             [class.outline-primary]="themeService.preferences().surface === null"
             class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
@@ -113,9 +115,9 @@ export class ThemeConfigurator {
 
   readonly presetNames = [...THEME_PRESET_NAMES];
   readonly themeModes: Array<{ label: string; value: ThemeMode }> = [
-    { label: '亮色', value: 'light' },
-    { label: '系统', value: 'system' },
-    { label: '暗色', value: 'dark' }
+    { label: $localize`亮色`, value: 'light' },
+    { label: $localize`系统`, value: 'system' },
+    { label: $localize`暗色`, value: 'dark' }
   ];
 
   readonly primaryColors = computed<Array<PaletteOption<ThemePrimaryName>>>(() => {

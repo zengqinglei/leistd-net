@@ -19,6 +19,7 @@
     [breakpoint]="'960px'"
     [sortField]="sortField()"
     [sortOrder]="sortOrder()"
+    i18n-currentPageReportTemplate
   >
     <ng-template pTemplate="header">
       <tr class="bg-surface-50 dark:bg-surface-800 text-muted-color text-xs font-medium backdrop-blur-sm uppercase">
@@ -26,15 +27,17 @@
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3"
           pSortableColumn="clientId"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">应用 <p-sortIcon field="clientId" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap" i18n>应用 <p-sortIcon field="clientId" /></div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden sm:table-cell whitespace-nowrap"
+          i18n
         >
           类型
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden md:table-cell whitespace-nowrap"
+          i18n
         >
           授权能力
         </th>
@@ -45,6 +48,7 @@
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden xl:table-cell whitespace-nowrap"
+          i18n
         >
           安全
         </th>
@@ -52,10 +56,11 @@
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden 2xl:table-cell whitespace-nowrap"
           pSortableColumn="creationTime"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">创建时间 <p-sortIcon field="creationTime" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap" i18n>创建时间 <p-sortIcon field="creationTime" /></div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 text-right whitespace-nowrap"
+          i18n
         >
           操作
         </th>
@@ -127,9 +132,13 @@
 
         <td class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden xl:table-cell">
           <div class="flex items-center gap-1.5 whitespace-nowrap">
-            <p-tag [value]="hasPkce(item) ? 'PKCE' : '无 PKCE'" [severity]="hasPkce(item) ? 'success' : 'warn'" styleClass="text-[10px]" />
             <p-tag
-              [value]="item.hasClientSecret ? 'Secret 已设置' : '无 Secret'"
+              [value]="hasPkce(item) ? pkceLabel : noPkceLabel"
+              [severity]="hasPkce(item) ? 'success' : 'warn'"
+              styleClass="text-[10px]"
+            />
+            <p-tag
+              [value]="item.hasClientSecret ? secretConfiguredLabel : noSecretLabel"
               [severity]="item.hasClientSecret ? 'warn' : 'secondary'"
               styleClass="text-[10px] hidden 2xl:inline-flex"
             />
@@ -151,6 +160,7 @@
               styleClass="w-8 h-8 !p-0"
               pTooltip="编辑"
               tooltipPosition="top"
+              i18n-pTooltip
             />
             <p-button
               (onClick)="resetSecret.emit(item.id)"
@@ -162,6 +172,7 @@
               pTooltip="重置密钥"
               tooltipPosition="top"
               [disabled]="item.clientType !== 'confidential'"
+              i18n-pTooltip
             />
             <p-button
               (onClick)="delete.emit(item.id)"
@@ -172,6 +183,7 @@
               styleClass="w-8 h-8 !p-0"
               pTooltip="删除"
               tooltipPosition="top"
+              i18n-pTooltip
             />
           </div>
         </td>
@@ -183,8 +195,8 @@
         <td colspan="7" class="!p-0 !border-0">
           <div class="flex flex-col items-center justify-center h-64 text-muted-color">
             <i class="pi pi-inbox text-5xl opacity-30 mb-3"></i>
-            <p class="text-base font-medium m-0">暂无开放应用</p>
-            <p class="text-sm mt-1 opacity-70">请创建新的开放应用</p>
+            <p class="text-base font-medium m-0" i18n>暂无开放应用</p>
+            <p class="text-sm mt-1 opacity-70" i18n>请创建新的开放应用</p>
           </div>
         </td>
       </tr>
@@ -203,7 +215,7 @@
           {{ item }}
         </div>
       } @empty {
-        <div class="text-sm text-muted-color">暂无配置</div>
+        <div class="text-sm text-muted-color" i18n>暂无配置</div>
       }
     </div>
   </div>

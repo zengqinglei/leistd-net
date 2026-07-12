@@ -37,7 +37,7 @@ export class ProfileSettingsDialogComponent {
   readonly user = computed(() => this.authService.currentUser());
   readonly avatarPreview = signal('');
   readonly displayName = computed(
-    () => this.form.controls.nickname.value.trim() || this.user()?.nickname || this.user()?.username || '未登录用户'
+    () => this.form.controls.nickname.value.trim() || this.user()?.nickname || this.user()?.username || $localize`未登录用户`
   );
   readonly avatarLabel = computed(() => {
     const text = this.displayName().trim();
@@ -134,7 +134,7 @@ export class ProfileSettingsDialogComponent {
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '个人资料已更新' });
+          this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`个人资料已更新` });
           this.visible.set(false);
         }
       });

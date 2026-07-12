@@ -83,8 +83,8 @@ export class OpenApplicationsPage implements OnInit {
 
   applicationTypeOptions = [
     { label: 'Web', value: 'web' },
-    { label: '桌面/原生', value: 'native' },
-    { label: '服务端', value: 'service' }
+    { label: $localize`桌面/原生`, value: 'native' },
+    { label: $localize`服务端`, value: 'service' }
   ];
 
   clientTypeOptions = [
@@ -99,7 +99,7 @@ export class OpenApplicationsPage implements OnInit {
   }
 
   ngOnInit() {
-    this.layoutService.title.set('开放应用管理');
+    this.layoutService.title.set($localize`开放应用管理`);
 
     const saved = this.filterStateService.load<{
       searchQuery: string;
@@ -198,8 +198,8 @@ export class OpenApplicationsPage implements OnInit {
         next: result => {
           this.messageService.add({
             severity: 'success',
-            summary: '成功',
-            detail: selected ? '开放应用更新成功' : '开放应用创建成功'
+            summary: $localize`成功`,
+            detail: selected ? $localize`开放应用更新成功` : $localize`开放应用创建成功`
           });
           this.editDialogVisible.set(false);
 
@@ -216,12 +216,12 @@ export class OpenApplicationsPage implements OnInit {
 
   handleDelete(id: string) {
     this.confirmationService.confirm({
-      message: '确定要删除此开放应用吗？使用该 Client ID 的客户端将无法继续登录。',
-      header: '确认删除',
+      message: $localize`确定要删除此开放应用吗？使用该 Client ID 的客户端将无法继续登录。`,
+      header: $localize`确认删除`,
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         this.service.deleteOpenApplication(id).subscribe(() => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '开放应用已删除' });
+          this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`开放应用已删除` });
           this.reloadList();
         });
       }
@@ -230,8 +230,8 @@ export class OpenApplicationsPage implements OnInit {
 
   handleResetSecret(id: string) {
     this.confirmationService.confirm({
-      message: '确定要重置该开放应用的 Client Secret 吗？旧密钥将立即失效。',
-      header: '确认重置密钥',
+      message: $localize`确定要重置该开放应用的 Client Secret 吗？旧密钥将立即失效。`,
+      header: $localize`确认重置密钥`,
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         this.service.resetSecret(id).subscribe(result => {
@@ -250,7 +250,7 @@ export class OpenApplicationsPage implements OnInit {
     }
 
     navigator.clipboard?.writeText(value).then(() => {
-      this.messageService.add({ severity: 'success', summary: '成功', detail: '已复制密钥' });
+      this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`已复制密钥` });
     });
   }
 
@@ -261,7 +261,7 @@ export class OpenApplicationsPage implements OnInit {
     }
 
     navigator.clipboard?.writeText(value).then(() => {
-      this.messageService.add({ severity: 'success', summary: '成功', detail: '已复制密钥' });
+      this.messageService.add({ severity: 'success', summary: $localize`成功`, detail: $localize`已复制密钥` });
     });
   }
 }

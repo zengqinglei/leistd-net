@@ -48,14 +48,14 @@ export function formatDuration(ms: number | undefined | null): string {
   if (ms == null || ms < 0) return 'N/A';
   if (ms < 1000) return `${Math.round(ms)}ms`;
   const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}秒`;
+  if (seconds < 60) return $localize`${seconds.toFixed(1)}秒`;
   const minutes = seconds / 60;
-  if (minutes < 60) return `${Math.floor(minutes)}分钟`;
+  if (minutes < 60) return $localize`${Math.floor(minutes)}分钟`;
   const hours = minutes / 60;
-  if (hours < 24) return `${Math.floor(hours)}小时`;
+  if (hours < 24) return $localize`${Math.floor(hours)}小时`;
   const days = hours / 24;
-  if (days < 365) return `${Math.floor(days)}天`;
-  return `${(days / 365).toFixed(1)}年`;
+  if (days < 365) return $localize`${Math.floor(days)}天`;
+  return $localize`${(days / 365).toFixed(1)}年`;
 }
 
 /**
@@ -77,9 +77,9 @@ export function formatDurationVerbose(ms: number | undefined | null): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  if (years > 0) return `${years}年${days > 0 ? `${days}天` : ''}`;
-  if (days > 0) return `${days}天${hours > 0 ? `${hours}小时` : ''}${minutes > 0 ? `${minutes}分` : ''}`;
-  if (hours > 0) return `${hours}小时${minutes > 0 ? `${minutes}分` : ''}${seconds > 0 ? `${seconds}秒` : ''}`;
-  if (minutes > 0) return `${minutes}分${seconds > 0 ? `${seconds}秒` : ''}`;
-  return `${seconds}秒`;
+  if (years > 0) return $localize`${years}年${days > 0 ? `${days}天` : ''}`;
+  if (days > 0) return $localize`${days}天${hours > 0 ? `${hours}小时` : ''}${minutes > 0 ? `${minutes}分` : ''}`;
+  if (hours > 0) return $localize`${hours}小时${minutes > 0 ? `${minutes}分` : ''}${seconds > 0 ? `${seconds}秒` : ''}`;
+  if (minutes > 0) return $localize`${minutes}分${seconds > 0 ? `${seconds}秒` : ''}`;
+  return $localize`${seconds}秒`;
 }

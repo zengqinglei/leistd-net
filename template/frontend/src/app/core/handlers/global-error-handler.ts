@@ -32,7 +32,7 @@ export class GlobalErrorHandler implements ErrorHandler {
     if (error instanceof Error) {
       this.messageService.add({
         severity: 'error',
-        summary: '应用错误',
+        summary: $localize`应用错误`,
         detail: error.message
       });
       return;
@@ -41,8 +41,8 @@ export class GlobalErrorHandler implements ErrorHandler {
     // 处理未知类型的错误
     this.messageService.add({
       severity: 'error',
-      summary: '未知错误',
-      detail: '应用发生了未知错误，请刷新页面重试'
+      summary: $localize`未知错误`,
+      detail: $localize`应用发生了未知错误，请刷新页面重试`
     });
   }
 }

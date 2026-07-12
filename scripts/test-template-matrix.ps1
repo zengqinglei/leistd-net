@@ -1,5 +1,5 @@
 param(
-    [string[]]$Scenarios = @("default", "minimal", "no-roles", "notifications", "no-openiddict", "external-login"),
+    [string[]]$Scenarios = @("default", "minimal", "no-roles", "notifications", "no-openiddict", "external-login", "localization"),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [switch]$SkipPack,
@@ -235,6 +235,24 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
             throw "Scenario '$($Definition.Name)' README contains disabled capability: $unexpectedText"
         }
     }
+
+    $frontendPackage = Get-Content -LiteralPath (Join-Path $ProjectRoot "frontend/package.json") -Raw | ConvertFrom-Json
+    $hasAngularLocalize = $null -ne $frontendPackage.devDependencies.'@angular/localize'
+    if ($Definition.Name -eq "localization") {
+        if (-not $hasAngularLocalize) {
+            throw "Localization scenario must install @angular/localize."
+        }
+        $angularConfig = Get-Content -LiteralPath (Join-Path $ProjectRoot "frontend/angular.json") -Raw | ConvertFrom-Json
+        $projectConfig = $angularConfig.projects."$($ProjectName.ToLowerInvariant().Replace('.', '-'))-web"
+        if ($projectConfig.i18n.sourceLocale.code -ne "zh-Hans" -or
+            $projectConfig.i18n.sourceLocale.subPath -ne "zh-CN" -or
+            $projectConfig.i18n.locales.'en-US'.subPath -ne "en-US") {
+            throw "Localization scenario must configure en-US and zh-CN Angular locales."
+        }
+    }
+    elseif ($hasAngularLocalize) {
+        throw "Scenario '$($Definition.Name)' must not install @angular/localize when localization is disabled."
+    }
 }
 
 function Get-FreeTcpPort {
@@ -373,6 +391,19 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
         ReadmeContains = @("外部身份提供方登录", "OpenIddict")
         ReadmeExcludes = @("通知持久化")
+    }
+    "localization" = @{
+        Arguments = @("--include-localization", "true"); Frontend = $true; Lint = $true
+        Present = @(
+            "backend/src/{name}.Api/Localization/Resources/ApiResource.resx",
+            "backend/src/{name}.Api/Localization/Resources/ApiResource.zh-CN.resx",
+            "frontend/src/app/core/services/localization-service.ts",
+            "frontend/src/app/shared/components/language-switcher/language-switcher.ts",
+            "frontend/src/locale/messages.en-US.xlf"
+        )
+        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
+        ReadmeContains = @("英文（默认）和简体中文本地化", "OpenIddict")
+        ReadmeExcludes = @("通知持久化", "外部身份提供方登录")
     }
 }
 

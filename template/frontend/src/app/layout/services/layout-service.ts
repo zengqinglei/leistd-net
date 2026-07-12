@@ -38,7 +38,7 @@ export class LayoutService {
   /**
    * 页面标题
    */
-  title = signal<string>('概览');
+  title = signal<string>($localize`概览`);
 
   private readonly platformId = inject(PLATFORM_ID);
   private readonly destroyRef = inject(DestroyRef);

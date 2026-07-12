@@ -1,6 +1,7 @@
 #if (IncludeIdentity)
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using Leistd.Exception.Core;
 using Microsoft.Extensions.Configuration;
@@ -23,7 +24,7 @@ public class GoogleOAuthProvider(
     public string GetAuthorizationUrl(string redirectUri, string state)
     {
         var clientId = configuration["ExternalAuth:Google:ClientId"]
-            ?? throw new NotFoundException("Google ClientId 未配置");
+            ?? throw CreateMissingConfigurationException("ExternalAuth:Google:ClientId");
 
         return $"{AuthorizationEndpoint}?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&response_type=code&scope=openid%20email%20profile&state={state}";
     }
@@ -34,9 +35,9 @@ public class GoogleOAuthProvider(
         CancellationToken cancellationToken = default)
     {
         var clientId = configuration["ExternalAuth:Google:ClientId"]
-            ?? throw new NotFoundException("Google ClientId 未配置");
+            ?? throw CreateMissingConfigurationException("ExternalAuth:Google:ClientId");
         var clientSecret = configuration["ExternalAuth:Google:ClientSecret"]
-            ?? throw new NotFoundException("Google ClientSecret 未配置");
+            ?? throw CreateMissingConfigurationException("ExternalAuth:Google:ClientSecret");
 
         var httpClient = httpClientFactory.CreateClient();
 
@@ -55,7 +56,9 @@ public class GoogleOAuthProvider(
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             logger.LogError("Google Token 交换失败: {StatusCode} {Content}", response.StatusCode, errorContent);
-            throw new BadRequestException($"获取 Access Token 失败: {response.StatusCode}");
+            throw new BadRequestException($"Google access token exchange failed with status '{response.StatusCode}'.")
+                .WithCode(BusinessErrorCodes.OAuthTokenExchangeFailed)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OAuthTokenExchangeFailed}", "Google");
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -64,12 +67,16 @@ public class GoogleOAuthProvider(
         if (tokenResponse == null || !tokenResponse.TryGetValue("access_token", out var accessTokenElement))
         {
             logger.LogError("解析 Google Access Token 失败: {Response}", responseContent);
-            throw new BadRequestException("解析 Google Access Token 失败");
+            throw new BadRequestException("The Google access token response is invalid.")
+                .WithCode(BusinessErrorCodes.OAuthTokenInvalid)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OAuthTokenInvalid}", "Google");
         }
 
         return new OAuthTokenInfo
         {
-            AccessToken = accessTokenElement.GetString() ?? throw new BadRequestException("Access Token 为空"),
+            AccessToken = accessTokenElement.GetString() ?? throw new BadRequestException("The Google access token is missing.")
+                .WithCode(BusinessErrorCodes.OAuthAccessTokenMissing)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OAuthAccessTokenMissing}", "Google"),
             TokenType = tokenResponse.TryGetValue("token_type", out var tokenType) ? tokenType.GetString() : null,
             ExpiresIn = tokenResponse.TryGetValue("expires_in", out var expiresIn) ? expiresIn.GetInt32() : null,
             RefreshToken = tokenResponse.TryGetValue("refresh_token", out var refreshToken) ? refreshToken.GetString() : null,
@@ -87,17 +94,28 @@ public class GoogleOAuthProvider(
 
         var userInfo = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>(cancellationToken);
         if (userInfo == null)
-            throw new BadRequestException("获取 Google 用户信息失败");
+            throw new BadRequestException("Google user information could not be retrieved.")
+                .WithCode(BusinessErrorCodes.OAuthUserInfoFailed)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OAuthUserInfoFailed}", "Google");
 
         return new ExternalUserInfo
         {
-            ProviderId = userInfo["id"].GetString() ?? throw new BadRequestException("Google User ID is missing"),
+            ProviderId = userInfo["id"].GetString() ?? throw new BadRequestException("The Google user ID is missing.")
+                .WithCode(BusinessErrorCodes.OAuthProviderUserIdMissing)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OAuthProviderUserIdMissing}", "Google"),
             Email = userInfo.TryGetValue("email", out var email) ? email.GetString() : null,
             Username = (userInfo.TryGetValue("email", out var uEmail) ? uEmail.GetString()?.Split('@')[0] : null)
                        ?? userInfo["id"].GetString()!,
             Nickname = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("picture", out var picture) ? picture.GetString() : null
         };
+    }
+
+    private static BusinessException CreateMissingConfigurationException(string configurationKey)
+    {
+        return new NotFoundException($"OAuth configuration '{configurationKey}' is missing.")
+            .WithCode(BusinessErrorCodes.OAuthConfigurationMissing)
+            .WithLocalization($"Exception:{BusinessErrorCodes.OAuthConfigurationMissing}", configurationKey);
     }
 }
 #endif

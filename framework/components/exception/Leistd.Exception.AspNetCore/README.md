@@ -96,49 +96,41 @@ app.UseAuthorization();
 
 ## 响应格式
 
-异常会被转换为统一的JSON响应：
+异常会被转换为 RFC 9457 `ProblemDetails`：
 
 ```json
 {
-  "success": false,
-  "code": 40000,
-  "message": "错误消息",
-  "details": "详细错误信息（仅开发环境或配置启用时显示）",
-  "errors": [
-    {
-      "field": "fieldName",
-      "message": "验证错误消息"
-    }
-  ]
+  "type": "urn:leistd:error:40001",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Username already exists.",
+  "instance": "/api/users",
+  "code": 40001,
+  "message": "Username already exists.",
+  "traceId": "00-abc...-01"
 }
 ```
 
 ## HTTP状态码映射
 
-异常的错误码会自动映射到HTTP状态码：
-- `40000-40099` → 400 Bad Request
-- `40100-40199` → 401 Unauthorized
-- `40300-40399` → 403 Forbidden
-- `40400-40499` → 404 Not Found
-- `42200-42299` → 422 Unprocessable Entity
-- `50000-50099` → 500 Internal Server Error
+异常错误码的前三位映射为 HTTP 状态码。默认异常使用 `40000` 这类「状态码 + 00」形式；标准业务码使用「状态码 + 两位业务序号」的五位格式，例如 `.WithCode("01")` 生成 `40001`。
+默认码的 `ProblemDetails.type` 使用对应 HTTP 规范 URI；业务码使用 `urn:leistd:error:{code}`，例如 `urn:leistd:error:40001`，作为语言无关的问题类型标识。
 
-## 自定义异常处理器
+## 本地化响应
 
-如果需要自定义异常处理逻辑，实现 `IExceptionHandler` 接口：
+Core 层通过 `WithLocalization` 附加资源键和参数，ASP.NET Core 宿主通过 `IExceptionResponseLocalizer` 在请求边界翻译响应。未注册本地化器或资源不存在时自动回退原消息。
 
 ```csharp
-public class CustomExceptionHandler : IExceptionHandler
+public sealed class AppExceptionResponseLocalizer : IExceptionResponseLocalizer
 {
-    public async Task<IResult> HandleAsync(Exception exception, HttpContext context)
+    public ExceptionResponseLocalization Localize(BusinessException exception, int statusCode)
     {
-        // 自定义处理逻辑
-        return Results.Json(new { error = exception.Message });
+        // 使用当前请求文化从 .resx、数据库或其他资源源解析。
+        return new ExceptionResponseLocalization(message: null, title: null);
     }
 }
 
-// 注册
-builder.Services.AddSingleton<IExceptionHandler, CustomExceptionHandler>();
+builder.Services.AddSingleton<IExceptionResponseLocalizer, AppExceptionResponseLocalizer>();
 ```
 
 ## 示例
@@ -154,25 +146,20 @@ public class UserController : ControllerBase
     {
         if (id <= 0)
         {
-            throw new BadRequestException("用户ID必须大于0");
+            throw new BadRequestException("User ID must be greater than zero.")
+                .WithCode("01")
+                .WithLocalization("Users.InvalidId");
         }
 
         var user = FindUser(id);
         if (user == null)
         {
-            throw new NotFoundException($"未找到ID为{id}的用户");
+            throw new NotFoundException($"User {id} was not found.");
         }
 
         return Ok(user);
     }
 }
 
-// 客户端收到的响应（400 Bad Request）
-{
-  "success": false,
-  "code": 40000,
-  "message": "用户ID必须大于0",
-  "details": null,
-  "errors": null
-}
+// 客户端收到 HTTP 400 ProblemDetails，code 为 40001。
 ```

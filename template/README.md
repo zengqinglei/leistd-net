@@ -22,6 +22,9 @@ CompanyName.ProjectName/
 <!--#if (IncludeRoles)-->
 - 用户、角色、权限以及超级管理员授权模型。
 <!--#endif-->
+<!--#if (IncludeLocalization)-->
+- 英文（默认）和简体中文本地化，覆盖 .NET 请求文化、异常响应、Angular 构建和 PrimeNG 组件文案。
+<!--#endif-->
 <!--#if (IncludeOpenIddict)-->
 - OpenIddict OAuth 2.0/OIDC Server。
 <!--#endif-->
@@ -86,6 +89,9 @@ npm start
 ```
 
 默认开发服务器地址为 `http://localhost:4200`。Mock、同源代理和跨域联调方式见 [前端说明](frontend/README.md)。
+<!--#if (IncludeLocalization)-->
+`npm start` 默认运行 `en-US` 构建；生产构建同时输出 `en-US` 与 `zh-CN` 子目录。
+<!--#endif-->
 
 ## 验证
 

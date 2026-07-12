@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Shared.Email;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Options;
 using Leistd.Ddd.Application.AppService;
@@ -26,20 +27,24 @@ public class EmailVerificationAppService(
         var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken, input.CaptchaCode, cancellationToken);
         if (!isValidCaptcha)
         {
-            throw new BadRequestException("图形验证码不正确或已过期");
+            throw new BadRequestException("The captcha is incorrect or has expired.")
+                .WithCode(BusinessErrorCodes.CaptchaInvalid);
         }
 
         var existingUser = await userRepository.GetFirstAsync(u => u.Email.ToLower() == normalizedEmail, cancellationToken: cancellationToken);
         if (existingUser != null)
         {
-            throw new BadRequestException("邮箱已被使用");
+            throw new BadRequestException($"Email '{input.Email}' is already in use.")
+                .WithCode(BusinessErrorCodes.EmailAlreadyInUse)
+                .WithLocalization($"Exception:{BusinessErrorCodes.EmailAlreadyInUse}", input.Email);
         }
 
         var limitKey = GetLimitCacheKey(normalizedEmail);
         var isLimited = await distributedCache.GetStringAsync(limitKey, cancellationToken);
         if (!string.IsNullOrEmpty(isLimited))
         {
-            throw new BadRequestException("发送过于频繁，请稍后再试");
+            throw new BadRequestException("Requests are too frequent. Please try again later.")
+                .WithCode(BusinessErrorCodes.EmailVerificationRateLimited);
         }
 
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();

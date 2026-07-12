@@ -2,6 +2,14 @@
 
 本项目基于 Angular、PrimeNG 和 Tailwind CSS 构建。
 
+<!--#if (IncludeLocalization)-->
+## 多语言
+
+Angular 使用官方编译期 i18n。模板源码文案以 `zh-Hans` 为源语言，默认访问语言 `en-US` 由 `messages.en-US.xlf` 提供；中文构建的对外 URL 和后端文化使用 `zh-CN`。`npm run build` 会生成 `en-US` 与 `zh-CN` 两个目录。模板文案使用 `i18n` / `$localize` 标记，运行 `npm run extract-i18n` 更新消息清单后同步维护英文目标 XLIFF。语言切换通过跳转到另一语言构建完成，因此日期、数字和 Angular 内置管道会获得一致的 `LOCALE_ID`。
+
+PrimeNG 组件翻译由 `LocalizationService` 调用官方 `PrimeNG.setTranslation` 设置；API 请求同时发送 `Accept-Language` 并写入 ASP.NET Core 文化 Cookie。新增语言时需同步更新 `angular.json`、XLIFF、PrimeNG 翻译和后端支持文化。
+<!--#endif-->
+
 有关详细的开发规范、目录结构和编码准则，请参阅项目根目录下的 [前端开发规范](../docs/standards/coding-frontend.md)。
 
 ---

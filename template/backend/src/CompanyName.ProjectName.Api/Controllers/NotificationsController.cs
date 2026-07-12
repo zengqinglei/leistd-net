@@ -1,4 +1,5 @@
 using Leistd.Exception.Core;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using Leistd.Notifications;
 using Leistd.Security.Users;
 using Microsoft.AspNetCore.Authorization;
@@ -45,7 +46,8 @@ public class NotificationsController(
     {
         var userId = currentUser.Id?.ToString();
         if (string.IsNullOrEmpty(userId))
-            throw new ForbiddenException("当前身份不能操作用户通知。");
+            throw new ForbiddenException("The current identity cannot manage user notifications.")
+                .WithCode(BusinessErrorCodes.NotificationIdentityForbidden);
 
         await notificationStore.MarkAsReadAsync(id, userId, cancellationToken);
     }
@@ -56,7 +58,8 @@ public class NotificationsController(
     {
         var userId = currentUser.Id?.ToString();
         if (string.IsNullOrEmpty(userId))
-            throw new ForbiddenException("当前身份不能操作用户通知。");
+            throw new ForbiddenException("The current identity cannot manage user notifications.")
+                .WithCode(BusinessErrorCodes.NotificationIdentityForbidden);
 
         await notificationStore.MarkAllAsReadAsync(userId, cancellationToken);
     }

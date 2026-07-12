@@ -210,6 +210,14 @@ frontend/
 
 AI 极易只改一端，务必六环全改。
 
+### 5.7 多语言（启用 `IncludeLocalization` 时）
+
+- 应用文案使用 Angular 官方 `i18n` 或 `$localize`，不要在组件内维护自定义翻译字典，也不要拼接可翻译句子。
+- 模板源码文案为中文，因此 Angular 源语言使用 `zh-Hans`；`en-US` 是默认访问语言和目标语言。中文构建对外路径和 API 文化使用 `zh-CN`。
+- 修改文案后运行 `npm run extract-i18n`，同步维护目标 XLIFF；缺失翻译不得静默进入发布构建。
+- PrimeNG 自带文案统一由 `LocalizationService` 调用 `PrimeNG.setTranslation` 设置，不逐组件覆盖。
+- API 请求由拦截器发送 `Accept-Language`；语言切换跳转到对应 AOT 构建并允许页面重载，以保证 `LOCALE_ID`、管道和组件文案一致。
+
 ---
 
 ## 6. 共享资源
@@ -256,4 +264,3 @@ AI 极易只改一端，务必六环全改。
 - [ ] 核心服务有单元测试
 
 ---
-

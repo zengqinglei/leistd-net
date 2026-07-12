@@ -22,11 +22,11 @@ import { AccountService } from '../../services/account-service';
     <main class="flex min-h-screen items-center justify-center bg-surface-50 px-4 dark:bg-surface-950">
       <section class="text-center">
         @if (error()) {
-          <h1 class="mb-3 text-2xl font-semibold text-red-500">登录失败</h1>
+          <h1 class="mb-3 text-2xl font-semibold text-red-500" i18n>登录失败</h1>
           <p class="text-surface-600 dark:text-surface-300">{{ error() }}</p>
         } @else {
-          <p-progress-spinner ariaLabel="正在完成登录" />
-          <h1 class="mt-4 text-2xl font-semibold text-surface-900 dark:text-surface-0">正在处理第三方登录</h1>
+          <p-progress-spinner ariaLabel="正在完成登录" i18n-ariaLabel />
+          <h1 class="mt-4 text-2xl font-semibold text-surface-900 dark:text-surface-0" i18n>正在处理第三方登录</h1>
         }
       </section>
     </main>
@@ -52,7 +52,7 @@ export class ExternalAuthCallback implements OnInit {
     const provider = params.get('provider') ?? this.route.snapshot.paramMap.get('provider');
 
     if (!code || !provider) {
-      this.error.set('缺少必要的回调参数');
+      this.error.set($localize`缺少必要的回调参数`);
       return;
     }
 
@@ -69,7 +69,7 @@ export class ExternalAuthCallback implements OnInit {
       }
     } catch (err) {
       console.error('第三方登录回调处理失败', err);
-      this.error.set('第三方登录失败，请返回重试');
+      this.error.set($localize`第三方登录失败，请返回重试`);
     }
   }
 }

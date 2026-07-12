@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using Leistd.Exception.Core;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
@@ -17,7 +18,8 @@ public class PasswordHasher : IPasswordHasher
     public string HashPassword(string password)
     {
         if (string.IsNullOrEmpty(password))
-            throw new BadRequestException("密码不能为空");
+            throw new BadRequestException("Password is required.")
+                .WithCode(BusinessErrorCodes.PasswordRequired);
 
         // 生成盐值
         var salt = new byte[SaltSize];
@@ -46,9 +48,11 @@ public class PasswordHasher : IPasswordHasher
     public bool VerifyPassword(string hashedPassword, string providedPassword)
     {
         if (string.IsNullOrEmpty(hashedPassword))
-            throw new BadRequestException("哈希密码不能为空");
+            throw new BadRequestException("Password hash is required.")
+                .WithCode(BusinessErrorCodes.PasswordHashRequired);
         if (string.IsNullOrEmpty(providedPassword))
-            throw new BadRequestException("待验证密码不能为空");
+            throw new BadRequestException("Password to verify is required.")
+                .WithCode(BusinessErrorCodes.VerificationPasswordRequired);
 
         var hashBytes = Convert.FromBase64String(hashedPassword);
 

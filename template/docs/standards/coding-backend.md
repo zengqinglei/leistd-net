@@ -520,6 +520,14 @@ logger.LogError(ex, "创建用户失败: {Username}", input.Username);
 - **Controller 统一继承 `BaseController`**（见 §3.6）；确有特殊性的（视图渲染、纯透传代理、机器对机器端点）可用不同基类，属合理例外，就近注释说明。
 - **以下留在表现层属合理边界、不算越层**（避免过度下沉）：后台服务取请求作用域服务推进工单状态机（调度编排）、连接/端点准入的存在性探针（等价鉴权）、后台 Worker 直写技术性日志实体（fire-and-forget 技术数据）、下发外部的 UTC 线缆时间戳直接用明确 UTC 取法（见 §3.2.1）。
 
+### 7.4 多语言边界（启用 `IncludeLocalization` 时）
+
+- Domain/Application 不注入 `IStringLocalizer`，只产生稳定错误码、英文回退消息以及可选资源键/格式参数。
+- Api 层使用 .NET 请求本地化和 `.resx`，在写入 `ProblemDetails` 时翻译标题、消息和逐字段错误。
+- 错误码是语言无关的客户端契约；资源键优先使用明确业务语义，也可按 `Exception:{Code}` 约定映射。
+- 日志记录原始异常、错误码和结构化参数，不将翻译后的用户文案作为唯一诊断信息。
+- 新增支持文化时同步更新后端文化列表、资源文件、Angular 构建配置和 PrimeNG 翻译。
+
 ---
 
 ## 附录：规范检查清单
@@ -559,4 +567,3 @@ logger.LogError(ex, "创建用户失败: {Username}", input.Username);
 - [ ] 使用 Leistd 提供的异步扩展方法
 
 ---
-

@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Leistd.Ddd.Domain.Repositories;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -40,17 +41,22 @@ public class AuthController(
 
         if (user == null)
         {
-            throw new UnauthorizedException($"登录失败: 用户不存在或密码错误 - {request.UsernameOrEmail}");
+            throw new UnauthorizedException("The username, email, or password is incorrect.")
+                .WithCode(BusinessErrorCodes.InvalidCredentials);
         }
 
         if (!user.IsActive)
         {
-            throw new UnauthorizedException($"登录失败: 用户已被禁用 - 用户: {user.Username}");
+            throw new UnauthorizedException($"User '{user.Username}' is disabled.")
+                .WithCode(BusinessErrorCodes.UserDisabled)
+                .WithLocalization($"Exception:{BusinessErrorCodes.UserDisabled}", user.Username);
         }
 
         if (user.IsLockedOut())
         {
-            throw new UnauthorizedException($"登录失败: 用户已被锁定 - 用户: {user.Username}, 锁定至: {user.LockoutEnd}");
+            throw new UnauthorizedException($"User '{user.Username}' is locked until {user.LockoutEnd}.")
+                .WithCode(BusinessErrorCodes.UserLocked)
+                .WithLocalization($"Exception:{BusinessErrorCodes.UserLocked}", user.Username, user.LockoutEnd);
         }
 
         // 记录登录成功并建立 Cookie 会话

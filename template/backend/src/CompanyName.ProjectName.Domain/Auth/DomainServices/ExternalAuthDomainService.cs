@@ -1,6 +1,7 @@
 #if (IncludeIdentity)
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
@@ -33,7 +34,9 @@ public class ExternalAuthDomainService(
 
         // 1. 获取 OAuth 服务 (Keyed Service)
         var oauthProvider = serviceProvider.GetKeyedService<IOAuthProvider>(provider.ToLower())
-            ?? throw new BadRequestException($"不支持的外部身份提供商: {provider}");
+            ?? throw new BadRequestException($"External identity provider '{provider}' is not supported.")
+                .WithCode(BusinessErrorCodes.ExternalProviderUnsupported)
+                .WithLocalization($"Exception:{BusinessErrorCodes.ExternalProviderUnsupported}", provider);
 
         // 2. 交换 Token
         var tokenInfo = await oauthProvider.ExchangeCodeForTokenAsync(code, redirectUri, cancellationToken);
@@ -71,7 +74,9 @@ public class ExternalAuthDomainService(
         {
             var existingUser = await userRepository.GetByIdAsync(connection.UserId, cancellationToken);
             if (existingUser == null)
-                throw new NotFoundException($"用户 '{connection.UserId}' 不存在");
+                throw new NotFoundException($"User '{connection.UserId}' was not found.")
+                    .WithCode(BusinessErrorCodes.UserNotFound)
+                    .WithLocalization($"Exception:{BusinessErrorCodes.UserNotFound}", connection.UserId);
 
             logger.LogInformation("用户 {Username} 通过 {Provider} 登录", existingUser.Username, provider);
             return existingUser;

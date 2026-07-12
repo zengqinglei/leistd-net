@@ -3,6 +3,7 @@ using System.Linq.Dynamic.Core;
 using System.Security.Cryptography;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Exception.Core;
@@ -107,12 +108,15 @@ public class OpenApplicationAppService(
         var clientId = input.ClientId.Trim();
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            throw new BadRequestException("Client ID 不能为空");
+            throw new BadRequestException("Client ID is required.")
+                .WithCode(BusinessErrorCodes.ClientIdRequired);
         }
 
         if (await applicationManager.FindByClientIdAsync(clientId, cancellationToken) != null)
         {
-            throw new BadRequestException($"Client ID 已存在: {clientId}");
+            throw new BadRequestException($"Client ID '{clientId}' already exists.")
+                .WithCode(BusinessErrorCodes.ClientIdAlreadyExists)
+                .WithLocalization($"Exception:{BusinessErrorCodes.ClientIdAlreadyExists}", clientId);
         }
 
         ValidateApplication(input.ApplicationType, input.ClientType, input.ConsentType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements);
@@ -160,7 +164,8 @@ public class OpenApplicationAppService(
         catch (OpenIddict.Abstractions.OpenIddictExceptions.ValidationException ex)
         {
             logger.LogWarning(ex, "OpenIddict 校验失败 (ClientId: {ClientId})", clientId);
-            throw new BadRequestException($"客户端创建失败：{ex.Message}");
+            throw new BadRequestException("The client application could not be created.", ex)
+                .WithCode(BusinessErrorCodes.OpenApplicationCreationFailed);
         }
     }
 
@@ -209,7 +214,8 @@ public class OpenApplicationAppService(
         var clientType = await applicationManager.GetClientTypeAsync(application, cancellationToken);
         if (clientType != OpenIddictConstants.ClientTypes.Confidential)
         {
-            throw new BadRequestException("只有 Confidential 客户端可以重置密钥");
+            throw new BadRequestException("Only confidential clients can reset their secret.")
+                .WithCode(BusinessErrorCodes.ConfidentialClientRequired);
         }
 
         var clientSecret = GenerateClientSecret();
@@ -223,7 +229,9 @@ public class OpenApplicationAppService(
         var application = await applicationManager.FindByIdAsync(id, cancellationToken);
         if (application == null)
         {
-            throw new NotFoundException($"开放应用不存在: {id}");
+            throw new NotFoundException($"Open application '{id}' was not found.")
+                .WithCode(BusinessErrorCodes.OpenApplicationNotFound)
+                .WithLocalization($"Exception:{BusinessErrorCodes.OpenApplicationNotFound}", id);
         }
 
         return application;
@@ -274,17 +282,23 @@ public class OpenApplicationAppService(
     {
         if (!ApplicationTypes.Contains(applicationType))
         {
-            throw new BadRequestException($"应用类型不支持: {applicationType}");
+            throw new BadRequestException($"Application type '{applicationType}' is not supported.")
+                .WithCode(BusinessErrorCodes.ApplicationTypeUnsupported)
+                .WithLocalization($"Exception:{BusinessErrorCodes.ApplicationTypeUnsupported}", applicationType);
         }
 
         if (!ClientTypes.Contains(clientType))
         {
-            throw new BadRequestException($"客户端类型不支持: {clientType}");
+            throw new BadRequestException($"Client type '{clientType}' is not supported.")
+                .WithCode(BusinessErrorCodes.ClientTypeUnsupported)
+                .WithLocalization($"Exception:{BusinessErrorCodes.ClientTypeUnsupported}", clientType);
         }
 
         if (!ConsentTypes.Contains(consentType))
         {
-            throw new BadRequestException($"同意类型不支持: {consentType}");
+            throw new BadRequestException($"Consent type '{consentType}' is not supported.")
+                .WithCode(BusinessErrorCodes.ConsentTypeUnsupported)
+                .WithLocalization($"Exception:{BusinessErrorCodes.ConsentTypeUnsupported}", consentType);
         }
 
         // Secret 由后端自动生成，不从前端传入，无需校验
@@ -292,7 +306,8 @@ public class OpenApplicationAppService(
         if ((applicationType == OpenIddictConstants.ApplicationTypes.Native || clientType == OpenIddictConstants.ClientTypes.Public) &&
             !requirements.Contains(PkceRequirement))
         {
-            throw new BadRequestException("Native/Public 客户端必须启用 PKCE");
+            throw new BadRequestException("Native and public clients must enable PKCE.")
+                .WithCode(BusinessErrorCodes.PkceRequired);
         }
 
         foreach (var uri in redirectUris.Concat(postLogoutRedirectUris))
@@ -306,7 +321,9 @@ public class OpenApplicationAppService(
         if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsWhiteSpace) ||
             !Uri.TryCreate(value, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.Fragment))
         {
-            throw new BadRequestException($"URI 不合法: {value}");
+            throw new BadRequestException($"URI '{value}' is invalid.")
+                .WithCode(BusinessErrorCodes.UriInvalid)
+                .WithLocalization($"Exception:{BusinessErrorCodes.UriInvalid}", value);
         }
     }
 

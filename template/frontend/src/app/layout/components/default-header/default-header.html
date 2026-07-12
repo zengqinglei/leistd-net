@@ -9,7 +9,7 @@
 
     <!-- Breadcrumb: 响应式 -->
     <div class="flex items-center gap-2 text-sm overflow-hidden">
-      <span class="text-muted-color hidden sm:inline">工作区</span>
+      <span class="text-muted-color hidden sm:inline" i18n>工作区</span>
       <span class="text-muted-color hidden sm:inline">/</span>
       <h2 class="font-semibold text-color truncate">{{ layoutService.title() }}</h2>
     </div>
@@ -17,6 +17,9 @@
 
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
+    <!--#if (IncludeLocalization)-->
+    <app-language-switcher />
+    <!--#endif-->
     <!-- Theme Toggle -->
     <p-button [icon]="themeService.modeIcon()" [text]="true" [rounded]="true" severity="secondary" (onClick)="themeService.toggleTheme()">
     </p-button>
@@ -49,6 +52,7 @@
       (onClick)="toggleNotifications($event)"
       pTooltip="通知"
       tooltipPosition="bottom"
+      i18n-pTooltip
     >
       <p-overlay-badge
         [value]="notificationCount() > 99 ? '99+' : notificationCount()"
@@ -63,13 +67,13 @@
     <p-popover #notificationPopover [pt]="{ content: { class: '!p-0' } }">
       <div class="w-[360px] max-w-[90vw]">
         <div class="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700">
-          <span class="font-semibold text-color">通知</span>
+          <span class="font-semibold text-color" i18n>通知</span>
           @if (notificationCount() > 0) {
-            <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()">全部已读</button>
+            <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()" i18n>全部已读</button>
           }
         </div>
         @if (notifications().length === 0) {
-          <div class="py-10 text-center text-muted-color text-sm">
+          <div class="py-10 text-center text-muted-color text-sm" i18n>
             <i class="pi pi-inbox text-2xl block mb-2 opacity-60"></i>
             暂无通知
           </div>
@@ -146,7 +150,7 @@
               {{ user.nickname || user.username }}
             </p>
             @if (user.isAdmin()) {
-              <i class="pi pi-verified text-primary text-xs hidden md:inline" pTooltip="管理员" tooltipPosition="bottom"></i>
+              <i class="pi pi-verified text-primary text-xs hidden md:inline" pTooltip="管理员" tooltipPosition="bottom" i18n-pTooltip></i>
             }
           </div>
           <i class="pi pi-angle-down text-muted-color text-xs ml-1"></i>

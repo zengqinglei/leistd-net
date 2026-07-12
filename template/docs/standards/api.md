@@ -9,7 +9,7 @@
 
 ## 2. 响应格式
 
-本项目响应风格：**成功直接返回业务对象（裸对象，不包裹），失败统一返回 RFC 7807 `ProblemDetails`**。
+本项目响应风格：**成功直接返回业务对象（裸对象，不包裹），失败统一返回 RFC 9457 `ProblemDetails`**。
 该风格由 Leistd 框架的全局异常处理（`Leistd.Exception.AspNetCore`）落地，无需也不应在 Controller 里手动包裹 `Ok(...)` 或自定义 `{success,data}` 信封。
 
 > 设计取舍：前端按 HTTP 状态码判断成功失败；失败用 ProblemDetails（`application/problem+json`）携带机器可读的错误信息。
@@ -49,15 +49,17 @@ HTTP/1.1 200 OK
 
 ### 2.4 错误响应
 
-失败统一返回 RFC 7807 `ProblemDetails`，`Content-Type: application/problem+json`。
+失败统一返回 RFC 9457 `ProblemDetails`，`Content-Type: application/problem+json`。
 
 ```json
 {
-  "type": "about:blank",
-  "title": "请求处理失败",
+  "type": "urn:leistd:error:40001",
+  "title": "Bad Request",
   "status": 400,
-  "detail": "用户名 'admin' 已存在",
+  "detail": "Username 'admin' already exists.",
   "instance": "/api/v1/users",
+  "code": 40001,
+  "message": "Username 'admin' already exists.",
   "traceId": "00-abc...-def...-01"
 }
 ```
@@ -66,16 +68,20 @@ HTTP/1.1 200 OK
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| type | string | 错误类型 URI；未细分时为 `about:blank` |
-| title | string | 错误标题（人类可读、与 status 对应） |
+| type | string | 稳定问题类型；默认码为 HTTP 规范 URI，业务码为 `urn:leistd:error:{code}` |
+| title | string | 与 status 对应的人类可读标题；启用多语言时按请求文化返回 |
 | status | number | HTTP 状态码 |
-| detail | string | 本次错误的具体说明 |
+| detail | string | 本次错误的用户可读说明；与 `message` 当前值一致 |
 | instance | string | 出错的请求路径（可选） |
+| code | number | 稳定机器错误码；前三位映射 HTTP 状态，完整值供客户端分支判断 |
+| message | string | Leistd 扩展字段，用户可读错误消息 |
 | traceId | string | 链路追踪 ID（扩展字段，贯穿调用链） |
+
+框架异常的默认码是 HTTP 三位前缀加 `00`，例如 `BadRequestException` 为 `40000`。业务错误码采用「HTTP 三位状态码 + 两位业务序号」的五位格式，例如 `.WithCode("01")` 得到 `40001`。模板统一在 `BusinessErrorCodes` 中声明完整错误码；业务响应的 `type` 为 `urn:leistd:error:{code}`，同一业务语义的 `type` 和完整错误码发布后均不得复用或随意修改。启用多语言后，`type`、`code` 不随语言改变，仅 `title`、`detail`、`message` 和验证文本本地化。
 
 ### 2.5 验证错误响应
 
-模型校验（Data Annotations）失败返回 HTTP 400，`ProblemDetails` 的 `errors` 扩展字段按字段聚合错误信息（ASP.NET Core `ValidationProblemDetails` 标准格式）。
+MVC 模型绑定或 Data Annotations 自动校验失败返回 HTTP 400，`ProblemDetails` 的 `errors` 字段按字段聚合错误信息（ASP.NET Core `ValidationProblemDetails` 标准格式）。应用代码抛出的 `ValidationException` 会由 Leistd 转换为 `UnprocessableEntityException`，返回 HTTP 422；两者不可混为同一契约。
 
 ```json
 {
@@ -101,9 +107,8 @@ HTTP/1.1 200 OK
 | 403 | 无权限 |
 | 404 | 资源不存在 |
 | 409 | 状态冲突或幂等冲突 |
+| 422 | 请求结构有效，但字段或业务实体语义无法处理 |
 | 500 | 服务端异常 |
-
-> 业务校验失败本项目统一用 400（由 `BadRequestException` 抛出），不区分到 422。
 
 ## 4. 异常类型映射
 
@@ -116,6 +121,7 @@ HTTP/1.1 200 OK
 | `ForbiddenException` | 403 | 已登录但权限不足 |
 | `NotFoundException` | 404 | 资源不存在 |
 | `ConflictException` | 409 | 状态冲突、重复提交 |
+| `UnprocessableEntityException` | 422 | 字段或实体语义校验失败，携带 `errors` |
 | （未捕获异常） | 500 | 未预期异常，detail 不暴露内部细节 |
 
 **示例**：
@@ -123,13 +129,17 @@ HTTP/1.1 200 OK
 ```csharp
 // 业务规则验证失败
 if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-    throw new BadRequestException($"用户名 '{username}' 已存在");
+    throw new BadRequestException($"Username '{username}' already exists.")
+        .WithCode(BusinessErrorCodes.UsernameAlreadyExists)
+        .WithLocalization("Users.UsernameAlreadyExists", username);
 
 // 资源不存在
 var user = await userRepository.GetAsync(id, cancellationToken);
 if (user is null)
-    throw new NotFoundException($"用户 {id} 不存在");
+    throw new NotFoundException($"User {id} was not found.");
 ```
+
+开启模板的多语言选项后，API 使用 .NET 请求本地化中间件，默认文化为 `en-US`，支持 `zh-CN`。客户端发送 `Accept-Language`，也可使用 ASP.NET Core 文化 Cookie；资源缺失时回退到异常构造时的英文消息。Domain/Application 不读取当前请求文化，资源解析统一发生在 API 边界。
 
 ## 5. 认证与授权
 

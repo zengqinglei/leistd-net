@@ -7,18 +7,18 @@ namespace CompanyName.ProjectName.Application.Users.Dtos;
 /// </summary>
 public record UpdateUserInputDto
 {
-    [Display(Name = "邮箱")]
-    [Required(ErrorMessage = "{0}不能为空")]
-    [EmailAddress(ErrorMessage = "{0}格式不正确")]
-    [StringLength(256, ErrorMessage = "{0}长度不能超过 {1} 个字符")]
+    [Display(Name = "Email")]
+    [Required(ErrorMessage = "{0} is required.")]
+    [EmailAddress(ErrorMessage = "{0} has an invalid format.")]
+    [StringLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public required string Email { get; init; }
 
-    [Display(Name = "显示名称")]
-    [StringLength(128, ErrorMessage = "{0}长度不能超过 {1} 个字符")]
+    [Display(Name = "Display name")]
+    [StringLength(128, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 
-    [Display(Name = "头像")]
-    [StringLength(1500000, ErrorMessage = "{0}内容过大，请压缩后重试")]
+    [Display(Name = "Avatar")]
+    [StringLength(1500000, ErrorMessage = "{0} is too large. Compress it and try again.")]
     public string? Avatar { get; init; }
 
     public bool IsActive { get; init; }

@@ -1,5 +1,6 @@
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
 using Microsoft.Extensions.Logging;
@@ -63,13 +64,17 @@ public class UserDomainService(
         // 检查用户名唯一性
         if (!await IsUsernameAvailableAsync(username, cancellationToken))
         {
-            throw new BadRequestException($"用户名 '{username}' 已存在");
+            throw new BadRequestException($"Username '{username}' already exists.")
+                .WithCode(BusinessErrorCodes.UsernameAlreadyExists)
+                .WithLocalization("Exception:40001", username);
         }
 
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(email, cancellationToken))
         {
-            throw new BadRequestException($"邮箱 '{email}' 已被使用");
+            throw new BadRequestException($"Email '{email}' is already in use.")
+                .WithCode(BusinessErrorCodes.EmailAlreadyInUse)
+                .WithLocalization("Exception:40002", email);
         }
 
         // 创建用户
@@ -99,13 +104,17 @@ public class UserDomainService(
         // 检查用户名唯一性
         if (!await IsUsernameAvailableAsync(user.Id, username, cancellationToken))
         {
-            throw new BadRequestException($"用户名 '{username}' 已存在");
+            throw new BadRequestException($"Username '{username}' already exists.")
+                .WithCode(BusinessErrorCodes.UsernameAlreadyExists)
+                .WithLocalization("Exception:40001", username);
         }
 
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(user.Id, email, cancellationToken))
         {
-            throw new BadRequestException($"邮箱 '{email}' 已被使用");
+            throw new BadRequestException($"Email '{email}' is already in use.")
+                .WithCode(BusinessErrorCodes.EmailAlreadyInUse)
+                .WithLocalization("Exception:40002", email);
         }
 
         user.UpdateProfile(username, email, nickname, phoneNumber, avatar);
@@ -123,12 +132,14 @@ public class UserDomainService(
     {
         if (user.PasswordHash == null)
         {
-            throw new BadRequestException("当前账号未设置本地密码，无法修改密码");
+            throw new BadRequestException("The current account does not have a local password.")
+                .WithCode(BusinessErrorCodes.LocalPasswordNotConfigured);
         }
 
         if (!passwordHasher.VerifyPassword(user.PasswordHash, currentPassword))
         {
-            throw new BadRequestException("当前密码不正确");
+            throw new BadRequestException("The current password is incorrect.")
+                .WithCode(BusinessErrorCodes.CurrentPasswordIncorrect);
         }
 
         user.UpdatePasswordHash(passwordHasher.HashPassword(newPassword));

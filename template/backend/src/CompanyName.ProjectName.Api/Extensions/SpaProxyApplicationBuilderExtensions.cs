@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using System.Globalization;
 using CompanyName.ProjectName.Api.Options;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
@@ -70,11 +71,49 @@ public static class SpaProxyApplicationBuilderExtensions
         }
         else
         {
+#if (IncludeLocalization)
+            app.MapFallback(ServeLocalizedSpaAsync);
+#else
             app.MapFallbackToFile("index.html");
+#endif
         }
 
         return app;
     }
+
+#if (IncludeLocalization)
+    private static async Task ServeLocalizedSpaAsync(HttpContext context)
+    {
+        var requestPath = context.Request.Path.Value ?? "/";
+        var locale = HasLocalePrefix(requestPath, "zh-CN")
+            ? "zh-CN"
+            : HasLocalePrefix(requestPath, "en-US")
+                ? "en-US"
+                : null;
+
+        if (locale is null)
+        {
+            var preferredLocale = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+                ? "zh-CN"
+                : "en-US";
+            context.Response.Redirect($"/{preferredLocale}{requestPath}{context.Request.QueryString}");
+            return;
+        }
+
+        var environment = context.RequestServices.GetRequiredService<IWebHostEnvironment>();
+        var webRootPath = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
+        var indexPath = Path.Combine(webRootPath, locale, "index.html");
+        context.Response.ContentType = "text/html; charset=utf-8";
+        await context.Response.SendFileAsync(indexPath, context.RequestAborted);
+    }
+
+    private static bool HasLocalePrefix(string path, string locale)
+    {
+        var prefix = $"/{locale}";
+        return path.Equals(prefix, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith($"{prefix}/", StringComparison.OrdinalIgnoreCase);
+    }
+#endif
 
     private static Task ReturnApiNotFoundAsync(HttpContext context)
     {

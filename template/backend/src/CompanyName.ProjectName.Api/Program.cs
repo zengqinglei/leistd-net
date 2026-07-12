@@ -171,10 +171,13 @@ try
     builder.Services.AddHostedService<ApplicationBootstrapper>();
 
     // 4. API 层基础设施 (Exception, HealthChecks, Controllers)
+#if (IncludeLocalization)
+    builder.Services.AddMyProjectLocalization();
+#endif
     builder.Services.AddGlobalExceptionHandler(builder.Configuration);
     builder.Services.AddHealthChecks();
     builder.Services.AddMyProjectSpaProxy();
-    builder.Services.AddControllers()
+    var controllers = builder.Services.AddControllers()
         .AddJsonOptions(options =>
         {
             // 使用 Domain.Shared 层的 WebApi 配置
@@ -187,6 +190,10 @@ try
                 options.JsonSerializerOptions.Converters.Add(converter);
             }
         });
+#if (IncludeLocalization)
+    controllers.AddDataAnnotationsLocalization(options =>
+        options.DataAnnotationLocalizerProvider = (_, factory) => factory.Create(typeof(CompanyName.ProjectName.Api.ApiResource)));
+#endif
 
     // 4.1. CORS 配置
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -379,6 +386,9 @@ try
             return Serilog.Events.LogEventLevel.Information;
         };
     });
+#if (IncludeLocalization)
+    app.UseRequestLocalization();
+#endif
     app.UseGlobalExceptionHandler();
     app.UseCorrelationId();
     app.MapHealthChecks("/api/health").AllowAnonymous();

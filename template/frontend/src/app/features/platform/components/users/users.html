@@ -12,6 +12,7 @@
           [showClear]="true"
           appendTo="body"
           styleClass="w-full sm:w-48"
+          i18n-placeholder
         />
 
         <p-select
@@ -24,6 +25,7 @@
           [showClear]="true"
           appendTo="body"
           styleClass="w-full sm:w-48"
+          i18n-placeholder
         />
 
         <p-select
@@ -36,6 +38,7 @@
           [showClear]="true"
           appendTo="body"
           styleClass="w-full sm:w-48"
+          i18n-placeholder
         />
 
         <p-iconfield class="w-full sm:max-w-xs sm:flex-1">
@@ -47,6 +50,7 @@
             [ngModel]="searchQuery()"
             (ngModelChange)="onSearchQueryChange($event)"
             class="w-full"
+            i18n-placeholder
           />
         </p-iconfield>
       </div>
@@ -59,6 +63,8 @@
           styleClass="w-full sm:w-auto"
           pTooltip="刷新"
           tooltipPosition="top"
+          i18n-label
+          i18n-pTooltip
         />
         <p-button
           label="新建用户"
@@ -67,6 +73,7 @@
           [outlined]="true"
           severity="primary"
           styleClass="w-full sm:w-auto"
+          i18n-label
         />
       </div>
     </div>
@@ -105,5 +112,8 @@
   rejectLabel="取消"
   acceptButtonStyleClass="p-button-danger p-button-text"
   rejectButtonStyleClass="p-button-text p-button-secondary"
+  i18n-header
+  i18n-acceptLabel
+  i18n-rejectLabel
 >
 </p-confirmDialog>

@@ -13,9 +13,10 @@
   styleClass="overflow-hidden"
   (visibleChange)="visible.set($event)"
   (onHide)="onHide()"
+  i18n-header
 >
   <div class="p-4 md:p-6 pt-2" [formGroup]="form">
-    <p class="mt-0 mb-6 text-sm text-muted-color">更新用户名、邮箱、昵称、手机号和头像。</p>
+    <p class="mt-0 mb-6 text-sm text-muted-color" i18n>更新用户名、邮箱、昵称、手机号和头像。</p>
 
     <p-fileupload
       mode="advanced"
@@ -33,6 +34,10 @@
       invalidFileTypeMessageSummary="格式不支持"
       invalidFileTypeMessageDetail="请上传 PNG、JPG 或 WEBP 图片"
       (onSelect)="onAvatarSelect($event)"
+      i18n-invalidFileSizeMessageSummary
+      i18n-invalidFileSizeMessageDetail
+      i18n-invalidFileTypeMessageSummary
+      i18n-invalidFileTypeMessageDetail
     >
       <ng-template pTemplate="header">
         <div class="hidden"></div>
@@ -64,13 +69,13 @@
             <div class="flex items-center gap-2 flex-wrap">
               <h3 class="m-0 truncate text-lg font-semibold text-color">{{ displayName() }}</h3>
               @if (user()?.isSuperAdmin) {
-                <p-tag value="超级管理员" severity="danger" />
+                <p-tag value="超级管理员" severity="danger" i18n-value />
               } @else if (user()?.isAdmin()) {
-                <p-tag value="管理员" severity="info" />
+                <p-tag value="管理员" severity="info" i18n-value />
               }
             </div>
             <p class="mt-1 mb-0 truncate text-sm text-muted-color">{{ form.controls.email.value || user()?.email }}</p>
-            <p class="mt-2 mb-0 text-xs text-muted-color">悬浮头像后点击 + 重新上传，选择后即时预览。</p>
+            <p class="mt-2 mb-0 text-xs text-muted-color" i18n>悬浮头像后点击 + 重新上传，选择后即时预览。</p>
           </div>
         </div>
       </ng-template>
@@ -82,10 +87,10 @@
 
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">用户名</label>
-        <input pInputText formControlName="username" placeholder="请输入用户名" class="w-full" />
+        <label class="block text-sm font-medium text-color" i18n>用户名</label>
+        <input pInputText formControlName="username" placeholder="请输入用户名" class="w-full" i18n-placeholder />
         @if (form.controls.username.hasError('required') && form.controls.username.touched) {
-          <small class="text-red-500">用户名不能为空</small>
+          <small class="text-red-500" i18n>用户名不能为空</small>
         }
         @if (
           (form.controls.username.hasError('minlength') ||
@@ -93,39 +98,39 @@
             form.controls.username.hasError('pattern')) &&
           form.controls.username.touched
         ) {
-          <small class="text-red-500">用户名需为 3-64 位字母、数字或下划线</small>
+          <small class="text-red-500" i18n>用户名需为 3-64 位字母、数字或下划线</small>
         }
       </div>
 
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">邮箱</label>
-        <input pInputText formControlName="email" placeholder="请输入邮箱" class="w-full" />
+        <label class="block text-sm font-medium text-color" i18n>邮箱</label>
+        <input pInputText formControlName="email" placeholder="请输入邮箱" class="w-full" i18n-placeholder />
         @if (
           (form.controls.email.hasError('required') ||
             form.controls.email.hasError('email') ||
             form.controls.email.hasError('maxlength')) &&
           form.controls.email.touched
         ) {
-          <small class="text-red-500">请输入有效邮箱，长度不能超过 256 个字符</small>
+          <small class="text-red-500" i18n>请输入有效邮箱，长度不能超过 256 个字符</small>
         }
       </div>
 
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">昵称</label>
-        <input pInputText formControlName="nickname" placeholder="请输入昵称" class="w-full" />
+        <label class="block text-sm font-medium text-color" i18n>昵称</label>
+        <input pInputText formControlName="nickname" placeholder="请输入昵称" class="w-full" i18n-placeholder />
         @if (form.controls.nickname.invalid && form.controls.nickname.touched) {
-          <small class="text-red-500">昵称长度不能超过 128 个字符</small>
+          <small class="text-red-500" i18n>昵称长度不能超过 128 个字符</small>
         }
       </div>
 
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">手机号</label>
-        <input pInputText formControlName="phoneNumber" placeholder="请输入手机号" class="w-full" />
+        <label class="block text-sm font-medium text-color" i18n>手机号</label>
+        <input pInputText formControlName="phoneNumber" placeholder="请输入手机号" class="w-full" i18n-placeholder />
         @if (form.controls.phoneNumber.hasError('maxlength') && form.controls.phoneNumber.touched) {
-          <small class="text-red-500">手机号长度不能超过 20 个字符</small>
+          <small class="text-red-500" i18n>手机号长度不能超过 20 个字符</small>
         }
         @if (form.controls.phoneNumber.hasError('pattern') && form.controls.phoneNumber.touched) {
-          <small class="text-red-500">手机号仅支持数字、空格以及 + - ( ) 符号</small>
+          <small class="text-red-500" i18n>手机号仅支持数字、空格以及 + - ( ) 符号</small>
         }
       </div>
     </div>
@@ -133,8 +138,8 @@
 
   <ng-template pTemplate="footer">
     <div class="flex justify-end gap-3 p-4">
-      <p-button label="取消" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="onHide()" />
-      <p-button label="保存" [loading]="saving()" (onClick)="onSubmit()" />
+      <p-button label="取消" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="onHide()" i18n-label />
+      <p-button label="保存" [loading]="saving()" (onClick)="onSubmit()" i18n-label />
     </div>
   </ng-template>
 </p-dialog>

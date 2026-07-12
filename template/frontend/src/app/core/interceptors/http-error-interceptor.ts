@@ -21,22 +21,22 @@ import { AuthService } from '../services/auth-service';
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const messageService = inject(MessageService);
   const router = inject(Router);
-//#if (IncludeIdentity)
+  //#if (IncludeIdentity)
   const authService = inject(AuthService);
-//#endif
+  //#endif
 
   const CODE_MESSAGES: Record<number, string> = {
-    400: '发出的请求有错误，服务器没有进行新建或修改数据的操作。',
-    401: '身份验证失败，请重新登录。',
-    403: '权限不足，无法访问该资源。',
-    404: '发出的请求针对的是不存在的记录，服务器没有进行操作。',
-    406: '请求的格式不可得。',
-    410: '请求的资源被永久删除，且不会再得到的。',
-    422: '当创建一个对象时，发生一个验证错误。',
-    500: '服务器发生错误，请检查服务器。',
-    502: '网关错误。',
-    503: '服务不可用，服务器暂时过载或维护。',
-    504: '网关超时。'
+    400: $localize`发出的请求有错误，服务器没有进行新建或修改数据的操作。`,
+    401: $localize`身份验证失败，请重新登录。`,
+    403: $localize`权限不足，无法访问该资源。`,
+    404: $localize`发出的请求针对的是不存在的记录，服务器没有进行操作。`,
+    406: $localize`请求的格式不可得。`,
+    410: $localize`请求的资源被永久删除，且不会再得到的。`,
+    422: $localize`当创建一个对象时，发生一个验证错误。`,
+    500: $localize`服务器发生错误，请检查服务器。`,
+    502: $localize`网关错误。`,
+    503: $localize`服务不可用，服务器暂时过载或维护。`,
+    504: $localize`网关超时。`
   };
 
   return next(req).pipe(
@@ -52,7 +52,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
 
         const contentType = error.headers?.get('Content-Type');
 
-        // 支持 application/json 和 application/problem+json (RFC 7807)
+        // 支持 application/json 和 application/problem+json (RFC 9457)
         if ((contentType?.includes('application/json') || contentType?.includes('application/problem+json')) && error.error) {
           const code = error.error.code || '';
           const message = error.error.message || error.error.detail;
@@ -60,14 +60,14 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           if (message) {
             messageService.add({
               severity: 'error',
-              summary: `请求错误（${error.status} - ${code}）`,
+              summary: $localize`请求错误（${error.status} - ${code}）`,
               detail: message
             });
           } else {
             const errorText = CODE_MESSAGES[error.status];
             messageService.add({
               severity: 'error',
-              summary: `请求错误（${error.status}）`,
+              summary: $localize`请求错误（${error.status}）`,
               detail: errorText
             });
           }
@@ -75,12 +75,12 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           const errorText = CODE_MESSAGES[error.status] || error.statusText;
           messageService.add({
             severity: 'error',
-            summary: `请求错误（${error.status}）`,
+            summary: $localize`请求错误（${error.status}）`,
             detail: errorText
           });
         }
 
-//#if (IncludeIdentity)
+        //#if (IncludeIdentity)
         // 处理 401 未授权情况：保留当前 URL 作为 returnUrl
         if (error.status === 401) {
           authService.clearAuthData();
@@ -93,7 +93,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
             queryParams: returnUrl ? { returnUrl } : undefined
           });
         }
-//#endif
+        //#endif
 
         // 重新抛出错误，避免下游（如 lastValueFrom）收不到数据直接 complete 导致 EmptyError
         return throwError(() => error);

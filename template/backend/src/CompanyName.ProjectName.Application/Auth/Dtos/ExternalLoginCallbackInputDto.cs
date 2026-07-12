@@ -11,14 +11,14 @@ public record ExternalLoginCallbackInputDto
     /// <summary>
     /// 授权码
     /// </summary>
-    [Required(ErrorMessage = "授权码不能为空")]
-    [StringLength(500, ErrorMessage = "授权码长度不能超过 500 个字符")]
+    [Required(ErrorMessage = "Authorization code is required.")]
+    [StringLength(500, ErrorMessage = "Authorization code cannot exceed 500 characters.")]
     public required string Code { get; init; }
 
     /// <summary>
     /// 状态参数
     /// </summary>
-    [StringLength(100, ErrorMessage = "状态参数长度不能超过 100 个字符")]
+    [StringLength(100, ErrorMessage = "State cannot exceed 100 characters.")]
     public string? State { get; init; }
 }
 #endif

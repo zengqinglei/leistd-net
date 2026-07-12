@@ -73,9 +73,11 @@ export function getUserById(id: string) {
 export function addUser(value: any) {
   const username = String(value.username ?? '').trim();
   const email = String(value.email ?? '').trim();
-  const userExists = USERS.some(w => w.username === username || w.email === email);
-  if (userExists) {
-    throw new MockException(400, { code: 40000, message: '用户名或邮箱已存在' });
+  if (USERS.some(user => user.username === username)) {
+    throw new MockException(400, { code: 40001, message: `Username '${username}' already exists.` });
+  }
+  if (USERS.some(user => user.email === email)) {
+    throw new MockException(400, { code: 40002, message: `Email '${email}' is already in use.` });
   }
 
   const newUser = {

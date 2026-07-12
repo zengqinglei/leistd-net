@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Leistd.Exception.AspNetCore.Options;
+using Leistd.Exception.AspNetCore.Localization;
 using Leistd.Exception.Core;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
@@ -16,7 +17,8 @@ public sealed class BusinessExceptionHandler(
     IOptions<GlobalExceptionOptions> options,
     IHostEnvironment environment,
     ILogger<BusinessExceptionHandler> logger,
-    IProblemDetailsService problemDetailsService) : IExceptionHandler
+    IProblemDetailsService problemDetailsService,
+    IEnumerable<IExceptionResponseLocalizer> localizers) : IExceptionHandler
 {
     private readonly GlobalExceptionOptions _options = options.Value;
 
@@ -89,23 +91,29 @@ public sealed class BusinessExceptionHandler(
 
             ValidationException validationException => new UnprocessableEntityException(
                 validationException.ValidationResult?.MemberNames?.FirstOrDefault() ?? "unknown",
-                validationException.Message),
+                validationException.Message)
+                .WithLocalization("Exception.ValidationFailed"),
 
             CommonException commonException => new BadRequestException(
                 commonException.Message,
                 commonException.InnerException),
 
             OperationCanceledException canceledException => canceledException.InnerException is TimeoutException
-                ? new ServiceUnavailableException("上游服务响应超时，请稍后重试", canceledException)
-                : new BadRequestException("请求已取消", canceledException),
+                ? new ServiceUnavailableException("The upstream service timed out. Please try again later.", canceledException)
+                    .WithLocalization("Exception.UpstreamTimeout")
+                : new BadRequestException("The request was canceled.", canceledException)
+                    .WithLocalization("Exception.RequestCanceled"),
 
             TimeoutException timeoutException => new ServiceUnavailableException(
-                "请求超时，请稍后重试", timeoutException),
+                "The request timed out. Please try again later.", timeoutException)
+                .WithLocalization("Exception.RequestTimeout"),
 
             HttpRequestException httpException => new ServiceUnavailableException(
-                $"上游服务连接失败: {httpException.Message}", httpException),
+                $"Unable to connect to the upstream service: {httpException.Message}", httpException)
+                .WithLocalization("Exception.UpstreamConnectionFailed"),
 
-            _ => new InternalServerException("系统异常，请联系管理员", exception)
+            _ => new InternalServerException("An unexpected error occurred. Please contact the administrator.", exception)
+                .WithLocalization("Exception.Unhandled")
         };
     }
 
@@ -128,19 +136,27 @@ public sealed class BusinessExceptionHandler(
     private ProblemDetails BuildProblemDetails(HttpContext httpContext, BusinessException bizException)
     {
         var statusCode = GetHttpStatusCode(bizException.Code);
+        var localization = LocalizeException(bizException, statusCode);
+        var message = string.IsNullOrWhiteSpace(localization?.Message)
+            ? bizException.Message
+            : localization.Message;
+        var title = string.IsNullOrWhiteSpace(localization?.Title)
+            ? GetProblemTitle(statusCode)
+            : localization.Title;
 
         // 对于验证异常使用 ValidationProblemDetails
         if (bizException is UnprocessableEntityException unprocessableEntity)
         {
-            var validationProblem = new ValidationProblemDetails(unprocessableEntity.ValidationErrors ?? new Dictionary<string, string[]>())
+            var validationErrors = localization?.Errors ?? unprocessableEntity.ValidationErrors ?? new Dictionary<string, string[]>();
+            var validationProblem = new ValidationProblemDetails(validationErrors)
             {
-                Type = GetProblemType(statusCode),
-                Title = GetProblemTitle(statusCode),
+                Type = GetProblemType(statusCode, bizException.Code),
+                Title = title,
                 Status = statusCode,
-                Detail = bizException.Message,
+                Detail = message,
                 Instance = httpContext.Request.Path
             };
-            validationProblem.Extensions["message"] = bizException.Message;
+            validationProblem.Extensions["message"] = message;
             validationProblem.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
             validationProblem.Extensions["code"] = bizException.Code;
 
@@ -155,13 +171,13 @@ public sealed class BusinessExceptionHandler(
         // 标准 ProblemDetails
         var problemDetails = new ProblemDetails
         {
-            Type = GetProblemType(statusCode),
-            Title = GetProblemTitle(statusCode),
+            Type = GetProblemType(statusCode, bizException.Code),
+            Title = title,
             Status = statusCode,
-            Detail = bizException.Message,
+            Detail = message,
             Instance = httpContext.Request.Path
         };
-        problemDetails.Extensions["message"] = bizException.Message;
+        problemDetails.Extensions["message"] = message;
         problemDetails.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
         problemDetails.Extensions["code"] = bizException.Code;
 
@@ -180,6 +196,27 @@ public sealed class BusinessExceptionHandler(
         }
 
         return problemDetails;
+    }
+
+    private ExceptionResponseLocalization? LocalizeException(BusinessException exception, int statusCode)
+    {
+        var localizer = localizers.LastOrDefault();
+        if (localizer is null)
+            return null;
+
+        try
+        {
+            return localizer.Localize(exception, statusCode);
+        }
+        catch (System.Exception localizationException)
+        {
+            logger.LogWarning(
+                localizationException,
+                "Failed to localize BusinessException response: Code={Code}, LocalizationKey={LocalizationKey}",
+                exception.Code,
+                exception.LocalizationKey);
+            return null;
+        }
     }
 
     private bool ShouldShowDetails()
@@ -204,8 +241,11 @@ public sealed class BusinessExceptionHandler(
         return StatusCodes.Status500InternalServerError;
     }
 
-    private static string GetProblemType(int statusCode)
+    private static string GetProblemType(int statusCode, int errorCode)
     {
+        if (errorCode != statusCode * 100)
+            return $"urn:leistd:error:{errorCode}";
+
         return statusCode switch
         {
             400 => "https://tools.ietf.org/html/rfc7231#section-6.5.1",

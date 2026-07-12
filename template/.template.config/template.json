@@ -84,6 +84,12 @@
       "description": "是否包含外部登录（GitHub / Google 等第三方身份提供商）",
       "defaultValue": "false",
       "isEnabled": "IncludeIdentity"
+    },
+    "IncludeLocalization": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含英文/简体中文本地化（.NET、Angular、PrimeNG）",
+      "defaultValue": "false"
     }
   },
   "sources": [
@@ -101,6 +107,26 @@
         ".pid"
       ],
       "modifiers": [
+        {
+          "condition": "IncludeLocalization",
+          "exclude": [
+            "frontend/package.json",
+            "frontend/angular.json"
+          ]
+        },
+        {
+          "condition": "!IncludeLocalization",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Api/Localization/**",
+            "backend/src/CompanyName.ProjectName.Api/Extensions/LocalizationServiceCollectionExtensions.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/LocalizationTests.cs",
+            "frontend/src/locale/**",
+            "frontend/src/app/core/services/localization-service.ts",
+            "frontend/src/app/core/interceptors/accept-language-interceptor.ts",
+            "frontend/src/app/shared/components/language-switcher/**",
+            "frontend/src/app/localization/**"
+          ]
+        },
         {
           "condition": "!IncludeIdentity",
           "exclude": [
@@ -197,6 +223,11 @@
           ]
         }
       ]
+    },
+    {
+      "condition": "IncludeLocalization",
+      "source": ".template.config/localization/frontend",
+      "target": "frontend"
     }
   ]
 }

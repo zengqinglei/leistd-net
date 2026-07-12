@@ -1,6 +1,6 @@
 # 业务异常与全局异常处理
 
-在 Web 应用里，抛错处处都有：参数非法、资源不存在、权限不足、上游超时……如果每个 Controller 都自己 `try/catch` 再拼装错误响应，会产生大量重复代码，且响应格式难以统一。Leistd 的做法是：业务层只管按语义**抛出**强类型异常，由一个全局处理器在管道末端统一**捕获**，转换成符合 [RFC 7807 ProblemDetails](https://datatracker.ietf.org/doc/html/rfc7807) 的标准错误响应。
+在 Web 应用里，抛错处处都有：参数非法、资源不存在、权限不足、上游超时……如果每个 Controller 都自己 `try/catch` 再拼装错误响应，会产生大量重复代码，且响应格式难以统一。Leistd 的做法是：业务层只管按语义**抛出**强类型异常，由一个全局处理器在管道末端统一**捕获**，转换成符合 [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html) 的标准错误响应。
 
 `Leistd.Exception.Core` 提供一组面向 HTTP 语义的业务异常（`BadRequestException`、`NotFoundException`、`UnprocessableEntityException` 等），每个异常自带一个错误码，错误码前三位即对应 HTTP 状态码。`Leistd.Exception.AspNetCore` 提供 ASP.NET Core 的全局异常处理器，把这些异常（以及框架内置异常）映射为带 `code` / `traceId` / `message` 扩展字段的 ProblemDetails。
 
@@ -108,6 +108,8 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 | `BusinessException.Code` | 错误码，构造时为「前缀 + 00」（如 `404` → `40400`） |
 | `BusinessException.Details` | 附加详情，可选 |
 | `BusinessException.WithCode(code)` | 链式覆盖错误码为「前缀 + code」，返回自身 |
+| `BusinessException.WithCode(fullCode)` | 使用完整五位整数错误码；前三位必须与异常类型的 HTTP 前缀一致 |
+| `BusinessException.WithLocalization(key, arguments)` | 附加资源键和格式参数；Core 只保存元数据，不读取当前请求语言 |
 | `BusinessException.WithDetails(details)` | 链式设置详情，返回自身 |
 | `BadRequestException(message)` | 请求错误，错误码 `40000`（HTTP 400） |
 | `UnauthorizedException(message)` | 未授权，错误码 `40100`（HTTP 401） |
@@ -123,7 +125,7 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 
 | 成员 | 说明 |
 | --- | --- |
-| `ValidationErrors` | `Dictionary<string,string[]>?`，符合 RFC 7807 的逐字段错误集合 |
+| `ValidationErrors` | `Dictionary<string,string[]>?`，作为 RFC 9457 扩展成员承载逐字段错误集合 |
 | `WithErrors(dict)` | 整体替换错误集合，返回自身 |
 | `AddError(field, error)` | 追加某字段的单条错误，返回自身 |
 | `AddErrors(field, params errors)` | 追加某字段的多条错误，返回自身 |
@@ -147,7 +149,7 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 - **开关与排除**：`Options.Enable` 为 `false`（默认）时处理器直接放行（返回 `false`，交回框架）。`ExcludePatterns` 命中的路径同样放行；模式支持 `前缀/**` 与含 `*` 的通配匹配，匹配大小写不敏感。
 - **异常归一化**：非 `BusinessException` 的异常会被映射——`System.ComponentModel.DataAnnotations.ValidationException` → `UnprocessableEntityException`；`CommonException` → `BadRequestException`；`TimeoutException` / `HttpRequestException`（及内含 `TimeoutException` 的 `OperationCanceledException`）→ `ServiceUnavailableException`；**不含超时的普通 `OperationCanceledException`（客户端主动取消）→ `BadRequestException`**；其余 → `InternalServerException`。
 - **状态码推导**：取 `Code` 的前 3 位作为 HTTP 状态码（须落在 100–599），否则回退 500。
-- **响应体**：标准异常输出 `ProblemDetails`，`UnprocessableEntityException` 输出 `ValidationProblemDetails`；两者都在 `Extensions` 中写入 `message`、`traceId`（取 `Activity.Current?.Id`，否则 `TraceIdentifier`）、`code`。
+- **响应体**：标准异常输出 `ProblemDetails`，`UnprocessableEntityException` 输出 `ValidationProblemDetails`；默认码使用对应 HTTP 规范 URI，业务码使用 `urn:leistd:error:{code}` 作为稳定 `type`；两者都在 `Extensions` 中写入 `message`、`traceId`（取 `Activity.Current?.Id`，否则 `TraceIdentifier`）、`code`。
 - **详情可见性**：由 `IsShowDetails` 决定（`null` 时按是否开发环境）。可见时写入 `details` 或 `stackTrace`；不可见时仅在有 `Details` 的情况下写入 `details`。
 - **日志**：`InternalServerException` 记为 `LogError`（含原始异常堆栈），其余业务异常记为 `LogWarning`。
 
@@ -165,7 +167,22 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 
 - `Enable` 默认 **`false`**，注册后若不显式置为 `true`，处理器不会接管异常。
 - `WithCode` 传入的是「码后缀」而非完整错误码——`new BadRequestException(...).WithCode("01")` 得到的 `Code` 是 `40001`，而非 `01`。
+- Leistd 的标准业务码采用「HTTP 三位状态码 + 两位业务序号」的五位格式。已有调用仍可通过字符串重载拼接其他长度的后缀，但新代码应使用两位后缀，或集中声明五位完整码。
 - 错误码内部用 `int.Parse(前缀 + 后缀)` 计算，传入非数字字符串会抛 `FormatException`。
+
+## 本地化扩展
+
+`Leistd.Exception.Core` 不依赖 `IStringLocalizer`，业务异常只携带稳定错误码、回退消息以及可选的资源键/格式参数。ASP.NET Core 宿主可注册一个 `IExceptionResponseLocalizer`，全局处理器会在写入 `ProblemDetails` 前按当前请求文化解析 `message` 和 `title`；未注册本地化器、资源不存在或返回空值时，继续使用异常原消息和框架默认标题。
+
+```csharp
+services.AddSingleton<IExceptionResponseLocalizer, AppExceptionResponseLocalizer>();
+
+throw new BadRequestException("Username already exists")
+    .WithCode("01")
+    .WithLocalization("Users.UsernameAlreadyExists", username);
+```
+
+推荐约定：业务有明确语义时使用显式资源键；否则宿主可按 `Exception:{Code}` 查找，例如 `Exception:40001`。日志仍记录异常的原始消息和稳定错误码，翻译后的内容只用于面向用户的 HTTP 响应。
 - 中间件 `UseGlobalExceptionHandler` 应尽量靠近管道前端，以便捕获后续中间件抛出的异常。
 - `CommonException` 位于 `Leistd.Exception` 命名空间（`Leistd.Core` 提供），与业务异常所在的 `Leistd.Exception.Core` 命名空间不同，引用时注意区分。
 

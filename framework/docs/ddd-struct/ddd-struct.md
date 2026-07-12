@@ -15,6 +15,12 @@
 
 > 四层按依赖方向引用：Application 依赖 Application.Contracts 与 Domain，Infrastructure 依赖 Domain（并引用 `Leistd.Auditing.EntityFrameworkCore`、`Leistd.UnitOfWork.EfCore` 接入审计与工作单元）。业务项目通常每层各建一个工程，分别引用对应的 `Leistd.Ddd.*` 包。
 
+## 多语言与分层
+
+DDD 基座不注册本地化服务，也不依赖 ASP.NET Core 请求文化。Domain 只表达稳定业务语义，Application 只编排用例；需要返回本地化错误时，内层代码抛出带稳定错误码、英文回退消息以及可选资源键/参数的 `BusinessException`。Api 宿主负责运行请求本地化中间件，并通过 `IExceptionResponseLocalizer` 在写入 `ProblemDetails` 时解析资源。Infrastructure 的日志和集成异常保持可检索的稳定内容，不根据终端用户语言改变。
+
+这种边界使未启用多语言的项目无需安装或注册任何本地化组件，也避免后台任务、领域事件和非 HTTP 调用错误地依赖某个请求的 `CurrentUICulture`。
+
 ## 安装
 
 | 包 | 层 | 提供什么 |

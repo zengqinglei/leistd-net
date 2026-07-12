@@ -42,7 +42,19 @@ export class UserTable {
   sortField = signal('username');
   sortOrder = signal(1);
   activeRoles = signal<string[]>([]);
-  rolePopoverTitle = computed(() => `角色 (${this.activeRoles().length})`);
+  rolePopoverTitle = computed(() => $localize`角色 (${this.activeRoles().length})`);
+  readonly enabledLabel = $localize`启用`;
+  readonly disabledLabel = $localize`禁用`;
+  readonly emailVerifiedLabel = $localize`邮箱已验证`;
+  readonly emailNotVerifiedLabel = $localize`邮箱未验证`;
+  readonly editLabel = $localize`编辑`;
+  readonly resetPasswordLabel = $localize`重置密码`;
+  readonly deleteLabel = $localize`删除`;
+  readonly superAdminEditForbiddenLabel = $localize`系统内置超级管理员不允许被其他管理员更新`;
+  readonly superAdminResetForbiddenLabel = $localize`系统内置超级管理员的密码不允许被其他管理员重置`;
+  readonly superAdminDeleteForbiddenLabel = $localize`系统内置超级管理员不允许删除`;
+  readonly superAdminDisableForbiddenLabel = $localize`系统内置超级管理员不允许被其他管理员禁用`;
+  readonly superAdminSelfDisableForbiddenLabel = $localize`系统内置超级管理员不允许禁用自己`;
 
   onPage(event: TableLazyLoadEvent) {
     this.first = event.first ?? 0;
@@ -81,6 +93,12 @@ export class UserTable {
 
   isSelfSuperAdmin(user: UserManagementOutputDto) {
     return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
+  }
+
+  getToggleActiveTooltip(user: UserManagementOutputDto): string {
+    if (this.isOtherSuperAdmin(user)) return this.superAdminDisableForbiddenLabel;
+    if (this.isSelfSuperAdmin(user)) return this.superAdminSelfDisableForbiddenLabel;
+    return user.isActive ? this.disabledLabel : this.enabledLabel;
   }
 
   getRoleSeverity(role: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' {

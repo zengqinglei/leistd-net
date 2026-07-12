@@ -58,6 +58,7 @@
       <div>
         <h1
           class="text-3xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-primary-50 to-primary-100 drop-shadow-sm"
+          i18n
         >
           模板项目
         </h1>
@@ -69,7 +70,7 @@
             ></span>
             <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
           </span>
-          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium">基于 Angular + .NET 的全栈开发模板</p>
+          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium" i18n>基于 Angular + .NET 的全栈开发模板</p>
         </div>
       </div>
     </div>
@@ -108,10 +109,10 @@
           class="absolute top-10 -right-4 p-3 pr-5 bg-slate-900/90 backdrop-blur-md border-l-4 border-cyan-400 rounded-r-lg shadow-2xl animate-[bounce_4s_infinite]"
         >
           <div class="flex flex-col">
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">快速开发</span>
+            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1" i18n>快速开发</span>
             <div class="flex items-end gap-2">
-              <span class="text-2xl font-mono font-bold text-white leading-none">开箱</span>
-              <span class="text-xs text-cyan-400 font-mono mb-1">即用</span>
+              <span class="text-2xl font-mono font-bold text-white leading-none" i18n>开箱</span>
+              <span class="text-xs text-cyan-400 font-mono mb-1" i18n>即用</span>
               <i class="pi pi-bolt text-green-400 text-xs mb-1 ml-2"></i>
             </div>
           </div>
@@ -122,7 +123,7 @@
           style="animation-delay: 1s"
         >
           <div class="flex flex-col items-end">
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">现代架构</span>
+            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1" i18n>现代架构</span>
             <div class="flex items-end gap-2">
               <i class="pi pi-check-circle text-blue-500 text-xs mb-1 mr-2"></i>
               <span class="text-2xl font-mono font-bold text-white leading-none">Full</span>
@@ -147,6 +148,9 @@
   <!-- Right Column: Login Form -->
   <div class="flex-1 flex items-center justify-center p-8 relative">
     <div class="absolute top-4 right-4 flex gap-2 z-50">
+      <!--#if (IncludeLocalization)-->
+      <app-language-switcher />
+      <!--#endif-->
       <p-button
         [icon]="themeService.modeIcon()"
         [text]="true"
@@ -180,19 +184,19 @@
         <div class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary-100 text-primary-600 mb-4">
           <i class="pi pi-bolt text-2xl"></i>
         </div>
-        <h2 class="text-2xl font-bold">模板项目</h2>
+        <h2 class="text-2xl font-bold" i18n>模板项目</h2>
       </div>
 
       <!-- Form Header -->
       <div>
-        <h2 class="text-3xl font-bold text-color mb-2">登录</h2>
-        <p class="text-muted-color text-sm">欢迎回来，请输入您的账号信息</p>
+        <h2 class="text-3xl font-bold text-color mb-2" i18n>登录</h2>
+        <p class="text-muted-color text-sm" i18n>欢迎回来，请输入您的账号信息</p>
       </div>
 
       <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="flex flex-col gap-5">
         <!-- Username/Email -->
         <div class="flex flex-col gap-2">
-          <label for="usernameOrEmail" class="font-medium text-color">用户名或邮箱</label>
+          <label for="usernameOrEmail" class="font-medium text-color" i18n>用户名或邮箱</label>
           <input
             pInputText
             id="usernameOrEmail"
@@ -200,15 +204,16 @@
             class="w-full"
             placeholder="请输入用户名或邮箱"
             [ngClass]="{ 'ng-invalid ng-dirty': loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched }"
+            i18n-placeholder
           />
           @if (loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched) {
-            <small class="text-red-500"> 请输入用户名或邮箱 </small>
+            <small class="text-red-500" i18n> 请输入用户名或邮箱 </small>
           }
         </div>
 
         <!-- Password -->
         <div class="flex flex-col gap-2">
-          <label for="password" class="font-medium text-color">密码</label>
+          <label for="password" class="font-medium text-color" i18n>密码</label>
           <div class="relative">
             <p-password
               id="password"
@@ -218,29 +223,33 @@
               [fluid]="true"
               inputClass="w-full"
               placeholder="请输入密码"
+              i18n-placeholder
             >
             </p-password>
           </div>
           @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
-            <small class="text-red-500"> 请输入密码 </small>
+            <small class="text-red-500" i18n> 请输入密码 </small>
           }
         </div>
 
         <div class="flex items-center justify-end gap-1 mt-1 text-base text-color">
-          <span>没有账号？</span>
-          <a [routerLink]="['/auth/register']" class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
+          <span i18n>没有账号？</span>
+          <a
+            [routerLink]="['/auth/register']"
+            class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
+            i18n
             >立即注册</a
           >
         </div>
 
         <!-- Submit Button -->
-        <p-button label="登录" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true"> </p-button>
+        <p-button label="登录" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true" i18n-label> </p-button>
         <!--#if (IncludeExternalLogin)-->
 
         <!-- Divider -->
         <div class="relative flex py-2 items-center my-2">
           <div class="flex-grow border-t border-surface"></div>
-          <span class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2">或</span>
+          <span class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2" i18n>或</span>
           <div class="flex-grow border-t border-surface"></div>
         </div>
 
@@ -294,10 +303,10 @@
       <!-- Test Account Hint -->
       @if (isMockEnabled()) {
         <div class="mt-8 p-4 bg-surface-0 dark:bg-surface-900 rounded-xl border border-surface shadow-md">
-          <h4 class="font-bold text-color mb-2 flex items-center gap-2"> <i class="pi pi-info-circle text-primary"></i> 测试账号 </h4>
+          <h4 class="font-bold text-color mb-2 flex items-center gap-2" i18n> <i class="pi pi-info-circle text-primary"></i> 测试账号 </h4>
           <div class="grid grid-cols-1 gap-2 text-sm">
             <div class="bg-surface-50 dark:bg-surface-800 p-2 rounded shadow-sm border border-surface">
-              <span class="block text-xs text-muted-color mb-1">管理员</span>
+              <span class="block text-xs text-muted-color mb-1" i18n>管理员</span>
               <span class="font-mono text-color">admin</span>
               <span class="text-muted-color mx-1">/</span>
               <span class="font-mono text-color">Admin&#64;123456</span>

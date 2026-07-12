@@ -24,6 +24,7 @@
 | `minimal` | `IncludeIdentity=false` | 最小裁剪 |
 | `no-roles` | `IncludeRoles=false` | 认证但无角色权限 |
 | `notifications` | `IncludeNotifications=true` | 通知与实时组合 |
+| `localization` | `IncludeLocalization=true` | .NET、Angular 与 PrimeNG 多语言组合 |
 | `no-openiddict` | `IncludeOpenIddict=false` | 无开放授权服务 |
 | `external-login` | `IncludeExternalLogin=true` | 外部登录适配 |
 

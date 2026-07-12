@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Domain.Shared.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
@@ -117,7 +118,9 @@ public class AuthorizationController(
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        throw new BadRequestException($"不支持的授权类型: {request.GrantType}");
+        throw new BadRequestException($"Grant type '{request.GrantType}' is not supported.")
+            .WithCode(BusinessErrorCodes.GrantTypeUnsupported)
+            .WithLocalization($"Exception:{BusinessErrorCodes.GrantTypeUnsupported}", request.GrantType ?? string.Empty);
     }
 
     [Authorize(AuthenticationSchemes = OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)]
