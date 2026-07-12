@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, lastValueFrom, tap } from 'rxjs';
 
-import { UserOutputDto } from '../../features/account/models/account.dto';
+import { LoginInputDto, UserOutputDto } from '../../features/account/models/account.dto';
 import { User } from '../../shared/models/user.model';
 
 @Injectable({ providedIn: 'root' })
@@ -17,7 +17,7 @@ export class AuthService {
     return this._currentUser() !== null;
   }
 
-  login(credentials: any): Observable<void> {
+  login(credentials: LoginInputDto): Observable<void> {
     return this.http.post<void>('/api/v1/auth/session-login', credentials);
   }
 

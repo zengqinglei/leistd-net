@@ -20,10 +20,10 @@ import { StyleClassModule } from 'primeng/styleclass';
 import { TooltipModule } from 'primeng/tooltip';
 
 import { AuthService } from '../../../core/services/auth-service';
-import { ThemeService } from '../../../core/services/theme-service';
 //#if (IncludeNotifications)
 import { NotificationService, NotificationOutputDto } from '../../../core/services/notification-service';
 //#endif
+import { ThemeService } from '../../../core/services/theme-service';
 //#if (IncludeIdentity)
 import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialogComponent } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
