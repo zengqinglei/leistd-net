@@ -1,62 +1,26 @@
-# {ProjectName} 文档中心
+# {ProjectName} 文档
 
-> 本目录是项目的规范、需求、模块、测试、部署与报告文档入口，供人类团队与 AI Agent 共同读取和维护。
+本目录只保存需要跨会话、跨成员或长期复用的项目知识。源码、配置、测试、Git 和 CI 已能表达的信息不重复写成文档。
 
-## 1. 文档目标
+## 文档入口
 
-- 为 AI 提供稳定上下文，减少重复澄清和错误实现。
-- 为人类提供决策依据，确保需求、设计、实现、测试、部署可追溯。
-- 将项目规范沉淀为可复用模板，而不是记录某个具体项目的临时过程。
-- 明确高风险动作的人类确认点，避免 AI 越权修改生产、密钥、权限和数据。
-
-## 2. 推荐阅读路径
-
-| 场景 | 必读文档 |
+| 主题 | 文档 |
 | --- | --- |
-| 第一次接入项目 | `quick-start/quick-start.md`、`quick-start/ai-native-model.md` |
-| 提新需求 | `standards/agent-workflow.md`、`requirements/req-template-plan.md` |
-| 开发实现 | `standards/agent-workflow.md`、`standards/code-standard/`、`standards/project-structure.md` |
-| 创建前端项目 | `guides/create-app/frontend-create.md` |
-| 前端错误处理/Mock | `guides/frontend/global-error-handling.md`、`guides/frontend/mock-development.md` |
-| 设计 API | `standards/api-standard.md`、`modules/_template/api.md` |
-| 编写模块文档 | `modules/README.md`、`modules/_template/` |
-| 执行测试 | `standards/test.md` |
-| 部署发布 | `deploy/README.md`、`deploy/server-config.md` |
-| 代码审查 | `standards/agent-workflow.md`、`standards/code-standard/` |
+| 通用编码 | [`standards/coding-common.md`](standards/coding-common.md) |
+| 后端编码 | [`standards/coding-backend.md`](standards/coding-backend.md) |
+| 前端编码 | [`standards/coding-frontend.md`](standards/coding-frontend.md) |
+| API 契约 | [`standards/api.md`](standards/api.md) |
+| 测试 | [`standards/testing.md`](standards/testing.md) |
+| 技术栈与目录 | [`standards/tech-stack.md`](standards/tech-stack.md)、[`standards/project-structure.md`](standards/project-structure.md) |
+| UI 设计 | [`standards/ui-design.md`](standards/ui-design.md) |
+| 部署 | [`deploy/README.md`](deploy/README.md) 与项目根 `deploy/` |
 
-## 3. 目录结构
+AI 协作流程由项目 Skill [leistd-project-workflow](../.agents/skills/leistd-project-workflow/SKILL.md) 提供。它按用户意图读取本索引和必要文档，不要求工具专属入口。
 
-```text
-docs/
-├── quick-start/              # AI 协作快速开始
-├── guides/                   # 创建项目、前端工程化等操作指南
-├── standards/                # 项目级规范
-│   └── code-standard/        # 编码规范
-├── requirements/             # 需求登记册、Plan 与任务上下文
-│   └── context/              # 任务上下文，可按需创建
-├── modules/                  # 模块设计、API、计划、测试与状态
-├── deploy/                   # 部署规范与环境配置
-├── reports/                  # 阶段报告与验收证据
-│   ├── development/
-│   ├── code-review/
-│   ├── tests/
-│   ├── deploy/
-│   └── acceptance/
-└── reference/                # 可选参考资料索引
-```
+## 按需文档
 
-## 4. 协作原则
+- `requirements/`：长期需求决策和验收边界。
+- `modules/`：稳定模块边界、模型和对外契约。
+- `deploy/`：环境、发布和运维事实，不记录密钥。
 
-1. **人定目标，AI 出方案**：人类提供业务目标、边界和优先级，AI 负责澄清、拆解和生成 Plan。
-2. **先确认，后实施**：涉及架构、数据库、权限、部署、外部接口的变更必须先确认 Plan。
-3. **小步交付**：每个需求应有清晰范围、验收标准、非目标和回滚方案。
-4. **规范优先**：AI 执行前应读取 `docs/standards/agent-workflow.md` 与相关模块文档。
-5. **证据闭环**：实现完成后应留下开发、审查、测试、部署或未验证风险报告。
-
-## 5. 文档维护规则
-
-- 新需求写入 `requirements/registry.md`，再创建 `requirements/{req-id}-plan.md`。
-- 新模块从 `modules/_template/` 复制文档结构到 `modules/{module-name}/`。
-- 阶段报告写入 `reports/{development|code-review|tests|deploy|acceptance}/`。
-- 部署相关变更同步更新 `deploy/`。
-- 规范变化优先修改 `standards/`，不要在需求文档中重复定义长期规则。
+只在产生对应长期信息时创建目录和文档。优先更新最新同类文件；一个事实只维护一处，其他位置使用链接。

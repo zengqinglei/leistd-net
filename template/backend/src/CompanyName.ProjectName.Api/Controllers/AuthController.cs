@@ -30,7 +30,7 @@ public class AuthController(
     [AllowAnonymous]
     [HttpPost("session-login")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> SessionLoginAsync([FromBody] LoginInputDto request, CancellationToken cancellationToken)
+    public async Task SessionLoginAsync([FromBody] LoginInputDto request, CancellationToken cancellationToken)
     {
         // 验证凭据
         var user = await userDomainService.ValidateCredentialsAsync(
@@ -61,7 +61,6 @@ public class AuthController(
 
         await HttpContext.SignInAsync("MyProjectCookie", principal,
             new AuthenticationProperties { IsPersistent = true });
-        return NoContent();
     }
 
     private async Task<ClaimsPrincipal> CreateCookiePrincipalAsync(User user, CancellationToken cancellationToken)
@@ -81,10 +80,9 @@ public class AuthController(
 
     [Authorize]
     [HttpPost("logout")]
-    public async Task<IActionResult> LogoutAsync()
+    public async Task LogoutAsync()
     {
         await HttpContext.SignOutAsync("MyProjectCookie");
-        return NoContent();
     }
 
     [AllowAnonymous]

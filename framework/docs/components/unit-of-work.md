@@ -2,7 +2,7 @@
 
 一个业务操作往往跨多个仓储、多次数据库写入，必须**要么全部成功、要么全部回滚**。如果让每个方法各自管理 `DbContext`、显式开启/提交事务、再手动 `SaveChanges`，业务代码会被基础设施细节淹没，且很难保证嵌套调用时复用同一个事务边界。
 
-Leistd 的工作单元（Unit of Work）借鉴 Volo.ABP 的设计，把「一个请求 / 一个业务方法」内的所有数据库操作收敛到一个统一的事务边界：通过 `[UnitOfWork]` 特性声明边界，由拦截器自动 `Begin → SaveChanges → Commit`，异常时自动回滚；嵌套调用自动复用外层工作单元（不重复开事务）。同时它还提供与领域事件的集成——可让事件处理器精确地在「提交前 / 提交后 / 回滚后 / 完成后」等阶段运行。
+Leistd 的工作单元（Unit of Work）把「一个请求 / 一个业务方法」内的所有数据库操作收敛到统一事务边界：通过 `[UnitOfWork]` 特性声明边界，由拦截器自动 `Begin → SaveChanges → Commit`，异常时自动回滚；嵌套调用自动复用外层工作单元（不重复开事务）。同时它还提供与领域事件的集成，可让事件处理器精确地在「提交前 / 提交后 / 回滚后 / 完成后」等阶段运行。
 
 ## 何时使用
 
@@ -69,20 +69,23 @@ builder.Services.AddUnitOfWorkEfCore();
 using Leistd.UnitOfWork.Core.Attributes;
 
 [UnitOfWork]
-public class OrderAppService(
+public class OrderPlacementService(
     IDbContextProvider<AppDbContext> dbContextProvider)
 {
     public async Task PlaceOrderAsync(PlaceOrderInput input)
     {
+        // 同一工作单元内多次获取，拿到的是同一个受管理的 DbContext
         var db = await dbContextProvider.GetDbContextAsync();
 
         db.Stocks.Deduct(input.ProductId, input.Quantity);
         db.Orders.Add(new Order(input));
         // 无需手动 SaveChanges / Commit：方法正常返回时工作单元统一提交，
-        // 抛异常则整体回滚。
+        // 抛异常则整体回滚。扣库存与建订单的原子性由 [UnitOfWork] 保证。
     }
 }
 ```
+
+> `IDbContextProvider<TDbContext>` 是本组件的核心 API：它返回受当前工作单元管理的 `DbContext`，让多个数据操作共享同一上下文与事务。在采用 [DDD 四层基座](../ddd-struct/ddd-struct.md) 的项目里，应用服务通常经仓储读写、由仓储实现在内部使用 `IDbContextProvider`；本组件本身不依赖 ddd-struct，上面直用 `IDbContextProvider` + `DbContext` 是其最小自包含用法。
 
 `[UnitOfWork]` 可标注在类（对所有方法生效）或单个方法上；通过特性属性覆盖默认配置：
 
@@ -155,6 +158,7 @@ public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 | `IAmbientUnitOfWork.Get() / Set(uow)` | 读取/设置当前线程上下文中的工作单元（`AsyncLocal`） |
 | `IDatabaseApiContainer.GetOrAddDatabaseApi(factory)` | 获取或惰性创建该工作单元的 `IDatabaseApi` |
 | `ITransactionApiContainer.FindTransactionApi()` | 查找事务 API，无则 `null` |
+| `ITransactionApiContainer.AddTransactionApi(key, api)` | 向容器登记一个事务 API（供基础设施层实现接入） |
 | `ITransactionApi.CommitAsync()` | 提交事务 |
 | `ISupportsSavingChanges.SaveChangesAsync(ct)` / `ISupportsRollback.RollbackAsync(ct)` | 数据库/事务 API 的可选实现，供工作单元在提交/回滚时调用 |
 | `[UnitOfWork]` | 声明事务边界；属性 `Timeout` / `IsolationLevel` / `IsDisabled` |
@@ -204,7 +208,6 @@ public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 - 嵌套调用中只有最外层工作单元真正提交/回滚，内层 `ChildUnitOfWork.CompleteAsync` 不做任何事——不要依赖内层「提交」来落库。
 - `BeforeCommit` 阶段的事件处理器异常会触发整体回滚；只有确实希望影响事务结果的逻辑才放在该阶段，发通知、刷缓存等副作用应放 `AfterCommit`。
 - `RollbackAsync` 是幂等的；`CompleteAsync` 不可重复调用，否则抛 `InvalidOperationException`。
-- 部分接口注释采用英文并对照 ABP 设计（如 `UnitOfWorkFailedEventArgs`、`ITransactionApi`），命名与 ABP 工作单元保持一致以便迁移参考。
 
 ## 相关
 

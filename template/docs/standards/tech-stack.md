@@ -52,7 +52,7 @@
 
 ## 6. 相关文档
 
-- `docs/standards/code-standard/backend-develop.md`
-- `docs/standards/code-standard/frontend-develop.md`
-- `docs/standards/test.md`
+- `docs/standards/coding-backend.md`
+- `docs/standards/coding-frontend.md`
+- `docs/standards/testing.md`
 - `docs/deploy/README.md`

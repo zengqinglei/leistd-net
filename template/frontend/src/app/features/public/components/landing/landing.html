@@ -1,13 +1,7 @@
-<div class="min-h-screen flex flex-col items-center justify-center bg-surface-ground px-6 relative">
+<div class="min-h-screen flex flex-col items-center justify-center bg-surface-50 dark:bg-surface-950 px-6 relative">
   <!-- Theme Toggle -->
   <div class="absolute top-4 right-4 flex gap-2 z-50">
-    <p-button
-      [icon]="layoutService.isDarkTheme() ? 'pi pi-moon' : 'pi pi-sun'"
-      [text]="true"
-      [rounded]="true"
-      severity="secondary"
-      (onClick)="layoutService.toggleDarkMode()"
-    >
+    <p-button [icon]="themeService.modeIcon()" [text]="true" [rounded]="true" severity="secondary" (onClick)="themeService.toggleTheme()">
     </p-button>
     <div class="relative">
       <p-button

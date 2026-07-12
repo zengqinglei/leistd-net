@@ -22,6 +22,7 @@
   <!-- 业务项目内部引用 -->
   <ItemGroup>
     <ProjectReference Include="..\CompanyName.ProjectName.Application\CompanyName.ProjectName.Application.csproj" />
+    <ProjectReference Include="..\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />
   </ItemGroup>
 
   <!-- Leistd 框架引用 -->

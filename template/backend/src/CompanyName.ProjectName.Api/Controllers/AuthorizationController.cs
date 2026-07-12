@@ -19,8 +19,7 @@ namespace CompanyName.ProjectName.Api.Controllers;
 public class AuthorizationController(
     IRepository<User, Guid> userRepository,
     IAuthPrincipalFactory principalFactory,
-    IOptions<OAuthOptions> oauthOptions,
-    ILogger<AuthorizationController> logger) : Controller
+    IOptions<OAuthOptions> oauthOptions) : Controller
 {
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]

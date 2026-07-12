@@ -8,7 +8,7 @@ namespace Leistd.DependencyInjection;
 public static class ServiceCollectionRegistrationExtensions
 {
     /// <summary>
-    /// 注册服务注册回调（类似 ABP 的 OnRegistered）
+    /// 注册服务注册回调。
     /// 回调将在构建 IServiceProvider 时自动执行
     /// </summary>
     /// <param name="services">服务集合</param>

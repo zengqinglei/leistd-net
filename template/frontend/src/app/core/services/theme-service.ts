@@ -1,122 +1,182 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Injectable, signal, effect, inject, PLATFORM_ID } from '@angular/core';
+import { afterNextRender, DestroyRef, PLATFORM_ID, computed, effect, inject, Injectable, signal } from '@angular/core';
+import { palette, updatePrimaryPalette, updateSurfacePalette, usePreset } from '@primeuix/themes';
+import Aura from '@primeuix/themes/aura';
+import Lara from '@primeuix/themes/lara';
+import Material from '@primeuix/themes/material';
+import Nora from '@primeuix/themes/nora';
+import type { PaletteDesignToken } from '@primeuix/themes/types';
 
-/**
- * 主题服务
- * 负责管理应用的深色/浅色主题切换
- *
- * 采用 CSS Transitions 实现平滑的主题切换动画 (Performance optimized)
- * 遵循 Angular 21 最佳实践和 PrimeNG 21 主题系统
- *
- * @see https://primeng.org/theming/styled
- */
-@Injectable({
-  providedIn: 'root'
-})
+export const THEME_MODES = ['system', 'light', 'dark'] as const;
+export const THEME_PRESET_NAMES = ['Aura', 'Material', 'Lara', 'Nora'] as const;
+export const THEME_PRIMARY_NAMES = [
+  'emerald',
+  'green',
+  'lime',
+  'red',
+  'orange',
+  'amber',
+  'yellow',
+  'teal',
+  'cyan',
+  'sky',
+  'blue',
+  'indigo',
+  'violet',
+  'purple',
+  'fuchsia',
+  'pink',
+  'rose'
+] as const;
+export const THEME_SURFACE_NAMES = ['slate', 'gray', 'zinc', 'neutral', 'stone'] as const;
+
+export type ThemeMode = (typeof THEME_MODES)[number];
+export type ThemePresetName = (typeof THEME_PRESET_NAMES)[number];
+export type ThemePrimaryName = (typeof THEME_PRIMARY_NAMES)[number];
+export type ThemeSurfaceName = (typeof THEME_SURFACE_NAMES)[number];
+
+export const THEME_PRESETS = { Aura, Material, Lara, Nora } as const satisfies Record<ThemePresetName, unknown>;
+
+export interface ThemePreferences {
+  mode: ThemeMode;
+  preset: ThemePresetName;
+  primary: ThemePrimaryName | null;
+  surface: ThemeSurfaceName | null;
+}
+
+const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
+  mode: 'system',
+  preset: 'Aura',
+  primary: null,
+  surface: null
+};
+
+function getPalette(name: ThemePrimaryName | ThemeSurfaceName): PaletteDesignToken {
+  return palette(`{${name}}`) as PaletteDesignToken;
+}
+
+@Injectable({ providedIn: 'root' })
 export class ThemeService {
-  private readonly THEME_KEY = 'app_theme';
-  private readonly platformId = inject(PLATFORM_ID);
+  static readonly STORAGE_KEY = 'theme_config';
 
-  /**
-   * 深色主题状态 Signal
-   * 使用 signal 实现细粒度响应式更新
-   */
-  darkTheme = signal<boolean>(this.loadThemePreference());
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly systemDark = signal(false);
+
+  private readonly preferencesState = signal<ThemePreferences>(this.loadPreferences());
+
+  readonly preferences = this.preferencesState.asReadonly();
+  readonly mode = computed(() => this.preferences().mode);
+  readonly modeIcon = computed(() => {
+    switch (this.mode()) {
+      case 'light':
+        return 'pi pi-sun';
+      case 'dark':
+        return 'pi pi-moon';
+      default:
+        return 'pi pi-desktop';
+    }
+  });
+  readonly isDarkTheme = computed(() => {
+    const mode = this.mode();
+    return mode === 'dark' || (mode === 'system' && this.systemDark());
+  });
 
   constructor() {
-    // 使用 effect 监听主题变化并应用到 DOM
-    // Angular 21 推荐在 effect 中处理副作用
+    this.watchSystemTheme();
+    afterNextRender(() => this.applyThemePreferences(this.preferences()));
+
     effect(() => {
-      this.applyTheme(this.darkTheme());
+      const preferences = this.preferences();
+      const isDark = this.isDarkTheme();
+
+      if (!isPlatformBrowser(this.platformId)) {
+        return;
+      }
+
+      document.documentElement.classList.toggle('dark', isDark);
+      localStorage.setItem(ThemeService.STORAGE_KEY, JSON.stringify(preferences));
     });
   }
 
-  /**
-   * 切换主题模式
-   * 采用 View Transition API 实现标准、平滑的交叉淡入淡出效果
-   */
   toggleTheme(): void {
-    const isDark = !this.darkTheme();
+    const modes: ThemeMode[] = ['light', 'system', 'dark'];
+    const nextMode = modes[(modes.indexOf(this.mode()) + 1) % modes.length];
 
-    // 1. 特性检测：如果浏览器不支持 View Transition API (如旧版 Firefox)
-    if (!document.startViewTransition) {
-      this.darkTheme.set(isDark);
+    if (isPlatformBrowser(this.platformId) && document.startViewTransition) {
+      document.startViewTransition(() => this.setMode(nextMode));
       return;
     }
 
-    // 2. 使用浏览器原生 View Transition 实现平滑切换
-    // 浏览器会自动对切换前后的页面进行快照并执行交叉淡入淡出动画
-    document.startViewTransition(() => {
-      this.darkTheme.set(isDark);
-    });
+    this.setMode(nextMode);
   }
 
-  /**
-   * 应用主题到 DOM
-   * 直接切换 .dark 类，依赖 CSS transitions 实现平滑过渡
-   *
-   * @param isDark - 是否启用深色主题
-   */
-  private applyTheme(isDark: boolean): void {
+  setMode(mode: ThemeMode): void {
+    this.preferencesState.update(preferences => ({ ...preferences, mode }));
+  }
+
+  updatePreferences(preferences: Partial<ThemePreferences>): void {
+    this.preferencesState.update(current => ({ ...current, ...preferences }));
+    this.applyThemePreferences(this.preferences());
+  }
+
+  private applyThemePreferences(preferences: ThemePreferences): void {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
 
-    this.updateDarkClass(isDark);
-    this.saveThemePreference(isDark);
-  }
+    usePreset(THEME_PRESETS[preferences.preset]);
 
-  /**
-   * 更新 document.documentElement 的 .dark 类
-   *
-   * 这是主题切换的核心操作：
-   * - 添加 .dark 类触发 Tailwind 的 dark: 变体
-   * - PrimeNG 通过 darkModeSelector 监听此类
-   * - 所有组件自动切换到暗色主题变量
-   *
-   * @param isDark - 是否启用深色主题
-   */
-  private updateDarkClass(isDark: boolean): void {
-    const htmlElement = document.documentElement;
-
-    if (isDark) {
-      htmlElement.classList.add('dark');
-    } else {
-      htmlElement.classList.remove('dark');
+    if (preferences.primary) {
+      updatePrimaryPalette(getPalette(preferences.primary));
+    }
+    if (preferences.surface) {
+      updateSurfacePalette(getPalette(preferences.surface));
     }
   }
 
-  /**
-   * 加载主题偏好
-   *
-   * 优先级：
-   * 1. localStorage 中的用户偏好
-   * 2. 默认浅色主题
-   *
-   * @returns 是否启用深色主题
-   */
-  private loadThemePreference(): boolean {
+  private loadPreferences(): ThemePreferences {
     if (!isPlatformBrowser(this.platformId)) {
-      return false;
+      return DEFAULT_THEME_PREFERENCES;
     }
 
-    const saved = localStorage.getItem(this.THEME_KEY);
-    if (saved !== null) {
-      return saved === 'dark';
+    const storedPreferences = localStorage.getItem(ThemeService.STORAGE_KEY);
+    if (!storedPreferences) {
+      return DEFAULT_THEME_PREFERENCES;
     }
 
-    return false;
+    try {
+      const parsed = JSON.parse(storedPreferences) as Partial<ThemePreferences>;
+      return {
+        mode: THEME_MODES.includes(parsed.mode as ThemeMode) ? (parsed.mode as ThemeMode) : DEFAULT_THEME_PREFERENCES.mode,
+        preset: THEME_PRESET_NAMES.includes(parsed.preset as ThemePresetName)
+          ? (parsed.preset as ThemePresetName)
+          : DEFAULT_THEME_PREFERENCES.preset,
+        primary:
+          parsed.primary === null || THEME_PRIMARY_NAMES.includes(parsed.primary as ThemePrimaryName)
+            ? (parsed.primary ?? null)
+            : DEFAULT_THEME_PREFERENCES.primary,
+        surface:
+          parsed.surface === null || THEME_SURFACE_NAMES.includes(parsed.surface as ThemeSurfaceName)
+            ? (parsed.surface ?? null)
+            : DEFAULT_THEME_PREFERENCES.surface
+      };
+    } catch {
+      localStorage.removeItem(ThemeService.STORAGE_KEY);
+      return DEFAULT_THEME_PREFERENCES;
+    }
   }
 
-  /**
-   * 保存主题偏好到 localStorage
-   * 实现主题持久化
-   *
-   * @param isDark - 是否启用深色主题
-   */
-  private saveThemePreference(isDark: boolean): void {
-    if (isPlatformBrowser(this.platformId)) {
-      localStorage.setItem(this.THEME_KEY, isDark ? 'dark' : 'light');
+  private watchSystemTheme(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
     }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = (event: MediaQueryListEvent | MediaQueryList) => this.systemDark.set(event.matches);
+
+    updateSystemTheme(mediaQuery);
+    mediaQuery.addEventListener('change', updateSystemTheme);
+    this.destroyRef.onDestroy(() => mediaQuery.removeEventListener('change', updateSystemTheme));
   }
 }

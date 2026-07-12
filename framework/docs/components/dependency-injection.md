@@ -2,7 +2,7 @@
 
 标准 .NET DI 只能在注册服务时逐一配置。Leistd 将这类能力拆成两层：
 
-- `Leistd.DependencyInjection`：只提供类似 ABP `OnRegistered` 的服务注册回调机制，不依赖 Castle / AOP。
+- `Leistd.DependencyInjection`：提供服务注册回调机制，不依赖 Castle / AOP。
 - `Leistd.DependencyInjection.DynamicProxy`：在回调机制之上接入 Castle DynamicProxy，把回调中声明的拦截器织入服务代理。
 
 ## 何时使用
@@ -83,6 +83,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 | `IOnServiceRegisteredContext.ImplementationType` | 实现类型 |
 | `IOnServiceRegisteredContext.Items` | 扩展数据字典，供上层集成组件挂载自定义信息 |
 | `ServiceRegistrationCallbackFactory` | 只执行回调，不做 AOP 织入 |
+| `ServiceRegistrationCallbackFactory.OnRegistrationProcessed(context, services)`（`protected virtual`）| 每个服务回调处理完成后的扩展点；`DynamicProxy` 子类正是重写它完成拦截器织入，也可自行继承重写做自定义后处理 |
 
 `Leistd.DependencyInjection.DynamicProxy`：
 

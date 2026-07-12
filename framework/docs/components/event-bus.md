@@ -47,21 +47,23 @@ builder.Services.AddScoped<IEventHandler<OrderCreatedEvent>, OrderCreatedHandler
 发布方注入 `IEventBus`，发布一个事件对象：
 
 ```csharp
-public class OrderAppService(IEventBus eventBus)
+public class OrderNotifier(IEventBus eventBus)
 {
-    public async Task PlaceOrderAsync(Order order)
+    public async Task NotifyPlacedAsync(string orderNo, CancellationToken ct = default)
     {
-        // —— 主业务流程 ——
-        await eventBus.PublishAsync(new OrderCreatedEvent { OrderNo = order.No });
+        // —— 主业务流程完成后，发布事件解耦后续副作用 ——
+        await eventBus.PublishAsync(new OrderPlacedEvent { OrderNo = orderNo }, ct);
     }
 }
 
 // 事件：继承 LocalEvent 自动获得 EventId / OccurredOn
-public class OrderCreatedEvent : LocalEvent
+public class OrderPlacedEvent : LocalEvent
 {
     public string OrderNo { get; init; } = "";
 }
 ```
+
+> **应用层发布 vs 领域事件**：这里主动 `PublishAsync` 是**应用流程派发**的用法。若事件表达的是**聚合根状态变更**，采用 [DDD 四层基座](../ddd-struct/ddd-struct.md) 的项目推荐在实体内 `AddLocalEvent(...)`、随保存由拦截器自动发布，从而与工作单元/事务对齐——两者底层都走 `IEventBus`，按事件语义选择发布位置。
 
 订阅方实现 `IEventHandler<TEvent>` 并注册到 DI：
 
@@ -100,9 +102,9 @@ public class OrderCreatedHandler : IEventHandler<OrderCreatedEvent>
 
 - `LocalEventBus` 以 **Singleton** 全局共享一个实例；每次发布时通过 `IServiceScopeFactory` 创建**独立 Scope** 再 `GetServices<IEventHandler<TEvent>>()` 解析处理器，因而处理器可安全注册为 Scoped。适用于 Web、Console、BackgroundService。
 - 处理器按解析顺序 `foreach` **串行 `await`**（非并行），且在发布方上下文中同步等待全部完成，不是后台异步投递。
-- **异常传播**：泛型 `PublishAsync<TEvent>` 中任一处理器抛异常时，先 `LogError`（含事件类型、`EventId`、处理器名）再**向上重新抛出**并中断后续处理器，以保证调用方事务一致性。
-- 未解析到任何处理器时，泛型重载仅在 `Debug` 级别记录一条日志后直接返回，不报错（避免生产环境刷屏）。
-- 非泛型 `PublishAsync(IEvent)` 按事件运行时类型解析处理器，内部用 `ConcurrentDictionary` 缓存 `EventHandlerWrapperImpl<>` 以恢复泛型上下文；该路径不含上述无处理器降级日志与逐处理器 try/catch 包装。
+- **异常传播**：任一处理器抛异常时**直接向上抛出**并中断后续处理器（无内建 try/catch 包装、不吞异常），以保证调用方事务一致性。
+- 未解析到任何处理器时**静默返回**，不报错。
+- 泛型 `PublishAsync<TEvent>` 仅委托到非泛型 `PublishAsync(IEvent)`（两者同一实现路径，行为一致）；非泛型按事件运行时类型解析处理器，内部用 `ConcurrentDictionary` 缓存 `EventHandlerWrapperImpl<>` 以恢复泛型上下文。
 
 ## 配置项 / Options
 
@@ -110,9 +112,9 @@ public class OrderCreatedHandler : IEventHandler<OrderCreatedEvent>
 
 ## 注意事项
 
-- 处理器**不会自动注册**，必须显式 `AddScoped`/`AddTransient`/`AddSingleton` 注册 `IEventHandler<TEvent>`，否则发布时找不到处理器（泛型重载静默返回）。
+- 处理器**不会自动注册**，必须显式 `AddScoped`/`AddTransient`/`AddSingleton` 注册 `IEventHandler<TEvent>`，否则发布时找不到处理器（静默返回，不报错）。
 - 本地总线为**同步语义**：处理器耗时直接计入发布方的调用时长；长耗时副作用应在处理器内部自行转为后台任务。
-- 处理器异常会沿泛型 `PublishAsync<TEvent>` 抛回发布方并中断其余处理器；若需"尽力执行、互不影响"，请在处理器内部自行捕获异常。
+- 处理器异常会抛回发布方并中断其余处理器；若需"尽力执行、互不影响"，请在处理器内部自行捕获异常。
 - 仅进程内有效，无跨进程/持久化能力；`ILocalEventBus` 与 `IEventBus` 当前指向同一 `LocalEventBus` 实例，进程重启不保留未处理事件。
 
 ## 相关

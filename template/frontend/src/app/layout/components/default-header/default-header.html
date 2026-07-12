@@ -5,14 +5,7 @@
   <!-- Breadcrumb / Title & Toggle -->
   <div class="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
     <!-- Sidebar Toggle -->
-    <p-button
-      icon="pi pi-bars"
-      [text]="true"
-      [rounded]="true"
-      severity="secondary"
-      (onClick)="handleMenuToggle()"
-    >
-    </p-button>
+    <p-button icon="pi pi-bars" [text]="true" [rounded]="true" severity="secondary" (onClick)="handleMenuToggle()"> </p-button>
 
     <!-- Breadcrumb: 响应式 -->
     <div class="flex items-center gap-2 text-sm overflow-hidden">
@@ -25,13 +18,7 @@
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
     <!-- Theme Toggle -->
-    <p-button
-      [icon]="layoutService.isDarkTheme() ? 'pi pi-moon' : 'pi pi-sun'"
-      [text]="true"
-      [rounded]="true"
-      severity="secondary"
-      (onClick)="layoutService.toggleDarkMode()"
-    >
+    <p-button [icon]="themeService.modeIcon()" [text]="true" [rounded]="true" severity="secondary" (onClick)="themeService.toggleTheme()">
     </p-button>
 
     <!-- Configurator: 桌面端显示 -->
@@ -53,50 +40,79 @@
     </div>
 
     <!-- Notifications -->
-<!--#if (IncludeNotifications)-->
-    <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="min-w-[36px] min-h-[36px] !overflow-visible"
-      (onClick)="toggleNotifications($event)" pTooltip="通知" tooltipPosition="bottom">
+    <!--#if (IncludeNotifications)-->
+    <p-button
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      styleClass="min-w-[36px] min-h-[36px] !overflow-visible"
+      (onClick)="toggleNotifications($event)"
+      pTooltip="通知"
+      tooltipPosition="bottom"
+    >
       <p-overlay-badge
         [value]="notificationCount() > 99 ? '99+' : notificationCount()"
         [badgeDisabled]="notificationCount() === 0"
         severity="danger"
-        badgeSize="small">
+        badgeSize="small"
+      >
         <i class="pi pi-bell text-base md:text-lg"></i>
       </p-overlay-badge>
     </p-button>
 
-    <p-popover #notificationPopover>
-      <div class="w-[340px] max-w-[90vw]">
-        <div class="flex items-center justify-between px-1 pb-2 mb-2 border-b border-surface-200 dark:border-surface-700">
+    <p-popover #notificationPopover [pt]="{ content: { class: '!p-0' } }">
+      <div class="w-[360px] max-w-[90vw]">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700">
           <span class="font-semibold text-color">通知</span>
           @if (notificationCount() > 0) {
             <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()">全部已读</button>
           }
         </div>
         @if (notifications().length === 0) {
-          <div class="py-8 text-center text-muted-color text-sm">
+          <div class="py-10 text-center text-muted-color text-sm">
             <i class="pi pi-inbox text-2xl block mb-2 opacity-60"></i>
             暂无通知
           </div>
         } @else {
-          <div class="max-h-[360px] overflow-y-auto flex flex-col gap-1">
+          <div class="max-h-[360px] overflow-y-auto flex flex-col">
             @for (n of notifications(); track n.id) {
-              <button type="button"
-                class="flex items-start gap-3 w-full text-left p-2 rounded-md hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
-                [class.opacity-60]="n.isRead"
-                (click)="onNotificationClick(n)">
-                <i class="pi {{ notificationIcon(n.type) }} {{ notificationColor(n.type) }} mt-0.5"></i>
-                <span class="flex-1 min-w-0">
-                  <span class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-color truncate">{{ n.title }}</span>
-                    @if (!n.isRead) {
-                      <span class="w-2 h-2 bg-red-500 rounded-full shrink-0"></span>
-                    }
+              <button
+                type="button"
+                class="flex items-stretch gap-3 w-full text-left px-4 py-3 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+                [class.bg-primary-50]="!n.isRead"
+                [class.dark:bg-primary-950/40]="!n.isRead"
+                (click)="onNotificationClick(n)"
+              >
+                <!-- 图标：统一中性灰，仅形状按类型区分；大小撑满标题+内容高度，垂直居中 -->
+                <span class="flex items-center justify-center shrink-0 self-stretch aspect-square">
+                  <i class="pi {{ notificationIcon(n.type) }} text-muted-color text-2xl"></i>
+                </span>
+                <span class="flex-1 min-w-0 flex flex-col gap-1">
+                  <!-- 标题行：标题在左，未读小圆点 + 时间成组在右，垂直居中 -->
+                  <span class="flex items-center gap-3">
+                    <span
+                      class="text-sm truncate flex-1 min-w-0"
+                      [class.font-semibold]="!n.isRead"
+                      [class.text-color]="!n.isRead"
+                      [class.text-muted-color]="n.isRead"
+                      [pTooltip]="n.title"
+                      tooltipPosition="bottom"
+                      [tooltipDisabled]="!n.title"
+                      >{{ n.title }}</span
+                    >
+                    <span class="flex items-center gap-1.5 shrink-0">
+                      @if (!n.isRead) {
+                        <span class="w-2 h-2 bg-primary rounded-full"></span>
+                      }
+                      <span class="text-[11px] text-muted-color whitespace-nowrap">{{ n.creationTime | date: 'MM-dd HH:mm' }}</span>
+                    </span>
                   </span>
+                  <!-- 内容：次要，截断时 hover 在下方显示完整 -->
                   @if (n.content) {
-                    <span class="block text-xs text-muted-color truncate">{{ n.content }}</span>
+                    <span class="block text-xs text-muted-color leading-relaxed truncate" [pTooltip]="n.content" tooltipPosition="bottom">{{
+                      n.content
+                    }}</span>
                   }
-                  <span class="block text-[11px] text-muted-color mt-0.5">{{ n.creationTime | date:'MM-dd HH:mm' }}</span>
                 </span>
               </button>
             }
@@ -104,11 +120,11 @@
         }
       </div>
     </p-popover>
-<!--#else-->
+    <!--#else-->
     <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="relative min-w-[36px] min-h-[36px]">
       <i class="pi pi-bell text-base md:text-lg"></i>
     </p-button>
-<!--#endif-->
+    <!--#endif-->
 
     <div class="h-6 w-px bg-surface-200 dark:bg-surface-700 mx-1"></div>
 

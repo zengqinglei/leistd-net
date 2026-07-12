@@ -58,9 +58,7 @@ export class ExternalAuthCallback implements OnInit {
 
     try {
       // 1. 将 code+state 发送到后端建立 Cookie session
-      await lastValueFrom(
-        this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' })
-      );
+      await lastValueFrom(this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }));
 
       // 2. 加载用户信息并根据角色跳转
       await lastValueFrom(this.authService.loadUser());

@@ -1,13 +1,5 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Injectable, signal, inject, PLATFORM_ID, DestroyRef, computed, effect } from '@angular/core';
-
-export interface LayoutConfig {
-  preset?: string;
-  primary?: string;
-  surface?: string | undefined | null;
-  darkTheme?: boolean;
-  menuMode?: string;
-}
+import { DestroyRef, Injectable, PLATFORM_ID, inject, signal } from '@angular/core';
 
 /**
  * 布局服务
@@ -51,105 +43,14 @@ export class LayoutService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly destroyRef = inject(DestroyRef);
   private resizeHandler?: () => void;
-  private initialized = false;
   private wasAboveAutoCollapseBreakpoint = true;
-  private readonly LAYOUT_CONFIG_KEY = 'layout_config';
-
-  /**
-   * 主题配置
-   */
-  layoutConfig = signal<LayoutConfig>(this.getInitialConfig());
-
-  isDarkTheme = computed(() => this.layoutConfig().darkTheme);
-
   constructor() {
     this.initResponsive();
-
-    // 立即应用初始主题配置到DOM（仅在浏览器环境）
-    if (isPlatformBrowser(this.platformId)) {
-      const initialConfig = this.layoutConfig();
-      if (initialConfig.darkTheme) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }
 
     // 注册清理函数，在服务销毁时移除监听器
     this.destroyRef.onDestroy(() => {
       this.cleanup();
     });
-
-    effect(() => {
-      const config = this.layoutConfig();
-      if (isPlatformBrowser(this.platformId)) {
-        localStorage.setItem(this.LAYOUT_CONFIG_KEY, JSON.stringify(config));
-      }
-
-      if (!this.initialized || !config) {
-        this.initialized = true;
-        return;
-      }
-      this.handleDarkModeTransition(config);
-    });
-  }
-
-  private getInitialConfig(): LayoutConfig {
-    const defaultConfig: LayoutConfig = {
-      preset: 'Aura',
-      primary: 'blue',
-      surface: 'slate',
-      darkTheme: false,
-      menuMode: 'static'
-    };
-
-    if (isPlatformBrowser(inject(PLATFORM_ID))) {
-      const storedConfig = localStorage.getItem('layout_config'); // Access key directly or move const up if static
-      if (storedConfig) {
-        try {
-          return { ...defaultConfig, ...JSON.parse(storedConfig) };
-        } catch (e) {
-          console.error('Failed to parse layout config', e);
-        }
-      }
-    }
-    return defaultConfig;
-  }
-
-  private handleDarkModeTransition(config: LayoutConfig): void {
-    if (isPlatformBrowser(this.platformId)) {
-      if ((document as any).startViewTransition) {
-        this.startViewTransition(config);
-      } else {
-        this.toggleDarkMode(config);
-      }
-    }
-  }
-
-  private startViewTransition(config: LayoutConfig): void {
-    const _transition = (document as any).startViewTransition(() => {
-      this.toggleDarkMode(config);
-    });
-  }
-
-  toggleDarkMode(config?: LayoutConfig): void {
-    const _config = config || this.layoutConfig();
-    // Use update to trigger signals and effects
-    if (!config) {
-      this.layoutConfig.update(state => ({ ...state, darkTheme: !state.darkTheme }));
-      // The effect in constructor will call this method again with the updated config,
-      // but we need to ensure the class is toggled immediately for responsiveness if called directly
-      // However, better to let the effect handle the class toggling to avoid double toggling or race conditions
-      // But wait, the effect calls handleDarkModeTransition which calls toggleDarkMode.
-      // We need to distinguish between 'user action' and 'effect application'.
-      return;
-    }
-
-    if (_config.darkTheme) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
   }
 
   /**

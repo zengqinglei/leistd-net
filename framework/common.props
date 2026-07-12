@@ -1,7 +1,7 @@
 <Project>
 
   <!--
-    Leistd 框架共享构建属性（参考 Volo.ABP common.props 模式）。
+    Leistd 框架共享构建属性。
     由 framework/Directory.Build.props 自动导入到所有框架项目。
 
     版本：唯一来源是仓库根的 VERSION 文件（基准 x.y.z）。此处自动读取它作为 VersionPrefix，
@@ -34,7 +34,7 @@
   </PropertyGroup>
 
   <!--
-    源码调试：PDB 内嵌进主包 + Source Link + 确定性构建（ABP 风格）。
+    源码调试：PDB 内嵌进主包 + Source Link + 确定性构建。
     - PDB 随主 .nupkg 分发（不产独立 snupkg），装包即有符号；
     - Source Link 让调试器按 commit 从 GitHub 远程按需拉取源码，开发者无需手动 clone 框架仓。
     前提：框架代码须已推送到 RepositoryUrl 指向的 GitHub 远程，调试器方能拉到对应源码。
@@ -59,6 +59,28 @@
   <!-- 每个项目的 NuGet 自述文件（指向 framework 根的 NuGet.md） -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)NuGet.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <!--
+    组件用法文档随包分发（P5 / 引用链路 L4）。
+    项目目录布局：
+    - 通用组件：components/<家族>/<项目>/  → 项目目录的父目录名即家族名（如 lock），文档 docs/components/<家族>.md。
+    - DDD 基座：ddd-struct/<项目>/         → 父目录名为 ddd-struct，统一文档 docs/ddd-struct/ddd-struct.md。
+    统一：_LeistdParentDir = 项目目录的父目录名。
+      component 分支打包 docs/components/<父目录名>.md（仅真实家族存在，Exists 保护）；
+      ddd-struct 分支在父目录名为 ddd-struct 时打包统一文档。
+    同家族多个包都内置该家族文档（用户装任一包即可就地拿到用法），打进包内 docs/ 目录。
+  -->
+  <PropertyGroup>
+    <_LeistdParentDir>$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName($(MSBuildProjectDirectory)))))</_LeistdParentDir>
+    <_LeistdComponentDocPath>$(MSBuildThisFileDirectory)docs\components\$(_LeistdParentDir).md</_LeistdComponentDocPath>
+    <_LeistdDddDocPath>$(MSBuildThisFileDirectory)docs\ddd-struct\ddd-struct.md</_LeistdDddDocPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(_LeistdComponentDocPath)" Pack="true" PackagePath="docs\" Visible="false"
+          Condition="Exists('$(_LeistdComponentDocPath)')" />
+    <None Include="$(_LeistdDddDocPath)" Pack="true" PackagePath="docs\" Visible="false"
+          Condition="'$(_LeistdParentDir)' == 'ddd-struct' And Exists('$(_LeistdDddDocPath)')" />
   </ItemGroup>
 
 </Project>
