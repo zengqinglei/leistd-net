@@ -7,23 +7,29 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <!-- 提前检测主题，防止闪烁 (Fix FOIT) -->
+  <!-- 在 Angular 启动前应用与 ThemeService 相同的主题偏好，避免首屏闪烁。 -->
   <script>
     (function () {
-      const theme = localStorage.getItem('app_theme');
-      const isDark = theme === 'dark';
-      if (isDark) {
-        document.documentElement.classList.add('dark');
+      let mode = 'system';
+      try {
+        const stored = JSON.parse(localStorage.getItem('theme_config') || '{}');
+        if (stored.mode === 'light' || stored.mode === 'dark') {
+          mode = stored.mode;
+        }
+      } catch {
+        localStorage.removeItem('theme_config');
       }
+
+      const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
     })();
   </script>
 </head>
 <body>
   <app-root>
     <!-- 初始加载状态 (HTML Shell)，在 Angular 启动前显示 -->
-    <!-- 使用 bg-surface-ground 替代 bg-gray-50/dark:bg-[#020617] -->
     <div
-      class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface-ground transition-opacity duration-300 ease-in-out">
+      class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface-50 dark:bg-surface-950 transition-opacity duration-300 ease-in-out">
       <!-- 
           Spinner 样式:
           - 边框底色: border-surface-200 (替代 border-gray-200/slate-800)

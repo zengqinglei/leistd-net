@@ -12,7 +12,7 @@ import { StyleClassModule } from 'primeng/styleclass';
 import { TooltipModule } from 'primeng/tooltip';
 import { lastValueFrom } from 'rxjs';
 
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { ThemeService } from '../../../../core/services/theme-service';
 import { LogoComponent } from '../../../../shared/components/logo/logo';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
@@ -44,7 +44,7 @@ export class Register implements OnInit {
   private router = inject(Router);
   private messageService = inject(MessageService);
   private destroyRef = inject(DestroyRef);
-  public layoutService = inject(LayoutService);
+  public themeService = inject(ThemeService);
 
   // returnUrl：注册成功后跳转 login 时传递
   returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');

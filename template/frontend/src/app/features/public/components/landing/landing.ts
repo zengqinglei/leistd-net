@@ -3,7 +3,7 @@ import { RouterModule } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { StyleClassModule } from 'primeng/styleclass';
 
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { ThemeService } from '../../../../core/services/theme-service';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 
 @Component({
@@ -14,5 +14,5 @@ import { ThemeConfigurator } from '../../../../shared/components/theme-configura
   templateUrl: './landing.html'
 })
 export class Landing {
-  public layoutService = inject(LayoutService);
+  public themeService = inject(ThemeService);
 }

@@ -20,6 +20,7 @@ import { StyleClassModule } from 'primeng/styleclass';
 import { TooltipModule } from 'primeng/tooltip';
 
 import { AuthService } from '../../../core/services/auth-service';
+import { ThemeService } from '../../../core/services/theme-service';
 //#if (IncludeNotifications)
 import { NotificationService, NotificationOutputDto } from '../../../core/services/notification-service';
 //#endif
@@ -61,6 +62,7 @@ export class DefaultHeader implements OnInit, OnDestroy {
 export class DefaultHeader implements OnDestroy {
 //#endif
   readonly layoutService = inject(LayoutService);
+  readonly themeService = inject(ThemeService);
   readonly authService = inject(AuthService);
   readonly router = inject(Router);
 

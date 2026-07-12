@@ -18,13 +18,7 @@
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
     <!-- Theme Toggle -->
-    <p-button
-      [icon]="layoutService.isDarkTheme() ? 'pi pi-moon' : 'pi pi-sun'"
-      [text]="true"
-      [rounded]="true"
-      severity="secondary"
-      (onClick)="layoutService.toggleDarkMode()"
-    >
+    <p-button [icon]="themeService.modeIcon()" [text]="true" [rounded]="true" severity="secondary" (onClick)="themeService.toggleTheme()">
     </p-button>
 
     <!-- Configurator: 桌面端显示 -->

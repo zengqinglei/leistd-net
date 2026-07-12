@@ -23,12 +23,12 @@ import { ThemeService } from './core/services/theme-service';
         <router-outlet></router-outlet>
       }
       @case ('loading') {
-        <div class="h-screen w-full flex items-center justify-center bg-surface-ground">
+        <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
           <p-progressSpinner ariaLabel="正在加载..."></p-progressSpinner>
         </div>
       }
       @case ('failed') {
-        <div class="h-screen w-full flex items-center justify-center bg-surface-ground">
+        <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
           @if (startupService.error(); as error) {
             <p-card header="应用加载失败" [style]="{ width: '360px', textAlign: 'center' }">
               <p>{{ formatHttpError(error) }}</p>

@@ -1,4 +1,4 @@
-<div class="min-h-screen w-full flex overflow-hidden bg-surface-ground">
+<div class="min-h-screen w-full flex overflow-hidden bg-surface-50 dark:bg-surface-950">
   <!-- Left Column: Branding -->
   <div class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden text-white bg-[#0f172a]">
     <!-- Blue/Indigo Gradient -->
@@ -98,15 +98,15 @@
   </div>
 
   <!-- Right Column: Register Form -->
-  <div class="flex-1 flex items-center justify-center p-8 bg-surface-0 dark:bg-surface-900 relative">
+  <div class="flex-1 flex items-center justify-center p-8 relative">
     <div class="absolute top-4 right-4 flex gap-2 z-50">
       <p-button
-        [icon]="layoutService.isDarkTheme() ? 'pi pi-moon' : 'pi pi-sun'"
+        [icon]="themeService.modeIcon()"
         [text]="true"
         [rounded]="true"
         severity="secondary"
         styleClass="w-9 h-9"
-        (onClick)="layoutService.toggleDarkMode()"
+        (onClick)="themeService.toggleTheme()"
       ></p-button>
       <div class="relative">
         <p-button
@@ -188,12 +188,12 @@
             />
             @if (captchaData(); as captcha) {
               <div
-                class="h-11 w-[130px] rounded-lg overflow-hidden border border-surface shadow-sm shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all bg-surface-100 flex items-center justify-center"
+                class="h-11 w-[130px] rounded-lg overflow-hidden inset-ring inset-ring-surface-300 dark:inset-ring-surface-700 shadow-sm shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all bg-surface-100 flex items-center justify-center"
                 (click)="refreshCaptcha()"
                 pTooltip="看不清？点击刷新"
                 tooltipPosition="top"
               >
-                <img [src]="captcha.captchaImageBase64" class="w-full h-full object-cover" alt="验证码" />
+                <img [src]="captcha.captchaImageBase64" class="block w-full h-full" alt="验证码" />
               </div>
             }
           </div>

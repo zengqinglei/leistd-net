@@ -12,7 +12,7 @@ import { lastValueFrom } from 'rxjs';
 
 import { environment } from '../../../../../environments/environment';
 import { AuthService } from '../../../../core/services/auth-service';
-import { LayoutService } from '../../../../layout/services/layout-service';
+import { ThemeService } from '../../../../core/services/theme-service';
 import { LogoComponent } from '../../../../shared/components/logo/logo';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { AccountService } from '../../services/account-service';
@@ -42,7 +42,7 @@ export class Login {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private messageService = inject(MessageService);
-  public layoutService = inject(LayoutService);
+  public themeService = inject(ThemeService);
 
   // 加载状态
   private _isLoading = signal(false);
