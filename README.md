@@ -22,6 +22,26 @@
 
 ## AI 协作开发（核心特性）
 
+仓库维护与模板生成项目分别使用自己的项目级 Skill，并从所属交付面的源码和文档建立事实。
+
+### 维护本仓库
+
+仓库内部 Skill 位于 [`.agents/skills/`](.agents/skills/)，[Codex](https://developers.openai.com/codex/skills) 等原生发现该目录的 AI CLI 无需安装。使用只识别其他项目目录的 CLI 时，按需生成本地适配；例如项目 Skill 位于 `.claude/skills/` 的 [Claude Code](https://code.claude.com/docs/en/skills#where-skills-live) 执行：
+
+```bash
+npx skills add ./.agents/skills --agent claude-code --skill developing-leistd-framework developing-leistd-template maintaining-leistd-repository -y
+```
+
+`npx skills` 会根据平台能力选择链接或复制，并在结果中标明实际方式。需要强制复制时执行：
+
+```bash
+npx skills add ./.agents/skills --agent claude-code --skill developing-leistd-framework developing-leistd-template maintaining-leistd-repository --copy -y
+```
+
+复制的适配不会自动跟随权威源更新，修改 `.agents/skills/` 后应重新执行命令。生成的 `.claude/skills/` 和 `skills-lock.json` 是本地适配产物，不提交到仓库。
+
+### 生成项目
+
 模板生成的项目使用一个 Skill 路由最终意图，再按需加载场景知识：
 
 | 机制 | 作用 |
@@ -40,6 +60,7 @@
 
 ```
 leistd-net/
+├── .agents/skills/     # 仓库内部维护 Skill
 ├── framework/          # Leistd 框架（NuGet 化，独立版本）
 │   ├── components/     #   共享组件（15 个能力分组，33 个包）
 │   ├── ddd-struct/     #   DDD 四层基础类型（4 个包）
@@ -51,6 +72,7 @@ leistd-net/
 │   ├── .agents/skills/ #   跨工具项目 Skill
 │   └── docs/           #   项目规范及按需沉淀的长期文档
 ├── scripts/            # 本地开发与 CI 共用的仓库级验证脚本
+├── skills/             # 面向 Leistd.* 使用者的可分发 Skill
 ├── docs/               # 仓库架构、框架/模板内部维护规范与变更记录
 ├── VERSION             # 版本基准（唯一版本来源，x.y.z）
 └── .github/workflows/  # CI 与多通道发布流水线

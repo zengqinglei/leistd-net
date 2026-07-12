@@ -16,9 +16,9 @@
 
 | Skill | 场景 | 事实范围 |
 | --- | --- | --- |
-| `.claude/skills/developing-leistd-framework` | 开发 Framework | 框架源码、测试、随包文档和包验证 |
-| `.claude/skills/developing-leistd-template` | 维护 Template | 模板源码、条件配置和实际生成结果 |
-| `.claude/skills/maintaining-leistd-repository` | 跨层、CI、版本或发布维护 | 整个仓库及各专项 Skill 的验证结果 |
+| `.agents/skills/developing-leistd-framework` | 开发 Framework | 框架源码、测试、随包文档和包验证 |
+| `.agents/skills/developing-leistd-template` | 维护 Template | 模板源码、条件配置和实际生成结果 |
+| `.agents/skills/maintaining-leistd-repository` | 跨层、CI、版本或发布维护 | 整个仓库及各专项 Skill 的验证结果 |
 | `skills/leistd-net-framework` | 下游项目使用 `Leistd.*` | 项目实际安装包的文档、XML 和程序集 |
 | `template/.agents/skills/leistd-project-workflow` | 生成项目或其他业务项目的完整协作 | 项目源码、配置、测试、CI 和已沉淀文档 |
 

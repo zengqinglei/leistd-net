@@ -134,6 +134,13 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated project must contain only leistd-project-workflow in $skillRoot"
     }
 
+    $projectReadme = Get-Content -LiteralPath (Join-Path $ProjectRoot "README.md") -Raw -Encoding UTF8
+    foreach ($marker in @("npx skills add ./.agents/skills/leistd-project-workflow", "--agent claude-code", "--copy", "skills-lock.json")) {
+        if (-not $projectReadme.Contains($marker)) {
+            throw "Generated project README is missing AI CLI compatibility guidance: $marker"
+        }
+    }
+
     $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "tech-stack.md", "testing.md", "ui-design.md")
     $standardsRoot = Join-Path $ProjectRoot "docs/standards"
     $actualStandards = @(Get-ChildItem -LiteralPath $standardsRoot -File -Filter "*.md" | ForEach-Object Name | Sort-Object)
@@ -173,7 +180,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         throw "Generated project contains template residue:`n$($sample -join "`n")"
     }
 
-    $removedGuidanceReferences = $textFiles | Select-String -Pattern 'template/\.claude', '\.claude/skills/', 'agent-workflow\.md', 'api-standard\.md', 'code-standard/(common|backend|frontend)-develop\.md', 'ui-design-strategy\.md'
+    $removedGuidanceReferences = $textFiles | Select-String -Pattern 'template/\.claude', 'agent-workflow\.md', 'api-standard\.md', 'code-standard/(common|backend|frontend)-develop\.md', 'ui-design-strategy\.md'
     if ($removedGuidanceReferences) {
         $sample = $removedGuidanceReferences | Select-Object -First 20 | ForEach-Object { "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
         throw "Generated project references removed guidance:`n$($sample -join "`n")"
