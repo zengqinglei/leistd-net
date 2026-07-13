@@ -49,15 +49,17 @@ HTTP/1.1 200 OK
 
 ### 2.4 错误响应
 
-失败统一返回 RFC 7807 `ProblemDetails`，`Content-Type: application/problem+json`。
+失败统一返回 RFC 7807 `ProblemDetails`，`Content-Type: application/problem+json`，由 `Leistd.Exception.AspNetCore` 的全局异常处理（`BusinessExceptionHandler`）产出。除 RFC 标准字段外，固定附带 `code`、`message`、`traceId` 三个扩展字段。
 
 ```json
 {
-  "type": "about:blank",
-  "title": "请求处理失败",
+  "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+  "title": "Bad Request",
   "status": 400,
   "detail": "用户名 'admin' 已存在",
   "instance": "/api/v1/users",
+  "code": 40000,
+  "message": "用户名 'admin' 已存在",
   "traceId": "00-abc...-def...-01"
 }
 ```
@@ -66,22 +68,30 @@ HTTP/1.1 200 OK
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| type | string | 错误类型 URI；未细分时为 `about:blank` |
-| title | string | 错误标题（人类可读、与 status 对应） |
+| type | string | 错误类型 URI；按 status 映射到对应 RFC 章节（如 400→`rfc7231#section-6.5.1`） |
+| title | string | 错误标题（英文短语，与 status 对应，如 `Bad Request`、`Not Found`） |
 | status | number | HTTP 状态码 |
-| detail | string | 本次错误的具体说明 |
-| instance | string | 出错的请求路径（可选） |
-| traceId | string | 链路追踪 ID（扩展字段，贯穿调用链） |
+| detail | string | 本次错误的具体说明（= 异常 `Message`） |
+| instance | string | 出错的请求路径 |
+| code | number | **业务错误码扩展字段**：`BusinessException.Code`，形如 `40000`、`42200`；前 3 位即 HTTP 状态码，后续位可用 `WithCode` 细分。是前端定位与本地化的稳定键 |
+| message | string | 错误消息扩展字段（= 异常 `Message`，与 `detail` 同值，便于前端统一读取） |
+| traceId | string | 链路追踪 ID（扩展字段，取 `Activity.Current?.Id`，贯穿调用链） |
+
+> 开发环境（或 `GlobalExceptionOptions.IsShowDetails = true`）会额外附带 `stackTrace`（未捕获异常）或 `details`（`WithDetails` 设置的补充信息）；生产环境不暴露。
 
 ### 2.5 验证错误响应
 
-模型校验（Data Annotations）失败返回 HTTP 400，`ProblemDetails` 的 `errors` 扩展字段按字段聚合错误信息（ASP.NET Core `ValidationProblemDetails` 标准格式）。
+实体/模型校验失败返回 HTTP **422**（`UnprocessableEntityException`，`code` = `42200`），`ProblemDetails` 的 `errors` 扩展字段按字段聚合错误信息（ASP.NET Core `ValidationProblemDetails` 标准格式）。`System.ComponentModel.DataAnnotations.ValidationException` 会被全局处理器转换为该 422 响应。
 
 ```json
 {
-  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
-  "title": "One or more validation errors occurred.",
-  "status": 400,
+  "type": "https://tools.ietf.org/html/rfc4918#section-11.2",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "输入的信息有误",
+  "instance": "/api/v1/products",
+  "code": 42200,
+  "message": "输入的信息有误",
   "errors": {
     "name": ["名称不能为空"],
     "price": ["价格必须大于 0"]
@@ -96,39 +106,56 @@ HTTP/1.1 200 OK
 | --- | --- |
 | 200 | 查询或操作成功 |
 | 201 | 创建成功 |
-| 400 | 参数格式错误或业务校验失败 |
+| 400 | 参数格式错误或业务规则校验失败 |
 | 401 | 未认证 |
 | 403 | 无权限 |
 | 404 | 资源不存在 |
 | 409 | 状态冲突或幂等冲突 |
+| 422 | 实体字段校验失败（按字段聚合 `errors`） |
 | 500 | 服务端异常 |
+| 503 | 上游服务超时 / 连接失败 |
 
-> 业务校验失败本项目统一用 400（由 `BadRequestException` 抛出），不区分到 422。
+> **业务规则校验**（如「用户名已存在」）用 400（`BadRequestException`）；**实体字段校验**（按字段聚合错误）用 422（`UnprocessableEntityException`）。二者区别：前者是单条业务约束消息，后者是多字段 `errors` 字典。
 
 ## 4. 异常类型映射
 
-后端使用 `Leistd.Exception.Core` 提供的异常类型，由全局异常处理转换为对应 HTTP 状态码的 `ProblemDetails`。
+后端使用 `Leistd.Exception.Core` 提供的异常类型（均继承 `BusinessException`），由 `Leistd.Exception.AspNetCore` 的全局异常处理转换为对应 HTTP 状态码的 `ProblemDetails`。每个异常自带默认业务码 `Code`（= HTTP 前缀 + `00`）。
 
-| 异常类型 | HTTP | 使用场景 |
-| --- | --- | --- |
-| `BadRequestException` | 400 | 参数/请求结构错误、业务规则验证失败 |
-| `UnauthorizedException` | 401 | 未登录、Token 无效 |
-| `ForbiddenException` | 403 | 已登录但权限不足 |
-| `NotFoundException` | 404 | 资源不存在 |
-| `ConflictException` | 409 | 状态冲突、重复提交 |
-| （未捕获异常） | 500 | 未预期异常，detail 不暴露内部细节 |
+| 异常类型 | HTTP | 默认 `code` | 使用场景 |
+| --- | --- | --- | --- |
+| `BadRequestException` | 400 | 40000 | 参数/请求结构错误、业务规则验证失败 |
+| `UnauthorizedException` | 401 | 40100 | 未登录、Token 无效 |
+| `ForbiddenException` | 403 | 40300 | 已登录但权限不足 |
+| `NotFoundException` | 404 | 40400 | 资源不存在 |
+| `ConflictException` | 409 | 40900 | 状态冲突、重复提交 |
+| `UnprocessableEntityException` | 422 | 42200 | 实体字段校验失败（按字段聚合 `errors`） |
+| `InternalServerException` | 500 | 50000 | 未预期异常，`detail` 不暴露内部细节 |
+| `ServiceUnavailableException` | 503 | 50300 | 上游服务超时 / 连接失败 |
+
+框架还会**自动转换**下列常见异常，无需手动 catch：`System.ComponentModel.DataAnnotations.ValidationException` → 422；`OperationCanceledException` / `TimeoutException` / `HttpRequestException` → 400 或 503；其余未捕获异常 → 500。
+
+`BusinessException` 支持链式细化：
+
+- `WithCode("46")`：在默认前缀后追加细分码（如 `BadRequestException(...).WithCode("46")` → `code` = `40046`）。
+- `WithDetails("...")`：补充仅在开发环境（或开启 `IsShowDetails`）暴露的 `details`。
 
 **示例**：
 
 ```csharp
-// 业务规则验证失败
+// 业务规则验证失败（400）
 if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
     throw new BadRequestException($"用户名 '{username}' 已存在");
 
-// 资源不存在
+// 资源不存在（404）
 var user = await userRepository.GetAsync(id, cancellationToken);
 if (user is null)
     throw new NotFoundException($"用户 {id} 不存在");
+
+// 实体字段校验（422，按字段聚合）
+throw new UnprocessableEntityException("email", "邮箱格式不正确");
+
+// 细分业务码（code = 40046）
+throw new BadRequestException("余额不足").WithCode("46");
 ```
 
 ## 5. 认证与授权
