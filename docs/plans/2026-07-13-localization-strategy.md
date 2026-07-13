@@ -10,13 +10,22 @@
 | --- | --- | --- |
 | 前端加载方式 | **运行时库 Transloco** | JSON 词条运行时 fetch，用户即时切换、单包部署；比编译期 `$localize` 更适合管理后台 |
 | 前端 UI 组件 | **PrimeNG `setTranslation` 联动** | `providePrimeNG({translation})` 初始化 + 运行时 `PrimeNG.setTranslation()` 跟随语言切换 |
-| 后端消息本地化 | **语义错误键 → 资源映射（仿 ABP 模型 2）** | `throw` 处只声明语义键 + 参数（`Shop:BalanceInsufficient` + `WithData`），文案在资源文件按 culture 查表，throw 处零 localizer 依赖 |
+| 后端消息本地化 | **文案键 → 资源映射（吸收 ABP 模型 2，用 .NET 原语实现）** | `throw` 处传**文案键 + 参数**（可通用如 `Error:NotFound`，也可专属如 `Order:StockInsufficient` + `WithData`），文案按 culture 查表出 `message`，throw 处零 localizer 依赖 |
+| 前端分支判断 | **沿用现有数字 `code`** | 大部分错误共用默认码；需前端特判时 `.WithCode("46")` 指定；前端 `switch(code)`，不引入额外标识字段 |
 | 语言协商 | **`Accept-Language` 头 + Cookie 覆盖** | 前端 HTTP 拦截器带上活动语言，后端 `UseRequestLocalization` 统一解析 |
 | 契约职责 | **静态 UI 文案在前端、系统/错误消息在后端** | 业界共识：静态 UI 用前端词条，跨端一致的系统消息由后端按 culture 产出 |
 
-**核心洞察**：后端要本地化，根因不是错误码粒度粗，而是当前 `throw new BadRequestException("余额不足")` 把**「人读的成品中文」和「机读的稳定键」塞进了同一个参数**。理想方案（ABP 与微软官方殊途同归）是**在 throw 处只声明语义键 + 参数，成品文案在资源文件按 culture 产出**。因此本方案采**语义字符串错误键**（`Shop:BalanceInsufficient`）作本地化键——而不是现有的数字 `Code`。
+**核心洞察**：后端要本地化，根因不是错误码粒度粗，而是当前 `throw new BadRequestException("余额不足")` 把**「人读的成品中文」直接写进了 throw 处**——没法按 culture 查表。修正只需一件事：**throw 处传"文案键"而非"成品中文"，文案落到资源文件按 culture 产出**。
 
-> **重要修正**：早期草案曾设想「复用现有数字 `BusinessException.Code`（40000/42200）作本地化键」，此设想**不成立**——现有 `Code` 按 HTTP 类别粗分（同一类 400 错误全是 40000），无法区分同类里语义不同的多条业务错误。数字 `Code` 的职责应限定为**决定 HTTP 状态码**；本地化键改用**新增的语义字符串键**。详见 §2.3 与 §4.1。
+**职责分离（本方案定论）**——三个需求各由一个既有机制承担，互不兼职：
+
+| 职责 | 承担者 | throw 处 |
+| --- | --- | --- |
+| 多语言文案 | **文案键**（第一参数） | `"Error:NotFound"` / `"Order:StockInsufficient"` |
+| 前端分支判断 | **数字 `code`** | 默认码；特殊才 `.WithCode("46")` |
+| 补充说明（给人看） | **`Details`** | `.WithDetails(...)`，保持现状不动 |
+
+> **设计演进说明**：本节结论经多轮收敛而来。早期草案曾设想①「复用数字 `Code` 兼作本地化键」（否决：`Code` 按 HTTP 类别粗分，同类 400 全是 40000，无法区分多条业务错误）、②「新增语义字符串键 `errorCode` + `data`/`reason` 字段」（否决：前端判断已有 `code` 承担，独立文案与前端判断是同一批少数错误、无需两套键，且额外字段增加前端认知与泄露面）。**最终定论**：`code` 保留本职（HTTP 状态 + 前端分支），本地化仅靠**文案键**，`Details` 保持"补充说明"本职，**不新增任何面向前端的字段**。详见 §4.1。
 
 ---
 
@@ -85,14 +94,14 @@ throw new BusinessException("Shop:BalanceInsufficient")
 options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 ```
 
-模型 2 的四个设计要点（本方案后端采用的正是这套）：
+模型 2 的四个设计要点（本方案**部分吸收**，差异见下）：
 
-1. **错误键是字符串命名空间键**（`Shop:BalanceInsufficient`），**不是裸数字**——天然按模块隔离、自解释、去中心化，无需"谁管 40046"的分配治理。
-2. **throw 处零 localizer 依赖**——静态上下文、领域层深处都能抛。
-3. **参数用 `.WithData(key, value)` 注入**，资源里用 `{key}` 具名占位。
-4. **回落明确**：键查不到 → 发默认消息；**不回落到 `.Message`**（除非 `IUserFriendlyException`）。这逼使消息真正沉淀到资源。
+1. **文案键是字符串**（`Shop:BalanceInsufficient`），自解释、按模块组织——本方案吸收此点作**文案键**（第一参数），资源按它查表。
+2. **throw 处零 localizer 依赖**——静态上下文、领域层深处都能抛。本方案完全吸收。
+3. **参数用 `.WithData(key, value)` 注入**，资源里用 `{key}` 具名占位。本方案完全吸收。
+4. **回落明确**：键查不到 → 发默认消息/键本身。本方案吸收（用 .NET `IStringLocalizer` 原生"键即默认值"，回落到键或异常 Message）。
 
-> 对 leistd 的启示：现有 `BusinessException` 的数字 `Code` 相当于 ABP 里"决定 HTTP 状态"的部分，但**缺少 ABP 那个语义字符串错误键**——这正是要新增的。见 §4.1。
+> **本方案与 ABP 的差异**：ABP 用这个字符串键**同时**承担"本地化 + 客户端识别"，并配 `MapCodeNamespace` 做码空间→资源映射。本方案不这么做——**文案键只用于后端资源查表、不返给前端**；前端识别/分支沿用**现有数字 `code`**（`WithCode` 特殊化），不引入返给前端的字符串键。即：借 ABP 的"throw 传键不传文案 + WithData 参数"，但不借它的"字符串键兼做客户端识别"。见 §4.1、§4.4。
 
 ### 2.5 业界全栈契约共识
 
@@ -123,13 +132,13 @@ options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 │  UseRequestLocalization  ──解析 culture──▶ CurrentUICulture                        │
 │       (QueryString / Cookie / Accept-Language 三 provider)                         │
 │                                                                                    │
-│  throw new BadRequestException("Shop:BalanceInsufficient")                         │
-│        .WithData("Balance", 50)   ── 语义键 + 参数, 无成品文案 ──┐                   │
-│                                                                 ▼                   │
-│  BusinessExceptionHandler ── 按 ErrorKey + Data 查资源(culture) ──▶ 本地化 message  │
-│       └─▶ ProblemDetails { errorCode, message(本地化), data, code(HTTP), traceId } │
-│  资源: 虚拟 JSON，键=语义错误键 Shop:BalanceInsufficient，值含 {Balance} 具名占位    │
-│  数字 Code(400/422) 只决定 HTTP 状态；语义 errorCode 才是本地化键（职责分离）        │
+│  throw new BadRequestException("Order:StockInsufficient")                          │
+│        .WithData("Sku", "A1").WithCode("46")  ── 文案键(+参数)(+特殊码) ──┐          │
+│                                                                          ▼          │
+│  BusinessExceptionHandler ── 按 文案键 + Data 查资源(culture) ──▶ 本地化 message     │
+│       └─▶ ProblemDetails { code(HTTP+可选细分), message(本地化), title, traceId }   │
+│  资源: 虚拟 JSON，键=文案键 Order:StockInsufficient，值含 {Sku} 具名占位             │
+│  职责分离: 文案键→多语言; 数字 code→HTTP+前端分支; Details→补充说明。无新增前端字段  │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -145,36 +154,46 @@ options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 
 | 包 | 职责 | 依赖边界 |
 | --- | --- | --- |
-| `Leistd.Localization.Core` | 本地化资源抽象：资源定义、错误码↔资源映射选项、JSON 资源读取契约 | 平台无关，不引 ASP.NET Core |
+| `Leistd.Localization.Core` | 本地化资源抽象：资源定义、文案键↔资源映射选项、JSON 资源读取契约 | 平台无关，不引 ASP.NET Core |
 | `Leistd.Localization.AspNetCore` | `AddLeistdLocalization` / `UseLeistdRequestLocalization`：封装 `AddLocalization` + culture provider 顺序 + 支持语言配置 | 引 `Microsoft.AspNetCore.App` FrameworkReference |
 
 要点：
-- 资源用**虚拟 JSON**（键=语义错误键/消息键，值含 `{具名占位符}`），对齐 ABP，比纯 `.resx` 更易维护、可随包分发默认中英资源。
+- 资源用**虚拟 JSON**（键=文案键，值含 `{具名占位符}`），吸收 ABP 做法，比纯 `.resx` 更易维护、可随包分发默认中英资源。
 - 组件**只提供能力**，不替宿主注册中间件——`Use*` 由模板 `Program.cs` 显式调用（符合「不替其他组件挂载」的边界）。
 
 **改造 `Leistd.Exception`（破坏性，本方案已获准可破坏兼容性）**
 
-核心：把 `BusinessException` 里"人读的成品文案"与"机读的稳定键"拆开，采 ABP 模型 2。
+核心：把 throw 处的**「成品中文」换成「文案键」**，让消息能按 culture 查表；`code` 与 `Details` 各守本职、不兼职本地化。
 
-- `BusinessException` **新增语义字符串键** `ErrorCode`（如 `Shop:BalanceInsufficient`）与 `Data` / `WithData(key, value)` 参数机制；现有 `int Code` **职责收窄为只决定 HTTP 状态码**，不再兼作本地化键。
-- `BusinessExceptionHandler` 注入 `IStringLocalizer`（经 `Leistd.Localization.Core` 抽象），按 `ErrorCode` 当键、`Data` 当具名参数查当前 culture 文案，填进 `ProblemDetails.detail` / `message`。
-- 回落：`ErrorCode` 查不到 → 用异常 `Message`（比 ABP 严格策略宽松一档，便于渐进补键；可按需切换为 ABP 式"发默认消息、不回落 Message"）。
+- `BusinessException` **新增 `Data` / `WithData(key, value)` 参数机制**（供资源里 `{key}` 具名占位）。第一构造参数由"成品消息"改为"**文案键**"（可通用如 `Error:NotFound`，可专属如 `Order:StockInsufficient`）。
+- 现有 `int Code`（`WithCode`）**保持不变**：既定 HTTP 状态码，也是前端分支判断的依据——大部分错误共用默认码，需前端特判时 `.WithCode("46")`。**不新增 `errorCode` 字段**。
+- 现有 `Details`（`WithDetails`）**保持现状**：仅作"给人看的补充说明"，**不承担前端判断**（前端判断走 `code`）。
+- `BusinessExceptionHandler` 注入 `IStringLocalizer`（经 `Leistd.Localization.Core` 抽象），按**文案键** + `Data` 查当前 culture 文案，填进 `ProblemDetails.detail` / `message`。
+- 回落：文案键查不到 → 用键本身/默认消息（.NET `IStringLocalizer` 原生"键即默认值"语义），避免整条丢消息。
 - `GetProblemTitle` 的英文标题改为按 culture 本地化（保留英文为默认回落）。
-- 现在写死的中文串（`throw new BadRequestException("余额不足")`、兜底串 `"系统异常，请联系管理员"` 等）**全量迁入资源文件**，throw 处改为传语义键。
-- `ProblemDetails` 结构演进：新增 `errorCode`（语义键）与 `data`（参数）扩展字段；`code`（数字，HTTP 类别）、`message`、`title`、`traceId`、`detail`、`errors` 保留，其中 `message`/`title` 取值随 culture 变化。
+- 现在写死的中文串（`throw new BadRequestException("余额不足")`、兜底串 `"系统异常，请联系管理员"` 等）**全量迁入资源文件**，throw 处改为传文案键。
 
-**目标形态对照**（即"破坏性"的具体含义）：
+**`ProblemDetails` 结构变化（对前端几乎零新增）**：
+
+| 字段 | 变化 |
+| --- | --- |
+| `message` / `detail` / `title` / `errors` | **取值随 culture 变**（结构不变） |
+| `code` | **不变**（仍表 HTTP 类别 + 可选细分码，前端仍按它分支） |
+| `traceId` | 不变 |
+| ~~`errorCode` / `data` / `reason`~~ | **不新增**（前端判断靠 `code`，无需额外标识；`data` 是渲染前原料，不外泄） |
+
+**目标形态对照**（即"破坏性"的具体含义，集中在 throw 侧）：
 
 | 项 | 现在 | 目标 |
 | --- | --- | --- |
-| throw 传参 | 成品中文 `"余额不足"` | 语义键 `"Shop:BalanceInsufficient"` |
-| 本地化键 | 数字 `Code`（粗，40000 类别级） | 字符串 `ErrorCode`（细，按模块命名空间） |
-| 消息存放 | 散在代码字符串插值 | 集中资源文件 zh/en |
+| throw 第一参数 | 成品中文 `"余额不足"` | 文案键 `"Order:StockInsufficient"` |
 | 动态参数 | `$"用户名 '{x}' 已存在"` | `.WithData("x", x)` + 资源 `{x}` |
+| 消息存放 | 散在代码字符串插值 | 集中资源文件 zh/en |
 | 校验消息 | DataAnnotation 写死中文 | `ErrorMessage` 键化 |
-| 前后端键 | 无关联 | 同一套语义键（见 §4.4） |
+| 前端分支 | 读 `code`（无变化） | 读 `code`（无变化） |
+| 补充说明 | `WithDetails`（无变化） | `WithDetails`（无变化） |
 
-> 版本影响：新增包 + 异常组件**破坏性公共 API 变化**（throw 契约、`ProblemDetails` 字段），按 `docs/framework/versioning.md` 为 `BREAKING CHANGE`（major）。需在组件文档与迁移说明同步；模板作为首个消费者同批迁移。
+> 版本影响：新增包 + 异常组件**破坏性公共 API 变化**（throw 第一参数语义从"消息"变"键"），按 `docs/framework/versioning.md` 为 `BREAKING CHANGE`（major）。响应结构本身对前端不新增字段，破坏性主要落在后端 throw 侧与"断言中文文案"的旧测试。需在组件文档与迁移说明同步；模板作为首个消费者同批迁移。
 
 ### 4.2 Template-backend：装配框架能力
 
@@ -188,29 +207,33 @@ options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 - 词条放 `public/i18n/{zh,en}.json`（运行时 fetch）；每个文件含一个 `primeng` 段供组件库使用。
 - **语言切换服务**：`translocoService.setActiveLang(lang)` 同时 `translocoService.selectTranslate('primeng').subscribe(r => primeng.setTranslation(r))`，让 PrimeNG 跟随。
 - **HTTP 拦截器**：每个请求注入 `Accept-Language: <活动语言>`，使后端错误消息按同一 culture 返回。
-- **收敛现有写死中文**：`http-error-interceptor.ts` 的 `CODE_MESSAGES`、`global-error-handler.ts` 的 `summary/detail` 改为查 Transloco 词条；HTTP 状态/错误码文案键与后端错误码对齐（同一码两端一致）。
+- **收敛现有写死中文**：`http-error-interceptor.ts` 的 `CODE_MESSAGES`、`global-error-handler.ts` 的 `summary/detail` 改为查 Transloco 词条；**业务错误提示优先直接显示后端已本地化的 `message`**（后端已按 `Accept-Language` 产出），前端 map 仅保留纯客户端兜底（网络断开/后端不可达）。需按错误类型做差异化 UI 行为时，前端读 **`code`** 分支（与现有 `error.error.code` 读取一致）。
 - 数据格式（日期/货币/数字）用 Angular 内置 `DatePipe`/`CurrencyPipe`/`DecimalPipe`，按需 `registerLocaleData` + 绑定活动 `LOCALE_ID`（运行时数据格式本地化，与 Transloco 文案本地化正交）。
 
 ### 4.4 键命名与职责边界（跨端一致）
 
 | 类别 | 归属 | 键形态 | 示例 |
 | --- | --- | --- | --- |
-| UI 静态文案 | 前端词条 | 语义命名空间 | `menu.users`、`btn.save` |
-| 系统/错误消息 | 后端资源（权威）+ 前端可选覆盖 | **语义错误键** | `Shop:BalanceInsufficient` |
+| UI 静态文案 | 前端词条（权威） | 语义命名空间 | `menu.users`、`btn.save` |
+| 系统/错误消息文案 | 后端资源（权威） | **文案键** | `Order:StockInsufficient` |
+| 错误的前端分支标识 | 后端 `code`（前端读取） | 数字码 | `40000`、`40046` |
 | PrimeNG 组件文案 | 前端词条 `primeng` 段 | PrimeNG 约定键 | `primeng.accept` |
 | 校验消息 | 后端校验资源 | DataAnnotations 键 | `Validation:Required` |
 
-**全栈最优收口——前后端键统一**：
+**职责分离（本方案定论，非"前后端共用同一键"）**：
+
+- **错误文案**：权威在**后端**资源（按文案键 + culture 产出），前端**直接显示后端 `message`**，不在前端重复维护一份业务错误词条。
+- **前端分支**：靠**后端 `code`**（前端可维护一份 `code` 常量枚举做 `switch`，但那是"码→行为"映射，不是"码→文案"）。
+- **文案键不外泄给前端**：文案键是后端资源查表用的内部键，不进 `ProblemDetails`；前端拿到的是已本地化的 `message` + 用于分支的 `code`。
 
 ```
-throw 语义键  ==  后端资源键  ==  前端 Transloco 词条键
-                Shop:BalanceInsufficient
+后端 throw 文案键  ──查表──▶  后端资源(zh/en)  ──产出──▶  ProblemDetails.message(已本地化)
+                                                          ProblemDetails.code(前端分支)
+                                                                │
+前端 ◀── 显示 message；必要时按 code 分支 ──────────────────────┘
 ```
 
-- 后端返回 `ProblemDetails { errorCode: "Shop:BalanceInsufficient", message: <后端已本地化>, data: {Balance:50}, code: 400 }`。
-- 前端两种消费任选：① 直接显示后端已本地化的 `message`（省事）；② 用 `errorCode` + `data` 在前端 Transloco 再查一次（前端要完全掌控文案时）。**两端共用同一 key，永不漂移**。
-
-原则：**同一事实一处权威**。错误消息以后端语义键资源为准；前端只在需要纯客户端兜底（如网络断开、后端不可达）时保留少量本地文案。
+原则：**同一事实一处权威**。业务错误文案的唯一权威是后端资源；前端只维护自己的 UI 文案与纯客户端兜底（网络断开、后端不可达）。
 
 ---
 
@@ -218,12 +241,12 @@ throw 语义键  ==  后端资源键  ==  前端 Transloco 词条键
 
 > 本轮不写代码。以下为建议的执行批次，每批按所属交付面的 Skill 与验证入口收口。
 
-1. **框架能力**（`developing-leistd-framework`）：建 `Leistd.Localization.*` → 破坏性改造 `Leistd.Exception`（`BusinessException` 加 `ErrorCode`/`WithData`、handler 接 localizer、message/title 键化）→ 构建/测试/打包 `.tmp/local-feed` → 包消费检查 → 组件文档 + 迁移说明 `framework/docs/components/` 同步。
+1. **框架能力**（`developing-leistd-framework`）：建 `Leistd.Localization.*` → 破坏性改造 `Leistd.Exception`（`BusinessException` 第一参数改文案键、加 `Data`/`WithData`、handler 接 localizer 按文案键+culture 产出 message/title；`Code`/`Details` 保持本职）→ 构建/测试/打包 `.tmp/local-feed` → 包消费检查 → 组件文档 + 迁移说明 `framework/docs/components/` 同步。
 2. **模板后端**（`developing-leistd-template`）：先 `.tmp/local-feed` 打包新框架 → 模板经 NuGet 消费 → `Program.cs` 装配 → 生成项目还原/构建/测试 → 多 culture 请求验证错误消息随 `Accept-Language` 变化。
 3. **模板前端**（`developing-leistd-template`）：Transloco + PrimeNG 联动 + 拦截器 → 前端构建 → 语言即时切换与错误码文案对齐验证。
 4. **文档沉淀**：框架侧本地化组件契约进 `framework/docs/components/`；模板侧 i18n 工程规范进 `template/docs/standards/`（含前端运行时库选型与 `$localize` 取舍 cross-link）。
 
-**残余风险 / 待定**：语义键命名规范（`模块:实体动作`，需成文约束避免各模块乱起）、`ErrorCode` 查不到时回落到 `Message` 还是走 ABP 严格策略、支持语言清单（起步 zh-CN + en-US？）、用户级语言是否持久化到后端账户、校验消息走 MVC `AddDataAnnotationsLocalization` 还是 .NET 11 `AddValidationLocalization`——这些在批次 1 开工前确认。
+**残余风险 / 待定**：文案键命名规范（`模块:实体动作`，需成文约束避免各模块乱起）、通用键是否从 HTTP status 自动推导（让通用错误 throw 处连键都不必传）、支持语言清单（起步 zh-CN + en-US？）、用户级语言是否持久化到后端账户、校验消息走 MVC `AddDataAnnotationsLocalization` 还是 .NET 11 `AddValidationLocalization`——这些在批次 1 开工前确认。
 
 ---
 
