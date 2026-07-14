@@ -3,6 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { lastValueFrom } from 'rxjs';
 
 import { SignalRService, NotificationOutputDto } from './signalr-service';
+import { environment } from '../../../environments/environment';
 export type { NotificationOutputDto } from './signalr-service';
 
 /**
@@ -26,6 +27,12 @@ export class NotificationService {
   /** 初始化：加载历史通知 + 连接 SignalR。 */
   async init(): Promise<void> {
     await this.loadNotifications();
+
+    const useMock = environment.useMock;
+    if (typeof useMock === 'boolean' ? useMock : useMock.enable) {
+      return;
+    }
+
     await this.signalR.connect();
   }
 
