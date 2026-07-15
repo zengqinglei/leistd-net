@@ -18,7 +18,28 @@ export class MockInterceptor implements HttpInterceptor {
 
     const matchingRule = this.findMatchingRule(method, url);
 
-    if (!matchingRule || !this.shouldMock(url, mockEnv)) {
+    if (!matchingRule) {
+      if (this.shouldMock(url, mockEnv) && this.getUrlPath(url).startsWith('/api/')) {
+        const errorHeaders = headers.set('Content-Type', 'application/json');
+        return throwError(
+          () =>
+            new HttpErrorResponse({
+              error: {
+                code: 'MOCK_ROUTE_NOT_FOUND',
+                message: `Mock API is not defined: ${method.toUpperCase()} ${this.getUrlPath(url)}`
+              },
+              headers: errorHeaders,
+              status: 501,
+              statusText: 'Mock Route Not Found',
+              url
+            })
+        );
+      }
+
+      return next.handle(req);
+    }
+
+    if (!this.shouldMock(url, mockEnv)) {
       return next.handle(req);
     }
 
