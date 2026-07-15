@@ -10,9 +10,9 @@ public class JsonStringLocalizerTests
 {
     private static JsonStringLocalizer CreateLocalizer(string defaultCulture = "en")
     {
-        var options = Options.Create(new LeistdLocalizationOptions { DefaultCulture = defaultCulture });
+        var options = Options.Create(new JsonLocalizationOptions { DefaultCulture = defaultCulture });
         // 使用框架 Core 自带的嵌入资源（en.json / zh-CN.json）
-        options.Value.ResourceAssemblies.Add(typeof(LeistdLocalizationOptions).Assembly);
+        options.Value.ResourceAssemblies.Add(typeof(JsonLocalizationOptions).Assembly);
         var reader = new JsonLocalizationResourceReader(options);
         return new JsonStringLocalizer(reader, options);
     }

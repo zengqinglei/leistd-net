@@ -8,7 +8,7 @@
 
 | 场景 | 用法 |
 | --- | --- |
-| Web API 需按 `Accept-Language` 返回本地化文案 | 引用 `Leistd.Localization.AspNetCore`，`AddLeistdLocalization` + `UseLeistdRequestLocalization` |
+| Web API 需按 `Accept-Language` 返回本地化文案 | 引用 `Leistd.Localization.AspNetCore`，`AddJsonLocalization` + `UseJsonRequestLocalization` |
 | 领域/类库层只需注入 `IStringLocalizer` 查文案，不依赖 ASP.NET Core | 只引用 `Leistd.Localization.Core` |
 | 业务项目要覆盖或追加框架默认文案 | 在自己的程序集放同名键的 `{culture}.json` 并登记该程序集 |
 | 与 `Leistd.Exception` 配合，让错误消息本地化 | 启用本地化后，异常用 `WithLocalization("模块:键")` 挂展示键、`WithData` 传占位参数（`Message` 始终是英文诊断，见 [`exception`](./exception.md) 的三分离契约） |
@@ -31,7 +31,7 @@ dotnet add package Leistd.Localization.AspNetCore
 
 ```csharp
 // 声明支持语言（首个为默认/回落语言），并登记承载资源的程序集
-builder.Services.AddLeistdLocalization(
+builder.Services.AddJsonLocalization(
     supportedCultures: ["en", "zh-CN"],       // 默认语言 = en（英语）
     configure: options =>
     {
@@ -42,10 +42,10 @@ builder.Services.AddLeistdLocalization(
 var app = builder.Build();
 
 // 必须在任何读取当前 culture 的中间件之前
-app.UseLeistdRequestLocalization();
+app.UseJsonRequestLocalization();
 ```
 
-`AddLeistdLocalization` 注册 `JsonStringLocalizerFactory` 为 `IStringLocalizerFactory`、开放 `IStringLocalizer` / `IStringLocalizer<T>` 解析，并配置 `RequestLocalizationOptions`（默认语言 + 支持语言）。`UseLeistdRequestLocalization` 包装 `UseRequestLocalization`，启用 QueryString / Cookie / `Accept-Language` 三个 culture provider。框架自身程序集默认已登记，用于分发通用键（`Error:*`、`Title:*`）。
+`AddJsonLocalization` 注册 `JsonStringLocalizerFactory` 为 `IStringLocalizerFactory`、开放 `IStringLocalizer` / `IStringLocalizer<T>` 解析，并配置 `RequestLocalizationOptions`（默认语言 + 支持语言）。`UseJsonRequestLocalization` 包装 `UseRequestLocalization`，启用 QueryString / Cookie / `Accept-Language` 三个 culture provider。框架自身程序集默认已登记，用于分发通用键（`Error:*`、`Title:*`）。
 
 ## 资源文件
 
@@ -80,7 +80,7 @@ app.UseLeistdRequestLocalization();
 - **覆盖**：同一键在多个已登记程序集出现时，**后登记者覆盖前者**，业务项目因此可覆盖框架默认文案。
 - **坏文件容错**：某个资源不是合法 JSON 时，读取器**跳过该文件并告警**（`ILogger` Warning），其余程序集/键正常加载，绝不因单个坏文件拖垮整个本地化。
 - **culture 声明校验**：文件内 `culture` 段与文件名解析出的 culture 不一致时**仍加载键值，仅告警**（多为复制粘贴漏改），避免因笔误整份文案丢失。
-- **启动预热**：`AddLeistdLocalization` 会注册一个 `IHostedService`，在启动阶段按支持语言预热资源缓存——把上述解析/告警提前到启动日志暴露，而非在生产首个请求时才隐性发生。
+- **启动预热**：`AddJsonLocalization` 会注册一个 `IHostedService`，在启动阶段按支持语言预热资源缓存——把上述解析/告警提前到启动日志暴露，而非在生产首个请求时才隐性发生。
 
 ## 使用
 
@@ -104,16 +104,16 @@ public class OrderNotifier(IStringLocalizer localizer)
 | `JsonStringLocalizer` | `IStringLocalizer` 实现，按 culture 回落查嵌入 JSON，未命中返回键本身 |
 | `JsonStringLocalizerFactory` | `IStringLocalizerFactory` 实现，`Create(Type)` / `Create(string,string)` 返回同一共享视图 |
 | `JsonLocalizationResourceReader` | 读取并缓存各程序集嵌入 JSON，按登记顺序合并键 |
-| `LeistdLocalizationOptions.ResourceAssemblies` | 承载嵌入 JSON 的程序集集合，后登记者覆盖前者 |
-| `LeistdLocalizationOptions.ResourcesPath` | 嵌入资源逻辑目录，默认 `Resources` |
-| `LeistdLocalizationOptions.DefaultCulture` | 默认/回落语言，默认 `en` |
+| `JsonLocalizationOptions.ResourceAssemblies` | 承载嵌入 JSON 的程序集集合，后登记者覆盖前者 |
+| `JsonLocalizationOptions.ResourcesPath` | 嵌入资源逻辑目录，默认 `Resources` |
+| `JsonLocalizationOptions.DefaultCulture` | 默认/回落语言，默认 `en` |
 
 `Leistd.Localization.AspNetCore` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |
-| `AddLeistdLocalization(supportedCultures?, configure?)` | 注册 JSON localizer 栈并配置支持语言（首个为默认/回落语言，默认 `["en","zh-CN"]`） |
-| `UseLeistdRequestLocalization()` | 接入请求 culture 解析中间件（QueryString / Cookie / Accept-Language） |
+| `AddJsonLocalization(supportedCultures?, configure?)` | 注册 JSON localizer 栈并配置支持语言（首个为默认/回落语言，默认 `["en","zh-CN"]`） |
+| `UseJsonRequestLocalization()` | 接入请求 culture 解析中间件（QueryString / Cookie / Accept-Language） |
 
 ## 实现行为
 
@@ -124,7 +124,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 
 ## 配置项 / Options
 
-`LeistdLocalizationOptions`：
+`JsonLocalizationOptions`：
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
@@ -134,7 +134,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 
 ## 注意事项
 
-- 未调用 `AddLeistdLocalization` 时，`IStringLocalizer` 未注册；依赖它的 `Leistd.Exception` 全局处理器会自动退回"直出原消息"，因此**是否启用本地化不影响未启用方的行为**。
+- 未调用 `AddJsonLocalization` 时，`IStringLocalizer` 未注册；依赖它的 `Leistd.Exception` 全局处理器会自动退回"直出原消息"，因此**是否启用本地化不影响未启用方的行为**。
 - 资源 JSON 必须 `EmbeddedResource`；仅作为 `Content` 不会被读取。
 - 键为**全局唯一**的文案键（如 `Order:StockInsufficient`），不按类型/目录分资源——工厂对所有 `Create` 返回同一合并视图。
 

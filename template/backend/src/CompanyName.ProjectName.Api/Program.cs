@@ -179,7 +179,7 @@ try
 #if (IncludeLocalization)
     // 多语言：默认英语，支持中英；错误消息与校验消息随请求 culture 本地化。
     // 业务错误文案键的资源在本项目 Resources/{en,zh-CN}.json（覆盖/扩展框架默认 Error:* 键）。
-    builder.Services.AddLeistdLocalization(
+    builder.Services.AddJsonLocalization(
         supportedCultures: ["en", "zh-CN"],
         configure: options => options.ResourceAssemblies.Add(typeof(Program).Assembly));
 #endif
@@ -371,7 +371,7 @@ try
     app.UseForwardedHeaders();
 #if (IncludeLocalization)
     // 请求 culture 解析（QueryString / Cookie / Accept-Language）——须在读取 culture 的中间件（含全局异常处理）之前
-    app.UseLeistdRequestLocalization();
+    app.UseJsonRequestLocalization();
 #endif
     var webRootPath = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
     var uploadsRoot = Path.Combine(webRootPath, "uploads");

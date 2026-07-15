@@ -169,7 +169,7 @@ options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 | 包 | 职责 | 依赖边界 |
 | --- | --- | --- |
 | `Leistd.Localization.Core` | **自写轻量 JSON localizer**：`JsonStringLocalizerFactory : IStringLocalizerFactory` + `JsonStringLocalizer : IStringLocalizer`，读嵌入 JSON、按键查表、culture 回落 + 内存缓存 | 平台无关，仅依赖 `Microsoft.Extensions.Localization.Abstractions`，不引 ASP.NET Core、零第三方 |
-| `Leistd.Localization.AspNetCore` | `AddLeistdLocalization`（注册上面的 factory + `AddLocalization`）/ `UseLeistdRequestLocalization`（culture provider 顺序 + 支持语言配置） | 引 `Microsoft.AspNetCore.App` FrameworkReference |
+| `Leistd.Localization.AspNetCore` | `AddJsonLocalization`（注册上面的 factory + `AddLocalization`）/ `UseJsonRequestLocalization`（culture provider 顺序 + 支持语言配置） | 引 `Microsoft.AspNetCore.App` FrameworkReference |
 
 **资源底层选型 —— 自写 JSON localizer（见 §2.6 论证）**：
 
@@ -207,7 +207,7 @@ options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 
 ### 4.2 Template-backend：装配框架能力
 
-- `Program.cs`：`builder.Services.AddLeistdLocalization(...)` 声明支持语言（`en`、`zh-CN`）与**默认语言 `en`（英语）**；`app.UseLeistdRequestLocalization()` **置于最前**（在任何读 culture 的中间件之前，符合官方顺序要求）。
+- `Program.cs`：`builder.Services.AddJsonLocalization(...)` 声明支持语言（`en`、`zh-CN`）与**默认语言 `en`（英语）**；`app.UseJsonRequestLocalization()` **置于最前**（在任何读 culture 的中间件之前，符合官方顺序要求）。
 - 校验消息：采用 `AddDataAnnotationsLocalization`（MVC 控制器）或 .NET 11 的 `AddValidationLocalization`，把 DataAnnotations 消息键化。
 - 随模板携带默认 `zh-CN` / `en-US` 资源；条件裁剪（如 identity/notifications）对应模块的消息键随功能块一起裁剪。
 
@@ -266,7 +266,7 @@ options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 | 面 | `IncludeLocalization=false`（默认） | `IncludeLocalization=true` |
 | --- | --- | --- |
 | 后端 throw | `throw new BadRequestException("余额不足")`，原样返回 | `throw ...("Order:StockInsufficient").WithData(..)`，按 culture 查表 |
-| 后端 `Program.cs` | 不注册 localizer / 不 `UseRequestLocalization` | `#if` 块内 `AddLeistdLocalization` + `UseLeistdRequestLocalization` |
+| 后端 `Program.cs` | 不注册 localizer / 不 `UseRequestLocalization` | `#if` 块内 `AddJsonLocalization` + `UseJsonRequestLocalization` |
 | 后端资源文件 | 不生成 `Resources/*.json` | 生成 zh-CN/en-US |
 | 前端 | 无 Transloco、无语言切换、文案写死（现状） | Transloco + 语言选择器 + 拦截器 |
 | 框架包引用 | `Leistd.Exception.*` 照旧（不引 `Leistd.Localization`） | `#if` 引 `Leistd.Localization.AspNetCore` |
@@ -290,11 +290,11 @@ options.MapCodeNamespace("Shop", typeof(ShopResource));   // 配置一次映射
 | # | 层 | 步骤 |
 | --- | --- | --- |
 | 1 | 框架 | 建 `Leistd.Localization.Core`：写 `JsonStringLocalizer` / `JsonStringLocalizerFactory`（读嵌入 JSON、culture 回落、缓存） |
-| 2 | 框架 | 建 `Leistd.Localization.AspNetCore`：`AddLeistdLocalization` / `UseLeistdRequestLocalization` |
+| 2 | 框架 | 建 `Leistd.Localization.AspNetCore`：`AddJsonLocalization` / `UseJsonRequestLocalization` |
 | 3 | 框架 | 改 `Leistd.Exception`：`BusinessException` 加 `Data`/`WithData`（**第一参数签名不变**）；handler 注入**可选** `IStringLocalizer`（缺省=现状、存在=按键+culture）；`Code`/`Details` 不动 |
 | 4 | 框架 | 写默认资源 `Resources/{en,zh-CN}.json`（框架级通用键 `Error:*`，**默认/回落 en**），随包 `EmbeddedResource` |
 | 5 | 模板参数 | `template.json` 加 `IncludeLocalization`（默认 `false`）+ `modifiers` 文件级裁剪 |
-| 6 | 模板后端 | `Program.cs` `#if(IncludeLocalization)`：`AddLeistdLocalization(默认 en，支持 en+zh-CN)` + `UseLeistdRequestLocalization()`（置于读 culture 的中间件之前）+ `AddDataAnnotationsLocalization`；生成默认资源 |
+| 6 | 模板后端 | `Program.cs` `#if(IncludeLocalization)`：`AddJsonLocalization(默认 en，支持 en+zh-CN)` + `UseJsonRequestLocalization()`（置于读 culture 的中间件之前）+ `AddDataAnnotationsLocalization`；生成默认资源 |
 | 7 | 模板前端 | `#if` 装 `@jsverse/transloco`（`provideTransloco`）；建 `public/i18n/{zh-CN,en}.json`（含 `primeng` 段）；`LanguageService` 联动 `PrimeNG.setTranslation` |
 | 8 | 模板前端 | `#if` Accept-Language 拦截器（置首）；`p-select` 语言选择器入 `default-header`；错误提示优先显示后端 `message`、按 `code` 分支 |
 
@@ -356,7 +356,7 @@ leistd-net/
 │   │   │   │   │   ├── JsonStringLocalizerFactory.cs        [新] IStringLocalizerFactory 实现
 │   │   │   │   │   └── JsonLocalizationResourceReader.cs    [新] 读嵌入 JSON + culture 回落 + 缓存
 │   │   │   │   └── Options/
-│   │   │   │       └── LeistdLocalizationOptions.cs         [新] 资源程序集/路径/默认语言
+│   │   │   │       └── JsonLocalizationOptions.cs         [新] 资源程序集/路径/默认语言
 │   │   │   └── Leistd.Localization.AspNetCore/
 │   │   │       ├── Leistd.Localization.AspNetCore.csproj    [新] FrameworkReference AspNetCore.App
 │   │   │       └── DependencyInjection.cs                   [新] Add/UseLeistdLocalization

@@ -13,7 +13,7 @@ public class JsonLocalizationResourceReaderRobustnessTests
 {
     private static JsonLocalizationResourceReader CreateReader(string resourcesPath)
     {
-        var options = Options.Create(new LeistdLocalizationOptions { ResourcesPath = resourcesPath });
+        var options = Options.Create(new JsonLocalizationOptions { ResourcesPath = resourcesPath });
         options.Value.ResourceAssemblies.Add(typeof(JsonLocalizationResourceReaderRobustnessTests).Assembly);
         // logger 省略：走 null → NullLogger，验证不依赖日志断言
         return new JsonLocalizationResourceReader(options);

@@ -14,7 +14,7 @@ namespace Leistd.Localization.Core.Json;
 /// </remarks>
 public sealed class JsonStringLocalizerFactory(
     JsonLocalizationResourceReader reader,
-    IOptions<LeistdLocalizationOptions> options) : IStringLocalizerFactory
+    IOptions<JsonLocalizationOptions> options) : IStringLocalizerFactory
 {
     private readonly JsonStringLocalizer _shared = new(reader, options);
 

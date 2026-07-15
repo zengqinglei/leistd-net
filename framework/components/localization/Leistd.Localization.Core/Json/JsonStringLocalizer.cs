@@ -10,15 +10,15 @@ namespace Leistd.Localization.Core.Json;
 /// </summary>
 /// <remarks>
 /// 查表按 <see cref="CultureInfo.CurrentUICulture"/> 逐级回落（如 <c>zh-Hans-CN</c> → <c>zh-Hans</c> → <c>zh</c>），
-/// 再回落到 <see cref="LeistdLocalizationOptions.DefaultCulture"/>；仍未命中则返回**键本身**
+/// 再回落到 <see cref="JsonLocalizationOptions.DefaultCulture"/>；仍未命中则返回**键本身**
 /// （.NET "键即默认值" 语义，使未启用/漏配资源时行为等于直出原字符串）。
 /// 参数化通过标准 <see cref="string.Format(IFormatProvider?, string, object?[])"/>（位置占位 <c>{0}</c>）。
 /// </remarks>
 public sealed class JsonStringLocalizer(
     JsonLocalizationResourceReader reader,
-    IOptions<LeistdLocalizationOptions> options) : IStringLocalizer
+    IOptions<JsonLocalizationOptions> options) : IStringLocalizer
 {
-    private readonly LeistdLocalizationOptions _options = options.Value;
+    private readonly JsonLocalizationOptions _options = options.Value;
 
     public LocalizedString this[string name]
     {

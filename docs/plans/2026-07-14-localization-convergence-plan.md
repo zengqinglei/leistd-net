@@ -62,7 +62,7 @@ A 已完成（暂存待审）。本计划聚焦 B–F。
 
 现状差距：我方只有框架单测（`JsonStringLocalizerTests` 6 例），无模板级 i18n 集成测试；对方有 `LocalizationTests.cs`（culture 端到端 + 校验消息本地化）。
 
-- C1. 参考对方 `origin/feature/localization-support:template/backend/tests/CompanyName.ProjectName.IntegrationTests/LocalizationTests.cs`，在我方模板测试工程新增等价用例，但**适配我方 API**（JSON 资源 + `AddLeistdLocalization` + message-即-键）：
+- C1. 参考对方 `origin/feature/localization-support:template/backend/tests/CompanyName.ProjectName.IntegrationTests/LocalizationTests.cs`，在我方模板测试工程新增等价用例，但**适配我方 API**（JSON 资源 + `AddJsonLocalization` + message-即-键）：
   - C1a. 带 `Accept-Language: zh-CN` / `en-US` 请求一个会抛业务异常的端点，断言 `ProblemDetails.message` 随 culture 变。
   - C1b. 校验失败（DataAnnotations）请求，断言 `errors` 字段消息随 culture 本地化。
 - C2. 该测试仅在 `IncludeLocalization` 启用时生成（`template.json` 文件级门控），加入矩阵 `localization` 场景的 `dotnet test`。

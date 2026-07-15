@@ -14,14 +14,14 @@ namespace Leistd.Localization.Core.Json;
 /// <remarks>
 /// 资源文件结构（ABP 式）：<c>{ "culture": "en", "texts": { "Key": "Value" } }</c>；
 /// 缺 <c>culture</c> 段的文件被忽略。同一 culture 的键在多个程序集出现时，
-/// 按 <see cref="LeistdLocalizationOptions.ResourceAssemblies"/> 顺序后者覆盖前者。
+/// 按 <see cref="JsonLocalizationOptions.ResourceAssemblies"/> 顺序后者覆盖前者。
 /// 每个 culture 的合并结果按需加载一次并缓存。
 /// </remarks>
 public sealed class JsonLocalizationResourceReader(
-    IOptions<LeistdLocalizationOptions> options,
+    IOptions<JsonLocalizationOptions> options,
     ILogger<JsonLocalizationResourceReader>? logger = null)
 {
-    private readonly LeistdLocalizationOptions _options = options.Value;
+    private readonly JsonLocalizationOptions _options = options.Value;
     private readonly ILogger _logger = logger ?? NullLogger<JsonLocalizationResourceReader>.Instance;
     private readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> _cache = new();
 

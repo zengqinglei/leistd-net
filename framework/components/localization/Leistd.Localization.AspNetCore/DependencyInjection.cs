@@ -21,13 +21,13 @@ public static class DependencyInjection
     /// <param name="configure">进一步配置本地化选项（如追加资源程序集）。</param>
     /// <remarks>
     /// 本方法仅注册服务，不挂载中间件；请求 culture 解析由宿主显式调用
-    /// <see cref="UseLeistdRequestLocalization"/> 完成（不替宿主隐式挂载中间件）。
+    /// <see cref="UseJsonRequestLocalization"/> 完成（不替宿主隐式挂载中间件）。
     /// 框架默认将本组件所在程序集登记为资源程序集之一，用于分发通用键（<c>Error:*</c>）。
     /// </remarks>
-    public static IServiceCollection AddLeistdLocalization(
+    public static IServiceCollection AddJsonLocalization(
         this IServiceCollection services,
         string[]? supportedCultures = null,
-        Action<LeistdLocalizationOptions>? configure = null)
+        Action<JsonLocalizationOptions>? configure = null)
     {
         var cultures = supportedCultures is { Length: > 0 }
             ? supportedCultures
@@ -40,11 +40,11 @@ public static class DependencyInjection
         services.AddTransient(typeof(IStringLocalizer<>), typeof(StringLocalizer<>));
         services.AddTransient(sp => sp.GetRequiredService<IStringLocalizerFactory>().Create(typeof(object)));
 
-        services.Configure<LeistdLocalizationOptions>(options =>
+        services.Configure<JsonLocalizationOptions>(options =>
         {
             options.DefaultCulture = defaultCulture;
             // 框架自身资源程序集（承载通用键默认中英文案）
-            var frameworkAssembly = typeof(LeistdLocalizationOptions).Assembly;
+            var frameworkAssembly = typeof(JsonLocalizationOptions).Assembly;
             if (!options.ResourceAssemblies.Contains(frameworkAssembly))
                 options.ResourceAssemblies.Add(frameworkAssembly);
             configure?.Invoke(options);
@@ -69,6 +69,6 @@ public static class DependencyInjection
     /// 启用请求 culture 解析中间件（QueryString / Cookie / Accept-Language 三 provider）。
     /// 必须在任何读取当前 culture 的中间件之前调用。
     /// </summary>
-    public static IApplicationBuilder UseLeistdRequestLocalization(this IApplicationBuilder app)
+    public static IApplicationBuilder UseJsonRequestLocalization(this IApplicationBuilder app)
         => app.UseRequestLocalization();
 }
