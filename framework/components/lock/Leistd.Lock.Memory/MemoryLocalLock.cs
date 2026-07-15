@@ -9,60 +9,113 @@ namespace Leistd.Lock.Memory;
 /// 内存本地锁实现
 /// 使用 SemaphoreSlim(1,1) per key，适用于单机/测试场景
 /// </summary>
-public sealed class MemoryLocalLock(ILogger<MemoryLocalLock> logger) : ILocalLock, IDistributedLock, IDisposable
+public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
 {
+    private readonly ILogger<MemoryLocalLock> _logger;
+    private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<string, SemaphoreEntry> _semaphores = new();
 
     internal ConcurrentDictionary<string, SemaphoreEntry> Semaphores => _semaphores;
 
+    public MemoryLocalLock(ILogger<MemoryLocalLock> logger)
+        : this(logger, TimeProvider.System)
+    {
+    }
+
+    internal MemoryLocalLock(ILogger<MemoryLocalLock> logger, TimeProvider timeProvider)
+    {
+        _logger = logger;
+        _timeProvider = timeProvider;
+    }
+
     public async Task<ILockHandle> LockAsync(string key, CancellationToken cancellationToken = default)
     {
-        logger.LogTrace("开始加锁【{Key}】...", key);
-        var entry = _semaphores.GetOrAdd(key, _ => new SemaphoreEntry());
-        await entry.Semaphore.WaitAsync(cancellationToken);
-        logger.LogTrace("加锁【{Key}】成功", key);
-        return new MemoryLockHandle(key, this);
+        _logger.LogTrace("开始加锁【{Key}】...", key);
+        var entry = AcquireEntryLease(key);
+        try
+        {
+            await entry.Semaphore.WaitAsync(cancellationToken);
+        }
+        catch
+        {
+            entry.AbandonLease();
+            throw;
+        }
+
+        _logger.LogTrace("加锁【{Key}】成功", key);
+        return new MemoryLockHandle(key, entry, this);
     }
 
     public async Task<ILockHandle?> TryLockAsync(string key, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        logger.LogTrace("开始尝试加锁【{Key}】...", key);
-        var entry = _semaphores.GetOrAdd(key, _ => new SemaphoreEntry());
-        var acquired = await entry.Semaphore.WaitAsync(timeout, cancellationToken);
+        _logger.LogTrace("开始尝试加锁【{Key}】...", key);
+        var entry = AcquireEntryLease(key);
+        bool acquired;
+        try
+        {
+            acquired = await entry.Semaphore.WaitAsync(timeout, cancellationToken);
+        }
+        catch
+        {
+            entry.AbandonLease();
+            throw;
+        }
+
         if (!acquired)
         {
-            logger.LogDebug("尝试加锁【{Key}】失败：超时", key);
+            entry.AbandonLease();
+            _logger.LogDebug("尝试加锁【{Key}】失败：超时", key);
             return null;
         }
-        logger.LogTrace("尝试加锁【{Key}】成功", key);
-        return new MemoryLockHandle(key, this);
+
+        _logger.LogTrace("尝试加锁【{Key}】成功", key);
+        return new MemoryLockHandle(key, entry, this);
     }
 
     public Task UnlockAsync(string key, CancellationToken cancellationToken = default)
     {
-        Release(key);
+        if (_semaphores.TryGetValue(key, out var entry))
+            Release(key, entry);
+        else
+            _logger.LogWarning("解锁【{Key}】失败：未找到对应信号量", key);
+
         return Task.CompletedTask;
     }
 
-    internal void Release(string key)
+    internal void Release(string key, SemaphoreEntry entry)
     {
-        if (_semaphores.TryGetValue(key, out var entry))
+        entry.ReleaseLease(_timeProvider.GetUtcNow());
+        _logger.LogTrace("解锁【{Key}】成功", key);
+    }
+
+    internal bool TryRemove(string key, SemaphoreEntry entry)
+    {
+        if (!_semaphores.TryRemove(new KeyValuePair<string, SemaphoreEntry>(key, entry)))
+            return false;
+
+        entry.Dispose();
+        return true;
+    }
+
+    internal DateTimeOffset GetUtcNow() => _timeProvider.GetUtcNow();
+
+    private SemaphoreEntry AcquireEntryLease(string key)
+    {
+        while (true)
         {
-            entry.Semaphore.Release();
-            entry.LastReleasedAt = DateTime.UtcNow;
-            logger.LogTrace("解锁【{Key}】成功", key);
-        }
-        else
-        {
-            logger.LogWarning("解锁【{Key}】失败：未找到对应信号量", key);
+            var entry = _semaphores.GetOrAdd(key, _ => new SemaphoreEntry(_timeProvider.GetUtcNow()));
+            if (entry.TryAcquireLease())
+                return entry;
+
+            // A retired entry may still be visible briefly between retirement and dictionary removal.
+            TryRemove(key, entry);
         }
     }
 
     public void Dispose()
     {
-        foreach (var entry in _semaphores.Values)
-            entry.Semaphore.Dispose();
-        _semaphores.Clear();
+        foreach (var (key, entry) in _semaphores)
+            TryRemove(key, entry);
     }
 
 

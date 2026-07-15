@@ -88,7 +88,7 @@ public class OrderService(IDistributedLock distributedLock)
 ### Leistd.Lock.Memory（内存本地锁）
 
 - 每个 key 对应一个 `SemaphoreSlim(1,1)`，按 key 互斥；`TryLockAsync` 用信号量超时等待实现。
-- 随注册自动启用 `MemoryLockCleanupHostedService`：每 **1 分钟**扫描，回收空闲超过 **5 分钟**的信号量，防止 key 无限增长导致内存泄漏。
+- 随注册自动启用 `MemoryLockCleanupHostedService`：每 **1 分钟**扫描；entry 在没有持锁者或等待者时才会被原子退休并回收，空闲超过 **5 分钟**后移除，防止 key 无限增长导致内存泄漏。
 - 以 Singleton 注册，进程内有效；进程重启后锁状态丢失。
 
 ### Leistd.Lock.Redis（分布式锁）

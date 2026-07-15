@@ -73,6 +73,7 @@
     <Project Path="tests/Leistd.Authorization.Tests/Leistd.Authorization.Tests.csproj" />
     <Project Path="tests/Leistd.Ddd.Infrastructure.Tests/Leistd.Ddd.Infrastructure.Tests.csproj" />
     <Project Path="tests/Leistd.EventBus.Tests/Leistd.EventBus.Tests.csproj" />
+    <Project Path="tests/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj" />
     <Project Path="tests/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />
     <Project Path="tests/Leistd.TestBase/Leistd.TestBase.csproj" />
   </Folder>

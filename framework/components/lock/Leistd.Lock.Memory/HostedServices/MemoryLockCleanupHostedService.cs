@@ -19,7 +19,7 @@ public sealed class MemoryLockCleanupHostedService(
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _stoppingCts = new CancellationTokenSource();
-        _cleanupTimer = new Timer(_ => Cleanup(), null, CleanupInterval, CleanupInterval);
+        _cleanupTimer = new Timer(_ => CleanupOnce(), null, CleanupInterval, CleanupInterval);
         return Task.CompletedTask;
     }
 
@@ -31,23 +31,25 @@ public sealed class MemoryLockCleanupHostedService(
         return Task.CompletedTask;
     }
 
-    private void Cleanup()
+    internal int CleanupOnce()
     {
-        if (_stoppingCts?.Token.IsCancellationRequested == true) return;
+        if (_stoppingCts?.Token.IsCancellationRequested == true) return 0;
 
         logger.LogTrace("开始清理超时 Semaphore 锁...");
-        var now = DateTime.UtcNow;
+        var removedCount = 0;
+        var now = memoryLock.GetUtcNow();
         foreach (var (key, entry) in memoryLock.Semaphores)
         {
             if (_stoppingCts?.Token.IsCancellationRequested == true) break;
 
-            if (entry.Semaphore.CurrentCount == 1 && now - entry.LastReleasedAt > MaxIdleTime)
+            if (entry.TryRetire(now, MaxIdleTime) && memoryLock.TryRemove(key, entry))
             {
-                if (memoryLock.Semaphores.TryRemove(key, out _))
-                    logger.LogTrace("清理超时 Semaphore 锁【{Key}】", key);
+                removedCount++;
+                logger.LogTrace("清理超时 Semaphore 锁【{Key}】", key);
             }
         }
         logger.LogTrace("清理超时 Semaphore 锁完成");
+        return removedCount;
     }
 
     public void Dispose()
