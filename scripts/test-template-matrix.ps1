@@ -235,6 +235,24 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
             throw "Scenario '$($Definition.Name)' README contains disabled capability: $unexpectedText"
         }
     }
+
+    $mockInterceptorPath = Join-Path $ProjectRoot "frontend/_mock/core/interceptor.ts"
+    $mockInterceptor = Get-Content -LiteralPath $mockInterceptorPath -Raw -Encoding UTF8
+    foreach ($marker in @("MOCK_ROUTE_NOT_FOUND", "Mock Route Not Found", "startsWith('/api/')")) {
+        if (-not $mockInterceptor.Contains($marker)) {
+            throw "Scenario '$($Definition.Name)' Mock interceptor is missing fail-fast marker: $marker"
+        }
+    }
+
+    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/core/services/notification-service.ts"
+    if (Test-Path -LiteralPath $notificationServicePath) {
+        $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
+        foreach ($marker in @("environment.useMock", "useMock.enable", "await this.signalR.connect()")) {
+            if (-not $notificationService.Contains($marker)) {
+                throw "Scenario '$($Definition.Name)' notification service is missing Mock isolation marker: $marker"
+            }
+        }
+    }
 }
 
 function Get-FreeTcpPort {
