@@ -1,5 +1,5 @@
 param(
-    [string[]]$Scenarios = @("default", "minimal", "no-roles", "notifications", "no-openiddict", "external-login"),
+    [string[]]$Scenarios = @("default", "minimal", "no-roles", "notifications", "no-openiddict", "external-login", "localization", "no-localization", "localization-notifications", "localization-external-login"),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [switch]$SkipPack,
@@ -373,6 +373,36 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
         ReadmeContains = @("外部身份提供方登录", "OpenIddict")
         ReadmeExcludes = @("通知持久化")
+    }
+    "localization" = @{
+        Arguments = @("--include-localization", "true"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Resources/en.json", "backend/src/{name}.Api/Resources/zh-CN.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
+        Absent = @()
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+    }
+    "no-localization" = @{
+        Arguments = @("--include-localization", "false"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Program.cs")
+        Absent = @("backend/src/{name}.Api/Resources", "frontend/public/i18n", "frontend/src/app/core/services/language-service.ts")
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+    }
+    # 交叉场景：本地化 + 通知（校验通知面板的本地化 gate）
+    "localization-notifications" = @{
+        Arguments = @("--include-localization", "true", "--include-notifications", "true"); Frontend = $true; Lint = $true
+        Present = @("frontend/public/i18n/en.json", "backend/src/{name}.Api/Controllers/NotificationsController.cs")
+        Absent = @()
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+    }
+    # 交叉场景：本地化 + 外部登录（校验第三方回调页的本地化 gate）
+    "localization-external-login" = @{
+        Arguments = @("--include-localization", "true", "--include-external-login", "true"); Frontend = $true; Lint = $true
+        Present = @("frontend/public/i18n/en.json", "frontend/src/app/features/account/components/external-auth-callback")
+        Absent = @()
+        ReadmeContains = @()
+        ReadmeExcludes = @()
     }
 }
 

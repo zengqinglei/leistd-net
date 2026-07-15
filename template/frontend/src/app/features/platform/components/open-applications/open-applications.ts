@@ -1,7 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+//#if (IncludeLocalization)
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+//#else
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+//#endif
 import { FormsModule } from '@angular/forms';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
@@ -40,6 +48,9 @@ import { OpenApplicationTable, OpenApplicationTableFilterEvent } from './widgets
     TooltipModule,
     ConfirmDialogModule,
     DialogModule,
+    //#if (IncludeLocalization)
+    TranslocoModule,
+    //#endif
     OpenApplicationTable,
     OpenApplicationEditDialogComponent
   ],
@@ -54,6 +65,9 @@ export class OpenApplicationsPage implements OnInit {
   private readonly messageService = inject(MessageService);
   private readonly layoutService = inject(LayoutService);
   private readonly filterStateService = inject(FilterStateService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   private readonly FILTER_KEY = 'open-applications';
   private readonly searchSubject = new Subject<string>();
@@ -81,26 +95,67 @@ export class OpenApplicationsPage implements OnInit {
   limit = signal(10);
   sorting = signal('clientId asc');
 
-  applicationTypeOptions = [
-    { label: 'Web', value: 'web' },
-    { label: '桌面/原生', value: 'native' },
-    { label: '服务端', value: 'service' }
-  ];
+  //#if (IncludeLocalization)
+  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed / effect 重算，文案随之更新。
+  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
 
-  clientTypeOptions = [
+  // 读取 activeLang 建立依赖：语言切换时本 computed 重算，选项标签重新翻译。
+  readonly applicationTypeOptions = computed(() => {
+    this.activeLang();
+    return [
+      { label: 'Web', value: 'web' },
+      { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
+      { label: this.transloco.translate('openApp.appType.service'), value: 'service' }
+    ];
+  });
+  //#else
+  readonly applicationTypeOptions = computed(() => [
+    { label: 'Web', value: 'web' },
+    { label: 'Desktop/Native', value: 'native' },
+    { label: 'Service', value: 'service' }
+  ]);
+  //#endif
+
+  readonly clientTypeOptions = computed(() => [
     { label: 'Public', value: 'public' },
     { label: 'Confidential', value: 'confidential' }
-  ];
+  ]);
+
+  //#if (IncludeLocalization)
+  readonly allAppTypesPlaceholder = () => this.transloco.translate('openApp.filter.allAppTypes');
+  readonly allClientTypesPlaceholder = () => this.transloco.translate('openApp.filter.allClientTypes');
+  readonly searchPlaceholder = () => this.transloco.translate('openApp.filter.searchPlaceholder');
+  readonly refreshLabel = () => this.transloco.translate('common.refresh');
+  readonly createLabel = () => this.transloco.translate('openApp.action.create');
+  readonly resetSecretHeader = () => this.transloco.translate('openApp.secret.resetHeader');
+  readonly createdSecretHeader = () => this.transloco.translate('openApp.secret.createdHeader');
+  //#else
+  readonly allAppTypesPlaceholder = () => 'All application types';
+  readonly allClientTypesPlaceholder = () => 'All client types';
+  readonly searchPlaceholder = () => 'Search by name / Client ID...';
+  readonly refreshLabel = () => 'Refresh';
+  readonly createLabel = () => 'New Open Application';
+  readonly resetSecretHeader = () => 'Client Secret reset';
+  readonly createdSecretHeader = () => 'Client secret';
+  //#endif
 
   constructor() {
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.onFilter());
+
+    //#if (IncludeLocalization)
+    // 读取 activeLang 建立依赖：语言切换时重设标题，随语言更新。
+    effect(() => {
+      this.activeLang();
+      this.layoutService.title.set(this.transloco.translate('openApp.page.title'));
+    });
+    //#else
+    this.layoutService.title.set('Open Applications');
+    //#endif
   }
 
   ngOnInit() {
-    this.layoutService.title.set('开放应用管理');
-
     const saved = this.filterStateService.load<{
       searchQuery: string;
       selectedApplicationType: OpenApplicationType | null;
@@ -196,11 +251,19 @@ export class OpenApplicationsPage implements OnInit {
       )
       .subscribe({
         next: result => {
+          //#if (IncludeLocalization)
           this.messageService.add({
             severity: 'success',
-            summary: '成功',
-            detail: selected ? '开放应用更新成功' : '开放应用创建成功'
+            summary: this.transloco.translate('common.success'),
+            detail: selected ? this.transloco.translate('openApp.toast.updated') : this.transloco.translate('openApp.toast.created')
           });
+          //#else
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: selected ? 'Open application updated successfully' : 'Open application created successfully'
+          });
+          //#endif
           this.editDialogVisible.set(false);
 
           // 创建 Confidential 客户端后显示自动生成的 Secret
@@ -216,12 +279,25 @@ export class OpenApplicationsPage implements OnInit {
 
   handleDelete(id: string) {
     this.confirmationService.confirm({
-      message: '确定要删除此开放应用吗？使用该 Client ID 的客户端将无法继续登录。',
-      header: '确认删除',
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('openApp.confirm.deleteMessage'),
+      header: this.transloco.translate('openApp.confirm.deleteHeader'),
+      //#else
+      message: 'Are you sure you want to delete this open application? Clients using this Client ID will no longer be able to sign in.',
+      header: 'Confirm deletion',
+      //#endif
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         this.service.deleteOpenApplication(id).subscribe(() => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '开放应用已删除' });
+          //#if (IncludeLocalization)
+          this.messageService.add({
+            severity: 'success',
+            summary: this.transloco.translate('common.success'),
+            detail: this.transloco.translate('openApp.toast.deleted')
+          });
+          //#else
+          this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Open application deleted' });
+          //#endif
           this.reloadList();
         });
       }
@@ -230,8 +306,13 @@ export class OpenApplicationsPage implements OnInit {
 
   handleResetSecret(id: string) {
     this.confirmationService.confirm({
-      message: '确定要重置该开放应用的 Client Secret 吗？旧密钥将立即失效。',
-      header: '确认重置密钥',
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('openApp.confirm.resetSecretMessage'),
+      header: this.transloco.translate('openApp.confirm.resetSecretHeader'),
+      //#else
+      message: "Are you sure you want to reset this open application's Client Secret? The old secret will be invalidated immediately.",
+      header: 'Confirm secret reset',
+      //#endif
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         this.service.resetSecret(id).subscribe(result => {
@@ -250,7 +331,15 @@ export class OpenApplicationsPage implements OnInit {
     }
 
     navigator.clipboard?.writeText(value).then(() => {
-      this.messageService.add({ severity: 'success', summary: '成功', detail: '已复制密钥' });
+      //#if (IncludeLocalization)
+      this.messageService.add({
+        severity: 'success',
+        summary: this.transloco.translate('common.success'),
+        detail: this.transloco.translate('openApp.toast.secretCopied')
+      });
+      //#else
+      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Secret copied' });
+      //#endif
     });
   }
 
@@ -261,7 +350,15 @@ export class OpenApplicationsPage implements OnInit {
     }
 
     navigator.clipboard?.writeText(value).then(() => {
-      this.messageService.add({ severity: 'success', summary: '成功', detail: '已复制密钥' });
+      //#if (IncludeLocalization)
+      this.messageService.add({
+        severity: 'success',
+        summary: this.transloco.translate('common.success'),
+        detail: this.transloco.translate('openApp.toast.secretCopied')
+      });
+      //#else
+      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Secret copied' });
+      //#endif
     });
   }
 }

@@ -18,7 +18,7 @@ public class SmtpOptions
     public string Password { get; set; } = "";
 
     [Required]
-    public string FromName { get; set; } = "系统通知";
+    public string FromName { get; set; } = "System Notifications";
 
     [Required]
     [EmailAddress]

@@ -7,31 +7,31 @@ namespace CompanyName.ProjectName.Application.Users.Dtos;
 /// </summary>
 public record CreateUserInputDto
 {
-    [Display(Name = "用户名")]
-    [Required(ErrorMessage = "{0}不能为空")]
-    [StringLength(64, MinimumLength = 3, ErrorMessage = "{0}长度必须在 {2}-{1} 个字符之间")]
-    [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "{0}只能包含字母、数字和下划线")]
+    [Display(Name = "Username")]
+    [Required(ErrorMessage = "{0} is required.")]
+    [StringLength(64, MinimumLength = 3, ErrorMessage = "{0} must be between {2} and {1} characters.")]
+    [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "{0} can contain only letters, numbers, and underscores.")]
     public required string Username { get; init; }
 
-    [Display(Name = "邮箱")]
-    [Required(ErrorMessage = "{0}不能为空")]
-    [EmailAddress(ErrorMessage = "{0}格式不正确")]
-    [StringLength(256, ErrorMessage = "{0}长度不能超过 {1} 个字符")]
+    [Display(Name = "Email")]
+    [Required(ErrorMessage = "{0} is required.")]
+    [EmailAddress(ErrorMessage = "{0} has an invalid format.")]
+    [StringLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public required string Email { get; init; }
 
-    [Display(Name = "显示名称")]
-    [StringLength(128, ErrorMessage = "{0}长度不能超过 {1} 个字符")]
+    [Display(Name = "Display name")]
+    [StringLength(128, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 
-    [Display(Name = "头像")]
-    [StringLength(1500000, ErrorMessage = "{0}内容过大，请压缩后重试")]
+    [Display(Name = "Avatar")]
+    [StringLength(1500000, ErrorMessage = "{0} is too large. Compress it and try again.")]
     public string? Avatar { get; init; }
 
-    [Display(Name = "密码")]
-    [Required(ErrorMessage = "{0}不能为空")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0}长度必须在 {2}-{1} 个字符之间")]
+    [Display(Name = "Password")]
+    [Required(ErrorMessage = "{0} is required.")]
+    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0} must be between {2} and {1} characters.")]
     [RegularExpression(@"^(?=.*[a-zA-Z])(?=.*\d).{6,}$",
-        ErrorMessage = "{0}需 6 位以上，包含字母和数字")]
+        ErrorMessage = "{0} must be at least 6 characters and contain both letters and numbers.")]
     public required string Password { get; init; }
 
     public bool IsActive { get; init; } = true;

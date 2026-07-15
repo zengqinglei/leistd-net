@@ -9,6 +9,10 @@ using CompanyName.ProjectName.Infrastructure;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.DependencyInjection.DynamicProxy;
 using Leistd.Exception.AspNetCore;
+#if (IncludeLocalization)
+using CompanyName.ProjectName.Api;
+using Leistd.Localization.AspNetCore;
+#endif
 using Leistd.Security.AspNetCore;
 using Leistd.Tracing.AspNetCore;
 #if (IncludeRoles)
@@ -172,6 +176,13 @@ try
 
     // 4. API 层基础设施 (Exception, HealthChecks, Controllers)
     builder.Services.AddGlobalExceptionHandler(builder.Configuration);
+#if (IncludeLocalization)
+    // 多语言：默认英语，支持中英；错误消息与校验消息随请求 culture 本地化。
+    // 业务错误文案键的资源在本项目 Resources/{en,zh-CN}.json（覆盖/扩展框架默认 Error:* 键）。
+    builder.Services.AddLeistdLocalization(
+        supportedCultures: ["en", "zh-CN"],
+        configure: options => options.ResourceAssemblies.Add(typeof(Program).Assembly));
+#endif
     builder.Services.AddHealthChecks();
     builder.Services.AddMyProjectSpaProxy();
     builder.Services.AddControllers()
@@ -186,7 +197,14 @@ try
             {
                 options.JsonSerializerOptions.Converters.Add(converter);
             }
-        });
+        })
+#if (IncludeLocalization)
+        // DataAnnotations 校验消息随 culture 本地化：ErrorMessage/Display 的英文句子即文案键（en 默认值），
+        // zh-CN.json 用同一句子作键映射中文。Provider 指向 ApiResource 标记类型（工厂返回共享视图）。
+        .AddDataAnnotationsLocalization(options =>
+            options.DataAnnotationLocalizerProvider = (_, factory) => factory.Create(typeof(ApiResource)))
+#endif
+        ;
 
     // 4.1. CORS 配置
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -351,6 +369,10 @@ try
 
     // 7. 中间件管道配置
     app.UseForwardedHeaders();
+#if (IncludeLocalization)
+    // 请求 culture 解析（QueryString / Cookie / Accept-Language）——须在读取 culture 的中间件（含全局异常处理）之前
+    app.UseLeistdRequestLocalization();
+#endif
     var webRootPath = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
     var uploadsRoot = Path.Combine(webRootPath, "uploads");
     Directory.CreateDirectory(uploadsRoot);

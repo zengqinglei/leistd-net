@@ -65,7 +65,7 @@ export function getUsers(params: any): PagedResultDto<any> {
 export function getUserById(id: string) {
   const user = USERS.find(w => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: '用户不存在' });
+    throw new MockException(404, { code: 40400, message: 'User not found' });
   }
   return toUserManagementOutput(user);
 }
@@ -75,7 +75,7 @@ export function addUser(value: any) {
   const email = String(value.email ?? '').trim();
   const userExists = USERS.some(w => w.username === username || w.email === email);
   if (userExists) {
-    throw new MockException(400, { code: 40000, message: '用户名或邮箱已存在' });
+    throw new MockException(400, { code: 40000, message: 'Username or email already exists' });
   }
 
   const newUser = {
@@ -99,7 +99,7 @@ export function addUser(value: any) {
 export function updateUser(id: string, value: any) {
   const user = USERS.find(w => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: '用户不存在或已删除' });
+    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
   }
 
   Object.assign(user, {
@@ -116,7 +116,7 @@ export function updateUser(id: string, value: any) {
 export function enableUser(id: string) {
   const user = USERS.find(w => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: '用户不存在或已删除' });
+    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
   }
   user.isActive = true;
 }
@@ -124,7 +124,7 @@ export function enableUser(id: string) {
 export function disableUser(id: string) {
   const user = USERS.find(w => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: '用户不存在或已删除' });
+    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
   }
   user.isActive = false;
 }
@@ -132,7 +132,7 @@ export function disableUser(id: string) {
 export function resetPassword(id: string, value: any) {
   const user = USERS.find(w => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: '用户不存在或已删除' });
+    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
   }
   user.password = value.password;
 }
@@ -140,10 +140,10 @@ export function resetPassword(id: string, value: any) {
 export function deleteUser(id: string) {
   const index = USERS.findIndex(w => w.id === id);
   if (index < 0) {
-    throw new MockException(404, { code: 40400, message: '用户不存在或已删除' });
+    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
   }
   if (USERS[index].isSuperAdmin) {
-    throw new MockException(400, { code: 40000, message: '系统内置超级管理员不允许删除' });
+    throw new MockException(400, { code: 40000, message: 'The built-in super administrator cannot be deleted' });
   }
   USERS.splice(index, 1);
 }

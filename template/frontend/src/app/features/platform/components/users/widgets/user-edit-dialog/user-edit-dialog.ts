@@ -1,6 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, output, signal } from '@angular/core';
+//#if (IncludeLocalization)
+import { toSignal } from '@angular/core/rxjs-interop';
+//#endif
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -24,6 +30,9 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
   imports: [
     CommonModule,
     ReactiveFormsModule,
+    //#if (IncludeLocalization)
+    TranslocoModule,
+    //#endif
     DialogModule,
     ButtonModule,
     AvatarModule,
@@ -46,11 +55,36 @@ export class UserEditDialogComponent {
   readonly saved = output<CreateUserInputDto | UpdateUserInputDto>();
 
   private readonly fb = inject(FormBuilder);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed 重算，文案重新翻译。
+  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  private readonly unnamedLabel = () => this.transloco.translate('users.editDialog.unnamedUser');
+  readonly dialogHeader = () =>
+    this.transloco.translate(this.isEditMode() ? 'users.editDialog.editHeader' : 'users.editDialog.createHeader');
+  readonly rolesPlaceholder = () => this.transloco.translate('users.editDialog.rolesPlaceholder');
+  readonly avatarMessages = () => ({
+    sizeSummary: this.transloco.translate('users.editDialog.avatarTooLargeSummary'),
+    sizeDetail: this.transloco.translate('users.editDialog.avatarTooLargeDetail'),
+    typeSummary: this.transloco.translate('users.editDialog.avatarBadTypeSummary'),
+    typeDetail: this.transloco.translate('users.editDialog.avatarBadTypeDetail')
+  });
+  //#else
+  private readonly unnamedLabel = () => 'Unnamed user';
+  readonly dialogHeader = () => (this.isEditMode() ? 'Edit user' : 'New user');
+  readonly rolesPlaceholder = () => 'Select roles';
+  readonly avatarMessages = () => ({
+    sizeSummary: 'File too large',
+    sizeDetail: 'The avatar size cannot exceed 1MB',
+    typeSummary: 'Unsupported format',
+    typeDetail: 'Please upload a PNG, JPG or WEBP image'
+  });
+  //#endif
 
   dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly avatarPreview = signal('');
   readonly displayName = computed(
-    () => this.form.controls.displayName.value.trim() || this.form.controls.username.value.trim() || '未命名用户'
+    () => this.form.controls.displayName.value.trim() || this.form.controls.username.value.trim() || this.unnamedLabel()
   );
   readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
   readonly avatarStyle = computed(() => {
@@ -82,7 +116,15 @@ export class UserEditDialogComponent {
     roles: [['Member'], [Validators.required]]
   });
 
-  roleOptions = Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value }));
+  //#if (IncludeLocalization)
+  // 本地化模式：ROLE_LABEL_MAP 值是词条键，读 activeLang 建立依赖，语言切换时 computed 重算，标签重新翻译。
+  readonly roleOptions = computed(() => {
+    this.activeLang();
+    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label: this.transloco.translate(label), value }));
+  });
+  //#else
+  readonly roleOptions = computed(() => Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })));
+  //#endif
 
   constructor() {
     // 同时依赖 visible 与 user：每次对话框打开都重置表单，避免新建模式残留上次输入

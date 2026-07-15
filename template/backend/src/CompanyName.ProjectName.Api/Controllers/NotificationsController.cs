@@ -45,7 +45,11 @@ public class NotificationsController(
     {
         var userId = currentUser.Id?.ToString();
         if (string.IsNullOrEmpty(userId))
-            throw new ForbiddenException("当前身份不能操作用户通知。");
+            throw new ForbiddenException("The current identity cannot operate on user notifications.")
+#if (IncludeLocalization)
+                .WithLocalization("Notification:IdentityCannotOperate")
+#endif
+                ;
 
         await notificationStore.MarkAsReadAsync(id, userId, cancellationToken);
     }
@@ -56,7 +60,11 @@ public class NotificationsController(
     {
         var userId = currentUser.Id?.ToString();
         if (string.IsNullOrEmpty(userId))
-            throw new ForbiddenException("当前身份不能操作用户通知。");
+            throw new ForbiddenException("The current identity cannot operate on user notifications.")
+#if (IncludeLocalization)
+                .WithLocalization("Notification:IdentityCannotOperate")
+#endif
+                ;
 
         await notificationStore.MarkAllAsReadAsync(userId, cancellationToken);
     }

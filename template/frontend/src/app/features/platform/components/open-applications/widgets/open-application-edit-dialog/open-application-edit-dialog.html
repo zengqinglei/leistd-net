@@ -1,7 +1,7 @@
 <p-dialog
   [visible]="visible()"
   (visibleChange)="visible.set($event)"
-  [header]="isEditMode() ? '编辑开放应用' : '新建开放应用'"
+  [header]="dialogHeader()"
   [modal]="true"
   [breakpoints]="dialogConfig.breakpoints"
   [style]="dialogConfig.style"
@@ -14,19 +14,27 @@
   (onHide)="onHide()"
 >
   @if (loading()) {
-    <app-dialog-loading text="正在加载开放应用信息..." />
+    <!--#if (IncludeLocalization)-->
+    <app-dialog-loading [text]="'openApp.dialog.loading' | transloco" />
+    <!--#else-->
+    <app-dialog-loading text="Loading open application..." />
+    <!--#endif-->
   } @else {
     <div class="flex flex-col gap-6">
       @if (!isEditMode()) {
         <div class="flex flex-col gap-2">
-          <label class="font-bold">应用模板</label>
+          <!--#if (IncludeLocalization)-->
+          <label class="font-bold">{{ 'openApp.field.template' | transloco }}</label>
+          <!--#else-->
+          <label class="font-bold">Application template</label>
+          <!--#endif-->
           <p-select
-            [options]="templateOptions"
+            [options]="templateOptions()"
             [ngModel]="selectedTemplate()"
             (ngModelChange)="applyTemplate($event)"
             optionLabel="label"
             optionValue="value"
-            placeholder="选择模板快速填充"
+            [placeholder]="templatePlaceholder()"
             appendTo="body"
             styleClass="w-full"
           />
@@ -36,12 +44,16 @@
       <div class="flex flex-col gap-4">
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div class="flex flex-col gap-2">
-            <label class="font-bold">应用名称</label>
+            <!--#if (IncludeLocalization)-->
+            <label class="font-bold">{{ 'openApp.field.displayName' | transloco }}</label>
+            <!--#else-->
+            <label class="font-bold">Application name</label>
+            <!--#endif-->
             <input
               pInputText
               [ngModel]="formModel().displayName"
               (ngModelChange)="formModel.update(model => ({ ...model, displayName: $event }))"
-              placeholder="例如 我的桌面应用"
+              [placeholder]="displayNamePlaceholder()"
             />
           </div>
           <div class="flex flex-col gap-2">
@@ -50,7 +62,7 @@
               pInputText
               [ngModel]="formModel().clientId"
               (ngModelChange)="formModel.update(model => ({ ...model, clientId: $event }))"
-              placeholder="例如 my-desktop-app"
+              [placeholder]="clientIdPlaceholder()"
               [disabled]="isEditMode()"
               class="font-mono"
             />
@@ -59,12 +71,16 @@
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div class="flex flex-col gap-2">
-            <label class="font-bold">应用类型</label>
+            <!--#if (IncludeLocalization)-->
+            <label class="font-bold">{{ 'openApp.field.applicationType' | transloco }}</label>
+            <!--#else-->
+            <label class="font-bold">Application type</label>
+            <!--#endif-->
             @if (isTemplateLocked()) {
-              <p-tag [value]="applicationTypeLabels[formModel().applicationType]" severity="info" />
+              <p-tag [value]="applicationTypeLabels()[formModel().applicationType]" severity="info" />
             } @else {
               <p-select
-                [options]="applicationTypeOptions"
+                [options]="applicationTypeOptions()"
                 [ngModel]="formModel().applicationType"
                 (ngModelChange)="formModel.update(model => ({ ...model, applicationType: $event }))"
                 optionLabel="label"
@@ -75,12 +91,16 @@
             }
           </div>
           <div class="flex flex-col gap-2">
-            <label class="font-bold">客户端类型</label>
+            <!--#if (IncludeLocalization)-->
+            <label class="font-bold">{{ 'openApp.field.clientType' | transloco }}</label>
+            <!--#else-->
+            <label class="font-bold">Client type</label>
+            <!--#endif-->
             @if (isTemplateLocked()) {
-              <p-tag [value]="clientTypeLabels[formModel().clientType]" [severity]="isConfidentialClient() ? 'warn' : 'info'" />
+              <p-tag [value]="clientTypeLabels()[formModel().clientType]" [severity]="isConfidentialClient() ? 'warn' : 'info'" />
             } @else {
               <p-select
-                [options]="clientTypeOptions"
+                [options]="clientTypeOptions()"
                 [ngModel]="formModel().clientType"
                 (ngModelChange)="onClientTypeSelect($event)"
                 optionLabel="label"
@@ -91,12 +111,16 @@
             }
           </div>
           <div class="flex flex-col gap-2">
-            <label class="font-bold">授权确认</label>
+            <!--#if (IncludeLocalization)-->
+            <label class="font-bold">{{ 'openApp.field.consentType' | transloco }}</label>
+            <!--#else-->
+            <label class="font-bold">Consent</label>
+            <!--#endif-->
             @if (isTemplateLocked()) {
-              <p-tag [value]="consentTypeLabels[formModel().consentType]" severity="secondary" />
+              <p-tag [value]="consentTypeLabels()[formModel().consentType]" severity="secondary" />
             } @else {
               <p-select
-                [options]="consentTypeOptions"
+                [options]="consentTypeOptions()"
                 [ngModel]="formModel().consentType"
                 (ngModelChange)="formModel.update(model => ({ ...model, consentType: $event }))"
                 optionLabel="label"
@@ -111,25 +135,33 @@
 
       @if (formModel().applicationType !== 'service') {
         <p-divider align="center">
-          <span class="text-sm font-bold text-muted-color">回调地址</span>
+          <!--#if (IncludeLocalization)-->
+          <span class="text-sm font-bold text-muted-color">{{ 'openApp.section.callback' | transloco }}</span>
+          <!--#else-->
+          <span class="text-sm font-bold text-muted-color">Callback URIs</span>
+          <!--#endif-->
         </p-divider>
 
         <div class="grid grid-cols-1 gap-4">
           <div class="rounded-lg border border-surface-200 bg-surface-50/70 p-4 dark:border-surface-700 dark:bg-surface-800/40">
             <div class="mb-3 flex items-center justify-between gap-3">
               <label class="font-bold">Redirect URIs</label>
-              <span class="text-xs text-muted-color">登录完成后的回调地址</span>
+              <!--#if (IncludeLocalization)-->
+              <span class="text-xs text-muted-color">{{ 'openApp.redirectUri.hint' | transloco }}</span>
+              <!--#else-->
+              <span class="text-xs text-muted-color">Callback URI after login completes</span>
+              <!--#endif-->
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">
               <input
                 pInputText
                 [ngModel]="formModel().redirectUriInput"
                 (ngModelChange)="formModel.update(model => ({ ...model, redirectUriInput: $event }))"
-                placeholder="https://example.com/callback 或 my-desktop-app://oauth/callback"
+                [placeholder]="redirectUriPlaceholder()"
                 class="w-full font-mono"
               />
               <p-button
-                label="添加"
+                [label]="addLabel()"
                 icon="pi pi-plus"
                 (onClick)="addRedirectUri()"
                 [disabled]="!formModel().redirectUriInput || isRedirectUriInputInvalid()"
@@ -137,7 +169,11 @@
               />
             </div>
             @if (isRedirectUriInputInvalid()) {
-              <small class="mt-2 block text-red-500">请输入合法的绝对 URI，且不能包含 fragment。</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="mt-2 block text-red-500">{{ 'openApp.redirectUri.invalid' | transloco }}</small>
+              <!--#else-->
+              <small class="mt-2 block text-red-500">Please enter a valid absolute URI without a fragment.</small>
+              <!--#endif-->
             }
             <div class="mt-3 flex flex-wrap gap-2">
               @for (uri of formModel().redirectUris; track uri) {
@@ -148,7 +184,11 @@
                   </button>
                 </p-tag>
               } @empty {
-                <span class="text-xs text-muted-color">暂未配置 Redirect URI</span>
+                <!--#if (IncludeLocalization)-->
+                <span class="text-xs text-muted-color">{{ 'openApp.redirectUri.empty' | transloco }}</span>
+                <!--#else-->
+                <span class="text-xs text-muted-color">No Redirect URI configured yet</span>
+                <!--#endif-->
               }
             </div>
           </div>
@@ -156,7 +196,11 @@
           <div class="rounded-xl border border-surface-200 bg-surface-50/70 p-4 dark:border-surface-700 dark:bg-surface-800/40">
             <div class="mb-3 flex items-center justify-between gap-3">
               <label class="font-bold">Post Logout Redirect URIs</label>
-              <span class="text-xs text-muted-color">登出后的跳转地址</span>
+              <!--#if (IncludeLocalization)-->
+              <span class="text-xs text-muted-color">{{ 'openApp.postLogoutUri.hint' | transloco }}</span>
+              <!--#else-->
+              <span class="text-xs text-muted-color">Redirect URI after logout</span>
+              <!--#endif-->
             </div>
             <div class="flex flex-col gap-2 sm:flex-row">
               <input
@@ -167,7 +211,7 @@
                 class="w-full font-mono"
               />
               <p-button
-                label="添加"
+                [label]="addLabel()"
                 icon="pi pi-plus"
                 (onClick)="addPostLogoutRedirectUri()"
                 [disabled]="!formModel().postLogoutRedirectUriInput || isPostLogoutRedirectUriInputInvalid()"
@@ -175,7 +219,11 @@
               />
             </div>
             @if (isPostLogoutRedirectUriInputInvalid()) {
-              <small class="mt-2 block text-red-500">请输入合法的绝对 URI，且不能包含 fragment。</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="mt-2 block text-red-500">{{ 'openApp.redirectUri.invalid' | transloco }}</small>
+              <!--#else-->
+              <small class="mt-2 block text-red-500">Please enter a valid absolute URI without a fragment.</small>
+              <!--#endif-->
             }
             <div class="mt-3 flex flex-wrap gap-2">
               @for (uri of formModel().postLogoutRedirectUris; track uri) {
@@ -189,7 +237,11 @@
                   </button>
                 </p-tag>
               } @empty {
-                <span class="text-xs text-muted-color">暂未配置 Post Logout Redirect URI</span>
+                <!--#if (IncludeLocalization)-->
+                <span class="text-xs text-muted-color">{{ 'openApp.postLogoutUri.empty' | transloco }}</span>
+                <!--#else-->
+                <span class="text-xs text-muted-color">No Post Logout Redirect URI configured yet</span>
+                <!--#endif-->
               }
             </div>
           </div>
@@ -197,7 +249,11 @@
       }
 
       <p-divider align="center">
-        <span class="text-sm font-bold text-muted-color">授权能力</span>
+        <!--#if (IncludeLocalization)-->
+        <span class="text-sm font-bold text-muted-color">{{ 'openApp.section.authorization' | transloco }}</span>
+        <!--#else-->
+        <span class="text-sm font-bold text-muted-color">Authorization capabilities</span>
+        <!--#endif-->
       </p-divider>
 
       <div class="flex flex-col gap-4">
@@ -206,21 +262,29 @@
           <div class="rounded-lg border border-surface-200 bg-surface-50/70 p-4 dark:border-surface-700 dark:bg-surface-800/40">
             <div class="mb-2 flex items-center gap-2">
               <i class="pi pi-check-circle text-green-500"></i>
-              <span class="text-sm font-medium">已根据模板自动配置</span>
+              <!--#if (IncludeLocalization)-->
+              <span class="text-sm font-medium">{{ 'openApp.service.autoConfigured' | transloco }}</span>
+              <!--#else-->
+              <span class="text-sm font-medium">Configured automatically from the template</span>
+              <!--#endif-->
             </div>
             <div class="flex flex-wrap gap-2">
               @for (p of formModel().permissions; track p) {
                 <p-tag [value]="getPermissionLabel(p)" severity="success" />
               }
             </div>
-            <p class="mt-2 text-xs text-muted-color">服务端客户端凭据流程，无需回调地址和 PKCE。</p>
+            <!--#if (IncludeLocalization)-->
+            <p class="mt-2 text-xs text-muted-color">{{ 'openApp.service.description' | transloco }}</p>
+            <!--#else-->
+            <p class="mt-2 text-xs text-muted-color">Server-side client credentials flow; no callback URIs or PKCE required.</p>
+            <!--#endif-->
           </div>
         } @else {
           <!-- web/desktop 类型：完整编辑 -->
           <div class="flex flex-col gap-2">
             <label class="font-bold">Permissions</label>
             <p-multiselect
-              [options]="permissionOptions"
+              [options]="permissionOptions()"
               [ngModel]="formModel().permissions"
               (ngModelChange)="formModel.update(model => ({ ...model, permissions: $event }))"
               optionLabel="label"
@@ -228,7 +292,7 @@
               display="chip"
               appendTo="body"
               styleClass="w-full"
-              placeholder="选择授权能力"
+              [placeholder]="permissionsPlaceholder()"
             >
               <ng-template let-option pTemplate="item">
                 <div class="flex w-full items-center justify-between gap-3">
@@ -242,7 +306,7 @@
           <div class="flex flex-col gap-2">
             <label class="font-bold">Requirements</label>
             <p-multiselect
-              [options]="requirementOptions"
+              [options]="requirementOptions()"
               [ngModel]="formModel().requirements"
               (ngModelChange)="formModel.update(model => ({ ...model, requirements: $event }))"
               optionLabel="label"
@@ -250,16 +314,24 @@
               display="chip"
               appendTo="body"
               styleClass="w-full"
-              placeholder="选择安全要求"
+              [placeholder]="requirementsPlaceholder()"
             />
             @if (
               (formModel().applicationType === 'native' || formModel().clientType === 'public') &&
               !formModel().requirements.includes('ft:pkce')
             ) {
-              <small class="text-red-500">Native/Public 客户端必须启用 PKCE。</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="text-red-500">{{ 'openApp.requirements.pkceRequired' | transloco }}</small>
+              <!--#else-->
+              <small class="text-red-500">Native/Public clients must enable PKCE.</small>
+              <!--#endif-->
             }
             @if (formModel().permissions.includes('gt:refresh_token') && !formModel().permissions.includes('scp:offline_access')) {
-              <small class="text-orange-500">已允许 refresh_token，建议同时开放 offline_access scope。</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="text-orange-500">{{ 'openApp.requirements.offlineAccessHint' | transloco }}</small>
+              <!--#else-->
+              <small class="text-orange-500">refresh_token is allowed; consider also granting the offline_access scope.</small>
+              <!--#endif-->
             }
           </div>
         }
@@ -268,7 +340,24 @@
   }
 
   <ng-template pTemplate="footer">
-    <p-button label="取消" [text]="true" severity="secondary" (onClick)="visible.set(false)" [disabled]="saving()" />
-    <p-button label="保存" icon="pi pi-check" (onClick)="save()" [disabled]="!isValid() || saving()" [loading]="saving()" />
+    <!--#if (IncludeLocalization)-->
+    <p-button
+      [label]="'common.cancel' | transloco"
+      [text]="true"
+      severity="secondary"
+      (onClick)="visible.set(false)"
+      [disabled]="saving()"
+    />
+    <p-button
+      [label]="'common.save' | transloco"
+      icon="pi pi-check"
+      (onClick)="save()"
+      [disabled]="!isValid() || saving()"
+      [loading]="saving()"
+    />
+    <!--#else-->
+    <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="visible.set(false)" [disabled]="saving()" />
+    <p-button label="Save" icon="pi pi-check" (onClick)="save()" [disabled]="!isValid() || saving()" [loading]="saving()" />
+    <!--#endif-->
   </ng-template>
 </p-dialog>

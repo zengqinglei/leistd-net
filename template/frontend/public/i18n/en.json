@@ -1,0 +1,504 @@
+{
+  "common": {
+    "workspace": "Workspace",
+    "unknownError": "Unknown error",
+    "appError": "Application error",
+    "unexpectedError": "An unexpected error occurred. Please refresh the page and try again.",
+    "requestError": "Request error",
+    "authFailedReLogin": "Authentication failed. Please sign in again.",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "success": "Success",
+    "notice": "Notice",
+    "error": "Error",
+    "refresh": "Refresh",
+    "confirm": "Confirm",
+    "ok": "OK",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "close": "Close",
+    "copy": "Copy",
+    "add": "Add",
+    "actions": "Actions"
+  },
+  "menu": {
+    "workspace": "Workspace",
+    "platform": "Admin platform",
+    "profile": "Profile",
+    "changePassword": "Change password",
+    "logout": "Sign out"
+  },
+  "language": {
+    "label": "Language"
+  },
+  "httpError": {
+    "400": "The request was malformed; the server did not create or modify data.",
+    "401": "Authentication failed. Please sign in again.",
+    "403": "Insufficient permissions to access this resource.",
+    "404": "The requested record does not exist; the server took no action.",
+    "406": "The requested format is not available.",
+    "410": "The requested resource has been permanently deleted.",
+    "422": "A validation error occurred while creating the object.",
+    "500": "A server error occurred. Please check the server.",
+    "502": "Bad gateway.",
+    "503": "Service unavailable; the server is temporarily overloaded or under maintenance.",
+    "504": "Gateway timeout."
+  },
+  "primeng": {
+    "accept": "Yes",
+    "reject": "No",
+    "choose": "Choose",
+    "upload": "Upload",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "apply": "Apply",
+    "dayNames": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    "dayNamesShort": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "dayNamesMin": ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"],
+    "monthNames": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ],
+    "monthNamesShort": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    "today": "Today",
+    "weekHeader": "Wk",
+    "emptyMessage": "No results found",
+    "emptyFilterMessage": "No results found"
+  },
+  "layout": {
+    "sidebar": {
+      "appTitle": "Template Project",
+      "dashboard": "Dashboard",
+      "groupSystem": "System",
+      "users": "User Management",
+      "openApplications": "Developer Apps",
+      "workbench": "Workbench"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "markAllRead": "Mark all as read",
+      "empty": "No notifications"
+    }
+  },
+  "platform": {
+    "dashboard": {
+      "welcome": "Welcome to the Admin Console",
+      "currentUser": "Currently signed in as: {{name}}",
+      "intro": "This is a starter template project. You can manage users under \"User Management\" and extend more feature modules from the left-hand menu.",
+      "title": "Dashboard"
+    }
+  },
+  "workspace": {
+    "dashboard": {
+      "title": "Workspace",
+      "username": "Username",
+      "nickname": "Nickname",
+      "email": "Email",
+      "roles": "Roles",
+      "noUserInfo": "No user information available"
+    },
+    "placeholder": {
+      "title": "Workspace",
+      "comingSoon": "This feature is under development, stay tuned..."
+    }
+  },
+  "landing": {
+    "hero": {
+      "title": "Template Project",
+      "subtitle": "A full-stack application development template based on Angular + PrimeNG + .NET 10 DDD architecture",
+      "login": "Sign In",
+      "register": "Sign Up"
+    },
+    "feature": {
+      "authTitle": "Authentication",
+      "authDesc": "Cookie-based authentication with role and permission management",
+      "usersTitle": "User Management",
+      "usersDesc": "Full CRUD operations with permission control",
+      "themeTitle": "Theme System",
+      "themeDesc": "Dark mode + Tailwind CSS + PrimeNG"
+    }
+  },
+  "theme": {
+    "config": {
+      "mode": "Theme Mode",
+      "default": "Default",
+      "light": "Light",
+      "system": "System",
+      "dark": "Dark"
+    }
+  },
+  "app": {
+    "startup": {
+      "loading": "Loading...",
+      "failed": "Application Failed to Load",
+      "clientError": "Client error: {{message}}",
+      "requestFailed": "Request failed: {{message}} (code: {{code}})",
+      "serverError": "Unknown server error: {{status}} - {{statusText}}",
+      "unknownErrorDetail": "An unknown error occurred: {{message}}",
+      "unknownError": "An unknown error occurred. Please try again later."
+    }
+  },
+  "account": {
+    "changePassword": {
+      "header": "Change Password",
+      "subtitle": "Enter your current password and set a new sign-in password.",
+      "rules": "Password rules: 8–20 characters, and must include uppercase letters, lowercase letters, numbers, and special characters.",
+      "currentPassword": "Current Password",
+      "currentPasswordRequired": "Please enter your current password",
+      "newPassword": "New Password",
+      "newPasswordRuleError": "The new password does not meet the requirements; it must include uppercase and lowercase letters, numbers, and special characters",
+      "confirmPassword": "Confirm New Password",
+      "confirmPasswordRequired": "Please re-enter the new password",
+      "sameAsCurrentError": "The new password cannot be the same as the current password",
+      "mismatchError": "The two new passwords do not match",
+      "submit": "Update Password",
+      "updateSuccess": "Password updated"
+    },
+    "profile": {
+      "header": "Profile",
+      "subtitle": "Update your username, email, nickname, phone number, and avatar.",
+      "invalidFileSizeSummary": "File too large",
+      "invalidFileSizeDetail": "The avatar size cannot exceed 1MB",
+      "invalidFileTypeSummary": "Unsupported format",
+      "invalidFileTypeDetail": "Please upload a PNG, JPG, or WEBP image",
+      "superAdminTag": "Super Admin",
+      "adminTag": "Admin",
+      "avatarHint": "Hover over the avatar and click + to re-upload; the selection previews instantly.",
+      "username": "Username",
+      "usernamePlaceholder": "Please enter a username",
+      "usernameRequired": "Username cannot be empty",
+      "usernameFormatError": "Username must be 3–64 characters of letters, numbers, or underscores",
+      "email": "Email",
+      "emailPlaceholder": "Please enter an email",
+      "emailError": "Please enter a valid email; length cannot exceed 256 characters",
+      "nickname": "Nickname",
+      "nicknamePlaceholder": "Please enter a nickname",
+      "nicknameError": "Nickname length cannot exceed 128 characters",
+      "phoneNumber": "Phone Number",
+      "phoneNumberPlaceholder": "Please enter a phone number",
+      "phoneNumberLengthError": "Phone number length cannot exceed 20 characters",
+      "phoneNumberPatternError": "Phone number supports only digits, spaces, and the symbols + - ( )",
+      "guestUser": "Guest user",
+      "updateSuccess": "Profile updated"
+    },
+    "brand": {
+      "title": "Template Project",
+      "subtitle": "Full-stack development template based on Angular + .NET"
+    },
+    "login": {
+      "title": "Sign In",
+      "subtitle": "Welcome back, please enter your account information",
+      "usernameOrEmail": "Username or Email",
+      "usernameOrEmailPlaceholder": "Please enter your username or email",
+      "password": "Password",
+      "passwordPlaceholder": "Please enter your password",
+      "noAccount": "Don't have an account?",
+      "registerNow": "Register now",
+      "submit": "Sign In",
+      "or": "OR",
+      "testAccount": "Test Account",
+      "adminRole": "Administrator",
+      "badgeFastDev": "Fast Development",
+      "badgeReadyMain": "Ready",
+      "badgeReadySub": "to use",
+      "badgeModernArch": "Modern Architecture",
+      "loginSuccess": "Login successful",
+      "welcomeBack": "Welcome back!",
+      "loginFailed": "Login failed",
+      "externalLoginFailed": "Unable to connect to the {{provider}} login service, please try again later"
+    },
+    "register": {
+      "title": "Create Account",
+      "subtitle": "Welcome aboard, please fill in the following information to register a new account",
+      "badgeFastRegister": "Quick Registration",
+      "badgeSecure": "Security Guaranteed",
+      "email": "Email",
+      "emailPlaceholder": "Enter your email address",
+      "username": "Username",
+      "usernamePlaceholder": "Extracted from email prefix, letters, digits and underscores allowed",
+      "captcha": "Captcha",
+      "captchaPlaceholder": "Enter the captcha on the right",
+      "captchaRefresh": "Can't see clearly? Click to refresh",
+      "captchaAlt": "Captcha",
+      "emailCode": "Email Verification Code",
+      "emailCodePlaceholder": "Enter the 6-digit code",
+      "resendCountdown": "Resend in {{seconds}}s",
+      "sendCode": "Get Code",
+      "password": "Password",
+      "passwordPlaceholder": "Contains letters and digits, at least 6 characters",
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Enter the password again",
+      "submit": "Create Account",
+      "haveAccount": "Already have an account?",
+      "loginNow": "Sign in directly",
+      "emailRequired": "Please enter a valid email first",
+      "captchaRequired": "Please enter the captcha first",
+      "emailCodeSent": "Verification code sent, please check your email",
+      "captchaTokenMissing": "Please refresh to get the captcha",
+      "registerSuccess": "Registration successful",
+      "registerSuccessDetail": "Account created successfully, please sign in",
+      "errRequired": "This field is required",
+      "errEmailInvalid": "Invalid email format",
+      "errUsernamePattern": "Only letters, digits and underscores are allowed",
+      "errPasswordPattern": "Password must be at least 6 characters and contain letters and digits",
+      "errMinLength": "At least {{min}} characters required",
+      "errPasswordMismatch": "The two passwords do not match"
+    },
+    "externalCallback": {
+      "processingAria": "Completing sign-in",
+      "processing": "Processing third-party sign-in",
+      "missingParams": "Missing required callback parameters",
+      "failed": "Third-party sign-in failed. Please go back and try again."
+    }
+  },
+  "users": {
+    "page": {
+      "title": "User management"
+    },
+    "filter": {
+      "allStatus": "All statuses",
+      "allEmailStatus": "All email statuses",
+      "allRoles": "All roles",
+      "searchPlaceholder": "Search username / email / display name..."
+    },
+    "actions": {
+      "newUser": "New user"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Disabled",
+      "emailVerified": "Email verified",
+      "emailUnverified": "Email not verified"
+    },
+    "toast": {
+      "created": "User created successfully",
+      "updated": "User updated successfully",
+      "enabled": "User enabled",
+      "disabled": "User disabled",
+      "deleted": "User deleted",
+      "passwordReset": "Password has been reset",
+      "cannotDeleteSummary": "Cannot delete",
+      "cannotDeleteSuperAdmin": "The built-in super administrator cannot be deleted"
+    },
+    "confirm": {
+      "enableMessage": "Are you sure you want to enable user {{name}}?",
+      "disableMessage": "Are you sure you want to disable user {{name}}?",
+      "enableHeader": "Confirm enable",
+      "disableHeader": "Confirm disable",
+      "deleteMessage": "Are you sure you want to delete user {{name}}? Once deleted, the user will no longer be able to sign in.",
+      "deleteHeader": "Confirm delete"
+    },
+    "table": {
+      "currentPageReport": "{totalRecords} in total",
+      "colUser": "User",
+      "colEmail": "Email",
+      "colRole": "Role",
+      "colStatus": "Status",
+      "colLastLogin": "Last login",
+      "colCreatedAt": "Created at",
+      "colActions": "Actions",
+      "emptyTitle": "No users yet",
+      "emptyHint": "Create a new user"
+    },
+    "popover": {
+      "noRoles": "No roles",
+      "rolesTitle": "Roles ({{count}})"
+    },
+    "tooltip": {
+      "superAdminNoEdit": "The built-in super administrator cannot be updated by other administrators",
+      "superAdminNoDisable": "The built-in super administrator cannot be disabled by other administrators",
+      "superAdminNoDisableSelf": "The built-in super administrator cannot disable itself",
+      "disable": "Disable",
+      "enable": "Enable",
+      "superAdminNoReset": "The built-in super administrator's password cannot be reset by other administrators",
+      "resetPassword": "Reset password",
+      "superAdminNoDelete": "The built-in super administrator cannot be deleted"
+    },
+    "editDialog": {
+      "editHeader": "Edit user",
+      "createHeader": "New user",
+      "loading": "Loading user information...",
+      "unnamedUser": "Unnamed user",
+      "noEmail": "No email set",
+      "avatarHint": "Hover over the avatar and click + to re-upload; the preview updates instantly.",
+      "avatarTooLargeSummary": "File too large",
+      "avatarTooLargeDetail": "The avatar size cannot exceed 1MB",
+      "avatarBadTypeSummary": "Unsupported format",
+      "avatarBadTypeDetail": "Please upload a PNG, JPG or WEBP image",
+      "usernameLabel": "Username",
+      "usernamePlaceholder": "Enter a username",
+      "usernameRequired": "Username is required",
+      "usernamePattern": "Username must be 3-64 letters, digits or underscores",
+      "emailLabel": "Email",
+      "emailPlaceholder": "Enter an email",
+      "emailInvalid": "Enter a valid email, no longer than 256 characters",
+      "displayNameLabel": "Display name",
+      "displayNamePlaceholder": "Enter a display name",
+      "displayNameMaxLength": "Display name cannot exceed 128 characters",
+      "passwordLabel": "Initial password",
+      "passwordRequired": "Enter an initial password",
+      "passwordRule": "Password does not meet the rules: 8-20 characters including uppercase and lowercase letters, digits and special characters",
+      "rolesLabel": "Roles",
+      "rolesPlaceholder": "Select roles",
+      "rolesRequired": "Select at least one role",
+      "activeTitle": "Enable user",
+      "activeHint": "When disabled, the user cannot sign in or call protected endpoints",
+      "emailVerifiedTitle": "Email verified",
+      "emailVerifiedHint": "Used to manage the email verification status"
+    },
+    "resetDialog": {
+      "header": "Reset user password",
+      "warning": "After the reset, the user must sign in with the new password.",
+      "ruleHint": "New password rule: 8-20 characters, and must include uppercase letters, lowercase letters, digits and special characters.",
+      "newPasswordLabel": "New password",
+      "newPasswordRequired": "Enter a new password",
+      "newPasswordRule": "The new password does not meet the rules: it must include uppercase and lowercase letters, digits and special characters",
+      "confirmButton": "Confirm reset"
+    }
+  },
+  "openApp": {
+    "page": {
+      "title": "Open Applications"
+    },
+    "action": {
+      "create": "New Open Application",
+      "resetSecret": "Reset secret"
+    },
+    "filter": {
+      "allAppTypes": "All application types",
+      "allClientTypes": "All client types",
+      "searchPlaceholder": "Search by name / Client ID..."
+    },
+    "toast": {
+      "created": "Open application created successfully",
+      "updated": "Open application updated successfully",
+      "deleted": "Open application deleted",
+      "secretCopied": "Secret copied"
+    },
+    "confirm": {
+      "deleteHeader": "Confirm deletion",
+      "deleteMessage": "Are you sure you want to delete this open application? Clients using this Client ID will no longer be able to sign in.",
+      "resetSecretHeader": "Confirm secret reset",
+      "resetSecretMessage": "Are you sure you want to reset this open application's Client Secret? The old secret will be invalidated immediately."
+    },
+    "secret": {
+      "resetHeader": "Client Secret reset",
+      "createdHeader": "Client secret",
+      "warning": "Please copy and store it securely now; the secret will not be shown in plain text again.",
+      "copyAndClose": "Copy and close"
+    },
+    "appType": {
+      "native": "Desktop/Native",
+      "service": "Service"
+    },
+    "dialog": {
+      "editHeader": "Edit Open Application",
+      "createHeader": "New Open Application",
+      "loading": "Loading open application..."
+    },
+    "field": {
+      "template": "Application template",
+      "templatePlaceholder": "Select a template to quickly fill in",
+      "displayName": "Application name",
+      "displayNamePlaceholder": "e.g. My Desktop App",
+      "clientIdPlaceholder": "e.g. my-desktop-app",
+      "applicationType": "Application type",
+      "clientType": "Client type",
+      "consentType": "Consent"
+    },
+    "template": {
+      "web": "Web PKCE client",
+      "desktop": "Desktop PKCE client",
+      "service": "Service confidential client",
+      "desktopDisplayName": "My Desktop App"
+    },
+    "consentType": {
+      "implicit": "Implicit consent",
+      "explicit": "Explicit consent",
+      "external": "External consent",
+      "systematic": "Systematic consent"
+    },
+    "clientType": {
+      "publicLabel": "Public",
+      "confidentialLabel": "Confidential"
+    },
+    "permission": {
+      "authorizationEndpoint": "Authorization endpoint",
+      "tokenEndpoint": "Token endpoint",
+      "endSessionEndpoint": "End session endpoint",
+      "authorizationCode": "Authorization code",
+      "authorizationCodeFlow": "Authorization code flow",
+      "refreshToken": "Refresh token",
+      "clientCredentials": "Client credentials",
+      "codeResponse": "Code response",
+      "scopeOpenid": "Identity",
+      "scopeProfile": "Profile",
+      "scopeEmail": "Email",
+      "scopeRoles": "Roles",
+      "scopeOfflineAccess": "Offline access",
+      "notConfigured": "Not configured"
+    },
+    "requirement": {
+      "forcePkce": "Force PKCE"
+    },
+    "section": {
+      "callback": "Callback URIs",
+      "authorization": "Authorization capabilities"
+    },
+    "redirectUri": {
+      "hint": "Callback URI after login completes",
+      "placeholder": "https://example.com/callback or my-desktop-app://oauth/callback",
+      "invalid": "Please enter a valid absolute URI without a fragment.",
+      "empty": "No Redirect URI configured yet"
+    },
+    "postLogoutUri": {
+      "hint": "Redirect URI after logout",
+      "empty": "No Post Logout Redirect URI configured yet"
+    },
+    "service": {
+      "autoConfigured": "Configured automatically from the template",
+      "description": "Server-side client credentials flow; no callback URIs or PKCE required."
+    },
+    "permissions": {
+      "placeholder": "Select authorization capabilities"
+    },
+    "requirements": {
+      "placeholder": "Select security requirements",
+      "pkceRequired": "Native/Public clients must enable PKCE.",
+      "offlineAccessHint": "refresh_token is allowed; consider also granting the offline_access scope."
+    },
+    "table": {
+      "currentPageReport": "{totalRecords} total",
+      "colApp": "Application",
+      "colType": "Type",
+      "colPermissions": "Capabilities",
+      "colSecurity": "Security",
+      "colCreatedAt": "Created at",
+      "noPkce": "No PKCE",
+      "secretSet": "Secret set",
+      "noSecret": "No secret",
+      "emptyTitle": "No open applications yet",
+      "emptyHint": "Create a new open application"
+    },
+    "popover": {
+      "empty": "Nothing configured"
+    }
+  },
+  "role": {
+    "admin": "Administrator",
+    "operator": "Operator",
+    "member": "Member"
+  }
+}

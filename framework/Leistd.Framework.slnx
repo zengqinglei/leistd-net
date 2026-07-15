@@ -27,6 +27,10 @@
     <Project Path="components/exception/Leistd.Exception.AspNetCore/Leistd.Exception.AspNetCore.csproj" />
     <Project Path="components/exception/Leistd.Exception.Core/Leistd.Exception.Core.csproj" />
   </Folder>
+  <Folder Name="/components/localization/">
+    <Project Path="components/localization/Leistd.Localization.AspNetCore/Leistd.Localization.AspNetCore.csproj" />
+    <Project Path="components/localization/Leistd.Localization.Core/Leistd.Localization.Core.csproj" />
+  </Folder>
   <Folder Name="/components/lock/">
     <Project Path="components/lock/Leistd.Lock.Core/Leistd.Lock.Core.csproj" />
     <Project Path="components/lock/Leistd.Lock.Memory/Leistd.Lock.Memory.csproj" />
@@ -73,6 +77,8 @@
     <Project Path="tests/Leistd.Authorization.Tests/Leistd.Authorization.Tests.csproj" />
     <Project Path="tests/Leistd.Ddd.Infrastructure.Tests/Leistd.Ddd.Infrastructure.Tests.csproj" />
     <Project Path="tests/Leistd.EventBus.Tests/Leistd.EventBus.Tests.csproj" />
+    <Project Path="tests/Leistd.Exception.Tests/Leistd.Exception.Tests.csproj" />
+    <Project Path="tests/Leistd.Localization.Tests/Leistd.Localization.Tests.csproj" />
     <Project Path="tests/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj" />
     <Project Path="tests/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />
     <Project Path="tests/Leistd.TestBase/Leistd.TestBase.csproj" />

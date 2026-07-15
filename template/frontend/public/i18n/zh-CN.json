@@ -1,0 +1,491 @@
+{
+  "common": {
+    "workspace": "工作区",
+    "unknownError": "未知错误",
+    "appError": "应用错误",
+    "unexpectedError": "应用发生了未知错误，请刷新页面重试。",
+    "requestError": "请求错误",
+    "authFailedReLogin": "身份验证失败，请重新登录。",
+    "retry": "重试",
+    "cancel": "取消",
+    "save": "保存",
+    "success": "成功",
+    "notice": "提示",
+    "error": "错误",
+    "refresh": "刷新",
+    "confirm": "确认",
+    "ok": "确定",
+    "create": "创建",
+    "edit": "编辑",
+    "delete": "删除",
+    "close": "关闭",
+    "copy": "复制",
+    "add": "添加",
+    "actions": "操作"
+  },
+  "menu": {
+    "workspace": "工作空间",
+    "platform": "管理平台",
+    "profile": "个人信息",
+    "changePassword": "修改密码",
+    "logout": "退出登录"
+  },
+  "language": {
+    "label": "语言"
+  },
+  "httpError": {
+    "400": "发出的请求有错误，服务器没有进行新建或修改数据的操作。",
+    "401": "身份验证失败，请重新登录。",
+    "403": "权限不足，无法访问该资源。",
+    "404": "发出的请求针对的是不存在的记录，服务器没有进行操作。",
+    "406": "请求的格式不可得。",
+    "410": "请求的资源被永久删除，且不会再得到的。",
+    "422": "当创建一个对象时，发生一个验证错误。",
+    "500": "服务器发生错误，请检查服务器。",
+    "502": "网关错误。",
+    "503": "服务不可用，服务器暂时过载或维护。",
+    "504": "网关超时。"
+  },
+  "primeng": {
+    "accept": "是",
+    "reject": "否",
+    "choose": "选择",
+    "upload": "上传",
+    "cancel": "取消",
+    "clear": "清除",
+    "apply": "应用",
+    "dayNames": ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
+    "dayNamesShort": ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+    "dayNamesMin": ["日", "一", "二", "三", "四", "五", "六"],
+    "monthNames": ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+    "monthNamesShort": ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+    "today": "今天",
+    "weekHeader": "周",
+    "emptyMessage": "未找到结果",
+    "emptyFilterMessage": "未找到结果"
+  },
+  "layout": {
+    "sidebar": {
+      "appTitle": "模板项目",
+      "dashboard": "仪表盘",
+      "groupSystem": "系统",
+      "users": "用户管理",
+      "openApplications": "开发应用",
+      "workbench": "工作台"
+    },
+    "notifications": {
+      "title": "通知",
+      "markAllRead": "全部已读",
+      "empty": "暂无通知"
+    }
+  },
+  "platform": {
+    "dashboard": {
+      "welcome": "欢迎使用管理后台",
+      "currentUser": "当前登录用户：{{name}}",
+      "intro": "这是一个基础模板项目。你可以在「用户管理」中管理用户，在左侧菜单中扩展更多功能模块。",
+      "title": "仪表盘"
+    }
+  },
+  "workspace": {
+    "dashboard": {
+      "title": "工作台",
+      "username": "用户名",
+      "nickname": "昵称",
+      "email": "邮箱",
+      "roles": "角色",
+      "noUserInfo": "未获取到用户信息"
+    },
+    "placeholder": {
+      "title": "工作区",
+      "comingSoon": "功能开发中，敬请期待..."
+    }
+  },
+  "landing": {
+    "hero": {
+      "title": "模板项目",
+      "subtitle": "基于 Angular + PrimeNG + .NET 10 DDD 架构的全栈应用开发模板",
+      "login": "登录",
+      "register": "注册"
+    },
+    "feature": {
+      "authTitle": "身份认证",
+      "authDesc": "基于 Cookie 的认证与角色权限管理",
+      "usersTitle": "用户管理",
+      "usersDesc": "完整的 CRUD 操作与权限控制",
+      "themeTitle": "主题系统",
+      "themeDesc": "深色模式 + Tailwind CSS + PrimeNG"
+    }
+  },
+  "theme": {
+    "config": {
+      "mode": "主题模式",
+      "default": "默认",
+      "light": "亮色",
+      "system": "系统",
+      "dark": "暗色"
+    }
+  },
+  "app": {
+    "startup": {
+      "loading": "正在加载...",
+      "failed": "应用加载失败",
+      "clientError": "客户端错误: {{message}}",
+      "requestFailed": "请求失败: {{message}} (代码: {{code}})",
+      "serverError": "未知服务端错误: {{status}} - {{statusText}}",
+      "unknownErrorDetail": "发生未知错误: {{message}}",
+      "unknownError": "发生未知错误，请稍后重试。"
+    }
+  },
+  "account": {
+    "changePassword": {
+      "header": "修改密码",
+      "subtitle": "请输入当前密码，并设置新的登录密码。",
+      "rules": "新密码规则：8~20 位，且必须同时包含大写字母、小写字母、数字和特殊字符。",
+      "currentPassword": "当前密码",
+      "currentPasswordRequired": "请输入当前密码",
+      "newPassword": "新密码",
+      "newPasswordRuleError": "新密码不符合规则，需同时包含大小写字母、数字和特殊字符",
+      "confirmPassword": "确认新密码",
+      "confirmPasswordRequired": "请再次输入新密码",
+      "sameAsCurrentError": "新密码不能与当前密码相同",
+      "mismatchError": "两次输入的新密码不一致",
+      "submit": "更新密码",
+      "updateSuccess": "密码已更新"
+    },
+    "profile": {
+      "header": "个人信息",
+      "subtitle": "更新用户名、邮箱、昵称、手机号和头像。",
+      "invalidFileSizeSummary": "文件过大",
+      "invalidFileSizeDetail": "头像大小不能超过 1MB",
+      "invalidFileTypeSummary": "格式不支持",
+      "invalidFileTypeDetail": "请上传 PNG、JPG 或 WEBP 图片",
+      "superAdminTag": "超级管理员",
+      "adminTag": "管理员",
+      "avatarHint": "悬浮头像后点击 + 重新上传，选择后即时预览。",
+      "username": "用户名",
+      "usernamePlaceholder": "请输入用户名",
+      "usernameRequired": "用户名不能为空",
+      "usernameFormatError": "用户名需为 3-64 位字母、数字或下划线",
+      "email": "邮箱",
+      "emailPlaceholder": "请输入邮箱",
+      "emailError": "请输入有效邮箱，长度不能超过 256 个字符",
+      "nickname": "昵称",
+      "nicknamePlaceholder": "请输入昵称",
+      "nicknameError": "昵称长度不能超过 128 个字符",
+      "phoneNumber": "手机号",
+      "phoneNumberPlaceholder": "请输入手机号",
+      "phoneNumberLengthError": "手机号长度不能超过 20 个字符",
+      "phoneNumberPatternError": "手机号仅支持数字、空格以及 + - ( ) 符号",
+      "guestUser": "未登录用户",
+      "updateSuccess": "个人资料已更新"
+    },
+    "brand": {
+      "title": "模板项目",
+      "subtitle": "基于 Angular + .NET 的全栈开发模板"
+    },
+    "login": {
+      "title": "登录",
+      "subtitle": "欢迎回来，请输入您的账号信息",
+      "usernameOrEmail": "用户名或邮箱",
+      "usernameOrEmailPlaceholder": "请输入用户名或邮箱",
+      "password": "密码",
+      "passwordPlaceholder": "请输入密码",
+      "noAccount": "没有账号？",
+      "registerNow": "立即注册",
+      "submit": "登录",
+      "or": "或",
+      "testAccount": "测试账号",
+      "adminRole": "管理员",
+      "badgeFastDev": "快速开发",
+      "badgeReadyMain": "开箱",
+      "badgeReadySub": "即用",
+      "badgeModernArch": "现代架构",
+      "loginSuccess": "登录成功",
+      "welcomeBack": "欢迎回来！",
+      "loginFailed": "登录失败",
+      "externalLoginFailed": "无法连接到 {{provider}} 登录服务，请稍后重试"
+    },
+    "register": {
+      "title": "创建账号",
+      "subtitle": "欢迎加入，请填写以下信息注册新账号",
+      "badgeFastRegister": "快速注册",
+      "badgeSecure": "安全保障",
+      "email": "邮箱",
+      "emailPlaceholder": "输入您的邮箱地址",
+      "username": "用户名",
+      "usernamePlaceholder": "由邮箱前缀提取，允许字母数字下划线",
+      "captcha": "图形验证码",
+      "captchaPlaceholder": "请输入右侧验证码",
+      "captchaRefresh": "看不清？点击刷新",
+      "captchaAlt": "验证码",
+      "emailCode": "邮箱验证码",
+      "emailCodePlaceholder": "输入 6 位验证码",
+      "resendCountdown": "{{seconds}}s 后重发",
+      "sendCode": "获取验证码",
+      "password": "密码",
+      "passwordPlaceholder": "包含字母和数字，6位以上",
+      "confirmPassword": "确认密码",
+      "confirmPasswordPlaceholder": "再次输入密码",
+      "submit": "注册账号",
+      "haveAccount": "已有账号？",
+      "loginNow": "直接登录",
+      "emailRequired": "请先输入有效的邮箱",
+      "captchaRequired": "请先输入图形验证码",
+      "emailCodeSent": "验证码已发送，请查收邮件",
+      "captchaTokenMissing": "请刷新获取图形验证码",
+      "registerSuccess": "注册成功",
+      "registerSuccessDetail": "账号创建成功，请登录",
+      "errRequired": "此字段不能为空",
+      "errEmailInvalid": "邮箱格式不正确",
+      "errUsernamePattern": "只能包含字母、数字和下划线",
+      "errPasswordPattern": "密码需 6 位以上，包含字母和数字",
+      "errMinLength": "至少需要 {{min}} 个字符",
+      "errPasswordMismatch": "两次输入的密码不一致"
+    },
+    "externalCallback": {
+      "processingAria": "正在完成登录",
+      "processing": "正在处理第三方登录",
+      "missingParams": "缺少必要的回调参数",
+      "failed": "第三方登录失败，请返回重试"
+    }
+  },
+  "users": {
+    "page": {
+      "title": "用户管理"
+    },
+    "filter": {
+      "allStatus": "全部状态",
+      "allEmailStatus": "全部邮箱状态",
+      "allRoles": "全部角色",
+      "searchPlaceholder": "搜索用户名 / 邮箱 / 显示名称..."
+    },
+    "actions": {
+      "newUser": "新建用户"
+    },
+    "status": {
+      "active": "启用",
+      "inactive": "禁用",
+      "emailVerified": "邮箱已验证",
+      "emailUnverified": "邮箱未验证"
+    },
+    "toast": {
+      "created": "用户创建成功",
+      "updated": "用户更新成功",
+      "enabled": "用户已启用",
+      "disabled": "用户已禁用",
+      "deleted": "用户已删除",
+      "passwordReset": "密码已重置",
+      "cannotDeleteSummary": "无法删除",
+      "cannotDeleteSuperAdmin": "系统内置超级管理员不允许删除"
+    },
+    "confirm": {
+      "enableMessage": "确定要启用用户 {{name}} 吗？",
+      "disableMessage": "确定要禁用用户 {{name}} 吗？",
+      "enableHeader": "确认启用",
+      "disableHeader": "确认禁用",
+      "deleteMessage": "确定要删除用户 {{name}} 吗？删除后该用户将无法继续登录。",
+      "deleteHeader": "确认删除"
+    },
+    "table": {
+      "currentPageReport": "共 {totalRecords} 条",
+      "colUser": "用户",
+      "colEmail": "邮箱",
+      "colRole": "角色",
+      "colStatus": "状态",
+      "colLastLogin": "最近登录",
+      "colCreatedAt": "创建时间",
+      "colActions": "操作",
+      "emptyTitle": "暂无用户",
+      "emptyHint": "请创建新的用户"
+    },
+    "popover": {
+      "noRoles": "暂无角色",
+      "rolesTitle": "角色 ({{count}})"
+    },
+    "tooltip": {
+      "superAdminNoEdit": "系统内置超级管理员不允许被其他管理员更新",
+      "superAdminNoDisable": "系统内置超级管理员不允许被其他管理员禁用",
+      "superAdminNoDisableSelf": "系统内置超级管理员不允许禁用自己",
+      "disable": "禁用",
+      "enable": "启用",
+      "superAdminNoReset": "系统内置超级管理员的密码不允许被其他管理员重置",
+      "resetPassword": "重置密码",
+      "superAdminNoDelete": "系统内置超级管理员不允许删除"
+    },
+    "editDialog": {
+      "editHeader": "编辑用户",
+      "createHeader": "新建用户",
+      "loading": "正在加载用户信息...",
+      "unnamedUser": "未命名用户",
+      "noEmail": "未设置邮箱",
+      "avatarHint": "悬浮头像后点击 + 重新上传，选择后即时预览。",
+      "avatarTooLargeSummary": "文件过大",
+      "avatarTooLargeDetail": "头像大小不能超过 1MB",
+      "avatarBadTypeSummary": "格式不支持",
+      "avatarBadTypeDetail": "请上传 PNG、JPG 或 WEBP 图片",
+      "usernameLabel": "用户名",
+      "usernamePlaceholder": "请输入用户名",
+      "usernameRequired": "用户名不能为空",
+      "usernamePattern": "用户名需为 3-64 位字母、数字或下划线",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "请输入邮箱",
+      "emailInvalid": "请输入有效邮箱，长度不能超过 256 个字符",
+      "displayNameLabel": "显示名称",
+      "displayNamePlaceholder": "请输入显示名称",
+      "displayNameMaxLength": "显示名称长度不能超过 128 个字符",
+      "passwordLabel": "初始密码",
+      "passwordRequired": "请输入初始密码",
+      "passwordRule": "密码不符合规则，需为 8~20 位并同时包含大小写字母、数字和特殊字符",
+      "rolesLabel": "角色",
+      "rolesPlaceholder": "请选择角色",
+      "rolesRequired": "请至少选择一个角色",
+      "activeTitle": "启用用户",
+      "activeHint": "禁用后用户无法登录和调用受保护接口",
+      "emailVerifiedTitle": "邮箱已验证",
+      "emailVerifiedHint": "用于管理邮箱验证状态"
+    },
+    "resetDialog": {
+      "header": "重置用户密码",
+      "warning": "重置后用户需要使用新密码登录。",
+      "ruleHint": "新密码规则：8~20 位，且必须同时包含大写字母、小写字母、数字和特殊字符。",
+      "newPasswordLabel": "新密码",
+      "newPasswordRequired": "请输入新密码",
+      "newPasswordRule": "新密码不符合规则，需同时包含大小写字母、数字和特殊字符",
+      "confirmButton": "确认重置"
+    }
+  },
+  "openApp": {
+    "page": {
+      "title": "开放应用管理"
+    },
+    "action": {
+      "create": "新建开放应用",
+      "resetSecret": "重置密钥"
+    },
+    "filter": {
+      "allAppTypes": "全部应用类型",
+      "allClientTypes": "全部客户端类型",
+      "searchPlaceholder": "搜索应用名称 / Client ID..."
+    },
+    "toast": {
+      "created": "开放应用创建成功",
+      "updated": "开放应用更新成功",
+      "deleted": "开放应用已删除",
+      "secretCopied": "已复制密钥"
+    },
+    "confirm": {
+      "deleteHeader": "确认删除",
+      "deleteMessage": "确定要删除此开放应用吗？使用该 Client ID 的客户端将无法继续登录。",
+      "resetSecretHeader": "确认重置密钥",
+      "resetSecretMessage": "确定要重置该开放应用的 Client Secret 吗？旧密钥将立即失效。"
+    },
+    "secret": {
+      "resetHeader": "Client Secret 已重置",
+      "createdHeader": "客户端密钥",
+      "warning": "请立即复制并安全保存，该密钥后续不会再次明文展示。",
+      "copyAndClose": "复制并关闭"
+    },
+    "appType": {
+      "native": "桌面/原生",
+      "service": "服务端"
+    },
+    "dialog": {
+      "editHeader": "编辑开放应用",
+      "createHeader": "新建开放应用",
+      "loading": "正在加载开放应用信息..."
+    },
+    "field": {
+      "template": "应用模板",
+      "templatePlaceholder": "选择模板快速填充",
+      "displayName": "应用名称",
+      "displayNamePlaceholder": "例如 我的桌面应用",
+      "clientIdPlaceholder": "例如 my-desktop-app",
+      "applicationType": "应用类型",
+      "clientType": "客户端类型",
+      "consentType": "授权确认"
+    },
+    "template": {
+      "web": "Web PKCE 客户端",
+      "desktop": "桌面端 PKCE 客户端",
+      "service": "服务端机密客户端",
+      "desktopDisplayName": "我的桌面应用"
+    },
+    "consentType": {
+      "implicit": "隐式同意",
+      "explicit": "显式同意",
+      "external": "外部同意",
+      "systematic": "系统同意"
+    },
+    "clientType": {
+      "publicLabel": "Public（公开）",
+      "confidentialLabel": "Confidential（机密）"
+    },
+    "permission": {
+      "authorizationEndpoint": "授权端点",
+      "tokenEndpoint": "Token 端点",
+      "endSessionEndpoint": "登出端点",
+      "authorizationCode": "授权码",
+      "authorizationCodeFlow": "授权码流程",
+      "refreshToken": "刷新令牌",
+      "clientCredentials": "客户端凭据",
+      "codeResponse": "Code 响应",
+      "scopeOpenid": "身份标识",
+      "scopeProfile": "个人资料",
+      "scopeEmail": "邮箱",
+      "scopeRoles": "角色",
+      "scopeOfflineAccess": "离线访问",
+      "notConfigured": "未配置"
+    },
+    "requirement": {
+      "forcePkce": "强制 PKCE"
+    },
+    "section": {
+      "callback": "回调地址",
+      "authorization": "授权能力"
+    },
+    "redirectUri": {
+      "hint": "登录完成后的回调地址",
+      "placeholder": "https://example.com/callback 或 my-desktop-app://oauth/callback",
+      "invalid": "请输入合法的绝对 URI，且不能包含 fragment。",
+      "empty": "暂未配置 Redirect URI"
+    },
+    "postLogoutUri": {
+      "hint": "登出后的跳转地址",
+      "empty": "暂未配置 Post Logout Redirect URI"
+    },
+    "service": {
+      "autoConfigured": "已根据模板自动配置",
+      "description": "服务端客户端凭据流程，无需回调地址和 PKCE。"
+    },
+    "permissions": {
+      "placeholder": "选择授权能力"
+    },
+    "requirements": {
+      "placeholder": "选择安全要求",
+      "pkceRequired": "Native/Public 客户端必须启用 PKCE。",
+      "offlineAccessHint": "已允许 refresh_token，建议同时开放 offline_access scope。"
+    },
+    "table": {
+      "currentPageReport": "共 {totalRecords} 条",
+      "colApp": "应用",
+      "colType": "类型",
+      "colPermissions": "授权能力",
+      "colSecurity": "安全",
+      "colCreatedAt": "创建时间",
+      "noPkce": "无 PKCE",
+      "secretSet": "Secret 已设置",
+      "noSecret": "无 Secret",
+      "emptyTitle": "暂无开放应用",
+      "emptyHint": "请创建新的开放应用"
+    },
+    "popover": {
+      "empty": "暂无配置"
+    }
+  },
+  "role": {
+    "admin": "管理员",
+    "operator": "运营人员",
+    "member": "普通成员"
+  }
+}

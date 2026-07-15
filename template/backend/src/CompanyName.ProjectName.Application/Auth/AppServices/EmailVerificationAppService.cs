@@ -26,37 +26,49 @@ public class EmailVerificationAppService(
         var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken, input.CaptchaCode, cancellationToken);
         if (!isValidCaptcha)
         {
-            throw new BadRequestException("图形验证码不正确或已过期");
+            throw new BadRequestException("The image captcha is incorrect or has expired.")
+#if (IncludeLocalization)
+                .WithLocalization("Auth:CaptchaInvalid")
+#endif
+                ;
         }
 
         var existingUser = await userRepository.GetFirstAsync(u => u.Email.ToLower() == normalizedEmail, cancellationToken: cancellationToken);
         if (existingUser != null)
         {
-            throw new BadRequestException("邮箱已被使用");
+            throw new BadRequestException("This email address is already in use.")
+#if (IncludeLocalization)
+                .WithLocalization("Auth:EmailAlreadyUsed")
+#endif
+                ;
         }
 
         var limitKey = GetLimitCacheKey(normalizedEmail);
         var isLimited = await distributedCache.GetStringAsync(limitKey, cancellationToken);
         if (!string.IsNullOrEmpty(isLimited))
         {
-            throw new BadRequestException("发送过于频繁，请稍后再试");
+            throw new BadRequestException("Verification codes are being sent too frequently. Please try again later.")
+#if (IncludeLocalization)
+                .WithLocalization("Auth:EmailCodeSendTooFrequent")
+#endif
+                ;
         }
 
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var subject = "账号注册验证码";
+        var subject = "Account Registration Verification Code";
         var htmlBody = $@"
 <div style='font-family: Arial, sans-serif; max-w-md: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;'>
     <div style='background-color: #0f172a; padding: 20px; text-align: center; color: white;'>
-        <h2 style='margin: 0;'>账号注册验证码</h2>
+        <h2 style='margin: 0;'>Account Registration Verification Code</h2>
     </div>
     <div style='padding: 30px; background-color: #f8fafc; color: #334155;'>
-        <p>您好，</p>
-        <p>您正在进行账号注册，您的验证码是：</p>
+        <p>Hello,</p>
+        <p>You are registering an account. Your verification code is:</p>
         <div style='margin: 20px 0; text-align: center;'>
             <span style='font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #2563eb;'>{code}</span>
         </div>
-        <p style='font-size: 14px; color: #64748b;'>此验证码将在 {_options.EmailCodeExpiryMinutes} 分钟后过期。请勿向他人泄露此验证码。</p>
-        <p style='font-size: 14px; color: #64748b; margin-top: 30px;'>如果这不是您的操作，请忽略此邮件。</p>
+        <p style='font-size: 14px; color: #64748b;'>This code will expire in {_options.EmailCodeExpiryMinutes} minutes. Please do not share it with anyone.</p>
+        <p style='font-size: 14px; color: #64748b; margin-top: 30px;'>If you did not request this, please ignore this email.</p>
     </div>
 </div>";
         var codeCacheKey = GetCodeCacheKey(normalizedEmail);

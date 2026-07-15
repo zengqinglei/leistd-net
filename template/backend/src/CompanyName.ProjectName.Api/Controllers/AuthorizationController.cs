@@ -117,7 +117,12 @@ public class AuthorizationController(
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        throw new BadRequestException($"不支持的授权类型: {request.GrantType}");
+        throw new BadRequestException($"Unsupported grant type: {request.GrantType}")
+#if (IncludeLocalization)
+            .WithLocalization("Auth:UnsupportedGrantType")
+            .WithData("GrantType", request.GrantType)
+#endif
+            ;
     }
 
     [Authorize(AuthenticationSchemes = OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)]

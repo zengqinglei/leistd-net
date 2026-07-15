@@ -84,6 +84,12 @@
       "description": "是否包含外部登录（GitHub / Google 等第三方身份提供商）",
       "defaultValue": "false",
       "isEnabled": "IncludeIdentity"
+    },
+    "IncludeLocalization": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含多语言（i18n）支持：前端 Transloco 运行时切换 + 后端按 culture 本地化（默认语言英语）",
+      "defaultValue": "false"
     }
   },
   "sources": [
@@ -101,6 +107,13 @@
         ".pid"
       ],
       "modifiers": [
+        {
+          "condition": "IncludeLocalization",
+          "exclude": [
+            "frontend/package.json",
+            "frontend/package-lock.json"
+          ]
+        },
         {
           "condition": "!IncludeIdentity",
           "exclude": [
@@ -151,6 +164,7 @@
           "condition": "!IncludeIdentity || !IncludeNotifications",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationsAndRealTimeTests.cs",
             "frontend/src/app/core/services/signalr-service.ts",
             "frontend/src/app/core/services/notification-service.ts",
             "frontend/_mock/api/notification.ts",
@@ -195,8 +209,30 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "frontend/src/app/features/account/components/external-auth-callback/**"
           ]
+        },
+        {
+          "condition": "!IncludeLocalization",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Api/Resources/**",
+            "frontend/public/i18n/**",
+            "frontend/src/app/core/i18n/**",
+            "frontend/src/app/core/services/language-service.ts",
+            "frontend/src/app/core/interceptors/accept-language-interceptor.ts",
+            "frontend/src/app/shared/components/language-switcher/**"
+          ]
+        },
+        {
+          "condition": "!IncludeLocalization || !IncludeIdentity",
+          "exclude": [
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/LocalizationTests.cs"
+          ]
         }
       ]
+    },
+    {
+      "condition": "IncludeLocalization",
+      "source": "./.template.config/localization/frontend",
+      "target": "./frontend"
     }
   ]
 }

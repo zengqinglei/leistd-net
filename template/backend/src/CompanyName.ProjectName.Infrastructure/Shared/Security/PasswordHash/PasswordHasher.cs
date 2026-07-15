@@ -17,7 +17,11 @@ public class PasswordHasher : IPasswordHasher
     public string HashPassword(string password)
     {
         if (string.IsNullOrEmpty(password))
-            throw new BadRequestException("密码不能为空");
+            throw new BadRequestException("Password cannot be empty.")
+#if (IncludeLocalization)
+                .WithLocalization("Security:PasswordRequired")
+#endif
+                ;
 
         // 生成盐值
         var salt = new byte[SaltSize];
@@ -46,9 +50,17 @@ public class PasswordHasher : IPasswordHasher
     public bool VerifyPassword(string hashedPassword, string providedPassword)
     {
         if (string.IsNullOrEmpty(hashedPassword))
-            throw new BadRequestException("哈希密码不能为空");
+            throw new BadRequestException("Hashed password cannot be empty.")
+#if (IncludeLocalization)
+                .WithLocalization("Security:HashedPasswordRequired")
+#endif
+                ;
         if (string.IsNullOrEmpty(providedPassword))
-            throw new BadRequestException("待验证密码不能为空");
+            throw new BadRequestException("Password to verify cannot be empty.")
+#if (IncludeLocalization)
+                .WithLocalization("Security:PasswordToVerifyRequired")
+#endif
+                ;
 
         var hashBytes = Convert.FromBase64String(hashedPassword);
 

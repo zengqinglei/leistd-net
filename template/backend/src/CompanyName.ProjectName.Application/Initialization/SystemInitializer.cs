@@ -60,8 +60,8 @@ public class SystemInitializer(
         {
             adminRole = new Role(
                 name: AdminConstant.RoleName,
-                displayName: "管理员",
-                description: "系统管理员，拥有所有权限",
+                displayName: "Administrator",
+                description: "System administrator with all permissions",
                 isStatic: true,
                 isDefault: false,
                 sort: 1
@@ -75,8 +75,8 @@ public class SystemInitializer(
         {
             memberRole = new Role(
                 name: MemberRoleName,
-                displayName: "普通成员",
-                description: "系统默认角色，新用户自动分配",
+                displayName: "Member",
+                description: "Default role automatically assigned to new users",
                 isStatic: true,
                 isDefault: true,
                 sort: 100
@@ -102,7 +102,7 @@ public class SystemInitializer(
                     username: options.Username,
                     email: options.Email,
                     passwordHash: passwordHash,
-                    nickname: options.Nickname ?? "系统管理员"
+                    nickname: options.Nickname ?? "System Administrator"
                 );
 
                 adminUser.MarkAsSuperAdmin();
@@ -164,7 +164,7 @@ public class SystemInitializer(
                 adminUser = new User(
                     username: options.Username,
                     email: options.Email,
-                    nickname: options.Nickname ?? "系统管理员"
+                    nickname: options.Nickname ?? "System Administrator"
                 );
 
                 await userRepository.InsertAsync(adminUser, cancellationToken);

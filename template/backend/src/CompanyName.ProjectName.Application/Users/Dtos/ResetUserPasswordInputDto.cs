@@ -7,10 +7,10 @@ namespace CompanyName.ProjectName.Application.Users.Dtos;
 /// </summary>
 public record ResetUserPasswordInputDto
 {
-    [Display(Name = "密码")]
-    [Required(ErrorMessage = "{0}不能为空")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0}长度必须在 {2}-{1} 个字符之间")]
+    [Display(Name = "Password")]
+    [Required(ErrorMessage = "{0} is required.")]
+    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0} must be between {2} and {1} characters.")]
     [RegularExpression(@"^(?=.*[a-zA-Z])(?=.*\d).{6,}$",
-        ErrorMessage = "{0}需 6 位以上，包含字母和数字")]
+        ErrorMessage = "{0} must be at least 6 characters and contain both letters and numbers.")]
     public required string Password { get; init; }
 }

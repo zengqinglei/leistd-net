@@ -1,5 +1,10 @@
 import { CommonModule } from '@angular/common';
+//#if (IncludeLocalization)
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#else
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+//#endif
 import { ButtonModule } from 'primeng/button';
 import { Popover, PopoverModule } from 'primeng/popover';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
@@ -18,11 +23,28 @@ type PopoverMode = 'permissions' | 'redirectUris';
 
 @Component({
   selector: 'app-open-application-table',
+  //#if (IncludeLocalization)
+  imports: [CommonModule, TableModule, ButtonModule, TagModule, TooltipModule, PopoverModule, TranslocoModule],
+  //#else
   imports: [CommonModule, TableModule, ButtonModule, TagModule, TooltipModule, PopoverModule],
+  //#endif
   templateUrl: './open-application-table.html',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class OpenApplicationTable {
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  readonly currentPageReportTemplate = () => this.transloco.translate('openApp.table.currentPageReport');
+  readonly editTooltip = () => this.transloco.translate('common.edit');
+  readonly resetSecretTooltip = () => this.transloco.translate('openApp.action.resetSecret');
+  readonly deleteTooltip = () => this.transloco.translate('common.delete');
+  //#else
+  readonly currentPageReportTemplate = () => '{totalRecords} total';
+  readonly editTooltip = () => 'Edit';
+  readonly resetSecretTooltip = () => 'Reset secret';
+  readonly deleteTooltip = () => 'Delete';
+  //#endif
+
   applications = input.required<OpenApplicationOutputDto[]>();
   totalRecords = input.required<number>();
   loading = input<boolean>(false);
@@ -44,7 +66,11 @@ export class OpenApplicationTable {
       case 'redirectUris':
         return 'Redirect URIs';
       default:
-        return '授权能力';
+        //#if (IncludeLocalization)
+        return this.transloco.translate('openApp.section.authorization');
+        //#else
+        return 'Authorization capabilities';
+        //#endif
     }
   });
 
@@ -69,11 +95,19 @@ export class OpenApplicationTable {
   }
 
   getApplicationTypeLabel(value: string) {
+    //#if (IncludeLocalization)
     const labels: Record<string, string> = {
       web: 'Web',
-      native: '桌面/原生',
-      service: '服务端'
+      native: this.transloco.translate('openApp.appType.native'),
+      service: this.transloco.translate('openApp.appType.service')
     };
+    //#else
+    const labels: Record<string, string> = {
+      web: 'Web',
+      native: 'Desktop/Native',
+      service: 'Service'
+    };
+    //#endif
     return labels[value] ?? value;
   }
 
@@ -82,18 +116,31 @@ export class OpenApplicationTable {
   }
 
   getConsentTypeLabel(value: string) {
+    //#if (IncludeLocalization)
     const labels: Record<string, string> = {
-      implicit: '隐式同意',
-      explicit: '显式同意',
-      external: '外部同意',
-      systematic: '系统同意'
+      implicit: this.transloco.translate('openApp.consentType.implicit'),
+      explicit: this.transloco.translate('openApp.consentType.explicit'),
+      external: this.transloco.translate('openApp.consentType.external'),
+      systematic: this.transloco.translate('openApp.consentType.systematic')
     };
+    //#else
+    const labels: Record<string, string> = {
+      implicit: 'Implicit consent',
+      explicit: 'Explicit consent',
+      external: 'External consent',
+      systematic: 'Systematic consent'
+    };
+    //#endif
     return labels[value] ?? value;
   }
 
   getPermissionSummary(item: OpenApplicationOutputDto) {
     const grants = item.permissions.filter(permission => permission.startsWith('gt:')).map(permission => permission.replace('gt:', ''));
-    return grants.length ? grants.join(' / ') : '未配置';
+    //#if (IncludeLocalization)
+    return grants.length ? grants.join(' / ') : this.transloco.translate('openApp.permission.notConfigured');
+    //#else
+    return grants.length ? grants.join(' / ') : 'Not configured';
+    //#endif
   }
 
   getVisibleRedirectUris(item: OpenApplicationOutputDto) {

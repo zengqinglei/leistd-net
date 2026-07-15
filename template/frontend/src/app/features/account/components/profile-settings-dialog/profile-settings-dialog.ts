@@ -1,6 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, model, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { MessageService } from 'primeng/api';
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
@@ -20,7 +23,21 @@ const PHONE_PATTERN = /^[0-9+\-()\s]{0,20}$/;
 @Component({
   selector: 'app-profile-settings-dialog',
   standalone: true,
+  //#if (IncludeLocalization)
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    TranslocoModule,
+    DialogModule,
+    ButtonModule,
+    AvatarModule,
+    FileUploadModule,
+    InputTextModule,
+    TagModule
+  ],
+  //#else
   imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, AvatarModule, FileUploadModule, InputTextModule, TagModule],
+  //#endif
   templateUrl: './profile-settings-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -31,13 +48,33 @@ export class ProfileSettingsDialogComponent {
   private readonly authService = inject(AuthService);
   private readonly accountService = inject(AccountService);
   private readonly messageService = inject(MessageService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  private readonly guestLabel = () => this.transloco.translate('account.profile.guestUser');
+  readonly dialogHeader = () => this.transloco.translate('account.profile.header');
+  readonly uploadMessages = () => ({
+    sizeSummary: this.transloco.translate('account.profile.invalidFileSizeSummary'),
+    sizeDetail: this.transloco.translate('account.profile.invalidFileSizeDetail'),
+    typeSummary: this.transloco.translate('account.profile.invalidFileTypeSummary'),
+    typeDetail: this.transloco.translate('account.profile.invalidFileTypeDetail')
+  });
+  //#else
+  private readonly guestLabel = () => 'Guest user';
+  readonly dialogHeader = () => 'Profile';
+  readonly uploadMessages = () => ({
+    sizeSummary: 'File too large',
+    sizeDetail: 'The avatar size cannot exceed 1MB',
+    typeSummary: 'Unsupported format',
+    typeDetail: 'Please upload a PNG, JPG, or WEBP image'
+  });
+  //#endif
 
   readonly dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly saving = signal(false);
   readonly user = computed(() => this.authService.currentUser());
   readonly avatarPreview = signal('');
   readonly displayName = computed(
-    () => this.form.controls.nickname.value.trim() || this.user()?.nickname || this.user()?.username || '未登录用户'
+    () => this.form.controls.nickname.value.trim() || this.user()?.nickname || this.user()?.username || this.guestLabel()
   );
   readonly avatarLabel = computed(() => {
     const text = this.displayName().trim();
@@ -134,7 +171,15 @@ export class ProfileSettingsDialogComponent {
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '个人资料已更新' });
+          //#if (IncludeLocalization)
+          this.messageService.add({
+            severity: 'success',
+            summary: this.transloco.translate('common.success'),
+            detail: this.transloco.translate('account.profile.updateSuccess')
+          });
+          //#else
+          this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Profile updated' });
+          //#endif
           this.visible.set(false);
         }
       });

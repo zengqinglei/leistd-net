@@ -15,6 +15,9 @@
     },
     "IncludeExternalLogin": {
       "longName": "include-external-login"
+    },
+    "IncludeLocalization": {
+      "longName": "include-localization"
     }
   }
 }

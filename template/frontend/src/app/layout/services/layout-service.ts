@@ -38,7 +38,8 @@ export class LayoutService {
   /**
    * 页面标题
    */
-  title = signal<string>('概览');
+  // 初始占位值（各页在 ngOnInit/effect 里会立即覆盖为本页标题）
+  title = signal<string>('Overview');
 
   private readonly platformId = inject(PLATFORM_ID);
   private readonly destroyRef = inject(DestroyRef);

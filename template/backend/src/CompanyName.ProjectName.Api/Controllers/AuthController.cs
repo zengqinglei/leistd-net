@@ -40,17 +40,33 @@ public class AuthController(
 
         if (user == null)
         {
-            throw new UnauthorizedException($"登录失败: 用户不存在或密码错误 - {request.UsernameOrEmail}");
+            throw new UnauthorizedException($"Login failed: user not found or incorrect password - {request.UsernameOrEmail}")
+#if (IncludeLocalization)
+                .WithLocalization("Auth:InvalidCredentials")
+                .WithData("UsernameOrEmail", request.UsernameOrEmail)
+#endif
+                ;
         }
 
         if (!user.IsActive)
         {
-            throw new UnauthorizedException($"登录失败: 用户已被禁用 - 用户: {user.Username}");
+            throw new UnauthorizedException($"Login failed: user is disabled - user: {user.Username}")
+#if (IncludeLocalization)
+                .WithLocalization("Auth:UserDisabled")
+                .WithData("Username", user.Username)
+#endif
+                ;
         }
 
         if (user.IsLockedOut())
         {
-            throw new UnauthorizedException($"登录失败: 用户已被锁定 - 用户: {user.Username}, 锁定至: {user.LockoutEnd}");
+            throw new UnauthorizedException($"Login failed: user is locked out - user: {user.Username}, locked until: {user.LockoutEnd}")
+#if (IncludeLocalization)
+                .WithLocalization("Auth:UserLockedOut")
+                .WithData("Username", user.Username)
+                .WithData("LockoutEnd", user.LockoutEnd)
+#endif
+                ;
         }
 
         // 记录登录成功并建立 Cookie 会话

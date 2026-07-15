@@ -9,13 +9,17 @@
   [closable]="true"
   [dismissableMask]="!saving()"
   [closeOnEscape]="!saving()"
-  header="个人信息"
+  [header]="dialogHeader()"
   styleClass="overflow-hidden"
   (visibleChange)="visible.set($event)"
   (onHide)="onHide()"
 >
   <div class="p-4 md:p-6 pt-2" [formGroup]="form">
-    <p class="mt-0 mb-6 text-sm text-muted-color">更新用户名、邮箱、昵称、手机号和头像。</p>
+    <!--#if (IncludeLocalization)-->
+    <p class="mt-0 mb-6 text-sm text-muted-color">{{ 'account.profile.subtitle' | transloco }}</p>
+    <!--#else-->
+    <p class="mt-0 mb-6 text-sm text-muted-color">Update your username, email, nickname, phone number, and avatar.</p>
+    <!--#endif-->
 
     <p-fileupload
       mode="advanced"
@@ -28,10 +32,10 @@
       [showUploadButton]="false"
       [showCancelButton]="false"
       styleClass="border-0 bg-transparent p-0 shadow-none"
-      invalidFileSizeMessageSummary="文件过大"
-      invalidFileSizeMessageDetail="头像大小不能超过 1MB"
-      invalidFileTypeMessageSummary="格式不支持"
-      invalidFileTypeMessageDetail="请上传 PNG、JPG 或 WEBP 图片"
+      [invalidFileSizeMessageSummary]="uploadMessages().sizeSummary"
+      [invalidFileSizeMessageDetail]="uploadMessages().sizeDetail"
+      [invalidFileTypeMessageSummary]="uploadMessages().typeSummary"
+      [invalidFileTypeMessageDetail]="uploadMessages().typeDetail"
       (onSelect)="onAvatarSelect($event)"
     >
       <ng-template pTemplate="header">
@@ -64,13 +68,27 @@
             <div class="flex items-center gap-2 flex-wrap">
               <h3 class="m-0 truncate text-lg font-semibold text-color">{{ displayName() }}</h3>
               @if (user()?.isSuperAdmin) {
-                <p-tag value="超级管理员" severity="danger" />
+                <!--#if (IncludeLocalization)-->
+                <p-tag [value]="'account.profile.superAdminTag' | transloco" severity="danger" />
+                <!--#else-->
+                <p-tag value="Super Admin" severity="danger" />
+                <!--#endif-->
               } @else if (user()?.isAdmin()) {
-                <p-tag value="管理员" severity="info" />
+                <!--#if (IncludeLocalization)-->
+                <p-tag [value]="'account.profile.adminTag' | transloco" severity="info" />
+                <!--#else-->
+                <p-tag value="Admin" severity="info" />
+                <!--#endif-->
               }
             </div>
             <p class="mt-1 mb-0 truncate text-sm text-muted-color">{{ form.controls.email.value || user()?.email }}</p>
-            <p class="mt-2 mb-0 text-xs text-muted-color">悬浮头像后点击 + 重新上传，选择后即时预览。</p>
+            <!--#if (IncludeLocalization)-->
+            <p class="mt-2 mb-0 text-xs text-muted-color">{{ 'account.profile.avatarHint' | transloco }}</p>
+            <!--#else-->
+            <p class="mt-2 mb-0 text-xs text-muted-color"
+              >Hover over the avatar and click + to re-upload; the selection previews instantly.</p
+            >
+            <!--#endif-->
           </div>
         </div>
       </ng-template>
@@ -82,10 +100,19 @@
 
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">用户名</label>
-        <input pInputText formControlName="username" placeholder="请输入用户名" class="w-full" />
+        <!--#if (IncludeLocalization)-->
+        <label class="block text-sm font-medium text-color">{{ 'account.profile.username' | transloco }}</label>
+        <input pInputText formControlName="username" [placeholder]="'account.profile.usernamePlaceholder' | transloco" class="w-full" />
+        <!--#else-->
+        <label class="block text-sm font-medium text-color">Username</label>
+        <input pInputText formControlName="username" placeholder="Please enter a username" class="w-full" />
+        <!--#endif-->
         @if (form.controls.username.hasError('required') && form.controls.username.touched) {
-          <small class="text-red-500">用户名不能为空</small>
+          <!--#if (IncludeLocalization)-->
+          <small class="text-red-500">{{ 'account.profile.usernameRequired' | transloco }}</small>
+          <!--#else-->
+          <small class="text-red-500">Username cannot be empty</small>
+          <!--#endif-->
         }
         @if (
           (form.controls.username.hasError('minlength') ||
@@ -93,39 +120,79 @@
             form.controls.username.hasError('pattern')) &&
           form.controls.username.touched
         ) {
-          <small class="text-red-500">用户名需为 3-64 位字母、数字或下划线</small>
+          <!--#if (IncludeLocalization)-->
+          <small class="text-red-500">{{ 'account.profile.usernameFormatError' | transloco }}</small>
+          <!--#else-->
+          <small class="text-red-500">Username must be 3–64 characters of letters, numbers, or underscores</small>
+          <!--#endif-->
         }
       </div>
 
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">邮箱</label>
-        <input pInputText formControlName="email" placeholder="请输入邮箱" class="w-full" />
+        <!--#if (IncludeLocalization)-->
+        <label class="block text-sm font-medium text-color">{{ 'account.profile.email' | transloco }}</label>
+        <input pInputText formControlName="email" [placeholder]="'account.profile.emailPlaceholder' | transloco" class="w-full" />
+        <!--#else-->
+        <label class="block text-sm font-medium text-color">Email</label>
+        <input pInputText formControlName="email" placeholder="Please enter an email" class="w-full" />
+        <!--#endif-->
         @if (
           (form.controls.email.hasError('required') ||
             form.controls.email.hasError('email') ||
             form.controls.email.hasError('maxlength')) &&
           form.controls.email.touched
         ) {
-          <small class="text-red-500">请输入有效邮箱，长度不能超过 256 个字符</small>
+          <!--#if (IncludeLocalization)-->
+          <small class="text-red-500">{{ 'account.profile.emailError' | transloco }}</small>
+          <!--#else-->
+          <small class="text-red-500">Please enter a valid email; length cannot exceed 256 characters</small>
+          <!--#endif-->
         }
       </div>
 
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">昵称</label>
-        <input pInputText formControlName="nickname" placeholder="请输入昵称" class="w-full" />
+        <!--#if (IncludeLocalization)-->
+        <label class="block text-sm font-medium text-color">{{ 'account.profile.nickname' | transloco }}</label>
+        <input pInputText formControlName="nickname" [placeholder]="'account.profile.nicknamePlaceholder' | transloco" class="w-full" />
+        <!--#else-->
+        <label class="block text-sm font-medium text-color">Nickname</label>
+        <input pInputText formControlName="nickname" placeholder="Please enter a nickname" class="w-full" />
+        <!--#endif-->
         @if (form.controls.nickname.invalid && form.controls.nickname.touched) {
-          <small class="text-red-500">昵称长度不能超过 128 个字符</small>
+          <!--#if (IncludeLocalization)-->
+          <small class="text-red-500">{{ 'account.profile.nicknameError' | transloco }}</small>
+          <!--#else-->
+          <small class="text-red-500">Nickname length cannot exceed 128 characters</small>
+          <!--#endif-->
         }
       </div>
 
       <div class="flex flex-col gap-2">
-        <label class="block text-sm font-medium text-color">手机号</label>
-        <input pInputText formControlName="phoneNumber" placeholder="请输入手机号" class="w-full" />
+        <!--#if (IncludeLocalization)-->
+        <label class="block text-sm font-medium text-color">{{ 'account.profile.phoneNumber' | transloco }}</label>
+        <input
+          pInputText
+          formControlName="phoneNumber"
+          [placeholder]="'account.profile.phoneNumberPlaceholder' | transloco"
+          class="w-full"
+        />
+        <!--#else-->
+        <label class="block text-sm font-medium text-color">Phone Number</label>
+        <input pInputText formControlName="phoneNumber" placeholder="Please enter a phone number" class="w-full" />
+        <!--#endif-->
         @if (form.controls.phoneNumber.hasError('maxlength') && form.controls.phoneNumber.touched) {
-          <small class="text-red-500">手机号长度不能超过 20 个字符</small>
+          <!--#if (IncludeLocalization)-->
+          <small class="text-red-500">{{ 'account.profile.phoneNumberLengthError' | transloco }}</small>
+          <!--#else-->
+          <small class="text-red-500">Phone number length cannot exceed 20 characters</small>
+          <!--#endif-->
         }
         @if (form.controls.phoneNumber.hasError('pattern') && form.controls.phoneNumber.touched) {
-          <small class="text-red-500">手机号仅支持数字、空格以及 + - ( ) 符号</small>
+          <!--#if (IncludeLocalization)-->
+          <small class="text-red-500">{{ 'account.profile.phoneNumberPatternError' | transloco }}</small>
+          <!--#else-->
+          <small class="text-red-500">Phone number supports only digits, spaces, and the symbols + - ( )</small>
+          <!--#endif-->
         }
       </div>
     </div>
@@ -133,8 +200,13 @@
 
   <ng-template pTemplate="footer">
     <div class="flex justify-end gap-3 p-4">
-      <p-button label="取消" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="onHide()" />
-      <p-button label="保存" [loading]="saving()" (onClick)="onSubmit()" />
+      <!--#if (IncludeLocalization)-->
+      <p-button [label]="'common.cancel' | transloco" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="onHide()" />
+      <p-button [label]="'common.save' | transloco" [loading]="saving()" (onClick)="onSubmit()" />
+      <!--#else-->
+      <p-button label="Cancel" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="onHide()" />
+      <p-button label="Save" [loading]="saving()" (onClick)="onSubmit()" />
+      <!--#endif-->
     </div>
   </ng-template>
 </p-dialog>

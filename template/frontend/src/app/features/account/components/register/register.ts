@@ -3,6 +3,9 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -13,6 +16,9 @@ import { TooltipModule } from 'primeng/tooltip';
 import { lastValueFrom } from 'rxjs';
 
 import { ThemeService } from '../../../../core/services/theme-service';
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
+//#endif
 import { LogoComponent } from '../../../../shared/components/logo/logo';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
@@ -31,6 +37,10 @@ import { AccountService } from '../../services/account-service';
     ButtonModule,
     StyleClassModule,
     ThemeConfigurator,
+    //#if (IncludeLocalization)
+    LanguageSwitcher,
+    TranslocoModule,
+    //#endif
     LogoComponent,
     TooltipModule
   ],
@@ -45,6 +55,23 @@ export class Register implements OnInit {
   private messageService = inject(MessageService);
   private destroyRef = inject(DestroyRef);
   public themeService = inject(ThemeService);
+  //#if (IncludeLocalization)
+  public readonly transloco = inject(TranslocoService);
+  // 属性位置的文案（无法在标签属性里用 #if 分支）经此对象绑定
+  readonly i18n = {
+    captcha: () => this.transloco.translate('account.register.captcha'),
+    captchaPlaceholder: () => this.transloco.translate('account.register.captchaPlaceholder'),
+    captchaRefresh: () => this.transloco.translate('account.register.captchaRefresh'),
+    captchaAlt: () => this.transloco.translate('account.register.captchaAlt')
+  };
+  //#else
+  readonly i18n = {
+    captcha: () => 'Captcha',
+    captchaPlaceholder: () => 'Enter the captcha on the right',
+    captchaRefresh: () => "Can't see clearly? Click to refresh",
+    captchaAlt: () => 'Captcha'
+  };
+  //#endif
 
   // returnUrl：注册成功后跳转 login 时传递
   returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
@@ -156,12 +183,28 @@ export class Register implements OnInit {
     const captchaToken = this.captchaData()?.captchaToken;
 
     if (!email || this.registerForm.get('email')?.invalid) {
-      this.messageService.add({ severity: 'warn', summary: '提示', detail: '请先输入有效的邮箱' });
+      //#if (IncludeLocalization)
+      this.messageService.add({
+        severity: 'warn',
+        summary: this.transloco.translate('common.notice'),
+        detail: this.transloco.translate('account.register.emailRequired')
+      });
+      //#else
+      this.messageService.add({ severity: 'warn', summary: 'Notice', detail: 'Please enter a valid email first' });
+      //#endif
       return;
     }
 
     if (!captchaCode || !captchaToken) {
-      this.messageService.add({ severity: 'warn', summary: '提示', detail: '请先输入图形验证码' });
+      //#if (IncludeLocalization)
+      this.messageService.add({
+        severity: 'warn',
+        summary: this.transloco.translate('common.notice'),
+        detail: this.transloco.translate('account.register.captchaRequired')
+      });
+      //#else
+      this.messageService.add({ severity: 'warn', summary: 'Notice', detail: 'Please enter the captcha first' });
+      //#endif
       return;
     }
 
@@ -174,7 +217,15 @@ export class Register implements OnInit {
           captchaToken
         })
       );
-      this.messageService.add({ severity: 'success', summary: '成功', detail: '验证码已发送，请查收邮件' });
+      //#if (IncludeLocalization)
+      this.messageService.add({
+        severity: 'success',
+        summary: this.transloco.translate('common.success'),
+        detail: this.transloco.translate('account.register.emailCodeSent')
+      });
+      //#else
+      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Verification code sent, please check your email' });
+      //#endif
       this.startCountdown();
     } catch {
       this.refreshCaptcha(); // 如果验证码错误，刷新图形验证码
@@ -216,7 +267,15 @@ export class Register implements OnInit {
       const captchaToken = this.captchaData()?.captchaToken;
 
       if (!captchaToken) {
-        this.messageService.add({ severity: 'error', summary: '错误', detail: '请刷新获取图形验证码' });
+        //#if (IncludeLocalization)
+        this.messageService.add({
+          severity: 'error',
+          summary: this.transloco.translate('common.error'),
+          detail: this.transloco.translate('account.register.captchaTokenMissing')
+        });
+        //#else
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Please refresh to get the captcha' });
+        //#endif
         return;
       }
 
@@ -231,7 +290,19 @@ export class Register implements OnInit {
         })
       );
 
-      this.messageService.add({ severity: 'success', summary: '注册成功', detail: '账号创建成功，请登录' });
+      //#if (IncludeLocalization)
+      this.messageService.add({
+        severity: 'success',
+        summary: this.transloco.translate('account.register.registerSuccess'),
+        detail: this.transloco.translate('account.register.registerSuccessDetail')
+      });
+      //#else
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Registration successful',
+        detail: 'Account created successfully, please sign in'
+      });
+      //#endif
       this.router.navigate(['/auth/login'], {
         queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined
       });
@@ -249,23 +320,47 @@ export class Register implements OnInit {
     }
 
     if (field.errors['required']) {
-      return '此字段不能为空';
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errRequired');
+      //#else
+      return 'This field is required';
+      //#endif
     }
     if (field.errors['email']) {
-      return '邮箱格式不正确';
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errEmailInvalid');
+      //#else
+      return 'Invalid email format';
+      //#endif
     }
     if (field.errors['pattern'] && fieldName === 'username') {
-      return '只能包含字母、数字和下划线';
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errUsernamePattern');
+      //#else
+      return 'Only letters, digits and underscores are allowed';
+      //#endif
     }
     if (field.errors['pattern'] && fieldName === 'password') {
-      return '密码需 6 位以上，包含字母和数字';
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errPasswordPattern');
+      //#else
+      return 'Password must be at least 6 characters and contain letters and digits';
+      //#endif
     }
     if (field.errors['minlength']) {
       const minLength = field.errors['minlength'].requiredLength;
-      return `至少需要 ${minLength} 个字符`;
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errMinLength', { min: minLength });
+      //#else
+      return `At least ${minLength} characters required`;
+      //#endif
     }
     if (field.errors['passwordMismatch']) {
-      return '两次输入的密码不一致';
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errPasswordMismatch');
+      //#else
+      return 'The two passwords do not match';
+      //#endif
     }
     return null;
   }

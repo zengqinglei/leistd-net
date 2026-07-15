@@ -1,0 +1,25 @@
+{
+  "culture": "en",
+  "texts": {
+    "Error:BadRequest": "The request is invalid.",
+    "Error:Unauthorized": "Authentication is required.",
+    "Error:Forbidden": "You do not have permission to perform this action.",
+    "Error:NotFound": "The requested resource was not found.",
+    "Error:Conflict": "The request conflicts with the current state.",
+    "Error:UnprocessableEntity": "The submitted data is invalid.",
+    "Error:InternalServer": "A system error occurred. Please contact the administrator.",
+    "Error:ServiceUnavailable": "The service is temporarily unavailable. Please try again later.",
+    "Error:RequestCanceled": "The request was canceled.",
+    "Error:UpstreamTimeout": "The upstream service timed out. Please try again later.",
+    "Error:UpstreamUnavailable": "Failed to reach the upstream service.",
+    "Title:400": "Bad Request",
+    "Title:401": "Unauthorized",
+    "Title:403": "Forbidden",
+    "Title:404": "Not Found",
+    "Title:409": "Conflict",
+    "Title:422": "Unprocessable Entity",
+    "Title:500": "Internal Server Error",
+    "Title:502": "Bad Gateway",
+    "Title:503": "Service Unavailable"
+  }
+}

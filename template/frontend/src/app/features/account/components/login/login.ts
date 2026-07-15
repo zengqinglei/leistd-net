@@ -2,6 +2,9 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -13,6 +16,9 @@ import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 import { AuthService } from '../../../../core/services/auth-service';
 import { ThemeService } from '../../../../core/services/theme-service';
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
+//#endif
 import { LogoComponent } from '../../../../shared/components/logo/logo';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { AccountService } from '../../services/account-service';
@@ -30,6 +36,10 @@ import { AccountService } from '../../services/account-service';
     ButtonModule,
     StyleClassModule,
     ThemeConfigurator,
+    //#if (IncludeLocalization)
+    LanguageSwitcher,
+    TranslocoModule,
+    //#endif
     LogoComponent
   ],
   templateUrl: './login.html',
@@ -43,6 +53,9 @@ export class Login {
   private router = inject(Router);
   private messageService = inject(MessageService);
   public themeService = inject(ThemeService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   // 加载状态
   private _isLoading = signal(false);
@@ -86,12 +99,21 @@ export class Login {
       await lastValueFrom(this.authService.loadUser());
 
       // 登录成功提示
+      //#if (IncludeLocalization)
       this.messageService.add({
         severity: 'success',
-        summary: '登录成功',
-        detail: '欢迎回来！',
+        summary: this.transloco.translate('account.login.loginSuccess'),
+        detail: this.transloco.translate('account.login.welcomeBack'),
         life: 3000
       });
+      //#else
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Login successful',
+        detail: 'Welcome back!',
+        life: 3000
+      });
+      //#endif
 
       if (this.isSafeLocalReturnUrl(returnUrl)) {
         await this.router.navigateByUrl(returnUrl);
@@ -107,7 +129,7 @@ export class Login {
     } catch (error) {
       // HTTP 错误已经在 httpErrorInterceptor 中统一处理并显示 Toast
       // 这里只需要捕获错误以确保 finally 块能执行，不需要再次抛出
-      console.error('登录失败', error);
+      console.error('Login failed', error);
     } finally {
       this._isLoading.set(false);
     }
@@ -127,11 +149,19 @@ export class Login {
     }
 
     if (field.errors['required']) {
-      return '此字段不能为空';
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errRequired');
+      //#else
+      return 'This field is required';
+      //#endif
     }
     if (field.errors['minlength']) {
       const minLength = field.errors['minlength'].requiredLength;
-      return `至少需要 ${minLength} 个字符`;
+      //#if (IncludeLocalization)
+      return this.transloco.translate('account.register.errMinLength', { min: minLength });
+      //#else
+      return `At least ${minLength} characters required`;
+      //#endif
     }
     return null;
   }
@@ -154,18 +184,27 @@ export class Login {
       const response = await lastValueFrom(this.accountService.getExternalLoginUrl(provider));
 
       if (!response.loginUrl) {
-        throw new Error('未获取到有效的登录 URL');
+        throw new Error('No valid login URL was returned');
       }
 
       window.location.href = response.loginUrl;
     } catch (error) {
-      console.error(`${label} 登录失败`, error);
+      console.error(`${label} login failed`, error);
+      //#if (IncludeLocalization)
       this.messageService.add({
         severity: 'error',
-        summary: '登录失败',
-        detail: `无法连接到 ${label} 登录服务，请稍后重试`,
+        summary: this.transloco.translate('account.login.loginFailed'),
+        detail: this.transloco.translate('account.login.externalLoginFailed', { provider: label }),
         life: 3000
       });
+      //#else
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Login failed',
+        detail: `Unable to connect to the ${label} login service, please try again later`,
+        life: 3000
+      });
+      //#endif
       this._isLoading.set(false);
     }
   }

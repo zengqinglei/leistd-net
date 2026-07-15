@@ -9,6 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- WebApplicationFactory<> 需要 ASP.NET Core 共享框架的编译引用；Mvc.Testing 包本身只带 tasks，不含 compile lib -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />

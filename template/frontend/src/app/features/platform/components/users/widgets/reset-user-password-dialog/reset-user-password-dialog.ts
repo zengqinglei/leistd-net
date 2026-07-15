@@ -1,6 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, model, output } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { PasswordModule } from 'primeng/password';
@@ -12,7 +15,11 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
 
 @Component({
   selector: 'app-reset-user-password-dialog',
+  //#if (IncludeLocalization)
+  imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, PasswordModule, TranslocoModule],
+  //#else
   imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, PasswordModule],
+  //#endif
   templateUrl: './reset-user-password-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -22,6 +29,12 @@ export class ResetUserPasswordDialogComponent {
   readonly saved = output<ResetUserPasswordInputDto>();
 
   private readonly fb = inject(FormBuilder);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  readonly dialogHeader = () => this.transloco.translate('users.resetDialog.header');
+  //#else
+  readonly dialogHeader = () => 'Reset user password';
+  //#endif
 
   dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly form = this.fb.nonNullable.group({

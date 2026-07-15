@@ -1,5 +1,11 @@
 import { Component, computed, inject } from '@angular/core';
+//#if (IncludeLocalization)
+import { toSignal } from '@angular/core/rxjs-interop';
+//#endif
 import { FormsModule } from '@angular/forms';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import type { PaletteDesignToken } from '@primeuix/themes/types';
 import { SelectButtonModule } from 'primeng/selectbutton';
 
@@ -27,9 +33,9 @@ interface PaletteOption<TName extends string> {
   template: `
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-2">
-        <span class="text-sm text-muted-color font-semibold">主题模式</span>
+        <span class="text-sm text-muted-color font-semibold">{{ modeLabel() }}</span>
         <p-selectbutton
-          [options]="themeModes"
+          [options]="themeModes()"
           optionLabel="label"
           optionValue="value"
           [ngModel]="themeService.mode()"
@@ -43,7 +49,7 @@ interface PaletteOption<TName extends string> {
         <div class="pt-2 flex gap-2 flex-wrap justify-start">
           <button
             type="button"
-            title="默认"
+            [title]="defaultLabel()"
             (click)="onPrimaryChange($event, null)"
             [class.outline-primary]="themeService.preferences().primary === null"
             class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
@@ -67,7 +73,7 @@ interface PaletteOption<TName extends string> {
         <div class="pt-2 flex gap-2 flex-wrap justify-start">
           <button
             type="button"
-            title="默认"
+            [title]="defaultLabel()"
             (click)="onSurfaceChange($event, null)"
             [class.outline-primary]="themeService.preferences().surface === null"
             class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
@@ -110,13 +116,40 @@ interface PaletteOption<TName extends string> {
 })
 export class ThemeConfigurator {
   readonly themeService = inject(ThemeService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed 重算，文案随之更新。
+  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  readonly modeLabel = computed(() => {
+    this.activeLang();
+    return this.transloco.translate('theme.config.mode');
+  });
+  readonly defaultLabel = computed(() => {
+    this.activeLang();
+    return this.transloco.translate('theme.config.default');
+  });
+  //#else
+  readonly modeLabel = computed(() => 'Theme Mode');
+  readonly defaultLabel = computed(() => 'Default');
+  //#endif
 
   readonly presetNames = [...THEME_PRESET_NAMES];
-  readonly themeModes: Array<{ label: string; value: ThemeMode }> = [
-    { label: '亮色', value: 'light' },
-    { label: '系统', value: 'system' },
-    { label: '暗色', value: 'dark' }
-  ];
+  //#if (IncludeLocalization)
+  readonly themeModes = computed<Array<{ label: string; value: ThemeMode }>>(() => {
+    this.activeLang();
+    return [
+      { label: this.transloco.translate('theme.config.light'), value: 'light' },
+      { label: this.transloco.translate('theme.config.system'), value: 'system' },
+      { label: this.transloco.translate('theme.config.dark'), value: 'dark' }
+    ];
+  });
+  //#else
+  readonly themeModes = computed<Array<{ label: string; value: ThemeMode }>>(() => [
+    { label: 'Light', value: 'light' },
+    { label: 'System', value: 'system' },
+    { label: 'Dark', value: 'dark' }
+  ]);
+  //#endif
 
   readonly primaryColors = computed<Array<PaletteOption<ThemePrimaryName>>>(() => {
     const primitive = THEME_PRESETS[this.themeService.preferences().preset].primitive;

@@ -1,6 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { lastValueFrom } from 'rxjs';
 
@@ -22,11 +25,11 @@ import { AccountService } from '../../services/account-service';
     <main class="flex min-h-screen items-center justify-center bg-surface-50 px-4 dark:bg-surface-950">
       <section class="text-center">
         @if (error()) {
-          <h1 class="mb-3 text-2xl font-semibold text-red-500">登录失败</h1>
+          <h1 class="mb-3 text-2xl font-semibold text-red-500">{{ failedTitle() }}</h1>
           <p class="text-surface-600 dark:text-surface-300">{{ error() }}</p>
         } @else {
-          <p-progress-spinner ariaLabel="正在完成登录" />
-          <h1 class="mt-4 text-2xl font-semibold text-surface-900 dark:text-surface-0">正在处理第三方登录</h1>
+          <p-progress-spinner [ariaLabel]="processingAria()" />
+          <h1 class="mt-4 text-2xl font-semibold text-surface-900 dark:text-surface-0">{{ processingTitle() }}</h1>
         }
       </section>
     </main>
@@ -38,8 +41,22 @@ export class ExternalAuthCallback implements OnInit {
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   protected readonly error = signal<string | null>(null);
+
+  // 内联模板里的条件文案：.ts 的模板字符串区不支持 HTML 注释式条件指令，改用 getter 承载。
+  //#if (IncludeLocalization)
+  protected readonly failedTitle = () => this.transloco.translate('account.login.loginFailed');
+  protected readonly processingAria = () => this.transloco.translate('account.externalCallback.processingAria');
+  protected readonly processingTitle = () => this.transloco.translate('account.externalCallback.processing');
+  //#else
+  protected readonly failedTitle = () => 'Login failed';
+  protected readonly processingAria = () => 'Completing sign-in';
+  protected readonly processingTitle = () => 'Processing third-party sign-in';
+  //#endif
 
   ngOnInit(): void {
     this.processCallback();
@@ -52,7 +69,11 @@ export class ExternalAuthCallback implements OnInit {
     const provider = params.get('provider') ?? this.route.snapshot.paramMap.get('provider');
 
     if (!code || !provider) {
-      this.error.set('缺少必要的回调参数');
+      //#if (IncludeLocalization)
+      this.error.set(this.transloco.translate('account.externalCallback.missingParams'));
+      //#else
+      this.error.set('Missing required callback parameters');
+      //#endif
       return;
     }
 
@@ -68,8 +89,12 @@ export class ExternalAuthCallback implements OnInit {
         this.router.navigate(['/workspace']);
       }
     } catch (err) {
-      console.error('第三方登录回调处理失败', err);
-      this.error.set('第三方登录失败，请返回重试');
+      console.error('External login callback processing failed', err);
+      //#if (IncludeLocalization)
+      this.error.set(this.transloco.translate('account.externalCallback.failed'));
+      //#else
+      this.error.set('Third-party sign-in failed. Please go back and try again.');
+      //#endif
     }
   }
 }

@@ -1,6 +1,9 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { MessageService } from 'primeng/api';
 import { catchError, throwError } from 'rxjs';
 
@@ -24,20 +27,31 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
 //#if (IncludeIdentity)
   const authService = inject(AuthService);
 //#endif
-
-  const CODE_MESSAGES: Record<number, string> = {
-    400: '发出的请求有错误，服务器没有进行新建或修改数据的操作。',
-    401: '身份验证失败，请重新登录。',
-    403: '权限不足，无法访问该资源。',
-    404: '发出的请求针对的是不存在的记录，服务器没有进行操作。',
-    406: '请求的格式不可得。',
-    410: '请求的资源被永久删除，且不会再得到的。',
-    422: '当创建一个对象时，发生一个验证错误。',
-    500: '服务器发生错误，请检查服务器。',
-    502: '网关错误。',
-    503: '服务不可用，服务器暂时过载或维护。',
-    504: '网关超时。'
+//#if (IncludeLocalization)
+  const transloco = inject(TranslocoService);
+  // 纯客户端兜底文案（后端不可达/无消息体时）；后端可达时优先用其已本地化的 message。
+  const codeMessage = (status: number): string | undefined => {
+    const value = transloco.translate(`httpError.${status}`);
+    return value === `httpError.${status}` ? undefined : value;
   };
+  const requestErrorSummary = () => transloco.translate('common.requestError');
+//#else
+  const CODE_MESSAGES: Record<number, string> = {
+    400: 'The request was malformed; the server did not create or modify data.',
+    401: 'Authentication failed. Please sign in again.',
+    403: 'Insufficient permissions to access this resource.',
+    404: 'The requested record does not exist; the server took no action.',
+    406: 'The requested format is not available.',
+    410: 'The requested resource has been permanently deleted.',
+    422: 'A validation error occurred while creating the object.',
+    500: 'A server error occurred. Please check the server.',
+    502: 'Bad gateway.',
+    503: 'Service unavailable; the server is temporarily overloaded or under maintenance.',
+    504: 'Gateway timeout.'
+  };
+  const codeMessage = (status: number): string | undefined => CODE_MESSAGES[status];
+  const requestErrorSummary = () => 'Request error';
+//#endif
 
   return next(req).pipe(
     catchError((error: unknown) => {
@@ -55,27 +69,27 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         // 支持 application/json 和 application/problem+json (RFC 7807)
         if ((contentType?.includes('application/json') || contentType?.includes('application/problem+json')) && error.error) {
           const code = error.error.code || '';
+          // 优先使用后端返回的 message（启用多语言时后端已按 Accept-Language 本地化）
           const message = error.error.message || error.error.detail;
 
           if (message) {
             messageService.add({
               severity: 'error',
-              summary: `请求错误（${error.status} - ${code}）`,
+              summary: `${requestErrorSummary()}（${error.status} - ${code}）`,
               detail: message
             });
           } else {
-            const errorText = CODE_MESSAGES[error.status];
             messageService.add({
               severity: 'error',
-              summary: `请求错误（${error.status}）`,
-              detail: errorText
+              summary: `${requestErrorSummary()}（${error.status}）`,
+              detail: codeMessage(error.status)
             });
           }
         } else {
-          const errorText = CODE_MESSAGES[error.status] || error.statusText;
+          const errorText = codeMessage(error.status) || error.statusText;
           messageService.add({
             severity: 'error',
-            summary: `请求错误（${error.status}）`,
+            summary: `${requestErrorSummary()}（${error.status}）`,
             detail: errorText
           });
         }

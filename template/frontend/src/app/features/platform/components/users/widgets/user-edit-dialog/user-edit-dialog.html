@@ -2,7 +2,7 @@
   [visible]="visible()"
   (visibleChange)="visible.set($event)"
   (onHide)="onHide()"
-  [header]="isEditMode() ? '编辑用户' : '新建用户'"
+  [header]="dialogHeader()"
   [modal]="true"
   [breakpoints]="dialogConfig.breakpoints"
   [style]="dialogConfig.style"
@@ -12,7 +12,11 @@
 >
   <div class="relative min-h-56" [formGroup]="form">
     @if (loading()) {
-      <app-dialog-loading text="正在加载用户信息..." />
+      <!--#if (IncludeLocalization)-->
+      <app-dialog-loading [text]="'users.editDialog.loading' | transloco" />
+      <!--#else-->
+      <app-dialog-loading text="Loading user information..." />
+      <!--#endif-->
     } @else {
       <div class="flex flex-col gap-5">
         <p-fileupload
@@ -26,10 +30,10 @@
           [showUploadButton]="false"
           [showCancelButton]="false"
           styleClass="border-0 bg-transparent p-0 shadow-none"
-          invalidFileSizeMessageSummary="文件过大"
-          invalidFileSizeMessageDetail="头像大小不能超过 1MB"
-          invalidFileTypeMessageSummary="格式不支持"
-          invalidFileTypeMessageDetail="请上传 PNG、JPG 或 WEBP 图片"
+          [invalidFileSizeMessageSummary]="avatarMessages().sizeSummary"
+          [invalidFileSizeMessageDetail]="avatarMessages().sizeDetail"
+          [invalidFileTypeMessageSummary]="avatarMessages().typeSummary"
+          [invalidFileTypeMessageDetail]="avatarMessages().typeDetail"
           (onSelect)="onAvatarSelect($event)"
         >
           <ng-template pTemplate="header">
@@ -62,8 +66,17 @@
                 <div class="flex items-center gap-2 flex-wrap">
                   <h3 class="m-0 truncate text-lg font-semibold text-color">{{ displayName() }}</h3>
                 </div>
-                <p class="mt-1 mb-0 truncate text-sm text-muted-color">{{ form.controls.email.value || '未设置邮箱' }}</p>
-                <p class="mt-2 mb-0 text-xs text-muted-color">悬浮头像后点击 + 重新上传，选择后即时预览。</p>
+                <!--#if (IncludeLocalization)-->
+                <p class="mt-1 mb-0 truncate text-sm text-muted-color">
+                  {{ form.controls.email.value || ('users.editDialog.noEmail' | transloco) }}
+                </p>
+                <p class="mt-2 mb-0 text-xs text-muted-color">{{ 'users.editDialog.avatarHint' | transloco }}</p>
+                <!--#else-->
+                <p class="mt-1 mb-0 truncate text-sm text-muted-color">{{ form.controls.email.value || 'No email set' }}</p>
+                <p class="mt-2 mb-0 text-xs text-muted-color"
+                  >Hover over the avatar and click + to re-upload; the preview updates instantly.</p
+                >
+                <!--#endif-->
               </div>
             </div>
           </ng-template>
@@ -75,10 +88,24 @@
 
         <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-medium text-color">用户名</label>
-            <input pInputText formControlName="username" placeholder="请输入用户名" class="w-full" />
+            <!--#if (IncludeLocalization)-->
+            <label class="text-sm font-medium text-color">{{ 'users.editDialog.usernameLabel' | transloco }}</label>
+            <input
+              pInputText
+              formControlName="username"
+              [placeholder]="'users.editDialog.usernamePlaceholder' | transloco"
+              class="w-full"
+            />
+            <!--#else-->
+            <label class="text-sm font-medium text-color">Username</label>
+            <input pInputText formControlName="username" placeholder="Enter a username" class="w-full" />
+            <!--#endif-->
             @if (form.controls.username.hasError('required') && form.controls.username.touched) {
-              <small class="text-red-500">用户名不能为空</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="text-red-500">{{ 'users.editDialog.usernameRequired' | transloco }}</small>
+              <!--#else-->
+              <small class="text-red-500">Username is required</small>
+              <!--#endif-->
             }
             @if (
               (form.controls.username.hasError('minlength') ||
@@ -86,40 +113,88 @@
                 form.controls.username.hasError('pattern')) &&
               form.controls.username.touched
             ) {
-              <small class="text-red-500">用户名需为 3-64 位字母、数字或下划线</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="text-red-500">{{ 'users.editDialog.usernamePattern' | transloco }}</small>
+              <!--#else-->
+              <small class="text-red-500">Username must be 3-64 letters, digits or underscores</small>
+              <!--#endif-->
             }
           </div>
 
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-medium text-color">邮箱</label>
-            <input pInputText type="email" formControlName="email" placeholder="请输入邮箱" class="w-full" />
+            <!--#if (IncludeLocalization)-->
+            <label class="text-sm font-medium text-color">{{ 'users.editDialog.emailLabel' | transloco }}</label>
+            <input
+              pInputText
+              type="email"
+              formControlName="email"
+              [placeholder]="'users.editDialog.emailPlaceholder' | transloco"
+              class="w-full"
+            />
+            <!--#else-->
+            <label class="text-sm font-medium text-color">Email</label>
+            <input pInputText type="email" formControlName="email" placeholder="Enter an email" class="w-full" />
+            <!--#endif-->
             @if (
               (form.controls.email.hasError('required') ||
                 form.controls.email.hasError('email') ||
                 form.controls.email.hasError('maxlength')) &&
               form.controls.email.touched
             ) {
-              <small class="text-red-500">请输入有效邮箱，长度不能超过 256 个字符</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="text-red-500">{{ 'users.editDialog.emailInvalid' | transloco }}</small>
+              <!--#else-->
+              <small class="text-red-500">Enter a valid email, no longer than 256 characters</small>
+              <!--#endif-->
             }
           </div>
 
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-medium text-color">显示名称</label>
-            <input pInputText formControlName="displayName" placeholder="请输入显示名称" class="w-full" />
+            <!--#if (IncludeLocalization)-->
+            <label class="text-sm font-medium text-color">{{ 'users.editDialog.displayNameLabel' | transloco }}</label>
+            <input
+              pInputText
+              formControlName="displayName"
+              [placeholder]="'users.editDialog.displayNamePlaceholder' | transloco"
+              class="w-full"
+            />
+            <!--#else-->
+            <label class="text-sm font-medium text-color">Display name</label>
+            <input pInputText formControlName="displayName" placeholder="Enter a display name" class="w-full" />
+            <!--#endif-->
             @if (form.controls.displayName.invalid && form.controls.displayName.touched) {
-              <small class="text-red-500">显示名称长度不能超过 128 个字符</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="text-red-500">{{ 'users.editDialog.displayNameMaxLength' | transloco }}</small>
+              <!--#else-->
+              <small class="text-red-500">Display name cannot exceed 128 characters</small>
+              <!--#endif-->
             }
           </div>
 
           @if (!isEditMode()) {
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-color">初始密码</label>
+              <!--#if (IncludeLocalization)-->
+              <label class="text-sm font-medium text-color">{{ 'users.editDialog.passwordLabel' | transloco }}</label>
+              <!--#else-->
+              <label class="text-sm font-medium text-color">Initial password</label>
+              <!--#endif-->
               <p-password formControlName="password" [feedback]="false" [toggleMask]="true" [fluid]="true" inputStyleClass="w-full" />
               @if (form.controls.password.hasError('required') && form.controls.password.touched) {
-                <small class="text-red-500">请输入初始密码</small>
+                <!--#if (IncludeLocalization)-->
+                <small class="text-red-500">{{ 'users.editDialog.passwordRequired' | transloco }}</small>
+                <!--#else-->
+                <small class="text-red-500">Enter an initial password</small>
+                <!--#endif-->
               }
               @if (hasPasswordRuleError()) {
-                <small class="text-red-500">密码不符合规则，需为 8~20 位并同时包含大小写字母、数字和特殊字符</small>
+                <!--#if (IncludeLocalization)-->
+                <small class="text-red-500">{{ 'users.editDialog.passwordRule' | transloco }}</small>
+                <!--#else-->
+                <small class="text-red-500"
+                  >Password does not meet the rules: 8-20 characters including uppercase and lowercase letters, digits and special
+                  characters</small
+                >
+                <!--#endif-->
               }
             </div>
           }
@@ -129,27 +204,40 @@
 
         <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex flex-col gap-2 md:col-span-2">
-            <label class="text-sm font-medium text-color">角色</label>
+            <!--#if (IncludeLocalization)-->
+            <label class="text-sm font-medium text-color">{{ 'users.editDialog.rolesLabel' | transloco }}</label>
+            <!--#else-->
+            <label class="text-sm font-medium text-color">Roles</label>
+            <!--#endif-->
             <p-multiselect
               formControlName="roles"
-              [options]="roleOptions"
+              [options]="roleOptions()"
               optionLabel="label"
               optionValue="value"
-              placeholder="请选择角色"
+              [placeholder]="rolesPlaceholder()"
               display="chip"
               appendTo="body"
               styleClass="w-full"
             />
             @if (form.controls.roles.invalid && form.controls.roles.touched) {
-              <small class="text-red-500">请至少选择一个角色</small>
+              <!--#if (IncludeLocalization)-->
+              <small class="text-red-500">{{ 'users.editDialog.rolesRequired' | transloco }}</small>
+              <!--#else-->
+              <small class="text-red-500">Select at least one role</small>
+              <!--#endif-->
             }
           </div>
 
           <div class="rounded-lg border border-surface-200 p-3 dark:border-surface-700">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <div class="text-sm font-medium text-color">启用用户</div>
-                <div class="text-xs text-muted-color mt-1">禁用后用户无法登录和调用受保护接口</div>
+                <!--#if (IncludeLocalization)-->
+                <div class="text-sm font-medium text-color">{{ 'users.editDialog.activeTitle' | transloco }}</div>
+                <div class="text-xs text-muted-color mt-1">{{ 'users.editDialog.activeHint' | transloco }}</div>
+                <!--#else-->
+                <div class="text-sm font-medium text-color">Enable user</div>
+                <div class="text-xs text-muted-color mt-1">When disabled, the user cannot sign in or call protected endpoints</div>
+                <!--#endif-->
               </div>
               <p-toggleswitch formControlName="isActive" />
             </div>
@@ -158,8 +246,13 @@
           <div class="rounded-lg border border-surface-200 p-3 dark:border-surface-700">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <div class="text-sm font-medium text-color">邮箱已验证</div>
-                <div class="text-xs text-muted-color mt-1">用于管理邮箱验证状态</div>
+                <!--#if (IncludeLocalization)-->
+                <div class="text-sm font-medium text-color">{{ 'users.editDialog.emailVerifiedTitle' | transloco }}</div>
+                <div class="text-xs text-muted-color mt-1">{{ 'users.editDialog.emailVerifiedHint' | transloco }}</div>
+                <!--#else-->
+                <div class="text-sm font-medium text-color">Email verified</div>
+                <div class="text-xs text-muted-color mt-1">Used to manage the email verification status</div>
+                <!--#endif-->
               </div>
               <p-toggleswitch formControlName="isEmailVerified" />
             </div>
@@ -171,8 +264,13 @@
 
   <ng-template pTemplate="footer">
     <div class="flex justify-end gap-2">
-      <p-button label="取消" severity="secondary" [text]="true" (onClick)="visible.set(false)" />
-      <p-button [label]="isEditMode() ? '保存' : '创建'" [loading]="saving()" (onClick)="save()" />
+      <!--#if (IncludeLocalization)-->
+      <p-button [label]="'common.cancel' | transloco" severity="secondary" [text]="true" (onClick)="visible.set(false)" />
+      <p-button [label]="(isEditMode() ? 'common.save' : 'common.create') | transloco" [loading]="saving()" (onClick)="save()" />
+      <!--#else-->
+      <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="visible.set(false)" />
+      <p-button [label]="isEditMode() ? 'Save' : 'Create'" [loading]="saving()" (onClick)="save()" />
+      <!--#endif-->
     </div>
   </ng-template>
 </p-dialog>

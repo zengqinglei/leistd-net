@@ -73,7 +73,7 @@ HTTP/1.1 200 OK
 | status | number | HTTP 状态码 |
 | detail | string | 本次错误的具体说明（= 异常 `Message`） |
 | instance | string | 出错的请求路径 |
-| code | number | **业务错误码扩展字段**：`BusinessException.Code`，形如 `40000`、`42200`；前 3 位即 HTTP 状态码，后续位可用 `WithCode` 细分。是前端定位与本地化的稳定键 |
+| code | number | **业务错误码扩展字段**：`BusinessException.Code`，形如 `40000`、`42200`；前 3 位即 HTTP 状态码，默认后两位为 `00`。极少数需前端差异化时可用 `WithCode("46")` 细分（→ `40046`）。稳定机器契约，跨 localization 配置一致 |
 | message | string | 错误消息扩展字段（= 异常 `Message`，与 `detail` 同值，便于前端统一读取） |
 | traceId | string | 链路追踪 ID（扩展字段，取 `Activity.Current?.Id`，贯穿调用链） |
 
@@ -138,25 +138,51 @@ HTTP/1.1 200 OK
 
 - `WithCode("46")`：在默认前缀后追加细分码（如 `BadRequestException(...).WithCode("46")` → `code` = `40046`）。
 - `WithDetails("...")`：补充仅在开发环境（或开启 `IsShowDetails`）暴露的 `details`。
+- `WithData("Name", value)`：为本地化文案的具名占位符 `{Name}` 提供值（仅启用多语言时用）。
 
-**示例**：
+<!--#if (IncludeLocalization)-->
+### 4.1 异常本地化
+
+本项目已启用多语言（`--include-localization true`），异常按请求 `Accept-Language` 本地化，遵循**三职责分离**：
+
+| 职责 | 载体 | 说明 |
+| --- | --- | --- |
+| 日志/诊断 | `Message`（构造参数） | 永远是可读**英文**，进日志便于跨语言检索，不给终端用户看 |
+| 机器契约 | `Code` | 稳定业务码；**默认取「HTTP 前缀 + 00」**（如 `40000`/`40400`），跨 localization 配置一致 |
+| 用户展示 | `LocalizationKey`（`WithLocalization`） | 可改名的展示语义键，处理器按 culture 查资源产出用户可见消息 |
+
+- **throw 处写法**（`Message` 英文诊断恒定；`WithLocalization`/`WithData` 仅启用多语言时用，占位值用具名 `WithData`）：
+  ```csharp
+  throw new BadRequestException("Username already exists")          // Message：英文诊断；Code 走默认 40000
+      .WithLocalization("User:UsernameTaken")                      // LocalizationKey：展示键（仅 #if IncludeLocalization）
+      .WithData("Username", username);                             // 具名占位 {Username}
+  ```
+  资源 `Resources/{en,zh-CN}.json` 的 `texts` 段按展示键给出各语言文案（`en` 为默认/回落）：`"User:UsernameTaken": "Username '{Username}' already exists."`。
+- **`Code` 默认即可，不必逐异常显式指定。** 前端 `http-error-interceptor` 按 **HTTP 状态码**统一处理（400 提示 / 401 跳登录 / …），并不消费细分业务码。仅当前端要对**某个具体错误**做差异化行为（如高亮某输入框、自动刷新验证码）时，才 `WithCode("46")` 追加细分后缀（→ `40046`）——这是极少数场景，模板默认不用。
+- 全局处理器解析顺序：**`LocalizationKey` → 状态码通用语义键（`Error:NotFound` 等）→ `Message` 兜底**，绝不把裸键漏给用户；查询全程 `try/catch` 隔离，本地化失败不覆盖原始 `code`。**响应结构不变**，仅 `message`/`detail`/`title` 随语言变，`code`/`traceId` 不变。
+- **未启用多语言（off-mode）时**：`Message` 仍是英文诊断（单一代码路径），处理器原样返回；`throw` 处**不带** `WithLocalization`，无需资源文件。
+- 展示键命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等）。前端**直接显示后端 `message`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §7.2）。
+- **DataAnnotations 校验消息**也随 culture 本地化：DTO 的 `ErrorMessage`/`Display` 用英文句子作键（`"{0} is required."`），`zh-CN.json` 按同一句子映射中文；`Program.cs` 已接线 `AddDataAnnotationsLocalization(...DataAnnotationLocalizerProvider...)`。这样参数校验与业务异常在同一请求下**同语言**。
+
+**示例（`Message` 恒为英文诊断，`Code` 走默认前缀码）**：
 
 ```csharp
-// 业务规则验证失败（400）
+// 业务规则验证失败（400，Code 默认 40000）
 if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-    throw new BadRequestException($"用户名 '{username}' 已存在");
+    throw new BadRequestException($"Username '{username}' already exists.");
 
-// 资源不存在（404）
+// 资源不存在（404，Code 默认 40400）
 var user = await userRepository.GetAsync(id, cancellationToken);
 if (user is null)
-    throw new NotFoundException($"用户 {id} 不存在");
+    throw new NotFoundException($"User {id} not found.");
 
 // 实体字段校验（422，按字段聚合）
-throw new UnprocessableEntityException("email", "邮箱格式不正确");
+throw new UnprocessableEntityException("email", "Invalid email format.");
 
-// 细分业务码（code = 40046）
-throw new BadRequestException("余额不足").WithCode("46");
+// 极少数：前端需按码差异化时，才追加细分后缀（code = 40046）
+throw new BadRequestException("Insufficient balance.").WithCode("46");
 ```
+<!--#endif-->
 
 ## 5. 认证与授权
 

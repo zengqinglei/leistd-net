@@ -107,12 +107,21 @@ public class OpenApplicationAppService(
         var clientId = input.ClientId.Trim();
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            throw new BadRequestException("Client ID 不能为空");
+            throw new BadRequestException("Client ID is required.")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:ClientIdRequired")
+#endif
+                ;
         }
 
         if (await applicationManager.FindByClientIdAsync(clientId, cancellationToken) != null)
         {
-            throw new BadRequestException($"Client ID 已存在: {clientId}");
+            throw new BadRequestException($"Client ID already exists: {clientId}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:ClientIdTaken")
+                .WithData("ClientId", clientId)
+#endif
+                ;
         }
 
         ValidateApplication(input.ApplicationType, input.ClientType, input.ConsentType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements);
@@ -160,7 +169,12 @@ public class OpenApplicationAppService(
         catch (OpenIddict.Abstractions.OpenIddictExceptions.ValidationException ex)
         {
             logger.LogWarning(ex, "OpenIddict 校验失败 (ClientId: {ClientId})", clientId);
-            throw new BadRequestException($"客户端创建失败：{ex.Message}");
+            throw new BadRequestException($"Failed to create client: {ex.Message}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:CreateFailed")
+                .WithData("Reason", ex.Message)
+#endif
+                ;
         }
     }
 
@@ -209,7 +223,11 @@ public class OpenApplicationAppService(
         var clientType = await applicationManager.GetClientTypeAsync(application, cancellationToken);
         if (clientType != OpenIddictConstants.ClientTypes.Confidential)
         {
-            throw new BadRequestException("只有 Confidential 客户端可以重置密钥");
+            throw new BadRequestException("Only confidential clients can reset their secret.")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:SecretResetConfidentialOnly")
+#endif
+                ;
         }
 
         var clientSecret = GenerateClientSecret();
@@ -223,7 +241,12 @@ public class OpenApplicationAppService(
         var application = await applicationManager.FindByIdAsync(id, cancellationToken);
         if (application == null)
         {
-            throw new NotFoundException($"开放应用不存在: {id}");
+            throw new NotFoundException($"Open application not found: {id}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:NotFound")
+                .WithData("Id", id)
+#endif
+                ;
         }
 
         return application;
@@ -274,17 +297,32 @@ public class OpenApplicationAppService(
     {
         if (!ApplicationTypes.Contains(applicationType))
         {
-            throw new BadRequestException($"应用类型不支持: {applicationType}");
+            throw new BadRequestException($"Unsupported application type: {applicationType}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:ApplicationTypeUnsupported")
+                .WithData("ApplicationType", applicationType)
+#endif
+                ;
         }
 
         if (!ClientTypes.Contains(clientType))
         {
-            throw new BadRequestException($"客户端类型不支持: {clientType}");
+            throw new BadRequestException($"Unsupported client type: {clientType}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:ClientTypeUnsupported")
+                .WithData("ClientType", clientType)
+#endif
+                ;
         }
 
         if (!ConsentTypes.Contains(consentType))
         {
-            throw new BadRequestException($"同意类型不支持: {consentType}");
+            throw new BadRequestException($"Unsupported consent type: {consentType}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:ConsentTypeUnsupported")
+                .WithData("ConsentType", consentType)
+#endif
+                ;
         }
 
         // Secret 由后端自动生成，不从前端传入，无需校验
@@ -292,7 +330,11 @@ public class OpenApplicationAppService(
         if ((applicationType == OpenIddictConstants.ApplicationTypes.Native || clientType == OpenIddictConstants.ClientTypes.Public) &&
             !requirements.Contains(PkceRequirement))
         {
-            throw new BadRequestException("Native/Public 客户端必须启用 PKCE");
+            throw new BadRequestException("PKCE must be enabled for native/public clients.")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:PkceRequired")
+#endif
+                ;
         }
 
         foreach (var uri in redirectUris.Concat(postLogoutRedirectUris))
@@ -306,7 +348,12 @@ public class OpenApplicationAppService(
         if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsWhiteSpace) ||
             !Uri.TryCreate(value, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.Fragment))
         {
-            throw new BadRequestException($"URI 不合法: {value}");
+            throw new BadRequestException($"Invalid URI: {value}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:InvalidUri")
+                .WithData("Uri", value)
+#endif
+                ;
         }
     }
 

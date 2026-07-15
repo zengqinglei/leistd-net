@@ -3,36 +3,36 @@
     <div class="mb-6 flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
       <div class="flex flex-1 flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <p-select
-          [options]="activeOptions"
+          [options]="activeOptions()"
           [ngModel]="selectedIsActive()"
           (ngModelChange)="onActiveChange($event)"
           optionLabel="label"
           optionValue="value"
-          placeholder="全部状态"
+          [placeholder]="allStatusPlaceholder()"
           [showClear]="true"
           appendTo="body"
           styleClass="w-full sm:w-48"
         />
 
         <p-select
-          [options]="emailVerifiedOptions"
+          [options]="emailVerifiedOptions()"
           [ngModel]="selectedIsEmailVerified()"
           (ngModelChange)="onEmailVerifiedChange($event)"
           optionLabel="label"
           optionValue="value"
-          placeholder="全部邮箱状态"
+          [placeholder]="allEmailStatusPlaceholder()"
           [showClear]="true"
           appendTo="body"
           styleClass="w-full sm:w-48"
         />
 
         <p-select
-          [options]="roleOptions"
+          [options]="roleOptions()"
           [ngModel]="selectedRole()"
           (ngModelChange)="onRoleChange($event)"
           optionLabel="label"
           optionValue="value"
-          placeholder="全部角色"
+          [placeholder]="allRolesPlaceholder()"
           [showClear]="true"
           appendTo="body"
           styleClass="w-full sm:w-48"
@@ -43,7 +43,7 @@
           <input
             pInputText
             type="text"
-            placeholder="搜索用户名 / 邮箱 / 显示名称..."
+            [placeholder]="searchPlaceholder()"
             [ngModel]="searchQuery()"
             (ngModelChange)="onSearchQueryChange($event)"
             class="w-full"
@@ -54,14 +54,14 @@
       <div class="flex items-center justify-end gap-3 shrink-0">
         <p-button
           icon="pi pi-refresh"
-          label="刷新"
+          [label]="refreshLabel()"
           (onClick)="onFilter()"
           styleClass="w-full sm:w-auto"
-          pTooltip="刷新"
+          [pTooltip]="refreshLabel()"
           tooltipPosition="top"
         />
         <p-button
-          label="新建用户"
+          [label]="newUserLabel()"
           icon="pi pi-plus"
           (onClick)="openAddDialog()"
           [outlined]="true"
@@ -99,10 +99,10 @@
 />
 
 <p-confirmDialog
-  header="确认"
+  [header]="confirmHeader()"
   icon="pi pi-exclamation-triangle"
-  acceptLabel="确定"
-  rejectLabel="取消"
+  [acceptLabel]="confirmAcceptLabel()"
+  [rejectLabel]="confirmRejectLabel()"
   acceptButtonStyleClass="p-button-danger p-button-text"
   rejectButtonStyleClass="p-button-text p-button-secondary"
 >

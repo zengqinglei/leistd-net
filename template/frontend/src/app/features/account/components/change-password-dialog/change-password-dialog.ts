@@ -1,6 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, model, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -36,7 +39,11 @@ function passwordRulesValidator(): ValidatorFn {
 @Component({
   selector: 'app-change-password-dialog',
   standalone: true,
+  //#if (IncludeLocalization)
+  imports: [CommonModule, ReactiveFormsModule, TranslocoModule, DialogModule, ButtonModule, PasswordModule],
+  //#else
   imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, PasswordModule],
+  //#endif
   templateUrl: './change-password-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -46,6 +53,12 @@ export class ChangePasswordDialogComponent {
   private readonly fb = inject(FormBuilder);
   private readonly accountService = inject(AccountService);
   private readonly messageService = inject(MessageService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  readonly dialogHeader = () => this.transloco.translate('account.changePassword.header');
+  //#else
+  readonly dialogHeader = () => 'Change Password';
+  //#endif
 
   readonly dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly saving = signal(false);
@@ -101,7 +114,15 @@ export class ChangePasswordDialogComponent {
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '密码已更新' });
+          //#if (IncludeLocalization)
+          this.messageService.add({
+            severity: 'success',
+            summary: this.transloco.translate('common.success'),
+            detail: this.transloco.translate('account.changePassword.updateSuccess')
+          });
+          //#else
+          this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Password updated' });
+          //#endif
           this.visible.set(false);
         }
       });

@@ -11,7 +11,7 @@
     [rowHover]="true"
     [rowsPerPageOptions]="[10, 20, 50, 100]"
     [showCurrentPageReport]="true"
-    currentPageReportTemplate="共 {totalRecords} 条"
+    [currentPageReportTemplate]="currentPageReportTemplate()"
     [showJumpToPageInput]="true"
     paginatorDropdownAppendTo="body"
     styleClass="w-full"
@@ -26,17 +26,32 @@
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3"
           pSortableColumn="clientId"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">应用 <p-sortIcon field="clientId" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap">
+            <!--#if (IncludeLocalization)-->
+            {{ 'openApp.table.colApp' | transloco }}
+            <!--#else-->
+            Application
+            <!--#endif-->
+            <p-sortIcon field="clientId" />
+          </div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden sm:table-cell whitespace-nowrap"
         >
-          类型
+          <!--#if (IncludeLocalization)-->
+          {{ 'openApp.table.colType' | transloco }}
+          <!--#else-->
+          Type
+          <!--#endif-->
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden md:table-cell whitespace-nowrap"
         >
-          授权能力
+          <!--#if (IncludeLocalization)-->
+          {{ 'openApp.table.colPermissions' | transloco }}
+          <!--#else-->
+          Capabilities
+          <!--#endif-->
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden lg:table-cell whitespace-nowrap"
@@ -46,18 +61,33 @@
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden xl:table-cell whitespace-nowrap"
         >
-          安全
+          <!--#if (IncludeLocalization)-->
+          {{ 'openApp.table.colSecurity' | transloco }}
+          <!--#else-->
+          Security
+          <!--#endif-->
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden 2xl:table-cell whitespace-nowrap"
           pSortableColumn="creationTime"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">创建时间 <p-sortIcon field="creationTime" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap">
+            <!--#if (IncludeLocalization)-->
+            {{ 'openApp.table.colCreatedAt' | transloco }}
+            <!--#else-->
+            Created at
+            <!--#endif-->
+            <p-sortIcon field="creationTime" />
+          </div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 text-right whitespace-nowrap"
         >
-          操作
+          <!--#if (IncludeLocalization)-->
+          {{ 'common.actions' | transloco }}
+          <!--#else-->
+          Actions
+          <!--#endif-->
         </th>
       </tr>
     </ng-template>
@@ -127,12 +157,25 @@
 
         <td class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden xl:table-cell">
           <div class="flex items-center gap-1.5 whitespace-nowrap">
-            <p-tag [value]="hasPkce(item) ? 'PKCE' : '无 PKCE'" [severity]="hasPkce(item) ? 'success' : 'warn'" styleClass="text-[10px]" />
+            <!--#if (IncludeLocalization)-->
             <p-tag
-              [value]="item.hasClientSecret ? 'Secret 已设置' : '无 Secret'"
+              [value]="hasPkce(item) ? 'PKCE' : ('openApp.table.noPkce' | transloco)"
+              [severity]="hasPkce(item) ? 'success' : 'warn'"
+              styleClass="text-[10px]"
+            />
+            <p-tag
+              [value]="item.hasClientSecret ? ('openApp.table.secretSet' | transloco) : ('openApp.table.noSecret' | transloco)"
               [severity]="item.hasClientSecret ? 'warn' : 'secondary'"
               styleClass="text-[10px] hidden 2xl:inline-flex"
             />
+            <!--#else-->
+            <p-tag [value]="hasPkce(item) ? 'PKCE' : 'No PKCE'" [severity]="hasPkce(item) ? 'success' : 'warn'" styleClass="text-[10px]" />
+            <p-tag
+              [value]="item.hasClientSecret ? 'Secret set' : 'No secret'"
+              [severity]="item.hasClientSecret ? 'warn' : 'secondary'"
+              styleClass="text-[10px] hidden 2xl:inline-flex"
+            />
+            <!--#endif-->
           </div>
         </td>
 
@@ -149,7 +192,7 @@
               severity="secondary"
               icon="pi pi-pencil"
               styleClass="w-8 h-8 !p-0"
-              pTooltip="编辑"
+              [pTooltip]="editTooltip()"
               tooltipPosition="top"
             />
             <p-button
@@ -159,7 +202,7 @@
               severity="secondary"
               icon="pi pi-refresh"
               styleClass="w-8 h-8 !p-0"
-              pTooltip="重置密钥"
+              [pTooltip]="resetSecretTooltip()"
               tooltipPosition="top"
               [disabled]="item.clientType !== 'confidential'"
             />
@@ -170,7 +213,7 @@
               severity="danger"
               icon="pi pi-trash"
               styleClass="w-8 h-8 !p-0"
-              pTooltip="删除"
+              [pTooltip]="deleteTooltip()"
               tooltipPosition="top"
             />
           </div>
@@ -183,8 +226,13 @@
         <td colspan="7" class="!p-0 !border-0">
           <div class="flex flex-col items-center justify-center h-64 text-muted-color">
             <i class="pi pi-inbox text-5xl opacity-30 mb-3"></i>
-            <p class="text-base font-medium m-0">暂无开放应用</p>
-            <p class="text-sm mt-1 opacity-70">请创建新的开放应用</p>
+            <!--#if (IncludeLocalization)-->
+            <p class="text-base font-medium m-0">{{ 'openApp.table.emptyTitle' | transloco }}</p>
+            <p class="text-sm mt-1 opacity-70">{{ 'openApp.table.emptyHint' | transloco }}</p>
+            <!--#else-->
+            <p class="text-base font-medium m-0">No open applications yet</p>
+            <p class="text-sm mt-1 opacity-70">Create a new open application</p>
+            <!--#endif-->
           </div>
         </td>
       </tr>
@@ -203,7 +251,11 @@
           {{ item }}
         </div>
       } @empty {
-        <div class="text-sm text-muted-color">暂无配置</div>
+        <!--#if (IncludeLocalization)-->
+        <div class="text-sm text-muted-color">{{ 'openApp.popover.empty' | transloco }}</div>
+        <!--#else-->
+        <div class="text-sm text-muted-color">Nothing configured</div>
+        <!--#endif-->
       }
     </div>
   </div>

@@ -7,6 +7,9 @@ import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, ViewChild, compu
 import { ChangeDetectionStrategy, Component, OnDestroy, ViewChild, computed, inject, output, signal } from '@angular/core';
 //#endif
 import { Router, RouterModule } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { MenuItem } from 'primeng/api';
 import { AvatarModule } from 'primeng/avatar';
 import { BadgeModule } from 'primeng/badge';
@@ -20,6 +23,9 @@ import { StyleClassModule } from 'primeng/styleclass';
 import { TooltipModule } from 'primeng/tooltip';
 
 import { AuthService } from '../../../core/services/auth-service';
+//#if (IncludeLocalization)
+import { LanguageService } from '../../../core/services/language-service';
+//#endif
 //#if (IncludeNotifications)
 import { NotificationService, NotificationOutputDto } from '../../../core/services/notification-service';
 //#endif
@@ -27,6 +33,9 @@ import { ThemeService } from '../../../core/services/theme-service';
 //#if (IncludeIdentity)
 import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialogComponent } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
+//#endif
+//#if (IncludeLocalization)
+import { LanguageSwitcher } from '../../../shared/components/language-switcher/language-switcher';
 //#endif
 import { ThemeConfigurator } from '../../../shared/components/theme-configurator/theme-configurator';
 import { LayoutService } from '../../services/layout-service';
@@ -43,6 +52,10 @@ import { LayoutService } from '../../services/layout-service';
     TooltipModule,
     MenuModule,
     ThemeConfigurator,
+    //#if (IncludeLocalization)
+    LanguageSwitcher,
+    TranslocoModule,
+    //#endif
     //#if (IncludeNotifications)
     PopoverModule,
     OverlayBadgeModule,
@@ -65,8 +78,21 @@ export class DefaultHeader implements OnDestroy {
   readonly themeService = inject(ThemeService);
   readonly authService = inject(AuthService);
   readonly router = inject(Router);
+  //#if (IncludeLocalization)
+  readonly languageService = inject(LanguageService);
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   @ViewChild('userMenu') userMenu!: Menu;
+
+  //#if (IncludeIdentity)
+  // 管理员徽标 tooltip：模板属性区不支持内嵌条件指令，用 getter 承载条件文案。
+  //#if (IncludeLocalization)
+  readonly adminTooltip = () => this.transloco.translate('role.admin');
+  //#else
+  readonly adminTooltip = () => 'Administrator';
+  //#endif
+  //#endif
 
   readonly toggleMobileMenu = output<void>();
   //#if (IncludeNotifications)
@@ -74,6 +100,13 @@ export class DefaultHeader implements OnDestroy {
   readonly notificationCount = this.notificationService.unreadCount;
   readonly notifications = this.notificationService.notifications;
   @ViewChild('notificationPopover') notificationPopover!: Popover;
+
+  // 铃铛 tooltip：模板属性区不支持内嵌条件指令，故用 getter 承载条件文案。
+  //#if (IncludeLocalization)
+  readonly notificationTooltip = () => this.transloco.translate('layout.notifications.title');
+  //#else
+  readonly notificationTooltip = () => 'Notifications';
+  //#endif
 
   ngOnInit(): void {
     // 登录后初始化：连接 SignalR + 加载历史通知
@@ -111,17 +144,30 @@ export class DefaultHeader implements OnDestroy {
 
   readonly userMenuItems = computed<MenuItem[]>(() => {
     const currentUser = this.authService.currentUser();
+    //#if (IncludeLocalization)
+    // 建立对活动语言的依赖，语言切换时重新计算菜单文案
+    this.languageService.activeLang();
+    const t = (key: string) => this.transloco.translate(key);
+    //#endif
     const items: MenuItem[] = [];
 
     if (this.router.url.startsWith('/platform')) {
       items.push({
-        label: '工作空间',
+        //#if (IncludeLocalization)
+        label: t('menu.workspace'),
+        //#else
+        label: 'Workspace',
+        //#endif
         icon: 'pi pi-home',
         command: () => this.closeMenuAndNavigate('/workspace')
       });
     } else if (this.router.url.startsWith('/workspace') && currentUser?.isAdmin()) {
       items.push({
-        label: '管理平台',
+        //#if (IncludeLocalization)
+        label: t('menu.platform'),
+        //#else
+        label: 'Admin platform',
+        //#endif
         icon: 'pi pi-cog',
         command: () => this.closeMenuAndNavigate('/platform')
       });
@@ -134,12 +180,20 @@ export class DefaultHeader implements OnDestroy {
 
     items.push(
       {
-        label: '个人信息',
+        //#if (IncludeLocalization)
+        label: t('menu.profile'),
+        //#else
+        label: 'Profile',
+        //#endif
         icon: 'pi pi-user-edit',
         command: () => this.openProfileDialog()
       },
       {
-        label: '修改密码',
+        //#if (IncludeLocalization)
+        label: t('menu.changePassword'),
+        //#else
+        label: 'Change password',
+        //#endif
         icon: 'pi pi-lock',
         command: () => this.openChangePasswordDialog()
       },
@@ -147,7 +201,11 @@ export class DefaultHeader implements OnDestroy {
         separator: true
       },
       {
-        label: '退出登录',
+        //#if (IncludeLocalization)
+        label: t('menu.logout'),
+        //#else
+        label: 'Sign out',
+        //#endif
         icon: 'pi pi-sign-out',
         command: () => this.handleLogout()
       }

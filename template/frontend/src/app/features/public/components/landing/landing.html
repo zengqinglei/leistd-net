@@ -19,32 +19,62 @@
       </p-button>
       <app-theme-configurator />
     </div>
+    <!--#if (IncludeLocalization)-->
+    <app-language-switcher />
+    <!--#endif-->
   </div>
 
   <div class="max-w-2xl text-center space-y-8">
-    <h1 class="text-5xl font-bold text-color">模板项目</h1>
-    <p class="text-xl text-muted-color"> 基于 Angular + PrimeNG + .NET 10 DDD 架构的全栈应用开发模板 </p>
+    <!--#if (IncludeLocalization)-->
+    <h1 class="text-5xl font-bold text-color">{{ 'landing.hero.title' | transloco }}</h1>
+    <p class="text-xl text-muted-color"> {{ 'landing.hero.subtitle' | transloco }} </p>
+    <!--#else-->
+    <h1 class="text-5xl font-bold text-color">Template Project</h1>
+    <p class="text-xl text-muted-color">
+      A full-stack application development template based on Angular + PrimeNG + .NET 10 DDD architecture
+    </p>
+    <!--#endif-->
 
     <div class="flex items-center justify-center gap-4">
-      <p-button label="登录" routerLink="/auth/login" />
-      <p-button label="注册" routerLink="/auth/register" [outlined]="true" />
+      <!--#if (IncludeLocalization)-->
+      <p-button [label]="'landing.hero.login' | transloco" routerLink="/auth/login" />
+      <p-button [label]="'landing.hero.register' | transloco" routerLink="/auth/register" [outlined]="true" />
+      <!--#else-->
+      <p-button label="Sign In" routerLink="/auth/login" />
+      <p-button label="Sign Up" routerLink="/auth/register" [outlined]="true" />
+      <!--#endif-->
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
       <div class="p-6 rounded-xl bg-surface-card border border-surface">
         <i class="pi pi-shield text-3xl text-primary mb-3"></i>
-        <h3 class="font-semibold text-color">身份认证</h3>
-        <p class="text-sm text-muted-color mt-2">基于 Cookie 的认证与角色权限管理</p>
+        <!--#if (IncludeLocalization)-->
+        <h3 class="font-semibold text-color">{{ 'landing.feature.authTitle' | transloco }}</h3>
+        <p class="text-sm text-muted-color mt-2">{{ 'landing.feature.authDesc' | transloco }}</p>
+        <!--#else-->
+        <h3 class="font-semibold text-color">Authentication</h3>
+        <p class="text-sm text-muted-color mt-2">Cookie-based authentication with role and permission management</p>
+        <!--#endif-->
       </div>
       <div class="p-6 rounded-xl bg-surface-card border border-surface">
         <i class="pi pi-users text-3xl text-primary mb-3"></i>
-        <h3 class="font-semibold text-color">用户管理</h3>
-        <p class="text-sm text-muted-color mt-2">完整的 CRUD 操作与权限控制</p>
+        <!--#if (IncludeLocalization)-->
+        <h3 class="font-semibold text-color">{{ 'landing.feature.usersTitle' | transloco }}</h3>
+        <p class="text-sm text-muted-color mt-2">{{ 'landing.feature.usersDesc' | transloco }}</p>
+        <!--#else-->
+        <h3 class="font-semibold text-color">User Management</h3>
+        <p class="text-sm text-muted-color mt-2">Full CRUD operations with permission control</p>
+        <!--#endif-->
       </div>
       <div class="p-6 rounded-xl bg-surface-card border border-surface">
         <i class="pi pi-palette text-3xl text-primary mb-3"></i>
-        <h3 class="font-semibold text-color">主题系统</h3>
-        <p class="text-sm text-muted-color mt-2">深色模式 + Tailwind CSS + PrimeNG</p>
+        <!--#if (IncludeLocalization)-->
+        <h3 class="font-semibold text-color">{{ 'landing.feature.themeTitle' | transloco }}</h3>
+        <p class="text-sm text-muted-color mt-2">{{ 'landing.feature.themeDesc' | transloco }}</p>
+        <!--#else-->
+        <h3 class="font-semibold text-color">Theme System</h3>
+        <p class="text-sm text-muted-color mt-2">Dark mode + Tailwind CSS + PrimeNG</p>
+        <!--#endif-->
       </div>
     </div>
   </div>

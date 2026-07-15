@@ -69,7 +69,7 @@ function getOpenApplication(req: MockRequest) {
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
-    throw new MockException(404, '开放应用不存在');
+    throw new MockException(404, 'Open application not found');
   }
   return toOutput(application);
 }
@@ -78,19 +78,19 @@ function validateApplication(input: CreateOpenApplicationInputDto | UpdateOpenAp
   if ('clientId' in input) {
     const clientId = input.clientId.trim();
     if (!clientId) {
-      throw new MockException(400, { message: 'Client ID 不能为空' });
+      throw new MockException(400, { message: 'Client ID is required' });
     }
     if (applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)) {
-      throw new MockException(400, { message: `Client ID 已存在: ${clientId}` });
+      throw new MockException(400, { message: `Client ID already exists: ${clientId}` });
     }
   }
 
   if (input.clientType === 'public' && 'clientSecret' in input && input.clientSecret) {
-    throw new MockException(400, { message: 'Public 客户端不能配置 Client Secret' });
+    throw new MockException(400, { message: 'Public clients cannot configure a client secret' });
   }
 
   if ((input.applicationType === 'native' || input.clientType === 'public') && !input.requirements.includes('ft:pkce')) {
-    throw new MockException(400, { message: 'Native/Public 客户端必须启用 PKCE' });
+    throw new MockException(400, { message: 'Native/Public clients must enable PKCE' });
   }
 }
 
@@ -125,7 +125,7 @@ function updateOpenApplication(req: MockRequest) {
   const body = req.body as UpdateOpenApplicationInputDto;
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
   if (index === -1) {
-    throw new MockException(404, '开放应用不存在');
+    throw new MockException(404, 'Open application not found');
   }
 
   validateApplication(body, id);
@@ -160,10 +160,10 @@ function resetOpenApplicationSecret(req: MockRequest) {
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
-    throw new MockException(404, '开放应用不存在');
+    throw new MockException(404, 'Open application not found');
   }
   if (application.clientType !== 'confidential') {
-    throw new MockException(400, { message: '只有 Confidential 客户端可以重置密钥' });
+    throw new MockException(400, { message: 'Only confidential clients can reset their secret' });
   }
 
   const clientSecret = `mock_secret_${Math.random().toString(36).slice(2, 14)}`;

@@ -39,7 +39,9 @@ $allow = @(
     'AsyncInterceptorBase','IMapperConfigurationExpression','TypeAdapterConfig','Profile','IInterceptor',
     'AddProfile','CreateMap',
     # BCL / LINQ / MSBuild 概念（散文中合法出现的非 Leistd 词）
-    'GetHashCode','FormatException','SingleOrDefault','ProjectReference','Debug',
+    'GetHashCode','FormatException','SingleOrDefault','ProjectReference','EmbeddedResource','Debug',
+    # 本地化：BCL/ASP.NET 本地化抽象（Leistd 在其上实现，非自有类型）
+    'IStringLocalizer','IStringLocalizerFactory','ResourceManagerStringLocalizerFactory','LocalizedString','CultureInfo','RequestLocalizationOptions',
     # ASP.NET MVC 结果类型（response 文档在对比自动包装边界时会提到）
     'ContentResult','FileResult','StatusCodeResult','ObjectResult',
     # Redis / StackExchange 原语（lock 文档提到底层命令）

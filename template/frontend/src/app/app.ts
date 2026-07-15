@@ -1,6 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 // 导入所需的 PrimeNG 模块
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -24,16 +27,22 @@ import { ThemeService } from './core/services/theme-service';
       }
       @case ('loading') {
         <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
-          <p-progressSpinner ariaLabel="正在加载..."></p-progressSpinner>
+          <p-progressSpinner [ariaLabel]="loadingLabel()"></p-progressSpinner>
         </div>
       }
       @case ('failed') {
         <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
           @if (startupService.error(); as error) {
-            <p-card header="应用加载失败" [style]="{ width: '360px', textAlign: 'center' }">
+            <p-card [header]="failedHeader()" [style]="{ width: '360px', textAlign: 'center' }">
               <p>{{ formatHttpError(error) }}</p>
               <ng-template pTemplate="footer">
-                <p-button label="重试" icon="pi pi-refresh" (click)="onRetryClick()" [loading]="isRetrying()" [disabled]="isRetrying()">
+                <p-button
+                  [label]="retryLabel()"
+                  icon="pi pi-refresh"
+                  (click)="onRetryClick()"
+                  [loading]="isRetrying()"
+                  [disabled]="isRetrying()"
+                >
                 </p-button>
               </ng-template>
             </p-card>
@@ -47,6 +56,16 @@ export class App {
   protected readonly startupService = inject(StartupService);
   // 注入 ThemeService 确保主题在应用启动时生效 (通过构造函数中的 effect)
   protected readonly themeService = inject(ThemeService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  protected readonly loadingLabel = () => this.transloco.translate('app.startup.loading');
+  protected readonly failedHeader = () => this.transloco.translate('app.startup.failed');
+  protected readonly retryLabel = () => this.transloco.translate('common.retry');
+  //#else
+  protected readonly loadingLabel = () => 'Loading...';
+  protected readonly failedHeader = () => 'Application Failed to Load';
+  protected readonly retryLabel = () => 'Retry';
+  //#endif
 
   private _isRetrying = signal(false);
   public readonly isRetrying = this._isRetrying.asReadonly();
@@ -61,22 +80,42 @@ export class App {
     if (error instanceof HttpErrorResponse) {
       if (error.error instanceof ErrorEvent) {
         // 客户端或网络错误
-        return `客户端错误: ${error.error.message}`;
+        //#if (IncludeLocalization)
+        return this.transloco.translate('app.startup.clientError', { message: error.error.message });
+        //#else
+        return `Client error: ${error.error.message}`;
+        //#endif
       } else {
         // 后端返回的错误
         const contentType = error.headers.get('Content-Type');
         if (contentType?.includes('application/json') && error.error?.message) {
-          return `请求失败: ${error.error.message} (代码: ${error.error.code})`;
+          //#if (IncludeLocalization)
+          return this.transloco.translate('app.startup.requestFailed', { message: error.error.message, code: error.error.code });
+          //#else
+          return `Request failed: ${error.error.message} (code: ${error.error.code})`;
+          //#endif
         }
-        return `未知服务端错误: ${error.status} - ${error.statusText}`;
+        //#if (IncludeLocalization)
+        return this.transloco.translate('app.startup.serverError', { status: error.status, statusText: error.statusText });
+        //#else
+        return `Unknown server error: ${error.status} - ${error.statusText}`;
+        //#endif
       }
     }
 
     // 处理非 HttpErrorResponse 的其他未知错误
     if (error instanceof Error) {
-      return `发生未知错误: ${error.message}`;
+      //#if (IncludeLocalization)
+      return this.transloco.translate('app.startup.unknownErrorDetail', { message: error.message });
+      //#else
+      return `An unknown error occurred: ${error.message}`;
+      //#endif
     }
 
-    return `发生未知错误，请稍后重试。`;
+    //#if (IncludeLocalization)
+    return this.transloco.translate('app.startup.unknownError');
+    //#else
+    return `An unknown error occurred. Please try again later.`;
+    //#endif
   }
 }

@@ -14,6 +14,9 @@
 4. [组件与样式规范](#4-组件与样式规范)
 5. [开发原则](#5-开发原则)
 6. [共享资源](#6-共享资源)
+<!--#if (IncludeLocalization)-->
+7. [多语言（i18n）](#7-多语言i18n)
+<!--#endif-->
 
 ---
 
@@ -96,17 +99,25 @@ frontend/
 │   │   ├── app.ts                            # 应用根组件 (v20+ 规范)
 │   │   ├── app.routes.ts                     # 应用主路由 (定义布局与特性模块的懒加载关系)
 │   │   └── main.ts                           # 应用启动文件 (bootstrapApplication)
-│   ├── assets/                               # 静态资源 (图片, 字体, i18n文件等)
-│   │   ├── i18n/                             # 国际化语言文件
-│   │   └── icons/                            # SVG 图标
 │   └── environments/                         # 环境配置 (用于区分不同部署环境的变量)
 │       ├── environment.base.ts               # 基础环境配置 (所有环境共享的通用变量)
 │       ├── environment.ts                    # 默认开发环境 (ng serve 时使用)
 │       ├── environment.prod.ts               # 生产环境 (ng build --configuration production 时使用)
 │       ├── environment.test.ts               # 测试环境 (e.g., 用于QA服务器或自动化测试)
 │       └── environment.debug.ts              # 本地调试环境 (用于需要开启特殊调试标志的本地开发)
+├── public/                                   # 静态资源 (构建后位于站点根；无 src/assets)
+│   ├── images/                              # 图片
+<!--#if (IncludeLocalization)-->
+│   └── i18n/                                # 多语言词条 ({lang}.json，运行时 fetch /i18n/)
+<!--#endif-->
 └── ... (package.json, angular.json, etc.)
 ```
+
+<!--#if (IncludeLocalization)-->
+> 静态资源用 Angular `public/` 约定（构建后映射到站点根），**没有 `src/assets`**。多语言词条 `public/i18n/{lang}.json` 存放各语言文案（见 §7）。
+<!--#else-->
+> 静态资源用 Angular `public/` 约定（构建后映射到站点根），**没有 `src/assets`**。
+<!--#endif-->
 
 ---
 
@@ -229,6 +240,45 @@ AI 极易只改一端，务必六环全改。
 - 只有被多个不相关特性使用的组件才应放入 `shared`
 - 特性内部复用的组件应放在特性的 `widgets` 目录下
 - 保持 `shared` 目录的纯粹性和通用性
+
+---
+
+<!--#if (IncludeLocalization)-->
+## 7. 多语言（i18n）
+
+> 本项目已启用多语言（`--include-localization true`）。默认语言英语，支持 en + zh-CN 运行时切换。
+
+### 7.1 方案与默认语言
+
+- **运行时库 Transloco**（`@jsverse/transloco`）：JSON 词条运行时加载，用户即时切换语言、单包部署——**不用** Angular 编译期 `$localize`（那是按 locale 出多包、无法运行时切换）。
+- **默认语言英语（`en`）**，支持 `en` + `zh-CN`；回落语言 `en`。
+- 词条文件 `public/i18n/{en,zh-CN}.json`，运行时按 `{baseHref}i18n/{lang}.json` fetch（loader 用 `APP_BASE_HREF` 前缀，兼容子路径部署）。
+
+### 7.2 文案归属（三类，各一处权威）
+
+| 类别 | 归属 | 用法 |
+| --- | --- | --- |
+| UI 静态文案（菜单、按钮、标签） | 前端词条（权威） | 模板 `{{ 'menu.users' \| transloco }}` / 服务 `transloco.translate('key')` |
+| 业务错误消息 | **后端资源**（权威，见 [`api.md`](./api.md)） | 前端直接显示后端已本地化的 `message`，不在前端重复维护业务错误词条 |
+| PrimeNG 组件文案 | 前端词条 `primeng` 段 | 由 `LanguageService` 喂给 `PrimeNG.setTranslation`，随语言联动 |
+
+- **业务错误不在前端翻译**：后端按 `Accept-Language` 已产出本地化 `message`，前端 `http-error-interceptor` 优先显示它。默认按 **HTTP 状态码**统一处理即可，**无需**消费细分业务 `code`；仅在极少数需要对某个具体错误做差异化 UI 行为（如高亮某输入框）时，才读 `code` 分支——对应后端那处 `WithCode("46")`。前端词条只保留纯客户端兜底（网络断开、后端不可达）。
+
+### 7.3 关键接线（`core/`）
+
+- `core/services/language-service.ts`：`setActiveLang(lang)` 驱动 `TranslocoService.setActiveLang`、同步 `<html lang>`、并 `selectTranslateObject('primeng')`（`take(1)` 一次性取值，避免订阅泄漏）联动 PrimeNG；活动语言持久化到 localStorage（镜像 `theme-service` 形态：signal + `isPlatformBrowser` 守卫）。
+- `core/i18n/transloco-loader.ts`：按 `{baseHref}i18n/{lang}.json` 取词条（用 `APP_BASE_HREF` 前缀而非绝对 `/i18n/`，以支持子路径部署）。
+- `core/interceptors/accept-language-interceptor.ts`：注入 `Accept-Language` 头，**置拦截器数组首位**，使后端消息按当前语言返回。
+- `app.config.ts`：`provideTransloco`（`defaultLang: 'en'`）+ `TranslocoHttpLoader`。
+- 语言选择器用 PrimeNG **`p-menu [popup]`**（无面板小三角，与铃铛/主题按钮风格一致），封装在 `shared/components/language-switcher`，挂在 `layout/components/default-header` 最右图标区（后台页在铃铛右侧）。**不用 `p-select`/`p-popover`**（后者带箭头）。
+
+### 7.4 新增文案
+
+- UI 文案：在 `public/i18n/{en,zh-CN}.json` 各加一条键（`模块.语义`，如 `menu.orders`），模板用 `| transloco`。**两语言必须同时加**（CI 有 `scripts/check-i18n-keys.ps1` 键一致性闸门，缺一即红）。
+- **响应式**：`.ts` 里要随语言切换更新的文案，别在字段初始化时 `translate()` 定死；改为在 `computed`/getter 里调用 `translate()` 并读一次 `transloco.langChanges$`（或 `languageService.activeLang()`）建立依赖，切换时自动重算。
+- 业务错误文案：改后端资源（见 `api.md` §异常本地化），**不在前端加**。
+- 数据格式（日期/货币/数字）用 Angular `DatePipe`/`CurrencyPipe`/`DecimalPipe`。注意 **`LOCALE_ID` 是启动期注入、不随运行时语言切换自动改变**；如需格式也跟随切换，需自行传 locale 参数或重建相关视图，别假设它会自动联动。
+<!--#endif-->
 
 ---
 

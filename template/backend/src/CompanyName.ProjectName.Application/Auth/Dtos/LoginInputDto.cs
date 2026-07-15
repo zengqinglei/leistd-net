@@ -10,16 +10,16 @@ public record LoginInputDto
     /// <summary>
     /// 用户名或邮箱
     /// </summary>
-    [Display(Name = "用户名或邮箱")]
-    [Required(ErrorMessage = "{0}不能为空")]
-    [StringLength(256, MinimumLength = 3, ErrorMessage = "{0}长度必须在 {2}-{1} 个字符之间")]
+    [Display(Name = "Username or email")]
+    [Required(ErrorMessage = "{0} is required.")]
+    [StringLength(256, MinimumLength = 3, ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public required string UsernameOrEmail { get; init; }
 
     /// <summary>
     /// 密码
     /// </summary>
-    [Display(Name = "密码")]
-    [Required(ErrorMessage = "{0}不能为空")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0}长度必须在 {2}-{1} 个字符之间")]
+    [Display(Name = "Password")]
+    [Required(ErrorMessage = "{0} is required.")]
+    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public required string Password { get; init; }
 }

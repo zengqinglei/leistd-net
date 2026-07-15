@@ -1,5 +1,10 @@
 <!doctype html>
-<html lang="zh">
+<!--#if (IncludeLocalization)-->
+<!-- 默认语言英语；运行时 LanguageService 会按 localStorage/切换更新 <html lang>。 -->
+<!--#else-->
+<!-- 界面语言英语。 -->
+<!--#endif-->
+<html lang="en">
 
 <head>
   <meta charset="utf-8">
@@ -38,8 +43,8 @@
       <div
         class="w-10 h-10 border-4 border-surface-200 dark:border-surface-700 border-t-primary rounded-full animate-spin">
       </div>
-      <!-- 文字颜色: text-surface-500 (替代 text-gray-600/slate-400) -->
-      <span class="mt-4 text-sm font-medium text-surface-500">加载中...</span>
+      <!-- 文字颜色: text-surface-500 (替代 text-gray-600/slate-400)；splash 早于 Angular/i18n，固定英文 -->
+      <span class="mt-4 text-sm font-medium text-surface-500">Loading...</span>
     </div>
   </app-root>
 </body>

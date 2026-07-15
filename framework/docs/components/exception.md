@@ -77,6 +77,16 @@ public class OrderService(IOrderStore store)
 }
 ```
 
+启用本地化时推荐**三分离**写法——`Message` 给日志（可读英文）、`Code` 是稳定机器契约（多数用默认前缀码即可）、`LocalizationKey` 是可改名的展示键、`WithData` 提供具名占位参数：
+
+```csharp
+throw new BadRequestException("Email already in use")   // Message：日志/诊断；Code 走默认 40000
+    .WithLocalization("User:EmailAlreadyUsed")           // LocalizationKey：展示语义键
+    .WithData("Email", email);                           // 资源 "Email '{Email}' is already in use"
+```
+
+> `Code` 默认取「HTTP 前缀 + 00」，前端一般按 HTTP 状态码统一处理、并不消费细分码。仅当前端要对**某个具体错误**做差异化行为（如高亮某输入框）时，才用 `WithCode("46")` 追加细分后缀（→ `40046`）。这是极少数场景。
+
 字段校验场景使用 `UnprocessableEntityException`，可逐字段累加错误，处理器会输出为 `ValidationProblemDetails`（HTTP 422）：
 
 ```csharp
@@ -107,8 +117,12 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 | `BusinessException` | 抽象基类，承载 `Code` / `Details`，是所有业务异常的父类 |
 | `BusinessException.Code` | 错误码，构造时为「前缀 + 00」（如 `404` → `40400`） |
 | `BusinessException.Details` | 附加详情，可选 |
-| `BusinessException.WithCode(code)` | 链式覆盖错误码为「前缀 + code」，返回自身 |
+| `BusinessException.LocalizationKey` | 可选的**展示文案键**（如 `User:EmailAlreadyUsed`）；处理器解析顺序为 `LocalizationKey → 状态码通用语义键 → Message`（未设置/未命中即逐级回落，绝不漏裸键） |
+| `BusinessException.WithCode(string code)` | 链式在前缀后追加码后缀（如前缀 `400` + `"46"` → `40046`）；仅前端需按码差异化时才用，多数异常用默认码即可，返回自身 |
 | `BusinessException.WithDetails(details)` | 链式设置详情，返回自身 |
+| `BusinessException.WithLocalization(key)` | 链式设置展示文案键，把「用户可见消息」与「日志诊断 `Message`」解耦，返回自身 |
+| `BusinessException.LocalizationData` | `IReadOnlyDictionary<string,object?>`，本地化占位参数（供资源 `{Name}` 填充）；命名区别于基类 `Exception.Data` |
+| `BusinessException.WithData(name, value)` | 链式追加一个本地化占位参数，返回自身 |
 | `BadRequestException(message)` | 请求错误，错误码 `40000`（HTTP 400） |
 | `UnauthorizedException(message)` | 未授权，错误码 `40100`（HTTP 401） |
 | `ForbiddenException(message)` | 禁止访问，错误码 `40300`（HTTP 403） |
@@ -149,7 +163,10 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 - **状态码推导**：取 `Code` 的前 3 位作为 HTTP 状态码（须落在 100–599），否则回退 500。
 - **响应体**：标准异常输出 `ProblemDetails`，`UnprocessableEntityException` 输出 `ValidationProblemDetails`；两者都在 `Extensions` 中写入 `message`、`traceId`（取 `Activity.Current?.Id`，否则 `TraceIdentifier`）、`code`。
 - **详情可见性**：由 `IsShowDetails` 决定（`null` 时按是否开发环境）。可见时写入 `details` 或 `stackTrace`；不可见时仅在有 `Details` 的情况下写入 `details`。
-- **日志**：`InternalServerException` 记为 `LogError`（含原始异常堆栈），其余业务异常记为 `LogWarning`。
+- **本地化（可选，三分离）**：若容器注册了 `IStringLocalizer`（见 [`localization`](./localization.md)），处理器按 **`LocalizationKey`（展示键）→ 状态码通用语义键 → `Message`（诊断兜底）** 的顺序解析用户可见消息，用 `LocalizationData` 填充具名占位参数，并按 `Title:{status}` 本地化 `title`；**未注册时原样直出 `Message`、标题用内置英文**——因此是否启用本地化不改变未启用方的行为。三者职责分离：`Message` 永远是给日志/诊断的可读英文、`Code` 是稳定机器契约、`LocalizationKey` 是可改名的展示语义键。框架内置的异常归一化消息（超时/取消/内部错误等）也带通用键（`Error:*`）。
+- **漏配兜底**：启用本地化时，若异常的 `LocalizationKey` 在资源中未命中（或未设置），处理器**回落到按 HTTP 状态码的通用语义键**（`400→Error:BadRequest`、`404→Error:NotFound`、`409→Error:Conflict`、`422→Error:UnprocessableEntity`、其余→`Error:InternalServer` 等，框架自带默认资源）；通用键也查不到时回落到诊断 `Message`，**绝不把原始裸键漏给用户**。
+- **本地化容错**：整个本地化查询过程被 `try/catch` 隔离——本地化组件自身失败（如坏资源）时回落 `Message`，**绝不覆盖原始业务异常的 `Code`/语义**；配套的启动预热（见 `localization`）会把此类问题提前到启动日志暴露。
+- **日志**：`InternalServerException` 记为 `LogError`（含原始异常堆栈），其余业务异常记为 `LogWarning`。日志始终记录异常原始 `Message`（英文诊断串），便于跨语言稳定检索。
 
 ## 配置项 / Options
 

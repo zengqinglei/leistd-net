@@ -6,6 +6,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+<!--#if (IncludeLocalization)-->
+  <ItemGroup>
+    <!-- 本地化资源随程序集嵌入（业务文案键，按 culture 查表） -->
+    <EmbeddedResource Include="Resources\*.json" />
+  </ItemGroup>
+<!--#endif-->
+
+
   <ItemGroup>
 <!--#if (IncludeOpenIddict)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
@@ -28,6 +36,9 @@
   <!-- Leistd 框架引用 -->
   <ItemGroup>
     <PackageReference Include="Leistd.Exception.AspNetCore" />
+<!--#if (IncludeLocalization)-->
+    <PackageReference Include="Leistd.Localization.AspNetCore" />
+<!--#endif-->
     <PackageReference Include="Leistd.DependencyInjection.DynamicProxy" />
     <PackageReference Include="Leistd.Authorization.AspNetCore" />
     <PackageReference Include="Leistd.Security.AspNetCore" />

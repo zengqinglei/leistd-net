@@ -9,7 +9,11 @@
 
     <!-- Breadcrumb: 响应式 -->
     <div class="flex items-center gap-2 text-sm overflow-hidden">
-      <span class="text-muted-color hidden sm:inline">工作区</span>
+      <!--#if (IncludeLocalization)-->
+      <span class="text-muted-color hidden sm:inline">{{ 'common.workspace' | transloco }}</span>
+      <!--#else-->
+      <span class="text-muted-color hidden sm:inline">Workspace</span>
+      <!--#endif-->
       <span class="text-muted-color hidden sm:inline">/</span>
       <h2 class="font-semibold text-color truncate">{{ layoutService.title() }}</h2>
     </div>
@@ -41,89 +45,116 @@
 
     <!-- Notifications -->
     <!--#if (IncludeNotifications)-->
-    <p-button
-      [text]="true"
-      [rounded]="true"
-      severity="secondary"
-      styleClass="min-w-[36px] min-h-[36px] !overflow-visible"
-      (onClick)="toggleNotifications($event)"
-      pTooltip="通知"
-      tooltipPosition="bottom"
-    >
-      <p-overlay-badge
-        [value]="notificationCount() > 99 ? '99+' : notificationCount()"
-        [badgeDisabled]="notificationCount() === 0"
-        severity="danger"
-        badgeSize="small"
+    <!-- 铃铛与其弹层包在同一个盒子里，使二者作为单个 flex 子项，避免空的 p-popover 占位挤出额外间距。
+         铃铛按钮尺寸/图标与其他图标按钮保持一致：min-w/min-h-[36px] + 默认图标字号（不放大）。 -->
+    <div class="relative">
+      <p-button
+        [text]="true"
+        [rounded]="true"
+        severity="secondary"
+        styleClass="min-w-[36px] min-h-[36px] !overflow-visible"
+        (onClick)="toggleNotifications($event)"
+        [pTooltip]="notificationTooltip()"
+        tooltipPosition="bottom"
       >
-        <i class="pi pi-bell text-base md:text-lg"></i>
-      </p-overlay-badge>
-    </p-button>
+        <p-overlay-badge
+          [value]="notificationCount() > 99 ? '99+' : notificationCount()"
+          [badgeDisabled]="notificationCount() === 0"
+          severity="danger"
+          badgeSize="small"
+          [pt]="{ root: { class: 'flex items-center leading-none' } }"
+        >
+          <i class="pi pi-bell"></i>
+        </p-overlay-badge>
+      </p-button>
 
-    <p-popover #notificationPopover [pt]="{ content: { class: '!p-0' } }">
-      <div class="w-[360px] max-w-[90vw]">
-        <div class="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700">
-          <span class="font-semibold text-color">通知</span>
-          @if (notificationCount() > 0) {
-            <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()">全部已读</button>
-          }
-        </div>
-        @if (notifications().length === 0) {
-          <div class="py-10 text-center text-muted-color text-sm">
-            <i class="pi pi-inbox text-2xl block mb-2 opacity-60"></i>
-            暂无通知
-          </div>
-        } @else {
-          <div class="max-h-[360px] overflow-y-auto flex flex-col">
-            @for (n of notifications(); track n.id) {
-              <button
-                type="button"
-                class="flex items-stretch gap-3 w-full text-left px-4 py-3 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
-                [class.bg-primary-50]="!n.isRead"
-                [class.dark:bg-primary-950/40]="!n.isRead"
-                (click)="onNotificationClick(n)"
-              >
-                <!-- 图标：统一中性灰，仅形状按类型区分；大小撑满标题+内容高度，垂直居中 -->
-                <span class="flex items-center justify-center shrink-0 self-stretch aspect-square">
-                  <i class="pi {{ notificationIcon(n.type) }} text-muted-color text-2xl"></i>
-                </span>
-                <span class="flex-1 min-w-0 flex flex-col gap-1">
-                  <!-- 标题行：标题在左，未读小圆点 + 时间成组在右，垂直居中 -->
-                  <span class="flex items-center gap-3">
-                    <span
-                      class="text-sm truncate flex-1 min-w-0"
-                      [class.font-semibold]="!n.isRead"
-                      [class.text-color]="!n.isRead"
-                      [class.text-muted-color]="n.isRead"
-                      [pTooltip]="n.title"
-                      tooltipPosition="bottom"
-                      [tooltipDisabled]="!n.title"
-                      >{{ n.title }}</span
-                    >
-                    <span class="flex items-center gap-1.5 shrink-0">
-                      @if (!n.isRead) {
-                        <span class="w-2 h-2 bg-primary rounded-full"></span>
-                      }
-                      <span class="text-[11px] text-muted-color whitespace-nowrap">{{ n.creationTime | date: 'MM-dd HH:mm' }}</span>
-                    </span>
-                  </span>
-                  <!-- 内容：次要，截断时 hover 在下方显示完整 -->
-                  @if (n.content) {
-                    <span class="block text-xs text-muted-color leading-relaxed truncate" [pTooltip]="n.content" tooltipPosition="bottom">{{
-                      n.content
-                    }}</span>
-                  }
-                </span>
+      <p-popover #notificationPopover [pt]="{ content: { class: '!p-0' } }">
+        <div class="w-[360px] max-w-[90vw]">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700">
+            <!--#if (IncludeLocalization)-->
+            <span class="font-semibold text-color">{{ 'layout.notifications.title' | transloco }}</span>
+            @if (notificationCount() > 0) {
+              <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()">
+                {{ 'layout.notifications.markAllRead' | transloco }}
               </button>
             }
+            <!--#else-->
+            <span class="font-semibold text-color">Notifications</span>
+            @if (notificationCount() > 0) {
+              <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()"
+                >Mark all as read</button
+              >
+            }
+            <!--#endif-->
           </div>
-        }
-      </div>
-    </p-popover>
+          @if (notifications().length === 0) {
+            <div class="py-10 text-center text-muted-color text-sm">
+              <i class="pi pi-inbox text-2xl block mb-2 opacity-60"></i>
+              <!--#if (IncludeLocalization)-->
+              {{ 'layout.notifications.empty' | transloco }}
+              <!--#else-->
+              No notifications
+              <!--#endif-->
+            </div>
+          } @else {
+            <div class="max-h-[360px] overflow-y-auto flex flex-col">
+              @for (n of notifications(); track n.id) {
+                <button
+                  type="button"
+                  class="flex items-stretch gap-3 w-full text-left px-4 py-3 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+                  [class.bg-primary-50]="!n.isRead"
+                  [class.dark:bg-primary-950/40]="!n.isRead"
+                  (click)="onNotificationClick(n)"
+                >
+                  <!-- 图标：统一中性灰，仅形状按类型区分；大小撑满标题+内容高度，垂直居中 -->
+                  <span class="flex items-center justify-center shrink-0 self-stretch aspect-square">
+                    <i class="pi {{ notificationIcon(n.type) }} text-muted-color text-2xl"></i>
+                  </span>
+                  <span class="flex-1 min-w-0 flex flex-col gap-1">
+                    <!-- 标题行：标题在左，未读小圆点 + 时间成组在右，垂直居中 -->
+                    <span class="flex items-center gap-3">
+                      <span
+                        class="text-sm truncate flex-1 min-w-0"
+                        [class.font-semibold]="!n.isRead"
+                        [class.text-color]="!n.isRead"
+                        [class.text-muted-color]="n.isRead"
+                        [pTooltip]="n.title"
+                        tooltipPosition="bottom"
+                        [tooltipDisabled]="!n.title"
+                        >{{ n.title }}</span
+                      >
+                      <span class="flex items-center gap-1.5 shrink-0">
+                        @if (!n.isRead) {
+                          <span class="w-2 h-2 bg-primary rounded-full"></span>
+                        }
+                        <span class="text-[11px] text-muted-color whitespace-nowrap">{{ n.creationTime | date: 'MM-dd HH:mm' }}</span>
+                      </span>
+                    </span>
+                    <!-- 内容：次要，截断时 hover 在下方显示完整 -->
+                    @if (n.content) {
+                      <span
+                        class="block text-xs text-muted-color leading-relaxed truncate"
+                        [pTooltip]="n.content"
+                        tooltipPosition="bottom"
+                        >{{ n.content }}</span
+                      >
+                    }
+                  </span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </p-popover>
+    </div>
     <!--#else-->
-    <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="relative min-w-[36px] min-h-[36px]">
-      <i class="pi pi-bell text-base md:text-lg"></i>
+    <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="min-w-[36px] min-h-[36px] !overflow-visible">
+      <i class="pi pi-bell"></i>
     </p-button>
+    <!--#endif-->
+    <!--#if (IncludeLocalization)-->
+    <!-- Language Switcher: 铃铛右侧 -->
+    <app-language-switcher />
     <!--#endif-->
 
     <div class="h-6 w-px bg-surface-200 dark:bg-surface-700 mx-1"></div>
@@ -146,7 +177,7 @@
               {{ user.nickname || user.username }}
             </p>
             @if (user.isAdmin()) {
-              <i class="pi pi-verified text-primary text-xs hidden md:inline" pTooltip="管理员" tooltipPosition="bottom"></i>
+              <i class="pi pi-verified text-primary text-xs hidden md:inline" [pTooltip]="adminTooltip()" tooltipPosition="bottom"></i>
             }
           </div>
           <i class="pi pi-angle-down text-muted-color text-xs ml-1"></i>

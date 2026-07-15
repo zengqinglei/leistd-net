@@ -32,6 +32,9 @@ jobs:
       - name: 校验全部 Skill 与文档引用
         shell: pwsh
         run: pwsh scripts/validate-skills.ps1
+      - name: 校验 i18n 词条键一致（en/zh 前后端 + 框架）
+        shell: pwsh
+        run: pwsh scripts/check-i18n-keys.ps1
 
   template-matrix:
     name: 模板全场景矩阵

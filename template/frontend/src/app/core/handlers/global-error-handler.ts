@@ -1,5 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorHandler, Injectable, inject } from '@angular/core';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { MessageService } from 'primeng/api';
 
 /**
@@ -17,6 +20,9 @@ import { MessageService } from 'primeng/api';
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
   private readonly messageService = inject(MessageService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   handleError(error: unknown): void {
     console.error('Global error caught:', error);
@@ -32,7 +38,11 @@ export class GlobalErrorHandler implements ErrorHandler {
     if (error instanceof Error) {
       this.messageService.add({
         severity: 'error',
-        summary: '应用错误',
+        //#if (IncludeLocalization)
+        summary: this.transloco.translate('common.appError'),
+        //#else
+        summary: 'Application error',
+        //#endif
         detail: error.message
       });
       return;
@@ -41,8 +51,13 @@ export class GlobalErrorHandler implements ErrorHandler {
     // 处理未知类型的错误
     this.messageService.add({
       severity: 'error',
-      summary: '未知错误',
-      detail: '应用发生了未知错误，请刷新页面重试'
+      //#if (IncludeLocalization)
+      summary: this.transloco.translate('common.unknownError'),
+      detail: this.transloco.translate('common.unexpectedError')
+      //#else
+      summary: 'Unknown error',
+      detail: 'An unexpected error occurred. Please refresh the page and try again.'
+      //#endif
     });
   }
 }

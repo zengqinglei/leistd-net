@@ -13,6 +13,8 @@
   <ItemGroup>
     <PackageVersion Include="Leistd.Exception.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Exception.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Localization.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Localization.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.DependencyInjection.DynamicProxy" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Memory" Version="$(LeistdFrameworkVersion)" />

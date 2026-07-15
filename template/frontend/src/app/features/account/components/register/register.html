@@ -27,9 +27,19 @@
       <app-logo size="large" />
       <div>
         <h1 class="text-3xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-50 to-cyan-200 drop-shadow-sm">
-          模板项目
+          <!--#if (IncludeLocalization)-->
+          {{ 'account.brand.title' | transloco }}
+          <!--#else-->
+          Template Project
+          <!--#endif-->
         </h1>
-        <p class="text-xs text-blue-200/80 tracking-[0.15em] uppercase mt-1 font-medium">基于 Angular + .NET 的全栈开发模板</p>
+        <!--#if (IncludeLocalization)-->
+        <p class="text-xs text-blue-200/80 tracking-[0.15em] uppercase mt-1 font-medium">{{ 'account.brand.subtitle' | transloco }}</p>
+        <!--#else-->
+        <p class="text-xs text-blue-200/80 tracking-[0.15em] uppercase mt-1 font-medium"
+          >Full-stack development template based on Angular + .NET</p
+        >
+        <!--#endif-->
       </div>
     </div>
 
@@ -70,7 +80,11 @@
         >
           <div class="flex items-center gap-2">
             <i class="pi pi-users text-cyan-400"></i>
-            <span class="text-xs text-blue-100 font-medium tracking-wide">快速注册</span>
+            <!--#if (IncludeLocalization)-->
+            <span class="text-xs text-blue-100 font-medium tracking-wide">{{ 'account.register.badgeFastRegister' | transloco }}</span>
+            <!--#else-->
+            <span class="text-xs text-blue-100 font-medium tracking-wide">Quick Registration</span>
+            <!--#endif-->
           </div>
         </div>
 
@@ -80,7 +94,11 @@
         >
           <div class="flex items-center gap-2">
             <i class="pi pi-shield text-blue-400"></i>
-            <span class="text-xs text-cyan-100 font-medium tracking-wide">安全保障</span>
+            <!--#if (IncludeLocalization)-->
+            <span class="text-xs text-cyan-100 font-medium tracking-wide">{{ 'account.register.badgeSecure' | transloco }}</span>
+            <!--#else-->
+            <span class="text-xs text-cyan-100 font-medium tracking-wide">Security Guaranteed</span>
+            <!--#endif-->
           </div>
         </div>
       </div>
@@ -124,6 +142,9 @@
         ></p-button>
         <app-theme-configurator />
       </div>
+      <!--#if (IncludeLocalization)-->
+      <app-language-switcher />
+      <!--#endif-->
     </div>
 
     <div class="w-full max-w-md space-y-5">
@@ -132,27 +153,48 @@
         <div class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary-100 text-primary-600 mb-4"
           ><i class="pi pi-bolt text-2xl"></i
         ></div>
-        <h2 class="text-2xl font-bold">模板项目</h2>
+        <!--#if (IncludeLocalization)-->
+        <h2 class="text-2xl font-bold">{{ 'account.brand.title' | transloco }}</h2>
+        <!--#else-->
+        <h2 class="text-2xl font-bold">Template Project</h2>
+        <!--#endif-->
       </div>
 
       <!-- Form Header -->
       <div>
-        <h2 class="text-3xl font-bold text-color mb-1.5">创建账号</h2>
-        <p class="text-muted-color text-sm">欢迎加入，请填写以下信息注册新账号</p>
+        <!--#if (IncludeLocalization)-->
+        <h2 class="text-3xl font-bold text-color mb-1.5">{{ 'account.register.title' | transloco }}</h2>
+        <p class="text-muted-color text-sm">{{ 'account.register.subtitle' | transloco }}</p>
+        <!--#else-->
+        <h2 class="text-3xl font-bold text-color mb-1.5">Create Account</h2>
+        <p class="text-muted-color text-sm">Welcome aboard, please fill in the following information to register a new account</p>
+        <!--#endif-->
       </div>
 
       <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="flex flex-col gap-5">
         <!-- Email -->
         <div class="flex flex-col gap-2">
-          <label for="email" class="font-medium text-color">邮箱</label>
+          <!--#if (IncludeLocalization)-->
+          <label for="email" class="font-medium text-color">{{ 'account.register.email' | transloco }}</label>
           <input
             pInputText
             id="email"
             formControlName="email"
             class="w-full"
-            placeholder="输入您的邮箱地址"
+            [placeholder]="'account.register.emailPlaceholder' | transloco"
             [ngClass]="{ 'ng-invalid ng-dirty': getFieldError('email') }"
           />
+          <!--#else-->
+          <label for="email" class="font-medium text-color">Email</label>
+          <input
+            pInputText
+            id="email"
+            formControlName="email"
+            class="w-full"
+            placeholder="Enter your email address"
+            [ngClass]="{ 'ng-invalid ng-dirty': getFieldError('email') }"
+          />
+          <!--#endif-->
           @if (getFieldError('email')) {
             <small class="text-red-500">{{ getFieldError('email') }}</small>
           }
@@ -160,15 +202,27 @@
 
         <!-- Username -->
         <div class="flex flex-col gap-2">
-          <label for="username" class="font-medium text-color">用户名</label>
+          <!--#if (IncludeLocalization)-->
+          <label for="username" class="font-medium text-color">{{ 'account.register.username' | transloco }}</label>
           <input
             pInputText
             id="username"
             formControlName="username"
             class="w-full"
-            placeholder="由邮箱前缀提取，允许字母数字下划线"
+            [placeholder]="'account.register.usernamePlaceholder' | transloco"
             [ngClass]="{ 'ng-invalid ng-dirty': getFieldError('username') }"
           />
+          <!--#else-->
+          <label for="username" class="font-medium text-color">Username</label>
+          <input
+            pInputText
+            id="username"
+            formControlName="username"
+            class="w-full"
+            placeholder="Extracted from email prefix, letters, digits and underscores allowed"
+            [ngClass]="{ 'ng-invalid ng-dirty': getFieldError('username') }"
+          />
+          <!--#endif-->
           @if (getFieldError('username')) {
             <small class="text-red-500">{{ getFieldError('username') }}</small>
           }
@@ -176,24 +230,24 @@
 
         <!-- Captcha -->
         <div class="flex flex-col gap-2">
-          <label for="captchaCode" class="font-medium text-color">图形验证码</label>
+          <label for="captchaCode" class="font-medium text-color">{{ i18n.captcha() }}</label>
           <div class="flex gap-3 h-11 items-center">
             <input
               pInputText
               id="captchaCode"
               formControlName="captchaCode"
               class="w-full flex-1"
-              placeholder="请输入右侧验证码"
+              [placeholder]="i18n.captchaPlaceholder()"
               [ngClass]="{ 'ng-invalid ng-dirty': getFieldError('captchaCode') }"
             />
             @if (captchaData(); as captcha) {
               <div
                 class="h-11 w-[130px] rounded-lg overflow-hidden inset-ring inset-ring-surface-300 dark:inset-ring-surface-700 shadow-sm shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all bg-surface-100 flex items-center justify-center"
                 (click)="refreshCaptcha()"
-                pTooltip="看不清？点击刷新"
+                [pTooltip]="i18n.captchaRefresh()"
                 tooltipPosition="top"
               >
-                <img [src]="captcha.captchaImageBase64" class="block w-full h-full" alt="验证码" />
+                <img [src]="captcha.captchaImageBase64" class="block w-full h-full" [alt]="i18n.captchaAlt()" />
               </div>
             }
           </div>
@@ -205,18 +259,23 @@
         <!-- Email Code (Optional) -->
         @if (securityConfig()?.enableEmailVerification) {
           <div class="flex flex-col gap-2">
-            <label for="emailVerificationCode" class="font-medium text-color">邮箱验证码</label>
+            <!--#if (IncludeLocalization)-->
+            <label for="emailVerificationCode" class="font-medium text-color">{{ 'account.register.emailCode' | transloco }}</label>
             <div class="flex gap-2">
               <input
                 pInputText
                 id="emailVerificationCode"
                 formControlName="emailVerificationCode"
                 class="w-full flex-1"
-                placeholder="输入 6 位验证码"
+                [placeholder]="'account.register.emailCodePlaceholder' | transloco"
                 [ngClass]="{ 'ng-invalid ng-dirty': getFieldError('emailVerificationCode') }"
               />
               <p-button
-                [label]="countdown() > 0 ? countdown() + 's 后重发' : '获取验证码'"
+                [label]="
+                  countdown() > 0
+                    ? transloco.translate('account.register.resendCountdown', { seconds: countdown() })
+                    : transloco.translate('account.register.sendCode')
+                "
                 [disabled]="countdown() > 0 || isSendingEmailCode()"
                 (onClick)="sendEmailCode()"
                 severity="secondary"
@@ -224,6 +283,27 @@
                 styleClass="w-[120px] whitespace-nowrap px-0"
               ></p-button>
             </div>
+            <!--#else-->
+            <label for="emailVerificationCode" class="font-medium text-color">Email Verification Code</label>
+            <div class="flex gap-2">
+              <input
+                pInputText
+                id="emailVerificationCode"
+                formControlName="emailVerificationCode"
+                class="w-full flex-1"
+                placeholder="Enter the 6-digit code"
+                [ngClass]="{ 'ng-invalid ng-dirty': getFieldError('emailVerificationCode') }"
+              />
+              <p-button
+                [label]="countdown() > 0 ? 'Resend in ' + countdown() + 's' : 'Get Code'"
+                [disabled]="countdown() > 0 || isSendingEmailCode()"
+                (onClick)="sendEmailCode()"
+                severity="secondary"
+                [outlined]="true"
+                styleClass="w-[120px] whitespace-nowrap px-0"
+              ></p-button>
+            </div>
+            <!--#endif-->
             @if (getFieldError('emailVerificationCode')) {
               <small class="text-red-500">{{ getFieldError('emailVerificationCode') }}</small>
             }
@@ -233,7 +313,8 @@
         <!-- Password -->
         <div class="flex flex-col gap-5">
           <div class="flex flex-col gap-2">
-            <label for="password" class="font-medium text-color">密码</label>
+            <!--#if (IncludeLocalization)-->
+            <label for="password" class="font-medium text-color">{{ 'account.register.password' | transloco }}</label>
             <div class="relative">
               <p-password
                 id="password"
@@ -242,9 +323,23 @@
                 [toggleMask]="true"
                 [fluid]="true"
                 inputClass="w-full"
-                placeholder="包含字母和数字，6位以上"
+                [placeholder]="'account.register.passwordPlaceholder' | transloco"
               ></p-password>
             </div>
+            <!--#else-->
+            <label for="password" class="font-medium text-color">Password</label>
+            <div class="relative">
+              <p-password
+                id="password"
+                formControlName="password"
+                [feedback]="false"
+                [toggleMask]="true"
+                [fluid]="true"
+                inputClass="w-full"
+                placeholder="Contains letters and digits, at least 6 characters"
+              ></p-password>
+            </div>
+            <!--#endif-->
             @if (getFieldError('password')) {
               <small class="text-red-500">{{ getFieldError('password') }}</small>
             }
@@ -252,7 +347,8 @@
 
           <!-- Confirm Password -->
           <div class="flex flex-col gap-2">
-            <label for="confirmPassword" class="font-medium text-color">确认密码</label>
+            <!--#if (IncludeLocalization)-->
+            <label for="confirmPassword" class="font-medium text-color">{{ 'account.register.confirmPassword' | transloco }}</label>
             <div class="relative">
               <p-password
                 id="confirmPassword"
@@ -261,27 +357,62 @@
                 [toggleMask]="true"
                 [fluid]="true"
                 inputClass="w-full"
-                placeholder="再次输入密码"
+                [placeholder]="'account.register.confirmPasswordPlaceholder' | transloco"
               ></p-password>
             </div>
+            <!--#else-->
+            <label for="confirmPassword" class="font-medium text-color">Confirm Password</label>
+            <div class="relative">
+              <p-password
+                id="confirmPassword"
+                formControlName="confirmPassword"
+                [feedback]="false"
+                [toggleMask]="true"
+                [fluid]="true"
+                inputClass="w-full"
+                placeholder="Enter the password again"
+              ></p-password>
+            </div>
+            <!--#endif-->
             @if (getFieldError('confirmPassword')) {
               <small class="text-red-500">{{ getFieldError('confirmPassword') }}</small>
             }
           </div>
         </div>
 
-        <p-button label="注册账号" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true" class="mt-3"></p-button>
+        <!--#if (IncludeLocalization)-->
+        <p-button
+          [label]="'account.register.submit' | transloco"
+          type="submit"
+          [loading]="isLoading()"
+          [fluid]="true"
+          [rounded]="true"
+          class="mt-3"
+        ></p-button>
+        <!--#else-->
+        <p-button label="Create Account" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true" class="mt-3"></p-button>
+        <!--#endif-->
       </form>
 
       <!-- Bottom Login Link -->
       <div class="mt-8 text-center text-base text-color">
-        已有账号？
+        <!--#if (IncludeLocalization)-->
+        {{ 'account.register.haveAccount' | transloco }}
         <a
           [routerLink]="['/auth/login']"
           [queryParams]="returnUrl ? { returnUrl: returnUrl } : null"
           class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
-          >直接登录</a
+          >{{ 'account.register.loginNow' | transloco }}</a
         >
+        <!--#else-->
+        Already have an account?
+        <a
+          [routerLink]="['/auth/login']"
+          [queryParams]="returnUrl ? { returnUrl: returnUrl } : null"
+          class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
+          >Sign in directly</a
+        >
+        <!--#endif-->
       </div>
     </div>
   </div>

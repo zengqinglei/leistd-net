@@ -21,7 +21,7 @@ export function formatTokenCount(num: number | undefined | null): string {
   if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
   if (num >= 1_000) return `${(num / 1_000).toFixed(2)}K`;
-  return num.toLocaleString('zh-CN');
+  return num.toLocaleString();
 }
 
 /**
@@ -33,7 +33,7 @@ export function formatTokenCount(num: number | undefined | null): string {
  * formatNumber(1234567) => "1,234,567"
  */
 export function formatNumber(num: number): string {
-  return num.toLocaleString('zh-CN');
+  return num.toLocaleString();
 }
 
 /**
@@ -47,15 +47,16 @@ export function formatNumber(num: number): string {
 export function formatDuration(ms: number | undefined | null): string {
   if (ms == null || ms < 0) return 'N/A';
   if (ms < 1000) return `${Math.round(ms)}ms`;
+  // locale 无关的单位缩写，无需按语言切换。
   const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}秒`;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
   const minutes = seconds / 60;
-  if (minutes < 60) return `${Math.floor(minutes)}分钟`;
+  if (minutes < 60) return `${Math.floor(minutes)}min`;
   const hours = minutes / 60;
-  if (hours < 24) return `${Math.floor(hours)}小时`;
+  if (hours < 24) return `${Math.floor(hours)}h`;
   const days = hours / 24;
-  if (days < 365) return `${Math.floor(days)}天`;
-  return `${(days / 365).toFixed(1)}年`;
+  if (days < 365) return `${Math.floor(days)}d`;
+  return `${(days / 365).toFixed(1)}y`;
 }
 
 /**
@@ -77,9 +78,9 @@ export function formatDurationVerbose(ms: number | undefined | null): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
 
-  if (years > 0) return `${years}年${days > 0 ? `${days}天` : ''}`;
-  if (days > 0) return `${days}天${hours > 0 ? `${hours}小时` : ''}${minutes > 0 ? `${minutes}分` : ''}`;
-  if (hours > 0) return `${hours}小时${minutes > 0 ? `${minutes}分` : ''}${seconds > 0 ? `${seconds}秒` : ''}`;
-  if (minutes > 0) return `${minutes}分${seconds > 0 ? `${seconds}秒` : ''}`;
-  return `${seconds}秒`;
+  if (years > 0) return `${years}y${days > 0 ? `${days}d` : ''}`;
+  if (days > 0) return `${days}d${hours > 0 ? `${hours}h` : ''}${minutes > 0 ? `${minutes}min` : ''}`;
+  if (hours > 0) return `${hours}h${minutes > 0 ? `${minutes}min` : ''}${seconds > 0 ? `${seconds}s` : ''}`;
+  if (minutes > 0) return `${minutes}min${seconds > 0 ? `${seconds}s` : ''}`;
+  return `${seconds}s`;
 }

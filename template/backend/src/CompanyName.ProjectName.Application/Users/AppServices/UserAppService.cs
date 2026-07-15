@@ -129,13 +129,22 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (user.IsSuperAdmin && user.Id != currentUser.Id)
         {
-            throw new BadRequestException("系统内置超级管理员不允许被其他管理员更新");
+            throw new BadRequestException("The built-in super administrator cannot be updated by other administrators.")
+#if (IncludeLocalization)
+                .WithLocalization("User:SuperAdminUpdateForbidden")
+#endif
+                ;
         }
 
         var email = input.Email.Trim();
         if (!await userDomainService.IsEmailAvailableAsync(id, email, cancellationToken))
         {
-            throw new BadRequestException($"邮箱 '{email}' 已被使用");
+            throw new BadRequestException($"Email '{email}' is already in use.")
+#if (IncludeLocalization)
+                .WithLocalization("User:EmailAlreadyUsed")
+                .WithData("Email", email)
+#endif
+                ;
         }
 
 #if (IncludeIdentity)
@@ -161,7 +170,11 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (user.IsSuperAdmin && user.Id != currentUser.Id)
         {
-            throw new BadRequestException("系统内置超级管理员不允许被其他管理员操作");
+            throw new BadRequestException("The built-in super administrator cannot be operated on by other administrators.")
+#if (IncludeLocalization)
+                .WithLocalization("User:SuperAdminOperationForbidden")
+#endif
+                ;
         }
 
         user.Enable();
@@ -176,11 +189,19 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (user.IsSuperAdmin && user.Id != currentUser.Id)
         {
-            throw new BadRequestException("系统内置超级管理员不允许被其他管理员禁用");
+            throw new BadRequestException("The built-in super administrator cannot be disabled by other administrators.")
+#if (IncludeLocalization)
+                .WithLocalization("User:SuperAdminDisableForbidden")
+#endif
+                ;
         }
         if (user.IsSuperAdmin && user.Id == currentUser.Id)
         {
-            throw new BadRequestException("系统内置超级管理员不允许禁用自己");
+            throw new BadRequestException("The built-in super administrator cannot disable itself.")
+#if (IncludeLocalization)
+                .WithLocalization("User:SuperAdminDisableSelfForbidden")
+#endif
+                ;
         }
 
         user.Disable();
@@ -196,7 +217,11 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (user.IsSuperAdmin && user.Id != currentUser.Id)
         {
-            throw new BadRequestException("系统内置超级管理员的密码不允许被其他管理员重置");
+            throw new BadRequestException("The built-in super administrator's password cannot be reset by other administrators.")
+#if (IncludeLocalization)
+                .WithLocalization("User:SuperAdminResetPasswordForbidden")
+#endif
+                ;
         }
 
         user.UpdatePasswordHash(passwordHasher.HashPassword(input.Password));
@@ -214,7 +239,11 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (user.IsSuperAdmin)
         {
-            throw new BadRequestException("系统内置超级管理员不允许删除");
+            throw new BadRequestException("The built-in super administrator cannot be deleted.")
+#if (IncludeLocalization)
+                .WithLocalization("User:SuperAdminDeleteForbidden")
+#endif
+                ;
         }
 
         await userRepository.DeleteAsync(user, cancellationToken);
@@ -224,7 +253,17 @@ public class UserAppService(
     private async Task<User> GetUserOrThrowAsync(Guid id, CancellationToken cancellationToken)
     {
         var user = await userRepository.GetByIdAsync(id, cancellationToken);
-        return user ?? throw new NotFoundException($"用户 {id} 不存在");
+        if (user is null)
+        {
+            throw new NotFoundException($"User {id} not found.")
+#if (IncludeLocalization)
+                .WithLocalization("User:NotFound")
+                .WithData("Id", id)
+#endif
+                ;
+        }
+
+        return user;
     }
 
 #if (IncludeIdentity)
@@ -238,14 +277,23 @@ public class UserAppService(
 
         if (normalizedRoleNames.Count == 0)
         {
-            throw new BadRequestException("请至少选择一个角色");
+            throw new BadRequestException("Please select at least one role.")
+#if (IncludeLocalization)
+                .WithLocalization("User:RoleRequired")
+#endif
+                ;
         }
 
         var roles = (await roleRepository.GetListAsync(r => normalizedRoleNames.Contains(r.Name), cancellationToken)).ToList();
         var missingRoles = normalizedRoleNames.Except(roles.Select(r => r.Name), StringComparer.OrdinalIgnoreCase).ToList();
         if (missingRoles.Count != 0)
         {
-            throw new BadRequestException($"角色不存在: {string.Join(", ", missingRoles)}");
+            throw new BadRequestException($"Roles not found: {string.Join(", ", missingRoles)}")
+#if (IncludeLocalization)
+                .WithLocalization("User:RolesNotFound")
+                .WithData("Roles", string.Join(", ", missingRoles))
+#endif
+                ;
         }
 
         return roles;

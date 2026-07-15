@@ -15,17 +15,24 @@ import {
   withInMemoryScrolling,
   withViewTransitions
 } from '@angular/router';
+//#if (IncludeLocalization)
+import { provideTransloco } from '@jsverse/transloco';
+//#endif
 import Aura from '@primeuix/themes/aura';
 import { MessageService } from 'primeng/api';
 import { providePrimeNG } from 'primeng/config';
 
 import { routes } from './app.routes';
-import { GlobalErrorHandler } from './core/handlers/global-error-handler';
-import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
-import { provideMock } from '../../_mock/core/providers';
 import { environment } from '../environments/environment';
+import { GlobalErrorHandler } from './core/handlers/global-error-handler';
+//#if (IncludeLocalization)
+import { TranslocoHttpLoader } from './core/i18n/transloco-loader';
+import { acceptLanguageInterceptor } from './core/interceptors/accept-language-interceptor';
+//#endif
+import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
 import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
 import { StartupService } from './core/services/startup-service';
+import { provideMock } from '../../_mock/core/providers';
 
 // 定义路由特性，用于增强应用功能和用户体验
 const routerFeatures: RouterFeatures[] = [
@@ -59,8 +66,23 @@ export const appConfig: ApplicationConfig = {
         }
       }
     }),
+//#if (IncludeLocalization)
+    provideTransloco({
+      config: {
+        availableLangs: ['en', 'zh-CN'],
+        defaultLang: 'en',
+        fallbackLang: 'en',
+        reRenderOnLangChange: true,
+        prodMode: environment.production
+      },
+      loader: TranslocoHttpLoader
+    }),
+//#endif
     provideHttpClient(
       withInterceptors([
+//#if (IncludeLocalization)
+        acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
+//#endif
         urlFormatInterceptor,
         httpErrorInterceptor // 捕获所有 HTTP 错误并显示用户提示
       ]),

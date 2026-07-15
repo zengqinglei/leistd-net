@@ -1,7 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+//#if (IncludeLocalization)
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+//#else
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+//#endif
 import { FormsModule } from '@angular/forms';
+//#if (IncludeLocalization)
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+//#endif
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
@@ -39,6 +47,9 @@ import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table
     ButtonModule,
     TooltipModule,
     ConfirmDialogModule,
+    //#if (IncludeLocalization)
+    TranslocoModule,
+    //#endif
     UserTable,
     UserEditDialogComponent,
     ResetUserPasswordDialogComponent
@@ -54,6 +65,9 @@ export class UsersPage implements OnInit {
   private readonly messageService = inject(MessageService);
   private readonly layoutService = inject(LayoutService);
   private readonly filterStateService = inject(FilterStateService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   private readonly FILTER_KEY = 'users';
   private readonly searchSubject = new Subject<string>();
@@ -80,27 +94,85 @@ export class UsersPage implements OnInit {
   limit = signal(10);
   sorting = signal('username asc');
 
-  activeOptions = [
-    { label: '启用', value: true },
-    { label: '禁用', value: false }
-  ];
+  //#if (IncludeLocalization)
+  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed 重算，选项/文案重新翻译。
+  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
 
-  emailVerifiedOptions = [
-    { label: '已验证', value: true },
-    { label: '未验证', value: false }
-  ];
+  // 读 activeLang 建立依赖：语言切换时重算并重新翻译。
+  readonly activeOptions = computed(() => {
+    this.activeLang();
+    return [
+      { label: this.transloco.translate('users.status.active'), value: true },
+      { label: this.transloco.translate('users.status.inactive'), value: false }
+    ];
+  });
 
-  roleOptions = Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value }));
+  readonly emailVerifiedOptions = computed(() => {
+    this.activeLang();
+    return [
+      { label: this.transloco.translate('users.status.emailVerified'), value: true },
+      { label: this.transloco.translate('users.status.emailUnverified'), value: false }
+    ];
+  });
+
+  // 本地化模式：ROLE_LABEL_MAP 值是词条键，翻译为显示文案。
+  readonly roleOptions = computed(() => {
+    this.activeLang();
+    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label: this.transloco.translate(label), value }));
+  });
+  //#else
+  readonly activeOptions = computed(() => [
+    { label: 'Active', value: true },
+    { label: 'Disabled', value: false }
+  ]);
+
+  readonly emailVerifiedOptions = computed(() => [
+    { label: 'Email verified', value: true },
+    { label: 'Email not verified', value: false }
+  ]);
+
+  readonly roleOptions = computed(() => Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })));
+  //#endif
+
+  //#if (IncludeLocalization)
+  readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');
+  readonly allEmailStatusPlaceholder = () => this.transloco.translate('users.filter.allEmailStatus');
+  readonly allRolesPlaceholder = () => this.transloco.translate('users.filter.allRoles');
+  readonly searchPlaceholder = () => this.transloco.translate('users.filter.searchPlaceholder');
+  readonly refreshLabel = () => this.transloco.translate('common.refresh');
+  readonly newUserLabel = () => this.transloco.translate('users.actions.newUser');
+  readonly confirmHeader = () => this.transloco.translate('common.confirm');
+  readonly confirmAcceptLabel = () => this.transloco.translate('common.ok');
+  readonly confirmRejectLabel = () => this.transloco.translate('common.cancel');
+  //#else
+  readonly allStatusPlaceholder = () => 'All statuses';
+  readonly allEmailStatusPlaceholder = () => 'All email statuses';
+  readonly allRolesPlaceholder = () => 'All roles';
+  readonly searchPlaceholder = () => 'Search username / email / display name...';
+  readonly refreshLabel = () => 'Refresh';
+  readonly newUserLabel = () => 'New user';
+  readonly confirmHeader = () => 'Confirm';
+  readonly confirmAcceptLabel = () => 'OK';
+  readonly confirmRejectLabel = () => 'Cancel';
+  //#endif
 
   constructor() {
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.onFilter());
+
+    //#if (IncludeLocalization)
+    // 读 activeLang 建立依赖：语言切换时标题随之重设。
+    effect(() => {
+      this.activeLang();
+      this.layoutService.title.set(this.transloco.translate('users.page.title'));
+    });
+    //#else
+    this.layoutService.title.set('User management');
+    //#endif
   }
 
   ngOnInit() {
-    this.layoutService.title.set('用户管理');
-
     const saved = this.filterStateService.load<{
       searchQuery: string;
       selectedIsActive: boolean | null;
@@ -204,7 +276,19 @@ export class UsersPage implements OnInit {
       )
       .subscribe({
         next: () => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: selected ? '用户更新成功' : '用户创建成功' });
+          //#if (IncludeLocalization)
+          this.messageService.add({
+            severity: 'success',
+            summary: this.transloco.translate('common.success'),
+            detail: this.transloco.translate(selected ? 'users.toast.updated' : 'users.toast.created')
+          });
+          //#else
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: selected ? 'User updated successfully' : 'User created successfully'
+          });
+          //#endif
           this.editDialogVisible.set(false);
           this.reloadList();
         }
@@ -213,13 +297,30 @@ export class UsersPage implements OnInit {
 
   handleToggleActive(user: UserManagementOutputDto) {
     this.confirmationService.confirm({
-      message: user.isActive ? `确定要禁用用户 ${user.username} 吗？` : `确定要启用用户 ${user.username} 吗？`,
-      header: user.isActive ? '确认禁用' : '确认启用',
+      //#if (IncludeLocalization)
+      message: this.transloco.translate(user.isActive ? 'users.confirm.disableMessage' : 'users.confirm.enableMessage', {
+        name: user.username
+      }),
+      header: this.transloco.translate(user.isActive ? 'users.confirm.disableHeader' : 'users.confirm.enableHeader'),
+      //#else
+      message: user.isActive
+        ? `Are you sure you want to disable user ${user.username}?`
+        : `Are you sure you want to enable user ${user.username}?`,
+      header: user.isActive ? 'Confirm disable' : 'Confirm enable',
+      //#endif
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         const request = user.isActive ? this.service.disableUser(user.id) : this.service.enableUser(user.id);
         request.subscribe(() => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: user.isActive ? '用户已禁用' : '用户已启用' });
+          //#if (IncludeLocalization)
+          this.messageService.add({
+            severity: 'success',
+            summary: this.transloco.translate('common.success'),
+            detail: this.transloco.translate(user.isActive ? 'users.toast.disabled' : 'users.toast.enabled')
+          });
+          //#else
+          this.messageService.add({ severity: 'success', summary: 'Success', detail: user.isActive ? 'User disabled' : 'User enabled' });
+          //#endif
           this.reloadList();
         });
       }
@@ -228,17 +329,38 @@ export class UsersPage implements OnInit {
 
   handleDelete(user: UserManagementOutputDto) {
     if (user.isSuperAdmin) {
-      this.messageService.add({ severity: 'warn', summary: '无法删除', detail: '系统内置超级管理员不允许删除' });
+      //#if (IncludeLocalization)
+      this.messageService.add({
+        severity: 'warn',
+        summary: this.transloco.translate('users.toast.cannotDeleteSummary'),
+        detail: this.transloco.translate('users.toast.cannotDeleteSuperAdmin')
+      });
+      //#else
+      this.messageService.add({ severity: 'warn', summary: 'Cannot delete', detail: 'The built-in super administrator cannot be deleted' });
+      //#endif
       return;
     }
 
     this.confirmationService.confirm({
-      message: `确定要删除用户 ${user.username} 吗？删除后该用户将无法继续登录。`,
-      header: '确认删除',
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('users.confirm.deleteMessage', { name: user.username }),
+      header: this.transloco.translate('users.confirm.deleteHeader'),
+      //#else
+      message: `Are you sure you want to delete user ${user.username}? Once deleted, the user will no longer be able to sign in.`,
+      header: 'Confirm delete',
+      //#endif
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
         this.service.deleteUser(user.id).subscribe(() => {
-          this.messageService.add({ severity: 'success', summary: '成功', detail: '用户已删除' });
+          //#if (IncludeLocalization)
+          this.messageService.add({
+            severity: 'success',
+            summary: this.transloco.translate('common.success'),
+            detail: this.transloco.translate('users.toast.deleted')
+          });
+          //#else
+          this.messageService.add({ severity: 'success', summary: 'Success', detail: 'User deleted' });
+          //#endif
           this.reloadList();
         });
       }
@@ -264,7 +386,15 @@ export class UsersPage implements OnInit {
         finalize(() => this.resetPasswordSaving.set(false))
       )
       .subscribe(() => {
-        this.messageService.add({ severity: 'success', summary: '成功', detail: '密码已重置' });
+        //#if (IncludeLocalization)
+        this.messageService.add({
+          severity: 'success',
+          summary: this.transloco.translate('common.success'),
+          detail: this.transloco.translate('users.toast.passwordReset')
+        });
+        //#else
+        this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Password has been reset' });
+        //#endif
         this.resetPasswordDialogVisible.set(false);
         this.resettingUserId.set(null);
       });

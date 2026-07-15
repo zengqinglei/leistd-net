@@ -19,14 +19,14 @@ const captchaStore = new Map<string, string>();
 function ensureUsernameAvailable(username: string, currentUserId: string): void {
   const exists = USERS.some(user => user.username === username && user.id !== currentUserId);
   if (exists) {
-    throw new MockException(400, { code: 40011, message: '用户名已存在' });
+    throw new MockException(400, { code: 40011, message: 'Username already exists' });
   }
 }
 
 function ensureEmailAvailable(email: string, currentUserId: string): void {
   const exists = USERS.some(user => user.email === email && user.id !== currentUserId);
   if (exists) {
-    throw new MockException(400, { code: 40012, message: '邮箱已被使用' });
+    throw new MockException(400, { code: 40012, message: 'Email is already in use' });
   }
 }
 
@@ -38,12 +38,12 @@ function sessionLogin(usernameOrEmail: string, password: string): 'ok' {
     return 'ok';
   }
 
-  throw new MockException(401, { code: 40100, message: '用户名或密码不正确' });
+  throw new MockException(401, { code: 40100, message: 'Incorrect username or password' });
 }
 
 function getCurrentUser(_req: MockRequest): UserOutputDto {
   if (!MOCK_SESSION_USER_ID) {
-    throw new MockException(401, { code: 40101, message: '未登录' });
+    throw new MockException(401, { code: 40101, message: 'Not authenticated' });
   }
   const user = USERS.find(u => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
   return toUserOutput(user);
@@ -57,11 +57,11 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
   const email = body.email.trim();
 
   if (!username) {
-    throw new MockException(400, { code: 40013, message: '用户名不能为空' });
+    throw new MockException(400, { code: 40013, message: 'Username is required' });
   }
 
   if (!email) {
-    throw new MockException(400, { code: 40014, message: '邮箱不能为空' });
+    throw new MockException(400, { code: 40014, message: 'Email is required' });
   }
 
   ensureUsernameAvailable(username, user.id);
@@ -81,15 +81,15 @@ function changePassword(req: MockRequest): 'ok' {
   const body = req.body as ChangePasswordInputDto;
 
   if (user.password !== body.currentPassword) {
-    throw new MockException(400, { code: 40001, message: '当前密码不正确' });
+    throw new MockException(400, { code: 40001, message: 'Current password is incorrect' });
   }
 
   if (body.newPassword !== body.confirmPassword) {
-    throw new MockException(400, { code: 40002, message: '两次输入的新密码不一致' });
+    throw new MockException(400, { code: 40002, message: 'The new passwords do not match' });
   }
 
   if (body.currentPassword === body.newPassword) {
-    throw new MockException(400, { code: 40003, message: '新密码不能与当前密码相同' });
+    throw new MockException(400, { code: 40003, message: 'The new password must be different from the current password' });
   }
 
   user.password = body.newPassword;
@@ -145,7 +145,7 @@ function validateCaptcha(captchaToken: string | undefined, captchaCode: string |
   captchaStore.delete(captchaToken ?? '');
 
   if (!code || !captchaCode || code.toLowerCase() !== captchaCode.trim().toLowerCase()) {
-    throw new MockException(400, { code: 40015, message: '图形验证码错误，请重新输入' });
+    throw new MockException(400, { code: 40015, message: 'The captcha is incorrect, please try again' });
   }
 }
 
@@ -195,7 +195,7 @@ function getExternalLoginUrl(provider: string): { loginUrl: string; state: strin
 
   const loginUrl = urls[provider];
   if (!loginUrl) {
-    throw new MockException(400, { code: 40020, message: `不支持的登录提供商: ${provider}` });
+    throw new MockException(400, { code: 40020, message: `Unsupported login provider: ${provider}` });
   }
 
   return { loginUrl, state };

@@ -19,8 +19,13 @@
         [class.opacity-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
         [class.max-w-40]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
         [class.opacity-100]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
-        >模板项目</span
       >
+        <!--#if (IncludeLocalization)-->
+        {{ 'layout.sidebar.appTitle' | transloco }}
+        <!--#else-->
+        Template Project
+        <!--#endif-->
+      </span>
     </div>
 
     <p-button

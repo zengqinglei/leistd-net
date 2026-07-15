@@ -11,7 +11,7 @@
     [rowHover]="true"
     [rowsPerPageOptions]="[10, 20, 50, 100]"
     [showCurrentPageReport]="true"
-    currentPageReportTemplate="共 {totalRecords} 条"
+    [currentPageReportTemplate]="currentPageReport()"
     [showJumpToPageInput]="true"
     paginatorDropdownAppendTo="body"
     styleClass="w-full"
@@ -26,40 +26,80 @@
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3"
           pSortableColumn="username"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">用户 <p-sortIcon field="username" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap">
+            <!--#if (IncludeLocalization)-->
+            {{ 'users.table.colUser' | transloco }}
+            <!--#else-->
+            User
+            <!--#endif-->
+            <p-sortIcon field="username" />
+          </div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden sm:table-cell"
           pSortableColumn="email"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">邮箱 <p-sortIcon field="email" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap">
+            <!--#if (IncludeLocalization)-->
+            {{ 'users.table.colEmail' | transloco }}
+            <!--#else-->
+            Email
+            <!--#endif-->
+            <p-sortIcon field="email" />
+          </div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden md:table-cell whitespace-nowrap"
         >
-          角色
+          <!--#if (IncludeLocalization)-->
+          {{ 'users.table.colRole' | transloco }}
+          <!--#else-->
+          Role
+          <!--#endif-->
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden lg:table-cell whitespace-nowrap"
         >
-          状态
+          <!--#if (IncludeLocalization)-->
+          {{ 'users.table.colStatus' | transloco }}
+          <!--#else-->
+          Status
+          <!--#endif-->
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden xl:table-cell"
           pSortableColumn="lastLoginTime"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">最近登录 <p-sortIcon field="lastLoginTime" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap">
+            <!--#if (IncludeLocalization)-->
+            {{ 'users.table.colLastLogin' | transloco }}
+            <!--#else-->
+            Last login
+            <!--#endif-->
+            <p-sortIcon field="lastLoginTime" />
+          </div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden 2xl:table-cell"
           pSortableColumn="creationTime"
         >
-          <div class="flex items-center gap-1 whitespace-nowrap">创建时间 <p-sortIcon field="creationTime" /></div>
+          <div class="flex items-center gap-1 whitespace-nowrap">
+            <!--#if (IncludeLocalization)-->
+            {{ 'users.table.colCreatedAt' | transloco }}
+            <!--#else-->
+            Created at
+            <!--#endif-->
+            <p-sortIcon field="creationTime" />
+          </div>
         </th>
         <th
           class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 text-right whitespace-nowrap"
         >
-          操作
+          <!--#if (IncludeLocalization)-->
+          {{ 'users.table.colActions' | transloco }}
+          <!--#else-->
+          Actions
+          <!--#endif-->
         </th>
       </tr>
     </ng-template>
@@ -102,13 +142,9 @@
 
         <td class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden lg:table-cell">
           <div class="flex items-center gap-1.5 whitespace-nowrap">
+            <p-tag [value]="statusLabel(item.isActive)" [severity]="item.isActive ? 'success' : 'secondary'" styleClass="text-[10px]" />
             <p-tag
-              [value]="item.isActive ? '启用' : '禁用'"
-              [severity]="item.isActive ? 'success' : 'secondary'"
-              styleClass="text-[10px]"
-            />
-            <p-tag
-              [value]="item.isEmailVerified ? '邮箱已验证' : '邮箱未验证'"
+              [value]="emailVerifiedLabel(item.isEmailVerified)"
               [severity]="item.isEmailVerified ? 'info' : 'warn'"
               styleClass="text-[10px] hidden xl:inline-flex"
             />
@@ -135,7 +171,7 @@
               icon="pi pi-pencil"
               styleClass="w-8 h-8 !p-0"
               [disabled]="isOtherSuperAdmin(item)"
-              [pTooltip]="isOtherSuperAdmin(item) ? '系统内置超级管理员不允许被其他管理员更新' : '编辑'"
+              [pTooltip]="editTooltip(isOtherSuperAdmin(item))"
               tooltipPosition="top"
             />
             <p-button
@@ -146,15 +182,7 @@
               [icon]="item.isActive ? 'pi pi-ban' : 'pi pi-check-circle'"
               styleClass="w-8 h-8 !p-0"
               [disabled]="isSuperAdmin(item)"
-              [pTooltip]="
-                isOtherSuperAdmin(item)
-                  ? '系统内置超级管理员不允许被其他管理员禁用'
-                  : isSelfSuperAdmin(item)
-                    ? '系统内置超级管理员不允许禁用自己'
-                    : item.isActive
-                      ? '禁用'
-                      : '启用'
-              "
+              [pTooltip]="toggleActiveTooltip(item)"
               tooltipPosition="top"
             />
             <p-button
@@ -165,7 +193,7 @@
               icon="pi pi-key"
               styleClass="w-8 h-8 !p-0"
               [disabled]="isOtherSuperAdmin(item)"
-              [pTooltip]="isOtherSuperAdmin(item) ? '系统内置超级管理员的密码不允许被其他管理员重置' : '重置密码'"
+              [pTooltip]="resetPasswordTooltip(isOtherSuperAdmin(item))"
               tooltipPosition="top"
             />
             <p-button
@@ -176,7 +204,7 @@
               icon="pi pi-trash"
               styleClass="w-8 h-8 !p-0"
               [disabled]="isSuperAdmin(item)"
-              [pTooltip]="isSuperAdmin(item) ? '系统内置超级管理员不允许删除' : '删除'"
+              [pTooltip]="deleteTooltip(isSuperAdmin(item))"
               tooltipPosition="top"
             />
           </div>
@@ -189,8 +217,13 @@
         <td colspan="7" class="!p-0 !border-0">
           <div class="flex flex-col items-center justify-center h-64 text-muted-color">
             <i class="pi pi-users text-5xl opacity-30 mb-3"></i>
-            <p class="text-base font-medium m-0">暂无用户</p>
-            <p class="text-sm mt-1 opacity-70">请创建新的用户</p>
+            <!--#if (IncludeLocalization)-->
+            <p class="text-base font-medium m-0">{{ 'users.table.emptyTitle' | transloco }}</p>
+            <p class="text-sm mt-1 opacity-70">{{ 'users.table.emptyHint' | transloco }}</p>
+            <!--#else-->
+            <p class="text-base font-medium m-0">No users yet</p>
+            <p class="text-sm mt-1 opacity-70">Create a new user</p>
+            <!--#endif-->
           </div>
         </td>
       </tr>
@@ -205,7 +238,11 @@
       @for (role of activeRoles(); track role) {
         <p-tag [value]="getRoleLabel(role)" [severity]="getRoleSeverity(role)" />
       } @empty {
-        <div class="text-sm text-muted-color">暂无角色</div>
+        <!--#if (IncludeLocalization)-->
+        <div class="text-sm text-muted-color">{{ 'users.popover.noRoles' | transloco }}</div>
+        <!--#else-->
+        <div class="text-sm text-muted-color">No roles</div>
+        <!--#endif-->
       }
     </div>
   </div>
