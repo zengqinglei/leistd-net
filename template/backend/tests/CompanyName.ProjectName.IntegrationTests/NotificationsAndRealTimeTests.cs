@@ -49,6 +49,9 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var markRead = await admin.Client.PutAsync($"/api/v1/notifications/{notification.Id}/read", null);
         Assert.Equal(HttpStatusCode.OK, markRead.StatusCode);
         Assert.Equal(0, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
+
+        // 显式停止连接，排空 SignalR 后台循环（持有 CTS），避免与 await using 释放竞争导致类清理期 ObjectDisposedException
+        await connection.StopAsync();
     }
 
     [Fact]
@@ -70,6 +73,8 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         }
 
         Assert.Equal("available", (await received.Task.WaitAsync(TimeSpan.FromSeconds(10))).Value);
+
+        await connection.StopAsync();
     }
 
     [Fact]
@@ -90,6 +95,9 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
             connection.InvokeAsync("Subscribe", "private:42"));
         Assert.Contains("Subscription forbidden", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        // securedFactory 是派生工厂，须在连接后台循环排空后再随 await using 释放，否则类清理期出现 CTS 已释放的竞争
+        await connection.StopAsync();
     }
 
     private static HubConnection CreateHubConnection(
