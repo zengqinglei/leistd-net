@@ -181,7 +181,13 @@ try
     // 业务错误文案键的资源在本项目 Resources/{en,zh-CN}.json（覆盖/扩展框架默认 Error:* 键）。
     builder.Services.AddJsonLocalization(
         supportedCultures: ["en", "zh-CN"],
-        configure: options => options.ResourceAssemblies.Add(typeof(Program).Assembly));
+        configure: options =>
+        {
+            options.ResourceAssemblies.Add(typeof(Program).Assembly);
+            // 显式登记 DataAnnotations 校验消息的标记类型走 JSON（组合工厂按类型精确路由，
+            // 未登记则委派官方 RESX）；否则 factory.Create(typeof(ApiResource)) 取不到 JSON 校验文案。
+            options.JsonResourceTypes.Add(typeof(ApiResource));
+        });
 #endif
     builder.Services.AddHealthChecks();
     builder.Services.AddMyProjectSpaProxy();
