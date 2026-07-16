@@ -1,6 +1,5 @@
 //#if (IncludeLocalization)
 import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#else
 import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
@@ -8,6 +7,9 @@ import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/cor
 import { CardModule } from 'primeng/card';
 import { TagModule } from 'primeng/tag';
 
+//#if (IncludeLocalization)
+import { translationReady } from '../../../../core/i18n/translation-ready';
+//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { RoleLabelPipe } from '../../../../shared/pipes/role-label.pipe';
@@ -29,13 +31,13 @@ export class WorkspaceDashboardPage {
   readonly authService = inject(AuthService);
   private readonly transloco = inject(TranslocoService);
 
-  // 追踪活动语言：切换时该 signal 变化 → effect 重跑 → 标题重新翻译。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
+  private readonly translationReady = translationReady(this.transloco);
 
   constructor() {
-    // 读取 activeLang 建立依赖：语言切换时本 effect 重跑，标题随之更新。
+    // 读取 translationReady 建立依赖：资源就绪 / 语言切换时本 effect 重跑，标题随之更新。
     effect(() => {
-      this.activeLang();
+      this.translationReady();
       this.layoutService.title.set(this.transloco.translate('workspace.dashboard.title'));
     });
   }

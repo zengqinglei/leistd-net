@@ -1,12 +1,14 @@
 //#if (IncludeLocalization)
 import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#else
 import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 //#endif
 import { CardModule } from 'primeng/card';
 
+//#if (IncludeLocalization)
+import { translationReady } from '../../../../core/i18n/translation-ready';
+//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
 
@@ -27,12 +29,12 @@ export class Dashboard {
   readonly authService = inject(AuthService);
   private readonly transloco = inject(TranslocoService);
 
-  // 追踪活动语言：切换时 effect 重跑，layout 标题随之更新（避免只在 ngOnInit 定死一次）。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
+  private readonly translationReady = translationReady(this.transloco);
 
   constructor() {
     effect(() => {
-      this.activeLang();
+      this.translationReady();
       this.layoutService.title.set(this.transloco.translate('platform.dashboard.title'));
     });
   }

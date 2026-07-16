@@ -1,7 +1,4 @@
 import { Component, computed, inject } from '@angular/core';
-//#if (IncludeLocalization)
-import { toSignal } from '@angular/core/rxjs-interop';
-//#endif
 import { FormsModule } from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
@@ -9,6 +6,9 @@ import { TranslocoService } from '@jsverse/transloco';
 import type { PaletteDesignToken } from '@primeuix/themes/types';
 import { SelectButtonModule } from 'primeng/selectbutton';
 
+//#if (IncludeLocalization)
+import { translationReady } from '../../../core/i18n/translation-ready';
+//#endif
 import {
   THEME_PRESET_NAMES,
   THEME_PRESETS,
@@ -45,7 +45,7 @@ interface PaletteOption<TName extends string> {
       </div>
 
       <div>
-        <span class="text-sm text-muted-color font-semibold">Primary</span>
+        <span class="text-sm text-muted-color font-semibold">{{ primaryLabel() }}</span>
         <div class="pt-2 flex gap-2 flex-wrap justify-start">
           <button
             type="button"
@@ -69,7 +69,7 @@ interface PaletteOption<TName extends string> {
       </div>
 
       <div>
-        <span class="text-sm text-muted-color font-semibold">Surface</span>
+        <span class="text-sm text-muted-color font-semibold">{{ surfaceLabel() }}</span>
         <div class="pt-2 flex gap-2 flex-wrap justify-start">
           <button
             type="button"
@@ -93,7 +93,7 @@ interface PaletteOption<TName extends string> {
       </div>
 
       <div class="flex flex-col gap-2">
-        <span class="text-sm text-muted-color font-semibold">Presets</span>
+        <span class="text-sm text-muted-color font-semibold">{{ presetsLabel() }}</span>
         <p-selectbutton
           [options]="presetNames"
           [ngModel]="themeService.preferences().preset"
@@ -118,25 +118,40 @@ export class ThemeConfigurator {
   readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed 重算，文案随之更新。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时该 signal 变化 → 依赖它的 computed 重算（含首帧，避免裸键）。
+  private readonly translationReady = translationReady(this.transloco);
   readonly modeLabel = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return this.transloco.translate('theme.config.mode');
   });
   readonly defaultLabel = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return this.transloco.translate('theme.config.default');
+  });
+  readonly primaryLabel = computed(() => {
+    this.translationReady();
+    return this.transloco.translate('theme.config.primary');
+  });
+  readonly surfaceLabel = computed(() => {
+    this.translationReady();
+    return this.transloco.translate('theme.config.surface');
+  });
+  readonly presetsLabel = computed(() => {
+    this.translationReady();
+    return this.transloco.translate('theme.config.presets');
   });
   //#else
   readonly modeLabel = computed(() => 'Theme Mode');
   readonly defaultLabel = computed(() => 'Default');
+  readonly primaryLabel = computed(() => 'Primary');
+  readonly surfaceLabel = computed(() => 'Surface');
+  readonly presetsLabel = computed(() => 'Presets');
   //#endif
 
   readonly presetNames = [...THEME_PRESET_NAMES];
   //#if (IncludeLocalization)
   readonly themeModes = computed<Array<{ label: string; value: ThemeMode }>>(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: this.transloco.translate('theme.config.light'), value: 'light' },
       { label: this.transloco.translate('theme.config.system'), value: 'system' },

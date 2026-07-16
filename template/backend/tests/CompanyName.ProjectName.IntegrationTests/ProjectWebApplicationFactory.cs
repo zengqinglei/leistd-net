@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -25,6 +27,18 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 ["DefaultAdmin:Username"] = "admin",
                 ["DefaultAdmin:Password"] = "Admin@123456",
                 ["UserRegistration:EnableEmailVerification"] = "false"
+            });
+        });
+
+        // 测试宿主关闭确定化：强制托管服务顺序启停（关闭并发路径），避免 WebApplicationFactory 释放时
+        // Host.ForeachService 与已释放的 CancellationTokenSource 竞争，导致类清理期偶发 ObjectDisposedException。
+        // 作用于工厂 → 覆盖所有测试类（Health / Localization / Notifications 等），而非逐类修补。
+        builder.ConfigureServices(services =>
+        {
+            services.Configure<HostOptions>(options =>
+            {
+                options.ServicesStartConcurrently = false;
+                options.ServicesStopConcurrently = false;
             });
         });
     }

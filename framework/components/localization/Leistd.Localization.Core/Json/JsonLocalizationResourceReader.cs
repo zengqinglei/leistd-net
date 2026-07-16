@@ -60,21 +60,30 @@ public sealed class JsonLocalizationResourceReader(
     /// <summary>
     /// 在程序集嵌入清单中定位 <c>{ResourcesPath}.{culture}.json</c>（大小写不敏感，兼容目录分隔差异）。
     /// </summary>
+    /// <remarks>
+    /// 精确后缀匹配：清单名须以 <c>.{ResourcesPath}.{culture}.json</c> 结尾（<c>ResourcesPath</c> 为空时退化为 <c>.{culture}.json</c>），
+    /// 避免仅凭 <c>Contains</c> 命中同程序集下相似目录的错误资源。命中多个候选时抛出
+    /// <see cref="InvalidOperationException"/>——歧义应在启动预热阶段暴露，而非静默取第一个埋雷。
+    /// </remarks>
     private string? ResolveResourceName(Assembly assembly, string culture)
     {
-        var suffix = $".{culture}.json";
-        var pathHint = _options.ResourcesPath.Replace('/', '.').Replace('\\', '.');
+        var pathHint = _options.ResourcesPath.Replace('/', '.').Replace('\\', '.').Trim('.');
+        var suffix = string.IsNullOrEmpty(pathHint)
+            ? $".{culture}.json"
+            : $".{pathHint}.{culture}.json";
 
-        foreach (var name in assembly.GetManifestResourceNames())
+        var matches = assembly.GetManifestResourceNames()
+            .Where(name => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (matches.Count > 1)
         {
-            if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (string.IsNullOrEmpty(pathHint)
-                || name.Contains($".{pathHint}.", StringComparison.OrdinalIgnoreCase))
-                return name;
+            throw new InvalidOperationException(
+                $"程序集 '{assembly.GetName().Name}' 中 culture '{culture}' 命中多个本地化资源候选：" +
+                $"{string.Join(", ", matches)}。请确保逻辑后缀 '{suffix}' 在单个程序集内唯一。");
         }
 
-        return null;
+        return matches.Count == 1 ? matches[0] : null;
     }
 
     private IReadOnlyDictionary<string, string>? Parse(Stream stream, string expectedCulture, string resourceName)

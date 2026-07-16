@@ -136,7 +136,10 @@
       "default": "Default",
       "light": "Light",
       "system": "System",
-      "dark": "Dark"
+      "dark": "Dark",
+      "primary": "Primary",
+      "surface": "Surface",
+      "presets": "Presets"
     }
   },
   "app": {

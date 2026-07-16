@@ -1,8 +1,5 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, output, signal } from '@angular/core';
-//#if (IncludeLocalization)
-import { toSignal } from '@angular/core/rxjs-interop';
-//#endif
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
@@ -17,6 +14,9 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import { PasswordModule } from 'primeng/password';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
+//#if (IncludeLocalization)
+import { translationReady } from '../../../../../../core/i18n/translation-ready';
+//#endif
 import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { DIALOG_CONFIGS } from '../../../../../../shared/constants/dialog-config.constants';
 import { ROLE_LABEL_MAP } from '../../../../../../shared/models/role.enum';
@@ -57,8 +57,8 @@ export class UserEditDialogComponent {
   private readonly fb = inject(FormBuilder);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed 重算，文案重新翻译。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
+  private readonly translationReady = translationReady(this.transloco);
   private readonly unnamedLabel = () => this.transloco.translate('users.editDialog.unnamedUser');
   readonly dialogHeader = () =>
     this.transloco.translate(this.isEditMode() ? 'users.editDialog.editHeader' : 'users.editDialog.createHeader');
@@ -117,9 +117,9 @@ export class UserEditDialogComponent {
   });
 
   //#if (IncludeLocalization)
-  // 本地化模式：ROLE_LABEL_MAP 值是词条键，读 activeLang 建立依赖，语言切换时 computed 重算，标签重新翻译。
+  // 本地化模式：ROLE_LABEL_MAP 值是词条键，读 translationReady 建立依赖，资源就绪 / 语言切换时 computed 重算，标签重新翻译。
   readonly roleOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label: this.transloco.translate(label), value }));
   });
   //#else

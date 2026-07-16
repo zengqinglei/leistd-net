@@ -1,11 +1,14 @@
 //#if (IncludeLocalization)
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoService } from '@jsverse/transloco';
 //#else
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 //#endif
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+//#if (IncludeLocalization)
+
+import { translationReady } from '../../../core/i18n/translation-ready';
+//#endif
 
 @Component({
   selector: 'app-dialog-loading',
@@ -25,17 +28,17 @@ export class DialogLoadingComponent {
 
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  // 追踪活动语言：切换时该 signal 变化 → displayText 重算 → 默认文案重新翻译。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时该 signal 变化 → displayText 重算 → 默认文案重新翻译（含首帧，避免裸键）。
+  private readonly translationReady = translationReady(this.transloco);
 
-  // 未传入 text 时读 activeLang 建立依赖，语言切换后默认文案随之更新。
+  // 未传入 text 时读 translationReady 建立依赖，资源就绪 / 语言切换后默认文案随之更新。
   readonly displayText = computed(() => {
     const override = this.text();
     if (override !== undefined) {
       return override;
     }
 
-    this.activeLang();
+    this.translationReady();
     return this.transloco.translate('app.startup.loading');
   });
   //#else

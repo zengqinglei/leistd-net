@@ -50,4 +50,14 @@ public class JsonLocalizationResourceReaderRobustnessTests
 
         Assert.Equal("Hello", texts["Greeting"]);
     }
+
+    [Fact]
+    public void Multiple_candidates_for_same_culture_throw_instead_of_silently_picking_first()
+    {
+        // 两个清单名（FirstArea/SecondArea）都以 .Ambiguous.en.json 结尾 → 精确后缀命中多候选，应抛错暴露歧义。
+        var reader = CreateReader("Ambiguous");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => reader.GetTexts("en"));
+        Assert.Contains("Ambiguous", ex.Message, StringComparison.Ordinal);
+    }
 }

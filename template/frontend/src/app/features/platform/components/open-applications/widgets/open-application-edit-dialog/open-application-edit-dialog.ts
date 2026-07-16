@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, output, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 //#else
 import { ChangeDetectionStrategy, Component, computed, effect, input, model, output, signal } from '@angular/core';
 //#endif
@@ -19,6 +18,9 @@ import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
 
+//#if (IncludeLocalization)
+import { translationReady } from '../../../../../../core/i18n/translation-ready';
+//#endif
 import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { DIALOG_CONFIGS } from '../../../../../../shared/constants/dialog-config.constants';
 import {
@@ -85,8 +87,8 @@ const authorizationCodePermissions = [
 export class OpenApplicationEditDialogComponent {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  // 追踪活动语言：切换时该 signal 变化 → 选项/标签 computed 重算，随之重新翻译。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
+  private readonly translationReady = translationReady(this.transloco);
   readonly dialogHeader = () => this.transloco.translate(this.isEditMode() ? 'openApp.dialog.editHeader' : 'openApp.dialog.createHeader');
   readonly templatePlaceholder = () => this.transloco.translate('openApp.field.templatePlaceholder');
   readonly displayNamePlaceholder = () => this.transloco.translate('openApp.field.displayNamePlaceholder');
@@ -134,9 +136,9 @@ export class OpenApplicationEditDialogComponent {
   });
 
   //#if (IncludeLocalization)
-  // 读一次 activeLang 建立依赖：语言切换时本 computed 重算，选项标签重新翻译。
+  // 读一次 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，选项标签重新翻译。
   readonly templateOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: this.transloco.translate('openApp.template.web'), value: 'web' },
       { label: this.transloco.translate('openApp.template.desktop'), value: 'desktop' },
@@ -145,7 +147,7 @@ export class OpenApplicationEditDialogComponent {
   });
 
   readonly applicationTypeOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: 'Web', value: 'web' },
       { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
@@ -159,7 +161,7 @@ export class OpenApplicationEditDialogComponent {
   ]);
 
   readonly consentTypeOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: this.transloco.translate('openApp.consentType.implicit'), value: 'implicit' },
       { label: this.transloco.translate('openApp.consentType.explicit'), value: 'explicit' },
@@ -169,7 +171,7 @@ export class OpenApplicationEditDialogComponent {
   });
 
   readonly permissionOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: this.transloco.translate('openApp.permission.authorizationEndpoint'), value: 'ept:authorization', group: 'Endpoints' },
       { label: this.transloco.translate('openApp.permission.tokenEndpoint'), value: 'ept:token', group: 'Endpoints' },
@@ -187,12 +189,12 @@ export class OpenApplicationEditDialogComponent {
   });
 
   readonly requirementOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [{ label: this.transloco.translate('openApp.requirement.forcePkce'), value: 'ft:pkce' }];
   });
 
   readonly permissionLabels = computed<Record<string, string>>(() => {
-    this.activeLang();
+    this.translationReady();
     return {
       'ept:authorization': this.transloco.translate('openApp.permission.authorizationEndpoint'),
       'ept:token': this.transloco.translate('openApp.permission.tokenEndpoint'),
@@ -210,7 +212,7 @@ export class OpenApplicationEditDialogComponent {
   });
 
   readonly applicationTypeLabels = computed<Record<string, string>>(() => {
-    this.activeLang();
+    this.translationReady();
     return {
       web: 'Web',
       native: this.transloco.translate('openApp.appType.native'),
@@ -219,7 +221,7 @@ export class OpenApplicationEditDialogComponent {
   });
 
   readonly clientTypeLabels = computed<Record<string, string>>(() => {
-    this.activeLang();
+    this.translationReady();
     return {
       public: this.transloco.translate('openApp.clientType.publicLabel'),
       confidential: this.transloco.translate('openApp.clientType.confidentialLabel')
@@ -227,7 +229,7 @@ export class OpenApplicationEditDialogComponent {
   });
 
   readonly consentTypeLabels = computed<Record<string, string>>(() => {
-    this.activeLang();
+    this.translationReady();
     return {
       implicit: this.transloco.translate('openApp.consentType.implicit'),
       explicit: this.transloco.translate('openApp.consentType.explicit'),

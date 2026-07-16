@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, OnInit, signal } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#else
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -22,6 +22,11 @@ import { TooltipModule } from 'primeng/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 
+import { OpenApplicationEditDialogComponent } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
+import { OpenApplicationTable, OpenApplicationTableFilterEvent } from './widgets/open-application-table/open-application-table';
+//#if (IncludeLocalization)
+import { translationReady } from '../../../../core/i18n/translation-ready';
+//#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FilterStateService } from '../../../../shared/services/filter-state.service';
 import {
@@ -32,8 +37,6 @@ import {
   UpdateOpenApplicationInputDto
 } from '../../models/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
-import { OpenApplicationEditDialogComponent } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
-import { OpenApplicationTable, OpenApplicationTableFilterEvent } from './widgets/open-application-table/open-application-table';
 
 @Component({
   selector: 'app-open-applications',
@@ -96,12 +99,12 @@ export class OpenApplicationsPage implements OnInit {
   sorting = signal('clientId asc');
 
   //#if (IncludeLocalization)
-  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed / effect 重算，文案随之更新。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
+  private readonly translationReady = translationReady(this.transloco);
 
-  // 读取 activeLang 建立依赖：语言切换时本 computed 重算，选项标签重新翻译。
+  // 读取 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，选项标签重新翻译。
   readonly applicationTypeOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: 'Web', value: 'web' },
       { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
@@ -145,9 +148,9 @@ export class OpenApplicationsPage implements OnInit {
       .subscribe(() => this.onFilter());
 
     //#if (IncludeLocalization)
-    // 读取 activeLang 建立依赖：语言切换时重设标题，随语言更新。
+    // 读取 translationReady 建立依赖：资源就绪 / 语言切换时重设标题，随语言更新。
     effect(() => {
-      this.activeLang();
+      this.translationReady();
       this.layoutService.title.set(this.transloco.translate('openApp.page.title'));
     });
     //#else

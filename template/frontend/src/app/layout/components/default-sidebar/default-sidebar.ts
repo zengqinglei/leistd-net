@@ -9,6 +9,9 @@ import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
 import { filter, map, startWith } from 'rxjs/operators';
 
+//#if (IncludeLocalization)
+import { translationReady } from '../../../core/i18n/translation-ready';
+//#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { LogoComponent } from '../../../shared/components/logo/logo';
 import { LayoutService } from '../../services/layout-service';
@@ -48,7 +51,7 @@ export class DefaultSidebar {
   readonly mobileMenuClosed = output<void>();
 
   //#if (IncludeLocalization)
-  // 存词条键，展示时按 activeLang 响应式翻译；语言切换时 menuGroups computed 重算，标签随之更新。
+  // 存词条键，展示时按 translationReady 响应式翻译；资源就绪 / 语言切换时 menuGroups computed 重算，标签随之更新。
   private readonly platformMenuGroups: MenuGroup[] = [
     { items: [{ label: 'layout.sidebar.dashboard', icon: 'pi-gauge', route: '/platform' }] },
     //#if (IncludeIdentity)
@@ -68,8 +71,8 @@ export class DefaultSidebar {
     { items: [{ label: 'layout.sidebar.workbench', icon: 'pi-gauge', route: '/workspace/dashboard' }] }
   ];
 
-  // 追踪活动语言：切换时该 signal 变化 → menuGroups 重算 → 标签重新翻译。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
+  private readonly translationReady = translationReady(this.transloco);
   //#else
   private readonly platformMenuGroups: MenuGroup[] = [
     { items: [{ label: 'Dashboard', icon: 'pi-gauge', route: '/platform' }] },
@@ -105,8 +108,8 @@ export class DefaultSidebar {
     const groups = url.startsWith('/platform') ? this.platformMenuGroups : this.workspaceMenuGroups;
     const isSuperAdmin = this.authService.currentUser()?.isSuperAdmin === true;
     //#if (IncludeLocalization)
-    // 读取 activeLang 建立依赖：语言切换时本 computed 重算，标签重新翻译。
-    this.activeLang();
+    // 读取 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，标签重新翻译。
+    this.translationReady();
     //#endif
 
     return groups

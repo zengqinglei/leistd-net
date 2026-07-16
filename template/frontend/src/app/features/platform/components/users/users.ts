@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#else
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -21,6 +21,9 @@ import { TooltipModule } from 'primeng/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 
+//#if (IncludeLocalization)
+import { translationReady } from '../../../../core/i18n/translation-ready';
+//#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
 import { FilterStateService } from '../../../../shared/services/filter-state.service';
@@ -95,12 +98,12 @@ export class UsersPage implements OnInit {
   sorting = signal('username asc');
 
   //#if (IncludeLocalization)
-  // 追踪活动语言：切换时该 signal 变化 → 依赖它的 computed 重算，选项/文案重新翻译。
-  private readonly activeLang = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
+  private readonly translationReady = translationReady(this.transloco);
 
-  // 读 activeLang 建立依赖：语言切换时重算并重新翻译。
+  // 读 translationReady 建立依赖：资源就绪 / 语言切换时重算并重新翻译。
   readonly activeOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: this.transloco.translate('users.status.active'), value: true },
       { label: this.transloco.translate('users.status.inactive'), value: false }
@@ -108,7 +111,7 @@ export class UsersPage implements OnInit {
   });
 
   readonly emailVerifiedOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return [
       { label: this.transloco.translate('users.status.emailVerified'), value: true },
       { label: this.transloco.translate('users.status.emailUnverified'), value: false }
@@ -117,7 +120,7 @@ export class UsersPage implements OnInit {
 
   // 本地化模式：ROLE_LABEL_MAP 值是词条键，翻译为显示文案。
   readonly roleOptions = computed(() => {
-    this.activeLang();
+    this.translationReady();
     return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label: this.transloco.translate(label), value }));
   });
   //#else
@@ -162,9 +165,9 @@ export class UsersPage implements OnInit {
       .subscribe(() => this.onFilter());
 
     //#if (IncludeLocalization)
-    // 读 activeLang 建立依赖：语言切换时标题随之重设。
+    // 读 translationReady 建立依赖：资源就绪 / 语言切换时标题随之重设。
     effect(() => {
-      this.activeLang();
+      this.translationReady();
       this.layoutService.title.set(this.transloco.translate('users.page.title'));
     });
     //#else

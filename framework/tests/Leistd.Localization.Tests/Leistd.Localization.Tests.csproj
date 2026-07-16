@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- 组合工厂测试需 ASP.NET Core 共享框架（ResourceManagerStringLocalizerFactory / AddLocalization）。 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <!-- 测试项目：覆盖 common.props 的打包/文档约定 -->
@@ -23,14 +28,19 @@
 
   <ItemGroup>
     <!-- 读取器健壮化测试用夹具：坏 JSON / culture 声明不一致 / 正常，各自独立目录以便按 ResourcesPath 精确定位。
-         磁盘文件名不含 .en. 以免被 MSBuild 当作附属(satellite)资源；用显式 LogicalName 还原读取器期望的 {path}.{culture}.json 清单名。 -->
-    <EmbeddedResource Include="TestResources/Broken/messages.json" LogicalName="Leistd.Localization.Tests.TestResources.Broken.messages.en.json" />
-    <EmbeddedResource Include="TestResources/Mismatch/messages.json" LogicalName="Leistd.Localization.Tests.TestResources.Mismatch.messages.en.json" />
-    <EmbeddedResource Include="TestResources/Good/messages.json" LogicalName="Leistd.Localization.Tests.TestResources.Good.messages.en.json" />
+         磁盘文件名不含 .en. 以免被 MSBuild 当作附属(satellite)资源；夹具由 SDK 默认包含，此处仅用 Update 覆写
+         LogicalName 为读取器期望的 {ResourcesPath}.{culture}.json 精确后缀清单名（与生产 Resources/en.json → *.Resources.en.json 约定一致）。 -->
+    <EmbeddedResource Include="TestResources/Broken/messages.json" LogicalName="Leistd.Localization.Tests.TestResources.Broken.en.json" />
+    <EmbeddedResource Include="TestResources/Mismatch/messages.json" LogicalName="Leistd.Localization.Tests.TestResources.Mismatch.en.json" />
+    <EmbeddedResource Include="TestResources/Good/messages.json" LogicalName="Leistd.Localization.Tests.TestResources.Good.en.json" />
+    <!-- 多候选歧义夹具：两个清单名以同一精确后缀 .Ambiguous.en.json 结尾，验证读取器命中多候选时抛错而非静默取首个。 -->
+    <EmbeddedResource Include="TestResources/Ambiguous/first.json" LogicalName="Leistd.Localization.Tests.FirstArea.Ambiguous.en.json" />
+    <EmbeddedResource Include="TestResources/Ambiguous/second.json" LogicalName="Leistd.Localization.Tests.SecondArea.Ambiguous.en.json" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\components\localization\Leistd.Localization.Core\Leistd.Localization.Core.csproj" />
+    <ProjectReference Include="..\..\components\localization\Leistd.Localization.AspNetCore\Leistd.Localization.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

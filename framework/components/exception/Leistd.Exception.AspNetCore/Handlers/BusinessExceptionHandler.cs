@@ -78,6 +78,38 @@ public sealed class BusinessExceptionHandler(
         }
     }
 
+    /// <summary>
+    /// 把结构化字段错误按当前 culture 解析为 RFC 7807 <c>ValidationProblemDetails</c> 形状
+    /// （<c>{ field: [localizedString] }</c>）：每条错误优先按 <see cref="ValidationError.LocalizationKey"/>
+    /// 查资源，未启用本地化 / 无键 / 未命中时回落到 <see cref="ValidationError.Message"/>（诊断消息）。
+    /// 与 <see cref="Localize"/> 同样 try/catch 隔离，本地化组件失败绝不吞掉字段错误本身。
+    /// </summary>
+    private Dictionary<string, string[]> LocalizeValidationErrors(UnprocessableEntityException exception)
+    {
+        return exception.ValidationErrors
+            .GroupBy(error => error.Field, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(LocalizeValidationError).ToArray(),
+                StringComparer.Ordinal);
+    }
+
+    private string LocalizeValidationError(ValidationError error)
+    {
+        if (_localizer is null || string.IsNullOrEmpty(error.LocalizationKey))
+            return error.Message;
+
+        try
+        {
+            var localized = _localizer[error.LocalizationKey];
+            return localized.ResourceNotFound ? error.Message : Fill(localized.Value, error.Data);
+        }
+        catch
+        {
+            return error.Message;
+        }
+    }
+
     private static string Fill(string text, IReadOnlyDictionary<string, object?>? data)
     {
         if (data is not { Count: > 0 })
@@ -228,7 +260,7 @@ public sealed class BusinessExceptionHandler(
         // 对于验证异常使用 ValidationProblemDetails
         if (bizException is UnprocessableEntityException unprocessableEntity)
         {
-            var validationProblem = new ValidationProblemDetails(unprocessableEntity.ValidationErrors ?? new Dictionary<string, string[]>())
+            var validationProblem = new ValidationProblemDetails(LocalizeValidationErrors(unprocessableEntity))
             {
                 Type = GetProblemType(statusCode),
                 Title = title,
