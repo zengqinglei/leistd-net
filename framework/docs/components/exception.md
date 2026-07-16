@@ -87,13 +87,18 @@ throw new BadRequestException("Email already in use")   // Message：日志/诊�
 
 > `Code` 默认取「HTTP 前缀 + 00」，前端一般按 HTTP 状态码统一处理、并不消费细分码。仅当前端要对**某个具体错误**做差异化行为（如高亮某输入框）时，才用 `WithCode("46")` 追加细分后缀（→ `40046`）。这是极少数场景。
 
-字段校验场景使用 `UnprocessableEntityException`，可逐字段累加错误，处理器会输出为 `ValidationProblemDetails`（HTTP 422）：
+字段校验场景使用 `UnprocessableEntityException`，可逐字段累加**结构化**错误（与业务异常同构的三分离：`Message` 诊断 / `Code` 机器码 / `LocalizationKey` 展示键 / `Data` 占位参数），处理器按当前 culture 解析后输出为 `ValidationProblemDetails`（HTTP 422）：
 
 ```csharp
-throw new UnprocessableEntityException("email", "邮箱格式不正确")
-    .AddError("password", "密码至少 8 位")
-    .AddErrors("phone", "号码非法", "号码已被占用");
+throw new UnprocessableEntityException("email", "Invalid email format")   // 便捷构造：单字段单条（仅诊断消息）
+    .AddError("password", "Password must be at least 8 characters")         // 便捷追加：仅诊断消息
+    .AddError(new ValidationError(                                          // 结构化：带展示键与占位参数
+        Field: "phone",
+        Message: "Phone number already in use",
+        LocalizationKey: "User:PhoneAlreadyUsed"));
 ```
+
+> 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。无论哪种情况，处理器都保持 RFC 7807 `errors: { field: [string] }` 形状。
 
 抛出后，全局处理器自动产出如下结构的响应（节选）：
 
@@ -137,11 +142,12 @@ throw new UnprocessableEntityException("email", "邮箱格式不正确")
 
 | 成员 | 说明 |
 | --- | --- |
-| `ValidationErrors` | `Dictionary<string,string[]>?`，符合 RFC 7807 的逐字段错误集合 |
-| `WithErrors(dict)` | 整体替换错误集合，返回自身 |
-| `AddError(field, error)` | 追加某字段的单条错误，返回自身 |
-| `AddErrors(field, params errors)` | 追加某字段的多条错误，返回自身 |
-| 构造 `(field, error)` / `(field, errors)` | 便捷构造单字段错误 |
+| `ValidationErrors` | `IReadOnlyList<ValidationError>`，结构化逐字段错误集合 |
+| `AddError(ValidationError error)` | 追加一条结构化字段错误，返回自身 |
+| `AddError(field, message, code?, localizationKey?, data?)` | 追加一条字段错误（诊断消息 + 可选码/展示键/占位参数），返回自身 |
+| 构造 `(field, error)` / `(field, errors)` | 便捷构造单字段错误（仅诊断消息，无展示键） |
+
+`ValidationError`（`record`）字段：`Field` / `Message`（诊断兼兜底展示）/ `Code?`（稳定机器码）/ `LocalizationKey?`（展示键）/ `Data?`（占位参数）。
 
 > 业务异常的基类链为 `BusinessException` → `CommonException`（位于 `Leistd.Exception` 命名空间，由 `Leistd.Core` 提供）→ `System.Exception`。
 
