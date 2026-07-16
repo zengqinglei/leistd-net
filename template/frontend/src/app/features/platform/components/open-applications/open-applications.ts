@@ -106,9 +106,17 @@ export class OpenApplicationsPage implements OnInit {
   readonly applicationTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: 'Web', value: 'web' },
+      { label: this.transloco.translate('openApp.appType.web'), value: 'web' },
       { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
       { label: this.transloco.translate('openApp.appType.service'), value: 'service' }
+    ];
+  });
+
+  readonly clientTypeOptions = computed(() => {
+    this.translationReady();
+    return [
+      { label: this.transloco.translate('openApp.clientType.publicLabel'), value: 'public' },
+      { label: this.transloco.translate('openApp.clientType.confidentialLabel'), value: 'confidential' }
     ];
   });
   //#else
@@ -117,12 +125,12 @@ export class OpenApplicationsPage implements OnInit {
     { label: 'Desktop/Native', value: 'native' },
     { label: 'Service', value: 'service' }
   ]);
-  //#endif
 
   readonly clientTypeOptions = computed(() => [
     { label: 'Public', value: 'public' },
     { label: 'Confidential', value: 'confidential' }
   ]);
+  //#endif
 
   //#if (IncludeLocalization)
   readonly allAppTypesPlaceholder = () => this.transloco.translate('openApp.filter.allAppTypes');

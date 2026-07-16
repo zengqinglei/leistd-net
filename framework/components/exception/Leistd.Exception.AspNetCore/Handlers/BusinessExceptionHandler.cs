@@ -94,6 +94,21 @@ public sealed class BusinessExceptionHandler(
                 StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// 产出结构化字段错误明细（机器契约）：每条保留 <c>field</c> / <c>code</c> / <c>localizationKey</c>
+    /// 及本地化后的 <c>message</c>，供前端按稳定错误码对具体字段做差异化处理。与标准 <c>errors</c> 并存，互不替代。
+    /// </summary>
+    private object[] BuildValidationErrorDetails(UnprocessableEntityException exception)
+    {
+        return [.. exception.ValidationErrors.Select(error => new
+        {
+            field = error.Field,
+            code = error.Code,
+            localizationKey = error.LocalizationKey,
+            message = LocalizeValidationError(error)
+        })];
+    }
+
     private string LocalizeValidationError(ValidationError error)
     {
         if (_localizer is null || string.IsNullOrEmpty(error.LocalizationKey))
@@ -271,6 +286,9 @@ public sealed class BusinessExceptionHandler(
             validationProblem.Extensions["message"] = message;
             validationProblem.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
             validationProblem.Extensions["code"] = bizException.Code;
+            // 标准 errors 仅承载本地化后的字符串（RFC 7807 兼容）；结构化机器契约（字段码/展示键）
+            // 另放 validationErrorDetails 扩展，使前端能按 Code 对具体字段错误做差异化处理。
+            validationProblem.Extensions["validationErrorDetails"] = BuildValidationErrorDetails(unprocessableEntity);
 
             if (ShouldShowDetails() && !string.IsNullOrEmpty(bizException.Details))
             {

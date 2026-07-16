@@ -15,7 +15,20 @@ public sealed class JsonLocalizationOptions
     /// 承载嵌入 JSON 资源的程序集集合。宿主与各功能包各自登记自身程序集，
     /// 同一键在多个程序集出现时后登记者覆盖前者（便于业务项目覆盖框架默认文案）。
     /// </summary>
+    /// <remarks>
+    /// 此集合仅决定「从哪些程序集加载 JSON 词条」；不决定 <see cref="IStringLocalizer{T}"/> 的路由。
+    /// typed localizer 的 JSON/RESX 分流由 <see cref="JsonResourceTypes"/> 精确到具体类型，
+    /// 避免「登记了 JSON 资源的程序集内所有类型都被吞进 JSON」误伤本应走 RESX 的类型。
+    /// </remarks>
     public IList<Assembly> ResourceAssemblies { get; } = [];
+
+    /// <summary>
+    /// 显式登记「走 JSON 词条表」的资源标记类型集合（精确到类型，而非整程序集）。
+    /// 仅 <see cref="IStringLocalizer{TResourceSource}"/> 且 <c>TResourceSource</c> 在此集合中时走 JSON；
+    /// 其余 typed localizer 一律委派微软官方 <c>ResourceManagerStringLocalizerFactory</c>（RESX）。
+    /// 为空时不接管任何 typed localizer，宿主既有 RESX / 第三方本地化完全不受影响。
+    /// </summary>
+    public ISet<Type> JsonResourceTypes { get; } = new HashSet<Type>();
 
     /// <summary>
     /// 嵌入资源相对程序集根的逻辑目录，默认 <c>Resources</c>。

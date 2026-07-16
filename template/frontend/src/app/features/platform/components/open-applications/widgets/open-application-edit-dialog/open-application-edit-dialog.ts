@@ -149,16 +149,19 @@ export class OpenApplicationEditDialogComponent {
   readonly applicationTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: 'Web', value: 'web' },
+      { label: this.transloco.translate('openApp.appType.web'), value: 'web' },
       { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
       { label: this.transloco.translate('openApp.appType.service'), value: 'service' }
     ];
   });
 
-  readonly clientTypeOptions = computed(() => [
-    { label: 'Public', value: 'public' },
-    { label: 'Confidential', value: 'confidential' }
-  ]);
+  readonly clientTypeOptions = computed(() => {
+    this.translationReady();
+    return [
+      { label: this.transloco.translate('openApp.clientType.publicLabel'), value: 'public' },
+      { label: this.transloco.translate('openApp.clientType.confidentialLabel'), value: 'confidential' }
+    ];
+  });
 
   readonly consentTypeOptions = computed(() => {
     this.translationReady();
@@ -214,7 +217,7 @@ export class OpenApplicationEditDialogComponent {
   readonly applicationTypeLabels = computed<Record<string, string>>(() => {
     this.translationReady();
     return {
-      web: 'Web',
+      web: this.transloco.translate('openApp.appType.web'),
       native: this.transloco.translate('openApp.appType.native'),
       service: this.transloco.translate('openApp.appType.service')
     };

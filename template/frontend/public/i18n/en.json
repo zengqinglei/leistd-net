@@ -403,6 +403,7 @@
       "copyAndClose": "Copy and close"
     },
     "appType": {
+      "web": "Web",
       "native": "Desktop/Native",
       "service": "Service"
     },

@@ -98,21 +98,19 @@
             </div>
           } @else {
             <div class="max-h-[360px] overflow-y-auto flex flex-col">
-              @for (n of notifications(); track n.id) {
+              @for (n of notifications(); track n.id; let last = $last) {
                 <button
                   type="button"
-                  class="flex items-stretch gap-3 w-full text-left px-4 py-3 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
-                  [class.bg-primary-50]="!n.isRead"
-                  [class.dark:bg-primary-950/40]="!n.isRead"
+                  class="flex items-stretch gap-3 w-full text-left px-4 py-3.5 transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
                   (click)="onNotificationClick(n)"
                 >
                   <!-- 图标：统一中性灰，仅形状按类型区分；大小撑满标题+内容高度，垂直居中 -->
                   <span class="flex items-center justify-center shrink-0 self-stretch aspect-square">
                     <i class="pi {{ notificationIcon(n.type) }} text-muted-color text-2xl"></i>
                   </span>
-                  <span class="flex-1 min-w-0 flex flex-col gap-1">
-                    <!-- 标题行：标题在左，未读小圆点 + 时间成组在右，垂直居中 -->
-                    <span class="flex items-center gap-3">
+                  <span class="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+                    <!-- 标题行：标题在左，未读小圆点 + 时间成组在右，垂直居中；gap-6 拉开标题与时间的间距 -->
+                    <span class="flex items-center gap-6">
                       <span
                         class="text-sm truncate flex-1 min-w-0"
                         [class.font-semibold]="!n.isRead"
@@ -130,17 +128,20 @@
                         <span class="text-[11px] text-muted-color whitespace-nowrap">{{ n.creationTime | date: 'MM-dd HH:mm' }}</span>
                       </span>
                     </span>
-                    <!-- 内容：次要，截断时 hover 在下方显示完整 -->
-                    @if (n.content) {
-                      <span
-                        class="block text-xs text-muted-color leading-relaxed truncate"
-                        [pTooltip]="n.content"
-                        tooltipPosition="bottom"
-                        >{{ n.content }}</span
-                      >
-                    }
+                    <!-- 内容：始终占一行（无描述时渲染空占位），使每条通知高度一致；截断时 hover 显示完整；pr-6 与右侧留白 -->
+                    <span
+                      class="block text-xs text-muted-color leading-relaxed truncate min-h-[1rem] pr-6"
+                      [pTooltip]="n.content || ''"
+                      tooltipPosition="bottom"
+                      [tooltipDisabled]="!n.content"
+                      >{{ n.content }}</span
+                    >
                   </span>
                 </button>
+                <!-- 条目分隔：PrimeNG Divider（type=dashed，主题 token 驱动，官方标准做法）；最后一条不加 -->
+                @if (!last) {
+                  <p-divider type="dashed" styleClass="!my-0" />
+                }
               }
             </div>
           }

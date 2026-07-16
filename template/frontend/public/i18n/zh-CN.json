@@ -390,6 +390,7 @@
       "copyAndClose": "复制并关闭"
     },
     "appType": {
+      "web": "Web",
       "native": "桌面/原生",
       "service": "服务端"
     },

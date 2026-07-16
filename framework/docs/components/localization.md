@@ -45,7 +45,9 @@ var app = builder.Build();
 app.UseJsonRequestLocalization();
 ```
 
-`AddJsonLocalization` 注册 `JsonStringLocalizerFactory` 为 `IStringLocalizerFactory`、开放 `IStringLocalizer` / `IStringLocalizer<T>` 解析，并配置 `RequestLocalizationOptions`（默认语言 + 支持语言）。`UseJsonRequestLocalization` 包装 `UseRequestLocalization`，启用 QueryString / Cookie / `Accept-Language` 三个 culture provider。框架自身程序集默认已登记，用于分发通用键（`Error:*`、`Title:*`）。
+`AddJsonLocalization` 注册**组合工厂** `CompositeStringLocalizerFactory` 为 `IStringLocalizerFactory`，开放 `IStringLocalizer` / `IStringLocalizer<T>` 解析，并配置 `RequestLocalizationOptions`（默认语言 + 支持语言）。`UseJsonRequestLocalization` 包装 `UseRequestLocalization`，启用 QueryString / Cookie / `Accept-Language` 三个 culture provider。框架自身程序集默认已登记，用于分发通用键（`Error:*`、`Title:*`）。
+
+> 组合工厂**不全局接管**宿主本地化：框架全局键通过无参 `IStringLocalizer`（直取 JSON 工厂）分发；`IStringLocalizer<T>` 仅当 `TResourceSource` 显式登记在 `JsonLocalizationOptions.JsonResourceTypes` 时走 JSON，其余（含同程序集内未登记的类型、宿主 RESX、第三方库）一律委派微软官方 `ResourceManagerStringLocalizerFactory`。
 
 ## 资源文件
 
@@ -117,7 +119,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 
 ## 实现行为
 
-- **资源源**：仅 JSON（嵌入程序集），不使用 RESX；替换 .NET 默认的 `ResourceManagerStringLocalizerFactory`。
+- **资源源与路由**：框架键走嵌入 JSON；typed `IStringLocalizer<T>` 由组合工厂按 `JsonResourceTypes` 精确分流——登记类型走 JSON，其余委派微软官方 `ResourceManagerStringLocalizerFactory`（RESX），二者并存、互不接管。
 - **回落链**：当前 UI culture 及其父链，末尾追加 `DefaultCulture`；每级去重。
 - **合并与覆盖**：各程序集同 culture 的键合并进一张表，按 `ResourceAssemblies` 顺序后者覆盖前者；每个 culture 合并结果缓存一次。
 - **未命中**：返回请求的键本身，且 `LocalizedString.ResourceNotFound` 为 `true`（调用方可据此判断是否漏配）。

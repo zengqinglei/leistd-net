@@ -14,6 +14,9 @@ import { MenuItem } from 'primeng/api';
 import { AvatarModule } from 'primeng/avatar';
 import { BadgeModule } from 'primeng/badge';
 import { ButtonModule } from 'primeng/button';
+//#if (IncludeNotifications)
+import { DividerModule } from 'primeng/divider';
+//#endif
 import { MenuModule, Menu } from 'primeng/menu';
 //#if (IncludeNotifications)
 import { OverlayBadgeModule } from 'primeng/overlaybadge';
@@ -59,6 +62,7 @@ import { LayoutService } from '../../services/layout-service';
     //#if (IncludeNotifications)
     PopoverModule,
     OverlayBadgeModule,
+    DividerModule,
     DatePipe,
     //#endif
     //#if (IncludeIdentity)
