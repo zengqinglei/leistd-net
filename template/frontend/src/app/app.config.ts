@@ -5,7 +5,7 @@ import {
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
-  provideZonelessChangeDetection
+  provideZonelessChangeDetection,
 } from '@angular/core';
 import {
   provideRouter,
@@ -13,7 +13,7 @@ import {
   withComponentInputBinding,
   withHashLocation,
   withInMemoryScrolling,
-  withViewTransitions
+  withViewTransitions,
 } from '@angular/router';
 //#if (IncludeLocalization)
 import { provideTransloco } from '@jsverse/transloco';
@@ -43,7 +43,7 @@ const routerFeatures: RouterFeatures[] = [
   // 配置导航时的滚动行为，导航后滚动到页面顶部
   withInMemoryScrolling({ anchorScrolling: 'enabled', scrollPositionRestoration: 'enabled' }),
   // 根据环境配置决定是否启用哈希路由
-  ...(environment.useHash ? [withHashLocation()] : [])
+  ...(environment.useHash ? [withHashLocation()] : []),
 ];
 
 export const appConfig: ApplicationConfig = {
@@ -61,38 +61,38 @@ export const appConfig: ApplicationConfig = {
           darkModeSelector: '.dark',
           cssLayer: {
             name: 'primeng',
-            order: 'theme, base, primeng'
-          }
-        }
-      }
+            order: 'theme, base, primeng',
+          },
+        },
+      },
     }),
-//#if (IncludeLocalization)
+    //#if (IncludeLocalization)
     provideTransloco({
       config: {
         availableLangs: ['en', 'zh-CN'],
         defaultLang: 'en',
         fallbackLang: 'en',
         reRenderOnLangChange: true,
-        prodMode: environment.production
+        prodMode: environment.production,
       },
-      loader: TranslocoHttpLoader
+      loader: TranslocoHttpLoader,
     }),
-//#endif
+    //#endif
     provideHttpClient(
       withInterceptors([
-//#if (IncludeLocalization)
+        //#if (IncludeLocalization)
         acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
-//#endif
+        //#endif
         urlFormatInterceptor,
-        httpErrorInterceptor // 捕获所有 HTTP 错误并显示用户提示
+        httpErrorInterceptor, // 捕获所有 HTTP 错误并显示用户提示
       ]),
-      withInterceptorsFromDi() // 启用对基于类的拦截器的支持
+      withInterceptorsFromDi(), // 启用对基于类的拦截器的支持
     ),
     // 在应用初始化时加载关键数据
     provideAppInitializer(() => inject(StartupService).load()),
     // 注册 Mock 服务
     ...provideMock(environment.useMock),
     // 注册 PrimeNG MessageService
-    MessageService
-  ]
+    MessageService,
+  ],
 };

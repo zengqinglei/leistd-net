@@ -40,10 +40,10 @@ import { AccountService } from '../../services/account-service';
     LanguageSwitcher,
     TranslocoModule,
     //#endif
-    LogoComponent
+    LogoComponent,
   ],
   templateUrl: './login.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Login {
   private fb = inject(FormBuilder);
@@ -62,12 +62,17 @@ export class Login {
   public readonly isLoading = this._isLoading.asReadonly();
 
   // Mock状态
-  public readonly isMockEnabled = signal(typeof environment.useMock === 'object' && environment.useMock.enable === true);
+  public readonly isMockEnabled = signal(
+    typeof environment.useMock === 'object' && environment.useMock.enable === true,
+  );
 
   // 登录表单
   loginForm = this.fb.group({
-    usernameOrEmail: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(256)]],
-    password: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]]
+    usernameOrEmail: [
+      '',
+      [Validators.required, Validators.minLength(3), Validators.maxLength(256)],
+    ],
+    password: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
   });
 
   constructor() {
@@ -91,7 +96,7 @@ export class Login {
 
       const loginInput = {
         usernameOrEmail: usernameOrEmail!,
-        password: password!
+        password: password!,
       };
       const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
@@ -104,14 +109,14 @@ export class Login {
         severity: 'success',
         summary: this.transloco.translate('account.login.loginSuccess'),
         detail: this.transloco.translate('account.login.welcomeBack'),
-        life: 3000
+        life: 3000,
       });
       //#else
       this.messageService.add({
         severity: 'success',
         summary: 'Login successful',
         detail: 'Welcome back!',
-        life: 3000
+        life: 3000,
       });
       //#endif
 
@@ -136,7 +141,12 @@ export class Login {
   }
 
   private isSafeLocalReturnUrl(returnUrl: string | null): returnUrl is string {
-    return !!returnUrl && returnUrl.startsWith('/') && !returnUrl.startsWith('//') && !returnUrl.includes('://');
+    return (
+      !!returnUrl &&
+      returnUrl.startsWith('/') &&
+      !returnUrl.startsWith('//') &&
+      !returnUrl.includes('://')
+    );
   }
 
   /**
@@ -195,14 +205,14 @@ export class Login {
         severity: 'error',
         summary: this.transloco.translate('account.login.loginFailed'),
         detail: this.transloco.translate('account.login.externalLoginFailed', { provider: label }),
-        life: 3000
+        life: 3000,
       });
       //#else
       this.messageService.add({
         severity: 'error',
         summary: 'Login failed',
         detail: `Unable to connect to the ${label} login service, please try again later`,
-        life: 3000
+        life: 3000,
       });
       //#endif
       this._isLoading.set(false);

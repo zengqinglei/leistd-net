@@ -18,12 +18,12 @@ export function provideMock(config: boolean | MockConfig): Provider[] {
 
   // 动态地将所有导入的 *_API 对象合并到一个 APIS 对象中
   const apis = Object.values(allApis)
-    .filter(value => typeof value === 'object' && value !== null)
+    .filter((value) => typeof value === 'object' && value !== null)
     .reduce((acc, current) => ({ ...acc, ...current }), {});
 
   return [
     { provide: MOCK_APIS, useValue: apis },
-    { provide: HTTP_INTERCEPTORS, useClass: MockInterceptor, multi: true }
+    { provide: HTTP_INTERCEPTORS, useClass: MockInterceptor, multi: true },
   ];
 }
 

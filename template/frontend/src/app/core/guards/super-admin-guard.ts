@@ -12,8 +12,8 @@ export const superAdminGuard: CanActivateFn = () => {
   const router = inject(Router);
 
   return toObservable(startupService.status).pipe(
-    filter(status => status !== 'loading'),
+    filter((status) => status !== 'loading'),
     take(1),
-    map(() => (authService.currentUser()?.isSuperAdmin ? true : router.parseUrl('/workspace')))
+    map(() => (authService.currentUser()?.isSuperAdmin ? true : router.parseUrl('/workspace'))),
   );
 };

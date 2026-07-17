@@ -8,7 +8,7 @@ import {
   GetUsersInputDto,
   ResetUserPasswordInputDto,
   UpdateUserInputDto,
-  UserManagementOutputDto
+  UserManagementOutputDto,
 } from '../models/user-management.dto';
 
 @Injectable({ providedIn: 'root' })
@@ -22,7 +22,8 @@ export class UserManagementService {
     if (input.limit !== undefined) params = params.set('limit', input.limit.toString());
     if (input.keyword) params = params.set('keyword', input.keyword);
     if (input.isActive !== undefined) params = params.set('isActive', input.isActive.toString());
-    if (input.isEmailVerified !== undefined) params = params.set('isEmailVerified', input.isEmailVerified.toString());
+    if (input.isEmailVerified !== undefined)
+      params = params.set('isEmailVerified', input.isEmailVerified.toString());
     if (input.role) params = params.set('role', input.role);
     if (input.sorting) params = params.set('sorting', input.sorting);
     return this.http.get<PagedResultDto<UserManagementOutputDto>>(this.baseUrl, { params });

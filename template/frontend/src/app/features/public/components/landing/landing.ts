@@ -17,11 +17,18 @@ import { ThemeConfigurator } from '../../../../shared/components/theme-configura
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   //#if (IncludeLocalization)
-  imports: [RouterModule, ButtonModule, StyleClassModule, ThemeConfigurator, LanguageSwitcher, TranslocoModule],
+  imports: [
+    RouterModule,
+    ButtonModule,
+    StyleClassModule,
+    ThemeConfigurator,
+    LanguageSwitcher,
+    TranslocoModule,
+  ],
   //#else
   imports: [RouterModule, ButtonModule, StyleClassModule, ThemeConfigurator],
   //#endif
-  templateUrl: './landing.html'
+  templateUrl: './landing.html',
 })
 export class Landing {
   public themeService = inject(ThemeService);

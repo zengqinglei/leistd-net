@@ -1,5 +1,6 @@
 using Leistd.Lock.Memory;
 using Leistd.Lock.Memory.HostedServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -109,18 +110,163 @@ public sealed class MemoryLocalLockCleanupTests
         Assert.False(memoryLock.Semaphores.ContainsKey(Key));
     }
 
+    [Fact]
+    public async Task StopAsyncAfterDisposeDoesNotThrow()
+    {
+        var timeProvider = new ManualTimeProvider();
+        using var memoryLock = CreateLock(timeProvider);
+        var cleanup = CreateCleanup(memoryLock, timeProvider);
+
+        await cleanup.StartAsync(CancellationToken.None);
+        cleanup.Dispose();
+
+        var exception = await Record.ExceptionAsync(() => cleanup.StopAsync(CancellationToken.None));
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task DisposeWaitsForInFlightCleanupCallback()
+    {
+        var timeProvider = new ManualTimeProvider();
+        using var memoryLock = CreateLock(timeProvider);
+        using var logger = new BlockingCleanupLogger();
+        var cleanup = CreateCleanup(memoryLock, timeProvider, logger);
+
+        await cleanup.StartAsync(CancellationToken.None);
+        var callbackTask = timeProvider.Timer.FireAsync();
+        Assert.True(logger.WaitUntilBlocked(TimeSpan.FromSeconds(5)));
+
+        var disposeTask = Task.Run(cleanup.Dispose);
+        Assert.True(timeProvider.Timer.WaitUntilDisposeStarted(TimeSpan.FromSeconds(5)));
+        Assert.False(disposeTask.IsCompleted);
+
+        logger.Release();
+        await Task.WhenAll(callbackTask, disposeTask);
+    }
+
+    [Fact]
+    public async Task CleanupAfterDisposeReturnsWithoutThrowing()
+    {
+        var timeProvider = new ManualTimeProvider();
+        using var memoryLock = CreateLock(timeProvider);
+        var cleanup = CreateCleanup(memoryLock, timeProvider);
+
+        await cleanup.StartAsync(CancellationToken.None);
+        cleanup.Dispose();
+
+        Assert.Equal(0, cleanup.CleanupOnce());
+    }
+
     private static MemoryLocalLock CreateLock(TimeProvider timeProvider) =>
         new(NullLogger<MemoryLocalLock>.Instance, timeProvider);
 
-    private static MemoryLockCleanupHostedService CreateCleanup(MemoryLocalLock memoryLock) =>
-        new(memoryLock, NullLogger<MemoryLockCleanupHostedService>.Instance);
+    private static MemoryLockCleanupHostedService CreateCleanup(
+        MemoryLocalLock memoryLock,
+        TimeProvider? timeProvider = null,
+        ILogger<MemoryLockCleanupHostedService>? logger = null) =>
+        timeProvider is null
+            ? new(memoryLock, logger ?? NullLogger<MemoryLockCleanupHostedService>.Instance)
+            : new(memoryLock, logger ?? NullLogger<MemoryLockCleanupHostedService>.Instance, timeProvider);
 
     private sealed class ManualTimeProvider : TimeProvider
     {
         private DateTimeOffset _utcNow = new(2026, 7, 15, 0, 0, 0, TimeSpan.Zero);
 
+        internal ManualTimer Timer { get; private set; } = null!;
+
         public override DateTimeOffset GetUtcNow() => _utcNow;
 
+        public override ITimer CreateTimer(
+            TimerCallback callback,
+            object? state,
+            TimeSpan dueTime,
+            TimeSpan period)
+        {
+            Timer = new ManualTimer(callback, state);
+            return Timer;
+        }
+
         internal void Advance(TimeSpan duration) => _utcNow += duration;
+    }
+
+    private sealed class ManualTimer(TimerCallback callback, object? state) : ITimer
+    {
+        private readonly object _lock = new();
+        private readonly List<Task> _callbacks = [];
+        private readonly ManualResetEventSlim _disposeStarted = new();
+        private bool _disposed;
+
+        internal Task FireAsync()
+        {
+            lock (_lock)
+            {
+                if (_disposed) return Task.CompletedTask;
+
+                var callbackTask = Task.Run(() => callback(state));
+                _callbacks.Add(callbackTask);
+                return callbackTask;
+            }
+        }
+
+        internal bool WaitUntilDisposeStarted(TimeSpan timeout) => _disposeStarted.Wait(timeout);
+
+        public bool Change(TimeSpan dueTime, TimeSpan period)
+        {
+            lock (_lock)
+            {
+                return !_disposed;
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Task callbacks;
+            lock (_lock)
+            {
+                _disposed = true;
+                callbacks = Task.WhenAll(_callbacks);
+            }
+
+            _disposeStarted.Set();
+            return new ValueTask(callbacks);
+        }
+
+        public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    private sealed class BlockingCleanupLogger : ILogger<MemoryLockCleanupHostedService>, IDisposable
+    {
+        private readonly ManualResetEventSlim _blocked = new();
+        private readonly ManualResetEventSlim _release = new();
+        private int _hasBlocked;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel != LogLevel.Trace || Interlocked.Exchange(ref _hasBlocked, 1) != 0)
+                return;
+
+            _blocked.Set();
+            _release.Wait();
+        }
+
+        internal bool WaitUntilBlocked(TimeSpan timeout) => _blocked.Wait(timeout);
+
+        internal void Release() => _release.Set();
+
+        public void Dispose()
+        {
+            _release.Set();
+            _blocked.Dispose();
+            _release.Dispose();
+        }
     }
 }

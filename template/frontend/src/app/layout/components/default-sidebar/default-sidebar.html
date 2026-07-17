@@ -2,7 +2,7 @@
   class="bg-surface-0 dark:bg-surface-900 border-r border-surface-200 dark:border-surface-800 flex flex-col h-full transition-all duration-300 ease-in-out"
   [ngClass]="{
     'w-64': !layoutService.sidebarCollapsed() || isMobileMenuOpen(),
-    'w-20': layoutService.sidebarCollapsed() && !isMobileMenuOpen()
+    'w-20': layoutService.sidebarCollapsed() && !isMobileMenuOpen(),
   }"
 >
   <div
@@ -56,7 +56,9 @@
           <li>
             <a
               [routerLink]="item.route"
-              [pTooltip]="layoutService.sidebarCollapsed() && !isMobileMenuOpen() ? item.label : undefined"
+              [pTooltip]="
+                layoutService.sidebarCollapsed() && !isMobileMenuOpen() ? item.label : undefined
+              "
               tooltipPosition="right"
               class="flex items-center cursor-pointer px-3 py-4 md:py-3 rounded-md text-color hover:bg-surface-100 dark:hover:bg-surface-800 transition-all duration-300 ease-in-out focus:outline-none min-h-[44px] md:min-h-0"
               [class.gap-3]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"

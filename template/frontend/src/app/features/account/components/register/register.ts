@@ -1,7 +1,20 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
@@ -42,10 +55,10 @@ import { AccountService } from '../../services/account-service';
     TranslocoModule,
     //#endif
     LogoComponent,
-    TooltipModule
+    TooltipModule,
   ],
   templateUrl: './register.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Register implements OnInit {
   private fb = inject(FormBuilder);
@@ -62,14 +75,14 @@ export class Register implements OnInit {
     captcha: () => this.transloco.translate('account.register.captcha'),
     captchaPlaceholder: () => this.transloco.translate('account.register.captchaPlaceholder'),
     captchaRefresh: () => this.transloco.translate('account.register.captchaRefresh'),
-    captchaAlt: () => this.transloco.translate('account.register.captchaAlt')
+    captchaAlt: () => this.transloco.translate('account.register.captchaAlt'),
   };
   //#else
   readonly i18n = {
     captcha: () => 'Captcha',
     captchaPlaceholder: () => 'Enter the captcha on the right',
     captchaRefresh: () => "Can't see clearly? Click to refresh",
-    captchaAlt: () => 'Captcha'
+    captchaAlt: () => 'Captcha',
   };
   //#endif
 
@@ -90,13 +103,21 @@ export class Register implements OnInit {
   registerForm = this.fb.group(
     {
       email: ['', [Validators.required, Validators.email, Validators.maxLength(256)]],
-      username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(64), Validators.pattern(/^[a-zA-Z0-9_]+$/)]],
+      username: [
+        '',
+        [
+          Validators.required,
+          Validators.minLength(3),
+          Validators.maxLength(64),
+          Validators.pattern(/^[a-zA-Z0-9_]+$/),
+        ],
+      ],
       captchaCode: ['', [Validators.required, Validators.maxLength(10)]],
       emailVerificationCode: [''],
       password: ['', [Validators.required, Validators.pattern(/^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/)]],
-      confirmPassword: ['', [Validators.required]]
+      confirmPassword: ['', [Validators.required]],
     },
-    { validators: this.passwordMatchValidator }
+    { validators: this.passwordMatchValidator },
   );
 
   private usernameManuallyEdited = false;
@@ -113,7 +134,7 @@ export class Register implements OnInit {
     this.registerForm
       .get('email')
       ?.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(email => {
+      .subscribe((email) => {
         if (!this.usernameManuallyEdited && email) {
           const usernamePart = email.split('@')[0];
           if (usernamePart) {
@@ -126,7 +147,7 @@ export class Register implements OnInit {
     this.registerForm
       .get('username')
       ?.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(val => {
+      .subscribe((val) => {
         if (val) {
           this.usernameManuallyEdited = true;
         }
@@ -187,10 +208,14 @@ export class Register implements OnInit {
       this.messageService.add({
         severity: 'warn',
         summary: this.transloco.translate('common.notice'),
-        detail: this.transloco.translate('account.register.emailRequired')
+        detail: this.transloco.translate('account.register.emailRequired'),
       });
       //#else
-      this.messageService.add({ severity: 'warn', summary: 'Notice', detail: 'Please enter a valid email first' });
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Notice',
+        detail: 'Please enter a valid email first',
+      });
       //#endif
       return;
     }
@@ -200,10 +225,14 @@ export class Register implements OnInit {
       this.messageService.add({
         severity: 'warn',
         summary: this.transloco.translate('common.notice'),
-        detail: this.transloco.translate('account.register.captchaRequired')
+        detail: this.transloco.translate('account.register.captchaRequired'),
       });
       //#else
-      this.messageService.add({ severity: 'warn', summary: 'Notice', detail: 'Please enter the captcha first' });
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Notice',
+        detail: 'Please enter the captcha first',
+      });
       //#endif
       return;
     }
@@ -214,17 +243,21 @@ export class Register implements OnInit {
         this.accountService.sendEmailCode({
           email,
           captchaCode,
-          captchaToken
-        })
+          captchaToken,
+        }),
       );
       //#if (IncludeLocalization)
       this.messageService.add({
         severity: 'success',
         summary: this.transloco.translate('common.success'),
-        detail: this.transloco.translate('account.register.emailCodeSent')
+        detail: this.transloco.translate('account.register.emailCodeSent'),
       });
       //#else
-      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Verification code sent, please check your email' });
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Verification code sent, please check your email',
+      });
       //#endif
       this.startCountdown();
     } catch {
@@ -271,10 +304,14 @@ export class Register implements OnInit {
         this.messageService.add({
           severity: 'error',
           summary: this.transloco.translate('common.error'),
-          detail: this.transloco.translate('account.register.captchaTokenMissing')
+          detail: this.transloco.translate('account.register.captchaTokenMissing'),
         });
         //#else
-        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Please refresh to get the captcha' });
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Please refresh to get the captcha',
+        });
         //#endif
         return;
       }
@@ -286,25 +323,25 @@ export class Register implements OnInit {
           password: formValue.password!,
           captchaCode: formValue.captchaCode!,
           captchaToken: captchaToken,
-          emailVerificationCode: formValue.emailVerificationCode || undefined
-        })
+          emailVerificationCode: formValue.emailVerificationCode || undefined,
+        }),
       );
 
       //#if (IncludeLocalization)
       this.messageService.add({
         severity: 'success',
         summary: this.transloco.translate('account.register.registerSuccess'),
-        detail: this.transloco.translate('account.register.registerSuccessDetail')
+        detail: this.transloco.translate('account.register.registerSuccessDetail'),
       });
       //#else
       this.messageService.add({
         severity: 'success',
         summary: 'Registration successful',
-        detail: 'Account created successfully, please sign in'
+        detail: 'Account created successfully, please sign in',
       });
       //#endif
       this.router.navigate(['/auth/login'], {
-        queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined
+        queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined,
       });
     } catch {
       this.refreshCaptcha();

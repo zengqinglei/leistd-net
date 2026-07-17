@@ -14,6 +14,7 @@
 - **Angular CLI**: v21+
 
 您可以通过以下命令验证是否已成功安装：
+
 ```bash
 node --version
 ng version
@@ -46,12 +47,12 @@ export const environment = {
     enable: false,
     delay: 500,
     exclude: '',
-    include: ''
+    include: '',
   },
   api: {
     ...environmentBase.api,
-    gateway: '' // 留空 = 同源相对路径，请求经后端 SPA 代理
-  }
+    gateway: '', // 留空 = 同源相对路径，请求经后端 SPA 代理
+  },
 };
 ```
 
@@ -68,8 +69,8 @@ export const environment = {
   useMock: { enable: false, delay: 500, exclude: '', include: '' },
   api: {
     ...environmentBase.api,
-    gateway: 'http://localhost:5240' // 后端完整地址，跨域访问
-  }
+    gateway: 'http://localhost:5240', // 后端完整地址，跨域访问
+  },
 };
 ```
 
@@ -81,6 +82,7 @@ export const environment = {
 本项目已预置了多套环境配置，您可以根据需要启动对应的开发服务器。
 
 - **启动本地调试环境**（默认使用 `environment.debug.ts` 配置）：
+
   ```bash
   npm start
   ```
@@ -112,12 +114,13 @@ export const environment = {
 ```typescript
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:8080/api',  // 后端 API 地址
+  apiUrl: 'http://localhost:8080/api', // 后端 API 地址
   // 在此添加其他环境特定的设置
 };
 ```
 
 使用特定环境：
+
 ```bash
 ng serve -c <环境名称>
 ng build -c <环境名称>
@@ -158,6 +161,7 @@ docker build --build-arg API_GATEWAY=https://api.example.com -t company-name-pro
 ```
 
 **说明**：
+
 - `API_GATEWAY` 为后端 API 网关地址
 - 构建时会替换 `environment.prod.ts` 中的占位符
 - 如果不传入该参数，默认使用空字符串（相对路径）
@@ -169,6 +173,7 @@ docker build --build-arg API_GATEWAY=https://api.example.com -t company-name-pro
 ### 代码检查
 
 运行代码检查：
+
 ```bash
 npm run lint           # 运行所有检查
 npm run lint:ts        # TypeScript/HTML 检查
@@ -177,6 +182,7 @@ npm run format         # 检查代码格式
 ```
 
 自动修复问题：
+
 ```bash
 npm run lint:fix       # 修复所有可自动修复的问题
 npm run lint:ts:fix    # 修复 TypeScript/HTML 问题
@@ -187,6 +193,7 @@ npm run format:fix     # 自动格式化代码
 ### 预提交钩子
 
 项目使用 Husky 和 lint-staged 在提交前自动运行代码检查：
+
 - TypeScript/HTML 文件使用 ESLint 检查
 - CSS 文件使用 Stylelint 检查
 - 所有文件使用 Prettier 格式化
@@ -196,6 +203,7 @@ npm run format:fix     # 自动格式化代码
 ## 运行测试
 
 - **单元测试**：
+
   ```bash
   npm test
   ```

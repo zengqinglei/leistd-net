@@ -1,4 +1,10 @@
-import { HttpContextToken, HttpEvent, HttpHandlerFn, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
+import {
+  HttpContextToken,
+  HttpEvent,
+  HttpHandlerFn,
+  HttpInterceptorFn,
+  HttpRequest,
+} from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
@@ -12,7 +18,10 @@ export const GATEWAY_SERVICE_NAME = new HttpContextToken<string>(() => '');
  * URL格式化拦截器。
  * 自动为请求URL添加网关和微服务前缀。
  */
-export const urlFormatInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, next: HttpHandlerFn): Observable<HttpEvent<unknown>> => {
+export const urlFormatInterceptor: HttpInterceptorFn = (
+  req: HttpRequest<unknown>,
+  next: HttpHandlerFn,
+): Observable<HttpEvent<unknown>> => {
   let url = req.url;
 
   if (shouldSkipUrlFormat(url)) {
@@ -28,7 +37,9 @@ export const urlFormatInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown
     if (gatewayPart) {
       pathSegments.push(gatewayPart);
     }
-    const servicePart = gatewayServiceName.startsWith('/') ? gatewayServiceName.slice(1) : gatewayServiceName;
+    const servicePart = gatewayServiceName.startsWith('/')
+      ? gatewayServiceName.slice(1)
+      : gatewayServiceName;
     if (servicePart) {
       pathSegments.push(servicePart);
     }
@@ -61,7 +72,7 @@ function matchesPatterns(urlPath: string, patterns?: string | string[]): boolean
   }
 
   const normalizedPatterns = Array.isArray(patterns) ? patterns : [patterns];
-  return normalizedPatterns.some(pattern => new RegExp(pattern).test(urlPath));
+  return normalizedPatterns.some((pattern) => new RegExp(pattern).test(urlPath));
 }
 
 function getUrlPath(url: string): string {

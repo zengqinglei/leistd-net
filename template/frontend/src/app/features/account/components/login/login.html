@@ -1,8 +1,12 @@
 <div class="min-h-screen w-full flex overflow-hidden bg-surface-50 dark:bg-surface-950">
   <!-- Left Column: Branding/Visuals -->
-  <div class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden text-white bg-[#0f172a]">
+  <div
+    class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden text-white bg-[#0f172a]"
+  >
     <!-- Deep Base Gradient -->
-    <div class="absolute inset-0 z-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#172554]"></div>
+    <div
+      class="absolute inset-0 z-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#172554]"
+    ></div>
 
     <!-- Speed Lines Background -->
     <div class="absolute inset-0 z-0 opacity-10">
@@ -32,9 +36,18 @@
     </div>
 
     <!-- Network Connection Overlay -->
-    <svg class="absolute inset-0 z-0 opacity-20 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      class="absolute inset-0 z-0 opacity-20 pointer-events-none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <defs>
-        <pattern id="hexagons" width="50" height="43.4" patternUnits="userSpaceOnUse" patternTransform="scale(2)">
+        <pattern
+          id="hexagons"
+          width="50"
+          height="43.4"
+          patternUnits="userSpaceOnUse"
+          patternTransform="scale(2)"
+        >
           <path
             d="M24.8,22 L24.8,0.2 L8.75,9.5 L8.75,29.8 Z M25.2,22 L41.25,29.8 L41.25,9.5 L25.2,0.2 Z M8.25,30 L8.25,10 L-8,0.5 L-8,21 Z"
             fill="none"
@@ -74,11 +87,13 @@
             <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
           </span>
           <!--#if (IncludeLocalization)-->
-          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium">{{ 'account.brand.subtitle' | transloco }}</p>
+          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium">
+            {{ 'account.brand.subtitle' | transloco }}
+          </p>
           <!--#else-->
-          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium"
-            >Full-stack development template based on Angular + .NET</p
-          >
+          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium">
+            Full-stack development template based on Angular + .NET
+          </p>
           <!--#endif-->
         </div>
       </div>
@@ -123,12 +138,18 @@
               'account.login.badgeFastDev' | transloco
             }}</span>
             <!--#else-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">Fast Development</span>
+            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1"
+              >Fast Development</span
+            >
             <!--#endif-->
             <div class="flex items-end gap-2">
               <!--#if (IncludeLocalization)-->
-              <span class="text-2xl font-mono font-bold text-white leading-none">{{ 'account.login.badgeReadyMain' | transloco }}</span>
-              <span class="text-xs text-cyan-400 font-mono mb-1">{{ 'account.login.badgeReadySub' | transloco }}</span>
+              <span class="text-2xl font-mono font-bold text-white leading-none">{{
+                'account.login.badgeReadyMain' | transloco
+              }}</span>
+              <span class="text-xs text-cyan-400 font-mono mb-1">{{
+                'account.login.badgeReadySub' | transloco
+              }}</span>
               <!--#else-->
               <span class="text-2xl font-mono font-bold text-white leading-none">Ready</span>
               <span class="text-xs text-cyan-400 font-mono mb-1">to use</span>
@@ -148,7 +169,9 @@
               'account.login.badgeModernArch' | transloco
             }}</span>
             <!--#else-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">Modern Architecture</span>
+            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1"
+              >Modern Architecture</span
+            >
             <!--#endif-->
             <div class="flex items-end gap-2">
               <i class="pi pi-check-circle text-blue-500 text-xs mb-1 mr-2"></i>
@@ -162,7 +185,7 @@
 
     <!-- Footer Copyright -->
     <div class="relative z-10 flex justify-between items-end">
-      <div class="text-xs text-blue-300/50"> &copy; 2026 Template. All rights reserved. </div>
+      <div class="text-xs text-blue-300/50">&copy; 2026 Template. All rights reserved.</div>
       <div class="flex gap-2">
         <span class="h-1 w-8 bg-blue-500/50 rounded-full"></span>
         <span class="h-1 w-4 bg-cyan-500/50 rounded-full"></span>
@@ -207,7 +230,9 @@
     <div class="w-full max-w-md space-y-6">
       <!-- Mobile Header -->
       <div class="lg:hidden text-center mb-8">
-        <div class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary-100 text-primary-600 mb-4">
+        <div
+          class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary-100 text-primary-600 mb-4"
+        >
           <i class="pi pi-bolt text-2xl"></i>
         </div>
         <!--#if (IncludeLocalization)-->
@@ -232,17 +257,27 @@
         <!-- Username/Email -->
         <div class="flex flex-col gap-2">
           <!--#if (IncludeLocalization)-->
-          <label for="usernameOrEmail" class="font-medium text-color">{{ 'account.login.usernameOrEmail' | transloco }}</label>
+          <label for="usernameOrEmail" class="font-medium text-color">{{
+            'account.login.usernameOrEmail' | transloco
+          }}</label>
           <input
             pInputText
             id="usernameOrEmail"
             formControlName="usernameOrEmail"
             class="w-full"
             [placeholder]="'account.login.usernameOrEmailPlaceholder' | transloco"
-            [ngClass]="{ 'ng-invalid ng-dirty': loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched }"
+            [ngClass]="{
+              'ng-invalid ng-dirty':
+                loginForm.get('usernameOrEmail')?.invalid &&
+                loginForm.get('usernameOrEmail')?.touched,
+            }"
           />
-          @if (loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched) {
-            <small class="text-red-500"> {{ 'account.login.usernameOrEmailPlaceholder' | transloco }} </small>
+          @if (
+            loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched
+          ) {
+            <small class="text-red-500">
+              {{ 'account.login.usernameOrEmailPlaceholder' | transloco }}
+            </small>
           }
           <!--#else-->
           <label for="usernameOrEmail" class="font-medium text-color">Username or Email</label>
@@ -252,9 +287,15 @@
             formControlName="usernameOrEmail"
             class="w-full"
             placeholder="Please enter your username or email"
-            [ngClass]="{ 'ng-invalid ng-dirty': loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched }"
+            [ngClass]="{
+              'ng-invalid ng-dirty':
+                loginForm.get('usernameOrEmail')?.invalid &&
+                loginForm.get('usernameOrEmail')?.touched,
+            }"
           />
-          @if (loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched) {
+          @if (
+            loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched
+          ) {
             <small class="text-red-500"> Please enter your username or email </small>
           }
           <!--#endif-->
@@ -263,7 +304,9 @@
         <!-- Password -->
         <div class="flex flex-col gap-2">
           <!--#if (IncludeLocalization)-->
-          <label for="password" class="font-medium text-color">{{ 'account.login.password' | transloco }}</label>
+          <label for="password" class="font-medium text-color">{{
+            'account.login.password' | transloco
+          }}</label>
           <div class="relative">
             <p-password
               id="password"
@@ -277,7 +320,9 @@
             </p-password>
           </div>
           @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
-            <small class="text-red-500"> {{ 'account.login.passwordPlaceholder' | transloco }} </small>
+            <small class="text-red-500">
+              {{ 'account.login.passwordPlaceholder' | transloco }}
+            </small>
           }
           <!--#else-->
           <label for="password" class="font-medium text-color">Password</label>
@@ -309,7 +354,9 @@
           >
           <!--#else-->
           <span>Don't have an account?</span>
-          <a [routerLink]="['/auth/register']" class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
+          <a
+            [routerLink]="['/auth/register']"
+            class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
             >Register now</a
           >
           <!--#endif-->
@@ -317,10 +364,23 @@
 
         <!-- Submit Button -->
         <!--#if (IncludeLocalization)-->
-        <p-button [label]="'account.login.submit' | transloco" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true">
+        <p-button
+          [label]="'account.login.submit' | transloco"
+          type="submit"
+          [loading]="isLoading()"
+          [fluid]="true"
+          [rounded]="true"
+        >
         </p-button>
         <!--#else-->
-        <p-button label="Sign In" type="submit" [loading]="isLoading()" [fluid]="true" [rounded]="true"> </p-button>
+        <p-button
+          label="Sign In"
+          type="submit"
+          [loading]="isLoading()"
+          [fluid]="true"
+          [rounded]="true"
+        >
+        </p-button>
         <!--#endif-->
         <!--#if (IncludeExternalLogin)-->
 
@@ -328,11 +388,15 @@
         <div class="relative flex py-2 items-center my-2">
           <div class="flex-grow border-t border-surface"></div>
           <!--#if (IncludeLocalization)-->
-          <span class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2">{{
-            'account.login.or' | transloco
-          }}</span>
+          <span
+            class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2"
+            >{{ 'account.login.or' | transloco }}</span
+          >
           <!--#else-->
-          <span class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2">OR</span>
+          <span
+            class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2"
+            >OR</span
+          >
           <!--#endif-->
           <div class="flex-grow border-t border-surface"></div>
         </div>
@@ -386,18 +450,27 @@
 
       <!-- Test Account Hint -->
       @if (isMockEnabled()) {
-        <div class="mt-8 p-4 bg-surface-0 dark:bg-surface-900 rounded-xl border border-surface shadow-md">
+        <div
+          class="mt-8 p-4 bg-surface-0 dark:bg-surface-900 rounded-xl border border-surface shadow-md"
+        >
           <!--#if (IncludeLocalization)-->
           <h4 class="font-bold text-color mb-2 flex items-center gap-2">
-            <i class="pi pi-info-circle text-primary"></i> {{ 'account.login.testAccount' | transloco }}
+            <i class="pi pi-info-circle text-primary"></i>
+            {{ 'account.login.testAccount' | transloco }}
           </h4>
           <!--#else-->
-          <h4 class="font-bold text-color mb-2 flex items-center gap-2"> <i class="pi pi-info-circle text-primary"></i> Test Account </h4>
+          <h4 class="font-bold text-color mb-2 flex items-center gap-2">
+            <i class="pi pi-info-circle text-primary"></i> Test Account
+          </h4>
           <!--#endif-->
           <div class="grid grid-cols-1 gap-2 text-sm">
-            <div class="bg-surface-50 dark:bg-surface-800 p-2 rounded shadow-sm border border-surface">
+            <div
+              class="bg-surface-50 dark:bg-surface-800 p-2 rounded shadow-sm border border-surface"
+            >
               <!--#if (IncludeLocalization)-->
-              <span class="block text-xs text-muted-color mb-1">{{ 'account.login.adminRole' | transloco }}</span>
+              <span class="block text-xs text-muted-color mb-1">{{
+                'account.login.adminRole' | transloco
+              }}</span>
               <!--#else-->
               <span class="block text-xs text-muted-color mb-1">Administrator</span>
               <!--#endif-->

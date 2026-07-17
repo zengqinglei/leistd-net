@@ -1,9 +1,26 @@
 import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#else
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#endif
 import { FormsModule } from '@angular/forms';
@@ -23,7 +40,10 @@ import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 
 import { OpenApplicationEditDialogComponent } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
-import { OpenApplicationTable, OpenApplicationTableFilterEvent } from './widgets/open-application-table/open-application-table';
+import {
+  OpenApplicationTable,
+  OpenApplicationTableFilterEvent,
+} from './widgets/open-application-table/open-application-table';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
@@ -34,7 +54,7 @@ import {
   OpenApplicationClientType,
   OpenApplicationOutputDto,
   OpenApplicationType,
-  UpdateOpenApplicationInputDto
+  UpdateOpenApplicationInputDto,
 } from '../../models/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 
@@ -55,11 +75,11 @@ import { OpenApplicationService } from '../../services/open-application-service'
     TranslocoModule,
     //#endif
     OpenApplicationTable,
-    OpenApplicationEditDialogComponent
+    OpenApplicationEditDialogComponent,
   ],
   providers: [ConfirmationService],
   templateUrl: './open-applications.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationsPage implements OnInit {
   private readonly service = inject(OpenApplicationService);
@@ -108,7 +128,7 @@ export class OpenApplicationsPage implements OnInit {
     return [
       { label: this.transloco.translate('openApp.appType.web'), value: 'web' },
       { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
-      { label: this.transloco.translate('openApp.appType.service'), value: 'service' }
+      { label: this.transloco.translate('openApp.appType.service'), value: 'service' },
     ];
   });
 
@@ -116,25 +136,29 @@ export class OpenApplicationsPage implements OnInit {
     this.translationReady();
     return [
       { label: this.transloco.translate('openApp.clientType.publicLabel'), value: 'public' },
-      { label: this.transloco.translate('openApp.clientType.confidentialLabel'), value: 'confidential' }
+      {
+        label: this.transloco.translate('openApp.clientType.confidentialLabel'),
+        value: 'confidential',
+      },
     ];
   });
   //#else
   readonly applicationTypeOptions = computed(() => [
     { label: 'Web', value: 'web' },
     { label: 'Desktop/Native', value: 'native' },
-    { label: 'Service', value: 'service' }
+    { label: 'Service', value: 'service' },
   ]);
 
   readonly clientTypeOptions = computed(() => [
     { label: 'Public', value: 'public' },
-    { label: 'Confidential', value: 'confidential' }
+    { label: 'Confidential', value: 'confidential' },
   ]);
   //#endif
 
   //#if (IncludeLocalization)
   readonly allAppTypesPlaceholder = () => this.transloco.translate('openApp.filter.allAppTypes');
-  readonly allClientTypesPlaceholder = () => this.transloco.translate('openApp.filter.allClientTypes');
+  readonly allClientTypesPlaceholder = () =>
+    this.transloco.translate('openApp.filter.allClientTypes');
   readonly searchPlaceholder = () => this.transloco.translate('openApp.filter.searchPlaceholder');
   readonly refreshLabel = () => this.transloco.translate('common.refresh');
   readonly createLabel = () => this.transloco.translate('openApp.action.create');
@@ -174,8 +198,10 @@ export class OpenApplicationsPage implements OnInit {
     }>(this.FILTER_KEY);
 
     if (saved.searchQuery) this.searchQuery.set(saved.searchQuery);
-    if (saved.selectedApplicationType !== undefined) this.selectedApplicationType.set(saved.selectedApplicationType ?? null);
-    if (saved.selectedClientType !== undefined) this.selectedClientType.set(saved.selectedClientType ?? null);
+    if (saved.selectedApplicationType !== undefined)
+      this.selectedApplicationType.set(saved.selectedApplicationType ?? null);
+    if (saved.selectedClientType !== undefined)
+      this.selectedClientType.set(saved.selectedClientType ?? null);
   }
 
   reloadList() {
@@ -187,13 +213,13 @@ export class OpenApplicationsPage implements OnInit {
         clientType: this.selectedClientType() ?? undefined,
         offset: this.offset(),
         limit: this.limit(),
-        sorting: this.sorting()
+        sorting: this.sorting(),
       })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.loading.set(false))
+        finalize(() => this.loading.set(false)),
       )
-      .subscribe(data => {
+      .subscribe((data) => {
         this.applications.set(data.items);
         this.totalRecords.set(data.totalCount);
       });
@@ -219,7 +245,7 @@ export class OpenApplicationsPage implements OnInit {
     this.filterStateService.save(this.FILTER_KEY, {
       searchQuery: this.searchQuery(),
       selectedApplicationType: this.selectedApplicationType(),
-      selectedClientType: this.selectedClientType()
+      selectedClientType: this.selectedClientType(),
     });
     this.reloadList();
   }
@@ -244,7 +270,7 @@ export class OpenApplicationsPage implements OnInit {
     this.service
       .getOpenApplication(id)
       .pipe(finalize(() => this.editDialogLoading.set(false)))
-      .subscribe(application => this.selectedApplication.set(application));
+      .subscribe((application) => this.selectedApplication.set(application));
   }
 
   handleSave(data: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) {
@@ -258,21 +284,25 @@ export class OpenApplicationsPage implements OnInit {
     request
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.editDialogSaving.set(false))
+        finalize(() => this.editDialogSaving.set(false)),
       )
       .subscribe({
-        next: result => {
+        next: (result) => {
           //#if (IncludeLocalization)
           this.messageService.add({
             severity: 'success',
             summary: this.transloco.translate('common.success'),
-            detail: selected ? this.transloco.translate('openApp.toast.updated') : this.transloco.translate('openApp.toast.created')
+            detail: selected
+              ? this.transloco.translate('openApp.toast.updated')
+              : this.transloco.translate('openApp.toast.created'),
           });
           //#else
           this.messageService.add({
             severity: 'success',
             summary: 'Success',
-            detail: selected ? 'Open application updated successfully' : 'Open application created successfully'
+            detail: selected
+              ? 'Open application updated successfully'
+              : 'Open application created successfully',
           });
           //#endif
           this.editDialogVisible.set(false);
@@ -284,7 +314,7 @@ export class OpenApplicationsPage implements OnInit {
           }
 
           this.reloadList();
-        }
+        },
       });
   }
 
@@ -294,7 +324,8 @@ export class OpenApplicationsPage implements OnInit {
       message: this.transloco.translate('openApp.confirm.deleteMessage'),
       header: this.transloco.translate('openApp.confirm.deleteHeader'),
       //#else
-      message: 'Are you sure you want to delete this open application? Clients using this Client ID will no longer be able to sign in.',
+      message:
+        'Are you sure you want to delete this open application? Clients using this Client ID will no longer be able to sign in.',
       header: 'Confirm deletion',
       //#endif
       icon: 'pi pi-exclamation-triangle',
@@ -304,14 +335,18 @@ export class OpenApplicationsPage implements OnInit {
           this.messageService.add({
             severity: 'success',
             summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate('openApp.toast.deleted')
+            detail: this.transloco.translate('openApp.toast.deleted'),
           });
           //#else
-          this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Open application deleted' });
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Open application deleted',
+          });
           //#endif
           this.reloadList();
         });
-      }
+      },
     });
   }
 
@@ -321,17 +356,18 @@ export class OpenApplicationsPage implements OnInit {
       message: this.transloco.translate('openApp.confirm.resetSecretMessage'),
       header: this.transloco.translate('openApp.confirm.resetSecretHeader'),
       //#else
-      message: "Are you sure you want to reset this open application's Client Secret? The old secret will be invalidated immediately.",
+      message:
+        "Are you sure you want to reset this open application's Client Secret? The old secret will be invalidated immediately.",
       header: 'Confirm secret reset',
       //#endif
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
-        this.service.resetSecret(id).subscribe(result => {
+        this.service.resetSecret(id).subscribe((result) => {
           this.resetSecretValue.set(result.clientSecret);
           this.resetSecretDialogVisible.set(true);
           this.reloadList();
         });
-      }
+      },
     });
   }
 
@@ -346,7 +382,7 @@ export class OpenApplicationsPage implements OnInit {
       this.messageService.add({
         severity: 'success',
         summary: this.transloco.translate('common.success'),
-        detail: this.transloco.translate('openApp.toast.secretCopied')
+        detail: this.transloco.translate('openApp.toast.secretCopied'),
       });
       //#else
       this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Secret copied' });
@@ -365,7 +401,7 @@ export class OpenApplicationsPage implements OnInit {
       this.messageService.add({
         severity: 'success',
         summary: this.transloco.translate('common.success'),
-        detail: this.transloco.translate('openApp.toast.secretCopied')
+        detail: this.transloco.translate('openApp.toast.secretCopied'),
       });
       //#else
       this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Secret copied' });

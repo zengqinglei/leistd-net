@@ -13,9 +13,12 @@ public static class DependencyInjection
     public static IServiceCollection AddMemoryLocalLock(this IServiceCollection services)
     {
         services.AddSingleton<MemoryLocalLock>();
-        services.AddSingleton<ILocalLock, MemoryLocalLock>();
-        services.AddSingleton<ILock, MemoryLocalLock>();
-        services.AddSingleton<IDistributedLock, MemoryLocalLock>();
+        services.AddSingleton<ILocalLock>(serviceProvider =>
+            serviceProvider.GetRequiredService<MemoryLocalLock>());
+        services.AddSingleton<ILock>(serviceProvider =>
+            serviceProvider.GetRequiredService<MemoryLocalLock>());
+        services.AddSingleton<IDistributedLock>(serviceProvider =>
+            serviceProvider.GetRequiredService<MemoryLocalLock>());
         services.AddHostedService<MemoryLockCleanupHostedService>();
         return services;
     }

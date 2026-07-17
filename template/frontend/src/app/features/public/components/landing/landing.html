@@ -1,7 +1,15 @@
-<div class="min-h-screen flex flex-col items-center justify-center bg-surface-50 dark:bg-surface-950 px-6 relative">
+<div
+  class="min-h-screen flex flex-col items-center justify-center bg-surface-50 dark:bg-surface-950 px-6 relative"
+>
   <!-- Theme Toggle -->
   <div class="absolute top-4 right-4 flex gap-2 z-50">
-    <p-button [icon]="themeService.modeIcon()" [text]="true" [rounded]="true" severity="secondary" (onClick)="themeService.toggleTheme()">
+    <p-button
+      [icon]="themeService.modeIcon()"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      (onClick)="themeService.toggleTheme()"
+    >
     </p-button>
     <div class="relative">
       <p-button
@@ -27,18 +35,23 @@
   <div class="max-w-2xl text-center space-y-8">
     <!--#if (IncludeLocalization)-->
     <h1 class="text-5xl font-bold text-color">{{ 'landing.hero.title' | transloco }}</h1>
-    <p class="text-xl text-muted-color"> {{ 'landing.hero.subtitle' | transloco }} </p>
+    <p class="text-xl text-muted-color">{{ 'landing.hero.subtitle' | transloco }}</p>
     <!--#else-->
     <h1 class="text-5xl font-bold text-color">Template Project</h1>
     <p class="text-xl text-muted-color">
-      A full-stack application development template based on Angular + PrimeNG + .NET 10 DDD architecture
+      A full-stack application development template based on Angular + PrimeNG + .NET 10 DDD
+      architecture
     </p>
     <!--#endif-->
 
     <div class="flex items-center justify-center gap-4">
       <!--#if (IncludeLocalization)-->
       <p-button [label]="'landing.hero.login' | transloco" routerLink="/auth/login" />
-      <p-button [label]="'landing.hero.register' | transloco" routerLink="/auth/register" [outlined]="true" />
+      <p-button
+        [label]="'landing.hero.register' | transloco"
+        routerLink="/auth/register"
+        [outlined]="true"
+      />
       <!--#else-->
       <p-button label="Sign In" routerLink="/auth/login" />
       <p-button label="Sign Up" routerLink="/auth/register" [outlined]="true" />
@@ -53,7 +66,9 @@
         <p class="text-sm text-muted-color mt-2">{{ 'landing.feature.authDesc' | transloco }}</p>
         <!--#else-->
         <h3 class="font-semibold text-color">Authentication</h3>
-        <p class="text-sm text-muted-color mt-2">Cookie-based authentication with role and permission management</p>
+        <p class="text-sm text-muted-color mt-2">
+          Cookie-based authentication with role and permission management
+        </p>
         <!--#endif-->
       </div>
       <div class="p-6 rounded-xl bg-surface-card border border-surface">

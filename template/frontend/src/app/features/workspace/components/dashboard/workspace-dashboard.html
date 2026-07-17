@@ -3,7 +3,9 @@
     <ng-template pTemplate="header">
       <div class="px-6 pt-6">
         <!--#if (IncludeLocalization)-->
-        <h2 class="text-2xl font-bold m-0 text-color">{{ 'workspace.dashboard.title' | transloco }}</h2>
+        <h2 class="text-2xl font-bold m-0 text-color">
+          {{ 'workspace.dashboard.title' | transloco }}
+        </h2>
         <!--#else-->
         <h2 class="text-2xl font-bold m-0 text-color">Workspace</h2>
         <!--#endif-->
@@ -14,7 +16,9 @@
         <div class="space-y-3">
           <div class="flex items-center gap-3">
             <!--#if (IncludeLocalization)-->
-            <span class="text-muted-color w-20">{{ 'workspace.dashboard.username' | transloco }}</span>
+            <span class="text-muted-color w-20">{{
+              'workspace.dashboard.username' | transloco
+            }}</span>
             <!--#else-->
             <span class="text-muted-color w-20">Username</span>
             <!--#endif-->
@@ -22,7 +26,9 @@
           </div>
           <div class="flex items-center gap-3">
             <!--#if (IncludeLocalization)-->
-            <span class="text-muted-color w-20">{{ 'workspace.dashboard.nickname' | transloco }}</span>
+            <span class="text-muted-color w-20">{{
+              'workspace.dashboard.nickname' | transloco
+            }}</span>
             <!--#else-->
             <span class="text-muted-color w-20">Nickname</span>
             <!--#endif-->

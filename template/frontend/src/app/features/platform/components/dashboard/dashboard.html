@@ -3,14 +3,18 @@
     <ng-template pTemplate="header">
       <div class="px-6 pt-6">
         <!--#if (IncludeLocalization)-->
-        <h2 class="text-2xl font-bold m-0 text-color">{{ 'platform.dashboard.welcome' | transloco }}</h2>
+        <h2 class="text-2xl font-bold m-0 text-color">
+          {{ 'platform.dashboard.welcome' | transloco }}
+        </h2>
         <!--#else-->
         <h2 class="text-2xl font-bold m-0 text-color">Welcome to the Admin Console</h2>
         <!--#endif-->
         <p class="text-muted-color mt-2 mb-0">
           @if (authService.currentUser(); as user) {
             <!--#if (IncludeLocalization)-->
-            {{ 'platform.dashboard.currentUser' | transloco: { name: user.nickname || user.username } }}
+            {{
+              'platform.dashboard.currentUser' | transloco: { name: user.nickname || user.username }
+            }}
             <!--#else-->
             Currently signed in as: {{ user.nickname || user.username }}
             <!--#endif-->
@@ -20,11 +24,11 @@
     </ng-template>
     <div class="px-6 pb-6">
       <!--#if (IncludeLocalization)-->
-      <p class="text-muted-color"> {{ 'platform.dashboard.intro' | transloco }} </p>
+      <p class="text-muted-color">{{ 'platform.dashboard.intro' | transloco }}</p>
       <!--#else-->
       <p class="text-muted-color">
-        This is a starter template project. You can manage users under "User Management" and extend more feature modules from the left-hand
-        menu.
+        This is a starter template project. You can manage users under "User Management" and extend
+        more feature modules from the left-hand menu.
       </p>
       <!--#endif-->
     </div>

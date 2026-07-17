@@ -6,7 +6,7 @@ import { Pipe, PipeTransform } from '@angular/core';
  */
 @Pipe({
   name: 'httpStatusSeverity',
-  standalone: true
+  standalone: true,
 })
 export class HttpStatusSeverityPipe implements PipeTransform {
   transform(status: number | undefined | null): 'success' | 'warn' | 'danger' | 'info' {

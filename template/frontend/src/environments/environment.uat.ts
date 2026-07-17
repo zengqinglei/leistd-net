@@ -5,6 +5,6 @@ export const environment: Environment = {
   production: true,
   api: {
     ...environmentBase.api,
-    gateway: 'http://uat.api.leistd.com' // 覆盖网关地址
-  }
+    gateway: 'http://uat.api.leistd.com', // 覆盖网关地址
+  },
 };

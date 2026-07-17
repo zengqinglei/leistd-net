@@ -11,10 +11,9 @@ export type StartupStatus = 'loading' | 'success' | 'failed';
 
 @Injectable({ providedIn: 'root' })
 export class StartupService {
-//#if (IncludeIdentity)
+  //#if (IncludeIdentity)
   private authService = inject(AuthService);
-//#endif
-
+  //#endif
   private _status = signal<StartupStatus>('loading');
   private _error = signal<unknown | null>(null);
 
@@ -25,7 +24,7 @@ export class StartupService {
     this._status.set('loading');
     this._error.set(null);
 
-//#if (IncludeIdentity)
+    //#if (IncludeIdentity)
     const pathname = window.location.pathname;
     const hash = window.location.hash;
 
@@ -62,21 +61,20 @@ export class StartupService {
         this._status.set('failed');
       }
     }
-//#else
+    //#else
     // 未启用认证模块：无需加载当前用户，直接就绪。
     this._status.set('success');
-//#endif
+    //#endif
   }
 
   async retry(): Promise<void> {
     // Signals 会自动处理UI更新，我们不再需要手动延时
     await this.load();
   }
-
-//#if (IncludeIdentity)
+  //#if (IncludeIdentity)
   private isProtectedRoute(pathname: string, hash: string): boolean {
     const route = hash.startsWith('#/') ? hash.slice(1) : pathname;
     return route.startsWith('/workspace') || route.startsWith('/platform');
   }
-//#endif
+  //#endif
 }

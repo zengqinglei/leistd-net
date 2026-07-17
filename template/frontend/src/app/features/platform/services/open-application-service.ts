@@ -8,17 +8,19 @@ import {
   GetOpenApplicationsInputDto,
   OpenApplicationOutputDto,
   ResetOpenApplicationSecretOutputDto,
-  UpdateOpenApplicationInputDto
+  UpdateOpenApplicationInputDto,
 } from '../models/open-application.dto';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class OpenApplicationService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api/v1/open-applications';
 
-  getOpenApplications(input?: GetOpenApplicationsInputDto): Observable<PagedResultDto<OpenApplicationOutputDto>> {
+  getOpenApplications(
+    input?: GetOpenApplicationsInputDto,
+  ): Observable<PagedResultDto<OpenApplicationOutputDto>> {
     let params = new HttpParams();
 
     if (input?.offset !== undefined) {
@@ -51,7 +53,10 @@ export class OpenApplicationService {
     return this.http.post<OpenApplicationOutputDto>(this.baseUrl, data);
   }
 
-  updateOpenApplication(id: string, data: UpdateOpenApplicationInputDto): Observable<OpenApplicationOutputDto> {
+  updateOpenApplication(
+    id: string,
+    data: UpdateOpenApplicationInputDto,
+  ): Observable<OpenApplicationOutputDto> {
     return this.http.put<OpenApplicationOutputDto>(`${this.baseUrl}/${id}`, data);
   }
 
@@ -60,6 +65,9 @@ export class OpenApplicationService {
   }
 
   resetSecret(id: string): Observable<ResetOpenApplicationSecretOutputDto> {
-    return this.http.post<ResetOpenApplicationSecretOutputDto>(`${this.baseUrl}/${id}/reset-secret`, {});
+    return this.http.post<ResetOpenApplicationSecretOutputDto>(
+      `${this.baseUrl}/${id}/reset-secret`,
+      {},
+    );
   }
 }

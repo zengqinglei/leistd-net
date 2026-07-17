@@ -4,9 +4,9 @@
  */
 
 export interface DialogConfig {
-  breakpoints: { [key: string]: string };
-  style: { [key: string]: string };
-  contentStyle: { [key: string]: string };
+  breakpoints: Record<string, string>;
+  style: Record<string, string>;
+  contentStyle: Record<string, string>;
   draggable: boolean;
   resizable: boolean;
 }
@@ -24,7 +24,7 @@ export const DIALOG_CONFIGS = {
     style: { width: '50vw', 'max-width': '700px' },
     contentStyle: { 'max-height': 'calc(100vh - 180px)', 'overflow-y': 'auto' },
     draggable: false,
-    resizable: false
+    resizable: false,
   } as DialogConfig,
 
   /**
@@ -36,7 +36,7 @@ export const DIALOG_CONFIGS = {
     style: { width: '60vw', 'max-width': '900px' },
     contentStyle: { 'max-height': 'calc(100vh - 180px)', 'overflow-y': 'auto' },
     draggable: false,
-    resizable: false
+    resizable: false,
   } as DialogConfig,
 
   /**
@@ -48,6 +48,6 @@ export const DIALOG_CONFIGS = {
     style: { width: '70vw', 'max-width': '1200px' },
     contentStyle: { 'max-height': 'calc(100vh - 180px)', 'overflow-y': 'auto' },
     draggable: false,
-    resizable: false
-  } as DialogConfig
+    resizable: false,
+  } as DialogConfig,
 };

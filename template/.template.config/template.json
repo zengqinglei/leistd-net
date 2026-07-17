@@ -102,6 +102,7 @@
         "**/artifacts/**",
         "frontend/node_modules/**",
         "frontend/.angular/**",
+        "frontend/.tmp/**",
         "frontend/dist/**",
         "test-scenarios/**",
         ".pid"

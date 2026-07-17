@@ -3,7 +3,6 @@ import { FormsModule } from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-import type { PaletteDesignToken } from '@primeuix/themes/types';
 import { SelectButtonModule } from 'primeng/selectbutton';
 
 //#if (IncludeLocalization)
@@ -18,8 +17,10 @@ import {
   ThemePresetName,
   ThemePrimaryName,
   ThemeService,
-  ThemeSurfaceName
+  ThemeSurfaceName,
 } from '../../../core/services/theme-service';
+
+import type { PaletteDesignToken } from '@primeuix/themes/types';
 
 interface PaletteOption<TName extends string> {
   name: TName;
@@ -111,8 +112,8 @@ interface PaletteOption<TName extends string> {
   `,
   host: {
     class:
-      'hidden absolute top-12 right-0 w-80 max-w-[calc(100vw-2rem)] p-5 bg-surface-0 dark:bg-surface-900 border border-surface rounded-border origin-top shadow-[0px_3px_5px_rgba(0,0,0,0.02),0px_0px_2px_rgba(0,0,0,0.05),0px_1px_4px_rgba(0,0,0,0.08)]'
-  }
+      'hidden absolute top-12 right-0 w-80 max-w-[calc(100vw-2rem)] p-5 bg-surface-0 dark:bg-surface-900 border border-surface rounded-border origin-top shadow-[0px_3px_5px_rgba(0,0,0,0.02),0px_0px_2px_rgba(0,0,0,0.05),0px_1px_4px_rgba(0,0,0,0.08)]',
+  },
 })
 export class ThemeConfigurator {
   readonly themeService = inject(ThemeService);
@@ -150,30 +151,36 @@ export class ThemeConfigurator {
 
   readonly presetNames = [...THEME_PRESET_NAMES];
   //#if (IncludeLocalization)
-  readonly themeModes = computed<Array<{ label: string; value: ThemeMode }>>(() => {
+  readonly themeModes = computed<{ label: string; value: ThemeMode }[]>(() => {
     this.translationReady();
     return [
       { label: this.transloco.translate('theme.config.light'), value: 'light' },
       { label: this.transloco.translate('theme.config.system'), value: 'system' },
-      { label: this.transloco.translate('theme.config.dark'), value: 'dark' }
+      { label: this.transloco.translate('theme.config.dark'), value: 'dark' },
     ];
   });
   //#else
-  readonly themeModes = computed<Array<{ label: string; value: ThemeMode }>>(() => [
+  readonly themeModes = computed<{ label: string; value: ThemeMode }[]>(() => [
     { label: 'Light', value: 'light' },
     { label: 'System', value: 'system' },
-    { label: 'Dark', value: 'dark' }
+    { label: 'Dark', value: 'dark' },
   ]);
   //#endif
 
-  readonly primaryColors = computed<Array<PaletteOption<ThemePrimaryName>>>(() => {
+  readonly primaryColors = computed<PaletteOption<ThemePrimaryName>[]>(() => {
     const primitive = THEME_PRESETS[this.themeService.preferences().preset].primitive;
-    return THEME_PRIMARY_NAMES.map(name => ({ name, palette: (primitive?.[name] ?? {}) as PaletteDesignToken }));
+    return THEME_PRIMARY_NAMES.map((name) => ({
+      name,
+      palette: (primitive?.[name] ?? {}) as PaletteDesignToken,
+    }));
   });
 
-  readonly surfaces = computed<Array<PaletteOption<ThemeSurfaceName>>>(() => {
+  readonly surfaces = computed<PaletteOption<ThemeSurfaceName>[]>(() => {
     const primitive = THEME_PRESETS[this.themeService.preferences().preset].primitive;
-    return THEME_SURFACE_NAMES.map(name => ({ name, palette: (primitive?.[name] ?? {}) as PaletteDesignToken }));
+    return THEME_SURFACE_NAMES.map((name) => ({
+      name,
+      palette: (primitive?.[name] ?? {}) as PaletteDesignToken,
+    }));
   });
 
   onThemeModeChange(mode: ThemeMode): void {

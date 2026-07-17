@@ -21,7 +21,7 @@ interface LangMeta {
 /** 语言选择器展示元数据。 */
 export const LANG_OPTIONS: LangMeta[] = [
   { id: 'en', label: 'English', short: 'EN' },
-  { id: 'zh-CN', label: '中文', short: '中' }
+  { id: 'zh-CN', label: '中文', short: '中' },
 ];
 
 /**
@@ -42,7 +42,9 @@ export class LanguageService {
 
   readonly activeLang = this.activeLangState.asReadonly();
   readonly options = LANG_OPTIONS;
-  readonly currentMeta = computed(() => LANG_OPTIONS.find(o => o.id === this.activeLang()) ?? LANG_OPTIONS[0]);
+  readonly currentMeta = computed(
+    () => LANG_OPTIONS.find((o) => o.id === this.activeLang()) ?? LANG_OPTIONS[0],
+  );
 
   constructor() {
     // 初次即应用一次（Transloco + PrimeNG），并在语言变化时持久化
@@ -75,7 +77,7 @@ export class LanguageService {
     this.transloco
       .selectTranslateObject('primeng', {}, lang)
       .pipe(take(1))
-      .subscribe(translation => {
+      .subscribe((translation) => {
         if (translation) {
           this.primeng.setTranslation(translation);
         }

@@ -17,12 +17,19 @@ interface SseMockHandler {
 class SseMockRegistry {
   private handlers: SseMockHandler[] = [];
 
-  register(method: string, pattern: RegExp, handler: (body?: unknown, context?: SseMockContext) => unknown[]): void {
+  register(
+    method: string,
+    pattern: RegExp,
+    handler: (body?: unknown, context?: SseMockContext) => unknown[],
+  ): void {
     this.handlers.push({ method, pattern, handler });
   }
 
-  match(url: string, method: string): ((body?: unknown, context?: SseMockContext) => unknown[]) | null {
-    const handler = this.handlers.find(h => h.method === method && h.pattern.test(url));
+  match(
+    url: string,
+    method: string,
+  ): ((body?: unknown, context?: SseMockContext) => unknown[]) | null {
+    const handler = this.handlers.find((h) => h.method === method && h.pattern.test(url));
     return handler ? handler.handler : null;
   }
 }

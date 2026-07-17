@@ -7,7 +7,7 @@ import { DestroyRef, Injectable, PLATFORM_ID, inject, signal } from '@angular/co
  * 支持响应式布局，在小屏幕设备上自动折叠侧边栏
  */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class LayoutService {
   private readonly mobileBreakpoint = 768;
@@ -85,7 +85,10 @@ export class LayoutService {
       return;
     }
 
-    if (isMobileSidebarMode || (this.wasAboveAutoCollapseBreakpoint && isBelowOrEqualAutoCollapseBreakpoint)) {
+    if (
+      isMobileSidebarMode ||
+      (this.wasAboveAutoCollapseBreakpoint && isBelowOrEqualAutoCollapseBreakpoint)
+    ) {
       this.sidebarCollapsed.set(true);
     }
 
@@ -107,7 +110,7 @@ export class LayoutService {
    * 用于用户手动展开/折叠侧边栏
    */
   toggleSidebarCollapse(): void {
-    this.sidebarCollapsed.update(collapsed => !collapsed);
+    this.sidebarCollapsed.update((collapsed) => !collapsed);
   }
 
   /**
@@ -115,6 +118,6 @@ export class LayoutService {
    * 主要用于移动端的侧边栏显示/隐藏
    */
   toggleSidebar(): void {
-    this.sidebarVisible.update(visible => !visible);
+    this.sidebarVisible.update((visible) => !visible);
   }
 }

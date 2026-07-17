@@ -31,7 +31,9 @@ export class AuthService {
   }
 
   loadUser(): Observable<UserOutputDto> {
-    return this.http.get<UserOutputDto>('/api/v1/auth/me').pipe(tap(user => this.setCurrentUser(user)));
+    return this.http
+      .get<UserOutputDto>('/api/v1/auth/me')
+      .pipe(tap((user) => this.setCurrentUser(user)));
   }
 
   setCurrentUser(user: UserOutputDto): void {
@@ -50,7 +52,7 @@ export class AuthService {
     this.clearAuthData();
     this.http.post('/api/v1/auth/logout', {}).subscribe({
       next: () => (window.location.href = '/auth/login'),
-      error: () => (window.location.href = '/auth/login')
+      error: () => (window.location.href = '/auth/login'),
     });
   }
 }

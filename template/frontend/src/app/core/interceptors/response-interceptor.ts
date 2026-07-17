@@ -1,4 +1,10 @@
-import { HttpEvent, HttpHandlerFn, HttpInterceptorFn, HttpRequest, HttpResponse } from '@angular/common/http';
+import {
+  HttpEvent,
+  HttpHandlerFn,
+  HttpInterceptorFn,
+  HttpRequest,
+  HttpResponse,
+} from '@angular/common/http';
 import { Observable, catchError, tap, throwError } from 'rxjs';
 
 function handleSuccess(_res: HttpResponse<unknown>) {
@@ -24,9 +30,12 @@ function handleSuccess(_res: HttpResponse<unknown>) {
   // }
 }
 
-export const responseInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, next: HttpHandlerFn): Observable<HttpEvent<unknown>> => {
+export const responseInterceptor: HttpInterceptorFn = (
+  req: HttpRequest<unknown>,
+  next: HttpHandlerFn,
+): Observable<HttpEvent<unknown>> => {
   return next(req).pipe(
-    tap(event => {
+    tap((event) => {
       if (event instanceof HttpResponse) {
         handleSuccess(event);
       }
@@ -34,6 +43,6 @@ export const responseInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>
     catchError((err: unknown) => {
       // 统一将错误继续抛出，由全局错误处理器统一展示
       return throwError(() => err);
-    })
+    }),
   );
 };

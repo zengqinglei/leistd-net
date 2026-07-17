@@ -6,7 +6,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   templateUrl: './logo.html',
   standalone: true,
   imports: [CommonModule],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LogoComponent {
   /** 控制 Logo 的尺寸: 'normal' 用于导航栏或按钮, 'large' 用于登录页或展示面板 */

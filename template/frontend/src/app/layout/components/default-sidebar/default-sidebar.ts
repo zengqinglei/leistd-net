@@ -37,7 +37,7 @@ interface MenuGroup {
   imports: [NgClass, RouterModule, ButtonModule, TooltipModule, LogoComponent],
   //#endif
   templateUrl: './default-sidebar.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DefaultSidebar {
   readonly layoutService = inject(LayoutService);
@@ -58,17 +58,26 @@ export class DefaultSidebar {
     {
       label: 'layout.sidebar.groupSystem',
       items: [
+        // Identity management entries; the developer-app entry is optional.
         { label: 'layout.sidebar.users', icon: 'pi-users', route: '/platform/users' },
         //#if (IncludeOpenIddict)
-        { label: 'layout.sidebar.openApplications', icon: 'pi-id-card', route: '/platform/open-applications' }
+        {
+          label: 'layout.sidebar.openApplications',
+          icon: 'pi-id-card',
+          route: '/platform/open-applications',
+        },
         //#endif
-      ]
-    }
+      ],
+    },
     //#endif
   ];
 
   private readonly workspaceMenuGroups: MenuGroup[] = [
-    { items: [{ label: 'layout.sidebar.workbench', icon: 'pi-gauge', route: '/workspace/dashboard' }] }
+    {
+      items: [
+        { label: 'layout.sidebar.workbench', icon: 'pi-gauge', route: '/workspace/dashboard' },
+      ],
+    },
   ];
 
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -80,27 +89,28 @@ export class DefaultSidebar {
     {
       label: 'System',
       items: [
+        // Identity management entries; the developer-app entry is optional.
         { label: 'User Management', icon: 'pi-users', route: '/platform/users' },
         //#if (IncludeOpenIddict)
-        { label: 'Developer Apps', icon: 'pi-id-card', route: '/platform/open-applications' }
+        { label: 'Developer Apps', icon: 'pi-id-card', route: '/platform/open-applications' },
         //#endif
-      ]
-    }
+      ],
+    },
     //#endif
   ];
 
   private readonly workspaceMenuGroups: MenuGroup[] = [
-    { items: [{ label: 'Workbench', icon: 'pi-gauge', route: '/workspace/dashboard' }] }
+    { items: [{ label: 'Workbench', icon: 'pi-gauge', route: '/workspace/dashboard' }] },
   ];
   //#endif
 
   private readonly currentUrl = toSignal(
     this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      map(event => event.urlAfterRedirects ?? event.url),
-      startWith(this.router.url)
+      map((event) => event.urlAfterRedirects ?? event.url),
+      startWith(this.router.url),
     ),
-    { initialValue: this.router.url }
+    { initialValue: this.router.url },
   );
 
   readonly menuGroups = computed(() => {
@@ -113,18 +123,18 @@ export class DefaultSidebar {
     //#endif
 
     return groups
-      .map(group => ({
+      .map((group) => ({
         ...group,
         //#if (IncludeLocalization)
         label: group.label ? this.transloco.translate(group.label) : group.label,
         items: group.items
-          .filter(item => !item.superAdminOnly || isSuperAdmin)
-          .map(item => ({ ...item, label: this.transloco.translate(item.label) }))
+          .filter((item) => !item.superAdminOnly || isSuperAdmin)
+          .map((item) => ({ ...item, label: this.transloco.translate(item.label) })),
         //#else
-        items: group.items.filter(item => !item.superAdminOnly || isSuperAdmin)
+        items: group.items.filter((item) => !item.superAdminOnly || isSuperAdmin),
         //#endif
       }))
-      .filter(group => group.items.length > 0);
+      .filter((group) => group.items.length > 0);
   });
 
   isItemActive(item: MenuItem) {

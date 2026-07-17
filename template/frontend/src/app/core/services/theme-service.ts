@@ -1,10 +1,20 @@
 import { isPlatformBrowser } from '@angular/common';
-import { afterNextRender, DestroyRef, PLATFORM_ID, computed, effect, inject, Injectable, signal } from '@angular/core';
+import {
+  afterNextRender,
+  DestroyRef,
+  PLATFORM_ID,
+  computed,
+  effect,
+  inject,
+  Injectable,
+  signal,
+} from '@angular/core';
 import { palette, updatePrimaryPalette, updateSurfacePalette, usePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
 import Lara from '@primeuix/themes/lara';
 import Material from '@primeuix/themes/material';
 import Nora from '@primeuix/themes/nora';
+
 import type { PaletteDesignToken } from '@primeuix/themes/types';
 
 export const THEME_MODES = ['system', 'light', 'dark'] as const;
@@ -26,7 +36,7 @@ export const THEME_PRIMARY_NAMES = [
   'purple',
   'fuchsia',
   'pink',
-  'rose'
+  'rose',
 ] as const;
 export const THEME_SURFACE_NAMES = ['slate', 'gray', 'zinc', 'neutral', 'stone'] as const;
 
@@ -35,7 +45,10 @@ export type ThemePresetName = (typeof THEME_PRESET_NAMES)[number];
 export type ThemePrimaryName = (typeof THEME_PRIMARY_NAMES)[number];
 export type ThemeSurfaceName = (typeof THEME_SURFACE_NAMES)[number];
 
-export const THEME_PRESETS = { Aura, Material, Lara, Nora } as const satisfies Record<ThemePresetName, unknown>;
+export const THEME_PRESETS = { Aura, Material, Lara, Nora } as const satisfies Record<
+  ThemePresetName,
+  unknown
+>;
 
 export interface ThemePreferences {
   mode: ThemeMode;
@@ -48,7 +61,7 @@ const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
   mode: 'system',
   preset: 'Aura',
   primary: null,
-  surface: null
+  surface: null,
 };
 
 function getPalette(name: ThemePrimaryName | ThemeSurfaceName): PaletteDesignToken {
@@ -112,11 +125,11 @@ export class ThemeService {
   }
 
   setMode(mode: ThemeMode): void {
-    this.preferencesState.update(preferences => ({ ...preferences, mode }));
+    this.preferencesState.update((preferences) => ({ ...preferences, mode }));
   }
 
   updatePreferences(preferences: Partial<ThemePreferences>): void {
-    this.preferencesState.update(current => ({ ...current, ...preferences }));
+    this.preferencesState.update((current) => ({ ...current, ...preferences }));
     this.applyThemePreferences(this.preferences());
   }
 
@@ -148,18 +161,22 @@ export class ThemeService {
     try {
       const parsed = JSON.parse(storedPreferences) as Partial<ThemePreferences>;
       return {
-        mode: THEME_MODES.includes(parsed.mode as ThemeMode) ? (parsed.mode as ThemeMode) : DEFAULT_THEME_PREFERENCES.mode,
+        mode: THEME_MODES.includes(parsed.mode as ThemeMode)
+          ? (parsed.mode as ThemeMode)
+          : DEFAULT_THEME_PREFERENCES.mode,
         preset: THEME_PRESET_NAMES.includes(parsed.preset as ThemePresetName)
           ? (parsed.preset as ThemePresetName)
           : DEFAULT_THEME_PREFERENCES.preset,
         primary:
-          parsed.primary === null || THEME_PRIMARY_NAMES.includes(parsed.primary as ThemePrimaryName)
+          parsed.primary === null ||
+          THEME_PRIMARY_NAMES.includes(parsed.primary as ThemePrimaryName)
             ? (parsed.primary ?? null)
             : DEFAULT_THEME_PREFERENCES.primary,
         surface:
-          parsed.surface === null || THEME_SURFACE_NAMES.includes(parsed.surface as ThemeSurfaceName)
+          parsed.surface === null ||
+          THEME_SURFACE_NAMES.includes(parsed.surface as ThemeSurfaceName)
             ? (parsed.surface ?? null)
-            : DEFAULT_THEME_PREFERENCES.surface
+            : DEFAULT_THEME_PREFERENCES.surface,
       };
     } catch {
       localStorage.removeItem(ThemeService.STORAGE_KEY);
@@ -173,7 +190,8 @@ export class ThemeService {
     }
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const updateSystemTheme = (event: MediaQueryListEvent | MediaQueryList) => this.systemDark.set(event.matches);
+    const updateSystemTheme = (event: MediaQueryListEvent | MediaQueryList) =>
+      this.systemDark.set(event.matches);
 
     updateSystemTheme(mediaQuery);
     mediaQuery.addEventListener('change', updateSystemTheme);

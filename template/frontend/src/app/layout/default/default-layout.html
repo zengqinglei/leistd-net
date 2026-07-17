@@ -1,7 +1,8 @@
 <!-- 应用主布局容器 -->
 <div data-layout="default" class="flex h-screen overflow-hidden bg-surface-50 dark:bg-surface-950">
   <!-- 桌面端侧边栏 -->
-  <app-default-sidebar [isMobileMenuOpen]="false" class="hidden md:block h-full shrink-0"> </app-default-sidebar>
+  <app-default-sidebar [isMobileMenuOpen]="false" class="hidden md:block h-full shrink-0">
+  </app-default-sidebar>
 
   <!-- 移动端抽屉 -->
   <p-drawer
@@ -17,7 +18,12 @@
     (visibleChange)="isMobileMenuOpen.set($event)"
   >
     <ng-template #headless>
-      <app-default-sidebar [isMobileMenuOpen]="true" (mobileMenuClosed)="closeMobileMenu()" class="h-full w-full"> </app-default-sidebar>
+      <app-default-sidebar
+        [isMobileMenuOpen]="true"
+        (mobileMenuClosed)="closeMobileMenu()"
+        class="h-full w-full"
+      >
+      </app-default-sidebar>
     </ng-template>
   </p-drawer>
 
@@ -28,7 +34,9 @@
 
     <!-- 主内容区域 -->
     <!-- 使用 bg-surface-50 dark:bg-surface-950 作为背景色，自动适配 Light/Dark -->
-    <main class="flex-1 overflow-auto bg-surface-50 dark:bg-surface-950 custom-scrollbar scroll-smooth">
+    <main
+      class="flex-1 overflow-auto bg-surface-50 dark:bg-surface-950 custom-scrollbar scroll-smooth"
+    >
       <router-outlet></router-outlet>
     </main>
 

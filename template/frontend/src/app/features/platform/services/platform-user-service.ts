@@ -6,13 +6,18 @@ import { PagedResultDto } from '../../../shared/models/paged-result.dto';
 import { UserOutputDto } from '../../account/models/account.dto';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class PlatformUserService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/api/v1/users';
 
-  getUsers(input?: { offset?: number; limit?: number; keyword?: string; isActive?: boolean }): Observable<PagedResultDto<UserOutputDto>> {
+  getUsers(input?: {
+    offset?: number;
+    limit?: number;
+    keyword?: string;
+    isActive?: boolean;
+  }): Observable<PagedResultDto<UserOutputDto>> {
     let params = new HttpParams();
 
     if (input?.offset !== undefined) {

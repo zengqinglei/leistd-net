@@ -12,7 +12,7 @@ import {
   UserOutputDto,
   SecurityConfigOutputDto,
   CaptchaOutputDto,
-  SendEmailCodeInputDto
+  SendEmailCodeInputDto,
 } from '../models/account.dto';
 
 @Injectable({ providedIn: 'root' })
@@ -37,7 +37,9 @@ export class AccountService {
   }
 
   updateCurrentUser(data: UpdateCurrentUserInputDto): Observable<UserOutputDto> {
-    return this.http.put<UserOutputDto>('/api/v1/auth/me', data).pipe(tap(user => this.authService.setCurrentUser(user)));
+    return this.http
+      .put<UserOutputDto>('/api/v1/auth/me', data)
+      .pipe(tap((user) => this.authService.setCurrentUser(user)));
   }
 
   changePassword(data: ChangePasswordInputDto): Observable<void> {

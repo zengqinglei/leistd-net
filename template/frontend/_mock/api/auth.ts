@@ -5,7 +5,7 @@ import {
   RegisterInputDto,
   SecurityConfigOutputDto,
   CaptchaOutputDto,
-  SendEmailCodeInputDto
+  SendEmailCodeInputDto,
 } from '../../src/app/features/account/models/account.dto';
 import { MockException, MockRequest } from '../core/models';
 import { USERS, toUserOutput } from '../data/user';
@@ -17,21 +17,21 @@ const CAPTCHA_CHARACTERS = CAPTCHA_LETTERS + CAPTCHA_DIGITS;
 const captchaStore = new Map<string, string>();
 
 function ensureUsernameAvailable(username: string, currentUserId: string): void {
-  const exists = USERS.some(user => user.username === username && user.id !== currentUserId);
+  const exists = USERS.some((user) => user.username === username && user.id !== currentUserId);
   if (exists) {
     throw new MockException(400, { code: 40011, message: 'Username already exists' });
   }
 }
 
 function ensureEmailAvailable(email: string, currentUserId: string): void {
-  const exists = USERS.some(user => user.email === email && user.id !== currentUserId);
+  const exists = USERS.some((user) => user.email === email && user.id !== currentUserId);
   if (exists) {
     throw new MockException(400, { code: 40012, message: 'Email is already in use' });
   }
 }
 
 function sessionLogin(usernameOrEmail: string, password: string): 'ok' {
-  const user = USERS.find(u => u.username === usernameOrEmail || u.email === usernameOrEmail);
+  const user = USERS.find((u) => u.username === usernameOrEmail || u.email === usernameOrEmail);
 
   if (user && user.password === password) {
     setMockSessionUserId(user.id);
@@ -45,12 +45,12 @@ function getCurrentUser(_req: MockRequest): UserOutputDto {
   if (!MOCK_SESSION_USER_ID) {
     throw new MockException(401, { code: 40101, message: 'Not authenticated' });
   }
-  const user = USERS.find(u => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
+  const user = USERS.find((u) => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
   return toUserOutput(user);
 }
 
 function updateCurrentUser(req: MockRequest): UserOutputDto {
-  const user = USERS.find(u => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
+  const user = USERS.find((u) => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
   const body = req.body as UpdateCurrentUserInputDto;
 
   const username = body.username.trim();
@@ -77,7 +77,7 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
 }
 
 function changePassword(req: MockRequest): 'ok' {
-  const user = USERS.find(u => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
+  const user = USERS.find((u) => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
   const body = req.body as ChangePasswordInputDto;
 
   if (user.password !== body.currentPassword) {
@@ -89,7 +89,10 @@ function changePassword(req: MockRequest): 'ok' {
   }
 
   if (body.currentPassword === body.newPassword) {
-    throw new MockException(400, { code: 40003, message: 'The new password must be different from the current password' });
+    throw new MockException(400, {
+      code: 40003,
+      message: 'The new password must be different from the current password',
+    });
   }
 
   user.password = body.newPassword;
@@ -121,7 +124,7 @@ function getCaptcha(): CaptchaOutputDto {
 
   return {
     captchaToken: token,
-    captchaImageBase64: fakeImage
+    captchaImageBase64: fakeImage,
   };
 }
 
@@ -129,7 +132,10 @@ function generateCaptchaCode(length: number): string {
   const chars = [
     CAPTCHA_LETTERS[Math.floor(Math.random() * CAPTCHA_LETTERS.length)],
     CAPTCHA_DIGITS[Math.floor(Math.random() * CAPTCHA_DIGITS.length)],
-    ...Array.from({ length: length - 2 }, () => CAPTCHA_CHARACTERS[Math.floor(Math.random() * CAPTCHA_CHARACTERS.length)])
+    ...Array.from(
+      { length: length - 2 },
+      () => CAPTCHA_CHARACTERS[Math.floor(Math.random() * CAPTCHA_CHARACTERS.length)],
+    ),
   ];
 
   for (let i = chars.length - 1; i > 0; i--) {
@@ -145,7 +151,10 @@ function validateCaptcha(captchaToken: string | undefined, captchaCode: string |
   captchaStore.delete(captchaToken ?? '');
 
   if (!code || !captchaCode || code.toLowerCase() !== captchaCode.trim().toLowerCase()) {
-    throw new MockException(400, { code: 40015, message: 'The captcha is incorrect, please try again' });
+    throw new MockException(400, {
+      code: 40015,
+      message: 'The captcha is incorrect, please try again',
+    });
   }
 }
 
@@ -176,7 +185,7 @@ function register(req: MockRequest): 'ok' {
     isActive: true,
     isSuperAdmin: false,
     isEmailVerified: false,
-    creationTime: new Date().toISOString()
+    creationTime: new Date().toISOString(),
   };
   USERS.push(newUser as any);
 
@@ -190,12 +199,15 @@ function getExternalLoginUrl(provider: string): { loginUrl: string; state: strin
 
   const urls: Record<string, string> = {
     github: `https://github.com/login/oauth/authorize?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&scope=user:email`,
-    google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&response_type=code&scope=email%20profile`
+    google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&response_type=code&scope=email%20profile`,
   };
 
   const loginUrl = urls[provider];
   if (!loginUrl) {
-    throw new MockException(400, { code: 40020, message: `Unsupported login provider: ${provider}` });
+    throw new MockException(400, {
+      code: 40020,
+      message: `Unsupported login provider: ${provider}`,
+    });
   }
 
   return { loginUrl, state };
@@ -213,10 +225,12 @@ export const AUTH_API = {
   'GET /api/v1/auth/captcha': () => getCaptcha(),
   'POST /api/v1/auth/send-email-code': (req: MockRequest) => sendEmailCode(req),
   'POST /api/v1/auth/logout': () => logout(),
-  'POST /api/v1/auth/session-login': (req: MockRequest) => sessionLogin(req.body.usernameOrEmail, req.body.password),
+  'POST /api/v1/auth/session-login': (req: MockRequest) =>
+    sessionLogin(req.body.usernameOrEmail, req.body.password),
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
   'PUT /api/v1/auth/me': (req: MockRequest) => updateCurrentUser(req),
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
-  'GET /api/v1/external-auth/:provider/login-url': (req: MockRequest) => getExternalLoginUrl(req.params.provider),
-  'POST /api/v1/external-auth/:provider/callback': () => externalLoginCallback()
+  'GET /api/v1/external-auth/:provider/login-url': (req: MockRequest) =>
+    getExternalLoginUrl(req.params.provider),
+  'POST /api/v1/external-auth/:provider/callback': () => externalLoginCallback(),
 };

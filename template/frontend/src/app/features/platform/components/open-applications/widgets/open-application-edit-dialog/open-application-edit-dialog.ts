@@ -1,8 +1,27 @@
 import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  model,
+  output,
+  signal,
+} from '@angular/core';
 //#else
-import { ChangeDetectionStrategy, Component, computed, effect, input, model, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  input,
+  model,
+  output,
+  signal,
+} from '@angular/core';
 //#endif
 import { FormsModule } from '@angular/forms';
 //#if (IncludeLocalization)
@@ -29,12 +48,12 @@ import {
   OpenApplicationConsentType,
   OpenApplicationOutputDto,
   OpenApplicationType,
-  UpdateOpenApplicationInputDto
+  UpdateOpenApplicationInputDto,
 } from '../../../../models/open-application.dto';
 
 type OpenApplicationTemplate = 'web' | 'desktop' | 'service';
 
-type OpenApplicationEditFormModel = {
+interface OpenApplicationEditFormModel {
   clientId: string;
   displayName?: string;
   applicationType: OpenApplicationType;
@@ -46,7 +65,7 @@ type OpenApplicationEditFormModel = {
   requirements: string[];
   redirectUriInput: string;
   postLogoutRedirectUriInput: string;
-};
+}
 
 const authorizationCodePermissions = [
   'ept:authorization',
@@ -59,7 +78,7 @@ const authorizationCodePermissions = [
   'scp:profile',
   'scp:email',
   'scp:roles',
-  'scp:offline_access'
+  'scp:offline_access',
 ];
 
 @Component({
@@ -79,30 +98,41 @@ const authorizationCodePermissions = [
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
-    DialogLoadingComponent
+    DialogLoadingComponent,
   ],
   templateUrl: './open-application-edit-dialog.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationEditDialogComponent {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
   private readonly translationReady = translationReady(this.transloco);
-  readonly dialogHeader = () => this.transloco.translate(this.isEditMode() ? 'openApp.dialog.editHeader' : 'openApp.dialog.createHeader');
-  readonly templatePlaceholder = () => this.transloco.translate('openApp.field.templatePlaceholder');
-  readonly displayNamePlaceholder = () => this.transloco.translate('openApp.field.displayNamePlaceholder');
-  readonly clientIdPlaceholder = () => this.transloco.translate('openApp.field.clientIdPlaceholder');
-  readonly redirectUriPlaceholder = () => this.transloco.translate('openApp.redirectUri.placeholder');
+  readonly dialogHeader = () =>
+    this.transloco.translate(
+      this.isEditMode() ? 'openApp.dialog.editHeader' : 'openApp.dialog.createHeader',
+    );
+  readonly templatePlaceholder = () =>
+    this.transloco.translate('openApp.field.templatePlaceholder');
+  readonly displayNamePlaceholder = () =>
+    this.transloco.translate('openApp.field.displayNamePlaceholder');
+  readonly clientIdPlaceholder = () =>
+    this.transloco.translate('openApp.field.clientIdPlaceholder');
+  readonly redirectUriPlaceholder = () =>
+    this.transloco.translate('openApp.redirectUri.placeholder');
   readonly addLabel = () => this.transloco.translate('common.add');
-  readonly permissionsPlaceholder = () => this.transloco.translate('openApp.permissions.placeholder');
-  readonly requirementsPlaceholder = () => this.transloco.translate('openApp.requirements.placeholder');
+  readonly permissionsPlaceholder = () =>
+    this.transloco.translate('openApp.permissions.placeholder');
+  readonly requirementsPlaceholder = () =>
+    this.transloco.translate('openApp.requirements.placeholder');
   //#else
-  readonly dialogHeader = () => (this.isEditMode() ? 'Edit Open Application' : 'New Open Application');
+  readonly dialogHeader = () =>
+    this.isEditMode() ? 'Edit Open Application' : 'New Open Application';
   readonly templatePlaceholder = () => 'Select a template to quickly fill in';
   readonly displayNamePlaceholder = () => 'e.g. My Desktop App';
   readonly clientIdPlaceholder = () => 'e.g. my-desktop-app';
-  readonly redirectUriPlaceholder = () => 'https://example.com/callback or my-desktop-app://oauth/callback';
+  readonly redirectUriPlaceholder = () =>
+    'https://example.com/callback or my-desktop-app://oauth/callback';
   readonly addLabel = () => 'Add';
   readonly permissionsPlaceholder = () => 'Select authorization capabilities';
   readonly requirementsPlaceholder = () => 'Select security requirements';
@@ -129,7 +159,10 @@ export class OpenApplicationEditDialogComponent {
     if (!model.applicationType || !model.clientType || !model.consentType) {
       return false;
     }
-    if ((model.applicationType === 'native' || model.clientType === 'public') && !model.requirements.includes('ft:pkce')) {
+    if (
+      (model.applicationType === 'native' || model.clientType === 'public') &&
+      !model.requirements.includes('ft:pkce')
+    ) {
       return false;
     }
     return true;
@@ -142,7 +175,7 @@ export class OpenApplicationEditDialogComponent {
     return [
       { label: this.transloco.translate('openApp.template.web'), value: 'web' },
       { label: this.transloco.translate('openApp.template.desktop'), value: 'desktop' },
-      { label: this.transloco.translate('openApp.template.service'), value: 'service' }
+      { label: this.transloco.translate('openApp.template.service'), value: 'service' },
     ];
   });
 
@@ -151,7 +184,7 @@ export class OpenApplicationEditDialogComponent {
     return [
       { label: this.transloco.translate('openApp.appType.web'), value: 'web' },
       { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
-      { label: this.transloco.translate('openApp.appType.service'), value: 'service' }
+      { label: this.transloco.translate('openApp.appType.service'), value: 'service' },
     ];
   });
 
@@ -159,7 +192,10 @@ export class OpenApplicationEditDialogComponent {
     this.translationReady();
     return [
       { label: this.transloco.translate('openApp.clientType.publicLabel'), value: 'public' },
-      { label: this.transloco.translate('openApp.clientType.confidentialLabel'), value: 'confidential' }
+      {
+        label: this.transloco.translate('openApp.clientType.confidentialLabel'),
+        value: 'confidential',
+      },
     ];
   });
 
@@ -169,25 +205,53 @@ export class OpenApplicationEditDialogComponent {
       { label: this.transloco.translate('openApp.consentType.implicit'), value: 'implicit' },
       { label: this.transloco.translate('openApp.consentType.explicit'), value: 'explicit' },
       { label: this.transloco.translate('openApp.consentType.external'), value: 'external' },
-      { label: this.transloco.translate('openApp.consentType.systematic'), value: 'systematic' }
+      { label: this.transloco.translate('openApp.consentType.systematic'), value: 'systematic' },
     ];
   });
 
   readonly permissionOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.permission.authorizationEndpoint'), value: 'ept:authorization', group: 'Endpoints' },
-      { label: this.transloco.translate('openApp.permission.tokenEndpoint'), value: 'ept:token', group: 'Endpoints' },
-      { label: this.transloco.translate('openApp.permission.endSessionEndpoint'), value: 'ept:end_session', group: 'Endpoints' },
-      { label: this.transloco.translate('openApp.permission.authorizationCode'), value: 'gt:authorization_code', group: 'Grant Types' },
-      { label: this.transloco.translate('openApp.permission.refreshToken'), value: 'gt:refresh_token', group: 'Grant Types' },
-      { label: this.transloco.translate('openApp.permission.clientCredentials'), value: 'gt:client_credentials', group: 'Grant Types' },
-      { label: this.transloco.translate('openApp.permission.codeResponse'), value: 'rst:code', group: 'Response Types' },
+      {
+        label: this.transloco.translate('openApp.permission.authorizationEndpoint'),
+        value: 'ept:authorization',
+        group: 'Endpoints',
+      },
+      {
+        label: this.transloco.translate('openApp.permission.tokenEndpoint'),
+        value: 'ept:token',
+        group: 'Endpoints',
+      },
+      {
+        label: this.transloco.translate('openApp.permission.endSessionEndpoint'),
+        value: 'ept:end_session',
+        group: 'Endpoints',
+      },
+      {
+        label: this.transloco.translate('openApp.permission.authorizationCode'),
+        value: 'gt:authorization_code',
+        group: 'Grant Types',
+      },
+      {
+        label: this.transloco.translate('openApp.permission.refreshToken'),
+        value: 'gt:refresh_token',
+        group: 'Grant Types',
+      },
+      {
+        label: this.transloco.translate('openApp.permission.clientCredentials'),
+        value: 'gt:client_credentials',
+        group: 'Grant Types',
+      },
+      {
+        label: this.transloco.translate('openApp.permission.codeResponse'),
+        value: 'rst:code',
+        group: 'Response Types',
+      },
       { label: 'openid', value: 'scp:openid', group: 'Scopes' },
       { label: 'profile', value: 'scp:profile', group: 'Scopes' },
       { label: 'email', value: 'scp:email', group: 'Scopes' },
       { label: 'roles', value: 'scp:roles', group: 'Scopes' },
-      { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' }
+      { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
     ];
   });
 
@@ -210,7 +274,7 @@ export class OpenApplicationEditDialogComponent {
       'scp:profile': this.transloco.translate('openApp.permission.scopeProfile'),
       'scp:email': this.transloco.translate('openApp.permission.scopeEmail'),
       'scp:roles': this.transloco.translate('openApp.permission.scopeRoles'),
-      'scp:offline_access': this.transloco.translate('openApp.permission.scopeOfflineAccess')
+      'scp:offline_access': this.transloco.translate('openApp.permission.scopeOfflineAccess'),
     };
   });
 
@@ -219,7 +283,7 @@ export class OpenApplicationEditDialogComponent {
     return {
       web: this.transloco.translate('openApp.appType.web'),
       native: this.transloco.translate('openApp.appType.native'),
-      service: this.transloco.translate('openApp.appType.service')
+      service: this.transloco.translate('openApp.appType.service'),
     };
   });
 
@@ -227,7 +291,7 @@ export class OpenApplicationEditDialogComponent {
     this.translationReady();
     return {
       public: this.transloco.translate('openApp.clientType.publicLabel'),
-      confidential: this.transloco.translate('openApp.clientType.confidentialLabel')
+      confidential: this.transloco.translate('openApp.clientType.confidentialLabel'),
     };
   });
 
@@ -237,32 +301,32 @@ export class OpenApplicationEditDialogComponent {
       implicit: this.transloco.translate('openApp.consentType.implicit'),
       explicit: this.transloco.translate('openApp.consentType.explicit'),
       external: this.transloco.translate('openApp.consentType.external'),
-      systematic: this.transloco.translate('openApp.consentType.systematic')
+      systematic: this.transloco.translate('openApp.consentType.systematic'),
     };
   });
   //#else
   readonly templateOptions = computed(() => [
     { label: 'Web PKCE client', value: 'web' },
     { label: 'Desktop PKCE client', value: 'desktop' },
-    { label: 'Service confidential client', value: 'service' }
+    { label: 'Service confidential client', value: 'service' },
   ]);
 
   readonly applicationTypeOptions = computed(() => [
     { label: 'Web', value: 'web' },
     { label: 'Desktop/Native', value: 'native' },
-    { label: 'Service', value: 'service' }
+    { label: 'Service', value: 'service' },
   ]);
 
   readonly clientTypeOptions = computed(() => [
     { label: 'Public', value: 'public' },
-    { label: 'Confidential', value: 'confidential' }
+    { label: 'Confidential', value: 'confidential' },
   ]);
 
   readonly consentTypeOptions = computed(() => [
     { label: 'Implicit consent', value: 'implicit' },
     { label: 'Explicit consent', value: 'explicit' },
     { label: 'External consent', value: 'external' },
-    { label: 'Systematic consent', value: 'systematic' }
+    { label: 'Systematic consent', value: 'systematic' },
   ]);
 
   readonly permissionOptions = computed(() => [
@@ -277,7 +341,7 @@ export class OpenApplicationEditDialogComponent {
     { label: 'profile', value: 'scp:profile', group: 'Scopes' },
     { label: 'email', value: 'scp:email', group: 'Scopes' },
     { label: 'roles', value: 'scp:roles', group: 'Scopes' },
-    { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' }
+    { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
   ]);
 
   readonly requirementOptions = computed(() => [{ label: 'Force PKCE', value: 'ft:pkce' }]);
@@ -294,25 +358,25 @@ export class OpenApplicationEditDialogComponent {
     'scp:profile': 'Profile',
     'scp:email': 'Email',
     'scp:roles': 'Roles',
-    'scp:offline_access': 'Offline access'
+    'scp:offline_access': 'Offline access',
   }));
 
   readonly applicationTypeLabels = computed<Record<string, string>>(() => ({
     web: 'Web',
     native: 'Desktop/Native',
-    service: 'Service'
+    service: 'Service',
   }));
 
   readonly clientTypeLabels = computed<Record<string, string>>(() => ({
     public: 'Public',
-    confidential: 'Confidential'
+    confidential: 'Confidential',
   }));
 
   readonly consentTypeLabels = computed<Record<string, string>>(() => ({
     implicit: 'Implicit consent',
     explicit: 'Explicit consent',
     external: 'External consent',
-    systematic: 'Systematic consent'
+    systematic: 'Systematic consent',
   }));
   //#endif
 
@@ -340,7 +404,7 @@ export class OpenApplicationEditDialogComponent {
           permissions: [...application.permissions],
           requirements: [...application.requirements],
           redirectUriInput: '',
-          postLogoutRedirectUriInput: ''
+          postLogoutRedirectUriInput: '',
         });
       } else {
         this.formModel.set(this.createEmptyModel());
@@ -360,18 +424,19 @@ export class OpenApplicationEditDialogComponent {
       permissions: [...authorizationCodePermissions],
       requirements: ['ft:pkce'],
       redirectUriInput: '',
-      postLogoutRedirectUriInput: ''
+      postLogoutRedirectUriInput: '',
     };
   }
 
   applyTemplate(template: OpenApplicationTemplate) {
     this.selectedTemplate.set(template);
     if (template === 'desktop') {
-      this.formModel.update(model => ({
+      this.formModel.update((model) => ({
         ...model,
         clientId: model.clientId || 'my-desktop-app',
         //#if (IncludeLocalization)
-        displayName: model.displayName || this.transloco.translate('openApp.template.desktopDisplayName'),
+        displayName:
+          model.displayName || this.transloco.translate('openApp.template.desktopDisplayName'),
         //#else
         displayName: model.displayName || 'My Desktop App',
         //#endif
@@ -381,13 +446,13 @@ export class OpenApplicationEditDialogComponent {
         redirectUris: ['my-desktop-app://oauth/callback'],
         postLogoutRedirectUris: ['my-desktop-app://oauth/logout-callback'],
         permissions: [...authorizationCodePermissions],
-        requirements: ['ft:pkce']
+        requirements: ['ft:pkce'],
       }));
       return;
     }
 
     if (template === 'service') {
-      this.formModel.update(model => ({
+      this.formModel.update((model) => ({
         ...model,
         applicationType: 'service',
         clientType: 'confidential',
@@ -395,32 +460,38 @@ export class OpenApplicationEditDialogComponent {
         redirectUris: [],
         postLogoutRedirectUris: [],
         permissions: ['ept:token', 'gt:client_credentials'],
-        requirements: []
+        requirements: [],
       }));
       return;
     }
 
-    this.formModel.update(model => ({
+    this.formModel.update((model) => ({
       ...model,
       applicationType: 'web',
       clientType: 'public',
       consentType: 'explicit',
       permissions: [...authorizationCodePermissions],
-      requirements: ['ft:pkce']
+      requirements: ['ft:pkce'],
     }));
   }
 
   onClientTypeChange() {
     if (this.formModel().clientType === 'public') {
-      this.formModel.update(model => ({ ...model, requirements: this.ensurePkce(model.requirements) }));
+      this.formModel.update((model) => ({
+        ...model,
+        requirements: this.ensurePkce(model.requirements),
+      }));
     }
   }
 
   onClientTypeSelect(clientType: OpenApplicationClientType) {
-    this.formModel.update(model => ({
+    this.formModel.update((model) => ({
       ...model,
       clientType,
-      requirements: clientType === 'public' ? this.ensurePkce(model.requirements) : model.requirements.filter(r => r !== 'ft:pkce')
+      requirements:
+        clientType === 'public'
+          ? this.ensurePkce(model.requirements)
+          : model.requirements.filter((r) => r !== 'ft:pkce'),
     }));
   }
 
@@ -433,11 +504,17 @@ export class OpenApplicationEditDialogComponent {
   }
 
   removeRedirectUri(uri: string) {
-    this.formModel.update(model => ({ ...model, redirectUris: model.redirectUris.filter(item => item !== uri) }));
+    this.formModel.update((model) => ({
+      ...model,
+      redirectUris: model.redirectUris.filter((item) => item !== uri),
+    }));
   }
 
   removePostLogoutRedirectUri(uri: string) {
-    this.formModel.update(model => ({ ...model, postLogoutRedirectUris: model.postLogoutRedirectUris.filter(item => item !== uri) }));
+    this.formModel.update((model) => ({
+      ...model,
+      postLogoutRedirectUris: model.postLogoutRedirectUris.filter((item) => item !== uri),
+    }));
   }
 
   isRedirectUriInputInvalid() {
@@ -471,7 +548,7 @@ export class OpenApplicationEditDialogComponent {
         redirectUris: model.redirectUris,
         postLogoutRedirectUris: model.postLogoutRedirectUris,
         permissions: model.permissions,
-        requirements: model.requirements
+        requirements: model.requirements,
       });
       return;
     }
@@ -485,20 +562,23 @@ export class OpenApplicationEditDialogComponent {
       redirectUris: model.redirectUris,
       postLogoutRedirectUris: model.postLogoutRedirectUris,
       permissions: model.permissions,
-      requirements: model.requirements
+      requirements: model.requirements,
     });
   }
 
-  private addUri(listKey: 'redirectUris' | 'postLogoutRedirectUris', inputKey: 'redirectUriInput' | 'postLogoutRedirectUriInput') {
+  private addUri(
+    listKey: 'redirectUris' | 'postLogoutRedirectUris',
+    inputKey: 'redirectUriInput' | 'postLogoutRedirectUriInput',
+  ) {
     const value = this.formModel()[inputKey].trim();
     if (!value || !this.isValidRedirectUri(value)) {
       return;
     }
 
-    this.formModel.update(model => ({
+    this.formModel.update((model) => ({
       ...model,
       [listKey]: model[listKey].includes(value) ? model[listKey] : [...model[listKey], value],
-      [inputKey]: ''
+      [inputKey]: '',
     }));
   }
 

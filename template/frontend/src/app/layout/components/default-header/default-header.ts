@@ -1,11 +1,17 @@
 //#if (IncludeNotifications)
 import { DatePipe } from '@angular/common';
 //#endif
-//#if (IncludeNotifications)
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, ViewChild, computed, inject, output, signal } from '@angular/core';
-//#else
-import { ChangeDetectionStrategy, Component, OnDestroy, ViewChild, computed, inject, output, signal } from '@angular/core';
-//#endif
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  computed,
+  inject,
+  output,
+  signal,
+} from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
@@ -30,7 +36,10 @@ import { AuthService } from '../../../core/services/auth-service';
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
 //#if (IncludeNotifications)
-import { NotificationService, NotificationOutputDto } from '../../../core/services/notification-service';
+import {
+  NotificationService,
+  NotificationOutputDto,
+} from '../../../core/services/notification-service';
 //#endif
 import { ThemeService } from '../../../core/services/theme-service';
 //#if (IncludeIdentity)
@@ -67,17 +76,13 @@ import { LayoutService } from '../../services/layout-service';
     //#endif
     //#if (IncludeIdentity)
     ProfileSettingsDialogComponent,
-    ChangePasswordDialogComponent
+    ChangePasswordDialogComponent,
     //#endif
   ],
   templateUrl: './default-header.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-//#if (IncludeNotifications)
 export class DefaultHeader implements OnInit, OnDestroy {
-//#else
-export class DefaultHeader implements OnDestroy {
-//#endif
   readonly layoutService = inject(LayoutService);
   readonly themeService = inject(ThemeService);
   readonly authService = inject(AuthService);
@@ -97,7 +102,6 @@ export class DefaultHeader implements OnDestroy {
   readonly adminTooltip = () => 'Administrator';
   //#endif
   //#endif
-
   readonly toggleMobileMenu = output<void>();
   //#if (IncludeNotifications)
   readonly notificationService = inject(NotificationService);
@@ -111,11 +115,6 @@ export class DefaultHeader implements OnDestroy {
   //#else
   readonly notificationTooltip = () => 'Notifications';
   //#endif
-
-  ngOnInit(): void {
-    // 登录后初始化：连接 SignalR + 加载历史通知
-    void this.notificationService.init();
-  }
 
   toggleNotifications(event: Event): void {
     this.notificationPopover?.toggle(event);
@@ -141,11 +140,19 @@ export class DefaultHeader implements OnDestroy {
   //#else
   readonly notificationCount = signal(0);
   //#endif
+
+  ngOnInit(): void {
+    //#if (IncludeNotifications)
+    void this.notificationService.init();
+    //#else
+    this.notificationCount.set(0);
+    //#endif
+  }
+
   //#if (IncludeIdentity)
   readonly profileDialogVisible = signal(false);
   readonly changePasswordDialogVisible = signal(false);
   //#endif
-
   readonly userMenuItems = computed<MenuItem[]>(() => {
     const currentUser = this.authService.currentUser();
     //#if (IncludeLocalization)
@@ -163,7 +170,7 @@ export class DefaultHeader implements OnDestroy {
         label: 'Workspace',
         //#endif
         icon: 'pi pi-home',
-        command: () => this.closeMenuAndNavigate('/workspace')
+        command: () => this.closeMenuAndNavigate('/workspace'),
       });
     } else if (this.router.url.startsWith('/workspace') && currentUser?.isAdmin()) {
       items.push({
@@ -173,7 +180,7 @@ export class DefaultHeader implements OnDestroy {
         label: 'Admin platform',
         //#endif
         icon: 'pi pi-cog',
-        command: () => this.closeMenuAndNavigate('/platform')
+        command: () => this.closeMenuAndNavigate('/platform'),
       });
     }
 
@@ -190,7 +197,7 @@ export class DefaultHeader implements OnDestroy {
         label: 'Profile',
         //#endif
         icon: 'pi pi-user-edit',
-        command: () => this.openProfileDialog()
+        command: () => this.openProfileDialog(),
       },
       {
         //#if (IncludeLocalization)
@@ -199,10 +206,10 @@ export class DefaultHeader implements OnDestroy {
         label: 'Change password',
         //#endif
         icon: 'pi pi-lock',
-        command: () => this.openChangePasswordDialog()
+        command: () => this.openChangePasswordDialog(),
       },
       {
-        separator: true
+        separator: true,
       },
       {
         //#if (IncludeLocalization)
@@ -211,11 +218,10 @@ export class DefaultHeader implements OnDestroy {
         label: 'Sign out',
         //#endif
         icon: 'pi pi-sign-out',
-        command: () => this.handleLogout()
-      }
+        command: () => this.handleLogout(),
+      },
     );
     //#endif
-
     return items;
   });
 
@@ -236,7 +242,6 @@ export class DefaultHeader implements OnDestroy {
     this.authService.logout();
   }
   //#endif
-
   handleMenuToggle(): void {
     if (this.layoutService.isMobileSidebarMode()) {
       this.toggleMobileMenu.emit();
@@ -266,7 +271,7 @@ export class DefaultHeader implements OnDestroy {
   private cleanupOverlay(): void {
     const overlays = document.querySelectorAll('.p-menu-overlay, .p-component-overlay');
     if (overlays.length > 0) {
-      overlays.forEach(overlay => overlay.remove());
+      overlays.forEach((overlay) => overlay.remove());
     }
   }
 

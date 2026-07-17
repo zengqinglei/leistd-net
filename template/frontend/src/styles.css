@@ -17,13 +17,21 @@ body {
   --app-scrollbar-size: 0.8rem;
   --app-scrollbar-thumb: color-mix(in srgb, var(--p-surface-400) 82%, transparent);
   --app-scrollbar-thumb-hover: color-mix(in srgb, var(--p-primary-color) 28%, var(--p-surface-500));
-  --app-scrollbar-thumb-active: color-mix(in srgb, var(--p-primary-color) 44%, var(--p-surface-600));
+  --app-scrollbar-thumb-active: color-mix(
+    in srgb,
+    var(--p-primary-color) 44%,
+    var(--p-surface-600)
+  );
 }
 
 .dark {
   --app-scrollbar-thumb: color-mix(in srgb, var(--p-surface-500) 82%, transparent);
   --app-scrollbar-thumb-hover: color-mix(in srgb, var(--p-primary-color) 34%, var(--p-surface-400));
-  --app-scrollbar-thumb-active: color-mix(in srgb, var(--p-primary-color) 50%, var(--p-surface-300));
+  --app-scrollbar-thumb-active: color-mix(
+    in srgb,
+    var(--p-primary-color) 50%,
+    var(--p-surface-300)
+  );
 }
 
 * {

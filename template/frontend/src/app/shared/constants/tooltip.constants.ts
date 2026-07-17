@@ -14,5 +14,5 @@ export const TOOLTIP_STYLE = {
   MD: 'max-w-xs',
 
   /** 长内容，对应 Tailwind max-w-md (~448px) */
-  LG: 'max-w-md'
+  LG: 'max-w-md',
 } as const;

@@ -7,23 +7,26 @@ import { Routes } from '@angular/router';
 export const AUTH_ROUTES: Routes = [
   {
     path: 'login',
-    loadComponent: () => import('./components/login/login').then(m => m.Login)
+    loadComponent: () => import('./components/login/login').then((m) => m.Login),
   },
   {
     path: 'register',
-    loadComponent: () => import('./components/register/register').then(m => m.Register)
+    loadComponent: () => import('./components/register/register').then((m) => m.Register),
   },
-//#if (IncludeExternalLogin)
+  //#if (IncludeExternalLogin)
   {
     path: 'external-callback',
-    loadComponent: () => import('./components/external-auth-callback/external-auth-callback').then(m => m.ExternalAuthCallback)
+    loadComponent: () =>
+      import('./components/external-auth-callback/external-auth-callback').then(
+        (m) => m.ExternalAuthCallback,
+      ),
   },
-//#endif
+  //#endif
   {
     path: '',
     redirectTo: 'login',
-    pathMatch: 'full'
-  }
+    pathMatch: 'full',
+  },
 ];
 
 export default AUTH_ROUTES;

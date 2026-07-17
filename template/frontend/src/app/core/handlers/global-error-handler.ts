@@ -30,7 +30,9 @@ export class GlobalErrorHandler implements ErrorHandler {
     // HTTP 错误应该已经被 httpErrorInterceptor 处理
     // 如果到达这里，记录警告但不重复显示
     if (error instanceof HttpErrorResponse) {
-      console.warn('HTTP error reached GlobalErrorHandler, this should not happen. Check interceptor configuration.');
+      console.warn(
+        'HTTP error reached GlobalErrorHandler, this should not happen. Check interceptor configuration.',
+      );
       return;
     }
 
@@ -43,7 +45,7 @@ export class GlobalErrorHandler implements ErrorHandler {
         //#else
         summary: 'Application error',
         //#endif
-        detail: error.message
+        detail: error.message,
       });
       return;
     }
@@ -53,10 +55,10 @@ export class GlobalErrorHandler implements ErrorHandler {
       severity: 'error',
       //#if (IncludeLocalization)
       summary: this.transloco.translate('common.unknownError'),
-      detail: this.transloco.translate('common.unexpectedError')
+      detail: this.transloco.translate('common.unexpectedError'),
       //#else
       summary: 'Unknown error',
-      detail: 'An unexpected error occurred. Please refresh the page and try again.'
+      detail: 'An unexpected error occurred. Please refresh the page and try again.',
       //#endif
     });
   }

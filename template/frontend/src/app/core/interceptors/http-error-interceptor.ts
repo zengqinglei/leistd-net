@@ -1,6 +1,8 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
+//#if (IncludeIdentity)
 import { Router } from '@angular/router';
+//#endif
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -23,11 +25,11 @@ import { AuthService } from '../services/auth-service';
  */
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const messageService = inject(MessageService);
+  //#if (IncludeIdentity)
   const router = inject(Router);
-//#if (IncludeIdentity)
   const authService = inject(AuthService);
-//#endif
-//#if (IncludeLocalization)
+  //#endif
+  //#if (IncludeLocalization)
   const transloco = inject(TranslocoService);
   // 纯客户端兜底文案（后端不可达/无消息体时）；后端可达时优先用其已本地化的 message。
   const codeMessage = (status: number): string | undefined => {
@@ -35,7 +37,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
     return value === `httpError.${status}` ? undefined : value;
   };
   const requestErrorSummary = () => transloco.translate('common.requestError');
-//#else
+  //#else
   const CODE_MESSAGES: Record<number, string> = {
     400: 'The request was malformed; the server did not create or modify data.',
     401: 'Authentication failed. Please sign in again.',
@@ -47,11 +49,11 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
     500: 'A server error occurred. Please check the server.',
     502: 'Bad gateway.',
     503: 'Service unavailable; the server is temporarily overloaded or under maintenance.',
-    504: 'Gateway timeout.'
+    504: 'Gateway timeout.',
   };
   const codeMessage = (status: number): string | undefined => CODE_MESSAGES[status];
   const requestErrorSummary = () => 'Request error';
-//#endif
+  //#endif
 
   return next(req).pipe(
     catchError((error: unknown) => {
@@ -62,12 +64,21 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           return throwError(() => error);
         }
 
-        console.error('HTTP Error Interceptor caught error:', error.url, error.status, error.message);
+        console.error(
+          'HTTP Error Interceptor caught error:',
+          error.url,
+          error.status,
+          error.message,
+        );
 
         const contentType = error.headers?.get('Content-Type');
 
         // 支持 application/json 和 application/problem+json (RFC 7807)
-        if ((contentType?.includes('application/json') || contentType?.includes('application/problem+json')) && error.error) {
+        if (
+          (contentType?.includes('application/json') ||
+            contentType?.includes('application/problem+json')) &&
+          error.error
+        ) {
           const code = error.error.code || '';
           // 优先使用后端返回的 message（启用多语言时后端已按 Accept-Language 本地化）
           const message = error.error.message || error.error.detail;
@@ -76,13 +87,13 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
             messageService.add({
               severity: 'error',
               summary: `${requestErrorSummary()}（${error.status} - ${code}）`,
-              detail: message
+              detail: message,
             });
           } else {
             messageService.add({
               severity: 'error',
               summary: `${requestErrorSummary()}（${error.status}）`,
-              detail: codeMessage(error.status)
+              detail: codeMessage(error.status),
             });
           }
         } else {
@@ -90,11 +101,11 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           messageService.add({
             severity: 'error',
             summary: `${requestErrorSummary()}（${error.status}）`,
-            detail: errorText
+            detail: errorText,
           });
         }
 
-//#if (IncludeIdentity)
+        //#if (IncludeIdentity)
         // 处理 401 未授权情况：保留当前 URL 作为 returnUrl
         if (error.status === 401) {
           authService.clearAuthData();
@@ -102,19 +113,19 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
             router.getCurrentNavigation()?.finalUrl?.queryParamMap.get('returnUrl') ??
             new URL(window.location.href).searchParams.get('returnUrl');
           const currentPath = window.location.pathname + window.location.search;
-          const returnUrl = currentReturnUrl || (currentPath.startsWith('/auth/') ? undefined : currentPath);
+          const returnUrl =
+            currentReturnUrl || (currentPath.startsWith('/auth/') ? undefined : currentPath);
           router.navigate(['/auth/login'], {
-            queryParams: returnUrl ? { returnUrl } : undefined
+            queryParams: returnUrl ? { returnUrl } : undefined,
           });
         }
-//#endif
-
+        //#endif
         // 重新抛出错误，避免下游（如 lastValueFrom）收不到数据直接 complete 导致 EmptyError
         return throwError(() => error);
       }
 
       // 非 HTTP 错误，继续传播到 GlobalErrorHandler
       throw error;
-    })
+    }),
   );
 };

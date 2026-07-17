@@ -4,14 +4,16 @@ export const WORKSPACE_ROUTES: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    redirectTo: 'dashboard'
+    redirectTo: 'dashboard',
   },
   {
     path: 'dashboard',
-    loadComponent: () => import('./components/dashboard/workspace-dashboard').then(m => m.WorkspaceDashboardPage)
+    loadComponent: () =>
+      import('./components/dashboard/workspace-dashboard').then((m) => m.WorkspaceDashboardPage),
   },
   {
     path: 'placeholder',
-    loadComponent: () => import('./components/placeholder/workspace-placeholder').then(m => m.WorkspacePlaceholder)
-  }
+    loadComponent: () =>
+      import('./components/placeholder/workspace-placeholder').then((m) => m.WorkspacePlaceholder),
+  },
 ];

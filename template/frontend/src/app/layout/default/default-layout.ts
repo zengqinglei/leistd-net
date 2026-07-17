@@ -12,7 +12,7 @@ import { LayoutService } from '../services/layout-service';
   standalone: true,
   imports: [RouterOutlet, DrawerModule, DefaultHeader, DefaultFooter, DefaultSidebar],
   templateUrl: './default-layout.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DefaultLayout {
   layoutService = inject(LayoutService);
@@ -28,7 +28,7 @@ export class DefaultLayout {
   }
 
   toggleMobileMenu() {
-    this.isMobileMenuOpen.update(v => !v);
+    this.isMobileMenuOpen.update((v) => !v);
   }
 
   closeMobileMenu() {

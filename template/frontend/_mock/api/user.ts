@@ -4,7 +4,9 @@ import { USERS, toUserManagementOutput } from '../data/user';
 
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;
-  return normalized === undefined || normalized === null || normalized === '' ? undefined : String(normalized);
+  return normalized === undefined || normalized === null || normalized === ''
+    ? undefined
+    : String(normalized);
 }
 
 function sortUsers(users: typeof USERS, sorting?: string) {
@@ -14,7 +16,15 @@ function sortUsers(users: typeof USERS, sorting?: string) {
 
   const [field, direction] = sorting.split(' ');
   const order = direction === 'desc' ? -1 : 1;
-  const supportedFields = ['username', 'email', 'displayName', 'isActive', 'isEmailVerified', 'creationTime', 'lastLoginTime'];
+  const supportedFields = [
+    'username',
+    'email',
+    'displayName',
+    'isActive',
+    'isEmailVerified',
+    'creationTime',
+    'lastLoginTime',
+  ];
   if (!supportedFields.includes(field)) {
     return users.sort((a, b) => a.username.localeCompare(b.username));
   }
@@ -38,32 +48,35 @@ export function getUsers(params: any): PagedResultDto<any> {
 
   if (keyword) {
     users = users.filter(
-      user =>
+      (user) =>
         user.username.toLowerCase().includes(keyword) ||
         user.email.toLowerCase().includes(keyword) ||
-        user.nickname?.toLowerCase().includes(keyword)
+        user.nickname?.toLowerCase().includes(keyword),
     );
   }
 
   if (isActive !== undefined) {
-    users = users.filter(user => user.isActive === (isActive === 'true'));
+    users = users.filter((user) => user.isActive === (isActive === 'true'));
   }
 
   if (isEmailVerified !== undefined) {
-    users = users.filter(user => user.isEmailVerified === (isEmailVerified === 'true'));
+    users = users.filter((user) => user.isEmailVerified === (isEmailVerified === 'true'));
   }
 
   if (role) {
-    users = users.filter(user => user.roles.includes(role));
+    users = users.filter((user) => user.roles.includes(role));
   }
 
   users = sortUsers(users, sorting);
 
-  return { totalCount: users.length, items: users.slice(offset, offset + limit).map(toUserManagementOutput) };
+  return {
+    totalCount: users.length,
+    items: users.slice(offset, offset + limit).map(toUserManagementOutput),
+  };
 }
 
 export function getUserById(id: string) {
-  const user = USERS.find(w => w.id === id);
+  const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, { code: 40400, message: 'User not found' });
   }
@@ -73,7 +86,7 @@ export function getUserById(id: string) {
 export function addUser(value: any) {
   const username = String(value.username ?? '').trim();
   const email = String(value.email ?? '').trim();
-  const userExists = USERS.some(w => w.username === username || w.email === email);
+  const userExists = USERS.some((w) => w.username === username || w.email === email);
   if (userExists) {
     throw new MockException(400, { code: 40000, message: 'Username or email already exists' });
   }
@@ -83,23 +96,28 @@ export function addUser(value: any) {
     username,
     email,
     nickname: value.displayName,
-    avatar: value.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`,
+    avatar:
+      value.avatar ||
+      `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`,
     phoneNumber: value.phoneNumber,
     isActive: value.isActive ?? true,
     isSuperAdmin: false,
     isEmailVerified: value.isEmailVerified ?? false,
     creationTime: new Date().toISOString(),
     roles: value.roles ?? ['Member'],
-    password: value.password || 'Admin@123456'
+    password: value.password || 'Admin@123456',
   };
   USERS.push(newUser);
   return toUserManagementOutput(newUser);
 }
 
 export function updateUser(id: string, value: any) {
-  const user = USERS.find(w => w.id === id);
+  const user = USERS.find((w) => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
+    throw new MockException(404, {
+      code: 40400,
+      message: 'User does not exist or has been deleted',
+    });
   }
 
   Object.assign(user, {
@@ -108,42 +126,57 @@ export function updateUser(id: string, value: any) {
     avatar: value.avatar,
     isActive: value.isActive,
     isEmailVerified: value.isEmailVerified,
-    roles: value.roles
+    roles: value.roles,
   });
   return toUserManagementOutput(user);
 }
 
 export function enableUser(id: string) {
-  const user = USERS.find(w => w.id === id);
+  const user = USERS.find((w) => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
+    throw new MockException(404, {
+      code: 40400,
+      message: 'User does not exist or has been deleted',
+    });
   }
   user.isActive = true;
 }
 
 export function disableUser(id: string) {
-  const user = USERS.find(w => w.id === id);
+  const user = USERS.find((w) => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
+    throw new MockException(404, {
+      code: 40400,
+      message: 'User does not exist or has been deleted',
+    });
   }
   user.isActive = false;
 }
 
 export function resetPassword(id: string, value: any) {
-  const user = USERS.find(w => w.id === id);
+  const user = USERS.find((w) => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
+    throw new MockException(404, {
+      code: 40400,
+      message: 'User does not exist or has been deleted',
+    });
   }
   user.password = value.password;
 }
 
 export function deleteUser(id: string) {
-  const index = USERS.findIndex(w => w.id === id);
+  const index = USERS.findIndex((w) => w.id === id);
   if (index < 0) {
-    throw new MockException(404, { code: 40400, message: 'User does not exist or has been deleted' });
+    throw new MockException(404, {
+      code: 40400,
+      message: 'User does not exist or has been deleted',
+    });
   }
   if (USERS[index].isSuperAdmin) {
-    throw new MockException(400, { code: 40000, message: 'The built-in super administrator cannot be deleted' });
+    throw new MockException(400, {
+      code: 40000,
+      message: 'The built-in super administrator cannot be deleted',
+    });
   }
   USERS.splice(index, 1);
 }
@@ -155,8 +188,9 @@ export const USER_API = {
   'PUT /api/v1/users/:id': (req: MockRequest) => updateUser(req.params.id, req.body),
   'PATCH /api/v1/users/:id/enable': (req: MockRequest) => enableUser(req.params.id),
   'PATCH /api/v1/users/:id/disable': (req: MockRequest) => disableUser(req.params.id),
-  'POST /api/v1/users/:id/reset-password': (req: MockRequest) => resetPassword(req.params.id, req.body),
+  'POST /api/v1/users/:id/reset-password': (req: MockRequest) =>
+    resetPassword(req.params.id, req.body),
   'DELETE /api/v1/users/:id': (req: MockRequest) => deleteUser(req.params.id),
   'POST /api/v1/user/avatar': 'ok',
-  'POST /api/v1/register': { msg: 'ok' }
+  'POST /api/v1/register': { msg: 'ok' },
 };

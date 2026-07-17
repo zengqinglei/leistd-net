@@ -22,19 +22,23 @@ import { AccountService } from '../../services/account-service';
   selector: 'app-external-auth-callback',
   imports: [CommonModule, ProgressSpinnerModule],
   template: `
-    <main class="flex min-h-screen items-center justify-center bg-surface-50 px-4 dark:bg-surface-950">
+    <main
+      class="flex min-h-screen items-center justify-center bg-surface-50 px-4 dark:bg-surface-950"
+    >
       <section class="text-center">
         @if (error()) {
           <h1 class="mb-3 text-2xl font-semibold text-red-500">{{ failedTitle() }}</h1>
           <p class="text-surface-600 dark:text-surface-300">{{ error() }}</p>
         } @else {
           <p-progress-spinner [ariaLabel]="processingAria()" />
-          <h1 class="mt-4 text-2xl font-semibold text-surface-900 dark:text-surface-0">{{ processingTitle() }}</h1>
+          <h1 class="mt-4 text-2xl font-semibold text-surface-900 dark:text-surface-0">
+            {{ processingTitle() }}
+          </h1>
         }
       </section>
     </main>
   `,
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ExternalAuthCallback implements OnInit {
   private authService = inject(AuthService);
@@ -50,8 +54,10 @@ export class ExternalAuthCallback implements OnInit {
   // 内联模板里的条件文案：.ts 的模板字符串区不支持 HTML 注释式条件指令，改用 getter 承载。
   //#if (IncludeLocalization)
   protected readonly failedTitle = () => this.transloco.translate('account.login.loginFailed');
-  protected readonly processingAria = () => this.transloco.translate('account.externalCallback.processingAria');
-  protected readonly processingTitle = () => this.transloco.translate('account.externalCallback.processing');
+  protected readonly processingAria = () =>
+    this.transloco.translate('account.externalCallback.processingAria');
+  protected readonly processingTitle = () =>
+    this.transloco.translate('account.externalCallback.processing');
   //#else
   protected readonly failedTitle = () => 'Login failed';
   protected readonly processingAria = () => 'Completing sign-in';
@@ -79,7 +85,9 @@ export class ExternalAuthCallback implements OnInit {
 
     try {
       // 1. 将 code+state 发送到后端建立 Cookie session
-      await lastValueFrom(this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }));
+      await lastValueFrom(
+        this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }),
+      );
 
       // 2. 加载用户信息并根据角色跳转
       await lastValueFrom(this.authService.loadUser());

@@ -1,5 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  model,
+  output,
+  signal,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
@@ -20,7 +30,11 @@ import { translationReady } from '../../../../../../core/i18n/translation-ready'
 import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { DIALOG_CONFIGS } from '../../../../../../shared/constants/dialog-config.constants';
 import { ROLE_LABEL_MAP } from '../../../../../../shared/models/role.enum';
-import { CreateUserInputDto, UpdateUserInputDto, UserManagementOutputDto } from '../../../../models/user-management.dto';
+import {
+  CreateUserInputDto,
+  UpdateUserInputDto,
+  UserManagementOutputDto,
+} from '../../../../models/user-management.dto';
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
 const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
@@ -42,10 +56,10 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
     ToggleSwitchModule,
     MultiSelectModule,
     DividerModule,
-    DialogLoadingComponent
+    DialogLoadingComponent,
   ],
   templateUrl: './user-edit-dialog.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserEditDialogComponent {
   visible = model(false);
@@ -61,13 +75,15 @@ export class UserEditDialogComponent {
   private readonly translationReady = translationReady(this.transloco);
   private readonly unnamedLabel = () => this.transloco.translate('users.editDialog.unnamedUser');
   readonly dialogHeader = () =>
-    this.transloco.translate(this.isEditMode() ? 'users.editDialog.editHeader' : 'users.editDialog.createHeader');
+    this.transloco.translate(
+      this.isEditMode() ? 'users.editDialog.editHeader' : 'users.editDialog.createHeader',
+    );
   readonly rolesPlaceholder = () => this.transloco.translate('users.editDialog.rolesPlaceholder');
   readonly avatarMessages = () => ({
     sizeSummary: this.transloco.translate('users.editDialog.avatarTooLargeSummary'),
     sizeDetail: this.transloco.translate('users.editDialog.avatarTooLargeDetail'),
     typeSummary: this.transloco.translate('users.editDialog.avatarBadTypeSummary'),
-    typeDetail: this.transloco.translate('users.editDialog.avatarBadTypeDetail')
+    typeDetail: this.transloco.translate('users.editDialog.avatarBadTypeDetail'),
   });
   //#else
   private readonly unnamedLabel = () => 'Unnamed user';
@@ -77,14 +93,17 @@ export class UserEditDialogComponent {
     sizeSummary: 'File too large',
     sizeDetail: 'The avatar size cannot exceed 1MB',
     typeSummary: 'Unsupported format',
-    typeDetail: 'Please upload a PNG, JPG or WEBP image'
+    typeDetail: 'Please upload a PNG, JPG or WEBP image',
   });
   //#endif
 
   dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly avatarPreview = signal('');
   readonly displayName = computed(
-    () => this.form.controls.displayName.value.trim() || this.form.controls.username.value.trim() || this.unnamedLabel()
+    () =>
+      this.form.controls.displayName.value.trim() ||
+      this.form.controls.username.value.trim() ||
+      this.unnamedLabel(),
   );
   readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
   readonly avatarStyle = computed(() => {
@@ -100,30 +119,43 @@ export class UserEditDialogComponent {
       { background: '#dcfce7', color: '#15803d' },
       { background: '#fef3c7', color: '#b45309' },
       { background: '#fce7f3', color: '#be185d' },
-      { background: '#ede9fe', color: '#6d28d9' }
+      { background: '#ede9fe', color: '#6d28d9' },
     ];
 
     return palette[total % palette.length];
   });
   readonly form = this.fb.nonNullable.group({
-    username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(64), Validators.pattern(/^[a-zA-Z0-9_]+$/)]],
+    username: [
+      '',
+      [
+        Validators.required,
+        Validators.minLength(3),
+        Validators.maxLength(64),
+        Validators.pattern(/^[a-zA-Z0-9_]+$/),
+      ],
+    ],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(256)]],
     displayName: ['', [Validators.maxLength(128)]],
     avatar: [''],
     password: ['', [Validators.required, Validators.pattern(PASSWORD_RULE)]],
     isActive: [true],
     isEmailVerified: [false],
-    roles: [['Member'], [Validators.required]]
+    roles: [['Member'], [Validators.required]],
   });
 
   //#if (IncludeLocalization)
   // 本地化模式：ROLE_LABEL_MAP 值是词条键，读 translationReady 建立依赖，资源就绪 / 语言切换时 computed 重算，标签重新翻译。
   readonly roleOptions = computed(() => {
     this.translationReady();
-    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label: this.transloco.translate(label), value }));
+    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
+      label: this.transloco.translate(label),
+      value,
+    }));
   });
   //#else
-  readonly roleOptions = computed(() => Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })));
+  readonly roleOptions = computed(() =>
+    Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })),
+  );
   //#endif
 
   constructor() {
@@ -143,7 +175,7 @@ export class UserEditDialogComponent {
         password: '',
         isActive: user?.isActive ?? true,
         isEmailVerified: user?.isEmailVerified ?? false,
-        roles: user ? [...user.roles] : ['Member']
+        roles: user ? [...user.roles] : ['Member'],
       });
       this.avatarPreview.set(avatar);
 
@@ -163,7 +195,11 @@ export class UserEditDialogComponent {
 
   hasAvatarImage() {
     const avatar = this.avatarPreview();
-    return avatar.startsWith('data:image/') || avatar.startsWith('http://') || avatar.startsWith('https://');
+    return (
+      avatar.startsWith('data:image/') ||
+      avatar.startsWith('http://') ||
+      avatar.startsWith('https://')
+    );
   }
 
   onAvatarSelect(event: FileSelectEvent) {
@@ -205,7 +241,7 @@ export class UserEditDialogComponent {
         avatar: model.avatar.trim() || undefined,
         isActive: model.isActive,
         isEmailVerified: model.isEmailVerified,
-        roles: model.roles
+        roles: model.roles,
       });
       return;
     }
@@ -218,7 +254,7 @@ export class UserEditDialogComponent {
       password: model.password,
       isActive: model.isActive,
       isEmailVerified: model.isEmailVerified,
-      roles: model.roles
+      roles: model.roles,
     });
   }
 

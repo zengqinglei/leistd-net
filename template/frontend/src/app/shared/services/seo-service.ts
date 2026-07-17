@@ -10,7 +10,7 @@ export interface SeoMetadata {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class SeoService {
   private readonly title = inject(Title);
@@ -23,7 +23,10 @@ export class SeoService {
     this.meta.updateTag({ property: 'og:title', content: metadata.title });
     this.meta.updateTag({ property: 'og:description', content: metadata.description });
     this.meta.updateTag({ property: 'og:type', content: 'website' });
-    this.meta.updateTag({ property: 'og:image', content: metadata.image ?? '/images/og-default.png' });
+    this.meta.updateTag({
+      property: 'og:image',
+      content: metadata.image ?? '/images/og-default.png',
+    });
 
     this.updateJsonLd(metadata.jsonLd);
   }

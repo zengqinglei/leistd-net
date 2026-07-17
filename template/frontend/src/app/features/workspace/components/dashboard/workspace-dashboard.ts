@@ -23,7 +23,7 @@ import { RoleLabelPipe } from '../../../../shared/pipes/role-label.pipe';
   imports: [CardModule, TagModule, RoleLabelPipe],
   //#endif
   templateUrl: './workspace-dashboard.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 //#if (IncludeLocalization)
 export class WorkspaceDashboardPage {

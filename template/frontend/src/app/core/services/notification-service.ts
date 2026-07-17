@@ -42,8 +42,8 @@ export class NotificationService {
     try {
       const items = await lastValueFrom(
         this.http.get<NotificationOutputDto[]>('/api/v1/notifications', {
-          params: { maxCount: maxCount.toString() }
-        })
+          params: { maxCount: maxCount.toString() },
+        }),
       );
 
       const incoming = items ?? [];
@@ -51,11 +51,13 @@ export class NotificationService {
       const pushed = this.signalR.notifications();
       const merged = [...incoming];
       for (const n of pushed) {
-        if (!merged.some(m => m.id === n.id)) {
+        if (!merged.some((m) => m.id === n.id)) {
           merged.unshift(n);
         }
       }
-      merged.sort((a, b) => new Date(b.creationTime).getTime() - new Date(a.creationTime).getTime());
+      merged.sort(
+        (a, b) => new Date(b.creationTime).getTime() - new Date(a.creationTime).getTime(),
+      );
       this.signalR.notifications.set(merged);
     } catch (err) {
       console.error('[NotificationService] Load failed:', err);
@@ -68,7 +70,9 @@ export class NotificationService {
   async markAsRead(notificationId: string): Promise<void> {
     try {
       await lastValueFrom(this.http.put(`/api/v1/notifications/${notificationId}/read`, {}));
-      this.signalR.notifications.update(list => list.map(n => (n.id === notificationId ? { ...n, isRead: true } : n)));
+      this.signalR.notifications.update((list) =>
+        list.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)),
+      );
     } catch (err) {
       console.error('[NotificationService] MarkAsRead failed:', err);
     }
@@ -78,7 +82,7 @@ export class NotificationService {
   async markAllAsRead(): Promise<void> {
     try {
       await lastValueFrom(this.http.put('/api/v1/notifications/read-all', {}));
-      this.signalR.notifications.update(list => list.map(n => ({ ...n, isRead: true })));
+      this.signalR.notifications.update((list) => list.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
       console.error('[NotificationService] MarkAllAsRead failed:', err);
     }

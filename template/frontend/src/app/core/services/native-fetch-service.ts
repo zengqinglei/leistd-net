@@ -5,7 +5,7 @@ import { SSE_MOCK_REGISTRY } from '../../../../_mock/core/sse-mock-registry';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class NativeFetchService {
   private readonly platformId = inject(PLATFORM_ID);
@@ -40,7 +40,7 @@ export class NativeFetchService {
 
     const newInit: RequestInit = {
       ...init,
-      headers
+      headers,
     };
 
     const useMock = environment.useMock;
@@ -59,12 +59,15 @@ export class NativeFetchService {
   }
 
   private createMockSseResponse(
-    mockHandler: (body?: unknown, context?: { url: string; method: string; headers?: Headers }) => unknown[],
+    mockHandler: (
+      body?: unknown,
+      context?: { url: string; method: string; headers?: Headers },
+    ) => unknown[],
     init: RequestInit | undefined,
     url: string,
-    method: string
+    method: string,
   ): Promise<Response> {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       let requestBody: unknown;
       if (init?.body) {
         try {
@@ -77,7 +80,7 @@ export class NativeFetchService {
       const mockData = mockHandler(requestBody, {
         url,
         method,
-        headers: init?.headers instanceof Headers ? init.headers : new Headers(init?.headers)
+        headers: init?.headers instanceof Headers ? init.headers : new Headers(init?.headers),
       });
 
       const stream = new ReadableStream({
@@ -98,7 +101,7 @@ export class NativeFetchService {
           };
 
           pushChunk();
-        }
+        },
       });
 
       resolve(
@@ -107,9 +110,9 @@ export class NativeFetchService {
           headers: {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
-            Connection: 'keep-alive'
-          }
-        })
+            Connection: 'keep-alive',
+          },
+        }),
       );
     });
   }

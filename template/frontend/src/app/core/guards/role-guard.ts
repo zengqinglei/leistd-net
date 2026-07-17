@@ -13,7 +13,7 @@ export const roleGuard: CanActivateFn = (route, _state) => {
 
   // Wait for startup service to complete loading user data
   return toObservable(startupService.status).pipe(
-    filter(status => status !== 'loading'),
+    filter((status) => status !== 'loading'),
     take(1),
     map(() => {
       const requiredRole = route.data['role'];
@@ -25,6 +25,6 @@ export const roleGuard: CanActivateFn = (route, _state) => {
       // Redirect to an unauthorized page or home
       // For now, redirect to workspace
       return router.parseUrl('/workspace');
-    })
+    }),
   );
 };

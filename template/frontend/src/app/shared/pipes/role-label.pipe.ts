@@ -14,7 +14,7 @@ import { ROLE_LABEL_MAP } from '../models/role.enum';
 //#endif
 @Pipe({
   name: 'roleLabel',
-  standalone: true
+  standalone: true,
 })
 export class RoleLabelPipe implements PipeTransform {
   transform(value: string | undefined | null): string {

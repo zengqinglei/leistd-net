@@ -36,13 +36,13 @@ export const environmentBase: Environment = {
     authService: {
       url: '/auth-service',
       refreshTokenEnabled: true,
-      refreshTokenType: 'auth-refresh'
+      refreshTokenType: 'auth-refresh',
     },
     appService: {
-      url: '/app-service'
+      url: '/app-service',
     },
     envService: {
-      url: '/env-service'
-    }
-  }
+      url: '/env-service',
+    },
+  },
 };

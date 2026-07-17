@@ -16,12 +16,19 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
 @Component({
   selector: 'app-reset-user-password-dialog',
   //#if (IncludeLocalization)
-  imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, PasswordModule, TranslocoModule],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    DialogModule,
+    ButtonModule,
+    PasswordModule,
+    TranslocoModule,
+  ],
   //#else
   imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, PasswordModule],
   //#endif
   templateUrl: './reset-user-password-dialog.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ResetUserPasswordDialogComponent {
   visible = model(false);
@@ -38,7 +45,7 @@ export class ResetUserPasswordDialogComponent {
 
   dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly form = this.fb.nonNullable.group({
-    password: ['', [Validators.required, Validators.pattern(PASSWORD_RULE)]]
+    password: ['', [Validators.required, Validators.pattern(PASSWORD_RULE)]],
   });
 
   hasPasswordRuleError() {

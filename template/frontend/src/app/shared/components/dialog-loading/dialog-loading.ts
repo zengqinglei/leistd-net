@@ -20,7 +20,7 @@ import { translationReady } from '../../../core/i18n/translation-ready';
       <div class="text-sm text-muted-color">{{ displayText() }}</div>
     </div>
   `,
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DialogLoadingComponent {
   // 调用方可显式传入文本；未传入时回退到默认加载文案。

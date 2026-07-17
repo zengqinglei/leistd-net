@@ -10,6 +10,6 @@ import { TranslocoModule } from '@jsverse/transloco';
   imports: [TranslocoModule],
   //#endif
   templateUrl: './workspace-placeholder.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WorkspacePlaceholder {}

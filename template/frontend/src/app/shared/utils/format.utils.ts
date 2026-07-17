@@ -79,8 +79,10 @@ export function formatDurationVerbose(ms: number | undefined | null): string {
   const seconds = totalSeconds % 60;
 
   if (years > 0) return `${years}y${days > 0 ? `${days}d` : ''}`;
-  if (days > 0) return `${days}d${hours > 0 ? `${hours}h` : ''}${minutes > 0 ? `${minutes}min` : ''}`;
-  if (hours > 0) return `${hours}h${minutes > 0 ? `${minutes}min` : ''}${seconds > 0 ? `${seconds}s` : ''}`;
+  if (days > 0)
+    return `${days}d${hours > 0 ? `${hours}h` : ''}${minutes > 0 ? `${minutes}min` : ''}`;
+  if (hours > 0)
+    return `${hours}h${minutes > 0 ? `${minutes}min` : ''}${seconds > 0 ? `${seconds}s` : ''}`;
   if (minutes > 0) return `${minutes}min${seconds > 0 ? `${seconds}s` : ''}`;
   return `${seconds}s`;
 }

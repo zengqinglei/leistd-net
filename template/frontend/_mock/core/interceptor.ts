@@ -1,4 +1,11 @@
-import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent, HttpResponse, HttpErrorResponse } from '@angular/common/http';
+import {
+  HttpInterceptor,
+  HttpRequest,
+  HttpHandler,
+  HttpEvent,
+  HttpResponse,
+  HttpErrorResponse,
+} from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { Observable, of, from, throwError } from 'rxjs';
 import { mergeMap, delay, tap, catchError } from 'rxjs/operators';
@@ -26,13 +33,13 @@ export class MockInterceptor implements HttpInterceptor {
             new HttpErrorResponse({
               error: {
                 code: 'MOCK_ROUTE_NOT_FOUND',
-                message: `Mock API is not defined: ${method.toUpperCase()} ${this.getUrlPath(url)}`
+                message: `Mock API is not defined: ${method.toUpperCase()} ${this.getUrlPath(url)}`,
               },
               headers: errorHeaders,
               status: 501,
               statusText: 'Mock Route Not Found',
-              url
-            })
+              url,
+            }),
         );
       }
 
@@ -49,7 +56,7 @@ export class MockInterceptor implements HttpInterceptor {
       queryParams: params.keys().reduce((acc, key) => ({ ...acc, [key]: params.getAll(key) }), {}),
       headers,
       body,
-      params: matchingRule.urlParams
+      params: matchingRule.urlParams,
     };
 
     // Log the request immediately
@@ -65,24 +72,26 @@ export class MockInterceptor implements HttpInterceptor {
         } catch (error) {
           reject(error);
         }
-      })
+      }),
     );
 
     return result$.pipe(
       mergeMap((result: MockResponse | any) => {
         const response =
-          result && typeof result.status !== 'undefined' ? new HttpResponse(result) : new HttpResponse({ status: 200, body: result });
+          result && typeof result.status !== 'undefined'
+            ? new HttpResponse(result)
+            : new HttpResponse({ status: 200, body: result });
 
         const delayTime = (result as MockResponse)?.delay ?? mockEnv.delay ?? 0;
 
         return of(response).pipe(delay(delayTime));
       }),
-      tap(response => {
+      tap((response) => {
         if (mockEnv.log) {
           this.log('Mock response for', method, url, response, 'log');
         }
       }),
-      catchError(error => {
+      catchError((error) => {
         if (mockEnv.log) {
           this.log('Mock error for', method, url, error, 'error');
         }
@@ -96,16 +105,19 @@ export class MockInterceptor implements HttpInterceptor {
                 headers: headers,
                 status: error.status,
                 statusText: 'Mock Error',
-                url: req.url
-              })
+                url: req.url,
+              }),
           );
         }
         return throwError(() => error);
-      })
+      }),
     );
   }
 
-  private findMatchingRule(method: string, url: string): { handler: (req: MockRequest) => any; urlParams: any } | null {
+  private findMatchingRule(
+    method: string,
+    url: string,
+  ): { handler: (req: MockRequest) => any; urlParams: any } | null {
     const urlPath = this.getUrlPath(url);
 
     // 首先尝试精确匹配（不带参数的路由）
@@ -123,7 +135,7 @@ export class MockInterceptor implements HttpInterceptor {
       const match = urlPath.match(pattern);
 
       if (apiMethod === method.toUpperCase() && match) {
-        const paramNames = (apiRoute.match(/:\w+/g) || []).map(name => name.substring(1));
+        const paramNames = (apiRoute.match(/:\w+/g) || []).map((name) => name.substring(1));
         const urlParams = paramNames.reduce((acc, name, index) => {
           acc[name] = match[index + 1];
           return acc;
@@ -150,7 +162,9 @@ export class MockInterceptor implements HttpInterceptor {
 
   private shouldMock(url: string, mockEnv: Partial<MockConfig>): boolean {
     const urlPath = this.getUrlPath(url);
-    const includeMatched = mockEnv.include ? this.matchesPatterns(urlPath, mockEnv.include) : Boolean(mockEnv.enable);
+    const includeMatched = mockEnv.include
+      ? this.matchesPatterns(urlPath, mockEnv.include)
+      : Boolean(mockEnv.enable);
     const excludeMatched = mockEnv.exclude ? this.matchesPatterns(urlPath, mockEnv.exclude) : false;
 
     return includeMatched && !excludeMatched;
@@ -158,7 +172,7 @@ export class MockInterceptor implements HttpInterceptor {
 
   private matchesPatterns(urlPath: string, patterns: string | string[]): boolean {
     const normalizedPatterns = Array.isArray(patterns) ? patterns : [patterns];
-    return normalizedPatterns.some(pattern => new RegExp(pattern).test(urlPath));
+    return normalizedPatterns.some((pattern) => new RegExp(pattern).test(urlPath));
   }
 
   private getMockConfig(): Partial<MockConfig> {
@@ -166,7 +180,13 @@ export class MockInterceptor implements HttpInterceptor {
     return typeof config === 'boolean' ? { enable: config } : config;
   }
 
-  private log(title: string, method: string, url: string, data: any, level: 'log' | 'error' = 'log'): void {
+  private log(
+    title: string,
+    method: string,
+    url: string,
+    data: any,
+    level: 'log' | 'error' = 'log',
+  ): void {
     const titleStyle = `color: ${level === 'error' ? '#F44336' : '#4CAF50'}; font-weight: bold;`;
     const urlStyle = 'color: #3498db;';
 

@@ -3,7 +3,7 @@ import { HttpHeaders, HttpRequest } from '@angular/common/http';
 export class MockException extends Error {
   constructor(
     public status: number,
-    public error?: any
+    public error?: any,
   ) {
     super();
   }

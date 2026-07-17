@@ -30,7 +30,7 @@ export const USERS: MockUser[] = [
     isEmailVerified: true,
     creationTime: '2025-01-01T00:00:00Z',
     lastLoginTime: '2026-06-10T08:00:00Z',
-    roles: ['Admin']
+    roles: ['Admin'],
   },
   {
     id: 'user_demo',
@@ -44,8 +44,8 @@ export const USERS: MockUser[] = [
     isEmailVerified: true,
     creationTime: '2025-06-01T00:00:00Z',
     lastLoginTime: '2026-06-09T12:00:00Z',
-    roles: ['Member']
-  }
+    roles: ['Member'],
+  },
 ];
 
 export function toUserOutput(user: MockUser): UserOutputDto {
@@ -59,7 +59,7 @@ export function toUserOutput(user: MockUser): UserOutputDto {
     isActive: user.isActive,
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
-    roles: user.roles
+    roles: user.roles,
   };
 }
 
@@ -75,6 +75,6 @@ export function toUserManagementOutput(user: MockUser): UserManagementOutputDto 
     roles: user.roles,
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
-    lastLoginTime: user.lastLoginTime
+    lastLoginTime: user.lastLoginTime,
   };
 }

@@ -1,5 +1,13 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -24,12 +32,29 @@ export interface UserTableFilterEvent {
 @Component({
   selector: 'app-user-table',
   //#if (IncludeLocalization)
-  imports: [CommonModule, TableModule, ButtonModule, TagModule, TooltipModule, PopoverModule, AvatarModule, TranslocoModule],
+  imports: [
+    CommonModule,
+    TableModule,
+    ButtonModule,
+    TagModule,
+    TooltipModule,
+    PopoverModule,
+    AvatarModule,
+    TranslocoModule,
+  ],
   //#else
-  imports: [CommonModule, TableModule, ButtonModule, TagModule, TooltipModule, PopoverModule, AvatarModule],
+  imports: [
+    CommonModule,
+    TableModule,
+    ButtonModule,
+    TagModule,
+    TooltipModule,
+    PopoverModule,
+    AvatarModule,
+  ],
   //#endif
   templateUrl: './user-table.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserTable {
   private readonly authService = inject(AuthService);
@@ -38,10 +63,13 @@ export class UserTable {
 
   readonly currentPageReport = () => this.transloco.translate('users.table.currentPageReport');
 
-  readonly statusLabel = (isActive: boolean) => this.transloco.translate(isActive ? 'users.status.active' : 'users.status.inactive');
+  readonly statusLabel = (isActive: boolean) =>
+    this.transloco.translate(isActive ? 'users.status.active' : 'users.status.inactive');
 
   readonly emailVerifiedLabel = (verified: boolean) =>
-    this.transloco.translate(verified ? 'users.status.emailVerified' : 'users.status.emailUnverified');
+    this.transloco.translate(
+      verified ? 'users.status.emailVerified' : 'users.status.emailUnverified',
+    );
 
   readonly editTooltip = (otherSuperAdmin: boolean) =>
     this.transloco.translate(otherSuperAdmin ? 'users.tooltip.superAdminNoEdit' : 'common.edit');
@@ -54,11 +82,13 @@ export class UserTable {
           ? 'users.tooltip.superAdminNoDisableSelf'
           : item.isActive
             ? 'users.tooltip.disable'
-            : 'users.tooltip.enable'
+            : 'users.tooltip.enable',
     );
 
   readonly resetPasswordTooltip = (otherSuperAdmin: boolean) =>
-    this.transloco.translate(otherSuperAdmin ? 'users.tooltip.superAdminNoReset' : 'users.tooltip.resetPassword');
+    this.transloco.translate(
+      otherSuperAdmin ? 'users.tooltip.superAdminNoReset' : 'users.tooltip.resetPassword',
+    );
 
   readonly deleteTooltip = (superAdmin: boolean) =>
     this.transloco.translate(superAdmin ? 'users.tooltip.superAdminNoDelete' : 'common.delete');
@@ -67,10 +97,13 @@ export class UserTable {
 
   readonly statusLabel = (isActive: boolean) => (isActive ? 'Active' : 'Disabled');
 
-  readonly emailVerifiedLabel = (verified: boolean) => (verified ? 'Email verified' : 'Email not verified');
+  readonly emailVerifiedLabel = (verified: boolean) =>
+    verified ? 'Email verified' : 'Email not verified';
 
   readonly editTooltip = (otherSuperAdmin: boolean) =>
-    otherSuperAdmin ? 'The built-in super administrator cannot be updated by other administrators' : 'Edit';
+    otherSuperAdmin
+      ? 'The built-in super administrator cannot be updated by other administrators'
+      : 'Edit';
 
   readonly toggleActiveTooltip = (item: UserManagementOutputDto) =>
     this.isOtherSuperAdmin(item)
@@ -82,9 +115,12 @@ export class UserTable {
           : 'Enable';
 
   readonly resetPasswordTooltip = (otherSuperAdmin: boolean) =>
-    otherSuperAdmin ? "The built-in super administrator's password cannot be reset by other administrators" : 'Reset password';
+    otherSuperAdmin
+      ? "The built-in super administrator's password cannot be reset by other administrators"
+      : 'Reset password';
 
-  readonly deleteTooltip = (superAdmin: boolean) => (superAdmin ? 'The built-in super administrator cannot be deleted' : 'Delete');
+  readonly deleteTooltip = (superAdmin: boolean) =>
+    superAdmin ? 'The built-in super administrator cannot be deleted' : 'Delete';
   //#endif
 
   users = input.required<UserManagementOutputDto[]>();
@@ -103,7 +139,9 @@ export class UserTable {
   sortOrder = signal(1);
   activeRoles = signal<string[]>([]);
   //#if (IncludeLocalization)
-  rolePopoverTitle = computed(() => this.transloco.translate('users.popover.rolesTitle', { count: this.activeRoles().length }));
+  rolePopoverTitle = computed(() =>
+    this.transloco.translate('users.popover.rolesTitle', { count: this.activeRoles().length }),
+  );
   //#else
   rolePopoverTitle = computed(() => `Roles (${this.activeRoles().length})`);
   //#endif
@@ -118,7 +156,7 @@ export class UserTable {
     this.filterChange.emit({
       offset: this.first,
       limit: this.rows,
-      sorting: `${this.sortField()} ${this.sortOrder() === 1 ? 'asc' : 'desc'}`
+      sorting: `${this.sortField()} ${this.sortOrder() === 1 ? 'asc' : 'desc'}`,
     });
   }
 
@@ -151,7 +189,7 @@ export class UserTable {
     const roleMap: Record<Role, 'success' | 'info' | 'warn' | 'danger' | 'secondary'> = {
       [Role.Admin]: 'danger',
       [Role.Operator]: 'warn',
-      [Role.Member]: 'info'
+      [Role.Member]: 'info',
     };
     return roleMap[role as Role] ?? 'secondary';
   }

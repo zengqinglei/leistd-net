@@ -1,7 +1,7 @@
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
-  UpdateOpenApplicationInputDto
+  UpdateOpenApplicationInputDto,
 } from '../../src/app/features/platform/models/open-application.dto';
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
@@ -16,7 +16,9 @@ function toOutput(item: MockOpenApplication): OpenApplicationOutputDto {
 
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;
-  return normalized === undefined || normalized === null || normalized === '' ? undefined : String(normalized);
+  return normalized === undefined || normalized === null || normalized === ''
+    ? undefined
+    : String(normalized);
 }
 
 function sortApplications(items: MockOpenApplication[], sorting?: unknown) {
@@ -42,15 +44,19 @@ function getOpenApplications(req: MockRequest) {
 
   if (keyword) {
     const value = keyword.trim().toLowerCase();
-    items = items.filter(item => item.clientId.toLowerCase().includes(value) || (item.displayName ?? '').toLowerCase().includes(value));
+    items = items.filter(
+      (item) =>
+        item.clientId.toLowerCase().includes(value) ||
+        (item.displayName ?? '').toLowerCase().includes(value),
+    );
   }
 
   if (applicationType) {
-    items = items.filter(item => item.applicationType === applicationType);
+    items = items.filter((item) => item.applicationType === applicationType);
   }
 
   if (clientType) {
-    items = items.filter(item => item.clientType === clientType);
+    items = items.filter((item) => item.clientType === clientType);
   }
 
   items = sortApplications(items, sorting);
@@ -61,7 +67,7 @@ function getOpenApplications(req: MockRequest) {
 
   return {
     totalCount,
-    items: items.slice(start, end).map(toOutput)
+    items: items.slice(start, end).map(toOutput),
   } as PagedResultDto<OpenApplicationOutputDto>;
 }
 
@@ -74,13 +80,18 @@ function getOpenApplication(req: MockRequest) {
   return toOutput(application);
 }
 
-function validateApplication(input: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto, id?: string) {
+function validateApplication(
+  input: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto,
+  id?: string,
+) {
   if ('clientId' in input) {
     const clientId = input.clientId.trim();
     if (!clientId) {
       throw new MockException(400, { message: 'Client ID is required' });
     }
-    if (applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)) {
+    if (
+      applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)
+    ) {
       throw new MockException(400, { message: `Client ID already exists: ${clientId}` });
     }
   }
@@ -89,7 +100,10 @@ function validateApplication(input: CreateOpenApplicationInputDto | UpdateOpenAp
     throw new MockException(400, { message: 'Public clients cannot configure a client secret' });
   }
 
-  if ((input.applicationType === 'native' || input.clientType === 'public') && !input.requirements.includes('ft:pkce')) {
+  if (
+    (input.applicationType === 'native' || input.clientType === 'public') &&
+    !input.requirements.includes('ft:pkce')
+  ) {
     throw new MockException(400, { message: 'Native/Public clients must enable PKCE' });
   }
 }
@@ -113,7 +127,8 @@ function createOpenApplication(req: MockRequest) {
     properties: {},
     hasClientSecret: body.clientType === 'confidential',
     creationTime: new Date().toISOString(),
-    clientSecret: body.clientType === 'confidential' ? `mock-secret-${crypto.randomUUID()}` : undefined
+    clientSecret:
+      body.clientType === 'confidential' ? `mock-secret-${crypto.randomUUID()}` : undefined,
   };
 
   applications.unshift(newApplication);
@@ -141,7 +156,7 @@ function updateOpenApplication(req: MockRequest) {
     permissions: body.permissions || [],
     requirements: body.requirements || [],
     hasClientSecret: body.clientType === 'confidential' && applications[index].hasClientSecret,
-    clientSecret: body.clientType === 'confidential' ? applications[index].clientSecret : undefined
+    clientSecret: body.clientType === 'confidential' ? applications[index].clientSecret : undefined,
   };
 
   return toOutput(applications[index]);
@@ -178,5 +193,6 @@ export const OPEN_APPLICATION_API = {
   'POST /api/v1/open-applications': (req: MockRequest) => createOpenApplication(req),
   'PUT /api/v1/open-applications/:id': (req: MockRequest) => updateOpenApplication(req),
   'DELETE /api/v1/open-applications/:id': (req: MockRequest) => deleteOpenApplication(req),
-  'POST /api/v1/open-applications/:id/reset-secret': (req: MockRequest) => resetOpenApplicationSecret(req)
+  'POST /api/v1/open-applications/:id/reset-secret': (req: MockRequest) =>
+    resetOpenApplicationSecret(req),
 };

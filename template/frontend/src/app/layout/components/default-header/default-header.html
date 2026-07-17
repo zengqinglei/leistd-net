@@ -5,7 +5,14 @@
   <!-- Breadcrumb / Title & Toggle -->
   <div class="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
     <!-- Sidebar Toggle -->
-    <p-button icon="pi pi-bars" [text]="true" [rounded]="true" severity="secondary" (onClick)="handleMenuToggle()"> </p-button>
+    <p-button
+      icon="pi pi-bars"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      (onClick)="handleMenuToggle()"
+    >
+    </p-button>
 
     <!-- Breadcrumb: 响应式 -->
     <div class="flex items-center gap-2 text-sm overflow-hidden">
@@ -22,7 +29,13 @@
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
     <!-- Theme Toggle -->
-    <p-button [icon]="themeService.modeIcon()" [text]="true" [rounded]="true" severity="secondary" (onClick)="themeService.toggleTheme()">
+    <p-button
+      [icon]="themeService.modeIcon()"
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      (onClick)="themeService.toggleTheme()"
+    >
     </p-button>
 
     <!-- Configurator: 桌面端显示 -->
@@ -70,20 +83,32 @@
 
       <p-popover #notificationPopover [pt]="{ content: { class: '!p-0' } }">
         <div class="w-[360px] max-w-[90vw]">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700">
+          <div
+            class="flex items-center justify-between px-4 py-3 border-b border-surface-200 dark:border-surface-700"
+          >
             <!--#if (IncludeLocalization)-->
-            <span class="font-semibold text-color">{{ 'layout.notifications.title' | transloco }}</span>
+            <span class="font-semibold text-color">{{
+              'layout.notifications.title' | transloco
+            }}</span>
             @if (notificationCount() > 0) {
-              <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()">
+              <button
+                type="button"
+                class="text-xs text-primary hover:underline"
+                (click)="markAllNotificationsRead()"
+              >
                 {{ 'layout.notifications.markAllRead' | transloco }}
               </button>
             }
             <!--#else-->
             <span class="font-semibold text-color">Notifications</span>
             @if (notificationCount() > 0) {
-              <button type="button" class="text-xs text-primary hover:underline" (click)="markAllNotificationsRead()"
-                >Mark all as read</button
+              <button
+                type="button"
+                class="text-xs text-primary hover:underline"
+                (click)="markAllNotificationsRead()"
               >
+                Mark all as read
+              </button>
             }
             <!--#endif-->
           </div>
@@ -105,7 +130,9 @@
                   (click)="onNotificationClick(n)"
                 >
                   <!-- 图标：统一中性灰，仅形状按类型区分；大小撑满标题+内容高度，垂直居中 -->
-                  <span class="flex items-center justify-center shrink-0 self-stretch aspect-square">
+                  <span
+                    class="flex items-center justify-center shrink-0 self-stretch aspect-square"
+                  >
                     <i class="pi {{ notificationIcon(n.type) }} text-muted-color text-2xl"></i>
                   </span>
                   <span class="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
@@ -125,7 +152,9 @@
                         @if (!n.isRead) {
                           <span class="w-2 h-2 bg-primary rounded-full"></span>
                         }
-                        <span class="text-[11px] text-muted-color whitespace-nowrap">{{ n.creationTime | date: 'MM-dd HH:mm' }}</span>
+                        <span class="text-[11px] text-muted-color whitespace-nowrap">{{
+                          n.creationTime | date: 'MM-dd HH:mm'
+                        }}</span>
                       </span>
                     </span>
                     <!-- 内容：始终占一行（无描述时渲染空占位），使每条通知高度一致；截断时 hover 显示完整；pr-6 与右侧留白 -->
@@ -149,7 +178,12 @@
       </p-popover>
     </div>
     <!--#else-->
-    <p-button [text]="true" [rounded]="true" severity="secondary" styleClass="min-w-[36px] min-h-[36px] !overflow-visible">
+    <p-button
+      [text]="true"
+      [rounded]="true"
+      severity="secondary"
+      styleClass="min-w-[36px] min-h-[36px] !overflow-visible"
+    >
       <i class="pi pi-bell"></i>
     </p-button>
     <!--#endif-->
@@ -159,7 +193,6 @@
     <!--#endif-->
 
     <div class="h-6 w-px bg-surface-200 dark:bg-surface-700 mx-1"></div>
-
     <!--#if (IncludeIdentity)-->
     <!-- User Dropdown: 始终显示用户名 -->
     @if (authService.currentUser(); as user) {
@@ -172,13 +205,24 @@
           styleClass="flex items-center gap-2 md:gap-3 p-1.5 border-transparent transition-colors min-h-[44px]"
           (onClick)="userMenu.toggle($event)"
         >
-          <p-avatar [image]="user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username" shape="circle"></p-avatar>
+          <p-avatar
+            [image]="
+              user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username
+            "
+            shape="circle"
+          ></p-avatar>
           <div class="flex items-center gap-2">
-            <p class="text-sm font-medium text-color leading-none truncate max-w-[80px] md:max-w-none">
+            <p
+              class="text-sm font-medium text-color leading-none truncate max-w-[80px] md:max-w-none"
+            >
               {{ user.nickname || user.username }}
             </p>
             @if (user.isAdmin()) {
-              <i class="pi pi-verified text-primary text-xs hidden md:inline" [pTooltip]="adminTooltip()" tooltipPosition="bottom"></i>
+              <i
+                class="pi pi-verified text-primary text-xs hidden md:inline"
+                [pTooltip]="adminTooltip()"
+                tooltipPosition="bottom"
+              ></i>
             }
           </div>
           <i class="pi pi-angle-down text-muted-color text-xs ml-1"></i>
@@ -188,9 +232,15 @@
     <!--#endif-->
   </div>
 </header>
-
 <!--#if (IncludeIdentity)-->
-<app-profile-settings-dialog [visible]="profileDialogVisible()" (visibleChange)="profileDialogVisible.set($event)" />
 
-<app-change-password-dialog [visible]="changePasswordDialogVisible()" (visibleChange)="changePasswordDialogVisible.set($event)" />
+<app-profile-settings-dialog
+  [visible]="profileDialogVisible()"
+  (visibleChange)="profileDialogVisible.set($event)"
+/>
+
+<app-change-password-dialog
+  [visible]="changePasswordDialogVisible()"
+  (visibleChange)="changePasswordDialogVisible.set($event)"
+/>
 <!--#endif-->

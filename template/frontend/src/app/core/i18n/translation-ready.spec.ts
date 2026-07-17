@@ -1,6 +1,17 @@
-import { computed, Injector, provideZonelessChangeDetection, runInInjectionContext } from '@angular/core';
+import {
+  computed,
+  Injector,
+  provideZonelessChangeDetection,
+  runInInjectionContext,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideTransloco, Translation, TranslocoLoader, TranslocoService, TRANSLOCO_LOADER } from '@jsverse/transloco';
+import {
+  provideTransloco,
+  Translation,
+  TranslocoLoader,
+  TranslocoService,
+  TRANSLOCO_LOADER,
+} from '@jsverse/transloco';
 import { Subject } from 'rxjs';
 
 import { translationReady } from './translation-ready';
@@ -37,10 +48,10 @@ describe('translationReady', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideTransloco({
-          config: { availableLangs: ['en', 'zh-CN'], defaultLang: 'en', fallbackLang: 'en' }
+          config: { availableLangs: ['en', 'zh-CN'], defaultLang: 'en', fallbackLang: 'en' },
         }),
-        { provide: TRANSLOCO_LOADER, useValue: loader }
-      ]
+        { provide: TRANSLOCO_LOADER, useValue: loader },
+      ],
     });
     transloco = TestBed.inject(TranslocoService);
     injector = TestBed.inject(Injector);

@@ -25,13 +25,13 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
       'scp:profile',
       'scp:email',
       'scp:roles',
-      'scp:offline_access'
+      'scp:offline_access',
     ],
     requirements: ['ft:pkce'],
     settings: {},
     properties: {},
     hasClientSecret: false,
-    creationTime: '2026-05-01T09:00:00Z'
+    creationTime: '2026-05-01T09:00:00Z',
   },
   {
     id: 'companyname-projectname-desktop',
@@ -53,13 +53,13 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
       'scp:profile',
       'scp:email',
       'scp:roles',
-      'scp:offline_access'
+      'scp:offline_access',
     ],
     requirements: ['ft:pkce'],
     settings: {},
     properties: {},
     hasClientSecret: false,
-    creationTime: '2026-05-02T10:30:00Z'
+    creationTime: '2026-05-02T10:30:00Z',
   },
   {
     id: 'companyname-projectname-service',
@@ -76,6 +76,6 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     properties: {},
     hasClientSecret: true,
     creationTime: '2026-05-03T14:15:00Z',
-    clientSecret: 'mock-service-secret'
-  }
+    clientSecret: 'mock-service-secret',
+  },
 ];

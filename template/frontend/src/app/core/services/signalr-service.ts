@@ -1,5 +1,10 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { HubConnectionBuilder, HubConnection, LogLevel, HttpTransportType } from '@microsoft/signalr';
+import {
+  HubConnectionBuilder,
+  HubConnection,
+  LogLevel,
+  HttpTransportType,
+} from '@microsoft/signalr';
 
 import { environment } from '../../../environments/environment';
 
@@ -30,7 +35,7 @@ export class SignalRService {
 
   // ── 通知状态 ──
   readonly notifications = signal<NotificationOutputDto[]>([]);
-  readonly unreadCount = computed(() => this.notifications().filter(n => !n.isRead).length);
+  readonly unreadCount = computed(() => this.notifications().filter((n) => !n.isRead).length);
 
   // ── 业务事件（通用）：最近一次收到的资源事件 ──
   readonly lastResourceEvent = signal<{ eventName: string; payload: unknown } | null>(null);
@@ -70,7 +75,9 @@ export class SignalRService {
   registerResourceEvent(eventName: string): void {
     if (this.resourceEventNames.has(eventName)) return;
     this.resourceEventNames.add(eventName);
-    this.businessConnection?.on(eventName, (payload: unknown) => this.lastResourceEvent.set({ eventName, payload }));
+    this.businessConnection?.on(eventName, (payload: unknown) =>
+      this.lastResourceEvent.set({ eventName, payload }),
+    );
   }
 
   /** 订阅资源变更。 */
@@ -113,15 +120,18 @@ export class SignalRService {
   private async connectNotificationHub(): Promise<void> {
     this.notificationConnection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/notifications'), {
-        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling
+        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(LogLevel.Information)
       .build();
 
-    this.notificationConnection.on('NotificationReceived', (notification: NotificationOutputDto) => {
-      this.notifications.update(list => [notification, ...list]);
-    });
+    this.notificationConnection.on(
+      'NotificationReceived',
+      (notification: NotificationOutputDto) => {
+        this.notifications.update((list) => [notification, ...list]);
+      },
+    );
 
     this.notificationConnection.onreconnecting(() => this.isConnected.set(false));
     this.notificationConnection.onreconnected(() => this.isConnected.set(true));
@@ -132,7 +142,7 @@ export class SignalRService {
   private async connectBusinessHub(): Promise<void> {
     this.businessConnection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/realtime'), {
-        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling
+        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(LogLevel.Information)
@@ -140,7 +150,9 @@ export class SignalRService {
 
     // 重新挂载已注册的事件监听
     for (const eventName of this.resourceEventNames) {
-      this.businessConnection.on(eventName, (payload: unknown) => this.lastResourceEvent.set({ eventName, payload }));
+      this.businessConnection.on(eventName, (payload: unknown) =>
+        this.lastResourceEvent.set({ eventName, payload }),
+      );
     }
 
     this.businessConnection.onreconnected(async () => {

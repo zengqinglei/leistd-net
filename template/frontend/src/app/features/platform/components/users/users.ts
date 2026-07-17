@@ -1,9 +1,26 @@
 import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#else
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#endif
 import { FormsModule } from '@angular/forms';
@@ -31,7 +48,7 @@ import {
   CreateUserInputDto,
   ResetUserPasswordInputDto,
   UpdateUserInputDto,
-  UserManagementOutputDto
+  UserManagementOutputDto,
 } from '../../models/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
 import { ResetUserPasswordDialogComponent } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
@@ -55,11 +72,11 @@ import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table
     //#endif
     UserTable,
     UserEditDialogComponent,
-    ResetUserPasswordDialogComponent
+    ResetUserPasswordDialogComponent,
   ],
   providers: [ConfirmationService],
   templateUrl: './users.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UsersPage implements OnInit {
   private readonly service = inject(UserManagementService);
@@ -106,7 +123,7 @@ export class UsersPage implements OnInit {
     this.translationReady();
     return [
       { label: this.transloco.translate('users.status.active'), value: true },
-      { label: this.transloco.translate('users.status.inactive'), value: false }
+      { label: this.transloco.translate('users.status.inactive'), value: false },
     ];
   });
 
@@ -114,32 +131,38 @@ export class UsersPage implements OnInit {
     this.translationReady();
     return [
       { label: this.transloco.translate('users.status.emailVerified'), value: true },
-      { label: this.transloco.translate('users.status.emailUnverified'), value: false }
+      { label: this.transloco.translate('users.status.emailUnverified'), value: false },
     ];
   });
 
   // 本地化模式：ROLE_LABEL_MAP 值是词条键，翻译为显示文案。
   readonly roleOptions = computed(() => {
     this.translationReady();
-    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label: this.transloco.translate(label), value }));
+    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
+      label: this.transloco.translate(label),
+      value,
+    }));
   });
   //#else
   readonly activeOptions = computed(() => [
     { label: 'Active', value: true },
-    { label: 'Disabled', value: false }
+    { label: 'Disabled', value: false },
   ]);
 
   readonly emailVerifiedOptions = computed(() => [
     { label: 'Email verified', value: true },
-    { label: 'Email not verified', value: false }
+    { label: 'Email not verified', value: false },
   ]);
 
-  readonly roleOptions = computed(() => Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })));
+  readonly roleOptions = computed(() =>
+    Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })),
+  );
   //#endif
 
   //#if (IncludeLocalization)
   readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');
-  readonly allEmailStatusPlaceholder = () => this.transloco.translate('users.filter.allEmailStatus');
+  readonly allEmailStatusPlaceholder = () =>
+    this.transloco.translate('users.filter.allEmailStatus');
   readonly allRolesPlaceholder = () => this.transloco.translate('users.filter.allRoles');
   readonly searchPlaceholder = () => this.transloco.translate('users.filter.searchPlaceholder');
   readonly refreshLabel = () => this.transloco.translate('common.refresh');
@@ -184,8 +207,10 @@ export class UsersPage implements OnInit {
     }>(this.FILTER_KEY);
 
     if (saved.searchQuery) this.searchQuery.set(saved.searchQuery);
-    if (saved.selectedIsActive !== undefined) this.selectedIsActive.set(saved.selectedIsActive ?? null);
-    if (saved.selectedIsEmailVerified !== undefined) this.selectedIsEmailVerified.set(saved.selectedIsEmailVerified ?? null);
+    if (saved.selectedIsActive !== undefined)
+      this.selectedIsActive.set(saved.selectedIsActive ?? null);
+    if (saved.selectedIsEmailVerified !== undefined)
+      this.selectedIsEmailVerified.set(saved.selectedIsEmailVerified ?? null);
     if (saved.selectedRole !== undefined) this.selectedRole.set(saved.selectedRole ?? null);
   }
 
@@ -199,13 +224,13 @@ export class UsersPage implements OnInit {
         role: this.selectedRole() ?? undefined,
         offset: this.offset(),
         limit: this.limit(),
-        sorting: this.sorting()
+        sorting: this.sorting(),
       })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.loading.set(false))
+        finalize(() => this.loading.set(false)),
       )
-      .subscribe(data => {
+      .subscribe((data) => {
         this.users.set(data.items);
         this.totalRecords.set(data.totalCount);
       });
@@ -237,7 +262,7 @@ export class UsersPage implements OnInit {
       searchQuery: this.searchQuery(),
       selectedIsActive: this.selectedIsActive(),
       selectedIsEmailVerified: this.selectedIsEmailVerified(),
-      selectedRole: this.selectedRole()
+      selectedRole: this.selectedRole(),
     });
     this.reloadList();
   }
@@ -262,7 +287,7 @@ export class UsersPage implements OnInit {
     this.service
       .getUser(id)
       .pipe(finalize(() => this.editDialogLoading.set(false)))
-      .subscribe(user => this.selectedUser.set(user));
+      .subscribe((user) => this.selectedUser.set(user));
   }
 
   handleSave(data: CreateUserInputDto | UpdateUserInputDto) {
@@ -275,7 +300,7 @@ export class UsersPage implements OnInit {
     request
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.editDialogSaving.set(false))
+        finalize(() => this.editDialogSaving.set(false)),
       )
       .subscribe({
         next: () => {
@@ -283,28 +308,35 @@ export class UsersPage implements OnInit {
           this.messageService.add({
             severity: 'success',
             summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate(selected ? 'users.toast.updated' : 'users.toast.created')
+            detail: this.transloco.translate(
+              selected ? 'users.toast.updated' : 'users.toast.created',
+            ),
           });
           //#else
           this.messageService.add({
             severity: 'success',
             summary: 'Success',
-            detail: selected ? 'User updated successfully' : 'User created successfully'
+            detail: selected ? 'User updated successfully' : 'User created successfully',
           });
           //#endif
           this.editDialogVisible.set(false);
           this.reloadList();
-        }
+        },
       });
   }
 
   handleToggleActive(user: UserManagementOutputDto) {
     this.confirmationService.confirm({
       //#if (IncludeLocalization)
-      message: this.transloco.translate(user.isActive ? 'users.confirm.disableMessage' : 'users.confirm.enableMessage', {
-        name: user.username
-      }),
-      header: this.transloco.translate(user.isActive ? 'users.confirm.disableHeader' : 'users.confirm.enableHeader'),
+      message: this.transloco.translate(
+        user.isActive ? 'users.confirm.disableMessage' : 'users.confirm.enableMessage',
+        {
+          name: user.username,
+        },
+      ),
+      header: this.transloco.translate(
+        user.isActive ? 'users.confirm.disableHeader' : 'users.confirm.enableHeader',
+      ),
       //#else
       message: user.isActive
         ? `Are you sure you want to disable user ${user.username}?`
@@ -313,20 +345,28 @@ export class UsersPage implements OnInit {
       //#endif
       icon: 'pi pi-exclamation-triangle',
       accept: () => {
-        const request = user.isActive ? this.service.disableUser(user.id) : this.service.enableUser(user.id);
+        const request = user.isActive
+          ? this.service.disableUser(user.id)
+          : this.service.enableUser(user.id);
         request.subscribe(() => {
           //#if (IncludeLocalization)
           this.messageService.add({
             severity: 'success',
             summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate(user.isActive ? 'users.toast.disabled' : 'users.toast.enabled')
+            detail: this.transloco.translate(
+              user.isActive ? 'users.toast.disabled' : 'users.toast.enabled',
+            ),
           });
           //#else
-          this.messageService.add({ severity: 'success', summary: 'Success', detail: user.isActive ? 'User disabled' : 'User enabled' });
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: user.isActive ? 'User disabled' : 'User enabled',
+          });
           //#endif
           this.reloadList();
         });
-      }
+      },
     });
   }
 
@@ -336,10 +376,14 @@ export class UsersPage implements OnInit {
       this.messageService.add({
         severity: 'warn',
         summary: this.transloco.translate('users.toast.cannotDeleteSummary'),
-        detail: this.transloco.translate('users.toast.cannotDeleteSuperAdmin')
+        detail: this.transloco.translate('users.toast.cannotDeleteSuperAdmin'),
       });
       //#else
-      this.messageService.add({ severity: 'warn', summary: 'Cannot delete', detail: 'The built-in super administrator cannot be deleted' });
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Cannot delete',
+        detail: 'The built-in super administrator cannot be deleted',
+      });
       //#endif
       return;
     }
@@ -359,14 +403,18 @@ export class UsersPage implements OnInit {
           this.messageService.add({
             severity: 'success',
             summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate('users.toast.deleted')
+            detail: this.transloco.translate('users.toast.deleted'),
           });
           //#else
-          this.messageService.add({ severity: 'success', summary: 'Success', detail: 'User deleted' });
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'User deleted',
+          });
           //#endif
           this.reloadList();
         });
-      }
+      },
     });
   }
 
@@ -386,17 +434,21 @@ export class UsersPage implements OnInit {
       .resetPassword(id, data)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.resetPasswordSaving.set(false))
+        finalize(() => this.resetPasswordSaving.set(false)),
       )
       .subscribe(() => {
         //#if (IncludeLocalization)
         this.messageService.add({
           severity: 'success',
           summary: this.transloco.translate('common.success'),
-          detail: this.transloco.translate('users.toast.passwordReset')
+          detail: this.transloco.translate('users.toast.passwordReset'),
         });
         //#else
-        this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Password has been reset' });
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'Password has been reset',
+        });
         //#endif
         this.resetPasswordDialogVisible.set(false);
         this.resettingUserId.set(null);

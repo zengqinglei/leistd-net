@@ -39,16 +39,21 @@ interface LangMenuItem extends MenuItem {
         <div
           class="flex items-center gap-2 px-3 py-2 mx-1 my-0.5 rounded-md text-sm cursor-pointer transition-colors"
           [class]="
-            item.active ? 'bg-primary text-primary-contrast font-medium' : 'text-color hover:bg-surface-100 dark:hover:bg-surface-800'
+            item.active
+              ? 'bg-primary text-primary-contrast font-medium'
+              : 'text-color hover:bg-surface-100 dark:hover:bg-surface-800'
           "
         >
-          <span class="w-1.5 h-1.5 rounded-full flex-none" [class]="item.active ? 'bg-primary-contrast' : 'bg-transparent'"></span>
+          <span
+            class="w-1.5 h-1.5 rounded-full flex-none"
+            [class]="item.active ? 'bg-primary-contrast' : 'bg-transparent'"
+          ></span>
           <span>{{ item.label }}</span>
         </div>
       </ng-template>
     </p-menu>
   `,
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LanguageSwitcher {
   private readonly languageService = inject(LanguageService);
@@ -57,10 +62,10 @@ export class LanguageSwitcher {
 
   readonly items = computed<LangMenuItem[]>(() => {
     const active = this.languageService.activeLang();
-    return this.languageService.options.map(option => ({
+    return this.languageService.options.map((option) => ({
       label: option.label,
       active: option.id === active,
-      command: () => this.languageService.setActiveLang(option.id)
+      command: () => this.languageService.setActiveLang(option.id),
     }));
   });
 }

@@ -1,6 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, model, signal } from '@angular/core';
-import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -40,12 +47,19 @@ function passwordRulesValidator(): ValidatorFn {
   selector: 'app-change-password-dialog',
   standalone: true,
   //#if (IncludeLocalization)
-  imports: [CommonModule, ReactiveFormsModule, TranslocoModule, DialogModule, ButtonModule, PasswordModule],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    TranslocoModule,
+    DialogModule,
+    ButtonModule,
+    PasswordModule,
+  ],
   //#else
   imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, PasswordModule],
   //#endif
   templateUrl: './change-password-dialog.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChangePasswordDialogComponent {
   readonly visible = model(false);
@@ -67,9 +81,9 @@ export class ChangePasswordDialogComponent {
     {
       currentPassword: ['', [Validators.required]],
       newPassword: ['', [Validators.required, Validators.pattern(PASSWORD_RULE)]],
-      confirmPassword: ['', [Validators.required]]
+      confirmPassword: ['', [Validators.required]],
     },
-    { validators: [passwordRulesValidator()] }
+    { validators: [passwordRulesValidator()] },
   );
 
   constructor() {
@@ -78,7 +92,7 @@ export class ChangePasswordDialogComponent {
         this.form.reset({
           currentPassword: '',
           newPassword: '',
-          confirmPassword: ''
+          confirmPassword: '',
         });
       }
     });
@@ -90,11 +104,17 @@ export class ChangePasswordDialogComponent {
   }
 
   shouldShowMismatchError(): boolean {
-    return this.form.hasError('passwordMismatch') && (this.form.controls.confirmPassword.touched || this.form.controls.newPassword.touched);
+    return (
+      this.form.hasError('passwordMismatch') &&
+      (this.form.controls.confirmPassword.touched || this.form.controls.newPassword.touched)
+    );
   }
 
   shouldShowSamePasswordError(): boolean {
-    return this.form.hasError('sameAsCurrent') && (this.form.controls.currentPassword.touched || this.form.controls.newPassword.touched);
+    return (
+      this.form.hasError('sameAsCurrent') &&
+      (this.form.controls.currentPassword.touched || this.form.controls.newPassword.touched)
+    );
   }
 
   onHide(): void {
@@ -118,13 +138,17 @@ export class ChangePasswordDialogComponent {
           this.messageService.add({
             severity: 'success',
             summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate('account.changePassword.updateSuccess')
+            detail: this.transloco.translate('account.changePassword.updateSuccess'),
           });
           //#else
-          this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Password updated' });
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Password updated',
+          });
           //#endif
           this.visible.set(false);
-        }
+        },
       });
   }
 }

@@ -21,7 +21,7 @@ export function getUserByToken(_req: MockRequest): MockUser {
   if (!userId) {
     throw new MockException(401, { code: 40100, message: 'No authentication token provided' });
   }
-  const user = USERS.find(item => item.id === userId);
+  const user = USERS.find((item) => item.id === userId);
 
   if (!user) {
     throw new MockException(401, { code: 40100, message: 'Invalid authentication token' });

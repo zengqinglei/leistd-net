@@ -21,7 +21,7 @@ import { LayoutService } from '../../../../layout/services/layout-service';
   imports: [CardModule],
   //#endif
   templateUrl: './dashboard.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 //#if (IncludeLocalization)
 export class Dashboard {

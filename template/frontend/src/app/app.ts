@@ -26,12 +26,16 @@ import { ThemeService } from './core/services/theme-service';
         <router-outlet></router-outlet>
       }
       @case ('loading') {
-        <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
+        <div
+          class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950"
+        >
           <p-progressSpinner [ariaLabel]="loadingLabel()"></p-progressSpinner>
         </div>
       }
       @case ('failed') {
-        <div class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950">
+        <div
+          class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950"
+        >
           @if (startupService.error(); as error) {
             <p-card [header]="failedHeader()" [style]="{ width: '360px', textAlign: 'center' }">
               <p>{{ formatHttpError(error) }}</p>
@@ -50,7 +54,7 @@ import { ThemeService } from './core/services/theme-service';
         </div>
       }
     }
-  `
+  `,
 })
 export class App {
   protected readonly startupService = inject(StartupService);
@@ -81,7 +85,9 @@ export class App {
       if (error.error instanceof ErrorEvent) {
         // 客户端或网络错误
         //#if (IncludeLocalization)
-        return this.transloco.translate('app.startup.clientError', { message: error.error.message });
+        return this.transloco.translate('app.startup.clientError', {
+          message: error.error.message,
+        });
         //#else
         return `Client error: ${error.error.message}`;
         //#endif
@@ -90,13 +96,19 @@ export class App {
         const contentType = error.headers.get('Content-Type');
         if (contentType?.includes('application/json') && error.error?.message) {
           //#if (IncludeLocalization)
-          return this.transloco.translate('app.startup.requestFailed', { message: error.error.message, code: error.error.code });
+          return this.transloco.translate('app.startup.requestFailed', {
+            message: error.error.message,
+            code: error.error.code,
+          });
           //#else
           return `Request failed: ${error.error.message} (code: ${error.error.code})`;
           //#endif
         }
         //#if (IncludeLocalization)
-        return this.transloco.translate('app.startup.serverError', { status: error.status, statusText: error.statusText });
+        return this.transloco.translate('app.startup.serverError', {
+          status: error.status,
+          statusText: error.statusText,
+        });
         //#else
         return `Unknown server error: ${error.status} - ${error.statusText}`;
         //#endif

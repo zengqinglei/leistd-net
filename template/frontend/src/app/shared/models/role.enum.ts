@@ -1,7 +1,7 @@
 export enum Role {
   Admin = 'Admin',
   Operator = 'Operator',
-  Member = 'Member'
+  Member = 'Member',
 }
 
 //#if (IncludeLocalization)
@@ -18,10 +18,10 @@ export const ROLE_LABEL_MAP: Record<Role, string> = {
   //#if (IncludeLocalization)
   [Role.Admin]: 'role.admin',
   [Role.Operator]: 'role.operator',
-  [Role.Member]: 'role.member'
+  [Role.Member]: 'role.member',
   //#else
   [Role.Admin]: 'Administrator',
   [Role.Operator]: 'Operator',
-  [Role.Member]: 'Member'
+  [Role.Member]: 'Member',
   //#endif
 };

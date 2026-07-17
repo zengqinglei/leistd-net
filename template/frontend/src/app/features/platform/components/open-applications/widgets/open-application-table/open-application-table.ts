@@ -1,6 +1,14 @@
 import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#else
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
@@ -24,17 +32,26 @@ type PopoverMode = 'permissions' | 'redirectUris';
 @Component({
   selector: 'app-open-application-table',
   //#if (IncludeLocalization)
-  imports: [CommonModule, TableModule, ButtonModule, TagModule, TooltipModule, PopoverModule, TranslocoModule],
+  imports: [
+    CommonModule,
+    TableModule,
+    ButtonModule,
+    TagModule,
+    TooltipModule,
+    PopoverModule,
+    TranslocoModule,
+  ],
   //#else
   imports: [CommonModule, TableModule, ButtonModule, TagModule, TooltipModule, PopoverModule],
   //#endif
   templateUrl: './open-application-table.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationTable {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  readonly currentPageReportTemplate = () => this.transloco.translate('openApp.table.currentPageReport');
+  readonly currentPageReportTemplate = () =>
+    this.transloco.translate('openApp.table.currentPageReport');
   readonly editTooltip = () => this.transloco.translate('common.edit');
   readonly resetSecretTooltip = () => this.transloco.translate('openApp.action.resetSecret');
   readonly deleteTooltip = () => this.transloco.translate('common.delete');
@@ -70,7 +87,7 @@ export class OpenApplicationTable {
         return this.transloco.translate('openApp.section.authorization');
         //#else
         return 'Authorization capabilities';
-        //#endif
+      //#endif
     }
   });
 
@@ -84,7 +101,7 @@ export class OpenApplicationTable {
     this.filterChange.emit({
       offset: this.first,
       limit: this.rows,
-      sorting: `${this.sortField()} ${this.sortOrder() === 1 ? 'asc' : 'desc'}`
+      sorting: `${this.sortField()} ${this.sortOrder() === 1 ? 'asc' : 'desc'}`,
     });
   }
 
@@ -99,13 +116,13 @@ export class OpenApplicationTable {
     const labels: Record<string, string> = {
       web: 'Web',
       native: this.transloco.translate('openApp.appType.native'),
-      service: this.transloco.translate('openApp.appType.service')
+      service: this.transloco.translate('openApp.appType.service'),
     };
     //#else
     const labels: Record<string, string> = {
       web: 'Web',
       native: 'Desktop/Native',
-      service: 'Service'
+      service: 'Service',
     };
     //#endif
     return labels[value] ?? value;
@@ -121,23 +138,27 @@ export class OpenApplicationTable {
       implicit: this.transloco.translate('openApp.consentType.implicit'),
       explicit: this.transloco.translate('openApp.consentType.explicit'),
       external: this.transloco.translate('openApp.consentType.external'),
-      systematic: this.transloco.translate('openApp.consentType.systematic')
+      systematic: this.transloco.translate('openApp.consentType.systematic'),
     };
     //#else
     const labels: Record<string, string> = {
       implicit: 'Implicit consent',
       explicit: 'Explicit consent',
       external: 'External consent',
-      systematic: 'Systematic consent'
+      systematic: 'Systematic consent',
     };
     //#endif
     return labels[value] ?? value;
   }
 
   getPermissionSummary(item: OpenApplicationOutputDto) {
-    const grants = item.permissions.filter(permission => permission.startsWith('gt:')).map(permission => permission.replace('gt:', ''));
+    const grants = item.permissions
+      .filter((permission) => permission.startsWith('gt:'))
+      .map((permission) => permission.replace('gt:', ''));
     //#if (IncludeLocalization)
-    return grants.length ? grants.join(' / ') : this.transloco.translate('openApp.permission.notConfigured');
+    return grants.length
+      ? grants.join(' / ')
+      : this.transloco.translate('openApp.permission.notConfigured');
     //#else
     return grants.length ? grants.join(' / ') : 'Not configured';
     //#endif

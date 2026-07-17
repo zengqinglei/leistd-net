@@ -12,10 +12,10 @@ export const environment: Environment = {
     enable: false,
     include: '^/api/v1/public-content(/.*)?$',
     delay: 0,
-    log: false
+    log: false,
   },
   api: {
     ...environmentBase.api,
-    gateway: apiGateway === '__API_GATEWAY__' ? '' : apiGateway
-  }
+    gateway: apiGateway === '__API_GATEWAY__' ? '' : apiGateway,
+  },
 };
