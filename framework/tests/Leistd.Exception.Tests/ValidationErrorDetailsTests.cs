@@ -40,22 +40,22 @@ public class ValidationErrorDetailsTests
         var pd = await HandleAsync(ex, localizer, culture: "zh-CN");
         var validation = Assert.IsType<ValidationProblemDetails>(pd);
 
-        // 标准 errors：本地化后的字符串，按字段分组
+        // 展示文案唯一来源是标准 errors（本地化后的字符串，按字段分组）
         Assert.True(validation.Errors.ContainsKey("phone"));
         Assert.Contains("号码已被占用", validation.Errors["phone"]);
 
-        // validationErrorDetails 扩展：结构化机器契约并存
+        // validationErrorDetails 扩展：纯机器契约（field/code/localizationKey），不含 message，与 errors 不重复
         var details = Assert.IsAssignableFrom<IEnumerable<object>>(validation.Extensions["validationErrorDetails"]);
         var phone = Assert.Single(details, d => Field(d) == "phone");
         Assert.Equal("User:PhoneConflict", Code(phone));            // 字段级 Code 被序列化
         Assert.Equal("User:PhoneAlreadyUsed", LocalizationKey(phone));
-        Assert.Equal("号码已被占用", Message(phone));               // message 随 culture 本地化
+        Assert.Null(Message(phone));                                // 明细里不再冗余 message
     }
 
     [Fact]
     public async Task Falls_back_to_diagnostic_message_when_key_missing_or_absent()
     {
-        // email 无 LocalizationKey；phone 有键但资源未命中 → 两者的 detail message 都回落诊断消息。
+        // email 无 LocalizationKey；phone 有键但资源未命中 → 两者的展示文案（errors）都回落诊断消息。
         var localizer = new StubLocalizer(new Dictionary<string, string>());
 
         var ex = new UnprocessableEntityException("email", "Email is required")
@@ -67,12 +67,16 @@ public class ValidationErrorDetailsTests
         var pd = await HandleAsync(ex, localizer, culture: "zh-CN");
         var validation = Assert.IsType<ValidationProblemDetails>(pd);
 
+        // 展示文案（errors）回落到诊断消息
         Assert.Contains("Email is required", validation.Errors["email"]);
         Assert.Contains("Phone diagnostic", validation.Errors["phone"]);
 
+        // 明细逐字段存在、且不含 message（机器契约与展示解耦）
         var details = Assert.IsAssignableFrom<IEnumerable<object>>(validation.Extensions["validationErrorDetails"]);
-        Assert.Equal("Email is required", Message(Assert.Single(details, d => Field(d) == "email")));
-        Assert.Equal("Phone diagnostic", Message(Assert.Single(details, d => Field(d) == "phone")));
+        var email = Assert.Single(details, d => Field(d) == "email");
+        var phone = Assert.Single(details, d => Field(d) == "phone");
+        Assert.Null(Message(email));
+        Assert.Equal("User:NotThere", LocalizationKey(phone));
     }
 
     // ---- reflection helpers (匿名类型序列化前的属性读取) ----
@@ -83,7 +87,7 @@ public class ValidationErrorDetailsTests
     private static string? Message(object detail) => Prop(detail, "message");
 
     private static string? Prop(object detail, string name) =>
-        detail.GetType().GetProperty(name)!.GetValue(detail) as string;
+        detail.GetType().GetProperty(name)?.GetValue(detail) as string;
 
     // ---- harness ----
 

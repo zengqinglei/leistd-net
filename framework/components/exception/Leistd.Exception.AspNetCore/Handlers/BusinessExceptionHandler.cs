@@ -95,17 +95,17 @@ public sealed class BusinessExceptionHandler(
     }
 
     /// <summary>
-    /// 产出结构化字段错误明细（机器契约）：每条保留 <c>field</c> / <c>code</c> / <c>localizationKey</c>
-    /// 及本地化后的 <c>message</c>，供前端按稳定错误码对具体字段做差异化处理。与标准 <c>errors</c> 并存，互不替代。
+    /// 产出结构化字段错误明细（纯机器契约）：每条仅保留 <c>field</c> / <c>code</c> / <c>localizationKey</c>，
+    /// 供前端按稳定错误码对具体字段做差异化处理。**不含 message**——展示文案唯一来源是标准 <c>errors</c>
+    /// （避免同一本地化字符串两处重复）；同一字段多条错误时，本数组第 i 条与 <c>errors[field][i]</c> 顺序一致。
     /// </summary>
-    private object[] BuildValidationErrorDetails(UnprocessableEntityException exception)
+    private static object[] BuildValidationErrorDetails(UnprocessableEntityException exception)
     {
         return [.. exception.ValidationErrors.Select(error => new
         {
             field = error.Field,
             code = error.Code,
-            localizationKey = error.LocalizationKey,
-            message = LocalizeValidationError(error)
+            localizationKey = error.LocalizationKey
         })];
     }
 
