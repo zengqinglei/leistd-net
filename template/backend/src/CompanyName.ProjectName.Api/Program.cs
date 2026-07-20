@@ -210,7 +210,8 @@ try
         .AddDataAnnotationsLocalization(options =>
             options.DataAnnotationLocalizerProvider = (_, factory) => factory.Create(typeof(ApiResource)))
 #endif
-        ;
+        // [ApiController] 自动 400 校验产出与业务 422 一致的 RFC 9457 errors 数组形态（统一两条校验路径）。
+        .ConfigureLeistdApiValidation();
 
     // 4.1. CORS 配置
     builder.Services.Configure<ForwardedHeadersOptions>(options =>

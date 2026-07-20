@@ -61,13 +61,14 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
 
     private static async Task<string> PostInvalidRegisterAndReadErrorsAsync(HttpClient client)
     {
-        // 空用户名 + 非法邮箱 → 触发 [ApiController] 自动 400 ValidationProblemDetails
+        // 空用户名 + 非法邮箱 → 触发 [ApiController] 自动 400 校验；经 ConfigureLeistdApiValidation
+        // 产出与业务 422 一致的 RFC 9457 errors 数组（每项 detail/pointer），校验消息在 detail 里。
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/register",
             new { Username = "", Email = "not-an-email", Password = "" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        // 返回整个 errors 段文本，便于按语言断言其中的校验文案
+        // 返回整个 errors 数组文本，便于按语言断言其中的校验文案（本地化后的 detail）
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return body.RootElement.GetProperty("errors").GetRawText();
     }

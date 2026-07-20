@@ -1,4 +1,5 @@
 using System.Globalization;
+using Leistd.Exception.AspNetCore;
 using Leistd.Exception.AspNetCore.Handlers;
 using Leistd.Exception.AspNetCore.Options;
 using Leistd.Exception.Core;
@@ -15,16 +16,16 @@ using Xunit;
 namespace Leistd.Exception.Tests;
 
 /// <summary>
-/// 422 结构化字段错误契约验证：标准 <c>errors</c>（本地化字符串）与 <c>validationErrorDetails</c>
-/// 扩展（机器契约：field/code/localizationKey/message）并存，且 message 随 culture 本地化、
-/// 无键/未命中时回落诊断消息。端到端经 <see cref="BusinessExceptionHandler.TryHandleAsync"/> 驱动。
+/// 422 字段错误契约：errors 采用 RFC 9457 / JSON:API 惯用的「数组 of 对象」形态——每项一个
+/// <see cref="ErrorItem"/>，同时承载 detail（本地化消息）/ pointer（JSON Pointer）/ code（机器码）/
+/// localizationKey。单一数据源、无重复。端到端经 <see cref="BusinessExceptionHandler.TryHandleAsync"/> 驱动。
 /// </summary>
 public class ValidationErrorDetailsTests
 {
     [Fact]
-    public async Task Emits_field_level_code_and_details_alongside_localized_errors()
+    public async Task Errors_are_array_of_objects_carrying_detail_pointer_and_code()
     {
-        // 中文资源命中展示键；字段级 Code 应原样序列化，errors 与 validationErrorDetails 并存。
+        // 中文资源命中展示键：detail 应为本地化文案；code/pointer/localizationKey 一并在同一项对象里。
         var localizer = new StubLocalizer(new Dictionary<string, string>
         {
             ["User:PhoneAlreadyUsed"] = "号码已被占用",
@@ -38,24 +39,25 @@ public class ValidationErrorDetailsTests
                 LocalizationKey: "User:PhoneAlreadyUsed"));
 
         var pd = await HandleAsync(ex, localizer, culture: "zh-CN");
-        var validation = Assert.IsType<ValidationProblemDetails>(pd);
 
-        // 展示文案唯一来源是标准 errors（本地化后的字符串，按字段分组）
-        Assert.True(validation.Errors.ContainsKey("phone"));
-        Assert.Contains("号码已被占用", validation.Errors["phone"]);
+        // 不再是 ValidationProblemDetails 字典，而是普通 ProblemDetails + errors 数组扩展
+        Assert.IsNotType<ValidationProblemDetails>(pd);
+        var errors = Assert.IsType<ErrorItem[]>(pd.Extensions["errors"]);
 
-        // validationErrorDetails 扩展：纯机器契约（field/code/localizationKey），不含 message，与 errors 不重复
-        var details = Assert.IsAssignableFrom<IEnumerable<object>>(validation.Extensions["validationErrorDetails"]);
-        var phone = Assert.Single(details, d => Field(d) == "phone");
-        Assert.Equal("User:PhoneConflict", Code(phone));            // 字段级 Code 被序列化
-        Assert.Equal("User:PhoneAlreadyUsed", LocalizationKey(phone));
-        Assert.Null(Message(phone));                                // 明细里不再冗余 message
+        var phone = Assert.Single(errors, e => e.Pointer == "#/phone");
+        Assert.Equal("号码已被占用", phone.Detail);                    // 本地化消息
+        Assert.Equal("User:PhoneConflict", phone.Code);               // 字段级机器码
+        Assert.Equal("User:PhoneAlreadyUsed", phone.LocalizationKey);
+
+        var email = Assert.Single(errors, e => e.Pointer == "#/email");
+        Assert.Equal("Invalid email format", email.Detail);
+        Assert.Null(email.Code);                                      // 未设置 → 可空、序列化时省略
     }
 
     [Fact]
-    public async Task Falls_back_to_diagnostic_message_when_key_missing_or_absent()
+    public async Task Detail_falls_back_to_diagnostic_message_when_key_missing_or_absent()
     {
-        // email 无 LocalizationKey；phone 有键但资源未命中 → 两者的展示文案（errors）都回落诊断消息。
+        // email 无 LocalizationKey；phone 有键但资源未命中 → 两者 detail 都回落诊断消息。
         var localizer = new StubLocalizer(new Dictionary<string, string>());
 
         var ex = new UnprocessableEntityException("email", "Email is required")
@@ -65,29 +67,13 @@ public class ValidationErrorDetailsTests
                 LocalizationKey: "User:NotThere"));
 
         var pd = await HandleAsync(ex, localizer, culture: "zh-CN");
-        var validation = Assert.IsType<ValidationProblemDetails>(pd);
+        var errors = Assert.IsType<ErrorItem[]>(pd.Extensions["errors"]);
 
-        // 展示文案（errors）回落到诊断消息
-        Assert.Contains("Email is required", validation.Errors["email"]);
-        Assert.Contains("Phone diagnostic", validation.Errors["phone"]);
-
-        // 明细逐字段存在、且不含 message（机器契约与展示解耦）
-        var details = Assert.IsAssignableFrom<IEnumerable<object>>(validation.Extensions["validationErrorDetails"]);
-        var email = Assert.Single(details, d => Field(d) == "email");
-        var phone = Assert.Single(details, d => Field(d) == "phone");
-        Assert.Null(Message(email));
-        Assert.Equal("User:NotThere", LocalizationKey(phone));
+        Assert.Equal("Email is required", Assert.Single(errors, e => e.Pointer == "#/email").Detail);
+        var phone = Assert.Single(errors, e => e.Pointer == "#/phone");
+        Assert.Equal("Phone diagnostic", phone.Detail);
+        Assert.Equal("User:NotThere", phone.LocalizationKey);
     }
-
-    // ---- reflection helpers (匿名类型序列化前的属性读取) ----
-
-    private static string? Field(object detail) => Prop(detail, "field");
-    private static string? Code(object detail) => Prop(detail, "code");
-    private static string? LocalizationKey(object detail) => Prop(detail, "localizationKey");
-    private static string? Message(object detail) => Prop(detail, "message");
-
-    private static string? Prop(object detail, string name) =>
-        detail.GetType().GetProperty(name)?.GetValue(detail) as string;
 
     // ---- harness ----
 

@@ -98,21 +98,19 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
         LocalizationKey: "User:PhoneAlreadyUsed"));
 ```
 
-> 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。无论哪种情况，处理器都保持 RFC 7807 `errors: { field: [string] }` 形状。
+> 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。
 
-422 响应用**两个互补、不重复**的段承载字段错误——`errors` 负责**展示**，`validationErrorDetails` 负责**程序化契约**：
+422 响应的字段错误采用 **RFC 9457 / JSON:API 惯用的 `errors` 数组**——每项一个对象，同时承载展示与机器契约，**单一数据源、不拆多段**：
 
 ```json
 {
   "status": 422,
   "code": 42200,
   "message": "Validation failed.",
-  "errors": {
-    "phone": ["号码已被占用"]
-  },
-  "validationErrorDetails": [
+  "errors": [
     {
-      "field": "phone",
+      "detail": "号码已被占用",
+      "pointer": "#/phone",
       "code": "User:PhoneConflict",
       "localizationKey": "User:PhoneAlreadyUsed"
     }
@@ -120,11 +118,13 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
 }
 ```
 
-职责与关联：
-- **展示文案唯一来源是 `errors`**（RFC 7807 标准形状 `{ field: [string] }`，已随当前 culture 本地化）；`validationErrorDetails` **不含 message**，避免同一字符串两处重复。
-- `validationErrorDetails` 只承载**机器契约**：`field` 始终存在；`code`（稳定错误码，前端可据此分支）、`localizationKey`（可改名展示键）为可空，仅当抛出方在 `ValidationError` 上设置时才有值——定位与 `BusinessException` 的三分离一致。
-- **关联方式**：按 `field` 关联；同一字段多条错误时，`validationErrorDetails` 中该字段的第 i 条与 `errors[field][i]` 顺序一致。
-- 需要展示就读 `errors`，需要按 `code` 差异化处理就读 `validationErrorDetails`——两段互不替代、无冗余。
+字段说明（与 [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) 及 [JSON:API](https://jsonapi.org/format/#error-objects) 的错误对象一致）：
+- `detail`：本地化后的人类消息（展示用；未启用本地化 / 无键 / 未命中时回落诊断 `Message`）。
+- `pointer`：[JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901)，定位出错字段（如 `#/phone`）。
+- `code`：稳定机器错误码，前端可据此分支；**可空**，仅当抛出方在 `ValidationError` 上设置时才有值。
+- `localizationKey`：可改名的展示文案键；**可空**。
+
+> **与 ASP.NET 内置的差异**：本组件不用 `ValidationProblemDetails` 的 `{field:[string]}` 字典（那是微软惯例、非 RFC 形态、且无处安放机器码），改用符合标准的数组对象。`[ApiController]` 的**自动模型校验（400）**由 `ConfigureLeistdApiValidation()`（见 `AddControllers().ConfigureLeistdApiValidation()`）改写为**同一** `errors` 数组形态，两条校验路径统一。
 
 抛出后，全局处理器自动产出如下结构的响应（节选）：
 
@@ -183,8 +183,10 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
 | --- | --- |
 | `AddGlobalExceptionHandler(configuration)` | 从 `Leistd:GlobalException` 配置节绑定 Options 并注册处理器 |
 | `AddGlobalExceptionHandler(configure)` | 用委托配置 Options 并注册处理器 |
+| `ConfigureLeistdApiValidation()` | `IMvcBuilder` 扩展；把 `[ApiController]` 自动 400 校验产出为与业务 422 一致的 RFC 9457 `errors` 数组形态 |
 | `UseGlobalExceptionHandler()` | 接入异常处理中间件 |
 | `BusinessExceptionHandler` | `IExceptionHandler` 实现，执行异常到 ProblemDetails 的转换 |
+| `ErrorItem` | `errors` 数组的元素：`Detail` / `Pointer` / `Code?` / `LocalizationKey?`（RFC 9457 / JSON:API 错误对象） |
 
 ## 实现行为
 
