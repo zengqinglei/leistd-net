@@ -98,7 +98,33 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
         LocalizationKey: "User:PhoneAlreadyUsed"));
 ```
 
-> 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。无论哪种情况，处理器都保持 RFC 7807 `errors: { field: [string] }` 形状。
+> 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。
+
+422 响应的字段错误采用 **RFC 9457 / JSON:API 惯用的 `errors` 数组**——每项一个对象，同时承载展示与机器契约，**单一数据源、不拆多段**：
+
+```json
+{
+  "status": 422,
+  "code": 42200,
+  "message": "Validation failed.",
+  "errors": [
+    {
+      "detail": "号码已被占用",
+      "pointer": "#/phone",
+      "code": "User:PhoneConflict",
+      "localizationKey": "User:PhoneAlreadyUsed"
+    }
+  ]
+}
+```
+
+字段说明（与 [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) 及 [JSON:API](https://jsonapi.org/format/#error-objects) 的错误对象一致）：
+- `detail`：本地化后的人类消息（展示用；未启用本地化 / 无键 / 未命中时回落诊断 `Message`）。
+- `pointer`：[JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901)，定位出错字段（如 `#/phone`）。
+- `code`：稳定机器错误码，前端可据此分支；**可空**，仅当抛出方在 `ValidationError` 上设置时才有值。
+- `localizationKey`：可改名的展示文案键；**可空**。
+
+> **与 ASP.NET 内置的差异**：本组件不用 `ValidationProblemDetails` 的 `{field:[string]}` 字典（那是微软惯例、非 RFC 形态、且无处安放机器码），改用符合标准的数组对象。`[ApiController]` 的**自动模型校验（400）**由 `ConfigureApiValidation()`（见 `AddControllers().ConfigureApiValidation()`）改写为**同一** `errors` 数组形态，两条校验路径统一。
 
 抛出后，全局处理器自动产出如下结构的响应（节选）：
 
@@ -157,8 +183,10 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
 | --- | --- |
 | `AddGlobalExceptionHandler(configuration)` | 从 `Leistd:GlobalException` 配置节绑定 Options 并注册处理器 |
 | `AddGlobalExceptionHandler(configure)` | 用委托配置 Options 并注册处理器 |
+| `ConfigureApiValidation()` | `IMvcBuilder` 扩展；把 `[ApiController]` 自动 400 校验产出为与业务 422 一致的 RFC 9457 `errors` 数组形态 |
 | `UseGlobalExceptionHandler()` | 接入异常处理中间件 |
 | `BusinessExceptionHandler` | `IExceptionHandler` 实现，执行异常到 ProblemDetails 的转换 |
+| `ErrorItem` | `errors` 数组的元素：`Detail` / `Pointer` / `Code?` / `LocalizationKey?`（RFC 9457 / JSON:API 错误对象） |
 
 ## 实现行为
 

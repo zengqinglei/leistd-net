@@ -496,6 +496,7 @@ foreach ($scenario in $Scenarios) {
 
     $frontendValidated = $false
     $lintValidated = $false
+    $testValidated = $false
     if (-not $SkipFrontend -and $definition.Frontend) {
         $frontendRoot = Join-Path $projectRoot "frontend"
         $env:HUSKY = "0"
@@ -506,6 +507,11 @@ foreach ($scenario in $Scenarios) {
         }
         Invoke-External "npm" @("run", "build") $frontendRoot
         $frontendValidated = $true
+
+        # 前端单测（无头、单次）：每个场景都含一条不受本地化裁剪的基础 smoke spec，
+        # 故 npm test 恒能命中 >=1 个 spec；本地化场景另含 translationReady 首帧回归测试。
+        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=ChromeHeadless") $frontendRoot
+        $testValidated = $true
     }
 
     $results.Add([PSCustomObject]@{
@@ -514,6 +520,7 @@ foreach ($scenario in $Scenarios) {
         Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
         Lint = if ($lintValidated) { "pass" } else { "skipped" }
         Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
+        Test = if ($testValidated) { "pass" } else { "skipped" }
         Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
     })
 }

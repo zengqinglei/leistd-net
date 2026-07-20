@@ -104,7 +104,10 @@ function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex]$Patt
 
     $referenced = [System.Collections.Generic.SortedSet[string]]::new()
     foreach ($glob in $SourceGlobs) {
-        Get-ChildItem -Path (Join-Path $RepoRoot $glob) -Recurse -File -Include '*.ts', '*.html', '*.cs' -ErrorAction SilentlyContinue | ForEach-Object {
+        Get-ChildItem -Path (Join-Path $RepoRoot $glob) -Recurse -File -Include '*.ts', '*.html', '*.cs' -ErrorAction SilentlyContinue | Where-Object {
+            # 排除单测文件：describe('a.b') 等点号字符串不是 translate 引用，避免误报。
+            $_.Name -notlike '*.spec.ts'
+        } | ForEach-Object {
             $content = Get-Content -LiteralPath $_.FullName -Raw
             if ([string]::IsNullOrEmpty($content)) { return }
             foreach ($m in $Pattern.Matches($content)) { [void]$referenced.Add($m.Groups[1].Value) }

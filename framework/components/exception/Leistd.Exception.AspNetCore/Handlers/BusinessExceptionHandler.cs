@@ -79,35 +79,23 @@ public sealed class BusinessExceptionHandler(
     }
 
     /// <summary>
-    /// 把结构化字段错误按当前 culture 解析为 RFC 7807 <c>ValidationProblemDetails</c> 形状
-    /// （<c>{ field: [localizedString] }</c>）：每条错误优先按 <see cref="ValidationError.LocalizationKey"/>
-    /// 查资源，未启用本地化 / 无键 / 未命中时回落到 <see cref="ValidationError.Message"/>（诊断消息）。
-    /// 与 <see cref="Localize"/> 同样 try/catch 隔离，本地化组件失败绝不吞掉字段错误本身。
+    /// 把结构化字段错误产出为 RFC 9457 / JSON:API 惯用的 <c>errors</c> 数组：每项一个对象，同时承载
+    /// <c>detail</c>（本地化后的人类消息）、<c>pointer</c>（JSON Pointer 定位字段，如 <c>#/phone</c>）、
+    /// <c>code</c>（稳定机器码，可空）、<c>localizationKey</c>（可改名展示键，可空）。
+    /// 单一数据源，展示与机器契约同处一项，不再拆成两个字段。
     /// </summary>
-    private Dictionary<string, string[]> LocalizeValidationErrors(UnprocessableEntityException exception)
+    private ErrorItem[] BuildErrorItems(UnprocessableEntityException exception)
     {
-        return exception.ValidationErrors
-            .GroupBy(error => error.Field, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Select(LocalizeValidationError).ToArray(),
-                StringComparer.Ordinal);
+        return [.. exception.ValidationErrors.Select(error => new ErrorItem(
+            Detail: LocalizeValidationError(error),
+            Pointer: ToJsonPointer(error.Field),
+            Code: error.Code,
+            LocalizationKey: error.LocalizationKey))];
     }
 
-    /// <summary>
-    /// 产出结构化字段错误明细（机器契约）：每条保留 <c>field</c> / <c>code</c> / <c>localizationKey</c>
-    /// 及本地化后的 <c>message</c>，供前端按稳定错误码对具体字段做差异化处理。与标准 <c>errors</c> 并存，互不替代。
-    /// </summary>
-    private object[] BuildValidationErrorDetails(UnprocessableEntityException exception)
-    {
-        return [.. exception.ValidationErrors.Select(error => new
-        {
-            field = error.Field,
-            code = error.Code,
-            localizationKey = error.LocalizationKey,
-            message = LocalizeValidationError(error)
-        })];
-    }
+    // JSON Pointer（RFC 6901，前缀 # 为 RFC 9457 示例惯例）；对空字段名退化为文档根 #。
+    private static string ToJsonPointer(string field)
+        => string.IsNullOrEmpty(field) ? "#" : "#/" + field.Replace("~", "~0").Replace("/", "~1");
 
     private string LocalizeValidationError(ValidationError error)
     {
@@ -272,10 +260,11 @@ public sealed class BusinessExceptionHandler(
         var message = Localize(bizException, statusCode);
         var title = LocalizeTitle(statusCode);
 
-        // 对于验证异常使用 ValidationProblemDetails
+        // 验证异常：errors 采用 RFC 9457 / JSON:API 惯用的「数组 of 对象」形态（每项 detail+pointer+code），
+        // 而非 ASP.NET 内置 ValidationProblemDetails 的 {field:[string]} 字典——单一数据源、符合标准、可承载机器码。
         if (bizException is UnprocessableEntityException unprocessableEntity)
         {
-            var validationProblem = new ValidationProblemDetails(LocalizeValidationErrors(unprocessableEntity))
+            var validationProblem = new ProblemDetails
             {
                 Type = GetProblemType(statusCode),
                 Title = title,
@@ -286,9 +275,7 @@ public sealed class BusinessExceptionHandler(
             validationProblem.Extensions["message"] = message;
             validationProblem.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
             validationProblem.Extensions["code"] = bizException.Code;
-            // 标准 errors 仅承载本地化后的字符串（RFC 7807 兼容）；结构化机器契约（字段码/展示键）
-            // 另放 validationErrorDetails 扩展，使前端能按 Code 对具体字段错误做差异化处理。
-            validationProblem.Extensions["validationErrorDetails"] = BuildValidationErrorDetails(unprocessableEntity);
+            validationProblem.Extensions["errors"] = BuildErrorItems(unprocessableEntity);
 
             if (ShouldShowDetails() && !string.IsNullOrEmpty(bizException.Details))
             {
