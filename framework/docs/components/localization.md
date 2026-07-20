@@ -2,7 +2,7 @@
 
 需要按用户语言返回文案（错误消息、提示、标题）时，传统做法是把中文/英文字符串写死在代码里，无法随请求切换语言。Leistd 的本地化组件提供一个**基于嵌入 JSON 资源**的 `IStringLocalizer` 实现：代码里只写**文案键**，真正的文案放在随程序集分发的 `{culture}.json` 里，运行时按当前 culture 查表产出。
 
-它坐在 .NET 标准的 `Microsoft.Extensions.Localization` 抽象之上——消费者拿到的是原生 `IStringLocalizer` / `IStringLocalizer<T>`，没有 Leistd 私有抽象；只是把默认的 RESX 资源源换成了更易维护、可 review 的 JSON。
+它坐在 .NET 标准的 `Microsoft.Extensions.Localization` 抽象之上——消费者拿到的是原生 `IStringLocalizer` / `IStringLocalizer<T>`，没有 Leistd 私有抽象。核心路由规则一句话：**程序集负责加载、类型负责路由**——JSON 与官方 RESX **并存**：`ResourceAssemblies` 声明从哪些程序集加载 JSON 词条；`IStringLocalizer<T>` 仅当 `TResourceSource` 登记在 `JsonResourceTypes` 时走 JSON，其余（含同程序集内未登记的类型、宿主既有 RESX、第三方库）一律委派微软官方工厂。框架自身的全局键通过无参 `IStringLocalizer` 直取 JSON，不接管宿主本地化。
 
 ## 何时使用
 
@@ -35,8 +35,12 @@ builder.Services.AddJsonLocalization(
     supportedCultures: ["en", "zh-CN"],       // 默认语言 = en（英语）
     configure: options =>
     {
-        // 追加业务项目自身程序集的资源（覆盖/扩展框架默认键）
+        // 加载：追加业务项目自身程序集的资源（覆盖/扩展框架默认键）
         options.ResourceAssemblies.Add(typeof(Program).Assembly);
+
+        // 路由：若要让某个 typed IStringLocalizer<T> 走 JSON（典型如 DataAnnotations 校验消息用的
+        // 资源标记类型），必须显式登记该类型；未登记的类型走官方 RESX。
+        options.JsonResourceTypes.Add(typeof(MyResourceMarker));
     });
 
 var app = builder.Build();
@@ -130,7 +134,8 @@ public class OrderNotifier(IStringLocalizer localizer)
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `ResourceAssemblies` | `IList<Assembly>` | 空（`Add*` 时登记） | 承载嵌入 JSON 的程序集；后登记者覆盖前者 |
+| `ResourceAssemblies` | `IList<Assembly>` | 空（`Add*` 时登记） | **加载**：承载嵌入 JSON 的程序集；后登记者覆盖前者 |
+| `JsonResourceTypes` | `ISet<Type>` | 空 | **路由**：显式登记走 JSON 的 typed 资源标记类型；未登记的 `IStringLocalizer<T>` 走官方 RESX |
 | `ResourcesPath` | `string` | `Resources` | 嵌入资源相对程序集根的逻辑目录 |
 | `DefaultCulture` | `string` | `en` | 默认/回落语言 |
 
@@ -138,7 +143,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 
 - 未调用 `AddJsonLocalization` 时，`IStringLocalizer` 未注册；依赖它的 `Leistd.Exception` 全局处理器会自动退回"直出原消息"，因此**是否启用本地化不影响未启用方的行为**。
 - 资源 JSON 必须 `EmbeddedResource`；仅作为 `Content` 不会被读取。
-- 键为**全局唯一**的文案键（如 `Order:StockInsufficient`），不按类型/目录分资源——工厂对所有 `Create` 返回同一合并视图。
+- 键为**全局唯一**的文案键（如 `Order:StockInsufficient`），不按类型/目录分资源——JSON 工厂对任意登记类型返回同一合并视图（读取全部已登记资源程序集）。注意这只描述 **JSON 工厂内部**；对外的组合工厂仍按 `JsonResourceTypes` 分流，未登记类型不会进入该合并视图，而是走官方 RESX。
 
 ## 相关
 

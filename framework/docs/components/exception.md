@@ -100,6 +100,33 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
 
 > 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。无论哪种情况，处理器都保持 RFC 7807 `errors: { field: [string] }` 形状。
 
+除标准 `errors`（本地化后的字符串数组，供直接展示）外，422 响应还带一个 `validationErrorDetails` 扩展——承载**结构化机器契约**，供前端按稳定错误码对具体字段做差异化处理（如高亮某输入框）：
+
+```json
+{
+  "status": 422,
+  "code": 42200,
+  "message": "Validation failed.",
+  "errors": {
+    "phone": ["号码已被占用"]
+  },
+  "validationErrorDetails": [
+    {
+      "field": "phone",
+      "code": "User:PhoneConflict",
+      "localizationKey": "User:PhoneAlreadyUsed",
+      "message": "号码已被占用"
+    }
+  ]
+}
+```
+
+字段说明与稳定性：
+- `field` / `message` 始终存在；`message` 与 `errors` 中该字段的文案一致，已随当前 culture 本地化。
+- `code` / `localizationKey` 为可空——仅当抛出方在 `ValidationError` 上设置时才有值。
+- `code` 是**稳定机器契约**（前端可据此分支），`localizationKey` 是可改名的展示键，二者定位与 `BusinessException` 的三分离一致。
+- `errors` 与 `validationErrorDetails` **并存**：前者保证 RFC 7807 兼容与直接展示，后者供程序化消费；二者按字段一一对应。
+
 抛出后，全局处理器自动产出如下结构的响应（节选）：
 
 ```json

@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.Extensions.Localization;
 
 namespace Leistd.Localization.Core.Options;
 
