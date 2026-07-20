@@ -191,26 +191,19 @@ try
 #endif
     builder.Services.AddHealthChecks();
     builder.Services.AddMyProjectSpaProxy();
+    // HTTP 管道 JSON 配置：ProblemDetails / IProblemDetailsService（业务 422、异常响应）走此配置——
+    // 与下方 MVC 的 AddJsonOptions 用同一 ConfigureWebApi，令业务响应 / 400 / 422 命名策略一致、跟随宿主。
+    builder.Services.ConfigureHttpJsonOptions(options => JsonOptions.ConfigureWebApi(options.SerializerOptions));
     builder.Services.AddControllers()
-        .AddJsonOptions(options =>
-        {
-            // 使用 Domain.Shared 层的 WebApi 配置
-            options.JsonSerializerOptions.PropertyNamingPolicy = JsonOptions.WebApi.PropertyNamingPolicy;
-            options.JsonSerializerOptions.DefaultIgnoreCondition = JsonOptions.WebApi.DefaultIgnoreCondition;
-
-            // 复制转换器
-            foreach (var converter in JsonOptions.WebApi.Converters)
-            {
-                options.JsonSerializerOptions.Converters.Add(converter);
-            }
-        })
+        .AddJsonOptions(options => JsonOptions.ConfigureWebApi(options.JsonSerializerOptions))
 #if (IncludeLocalization)
         // DataAnnotations 校验消息随 culture 本地化：ErrorMessage/Display 的英文句子即文案键（en 默认值），
         // zh-CN.json 用同一句子作键映射中文。Provider 指向 ApiResource 标记类型（工厂返回共享视图）。
         .AddDataAnnotationsLocalization(options =>
             options.DataAnnotationLocalizerProvider = (_, factory) => factory.Create(typeof(ApiResource)))
 #endif
-        ;
+        // [ApiController] 自动 400 校验产出与业务 422 一致的 RFC 9457 errors 数组形态（统一两条校验路径）。
+        .ConfigureApiValidation();
 
     // 4.1. CORS 配置
     builder.Services.Configure<ForwardedHeadersOptions>(options =>

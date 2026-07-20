@@ -79,34 +79,17 @@ public sealed class BusinessExceptionHandler(
     }
 
     /// <summary>
-    /// 把结构化字段错误按当前 culture 解析为 RFC 7807 <c>ValidationProblemDetails</c> 形状
-    /// （<c>{ field: [localizedString] }</c>）：每条错误优先按 <see cref="ValidationError.LocalizationKey"/>
-    /// 查资源，未启用本地化 / 无键 / 未命中时回落到 <see cref="ValidationError.Message"/>（诊断消息）。
-    /// 与 <see cref="Localize"/> 同样 try/catch 隔离，本地化组件失败绝不吞掉字段错误本身。
+    /// 把结构化字段错误产出为 RFC 9457 §3 validation-error 示例风格的 <c>errors</c> 数组：每项一个对象，
+    /// 同时承载 <c>detail</c>（本地化后的人类消息）、<c>field</c>（出错字段，原样取 <see cref="ValidationError.Field"/>）、
+    /// <c>code</c>（稳定机器码，可空）、<c>localizationKey</c>（可改名展示键，可空）。单一数据源，展示与机器契约同处一项。
     /// </summary>
-    private Dictionary<string, string[]> LocalizeValidationErrors(UnprocessableEntityException exception)
+    private ErrorItem[] BuildErrorItems(UnprocessableEntityException exception)
     {
-        return exception.ValidationErrors
-            .GroupBy(error => error.Field, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Select(LocalizeValidationError).ToArray(),
-                StringComparer.Ordinal);
-    }
-
-    /// <summary>
-    /// 产出结构化字段错误明细（机器契约）：每条保留 <c>field</c> / <c>code</c> / <c>localizationKey</c>
-    /// 及本地化后的 <c>message</c>，供前端按稳定错误码对具体字段做差异化处理。与标准 <c>errors</c> 并存，互不替代。
-    /// </summary>
-    private object[] BuildValidationErrorDetails(UnprocessableEntityException exception)
-    {
-        return [.. exception.ValidationErrors.Select(error => new
-        {
-            field = error.Field,
-            code = error.Code,
-            localizationKey = error.LocalizationKey,
-            message = LocalizeValidationError(error)
-        })];
+        return [.. exception.ValidationErrors.Select(error => new ErrorItem(
+            Detail: LocalizeValidationError(error),
+            Field: error.Field,
+            Code: error.Code,
+            LocalizationKey: error.LocalizationKey))];
     }
 
     private string LocalizeValidationError(ValidationError error)
@@ -272,12 +255,13 @@ public sealed class BusinessExceptionHandler(
         var message = Localize(bizException, statusCode);
         var title = LocalizeTitle(statusCode);
 
-        // 对于验证异常使用 ValidationProblemDetails
+        // 验证异常：errors 采用 RFC 9457 §3 validation-error 示例风格的「数组 of 对象」（每项 detail+field+code），
+        // 而非 ASP.NET 内置 ValidationProblemDetails 的 {field:[string]} 字典——单一数据源、可承载机器码。
+        // type 省略（缺省 about:blank：无额外语义、title=状态短语）；框架不假定托管 problem-type 文档地址。
         if (bizException is UnprocessableEntityException unprocessableEntity)
         {
-            var validationProblem = new ValidationProblemDetails(LocalizeValidationErrors(unprocessableEntity))
+            var validationProblem = new ProblemDetails
             {
-                Type = GetProblemType(statusCode),
                 Title = title,
                 Status = statusCode,
                 Detail = message,
@@ -286,9 +270,7 @@ public sealed class BusinessExceptionHandler(
             validationProblem.Extensions["message"] = message;
             validationProblem.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
             validationProblem.Extensions["code"] = bizException.Code;
-            // 标准 errors 仅承载本地化后的字符串（RFC 7807 兼容）；结构化机器契约（字段码/展示键）
-            // 另放 validationErrorDetails 扩展，使前端能按 Code 对具体字段错误做差异化处理。
-            validationProblem.Extensions["validationErrorDetails"] = BuildValidationErrorDetails(unprocessableEntity);
+            validationProblem.Extensions["errors"] = BuildErrorItems(unprocessableEntity);
 
             if (ShouldShowDetails() && !string.IsNullOrEmpty(bizException.Details))
             {
@@ -298,10 +280,9 @@ public sealed class BusinessExceptionHandler(
             return validationProblem;
         }
 
-        // 标准 ProblemDetails
+        // 标准 ProblemDetails（type 省略 = 缺省 about:blank，title 用状态短语）
         var problemDetails = new ProblemDetails
         {
-            Type = GetProblemType(statusCode),
             Title = title,
             Status = statusCode,
             Detail = message,
@@ -348,21 +329,6 @@ public sealed class BusinessExceptionHandler(
                 return httpStatusCode;
         }
         return StatusCodes.Status500InternalServerError;
-    }
-
-    private static string GetProblemType(int statusCode)
-    {
-        return statusCode switch
-        {
-            400 => "https://tools.ietf.org/html/rfc7231#section-6.5.1",
-            401 => "https://tools.ietf.org/html/rfc7235#section-3.1",
-            403 => "https://tools.ietf.org/html/rfc7231#section-6.5.3",
-            404 => "https://tools.ietf.org/html/rfc7231#section-6.5.4",
-            409 => "https://tools.ietf.org/html/rfc7231#section-6.5.8",
-            422 => "https://tools.ietf.org/html/rfc4918#section-11.2",
-            500 => "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-            _ => $"https://httpstatuses.com/{statusCode}"
-        };
     }
 
     private static string GetProblemTitle(int statusCode)

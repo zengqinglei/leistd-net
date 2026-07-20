@@ -1,5 +1,7 @@
 # 对象映射
 
+> ⚠️ **`Leistd.ObjectMapping.AutoMapper` 已弃用**：AutoMapper 13.0.1 存在高危 DoS 漏洞（[GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x) / CVE-2026-32933），官方仅在改为**商业授权**的 15.1.1+ 修复、14.x 不修复。**新项目请默认选用 `Leistd.ObjectMapping.Mapster`**（同一 `IObjectMapper` 抽象，零授权成本、无该漏洞）。AutoMapper 组件保留仅为兼容存量消费者，`AddAutoMapperObjectMapper` 已标 `[Obsolete]`。
+
 在分层架构中，实体（Entity）、领域模型、DTO、视图模型之间需要频繁地相互转换。手写赋值代码冗长、易漏字段、难维护。对象映射组件把「把 A 类型的字段拷贝到 B 类型」这件事统一抽象成一个服务，业务代码只依赖 `IObjectMapper` 接口调用 `Map`，而具体用 AutoMapper 还是 Mapster 完成转换，由 DI 注册决定。
 
 典型场景：应用服务把领域实体转换为返回给前端的 DTO、把入参 DTO 物化为待持久化的实体、批量列表转换、以及在仓储查询中将映射下推到数据库（投影）。Leistd 通过 `IObjectMapper` 屏蔽底层映射库——切换实现只需更换注册方法，不改业务调用代码。
@@ -8,9 +10,9 @@
 
 | 场景 | 推荐 |
 | --- | --- |
-| 需要成熟的 `Profile` 配置体系、`ProjectTo` 查询投影（EF Core 下推数据库） | `Leistd.ObjectMapping.AutoMapper` |
-| 追求高性能、零配置约定映射、运行时编译 | `Leistd.ObjectMapping.Mapster` |
+| **默认选择**：高性能、零配置约定映射、运行时编译 | `Leistd.ObjectMapping.Mapster` |
 | 仅在领域/应用层依赖映射抽象编写业务代码 | 只引用 `Leistd.ObjectMapping.Core` |
+| 需 `ProjectTo` 查询投影（EF Core 下推）——仅存量项目，⚠️ 已弃用（见顶部安全说明） | `Leistd.ObjectMapping.AutoMapper` |
 
 > 两个实现都注册到同一个 `IObjectMapper`，业务代码无需感知差异。`ProjectTo` 查询投影是 AutoMapper 实现独有的能力（见[实现行为](#实现行为)）。
 

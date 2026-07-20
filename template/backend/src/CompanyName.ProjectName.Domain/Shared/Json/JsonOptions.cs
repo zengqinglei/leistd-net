@@ -55,4 +55,16 @@ public static class JsonOptions
             JsonConverters.StringEnumConverter  // 使用字符串枚举转换器
         }
     };
+
+    /// <summary>
+    /// 把 Web API 序列化策略应用到给定的 options 实例——单一数据源，供 MVC（AddJsonOptions）与
+    /// HTTP 管道（ConfigureHttpJsonOptions，ProblemDetails/IProblemDetailsService 走此配置）共用，
+    /// 确保业务响应、400、422 的命名策略一致；宿主改此处即全部跟随。
+    /// </summary>
+    public static void ConfigureWebApi(JsonSerializerOptions options)
+    {
+        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        options.Converters.Add(JsonConverters.StringEnumConverter);
+    }
 }

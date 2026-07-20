@@ -22,6 +22,8 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
 
     <!-- 第三方 -->
+    <!-- AutoMapper 组件已弃用：13.0.1 存在高危 DoS（GHSA-rvv3-g6hj-g44x），官方仅在商业授权的 15.1.1+ 修复。
+         新项目改用 Leistd.ObjectMapping.Mapster。此处保留仅为兼容存量消费者；构建会输出 NU1903 安全告警（预期）。 -->
     <PackageVersion Include="AutoMapper" Version="13.0.1" />
     <PackageVersion Include="Castle.Core" Version="5.2.1" />
     <PackageVersion Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />

@@ -30,7 +30,22 @@ function Assert-TempPath([string]$Path) {
 function Reset-Directory([string]$Path) {
     Assert-TempPath $Path
     if (Test-Path -LiteralPath $Path) {
-        Remove-Item -LiteralPath $Path -Recurse -Force
+        # Windows 下 node/dotnet 残留句柄常导致 "目录不是空的"/访问被拒——对 IO/权限异常带退避重试，
+        # 避免在打包/构建/测试前就阻断整个矩阵；最终仍失败时输出残留路径便于排查。
+        $maxAttempts = 5
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+                Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+                break
+            }
+            catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+                if ($attempt -eq $maxAttempts) {
+                    Write-Warning "无法清理目录（$maxAttempts 次重试后仍失败）: $Path"
+                    throw
+                }
+                Start-Sleep -Milliseconds (200 * $attempt)
+            }
+        }
     }
     New-Item -ItemType Directory -Path $Path | Out-Null
 }
@@ -480,7 +495,10 @@ foreach ($scenario in $Scenarios) {
     Assert-ScenarioShape $projectRoot $projectName $definition
 
     $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-    Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath)
+    # --force：等价于删除并重建 project.assets.json、强制重新评估依赖资产图（解决被 design-time restore
+    # 覆盖、资产图未刷新等问题）。注意：它**不**清除 globalPackagesFolder 中已提取的同 ID/同版本包——
+    # 若同版本包内容发生变化，仍需清空私有包缓存（本矩阵正常模式会重置 packages 目录，故此处安全）。
+    Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
     Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
     $runtimeValidated = $false
@@ -496,6 +514,7 @@ foreach ($scenario in $Scenarios) {
 
     $frontendValidated = $false
     $lintValidated = $false
+    $testValidated = $false
     if (-not $SkipFrontend -and $definition.Frontend) {
         $frontendRoot = Join-Path $projectRoot "frontend"
         $env:HUSKY = "0"
@@ -506,6 +525,11 @@ foreach ($scenario in $Scenarios) {
         }
         Invoke-External "npm" @("run", "build") $frontendRoot
         $frontendValidated = $true
+
+        # 前端单测（无头、单次）：每个场景都含一条不受本地化裁剪的基础 smoke spec，
+        # 故 npm test 恒能命中 >=1 个 spec；本地化场景另含 translationReady 首帧回归测试。
+        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=ChromeHeadless") $frontendRoot
+        $testValidated = $true
     }
 
     $results.Add([PSCustomObject]@{
@@ -514,6 +538,7 @@ foreach ($scenario in $Scenarios) {
         Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
         Lint = if ($lintValidated) { "pass" } else { "skipped" }
         Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
+        Test = if ($testValidated) { "pass" } else { "skipped" }
         Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
     })
 }

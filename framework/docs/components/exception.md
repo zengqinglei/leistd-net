@@ -1,6 +1,6 @@
 # 业务异常与全局异常处理
 
-在 Web 应用里，抛错处处都有：参数非法、资源不存在、权限不足、上游超时……如果每个 Controller 都自己 `try/catch` 再拼装错误响应，会产生大量重复代码，且响应格式难以统一。Leistd 的做法是：业务层只管按语义**抛出**强类型异常，由一个全局处理器在管道末端统一**捕获**，转换成符合 [RFC 7807 ProblemDetails](https://datatracker.ietf.org/doc/html/rfc7807) 的标准错误响应。
+在 Web 应用里，抛错处处都有：参数非法、资源不存在、权限不足、上游超时……如果每个 Controller 都自己 `try/catch` 再拼装错误响应，会产生大量重复代码，且响应格式难以统一。Leistd 的做法是：业务层只管按语义**抛出**强类型异常，由一个全局处理器在管道末端统一**捕获**，转换成符合 [RFC 9457 ProblemDetails](https://www.rfc-editor.org/rfc/rfc9457.html)（取代 RFC 7807）的标准错误响应。
 
 `Leistd.Exception.Core` 提供一组面向 HTTP 语义的业务异常（`BadRequestException`、`NotFoundException`、`UnprocessableEntityException` 等），每个异常自带一个错误码，错误码前三位即对应 HTTP 状态码。`Leistd.Exception.AspNetCore` 提供 ASP.NET Core 的全局异常处理器，把这些异常（以及框架内置异常）映射为带 `code` / `traceId` / `message` 扩展字段的 ProblemDetails。
 
@@ -87,7 +87,7 @@ throw new BadRequestException("Email already in use")   // Message：日志/诊�
 
 > `Code` 默认取「HTTP 前缀 + 00」，前端一般按 HTTP 状态码统一处理、并不消费细分码。仅当前端要对**某个具体错误**做差异化行为（如高亮某输入框）时，才用 `WithCode("46")` 追加细分后缀（→ `40046`）。这是极少数场景。
 
-字段校验场景使用 `UnprocessableEntityException`，可逐字段累加**结构化**错误（与业务异常同构的三分离：`Message` 诊断 / `Code` 机器码 / `LocalizationKey` 展示键 / `Data` 占位参数），处理器按当前 culture 解析后输出为 `ValidationProblemDetails`（HTTP 422）：
+字段校验场景使用 `UnprocessableEntityException`，可逐字段累加**结构化**错误（与业务异常同构的三分离：`Message` 诊断 / `Code` 机器码 / `LocalizationKey` 展示键 / `Data` 占位参数），处理器按当前 culture 解析后输出为普通 `ProblemDetails` + `errors` 扩展数组（HTTP 422）：
 
 ```csharp
 throw new UnprocessableEntityException("email", "Invalid email format")   // 便捷构造：单字段单条（仅诊断消息）
@@ -98,7 +98,34 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
         LocalizationKey: "User:PhoneAlreadyUsed"));
 ```
 
-> 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。无论哪种情况，处理器都保持 RFC 7807 `errors: { field: [string] }` 形状。
+> 未启用本地化 / 无 `LocalizationKey` / 键未命中时，逐字段回落到 `Message`（诊断消息）；启用时按 `LocalizationKey` 查表并以 `Data` 填充占位。
+
+422 响应的字段错误采用一个 `errors` 数组——每项一个对象，同时承载展示与机器契约，**单一数据源、不拆多段**。该 `errors` 是按 [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) §3 的 validation-error 示例定义的**扩展成员**（不是所有 Problem Details 的核心成员）：
+
+```json
+{
+  "status": 422,
+  "code": 42200,
+  "message": "Validation failed.",
+  "errors": [
+    {
+      "detail": "号码已被占用",
+      "field": "phone",
+      "code": "User:PhoneConflict",
+      "localizationKey": "User:PhoneAlreadyUsed"
+    }
+  ]
+}
+```
+
+字段说明：
+- `detail`：本地化后的人类消息（RFC 9457 示例字段；未启用本地化 / 无键 / 未命中时回落诊断 `Message`）。
+- `field`：出错字段（业务异常为 `ValidationError.Field`，自动模型校验为 MVC ModelState 键，如 `Address.Street`）。
+- `code`、`localizationKey`：**Leistd 自定义扩展**。`code` 稳定机器码、前端可据此分支；`localizationKey` 可改名展示键。二者**可空**，仅当抛出方在 `ValidationError` 上设置时才有值。
+- 字段名（`detail`/`field`/`code`/…）遵循**宿主的 JSON 属性命名策略**（System.Text.Json 的 PropertyNamingPolicy）；本文档的 camelCase 只是模板默认值。
+- 本结构**不是** JSON:API 错误对象（JSON:API 用 `source.pointer` 与 `application/vnd.api+json` 媒体类型），只是同样把逐字段错误组织为数组。
+
+> **与 ASP.NET 内置的差异**：本组件不用 `ValidationProblemDetails` 的 `{field:[string]}` 字典（那是微软惯例、非 RFC 形态、且无处安放机器码），改用符合标准的数组对象。`[ApiController]` 的**自动模型校验（400）**由 `ConfigureApiValidation()`（见 `AddControllers().ConfigureApiValidation()`）改写为**同一** `errors` 数组形态，两条校验路径统一。
 
 抛出后，全局处理器自动产出如下结构的响应（节选）：
 
@@ -157,8 +184,10 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
 | --- | --- |
 | `AddGlobalExceptionHandler(configuration)` | 从 `Leistd:GlobalException` 配置节绑定 Options 并注册处理器 |
 | `AddGlobalExceptionHandler(configure)` | 用委托配置 Options 并注册处理器 |
+| `ConfigureApiValidation()` | `IMvcBuilder` 扩展；把 `[ApiController]` 自动 400 校验产出为与业务 422 一致的 RFC 9457 `errors` 数组形态 |
 | `UseGlobalExceptionHandler()` | 接入异常处理中间件 |
 | `BusinessExceptionHandler` | `IExceptionHandler` 实现，执行异常到 ProblemDetails 的转换 |
+| `ErrorItem` | `errors` 数组的元素：`Detail` / `Field` / `Code?` / `LocalizationKey?`（RFC 9457 §3 validation-error 示例风格的扩展项） |
 
 ## 实现行为
 
@@ -167,7 +196,7 @@ throw new UnprocessableEntityException("email", "Invalid email format")   // 便
 - **开关与排除**：`Options.Enable` 为 `false`（默认）时处理器直接放行（返回 `false`，交回框架）。`ExcludePatterns` 命中的路径同样放行；模式支持 `前缀/**` 与含 `*` 的通配匹配，匹配大小写不敏感。
 - **异常归一化**：非 `BusinessException` 的异常会被映射——`System.ComponentModel.DataAnnotations.ValidationException` → `UnprocessableEntityException`；`CommonException` → `BadRequestException`；`TimeoutException` / `HttpRequestException`（及内含 `TimeoutException` 的 `OperationCanceledException`）→ `ServiceUnavailableException`；**不含超时的普通 `OperationCanceledException`（客户端主动取消）→ `BadRequestException`**；其余 → `InternalServerException`。
 - **状态码推导**：取 `Code` 的前 3 位作为 HTTP 状态码（须落在 100–599），否则回退 500。
-- **响应体**：标准异常输出 `ProblemDetails`，`UnprocessableEntityException` 输出 `ValidationProblemDetails`；两者都在 `Extensions` 中写入 `message`、`traceId`（取 `Activity.Current?.Id`，否则 `TraceIdentifier`）、`code`。
+- **响应体**：所有异常均输出普通 `ProblemDetails`（不用 `ValidationProblemDetails`）；`UnprocessableEntityException` 额外在 `Extensions` 写入 `errors` 数组（RFC 9457 §3 示例风格）。所有响应都在 `Extensions` 写入 `message`、`traceId`（取 `Activity.Current?.Id`，否则 `TraceIdentifier`）、`code`。`type` 省略（RFC 9457 缺省 `about:blank`：无额外语义、`title` 用状态短语）；宿主如需可解析的 problem-type URI 可自行设置。
 - **详情可见性**：由 `IsShowDetails` 决定（`null` 时按是否开发环境）。可见时写入 `details` 或 `stackTrace`；不可见时仅在有 `Details` 的情况下写入 `details`。
 - **本地化（可选，三分离）**：若容器注册了 `IStringLocalizer`（见 [`localization`](./localization.md)），处理器按 **`LocalizationKey`（展示键）→ 状态码通用语义键 → `Message`（诊断兜底）** 的顺序解析用户可见消息，用 `LocalizationData` 填充具名占位参数，并按 `Title:{status}` 本地化 `title`；**未注册时原样直出 `Message`、标题用内置英文**——因此是否启用本地化不改变未启用方的行为。三者职责分离：`Message` 永远是给日志/诊断的可读英文、`Code` 是稳定机器契约、`LocalizationKey` 是可改名的展示语义键。框架内置的异常归一化消息（超时/取消/内部错误等）也带通用键（`Error:*`）。
 - **漏配兜底**：启用本地化时，若异常的 `LocalizationKey` 在资源中未命中（或未设置），处理器**回落到按 HTTP 状态码的通用语义键**（`400→Error:BadRequest`、`404→Error:NotFound`、`409→Error:Conflict`、`422→Error:UnprocessableEntity`、其余→`Error:InternalServer` 等，框架自带默认资源）；通用键也查不到时回落到诊断 `Message`，**绝不把原始裸键漏给用户**。
