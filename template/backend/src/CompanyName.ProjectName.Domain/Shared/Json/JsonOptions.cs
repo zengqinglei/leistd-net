@@ -43,16 +43,14 @@ public static class JsonOptions
     };
 
     /// <summary>
-    /// Web API 选项：枚举字符串化 + 驼峰命名 + 忽略空值
-    /// 用于 ASP.NET Core Controllers 的 JSON 序列化配置
+    /// Web API 序列化策略（枚举字符串化 + 驼峰命名 + 忽略空值）的**唯一数据源**：应用到给定 options 实例，
+    /// 供 MVC（<c>AddJsonOptions</c>）与 HTTP 管道（<c>ConfigureHttpJsonOptions</c>，ProblemDetails/
+    /// IProblemDetailsService 走此配置）共用，确保业务响应、400、422 的命名策略一致；宿主改此处即全部跟随。
     /// </summary>
-    public static readonly JsonSerializerOptions WebApi = new()
+    public static void ConfigureWebApi(JsonSerializerOptions options)
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters =
-        {
-            JsonConverters.StringEnumConverter  // 使用字符串枚举转换器
-        }
-    };
+        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        options.Converters.Add(JsonConverters.StringEnumConverter);
+    }
 }

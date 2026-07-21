@@ -44,12 +44,12 @@ public static class DependencyInjection
         // 官方 ResourceManagerStringLocalizerFactory 依赖 IOptions<LocalizationOptions> / ILoggerFactory：由 AddLocalization 提供。
         services.AddLocalization();
         services.AddSingleton<ResourceManagerStringLocalizerFactory>();
-        // 用组合工厂替换默认全局 IStringLocalizerFactory：typed IStringLocalizer<T> 按资源来源路由
-        //（已登记 JSON 资源程序集走 JSON，其余委派官方 RESX），从而不接管宿主既有本地化。
+        // 用组合工厂替换默认全局 IStringLocalizerFactory：typed IStringLocalizer<T> 按**类型**路由
+        //（TResourceSource 登记在 JsonResourceTypes 才走 JSON，其余委派官方 RESX），从而不接管宿主既有本地化。
         services.AddSingleton<IStringLocalizerFactory, CompositeStringLocalizerFactory>();
         services.AddTransient(typeof(IStringLocalizer<>), typeof(StringLocalizer<>));
         // 无参 IStringLocalizer 是框架自身的全局 JSON 词条视图（业务/框架键，如 Error:* / 登录失败）：
-        // 直接取自 JSON 工厂，绕过组合工厂的按程序集路由——否则 Create(typeof(object)) 会因 object 属 CoreLib
+        // 直接取自 JSON 工厂，绕过组合工厂的按类型路由——否则 Create(typeof(object)) 会因 object 未登记
         // 落入 RESX 分支，导致业务错误消息无法本地化。
         services.AddTransient<IStringLocalizer>(sp =>
             sp.GetRequiredService<JsonStringLocalizerFactory>().Create(typeof(object)));

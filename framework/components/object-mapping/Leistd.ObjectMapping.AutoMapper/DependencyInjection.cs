@@ -9,8 +9,14 @@ namespace Leistd.ObjectMapping.AutoMapper;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 添加 AutoMapper 对象映射器
+    /// 添加 AutoMapper 对象映射器。
     /// </summary>
+    /// <remarks>
+    /// 已弃用：AutoMapper 13.0.1 存在高危 DoS 漏洞（GHSA-rvv3-g6hj-g44x / CVE-2026-32933），
+    /// 官方仅在改为商业授权的 15.1.1+ 修复。请改用 <c>Leistd.ObjectMapping.Mapster</c> 的
+    /// <c>AddMapsterObjectMapper</c>（同一 <c>IObjectMapper</c> 抽象，零授权成本、无该漏洞）。
+    /// </remarks>
+    [Obsolete("AutoMapper 组件已弃用（AutoMapper 13.0.1 存在 GHSA-rvv3-g6hj-g44x 高危 DoS，14.x 不会修复、15.x+ 改商业授权）。请改用 Leistd.ObjectMapping.Mapster 的 AddMapsterObjectMapper。")]
     public static IServiceCollection AddAutoMapperObjectMapper(
         this IServiceCollection services,
         Action<AutoMapperOptions>? configure = null)

@@ -144,6 +144,8 @@
             "frontend/_mock/data/user.ts",
             "frontend/_mock/utils/current-user.ts",
             "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationsAndRealTimeTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",
             "frontend/src/app/core/services/signalr-service.ts",
             "frontend/src/app/core/services/notification-service.ts",
             "frontend/_mock/api/notification.ts",

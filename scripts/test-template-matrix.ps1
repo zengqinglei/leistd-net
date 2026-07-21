@@ -4,18 +4,40 @@ param(
     [string]$Configuration = "Release",
     [switch]$SkipPack,
     [switch]$SkipFrontend,
-    [switch]$SkipRuntime,
-    [switch]$ReusePackages
+    [switch]$SkipRuntime
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tempRoot = Join-Path $repoRoot ".tmp"
-$feedRoot = Join-Path $tempRoot "local-feed"
-$generatedRoot = Join-Path $tempRoot "generated-template"
-$hiveRoot = Join-Path $tempRoot "template-hive"
-$packagesRoot = Join-Path $tempRoot "nuget-packages"
-$nugetConfigPath = Join-Path $tempRoot "template-matrix.NuGet.Config"
+
+# 每次运行独立的工作根：generated/hive/feed 都放在唯一 run 目录下，使上一轮残留的被锁目录
+# （MSBuild 复用节点仍持有 *.Tasks.dll 句柄等）永不阻断本轮，也让多个 AI/终端可并行执行——
+# 每个 run 自包含，互不写对方目录。用 PID + 高精度时间戳组合成 run id（脚本运行时确定，天然唯一）。
+$runId = "{0}-{1}" -f $PID, (Get-Date -Format "yyyyMMddHHmmssfff")
+$runRoot = Join-Path $tempRoot (Join-Path "runs" $runId)
+
+# 禁用 MSBuild 节点复用：worker 节点默认 /nodeReuse:true，进程退出后仍常驻并持有生成目录/包缓存的文件句柄，
+# 导致后续清理失败。MSBUILDDISABLENODEREUSE=1 才是关闭 node reuse 的正确开关（DOTNET_CLI_USE_MSBUILD_SERVER
+# 关的是另一个「MSBuild Server」特性，不影响 node reuse）。
+$env:MSBUILDDISABLENODEREUSE = "1"
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
+
+# 第三方 NuGet 缓存跨 run 共享、只读复用：nuget.org 的包按 (id,version) 内容不可变，可安全并发共享（NuGet 自带
+# 文件锁），避免每轮重下近 1GB 依赖闭包。真正会「同版本内容变化」的只有本地 pack 的 Leistd.*——restore 前定点
+# 清除缓存里的 Leistd.* 强制重新解包（见下），其余保持温热。
+$sharedPackagesRoot = Join-Path $tempRoot "nuget-cache"
+# 本地 Leistd 包源位置随模式而定：
+#  - 正常模式（本轮 pack）：per-run 独立目录，两个并行 run 各 pack 各的，杜绝共享目录重置竞争（发现#1）。
+#  - -SkipPack：消费预先 pack 到共享 .tmp/local-feed 的包（CI 先 `dotnet pack -o .tmp/local-feed` 再 -SkipPack），
+#    只读复用、并发安全。
+$sharedFeedRoot = Join-Path $tempRoot "local-feed"
+$feedRoot = if ($SkipPack) { $sharedFeedRoot } else { Join-Path $runRoot "local-feed" }
+$generatedRoot = Join-Path $runRoot "generated-template"
+$hiveRoot = Join-Path $runRoot "template-hive"
+$nugetConfigPath = Join-Path $runRoot "template-matrix.NuGet.Config"
+$lockFile = Join-Path $runRoot ".run.lock"            # 活动锁：清理旧 run 时据此/据修改时间判活，绝不删正在运行的 run
+$staleRunAgeHours = 2                                  # 超过此时长且非本 run 的目录才视为陈旧、可清理
 $templateRoot = Join-Path $repoRoot "template"
 $nugetOrg = "https://api.nuget.org/v3/index.json"
 
@@ -30,7 +52,22 @@ function Assert-TempPath([string]$Path) {
 function Reset-Directory([string]$Path) {
     Assert-TempPath $Path
     if (Test-Path -LiteralPath $Path) {
-        Remove-Item -LiteralPath $Path -Recurse -Force
+        # Windows 下 node/dotnet 残留句柄常导致 "目录不是空的"/访问被拒——对 IO/权限异常带退避重试，
+        # 避免在打包/构建/测试前就阻断整个矩阵；最终仍失败时输出残留路径便于排查。
+        $maxAttempts = 5
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+                Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+                break
+            }
+            catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+                if ($attempt -eq $maxAttempts) {
+                    Write-Warning "无法清理目录（$maxAttempts 次重试后仍失败）: $Path"
+                    throw
+                }
+                Start-Sleep -Milliseconds (200 * $attempt)
+            }
+        }
     }
     New-Item -ItemType Directory -Path $Path | Out-Null
 }
@@ -303,7 +340,12 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
         }
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
-        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(60)
+        # 健康探测窗口。生成项目单独冷启动通常 ~10s 即 200；但矩阵在一次 pack+generate+restore+build 突发之后
+        # 立即启动首个场景，CPU/磁盘/句柄仍处饱和，冷启动可显著变慢——旧的 60s 会偶发假超时（非启动故障，
+        # 单独启动即健康）。放宽到 150s 覆盖满载冷启动尾延迟；可用 $env:MATRIX_HEALTH_TIMEOUT_SEC 覆盖。
+        $healthTimeoutSec = 150
+        if ($env:MATRIX_HEALTH_TIMEOUT_SEC) { $healthTimeoutSec = [int]$env:MATRIX_HEALTH_TIMEOUT_SEC }
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds($healthTimeoutSec)
         $healthy = $false
         while ([DateTimeOffset]::UtcNow -lt $deadline) {
             if ($process.HasExited) {
@@ -322,7 +364,7 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
             }
         }
         if (-not $healthy -and -not $failure) {
-            $failure = "Generated API did not become healthy within 60 seconds."
+            $failure = "Generated API did not become healthy within $healthTimeoutSec seconds."
         }
     }
     catch {
@@ -430,19 +472,32 @@ foreach ($scenario in $Scenarios) {
     }
 }
 
-New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
-Reset-Directory $generatedRoot
-Reset-Directory $hiveRoot
-if ($ReusePackages -and (Test-Path -LiteralPath $packagesRoot)) {
-    New-Item -ItemType Directory -Path $packagesRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+[IO.File]::WriteAllText($lockFile, ("pid={0} started={1}" -f $PID, (Get-Date -Format "o")), [Text.UTF8Encoding]::new($false))
+
+# 清理陈旧 run 目录：仅删「非本 run」且「超过 $staleRunAgeHours 未活动」的目录，绝不删正在运行的 run——
+# 支持多 AI/终端并行执行。活动判据：目录里 .run.lock（无则回退目录本身）的最后写入时间。被锁清不掉也无妨（尽力而为）。
+$oldRunsRoot = Join-Path $tempRoot "runs"
+$staleBefore = (Get-Date).AddHours(-$staleRunAgeHours)
+if (Test-Path -LiteralPath $oldRunsRoot) {
+    Get-ChildItem -LiteralPath $oldRunsRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -ne $runRoot } |
+        Where-Object {
+            $lock = Join-Path $_.FullName ".run.lock"
+            $activityTime = if (Test-Path -LiteralPath $lock) { (Get-Item -LiteralPath $lock).LastWriteTime } else { $_.LastWriteTime }
+            $activityTime -lt $staleBefore
+        } |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
 }
-else {
-    Reset-Directory $packagesRoot
-}
-$env:NUGET_PACKAGES = $packagesRoot
+
+New-Item -ItemType Directory -Path $generatedRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $hiveRoot -Force | Out-Null
+# 第三方 NuGet 缓存跨 run 共享、只读复用（(id,version) 不可变，并发安全）；本 run 用它作 globalPackagesFolder。
+New-Item -ItemType Directory -Path $sharedPackagesRoot -Force | Out-Null
+$env:NUGET_PACKAGES = $sharedPackagesRoot
 
 $escapedFeedRoot = [Security.SecurityElement]::Escape($feedRoot)
-$escapedPackagesRoot = [Security.SecurityElement]::Escape($packagesRoot)
+$escapedPackagesRoot = [Security.SecurityElement]::Escape($sharedPackagesRoot)
 $nugetConfig = @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -463,8 +518,14 @@ if (-not $SkipPack) {
     Invoke-External "dotnet" @("pack", "framework/Leistd.Framework.slnx", "-c", $Configuration, "-o", $feedRoot)
 }
 elseif (-not (Test-Path -LiteralPath $feedRoot)) {
-    throw "-SkipPack requires an existing .tmp/local-feed."
+    throw "-SkipPack requires an existing shared feed at '$feedRoot'（先 `dotnet pack ... -o .tmp/local-feed`，或省略 -SkipPack 以重新 pack）."
 }
+
+# 定点清除共享缓存里的 Leistd.*：NuGet 对已在 globalPackagesFolder 中的同版本包不会重新解包，
+# 若源码变了但版本号未变（本地 0.12.0），restore 会命中陈旧内容。只清 Leistd.*（几 MB，非整个 ~1GB 闭包）
+# 强制本轮重新解包新 pack 的本地包；第三方包保持温热。
+Get-ChildItem -LiteralPath $sharedPackagesRoot -Directory -Filter "leistd.*" -ErrorAction SilentlyContinue |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
 
 Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", $templateRoot, "--force")
 
@@ -480,7 +541,10 @@ foreach ($scenario in $Scenarios) {
     Assert-ScenarioShape $projectRoot $projectName $definition
 
     $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-    Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath)
+    # --force：等价于删除并重建 project.assets.json、强制重新评估依赖资产图（解决被 design-time restore
+    # 覆盖、资产图未刷新等问题）。注意：它**不**清除 globalPackagesFolder 中已提取的同 ID/同版本包——
+    # 同版本内容变化（本地 Leistd.* 0.12.0）由前面「pack 后定点清除共享缓存里的 leistd.*」处理，故此处安全。
+    Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
     Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
     $runtimeValidated = $false
@@ -496,6 +560,7 @@ foreach ($scenario in $Scenarios) {
 
     $frontendValidated = $false
     $lintValidated = $false
+    $testValidated = $false
     if (-not $SkipFrontend -and $definition.Frontend) {
         $frontendRoot = Join-Path $projectRoot "frontend"
         $env:HUSKY = "0"
@@ -506,6 +571,11 @@ foreach ($scenario in $Scenarios) {
         }
         Invoke-External "npm" @("run", "build") $frontendRoot
         $frontendValidated = $true
+
+        # 前端单测（无头、单次）：每个场景都含一条不受本地化裁剪的基础 smoke spec，
+        # 故 npm test 恒能命中 >=1 个 spec；本地化场景另含 translationReady 首帧回归测试。
+        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=ChromeHeadless") $frontendRoot
+        $testValidated = $true
     }
 
     $results.Add([PSCustomObject]@{
@@ -514,6 +584,7 @@ foreach ($scenario in $Scenarios) {
         Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
         Lint = if ($lintValidated) { "pass" } else { "skipped" }
         Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
+        Test = if ($testValidated) { "pass" } else { "skipped" }
         Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
     })
 }

@@ -60,6 +60,6 @@ pwsh scripts/validate-skills.ps1
 pwsh scripts/test-template-matrix.ps1
 ```
 
-模板场景统一生成到 `.tmp/generated-template/`，本地 NuGet 包统一输出到 `.tmp/local-feed`，还原缓存隔离在 `.tmp/nuget-packages`。脚本会在 `.tmp` 生成一次性 NuGet 配置，不修改仓库或用户配置，从而避免同版本全局缓存掩盖当前源码包。CI 发布目录仍使用 `framework/artifacts`。
+每次运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），其下含 `generated-template/`（模板场景生成）、`local-feed/`（本地 Leistd 包，每 run 独立 pack）、`template-hive/` 与一次性 NuGet 配置——各 run 自包含、互不写对方目录，因此**多个 AI/终端可并行执行**。第三方 NuGet 包缓存跨 run 共享、只读复用于 `.tmp/nuget-cache`（按 (id,version) 内容不可变，并发安全，避免每轮重下近 1GB 依赖闭包）；restore 前脚本会定点清除该缓存里的 `Leistd.*`，强制重新解包当前源码包，避免同版本全局缓存掩盖改动。启动时只清理超过 2 小时未活动且非当前 run 的旧目录（据 `.run.lock` 判活），绝不删正在运行的 run。CI 发布目录仍使用 `framework/artifacts`。
 
-重复调试同一份本地包时可组合使用 `-SkipPack -ReusePackages`；框架包内容变化后不得复用缓存，必须重新 pack 和 restore。
+重复调试同一份已 pack 的本地包时可用 `-SkipPack`（复用当前 run 目录已有的 `local-feed`）；框架包内容变化后必须重新 pack（去掉 `-SkipPack`）。
