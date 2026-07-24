@@ -88,16 +88,16 @@ export class NotificationService {
     }
   }
 
-  /** 通知类型图标（仅区分形状，颜色统一由视图控制）。 */
+  /** 通知类型图标（lucide 图标名；仅区分形状，颜色统一由视图控制）。 */
   getIcon(type: string): string {
     switch (type) {
       case 'DataChange':
-        return 'pi pi-database';
+        return 'lucideDatabase';
       case 'Workflow':
-        return 'pi pi-sitemap';
+        return 'lucideNetwork';
       case 'System':
       default:
-        return 'pi pi-info-circle';
+        return 'lucideInfo';
     }
   }
 }

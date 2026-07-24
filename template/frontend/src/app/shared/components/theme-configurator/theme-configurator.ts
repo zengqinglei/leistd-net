@@ -1,118 +1,58 @@
-import { Component, computed, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-import { SelectButtonModule } from 'primeng/selectbutton';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideMonitor, lucideMoon, lucideSun } from '@ng-icons/lucide';
+import { HlmToggleGroup, HlmToggleGroupItem } from '@spartan-ng/helm/toggle-group';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
-import {
-  THEME_PRESET_NAMES,
-  THEME_PRESETS,
-  THEME_PRIMARY_NAMES,
-  THEME_SURFACE_NAMES,
-  ThemeMode,
-  ThemePresetName,
-  ThemePrimaryName,
-  ThemeService,
-  ThemeSurfaceName,
-} from '../../../core/services/theme-service';
+import { ThemeMode, ThemeService } from '../../../core/services/theme-service';
 
-import type { PaletteDesignToken } from '@primeuix/themes/types';
-
-interface PaletteOption<TName extends string> {
-  name: TName;
-  palette: PaletteDesignToken;
-}
-
+/**
+ * 主题配置面板：亮 / 跟随系统 / 暗 三态切换。
+ *
+ * 按 Spartan 主题体系（CSS 变量），不提供运行时换主色/表面色；
+ * 品牌定制由项目改 styles.css 的 CSS 变量完成。
+ */
 @Component({
   selector: 'app-theme-configurator',
   standalone: true,
-  imports: [FormsModule, SelectButtonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [HlmToggleGroup, HlmToggleGroupItem, NgIcon],
+  providers: [provideIcons({ lucideSun, lucideMonitor, lucideMoon })],
   template: `
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-2">
-        <span class="text-sm text-muted-color font-semibold">{{ modeLabel() }}</span>
-        <p-selectbutton
-          [options]="themeModes()"
-          optionLabel="label"
-          optionValue="value"
-          [ngModel]="themeService.mode()"
-          (ngModelChange)="onThemeModeChange($event)"
-          [allowEmpty]="false"
-        />
-      </div>
-
-      <div>
-        <span class="text-sm text-muted-color font-semibold">{{ primaryLabel() }}</span>
-        <div class="pt-2 flex gap-2 flex-wrap justify-start">
-          <button
-            type="button"
-            [title]="defaultLabel()"
-            (click)="onPrimaryChange($event, null)"
-            [class.outline-primary]="themeService.preferences().primary === null"
-            class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
-            style="background-color: var(--p-primary-color)"
-          ></button>
-          @for (primaryColor of primaryColors(); track primaryColor.name) {
-            <button
-              type="button"
-              [title]="primaryColor.name"
-              (click)="onPrimaryChange($event, primaryColor.name)"
-              [class.outline-primary]="primaryColor.name === themeService.preferences().primary"
-              class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
-              [style.background-color]="primaryColor.palette[500]"
-            ></button>
-          }
-        </div>
-      </div>
-
-      <div>
-        <span class="text-sm text-muted-color font-semibold">{{ surfaceLabel() }}</span>
-        <div class="pt-2 flex gap-2 flex-wrap justify-start">
-          <button
-            type="button"
-            [title]="defaultLabel()"
-            (click)="onSurfaceChange($event, null)"
-            [class.outline-primary]="themeService.preferences().surface === null"
-            class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
-            style="background-color: var(--p-surface-500)"
-          ></button>
-          @for (surface of surfaces(); track surface.name) {
-            <button
-              type="button"
-              [title]="surface.name"
-              (click)="onSurfaceChange($event, surface.name)"
-              [class.outline-primary]="surface.name === themeService.preferences().surface"
-              class="border-none w-5 h-5 rounded-full p-0 cursor-pointer outline-none outline-offset-1"
-              [style.background-color]="surface.palette[500]"
-            ></button>
-          }
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <span class="text-sm text-muted-color font-semibold">{{ presetsLabel() }}</span>
-        <p-selectbutton
-          [options]="presetNames"
-          [ngModel]="themeService.preferences().preset"
-          (ngModelChange)="onPresetChange($event)"
-          [allowEmpty]="false"
-        />
+        <span class="text-sm text-muted-foreground font-semibold">{{ modeLabel() }}</span>
+        <hlm-toggle-group
+          type="single"
+          variant="outline"
+          [value]="themeService.mode()"
+          (valueChange)="onThemeModeChange($event)"
+          class="justify-start"
+        >
+          <button hlmToggleGroupItem value="light" [attr.aria-label]="lightLabel()">
+            <ng-icon name="lucideSun" data-icon="inline-start" />
+            {{ lightLabel() }}
+          </button>
+          <button hlmToggleGroupItem value="system" [attr.aria-label]="systemLabel()">
+            <ng-icon name="lucideMonitor" data-icon="inline-start" />
+            {{ systemLabel() }}
+          </button>
+          <button hlmToggleGroupItem value="dark" [attr.aria-label]="darkLabel()">
+            <ng-icon name="lucideMoon" data-icon="inline-start" />
+            {{ darkLabel() }}
+          </button>
+        </hlm-toggle-group>
       </div>
     </div>
   `,
-  styles: `
-    .outline-primary {
-      outline: 2px solid var(--p-primary-color);
-      outline-offset: 1px;
-    }
-  `,
   host: {
     class:
-      'hidden absolute top-12 right-0 w-80 max-w-[calc(100vw-2rem)] p-5 bg-surface-0 dark:bg-surface-900 border border-surface rounded-border origin-top shadow-[0px_3px_5px_rgba(0,0,0,0.02),0px_0px_2px_rgba(0,0,0,0.05),0px_1px_4px_rgba(0,0,0,0.08)]',
+      'hidden absolute top-12 right-0 w-72 max-w-[calc(100vw-2rem)] p-5 bg-background border border-border rounded-md origin-top shadow-lg',
   },
 })
 export class ThemeConfigurator {
@@ -125,79 +65,28 @@ export class ThemeConfigurator {
     this.translationReady();
     return this.transloco.translate('theme.config.mode');
   });
-  readonly defaultLabel = computed(() => {
+  readonly lightLabel = computed(() => {
     this.translationReady();
-    return this.transloco.translate('theme.config.default');
+    return this.transloco.translate('theme.config.light');
   });
-  readonly primaryLabel = computed(() => {
+  readonly systemLabel = computed(() => {
     this.translationReady();
-    return this.transloco.translate('theme.config.primary');
+    return this.transloco.translate('theme.config.system');
   });
-  readonly surfaceLabel = computed(() => {
+  readonly darkLabel = computed(() => {
     this.translationReady();
-    return this.transloco.translate('theme.config.surface');
-  });
-  readonly presetsLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('theme.config.presets');
+    return this.transloco.translate('theme.config.dark');
   });
   //#else
   readonly modeLabel = computed(() => 'Theme Mode');
-  readonly defaultLabel = computed(() => 'Default');
-  readonly primaryLabel = computed(() => 'Primary');
-  readonly surfaceLabel = computed(() => 'Surface');
-  readonly presetsLabel = computed(() => 'Presets');
+  readonly lightLabel = computed(() => 'Light');
+  readonly systemLabel = computed(() => 'System');
+  readonly darkLabel = computed(() => 'Dark');
   //#endif
 
-  readonly presetNames = [...THEME_PRESET_NAMES];
-  //#if (IncludeLocalization)
-  readonly themeModes = computed<{ label: string; value: ThemeMode }[]>(() => {
-    this.translationReady();
-    return [
-      { label: this.transloco.translate('theme.config.light'), value: 'light' },
-      { label: this.transloco.translate('theme.config.system'), value: 'system' },
-      { label: this.transloco.translate('theme.config.dark'), value: 'dark' },
-    ];
-  });
-  //#else
-  readonly themeModes = computed<{ label: string; value: ThemeMode }[]>(() => [
-    { label: 'Light', value: 'light' },
-    { label: 'System', value: 'system' },
-    { label: 'Dark', value: 'dark' },
-  ]);
-  //#endif
-
-  readonly primaryColors = computed<PaletteOption<ThemePrimaryName>[]>(() => {
-    const primitive = THEME_PRESETS[this.themeService.preferences().preset].primitive;
-    return THEME_PRIMARY_NAMES.map((name) => ({
-      name,
-      palette: (primitive?.[name] ?? {}) as PaletteDesignToken,
-    }));
-  });
-
-  readonly surfaces = computed<PaletteOption<ThemeSurfaceName>[]>(() => {
-    const primitive = THEME_PRESETS[this.themeService.preferences().preset].primitive;
-    return THEME_SURFACE_NAMES.map((name) => ({
-      name,
-      palette: (primitive?.[name] ?? {}) as PaletteDesignToken,
-    }));
-  });
-
-  onThemeModeChange(mode: ThemeMode): void {
-    this.themeService.setMode(mode);
-  }
-
-  onPrimaryChange(event: MouseEvent, primary: ThemePrimaryName | null): void {
-    event.stopPropagation();
-    this.themeService.updatePreferences({ primary });
-  }
-
-  onSurfaceChange(event: MouseEvent, surface: ThemeSurfaceName | null): void {
-    event.stopPropagation();
-    this.themeService.updatePreferences({ surface });
-  }
-
-  onPresetChange(preset: ThemePresetName): void {
-    this.themeService.updatePreferences({ preset });
+  onThemeModeChange(mode: string | string[] | null | undefined): void {
+    if (typeof mode === 'string' && mode) {
+      this.themeService.setMode(mode as ThemeMode);
+    }
   }
 }

@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
 import {
   ChangeDetectionStrategy,
@@ -27,21 +26,21 @@ import { FormsModule } from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { DividerModule } from 'primeng/divider';
-import { InputTextModule } from 'primeng/inputtext';
-import { MultiSelectModule } from 'primeng/multiselect';
-import { SelectModule } from 'primeng/select';
-import { TagModule } from 'primeng/tag';
-import { TextareaModule } from 'primeng/textarea';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideCheck, lucideCircleCheck, lucidePlus, lucideX } from '@ng-icons/lucide';
+import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmSeparator } from '@spartan-ng/helm/separator';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
-import { DIALOG_CONFIGS } from '../../../../../../shared/constants/dialog-config.constants';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationClientType,
@@ -84,22 +83,21 @@ const authorizationCodePermissions = [
 @Component({
   selector: 'app-open-application-edit-dialog',
   imports: [
-    CommonModule,
     FormsModule,
-    DialogModule,
-    ButtonModule,
-    InputTextModule,
-    TextareaModule,
-    SelectModule,
-    MultiSelectModule,
-    TagModule,
-    DividerModule,
-    TooltipModule,
+    NgIcon,
+    HlmBadge,
+    HlmButton,
+    HlmInput,
+    HlmSpinner,
+    HlmSeparator,
+    ...HlmDialogImports,
+    ...HlmSelectImports,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
     DialogLoadingComponent,
   ],
+  providers: [provideIcons({ lucideCheck, lucideCircleCheck, lucidePlus, lucideX })],
   templateUrl: './open-application-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -144,7 +142,6 @@ export class OpenApplicationEditDialogComponent {
   readonly saved = output<CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto>();
 
   formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
-  dialogConfig = DIALOG_CONFIGS.MEDIUM;
   selectedTemplate = signal<OpenApplicationTemplate | null>(null);
 
   isEditMode = computed(() => !!this.application());
@@ -173,28 +170,31 @@ export class OpenApplicationEditDialogComponent {
   readonly templateOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.template.web'), value: 'web' },
-      { label: this.transloco.translate('openApp.template.desktop'), value: 'desktop' },
-      { label: this.transloco.translate('openApp.template.service'), value: 'service' },
+      { label: this.transloco.translate('openApp.template.web'), value: 'web' as const },
+      { label: this.transloco.translate('openApp.template.desktop'), value: 'desktop' as const },
+      { label: this.transloco.translate('openApp.template.service'), value: 'service' as const },
     ];
   });
 
   readonly applicationTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.appType.web'), value: 'web' },
-      { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
-      { label: this.transloco.translate('openApp.appType.service'), value: 'service' },
+      { label: this.transloco.translate('openApp.appType.web'), value: 'web' as const },
+      { label: this.transloco.translate('openApp.appType.native'), value: 'native' as const },
+      { label: this.transloco.translate('openApp.appType.service'), value: 'service' as const },
     ];
   });
 
   readonly clientTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.clientType.publicLabel'), value: 'public' },
+      {
+        label: this.transloco.translate('openApp.clientType.publicLabel'),
+        value: 'public' as const,
+      },
       {
         label: this.transloco.translate('openApp.clientType.confidentialLabel'),
-        value: 'confidential',
+        value: 'confidential' as const,
       },
     ];
   });
@@ -202,10 +202,22 @@ export class OpenApplicationEditDialogComponent {
   readonly consentTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.consentType.implicit'), value: 'implicit' },
-      { label: this.transloco.translate('openApp.consentType.explicit'), value: 'explicit' },
-      { label: this.transloco.translate('openApp.consentType.external'), value: 'external' },
-      { label: this.transloco.translate('openApp.consentType.systematic'), value: 'systematic' },
+      {
+        label: this.transloco.translate('openApp.consentType.implicit'),
+        value: 'implicit' as const,
+      },
+      {
+        label: this.transloco.translate('openApp.consentType.explicit'),
+        value: 'explicit' as const,
+      },
+      {
+        label: this.transloco.translate('openApp.consentType.external'),
+        value: 'external' as const,
+      },
+      {
+        label: this.transloco.translate('openApp.consentType.systematic'),
+        value: 'systematic' as const,
+      },
     ];
   });
 
@@ -306,27 +318,27 @@ export class OpenApplicationEditDialogComponent {
   });
   //#else
   readonly templateOptions = computed(() => [
-    { label: 'Web PKCE client', value: 'web' },
-    { label: 'Desktop PKCE client', value: 'desktop' },
-    { label: 'Service confidential client', value: 'service' },
+    { label: 'Web PKCE client', value: 'web' as const },
+    { label: 'Desktop PKCE client', value: 'desktop' as const },
+    { label: 'Service confidential client', value: 'service' as const },
   ]);
 
   readonly applicationTypeOptions = computed(() => [
-    { label: 'Web', value: 'web' },
-    { label: 'Desktop/Native', value: 'native' },
-    { label: 'Service', value: 'service' },
+    { label: 'Web', value: 'web' as const },
+    { label: 'Desktop/Native', value: 'native' as const },
+    { label: 'Service', value: 'service' as const },
   ]);
 
   readonly clientTypeOptions = computed(() => [
-    { label: 'Public', value: 'public' },
-    { label: 'Confidential', value: 'confidential' },
+    { label: 'Public', value: 'public' as const },
+    { label: 'Confidential', value: 'confidential' as const },
   ]);
 
   readonly consentTypeOptions = computed(() => [
-    { label: 'Implicit consent', value: 'implicit' },
-    { label: 'Explicit consent', value: 'explicit' },
-    { label: 'External consent', value: 'external' },
-    { label: 'Systematic consent', value: 'systematic' },
+    { label: 'Implicit consent', value: 'implicit' as const },
+    { label: 'Explicit consent', value: 'explicit' as const },
+    { label: 'External consent', value: 'external' as const },
+    { label: 'Systematic consent', value: 'systematic' as const },
   ]);
 
   readonly permissionOptions = computed(() => [
@@ -428,7 +440,11 @@ export class OpenApplicationEditDialogComponent {
     };
   }
 
-  applyTemplate(template: OpenApplicationTemplate) {
+  applyTemplate(template: OpenApplicationTemplate | null | undefined) {
+    if (!template) {
+      this.selectedTemplate.set(null);
+      return;
+    }
     this.selectedTemplate.set(template);
     if (template === 'desktop') {
       this.formModel.update((model) => ({
@@ -475,6 +491,44 @@ export class OpenApplicationEditDialogComponent {
     }));
   }
 
+  onDisplayNameChange(value: string) {
+    this.formModel.update((model) => ({ ...model, displayName: value }));
+  }
+
+  onClientIdChange(value: string) {
+    this.formModel.update((model) => ({ ...model, clientId: value }));
+  }
+
+  onApplicationTypeChange(value: OpenApplicationType | null | undefined) {
+    if (!value) {
+      return;
+    }
+    this.formModel.update((model) => ({ ...model, applicationType: value }));
+  }
+
+  onConsentTypeChange(value: OpenApplicationConsentType | null | undefined) {
+    if (!value) {
+      return;
+    }
+    this.formModel.update((model) => ({ ...model, consentType: value }));
+  }
+
+  onRedirectUriInputChange(value: string) {
+    this.formModel.update((model) => ({ ...model, redirectUriInput: value }));
+  }
+
+  onPostLogoutRedirectUriInputChange(value: string) {
+    this.formModel.update((model) => ({ ...model, postLogoutRedirectUriInput: value }));
+  }
+
+  onPermissionsChange(value: string[] | null | undefined) {
+    this.formModel.update((model) => ({ ...model, permissions: value ?? [] }));
+  }
+
+  onRequirementsChange(value: string[] | null | undefined) {
+    this.formModel.update((model) => ({ ...model, requirements: value ?? [] }));
+  }
+
   onClientTypeChange() {
     if (this.formModel().clientType === 'public') {
       this.formModel.update((model) => ({
@@ -484,7 +538,10 @@ export class OpenApplicationEditDialogComponent {
     }
   }
 
-  onClientTypeSelect(clientType: OpenApplicationClientType) {
+  onClientTypeSelect(clientType: OpenApplicationClientType | null | undefined) {
+    if (!clientType) {
+      return;
+    }
     this.formModel.update((model) => ({
       ...model,
       clientType,
@@ -525,6 +582,14 @@ export class OpenApplicationEditDialogComponent {
   isPostLogoutRedirectUriInputInvalid() {
     const value = this.formModel().postLogoutRedirectUriInput.trim();
     return !!value && !this.isValidRedirectUri(value);
+  }
+
+  /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约。 */
+  onDialogStateChange(state: BrnDialogState): void {
+    this.visible.set(state === 'open');
+    if (state === 'closed') {
+      this.onHide();
+    }
   }
 
   onHide() {

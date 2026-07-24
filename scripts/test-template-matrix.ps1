@@ -167,8 +167,14 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
 
     $skillRoot = Join-Path $ProjectRoot ".agents/skills"
     $skillNames = @(Get-ChildItem -LiteralPath $skillRoot -Directory | ForEach-Object Name)
-    if ($skillNames.Count -ne 1 -or $skillNames[0] -ne "leistd-project-workflow") {
-        throw "Generated project must contain only leistd-project-workflow in $skillRoot"
+    # 生成项目预期携带 leistd-project-workflow（项目协作）与 spartan（前端 UI 库 CLI 用法）。
+    $allowedSkills = @("leistd-project-workflow", "spartan")
+    if (-not ($skillNames -contains "leistd-project-workflow")) {
+        throw "Generated project must contain leistd-project-workflow in $skillRoot"
+    }
+    $unexpectedSkills = @($skillNames | Where-Object { $allowedSkills -notcontains $_ })
+    if ($unexpectedSkills.Count -gt 0) {
+        throw "Generated project has unexpected skills in $skillRoot : $($unexpectedSkills -join ', ')"
     }
 
     $projectReadme = Get-Content -LiteralPath (Join-Path $ProjectRoot "README.md") -Raw -Encoding UTF8

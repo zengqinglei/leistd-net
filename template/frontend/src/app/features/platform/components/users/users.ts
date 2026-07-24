@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
 import {
   ChangeDetectionStrategy,
@@ -10,7 +9,6 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#else
 import {
   ChangeDetectionStrategy,
@@ -21,26 +19,30 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#endif
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { ConfirmationService, MessageService } from 'primeng/api';
-import { ButtonModule } from 'primeng/button';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
-import { IconFieldModule } from 'primeng/iconfield';
-import { InputIconModule } from 'primeng/inputicon';
-import { InputTextModule } from 'primeng/inputtext';
-import { SelectModule } from 'primeng/select';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
+import { HlmButton } from '@spartan-ng/helm/button';
+import {
+  HlmInputGroup,
+  HlmInputGroupInput,
+  HlmInputGroupAddon,
+} from '@spartan-ng/helm/input-group';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
+import { ConfirmService } from '../../../../core/notifications/confirm-service';
+import { notify } from '../../../../core/notifications/notify';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
 import { FilterStateService } from '../../../../shared/services/filter-state.service';
@@ -58,15 +60,14 @@ import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table
 @Component({
   selector: 'app-users',
   imports: [
-    CommonModule,
     FormsModule,
-    SelectModule,
-    IconFieldModule,
-    InputIconModule,
-    InputTextModule,
-    ButtonModule,
-    TooltipModule,
-    ConfirmDialogModule,
+    NgIcon,
+    HlmButton,
+    HlmInputGroup,
+    HlmInputGroupInput,
+    HlmInputGroupAddon,
+    ...HlmSelectImports,
+    ...HlmTooltipImports,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
@@ -74,15 +75,14 @@ import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table
     UserEditDialogComponent,
     ResetUserPasswordDialogComponent,
   ],
-  providers: [ConfirmationService],
+  providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
   templateUrl: './users.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UsersPage implements OnInit {
   private readonly service = inject(UserManagementService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly confirmationService = inject(ConfirmationService);
-  private readonly messageService = inject(MessageService);
+  private readonly confirmService = inject(ConfirmService);
   private readonly layoutService = inject(LayoutService);
   private readonly filterStateService = inject(FilterStateService);
   //#if (IncludeLocalization)
@@ -167,9 +167,6 @@ export class UsersPage implements OnInit {
   readonly searchPlaceholder = () => this.transloco.translate('users.filter.searchPlaceholder');
   readonly refreshLabel = () => this.transloco.translate('common.refresh');
   readonly newUserLabel = () => this.transloco.translate('users.actions.newUser');
-  readonly confirmHeader = () => this.transloco.translate('common.confirm');
-  readonly confirmAcceptLabel = () => this.transloco.translate('common.ok');
-  readonly confirmRejectLabel = () => this.transloco.translate('common.cancel');
   //#else
   readonly allStatusPlaceholder = () => 'All statuses';
   readonly allEmailStatusPlaceholder = () => 'All email statuses';
@@ -177,9 +174,6 @@ export class UsersPage implements OnInit {
   readonly searchPlaceholder = () => 'Search username / email / display name...';
   readonly refreshLabel = () => 'Refresh';
   readonly newUserLabel = () => 'New user';
-  readonly confirmHeader = () => 'Confirm';
-  readonly confirmAcceptLabel = () => 'OK';
-  readonly confirmRejectLabel = () => 'Cancel';
   //#endif
 
   constructor() {
@@ -241,18 +235,18 @@ export class UsersPage implements OnInit {
     this.searchSubject.next(value);
   }
 
-  onActiveChange(value: boolean | null) {
-    this.selectedIsActive.set(value);
+  onActiveChange(value: boolean | null | undefined) {
+    this.selectedIsActive.set(value ?? null);
     this.onFilter();
   }
 
-  onEmailVerifiedChange(value: boolean | null) {
-    this.selectedIsEmailVerified.set(value);
+  onEmailVerifiedChange(value: boolean | null | undefined) {
+    this.selectedIsEmailVerified.set(value ?? null);
     this.onFilter();
   }
 
-  onRoleChange(value: string | null) {
-    this.selectedRole.set(value);
+  onRoleChange(value: string | null | undefined) {
+    this.selectedRole.set(value ?? null);
     this.onFilter();
   }
 
@@ -305,17 +299,13 @@ export class UsersPage implements OnInit {
       .subscribe({
         next: () => {
           //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
+          notify.success(this.transloco.translate('common.success'), {
             detail: this.transloco.translate(
               selected ? 'users.toast.updated' : 'users.toast.created',
             ),
           });
           //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
+          notify.success('Success', {
             detail: selected ? 'User updated successfully' : 'User created successfully',
           });
           //#endif
@@ -325,96 +315,85 @@ export class UsersPage implements OnInit {
       });
   }
 
-  handleToggleActive(user: UserManagementOutputDto) {
-    this.confirmationService.confirm({
+  async handleToggleActive(user: UserManagementOutputDto) {
+    const confirmed = await this.confirmService.open({
       //#if (IncludeLocalization)
       message: this.transloco.translate(
         user.isActive ? 'users.confirm.disableMessage' : 'users.confirm.enableMessage',
-        {
-          name: user.username,
-        },
+        { name: user.username },
       ),
       header: this.transloco.translate(
         user.isActive ? 'users.confirm.disableHeader' : 'users.confirm.enableHeader',
       ),
+      confirmText: this.transloco.translate('common.ok'),
+      cancelText: this.transloco.translate('common.cancel'),
       //#else
       message: user.isActive
         ? `Are you sure you want to disable user ${user.username}?`
         : `Are you sure you want to enable user ${user.username}?`,
       header: user.isActive ? 'Confirm disable' : 'Confirm enable',
       //#endif
-      icon: 'pi pi-exclamation-triangle',
-      accept: () => {
-        const request = user.isActive
-          ? this.service.disableUser(user.id)
-          : this.service.enableUser(user.id);
-        request.subscribe(() => {
-          //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate(
-              user.isActive ? 'users.toast.disabled' : 'users.toast.enabled',
-            ),
-          });
-          //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: user.isActive ? 'User disabled' : 'User enabled',
-          });
-          //#endif
-          this.reloadList();
-        });
-      },
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    const request = user.isActive
+      ? this.service.disableUser(user.id)
+      : this.service.enableUser(user.id);
+    request.subscribe(() => {
+      //#if (IncludeLocalization)
+      notify.success(this.transloco.translate('common.success'), {
+        detail: this.transloco.translate(
+          user.isActive ? 'users.toast.disabled' : 'users.toast.enabled',
+        ),
+      });
+      //#else
+      notify.success('Success', { detail: user.isActive ? 'User disabled' : 'User enabled' });
+      //#endif
+      this.reloadList();
     });
   }
 
-  handleDelete(user: UserManagementOutputDto) {
+  async handleDelete(user: UserManagementOutputDto) {
     if (user.isSuperAdmin) {
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'warn',
-        summary: this.transloco.translate('users.toast.cannotDeleteSummary'),
+      notify.warn(this.transloco.translate('users.toast.cannotDeleteSummary'), {
         detail: this.transloco.translate('users.toast.cannotDeleteSuperAdmin'),
       });
       //#else
-      this.messageService.add({
-        severity: 'warn',
-        summary: 'Cannot delete',
+      notify.warn('Cannot delete', {
         detail: 'The built-in super administrator cannot be deleted',
       });
       //#endif
       return;
     }
 
-    this.confirmationService.confirm({
+    const confirmed = await this.confirmService.open({
       //#if (IncludeLocalization)
       message: this.transloco.translate('users.confirm.deleteMessage', { name: user.username }),
       header: this.transloco.translate('users.confirm.deleteHeader'),
+      confirmText: this.transloco.translate('common.ok'),
+      cancelText: this.transloco.translate('common.cancel'),
       //#else
       message: `Are you sure you want to delete user ${user.username}? Once deleted, the user will no longer be able to sign in.`,
       header: 'Confirm delete',
       //#endif
-      icon: 'pi pi-exclamation-triangle',
-      accept: () => {
-        this.service.deleteUser(user.id).subscribe(() => {
-          //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate('users.toast.deleted'),
-          });
-          //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'User deleted',
-          });
-          //#endif
-          this.reloadList();
-        });
-      },
+      variant: 'destructive',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.service.deleteUser(user.id).subscribe(() => {
+      //#if (IncludeLocalization)
+      notify.success(this.transloco.translate('common.success'), {
+        detail: this.transloco.translate('users.toast.deleted'),
+      });
+      //#else
+      notify.success('Success', { detail: 'User deleted' });
+      //#endif
+      this.reloadList();
     });
   }
 
@@ -438,17 +417,11 @@ export class UsersPage implements OnInit {
       )
       .subscribe(() => {
         //#if (IncludeLocalization)
-        this.messageService.add({
-          severity: 'success',
-          summary: this.transloco.translate('common.success'),
+        notify.success(this.transloco.translate('common.success'), {
           detail: this.transloco.translate('users.toast.passwordReset'),
         });
         //#else
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Password has been reset',
-        });
+        notify.success('Success', { detail: 'Password has been reset' });
         //#endif
         this.resetPasswordDialogVisible.set(false);
         this.resettingUserId.set(null);

@@ -4,32 +4,43 @@ import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  OnDestroy,
   OnInit,
-  ViewChild,
   computed,
   inject,
-  output,
   signal,
 } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MenuItem } from 'primeng/api';
-import { AvatarModule } from 'primeng/avatar';
-import { BadgeModule } from 'primeng/badge';
-import { ButtonModule } from 'primeng/button';
+import { NgIcon, provideIcons } from '@ng-icons/core';
 //#if (IncludeNotifications)
-import { DividerModule } from 'primeng/divider';
+import { lucideDatabase, lucideInbox, lucideInfo, lucideNetwork } from '@ng-icons/lucide';
 //#endif
-import { MenuModule, Menu } from 'primeng/menu';
+import {
+  lucideBell,
+  lucideChevronDown,
+  lucideCog,
+  lucideHouse,
+  lucideLock,
+  lucideLogOut,
+  lucideMenu,
+  lucideMonitor,
+  lucideMoon,
+  lucidePalette,
+  lucideSun,
+  lucideUserPen,
+  lucideBadgeCheck,
+} from '@ng-icons/lucide';
+import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 //#if (IncludeNotifications)
-import { OverlayBadgeModule } from 'primeng/overlaybadge';
-import { PopoverModule, Popover } from 'primeng/popover';
+import { HlmSeparator } from '@spartan-ng/helm/separator';
 //#endif
-import { StyleClassModule } from 'primeng/styleclass';
-import { TooltipModule } from 'primeng/tooltip';
+import { HlmSidebarTrigger } from '@spartan-ng/helm/sidebar';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { AuthService } from '../../../core/services/auth-service';
 //#if (IncludeLocalization)
@@ -52,26 +63,33 @@ import { LanguageSwitcher } from '../../../shared/components/language-switcher/l
 import { ThemeConfigurator } from '../../../shared/components/theme-configurator/theme-configurator';
 import { LayoutService } from '../../services/layout-service';
 
+/** 用户下拉菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
+interface UserMenuItem {
+  label?: string;
+  icon?: string;
+  action?: () => void;
+  separator?: boolean;
+}
+
 @Component({
   selector: 'app-default-header',
   standalone: true,
   imports: [
     RouterModule,
-    ButtonModule,
-    AvatarModule,
-    BadgeModule,
-    StyleClassModule,
-    TooltipModule,
-    MenuModule,
+    NgIcon,
+    HlmButton,
     ThemeConfigurator,
+    ...HlmAvatarImports,
+    ...HlmDropdownMenuImports,
+    ...HlmTooltipImports,
+    ...HlmPopoverImports,
+    HlmSidebarTrigger,
     //#if (IncludeLocalization)
     LanguageSwitcher,
     TranslocoModule,
     //#endif
     //#if (IncludeNotifications)
-    PopoverModule,
-    OverlayBadgeModule,
-    DividerModule,
+    HlmSeparator,
     DatePipe,
     //#endif
     //#if (IncludeIdentity)
@@ -79,10 +97,33 @@ import { LayoutService } from '../../services/layout-service';
     ChangePasswordDialogComponent,
     //#endif
   ],
+  providers: [
+    provideIcons({
+      lucideMenu,
+      lucideSun,
+      lucideMoon,
+      lucideMonitor,
+      lucidePalette,
+      lucideBell,
+      lucideChevronDown,
+      lucideHouse,
+      lucideCog,
+      lucideUserPen,
+      lucideLock,
+      lucideLogOut,
+      lucideBadgeCheck,
+      //#if (IncludeNotifications)
+      lucideInbox,
+      lucideDatabase,
+      lucideNetwork,
+      lucideInfo,
+      //#endif
+    }),
+  ],
   templateUrl: './default-header.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DefaultHeader implements OnInit, OnDestroy {
+export class DefaultHeader implements OnInit {
   readonly layoutService = inject(LayoutService);
   readonly themeService = inject(ThemeService);
   readonly authService = inject(AuthService);
@@ -92,8 +133,6 @@ export class DefaultHeader implements OnInit, OnDestroy {
   private readonly transloco = inject(TranslocoService);
   //#endif
 
-  @ViewChild('userMenu') userMenu!: Menu;
-
   //#if (IncludeIdentity)
   // 管理员徽标 tooltip：模板属性区不支持内嵌条件指令，用 getter 承载条件文案。
   //#if (IncludeLocalization)
@@ -102,12 +141,12 @@ export class DefaultHeader implements OnInit, OnDestroy {
   readonly adminTooltip = () => 'Administrator';
   //#endif
   //#endif
-  readonly toggleMobileMenu = output<void>();
   //#if (IncludeNotifications)
   readonly notificationService = inject(NotificationService);
   readonly notificationCount = this.notificationService.unreadCount;
   readonly notifications = this.notificationService.notifications;
-  @ViewChild('notificationPopover') notificationPopover!: Popover;
+  // 通知 popover 开合状态（Spartan popover 的 state 受控绑定）。
+  readonly notificationOpen = signal<'open' | 'closed'>('closed');
 
   // 铃铛 tooltip：模板属性区不支持内嵌条件指令，故用 getter 承载条件文案。
   //#if (IncludeLocalization)
@@ -116,16 +155,12 @@ export class DefaultHeader implements OnInit, OnDestroy {
   readonly notificationTooltip = () => 'Notifications';
   //#endif
 
-  toggleNotifications(event: Event): void {
-    this.notificationPopover?.toggle(event);
-  }
-
   async onNotificationClick(item: NotificationOutputDto): Promise<void> {
     if (!item.isRead) {
       await this.notificationService.markAsRead(item.id);
     }
     if (item.link) {
-      this.notificationPopover?.hide();
+      this.notificationOpen.set('closed');
       this.router.navigateByUrl(item.link);
     }
   }
@@ -153,14 +188,14 @@ export class DefaultHeader implements OnInit, OnDestroy {
   readonly profileDialogVisible = signal(false);
   readonly changePasswordDialogVisible = signal(false);
   //#endif
-  readonly userMenuItems = computed<MenuItem[]>(() => {
+  readonly userMenuItems = computed<UserMenuItem[]>(() => {
     const currentUser = this.authService.currentUser();
     //#if (IncludeLocalization)
     // 建立对活动语言的依赖，语言切换时重新计算菜单文案
     this.languageService.activeLang();
     const t = (key: string) => this.transloco.translate(key);
     //#endif
-    const items: MenuItem[] = [];
+    const items: UserMenuItem[] = [];
 
     if (this.router.url.startsWith('/platform')) {
       items.push({
@@ -169,8 +204,8 @@ export class DefaultHeader implements OnInit, OnDestroy {
         //#else
         label: 'Workspace',
         //#endif
-        icon: 'pi pi-home',
-        command: () => this.closeMenuAndNavigate('/workspace'),
+        icon: 'lucideHouse',
+        action: () => this.router.navigate(['/workspace']),
       });
     } else if (this.router.url.startsWith('/workspace') && currentUser?.isAdmin()) {
       items.push({
@@ -179,8 +214,8 @@ export class DefaultHeader implements OnInit, OnDestroy {
         //#else
         label: 'Admin platform',
         //#endif
-        icon: 'pi pi-cog',
-        command: () => this.closeMenuAndNavigate('/platform'),
+        icon: 'lucideCog',
+        action: () => this.router.navigate(['/platform']),
       });
     }
 
@@ -196,8 +231,8 @@ export class DefaultHeader implements OnInit, OnDestroy {
         //#else
         label: 'Profile',
         //#endif
-        icon: 'pi pi-user-edit',
-        command: () => this.openProfileDialog(),
+        icon: 'lucideUserPen',
+        action: () => this.openProfileDialog(),
       },
       {
         //#if (IncludeLocalization)
@@ -205,20 +240,18 @@ export class DefaultHeader implements OnInit, OnDestroy {
         //#else
         label: 'Change password',
         //#endif
-        icon: 'pi pi-lock',
-        command: () => this.openChangePasswordDialog(),
+        icon: 'lucideLock',
+        action: () => this.openChangePasswordDialog(),
       },
-      {
-        separator: true,
-      },
+      { separator: true },
       {
         //#if (IncludeLocalization)
         label: t('menu.logout'),
         //#else
         label: 'Sign out',
         //#endif
-        icon: 'pi pi-sign-out',
-        command: () => this.handleLogout(),
+        icon: 'lucideLogOut',
+        action: () => this.handleLogout(),
       },
     );
     //#endif
@@ -227,55 +260,16 @@ export class DefaultHeader implements OnInit, OnDestroy {
 
   //#if (IncludeIdentity)
   openProfileDialog(): void {
-    this.forceCloseMenu();
     this.profileDialogVisible.set(true);
   }
 
   openChangePasswordDialog(): void {
-    this.forceCloseMenu();
     this.profileDialogVisible.set(false);
     this.changePasswordDialogVisible.set(true);
   }
 
   handleLogout(): void {
-    this.forceCloseMenu();
     this.authService.logout();
   }
   //#endif
-  handleMenuToggle(): void {
-    if (this.layoutService.isMobileSidebarMode()) {
-      this.toggleMobileMenu.emit();
-      return;
-    }
-
-    this.layoutService.toggleSidebarCollapse();
-  }
-
-  private closeMenuAndNavigate(path: string): void {
-    this.forceCloseMenu();
-    this.router.navigate([path]);
-  }
-
-  private forceCloseMenu(): void {
-    try {
-      if (this.userMenu) {
-        this.userMenu.hide();
-      }
-    } catch {
-      // 忽略关闭异常，由兜底清理机制处理
-    } finally {
-      setTimeout(() => this.cleanupOverlay(), 50);
-    }
-  }
-
-  private cleanupOverlay(): void {
-    const overlays = document.querySelectorAll('.p-menu-overlay, .p-component-overlay');
-    if (overlays.length > 0) {
-      overlays.forEach((overlay) => overlay.remove());
-    }
-  }
-
-  ngOnDestroy(): void {
-    this.forceCloseMenu();
-  }
 }

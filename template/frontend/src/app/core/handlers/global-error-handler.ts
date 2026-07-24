@@ -1,9 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ErrorHandler, Injectable, inject } from '@angular/core';
 //#if (IncludeLocalization)
+import { ErrorHandler, Injectable, inject } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
+//#else
+import { ErrorHandler, Injectable } from '@angular/core';
 //#endif
-import { MessageService } from 'primeng/api';
+
+import { notify } from '../notifications/notify';
 
 /**
  * 全局错误处理器
@@ -19,11 +22,10 @@ import { MessageService } from 'primeng/api';
  */
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
-  private readonly messageService = inject(MessageService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  //#endif
 
+  //#endif
   handleError(error: unknown): void {
     console.error('Global error caught:', error);
 
@@ -38,28 +40,23 @@ export class GlobalErrorHandler implements ErrorHandler {
 
     // 处理 JavaScript 运行时错误
     if (error instanceof Error) {
-      this.messageService.add({
-        severity: 'error',
-        //#if (IncludeLocalization)
-        summary: this.transloco.translate('common.appError'),
-        //#else
-        summary: 'Application error',
-        //#endif
-        detail: error.message,
-      });
+      //#if (IncludeLocalization)
+      notify.error(this.transloco.translate('common.appError'), { detail: error.message });
+      //#else
+      notify.error('Application error', { detail: error.message });
+      //#endif
       return;
     }
 
     // 处理未知类型的错误
-    this.messageService.add({
-      severity: 'error',
-      //#if (IncludeLocalization)
-      summary: this.transloco.translate('common.unknownError'),
+    //#if (IncludeLocalization)
+    notify.error(this.transloco.translate('common.unknownError'), {
       detail: this.transloco.translate('common.unexpectedError'),
-      //#else
-      summary: 'Unknown error',
-      detail: 'An unexpected error occurred. Please refresh the page and try again.',
-      //#endif
     });
+    //#else
+    notify.error('Unknown error', {
+      detail: 'An unexpected error occurred. Please refresh the page and try again.',
+    });
+    //#endif
   }
 }

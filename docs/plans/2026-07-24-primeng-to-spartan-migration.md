@@ -33,7 +33,7 @@
 | # | 决策项 | 结论 |
 | --- | --- | --- |
 | **D1** | 主题能力 | **方案 A**：收敛为「亮/暗/系统」三态 + 单一品牌主题。删除 PrimeNG 的 4 preset × 17 主色 × 5 surface 运行时换色能力（Spartan 无对应 API）。模板只提供基线，业务项目按品牌改 CSS 变量。 |
-| **D2** | 表单机制 | **直接终局，无中间态**：采用 **Angular Signal Forms**（官方文档主线，`[formField]` 绑定）。不保留 `[(ngModel)]` 过渡态。Angular 22 下用原生 Signal Forms API；Spartan Field 组件族已官方支持。 |
+| **D2** | 表单机制 | **直接终局，无中间态**：采用 **Angular Signal Forms**（`[formField]` 绑定，import 自 `@angular/forms/signals`）。不保留 `[(ngModel)]`/Reactive 过渡态。<br>⚠️ **已确认 Signal Forms 在 Angular 22 仍是 experimental**（官方明示 API 可能小版本间 breaking）。用户 2026-07-24 复核后仍选坚持。对冲：① 锁定 Angular 版本，升级后跑 `@spartan-ng/cli:healthcheck` + 手工回归表单；② 生成项目文档标注此实验性风险。Spartan Field 组件族表单策略无关（不 import `@angular/forms`，靠 `BrnField` 读校验态），UI 层与 Reactive 版一致，未来若回退仅换引擎、不动 UI。 |
 | **D3** | 滚动条 | **终局主流做法**：采用 **Tailwind v4.3+ 原生滚动条工具类**（`scrollbar-thin` / `scrollbar-thumb-*` / `scrollbar-track-*`）。删除现有手写 `::-webkit-scrollbar` + `--app-scrollbar-*` 变量方案，也不引入第三方 `ngx-scrollbar` / Spartan scroll-area（后者是逐容器方案，非全局）。模板已在 Tailwind 4.3.3，官方 blog 明确推荐原生工具类替代插件与手写伪元素。 |
 | **D4** | 决策记录落点 | 见 [§六 决策记录](#六决策记录d4)。 |
 
@@ -179,6 +179,11 @@
 ---
 
 ## 七、实施阶段
+
+> **验证策略（2026-07-24 调整）**：全矩阵（pack + 生成 + 后端 build + 前端 ci）单次约十余分钟，反馈环过长。改为**分层验证 + 全部改完统一测**：
+> - **快速内环**（改造进行中）：维护一个持久生成项目（`.tmp/work`），改动同步过去跑 `tsc --noEmit` + `ng build` +（按需）`stylelint`，分钟级反馈，不重新生成、不碰后端。
+> - **完整外环**（全部阶段改完后一次）：`test-template-matrix.ps1` default + localization 跑一次，含后端 build + 生成正确性 + 前端 ci + 浏览器实测，然后一次性提交。
+> - 阶段 0 已单独提交（46a5555）；阶段 1–5 按此策略连续推进，中途不跑全矩阵。
 
 ### 阶段 0：地基（前置，±3 天）
 

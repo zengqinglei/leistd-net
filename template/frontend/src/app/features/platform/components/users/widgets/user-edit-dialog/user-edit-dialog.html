@@ -1,16 +1,13 @@
-<p-dialog
-  [visible]="visible()"
-  (visibleChange)="visible.set($event)"
-  (onHide)="onHide()"
-  [header]="dialogHeader()"
-  [modal]="true"
-  [breakpoints]="dialogConfig.breakpoints"
-  [style]="dialogConfig.style"
-  [contentStyle]="dialogConfig.contentStyle"
-  [draggable]="dialogConfig.draggable"
-  [resizable]="dialogConfig.resizable"
+<hlm-dialog
+  [state]="visible() ? 'open' : 'closed'"
+  (stateChanged)="onDialogStateChange($event)"
+  [closeOnOutsidePointerEvents]="!saving()"
 >
-  <div class="relative min-h-56" [formGroup]="form">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-2xl" [showCloseButton]="!saving()">
+    <hlm-dialog-header>
+      <h3 hlmDialogTitle>{{ dialogHeader() }}</h3>
+    </hlm-dialog-header>
+
     @if (loading()) {
       <!--#if (IncludeLocalization)-->
       <app-dialog-loading [text]="'users.editDialog.loading' | transloco" />
@@ -18,351 +15,310 @@
       <app-dialog-loading text="Loading user information..." />
       <!--#endif-->
     } @else {
-      <div class="flex flex-col gap-5">
-        <p-fileupload
-          mode="advanced"
-          name="avatar"
-          accept="image/png,image/jpeg,image/webp"
-          [maxFileSize]="maxAvatarSize"
-          [customUpload]="true"
-          [auto]="false"
-          [multiple]="false"
-          [showUploadButton]="false"
-          [showCancelButton]="false"
-          styleClass="border-0 bg-transparent p-0 shadow-none"
-          [invalidFileSizeMessageSummary]="avatarMessages().sizeSummary"
-          [invalidFileSizeMessageDetail]="avatarMessages().sizeDetail"
-          [invalidFileTypeMessageSummary]="avatarMessages().typeSummary"
-          [invalidFileTypeMessageDetail]="avatarMessages().typeDetail"
-          (onSelect)="onAvatarSelect($event)"
-        >
-          <ng-template pTemplate="header">
-            <div class="hidden"></div>
-          </ng-template>
-
-          <ng-template pTemplate="content" let-chooseCallback="chooseCallback">
-            <div
-              class="flex items-center gap-4 border-b border-surface-200 pb-5 dark:border-surface-700"
-            >
-              <button
-                type="button"
-                class="group relative block h-20 w-20 shrink-0 overflow-hidden rounded-full border border-surface-200 bg-surface-100 transition-colors hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-surface-700 dark:bg-surface-800"
-                (click)="chooseCallback()"
+      <form (submit)="$event.preventDefault(); save()" class="flex flex-col gap-5">
+        <!-- Avatar 上传（原生 file input + 自绘头像 UI） -->
+        <div class="flex items-center gap-4 border-b border-border pb-5">
+          <label
+            class="group relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full border border-border bg-muted transition-colors hover:border-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/30"
+          >
+            @if (hasAvatarImage()) {
+              <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
+            } @else {
+              <span
+                class="flex h-full w-full items-center justify-center text-2xl font-semibold"
+                [style.background]="avatarStyle().background"
+                [style.color]="avatarStyle().color"
+                >{{ avatarLabel() }}</span
               >
-                @if (hasAvatarImage()) {
-                  <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
-                } @else {
-                  <div class="flex h-full w-full items-center justify-center">
-                    <p-avatar
-                      [label]="avatarLabel()"
-                      size="xlarge"
-                      shape="circle"
-                      [style]="avatarStyle()"
-                    />
-                  </div>
-                }
+            }
 
-                <div
-                  class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                >
-                  <i class="pi pi-plus text-xl"></i>
-                </div>
-              </button>
+            <span
+              class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+            >
+              <ng-icon name="lucidePlus" class="text-xl" />
+            </span>
 
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="m-0 truncate text-lg font-semibold text-color">{{ displayName() }}</h3>
-                </div>
-                <!--#if (IncludeLocalization)-->
-                <p class="mt-1 mb-0 truncate text-sm text-muted-color">
-                  {{ form.controls.email.value || ('users.editDialog.noEmail' | transloco) }}
-                </p>
-                <p class="mt-2 mb-0 text-xs text-muted-color">
-                  {{ 'users.editDialog.avatarHint' | transloco }}
-                </p>
-                <!--#else-->
-                <p class="mt-1 mb-0 truncate text-sm text-muted-color">
-                  {{ form.controls.email.value || 'No email set' }}
-                </p>
-                <p class="mt-2 mb-0 text-xs text-muted-color">
-                  Hover over the avatar and click + to re-upload; the preview updates instantly.
-                </p>
-                <!--#endif-->
-              </div>
+            <input
+              type="file"
+              class="sr-only"
+              accept="image/png,image/jpeg,image/webp"
+              (change)="onAvatarSelect($event)"
+            />
+          </label>
+
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="m-0 truncate text-lg font-semibold">{{ displayName() }}</h3>
             </div>
-          </ng-template>
-
-          <ng-template pTemplate="empty">
-            <div class="hidden"></div>
-          </ng-template>
-        </p-fileupload>
-
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="flex flex-col gap-2">
             <!--#if (IncludeLocalization)-->
-            <label for="user-username" class="text-sm font-medium text-color">{{
+            <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
+              {{ model_().email || ('users.editDialog.noEmail' | transloco) }}
+            </p>
+            <p class="mt-2 mb-0 text-xs text-muted-foreground">
+              {{ 'users.editDialog.avatarHint' | transloco }}
+            </p>
+            <!--#else-->
+            <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
+              {{ model_().email || 'No email set' }}
+            </p>
+            <p class="mt-2 mb-0 text-xs text-muted-foreground">
+              Hover over the avatar and click + to re-upload; the preview updates instantly.
+            </p>
+            <!--#endif-->
+          </div>
+        </div>
+
+        <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <!-- Username -->
+          <div hlmField>
+            <!--#if (IncludeLocalization)-->
+            <label hlmFieldLabel for="user-username">{{
               'users.editDialog.usernameLabel' | transloco
             }}</label>
             <input
+              hlmInput
               id="user-username"
-              pInputText
-              formControlName="username"
-              [placeholder]="'users.editDialog.usernamePlaceholder' | transloco"
               class="w-full"
+              [formField]="userForm.username"
+              [placeholder]="'users.editDialog.usernamePlaceholder' | transloco"
             />
             <!--#else-->
-            <label for="user-username" class="text-sm font-medium text-color">Username</label>
+            <label hlmFieldLabel for="user-username">Username</label>
             <input
+              hlmInput
               id="user-username"
-              pInputText
-              formControlName="username"
-              placeholder="Enter a username"
               class="w-full"
+              [formField]="userForm.username"
+              placeholder="Enter a username"
             />
             <!--#endif-->
-            @if (form.controls.username.hasError('required') && form.controls.username.touched) {
-              <!--#if (IncludeLocalization)-->
-              <small class="text-red-500">{{
-                'users.editDialog.usernameRequired' | transloco
-              }}</small>
-              <!--#else-->
-              <small class="text-red-500">Username is required</small>
-              <!--#endif-->
-            }
-            @if (
-              (form.controls.username.hasError('minlength') ||
-                form.controls.username.hasError('maxlength') ||
-                form.controls.username.hasError('pattern')) &&
-              form.controls.username.touched
-            ) {
-              <!--#if (IncludeLocalization)-->
-              <small class="text-red-500">{{
-                'users.editDialog.usernamePattern' | transloco
-              }}</small>
-              <!--#else-->
-              <small class="text-red-500"
-                >Username must be 3-64 letters, digits or underscores</small
-              >
-              <!--#endif-->
+            @for (error of userForm.username().errors(); track error.kind) {
+              @if (error.message) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
             }
           </div>
 
-          <div class="flex flex-col gap-2">
+          <!-- Email -->
+          <div hlmField>
             <!--#if (IncludeLocalization)-->
-            <label for="user-email" class="text-sm font-medium text-color">{{
+            <label hlmFieldLabel for="user-email">{{
               'users.editDialog.emailLabel' | transloco
             }}</label>
             <input
+              hlmInput
               id="user-email"
-              pInputText
               type="email"
-              formControlName="email"
-              [placeholder]="'users.editDialog.emailPlaceholder' | transloco"
               class="w-full"
+              [formField]="userForm.email"
+              [placeholder]="'users.editDialog.emailPlaceholder' | transloco"
             />
             <!--#else-->
-            <label for="user-email" class="text-sm font-medium text-color">Email</label>
+            <label hlmFieldLabel for="user-email">Email</label>
             <input
+              hlmInput
               id="user-email"
-              pInputText
               type="email"
-              formControlName="email"
-              placeholder="Enter an email"
               class="w-full"
+              [formField]="userForm.email"
+              placeholder="Enter an email"
             />
             <!--#endif-->
-            @if (
-              (form.controls.email.hasError('required') ||
-                form.controls.email.hasError('email') ||
-                form.controls.email.hasError('maxlength')) &&
-              form.controls.email.touched
-            ) {
-              <!--#if (IncludeLocalization)-->
-              <small class="text-red-500">{{ 'users.editDialog.emailInvalid' | transloco }}</small>
-              <!--#else-->
-              <small class="text-red-500">Enter a valid email, no longer than 256 characters</small>
-              <!--#endif-->
+            @for (error of userForm.email().errors(); track error.kind) {
+              @if (error.message) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
             }
           </div>
 
-          <div class="flex flex-col gap-2">
+          <!-- Display name -->
+          <div hlmField>
             <!--#if (IncludeLocalization)-->
-            <label for="user-display-name" class="text-sm font-medium text-color">{{
+            <label hlmFieldLabel for="user-display-name">{{
               'users.editDialog.displayNameLabel' | transloco
             }}</label>
             <input
+              hlmInput
               id="user-display-name"
-              pInputText
-              formControlName="displayName"
-              [placeholder]="'users.editDialog.displayNamePlaceholder' | transloco"
               class="w-full"
+              [formField]="userForm.displayName"
+              [placeholder]="'users.editDialog.displayNamePlaceholder' | transloco"
             />
             <!--#else-->
-            <label for="user-display-name" class="text-sm font-medium text-color"
-              >Display name</label
-            >
+            <label hlmFieldLabel for="user-display-name">Display name</label>
             <input
+              hlmInput
               id="user-display-name"
-              pInputText
-              formControlName="displayName"
-              placeholder="Enter a display name"
               class="w-full"
+              [formField]="userForm.displayName"
+              placeholder="Enter a display name"
             />
             <!--#endif-->
-            @if (form.controls.displayName.invalid && form.controls.displayName.touched) {
-              <!--#if (IncludeLocalization)-->
-              <small class="text-red-500">{{
-                'users.editDialog.displayNameMaxLength' | transloco
-              }}</small>
-              <!--#else-->
-              <small class="text-red-500">Display name cannot exceed 128 characters</small>
-              <!--#endif-->
+            @for (error of userForm.displayName().errors(); track error.kind) {
+              @if (error.message) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
             }
           </div>
 
+          <!-- Initial password（仅新建模式） -->
           @if (!isEditMode()) {
-            <div class="flex flex-col gap-2">
+            <div hlmField>
               <!--#if (IncludeLocalization)-->
-              <label for="user-password" class="text-sm font-medium text-color">{{
+              <label hlmFieldLabel for="user-password">{{
                 'users.editDialog.passwordLabel' | transloco
               }}</label>
               <!--#else-->
-              <label for="user-password" class="text-sm font-medium text-color"
-                >Initial password</label
-              >
+              <label hlmFieldLabel for="user-password">Initial password</label>
               <!--#endif-->
-              <p-password
-                inputId="user-password"
-                formControlName="password"
-                [feedback]="false"
-                [toggleMask]="true"
-                [fluid]="true"
-                inputStyleClass="w-full"
-              />
-              @if (form.controls.password.hasError('required') && form.controls.password.touched) {
+              <hlm-input-group>
                 <!--#if (IncludeLocalization)-->
-                <small class="text-red-500">{{
-                  'users.editDialog.passwordRequired' | transloco
-                }}</small>
+                <input
+                  hlmInputGroupInput
+                  id="user-password"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  [formField]="userForm.password"
+                  [placeholder]="'users.editDialog.passwordPlaceholder' | transloco"
+                />
                 <!--#else-->
-                <small class="text-red-500">Enter an initial password</small>
+                <input
+                  hlmInputGroupInput
+                  id="user-password"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  [formField]="userForm.password"
+                  placeholder="Enter an initial password"
+                />
                 <!--#endif-->
-              }
-              @if (hasPasswordRuleError()) {
-                <!--#if (IncludeLocalization)-->
-                <small class="text-red-500">{{
-                  'users.editDialog.passwordRule' | transloco
-                }}</small>
-                <!--#else-->
-                <small class="text-red-500"
-                  >Password does not meet the rules: 8-20 characters including uppercase and
-                  lowercase letters, digits and special characters</small
+                <button
+                  hlmInputGroupButton
+                  type="button"
+                  size="icon-sm"
+                  align="inline-end"
+                  (click)="showPassword.set(!showPassword())"
                 >
-                <!--#endif-->
+                  <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+                </button>
+              </hlm-input-group>
+              @for (error of userForm.password().errors(); track error.kind) {
+                @if (error.message) {
+                  <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+                }
               }
             </div>
           }
         </section>
 
-        <p-divider />
+        <hlm-separator />
 
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="flex flex-col gap-2 md:col-span-2">
+        <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <!-- Roles（多选） -->
+          <div hlmField class="md:col-span-2">
             <!--#if (IncludeLocalization)-->
-            <label for="user-roles" class="text-sm font-medium text-color">{{
+            <label hlmFieldLabel for="user-roles">{{
               'users.editDialog.rolesLabel' | transloco
             }}</label>
             <!--#else-->
-            <label for="user-roles" class="text-sm font-medium text-color">Roles</label>
+            <label hlmFieldLabel for="user-roles">Roles</label>
             <!--#endif-->
-            <p-multiselect
-              inputId="user-roles"
-              formControlName="roles"
-              [options]="roleOptions()"
-              optionLabel="label"
-              optionValue="value"
-              [placeholder]="rolesPlaceholder()"
-              display="chip"
-              appendTo="body"
-              styleClass="w-full"
-            />
-            @if (form.controls.roles.invalid && form.controls.roles.touched) {
-              <!--#if (IncludeLocalization)-->
-              <small class="text-red-500">{{ 'users.editDialog.rolesRequired' | transloco }}</small>
-              <!--#else-->
-              <small class="text-red-500">Select at least one role</small>
-              <!--#endif-->
+            <hlm-select-multiple class="w-full" [formField]="userForm.roles">
+              <hlm-select-trigger buttonId="user-roles" class="w-full">
+                <hlm-select-placeholder>{{ rolesPlaceholder() }}</hlm-select-placeholder>
+                <ng-template hlmSelectValues let-values>
+                  <hlm-select-values-content>
+                    {{ roleLabel(values[0]) }}
+                    @if (values.length > 1) {
+                      (+{{ values.length - 1 }})
+                    }
+                  </hlm-select-values-content>
+                </ng-template>
+              </hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal>
+                <hlm-select-group>
+                  @for (option of roleOptions(); track option.value) {
+                    <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                  }
+                </hlm-select-group>
+              </hlm-select-content>
+            </hlm-select-multiple>
+            @for (error of userForm.roles().errors(); track error.kind) {
+              @if (error.message) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
             }
           </div>
 
-          <div class="rounded-lg border border-surface-200 p-3 dark:border-surface-700">
+          <!-- Enable user -->
+          <div class="rounded-lg border border-border p-3">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <!--#if (IncludeLocalization)-->
-                <div class="text-sm font-medium text-color">
+                <div class="text-sm font-medium">
                   {{ 'users.editDialog.activeTitle' | transloco }}
                 </div>
-                <div class="text-xs text-muted-color mt-1">
+                <div class="mt-1 text-xs text-muted-foreground">
                   {{ 'users.editDialog.activeHint' | transloco }}
                 </div>
                 <!--#else-->
-                <div class="text-sm font-medium text-color">Enable user</div>
-                <div class="text-xs text-muted-color mt-1">
+                <div class="text-sm font-medium">Enable user</div>
+                <div class="mt-1 text-xs text-muted-foreground">
                   When disabled, the user cannot sign in or call protected endpoints
                 </div>
                 <!--#endif-->
               </div>
-              <p-toggleswitch formControlName="isActive" />
+              <hlm-switch [checked]="model_().isActive" (checkedChange)="setActive($event)" />
             </div>
           </div>
 
-          <div class="rounded-lg border border-surface-200 p-3 dark:border-surface-700">
+          <!-- Email verified -->
+          <div class="rounded-lg border border-border p-3">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <!--#if (IncludeLocalization)-->
-                <div class="text-sm font-medium text-color">
+                <div class="text-sm font-medium">
                   {{ 'users.editDialog.emailVerifiedTitle' | transloco }}
                 </div>
-                <div class="text-xs text-muted-color mt-1">
+                <div class="mt-1 text-xs text-muted-foreground">
                   {{ 'users.editDialog.emailVerifiedHint' | transloco }}
                 </div>
                 <!--#else-->
-                <div class="text-sm font-medium text-color">Email verified</div>
-                <div class="text-xs text-muted-color mt-1">
+                <div class="text-sm font-medium">Email verified</div>
+                <div class="mt-1 text-xs text-muted-foreground">
                   Used to manage the email verification status
                 </div>
                 <!--#endif-->
               </div>
-              <p-toggleswitch formControlName="isEmailVerified" />
+              <hlm-switch
+                [checked]="model_().isEmailVerified"
+                (checkedChange)="setEmailVerified($event)"
+              />
             </div>
           </div>
         </section>
-      </div>
-    }
-  </div>
 
-  <ng-template pTemplate="footer">
-    <div class="flex justify-end gap-2">
-      <!--#if (IncludeLocalization)-->
-      <p-button
-        [label]="'common.cancel' | transloco"
-        severity="secondary"
-        [text]="true"
-        (onClick)="visible.set(false)"
-      />
-      <p-button
-        [label]="(isEditMode() ? 'common.save' : 'common.create') | transloco"
-        [loading]="saving()"
-        (onClick)="save()"
-      />
-      <!--#else-->
-      <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="visible.set(false)" />
-      <p-button
-        [label]="isEditMode() ? 'Save' : 'Create'"
-        [loading]="saving()"
-        (onClick)="save()"
-      />
-      <!--#endif-->
-    </div>
-  </ng-template>
-</p-dialog>
+        <hlm-dialog-footer>
+          <!--#if (IncludeLocalization)-->
+          <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
+            {{ 'common.cancel' | transloco }}
+          </button>
+          <button hlmBtn type="submit" [disabled]="saving()">
+            @if (saving()) {
+              <hlm-spinner class="text-base" data-icon="inline-start" />
+            }
+            {{ (isEditMode() ? 'common.save' : 'common.create') | transloco }}
+          </button>
+          <!--#else-->
+          <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
+            Cancel
+          </button>
+          <button hlmBtn type="submit" [disabled]="saving()">
+            @if (saving()) {
+              <hlm-spinner class="text-base" data-icon="inline-start" />
+            }
+            {{ isEditMode() ? 'Save' : 'Create' }}
+          </button>
+          <!--#endif-->
+        </hlm-dialog-footer>
+      </form>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>

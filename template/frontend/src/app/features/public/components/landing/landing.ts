@@ -3,8 +3,10 @@ import { RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule } from '@jsverse/transloco';
 //#endif
-import { ButtonModule } from 'primeng/button';
-import { StyleClassModule } from 'primeng/styleclass';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucidePalette, lucideShield, lucideUsers } from '@ng-icons/lucide';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 
 import { ThemeService } from '../../../../core/services/theme-service';
 //#if (IncludeLocalization)
@@ -19,15 +21,17 @@ import { ThemeConfigurator } from '../../../../shared/components/theme-configura
   //#if (IncludeLocalization)
   imports: [
     RouterModule,
-    ButtonModule,
-    StyleClassModule,
+    NgIcon,
+    HlmButton,
     ThemeConfigurator,
     LanguageSwitcher,
     TranslocoModule,
+    ...HlmPopoverImports,
   ],
   //#else
-  imports: [RouterModule, ButtonModule, StyleClassModule, ThemeConfigurator],
+  imports: [RouterModule, NgIcon, HlmButton, ThemeConfigurator, ...HlmPopoverImports],
   //#endif
+  providers: [provideIcons({ lucidePalette, lucideShield, lucideUsers })],
   templateUrl: './landing.html',
 })
 export class Landing {

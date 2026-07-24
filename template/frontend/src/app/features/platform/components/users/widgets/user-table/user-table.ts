@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -11,12 +11,26 @@ import {
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { AvatarModule } from 'primeng/avatar';
-import { ButtonModule } from 'primeng/button';
-import { Popover, PopoverModule } from 'primeng/popover';
-import { TableLazyLoadEvent, TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  lucideArrowDown,
+  lucideArrowUp,
+  lucideArrowUpDown,
+  lucideBan,
+  lucideChevronLeft,
+  lucideChevronRight,
+  lucideCircleCheck,
+  lucideKey,
+  lucidePencil,
+  lucideTrash2,
+  lucideUsers,
+} from '@ng-icons/lucide';
+import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+import { HlmTableImports } from '@spartan-ng/helm/table';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { Role } from '../../../../../../shared/models/role.enum';
@@ -29,30 +43,39 @@ export interface UserTableFilterEvent {
   sorting?: string;
 }
 
+/** Spartan badge 变体（替代 PrimeNG severity）。 */
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+
 @Component({
   selector: 'app-user-table',
-  //#if (IncludeLocalization)
   imports: [
-    CommonModule,
-    TableModule,
-    ButtonModule,
-    TagModule,
-    TooltipModule,
-    PopoverModule,
-    AvatarModule,
+    DatePipe,
+    NgIcon,
+    HlmButton,
+    HlmBadge,
+    ...HlmAvatarImports,
+    ...HlmTableImports,
+    ...HlmPopoverImports,
+    ...HlmTooltipImports,
+    //#if (IncludeLocalization)
     TranslocoModule,
+    //#endif
   ],
-  //#else
-  imports: [
-    CommonModule,
-    TableModule,
-    ButtonModule,
-    TagModule,
-    TooltipModule,
-    PopoverModule,
-    AvatarModule,
+  providers: [
+    provideIcons({
+      lucideArrowDown,
+      lucideArrowUp,
+      lucideArrowUpDown,
+      lucideBan,
+      lucideChevronLeft,
+      lucideChevronRight,
+      lucideCircleCheck,
+      lucideKey,
+      lucidePencil,
+      lucideTrash2,
+      lucideUsers,
+    }),
   ],
-  //#endif
   templateUrl: './user-table.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -133,11 +156,23 @@ export class UserTable {
   readonly delete = output<UserManagementOutputDto>();
   readonly filterChange = output<UserTableFilterEvent>();
 
-  first = 0;
-  rows = 20;
+  readonly rowsPerPageOptions = [10, 20, 50, 100];
+  readonly first = signal(0);
+  readonly rows = signal(20);
   sortField = signal('username');
   sortOrder = signal(1);
   activeRoles = signal<string[]>([]);
+  readonly rolePopoverOpen = signal<'open' | 'closed'>('closed');
+
+  // 可排序列
+  readonly sortableColumns = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
+
+  // 分页派生
+  readonly currentPage = computed(() => Math.floor(this.first() / this.rows()) + 1);
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalRecords() / this.rows())));
+  readonly canPrev = computed(() => this.first() > 0);
+  readonly canNext = computed(() => this.currentPage() < this.totalPages());
+
   //#if (IncludeLocalization)
   rolePopoverTitle = computed(() =>
     this.transloco.translate('users.popover.rolesTitle', { count: this.activeRoles().length }),
@@ -146,23 +181,55 @@ export class UserTable {
   rolePopoverTitle = computed(() => `Roles (${this.activeRoles().length})`);
   //#endif
 
-  onPage(event: TableLazyLoadEvent) {
-    this.first = event.first ?? 0;
-    this.rows = event.rows ?? 20;
-    if (event.sortField) {
-      this.sortField.set(Array.isArray(event.sortField) ? event.sortField[0] : event.sortField);
-      this.sortOrder.set(event.sortOrder ?? 1);
-    }
+  private emitFilter() {
     this.filterChange.emit({
-      offset: this.first,
-      limit: this.rows,
+      offset: this.first(),
+      limit: this.rows(),
       sorting: `${this.sortField()} ${this.sortOrder() === 1 ? 'asc' : 'desc'}`,
     });
   }
 
-  openRolesPopover(event: Event, popover: Popover, roles: string[]) {
+  /** 点击可排序列头：同列切换升/降序，异列切到该列升序。 */
+  onSort(field: string) {
+    if (this.sortField() === field) {
+      this.sortOrder.set(this.sortOrder() === 1 ? -1 : 1);
+    } else {
+      this.sortField.set(field);
+      this.sortOrder.set(1);
+    }
+    this.first.set(0);
+    this.emitFilter();
+  }
+
+  /** 排序图标名（当前列升/降，其它列中性）。 */
+  sortIcon(field: string): string {
+    if (this.sortField() !== field) {
+      return 'lucideArrowUpDown';
+    }
+    return this.sortOrder() === 1 ? 'lucideArrowUp' : 'lucideArrowDown';
+  }
+
+  prevPage() {
+    if (!this.canPrev()) return;
+    this.first.set(Math.max(0, this.first() - this.rows()));
+    this.emitFilter();
+  }
+
+  nextPage() {
+    if (!this.canNext()) return;
+    this.first.set(this.first() + this.rows());
+    this.emitFilter();
+  }
+
+  onRowsChange(rows: number) {
+    this.rows.set(rows);
+    this.first.set(0);
+    this.emitFilter();
+  }
+
+  openRolesPopover(roles: string[]) {
     this.activeRoles.set(roles);
-    popover.toggle(event);
+    this.rolePopoverOpen.set('open');
   }
 
   getVisibleRoles(user: UserManagementOutputDto) {
@@ -185,13 +252,13 @@ export class UserTable {
     return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
   }
 
-  getRoleSeverity(role: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' {
-    const roleMap: Record<Role, 'success' | 'info' | 'warn' | 'danger' | 'secondary'> = {
-      [Role.Admin]: 'danger',
-      [Role.Operator]: 'warn',
-      [Role.Member]: 'info',
+  getRoleVariant(role: string): BadgeVariant {
+    const roleMap: Record<Role, BadgeVariant> = {
+      [Role.Admin]: 'destructive',
+      [Role.Operator]: 'default',
+      [Role.Member]: 'secondary',
     };
-    return roleMap[role as Role] ?? 'secondary';
+    return roleMap[role as Role] ?? 'outline';
   }
 
   //#if (IncludeLocalization)

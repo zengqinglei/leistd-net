@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+import { DatePipe } from '@angular/common';
 //#if (IncludeLocalization)
 import {
   ChangeDetectionStrategy,
@@ -13,11 +13,24 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#else
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 //#endif
-import { ButtonModule } from 'primeng/button';
-import { Popover, PopoverModule } from 'primeng/popover';
-import { TableLazyLoadEvent, TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  lucideArrowDown,
+  lucideArrowUp,
+  lucideArrowUpDown,
+  lucideChevronLeft,
+  lucideChevronRight,
+  lucideInbox,
+  lucidePencil,
+  lucideRefreshCw,
+  lucideShield,
+  lucideTrash2,
+} from '@ng-icons/lucide';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+import { HlmTableImports } from '@spartan-ng/helm/table';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { OpenApplicationOutputDto } from '../../../../models/open-application.dto';
 
@@ -29,34 +42,49 @@ export interface OpenApplicationTableFilterEvent {
 
 type PopoverMode = 'permissions' | 'redirectUris';
 
+/** Spartan badge 变体（替代 PrimeNG severity）。 */
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+
 @Component({
   selector: 'app-open-application-table',
-  //#if (IncludeLocalization)
   imports: [
-    CommonModule,
-    TableModule,
-    ButtonModule,
-    TagModule,
-    TooltipModule,
-    PopoverModule,
+    DatePipe,
+    NgIcon,
+    HlmBadge,
+    HlmButton,
+    ...HlmTableImports,
+    ...HlmPopoverImports,
+    ...HlmTooltipImports,
+    //#if (IncludeLocalization)
     TranslocoModule,
+    //#endif
   ],
-  //#else
-  imports: [CommonModule, TableModule, ButtonModule, TagModule, TooltipModule, PopoverModule],
-  //#endif
+  providers: [
+    provideIcons({
+      lucideArrowDown,
+      lucideArrowUp,
+      lucideArrowUpDown,
+      lucideChevronLeft,
+      lucideChevronRight,
+      lucideInbox,
+      lucidePencil,
+      lucideRefreshCw,
+      lucideShield,
+      lucideTrash2,
+    }),
+  ],
   templateUrl: './open-application-table.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationTable {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  readonly currentPageReportTemplate = () =>
-    this.transloco.translate('openApp.table.currentPageReport');
+  readonly currentPageReport = () => this.transloco.translate('openApp.table.currentPageReport');
   readonly editTooltip = () => this.transloco.translate('common.edit');
   readonly resetSecretTooltip = () => this.transloco.translate('openApp.action.resetSecret');
   readonly deleteTooltip = () => this.transloco.translate('common.delete');
   //#else
-  readonly currentPageReportTemplate = () => '{totalRecords} total';
+  readonly currentPageReport = () => '{totalRecords} total';
   readonly editTooltip = () => 'Edit';
   readonly resetSecretTooltip = () => 'Reset secret';
   readonly deleteTooltip = () => 'Delete';
@@ -71,44 +99,94 @@ export class OpenApplicationTable {
   readonly resetSecret = output<string>();
   readonly filterChange = output<OpenApplicationTableFilterEvent>();
 
-  first = 0;
-  rows = 20;
+  readonly rowsPerPageOptions = [10, 20, 50, 100];
+  readonly first = signal(0);
+  readonly rows = signal(20);
   sortField = signal('clientId');
   sortOrder = signal(1);
   activeItems = signal<string[]>([]);
   popoverMode = signal<PopoverMode>('permissions');
+  readonly popoverOpen = signal<'open' | 'closed'>('closed');
 
+  // 可排序列
+  readonly sortableColumns = ['clientId', 'creationTime'] as const;
+
+  // 分页派生
+  readonly currentPage = computed(() => Math.floor(this.first() / this.rows()) + 1);
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalRecords() / this.rows())));
+  readonly canPrev = computed(() => this.first() > 0);
+  readonly canNext = computed(() => this.currentPage() < this.totalPages());
+
+  //#if (IncludeLocalization)
   popoverTitle = computed(() => {
     switch (this.popoverMode()) {
       case 'redirectUris':
         return 'Redirect URIs';
       default:
-        //#if (IncludeLocalization)
         return this.transloco.translate('openApp.section.authorization');
-        //#else
-        return 'Authorization capabilities';
-      //#endif
     }
   });
-
-  onPage(event: TableLazyLoadEvent) {
-    this.first = event.first ?? 0;
-    this.rows = event.rows ?? 20;
-    if (event.sortField) {
-      this.sortField.set(Array.isArray(event.sortField) ? event.sortField[0] : event.sortField);
-      this.sortOrder.set(event.sortOrder ?? 1);
+  //#else
+  popoverTitle = computed(() => {
+    switch (this.popoverMode()) {
+      case 'redirectUris':
+        return 'Redirect URIs';
+      default:
+        return 'Authorization capabilities';
     }
+  });
+  //#endif
+
+  private emitFilter() {
     this.filterChange.emit({
-      offset: this.first,
-      limit: this.rows,
+      offset: this.first(),
+      limit: this.rows(),
       sorting: `${this.sortField()} ${this.sortOrder() === 1 ? 'asc' : 'desc'}`,
     });
   }
 
-  openPopover(event: Event, popover: Popover, mode: PopoverMode, items: string[]) {
+  /** 点击可排序列头：同列切换升/降序，异列切到该列升序。 */
+  onSort(field: string) {
+    if (this.sortField() === field) {
+      this.sortOrder.set(this.sortOrder() === 1 ? -1 : 1);
+    } else {
+      this.sortField.set(field);
+      this.sortOrder.set(1);
+    }
+    this.first.set(0);
+    this.emitFilter();
+  }
+
+  /** 排序图标名（当前列升/降，其它列中性）。 */
+  sortIcon(field: string): string {
+    if (this.sortField() !== field) {
+      return 'lucideArrowUpDown';
+    }
+    return this.sortOrder() === 1 ? 'lucideArrowUp' : 'lucideArrowDown';
+  }
+
+  prevPage() {
+    if (!this.canPrev()) return;
+    this.first.set(Math.max(0, this.first() - this.rows()));
+    this.emitFilter();
+  }
+
+  nextPage() {
+    if (!this.canNext()) return;
+    this.first.set(this.first() + this.rows());
+    this.emitFilter();
+  }
+
+  onRowsChange(rows: number) {
+    this.rows.set(rows);
+    this.first.set(0);
+    this.emitFilter();
+  }
+
+  openPopover(mode: PopoverMode, items: string[]) {
     this.popoverMode.set(mode);
     this.activeItems.set(items);
-    popover.toggle(event);
+    this.popoverOpen.set('open');
   }
 
   getApplicationTypeLabel(value: string) {
@@ -128,8 +206,8 @@ export class OpenApplicationTable {
     return labels[value] ?? value;
   }
 
-  getClientTypeSeverity(value: string): 'success' | 'info' | 'warn' | 'secondary' {
-    return value === 'public' ? 'success' : 'warn';
+  getClientTypeVariant(value: string): BadgeVariant {
+    return value === 'public' ? 'default' : 'destructive';
   }
 
   getConsentTypeLabel(value: string) {

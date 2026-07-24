@@ -1,6 +1,6 @@
 # 前端开发规范
 
-本文档为模板项目默认的 Angular 21、PrimeNG 21、Tailwind CSS 4 前端开发规范。若新项目未采用该技术栈，不应把本文规则作为通用默认事实。
+本文档为模板项目默认的 Angular 22、Spartan UI（@spartan-ng/brain + helm）、Tailwind CSS 4 前端开发规范。若新项目未采用该技术栈，不应把本文规则作为通用默认事实。
 
 > **注意**: 本文档中的所有开发活动，都必须同时遵循 **[项目通用开发规范](./coding-common.md)** 中定义的 Git 工作流和提交规范。
 
@@ -22,12 +22,13 @@
 
 ## 1. 核心技术栈
 
-- **前端框架**: Angular v21+
-- **UI 组件库**: PrimeNG v21+
+- **前端框架**: Angular v22+
+- **UI 组件库**: Spartan UI（`@spartan-ng/brain` 无头基元 + helm 样式层）
 - **原子化CSS**: Tailwind CSS v4+
-- **命令行工具**: Angular CLI v21+
-- **开发语言**: TypeScript 5.8+
+- **命令行工具**: Angular CLI v22+
+- **开发语言**: TypeScript 6.0+
 - **状态管理**: Angular Signals
+- **表单**: Angular Signal Forms（`@angular/forms/signals`，在 Angular 22 仍为 experimental）
 
 ---
 
@@ -130,7 +131,7 @@ frontend/
 
 ### 3.2 命名约定
 
-遵循 Angular v21+ 的简化风格：
+遵循 Angular v22+ 的简化风格：
 
 | 类型 | 命名规范 | 示例 |
 |------|---------|------|
@@ -155,22 +156,23 @@ frontend/
 
 ### 4.1 组件库优先
 
-- **必须** 首先在 [PrimeNG 官方文档](https://primeng.org/) 中寻找现成组件
-- 尽量使用 PrimeNG v21 组件以及默认风格
+- **必须** 首先在 [Spartan UI 官方文档](https://spartan.ng/) 中寻找现成组件（也可查仓库内 `spartan` skill 或 Spartan MCP）
+- 组件通过 `ng g @spartan-ng/cli:ui --name=<comp>` 添加，会把 helm 样式层复制进 `libs/ui/`；helm 层是本项目自有代码，可按需修改
+- 尽量沿用 Spartan 的默认组件与风格（`hlm*` 指令 / `hlm-*` 组件）
 - 仅在无法满足需求时才可创建自定义组件
 
 ### 4.2 样式方案
 
 - **必须** 优先使用 Tailwind CSS v4 的原子类进行布局和微调
 - 自定义样式使用 Tailwind CSS v4
-- 任何自定义样式都**必须**与 PrimeNG 的主题风格保持一致
+- 任何自定义样式都**必须**与 Spartan UI 的主题风格保持一致（基于 Spartan 主题的 CSS 变量与 `.dark` class）
 
 ### 4.3 有限语义色板
 
 - 状态/分类标签**只用项目约定的有限几个语义色**，不随意扩色。
 - **分类标签用中性色，不用告警色表达"非告警"的分类**（不要用 warn 橙表达一个普通分类）。
 
-> `例`：四色板 `success` / `danger` / `info` / `secondary`（PrimeNG 语义色）；分类标签一律用中性色（`secondary`）。
+> `例`：用 Spartan badge 的有限变体 `default` / `secondary` / `destructive` / `outline`（`hlmBadge`）；分类标签一律用中性变体（`secondary`）。
 
 ### 4.4 组件设计
 
@@ -181,6 +183,19 @@ frontend/
 ### 4.5 图标 / 文案跨页一致
 
 - 跨页的图标尺寸、文案措辞要统一；**对齐用实测（浏览器/像素）确认，不靠目测**。
+- 图标使用 `@ng-icons` + lucide：模板写 `<ng-icon name="lucideXxx">`，并在组件级用 `provideIcons({ lucideXxx })` 按需注册（不全局注册全部图标）。
+
+### 4.6 表单规范
+
+- **必须** 使用 Angular Signal Forms（`@angular/forms/signals`）：以 `form()` 构建表单模型，模板用 `[formField]` 绑定字段，不用 `[(ngModel)]` / Reactive Forms。
+- 表单 UI **必须** 走 Spartan Field 组件族：`hlm-field` 容器 + `hlmFieldLabel` 标签 + `hlm-field-error` 错误展示，配合 `hlmInput` / `hlm-select` 等输入组件。校验态由 brain 层（`BrnField`）读取，与具体表单引擎解耦。
+- ⚠️ **Signal Forms 在 Angular 22 仍为 experimental**（官方明示 API 可能在小版本间 breaking）。因此**必须锁定 Angular 版本**；升级 Angular 后需手工回归所有表单，确认 `@angular/forms/signals` API 未破坏。
+
+### 4.7 Spartan 维护约定
+
+- **两层结构**：brain 层 `@spartan-ng/brain` 是无头基元，作为 npm 依赖引入、不改；helm 层是样式实现，通过 CLI **复制进本项目** `libs/ui/`，属自有代码，可自由修改。
+- **加组件**：`ng g @spartan-ng/cli:ui --name=<comp>`，把对应 helm 组件生成到 `libs/ui/`。
+- **升级**：升级 `@spartan-ng/brain` + `@spartan-ng/cli` 后跑 `ng g @spartan-ng/cli:healthcheck` 检查兼容性；**已改过的 helm 组件禁用 `migrate-helm-libraries`**（它会用上游版本覆盖自定义改动），需对照上游变更**手动合入**。为保稳定，锁定 brain / CLI 的小版本，只走官方 `healthcheck` 流程升级。
 
 ---
 
@@ -260,17 +275,16 @@ AI 极易只改一端，务必六环全改。
 | --- | --- | --- |
 | UI 静态文案（菜单、按钮、标签） | 前端词条（权威） | 模板 `{{ 'menu.users' \| transloco }}` / 服务 `transloco.translate('key')` |
 | 业务错误消息 | **后端资源**（权威，见 [`api.md`](./api.md)） | 前端直接显示后端已本地化的 `message`，不在前端重复维护业务错误词条 |
-| PrimeNG 组件文案 | 前端词条 `primeng` 段 | 由 `LanguageService` 喂给 `PrimeNG.setTranslation`，随语言联动 |
 
 - **业务错误不在前端翻译**：后端按 `Accept-Language` 已产出本地化 `message`，前端 `http-error-interceptor` 优先显示它。默认按 **HTTP 状态码**统一处理即可，**无需**消费细分业务 `code`；仅在极少数需要对某个具体错误做差异化 UI 行为（如高亮某输入框）时，才读 `code` 分支——对应后端那处 `WithCode("46")`。前端词条只保留纯客户端兜底（网络断开、后端不可达）。
 
 ### 7.3 关键接线（`core/`）
 
-- `core/services/language-service.ts`：`setActiveLang(lang)` 驱动 `TranslocoService.setActiveLang`、同步 `<html lang>`、并 `selectTranslateObject('primeng')`（`take(1)` 一次性取值，避免订阅泄漏）联动 PrimeNG；活动语言持久化到 localStorage（镜像 `theme-service` 形态：signal + `isPlatformBrowser` 守卫）。
+- `core/services/language-service.ts`：`setActiveLang(lang)` 驱动 `TranslocoService.setActiveLang`、同步 `<html lang>`；活动语言持久化到 localStorage（镜像 `theme-service` 形态：signal + `isPlatformBrowser` 守卫）。语言只驱动 Transloco，不联动任何 UI 组件库文案。
 - `core/i18n/transloco-loader.ts`：按 `{baseHref}i18n/{lang}.json` 取词条（用 `APP_BASE_HREF` 前缀而非绝对 `/i18n/`，以支持子路径部署）。
 - `core/interceptors/accept-language-interceptor.ts`：注入 `Accept-Language` 头，**置拦截器数组首位**，使后端消息按当前语言返回。
 - `app.config.ts`：`provideTransloco`（`defaultLang: 'en'`）+ `TranslocoHttpLoader`。
-- 语言选择器用 PrimeNG **`p-menu [popup]`**（无面板小三角，与铃铛/主题按钮风格一致），封装在 `shared/components/language-switcher`，挂在 `layout/components/default-header` 最右图标区（后台页在铃铛右侧）。**不用 `p-select`/`p-popover`**（后者带箭头）。
+- 语言选择器用 Spartan **dropdown-menu**（`hlmDropdownMenuTrigger` + `ng-template` 模板驱动菜单项，触发按钮用 `hlmBtn`，与铃铛/主题按钮风格一致），封装在 `shared/components/language-switcher`，挂在 `layout/components/default-header` 最右图标区（后台页在铃铛右侧）。
 
 ### 7.4 新增文案
 
@@ -286,14 +300,15 @@ AI 极易只改一端，务必六环全改。
 
 ### ✅ 编码规范检查
 
-- [ ] 遵循 Angular v21 最佳风格指南
+- [ ] 遵循 Angular v22 最佳风格指南
 - [ ] 文件命名符合项目风格
 - [ ] 使用 `inject()` 进行依赖注入
 - [ ] 所有 API 数据使用类型定义
 
 ### ✅ 组件规范检查
 
-- [ ] 优先使用 PrimeNG v21 组件
+- [ ] 优先使用 Spartan UI 组件（helm 层，`libs/ui/`）
+- [ ] 表单使用 Signal Forms + Spartan Field（`hlm-field`）
 - [ ] 自定义样式使用 Tailwind CSS v4
 - [ ] 组件遵循单一职责原则
 - [ ] 展示型组件使用 OnPush 策略

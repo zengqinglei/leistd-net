@@ -36,13 +36,13 @@
     <!-- 放在 Angular host 外部，避免根组件创建时被提前清空。 -->
     <div
       id="preloader"
-      class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface-50 dark:bg-surface-950 transition-opacity duration-300 ease-in-out"
+      class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background transition-opacity duration-300 ease-in-out"
     >
       <div
-        class="w-10 h-10 border-4 border-surface-200 dark:border-surface-700 border-t-primary rounded-full animate-spin"
+        class="w-10 h-10 border-4 border-border border-t-primary rounded-full animate-spin"
       ></div>
       <!-- Splash 早于 Angular/i18n，固定使用英文。 -->
-      <span class="mt-4 text-sm font-medium text-surface-500">Loading...</span>
+      <span class="mt-4 text-sm font-medium text-muted-foreground">Loading...</span>
     </div>
   </body>
 </html>

@@ -1,19 +1,33 @@
-import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { form, minLength, maxLength, required, FormField } from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MessageService } from 'primeng/api';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { InputTextModule } from 'primeng/inputtext';
-import { PasswordModule } from 'primeng/password';
-import { StyleClassModule } from 'primeng/styleclass';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  lucideZap,
+  lucideCircleCheck,
+  lucideInfo,
+  lucidePalette,
+  lucideEye,
+  lucideEyeOff,
+} from '@ng-icons/lucide';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import {
+  HlmInputGroup,
+  HlmInputGroupInput,
+  HlmInputGroupButton,
+} from '@spartan-ng/helm/input-group';
+import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { environment } from '../../../../../environments/environment';
+import { notify } from '../../../../core/notifications/notify';
 import { AuthService } from '../../../../core/services/auth-service';
 import { ThemeService } from '../../../../core/services/theme-service';
 //#if (IncludeLocalization)
@@ -23,35 +37,52 @@ import { LogoComponent } from '../../../../shared/components/logo/logo';
 import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
 import { AccountService } from '../../services/account-service';
 
+// GitHub 品牌图标（lucide 已下架品牌 logo，用官方 SVG path 自定义注入）
+const githubIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.31-.54-1.52.11-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.87.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.49 5.93.43.37.82 1.1.82 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"/></svg>';
+
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [
-    CommonModule,
-    ReactiveFormsModule,
+    FormField,
     RouterModule,
-    CardModule,
-    InputTextModule,
-    PasswordModule,
-    ButtonModule,
-    StyleClassModule,
+    NgIcon,
+    HlmButton,
+    HlmInput,
+    HlmSpinner,
+    HlmInputGroup,
+    HlmInputGroupInput,
+    HlmInputGroupButton,
     ThemeConfigurator,
+    ...HlmCardImports,
+    ...HlmFieldImports,
+    ...HlmPopoverImports,
     //#if (IncludeLocalization)
     LanguageSwitcher,
     TranslocoModule,
     //#endif
     LogoComponent,
   ],
+  providers: [
+    provideIcons({
+      lucideZap,
+      lucideCircleCheck,
+      lucideInfo,
+      lucidePalette,
+      lucideEye,
+      lucideEyeOff,
+      github: githubIcon,
+    }),
+  ],
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Login {
-  private fb = inject(FormBuilder);
   private accountService = inject(AccountService);
   private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private messageService = inject(MessageService);
   public themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
@@ -61,19 +92,45 @@ export class Login {
   private _isLoading = signal(false);
   public readonly isLoading = this._isLoading.asReadonly();
 
+  // 密码可见性
+  protected readonly showPassword = signal(false);
+
   // Mock状态
   public readonly isMockEnabled = signal(
     typeof environment.useMock === 'object' && environment.useMock.enable === true,
   );
 
-  // 登录表单
-  loginForm = this.fb.group({
-    usernameOrEmail: [
-      '',
-      [Validators.required, Validators.minLength(3), Validators.maxLength(256)],
-    ],
-    password: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
+  // 登录表单模型（Signal Forms）
+  private readonly model = signal({
+    usernameOrEmail: '',
+    password: '',
   });
+
+  //#if (IncludeLocalization)
+  readonly loginForm = form(this.model, (path) => {
+    required(path.usernameOrEmail, {
+      message: this.transloco.translate('account.register.errRequired'),
+    });
+    minLength(path.usernameOrEmail, 3, {
+      message: this.transloco.translate('account.register.errMinLength', { min: 3 }),
+    });
+    maxLength(path.usernameOrEmail, 256, { message: '' });
+    required(path.password, { message: this.transloco.translate('account.register.errRequired') });
+    minLength(path.password, 6, {
+      message: this.transloco.translate('account.register.errMinLength', { min: 6 }),
+    });
+    maxLength(path.password, 100, { message: '' });
+  });
+  //#else
+  readonly loginForm = form(this.model, (path) => {
+    required(path.usernameOrEmail, { message: 'This field is required' });
+    minLength(path.usernameOrEmail, 3, { message: 'At least 3 characters required' });
+    maxLength(path.usernameOrEmail, 256, { message: '' });
+    required(path.password, { message: 'This field is required' });
+    minLength(path.password, 6, { message: 'At least 6 characters required' });
+    maxLength(path.password, 100, { message: '' });
+  });
+  //#endif
 
   constructor() {
     // 进入登录页面时清理旧的认证信息
@@ -84,20 +141,17 @@ export class Login {
    * 提交登录表单
    */
   async onSubmit() {
-    if (this.loginForm.invalid) {
-      this.loginForm.markAllAsTouched();
+    if (this.loginForm().invalid()) {
+      this.loginForm().markAsTouched();
       return;
     }
 
     this._isLoading.set(true);
 
     try {
-      const { usernameOrEmail, password } = this.loginForm.value;
+      const { usernameOrEmail, password } = this.model();
 
-      const loginInput = {
-        usernameOrEmail: usernameOrEmail!,
-        password: password!,
-      };
+      const loginInput = { usernameOrEmail, password };
       const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
       await lastValueFrom(this.authService.login(loginInput));
@@ -105,19 +159,12 @@ export class Login {
 
       // 登录成功提示
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'success',
-        summary: this.transloco.translate('account.login.loginSuccess'),
+      notify.success(this.transloco.translate('account.login.loginSuccess'), {
         detail: this.transloco.translate('account.login.welcomeBack'),
         life: 3000,
       });
       //#else
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Login successful',
-        detail: 'Welcome back!',
-        life: 3000,
-      });
+      notify.success('Login successful', { detail: 'Welcome back!', life: 3000 });
       //#endif
 
       if (this.isSafeLocalReturnUrl(returnUrl)) {
@@ -133,7 +180,6 @@ export class Login {
       }
     } catch (error) {
       // HTTP 错误已经在 httpErrorInterceptor 中统一处理并显示 Toast
-      // 这里只需要捕获错误以确保 finally 块能执行，不需要再次抛出
       console.error('Login failed', error);
     } finally {
       this._isLoading.set(false);
@@ -147,33 +193,6 @@ export class Login {
       !returnUrl.startsWith('//') &&
       !returnUrl.includes('://')
     );
-  }
-
-  /**
-   * 获取表单字段的错误信息
-   */
-  getFieldError(fieldName: string): string | null {
-    const field = this.loginForm.get(fieldName);
-    if (!field || !field.touched || !field.errors) {
-      return null;
-    }
-
-    if (field.errors['required']) {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errRequired');
-      //#else
-      return 'This field is required';
-      //#endif
-    }
-    if (field.errors['minlength']) {
-      const minLength = field.errors['minlength'].requiredLength;
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errMinLength', { min: minLength });
-      //#else
-      return `At least ${minLength} characters required`;
-      //#endif
-    }
-    return null;
   }
   //#if (IncludeExternalLogin)
 
@@ -201,16 +220,12 @@ export class Login {
     } catch (error) {
       console.error(`${label} login failed`, error);
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'error',
-        summary: this.transloco.translate('account.login.loginFailed'),
+      notify.error(this.transloco.translate('account.login.loginFailed'), {
         detail: this.transloco.translate('account.login.externalLoginFailed', { provider: label }),
         life: 3000,
       });
       //#else
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Login failed',
+      notify.error('Login failed', {
         detail: `Unable to connect to the ${label} login service, please try again later`,
         life: 3000,
       });

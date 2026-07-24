@@ -1,31 +1,18 @@
-<div
-  class="min-h-screen flex flex-col items-center justify-center bg-surface-50 dark:bg-surface-950 px-6 relative"
->
+<div class="min-h-screen flex flex-col items-center justify-center bg-background px-6 relative">
   <!-- Theme Toggle -->
   <div class="absolute top-4 right-4 flex gap-2 z-50">
-    <p-button
-      [icon]="themeService.modeIcon()"
-      [text]="true"
-      [rounded]="true"
-      severity="secondary"
-      (onClick)="themeService.toggleTheme()"
-    >
-    </p-button>
+    <button hlmBtn variant="ghost" size="icon" (click)="themeService.toggleTheme()">
+      <ng-icon [name]="themeService.modeIcon()" />
+    </button>
     <div class="relative">
-      <p-button
-        icon="pi pi-palette"
-        [text]="true"
-        [rounded]="true"
-        severity="secondary"
-        pStyleClass="@next"
-        enterFromClass="hidden"
-        enterActiveClass="animate-scalein"
-        leaveToClass="hidden"
-        leaveActiveClass="animate-fadeout"
-        [hideOnOutsideClick]="true"
-      >
-      </p-button>
-      <app-theme-configurator />
+      <hlm-popover>
+        <button hlmBtn variant="ghost" size="icon" hlmPopoverTrigger>
+          <ng-icon name="lucidePalette" />
+        </button>
+        <hlm-popover-content *hlmPopoverPortal class="w-72">
+          <app-theme-configurator />
+        </hlm-popover-content>
+      </hlm-popover>
     </div>
     <!--#if (IncludeLocalization)-->
     <app-language-switcher />
@@ -34,61 +21,67 @@
 
   <div class="max-w-2xl text-center space-y-8">
     <!--#if (IncludeLocalization)-->
-    <h1 class="text-5xl font-bold text-color">{{ 'landing.hero.title' | transloco }}</h1>
-    <p class="text-xl text-muted-color">{{ 'landing.hero.subtitle' | transloco }}</p>
+    <h1 class="text-5xl font-bold">{{ 'landing.hero.title' | transloco }}</h1>
+    <p class="text-xl text-muted-foreground">{{ 'landing.hero.subtitle' | transloco }}</p>
     <!--#else-->
-    <h1 class="text-5xl font-bold text-color">Template Project</h1>
-    <p class="text-xl text-muted-color">
-      A full-stack application development template based on Angular + PrimeNG + .NET 10 DDD
+    <h1 class="text-5xl font-bold">Template Project</h1>
+    <p class="text-xl text-muted-foreground">
+      A full-stack application development template based on Angular + Spartan UI + .NET 10 DDD
       architecture
     </p>
     <!--#endif-->
 
     <div class="flex items-center justify-center gap-4">
       <!--#if (IncludeLocalization)-->
-      <p-button [label]="'landing.hero.login' | transloco" routerLink="/auth/login" />
-      <p-button
-        [label]="'landing.hero.register' | transloco"
-        routerLink="/auth/register"
-        [outlined]="true"
-      />
+      <a hlmBtn routerLink="/auth/login">{{ 'landing.hero.login' | transloco }}</a>
+      <a hlmBtn variant="outline" routerLink="/auth/register">{{
+        'landing.hero.register' | transloco
+      }}</a>
       <!--#else-->
-      <p-button label="Sign In" routerLink="/auth/login" />
-      <p-button label="Sign Up" routerLink="/auth/register" [outlined]="true" />
+      <a hlmBtn routerLink="/auth/login">Sign In</a>
+      <a hlmBtn variant="outline" routerLink="/auth/register">Sign Up</a>
       <!--#endif-->
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
-      <div class="p-6 rounded-xl bg-surface-card border border-surface">
-        <i class="pi pi-shield text-3xl text-primary mb-3"></i>
+      <div class="p-6 rounded-xl bg-card border border-border">
+        <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
         <!--#if (IncludeLocalization)-->
-        <h3 class="font-semibold text-color">{{ 'landing.feature.authTitle' | transloco }}</h3>
-        <p class="text-sm text-muted-color mt-2">{{ 'landing.feature.authDesc' | transloco }}</p>
+        <h3 class="font-semibold">{{ 'landing.feature.authTitle' | transloco }}</h3>
+        <p class="text-sm text-muted-foreground mt-2">
+          {{ 'landing.feature.authDesc' | transloco }}
+        </p>
         <!--#else-->
-        <h3 class="font-semibold text-color">Authentication</h3>
-        <p class="text-sm text-muted-color mt-2">
+        <h3 class="font-semibold">Authentication</h3>
+        <p class="text-sm text-muted-foreground mt-2">
           Cookie-based authentication with role and permission management
         </p>
         <!--#endif-->
       </div>
-      <div class="p-6 rounded-xl bg-surface-card border border-surface">
-        <i class="pi pi-users text-3xl text-primary mb-3"></i>
+      <div class="p-6 rounded-xl bg-card border border-border">
+        <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
         <!--#if (IncludeLocalization)-->
-        <h3 class="font-semibold text-color">{{ 'landing.feature.usersTitle' | transloco }}</h3>
-        <p class="text-sm text-muted-color mt-2">{{ 'landing.feature.usersDesc' | transloco }}</p>
+        <h3 class="font-semibold">{{ 'landing.feature.usersTitle' | transloco }}</h3>
+        <p class="text-sm text-muted-foreground mt-2">
+          {{ 'landing.feature.usersDesc' | transloco }}
+        </p>
         <!--#else-->
-        <h3 class="font-semibold text-color">User Management</h3>
-        <p class="text-sm text-muted-color mt-2">Full CRUD operations with permission control</p>
+        <h3 class="font-semibold">User Management</h3>
+        <p class="text-sm text-muted-foreground mt-2">
+          Full CRUD operations with permission control
+        </p>
         <!--#endif-->
       </div>
-      <div class="p-6 rounded-xl bg-surface-card border border-surface">
-        <i class="pi pi-palette text-3xl text-primary mb-3"></i>
+      <div class="p-6 rounded-xl bg-card border border-border">
+        <ng-icon name="lucidePalette" class="text-3xl text-primary mb-3" />
         <!--#if (IncludeLocalization)-->
-        <h3 class="font-semibold text-color">{{ 'landing.feature.themeTitle' | transloco }}</h3>
-        <p class="text-sm text-muted-color mt-2">{{ 'landing.feature.themeDesc' | transloco }}</p>
+        <h3 class="font-semibold">{{ 'landing.feature.themeTitle' | transloco }}</h3>
+        <p class="text-sm text-muted-foreground mt-2">
+          {{ 'landing.feature.themeDesc' | transloco }}
+        </p>
         <!--#else-->
-        <h3 class="font-semibold text-color">Theme System</h3>
-        <p class="text-sm text-muted-color mt-2">Dark mode + Tailwind CSS + PrimeNG</p>
+        <h3 class="font-semibold">Theme System</h3>
+        <p class="text-sm text-muted-foreground mt-2">Dark mode + Tailwind CSS + Spartan UI</p>
         <!--#endif-->
       </div>
     </div>

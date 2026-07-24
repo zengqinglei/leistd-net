@@ -4,8 +4,8 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#else
 import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 //#endif
-import { CardModule } from 'primeng/card';
-import { TagModule } from 'primeng/tag';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmCardImports } from '@spartan-ng/helm/card';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
@@ -18,9 +18,9 @@ import { RoleLabelPipe } from '../../../../shared/pipes/role-label.pipe';
   selector: 'app-workspace-dashboard-page',
   standalone: true,
   //#if (IncludeLocalization)
-  imports: [CardModule, TagModule, RoleLabelPipe, TranslocoModule],
+  imports: [...HlmCardImports, HlmBadge, RoleLabelPipe, TranslocoModule],
   //#else
-  imports: [CardModule, TagModule, RoleLabelPipe],
+  imports: [...HlmCardImports, HlmBadge, RoleLabelPipe],
   //#endif
   templateUrl: './workspace-dashboard.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

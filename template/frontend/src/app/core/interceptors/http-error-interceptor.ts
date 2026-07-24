@@ -6,10 +6,10 @@ import { Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MessageService } from 'primeng/api';
 import { catchError, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
+import { notify } from '../notifications/notify';
 //#if (IncludeIdentity)
 import { AuthService } from '../services/auth-service';
 //#endif
@@ -24,7 +24,6 @@ import { AuthService } from '../services/auth-service';
  * - 重新抛出错误给调用方处理
  */
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
-  const messageService = inject(MessageService);
   //#if (IncludeIdentity)
   const router = inject(Router);
   const authService = inject(AuthService);
@@ -84,23 +83,17 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           const message = error.error.message || error.error.detail;
 
           if (message) {
-            messageService.add({
-              severity: 'error',
-              summary: `${requestErrorSummary()}（${error.status} - ${code}）`,
+            notify.error(`${requestErrorSummary()}（${error.status} - ${code}）`, {
               detail: message,
             });
           } else {
-            messageService.add({
-              severity: 'error',
-              summary: `${requestErrorSummary()}（${error.status}）`,
+            notify.error(`${requestErrorSummary()}（${error.status}）`, {
               detail: codeMessage(error.status),
             });
           }
         } else {
           const errorText = codeMessage(error.status) || error.statusText;
-          messageService.add({
-            severity: 'error',
-            summary: `${requestErrorSummary()}（${error.status}）`,
+          notify.error(`${requestErrorSummary()}（${error.status}）`, {
             detail: errorText,
           });
         }

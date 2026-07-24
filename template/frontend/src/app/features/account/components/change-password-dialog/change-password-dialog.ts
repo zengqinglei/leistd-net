@@ -1,72 +1,52 @@
-import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, effect, inject, model, signal } from '@angular/core';
-import {
-  AbstractControl,
-  FormBuilder,
-  ReactiveFormsModule,
-  ValidationErrors,
-  ValidatorFn,
-  Validators,
-} from '@angular/forms';
+import { ChangeDetectionStrategy, Component, inject, model, signal } from '@angular/core';
+import { form, required, pattern, validate, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MessageService } from 'primeng/api';
-import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { PasswordModule } from 'primeng/password';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideEye, lucideEyeOff, lucideLock } from '@ng-icons/lucide';
+import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import {
+  HlmInputGroup,
+  HlmInputGroupInput,
+  HlmInputGroupButton,
+} from '@spartan-ng/helm/input-group';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
-import { DIALOG_CONFIGS } from '../../../../shared/constants/dialog-config.constants';
+import { notify } from '../../../../core/notifications/notify';
 import { AccountService } from '../../services/account-service';
 
 const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
 
-function passwordRulesValidator(): ValidatorFn {
-  return (control: AbstractControl): ValidationErrors | null => {
-    const group = control;
-    const currentPassword = String(group.get('currentPassword')?.value ?? '');
-    const newPassword = String(group.get('newPassword')?.value ?? '');
-    const confirmPassword = String(group.get('confirmPassword')?.value ?? '');
-
-    const errors: Record<string, true> = {};
-
-    if (currentPassword && newPassword && currentPassword === newPassword) {
-      errors['sameAsCurrent'] = true;
-    }
-
-    if (confirmPassword && newPassword !== confirmPassword) {
-      errors['passwordMismatch'] = true;
-    }
-
-    return Object.keys(errors).length > 0 ? errors : null;
-  };
-}
-
 @Component({
   selector: 'app-change-password-dialog',
   standalone: true,
-  //#if (IncludeLocalization)
   imports: [
-    CommonModule,
-    ReactiveFormsModule,
+    FormField,
+    NgIcon,
+    HlmButton,
+    HlmSpinner,
+    HlmInputGroup,
+    HlmInputGroupInput,
+    HlmInputGroupButton,
+    ...HlmDialogImports,
+    ...HlmFieldImports,
+    //#if (IncludeLocalization)
     TranslocoModule,
-    DialogModule,
-    ButtonModule,
-    PasswordModule,
+    //#endif
   ],
-  //#else
-  imports: [CommonModule, ReactiveFormsModule, DialogModule, ButtonModule, PasswordModule],
-  //#endif
+  providers: [provideIcons({ lucideEye, lucideEyeOff, lucideLock })],
   templateUrl: './change-password-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChangePasswordDialogComponent {
   readonly visible = model(false);
 
-  private readonly fb = inject(FormBuilder);
   private readonly accountService = inject(AccountService);
-  private readonly messageService = inject(MessageService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   readonly dialogHeader = () => this.transloco.translate('account.changePassword.header');
@@ -74,47 +54,101 @@ export class ChangePasswordDialogComponent {
   readonly dialogHeader = () => 'Change Password';
   //#endif
 
-  readonly dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly saving = signal(false);
 
-  readonly form = this.fb.nonNullable.group(
-    {
-      currentPassword: ['', [Validators.required]],
-      newPassword: ['', [Validators.required, Validators.pattern(PASSWORD_RULE)]],
-      confirmPassword: ['', [Validators.required]],
-    },
-    { validators: [passwordRulesValidator()] },
-  );
+  // 密码可见性
+  protected readonly showCurrentPassword = signal(false);
+  protected readonly showNewPassword = signal(false);
+  protected readonly showConfirmPassword = signal(false);
 
-  constructor() {
-    effect(() => {
-      if (this.visible()) {
-        this.form.reset({
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: '',
-        });
-      }
+  // 表单模型（Signal Forms）
+  private readonly model_ = signal({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+
+  //#if (IncludeLocalization)
+  readonly changeForm = form(this.model_, (path) => {
+    required(path.currentPassword, {
+      message: this.transloco.translate('account.changePassword.currentPasswordRequired'),
     });
+    required(path.newPassword, { message: '' });
+    pattern(path.newPassword, PASSWORD_RULE, {
+      message: this.transloco.translate('account.changePassword.newPasswordRuleError'),
+    });
+    validate(path.newPassword, (ctx) => {
+      const newPassword = ctx.value();
+      const currentPassword = ctx.valueOf(path.currentPassword);
+      if (currentPassword && newPassword && currentPassword === newPassword) {
+        return {
+          kind: 'sameAsCurrent',
+          message: this.transloco.translate('account.changePassword.sameAsCurrentError'),
+        };
+      }
+      return null;
+    });
+    required(path.confirmPassword, {
+      message: this.transloco.translate('account.changePassword.confirmPasswordRequired'),
+    });
+    validate(path.confirmPassword, (ctx) => {
+      const confirm = ctx.value();
+      const newPassword = ctx.valueOf(path.newPassword);
+      if (newPassword && confirm && newPassword !== confirm) {
+        return {
+          kind: 'passwordMismatch',
+          message: this.transloco.translate('account.changePassword.mismatchError'),
+        };
+      }
+      return null;
+    });
+  });
+  //#else
+  readonly changeForm = form(this.model_, (path) => {
+    required(path.currentPassword, { message: 'Please enter your current password' });
+    required(path.newPassword, { message: '' });
+    pattern(path.newPassword, PASSWORD_RULE, {
+      message:
+        'The new password does not meet the requirements; it must include uppercase and lowercase letters, numbers, and special characters',
+    });
+    validate(path.newPassword, (ctx) => {
+      const newPassword = ctx.value();
+      const currentPassword = ctx.valueOf(path.currentPassword);
+      if (currentPassword && newPassword && currentPassword === newPassword) {
+        return {
+          kind: 'sameAsCurrent',
+          message: 'The new password cannot be the same as the current password',
+        };
+      }
+      return null;
+    });
+    required(path.confirmPassword, { message: 'Please re-enter the new password' });
+    validate(path.confirmPassword, (ctx) => {
+      const confirm = ctx.value();
+      const newPassword = ctx.valueOf(path.newPassword);
+      if (newPassword && confirm && newPassword !== confirm) {
+        return { kind: 'passwordMismatch', message: 'The two new passwords do not match' };
+      }
+      return null;
+    });
+  });
+  //#endif
+
+  /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约；打开时重置表单。 */
+  onDialogStateChange(state: BrnDialogState): void {
+    const open = state === 'open';
+    this.visible.set(open);
+    if (open) {
+      this.resetForm();
+    } else {
+      this.showCurrentPassword.set(false);
+      this.showNewPassword.set(false);
+      this.showConfirmPassword.set(false);
+    }
   }
 
-  hasPasswordRuleError(): boolean {
-    const control = this.form.controls.newPassword;
-    return control.touched && control.hasError('pattern');
-  }
-
-  shouldShowMismatchError(): boolean {
-    return (
-      this.form.hasError('passwordMismatch') &&
-      (this.form.controls.confirmPassword.touched || this.form.controls.newPassword.touched)
-    );
-  }
-
-  shouldShowSamePasswordError(): boolean {
-    return (
-      this.form.hasError('sameAsCurrent') &&
-      (this.form.controls.currentPassword.touched || this.form.controls.newPassword.touched)
-    );
+  private resetForm(): void {
+    this.model_.set({ currentPassword: '', newPassword: '', confirmPassword: '' });
   }
 
   onHide(): void {
@@ -122,30 +156,26 @@ export class ChangePasswordDialogComponent {
   }
 
   onSubmit(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (this.changeForm().invalid()) {
+      this.changeForm().markAsTouched();
       return;
     }
 
     this.saving.set(true);
 
+    const { currentPassword, newPassword, confirmPassword } = this.model_();
+
     this.accountService
-      .changePassword(this.form.getRawValue())
+      .changePassword({ currentPassword, newPassword, confirmPassword })
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
           //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
+          notify.success(this.transloco.translate('common.success'), {
             detail: this.transloco.translate('account.changePassword.updateSuccess'),
           });
           //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Password updated',
-          });
+          notify.success('Success', { detail: 'Password updated' });
           //#endif
           this.visible.set(false);
         },

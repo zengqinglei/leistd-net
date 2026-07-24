@@ -1,302 +1,226 @@
-<p-dialog
-  [visible]="visible()"
-  [modal]="true"
-  [breakpoints]="dialogConfig.breakpoints"
-  [style]="dialogConfig.style"
-  [contentStyle]="dialogConfig.contentStyle"
-  [draggable]="dialogConfig.draggable"
-  [resizable]="dialogConfig.resizable"
-  [closable]="true"
-  [dismissableMask]="!saving()"
-  [closeOnEscape]="!saving()"
-  [header]="dialogHeader()"
-  styleClass="overflow-hidden"
-  (visibleChange)="visible.set($event)"
-  (onHide)="onHide()"
+<hlm-dialog
+  [state]="visible() ? 'open' : 'closed'"
+  (stateChanged)="onDialogStateChange($event)"
+  [closeOnOutsidePointerEvents]="!saving()"
 >
-  <div class="p-4 md:p-6 pt-2" [formGroup]="form">
-    <!--#if (IncludeLocalization)-->
-    <p class="mt-0 mb-6 text-sm text-muted-color">{{ 'account.profile.subtitle' | transloco }}</p>
-    <!--#else-->
-    <p class="mt-0 mb-6 text-sm text-muted-color">
-      Update your username, email, nickname, phone number, and avatar.
-    </p>
-    <!--#endif-->
-
-    <p-fileupload
-      mode="advanced"
-      name="avatar"
-      accept="image/png,image/jpeg,image/webp"
-      [maxFileSize]="maxAvatarSize"
-      [customUpload]="true"
-      [auto]="false"
-      [multiple]="false"
-      [showUploadButton]="false"
-      [showCancelButton]="false"
-      styleClass="border-0 bg-transparent p-0 shadow-none"
-      [invalidFileSizeMessageSummary]="uploadMessages().sizeSummary"
-      [invalidFileSizeMessageDetail]="uploadMessages().sizeDetail"
-      [invalidFileTypeMessageSummary]="uploadMessages().typeSummary"
-      [invalidFileTypeMessageDetail]="uploadMessages().typeDetail"
-      (onSelect)="onAvatarSelect($event)"
-    >
-      <ng-template pTemplate="header">
-        <div class="hidden"></div>
-      </ng-template>
-
-      <ng-template pTemplate="content" let-chooseCallback="chooseCallback">
-        <div
-          class="mb-6 flex items-center gap-4 border-b border-surface-200 pb-5 dark:border-surface-700"
-        >
-          <button
-            type="button"
-            class="group relative block h-20 w-20 shrink-0 overflow-hidden rounded-full border border-surface-200 bg-surface-100 transition-colors hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-surface-700 dark:bg-surface-800"
-            (click)="chooseCallback()"
-          >
-            @if (hasAvatarImage()) {
-              <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
-            } @else {
-              <div class="flex h-full w-full items-center justify-center">
-                <p-avatar
-                  [label]="avatarLabel()"
-                  size="xlarge"
-                  shape="circle"
-                  [style]="avatarStyle()"
-                />
-              </div>
-            }
-
-            <div
-              class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-            >
-              <i class="pi pi-plus text-xl"></i>
-            </div>
-          </button>
-
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2 flex-wrap">
-              <h3 class="m-0 truncate text-lg font-semibold text-color">{{ displayName() }}</h3>
-              @if (user()?.isSuperAdmin) {
-                <!--#if (IncludeLocalization)-->
-                <p-tag [value]="'account.profile.superAdminTag' | transloco" severity="danger" />
-                <!--#else-->
-                <p-tag value="Super Admin" severity="danger" />
-                <!--#endif-->
-              } @else if (user()?.isAdmin()) {
-                <!--#if (IncludeLocalization)-->
-                <p-tag [value]="'account.profile.adminTag' | transloco" severity="info" />
-                <!--#else-->
-                <p-tag value="Admin" severity="info" />
-                <!--#endif-->
-              }
-            </div>
-            <p class="mt-1 mb-0 truncate text-sm text-muted-color">
-              {{ form.controls.email.value || user()?.email }}
-            </p>
-            <!--#if (IncludeLocalization)-->
-            <p class="mt-2 mb-0 text-xs text-muted-color">
-              {{ 'account.profile.avatarHint' | transloco }}
-            </p>
-            <!--#else-->
-            <p class="mt-2 mb-0 text-xs text-muted-color">
-              Hover over the avatar and click + to re-upload; the selection previews instantly.
-            </p>
-            <!--#endif-->
-          </div>
-        </div>
-      </ng-template>
-
-      <ng-template pTemplate="empty">
-        <div class="hidden"></div>
-      </ng-template>
-    </p-fileupload>
-
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <div class="flex flex-col gap-2">
-        <!--#if (IncludeLocalization)-->
-        <label for="profile-username" class="block text-sm font-medium text-color">{{
-          'account.profile.username' | transloco
-        }}</label>
-        <input
-          id="profile-username"
-          pInputText
-          formControlName="username"
-          [placeholder]="'account.profile.usernamePlaceholder' | transloco"
-          class="w-full"
-        />
-        <!--#else-->
-        <label for="profile-username" class="block text-sm font-medium text-color">Username</label>
-        <input
-          id="profile-username"
-          pInputText
-          formControlName="username"
-          placeholder="Please enter a username"
-          class="w-full"
-        />
-        <!--#endif-->
-        @if (form.controls.username.hasError('required') && form.controls.username.touched) {
-          <!--#if (IncludeLocalization)-->
-          <small class="text-red-500">{{ 'account.profile.usernameRequired' | transloco }}</small>
-          <!--#else-->
-          <small class="text-red-500">Username cannot be empty</small>
-          <!--#endif-->
-        }
-        @if (
-          (form.controls.username.hasError('minlength') ||
-            form.controls.username.hasError('maxlength') ||
-            form.controls.username.hasError('pattern')) &&
-          form.controls.username.touched
-        ) {
-          <!--#if (IncludeLocalization)-->
-          <small class="text-red-500">{{
-            'account.profile.usernameFormatError' | transloco
-          }}</small>
-          <!--#else-->
-          <small class="text-red-500"
-            >Username must be 3–64 characters of letters, numbers, or underscores</small
-          >
-          <!--#endif-->
-        }
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <!--#if (IncludeLocalization)-->
-        <label for="profile-email" class="block text-sm font-medium text-color">{{
-          'account.profile.email' | transloco
-        }}</label>
-        <input
-          id="profile-email"
-          pInputText
-          formControlName="email"
-          [placeholder]="'account.profile.emailPlaceholder' | transloco"
-          class="w-full"
-        />
-        <!--#else-->
-        <label for="profile-email" class="block text-sm font-medium text-color">Email</label>
-        <input
-          id="profile-email"
-          pInputText
-          formControlName="email"
-          placeholder="Please enter an email"
-          class="w-full"
-        />
-        <!--#endif-->
-        @if (
-          (form.controls.email.hasError('required') ||
-            form.controls.email.hasError('email') ||
-            form.controls.email.hasError('maxlength')) &&
-          form.controls.email.touched
-        ) {
-          <!--#if (IncludeLocalization)-->
-          <small class="text-red-500">{{ 'account.profile.emailError' | transloco }}</small>
-          <!--#else-->
-          <small class="text-red-500"
-            >Please enter a valid email; length cannot exceed 256 characters</small
-          >
-          <!--#endif-->
-        }
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <!--#if (IncludeLocalization)-->
-        <label for="profile-nickname" class="block text-sm font-medium text-color">{{
-          'account.profile.nickname' | transloco
-        }}</label>
-        <input
-          id="profile-nickname"
-          pInputText
-          formControlName="nickname"
-          [placeholder]="'account.profile.nicknamePlaceholder' | transloco"
-          class="w-full"
-        />
-        <!--#else-->
-        <label for="profile-nickname" class="block text-sm font-medium text-color">Nickname</label>
-        <input
-          id="profile-nickname"
-          pInputText
-          formControlName="nickname"
-          placeholder="Please enter a nickname"
-          class="w-full"
-        />
-        <!--#endif-->
-        @if (form.controls.nickname.invalid && form.controls.nickname.touched) {
-          <!--#if (IncludeLocalization)-->
-          <small class="text-red-500">{{ 'account.profile.nicknameError' | transloco }}</small>
-          <!--#else-->
-          <small class="text-red-500">Nickname length cannot exceed 128 characters</small>
-          <!--#endif-->
-        }
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <!--#if (IncludeLocalization)-->
-        <label for="profile-phone-number" class="block text-sm font-medium text-color">{{
-          'account.profile.phoneNumber' | transloco
-        }}</label>
-        <input
-          id="profile-phone-number"
-          pInputText
-          formControlName="phoneNumber"
-          [placeholder]="'account.profile.phoneNumberPlaceholder' | transloco"
-          class="w-full"
-        />
-        <!--#else-->
-        <label for="profile-phone-number" class="block text-sm font-medium text-color"
-          >Phone Number</label
-        >
-        <input
-          id="profile-phone-number"
-          pInputText
-          formControlName="phoneNumber"
-          placeholder="Please enter a phone number"
-          class="w-full"
-        />
-        <!--#endif-->
-        @if (form.controls.phoneNumber.hasError('maxlength') && form.controls.phoneNumber.touched) {
-          <!--#if (IncludeLocalization)-->
-          <small class="text-red-500">{{
-            'account.profile.phoneNumberLengthError' | transloco
-          }}</small>
-          <!--#else-->
-          <small class="text-red-500">Phone number length cannot exceed 20 characters</small>
-          <!--#endif-->
-        }
-        @if (form.controls.phoneNumber.hasError('pattern') && form.controls.phoneNumber.touched) {
-          <!--#if (IncludeLocalization)-->
-          <small class="text-red-500">{{
-            'account.profile.phoneNumberPatternError' | transloco
-          }}</small>
-          <!--#else-->
-          <small class="text-red-500"
-            >Phone number supports only digits, spaces, and the symbols + - ( )</small
-          >
-          <!--#endif-->
-        }
-      </div>
-    </div>
-  </div>
-
-  <ng-template pTemplate="footer">
-    <div class="flex justify-end gap-3 p-4">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-2xl" [showCloseButton]="!saving()">
+    <hlm-dialog-header>
+      <h3 hlmDialogTitle>{{ dialogHeader() }}</h3>
       <!--#if (IncludeLocalization)-->
-      <p-button
-        [label]="'common.cancel' | transloco"
-        severity="secondary"
-        [outlined]="true"
-        [disabled]="saving()"
-        (onClick)="onHide()"
-      />
-      <p-button [label]="'common.save' | transloco" [loading]="saving()" (onClick)="onSubmit()" />
+      <p hlmDialogDescription>{{ 'account.profile.subtitle' | transloco }}</p>
       <!--#else-->
-      <p-button
-        label="Cancel"
-        severity="secondary"
-        [outlined]="true"
-        [disabled]="saving()"
-        (onClick)="onHide()"
-      />
-      <p-button label="Save" [loading]="saving()" (onClick)="onSubmit()" />
+      <p hlmDialogDescription>Update your username, email, nickname, phone number, and avatar.</p>
       <!--#endif-->
-    </div>
-  </ng-template>
-</p-dialog>
+    </hlm-dialog-header>
+
+    <form (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-6">
+      <!-- Avatar 上传（原生 file input + 自绘头像 UI） -->
+      <div class="flex items-center gap-4 border-b border-border pb-5">
+        <label
+          class="group relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full border border-border bg-muted transition-colors hover:border-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/30"
+        >
+          @if (hasAvatarImage()) {
+            <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
+          } @else {
+            <span
+              class="flex h-full w-full items-center justify-center text-2xl font-semibold"
+              [style.background]="avatarStyle().background"
+              [style.color]="avatarStyle().color"
+              >{{ avatarLabel() }}</span
+            >
+          }
+
+          <span
+            class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+          >
+            <ng-icon name="lucideImagePlus" class="text-xl" />
+          </span>
+
+          <input
+            type="file"
+            class="sr-only"
+            accept="image/png,image/jpeg,image/webp"
+            (change)="onAvatarSelect($event)"
+          />
+        </label>
+
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="m-0 truncate text-lg font-semibold">{{ displayName() }}</h3>
+            @if (user()?.isSuperAdmin) {
+              <!--#if (IncludeLocalization)-->
+              <span hlmBadge variant="destructive">{{
+                'account.profile.superAdminTag' | transloco
+              }}</span>
+              <!--#else-->
+              <span hlmBadge variant="destructive">Super Admin</span>
+              <!--#endif-->
+            } @else if (user()?.isAdmin()) {
+              <!--#if (IncludeLocalization)-->
+              <span hlmBadge variant="secondary">{{ 'account.profile.adminTag' | transloco }}</span>
+              <!--#else-->
+              <span hlmBadge variant="secondary">Admin</span>
+              <!--#endif-->
+            }
+          </div>
+          <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
+            {{ model_().email || user()?.email }}
+          </p>
+          <!--#if (IncludeLocalization)-->
+          <p class="mt-2 mb-0 text-xs text-muted-foreground">
+            {{ 'account.profile.avatarHint' | transloco }}
+          </p>
+          <!--#else-->
+          <p class="mt-2 mb-0 text-xs text-muted-foreground">
+            Hover over the avatar and click + to re-upload; the selection previews instantly.
+          </p>
+          <!--#endif-->
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <!-- Username -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="profile-username">{{
+            'account.profile.username' | transloco
+          }}</label>
+          <input
+            hlmInput
+            id="profile-username"
+            class="w-full"
+            [formField]="profileForm.username"
+            [placeholder]="'account.profile.usernamePlaceholder' | transloco"
+          />
+          <!--#else-->
+          <label hlmFieldLabel for="profile-username">Username</label>
+          <input
+            hlmInput
+            id="profile-username"
+            class="w-full"
+            [formField]="profileForm.username"
+            placeholder="Please enter a username"
+          />
+          <!--#endif-->
+          @for (error of profileForm.username().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+
+        <!-- Email -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="profile-email">{{ 'account.profile.email' | transloco }}</label>
+          <input
+            hlmInput
+            id="profile-email"
+            class="w-full"
+            [formField]="profileForm.email"
+            [placeholder]="'account.profile.emailPlaceholder' | transloco"
+          />
+          <!--#else-->
+          <label hlmFieldLabel for="profile-email">Email</label>
+          <input
+            hlmInput
+            id="profile-email"
+            class="w-full"
+            [formField]="profileForm.email"
+            placeholder="Please enter an email"
+          />
+          <!--#endif-->
+          @for (error of profileForm.email().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+
+        <!-- Nickname -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="profile-nickname">{{
+            'account.profile.nickname' | transloco
+          }}</label>
+          <input
+            hlmInput
+            id="profile-nickname"
+            class="w-full"
+            [formField]="profileForm.nickname"
+            [placeholder]="'account.profile.nicknamePlaceholder' | transloco"
+          />
+          <!--#else-->
+          <label hlmFieldLabel for="profile-nickname">Nickname</label>
+          <input
+            hlmInput
+            id="profile-nickname"
+            class="w-full"
+            [formField]="profileForm.nickname"
+            placeholder="Please enter a nickname"
+          />
+          <!--#endif-->
+          @for (error of profileForm.nickname().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+
+        <!-- Phone Number -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="profile-phone-number">{{
+            'account.profile.phoneNumber' | transloco
+          }}</label>
+          <input
+            hlmInput
+            id="profile-phone-number"
+            class="w-full"
+            [formField]="profileForm.phoneNumber"
+            [placeholder]="'account.profile.phoneNumberPlaceholder' | transloco"
+          />
+          <!--#else-->
+          <label hlmFieldLabel for="profile-phone-number">Phone Number</label>
+          <input
+            hlmInput
+            id="profile-phone-number"
+            class="w-full"
+            [formField]="profileForm.phoneNumber"
+            placeholder="Please enter a phone number"
+          />
+          <!--#endif-->
+          @for (error of profileForm.phoneNumber().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+      </div>
+
+      <hlm-dialog-footer>
+        <!--#if (IncludeLocalization)-->
+        <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
+          {{ 'common.cancel' | transloco }}
+        </button>
+        <button hlmBtn type="submit" [disabled]="saving()">
+          @if (saving()) {
+            <hlm-spinner class="text-base" data-icon="inline-start" />
+          }
+          {{ 'common.save' | transloco }}
+        </button>
+        <!--#else-->
+        <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
+          Cancel
+        </button>
+        <button hlmBtn type="submit" [disabled]="saving()">
+          @if (saving()) {
+            <hlm-spinner class="text-base" data-icon="inline-start" />
+          }
+          Save
+        </button>
+        <!--#endif-->
+      </hlm-dialog-footer>
+    </form>
+  </hlm-dialog-content>
+</hlm-dialog>

@@ -1,283 +1,280 @@
-<div
-  class="bg-surface-0 dark:bg-surface-900 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden"
->
-  <p-table
-    [value]="users()"
-    [totalRecords]="totalRecords()"
-    [lazy]="true"
-    (onLazyLoad)="onPage($event)"
-    [loading]="loading()"
-    [first]="first"
-    [rows]="rows"
-    [paginator]="true"
-    [rowHover]="true"
-    [rowsPerPageOptions]="[10, 20, 50, 100]"
-    [showCurrentPageReport]="true"
-    [currentPageReportTemplate]="currentPageReport()"
-    [showJumpToPageInput]="true"
-    paginatorDropdownAppendTo="body"
-    styleClass="w-full"
-    responsiveLayout="scroll"
-    [breakpoint]="'960px'"
-    [sortField]="sortField()"
-    [sortOrder]="sortOrder()"
-  >
-    <ng-template pTemplate="header">
-      <tr
-        class="bg-surface-50 dark:bg-surface-800 text-muted-color text-xs font-medium backdrop-blur-sm uppercase"
-      >
-        <th
-          class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3"
-          pSortableColumn="username"
-        >
-          <div class="flex items-center gap-1 whitespace-nowrap">
-            <!--#if (IncludeLocalization)-->
-            {{ 'users.table.colUser' | transloco }}
-            <!--#else-->
-            User
-            <!--#endif-->
-            <p-sortIcon field="username" />
-          </div>
-        </th>
-        <th
-          class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden sm:table-cell"
-          pSortableColumn="email"
-        >
-          <div class="flex items-center gap-1 whitespace-nowrap">
-            <!--#if (IncludeLocalization)-->
-            {{ 'users.table.colEmail' | transloco }}
-            <!--#else-->
-            Email
-            <!--#endif-->
-            <p-sortIcon field="email" />
-          </div>
-        </th>
-        <th
-          class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden md:table-cell whitespace-nowrap"
-        >
+<div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+  <div hlmTableContainer class="w-full overflow-x-auto">
+    <table hlmTable class="w-full">
+      <thead hlmTHead>
+        <tr hlmTr class="bg-muted/50 text-muted-foreground text-xs font-medium uppercase">
+          <th hlmTh class="px-6 py-3">
+            <button
+              type="button"
+              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+              (click)="onSort('username')"
+            >
+              <!--#if (IncludeLocalization)-->
+              {{ 'users.table.colUser' | transloco }}
+              <!--#else-->
+              User
+              <!--#endif-->
+              <ng-icon [name]="sortIcon('username')" class="text-sm" />
+            </button>
+          </th>
+          <th hlmTh class="px-6 py-3 hidden sm:table-cell">
+            <button
+              type="button"
+              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+              (click)="onSort('email')"
+            >
+              <!--#if (IncludeLocalization)-->
+              {{ 'users.table.colEmail' | transloco }}
+              <!--#else-->
+              Email
+              <!--#endif-->
+              <ng-icon [name]="sortIcon('email')" class="text-sm" />
+            </button>
+          </th>
           <!--#if (IncludeLocalization)-->
-          {{ 'users.table.colRole' | transloco }}
+          <th hlmTh class="px-6 py-3 hidden md:table-cell whitespace-nowrap">
+            {{ 'users.table.colRole' | transloco }}
+          </th>
+          <th hlmTh class="px-6 py-3 hidden lg:table-cell whitespace-nowrap">
+            {{ 'users.table.colStatus' | transloco }}
+          </th>
           <!--#else-->
-          Role
+          <th hlmTh class="px-6 py-3 hidden md:table-cell whitespace-nowrap">Role</th>
+          <th hlmTh class="px-6 py-3 hidden lg:table-cell whitespace-nowrap">Status</th>
           <!--#endif-->
-        </th>
-        <th
-          class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden lg:table-cell whitespace-nowrap"
-        >
+          <th hlmTh class="px-6 py-3 hidden xl:table-cell">
+            <button
+              type="button"
+              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+              (click)="onSort('lastLoginTime')"
+            >
+              <!--#if (IncludeLocalization)-->
+              {{ 'users.table.colLastLogin' | transloco }}
+              <!--#else-->
+              Last login
+              <!--#endif-->
+              <ng-icon [name]="sortIcon('lastLoginTime')" class="text-sm" />
+            </button>
+          </th>
+          <th hlmTh class="px-6 py-3 hidden 2xl:table-cell">
+            <button
+              type="button"
+              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+              (click)="onSort('creationTime')"
+            >
+              <!--#if (IncludeLocalization)-->
+              {{ 'users.table.colCreatedAt' | transloco }}
+              <!--#else-->
+              Created at
+              <!--#endif-->
+              <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
+            </button>
+          </th>
           <!--#if (IncludeLocalization)-->
-          {{ 'users.table.colStatus' | transloco }}
+          <th hlmTh class="px-6 py-3 text-right whitespace-nowrap">
+            {{ 'users.table.colActions' | transloco }}
+          </th>
           <!--#else-->
-          Status
+          <th hlmTh class="px-6 py-3 text-right whitespace-nowrap">Actions</th>
           <!--#endif-->
-        </th>
-        <th
-          class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden xl:table-cell"
-          pSortableColumn="lastLoginTime"
-        >
-          <div class="flex items-center gap-1 whitespace-nowrap">
-            <!--#if (IncludeLocalization)-->
-            {{ 'users.table.colLastLogin' | transloco }}
-            <!--#else-->
-            Last login
-            <!--#endif-->
-            <p-sortIcon field="lastLoginTime" />
-          </div>
-        </th>
-        <th
-          class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 hidden 2xl:table-cell"
-          pSortableColumn="creationTime"
-        >
-          <div class="flex items-center gap-1 whitespace-nowrap">
-            <!--#if (IncludeLocalization)-->
-            {{ 'users.table.colCreatedAt' | transloco }}
-            <!--#else-->
-            Created at
-            <!--#endif-->
-            <p-sortIcon field="creationTime" />
-          </div>
-        </th>
-        <th
-          class="bg-transparent font-medium text-xs border-b border-surface-200 dark:border-surface-700 px-6 py-3 text-right whitespace-nowrap"
-        >
-          <!--#if (IncludeLocalization)-->
-          {{ 'users.table.colActions' | transloco }}
-          <!--#else-->
-          Actions
-          <!--#endif-->
-        </th>
-      </tr>
-    </ng-template>
+        </tr>
+      </thead>
 
-    <ng-template pTemplate="body" let-item>
-      <tr
-        class="transition-colors group border-b border-transparent hover:bg-surface-50 dark:hover:bg-surface-800/50 text-sm text-color-secondary"
-      >
-        <td class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4">
-          <div class="flex min-w-0 items-center gap-3 whitespace-nowrap">
-            <p-avatar
-              [image]="item.avatar"
-              [label]="item.avatar ? undefined : item.username.slice(0, 1).toUpperCase()"
-              shape="circle"
-            />
-            <div class="min-w-0 flex flex-col">
-              <span
-                class="text-color text-sm font-semibold group-hover:text-primary transition-colors truncate"
-              >
-                {{ item.displayName || item.username }}
+      <tbody hlmTBody>
+        @for (item of users(); track item.id) {
+          <tr hlmTr class="group text-sm text-muted-foreground hover:bg-muted/50 transition-colors">
+            <td hlmTd class="px-6 py-4">
+              <div class="flex min-w-0 items-center gap-3 whitespace-nowrap">
+                <hlm-avatar size="sm">
+                  @if (item.avatar) {
+                    <img hlmAvatarImage [src]="item.avatar" [alt]="item.username" />
+                  }
+                  <span hlmAvatarFallback>{{ item.username.slice(0, 1).toUpperCase() }}</span>
+                </hlm-avatar>
+                <div class="min-w-0 flex flex-col">
+                  <span
+                    class="text-foreground text-sm font-semibold group-hover:text-primary transition-colors truncate"
+                  >
+                    {{ item.displayName || item.username }}
+                  </span>
+                  <span class="text-xs text-muted-foreground truncate">{{ item.username }}</span>
+                </div>
+              </div>
+            </td>
+
+            <td hlmTd class="px-6 py-4 hidden sm:table-cell">
+              <span class="whitespace-nowrap text-sm">{{ item.email }}</span>
+            </td>
+
+            <td hlmTd class="px-6 py-4 hidden md:table-cell">
+              <div class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap">
+                @for (role of getVisibleRoles(item); track role) {
+                  <span hlmBadge [variant]="getRoleVariant(role)" class="text-[10px]">{{
+                    getRoleLabel(role)
+                  }}</span>
+                }
+                @if (getHiddenRoles(item).length > 0) {
+                  <button
+                    type="button"
+                    hlmBadge
+                    variant="outline"
+                    class="text-[10px] cursor-pointer shrink-0"
+                    (click)="openRolesPopover(getHiddenRoles(item))"
+                  >
+                    +{{ getHiddenRoles(item).length }}
+                  </button>
+                }
+              </div>
+            </td>
+
+            <td hlmTd class="px-6 py-4 hidden lg:table-cell">
+              <div class="flex items-center gap-1.5 whitespace-nowrap">
+                <span
+                  hlmBadge
+                  [variant]="item.isActive ? 'default' : 'secondary'"
+                  class="text-[10px]"
+                  >{{ statusLabel(item.isActive) }}</span
+                >
+                <span
+                  hlmBadge
+                  [variant]="item.isEmailVerified ? 'secondary' : 'outline'"
+                  class="text-[10px] hidden xl:inline-flex"
+                  >{{ emailVerifiedLabel(item.isEmailVerified) }}</span
+                >
+              </div>
+            </td>
+
+            <td hlmTd class="px-6 py-4 hidden xl:table-cell">
+              <span class="text-[11px] text-muted-foreground whitespace-nowrap">
+                {{ item.lastLoginTime ? (item.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss') : '-' }}
               </span>
-              <span class="text-xs text-muted-color truncate">{{ item.username }}</span>
-            </div>
-          </div>
-        </td>
+            </td>
 
-        <td
-          class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden sm:table-cell"
+            <td hlmTd class="px-6 py-4 hidden 2xl:table-cell">
+              <span class="text-[11px] text-muted-foreground whitespace-nowrap">{{
+                item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
+              }}</span>
+            </td>
+
+            <td hlmTd class="px-6 py-4 text-right">
+              <div
+                class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+              >
+                <button
+                  hlmBtn
+                  variant="ghost"
+                  size="icon"
+                  class="w-8 h-8"
+                  (click)="edit.emit(item.id)"
+                  [disabled]="isOtherSuperAdmin(item)"
+                  [hlmTooltip]="editTooltip(isOtherSuperAdmin(item))"
+                >
+                  <ng-icon name="lucidePencil" />
+                </button>
+                <button
+                  hlmBtn
+                  variant="ghost"
+                  size="icon"
+                  class="w-8 h-8"
+                  (click)="toggleActive.emit(item)"
+                  [disabled]="isSuperAdmin(item)"
+                  [hlmTooltip]="toggleActiveTooltip(item)"
+                >
+                  <ng-icon [name]="item.isActive ? 'lucideBan' : 'lucideCircleCheck'" />
+                </button>
+                <button
+                  hlmBtn
+                  variant="ghost"
+                  size="icon"
+                  class="w-8 h-8"
+                  (click)="resetPassword.emit(item.id)"
+                  [disabled]="isOtherSuperAdmin(item)"
+                  [hlmTooltip]="resetPasswordTooltip(isOtherSuperAdmin(item))"
+                >
+                  <ng-icon name="lucideKey" />
+                </button>
+                <button
+                  hlmBtn
+                  variant="ghost"
+                  size="icon"
+                  class="w-8 h-8 text-destructive"
+                  (click)="delete.emit(item)"
+                  [disabled]="isSuperAdmin(item)"
+                  [hlmTooltip]="deleteTooltip(isSuperAdmin(item))"
+                >
+                  <ng-icon name="lucideTrash2" />
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr hlmTr class="hover:bg-transparent">
+            <td hlmTd colspan="7" class="!p-0 !border-0">
+              <div class="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                <ng-icon name="lucideUsers" class="text-5xl opacity-30 mb-3" />
+                <!--#if (IncludeLocalization)-->
+                <p class="text-base font-medium m-0">{{ 'users.table.emptyTitle' | transloco }}</p>
+                <p class="text-sm mt-1 opacity-70">{{ 'users.table.emptyHint' | transloco }}</p>
+                <!--#else-->
+                <p class="text-base font-medium m-0">No users yet</p>
+                <p class="text-sm mt-1 opacity-70">Create a new user</p>
+                <!--#endif-->
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 分页栏 -->
+  @if (totalRecords() > 0) {
+    <div class="flex items-center justify-between gap-4 px-6 py-3 border-t border-border text-sm">
+      <span class="text-muted-foreground">{{ currentPageReport() }}</span>
+      <div class="flex items-center gap-2">
+        <button
+          hlmBtn
+          variant="outline"
+          size="icon"
+          class="w-8 h-8"
+          [disabled]="!canPrev()"
+          (click)="prevPage()"
         >
-          <span class="whitespace-nowrap text-sm text-color-secondary">{{ item.email }}</span>
-        </td>
-
-        <td
-          class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden md:table-cell"
+          <ng-icon name="lucideChevronLeft" />
+        </button>
+        <span class="text-muted-foreground whitespace-nowrap">
+          {{ currentPage() }} / {{ totalPages() }}
+        </span>
+        <button
+          hlmBtn
+          variant="outline"
+          size="icon"
+          class="w-8 h-8"
+          [disabled]="!canNext()"
+          (click)="nextPage()"
         >
-          <div class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap">
-            @for (role of getVisibleRoles(item); track role) {
-              <p-tag
-                [value]="getRoleLabel(role)"
-                [severity]="getRoleSeverity(role)"
-                styleClass="text-[10px]"
-              />
-            }
-            @if (getHiddenRoles(item).length > 0) {
-              <p-tag
-                [value]="'+' + getHiddenRoles(item).length"
-                severity="secondary"
-                styleClass="text-[10px] cursor-pointer shrink-0"
-                (click)="openRolesPopover($event, rolePopover, getHiddenRoles(item))"
-              />
-            }
-          </div>
-        </td>
-
-        <td
-          class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden lg:table-cell"
-        >
-          <div class="flex items-center gap-1.5 whitespace-nowrap">
-            <p-tag
-              [value]="statusLabel(item.isActive)"
-              [severity]="item.isActive ? 'success' : 'secondary'"
-              styleClass="text-[10px]"
-            />
-            <p-tag
-              [value]="emailVerifiedLabel(item.isEmailVerified)"
-              [severity]="item.isEmailVerified ? 'info' : 'warn'"
-              styleClass="text-[10px] hidden xl:inline-flex"
-            />
-          </div>
-        </td>
-
-        <td
-          class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden xl:table-cell"
-        >
-          <span class="text-[11px] text-muted-color whitespace-nowrap">
-            {{ item.lastLoginTime ? (item.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss') : '-' }}
-          </span>
-        </td>
-
-        <td
-          class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 hidden 2xl:table-cell"
-        >
-          <span class="text-[11px] text-muted-color whitespace-nowrap">{{
-            item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
-          }}</span>
-        </td>
-
-        <td
-          class="bg-transparent border-b border-surface-200 dark:border-surface-700 px-6 py-4 text-right"
-        >
-          <div
-            class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
-          >
-            <p-button
-              (onClick)="edit.emit(item.id)"
-              [text]="true"
-              [rounded]="true"
-              severity="secondary"
-              icon="pi pi-pencil"
-              styleClass="w-8 h-8 !p-0"
-              [disabled]="isOtherSuperAdmin(item)"
-              [pTooltip]="editTooltip(isOtherSuperAdmin(item))"
-              tooltipPosition="top"
-            />
-            <p-button
-              (onClick)="toggleActive.emit(item)"
-              [text]="true"
-              [rounded]="true"
-              [severity]="item.isActive ? 'warn' : 'success'"
-              [icon]="item.isActive ? 'pi pi-ban' : 'pi pi-check-circle'"
-              styleClass="w-8 h-8 !p-0"
-              [disabled]="isSuperAdmin(item)"
-              [pTooltip]="toggleActiveTooltip(item)"
-              tooltipPosition="top"
-            />
-            <p-button
-              (onClick)="resetPassword.emit(item.id)"
-              [text]="true"
-              [rounded]="true"
-              severity="secondary"
-              icon="pi pi-key"
-              styleClass="w-8 h-8 !p-0"
-              [disabled]="isOtherSuperAdmin(item)"
-              [pTooltip]="resetPasswordTooltip(isOtherSuperAdmin(item))"
-              tooltipPosition="top"
-            />
-            <p-button
-              (onClick)="delete.emit(item)"
-              [text]="true"
-              [rounded]="true"
-              severity="danger"
-              icon="pi pi-trash"
-              styleClass="w-8 h-8 !p-0"
-              [disabled]="isSuperAdmin(item)"
-              [pTooltip]="deleteTooltip(isSuperAdmin(item))"
-              tooltipPosition="top"
-            />
-          </div>
-        </td>
-      </tr>
-    </ng-template>
-
-    <ng-template pTemplate="emptymessage">
-      <tr class="hover:!bg-transparent">
-        <td colspan="7" class="!p-0 !border-0">
-          <div class="flex flex-col items-center justify-center h-64 text-muted-color">
-            <i class="pi pi-users text-5xl opacity-30 mb-3"></i>
-            <!--#if (IncludeLocalization)-->
-            <p class="text-base font-medium m-0">{{ 'users.table.emptyTitle' | transloco }}</p>
-            <p class="text-sm mt-1 opacity-70">{{ 'users.table.emptyHint' | transloco }}</p>
-            <!--#else-->
-            <p class="text-base font-medium m-0">No users yet</p>
-            <p class="text-sm mt-1 opacity-70">Create a new user</p>
-            <!--#endif-->
-          </div>
-        </td>
-      </tr>
-    </ng-template>
-  </p-table>
+          <ng-icon name="lucideChevronRight" />
+        </button>
+      </div>
+    </div>
+  }
 </div>
 
-<p-popover #rolePopover>
-  <div class="min-w-48 max-w-sm p-2">
-    <div class="mb-3 text-sm font-semibold text-color">{{ rolePopoverTitle() }}</div>
+<!-- 角色溢出 popover -->
+<hlm-popover [state]="rolePopoverOpen()" (stateChanged)="rolePopoverOpen.set($event)">
+  <span hlmPopoverTrigger class="hidden"></span>
+  <hlm-popover-content *hlmPopoverPortal class="min-w-48 max-w-sm">
+    <div class="mb-3 text-sm font-semibold">{{ rolePopoverTitle() }}</div>
     <div class="flex flex-wrap gap-2">
       @for (role of activeRoles(); track role) {
-        <p-tag [value]="getRoleLabel(role)" [severity]="getRoleSeverity(role)" />
+        <span hlmBadge [variant]="getRoleVariant(role)">{{ getRoleLabel(role) }}</span>
       } @empty {
         <!--#if (IncludeLocalization)-->
-        <div class="text-sm text-muted-color">{{ 'users.popover.noRoles' | transloco }}</div>
+        <div class="text-sm text-muted-foreground">{{ 'users.popover.noRoles' | transloco }}</div>
         <!--#else-->
-        <div class="text-sm text-muted-color">No roles</div>
+        <div class="text-sm text-muted-foreground">No roles</div>
         <!--#endif-->
       }
     </div>
-  </div>
-</p-popover>
+  </hlm-popover-content>
+</hlm-popover>

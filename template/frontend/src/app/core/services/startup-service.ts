@@ -4,7 +4,6 @@ import { Injectable, inject, signal } from '@angular/core';
 
 import { AuthService } from './auth-service';
 //#else
-import { Injectable, signal } from '@angular/core';
 //#endif
 
 export type StartupStatus = 'loading' | 'success' | 'failed';

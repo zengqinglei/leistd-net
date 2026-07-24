@@ -1,33 +1,51 @@
-import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
   OnInit,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
-  AbstractControl,
-  FormBuilder,
-  ReactiveFormsModule,
-  ValidationErrors,
-  Validators,
-} from '@angular/forms';
+  form,
+  required,
+  minLength,
+  maxLength,
+  email as emailValidator,
+  pattern,
+  validate,
+  FormField,
+} from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MessageService } from 'primeng/api';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { InputTextModule } from 'primeng/inputtext';
-import { PasswordModule } from 'primeng/password';
-import { StyleClassModule } from 'primeng/styleclass';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import {
+  lucideUserPlus,
+  lucideUsers,
+  lucideShield,
+  lucideZap,
+  lucidePalette,
+  lucideEye,
+  lucideEyeOff,
+} from '@ng-icons/lucide';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import {
+  HlmInputGroup,
+  HlmInputGroupInput,
+  HlmInputGroupButton,
+} from '@spartan-ng/helm/input-group';
+import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { lastValueFrom } from 'rxjs';
 
+import { notify } from '../../../../core/notifications/notify';
 import { ThemeService } from '../../../../core/services/theme-service';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
@@ -41,31 +59,43 @@ import { AccountService } from '../../services/account-service';
   selector: 'app-register',
   standalone: true,
   imports: [
-    CommonModule,
-    ReactiveFormsModule,
+    FormField,
     RouterModule,
-    CardModule,
-    InputTextModule,
-    PasswordModule,
-    ButtonModule,
-    StyleClassModule,
+    NgIcon,
+    HlmButton,
+    HlmInput,
+    HlmSpinner,
+    HlmInputGroup,
+    HlmInputGroupInput,
+    HlmInputGroupButton,
     ThemeConfigurator,
+    ...HlmFieldImports,
+    ...HlmPopoverImports,
+    ...HlmTooltipImports,
     //#if (IncludeLocalization)
     LanguageSwitcher,
     TranslocoModule,
     //#endif
     LogoComponent,
-    TooltipModule,
+  ],
+  providers: [
+    provideIcons({
+      lucideUserPlus,
+      lucideUsers,
+      lucideShield,
+      lucideZap,
+      lucidePalette,
+      lucideEye,
+      lucideEyeOff,
+    }),
   ],
   templateUrl: './register.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Register implements OnInit {
-  private fb = inject(FormBuilder);
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private messageService = inject(MessageService);
   private destroyRef = inject(DestroyRef);
   public themeService = inject(ThemeService);
   //#if (IncludeLocalization)
@@ -92,6 +122,10 @@ export class Register implements OnInit {
   private _isLoading = signal(false);
   public readonly isLoading = this._isLoading.asReadonly();
 
+  // 密码可见性
+  protected readonly showPassword = signal(false);
+  protected readonly showConfirmPassword = signal(false);
+
   public securityConfig = signal<SecurityConfigOutputDto | null>(null);
   public captchaData = signal<CaptchaOutputDto | null>(null);
 
@@ -100,89 +134,133 @@ export class Register implements OnInit {
   private _isSendingEmailCode = signal(false);
   public readonly isSendingEmailCode = this._isSendingEmailCode.asReadonly();
 
-  registerForm = this.fb.group(
-    {
-      email: ['', [Validators.required, Validators.email, Validators.maxLength(256)]],
-      username: [
-        '',
-        [
-          Validators.required,
-          Validators.minLength(3),
-          Validators.maxLength(64),
-          Validators.pattern(/^[a-zA-Z0-9_]+$/),
-        ],
-      ],
-      captchaCode: ['', [Validators.required, Validators.maxLength(10)]],
-      emailVerificationCode: [''],
-      password: ['', [Validators.required, Validators.pattern(/^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/)]],
-      confirmPassword: ['', [Validators.required]],
-    },
-    { validators: this.passwordMatchValidator },
-  );
+  // 注册表单模型（Signal Forms）
+  private readonly model = signal({
+    email: '',
+    username: '',
+    captchaCode: '',
+    emailVerificationCode: '',
+    password: '',
+    confirmPassword: '',
+  });
 
+  //#if (IncludeLocalization)
+  readonly registerForm = form(this.model, (path) => {
+    required(path.email, { message: this.transloco.translate('account.register.errRequired') });
+    emailValidator(path.email, {
+      message: this.transloco.translate('account.register.errEmailInvalid'),
+    });
+    maxLength(path.email, 256, { message: '' });
+    required(path.username, { message: this.transloco.translate('account.register.errRequired') });
+    minLength(path.username, 3, {
+      message: this.transloco.translate('account.register.errMinLength', { min: 3 }),
+    });
+    maxLength(path.username, 64, { message: '' });
+    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
+      message: this.transloco.translate('account.register.errUsernamePattern'),
+    });
+    required(path.captchaCode, {
+      message: this.transloco.translate('account.register.errRequired'),
+    });
+    maxLength(path.captchaCode, 10, { message: '' });
+    required(path.emailVerificationCode, {
+      message: this.transloco.translate('account.register.errRequired'),
+      when: () => this.securityConfig()?.enableEmailVerification === true,
+    });
+    required(path.password, { message: this.transloco.translate('account.register.errRequired') });
+    pattern(path.password, /^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/, {
+      message: this.transloco.translate('account.register.errPasswordPattern'),
+    });
+    required(path.confirmPassword, {
+      message: this.transloco.translate('account.register.errRequired'),
+    });
+    validate(path.confirmPassword, (ctx) => {
+      const confirm = ctx.value();
+      const password = ctx.valueOf(path.password);
+      if (password && confirm && password !== confirm) {
+        return {
+          kind: 'passwordMismatch',
+          message: this.transloco.translate('account.register.errPasswordMismatch'),
+        };
+      }
+      return null;
+    });
+  });
+  //#else
+  readonly registerForm = form(this.model, (path) => {
+    required(path.email, { message: 'This field is required' });
+    emailValidator(path.email, { message: 'Invalid email format' });
+    maxLength(path.email, 256, { message: '' });
+    required(path.username, { message: 'This field is required' });
+    minLength(path.username, 3, { message: 'At least 3 characters required' });
+    maxLength(path.username, 64, { message: '' });
+    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
+      message: 'Only letters, digits and underscores are allowed',
+    });
+    required(path.captchaCode, { message: 'This field is required' });
+    maxLength(path.captchaCode, 10, { message: '' });
+    required(path.emailVerificationCode, {
+      message: 'This field is required',
+      when: () => this.securityConfig()?.enableEmailVerification === true,
+    });
+    required(path.password, { message: 'This field is required' });
+    pattern(path.password, /^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/, {
+      message: 'Password must be at least 6 characters and contain letters and digits',
+    });
+    required(path.confirmPassword, { message: 'This field is required' });
+    validate(path.confirmPassword, (ctx) => {
+      const confirm = ctx.value();
+      const password = ctx.valueOf(path.password);
+      if (password && confirm && password !== confirm) {
+        return { kind: 'passwordMismatch', message: 'The two passwords do not match' };
+      }
+      return null;
+    });
+  });
+  //#endif
+
+  // 用户名是否被用户手动编辑过（一旦手动改动，停止从邮箱自动推导）
   private usernameManuallyEdited = false;
+  // 最近一次自动推导写入的用户名，用于区分用户手动输入
+  private lastDerivedUsername = '';
 
   constructor() {
     this.destroyRef.onDestroy(() => this.clearCountdown());
+
+    // 监听 email/username 变化：从邮箱前缀自动推导 username，
+    // 一旦用户手动改动 username 即停止推导（等价原 valueChanges 逻辑）。
+    effect(() => {
+      const email = this.model().email;
+      untracked(() => {
+        const currentUsername = this.model().username;
+
+        // 用户手动改动了 username（当前值既非空也不等于我们上次自动写入的值）
+        if (currentUsername && currentUsername !== this.lastDerivedUsername) {
+          this.usernameManuallyEdited = true;
+        }
+
+        if (this.usernameManuallyEdited || !email) {
+          return;
+        }
+
+        const usernamePart = email.split('@')[0];
+        if (usernamePart && usernamePart !== currentUsername) {
+          this.lastDerivedUsername = usernamePart;
+          this.model.update((m) => ({ ...m, username: usernamePart }));
+        }
+      });
+    });
   }
 
   ngOnInit() {
     this.loadSecurityConfig();
     this.refreshCaptcha();
-
-    // 监听 email 变化，自动推导 username
-    this.registerForm
-      .get('email')
-      ?.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((email) => {
-        if (!this.usernameManuallyEdited && email) {
-          const usernamePart = email.split('@')[0];
-          if (usernamePart) {
-            this.registerForm.get('username')?.setValue(usernamePart, { emitEvent: false });
-          }
-        }
-      });
-
-    // 监听 username 变化，标记是否手动修改
-    this.registerForm
-      .get('username')
-      ?.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((val) => {
-        if (val) {
-          this.usernameManuallyEdited = true;
-        }
-      });
-  }
-
-  passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
-    const password = control.get('password')?.value;
-    const confirmPassword = control.get('confirmPassword')?.value;
-
-    if (password && confirmPassword && password !== confirmPassword) {
-      control.get('confirmPassword')?.setErrors({ passwordMismatch: true });
-      return { passwordMismatch: true };
-    } else {
-      const errors = control.get('confirmPassword')?.errors;
-      if (errors) {
-        delete errors['passwordMismatch'];
-        if (Object.keys(errors).length === 0) {
-          control.get('confirmPassword')?.setErrors(null);
-        } else {
-          control.get('confirmPassword')?.setErrors(errors);
-        }
-      }
-      return null;
-    }
   }
 
   async loadSecurityConfig() {
     try {
       const config = await lastValueFrom(this.accountService.getSecurityConfig());
       this.securityConfig.set(config);
-      if (config.enableEmailVerification) {
-        this.registerForm.get('emailVerificationCode')?.setValidators([Validators.required]);
-        this.registerForm.get('emailVerificationCode')?.updateValueAndValidity();
-      }
     } catch (err) {
       console.error('Failed to load security config', err);
     }
@@ -192,47 +270,34 @@ export class Register implements OnInit {
     try {
       const captcha = await lastValueFrom(this.accountService.getCaptcha());
       this.captchaData.set(captcha);
-      this.registerForm.get('captchaCode')?.setValue('');
+      this.model.update((m) => ({ ...m, captchaCode: '' }));
     } catch (err) {
       console.error('Failed to refresh captcha', err);
     }
   }
 
   async sendEmailCode() {
-    const email = this.registerForm.get('email')?.value;
-    const captchaCode = this.registerForm.get('captchaCode')?.value;
+    const { email, captchaCode } = this.model();
     const captchaToken = this.captchaData()?.captchaToken;
 
-    if (!email || this.registerForm.get('email')?.invalid) {
+    if (!email || this.registerForm.email().invalid()) {
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'warn',
-        summary: this.transloco.translate('common.notice'),
+      notify.warn(this.transloco.translate('common.notice'), {
         detail: this.transloco.translate('account.register.emailRequired'),
       });
       //#else
-      this.messageService.add({
-        severity: 'warn',
-        summary: 'Notice',
-        detail: 'Please enter a valid email first',
-      });
+      notify.warn('Notice', { detail: 'Please enter a valid email first' });
       //#endif
       return;
     }
 
     if (!captchaCode || !captchaToken) {
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'warn',
-        summary: this.transloco.translate('common.notice'),
+      notify.warn(this.transloco.translate('common.notice'), {
         detail: this.transloco.translate('account.register.captchaRequired'),
       });
       //#else
-      this.messageService.add({
-        severity: 'warn',
-        summary: 'Notice',
-        detail: 'Please enter the captcha first',
-      });
+      notify.warn('Notice', { detail: 'Please enter the captcha first' });
       //#endif
       return;
     }
@@ -247,17 +312,11 @@ export class Register implements OnInit {
         }),
       );
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'success',
-        summary: this.transloco.translate('common.success'),
+      notify.success(this.transloco.translate('common.success'), {
         detail: this.transloco.translate('account.register.emailCodeSent'),
       });
       //#else
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Verification code sent, please check your email',
-      });
+      notify.success('Success', { detail: 'Verification code sent, please check your email' });
       //#endif
       this.startCountdown();
     } catch {
@@ -289,54 +348,44 @@ export class Register implements OnInit {
   }
 
   async onSubmit() {
-    if (this.registerForm.invalid) {
-      this.registerForm.markAllAsTouched();
+    if (this.registerForm().invalid()) {
+      this.registerForm().markAsTouched();
       return;
     }
 
     this._isLoading.set(true);
     try {
-      const formValue = this.registerForm.value;
+      const formValue = this.model();
       const captchaToken = this.captchaData()?.captchaToken;
 
       if (!captchaToken) {
         //#if (IncludeLocalization)
-        this.messageService.add({
-          severity: 'error',
-          summary: this.transloco.translate('common.error'),
+        notify.error(this.transloco.translate('common.error'), {
           detail: this.transloco.translate('account.register.captchaTokenMissing'),
         });
         //#else
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Please refresh to get the captcha',
-        });
+        notify.error('Error', { detail: 'Please refresh to get the captcha' });
         //#endif
         return;
       }
 
       await lastValueFrom(
         this.accountService.register({
-          email: formValue.email!,
-          username: formValue.username!,
-          password: formValue.password!,
-          captchaCode: formValue.captchaCode!,
+          email: formValue.email,
+          username: formValue.username,
+          password: formValue.password,
+          captchaCode: formValue.captchaCode,
           captchaToken: captchaToken,
           emailVerificationCode: formValue.emailVerificationCode || undefined,
         }),
       );
 
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'success',
-        summary: this.transloco.translate('account.register.registerSuccess'),
+      notify.success(this.transloco.translate('account.register.registerSuccess'), {
         detail: this.transloco.translate('account.register.registerSuccessDetail'),
       });
       //#else
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Registration successful',
+      notify.success('Registration successful', {
         detail: 'Account created successfully, please sign in',
       });
       //#endif
@@ -348,57 +397,5 @@ export class Register implements OnInit {
     } finally {
       this._isLoading.set(false);
     }
-  }
-
-  getFieldError(fieldName: string): string | null {
-    const field = this.registerForm.get(fieldName);
-    if (!field || !field.touched || !field.errors) {
-      return null;
-    }
-
-    if (field.errors['required']) {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errRequired');
-      //#else
-      return 'This field is required';
-      //#endif
-    }
-    if (field.errors['email']) {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errEmailInvalid');
-      //#else
-      return 'Invalid email format';
-      //#endif
-    }
-    if (field.errors['pattern'] && fieldName === 'username') {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errUsernamePattern');
-      //#else
-      return 'Only letters, digits and underscores are allowed';
-      //#endif
-    }
-    if (field.errors['pattern'] && fieldName === 'password') {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errPasswordPattern');
-      //#else
-      return 'Password must be at least 6 characters and contain letters and digits';
-      //#endif
-    }
-    if (field.errors['minlength']) {
-      const minLength = field.errors['minlength'].requiredLength;
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errMinLength', { min: minLength });
-      //#else
-      return `At least ${minLength} characters required`;
-      //#endif
-    }
-    if (field.errors['passwordMismatch']) {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('account.register.errPasswordMismatch');
-      //#else
-      return 'The two passwords do not match';
-      //#endif
-    }
-    return null;
   }
 }

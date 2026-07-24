@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 //#if (IncludeLocalization)
 import {
   ChangeDetectionStrategy,
@@ -10,7 +9,6 @@ import {
   OnInit,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#else
 import {
   ChangeDetectionStrategy,
@@ -21,32 +19,32 @@ import {
   OnInit,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 //#endif
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { ConfirmationService, MessageService } from 'primeng/api';
-import { ButtonModule } from 'primeng/button';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
-import { DialogModule } from 'primeng/dialog';
-import { IconFieldModule } from 'primeng/iconfield';
-import { InputIconModule } from 'primeng/inputicon';
-import { InputTextModule } from 'primeng/inputtext';
-import { SelectModule } from 'primeng/select';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideCopy, lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
+import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import {
+  HlmInputGroup,
+  HlmInputGroupInput,
+  HlmInputGroupAddon,
+} from '@spartan-ng/helm/input-group';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 
-import { OpenApplicationEditDialogComponent } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
-import {
-  OpenApplicationTable,
-  OpenApplicationTableFilterEvent,
-} from './widgets/open-application-table/open-application-table';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
+import { ConfirmService } from '../../../../core/notifications/confirm-service';
+import { notify } from '../../../../core/notifications/notify';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FilterStateService } from '../../../../shared/services/filter-state.service';
 import {
@@ -57,35 +55,38 @@ import {
   UpdateOpenApplicationInputDto,
 } from '../../models/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
+import { OpenApplicationEditDialogComponent } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
+import {
+  OpenApplicationTable,
+  OpenApplicationTableFilterEvent,
+} from './widgets/open-application-table/open-application-table';
 
 @Component({
   selector: 'app-open-applications',
   imports: [
-    CommonModule,
     FormsModule,
-    SelectModule,
-    IconFieldModule,
-    InputIconModule,
-    InputTextModule,
-    ButtonModule,
-    TooltipModule,
-    ConfirmDialogModule,
-    DialogModule,
+    NgIcon,
+    HlmButton,
+    HlmInputGroup,
+    HlmInputGroupInput,
+    HlmInputGroupAddon,
+    ...HlmSelectImports,
+    ...HlmTooltipImports,
+    ...HlmDialogImports,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
     OpenApplicationTable,
     OpenApplicationEditDialogComponent,
   ],
-  providers: [ConfirmationService],
+  providers: [provideIcons({ lucideCopy, lucidePlus, lucideRefreshCw, lucideSearch })],
   templateUrl: './open-applications.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationsPage implements OnInit {
   private readonly service = inject(OpenApplicationService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly confirmationService = inject(ConfirmationService);
-  private readonly messageService = inject(MessageService);
+  private readonly confirmService = inject(ConfirmService);
   private readonly layoutService = inject(LayoutService);
   private readonly filterStateService = inject(FilterStateService);
   //#if (IncludeLocalization)
@@ -126,32 +127,35 @@ export class OpenApplicationsPage implements OnInit {
   readonly applicationTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.appType.web'), value: 'web' },
-      { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
-      { label: this.transloco.translate('openApp.appType.service'), value: 'service' },
+      { label: this.transloco.translate('openApp.appType.web'), value: 'web' as const },
+      { label: this.transloco.translate('openApp.appType.native'), value: 'native' as const },
+      { label: this.transloco.translate('openApp.appType.service'), value: 'service' as const },
     ];
   });
 
   readonly clientTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.clientType.publicLabel'), value: 'public' },
+      {
+        label: this.transloco.translate('openApp.clientType.publicLabel'),
+        value: 'public' as const,
+      },
       {
         label: this.transloco.translate('openApp.clientType.confidentialLabel'),
-        value: 'confidential',
+        value: 'confidential' as const,
       },
     ];
   });
   //#else
   readonly applicationTypeOptions = computed(() => [
-    { label: 'Web', value: 'web' },
-    { label: 'Desktop/Native', value: 'native' },
-    { label: 'Service', value: 'service' },
+    { label: 'Web', value: 'web' as const },
+    { label: 'Desktop/Native', value: 'native' as const },
+    { label: 'Service', value: 'service' as const },
   ]);
 
   readonly clientTypeOptions = computed(() => [
-    { label: 'Public', value: 'public' },
-    { label: 'Confidential', value: 'confidential' },
+    { label: 'Public', value: 'public' as const },
+    { label: 'Confidential', value: 'confidential' as const },
   ]);
   //#endif
 
@@ -230,13 +234,13 @@ export class OpenApplicationsPage implements OnInit {
     this.searchSubject.next(value);
   }
 
-  onApplicationTypeChange(value: OpenApplicationType | null) {
-    this.selectedApplicationType.set(value);
+  onApplicationTypeChange(value: OpenApplicationType | null | undefined) {
+    this.selectedApplicationType.set(value ?? null);
     this.onFilter();
   }
 
-  onClientTypeChange(value: OpenApplicationClientType | null) {
-    this.selectedClientType.set(value);
+  onClientTypeChange(value: OpenApplicationClientType | null | undefined) {
+    this.selectedClientType.set(value ?? null);
     this.onFilter();
   }
 
@@ -289,17 +293,13 @@ export class OpenApplicationsPage implements OnInit {
       .subscribe({
         next: (result) => {
           //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
-            detail: selected
-              ? this.transloco.translate('openApp.toast.updated')
-              : this.transloco.translate('openApp.toast.created'),
+          notify.success(this.transloco.translate('common.success'), {
+            detail: this.transloco.translate(
+              selected ? 'openApp.toast.updated' : 'openApp.toast.created',
+            ),
           });
           //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
+          notify.success('Success', {
             detail: selected
               ? 'Open application updated successfully'
               : 'Open application created successfully',
@@ -318,57 +318,69 @@ export class OpenApplicationsPage implements OnInit {
       });
   }
 
-  handleDelete(id: string) {
-    this.confirmationService.confirm({
+  async handleDelete(id: string) {
+    const confirmed = await this.confirmService.open({
       //#if (IncludeLocalization)
       message: this.transloco.translate('openApp.confirm.deleteMessage'),
       header: this.transloco.translate('openApp.confirm.deleteHeader'),
+      confirmText: this.transloco.translate('common.ok'),
+      cancelText: this.transloco.translate('common.cancel'),
       //#else
       message:
         'Are you sure you want to delete this open application? Clients using this Client ID will no longer be able to sign in.',
       header: 'Confirm deletion',
       //#endif
-      icon: 'pi pi-exclamation-triangle',
-      accept: () => {
-        this.service.deleteOpenApplication(id).subscribe(() => {
-          //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate('openApp.toast.deleted'),
-          });
-          //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Open application deleted',
-          });
-          //#endif
-          this.reloadList();
-        });
-      },
+      variant: 'destructive',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.service.deleteOpenApplication(id).subscribe(() => {
+      //#if (IncludeLocalization)
+      notify.success(this.transloco.translate('common.success'), {
+        detail: this.transloco.translate('openApp.toast.deleted'),
+      });
+      //#else
+      notify.success('Success', { detail: 'Open application deleted' });
+      //#endif
+      this.reloadList();
     });
   }
 
-  handleResetSecret(id: string) {
-    this.confirmationService.confirm({
+  async handleResetSecret(id: string) {
+    const confirmed = await this.confirmService.open({
       //#if (IncludeLocalization)
       message: this.transloco.translate('openApp.confirm.resetSecretMessage'),
       header: this.transloco.translate('openApp.confirm.resetSecretHeader'),
+      confirmText: this.transloco.translate('common.ok'),
+      cancelText: this.transloco.translate('common.cancel'),
       //#else
       message:
         "Are you sure you want to reset this open application's Client Secret? The old secret will be invalidated immediately.",
       header: 'Confirm secret reset',
       //#endif
-      icon: 'pi pi-exclamation-triangle',
-      accept: () => {
-        this.service.resetSecret(id).subscribe((result) => {
-          this.resetSecretValue.set(result.clientSecret);
-          this.resetSecretDialogVisible.set(true);
-          this.reloadList();
-        });
-      },
+      variant: 'destructive',
     });
+    if (!confirmed) {
+      return;
+    }
+
+    this.service.resetSecret(id).subscribe((result) => {
+      this.resetSecretValue.set(result.clientSecret);
+      this.resetSecretDialogVisible.set(true);
+      this.reloadList();
+    });
+  }
+
+  /** 桥接 hlm-dialog 声明式 state 到重置密钥弹窗可见性。 */
+  onResetSecretDialogStateChange(state: BrnDialogState): void {
+    this.resetSecretDialogVisible.set(state === 'open');
+  }
+
+  /** 桥接 hlm-dialog 声明式 state 到新建密钥弹窗可见性。 */
+  onCreatedSecretDialogStateChange(state: BrnDialogState): void {
+    this.createdSecretDialogVisible.set(state === 'open');
   }
 
   copyResetSecret() {
@@ -379,13 +391,11 @@ export class OpenApplicationsPage implements OnInit {
 
     navigator.clipboard?.writeText(value).then(() => {
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'success',
-        summary: this.transloco.translate('common.success'),
+      notify.success(this.transloco.translate('common.success'), {
         detail: this.transloco.translate('openApp.toast.secretCopied'),
       });
       //#else
-      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Secret copied' });
+      notify.success('Success', { detail: 'Secret copied' });
       //#endif
     });
   }
@@ -398,13 +408,11 @@ export class OpenApplicationsPage implements OnInit {
 
     navigator.clipboard?.writeText(value).then(() => {
       //#if (IncludeLocalization)
-      this.messageService.add({
-        severity: 'success',
-        summary: this.transloco.translate('common.success'),
+      notify.success(this.transloco.translate('common.success'), {
         detail: this.transloco.translate('openApp.toast.secretCopied'),
       });
       //#else
-      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Secret copied' });
+      notify.success('Success', { detail: 'Secret copied' });
       //#endif
     });
   }

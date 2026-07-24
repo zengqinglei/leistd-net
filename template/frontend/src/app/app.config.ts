@@ -18,9 +18,7 @@ import {
 //#if (IncludeLocalization)
 import { provideTransloco } from '@jsverse/transloco';
 //#endif
-import Aura from '@primeuix/themes/aura';
-import { MessageService } from 'primeng/api';
-import { providePrimeNG } from 'primeng/config';
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -49,23 +47,13 @@ const routerFeatures: RouterFeatures[] = [
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZonelessChangeDetection(),
+    // Spartan：Angular 21+ 需注册，确保 CDK overlay 层级正确（避免盖过固定定位的 toaster）
+    provideSpartanHlm(),
     // 注册全局错误监听器
     provideBrowserGlobalErrorListeners(),
     // 注册全局错误处理器，替换 Angular 默认的 ErrorHandler
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideRouter(routes, ...routerFeatures),
-    providePrimeNG({
-      theme: {
-        preset: Aura,
-        options: {
-          darkModeSelector: '.dark',
-          cssLayer: {
-            name: 'primeng',
-            order: 'theme, base, primeng',
-          },
-        },
-      },
-    }),
     //#if (IncludeLocalization)
     provideTransloco({
       config: {
@@ -92,7 +80,5 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => inject(StartupService).load()),
     // 注册 Mock 服务
     ...provideMock(environment.useMock),
-    // 注册 PrimeNG MessageService
-    MessageService,
   ],
 };

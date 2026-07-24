@@ -40,6 +40,19 @@ npx skills add ./.agents/skills --agent claude-code --skill developing-leistd-fr
 
 复制的适配不会自动跟随权威源更新，修改 `.agents/skills/` 后应重新执行命令。生成的 `.claude/skills/` 和 `skills-lock.json` 是本地适配产物，不提交到仓库。
 
+#### 引入第三方 Skill
+
+引入外部 Skill（如前端 UI 库 `spartan`）时，先将其拉取到 `.agents/skills/` 作为权威源（随仓库提交），再按上面的方式生成本地适配，与自有 Skill 统一管理：
+
+```bash
+# 拉取第三方 Skill 到 .agents/skills/（权威源，提交）
+npx skills add spartan-ng/spartan
+# 生成 Claude Code 本地适配（.claude/skills/，不提交）
+npx skills add ./.agents/skills --agent claude-code --skill spartan -y
+```
+
+配套的 MCP server 在仓库根 [`.mcp.json`](.mcp.json) 声明（如 `@spartan-ng/mcp`），随仓库提交、开箱可用。
+
 ### 生成项目
 
 模板生成的项目使用一个 Skill 路由最终意图，再按需加载场景知识：

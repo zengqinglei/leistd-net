@@ -1,12 +1,12 @@
-import { NgClass } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterModule } from '@angular/router';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { ButtonModule } from 'primeng/button';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideGauge, lucideIdCard, lucideUsers } from '@ng-icons/lucide';
+import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 import { filter, map, startWith } from 'rxjs/operators';
 
 //#if (IncludeLocalization)
@@ -14,7 +14,6 @@ import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { LogoComponent } from '../../../shared/components/logo/logo';
-import { LayoutService } from '../../services/layout-service';
 
 interface MenuItem {
   label: string;
@@ -31,39 +30,41 @@ interface MenuGroup {
 @Component({
   selector: 'app-default-sidebar',
   standalone: true,
-  //#if (IncludeLocalization)
-  imports: [NgClass, RouterModule, TranslocoModule, ButtonModule, TooltipModule, LogoComponent],
-  //#else
-  imports: [NgClass, RouterModule, ButtonModule, TooltipModule, LogoComponent],
-  //#endif
+  // prettier-ignore
+  imports: [
+    RouterLink,
+    NgIcon,
+    LogoComponent,
+    ...HlmSidebarImports,
+    //#if (IncludeLocalization)
+    TranslocoModule,
+    //#endif
+  ],
+  providers: [provideIcons({ lucideGauge, lucideUsers, lucideIdCard })],
   templateUrl: './default-sidebar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DefaultSidebar {
-  readonly layoutService = inject(LayoutService);
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
 
-  isMobileMenuOpen = input<boolean>(false);
-  readonly mobileMenuClosed = output<void>();
-
   //#if (IncludeLocalization)
   // 存词条键，展示时按 translationReady 响应式翻译；资源就绪 / 语言切换时 menuGroups computed 重算，标签随之更新。
   private readonly platformMenuGroups: MenuGroup[] = [
-    { items: [{ label: 'layout.sidebar.dashboard', icon: 'pi-gauge', route: '/platform' }] },
+    { items: [{ label: 'layout.sidebar.dashboard', icon: 'lucideGauge', route: '/platform' }] },
     //#if (IncludeIdentity)
     {
       label: 'layout.sidebar.groupSystem',
       items: [
         // Identity management entries; the developer-app entry is optional.
-        { label: 'layout.sidebar.users', icon: 'pi-users', route: '/platform/users' },
+        { label: 'layout.sidebar.users', icon: 'lucideUsers', route: '/platform/users' },
         //#if (IncludeOpenIddict)
         {
           label: 'layout.sidebar.openApplications',
-          icon: 'pi-id-card',
+          icon: 'lucideIdCard',
           route: '/platform/open-applications',
         },
         //#endif
@@ -75,7 +76,7 @@ export class DefaultSidebar {
   private readonly workspaceMenuGroups: MenuGroup[] = [
     {
       items: [
-        { label: 'layout.sidebar.workbench', icon: 'pi-gauge', route: '/workspace/dashboard' },
+        { label: 'layout.sidebar.workbench', icon: 'lucideGauge', route: '/workspace/dashboard' },
       ],
     },
   ];
@@ -84,15 +85,15 @@ export class DefaultSidebar {
   private readonly translationReady = translationReady(this.transloco);
   //#else
   private readonly platformMenuGroups: MenuGroup[] = [
-    { items: [{ label: 'Dashboard', icon: 'pi-gauge', route: '/platform' }] },
+    { items: [{ label: 'Dashboard', icon: 'lucideGauge', route: '/platform' }] },
     //#if (IncludeIdentity)
     {
       label: 'System',
       items: [
         // Identity management entries; the developer-app entry is optional.
-        { label: 'User Management', icon: 'pi-users', route: '/platform/users' },
+        { label: 'User Management', icon: 'lucideUsers', route: '/platform/users' },
         //#if (IncludeOpenIddict)
-        { label: 'Developer Apps', icon: 'pi-id-card', route: '/platform/open-applications' },
+        { label: 'Developer Apps', icon: 'lucideIdCard', route: '/platform/open-applications' },
         //#endif
       ],
     },
@@ -100,7 +101,7 @@ export class DefaultSidebar {
   ];
 
   private readonly workspaceMenuGroups: MenuGroup[] = [
-    { items: [{ label: 'Workbench', icon: 'pi-gauge', route: '/workspace/dashboard' }] },
+    { items: [{ label: 'Workbench', icon: 'lucideGauge', route: '/workspace/dashboard' }] },
   ];
   //#endif
 
@@ -137,7 +138,7 @@ export class DefaultSidebar {
       .filter((group) => group.items.length > 0);
   });
 
-  isItemActive(item: MenuItem) {
+  isItemActive(item: MenuItem): boolean {
     const currentUrl = this.currentUrl();
     if (item.route === '/platform') {
       return currentUrl === item.route;

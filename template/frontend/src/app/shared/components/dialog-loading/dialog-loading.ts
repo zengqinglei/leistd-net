@@ -4,7 +4,7 @@ import { TranslocoService } from '@jsverse/transloco';
 //#else
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 //#endif
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 //#if (IncludeLocalization)
 
 import { translationReady } from '../../../core/i18n/translation-ready';
@@ -13,11 +13,11 @@ import { translationReady } from '../../../core/i18n/translation-ready';
 @Component({
   selector: 'app-dialog-loading',
   standalone: true,
-  imports: [ProgressSpinnerModule],
+  imports: [HlmSpinner],
   template: `
     <div class="flex min-h-64 flex-col items-center justify-center gap-4 py-10 text-center">
-      <p-progressSpinner ariaLabel="loading" strokeWidth="4" styleClass="h-10 w-10" />
-      <div class="text-sm text-muted-color">{{ displayText() }}</div>
+      <hlm-spinner class="text-3xl" aria-label="loading" />
+      <div class="text-sm text-muted-foreground">{{ displayText() }}</div>
     </div>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

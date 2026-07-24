@@ -1,8 +1,6 @@
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { computed, effect, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
-import { PrimeNG } from 'primeng/config';
-import { take } from 'rxjs';
 
 export const SUPPORTED_LANGS = ['en', 'zh-CN'] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
@@ -25,7 +23,7 @@ export const LANG_OPTIONS: LangMeta[] = [
 ];
 
 /**
- * 语言服务：管理活动语言，驱动 Transloco 文案与 PrimeNG 组件文案联动，并持久化到 localStorage。
+ * 语言服务：管理活动语言，驱动 Transloco 文案并持久化到 localStorage。
  *
  * 形态镜像 ThemeService：signal 状态 + effect 持久化 + isPlatformBrowser 守卫（SSR 安全）。
  */
@@ -35,7 +33,6 @@ export class LanguageService {
 
   private readonly platformId = inject(PLATFORM_ID);
   private readonly transloco = inject(TranslocoService);
-  private readonly primeng = inject(PrimeNG);
   private readonly document = inject(DOCUMENT);
 
   private readonly activeLangState = signal<Lang>(this.loadLang());
@@ -47,7 +44,7 @@ export class LanguageService {
   );
 
   constructor() {
-    // 初次即应用一次（Transloco + PrimeNG），并在语言变化时持久化
+    // 初次即应用一次，并在语言变化时持久化
     this.applyLang(this.activeLang());
 
     effect(() => {
@@ -71,17 +68,6 @@ export class LanguageService {
 
     // <html lang> 同步：利于可访问性、SEO 与浏览器（拼写检查/字体回退）。
     this.document.documentElement.lang = lang;
-
-    // PrimeNG 组件内部文案跟随：词条文件的 primeng 段喂给 PrimeNG.setTranslation。
-    // take(1)：一次性取值即完成，避免长期订阅泄漏（每次切换都会重新触发）。
-    this.transloco
-      .selectTranslateObject('primeng', {}, lang)
-      .pipe(take(1))
-      .subscribe((translation) => {
-        if (translation) {
-          this.primeng.setTranslation(translation);
-        }
-      });
   }
 
   private loadLang(): Lang {

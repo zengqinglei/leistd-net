@@ -1,75 +1,64 @@
-import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, model, signal } from '@angular/core';
 import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  model,
-  signal,
-} from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+  form,
+  required,
+  email as emailValidator,
+  maxLength,
+  pattern,
+  FormField,
+} from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MessageService } from 'primeng/api';
-import { AvatarModule } from 'primeng/avatar';
-import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { FileSelectEvent, FileUploadModule } from 'primeng/fileupload';
-import { InputTextModule } from 'primeng/inputtext';
-import { TagModule } from 'primeng/tag';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideImagePlus } from '@ng-icons/lucide';
+import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
+import { notify } from '../../../../core/notifications/notify';
 import { AuthService } from '../../../../core/services/auth-service';
-import { DIALOG_CONFIGS } from '../../../../shared/constants/dialog-config.constants';
 import { AccountService } from '../../services/account-service';
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
+const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const PHONE_PATTERN = /^[0-9+\-()\s]{0,20}$/;
 
 @Component({
   selector: 'app-profile-settings-dialog',
   standalone: true,
-  //#if (IncludeLocalization)
   imports: [
-    CommonModule,
-    ReactiveFormsModule,
+    FormField,
+    NgIcon,
+    HlmButton,
+    HlmSpinner,
+    HlmInput,
+    HlmBadge,
+    ...HlmDialogImports,
+    ...HlmFieldImports,
+    //#if (IncludeLocalization)
     TranslocoModule,
-    DialogModule,
-    ButtonModule,
-    AvatarModule,
-    FileUploadModule,
-    InputTextModule,
-    TagModule,
+    //#endif
   ],
-  //#else
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    DialogModule,
-    ButtonModule,
-    AvatarModule,
-    FileUploadModule,
-    InputTextModule,
-    TagModule,
-  ],
-  //#endif
+  providers: [provideIcons({ lucideImagePlus })],
   templateUrl: './profile-settings-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ProfileSettingsDialogComponent {
   readonly visible = model(false);
 
-  private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly accountService = inject(AccountService);
-  private readonly messageService = inject(MessageService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   private readonly guestLabel = () => this.transloco.translate('account.profile.guestUser');
   readonly dialogHeader = () => this.transloco.translate('account.profile.header');
-  readonly uploadMessages = () => ({
+  private readonly uploadMessages = () => ({
     sizeSummary: this.transloco.translate('account.profile.invalidFileSizeSummary'),
     sizeDetail: this.transloco.translate('account.profile.invalidFileSizeDetail'),
     typeSummary: this.transloco.translate('account.profile.invalidFileTypeSummary'),
@@ -78,7 +67,7 @@ export class ProfileSettingsDialogComponent {
   //#else
   private readonly guestLabel = () => 'Guest user';
   readonly dialogHeader = () => 'Profile';
-  readonly uploadMessages = () => ({
+  private readonly uploadMessages = () => ({
     sizeSummary: 'File too large',
     sizeDetail: 'The avatar size cannot exceed 1MB',
     typeSummary: 'Unsupported format',
@@ -86,13 +75,22 @@ export class ProfileSettingsDialogComponent {
   });
   //#endif
 
-  readonly dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly saving = signal(false);
   readonly user = computed(() => this.authService.currentUser());
   readonly avatarPreview = signal('');
+
+  // 表单模型（Signal Forms）
+  protected readonly model_ = signal({
+    username: '',
+    email: '',
+    nickname: '',
+    phoneNumber: '',
+    avatar: '',
+  });
+
   readonly displayName = computed(
     () =>
-      this.form.controls.nickname.value.trim() ||
+      this.model_().nickname.trim() ||
       this.user()?.nickname ||
       this.user()?.username ||
       this.guestLabel(),
@@ -102,11 +100,7 @@ export class ProfileSettingsDialogComponent {
     return (text.charAt(0) || 'U').toUpperCase();
   });
   readonly avatarStyle = computed(() => {
-    const seed = (
-      this.form.controls.username.value ||
-      this.user()?.username ||
-      this.displayName()
-    ).trim();
+    const seed = (this.model_().username || this.user()?.username || this.displayName()).trim();
     let total = 0;
 
     for (const char of seed) {
@@ -124,39 +118,70 @@ export class ProfileSettingsDialogComponent {
     return palette[total % palette.length];
   });
 
-  readonly form = this.fb.nonNullable.group({
-    username: [
-      '',
-      [
-        Validators.required,
-        Validators.minLength(3),
-        Validators.maxLength(64),
-        Validators.pattern(/^[a-zA-Z0-9_]+$/),
-      ],
-    ],
-    email: ['', [Validators.required, Validators.email, Validators.maxLength(256)]],
-    nickname: ['', [Validators.maxLength(128)]],
-    phoneNumber: ['', [Validators.maxLength(20), Validators.pattern(PHONE_PATTERN)]],
-    avatar: [''],
-  });
-
-  constructor() {
-    effect(() => {
-      if (this.visible()) {
-        const user = this.user();
-        const avatar = user?.avatar ?? '';
-
-        this.form.reset({
-          username: user?.username ?? '',
-          email: user?.email ?? '',
-          nickname: user?.nickname ?? '',
-          phoneNumber: user?.phoneNumber ?? '',
-          avatar,
-        });
-
-        this.avatarPreview.set(avatar);
-      }
+  //#if (IncludeLocalization)
+  readonly profileForm = form(this.model_, (path) => {
+    required(path.username, {
+      message: this.transloco.translate('account.profile.usernameRequired'),
     });
+    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
+      message: this.transloco.translate('account.profile.usernameFormatError'),
+    });
+    required(path.email, { message: this.transloco.translate('account.profile.emailError') });
+    emailValidator(path.email, {
+      message: this.transloco.translate('account.profile.emailError'),
+    });
+    maxLength(path.email, 256, {
+      message: this.transloco.translate('account.profile.emailError'),
+    });
+    maxLength(path.nickname, 128, {
+      message: this.transloco.translate('account.profile.nicknameError'),
+    });
+    maxLength(path.phoneNumber, 20, {
+      message: this.transloco.translate('account.profile.phoneNumberLengthError'),
+    });
+    pattern(path.phoneNumber, PHONE_PATTERN, {
+      message: this.transloco.translate('account.profile.phoneNumberPatternError'),
+    });
+  });
+  //#else
+  readonly profileForm = form(this.model_, (path) => {
+    required(path.username, { message: 'Username cannot be empty' });
+    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
+      message: 'Username must be 3–64 characters of letters, numbers, or underscores',
+    });
+    required(path.email, {
+      message: 'Please enter a valid email; length cannot exceed 256 characters',
+    });
+    emailValidator(path.email, {
+      message: 'Please enter a valid email; length cannot exceed 256 characters',
+    });
+    maxLength(path.email, 256, {
+      message: 'Please enter a valid email; length cannot exceed 256 characters',
+    });
+    maxLength(path.nickname, 128, { message: 'Nickname length cannot exceed 128 characters' });
+    maxLength(path.phoneNumber, 20, { message: 'Phone number length cannot exceed 20 characters' });
+    pattern(path.phoneNumber, PHONE_PATTERN, {
+      message: 'Phone number supports only digits, spaces, and the symbols + - ( )',
+    });
+  });
+  //#endif
+
+  /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约；打开时用当前用户回填表单。 */
+  onDialogStateChange(state: BrnDialogState): void {
+    const open = state === 'open';
+    this.visible.set(open);
+    if (open) {
+      const user = this.user();
+      const avatar = user?.avatar ?? '';
+      this.model_.set({
+        username: user?.username ?? '',
+        email: user?.email ?? '',
+        nickname: user?.nickname ?? '',
+        phoneNumber: user?.phoneNumber ?? '',
+        avatar,
+      });
+      this.avatarPreview.set(avatar);
+    }
   }
 
   hasAvatarImage(): boolean {
@@ -168,20 +193,38 @@ export class ProfileSettingsDialogComponent {
     );
   }
 
-  onAvatarSelect(event: FileSelectEvent): void {
-    const file = event.files?.[0];
+  onAvatarSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
 
     if (!file) {
+      return;
+    }
+
+    const messages = this.uploadMessages();
+
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+      notify.error(messages.typeSummary, { detail: messages.typeDetail });
+      input.value = '';
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_SIZE) {
+      notify.error(messages.sizeSummary, { detail: messages.sizeDetail });
+      input.value = '';
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : '';
-      this.form.controls.avatar.setValue(result);
+      this.model_.update((m) => ({ ...m, avatar: result }));
       this.avatarPreview.set(result);
     };
     reader.readAsDataURL(file);
+
+    // 允许再次选择同一文件时仍触发 change 事件
+    input.value = '';
   }
 
   onHide(): void {
@@ -189,13 +232,13 @@ export class ProfileSettingsDialogComponent {
   }
 
   onSubmit(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (this.profileForm().invalid()) {
+      this.profileForm().markAsTouched();
       return;
     }
 
     this.saving.set(true);
-    const { username, email, nickname, phoneNumber, avatar } = this.form.getRawValue();
+    const { username, email, nickname, phoneNumber, avatar } = this.model_();
 
     this.accountService
       .updateCurrentUser({
@@ -209,22 +252,14 @@ export class ProfileSettingsDialogComponent {
       .subscribe({
         next: () => {
           //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
+          notify.success(this.transloco.translate('common.success'), {
             detail: this.transloco.translate('account.profile.updateSuccess'),
           });
           //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Profile updated',
-          });
+          notify.success('Success', { detail: 'Profile updated' });
           //#endif
           this.visible.set(false);
         },
       });
   }
-
-  protected readonly maxAvatarSize = MAX_AVATAR_SIZE;
 }
