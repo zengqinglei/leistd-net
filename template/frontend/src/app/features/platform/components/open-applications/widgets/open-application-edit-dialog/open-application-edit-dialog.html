@@ -445,11 +445,11 @@
                 !formModel().permissions.includes('scp:offline_access')
               ) {
                 <!--#if (IncludeLocalization)-->
-                <small class="text-orange-500">{{
+                <small class="text-warning">{{
                   'openApp.requirements.offlineAccessHint' | transloco
                 }}</small>
                 <!--#else-->
-                <small class="text-orange-500"
+                <small class="text-warning"
                   >refresh_token is allowed; consider also granting the offline_access scope.</small
                 >
                 <!--#endif-->

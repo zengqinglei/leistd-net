@@ -1,13 +1,19 @@
 <!-- Header -->
 <header
-  class="h-14 md:h-16 flex items-center justify-between px-4 md:px-6 bg-background/80 backdrop-blur-md border-b border-border z-10 sticky top-0"
+  class="h-14 md:h-16 shrink-0 flex items-center justify-between px-4 md:px-6 bg-background/80 backdrop-blur-md border-b border-border z-50 sticky top-0"
 >
   <!-- Breadcrumb / Title & Toggle -->
   <div class="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
     <!-- Sidebar Toggle（驱动 HlmSidebarService：桌面折叠、移动端开合 sheet） -->
-    <button hlmBtn variant="ghost" size="icon" hlmSidebarTrigger>
-      <ng-icon name="lucideMenu" />
-    </button>
+    <!--#if (IncludeLocalization)-->
+    <button
+      hlmSidebarTrigger
+      size="icon"
+      [attr.aria-label]="'common.toggleSidebar' | transloco"
+    ></button>
+    <!--#else-->
+    <button hlmSidebarTrigger size="icon" aria-label="Toggle sidebar"></button>
+    <!--#endif-->
 
     <!-- Breadcrumb: 响应式 -->
     <div class="flex items-center gap-2 text-sm overflow-hidden">
@@ -26,28 +32,17 @@
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
     <!-- Theme Toggle -->
-    <button hlmBtn variant="ghost" size="icon" (click)="themeService.toggleTheme()">
-      <ng-icon [name]="themeService.modeIcon()" />
-    </button>
-
-    <!-- Configurator: 桌面端显示 -->
-    <div class="relative hidden md:block">
-      <hlm-popover>
-        <button hlmBtn variant="ghost" size="icon" hlmPopoverTrigger>
-          <ng-icon name="lucidePalette" />
-        </button>
-        <hlm-popover-content *hlmPopoverPortal class="w-72">
-          <app-theme-configurator
-            class="!static !block !w-full !p-0 !bg-transparent !border-0 !shadow-none"
-          />
-        </hlm-popover-content>
-      </hlm-popover>
-    </div>
+    <app-theme-mode-toggle />
 
     <!-- Notifications -->
     <!--#if (IncludeNotifications)-->
     <div class="relative">
-      <hlm-popover [state]="notificationOpen()" (stateChanged)="notificationOpen.set($event)">
+      <hlm-popover
+        align="end"
+        sideOffset="8"
+        [state]="notificationOpen()"
+        (stateChanged)="notificationOpen.set($event)"
+      >
         <button
           hlmBtn
           variant="ghost"
@@ -66,7 +61,7 @@
           }
         </button>
 
-        <hlm-popover-content *hlmPopoverPortal class="w-[360px] max-w-[90vw] !p-0">
+        <hlm-popover-content *hlmPopoverPortal class="w-[360px] max-w-[90vw] !gap-0 !p-0">
           <div class="flex items-center justify-between px-4 py-3 border-b border-border">
             <!--#if (IncludeLocalization)-->
             <span class="font-semibold">{{ 'layout.notifications.title' | transloco }}</span>
@@ -143,7 +138,7 @@
                   </span>
                 </button>
                 @if (!last) {
-                  <hlm-separator class="!my-0" />
+                  <div class="border-t border-dashed border-border"></div>
                 }
               }
             </div>

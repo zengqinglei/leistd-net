@@ -29,6 +29,7 @@ import {
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
@@ -42,7 +43,7 @@ export interface OpenApplicationTableFilterEvent {
 
 type PopoverMode = 'permissions' | 'redirectUris';
 
-/** Spartan badge 变体（替代 PrimeNG severity）。 */
+/** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
 @Component({
@@ -54,6 +55,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     HlmButton,
     ...HlmTableImports,
     ...HlmPopoverImports,
+    ...HlmSelectImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
     TranslocoModule,
@@ -79,23 +81,26 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 export class OpenApplicationTable {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  readonly currentPageReport = () => this.transloco.translate('openApp.table.currentPageReport');
+  readonly currentPageReport = () =>
+    this.transloco.translate('openApp.table.currentPageReport', { total: this.totalRecords() });
+  readonly rowsPerPageLabel = () => this.transloco.translate('common.rowsPerPage');
   readonly editTooltip = () => this.transloco.translate('common.edit');
   readonly resetSecretTooltip = () => this.transloco.translate('openApp.action.resetSecret');
   readonly deleteTooltip = () => this.transloco.translate('common.delete');
   //#else
-  readonly currentPageReport = () => '{totalRecords} total';
+  readonly currentPageReport = () => `${this.totalRecords()} total`;
+  readonly rowsPerPageLabel = () => 'Rows per page';
   readonly editTooltip = () => 'Edit';
   readonly resetSecretTooltip = () => 'Reset secret';
   readonly deleteTooltip = () => 'Delete';
   //#endif
 
-  applications = input.required<OpenApplicationOutputDto[]>();
-  totalRecords = input.required<number>();
-  loading = input<boolean>(false);
+  readonly applications = input.required<OpenApplicationOutputDto[]>();
+  readonly totalRecords = input.required<number>();
+  readonly loading = input<boolean>(false);
 
   readonly edit = output<string>();
-  readonly delete = output<string>();
+  readonly deleteRequested = output<string>();
   readonly resetSecret = output<string>();
   readonly filterChange = output<OpenApplicationTableFilterEvent>();
 
@@ -177,8 +182,9 @@ export class OpenApplicationTable {
     this.emitFilter();
   }
 
-  onRowsChange(rows: number) {
-    this.rows.set(rows);
+  onRowsChange(value: number | null | undefined) {
+    if (value == null) return;
+    this.rows.set(value);
     this.first.set(0);
     this.emitFilter();
   }

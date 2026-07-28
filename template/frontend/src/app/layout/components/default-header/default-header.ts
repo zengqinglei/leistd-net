@@ -14,9 +14,6 @@ import { Router, RouterModule } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-//#if (IncludeNotifications)
-import { lucideDatabase, lucideInbox, lucideInfo, lucideNetwork } from '@ng-icons/lucide';
-//#endif
 import {
   lucideBell,
   lucideChevronDown,
@@ -24,21 +21,19 @@ import {
   lucideHouse,
   lucideLock,
   lucideLogOut,
-  lucideMenu,
-  lucideMonitor,
-  lucideMoon,
-  lucidePalette,
-  lucideSun,
   lucideUserPen,
   lucideBadgeCheck,
+  //#if (IncludeNotifications)
+  lucideDatabase,
+  lucideInbox,
+  lucideInfo,
+  lucideNetwork,
+  //#endif
 } from '@ng-icons/lucide';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
-//#if (IncludeNotifications)
-import { HlmSeparator } from '@spartan-ng/helm/separator';
-//#endif
 import { HlmSidebarTrigger } from '@spartan-ng/helm/sidebar';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
@@ -52,15 +47,14 @@ import {
   NotificationOutputDto,
 } from '../../../core/services/notification-service';
 //#endif
-import { ThemeService } from '../../../core/services/theme-service';
 //#if (IncludeIdentity)
-import { ChangePasswordDialogComponent } from '../../../features/account/components/change-password-dialog/change-password-dialog';
-import { ProfileSettingsDialogComponent } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
+import { ChangePasswordDialog } from '../../../features/account/components/change-password-dialog/change-password-dialog';
+import { ProfileSettingsDialog } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
 //#endif
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../shared/components/language-switcher/language-switcher';
 //#endif
-import { ThemeConfigurator } from '../../../shared/components/theme-configurator/theme-configurator';
+import { ThemeModeToggle } from '../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 import { LayoutService } from '../../services/layout-service';
 
 /** 用户下拉菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
@@ -78,7 +72,7 @@ interface UserMenuItem {
     RouterModule,
     NgIcon,
     HlmButton,
-    ThemeConfigurator,
+    ThemeModeToggle,
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
     ...HlmTooltipImports,
@@ -89,21 +83,15 @@ interface UserMenuItem {
     TranslocoModule,
     //#endif
     //#if (IncludeNotifications)
-    HlmSeparator,
     DatePipe,
     //#endif
     //#if (IncludeIdentity)
-    ProfileSettingsDialogComponent,
-    ChangePasswordDialogComponent,
+    ProfileSettingsDialog,
+    ChangePasswordDialog,
     //#endif
   ],
   providers: [
     provideIcons({
-      lucideMenu,
-      lucideSun,
-      lucideMoon,
-      lucideMonitor,
-      lucidePalette,
       lucideBell,
       lucideChevronDown,
       lucideHouse,
@@ -125,7 +113,6 @@ interface UserMenuItem {
 })
 export class DefaultHeader implements OnInit {
   readonly layoutService = inject(LayoutService);
-  readonly themeService = inject(ThemeService);
   readonly authService = inject(AuthService);
   readonly router = inject(Router);
   //#if (IncludeLocalization)

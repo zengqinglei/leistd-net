@@ -17,7 +17,7 @@ body {
   scrollbar-width: thin;
 }
 
-/* ↓↓↓ Spartan UI 主题变量（ng g @spartan-ng/cli:ui-theme, slate）；迁移期与上方 PrimeNG 变量共存 ↓↓↓ */
+/* Spartan UI 主题变量（ng g @spartan-ng/cli:ui-theme, slate）。业务项目按品牌改这些 CSS 变量。 */
 :root {
   --font-sans:
     -apple-system, blinkmacsystemfont, 'Segoe UI', roboto, 'Helvetica Neue', arial, 'Noto Sans',
@@ -38,6 +38,8 @@ body {
   --accent: oklch(0.968 0.007 247.896);
   --accent-foreground: oklch(0.208 0.042 265.755);
   --destructive: oklch(0.577 0.245 27.325);
+  --warning: oklch(0.646 0.222 41.116);
+  --warning-foreground: oklch(0.984 0.016 73.684);
   --border: oklch(0.929 0.013 255.508);
   --input: oklch(0.929 0.013 255.508);
   --ring: oklch(0.704 0.04 256.788);
@@ -69,6 +71,8 @@ body {
   --accent: oklch(0.279 0.041 260.031);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
+  --warning: oklch(0.769 0.188 70.08);
+  --warning-foreground: oklch(0.208 0.042 265.755);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
@@ -82,6 +86,12 @@ body {
   --sidebar-ring: oklch(0.551 0.027 264.364);
 
   color-scheme: dark;
+}
+
+/* 将自定义语义色暴露为 Tailwind 工具类（bg-warning / text-warning / border-warning，含 /opacity 修饰）。 */
+@theme inline {
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
 }
 
 @layer base {

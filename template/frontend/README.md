@@ -1,6 +1,6 @@
 # 前端项目
 
-本项目基于 Angular、PrimeNG 和 Tailwind CSS 构建。
+本项目基于 Angular、Spartan UI 和 Tailwind CSS 构建。
 
 有关详细的开发规范、目录结构和编码准则，请参阅项目根目录下的 [前端开发规范](../docs/standards/coding-frontend.md)。
 
@@ -11,7 +11,7 @@
 在开始之前，请确保您已安装以下必需工具：
 
 - **Node.js**: v18+
-- **Angular CLI**: v21+
+- **Angular CLI**: v22+
 
 您可以通过以下命令验证是否已成功安装：
 
@@ -262,5 +262,5 @@ frontend/
 ## 更多资源
 
 - **Angular CLI**: [官方文档](https://angular.dev/tools/cli)
-- **PrimeNG**: [官方文档](https://primeng.org/)
+- **Spartan UI**: [官方文档](https://spartan.ng/)
 - **Tailwind CSS**: [官方文档](https://tailwindcss.com/docs)

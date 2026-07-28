@@ -1,4 +1,4 @@
-<div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+<div class="@container bg-card rounded-xl shadow-sm border border-border overflow-hidden">
   <div hlmTableContainer class="w-full overflow-x-auto">
     <table hlmTable class="w-full">
       <thead hlmTHead>
@@ -18,25 +18,31 @@
             </button>
           </th>
           <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 hidden sm:table-cell whitespace-nowrap">
+          <th hlmTh class="px-6 py-3 hidden @min-[680px]:table-cell whitespace-nowrap">
             {{ 'openApp.table.colType' | transloco }}
           </th>
-          <th hlmTh class="px-6 py-3 hidden md:table-cell whitespace-nowrap">
+          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">
             {{ 'openApp.table.colPermissions' | transloco }}
           </th>
           <!--#else-->
-          <th hlmTh class="px-6 py-3 hidden sm:table-cell whitespace-nowrap">Type</th>
-          <th hlmTh class="px-6 py-3 hidden md:table-cell whitespace-nowrap">Capabilities</th>
+          <th hlmTh class="px-6 py-3 hidden @min-[680px]:table-cell whitespace-nowrap">Type</th>
+          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">
+            Capabilities
+          </th>
           <!--#endif-->
-          <th hlmTh class="px-6 py-3 hidden lg:table-cell whitespace-nowrap">Redirect URI</th>
+          <th hlmTh class="px-6 py-3 hidden @min-[1200px]:table-cell whitespace-nowrap">
+            Redirect URI
+          </th>
           <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 hidden xl:table-cell whitespace-nowrap">
+          <th hlmTh class="px-6 py-3 hidden @min-[1400px]:table-cell whitespace-nowrap">
             {{ 'openApp.table.colSecurity' | transloco }}
           </th>
           <!--#else-->
-          <th hlmTh class="px-6 py-3 hidden xl:table-cell whitespace-nowrap">Security</th>
+          <th hlmTh class="px-6 py-3 hidden @min-[1400px]:table-cell whitespace-nowrap">
+            Security
+          </th>
           <!--#endif-->
-          <th hlmTh class="px-6 py-3 hidden 2xl:table-cell">
+          <th hlmTh class="px-6 py-3 hidden @min-[1560px]:table-cell">
             <button
               type="button"
               class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
@@ -81,7 +87,7 @@
               </div>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden sm:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[680px]:table-cell">
               <div class="flex items-center gap-1.5 whitespace-nowrap">
                 <span hlmBadge variant="secondary" class="text-[10px]">{{
                   getApplicationTypeLabel(item.applicationType)
@@ -92,13 +98,16 @@
                   class="text-[10px]"
                   >{{ item.clientType }}</span
                 >
-                <span hlmBadge variant="outline" class="text-[10px] hidden 2xl:inline-flex">{{
-                  getConsentTypeLabel(item.consentType)
-                }}</span>
+                <span
+                  hlmBadge
+                  variant="outline"
+                  class="text-[10px] hidden @min-[1560px]:inline-flex"
+                  >{{ getConsentTypeLabel(item.consentType) }}</span
+                >
               </div>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden md:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[950px]:table-cell">
               <button
                 type="button"
                 class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap border border-border"
@@ -110,7 +119,7 @@
               </button>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden lg:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[1200px]:table-cell">
               @if (item.redirectUris.length > 0) {
                 <div
                   class="flex max-w-[22rem] items-center gap-1 overflow-hidden whitespace-nowrap"
@@ -140,7 +149,7 @@
               }
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden xl:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[1400px]:table-cell">
               <div class="flex items-center gap-1.5 whitespace-nowrap">
                 <!--#if (IncludeLocalization)-->
                 <span
@@ -152,7 +161,7 @@
                 <span
                   hlmBadge
                   [variant]="item.hasClientSecret ? 'secondary' : 'outline'"
-                  class="text-[10px] hidden 2xl:inline-flex"
+                  class="text-[10px] hidden @min-[1560px]:inline-flex"
                   >{{
                     item.hasClientSecret
                       ? ('openApp.table.secretSet' | transloco)
@@ -169,14 +178,14 @@
                 <span
                   hlmBadge
                   [variant]="item.hasClientSecret ? 'secondary' : 'outline'"
-                  class="text-[10px] hidden 2xl:inline-flex"
+                  class="text-[10px] hidden @min-[1560px]:inline-flex"
                   >{{ item.hasClientSecret ? 'Secret set' : 'No secret' }}</span
                 >
                 <!--#endif-->
               </div>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden 2xl:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[1560px]:table-cell">
               <span class="text-[11px] text-muted-foreground whitespace-nowrap">{{
                 item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
               }}</span>
@@ -212,7 +221,7 @@
                   variant="ghost"
                   size="icon"
                   class="w-8 h-8 text-destructive"
-                  (click)="delete.emit(item.id)"
+                  (click)="deleteRequested.emit(item.id)"
                   [hlmTooltip]="deleteTooltip()"
                 >
                   <ng-icon name="lucideTrash2" />
@@ -247,6 +256,18 @@
     <div class="flex items-center justify-between gap-4 px-6 py-3 border-t border-border text-sm">
       <span class="text-muted-foreground">{{ currentPageReport() }}</span>
       <div class="flex items-center gap-2">
+        <!-- 每页条数选择：Spartan hlm-select（与 hlm-numbered-pagination 内置的页大小选择器同构）。 -->
+        <span class="text-muted-foreground whitespace-nowrap">{{ rowsPerPageLabel() }}</span>
+        <hlm-select [value]="rows()" (valueChange)="onRowsChange($event)">
+          <hlm-select-trigger size="sm" class="w-[4.5rem]">
+            <hlm-select-value />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal>
+            @for (size of rowsPerPageOptions; track size) {
+              <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
         <button
           hlmBtn
           variant="outline"

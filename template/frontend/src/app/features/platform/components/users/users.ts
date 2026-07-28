@@ -45,7 +45,7 @@ import { ConfirmService } from '../../../../core/notifications/confirm-service';
 import { notify } from '../../../../core/notifications/notify';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
-import { FilterStateService } from '../../../../shared/services/filter-state.service';
+import { FilterStateService } from '../../../../shared/services/filter-state-service';
 import {
   CreateUserInputDto,
   ResetUserPasswordInputDto,
@@ -53,8 +53,8 @@ import {
   UserManagementOutputDto,
 } from '../../models/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
-import { ResetUserPasswordDialogComponent } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
-import { UserEditDialogComponent } from './widgets/user-edit-dialog/user-edit-dialog';
+import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
+import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
 import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table';
 
 @Component({
@@ -72,14 +72,14 @@ import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table
     TranslocoModule,
     //#endif
     UserTable,
-    UserEditDialogComponent,
-    ResetUserPasswordDialogComponent,
+    UserEditDialog,
+    ResetUserPasswordDialog,
   ],
   providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
   templateUrl: './users.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UsersPage implements OnInit {
+export class Users implements OnInit {
   private readonly service = inject(UserManagementService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
@@ -206,6 +206,9 @@ export class UsersPage implements OnInit {
     if (saved.selectedIsEmailVerified !== undefined)
       this.selectedIsEmailVerified.set(saved.selectedIsEmailVerified ?? null);
     if (saved.selectedRole !== undefined) this.selectedRole.set(saved.selectedRole ?? null);
+
+    // 首次进入即加载列表（恢复筛选后），无需手动点刷新。
+    this.reloadList();
   }
 
   reloadList() {

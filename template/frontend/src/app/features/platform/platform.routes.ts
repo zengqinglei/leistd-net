@@ -13,16 +13,14 @@ export const PLATFORM_ROUTES: Routes = [
   //#if (IncludeIdentity)
   {
     path: 'users',
-    loadComponent: () => import('./components/users/users').then((m) => m.UsersPage),
+    loadComponent: () => import('./components/users/users').then((m) => m.Users),
   },
   //#endif
   //#if (IncludeOpenIddict)
   {
     path: 'open-applications',
     loadComponent: () =>
-      import('./components/open-applications/open-applications').then(
-        (m) => m.OpenApplicationsPage,
-      ),
+      import('./components/open-applications/open-applications').then((m) => m.OpenApplications),
   },
   //#endif
 ];

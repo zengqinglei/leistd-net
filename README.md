@@ -1,6 +1,6 @@
 # leistd-net
 
-> **为 AI 时代设计的 .NET 10 + Angular 21 全栈 DDD 基座**：框架让 AI 按真实 API 写代码，Skills 按场景提供执行知识，模板验证可运行的端到端组合。
+> **为 AI 时代设计的 .NET 10 + Angular 22 全栈 DDD 基座**：框架让 AI 按真实 API 写代码，Skills 按场景提供执行知识，模板验证可运行的端到端组合。
 
 [![Release](https://github.com/zengqinglei/leistd-net/actions/workflows/release.yml/badge.svg)](https://github.com/zengqinglei/leistd-net/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -16,7 +16,7 @@
 技术上，它把"可复用框架能力"与"业务项目脚手架"清晰分离：
 
 - **`framework/`** —— Leistd 框架基座（33 个 `Leistd.*` 包 / 15 个能力分组 + DDD 四层基础类型）：AOP、DI、事件总线、异常、分布式锁、对象映射、统一响应、安全、链路追踪、工作单元、通知、实时、审计、授权。统一版本、中央包管理（CPM）、Source Link 源码调试，以 NuGet 发布，**每个包内置随版本文档**。
-- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 21 前端，DDD 四层，可条件裁剪认证/权限）。生成的项目通过 NuGet 引用 framework，并自带跨工具项目 Skill 与工程规范。
+- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 22 前端，DDD 四层，可条件裁剪认证/权限）。生成的项目通过 NuGet 引用 framework，并自带跨工具项目 Skill 与工程规范。
 
 ---
 
@@ -81,7 +81,7 @@ leistd-net/
 │   └── build/          #   pack / push / 文档-源码漂移校验 脚本
 ├── template/           # dotnet new 项目模板
 │   ├── backend/        #   .NET 10 + DDD 后端
-│   ├── frontend/       #   Angular 21 前端
+│   ├── frontend/       #   Angular 22 前端
 │   ├── .agents/skills/ #   跨工具项目 Skill
 │   └── docs/           #   项目规范及按需沉淀的长期文档
 ├── scripts/            # 本地开发与 CI 共用的仓库级验证脚本
@@ -181,7 +181,7 @@ dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
 | 层 | 技术 |
 | --- | --- |
 | 后端 | .NET 10 · ASP.NET Core · EF Core · OpenIddict |
-| 前端 | Angular 21 · PrimeNG · Tailwind CSS |
+| 前端 | Angular 22 · Spartan UI · Tailwind CSS |
 | 数据 | PostgreSQL 15+ / 内存（开发）· Redis 7+（可选） |
 | 部署 | Docker · Docker Compose |
 

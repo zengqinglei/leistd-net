@@ -12,10 +12,10 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
-import { RoleLabelPipe } from '../../../../shared/pipes/role-label.pipe';
+import { RoleLabelPipe } from '../../../../shared/pipes/role-label-pipe';
 
 @Component({
-  selector: 'app-workspace-dashboard-page',
+  selector: 'app-workspace-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
   imports: [...HlmCardImports, HlmBadge, RoleLabelPipe, TranslocoModule],
@@ -26,7 +26,7 @@ import { RoleLabelPipe } from '../../../../shared/pipes/role-label.pipe';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 //#if (IncludeLocalization)
-export class WorkspaceDashboardPage {
+export class WorkspaceDashboard {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
   private readonly transloco = inject(TranslocoService);
@@ -43,7 +43,7 @@ export class WorkspaceDashboardPage {
   }
 }
 //#else
-export class WorkspaceDashboardPage implements OnInit {
+export class WorkspaceDashboard implements OnInit {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
 

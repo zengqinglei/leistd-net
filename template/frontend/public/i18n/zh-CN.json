@@ -21,7 +21,9 @@
     "close": "关闭",
     "copy": "复制",
     "add": "添加",
-    "actions": "操作"
+    "actions": "操作",
+    "rowsPerPage": "每页条数",
+    "toggleSidebar": "切换侧栏"
   },
   "menu": {
     "workspace": "工作空间",
@@ -45,50 +47,6 @@
     "502": "网关错误。",
     "503": "服务不可用，服务器暂时过载或维护。",
     "504": "网关超时。"
-  },
-  "primeng": {
-    "accept": "是",
-    "reject": "否",
-    "choose": "选择",
-    "upload": "上传",
-    "cancel": "取消",
-    "clear": "清除",
-    "apply": "应用",
-    "dayNames": ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
-    "dayNamesShort": ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
-    "dayNamesMin": ["日", "一", "二", "三", "四", "五", "六"],
-    "monthNames": [
-      "一月",
-      "二月",
-      "三月",
-      "四月",
-      "五月",
-      "六月",
-      "七月",
-      "八月",
-      "九月",
-      "十月",
-      "十一月",
-      "十二月"
-    ],
-    "monthNamesShort": [
-      "1月",
-      "2月",
-      "3月",
-      "4月",
-      "5月",
-      "6月",
-      "7月",
-      "8月",
-      "9月",
-      "10月",
-      "11月",
-      "12月"
-    ],
-    "today": "今天",
-    "weekHeader": "周",
-    "emptyMessage": "未找到结果",
-    "emptyFilterMessage": "未找到结果"
   },
   "layout": {
     "sidebar": {
@@ -130,7 +88,7 @@
   "landing": {
     "hero": {
       "title": "模板项目",
-      "subtitle": "基于 Angular + PrimeNG + .NET 10 DDD 架构的全栈应用开发模板",
+      "subtitle": "基于 Angular + Spartan UI + .NET 10 DDD 架构的全栈应用开发模板",
       "login": "登录",
       "register": "注册"
     },
@@ -140,20 +98,11 @@
       "usersTitle": "用户管理",
       "usersDesc": "完整的 CRUD 操作与权限控制",
       "themeTitle": "主题系统",
-      "themeDesc": "深色模式 + Tailwind CSS + PrimeNG"
+      "themeDesc": "深色模式 + Tailwind CSS + Spartan UI"
     }
   },
   "theme": {
-    "config": {
-      "mode": "主题模式",
-      "default": "默认",
-      "light": "亮色",
-      "system": "系统",
-      "dark": "暗色",
-      "primary": "主色",
-      "surface": "中性色",
-      "presets": "预设"
-    }
+    "toggle": "切换主题"
   },
   "app": {
     "startup": {
@@ -317,7 +266,7 @@
       "deleteHeader": "确认删除"
     },
     "table": {
-      "currentPageReport": "共 {totalRecords} 条",
+      "currentPageReport": "共 {{total}} 条",
       "colUser": "用户",
       "colEmail": "邮箱",
       "colRole": "角色",
@@ -497,7 +446,7 @@
       "offlineAccessHint": "已允许 refresh_token，建议同时开放 offline_access scope。"
     },
     "table": {
-      "currentPageReport": "共 {totalRecords} 条",
+      "currentPageReport": "共 {{total}} 条",
       "colApp": "应用",
       "colType": "类型",
       "colPermissions": "授权能力",

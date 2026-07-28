@@ -46,7 +46,7 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 import { ConfirmService } from '../../../../core/notifications/confirm-service';
 import { notify } from '../../../../core/notifications/notify';
 import { LayoutService } from '../../../../layout/services/layout-service';
-import { FilterStateService } from '../../../../shared/services/filter-state.service';
+import { FilterStateService } from '../../../../shared/services/filter-state-service';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationClientType,
@@ -55,7 +55,7 @@ import {
   UpdateOpenApplicationInputDto,
 } from '../../models/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
-import { OpenApplicationEditDialogComponent } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
+import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
 import {
   OpenApplicationTable,
   OpenApplicationTableFilterEvent,
@@ -77,13 +77,13 @@ import {
     TranslocoModule,
     //#endif
     OpenApplicationTable,
-    OpenApplicationEditDialogComponent,
+    OpenApplicationEditDialog,
   ],
   providers: [provideIcons({ lucideCopy, lucidePlus, lucideRefreshCw, lucideSearch })],
   templateUrl: './open-applications.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class OpenApplicationsPage implements OnInit {
+export class OpenApplications implements OnInit {
   private readonly service = inject(OpenApplicationService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
@@ -206,6 +206,9 @@ export class OpenApplicationsPage implements OnInit {
       this.selectedApplicationType.set(saved.selectedApplicationType ?? null);
     if (saved.selectedClientType !== undefined)
       this.selectedClientType.set(saved.selectedClientType ?? null);
+
+    // 首次进入即加载列表（恢复筛选后），无需手动点刷新。
+    this.reloadList();
   }
 
   reloadList() {

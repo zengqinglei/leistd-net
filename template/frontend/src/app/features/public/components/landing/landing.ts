@@ -1,39 +1,27 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePalette, lucideShield, lucideUsers } from '@ng-icons/lucide';
+import { lucideShield, lucideSunMoon, lucideUsers } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 
-import { ThemeService } from '../../../../core/services/theme-service';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
-import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
+import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 
 @Component({
   selector: 'app-landing',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   //#if (IncludeLocalization)
-  imports: [
-    RouterModule,
-    NgIcon,
-    HlmButton,
-    ThemeConfigurator,
-    LanguageSwitcher,
-    TranslocoModule,
-    ...HlmPopoverImports,
-  ],
+  imports: [RouterModule, NgIcon, HlmButton, ThemeModeToggle, LanguageSwitcher, TranslocoModule],
   //#else
-  imports: [RouterModule, NgIcon, HlmButton, ThemeConfigurator, ...HlmPopoverImports],
+  imports: [RouterModule, NgIcon, HlmButton, ThemeModeToggle],
   //#endif
-  providers: [provideIcons({ lucidePalette, lucideShield, lucideUsers })],
+  providers: [provideIcons({ lucideShield, lucideSunMoon, lucideUsers })],
   templateUrl: './landing.html',
 })
-export class Landing {
-  public themeService = inject(ThemeService);
-}
+export class Landing {}

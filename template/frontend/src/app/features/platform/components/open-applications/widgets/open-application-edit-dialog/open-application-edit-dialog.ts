@@ -40,7 +40,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
-import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationClientType,
@@ -95,13 +95,13 @@ const authorizationCodePermissions = [
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
-    DialogLoadingComponent,
+    DialogLoading,
   ],
   providers: [provideIcons({ lucideCheck, lucideCircleCheck, lucidePlus, lucideX })],
   templateUrl: './open-application-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class OpenApplicationEditDialogComponent {
+export class OpenApplicationEditDialog {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -135,10 +135,10 @@ export class OpenApplicationEditDialogComponent {
   readonly permissionsPlaceholder = () => 'Select authorization capabilities';
   readonly requirementsPlaceholder = () => 'Select security requirements';
   //#endif
-  visible = model(false);
-  loading = input(false);
-  saving = input(false);
-  application = input<OpenApplicationOutputDto | null>(null);
+  readonly visible = model(false);
+  readonly loading = input(false);
+  readonly saving = input(false);
+  readonly application = input<OpenApplicationOutputDto | null>(null);
   readonly saved = output<CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto>();
 
   formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());

@@ -29,8 +29,6 @@
     "@ng-icons/core": "^34.0.0",
     "@ng-icons/lucide": "^34.0.0",
     "@spartan-ng/brain": "^1.1.1",
-    "@tanstack/angular-table": "^8.21.4",
-    "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "markdown-it": "^14.2.0",

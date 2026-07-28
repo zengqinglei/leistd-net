@@ -16,9 +16,12 @@ import {
   withViewTransitions,
 } from '@angular/router';
 //#if (IncludeLocalization)
-import { provideTransloco } from '@jsverse/transloco';
+import { provideTransloco, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
+//#if (IncludeLocalization)
+import { firstValueFrom } from 'rxjs';
+//#endif
 
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -29,6 +32,9 @@ import { acceptLanguageInterceptor } from './core/interceptors/accept-language-i
 //#endif
 import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
 import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
+//#if (IncludeLocalization)
+import { LanguageService } from './core/services/language-service';
+//#endif
 import { StartupService } from './core/services/startup-service';
 import { provideMock } from '../../_mock/core/providers';
 
@@ -76,6 +82,15 @@ export const appConfig: ApplicationConfig = {
       ]),
       withInterceptorsFromDi(), // 启用对基于类的拦截器的支持
     ),
+    //#if (IncludeLocalization)
+    // 首帧前预加载活动语言词条：LanguageService 构造时从 localStorage 解析活动语言并设为 active，
+    // 随后加载对应 JSON。确保 shell 与各页首次渲染时 translate() 不命中未加载的裸键（消除首帧缺翻译告警）。
+    provideAppInitializer(() => {
+      inject(LanguageService);
+      const transloco = inject(TranslocoService);
+      return firstValueFrom(transloco.load(transloco.getActiveLang()));
+    }),
+    //#endif
     // 在应用初始化时加载关键数据
     provideAppInitializer(() => inject(StartupService).load()),
     // 注册 Mock 服务

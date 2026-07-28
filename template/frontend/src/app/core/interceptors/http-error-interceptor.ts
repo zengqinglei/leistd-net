@@ -1,5 +1,7 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+//#if (IncludeIdentity || IncludeLocalization)
 import { inject } from '@angular/core';
+//#endif
 //#if (IncludeIdentity)
 import { Router } from '@angular/router';
 //#endif

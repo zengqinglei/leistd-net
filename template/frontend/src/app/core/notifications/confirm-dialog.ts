@@ -29,8 +29,10 @@ export interface ConfirmContext {
       <div class="flex items-start gap-3">
         <ng-icon name="lucideTriangleAlert" class="mt-0.5 shrink-0 text-xl text-destructive" />
         <div class="flex flex-col gap-1">
-          <h2 class="text-lg font-semibold">{{ ctx.header }}</h2>
-          <p class="text-sm text-muted-foreground">{{ ctx.message }}</p>
+          <h2 id="confirm-dialog-title" class="text-lg font-semibold">{{ ctx.header }}</h2>
+          <p id="confirm-dialog-description" class="text-sm text-muted-foreground">
+            {{ ctx.message }}
+          </p>
         </div>
       </div>
       <div class="flex justify-end gap-2">

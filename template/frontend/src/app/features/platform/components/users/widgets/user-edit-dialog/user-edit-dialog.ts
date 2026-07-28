@@ -56,7 +56,7 @@ import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 import { notify } from '../../../../../../core/notifications/notify';
-import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { ROLE_LABEL_MAP } from '../../../../../../shared/models/role.enum';
 import {
   CreateUserInputDto,
@@ -88,17 +88,17 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
-    DialogLoadingComponent,
+    DialogLoading,
   ],
   providers: [provideIcons({ lucidePlus, lucideEye, lucideEyeOff })],
   templateUrl: './user-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UserEditDialogComponent {
-  visible = model(false);
-  loading = input(false);
-  saving = input(false);
-  user = input<UserManagementOutputDto | null>(null);
+export class UserEditDialog {
+  readonly visible = model(false);
+  readonly loading = input(false);
+  readonly saving = input(false);
+  readonly user = input<UserManagementOutputDto | null>(null);
   readonly saved = output<CreateUserInputDto | UpdateUserInputDto>();
 
   //#if (IncludeLocalization)
@@ -132,7 +132,7 @@ export class UserEditDialogComponent {
   readonly avatarPreview = signal('');
 
   // 表单模型（Signal Forms）
-  protected readonly model_ = signal({
+  protected readonly formModel = signal({
     username: '',
     email: '',
     displayName: '',
@@ -144,11 +144,14 @@ export class UserEditDialogComponent {
   });
 
   readonly displayName = computed(
-    () => this.model_().displayName.trim() || this.model_().username.trim() || this.unnamedLabel(),
+    () =>
+      this.formModel().displayName.trim() ||
+      this.formModel().username.trim() ||
+      this.unnamedLabel(),
   );
   readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
   readonly avatarStyle = computed(() => {
-    const seed = (this.model_().username || this.displayName()).trim();
+    const seed = (this.formModel().username || this.displayName()).trim();
     let total = 0;
 
     for (const char of seed) {
@@ -167,7 +170,7 @@ export class UserEditDialogComponent {
   });
 
   //#if (IncludeLocalization)
-  readonly userForm = form(this.model_, (path) => {
+  readonly userForm = form(this.formModel, (path) => {
     required(path.username, {
       message: this.transloco.translate('users.editDialog.usernameRequired'),
     });
@@ -204,7 +207,7 @@ export class UserEditDialogComponent {
     required(path.roles, { message: this.transloco.translate('users.editDialog.rolesRequired') });
   });
   //#else
-  readonly userForm = form(this.model_, (path) => {
+  readonly userForm = form(this.formModel, (path) => {
     required(path.username, { message: 'Username is required' });
     minLength(path.username, 3, {
       message: 'Username must be 3-64 letters, digits or underscores',
@@ -263,7 +266,7 @@ export class UserEditDialogComponent {
         return;
       }
       const avatar = user?.avatar ?? '';
-      this.model_.set({
+      this.formModel.set({
         username: user?.username ?? '',
         email: user?.email ?? '',
         displayName: user?.displayName ?? '',
@@ -315,7 +318,7 @@ export class UserEditDialogComponent {
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : '';
-      this.model_.update((m) => ({ ...m, avatar: result }));
+      this.formModel.update((m) => ({ ...m, avatar: result }));
       this.avatarPreview.set(result);
     };
     reader.readAsDataURL(file);
@@ -327,11 +330,11 @@ export class UserEditDialogComponent {
   // hlm-switch 为 CVA（checked 非 ModelSignal），Signal Forms 的 [formField] 不适配；
   // 直接以 [checked]/(checkedChange) 双向绑定回写模型信号。
   setActive(checked: boolean): void {
-    this.model_.update((m) => ({ ...m, isActive: checked }));
+    this.formModel.update((m) => ({ ...m, isActive: checked }));
   }
 
   setEmailVerified(checked: boolean): void {
-    this.model_.update((m) => ({ ...m, isEmailVerified: checked }));
+    this.formModel.update((m) => ({ ...m, isEmailVerified: checked }));
   }
 
   /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约。 */
@@ -349,7 +352,7 @@ export class UserEditDialogComponent {
       return;
     }
 
-    const model = this.model_();
+    const model = this.formModel();
     if (this.isEditMode()) {
       this.saved.emit({
         email: model.email.trim(),

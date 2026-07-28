@@ -1,4 +1,7 @@
 import { inject, Injectable } from '@angular/core';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { HlmDialogService } from '@spartan-ng/helm/dialog';
 import { firstValueFrom } from 'rxjs';
 
@@ -22,26 +25,38 @@ export interface ConfirmOptions {
  *
  * Spartan 无服务式 confirm（alert-dialog 是声明式）。这里基于 `HlmDialogService`
  * 动态打开通用 confirm 组件，返回 `Promise<boolean>`（确认 = true）。
- * 替代原 PrimeNG `ConfirmationService.confirm({ ..., accept })` 的用法。
  *
  * 用法：`if (await confirm.open({ message, variant: 'destructive' })) { ... }`。
  */
 @Injectable({ providedIn: 'root' })
 export class ConfirmService {
   private readonly dialog = inject(HlmDialogService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
 
   async open(options: ConfirmOptions): Promise<boolean> {
     const context: ConfirmContext = {
       message: options.message,
-      header: options.header ?? '请确认',
-      confirmText: options.confirmText ?? '确定',
-      cancelText: options.cancelText ?? '取消',
+      //#if (IncludeLocalization)
+      header: options.header ?? this.transloco.translate('common.confirm'),
+      confirmText: options.confirmText ?? this.transloco.translate('common.ok'),
+      cancelText: options.cancelText ?? this.transloco.translate('common.cancel'),
+      //#else
+      header: options.header ?? 'Please confirm',
+      confirmText: options.confirmText ?? 'OK',
+      cancelText: options.cancelText ?? 'Cancel',
+      //#endif
       variant: options.variant ?? 'default',
     };
 
+    // role=alertdialog + aria 关联标题/正文：确认/破坏性提示的 WAI-ARIA 正确语义。
     const dialogRef = this.dialog.open<boolean, ConfirmContext>(ConfirmDialog, {
       context,
       contentClass: 'sm:!max-w-md',
+      role: 'alertdialog',
+      ariaLabelledBy: 'confirm-dialog-title',
+      ariaDescribedBy: 'confirm-dialog-description',
     });
 
     const result = await firstValueFrom(dialogRef.closed$);

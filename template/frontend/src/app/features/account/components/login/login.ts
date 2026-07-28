@@ -9,7 +9,6 @@ import {
   lucideZap,
   lucideCircleCheck,
   lucideInfo,
-  lucidePalette,
   lucideEye,
   lucideEyeOff,
 } from '@ng-icons/lucide';
@@ -22,19 +21,17 @@ import {
   HlmInputGroupInput,
   HlmInputGroupButton,
 } from '@spartan-ng/helm/input-group';
-import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { environment } from '../../../../../environments/environment';
 import { notify } from '../../../../core/notifications/notify';
 import { AuthService } from '../../../../core/services/auth-service';
-import { ThemeService } from '../../../../core/services/theme-service';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
-import { LogoComponent } from '../../../../shared/components/logo/logo';
-import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
+import { Logo } from '../../../../shared/components/logo/logo';
+import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 import { AccountService } from '../../services/account-service';
 
 // GitHub 品牌图标（lucide 已下架品牌 logo，用官方 SVG path 自定义注入）
@@ -54,22 +51,20 @@ const githubIcon =
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupButton,
-    ThemeConfigurator,
+    ThemeModeToggle,
     ...HlmCardImports,
     ...HlmFieldImports,
-    ...HlmPopoverImports,
     //#if (IncludeLocalization)
     LanguageSwitcher,
     TranslocoModule,
     //#endif
-    LogoComponent,
+    Logo,
   ],
   providers: [
     provideIcons({
       lucideZap,
       lucideCircleCheck,
       lucideInfo,
-      lucidePalette,
       lucideEye,
       lucideEyeOff,
       github: githubIcon,
@@ -83,7 +78,6 @@ export class Login {
   private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  public themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif

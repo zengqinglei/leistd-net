@@ -35,6 +35,7 @@
 - Skill 安装后即使项目没有文档，也必须从源码、配置、测试和 CI 继续低风险任务；只有产生长期可复用信息时才按需创建最小权威文档。
 - 不携带固定需求、规范或报告模板，不预建按需目录。
 - 修改任何 Skill 时使用官方 `skill-creator` 并运行 `scripts/validate-skills.ps1`。
+- 前端 UI 走 Spartan UI：选型依据与主题/能力取舍见 [`docs/architecture/frontend-ui-library.md`](../architecture/frontend-ui-library.md)，组件用法规范见 [`template/docs/standards/coding-frontend.md`](../../template/docs/standards/coding-frontend.md)；改前端时遵循 `spartan` skill（`.agents/skills/spartan/`，含 `rules/`）与 `@spartan-ng/mcp`，先查 skill/MCP 再写代码，不臆造 Helm/Brain API。
 
 ## 5. 本地框架联调
 

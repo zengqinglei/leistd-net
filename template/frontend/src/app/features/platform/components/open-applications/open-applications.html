@@ -70,7 +70,7 @@
       [loading]="loading()"
       (filterChange)="onPageChange($event)"
       (edit)="openEditDialog($event)"
-      (delete)="handleDelete($event)"
+      (deleteRequested)="handleDelete($event)"
       (resetSecret)="handleResetSecret($event)"
     />
   </div>
@@ -95,9 +95,7 @@
     </hlm-dialog-header>
 
     <div class="flex flex-col gap-3">
-      <div
-        class="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300"
-      >
+      <div class="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
         <!--#if (IncludeLocalization)-->
         {{ 'openApp.secret.warning' | transloco }}
         <!--#else-->
@@ -155,9 +153,7 @@
     </hlm-dialog-header>
 
     <div class="flex flex-col gap-3">
-      <div
-        class="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300"
-      >
+      <div class="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
         <!--#if (IncludeLocalization)-->
         {{ 'openApp.secret.warning' | transloco }}
         <!--#else-->

@@ -44,9 +44,9 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
   templateUrl: './reset-user-password-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ResetUserPasswordDialogComponent {
-  visible = model(false);
-  saving = model(false);
+export class ResetUserPasswordDialog {
+  readonly visible = model(false);
+  readonly saving = model(false);
   readonly saved = output<ResetUserPasswordInputDto>();
 
   //#if (IncludeLocalization)
@@ -60,10 +60,10 @@ export class ResetUserPasswordDialogComponent {
   protected readonly showPassword = signal(false);
 
   // 表单模型（Signal Forms）
-  private readonly model_ = signal({ password: '' });
+  private readonly formModel = signal({ password: '' });
 
   //#if (IncludeLocalization)
-  readonly resetForm = form(this.model_, (path) => {
+  readonly resetForm = form(this.formModel, (path) => {
     required(path.password, {
       message: this.transloco.translate('users.resetDialog.newPasswordRequired'),
     });
@@ -72,7 +72,7 @@ export class ResetUserPasswordDialogComponent {
     });
   });
   //#else
-  readonly resetForm = form(this.model_, (path) => {
+  readonly resetForm = form(this.formModel, (path) => {
     required(path.password, { message: 'Enter a new password' });
     pattern(path.password, PASSWORD_RULE, {
       message:
@@ -86,7 +86,7 @@ export class ResetUserPasswordDialogComponent {
     const open = state === 'open';
     this.visible.set(open);
     if (!open) {
-      this.model_.set({ password: '' });
+      this.formModel.set({ password: '' });
       this.showPassword.set(false);
     }
   }
@@ -100,6 +100,6 @@ export class ResetUserPasswordDialogComponent {
       this.resetForm().markAsTouched();
       return;
     }
-    this.saved.emit({ password: this.model_().password });
+    this.saved.emit({ password: this.formModel().password });
   }
 }

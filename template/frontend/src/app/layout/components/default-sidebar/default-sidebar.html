@@ -1,17 +1,22 @@
 <hlm-sidebar collapsible="icon">
   <div hlmSidebarHeader>
-    <div class="flex items-center gap-3 px-2 py-1 overflow-hidden">
-      <app-logo size="normal" />
-      <span
-        class="font-bold text-lg tracking-tight text-primary whitespace-nowrap group-data-[collapsible=icon]:hidden"
-      >
-        <!--#if (IncludeLocalization)-->
-        {{ 'layout.sidebar.appTitle' | transloco }}
-        <!--#else-->
-        Template Project
-        <!--#endif-->
-      </span>
-    </div>
+    <ul hlmSidebarMenu>
+      <li hlmSidebarMenuItem>
+        <!-- Spartan 品牌头：用 menu-button 基元（size=lg），折叠为 icon 时自动收成居中的方形图标，避免自绘容器溢出裁剪。 -->
+        <a hlmSidebarMenuButton size="lg" [routerLink]="homeRoute()">
+          <app-logo size="normal" />
+          <span
+            class="font-bold text-lg tracking-tight text-primary group-data-[collapsible=icon]:hidden"
+          >
+            <!--#if (IncludeLocalization)-->
+            {{ 'layout.sidebar.appTitle' | transloco }}
+            <!--#else-->
+            Template Project
+            <!--#endif-->
+          </span>
+        </a>
+      </li>
+    </ul>
   </div>
 
   <div hlmSidebarContent>

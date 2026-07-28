@@ -43,7 +43,7 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
   templateUrl: './change-password-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ChangePasswordDialogComponent {
+export class ChangePasswordDialog {
   readonly visible = model(false);
 
   private readonly accountService = inject(AccountService);
@@ -62,14 +62,14 @@ export class ChangePasswordDialogComponent {
   protected readonly showConfirmPassword = signal(false);
 
   // 表单模型（Signal Forms）
-  private readonly model_ = signal({
+  private readonly formModel = signal({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
 
   //#if (IncludeLocalization)
-  readonly changeForm = form(this.model_, (path) => {
+  readonly changeForm = form(this.formModel, (path) => {
     required(path.currentPassword, {
       message: this.transloco.translate('account.changePassword.currentPasswordRequired'),
     });
@@ -104,7 +104,7 @@ export class ChangePasswordDialogComponent {
     });
   });
   //#else
-  readonly changeForm = form(this.model_, (path) => {
+  readonly changeForm = form(this.formModel, (path) => {
     required(path.currentPassword, { message: 'Please enter your current password' });
     required(path.newPassword, { message: '' });
     pattern(path.newPassword, PASSWORD_RULE, {
@@ -148,7 +148,7 @@ export class ChangePasswordDialogComponent {
   }
 
   private resetForm(): void {
-    this.model_.set({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    this.formModel.set({ currentPassword: '', newPassword: '', confirmPassword: '' });
   }
 
   onHide(): void {
@@ -163,7 +163,7 @@ export class ChangePasswordDialogComponent {
 
     this.saving.set(true);
 
-    const { currentPassword, newPassword, confirmPassword } = this.model_();
+    const { currentPassword, newPassword, confirmPassword } = this.formModel();
 
     this.accountService
       .changePassword({ currentPassword, newPassword, confirmPassword })

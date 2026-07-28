@@ -13,7 +13,7 @@ import { filter, map, startWith } from 'rxjs/operators';
 import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
-import { LogoComponent } from '../../../shared/components/logo/logo';
+import { Logo } from '../../../shared/components/logo/logo';
 
 interface MenuItem {
   label: string;
@@ -34,7 +34,7 @@ interface MenuGroup {
   imports: [
     RouterLink,
     NgIcon,
-    LogoComponent,
+    Logo,
     ...HlmSidebarImports,
     //#if (IncludeLocalization)
     TranslocoModule,
@@ -112,6 +112,11 @@ export class DefaultSidebar {
       startWith(this.router.url),
     ),
     { initialValue: this.router.url },
+  );
+
+  // 品牌头链接：跟随当前区段（平台/工作区）指向其首页，供折叠态 menu-button 使用。
+  readonly homeRoute = computed(() =>
+    this.currentUrl().startsWith('/platform') ? '/platform' : '/workspace/dashboard',
   );
 
   readonly menuGroups = computed(() => {

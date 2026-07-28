@@ -1,19 +1,7 @@
 <div class="min-h-screen flex flex-col items-center justify-center bg-background px-6 relative">
   <!-- Theme Toggle -->
   <div class="absolute top-4 right-4 flex gap-2 z-50">
-    <button hlmBtn variant="ghost" size="icon" (click)="themeService.toggleTheme()">
-      <ng-icon [name]="themeService.modeIcon()" />
-    </button>
-    <div class="relative">
-      <hlm-popover>
-        <button hlmBtn variant="ghost" size="icon" hlmPopoverTrigger>
-          <ng-icon name="lucidePalette" />
-        </button>
-        <hlm-popover-content *hlmPopoverPortal class="w-72">
-          <app-theme-configurator />
-        </hlm-popover-content>
-      </hlm-popover>
-    </div>
+    <app-theme-mode-toggle />
     <!--#if (IncludeLocalization)-->
     <app-language-switcher />
     <!--#endif-->
@@ -73,7 +61,7 @@
         <!--#endif-->
       </div>
       <div class="p-6 rounded-xl bg-card border border-border">
-        <ng-icon name="lucidePalette" class="text-3xl text-primary mb-3" />
+        <ng-icon name="lucideSunMoon" class="text-3xl text-primary mb-3" />
         <!--#if (IncludeLocalization)-->
         <h3 class="font-semibold">{{ 'landing.feature.themeTitle' | transloco }}</h3>
         <p class="text-sm text-muted-foreground mt-2">

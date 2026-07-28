@@ -29,12 +29,13 @@ import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { Role } from '../../../../../../shared/models/role.enum';
-import { getRoleLabel } from '../../../../../../shared/pipes/role-label.pipe';
+import { getRoleLabel } from '../../../../../../shared/pipes/role-label-pipe';
 import { UserManagementOutputDto } from '../../../../models/user-management.dto';
 
 export interface UserTableFilterEvent {
@@ -43,7 +44,7 @@ export interface UserTableFilterEvent {
   sorting?: string;
 }
 
-/** Spartan badge 变体（替代 PrimeNG severity）。 */
+/** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
 @Component({
@@ -56,6 +57,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     ...HlmAvatarImports,
     ...HlmTableImports,
     ...HlmPopoverImports,
+    ...HlmSelectImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
     TranslocoModule,
@@ -84,7 +86,9 @@ export class UserTable {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
 
-  readonly currentPageReport = () => this.transloco.translate('users.table.currentPageReport');
+  readonly currentPageReport = () =>
+    this.transloco.translate('users.table.currentPageReport', { total: this.totalRecords() });
+  readonly rowsPerPageLabel = () => this.transloco.translate('common.rowsPerPage');
 
   readonly statusLabel = (isActive: boolean) =>
     this.transloco.translate(isActive ? 'users.status.active' : 'users.status.inactive');
@@ -116,7 +120,8 @@ export class UserTable {
   readonly deleteTooltip = (superAdmin: boolean) =>
     this.transloco.translate(superAdmin ? 'users.tooltip.superAdminNoDelete' : 'common.delete');
   //#else
-  readonly currentPageReport = () => '{totalRecords} in total';
+  readonly currentPageReport = () => `${this.totalRecords()} in total`;
+  readonly rowsPerPageLabel = () => 'Rows per page';
 
   readonly statusLabel = (isActive: boolean) => (isActive ? 'Active' : 'Disabled');
 
@@ -146,14 +151,14 @@ export class UserTable {
     superAdmin ? 'The built-in super administrator cannot be deleted' : 'Delete';
   //#endif
 
-  users = input.required<UserManagementOutputDto[]>();
-  totalRecords = input.required<number>();
-  loading = input<boolean>(false);
+  readonly users = input.required<UserManagementOutputDto[]>();
+  readonly totalRecords = input.required<number>();
+  readonly loading = input<boolean>(false);
 
   readonly edit = output<string>();
   readonly toggleActive = output<UserManagementOutputDto>();
   readonly resetPassword = output<string>();
-  readonly delete = output<UserManagementOutputDto>();
+  readonly deleteRequested = output<UserManagementOutputDto>();
   readonly filterChange = output<UserTableFilterEvent>();
 
   readonly rowsPerPageOptions = [10, 20, 50, 100];
@@ -221,8 +226,9 @@ export class UserTable {
     this.emitFilter();
   }
 
-  onRowsChange(rows: number) {
-    this.rows.set(rows);
+  onRowsChange(value: number | null | undefined) {
+    if (value == null) return;
+    this.rows.set(value);
     this.first.set(0);
     this.emitFilter();
   }

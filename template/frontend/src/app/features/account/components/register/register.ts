@@ -28,7 +28,6 @@ import {
   lucideUsers,
   lucideShield,
   lucideZap,
-  lucidePalette,
   lucideEye,
   lucideEyeOff,
 } from '@ng-icons/lucide';
@@ -40,18 +39,16 @@ import {
   HlmInputGroupInput,
   HlmInputGroupButton,
 } from '@spartan-ng/helm/input-group';
-import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { lastValueFrom } from 'rxjs';
 
 import { notify } from '../../../../core/notifications/notify';
-import { ThemeService } from '../../../../core/services/theme-service';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
-import { LogoComponent } from '../../../../shared/components/logo/logo';
-import { ThemeConfigurator } from '../../../../shared/components/theme-configurator/theme-configurator';
+import { Logo } from '../../../../shared/components/logo/logo';
+import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 
@@ -68,15 +65,14 @@ import { AccountService } from '../../services/account-service';
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupButton,
-    ThemeConfigurator,
+    ThemeModeToggle,
     ...HlmFieldImports,
-    ...HlmPopoverImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
     LanguageSwitcher,
     TranslocoModule,
     //#endif
-    LogoComponent,
+    Logo,
   ],
   providers: [
     provideIcons({
@@ -84,7 +80,6 @@ import { AccountService } from '../../services/account-service';
       lucideUsers,
       lucideShield,
       lucideZap,
-      lucidePalette,
       lucideEye,
       lucideEyeOff,
     }),
@@ -97,7 +92,6 @@ export class Register implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
-  public themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   public readonly transloco = inject(TranslocoService);
   // 属性位置的文案（无法在标签属性里用 #if 分支）经此对象绑定

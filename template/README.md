@@ -1,6 +1,6 @@
 # CompanyName.ProjectName
 
-基于 .NET 10、Angular 21 和 Leistd.* 组件构建的全栈项目，后端采用 Domain、Application、Infrastructure、Api 四层结构。
+基于 .NET 10、Angular 22 和 Leistd.* 组件构建的全栈项目，后端采用 Domain、Application、Infrastructure、Api 四层结构。
 
 ## 项目结构
 

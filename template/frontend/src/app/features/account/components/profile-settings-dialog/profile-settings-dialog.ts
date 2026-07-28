@@ -49,7 +49,7 @@ const PHONE_PATTERN = /^[0-9+\-()\s]{0,20}$/;
   templateUrl: './profile-settings-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProfileSettingsDialogComponent {
+export class ProfileSettingsDialog {
   readonly visible = model(false);
 
   private readonly authService = inject(AuthService);
@@ -80,7 +80,7 @@ export class ProfileSettingsDialogComponent {
   readonly avatarPreview = signal('');
 
   // 表单模型（Signal Forms）
-  protected readonly model_ = signal({
+  protected readonly formModel = signal({
     username: '',
     email: '',
     nickname: '',
@@ -90,7 +90,7 @@ export class ProfileSettingsDialogComponent {
 
   readonly displayName = computed(
     () =>
-      this.model_().nickname.trim() ||
+      this.formModel().nickname.trim() ||
       this.user()?.nickname ||
       this.user()?.username ||
       this.guestLabel(),
@@ -100,7 +100,7 @@ export class ProfileSettingsDialogComponent {
     return (text.charAt(0) || 'U').toUpperCase();
   });
   readonly avatarStyle = computed(() => {
-    const seed = (this.model_().username || this.user()?.username || this.displayName()).trim();
+    const seed = (this.formModel().username || this.user()?.username || this.displayName()).trim();
     let total = 0;
 
     for (const char of seed) {
@@ -119,7 +119,7 @@ export class ProfileSettingsDialogComponent {
   });
 
   //#if (IncludeLocalization)
-  readonly profileForm = form(this.model_, (path) => {
+  readonly profileForm = form(this.formModel, (path) => {
     required(path.username, {
       message: this.transloco.translate('account.profile.usernameRequired'),
     });
@@ -144,7 +144,7 @@ export class ProfileSettingsDialogComponent {
     });
   });
   //#else
-  readonly profileForm = form(this.model_, (path) => {
+  readonly profileForm = form(this.formModel, (path) => {
     required(path.username, { message: 'Username cannot be empty' });
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
       message: 'Username must be 3–64 characters of letters, numbers, or underscores',
@@ -173,7 +173,7 @@ export class ProfileSettingsDialogComponent {
     if (open) {
       const user = this.user();
       const avatar = user?.avatar ?? '';
-      this.model_.set({
+      this.formModel.set({
         username: user?.username ?? '',
         email: user?.email ?? '',
         nickname: user?.nickname ?? '',
@@ -218,7 +218,7 @@ export class ProfileSettingsDialogComponent {
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : '';
-      this.model_.update((m) => ({ ...m, avatar: result }));
+      this.formModel.update((m) => ({ ...m, avatar: result }));
       this.avatarPreview.set(result);
     };
     reader.readAsDataURL(file);
@@ -238,7 +238,7 @@ export class ProfileSettingsDialogComponent {
     }
 
     this.saving.set(true);
-    const { username, email, nickname, phoneNumber, avatar } = this.model_();
+    const { username, email, nickname, phoneNumber, avatar } = this.formModel();
 
     this.accountService
       .updateCurrentUser({

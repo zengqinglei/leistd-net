@@ -22,7 +22,7 @@ import { translationReady } from '../../../core/i18n/translation-ready';
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DialogLoadingComponent {
+export class DialogLoading {
   // 调用方可显式传入文本；未传入时回退到默认加载文案。
   readonly text = input<string>();
 

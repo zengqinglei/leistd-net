@@ -142,19 +142,7 @@
   <!-- Right Column: Register Form -->
   <div class="flex-1 flex items-center justify-center p-8 relative">
     <div class="absolute top-4 right-4 flex gap-2 z-50">
-      <button hlmBtn variant="ghost" size="icon" (click)="themeService.toggleTheme()">
-        <ng-icon [name]="themeService.modeIcon()" />
-      </button>
-      <div class="relative">
-        <hlm-popover>
-          <button hlmBtn variant="ghost" size="icon" hlmPopoverTrigger>
-            <ng-icon name="lucidePalette" />
-          </button>
-          <hlm-popover-content *hlmPopoverPortal class="w-72">
-            <app-theme-configurator />
-          </hlm-popover-content>
-        </hlm-popover>
-      </div>
+      <app-theme-mode-toggle />
       <!--#if (IncludeLocalization)-->
       <app-language-switcher />
       <!--#endif-->

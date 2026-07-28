@@ -52,14 +52,14 @@
             </div>
             <!--#if (IncludeLocalization)-->
             <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
-              {{ model_().email || ('users.editDialog.noEmail' | transloco) }}
+              {{ formModel().email || ('users.editDialog.noEmail' | transloco) }}
             </p>
             <p class="mt-2 mb-0 text-xs text-muted-foreground">
               {{ 'users.editDialog.avatarHint' | transloco }}
             </p>
             <!--#else-->
             <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
-              {{ model_().email || 'No email set' }}
+              {{ formModel().email || 'No email set' }}
             </p>
             <p class="mt-2 mb-0 text-xs text-muted-foreground">
               Hover over the avatar and click + to re-upload; the preview updates instantly.
@@ -265,7 +265,7 @@
                 </div>
                 <!--#endif-->
               </div>
-              <hlm-switch [checked]="model_().isActive" (checkedChange)="setActive($event)" />
+              <hlm-switch [checked]="formModel().isActive" (checkedChange)="setActive($event)" />
             </div>
           </div>
 
@@ -288,7 +288,7 @@
                 <!--#endif-->
               </div>
               <hlm-switch
-                [checked]="model_().isEmailVerified"
+                [checked]="formModel().isEmailVerified"
                 (checkedChange)="setEmailVerified($event)"
               />
             </div>

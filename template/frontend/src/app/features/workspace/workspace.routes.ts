@@ -9,7 +9,7 @@ export const WORKSPACE_ROUTES: Routes = [
   {
     path: 'dashboard',
     loadComponent: () =>
-      import('./components/dashboard/workspace-dashboard').then((m) => m.WorkspaceDashboardPage),
+      import('./components/dashboard/workspace-dashboard').then((m) => m.WorkspaceDashboard),
   },
   {
     path: 'placeholder',

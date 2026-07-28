@@ -21,7 +21,9 @@
     "close": "Close",
     "copy": "Copy",
     "add": "Add",
-    "actions": "Actions"
+    "actions": "Actions",
+    "rowsPerPage": "Rows per page",
+    "toggleSidebar": "Toggle sidebar"
   },
   "menu": {
     "workspace": "Workspace",
@@ -45,50 +47,6 @@
     "502": "Bad gateway.",
     "503": "Service unavailable; the server is temporarily overloaded or under maintenance.",
     "504": "Gateway timeout."
-  },
-  "primeng": {
-    "accept": "Yes",
-    "reject": "No",
-    "choose": "Choose",
-    "upload": "Upload",
-    "cancel": "Cancel",
-    "clear": "Clear",
-    "apply": "Apply",
-    "dayNames": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-    "dayNamesShort": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-    "dayNamesMin": ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"],
-    "monthNames": [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December"
-    ],
-    "monthNamesShort": [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec"
-    ],
-    "today": "Today",
-    "weekHeader": "Wk",
-    "emptyMessage": "No results found",
-    "emptyFilterMessage": "No results found"
   },
   "layout": {
     "sidebar": {
@@ -130,7 +88,7 @@
   "landing": {
     "hero": {
       "title": "Template Project",
-      "subtitle": "A full-stack application development template based on Angular + PrimeNG + .NET 10 DDD architecture",
+      "subtitle": "A full-stack application development template based on Angular + Spartan UI + .NET 10 DDD architecture",
       "login": "Sign In",
       "register": "Sign Up"
     },
@@ -140,20 +98,11 @@
       "usersTitle": "User Management",
       "usersDesc": "Full CRUD operations with permission control",
       "themeTitle": "Theme System",
-      "themeDesc": "Dark mode + Tailwind CSS + PrimeNG"
+      "themeDesc": "Dark mode + Tailwind CSS + Spartan UI"
     }
   },
   "theme": {
-    "config": {
-      "mode": "Theme Mode",
-      "default": "Default",
-      "light": "Light",
-      "system": "System",
-      "dark": "Dark",
-      "primary": "Primary",
-      "surface": "Surface",
-      "presets": "Presets"
-    }
+    "toggle": "Switch theme"
   },
   "app": {
     "startup": {
@@ -317,7 +266,7 @@
       "deleteHeader": "Confirm delete"
     },
     "table": {
-      "currentPageReport": "{totalRecords} in total",
+      "currentPageReport": "{{total}} in total",
       "colUser": "User",
       "colEmail": "Email",
       "colRole": "Role",
@@ -497,7 +446,7 @@
       "offlineAccessHint": "refresh_token is allowed; consider also granting the offline_access scope."
     },
     "table": {
-      "currentPageReport": "{totalRecords} total",
+      "currentPageReport": "{{total}} total",
       "colApp": "Application",
       "colType": "Type",
       "colPermissions": "Capabilities",

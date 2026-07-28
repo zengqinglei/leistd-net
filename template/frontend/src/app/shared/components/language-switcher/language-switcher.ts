@@ -38,7 +38,7 @@ interface LangOption {
     </button>
 
     <ng-template #langMenu>
-      <hlm-dropdown-menu class="min-w-36">
+      <hlm-dropdown-menu sideOffset="2" class="min-w-36">
         @for (option of items(); track option.id) {
           <button hlmDropdownMenuItem (click)="select(option.id)">
             <ng-icon

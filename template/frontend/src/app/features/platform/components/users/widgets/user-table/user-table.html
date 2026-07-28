@@ -1,4 +1,4 @@
-<div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+<div class="@container bg-card rounded-xl shadow-sm border border-border overflow-hidden">
   <div hlmTableContainer class="w-full overflow-x-auto">
     <table hlmTable class="w-full">
       <thead hlmTHead>
@@ -17,7 +17,7 @@
               <ng-icon [name]="sortIcon('username')" class="text-sm" />
             </button>
           </th>
-          <th hlmTh class="px-6 py-3 hidden sm:table-cell">
+          <th hlmTh class="px-6 py-3 hidden @min-[680px]:table-cell">
             <button
               type="button"
               class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
@@ -32,17 +32,17 @@
             </button>
           </th>
           <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 hidden md:table-cell whitespace-nowrap">
+          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">
             {{ 'users.table.colRole' | transloco }}
           </th>
-          <th hlmTh class="px-6 py-3 hidden lg:table-cell whitespace-nowrap">
+          <th hlmTh class="px-6 py-3 hidden @min-[1200px]:table-cell whitespace-nowrap">
             {{ 'users.table.colStatus' | transloco }}
           </th>
           <!--#else-->
-          <th hlmTh class="px-6 py-3 hidden md:table-cell whitespace-nowrap">Role</th>
-          <th hlmTh class="px-6 py-3 hidden lg:table-cell whitespace-nowrap">Status</th>
+          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">Role</th>
+          <th hlmTh class="px-6 py-3 hidden @min-[1200px]:table-cell whitespace-nowrap">Status</th>
           <!--#endif-->
-          <th hlmTh class="px-6 py-3 hidden xl:table-cell">
+          <th hlmTh class="px-6 py-3 hidden @min-[1400px]:table-cell">
             <button
               type="button"
               class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
@@ -56,7 +56,7 @@
               <ng-icon [name]="sortIcon('lastLoginTime')" class="text-sm" />
             </button>
           </th>
-          <th hlmTh class="px-6 py-3 hidden 2xl:table-cell">
+          <th hlmTh class="px-6 py-3 hidden @min-[1560px]:table-cell">
             <button
               type="button"
               class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
@@ -102,11 +102,11 @@
               </div>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden sm:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[680px]:table-cell">
               <span class="whitespace-nowrap text-sm">{{ item.email }}</span>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden md:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[950px]:table-cell">
               <div class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap">
                 @for (role of getVisibleRoles(item); track role) {
                   <span hlmBadge [variant]="getRoleVariant(role)" class="text-[10px]">{{
@@ -127,7 +127,7 @@
               </div>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden lg:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[1200px]:table-cell">
               <div class="flex items-center gap-1.5 whitespace-nowrap">
                 <span
                   hlmBadge
@@ -138,19 +138,19 @@
                 <span
                   hlmBadge
                   [variant]="item.isEmailVerified ? 'secondary' : 'outline'"
-                  class="text-[10px] hidden xl:inline-flex"
+                  class="text-[10px] hidden @min-[1400px]:inline-flex"
                   >{{ emailVerifiedLabel(item.isEmailVerified) }}</span
                 >
               </div>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden xl:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[1400px]:table-cell">
               <span class="text-[11px] text-muted-foreground whitespace-nowrap">
                 {{ item.lastLoginTime ? (item.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss') : '-' }}
               </span>
             </td>
 
-            <td hlmTd class="px-6 py-4 hidden 2xl:table-cell">
+            <td hlmTd class="px-6 py-4 hidden @min-[1560px]:table-cell">
               <span class="text-[11px] text-muted-foreground whitespace-nowrap">{{
                 item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
               }}</span>
@@ -198,7 +198,7 @@
                   variant="ghost"
                   size="icon"
                   class="w-8 h-8 text-destructive"
-                  (click)="delete.emit(item)"
+                  (click)="deleteRequested.emit(item)"
                   [disabled]="isSuperAdmin(item)"
                   [hlmTooltip]="deleteTooltip(isSuperAdmin(item))"
                 >
@@ -232,6 +232,18 @@
     <div class="flex items-center justify-between gap-4 px-6 py-3 border-t border-border text-sm">
       <span class="text-muted-foreground">{{ currentPageReport() }}</span>
       <div class="flex items-center gap-2">
+        <!-- 每页条数选择：Spartan hlm-select（与 hlm-numbered-pagination 内置的页大小选择器同构）。 -->
+        <span class="text-muted-foreground whitespace-nowrap">{{ rowsPerPageLabel() }}</span>
+        <hlm-select [value]="rows()" (valueChange)="onRowsChange($event)">
+          <hlm-select-trigger size="sm" class="w-[4.5rem]">
+            <hlm-select-value />
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal>
+            @for (size of rowsPerPageOptions; track size) {
+              <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
         <button
           hlmBtn
           variant="outline"
