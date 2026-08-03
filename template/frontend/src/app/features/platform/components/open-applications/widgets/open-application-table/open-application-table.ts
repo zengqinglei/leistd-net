@@ -15,24 +15,24 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
-  lucideArrowDown,
-  lucideArrowUp,
   lucideArrowUpDown,
-  lucideChevronLeft,
-  lucideChevronRight,
+  lucideEllipsisVertical,
   lucideInbox,
   lucidePencil,
   lucideRefreshCw,
   lucideShield,
+  lucideSortAsc,
+  lucideSortDesc,
   lucideTrash2,
 } from '@ng-icons/lucide';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
-import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
+import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { OpenApplicationOutputDto } from '../../../../models/open-application.dto';
 
 export interface OpenApplicationTableFilterEvent {
@@ -55,23 +55,23 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     HlmButton,
     ...HlmTableImports,
     ...HlmPopoverImports,
-    ...HlmSelectImports,
     ...HlmTooltipImports,
+    ...HlmDropdownMenuImports,
+    TablePaginator,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
   ],
   providers: [
     provideIcons({
-      lucideArrowDown,
-      lucideArrowUp,
       lucideArrowUpDown,
-      lucideChevronLeft,
-      lucideChevronRight,
+      lucideEllipsisVertical,
       lucideInbox,
       lucidePencil,
       lucideRefreshCw,
       lucideShield,
+      lucideSortAsc,
+      lucideSortDesc,
       lucideTrash2,
     }),
   ],
@@ -84,15 +84,31 @@ export class OpenApplicationTable {
   readonly currentPageReport = () =>
     this.transloco.translate('openApp.table.currentPageReport', { total: this.totalRecords() });
   readonly rowsPerPageLabel = () => this.transloco.translate('common.rowsPerPage');
+  readonly pageLabel = () =>
+    this.transloco.translate('common.pageOf', {
+      page: this.currentPage(),
+      total: this.totalPages(),
+    });
+  readonly firstPageLabel = () => this.transloco.translate('common.pagination.first');
+  readonly prevPageLabel = () => this.transloco.translate('common.pagination.previous');
+  readonly nextPageLabel = () => this.transloco.translate('common.pagination.next');
+  readonly lastPageLabel = () => this.transloco.translate('common.pagination.last');
   readonly editTooltip = () => this.transloco.translate('common.edit');
   readonly resetSecretTooltip = () => this.transloco.translate('openApp.action.resetSecret');
   readonly deleteTooltip = () => this.transloco.translate('common.delete');
+  readonly actionsLabel = () => this.transloco.translate('common.actions');
   //#else
   readonly currentPageReport = () => `${this.totalRecords()} total`;
-  readonly rowsPerPageLabel = () => 'Rows per page';
+  readonly rowsPerPageLabel = () => 'Items per page';
+  readonly pageLabel = () => `Page ${this.currentPage()} of ${this.totalPages()}`;
+  readonly firstPageLabel = () => 'First page';
+  readonly prevPageLabel = () => 'Previous page';
+  readonly nextPageLabel = () => 'Next page';
+  readonly lastPageLabel = () => 'Last page';
   readonly editTooltip = () => 'Edit';
   readonly resetSecretTooltip = () => 'Reset secret';
   readonly deleteTooltip = () => 'Delete';
+  readonly actionsLabel = () => 'Actions';
   //#endif
 
   readonly applications = input.required<OpenApplicationOutputDto[]>();
@@ -104,7 +120,6 @@ export class OpenApplicationTable {
   readonly resetSecret = output<string>();
   readonly filterChange = output<OpenApplicationTableFilterEvent>();
 
-  readonly rowsPerPageOptions = [10, 20, 50, 100];
   readonly first = signal(0);
   readonly rows = signal(20);
   sortField = signal('clientId');
@@ -112,9 +127,6 @@ export class OpenApplicationTable {
   activeItems = signal<string[]>([]);
   popoverMode = signal<PopoverMode>('permissions');
   readonly popoverOpen = signal<'open' | 'closed'>('closed');
-
-  // 可排序列
-  readonly sortableColumns = ['clientId', 'creationTime'] as const;
 
   // 分页派生
   readonly currentPage = computed(() => Math.floor(this.first() / this.rows()) + 1);
@@ -167,7 +179,13 @@ export class OpenApplicationTable {
     if (this.sortField() !== field) {
       return 'lucideArrowUpDown';
     }
-    return this.sortOrder() === 1 ? 'lucideArrowUp' : 'lucideArrowDown';
+    return this.sortOrder() === 1 ? 'lucideSortAsc' : 'lucideSortDesc';
+  }
+
+  firstPage() {
+    if (!this.canPrev()) return;
+    this.first.set(0);
+    this.emitFilter();
   }
 
   prevPage() {
@@ -179,6 +197,12 @@ export class OpenApplicationTable {
   nextPage() {
     if (!this.canNext()) return;
     this.first.set(this.first() + this.rows());
+    this.emitFilter();
+  }
+
+  lastPage() {
+    if (!this.canNext()) return;
+    this.first.set((this.totalPages() - 1) * this.rows());
     this.emitFilter();
   }
 
@@ -213,7 +237,8 @@ export class OpenApplicationTable {
   }
 
   getClientTypeVariant(value: string): BadgeVariant {
-    return value === 'public' ? 'default' : 'destructive';
+    // 客户端类型是分类而非危险态：机密端权限更高→default 强调，公共端→secondary。红色留给危险/删除。
+    return value === 'public' ? 'secondary' : 'default';
   }
 
   getConsentTypeLabel(value: string) {

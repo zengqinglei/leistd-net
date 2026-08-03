@@ -39,7 +39,7 @@
     "ExternalAuth:UserIdMissing": "缺少外部用户 ID。",
     "ExternalAuth:UserInfoFetchFailed": "获取外部用户信息失败。",
     "New password": "新密码",
-    "Nickname": "昵称",
+    "Display Name": "显示名称",
     "Notification:IdentityCannotOperate": "当前身份不能操作用户通知。",
     "OpenApp:ApplicationTypeUnsupported": "应用类型不支持：{ApplicationType}",
     "OpenApp:ClientIdRequired": "Client ID 不能为空。",

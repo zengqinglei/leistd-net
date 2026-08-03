@@ -11,7 +11,7 @@ import { TranslocoService } from '@jsverse/transloco';
 import { catchError, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
-import { notify } from '../notifications/notify';
+import { notify } from '../feedback/notify';
 //#if (IncludeIdentity)
 import { AuthService } from '../services/auth-service';
 //#endif

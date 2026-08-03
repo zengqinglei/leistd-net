@@ -28,9 +28,8 @@ public record GetUserPagedInputDto : PagedRequestDto
     public bool? IsEmailVerified { get; init; }
 
     /// <summary>
-    /// 角色名称
+    /// 角色名称（多选，命中任一角色即匹配）
     /// </summary>
-    [Display(Name = "Role")]
-    [MaxLength(64, ErrorMessage = "{0} cannot exceed {1} characters.")]
-    public string? Role { get; init; }
+    [Display(Name = "Roles")]
+    public List<string>? Roles { get; init; }
 }

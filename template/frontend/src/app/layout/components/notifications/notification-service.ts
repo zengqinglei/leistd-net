@@ -2,9 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { lastValueFrom } from 'rxjs';
 
-import { SignalRService, NotificationOutputDto } from './signalr-service';
-import { environment } from '../../../environments/environment';
-export type { NotificationOutputDto } from './signalr-service';
+import { environment } from '../../../../environments/environment';
+import { SignalRService, NotificationOutputDto } from '../../../core/services/signalr-service';
+export type { NotificationOutputDto } from '../../../core/services/signalr-service';
 
 /**
  * 通知管理服务：通知列表/已读（HTTP）+ SignalR 实时推送桥接。
@@ -85,6 +85,26 @@ export class NotificationService {
       this.signalR.notifications.update((list) => list.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
       console.error('[NotificationService] MarkAllAsRead failed:', err);
+    }
+  }
+
+  /** 清空全部通知（持久删除）。 */
+  async clearAll(): Promise<void> {
+    try {
+      await lastValueFrom(this.http.delete('/api/v1/notifications'));
+      this.signalR.notifications.set([]);
+    } catch (err) {
+      console.error('[NotificationService] ClearAll failed:', err);
+    }
+  }
+
+  /** 删除单条通知（持久删除）。 */
+  async clearOne(notificationId: string): Promise<void> {
+    try {
+      await lastValueFrom(this.http.delete(`/api/v1/notifications/${notificationId}`));
+      this.signalR.notifications.update((list) => list.filter((n) => n.id !== notificationId));
+    } catch (err) {
+      console.error('[NotificationService] ClearOne failed:', err);
     }
   }
 

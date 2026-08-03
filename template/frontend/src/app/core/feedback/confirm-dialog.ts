@@ -25,7 +25,7 @@ export interface ConfirmContext {
   imports: [HlmButton, NgIcon],
   providers: [provideIcons({ lucideTriangleAlert })],
   template: `
-    <div class="flex flex-col gap-4 p-6 sm:max-w-md">
+    <div class="flex flex-col gap-4">
       <div class="flex items-start gap-3">
         <ng-icon name="lucideTriangleAlert" class="mt-0.5 shrink-0 text-xl text-destructive" />
         <div class="flex flex-col gap-1">

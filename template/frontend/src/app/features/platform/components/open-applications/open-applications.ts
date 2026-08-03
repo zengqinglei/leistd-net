@@ -26,26 +26,24 @@ import { FormsModule } from '@angular/forms';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCopy, lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
-import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import {
   HlmInputGroup,
   HlmInputGroupInput,
   HlmInputGroupAddon,
 } from '@spartan-ng/helm/input-group';
-import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 
+import { ConfirmService } from '../../../../core/feedback/confirm-service';
+import { notify } from '../../../../core/feedback/notify';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
-import { ConfirmService } from '../../../../core/notifications/confirm-service';
-import { notify } from '../../../../core/notifications/notify';
 import { LayoutService } from '../../../../layout/services/layout-service';
+import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { FilterStateService } from '../../../../shared/services/filter-state-service';
 import {
   CreateOpenApplicationInputDto,
@@ -60,6 +58,7 @@ import {
   OpenApplicationTable,
   OpenApplicationTableFilterEvent,
 } from './widgets/open-application-table/open-application-table';
+import { SecretRevealDialog } from './widgets/secret-reveal-dialog/secret-reveal-dialog';
 
 @Component({
   selector: 'app-open-applications',
@@ -70,16 +69,16 @@ import {
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupAddon,
-    ...HlmSelectImports,
     ...HlmTooltipImports,
-    ...HlmDialogImports,
+    FacetedFilter,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
     OpenApplicationTable,
     OpenApplicationEditDialog,
+    SecretRevealDialog,
   ],
-  providers: [provideIcons({ lucideCopy, lucidePlus, lucideRefreshCw, lucideSearch })],
+  providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
   templateUrl: './open-applications.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -105,11 +104,10 @@ export class OpenApplications implements OnInit {
   editDialogSaving = signal(false);
   selectedApplication = signal<OpenApplicationOutputDto | null>(null);
 
-  resetSecretDialogVisible = signal(false);
-  resetSecretValue = signal('');
-
-  createdSecretDialogVisible = signal(false);
-  createdSecretValue = signal('');
+  // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
+  secretDialogVisible = signal(false);
+  secretValue = signal('');
+  secretHeader = signal('');
 
   searchQuery = signal('');
   selectedApplicationType = signal<OpenApplicationType | null>(null);
@@ -168,6 +166,10 @@ export class OpenApplications implements OnInit {
   readonly createLabel = () => this.transloco.translate('openApp.action.create');
   readonly resetSecretHeader = () => this.transloco.translate('openApp.secret.resetHeader');
   readonly createdSecretHeader = () => this.transloco.translate('openApp.secret.createdHeader');
+  readonly appTypeFilterLabel = () => this.transloco.translate('openApp.filter.appTypeLabel');
+  readonly clientTypeFilterLabel = () => this.transloco.translate('openApp.filter.clientTypeLabel');
+  readonly filterClearLabel = () => this.transloco.translate('common.clearFilter');
+  readonly filterEmptyLabel = () => this.transloco.translate('common.noResults');
   //#else
   readonly allAppTypesPlaceholder = () => 'All application types';
   readonly allClientTypesPlaceholder = () => 'All client types';
@@ -176,6 +178,10 @@ export class OpenApplications implements OnInit {
   readonly createLabel = () => 'New Open Application';
   readonly resetSecretHeader = () => 'Client Secret reset';
   readonly createdSecretHeader = () => 'Client secret';
+  readonly appTypeFilterLabel = () => 'Application type';
+  readonly clientTypeFilterLabel = () => 'Client type';
+  readonly filterClearLabel = () => 'Clear filter';
+  readonly filterEmptyLabel = () => 'No results';
   //#endif
 
   constructor() {
@@ -312,8 +318,9 @@ export class OpenApplications implements OnInit {
 
           // 创建 Confidential 客户端后显示自动生成的 Secret
           if (!selected && result.clientSecret) {
-            this.createdSecretValue.set(result.clientSecret);
-            this.createdSecretDialogVisible.set(true);
+            this.secretValue.set(result.clientSecret);
+            this.secretHeader.set(this.createdSecretHeader());
+            this.secretDialogVisible.set(true);
           }
 
           this.reloadList();
@@ -370,53 +377,10 @@ export class OpenApplications implements OnInit {
     }
 
     this.service.resetSecret(id).subscribe((result) => {
-      this.resetSecretValue.set(result.clientSecret);
-      this.resetSecretDialogVisible.set(true);
+      this.secretValue.set(result.clientSecret);
+      this.secretHeader.set(this.resetSecretHeader());
+      this.secretDialogVisible.set(true);
       this.reloadList();
-    });
-  }
-
-  /** 桥接 hlm-dialog 声明式 state 到重置密钥弹窗可见性。 */
-  onResetSecretDialogStateChange(state: BrnDialogState): void {
-    this.resetSecretDialogVisible.set(state === 'open');
-  }
-
-  /** 桥接 hlm-dialog 声明式 state 到新建密钥弹窗可见性。 */
-  onCreatedSecretDialogStateChange(state: BrnDialogState): void {
-    this.createdSecretDialogVisible.set(state === 'open');
-  }
-
-  copyResetSecret() {
-    const value = this.resetSecretValue();
-    if (!value) {
-      return;
-    }
-
-    navigator.clipboard?.writeText(value).then(() => {
-      //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('common.success'), {
-        detail: this.transloco.translate('openApp.toast.secretCopied'),
-      });
-      //#else
-      notify.success('Success', { detail: 'Secret copied' });
-      //#endif
-    });
-  }
-
-  copyCreatedSecret() {
-    const value = this.createdSecretValue();
-    if (!value) {
-      return;
-    }
-
-    navigator.clipboard?.writeText(value).then(() => {
-      //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('common.success'), {
-        detail: this.transloco.translate('openApp.toast.secretCopied'),
-      });
-      //#else
-      notify.success('Success', { detail: 'Secret copied' });
-      //#endif
     });
   }
 }

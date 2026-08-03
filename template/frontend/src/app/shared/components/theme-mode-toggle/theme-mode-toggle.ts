@@ -25,7 +25,7 @@ import { ThemeService } from '../../../core/services/theme-service';
   template: `
     <button
       hlmBtn
-      variant="ghost"
+      variant="outline"
       size="icon"
       [attr.aria-label]="'theme.toggle' | transloco"
       (click)="themeService.toggleTheme()"
@@ -38,7 +38,7 @@ import { ThemeService } from '../../../core/services/theme-service';
   template: `
     <button
       hlmBtn
-      variant="ghost"
+      variant="outline"
       size="icon"
       aria-label="Switch theme"
       (click)="themeService.toggleTheme()"

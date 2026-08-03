@@ -13,27 +13,26 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
-  lucideArrowDown,
-  lucideArrowUp,
   lucideArrowUpDown,
   lucideBan,
-  lucideChevronLeft,
-  lucideChevronRight,
   lucideCircleCheck,
+  lucideEllipsisVertical,
   lucideKey,
   lucidePencil,
+  lucideSortAsc,
+  lucideSortDesc,
   lucideTrash2,
   lucideUsers,
 } from '@ng-icons/lucide';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
-import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmTableImports } from '@spartan-ng/helm/table';
-import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { AuthService } from '../../../../../../core/services/auth-service';
+import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { Role } from '../../../../../../shared/models/role.enum';
 import { getRoleLabel } from '../../../../../../shared/pipes/role-label-pipe';
 import { UserManagementOutputDto } from '../../../../models/user-management.dto';
@@ -57,23 +56,22 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     ...HlmAvatarImports,
     ...HlmTableImports,
     ...HlmPopoverImports,
-    ...HlmSelectImports,
-    ...HlmTooltipImports,
+    ...HlmDropdownMenuImports,
+    TablePaginator,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
   ],
   providers: [
     provideIcons({
-      lucideArrowDown,
-      lucideArrowUp,
       lucideArrowUpDown,
       lucideBan,
-      lucideChevronLeft,
-      lucideChevronRight,
       lucideCircleCheck,
+      lucideEllipsisVertical,
       lucideKey,
       lucidePencil,
+      lucideSortAsc,
+      lucideSortDesc,
       lucideTrash2,
       lucideUsers,
     }),
@@ -89,6 +87,15 @@ export class UserTable {
   readonly currentPageReport = () =>
     this.transloco.translate('users.table.currentPageReport', { total: this.totalRecords() });
   readonly rowsPerPageLabel = () => this.transloco.translate('common.rowsPerPage');
+  readonly pageLabel = () =>
+    this.transloco.translate('common.pageOf', {
+      page: this.currentPage(),
+      total: this.totalPages(),
+    });
+  readonly firstPageLabel = () => this.transloco.translate('common.pagination.first');
+  readonly prevPageLabel = () => this.transloco.translate('common.pagination.previous');
+  readonly nextPageLabel = () => this.transloco.translate('common.pagination.next');
+  readonly lastPageLabel = () => this.transloco.translate('common.pagination.last');
 
   readonly statusLabel = (isActive: boolean) =>
     this.transloco.translate(isActive ? 'users.status.active' : 'users.status.inactive');
@@ -119,9 +126,22 @@ export class UserTable {
 
   readonly deleteTooltip = (superAdmin: boolean) =>
     this.transloco.translate(superAdmin ? 'users.tooltip.superAdminNoDelete' : 'common.delete');
+
+  // 操作下拉菜单标签
+  readonly actionsLabel = () => this.transloco.translate('common.actions');
+  readonly editLabel = () => this.transloco.translate('common.edit');
+  readonly toggleLabel = (item: UserManagementOutputDto) =>
+    this.transloco.translate(item.isActive ? 'users.tooltip.disable' : 'users.tooltip.enable');
+  readonly resetLabel = () => this.transloco.translate('users.tooltip.resetPassword');
+  readonly deleteLabel = () => this.transloco.translate('common.delete');
   //#else
   readonly currentPageReport = () => `${this.totalRecords()} in total`;
-  readonly rowsPerPageLabel = () => 'Rows per page';
+  readonly rowsPerPageLabel = () => 'Items per page';
+  readonly pageLabel = () => `Page ${this.currentPage()} of ${this.totalPages()}`;
+  readonly firstPageLabel = () => 'First page';
+  readonly prevPageLabel = () => 'Previous page';
+  readonly nextPageLabel = () => 'Next page';
+  readonly lastPageLabel = () => 'Last page';
 
   readonly statusLabel = (isActive: boolean) => (isActive ? 'Active' : 'Disabled');
 
@@ -149,6 +169,13 @@ export class UserTable {
 
   readonly deleteTooltip = (superAdmin: boolean) =>
     superAdmin ? 'The built-in super administrator cannot be deleted' : 'Delete';
+
+  // 操作下拉菜单标签
+  readonly actionsLabel = () => 'Actions';
+  readonly editLabel = () => 'Edit';
+  readonly toggleLabel = (item: UserManagementOutputDto) => (item.isActive ? 'Disable' : 'Enable');
+  readonly resetLabel = () => 'Reset password';
+  readonly deleteLabel = () => 'Delete';
   //#endif
 
   readonly users = input.required<UserManagementOutputDto[]>();
@@ -161,16 +188,12 @@ export class UserTable {
   readonly deleteRequested = output<UserManagementOutputDto>();
   readonly filterChange = output<UserTableFilterEvent>();
 
-  readonly rowsPerPageOptions = [10, 20, 50, 100];
   readonly first = signal(0);
   readonly rows = signal(20);
   sortField = signal('username');
   sortOrder = signal(1);
   activeRoles = signal<string[]>([]);
   readonly rolePopoverOpen = signal<'open' | 'closed'>('closed');
-
-  // 可排序列
-  readonly sortableColumns = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
 
   // 分页派生
   readonly currentPage = computed(() => Math.floor(this.first() / this.rows()) + 1);
@@ -211,7 +234,13 @@ export class UserTable {
     if (this.sortField() !== field) {
       return 'lucideArrowUpDown';
     }
-    return this.sortOrder() === 1 ? 'lucideArrowUp' : 'lucideArrowDown';
+    return this.sortOrder() === 1 ? 'lucideSortAsc' : 'lucideSortDesc';
+  }
+
+  firstPage() {
+    if (!this.canPrev()) return;
+    this.first.set(0);
+    this.emitFilter();
   }
 
   prevPage() {
@@ -223,6 +252,12 @@ export class UserTable {
   nextPage() {
     if (!this.canNext()) return;
     this.first.set(this.first() + this.rows());
+    this.emitFilter();
+  }
+
+  lastPage() {
+    if (!this.canNext()) return;
+    this.first.set((this.totalPages() - 1) * this.rows());
     this.emitFilter();
   }
 
@@ -259,10 +294,11 @@ export class UserTable {
   }
 
   getRoleVariant(role: string): BadgeVariant {
+    // 角色用中性强弱层级（primary→secondary→outline）；红色（destructive）专留给危险/删除操作。
     const roleMap: Record<Role, BadgeVariant> = {
-      [Role.Admin]: 'destructive',
-      [Role.Operator]: 'default',
-      [Role.Member]: 'secondary',
+      [Role.Admin]: 'default',
+      [Role.Operator]: 'secondary',
+      [Role.Member]: 'outline',
     };
     return roleMap[role as Role] ?? 'outline';
   }

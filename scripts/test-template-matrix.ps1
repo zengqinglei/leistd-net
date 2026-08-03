@@ -287,7 +287,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
-    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/core/services/notification-service.ts"
+    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/components/notifications/notification-service.ts"
     if (Test-Path -LiteralPath $notificationServicePath) {
         $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
         foreach ($marker in @("environment.useMock", "useMock.enable", "await this.signalR.connect()")) {
@@ -421,7 +421,7 @@ $scenarioMap = [ordered]@{
     }
     "notifications" = @{
         Arguments = @("--include-notifications", "true"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "frontend/src/app/core/services/notification-service.ts")
+        Present = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
         Absent = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
         ReadmeContains = @("通知持久化", "OpenIddict")
         ReadmeExcludes = @("外部身份提供方登录")
@@ -490,7 +490,10 @@ if (Test-Path -LiteralPath $oldRunsRoot) {
         Where-Object { $_.FullName -ne $runRoot } |
         Where-Object {
             $lock = Join-Path $_.FullName ".run.lock"
-            $activityTime = if (Test-Path -LiteralPath $lock) { (Get-Item -LiteralPath $lock).LastWriteTime } else { $_.LastWriteTime }
+            # TOCTOU 安全：Test-Path 与读取之间锁可能被并行 run 删除，Get-Item 加 SilentlyContinue 返回 $null 后回退目录时间，
+            # 避免在 $ErrorActionPreference=Stop 下因「文件已消失」中止整轮清理（进而中止整轮门禁）。
+            $lockItem = if (Test-Path -LiteralPath $lock) { Get-Item -LiteralPath $lock -ErrorAction SilentlyContinue } else { $null }
+            $activityTime = if ($lockItem) { $lockItem.LastWriteTime } else { $_.LastWriteTime }
             $activityTime -lt $staleBefore
         } |
         ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }

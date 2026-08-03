@@ -1,274 +1,275 @@
-<div class="@container bg-card rounded-xl shadow-sm border border-border overflow-hidden">
-  <div hlmTableContainer class="w-full overflow-x-auto">
-    <table hlmTable class="w-full">
-      <thead hlmTHead>
-        <tr hlmTr class="bg-muted/50 text-muted-foreground text-xs font-medium uppercase">
-          <th hlmTh class="px-6 py-3">
-            <button
-              type="button"
-              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-              (click)="onSort('username')"
-            >
-              <!--#if (IncludeLocalization)-->
-              {{ 'users.table.colUser' | transloco }}
-              <!--#else-->
-              User
-              <!--#endif-->
-              <ng-icon [name]="sortIcon('username')" class="text-sm" />
-            </button>
-          </th>
-          <th hlmTh class="px-6 py-3 hidden @min-[680px]:table-cell">
-            <button
-              type="button"
-              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-              (click)="onSort('email')"
-            >
-              <!--#if (IncludeLocalization)-->
-              {{ 'users.table.colEmail' | transloco }}
-              <!--#else-->
-              Email
-              <!--#endif-->
-              <ng-icon [name]="sortIcon('email')" class="text-sm" />
-            </button>
-          </th>
-          <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">
-            {{ 'users.table.colRole' | transloco }}
-          </th>
-          <th hlmTh class="px-6 py-3 hidden @min-[1200px]:table-cell whitespace-nowrap">
-            {{ 'users.table.colStatus' | transloco }}
-          </th>
-          <!--#else-->
-          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">Role</th>
-          <th hlmTh class="px-6 py-3 hidden @min-[1200px]:table-cell whitespace-nowrap">Status</th>
-          <!--#endif-->
-          <th hlmTh class="px-6 py-3 hidden @min-[1400px]:table-cell">
-            <button
-              type="button"
-              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-              (click)="onSort('lastLoginTime')"
-            >
-              <!--#if (IncludeLocalization)-->
-              {{ 'users.table.colLastLogin' | transloco }}
-              <!--#else-->
-              Last login
-              <!--#endif-->
-              <ng-icon [name]="sortIcon('lastLoginTime')" class="text-sm" />
-            </button>
-          </th>
-          <th hlmTh class="px-6 py-3 hidden @min-[1560px]:table-cell">
-            <button
-              type="button"
-              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-              (click)="onSort('creationTime')"
-            >
-              <!--#if (IncludeLocalization)-->
-              {{ 'users.table.colCreatedAt' | transloco }}
-              <!--#else-->
-              Created at
-              <!--#endif-->
-              <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
-            </button>
-          </th>
-          <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 text-right whitespace-nowrap">
-            {{ 'users.table.colActions' | transloco }}
-          </th>
-          <!--#else-->
-          <th hlmTh class="px-6 py-3 text-right whitespace-nowrap">Actions</th>
-          <!--#endif-->
-        </tr>
-      </thead>
-
-      <tbody hlmTBody>
-        @for (item of users(); track item.id) {
-          <tr hlmTr class="group text-sm text-muted-foreground hover:bg-muted/50 transition-colors">
-            <td hlmTd class="px-6 py-4">
-              <div class="flex min-w-0 items-center gap-3 whitespace-nowrap">
-                <hlm-avatar size="sm">
-                  @if (item.avatar) {
-                    <img hlmAvatarImage [src]="item.avatar" [alt]="item.username" />
-                  }
-                  <span hlmAvatarFallback>{{ item.username.slice(0, 1).toUpperCase() }}</span>
-                </hlm-avatar>
-                <div class="min-w-0 flex flex-col">
-                  <span
-                    class="text-foreground text-sm font-semibold group-hover:text-primary transition-colors truncate"
-                  >
-                    {{ item.displayName || item.username }}
-                  </span>
-                  <span class="text-xs text-muted-foreground truncate">{{ item.username }}</span>
-                </div>
-              </div>
-            </td>
-
-            <td hlmTd class="px-6 py-4 hidden @min-[680px]:table-cell">
-              <span class="whitespace-nowrap text-sm">{{ item.email }}</span>
-            </td>
-
-            <td hlmTd class="px-6 py-4 hidden @min-[950px]:table-cell">
-              <div class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap">
-                @for (role of getVisibleRoles(item); track role) {
-                  <span hlmBadge [variant]="getRoleVariant(role)" class="text-[10px]">{{
-                    getRoleLabel(role)
-                  }}</span>
-                }
-                @if (getHiddenRoles(item).length > 0) {
-                  <button
-                    type="button"
-                    hlmBadge
-                    variant="outline"
-                    class="text-[10px] cursor-pointer shrink-0"
-                    (click)="openRolesPopover(getHiddenRoles(item))"
-                  >
-                    +{{ getHiddenRoles(item).length }}
-                  </button>
-                }
-              </div>
-            </td>
-
-            <td hlmTd class="px-6 py-4 hidden @min-[1200px]:table-cell">
-              <div class="flex items-center gap-1.5 whitespace-nowrap">
-                <span
-                  hlmBadge
-                  [variant]="item.isActive ? 'default' : 'secondary'"
-                  class="text-[10px]"
-                  >{{ statusLabel(item.isActive) }}</span
-                >
-                <span
-                  hlmBadge
-                  [variant]="item.isEmailVerified ? 'secondary' : 'outline'"
-                  class="text-[10px] hidden @min-[1400px]:inline-flex"
-                  >{{ emailVerifiedLabel(item.isEmailVerified) }}</span
-                >
-              </div>
-            </td>
-
-            <td hlmTd class="px-6 py-4 hidden @min-[1400px]:table-cell">
-              <span class="text-[11px] text-muted-foreground whitespace-nowrap">
-                {{ item.lastLoginTime ? (item.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss') : '-' }}
-              </span>
-            </td>
-
-            <td hlmTd class="px-6 py-4 hidden @min-[1560px]:table-cell">
-              <span class="text-[11px] text-muted-foreground whitespace-nowrap">{{
-                item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
-              }}</span>
-            </td>
-
-            <td hlmTd class="px-6 py-4 text-right">
-              <div
-                class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+<div class="flex flex-col gap-4">
+  <div class="@container rounded-md border border-border overflow-hidden">
+    <div hlmTableContainer class="w-full overflow-x-auto">
+      <table hlmTable class="w-full">
+        <thead hlmTHead class="bg-card sticky top-0 z-10">
+          <tr hlmTr class="text-sm font-medium">
+            <th hlmTh class="px-6">
+              <button
+                type="button"
+                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                (click)="onSort('username')"
               >
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="icon"
-                  class="w-8 h-8"
-                  (click)="edit.emit(item.id)"
-                  [disabled]="isOtherSuperAdmin(item)"
-                  [hlmTooltip]="editTooltip(isOtherSuperAdmin(item))"
-                >
-                  <ng-icon name="lucidePencil" />
-                </button>
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="icon"
-                  class="w-8 h-8"
-                  (click)="toggleActive.emit(item)"
-                  [disabled]="isSuperAdmin(item)"
-                  [hlmTooltip]="toggleActiveTooltip(item)"
-                >
-                  <ng-icon [name]="item.isActive ? 'lucideBan' : 'lucideCircleCheck'" />
-                </button>
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="icon"
-                  class="w-8 h-8"
-                  (click)="resetPassword.emit(item.id)"
-                  [disabled]="isOtherSuperAdmin(item)"
-                  [hlmTooltip]="resetPasswordTooltip(isOtherSuperAdmin(item))"
-                >
-                  <ng-icon name="lucideKey" />
-                </button>
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="icon"
-                  class="w-8 h-8 text-destructive"
-                  (click)="deleteRequested.emit(item)"
-                  [disabled]="isSuperAdmin(item)"
-                  [hlmTooltip]="deleteTooltip(isSuperAdmin(item))"
-                >
-                  <ng-icon name="lucideTrash2" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        } @empty {
-          <tr hlmTr class="hover:bg-transparent">
-            <td hlmTd colspan="7" class="!p-0 !border-0">
-              <div class="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <ng-icon name="lucideUsers" class="text-5xl opacity-30 mb-3" />
                 <!--#if (IncludeLocalization)-->
-                <p class="text-base font-medium m-0">{{ 'users.table.emptyTitle' | transloco }}</p>
-                <p class="text-sm mt-1 opacity-70">{{ 'users.table.emptyHint' | transloco }}</p>
+                {{ 'users.table.colUser' | transloco }}
                 <!--#else-->
-                <p class="text-base font-medium m-0">No users yet</p>
-                <p class="text-sm mt-1 opacity-70">Create a new user</p>
+                User
                 <!--#endif-->
-              </div>
-            </td>
+                <ng-icon [name]="sortIcon('username')" class="text-sm" />
+              </button>
+            </th>
+            <th hlmTh class="px-6 hidden @min-[680px]:table-cell">
+              <button
+                type="button"
+                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                (click)="onSort('email')"
+              >
+                <!--#if (IncludeLocalization)-->
+                {{ 'users.table.colEmail' | transloco }}
+                <!--#else-->
+                Email
+                <!--#endif-->
+                <ng-icon [name]="sortIcon('email')" class="text-sm" />
+              </button>
+            </th>
+            <!--#if (IncludeLocalization)-->
+            <th hlmTh class="px-6 hidden @min-[950px]:table-cell whitespace-nowrap">
+              {{ 'users.table.colRole' | transloco }}
+            </th>
+            <th hlmTh class="px-6 hidden @min-[1200px]:table-cell whitespace-nowrap">
+              {{ 'users.table.colStatus' | transloco }}
+            </th>
+            <!--#else-->
+            <th hlmTh class="px-6 hidden @min-[950px]:table-cell whitespace-nowrap">Role</th>
+            <th hlmTh class="px-6 hidden @min-[1200px]:table-cell whitespace-nowrap">Status</th>
+            <!--#endif-->
+            <th hlmTh class="px-6 hidden @min-[1400px]:table-cell">
+              <button
+                type="button"
+                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                (click)="onSort('lastLoginTime')"
+              >
+                <!--#if (IncludeLocalization)-->
+                {{ 'users.table.colLastLogin' | transloco }}
+                <!--#else-->
+                Last sign-in
+                <!--#endif-->
+                <ng-icon [name]="sortIcon('lastLoginTime')" class="text-sm" />
+              </button>
+            </th>
+            <th hlmTh class="px-6 hidden @min-[1560px]:table-cell">
+              <button
+                type="button"
+                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                (click)="onSort('creationTime')"
+              >
+                <!--#if (IncludeLocalization)-->
+                {{ 'users.table.colCreatedAt' | transloco }}
+                <!--#else-->
+                Created at
+                <!--#endif-->
+                <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
+              </button>
+            </th>
+            <!--#if (IncludeLocalization)-->
+            <th
+              hlmTh
+              class="w-10 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border"
+            >
+              <span class="sr-only">{{ 'users.table.colActions' | transloco }}</span>
+            </th>
+            <!--#else-->
+            <th
+              hlmTh
+              class="w-10 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border"
+            >
+              <span class="sr-only">Actions</span>
+            </th>
+            <!--#endif-->
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+
+        <tbody hlmTBody>
+          @for (item of users(); track item.id) {
+            <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
+              <td hlmTd class="px-6 py-2">
+                <div class="flex min-w-0 items-center gap-3 whitespace-nowrap">
+                  <hlm-avatar>
+                    @if (item.avatar) {
+                      <img hlmAvatarImage [src]="item.avatar" [alt]="item.username" />
+                    }
+                    <span hlmAvatarFallback>{{ item.username.slice(0, 1).toUpperCase() }}</span>
+                  </hlm-avatar>
+                  <div class="min-w-0 flex flex-col">
+                    <span class="text-foreground text-sm font-medium truncate">
+                      {{ item.displayName || item.username }}
+                    </span>
+                    <span class="text-xs text-muted-foreground truncate">{{ item.username }}</span>
+                  </div>
+                </div>
+              </td>
+
+              <td hlmTd class="px-6 py-2 hidden @min-[680px]:table-cell">
+                <span class="whitespace-nowrap text-sm">{{ item.email }}</span>
+              </td>
+
+              <td hlmTd class="px-6 py-2 hidden @min-[950px]:table-cell">
+                <div
+                  class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap"
+                >
+                  @for (role of getVisibleRoles(item); track role) {
+                    <span hlmBadge [variant]="getRoleVariant(role)">{{ getRoleLabel(role) }}</span>
+                  }
+                  @if (getHiddenRoles(item).length > 0) {
+                    <button
+                      type="button"
+                      hlmBadge
+                      variant="outline"
+                      class="cursor-pointer shrink-0"
+                      (click)="openRolesPopover(getHiddenRoles(item))"
+                    >
+                      +{{ getHiddenRoles(item).length }}
+                    </button>
+                  }
+                </div>
+              </td>
+
+              <td hlmTd class="px-6 py-2 hidden @min-[1200px]:table-cell">
+                <div class="flex items-center gap-1.5 whitespace-nowrap">
+                  @if (item.isActive) {
+                    <span
+                      hlmBadge
+                      variant="outline"
+                      class="border-success/30 bg-success/10 text-success"
+                      >{{ statusLabel(item.isActive) }}</span
+                    >
+                  } @else {
+                    <span hlmBadge variant="secondary">{{ statusLabel(item.isActive) }}</span>
+                  }
+                  <span
+                    hlmBadge
+                    [variant]="item.isEmailVerified ? 'secondary' : 'outline'"
+                    class="hidden @min-[1400px]:inline-flex"
+                    >{{ emailVerifiedLabel(item.isEmailVerified) }}</span
+                  >
+                </div>
+              </td>
+
+              <td hlmTd class="px-6 py-2 hidden @min-[1400px]:table-cell">
+                <span class="text-xs text-muted-foreground whitespace-nowrap">
+                  {{
+                    item.lastLoginTime ? (item.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss') : '-'
+                  }}
+                </span>
+              </td>
+
+              <td hlmTd class="px-6 py-2 hidden @min-[1560px]:table-cell">
+                <span class="text-xs text-muted-foreground whitespace-nowrap">{{
+                  item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
+                }}</span>
+              </td>
+
+              <td
+                hlmTd
+                class="w-10 py-2 text-center sticky right-0 z-10 bg-card border-l border-border"
+              >
+                <!-- 操作：始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
+                <button
+                  hlmBtn
+                  variant="ghost"
+                  size="icon"
+                  align="end"
+                  [attr.aria-label]="actionsLabel()"
+                  [hlmDropdownMenuTrigger]="rowMenu"
+                >
+                  <ng-icon name="lucideEllipsisVertical" />
+                </button>
+                <ng-template #rowMenu>
+                  <hlm-dropdown-menu>
+                    <hlm-dropdown-menu-group>
+                      <button
+                        hlmDropdownMenuItem
+                        [disabled]="isOtherSuperAdmin(item)"
+                        (click)="edit.emit(item.id)"
+                      >
+                        <ng-icon name="lucidePencil" />
+                        {{ editLabel() }}
+                      </button>
+                      <button
+                        hlmDropdownMenuItem
+                        [disabled]="isSuperAdmin(item)"
+                        (click)="toggleActive.emit(item)"
+                      >
+                        <ng-icon [name]="item.isActive ? 'lucideBan' : 'lucideCircleCheck'" />
+                        {{ toggleLabel(item) }}
+                      </button>
+                      <button
+                        hlmDropdownMenuItem
+                        [disabled]="isOtherSuperAdmin(item)"
+                        (click)="resetPassword.emit(item.id)"
+                      >
+                        <ng-icon name="lucideKey" />
+                        {{ resetLabel() }}
+                      </button>
+                    </hlm-dropdown-menu-group>
+                    <hlm-dropdown-menu-separator />
+                    <button
+                      hlmDropdownMenuItem
+                      variant="destructive"
+                      [disabled]="isSuperAdmin(item)"
+                      (click)="deleteRequested.emit(item)"
+                    >
+                      <ng-icon name="lucideTrash2" />
+                      {{ deleteLabel() }}
+                    </button>
+                  </hlm-dropdown-menu>
+                </ng-template>
+              </td>
+            </tr>
+          } @empty {
+            <tr hlmTr class="hover:bg-transparent">
+              <td hlmTd colspan="7" class="!p-0 !border-0">
+                <div class="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                  <ng-icon name="lucideUsers" class="text-5xl opacity-30 mb-3" />
+                  <!--#if (IncludeLocalization)-->
+                  <p class="text-base font-medium m-0">
+                    {{ 'users.table.emptyTitle' | transloco }}
+                  </p>
+                  <p class="text-sm mt-1 opacity-70">{{ 'users.table.emptyHint' | transloco }}</p>
+                  <!--#else-->
+                  <p class="text-base font-medium m-0">No users yet</p>
+                  <p class="text-sm mt-1 opacity-70">Create a new user</p>
+                  <!--#endif-->
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <!-- 分页栏 -->
+  <!-- 分页栏：独立于表格卡片，置于其下方（对齐参考站的现代化布局）。 -->
   @if (totalRecords() > 0) {
-    <div class="flex items-center justify-between gap-4 px-6 py-3 border-t border-border text-sm">
-      <span class="text-muted-foreground">{{ currentPageReport() }}</span>
-      <div class="flex items-center gap-2">
-        <!-- 每页条数选择：Spartan hlm-select（与 hlm-numbered-pagination 内置的页大小选择器同构）。 -->
-        <span class="text-muted-foreground whitespace-nowrap">{{ rowsPerPageLabel() }}</span>
-        <hlm-select [value]="rows()" (valueChange)="onRowsChange($event)">
-          <hlm-select-trigger size="sm" class="w-[4.5rem]">
-            <hlm-select-value />
-          </hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal>
-            @for (size of rowsPerPageOptions; track size) {
-              <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
-            }
-          </hlm-select-content>
-        </hlm-select>
-        <button
-          hlmBtn
-          variant="outline"
-          size="icon"
-          class="w-8 h-8"
-          [disabled]="!canPrev()"
-          (click)="prevPage()"
-        >
-          <ng-icon name="lucideChevronLeft" />
-        </button>
-        <span class="text-muted-foreground whitespace-nowrap">
-          {{ currentPage() }} / {{ totalPages() }}
-        </span>
-        <button
-          hlmBtn
-          variant="outline"
-          size="icon"
-          class="w-8 h-8"
-          [disabled]="!canNext()"
-          (click)="nextPage()"
-        >
-          <ng-icon name="lucideChevronRight" />
-        </button>
-      </div>
-    </div>
+    <app-table-paginator
+      [labels]="{
+        currentPageReport: currentPageReport(),
+        rowsPerPage: rowsPerPageLabel(),
+        page: pageLabel(),
+        first: firstPageLabel(),
+        previous: prevPageLabel(),
+        next: nextPageLabel(),
+        last: lastPageLabel(),
+      }"
+      [rows]="rows()"
+      [canPrev]="canPrev()"
+      [canNext]="canNext()"
+      (firstPage)="firstPage()"
+      (prevPage)="prevPage()"
+      (nextPage)="nextPage()"
+      (lastPage)="lastPage()"
+      (rowsChange)="onRowsChange($event)"
+    />
   }
 </div>
 

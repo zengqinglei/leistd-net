@@ -19,7 +19,7 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
     : IClassFixture<ProjectWebApplicationFactory>
 {
     [Fact]
-    public async Task Notification_should_be_persisted_pushed_and_marked_as_read()
+    public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
     {
         using var admin = await factory.LoginAsync("admin", "Admin@123456");
         var userId = await GetSuperAdminIdAsync(factory);
@@ -49,6 +49,20 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var markRead = await admin.Client.PutAsync($"/api/v1/notifications/{notification.Id}/read", null);
         Assert.Equal(HttpStatusCode.OK, markRead.StatusCode);
         Assert.Equal(0, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
+
+        // 删除单条：持久删除指定通知
+        var clearOne = await admin.Client.DeleteAsync($"/api/v1/notifications/{notification.Id}");
+        Assert.Equal(HttpStatusCode.OK, clearOne.StatusCode);
+
+        var afterClearOne = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
+        Assert.DoesNotContain(afterClearOne!, item => item.Id == notification.Id);
+
+        // 清空全部：持久删除当前用户的通知记录
+        var clearAll = await admin.Client.DeleteAsync("/api/v1/notifications");
+        Assert.Equal(HttpStatusCode.OK, clearAll.StatusCode);
+
+        var afterClear = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
+        Assert.Empty(afterClear!);
 
         // 显式停止连接，排空 SignalR 后台循环（持有 CTS），避免与 await using 释放竞争导致类清理期 ObjectDisposedException
         await connection.StopAsync();

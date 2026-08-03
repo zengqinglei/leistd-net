@@ -23,7 +23,7 @@ internal static class BaseEntityConfiguration
             b.Property(e => e.Username).IsRequired().HasMaxLength(64);
             b.Property(e => e.Email).IsRequired().HasMaxLength(256);
             b.Property(e => e.Avatar).HasColumnType("text");
-            b.Property(e => e.Nickname).HasMaxLength(128);
+            b.Property(e => e.DisplayName).HasMaxLength(128);
             b.Property(e => e.IsSuperAdmin);
 
             b.HasIndex(e => e.Username).IsUnique();

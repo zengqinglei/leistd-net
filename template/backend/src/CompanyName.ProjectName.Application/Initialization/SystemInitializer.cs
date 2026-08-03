@@ -102,7 +102,7 @@ public class SystemInitializer(
                     username: options.Username,
                     email: options.Email,
                     passwordHash: passwordHash,
-                    nickname: options.Nickname ?? "System Administrator"
+                    displayName: options.DisplayName ?? "System Administrator"
                 );
 
                 adminUser.MarkAsSuperAdmin();
@@ -164,7 +164,7 @@ public class SystemInitializer(
                 adminUser = new User(
                     username: options.Username,
                     email: options.Email,
-                    nickname: options.Nickname ?? "System Administrator"
+                    displayName: options.DisplayName ?? "System Administrator"
                 );
 
                 await userRepository.InsertAsync(adminUser, cancellationToken);

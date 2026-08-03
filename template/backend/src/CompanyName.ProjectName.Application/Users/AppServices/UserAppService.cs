@@ -44,7 +44,7 @@ public class UserAppService(
         if (!string.IsNullOrWhiteSpace(input.Keyword))
         {
             var keyword = input.Keyword.Trim();
-            userQuery = userQuery.Where(u => u.Username.Contains(keyword) || u.Email.Contains(keyword) || (u.Nickname != null && u.Nickname.Contains(keyword)));
+            userQuery = userQuery.Where(u => u.Username.Contains(keyword) || u.Email.Contains(keyword) || (u.DisplayName != null && u.DisplayName.Contains(keyword)));
         }
 
         if (input.IsActive.HasValue)
@@ -58,16 +58,24 @@ public class UserAppService(
             userQuery = userQuery.Where(u => u.EmailConfirmed == input.IsEmailVerified.Value);
         }
 
-        if (!string.IsNullOrWhiteSpace(input.Role))
+        if (input.Roles is { Count: > 0 })
         {
-            var role = await roleRepository.GetFirstAsync(r => r.Name == input.Role.Trim(), q => q.OrderBy(r => r.Id), cancellationToken);
-            if (role == null)
+            var roleNames = input.Roles
+                .Select(r => r.Trim())
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .ToList();
+            if (roleNames.Count > 0)
             {
-                return new PagedResultDto<UserManagementOutputDto>(0, []);
-            }
+                var matchedRoles = await roleRepository.GetListAsync(r => roleNames.Contains(r.Name), cancellationToken);
+                var roleIds = matchedRoles.Select(r => r.Id).ToList();
+                if (roleIds.Count == 0)
+                {
+                    return new PagedResultDto<UserManagementOutputDto>(0, []);
+                }
 
-            var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
-            userQuery = userQuery.Where(u => userRoleQuery.Any(ur => ur.RoleId == role.Id && ur.UserId == u.Id));
+                var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
+                userQuery = userQuery.Where(u => userRoleQuery.Any(ur => roleIds.Contains(ur.RoleId) && ur.UserId == u.Id));
+            }
         }
 #endif
 

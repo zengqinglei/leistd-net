@@ -32,7 +32,7 @@ import { HlmSheetClose } from './hlm-sheet-close';
     <ng-content />
 
     @if (showCloseButton()) {
-      <button hlmBtn variant="ghost" size="icon-sm" class="absolute end-4 top-4" hlmSheetClose>
+      <button hlmBtn variant="ghost" size="icon-sm" class="absolute end-3 top-3" hlmSheetClose>
         <span class="sr-only">Close</span>
         <ng-icon name="lucideX" />
       </button>

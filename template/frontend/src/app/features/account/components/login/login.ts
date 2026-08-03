@@ -25,7 +25,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { environment } from '../../../../../environments/environment';
-import { notify } from '../../../../core/notifications/notify';
+import { notify } from '../../../../core/feedback/notify';
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
@@ -103,25 +103,25 @@ export class Login {
   //#if (IncludeLocalization)
   readonly loginForm = form(this.model, (path) => {
     required(path.usernameOrEmail, {
-      message: this.transloco.translate('account.register.errRequired'),
+      message: this.transloco.translate('common.validation.required'),
     });
     minLength(path.usernameOrEmail, 3, {
-      message: this.transloco.translate('account.register.errMinLength', { min: 3 }),
+      message: this.transloco.translate('common.validation.minLength', { min: 3 }),
     });
     maxLength(path.usernameOrEmail, 256, { message: '' });
-    required(path.password, { message: this.transloco.translate('account.register.errRequired') });
+    required(path.password, { message: this.transloco.translate('common.validation.required') });
     minLength(path.password, 6, {
-      message: this.transloco.translate('account.register.errMinLength', { min: 6 }),
+      message: this.transloco.translate('common.validation.minLength', { min: 6 }),
     });
     maxLength(path.password, 100, { message: '' });
   });
   //#else
   readonly loginForm = form(this.model, (path) => {
-    required(path.usernameOrEmail, { message: 'This field is required' });
-    minLength(path.usernameOrEmail, 3, { message: 'At least 3 characters required' });
+    required(path.usernameOrEmail, { message: 'This field is required.' });
+    minLength(path.usernameOrEmail, 3, { message: 'Must be at least 3 characters.' });
     maxLength(path.usernameOrEmail, 256, { message: '' });
-    required(path.password, { message: 'This field is required' });
-    minLength(path.password, 6, { message: 'At least 6 characters required' });
+    required(path.password, { message: 'This field is required.' });
+    minLength(path.password, 6, { message: 'Must be at least 6 characters.' });
     maxLength(path.password, 100, { message: '' });
   });
   //#endif
@@ -158,7 +158,7 @@ export class Login {
         life: 3000,
       });
       //#else
-      notify.success('Login successful', { detail: 'Welcome back!', life: 3000 });
+      notify.success('Signed in successfully', { detail: 'Welcome back!', life: 3000 });
       //#endif
 
       if (this.isSafeLocalReturnUrl(returnUrl)) {
@@ -219,8 +219,8 @@ export class Login {
         life: 3000,
       });
       //#else
-      notify.error('Login failed', {
-        detail: `Unable to connect to the ${label} login service, please try again later`,
+      notify.error('Sign-in failed', {
+        detail: `Unable to connect to the ${label} sign-in service, please try again later`,
         life: 3000,
       });
       //#endif

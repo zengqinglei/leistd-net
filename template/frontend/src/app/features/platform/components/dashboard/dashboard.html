@@ -10,10 +10,11 @@
         @if (authService.currentUser(); as user) {
           <!--#if (IncludeLocalization)-->
           {{
-            'platform.dashboard.currentUser' | transloco: { name: user.nickname || user.username }
+            'platform.dashboard.currentUser'
+              | transloco: { name: user.displayName || user.username }
           }}
           <!--#else-->
-          Currently signed in as: {{ user.nickname || user.username }}
+          Currently signed in as: {{ user.displayName || user.username }}
           <!--#endif-->
         }
       </p>

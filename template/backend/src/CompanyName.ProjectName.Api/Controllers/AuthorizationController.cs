@@ -150,7 +150,7 @@ public class AuthorizationController(
 
         if (User.HasScope(Scopes.Profile))
         {
-            claims[Claims.Name] = user.Nickname ?? user.Username;
+            claims[Claims.Name] = user.DisplayName ?? user.Username;
             claims[Claims.PreferredUsername] = user.Username;
             if (Uri.TryCreate(user.Avatar, UriKind.Absolute, out var avatarUri) &&
                 (avatarUri.Scheme == Uri.UriSchemeHttp || avatarUri.Scheme == Uri.UriSchemeHttps))

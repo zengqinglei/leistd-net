@@ -56,7 +56,7 @@ export class ExternalAuthCallback implements OnInit {
   protected readonly processingTitle = () =>
     this.transloco.translate('account.externalCallback.processing');
   //#else
-  protected readonly failedTitle = () => 'Login failed';
+  protected readonly failedTitle = () => 'Sign-in failed';
   protected readonly processingAria = () => 'Completing sign-in';
   protected readonly processingTitle = () => 'Processing third-party sign-in';
   //#endif

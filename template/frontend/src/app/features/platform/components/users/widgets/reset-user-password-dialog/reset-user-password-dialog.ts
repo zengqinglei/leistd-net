@@ -65,18 +65,18 @@ export class ResetUserPasswordDialog {
   //#if (IncludeLocalization)
   readonly resetForm = form(this.formModel, (path) => {
     required(path.password, {
-      message: this.transloco.translate('users.resetDialog.newPasswordRequired'),
+      message: this.transloco.translate('common.validation.required'),
     });
     pattern(path.password, PASSWORD_RULE, {
-      message: this.transloco.translate('users.resetDialog.newPasswordRule'),
+      message: this.transloco.translate('common.validation.passwordRule'),
     });
   });
   //#else
   readonly resetForm = form(this.formModel, (path) => {
-    required(path.password, { message: 'Enter a new password' });
+    required(path.password, { message: 'This field is required.' });
     pattern(path.password, PASSWORD_RULE, {
       message:
-        'The new password does not meet the rules: it must include uppercase and lowercase letters, digits and special characters',
+        'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
     });
   });
   //#endif

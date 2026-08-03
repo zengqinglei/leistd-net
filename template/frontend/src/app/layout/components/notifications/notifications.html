@@ -1,0 +1,140 @@
+<div class="relative">
+  <hlm-popover
+    align="end"
+    sideOffset="10"
+    [state]="notificationOpen()"
+    (stateChanged)="notificationOpen.set($event)"
+  >
+    <button
+      hlmBtn
+      variant="outline"
+      size="icon"
+      hlmPopoverTrigger
+      aria-label="Notifications"
+      class="relative !overflow-visible"
+    >
+      <ng-icon name="lucideBell" />
+      @if (notificationCount() > 0) {
+        <span
+          hlmBadge
+          class="absolute -top-2 left-full flex min-w-5 -translate-x-1/2 items-center justify-center px-1 py-px"
+        >
+          {{ notificationCount() > 99 ? '99+' : notificationCount() }}
+        </span>
+      }
+    </button>
+
+    <hlm-popover-content *hlmPopoverPortal class="w-[360px] max-w-[90vw] !gap-0 !p-0">
+      <div class="flex items-center justify-between border-b border-border px-4 py-3">
+        <!--#if (IncludeLocalization)-->
+        <span class="font-semibold">{{ 'layout.notifications.title' | transloco }}</span>
+        @if (notificationCount() > 0) {
+          <button
+            type="button"
+            class="text-xs text-primary hover:underline"
+            (click)="markAllNotificationsRead()"
+          >
+            {{ 'layout.notifications.markAllRead' | transloco }}
+          </button>
+        }
+        <!--#else-->
+        <span class="font-semibold">Notifications</span>
+        @if (notificationCount() > 0) {
+          <button
+            type="button"
+            class="text-xs text-primary hover:underline"
+            (click)="markAllNotificationsRead()"
+          >
+            Mark all as read
+          </button>
+        }
+        <!--#endif-->
+      </div>
+      @if (notifications().length === 0) {
+        <div class="text-muted-foreground py-10 text-center text-sm">
+          <ng-icon name="lucideInbox" class="mb-2 block text-2xl opacity-60" />
+          <!--#if (IncludeLocalization)-->
+          {{ 'layout.notifications.empty' | transloco }}
+          <!--#else-->
+          No notifications
+          <!--#endif-->
+        </div>
+      } @else {
+        <div class="flex max-h-[360px] flex-col overflow-y-auto p-1">
+          @for (n of notifications(); track n.id; let last = $last) {
+            <div
+              role="button"
+              tabindex="0"
+              class="group hover:bg-muted flex cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-colors"
+              (click)="onNotificationClick(n)"
+              (keydown.enter)="onNotificationClick(n)"
+            >
+              <span class="shrink-0 self-center">
+                <ng-icon [name]="notificationIcon(n.type)" class="text-muted-foreground text-2xl" />
+              </span>
+              <span class="flex min-w-0 flex-1 flex-col gap-1">
+                <span class="flex items-center gap-6">
+                  <span
+                    class="min-w-0 flex-1 truncate text-sm"
+                    [class.font-semibold]="!n.isRead"
+                    [class.text-muted-foreground]="n.isRead"
+                    [hlmTooltip]="n.title"
+                    >{{ n.title }}</span
+                  >
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    @if (!n.isRead) {
+                      <span class="bg-primary h-2 w-2 rounded-full"></span>
+                    }
+                    <span class="text-muted-foreground text-xs whitespace-nowrap">{{
+                      n.creationTime | date: 'MM-dd HH:mm'
+                    }}</span>
+                  </span>
+                </span>
+                <span class="flex items-center gap-2">
+                  <span
+                    class="text-muted-foreground min-h-[1rem] min-w-0 flex-1 truncate text-xs leading-relaxed"
+                    [hlmTooltip]="n.content || ''"
+                    >{{ n.content }}</span
+                  >
+                  <!--#if (IncludeLocalization)-->
+                  <button
+                    type="button"
+                    class="text-muted-foreground hover:text-destructive shrink-0 self-center focus:outline-none"
+                    [attr.aria-label]="'layout.notifications.clearOne' | transloco"
+                    (click)="$event.stopPropagation(); clearOneNotification(n.id)"
+                  >
+                    <ng-icon name="lucideTrash2" class="text-sm" />
+                  </button>
+                  <!--#else-->
+                  <button
+                    type="button"
+                    class="text-muted-foreground hover:text-destructive shrink-0 self-center focus:outline-none"
+                    aria-label="Delete"
+                    (click)="$event.stopPropagation(); clearOneNotification(n.id)"
+                  >
+                    <ng-icon name="lucideTrash2" class="text-sm" />
+                  </button>
+                  <!--#endif-->
+                </span>
+              </span>
+            </div>
+            @if (!last) {
+              <div class="border-t border-dashed border-border my-1"></div>
+            }
+          }
+        </div>
+        <div class="border-t border-border p-1">
+          <!--#if (IncludeLocalization)-->
+          <button hlmBtn variant="ghost" class="w-full" (click)="clearAllNotifications()">
+            {{ 'layout.notifications.clearAll' | transloco }}
+          </button>
+          <!--#else-->
+          <button hlmBtn variant="ghost" class="w-full" (click)="clearAllNotifications()">
+            Clear all
+          </button>
+          <!--#endif-->
+        </div>
+      }
+    </hlm-popover-content>
+  </hlm-popover>
+</div>

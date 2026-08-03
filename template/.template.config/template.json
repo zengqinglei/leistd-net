@@ -136,6 +136,7 @@
             "frontend/_mock/api/open-application.ts",
             "frontend/_mock/data/open-applications.ts",
             "frontend/src/app/features/account/**",
+            "frontend/src/app/layout/components/user-menu/**",
             "frontend/src/app/core/guards/auth-guard.ts",
             "frontend/src/app/core/guards/role-guard.ts",
             "frontend/src/app/core/guards/super-admin-guard.ts",
@@ -144,10 +145,11 @@
             "frontend/_mock/data/user.ts",
             "frontend/_mock/utils/current-user.ts",
             "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Notifications/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationsAndRealTimeTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",
             "frontend/src/app/core/services/signalr-service.ts",
-            "frontend/src/app/core/services/notification-service.ts",
+            "frontend/src/app/layout/components/notifications/**",
             "frontend/_mock/api/notification.ts",
             "frontend/_mock/data/notifications.ts",
             "frontend/src/app/features/platform/components/users/**",
@@ -167,9 +169,10 @@
           "condition": "!IncludeIdentity || !IncludeNotifications",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Notifications/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationsAndRealTimeTests.cs",
             "frontend/src/app/core/services/signalr-service.ts",
-            "frontend/src/app/core/services/notification-service.ts",
+            "frontend/src/app/layout/components/notifications/**",
             "frontend/_mock/api/notification.ts",
             "frontend/_mock/data/notifications.ts"
           ]

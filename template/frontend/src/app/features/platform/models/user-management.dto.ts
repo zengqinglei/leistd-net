@@ -18,7 +18,7 @@ export interface GetUsersInputDto extends PagedRequestDto {
   keyword?: string;
   isActive?: boolean;
   isEmailVerified?: boolean;
-  role?: string;
+  roles?: string[];
 }
 
 export interface CreateUserInputDto {

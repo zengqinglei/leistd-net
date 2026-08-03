@@ -302,7 +302,7 @@ function toClassList(className: string | ClassValue[]): string[] {
 
   const result = clsx(className)
     .split(' ')
-    .filter((c: string) => c.length > 0);
+    .filter((c) => c.length > 0);
 
   // Cache string results, but limit cache size to prevent memory growth
   if (typeof className === 'string' && classListCache.size < 1000) {

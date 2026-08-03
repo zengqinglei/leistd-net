@@ -145,7 +145,7 @@ public class GoogleOAuthProvider(
             Email = userInfo.TryGetValue("email", out var email) ? email.GetString() : null,
             Username = (userInfo.TryGetValue("email", out var uEmail) ? uEmail.GetString()?.Split('@')[0] : null)
                        ?? providerId,
-            Nickname = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
+            DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("picture", out var picture) ? picture.GetString() : null
         };
     }

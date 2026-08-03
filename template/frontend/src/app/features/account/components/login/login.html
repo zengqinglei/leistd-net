@@ -1,11 +1,11 @@
 <div class="min-h-screen w-full flex overflow-hidden bg-background">
   <!-- Left Column: Branding/Visuals -->
   <div
-    class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden text-white bg-[#0f172a]"
+    class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden text-slate-900 dark:text-white bg-blue-50 dark:bg-[#0f172a]"
   >
     <!-- Deep Base Gradient -->
     <div
-      class="absolute inset-0 z-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#172554]"
+      class="absolute inset-0 z-0 bg-gradient-to-br from-blue-100 dark:from-[#020617] via-white dark:via-[#0f172a] to-indigo-100 dark:to-[#172554]"
     ></div>
 
     <!-- Speed Lines Background -->
@@ -70,7 +70,7 @@
       <app-logo size="large" />
       <div>
         <h1
-          class="text-3xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-50 to-blue-100 drop-shadow-sm"
+          class="text-2xl font-semibold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-700 dark:from-blue-50 to-indigo-600 dark:to-blue-100 drop-shadow-sm"
         >
           <!--#if (IncludeLocalization)-->
           {{ 'account.brand.title' | transloco }}
@@ -87,11 +87,15 @@
             <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
           </span>
           <!--#if (IncludeLocalization)-->
-          <p class="text-xs text-blue-200/80 tracking-[0.15em] uppercase font-medium">
+          <p
+            class="text-xs text-blue-700/80 dark:text-blue-200/80 tracking-[0.15em] uppercase font-medium"
+          >
             {{ 'account.brand.subtitle' | transloco }}
           </p>
           <!--#else-->
-          <p class="text-xs text-blue-200/80 tracking-[0.15em] uppercase font-medium">
+          <p
+            class="text-xs text-blue-700/80 dark:text-blue-200/80 tracking-[0.15em] uppercase font-medium"
+          >
             Full-stack development template based on Angular + .NET
           </p>
           <!--#endif-->
@@ -105,15 +109,15 @@
         <!-- Central Hub -->
         <div class="relative z-20 flex flex-col items-center">
           <div
-            class="w-36 h-36 bg-gradient-to-b from-slate-900 to-blue-950 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(37,99,235,0.4)] flex items-center justify-center relative overflow-hidden"
+            class="w-36 h-36 bg-gradient-to-b from-blue-200 dark:from-slate-900 to-indigo-300 dark:to-blue-950 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(37,99,235,0.4)] flex items-center justify-center relative overflow-hidden"
           >
             <div class="absolute inset-0 bg-blue-500/10 animate-pulse"></div>
-            <ng-icon name="lucideZap" class="text-6xl text-cyan-400 z-10" />
+            <ng-icon name="lucideZap" class="text-5xl text-cyan-600 dark:text-cyan-400 z-10" />
             <div
               class="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/10 to-transparent h-[200%] w-full animate-[scan_1.5s_linear_infinite] -translate-y-1/2"
             ></div>
           </div>
-          <div class="mt-4 w-24 h-2 bg-blue-900/50 rounded-full blur-sm"></div>
+          <div class="mt-4 w-24 h-2 bg-blue-300/50 dark:bg-blue-900/50 rounded-full blur-sm"></div>
         </div>
 
         <!-- Orbiting Particles -->
@@ -130,29 +134,35 @@
 
         <!-- Floating Badges -->
         <div
-          class="absolute top-10 -right-4 p-3 pr-5 bg-slate-900/90 backdrop-blur-md border-l-4 border-cyan-400 rounded-r-lg shadow-2xl animate-[bounce_4s_infinite]"
+          class="absolute top-10 -right-4 p-3 pr-5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-l-4 border-cyan-400 rounded-r-lg shadow-2xl animate-[bounce_4s_infinite]"
         >
           <div class="flex flex-col">
             <!--#if (IncludeLocalization)-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">{{
-              'account.login.badgeFastDev' | transloco
-            }}</span>
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
+              >{{ 'account.login.badgeFastDev' | transloco }}</span
+            >
             <!--#else-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1"
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
               >Fast Development</span
             >
             <!--#endif-->
             <div class="flex items-end gap-2">
               <!--#if (IncludeLocalization)-->
-              <span class="text-2xl font-mono font-bold text-white leading-none">{{
-                'account.login.badgeReadyMain' | transloco
-              }}</span>
-              <span class="text-xs text-cyan-400 font-mono mb-1">{{
+              <span
+                class="text-2xl font-mono font-semibold text-slate-900 dark:text-white leading-none"
+                >{{ 'account.login.badgeReadyMain' | transloco }}</span
+              >
+              <span class="text-xs text-cyan-600 dark:text-cyan-400 font-mono mb-1">{{
                 'account.login.badgeReadySub' | transloco
               }}</span>
               <!--#else-->
-              <span class="text-2xl font-mono font-bold text-white leading-none">Ready</span>
-              <span class="text-xs text-cyan-400 font-mono mb-1">to use</span>
+              <span
+                class="text-2xl font-mono font-semibold text-slate-900 dark:text-white leading-none"
+                >Ready</span
+              >
+              <span class="text-xs text-cyan-600 dark:text-cyan-400 font-mono mb-1">to use</span>
               <!--#endif-->
               <ng-icon name="lucideZap" class="text-green-400 text-xs mb-1 ml-2" />
             </div>
@@ -160,23 +170,31 @@
         </div>
 
         <div
-          class="absolute bottom-10 -left-4 p-3 pl-5 bg-slate-900/90 backdrop-blur-md border-r-4 border-blue-600 rounded-l-lg shadow-2xl animate-[bounce_5s_infinite]"
+          class="absolute bottom-10 -left-4 p-3 pl-5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-r-4 border-blue-600 rounded-l-lg shadow-2xl animate-[bounce_5s_infinite]"
           style="animation-delay: 1s"
         >
           <div class="flex flex-col items-end">
             <!--#if (IncludeLocalization)-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">{{
-              'account.login.badgeModernArch' | transloco
-            }}</span>
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
+              >{{ 'account.login.badgeModernArch' | transloco }}</span
+            >
             <!--#else-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1"
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
               >Modern Architecture</span
             >
             <!--#endif-->
             <div class="flex items-end gap-2">
-              <ng-icon name="lucideCircleCheck" class="text-blue-500 text-xs mb-1 mr-2" />
-              <span class="text-2xl font-mono font-bold text-white leading-none">Full</span>
-              <span class="text-xs text-blue-400 font-mono mb-1">Stack</span>
+              <ng-icon
+                name="lucideCircleCheck"
+                class="text-blue-600 dark:text-blue-500 text-xs mb-1 mr-2"
+              />
+              <span
+                class="text-2xl font-mono font-semibold text-slate-900 dark:text-white leading-none"
+                >Full</span
+              >
+              <span class="text-xs text-blue-600 dark:text-blue-400 font-mono mb-1">Stack</span>
             </div>
           </div>
         </div>
@@ -185,11 +203,13 @@
 
     <!-- Footer Copyright -->
     <div class="relative z-10 flex justify-between items-end">
-      <div class="text-xs text-blue-300/50">&copy; 2026 Template. All rights reserved.</div>
+      <div class="text-xs text-blue-700/50 dark:text-blue-300/50">
+        &copy; 2026 Template. All rights reserved.
+      </div>
       <div class="flex gap-2">
         <span class="h-1 w-8 bg-blue-500/50 rounded-full"></span>
         <span class="h-1 w-4 bg-cyan-500/50 rounded-full"></span>
-        <span class="h-1 w-2 bg-white/50 rounded-full"></span>
+        <span class="h-1 w-2 bg-slate-400/50 dark:bg-white/50 rounded-full"></span>
       </div>
     </div>
   </div>
@@ -211,26 +231,26 @@
           <ng-icon name="lucideZap" class="text-2xl" />
         </div>
         <!--#if (IncludeLocalization)-->
-        <h2 class="text-2xl font-bold">{{ 'account.brand.title' | transloco }}</h2>
+        <h2 class="text-2xl font-semibold">{{ 'account.brand.title' | transloco }}</h2>
         <!--#else-->
-        <h2 class="text-2xl font-bold">Template Project</h2>
+        <h2 class="text-2xl font-semibold">Template Project</h2>
         <!--#endif-->
       </div>
 
       <!-- Form Header -->
       <div>
         <!--#if (IncludeLocalization)-->
-        <h2 class="text-3xl font-bold mb-2">{{ 'account.login.title' | transloco }}</h2>
+        <h2 class="text-2xl font-semibold mb-2">{{ 'account.login.title' | transloco }}</h2>
         <p class="text-muted-foreground text-sm">{{ 'account.login.subtitle' | transloco }}</p>
         <!--#else-->
-        <h2 class="text-3xl font-bold mb-2">Sign In</h2>
+        <h2 class="text-2xl font-semibold mb-2">Sign In</h2>
         <p class="text-muted-foreground text-sm">
           Welcome back, please enter your account information
         </p>
         <!--#endif-->
       </div>
 
-      <form (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
+      <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
         <!-- Username/Email -->
         <div hlmField>
           <!--#if (IncludeLocalization)-->
@@ -308,15 +328,15 @@
           <span>{{ 'account.login.noAccount' | transloco }}</span>
           <a
             [routerLink]="['/auth/register']"
-            class="font-bold text-primary hover:underline transition-colors"
+            class="font-semibold text-primary hover:underline transition-colors"
             >{{ 'account.login.registerNow' | transloco }}</a
           >
           <!--#else-->
           <span>Don't have an account?</span>
           <a
             [routerLink]="['/auth/register']"
-            class="font-bold text-primary hover:underline transition-colors"
-            >Register now</a
+            class="font-semibold text-primary hover:underline transition-colors"
+            >Sign up now</a
           >
           <!--#endif-->
         </div>
@@ -397,12 +417,12 @@
       @if (isMockEnabled()) {
         <div class="mt-8 p-4 bg-card rounded-xl border border-border shadow-md">
           <!--#if (IncludeLocalization)-->
-          <h4 class="font-bold mb-2 flex items-center gap-2">
+          <h4 class="font-semibold mb-2 flex items-center gap-2">
             <ng-icon name="lucideInfo" class="text-primary" />
             {{ 'account.login.testAccount' | transloco }}
           </h4>
           <!--#else-->
-          <h4 class="font-bold mb-2 flex items-center gap-2">
+          <h4 class="font-semibold mb-2 flex items-center gap-2">
             <ng-icon name="lucideInfo" class="text-primary" /> Test Account
           </h4>
           <!--#endif-->

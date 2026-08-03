@@ -1,19 +1,21 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideGauge, lucideIdCard, lucideUsers } from '@ng-icons/lucide';
 import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
-import { filter, map, startWith } from 'rxjs/operators';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { Logo } from '../../../shared/components/logo/logo';
+import { LayoutService } from '../../services/layout-service';
+//#if (IncludeIdentity)
+import { UserMenu } from '../user-menu/user-menu';
+//#endif
 
 interface MenuItem {
   label: string;
@@ -36,6 +38,9 @@ interface MenuGroup {
     NgIcon,
     Logo,
     ...HlmSidebarImports,
+    //#if (IncludeIdentity)
+    UserMenu,
+    //#endif
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
@@ -45,7 +50,7 @@ interface MenuGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DefaultSidebar {
-  private readonly router = inject(Router);
+  readonly layoutService = inject(LayoutService);
   private readonly authService = inject(AuthService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
@@ -105,23 +110,10 @@ export class DefaultSidebar {
   ];
   //#endif
 
-  private readonly currentUrl = toSignal(
-    this.router.events.pipe(
-      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      map((event) => event.urlAfterRedirects ?? event.url),
-      startWith(this.router.url),
-    ),
-    { initialValue: this.router.url },
-  );
-
-  // 品牌头链接：跟随当前区段（平台/工作区）指向其首页，供折叠态 menu-button 使用。
-  readonly homeRoute = computed(() =>
-    this.currentUrl().startsWith('/platform') ? '/platform' : '/workspace/dashboard',
-  );
-
   readonly menuGroups = computed(() => {
-    const url = this.currentUrl();
-    const groups = url.startsWith('/platform') ? this.platformMenuGroups : this.workspaceMenuGroups;
+    const groups = this.layoutService.isPlatform()
+      ? this.platformMenuGroups
+      : this.workspaceMenuGroups;
     const isSuperAdmin = this.authService.currentUser()?.isSuperAdmin === true;
     //#if (IncludeLocalization)
     // 读取 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，标签重新翻译。
@@ -144,7 +136,7 @@ export class DefaultSidebar {
   });
 
   isItemActive(item: MenuItem): boolean {
-    const currentUrl = this.currentUrl();
+    const currentUrl = this.layoutService.currentUrl();
     if (item.route === '/platform') {
       return currentUrl === item.route;
     }

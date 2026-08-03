@@ -23,7 +23,7 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
         identity.SetClaim(Claims.Subject, user.Id.ToString());
-        identity.SetClaim(Claims.Name, user.Nickname ?? user.Username);
+        identity.SetClaim(Claims.Name, user.DisplayName ?? user.Username);
         identity.SetClaim(Claims.PreferredUsername, user.Username);
         identity.SetClaim(Claims.Email, user.Email);
 

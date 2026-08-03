@@ -113,7 +113,7 @@ public class GitHubOAuthProvider(
             ProviderId = userInfo["id"].GetInt64().ToString(),
             Email = userInfo.TryGetValue("email", out var email) ? email.GetString() : null,
             Username = userInfo["login"].GetString()!,
-            Nickname = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
+            DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("avatar_url", out var avatar) ? avatar.GetString() : null
         };
     }

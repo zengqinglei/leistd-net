@@ -57,7 +57,7 @@ public class UserDomainService(
         string username,
         string email,
         string password,
-        string? nickname,
+        string? displayName,
         CancellationToken cancellationToken = default)
     {
         // 检查用户名唯一性
@@ -84,9 +84,9 @@ public class UserDomainService(
 
         // 创建用户
 #if (IncludeIdentity)
-        var user = new User(username, email, passwordHasher.HashPassword(password), nickname);
+        var user = new User(username, email, passwordHasher.HashPassword(password), displayName);
 #else
-        var user = new User(username, email, nickname: nickname);
+        var user = new User(username, email, displayName: displayName);
 #endif
         await userRepository.InsertAsync(user, cancellationToken);
 
@@ -101,7 +101,7 @@ public class UserDomainService(
         User user,
         string username,
         string email,
-        string? nickname,
+        string? displayName,
         string? phoneNumber,
         string? avatar,
         CancellationToken cancellationToken = default)
@@ -128,7 +128,7 @@ public class UserDomainService(
                 ;
         }
 
-        user.UpdateProfile(username, email, nickname, phoneNumber, avatar);
+        user.UpdateProfile(username, email, displayName, phoneNumber, avatar);
     }
 
 #if (IncludeIdentity)
@@ -167,11 +167,11 @@ public class UserDomainService(
         string username,
         string email,
         string password,
-        string? nickname,
+        string? displayName,
         List<Guid>? roleIds,
         CancellationToken cancellationToken = default)
     {
-        var user = await CreateUserAsync(username, email, password, nickname, cancellationToken);
+        var user = await CreateUserAsync(username, email, password, displayName, cancellationToken);
 
         // 分配角色
         if (roleIds != null && roleIds.Count > 0)

@@ -43,7 +43,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { lastValueFrom } from 'rxjs';
 
-import { notify } from '../../../../core/notifications/notify';
+import { notify } from '../../../../core/feedback/notify';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
@@ -140,33 +140,33 @@ export class Register implements OnInit {
 
   //#if (IncludeLocalization)
   readonly registerForm = form(this.model, (path) => {
-    required(path.email, { message: this.transloco.translate('account.register.errRequired') });
+    required(path.email, { message: this.transloco.translate('common.validation.required') });
     emailValidator(path.email, {
-      message: this.transloco.translate('account.register.errEmailInvalid'),
+      message: this.transloco.translate('common.validation.email'),
     });
     maxLength(path.email, 256, { message: '' });
-    required(path.username, { message: this.transloco.translate('account.register.errRequired') });
+    required(path.username, { message: this.transloco.translate('common.validation.required') });
     minLength(path.username, 3, {
-      message: this.transloco.translate('account.register.errMinLength', { min: 3 }),
+      message: this.transloco.translate('common.validation.minLength', { min: 3 }),
     });
     maxLength(path.username, 64, { message: '' });
     pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: this.transloco.translate('account.register.errUsernamePattern'),
+      message: this.transloco.translate('common.validation.usernamePattern'),
     });
     required(path.captchaCode, {
-      message: this.transloco.translate('account.register.errRequired'),
+      message: this.transloco.translate('common.validation.required'),
     });
     maxLength(path.captchaCode, 10, { message: '' });
     required(path.emailVerificationCode, {
-      message: this.transloco.translate('account.register.errRequired'),
+      message: this.transloco.translate('common.validation.required'),
       when: () => this.securityConfig()?.enableEmailVerification === true,
     });
-    required(path.password, { message: this.transloco.translate('account.register.errRequired') });
+    required(path.password, { message: this.transloco.translate('common.validation.required') });
     pattern(path.password, /^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/, {
-      message: this.transloco.translate('account.register.errPasswordPattern'),
+      message: this.transloco.translate('common.validation.passwordWeak'),
     });
     required(path.confirmPassword, {
-      message: this.transloco.translate('account.register.errRequired'),
+      message: this.transloco.translate('common.validation.required'),
     });
     validate(path.confirmPassword, (ctx) => {
       const confirm = ctx.value();
@@ -174,7 +174,7 @@ export class Register implements OnInit {
       if (password && confirm && password !== confirm) {
         return {
           kind: 'passwordMismatch',
-          message: this.transloco.translate('account.register.errPasswordMismatch'),
+          message: this.transloco.translate('common.validation.passwordMismatch'),
         };
       }
       return null;
@@ -182,31 +182,31 @@ export class Register implements OnInit {
   });
   //#else
   readonly registerForm = form(this.model, (path) => {
-    required(path.email, { message: 'This field is required' });
-    emailValidator(path.email, { message: 'Invalid email format' });
+    required(path.email, { message: 'This field is required.' });
+    emailValidator(path.email, { message: 'Please enter a valid email address.' });
     maxLength(path.email, 256, { message: '' });
-    required(path.username, { message: 'This field is required' });
-    minLength(path.username, 3, { message: 'At least 3 characters required' });
+    required(path.username, { message: 'This field is required.' });
+    minLength(path.username, 3, { message: 'Must be at least 3 characters.' });
     maxLength(path.username, 64, { message: '' });
     pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: 'Only letters, digits and underscores are allowed',
+      message: 'Must be 3–64 letters, digits, or underscores.',
     });
-    required(path.captchaCode, { message: 'This field is required' });
+    required(path.captchaCode, { message: 'This field is required.' });
     maxLength(path.captchaCode, 10, { message: '' });
     required(path.emailVerificationCode, {
-      message: 'This field is required',
+      message: 'This field is required.',
       when: () => this.securityConfig()?.enableEmailVerification === true,
     });
-    required(path.password, { message: 'This field is required' });
+    required(path.password, { message: 'This field is required.' });
     pattern(path.password, /^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/, {
-      message: 'Password must be at least 6 characters and contain letters and digits',
+      message: 'Password must be at least 6 characters and include letters and digits.',
     });
-    required(path.confirmPassword, { message: 'This field is required' });
+    required(path.confirmPassword, { message: 'This field is required.' });
     validate(path.confirmPassword, (ctx) => {
       const confirm = ctx.value();
       const password = ctx.valueOf(path.password);
       if (password && confirm && password !== confirm) {
-        return { kind: 'passwordMismatch', message: 'The two passwords do not match' };
+        return { kind: 'passwordMismatch', message: 'The two passwords do not match.' };
       }
       return null;
     });
@@ -379,7 +379,7 @@ export class Register implements OnInit {
         detail: this.transloco.translate('account.register.registerSuccessDetail'),
       });
       //#else
-      notify.success('Registration successful', {
+      notify.success('Account created', {
         detail: 'Account created successfully, please sign in',
       });
       //#endif

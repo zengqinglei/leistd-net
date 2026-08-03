@@ -23,7 +23,28 @@
     "add": "添加",
     "actions": "操作",
     "rowsPerPage": "每页条数",
-    "toggleSidebar": "切换侧栏"
+    "pageOf": "第 {{page}} / {{total}} 页",
+    "pagination": {
+      "first": "首页",
+      "previous": "上一页",
+      "next": "下一页",
+      "last": "末页"
+    },
+    "toggleSidebar": "切换侧栏",
+    "clearFilter": "清除筛选",
+    "noResults": "无匹配结果",
+    "validation": {
+      "required": "此字段为必填项",
+      "email": "请输入有效的邮箱地址",
+      "minLength": "至少需要 {{min}} 个字符",
+      "maxLength": "不能超过 {{max}} 个字符",
+      "usernamePattern": "只能为 3~64 位字母、数字或下划线",
+      "passwordRule": "密码需为 8~20 位，且包含大写字母、小写字母、数字和特殊字符",
+      "passwordWeak": "密码至少 6 位，且需包含字母和数字",
+      "passwordMismatch": "两次输入的密码不一致",
+      "passwordSameAsCurrent": "新密码不能与当前密码相同",
+      "phonePattern": "只能包含数字、空格及 + - ( ) 符号"
+    }
   },
   "menu": {
     "workspace": "工作空间",
@@ -55,11 +76,14 @@
       "groupSystem": "系统",
       "users": "用户管理",
       "openApplications": "开发应用",
-      "workbench": "工作台"
+      "workbench": "工作台",
+      "appSubtitle": "管理平台"
     },
     "notifications": {
       "title": "通知",
       "markAllRead": "全部已读",
+      "clearAll": "清空全部",
+      "clearOne": "删除",
       "empty": "暂无通知"
     }
   },
@@ -75,7 +99,7 @@
     "dashboard": {
       "title": "工作台",
       "username": "用户名",
-      "nickname": "昵称",
+      "displayName": "显示名称",
       "email": "邮箱",
       "roles": "角色",
       "noUserInfo": "未获取到用户信息"
@@ -121,19 +145,14 @@
       "subtitle": "请输入当前密码，并设置新的登录密码。",
       "rules": "新密码规则：8~20 位，且必须同时包含大写字母、小写字母、数字和特殊字符。",
       "currentPassword": "当前密码",
-      "currentPasswordRequired": "请输入当前密码",
       "newPassword": "新密码",
-      "newPasswordRuleError": "新密码不符合规则，需同时包含大小写字母、数字和特殊字符",
       "confirmPassword": "确认新密码",
-      "confirmPasswordRequired": "请再次输入新密码",
-      "sameAsCurrentError": "新密码不能与当前密码相同",
-      "mismatchError": "两次输入的新密码不一致",
       "submit": "更新密码",
       "updateSuccess": "密码已更新"
     },
     "profile": {
       "header": "个人信息",
-      "subtitle": "更新用户名、邮箱、昵称、手机号和头像。",
+      "subtitle": "更新用户名、邮箱、显示名称、手机号和头像。",
       "invalidFileSizeSummary": "文件过大",
       "invalidFileSizeDetail": "头像大小不能超过 1MB",
       "invalidFileTypeSummary": "格式不支持",
@@ -143,18 +162,12 @@
       "avatarHint": "悬浮头像后点击 + 重新上传，选择后即时预览。",
       "username": "用户名",
       "usernamePlaceholder": "请输入用户名",
-      "usernameRequired": "用户名不能为空",
-      "usernameFormatError": "用户名需为 3-64 位字母、数字或下划线",
       "email": "邮箱",
       "emailPlaceholder": "请输入邮箱",
-      "emailError": "请输入有效邮箱，长度不能超过 256 个字符",
-      "nickname": "昵称",
-      "nicknamePlaceholder": "请输入昵称",
-      "nicknameError": "昵称长度不能超过 128 个字符",
+      "displayName": "显示名称",
+      "displayNamePlaceholder": "请输入显示名称",
       "phoneNumber": "手机号",
       "phoneNumberPlaceholder": "请输入手机号",
-      "phoneNumberLengthError": "手机号长度不能超过 20 个字符",
-      "phoneNumberPatternError": "手机号仅支持数字、空格以及 + - ( ) 符号",
       "guestUser": "未登录用户",
       "updateSuccess": "个人资料已更新"
     },
@@ -176,16 +189,16 @@
       "testAccount": "测试账号",
       "adminRole": "管理员",
       "badgeFastDev": "快速开发",
-      "badgeReadyMain": "开箱",
-      "badgeReadySub": "即用",
       "badgeModernArch": "现代架构",
       "loginSuccess": "登录成功",
       "welcomeBack": "欢迎回来！",
       "loginFailed": "登录失败",
-      "externalLoginFailed": "无法连接到 {{provider}} 登录服务，请稍后重试"
+      "externalLoginFailed": "无法连接到 {{provider}} 登录服务，请稍后重试",
+      "badgeReadyMain": "开箱",
+      "badgeReadySub": "即用"
     },
     "register": {
-      "title": "创建账号",
+      "title": "注册账号",
       "subtitle": "欢迎加入，请填写以下信息注册新账号",
       "badgeFastRegister": "快速注册",
       "badgeSecure": "安全保障",
@@ -213,13 +226,7 @@
       "emailCodeSent": "验证码已发送，请查收邮件",
       "captchaTokenMissing": "请刷新获取图形验证码",
       "registerSuccess": "注册成功",
-      "registerSuccessDetail": "账号创建成功，请登录",
-      "errRequired": "此字段不能为空",
-      "errEmailInvalid": "邮箱格式不正确",
-      "errUsernamePattern": "只能包含字母、数字和下划线",
-      "errPasswordPattern": "密码需 6 位以上，包含字母和数字",
-      "errMinLength": "至少需要 {{min}} 个字符",
-      "errPasswordMismatch": "两次输入的密码不一致"
+      "registerSuccessDetail": "账号创建成功，请登录"
     },
     "externalCallback": {
       "processingAria": "正在完成登录",
@@ -235,6 +242,7 @@
     "filter": {
       "allStatus": "全部状态",
       "allEmailStatus": "全部邮箱状态",
+      "emailLabel": "邮箱状态",
       "allRoles": "全部角色",
       "searchPlaceholder": "搜索用户名 / 邮箱 / 显示名称..."
     },
@@ -294,6 +302,7 @@
     "editDialog": {
       "editHeader": "编辑用户",
       "createHeader": "新建用户",
+      "description": "管理该账号的资料、角色与状态。",
       "loading": "正在加载用户信息...",
       "unnamedUser": "未命名用户",
       "noEmail": "未设置邮箱",
@@ -304,20 +313,15 @@
       "avatarBadTypeDetail": "请上传 PNG、JPG 或 WEBP 图片",
       "usernameLabel": "用户名",
       "usernamePlaceholder": "请输入用户名",
-      "usernameRequired": "用户名不能为空",
-      "usernamePattern": "用户名需为 3-64 位字母、数字或下划线",
       "emailLabel": "邮箱",
       "emailPlaceholder": "请输入邮箱",
-      "emailInvalid": "请输入有效邮箱，长度不能超过 256 个字符",
       "displayNameLabel": "显示名称",
       "displayNamePlaceholder": "请输入显示名称",
-      "displayNameMaxLength": "显示名称长度不能超过 128 个字符",
       "passwordLabel": "初始密码",
+      "passwordPlaceholder": "请输入初始密码",
       "passwordRequired": "请输入初始密码",
-      "passwordRule": "密码不符合规则，需为 8~20 位并同时包含大小写字母、数字和特殊字符",
       "rolesLabel": "角色",
       "rolesPlaceholder": "请选择角色",
-      "rolesRequired": "请至少选择一个角色",
       "activeTitle": "启用用户",
       "activeHint": "禁用后用户无法登录和调用受保护接口",
       "emailVerifiedTitle": "邮箱已验证",
@@ -328,8 +332,6 @@
       "warning": "重置后用户需要使用新密码登录。",
       "ruleHint": "新密码规则：8~20 位，且必须同时包含大写字母、小写字母、数字和特殊字符。",
       "newPasswordLabel": "新密码",
-      "newPasswordRequired": "请输入新密码",
-      "newPasswordRule": "新密码不符合规则，需同时包含大小写字母、数字和特殊字符",
       "confirmButton": "确认重置"
     }
   },
@@ -344,6 +346,8 @@
     "filter": {
       "allAppTypes": "全部应用类型",
       "allClientTypes": "全部客户端类型",
+      "appTypeLabel": "应用类型",
+      "clientTypeLabel": "客户端类型",
       "searchPlaceholder": "搜索应用名称 / Client ID..."
     },
     "toast": {
@@ -372,6 +376,7 @@
     "dialog": {
       "editHeader": "编辑开放应用",
       "createHeader": "新建开放应用",
+      "description": "配置该客户端的标识、类型与 OAuth 能力。",
       "loading": "正在加载开放应用信息..."
     },
     "field": {
@@ -382,7 +387,12 @@
       "clientIdPlaceholder": "例如 my-desktop-app",
       "applicationType": "应用类型",
       "clientType": "客户端类型",
-      "consentType": "授权确认"
+      "consentType": "授权确认",
+      "clientId": "Client ID",
+      "redirectUris": "重定向 URI",
+      "postLogoutRedirectUris": "注销后重定向 URI",
+      "permissions": "权限",
+      "requirements": "安全要求"
     },
     "template": {
       "web": "Web PKCE 客户端",

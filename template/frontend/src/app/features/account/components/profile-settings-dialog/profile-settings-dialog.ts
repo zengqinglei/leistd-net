@@ -21,8 +21,9 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
-import { notify } from '../../../../core/notifications/notify';
+import { notify } from '../../../../core/feedback/notify';
 import { AuthService } from '../../../../core/services/auth-service';
+import { avatarPalette } from '../../../../shared/utils/avatar-palette';
 import { AccountService } from '../../services/account-service';
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
@@ -83,15 +84,15 @@ export class ProfileSettingsDialog {
   protected readonly formModel = signal({
     username: '',
     email: '',
-    nickname: '',
+    displayName: '',
     phoneNumber: '',
     avatar: '',
   });
 
   readonly displayName = computed(
     () =>
-      this.formModel().nickname.trim() ||
-      this.user()?.nickname ||
+      this.formModel().displayName.trim() ||
+      this.user()?.displayName ||
       this.user()?.username ||
       this.guestLabel(),
   );
@@ -99,69 +100,50 @@ export class ProfileSettingsDialog {
     const text = this.displayName().trim();
     return (text.charAt(0) || 'U').toUpperCase();
   });
-  readonly avatarStyle = computed(() => {
-    const seed = (this.formModel().username || this.user()?.username || this.displayName()).trim();
-    let total = 0;
-
-    for (const char of seed) {
-      total += char.charCodeAt(0);
-    }
-
-    const palette = [
-      { background: '#dbeafe', color: '#1d4ed8' },
-      { background: '#dcfce7', color: '#15803d' },
-      { background: '#fef3c7', color: '#b45309' },
-      { background: '#fce7f3', color: '#be185d' },
-      { background: '#ede9fe', color: '#6d28d9' },
-    ];
-
-    return palette[total % palette.length];
-  });
+  readonly avatarStyle = computed(() =>
+    avatarPalette(
+      (this.formModel().username || this.user()?.username || this.displayName()).trim(),
+    ),
+  );
 
   //#if (IncludeLocalization)
   readonly profileForm = form(this.formModel, (path) => {
     required(path.username, {
-      message: this.transloco.translate('account.profile.usernameRequired'),
+      message: this.transloco.translate('common.validation.required'),
     });
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
-      message: this.transloco.translate('account.profile.usernameFormatError'),
+      message: this.transloco.translate('common.validation.usernamePattern'),
     });
-    required(path.email, { message: this.transloco.translate('account.profile.emailError') });
+    required(path.email, { message: this.transloco.translate('common.validation.required') });
     emailValidator(path.email, {
-      message: this.transloco.translate('account.profile.emailError'),
+      message: this.transloco.translate('common.validation.email'),
     });
-    maxLength(path.email, 256, {
-      message: this.transloco.translate('account.profile.emailError'),
-    });
-    maxLength(path.nickname, 128, {
-      message: this.transloco.translate('account.profile.nicknameError'),
+    maxLength(path.email, 256, { message: '' });
+    maxLength(path.displayName, 128, {
+      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
     });
     maxLength(path.phoneNumber, 20, {
-      message: this.transloco.translate('account.profile.phoneNumberLengthError'),
+      message: this.transloco.translate('common.validation.maxLength', { max: 20 }),
     });
     pattern(path.phoneNumber, PHONE_PATTERN, {
-      message: this.transloco.translate('account.profile.phoneNumberPatternError'),
+      message: this.transloco.translate('common.validation.phonePattern'),
     });
   });
   //#else
   readonly profileForm = form(this.formModel, (path) => {
-    required(path.username, { message: 'Username cannot be empty' });
+    required(path.username, { message: 'This field is required.' });
     pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
-      message: 'Username must be 3–64 characters of letters, numbers, or underscores',
+      message: 'Must be 3–64 letters, digits, or underscores.',
     });
-    required(path.email, {
-      message: 'Please enter a valid email; length cannot exceed 256 characters',
-    });
+    required(path.email, { message: 'This field is required.' });
     emailValidator(path.email, {
-      message: 'Please enter a valid email; length cannot exceed 256 characters',
+      message: 'Please enter a valid email address.',
     });
-    maxLength(path.email, 256, {
-      message: 'Please enter a valid email; length cannot exceed 256 characters',
-    });
-    maxLength(path.nickname, 128, { message: 'Nickname length cannot exceed 128 characters' });
-    maxLength(path.phoneNumber, 20, { message: 'Phone number length cannot exceed 20 characters' });
+    maxLength(path.email, 256, { message: '' });
+    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
+    maxLength(path.phoneNumber, 20, { message: 'Must not exceed 20 characters.' });
     pattern(path.phoneNumber, PHONE_PATTERN, {
-      message: 'Phone number supports only digits, spaces, and the symbols + - ( )',
+      message: 'Only digits, spaces, and + - ( ) are allowed.',
     });
   });
   //#endif
@@ -176,7 +158,7 @@ export class ProfileSettingsDialog {
       this.formModel.set({
         username: user?.username ?? '',
         email: user?.email ?? '',
-        nickname: user?.nickname ?? '',
+        displayName: user?.displayName ?? '',
         phoneNumber: user?.phoneNumber ?? '',
         avatar,
       });
@@ -238,13 +220,13 @@ export class ProfileSettingsDialog {
     }
 
     this.saving.set(true);
-    const { username, email, nickname, phoneNumber, avatar } = this.formModel();
+    const { username, email, displayName, phoneNumber, avatar } = this.formModel();
 
     this.accountService
       .updateCurrentUser({
         username: username.trim(),
         email: email.trim(),
-        nickname: nickname.trim() || undefined,
+        displayName: displayName.trim() || undefined,
         phoneNumber: phoneNumber.trim() || undefined,
         avatar: avatar.trim() || undefined,
       })

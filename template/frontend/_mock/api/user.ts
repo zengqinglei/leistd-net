@@ -30,8 +30,8 @@ function sortUsers(users: typeof USERS, sorting?: string) {
   }
 
   return users.sort((a, b) => {
-    const left = field === 'displayName' ? a.nickname : a[field as keyof typeof a];
-    const right = field === 'displayName' ? b.nickname : b[field as keyof typeof b];
+    const left = field === 'displayName' ? a.displayName : a[field as keyof typeof a];
+    const right = field === 'displayName' ? b.displayName : b[field as keyof typeof b];
     return String(left ?? '').localeCompare(String(right ?? '')) * order;
   });
 }
@@ -43,7 +43,8 @@ export function getUsers(params: any): PagedResultDto<any> {
   const keyword = getQueryValue(params.keyword)?.toLowerCase();
   const isActive = getQueryValue(params.isActive);
   const isEmailVerified = getQueryValue(params.isEmailVerified);
-  const role = getQueryValue(params.role);
+  const rolesParam = params.roles;
+  const roles: string[] = Array.isArray(rolesParam) ? rolesParam : rolesParam ? [rolesParam] : [];
   const sorting = getQueryValue(params.sorting);
 
   if (keyword) {
@@ -51,7 +52,7 @@ export function getUsers(params: any): PagedResultDto<any> {
       (user) =>
         user.username.toLowerCase().includes(keyword) ||
         user.email.toLowerCase().includes(keyword) ||
-        user.nickname?.toLowerCase().includes(keyword),
+        user.displayName?.toLowerCase().includes(keyword),
     );
   }
 
@@ -63,8 +64,8 @@ export function getUsers(params: any): PagedResultDto<any> {
     users = users.filter((user) => user.isEmailVerified === (isEmailVerified === 'true'));
   }
 
-  if (role) {
-    users = users.filter((user) => user.roles.includes(role));
+  if (roles.length) {
+    users = users.filter((user) => user.roles.some((r) => roles.includes(r)));
   }
 
   users = sortUsers(users, sorting);
@@ -95,7 +96,7 @@ export function addUser(value: any) {
     id: crypto.randomUUID(),
     username,
     email,
-    nickname: value.displayName,
+    displayName: value.displayName,
     avatar:
       value.avatar ||
       `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`,
@@ -122,7 +123,7 @@ export function updateUser(id: string, value: any) {
 
   Object.assign(user, {
     email: value.email,
-    nickname: value.displayName,
+    displayName: value.displayName,
     avatar: value.avatar,
     isActive: value.isActive,
     isEmailVerified: value.isEmailVerified,

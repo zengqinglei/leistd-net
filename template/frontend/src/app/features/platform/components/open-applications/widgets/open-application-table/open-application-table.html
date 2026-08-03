@@ -1,298 +1,277 @@
-<div class="@container bg-card rounded-xl shadow-sm border border-border overflow-hidden">
-  <div hlmTableContainer class="w-full overflow-x-auto">
-    <table hlmTable class="w-full">
-      <thead hlmTHead>
-        <tr hlmTr class="bg-muted/50 text-muted-foreground text-xs font-medium uppercase">
-          <th hlmTh class="px-6 py-3">
-            <button
-              type="button"
-              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-              (click)="onSort('clientId')"
-            >
-              <!--#if (IncludeLocalization)-->
-              {{ 'openApp.table.colApp' | transloco }}
-              <!--#else-->
-              Application
-              <!--#endif-->
-              <ng-icon [name]="sortIcon('clientId')" class="text-sm" />
-            </button>
-          </th>
-          <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 hidden @min-[680px]:table-cell whitespace-nowrap">
-            {{ 'openApp.table.colType' | transloco }}
-          </th>
-          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">
-            {{ 'openApp.table.colPermissions' | transloco }}
-          </th>
-          <!--#else-->
-          <th hlmTh class="px-6 py-3 hidden @min-[680px]:table-cell whitespace-nowrap">Type</th>
-          <th hlmTh class="px-6 py-3 hidden @min-[950px]:table-cell whitespace-nowrap">
-            Capabilities
-          </th>
-          <!--#endif-->
-          <th hlmTh class="px-6 py-3 hidden @min-[1200px]:table-cell whitespace-nowrap">
-            Redirect URI
-          </th>
-          <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 hidden @min-[1400px]:table-cell whitespace-nowrap">
-            {{ 'openApp.table.colSecurity' | transloco }}
-          </th>
-          <!--#else-->
-          <th hlmTh class="px-6 py-3 hidden @min-[1400px]:table-cell whitespace-nowrap">
-            Security
-          </th>
-          <!--#endif-->
-          <th hlmTh class="px-6 py-3 hidden @min-[1560px]:table-cell">
-            <button
-              type="button"
-              class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-              (click)="onSort('creationTime')"
-            >
-              <!--#if (IncludeLocalization)-->
-              {{ 'openApp.table.colCreatedAt' | transloco }}
-              <!--#else-->
-              Created at
-              <!--#endif-->
-              <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
-            </button>
-          </th>
-          <!--#if (IncludeLocalization)-->
-          <th hlmTh class="px-6 py-3 text-right whitespace-nowrap">
-            {{ 'common.actions' | transloco }}
-          </th>
-          <!--#else-->
-          <th hlmTh class="px-6 py-3 text-right whitespace-nowrap">Actions</th>
-          <!--#endif-->
-        </tr>
-      </thead>
-
-      <tbody hlmTBody>
-        @for (item of applications(); track item.id) {
-          <tr hlmTr class="group text-sm text-muted-foreground hover:bg-muted/50 transition-colors">
-            <td hlmTd class="px-6 py-4">
-              <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                <span
-                  class="text-foreground text-sm font-semibold group-hover:text-primary transition-colors truncate"
-                >
-                  {{ item.displayName || item.clientId }}
-                </span>
-                @if (item.displayName) {
-                  <span
-                    class="text-xs text-muted-foreground font-mono truncate"
-                    [hlmTooltip]="item.clientId"
-                  >
-                    {{ item.clientId }}
-                  </span>
-                }
-              </div>
-            </td>
-
-            <td hlmTd class="px-6 py-4 hidden @min-[680px]:table-cell">
-              <div class="flex items-center gap-1.5 whitespace-nowrap">
-                <span hlmBadge variant="secondary" class="text-[10px]">{{
-                  getApplicationTypeLabel(item.applicationType)
-                }}</span>
-                <span
-                  hlmBadge
-                  [variant]="getClientTypeVariant(item.clientType)"
-                  class="text-[10px]"
-                  >{{ item.clientType }}</span
-                >
-                <span
-                  hlmBadge
-                  variant="outline"
-                  class="text-[10px] hidden @min-[1560px]:inline-flex"
-                  >{{ getConsentTypeLabel(item.consentType) }}</span
-                >
-              </div>
-            </td>
-
-            <td hlmTd class="px-6 py-4 hidden @min-[950px]:table-cell">
+<div class="flex flex-col gap-4">
+  <div class="@container rounded-md border border-border overflow-hidden">
+    <div hlmTableContainer class="w-full overflow-x-auto">
+      <table hlmTable class="w-full">
+        <thead hlmTHead class="bg-card sticky top-0 z-10">
+          <tr hlmTr class="text-sm font-medium">
+            <th hlmTh class="px-6">
               <button
                 type="button"
-                class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap border border-border"
-                (click)="openPopover('permissions', item.permissions)"
+                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                (click)="onSort('clientId')"
               >
-                <ng-icon name="lucideShield" class="text-[10px]" />
-                <span class="truncate">{{ getPermissionSummary(item) }}</span>
-                <span class="text-muted-foreground">({{ item.permissions.length }})</span>
+                <!--#if (IncludeLocalization)-->
+                {{ 'openApp.table.colApp' | transloco }}
+                <!--#else-->
+                Application
+                <!--#endif-->
+                <ng-icon [name]="sortIcon('clientId')" class="text-sm" />
               </button>
-            </td>
+            </th>
+            <!--#if (IncludeLocalization)-->
+            <th hlmTh class="px-6 hidden @min-[680px]:table-cell whitespace-nowrap">
+              {{ 'openApp.table.colType' | transloco }}
+            </th>
+            <th hlmTh class="px-6 hidden @min-[950px]:table-cell whitespace-nowrap">
+              {{ 'openApp.table.colPermissions' | transloco }}
+            </th>
+            <!--#else-->
+            <th hlmTh class="px-6 hidden @min-[680px]:table-cell whitespace-nowrap">Type</th>
+            <th hlmTh class="px-6 hidden @min-[950px]:table-cell whitespace-nowrap">
+              Capabilities
+            </th>
+            <!--#endif-->
+            <th hlmTh class="px-6 hidden @min-[1200px]:table-cell whitespace-nowrap">
+              Redirect URI
+            </th>
+            <!--#if (IncludeLocalization)-->
+            <th hlmTh class="px-6 hidden @min-[1400px]:table-cell whitespace-nowrap">
+              {{ 'openApp.table.colSecurity' | transloco }}
+            </th>
+            <!--#else-->
+            <th hlmTh class="px-6 hidden @min-[1400px]:table-cell whitespace-nowrap">Security</th>
+            <!--#endif-->
+            <th hlmTh class="px-6 hidden @min-[1560px]:table-cell">
+              <button
+                type="button"
+                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                (click)="onSort('creationTime')"
+              >
+                <!--#if (IncludeLocalization)-->
+                {{ 'openApp.table.colCreatedAt' | transloco }}
+                <!--#else-->
+                Created at
+                <!--#endif-->
+                <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
+              </button>
+            </th>
+            <!--#if (IncludeLocalization)-->
+            <th
+              hlmTh
+              class="w-10 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border"
+            >
+              <span class="sr-only">{{ 'common.actions' | transloco }}</span>
+            </th>
+            <!--#else-->
+            <th
+              hlmTh
+              class="w-10 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border"
+            >
+              <span class="sr-only">Actions</span>
+            </th>
+            <!--#endif-->
+          </tr>
+        </thead>
 
-            <td hlmTd class="px-6 py-4 hidden @min-[1200px]:table-cell">
-              @if (item.redirectUris.length > 0) {
-                <div
-                  class="flex max-w-[22rem] items-center gap-1 overflow-hidden whitespace-nowrap"
-                >
-                  @for (uri of getVisibleRedirectUris(item); track uri) {
+        <tbody hlmTBody>
+          @for (item of applications(); track item.id) {
+            <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
+              <td hlmTd class="px-6 py-2">
+                <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                  <span class="text-foreground text-sm font-medium truncate">
+                    {{ item.displayName || item.clientId }}
+                  </span>
+                  @if (item.displayName) {
                     <span
-                      class="min-w-0 truncate rounded-md bg-muted px-2 py-1 text-xs border border-border font-mono"
-                      [hlmTooltip]="uri"
+                      class="text-xs text-muted-foreground font-mono truncate"
+                      [hlmTooltip]="item.clientId"
                     >
-                      {{ uri }}
+                      {{ item.clientId }}
                     </span>
                   }
-                  @if (getHiddenRedirectUris(item).length > 0) {
-                    <button
-                      type="button"
-                      hlmBadge
-                      variant="outline"
-                      class="text-[10px] cursor-pointer shrink-0"
-                      (click)="openPopover('redirectUris', getHiddenRedirectUris(item))"
-                    >
-                      +{{ getHiddenRedirectUris(item).length }}
-                    </button>
-                  }
                 </div>
-              } @else {
-                <span class="text-xs text-muted-foreground">-</span>
-              }
-            </td>
+              </td>
 
-            <td hlmTd class="px-6 py-4 hidden @min-[1400px]:table-cell">
-              <div class="flex items-center gap-1.5 whitespace-nowrap">
-                <!--#if (IncludeLocalization)-->
-                <span
-                  hlmBadge
-                  [variant]="hasPkce(item) ? 'default' : 'destructive'"
-                  class="text-[10px]"
-                  >{{ hasPkce(item) ? 'PKCE' : ('openApp.table.noPkce' | transloco) }}</span
-                >
-                <span
-                  hlmBadge
-                  [variant]="item.hasClientSecret ? 'secondary' : 'outline'"
-                  class="text-[10px] hidden @min-[1560px]:inline-flex"
-                  >{{
-                    item.hasClientSecret
-                      ? ('openApp.table.secretSet' | transloco)
-                      : ('openApp.table.noSecret' | transloco)
-                  }}</span
-                >
-                <!--#else-->
-                <span
-                  hlmBadge
-                  [variant]="hasPkce(item) ? 'default' : 'destructive'"
-                  class="text-[10px]"
-                  >{{ hasPkce(item) ? 'PKCE' : 'No PKCE' }}</span
-                >
-                <span
-                  hlmBadge
-                  [variant]="item.hasClientSecret ? 'secondary' : 'outline'"
-                  class="text-[10px] hidden @min-[1560px]:inline-flex"
-                  >{{ item.hasClientSecret ? 'Secret set' : 'No secret' }}</span
-                >
-                <!--#endif-->
-              </div>
-            </td>
+              <td hlmTd class="px-6 py-2 hidden @min-[680px]:table-cell">
+                <div class="flex items-center gap-1.5 whitespace-nowrap">
+                  <span hlmBadge variant="secondary">{{
+                    getApplicationTypeLabel(item.applicationType)
+                  }}</span>
+                  <span hlmBadge [variant]="getClientTypeVariant(item.clientType)">{{
+                    item.clientType
+                  }}</span>
+                  <span hlmBadge variant="outline" class="hidden @min-[1560px]:inline-flex">{{
+                    getConsentTypeLabel(item.consentType)
+                  }}</span>
+                </div>
+              </td>
 
-            <td hlmTd class="px-6 py-4 hidden @min-[1560px]:table-cell">
-              <span class="text-[11px] text-muted-foreground whitespace-nowrap">{{
-                item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
-              }}</span>
-            </td>
+              <td hlmTd class="px-6 py-2 hidden @min-[950px]:table-cell">
+                <button
+                  type="button"
+                  class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap border border-border"
+                  (click)="openPopover('permissions', item.permissions)"
+                >
+                  <ng-icon name="lucideShield" class="text-xs" />
+                  <span class="truncate">{{ getPermissionSummary(item) }}</span>
+                  <span class="text-muted-foreground">({{ item.permissions.length }})</span>
+                </button>
+              </td>
 
-            <td hlmTd class="px-6 py-4 text-right">
-              <div
-                class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+              <td hlmTd class="px-6 py-2 hidden @min-[1200px]:table-cell">
+                @if (item.redirectUris.length > 0) {
+                  <div
+                    class="flex max-w-[22rem] items-center gap-1 overflow-hidden whitespace-nowrap"
+                  >
+                    @for (uri of getVisibleRedirectUris(item); track uri) {
+                      <span
+                        class="min-w-0 truncate rounded-md bg-muted px-2 py-1 text-xs border border-border font-mono"
+                        [hlmTooltip]="uri"
+                      >
+                        {{ uri }}
+                      </span>
+                    }
+                    @if (getHiddenRedirectUris(item).length > 0) {
+                      <button
+                        type="button"
+                        hlmBadge
+                        variant="outline"
+                        class="cursor-pointer shrink-0"
+                        (click)="openPopover('redirectUris', getHiddenRedirectUris(item))"
+                      >
+                        +{{ getHiddenRedirectUris(item).length }}
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <span class="text-xs text-muted-foreground">-</span>
+                }
+              </td>
+
+              <td hlmTd class="px-6 py-2 hidden @min-[1400px]:table-cell">
+                <div class="flex items-center gap-1.5 whitespace-nowrap">
+                  <!--#if (IncludeLocalization)-->
+                  <span hlmBadge [variant]="hasPkce(item) ? 'default' : 'destructive'">{{
+                    hasPkce(item) ? 'PKCE' : ('openApp.table.noPkce' | transloco)
+                  }}</span>
+                  <span
+                    hlmBadge
+                    [variant]="item.hasClientSecret ? 'secondary' : 'outline'"
+                    class="hidden @min-[1560px]:inline-flex"
+                    >{{
+                      item.hasClientSecret
+                        ? ('openApp.table.secretSet' | transloco)
+                        : ('openApp.table.noSecret' | transloco)
+                    }}</span
+                  >
+                  <!--#else-->
+                  <span hlmBadge [variant]="hasPkce(item) ? 'default' : 'destructive'">{{
+                    hasPkce(item) ? 'PKCE' : 'No PKCE'
+                  }}</span>
+                  <span
+                    hlmBadge
+                    [variant]="item.hasClientSecret ? 'secondary' : 'outline'"
+                    class="hidden @min-[1560px]:inline-flex"
+                    >{{ item.hasClientSecret ? 'Secret set' : 'No secret' }}</span
+                  >
+                  <!--#endif-->
+                </div>
+              </td>
+
+              <td hlmTd class="px-6 py-2 hidden @min-[1560px]:table-cell">
+                <span class="text-xs text-muted-foreground whitespace-nowrap">{{
+                  item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
+                }}</span>
+              </td>
+
+              <td
+                hlmTd
+                class="w-10 py-2 text-center sticky right-0 z-10 bg-card border-l border-border"
               >
+                <!-- 操作：始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
                 <button
                   hlmBtn
                   variant="ghost"
                   size="icon"
-                  class="w-8 h-8"
-                  (click)="edit.emit(item.id)"
-                  [hlmTooltip]="editTooltip()"
+                  align="end"
+                  [attr.aria-label]="actionsLabel()"
+                  [hlmDropdownMenuTrigger]="rowMenu"
                 >
-                  <ng-icon name="lucidePencil" />
+                  <ng-icon name="lucideEllipsisVertical" />
                 </button>
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="icon"
-                  class="w-8 h-8"
-                  (click)="resetSecret.emit(item.id)"
-                  [disabled]="item.clientType !== 'confidential'"
-                  [hlmTooltip]="resetSecretTooltip()"
-                >
-                  <ng-icon name="lucideRefreshCw" />
-                </button>
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="icon"
-                  class="w-8 h-8 text-destructive"
-                  (click)="deleteRequested.emit(item.id)"
-                  [hlmTooltip]="deleteTooltip()"
-                >
-                  <ng-icon name="lucideTrash2" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        } @empty {
-          <tr hlmTr class="hover:bg-transparent">
-            <td hlmTd colspan="7" class="!p-0 !border-0">
-              <div class="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <ng-icon name="lucideInbox" class="text-5xl opacity-30 mb-3" />
-                <!--#if (IncludeLocalization)-->
-                <p class="text-base font-medium m-0">
-                  {{ 'openApp.table.emptyTitle' | transloco }}
-                </p>
-                <p class="text-sm mt-1 opacity-70">{{ 'openApp.table.emptyHint' | transloco }}</p>
-                <!--#else-->
-                <p class="text-base font-medium m-0">No open applications yet</p>
-                <p class="text-sm mt-1 opacity-70">Create a new open application</p>
-                <!--#endif-->
-              </div>
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
+                <ng-template #rowMenu>
+                  <hlm-dropdown-menu>
+                    <hlm-dropdown-menu-group>
+                      <button hlmDropdownMenuItem (click)="edit.emit(item.id)">
+                        <ng-icon name="lucidePencil" />
+                        {{ editTooltip() }}
+                      </button>
+                      <button
+                        hlmDropdownMenuItem
+                        [disabled]="item.clientType !== 'confidential'"
+                        (click)="resetSecret.emit(item.id)"
+                      >
+                        <ng-icon name="lucideRefreshCw" />
+                        {{ resetSecretTooltip() }}
+                      </button>
+                    </hlm-dropdown-menu-group>
+                    <hlm-dropdown-menu-separator />
+                    <button
+                      hlmDropdownMenuItem
+                      variant="destructive"
+                      (click)="deleteRequested.emit(item.id)"
+                    >
+                      <ng-icon name="lucideTrash2" />
+                      {{ deleteTooltip() }}
+                    </button>
+                  </hlm-dropdown-menu>
+                </ng-template>
+              </td>
+            </tr>
+          } @empty {
+            <tr hlmTr class="hover:bg-transparent">
+              <td hlmTd colspan="7" class="!p-0 !border-0">
+                <div class="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                  <ng-icon name="lucideInbox" class="text-5xl opacity-30 mb-3" />
+                  <!--#if (IncludeLocalization)-->
+                  <p class="text-base font-medium m-0">
+                    {{ 'openApp.table.emptyTitle' | transloco }}
+                  </p>
+                  <p class="text-sm mt-1 opacity-70">{{ 'openApp.table.emptyHint' | transloco }}</p>
+                  <!--#else-->
+                  <p class="text-base font-medium m-0">No open applications yet</p>
+                  <p class="text-sm mt-1 opacity-70">Create a new open application</p>
+                  <!--#endif-->
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <!-- 分页栏 -->
+  <!-- 分页栏：独立于表格卡片，置于其下方（对齐参考站的现代化布局）。 -->
   @if (totalRecords() > 0) {
-    <div class="flex items-center justify-between gap-4 px-6 py-3 border-t border-border text-sm">
-      <span class="text-muted-foreground">{{ currentPageReport() }}</span>
-      <div class="flex items-center gap-2">
-        <!-- 每页条数选择：Spartan hlm-select（与 hlm-numbered-pagination 内置的页大小选择器同构）。 -->
-        <span class="text-muted-foreground whitespace-nowrap">{{ rowsPerPageLabel() }}</span>
-        <hlm-select [value]="rows()" (valueChange)="onRowsChange($event)">
-          <hlm-select-trigger size="sm" class="w-[4.5rem]">
-            <hlm-select-value />
-          </hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal>
-            @for (size of rowsPerPageOptions; track size) {
-              <hlm-select-item [value]="size">{{ size }}</hlm-select-item>
-            }
-          </hlm-select-content>
-        </hlm-select>
-        <button
-          hlmBtn
-          variant="outline"
-          size="icon"
-          class="w-8 h-8"
-          [disabled]="!canPrev()"
-          (click)="prevPage()"
-        >
-          <ng-icon name="lucideChevronLeft" />
-        </button>
-        <span class="text-muted-foreground whitespace-nowrap">
-          {{ currentPage() }} / {{ totalPages() }}
-        </span>
-        <button
-          hlmBtn
-          variant="outline"
-          size="icon"
-          class="w-8 h-8"
-          [disabled]="!canNext()"
-          (click)="nextPage()"
-        >
-          <ng-icon name="lucideChevronRight" />
-        </button>
-      </div>
-    </div>
+    <app-table-paginator
+      [labels]="{
+        currentPageReport: currentPageReport(),
+        rowsPerPage: rowsPerPageLabel(),
+        page: pageLabel(),
+        first: firstPageLabel(),
+        previous: prevPageLabel(),
+        next: nextPageLabel(),
+        last: lastPageLabel(),
+      }"
+      [rows]="rows()"
+      [canPrev]="canPrev()"
+      [canNext]="canNext()"
+      (firstPage)="firstPage()"
+      (prevPage)="prevPage()"
+      (nextPage)="nextPage()"
+      (lastPage)="lastPage()"
+      (rowsChange)="onRowsChange($event)"
+    />
   }
 </div>
 

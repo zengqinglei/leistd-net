@@ -42,9 +42,9 @@ public class User : FullAuditedEntity<Guid>
     public string? Avatar { get; private set; }
 
     /// <summary>
-    /// 昵称
+    /// 显示名称
     /// </summary>
-    public string? Nickname { get; private set; }
+    public string? DisplayName { get; private set; }
 
     /// <summary>
     /// 是否启用
@@ -89,7 +89,7 @@ public class User : FullAuditedEntity<Guid>
         Email = null!;
     }
 
-    public User(string username, string email, string? passwordHash = null, string? nickname = null)
+    public User(string username, string email, string? passwordHash = null, string? displayName = null)
     {
         Id = Guid.CreateVersion7();
         Username = username;
@@ -97,22 +97,22 @@ public class User : FullAuditedEntity<Guid>
 #if (IncludeIdentity)
         PasswordHash = passwordHash;
 #endif
-        Nickname = nickname ?? username;
+        DisplayName = displayName ?? username;
     }
 
-    public void Update(string? nickname, string? phoneNumber, string? avatar)
+    public void Update(string? displayName, string? phoneNumber, string? avatar)
     {
-        Nickname = nickname;
+        DisplayName = displayName;
 #if (IncludeIdentity)
         PhoneNumber = phoneNumber;
 #endif
         Avatar = avatar;
     }
 
-    public void UpdateManagement(string email, string? nickname, string? avatar, bool isActive, bool emailConfirmed)
+    public void UpdateManagement(string email, string? displayName, string? avatar, bool isActive, bool emailConfirmed)
     {
         Email = email;
-        Nickname = nickname;
+        DisplayName = displayName;
         Avatar = avatar;
         IsActive = isActive;
 #if (IncludeIdentity)
@@ -120,11 +120,11 @@ public class User : FullAuditedEntity<Guid>
 #endif
     }
 
-    public void UpdateProfile(string username, string email, string? nickname, string? phoneNumber, string? avatar)
+    public void UpdateProfile(string username, string email, string? displayName, string? phoneNumber, string? avatar)
     {
         Username = username;
         Email = email;
-        Nickname = nickname;
+        DisplayName = displayName;
 #if (IncludeIdentity)
         PhoneNumber = phoneNumber;
 #endif

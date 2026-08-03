@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
+using CompanyName.ProjectName.Infrastructure.Notifications;
 #endif
 
 using CompanyName.ProjectName.Domain.Shared.Security.Aes;
@@ -86,6 +87,8 @@ public static class DependencyInjection
 
 #if (IncludeNotifications)
         services.AddNotificationsEfCore<MyProjectDbContext>();
+        // 通知“清空全部”能力：框架 INotificationStore 未提供删除，走自定义 EF 清理服务。
+        services.AddScoped<INotificationCleanupService, NotificationCleanupService>();
 #endif
 #if (IncludeRoles)
         services.AddAuthorizationEfCore<MyProjectDbContext>();

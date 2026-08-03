@@ -33,17 +33,17 @@ import {
   HlmInputGroupInput,
   HlmInputGroupAddon,
 } from '@spartan-ng/helm/input-group';
-import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 
+import { ConfirmService } from '../../../../core/feedback/confirm-service';
+import { notify } from '../../../../core/feedback/notify';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
-import { ConfirmService } from '../../../../core/notifications/confirm-service';
-import { notify } from '../../../../core/notifications/notify';
 import { LayoutService } from '../../../../layout/services/layout-service';
+import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
 import { FilterStateService } from '../../../../shared/services/filter-state-service';
 import {
@@ -66,8 +66,8 @@ import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupAddon,
-    ...HlmSelectImports,
     ...HlmTooltipImports,
+    FacetedFilter,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
@@ -108,7 +108,7 @@ export class Users implements OnInit {
   searchQuery = signal('');
   selectedIsActive = signal<boolean | null>(null);
   selectedIsEmailVerified = signal<boolean | null>(null);
-  selectedRole = signal<string | null>(null);
+  selectedRoles = signal<string[]>([]);
 
   offset = signal(0);
   limit = signal(10);
@@ -167,6 +167,11 @@ export class Users implements OnInit {
   readonly searchPlaceholder = () => this.transloco.translate('users.filter.searchPlaceholder');
   readonly refreshLabel = () => this.transloco.translate('common.refresh');
   readonly newUserLabel = () => this.transloco.translate('users.actions.newUser');
+  readonly statusFilterLabel = () => this.transloco.translate('users.table.colStatus');
+  readonly emailFilterLabel = () => this.transloco.translate('users.filter.emailLabel');
+  readonly roleFilterLabel = () => this.transloco.translate('users.table.colRole');
+  readonly filterClearLabel = () => this.transloco.translate('common.clearFilter');
+  readonly filterEmptyLabel = () => this.transloco.translate('common.noResults');
   //#else
   readonly allStatusPlaceholder = () => 'All statuses';
   readonly allEmailStatusPlaceholder = () => 'All email statuses';
@@ -174,6 +179,11 @@ export class Users implements OnInit {
   readonly searchPlaceholder = () => 'Search username / email / display name...';
   readonly refreshLabel = () => 'Refresh';
   readonly newUserLabel = () => 'New user';
+  readonly statusFilterLabel = () => 'Status';
+  readonly emailFilterLabel = () => 'Email status';
+  readonly roleFilterLabel = () => 'Role';
+  readonly filterClearLabel = () => 'Clear filter';
+  readonly filterEmptyLabel = () => 'No results';
   //#endif
 
   constructor() {
@@ -197,7 +207,7 @@ export class Users implements OnInit {
       searchQuery: string;
       selectedIsActive: boolean | null;
       selectedIsEmailVerified: boolean | null;
-      selectedRole: string | null;
+      selectedRoles: string[];
     }>(this.FILTER_KEY);
 
     if (saved.searchQuery) this.searchQuery.set(saved.searchQuery);
@@ -205,7 +215,7 @@ export class Users implements OnInit {
       this.selectedIsActive.set(saved.selectedIsActive ?? null);
     if (saved.selectedIsEmailVerified !== undefined)
       this.selectedIsEmailVerified.set(saved.selectedIsEmailVerified ?? null);
-    if (saved.selectedRole !== undefined) this.selectedRole.set(saved.selectedRole ?? null);
+    if (saved.selectedRoles !== undefined) this.selectedRoles.set(saved.selectedRoles ?? []);
 
     // 首次进入即加载列表（恢复筛选后），无需手动点刷新。
     this.reloadList();
@@ -218,7 +228,7 @@ export class Users implements OnInit {
         keyword: this.searchQuery(),
         isActive: this.selectedIsActive() ?? undefined,
         isEmailVerified: this.selectedIsEmailVerified() ?? undefined,
-        role: this.selectedRole() ?? undefined,
+        roles: this.selectedRoles().length ? this.selectedRoles() : undefined,
         offset: this.offset(),
         limit: this.limit(),
         sorting: this.sorting(),
@@ -248,8 +258,8 @@ export class Users implements OnInit {
     this.onFilter();
   }
 
-  onRoleChange(value: string | null | undefined) {
-    this.selectedRole.set(value ?? null);
+  onRolesChange(values: string[]) {
+    this.selectedRoles.set(values ?? []);
     this.onFilter();
   }
 
@@ -259,7 +269,7 @@ export class Users implements OnInit {
       searchQuery: this.searchQuery(),
       selectedIsActive: this.selectedIsActive(),
       selectedIsEmailVerified: this.selectedIsEmailVerified(),
-      selectedRole: this.selectedRole(),
+      selectedRoles: this.selectedRoles(),
     });
     this.reloadList();
   }

@@ -62,7 +62,7 @@ public class AuthAppService(
             }
         }
 
-        var user = await userDomainService.CreateUserAsync(input.Username, input.Email, input.Password, input.Nickname, cancellationToken);
+        var user = await userDomainService.CreateUserAsync(input.Username, input.Email, input.Password, input.DisplayName, cancellationToken);
         await userDomainService.AssignDefaultRolesToUserAsync(user.Id, cancellationToken);
 
         logger.LogInformation("用户注册成功 (ID: {Id})", user.Id);
@@ -102,7 +102,7 @@ public class AuthAppService(
             user,
             input.Username,
             input.Email,
-            input.Nickname,
+            input.DisplayName,
             input.PhoneNumber,
             input.Avatar,
             cancellationToken);
@@ -158,7 +158,7 @@ public class AuthAppService(
             Id = user.Id,
             Username = user.Username,
             Email = user.Email,
-            Nickname = user.Nickname,
+            DisplayName = user.DisplayName,
             Avatar = user.Avatar,
             PhoneNumber = user.PhoneNumber,
             IsActive = user.IsActive,

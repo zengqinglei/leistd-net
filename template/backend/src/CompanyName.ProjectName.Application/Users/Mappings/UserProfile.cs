@@ -21,7 +21,6 @@ public class UserProfile : MapsterProfile
 #endif
 
         CreateMap<User, UserManagementOutputDto>()
-            .Map(dest => dest.DisplayName, src => src.Nickname)
 #if (IncludeIdentity)
             .Map(dest => dest.IsEmailVerified, src => src.EmailConfirmed)
             .Map(dest => dest.Roles, src => ResolveRoles(src))

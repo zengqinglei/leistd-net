@@ -2,7 +2,7 @@ export class User {
   id!: string;
   username!: string;
   email!: string;
-  nickname?: string;
+  displayName?: string;
   avatar?: string;
   phoneNumber?: string;
   roles!: string[];

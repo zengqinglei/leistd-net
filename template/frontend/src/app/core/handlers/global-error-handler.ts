@@ -6,7 +6,7 @@ import { TranslocoService } from '@jsverse/transloco';
 import { ErrorHandler, Injectable } from '@angular/core';
 //#endif
 
-import { notify } from '../notifications/notify';
+import { notify } from '../feedback/notify';
 
 /**
  * 全局错误处理器

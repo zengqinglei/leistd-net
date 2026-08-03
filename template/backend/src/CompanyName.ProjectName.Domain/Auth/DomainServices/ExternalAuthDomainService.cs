@@ -109,12 +109,12 @@ public class ExternalAuthDomainService(
                 username: externalUserInfo.Username,
                 email: externalUserInfo.Email ?? $"{externalUserInfo.Username}@{provider.ToLower()}.local",
                 passwordHash: null,
-                nickname: externalUserInfo.Nickname ?? externalUserInfo.Username
+                displayName: externalUserInfo.DisplayName ?? externalUserInfo.Username
             );
 
             if (!string.IsNullOrEmpty(externalUserInfo.AvatarUrl))
             {
-                user.Update(user.Nickname, user.PhoneNumber, externalUserInfo.AvatarUrl);
+                user.Update(user.DisplayName, user.PhoneNumber, externalUserInfo.AvatarUrl);
             }
 
             await userRepository.InsertAsync(user, cancellationToken);

@@ -1,32 +1,54 @@
 <!-- Header -->
 <header
-  class="h-14 md:h-16 shrink-0 flex items-center justify-between px-4 md:px-6 bg-background/80 backdrop-blur-md border-b border-border z-50 sticky top-0"
+  class="h-14 shrink-0 flex items-center justify-between px-4 md:px-6 bg-background/95 backdrop-blur border-b border-border z-30 sticky top-0"
 >
-  <!-- Breadcrumb / Title & Toggle -->
-  <div class="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-    <!-- Sidebar Toggle（驱动 HlmSidebarService：桌面折叠、移动端开合 sheet） -->
+  <!-- 折叠按钮 + 分隔线 + 路由面包屑 -->
+  <div class="flex items-center gap-2 flex-1 min-w-0">
     <!--#if (IncludeLocalization)-->
     <button
       hlmSidebarTrigger
       size="icon"
+      position="bottom"
       [attr.aria-label]="'common.toggleSidebar' | transloco"
+      [hlmTooltip]="sidebarTip"
     ></button>
     <!--#else-->
-    <button hlmSidebarTrigger size="icon" aria-label="Toggle sidebar"></button>
+    <button
+      hlmSidebarTrigger
+      size="icon"
+      position="bottom"
+      aria-label="Toggle sidebar"
+      [hlmTooltip]="sidebarTip"
+    ></button>
     <!--#endif-->
+    <ng-template #sidebarTip>
+      <span class="flex items-center gap-2">
+        <!--#if (IncludeLocalization)-->
+        {{ 'common.toggleSidebar' | transloco }}
+        <!--#else-->
+        Toggle sidebar
+        <!--#endif-->
+        <kbd hlmKbdGroup><kbd hlmKbd>⌘ B</kbd></kbd>
+      </span>
+    </ng-template>
 
-    <!-- Breadcrumb: 响应式 -->
-    <div class="flex items-center gap-2 text-sm overflow-hidden">
-      <!--#if (IncludeLocalization)-->
-      <span class="text-muted-foreground hidden sm:inline">{{
-        'common.workspace' | transloco
-      }}</span>
-      <!--#else-->
-      <span class="text-muted-foreground hidden sm:inline">Workspace</span>
-      <!--#endif-->
-      <span class="text-muted-foreground hidden sm:inline">/</span>
-      <h2 class="font-semibold truncate">{{ layoutService.title() }}</h2>
-    </div>
+    <hlm-separator orientation="vertical" class="me-2 !h-6 !self-center" />
+
+    <nav hlmBreadcrumb class="overflow-hidden">
+      <ol hlmBreadcrumbList>
+        <li hlmBreadcrumbItem class="hidden sm:inline-flex">
+          <!--#if (IncludeLocalization)-->
+          <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{ homeLabel() | transloco }}</a>
+          <!--#else-->
+          <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{ homeLabel() }}</a>
+          <!--#endif-->
+        </li>
+        <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
+        <li hlmBreadcrumbItem class="min-w-0">
+          <span hlmBreadcrumbPage class="truncate">{{ layoutService.title() }}</span>
+        </li>
+      </ol>
+    </nav>
   </div>
 
   <!-- Right Actions -->
@@ -36,118 +58,9 @@
 
     <!-- Notifications -->
     <!--#if (IncludeNotifications)-->
-    <div class="relative">
-      <hlm-popover
-        align="end"
-        sideOffset="8"
-        [state]="notificationOpen()"
-        (stateChanged)="notificationOpen.set($event)"
-      >
-        <button
-          hlmBtn
-          variant="ghost"
-          size="icon"
-          hlmPopoverTrigger
-          [hlmTooltip]="notificationTooltip()"
-          class="relative !overflow-visible"
-        >
-          <ng-icon name="lucideBell" />
-          @if (notificationCount() > 0) {
-            <span
-              class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-destructive text-[10px] font-medium leading-none text-white"
-            >
-              {{ notificationCount() > 99 ? '99+' : notificationCount() }}
-            </span>
-          }
-        </button>
-
-        <hlm-popover-content *hlmPopoverPortal class="w-[360px] max-w-[90vw] !gap-0 !p-0">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-border">
-            <!--#if (IncludeLocalization)-->
-            <span class="font-semibold">{{ 'layout.notifications.title' | transloco }}</span>
-            @if (notificationCount() > 0) {
-              <button
-                type="button"
-                class="text-xs text-primary hover:underline"
-                (click)="markAllNotificationsRead()"
-              >
-                {{ 'layout.notifications.markAllRead' | transloco }}
-              </button>
-            }
-            <!--#else-->
-            <span class="font-semibold">Notifications</span>
-            @if (notificationCount() > 0) {
-              <button
-                type="button"
-                class="text-xs text-primary hover:underline"
-                (click)="markAllNotificationsRead()"
-              >
-                Mark all as read
-              </button>
-            }
-            <!--#endif-->
-          </div>
-          @if (notifications().length === 0) {
-            <div class="py-10 text-center text-muted-foreground text-sm">
-              <ng-icon name="lucideInbox" class="text-2xl block mb-2 opacity-60" />
-              <!--#if (IncludeLocalization)-->
-              {{ 'layout.notifications.empty' | transloco }}
-              <!--#else-->
-              No notifications
-              <!--#endif-->
-            </div>
-          } @else {
-            <div class="max-h-[360px] overflow-y-auto flex flex-col">
-              @for (n of notifications(); track n.id; let last = $last) {
-                <button
-                  type="button"
-                  class="flex items-stretch gap-3 w-full text-left px-4 py-3.5 transition-colors hover:bg-accent"
-                  (click)="onNotificationClick(n)"
-                >
-                  <span
-                    class="flex items-center justify-center shrink-0 self-stretch aspect-square"
-                  >
-                    <ng-icon
-                      [name]="notificationIcon(n.type)"
-                      class="text-muted-foreground text-2xl"
-                    />
-                  </span>
-                  <span class="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
-                    <span class="flex items-center gap-6">
-                      <span
-                        class="text-sm truncate flex-1 min-w-0"
-                        [class.font-semibold]="!n.isRead"
-                        [class.text-muted-foreground]="n.isRead"
-                        [hlmTooltip]="n.title"
-                        >{{ n.title }}</span
-                      >
-                      <span class="flex items-center gap-1.5 shrink-0">
-                        @if (!n.isRead) {
-                          <span class="w-2 h-2 bg-primary rounded-full"></span>
-                        }
-                        <span class="text-[11px] text-muted-foreground whitespace-nowrap">{{
-                          n.creationTime | date: 'MM-dd HH:mm'
-                        }}</span>
-                      </span>
-                    </span>
-                    <span
-                      class="block text-xs text-muted-foreground leading-relaxed truncate min-h-[1rem] pr-6"
-                      [hlmTooltip]="n.content || ''"
-                      >{{ n.content }}</span
-                    >
-                  </span>
-                </button>
-                @if (!last) {
-                  <div class="border-t border-dashed border-border"></div>
-                }
-              }
-            </div>
-          }
-        </hlm-popover-content>
-      </hlm-popover>
-    </div>
+    <app-notifications />
     <!--#else-->
-    <button hlmBtn variant="ghost" size="icon">
+    <button hlmBtn variant="ghost" size="icon" aria-label="Notifications">
       <ng-icon name="lucideBell" />
     </button>
     <!--#endif-->
@@ -155,72 +68,5 @@
     <!-- Language Switcher: 铃铛右侧 -->
     <app-language-switcher />
     <!--#endif-->
-
-    <div class="h-6 w-px bg-border mx-1"></div>
-    <!--#if (IncludeIdentity)-->
-    <!-- User Dropdown: 始终显示用户名 -->
-    @if (authService.currentUser(); as user) {
-      <div class="relative">
-        <button
-          hlmBtn
-          variant="ghost"
-          class="flex items-center gap-2 md:gap-3 p-1.5 min-h-[44px]"
-          [hlmDropdownMenuTrigger]="userMenu"
-          align="end"
-        >
-          <hlm-avatar size="sm">
-            <img
-              [src]="
-                user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username
-              "
-              hlmAvatarImage
-              [alt]="user.username"
-            />
-            <span hlmAvatarFallback>{{ (user.nickname || user.username)[0] }}</span>
-          </hlm-avatar>
-          <div class="flex items-center gap-2">
-            <p class="text-sm font-medium leading-none truncate max-w-[80px] md:max-w-none">
-              {{ user.nickname || user.username }}
-            </p>
-            @if (user.isAdmin()) {
-              <ng-icon
-                name="lucideBadgeCheck"
-                class="text-primary text-xs hidden md:inline"
-                [hlmTooltip]="adminTooltip()"
-              />
-            }
-          </div>
-          <ng-icon name="lucideChevronDown" class="text-muted-foreground text-xs ml-1" />
-        </button>
-
-        <ng-template #userMenu>
-          <hlm-dropdown-menu class="min-w-44">
-            @for (item of userMenuItems(); track $index) {
-              @if (item.separator) {
-                <hlm-dropdown-menu-separator />
-              } @else {
-                <button hlmDropdownMenuItem (click)="item.action!()">
-                  <ng-icon [name]="item.icon!" data-icon="inline-start" />
-                  <span>{{ item.label }}</span>
-                </button>
-              }
-            }
-          </hlm-dropdown-menu>
-        </ng-template>
-      </div>
-    }
-    <!--#endif-->
   </div>
 </header>
-<!--#if (IncludeIdentity)-->
-
-<app-profile-settings-dialog
-  [visible]="profileDialogVisible()"
-  (visibleChange)="profileDialogVisible.set($event)"
-/>
-
-<app-change-password-dialog
-  [visible]="changePasswordDialogVisible()"
-  (visibleChange)="changePasswordDialogVisible.set($event)"
-/>
-<!--#endif-->

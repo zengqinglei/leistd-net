@@ -22,16 +22,17 @@ import {
   signal,
 } from '@angular/core';
 //#endif
-import { FormsModule } from '@angular/forms';
+import { form, required, disabled, validate, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCheck, lucideCircleCheck, lucidePlus, lucideX } from '@ng-icons/lucide';
+import { lucideCircleCheck } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
@@ -49,12 +50,13 @@ import {
   OpenApplicationType,
   UpdateOpenApplicationInputDto,
 } from '../../../../models/open-application.dto';
+import { UriListEditor } from '../uri-list-editor/uri-list-editor';
 
 type OpenApplicationTemplate = 'web' | 'desktop' | 'service';
 
 interface OpenApplicationEditFormModel {
   clientId: string;
-  displayName?: string;
+  displayName: string;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
   consentType: OpenApplicationConsentType;
@@ -62,8 +64,6 @@ interface OpenApplicationEditFormModel {
   postLogoutRedirectUris: string[];
   permissions: string[];
   requirements: string[];
-  redirectUriInput: string;
-  postLogoutRedirectUriInput: string;
 }
 
 const authorizationCodePermissions = [
@@ -83,7 +83,7 @@ const authorizationCodePermissions = [
 @Component({
   selector: 'app-open-application-edit-dialog',
   imports: [
-    FormsModule,
+    FormField,
     NgIcon,
     HlmBadge,
     HlmButton,
@@ -91,13 +91,15 @@ const authorizationCodePermissions = [
     HlmSpinner,
     HlmSeparator,
     ...HlmDialogImports,
+    ...HlmFieldImports,
     ...HlmSelectImports,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
     DialogLoading,
+    UriListEditor,
   ],
-  providers: [provideIcons({ lucideCheck, lucideCircleCheck, lucidePlus, lucideX })],
+  providers: [provideIcons({ lucideCircleCheck })],
   templateUrl: './open-application-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -123,6 +125,14 @@ export class OpenApplicationEditDialog {
     this.transloco.translate('openApp.permissions.placeholder');
   readonly requirementsPlaceholder = () =>
     this.transloco.translate('openApp.requirements.placeholder');
+  readonly redirectUrisLabel = () => this.transloco.translate('openApp.field.redirectUris');
+  readonly postLogoutUrisLabel = () =>
+    this.transloco.translate('openApp.field.postLogoutRedirectUris');
+  readonly redirectUriHint = () => this.transloco.translate('openApp.redirectUri.hint');
+  readonly postLogoutUriHint = () => this.transloco.translate('openApp.postLogoutUri.hint');
+  readonly redirectUriInvalid = () => this.transloco.translate('openApp.redirectUri.invalid');
+  readonly redirectUriEmpty = () => this.transloco.translate('openApp.redirectUri.empty');
+  readonly postLogoutUriEmpty = () => this.transloco.translate('openApp.postLogoutUri.empty');
   //#else
   readonly dialogHeader = () =>
     this.isEditMode() ? 'Edit Open Application' : 'New Open Application';
@@ -134,6 +144,13 @@ export class OpenApplicationEditDialog {
   readonly addLabel = () => 'Add';
   readonly permissionsPlaceholder = () => 'Select authorization capabilities';
   readonly requirementsPlaceholder = () => 'Select security requirements';
+  readonly redirectUrisLabel = () => 'Redirect URIs';
+  readonly postLogoutUrisLabel = () => 'Post Logout Redirect URIs';
+  readonly redirectUriHint = () => 'Callback URI after sign-in completes';
+  readonly postLogoutUriHint = () => 'Redirect URI after logout';
+  readonly redirectUriInvalid = () => 'Please enter a valid absolute URI without a fragment.';
+  readonly redirectUriEmpty = () => 'No Redirect URI configured yet';
+  readonly postLogoutUriEmpty = () => 'No Post Logout Redirect URI configured yet';
   //#endif
   readonly visible = model(false);
   readonly loading = input(false);
@@ -141,29 +158,62 @@ export class OpenApplicationEditDialog {
   readonly application = input<OpenApplicationOutputDto | null>(null);
   readonly saved = output<CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto>();
 
-  formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
+  protected readonly formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
   selectedTemplate = signal<OpenApplicationTemplate | null>(null);
 
   isEditMode = computed(() => !!this.application());
   isTemplateLocked = computed(() => !!this.selectedTemplate() && !this.isEditMode());
   isConfidentialClient = computed(() => this.formModel().clientType === 'confidential');
   isServiceType = computed(() => this.formModel().applicationType === 'service');
-  isValid = computed(() => {
-    const model = this.formModel();
-    if (!this.isEditMode() && !model.clientId.trim()) {
-      return false;
-    }
-    if (!model.applicationType || !model.clientType || !model.consentType) {
-      return false;
-    }
-    if (
-      (model.applicationType === 'native' || model.clientType === 'public') &&
-      !model.requirements.includes('ft:pkce')
-    ) {
-      return false;
-    }
-    return true;
+
+  //#if (IncludeLocalization)
+  readonly applicationForm = form(this.formModel, (path) => {
+    required(path.clientId, {
+      message: this.transloco.translate('common.validation.required'),
+      when: () => !this.isEditMode(),
+    });
+    // 编辑模式禁用 Client ID（不可改）。
+    disabled(path.clientId, { when: () => this.isEditMode() });
+    // 跨字段：Native / Public 客户端必须启用 PKCE。
+    validate(path.requirements, (ctx) => {
+      const requirements = ctx.value();
+      const applicationType = ctx.valueOf(path.applicationType);
+      const clientType = ctx.valueOf(path.clientType);
+      if (
+        (applicationType === 'native' || clientType === 'public') &&
+        !requirements.includes('ft:pkce')
+      ) {
+        return {
+          kind: 'pkceRequired',
+          message: this.transloco.translate('openApp.requirements.pkceRequired'),
+        };
+      }
+      return null;
+    });
   });
+  //#else
+  readonly applicationForm = form(this.formModel, (path) => {
+    required(path.clientId, {
+      message: 'This field is required.',
+      when: () => !this.isEditMode(),
+    });
+    // 编辑模式禁用 Client ID（不可改）。
+    disabled(path.clientId, { when: () => this.isEditMode() });
+    // 跨字段：Native / Public 客户端必须启用 PKCE。
+    validate(path.requirements, (ctx) => {
+      const requirements = ctx.value();
+      const applicationType = ctx.valueOf(path.applicationType);
+      const clientType = ctx.valueOf(path.clientType);
+      if (
+        (applicationType === 'native' || clientType === 'public') &&
+        !requirements.includes('ft:pkce')
+      ) {
+        return { kind: 'pkceRequired', message: 'Native/Public clients must enable PKCE.' };
+      }
+      return null;
+    });
+  });
+  //#endif
 
   //#if (IncludeLocalization)
   // 读一次 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，选项标签重新翻译。
@@ -407,7 +457,7 @@ export class OpenApplicationEditDialog {
       if (application) {
         this.formModel.set({
           clientId: application.clientId,
-          displayName: application.displayName,
+          displayName: application.displayName ?? '',
           applicationType: application.applicationType,
           clientType: application.clientType,
           consentType: application.consentType,
@@ -415,8 +465,6 @@ export class OpenApplicationEditDialog {
           postLogoutRedirectUris: [...application.postLogoutRedirectUris],
           permissions: [...application.permissions],
           requirements: [...application.requirements],
-          redirectUriInput: '',
-          postLogoutRedirectUriInput: '',
         });
       } else {
         this.formModel.set(this.createEmptyModel());
@@ -435,8 +483,6 @@ export class OpenApplicationEditDialog {
       postLogoutRedirectUris: [],
       permissions: [...authorizationCodePermissions],
       requirements: ['ft:pkce'],
-      redirectUriInput: '',
-      postLogoutRedirectUriInput: '',
     };
   }
 
@@ -491,14 +537,6 @@ export class OpenApplicationEditDialog {
     }));
   }
 
-  onDisplayNameChange(value: string) {
-    this.formModel.update((model) => ({ ...model, displayName: value }));
-  }
-
-  onClientIdChange(value: string) {
-    this.formModel.update((model) => ({ ...model, clientId: value }));
-  }
-
   onApplicationTypeChange(value: OpenApplicationType | null | undefined) {
     if (!value) {
       return;
@@ -511,31 +549,6 @@ export class OpenApplicationEditDialog {
       return;
     }
     this.formModel.update((model) => ({ ...model, consentType: value }));
-  }
-
-  onRedirectUriInputChange(value: string) {
-    this.formModel.update((model) => ({ ...model, redirectUriInput: value }));
-  }
-
-  onPostLogoutRedirectUriInputChange(value: string) {
-    this.formModel.update((model) => ({ ...model, postLogoutRedirectUriInput: value }));
-  }
-
-  onPermissionsChange(value: string[] | null | undefined) {
-    this.formModel.update((model) => ({ ...model, permissions: value ?? [] }));
-  }
-
-  onRequirementsChange(value: string[] | null | undefined) {
-    this.formModel.update((model) => ({ ...model, requirements: value ?? [] }));
-  }
-
-  onClientTypeChange() {
-    if (this.formModel().clientType === 'public') {
-      this.formModel.update((model) => ({
-        ...model,
-        requirements: this.ensurePkce(model.requirements),
-      }));
-    }
   }
 
   onClientTypeSelect(clientType: OpenApplicationClientType | null | undefined) {
@@ -552,12 +565,22 @@ export class OpenApplicationEditDialog {
     }));
   }
 
-  addRedirectUri() {
-    this.addUri('redirectUris', 'redirectUriInput');
+  addRedirectUri(uri: string) {
+    this.formModel.update((model) => ({
+      ...model,
+      redirectUris: model.redirectUris.includes(uri)
+        ? model.redirectUris
+        : [...model.redirectUris, uri],
+    }));
   }
 
-  addPostLogoutRedirectUri() {
-    this.addUri('postLogoutRedirectUris', 'postLogoutRedirectUriInput');
+  addPostLogoutRedirectUri(uri: string) {
+    this.formModel.update((model) => ({
+      ...model,
+      postLogoutRedirectUris: model.postLogoutRedirectUris.includes(uri)
+        ? model.postLogoutRedirectUris
+        : [...model.postLogoutRedirectUris, uri],
+    }));
   }
 
   removeRedirectUri(uri: string) {
@@ -572,16 +595,6 @@ export class OpenApplicationEditDialog {
       ...model,
       postLogoutRedirectUris: model.postLogoutRedirectUris.filter((item) => item !== uri),
     }));
-  }
-
-  isRedirectUriInputInvalid() {
-    const value = this.formModel().redirectUriInput.trim();
-    return !!value && !this.isValidRedirectUri(value);
-  }
-
-  isPostLogoutRedirectUriInputInvalid() {
-    const value = this.formModel().postLogoutRedirectUriInput.trim();
-    return !!value && !this.isValidRedirectUri(value);
   }
 
   /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约。 */
@@ -599,7 +612,8 @@ export class OpenApplicationEditDialog {
   }
 
   save() {
-    if (!this.isValid()) {
+    if (this.applicationForm().invalid()) {
+      this.applicationForm().markAsTouched();
       return;
     }
 
@@ -629,35 +643,6 @@ export class OpenApplicationEditDialog {
       permissions: model.permissions,
       requirements: model.requirements,
     });
-  }
-
-  private addUri(
-    listKey: 'redirectUris' | 'postLogoutRedirectUris',
-    inputKey: 'redirectUriInput' | 'postLogoutRedirectUriInput',
-  ) {
-    const value = this.formModel()[inputKey].trim();
-    if (!value || !this.isValidRedirectUri(value)) {
-      return;
-    }
-
-    this.formModel.update((model) => ({
-      ...model,
-      [listKey]: model[listKey].includes(value) ? model[listKey] : [...model[listKey], value],
-      [inputKey]: '',
-    }));
-  }
-
-  private isValidRedirectUri(value: string) {
-    if (!/^[a-z][a-z0-9+.-]*:/i.test(value) || /\s/.test(value)) {
-      return false;
-    }
-
-    try {
-      const uri = new URL(value);
-      return !!uri.protocol && !uri.hash;
-    } catch {
-      return false;
-    }
   }
 
   private ensurePkce(requirements: string[]) {

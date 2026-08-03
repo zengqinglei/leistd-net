@@ -69,7 +69,7 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
 
   user.username = username;
   user.email = email;
-  user.nickname = body.nickname?.trim() || undefined;
+  user.displayName = body.displayName?.trim() || undefined;
   user.phoneNumber = body.phoneNumber?.trim() || undefined;
   user.avatar = body.avatar?.trim() || undefined;
 

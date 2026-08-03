@@ -28,13 +28,15 @@ interface LangOption {
   template: `
     <button
       hlmBtn
-      variant="ghost"
+      variant="outline"
       size="icon"
+      class="w-auto gap-1.5 px-2.5"
       [attr.aria-label]="'language.label' | transloco"
       [hlmDropdownMenuTrigger]="langMenu"
       align="end"
     >
       <ng-icon name="lucideGlobe" />
+      {{ shortLabel() }}
     </button>
 
     <ng-template #langMenu>
@@ -56,6 +58,9 @@ interface LangOption {
 })
 export class LanguageSwitcher {
   private readonly languageService = inject(LanguageService);
+
+  /** 当前语言的短标识（EN / 中），显示在全球化图标右侧；随语言切换响应式更新。 */
+  readonly shortLabel = computed(() => this.languageService.currentMeta().short);
 
   readonly items = computed<LangOption[]>(() => {
     const active = this.languageService.activeLang();

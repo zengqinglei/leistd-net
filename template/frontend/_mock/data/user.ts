@@ -6,7 +6,7 @@ export interface MockUser {
   username: string;
   email: string;
   password: string;
-  nickname?: string;
+  displayName?: string;
   avatar?: string;
   phoneNumber?: string;
   isActive: boolean;
@@ -23,7 +23,7 @@ export const USERS: MockUser[] = [
     username: 'admin',
     email: 'admin@example.com',
     password: 'Admin@123456',
-    nickname: 'Administrator',
+    displayName: 'Administrator',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
     isActive: true,
     isSuperAdmin: true,
@@ -37,7 +37,7 @@ export const USERS: MockUser[] = [
     username: 'demo',
     email: 'demo@example.com',
     password: 'Demo@123456',
-    nickname: 'Demo User',
+    displayName: 'Demo User',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=demo',
     isActive: true,
     isSuperAdmin: false,
@@ -53,7 +53,7 @@ export function toUserOutput(user: MockUser): UserOutputDto {
     id: user.id,
     username: user.username,
     email: user.email,
-    nickname: user.nickname,
+    displayName: user.displayName,
     avatar: user.avatar,
     phoneNumber: user.phoneNumber,
     isActive: user.isActive,
@@ -68,7 +68,7 @@ export function toUserManagementOutput(user: MockUser): UserManagementOutputDto 
     id: user.id,
     username: user.username,
     email: user.email,
-    displayName: user.nickname,
+    displayName: user.displayName,
     avatar: user.avatar,
     isActive: user.isActive,
     isEmailVerified: user.isEmailVerified,

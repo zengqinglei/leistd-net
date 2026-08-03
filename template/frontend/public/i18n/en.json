@@ -22,8 +22,29 @@
     "copy": "Copy",
     "add": "Add",
     "actions": "Actions",
-    "rowsPerPage": "Rows per page",
-    "toggleSidebar": "Toggle sidebar"
+    "rowsPerPage": "Items per page",
+    "pageOf": "Page {{page}} of {{total}}",
+    "pagination": {
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "toggleSidebar": "Toggle sidebar",
+    "clearFilter": "Clear filter",
+    "noResults": "No results",
+    "validation": {
+      "required": "This field is required.",
+      "email": "Please enter a valid email address.",
+      "minLength": "Must be at least {{min}} characters.",
+      "maxLength": "Must not exceed {{max}} characters.",
+      "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
+      "passwordRule": "Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.",
+      "passwordWeak": "Password must be at least 6 characters and include letters and digits.",
+      "passwordMismatch": "The two passwords do not match.",
+      "passwordSameAsCurrent": "The new password must differ from the current one.",
+      "phonePattern": "Only digits, spaces, and + - ( ) are allowed."
+    }
   },
   "menu": {
     "workspace": "Workspace",
@@ -55,11 +76,14 @@
       "groupSystem": "System",
       "users": "User Management",
       "openApplications": "Developer Apps",
-      "workbench": "Workbench"
+      "workbench": "Workbench",
+      "appSubtitle": "Admin Platform"
     },
     "notifications": {
       "title": "Notifications",
       "markAllRead": "Mark all as read",
+      "clearAll": "Clear all",
+      "clearOne": "Dismiss",
       "empty": "No notifications"
     }
   },
@@ -75,7 +99,7 @@
     "dashboard": {
       "title": "Workspace",
       "username": "Username",
-      "nickname": "Nickname",
+      "displayName": "Display name",
       "email": "Email",
       "roles": "Roles",
       "noUserInfo": "No user information available"
@@ -121,19 +145,14 @@
       "subtitle": "Enter your current password and set a new sign-in password.",
       "rules": "Password rules: 8–20 characters, and must include uppercase letters, lowercase letters, numbers, and special characters.",
       "currentPassword": "Current Password",
-      "currentPasswordRequired": "Please enter your current password",
       "newPassword": "New Password",
-      "newPasswordRuleError": "The new password does not meet the requirements; it must include uppercase and lowercase letters, numbers, and special characters",
       "confirmPassword": "Confirm New Password",
-      "confirmPasswordRequired": "Please re-enter the new password",
-      "sameAsCurrentError": "The new password cannot be the same as the current password",
-      "mismatchError": "The two new passwords do not match",
       "submit": "Update Password",
       "updateSuccess": "Password updated"
     },
     "profile": {
       "header": "Profile",
-      "subtitle": "Update your username, email, nickname, phone number, and avatar.",
+      "subtitle": "Update your username, email, display name, phone number, and avatar.",
       "invalidFileSizeSummary": "File too large",
       "invalidFileSizeDetail": "The avatar size cannot exceed 1MB",
       "invalidFileTypeSummary": "Unsupported format",
@@ -143,18 +162,12 @@
       "avatarHint": "Hover over the avatar and click + to re-upload; the selection previews instantly.",
       "username": "Username",
       "usernamePlaceholder": "Please enter a username",
-      "usernameRequired": "Username cannot be empty",
-      "usernameFormatError": "Username must be 3–64 characters of letters, numbers, or underscores",
       "email": "Email",
       "emailPlaceholder": "Please enter an email",
-      "emailError": "Please enter a valid email; length cannot exceed 256 characters",
-      "nickname": "Nickname",
-      "nicknamePlaceholder": "Please enter a nickname",
-      "nicknameError": "Nickname length cannot exceed 128 characters",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "Enter a display name",
       "phoneNumber": "Phone Number",
       "phoneNumberPlaceholder": "Please enter a phone number",
-      "phoneNumberLengthError": "Phone number length cannot exceed 20 characters",
-      "phoneNumberPatternError": "Phone number supports only digits, spaces, and the symbols + - ( )",
       "guestUser": "Guest user",
       "updateSuccess": "Profile updated"
     },
@@ -170,24 +183,24 @@
       "password": "Password",
       "passwordPlaceholder": "Please enter your password",
       "noAccount": "Don't have an account?",
-      "registerNow": "Register now",
+      "registerNow": "Sign up now",
       "submit": "Sign In",
       "or": "OR",
       "testAccount": "Test Account",
       "adminRole": "Administrator",
       "badgeFastDev": "Fast Development",
-      "badgeReadyMain": "Ready",
-      "badgeReadySub": "to use",
       "badgeModernArch": "Modern Architecture",
-      "loginSuccess": "Login successful",
+      "loginSuccess": "Signed in successfully",
       "welcomeBack": "Welcome back!",
-      "loginFailed": "Login failed",
-      "externalLoginFailed": "Unable to connect to the {{provider}} login service, please try again later"
+      "loginFailed": "Sign-in failed",
+      "externalLoginFailed": "Unable to connect to the {{provider}} sign-in service, please try again later",
+      "badgeReadyMain": "Ready",
+      "badgeReadySub": "to use"
     },
     "register": {
-      "title": "Create Account",
-      "subtitle": "Welcome aboard, please fill in the following information to register a new account",
-      "badgeFastRegister": "Quick Registration",
+      "title": "Sign Up",
+      "subtitle": "Welcome aboard, please fill in the following information to create your account",
+      "badgeFastRegister": "Quick Sign-up",
       "badgeSecure": "Security Guaranteed",
       "email": "Email",
       "emailPlaceholder": "Enter your email address",
@@ -205,21 +218,15 @@
       "passwordPlaceholder": "Contains letters and digits, at least 6 characters",
       "confirmPassword": "Confirm Password",
       "confirmPasswordPlaceholder": "Enter the password again",
-      "submit": "Create Account",
+      "submit": "Sign Up",
       "haveAccount": "Already have an account?",
       "loginNow": "Sign in directly",
       "emailRequired": "Please enter a valid email first",
       "captchaRequired": "Please enter the captcha first",
       "emailCodeSent": "Verification code sent, please check your email",
       "captchaTokenMissing": "Please refresh to get the captcha",
-      "registerSuccess": "Registration successful",
-      "registerSuccessDetail": "Account created successfully, please sign in",
-      "errRequired": "This field is required",
-      "errEmailInvalid": "Invalid email format",
-      "errUsernamePattern": "Only letters, digits and underscores are allowed",
-      "errPasswordPattern": "Password must be at least 6 characters and contain letters and digits",
-      "errMinLength": "At least {{min}} characters required",
-      "errPasswordMismatch": "The two passwords do not match"
+      "registerSuccess": "Account created",
+      "registerSuccessDetail": "Account created successfully, please sign in"
     },
     "externalCallback": {
       "processingAria": "Completing sign-in",
@@ -235,6 +242,7 @@
     "filter": {
       "allStatus": "All statuses",
       "allEmailStatus": "All email statuses",
+      "emailLabel": "Email status",
       "allRoles": "All roles",
       "searchPlaceholder": "Search username / email / display name..."
     },
@@ -271,7 +279,7 @@
       "colEmail": "Email",
       "colRole": "Role",
       "colStatus": "Status",
-      "colLastLogin": "Last login",
+      "colLastLogin": "Last sign-in",
       "colCreatedAt": "Created at",
       "colActions": "Actions",
       "emptyTitle": "No users yet",
@@ -294,6 +302,7 @@
     "editDialog": {
       "editHeader": "Edit user",
       "createHeader": "New user",
+      "description": "Manage the account profile, roles, and status.",
       "loading": "Loading user information...",
       "unnamedUser": "Unnamed user",
       "noEmail": "No email set",
@@ -304,20 +313,15 @@
       "avatarBadTypeDetail": "Please upload a PNG, JPG or WEBP image",
       "usernameLabel": "Username",
       "usernamePlaceholder": "Enter a username",
-      "usernameRequired": "Username is required",
-      "usernamePattern": "Username must be 3-64 letters, digits or underscores",
       "emailLabel": "Email",
       "emailPlaceholder": "Enter an email",
-      "emailInvalid": "Enter a valid email, no longer than 256 characters",
       "displayNameLabel": "Display name",
       "displayNamePlaceholder": "Enter a display name",
-      "displayNameMaxLength": "Display name cannot exceed 128 characters",
       "passwordLabel": "Initial password",
+      "passwordPlaceholder": "Enter an initial password",
       "passwordRequired": "Enter an initial password",
-      "passwordRule": "Password does not meet the rules: 8-20 characters including uppercase and lowercase letters, digits and special characters",
       "rolesLabel": "Roles",
       "rolesPlaceholder": "Select roles",
-      "rolesRequired": "Select at least one role",
       "activeTitle": "Enable user",
       "activeHint": "When disabled, the user cannot sign in or call protected endpoints",
       "emailVerifiedTitle": "Email verified",
@@ -328,8 +332,6 @@
       "warning": "After the reset, the user must sign in with the new password.",
       "ruleHint": "New password rule: 8-20 characters, and must include uppercase letters, lowercase letters, digits and special characters.",
       "newPasswordLabel": "New password",
-      "newPasswordRequired": "Enter a new password",
-      "newPasswordRule": "The new password does not meet the rules: it must include uppercase and lowercase letters, digits and special characters",
       "confirmButton": "Confirm reset"
     }
   },
@@ -344,6 +346,8 @@
     "filter": {
       "allAppTypes": "All application types",
       "allClientTypes": "All client types",
+      "appTypeLabel": "Application type",
+      "clientTypeLabel": "Client type",
       "searchPlaceholder": "Search by name / Client ID..."
     },
     "toast": {
@@ -372,6 +376,7 @@
     "dialog": {
       "editHeader": "Edit Open Application",
       "createHeader": "New Open Application",
+      "description": "Configure the client's identity, type, and OAuth capabilities.",
       "loading": "Loading open application..."
     },
     "field": {
@@ -382,7 +387,12 @@
       "clientIdPlaceholder": "e.g. my-desktop-app",
       "applicationType": "Application type",
       "clientType": "Client type",
-      "consentType": "Consent"
+      "consentType": "Consent",
+      "clientId": "Client ID",
+      "redirectUris": "Redirect URIs",
+      "postLogoutRedirectUris": "Post Logout Redirect URIs",
+      "permissions": "Permissions",
+      "requirements": "Requirements"
     },
     "template": {
       "web": "Web PKCE client",
@@ -424,7 +434,7 @@
       "authorization": "Authorization capabilities"
     },
     "redirectUri": {
-      "hint": "Callback URI after login completes",
+      "hint": "Callback URI after sign-in completes",
       "placeholder": "https://example.com/callback or my-desktop-app://oauth/callback",
       "invalid": "Please enter a valid absolute URI without a fragment.",
       "empty": "No Redirect URI configured yet"

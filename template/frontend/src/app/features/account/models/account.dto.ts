@@ -13,7 +13,7 @@ export interface UserOutputDto {
   id: string;
   username: string;
   email: string;
-  nickname?: string;
+  displayName?: string;
   avatar?: string;
   phoneNumber?: string;
   isActive: boolean;
@@ -32,7 +32,7 @@ export interface RegisterInputDto {
   captchaCode?: string;
   captchaToken?: string;
   emailVerificationCode?: string;
-  nickname?: string;
+  displayName?: string;
 }
 
 /**
@@ -65,7 +65,7 @@ export interface SendEmailCodeInputDto {
 export interface UpdateCurrentUserInputDto {
   username: string;
   email: string;
-  nickname?: string;
+  displayName?: string;
   phoneNumber?: string;
   avatar?: string;
 }

@@ -26,7 +26,7 @@ public class DefaultAdminOptions
     public string Email { get; set; } = "admin@companyname-projectname.com";
 
     /// <summary>
-    /// 昵称
+    /// 显示名称
     /// </summary>
-    public string? Nickname { get; set; }
+    public string? DisplayName { get; set; }
 }

@@ -26,9 +26,9 @@ public record RegisterInputDto
         ErrorMessage = "{0} must be at least 6 characters and contain both letters and numbers.")]
     public required string Password { get; init; }
 
-    [Display(Name = "Nickname")]
+    [Display(Name = "DisplayName")]
     [StringLength(128, ErrorMessage = "{0} cannot exceed {1} characters.")]
-    public string? Nickname { get; init; }
+    public string? DisplayName { get; init; }
 
     [Display(Name = "Captcha token")]
     public string? CaptchaToken { get; init; }

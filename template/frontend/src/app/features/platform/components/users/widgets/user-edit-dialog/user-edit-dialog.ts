@@ -52,12 +52,13 @@ import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
 
+import { notify } from '../../../../../../core/feedback/notify';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
-import { notify } from '../../../../../../core/notifications/notify';
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { ROLE_LABEL_MAP } from '../../../../../../shared/models/role.enum';
+import { avatarPalette } from '../../../../../../shared/utils/avatar-palette';
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
@@ -150,91 +151,74 @@ export class UserEditDialog {
       this.unnamedLabel(),
   );
   readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
-  readonly avatarStyle = computed(() => {
-    const seed = (this.formModel().username || this.displayName()).trim();
-    let total = 0;
-
-    for (const char of seed) {
-      total += char.charCodeAt(0);
-    }
-
-    const palette = [
-      { background: '#dbeafe', color: '#1d4ed8' },
-      { background: '#dcfce7', color: '#15803d' },
-      { background: '#fef3c7', color: '#b45309' },
-      { background: '#fce7f3', color: '#be185d' },
-      { background: '#ede9fe', color: '#6d28d9' },
-    ];
-
-    return palette[total % palette.length];
-  });
+  readonly avatarStyle = computed(() =>
+    avatarPalette((this.formModel().username || this.displayName()).trim()),
+  );
 
   //#if (IncludeLocalization)
   readonly userForm = form(this.formModel, (path) => {
     required(path.username, {
-      message: this.transloco.translate('users.editDialog.usernameRequired'),
+      message: this.transloco.translate('common.validation.required'),
     });
     minLength(path.username, 3, {
-      message: this.transloco.translate('users.editDialog.usernamePattern'),
+      message: this.transloco.translate('common.validation.usernamePattern'),
     });
     maxLength(path.username, 64, {
-      message: this.transloco.translate('users.editDialog.usernamePattern'),
+      message: this.transloco.translate('common.validation.usernamePattern'),
     });
     pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: this.transloco.translate('users.editDialog.usernamePattern'),
+      message: this.transloco.translate('common.validation.usernamePattern'),
     });
     // 编辑模式禁用用户名（不可改）。
     disabled(path.username, { when: () => this.isEditMode() });
-    required(path.email, { message: this.transloco.translate('users.editDialog.emailInvalid') });
+    required(path.email, { message: this.transloco.translate('common.validation.required') });
     emailValidator(path.email, {
-      message: this.transloco.translate('users.editDialog.emailInvalid'),
+      message: this.transloco.translate('common.validation.email'),
     });
-    maxLength(path.email, 256, {
-      message: this.transloco.translate('users.editDialog.emailInvalid'),
-    });
+    maxLength(path.email, 256, { message: '' });
     maxLength(path.displayName, 128, {
-      message: this.transloco.translate('users.editDialog.displayNameMaxLength'),
+      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
     });
     // 初始密码仅在新建模式校验（编辑模式无密码字段）。
     required(path.password, {
-      message: this.transloco.translate('users.editDialog.passwordRequired'),
+      message: this.transloco.translate('common.validation.required'),
       when: () => !this.isEditMode(),
     });
     pattern(path.password, PASSWORD_RULE, {
-      message: this.transloco.translate('users.editDialog.passwordRule'),
+      message: this.transloco.translate('common.validation.passwordRule'),
       when: () => !this.isEditMode(),
     });
-    required(path.roles, { message: this.transloco.translate('users.editDialog.rolesRequired') });
+    required(path.roles, { message: this.transloco.translate('common.validation.required') });
   });
   //#else
   readonly userForm = form(this.formModel, (path) => {
-    required(path.username, { message: 'Username is required' });
+    required(path.username, { message: 'This field is required.' });
     minLength(path.username, 3, {
-      message: 'Username must be 3-64 letters, digits or underscores',
+      message: 'Must be 3–64 letters, digits, or underscores.',
     });
     maxLength(path.username, 64, {
-      message: 'Username must be 3-64 letters, digits or underscores',
+      message: 'Must be 3–64 letters, digits, or underscores.',
     });
     pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: 'Username must be 3-64 letters, digits or underscores',
+      message: 'Must be 3–64 letters, digits, or underscores.',
     });
     // 编辑模式禁用用户名（不可改）。
     disabled(path.username, { when: () => this.isEditMode() });
-    required(path.email, { message: 'Enter a valid email, no longer than 256 characters' });
-    emailValidator(path.email, { message: 'Enter a valid email, no longer than 256 characters' });
-    maxLength(path.email, 256, { message: 'Enter a valid email, no longer than 256 characters' });
-    maxLength(path.displayName, 128, { message: 'Display name cannot exceed 128 characters' });
+    required(path.email, { message: 'This field is required.' });
+    emailValidator(path.email, { message: 'Please enter a valid email address.' });
+    maxLength(path.email, 256, { message: '' });
+    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
     // 初始密码仅在新建模式校验（编辑模式无密码字段）。
     required(path.password, {
-      message: 'Enter an initial password',
+      message: 'This field is required.',
       when: () => !this.isEditMode(),
     });
     pattern(path.password, PASSWORD_RULE, {
       message:
-        'Password does not meet the rules: 8-20 characters including uppercase and lowercase letters, digits and special characters',
+        'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
       when: () => !this.isEditMode(),
     });
-    required(path.roles, { message: 'Select at least one role' });
+    required(path.roles, { message: 'This field is required.' });
   });
   //#endif
 

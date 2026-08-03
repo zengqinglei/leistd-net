@@ -23,12 +23,12 @@
           <div class="flex items-center gap-3">
             <!--#if (IncludeLocalization)-->
             <span class="text-muted-foreground w-20">{{
-              'workspace.dashboard.nickname' | transloco
+              'workspace.dashboard.displayName' | transloco
             }}</span>
             <!--#else-->
-            <span class="text-muted-foreground w-20">Nickname</span>
+            <span class="text-muted-foreground w-20">DisplayName</span>
             <!--#endif-->
-            <span class="font-medium">{{ user.nickname || '-' }}</span>
+            <span class="font-medium">{{ user.displayName || '-' }}</span>
           </div>
           <div class="flex items-center gap-3">
             <!--#if (IncludeLocalization)-->
