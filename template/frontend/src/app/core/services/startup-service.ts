@@ -1,8 +1,8 @@
 //#if (IncludeIdentity)
-import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 
 import { AuthService } from './auth-service';
+import { ApplicationHttpError } from '../errors/application-http-error';
 //#else
 import { Injectable, signal } from '@angular/core';
 //#endif
@@ -53,7 +53,7 @@ export class StartupService {
       await this.authService.initializeAuth();
       this._status.set('success');
     } catch (err: unknown) {
-      if (err instanceof HttpErrorResponse && err.status === 401) {
+      if (err instanceof ApplicationHttpError && err.status === 401) {
         this.authService.clearAuthData();
         this._status.set('success');
       } else {

@@ -13,6 +13,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideImagePlus } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
@@ -21,7 +22,7 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
-import { notify } from '../../../../core/feedback/notify';
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { avatarPalette } from '../../../../shared/utils/avatar-palette';
 import { AccountService } from '../../services/account-service';
@@ -186,13 +187,13 @@ export class ProfileSettingsDialog {
     const messages = this.uploadMessages();
 
     if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
-      notify.error(messages.typeSummary, { detail: messages.typeDetail });
+      toast.error(messages.typeSummary, { description: messages.typeDetail });
       input.value = '';
       return;
     }
 
     if (file.size > MAX_AVATAR_SIZE) {
-      notify.error(messages.sizeSummary, { detail: messages.sizeDetail });
+      toast.error(messages.sizeSummary, { description: messages.sizeDetail });
       input.value = '';
       return;
     }
@@ -234,13 +235,22 @@ export class ProfileSettingsDialog {
       .subscribe({
         next: () => {
           //#if (IncludeLocalization)
-          notify.success(this.transloco.translate('common.success'), {
-            detail: this.transloco.translate('account.profile.updateSuccess'),
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('account.profile.updateSuccess'),
           });
           //#else
-          notify.success('Success', { detail: 'Profile updated' });
+          toast.success('Success', { description: 'Profile updated' });
           //#endif
           this.visible.set(false);
+        },
+        error: (error) => {
+          //#if (IncludeLocalization)
+          toast.error(this.transloco.translate('common.requestError'), {
+            description: applicationErrorMessage(error),
+          });
+          //#else
+          toast.error('Request failed', { description: applicationErrorMessage(error) });
+          //#endif
         },
       });
   }

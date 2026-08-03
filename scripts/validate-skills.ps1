@@ -18,8 +18,8 @@ function Get-RepoRelativePath([string]$Path) {
 }
 
 $skillSets = @(
-    @{ Path = ".agents/skills"; Kind = "repository"; Expected = @("developing-leistd-framework", "developing-leistd-template", "maintaining-leistd-repository") },
-    @{ Path = "template/.agents/skills"; Kind = "template"; Expected = @("leistd-project-workflow") },
+    @{ Path = ".agents/skills"; Kind = "repository"; Expected = @("developing-leistd-framework", "developing-leistd-template", "maintaining-leistd-repository", "spartan") },
+    @{ Path = "template/.agents/skills"; Kind = "template"; Expected = @("leistd-project-workflow", "spartan") },
     @{ Path = "skills"; Kind = "distribution"; Expected = @("leistd-net-framework") }
 )
 $requiredSkillMarkers = @{
@@ -27,6 +27,7 @@ $requiredSkillMarkers = @{
     "maintaining-leistd-repository" = @("单独修改 framework 或 template", "多个交付面")
     "leistd-net-framework" = @("目标包未安装时", "启动真实宿主")
     "leistd-project-workflow" = @("以用户的最终意图决定交付边界", "缺失规范或文档不阻断低风险任务", "references/bootstrap.md")
+    "spartan" = @("@spartan-ng/cli:info --json", "@spartan-ng/cli:healthcheck")
 }
 
 foreach ($set in $skillSets) {
@@ -79,7 +80,13 @@ foreach ($set in $skillSets) {
         $keys = @($frontmatter | ForEach-Object {
             if ($_ -match '^(?<key>[A-Za-z0-9-]+):') { $Matches.key }
         })
-        $unexpectedKeys = @($keys | Where-Object { $_ -notin @("name", "description") })
+        $allowedFrontmatterKeys = if ($skillName -eq "spartan") {
+            @("name", "description", "user-invocable", "allowed-tools")
+        }
+        else {
+            @("name", "description")
+        }
+        $unexpectedKeys = @($keys | Where-Object { $_ -notin $allowedFrontmatterKeys })
         if ($unexpectedKeys.Count -gt 0) {
             Add-ValidationError "[$skillName] unsupported frontmatter keys: $($unexpectedKeys -join ', ')"
         }
@@ -98,10 +105,11 @@ foreach ($set in $skillSets) {
 
         $descriptionLine = $frontmatter | Where-Object { $_ -match '^description:' } | Select-Object -First 1
         $description = ($descriptionLine -replace '^description:\s*', '').Trim('"', "'")
-        if ([string]::IsNullOrWhiteSpace($description) -or $description.Length -gt 1024) {
+        $isYamlBlockScalar = $description -in @(">", ">-", "|", "|-")
+        if (-not $isYamlBlockScalar -and ([string]::IsNullOrWhiteSpace($description) -or $description.Length -gt 1024)) {
             Add-ValidationError "[$skillName] description must contain 1-1024 characters"
         }
-        if ($description -match '[<>]') {
+        if (-not $isYamlBlockScalar -and $description -match '[<>]') {
             Add-ValidationError "[$skillName] description must not contain angle brackets"
         }
 
@@ -118,7 +126,20 @@ foreach ($set in $skillSets) {
             }
         }
 
-        $allowedEntries = @("SKILL.md", "agents", "assets", "references", "scripts")
+        $allowedEntries = if ($skillName -eq "spartan") {
+            @(
+                "SKILL.md",
+                "cli.md",
+                "customization.md",
+                "mcp.md",
+                "references",
+                "registry.md",
+                "rules"
+            )
+        }
+        else {
+            @("SKILL.md", "agents", "assets", "references", "scripts")
+        }
         foreach ($entry in Get-ChildItem -LiteralPath $directory.FullName -Force) {
             if ($entry.Name -notin $allowedEntries) {
                 Add-ValidationError "[$skillName] unexpected skill resource: $($entry.Name)"
@@ -132,7 +153,7 @@ foreach ($set in $skillSets) {
             }
         }
 
-        if ($set.Kind -eq "template") {
+        if ($set.Kind -eq "template" -and $skillName -eq "leistd-project-workflow") {
             if ($lines.Count -gt 120) {
                 Add-ValidationError "[$skillName] project workflow SKILL.md must stay concise (expected <= 120 lines)"
             }
@@ -205,6 +226,71 @@ $forbiddenPaths = @(
 foreach ($relativePath in $forbiddenPaths) {
     if (Test-Path -LiteralPath (Join-Path $repoRoot $relativePath)) {
         Add-ValidationError "Removed template mechanism still exists: $relativePath"
+    }
+}
+
+$repositorySpartanRoot = Join-Path $repoRoot ".agents/skills/spartan"
+$templateSpartanRoot = Join-Path $repoRoot "template/.agents/skills/spartan"
+if ((Test-Path -LiteralPath $repositorySpartanRoot) -and (Test-Path -LiteralPath $templateSpartanRoot)) {
+    $repositorySpartanFiles = @(Get-ChildItem -LiteralPath $repositorySpartanRoot -Recurse -File | ForEach-Object {
+        [IO.Path]::GetRelativePath($repositorySpartanRoot, $_.FullName).Replace('\', '/')
+    } | Sort-Object)
+    $templateSpartanFiles = @(Get-ChildItem -LiteralPath $templateSpartanRoot -Recurse -File | ForEach-Object {
+        [IO.Path]::GetRelativePath($templateSpartanRoot, $_.FullName).Replace('\', '/')
+    } | Sort-Object)
+    $spartanFileDifference = Compare-Object $repositorySpartanFiles $templateSpartanFiles
+    if ($spartanFileDifference) {
+        Add-ValidationError "Repository and template Spartan skill file sets differ: $($spartanFileDifference | Out-String)"
+    }
+    else {
+        foreach ($relativePath in $repositorySpartanFiles) {
+            $repositoryHash = (Get-FileHash -LiteralPath (Join-Path $repositorySpartanRoot $relativePath) -Algorithm SHA256).Hash
+            $templateHash = (Get-FileHash -LiteralPath (Join-Path $templateSpartanRoot $relativePath) -Algorithm SHA256).Hash
+            if ($repositoryHash -ne $templateHash) {
+                Add-ValidationError "Repository and template Spartan skill content differs: $relativePath"
+            }
+        }
+    }
+}
+
+$repositoryMcpPath = Join-Path $repoRoot ".mcp.json"
+$templateMcpPath = Join-Path $repoRoot "template/.mcp.json"
+if ((Test-Path -LiteralPath $repositoryMcpPath) -and (Test-Path -LiteralPath $templateMcpPath)) {
+    $repositoryMcpHash = (Get-FileHash -LiteralPath $repositoryMcpPath -Algorithm SHA256).Hash
+    $templateMcpHash = (Get-FileHash -LiteralPath $templateMcpPath -Algorithm SHA256).Hash
+    if ($repositoryMcpHash -ne $templateMcpHash) {
+        Add-ValidationError "Repository and template MCP configurations must be identical"
+    }
+
+    $frontendPackagePath = Join-Path $repoRoot "template/frontend/package.json"
+    $localizedFrontendPackagePath = Join-Path $repoRoot "template/.template.config/localization/frontend/package.json"
+    if ((Test-Path -LiteralPath $frontendPackagePath) -and (Test-Path -LiteralPath $localizedFrontendPackagePath)) {
+        $frontendPackage = Get-Content -LiteralPath $frontendPackagePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $localizedFrontendPackage = Get-Content -LiteralPath $localizedFrontendPackagePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $brainVersion = $frontendPackage.dependencies.'@spartan-ng/brain'
+        $cliVersion = $frontendPackage.devDependencies.'@spartan-ng/cli'
+        $localizedBrainVersion = $localizedFrontendPackage.dependencies.'@spartan-ng/brain'
+        $localizedCliVersion = $localizedFrontendPackage.devDependencies.'@spartan-ng/cli'
+        $mcpConfig = Get-Content -LiteralPath $repositoryMcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $mcpPackage = @($mcpConfig.mcpServers.spartan.args | Where-Object { $_ -like '@spartan-ng/mcp@*' }) | Select-Object -First 1
+        $mcpVersion = if ($mcpPackage) { $mcpPackage -replace '^@spartan-ng/mcp@', '' } else { $null }
+
+        foreach ($versionEntry in @(
+            @{ Name = "Brain"; Value = $brainVersion },
+            @{ Name = "CLI"; Value = $cliVersion },
+            @{ Name = "MCP"; Value = $mcpVersion }
+        )) {
+            if ([string]::IsNullOrWhiteSpace($versionEntry.Value) -or $versionEntry.Value -notmatch '^\d+\.\d+\.\d+$') {
+                Add-ValidationError "Spartan $($versionEntry.Name) must use an exact semantic version"
+            }
+        }
+
+        if ($brainVersion -ne $cliVersion -or $brainVersion -ne $mcpVersion) {
+            Add-ValidationError "Spartan Brain, CLI, and MCP versions must match"
+        }
+        if ($localizedBrainVersion -ne $brainVersion -or $localizedCliVersion -ne $cliVersion) {
+            Add-ValidationError "Localized frontend Spartan versions must match the primary frontend"
+        }
     }
 }
 

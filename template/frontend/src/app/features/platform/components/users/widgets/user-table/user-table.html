@@ -1,274 +1,409 @@
 <div class="flex flex-col gap-4">
   <div class="@container rounded-md border border-border overflow-hidden">
-    <div hlmTableContainer class="w-full overflow-x-auto">
-      <table hlmTable class="w-full">
-        <thead hlmTHead class="bg-card sticky top-0 z-10">
-          <tr hlmTr class="text-sm font-medium">
-            <th hlmTh class="px-6">
-              <button
-                type="button"
-                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-                (click)="onSort('username')"
-              >
-                <!--#if (IncludeLocalization)-->
-                {{ 'users.table.colUser' | transloco }}
-                <!--#else-->
-                User
-                <!--#endif-->
-                <ng-icon [name]="sortIcon('username')" class="text-sm" />
-              </button>
-            </th>
-            <th hlmTh class="px-6 hidden @min-[680px]:table-cell">
-              <button
-                type="button"
-                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-                (click)="onSort('email')"
-              >
-                <!--#if (IncludeLocalization)-->
-                {{ 'users.table.colEmail' | transloco }}
-                <!--#else-->
-                Email
-                <!--#endif-->
-                <ng-icon [name]="sortIcon('email')" class="text-sm" />
-              </button>
-            </th>
-            <!--#if (IncludeLocalization)-->
-            <th hlmTh class="px-6 hidden @min-[950px]:table-cell whitespace-nowrap">
-              {{ 'users.table.colRole' | transloco }}
-            </th>
-            <th hlmTh class="px-6 hidden @min-[1200px]:table-cell whitespace-nowrap">
-              {{ 'users.table.colStatus' | transloco }}
-            </th>
-            <!--#else-->
-            <th hlmTh class="px-6 hidden @min-[950px]:table-cell whitespace-nowrap">Role</th>
-            <th hlmTh class="px-6 hidden @min-[1200px]:table-cell whitespace-nowrap">Status</th>
-            <!--#endif-->
-            <th hlmTh class="px-6 hidden @min-[1400px]:table-cell">
-              <button
-                type="button"
-                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-                (click)="onSort('lastLoginTime')"
-              >
-                <!--#if (IncludeLocalization)-->
-                {{ 'users.table.colLastLogin' | transloco }}
-                <!--#else-->
-                Last sign-in
-                <!--#endif-->
-                <ng-icon [name]="sortIcon('lastLoginTime')" class="text-sm" />
-              </button>
-            </th>
-            <th hlmTh class="px-6 hidden @min-[1560px]:table-cell">
-              <button
-                type="button"
-                class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
-                (click)="onSort('creationTime')"
-              >
-                <!--#if (IncludeLocalization)-->
-                {{ 'users.table.colCreatedAt' | transloco }}
-                <!--#else-->
-                Created at
-                <!--#endif-->
-                <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
-              </button>
-            </th>
-            <!--#if (IncludeLocalization)-->
-            <th
-              hlmTh
-              class="w-10 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border"
-            >
-              <span class="sr-only">{{ 'users.table.colActions' | transloco }}</span>
-            </th>
-            <!--#else-->
-            <th
-              hlmTh
-              class="w-10 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border"
-            >
-              <span class="sr-only">Actions</span>
-            </th>
-            <!--#endif-->
-          </tr>
-        </thead>
-
-        <tbody hlmTBody>
-          @for (item of users(); track item.id) {
-            <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
-              <td hlmTd class="px-6 py-2">
-                <div class="flex min-w-0 items-center gap-3 whitespace-nowrap">
-                  <hlm-avatar>
-                    @if (item.avatar) {
-                      <img hlmAvatarImage [src]="item.avatar" [alt]="item.username" />
-                    }
-                    <span hlmAvatarFallback>{{ item.username.slice(0, 1).toUpperCase() }}</span>
-                  </hlm-avatar>
-                  <div class="min-w-0 flex flex-col">
-                    <span class="text-foreground text-sm font-medium truncate">
-                      {{ item.displayName || item.username }}
-                    </span>
-                    <span class="text-xs text-muted-foreground truncate">{{ item.username }}</span>
-                  </div>
-                </div>
-              </td>
-
-              <td hlmTd class="px-6 py-2 hidden @min-[680px]:table-cell">
-                <span class="whitespace-nowrap text-sm">{{ item.email }}</span>
-              </td>
-
-              <td hlmTd class="px-6 py-2 hidden @min-[950px]:table-cell">
-                <div
-                  class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap"
-                >
-                  @for (role of getVisibleRoles(item); track role) {
-                    <span hlmBadge [variant]="getRoleVariant(role)">{{ getRoleLabel(role) }}</span>
-                  }
-                  @if (getHiddenRoles(item).length > 0) {
-                    <button
-                      type="button"
-                      hlmBadge
-                      variant="outline"
-                      class="cursor-pointer shrink-0"
-                      (click)="openRolesPopover(getHiddenRoles(item))"
-                    >
-                      +{{ getHiddenRoles(item).length }}
-                    </button>
-                  }
-                </div>
-              </td>
-
-              <td hlmTd class="px-6 py-2 hidden @min-[1200px]:table-cell">
-                <div class="flex items-center gap-1.5 whitespace-nowrap">
-                  @if (item.isActive) {
-                    <span
-                      hlmBadge
-                      variant="outline"
-                      class="border-success/30 bg-success/10 text-success"
-                      >{{ statusLabel(item.isActive) }}</span
-                    >
-                  } @else {
-                    <span hlmBadge variant="secondary">{{ statusLabel(item.isActive) }}</span>
-                  }
-                  <span
-                    hlmBadge
-                    [variant]="item.isEmailVerified ? 'secondary' : 'outline'"
-                    class="hidden @min-[1400px]:inline-flex"
-                    >{{ emailVerifiedLabel(item.isEmailVerified) }}</span
+    @defer {
+      <div hlmTableContainer class="w-full overflow-x-auto">
+        <table hlmTable class="w-full">
+          <thead hlmTHead class="bg-card sticky top-0 z-10">
+            @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
+              <tr hlmTr class="text-sm font-medium">
+                @for (header of headerGroup.headers; track header.id) {
+                  <th
+                    hlmTh
+                    [class]="header.column.columnDef.meta?.headClass ?? 'px-6'"
+                    [attr.aria-sort]="sortAria(header.column.id)"
                   >
-                </div>
-              </td>
+                    @switch (header.column.id) {
+                      @case ('username') {
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                          (click)="toggleSort('username')"
+                        >
+                          <!--#if (IncludeLocalization)-->
+                          {{ 'users.table.colUser' | transloco }}
+                          <!--#else-->
+                          User
+                          <!--#endif-->
+                          <ng-icon [name]="sortIcon('username')" class="text-sm" />
+                        </button>
+                      }
+                      @case ('email') {
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                          (click)="toggleSort('email')"
+                        >
+                          <!--#if (IncludeLocalization)-->
+                          {{ 'users.table.colEmail' | transloco }}
+                          <!--#else-->
+                          Email
+                          <!--#endif-->
+                          <ng-icon [name]="sortIcon('email')" class="text-sm" />
+                        </button>
+                      }
+                      @case ('roles') {
+                        <!--#if (IncludeLocalization)-->
+                        <span class="whitespace-nowrap">{{
+                          'users.table.colRole' | transloco
+                        }}</span>
+                        <!--#else-->
+                        <span class="whitespace-nowrap">Role</span>
+                        <!--#endif-->
+                      }
+                      @case ('status') {
+                        <!--#if (IncludeLocalization)-->
+                        <span class="whitespace-nowrap">{{
+                          'users.table.colStatus' | transloco
+                        }}</span>
+                        <!--#else-->
+                        <span class="whitespace-nowrap">Status</span>
+                        <!--#endif-->
+                      }
+                      @case ('lastLoginTime') {
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                          (click)="toggleSort('lastLoginTime')"
+                        >
+                          <!--#if (IncludeLocalization)-->
+                          {{ 'users.table.colLastLogin' | transloco }}
+                          <!--#else-->
+                          Last sign-in
+                          <!--#endif-->
+                          <ng-icon [name]="sortIcon('lastLoginTime')" class="text-sm" />
+                        </button>
+                      }
+                      @case ('creationTime') {
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                          (click)="toggleSort('creationTime')"
+                        >
+                          <!--#if (IncludeLocalization)-->
+                          {{ 'users.table.colCreatedAt' | transloco }}
+                          <!--#else-->
+                          Created at
+                          <!--#endif-->
+                          <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
+                        </button>
+                      }
+                      @case ('actions') {
+                        <!--#if (IncludeLocalization)-->
+                        <span class="sr-only">{{ 'common.actions' | transloco }}</span>
+                        <!--#else-->
+                        <span class="sr-only">Actions</span>
+                        <!--#endif-->
+                      }
+                    }
+                  </th>
+                }
+              </tr>
+            }
+          </thead>
 
-              <td hlmTd class="px-6 py-2 hidden @min-[1400px]:table-cell">
-                <span class="text-xs text-muted-foreground whitespace-nowrap">
-                  {{
-                    item.lastLoginTime ? (item.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss') : '-'
-                  }}
-                </span>
-              </td>
-
-              <td hlmTd class="px-6 py-2 hidden @min-[1560px]:table-cell">
-                <span class="text-xs text-muted-foreground whitespace-nowrap">{{
-                  item.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
-                }}</span>
-              </td>
-
-              <td
-                hlmTd
-                class="w-10 py-2 text-center sticky right-0 z-10 bg-card border-l border-border"
-              >
-                <!-- 操作：始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
-                <button
-                  hlmBtn
-                  variant="ghost"
-                  size="icon"
-                  align="end"
-                  [attr.aria-label]="actionsLabel()"
-                  [hlmDropdownMenuTrigger]="rowMenu"
+          <tbody hlmTBody>
+            @if (loading()) {
+              <tr hlmTr>
+                <td
+                  hlmTd
+                  [attr.colspan]="table.getVisibleLeafColumns().length"
+                  class="h-32 text-center"
                 >
-                  <ng-icon name="lucideEllipsisVertical" />
-                </button>
-                <ng-template #rowMenu>
-                  <hlm-dropdown-menu>
-                    <hlm-dropdown-menu-group>
-                      <button
-                        hlmDropdownMenuItem
-                        [disabled]="isOtherSuperAdmin(item)"
-                        (click)="edit.emit(item.id)"
-                      >
-                        <ng-icon name="lucidePencil" />
-                        {{ editLabel() }}
-                      </button>
-                      <button
-                        hlmDropdownMenuItem
-                        [disabled]="isSuperAdmin(item)"
-                        (click)="toggleActive.emit(item)"
-                      >
-                        <ng-icon [name]="item.isActive ? 'lucideBan' : 'lucideCircleCheck'" />
-                        {{ toggleLabel(item) }}
-                      </button>
-                      <button
-                        hlmDropdownMenuItem
-                        [disabled]="isOtherSuperAdmin(item)"
-                        (click)="resetPassword.emit(item.id)"
-                      >
-                        <ng-icon name="lucideKey" />
-                        {{ resetLabel() }}
-                      </button>
-                    </hlm-dropdown-menu-group>
-                    <hlm-dropdown-menu-separator />
-                    <button
-                      hlmDropdownMenuItem
-                      variant="destructive"
-                      [disabled]="isSuperAdmin(item)"
-                      (click)="deleteRequested.emit(item)"
+                  <hlm-spinner class="mx-auto" />
+                  <span class="sr-only">Loading</span>
+                </td>
+              </tr>
+            } @else {
+              @for (row of table.getRowModel().rows; track row.original.id) {
+                <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
+                  @for (cell of row.getVisibleCells(); track cell.id) {
+                    <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'px-6 py-2'">
+                      @switch (cell.column.id) {
+                        @case ('username') {
+                          <div class="flex min-w-0 items-center gap-3 whitespace-nowrap">
+                            @if (hasCollapsedColumns()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon-sm"
+                                class="-ml-2 shrink-0"
+                                [attr.aria-label]="detailsLabel()"
+                                [attr.aria-expanded]="isRowExpanded(row.original.id)"
+                                (click)="toggleRow(row.original.id)"
+                              >
+                                <ng-icon
+                                  name="lucideChevronRight"
+                                  class="transition-transform duration-200"
+                                  [class.rotate-90]="isRowExpanded(row.original.id)"
+                                />
+                              </button>
+                            }
+                            <hlm-avatar>
+                              @if (row.original.avatar) {
+                                <img
+                                  hlmAvatarImage
+                                  [src]="row.original.avatar"
+                                  [alt]="row.original.username"
+                                />
+                              }
+                              <span hlmAvatarFallback>{{
+                                row.original.username.slice(0, 1).toUpperCase()
+                              }}</span>
+                            </hlm-avatar>
+                            <div class="min-w-0 flex flex-col">
+                              <span class="text-foreground text-sm font-medium truncate">
+                                {{ row.original.displayName || row.original.username }}
+                              </span>
+                              <span class="text-xs text-muted-foreground truncate">{{
+                                row.original.username
+                              }}</span>
+                            </div>
+                          </div>
+                        }
+                        @case ('email') {
+                          <span class="whitespace-nowrap text-sm">{{ row.original.email }}</span>
+                        }
+                        @case ('roles') {
+                          <div
+                            class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap"
+                          >
+                            @for (role of getVisibleRoles(row.original); track role) {
+                              <span hlmBadge [variant]="getRoleVariant(role)">{{
+                                getRoleLabel(role)
+                              }}</span>
+                            }
+                            @if (getHiddenRoles(row.original).length > 0) {
+                              <button
+                                type="button"
+                                hlmBadge
+                                variant="outline"
+                                class="cursor-pointer shrink-0"
+                                (click)="openRolesPopover(getHiddenRoles(row.original))"
+                              >
+                                +{{ getHiddenRoles(row.original).length }}
+                              </button>
+                            }
+                          </div>
+                        }
+                        @case ('status') {
+                          <div class="flex items-center gap-1.5 whitespace-nowrap">
+                            @if (row.original.isActive) {
+                              <span
+                                hlmBadge
+                                variant="outline"
+                                class="border-success/30 bg-success/10 text-success"
+                                >{{ statusLabel(row.original.isActive) }}</span
+                              >
+                            } @else {
+                              <span hlmBadge variant="secondary">{{
+                                statusLabel(row.original.isActive)
+                              }}</span>
+                            }
+                            <span
+                              hlmBadge
+                              [variant]="row.original.isEmailVerified ? 'secondary' : 'outline'"
+                              class="hidden @min-[1400px]:inline-flex"
+                              >{{ emailVerifiedLabel(row.original.isEmailVerified) }}</span
+                            >
+                          </div>
+                        }
+                        @case ('lastLoginTime') {
+                          <span class="text-xs text-muted-foreground whitespace-nowrap">
+                            {{
+                              row.original.lastLoginTime
+                                ? (row.original.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss')
+                                : '-'
+                            }}
+                          </span>
+                        }
+                        @case ('creationTime') {
+                          <span class="text-xs text-muted-foreground whitespace-nowrap">{{
+                            row.original.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
+                          }}</span>
+                        }
+                        @case ('actions') {
+                          <!-- 操作：桌面端内联最常用操作 + 始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
+                          <div class="flex items-center justify-end gap-1">
+                            <button
+                              hlmBtn
+                              variant="ghost"
+                              size="icon-sm"
+                              class="hidden sm:inline-flex"
+                              [disabled]="isOtherSuperAdmin(row.original)"
+                              [attr.aria-label]="actionLabel('edit', row.original)"
+                              [hlmTooltip]="actionLabel('edit', row.original)"
+                              (click)="edit.emit(row.original.id)"
+                            >
+                              <ng-icon name="lucidePencil" />
+                            </button>
+                            <button
+                              hlmBtn
+                              variant="ghost"
+                              size="icon-sm"
+                              class="hidden sm:inline-flex"
+                              [disabled]="isSuperAdmin(row.original)"
+                              [attr.aria-label]="actionLabel('toggle', row.original)"
+                              [hlmTooltip]="actionLabel('toggle', row.original)"
+                              (click)="toggleActive.emit(row.original)"
+                            >
+                              <ng-icon
+                                [name]="row.original.isActive ? 'lucideBan' : 'lucideCircleCheck'"
+                              />
+                            </button>
+                            <button
+                              hlmBtn
+                              variant="ghost"
+                              size="icon"
+                              align="end"
+                              [attr.aria-label]="actionsLabel()"
+                              [hlmDropdownMenuTrigger]="rowMenu"
+                            >
+                              <ng-icon name="lucideEllipsisVertical" />
+                            </button>
+                            <ng-template #rowMenu>
+                              <hlm-dropdown-menu>
+                                <hlm-dropdown-menu-group>
+                                  <button
+                                    hlmDropdownMenuItem
+                                    class="sm:hidden"
+                                    [disabled]="isOtherSuperAdmin(row.original)"
+                                    (click)="edit.emit(row.original.id)"
+                                  >
+                                    <ng-icon name="lucidePencil" />
+                                    {{ actionLabel('edit', row.original) }}
+                                  </button>
+                                  <button
+                                    hlmDropdownMenuItem
+                                    class="sm:hidden"
+                                    [disabled]="isSuperAdmin(row.original)"
+                                    (click)="toggleActive.emit(row.original)"
+                                  >
+                                    <ng-icon
+                                      [name]="
+                                        row.original.isActive ? 'lucideBan' : 'lucideCircleCheck'
+                                      "
+                                    />
+                                    {{ actionLabel('toggle', row.original) }}
+                                  </button>
+                                  <button
+                                    hlmDropdownMenuItem
+                                    [disabled]="isOtherSuperAdmin(row.original)"
+                                    (click)="resetPassword.emit(row.original.id)"
+                                  >
+                                    <ng-icon name="lucideKey" />
+                                    {{ actionLabel('reset', row.original) }}
+                                  </button>
+                                </hlm-dropdown-menu-group>
+                                <hlm-dropdown-menu-separator />
+                                <button
+                                  hlmDropdownMenuItem
+                                  variant="destructive"
+                                  [disabled]="isSuperAdmin(row.original)"
+                                  (click)="delete.emit(row.original)"
+                                >
+                                  <ng-icon name="lucideTrash2" />
+                                  {{ actionLabel('delete', row.original) }}
+                                </button>
+                              </hlm-dropdown-menu>
+                            </ng-template>
+                          </div>
+                        }
+                      }
+                    </td>
+                  }
+                </tr>
+                <!-- 行展开：呈现在移动端/平板端被隐藏的列，避免「隐藏=丢数据」。 -->
+                @if (hasCollapsedColumns() && isRowExpanded(row.original.id)) {
+                  <tr hlmTr class="bg-muted/30 hover:bg-muted/30">
+                    <td
+                      hlmTd
+                      [attr.colspan]="table.getVisibleLeafColumns().length"
+                      class="px-6 pb-3 pt-2"
                     >
-                      <ng-icon name="lucideTrash2" />
-                      {{ deleteLabel() }}
-                    </button>
-                  </hlm-dropdown-menu>
-                </ng-template>
-              </td>
-            </tr>
-          } @empty {
-            <tr hlmTr class="hover:bg-transparent">
-              <td hlmTd colspan="7" class="!p-0 !border-0">
-                <div class="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                  <ng-icon name="lucideUsers" class="text-5xl opacity-30 mb-3" />
-                  <!--#if (IncludeLocalization)-->
-                  <p class="text-base font-medium m-0">
-                    {{ 'users.table.emptyTitle' | transloco }}
-                  </p>
-                  <p class="text-sm mt-1 opacity-70">{{ 'users.table.emptyHint' | transloco }}</p>
-                  <!--#else-->
-                  <p class="text-base font-medium m-0">No users yet</p>
-                  <p class="text-sm mt-1 opacity-70">Create a new user</p>
-                  <!--#endif-->
-                </div>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+                      <dl
+                        class="grid grid-cols-[minmax(5rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm"
+                      >
+                        @if (isColumnHidden('email')) {
+                          <dt class="text-muted-foreground">{{ detailLabel('email') }}</dt>
+                          <dd class="min-w-0 truncate">{{ row.original.email }}</dd>
+                        }
+                        @if (isColumnHidden('roles')) {
+                          <dt class="text-muted-foreground">{{ detailLabel('roles') }}</dt>
+                          <dd class="flex flex-wrap gap-1">
+                            @for (role of row.original.roles; track role) {
+                              <span hlmBadge [variant]="getRoleVariant(role)">{{
+                                getRoleLabel(role)
+                              }}</span>
+                            } @empty {
+                              <span class="text-muted-foreground">-</span>
+                            }
+                          </dd>
+                        }
+                        @if (isColumnHidden('lastLoginTime')) {
+                          <dt class="text-muted-foreground">{{ detailLabel('lastLogin') }}</dt>
+                          <dd class="text-muted-foreground">
+                            {{
+                              row.original.lastLoginTime
+                                ? (row.original.lastLoginTime | date: 'yyyy-MM-dd HH:mm:ss')
+                                : '-'
+                            }}
+                          </dd>
+                        }
+                        @if (isColumnHidden('creationTime')) {
+                          <dt class="text-muted-foreground">{{ detailLabel('created') }}</dt>
+                          <dd class="text-muted-foreground">
+                            {{ row.original.creationTime | date: 'yyyy-MM-dd HH:mm:ss' }}
+                          </dd>
+                        }
+                      </dl>
+                    </td>
+                  </tr>
+                }
+              } @empty {
+                <tr hlmTr class="hover:bg-transparent">
+                  <td
+                    hlmTd
+                    [attr.colspan]="table.getVisibleLeafColumns().length"
+                    class="!p-0 !border-0"
+                  >
+                    <div
+                      class="flex flex-col items-center justify-center h-64 text-muted-foreground"
+                    >
+                      <ng-icon name="lucideUsers" class="text-5xl opacity-30 mb-3" />
+                      <!--#if (IncludeLocalization)-->
+                      <p class="text-base font-medium m-0">
+                        {{ 'users.table.emptyTitle' | transloco }}
+                      </p>
+                      <p class="text-sm mt-1 opacity-70">
+                        {{ 'users.table.emptyHint' | transloco }}
+                      </p>
+                      <!--#else-->
+                      <p class="text-base font-medium m-0">No users yet</p>
+                      <p class="text-sm mt-1 opacity-70">Create a new user</p>
+                      <!--#endif-->
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
   </div>
 
   <!-- 分页栏：独立于表格卡片，置于其下方（对齐参考站的现代化布局）。 -->
-  @if (totalRecords() > 0) {
+  @if (totalCount() > 0) {
     <app-table-paginator
-      [labels]="{
-        currentPageReport: currentPageReport(),
-        rowsPerPage: rowsPerPageLabel(),
-        page: pageLabel(),
-        first: firstPageLabel(),
-        previous: prevPageLabel(),
-        next: nextPageLabel(),
-        last: lastPageLabel(),
-      }"
-      [rows]="rows()"
-      [canPrev]="canPrev()"
-      [canNext]="canNext()"
-      (firstPage)="firstPage()"
-      (prevPage)="prevPage()"
-      (nextPage)="nextPage()"
-      (lastPage)="lastPage()"
-      (rowsChange)="onRowsChange($event)"
+      [labels]="paginatorLabels()"
+      [rows]="pagination().pageSize"
+      [canPrev]="table.getCanPreviousPage()"
+      [canNext]="table.getCanNextPage()"
+      (firstPage)="table.firstPage()"
+      (prevPage)="table.previousPage()"
+      (nextPage)="table.nextPage()"
+      (lastPage)="table.lastPage()"
+      (rowsChange)="changePageSize($event)"
     />
   }
 </div>

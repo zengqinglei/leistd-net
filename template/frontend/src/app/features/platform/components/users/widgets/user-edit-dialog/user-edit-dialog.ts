@@ -38,6 +38,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideEye, lucideEyeOff } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -52,7 +53,6 @@ import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
 
-import { notify } from '../../../../../../core/feedback/notify';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
@@ -288,13 +288,13 @@ export class UserEditDialog {
     const messages = this.avatarMessages();
 
     if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
-      notify.error(messages.typeSummary, { detail: messages.typeDetail });
+      toast.error(messages.typeSummary, { description: messages.typeDetail });
       input.value = '';
       return;
     }
 
     if (file.size > MAX_AVATAR_SIZE) {
-      notify.error(messages.sizeSummary, { detail: messages.sizeDetail });
+      toast.error(messages.sizeSummary, { description: messages.sizeDetail });
       input.value = '';
       return;
     }

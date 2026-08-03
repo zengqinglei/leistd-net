@@ -1,32 +1,20 @@
-//#if (IncludeLocalization)
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
-  OnInit,
   computed,
+  DestroyRef,
   effect,
   inject,
   signal,
 } from '@angular/core';
-//#else
-import {
-  ChangeDetectionStrategy,
-  Component,
-  DestroyRef,
-  OnInit,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
-//#endif
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import {
   HlmInputGroup,
@@ -34,20 +22,35 @@ import {
   HlmInputGroupAddon,
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
+import { PaginationState, SortingState } from '@tanstack/angular-table';
+import { combineLatest, EMPTY, Subject } from 'rxjs';
+import {
+  catchError,
+  debounceTime,
+  distinctUntilChanged,
+  finalize,
+  startWith,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
 
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-import { notify } from '../../../../core/feedback/notify';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
-import { FilterStateService } from '../../../../shared/services/filter-state-service';
+import {
+  paginationFromQuery,
+  sortingFromQuery,
+  tableStateToQuery,
+  toApiSorting,
+} from '../../../../shared/utils/table-query-state';
 import {
   CreateUserInputDto,
+  GetUsersInputDto,
   ResetUserPasswordInputDto,
   UpdateUserInputDto,
   UserManagementOutputDto,
@@ -55,12 +58,14 @@ import {
 import { UserManagementService } from '../../services/user-management-service';
 import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
 import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
-import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table';
+import { UserTable } from './widgets/user-table/user-table';
+
+const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
+const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
 
 @Component({
   selector: 'app-users',
   imports: [
-    FormsModule,
     NgIcon,
     HlmButton,
     HlmInputGroup,
@@ -79,22 +84,32 @@ import { UserTable, UserTableFilterEvent } from './widgets/user-table/user-table
   templateUrl: './users.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class Users implements OnInit {
+export class Users {
   private readonly service = inject(UserManagementService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
-  private readonly filterStateService = inject(FilterStateService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
 
-  private readonly FILTER_KEY = 'users';
   private readonly searchSubject = new Subject<string>();
+  private readonly refreshRequests = new Subject<void>();
+  private readonly queryParams = toSignal(this.route.queryParamMap, {
+    initialValue: this.route.snapshot.queryParamMap,
+  });
 
   users = signal<UserManagementOutputDto[]>([]);
   totalRecords = signal(0);
   loading = signal(false);
+
+  // 列表状态全部来源于 URL 查询参数（刷新 / 前进后退 / 分享皆可复原）。
+  readonly pagination = computed(() => paginationFromQuery(this.queryParams()));
+  readonly sorting = computed(() =>
+    sortingFromQuery(this.queryParams(), USER_SORT_COLUMNS, DEFAULT_USER_SORTING),
+  );
 
   editDialogVisible = signal(false);
   editDialogLoading = signal(false);
@@ -105,14 +120,14 @@ export class Users implements OnInit {
   resetPasswordSaving = signal(false);
   resettingUserId = signal<string | null>(null);
 
-  searchQuery = signal('');
-  selectedIsActive = signal<boolean | null>(null);
-  selectedIsEmailVerified = signal<boolean | null>(null);
-  selectedRoles = signal<string[]>([]);
-
-  offset = signal(0);
-  limit = signal(10);
-  sorting = signal('username asc');
+  // 搜索框即时值：随 URL 回填，输入时乐观更新，防抖后写回 URL。
+  readonly searchQuery = signal(this.route.snapshot.queryParamMap.get('keyword') ?? '');
+  // FacetedFilter 的取值由 URL 状态驱动。
+  readonly selectedIsActive = computed(() => readBoolean(this.queryParams().get('isActive')));
+  readonly selectedIsEmailVerified = computed(() =>
+    readBoolean(this.queryParams().get('isEmailVerified')),
+  );
+  readonly selectedRoles = computed(() => this.queryParams().getAll('roles'));
 
   //#if (IncludeLocalization)
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -189,7 +204,30 @@ export class Users implements OnInit {
   constructor() {
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.onFilter());
+      .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
+
+    // 搜索框即时值随 URL 回填（前进后退 / 分享链接场景）。
+    effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));
+
+    // URL 变化或显式刷新时重新拉取列表。
+    combineLatest([this.route.queryParamMap, this.refreshRequests.pipe(startWith(undefined))])
+      .pipe(
+        tap(() => this.loading.set(true)),
+        switchMap(([params]) =>
+          this.service.getUsers(this.queryFromParams(params)).pipe(
+            catchError((error: unknown) => {
+              this.showRequestError(error);
+              return EMPTY;
+            }),
+            finalize(() => this.loading.set(false)),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((data) => {
+        this.users.set(data.items);
+        this.totalRecords.set(data.totalCount);
+      });
 
     //#if (IncludeLocalization)
     // 读 translationReady 建立依赖：资源就绪 / 语言切换时标题随之重设。
@@ -202,83 +240,36 @@ export class Users implements OnInit {
     //#endif
   }
 
-  ngOnInit() {
-    const saved = this.filterStateService.load<{
-      searchQuery: string;
-      selectedIsActive: boolean | null;
-      selectedIsEmailVerified: boolean | null;
-      selectedRoles: string[];
-    }>(this.FILTER_KEY);
-
-    if (saved.searchQuery) this.searchQuery.set(saved.searchQuery);
-    if (saved.selectedIsActive !== undefined)
-      this.selectedIsActive.set(saved.selectedIsActive ?? null);
-    if (saved.selectedIsEmailVerified !== undefined)
-      this.selectedIsEmailVerified.set(saved.selectedIsEmailVerified ?? null);
-    if (saved.selectedRoles !== undefined) this.selectedRoles.set(saved.selectedRoles ?? []);
-
-    // 首次进入即加载列表（恢复筛选后），无需手动点刷新。
-    this.reloadList();
-  }
-
-  reloadList() {
-    this.loading.set(true);
-    this.service
-      .getUsers({
-        keyword: this.searchQuery(),
-        isActive: this.selectedIsActive() ?? undefined,
-        isEmailVerified: this.selectedIsEmailVerified() ?? undefined,
-        roles: this.selectedRoles().length ? this.selectedRoles() : undefined,
-        offset: this.offset(),
-        limit: this.limit(),
-        sorting: this.sorting(),
-      })
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.loading.set(false)),
-      )
-      .subscribe((data) => {
-        this.users.set(data.items);
-        this.totalRecords.set(data.totalCount);
-      });
-  }
-
   onSearchQueryChange(value: string) {
     this.searchQuery.set(value);
     this.searchSubject.next(value);
   }
 
   onActiveChange(value: boolean | null | undefined) {
-    this.selectedIsActive.set(value ?? null);
-    this.onFilter();
+    this.updateQuery({ isActive: serializeBoolean(value), page: 1 });
   }
 
   onEmailVerifiedChange(value: boolean | null | undefined) {
-    this.selectedIsEmailVerified.set(value ?? null);
-    this.onFilter();
+    this.updateQuery({ isEmailVerified: serializeBoolean(value), page: 1 });
   }
 
   onRolesChange(values: string[]) {
-    this.selectedRoles.set(values ?? []);
-    this.onFilter();
+    this.updateQuery({ roles: values.length ? values : null, page: 1 });
   }
 
-  onFilter() {
-    this.offset.set(0);
-    this.filterStateService.save(this.FILTER_KEY, {
-      searchQuery: this.searchQuery(),
-      selectedIsActive: this.selectedIsActive(),
-      selectedIsEmailVerified: this.selectedIsEmailVerified(),
-      selectedRoles: this.selectedRoles(),
+  onPaginationChange(pagination: PaginationState) {
+    this.updateQuery(tableStateToQuery(pagination, this.sorting()));
+  }
+
+  onSortingChange(sorting: SortingState) {
+    this.updateQuery({
+      ...tableStateToQuery({ ...this.pagination(), pageIndex: 0 }, sorting),
+      page: 1,
     });
-    this.reloadList();
   }
 
-  onPageChange(event: UserTableFilterEvent) {
-    this.offset.set(event.offset);
-    this.limit.set(event.limit);
-    if (event.sorting) this.sorting.set(event.sorting);
-    this.reloadList();
+  reloadList() {
+    this.refreshRequests.next();
   }
 
   openAddDialog() {
@@ -293,8 +284,14 @@ export class Users implements OnInit {
 
     this.service
       .getUser(id)
-      .pipe(finalize(() => this.editDialogLoading.set(false)))
-      .subscribe((user) => this.selectedUser.set(user));
+      .pipe(
+        finalize(() => this.editDialogLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (user) => this.selectedUser.set(user),
+        error: (error) => this.showRequestError(error),
+      });
   }
 
   handleSave(data: CreateUserInputDto | UpdateUserInputDto) {
@@ -306,25 +303,26 @@ export class Users implements OnInit {
 
     request
       .pipe(
-        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.editDialogSaving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
         next: () => {
           //#if (IncludeLocalization)
-          notify.success(this.transloco.translate('common.success'), {
-            detail: this.transloco.translate(
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate(
               selected ? 'users.toast.updated' : 'users.toast.created',
             ),
           });
           //#else
-          notify.success('Success', {
-            detail: selected ? 'User updated successfully' : 'User created successfully',
+          toast.success('Success', {
+            description: selected ? 'User updated successfully' : 'User created successfully',
           });
           //#endif
           this.editDialogVisible.set(false);
           this.reloadList();
         },
+        error: (error) => this.showRequestError(error),
       });
   }
 
@@ -354,29 +352,34 @@ export class Users implements OnInit {
     const request = user.isActive
       ? this.service.disableUser(user.id)
       : this.service.enableUser(user.id);
-    request.subscribe(() => {
-      //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('common.success'), {
-        detail: this.transloco.translate(
-          user.isActive ? 'users.toast.disabled' : 'users.toast.enabled',
-        ),
-      });
-      //#else
-      notify.success('Success', { detail: user.isActive ? 'User disabled' : 'User enabled' });
-      //#endif
-      this.reloadList();
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        //#if (IncludeLocalization)
+        toast.success(this.transloco.translate('common.success'), {
+          description: this.transloco.translate(
+            user.isActive ? 'users.toast.disabled' : 'users.toast.enabled',
+          ),
+        });
+        //#else
+        toast.success('Success', {
+          description: user.isActive ? 'User disabled' : 'User enabled',
+        });
+        //#endif
+        this.reloadList();
+      },
+      error: (error) => this.showRequestError(error),
     });
   }
 
   async handleDelete(user: UserManagementOutputDto) {
     if (user.isSuperAdmin) {
       //#if (IncludeLocalization)
-      notify.warn(this.transloco.translate('users.toast.cannotDeleteSummary'), {
-        detail: this.transloco.translate('users.toast.cannotDeleteSuperAdmin'),
+      toast.warning(this.transloco.translate('users.toast.cannotDeleteSummary'), {
+        description: this.transloco.translate('users.toast.cannotDeleteSuperAdmin'),
       });
       //#else
-      notify.warn('Cannot delete', {
-        detail: 'The built-in super administrator cannot be deleted',
+      toast.warning('Cannot delete', {
+        description: 'The built-in super administrator cannot be deleted',
       });
       //#endif
       return;
@@ -398,16 +401,22 @@ export class Users implements OnInit {
       return;
     }
 
-    this.service.deleteUser(user.id).subscribe(() => {
-      //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('common.success'), {
-        detail: this.transloco.translate('users.toast.deleted'),
+    this.service
+      .deleteUser(user.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('users.toast.deleted'),
+          });
+          //#else
+          toast.success('Success', { description: 'User deleted' });
+          //#endif
+          this.reloadList();
+        },
+        error: (error) => this.showRequestError(error),
       });
-      //#else
-      notify.success('Success', { detail: 'User deleted' });
-      //#endif
-      this.reloadList();
-    });
   }
 
   openResetPasswordDialog(id: string) {
@@ -425,19 +434,63 @@ export class Users implements OnInit {
     this.service
       .resetPassword(id, data)
       .pipe(
-        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.resetPasswordSaving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe(() => {
-        //#if (IncludeLocalization)
-        notify.success(this.transloco.translate('common.success'), {
-          detail: this.transloco.translate('users.toast.passwordReset'),
-        });
-        //#else
-        notify.success('Success', { detail: 'Password has been reset' });
-        //#endif
-        this.resetPasswordDialogVisible.set(false);
-        this.resettingUserId.set(null);
+      .subscribe({
+        next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('users.toast.passwordReset'),
+          });
+          //#else
+          toast.success('Success', { description: 'Password has been reset' });
+          //#endif
+          this.resetPasswordDialogVisible.set(false);
+          this.resettingUserId.set(null);
+        },
+        error: (error) => this.showRequestError(error),
       });
   }
+
+  private queryFromParams(params: ParamMap): GetUsersInputDto {
+    const pagination = paginationFromQuery(params);
+    const roles = params.getAll('roles');
+    return {
+      offset: pagination.pageIndex * pagination.pageSize,
+      limit: pagination.pageSize,
+      keyword: params.get('keyword') || undefined,
+      isActive: readBoolean(params.get('isActive')) ?? undefined,
+      isEmailVerified: readBoolean(params.get('isEmailVerified')) ?? undefined,
+      roles: roles.length ? roles : undefined,
+      sorting: toApiSorting(sortingFromQuery(params, USER_SORT_COLUMNS, DEFAULT_USER_SORTING)),
+    };
+  }
+
+  private updateQuery(queryParams: Params, replaceUrl = false): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: 'merge',
+      replaceUrl,
+    });
+  }
+
+  private showRequestError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
+    toast.error('Request failed', { description: applicationErrorMessage(error) });
+    //#endif
+  }
+}
+
+function readBoolean(value: string | null): boolean | null {
+  return value === 'true' ? true : value === 'false' ? false : null;
+}
+
+function serializeBoolean(value: boolean | null | undefined): string | null {
+  return value === true ? 'true' : value === false ? 'false' : null;
 }

@@ -123,10 +123,8 @@ function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex]$Patt
 }
 
 # 前端 Transloco 插值必须用双大括号 {{name}}；单大括号 {name} 是常见误用（Transloco 不会替换）。
-# 例外：PrimeNG 模板占位符（如 {totalRecords}）走 PrimeNG 自己的替换，保留单括号——用白名单放过。
 function Test-TranslocoInterpolation([string]$EnPath) {
     if (-not (Test-Path $EnPath)) { return }
-    $primengTokens = @('totalRecords', 'first', 'last', 'rows', 'totalPages', 'currentPage')
     $flat = New-Object System.Collections.Generic.List[string]
     $root = Get-Content -LiteralPath $EnPath -Raw | ConvertFrom-Json
     Get-JsonFlatKeys $root '' $flat
@@ -139,16 +137,14 @@ function Test-TranslocoInterpolation([string]$EnPath) {
         $stripped = [regex]::Replace($v, '\{\{[^}]+\}\}', '')
         foreach ($m in [regex]::Matches($stripped, '\{([a-zA-Z][a-zA-Z0-9_]*)\}')) {
             $name = $m.Groups[1].Value
-            if ($primengTokens -notcontains $name) {
-                $bad.Add("$k → 单括号 '{$name}'（Transloco 应用 '{{$name}}'）")
-            }
+            $bad.Add("$k → 单括号 '{$name}'（Transloco 应用 '{{$name}}'）")
         }
     }
     if ($bad.Count -gt 0) {
         $script:problems.Add("前端 Transloco 插值误用（$($bad.Count) 处）：$([string]::Join('; ', $bad))")
     }
     else {
-        Write-Host "  OK  前端 Transloco 插值：双大括号规范（PrimeNG {totalRecords} 等已白名单放过）。" -ForegroundColor Green
+        Write-Host "  OK  前端 Transloco 插值全部使用双大括号规范。" -ForegroundColor Green
     }
 }
 

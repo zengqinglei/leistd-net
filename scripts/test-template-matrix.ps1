@@ -147,6 +147,8 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         ".agents/skills/leistd-project-workflow/references/quality.md",
         ".agents/skills/leistd-project-workflow/references/delivery.md",
         ".agents/skills/leistd-project-workflow/references/documentation.md",
+        ".agents/skills/spartan/SKILL.md",
+        ".mcp.json",
         "docs/README.md",
         "docs/standards/api.md",
         "docs/standards/coding-common.md",
@@ -157,7 +159,8 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         "docs/standards/testing.md",
         "docs/standards/ui-design.md",
         "docs/deploy/README.md",
-        "backend/README.md"
+        "backend/README.md",
+        "frontend/components.json"
     )
     foreach ($relativePath in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $relativePath))) {
@@ -574,6 +577,8 @@ foreach ($scenario in $Scenarios) {
         $frontendRoot = Join-Path $projectRoot "frontend"
         $env:HUSKY = "0"
         Invoke-External "npm" @("ci") $frontendRoot
+        Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
+        Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
         if ($definition.Lint) {
             Invoke-External "npm" @("run", "lint") $frontendRoot
             $lintValidated = $true

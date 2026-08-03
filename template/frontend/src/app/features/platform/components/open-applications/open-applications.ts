@@ -1,4 +1,3 @@
-//#if (IncludeLocalization)
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,27 +5,16 @@ import {
   DestroyRef,
   effect,
   inject,
-  OnInit,
   signal,
 } from '@angular/core';
-//#else
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  DestroyRef,
-  inject,
-  OnInit,
-  signal,
-} from '@angular/core';
-//#endif
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import {
   HlmInputGroup,
@@ -34,19 +22,34 @@ import {
   HlmInputGroupAddon,
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
+import { PaginationState, SortingState } from '@tanstack/angular-table';
+import { combineLatest, EMPTY, Subject } from 'rxjs';
+import {
+  catchError,
+  debounceTime,
+  distinctUntilChanged,
+  finalize,
+  startWith,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
 
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-import { notify } from '../../../../core/feedback/notify';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-import { FilterStateService } from '../../../../shared/services/filter-state-service';
+import {
+  paginationFromQuery,
+  sortingFromQuery,
+  tableStateToQuery,
+  toApiSorting,
+} from '../../../../shared/utils/table-query-state';
 import {
   CreateOpenApplicationInputDto,
+  GetOpenApplicationsInputDto,
   OpenApplicationClientType,
   OpenApplicationOutputDto,
   OpenApplicationType,
@@ -54,16 +57,15 @@ import {
 } from '../../models/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 import { OpenApplicationEditDialog } from './widgets/open-application-edit-dialog/open-application-edit-dialog';
-import {
-  OpenApplicationTable,
-  OpenApplicationTableFilterEvent,
-} from './widgets/open-application-table/open-application-table';
+import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
 import { SecretRevealDialog } from './widgets/secret-reveal-dialog/secret-reveal-dialog';
+
+const APPLICATION_SORT_COLUMNS = ['clientId', 'creationTime'] as const;
+const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'clientId', desc: false }];
 
 @Component({
   selector: 'app-open-applications',
   imports: [
-    FormsModule,
     NgIcon,
     HlmButton,
     HlmInputGroup,
@@ -82,22 +84,32 @@ import { SecretRevealDialog } from './widgets/secret-reveal-dialog/secret-reveal
   templateUrl: './open-applications.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class OpenApplications implements OnInit {
+export class OpenApplications {
   private readonly service = inject(OpenApplicationService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
-  private readonly filterStateService = inject(FilterStateService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
 
-  private readonly FILTER_KEY = 'open-applications';
   private readonly searchSubject = new Subject<string>();
+  private readonly refreshRequests = new Subject<void>();
+  private readonly queryParams = toSignal(this.route.queryParamMap, {
+    initialValue: this.route.snapshot.queryParamMap,
+  });
 
   applications = signal<OpenApplicationOutputDto[]>([]);
   totalRecords = signal(0);
   loading = signal(false);
+
+  // 列表状态全部来源于 URL 查询参数（刷新 / 前进后退 / 分享皆可复原）。
+  readonly pagination = computed(() => paginationFromQuery(this.queryParams()));
+  readonly sorting = computed(() =>
+    sortingFromQuery(this.queryParams(), APPLICATION_SORT_COLUMNS, DEFAULT_APPLICATION_SORTING),
+  );
 
   editDialogVisible = signal(false);
   editDialogLoading = signal(false);
@@ -109,13 +121,15 @@ export class OpenApplications implements OnInit {
   secretValue = signal('');
   secretHeader = signal('');
 
-  searchQuery = signal('');
-  selectedApplicationType = signal<OpenApplicationType | null>(null);
-  selectedClientType = signal<OpenApplicationClientType | null>(null);
-
-  offset = signal(0);
-  limit = signal(10);
-  sorting = signal('clientId asc');
+  // 搜索框即时值：随 URL 回填，输入时乐观更新，防抖后写回 URL。
+  readonly searchQuery = signal(this.route.snapshot.queryParamMap.get('keyword') ?? '');
+  // FacetedFilter 的取值由 URL 状态驱动。
+  readonly selectedApplicationType = computed(
+    () => (this.queryParams().get('applicationType') as OpenApplicationType | null) ?? null,
+  );
+  readonly selectedClientType = computed(
+    () => (this.queryParams().get('clientType') as OpenApplicationClientType | null) ?? null,
+  );
 
   //#if (IncludeLocalization)
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -187,7 +201,30 @@ export class OpenApplications implements OnInit {
   constructor() {
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.onFilter());
+      .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
+
+    // 搜索框即时值随 URL 回填（前进后退 / 分享链接场景）。
+    effect(() => this.searchQuery.set(this.queryParams().get('keyword') ?? ''));
+
+    // URL 变化或显式刷新时重新拉取列表。
+    combineLatest([this.route.queryParamMap, this.refreshRequests.pipe(startWith(undefined))])
+      .pipe(
+        tap(() => this.loading.set(true)),
+        switchMap(([params]) =>
+          this.service.getOpenApplications(this.queryFromParams(params)).pipe(
+            catchError((error: unknown) => {
+              this.showRequestError(error);
+              return EMPTY;
+            }),
+            finalize(() => this.loading.set(false)),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((data) => {
+        this.applications.set(data.items);
+        this.totalRecords.set(data.totalCount);
+      });
 
     //#if (IncludeLocalization)
     // 读取 translationReady 建立依赖：资源就绪 / 语言切换时重设标题，随语言更新。
@@ -200,74 +237,32 @@ export class OpenApplications implements OnInit {
     //#endif
   }
 
-  ngOnInit() {
-    const saved = this.filterStateService.load<{
-      searchQuery: string;
-      selectedApplicationType: OpenApplicationType | null;
-      selectedClientType: OpenApplicationClientType | null;
-    }>(this.FILTER_KEY);
-
-    if (saved.searchQuery) this.searchQuery.set(saved.searchQuery);
-    if (saved.selectedApplicationType !== undefined)
-      this.selectedApplicationType.set(saved.selectedApplicationType ?? null);
-    if (saved.selectedClientType !== undefined)
-      this.selectedClientType.set(saved.selectedClientType ?? null);
-
-    // 首次进入即加载列表（恢复筛选后），无需手动点刷新。
-    this.reloadList();
-  }
-
-  reloadList() {
-    this.loading.set(true);
-    this.service
-      .getOpenApplications({
-        keyword: this.searchQuery(),
-        applicationType: this.selectedApplicationType() ?? undefined,
-        clientType: this.selectedClientType() ?? undefined,
-        offset: this.offset(),
-        limit: this.limit(),
-        sorting: this.sorting(),
-      })
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.loading.set(false)),
-      )
-      .subscribe((data) => {
-        this.applications.set(data.items);
-        this.totalRecords.set(data.totalCount);
-      });
-  }
-
   onSearchQueryChange(value: string) {
     this.searchQuery.set(value);
     this.searchSubject.next(value);
   }
 
   onApplicationTypeChange(value: OpenApplicationType | null | undefined) {
-    this.selectedApplicationType.set(value ?? null);
-    this.onFilter();
+    this.updateQuery({ applicationType: value ?? null, page: 1 });
   }
 
   onClientTypeChange(value: OpenApplicationClientType | null | undefined) {
-    this.selectedClientType.set(value ?? null);
-    this.onFilter();
+    this.updateQuery({ clientType: value ?? null, page: 1 });
   }
 
-  onFilter() {
-    this.offset.set(0);
-    this.filterStateService.save(this.FILTER_KEY, {
-      searchQuery: this.searchQuery(),
-      selectedApplicationType: this.selectedApplicationType(),
-      selectedClientType: this.selectedClientType(),
+  onPaginationChange(pagination: PaginationState) {
+    this.updateQuery(tableStateToQuery(pagination, this.sorting()));
+  }
+
+  onSortingChange(sorting: SortingState) {
+    this.updateQuery({
+      ...tableStateToQuery({ ...this.pagination(), pageIndex: 0 }, sorting),
+      page: 1,
     });
-    this.reloadList();
   }
 
-  onPageChange(event: OpenApplicationTableFilterEvent) {
-    this.offset.set(event.offset);
-    this.limit.set(event.limit);
-    if (event.sorting) this.sorting.set(event.sorting);
-    this.reloadList();
+  reloadList() {
+    this.refreshRequests.next();
   }
 
   openAddDialog() {
@@ -282,8 +277,14 @@ export class OpenApplications implements OnInit {
 
     this.service
       .getOpenApplication(id)
-      .pipe(finalize(() => this.editDialogLoading.set(false)))
-      .subscribe((application) => this.selectedApplication.set(application));
+      .pipe(
+        finalize(() => this.editDialogLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (application) => this.selectedApplication.set(application),
+        error: (error) => this.showRequestError(error),
+      });
   }
 
   handleSave(data: CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto) {
@@ -296,20 +297,20 @@ export class OpenApplications implements OnInit {
 
     request
       .pipe(
-        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.editDialogSaving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
         next: (result) => {
           //#if (IncludeLocalization)
-          notify.success(this.transloco.translate('common.success'), {
-            detail: this.transloco.translate(
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate(
               selected ? 'openApp.toast.updated' : 'openApp.toast.created',
             ),
           });
           //#else
-          notify.success('Success', {
-            detail: selected
+          toast.success('Success', {
+            description: selected
               ? 'Open application updated successfully'
               : 'Open application created successfully',
           });
@@ -325,6 +326,7 @@ export class OpenApplications implements OnInit {
 
           this.reloadList();
         },
+        error: (error) => this.showRequestError(error),
       });
   }
 
@@ -346,16 +348,22 @@ export class OpenApplications implements OnInit {
       return;
     }
 
-    this.service.deleteOpenApplication(id).subscribe(() => {
-      //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('common.success'), {
-        detail: this.transloco.translate('openApp.toast.deleted'),
+    this.service
+      .deleteOpenApplication(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('openApp.toast.deleted'),
+          });
+          //#else
+          toast.success('Success', { description: 'Open application deleted' });
+          //#endif
+          this.reloadList();
+        },
+        error: (error) => this.showRequestError(error),
       });
-      //#else
-      notify.success('Success', { detail: 'Open application deleted' });
-      //#endif
-      this.reloadList();
-    });
   }
 
   async handleResetSecret(id: string) {
@@ -376,11 +384,50 @@ export class OpenApplications implements OnInit {
       return;
     }
 
-    this.service.resetSecret(id).subscribe((result) => {
-      this.secretValue.set(result.clientSecret);
-      this.secretHeader.set(this.resetSecretHeader());
-      this.secretDialogVisible.set(true);
-      this.reloadList();
+    this.service
+      .resetSecret(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (result) => {
+          this.secretValue.set(result.clientSecret);
+          this.secretHeader.set(this.resetSecretHeader());
+          this.secretDialogVisible.set(true);
+          this.reloadList();
+        },
+        error: (error) => this.showRequestError(error),
+      });
+  }
+
+  private queryFromParams(params: ParamMap): GetOpenApplicationsInputDto {
+    const pagination = paginationFromQuery(params);
+    return {
+      offset: pagination.pageIndex * pagination.pageSize,
+      limit: pagination.pageSize,
+      keyword: params.get('keyword') || undefined,
+      applicationType: (params.get('applicationType') as OpenApplicationType | null) ?? undefined,
+      clientType: (params.get('clientType') as OpenApplicationClientType | null) ?? undefined,
+      sorting: toApiSorting(
+        sortingFromQuery(params, APPLICATION_SORT_COLUMNS, DEFAULT_APPLICATION_SORTING),
+      ),
+    };
+  }
+
+  private updateQuery(queryParams: Params, replaceUrl = false): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: 'merge',
+      replaceUrl,
     });
+  }
+
+  private showRequestError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
+    toast.error('Request failed', { description: applicationErrorMessage(error) });
+    //#endif
   }
 }

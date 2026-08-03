@@ -2,6 +2,19 @@
   <div class="flex-1 overflow-y-auto p-4 sm:p-6">
     <div class="mb-6 flex flex-col items-stretch justify-between gap-4 md:flex-row md:items-center">
       <div class="flex flex-1 flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        <hlm-input-group class="w-full sm:max-w-xs sm:flex-1">
+          <hlm-input-group-addon>
+            <ng-icon name="lucideSearch" />
+          </hlm-input-group-addon>
+          <input
+            hlmInputGroupInput
+            type="text"
+            [placeholder]="searchPlaceholder()"
+            [value]="searchQuery()"
+            (input)="onSearchQueryChange($any($event.target).value)"
+          />
+        </hlm-input-group>
+
         <app-faceted-filter
           [label]="appTypeFilterLabel()"
           [options]="applicationTypeOptions()"
@@ -21,19 +34,6 @@
           [emptyLabel]="filterEmptyLabel()"
           (valueChange)="onClientTypeChange($any($event))"
         />
-
-        <hlm-input-group class="w-full sm:max-w-xs sm:flex-1">
-          <hlm-input-group-addon>
-            <ng-icon name="lucideSearch" />
-          </hlm-input-group-addon>
-          <input
-            hlmInputGroupInput
-            type="text"
-            [placeholder]="searchPlaceholder()"
-            [ngModel]="searchQuery()"
-            (ngModelChange)="onSearchQueryChange($event)"
-          />
-        </hlm-input-group>
       </div>
 
       <div class="flex items-center justify-end gap-3 shrink-0">
@@ -41,7 +41,7 @@
           hlmBtn
           variant="secondary"
           class="w-full sm:w-auto"
-          (click)="onFilter()"
+          (click)="reloadList()"
           [hlmTooltip]="refreshLabel()"
         >
           <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
@@ -56,11 +56,14 @@
 
     <app-open-application-table
       [applications]="applications()"
-      [totalRecords]="totalRecords()"
+      [totalCount]="totalRecords()"
+      [pagination]="pagination()"
+      [sorting]="sorting()"
       [loading]="loading()"
-      (filterChange)="onPageChange($event)"
+      (paginationChange)="onPaginationChange($event)"
+      (sortingChange)="onSortingChange($event)"
       (edit)="openEditDialog($event)"
-      (deleteRequested)="handleDelete($event)"
+      (delete)="handleDelete($event)"
       (resetSecret)="handleResetSecret($event)"
     />
   </div>

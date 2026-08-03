@@ -6,6 +6,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideEye, lucideEyeOff, lucideLock } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -17,7 +18,7 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
-import { notify } from '../../../../core/feedback/notify';
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AccountService } from '../../services/account-service';
 
 const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
@@ -173,13 +174,22 @@ export class ChangePasswordDialog {
       .subscribe({
         next: () => {
           //#if (IncludeLocalization)
-          notify.success(this.transloco.translate('common.success'), {
-            detail: this.transloco.translate('account.changePassword.updateSuccess'),
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('account.changePassword.updateSuccess'),
           });
           //#else
-          notify.success('Success', { detail: 'Password updated' });
+          toast.success('Success', { description: 'Password updated' });
           //#endif
           this.visible.set(false);
+        },
+        error: (error) => {
+          //#if (IncludeLocalization)
+          toast.error(this.transloco.translate('common.requestError'), {
+            description: applicationErrorMessage(error),
+          });
+          //#else
+          toast.error('Request failed', { description: applicationErrorMessage(error) });
+          //#endif
         },
       });
   }

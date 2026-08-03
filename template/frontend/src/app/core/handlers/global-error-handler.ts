@@ -5,8 +5,9 @@ import { TranslocoService } from '@jsverse/transloco';
 //#else
 import { ErrorHandler, Injectable } from '@angular/core';
 //#endif
+import { toast } from '@spartan-ng/brain/sonner';
 
-import { notify } from '../feedback/notify';
+import { ApplicationHttpError } from '../errors/application-http-error';
 
 /**
  * 全局错误处理器
@@ -31,7 +32,7 @@ export class GlobalErrorHandler implements ErrorHandler {
 
     // HTTP 错误应该已经被 httpErrorInterceptor 处理
     // 如果到达这里，记录警告但不重复显示
-    if (error instanceof HttpErrorResponse) {
+    if (error instanceof HttpErrorResponse || error instanceof ApplicationHttpError) {
       console.warn(
         'HTTP error reached GlobalErrorHandler, this should not happen. Check interceptor configuration.',
       );
@@ -41,21 +42,21 @@ export class GlobalErrorHandler implements ErrorHandler {
     // 处理 JavaScript 运行时错误
     if (error instanceof Error) {
       //#if (IncludeLocalization)
-      notify.error(this.transloco.translate('common.appError'), { detail: error.message });
+      toast.error(this.transloco.translate('common.appError'), { description: error.message });
       //#else
-      notify.error('Application error', { detail: error.message });
+      toast.error('Application error', { description: error.message });
       //#endif
       return;
     }
 
     // 处理未知类型的错误
     //#if (IncludeLocalization)
-    notify.error(this.transloco.translate('common.unknownError'), {
-      detail: this.transloco.translate('common.unexpectedError'),
+    toast.error(this.transloco.translate('common.unknownError'), {
+      description: this.transloco.translate('common.unexpectedError'),
     });
     //#else
-    notify.error('Unknown error', {
-      detail: 'An unexpected error occurred. Please refresh the page and try again.',
+    toast.error('Unknown error', {
+      description: 'An unexpected error occurred. Please refresh the page and try again.',
     });
     //#endif
   }

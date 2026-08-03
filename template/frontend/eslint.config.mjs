@@ -46,6 +46,19 @@ export default defineConfig(
           groups: ['builtin', 'external', 'internal', ['parent', 'sibling', 'index'], 'type'],
         },
       ],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@angular/forms',
+              importNames: ['FormsModule', 'ReactiveFormsModule'],
+              message:
+                'Use Angular Signal Forms (@angular/forms/signals); FormsModule/ReactiveFormsModule/ngModel are not allowed.',
+            },
+          ],
+        },
+      ],
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': [
         'error',

@@ -39,7 +39,6 @@
     "ExternalAuth:UserIdMissing": "The external user ID is missing.",
     "ExternalAuth:UserInfoFetchFailed": "Failed to obtain external user information.",
     "New password": "New password",
-    "Display Name": "Display name",
     "Notification:IdentityCannotOperate": "The current identity cannot operate on user notifications.",
     "OpenApp:ApplicationTypeUnsupported": "Unsupported application type: {ApplicationType}",
     "OpenApp:ClientIdRequired": "Client ID is required.",

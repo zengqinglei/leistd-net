@@ -51,6 +51,8 @@ body {
   --destructive: oklch(0.577 0.245 27.325);
   --warning: oklch(0.769 0.188 70.08);
   --warning-foreground: oklch(0.208 0.042 265.755);
+  --success: oklch(0.627 0.194 149.214);
+  --success-foreground: oklch(0.208 0.042 265.755);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -84,6 +86,8 @@ body {
   --destructive: oklch(0.704 0.191 22.216);
   --warning: oklch(0.769 0.188 70.08);
   --warning-foreground: oklch(0.208 0.042 265.755);
+  --success: oklch(0.627 0.194 149.214);
+  --success-foreground: oklch(0.208 0.042 265.755);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -102,12 +106,13 @@ body {
 /* 字体与语义色接入 Tailwind：body 用 font-sans；success 与 warning 暴露为语义工具类。 */
 @theme {
   --font-sans: 'Geist', system-ui, sans-serif;
-  --color-success: oklch(0.627 0.194 149.214);
 }
 
 @theme inline {
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
 }
 
 @layer base {

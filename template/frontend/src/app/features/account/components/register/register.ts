@@ -31,6 +31,7 @@ import {
   lucideEye,
   lucideEyeOff,
 } from '@ng-icons/lucide';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
@@ -43,7 +44,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { lastValueFrom } from 'rxjs';
 
-import { notify } from '../../../../core/feedback/notify';
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
@@ -256,7 +257,7 @@ export class Register implements OnInit {
       const config = await lastValueFrom(this.accountService.getSecurityConfig());
       this.securityConfig.set(config);
     } catch (err) {
-      console.error('Failed to load security config', err);
+      this.showRequestError(err);
     }
   }
 
@@ -266,7 +267,7 @@ export class Register implements OnInit {
       this.captchaData.set(captcha);
       this.model.update((m) => ({ ...m, captchaCode: '' }));
     } catch (err) {
-      console.error('Failed to refresh captcha', err);
+      this.showRequestError(err);
     }
   }
 
@@ -276,22 +277,22 @@ export class Register implements OnInit {
 
     if (!email || this.registerForm.email().invalid()) {
       //#if (IncludeLocalization)
-      notify.warn(this.transloco.translate('common.notice'), {
-        detail: this.transloco.translate('account.register.emailRequired'),
+      toast.warning(this.transloco.translate('common.notice'), {
+        description: this.transloco.translate('account.register.emailRequired'),
       });
       //#else
-      notify.warn('Notice', { detail: 'Please enter a valid email first' });
+      toast.warning('Notice', { description: 'Please enter a valid email first' });
       //#endif
       return;
     }
 
     if (!captchaCode || !captchaToken) {
       //#if (IncludeLocalization)
-      notify.warn(this.transloco.translate('common.notice'), {
-        detail: this.transloco.translate('account.register.captchaRequired'),
+      toast.warning(this.transloco.translate('common.notice'), {
+        description: this.transloco.translate('account.register.captchaRequired'),
       });
       //#else
-      notify.warn('Notice', { detail: 'Please enter the captcha first' });
+      toast.warning('Notice', { description: 'Please enter the captcha first' });
       //#endif
       return;
     }
@@ -306,14 +307,15 @@ export class Register implements OnInit {
         }),
       );
       //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('common.success'), {
-        detail: this.transloco.translate('account.register.emailCodeSent'),
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('account.register.emailCodeSent'),
       });
       //#else
-      notify.success('Success', { detail: 'Verification code sent, please check your email' });
+      toast.success('Success', { description: 'Verification code sent, please check your email' });
       //#endif
       this.startCountdown();
-    } catch {
+    } catch (error) {
+      this.showRequestError(error);
       this.refreshCaptcha(); // 如果验证码错误，刷新图形验证码
     } finally {
       this._isSendingEmailCode.set(false);
@@ -354,11 +356,11 @@ export class Register implements OnInit {
 
       if (!captchaToken) {
         //#if (IncludeLocalization)
-        notify.error(this.transloco.translate('common.error'), {
-          detail: this.transloco.translate('account.register.captchaTokenMissing'),
+        toast.error(this.transloco.translate('common.error'), {
+          description: this.transloco.translate('account.register.captchaTokenMissing'),
         });
         //#else
-        notify.error('Error', { detail: 'Please refresh to get the captcha' });
+        toast.error('Error', { description: 'Please refresh to get the captcha' });
         //#endif
         return;
       }
@@ -375,21 +377,32 @@ export class Register implements OnInit {
       );
 
       //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('account.register.registerSuccess'), {
-        detail: this.transloco.translate('account.register.registerSuccessDetail'),
+      toast.success(this.transloco.translate('account.register.registerSuccess'), {
+        description: this.transloco.translate('account.register.registerSuccessDetail'),
       });
       //#else
-      notify.success('Account created', {
-        detail: 'Account created successfully, please sign in',
+      toast.success('Account created', {
+        description: 'Account created successfully, please sign in',
       });
       //#endif
       this.router.navigate(['/auth/login'], {
         queryParams: this.returnUrl ? { returnUrl: this.returnUrl } : undefined,
       });
-    } catch {
+    } catch (error) {
+      this.showRequestError(error);
       this.refreshCaptcha();
     } finally {
       this._isLoading.set(false);
     }
+  }
+
+  private showRequestError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
+    toast.error('Request failed', { description: applicationErrorMessage(error) });
+    //#endif
   }
 }

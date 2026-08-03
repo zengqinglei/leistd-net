@@ -9,11 +9,10 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCopy } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-
-import { notify } from '../../../../../../core/feedback/notify';
 
 /**
  * 一次性揭示 Client Secret 的弹窗（重置 / 新建后复用同一实例）。
@@ -55,11 +54,11 @@ export class SecretRevealDialog {
     }
     navigator.clipboard?.writeText(value).then(() => {
       //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('common.success'), {
-        detail: this.transloco.translate('openApp.toast.secretCopied'),
+      toast.success(this.transloco.translate('common.success'), {
+        description: this.transloco.translate('openApp.toast.secretCopied'),
       });
       //#else
-      notify.success('Success', { detail: 'Secret copied' });
+      toast.success('Success', { description: 'Secret copied' });
       //#endif
     });
   }

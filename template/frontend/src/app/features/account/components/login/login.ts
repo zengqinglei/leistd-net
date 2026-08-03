@@ -12,6 +12,7 @@ import {
   lucideEye,
   lucideEyeOff,
 } from '@ng-icons/lucide';
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -25,7 +26,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { environment } from '../../../../../environments/environment';
-import { notify } from '../../../../core/feedback/notify';
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
@@ -153,12 +154,12 @@ export class Login {
 
       // 登录成功提示
       //#if (IncludeLocalization)
-      notify.success(this.transloco.translate('account.login.loginSuccess'), {
-        detail: this.transloco.translate('account.login.welcomeBack'),
-        life: 3000,
+      toast.success(this.transloco.translate('account.login.loginSuccess'), {
+        description: this.transloco.translate('account.login.welcomeBack'),
+        duration: 3000,
       });
       //#else
-      notify.success('Signed in successfully', { detail: 'Welcome back!', life: 3000 });
+      toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
       //#endif
 
       if (this.isSafeLocalReturnUrl(returnUrl)) {
@@ -173,8 +174,13 @@ export class Login {
         this.router.navigate(['/workspace']);
       }
     } catch (error) {
-      // HTTP 错误已经在 httpErrorInterceptor 中统一处理并显示 Toast
-      console.error('Login failed', error);
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('account.login.loginFailed'), {
+        description: applicationErrorMessage(error),
+      });
+      //#else
+      toast.error('Login failed', { description: applicationErrorMessage(error) });
+      //#endif
     } finally {
       this._isLoading.set(false);
     }
@@ -214,14 +220,16 @@ export class Login {
     } catch (error) {
       console.error(`${label} login failed`, error);
       //#if (IncludeLocalization)
-      notify.error(this.transloco.translate('account.login.loginFailed'), {
-        detail: this.transloco.translate('account.login.externalLoginFailed', { provider: label }),
-        life: 3000,
+      toast.error(this.transloco.translate('account.login.loginFailed'), {
+        description: this.transloco.translate('account.login.externalLoginFailed', {
+          provider: label,
+        }),
+        duration: 3000,
       });
       //#else
-      notify.error('Sign-in failed', {
-        detail: `Unable to connect to the ${label} sign-in service, please try again later`,
-        life: 3000,
+      toast.error('Sign-in failed', {
+        description: `Unable to connect to the ${label} sign-in service, please try again later`,
+        duration: 3000,
       });
       //#endif
       this._isLoading.set(false);
