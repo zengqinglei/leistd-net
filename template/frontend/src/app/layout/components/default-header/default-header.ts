@@ -2,10 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 //#if (IncludeLocalization)
 import { TranslocoModule } from '@jsverse/transloco';
 //#endif
-//#if (!IncludeNotifications)
-import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideBell } from '@ng-icons/lucide';
-//#endif
 import { HlmBreadcrumbImports } from '@spartan-ng/helm/breadcrumb';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmKbdImports } from '@spartan-ng/helm/kbd';
@@ -27,9 +23,6 @@ import { Notifications } from '../notifications/notifications';
   standalone: true,
   imports: [
     // 基础布局依赖；通知 / 本地化组件按条件补充。
-    //#if (!IncludeNotifications)
-    NgIcon,
-    //#endif
     HlmButton,
     ThemeModeToggle,
     HlmSidebarTrigger,
@@ -45,9 +38,6 @@ import { Notifications } from '../notifications/notifications';
     TranslocoModule,
     //#endif
   ],
-  //#if (!IncludeNotifications)
-  providers: [provideIcons({ lucideBell })],
-  //#endif
   templateUrl: './default-header.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

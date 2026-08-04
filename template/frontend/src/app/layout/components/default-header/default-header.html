@@ -55,14 +55,9 @@
   <div class="flex items-center gap-2 md:gap-4">
     <!-- Theme Toggle -->
     <app-theme-mode-toggle />
-
-    <!-- Notifications -->
     <!--#if (IncludeNotifications)-->
+    <!-- Notifications -->
     <app-notifications />
-    <!--#else-->
-    <button hlmBtn variant="ghost" size="icon" aria-label="Notifications">
-      <ng-icon name="lucideBell" />
-    </button>
     <!--#endif-->
     <!--#if (IncludeLocalization)-->
     <!-- Language Switcher: 铃铛右侧 -->

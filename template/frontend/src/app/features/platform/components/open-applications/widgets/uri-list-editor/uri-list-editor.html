@@ -34,6 +34,7 @@
         <button
           type="button"
           class="-mr-1 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          [attr.aria-label]="removeLabel() + ': ' + uri"
           (click)="remove.emit(uri)"
         >
           <ng-icon name="lucideX" class="text-xs" />

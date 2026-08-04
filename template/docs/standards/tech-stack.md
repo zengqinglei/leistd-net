@@ -14,6 +14,7 @@
 | 前端语言 | TypeScript | 6.0+ | 类型安全 |
 | 前端状态 | Angular Signals | 当前框架版本 | 组件级/局部状态 |
 | 前端表单 | Angular Signal Forms | 当前框架版本 | `@angular/forms/signals`（Angular 22 仍 experimental，需锁版本） |
+| 数据表格 | TanStack Table | 8+ | `@tanstack/angular-table` headless 引擎；服务端 `manualPagination`/`manualSorting`，列表分页/排序/筛选状态以 URL query params 为唯一来源 |
 | 后端框架 | .NET / ASP.NET Core | 10+ | API 与业务服务 |
 | ORM | EF Core | 10+ | 数据访问 |
 | 架构 | DDD 分层 | 项目约定 | Api/Application/Domain/Infrastructure |

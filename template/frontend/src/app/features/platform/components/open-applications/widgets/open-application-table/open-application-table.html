@@ -240,48 +240,13 @@
                           }}</span>
                         }
                         @case ('actions') {
-                          <!-- 操作：桌面端内联全部操作 + 移动端 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
+                          <!-- 操作：始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
                           <div class="flex items-center justify-end gap-1">
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon-sm"
-                              class="hidden sm:inline-flex"
-                              [attr.aria-label]="actionLabel('edit')"
-                              [hlmTooltip]="actionLabel('edit')"
-                              (click)="edit.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucidePencil" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon-sm"
-                              class="hidden sm:inline-flex"
-                              [disabled]="row.original.clientType !== 'confidential'"
-                              [attr.aria-label]="actionLabel('reset')"
-                              [hlmTooltip]="actionLabel('reset')"
-                              (click)="resetSecret.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucideRefreshCw" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon-sm"
-                              class="hidden sm:inline-flex text-destructive hover:text-destructive"
-                              [attr.aria-label]="actionLabel('delete')"
-                              [hlmTooltip]="actionLabel('delete')"
-                              (click)="delete.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucideTrash2" />
-                            </button>
                             <button
                               hlmBtn
                               variant="ghost"
                               size="icon"
                               align="end"
-                              class="sm:hidden"
                               [attr.aria-label]="actionsLabel()"
                               [hlmDropdownMenuTrigger]="rowMenu"
                             >

@@ -22,6 +22,8 @@
     "close": "关闭",
     "copy": "复制",
     "add": "添加",
+    "remove": "移除",
+    "uploadAvatar": "上传头像",
     "actions": "操作",
     "rowsPerPage": "每页条数",
     "pageOf": "第 {{page}} / {{total}} 页",
@@ -72,6 +74,7 @@
   },
   "layout": {
     "sidebar": {
+      "navigation": "导航",
       "appTitle": "模板项目",
       "dashboard": "仪表盘",
       "groupSystem": "系统",
@@ -127,7 +130,13 @@
     }
   },
   "theme": {
-    "toggle": "切换主题"
+    "toggle": "切换主题",
+    "current": "主题：{{mode}}",
+    "mode": {
+      "light": "浅色",
+      "system": "跟随系统",
+      "dark": "深色"
+    }
   },
   "app": {
     "startup": {
@@ -160,7 +169,7 @@
       "invalidFileTypeDetail": "请上传 PNG、JPG 或 WEBP 图片",
       "superAdminTag": "超级管理员",
       "adminTag": "管理员",
-      "avatarHint": "悬浮头像后点击 + 重新上传，选择后即时预览。",
+      "avatarHint": "点击头像上传新图片（PNG / JPG / WebP）。",
       "username": "用户名",
       "usernamePlaceholder": "请输入用户名",
       "email": "邮箱",
@@ -307,7 +316,7 @@
       "loading": "正在加载用户信息...",
       "unnamedUser": "未命名用户",
       "noEmail": "未设置邮箱",
-      "avatarHint": "悬浮头像后点击 + 重新上传，选择后即时预览。",
+      "avatarHint": "点击头像上传新图片（PNG / JPG / WebP）。",
       "avatarTooLargeSummary": "文件过大",
       "avatarTooLargeDetail": "头像大小不能超过 1MB",
       "avatarBadTypeSummary": "格式不支持",

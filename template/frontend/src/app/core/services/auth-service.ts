@@ -1,10 +1,11 @@
 //#if (IncludeIdentity)
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, lastValueFrom, tap } from 'rxjs';
 
 import { LoginInputDto, UserOutputDto } from '../../features/account/models/account.dto';
 import { User } from '../../shared/models/user.model';
+import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -31,8 +32,12 @@ export class AuthService {
   }
 
   loadUser(): Observable<UserOutputDto> {
+    // 标记为静默认证：/me 探测的 401 由 Guard（负责 returnUrl）与登录流各自本地处理，
+    // 不触发 HTTP 拦截器的全局跳转，避免启动阶段覆盖 Guard 的 returnUrl。
     return this.http
-      .get<UserOutputDto>('/api/v1/auth/me')
+      .get<UserOutputDto>('/api/v1/auth/me', {
+        context: new HttpContext().set(SILENT_AUTH, true),
+      })
       .pipe(tap((user) => this.setCurrentUser(user)));
   }
 

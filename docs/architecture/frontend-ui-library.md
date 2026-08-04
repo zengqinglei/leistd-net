@@ -9,7 +9,10 @@
 - 组件消费模式：headless 逻辑层 `@spartan-ng/brain`（npm 依赖）+ 样式层 helm（经 CLI 复制进本仓库 `libs/ui/`，**属自有代码**）。
 - 样式基座：Tailwind CSS v4，组件主题走 CSS 变量（oklch token）。
 - 图标：`@ng-icons` + Lucide。
-- 表单：Angular Signal Forms。
+- 表单：Angular Signal Forms（`@angular/forms/signals`）；不使用 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 静态禁止）。
+- 数据表格：`@tanstack/angular-table`（headless 表格引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；展示层复用自有 `TablePaginator`/`FacetedFilter`，列可见性按优先级（primary/secondary/tertiary）响应式裁剪。
+- 列表查询状态：分页/排序/筛选以 **URL query params 为唯一状态源**，刷新、分享链接、浏览器前进后退均可恢复；非法参数回退到默认值。
+- HTTP 错误契约：拦截器只负责 401 认证跳转与把错误归一化为类型化 `ApplicationHttpError`（解析 RFC 9457/7807 Problem Details），**不发全局 toast**；具体反馈（字段错误 / Toast / 空状态 / 静默）由发起操作的 feature 决定；全局 Toast 直接用 Spartan Sonner（`@spartan-ng/brain/sonner`），无自建封装。
 - 支持范围：紧跟 Angular 最近两个大版本（当前 21/22）。
 
 ## 依据

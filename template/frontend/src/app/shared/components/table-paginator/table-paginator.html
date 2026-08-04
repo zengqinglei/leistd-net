@@ -6,7 +6,11 @@
       labels().rowsPerPage
     }}</span>
     <hlm-select [value]="rows()" (valueChange)="onRowsChange($event)">
-      <hlm-select-trigger size="sm" class="inline-flex h-8 w-fit">
+      <hlm-select-trigger
+        size="sm"
+        class="inline-flex h-8 w-fit"
+        [attr.aria-label]="labels().rowsPerPage"
+      >
         <hlm-select-value />
       </hlm-select-trigger>
       <hlm-select-content *hlmSelectPortal>

@@ -132,7 +132,8 @@ function createOpenApplication(req: MockRequest) {
   };
 
   applications.unshift(newApplication);
-  return toOutput(newApplication);
+  // 创建响应一次性返回明文 Secret（列表/详情仍通过 toOutput 隐藏），供前端弹窗展示。
+  return { ...toOutput(newApplication), clientSecret: newApplication.clientSecret };
 }
 
 function updateOpenApplication(req: MockRequest) {

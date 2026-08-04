@@ -5,7 +5,7 @@
 >
   <hlm-dialog-content
     *hlmDialogPortal
-    class="min-w-[min(64rem,calc(100vw_-_2rem))]"
+    class="flex max-h-[calc(100dvh-2rem)] min-w-[min(64rem,calc(100vw_-_2rem))] flex-col overflow-hidden"
     [showCloseButton]="!saving()"
   >
     <hlm-dialog-header>
@@ -24,8 +24,12 @@
       <app-dialog-loading text="Loading open application..." />
       <!--#endif-->
     } @else {
-      <form novalidate (submit)="$event.preventDefault(); save()" class="flex flex-col gap-4">
-        <div class="flex flex-col gap-4 max-h-[70vh] overflow-y-auto -mx-4 -my-1 px-4 py-1">
+      <form
+        novalidate
+        (submit)="$event.preventDefault(); save()"
+        class="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden"
+      >
+        <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
           @if (!isEditMode()) {
             <div hlmField>
               <!--#if (IncludeLocalization)-->
@@ -206,6 +210,7 @@
                 [addLabel]="addLabel()"
                 [invalidText]="redirectUriInvalid()"
                 [emptyText]="redirectUriEmpty()"
+                [removeLabel]="removeUriLabel()"
                 [uris]="formModel().redirectUris"
                 badgeVariant="secondary"
                 (add)="addRedirectUri($event)"
@@ -220,6 +225,7 @@
                 [addLabel]="addLabel()"
                 [invalidText]="redirectUriInvalid()"
                 [emptyText]="postLogoutUriEmpty()"
+                [removeLabel]="removeUriLabel()"
                 [uris]="formModel().postLogoutRedirectUris"
                 badgeVariant="outline"
                 (add)="addPostLogoutRedirectUri($event)"

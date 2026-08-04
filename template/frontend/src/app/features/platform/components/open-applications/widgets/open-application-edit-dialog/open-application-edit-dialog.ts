@@ -121,6 +121,7 @@ export class OpenApplicationEditDialog {
   readonly redirectUriPlaceholder = () =>
     this.transloco.translate('openApp.redirectUri.placeholder');
   readonly addLabel = () => this.transloco.translate('common.add');
+  readonly removeUriLabel = () => this.transloco.translate('common.remove');
   readonly permissionsPlaceholder = () =>
     this.transloco.translate('openApp.permissions.placeholder');
   readonly requirementsPlaceholder = () =>
@@ -142,6 +143,7 @@ export class OpenApplicationEditDialog {
   readonly redirectUriPlaceholder = () =>
     'https://example.com/callback or my-desktop-app://oauth/callback';
   readonly addLabel = () => 'Add';
+  readonly removeUriLabel = () => 'Remove';
   readonly permissionsPlaceholder = () => 'Select authorization capabilities';
   readonly requirementsPlaceholder = () => 'Select security requirements';
   readonly redirectUrisLabel = () => 'Redirect URIs';

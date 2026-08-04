@@ -135,6 +135,16 @@ export class DefaultSidebar {
       .filter((group) => group.items.length > 0);
   });
 
+  //#if (IncludeLocalization)
+  // 移动端侧栏 Sheet 的可访问名（视觉隐藏），随语言切换重算。
+  readonly navLabel = computed(() => {
+    this.translationReady();
+    return this.transloco.translate('layout.sidebar.navigation');
+  });
+  //#else
+  readonly navLabel = computed(() => 'Navigation');
+  //#endif
+
   isItemActive(item: MenuItem): boolean {
     const currentUrl = this.layoutService.currentUrl();
     if (item.route === '/platform') {

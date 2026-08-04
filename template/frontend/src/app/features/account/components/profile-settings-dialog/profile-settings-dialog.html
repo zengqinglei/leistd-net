@@ -3,7 +3,11 @@
   (stateChanged)="onDialogStateChange($event)"
   [closeOnOutsidePointerEvents]="!saving()"
 >
-  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-2xl" [showCloseButton]="!saving()">
+  <hlm-dialog-content
+    *hlmDialogPortal
+    class="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl"
+    [showCloseButton]="!saving()"
+  >
     <hlm-dialog-header>
       <h3 hlmDialogTitle>{{ dialogHeader() }}</h3>
       <!--#if (IncludeLocalization)-->
@@ -15,8 +19,12 @@
       <!--#endif-->
     </hlm-dialog-header>
 
-    <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-6">
-      <div class="flex flex-col gap-6 max-h-[65vh] overflow-y-auto -mx-4 -my-1 px-4 py-1">
+    <form
+      novalidate
+      (submit)="$event.preventDefault(); onSubmit()"
+      class="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden"
+    >
+      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto -mx-4 -my-1 px-4 py-1">
         <!-- Avatar 上传（原生 file input + 自绘头像 UI） -->
         <div class="flex items-center gap-4 border-b border-border pb-5">
           <label
@@ -34,17 +42,28 @@
             }
 
             <span
-              class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              class="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
             >
               <ng-icon name="lucideImagePlus" class="text-xl" />
             </span>
 
+            <!--#if (IncludeLocalization)-->
             <input
               type="file"
               class="sr-only"
               accept="image/png,image/jpeg,image/webp"
+              [attr.aria-label]="'common.uploadAvatar' | transloco"
               (change)="onAvatarSelect($event)"
             />
+            <!--#else-->
+            <input
+              type="file"
+              class="sr-only"
+              accept="image/png,image/jpeg,image/webp"
+              aria-label="Upload avatar"
+              (change)="onAvatarSelect($event)"
+            />
+            <!--#endif-->
           </label>
 
           <div class="min-w-0 flex-1">
@@ -77,7 +96,7 @@
             </p>
             <!--#else-->
             <p class="mt-2 mb-0 text-xs text-muted-foreground">
-              Hover over the avatar and click + to re-upload; the selection previews instantly.
+              Click the avatar to upload a new image (PNG / JPG / WebP).
             </p>
             <!--#endif-->
           </div>

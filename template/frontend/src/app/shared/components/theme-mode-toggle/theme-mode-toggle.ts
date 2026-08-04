@@ -27,7 +27,9 @@ import { ThemeService } from '../../../core/services/theme-service';
       hlmBtn
       variant="outline"
       size="icon"
-      [attr.aria-label]="'theme.toggle' | transloco"
+      [attr.aria-label]="
+        'theme.current' | transloco: { mode: 'theme.mode.' + themeService.mode() | transloco }
+      "
       (click)="themeService.toggleTheme()"
     >
       <ng-icon [name]="themeService.modeIcon()" />
@@ -40,7 +42,7 @@ import { ThemeService } from '../../../core/services/theme-service';
       hlmBtn
       variant="outline"
       size="icon"
-      aria-label="Switch theme"
+      [attr.aria-label]="'Theme: ' + themeService.mode()"
       (click)="themeService.toggleTheme()"
     >
       <ng-icon [name]="themeService.modeIcon()" />

@@ -222,34 +222,8 @@
                           }}</span>
                         }
                         @case ('actions') {
-                          <!-- 操作：桌面端内联最常用操作 + 始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
+                          <!-- 操作：始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
                           <div class="flex items-center justify-end gap-1">
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon-sm"
-                              class="hidden sm:inline-flex"
-                              [disabled]="isOtherSuperAdmin(row.original)"
-                              [attr.aria-label]="actionLabel('edit', row.original)"
-                              [hlmTooltip]="actionLabel('edit', row.original)"
-                              (click)="edit.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucidePencil" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon-sm"
-                              class="hidden sm:inline-flex"
-                              [disabled]="isSuperAdmin(row.original)"
-                              [attr.aria-label]="actionLabel('toggle', row.original)"
-                              [hlmTooltip]="actionLabel('toggle', row.original)"
-                              (click)="toggleActive.emit(row.original)"
-                            >
-                              <ng-icon
-                                [name]="row.original.isActive ? 'lucideBan' : 'lucideCircleCheck'"
-                              />
-                            </button>
                             <button
                               hlmBtn
                               variant="ghost"

@@ -165,7 +165,7 @@ export class UserTable {
         headClass:
           'w-px px-2 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border',
         cellClass:
-          'w-px px-2 py-2 whitespace-nowrap sticky right-0 z-10 bg-card border-l border-border',
+          'w-px px-2 py-2 whitespace-nowrap sticky right-0 z-10 bg-card group-hover:bg-muted/50 border-l border-border',
       },
     },
   ];

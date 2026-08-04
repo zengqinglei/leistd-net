@@ -26,6 +26,7 @@ export class UriListEditor {
   readonly addLabel = input('');
   readonly invalidText = input('');
   readonly emptyText = input('');
+  readonly removeLabel = input('Remove');
   readonly uris = input<string[]>([]);
   readonly badgeVariant = input<'secondary' | 'outline'>('secondary');
 

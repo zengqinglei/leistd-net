@@ -38,6 +38,7 @@ import { injectHlmSidebarConfig } from './hlm-sidebar.token';
           class="bg-sidebar text-sidebar-foreground h-svh w-(--sidebar-width) p-0 [&>button]:hidden"
           [style.--sidebar-width]="sidebarWidthMobile()"
         >
+          <h2 hlmSheetTitle class="sr-only">{{ mobileTitle() }}</h2>
           <div class="flex h-full w-full flex-col">
             <ng-container *ngTemplateOutlet="contentContainer" />
           </div>
@@ -70,6 +71,8 @@ export class HlmSidebar {
   public readonly side = input<'left' | 'right'>('left');
   public readonly variant = input<SidebarVariant>(this._sidebarService.variant());
   public readonly collapsible = input<'offcanvas' | 'icon' | 'none'>('offcanvas');
+  /** Accessible name for the mobile off-canvas sheet (visually hidden). */
+  public readonly mobileTitle = input<string>('Sidebar');
 
   protected readonly _sidebarGapComputedClass = computed(() =>
     hlm(

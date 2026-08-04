@@ -22,6 +22,8 @@
     "close": "Close",
     "copy": "Copy",
     "add": "Add",
+    "remove": "Remove",
+    "uploadAvatar": "Upload avatar",
     "actions": "Actions",
     "rowsPerPage": "Items per page",
     "pageOf": "Page {{page}} of {{total}}",
@@ -72,6 +74,7 @@
   },
   "layout": {
     "sidebar": {
+      "navigation": "Navigation",
       "appTitle": "Template Project",
       "dashboard": "Dashboard",
       "groupSystem": "System",
@@ -127,7 +130,13 @@
     }
   },
   "theme": {
-    "toggle": "Switch theme"
+    "toggle": "Switch theme",
+    "current": "Theme: {{mode}}",
+    "mode": {
+      "light": "Light",
+      "system": "System",
+      "dark": "Dark"
+    }
   },
   "app": {
     "startup": {
@@ -160,7 +169,7 @@
       "invalidFileTypeDetail": "Please upload a PNG, JPG, or WEBP image",
       "superAdminTag": "Super Admin",
       "adminTag": "Admin",
-      "avatarHint": "Hover over the avatar and click + to re-upload; the selection previews instantly.",
+      "avatarHint": "Click the avatar to upload a new image (PNG / JPG / WebP).",
       "username": "Username",
       "usernamePlaceholder": "Please enter a username",
       "email": "Email",
@@ -307,7 +316,7 @@
       "loading": "Loading user information...",
       "unnamedUser": "Unnamed user",
       "noEmail": "No email set",
-      "avatarHint": "Hover over the avatar and click + to re-upload; the preview updates instantly.",
+      "avatarHint": "Click the avatar to upload a new image (PNG / JPG / WebP).",
       "avatarTooLargeSummary": "File too large",
       "avatarTooLargeDetail": "The avatar size cannot exceed 1MB",
       "avatarBadTypeSummary": "Unsupported format",
