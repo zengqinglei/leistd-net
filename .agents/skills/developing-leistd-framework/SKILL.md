@@ -1,6 +1,6 @@
 ---
 name: developing-leistd-framework
-description: 在 leistd-net 仓库中新增、修改、审查或排查 framework/components、framework/ddd-struct、公共 API、依赖注入、Options、NuGet 打包及随包文档时使用，例如“新增组件”“调整框架注册”“审视组件边界”。不用于下游项目仅消费 Leistd 包或只维护项目模板。
+description: 在 leistd-net 仓库中为 framework/components、framework/ddd-struct、公共 API、依赖注入、Options、NuGet 打包及随包文档设计方案、制定实施计划、新增、修改、审查或排查时使用，例如“新增组件”“规划 DDD 基座调整”“审视组件边界”。不用于下游项目仅消费 Leistd 包或只维护项目模板。
 ---
 
 # 开发 Leistd 框架
@@ -23,6 +23,17 @@ description: 在 leistd-net 仓库中新增、修改、审查或排查 framework
 - 公共 API、命名、目录和依赖沿用同类组件规范，避免无实际收益的新抽象。
 - 组件文档示例只使用该组件真实依赖；DDD 组合示例留在 DDD 文档。
 
+## 方案与实施计划
+
+涉及通用组件、DDD 基座、公共 API 或包边界的方案设计时，先读取 `docs/README.md` 并搜索同主题最新文档：
+
+- 仍在比较候选或诊断现状时，跨会话材料写入 `docs/assessments/YYYY-MM-DD-<topic>.md`；
+- 方案已经选定且需要任务分解、实施顺序和验收时，写入 `docs/plans/YYYY-MM-DD-<topic>.md`；
+- 长期维护规则才写入 `docs/framework/`；
+- 已实现且使用者必须知道的公共契约才写入 `framework/docs/`。
+
+临时分析默认留在当前答复。不得把未实施方案、迁移步骤、任务状态、分支记录或仓库验证过程写入随 NuGet 分发的 `framework/docs/`。同时影响 Template、Skill、CI 或发布流程时，改用 `maintaining-leistd-repository` 维护一份跨交付面计划。
+
 ## 工作流
 
 1. 检查分支、工作区和用户已有改动，确认受影响家族、依赖方向、公共表面和消费点。
@@ -33,7 +44,7 @@ description: 在 leistd-net 仓库中新增、修改、审查或排查 framework
 6. 检查受影响 `.nupkg` 的程序集、XML、随包文档和依赖，并从隔离本地源完成还原与构建。
 7. Template 已消费该能力时使用 `developing-leistd-template` 验证受影响场景；未消费时运行组件家族集成测试，公共集成方式变化时再建立 `.tmp/` 下的临时宿主验证。
 
-使用者可见的组件契约写入 `framework/docs/components/{family}.md`，DDD 基座契约写入 `framework/docs/ddd-struct/`；仅供仓库维护者使用的规则写入 `docs/framework/`。编写前先参考最新同类内容并按组件特性组织，不使用固定章节模板。公共能力缺少对应文档时主动创建并更新索引，只覆盖使用者必须知道的安装、注册、调用、默认行为和限制。
+使用者可见的组件契约写入 `framework/docs/components/{family}.md`，DDD 基座契约写入 `framework/docs/ddd-struct/`；仅供仓库维护者使用的稳定规则写入 `docs/framework/`。编写前先参考最新同类内容并按组件特性组织，不使用固定章节模板。公共能力缺少对应文档时主动创建并更新索引，只覆盖使用者必须知道的安装、注册、调用、默认行为和限制。
 
 ## 验证入口
 

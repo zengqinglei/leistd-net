@@ -1,6 +1,6 @@
 ---
 name: developing-leistd-template
-description: 在 leistd-net 仓库中修改或审查 template 的后端、前端、条件参数、生成项目文档、项目 Skill、Mock 或部署资产时使用，也用于适配 Leistd 公共 API 并验证生成场景。不能替代框架组件开发；生成后的业务功能开发应使用项目内 Skill。
+description: 在 leistd-net 仓库中为 template 的后端、前端、条件参数、生成项目文档、项目 Skill、Mock 或部署资产设计方案、制定实施计划、修改或审查时使用，也用于适配 Leistd 公共 API 并验证生成场景。不能替代框架组件开发；生成后的业务功能开发应使用项目内 Skill。
 ---
 
 # 开发 Fullstack App Template
@@ -16,6 +16,28 @@ description: 在 leistd-net 仓库中修改或审查 template 的后端、前端
 
 模板通过 `PackageReference` 消费框架；`Api` 是组合根，Application 不依赖 Infrastructure。模板源可编辑不等于交付完成，必须验证实际生成结果。
 
+## 方案与实施计划
+
+涉及 Template 技术选型、结构调整、参数迁移或跨场景改造时，先读取 `docs/README.md` 并搜索同主题最新文档：
+
+- 仍在比较候选或诊断现状时，跨会话材料写入 `docs/assessments/YYYY-MM-DD-<topic>.md`；
+- 方案已经选定且需要任务分解、实施顺序和验收时，写入 `docs/plans/YYYY-MM-DD-<topic>.md`；
+- 长期模板维护规则才写入 `docs/template/`；
+- 当前实现已经成立后，生成项目必须知道的工程事实才写入 `template/docs/`。
+
+临时分析默认留在当前答复。即使计划只影响 Template，也不得将方案比较、迁移计划、任务状态、分支记录或仓库验证过程写入 `template/`。
+
+## 对外分发边界
+
+`template/` 是 `dotnet new` 对外发布载荷，只包含生成项目运行和持续开发真正需要的内容：当前源码、配置、测试、Mock、部署资产、工程规范和项目级 Skill。以下 leistd-net 仓库信息不得进入 `template/`：
+
+- Framework 或 Template 的候选方案、选型过程和实施计划；
+- 仓库分支、MR、提交、任务状态、阶段报告和历史结论；
+- `.tmp/local-feed`、模板矩阵等仅供 leistd-net 维护者使用的命令和路径；
+- 尚未由当前模板源码和验证证明的未来技术栈或迁移说明。
+
+`template/.agents/skills/leistd-project-workflow/` 只描述生成后业务项目自身的分析、实现、审查、测试和部署协作，不承载 leistd-net 的 Framework/Template 维护流程。仓库过程统一留在根 `.agents/skills/` 与 `docs/`。
+
 ## 工作流
 
 1. 检查分支、工作区和用户已有改动，列出受影响参数、条件组合、替换项和排除文件。
@@ -25,7 +47,7 @@ description: 在 leistd-net 仓库中修改或审查 template 的后端、前端
 5. 对生成项目执行后端还原、构建、测试及必要的前端构建。
 6. 权限、审计、通知、实时或数据库变化时补充对应业务闭环验证。
 
-模板维护规则写入 `docs/template/`。项目协作流程写入 `template/.agents/skills/leistd-project-workflow/`，生成项目的长期工程事实由 `template/docs/README.md` 索引；满足沉淀条件但没有同类文档时主动创建最小权威文档，只写已验证且必要的信息，不携带固定需求、报告、配置或规范模板。
+模板维护规则写入 `docs/template/`。生成后业务项目的通用协作流程写入 `template/.agents/skills/leistd-project-workflow/`，生成项目的长期工程事实由 `template/docs/README.md` 索引；满足沉淀条件但没有同类文档时主动创建最小权威文档，只写已验证且必要的信息，不携带固定需求、报告、配置或规范模板。
 
 ## 验证入口
 

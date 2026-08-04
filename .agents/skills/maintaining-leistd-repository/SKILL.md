@@ -20,6 +20,21 @@ description: 在 leistd-net 仓库中处理跨 framework、template、skills、d
 
 只有一个交付面受影响时直接使用对应专项 Skill，不额外加载本 Skill。
 
+## 方案与实施计划
+
+方案、计划和稳定规范的归属以 `docs/README.md` 为准：
+
+| 信息 | 位置 |
+| --- | --- |
+| 现状诊断、候选比较和迁移建议 | `docs/assessments/YYYY-MM-DD-<topic>.md` |
+| 已选方案的可执行任务、顺序和验收 | `docs/plans/YYYY-MM-DD-<topic>.md` |
+| 长期有效的仓库、Framework 或 Template 维护规则 | `docs/architecture/`、`docs/framework/`、`docs/template/` |
+| 确有长期价值的重大跨层验证结果 | `docs/reports/YYYY-MM-DD-<topic>.md` |
+
+聊天中的临时分析不默认落盘；用户要求持久化或信息需要跨会话执行时，先查同主题最新文档，再按上表更新或创建。跨 Framework、Template 和 Skill 的选型或迁移只维护一份根仓库计划，不在每个交付面复制。
+
+`framework/docs/` 和 `template/` 都是对外分发内容，不得写入 leistd-net 的方案比较、实施计划、任务状态、分支记录或仓库内部验证过程。实现完成后只把已经成立的公共契约和生成项目事实同步到对应分发文档。
+
 ## 工作流
 
 1. 检查分支、工作区和用户已有改动，确认当前变更基线。
@@ -28,6 +43,6 @@ description: 在 leistd-net 仓库中处理跨 framework、template、skills、d
 4. 实施聚焦变更，并分别完成构建、测试、文档检查、打包或模板生成验证。
 5. 汇总各交付面的真实结果、未验证项和残余风险；只有长期共享信息才更新稳定文档。
 
-仓库稳定规则、评估和实施计划的归属及命名以 `docs/README.md` 为准。确认信息确有跨会话复用价值后，没有同类文档时按该入口主动创建权威文档，只写已验证且必要的信息；不创建固定报告或规范模板，只有归类或关键决策不明确时才询问用户。
+确认信息确有跨会话复用价值后，没有同类文档时按 `docs/README.md` 主动创建权威文档，只写已验证且必要的信息；不创建固定报告或规范模板，只有归类或关键决策不明确时才询问用户。
 
 发布正式包、生产操作、真实数据修改、密钥变更和破坏性 Git 操作必须先获得用户明确确认。

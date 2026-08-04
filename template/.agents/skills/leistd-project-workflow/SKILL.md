@@ -1,6 +1,6 @@
 ---
 name: leistd-project-workflow
-description: 在项目中进行需求分析、代码实现、审查、测试、跨任务协调或部署时使用；根据用户最终意图完成端到端闭环，从源码、配置、测试和已有文档建立事实，并在长期规则缺失时按需沉淀最小权威文档。适用于由 Leistd 模板生成的业务项目，也可独立安装到其他技术栈项目；不用于 leistd-net 仓库中的 Framework 或 Template 源码维护，这些场景使用仓库内部 Skill。
+description: 在业务项目中进行需求分析、代码实现、审查、测试、跨任务协调或部署时使用；根据用户最终意图完成端到端闭环，从源码、配置、测试和已有文档建立事实，并在长期规则缺失时按需沉淀最小权威文档。适用于由 Leistd 模板生成的项目，也可独立安装到其他技术栈项目。
 ---
 
 # 项目协作
@@ -14,6 +14,12 @@ description: 在项目中进行需求分析、代码实现、审查、测试、�
 5. 事实冲突时以当前可执行实现为准，并在本次改动中修正失效的权威文档。
 
 不假定 `CLAUDE.md`、`AGENTS.md` 或其他工具专属入口存在。若项目已有此类有效约束，可作为补充事实读取，但不能将其作为唯一入口。
+
+## 前端任务
+
+修改前端时先读取 `docs/standards/coding-frontend.md`。涉及 Spartan、`@spartan-ng/brain`、`@spartan-ng/helm`、`components.json` 或 `libs/ui` 时同时使用项目内 `spartan` Skill，并优先通过 Spartan MCP/官方文档确认锁定版本的组件 API 和组合方式。
+
+变更前运行 `npx ng g @spartan-ng/cli:info --json` 建立组件事实，优先使用现有 Helm 组件和 Tailwind CSS 4；变更后运行 `npx ng g @spartan-ng/cli:healthcheck`，再执行项目 lint、test、build 和必要的真实浏览器验证。项目文档只记录当前成立的工程事实，不记录模板仓库的选型、迁移过程或验证报告。
 
 ## 路由意图
 
