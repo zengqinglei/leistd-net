@@ -17,7 +17,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowUpDown,
   lucideChevronRight,
-  lucideEllipsisVertical,
+  lucideEllipsis,
   lucideInbox,
   lucidePencil,
   lucideRefreshCw,
@@ -79,7 +79,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     provideIcons({
       lucideArrowUpDown,
       lucideChevronRight,
-      lucideEllipsisVertical,
+      lucideEllipsis,
       lucideInbox,
       lucidePencil,
       lucideRefreshCw,

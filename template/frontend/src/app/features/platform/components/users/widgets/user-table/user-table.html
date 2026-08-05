@@ -222,8 +222,32 @@
                           }}</span>
                         }
                         @case ('actions') {
-                          <!-- 操作：始终可见的 ⋮ 下拉菜单（移动端友好、破坏性操作防呆）。 -->
+                          <!-- 操作列（4 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。 -->
                           <div class="flex items-center justify-end gap-1">
+                            <button
+                              hlmBtn
+                              variant="ghost"
+                              size="icon"
+                              class="hidden sm:inline-flex"
+                              [disabled]="isOtherSuperAdmin(row.original)"
+                              [hlmTooltip]="actionLabel('edit', row.original)"
+                              [attr.aria-label]="actionLabel('edit', row.original)"
+                              (click)="edit.emit(row.original.id)"
+                            >
+                              <ng-icon name="lucidePencil" />
+                            </button>
+                            <button
+                              hlmBtn
+                              variant="ghost"
+                              size="icon"
+                              class="hidden sm:inline-flex"
+                              [disabled]="isOtherSuperAdmin(row.original)"
+                              [hlmTooltip]="actionLabel('reset', row.original)"
+                              [attr.aria-label]="actionLabel('reset', row.original)"
+                              (click)="resetPassword.emit(row.original.id)"
+                            >
+                              <ng-icon name="lucideKey" />
+                            </button>
                             <button
                               hlmBtn
                               variant="ghost"
@@ -232,7 +256,7 @@
                               [attr.aria-label]="actionsLabel()"
                               [hlmDropdownMenuTrigger]="rowMenu"
                             >
-                              <ng-icon name="lucideEllipsisVertical" />
+                              <ng-icon name="lucideEllipsis" />
                             </button>
                             <ng-template #rowMenu>
                               <hlm-dropdown-menu>
@@ -249,6 +273,14 @@
                                   <button
                                     hlmDropdownMenuItem
                                     class="sm:hidden"
+                                    [disabled]="isOtherSuperAdmin(row.original)"
+                                    (click)="resetPassword.emit(row.original.id)"
+                                  >
+                                    <ng-icon name="lucideKey" />
+                                    {{ actionLabel('reset', row.original) }}
+                                  </button>
+                                  <button
+                                    hlmDropdownMenuItem
                                     [disabled]="isSuperAdmin(row.original)"
                                     (click)="toggleActive.emit(row.original)"
                                   >
@@ -258,14 +290,6 @@
                                       "
                                     />
                                     {{ actionLabel('toggle', row.original) }}
-                                  </button>
-                                  <button
-                                    hlmDropdownMenuItem
-                                    [disabled]="isOtherSuperAdmin(row.original)"
-                                    (click)="resetPassword.emit(row.original.id)"
-                                  >
-                                    <ng-icon name="lucideKey" />
-                                    {{ actionLabel('reset', row.original) }}
                                   </button>
                                 </hlm-dropdown-menu-group>
                                 <hlm-dropdown-menu-separator />

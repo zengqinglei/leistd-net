@@ -36,7 +36,7 @@ import {
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePlus, lucideEye, lucideEyeOff } from '@ng-icons/lucide';
+import { lucideImagePlus, lucideEye, lucideEyeOff } from '@ng-icons/lucide';
 import { BrnDialogState } from '@spartan-ng/brain/dialog';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -90,7 +90,7 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
     //#endif
     DialogLoading,
   ],
-  providers: [provideIcons({ lucidePlus, lucideEye, lucideEyeOff })],
+  providers: [provideIcons({ lucideImagePlus, lucideEye, lucideEyeOff })],
   templateUrl: './user-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

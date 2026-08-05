@@ -24,18 +24,23 @@ export interface ConfirmContext {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HlmButton, NgIcon],
   providers: [provideIcons({ lucideTriangleAlert })],
+  // 结构对齐 Spartan alert-dialog 默认解剖：media 图标块 + header + muted footer 条。
   template: `
     <div class="flex flex-col gap-4">
-      <div class="flex items-start gap-3">
-        <ng-icon name="lucideTriangleAlert" class="mt-0.5 shrink-0 text-xl text-destructive" />
-        <div class="flex flex-col gap-1">
-          <h2 id="confirm-dialog-title" class="text-lg font-semibold">{{ ctx.header }}</h2>
-          <p id="confirm-dialog-description" class="text-sm text-muted-foreground">
+      <div class="flex items-start gap-4">
+        <div class="bg-muted inline-flex size-10 shrink-0 items-center justify-center rounded-md">
+          <ng-icon name="lucideTriangleAlert" class="text-destructive text-2xl" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <h2 id="confirm-dialog-title" class="text-base font-medium">{{ ctx.header }}</h2>
+          <p id="confirm-dialog-description" class="text-muted-foreground text-sm text-balance">
             {{ ctx.message }}
           </p>
         </div>
       </div>
-      <div class="flex justify-end gap-2">
+      <div
+        class="bg-muted/50 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t p-4 sm:flex-row sm:justify-end"
+      >
         <button hlmBtn variant="outline" (click)="close(false)">{{ ctx.cancelText }}</button>
         <button hlmBtn [variant]="ctx.variant" (click)="close(true)">{{ ctx.confirmText }}</button>
       </div>

@@ -51,9 +51,10 @@ export class ConfirmService {
     };
 
     // role=alertdialog + aria 关联标题/正文：确认/破坏性提示的 WAI-ARIA 正确语义。
+    // 无 ✕ 关闭钮（alert-dialog 语义：必须显式选择动作）；宽度用面板默认 sm:max-w-sm。
     const dialogRef = this.dialog.open<boolean, ConfirmContext>(ConfirmDialog, {
       context,
-      contentClass: 'sm:!max-w-md',
+      showCloseButton: false,
       role: 'alertdialog',
       ariaLabelledBy: 'confirm-dialog-title',
       ariaDescribedBy: 'confirm-dialog-description',
