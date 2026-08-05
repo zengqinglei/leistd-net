@@ -17,7 +17,7 @@ description: 在业务项目中进行需求分析、代码实现、审查、测�
 
 ## 前端任务
 
-修改前端时先读取 `docs/standards/coding-frontend.md`。涉及 Spartan、`@spartan-ng/brain`、`@spartan-ng/helm`、`components.json` 或 `libs/ui` 时同时使用项目内 `spartan` Skill，并优先通过 Spartan MCP/官方文档确认锁定版本的组件 API 和组合方式。
+修改前端时先读取 `docs/standards/coding-frontend.md`。涉及 Spartan、`@spartan-ng/brain`、`@spartan-ng/helm`、`components.json` 或 `libs/ui` 时同时使用项目内 `spartan` Skill，并优先通过官方文档与本地 `libs/ui` 源码确认锁定版本的组件 API 和组合方式。
 
 变更前运行 `npx ng g @spartan-ng/cli:info --json` 建立组件事实，优先使用现有 Helm 组件和 Tailwind CSS 4；变更后运行 `npx ng g @spartan-ng/cli:healthcheck`，再执行项目 lint、test、build 和必要的真实浏览器验证。项目文档只记录当前成立的工程事实，不记录模板仓库的选型、迁移过程或验证报告。
 
