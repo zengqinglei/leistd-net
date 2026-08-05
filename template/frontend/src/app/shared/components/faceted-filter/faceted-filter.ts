@@ -12,7 +12,6 @@ import { lucideCheck, lucideListFilter } from '@ng-icons/lucide';
 import { BrnCommandImports } from '@spartan-ng/brain/command';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmCommandImports } from '@spartan-ng/helm/command';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
@@ -38,7 +37,6 @@ export interface FacetedFilterOption {
     HlmButton,
     ...HlmPopoverImports,
     ...HlmSeparatorImports,
-    ...HlmCheckboxImports,
     BrnCommandImports,
     ...HlmCommandImports,
   ],
@@ -80,7 +78,18 @@ export interface FacetedFilterOption {
                 (selected)="onSelect(opt)"
               >
                 @if (multiple()) {
-                  <hlm-checkbox class="mr-2" [checked]="isChecked(opt)" />
+                  <!-- 勾选态为纯视觉图形（无焦点）：Command Item 是唯一交互元素，避免 button 嵌套。 -->
+                  <span
+                    aria-hidden="true"
+                    class="border-input dark:bg-input/30 mr-2 flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
+                    [class.bg-primary]="isChecked(opt)"
+                    [class.border-primary]="isChecked(opt)"
+                    [class.text-primary-foreground]="isChecked(opt)"
+                  >
+                    @if (isChecked(opt)) {
+                      <ng-icon name="lucideCheck" class="text-xs" />
+                    }
+                  </span>
                 } @else {
                   <ng-icon name="lucideCheck" [class.opacity-0]="opt.value !== value()" />
                 }

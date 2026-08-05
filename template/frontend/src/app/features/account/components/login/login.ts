@@ -90,9 +90,10 @@ export class Login {
   // 密码可见性
   protected readonly showPassword = signal(false);
 
-  // Mock状态
+  // Mock状态：useMock 支持布尔与对象两种形态（与 MockInterceptor 的解析一致）。
   public readonly isMockEnabled = signal(
-    typeof environment.useMock === 'object' && environment.useMock.enable === true,
+    environment.useMock === true ||
+      (typeof environment.useMock === 'object' && environment.useMock.enable === true),
   );
 
   // 登录表单模型（Signal Forms）

@@ -483,6 +483,27 @@ foreach ($scenario in $Scenarios) {
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 [IO.File]::WriteAllText($lockFile, ("pid={0} started={1}" -f $PID, (Get-Date -Format "o")), [Text.UTF8Encoding]::new($false))
 
+# 安全门禁：生产依赖闭包不得含 high 及以上漏洞。10 个场景共用模板的两份 lockfile，
+# 故在循环前各审计一次即可；advisory 端点偶发抖动，用重试消化（完整审计属依赖治理任务）。
+if (-not $SkipFrontend) {
+    $auditTargets = @(
+        (Join-Path $repoRoot "template/frontend"),
+        (Join-Path $repoRoot "template/.template.config/localization/frontend")
+    )
+    foreach ($auditRoot in $auditTargets) {
+        for ($auditAttempt = 1; $auditAttempt -le 3; $auditAttempt++) {
+            try {
+                Invoke-External "npm" @("audit", "--omit=dev", "--audit-level=high", "--package-lock-only") $auditRoot
+                break
+            }
+            catch {
+                if ($auditAttempt -ge 3) { throw }
+                Start-Sleep -Seconds (5 * $auditAttempt)
+            }
+        }
+    }
+}
+
 # 清理陈旧 run 目录：仅删「非本 run」且「超过 $staleRunAgeHours 未活动」的目录，绝不删正在运行的 run——
 # 支持多 AI/终端并行执行。活动判据：目录里 .run.lock（无则回退目录本身）的最后写入时间。被锁清不掉也无妨（尽力而为）。
 $oldRunsRoot = Join-Path $tempRoot "runs"

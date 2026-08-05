@@ -6,12 +6,13 @@ When it is connected, use it for discovery instead of guessing selectors or fetc
 
 ## Configuration
 
-No install (recommended):
+No install (recommended). Pin the version to match the project's `@spartan-ng/brain` in
+`package.json` so the served docs describe the vendored components:
 
 ```json
 {
 	"mcpServers": {
-		"spartan-ui": { "command": "npx", "args": ["-y", "@spartan-ng/mcp"] }
+		"spartan-ui": { "command": "npx", "args": ["-y", "@spartan-ng/mcp@1.3.1"] }
 	}
 }
 ```
