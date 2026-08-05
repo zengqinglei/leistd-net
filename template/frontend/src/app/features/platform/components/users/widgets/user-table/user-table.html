@@ -343,18 +343,35 @@
                     <div
                       class="flex flex-col items-center justify-center h-64 text-muted-foreground"
                     >
-                      <ng-icon name="lucideUsers" class="text-5xl opacity-30 mb-3" />
-                      <!--#if (IncludeLocalization)-->
-                      <p class="text-base font-medium m-0">
-                        {{ 'users.table.emptyTitle' | transloco }}
-                      </p>
-                      <p class="text-sm mt-1 opacity-70">
-                        {{ 'users.table.emptyHint' | transloco }}
-                      </p>
-                      <!--#else-->
-                      <p class="text-base font-medium m-0">No users yet</p>
-                      <p class="text-sm mt-1 opacity-70">Create a new user</p>
-                      <!--#endif-->
+                      <ng-icon
+                        [name]="filtered() ? 'lucideSearchX' : 'lucideUsers'"
+                        class="text-5xl opacity-30 mb-3"
+                      />
+                      @if (filtered()) {
+                        <!--#if (IncludeLocalization)-->
+                        <p class="text-base font-medium m-0">
+                          {{ 'users.table.emptyFilteredTitle' | transloco }}
+                        </p>
+                        <p class="text-sm mt-1 opacity-70">
+                          {{ 'users.table.emptyFilteredHint' | transloco }}
+                        </p>
+                        <!--#else-->
+                        <p class="text-base font-medium m-0">No matching users</p>
+                        <p class="text-sm mt-1 opacity-70">Adjust the search or filters</p>
+                        <!--#endif-->
+                      } @else {
+                        <!--#if (IncludeLocalization)-->
+                        <p class="text-base font-medium m-0">
+                          {{ 'users.table.emptyTitle' | transloco }}
+                        </p>
+                        <p class="text-sm mt-1 opacity-70">
+                          {{ 'users.table.emptyHint' | transloco }}
+                        </p>
+                        <!--#else-->
+                        <p class="text-base font-medium m-0">No users yet</p>
+                        <p class="text-sm mt-1 opacity-70">Create a new user</p>
+                        <!--#endif-->
+                      }
                     </div>
                   </td>
                 </tr>

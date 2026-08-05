@@ -169,7 +169,7 @@
       "invalidFileTypeDetail": "Please upload a PNG, JPG, or WEBP image",
       "superAdminTag": "Super Admin",
       "adminTag": "Admin",
-      "avatarHint": "Click the avatar to upload a new image (PNG / JPG / WebP).",
+      "avatarHint": "PNG, JPG or WebP",
       "username": "Username",
       "usernamePlaceholder": "Please enter a username",
       "email": "Email",
@@ -293,7 +293,9 @@
       "colCreatedAt": "Created at",
       "colActions": "Actions",
       "emptyTitle": "No users yet",
-      "emptyHint": "Create a new user"
+      "emptyHint": "Create a new user",
+      "emptyFilteredTitle": "No matching users",
+      "emptyFilteredHint": "Adjust the search or filters"
     },
     "popover": {
       "noRoles": "No roles",
@@ -316,7 +318,7 @@
       "loading": "Loading user information...",
       "unnamedUser": "Unnamed user",
       "noEmail": "No email set",
-      "avatarHint": "Click the avatar to upload a new image (PNG / JPG / WebP).",
+      "avatarHint": "PNG, JPG or WebP",
       "avatarTooLargeSummary": "File too large",
       "avatarTooLargeDetail": "The avatar size cannot exceed 1MB",
       "avatarBadTypeSummary": "Unsupported format",
@@ -478,7 +480,9 @@
       "secretSet": "Secret set",
       "noSecret": "No secret",
       "emptyTitle": "No open applications yet",
-      "emptyHint": "Create a new open application"
+      "emptyHint": "Create a new open application",
+      "emptyFilteredTitle": "No matching open applications",
+      "emptyFilteredHint": "Adjust the search or filters"
     },
     "popover": {
       "empty": "Nothing configured"

@@ -60,6 +60,7 @@
       [pagination]="pagination()"
       [sorting]="sorting()"
       [loading]="loading()"
+      [filtered]="hasActiveFilters()"
       (paginationChange)="onPaginationChange($event)"
       (sortingChange)="onSortingChange($event)"
       (edit)="openEditDialog($event)"

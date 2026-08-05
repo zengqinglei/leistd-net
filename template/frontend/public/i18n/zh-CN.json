@@ -169,7 +169,7 @@
       "invalidFileTypeDetail": "请上传 PNG、JPG 或 WEBP 图片",
       "superAdminTag": "超级管理员",
       "adminTag": "管理员",
-      "avatarHint": "点击头像上传新图片（PNG / JPG / WebP）。",
+      "avatarHint": "PNG、JPG 或 WebP",
       "username": "用户名",
       "usernamePlaceholder": "请输入用户名",
       "email": "邮箱",
@@ -293,7 +293,9 @@
       "colCreatedAt": "创建时间",
       "colActions": "操作",
       "emptyTitle": "暂无用户",
-      "emptyHint": "请创建新的用户"
+      "emptyHint": "请创建新的用户",
+      "emptyFilteredTitle": "没有匹配的用户",
+      "emptyFilteredHint": "请调整搜索或筛选条件"
     },
     "popover": {
       "noRoles": "暂无角色",
@@ -316,7 +318,7 @@
       "loading": "正在加载用户信息...",
       "unnamedUser": "未命名用户",
       "noEmail": "未设置邮箱",
-      "avatarHint": "点击头像上传新图片（PNG / JPG / WebP）。",
+      "avatarHint": "PNG、JPG 或 WebP",
       "avatarTooLargeSummary": "文件过大",
       "avatarTooLargeDetail": "头像大小不能超过 1MB",
       "avatarBadTypeSummary": "格式不支持",
@@ -478,7 +480,9 @@
       "secretSet": "Secret 已设置",
       "noSecret": "无 Secret",
       "emptyTitle": "暂无开放应用",
-      "emptyHint": "请创建新的开放应用"
+      "emptyHint": "请创建新的开放应用",
+      "emptyFilteredTitle": "没有匹配的开放应用",
+      "emptyFilteredHint": "请调整搜索或筛选条件"
     },
     "popover": {
       "empty": "暂无配置"

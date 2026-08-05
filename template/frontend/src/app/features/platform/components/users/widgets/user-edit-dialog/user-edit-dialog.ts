@@ -58,7 +58,6 @@ import { translationReady } from '../../../../../../core/i18n/translation-ready'
 //#endif
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import { ROLE_LABEL_MAP } from '../../../../../../shared/models/role.enum';
-import { avatarPalette } from '../../../../../../shared/utils/avatar-palette';
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
@@ -151,9 +150,6 @@ export class UserEditDialog {
       this.unnamedLabel(),
   );
   readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
-  readonly avatarStyle = computed(() =>
-    avatarPalette((this.formModel().username || this.displayName()).trim()),
-  );
 
   //#if (IncludeLocalization)
   readonly userForm = form(this.formModel, (path) => {

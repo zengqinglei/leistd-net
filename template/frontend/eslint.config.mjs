@@ -52,7 +52,7 @@ export default defineConfig(
           paths: [
             {
               name: '@angular/forms',
-              importNames: ['FormsModule', 'ReactiveFormsModule'],
+              importNames: ['FormsModule', 'ReactiveFormsModule', 'NgModel', 'NgForm', 'NgControl'],
               message:
                 'Use Angular Signal Forms (@angular/forms/signals); FormsModule/ReactiveFormsModule/ngModel are not allowed.',
             },

@@ -21,6 +21,7 @@ import {
   lucideInbox,
   lucidePencil,
   lucideRefreshCw,
+  lucideSearchX,
   lucideShield,
   lucideSortAsc,
   lucideSortDesc,
@@ -82,6 +83,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
       lucideInbox,
       lucidePencil,
       lucideRefreshCw,
+      lucideSearchX,
       lucideShield,
       lucideSortAsc,
       lucideSortDesc,
@@ -102,6 +104,7 @@ export class OpenApplicationTable {
   readonly pagination = input<PaginationState>({ pageIndex: 0, pageSize: 20 });
   readonly sorting = input<SortingState>([]);
   readonly loading = input(false);
+  readonly filtered = input(false);
 
   readonly paginationChange = output<PaginationState>();
   readonly sortingChange = output<SortingState>();

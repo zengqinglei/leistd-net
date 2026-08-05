@@ -9,6 +9,7 @@
 - 组件消费模式：headless 逻辑层 `@spartan-ng/brain`（npm 依赖）+ 样式层 helm（经 CLI 复制进本仓库 `libs/ui/`，**属自有代码**）。
 - 样式基座：Tailwind CSS v4，组件主题走 CSS 变量（oklch token）。
 - 图标：`@ng-icons` + Lucide。
+- 字体：正文默认 **Geist**，经 `@fontsource/geist` 自托管（npm 依赖打包字体文件，离线可用、无 CDN），回退 `system-ui, sans-serif`；属模板设计系统的一部分，业务项目可替换为品牌字体或改回系统字体栈。
 - 表单：Angular Signal Forms（`@angular/forms/signals`）；不使用 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 静态禁止）。
 - 数据表格：`@tanstack/angular-table`（headless 表格引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；展示层复用自有 `TablePaginator`/`FacetedFilter`，列可见性按优先级（primary/secondary/tertiary）响应式裁剪。
 - 列表查询状态：分页/排序/筛选以 **URL query params 为唯一状态源**，刷新、分享链接、浏览器前进后退均可恢复；非法参数回退到默认值。

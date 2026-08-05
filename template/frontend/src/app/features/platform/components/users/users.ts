@@ -128,6 +128,14 @@ export class Users {
     readBoolean(this.queryParams().get('isEmailVerified')),
   );
   readonly selectedRoles = computed(() => this.queryParams().getAll('roles'));
+  // 是否处于筛选/搜索态：用于区分「暂无数据」与「无匹配结果」的空状态。
+  readonly hasActiveFilters = computed(
+    () =>
+      this.searchQuery().trim().length > 0 ||
+      this.selectedIsActive() !== null ||
+      this.selectedIsEmailVerified() !== null ||
+      this.selectedRoles().length > 0,
+  );
 
   //#if (IncludeLocalization)
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。

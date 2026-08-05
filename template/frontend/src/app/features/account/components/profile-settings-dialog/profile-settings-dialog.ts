@@ -24,7 +24,6 @@ import { finalize } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
-import { avatarPalette } from '../../../../shared/utils/avatar-palette';
 import { AccountService } from '../../services/account-service';
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
@@ -101,11 +100,6 @@ export class ProfileSettingsDialog {
     const text = this.displayName().trim();
     return (text.charAt(0) || 'U').toUpperCase();
   });
-  readonly avatarStyle = computed(() =>
-    avatarPalette(
-      (this.formModel().username || this.user()?.username || this.displayName()).trim(),
-    ),
-  );
 
   //#if (IncludeLocalization)
   readonly profileForm = form(this.formModel, (path) => {

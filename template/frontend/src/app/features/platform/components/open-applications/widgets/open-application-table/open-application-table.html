@@ -358,18 +358,35 @@
                     <div
                       class="flex flex-col items-center justify-center h-64 text-muted-foreground"
                     >
-                      <ng-icon name="lucideInbox" class="text-5xl opacity-30 mb-3" />
-                      <!--#if (IncludeLocalization)-->
-                      <p class="text-base font-medium m-0">
-                        {{ 'openApp.table.emptyTitle' | transloco }}
-                      </p>
-                      <p class="text-sm mt-1 opacity-70">
-                        {{ 'openApp.table.emptyHint' | transloco }}
-                      </p>
-                      <!--#else-->
-                      <p class="text-base font-medium m-0">No open applications yet</p>
-                      <p class="text-sm mt-1 opacity-70">Create a new open application</p>
-                      <!--#endif-->
+                      <ng-icon
+                        [name]="filtered() ? 'lucideSearchX' : 'lucideInbox'"
+                        class="text-5xl opacity-30 mb-3"
+                      />
+                      @if (filtered()) {
+                        <!--#if (IncludeLocalization)-->
+                        <p class="text-base font-medium m-0">
+                          {{ 'openApp.table.emptyFilteredTitle' | transloco }}
+                        </p>
+                        <p class="text-sm mt-1 opacity-70">
+                          {{ 'openApp.table.emptyFilteredHint' | transloco }}
+                        </p>
+                        <!--#else-->
+                        <p class="text-base font-medium m-0">No matching open applications</p>
+                        <p class="text-sm mt-1 opacity-70">Adjust the search or filters</p>
+                        <!--#endif-->
+                      } @else {
+                        <!--#if (IncludeLocalization)-->
+                        <p class="text-base font-medium m-0">
+                          {{ 'openApp.table.emptyTitle' | transloco }}
+                        </p>
+                        <p class="text-sm mt-1 opacity-70">
+                          {{ 'openApp.table.emptyHint' | transloco }}
+                        </p>
+                        <!--#else-->
+                        <p class="text-base font-medium m-0">No open applications yet</p>
+                        <p class="text-sm mt-1 opacity-70">Create a new open application</p>
+                        <!--#endif-->
+                      }
                     </div>
                   </td>
                 </tr>

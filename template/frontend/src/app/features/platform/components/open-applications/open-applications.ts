@@ -130,6 +130,13 @@ export class OpenApplications {
   readonly selectedClientType = computed(
     () => (this.queryParams().get('clientType') as OpenApplicationClientType | null) ?? null,
   );
+  // 是否处于筛选/搜索态：用于区分「暂无数据」与「无匹配结果」的空状态。
+  readonly hasActiveFilters = computed(
+    () =>
+      this.searchQuery().trim().length > 0 ||
+      this.selectedApplicationType() !== null ||
+      this.selectedClientType() !== null,
+  );
 
   //#if (IncludeLocalization)
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
