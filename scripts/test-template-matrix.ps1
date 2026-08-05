@@ -148,7 +148,6 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         ".agents/skills/leistd-project-workflow/references/delivery.md",
         ".agents/skills/leistd-project-workflow/references/documentation.md",
         ".agents/skills/spartan/SKILL.md",
-        ".mcp.json",
         "docs/README.md",
         "docs/standards/api.md",
         "docs/standards/coding-common.md",
@@ -543,6 +542,8 @@ Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", $
 
 $results = [System.Collections.Generic.List[object]]::new()
 foreach ($scenario in $Scenarios) {
+    # 心跳：刷新锁文件时间戳，防止长时间运行的 run 被并行进程按 stale 目录清理。
+    [IO.File]::SetLastWriteTimeUtc($lockFile, [DateTime]::UtcNow)
     $definition = $scenarioMap[$scenario]
     $definition["Name"] = $scenario
     $projectName = Get-ScenarioProjectName $scenario

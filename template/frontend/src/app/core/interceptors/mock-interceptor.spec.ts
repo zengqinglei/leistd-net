@@ -7,8 +7,17 @@ import {
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+//#if (IncludeOpenIddict)
+import { OPEN_APPLICATION_API } from '../../../../_mock/api/open-application';
+//#endif
 import { MOCK_APIS, MockInterceptor } from '../../../../_mock/core/interceptor';
 import { environment } from '../../../environments/environment';
+//#if (IncludeOpenIddict)
+import {
+  CreateOpenApplicationInputDto,
+  OpenApplicationOutputDto,
+} from '../../features/platform/models/open-application.dto';
+//#endif
 
 describe('MockInterceptor', () => {
   const originalUseMock = environment.useMock;
@@ -22,7 +31,11 @@ describe('MockInterceptor', () => {
         { provide: HTTP_INTERCEPTORS, useClass: MockInterceptor, multi: true },
         {
           provide: MOCK_APIS,
+          // prettier-ignore
           useValue: {
+            //#if (IncludeOpenIddict)
+            ...OPEN_APPLICATION_API,
+            //#endif
             'GET /api/items': [{ id: 'all' }],
             'GET /api/items/:id': (request: { params: Record<string, string> }) => ({
               id: request.params['id'],
@@ -72,4 +85,38 @@ describe('MockInterceptor', () => {
         },
       });
   });
+  //#if (IncludeOpenIddict)
+
+  it('returns a confidential client secret only in the create response', (done) => {
+    const clientId = `spec-confidential-${crypto.randomUUID()}`;
+    const input: CreateOpenApplicationInputDto = {
+      clientId,
+      displayName: 'Spec confidential client',
+      applicationType: 'service',
+      clientType: 'confidential',
+      consentType: 'systematic',
+      redirectUris: [],
+      postLogoutRedirectUris: [],
+      permissions: ['ept:token', 'gt:client_credentials'],
+      requirements: [],
+    };
+    const http = TestBed.inject(HttpClient);
+
+    http.post<OpenApplicationOutputDto>('/api/v1/open-applications', input).subscribe({
+      next: (created) => {
+        expect(created.clientSecret).toContain('mock-secret-');
+        expect(created.hasClientSecret).toBeTrue();
+
+        http.get<OpenApplicationOutputDto>(`/api/v1/open-applications/${clientId}`).subscribe({
+          next: (stored) => {
+            expect(stored.clientSecret).toBeUndefined();
+            done();
+          },
+          error: done.fail,
+        });
+      },
+      error: done.fail,
+    });
+  });
+  //#endif
 });

@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule } from '@jsverse/transloco';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -19,6 +19,7 @@ import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { NotificationOutputDto, NotificationService } from './notification-service';
+import { ConfirmService } from '../../../core/feedback/confirm-service';
 
 /**
  * 通知中心：铃铛 + 未读角标 + popover 通知列表（标记已读 / 单条或全部清除）。
@@ -55,6 +56,10 @@ import { NotificationOutputDto, NotificationService } from './notification-servi
 })
 export class Notifications implements OnInit {
   private readonly router = inject(Router);
+  private readonly confirmService = inject(ConfirmService);
+  //#if (IncludeLocalization)
+  private readonly transloco = inject(TranslocoService);
+  //#endif
   readonly notificationService = inject(NotificationService);
   readonly notificationCount = this.notificationService.unreadCount;
   readonly notifications = this.notificationService.notifications;
@@ -76,6 +81,24 @@ export class Notifications implements OnInit {
   }
 
   async clearAllNotifications(): Promise<void> {
+    // 清空不可撤销，先确认。
+    const confirmed = await this.confirmService.open({
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('layout.notifications.clearAllConfirm'),
+      header: this.transloco.translate('layout.notifications.clearAll'),
+      confirmText: this.transloco.translate('common.ok'),
+      cancelText: this.transloco.translate('common.cancel'),
+      //#else
+      message: 'Clear all notifications? This cannot be undone.',
+      header: 'Clear all',
+      confirmText: 'OK',
+      cancelText: 'Cancel',
+      //#endif
+      variant: 'destructive',
+    });
+    if (!confirmed) {
+      return;
+    }
     await this.notificationService.clearAll();
     this.notificationOpen.set('closed');
   }

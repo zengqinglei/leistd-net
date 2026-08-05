@@ -52,9 +52,13 @@ export interface FacetedFilterOption {
         @if (multiple()) {
           @if (selectedOptions().length) {
             <hlm-separator class="mx-2" orientation="vertical" />
+            <!-- 最多展示 2 枚 Badge，其余折叠为 +N，防止选中项多时撑宽工具栏。 -->
             <div class="flex gap-1">
-              @for (opt of selectedOptions(); track opt.label) {
+              @for (opt of selectedOptions().slice(0, 2); track opt.value) {
                 <span hlmBadge>{{ opt.label }}</span>
+              }
+              @if (selectedOptions().length > 2) {
+                <span hlmBadge variant="secondary">+{{ selectedOptions().length - 2 }}</span>
               }
             </div>
           }
@@ -68,8 +72,13 @@ export interface FacetedFilterOption {
         <div *brnCommandEmpty hlmCommandEmpty>{{ emptyLabel() }}</div>
         <hlm-command-list>
           <hlm-command-group>
-            @for (opt of options(); track opt.label) {
-              <button type="button" hlm-command-item [value]="opt.label" (selected)="onSelect(opt)">
+            @for (opt of options(); track opt.value) {
+              <button
+                type="button"
+                hlm-command-item
+                [value]="commandValue(opt)"
+                (selected)="onSelect(opt)"
+              >
                 @if (multiple()) {
                   <hlm-checkbox class="mr-2" [checked]="isChecked(opt)" />
                 } @else {
@@ -125,6 +134,11 @@ export class FacetedFilter {
 
   isChecked(option: FacetedFilterOption): boolean {
     return this.values().includes(String(option.value));
+  }
+
+  /** Command value 兼顾两职：label 供用户搜索匹配，value 保证同名文案下身份唯一。 */
+  commandValue(option: FacetedFilterOption): string {
+    return `${option.label} ${String(option.value)}`;
   }
 
   onSelect(option: FacetedFilterOption): void {

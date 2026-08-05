@@ -88,7 +88,8 @@
       "markAllRead": "全部已读",
       "clearAll": "清空全部",
       "clearOne": "删除",
-      "empty": "暂无通知"
+      "empty": "暂无通知",
+      "clearAllConfirm": "清空全部通知？此操作不可撤销。"
     }
   },
   "platform": {

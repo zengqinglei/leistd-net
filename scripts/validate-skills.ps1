@@ -253,43 +253,52 @@ if ((Test-Path -LiteralPath $repositorySpartanRoot) -and (Test-Path -LiteralPath
     }
 }
 
+# Spartan 版本治理：Brain/CLI 钉版校验无条件执行；MCP 仅供仓库维护者使用，模板不得内置。
 $repositoryMcpPath = Join-Path $repoRoot ".mcp.json"
 $templateMcpPath = Join-Path $repoRoot "template/.mcp.json"
-if ((Test-Path -LiteralPath $repositoryMcpPath) -and (Test-Path -LiteralPath $templateMcpPath)) {
-    $repositoryMcpHash = (Get-FileHash -LiteralPath $repositoryMcpPath -Algorithm SHA256).Hash
-    $templateMcpHash = (Get-FileHash -LiteralPath $templateMcpPath -Algorithm SHA256).Hash
-    if ($repositoryMcpHash -ne $templateMcpHash) {
-        Add-ValidationError "Repository and template MCP configurations must be identical"
+if (Test-Path -LiteralPath $templateMcpPath) {
+    Add-ValidationError "Template must not bundle .mcp.json (generated projects rely on the spartan skill, official docs, and vendored libs/ui)"
+}
+
+$frontendPackagePath = Join-Path $repoRoot "template/frontend/package.json"
+$localizedFrontendPackagePath = Join-Path $repoRoot "template/.template.config/localization/frontend/package.json"
+if (-not (Test-Path -LiteralPath $frontendPackagePath) -or -not (Test-Path -LiteralPath $localizedFrontendPackagePath)) {
+    Add-ValidationError "Frontend package.json files are required for Spartan version validation"
+}
+else {
+    $frontendPackage = Get-Content -LiteralPath $frontendPackagePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $localizedFrontendPackage = Get-Content -LiteralPath $localizedFrontendPackagePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $brainVersion = $frontendPackage.dependencies.'@spartan-ng/brain'
+    $cliVersion = $frontendPackage.devDependencies.'@spartan-ng/cli'
+    $localizedBrainVersion = $localizedFrontendPackage.dependencies.'@spartan-ng/brain'
+    $localizedCliVersion = $localizedFrontendPackage.devDependencies.'@spartan-ng/cli'
+
+    foreach ($versionEntry in @(
+        @{ Name = "Brain"; Value = $brainVersion },
+        @{ Name = "CLI"; Value = $cliVersion }
+    )) {
+        if ([string]::IsNullOrWhiteSpace($versionEntry.Value) -or $versionEntry.Value -notmatch '^\d+\.\d+\.\d+$') {
+            Add-ValidationError "Spartan $($versionEntry.Name) must use an exact semantic version"
+        }
     }
 
-    $frontendPackagePath = Join-Path $repoRoot "template/frontend/package.json"
-    $localizedFrontendPackagePath = Join-Path $repoRoot "template/.template.config/localization/frontend/package.json"
-    if ((Test-Path -LiteralPath $frontendPackagePath) -and (Test-Path -LiteralPath $localizedFrontendPackagePath)) {
-        $frontendPackage = Get-Content -LiteralPath $frontendPackagePath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $localizedFrontendPackage = Get-Content -LiteralPath $localizedFrontendPackagePath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $brainVersion = $frontendPackage.dependencies.'@spartan-ng/brain'
-        $cliVersion = $frontendPackage.devDependencies.'@spartan-ng/cli'
-        $localizedBrainVersion = $localizedFrontendPackage.dependencies.'@spartan-ng/brain'
-        $localizedCliVersion = $localizedFrontendPackage.devDependencies.'@spartan-ng/cli'
+    if ($brainVersion -ne $cliVersion) {
+        Add-ValidationError "Spartan Brain and CLI versions must match"
+    }
+    if ($localizedBrainVersion -ne $brainVersion -or $localizedCliVersion -ne $cliVersion) {
+        Add-ValidationError "Localized frontend Spartan versions must match the primary frontend"
+    }
+
+    # 仓库根 .mcp.json（维护者工具）：如存在，其钉版必须与 Brain 一致。
+    if (Test-Path -LiteralPath $repositoryMcpPath) {
         $mcpConfig = Get-Content -LiteralPath $repositoryMcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
         $mcpPackage = @($mcpConfig.mcpServers.spartan.args | Where-Object { $_ -like '@spartan-ng/mcp@*' }) | Select-Object -First 1
         $mcpVersion = if ($mcpPackage) { $mcpPackage -replace '^@spartan-ng/mcp@', '' } else { $null }
-
-        foreach ($versionEntry in @(
-            @{ Name = "Brain"; Value = $brainVersion },
-            @{ Name = "CLI"; Value = $cliVersion },
-            @{ Name = "MCP"; Value = $mcpVersion }
-        )) {
-            if ([string]::IsNullOrWhiteSpace($versionEntry.Value) -or $versionEntry.Value -notmatch '^\d+\.\d+\.\d+$') {
-                Add-ValidationError "Spartan $($versionEntry.Name) must use an exact semantic version"
-            }
+        if ([string]::IsNullOrWhiteSpace($mcpVersion) -or $mcpVersion -notmatch '^\d+\.\d+\.\d+$') {
+            Add-ValidationError "Repository Spartan MCP must use an exact semantic version"
         }
-
-        if ($brainVersion -ne $cliVersion -or $brainVersion -ne $mcpVersion) {
-            Add-ValidationError "Spartan Brain, CLI, and MCP versions must match"
-        }
-        if ($localizedBrainVersion -ne $brainVersion -or $localizedCliVersion -ne $cliVersion) {
-            Add-ValidationError "Localized frontend Spartan versions must match the primary frontend"
+        elseif ($mcpVersion -ne $brainVersion) {
+            Add-ValidationError "Repository Spartan MCP version must match the Brain version"
         }
     }
 }

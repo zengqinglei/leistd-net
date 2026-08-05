@@ -32,7 +32,7 @@
         <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
           <!-- Avatar 上传（原生 file input + 自绘头像 UI） -->
           <div class="flex items-center gap-4 border-b border-border pb-5">
-            <!-- 头像上传：无图时常驻居中图标邀请上传；有图时仅 hover 显示（键盘焦点由 ring 指示），不遮挡照片。 -->
+            <!-- 头像上传：无图时常驻居中图标；有图时桌面 hover 显示（键盘焦点由 ring 指示）、触屏（pointer-coarse）常驻。 -->
             <label
               class="group relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full border border-border bg-muted transition-colors hover:border-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/30"
             >
@@ -62,7 +62,7 @@
               <!--#endif-->
 
               <span
-                class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 text-white transition-opacity duration-200 group-hover:opacity-100"
+                class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 text-white transition-opacity duration-200 group-hover:opacity-100 pointer-coarse:opacity-100"
                 [class.opacity-0]="hasAvatarImage()"
                 aria-hidden="true"
               >

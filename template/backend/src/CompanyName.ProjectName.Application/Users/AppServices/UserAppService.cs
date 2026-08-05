@@ -60,10 +60,16 @@ public class UserAppService(
 
         if (input.Roles is { Count: > 0 })
         {
+            // 规范化：去 null/空白（模型绑定会把空白项转为 null）、去重；单项超长直接拒绝。
             var roleNames = input.Roles
-                .Select(r => r.Trim())
                 .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Select(r => r.Trim())
+                .Distinct(StringComparer.Ordinal)
                 .ToList();
+            if (roleNames.Exists(r => r.Length > 256))
+            {
+                throw new BadRequestException("Role name cannot exceed 256 characters.");
+            }
             if (roleNames.Count > 0)
             {
                 var matchedRoles = await roleRepository.GetListAsync(r => roleNames.Contains(r.Name), cancellationToken);

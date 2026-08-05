@@ -31,5 +31,6 @@ public record GetUserPagedInputDto : PagedRequestDto
     /// 角色名称（多选，命中任一角色即匹配）
     /// </summary>
     [Display(Name = "Roles")]
+    [MaxLength(20, ErrorMessage = "{0} cannot contain more than {1} items.")]
     public List<string>? Roles { get; init; }
 }

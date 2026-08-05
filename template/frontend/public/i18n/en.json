@@ -88,7 +88,8 @@
       "markAllRead": "Mark all as read",
       "clearAll": "Clear all",
       "clearOne": "Dismiss",
-      "empty": "No notifications"
+      "empty": "No notifications",
+      "clearAllConfirm": "Clear all notifications? This cannot be undone."
     }
   },
   "platform": {

@@ -28,8 +28,5 @@ export default {
     'lightness-notation': null,
     'alpha-value-notation': null,
     'color-function-notation': null,
-    // 迁移共存期：PrimeNG 与 Spartan 的主题变量各占一个 :root 块。
-    // TODO: PrimeNG 完全移除后（阶段 5）恢复此规则为默认。
-    'no-duplicate-selectors': null,
   },
 };
