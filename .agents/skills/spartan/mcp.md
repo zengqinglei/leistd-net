@@ -20,7 +20,7 @@ No install (recommended). Pin the version to match the project's `@spartan-ng/br
 Global install:
 
 ```bash
-npm install -g @spartan-ng/mcp
+npm install -g @spartan-ng/mcp@1.3.1
 ```
 
 ```json

@@ -301,6 +301,52 @@ else {
             Add-ValidationError "Repository Spartan MCP version must match the Brain version"
         }
     }
+
+    # Skill 文档中的 MCP 安装/配置示例必须钉版且与 Brain 一致，避免文档拉到不兼容版本。
+    foreach ($mcpDoc in @(".agents/skills/spartan/mcp.md", "template/.agents/skills/spartan/mcp.md")) {
+        $mcpDocPath = Join-Path $repoRoot $mcpDoc
+        if (-not (Test-Path -LiteralPath $mcpDocPath)) { continue }
+        $lineNumber = 0
+        foreach ($line in Get-Content -LiteralPath $mcpDocPath -Encoding UTF8) {
+            $lineNumber++
+            if ($line -notmatch '@spartan-ng/mcp') { continue }
+            # 只校验命令/配置示例，跳过正文散文提及。
+            if ($line -notmatch 'npm install|npx|"args"|spartan-mcp') { continue }
+            if ($line -notmatch '@spartan-ng/mcp@(\d+\.\d+\.\d+)') {
+                Add-ValidationError "${mcpDoc}:${lineNumber} must pin @spartan-ng/mcp to an exact version"
+            }
+            elseif ($Matches[1] -ne $brainVersion) {
+                Add-ValidationError "${mcpDoc}:${lineNumber} pins @spartan-ng/mcp $($Matches[1]) but Brain is $brainVersion"
+            }
+        }
+    }
+}
+
+# 两个模板变体的 lockfile 必须解析出一致的共享依赖版本：否则「是否启用本地化」会改变
+# 生产运行时（如 SignalR）与构建工具基线。出现漂移时同时重新生成两份 lockfile，不要单独重生成其中一份。
+$mainLockPath = Join-Path $repoRoot "template/frontend/package-lock.json"
+$localizedLockPath = Join-Path $repoRoot "template/.template.config/localization/frontend/package-lock.json"
+if ((Test-Path -LiteralPath $mainLockPath) -and (Test-Path -LiteralPath $localizedLockPath)) {
+    # 本地化变体额外引入 @jsverse/transloco-utils（要求 cosmiconfig ^8），迫使顶层提升不同 major；
+    # 每个消费者仍各自拿到满足自身范围的版本，属结构性差异而非漂移。
+    $lockDriftExceptions = @("node_modules/cosmiconfig")
+    # lockfile 的根包键是空字符串，ConvertFrom-Json 必须用 -AsHashtable 才能解析。
+    $mainPackages = (Get-Content -LiteralPath $mainLockPath -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable).packages
+    $localizedPackages = (Get-Content -LiteralPath $localizedLockPath -Raw -Encoding UTF8 | ConvertFrom-Json -AsHashtable).packages
+    $drift = [System.Collections.Generic.List[string]]::new()
+    foreach ($name in $mainPackages.Keys) {
+        if ([string]::IsNullOrWhiteSpace($name) -or $lockDriftExceptions -contains $name) { continue }
+        if (-not $localizedPackages.ContainsKey($name)) { continue }
+        $mainVersion = $mainPackages[$name].version
+        $localizedVersion = $localizedPackages[$name].version
+        if ($mainVersion -and $localizedVersion -and $mainVersion -ne $localizedVersion) {
+            $drift.Add("$($name -replace '^node_modules/', '') ($mainVersion vs $localizedVersion)")
+        }
+    }
+    if ($drift.Count -gt 0) {
+        $sample = ($drift | Select-Object -First 5) -join ", "
+        Add-ValidationError "Template and localized lockfiles resolve $($drift.Count) shared package(s) differently; regenerate both together. Examples: $sample"
+    }
 }
 
 $validatorCandidates = [System.Collections.Generic.List[string]]::new()

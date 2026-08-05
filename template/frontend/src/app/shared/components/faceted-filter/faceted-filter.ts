@@ -75,16 +75,20 @@ export interface FacetedFilterOption {
                 type="button"
                 hlm-command-item
                 [value]="commandValue(opt)"
+                [attr.aria-checked]="multiple() ? isChecked(opt) : null"
                 (selected)="onSelect(opt)"
               >
                 @if (multiple()) {
-                  <!-- 勾选态为纯视觉图形（无焦点）：Command Item 是唯一交互元素，避免 button 嵌套。 -->
+                  <!-- 勾选态为纯视觉图形（无焦点）：Command Item 是唯一交互元素（aria-checked 表达选中语义），
+                       选中/未选样式互斥，避免固定暗色类以更高优先级盖掉选中背景。 -->
                   <span
                     aria-hidden="true"
-                    class="border-input dark:bg-input/30 mr-2 flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
-                    [class.bg-primary]="isChecked(opt)"
-                    [class.border-primary]="isChecked(opt)"
-                    [class.text-primary-foreground]="isChecked(opt)"
+                    class="mr-2 flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
+                    [class]="
+                      isChecked(opt)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input dark:bg-input/30'
+                    "
                   >
                     @if (isChecked(opt)) {
                       <ng-icon name="lucideCheck" class="text-xs" />

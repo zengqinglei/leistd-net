@@ -10,7 +10,7 @@
   ],
   "identity": "FullstackApp.Template.CSharp",
   "name": "Fullstack App (.NET + Angular)",
-  "description": ".NET 10 + Angular 21 全栈项目模板，DDD 四层架构，支持条件裁剪认证和权限模块",
+  "description": ".NET 10 + Angular 22 全栈项目模板，DDD 四层架构，支持条件裁剪认证和权限模块",
   "shortName": "fullstack-app",
   "tags": {
     "language": "C#",
@@ -101,6 +101,7 @@
         "**/.template.config/**",
         "**/artifacts/**",
         "frontend/node_modules/**",
+        "frontend/node_modules*/**",
         "frontend/.angular/**",
         "frontend/.tmp/**",
         "frontend/dist/**",

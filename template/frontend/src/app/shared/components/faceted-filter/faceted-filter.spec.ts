@@ -48,6 +48,39 @@ describe('FacetedFilter', () => {
     }
   });
 
+  it('exposes the business selection via aria-checked, independent of keyboard focus', () => {
+    const fixture = createFilter({ multiple: true, values: ['admin'] });
+
+    const items = commandItems();
+    const byLabel = (label: string) => items.find((item) => item.textContent?.includes(label));
+    expect(byLabel('Administrator')?.getAttribute('aria-checked')).toBe('true');
+    expect(byLabel('Member')?.getAttribute('aria-checked')).toBe('false');
+
+    byLabel('Member')?.click();
+    fixture.componentRef.setInput('values', ['admin', 'member']);
+    fixture.detectChanges();
+
+    expect(byLabel('Member')?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('uses a distinct checked background in dark mode', () => {
+    document.documentElement.classList.add('dark');
+    try {
+      createFilter({ multiple: true, values: ['admin'] });
+      const items = commandItems();
+      const graphic = (label: string) =>
+        items
+          .find((item) => item.textContent?.includes(label))
+          ?.querySelector<HTMLElement>('span[aria-hidden]');
+
+      const checkedBg = getComputedStyle(graphic('Administrator')!).backgroundColor;
+      const uncheckedBg = getComputedStyle(graphic('Member')!).backgroundColor;
+      expect(checkedBg).not.toBe(uncheckedBg);
+    } finally {
+      document.documentElement.classList.remove('dark');
+    }
+  });
+
   it('toggles a multi-select value and keeps the panel open', () => {
     const fixture = createFilter({ multiple: true, values: ['admin'] });
     let emitted: string[] | null = null;
