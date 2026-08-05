@@ -20,21 +20,23 @@ describe('AuthService', () => {
 
   afterEach(() => httpTesting.verify());
 
-  it('marks the session probe as silent so the interceptor skips the 401 redirect', () => {
-    void service.initializeAuth();
+  it('marks the session probe as silent so the interceptor skips the 401 redirect', async () => {
+    const initialization = service.initializeAuth();
     const request = httpTesting.expectOne('/api/v1/auth/me');
 
     expect(request.request.context.get(SILENT_AUTH)).toBeTrue();
     request.flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    await expectAsync(initialization).toBeRejected();
   });
 
-  it('resolves false and stays unauthenticated when the startup probe fails', async () => {
+  it('propagates startup probe failures so callers can distinguish outages from 401', async () => {
     const initialization = service.initializeAuth();
     httpTesting
       .expectOne('/api/v1/auth/me')
       .flush({ detail: 'Gateway unavailable' }, { status: 503, statusText: 'Unavailable' });
 
-    await expectAsync(initialization).toBeResolvedTo(false);
+    await expectAsync(initialization).toBeRejected();
     expect(service.isAuthenticated()).toBeFalse();
   });
 });

@@ -1,9 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
+// prettier-ignore
+import {
+  ErrorHandler,
+  Injectable,
+  //#if (IncludeLocalization)
+  inject,
+  //#endif
+} from '@angular/core';
 //#if (IncludeLocalization)
-import { ErrorHandler, Injectable, inject } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
-//#else
-import { ErrorHandler, Injectable } from '@angular/core';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 

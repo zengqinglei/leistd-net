@@ -1,4 +1,3 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 //#if (IncludeLocalization)
@@ -11,6 +10,10 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmToaster } from '@spartan-ng/helm/sonner';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
+import {
+  ApplicationHttpError,
+  applicationErrorMessage,
+} from './core/errors/application-http-error';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
 
@@ -83,42 +86,30 @@ export class App {
     this._isRetrying.set(false);
   }
 
+  // 拦截器已把 HTTP 错误归一化为类型化 ApplicationHttpError，这里按其契约展示。
   protected formatHttpError(error: unknown): string {
-    if (error instanceof HttpErrorResponse) {
-      if (error.error instanceof ErrorEvent) {
-        // 客户端或网络错误
+    if (error instanceof ApplicationHttpError) {
+      if (error.code) {
         //#if (IncludeLocalization)
-        return this.transloco.translate('app.startup.clientError', {
-          message: error.error.message,
+        return this.transloco.translate('app.startup.requestFailed', {
+          message: applicationErrorMessage(error),
+          code: error.code,
         });
         //#else
-        return `Client error: ${error.error.message}`;
-        //#endif
-      } else {
-        // 后端返回的错误
-        const contentType = error.headers.get('Content-Type');
-        if (contentType?.includes('application/json') && error.error?.message) {
-          //#if (IncludeLocalization)
-          return this.transloco.translate('app.startup.requestFailed', {
-            message: error.error.message,
-            code: error.error.code,
-          });
-          //#else
-          return `Request failed: ${error.error.message} (code: ${error.error.code})`;
-          //#endif
-        }
-        //#if (IncludeLocalization)
-        return this.transloco.translate('app.startup.serverError', {
-          status: error.status,
-          statusText: error.statusText,
-        });
-        //#else
-        return `Unknown server error: ${error.status} - ${error.statusText}`;
+        return `Request failed: ${applicationErrorMessage(error)} (code: ${error.code})`;
         //#endif
       }
+      //#if (IncludeLocalization)
+      return this.transloco.translate('app.startup.serverError', {
+        status: error.status,
+        statusText: applicationErrorMessage(error),
+      });
+      //#else
+      return `Unknown server error: ${error.status} - ${applicationErrorMessage(error)}`;
+      //#endif
     }
 
-    // 处理非 HttpErrorResponse 的其他未知错误
+    // 处理非 ApplicationHttpError 的其他未知错误
     if (error instanceof Error) {
       //#if (IncludeLocalization)
       return this.transloco.translate('app.startup.unknownErrorDetail', { message: error.message });

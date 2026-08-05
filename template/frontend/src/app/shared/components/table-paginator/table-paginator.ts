@@ -28,7 +28,7 @@ export interface TablePaginatorLabels {
 @Component({
   selector: 'app-table-paginator',
   standalone: true,
-  host: { class: 'flex items-center justify-between gap-4 text-sm' },
+  host: { class: 'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm' },
   imports: [NgIcon, HlmButton, ...HlmSelectImports, ...HlmTooltipImports],
   providers: [
     provideIcons({

@@ -1,8 +1,13 @@
-//#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, inject, input, model } from '@angular/core';
-//#else
-import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
-//#endif
+// prettier-ignore
+import {
+  ChangeDetectionStrategy,
+  Component,
+  //#if (IncludeLocalization)
+  inject,
+  //#endif
+  input,
+  model,
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif

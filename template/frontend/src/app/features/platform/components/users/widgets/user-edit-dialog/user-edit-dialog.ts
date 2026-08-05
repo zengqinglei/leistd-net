@@ -1,27 +1,17 @@
-//#if (IncludeLocalization)
+// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   effect,
+  //#if (IncludeLocalization)
   inject,
+  //#endif
   input,
   model,
   output,
   signal,
 } from '@angular/core';
-//#else
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  input,
-  model,
-  output,
-  signal,
-} from '@angular/core';
-//#endif
 import {
   form,
   required,
@@ -149,7 +139,6 @@ export class UserEditDialog {
       this.formModel().username.trim() ||
       this.unnamedLabel(),
   );
-  readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
 
   //#if (IncludeLocalization)
   readonly userForm = form(this.formModel, (path) => {

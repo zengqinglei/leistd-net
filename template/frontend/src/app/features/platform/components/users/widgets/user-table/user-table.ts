@@ -119,10 +119,6 @@ export class UserTable {
   readonly resetPassword = output<string>();
   readonly delete = output<UserManagementOutputDto>();
 
-  // 角色溢出 popover 状态（对齐参考站的现代化布局）。
-  readonly activeRoles = signal<string[]>([]);
-  readonly rolePopoverOpen = signal<'open' | 'closed'>('closed');
-
   private readonly viewport = toSignal(
     this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),
     {
@@ -248,11 +244,13 @@ export class UserTable {
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
   //#if (IncludeLocalization)
-  readonly rolePopoverTitle = computed(() =>
-    this.transloco.translate('users.popover.rolesTitle', { count: this.activeRoles().length }),
-  );
+  rolesPopoverTitle(count: number): string {
+    return this.transloco.translate('users.popover.rolesTitle', { count });
+  }
   //#else
-  readonly rolePopoverTitle = computed(() => `Roles (${this.activeRoles().length})`);
+  rolesPopoverTitle(count: number): string {
+    return `Roles (${count})`;
+  }
   //#endif
 
   toggleSort(columnId: string): void {
@@ -277,12 +275,6 @@ export class UserTable {
   /** 每页条数变化：回到第一页并广播新的分页状态。 */
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
-  }
-
-  /** 打开角色溢出 popover，展示被折叠的角色。 */
-  openRolesPopover(roles: string[]): void {
-    this.activeRoles.set(roles);
-    this.rolePopoverOpen.set('open');
   }
 
   getVisibleRoles(user: UserManagementOutputDto): string[] {

@@ -34,10 +34,8 @@
             @if (hasAvatarImage()) {
               <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
             } @else {
-              <span
-                class="flex h-full w-full items-center justify-center bg-primary/10 text-2xl font-semibold text-primary"
-                >{{ avatarLabel() }}</span
-              >
+              <!-- 无图占位：常驻居中上传图标即完整语义，不再叠加首字母。 -->
+              <span class="block h-full w-full bg-primary/10"></span>
             }
 
             <!--#if (IncludeLocalization)-->

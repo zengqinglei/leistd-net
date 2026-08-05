@@ -1,27 +1,17 @@
-//#if (IncludeLocalization)
+// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   effect,
+  //#if (IncludeLocalization)
   inject,
+  //#endif
   input,
   model,
   output,
   signal,
 } from '@angular/core';
-//#else
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  input,
-  model,
-  output,
-  signal,
-} from '@angular/core';
-//#endif
 import { form, required, disabled, validate, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';

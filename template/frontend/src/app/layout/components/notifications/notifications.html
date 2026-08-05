@@ -62,61 +62,65 @@
       } @else {
         <div class="flex max-h-[360px] flex-col overflow-y-auto p-1">
           @for (n of notifications(); track n.id; let last = $last) {
+            <!-- 主操作用原生 button（自带 Enter/Space 语义），删除按钮是兄弟节点，避免交互元素嵌套。 -->
             <div
-              role="button"
-              tabindex="0"
-              class="group hover:bg-muted flex cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-colors"
-              (click)="onNotificationClick(n)"
-              (keydown.enter)="onNotificationClick(n)"
+              class="hover:bg-muted flex items-start gap-2 rounded-md px-3 py-2 transition-colors"
             >
-              <span class="shrink-0 self-center">
-                <ng-icon [name]="notificationIcon(n.type)" class="text-muted-foreground text-2xl" />
-              </span>
-              <span class="flex min-w-0 flex-1 flex-col gap-1">
-                <span class="flex items-center gap-6">
-                  <span
-                    class="min-w-0 flex-1 truncate text-sm"
-                    [class.font-semibold]="!n.isRead"
-                    [class.text-muted-foreground]="n.isRead"
-                    [hlmTooltip]="n.title"
-                    >{{ n.title }}</span
-                  >
-                  <span class="flex shrink-0 items-center gap-1.5">
-                    @if (!n.isRead) {
-                      <span class="bg-primary h-2 w-2 rounded-full"></span>
-                    }
-                    <span class="text-muted-foreground text-xs whitespace-nowrap">{{
-                      n.creationTime | date: 'MM-dd HH:mm'
-                    }}</span>
-                  </span>
+              <button
+                type="button"
+                class="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-md text-start focus-visible:outline-none focus-visible:ring-2"
+                (click)="onNotificationClick(n)"
+              >
+                <span class="shrink-0 self-center">
+                  <ng-icon
+                    [name]="notificationIcon(n.type)"
+                    class="text-muted-foreground text-2xl"
+                  />
                 </span>
-                <span class="flex items-center gap-2">
+                <span class="flex min-w-0 flex-1 flex-col gap-1">
+                  <span class="flex items-center gap-6">
+                    <span
+                      class="min-w-0 flex-1 truncate text-sm"
+                      [class.font-semibold]="!n.isRead"
+                      [class.text-muted-foreground]="n.isRead"
+                      [hlmTooltip]="n.title"
+                      >{{ n.title }}</span
+                    >
+                    <span class="flex shrink-0 items-center gap-1.5">
+                      @if (!n.isRead) {
+                        <span class="bg-primary h-2 w-2 rounded-full"></span>
+                      }
+                      <span class="text-muted-foreground text-xs whitespace-nowrap">{{
+                        n.creationTime | date: 'MM-dd HH:mm'
+                      }}</span>
+                    </span>
+                  </span>
                   <span
-                    class="text-muted-foreground min-h-[1rem] min-w-0 flex-1 truncate text-xs leading-relaxed"
+                    class="text-muted-foreground min-h-[1rem] min-w-0 truncate text-xs leading-relaxed"
                     [hlmTooltip]="n.content || ''"
                     >{{ n.content }}</span
                   >
-                  <!--#if (IncludeLocalization)-->
-                  <button
-                    type="button"
-                    class="text-muted-foreground hover:text-destructive shrink-0 self-center focus:outline-none"
-                    [attr.aria-label]="'layout.notifications.clearOne' | transloco"
-                    (click)="$event.stopPropagation(); clearOneNotification(n.id)"
-                  >
-                    <ng-icon name="lucideTrash2" class="text-sm" />
-                  </button>
-                  <!--#else-->
-                  <button
-                    type="button"
-                    class="text-muted-foreground hover:text-destructive shrink-0 self-center focus:outline-none"
-                    aria-label="Delete"
-                    (click)="$event.stopPropagation(); clearOneNotification(n.id)"
-                  >
-                    <ng-icon name="lucideTrash2" class="text-sm" />
-                  </button>
-                  <!--#endif-->
                 </span>
-              </span>
+              </button>
+              <!--#if (IncludeLocalization)-->
+              <button
+                type="button"
+                class="text-muted-foreground hover:text-destructive focus-visible:ring-ring shrink-0 self-center rounded-sm focus-visible:outline-none focus-visible:ring-2"
+                [attr.aria-label]="'layout.notifications.clearOne' | transloco"
+                (click)="clearOneNotification(n.id)"
+              >
+                <ng-icon name="lucideTrash2" class="text-sm" />
+              </button>
+              <!--#else-->
+              <button
+                type="button"
+                class="text-muted-foreground hover:text-destructive focus-visible:ring-ring shrink-0 self-center rounded-sm focus-visible:outline-none focus-visible:ring-2"
+                aria-label="Delete"
+                (click)="clearOneNotification(n.id)"
+              >
+                <ng-icon name="lucideTrash2" class="text-sm" />
+              </button>
+              <!--#endif-->
             </div>
             @if (!last) {
               <div class="border-t border-dashed border-border my-1"></div>

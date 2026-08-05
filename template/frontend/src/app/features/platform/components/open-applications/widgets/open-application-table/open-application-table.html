@@ -154,17 +154,34 @@
                           </div>
                         }
                         @case ('permissions') {
-                          <button
-                            type="button"
-                            class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap border border-border"
-                            (click)="openPopover('permissions', row.original.permissions)"
-                          >
-                            <ng-icon name="lucideShield" class="text-xs" />
-                            <span class="truncate">{{ getPermissionSummary(row.original) }}</span>
-                            <span class="text-muted-foreground"
-                              >({{ row.original.permissions.length }})</span
+                          <!-- 每行独立 popover：以真实按钮为锚点，定位与焦点回归可靠。 -->
+                          <hlm-popover>
+                            <button
+                              type="button"
+                              class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap border border-border"
+                              hlmPopoverTrigger
                             >
-                          </button>
+                              <ng-icon name="lucideShield" class="text-xs" />
+                              <span class="truncate">{{ getPermissionSummary(row.original) }}</span>
+                              <span class="text-muted-foreground"
+                                >({{ row.original.permissions.length }})</span
+                              >
+                            </button>
+                            <hlm-popover-content *hlmPopoverPortal class="min-w-72 max-w-xl">
+                              <div class="mb-3 text-sm font-semibold">
+                                {{ popoverTitle('permissions') }}
+                              </div>
+                              <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
+                                @for (item of row.original.permissions; track item) {
+                                  <div
+                                    class="rounded border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground font-mono"
+                                  >
+                                    {{ item }}
+                                  </div>
+                                }
+                              </div>
+                            </hlm-popover-content>
+                          </hlm-popover>
                         }
                         @case ('redirectUris') {
                           @if (row.original.redirectUris.length > 0) {
@@ -180,17 +197,34 @@
                                 </span>
                               }
                               @if (getHiddenRedirectUris(row.original).length > 0) {
-                                <button
-                                  type="button"
-                                  hlmBadge
-                                  variant="outline"
-                                  class="cursor-pointer shrink-0"
-                                  (click)="
-                                    openPopover('redirectUris', getHiddenRedirectUris(row.original))
-                                  "
-                                >
-                                  +{{ getHiddenRedirectUris(row.original).length }}
-                                </button>
+                                <hlm-popover align="end">
+                                  <button
+                                    type="button"
+                                    hlmBadge
+                                    variant="outline"
+                                    class="cursor-pointer shrink-0"
+                                    hlmPopoverTrigger
+                                  >
+                                    +{{ getHiddenRedirectUris(row.original).length }}
+                                  </button>
+                                  <hlm-popover-content *hlmPopoverPortal class="min-w-72 max-w-xl">
+                                    <div class="mb-3 text-sm font-semibold">
+                                      {{ popoverTitle('redirectUris') }}
+                                    </div>
+                                    <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
+                                      @for (
+                                        item of getHiddenRedirectUris(row.original);
+                                        track item
+                                      ) {
+                                        <div
+                                          class="rounded border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground font-mono"
+                                        >
+                                          {{ item }}
+                                        </div>
+                                      }
+                                    </div>
+                                  </hlm-popover-content>
+                                </hlm-popover>
                               }
                             </div>
                           } @else {
@@ -334,15 +368,33 @@
                         @if (isColumnHidden('permissions')) {
                           <dt class="text-muted-foreground">{{ detailLabel('permissions') }}</dt>
                           <dd>
-                            <button
-                              type="button"
-                              class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer"
-                              (click)="openPopover('permissions', row.original.permissions)"
-                            >
-                              <ng-icon name="lucideShield" class="text-xs" />
-                              <span class="truncate">{{ getPermissionSummary(row.original) }}</span>
-                              <span>({{ row.original.permissions.length }})</span>
-                            </button>
+                            <hlm-popover>
+                              <button
+                                type="button"
+                                class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground cursor-pointer"
+                                hlmPopoverTrigger
+                              >
+                                <ng-icon name="lucideShield" class="text-xs" />
+                                <span class="truncate">{{
+                                  getPermissionSummary(row.original)
+                                }}</span>
+                                <span>({{ row.original.permissions.length }})</span>
+                              </button>
+                              <hlm-popover-content *hlmPopoverPortal class="min-w-72 max-w-xl">
+                                <div class="mb-3 text-sm font-semibold">
+                                  {{ popoverTitle('permissions') }}
+                                </div>
+                                <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
+                                  @for (item of row.original.permissions; track item) {
+                                    <div
+                                      class="rounded border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground font-mono"
+                                    >
+                                      {{ item }}
+                                    </div>
+                                  }
+                                </div>
+                              </hlm-popover-content>
+                            </hlm-popover>
                           </dd>
                         }
                         @if (isColumnHidden('redirectUris')) {
@@ -448,26 +500,3 @@
     />
   }
 </div>
-
-<!-- 权限 / Redirect URI 溢出 popover -->
-<hlm-popover [state]="popoverOpen()" (stateChanged)="popoverOpen.set($event)">
-  <span hlmPopoverTrigger class="hidden"></span>
-  <hlm-popover-content *hlmPopoverPortal class="min-w-72 max-w-xl">
-    <div class="mb-3 text-sm font-semibold">{{ popoverTitle() }}</div>
-    <div class="flex max-h-80 flex-col gap-2 overflow-y-auto">
-      @for (item of activeItems(); track item) {
-        <div
-          class="rounded border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground font-mono"
-        >
-          {{ item }}
-        </div>
-      } @empty {
-        <!--#if (IncludeLocalization)-->
-        <div class="text-sm text-muted-foreground">{{ 'openApp.popover.empty' | transloco }}</div>
-        <!--#else-->
-        <div class="text-sm text-muted-foreground">Nothing configured</div>
-        <!--#endif-->
-      }
-    </div>
-  </hlm-popover-content>
-</hlm-popover>

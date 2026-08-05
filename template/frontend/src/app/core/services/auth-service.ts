@@ -1,12 +1,27 @@
 //#if (IncludeIdentity)
 import { HttpClient, HttpContext } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+//#endif
+// prettier-ignore
+import {
+  Injectable,
+  //#if (IncludeIdentity)
+  inject,
+  //#endif
+  signal,
+} from '@angular/core';
+//#if (IncludeIdentity)
 import { Observable, lastValueFrom, tap } from 'rxjs';
+//#endif
 
+//#if (IncludeIdentity)
 import { LoginInputDto, UserOutputDto } from '../../features/account/models/account.dto';
+//#endif
 import { User } from '../../shared/models/user.model';
+//#if (IncludeIdentity)
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
+//#endif
 
+//#if (IncludeIdentity)
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -22,13 +37,10 @@ export class AuthService {
     return this.http.post<void>('/api/v1/auth/session-login', credentials);
   }
 
-  async initializeAuth(): Promise<boolean> {
-    try {
-      await lastValueFrom(this.loadUser());
-      return true;
-    } catch {
-      return false;
-    }
+  // 错误按原样抛出：401（未登录）与服务故障（503/断网）由 StartupService 分别处理，
+  // 吞掉异常会把认证服务故障误判成「未登录」。
+  async initializeAuth(): Promise<void> {
+    await lastValueFrom(this.loadUser());
   }
 
   loadUser(): Observable<UserOutputDto> {
@@ -62,10 +74,6 @@ export class AuthService {
   }
 }
 //#else
-import { Injectable, signal } from '@angular/core';
-
-import { User } from '../../shared/models/user.model';
-
 /**
  * 未启用认证模块时的占位实现：始终无登录用户。
  * 保留 currentUser 信号与 isAuthenticated()，供布局/仪表盘等只读消费。

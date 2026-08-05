@@ -112,11 +112,6 @@ export class OpenApplicationTable {
   readonly delete = output<string>();
   readonly resetSecret = output<string>();
 
-  // 权限 / Redirect URI 溢出 popover 状态（对齐参考站的现代化布局）。
-  readonly activeItems = signal<string[]>([]);
-  readonly popoverMode = signal<PopoverMode>('permissions');
-  readonly popoverOpen = signal<'open' | 'closed'>('closed');
-
   private readonly viewport = toSignal(
     this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),
     {
@@ -229,23 +224,15 @@ export class OpenApplicationTable {
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
   //#if (IncludeLocalization)
-  readonly popoverTitle = computed(() => {
-    switch (this.popoverMode()) {
-      case 'redirectUris':
-        return 'Redirect URIs';
-      default:
-        return this.transloco.translate('openApp.section.authorization');
-    }
-  });
+  popoverTitle(mode: PopoverMode): string {
+    return mode === 'redirectUris'
+      ? 'Redirect URIs'
+      : this.transloco.translate('openApp.section.authorization');
+  }
   //#else
-  readonly popoverTitle = computed(() => {
-    switch (this.popoverMode()) {
-      case 'redirectUris':
-        return 'Redirect URIs';
-      default:
-        return 'Authorization capabilities';
-    }
-  });
+  popoverTitle(mode: PopoverMode): string {
+    return mode === 'redirectUris' ? 'Redirect URIs' : 'Authorization capabilities';
+  }
   //#endif
 
   toggleSort(columnId: string): void {
@@ -270,13 +257,6 @@ export class OpenApplicationTable {
   /** 每页条数变化：回到第一页并广播新的分页状态。 */
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
-  }
-
-  /** 打开权限 / Redirect URI 溢出 popover。 */
-  openPopover(mode: PopoverMode, items: string[]): void {
-    this.popoverMode.set(mode);
-    this.activeItems.set(items);
-    this.popoverOpen.set('open');
   }
 
   getVisibleRedirectUris(application: OpenApplicationOutputDto): string[] {

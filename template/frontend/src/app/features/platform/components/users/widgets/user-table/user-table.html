@@ -173,15 +173,30 @@
                               }}</span>
                             }
                             @if (getHiddenRoles(row.original).length > 0) {
-                              <button
-                                type="button"
-                                hlmBadge
-                                variant="outline"
-                                class="cursor-pointer shrink-0"
-                                (click)="openRolesPopover(getHiddenRoles(row.original))"
-                              >
-                                +{{ getHiddenRoles(row.original).length }}
-                              </button>
+                              <!-- 每行独立 popover：以真实按钮为锚点，定位与焦点回归可靠。 -->
+                              <hlm-popover align="end">
+                                <button
+                                  type="button"
+                                  hlmBadge
+                                  variant="outline"
+                                  class="cursor-pointer shrink-0"
+                                  hlmPopoverTrigger
+                                >
+                                  +{{ getHiddenRoles(row.original).length }}
+                                </button>
+                                <hlm-popover-content *hlmPopoverPortal class="min-w-48 max-w-sm">
+                                  <div class="mb-3 text-sm font-semibold">
+                                    {{ rolesPopoverTitle(getHiddenRoles(row.original).length) }}
+                                  </div>
+                                  <div class="flex flex-wrap gap-2">
+                                    @for (role of getHiddenRoles(row.original); track role) {
+                                      <span hlmBadge [variant]="getRoleVariant(role)">{{
+                                        getRoleLabel(role)
+                                      }}</span>
+                                    }
+                                  </div>
+                                </hlm-popover-content>
+                              </hlm-popover>
                             }
                           </div>
                         }
@@ -422,22 +437,3 @@
     />
   }
 </div>
-
-<!-- 角色溢出 popover -->
-<hlm-popover [state]="rolePopoverOpen()" (stateChanged)="rolePopoverOpen.set($event)">
-  <span hlmPopoverTrigger class="hidden"></span>
-  <hlm-popover-content *hlmPopoverPortal class="min-w-48 max-w-sm">
-    <div class="mb-3 text-sm font-semibold">{{ rolePopoverTitle() }}</div>
-    <div class="flex flex-wrap gap-2">
-      @for (role of activeRoles(); track role) {
-        <span hlmBadge [variant]="getRoleVariant(role)">{{ getRoleLabel(role) }}</span>
-      } @empty {
-        <!--#if (IncludeLocalization)-->
-        <div class="text-sm text-muted-foreground">{{ 'users.popover.noRoles' | transloco }}</div>
-        <!--#else-->
-        <div class="text-sm text-muted-foreground">No roles</div>
-        <!--#endif-->
-      }
-    </div>
-  </hlm-popover-content>
-</hlm-popover>

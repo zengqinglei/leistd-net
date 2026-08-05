@@ -1,10 +1,15 @@
+// prettier-ignore
+import {
+  Injectable,
+  //#if (IncludeIdentity)
+  inject,
+  //#endif
+  signal,
+} from '@angular/core';
 //#if (IncludeIdentity)
-import { Injectable, inject, signal } from '@angular/core';
 
 import { AuthService } from './auth-service';
 import { ApplicationHttpError } from '../errors/application-http-error';
-//#else
-import { Injectable, signal } from '@angular/core';
 //#endif
 
 export type StartupStatus = 'loading' | 'success' | 'failed';

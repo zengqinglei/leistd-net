@@ -92,8 +92,8 @@ describe('httpErrorInterceptor', () => {
     expect(caught).toBe(original);
     expect(caught instanceof ApplicationHttpError).toBe(false);
   });
-
   //#if (IncludeIdentity)
+
   it('clears auth data and redirects to /auth/login on 401', () => {
     const authService = TestBed.inject(AuthService);
     const router = TestBed.inject(Router);

@@ -96,10 +96,6 @@ export class ProfileSettingsDialog {
       this.user()?.username ||
       this.guestLabel(),
   );
-  readonly avatarLabel = computed(() => {
-    const text = this.displayName().trim();
-    return (text.charAt(0) || 'U').toUpperCase();
-  });
 
   //#if (IncludeLocalization)
   readonly profileForm = form(this.formModel, (path) => {

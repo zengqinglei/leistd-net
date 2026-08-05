@@ -1,8 +1,15 @@
+// prettier-ignore
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  //#if (IncludeLocalization)
+  inject,
+  //#endif
+  input,
+} from '@angular/core';
 //#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
-//#else
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 //#endif
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 //#if (IncludeLocalization)
