@@ -57,14 +57,7 @@ let nextFacetedFilterId = 0;
       [state]="state()"
       (stateChanged)="onStateChange($event)"
     >
-      <button
-        type="button"
-        hlmBtn
-        hlmPopoverTrigger
-        variant="outline"
-        class="border-dashed"
-        aria-haspopup="listbox"
-      >
+      <button type="button" hlmBtn hlmPopoverTrigger variant="outline" class="border-dashed">
         <ng-icon name="lucideListFilter" />
         {{ label() }}
         @if (multiple()) {
@@ -101,6 +94,7 @@ let nextFacetedFilterId = 0;
               class="w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
               autocomplete="off"
               aria-expanded="true"
+              aria-autocomplete="list"
               [attr.aria-controls]="listboxId"
               [attr.aria-activedescendant]="activeOptionId()"
               [attr.aria-label]="searchPlaceholder() || label()"
@@ -167,10 +161,12 @@ let nextFacetedFilterId = 0;
               }
               <span class="truncate">{{ opt.label }}</span>
             </div>
-          } @empty {
-            <div class="py-6 text-center text-sm">{{ emptyLabel() }}</div>
           }
         </div>
+        @if (filteredOptions().length === 0) {
+          <!-- 空状态是提示文本而非选项，置于 listbox 之外，保持 listbox 只含 option。 -->
+          <div class="py-6 text-center text-sm">{{ emptyLabel() }}</div>
+        }
 
         <!-- 清除是命令而非选项，置于 listbox 之外，避免混入 option 语义。 -->
         @if (hasSelection()) {
@@ -267,6 +263,11 @@ export class FacetedFilter {
 
   /** 键盘导航：↑↓ 环绕移动、Home/End 跳边界、Enter 选中；Space 保留给搜索输入。 */
   protected onKeydown(event: KeyboardEvent): void {
+    // 输入法合成期间（如中文候选词确认）的 Enter 属于文本输入，不能当作选中。
+    if (event.isComposing) {
+      return;
+    }
+
     const count = this.filteredOptions().length;
     if (count === 0) {
       return;

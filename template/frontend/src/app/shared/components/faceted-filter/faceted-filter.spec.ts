@@ -29,8 +29,12 @@ describe('FacetedFilter', () => {
   const optionEls = () => Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
   const optionBy = (label: string) => optionEls().find((o) => o.textContent?.includes(label));
 
-  function press(fixture: ComponentFixture<FacetedFilter>, key: string): void {
-    search()!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  function press(
+    fixture: ComponentFixture<FacetedFilter>,
+    key: string,
+    init: KeyboardEventInit = {},
+  ): void {
+    search()!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init }));
     fixture.detectChanges();
   }
 
@@ -44,6 +48,15 @@ describe('FacetedFilter', () => {
     expect(listbox()?.getAttribute('aria-multiselectable')).toBe('true');
     expect(search()?.getAttribute('aria-controls')).toBe(listbox()?.id);
     expect(listbox()?.id).toBeTruthy();
+    // 输入会过滤候选集：必须声明 list 型自动补全（autocomplete="off" 只管浏览器表单填充）。
+    expect(search()?.getAttribute('aria-autocomplete')).toBe('list');
+    // 触发器打开的是 popover（dialog）：先确认元素存在，再精确断言语义与其受控元素一致。
+    const trigger = document.querySelector<HTMLElement>('button[hlmpopovertrigger]');
+    expect(trigger).withContext('popover trigger must render').not.toBeNull();
+    expect(trigger!.getAttribute('aria-haspopup')).toBe('dialog');
+    const controlledId = trigger!.getAttribute('aria-controls');
+    expect(controlledId).withContext('trigger must reference the overlay').toBeTruthy();
+    expect(document.getElementById(controlledId!)?.getAttribute('role')).toBe('dialog');
 
     fixture.componentRef.setInput('multiple', false);
     fixture.detectChanges();
@@ -89,6 +102,40 @@ describe('FacetedFilter', () => {
 
     expect(emitted!).toEqual(['admin', 'member']);
     expect(fixture.componentInstance.state()).toBe('open');
+  });
+
+  it('ignores keys composed by an IME so confirming a candidate never selects', () => {
+    const fixture = createFilter({ multiple: true, values: ['admin'] });
+    let emitted: string[] | null = null;
+    fixture.componentInstance.valuesChange.subscribe((values) => (emitted = values));
+
+    press(fixture, 'ArrowDown', { isComposing: true });
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[0].id);
+
+    press(fixture, 'Enter', { isComposing: true });
+    expect(emitted).toBeNull();
+    expect(fixture.componentInstance.state()).toBe('open');
+
+    // 合成结束后按键恢复正常。
+    press(fixture, 'Enter');
+    expect(emitted!).toEqual([]);
+  });
+
+  it('keeps the empty state outside the listbox so it only contains options', () => {
+    const fixture = createFilter({ multiple: true, values: [] });
+
+    const input = search()!;
+    input.value = 'zzz-no-match';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(optionEls().length).toBe(0);
+    expect(listbox()?.children.length).toBe(0);
+    const empty = Array.from(document.querySelectorAll('.cdk-overlay-container div')).find(
+      (el) => el.textContent?.trim() === 'No results',
+    );
+    expect(empty).withContext('empty state should still render').toBeDefined();
+    expect(listbox()?.contains(empty!)).toBeFalse();
   });
 
   it('emits the single-select value on click and closes the panel', () => {
