@@ -25,3 +25,10 @@ export const ROLE_LABEL_MAP: Record<Role, string> = {
   [Role.Member]: 'Member',
   //#endif
 };
+
+/** 角色图标映射（ng-icon 名称）。使用方需自行 provideIcons 注册对应图标。 */
+export const ROLE_ICON_MAP: Record<string, string> = {
+  [Role.Admin]: 'lucideShieldCheck',
+  [Role.Operator]: 'lucideBriefcase',
+  [Role.Member]: 'lucideUser',
+};

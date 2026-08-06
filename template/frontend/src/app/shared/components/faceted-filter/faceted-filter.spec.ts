@@ -24,87 +24,133 @@ describe('FacetedFilter', () => {
     return fixture;
   }
 
-  function commandItems(): HTMLButtonElement[] {
-    return Array.from(document.querySelectorAll<HTMLButtonElement>('[hlm-command-item]')).filter(
-      (item) => item.textContent !== null,
-    );
+  const listbox = () => document.querySelector<HTMLElement>('[role="listbox"]');
+  const search = () => document.querySelector<HTMLInputElement>('input[role="combobox"]');
+  const optionEls = () => Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
+  const optionBy = (label: string) => optionEls().find((o) => o.textContent?.includes(label));
+
+  function press(fixture: ComponentFixture<FacetedFilter>, key: string): void {
+    search()!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    fixture.detectChanges();
   }
 
   afterEach(() => {
     document.querySelectorAll('.cdk-overlay-container').forEach((el) => (el.innerHTML = ''));
   });
 
-  it('renders multi-select options without nested interactive elements', () => {
-    createFilter({ multiple: true, values: ['admin'] });
+  it('declares a multi-selectable listbox owned by the search combobox', () => {
+    const fixture = createFilter({ multiple: true, values: [] });
 
-    const items = commandItems();
-    expect(items.length).toBeGreaterThanOrEqual(OPTIONS.length);
-    for (const item of items) {
-      expect(item.querySelector('button, [role="checkbox"], input, [tabindex]'))
-        .withContext(
-          `command item "${item.textContent?.trim()}" must be the only focusable element`,
-        )
-        .toBeNull();
-    }
+    expect(listbox()?.getAttribute('aria-multiselectable')).toBe('true');
+    expect(search()?.getAttribute('aria-controls')).toBe(listbox()?.id);
+    expect(listbox()?.id).toBeTruthy();
+
+    fixture.componentRef.setInput('multiple', false);
+    fixture.detectChanges();
+    expect(listbox()?.getAttribute('aria-multiselectable')).toBeNull();
   });
 
-  it('exposes the business selection via aria-checked, independent of keyboard focus', () => {
+  it('reports business selection through aria-selected in both modes', () => {
     const fixture = createFilter({ multiple: true, values: ['admin'] });
+    expect(optionBy('Administrator')?.getAttribute('aria-selected')).toBe('true');
+    expect(optionBy('Member')?.getAttribute('aria-selected')).toBe('false');
 
-    const items = commandItems();
-    const byLabel = (label: string) => items.find((item) => item.textContent?.includes(label));
-    expect(byLabel('Administrator')?.getAttribute('aria-checked')).toBe('true');
-    expect(byLabel('Member')?.getAttribute('aria-checked')).toBe('false');
+    fixture.componentRef.setInput('multiple', false);
+    fixture.componentRef.setInput('value', 'guest');
+    fixture.detectChanges();
+    expect(optionBy('Guest')?.getAttribute('aria-selected')).toBe('true');
+    expect(optionBy('Administrator')?.getAttribute('aria-selected')).toBe('false');
+  });
 
-    byLabel('Member')?.click();
-    fixture.componentRef.setInput('values', ['admin', 'member']);
+  it('moves the keyboard active option without changing the selection', () => {
+    const fixture = createFilter({ multiple: true, values: ['admin'] });
+    const selectedBefore = optionEls().map((o) => o.getAttribute('aria-selected'));
+
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[0].id);
+    press(fixture, 'ArrowDown');
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[1].id);
+    press(fixture, 'End');
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[2].id);
+    press(fixture, 'ArrowDown'); // 环绕回首项
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[0].id);
+    press(fixture, 'ArrowUp'); // 环绕到末项
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[2].id);
+
+    expect(optionEls().map((o) => o.getAttribute('aria-selected'))).toEqual(selectedBefore);
+  });
+
+  it('toggles the active option with Enter and keeps the multi-select panel open', () => {
+    const fixture = createFilter({ multiple: true, values: ['admin'] });
+    let emitted: string[] | null = null;
+    fixture.componentInstance.valuesChange.subscribe((values) => (emitted = values));
+
+    press(fixture, 'ArrowDown');
+    press(fixture, 'Enter');
+
+    expect(emitted!).toEqual(['admin', 'member']);
+    expect(fixture.componentInstance.state()).toBe('open');
+  });
+
+  it('emits the single-select value on click and closes the panel', () => {
+    const fixture = createFilter({ value: null });
+    let emitted: unknown = 'untouched';
+    fixture.componentInstance.valueChange.subscribe((value) => (emitted = value));
+
+    optionBy('Guest')?.click();
     fixture.detectChanges();
 
-    expect(byLabel('Member')?.getAttribute('aria-checked')).toBe('true');
+    expect(emitted).toBe('guest');
+    expect(fixture.componentInstance.state()).toBe('closed');
+  });
+
+  it('filters options by the search query and resets the active option', () => {
+    const fixture = createFilter({ multiple: true, values: [] });
+
+    press(fixture, 'End');
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[2].id);
+
+    const input = search()!;
+    input.value = 'mem';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(optionEls().length).toBe(1);
+    expect(optionEls()[0].textContent).toContain('Member');
+    expect(search()?.getAttribute('aria-activedescendant')).toBe(optionEls()[0].id);
+  });
+
+  it('keeps the clear command outside the listbox and free of option semantics', () => {
+    createFilter({ multiple: true, values: ['admin'] });
+
+    const clear = Array.from(document.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Clear filter'),
+    );
+    expect(clear).withContext('clear button should render when a selection exists').toBeDefined();
+    expect(clear?.getAttribute('role')).toBeNull();
+    expect(listbox()?.contains(clear!)).toBeFalse();
+  });
+
+  it('renders options without nested interactive elements', () => {
+    createFilter({ multiple: true, values: ['admin'] });
+
+    for (const option of optionEls()) {
+      expect(option.querySelector('button, input, [tabindex], [role="checkbox"]'))
+        .withContext(`option "${option.textContent?.trim()}" must not nest interactive elements`)
+        .toBeNull();
+    }
   });
 
   it('uses a distinct checked background in dark mode', () => {
     document.documentElement.classList.add('dark');
     try {
       createFilter({ multiple: true, values: ['admin'] });
-      const items = commandItems();
       const graphic = (label: string) =>
-        items
-          .find((item) => item.textContent?.includes(label))
-          ?.querySelector<HTMLElement>('span[aria-hidden]');
-
-      const checkedBg = getComputedStyle(graphic('Administrator')!).backgroundColor;
-      const uncheckedBg = getComputedStyle(graphic('Member')!).backgroundColor;
-      expect(checkedBg).not.toBe(uncheckedBg);
+        optionBy(label)?.querySelector<HTMLElement>('span[aria-hidden]');
+      const checked = getComputedStyle(graphic('Administrator')!).backgroundColor;
+      const unchecked = getComputedStyle(graphic('Member')!).backgroundColor;
+      expect(checked).not.toBe(unchecked);
     } finally {
       document.documentElement.classList.remove('dark');
     }
-  });
-
-  it('toggles a multi-select value and keeps the panel open', () => {
-    const fixture = createFilter({ multiple: true, values: ['admin'] });
-    let emitted: string[] | null = null;
-    fixture.componentInstance.valuesChange.subscribe((values) => (emitted = values));
-
-    const member = commandItems().find((item) => item.textContent?.includes('Member'));
-    expect(member).toBeDefined();
-    member?.click();
-    fixture.detectChanges();
-
-    expect(emitted!).toEqual(['admin', 'member']);
-    expect(fixture.componentInstance.state()).toBe('open');
-  });
-
-  it('emits the single-select value and closes the panel', () => {
-    const fixture = createFilter({ value: null });
-    let emitted: unknown = 'untouched';
-    fixture.componentInstance.valueChange.subscribe((value) => (emitted = value));
-
-    const guest = commandItems().find((item) => item.textContent?.includes('Guest'));
-    guest?.click();
-    fixture.detectChanges();
-
-    expect(emitted).toBe('guest');
-    expect(fixture.componentInstance.state()).toBe('closed');
   });
 });

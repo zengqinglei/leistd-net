@@ -13,7 +13,16 @@ import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
+import {
+  lucideGlobe,
+  lucideLockKeyhole,
+  lucideMonitor,
+  lucidePlus,
+  lucideRefreshCw,
+  lucideSearch,
+  lucideServer,
+  lucideUnlock,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import {
@@ -80,7 +89,18 @@ const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'clientId', desc: false
     OpenApplicationEditDialog,
     SecretRevealDialog,
   ],
-  providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
+  providers: [
+    provideIcons({
+      lucidePlus,
+      lucideRefreshCw,
+      lucideSearch,
+      lucideGlobe,
+      lucideMonitor,
+      lucideServer,
+      lucideUnlock,
+      lucideLockKeyhole,
+    }),
+  ],
   templateUrl: './open-applications.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -146,9 +166,21 @@ export class OpenApplications {
   readonly applicationTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.appType.web'), value: 'web' as const },
-      { label: this.transloco.translate('openApp.appType.native'), value: 'native' as const },
-      { label: this.transloco.translate('openApp.appType.service'), value: 'service' as const },
+      {
+        label: this.transloco.translate('openApp.appType.web'),
+        value: 'web' as const,
+        icon: 'lucideGlobe',
+      },
+      {
+        label: this.transloco.translate('openApp.appType.native'),
+        value: 'native' as const,
+        icon: 'lucideMonitor',
+      },
+      {
+        label: this.transloco.translate('openApp.appType.service'),
+        value: 'service' as const,
+        icon: 'lucideServer',
+      },
     ];
   });
 
@@ -158,23 +190,25 @@ export class OpenApplications {
       {
         label: this.transloco.translate('openApp.clientType.publicLabel'),
         value: 'public' as const,
+        icon: 'lucideUnlock',
       },
       {
         label: this.transloco.translate('openApp.clientType.confidentialLabel'),
         value: 'confidential' as const,
+        icon: 'lucideLockKeyhole',
       },
     ];
   });
   //#else
   readonly applicationTypeOptions = computed(() => [
-    { label: 'Web', value: 'web' as const },
-    { label: 'Desktop/Native', value: 'native' as const },
-    { label: 'Service', value: 'service' as const },
+    { label: 'Web', value: 'web' as const, icon: 'lucideGlobe' },
+    { label: 'Desktop/Native', value: 'native' as const, icon: 'lucideMonitor' },
+    { label: 'Service', value: 'service' as const, icon: 'lucideServer' },
   ]);
 
   readonly clientTypeOptions = computed(() => [
-    { label: 'Public', value: 'public' as const },
-    { label: 'Confidential', value: 'confidential' as const },
+    { label: 'Public', value: 'public' as const, icon: 'lucideUnlock' },
+    { label: 'Confidential', value: 'confidential' as const, icon: 'lucideLockKeyhole' },
   ]);
   //#endif
 

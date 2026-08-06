@@ -13,7 +13,18 @@ import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
+import {
+  lucideBan,
+  lucideBriefcase,
+  lucideCircleCheck,
+  lucideMail,
+  lucideMailCheck,
+  lucidePlus,
+  lucideRefreshCw,
+  lucideSearch,
+  lucideShieldCheck,
+  lucideUser,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import {
@@ -41,7 +52,7 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-import { ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
+import { ROLE_ICON_MAP, ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
 import {
   paginationFromQuery,
   sortingFromQuery,
@@ -80,7 +91,20 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
     UserEditDialog,
     ResetUserPasswordDialog,
   ],
-  providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
+  providers: [
+    provideIcons({
+      lucidePlus,
+      lucideRefreshCw,
+      lucideSearch,
+      lucideCircleCheck,
+      lucideBan,
+      lucideMailCheck,
+      lucideMail,
+      lucideShieldCheck,
+      lucideBriefcase,
+      lucideUser,
+    }),
+  ],
   templateUrl: './users.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -145,16 +169,28 @@ export class Users {
   readonly activeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('users.status.active'), value: true },
-      { label: this.transloco.translate('users.status.inactive'), value: false },
+      {
+        label: this.transloco.translate('users.status.active'),
+        value: true,
+        icon: 'lucideCircleCheck',
+      },
+      { label: this.transloco.translate('users.status.inactive'), value: false, icon: 'lucideBan' },
     ];
   });
 
   readonly emailVerifiedOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('users.status.emailVerified'), value: true },
-      { label: this.transloco.translate('users.status.emailUnverified'), value: false },
+      {
+        label: this.transloco.translate('users.status.emailVerified'),
+        value: true,
+        icon: 'lucideMailCheck',
+      },
+      {
+        label: this.transloco.translate('users.status.emailUnverified'),
+        value: false,
+        icon: 'lucideMail',
+      },
     ];
   });
 
@@ -164,21 +200,26 @@ export class Users {
     return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
       label: this.transloco.translate(label),
       value,
+      icon: ROLE_ICON_MAP[value] ?? 'lucideUser',
     }));
   });
   //#else
   readonly activeOptions = computed(() => [
-    { label: 'Active', value: true },
-    { label: 'Disabled', value: false },
+    { label: 'Active', value: true, icon: 'lucideCircleCheck' },
+    { label: 'Disabled', value: false, icon: 'lucideBan' },
   ]);
 
   readonly emailVerifiedOptions = computed(() => [
-    { label: 'Email verified', value: true },
-    { label: 'Email not verified', value: false },
+    { label: 'Email verified', value: true, icon: 'lucideMailCheck' },
+    { label: 'Email not verified', value: false, icon: 'lucideMail' },
   ]);
 
   readonly roleOptions = computed(() =>
-    Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })),
+    Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
+      label,
+      value,
+      icon: ROLE_ICON_MAP[value] ?? 'lucideUser',
+    })),
   );
   //#endif
 
