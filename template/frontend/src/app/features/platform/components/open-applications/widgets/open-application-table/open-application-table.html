@@ -167,7 +167,11 @@
                                 >({{ row.original.permissions.length }})</span
                               >
                             </button>
-                            <hlm-popover-content *hlmPopoverPortal class="min-w-72 max-w-xl">
+                            <hlm-popover-content
+                              *hlmPopoverPortal
+                              class="min-w-72 max-w-xl"
+                              [appPopoverAria]="popoverTitle('permissions')"
+                            >
                               <div class="mb-3 text-sm font-semibold">
                                 {{ popoverTitle('permissions') }}
                               </div>
@@ -207,7 +211,11 @@
                                   >
                                     +{{ getHiddenRedirectUris(row.original).length }}
                                   </button>
-                                  <hlm-popover-content *hlmPopoverPortal class="min-w-72 max-w-xl">
+                                  <hlm-popover-content
+                                    *hlmPopoverPortal
+                                    class="min-w-72 max-w-xl"
+                                    [appPopoverAria]="popoverTitle('redirectUris')"
+                                  >
                                     <div class="mb-3 text-sm font-semibold">
                                       {{ popoverTitle('redirectUris') }}
                                     </div>
@@ -380,7 +388,11 @@
                                 }}</span>
                                 <span>({{ row.original.permissions.length }})</span>
                               </button>
-                              <hlm-popover-content *hlmPopoverPortal class="min-w-72 max-w-xl">
+                              <hlm-popover-content
+                                *hlmPopoverPortal
+                                class="min-w-72 max-w-xl"
+                                [appPopoverAria]="popoverTitle('permissions')"
+                              >
                                 <div class="mb-3 text-sm font-semibold">
                                   {{ popoverTitle('permissions') }}
                                 </div>

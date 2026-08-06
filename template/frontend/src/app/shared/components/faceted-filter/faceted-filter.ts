@@ -18,6 +18,8 @@ import { HlmInputGroupImports } from '@spartan-ng/helm/input-group';
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 
+import { PopoverAria } from '../../directives/popover-aria';
+
 /** faceted filter 选项。`icon` 为可选的 ng-icon 名称（须由使用方 provideIcons 注册）。 */
 export interface FacetedFilterOption {
   value: string | boolean | null;
@@ -47,6 +49,7 @@ let nextFacetedFilterId = 0;
     ...HlmInputGroupImports,
     ...HlmPopoverImports,
     ...HlmSeparatorImports,
+    PopoverAria,
   ],
   providers: [provideIcons({ lucideListFilter, lucideCheck, lucideSearch })],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -80,7 +83,12 @@ let nextFacetedFilterId = 0;
       </button>
 
       <!-- 面板几何对齐 helm command：容器 w-50 p-0 且不用 flex gap，各段用显式间距，避免隐式 gap 影响清除区。 -->
-      <div *hlmPopoverPortal hlmPopoverContent class="w-50 gap-0 overflow-hidden rounded-xl p-0">
+      <div
+        *hlmPopoverPortal
+        hlmPopoverContent
+        class="w-50 gap-0 overflow-hidden rounded-xl p-0"
+        [appPopoverAria]="label()"
+      >
         <div class="p-1 pb-0">
           <hlm-input-group
             class="bg-input/30 border-input/30 h-8! rounded-lg! shadow-none! *:data-[slot=input-group-addon]:ps-2!"

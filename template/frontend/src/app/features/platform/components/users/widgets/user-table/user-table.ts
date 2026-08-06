@@ -49,6 +49,7 @@ import {
   TablePaginator,
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
+import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import { Role } from '../../../../../../shared/models/role.enum';
 import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
 import { getRoleLabel } from '../../../../../../shared/pipes/role-label-pipe';
@@ -73,6 +74,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
     ...HlmPopoverImports,
+    PopoverAria,
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)

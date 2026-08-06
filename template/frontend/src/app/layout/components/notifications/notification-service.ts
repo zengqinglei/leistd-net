@@ -68,44 +68,31 @@ export class NotificationService {
 
   /** 标记单条已读。 */
   async markAsRead(notificationId: string): Promise<void> {
-    try {
-      await lastValueFrom(this.http.put(`/api/v1/notifications/${notificationId}/read`, {}));
-      this.signalR.notifications.update((list) =>
-        list.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)),
-      );
-    } catch (err) {
-      console.error('[NotificationService] MarkAsRead failed:', err);
-    }
+    await lastValueFrom(this.http.put(`/api/v1/notifications/${notificationId}/read`, {}));
+    this.signalR.notifications.update((list) =>
+      list.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)),
+    );
   }
 
-  /** 全部标记已读。 */
+  /**
+   * 全部标记已读。写操作失败时抛出（拦截器已归一化为 ApplicationHttpError），
+   * 由调用方决定反馈方式；本地状态只在成功后更新。
+   */
   async markAllAsRead(): Promise<void> {
-    try {
-      await lastValueFrom(this.http.put('/api/v1/notifications/read-all', {}));
-      this.signalR.notifications.update((list) => list.map((n) => ({ ...n, isRead: true })));
-    } catch (err) {
-      console.error('[NotificationService] MarkAllAsRead failed:', err);
-    }
+    await lastValueFrom(this.http.put('/api/v1/notifications/read-all', {}));
+    this.signalR.notifications.update((list) => list.map((n) => ({ ...n, isRead: true })));
   }
 
   /** 清空全部通知（持久删除）。 */
   async clearAll(): Promise<void> {
-    try {
-      await lastValueFrom(this.http.delete('/api/v1/notifications'));
-      this.signalR.notifications.set([]);
-    } catch (err) {
-      console.error('[NotificationService] ClearAll failed:', err);
-    }
+    await lastValueFrom(this.http.delete('/api/v1/notifications'));
+    this.signalR.notifications.set([]);
   }
 
   /** 删除单条通知（持久删除）。 */
   async clearOne(notificationId: string): Promise<void> {
-    try {
-      await lastValueFrom(this.http.delete(`/api/v1/notifications/${notificationId}`));
-      this.signalR.notifications.update((list) => list.filter((n) => n.id !== notificationId));
-    } catch (err) {
-      console.error('[NotificationService] ClearOne failed:', err);
-    }
+    await lastValueFrom(this.http.delete(`/api/v1/notifications/${notificationId}`));
+    this.signalR.notifications.update((list) => list.filter((n) => n.id !== notificationId));
   }
 
   /** 通知类型图标（lucide 图标名；仅区分形状，颜色统一由视图控制）。 */

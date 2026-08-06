@@ -46,6 +46,7 @@ import {
   TablePaginator,
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
+import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import { OpenApplicationOutputDto } from '../../../../models/open-application.dto';
@@ -69,6 +70,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     TablePaginator,
     ...HlmDropdownMenuImports,
     ...HlmPopoverImports,
+    PopoverAria,
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)

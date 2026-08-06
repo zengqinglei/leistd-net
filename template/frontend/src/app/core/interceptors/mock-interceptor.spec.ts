@@ -1,16 +1,11 @@
-import {
-  HTTP_INTERCEPTORS,
-  HttpClient,
-  provideHttpClient,
-  withInterceptorsFromDi,
-} from '@angular/common/http';
+import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
 //#if (IncludeOpenIddict)
 import { OPEN_APPLICATION_API } from '../../../../_mock/api/open-application';
 //#endif
-import { MOCK_APIS, MockInterceptor } from '../../../../_mock/core/interceptor';
+import { MOCK_APIS, mockInterceptor } from '../../../../_mock/core/interceptor';
 import { environment } from '../../../environments/environment';
 //#if (IncludeOpenIddict)
 import {
@@ -19,16 +14,15 @@ import {
 } from '../../features/platform/models/open-application.dto';
 //#endif
 
-describe('MockInterceptor', () => {
+describe('mockInterceptor', () => {
   const originalUseMock = environment.useMock;
 
   beforeEach(() => {
     environment.useMock = true;
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClient(withInterceptors([mockInterceptor])),
         provideHttpClientTesting(),
-        { provide: HTTP_INTERCEPTORS, useClass: MockInterceptor, multi: true },
         {
           provide: MOCK_APIS,
           // prettier-ignore

@@ -32,6 +32,11 @@ public class UserAppService(
     IObjectMapper objectMapper,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
+#if (IncludeIdentity)
+    /// <summary>角色名称最大长度，与 Role 实体的持久化约束保持一致。</summary>
+    private const int RoleNameMaxLength = 64;
+
+#endif
     /// <summary>
     /// 获取用户列表（分页）
     /// </summary>
@@ -66,9 +71,10 @@ public class UserAppService(
                 .Select(r => r.Trim())
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
-            if (roleNames.Exists(r => r.Length > 256))
+            if (roleNames.Exists(r => r.Length > RoleNameMaxLength))
             {
-                throw new BadRequestException("Role name cannot exceed 256 characters.");
+                throw new BadRequestException(
+                    $"Role name cannot exceed {RoleNameMaxLength} characters.");
             }
             if (roleNames.Count > 0)
             {

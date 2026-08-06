@@ -184,7 +184,13 @@
                                 >
                                   +{{ getHiddenRoles(row.original).length }}
                                 </button>
-                                <hlm-popover-content *hlmPopoverPortal class="min-w-48 max-w-sm">
+                                <hlm-popover-content
+                                  *hlmPopoverPortal
+                                  class="min-w-48 max-w-sm"
+                                  [appPopoverAria]="
+                                    rolesPopoverTitle(getHiddenRoles(row.original).length)
+                                  "
+                                >
                                   <div class="mb-3 text-sm font-semibold">
                                     {{ rolesPopoverTitle(getHiddenRoles(row.original).length) }}
                                   </div>

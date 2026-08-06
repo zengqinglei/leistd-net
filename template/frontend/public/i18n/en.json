@@ -89,7 +89,8 @@
       "clearAll": "Clear all",
       "clearOne": "Dismiss",
       "empty": "No notifications",
-      "clearAllConfirm": "Clear all notifications? This cannot be undone."
+      "clearAllConfirm": "Clear all notifications? This cannot be undone.",
+      "unreadAria": "Notifications ({{count}} unread)"
     }
   },
   "platform": {

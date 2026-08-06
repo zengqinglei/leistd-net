@@ -89,7 +89,8 @@
       "clearAll": "清空全部",
       "clearOne": "删除",
       "empty": "暂无通知",
-      "clearAllConfirm": "清空全部通知？此操作不可撤销。"
+      "clearAllConfirm": "清空全部通知？此操作不可撤销。",
+      "unreadAria": "通知（{{count}} 条未读）"
     }
   },
   "platform": {

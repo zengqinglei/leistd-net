@@ -63,6 +63,21 @@ describe('FacetedFilter', () => {
     expect(listbox()?.getAttribute('aria-multiselectable')).toBeNull();
   });
 
+  it('names the overlay dialog after the filter label', () => {
+    const fixture = createFilter({ multiple: true, values: [] });
+
+    // Brain 把 role="dialog" 设在 CDK overlay pane 上（不是内容元素），共享指令负责为其命名。
+    const pane = document.querySelector('.cdk-overlay-pane[role="dialog"]');
+    expect(pane).withContext('popover should render into a dialog overlay pane').not.toBeNull();
+    expect(pane!.getAttribute('aria-label')).toBe('Role');
+
+    fixture.componentRef.setInput('label', 'Status');
+    fixture.detectChanges();
+    expect(pane!.getAttribute('aria-label'))
+      .withContext('label changes must propagate to the pane')
+      .toBe('Status');
+  });
+
   it('reports business selection through aria-selected in both modes', () => {
     const fixture = createFilter({ multiple: true, values: ['admin'] });
     expect(optionBy('Administrator')?.getAttribute('aria-selected')).toBe('true');

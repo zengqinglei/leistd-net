@@ -10,7 +10,7 @@
       variant="outline"
       size="icon"
       hlmPopoverTrigger
-      aria-label="Notifications"
+      [attr.aria-label]="triggerLabel()"
       class="relative !overflow-visible"
     >
       <ng-icon name="lucideBell" />
@@ -24,7 +24,11 @@
       }
     </button>
 
-    <hlm-popover-content *hlmPopoverPortal class="w-[360px] max-w-[90vw] !gap-0 !p-0">
+    <hlm-popover-content
+      *hlmPopoverPortal
+      class="w-[360px] max-w-[90vw] !gap-0 !p-0"
+      [appPopoverAria]="panelLabel()"
+    >
       <div class="flex items-center justify-between border-b border-border px-4 py-3">
         <!--#if (IncludeLocalization)-->
         <span class="font-semibold">{{ 'layout.notifications.title' | transloco }}</span>

@@ -59,10 +59,22 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task Roles_filter_should_reject_an_overlong_role_name()
+    public async Task Roles_filter_should_accept_a_role_name_at_the_domain_length_limit()
     {
         using var admin = await factory.LoginAsync("admin", "Admin@123456");
-        var overlong = new string('r', 257);
+        var atLimit = new string('r', 64);
+
+        var response = await admin.Client.GetAsync(
+            $"/api/v1/users?offset=0&limit=10&roles={atLimit}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Roles_filter_should_reject_a_role_name_over_the_domain_length_limit()
+    {
+        using var admin = await factory.LoginAsync("admin", "Admin@123456");
+        var overlong = new string('r', 65);
 
         var response = await admin.Client.GetAsync(
             $"/api/v1/users?offset=0&limit=10&roles={overlong}");
