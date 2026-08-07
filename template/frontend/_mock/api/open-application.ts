@@ -1,9 +1,15 @@
+//#if (IncludeRoles)
+import { requirePermission } from './authorization';
+//#endif
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
   UpdateOpenApplicationInputDto,
 } from '../../src/app/features/platform/models/open-application.dto';
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
+//#if (IncludeRoles)
+import { PERMISSIONS } from '../../src/app/shared/models/permission';
+//#endif
 import { MockException, MockRequest } from '../core/models';
 import { MockOpenApplication, OPEN_APPLICATIONS } from '../data/open-applications';
 
@@ -34,6 +40,9 @@ function sortApplications(items: MockOpenApplication[], sorting?: unknown) {
 }
 
 function getOpenApplications(req: MockRequest) {
+  //#if (IncludeRoles)
+  requirePermission(PERMISSIONS.openApplications.default);
+  //#endif
   const keyword = getQueryValue(req.queryParams['keyword']);
   const applicationType = getQueryValue(req.queryParams['applicationType']);
   const clientType = getQueryValue(req.queryParams['clientType']);
@@ -72,6 +81,9 @@ function getOpenApplications(req: MockRequest) {
 }
 
 function getOpenApplication(req: MockRequest) {
+  //#if (IncludeRoles)
+  requirePermission(PERMISSIONS.openApplications.default);
+  //#endif
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
@@ -109,6 +121,9 @@ function validateApplication(
 }
 
 function createOpenApplication(req: MockRequest) {
+  //#if (IncludeRoles)
+  requirePermission(PERMISSIONS.openApplications.create);
+  //#endif
   const body = req.body as CreateOpenApplicationInputDto;
   validateApplication(body);
 
@@ -137,6 +152,9 @@ function createOpenApplication(req: MockRequest) {
 }
 
 function updateOpenApplication(req: MockRequest) {
+  //#if (IncludeRoles)
+  requirePermission(PERMISSIONS.openApplications.update);
+  //#endif
   const id = req.params['id'];
   const body = req.body as UpdateOpenApplicationInputDto;
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
@@ -164,6 +182,9 @@ function updateOpenApplication(req: MockRequest) {
 }
 
 function deleteOpenApplication(req: MockRequest) {
+  //#if (IncludeRoles)
+  requirePermission(PERMISSIONS.openApplications.delete);
+  //#endif
   const id = req.params['id'];
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
   if (index !== -1) {
@@ -173,6 +194,9 @@ function deleteOpenApplication(req: MockRequest) {
 }
 
 function resetOpenApplicationSecret(req: MockRequest) {
+  //#if (IncludeRoles)
+  requirePermission(PERMISSIONS.openApplications.resetSecret);
+  //#endif
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {

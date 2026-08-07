@@ -100,6 +100,9 @@ export class DefaultSidebar {
           label: 'layout.sidebar.openApplications',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
+          //#if (IncludeRoles)
+          permissions: [PERMISSIONS.openApplications.default],
+          //#endif
         },
       ],
     },
@@ -148,7 +151,14 @@ export class DefaultSidebar {
     {
       label: 'Developer',
       items: [
-        { label: 'Developer Apps', icon: 'lucideIdCard', route: '/platform/open-applications' },
+        {
+          label: 'Developer Apps',
+          icon: 'lucideIdCard',
+          route: '/platform/open-applications',
+          //#if (IncludeRoles)
+          permissions: [PERMISSIONS.openApplications.default],
+          //#endif
+        },
       ],
     },
     //#endif

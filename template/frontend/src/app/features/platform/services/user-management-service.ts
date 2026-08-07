@@ -30,11 +30,13 @@ export class UserManagementService {
     if (input.isActive !== undefined) params = params.set('isActive', input.isActive.toString());
     if (input.isEmailVerified !== undefined)
       params = params.set('isEmailVerified', input.isEmailVerified.toString());
+    //#if (IncludeRoles)
     if (input.roles?.length) {
       for (const role of input.roles) {
         params = params.append('roles', role);
       }
     }
+    //#endif
     if (input.sorting) params = params.set('sorting', input.sorting);
     return this.http.get<PagedResultDto<UserManagementOutputDto>>(this.baseUrl, { params });
   }

@@ -41,6 +41,18 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         rolesPermission.AddChild(PermissionConstant.Roles.Delete, displayName: "Permission:App.Roles.Delete");
         rolesPermission.AddChild(PermissionConstant.Roles.ManagePermissions, displayName: "Permission:App.Roles.ManagePermissions");
 
+#if (IncludeOpenIddict)
+        // 开放应用
+        var openApplicationsPermission = appGroup.AddPermission(
+            PermissionConstant.OpenApplications.Default,
+            displayName: "Permission:App.OpenApplications"
+        );
+        openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.Create, displayName: "Permission:App.OpenApplications.Create");
+        openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.Update, displayName: "Permission:App.OpenApplications.Update");
+        openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.Delete, displayName: "Permission:App.OpenApplications.Delete");
+        openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.ResetSecret, displayName: "Permission:App.OpenApplications.ResetSecret");
+
+#endif
         // 权限定义
         appGroup.AddPermission(
             PermissionConstant.Permissions.Default,

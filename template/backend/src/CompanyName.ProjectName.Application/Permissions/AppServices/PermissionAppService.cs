@@ -67,7 +67,7 @@ public class PermissionAppService(
             subject.RoleIds,
             cancellationToken);
 
-        var effects = grants.GetEffectiveEffects();
+        var effects = grants.GetEffectiveEffects(permissionDefinitionManager);
         var permissions = effects
             .Where(x => x.Value == PermissionGrantEffect.Granted
                         && permissionDefinitionManager.IsEffectivelyEnabled(x.Key))
@@ -221,7 +221,7 @@ public class PermissionAppService(
             roleIds,
             cancellationToken);
 
-        return roleGrants.GetEffectiveEffects();
+        return roleGrants.GetEffectiveEffects(permissionDefinitionManager);
     }
 
     private PermissionGrantsOutputDto BuildOutput(
@@ -232,6 +232,16 @@ public class PermissionAppService(
     {
         var directEffects = direct.Grants
             .ToDictionary(x => x.PermissionName, x => x.Effect, StringComparer.Ordinal);
+
+        // Effective 走与运行时检查完全相同的合并路径（拒绝优先 + 拒绝沿定义树向下传播），
+        // 而不是就地再算一遍：任何在此处重写的规则都会与 IPermissionChecker 漂移。
+        var inheritedSet = new PermissionGrantSet(
+            PermissionGrantProviderNames.Role,
+            string.Empty,
+            [.. inherited.Select(x => new PermissionGrant(x.Key, x.Value))],
+            0);
+        var effective = new SubjectPermissionGrants(direct, [inheritedSet])
+            .GetEffectiveEffects(permissionDefinitionManager);
 
         var states = permissionDefinitionManager
             .GetAll()
@@ -244,17 +254,13 @@ public class PermissionAppService(
                 var hasDirect = directEffects.ContainsKey(definition.Name);
                 var hasInherited = inherited.ContainsKey(definition.Name);
 
-                var effective = !(hasDirect && directEffect == PermissionGrantEffect.Prohibited)
-                                && !(hasInherited && inheritedEffect == PermissionGrantEffect.Prohibited)
-                                && ((hasDirect && directEffect == PermissionGrantEffect.Granted)
-                                    || (hasInherited && inheritedEffect == PermissionGrantEffect.Granted));
-
                 return new PermissionGrantStateDto
                 {
                     Name = definition.Name,
                     Direct = hasDirect ? directEffect.ToString() : null,
                     Inherited = hasInherited ? inheritedEffect.ToString() : null,
-                    Effective = effective
+                    Effective = effective.TryGetValue(definition.Name, out var result)
+                                && result == PermissionGrantEffect.Granted
                 };
             })
             .ToList();

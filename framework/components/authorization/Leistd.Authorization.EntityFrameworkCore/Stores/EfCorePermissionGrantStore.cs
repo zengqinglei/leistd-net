@@ -35,6 +35,54 @@ public class EfCorePermissionGrantStore<TDbContext>(TDbContext dbContext) : IPer
         return new PermissionGrantSet(providerName, providerKey, grants, revision);
     }
 
+    public async Task<IReadOnlyList<PermissionGrantSet>> GetGrantsAsync(
+        string providerName,
+        IReadOnlyCollection<string> providerKeys,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(providerName))
+            return [];
+
+        var keys = providerKeys
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (keys.Count == 0)
+            return [];
+
+        var grants = await dbContext.Set<PermissionGrantRecord>()
+            .AsNoTracking()
+            .Where(x => x.ProviderName == providerName && keys.Contains(x.ProviderKey))
+            .Select(x => new { x.ProviderKey, x.PermissionName, x.Effect })
+            .ToListAsync(cancellationToken);
+
+        var revisions = await dbContext.Set<AuthorizationRevisionRecord>()
+            .AsNoTracking()
+            .Where(x => x.ProviderName == providerName && keys.Contains(x.ProviderKey))
+            .Select(x => new { x.ProviderKey, x.Version })
+            .ToListAsync(cancellationToken);
+
+        var grantsByKey = grants
+            .GroupBy(x => x.ProviderKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<PermissionGrant>)[.. group.Select(x => new PermissionGrant(x.PermissionName, x.Effect))],
+                StringComparer.Ordinal);
+
+        var revisionByKey = revisions
+            .ToDictionary(x => x.ProviderKey, x => x.Version, StringComparer.Ordinal);
+
+        return
+        [
+            .. keys.Select(key => new PermissionGrantSet(
+                providerName,
+                key,
+                grantsByKey.TryGetValue(key, out var keyGrants) ? keyGrants : [],
+                revisionByKey.TryGetValue(key, out var version) ? version : 0))
+        ];
+    }
+
     public async Task<SubjectPermissionGrants> GetGrantsForSubjectAsync(
         string userId,
         IReadOnlyCollection<string> roleIds,

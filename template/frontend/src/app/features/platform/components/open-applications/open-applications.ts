@@ -48,8 +48,14 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
+//#if (IncludeRoles)
+import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
+//#if (IncludeRoles)
+import { PERMISSIONS } from '../../../../shared/models/permission';
+//#endif
 import {
   paginationFromQuery,
   sortingFromQuery,
@@ -111,6 +117,9 @@ export class OpenApplications {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
+  //#if (IncludeRoles)
+  private readonly authorizationService = inject(AuthorizationService);
+  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
@@ -130,6 +139,28 @@ export class OpenApplications {
   readonly sorting = computed(() =>
     sortingFromQuery(this.queryParams(), APPLICATION_SORT_COLUMNS, DEFAULT_APPLICATION_SORTING),
   );
+
+  //#if (IncludeRoles)
+  // 操作入口按权限裁剪；前端隐藏只影响体验，后端仍逐个请求校验。
+  readonly canCreate = computed(() =>
+    this.authorizationService.has(PERMISSIONS.openApplications.create),
+  );
+  readonly canUpdate = computed(() =>
+    this.authorizationService.has(PERMISSIONS.openApplications.update),
+  );
+  readonly canDelete = computed(() =>
+    this.authorizationService.has(PERMISSIONS.openApplications.delete),
+  );
+  readonly canResetSecret = computed(() =>
+    this.authorizationService.has(PERMISSIONS.openApplications.resetSecret),
+  );
+  //#else
+  // 未启用权限模块：后端对应端点只要求已认证，前端不做额外裁剪。
+  readonly canCreate = computed(() => true);
+  readonly canUpdate = computed(() => true);
+  readonly canDelete = computed(() => true);
+  readonly canResetSecret = computed(() => true);
+  //#endif
 
   editDialogVisible = signal(false);
   editDialogLoading = signal(false);

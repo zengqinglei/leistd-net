@@ -181,6 +181,7 @@
             "frontend/src/app/features/platform/services/role-service.ts",
             "frontend/src/app/features/platform/services/permission-management-service.ts",
             "frontend/src/app/features/platform/models/role.dto.ts",
+            "frontend/src/app/features/platform/widgets/permission-grant-dialog/**",
             "frontend/_mock/api/authorization.ts",
             "frontend/_mock/data/authorization.ts"
           ]
@@ -218,6 +219,8 @@
             "frontend/src/app/features/platform/components/users/widgets/user-roles-dialog/**",
             "frontend/src/app/features/platform/services/role-service.ts",
             "frontend/src/app/features/platform/services/permission-management-service.ts",
+            "frontend/src/app/features/platform/models/role.dto.ts",
+            "frontend/src/app/features/platform/widgets/permission-grant-dialog/**",
             "frontend/_mock/api/authorization.ts",
             "frontend/_mock/data/authorization.ts"
           ]

@@ -183,6 +183,20 @@ public class DefaultPermissionCheckerTests
             return Task.FromResult(new PermissionGrantSet(providerName, providerKey, grants, grants.Count));
         }
 
+        public async Task<IReadOnlyList<PermissionGrantSet>> GetGrantsAsync(
+            string providerName,
+            IReadOnlyCollection<string> providerKeys,
+            CancellationToken cancellationToken = default)
+        {
+            var sets = new List<PermissionGrantSet>(providerKeys.Count);
+            foreach (var providerKey in providerKeys)
+            {
+                sets.Add(await GetGrantsAsync(providerName, providerKey, cancellationToken));
+            }
+
+            return sets;
+        }
+
         public Task<SubjectPermissionGrants> GetGrantsForSubjectAsync(
             string userId,
             IReadOnlyCollection<string> roleIds,

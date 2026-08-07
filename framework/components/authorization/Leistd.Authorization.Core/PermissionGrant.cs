@@ -67,10 +67,20 @@ public sealed record SubjectPermissionGrants(
     public string Revision { get; } = BuildRevision(UserGrants, RoleGrants);
 
     /// <summary>
-    /// 计算主体对每个权限的最终授予效果：任一来源为拒绝即拒绝，否则任一来源为允许即允许。
+    /// 计算主体对每个权限的最终授予效果：任一来源为拒绝即拒绝，否则任一来源为允许即允许；
+    /// 合并完成后拒绝再沿定义树向下传播，被拒绝权限的全部子孙一并失效。
     /// </summary>
-    public IReadOnlyDictionary<string, PermissionGrantEffect> GetEffectiveEffects()
+    /// <remarks>
+    /// 向下传播不能省。写入时的归一化只在单个主体内成立，跨来源合并会破坏它：
+    /// 角色 A 拒绝 <c>App.Users</c>、角色 B 允许 <c>App.Users.Create</c> 时，
+    /// 合并结果是父拒子允——若不在此处收口，子权限会绕过父权限的拒绝。
+    /// </remarks>
+    /// <param name="definitions">权限定义管理器，用于取被拒绝权限的子孙。</param>
+    public IReadOnlyDictionary<string, PermissionGrantEffect> GetEffectiveEffects(
+        IPermissionDefinitionManager definitions)
     {
+        ArgumentNullException.ThrowIfNull(definitions);
+
         var effects = new Dictionary<string, PermissionGrantEffect>(StringComparer.Ordinal);
 
         Merge(effects, UserGrants);
@@ -79,7 +89,33 @@ public sealed record SubjectPermissionGrants(
             Merge(effects, roleGrants);
         }
 
+        PropagateProhibitions(effects, definitions);
         return effects;
+    }
+
+    /// <summary>
+    /// 拒绝向下传播：被拒绝权限的全部子孙一律标记为拒绝。
+    /// </summary>
+    /// <remarks>
+    /// 标记为拒绝而不是删除：删除只能让「显式允许」回落为未授予，
+    /// 而调用方（如权限配置界面）需要区分「没有授予」与「被祖先拒绝」。
+    /// </remarks>
+    private static void PropagateProhibitions(
+        Dictionary<string, PermissionGrantEffect> effects,
+        IPermissionDefinitionManager definitions)
+    {
+        var prohibited = effects
+            .Where(x => x.Value == PermissionGrantEffect.Prohibited)
+            .Select(x => x.Key)
+            .ToList();
+
+        foreach (var name in prohibited)
+        {
+            foreach (var descendant in definitions.GetDescendantNames(name))
+            {
+                effects[descendant] = PermissionGrantEffect.Prohibited;
+            }
+        }
     }
 
     private static void Merge(

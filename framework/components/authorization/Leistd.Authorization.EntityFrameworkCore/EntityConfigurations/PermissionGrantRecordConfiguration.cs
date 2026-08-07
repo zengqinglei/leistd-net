@@ -59,7 +59,10 @@ public class AuthorizationRevisionRecordConfiguration : IEntityTypeConfiguration
             .HasMaxLength(128)
             .IsRequired();
 
+        // 并发令牌：EF 会在 UPDATE 上带 WHERE Version = @original，
+        // 使「读版本→比较→写入」这段窗口由数据库收口，而不是靠应用层的先读后比。
         builder.Property(x => x.Version)
+            .IsConcurrencyToken()
             .IsRequired();
 
         builder.Property(x => x.LastModifierId)

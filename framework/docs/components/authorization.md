@@ -135,7 +135,7 @@ foreach (var group in definitionManager.GetGroups())
 
 // 下发给前端的当前用户有效权限：一次查询取回，拒绝优先合并。
 var grants = await grantStore.GetGrantsForSubjectAsync(subject.UserId, subject.RoleIds);
-var effective = grants.GetEffectiveEffects()
+var effective = grants.GetEffectiveEffects(definitionManager)
     .Where(x => x.Value == PermissionGrantEffect.Granted)
     .Select(x => x.Key);
 
@@ -173,8 +173,9 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 | `PermissionGrantEffect` | 授予效果：`Granted`、`Prohibited`。**没有授予记录即表示未设置**，因此存储层只有两个取值 |
 | `PermissionGrant` | 单条授予：`PermissionName`、`Effect` |
 | `PermissionGrantSet` | 单个主体的全部授予及其并发版本：`ProviderName`、`ProviderKey`、`Grants`、`Revision`；`Empty(providerName, providerKey)` 构造空集合 |
-| `SubjectPermissionGrants` | 检查主体的全部授予：`UserGrants`、`RoleGrants`、`Revision`、`GetEffectiveEffects()`（拒绝优先合并） |
+| `SubjectPermissionGrants` | 检查主体的全部授予：`UserGrants`、`RoleGrants`、`Revision`、`GetEffectiveEffects(definitions)`（拒绝优先合并，并沿定义树向下传播拒绝） |
 | `IPermissionGrantStore.GetGrantsAsync(providerName, providerKey, ct)` | 取单个主体的全部授予与版本 |
+| `IPermissionGrantStore.GetGrantsAsync(providerName, providerKeys, ct)` | 批量取同类型多个主体的授予与版本，返回顺序与入参一致；列表页用它避免按行的 N+1 |
 | `IPermissionGrantStore.GetGrantsForSubjectAsync(userId, roleIds, ct)` | 一次取回主体的用户直授加全部角色授予 |
 | `IPermissionGrantManager.GrantAsync(name, providerName, providerKey, effect, ct)` | 授予单个权限，默认 `Granted` |
 | `IPermissionGrantManager.RevokeAsync(name, providerName, providerKey, ct)` | 撤销单个权限并级联撤销其全部子孙 |
@@ -228,12 +229,15 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 
 这使运行时的权限检查可以保持扁平字典查找，不需要回溯定义树。唯一残留是绕过 Manager 直接写 `DbContext` 的数据不会被归一化。
 
+写入归一化只在**单个主体内**成立。跨来源合并会破坏它——角色 A 拒绝 `App.Users`、角色 B 允许 `App.Users.Create` 时，合并结果是父拒子允。因此 `GetEffectiveEffects(definitions)` 在合并之后会再做一次拒绝向下传播，被拒绝权限的全部子孙一律标记为拒绝。计算有效权限时必须走这个方法，不要就地重写合并规则。
+
 ### EF Core 存储行为
 
 - `PermissionGrantRecord` 唯一性由唯一索引 `(PermissionName, ProviderName, ProviderKey)` 保证。**`Effect` 不纳入唯一索引**——它是授予的值而非标识，纳入索引会允许同一主体对同一权限同时存在允许与拒绝两行。
 - `ReplaceGrantsAsync` 以一次 `SaveChangesAsync` 提交，是单事务操作；目标集合与现有记录做差异比对，只在真正发生变化时递增版本。
 - `expectedRevision` 与存储中的当前版本不一致时抛 `PermissionGrantConcurrencyException`，且**不做任何写入**；传 `null` 表示跳过并发校验。
-- 每个读取方法的数据库往返次数是常数（授予一次、版本一次），与被检查的权限数量和主体所属角色数量无关，因此不存在按权限或按角色的 N+1。
+- `AuthorizationRevisionRecord.Version` 是**并发令牌**：EF 在 UPDATE 上带 `WHERE Version = @original`。仅靠「先读版本再内存比较」挡不住两个事务同时读到同一版本的情况，令牌把这段窗口交给数据库收口，落败方同样得到 `PermissionGrantConcurrencyException`。
+- 每个读取方法的数据库往返次数是常数（授予一次、版本一次），与被检查的权限数量、主体所属角色数量和批量查询的主体数量都无关，因此不存在 N+1。
 - `SubjectPermissionGrants.Revision` 由用户授予版本与各角色授予版本（按角色 Key 排序）拼接而成；角色成员变更会改变参与拼接的角色集合，因此无需为成员变更额外扇出写入即可反映在版本中。
 - 只读查询均使用 `AsNoTracking()`。
 - `Effect` 以**字符串**持久化（`varchar(32)`），不存序数值：枚举成员重排序不会让既有数据错位，迁移里比较该列须用字符串字面量。

@@ -34,6 +34,8 @@ import {
   tap,
 } from 'rxjs/operators';
 
+import { RoleEditDialog } from './widgets/role-edit-dialog/role-edit-dialog';
+import { RoleTable } from './widgets/role-table/role-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
@@ -55,9 +57,7 @@ import {
   UpdateRoleInputDto,
 } from '../../models/role.dto';
 import { RoleService } from '../../services/role-service';
-import { RoleEditDialog } from './widgets/role-edit-dialog/role-edit-dialog';
-import { RolePermissionDialog } from './widgets/role-permission-dialog/role-permission-dialog';
-import { RoleTable } from './widgets/role-table/role-table';
+import { PermissionGrantDialog } from '../../widgets/permission-grant-dialog/permission-grant-dialog';
 
 // 只列实体自身的列：userCount / permissionCount 是聚合出来的派生值，后端无法据其排序。
 const ROLE_SORT_COLUMNS = ['displayName', 'sort', 'creationTime'] as const;
@@ -80,7 +80,7 @@ const DEFAULT_ROLE_SORTING: SortingState = [{ id: 'sort', desc: false }];
     ...HlmTooltipImports,
     RoleTable,
     RoleEditDialog,
-    RolePermissionDialog,
+    PermissionGrantDialog,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif

@@ -64,7 +64,9 @@ import {
   tableStateToQuery,
   toApiSorting,
 } from '../../../../shared/utils/table-query-state';
+//#if (IncludeRoles)
 import { RoleBriefDto } from '../../models/role.dto';
+//#endif
 import {
   CreateUserInputDto,
   GetUsersInputDto,
@@ -82,6 +84,9 @@ import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
 import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
 //#endif
 import { UserTable } from './widgets/user-table/user-table';
+//#if (IncludeRoles)
+import { PermissionGrantDialog } from '../../widgets/permission-grant-dialog/permission-grant-dialog';
+//#endif
 
 const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
 const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
@@ -102,6 +107,7 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
     UserTable,
     //#if (IncludeRoles)
     UserRolesDialog,
+    PermissionGrantDialog,
     //#endif
     UserEditDialog,
     ResetUserPasswordDialog,
@@ -170,14 +176,18 @@ export class Users {
   readonly selectedIsEmailVerified = computed(() =>
     readBoolean(this.queryParams().get('isEmailVerified')),
   );
+  //#if (IncludeRoles)
   readonly selectedRoles = computed(() => this.queryParams().getAll('roles'));
+  //#endif
   // 是否处于筛选/搜索态：用于区分「暂无数据」与「无匹配结果」的空状态。
   readonly hasActiveFilters = computed(
     () =>
       this.searchQuery().trim().length > 0 ||
       this.selectedIsActive() !== null ||
-      this.selectedIsEmailVerified() !== null ||
-      this.selectedRoles().length > 0,
+      //#if (IncludeRoles)
+      this.selectedRoles().length > 0 ||
+      //#endif
+      this.selectedIsEmailVerified() !== null,
   );
 
   //#if (IncludeLocalization)
@@ -224,6 +234,7 @@ export class Users {
   ]);
   //#endif
 
+  //#if (IncludeRoles)
   /**
    * 角色筛选项来自角色 API：新建的角色立即出现在筛选器里，
    * 前端不再保留任何硬编码角色列表（旧的 Role 枚举含后端并不存在的 Operator）。
@@ -236,6 +247,7 @@ export class Users {
       icon: 'lucideUser',
     })),
   );
+  //#endif
 
   //#if (IncludeRoles)
   // 操作入口按权限裁剪。
@@ -245,20 +257,41 @@ export class Users {
   readonly canManageUserRoles = computed(() =>
     this.authorizationService.has(PERMISSIONS.users.manageRoles),
   );
+  readonly canManageUserPermissions = computed(() =>
+    this.authorizationService.has(PERMISSIONS.users.managePermissions),
+  );
   //#else
   // 未启用角色权限模块：后端对应端点只要求已认证，前端不做额外裁剪。
   readonly canCreateUser = computed(() => true);
   readonly canUpdateUser = computed(() => true);
   readonly canDeleteUser = computed(() => true);
   readonly canManageUserRoles = computed(() => false);
+  readonly canManageUserPermissions = computed(() => false);
   //#endif
 
   readonly rolesDialogVisible = signal(false);
   readonly rolesDialogUser = signal<UserManagementOutputDto | null>(null);
 
+  readonly permissionsDialogVisible = signal(false);
+  readonly permissionsDialogUser = signal<UserManagementOutputDto | null>(null);
+
   openRolesDialog(user: UserManagementOutputDto): void {
     this.rolesDialogUser.set(user);
     this.rolesDialogVisible.set(true);
+  }
+
+  openPermissionsDialog(user: UserManagementOutputDto): void {
+    this.permissionsDialogUser.set(user);
+    this.permissionsDialogVisible.set(true);
+  }
+
+  /** 权限例外改变的是有效权限，保存后刷新列表与当前用户权限。 */
+  onPermissionsSaved(): void {
+    this.permissionsDialogVisible.set(false);
+    this.refreshRequests.next();
+    //#if (IncludeRoles)
+    this.authorizationService.reload().subscribe({ error: () => undefined });
+    //#endif
   }
 
   /** 角色变更会改变有效权限，保存后刷新列表与当前用户权限。 */
@@ -274,25 +307,33 @@ export class Users {
   readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');
   readonly allEmailStatusPlaceholder = () =>
     this.transloco.translate('users.filter.allEmailStatus');
+  //#if (IncludeRoles)
   readonly allRolesPlaceholder = () => this.transloco.translate('users.filter.allRoles');
+  //#endif
   readonly searchPlaceholder = () => this.transloco.translate('users.filter.searchPlaceholder');
   readonly refreshLabel = () => this.transloco.translate('common.refresh');
   readonly newUserLabel = () => this.transloco.translate('users.actions.newUser');
   readonly statusFilterLabel = () => this.transloco.translate('users.table.colStatus');
   readonly emailFilterLabel = () => this.transloco.translate('users.filter.emailLabel');
+  //#if (IncludeRoles)
   readonly roleFilterLabel = () => this.transloco.translate('users.table.colRole');
+  //#endif
   readonly filterClearLabel = () => this.transloco.translate('common.clearFilter');
   readonly filterEmptyLabel = () => this.transloco.translate('common.noResults');
   //#else
   readonly allStatusPlaceholder = () => 'All statuses';
   readonly allEmailStatusPlaceholder = () => 'All email statuses';
+  //#if (IncludeRoles)
   readonly allRolesPlaceholder = () => 'All roles';
+  //#endif
   readonly searchPlaceholder = () => 'Search username / email / display name...';
   readonly refreshLabel = () => 'Refresh';
   readonly newUserLabel = () => 'New user';
   readonly statusFilterLabel = () => 'Status';
   readonly emailFilterLabel = () => 'Email status';
+  //#if (IncludeRoles)
   readonly roleFilterLabel = () => 'Role';
+  //#endif
   readonly filterClearLabel = () => 'Clear filter';
   readonly filterEmptyLabel = () => 'No results';
   //#endif
@@ -359,9 +400,11 @@ export class Users {
     this.updateQuery({ isEmailVerified: serializeBoolean(value), page: 1 });
   }
 
+  //#if (IncludeRoles)
   onRolesChange(values: string[]) {
     this.updateQuery({ roles: values.length ? values : null, page: 1 });
   }
+  //#endif
 
   onPaginationChange(pagination: PaginationState) {
     this.updateQuery(tableStateToQuery(pagination, this.sorting()));
@@ -561,14 +604,18 @@ export class Users {
 
   private queryFromParams(params: ParamMap): GetUsersInputDto {
     const pagination = paginationFromQuery(params);
+    //#if (IncludeRoles)
     const roles = params.getAll('roles');
+    //#endif
     return {
       offset: pagination.pageIndex * pagination.pageSize,
       limit: pagination.pageSize,
       keyword: params.get('keyword') || undefined,
       isActive: readBoolean(params.get('isActive')) ?? undefined,
       isEmailVerified: readBoolean(params.get('isEmailVerified')) ?? undefined,
+      //#if (IncludeRoles)
       roles: roles.length ? roles : undefined,
+      //#endif
       sorting: toApiSorting(sortingFromQuery(params, USER_SORT_COLUMNS, DEFAULT_USER_SORTING)),
     };
   }

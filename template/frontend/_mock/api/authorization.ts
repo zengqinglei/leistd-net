@@ -4,6 +4,7 @@ import {
   ALL_PERMISSIONS,
   MockRole,
   PERMISSION_DEFINITIONS,
+  PERMISSION_DESCENDANTS,
   PERMISSION_GRANTS,
   ROLES,
   grantKey,
@@ -59,6 +60,13 @@ function effectivePermissionsOf(username: string): { permissions: string[]; revi
     (grant.effect === 'Prohibited' ? prohibited : granted).add(grant.name);
   }
 
+  // 拒绝沿定义树向下传播：跨来源合并会产生「父拒子允」，与后端一样在此收口。
+  for (const name of [...prohibited]) {
+    for (const descendant of PERMISSION_DESCENDANTS[name] ?? []) {
+      prohibited.add(descendant);
+    }
+  }
+
   return {
     permissions: [...granted].filter((name) => !prohibited.has(name)).sort(),
     revision: `u${userEntry?.revision ?? 0}|r${parts.sort().join(',')}`,
@@ -66,7 +74,7 @@ function effectivePermissionsOf(username: string): { permissions: string[]; revi
 }
 
 /** 端点级 403：与后端的策略保护逐个对应。 */
-function requirePermission(permission: string) {
+export function requirePermission(permission: string) {
   const user = requireUser();
   const { permissions } = effectivePermissionsOf(user.username);
   if (!permissions.includes(permission)) {
@@ -248,7 +256,28 @@ function inheritedEffectsOf(userId: string): Map<string, 'Granted' | 'Prohibited
     }
   }
 
+  // 与运行时一致：被拒绝权限的子孙同样视为拒绝。
+  for (const [name, effect] of [...inherited]) {
+    if (effect !== 'Prohibited') {
+      continue;
+    }
+    for (const descendant of PERMISSION_DESCENDANTS[name] ?? []) {
+      inherited.set(descendant, 'Prohibited');
+    }
+  }
+
   return inherited;
+}
+
+/** 直授中是否有祖先被显式拒绝。 */
+function prohibitedByAncestor(
+  name: string,
+  direct: Map<string, 'Granted' | 'Prohibited'>,
+): boolean {
+  return Object.entries(PERMISSION_DESCENDANTS).some(
+    ([ancestor, descendants]) =>
+      direct.get(ancestor) === 'Prohibited' && descendants.includes(name),
+  );
 }
 
 function buildGrantsResponse(providerName: string, providerKey: string) {
@@ -274,10 +303,11 @@ function buildGrantsResponse(providerName: string, providerKey: string) {
         name,
         direct: directEffect,
         inherited: inheritedEffect,
-        // 拒绝优先：任一侧拒绝即不生效；否则任一侧允许即生效。
+        // 拒绝优先：任一侧拒绝（含被祖先拒绝而传播下来的）即不生效。
         effective:
           directEffect !== 'Prohibited' &&
           inheritedEffect !== 'Prohibited' &&
+          !prohibitedByAncestor(name, direct) &&
           (directEffect === 'Granted' || inheritedEffect === 'Granted'),
       };
     }),

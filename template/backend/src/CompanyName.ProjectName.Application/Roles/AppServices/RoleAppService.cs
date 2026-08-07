@@ -193,7 +193,7 @@ public class RoleAppService(
     }
 
     /// <summary>
-    /// 一次性取回本批角色的用户数与授予数，避免逐行查询。
+    /// 一次性取回本批角色的用户数与授予数：两者都走批量查询，往返次数与角色数量无关。
     /// </summary>
     private async Task<Dictionary<string, object>> CreateMappingContextAsync(
         IReadOnlyCollection<Role> roles,
@@ -210,15 +210,14 @@ public class RoleAppService(
             .GroupBy(ur => ur.RoleId)
             .ToDictionary(group => group.Key, group => group.Count());
 
-        var permissionCounts = new Dictionary<Guid, int>(roles.Count);
-        foreach (var role in roles)
-        {
-            var grants = await permissionGrantStore.GetGrantsAsync(
-                PermissionGrantProviderNames.Role,
-                role.Id.ToString(),
-                cancellationToken);
-            permissionCounts[role.Id] = grants.Grants.Count;
-        }
+        var grantSets = await permissionGrantStore.GetGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            [.. roleIds.Select(id => id.ToString())],
+            cancellationToken);
+
+        var permissionCounts = grantSets.ToDictionary(
+            set => Guid.Parse(set.ProviderKey),
+            set => set.Grants.Count);
 
         return new Dictionary<string, object>
         {

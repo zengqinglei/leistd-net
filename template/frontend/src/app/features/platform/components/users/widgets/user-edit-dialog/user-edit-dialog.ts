@@ -47,7 +47,9 @@ import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+//#if (IncludeRoles)
 import { RoleBriefDto } from '../../../../models/role.dto';
+//#endif
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
@@ -130,7 +132,9 @@ export class UserEditDialog {
     password: '',
     isActive: true,
     isEmailVerified: false,
+    //#if (IncludeRoles)
     roleIds: [] as string[],
+    //#endif
   });
 
   readonly displayName = computed(
@@ -205,6 +209,7 @@ export class UserEditDialog {
   });
   //#endif
 
+  //#if (IncludeRoles)
   /**
    * 角色选项由父级从角色 API 注入，按 Id 提交、按显示名回显。
    * 仅在「新建 + 持有角色分配权限」时展示：编辑态的角色变更走独立的角色分配入口，
@@ -222,6 +227,7 @@ export class UserEditDialog {
   // 角色 Id → 显示名，用于 hlm-select-multiple 触发器回显。
   readonly roleLabel = (value: string): string =>
     this.roleOptions().find((option) => option.value === value)?.label ?? value;
+  //#endif
 
   constructor() {
     // 同时依赖 visible 与 user：每次对话框打开都重置表单，避免新建模式残留上次输入
@@ -240,7 +246,9 @@ export class UserEditDialog {
         password: '',
         isActive: user?.isActive ?? true,
         isEmailVerified: user?.isEmailVerified ?? false,
+        //#if (IncludeRoles)
         roleIds: user ? (user.roles ?? []).map((role) => role.id) : [],
+        //#endif
       });
       this.avatarPreview.set(avatar);
     });
@@ -338,7 +346,9 @@ export class UserEditDialog {
       password: model.password,
       isActive: model.isActive,
       isEmailVerified: model.isEmailVerified,
+      //#if (IncludeRoles)
       roleIds: this.canAssignRoles() ? model.roleIds : [],
+      //#endif
     });
   }
 

@@ -93,7 +93,22 @@
                     class="flex flex-wrap items-center justify-between gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/40"
                     [style.padding-left.rem]="0.75 + row.depth * 1.25"
                   >
-                    <span class="text-sm">{{ row.displayName }}</span>
+                    <div class="flex min-w-0 flex-wrap items-center gap-2">
+                      <span class="text-sm">{{ row.displayName }}</span>
+                      <!-- 用户主体编辑的是「例外」，不显示继承来源就无法判断该设拒绝还是留继承。 -->
+                      @if (showsInherited() && inheritedOf(row.name); as inheritedEffect) {
+                        <span
+                          hlmBadge
+                          variant="outline"
+                          [class]="
+                            inheritedEffect === 'Granted'
+                              ? 'border-success/30 bg-success/10 text-success'
+                              : 'border-destructive/30 bg-destructive/10 text-destructive'
+                          "
+                          >{{ inheritedLabel(inheritedEffect) }}</span
+                        >
+                      }
+                    </div>
 
                     <hlm-radio-group
                       class="flex flex-row items-center gap-4"

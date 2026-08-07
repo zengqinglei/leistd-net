@@ -272,7 +272,8 @@
     },
     "actions": {
       "newUser": "新建用户",
-      "manageRoles": "分配角色"
+      "manageRoles": "分配角色",
+      "managePermissions": "权限例外"
     },
     "status": {
       "active": "启用",
@@ -535,21 +536,8 @@
     "deleted": "角色已删除",
     "deleteTitle": "删除角色",
     "deleteDescription": "确定删除“{{name}}”？其权限授予也会一并清理。",
-    "permissionsTitle": "权限配置 · {{name}}",
-    "permissionsDescription": "“继承”表示不设置；“拒绝”优先于任何来源的允许。",
-    "permissionsSaved": "权限已保存",
-    "permissionsConflict": "权限已被他人修改，已为你重新加载最新值。",
-    "grantedCount": "允许 {{count}} 项",
-    "prohibitedCount": "拒绝 {{count}} 项",
-    "stateInherit": "继承",
-    "stateGranted": "允许",
-    "stateProhibited": "拒绝",
     "configurePermissions": "配置权限",
     "title": "角色管理",
-    "searchPermissions": "搜索权限",
-    "allowAll": "全部允许",
-    "resetAll": "重置",
-    "groupSummary": "{{granted}}/{{total}}",
     "colSort": "排序号",
     "colCreatedAt": "创建时间",
     "table": {
@@ -559,5 +547,23 @@
       "emptyFilteredTitle": "没有匹配的角色",
       "emptyFilteredHint": "请调整搜索关键字"
     }
+  },
+  "permissions": {
+    "dialogTitle": "权限配置 · {{name}}",
+    "searchPlaceholder": "搜索权限",
+    "allowAll": "全部允许",
+    "resetAll": "重置",
+    "stateInherit": "继承",
+    "stateGranted": "允许",
+    "stateProhibited": "拒绝",
+    "grantedCount": "允许 {{count}} 项",
+    "prohibitedCount": "拒绝 {{count}} 项",
+    "groupSummary": "{{granted}}/{{total}}",
+    "saved": "权限已保存",
+    "conflict": "权限已被他人修改，已为你重新加载最新值。",
+    "descriptionForRole": "“继承”表示不设置；“拒绝”优先于任何来源的允许。",
+    "descriptionForUser": "“继承”表示沿用该用户所属角色的结果；“拒绝”优先于任何来源的允许，包括从角色继承的允许。",
+    "inheritedGranted": "角色允许",
+    "inheritedProhibited": "角色拒绝"
   }
 }

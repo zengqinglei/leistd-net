@@ -228,6 +228,71 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.False(overridden.Effective);
     }
 
+#if (IncludeOpenIddict)
+    [Fact]
+    public async Task Open_application_endpoints_require_their_own_permissions()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+
+        // 已认证不等于可管理 OAuth 客户端：开放应用持有可对外颁发令牌的凭据。
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await session.Client.GetAsync("/api/v1/open-applications?offset=0&limit=10")).StatusCode);
+
+        await GrantAsync(
+            PermissionGrantProviderNames.User,
+            user.Id,
+            PermissionConstant.OpenApplications.Default);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await session.Client.GetAsync("/api/v1/open-applications?offset=0&limit=10")).StatusCode);
+
+        // 查看权限不含写入：创建仍被拒绝。
+        var create = await session.Client.PostAsJsonAsync(
+            "/api/v1/open-applications",
+            new
+            {
+                clientId = $"client-{Guid.CreateVersion7():N}",
+                displayName = "Probe",
+                applicationType = "web",
+                clientType = "confidential"
+            });
+        Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
+    }
+
+#endif
+    [Fact]
+    public async Task User_permission_exceptions_require_a_dedicated_permission()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var target = await CreateUserAsync(superAdmin.Client);
+        var operatorUser = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(operatorUser.Username, TestPassword);
+
+        await GrantAsync(
+            PermissionGrantProviderNames.User,
+            operatorUser.Id,
+            PermissionConstant.Users.Default,
+            PermissionConstant.Users.Update);
+
+        // 能看、能改资料，仍不能改权限：例外配置是独立的提权路径。
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await session.Client.GetAsync($"/api/v1/permissions/grants/users/{target.Id}")).StatusCode);
+
+        await GrantAsync(
+            PermissionGrantProviderNames.User,
+            operatorUser.Id,
+            PermissionConstant.Users.ManagePermissions);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await session.Client.GetAsync($"/api/v1/permissions/grants/users/{target.Id}")).StatusCode);
+    }
+
     [Fact]
     public async Task Concurrent_permission_saves_return_conflict_instead_of_overwriting()
     {

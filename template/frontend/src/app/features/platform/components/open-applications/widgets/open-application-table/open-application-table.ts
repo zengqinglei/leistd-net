@@ -108,6 +108,19 @@ export class OpenApplicationTable {
   readonly loading = input(false);
   readonly filtered = input(false);
 
+  /**
+   * 行操作按权限裁剪。默认全开，未启用权限模块的生成物行为不变；
+   * 隐藏只影响体验，服务端仍对每个请求独立校验。
+   */
+  readonly canUpdate = input(true);
+  readonly canDelete = input(true);
+  readonly canResetSecret = input(true);
+
+  /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
+  readonly hasRowActions = computed(
+    () => this.canUpdate() || this.canDelete() || this.canResetSecret(),
+  );
+
   readonly paginationChange = output<PaginationState>();
   readonly sortingChange = output<SortingState>();
   readonly edit = output<string>();

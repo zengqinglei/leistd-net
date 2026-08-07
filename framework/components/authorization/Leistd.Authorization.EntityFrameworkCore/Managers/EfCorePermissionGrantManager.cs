@@ -13,6 +13,8 @@ namespace Leistd.Authorization.EntityFrameworkCore;
 /// <item>允许向上补齐：被允许权限的全部祖先补为允许，使运行时保持扁平查找而无需回溯定义树。</item>
 /// </list>
 /// 每个公开写方法以一次 <c>SaveChangesAsync</c> 提交，批量替换因此是单事务操作。
+/// 授权版本是并发令牌：并发写入中只有一个能成功，落败方得到
+/// <see cref="PermissionGrantConcurrencyException"/> 而不是静默覆盖对方的修改。
 /// </remarks>
 public class EfCorePermissionGrantManager<TDbContext>(
     TDbContext dbContext,
@@ -217,7 +219,21 @@ public class EfCorePermissionGrantManager<TDbContext>(
             revision.Version += 1;
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // 另一个事务在本次读版本之后完成了写入。抛业务异常而不是让 EF 的异常穿透到宿主，
+            // 调用方据此返回 409 并要求客户端带最新版本重试。
+            throw new PermissionGrantConcurrencyException(
+                providerName,
+                providerKey,
+                expectedRevision ?? currentRevision,
+                currentRevision);
+        }
+
         return revision.Version;
     }
 

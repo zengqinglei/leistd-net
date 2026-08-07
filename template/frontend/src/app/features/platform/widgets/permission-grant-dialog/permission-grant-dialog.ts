@@ -26,18 +26,22 @@ import {
 import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
-import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
-import { translationReady } from '../../../../../../core/i18n/translation-ready';
+import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import {
   PermissionDefinitionGroupOutputDto,
   PermissionDefinitionOutputDto,
+  PermissionGrantEffect,
   PermissionGrantInputDto,
   PermissionGrantState,
-} from '../../../../../../shared/models/permission';
-import { RoleOutputDto } from '../../../../models/role.dto';
-import { PermissionManagementService } from '../../../../services/permission-management-service';
+  ReplacePermissionGrantsInputDto,
+} from '../../../../shared/models/permission';
+import { PermissionManagementService } from '../../services/permission-management-service';
+
+/** 授予主体类型。与后端 `PermissionGrantProviderNames` 一致。 */
+export type PermissionGrantProvider = 'Role' | 'User';
 
 /** 权限树展平后的一行，depth 用于缩进渲染。 */
 interface PermissionRow {
@@ -60,15 +64,18 @@ interface PermissionGroupRender extends PermissionGroupView {
 }
 
 /**
- * 角色权限编辑器。
+ * 权限授予编辑器，角色与用户共用。
  *
  * 三态：继承（未设置）/ 允许 / 拒绝。拒绝优先于任何来源的允许。
  * 选中子权限时自动补齐父级、把父级设为拒绝时清理其子孙——这与后端写入时的归一化一致，
  * 这里只是即时反馈，最终仍以后端归一化结果为准。
  * 保存一次请求完成，并携带版本号；版本冲突时提示重新加载而不是覆盖对方的修改。
+ *
+ * 用户主体额外呈现「继承自角色」一列：用户的三态编辑的是**例外**，
+ * 不显示继承来源就无法判断某一项该设成拒绝还是留在继承。
  */
 @Component({
-  selector: 'app-role-permission-dialog',
+  selector: 'app-permission-grant-dialog',
   imports: [
     NgIcon,
     HlmBadge,
@@ -84,12 +91,15 @@ interface PermissionGroupRender extends PermissionGroupView {
     //#endif
   ],
   providers: [provideIcons({ lucideSearch, lucideChevronDown, lucideChevronRight })],
-  templateUrl: './role-permission-dialog.html',
+  templateUrl: './permission-grant-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class RolePermissionDialog {
+export class PermissionGrantDialog {
   readonly open = model(false);
-  readonly role = input<RoleOutputDto | null>(null);
+  readonly providerName = input<PermissionGrantProvider>('Role');
+  readonly providerKey = input<string | null>(null);
+  /** 主体展示名，仅用于标题。 */
+  readonly subjectName = input('');
   readonly saved = output<void>();
 
   private readonly permissionService = inject(PermissionManagementService);
@@ -103,8 +113,11 @@ export class RolePermissionDialog {
   readonly groups = signal<PermissionGroupView[]>([]);
   readonly revision = signal(0);
 
-  /** 权限名 -> 三态选择值。 */
+  /** 权限名 -> 三态选择值（该主体的直接授予）。 */
   private readonly states = signal<Record<string, PermissionGrantState>>({});
+
+  /** 权限名 -> 继承而来的效果。角色主体没有上游来源，恒为空。 */
+  private readonly inheritedEffects = signal<Record<string, PermissionGrantEffect>>({});
 
   /** 父子关系缓存，用于自动补齐祖先与清理子孙。 */
   private ancestors: Record<string, string[]> = {};
@@ -112,6 +125,9 @@ export class RolePermissionDialog {
 
   /** 权限搜索关键字：权限多起来后没有搜索就只能靠肉眼扫，这里按显示名与权限名同时匹配。 */
   readonly keyword = signal('');
+
+  /** 只有用户主体有上游来源，角色主体不渲染继承列。 */
+  readonly showsInherited = computed(() => this.providerName() === 'User');
 
   readonly grantedCount = computed(
     () => Object.values(this.states()).filter((state) => state === 'Granted').length,
@@ -200,17 +216,22 @@ export class RolePermissionDialog {
 
   constructor() {
     effect(() => {
-      const role = this.role();
-      if (!this.open() || !role) {
+      const providerKey = this.providerKey();
+      if (!this.open() || !providerKey) {
         return;
       }
 
-      this.loadFor(role.id);
+      this.loadFor(providerKey);
     });
   }
 
   stateOf(name: string): PermissionGrantState {
     return this.states()[name] ?? 'Inherit';
+  }
+
+  /** 该权限从角色继承到的效果；没有继承来源时返回 null。 */
+  inheritedOf(name: string): PermissionGrantEffect | null {
+    return this.inheritedEffects()[name] ?? null;
   }
 
   onStateChange(name: string, next: PermissionGrantState): void {
@@ -240,8 +261,8 @@ export class RolePermissionDialog {
   }
 
   onSave(): void {
-    const role = this.role();
-    if (!role) {
+    const providerKey = this.providerKey();
+    if (!providerKey) {
       return;
     }
 
@@ -250,42 +271,57 @@ export class RolePermissionDialog {
       .map(([name, state]) => ({ name, effect: state as PermissionGrantInputDto['effect'] }));
 
     this.saving.set(true);
-    this.permissionService
-      .replaceRoleGrants(role.id, { expectedRevision: this.revision(), grants })
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          toast.success(this.savedMessage());
-          this.saved.emit();
-        },
-        error: (error) => {
-          this.saving.set(false);
-          // 409 说明另一位管理员抢先保存：提示重新加载，不静默覆盖。
-          if (error?.status === 409) {
-            toast.error(this.conflictMessage());
-            this.loadFor(role.id);
-            return;
-          }
-          toast.error(applicationErrorMessage(error));
-        },
-      });
+    this.replaceGrants(providerKey, { expectedRevision: this.revision(), grants }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        toast.success(this.savedMessage());
+        this.saved.emit();
+      },
+      error: (error) => {
+        this.saving.set(false);
+        // 409 说明另一位管理员抢先保存：提示重新加载，不静默覆盖。
+        if (error?.status === 409) {
+          toast.error(this.conflictMessage());
+          this.loadFor(providerKey);
+          return;
+        }
+        toast.error(applicationErrorMessage(error));
+      },
+    });
   }
 
-  private loadFor(roleId: string): void {
+  private replaceGrants(providerKey: string, data: ReplacePermissionGrantsInputDto) {
+    return this.providerName() === 'User'
+      ? this.permissionService.replaceUserGrants(providerKey, data)
+      : this.permissionService.replaceRoleGrants(providerKey, data);
+  }
+
+  private loadFor(providerKey: string): void {
     this.loading.set(true);
 
     this.permissionService.getDefinitions().subscribe({
       next: (definitionGroups) => {
         this.buildTree(definitionGroups);
 
-        this.permissionService.getRoleGrants(roleId).subscribe({
+        const grants$ =
+          this.providerName() === 'User'
+            ? this.permissionService.getUserGrants(providerKey)
+            : this.permissionService.getRoleGrants(providerKey);
+
+        grants$.subscribe({
           next: (grants) => {
             this.revision.set(grants.revision);
+
             const states: Record<string, PermissionGrantState> = {};
+            const inherited: Record<string, PermissionGrantEffect> = {};
             for (const grant of grants.grants) {
               states[grant.name] = grant.direct ?? 'Inherit';
+              if (grant.inherited) {
+                inherited[grant.name] = grant.inherited;
+              }
             }
             this.states.set(states);
+            this.inheritedEffects.set(inherited);
             this.loading.set(false);
           },
           error: (error) => {
@@ -343,32 +379,39 @@ export class RolePermissionDialog {
   //#if (IncludeLocalization)
   readonly title = computed(() => {
     this.translationReady();
-    return this.transloco.translate('roles.permissionsTitle', {
-      name: this.role()?.displayName ?? '',
-    });
+    return this.transloco.translate('permissions.dialogTitle', { name: this.subjectName() });
   });
-  readonly description = () => this.transloco.translate('roles.permissionsDescription');
-  readonly searchPlaceholder = () => this.transloco.translate('roles.searchPermissions');
+  readonly description = () =>
+    this.transloco.translate(
+      this.showsInherited() ? 'permissions.descriptionForUser' : 'permissions.descriptionForRole',
+    );
+  readonly searchPlaceholder = () => this.transloco.translate('permissions.searchPlaceholder');
   readonly noMatchLabel = () => this.transloco.translate('common.noResults');
-  readonly allowAllLabel = () => this.transloco.translate('roles.allowAll');
-  readonly resetAllLabel = () => this.transloco.translate('roles.resetAll');
-  readonly stateInheritLabel = () => this.transloco.translate('roles.stateInherit');
-  readonly stateGrantedLabel = () => this.transloco.translate('roles.stateGranted');
-  readonly stateProhibitedLabel = () => this.transloco.translate('roles.stateProhibited');
+  readonly allowAllLabel = () => this.transloco.translate('permissions.allowAll');
+  readonly resetAllLabel = () => this.transloco.translate('permissions.resetAll');
+  readonly stateInheritLabel = () => this.transloco.translate('permissions.stateInherit');
+  readonly stateGrantedLabel = () => this.transloco.translate('permissions.stateGranted');
+  readonly stateProhibitedLabel = () => this.transloco.translate('permissions.stateProhibited');
   readonly cancelLabel = () => this.transloco.translate('common.cancel');
   readonly saveLabel = () => this.transloco.translate('common.save');
   readonly grantedLabel = (count: number) =>
-    this.transloco.translate('roles.grantedCount', { count });
+    this.transloco.translate('permissions.grantedCount', { count });
   readonly prohibitedLabel = (count: number) =>
-    this.transloco.translate('roles.prohibitedCount', { count });
+    this.transloco.translate('permissions.prohibitedCount', { count });
   readonly groupSummary = (granted: number, total: number) =>
-    this.transloco.translate('roles.groupSummary', { granted, total });
-  private savedMessage = () => this.transloco.translate('roles.permissionsSaved');
-  private conflictMessage = () => this.transloco.translate('roles.permissionsConflict');
+    this.transloco.translate('permissions.groupSummary', { granted, total });
+  readonly inheritedLabel = (effect: PermissionGrantEffect) =>
+    this.transloco.translate(
+      effect === 'Granted' ? 'permissions.inheritedGranted' : 'permissions.inheritedProhibited',
+    );
+  private savedMessage = () => this.transloco.translate('permissions.saved');
+  private conflictMessage = () => this.transloco.translate('permissions.conflict');
   //#else
-  readonly title = computed(() => `Permissions · ${this.role()?.displayName ?? ''}`);
+  readonly title = computed(() => `Permissions · ${this.subjectName()}`);
   readonly description = () =>
-    'Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.';
+    this.showsInherited()
+      ? 'Inherit follows the roles assigned to this user. Deny always wins over any grant, including grants inherited from roles.'
+      : 'Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.';
   readonly searchPlaceholder = () => 'Search permissions';
   readonly noMatchLabel = () => 'No results';
   readonly allowAllLabel = () => 'Allow all';
@@ -381,6 +424,8 @@ export class RolePermissionDialog {
   readonly grantedLabel = (count: number) => `${count} allowed`;
   readonly prohibitedLabel = (count: number) => `${count} denied`;
   readonly groupSummary = (granted: number, total: number) => `${granted}/${total}`;
+  readonly inheritedLabel = (effect: PermissionGrantEffect) =>
+    effect === 'Granted' ? 'Allowed by role' : 'Denied by role';
   private savedMessage = () => 'Permissions saved';
   private conflictMessage = () =>
     'Someone else changed these permissions. The latest values have been reloaded.';

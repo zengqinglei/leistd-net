@@ -35,6 +35,7 @@
           (valueChange)="onEmailVerifiedChange($any($event))"
         />
 
+        <!--#if (IncludeRoles)-->
         <app-faceted-filter
           multiple
           [label]="roleFilterLabel()"
@@ -45,6 +46,7 @@
           [emptyLabel]="filterEmptyLabel()"
           (valuesChange)="onRolesChange($event)"
         />
+        <!--#endif-->
       </div>
 
       <div class="flex items-center justify-end gap-3 shrink-0">
@@ -83,20 +85,32 @@
       [canUpdate]="canUpdateUser()"
       [canDelete]="canDeleteUser()"
       [canManageRoles]="canManageUserRoles()"
+      [canManagePermissions]="canManageUserPermissions()"
       (manageRoles)="openRolesDialog($event)"
+      (managePermissions)="openPermissionsDialog($event)"
     />
   </div>
 </div>
 
+<!--#if (IncludeRoles)-->
+<app-user-edit-dialog
+  [(visible)]="editDialogVisible"
+  [loading]="editDialogLoading()"
+  [saving]="editDialogSaving()"
+  [user]="selectedUser()"
+  [availableRoles]="availableRoles()"
+  [canAssignRoles]="canManageUserRoles()"
+  (saved)="handleSave($event)"
+/>
+<!--#else-->
 <app-user-edit-dialog
   [(visible)]="editDialogVisible"
   [loading]="editDialogLoading()"
   [saving]="editDialogSaving()"
   [user]="selectedUser()"
   (saved)="handleSave($event)"
-  [availableRoles]="availableRoles()"
-  [canAssignRoles]="canManageUserRoles()"
 />
+<!--#endif-->
 
 <!--#if (IncludeRoles)-->
 <app-user-roles-dialog
@@ -104,6 +118,14 @@
   [user]="rolesDialogUser()"
   [availableRoles]="availableRoles()"
   (saved)="onRolesSaved()"
+/>
+
+<app-permission-grant-dialog
+  [(open)]="permissionsDialogVisible"
+  providerName="User"
+  [providerKey]="permissionsDialogUser()?.id ?? null"
+  [subjectName]="permissionsDialogUser()?.displayName || permissionsDialogUser()?.username || ''"
+  (saved)="onPermissionsSaved()"
 />
 <!--#endif-->
 

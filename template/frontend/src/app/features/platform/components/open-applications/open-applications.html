@@ -47,10 +47,12 @@
           <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
           {{ refreshLabel() }}
         </button>
-        <button hlmBtn variant="default" class="w-full sm:w-auto" (click)="openAddDialog()">
-          <ng-icon name="lucidePlus" data-icon="inline-start" />
-          {{ createLabel() }}
-        </button>
+        @if (canCreate()) {
+          <button hlmBtn variant="default" class="w-full sm:w-auto" (click)="openAddDialog()">
+            <ng-icon name="lucidePlus" data-icon="inline-start" />
+            {{ createLabel() }}
+          </button>
+        }
       </div>
     </div>
 
@@ -61,6 +63,9 @@
       [sorting]="sorting()"
       [loading]="loading()"
       [filtered]="hasActiveFilters()"
+      [canUpdate]="canUpdate()"
+      [canDelete]="canDelete()"
+      [canResetSecret]="canResetSecret()"
       (paginationChange)="onPaginationChange($event)"
       (sortingChange)="onSortingChange($event)"
       (edit)="openEditDialog($event)"

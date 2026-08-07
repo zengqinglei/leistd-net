@@ -41,6 +41,7 @@
                           <ng-icon [name]="sortIcon('email')" class="text-sm" />
                         </button>
                       }
+                      <!--#if (IncludeRoles)-->
                       @case ('roles') {
                         <!--#if (IncludeLocalization)-->
                         <span class="whitespace-nowrap">{{
@@ -50,6 +51,7 @@
                         <span class="whitespace-nowrap">Role</span>
                         <!--#endif-->
                       }
+                      <!--#endif-->
                       @case ('status') {
                         <!--#if (IncludeLocalization)-->
                         <span class="whitespace-nowrap">{{
@@ -163,6 +165,7 @@
                         @case ('email') {
                           <span class="whitespace-nowrap text-sm">{{ row.original.email }}</span>
                         }
+                        <!--#if (IncludeRoles)-->
                         @case ('roles') {
                           <div
                             class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap"
@@ -206,6 +209,7 @@
                             }
                           </div>
                         }
+                        <!--#endif-->
                         @case ('status') {
                           <div class="flex items-center gap-1.5 whitespace-nowrap">
                             @if (row.original.isActive) {
@@ -328,6 +332,19 @@
                                       {{ actionLabel('reset', row.original) }}
                                     </button>
                                   }
+                                  <!--#if (IncludeRoles)-->
+                                  <!-- 用户权限例外：与角色分配同为独立命令，需要 App.Users.ManagePermissions。 -->
+                                  @if (canManagePermissions()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      [disabled]="isOtherSuperAdmin(row.original)"
+                                      (click)="managePermissions.emit(row.original)"
+                                    >
+                                      <ng-icon name="lucideKeyRound" />
+                                      {{ permissionsActionLabel() }}
+                                    </button>
+                                  }
+                                  <!--#endif-->
                                   @if (canUpdate()) {
                                     <button
                                       hlmDropdownMenuItem
@@ -378,6 +395,7 @@
                           <dt class="text-muted-foreground">{{ detailLabel('email') }}</dt>
                           <dd class="min-w-0 truncate">{{ row.original.email }}</dd>
                         }
+                        <!--#if (IncludeRoles)-->
                         @if (isColumnHidden('roles')) {
                           <dt class="text-muted-foreground">{{ detailLabel('roles') }}</dt>
                           <dd class="flex flex-wrap gap-1">
@@ -390,6 +408,7 @@
                             }
                           </dd>
                         }
+                        <!--#endif-->
                         @if (isColumnHidden('lastLoginTime')) {
                           <dt class="text-muted-foreground">{{ detailLabel('lastLogin') }}</dt>
                           <dd class="text-muted-foreground">

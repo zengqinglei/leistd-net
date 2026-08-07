@@ -272,7 +272,8 @@
     },
     "actions": {
       "newUser": "New user",
-      "manageRoles": "Assign roles"
+      "manageRoles": "Assign roles",
+      "managePermissions": "Permission exceptions"
     },
     "status": {
       "active": "Active",
@@ -535,21 +536,8 @@
     "deleted": "Role deleted",
     "deleteTitle": "Delete role",
     "deleteDescription": "Delete \"{{name}}\"? Its permission grants will be removed as well.",
-    "permissionsTitle": "Permissions · {{name}}",
-    "permissionsDescription": "Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.",
-    "permissionsSaved": "Permissions saved",
-    "permissionsConflict": "Someone else changed these permissions. The latest values have been reloaded.",
-    "grantedCount": "{{count}} allowed",
-    "prohibitedCount": "{{count}} denied",
-    "stateInherit": "Inherit",
-    "stateGranted": "Allow",
-    "stateProhibited": "Deny",
     "configurePermissions": "Configure permissions",
     "title": "Role Management",
-    "searchPermissions": "Search permissions",
-    "allowAll": "Allow all",
-    "resetAll": "Reset",
-    "groupSummary": "{{granted}}/{{total}}",
     "colSort": "Sort",
     "colCreatedAt": "Created at",
     "table": {
@@ -559,5 +547,23 @@
       "emptyFilteredTitle": "No matching roles",
       "emptyFilteredHint": "Adjust the search keyword"
     }
+  },
+  "permissions": {
+    "dialogTitle": "Permissions · {{name}}",
+    "searchPlaceholder": "Search permissions",
+    "allowAll": "Allow all",
+    "resetAll": "Reset",
+    "stateInherit": "Inherit",
+    "stateGranted": "Allow",
+    "stateProhibited": "Deny",
+    "grantedCount": "{{count}} allowed",
+    "prohibitedCount": "{{count}} denied",
+    "groupSummary": "{{granted}}/{{total}}",
+    "saved": "Permissions saved",
+    "conflict": "Someone else changed these permissions. The latest values have been reloaded.",
+    "descriptionForRole": "Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.",
+    "descriptionForUser": "Inherit follows the roles assigned to this user. Deny always wins over any grant, including grants inherited from roles.",
+    "inheritedGranted": "Allowed by role",
+    "inheritedProhibited": "Denied by role"
   }
 }

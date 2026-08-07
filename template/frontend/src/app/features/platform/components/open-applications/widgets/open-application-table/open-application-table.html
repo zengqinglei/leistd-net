@@ -284,76 +284,93 @@
                         @case ('actions') {
                           <!-- 操作列（3 项 ≤ 3）：桌面端全部平铺；<sm 收进 … 菜单省列宽。 -->
                           <div class="flex items-center justify-end gap-1">
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon"
-                              class="hidden sm:inline-flex"
-                              [hlmTooltip]="actionLabel('edit')"
-                              [attr.aria-label]="actionLabel('edit')"
-                              (click)="edit.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucidePencil" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon"
-                              class="hidden sm:inline-flex"
-                              [disabled]="row.original.clientType !== 'confidential'"
-                              [hlmTooltip]="actionLabel('reset')"
-                              [attr.aria-label]="actionLabel('reset')"
-                              (click)="resetSecret.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucideRefreshCw" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon"
-                              class="hidden text-destructive hover:text-destructive sm:inline-flex"
-                              [hlmTooltip]="actionLabel('delete')"
-                              [attr.aria-label]="actionLabel('delete')"
-                              (click)="delete.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucideTrash2" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon"
-                              align="end"
-                              class="sm:hidden"
-                              [attr.aria-label]="actionsLabel()"
-                              [hlmDropdownMenuTrigger]="rowMenu"
-                            >
-                              <ng-icon name="lucideEllipsis" />
-                            </button>
+                            @if (canUpdate()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden sm:inline-flex"
+                                [hlmTooltip]="actionLabel('edit')"
+                                [attr.aria-label]="actionLabel('edit')"
+                                (click)="edit.emit(row.original.id)"
+                              >
+                                <ng-icon name="lucidePencil" />
+                              </button>
+                            }
+                            @if (canResetSecret()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden sm:inline-flex"
+                                [disabled]="row.original.clientType !== 'confidential'"
+                                [hlmTooltip]="actionLabel('reset')"
+                                [attr.aria-label]="actionLabel('reset')"
+                                (click)="resetSecret.emit(row.original.id)"
+                              >
+                                <ng-icon name="lucideRefreshCw" />
+                              </button>
+                            }
+                            @if (canDelete()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden text-destructive hover:text-destructive sm:inline-flex"
+                                [hlmTooltip]="actionLabel('delete')"
+                                [attr.aria-label]="actionLabel('delete')"
+                                (click)="delete.emit(row.original.id)"
+                              >
+                                <ng-icon name="lucideTrash2" />
+                              </button>
+                            }
+                            @if (hasRowActions()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                align="end"
+                                class="sm:hidden"
+                                [attr.aria-label]="actionsLabel()"
+                                [hlmDropdownMenuTrigger]="rowMenu"
+                              >
+                                <ng-icon name="lucideEllipsis" />
+                              </button>
+                            }
                             <ng-template #rowMenu>
                               <hlm-dropdown-menu>
                                 <hlm-dropdown-menu-group>
-                                  <button hlmDropdownMenuItem (click)="edit.emit(row.original.id)">
-                                    <ng-icon name="lucidePencil" />
-                                    {{ actionLabel('edit') }}
-                                  </button>
+                                  @if (canUpdate()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      (click)="edit.emit(row.original.id)"
+                                    >
+                                      <ng-icon name="lucidePencil" />
+                                      {{ actionLabel('edit') }}
+                                    </button>
+                                  }
+                                  @if (canResetSecret()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      [disabled]="row.original.clientType !== 'confidential'"
+                                      (click)="resetSecret.emit(row.original.id)"
+                                    >
+                                      <ng-icon name="lucideRefreshCw" />
+                                      {{ actionLabel('reset') }}
+                                    </button>
+                                  }
+                                </hlm-dropdown-menu-group>
+                                @if (canDelete()) {
+                                  <hlm-dropdown-menu-separator />
                                   <button
                                     hlmDropdownMenuItem
-                                    [disabled]="row.original.clientType !== 'confidential'"
-                                    (click)="resetSecret.emit(row.original.id)"
+                                    variant="destructive"
+                                    (click)="delete.emit(row.original.id)"
                                   >
-                                    <ng-icon name="lucideRefreshCw" />
-                                    {{ actionLabel('reset') }}
+                                    <ng-icon name="lucideTrash2" />
+                                    {{ actionLabel('delete') }}
                                   </button>
-                                </hlm-dropdown-menu-group>
-                                <hlm-dropdown-menu-separator />
-                                <button
-                                  hlmDropdownMenuItem
-                                  variant="destructive"
-                                  (click)="delete.emit(row.original.id)"
-                                >
-                                  <ng-icon name="lucideTrash2" />
-                                  {{ actionLabel('delete') }}
-                                </button>
+                                }
                               </hlm-dropdown-menu>
                             </ng-template>
                           </div>

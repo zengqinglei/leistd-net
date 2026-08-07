@@ -18,6 +18,7 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
     private TestAuthorizationDbContext _db = default!;
     private EfCorePermissionGrantStore<TestAuthorizationDbContext> _store = default!;
     private EfCorePermissionGrantManager<TestAuthorizationDbContext> _manager = default!;
+    private PermissionDefinitionManager _definitions = default!;
 
     public async Task InitializeAsync()
     {
@@ -31,10 +32,9 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         _db = new TestAuthorizationDbContext(options);
         await _db.Database.EnsureCreatedAsync();
 
+        _definitions = TestPermissionDefinitions.CreateManager();
         _store = new EfCorePermissionGrantStore<TestAuthorizationDbContext>(_db);
-        _manager = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(
-            _db,
-            TestPermissionDefinitions.CreateManager());
+        _manager = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(_db, _definitions);
     }
 
     public async Task DisposeAsync()
@@ -212,7 +212,7 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         Assert.Contains(subject.UserGrants.Grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersRead);
         Assert.Equal(2, subject.RoleGrants.Count);
 
-        var effects = subject.GetEffectiveEffects();
+        var effects = subject.GetEffectiveEffects(_definitions);
         Assert.Equal(PermissionGrantEffect.Granted, effects[TestPermissionDefinitionProvider.OrdersRead]);
         Assert.Equal(PermissionGrantEffect.Granted, effects[TestPermissionDefinitionProvider.OrdersWrite]);
         // 未参与的角色的授予不得泄漏到本主体。
@@ -274,6 +274,140 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
 
         var read = Assert.Single(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersRead);
         Assert.Equal(PermissionGrantEffect.Prohibited, read.Effect);
+    }
+
+    [Theory]
+    // 用户拒绝父权限、角色允许子权限。
+    [InlineData(PermissionGrantProviderNames.User, PermissionGrantProviderNames.Role)]
+    // 角色拒绝父权限、用户允许子权限。
+    [InlineData(PermissionGrantProviderNames.Role, PermissionGrantProviderNames.User)]
+    public async Task Prohibiting_a_parent_in_one_source_disables_children_granted_by_another(
+        string prohibitingProvider,
+        string grantingProvider)
+    {
+        var prohibitingKey = prohibitingProvider == PermissionGrantProviderNames.User ? "u1" : "r1";
+        var grantingKey = grantingProvider == PermissionGrantProviderNames.User ? "u1" : "r1";
+
+        await _manager.ReplaceGrantsAsync(
+            prohibitingProvider,
+            prohibitingKey,
+            [new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Prohibited)]);
+        await _manager.ReplaceGrantsAsync(
+            grantingProvider,
+            grantingKey,
+            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWrite, PermissionGrantEffect.Granted)]);
+
+        var effects = (await _store.GetGrantsForSubjectAsync("u1", ["r1"]))
+            .GetEffectiveEffects(_definitions);
+
+        // 写入侧的归一化只在单个主体内成立；跨来源合并后必须由读取侧把拒绝继续传播下去。
+        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.Orders]);
+        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.OrdersWrite]);
+    }
+
+    [Fact]
+    public async Task Prohibiting_a_parent_in_one_role_disables_children_granted_by_another_role()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Prohibited)]);
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r2",
+            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+
+        var effects = (await _store.GetGrantsForSubjectAsync("u1", ["r1", "r2"]))
+            .GetEffectiveEffects(_definitions);
+
+        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.OrdersRead]);
+    }
+
+    [Fact]
+    public async Task Prohibition_propagates_through_every_level_of_ancestors()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Prohibited)]);
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r2",
+            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWriteBatch, PermissionGrantEffect.Granted)]);
+
+        var effects = (await _store.GetGrantsForSubjectAsync("u1", ["r1", "r2"]))
+            .GetEffectiveEffects(_definitions);
+
+        // 被拒绝的是祖父级，孙子级同样必须失效。
+        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.OrdersWriteBatch]);
+    }
+
+    [Fact]
+    public async Task Interleaved_writes_on_the_same_subject_lose_the_optimistic_concurrency_check()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+
+        var options = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+
+        await using var firstDb = new TestAuthorizationDbContext(options);
+        await using var secondDb = new TestAuthorizationDbContext(options);
+        var first = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(firstDb, _definitions);
+        var second = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(secondDb, _definitions);
+
+        // 两个上下文都把版本读进内存后才发生写入：这正是「先读后比」保护不了的窗口。
+        var revision = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Revision;
+        await firstDb.Set<AuthorizationRevisionRecord>().AsTracking().ToListAsync();
+        await secondDb.Set<AuthorizationRevisionRecord>().AsTracking().ToListAsync();
+
+        await first.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWrite, PermissionGrantEffect.Granted)],
+            revision);
+
+        // 第二个上下文持有的仍是写入前的版本行，提交时必须失败而不是覆盖先写。
+        var conflict = await Assert.ThrowsAsync<PermissionGrantConcurrencyException>(
+            () => second.ReplaceGrantsAsync(
+                PermissionGrantProviderNames.Role,
+                "r1",
+                [new PermissionGrant(TestPermissionDefinitionProvider.OrdersDelete, PermissionGrantEffect.Granted)],
+                revision));
+
+        Assert.Equal(PermissionGrantProviderNames.Role, conflict.ProviderName);
+
+        // 先写的内容原样保留。
+        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Grants;
+        Assert.Contains(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersWrite);
+        Assert.DoesNotContain(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersDelete);
+    }
+
+    [Fact]
+    public async Task Grants_for_many_subjects_are_fetched_in_a_constant_number_of_round_trips()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r2",
+            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWriteBatch, PermissionGrantEffect.Granted)]);
+
+        var sets = await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, ["r1", "r2", "r3"]);
+
+        Assert.Equal(3, sets.Count);
+        Assert.Equal(["r1", "r2", "r3"], sets.Select(x => x.ProviderKey));
+        // r2 授予了孙子级，写入归一化补齐了两级祖先。
+        Assert.Equal(3, sets.Single(x => x.ProviderKey == "r2").Grants.Count);
+        // 从未写入过的主体返回空集合与 0 版本，而不是被跳过。
+        var missing = sets.Single(x => x.ProviderKey == "r3");
+        Assert.Empty(missing.Grants);
+        Assert.Equal(0, missing.Revision);
     }
 
     private sealed class TestAuthorizationDbContext(DbContextOptions<TestAuthorizationDbContext> options)

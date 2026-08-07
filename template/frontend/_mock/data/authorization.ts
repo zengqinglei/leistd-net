@@ -48,6 +48,13 @@ export const ALL_PERMISSIONS: string[] = [
   PERMISSIONS.roles.update,
   PERMISSIONS.roles.delete,
   PERMISSIONS.roles.managePermissions,
+  //#if (IncludeOpenIddict)
+  PERMISSIONS.openApplications.default,
+  PERMISSIONS.openApplications.create,
+  PERMISSIONS.openApplications.update,
+  PERMISSIONS.openApplications.delete,
+  PERMISSIONS.openApplications.resetSecret,
+  //#endif
   PERMISSIONS.permissions.default,
 ];
 
@@ -93,6 +100,35 @@ export const PERMISSION_DEFINITIONS = [
           ),
         ],
       },
+      //#if (IncludeOpenIddict)
+      {
+        name: PERMISSIONS.openApplications.default,
+        displayName: 'Developer Applications',
+        parentName: undefined,
+        children: [
+          leaf(
+            PERMISSIONS.openApplications.create,
+            'Create Developer Application',
+            PERMISSIONS.openApplications.default,
+          ),
+          leaf(
+            PERMISSIONS.openApplications.update,
+            'Update Developer Application',
+            PERMISSIONS.openApplications.default,
+          ),
+          leaf(
+            PERMISSIONS.openApplications.delete,
+            'Delete Developer Application',
+            PERMISSIONS.openApplications.default,
+          ),
+          leaf(
+            PERMISSIONS.openApplications.resetSecret,
+            'Reset Client Secret',
+            PERMISSIONS.openApplications.default,
+          ),
+        ],
+      },
+      //#endif
       {
         name: PERMISSIONS.permissions.default,
         displayName: 'View Permission Definitions',
@@ -105,6 +141,36 @@ export const PERMISSION_DEFINITIONS = [
 
 function leaf(name: string, displayName: string, parentName: string) {
   return { name, displayName, parentName, children: [] as never[] };
+}
+
+/**
+ * 权限名 -> 其全部子孙。
+ *
+ * 拒绝需要沿定义树向下传播：写入归一化只在单个主体内成立，跨来源合并后
+ * 仍可能出现「父拒子允」。这一条规则 Mock 必须复刻，否则与后端的判定结果不一致。
+ */
+export const PERMISSION_DESCENDANTS: Record<string, string[]> = buildDescendants();
+
+function buildDescendants(): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+
+  const walk = (node: { name: string; children: { name: string }[] }, ancestors: string[]) => {
+    map[node.name] ??= [];
+    for (const ancestor of ancestors) {
+      map[ancestor].push(node.name);
+    }
+    for (const child of node.children as (typeof node)[]) {
+      walk(child, [node.name, ...ancestors]);
+    }
+  };
+
+  for (const group of PERMISSION_DEFINITIONS) {
+    for (const permission of group.permissions) {
+      walk(permission, []);
+    }
+  }
+
+  return map;
 }
 
 /**

@@ -43,6 +43,26 @@ public static class PermissionConstant
         public const string ManagePermissions = Default + ".ManagePermissions";
     }
 
+#if (IncludeOpenIddict)
+    /// <summary>
+    /// 开放应用（OAuth2 客户端）管理权限
+    /// </summary>
+    /// <remarks>
+    /// 开放应用持有 ClientId/ClientSecret，能代表本系统对外颁发令牌，
+    /// 因此与用户、角色同级独立成权限族，而不是复用用户管理权限。
+    /// </remarks>
+    public static class OpenApplications
+    {
+        public const string Default = GroupName + ".OpenApplications";
+        public const string Create = Default + ".Create";
+        public const string Update = Default + ".Update";
+        public const string Delete = Default + ".Delete";
+
+        /// <summary>重置客户端密钥。等价于换发凭据，与普通编辑分开授权。</summary>
+        public const string ResetSecret = Default + ".ResetSecret";
+    }
+
+#endif
     /// <summary>
     /// 权限定义查看权限
     /// </summary>

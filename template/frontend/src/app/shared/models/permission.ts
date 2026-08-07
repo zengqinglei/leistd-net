@@ -22,6 +22,15 @@ export const PERMISSIONS = {
     delete: 'App.Roles.Delete',
     managePermissions: 'App.Roles.ManagePermissions',
   },
+  //#if (IncludeOpenIddict)
+  openApplications: {
+    default: 'App.OpenApplications',
+    create: 'App.OpenApplications.Create',
+    update: 'App.OpenApplications.Update',
+    delete: 'App.OpenApplications.Delete',
+    resetSecret: 'App.OpenApplications.ResetSecret',
+  },
+  //#endif
   permissions: {
     default: 'App.Permissions',
   },

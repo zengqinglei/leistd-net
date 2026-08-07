@@ -37,6 +37,10 @@ export const PLATFORM_ROUTES: Routes = [
     path: 'open-applications',
     loadComponent: () =>
       import('./components/open-applications/open-applications').then((m) => m.OpenApplications),
+    //#if (IncludeRoles)
+    canActivate: [permissionGuard],
+    data: { permission: PERMISSIONS.openApplications.default },
+    //#endif
   },
   //#endif
 ];

@@ -57,8 +57,10 @@
 
 <app-role-edit-dialog [(open)]="editDialogOpen" [role]="editingRole()" (save)="onSave($event)" />
 
-<app-role-permission-dialog
+<app-permission-grant-dialog
   [(open)]="permissionDialogOpen"
-  [role]="permissionRole()"
+  providerName="Role"
+  [providerKey]="permissionRole()?.id ?? null"
+  [subjectName]="permissionRole()?.displayName ?? ''"
   (saved)="onPermissionsSaved()"
 />

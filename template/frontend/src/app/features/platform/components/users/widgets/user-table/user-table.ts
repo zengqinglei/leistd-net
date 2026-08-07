@@ -21,6 +21,7 @@ import {
   lucideCircleCheck,
   lucideEllipsis,
   lucideKey,
+  lucideKeyRound,
   lucideShieldCheck,
   lucidePencil,
   lucideSearchX,
@@ -53,14 +54,18 @@ import {
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
+//#if (IncludeRoles)
 import { RoleBriefDto } from '../../../../models/role.dto';
+//#endif
 import { UserManagementOutputDto } from '../../../../models/user-management.dto';
 
 const MEDIUM_VIEWPORT = '(min-width: 768px)';
 const LARGE_VIEWPORT = '(min-width: 1024px)';
 
+//#if (IncludeRoles)
 /** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+//#endif
 
 @Component({
   selector: 'app-user-table',
@@ -89,6 +94,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
       lucideCircleCheck,
       lucideEllipsis,
       lucideKey,
+      lucideKeyRound,
       lucideShieldCheck,
       lucidePencil,
       lucideSearchX,
@@ -122,10 +128,12 @@ export class UserTable {
   readonly canUpdate = input(true);
   readonly canDelete = input(true);
   readonly canManageRoles = input(false);
+  readonly canManagePermissions = input(false);
 
   /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
   readonly hasRowActions = computed(
-    () => this.canUpdate() || this.canDelete() || this.canManageRoles(),
+    () =>
+      this.canUpdate() || this.canDelete() || this.canManageRoles() || this.canManagePermissions(),
   );
 
   readonly paginationChange = output<PaginationState>();
@@ -136,6 +144,8 @@ export class UserTable {
   readonly delete = output<UserManagementOutputDto>();
   /** 角色分配是独立命令，与资料编辑分开触发。 */
   readonly manageRoles = output<UserManagementOutputDto>();
+  /** 用户权限例外，同样是独立命令与独立权限。 */
+  readonly managePermissions = output<UserManagementOutputDto>();
 
   private readonly viewport = toSignal(
     this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),
@@ -162,7 +172,9 @@ export class UserTable {
       meta: { priority: 'primary', locked: true },
     },
     { accessorKey: 'email', id: 'email', meta: { priority: 'secondary' } },
+    //#if (IncludeRoles)
     { accessorKey: 'roles', id: 'roles', enableSorting: false, meta: { priority: 'secondary' } },
+    //#endif
     {
       accessorKey: 'isActive',
       id: 'status',
@@ -211,6 +223,7 @@ export class UserTable {
     return this.table.getColumn(id)?.getIsVisible() === false;
   }
 
+  //#if (IncludeRoles)
   detailLabel(field: 'email' | 'roles' | 'lastLogin' | 'created'): string {
     //#if (IncludeLocalization)
     const keys = {
@@ -230,6 +243,25 @@ export class UserTable {
     return labels[field];
     //#endif
   }
+  //#else
+  detailLabel(field: 'email' | 'lastLogin' | 'created'): string {
+    //#if (IncludeLocalization)
+    const keys = {
+      email: 'users.table.colEmail',
+      lastLogin: 'users.table.colLastLogin',
+      created: 'users.table.colCreatedAt',
+    } as const;
+    return this.transloco.translate(keys[field]);
+    //#else
+    const labels = {
+      email: 'Email',
+      lastLogin: 'Last sign-in',
+      created: 'Created at',
+    } as const;
+    return labels[field];
+    //#endif
+  }
+  //#endif
 
   detailsLabel(): string {
     //#if (IncludeLocalization)
@@ -261,6 +293,7 @@ export class UserTable {
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
+  //#if (IncludeRoles)
   //#if (IncludeLocalization)
   rolesPopoverTitle(count: number): string {
     return this.transloco.translate('users.popover.rolesTitle', { count });
@@ -269,6 +302,7 @@ export class UserTable {
   rolesPopoverTitle(count: number): string {
     return `Roles (${count})`;
   }
+  //#endif
   //#endif
 
   toggleSort(columnId: string): void {
@@ -295,16 +329,27 @@ export class UserTable {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
 
+  //#if (IncludeRoles)
   //#if (IncludeLocalization)
   rolesActionLabel(): string {
     return this.transloco.translate('users.actions.manageRoles');
+  }
+
+  permissionsActionLabel(): string {
+    return this.transloco.translate('users.actions.managePermissions');
   }
   //#else
   rolesActionLabel(): string {
     return 'Assign roles';
   }
+
+  permissionsActionLabel(): string {
+    return 'Permission exceptions';
+  }
+  //#endif
   //#endif
 
+  //#if (IncludeRoles)
   getVisibleRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(0, 2);
   }
@@ -312,6 +357,7 @@ export class UserTable {
   getHiddenRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(2);
   }
+  //#endif
 
   paginatorLabels(): TablePaginatorLabels {
     //#if (IncludeLocalization)
@@ -405,6 +451,7 @@ export class UserTable {
     return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
   }
 
+  //#if (IncludeRoles)
   /**
    * 角色徽章样式。
    *
@@ -414,4 +461,5 @@ export class UserTable {
   getRoleVariant(): BadgeVariant {
     return 'outline';
   }
+  //#endif
 }

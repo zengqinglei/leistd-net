@@ -89,7 +89,7 @@ public class DefaultPermissionChecker(
                     _subject.RoleIds,
                     cancellationToken);
 
-                _effects = grants.GetEffectiveEffects();
+                _effects = grants.GetEffectiveEffects(permissionDefinitionManager);
             }
 
             _loaded = true;
