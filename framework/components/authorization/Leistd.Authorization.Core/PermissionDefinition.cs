@@ -116,8 +116,7 @@ internal sealed class PermissionDefinitionRegistry
 
     public void Register(PermissionDefinition permission)
     {
-        if (string.IsNullOrWhiteSpace(permission.Name))
-            throw new ArgumentException("权限名称不能为空。", nameof(permission));
+        ArgumentException.ThrowIfNullOrWhiteSpace(permission.Name, nameof(permission));
 
         if (!_permissions.TryAdd(permission.Name, permission))
             throw new InvalidOperationException($"权限 '{permission.Name}' 已存在，权限名称必须全局唯一。");

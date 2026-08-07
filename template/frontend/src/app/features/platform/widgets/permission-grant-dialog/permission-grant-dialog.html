@@ -29,6 +29,9 @@
           outline + 语义色描边/底色。实心 destructive 留给删除类操作，避免读者误以为此处可点。
         -->
         <div class="flex items-center gap-2 sm:ml-auto">
+          @if (hasPendingChanges()) {
+            <span class="text-xs text-muted-foreground">{{ pendingChangesLabel() }}</span>
+          }
           <span hlmBadge variant="outline" class="border-success/30 bg-success/10 text-success">{{
             grantedLabel(grantedCount())
           }}</span>
@@ -107,6 +110,26 @@
                           "
                           >{{ inheritedLabel(inheritedEffect) }}</span
                         >
+                      }
+                      <!-- 最终结果由服务端算出（拒绝优先 + 拒绝沿定义树向下传播）。
+                           本行的两列组合解释不了「被祖先拒绝」，因此额外标出来源。 -->
+                      @let effective = effectiveOf(row.name);
+                      @if (effective !== null) {
+                        <span
+                          hlmBadge
+                          variant="outline"
+                          [class]="
+                            effective
+                              ? 'border-success/30 bg-success/10 text-success'
+                              : 'border-destructive/30 bg-destructive/10 text-destructive'
+                          "
+                          >{{ effectiveLabel(effective) }}</span
+                        >
+                      }
+                      @if (isProhibitedByAncestor(row.name)) {
+                        <span class="text-xs text-destructive">{{
+                          ancestorProhibitedLabel()
+                        }}</span>
                       }
                     </div>
 

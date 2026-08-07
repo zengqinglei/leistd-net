@@ -69,6 +69,7 @@
       </div>
     </div>
 
+    <!--#if (IncludeRoles)-->
     <app-user-table
       [users]="users()"
       [totalCount]="totalRecords()"
@@ -76,19 +77,37 @@
       [sorting]="sorting()"
       [loading]="loading()"
       [filtered]="hasActiveFilters()"
+      [canUpdate]="canUpdateUser()"
+      [canDelete]="canDeleteUser()"
       (paginationChange)="onPaginationChange($event)"
       (sortingChange)="onSortingChange($event)"
       (edit)="openEditDialog($event)"
       (toggleActive)="handleToggleActive($event)"
       (resetPassword)="openResetPasswordDialog($event)"
       (delete)="handleDelete($event)"
-      [canUpdate]="canUpdateUser()"
-      [canDelete]="canDeleteUser()"
       [canManageRoles]="canManageUserRoles()"
       [canManagePermissions]="canManageUserPermissions()"
       (manageRoles)="openRolesDialog($event)"
       (managePermissions)="openPermissionsDialog($event)"
     />
+    <!--#else-->
+    <app-user-table
+      [users]="users()"
+      [totalCount]="totalRecords()"
+      [pagination]="pagination()"
+      [sorting]="sorting()"
+      [loading]="loading()"
+      [filtered]="hasActiveFilters()"
+      [canUpdate]="canUpdateUser()"
+      [canDelete]="canDeleteUser()"
+      (paginationChange)="onPaginationChange($event)"
+      (sortingChange)="onSortingChange($event)"
+      (edit)="openEditDialog($event)"
+      (toggleActive)="handleToggleActive($event)"
+      (resetPassword)="openResetPasswordDialog($event)"
+      (delete)="handleDelete($event)"
+    />
+    <!--#endif-->
   </div>
 </div>
 

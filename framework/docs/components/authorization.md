@@ -142,7 +142,18 @@ var effective = grants.GetEffectiveEffects(definitionManager)
 // grants.Revision 变化即表示权限已被改动，客户端据此判断本地缓存是否过期。
 ```
 
-**第五步：控制器/接口声明式校验**——引入 `Leistd.Authorization.AspNetCore` 后，`[Authorize(Policy = "权限名")]` 直接生效：
+**第五步：控制器/接口声明式校验**——引入 `Leistd.Authorization.AspNetCore` 后，`[Authorize(Policy = "权限名")]` 直接生效。
+
+策略名可以用 `|` 连接多个权限表示「任一满足」：
+
+```csharp
+// 「能配置某类主体的权限」蕴含「能读权限目录」。把读取做成一个可被单独扣掉的权限，
+// 只会制造一个永远无用的状态——有 ManagePermissions 却打不开权限配置界面。
+[Authorize(Policy = "App.Permissions|App.Roles.ManagePermissions|App.Users.ManagePermissions")]
+public Task<IReadOnlyList<PermissionGroupDto>> GetDefinitionsAsync() => ...;
+```
+
+仅当 `|` 分隔后的每一段都是已定义权限时才按权限策略解析，否则整个策略名交回默认策略提供器，因此不会误判恰好含 `|` 的自定义策略名。
 
 ```csharp
 // 权限名作为策略名：命中权限才放行，否则返回 403
@@ -181,6 +192,9 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 | `IPermissionGrantManager.RevokeAsync(name, providerName, providerKey, ct)` | 撤销单个权限并级联撤销其全部子孙 |
 | `IPermissionGrantManager.ReplaceGrantsAsync(providerName, providerKey, grants, expectedRevision, ct)` | 原子替换某主体的全部授予，返回新版本号 |
 | `PermissionGrantConcurrencyException` | 乐观并发冲突：`ProviderName`、`ProviderKey`、`ExpectedRevision`、`ActualRevision`；宿主应映射为 HTTP 409 |
+| `UndefinedPermissionException` | 试图授予未定义或已禁用的权限：`PermissionNames`；宿主应映射为 HTTP 400 |
+| `PermissionRequirement` | 授权需求，持有 `PermissionNames`；多个权限按"任一满足"处理 |
+| `PermissionPolicyProvider.AnyOfSeparator` | 多权限策略名的分隔符 `\|` |
 | `PermissionGrantProviderNames` | 授予对象类型常量：`User`、`Role` |
 
 `Leistd.Authorization.AspNetCore` 命名空间：
@@ -223,7 +237,7 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 
 所有写入都经过同一条流水线，因此单条授予、批量替换与种子数据得到一致的结果：
 
-1. **校验**：权限必须已定义且启用，否则抛 `ArgumentException`，不会把无效权限写进存储。
+1. **校验**：权限必须已定义且启用，否则抛 `UndefinedPermissionException`，不会把无效权限写进存储。这是该规则的**唯一执行点**（管理器是写入方，覆盖应用服务、种子数据、后台任务等全部调用路径），调用方不必也不应重复判断，只需按需把它翻译成对外契约（如 HTTP 400）。
 2. **拒绝向下传播**：被拒绝权限的全部子孙授予被移除，子孙回落为"未授予"，运行时同样拒绝。
 3. **允许向上补齐**：被允许权限的全部祖先补为允许。
 

@@ -1,4 +1,5 @@
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
+import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
 import {
   ALL_PERMISSIONS,
@@ -91,8 +92,26 @@ export function getCurrentPermissions() {
 }
 
 export function getPermissionDefinitions() {
-  requirePermission('App.Permissions');
+  // 与后端的「任一满足」策略对应：能配置某类主体的权限即可读权限目录。
+  requireAnyPermission([
+    PERMISSIONS.permissions.default,
+    PERMISSIONS.roles.managePermissions,
+    PERMISSIONS.users.managePermissions,
+  ]);
   return PERMISSION_DEFINITIONS;
+}
+
+/** 端点级 403（任一满足）：与后端的多权限策略逐个对应。 */
+function requireAnyPermission(candidates: string[]) {
+  const user = requireUser();
+  const { permissions } = effectivePermissionsOf(user.username);
+  if (!candidates.some((permission) => permissions.includes(permission))) {
+    throw new MockException(403, {
+      code: 40300,
+      message: `Missing any of: ${candidates.join(', ')}`,
+    });
+  }
+  return user;
 }
 
 export function getRoles(params: Record<string, unknown>): PagedResultDto<unknown> {

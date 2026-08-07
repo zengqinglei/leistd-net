@@ -34,7 +34,9 @@ import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+//#if (IncludeRoles)
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
+//#endif
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -51,7 +53,9 @@ import {
   TablePaginator,
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
+//#if (IncludeRoles)
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
+//#endif
 import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 //#if (IncludeRoles)
@@ -78,8 +82,10 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     TablePaginator,
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
+    //#if (IncludeRoles)
     ...HlmPopoverImports,
     PopoverAria,
+    //#endif
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
@@ -127,13 +133,21 @@ export class UserTable {
    */
   readonly canUpdate = input(true);
   readonly canDelete = input(true);
+  //#if (IncludeRoles)
   readonly canManageRoles = input(false);
   readonly canManagePermissions = input(false);
+  //#endif
 
   /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
   readonly hasRowActions = computed(
     () =>
-      this.canUpdate() || this.canDelete() || this.canManageRoles() || this.canManagePermissions(),
+      this.canUpdate() ||
+      this.canDelete() ||
+      //#if (IncludeRoles)
+      this.canManageRoles() ||
+      this.canManagePermissions() ||
+      //#endif
+      false,
   );
 
   readonly paginationChange = output<PaginationState>();
@@ -142,10 +156,12 @@ export class UserTable {
   readonly toggleActive = output<UserManagementOutputDto>();
   readonly resetPassword = output<string>();
   readonly delete = output<UserManagementOutputDto>();
+  //#if (IncludeRoles)
   /** 角色分配是独立命令，与资料编辑分开触发。 */
   readonly manageRoles = output<UserManagementOutputDto>();
   /** 用户权限例外，同样是独立命令与独立权限。 */
   readonly managePermissions = output<UserManagementOutputDto>();
+  //#endif
 
   private readonly viewport = toSignal(
     this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),

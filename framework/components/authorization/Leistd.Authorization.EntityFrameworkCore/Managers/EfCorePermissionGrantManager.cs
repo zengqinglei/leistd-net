@@ -8,7 +8,8 @@ namespace Leistd.Authorization.EntityFrameworkCore;
 /// <remarks>
 /// 所有写入都经过同一条归一化流水线，因此单条授予、批量替换与种子数据得到一致的结果：
 /// <list type="number">
-/// <item>校验权限已定义且启用，未定义的权限名直接拒绝写入，避免拼错或残留的权限进入存储；</item>
+/// <item>校验权限已定义且启用，未定义的权限名直接拒绝写入（抛 <see cref="UndefinedPermissionException"/>），
+/// 避免拼错或残留的权限进入存储。这是该规则的唯一执行点，调用方不必也不应重复判断；</item>
 /// <item>显式拒绝向下传播：被拒绝权限的全部子孙授予被移除，子孙因此回落为"未授予"，运行时同样拒绝；</item>
 /// <item>允许向上补齐：被允许权限的全部祖先补为允许，使运行时保持扁平查找而无需回溯定义树。</item>
 /// </list>
@@ -28,7 +29,6 @@ public class EfCorePermissionGrantManager<TDbContext>(
         PermissionGrantEffect effect = PermissionGrantEffect.Granted,
         CancellationToken cancellationToken = default)
     {
-        ValidateProvider(providerName, providerKey);
         ValidatePermissions([permissionName]);
 
         var desired = await ReadDesiredAsync(providerName, providerKey, cancellationToken);
@@ -43,8 +43,6 @@ public class EfCorePermissionGrantManager<TDbContext>(
         string providerKey,
         CancellationToken cancellationToken = default)
     {
-        ValidateProvider(providerName, providerKey);
-
         var desired = await ReadDesiredAsync(providerName, providerKey, cancellationToken);
         desired.Remove(permissionName);
 
@@ -64,7 +62,6 @@ public class EfCorePermissionGrantManager<TDbContext>(
         long? expectedRevision = null,
         CancellationToken cancellationToken = default)
     {
-        ValidateProvider(providerName, providerKey);
         ValidatePermissions(grants.Select(x => x.PermissionName));
 
         var desired = new Dictionary<string, PermissionGrantEffect>(StringComparer.Ordinal);
@@ -204,6 +201,7 @@ public class EfCorePermissionGrantManager<TDbContext>(
         if (!changed)
             return currentRevision;
 
+        var isFirstWrite = revision == null;
         if (revision == null)
         {
             revision = new AuthorizationRevisionRecord
@@ -225,18 +223,41 @@ public class EfCorePermissionGrantManager<TDbContext>(
         }
         catch (DbUpdateConcurrencyException)
         {
-            // 另一个事务在本次读版本之后完成了写入。抛业务异常而不是让 EF 的异常穿透到宿主，
-            // 调用方据此返回 409 并要求客户端带最新版本重试。
-            throw new PermissionGrantConcurrencyException(
+            // 更新路径：并发令牌命中 0 行，说明另一个事务在本次读版本之后完成了写入。
+            throw Conflict();
+        }
+        catch (DbUpdateException) when (isFirstWrite)
+        {
+            // 插入路径没有可比对的版本行，冲突表现为唯一索引违例，而唯一索引违例也可能来自
+            // 其他约束。因此不猜测：清掉跟踪状态重新读一次，确认版本行确实已被他人建立才转成
+            // 业务异常，否则原样抛出，避免把真实的写入错误伪装成 409。
+            dbContext.ChangeTracker.Clear();
+
+            var created = await dbContext.Set<AuthorizationRevisionRecord>()
+                .AsNoTracking()
+                .AnyAsync(
+                    x => x.ProviderName == providerName && x.ProviderKey == providerKey,
+                    cancellationToken);
+
+            if (!created)
+                throw;
+
+            throw Conflict();
+        }
+
+        return revision.Version;
+
+        PermissionGrantConcurrencyException Conflict()
+            => new(
                 providerName,
                 providerKey,
                 expectedRevision ?? currentRevision,
                 currentRevision);
-        }
-
-        return revision.Version;
     }
 
+    /// <summary>
+    /// 校验权限已定义且启用。这是"未定义权限不落库"的唯一执行点，覆盖全部调用路径。
+    /// </summary>
     private void ValidatePermissions(IEnumerable<string> permissionNames)
     {
         var unknown = permissionNames
@@ -245,19 +266,6 @@ public class EfCorePermissionGrantManager<TDbContext>(
             .ToList();
 
         if (unknown.Count > 0)
-        {
-            throw new ArgumentException(
-                $"以下权限未定义或已禁用，无法授予：{string.Join(", ", unknown)}。",
-                nameof(permissionNames));
-        }
-    }
-
-    private static void ValidateProvider(string providerName, string providerKey)
-    {
-        if (string.IsNullOrWhiteSpace(providerName))
-            throw new ArgumentException("授予对象类型不能为空。", nameof(providerName));
-
-        if (string.IsNullOrWhiteSpace(providerKey))
-            throw new ArgumentException("授予对象 Key 不能为空。", nameof(providerKey));
+            throw new UndefinedPermissionException(unknown);
     }
 }

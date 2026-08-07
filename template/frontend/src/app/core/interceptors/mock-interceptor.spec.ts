@@ -6,6 +6,10 @@ import { TestBed } from '@angular/core/testing';
 import { OPEN_APPLICATION_API } from '../../../../_mock/api/open-application';
 //#endif
 import { MOCK_APIS, mockInterceptor } from '../../../../_mock/core/interceptor';
+//#if (IncludeOpenIddict)
+import { USERS } from '../../../../_mock/data/user';
+import { setMockSessionUserId } from '../../../../_mock/utils/current-user';
+//#endif
 import { environment } from '../../../environments/environment';
 //#if (IncludeOpenIddict)
 import {
@@ -19,6 +23,11 @@ describe('mockInterceptor', () => {
 
   beforeEach(() => {
     environment.useMock = true;
+    //#if (IncludeOpenIddict)
+    // 开放应用接口有权限门（与后端策略一一对应），本组用例关注的是拦截器本身，
+    // 因此先建立一个有权限的会话，避免被 401 挡在门外。
+    setMockSessionUserId(USERS.find((user) => user.isSuperAdmin)!.id);
+    //#endif
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([mockInterceptor])),
@@ -42,6 +51,9 @@ describe('mockInterceptor', () => {
 
   afterEach(() => {
     environment.useMock = originalUseMock;
+    //#if (IncludeOpenIddict)
+    setMockSessionUserId(null);
+    //#endif
   });
 
   it('resolves an exact route to its mocked payload', (done) => {

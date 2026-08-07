@@ -269,6 +269,7 @@ export class Users {
   readonly canManageUserPermissions = computed(() => false);
   //#endif
 
+  //#if (IncludeRoles)
   readonly rolesDialogVisible = signal(false);
   readonly rolesDialogUser = signal<UserManagementOutputDto | null>(null);
 
@@ -284,24 +285,23 @@ export class Users {
     this.permissionsDialogUser.set(user);
     this.permissionsDialogVisible.set(true);
   }
+  //#endif
 
+  //#if (IncludeRoles)
   /** 权限例外改变的是有效权限，保存后刷新列表与当前用户权限。 */
   onPermissionsSaved(): void {
     this.permissionsDialogVisible.set(false);
     this.refreshRequests.next();
-    //#if (IncludeRoles)
     this.authorizationService.reload().subscribe({ error: () => undefined });
-    //#endif
   }
 
   /** 角色变更会改变有效权限，保存后刷新列表与当前用户权限。 */
   onRolesSaved(): void {
     this.rolesDialogVisible.set(false);
     this.refreshRequests.next();
-    //#if (IncludeRoles)
     this.authorizationService.reload().subscribe({ error: () => undefined });
-    //#endif
   }
+  //#endif
 
   //#if (IncludeLocalization)
   readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');

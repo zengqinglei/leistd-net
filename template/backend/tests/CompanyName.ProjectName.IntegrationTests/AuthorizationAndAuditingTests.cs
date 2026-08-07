@@ -265,6 +265,49 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
 #endif
     [Fact]
+    public async Task Undefined_permissions_surface_as_bad_request_not_server_error()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+        var role = await CreateRoleAsync(superAdmin.Client);
+
+        // 未定义权限由授予管理器统一拒绝；应用层只做翻译，不重复判断。
+        // 若这条异常没有被翻译，全局处理器会把它归一化成 500——这正是要锁住的行为。
+        var response = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new
+            {
+                expectedRevision = 0,
+                grants = new[] { new { name = "App.NotDefined", effect = "Granted" } }
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Managing_permissions_implies_reading_the_permission_definitions()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var operatorUser = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(operatorUser.Username, TestPassword);
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await session.Client.GetAsync("/api/v1/permissions/definitions")).StatusCode);
+
+        // 只授予「配置角色权限」，不授予 App.Permissions：定义树是配置权限的前置条件，
+        // 要求额外记得授一个根权限只会制造「有权限却打不开界面」的无用状态。
+        await GrantAsync(
+            PermissionGrantProviderNames.User,
+            operatorUser.Id,
+            PermissionConstant.Roles.ManagePermissions);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await session.Client.GetAsync("/api/v1/permissions/definitions")).StatusCode);
+    }
+
+    [Fact]
     public async Task User_permission_exceptions_require_a_dedicated_permission()
     {
         using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");

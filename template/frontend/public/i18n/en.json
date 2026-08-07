@@ -564,6 +564,10 @@
     "descriptionForRole": "Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.",
     "descriptionForUser": "Inherit follows the roles assigned to this user. Deny always wins over any grant, including grants inherited from roles.",
     "inheritedGranted": "Allowed by role",
-    "inheritedProhibited": "Denied by role"
+    "inheritedProhibited": "Denied by role",
+    "effectiveGranted": "Effective: allowed",
+    "effectiveProhibited": "Effective: denied",
+    "prohibitedByAncestor": "Denied by a parent permission",
+    "pendingChanges": "Effective results refresh after saving"
   }
 }

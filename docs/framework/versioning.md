@@ -13,13 +13,20 @@
 
 **`Leistd.Authorization.Core`**
 
-- `IPermissionGrantStore` 重构为两个读方法：`GetGrantsAsync(providerName, providerKey)` 与 `GetGrantsForSubjectAsync(userId, roleIds)`。原有 `IsGrantedToUserAsync` / `IsGrantedToRoleAsync` / `IsGrantedToAnyRoleAsync` / `IsGrantedToUserOrRolesAsync` / `GetGrantedPermissionsFor*Async` 全部移除——它们互为退化形式，且逐权限查询无法表达三态。
+- `IPermissionGrantStore` 重构为三个读方法：`GetGrantsAsync(providerName, providerKey)`、`GetGrantsAsync(providerName, providerKeys)`（批量，供列表页取每个主体的授予数，避免按行 N+1）与 `GetGrantsForSubjectAsync(userId, roleIds)`。原有 `IsGrantedToUserAsync` / `IsGrantedToRoleAsync` / `IsGrantedToAnyRoleAsync` / `IsGrantedToUserOrRolesAsync` / `GetGrantedPermissionsFor*Async` 全部移除——它们互为退化形式，且逐权限查询无法表达三态。**自定义 Store 实现必须补上批量重载**，否则编译失败。
 - `IPermissionGrantManager` 改为按 `(providerName, providerKey)` 的通用签名：`GrantAsync` / `RevokeAsync` / `ReplaceGrantsAsync`。原有 `GrantToUserAsync` / `GrantToRoleAsync` / `RevokeFromUserAsync` / `RevokeFromRoleAsync` 与两个转发读方法移除，读职责归 Store。
-- 新增 `PermissionGrantEffect`（`Granted` / `Prohibited`）、`PermissionGrant`、`PermissionGrantSet`、`SubjectPermissionGrants`、`PermissionGrantConcurrencyException`。
+- 新增 `PermissionGrantEffect`（`Granted` / `Prohibited`）、`PermissionGrant`、`PermissionGrantSet`、`SubjectPermissionGrants`、`PermissionGrantConcurrencyException`、`UndefinedPermissionException`。
+- 授予未定义/已禁用权限时抛 `UndefinedPermissionException`（此前是 `ArgumentException`，会被全局处理器归一化成 500）。宿主需把它映射为 HTTP 400。
+- `SubjectPermissionGrants.GetEffectiveEffects()` 改为 `GetEffectiveEffects(IPermissionDefinitionManager)`。合并多来源授予后需要再做一次「拒绝沿定义树向下传播」：写入归一化只在单个主体内成立，角色 A 拒绝父权限、角色 B 允许子权限时合并结果是父拒子允。**自行计算有效权限的调用方必须改走该方法**，不要就地重写合并规则。
 - `IPermissionDefinitionContext.AddPermission` 移除：每个权限都必须归属于某个组，游离权限无法被权限管理界面表达。权限名改为**全局唯一**，重复注册在启动阶段抛异常。
 - `IPermissionDefinitionManager` 新增 `GetGroups()`、`IsEffectivelyEnabled(name)`、`GetAncestorNames(name)`、`GetDescendantNames(name)`。
 - `IPermissionChecker` 注册生命周期从 Transient 改为 **Scoped**；调用签名不变，但同一作用域内只解析一次主体、只读取一次授予。
 - **运行时语义变更**：权限未定义或未启用一律拒绝（此前不校验定义，`IsEnabled` 形同虚设）。若此前依赖"未定义权限也能通过 Checker"，需要补齐定义。
+
+**`Leistd.Authorization.AspNetCore`**
+
+- 策略名支持用 `|` 连接多个权限表示「任一满足」，如 `[Authorize(Policy = "App.Permissions|App.Roles.ManagePermissions")]`；仅当每一段都是已定义权限时才按权限策略解析，否则交回默认策略提供器。
+- `PermissionRequirement.PermissionName` 改为 `PermissionNames`（`IReadOnlyList<string>`）。直接构造该类型或自定义 Handler 的调用方需要调整。
 
 **`Leistd.Authorization.EntityFrameworkCore`**
 
@@ -28,6 +35,7 @@
 - 需要一次 EF 迁移：为 `PermissionGrantRecord` 增加 `Effect`（`varchar(32)`，既有行填 `'Granted'`），并新建版本表。唯一索引保持 `(PermissionName, ProviderName, ProviderKey)` 不变。
 - 迁移里对 `Effect` 做数据转换时**按字符串比较**（`Effect = 'Granted'`），不要对该列写整数字面量。
 - 写入行为变更：授予子权限会补齐祖先，撤销父权限会级联清理子孙。既有的扁平授予在下一次经由 Manager 写入时被归一化。
+- `AuthorizationRevisionRecord.Version` 是并发令牌（`IsConcurrencyToken()`，列类型不变，无需额外迁移）。并发写入中落败方得到 `PermissionGrantConcurrencyException` 而不是静默覆盖；首次写入的竞争由唯一索引兜住，同样映射为该异常。宿主需把它映射为 HTTP 409。
 
 **新增包**
 

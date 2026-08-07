@@ -50,7 +50,7 @@
             <!--#endif-->
 
             <div class="flex gap-1">
-              @for (role of user.roles ?? []; track role) {
+              @for (role of user.roles; track role) {
                 <!--#if (IncludeLocalization)-->
                 <span hlmBadge variant="secondary">{{ role }}</span>
                 <!--#else-->

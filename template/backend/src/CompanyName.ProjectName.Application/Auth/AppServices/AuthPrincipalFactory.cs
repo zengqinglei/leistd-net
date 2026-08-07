@@ -2,7 +2,9 @@
 using System.Collections.Immutable;
 using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Options;
+#if (IncludeRoles)
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Security.Claims;
 using Microsoft.Extensions.Options;
@@ -12,7 +14,11 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
-public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<OAuthOptions> oauthOptions) : IAuthPrincipalFactory
+public class AuthPrincipalFactory(
+#if (IncludeRoles)
+    UserDomainService userDomainService,
+#endif
+    IOptions<OAuthOptions> oauthOptions) : IAuthPrincipalFactory
 {
     public async Task<ClaimsPrincipal> CreateAsync(
         User user,

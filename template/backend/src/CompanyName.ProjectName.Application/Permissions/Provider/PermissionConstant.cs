@@ -70,5 +70,16 @@ public static class PermissionConstant
     {
         /// <summary>查看权限定义树，是配置任何主体权限的前置条件。</summary>
         public const string Default = GroupName + ".Permissions";
+
+        /// <summary>
+        /// 读取权限定义树的策略：本权限，或任一「配置主体权限」的权限。
+        /// </summary>
+        /// <remarks>
+        /// 「能配置某类主体的权限」必然蕴含「能读权限目录」。若要求管理员额外持有
+        /// <see cref="Default"/>，就会存在一个永远无用的状态——有 ManagePermissions 却打不开
+        /// 权限配置界面。用「任一满足」表达这层蕴含关系，而不是靠管理员记得多授一个根权限。
+        /// </remarks>
+        public const string ReadPolicy =
+            Default + "|" + Roles.ManagePermissions + "|" + Users.ManagePermissions;
     }
 }

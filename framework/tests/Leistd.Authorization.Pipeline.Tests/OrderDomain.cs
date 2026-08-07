@@ -62,6 +62,12 @@ public static class OrderPermissions
     public const string Read = "Orders.Read";
     public const string Update = "Orders.Update";
     public const string Export = "Orders.Export";
+
+    /// <summary>
+    /// "任一满足"策略：导出报表既对导出人开放，也对编辑人开放。
+    /// 用来验证多权限策略名真的接上了检查器。
+    /// </summary>
+    public const string ExportOrUpdate = Export + "|" + Update;
 }
 
 public sealed class OrderPermissionDefinitionProvider : IPermissionDefinitionProvider

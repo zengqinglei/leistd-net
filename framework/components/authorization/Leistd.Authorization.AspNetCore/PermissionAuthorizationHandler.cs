@@ -17,7 +17,10 @@ public class PermissionAuthorizationHandler(IPermissionChecker permissionChecker
         AuthorizationHandlerContext context,
         PermissionRequirement requirement)
     {
-        var isGranted = await permissionChecker.IsGrantedAsync(requirement.PermissionName);
+        // 单权限走单权限重载；多权限时任一满足即通过。
+        var isGranted = requirement.PermissionNames.Count == 1
+            ? await permissionChecker.IsGrantedAsync(requirement.PermissionNames[0])
+            : (await permissionChecker.IsGrantedAsync([.. requirement.PermissionNames])).AnyGranted;
 
         if (isGranted)
         {

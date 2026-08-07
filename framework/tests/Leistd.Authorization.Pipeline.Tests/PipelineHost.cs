@@ -57,9 +57,9 @@ public sealed class PipelineHost : IAsyncDisposable
 
         // 认证：用请求头模拟已登录主体，把注意力留给授权本身。
         builder.Services
-            .AddAuthentication(TestAuthenticationHandler.Scheme)
+            .AddAuthentication(TestAuthenticationHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
-                TestAuthenticationHandler.Scheme, _ => { });
+                TestAuthenticationHandler.SchemeName, _ => { });
         builder.Services.AddAuthorization();
 
         // 第一层：功能权限。AddPermissionAuthorization 让 [Authorize(Policy = "权限名")] 生效。
@@ -147,7 +147,7 @@ public sealed class TestAuthenticationHandler(
     ILoggerFactory logger,
     UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    public const string Scheme = "Test";
+    public const string SchemeName = "Test";
     public const string UserHeader = "X-Test-User";
     public const string RolesHeader = "X-Test-Roles";
 
@@ -165,9 +165,9 @@ public sealed class TestAuthenticationHandler(
                 .Select(role => new Claim(ClaimTypes.Role, role)));
         }
 
-        var identity = new ClaimsIdentity(claims, Scheme);
+        var identity = new ClaimsIdentity(claims, SchemeName);
         return Task.FromResult(AuthenticateResult.Success(
-            new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme)));
+            new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
     }
 }
 

@@ -70,6 +70,34 @@ public class AuthorizationPipelineTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Theory]
+    // 任一满足：持有其中任意一个权限都放行。
+    [InlineData(OrderPermissions.Export)]
+    [InlineData(OrderPermissions.Update)]
+    public async Task Any_of_policy_accepts_each_listed_permission(string permission)
+    {
+        var userId = $"any-of-{permission}";
+        await _host.GrantAsync(PermissionGrantProviderNames.User, userId, permission);
+
+        var response = await _host.Client.SendAsync(
+            _host.Request(HttpMethod.Get, "/orders/report", userId));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Any_of_policy_still_rejects_a_subject_holding_none_of_them()
+    {
+        const string userId = "any-of-none";
+        // 持有同一权限族里的其他权限，但不在策略列出的集合内。
+        await _host.GrantAsync(PermissionGrantProviderNames.User, userId, OrderPermissions.Read);
+
+        var response = await _host.Client.SendAsync(
+            _host.Request(HttpMethod.Get, "/orders/report", userId));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     [Fact]
     public async Task Unauthenticated_request_is_challenged_rather_than_forbidden()
     {

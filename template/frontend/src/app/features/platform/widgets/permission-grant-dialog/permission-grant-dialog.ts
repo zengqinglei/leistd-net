@@ -2,13 +2,13 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  effect,
   inject,
   input,
   model,
   output,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -25,6 +25,8 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { combineLatest, EMPTY, of } from 'rxjs';
+import { catchError, filter, finalize, switchMap, tap } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
@@ -35,6 +37,7 @@ import {
   PermissionDefinitionOutputDto,
   PermissionGrantEffect,
   PermissionGrantInputDto,
+  PermissionGrantsOutputDto,
   PermissionGrantState,
   ReplacePermissionGrantsInputDto,
 } from '../../../../shared/models/permission';
@@ -118,6 +121,30 @@ export class PermissionGrantDialog {
 
   /** 权限名 -> 继承而来的效果。角色主体没有上游来源，恒为空。 */
   private readonly inheritedEffects = signal<Record<string, PermissionGrantEffect>>({});
+
+  /**
+   * 权限名 -> 后端算出的最终生效结果（拒绝优先 + 拒绝沿定义树向下传播）。
+   *
+   * 不在前端重算：直授与继承两列的组合规则里，「被祖先拒绝」这一项无法从本行的两个值推出，
+   * 界面若自行推断就会与执行层给出不同答案。
+   */
+  private readonly effectiveResults = signal<Record<string, boolean>>({});
+
+  /** 加载时的直授快照，用于判断是否存在尚未保存的改动。 */
+  private readonly loadedStates = signal<Record<string, PermissionGrantState>>({});
+
+  /**
+   * 是否有未保存的改动。
+   *
+   * 有改动时不展示「实际生效」——那是服务端基于已保存数据算出来的，
+   * 编辑过程中展示它会误导；而在前端就地重算又会与执行层分叉。
+   */
+  readonly hasPendingChanges = computed(() => {
+    const current = this.states();
+    const loaded = this.loadedStates();
+    const names = new Set([...Object.keys(current), ...Object.keys(loaded)]);
+    return [...names].some((name) => (current[name] ?? 'Inherit') !== (loaded[name] ?? 'Inherit'));
+  });
 
   /** 父子关系缓存，用于自动补齐祖先与清理子孙。 */
   private ancestors: Record<string, string[]> = {};
@@ -215,14 +242,17 @@ export class PermissionGrantDialog {
   }
 
   constructor() {
-    effect(() => {
-      const providerKey = this.providerKey();
-      if (!this.open() || !providerKey) {
-        return;
-      }
-
-      this.loadFor(providerKey);
-    });
+    // 单一请求流：主体切换时用 switchMap 取消上一次加载，组件销毁时随之退订。
+    // 嵌套 subscribe 既不取消也不校验归属，快速切换主体时晚到的响应会落到新主体上，
+    // 保存时就可能把 A 的授予写给 B——两边版本都是 0 时乐观并发也拦不住。
+    combineLatest([toObservable(this.open), toObservable(this.providerKey)])
+      .pipe(
+        filter(([open, providerKey]) => open && !!providerKey),
+        tap(() => this.loading.set(true)),
+        switchMap(([, providerKey]) => this.loadFor(providerKey as string)),
+        takeUntilDestroyed(),
+      )
+      .subscribe();
   }
 
   stateOf(name: string): PermissionGrantState {
@@ -232,6 +262,28 @@ export class PermissionGrantDialog {
   /** 该权限从角色继承到的效果；没有继承来源时返回 null。 */
   inheritedOf(name: string): PermissionGrantEffect | null {
     return this.inheritedEffects()[name] ?? null;
+  }
+
+  /** 后端算出的最终生效结果；存在未保存改动时返回 null，不展示过期结论。 */
+  effectiveOf(name: string): boolean | null {
+    if (this.hasPendingChanges()) {
+      return null;
+    }
+
+    return this.effectiveResults()[name] ?? null;
+  }
+
+  /**
+   * 该行的直授与继承都没有明确允许，最终却是拒绝——说明拒绝来自被拒绝的祖先。
+   * 单看本行的两列解释不了这个结果，因此单独提示来源。
+   */
+  isProhibitedByAncestor(name: string): boolean {
+    return (
+      this.effectiveOf(name) === false &&
+      this.stateOf(name) !== 'Prohibited' &&
+      this.inheritedOf(name) !== 'Prohibited' &&
+      (this.stateOf(name) === 'Granted' || this.inheritedOf(name) === 'Granted')
+    );
   }
 
   onStateChange(name: string, next: PermissionGrantState): void {
@@ -296,45 +348,50 @@ export class PermissionGrantDialog {
       : this.permissionService.replaceRoleGrants(providerKey, data);
   }
 
-  private loadFor(providerKey: string): void {
-    this.loading.set(true);
+  private loadFor(providerKey: string) {
+    const providerName = this.providerName();
 
-    this.permissionService.getDefinitions().subscribe({
-      next: (definitionGroups) => {
-        this.buildTree(definitionGroups);
-
-        const grants$ =
-          this.providerName() === 'User'
-            ? this.permissionService.getUserGrants(providerKey)
-            : this.permissionService.getRoleGrants(providerKey);
-
-        grants$.subscribe({
-          next: (grants) => {
-            this.revision.set(grants.revision);
-
-            const states: Record<string, PermissionGrantState> = {};
-            const inherited: Record<string, PermissionGrantEffect> = {};
-            for (const grant of grants.grants) {
-              states[grant.name] = grant.direct ?? 'Inherit';
-              if (grant.inherited) {
-                inherited[grant.name] = grant.inherited;
-              }
-            }
-            this.states.set(states);
-            this.inheritedEffects.set(inherited);
-            this.loading.set(false);
-          },
-          error: (error) => {
-            this.loading.set(false);
-            toast.error(applicationErrorMessage(error));
-          },
-        });
-      },
-      error: (error) => {
-        this.loading.set(false);
+    return this.permissionService.getDefinitions().pipe(
+      tap((definitionGroups) => this.buildTree(definitionGroups)),
+      switchMap(() =>
+        providerName === 'User'
+          ? this.permissionService.getUserGrants(providerKey)
+          : this.permissionService.getRoleGrants(providerKey),
+      ),
+      // 再核对一次归属：switchMap 已经取消了上一次订阅，这里防的是「响应内容与请求主体不符」，
+      // 例如服务端或 Mock 返回了另一个主体的数据。宁可不渲染，也不把别人的授予当成本主体的。
+      filter(
+        (grants) => grants.providerName === providerName && grants.providerKey === providerKey,
+      ),
+      tap((grants) => this.applyGrants(grants)),
+      catchError((error: unknown) => {
         toast.error(applicationErrorMessage(error));
-      },
-    });
+        return EMPTY;
+      }),
+      finalize(() => this.loading.set(false)),
+      // finalize 在被 switchMap 取消时也会跑，用 of() 收尾保证流不因单次失败而终止。
+      catchError(() => of(null)),
+    );
+  }
+
+  private applyGrants(grants: PermissionGrantsOutputDto): void {
+    this.revision.set(grants.revision);
+
+    const states: Record<string, PermissionGrantState> = {};
+    const inherited: Record<string, PermissionGrantEffect> = {};
+    const effective: Record<string, boolean> = {};
+    for (const grant of grants.grants) {
+      states[grant.name] = grant.direct ?? 'Inherit';
+      if (grant.inherited) {
+        inherited[grant.name] = grant.inherited;
+      }
+      effective[grant.name] = grant.effective;
+    }
+
+    this.states.set(states);
+    this.loadedStates.set({ ...states });
+    this.inheritedEffects.set(inherited);
+    this.effectiveResults.set(effective);
   }
 
   private buildTree(definitionGroups: PermissionDefinitionGroupOutputDto[]): void {
@@ -404,6 +461,13 @@ export class PermissionGrantDialog {
     this.transloco.translate(
       effect === 'Granted' ? 'permissions.inheritedGranted' : 'permissions.inheritedProhibited',
     );
+  readonly effectiveLabel = (granted: boolean) =>
+    this.transloco.translate(
+      granted ? 'permissions.effectiveGranted' : 'permissions.effectiveProhibited',
+    );
+  readonly ancestorProhibitedLabel = () =>
+    this.transloco.translate('permissions.prohibitedByAncestor');
+  readonly pendingChangesLabel = () => this.transloco.translate('permissions.pendingChanges');
   private savedMessage = () => this.transloco.translate('permissions.saved');
   private conflictMessage = () => this.transloco.translate('permissions.conflict');
   //#else
@@ -426,6 +490,10 @@ export class PermissionGrantDialog {
   readonly groupSummary = (granted: number, total: number) => `${granted}/${total}`;
   readonly inheritedLabel = (effect: PermissionGrantEffect) =>
     effect === 'Granted' ? 'Allowed by role' : 'Denied by role';
+  readonly effectiveLabel = (granted: boolean) =>
+    granted ? 'Effective: allowed' : 'Effective: denied';
+  readonly ancestorProhibitedLabel = () => 'Denied by a parent permission';
+  readonly pendingChangesLabel = () => 'Effective results refresh after saving';
   private savedMessage = () => 'Permissions saved';
   private conflictMessage = () =>
     'Someone else changed these permissions. The latest values have been reloaded.';

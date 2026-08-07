@@ -158,6 +158,11 @@ public static class OrderEndpoints
                 Results.Ok(await service.ExportAsync(ct)))
             .RequireAuthorization(OrderPermissions.Export);
 
+        // 同一份数据的另一个入口，用"任一满足"策略把关。
+        app.MapGet("/orders/report", async (OrderAppService service, CancellationToken ct) =>
+                Results.Ok(await service.ExportAsync(ct)))
+            .RequireAuthorization(OrderPermissions.ExportOrUpdate);
+
         app.MapGet("/orders/shared", async (OrderAppService service, CancellationToken ct) =>
                 Results.Ok(await service.GetSharedWithMeAsync(ct)))
             .RequireAuthorization(OrderPermissions.Read);

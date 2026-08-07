@@ -32,7 +32,7 @@ public class PermissionController(IPermissionAppService permissionAppService) : 
     /// 获取权限定义树（需要权限定义查看权限）
     /// </summary>
     [HttpGet("definitions")]
-    [Authorize(Policy = PermissionConstant.Permissions.Default)]
+    [Authorize(Policy = PermissionConstant.Permissions.ReadPolicy)]
     public async Task<IReadOnlyList<PermissionDefinitionGroupOutputDto>> GetDefinitionsAsync(
         CancellationToken cancellationToken)
     {

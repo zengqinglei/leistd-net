@@ -564,6 +564,10 @@
     "descriptionForRole": "“继承”表示不设置；“拒绝”优先于任何来源的允许。",
     "descriptionForUser": "“继承”表示沿用该用户所属角色的结果；“拒绝”优先于任何来源的允许，包括从角色继承的允许。",
     "inheritedGranted": "角色允许",
-    "inheritedProhibited": "角色拒绝"
+    "inheritedProhibited": "角色拒绝",
+    "effectiveGranted": "实际生效：允许",
+    "effectiveProhibited": "实际生效：拒绝",
+    "prohibitedByAncestor": "被上级权限拒绝",
+    "pendingChanges": "实际生效结果将在保存后刷新"
   }
 }

@@ -107,10 +107,10 @@ public class PermissionAppService(
         string providerKey,
         CancellationToken cancellationToken = default)
     {
-        await EnsureSubjectExistsAsync(providerName, providerKey, cancellationToken);
+        var subjectId = await EnsureSubjectExistsAsync(providerName, providerKey, cancellationToken);
 
         var direct = await permissionGrantStore.GetGrantsAsync(providerName, providerKey, cancellationToken);
-        var inherited = await GetInheritedEffectsAsync(providerName, providerKey, cancellationToken);
+        var inherited = await GetInheritedEffectsAsync(providerName, subjectId, cancellationToken);
 
         return BuildOutput(providerName, providerKey, direct, inherited);
     }
@@ -123,25 +123,14 @@ public class PermissionAppService(
     {
         await EnsureSubjectExistsAsync(providerName, providerKey, cancellationToken);
 
-        var grants = new List<PermissionGrant>(input.Grants.Count);
-        foreach (var grant in input.Grants)
-        {
-            if (!permissionDefinitionManager.IsEffectivelyEnabled(grant.Name))
-            {
-                throw new BadRequestException($"Permission '{grant.Name}' is not defined or is disabled.")
-#if (IncludeLocalization)
-                    .WithLocalization("Permission:UndefinedPermission")
-                    .WithData("Name", grant.Name)
-#endif
-                    ;
-            }
-
-            grants.Add(new PermissionGrant(
+        // Effect 的取值范围由 ReplacePermissionGrantsInputDto 的注解保证，此处不再重复判断。
+        var grants = input.Grants
+            .Select(grant => new PermissionGrant(
                 grant.Name,
                 grant.Effect == nameof(PermissionGrantEffect.Prohibited)
                     ? PermissionGrantEffect.Prohibited
-                    : PermissionGrantEffect.Granted));
-        }
+                    : PermissionGrantEffect.Granted))
+            .ToList();
 
         try
         {
@@ -159,6 +148,17 @@ public class PermissionAppService(
                     exception)
 #if (IncludeLocalization)
                 .WithLocalization("Permission:ConcurrencyConflict")
+#endif
+                ;
+        }
+        // "权限是否已定义且启用"由授予管理器统一把关（它是写入方，覆盖全部调用路径），
+        // 这里只负责把领域异常翻译成对外契约与展示文案，不重复这条判断。
+        catch (UndefinedPermissionException exception)
+        {
+            throw new BadRequestException(exception.Message, exception)
+#if (IncludeLocalization)
+                .WithLocalization("Permission:UndefinedPermission")
+                .WithData("Name", string.Join(", ", exception.PermissionNames))
 #endif
                 ;
         }
@@ -202,10 +202,10 @@ public class PermissionAppService(
     /// </summary>
     private async Task<IReadOnlyDictionary<string, PermissionGrantEffect>> GetInheritedEffectsAsync(
         string providerName,
-        string providerKey,
+        Guid userId,
         CancellationToken cancellationToken)
     {
-        if (providerName != PermissionGrantProviderNames.User || !Guid.TryParse(providerKey, out var userId))
+        if (providerName != PermissionGrantProviderNames.User)
             return new Dictionary<string, PermissionGrantEffect>(StringComparer.Ordinal);
 
         var roleIds = (await userRoleRepository.GetListAsync(ur => ur.UserId == userId, cancellationToken))
@@ -274,7 +274,14 @@ public class PermissionAppService(
         };
     }
 
-    private async Task EnsureSubjectExistsAsync(
+    /// <summary>
+    /// 校验主体 Key 合法且主体存在，并把解析结果交给调用方，避免下游重复解析。
+    /// </summary>
+    /// <remarks>
+    /// providerName / providerKey 来自路由段而非入口 DTO，注解覆盖不到，因此校验落在这里；
+    /// 这是该请求上这两项的唯一校验点。
+    /// </remarks>
+    private async Task<Guid> EnsureSubjectExistsAsync(
         string providerName,
         string providerKey,
         CancellationToken cancellationToken)
@@ -307,6 +314,8 @@ public class PermissionAppService(
 #endif
                 ;
         }
+
+        return id;
     }
 }
 #endif
