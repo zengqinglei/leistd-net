@@ -9,6 +9,9 @@ import {
 //#if (IncludeIdentity)
 
 import { AuthService } from './auth-service';
+//#if (IncludeRoles)
+import { AuthorizationService } from './authorization-service';
+//#endif
 import { ApplicationHttpError } from '../errors/application-http-error';
 //#endif
 
@@ -18,6 +21,9 @@ export type StartupStatus = 'loading' | 'success' | 'failed';
 export class StartupService {
   //#if (IncludeIdentity)
   private authService = inject(AuthService);
+  //#endif
+  //#if (IncludeRoles)
+  private authorizationService = inject(AuthorizationService);
   //#endif
   private _status = signal<StartupStatus>('loading');
   private _error = signal<unknown | null>(null);
@@ -35,6 +41,9 @@ export class StartupService {
 
     if (pathname.includes('/auth/login') || hash.includes('/auth/login')) {
       this.authService.clearAuthData();
+      //#if (IncludeRoles)
+      this.authorizationService.clear();
+      //#endif
       this._status.set('success');
       return;
     }
@@ -56,10 +65,18 @@ export class StartupService {
 
     try {
       await this.authService.initializeAuth();
+      //#if (IncludeRoles)
+      // 权限与当前用户在同一次启动中就位：Guard 与菜单据此裁剪，
+      // 未加载完成前一律按无权限处理，避免受保护入口闪现。
+      await this.authorizationService.initialize();
+      //#endif
       this._status.set('success');
     } catch (err: unknown) {
       if (err instanceof ApplicationHttpError && err.status === 401) {
         this.authService.clearAuthData();
+        //#if (IncludeRoles)
+        this.authorizationService.clear();
+        //#endif
         this._status.set('success');
       } else {
         this._error.set(err);

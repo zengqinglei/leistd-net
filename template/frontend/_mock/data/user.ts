@@ -1,3 +1,6 @@
+//#if (IncludeRoles)
+import { ROLES } from './authorization';
+//#endif
 import { UserOutputDto } from '../../src/app/features/account/models/account.dto';
 import { UserManagementOutputDto } from '../../src/app/features/platform/models/user-management.dto';
 
@@ -59,6 +62,7 @@ export function toUserOutput(user: MockUser): UserOutputDto {
     isActive: user.isActive,
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
+    // 当前用户模型只需要角色名（用于展示徽章），不需要 Id。
     roles: user.roles,
   };
 }
@@ -72,7 +76,14 @@ export function toUserManagementOutput(user: MockUser): UserManagementOutputDto 
     avatar: user.avatar,
     isActive: user.isActive,
     isEmailVerified: user.isEmailVerified,
-    roles: user.roles,
+    //#if (IncludeRoles)
+    // 角色以 Id + 名称的结构返回：Id 用于提交，名称仅用于展示与筛选。
+    roles: ROLES.filter((role) => user.roles.includes(role.name)).map((role) => ({
+      id: role.id,
+      name: role.name,
+      displayName: role.displayName,
+    })),
+    //#endif
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
     lastLoginTime: user.lastLoginTime,

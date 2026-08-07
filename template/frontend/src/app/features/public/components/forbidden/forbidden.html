@@ -1,0 +1,32 @@
+<section class="flex min-h-svh flex-col items-center justify-center gap-6 px-6 text-center">
+  <div
+    class="flex size-16 items-center justify-center rounded-full bg-destructive/10 text-destructive"
+  >
+    <ng-icon name="lucideShieldOff" size="32" aria-hidden="true" />
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <!--#if (IncludeLocalization)-->
+    <h1 class="m-0 text-2xl font-semibold tracking-tight">{{ 'forbidden.title' | transloco }}</h1>
+    <p class="m-0 max-w-md text-sm text-muted-foreground">
+      {{ 'forbidden.description' | transloco }}
+    </p>
+    <!--#else-->
+    <h1 class="m-0 text-2xl font-semibold tracking-tight">Access denied</h1>
+    <p class="m-0 max-w-md text-sm text-muted-foreground">
+      You are signed in, but you do not have permission to view this page. Ask an administrator to
+      grant it.
+    </p>
+    <!--#endif-->
+  </div>
+
+  <div class="flex flex-wrap items-center justify-center gap-3">
+    <!--#if (IncludeLocalization)-->
+    <a hlmBtn routerLink="/workspace">{{ 'forbidden.backToWorkspace' | transloco }}</a>
+    <a hlmBtn variant="outline" routerLink="/">{{ 'forbidden.backHome' | transloco }}</a>
+    <!--#else-->
+    <a hlmBtn routerLink="/workspace">Back to workspace</a>
+    <a hlmBtn variant="outline" routerLink="/">Go home</a>
+    <!--#endif-->
+  </div>
+</section>

@@ -11,9 +11,11 @@ namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 /// </summary>
 public class UserDomainService(
     IRepository<User, Guid> userRepository,
-#if (IncludeIdentity)
+#if (IncludeRoles)
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
+#endif
+#if (IncludeIdentity)
     IPasswordHasher passwordHasher,
 #endif
     ILogger<UserDomainService> logger)
@@ -163,6 +165,7 @@ public class UserDomainService(
         return Task.CompletedTask;
     }
 
+#if (IncludeRoles)
     public async Task<User> CreateUserWithRolesAsync(
         string username,
         string email,
@@ -227,6 +230,7 @@ public class UserDomainService(
         return roles.Select(r => r.Name).ToList();
     }
 
+#endif
     /// <summary>
     /// 验证用户凭据
     /// </summary>

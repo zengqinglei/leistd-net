@@ -1,10 +1,17 @@
 using System.Linq.Dynamic.Core;
+#if (IncludeRoles)
+using CompanyName.ProjectName.Application.Permissions.Provider;
+using CompanyName.ProjectName.Application.Roles.Dtos;
+#endif
 using CompanyName.ProjectName.Application.Users.Dtos;
 #if (IncludeIdentity)
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #endif
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
+#if (IncludeRoles)
+using Leistd.Authorization;
+#endif
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Domain.Repositories;
@@ -21,10 +28,15 @@ namespace CompanyName.ProjectName.Application.Users.AppServices;
 /// </summary>
 public class UserAppService(
     IRepository<User, Guid> userRepository,
-#if (IncludeIdentity)
+#if (IncludeRoles)
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
+#endif
+#if (IncludeIdentity)
     IPasswordHasher passwordHasher,
+#endif
+#if (IncludeRoles)
+    IPermissionChecker permissionChecker,
 #endif
     UserDomainService userDomainService,
     ICurrentUser currentUser,
@@ -32,7 +44,7 @@ public class UserAppService(
     IObjectMapper objectMapper,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
-#if (IncludeIdentity)
+#if (IncludeRoles)
     /// <summary>角色名称最大长度，与 Role 实体的持久化约束保持一致。</summary>
     private const int RoleNameMaxLength = 64;
 
@@ -62,6 +74,8 @@ public class UserAppService(
         {
             userQuery = userQuery.Where(u => u.EmailConfirmed == input.IsEmailVerified.Value);
         }
+#endif
+#if (IncludeRoles)
 
         if (input.Roles is { Count: > 0 })
         {
@@ -123,7 +137,13 @@ public class UserAppService(
         logger.LogInformation("开始创建用户 {Username}... 邮箱：{Email}", username, email);
 
 #if (IncludeIdentity)
-        var roles = await GetRolesByNamesAsync(input.Roles, cancellationToken);
+#if (IncludeRoles)
+        // 创建时携带角色等同于一次角色分配，因此除创建权限外还必须持有 ManageRoles，
+        // 否则只拥有创建权限的主体可以直接造出一个管理员账号。
+        var roles = input.RoleIds.Count > 0
+            ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
+            : await GetDefaultRolesAsync(cancellationToken);
+#endif
         var user = await userDomainService.CreateUserAsync(username, email, input.Password, displayName, cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
 #else
@@ -131,7 +151,7 @@ public class UserAppService(
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, false);
 #endif
         await userRepository.UpdateAsync(user, cancellationToken);
-#if (IncludeIdentity)
+#if (IncludeRoles)
         await AssignRolesAsync(user.Id, roles, cancellationToken);
 #endif
 
@@ -168,15 +188,12 @@ public class UserAppService(
         }
 
 #if (IncludeIdentity)
-        var roles = await GetRolesByNamesAsync(input.Roles, cancellationToken);
         user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
 #else
         user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), input.IsActive, false);
 #endif
+        // 角色不在此处变更：普通资料更新与角色分配是两个命令、两个权限。
         await userRepository.UpdateAsync(user, cancellationToken);
-#if (IncludeIdentity)
-        await ReplaceRolesAsync(user.Id, roles, cancellationToken);
-#endif
 
         logger.LogInformation("更新用户成功 (ID: {Id})", user.Id);
         return await MapToOutputAsync(user, cancellationToken);
@@ -286,32 +303,93 @@ public class UserAppService(
         return user;
     }
 
-#if (IncludeIdentity)
-    private async Task<List<Role>> GetRolesByNamesAsync(List<string> roleNames, CancellationToken cancellationToken)
+#if (IncludeRoles)
+    /// <summary>
+    /// 查询用户当前角色。
+    /// </summary>
+    public async Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        var normalizedRoleNames = roleNames
-            .Where(r => !string.IsNullOrWhiteSpace(r))
-            .Select(r => r.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        await GetUserOrThrowAsync(id, cancellationToken);
 
-        if (normalizedRoleNames.Count == 0)
+        var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == id, cancellationToken)).ToList();
+        var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
+        if (roleIds.Count == 0)
         {
-            throw new BadRequestException("Please select at least one role.")
+            return [];
+        }
+
+        var roles = (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
+        return [.. roles
+            .OrderBy(r => r.Sort)
+            .ThenBy(r => r.Name, StringComparer.Ordinal)
+            .Select(r => new RoleBriefDto { Id = r.Id, Name = r.Name, DisplayName = r.DisplayName })];
+    }
+
+    /// <summary>
+    /// 替换用户角色。调用方必须持有 App.Users.ManageRoles，由 Controller 上的策略保证。
+    /// </summary>
+    public async Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+        Guid id,
+        UpdateUserRolesInputDto input,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        if (user.IsSuperAdmin && user.Id != currentUser.Id)
+        {
+            throw new BadRequestException("The built-in super administrator cannot be updated by other administrators.")
 #if (IncludeLocalization)
-                .WithLocalization("User:RoleRequired")
+                .WithLocalization("User:SuperAdminUpdateForbidden")
 #endif
                 ;
         }
 
-        var roles = (await roleRepository.GetListAsync(r => normalizedRoleNames.Contains(r.Name), cancellationToken)).ToList();
-        var missingRoles = normalizedRoleNames.Except(roles.Select(r => r.Name), StringComparer.OrdinalIgnoreCase).ToList();
-        if (missingRoles.Count != 0)
+        var roles = await GetRolesByIdsAsync(input.RoleIds, cancellationToken);
+        await ReplaceUserRolesAsync(id, roles, cancellationToken);
+
+        logger.LogInformation("替换用户角色成功 (ID: {Id}，角色数: {Count})", id, roles.Count);
+        return await GetRolesAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    /// 解析角色前先确认调用方持有角色分配权限。
+    /// </summary>
+    private async Task<List<Role>> GetRolesWithManageRolesCheckAsync(
+        List<Guid> roleIds,
+        CancellationToken cancellationToken)
+    {
+        if (!await permissionChecker.IsGrantedAsync(PermissionConstant.Users.ManageRoles, cancellationToken))
         {
-            throw new BadRequestException($"Roles not found: {string.Join(", ", missingRoles)}")
+            throw new ForbiddenException("Assigning roles requires the user role management permission.")
+#if (IncludeLocalization)
+                .WithLocalization("User:ManageRolesRequired")
+#endif
+                ;
+        }
+
+        return await GetRolesByIdsAsync(roleIds, cancellationToken);
+    }
+
+    /// <summary>
+    /// 按 Id 解析角色。角色名只用于展示与筛选，写入路径一律按 Id，避免大小写与重名歧义。
+    /// </summary>
+    private async Task<List<Role>> GetRolesByIdsAsync(List<Guid> roleIds, CancellationToken cancellationToken)
+    {
+        var normalized = roleIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (normalized.Count == 0)
+        {
+            return [];
+        }
+
+        var roles = (await roleRepository.GetListAsync(r => normalized.Contains(r.Id), cancellationToken)).ToList();
+        var missing = normalized.Except(roles.Select(r => r.Id)).ToList();
+        if (missing.Count != 0)
+        {
+            throw new BadRequestException($"Roles not found: {string.Join(", ", missing)}")
 #if (IncludeLocalization)
                 .WithLocalization("User:RolesNotFound")
-                .WithData("Roles", string.Join(", ", missingRoles))
+                .WithData("Roles", string.Join(", ", missing))
 #endif
                 ;
         }
@@ -319,13 +397,24 @@ public class UserAppService(
         return roles;
     }
 
+    /// <summary>
+    /// 没有显式指定角色时使用默认角色，保证新用户不会处于"零角色"状态。
+    /// </summary>
+    private async Task<List<Role>> GetDefaultRolesAsync(CancellationToken cancellationToken)
+        => [.. await roleRepository.GetListAsync(r => r.IsDefault, cancellationToken)];
+
     private async Task AssignRolesAsync(Guid userId, List<Role> roles, CancellationToken cancellationToken)
     {
+        if (roles.Count == 0)
+        {
+            return;
+        }
+
         var userRoles = roles.Select(role => new UserRole(userId, role.Id)).ToList();
         await userRoleRepository.InsertManyAsync(userRoles, cancellationToken);
     }
 
-    private async Task ReplaceRolesAsync(Guid userId, List<Role> roles, CancellationToken cancellationToken)
+    private async Task ReplaceUserRolesAsync(Guid userId, List<Role> roles, CancellationToken cancellationToken)
     {
         var currentRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == userId, cancellationToken)).ToList();
         if (currentRoles.Count != 0)
@@ -344,7 +433,7 @@ public class UserAppService(
             return [];
         }
 
-#if (IncludeIdentity)
+#if (IncludeRoles)
         var userIds = users.Select(u => u.Id).ToList();
         var userRoles = (await userRoleRepository.GetListAsync(ur => userIds.Contains(ur.UserId), cancellationToken)).ToList();
         var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
@@ -358,7 +447,7 @@ public class UserAppService(
 
     private async Task<UserManagementOutputDto> MapToOutputAsync(User user, CancellationToken cancellationToken)
     {
-#if (IncludeIdentity)
+#if (IncludeRoles)
         var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == user.Id, cancellationToken)).ToList();
         var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
         var roles = roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
@@ -368,7 +457,7 @@ public class UserAppService(
 #endif
     }
 
-#if (IncludeIdentity)
+#if (IncludeRoles)
     private static Dictionary<string, object> CreateMappingContext(List<UserRole> userRoles, List<Role> roles)
     {
         return new Dictionary<string, object>

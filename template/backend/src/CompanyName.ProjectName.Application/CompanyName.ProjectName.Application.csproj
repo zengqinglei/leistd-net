@@ -11,6 +11,10 @@
     <PackageReference Include="OpenIddict.Abstractions" />
 <!--#endif-->
     <PackageReference Include="System.Linq.Dynamic.Core" />
+<!--#if (IncludeLocalization)-->
+    <!-- 权限定义的显示名按请求 culture 在响应阶段翻译，需要本地化抽象。 -->
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" />
+<!--#endif-->
   </ItemGroup>
 
   <!-- Leistd 框架引用 -->

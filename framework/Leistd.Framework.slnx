@@ -12,6 +12,13 @@
     <Project Path="components/authorization/Leistd.Authorization.AspNetCore/Leistd.Authorization.AspNetCore.csproj" />
     <Project Path="components/authorization/Leistd.Authorization.EntityFrameworkCore/Leistd.Authorization.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/components/authorization-data-scope/">
+    <Project Path="components/authorization-data-scope/Leistd.Authorization.DataScope.Core/Leistd.Authorization.DataScope.Core.csproj" />
+  </Folder>
+  <Folder Name="/components/authorization-resource/">
+    <Project Path="components/authorization-resource/Leistd.Authorization.Resource.Core/Leistd.Authorization.Resource.Core.csproj" />
+    <Project Path="components/authorization-resource/Leistd.Authorization.Resource.EntityFrameworkCore/Leistd.Authorization.Resource.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/components/core/">
     <Project Path="components/core/Leistd.Core/Leistd.Core.csproj" />
   </Folder>
@@ -75,6 +82,9 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Leistd.Authorization.Tests/Leistd.Authorization.Tests.csproj" />
+    <Project Path="tests/Leistd.Authorization.DataScope.Tests/Leistd.Authorization.DataScope.Tests.csproj" />
+    <Project Path="tests/Leistd.Authorization.Pipeline.Tests/Leistd.Authorization.Pipeline.Tests.csproj" />
+    <Project Path="tests/Leistd.Authorization.Resource.Tests/Leistd.Authorization.Resource.Tests.csproj" />
     <Project Path="tests/Leistd.Ddd.Infrastructure.Tests/Leistd.Ddd.Infrastructure.Tests.csproj" />
     <Project Path="tests/Leistd.EventBus.Tests/Leistd.EventBus.Tests.csproj" />
     <Project Path="tests/Leistd.Exception.Tests/Leistd.Exception.Tests.csproj" />

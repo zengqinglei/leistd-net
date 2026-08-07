@@ -43,7 +43,7 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
         var page = await response.Content.ReadFromJsonAsync<PagedUsers>();
         Assert.NotNull(page);
         Assert.True(page.TotalCount >= 1);
-        Assert.All(page.Items, user => Assert.Contains(AdminConstant.RoleName, user.Roles));
+        Assert.All(page.Items, user => Assert.Contains(AdminConstant.RoleName, user.Roles.Select(role => role.Name)));
     }
 #endif
 
@@ -84,6 +84,9 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
 
     private sealed record PagedUsers(int TotalCount, List<PagedUserItem> Items);
 
-    private sealed record PagedUserItem(string Username, List<string> Roles);
+    private sealed record PagedUserItem(string Username, List<UserRoleItem> Roles);
+
+    /// <summary>角色以 Id + 名称的结构返回：Id 用于提交，名称仅用于展示与筛选。</summary>
+    private sealed record UserRoleItem(Guid Id, string Name, string DisplayName);
 }
 #endif

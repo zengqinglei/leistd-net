@@ -19,6 +19,10 @@ public interface IPermissionDefinitionProvider
 /// <summary>
 /// 权限定义上下文
 /// </summary>
+/// <remarks>
+/// 每个权限都必须归属于一个权限组：权限管理界面按组分区渲染，游离权限无法被界面表达。
+/// 权限名称在所有组与层级中全局唯一，重复注册会在启动阶段抛出异常。
+/// </remarks>
 public interface IPermissionDefinitionContext
 {
     /// <summary>
@@ -28,14 +32,6 @@ public interface IPermissionDefinitionContext
     /// <param name="displayName">显示名称</param>
     /// <returns>权限组</returns>
     IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null);
-
-    /// <summary>
-    /// 添加权限
-    /// </summary>
-    /// <param name="name">权限名称</param>
-    /// <param name="displayName">显示名称</param>
-    /// <returns>权限定义</returns>
-    IPermissionDefinition AddPermission(string name, string? displayName = null);
 
     /// <summary>
     /// 获取权限定义
@@ -61,6 +57,11 @@ public interface IPermissionGroupDefinition
     string? DisplayName { get; set; }
 
     /// <summary>
+    /// 组内的顶层权限（各自可再带子权限），按声明顺序排列。
+    /// </summary>
+    IReadOnlyList<IPermissionDefinition> Permissions { get; }
+
+    /// <summary>
     /// 添加权限到组
     /// </summary>
     /// <param name="name">权限名称</param>
@@ -72,7 +73,7 @@ public interface IPermissionGroupDefinition
     /// 获取组内的权限定义
     /// </summary>
     /// <param name="name">权限名称</param>
-    /// <returns>权限定义，如果不存在则返回 null</returns>
+    /// <returns>权限定义，如果不存在或不属于本组则返回 null</returns>
     IPermissionDefinition? GetPermissionOrNull(string name);
 }
 

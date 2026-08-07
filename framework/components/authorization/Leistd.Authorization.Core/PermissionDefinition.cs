@@ -3,18 +3,24 @@ namespace Leistd.Authorization;
 /// <summary>
 /// 权限定义
 /// </summary>
-internal class PermissionDefinition : IPermissionDefinition
+internal sealed class PermissionDefinition : IPermissionDefinition
 {
-    private readonly List<PermissionDefinition> _children = new();
+    private readonly List<PermissionDefinition> _children = [];
+    private readonly PermissionDefinitionRegistry _registry;
 
     public string Name { get; }
     public string? DisplayName { get; set; }
-    public IPermissionDefinition? Parent { get; private set; }
+    public IPermissionDefinition? Parent { get; }
     public IReadOnlyList<IPermissionDefinition> Children => _children;
     public bool IsEnabled { get; set; } = true;
 
-    public PermissionDefinition(string name, string? displayName = null, IPermissionDefinition? parent = null)
+    internal PermissionDefinition(
+        PermissionDefinitionRegistry registry,
+        string name,
+        string? displayName = null,
+        PermissionDefinition? parent = null)
     {
+        _registry = registry;
         Name = name;
         DisplayName = displayName;
         Parent = parent;
@@ -22,7 +28,8 @@ internal class PermissionDefinition : IPermissionDefinition
 
     public IPermissionDefinition AddChild(string name, string? displayName = null)
     {
-        var child = new PermissionDefinition(name, displayName, this);
+        var child = new PermissionDefinition(_registry, name, displayName, this);
+        _registry.Register(child);
         _children.Add(child);
         return child;
     }
@@ -31,53 +38,108 @@ internal class PermissionDefinition : IPermissionDefinition
 /// <summary>
 /// 权限组定义
 /// </summary>
-internal class PermissionGroupDefinition : IPermissionGroupDefinition
+internal sealed class PermissionGroupDefinition : IPermissionGroupDefinition
 {
-    private readonly Dictionary<string, PermissionDefinition> _permissions = new();
+    private readonly List<PermissionDefinition> _permissions = [];
+    private readonly PermissionDefinitionRegistry _registry;
 
     public string Name { get; }
     public string? DisplayName { get; set; }
 
-    public PermissionGroupDefinition(string name, string? displayName = null)
+    public IReadOnlyList<IPermissionDefinition> Permissions => _permissions;
+
+    internal PermissionGroupDefinition(PermissionDefinitionRegistry registry, string name, string? displayName = null)
     {
+        _registry = registry;
         Name = name;
         DisplayName = displayName;
     }
 
     public IPermissionDefinition AddPermission(string name, string? displayName = null)
     {
-        if (_permissions.ContainsKey(name))
-            throw new InvalidOperationException($"权限 '{name}' 已存在于组 '{Name}' 中");
-
-        var permission = new PermissionDefinition(name, displayName);
-        _permissions[name] = permission;
+        var permission = new PermissionDefinition(_registry, name, displayName);
+        _registry.Register(permission);
+        _permissions.Add(permission);
         return permission;
     }
 
     public IPermissionDefinition? GetPermissionOrNull(string name)
     {
-        return _permissions.TryGetValue(name, out var permission) ? permission : null;
+        var permission = _registry.GetOrNull(name);
+        return permission != null && BelongsToThisGroup(permission) ? permission : null;
     }
 
-    public IEnumerable<IPermissionDefinition> GetAllPermissions()
+    internal IEnumerable<PermissionDefinition> GetAllPermissions()
     {
-        return _permissions.Values;
+        foreach (var permission in _permissions)
+        {
+            yield return permission;
+
+            foreach (var child in Flatten(permission))
+            {
+                yield return child;
+            }
+        }
     }
+
+    private static IEnumerable<PermissionDefinition> Flatten(PermissionDefinition permission)
+    {
+        foreach (var child in permission.Children.Cast<PermissionDefinition>())
+        {
+            yield return child;
+
+            foreach (var descendant in Flatten(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private bool BelongsToThisGroup(PermissionDefinition permission)
+    {
+        var root = permission;
+        while (root.Parent is PermissionDefinition parent)
+        {
+            root = parent;
+        }
+
+        return _permissions.Contains(root);
+    }
+}
+
+/// <summary>
+/// 权限名称到定义的全局注册表，保证权限名在所有组与层级中唯一，并提供 O(1) 查找。
+/// </summary>
+internal sealed class PermissionDefinitionRegistry
+{
+    private readonly Dictionary<string, PermissionDefinition> _permissions = new(StringComparer.Ordinal);
+
+    public void Register(PermissionDefinition permission)
+    {
+        if (string.IsNullOrWhiteSpace(permission.Name))
+            throw new ArgumentException("权限名称不能为空。", nameof(permission));
+
+        if (!_permissions.TryAdd(permission.Name, permission))
+            throw new InvalidOperationException($"权限 '{permission.Name}' 已存在，权限名称必须全局唯一。");
+    }
+
+    public PermissionDefinition? GetOrNull(string name)
+        => _permissions.TryGetValue(name, out var permission) ? permission : null;
 }
 
 /// <summary>
 /// 权限定义上下文
 /// </summary>
-internal class PermissionDefinitionContext : IPermissionDefinitionContext
+internal sealed class PermissionDefinitionContext : IPermissionDefinitionContext
 {
-    private readonly Dictionary<string, PermissionGroupDefinition> _groups = new();
-    private readonly Dictionary<string, IPermissionDefinition> _permissionCache = new();
+    private readonly Dictionary<string, PermissionGroupDefinition> _groups = new(StringComparer.Ordinal);
+    private readonly PermissionDefinitionRegistry _registry = new();
 
     public IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null)
     {
         if (!_groups.TryGetValue(name, out var group))
         {
-            group = new PermissionGroupDefinition(name, displayName);
+            group = new PermissionGroupDefinition(_registry, name, displayName);
             _groups[name] = group;
         }
         else if (displayName != null && group.DisplayName != displayName)
@@ -88,86 +150,11 @@ internal class PermissionDefinitionContext : IPermissionDefinitionContext
         return group;
     }
 
-    public IPermissionDefinition AddPermission(string name, string? displayName = null)
-    {
-        if (_permissionCache.ContainsKey(name))
-            throw new InvalidOperationException($"权限 '{name}' 已存在");
-
-        var permission = new PermissionDefinition(name, displayName);
-        _permissionCache[name] = permission;
-        return permission;
-    }
-
     public IPermissionDefinition? GetPermissionOrNull(string name)
-    {
-        // 先从缓存查找
-        if (_permissionCache.TryGetValue(name, out var permission))
-            return permission;
+        => string.IsNullOrWhiteSpace(name) ? null : _registry.GetOrNull(name);
 
-        // 从所有组中查找
-        foreach (var group in _groups.Values)
-        {
-            permission = group.GetPermissionOrNull(name);
-            if (permission != null)
-            {
-                _permissionCache[name] = permission;
-                return permission;
-            }
-
-            // 递归查找子权限
-            permission = FindPermissionRecursively(group.GetAllPermissions(), name);
-            if (permission != null)
-            {
-                _permissionCache[name] = permission;
-                return permission;
-            }
-        }
-
-        return null;
-    }
-
-    private IPermissionDefinition? FindPermissionRecursively(IEnumerable<IPermissionDefinition> permissions, string name)
-    {
-        foreach (var permission in permissions)
-        {
-            if (permission.Name == name)
-                return permission;
-
-            var child = FindPermissionRecursively(permission.Children, name);
-            if (child != null)
-                return child;
-        }
-
-        return null;
-    }
-
-    public IEnumerable<IPermissionGroupDefinition> GetGroups()
-    {
-        return _groups.Values;
-    }
+    public IEnumerable<IPermissionGroupDefinition> GetGroups() => _groups.Values;
 
     public IEnumerable<IPermissionDefinition> GetAllPermissions()
-    {
-        foreach (var group in _groups.Values)
-        {
-            foreach (var permission in GetAllPermissionsRecursively(group.GetAllPermissions()))
-            {
-                yield return permission;
-            }
-        }
-    }
-
-    private IEnumerable<IPermissionDefinition> GetAllPermissionsRecursively(IEnumerable<IPermissionDefinition> permissions)
-    {
-        foreach (var permission in permissions)
-        {
-            yield return permission;
-
-            foreach (var child in GetAllPermissionsRecursively(permission.Children))
-            {
-                yield return child;
-            }
-        }
-    }
+        => _groups.Values.SelectMany(group => group.GetAllPermissions());
 }
-

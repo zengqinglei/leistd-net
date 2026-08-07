@@ -233,41 +233,44 @@
           <hlm-separator />
 
           <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <!-- Roles（多选） -->
-            <div hlmField class="md:col-span-2">
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="user-roles">{{
-                'users.editDialog.rolesLabel' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="user-roles">Roles</label>
-              <!--#endif-->
-              <hlm-select-multiple class="w-full" [formField]="userForm.roles">
-                <hlm-select-trigger buttonId="user-roles" class="w-full">
-                  <hlm-select-placeholder>{{ rolesPlaceholder() }}</hlm-select-placeholder>
-                  <ng-template hlmSelectValues let-values>
-                    <hlm-select-values-content>
-                      {{ roleLabel(values[0]) }}
-                      @if (values.length > 1) {
-                        (+{{ values.length - 1 }})
+            <!--#if (IncludeRoles)-->
+            <!--
+              初始角色：仅「新建 + 持有角色分配权限」时可见。
+              编辑态不在此处改角色——资料更新与角色分配是两个命令、两个权限，
+              只持有 Users.Update 的主体在这里既看不到也提交不了角色。
+            -->
+            @if (showRoleField()) {
+              <div hlmField class="md:col-span-2">
+                <!--#if (IncludeLocalization)-->
+                <label hlmFieldLabel for="user-roles">{{
+                  'users.editDialog.rolesLabel' | transloco
+                }}</label>
+                <!--#else-->
+                <label hlmFieldLabel for="user-roles">Initial roles</label>
+                <!--#endif-->
+                <hlm-select-multiple class="w-full" [formField]="userForm.roleIds">
+                  <hlm-select-trigger buttonId="user-roles" class="w-full">
+                    <hlm-select-placeholder>{{ rolesPlaceholder() }}</hlm-select-placeholder>
+                    <ng-template hlmSelectValues let-values>
+                      <hlm-select-values-content>
+                        {{ roleLabel(values[0]) }}
+                        @if (values.length > 1) {
+                          (+{{ values.length - 1 }})
+                        }
+                      </hlm-select-values-content>
+                    </ng-template>
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    <hlm-select-group>
+                      @for (option of roleOptions(); track option.value) {
+                        <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
                       }
-                    </hlm-select-values-content>
-                  </ng-template>
-                </hlm-select-trigger>
-                <hlm-select-content *hlmSelectPortal>
-                  <hlm-select-group>
-                    @for (option of roleOptions(); track option.value) {
-                      <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
-                    }
-                  </hlm-select-group>
-                </hlm-select-content>
-              </hlm-select-multiple>
-              @for (error of userForm.roles().errors(); track error.kind) {
-                @if (error.message) {
-                  <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-                }
-              }
-            </div>
+                    </hlm-select-group>
+                  </hlm-select-content>
+                </hlm-select-multiple>
+              </div>
+            }
+            <!--#endif-->
 
             <!-- Enable user -->
             <div class="rounded-lg border border-border p-3">

@@ -3,29 +3,33 @@ namespace Leistd.Authorization;
 /// <summary>
 /// 默认权限检查器。
 /// </summary>
+/// <remarks>
+/// 以 Scoped 注册：主体解析与授予读取在同一作用域（通常是一次 HTTP 请求）内只发生一次，
+/// 之后同一作用域中的任意多次检查都是内存字典查找，不再回访数据库。
+/// 判定顺序为：权限未定义或未启用一律拒绝；主体不可识别一律拒绝；超级管理员旁路；
+/// 任一来源显式拒绝即拒绝；否则任一来源允许即允许；全部无结论时默认拒绝。
+/// </remarks>
 public class DefaultPermissionChecker(
     IPermissionSubjectProvider subjectProvider,
+    IPermissionDefinitionManager permissionDefinitionManager,
     IPermissionGrantStore permissionGrantStore) : IPermissionChecker
 {
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
+    private PermissionSubject? _subject;
+    private IReadOnlyDictionary<string, PermissionGrantEffect>? _effects;
+    private bool _loaded;
+
     public async Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        if (!permissionDefinitionManager.IsEffectivelyEnabled(name))
             return false;
 
-        var subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
-        if (subject == null)
+        await EnsureLoadedAsync(cancellationToken);
+
+        if (_subject == null)
             return false;
 
-        if (subject.IsSuperAdmin)
-            return true;
-
-        var results = await permissionGrantStore.IsGrantedToUserOrRolesAsync(
-            [name],
-            subject.UserId,
-            subject.RoleIds,
-            cancellationToken);
-
-        return results.TryGetValue(name, out var isGranted) && isGranted;
+        return _subject.IsSuperAdmin || IsGrantedCore(name);
     }
 
     public async Task<MultiplePermissionGrantResult> IsGrantedAsync(
@@ -36,41 +40,63 @@ public class DefaultPermissionChecker(
             return new MultiplePermissionGrantResult(new Dictionary<string, bool>());
 
         var results = names
+            .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal)
             .ToDictionary(x => x, _ => false, StringComparer.Ordinal);
 
-        var permissionNames = results.Keys
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToArray();
-
-        if (permissionNames.Length == 0)
+        if (results.Count == 0)
             return new MultiplePermissionGrantResult(results);
 
-        var subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
-        if (subject == null)
+        await EnsureLoadedAsync(cancellationToken);
+
+        if (_subject == null)
             return new MultiplePermissionGrantResult(results);
 
-        if (subject.IsSuperAdmin)
+        foreach (var name in results.Keys.ToArray())
         {
-            foreach (var name in permissionNames)
-            {
-                results[name] = true;
-            }
+            if (!permissionDefinitionManager.IsEffectivelyEnabled(name))
+                continue;
 
-            return new MultiplePermissionGrantResult(results);
-        }
-
-        var grants = await permissionGrantStore.IsGrantedToUserOrRolesAsync(
-            permissionNames,
-            subject.UserId,
-            subject.RoleIds,
-            cancellationToken);
-
-        foreach (var (name, isGranted) in grants)
-        {
-            results[name] = isGranted;
+            results[name] = _subject.IsSuperAdmin || IsGrantedCore(name);
         }
 
         return new MultiplePermissionGrantResult(results);
+    }
+
+    private bool IsGrantedCore(string name)
+        => _effects != null
+           && _effects.TryGetValue(name, out var effect)
+           && effect == PermissionGrantEffect.Granted;
+
+    private async Task EnsureLoadedAsync(CancellationToken cancellationToken)
+    {
+        if (_loaded)
+            return;
+
+        await _loadLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_loaded)
+                return;
+
+            _subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
+
+            // 超级管理员旁路功能权限，无需读取授予记录。
+            if (_subject is { IsSuperAdmin: false })
+            {
+                var grants = await permissionGrantStore.GetGrantsForSubjectAsync(
+                    _subject.UserId,
+                    _subject.RoleIds,
+                    cancellationToken);
+
+                _effects = grants.GetEffectiveEffects();
+            }
+
+            _loaded = true;
+        }
+        finally
+        {
+            _loadLock.Release();
+        }
     }
 }

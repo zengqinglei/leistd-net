@@ -18,8 +18,8 @@ public class MyProjectDbContext(
 {
     // Users（始终存在）
     public DbSet<User> Users { get; set; } = null!;
-#if (IncludeIdentity)
-    // Identity（认证模块）
+#if (IncludeRoles)
+    // Identity 角色模型
     public DbSet<Role> Roles { get; set; } = null!;
     public DbSet<UserRole> UserRoles { get; set; } = null!;
 #endif

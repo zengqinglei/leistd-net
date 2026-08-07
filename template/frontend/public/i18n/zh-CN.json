@@ -47,6 +47,16 @@
       "passwordMismatch": "两次输入的密码不一致",
       "passwordSameAsCurrent": "新密码不能与当前密码相同",
       "phonePattern": "只能包含数字、空格及 + - ( ) 符号"
+    },
+    "noData": "暂无数据",
+    "paginator": {
+      "report": "第 {{from}}-{{to}} 条，共 {{total}} 条",
+      "rowsPerPage": "每页条数",
+      "page": "页",
+      "first": "首页",
+      "previous": "上一页",
+      "next": "下一页",
+      "last": "末页"
     }
   },
   "menu": {
@@ -77,11 +87,13 @@
       "navigation": "导航",
       "appTitle": "模板项目",
       "dashboard": "仪表盘",
-      "groupSystem": "系统",
+      "groupAccess": "访问控制",
+      "groupDeveloper": "开发者",
       "users": "用户管理",
       "openApplications": "开发应用",
       "workbench": "工作台",
-      "appSubtitle": "管理平台"
+      "appSubtitle": "管理平台",
+      "roles": "角色管理"
     },
     "notifications": {
       "title": "通知",
@@ -259,7 +271,8 @@
       "searchPlaceholder": "搜索用户名 / 邮箱 / 显示名称..."
     },
     "actions": {
-      "newUser": "新建用户"
+      "newUser": "新建用户",
+      "manageRoles": "分配角色"
     },
     "status": {
       "active": "启用",
@@ -348,6 +361,11 @@
       "newPasswordLabel": "新密码",
       "newPasswordPlaceholder": "请输入新密码",
       "confirmButton": "确认重置"
+    },
+    "rolesDialog": {
+      "title": "角色 · {{name}}",
+      "description": "用户会继承所选角色的全部权限。",
+      "saved": "角色已更新"
     }
   },
   "openApp": {
@@ -491,9 +509,55 @@
       "empty": "暂无配置"
     }
   },
-  "role": {
-    "admin": "管理员",
-    "operator": "运营人员",
-    "member": "普通成员"
+  "forbidden": {
+    "title": "无访问权限",
+    "description": "你已登录，但没有查看该页面的权限。请联系管理员为你授予相应权限。",
+    "backToWorkspace": "返回工作区",
+    "backHome": "返回首页"
+  },
+  "roles": {
+    "searchPlaceholder": "搜索角色",
+    "create": "新建角色",
+    "colName": "角色",
+    "colUsers": "用户数",
+    "colPermissions": "权限数",
+    "static": "内置",
+    "default": "默认",
+    "staticRoleHint": "内置角色不可删除",
+    "createTitle": "新建角色",
+    "editTitle": "编辑角色",
+    "editDescription": "角色名称是稳定的业务标识，创建后不可修改。",
+    "fieldName": "名称",
+    "fieldDisplayName": "显示名称",
+    "fieldDescription": "描述",
+    "fieldIsDefault": "新用户自动分配该角色",
+    "saved": "角色已保存",
+    "deleted": "角色已删除",
+    "deleteTitle": "删除角色",
+    "deleteDescription": "确定删除“{{name}}”？其权限授予也会一并清理。",
+    "permissionsTitle": "权限配置 · {{name}}",
+    "permissionsDescription": "“继承”表示不设置；“拒绝”优先于任何来源的允许。",
+    "permissionsSaved": "权限已保存",
+    "permissionsConflict": "权限已被他人修改，已为你重新加载最新值。",
+    "grantedCount": "允许 {{count}} 项",
+    "prohibitedCount": "拒绝 {{count}} 项",
+    "stateInherit": "继承",
+    "stateGranted": "允许",
+    "stateProhibited": "拒绝",
+    "configurePermissions": "配置权限",
+    "title": "角色管理",
+    "searchPermissions": "搜索权限",
+    "allowAll": "全部允许",
+    "resetAll": "重置",
+    "groupSummary": "{{granted}}/{{total}}",
+    "colSort": "排序号",
+    "colCreatedAt": "创建时间",
+    "table": {
+      "currentPageReport": "共 {{total}} 条",
+      "emptyTitle": "暂无角色",
+      "emptyHint": "新建一个角色",
+      "emptyFilteredTitle": "没有匹配的角色",
+      "emptyFilteredHint": "请调整搜索关键字"
+    }
   }
 }

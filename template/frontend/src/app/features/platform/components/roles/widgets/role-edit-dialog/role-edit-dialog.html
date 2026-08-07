@@ -1,0 +1,63 @@
+<hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+    <hlm-dialog-header>
+      <h2 hlmDialogTitle>{{ title() }}</h2>
+      <p hlmDialogDescription>{{ description() }}</p>
+    </hlm-dialog-header>
+
+    <form class="flex flex-col gap-4 py-2" (ngSubmit)="onSubmit()">
+      <hlm-field>
+        <label hlmFieldLabel for="role-name">{{ fieldLabel('name') }}</label>
+        <input
+          hlmInput
+          id="role-name"
+          class="w-full"
+          autocomplete="off"
+          [formField]="roleForm.name"
+        />
+        @for (error of roleForm.name().errors(); track error.kind) {
+          <hlm-field-error>{{ error.message }}</hlm-field-error>
+        }
+      </hlm-field>
+
+      <hlm-field>
+        <label hlmFieldLabel for="role-display-name">{{ fieldLabel('displayName') }}</label>
+        <input
+          hlmInput
+          id="role-display-name"
+          class="w-full"
+          autocomplete="off"
+          [formField]="roleForm.displayName"
+        />
+        @for (error of roleForm.displayName().errors(); track error.kind) {
+          <hlm-field-error>{{ error.message }}</hlm-field-error>
+        }
+      </hlm-field>
+
+      <hlm-field>
+        <label hlmFieldLabel for="role-description">{{ fieldLabel('description') }}</label>
+        <input
+          hlmInput
+          id="role-description"
+          class="w-full"
+          autocomplete="off"
+          [formField]="roleForm.description"
+        />
+      </hlm-field>
+
+      <div class="flex items-center gap-3 text-sm">
+        <hlm-checkbox inputId="role-is-default" [formField]="roleForm.isDefault" />
+        <label hlmFieldLabel for="role-is-default">{{ fieldLabel('isDefault') }}</label>
+      </div>
+    </form>
+
+    <hlm-dialog-footer>
+      <button hlmBtn variant="outline" type="button" (click)="open.set(false)">
+        {{ cancelLabel() }}
+      </button>
+      <button hlmBtn type="button" [disabled]="roleForm().invalid()" (click)="onSubmit()">
+        {{ saveLabel() }}
+      </button>
+    </hlm-dialog-footer>
+  </hlm-dialog-content>
+</hlm-dialog>

@@ -76,13 +76,11 @@
                 <!--#else-->
                 <span hlmBadge variant="destructive">Super Admin</span>
                 <!--#endif-->
-              } @else if (user()?.isAdmin()) {
-                <!--#if (IncludeLocalization)-->
-                <span hlmBadge variant="secondary">{{
-                  'account.profile.adminTag' | transloco
-                }}</span>
-                <!--#else-->
-                <span hlmBadge variant="secondary">Admin</span>
+                <!--#if (IncludeRoles)-->
+              } @else if (roleLabels().length > 0) {
+                @for (role of roleLabels(); track role) {
+                  <span hlmBadge variant="secondary">{{ role }}</span>
+                }
                 <!--#endif-->
               }
             </div>

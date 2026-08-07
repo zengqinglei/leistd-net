@@ -22,11 +22,16 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 将 PermissionGrantRecord 实体配置应用到 DbContext。在 OnModelCreating 中调用。
+    /// 将授权相关实体配置应用到 DbContext。在 OnModelCreating 中调用。
     /// </summary>
+    /// <remarks>
+    /// 同时映射 <see cref="PermissionGrantRecord"/> 与 <see cref="AuthorizationRevisionRecord"/>；
+    /// 两者缺一不可，版本表缺失会导致批量替换无法做乐观并发校验。
+    /// </remarks>
     public static ModelBuilder ConfigureAuthorization(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new PermissionGrantRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new AuthorizationRevisionRecordConfiguration());
         return modelBuilder;
     }
 }

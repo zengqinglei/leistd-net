@@ -2,12 +2,17 @@ import { Routes } from '@angular/router';
 
 //#if (IncludeIdentity)
 import { authGuard } from './core/guards/auth-guard';
-import { roleGuard } from './core/guards/role-guard';
+//#endif
+//#if (IncludeRoles)
+import { permissionGuard } from './core/guards/permission-guard';
 //#endif
 // 布局组件导入
 import { DefaultLayout } from './layout/default/default-layout';
 //#if (IncludeIdentity)
 import { EmptyLayout } from './layout/empty/empty-layout';
+//#endif
+//#if (IncludeRoles)
+import { PERMISSIONS } from './shared/models/permission';
 //#endif
 
 export const routes: Routes = [
@@ -36,13 +41,33 @@ export const routes: Routes = [
       import('./features/workspace/workspace.routes').then((r) => r.WORKSPACE_ROUTES),
   },
 
+  //#if (IncludeRoles)
+  // 已登录但无权限：与 401 的登录跳转区分开，避免"登录成功又被弹回登录页"的循环。
+  {
+    path: '403-forbidden',
+    loadComponent: () =>
+      import('./features/public/components/forbidden/forbidden').then((m) => m.Forbidden),
+  },
+  //#endif
+
   // Default Layout - 平台管理
   {
     path: 'platform',
     component: DefaultLayout,
     //#if (IncludeIdentity)
-    canActivate: [authGuard, roleGuard],
-    data: { role: 'Admin' },
+    //#if (IncludeRoles)
+    // 按权限放行，不按角色名。各子路由再声明各自所需的权限。
+    canActivate: [authGuard, permissionGuard],
+    data: {
+      permissions: [
+        PERMISSIONS.users.default,
+        PERMISSIONS.roles.default,
+        PERMISSIONS.permissions.default,
+      ],
+    },
+    //#else
+    canActivate: [authGuard],
+    //#endif
     //#endif
     loadChildren: () =>
       import('./features/platform/platform.routes').then((r) => r.PLATFORM_ROUTES),

@@ -11,6 +11,9 @@ using Leistd.DependencyInjection.DynamicProxy;
 using Leistd.Exception.AspNetCore;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Api;
+#if (IncludeRoles)
+using CompanyName.ProjectName.Application.Permissions.AppServices;
+#endif
 using Leistd.Localization.AspNetCore;
 #endif
 using Leistd.Security.AspNetCore;
@@ -187,6 +190,11 @@ try
             // 显式登记 DataAnnotations 校验消息的标记类型走 JSON（组合工厂按类型精确路由，
             // 未登记则委派官方 RESX）；否则 factory.Create(typeof(ApiResource)) 取不到 JSON 校验文案。
             options.JsonResourceTypes.Add(typeof(ApiResource));
+#if (IncludeRoles)
+            // 权限定义的显示名存的是本地化键，由 PermissionAppService 在响应阶段翻译；
+            // 组合工厂按类型精确路由，这里必须登记它才会走 JSON 词条而非 RESX。
+            options.JsonResourceTypes.Add(typeof(PermissionAppService));
+#endif
         });
 #endif
     builder.Services.AddHealthChecks();

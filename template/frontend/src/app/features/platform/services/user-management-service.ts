@@ -3,11 +3,17 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { PagedResultDto } from '../../../shared/models/paged-result.dto';
+//#if (IncludeRoles)
+import { RoleBriefDto } from '../models/role.dto';
+//#endif
 import {
   CreateUserInputDto,
   GetUsersInputDto,
   ResetUserPasswordInputDto,
   UpdateUserInputDto,
+  //#if (IncludeRoles)
+  UpdateUserRolesInputDto,
+  //#endif
   UserManagementOutputDto,
 } from '../models/user-management.dto';
 
@@ -60,4 +66,15 @@ export class UserManagementService {
   deleteUser(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
+
+  //#if (IncludeRoles)
+  getUserRoles(id: string): Observable<RoleBriefDto[]> {
+    return this.http.get<RoleBriefDto[]>(`${this.baseUrl}/${id}/roles`);
+  }
+
+  /** 角色分配独立于资料更新，需要 App.Users.ManageRoles。 */
+  replaceUserRoles(id: string, data: UpdateUserRolesInputDto): Observable<RoleBriefDto[]> {
+    return this.http.put<RoleBriefDto[]>(`${this.baseUrl}/${id}/roles`, data);
+  }
+  //#endif
 }

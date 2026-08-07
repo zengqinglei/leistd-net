@@ -47,6 +47,16 @@
       "passwordMismatch": "The two passwords do not match.",
       "passwordSameAsCurrent": "The new password must differ from the current one.",
       "phonePattern": "Only digits, spaces, and + - ( ) are allowed."
+    },
+    "noData": "No data",
+    "paginator": {
+      "report": "{{from}}-{{to}} of {{total}}",
+      "rowsPerPage": "Rows per page",
+      "page": "Page",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
     }
   },
   "menu": {
@@ -77,11 +87,13 @@
       "navigation": "Navigation",
       "appTitle": "Template Project",
       "dashboard": "Dashboard",
-      "groupSystem": "System",
+      "groupAccess": "Access control",
+      "groupDeveloper": "Developer",
       "users": "User Management",
       "openApplications": "Developer Apps",
       "workbench": "Workbench",
-      "appSubtitle": "Admin Platform"
+      "appSubtitle": "Admin Platform",
+      "roles": "Role Management"
     },
     "notifications": {
       "title": "Notifications",
@@ -259,7 +271,8 @@
       "searchPlaceholder": "Search username / email / display name..."
     },
     "actions": {
-      "newUser": "New user"
+      "newUser": "New user",
+      "manageRoles": "Assign roles"
     },
     "status": {
       "active": "Active",
@@ -348,6 +361,11 @@
       "newPasswordLabel": "New password",
       "newPasswordPlaceholder": "Enter a new password",
       "confirmButton": "Confirm reset"
+    },
+    "rolesDialog": {
+      "title": "Roles · {{name}}",
+      "description": "The user inherits every permission granted to the selected roles.",
+      "saved": "Roles updated"
     }
   },
   "openApp": {
@@ -491,9 +509,55 @@
       "empty": "Nothing configured"
     }
   },
-  "role": {
-    "admin": "Administrator",
-    "operator": "Operator",
-    "member": "Member"
+  "forbidden": {
+    "title": "Access denied",
+    "description": "You are signed in, but you do not have permission to view this page. Ask an administrator to grant it.",
+    "backToWorkspace": "Back to workspace",
+    "backHome": "Go home"
+  },
+  "roles": {
+    "searchPlaceholder": "Search roles",
+    "create": "New role",
+    "colName": "Role",
+    "colUsers": "Users",
+    "colPermissions": "Permissions",
+    "static": "Built-in",
+    "default": "Default",
+    "staticRoleHint": "Built-in roles cannot be deleted",
+    "createTitle": "New role",
+    "editTitle": "Edit role",
+    "editDescription": "Name is the stable identifier and cannot be changed after creation.",
+    "fieldName": "Name",
+    "fieldDisplayName": "Display name",
+    "fieldDescription": "Description",
+    "fieldIsDefault": "Assign to new users by default",
+    "saved": "Role saved",
+    "deleted": "Role deleted",
+    "deleteTitle": "Delete role",
+    "deleteDescription": "Delete \"{{name}}\"? Its permission grants will be removed as well.",
+    "permissionsTitle": "Permissions · {{name}}",
+    "permissionsDescription": "Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.",
+    "permissionsSaved": "Permissions saved",
+    "permissionsConflict": "Someone else changed these permissions. The latest values have been reloaded.",
+    "grantedCount": "{{count}} allowed",
+    "prohibitedCount": "{{count}} denied",
+    "stateInherit": "Inherit",
+    "stateGranted": "Allow",
+    "stateProhibited": "Deny",
+    "configurePermissions": "Configure permissions",
+    "title": "Role Management",
+    "searchPermissions": "Search permissions",
+    "allowAll": "Allow all",
+    "resetAll": "Reset",
+    "groupSummary": "{{granted}}/{{total}}",
+    "colSort": "Sort",
+    "colCreatedAt": "Created at",
+    "table": {
+      "currentPageReport": "{{total}} in total",
+      "emptyTitle": "No roles yet",
+      "emptyHint": "Create a new role",
+      "emptyFilteredTitle": "No matching roles",
+      "emptyFilteredHint": "Adjust the search keyword"
+    }
   }
 }

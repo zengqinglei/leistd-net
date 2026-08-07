@@ -2,6 +2,9 @@
 export * from './api/auth';
 export * from './api/user';
 //#endif
+//#if (IncludeRoles)
+export * from './api/authorization';
+//#endif
 //#if (IncludeOpenIddict)
 export * from './api/open-application';
 //#endif

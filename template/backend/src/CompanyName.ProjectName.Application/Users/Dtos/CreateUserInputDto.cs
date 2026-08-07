@@ -38,5 +38,16 @@ public record CreateUserInputDto
 
     public bool IsEmailVerified { get; init; }
 
-    public List<string> Roles { get; init; } = [];
+#if (IncludeRoles)
+    /// <summary>
+    /// 初始角色 Id 集合。按 Id 提交而非角色名，角色名只用于展示。
+    /// </summary>
+    /// <remarks>
+    /// 非空时应用服务会额外要求 <c>App.Users.ManageRoles</c>：
+    /// 只持有创建权限的主体不能在创建时把自己或他人提升为管理员。
+    /// </remarks>
+    [Display(Name = "Roles")]
+    [MaxLength(20, ErrorMessage = "{0} cannot contain more than {1} items.")]
+    public List<Guid> RoleIds { get; init; } = [];
+#endif
 }

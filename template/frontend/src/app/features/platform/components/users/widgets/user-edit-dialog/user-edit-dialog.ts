@@ -47,7 +47,7 @@ import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
-import { ROLE_LABEL_MAP } from '../../../../../../shared/models/role.enum';
+import { RoleBriefDto } from '../../../../models/role.dto';
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
@@ -130,7 +130,7 @@ export class UserEditDialog {
     password: '',
     isActive: true,
     isEmailVerified: false,
-    roles: ['Member'] as string[],
+    roleIds: [] as string[],
   });
 
   readonly displayName = computed(
@@ -173,7 +173,6 @@ export class UserEditDialog {
       message: this.transloco.translate('common.validation.passwordRule'),
       when: () => !this.isEditMode(),
     });
-    required(path.roles, { message: this.transloco.translate('common.validation.required') });
   });
   //#else
   readonly userForm = form(this.formModel, (path) => {
@@ -203,26 +202,24 @@ export class UserEditDialog {
         'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
       when: () => !this.isEditMode(),
     });
-    required(path.roles, { message: 'This field is required.' });
   });
   //#endif
 
-  //#if (IncludeLocalization)
-  // 本地化模式：ROLE_LABEL_MAP 值是词条键，读 translationReady 建立依赖，资源就绪 / 语言切换时 computed 重算，标签重新翻译。
-  readonly roleOptions = computed(() => {
-    this.translationReady();
-    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
-      label: this.transloco.translate(label),
-      value,
-    }));
-  });
-  //#else
+  /**
+   * 角色选项由父级从角色 API 注入，按 Id 提交、按显示名回显。
+   * 仅在「新建 + 持有角色分配权限」时展示：编辑态的角色变更走独立的角色分配入口，
+   * 因此只持有 Users.Update 的主体在这里看不到也提交不了角色。
+   */
+  readonly availableRoles = input<RoleBriefDto[]>([]);
+  readonly canAssignRoles = input(false);
+
   readonly roleOptions = computed(() =>
-    Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })),
+    this.availableRoles().map((role) => ({ label: role.displayName, value: role.id })),
   );
-  //#endif
 
-  // 角色值 → 标签，用于 hlm-select-multiple 触发器回显。
+  readonly showRoleField = computed(() => !this.isEditMode() && this.canAssignRoles());
+
+  // 角色 Id → 显示名，用于 hlm-select-multiple 触发器回显。
   readonly roleLabel = (value: string): string =>
     this.roleOptions().find((option) => option.value === value)?.label ?? value;
 
@@ -243,7 +240,7 @@ export class UserEditDialog {
         password: '',
         isActive: user?.isActive ?? true,
         isEmailVerified: user?.isEmailVerified ?? false,
-        roles: user ? [...user.roles] : ['Member'],
+        roleIds: user ? (user.roles ?? []).map((role) => role.id) : [],
       });
       this.avatarPreview.set(avatar);
     });
@@ -329,7 +326,6 @@ export class UserEditDialog {
         avatar: model.avatar.trim() || undefined,
         isActive: model.isActive,
         isEmailVerified: model.isEmailVerified,
-        roles: model.roles,
       });
       return;
     }
@@ -342,7 +338,7 @@ export class UserEditDialog {
       password: model.password,
       isActive: model.isActive,
       isEmailVerified: model.isEmailVerified,
-      roles: model.roles,
+      roleIds: this.canAssignRoles() ? model.roleIds : [],
     });
   }
 

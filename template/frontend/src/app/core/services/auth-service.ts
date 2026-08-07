@@ -57,10 +57,6 @@ export class AuthService {
     this._currentUser.set(new User(user));
   }
 
-  hasRole(role: string): boolean {
-    return this._currentUser()?.roles.includes(role) ?? false;
-  }
-
   clearAuthData(): void {
     this._currentUser.set(null);
   }

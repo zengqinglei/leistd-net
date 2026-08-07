@@ -1,5 +1,6 @@
 #if (IncludeRoles)
 using CompanyName.ProjectName.Application.Permissions.Provider;
+using CompanyName.ProjectName.Application.Roles.Dtos;
 #endif
 using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Application.Users.Dtos;
@@ -123,4 +124,33 @@ public class UserController(IUserAppService userAppService) : BaseController
     {
         await userAppService.DeleteAsync(id, cancellationToken);
     }
+
+#if (IncludeRoles)
+    /// <summary>
+    /// 查询用户角色（需要角色分配权限）
+    /// </summary>
+    [HttpGet("{id}/roles")]
+    [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
+    public async Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return await userAppService.GetRolesAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    /// 替换用户角色（需要角色分配权限）
+    /// </summary>
+    /// <remarks>
+    /// 与 <c>PUT /api/v1/users/{id}</c> 是两个独立命令：只持有 Users.Update 的主体
+    /// 无法改变任何人的角色，只持有 Users.ManageRoles 的主体也无法修改用户资料。
+    /// </remarks>
+    [HttpPut("{id}/roles")]
+    [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
+    public async Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+        Guid id,
+        [FromBody] UpdateUserRolesInputDto input,
+        CancellationToken cancellationToken)
+    {
+        return await userAppService.ReplaceRolesAsync(id, input, cancellationToken);
+    }
+#endif
 }

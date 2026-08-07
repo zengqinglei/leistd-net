@@ -63,7 +63,9 @@ public class AuthAppService(
         }
 
         var user = await userDomainService.CreateUserAsync(input.Username, input.Email, input.Password, input.DisplayName, cancellationToken);
+#if (IncludeRoles)
         await userDomainService.AssignDefaultRolesToUserAsync(user.Id, cancellationToken);
+#endif
 
         logger.LogInformation("用户注册成功 (ID: {Id})", user.Id);
 
@@ -151,7 +153,9 @@ public class AuthAppService(
                 ;
         }
 
+#if (IncludeRoles)
         var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);
+#endif
 
         return new UserOutputDto
         {
@@ -164,7 +168,9 @@ public class AuthAppService(
             IsActive = user.IsActive,
             IsSuperAdmin = user.IsSuperAdmin,
             CreationTime = user.CreationTime,
+#if (IncludeRoles)
             Roles = [.. roleNames]
+#endif
         };
     }
 }

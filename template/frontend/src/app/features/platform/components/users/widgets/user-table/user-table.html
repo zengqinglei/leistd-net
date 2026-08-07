@@ -167,9 +167,9 @@
                           <div
                             class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap"
                           >
-                            @for (role of getVisibleRoles(row.original); track role) {
-                              <span hlmBadge [variant]="getRoleVariant(role)">{{
-                                getRoleLabel(role)
+                            @for (role of getVisibleRoles(row.original); track role.id) {
+                              <span hlmBadge [variant]="getRoleVariant()">{{
+                                role.displayName
                               }}</span>
                             }
                             @if (getHiddenRoles(row.original).length > 0) {
@@ -195,9 +195,9 @@
                                     {{ rolesPopoverTitle(getHiddenRoles(row.original).length) }}
                                   </div>
                                   <div class="flex flex-wrap gap-2">
-                                    @for (role of getHiddenRoles(row.original); track role) {
-                                      <span hlmBadge [variant]="getRoleVariant(role)">{{
-                                        getRoleLabel(role)
+                                    @for (role of getHiddenRoles(row.original); track role.id) {
+                                      <span hlmBadge [variant]="getRoleVariant()">{{
+                                        role.displayName
                                       }}</span>
                                     }
                                   </div>
@@ -245,84 +245,116 @@
                         @case ('actions') {
                           <!-- 操作列（4 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。 -->
                           <div class="flex items-center justify-end gap-1">
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon"
-                              class="hidden sm:inline-flex"
-                              [disabled]="isOtherSuperAdmin(row.original)"
-                              [hlmTooltip]="actionLabel('edit', row.original)"
-                              [attr.aria-label]="actionLabel('edit', row.original)"
-                              (click)="edit.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucidePencil" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon"
-                              class="hidden sm:inline-flex"
-                              [disabled]="isOtherSuperAdmin(row.original)"
-                              [hlmTooltip]="actionLabel('reset', row.original)"
-                              [attr.aria-label]="actionLabel('reset', row.original)"
-                              (click)="resetPassword.emit(row.original.id)"
-                            >
-                              <ng-icon name="lucideKey" />
-                            </button>
-                            <button
-                              hlmBtn
-                              variant="ghost"
-                              size="icon"
-                              align="end"
-                              [attr.aria-label]="actionsLabel()"
-                              [hlmDropdownMenuTrigger]="rowMenu"
-                            >
-                              <ng-icon name="lucideEllipsis" />
-                            </button>
+                            @if (canUpdate()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden sm:inline-flex"
+                                [disabled]="isOtherSuperAdmin(row.original)"
+                                [hlmTooltip]="actionLabel('edit', row.original)"
+                                [attr.aria-label]="actionLabel('edit', row.original)"
+                                (click)="edit.emit(row.original.id)"
+                              >
+                                <ng-icon name="lucidePencil" />
+                              </button>
+                            }
+                            <!--#if (IncludeRoles)-->
+                            <!-- 角色分配与资料编辑分离：需要 App.Users.ManageRoles 才出现。 -->
+                            @if (canManageRoles()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden sm:inline-flex"
+                                [disabled]="isOtherSuperAdmin(row.original)"
+                                [hlmTooltip]="rolesActionLabel()"
+                                [attr.aria-label]="rolesActionLabel()"
+                                (click)="manageRoles.emit(row.original)"
+                              >
+                                <ng-icon name="lucideShieldCheck" />
+                              </button>
+                            }
+                            <!--#endif-->
+                            <!-- 重置密码走 Users.Update 策略，入口与编辑同权限裁剪，避免制造必然 403 的按钮。 -->
+                            @if (canUpdate()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden sm:inline-flex"
+                                [disabled]="isOtherSuperAdmin(row.original)"
+                                [hlmTooltip]="actionLabel('reset', row.original)"
+                                [attr.aria-label]="actionLabel('reset', row.original)"
+                                (click)="resetPassword.emit(row.original.id)"
+                              >
+                                <ng-icon name="lucideKey" />
+                              </button>
+                            }
+                            @if (hasRowActions()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                align="end"
+                                [attr.aria-label]="actionsLabel()"
+                                [hlmDropdownMenuTrigger]="rowMenu"
+                              >
+                                <ng-icon name="lucideEllipsis" />
+                              </button>
+                            }
                             <ng-template #rowMenu>
                               <hlm-dropdown-menu>
                                 <hlm-dropdown-menu-group>
-                                  <button
-                                    hlmDropdownMenuItem
-                                    class="sm:hidden"
-                                    [disabled]="isOtherSuperAdmin(row.original)"
-                                    (click)="edit.emit(row.original.id)"
-                                  >
-                                    <ng-icon name="lucidePencil" />
-                                    {{ actionLabel('edit', row.original) }}
-                                  </button>
-                                  <button
-                                    hlmDropdownMenuItem
-                                    class="sm:hidden"
-                                    [disabled]="isOtherSuperAdmin(row.original)"
-                                    (click)="resetPassword.emit(row.original.id)"
-                                  >
-                                    <ng-icon name="lucideKey" />
-                                    {{ actionLabel('reset', row.original) }}
-                                  </button>
-                                  <button
-                                    hlmDropdownMenuItem
-                                    [disabled]="isSuperAdmin(row.original)"
-                                    (click)="toggleActive.emit(row.original)"
-                                  >
-                                    <ng-icon
-                                      [name]="
-                                        row.original.isActive ? 'lucideBan' : 'lucideCircleCheck'
-                                      "
-                                    />
-                                    {{ actionLabel('toggle', row.original) }}
-                                  </button>
+                                  @if (canUpdate()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      class="sm:hidden"
+                                      [disabled]="isOtherSuperAdmin(row.original)"
+                                      (click)="edit.emit(row.original.id)"
+                                    >
+                                      <ng-icon name="lucidePencil" />
+                                      {{ actionLabel('edit', row.original) }}
+                                    </button>
+                                  }
+                                  @if (canUpdate()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      class="sm:hidden"
+                                      [disabled]="isOtherSuperAdmin(row.original)"
+                                      (click)="resetPassword.emit(row.original.id)"
+                                    >
+                                      <ng-icon name="lucideKey" />
+                                      {{ actionLabel('reset', row.original) }}
+                                    </button>
+                                  }
+                                  @if (canUpdate()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      [disabled]="isSuperAdmin(row.original)"
+                                      (click)="toggleActive.emit(row.original)"
+                                    >
+                                      <ng-icon
+                                        [name]="
+                                          row.original.isActive ? 'lucideBan' : 'lucideCircleCheck'
+                                        "
+                                      />
+                                      {{ actionLabel('toggle', row.original) }}
+                                    </button>
+                                  }
                                 </hlm-dropdown-menu-group>
-                                <hlm-dropdown-menu-separator />
-                                <button
-                                  hlmDropdownMenuItem
-                                  variant="destructive"
-                                  [disabled]="isSuperAdmin(row.original)"
-                                  (click)="delete.emit(row.original)"
-                                >
-                                  <ng-icon name="lucideTrash2" />
-                                  {{ actionLabel('delete', row.original) }}
-                                </button>
+                                @if (canDelete()) {
+                                  <hlm-dropdown-menu-separator />
+                                  <button
+                                    hlmDropdownMenuItem
+                                    variant="destructive"
+                                    [disabled]="isSuperAdmin(row.original)"
+                                    (click)="delete.emit(row.original)"
+                                  >
+                                    <ng-icon name="lucideTrash2" />
+                                    {{ actionLabel('delete', row.original) }}
+                                  </button>
+                                }
                               </hlm-dropdown-menu>
                             </ng-template>
                           </div>
@@ -350,8 +382,8 @@
                           <dt class="text-muted-foreground">{{ detailLabel('roles') }}</dt>
                           <dd class="flex flex-wrap gap-1">
                             @for (role of row.original.roles; track role) {
-                              <span hlmBadge [variant]="getRoleVariant(role)">{{
-                                getRoleLabel(role)
+                              <span hlmBadge [variant]="getRoleVariant()">{{
+                                role.displayName
                               }}</span>
                             } @empty {
                               <span class="text-muted-foreground">-</span>

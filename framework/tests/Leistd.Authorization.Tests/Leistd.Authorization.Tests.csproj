@@ -16,7 +16,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <!--
+      使用关系型 Provider 而非 InMemory：只有它会真正强制唯一索引并翻译查询表达式，
+      InMemory 全内存求值会让被违反的约束和不可翻译的查询静默通过。
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>

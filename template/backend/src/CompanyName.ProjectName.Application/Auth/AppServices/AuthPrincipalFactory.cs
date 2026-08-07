@@ -19,7 +19,9 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
         IEnumerable<string>? scopes = null,
         CancellationToken cancellationToken = default)
     {
+#if (IncludeRoles)
         var roleNames = await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken);
+#endif
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
         identity.SetClaim(Claims.Subject, user.Id.ToString());
@@ -32,7 +34,9 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
             identity.SetClaim(Claims.Picture, user.Avatar!);
         }
 
+#if (IncludeRoles)
         identity.SetClaims(Claims.Role, roleNames.ToImmutableArray());
+#endif
         identity.SetClaim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false");
 
         var principal = new ClaimsPrincipal(identity);

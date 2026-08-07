@@ -37,3 +37,9 @@ export function getCurrentUserId(req: MockRequest): string {
 function readMockSessionUserId() {
   return sessionStorage.getItem(MOCK_SESSION_STORAGE_KEY);
 }
+
+/** 返回当前会话用户；未登录时返回 null（不抛异常，供权限接口自行决定 401/403）。 */
+export function getCurrentUser(): MockUser | null {
+  const userId = MOCK_SESSION_USER_ID ?? readMockSessionUserId();
+  return userId ? (USERS.find((item) => item.id === userId) ?? null) : null;
+}

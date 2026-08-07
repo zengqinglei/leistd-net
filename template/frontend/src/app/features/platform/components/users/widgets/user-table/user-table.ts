@@ -21,6 +21,7 @@ import {
   lucideCircleCheck,
   lucideEllipsis,
   lucideKey,
+  lucideShieldCheck,
   lucidePencil,
   lucideSearchX,
   lucideSortAsc,
@@ -50,10 +51,9 @@ import {
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
-import { Role } from '../../../../../../shared/models/role.enum';
 import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
-import { getRoleLabel } from '../../../../../../shared/pipes/role-label-pipe';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
+import { RoleBriefDto } from '../../../../models/role.dto';
 import { UserManagementOutputDto } from '../../../../models/user-management.dto';
 
 const MEDIUM_VIEWPORT = '(min-width: 768px)';
@@ -89,6 +89,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
       lucideCircleCheck,
       lucideEllipsis,
       lucideKey,
+      lucideShieldCheck,
       lucidePencil,
       lucideSearchX,
       lucideSortAsc,
@@ -114,12 +115,27 @@ export class UserTable {
   readonly loading = input(false);
   readonly filtered = input(false);
 
+  /**
+   * 行操作按权限裁剪。默认全开，未启用权限模块的生成物行为不变；
+   * 隐藏只影响体验，服务端仍对每个请求独立校验。
+   */
+  readonly canUpdate = input(true);
+  readonly canDelete = input(true);
+  readonly canManageRoles = input(false);
+
+  /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
+  readonly hasRowActions = computed(
+    () => this.canUpdate() || this.canDelete() || this.canManageRoles(),
+  );
+
   readonly paginationChange = output<PaginationState>();
   readonly sortingChange = output<SortingState>();
   readonly edit = output<string>();
   readonly toggleActive = output<UserManagementOutputDto>();
   readonly resetPassword = output<string>();
   readonly delete = output<UserManagementOutputDto>();
+  /** 角色分配是独立命令，与资料编辑分开触发。 */
+  readonly manageRoles = output<UserManagementOutputDto>();
 
   private readonly viewport = toSignal(
     this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),
@@ -279,12 +295,22 @@ export class UserTable {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
 
-  getVisibleRoles(user: UserManagementOutputDto): string[] {
-    return user.roles.slice(0, 2);
+  //#if (IncludeLocalization)
+  rolesActionLabel(): string {
+    return this.transloco.translate('users.actions.manageRoles');
+  }
+  //#else
+  rolesActionLabel(): string {
+    return 'Assign roles';
+  }
+  //#endif
+
+  getVisibleRoles(user: UserManagementOutputDto): RoleBriefDto[] {
+    return (user.roles ?? []).slice(0, 2);
   }
 
-  getHiddenRoles(user: UserManagementOutputDto): string[] {
-    return user.roles.slice(2);
+  getHiddenRoles(user: UserManagementOutputDto): RoleBriefDto[] {
+    return (user.roles ?? []).slice(2);
   }
 
   paginatorLabels(): TablePaginatorLabels {
@@ -379,22 +405,13 @@ export class UserTable {
     return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
   }
 
-  getRoleVariant(role: string): BadgeVariant {
-    // 角色用中性强弱层级；红色（destructive）专留给危险/删除操作。
-    const roleMap: Record<Role, BadgeVariant> = {
-      [Role.Admin]: 'default',
-      [Role.Operator]: 'secondary',
-      [Role.Member]: 'outline',
-    };
-    return roleMap[role as Role] ?? 'outline';
-  }
-
-  getRoleLabel(role: string): string {
-    const label = getRoleLabel(role);
-    //#if (IncludeLocalization)
-    return this.transloco.translate(label);
-    //#else
-    return label;
-    //#endif
+  /**
+   * 角色徽章样式。
+   *
+   * 角色由管理员自由创建，前端无法也不应预知有哪些角色，因此统一使用中性样式，
+   * 只用「是否默认角色」这类结构信息做弱区分；红色（destructive）专留给危险/删除操作。
+   */
+  getRoleVariant(): BadgeVariant {
+    return 'outline';
   }
 }

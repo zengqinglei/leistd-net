@@ -7,6 +7,35 @@
 - `framework/common.props` 在构建时自动读取 `VERSION` 作为 `VersionPrefix`，所有 `Leistd.*` 包同步该版本（无外部工具依赖）。
 - 模板 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 是字面值副本（生成项目需自包含），由发布流水线 `release.yml` 在发版时回写。
 
+## 0.13.0 授权体系最终态（破坏性变更）
+
+本次一并完成，不保留过渡重载与兼容分支。升级需要一次代码调整加一次 EF 迁移。
+
+**`Leistd.Authorization.Core`**
+
+- `IPermissionGrantStore` 重构为两个读方法：`GetGrantsAsync(providerName, providerKey)` 与 `GetGrantsForSubjectAsync(userId, roleIds)`。原有 `IsGrantedToUserAsync` / `IsGrantedToRoleAsync` / `IsGrantedToAnyRoleAsync` / `IsGrantedToUserOrRolesAsync` / `GetGrantedPermissionsFor*Async` 全部移除——它们互为退化形式，且逐权限查询无法表达三态。
+- `IPermissionGrantManager` 改为按 `(providerName, providerKey)` 的通用签名：`GrantAsync` / `RevokeAsync` / `ReplaceGrantsAsync`。原有 `GrantToUserAsync` / `GrantToRoleAsync` / `RevokeFromUserAsync` / `RevokeFromRoleAsync` 与两个转发读方法移除，读职责归 Store。
+- 新增 `PermissionGrantEffect`（`Granted` / `Prohibited`）、`PermissionGrant`、`PermissionGrantSet`、`SubjectPermissionGrants`、`PermissionGrantConcurrencyException`。
+- `IPermissionDefinitionContext.AddPermission` 移除：每个权限都必须归属于某个组，游离权限无法被权限管理界面表达。权限名改为**全局唯一**，重复注册在启动阶段抛异常。
+- `IPermissionDefinitionManager` 新增 `GetGroups()`、`IsEffectivelyEnabled(name)`、`GetAncestorNames(name)`、`GetDescendantNames(name)`。
+- `IPermissionChecker` 注册生命周期从 Transient 改为 **Scoped**；调用签名不变，但同一作用域内只解析一次主体、只读取一次授予。
+- **运行时语义变更**：权限未定义或未启用一律拒绝（此前不校验定义，`IsEnabled` 形同虚设）。若此前依赖"未定义权限也能通过 Checker"，需要补齐定义。
+
+**`Leistd.Authorization.EntityFrameworkCore`**
+
+- `PermissionGrantRecord` 新增非空 `Effect` 列（**以字符串持久化**，长度 32）；`ForUser` / `ForRole` 静态工厂移除（它们会绕过写时归一化）。
+- 新增 `AuthorizationRevisionRecord` 表，`ConfigureAuthorization()` 会一并映射，缺失会导致批量替换无法做乐观并发校验。
+- 需要一次 EF 迁移：为 `PermissionGrantRecord` 增加 `Effect`（`varchar(32)`，既有行填 `'Granted'`），并新建版本表。唯一索引保持 `(PermissionName, ProviderName, ProviderKey)` 不变。
+- 迁移里对 `Effect` 做数据转换时**按字符串比较**（`Effect = 'Granted'`），不要对该列写整数字面量。
+- 写入行为变更：授予子权限会补齐祖先，撤销父权限会级联清理子孙。既有的扁平授予在下一次经由 Manager 写入时被归一化。
+
+**新增包**
+
+- `Leistd.Authorization.Resource.Core` / `Leistd.Authorization.Resource.EntityFrameworkCore`：资源实例授权（可选）。
+- `Leistd.Authorization.DataScope.Core`：数据范围（可选）。
+
+三者互不依赖，按需引用；不引用即完全不产生模型与运行时成本。
+
 ## 提交规范决定版本递增（Conventional Commits）
 
 发版时流水线（`release.yml`）分析"自上个 `v*` tag 以来"的提交信息，算出下一个版本（默认"优先最小版本"）：

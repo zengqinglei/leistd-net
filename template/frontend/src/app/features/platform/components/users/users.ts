@@ -50,15 +50,21 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
+//#if (IncludeRoles)
+import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-import { ROLE_ICON_MAP, ROLE_LABEL_MAP } from '../../../../shared/models/role.enum';
+//#if (IncludeRoles)
+import { PERMISSIONS } from '../../../../shared/models/permission';
+//#endif
 import {
   paginationFromQuery,
   sortingFromQuery,
   tableStateToQuery,
   toApiSorting,
 } from '../../../../shared/utils/table-query-state';
+import { RoleBriefDto } from '../../models/role.dto';
 import {
   CreateUserInputDto,
   GetUsersInputDto,
@@ -66,9 +72,15 @@ import {
   UpdateUserInputDto,
   UserManagementOutputDto,
 } from '../../models/user-management.dto';
+//#if (IncludeRoles)
+import { RoleService } from '../../services/role-service';
+//#endif
 import { UserManagementService } from '../../services/user-management-service';
 import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
 import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
+//#if (IncludeRoles)
+import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
+//#endif
 import { UserTable } from './widgets/user-table/user-table';
 
 const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
@@ -88,6 +100,9 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
     TranslocoModule,
     //#endif
     UserTable,
+    //#if (IncludeRoles)
+    UserRolesDialog,
+    //#endif
     UserEditDialog,
     ResetUserPasswordDialog,
   ],
@@ -115,6 +130,10 @@ export class Users {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
+  //#if (IncludeRoles)
+  private readonly roleService = inject(RoleService);
+  private readonly authorizationService = inject(AuthorizationService);
+  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
@@ -193,16 +212,6 @@ export class Users {
       },
     ];
   });
-
-  // 本地化模式：ROLE_LABEL_MAP 值是词条键，翻译为显示文案。
-  readonly roleOptions = computed(() => {
-    this.translationReady();
-    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
-      label: this.transloco.translate(label),
-      value,
-      icon: ROLE_ICON_MAP[value] ?? 'lucideUser',
-    }));
-  });
   //#else
   readonly activeOptions = computed(() => [
     { label: 'Active', value: true, icon: 'lucideCircleCheck' },
@@ -213,15 +222,53 @@ export class Users {
     { label: 'Email verified', value: true, icon: 'lucideMailCheck' },
     { label: 'Email not verified', value: false, icon: 'lucideMail' },
   ]);
+  //#endif
 
+  /**
+   * 角色筛选项来自角色 API：新建的角色立即出现在筛选器里，
+   * 前端不再保留任何硬编码角色列表（旧的 Role 枚举含后端并不存在的 Operator）。
+   */
+  readonly availableRoles = signal<RoleBriefDto[]>([]);
   readonly roleOptions = computed(() =>
-    Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
-      label,
-      value,
-      icon: ROLE_ICON_MAP[value] ?? 'lucideUser',
+    this.availableRoles().map((role) => ({
+      label: role.displayName,
+      value: role.name,
+      icon: 'lucideUser',
     })),
   );
+
+  //#if (IncludeRoles)
+  // 操作入口按权限裁剪。
+  readonly canCreateUser = computed(() => this.authorizationService.has(PERMISSIONS.users.create));
+  readonly canUpdateUser = computed(() => this.authorizationService.has(PERMISSIONS.users.update));
+  readonly canDeleteUser = computed(() => this.authorizationService.has(PERMISSIONS.users.delete));
+  readonly canManageUserRoles = computed(() =>
+    this.authorizationService.has(PERMISSIONS.users.manageRoles),
+  );
+  //#else
+  // 未启用角色权限模块：后端对应端点只要求已认证，前端不做额外裁剪。
+  readonly canCreateUser = computed(() => true);
+  readonly canUpdateUser = computed(() => true);
+  readonly canDeleteUser = computed(() => true);
+  readonly canManageUserRoles = computed(() => false);
   //#endif
+
+  readonly rolesDialogVisible = signal(false);
+  readonly rolesDialogUser = signal<UserManagementOutputDto | null>(null);
+
+  openRolesDialog(user: UserManagementOutputDto): void {
+    this.rolesDialogUser.set(user);
+    this.rolesDialogVisible.set(true);
+  }
+
+  /** 角色变更会改变有效权限，保存后刷新列表与当前用户权限。 */
+  onRolesSaved(): void {
+    this.rolesDialogVisible.set(false);
+    this.refreshRequests.next();
+    //#if (IncludeRoles)
+    this.authorizationService.reload().subscribe({ error: () => undefined });
+    //#endif
+  }
 
   //#if (IncludeLocalization)
   readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');
@@ -251,6 +298,16 @@ export class Users {
   //#endif
 
   constructor() {
+    //#if (IncludeRoles)
+    // 角色选项端点要求 ManageRoles；无该权限时不请求，避免制造必然 403 的噪声。
+    if (this.authorizationService.has(PERMISSIONS.users.manageRoles)) {
+      this.roleService.getOptions().subscribe({
+        next: (roles) => this.availableRoles.set(roles),
+        error: () => this.availableRoles.set([]),
+      });
+    }
+    //#endif
+
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));

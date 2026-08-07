@@ -1,5 +1,8 @@
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
+//#if (IncludeRoles)
+import { ROLES } from '../data/authorization';
+//#endif
 import { USERS, toUserManagementOutput } from '../data/user';
 
 function getQueryValue(value: unknown) {
@@ -105,7 +108,18 @@ export function addUser(value: any) {
     isSuperAdmin: false,
     isEmailVerified: value.isEmailVerified ?? false,
     creationTime: new Date().toISOString(),
-    roles: value.roles ?? ['Member'],
+    //#if (IncludeRoles)
+    // 创建时按 Id 提交角色；未指定则落到默认角色，与后端一致。
+    roles: (value.roleIds?.length
+      ? ROLES.filter((role: { id: string }) => value.roleIds.includes(role.id)).map(
+          (role: { name: string }) => role.name,
+        )
+      : ROLES.filter((role: { isDefault: boolean }) => role.isDefault).map(
+          (role: { name: string }) => role.name,
+        )) as string[],
+    //#else
+    roles: [] as string[],
+    //#endif
     password: value.password || 'Admin@123456',
   };
   USERS.push(newUser);
@@ -127,7 +141,7 @@ export function updateUser(id: string, value: any) {
     avatar: value.avatar,
     isActive: value.isActive,
     isEmailVerified: value.isEmailVerified,
-    roles: value.roles,
+    // 普通更新不接受角色：角色分配是独立命令，走 PUT /api/v1/users/:id/roles。
   });
   return toUserManagementOutput(user);
 }

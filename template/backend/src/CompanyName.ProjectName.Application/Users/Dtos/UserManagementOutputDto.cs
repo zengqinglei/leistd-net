@@ -1,3 +1,7 @@
+#if (IncludeRoles)
+using CompanyName.ProjectName.Application.Roles.Dtos;
+#endif
+
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
 /// <summary>
@@ -12,7 +16,12 @@ public record UserManagementOutputDto
     public string? Avatar { get; init; }
     public bool IsActive { get; init; }
     public bool IsEmailVerified { get; init; }
-    public required string[] Roles { get; init; }
+#if (IncludeRoles)
+    /// <summary>
+    /// 已分配角色。携带 Id 供提交使用，Name 与 DisplayName 只用于展示。
+    /// </summary>
+    public required IReadOnlyList<RoleBriefDto> Roles { get; init; }
+#endif
     public bool IsSuperAdmin { get; init; }
     public DateTime CreationTime { get; init; }
     public DateTime? LastLoginTime { get; init; }

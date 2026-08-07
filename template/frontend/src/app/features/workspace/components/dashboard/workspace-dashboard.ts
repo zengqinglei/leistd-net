@@ -21,15 +21,14 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
-import { RoleLabelPipe } from '../../../../shared/pipes/role-label-pipe';
 
 @Component({
   selector: 'app-workspace-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
-  imports: [...HlmCardImports, HlmBadge, RoleLabelPipe, TranslocoModule],
+  imports: [...HlmCardImports, HlmBadge, TranslocoModule],
   //#else
-  imports: [...HlmCardImports, HlmBadge, RoleLabelPipe],
+  imports: [...HlmCardImports, HlmBadge],
   //#endif
   templateUrl: './workspace-dashboard.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

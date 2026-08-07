@@ -13,8 +13,10 @@ internal static class IdentityEntityConfiguration
     internal static void ConfigureIdentity(this ModelBuilder builder)
     {
         builder.ConfigureUserIdentity();
+#if (IncludeRoles)
         builder.ConfigureRoles();
         builder.ConfigureUserRoles();
+#endif
 #if (IncludeExternalLogin)
         builder.ConfigureExternalLoginConnections();
 #endif
@@ -30,6 +32,7 @@ internal static class IdentityEntityConfiguration
         });
     }
 
+#if (IncludeRoles)
     private static void ConfigureRoles(this ModelBuilder builder)
     {
         builder.Entity<Role>(b =>
@@ -44,6 +47,7 @@ internal static class IdentityEntityConfiguration
         });
     }
 
+#endif
 #if (IncludeExternalLogin)
     private static void ConfigureExternalLoginConnections(this ModelBuilder builder)
     {
@@ -67,6 +71,7 @@ internal static class IdentityEntityConfiguration
     }
 #endif
 
+#if (IncludeRoles)
     private static void ConfigureUserRoles(this ModelBuilder builder)
     {
         builder.Entity<UserRole>(b =>
@@ -81,5 +86,6 @@ internal static class IdentityEntityConfiguration
         });
     }
 
+#endif
 }
 #endif

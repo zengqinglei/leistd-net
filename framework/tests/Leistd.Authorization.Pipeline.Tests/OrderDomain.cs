@@ -1,0 +1,148 @@
+using System.Linq.Expressions;
+using Leistd.Authorization.DataScope;
+using Leistd.Authorization.EntityFrameworkCore;
+using Leistd.Authorization.Resource;
+using Leistd.Authorization.Resource.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+
+namespace Leistd.Authorization.Pipeline.Tests;
+
+/// <summary>
+/// 被测业务领域：一个带所有者、组织和状态的订单。
+/// </summary>
+/// <remarks>
+/// 这是三层授权各自都能作用到的最小形状：所有者用于资源规则、组织用于数据范围、
+/// 状态用于"规则拒绝优先于 ACL 允许"。
+/// </remarks>
+public class Order : IAuthorizableResource
+{
+    public const string Resource = "Orders";
+
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>与 ACL 一致的字符串资源 Key，使集合查询可被数据库翻译。</summary>
+    public string ResourceKey { get; set; } = default!;
+
+    public string OwnerId { get; set; } = default!;
+
+    public string OrganizationId { get; set; } = default!;
+
+    public string Code { get; set; } = default!;
+
+    public bool IsArchived { get; set; }
+
+    string IAuthorizableResource.ResourceName => Resource;
+}
+
+public class PipelineDbContext(DbContextOptions<PipelineDbContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ConfigureAuthorization();
+        modelBuilder.ConfigureResourceAuthorization();
+
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ResourceKey).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.OwnerId).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.OrganizationId).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Code).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => x.ResourceKey).IsUnique();
+        });
+    }
+}
+
+/// <summary>本次流水线用到的权限名。</summary>
+public static class OrderPermissions
+{
+    public const string Default = "Orders";
+    public const string Read = "Orders.Read";
+    public const string Update = "Orders.Update";
+    public const string Export = "Orders.Export";
+}
+
+public sealed class OrderPermissionDefinitionProvider : IPermissionDefinitionProvider
+{
+    public void Define(IPermissionDefinitionContext context)
+    {
+        var group = context.GetOrAddGroup("Orders", "订单");
+        var orders = group.AddPermission(OrderPermissions.Default, "订单管理");
+        orders.AddChild(OrderPermissions.Read, "查看订单");
+        orders.AddChild(OrderPermissions.Update, "编辑订单");
+        orders.AddChild(OrderPermissions.Export, "导出订单");
+    }
+}
+
+/// <summary>只允许本人的订单。</summary>
+public sealed class OwnOrderScopeProvider : IDataScopeProvider<Order>
+{
+    public const string Scope = "Own";
+
+    public string ResourceName => Order.Resource;
+    public string ScopeName => Scope;
+
+    public ValueTask<Expression<Func<Order, bool>>?> BuildPredicateAsync(
+        DataScopeContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = context.Subject.UserId;
+        return ValueTask.FromResult<Expression<Func<Order, bool>>?>(order => order.OwnerId == userId);
+    }
+}
+
+/// <summary>允许被分配的组织下的订单。</summary>
+public sealed class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
+{
+    public const string Scope = "Organization";
+
+    public string ResourceName => Order.Resource;
+    public string ScopeName => Scope;
+
+    public ValueTask<Expression<Func<Order, bool>>?> BuildPredicateAsync(
+        DataScopeContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var organizationIds = context.Assignments
+            .Where(x => x.ScopeName == Scope && !string.IsNullOrWhiteSpace(x.ScopeValue))
+            .Select(x => x.ScopeValue!)
+            .ToList();
+
+        return ValueTask.FromResult<Expression<Func<Order, bool>>?>(
+            order => organizationIds.Contains(order.OrganizationId));
+    }
+}
+
+/// <summary>所有者可以操作自己的订单。</summary>
+public sealed class OrderOwnerHandler : IResourceAuthorizationHandler<Order>
+{
+    public ValueTask HandleAsync(
+        ResourceAuthorizationContext<Order> context,
+        CancellationToken cancellationToken = default)
+    {
+        if (context.Resource.OwnerId == context.Subject.UserId)
+        {
+            context.Allow();
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>已归档的订单一律不可修改——领域规则的拒绝优先于任何 ACL 允许。</summary>
+public sealed class ArchivedOrderHandler : IResourceAuthorizationHandler<Order>
+{
+    public ValueTask HandleAsync(
+        ResourceAuthorizationContext<Order> context,
+        CancellationToken cancellationToken = default)
+    {
+        if (context.Operation == ResourceOperations.Update && context.Resource.IsArchived)
+        {
+            context.Deny();
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}

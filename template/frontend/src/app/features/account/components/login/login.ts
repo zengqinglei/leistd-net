@@ -28,6 +28,9 @@ import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
+//#if (IncludeRoles)
+import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#endif
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
@@ -77,6 +80,9 @@ const githubIcon =
 export class Login {
   private accountService = inject(AccountService);
   private authService = inject(AuthService);
+  //#if (IncludeRoles)
+  private readonly authorizationService = inject(AuthorizationService);
+  //#endif
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   //#if (IncludeLocalization)
@@ -168,12 +174,17 @@ export class Login {
         return;
       }
 
-      // 根据角色跳转
-      if (this.authService.currentUser()?.isAdmin()) {
+      //#if (IncludeRoles)
+      // 按权限跳转：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。
+      await lastValueFrom(this.authorizationService.load());
+      if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
       } else {
         this.router.navigate(['/workspace']);
       }
+      //#else
+      this.router.navigate(['/workspace']);
+      //#endif
     } catch (error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('account.login.loginFailed'), {

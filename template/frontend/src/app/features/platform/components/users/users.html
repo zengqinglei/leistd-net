@@ -58,10 +58,12 @@
           <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
           {{ refreshLabel() }}
         </button>
-        <button hlmBtn variant="default" class="w-full sm:w-auto" (click)="openAddDialog()">
-          <ng-icon name="lucidePlus" data-icon="inline-start" />
-          {{ newUserLabel() }}
-        </button>
+        @if (canCreateUser()) {
+          <button hlmBtn variant="default" class="w-full sm:w-auto" (click)="openAddDialog()">
+            <ng-icon name="lucidePlus" data-icon="inline-start" />
+            {{ newUserLabel() }}
+          </button>
+        }
       </div>
     </div>
 
@@ -78,6 +80,10 @@
       (toggleActive)="handleToggleActive($event)"
       (resetPassword)="openResetPasswordDialog($event)"
       (delete)="handleDelete($event)"
+      [canUpdate]="canUpdateUser()"
+      [canDelete]="canDeleteUser()"
+      [canManageRoles]="canManageUserRoles()"
+      (manageRoles)="openRolesDialog($event)"
     />
   </div>
 </div>
@@ -88,7 +94,18 @@
   [saving]="editDialogSaving()"
   [user]="selectedUser()"
   (saved)="handleSave($event)"
+  [availableRoles]="availableRoles()"
+  [canAssignRoles]="canManageUserRoles()"
 />
+
+<!--#if (IncludeRoles)-->
+<app-user-roles-dialog
+  [(open)]="rolesDialogVisible"
+  [user]="rolesDialogUser()"
+  [availableRoles]="availableRoles()"
+  (saved)="onRolesSaved()"
+/>
+<!--#endif-->
 
 <app-reset-user-password-dialog
   [(visible)]="resetPasswordDialogVisible"

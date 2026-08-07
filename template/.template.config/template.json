@@ -163,7 +163,26 @@
           "condition": "!IncludeIdentity",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Domain/Permissions/**"
+            "backend/src/CompanyName.ProjectName.Domain/Permissions/**",
+            "backend/src/CompanyName.ProjectName.Application/Roles/**",
+            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/Role.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/UserRole.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Users/Constants/AdminConstant.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/RoleController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/PermissionController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/UpdateUserRolesInputDto.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/UserRolesQueryTests.cs",
+            "frontend/src/app/core/guards/permission-guard.ts",
+            "frontend/src/app/core/services/authorization-service.ts",
+            "frontend/src/app/shared/models/permission.ts",
+            "frontend/src/app/features/public/components/forbidden/**",
+            "frontend/src/app/features/platform/components/roles/**",
+            "frontend/src/app/features/platform/components/users/widgets/user-roles-dialog/**",
+            "frontend/src/app/features/platform/services/role-service.ts",
+            "frontend/src/app/features/platform/services/permission-management-service.ts",
+            "frontend/src/app/features/platform/models/role.dto.ts",
+            "frontend/_mock/api/authorization.ts",
+            "frontend/_mock/data/authorization.ts"
           ]
         },
         {
@@ -182,7 +201,25 @@
           "condition": "IncludeIdentity && !IncludeRoles",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Domain/Permissions/**"
+            "backend/src/CompanyName.ProjectName.Domain/Permissions/**",
+            "backend/src/CompanyName.ProjectName.Application/Roles/**",
+            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/Role.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/UserRole.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Users/Constants/AdminConstant.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/RoleController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/PermissionController.cs",
+            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/UpdateUserRolesInputDto.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/UserRolesQueryTests.cs",
+            "frontend/src/app/core/guards/permission-guard.ts",
+            "frontend/src/app/core/services/authorization-service.ts",
+            "frontend/src/app/shared/models/permission.ts",
+            "frontend/src/app/features/public/components/forbidden/**",
+            "frontend/src/app/features/platform/components/roles/**",
+            "frontend/src/app/features/platform/components/users/widgets/user-roles-dialog/**",
+            "frontend/src/app/features/platform/services/role-service.ts",
+            "frontend/src/app/features/platform/services/permission-management-service.ts",
+            "frontend/_mock/api/authorization.ts",
+            "frontend/_mock/data/authorization.ts"
           ]
         },
         {

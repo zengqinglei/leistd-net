@@ -17,6 +17,9 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 
 import { AuthService } from '../../../core/services/auth-service';
+//#if (IncludeRoles)
+import { AuthorizationService } from '../../../core/services/authorization-service';
+//#endif
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
@@ -147,6 +150,9 @@ interface UserMenuItem {
 })
 export class UserMenu {
   readonly authService = inject(AuthService);
+  //#if (IncludeRoles)
+  private readonly authorizationService = inject(AuthorizationService);
+  //#endif
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
   //#if (IncludeLocalization)
@@ -158,7 +164,6 @@ export class UserMenu {
   readonly changePasswordDialogVisible = signal(false);
 
   readonly userMenuItems = computed<UserMenuItem[]>(() => {
-    const currentUser = this.authService.currentUser();
     //#if (IncludeLocalization)
     // 建立对活动语言的依赖，语言切换时重新计算菜单文案。
     this.languageService.activeLang();
@@ -176,7 +181,14 @@ export class UserMenu {
         icon: 'lucideHouse',
         action: () => this.router.navigate(['/workspace']),
       });
-    } else if (this.layoutService.currentUrl().startsWith('/workspace') && currentUser?.isAdmin()) {
+      //#if (IncludeRoles)
+    } else if (
+      this.layoutService.currentUrl().startsWith('/workspace') &&
+      this.authorizationService.canAccessPlatform()
+    ) {
+      //#else
+    } else if (this.layoutService.currentUrl().startsWith('/workspace')) {
+      //#endif
       items.push({
         //#if (IncludeLocalization)
         label: t('menu.platform'),

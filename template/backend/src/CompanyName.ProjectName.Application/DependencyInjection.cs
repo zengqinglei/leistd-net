@@ -9,8 +9,10 @@ using CompanyName.ProjectName.Application.Users.AppServices;
 using Leistd.ObjectMapping.Mapster;
 #if (IncludeRoles)
 using Leistd.Authorization;
+using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Checker;
 using CompanyName.ProjectName.Application.Permissions.Provider;
+using CompanyName.ProjectName.Application.Roles.AppServices;
 #endif
 using Microsoft.Extensions.DependencyInjection;
 
@@ -50,10 +52,15 @@ public static class DependencyInjection
         services.AddTransient<IUserAppService, UserAppService>();
 
 #if (IncludeRoles)
+        // 角色管理
+        services.AddTransient<IRoleAppService, RoleAppService>();
+
         // 权限
         services.AddPermissionAuthorizationCore();
-        services.AddTransient<IPermissionSubjectProvider, PermissionSubjectProvider>();
+        // Scoped：一次请求内的主体解析结果被 PermissionSubjectProvider 与 IPermissionChecker 共享。
+        services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
+        services.AddTransient<IPermissionAppService, PermissionAppService>();
 #endif
 
         return services;
