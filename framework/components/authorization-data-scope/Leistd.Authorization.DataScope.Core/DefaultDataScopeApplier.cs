@@ -62,14 +62,9 @@ public class DefaultDataScopeApplier(
                 continue;
             }
 
+            // 不贡献可见性的范围由 Provider 返回 _ => false 表达，并入并集后自然是空贡献；
+            // "全部可见"必须显式返回 _ => true。签名不可空，就没有第三种解释的余地。
             var predicate = await provider.BuildPredicateAsync(context, cancellationToken);
-            if (predicate == null)
-            {
-                // 本范围不贡献可见性，跳过。刻意不解释为"全部可见"：Provider 少查一个条件、
-                // 拿不到上下文而返回 null 时，那种解释会让整张表当场全部放开。
-                // "全部可见"必须由 Provider 显式返回 _ => true。
-                continue;
-            }
 
             combined = combined == null ? predicate : Or(combined, predicate);
         }

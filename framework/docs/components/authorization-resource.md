@@ -218,7 +218,7 @@ await resourceGrantManager.RemoveResourceAsync("Orders", order.ResourceKey, ct);
 - 未注册 `IResourceGrantStore` 时服务仍可工作，只有规则处理器参与判定。
 - `ResourcePermissionGrantRecord` 唯一索引为 `(ResourceName, ResourceKey, Operation, ProviderName, ProviderKey)`，同一主体对同一实例同一操作不会出现两条冲突记录；另有 `(ResourceName, Operation, ProviderName, ProviderKey)` 支撑集合查询、`(ResourceName, ResourceKey)` 支撑删除清理。
 - `QueryGrantedResourceKeys` 在数据库内完成"允许集合减去拒绝集合"，不把候选拉到内存；返回结果已 `Distinct()`。
-- **集合可见性要三者组合**：`(数据范围 OR ACL 允许) AND NOT ACL 拒绝`。只用前一个入口减不掉"数据范围放行、ACL 显式拒绝"的那一份——而"分享给部门、排除这一个人"正是显式拒绝的唯一用途。拒绝集合由 `QueryDeniedResourceKeys` 单独给出，与 `QueryGrantedResourceKeys` 对称，判据同为"不是 `Granted` 即拒绝"。
+- **集合可见性要三者组合**：非超管为 `(数据范围 OR ACL 允许) AND NOT ACL 拒绝`；超管旁路数据范围与 ACL（含拒绝集合），只受租户、软删除这类硬边界约束。集合与单实例必须同一口径——实例判定已让超管跳过 ACL，集合这边若照减拒绝集合，就会出现"列表里看不见、按 ID 却打得开"。只用前一个入口减不掉"数据范围放行、ACL 显式拒绝"的那一份——而"分享给部门、排除这一个人"正是显式拒绝的唯一用途。拒绝集合由 `QueryDeniedResourceKeys` 单独给出，与 `QueryGrantedResourceKeys` 对称，判据同为"不是 `Granted` 即拒绝"。
 - **集合入口答不了领域规则**：它只回答"哪些看得见/改得动"。批量操作必须在范围内取到目标后逐项执行实例授权，任一拒绝整批拒绝；只比对数量会漏掉已归档这类由资源状态决定的拒绝。
 - **判定 fail-closed**：只有明确的 `Granted` 才允许。写成"是 `Prohibited` 就拒、否则放行"会让任何非法枚举值（`(ResourceGrantEffect)0`、越界数值、自定义 Store 返回的损坏值）静默变成允许。写入端另有 `Enum.IsDefined` 校验与数据库检查约束两道拦截。
 - **全量替换带乐观并发**：唯一索引只防重复行，防不住"两人基于同一份旧快照各自保存"——被覆盖掉的往往正是显式拒绝，那个本该被排除的人会重新经由角色拿到访问权，且两次保存都显示成功。因此 ACL 与功能权限用同一口径：读取带回版本，保存回传版本，冲突抛异常而非静默覆盖。

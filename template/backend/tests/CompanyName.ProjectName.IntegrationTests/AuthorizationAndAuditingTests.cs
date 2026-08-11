@@ -1,16 +1,22 @@
 #if (IncludeIdentity)
 using System.Net;
 using System.Net.Http.Json;
+#if (IncludeOpenIddict)
+using System.Net.Http.Headers;
+#endif
 #if (IncludeRoles)
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 #endif
+#if (IncludeOpenIddict)
+using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+#endif
 using CompanyName.ProjectName.Application.Users.Dtos;
 #if (IncludeRoles)
 using CompanyName.ProjectName.Domain.Users.Constants;
-using CompanyName.ProjectName.Domain.Users.Entities;
 #endif
+using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 #if (IncludeRoles)
 using Leistd.Authorization.EntityFrameworkCore;
@@ -226,32 +232,6 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-#if (!IncludeRoles)
-    [Fact]
-    public async Task Creating_an_application_rejects_the_roles_scope_when_roles_are_trimmed()
-    {
-        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
-
-        // 裁掉角色能力的项目里根本没有 roles scope，接口不该收下它。
-        var response = await superAdmin.Client.PostAsJsonAsync(
-            "/api/v1/open-applications",
-            new
-            {
-                clientId = $"client-{Guid.CreateVersion7():N}",
-                displayName = "Probe",
-                applicationType = "web",
-                clientType = "confidential",
-                consentType = "explicit",
-                permissions = new[] { "scp:openid", "scp:roles" },
-                requirements = Array.Empty<string>(),
-                redirectUris = Array.Empty<string>(),
-                postLogoutRedirectUris = Array.Empty<string>()
-            });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-#endif
     [Fact]
     public async Task Open_application_endpoints_require_their_own_permissions()
     {
@@ -699,6 +679,141 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         Assert.Equal(HttpStatusCode.OK, (await GetUsersAsync(memberSession.Client)).StatusCode);
     }
+
+#if (IncludeOpenIddict)
+    [Fact]
+    public async Task Creating_an_application_rejects_the_roles_scope_when_roles_are_trimmed()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        // 裁掉角色能力的项目里根本没有 roles scope，接口不该收下它。
+        var response = await superAdmin.Client.PostAsJsonAsync(
+            "/api/v1/open-applications",
+            new
+            {
+                clientId = $"client-{Guid.CreateVersion7():N}",
+                displayName = "Probe",
+                applicationType = "web",
+                clientType = "confidential",
+                consentType = "explicit",
+                permissions = new[] { "scp:openid", "scp:roles" },
+                requirements = Array.Empty<string>(),
+                redirectUris = Array.Empty<string>(),
+                postLogoutRedirectUris = Array.Empty<string>()
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+#endif
+#endif
+
+    [Fact]
+    public async Task Disabling_a_user_also_revokes_endpoints_that_only_require_authentication()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+
+        // 只在权限判定里补检查的话，撤权只覆盖 RBAC 接口，`/auth/me` 这类"仅要求已认证"的端点照常畅通。
+        // 这条要求挂在默认策略上，正是为了让这里也失效。
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Locking_a_user_revokes_their_existing_session()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var entity = await dbContext.Set<User>().SingleAsync(x => x.Id == user.Id);
+            entity.Lock();
+            await dbContext.SaveChangesAsync();
+        }
+
+        // 锁定与禁用是同一句判定的两个分支，失效语义必须一致——只测其中一个，
+        // 另一个分支写错了没人会发现。
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+#if (IncludeOpenIddict)
+    [Fact]
+    public async Task Client_credentials_tokens_cannot_reach_user_management()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var clientId = $"client-{Guid.CreateVersion7():N}";
+        var created = await superAdmin.Client.PostAsJsonAsync(
+            "/api/v1/open-applications",
+            new
+            {
+                clientId,
+                displayName = "Workload",
+                applicationType = "service",
+                clientType = "confidential",
+                consentType = "explicit",
+                permissions = new[] { "ept:token", "gt:client_credentials" },
+                requirements = Array.Empty<string>(),
+                redirectUris = Array.Empty<string>(),
+                postLogoutRedirectUris = Array.Empty<string>()
+            });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        var application = await created.Content.ReadFromJsonAsync<OpenApplicationOutputDto>();
+        Assert.NotNull(application);
+
+        var reset = await superAdmin.Client.PostAsync(
+            $"/api/v1/open-applications/{application.Id}/reset-secret", null);
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+        var secret = await reset.Content.ReadFromJsonAsync<ResetOpenApplicationSecretOutputDto>();
+        Assert.NotNull(secret);
+
+        using var machine = factory.CreateProjectClient();
+
+        // OpenIddict 的令牌端点只收 HTTPS。TestServer 不做真实 TLS，改基地址即可让 Request.IsHttps 成立，
+        // 不必为测试在服务端放宽这条要求——那等于把生产配置改松来迁就测试。
+        machine.BaseAddress = new Uri("https://localhost");
+
+        var token = await machine.PostAsync("/connect/token", new FormUrlEncodedContent(
+        [
+            new KeyValuePair<string, string>("grant_type", "client_credentials"),
+            new KeyValuePair<string, string>("client_id", clientId),
+            new KeyValuePair<string, string>("client_secret", secret.ClientSecret)
+        ]));
+        Assert.Equal(HttpStatusCode.OK, token.StatusCode);
+
+        var payload = await token.Content.ReadFromJsonAsync<TokenResponse>();
+        Assert.NotNull(payload);
+        machine.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", payload.AccessToken);
+
+        // client_credentials 的 sub 是 client_id，代表工作负载而非人。默认策略是管理接口的兜底，
+        // 它要表达的是"一个可用的自然人"——放行等于任何机器令牌都能列用户和 OAuth 客户端，
+        // 而裁掉角色的项目里这些接口只剩 [Authorize]，没有第二道拦截。
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await machine.GetAsync("/api/v1/users?offset=0&limit=10")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await machine.GetAsync("/api/v1/open-applications?offset=0&limit=10")).StatusCode);
+    }
+
+    private sealed record TokenResponse(
+        [property: System.Text.Json.Serialization.JsonPropertyName("access_token")] string AccessToken);
 #endif
 
     [Fact]

@@ -56,21 +56,26 @@ public sealed class OrderAppService(
     }
 
     /// <summary>
-    /// 详情：先在可见范围内定位（防水平越权），再对已加载实例做资源判定。
+    /// 详情：在可见范围内定位，范围外当作不存在。
     /// </summary>
+    /// <remarks>
+    /// 可见性只在 <see cref="VisibleQueryAsync"/> 判一次。这里刻意不再叠一层
+    /// <c>IsGrantedAsync(order, Read)</c>：那个入口的判据是"Handler 放行或 ACL 显式 Granted"，
+    /// 与集合的 <c>(数据范围 OR ACL 允许) AND NOT ACL 拒绝</c> 不是同一个式子。
+    /// 两个式子对同一个 Read 操作各判一次，结果就是列表里列得出来、详情却坚称不存在——
+    /// 而两边 DTO 字段完全一样，那个 404 想防的存在性泄漏早已被列表泄光，只剩下自相矛盾。
+    ///
+    /// 实例判定留在写路径：那里的 Handler 表达的是资源状态本身允不允许（已归档不可改），
+    /// 不是重新决定看不看得见。"看得见但改不动"不矛盾，"列表里有但详情说没有"才矛盾。
+    /// </remarks>
     public async Task<OrderDto?> GetAsync(string resourceKey, CancellationToken ct)
     {
         var scoped = await VisibleQueryAsync(DataOperations.Read, ct);
         var order = await scoped.SingleOrDefaultAsync(x => x.ResourceKey == resourceKey, ct);
-        if (order == null)
-        {
-            // 范围外一律当作不存在：不泄漏"存在但你看不到"这一事实。
-            return null;
-        }
 
-        return await resourceAuthorization.IsGrantedAsync(order, ResourceOperations.Read, ct)
-            ? new OrderDto(order.ResourceKey, order.Code, order.OrganizationId, order.OwnerId)
-            : null;
+        return order == null
+            ? null
+            : new OrderDto(order.ResourceKey, order.Code, order.OrganizationId, order.OwnerId);
     }
 
     /// <summary>
@@ -165,6 +170,13 @@ public sealed class OrderAppService(
         var subject = await subjectProvider.GetCurrentSubjectAsync(ct);
         if (subject == null)
             return dbContext.Orders.Where(_ => false);
+
+        // 超管旁路授权层，集合与单实例必须同一口径：实例判定已经让超管跳过 ACL，
+        // 集合这边再减一次拒绝集合，就会出现"列表里看不见、按 ID 却打得开"。
+        // 数据范围那一层本身也已为超管旁路（DefaultDataScopeApplier），这里补齐 ACL 侧。
+        // 旁路的只是授权层——租户、软删除这类硬边界由查询自身承担，不在此处。
+        if (subject.IsSuperAdmin)
+            return dbContext.Orders;
 
         var scoped = await dataScope.ApplyAsync(dbContext.Orders.AsQueryable(), Order.Resource, operation, ct);
 

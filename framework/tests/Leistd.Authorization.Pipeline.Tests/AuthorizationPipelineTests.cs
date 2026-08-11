@@ -171,14 +171,16 @@ public class AuthorizationPipelineTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Detail_inside_the_scope_still_needs_the_resource_rule_to_allow()
+    public async Task Detail_answers_the_same_question_as_the_list()
     {
-        // 同组织的同事订单在读取范围内，但所有者规则不放行 → 依然拿不到。
-        var colleague = await _host.Client.SendAsync(_host.Request(
-            HttpMethod.Get, $"/orders/{ColleagueOrder}", PipelineFixtures.OwnerUserId, PipelineFixtures.OrgRoleId));
-        Assert.Equal(HttpStatusCode.NotFound, colleague.StatusCode);
+        var page = await GetAsync<PagedOrders>("/orders", PipelineFixtures.OwnerUserId);
+        Assert.Contains(page.Items, order => order.ResourceKey == ColleagueOrder);
 
-        // 自己的订单：范围内且规则放行。
+        // 列表列得出来、详情就必须打得开：同一个 Read 操作只能有一个答案。
+        // 两边 DTO 字段一样，详情再返回 404 挡不住任何存在性泄漏，只会自相矛盾。
+        var colleague = await GetAsync<OrderDto>($"/orders/{ColleagueOrder}", PipelineFixtures.OwnerUserId);
+        Assert.Equal(ColleagueOrder, colleague.ResourceKey);
+
         var own = await GetAsync<OrderDto>($"/orders/{OwnOrder}", PipelineFixtures.OwnerUserId);
         Assert.Equal("A-001", own.Code);
     }
@@ -311,6 +313,40 @@ public class AuthorizationPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Super_admin_sees_the_same_set_in_the_list_and_by_id()
+    {
+        // 超管旁路授权层，集合与单实例必须给同一个答案。集合这边照减 ACL 拒绝集合的话，
+        // 就会出现"列表里没有、按 ID 却打得开"——同一条 ACL 例外，两个入口两种结论。
+        await _host.ReplaceResourceGrantsAsync(
+            ColleagueOrder,
+            new ResourceGrant(
+                ResourceOperations.Read,
+                PermissionGrantProviderNames.User,
+                PipelineFixtures.OutsiderUserId,
+                ResourceGrantEffect.Prohibited));
+
+        var page = await SuperAdminGetAsync<PagedOrders>("/orders");
+        Assert.Contains(page.Items, x => x.ResourceKey == ColleagueOrder);
+
+        // 组织外的那条也在内：超管连数据范围一起旁路。
+        Assert.Contains(page.Items, x => x.ResourceKey == OutsideOrder);
+
+        var detail = await SuperAdminGetAsync<OrderDto>($"/orders/{ColleagueOrder}");
+        Assert.Equal(ColleagueOrder, detail.ResourceKey);
+    }
+
+    [Fact]
+    public async Task Super_admin_is_still_bound_by_domain_rules()
+    {
+        // 旁路的是授权层，不是领域不变量：已归档的订单谁都不能改，超管也不例外。
+        var response = await _host.Client.SendAsync(WithBody(
+            SuperAdminRequest(HttpMethod.Put, $"/orders/{ArchivedOrder}"),
+            new { code = "Z-999" }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Batch_is_rejected_as_a_whole_when_a_domain_rule_denies_one_item()
     {
         // 已归档订单在数据范围内、功能权限也齐备，只有领域规则拦得住它。
@@ -355,6 +391,22 @@ public class AuthorizationPipelineTests : IAsyncLifetime
     {
         var response = await _host.Client.SendAsync(
             _host.Request(HttpMethod.Get, url, userId, PipelineFixtures.OrgRoleId));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<T>())!;
+    }
+
+    private HttpRequestMessage SuperAdminRequest(HttpMethod method, string url)
+    {
+        var request = _host.Request(method, url, PipelineFixtures.OutsiderUserId);
+        request.Headers.Add(TestAuthenticationHandler.ClaimsHeader, PipelineFixtures.SuperAdminClaim);
+
+        return request;
+    }
+
+    private async Task<T> SuperAdminGetAsync<T>(string url)
+    {
+        var response = await _host.Client.SendAsync(SuperAdminRequest(HttpMethod.Get, url));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<T>())!;

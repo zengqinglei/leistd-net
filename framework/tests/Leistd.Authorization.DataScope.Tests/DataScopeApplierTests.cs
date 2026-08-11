@@ -224,12 +224,12 @@ public class DataScopeApplierTests : IAsyncLifetime
         public string ResourceName => Resource;
         public string ScopeName => Scope;
 
-        public ValueTask<Expression<Func<TestOrder, bool>>?> BuildPredicateAsync(
+        public ValueTask<Expression<Func<TestOrder, bool>>> BuildPredicateAsync(
             DataScopeContext context,
             CancellationToken cancellationToken = default)
         {
             var userId = context.Subject.UserId;
-            return ValueTask.FromResult<Expression<Func<TestOrder, bool>>?>(order => order.OwnerId == userId);
+            return ValueTask.FromResult<Expression<Func<TestOrder, bool>>>(order => order.OwnerId == userId);
         }
     }
 
@@ -240,7 +240,7 @@ public class DataScopeApplierTests : IAsyncLifetime
         public string ResourceName => Resource;
         public string ScopeName => Scope;
 
-        public ValueTask<Expression<Func<TestOrder, bool>>?> BuildPredicateAsync(
+        public ValueTask<Expression<Func<TestOrder, bool>>> BuildPredicateAsync(
             DataScopeContext context,
             CancellationToken cancellationToken = default)
         {
@@ -249,16 +249,16 @@ public class DataScopeApplierTests : IAsyncLifetime
                 .Select(x => x.ScopeValue!)
                 .ToList();
 
-            return ValueTask.FromResult<Expression<Func<TestOrder, bool>>?>(
+            return ValueTask.FromResult<Expression<Func<TestOrder, bool>>>(
                 order => organizationIds.Contains(order.OrganizationId));
         }
     }
 
     [Fact]
-    public async Task A_provider_returning_no_predicate_does_not_open_everything()
+    public async Task A_provider_contributing_nothing_does_not_open_everything()
     {
-        // 少查一个条件、拿不到上下文而返回 null 的 Provider，绝不能被解释成"全部可见"——
-        // 那会让整张表当场放开。它只是不贡献可见性，其余范围照常生效。
+        // 少查一个条件、拿不到上下文的 Provider 只能表达"本范围不贡献可见性"，
+        // 绝不能顺带被解释成"全部可见"——那会让整张表当场放开。其余范围照常生效。
         var applier = CreateApplier(
             Subject(),
             [new DataScopeAssignment(Resource, DataOperations.Read, SilentScopeProvider.Scope, null)],
@@ -269,7 +269,7 @@ public class DataScopeApplierTests : IAsyncLifetime
         Assert.Empty(visible);
     }
 
-    /// <summary>返回 null 的 Provider，用于验证契约不再 fail-open。</summary>
+    /// <summary>不贡献可见性的 Provider，用于验证契约不会 fail-open。</summary>
     private sealed class SilentScopeProvider : IDataScopeProvider<TestOrder>
     {
         public const string Scope = "Silent";
@@ -277,10 +277,10 @@ public class DataScopeApplierTests : IAsyncLifetime
         public string ResourceName => Resource;
         public string ScopeName => Scope;
 
-        public ValueTask<Expression<Func<TestOrder, bool>>?> BuildPredicateAsync(
+        public ValueTask<Expression<Func<TestOrder, bool>>> BuildPredicateAsync(
             DataScopeContext context,
             CancellationToken cancellationToken = default)
-            => ValueTask.FromResult<Expression<Func<TestOrder, bool>>?>(null);
+            => ValueTask.FromResult<Expression<Func<TestOrder, bool>>>(_ => false);
     }
 
     private sealed class AllScopeProvider : IDataScopeProvider<TestOrder>
@@ -290,11 +290,11 @@ public class DataScopeApplierTests : IAsyncLifetime
         public string ResourceName => Resource;
         public string ScopeName => Scope;
 
-        // "全部可见"必须显式表达：返回 null 现在表示"本范围不贡献可见性"，会被跳过。
-        public ValueTask<Expression<Func<TestOrder, bool>>?> BuildPredicateAsync(
+        // "全部可见"必须显式表达，不存在"什么都不返回就等于不限制"的写法。
+        public ValueTask<Expression<Func<TestOrder, bool>>> BuildPredicateAsync(
             DataScopeContext context,
             CancellationToken cancellationToken = default)
-            => ValueTask.FromResult<Expression<Func<TestOrder, bool>>?>(_ => true);
+            => ValueTask.FromResult<Expression<Func<TestOrder, bool>>>(_ => true);
     }
 }
 

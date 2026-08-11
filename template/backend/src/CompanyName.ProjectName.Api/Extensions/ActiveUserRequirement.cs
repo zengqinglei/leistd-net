@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 namespace CompanyName.ProjectName.Api.Extensions;
 
 /// <summary>
-/// 要求当前主体对应的用户存在、启用且未锁定。
+/// 要求当前主体是一个存在、启用且未锁定的自然人用户。
 /// </summary>
 /// <remarks>
 /// 登录时会拒绝禁用与锁定账号，但已签发的 Cookie/Bearer 不会因此失效。若只在权限判定里补这道检查，
@@ -27,11 +27,13 @@ public sealed class ActiveUserHandler(
         AuthorizationHandlerContext context,
         ActiveUserRequirement requirement)
     {
-        // 没有用户身份的主体（client_credentials 代表的是工作负载而非人）不适用本要求，
-        // 由端点自身的授权决定；在这里按"查不到用户"拒绝会把机器令牌一并挡掉。
+        // 没有用户身份的主体（client_credentials 的 sub 是 client_id，代表工作负载而非人）
+        // 一律不满足本要求。默认策略是管理接口的兜底，它要表达的是"一个可用的自然人"，
+        // 而不是"任何通过了认证的东西"——这两句话只在有用户时等价，恰恰在没有用户时分叉：
+        // 不开角色时管理控制器只剩 [Authorize]，放行等于任何机器令牌都能列用户和 OAuth 客户端。
+        // 确有面向工作负载的端点时，由该端点单独声明自己的策略，而不是把默认策略放宽。
         if (currentUser.Id is not { } userId)
         {
-            context.Succeed(requirement);
             return;
         }
 

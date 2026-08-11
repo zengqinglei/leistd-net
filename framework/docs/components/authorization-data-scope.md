@@ -53,12 +53,12 @@ public class OwnOrderScopeProvider(ICurrentUser currentUser) : IDataScopeProvide
     public string ResourceName => "Orders";
     public string ScopeName => Scope;
 
-    public ValueTask<Expression<Func<Order, bool>>?> BuildPredicateAsync(
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
         DataScopeContext context,
         CancellationToken cancellationToken = default)
     {
         var userId = context.Subject.UserId;
-        return ValueTask.FromResult<Expression<Func<Order, bool>>?>(
+        return ValueTask.FromResult<Expression<Func<Order, bool>>>(
             order => order.OwnerId == userId);
     }
 }
@@ -70,7 +70,7 @@ public class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
     public string ResourceName => "Orders";
     public string ScopeName => Scope;
 
-    public ValueTask<Expression<Func<Order, bool>>?> BuildPredicateAsync(
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
         DataScopeContext context,
         CancellationToken cancellationToken = default)
     {
@@ -80,21 +80,22 @@ public class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
             .Select(x => x.ScopeValue!)
             .ToList();
 
-        return ValueTask.FromResult<Expression<Func<Order, bool>>?>(
+        return ValueTask.FromResult<Expression<Func<Order, bool>>>(
             order => organizationIds.Contains(order.OrganizationId));
     }
 }
 
-// 返回 null 表示"不施加任何限制"（全部可见），会短路整个并集。
+// "全部可见"必须显式返回 _ => true；不贡献可见性则返回 _ => false。
+// 没有"什么都不返回就等于不限制"的写法——那种写法一旦被误用，整张表当场放开。
 public class AllOrderScopeProvider : IDataScopeProvider<Order>
 {
     public string ResourceName => "Orders";
     public string ScopeName => "All";
 
-    public ValueTask<Expression<Func<Order, bool>>?> BuildPredicateAsync(
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
         DataScopeContext context,
         CancellationToken cancellationToken = default)
-        => ValueTask.FromResult<Expression<Func<Order, bool>>?>(null);
+        => ValueTask.FromResult<Expression<Func<Order, bool>>>(_ => true);
 }
 ```
 
@@ -171,7 +172,7 @@ foreach (var order in targets)
 | `DataScopeAssignment` | 范围分配：`ResourceName`、`Operation`、`ScopeName`、`ScopeValue` |
 | `DataScopeContext` | 解析上下文：`Subject`、`ResourceName`、`Operation`、`Assignments` |
 | `IDataScopeProvider<TEntity>.ResourceName` / `.ScopeName` | 本 Provider 负责的资源与范围 |
-| `IDataScopeProvider<TEntity>.BuildPredicateAsync(context, ct)` | 构造该范围的查询谓词；返回 `null` 表示不施加限制 |
+| `IDataScopeProvider<TEntity>.BuildPredicateAsync(context, ct)` | 构造该范围的查询谓词；"全部可见"显式返回 `_ => true`，"不贡献可见性"返回 `_ => false` |
 | `IDataScopeAssignmentProvider.GetAssignmentsAsync(subject, resourceName, operation, ct)` | 业务实现：取当前主体在该资源该操作上的全部范围分配 |
 | `IDataScopeApplier.ApplyAsync(query, resourceName, operation, ct)` | 把可见范围合并进查询，返回施加范围后的 `IQueryable<TEntity>` |
 | `AddDataScopeCore()` | 注册 `IDataScopeApplier`（Scoped） |
@@ -186,7 +187,7 @@ foreach (var order in targets)
 3. 没有任何分配：返回空结果集。
 4. 分配了一个没有对应 Provider 的范围：跳过该分配，**不会**因此放宽范围。
 5. 多个分配之间取**并集**（OR）：一个主体常常同时拥有多种范围（例如"本人"加"某几个组织"）。
-6. 任一 Provider 返回 `null`：整体视为无限制，立即原样返回查询。
+6. 谓词签名不可空：`_ => true` 表示"全部可见"，`_ => false` 表示"本范围不贡献可见性"。并集之下这两者含义分明，不存在"没返回谓词"这一态——它一旦被解释成"不限制"，整张表就当场放开。
 7. 合并两个独立 Lambda 时会把参数统一到同一个 `ParameterExpression` 上，否则合并结果无法被数据库翻译。
 
 ## 配置项 / Options

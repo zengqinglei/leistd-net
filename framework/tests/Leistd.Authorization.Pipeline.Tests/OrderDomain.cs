@@ -94,12 +94,12 @@ public sealed class OwnOrderScopeProvider : IDataScopeProvider<Order>
     public string ResourceName => Order.Resource;
     public string ScopeName => Scope;
 
-    public ValueTask<Expression<Func<Order, bool>>?> BuildPredicateAsync(
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
         DataScopeContext context,
         CancellationToken cancellationToken = default)
     {
         var userId = context.Subject.UserId;
-        return ValueTask.FromResult<Expression<Func<Order, bool>>?>(order => order.OwnerId == userId);
+        return ValueTask.FromResult<Expression<Func<Order, bool>>>(order => order.OwnerId == userId);
     }
 }
 
@@ -111,7 +111,7 @@ public sealed class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
     public string ResourceName => Order.Resource;
     public string ScopeName => Scope;
 
-    public ValueTask<Expression<Func<Order, bool>>?> BuildPredicateAsync(
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
         DataScopeContext context,
         CancellationToken cancellationToken = default)
     {
@@ -120,7 +120,7 @@ public sealed class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
             .Select(x => x.ScopeValue!)
             .ToList();
 
-        return ValueTask.FromResult<Expression<Func<Order, bool>>?>(
+        return ValueTask.FromResult<Expression<Func<Order, bool>>>(
             order => organizationIds.Contains(order.OrganizationId));
     }
 }

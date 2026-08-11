@@ -102,14 +102,14 @@ public interface IDataScopeProvider<TEntity>
     /// 构造该范围对应的查询谓词。
     /// </summary>
     /// <returns>
-    /// 谓词。"全部可见"必须显式返回 <c>_ =&gt; true</c>；返回 <c>null</c> 表示本范围
-    /// **不贡献任何可见性**，会被跳过。
+    /// 谓词。"全部可见"必须显式返回 <c>_ =&gt; true</c>，"本范围不贡献任何可见性"返回 <c>_ =&gt; false</c>。
     /// </returns>
     /// <remarks>
-    /// 刻意不把 <c>null</c> 解释为"全部可见"：Provider 少查一个条件、拿不到上下文而返回 null 时，
-    /// 那种解释会让整张表当场全部放开。范围收窄要靠显式表达，放开也是。
+    /// 返回类型刻意不可空：多个范围之间取并集，<c>null</c> 与 <c>_ =&gt; false</c> 本就是同一个意思，
+    /// 多出来的这一态只会诱发"null 大概表示不限制吧"的误读——那种误读会让整张表当场全部放开。
+    /// 范围收窄要靠显式表达，放开也是。
     /// </remarks>
-    ValueTask<Expression<Func<TEntity, bool>>?> BuildPredicateAsync(
+    ValueTask<Expression<Func<TEntity, bool>>> BuildPredicateAsync(
         DataScopeContext context,
         CancellationToken cancellationToken = default);
 }

@@ -197,7 +197,9 @@ public sealed class TestPermissionSubjectProvider(IHttpContextAccessor accessor)
         }
 
         var roleIds = user!.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
-        return Task.FromResult<PermissionSubject?>(new PermissionSubject(userId, roleIds, IsSuperAdmin: false));
+        var isSuperAdmin = user.HasClaim(PipelineFixtures.SuperAdminClaim, "true");
+
+        return Task.FromResult<PermissionSubject?>(new PermissionSubject(userId, roleIds, isSuperAdmin));
     }
 }
 
@@ -248,4 +250,7 @@ public static class PipelineFixtures
 
     /// <summary>宿主显式注册的 Approve 策略额外要求的 Claim。</summary>
     public const string ApprovalClaim = "order-approval";
+
+    /// <summary>标记主体为超级管理员的 Claim。</summary>
+    public const string SuperAdminClaim = "super-admin";
 }
