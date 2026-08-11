@@ -65,6 +65,11 @@
     <Project Path="components/security/Leistd.Security.AspNetCore/Leistd.Security.AspNetCore.csproj" />
     <Project Path="components/security/Leistd.Security.Core/Leistd.Security.Core.csproj" />
   </Folder>
+  <Folder Name="/components/service-client/">
+    <Project Path="components/service-client/Leistd.ServiceClient.AspNetCore/Leistd.ServiceClient.AspNetCore.csproj" />
+    <Project Path="components/service-client/Leistd.ServiceClient.Core/Leistd.ServiceClient.Core.csproj" />
+    <Project Path="components/service-client/Leistd.ServiceClient.OAuth/Leistd.ServiceClient.OAuth.csproj" />
+  </Folder>
   <Folder Name="/components/tracing/">
     <Project Path="components/tracing/Leistd.Tracing.AspNetCore/Leistd.Tracing.AspNetCore.csproj" />
     <Project Path="components/tracing/Leistd.Tracing.Core/Leistd.Tracing.Core.csproj" />
@@ -91,6 +96,7 @@
     <Project Path="tests/Leistd.Localization.Tests/Leistd.Localization.Tests.csproj" />
     <Project Path="tests/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj" />
     <Project Path="tests/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />
+    <Project Path="tests/Leistd.ServiceClient.Tests/Leistd.ServiceClient.Tests.csproj" />
     <Project Path="tests/Leistd.TestBase/Leistd.TestBase.csproj" />
   </Folder>
 </Solution>

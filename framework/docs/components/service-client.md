@@ -1,0 +1,286 @@
+# 服务间调用客户端
+
+多个后端服务相互调用时，每个调用点都要重复解决同一批问题：请求打到哪里、带什么凭据、TraceId 和用户身份怎么跨服务延续、失败时对端返回了什么。如果各自手写 `HttpClient`，调用就成了黑盒——日志断链、认证各搞一套、错误响应五花八门。
+
+Leistd 把服务间调用收敛为一条标准管道：`AddServiceClient` 注册强类型客户端并装配调用日志、TraceId 透传、用户上下文头注入；`AddClientCredentials` 追加 OAuth2 client credentials 认证（token 缓存与 401 自愈）；被调方用 `UseServiceUserContext` 在受信前提下从请求头恢复用户主体；响应用 `ReadResultAsync` 解包统一响应并把远端错误还原为强类型异常。
+
+## 何时使用
+
+| 场景 | 用法 | 包 |
+| --- | --- | --- |
+| 调用其他 Leistd 服务，需要标准管道（日志/追踪/用户头） | `AddServiceClient<TClient, TImpl, TOptions>` | `Leistd.ServiceClient.Core` |
+| 服务间需要 OAuth2 client credentials 认证 | 在返回的 builder 上 `.AddClientCredentials(...)` | `Leistd.ServiceClient.OAuth` |
+| 作为被调方，接收携带 `X-User-*` 头的服务调用 | `AddServiceUserContext()` + `UseServiceUserContext()` | `Leistd.ServiceClient.AspNetCore` |
+| 解析统一响应 / 还原远端错误 | `response.ReadResultAsync<T>()` 等扩展 | `Leistd.ServiceClient.Core` |
+
+> Core 平台无关（Worker 等非 Web 宿主可用）；OAuth、AspNetCore 均传递引用 Core。
+> 典型分工：调用方引 Core + OAuth；被调方引 AspNetCore；双向互调的服务三者都引。
+
+## 安装
+
+```bash
+# 调用方核心：注册入口、标准管道、响应解包、异常类型
+dotnet add package Leistd.ServiceClient.Core
+
+# 调用方认证：client credentials token 获取/缓存/401 自愈（传递引用 Core）
+dotnet add package Leistd.ServiceClient.OAuth
+
+# 被调方：用户上下文恢复中间件（传递引用 Core）
+dotnet add package Leistd.ServiceClient.AspNetCore
+```
+
+> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
+
+## 调用方：注册客户端
+
+为下游服务定义强类型客户端与配置类型：
+
+```csharp
+public class OrderServiceClientOptions : ServiceClientOptions;
+
+public interface IOrderServiceClient
+{
+    Task<OrderDto?> GetAsync(Guid id);
+}
+
+public class OrderServiceClient(HttpClient httpClient) : IOrderServiceClient
+{
+    public async Task<OrderDto?> GetAsync(Guid id)
+    {
+        var response = await httpClient.GetAsync($"api/v1/orders/{id}");
+        // 远端启用了 Leistd.Response 统一包装 → ReadResultAsync 解包 {code,message,data}；
+        // 远端直接返回 DTO（如本仓库模板生成的服务）→ 改用 ReadContentAsync<OrderDto>()
+        return await response.ReadResultAsync<OrderDto>();
+    }
+}
+```
+
+在 `Program.cs` 注册（配置绑定 `Leistd:ServiceClients:OrderService`）：
+
+```csharp
+builder.Services
+    .AddServiceClient<IOrderServiceClient, OrderServiceClient, OrderServiceClientOptions>(
+        "OrderService", builder.Configuration)
+    .AddClientCredentials(builder.Configuration); // 绑定 Leistd:ServiceClients:OrderService:Auth
+```
+
+配置：
+
+```json
+{
+  "Leistd": {
+    "ServiceClients": {
+      "OrderService": {
+        "BaseAddress": "http://order-service",
+        "Timeout": "00:00:30",
+        "LogPayloads": false,
+        "Auth": {
+          "Authority": "http://identity-service",
+          "ClientId": "inventory-service",
+          "ClientSecret": "<来自密钥管理，勿入库>",
+          "Scope": "order-api"
+        }
+      }
+    }
+  }
+}
+```
+
+`AddServiceClient` 返回 `IHttpClientBuilder`，可继续叠加宿主自己的处理器（如
+`Microsoft.Extensions.Http.Resilience` 的 `.AddStandardResilienceHandler()`）；SDK 不内置重试熔断。
+
+### 调用管道
+
+`AddServiceClient` 装配的处理器链（自外向内）：
+
+```
+业务代码 → 调用日志 → TraceId 透传 → X-User-* 注入 → Bearer 认证(OAuth 包) → 网络
+```
+
+- **TraceId 透传**复用 `Leistd.Tracing.HttpClient`：宿主注册了 `AddCorrelationIdCore` /
+  `AddCorrelationId` 才生效，未注册时该环节直通，本组件不代为注册。
+- **用户头注入**依赖 `ICurrentUser`：宿主注册了 `Leistd.Security`（Web 宿主 `AddSecurity()`）才生效。
+- **Bearer 认证**由 `AddClientCredentials` 追加在最内层：401 重试对日志与上层透明。
+
+## 用户上下文传递
+
+调用方把当前用户写入请求头（仅在请求尚无同名头时追加）：
+
+| 头 | 来源 | 默认 |
+| --- | --- | --- |
+| `X-User-Id` | `ICurrentUser.Id` | 转发 |
+| `X-User-Name` | `ICurrentUser.Username`（UTF-8 URL 编码） | 转发（`ForwardUserName` 可关） |
+| 自定义 | `UserContext.ClaimHeaderMap`（claim → 头名，URL 编码） | 不转发 |
+
+角色、权限**不经头传递**：被调方对服务调用的授权应基于调用方 client 的 scope，或按用户 Id 本地判定。
+
+后台任务无 HTTP 上下文时，先用 `ICurrentPrincipalAccessor.Change(...)` 设定主体再调用，
+用户头即可正常携带（见[当前用户与身份信息](./security.md)）。
+
+## 被调方：恢复用户上下文
+
+```csharp
+builder.Services.AddServiceUserContext(builder.Configuration); // 绑定 Leistd:ServiceUserContext
+
+var app = builder.Build();
+app.UseAuthentication();
+app.UseServiceUserContext(); // 必须在 UseAuthentication 之后、UseAuthorization 之前
+app.UseAuthorization();
+```
+
+**信任边界**：仅当当前主体是已认证的服务客户端——含 `client_id` claim 且 `sub == client_id`
+（client credentials token 的形态；用户 token 的 `sub` 是用户 Id，不满足）——时才采信
+`X-User-*` 头。满足时把用户身份作为**主身份**加入 `HttpContext.User` 并保留调用方 client 身份，
+此后 `ICurrentUser`（用户）与 `ICurrentClient`（调用方服务）双通道可用；不满足时按配置
+**剥离**这些头，阻断伪造链路。
+
+被调方的 Bearer token 验证不属于本组件：宿主自行配置 OpenIddict Validation（或等价 JWT 验证）
+指向身份服务 issuer。
+
+## 响应解包与错误还原
+
+| 远端响应 | 行为 |
+| --- | --- |
+| 2xx 且 `code = 0` | `ReadResultAsync<T>()` 返回 `data`；`ReadResultAsync()` 用于无数据的 `Result` |
+| 2xx 且 `code ≠ 0` | 抛 `RemoteServiceException`（`ErrorCode` = 信封 code） |
+| 非 2xx（ProblemDetails） | 抛 `RemoteServiceException`，解析 `code`/`message`/`traceId`/`errors` |
+| 非 2xx（非 JSON 体） | 抛 `RemoteServiceException`，`ResponseBody` 保留原始体（截断 4096 字符） |
+| 网络失败 / 超时 / 反序列化失败 | 抛 `ServiceClientException`（调用方主动取消除外，原样上抛） |
+| 远端 `[NoWrap]` 端点 | `ReadContentAsync<T>()` 直接反序列化；文件流直接读 `Content`，先调 `EnsureRemoteSuccessAsync()` |
+
+远端错误**不映射回本地业务异常**——远端 404 不等于本地资源不存在。调用方捕获
+`RemoteServiceException` 后按需自行翻译：
+
+```csharp
+try
+{
+    var order = await orderServiceClient.GetAsync(id);
+}
+catch (RemoteServiceException ex) when (ex.StatusCode == 404)
+{
+    // ex.ErrorCode 远端业务码；ex.RemoteTraceId 可直接用于跨服务日志检索
+}
+```
+
+## 调用日志
+
+日志类别 `Leistd.ServiceClient.<服务名>`：
+
+- **Information**：每次调用一行摘要 `{Service} {Method} {Uri} 响应 {StatusCode}，耗时 {ElapsedMs}ms`；
+  非 2xx 为 **Warning**，传输层异常为 **Error**。TraceId 由链路追踪组件的日志 Scope
+  （`leistd.correlationId.traceId`）附着，需日志库启用 Scope 富化。
+- **Debug**（`LogPayloads = true`）：请求/响应体按 `MaxPayloadLength` 截断；
+  `Authorization`、`Cookie`、`X-User-*` 头一律脱敏为 `***`。
+
+## 接口参考
+
+### `Leistd.ServiceClient`（Core）
+
+| 成员 | 说明 |
+| --- | --- |
+| `AddServiceClient<TClient, TImpl, TOptions>(services, serviceName, IConfiguration)` | 注册强类型客户端并装配标准管道，Options 绑定 `Leistd:ServiceClients:<serviceName>`；返回 `IHttpClientBuilder` |
+| `AddServiceClient<TClient, TImpl, TOptions>(services, serviceName, Action<TOptions>)` | 同上，委托配置版 |
+| `ServiceClientOptions` | 配置基类：`BaseAddress`、`Timeout`、`LogPayloads`、`MaxPayloadLength`、`UserContext` |
+| `UserContextForwardingOptions` | 用户头转发：`Enable`、`ForwardUserName`、`ClaimHeaderMap` |
+| `ServiceClientHeaders` | 头名常量：`UserId`（`X-User-Id`）、`UserName`（`X-User-Name`） |
+| `ReadResultAsync<T>()` / `ReadResultAsync()` | 解包统一响应，失败抛 `RemoteServiceException` |
+| `ReadContentAsync<T>()` | 未包装端点直接反序列化（同样先做错误还原） |
+| `EnsureRemoteSuccessAsync()` | 仅做非 2xx → `RemoteServiceException` 还原，供文件流等场景 |
+| `ServiceClientException` | 客户端侧异常（继承 `Leistd.Core` 的 `CommonException`） |
+| `RemoteServiceException` | 远端错误（继承 `ServiceClientException`）：`StatusCode`、`ErrorCode`、`RemoteTraceId`、`Errors`、`ResponseBody` |
+
+### `Leistd.ServiceClient.OAuth`
+
+| 成员 | 说明 |
+| --- | --- |
+| `AddClientCredentials(builder, IConfiguration)` | 追加 client credentials 认证，配置绑定 `Leistd:ServiceClients:<名>:Auth` |
+| `AddClientCredentials(builder, Action<ClientCredentialsOptions>)` | 同上，委托配置版 |
+| `ClientCredentialsOptions` | `Authority` / `TokenEndpoint`（默认 `{Authority}/connect/token`）、`ClientId`、`ClientSecret`、`Scope`、`ExpirationBuffer`（默认 60s） |
+| `IServiceTokenProvider` | token 获取抽象：`GetAccessTokenAsync(clientName)` / `Invalidate(clientName)` |
+| `ClientCredentialsTokenProvider` | 默认实现（Singleton）：按具名客户端缓存、过期缓冲、并发单飞 |
+
+### `Leistd.ServiceClient.AspNetCore`
+
+| 成员 | 说明 |
+| --- | --- |
+| `AddServiceUserContext(services, IConfiguration)` | 注册恢复配置（绑定 `Leistd:ServiceUserContext`）与认证阶段的 ClaimsTransformation |
+| `AddServiceUserContext(services, Action<ServiceUserContextOptions>?)` | 同上，委托配置版 |
+| `UseServiceUserContext()` | 启用中间件（`UseAuthentication` 之后、`UseAuthorization` 之前）：剥离不受信头 + 兜底恢复 |
+| `ServiceUserContextClaimsTransformation` | `IClaimsTransformation` 实现：在每次认证内恢复用户主体（含授权策略按 scheme 重认证的路径） |
+| `ServiceUserContextOptions` | `Enable`、`UserIdHeader`、`UserNameHeader`、`HeaderClaimMap`、`RemoveUntrustedHeaders`、`RequiredScope`、`AuthenticationType` |
+
+## 实现行为
+
+### Leistd.ServiceClient.Core
+
+- `AddServiceClient` 内部调用 `AddHttpClient<TClient, TImpl>(serviceName, ...)`：`BaseAddress` 结尾自动补 `/`，`Timeout` 应用到 `HttpClient.Timeout`。
+- 管道各环节按可选能力**在构建时探测**：`ICorrelationIdProvider` 未注册则追踪环节直通，`ICurrentUser` 未注册或 `UserContext.Enable=false` 则用户头环节直通。处理器实例随 `HttpClientFactory` 的 handler 生命周期（默认 2 分钟）轮换，期间的 Options 变更在轮换后生效。
+- 日志处理器把传输层异常包装为 `ServiceClientException`；`OperationCanceledException` 且调用方令牌已取消时原样上抛。
+- 用户头注入读取的是**发送时刻**的 `ICurrentUser`（底层 `AsyncLocal`），处理器被缓存复用不影响每请求取值。
+
+### Leistd.ServiceClient.OAuth
+
+- token 请求走独立具名客户端 `Leistd.ServiceClient.OAuth.Token`（不带认证/用户头处理器，避免管道递归），表单为标准 `grant_type=client_credentials` + `client_id` + `client_secret` [+ `scope`]。
+- 令牌按具名客户端缓存至 `expires_in - ExpirationBuffer`；并发获取经 `SemaphoreSlim` 单飞，同一时刻同名客户端只有一个 token 请求在途。
+- 认证处理器在请求**尚无** `Authorization` 头时才介入；收到 401 时失效缓存、强制重取并克隆请求重试一次（请求体已预缓冲，克隆完整），仍 401 则原样返回。
+- token 端点不可达或返回非 2xx 抛 `ServiceClientException`（含端点与响应体片段）。
+
+### Leistd.ServiceClient.AspNetCore
+
+- **恢复发生在认证阶段**：`AddServiceUserContext` 注册的 `ServiceUserContextClaimsTransformation`（`IClaimsTransformation`）在每次 `AuthenticateAsync` 内生效。仅靠中间件改写 `HttpContext.User` 不够——授权策略显式声明认证 scheme 时，`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，中间件改写的主体在该路径上会被丢弃。转换幂等（已恢复的主体原样返回）。ASP.NET Core 只消费单个 `IClaimsTransformation`（`AddAuthentication` 预注册 Noop 实现），因此注册使用 `Replace`；宿主若有自己的 `IClaimsTransformation`，需在其中自行组合本恢复逻辑（`ServiceUserContextClaimsTransformation` 是公共类型，可直接内嵌调用）。
+- 中间件职责：不受信时剥离用户头；受信但认证阶段未恢复时兜底恢复 `HttpContext.User`。`Enable=false` 时完全直通（不恢复也不剥离）。
+- 受信判定：主体已认证 + 含 `client_id` claim + `sub == client_id`（`sub` 缺失时回退 `ClaimTypes.NameIdentifier`）+ 可选 `RequiredScope`（同时识别空格分隔的 `scope` claim 与 OpenIddict 的多值 `oi_scp` claim）。
+- 恢复时构造 `sub` / `preferred_username` / 自定义映射 claim 的 `ClaimsIdentity`（`AuthenticationType` 默认 `ServiceUserContext`）置于主体首位，原有身份全部保留。
+- 受信但无 `X-User-Id` 头：服务以自身身份调用，主体保持不变。
+- 不受信且 `RemoveUntrustedHeaders=true`（默认）：从请求中移除 `UserIdHeader`、`UserNameHeader` 与 `HeaderClaimMap` 声明的所有头。
+
+## 配置项 / Options
+
+`ServiceClientOptions`（每客户端一个派生类型，绑定 `Leistd:ServiceClients:<服务名>`）：
+
+| 属性 | 默认值 | 说明 |
+| --- | --- | --- |
+| `BaseAddress` | `null` | 下游服务基础地址，结尾自动补 `/` |
+| `Timeout` | 30s | 单次调用超时 |
+| `LogPayloads` | `false` | Debug 级别记录请求/响应载荷（脱敏、截断） |
+| `MaxPayloadLength` | 4096 | 载荷日志截断长度 |
+| `UserContext.Enable` | `true` | 用户头转发开关 |
+| `UserContext.ForwardUserName` | `true` | 是否转发 `X-User-Name` |
+| `UserContext.ClaimHeaderMap` | 空 | 额外 claim → 头名映射 |
+
+`ClientCredentialsOptions`（绑定 `Leistd:ServiceClients:<服务名>:Auth`）：
+
+| 属性 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Authority` | `null` | 身份服务基础地址 |
+| `TokenEndpoint` | `{Authority}/connect/token` | token 端点，设置后覆盖默认推导 |
+| `ClientId` / `ClientSecret` | 空 | 客户端凭据（Secret 来自密钥管理） |
+| `Scope` | `null` | 申请的 scope，空格分隔多个 |
+| `ExpirationBuffer` | 60s | 提前刷新缓冲 |
+
+`ServiceUserContextOptions`（绑定 `Leistd:ServiceUserContext`）：
+
+| 属性 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Enable` | `true` | 总开关；`false` 时不恢复也不剥离 |
+| `UserIdHeader` / `UserNameHeader` | `X-User-Id` / `X-User-Name` | 头名 |
+| `HeaderClaimMap` | 空 | 额外头 → claim 映射（与调用方 `ClaimHeaderMap` 对应） |
+| `RemoveUntrustedHeaders` | `true` | 不受信时剥离用户头 |
+| `RequiredScope` | `null` | 额外要求调用方 token 的 scope |
+| `AuthenticationType` | `ServiceUserContext` | 恢复身份的 AuthenticationType |
+
+## 注意事项
+
+- **网关必须剥离外部来源的内部头**：`X-User-*` 只应在服务网格内出现。中间件默认剥离不受信头是最后防线，Ingress/网关层应同步配置剥离。
+- `ClientSecret` 不要写入源码或提交的配置文件，从环境变量或密钥管理注入。
+- 401 自愈只重试一次；重试仍 401 说明凭据本身失效（client 被禁用/密钥轮换未同步），会以 `RemoteServiceException` 形式浮出。
+- `LogPayloads` 会完整缓冲响应体，勿在文件下载等大响应客户端上开启。
+- 追踪与用户头转发是**跟随宿主显式组合**的：忘记 `AddCorrelationIdCore` / `AddSecurity()` 不报错，只是对应能力静默缺失；联调时先检查这两项注册。
+- 远端错误经 `RemoteServiceException` 上抛后，若不捕获会被本方全局异常处理器按 500 归一化——对可预期的远端失败（如库存不足）应在调用方捕获并翻译为本方业务异常。
+
+## 相关
+
+- [链路追踪](./tracing.md)
+- [当前用户与身份信息](./security.md)
+- [统一 API 响应](./response.md)
+- [业务异常与全局异常处理](./exception.md)

@@ -34,6 +34,7 @@ using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
 #if (IncludeOpenIddict)
 using System.Security.Cryptography.X509Certificates;
+using Leistd.ServiceClient.AspNetCore;
 using OpenIddict.Abstractions;
 #endif
 #endif
@@ -256,6 +257,12 @@ try
     // 4.5. Leistd Security 服务
     builder.Services.AddSecurity();
 
+#if (IncludeOpenIddict)
+    // 4.5.0 服务间调用：受信恢复调用方携带的 X-User-* 用户上下文（配置节 Leistd:ServiceUserContext）。
+    // 仅当调用方以 client credentials 令牌通过认证时才采信这些头，其余请求一律剥离，阻断伪造。
+    builder.Services.AddServiceUserContext(builder.Configuration);
+#endif
+
 #if (IncludeNotifications)
     // 4.5.1 Leistd Notifications — 通知 Hub 与业务实时 Hub 显式注册
     // AddNotificationsSignalR 只注册通知传输；模板前端还会连接 /hubs/realtime 订阅业务事件，
@@ -445,6 +452,10 @@ try
     app.UseSecurity();
 #if (IncludeIdentity)
     app.UseAuthentication();
+#if (IncludeOpenIddict)
+    // 服务间调用的用户上下文恢复：必须在认证之后（信任判定依赖已认证的调用方主体）、授权之前
+    app.UseServiceUserContext();
+#endif
 #endif
     app.UseAuthorization();
 

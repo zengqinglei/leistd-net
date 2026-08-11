@@ -37,6 +37,9 @@
     <PackageVersion Include="Leistd.EventBus.Local" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.HttpClient" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.ServiceClient.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.ServiceClient.OAuth" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.ServiceClient.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Domain" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Application" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Application.Contracts" Version="$(LeistdFrameworkVersion)" />

@@ -60,6 +60,16 @@
 
 三者互不依赖，按需引用；不引用即完全不产生模型与运行时成本。
 
+## 0.13.0 新增服务间调用客户端（service-client）
+
+纯新增组件家族，无破坏性变更：
+
+- `Leistd.ServiceClient.Core`：强类型客户端注册（`AddServiceClient`）与标准管道（调用日志、TraceId 透传、`X-User-*` 用户头注入）、统一响应解包（`ReadResultAsync`）、`ServiceClientException` / `RemoteServiceException`。
+- `Leistd.ServiceClient.OAuth`：OAuth2 client credentials 令牌获取/缓存/并发单飞/401 自愈（`AddClientCredentials`）。
+- `Leistd.ServiceClient.AspNetCore`：被调方用户上下文恢复中间件（`UseServiceUserContext`），仅采信已认证服务客户端（`sub == client_id`）携带的用户头，不受信一律剥离。
+
+用法与信任边界见[服务间调用客户端](../../framework/docs/components/service-client.md)；方案与决策记录见 [`docs/plans/2026-08-11-service-invocation-sdk.md`](../plans/2026-08-11-service-invocation-sdk.md)。
+
 ## 提交规范决定版本递增（Conventional Commits）
 
 发版时流水线（`release.yml`）分析"自上个 `v*` tag 以来"的提交信息，算出下一个版本（默认"优先最小版本"）：

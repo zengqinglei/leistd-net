@@ -131,6 +131,8 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Email/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
+            "backend/src/CompanyName.ProjectName.Client/Dtos/WhoAmIDto.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
             "frontend/src/app/features/platform/components/open-applications/**",
             "frontend/src/app/features/platform/services/open-application-service.ts",
             "frontend/src/app/features/platform/models/open-application.dto.ts",
@@ -228,6 +230,7 @@
         {
           "condition": "IncludeIdentity && !IncludeOpenIddict",
           "exclude": [
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/AuthPrincipalFactory.cs",
