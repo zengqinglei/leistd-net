@@ -304,22 +304,16 @@ try
 #endif
         options.SlidingExpiration = true;
 
-        // 只有浏览器导航才该被重定向到登录页/拒绝页。默认行为对所有请求一律 302，
-        // 于是 API 与 OIDC 客户端拿到的是 /Account/AccessDenied——本应用没有这个路由，
-        // 再叠上 SPA 兜底，跟随重定向的客户端最后收到的是一个 HTML 200，
-        // 把"未认证/无权限"伪装成了成功。按 Accept 区分：认 text/html 的才重定向。
-        options.Events.OnRedirectToLogin = context => RespondWithStatusOrRedirect(context, StatusCodes.Status401Unauthorized);
-        options.Events.OnRedirectToAccessDenied = context => RespondWithStatusOrRedirect(context, StatusCodes.Status403Forbidden);
+        // 一律返回状态码，不重定向。默认行为是 302 到 /Account/AccessDenied——本应用没有这个
+        // 路由，再叠上 SPA 兜底，跟随重定向的客户端最后收到的是一个 HTML 200，把"未认证/无权限"
+        // 伪装成了成功。这里也不去按 Accept 猜"是不是浏览器导航"：本宿主是 SPA + API，
+        // 没有任何受保护的 SSR 页面需要这条重定向分支——`/connect/authorize` 的交互式登录跳转
+        // 由它自己处理。将来真加了 Razor/SSR，再按端点元数据定向重定向，不要靠嗅探请求头。
+        options.Events.OnRedirectToLogin = context => WriteStatus(context, StatusCodes.Status401Unauthorized);
+        options.Events.OnRedirectToAccessDenied = context => WriteStatus(context, StatusCodes.Status403Forbidden);
 
-        static Task RespondWithStatusOrRedirect(RedirectContext<CookieAuthenticationOptions> context, int statusCode)
+        static Task WriteStatus(RedirectContext<CookieAuthenticationOptions> context, int statusCode)
         {
-            if (context.Request.Headers.Accept.Any(value =>
-                    value != null && value.Contains("text/html", StringComparison.OrdinalIgnoreCase)))
-            {
-                context.Response.Redirect(context.RedirectUri);
-                return Task.CompletedTask;
-            }
-
             context.Response.StatusCode = statusCode;
             return Task.CompletedTask;
         }
@@ -329,6 +323,9 @@ try
     // 覆盖范围是每一次新的 HTTP 请求和每一次新的 Hub 连接握手；
     // 已经建立的 SignalR 连接不在其中，见 ActiveUserRequirement 的说明。
     builder.Services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
+
+    // 账号失效要返回 401 而不是 403：前端只把 401 当会话失效来清理登录态。
+    builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, InvalidAccountResultHandler>();
 
     builder.Services.AddAuthorization(options =>
     {

@@ -42,7 +42,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     {
         using var anonymous = factory.CreateProjectClient();
         var anonymousResponse = await anonymous.GetAsync("/api/v1/users?offset=0&limit=10");
-        Assert.Contains(anonymousResponse.StatusCode, new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Redirect });
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
 
         using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
         Assert.Equal(HttpStatusCode.OK, (await GetUsersAsync(superAdmin.Client)).StatusCode);
@@ -201,10 +201,12 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         var disabled = await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null);
         Assert.Equal(HttpStatusCode.OK, disabled.StatusCode);
 
-        // 登录时会拒绝禁用账号，但已签发的 Cookie 不会因此失效。主体解析每请求查库，
-        // 是撤权唯一即时生效的地方——放行就等于"禁用用户"只挡新登录，已在线的会话照常畅通。
+        // 登录时会拒绝禁用账号，但已签发的 Cookie 不会因此失效——放行就等于"禁用用户"
+        // 只挡新登录，已在线的会话照常畅通。
+        // 401 而非 403：账号失效说明这份凭据代表的身份已经不成立，属于"凭据无效"而非"权限不足"，
+        // 前端也只把 401 当会话失效来清理登录态。
         Assert.Equal(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.Unauthorized,
             (await session.Client.GetAsync("/api/v1/users?offset=0&limit=10")).StatusCode);
     }
 
@@ -709,6 +711,49 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 #endif
 #endif
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("application/json")]
+    [InlineData("*/*")]
+    [InlineData("text/html,application/xhtml+xml")]
+    [InlineData("text/html;q=0, application/json")]
+    public async Task Unauthenticated_api_calls_answer_401_regardless_of_accept(string? accept)
+    {
+        using var anonymous = factory.CreateProjectClient();
+        if (accept != null)
+        {
+            anonymous.DefaultRequestHeaders.Add("Accept", accept);
+        }
+
+        // Cookie 中间件默认把一切未认证请求 302 到登录页/拒绝页；本宿主是 SPA + API，
+        // 没有受保护的 SSR 页面需要那条分支，跟随重定向的客户端只会撞上 SPA 兜底拿到 HTML 200，
+        // 把"未认证"伪装成成功。也不按 Accept 猜测：text/html;q=0 明确表示不接受 HTML，
+        // 任何子串匹配都会把它误判成浏览器导航。
+        var response = await anonymous.GetAsync("/api/v1/users?offset=0&limit=10");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    [Fact]
+    public async Task Logging_out_works_even_after_the_account_was_disabled()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+
+        // 登出是幂等的 Cookie 清理。挂 [Authorize] 时账号一被禁用本人就清不掉服务端 Cookie——
+        // 登不出去，浏览器里还留着一张已经没用的票。
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await session.Client.PostAsync("/api/v1/auth/logout", null)).StatusCode);
+    }
+
     [Fact]
     public async Task Disabling_a_user_also_revokes_endpoints_that_only_require_authentication()
     {
@@ -725,7 +770,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         // 只在权限判定里补检查的话，撤权只覆盖 RBAC 接口，`/auth/me` 这类"仅要求已认证"的端点照常畅通。
         // 这条要求挂在默认策略上，正是为了让这里也失效。
         Assert.Equal(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.Unauthorized,
             (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
@@ -751,7 +796,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         // 已经建立的连接不会因为账号被禁用而断开——那条边界写在 ActiveUserRequirement 的说明里，
         // 需要它也失效的项目得自己做连接注册表加跨节点终止通道。
         Assert.Equal(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.Unauthorized,
             (await session.Client.PostAsync(Negotiate, null)).StatusCode);
     }
 
@@ -776,7 +821,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         // 锁定与禁用是同一句判定的两个分支，失效语义必须一致——只测其中一个，
         // 另一个分支写错了没人会发现。
         Assert.Equal(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.Unauthorized,
             (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
@@ -860,8 +905,8 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         // Cookie、OpenIddict Validation、userinfo 是三条不同的认证路径。撤权承诺覆盖 API 令牌，
         // 不只是浏览器会话——只有 Cookie 一条测试保持绿色时，策略被改窄了也看不出来。
-        Assert.Equal(HttpStatusCode.Forbidden, (await api.GetAsync("/api/v1/auth/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await api.GetAsync("/connect/userinfo")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await api.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await api.GetAsync("/connect/userinfo")).StatusCode);
     }
 
     private static async Task<(string ClientId, string ClientSecret)> CreateAuthorizationCodeClientAsync(

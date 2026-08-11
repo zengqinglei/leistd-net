@@ -22,7 +22,13 @@ namespace CompanyName.ProjectName.Api.Extensions;
 /// 仍可能在既有连接上继续收到推送。要让既有连接也断开，需要连接注册表加跨节点终止通道，
 /// 那是有明确敏感度要求的业务项目自己的事，通用模板不预置。
 /// </remarks>
-public sealed class ActiveUserRequirement : IAuthorizationRequirement;
+public sealed class ActiveUserRequirement : IAuthorizationRequirement
+{
+    /// <summary>
+    /// 标记"凭据背后的账号已失效"这一种失败，供结果处理器把它映射成 401 而非 403。
+    /// </summary>
+    public const string InvalidAccountReason = "ActiveUser:InvalidAccount";
+}
 
 public sealed class ActiveUserHandler(
     ICurrentUser currentUser,
@@ -37,6 +43,8 @@ public sealed class ActiveUserHandler(
         // 而不是"任何通过了认证的东西"——这两句话只在有用户时等价，恰恰在没有用户时分叉：
         // 不开角色时管理控制器只剩 [Authorize]，放行等于任何机器令牌都能列用户和 OAuth 客户端。
         // 确有面向工作负载的端点时，由该端点单独声明自己的策略，而不是把默认策略放宽。
+        //
+        // 这一支不打失效标记：机器令牌本身是有效的，只是没资格进人类管理端点——那是 403。
         if (currentUser.Id is not { } userId)
         {
             return;
@@ -45,6 +53,10 @@ public sealed class ActiveUserHandler(
         var user = await userRepository.GetByIdAsync(userId);
         if (user == null || !user.IsActive || user.IsLockedOut())
         {
+            // 账号已删除/禁用/锁定：这份 Cookie 或 Bearer 代表的身份已经不再成立，
+            // 属于"凭据无效"而不是"权限不足"。打上标记，由 InvalidAccountResultHandler 返回 401。
+            context.Fail(new AuthorizationFailureReason(
+                this, ActiveUserRequirement.InvalidAccountReason));
             return;
         }
 
