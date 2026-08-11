@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    本服务的强类型调用客户端：随服务发布为 NuGet 包，供其他后端服务引用。
+    只依赖 Leistd.ServiceClient.*，不引用服务内部程序集（DTO 自带，独立演进）。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Description>CompanyName.ProjectName 服务调用客户端</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Leistd.ServiceClient.Core" />
+    <PackageReference Include="Leistd.ServiceClient.OAuth" />
+  </ItemGroup>
+
+</Project>

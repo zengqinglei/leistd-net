@@ -10,6 +10,7 @@
 | 后端编码 | [`standards/coding-backend.md`](standards/coding-backend.md) |
 | 前端编码 | [`standards/coding-frontend.md`](standards/coding-frontend.md) |
 | API 契约 | [`standards/api.md`](standards/api.md) |
+| 服务间调用 | [`standards/service-invocation.md`](standards/service-invocation.md) |
 | 测试 | [`standards/testing.md`](standards/testing.md) |
 | 技术栈与目录 | [`standards/tech-stack.md`](standards/tech-stack.md)、[`standards/project-structure.md`](standards/project-structure.md) |
 | UI 设计 | [`standards/ui-design.md`](standards/ui-design.md) |

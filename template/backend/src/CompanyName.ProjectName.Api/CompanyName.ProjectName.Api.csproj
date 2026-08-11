@@ -46,6 +46,9 @@
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />
+<!--#if (IncludeOpenIddict)-->
+    <PackageReference Include="Leistd.ServiceClient.AspNetCore" />
+<!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.Core" />
     <PackageReference Include="Leistd.Notifications.AspNetCore.SignalR" />

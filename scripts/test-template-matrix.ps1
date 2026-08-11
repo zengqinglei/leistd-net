@@ -186,7 +186,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         }
     }
 
-    $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "tech-stack.md", "testing.md", "ui-design.md")
+    $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "service-invocation.md", "tech-stack.md", "testing.md", "ui-design.md")
     $standardsRoot = Join-Path $ProjectRoot "docs/standards"
     $actualStandards = @(Get-ChildItem -LiteralPath $standardsRoot -File -Filter "*.md" | ForEach-Object Name | Sort-Object)
     $standardDifference = Compare-Object ($expectedStandards | Sort-Object) $actualStandards
