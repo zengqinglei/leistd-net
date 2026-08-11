@@ -44,9 +44,6 @@ public class DefaultResourceAuthorizationService(
         if (subject == null)
             return false;
 
-        if (subject.IsSuperAdmin)
-            return true;
-
         var context = new ResourceAuthorizationContext<TResource>(
             subject,
             resourceName,
@@ -59,8 +56,15 @@ public class DefaultResourceAuthorizationService(
             await handler.HandleAsync(context, cancellationToken);
         }
 
+        // 领域规则的拒绝先于一切，超级管理员也不例外：那类规则表达的是资源状态本身不允许
+        // 执行该动作（已归档的订单谁都不能删），不是"谁有没有权限"。旁路它等于让文档说谎。
         if (context.Decision == ResourceAuthorizationDecision.Denied)
             return false;
+
+        // 超管旁路的是授权侧的判定——RBAC、数据范围、ACL 缺失与默认拒绝，
+        // 而不是上面那条领域不变量。
+        if (subject.IsSuperAdmin)
+            return true;
 
         if (resourceGrantStore != null)
         {
@@ -73,7 +77,11 @@ public class DefaultResourceAuthorizationService(
 
             if (acl.TryGetValue(operation, out var effect))
             {
-                if (effect == PermissionGrantEffect.Prohibited)
+                // 只认明确的 Granted，其余一律拒绝。
+                // 写成"是 Prohibited 就拒、否则放行"会让任何非法值 fail-open——
+                // (ResourceGrantEffect)0、越界数值、自定义 Store 返回的损坏值都会被当成允许。
+                // 授权判定必须 fail-closed：读不懂的东西一律当作没有授予。
+                if (effect != ResourceGrantEffect.Granted)
                     return false;
 
                 context.Allow();

@@ -33,15 +33,4 @@ export class PermissionManagementService {
   ): Observable<PermissionGrantsOutputDto> {
     return this.http.put<PermissionGrantsOutputDto>(`${this.baseUrl}/grants/roles/${roleId}`, data);
   }
-
-  getUserGrants(userId: string): Observable<PermissionGrantsOutputDto> {
-    return this.http.get<PermissionGrantsOutputDto>(`${this.baseUrl}/grants/users/${userId}`);
-  }
-
-  replaceUserGrants(
-    userId: string,
-    data: ReplacePermissionGrantsInputDto,
-  ): Observable<PermissionGrantsOutputDto> {
-    return this.http.put<PermissionGrantsOutputDto>(`${this.baseUrl}/grants/users/${userId}`, data);
-  }
 }

@@ -121,7 +121,9 @@ try
                 OpenIddictConstants.Scopes.OpenId,
                 OpenIddictConstants.Scopes.Profile,
                 OpenIddictConstants.Scopes.Email,
+#if (IncludeRoles)
                 OpenIddictConstants.Scopes.Roles,
+#endif
                 OpenIddictConstants.Scopes.OfflineAccess);
 
             if (oauthOpts.UseDevelopmentCertificates)
@@ -302,6 +304,9 @@ try
         options.SlidingExpiration = true;
     });
 
+    // 撤权要对已签发的凭据即时生效：登录时的启用/锁定检查挡不住已在线的会话。
+    builder.Services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
+
     builder.Services.AddAuthorization(options =>
     {
         var schemes = new[]
@@ -315,12 +320,15 @@ try
         options.DefaultPolicy = new AuthorizationPolicyBuilder()
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
+            .AddRequirements(new ActiveUserRequirement())
             .Build();
 
-        // 超级管理员策略：基于 is_super_admin claim 判定（无需查库）
+        // 超级管理员策略：claim 判定超管身份，但同样要求账号可用——
+        // 超管被禁用后也必须立刻失去权限，否则这条策略就成了绕过撤权的旁路。
         options.AddPolicy("SuperAdmin", policy => policy
             .AddAuthenticationSchemes(schemes)
             .RequireAuthenticatedUser()
+            .AddRequirements(new ActiveUserRequirement())
             .RequireClaim(Leistd.Security.Claims.CustomClaimTypes.IsSuperAdmin, "true"));
     });
 #else

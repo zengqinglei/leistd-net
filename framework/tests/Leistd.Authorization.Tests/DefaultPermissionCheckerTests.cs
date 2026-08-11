@@ -33,8 +33,8 @@ public class DefaultPermissionCheckerTests
     {
         var store = new FakePermissionGrantStore();
         store.SetUserGrants("u1",
-            new PermissionGrant(TestPermissionDefinitionProvider.Reports, PermissionGrantEffect.Granted),
-            new PermissionGrant(TestPermissionDefinitionProvider.ReportsView, PermissionGrantEffect.Granted));
+            TestPermissionDefinitionProvider.Reports,
+            TestPermissionDefinitionProvider.ReportsView);
 
         var checker = CreateChecker(new PermissionSubject("u1", [], IsSuperAdmin: false), store);
 
@@ -55,37 +55,23 @@ public class DefaultPermissionCheckerTests
     }
 
     [Fact]
-    public async Task Combines_user_and_role_grants_with_deny_taking_precedence()
+    public async Task Combines_user_and_role_grants_as_a_union()
     {
         var store = new FakePermissionGrantStore();
         store.SetRoleGrants("r1",
-            new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Granted),
-            new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted),
-            new PermissionGrant(TestPermissionDefinitionProvider.OrdersDelete, PermissionGrantEffect.Granted));
-        store.SetUserGrants("u1",
-            new PermissionGrant(TestPermissionDefinitionProvider.OrdersDelete, PermissionGrantEffect.Prohibited));
-
-        var checker = CreateChecker(new PermissionSubject("u1", ["r1"], IsSuperAdmin: false), store);
-
-        Assert.True(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersRead));
-        // 角色授予了删除，但用户上有显式拒绝：拒绝优先。
-        Assert.False(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersDelete));
-        // 从未授予：默认拒绝。
-        Assert.False(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersWrite));
-    }
-
-    [Fact]
-    public async Task Deny_from_a_role_also_beats_grant_from_another_role()
-    {
-        var store = new FakePermissionGrantStore();
-        store.SetRoleGrants("r1",
-            new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted));
-        store.SetRoleGrants("r2",
-            new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Prohibited));
+            TestPermissionDefinitionProvider.Orders,
+            TestPermissionDefinitionProvider.OrdersRead);
+        store.SetRoleGrants("r2", TestPermissionDefinitionProvider.OrdersDelete);
+        store.SetUserGrants("u1", TestPermissionDefinitionProvider.OrdersWrite);
 
         var checker = CreateChecker(new PermissionSubject("u1", ["r1", "r2"], IsSuperAdmin: false), store);
 
-        Assert.False(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersRead));
+        // 授予是纯加法：任一来源给了就有，来源之间不会互相否决。
+        Assert.True(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersRead));
+        Assert.True(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersDelete));
+        Assert.True(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersWrite));
+        // 从未授予：默认拒绝。
+        Assert.False(await checker.IsGrantedAsync(TestPermissionDefinitionProvider.OrdersWriteBatch));
     }
 
     [Fact]
@@ -93,7 +79,7 @@ public class DefaultPermissionCheckerTests
     {
         var store = new FakePermissionGrantStore();
         store.SetUserGrants("u1",
-            new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted));
+            TestPermissionDefinitionProvider.OrdersRead);
 
         var subjectProvider = new CountingSubjectProvider(
             new PermissionSubject("u1", ["r1"], IsSuperAdmin: false));
@@ -117,7 +103,7 @@ public class DefaultPermissionCheckerTests
     {
         var store = new FakePermissionGrantStore();
         store.SetUserGrants("u1",
-            new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted));
+            TestPermissionDefinitionProvider.OrdersRead);
 
         var checker = CreateChecker(new PermissionSubject("u1", [], IsSuperAdmin: false), store);
 
@@ -162,16 +148,16 @@ public class DefaultPermissionCheckerTests
 
     private sealed class FakePermissionGrantStore : IPermissionGrantStore
     {
-        private readonly Dictionary<string, List<PermissionGrant>> _userGrants = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, List<PermissionGrant>> _roleGrants = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<string>> _userGrants = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<string>> _roleGrants = new(StringComparer.Ordinal);
 
         public int SubjectQueryCount { get; private set; }
 
-        public void SetUserGrants(string userId, params PermissionGrant[] grants)
-            => _userGrants[userId] = [.. grants];
+        public void SetUserGrants(string userId, params string[] permissionNames)
+            => _userGrants[userId] = [.. permissionNames];
 
-        public void SetRoleGrants(string roleId, params PermissionGrant[] grants)
-            => _roleGrants[roleId] = [.. grants];
+        public void SetRoleGrants(string roleId, params string[] permissionNames)
+            => _roleGrants[roleId] = [.. permissionNames];
 
         public Task<PermissionGrantSet> GetGrantsAsync(
             string providerName,

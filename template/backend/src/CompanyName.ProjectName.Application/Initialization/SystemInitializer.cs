@@ -10,6 +10,7 @@ using CompanyName.ProjectName.Domain.Users.Options;
 using Leistd.Authorization;
 #endif
 using Leistd.Ddd.Domain.Repositories;
+using Leistd.Lock.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #if (IncludeOpenIddict)
@@ -40,19 +41,52 @@ public class SystemInitializer(
     IOpenIddictScopeManager scopeManager,
 #endif
     IOptions<DefaultAdminOptions> adminOptions,
+    IDistributedLock distributedLock,
     ILogger<SystemInitializer> logger) : ISystemInitializer
 {
+    /// <summary>
+    /// 初始化互斥锁的键。
+    /// </summary>
+    /// <remarks>
+    /// 公开是为了让集成测试能对同一把锁断言互斥，而不是各写一份字面量。
+    /// </remarks>
+    public const string InitializationLockKey = "MyProject:system-initialization";
+
 #if (IncludeRoles)
     private const string MemberRoleName = "Member";
 #endif
 
+    /// <remarks>
+    /// 整个初始化在 <see cref="IDistributedLock"/> 内串行执行。这里每一步都是"先查存在、
+    /// 不存在再建"，单实例下幂等，多实例同时启动就全是竞争窗口：角色名、用户名、
+    /// OpenIddict 客户端各自的唯一索引会冲突，权限播种会撞上授权版本冲突，异常一路冒泡穿过
+    /// <c>ApplicationBootstrapper</c>，落败的那个实例直接起不来。加锁之后落败方是排队而不是撞车：
+    /// 等前一个做完，再把同一套幂等检查走一遍，发现该建的都在、版本已大于 0，全部跳过。
+    ///
+    /// 只在权限播种处捕获冲突并不够——角色创建的窗口更靠前，堵了后面也走不到。
+    ///
+    /// 锁的实际作用范围由部署决定：多副本部署必须配置 Redis（<c>AddRedisDistributedLock</c>），
+    /// 单副本走内存实现即可。入口统一为 <see cref="IDistributedLock"/>，业务代码不因部署形态而变。
+    ///
+    /// 初始化可能长时间持锁（迁移、播种、外部依赖抖动），而基于租约的实现无法保证"拿到锁就一直持有"。
+    /// 因此把 <see cref="ILockHandle.LockLost"/> 并进本次的取消令牌：一旦失去持锁资格，
+    /// 后续操作立即中止，由启动失败暴露出来，而不是与新的持有者同时往同一套数据里写。
+    /// </remarks>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        await using var lockHandle = await distributedLock.LockAsync(InitializationLockKey, cancellationToken);
+        using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            lockHandle.LockLost);
+
+        cancellationToken = lockScope.Token;
+
         logger.LogInformation("开始初始化系统数据 ...");
 
 #if (IncludeIdentity)
 #if (IncludeRoles)
         var (adminRole, _) = await InitializeRolesAsync(cancellationToken);
+        await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
 #endif
 
         var adminUser = await InitializeDefaultAdminAsync(cancellationToken);
@@ -64,9 +98,6 @@ public class SystemInitializer(
         await InitializeOpenIddictAsync(cancellationToken);
 #endif
 
-#if (IncludeRoles)
-        await GrantAllPermissionsToAdminRoleAsync(adminRole, cancellationToken);
-#endif
 #else
         await InitializeIdentitylessAdminAsync(cancellationToken);
 #endif
@@ -160,54 +191,51 @@ public class SystemInitializer(
     }
 
     /// <summary>
-    /// 把当前全部权限定义幂等地授予 Admin 角色。
+    /// 在 Admin 角色尚未有过任何授予写入时，把当前全部权限定义播种给它。
     /// </summary>
     /// <remarks>
-    /// Admin 由此成为一个诚实的普通角色：初始拥有全部权限，但可被编辑、可被撤权，
-    /// 系统中不存在"某个角色在代码里自动全权"的第二条旁路（唯一旁路是
-    /// <c>User.IsSuperAdmin</c>）。每次启动都重新补齐，新增权限定义后重启即自愈。
+    /// 判据是授权版本为 0，而不是"本次新建了角色"。初始化没有事务，角色是立即落库的，
+    /// 因此"角色已建、权限未播"是可达状态；只认"本次新建"的话，那一次中断会让 Admin 永久缺权限。
+    /// 版本为 0 精确表示"从未写过授予"，既涵盖刚创建，也涵盖上次中断；而人工清空权限会把版本推到
+    /// 大于 0，不会被误当成未播种再补回来。
+    ///
+    /// 只播种一次，之后 Admin 就是一个诚实的普通角色：可编辑、可撤权，代码里不存在
+    /// "某个角色自动全权"的第二条旁路（唯一旁路是 <c>User.IsSuperAdmin</c>）。
+    ///
+    /// 不在每次启动时补齐缺失权限：纯加法模型无法区分"版本升级新增的定义"与"管理员明确撤销的权限"，
+    /// 补齐必然把人工撤权又加回来，"可撤权"就成了空话。升级后新增的权限由管理员显式授予，
+    /// 期间超级管理员凭 <c>IsSuperAdmin</c> 旁路照常可用，不存在把人锁在门外的风险。
     /// </remarks>
-    private async Task GrantAllPermissionsToAdminRoleAsync(Role adminRole, CancellationToken cancellationToken)
+    private async Task SeedAdminRolePermissionsAsync(Role adminRole, CancellationToken cancellationToken)
     {
-        var definitions = permissionDefinitionManager
-            .GetAll()
-            .Where(definition => permissionDefinitionManager.IsEffectivelyEnabled(definition.Name))
-            .Select(definition => definition.Name)
-            .ToList();
-
         var providerKey = adminRole.Id.ToString();
         var existing = await permissionGrantStore.GetGrantsAsync(
             PermissionGrantProviderNames.Role,
             providerKey,
             cancellationToken);
 
-        // 保留管理员已有的显式拒绝，只补齐缺失的允许，避免每次启动都覆盖运维的调整。
-        var target = existing.Grants.ToDictionary(x => x.PermissionName, x => x.Effect, StringComparer.Ordinal);
-        foreach (var name in definitions)
+        if (existing.Revision != 0)
         {
-            if (!target.ContainsKey(name))
-            {
-                target[name] = PermissionGrantEffect.Granted;
-            }
-        }
-
-        if (target.Count == existing.Grants.Count)
-        {
-            logger.LogInformation("{RoleName} 角色权限已是最新，共 {Count} 项", adminRole.Name, target.Count);
             return;
         }
+
+        var definitions = permissionDefinitionManager
+            .GetAll()
+            .Where(definition => permissionDefinitionManager.IsEffectivelyEnabled(definition.Name))
+            .Select(definition => definition.Name)
+            .ToList();
 
         await permissionGrantManager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             providerKey,
-            [.. target.Select(x => new PermissionGrant(x.Key, x.Value))],
-            expectedRevision: null,
+            definitions,
+            expectedRevision: existing.Revision,
             cancellationToken);
 
         logger.LogInformation(
-            "已为 {RoleName} 角色补齐权限授予，共 {Count} 项（该角色可被编辑与撤权，不存在代码级旁路）",
+            "已为 {RoleName} 角色播种权限授予，共 {Count} 项（此后该角色可被编辑与撤权，不再自动补齐）",
             adminRole.Name,
-            target.Count);
+            definitions.Count);
     }
 
 #endif
@@ -217,7 +245,9 @@ public class SystemInitializer(
         await EnsureScopeAsync(Scopes.OpenId, "OpenID", cancellationToken);
         await EnsureScopeAsync(Scopes.Profile, "Profile", cancellationToken);
         await EnsureScopeAsync(Scopes.Email, "Email", cancellationToken);
+#if (IncludeRoles)
         await EnsureScopeAsync(Scopes.Roles, "Roles", cancellationToken);
+#endif
         await EnsureScopeAsync(Scopes.OfflineAccess, "Offline access", cancellationToken);
     }
 

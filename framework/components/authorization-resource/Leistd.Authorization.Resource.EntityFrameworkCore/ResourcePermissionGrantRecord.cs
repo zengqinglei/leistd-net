@@ -33,7 +33,7 @@ public class ResourcePermissionGrantRecord : ICreationAuditedObject
     public string ProviderKey { get; set; } = default!;
 
     /// <summary>授予效果：显式允许或显式拒绝。</summary>
-    public PermissionGrantEffect Effect { get; set; } = PermissionGrantEffect.Granted;
+    public ResourceGrantEffect Effect { get; set; } = ResourceGrantEffect.Granted;
 
     /// <inheritdoc />
     public DateTime CreationTime { get; set; }
@@ -77,6 +77,12 @@ public class ResourcePermissionGrantRecordConfiguration
             .HasConversion<string>()
             .HasMaxLength(32)
             .IsRequired();
+
+        // 字符串列挡不住越界值：EF 的枚举转换会把 (ResourceGrantEffect)999 存成 "999"，
+        // 读回来还能解析成 999。约束写在数据库上，绕过 Manager 的直连写入也逃不掉。
+        builder.ToTable(table => table.HasCheckConstraint(
+            "CK_ResourcePermissionGrants_Effect",
+            $"\"Effect\" IN ('{nameof(ResourceGrantEffect.Granted)}', '{nameof(ResourceGrantEffect.Prohibited)}')"));
 
         builder.Property(x => x.CreatorId)
             .HasMaxLength(64);

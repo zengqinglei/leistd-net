@@ -1,4 +1,4 @@
-import { Signal } from '@angular/core';
+import { ChangeDetectorRef, Signal, effect, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoService, Translation } from '@jsverse/transloco';
 
@@ -21,4 +21,33 @@ import { TranslocoService, Translation } from '@jsverse/transloco';
  */
 export function translationReady(transloco: TranslocoService): Signal<Translation | undefined> {
   return toSignal(transloco.selectTranslation(), { initialValue: undefined });
+}
+
+/**
+ * 让本组件视图在资源就绪 / 语言切换时重绘，供模板里直接调用 `transloco.translate()` 的组件使用。
+ *
+ * OnPush 组件只有在「被渲染的表达式」依赖了语言时才会被标脏。靠 `| transloco` 管道或某个读了
+ * {@link translationReady} 的 computed 恰好出现在模板里，是隐式契约：角色列表的管道全写在空状态块中，
+ * 有数据时一个都不渲染；角色页只有搜索框、没有筛选下拉，于是整页停在旧语言。
+ * 这里把语言变化显式接到 markForCheck 上，与模板怎么写无关。
+ *
+ * 与 {@link translationReady} 是互补关系而非替代：computed 会缓存，仍需在其中读一次
+ * translationReady 才会失效重算；本函数解决的是视图不重绘。
+ *
+ * 必须在注入上下文中调用（字段初始化或构造函数）。
+ *
+ * @example
+ * export class RoleTable {
+ *   private readonly transloco = inject(TranslocoService);
+ *   constructor() { refreshOnLanguageChange(this.transloco); }
+ * }
+ */
+export function refreshOnLanguageChange(transloco: TranslocoService): void {
+  const ready = translationReady(transloco);
+  const changeDetectorRef = inject(ChangeDetectorRef);
+
+  effect(() => {
+    ready();
+    changeDetectorRef.markForCheck();
+  });
 }

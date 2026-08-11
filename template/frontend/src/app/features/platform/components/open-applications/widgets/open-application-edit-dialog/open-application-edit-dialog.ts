@@ -66,7 +66,9 @@ const authorizationCodePermissions = [
   'scp:openid',
   'scp:profile',
   'scp:email',
+  //#if (IncludeRoles)
   'scp:roles',
+  //#endif
   'scp:offline_access',
 ];
 
@@ -304,7 +306,9 @@ export class OpenApplicationEditDialog {
       { label: 'openid', value: 'scp:openid', group: 'Scopes' },
       { label: 'profile', value: 'scp:profile', group: 'Scopes' },
       { label: 'email', value: 'scp:email', group: 'Scopes' },
+      //#if (IncludeRoles)
       { label: 'roles', value: 'scp:roles', group: 'Scopes' },
+      //#endif
       { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
     ];
   });
@@ -327,7 +331,9 @@ export class OpenApplicationEditDialog {
       'scp:openid': this.transloco.translate('openApp.permission.scopeOpenid'),
       'scp:profile': this.transloco.translate('openApp.permission.scopeProfile'),
       'scp:email': this.transloco.translate('openApp.permission.scopeEmail'),
+      //#if (IncludeRoles)
       'scp:roles': this.transloco.translate('openApp.permission.scopeRoles'),
+      //#endif
       'scp:offline_access': this.transloco.translate('openApp.permission.scopeOfflineAccess'),
     };
   });
@@ -394,7 +400,9 @@ export class OpenApplicationEditDialog {
     { label: 'openid', value: 'scp:openid', group: 'Scopes' },
     { label: 'profile', value: 'scp:profile', group: 'Scopes' },
     { label: 'email', value: 'scp:email', group: 'Scopes' },
+    //#if (IncludeRoles)
     { label: 'roles', value: 'scp:roles', group: 'Scopes' },
+    //#endif
     { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
   ]);
 
@@ -411,7 +419,9 @@ export class OpenApplicationEditDialog {
     'scp:openid': 'Identity',
     'scp:profile': 'Profile',
     'scp:email': 'Email',
+    //#if (IncludeRoles)
     'scp:roles': 'Roles',
+    //#endif
     'scp:offline_access': 'Offline access',
   }));
 
@@ -434,8 +444,29 @@ export class OpenApplicationEditDialog {
   }));
   //#endif
 
+  /**
+   * Select 触发器上显示的文本。
+   *
+   * 触发器渲染的是 `itemToString(value)`，不传就退化成把值本身字符串化——
+   * 下拉里是"桌面/原生"，选完输入框里却是 `native`，同一个东西两个说法。
+   * 这些是箭头函数属性而非方法：传给 input 的引用必须稳定，否则每轮变更检测都换一个新函数。
+   */
+  readonly applicationTypeToLabel = (value: string): string =>
+    this.applicationTypeLabels()[value] ?? value;
+
+  readonly clientTypeToLabel = (value: string): string => this.clientTypeLabels()[value] ?? value;
+
+  readonly consentTypeToLabel = (value: string): string => this.consentTypeLabels()[value] ?? value;
+
+  readonly templateToLabel = (value: string): string =>
+    this.templateOptions().find((option) => option.value === value)?.label ?? value;
+
   getPermissionLabel(value: string): string {
     return this.permissionLabels()[value] ?? value;
+  }
+
+  getRequirementLabel(value: string): string {
+    return this.requirementOptions().find((option) => option.value === value)?.label ?? value;
   }
 
   constructor() {

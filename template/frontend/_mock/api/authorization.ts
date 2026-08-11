@@ -5,7 +5,6 @@ import {
   ALL_PERMISSIONS,
   MockRole,
   PERMISSION_DEFINITIONS,
-  PERMISSION_DESCENDANTS,
   PERMISSION_GRANTS,
   ROLES,
   grantKey,
@@ -16,7 +15,7 @@ import { getCurrentUser } from '../utils/current-user';
 /**
  * 角色与权限 Mock。
  *
- * 只复刻端点形状、401/403 和每个演示账号的固定权限集；三态组合规则、写时祖先归一化
+ * 只复刻端点形状、401/403 和每个演示账号的固定权限集；多来源并集、写时祖先归一化
  * 与定义树遍历以后端集成测试为唯一事实来源，这里不重复实现。
  */
 
@@ -28,7 +27,7 @@ function requireUser() {
   return user;
 }
 
-/** 计算当前用户的有效权限：超管全量，否则取其角色的固定授予集合并去掉显式拒绝。 */
+/** 计算当前用户的有效权限：超管全量，否则取其角色授予的并集。 */
 function effectivePermissionsOf(username: string): { permissions: string[]; revision: string } {
   const user = USERS.find((candidate) => candidate.username === username);
   if (!user) {
@@ -40,7 +39,6 @@ function effectivePermissionsOf(username: string): { permissions: string[]; revi
   }
 
   const granted = new Set<string>();
-  const prohibited = new Set<string>();
   const parts: string[] = [];
 
   for (const roleName of user.roles) {
@@ -51,26 +49,14 @@ function effectivePermissionsOf(username: string): { permissions: string[]; revi
 
     const entry = PERMISSION_GRANTS[grantKey('Role', role.id)];
     parts.push(`${role.id}:${entry?.revision ?? 0}`);
-    for (const grant of entry?.grants ?? []) {
-      (grant.effect === 'Prohibited' ? prohibited : granted).add(grant.name);
-    }
-  }
-
-  const userEntry = PERMISSION_GRANTS[grantKey('User', user.id)];
-  for (const grant of userEntry?.grants ?? []) {
-    (grant.effect === 'Prohibited' ? prohibited : granted).add(grant.name);
-  }
-
-  // 拒绝沿定义树向下传播：跨来源合并会产生「父拒子允」，与后端一样在此收口。
-  for (const name of [...prohibited]) {
-    for (const descendant of PERMISSION_DESCENDANTS[name] ?? []) {
-      prohibited.add(descendant);
+    for (const name of entry?.permissionNames ?? []) {
+      granted.add(name);
     }
   }
 
   return {
-    permissions: [...granted].filter((name) => !prohibited.has(name)).sort(),
-    revision: `u${userEntry?.revision ?? 0}|r${parts.sort().join(',')}`,
+    permissions: [...granted].sort(),
+    revision: `r${parts.sort().join(',')}`,
   };
 }
 
@@ -93,11 +79,7 @@ export function getCurrentPermissions() {
 
 export function getPermissionDefinitions() {
   // 与后端的「任一满足」策略对应：能配置某类主体的权限即可读权限目录。
-  requireAnyPermission([
-    PERMISSIONS.permissions.default,
-    PERMISSIONS.roles.managePermissions,
-    PERMISSIONS.users.managePermissions,
-  ]);
+  requireAnyPermission([PERMISSIONS.permissions.default, PERMISSIONS.roles.managePermissions]);
   return PERMISSION_DEFINITIONS;
 }
 
@@ -129,7 +111,7 @@ export function getRoles(params: Record<string, unknown>): PagedResultDto<unknow
   ).map((role) => ({
     ...role,
     userCount: USERS.filter((user) => user.roles.includes(role.name)).length,
-    permissionCount: PERMISSION_GRANTS[grantKey('Role', role.id)]?.grants.length ?? 0,
+    permissionCount: PERMISSION_GRANTS[grantKey('Role', role.id)]?.permissionNames.length ?? 0,
   }));
 
   sortRoles(matched, String(params['sorting'] ?? ''));
@@ -196,7 +178,7 @@ export function createRole(body: Record<string, unknown>) {
     creationTime: new Date().toISOString(),
   };
   ROLES.push(role);
-  PERMISSION_GRANTS[grantKey('Role', role.id)] = { revision: 0, grants: [] };
+  PERMISSION_GRANTS[grantKey('Role', role.id)] = { revision: 0, permissionNames: [] };
 
   return { ...role, userCount: 0, permissionCount: 0 };
 }
@@ -218,7 +200,7 @@ export function updateRole(id: string, body: Record<string, unknown>) {
   return {
     ...role,
     userCount: USERS.filter((user) => user.roles.includes(role.name)).length,
-    permissionCount: PERMISSION_GRANTS[grantKey('Role', role.id)]?.grants.length ?? 0,
+    permissionCount: PERMISSION_GRANTS[grantKey('Role', role.id)]?.permissionNames.length ?? 0,
   };
 }
 
@@ -250,86 +232,18 @@ export function deleteRole(id: string) {
   delete PERMISSION_GRANTS[grantKey('Role', role.id)];
 }
 
-/**
- * 用户从其角色继承而来的授予。拒绝优先：任一角色拒绝即为拒绝。
- *
- * 角色主体没有上游主体，因此只有 User 会有继承值。
- */
-function inheritedEffectsOf(userId: string): Map<string, 'Granted' | 'Prohibited'> {
-  const inherited = new Map<string, 'Granted' | 'Prohibited'>();
-  const user = USERS.find((candidate) => candidate.id === userId);
-  if (!user) {
-    return inherited;
-  }
-
-  for (const roleName of user.roles) {
-    const role = ROLES.find((candidate) => candidate.name === roleName);
-    if (!role) {
-      continue;
-    }
-
-    for (const grant of PERMISSION_GRANTS[grantKey('Role', role.id)]?.grants ?? []) {
-      if (grant.effect === 'Prohibited' || !inherited.has(grant.name)) {
-        inherited.set(grant.name, grant.effect);
-      }
-    }
-  }
-
-  // 与运行时一致：被拒绝权限的子孙同样视为拒绝。
-  for (const [name, effect] of [...inherited]) {
-    if (effect !== 'Prohibited') {
-      continue;
-    }
-    for (const descendant of PERMISSION_DESCENDANTS[name] ?? []) {
-      inherited.set(descendant, 'Prohibited');
-    }
-  }
-
-  return inherited;
-}
-
-/** 直授中是否有祖先被显式拒绝。 */
-function prohibitedByAncestor(
-  name: string,
-  direct: Map<string, 'Granted' | 'Prohibited'>,
-): boolean {
-  return Object.entries(PERMISSION_DESCENDANTS).some(
-    ([ancestor, descendants]) =>
-      direct.get(ancestor) === 'Prohibited' && descendants.includes(name),
-  );
-}
-
 function buildGrantsResponse(providerName: string, providerKey: string) {
   const entry = PERMISSION_GRANTS[grantKey(providerName, providerKey)] ?? {
     revision: 0,
-    grants: [],
+    permissionNames: [],
   };
-  const direct = new Map(entry.grants.map((grant) => [grant.name, grant.effect]));
-  const inherited =
-    providerName === 'User'
-      ? inheritedEffectsOf(providerKey)
-      : new Map<string, 'Granted' | 'Prohibited'>();
+  const granted = new Set(entry.permissionNames);
 
   return {
     providerName,
     providerKey,
     revision: entry.revision,
-    grants: ALL_PERMISSIONS.map((name) => {
-      const directEffect = direct.get(name) ?? null;
-      const inheritedEffect = inherited.get(name) ?? null;
-
-      return {
-        name,
-        direct: directEffect,
-        inherited: inheritedEffect,
-        // 拒绝优先：任一侧拒绝（含被祖先拒绝而传播下来的）即不生效。
-        effective:
-          directEffect !== 'Prohibited' &&
-          inheritedEffect !== 'Prohibited' &&
-          !prohibitedByAncestor(name, direct) &&
-          (directEffect === 'Granted' || inheritedEffect === 'Granted'),
-      };
-    }),
+    grants: ALL_PERMISSIONS.map((name) => ({ name, granted: granted.has(name) })),
   };
 }
 
@@ -342,7 +256,7 @@ export function replaceRoleGrants(roleId: string, body: Record<string, unknown>)
   requirePermission('App.Roles.ManagePermissions');
 
   const key = grantKey('Role', roleId);
-  const entry = PERMISSION_GRANTS[key] ?? { revision: 0, grants: [] };
+  const entry = PERMISSION_GRANTS[key] ?? { revision: 0, permissionNames: [] };
   const expected = Number(body['expectedRevision'] ?? 0);
 
   // 复刻乐观并发：版本不匹配返回 409，而不是静默覆盖对方的修改。
@@ -353,40 +267,17 @@ export function replaceRoleGrants(roleId: string, body: Record<string, unknown>)
     });
   }
 
-  const grants = (body['grants'] as { name: string; effect: 'Granted' | 'Prohibited' }[]) ?? [];
-  const unknown = grants.filter((grant) => !ALL_PERMISSIONS.includes(grant.name));
+  const permissionNames = (body['permissionNames'] as string[]) ?? [];
+  const unknown = permissionNames.filter((name) => !ALL_PERMISSIONS.includes(name));
   if (unknown.length > 0) {
     throw new MockException(400, {
       code: 40000,
-      message: `Permission '${unknown[0].name}' is not defined or is disabled.`,
+      message: `Permission '${unknown[0]}' is not defined or is disabled.`,
     });
   }
 
-  PERMISSION_GRANTS[key] = { revision: entry.revision + 1, grants: [...grants] };
+  PERMISSION_GRANTS[key] = { revision: entry.revision + 1, permissionNames: [...permissionNames] };
   return buildGrantsResponse('Role', roleId);
-}
-
-export function getUserGrants(userId: string) {
-  requirePermission('App.Users.ManagePermissions');
-  return buildGrantsResponse('User', userId);
-}
-
-export function replaceUserGrants(userId: string, body: Record<string, unknown>) {
-  requirePermission('App.Users.ManagePermissions');
-
-  const key = grantKey('User', userId);
-  const entry = PERMISSION_GRANTS[key] ?? { revision: 0, grants: [] };
-  const expected = Number(body['expectedRevision'] ?? 0);
-  if (expected !== entry.revision) {
-    throw new MockException(409, {
-      code: 40900,
-      message: 'The permissions were changed by someone else. Reload and try again.',
-    });
-  }
-
-  const grants = (body['grants'] as { name: string; effect: 'Granted' | 'Prohibited' }[]) ?? [];
-  PERMISSION_GRANTS[key] = { revision: entry.revision + 1, grants: [...grants] };
-  return buildGrantsResponse('User', userId);
 }
 
 export function getUserRoles(userId: string) {
@@ -425,10 +316,6 @@ export const AUTHORIZATION_API = {
     getRoleGrants(req.params.roleId),
   'PUT /api/v1/permissions/grants/roles/:roleId': (req: MockRequest) =>
     replaceRoleGrants(req.params.roleId, req.body),
-  'GET /api/v1/permissions/grants/users/:userId': (req: MockRequest) =>
-    getUserGrants(req.params.userId),
-  'PUT /api/v1/permissions/grants/users/:userId': (req: MockRequest) =>
-    replaceUserGrants(req.params.userId, req.body),
   'GET /api/v1/roles': (req: MockRequest) => getRoles(req.queryParams),
   'GET /api/v1/roles/options': () => getRoleOptions(),
   'POST /api/v1/roles': (req: MockRequest) => createRole(req.body),

@@ -32,14 +32,18 @@
             }
         }
 
-        internal void ReleaseLease(DateTimeOffset releasedAt)
+        /// <returns>本次是否真的放开了租约；没有活动租约时为 <c>false</c>。</returns>
+        internal bool ReleaseLease(DateTimeOffset releasedAt)
         {
             lock (_lifecycleLock)
             {
-                EnsureLeaseExists();
+                if (_leaseCount == 0)
+                    return false;
+
                 Semaphore.Release();
                 LastReleasedAt = releasedAt;
                 _leaseCount--;
+                return true;
             }
         }
 

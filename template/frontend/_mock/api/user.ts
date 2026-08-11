@@ -46,8 +46,10 @@ export function getUsers(params: any): PagedResultDto<any> {
   const keyword = getQueryValue(params.keyword)?.toLowerCase();
   const isActive = getQueryValue(params.isActive);
   const isEmailVerified = getQueryValue(params.isEmailVerified);
+  //#if (IncludeRoles)
   const rolesParam = params.roles;
   const roles: string[] = Array.isArray(rolesParam) ? rolesParam : rolesParam ? [rolesParam] : [];
+  //#endif
   const sorting = getQueryValue(params.sorting);
 
   if (keyword) {
@@ -67,10 +69,12 @@ export function getUsers(params: any): PagedResultDto<any> {
     users = users.filter((user) => user.isEmailVerified === (isEmailVerified === 'true'));
   }
 
+  //#if (IncludeRoles)
   if (roles.length) {
     users = users.filter((user) => user.roles.some((r) => roles.includes(r)));
   }
 
+  //#endif
   users = sortUsers(users, sorting);
 
   return {
@@ -117,8 +121,6 @@ export function addUser(value: any) {
       : ROLES.filter((role: { isDefault: boolean }) => role.isDefault).map(
           (role: { name: string }) => role.name,
         )) as string[],
-    //#else
-    roles: [] as string[],
     //#endif
     password: value.password || 'Admin@123456',
   };
@@ -141,7 +143,9 @@ export function updateUser(id: string, value: any) {
     avatar: value.avatar,
     isActive: value.isActive,
     isEmailVerified: value.isEmailVerified,
+    //#if (IncludeRoles)
     // 普通更新不接受角色：角色分配是独立命令，走 PUT /api/v1/users/:id/roles。
+    //#endif
   });
   return toUserManagementOutput(user);
 }

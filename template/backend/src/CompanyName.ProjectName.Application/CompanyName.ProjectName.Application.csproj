@@ -21,7 +21,10 @@
   <ItemGroup>
     <PackageReference Include="Leistd.ObjectMapping.Mapster" />
     <PackageReference Include="Leistd.Security.Core" />
+<!--#if (IncludeRoles)-->
     <PackageReference Include="Leistd.Authorization.Core" />
+    <!--#endif-->
+    <PackageReference Include="Leistd.Lock.Core" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />
   </ItemGroup>

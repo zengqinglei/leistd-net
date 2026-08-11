@@ -1,5 +1,7 @@
 using Leistd.Auditing.EntityFrameworkCore;
+#if (IncludeRoles)
 using Leistd.Authorization.EntityFrameworkCore;
+#endif
 using Leistd.Ddd.Infrastructure;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.EventBus.Local;
@@ -66,6 +68,7 @@ public static class DependencyInjection
             {
                 var databaseName = configuration["Database:InMemoryName"];
                 options.UseInMemoryDatabase(string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName);
+
             }
 
 #if (IncludeOpenIddict)

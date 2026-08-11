@@ -10,25 +10,39 @@ namespace CompanyName.ProjectName.Application.Permissions.Provider;
 public static class PermissionConstant
 {
     /// <summary>
-    /// 权限组前缀
+    /// 权限名前缀
     /// </summary>
-    public const string GroupName = "App";
+    public const string Prefix = "App";
+
+    /// <summary>
+    /// 权限分组的标识符。
+    /// </summary>
+    /// <remarks>
+    /// 分组是"模块"这一级，比资源粗一层：一个分组下放若干资源（用户、角色、开放应用），
+    /// 每个资源再展开成动作。分组不是权限，因此不与任何 <c>App.*</c> 同名——
+    /// 一旦组和某个权限共用标识符，同一个名字会在组标题和组内各出现一次，读起来像重复项。
+    /// 分组名不落库（授予只存权限名），可自由调整。
+    /// </remarks>
+    public static class Groups
+    {
+        /// <summary>谁能进来、能做什么：用户、角色，以及代表第三方进来的开放应用。</summary>
+        public const string Identity = "Group.Identity";
+
+        public const string System = "Group.System";
+    }
 
     /// <summary>
     /// 用户管理权限
     /// </summary>
     public static class Users
     {
-        public const string Default = GroupName + ".Users";
+        public const string Default = Prefix + ".Users";
         public const string Create = Default + ".Create";
         public const string Update = Default + ".Update";
         public const string Delete = Default + ".Delete";
 
         /// <summary>分配用户角色。与普通资料更新分离，避免持有编辑权限即可提权。</summary>
         public const string ManageRoles = Default + ".ManageRoles";
-
-        /// <summary>为单个用户配置权限例外（直接授予或显式拒绝）。</summary>
-        public const string ManagePermissions = Default + ".ManagePermissions";
     }
 
     /// <summary>
@@ -36,7 +50,7 @@ public static class PermissionConstant
     /// </summary>
     public static class Roles
     {
-        public const string Default = GroupName + ".Roles";
+        public const string Default = Prefix + ".Roles";
         public const string Create = Default + ".Create";
         public const string Update = Default + ".Update";
         public const string Delete = Default + ".Delete";
@@ -53,7 +67,7 @@ public static class PermissionConstant
     /// </remarks>
     public static class OpenApplications
     {
-        public const string Default = GroupName + ".OpenApplications";
+        public const string Default = Prefix + ".OpenApplications";
         public const string Create = Default + ".Create";
         public const string Update = Default + ".Update";
         public const string Delete = Default + ".Delete";
@@ -69,17 +83,16 @@ public static class PermissionConstant
     public static class Permissions
     {
         /// <summary>查看权限定义树，是配置任何主体权限的前置条件。</summary>
-        public const string Default = GroupName + ".Permissions";
+        public const string Default = Prefix + ".Permissions";
 
         /// <summary>
         /// 读取权限定义树的策略：本权限，或任一「配置主体权限」的权限。
         /// </summary>
         /// <remarks>
-        /// 「能配置某类主体的权限」必然蕴含「能读权限目录」。若要求管理员额外持有
+        /// 「能配置角色权限」必然蕴含「能读权限目录」。若要求管理员额外持有
         /// <see cref="Default"/>，就会存在一个永远无用的状态——有 ManagePermissions 却打不开
         /// 权限配置界面。用「任一满足」表达这层蕴含关系，而不是靠管理员记得多授一个根权限。
         /// </remarks>
-        public const string ReadPolicy =
-            Default + "|" + Roles.ManagePermissions + "|" + Users.ManagePermissions;
+        public const string ReadPolicy = Default + "|" + Roles.ManagePermissions;
     }
 }

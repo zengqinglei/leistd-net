@@ -2,7 +2,9 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 #if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
+#if (IncludeRoles)
 using Leistd.Authorization.EntityFrameworkCore;
+#endif
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;

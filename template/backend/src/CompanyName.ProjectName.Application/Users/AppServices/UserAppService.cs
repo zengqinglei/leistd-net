@@ -187,10 +187,11 @@ public class UserAppService(
                 ;
         }
 
+        // 启用状态原样带过：它只由 Enable/Disable 两个命令写入，那里才有"超管不得禁用自己"的保护。
 #if (IncludeIdentity)
-        user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
+        user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), user.IsActive, input.IsEmailVerified);
 #else
-        user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), input.IsActive, false);
+        user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), user.IsActive, false);
 #endif
         // 角色不在此处变更：普通资料更新与角色分配是两个命令、两个权限。
         await userRepository.UpdateAsync(user, cancellationToken);
@@ -269,6 +270,12 @@ public class UserAppService(
     /// <summary>
     /// 删除用户（软删除）
     /// </summary>
+    /// <remarks>
+    /// 软删除**保留**该用户的直授权限与授权版本：软删除是可恢复的，恢复后权限跟着一起回来才合理；
+    /// 删了权限再恢复，得到的是一个"存在但什么都不能做"的账号，没人会预期这个结果。
+    /// 主体被永久删除时才调用 <c>IPermissionGrantManager.RemoveProviderAsync</c> 清理，
+    /// 例如角色删除（<c>RoleAppService.DeleteAsync</c>）。
+    /// </remarks>
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("开始删除用户 {Id}...", id);

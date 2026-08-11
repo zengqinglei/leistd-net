@@ -281,6 +281,23 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
+    if ($Definition.ForbiddenTokens) {
+        $sourceRoots = @("backend/src", "frontend/src", "frontend/_mock") |
+            ForEach-Object { Join-Path $ProjectRoot $_ } |
+            Where-Object { Test-Path -LiteralPath $_ }
+
+        $sourceFiles = Get-ChildItem -LiteralPath $sourceRoots -Recurse -File -Include *.cs, *.ts -ErrorAction SilentlyContinue
+        foreach ($file in $sourceFiles) {
+            $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
+            foreach ($token in $Definition.ForbiddenTokens) {
+                if ($content -and $content.Contains($token)) {
+                    $relative = $file.FullName.Substring($ProjectRoot.Length).TrimStart('/', '\')
+                    throw "Scenario '$($Definition.Name)' leaks trimmed contract token '$token' in $relative"
+                }
+            }
+        }
+    }
+
     $mockInterceptorPath = Join-Path $ProjectRoot "frontend/_mock/core/interceptor.ts"
     $mockInterceptor = Get-Content -LiteralPath $mockInterceptorPath -Raw -Encoding UTF8
     foreach ($marker in @("MOCK_ROUTE_NOT_FOUND", "Mock Route Not Found", "startsWith('/api/')")) {
@@ -420,6 +437,13 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Application/Permissions", "backend/src/{name}.Domain/Permissions")
         ReadmeContains = @("本地账号", "OpenIddict")
         ReadmeExcludes = @("用户、角色、权限以及超级管理员授权模型")
+        # 路径存在性挡不住"文件还在、角色契约残留在里面"：DTO 字段、OAuth scope、role claim
+        # 都会让前后端契约对不上，或让 Mock 与真实后端行为分叉。只查高信号符号，
+        # 不做泛化的 "role" 扫描——HTML/ARIA 里到处是 role=，噪声会淹掉信号。
+        # 不含裸的 Claims.Role：它还作为 ClaimsIdentity(authType, nameType, roleType) 的构造参数出现，
+        # 那是框架管道而非角色契约（该重载没有两参版本，省掉会连带改变 nameType 解析）。
+        # scp:roles 是前端字面量，不含任何 C# 符号——上一轮只查符号，它就整条漏了过去。
+        ForbiddenTokens = @("roleIds", "Scopes.Roles", "SetClaims(Claims.Role", "ManageRoles", "scp:roles")
     }
     "notifications" = @{
         Arguments = @("--include-notifications", "true"); Frontend = $true; Lint = $true

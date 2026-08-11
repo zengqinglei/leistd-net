@@ -11,7 +11,7 @@ namespace CompanyName.ProjectName.Application.Permissions.Dtos;
 /// </remarks>
 public record CurrentPermissionsOutputDto
 {
-    /// <summary>已生效的权限名集合（已扣除显式拒绝）。</summary>
+    /// <summary>已生效的权限名集合（用户授予与各角色授予的并集）。</summary>
     [Display(Name = "Permissions")]
     public required IReadOnlyList<string> Permissions { get; init; }
 
@@ -60,22 +60,17 @@ public record PermissionDefinitionGroupOutputDto
 /// <summary>
 /// 单个权限在某主体上的授予状态。
 /// </summary>
+/// <remarks>
+/// 授予是纯加法，只有"已授予"与"未授予"两种；角色没有上游来源，因此不存在"继承"一说。
+/// </remarks>
 public record PermissionGrantStateDto
 {
     [Display(Name = "Permission name")]
     public required string Name { get; init; }
 
-    /// <summary>该主体自身的直接授予：Granted / Prohibited / 未设置时为 null。</summary>
-    [Display(Name = "Direct grant")]
-    public string? Direct { get; init; }
-
-    /// <summary>从角色继承而来的授予（仅用户主体有值）。</summary>
-    [Display(Name = "Inherited grant")]
-    public string? Inherited { get; init; }
-
-    /// <summary>综合直接授予与继承后的最终结果。</summary>
-    [Display(Name = "Effective")]
-    public bool Effective { get; init; }
+    /// <summary>该角色是否已被授予该权限。</summary>
+    [Display(Name = "Granted")]
+    public bool Granted { get; init; }
 }
 
 /// <summary>
@@ -98,25 +93,6 @@ public record PermissionGrantsOutputDto
 }
 
 /// <summary>
-/// 单条待保存的授予。
-/// </summary>
-public record PermissionGrantInputDto
-{
-    [Display(Name = "Permission name")]
-    [Required(ErrorMessage = "{0} is required.")]
-    [StringLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
-    public required string Name { get; init; }
-
-    /// <summary>
-    /// 授予效果：<c>Granted</c> 或 <c>Prohibited</c>。未出现在集合中的权限即为"继承/未设置"。
-    /// </summary>
-    [Display(Name = "Effect")]
-    [Required(ErrorMessage = "{0} is required.")]
-    [RegularExpression("^(Granted|Prohibited)$", ErrorMessage = "{0} must be either Granted or Prohibited.")]
-    public required string Effect { get; init; }
-}
-
-/// <summary>
 /// 原子替换某个主体的全部授予。
 /// </summary>
 public record ReplacePermissionGrantsInputDto
@@ -127,8 +103,9 @@ public record ReplacePermissionGrantsInputDto
     [Display(Name = "Expected revision")]
     public long ExpectedRevision { get; init; }
 
-    [Display(Name = "Grants")]
+    /// <summary>目标权限名集合，未出现的权限视为撤销。</summary>
+    [Display(Name = "Permissions")]
     [MaxLength(500, ErrorMessage = "{0} cannot contain more than {1} items.")]
-    public IReadOnlyList<PermissionGrantInputDto> Grants { get; init; } = [];
+    public IReadOnlyList<string> PermissionNames { get; init; } = [];
 }
 #endif

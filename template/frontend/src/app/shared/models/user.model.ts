@@ -5,7 +5,9 @@ export class User {
   displayName?: string;
   avatar?: string;
   phoneNumber?: string;
+  //#if (IncludeRoles)
   roles!: string[];
+  //#endif
   isSuperAdmin!: boolean;
 
   constructor(data: Partial<User>) {

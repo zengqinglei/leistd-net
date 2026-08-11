@@ -34,7 +34,9 @@
   <ItemGroup>
     <PackageReference Include="Leistd.Ddd.Infrastructure" />
     <PackageReference Include="Leistd.Auditing.EntityFrameworkCore" />
+<!--#if (IncludeRoles)-->
     <PackageReference Include="Leistd.Authorization.EntityFrameworkCore" />
+    <!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.EntityFrameworkCore" />
 <!--#endif-->

@@ -17,7 +17,9 @@ export interface MockUser {
   isEmailVerified: boolean;
   creationTime: string;
   lastLoginTime?: string;
+  //#if (IncludeRoles)
   roles: string[];
+  //#endif
 }
 
 export const USERS: MockUser[] = [
@@ -33,7 +35,9 @@ export const USERS: MockUser[] = [
     isEmailVerified: true,
     creationTime: '2025-01-01T00:00:00Z',
     lastLoginTime: '2026-06-10T08:00:00Z',
+    //#if (IncludeRoles)
     roles: ['Admin'],
+    //#endif
   },
   {
     id: 'user_demo',
@@ -47,7 +51,9 @@ export const USERS: MockUser[] = [
     isEmailVerified: true,
     creationTime: '2025-06-01T00:00:00Z',
     lastLoginTime: '2026-06-09T12:00:00Z',
+    //#if (IncludeRoles)
     roles: ['Member'],
+    //#endif
   },
 ];
 
@@ -62,8 +68,10 @@ export function toUserOutput(user: MockUser): UserOutputDto {
     isActive: user.isActive,
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
+    //#if (IncludeRoles)
     // 当前用户模型只需要角色名（用于展示徽章），不需要 Id。
     roles: user.roles,
+    //#endif
   };
 }
 

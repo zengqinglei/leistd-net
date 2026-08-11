@@ -29,8 +29,12 @@ public class PermissionController(IPermissionAppService permissionAppService) : 
     }
 
     /// <summary>
-    /// 获取权限定义树（需要权限定义查看权限）
+    /// 获取权限定义树（需要权限定义查看权限，或角色权限配置权限）
     /// </summary>
+    /// <remarks>
+    /// 策略是「任一满足」：<c>App.Permissions</c> 或 <c>App.Roles.ManagePermissions</c>。
+    /// 能配置角色权限必然蕴含能读权限目录，否则会存在"有配置权限却打不开界面"的无用状态。
+    /// </remarks>
     [HttpGet("definitions")]
     [Authorize(Policy = PermissionConstant.Permissions.ReadPolicy)]
     public async Task<IReadOnlyList<PermissionDefinitionGroupOutputDto>> GetDefinitionsAsync(
@@ -71,36 +75,5 @@ public class PermissionController(IPermissionAppService permissionAppService) : 
             cancellationToken);
     }
 
-    /// <summary>
-    /// 获取用户的权限例外（需要用户权限配置权限）
-    /// </summary>
-    [HttpGet("grants/users/{userId}")]
-    [Authorize(Policy = PermissionConstant.Users.ManagePermissions)]
-    public async Task<PermissionGrantsOutputDto> GetUserGrantsAsync(
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        return await permissionAppService.GetGrantsAsync(
-            PermissionGrantProviderNames.User,
-            userId.ToString(),
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// 替换用户的权限例外（需要用户权限配置权限）
-    /// </summary>
-    [HttpPut("grants/users/{userId}")]
-    [Authorize(Policy = PermissionConstant.Users.ManagePermissions)]
-    public async Task<PermissionGrantsOutputDto> ReplaceUserGrantsAsync(
-        Guid userId,
-        [FromBody] ReplacePermissionGrantsInputDto input,
-        CancellationToken cancellationToken)
-    {
-        return await permissionAppService.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.User,
-            userId.ToString(),
-            input,
-            cancellationToken);
-    }
 }
 #endif

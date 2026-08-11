@@ -2,19 +2,26 @@
 using System.Net;
 using System.Net.Http.Json;
 #if (IncludeRoles)
+using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 #endif
 using CompanyName.ProjectName.Application.Users.Dtos;
 #if (IncludeRoles)
 using CompanyName.ProjectName.Domain.Users.Constants;
+using CompanyName.ProjectName.Domain.Users.Entities;
 #endif
 using CompanyName.ProjectName.Infrastructure.Persistence;
+#if (IncludeRoles)
+using Leistd.Authorization.EntityFrameworkCore;
+#endif
 #if (IncludeRoles)
 using Leistd.Authorization;
 #endif
 using Microsoft.EntityFrameworkCore;
+using Leistd.Lock.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -70,25 +77,6 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         await GrantAllAsync(adminRoleId);
     }
 
-    [Fact]
-    public async Task Explicit_deny_on_the_user_beats_a_grant_inherited_from_a_role()
-    {
-        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
-
-        var role = await CreateRoleAsync(superAdmin.Client);
-        await GrantAsync(PermissionGrantProviderNames.Role, role.Id, PermissionConstant.Users.Default);
-
-        var user = await CreateUserAsync(superAdmin.Client, [role.Id]);
-        using var session = await factory.LoginAsync(user.Username, TestPassword);
-        Assert.Equal(HttpStatusCode.OK, (await GetUsersAsync(session.Client)).StatusCode);
-
-        await ReplaceGrantsAsync(
-            PermissionGrantProviderNames.User,
-            user.Id,
-            [new PermissionGrant(PermissionConstant.Users.Default, PermissionGrantEffect.Prohibited)]);
-
-        Assert.Equal(HttpStatusCode.Forbidden, (await GetUsersAsync(session.Client)).StatusCode);
-    }
 
     [Fact]
     public async Task Update_permission_alone_cannot_change_roles()
@@ -113,8 +101,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             new UpdateUserInputDto
             {
                 Email = target.Email,
-                DisplayName = "renamed by operator",
-                IsActive = true
+                DisplayName = "renamed by operator"
             });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
@@ -163,8 +150,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             new UpdateUserInputDto
             {
                 Email = target.Email,
-                DisplayName = "should not be allowed",
-                IsActive = true
+                DisplayName = "should not be allowed"
             });
         Assert.Equal(HttpStatusCode.Forbidden, updateResponse.StatusCode);
     }
@@ -178,7 +164,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         await ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             role.Id,
-            [new PermissionGrant(PermissionConstant.Users.Create, PermissionGrantEffect.Granted)]);
+            [PermissionConstant.Users.Create]);
 
         var response = await superAdmin.Client.GetAsync($"/api/v1/permissions/grants/roles/{role.Id}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -187,48 +173,85 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.NotNull(grants);
 
         var parent = grants.Grants.Single(x => x.Name == PermissionConstant.Users.Default);
-        Assert.Equal(nameof(PermissionGrantEffect.Granted), parent.Direct);
-        Assert.True(parent.Effective);
+        Assert.True(parent.Granted);
     }
 
+
     [Fact]
-    public async Task User_grants_expose_the_inherited_effect_separately_from_the_direct_one()
+    public async Task Disabling_a_user_revokes_their_existing_session()
     {
         using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
 
-        var role = await CreateRoleAsync(superAdmin.Client);
-        await ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            role.Id,
-            [
-                new PermissionGrant(PermissionConstant.Users.Default, PermissionGrantEffect.Granted),
-                new PermissionGrant(PermissionConstant.Roles.Default, PermissionGrantEffect.Granted)
-            ]);
+        var user = await CreateUserAsync(superAdmin.Client);
+        await GrantAsync(PermissionGrantProviderNames.User, user.Id, PermissionConstant.Users.Default);
 
-        var user = await CreateUserAsync(superAdmin.Client, [role.Id]);
-        await ReplaceGrantsAsync(
-            PermissionGrantProviderNames.User,
-            user.Id,
-            [new PermissionGrant(PermissionConstant.Roles.Default, PermissionGrantEffect.Prohibited)]);
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await session.Client.GetAsync("/api/v1/users?offset=0&limit=10")).StatusCode);
 
-        var grants = await superAdmin.Client.GetFromJsonAsync<PermissionGrantsResponse>(
-            $"/api/v1/permissions/grants/users/{user.Id}");
-        Assert.NotNull(grants);
+        var disabled = await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null);
+        Assert.Equal(HttpStatusCode.OK, disabled.StatusCode);
 
-        // 仅来自角色：direct 为空，inherited 有值，最终生效。
-        var inheritedOnly = grants.Grants.Single(x => x.Name == PermissionConstant.Users.Default);
-        Assert.Null(inheritedOnly.Direct);
-        Assert.Equal(nameof(PermissionGrantEffect.Granted), inheritedOnly.Inherited);
-        Assert.True(inheritedOnly.Effective);
-
-        // 角色允许 + 用户拒绝：两侧都要如实回传，且拒绝优先。
-        var overridden = grants.Grants.Single(x => x.Name == PermissionConstant.Roles.Default);
-        Assert.Equal(nameof(PermissionGrantEffect.Prohibited), overridden.Direct);
-        Assert.Equal(nameof(PermissionGrantEffect.Granted), overridden.Inherited);
-        Assert.False(overridden.Effective);
+        // 登录时会拒绝禁用账号，但已签发的 Cookie 不会因此失效。主体解析每请求查库，
+        // 是撤权唯一即时生效的地方——放行就等于"禁用用户"只挡新登录，已在线的会话照常畅通。
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await session.Client.GetAsync("/api/v1/users?offset=0&limit=10")).StatusCode);
     }
 
 #if (IncludeOpenIddict)
+    [Fact]
+    public async Task Creating_an_application_rejects_scopes_this_server_does_not_register()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        // 客户端能请求一个服务端根本没注册的 scope 时，配置存得下但发令牌时必然被拒——
+        // 界面裁掉了选项不代表接口就该收下，写入时报错才不会留一个"配置得上、用不了"的客户端。
+        var response = await superAdmin.Client.PostAsJsonAsync(
+            "/api/v1/open-applications",
+            new
+            {
+                clientId = $"client-{Guid.CreateVersion7():N}",
+                displayName = "Probe",
+                applicationType = "web",
+                clientType = "confidential",
+                consentType = "explicit",
+                permissions = new[] { "scp:openid", "scp:not_registered" },
+                requirements = Array.Empty<string>(),
+                redirectUris = Array.Empty<string>(),
+                postLogoutRedirectUris = Array.Empty<string>()
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+#if (!IncludeRoles)
+    [Fact]
+    public async Task Creating_an_application_rejects_the_roles_scope_when_roles_are_trimmed()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        // 裁掉角色能力的项目里根本没有 roles scope，接口不该收下它。
+        var response = await superAdmin.Client.PostAsJsonAsync(
+            "/api/v1/open-applications",
+            new
+            {
+                clientId = $"client-{Guid.CreateVersion7():N}",
+                displayName = "Probe",
+                applicationType = "web",
+                clientType = "confidential",
+                consentType = "explicit",
+                permissions = new[] { "scp:openid", "scp:roles" },
+                requirements = Array.Empty<string>(),
+                redirectUris = Array.Empty<string>(),
+                postLogoutRedirectUris = Array.Empty<string>()
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+#endif
     [Fact]
     public async Task Open_application_endpoints_require_their_own_permissions()
     {
@@ -277,7 +300,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             new
             {
                 expectedRevision = 0,
-                grants = new[] { new { name = "App.NotDefined", effect = "Granted" } }
+                permissionNames = new[] { "App.NotDefined" }
             });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -307,33 +330,278 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             (await session.Client.GetAsync("/api/v1/permissions/definitions")).StatusCode);
     }
 
+
     [Fact]
-    public async Task User_permission_exceptions_require_a_dedicated_permission()
+    public async Task Revoking_an_admin_permission_survives_re_initialization()
     {
         using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
 
-        var target = await CreateUserAsync(superAdmin.Client);
-        var operatorUser = await CreateUserAsync(superAdmin.Client);
-        using var session = await factory.LoginAsync(operatorUser.Username, TestPassword);
+        var adminRole = await GetRoleByNameAsync(AdminConstant.RoleName);
+        var grants = await superAdmin.Client
+            .GetFromJsonAsync<PermissionGrantsResponse>($"/api/v1/permissions/grants/roles/{adminRole.Id}");
+        Assert.NotNull(grants);
 
-        await GrantAsync(
-            PermissionGrantProviderNames.User,
-            operatorUser.Id,
-            PermissionConstant.Users.Default,
-            PermissionConstant.Users.Update);
+        // 撤掉一条叶子权限（撤父级会连带清空子孙，不便于观察）。
+        var kept = grants.Grants
+            .Where(x => x.Granted && x.Name != PermissionConstant.Users.Delete)
+            .Select(x => x.Name)
+            .ToArray();
+        Assert.DoesNotContain(PermissionConstant.Users.Delete, kept);
 
-        // 能看、能改资料，仍不能改权限：例外配置是独立的提权路径。
-        Assert.Equal(
-            HttpStatusCode.Forbidden,
-            (await session.Client.GetAsync($"/api/v1/permissions/grants/users/{target.Id}")).StatusCode);
+        var revoke = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{adminRole.Id}",
+            new { expectedRevision = grants.Revision, permissionNames = kept });
+        Assert.Equal(HttpStatusCode.OK, revoke.StatusCode);
 
-        await GrantAsync(
-            PermissionGrantProviderNames.User,
-            operatorUser.Id,
-            PermissionConstant.Users.ManagePermissions);
+        // 再跑一次初始化：Admin 是普通角色，撤权就该一直是撤掉的状态。
+        // 启动时"补齐缺失权限"看着无害，实际会把人工撤权原样加回来，"可撤权"就成了空话。
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ISystemInitializer>().InitializeAsync();
+        }
+
+        var after = await superAdmin.Client
+            .GetFromJsonAsync<PermissionGrantsResponse>($"/api/v1/permissions/grants/roles/{adminRole.Id}");
+        Assert.NotNull(after);
+        Assert.False(after.Grants.Single(x => x.Name == PermissionConstant.Users.Delete).Granted);
+        Assert.True(after.Grants.Single(x => x.Name == PermissionConstant.Users.Default).Granted);
+    }
+
+    [Fact]
+    public async Task Admin_permission_seeding_recovers_when_a_previous_run_was_interrupted()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+        var adminRole = await GetRoleByNameAsync(AdminConstant.RoleName);
+
+        // 复刻"角色已建、权限未播"：初始化没有事务，角色是立即落库的，这一状态确实可达。
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var providerKey = adminRole.Id.ToString();
+
+            dbContext.RemoveRange(await dbContext.Set<PermissionGrantRecord>()
+                .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey)
+                .ToListAsync());
+            dbContext.RemoveRange(await dbContext.Set<AuthorizationRevisionRecord>()
+                .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey)
+                .ToListAsync());
+            await dbContext.SaveChangesAsync();
+        }
+
+        var interrupted = await superAdmin.Client
+            .GetFromJsonAsync<PermissionGrantsResponse>($"/api/v1/permissions/grants/roles/{adminRole.Id}");
+        Assert.NotNull(interrupted);
+        Assert.Equal(0, interrupted.Revision);
+        Assert.DoesNotContain(interrupted.Grants, x => x.Granted);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ISystemInitializer>().InitializeAsync();
+        }
+
+        // 判据是"授权版本为 0"而不是"本次新建了角色"：只认后者的话，那一次中断会让 Admin 永久缺权限。
+        var recovered = await superAdmin.Client
+            .GetFromJsonAsync<PermissionGrantsResponse>($"/api/v1/permissions/grants/roles/{adminRole.Id}");
+        Assert.NotNull(recovered);
+        Assert.All(recovered.Grants, grant => Assert.True(grant.Granted));
+    }
+
+    [Fact]
+    public async Task Concurrent_initializers_are_serialized_by_the_initialization_lock()
+    {
+        // 断言的是"初始化确实在锁内执行"，不是"并发时会崩"：测试宿主是单进程 + InMemory
+        // Provider，InMemory 不强制唯一索引，多实例真正的失败形态在这里复现不出来，
+        // 写成"不抛异常即通过"的用例无论有没有锁都会绿，等于没测。
+        // 跨进程互斥由部署侧保证——多副本必须配置 Redis，那条路径不在集成测试范围内。
+        //
+        // 探针替换 IDistributedLock 而不是在初始化之后另取一把锁：后者两个任务本来就会被
+        // 那把锁串行，与初始化有没有加锁无关，测不出任何东西。
+        var probe = new LockUsageProbe();
+
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IDistributedLock>();
+            services.AddSingleton<IDistributedLock>(probe);
+        }));
+
+        using var superAdmin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", "Admin@123456");
+        var adminRole = await GetRoleByNameAsync(AdminConstant.RoleName);
+
+        // 复刻多实例同时启动：清掉授予与版本行，让两个 initializer 都看到"尚未播种"。
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var providerKey = adminRole.Id.ToString();
+
+            dbContext.RemoveRange(await dbContext.Set<PermissionGrantRecord>()
+                .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey)
+                .ToListAsync());
+            dbContext.RemoveRange(await dbContext.Set<AuthorizationRevisionRecord>()
+                .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey)
+                .ToListAsync());
+            await dbContext.SaveChangesAsync();
+        }
+
+        using var barrier = new Barrier(2);
+
+        async Task RunInitializerAsync()
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            var initializer = scope.ServiceProvider.GetRequiredService<ISystemInitializer>();
+            barrier.SignalAndWait();
+            await initializer.InitializeAsync();
+        }
+
+        // 宿主自身的 ApplicationBootstrapper 启动时已经初始化过一次，取增量而不是绝对值。
+        var acquiredBefore = probe.AcquireCount;
+
+        await Task.WhenAll(Task.Run(RunInitializerAsync), Task.Run(RunInitializerAsync));
+
+        Assert.Equal(2, probe.AcquireCount - acquiredBefore);
+        Assert.Equal(1, probe.MaxConcurrentHolders);
+
+        // 串行之后第二个实例会看到版本已大于 0 并整体跳过，因此只播种一次。
+        var grants = await superAdmin.Client
+            .GetFromJsonAsync<PermissionGrantsResponse>($"/api/v1/permissions/grants/roles/{adminRole.Id}");
+        Assert.NotNull(grants);
+        Assert.All(grants.Grants, grant => Assert.True(grant.Granted));
+        Assert.Equal(1, grants.Revision);
+    }
+
+    /// <summary>
+    /// 记录初始化锁使用情况的替身：本身提供真实互斥，同时把"取过几次""同时几人持有"暴露出来。
+    /// </summary>
+    private sealed class LockUsageProbe : IDistributedLock
+    {
+        private readonly SemaphoreSlim gate = new(1, 1);
+        private int acquireCount;
+        private int currentHolders;
+        private int maxConcurrentHolders;
+
+        public int AcquireCount => Volatile.Read(ref acquireCount);
+
+        public int MaxConcurrentHolders => Volatile.Read(ref maxConcurrentHolders);
+
+        public async Task<ILockHandle> LockAsync(string key, CancellationToken cancellationToken = default)
+        {
+            await gate.WaitAsync(cancellationToken);
+
+            if (key == SystemInitializer.InitializationLockKey)
+            {
+                Interlocked.Increment(ref acquireCount);
+                var holders = Interlocked.Increment(ref currentHolders);
+                InterlockedMax(ref maxConcurrentHolders, holders);
+            }
+
+            return new Handle(this, key);
+        }
+
+        public async Task<ILockHandle?> TryLockAsync(
+            string key,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+            => await LockAsync(key, cancellationToken);
+
+        private void Release(string key)
+        {
+            if (key == SystemInitializer.InitializationLockKey)
+            {
+                Interlocked.Decrement(ref currentHolders);
+            }
+
+            gate.Release();
+        }
+
+        private static void InterlockedMax(ref int target, int value)
+        {
+            var current = Volatile.Read(ref target);
+            while (value > current)
+            {
+                var seen = Interlocked.CompareExchange(ref target, value, current);
+                if (seen == current) return;
+                current = seen;
+            }
+        }
+
+        private sealed class Handle(LockUsageProbe owner, string key) : ILockHandle
+        {
+            /// <summary>探针不模拟租约失效。</summary>
+            public CancellationToken LockLost => CancellationToken.None;
+
+            public ValueTask DisposeAsync()
+            {
+                owner.Release(key);
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Deleting_a_role_removes_its_grants_and_revision()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+        var role = await CreateRoleAsync(superAdmin.Client);
+
+        var seeded = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedRevision = 0, permissionNames = new[] { PermissionConstant.Users.Default } });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+
         Assert.Equal(
             HttpStatusCode.OK,
-            (await session.Client.GetAsync($"/api/v1/permissions/grants/users/{target.Id}")).StatusCode);
+            (await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}")).StatusCode);
+
+        // 授予与版本必须跟着角色一起消失：主体没了还留着版本行只会变成永久孤儿，
+        // 而角色 Id 一旦被重用，新角色还会继承上一任的版本号。
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        var providerKey = role.Id.ToString();
+
+        Assert.Empty(await dbContext.Set<PermissionGrantRecord>()
+            .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey)
+            .ToListAsync());
+        Assert.Empty(await dbContext.Set<AuthorizationRevisionRecord>()
+            .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey)
+            .ToListAsync());
+    }
+
+    [Fact]
+    public async Task Disabled_permissions_are_not_offered_by_the_definitions_endpoint()
+    {
+        // 有效启用是在定义加载时一次性预计算的，运行时改 IsEnabled 不生效，
+        // 因此禁用必须发生在定义阶段——追加一个只在本宿主生效的定义提供器。
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddSingleton<IPermissionDefinitionProvider, DisableUserDeleteProvider>()));
+
+        using var superAdmin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", "Admin@123456");
+
+        var groups = await superAdmin.Client
+            .GetFromJsonAsync<List<PermissionDefinitionGroupResponse>>("/api/v1/permissions/definitions");
+        Assert.NotNull(groups);
+
+        var names = groups.SelectMany(group => group.Permissions).SelectMany(Flatten).ToList();
+
+        // 启用的父级下面挂着被禁用的子权限时，若照单下发，界面会渲染成可勾选项，
+        // 而写入时又会以"未定义或已禁用"拒绝——用户只能拿到一个无从解释的 400。
+        Assert.DoesNotContain(PermissionConstant.Users.Delete, names);
+        Assert.Contains(PermissionConstant.Users.Default, names);
+        Assert.Contains(PermissionConstant.Users.Create, names);
+
+        static IEnumerable<string> Flatten(PermissionDefinitionResponse definition)
+            => [definition.Name, .. definition.Children.SelectMany(Flatten)];
+    }
+
+    /// <summary>只在上面那条用例的宿主里禁用一个叶子权限，用于验证定义接口不下发禁用项。</summary>
+    private sealed class DisableUserDeleteProvider : IPermissionDefinitionProvider
+    {
+        public void Define(IPermissionDefinitionContext context)
+        {
+            var permission = context.GetPermissionOrNull(PermissionConstant.Users.Delete);
+            if (permission != null)
+            {
+                permission.IsEnabled = false;
+            }
+        }
     }
 
     [Fact]
@@ -347,7 +615,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             new
             {
                 expectedRevision = 0,
-                grants = new[] { new { name = PermissionConstant.Users.Default, effect = "Granted" } }
+                permissionNames = new[] { PermissionConstant.Users.Default }
             });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
@@ -357,15 +625,15 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             new
             {
                 expectedRevision = 0,
-                grants = new[] { new { name = PermissionConstant.Roles.Default, effect = "Granted" } }
+                permissionNames = new[] { PermissionConstant.Roles.Default }
             });
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
 
         var current = await superAdmin.Client
             .GetFromJsonAsync<PermissionGrantsResponse>($"/api/v1/permissions/grants/roles/{role.Id}");
         Assert.NotNull(current);
-        Assert.True(current.Grants.Single(x => x.Name == PermissionConstant.Users.Default).Effective);
-        Assert.False(current.Grants.Single(x => x.Name == PermissionConstant.Roles.Default).Effective);
+        Assert.True(current.Grants.Single(x => x.Name == PermissionConstant.Users.Default).Granted);
+        Assert.False(current.Grants.Single(x => x.Name == PermissionConstant.Roles.Default).Granted);
     }
 
     [Fact]
@@ -416,7 +684,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             new
             {
                 expectedRevision = 0,
-                grants = new[] { new { name = "App.NotDefined", effect = "Granted" } }
+                permissionNames = new[] { "App.NotDefined" }
             });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -454,8 +722,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             new UpdateUserInputDto
             {
                 Email = created.Email,
-                DisplayName = "Audited user updated",
-                IsActive = true
+                DisplayName = "Audited user updated"
             });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
@@ -506,11 +773,11 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     private async Task ReplaceGrantsAsync(
         string providerName,
         Guid providerKey,
-        IReadOnlyCollection<PermissionGrant> grants)
+        IReadOnlyCollection<string> permissionNames)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var manager = scope.ServiceProvider.GetRequiredService<IPermissionGrantManager>();
-        await manager.ReplaceGrantsAsync(providerName, providerKey.ToString(), grants);
+        await manager.ReplaceGrantsAsync(providerName, providerKey.ToString(), permissionNames);
     }
 
     private async Task GrantAllAsync(Guid roleId)
@@ -522,7 +789,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         await manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             roleId.ToString(),
-            [.. definitions.GetAll().Select(x => new PermissionGrant(x.Name, PermissionGrantEffect.Granted))]);
+            [.. definitions.GetAll().Select(x => x.Name)]);
     }
 
     private static async Task<RoleOutputDto> CreateRoleAsync(HttpClient client)
@@ -542,11 +809,29 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         return (await response.Content.ReadFromJsonAsync<RoleOutputDto>())!;
     }
 
+    private async Task<Role> GetRoleByNameAsync(string name)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        return await dbContext.Set<Role>().AsNoTracking().SingleAsync(role => role.Name == name);
+    }
+
     private sealed record CurrentPermissionsResponse(string[] Permissions, bool IsSuperAdmin, string Revision);
+
+    private sealed record PermissionDefinitionGroupResponse(
+        string Name,
+        string DisplayName,
+        PermissionDefinitionResponse[] Permissions);
+
+    private sealed record PermissionDefinitionResponse(
+        string Name,
+        string DisplayName,
+        string? ParentName,
+        PermissionDefinitionResponse[] Children);
 
     private sealed record PermissionGrantsResponse(long Revision, PermissionGrantStateResponse[] Grants);
 
-    private sealed record PermissionGrantStateResponse(string Name, string? Direct, string? Inherited, bool Effective);
+    private sealed record PermissionGrantStateResponse(string Name, bool Granted);
 #endif
 
     private static async Task<UserManagementOutputDto> CreateUserAsync(

@@ -40,6 +40,7 @@
             <!--#endif-->
             <span class="font-medium">{{ user.email || '-' }}</span>
           </div>
+          <!--#if (IncludeRoles)-->
           <div class="flex items-center gap-3">
             <!--#if (IncludeLocalization)-->
             <span class="text-muted-foreground w-20">{{
@@ -59,6 +60,7 @@
               }
             </div>
           </div>
+          <!--#endif-->
         </div>
       } @else {
         <!--#if (IncludeLocalization)-->

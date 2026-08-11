@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-
 //#if (IncludeRoles)
+
 import { permissionGuard } from '../../core/guards/permission-guard';
 import { PERMISSIONS } from '../../shared/models/permission';
 //#endif

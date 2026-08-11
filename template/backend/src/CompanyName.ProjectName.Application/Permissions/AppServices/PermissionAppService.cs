@@ -24,8 +24,7 @@ public class PermissionAppService(
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
     IRepository<User, Guid> userRepository,
-    IRepository<Role, Guid> roleRepository,
-    IRepository<UserRole, Guid> userRoleRepository
+    IRepository<Role, Guid> roleRepository
 #if (IncludeLocalization)
     ,
     IStringLocalizerFactory localizerFactory
@@ -67,11 +66,9 @@ public class PermissionAppService(
             subject.RoleIds,
             cancellationToken);
 
-        var effects = grants.GetEffectiveEffects(permissionDefinitionManager);
-        var permissions = effects
-            .Where(x => x.Value == PermissionGrantEffect.Granted
-                        && permissionDefinitionManager.IsEffectivelyEnabled(x.Key))
-            .Select(x => x.Key)
+        var permissions = grants
+            .GetGrantedNames()
+            .Where(permissionDefinitionManager.IsEffectivelyEnabled)
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();
 
@@ -97,6 +94,9 @@ public class PermissionAppService(
                     .Select(ToTree)
                     .ToList()
             })
+            // 整组都被禁用时不下发空壳：界面上一个只有标题、点开什么都没有的分组，
+            // 除了让人怀疑数据没加载出来之外没有任何作用。
+            .Where(group => group.Permissions.Count > 0)
             .ToList();
 
         return Task.FromResult(groups);
@@ -107,12 +107,11 @@ public class PermissionAppService(
         string providerKey,
         CancellationToken cancellationToken = default)
     {
-        var subjectId = await EnsureSubjectExistsAsync(providerName, providerKey, cancellationToken);
+        await EnsureSubjectExistsAsync(providerName, providerKey, cancellationToken);
 
         var direct = await permissionGrantStore.GetGrantsAsync(providerName, providerKey, cancellationToken);
-        var inherited = await GetInheritedEffectsAsync(providerName, subjectId, cancellationToken);
 
-        return BuildOutput(providerName, providerKey, direct, inherited);
+        return BuildOutput(providerName, providerKey, direct);
     }
 
     public async Task<PermissionGrantsOutputDto> ReplaceGrantsAsync(
@@ -123,21 +122,12 @@ public class PermissionAppService(
     {
         await EnsureSubjectExistsAsync(providerName, providerKey, cancellationToken);
 
-        // Effect 的取值范围由 ReplacePermissionGrantsInputDto 的注解保证，此处不再重复判断。
-        var grants = input.Grants
-            .Select(grant => new PermissionGrant(
-                grant.Name,
-                grant.Effect == nameof(PermissionGrantEffect.Prohibited)
-                    ? PermissionGrantEffect.Prohibited
-                    : PermissionGrantEffect.Granted))
-            .ToList();
-
         try
         {
             await permissionGrantManager.ReplaceGrantsAsync(
                 providerName,
                 providerKey,
-                grants,
+                input.PermissionNames,
                 input.ExpectedRevision,
                 cancellationToken);
         }
@@ -188,80 +178,37 @@ public class PermissionAppService(
 #endif
     }
 
+    /// <remarks>
+    /// 子节点同样要过滤：启用的父级下面挂着一个被禁用的子权限时，若照单下发，
+    /// 界面会把它渲染成可勾选项，而 Manager 写入时又会以"未定义或已禁用"拒绝，
+    /// 用户只能得到一个无从解释的 400。能不能勾，必须与能不能存保持同一判据。
+    /// </remarks>
     private PermissionDefinitionOutputDto ToTree(IPermissionDefinition definition)
         => new()
         {
             Name = definition.Name,
             DisplayName = Localize(definition.DisplayName, definition.Name),
             ParentName = definition.Parent?.Name,
-            Children = definition.Children.Select(ToTree).ToList()
+            Children = definition.Children
+                .Where(child => permissionDefinitionManager.IsEffectivelyEnabled(child.Name))
+                .Select(ToTree)
+                .ToList()
         };
-
-    /// <summary>
-    /// 用户主体的继承来源是其所属角色；角色主体没有上游来源。
-    /// </summary>
-    private async Task<IReadOnlyDictionary<string, PermissionGrantEffect>> GetInheritedEffectsAsync(
-        string providerName,
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        if (providerName != PermissionGrantProviderNames.User)
-            return new Dictionary<string, PermissionGrantEffect>(StringComparer.Ordinal);
-
-        var roleIds = (await userRoleRepository.GetListAsync(ur => ur.UserId == userId, cancellationToken))
-            .Select(ur => ur.RoleId.ToString())
-            .ToArray();
-
-        if (roleIds.Length == 0)
-            return new Dictionary<string, PermissionGrantEffect>(StringComparer.Ordinal);
-
-        // 只取角色部分：传入空用户 Key，避免把用户直授混进"继承"列。
-        var roleGrants = await permissionGrantStore.GetGrantsForSubjectAsync(
-            string.Empty,
-            roleIds,
-            cancellationToken);
-
-        return roleGrants.GetEffectiveEffects(permissionDefinitionManager);
-    }
 
     private PermissionGrantsOutputDto BuildOutput(
         string providerName,
         string providerKey,
-        PermissionGrantSet direct,
-        IReadOnlyDictionary<string, PermissionGrantEffect> inherited)
+        PermissionGrantSet direct)
     {
-        var directEffects = direct.Grants
-            .ToDictionary(x => x.PermissionName, x => x.Effect, StringComparer.Ordinal);
-
-        // Effective 走与运行时检查完全相同的合并路径（拒绝优先 + 拒绝沿定义树向下传播），
-        // 而不是就地再算一遍：任何在此处重写的规则都会与 IPermissionChecker 漂移。
-        var inheritedSet = new PermissionGrantSet(
-            PermissionGrantProviderNames.Role,
-            string.Empty,
-            [.. inherited.Select(x => new PermissionGrant(x.Key, x.Value))],
-            0);
-        var effective = new SubjectPermissionGrants(direct, [inheritedSet])
-            .GetEffectiveEffects(permissionDefinitionManager);
+        var granted = direct.PermissionNames.ToHashSet(StringComparer.Ordinal);
 
         var states = permissionDefinitionManager
             .GetAll()
             .Where(definition => permissionDefinitionManager.IsEffectivelyEnabled(definition.Name))
-            .Select(definition =>
+            .Select(definition => new PermissionGrantStateDto
             {
-                directEffects.TryGetValue(definition.Name, out var directEffect);
-                inherited.TryGetValue(definition.Name, out var inheritedEffect);
-
-                var hasDirect = directEffects.ContainsKey(definition.Name);
-                var hasInherited = inherited.ContainsKey(definition.Name);
-
-                return new PermissionGrantStateDto
-                {
-                    Name = definition.Name,
-                    Direct = hasDirect ? directEffect.ToString() : null,
-                    Inherited = hasInherited ? inheritedEffect.ToString() : null,
-                    Effective = effective.TryGetValue(definition.Name, out var result)
-                                && result == PermissionGrantEffect.Granted
-                };
+                Name = definition.Name,
+                Granted = granted.Contains(definition.Name)
             })
             .ToList();
 

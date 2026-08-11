@@ -40,6 +40,9 @@ import {
   SortingState,
 } from '@tanstack/angular-table';
 
+//#if (IncludeLocalization)
+import { refreshOnLanguageChange } from '../../../../../../core/i18n/translation-ready';
+//#endif
 import {
   TablePaginator,
   TablePaginatorLabels,
@@ -94,6 +97,12 @@ export class RoleTable {
   private readonly breakpointObserver = inject(BreakpointObserver);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+
+  constructor() {
+    // 表头与分页文案走 transloco.translate()，没有任何被渲染的表达式依赖语言，
+    // 需要显式把语言变化接到变更检测上，否则切换语言后整张表停在旧语言。
+    refreshOnLanguageChange(this.transloco);
+  }
   //#endif
 
   readonly roles = input<RoleOutputDto[]>([]);

@@ -7,7 +7,8 @@ namespace Leistd.Authorization;
 /// 以 Scoped 注册：主体解析与授予读取在同一作用域（通常是一次 HTTP 请求）内只发生一次，
 /// 之后同一作用域中的任意多次检查都是内存字典查找，不再回访数据库。
 /// 判定顺序为：权限未定义或未启用一律拒绝；主体不可识别一律拒绝；超级管理员旁路；
-/// 任一来源显式拒绝即拒绝；否则任一来源允许即允许；全部无结论时默认拒绝。
+/// 否则在用户与各角色授予的并集里查找，命中即允许，未命中即拒绝。
+/// 授予是纯加法，不存在"拒绝"这一态——要收回能力应调整角色构成，而不是在权限位上做减法。
 /// </remarks>
 public class DefaultPermissionChecker(
     IPermissionSubjectProvider subjectProvider,
@@ -16,7 +17,7 @@ public class DefaultPermissionChecker(
 {
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private PermissionSubject? _subject;
-    private IReadOnlyDictionary<string, PermissionGrantEffect>? _effects;
+    private IReadOnlySet<string>? _granted;
     private bool _loaded;
 
     public async Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)
@@ -63,10 +64,7 @@ public class DefaultPermissionChecker(
         return new MultiplePermissionGrantResult(results);
     }
 
-    private bool IsGrantedCore(string name)
-        => _effects != null
-           && _effects.TryGetValue(name, out var effect)
-           && effect == PermissionGrantEffect.Granted;
+    private bool IsGrantedCore(string name) => _granted?.Contains(name) == true;
 
     private async Task EnsureLoadedAsync(CancellationToken cancellationToken)
     {
@@ -89,7 +87,7 @@ public class DefaultPermissionChecker(
                     _subject.RoleIds,
                     cancellationToken);
 
-                _effects = grants.GetEffectiveEffects(permissionDefinitionManager);
+                _granted = grants.GetGrantedNames();
             }
 
             _loaded = true;

@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Leistd.Authorization.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +36,7 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
 
         _definitions = TestPermissionDefinitions.CreateManager();
         _store = new EfCorePermissionGrantStore<TestAuthorizationDbContext>(_db);
-        _manager = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(_db, _definitions);
+        _manager = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(_db, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(_db));
     }
 
     public async Task DisposeAsync()
@@ -60,9 +61,8 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
                 TestPermissionDefinitionProvider.OrdersWrite,
                 TestPermissionDefinitionProvider.OrdersWriteBatch
             ],
-            grants.Grants.Select(x => x.PermissionName).OrderBy(x => x, StringComparer.Ordinal));
-        Assert.All(grants.Grants, grant => Assert.Equal(PermissionGrantEffect.Granted, grant.Effect));
-    }
+            grants.PermissionNames.OrderBy(x => x, StringComparer.Ordinal));
+            }
 
     [Fact]
     public async Task Revoking_a_parent_cascades_to_its_descendants()
@@ -85,48 +85,10 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
 
         Assert.Equal(
             [TestPermissionDefinitionProvider.Orders, TestPermissionDefinitionProvider.OrdersRead],
-            grants.Grants.Select(x => x.PermissionName).OrderBy(x => x, StringComparer.Ordinal));
+            grants.PermissionNames.OrderBy(x => x, StringComparer.Ordinal));
     }
 
-    [Fact]
-    public async Task Prohibiting_a_parent_drops_granted_descendants()
-    {
-        var revision = await _manager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            "r1",
-            [
-                new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Prohibited),
-                new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)
-            ]);
 
-        var grants = await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1");
-
-        // 拒绝优先：被拒绝权限的子孙回落为未授予，运行时同样拒绝。
-        var grant = Assert.Single(grants.Grants);
-        Assert.Equal(TestPermissionDefinitionProvider.Orders, grant.PermissionName);
-        Assert.Equal(PermissionGrantEffect.Prohibited, grant.Effect);
-        Assert.Equal(1, revision);
-    }
-
-    [Fact]
-    public async Task Prohibiting_a_child_keeps_the_granted_parent()
-    {
-        await _manager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            "r1",
-            [
-                new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted),
-                new PermissionGrant(TestPermissionDefinitionProvider.OrdersDelete, PermissionGrantEffect.Prohibited)
-            ]);
-
-        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1"))
-            .Grants
-            .ToDictionary(x => x.PermissionName, x => x.Effect, StringComparer.Ordinal);
-
-        Assert.Equal(PermissionGrantEffect.Granted, grants[TestPermissionDefinitionProvider.Orders]);
-        Assert.Equal(PermissionGrantEffect.Granted, grants[TestPermissionDefinitionProvider.OrdersRead]);
-        Assert.Equal(PermissionGrantEffect.Prohibited, grants[TestPermissionDefinitionProvider.OrdersDelete]);
-    }
 
     [Fact]
     public async Task Replace_rejects_undefined_or_disabled_permissions()
@@ -135,7 +97,7 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
             () => _manager.ReplaceGrantsAsync(
                 PermissionGrantProviderNames.Role,
                 "r1",
-                [new PermissionGrant(TestPermissionDefinitionProvider.Undefined, PermissionGrantEffect.Granted)]));
+                [TestPermissionDefinitionProvider.Undefined]));
         Assert.Equal([TestPermissionDefinitionProvider.Undefined], undefined.PermissionNames);
 
         // 父权限被禁用时子权限同样不可授予。
@@ -143,10 +105,10 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
             () => _manager.ReplaceGrantsAsync(
                 PermissionGrantProviderNames.Role,
                 "r1",
-                [new PermissionGrant(TestPermissionDefinitionProvider.ReportsView, PermissionGrantEffect.Granted)]));
+                [TestPermissionDefinitionProvider.ReportsView]));
         Assert.Equal([TestPermissionDefinitionProvider.ReportsView], disabled.PermissionNames);
 
-        Assert.Empty((await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Grants);
+        Assert.Empty((await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).PermissionNames);
     }
 
     [Fact]
@@ -155,17 +117,17 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         var first = await _manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+            [TestPermissionDefinitionProvider.OrdersRead]);
 
         var unchanged = await _manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+            [TestPermissionDefinitionProvider.OrdersRead]);
 
         var second = await _manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWrite, PermissionGrantEffect.Granted)]);
+            [TestPermissionDefinitionProvider.OrdersWrite]);
 
         Assert.Equal(1, first);
         Assert.Equal(1, unchanged);
@@ -178,14 +140,14 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         await _manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)],
+            [TestPermissionDefinitionProvider.OrdersRead],
             expectedRevision: 0);
 
         var exception = await Assert.ThrowsAsync<PermissionGrantConcurrencyException>(
             () => _manager.ReplaceGrantsAsync(
                 PermissionGrantProviderNames.Role,
                 "r1",
-                [new PermissionGrant(TestPermissionDefinitionProvider.OrdersDelete, PermissionGrantEffect.Granted)],
+                [TestPermissionDefinitionProvider.OrdersDelete],
                 expectedRevision: 0));
 
         Assert.Equal(0, exception.ExpectedRevision);
@@ -193,8 +155,8 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
 
         // 冲突时不得静默覆盖：原授予保持不变。
         var grants = await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1");
-        Assert.Contains(grants.Grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersRead);
-        Assert.DoesNotContain(grants.Grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersDelete);
+        Assert.Contains(grants.PermissionNames, x => x == TestPermissionDefinitionProvider.OrdersRead);
+        Assert.DoesNotContain(grants.PermissionNames, x => x == TestPermissionDefinitionProvider.OrdersDelete);
     }
 
     [Fact]
@@ -215,14 +177,14 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
 
         var subject = await _store.GetGrantsForSubjectAsync("u1", ["r1", "r2"]);
 
-        Assert.Contains(subject.UserGrants.Grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersRead);
+        Assert.Contains(subject.UserGrants.PermissionNames, x => x == TestPermissionDefinitionProvider.OrdersRead);
         Assert.Equal(2, subject.RoleGrants.Count);
 
-        var effects = subject.GetEffectiveEffects(_definitions);
-        Assert.Equal(PermissionGrantEffect.Granted, effects[TestPermissionDefinitionProvider.OrdersRead]);
-        Assert.Equal(PermissionGrantEffect.Granted, effects[TestPermissionDefinitionProvider.OrdersWrite]);
+        var granted = subject.GetGrantedNames();
+        Assert.Contains(TestPermissionDefinitionProvider.OrdersRead, granted);
+        Assert.Contains(TestPermissionDefinitionProvider.OrdersWrite, granted);
         // 未参与的角色的授予不得泄漏到本主体。
-        Assert.False(effects.ContainsKey(TestPermissionDefinitionProvider.OrdersDelete));
+        Assert.DoesNotContain(TestPermissionDefinitionProvider.OrdersDelete, granted);
     }
 
     [Fact]
@@ -254,98 +216,12 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         {
             PermissionName = TestPermissionDefinitionProvider.OrdersRead,
             ProviderName = PermissionGrantProviderNames.Role,
-            ProviderKey = "r1",
-            Effect = PermissionGrantEffect.Prohibited
+            ProviderKey = "r1"
         });
 
-        // 同一主体对同一权限不可能同时存在允许与拒绝两行。
+        // 一行即一次授予，同一主体对同一权限不可能出现两行。
         await Assert.ThrowsAsync<DbUpdateException>(() => _db.SaveChangesAsync());
         _db.ChangeTracker.Clear();
-    }
-
-    [Fact]
-    public async Task Granting_the_same_permission_twice_updates_in_place()
-    {
-        await _manager.GrantAsync(
-            TestPermissionDefinitionProvider.OrdersRead,
-            PermissionGrantProviderNames.Role,
-            "r1");
-        await _manager.GrantAsync(
-            TestPermissionDefinitionProvider.OrdersRead,
-            PermissionGrantProviderNames.Role,
-            "r1",
-            PermissionGrantEffect.Prohibited);
-
-        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Grants;
-
-        var read = Assert.Single(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersRead);
-        Assert.Equal(PermissionGrantEffect.Prohibited, read.Effect);
-    }
-
-    [Theory]
-    // 用户拒绝父权限、角色允许子权限。
-    [InlineData(PermissionGrantProviderNames.User, PermissionGrantProviderNames.Role)]
-    // 角色拒绝父权限、用户允许子权限。
-    [InlineData(PermissionGrantProviderNames.Role, PermissionGrantProviderNames.User)]
-    public async Task Prohibiting_a_parent_in_one_source_disables_children_granted_by_another(
-        string prohibitingProvider,
-        string grantingProvider)
-    {
-        var prohibitingKey = prohibitingProvider == PermissionGrantProviderNames.User ? "u1" : "r1";
-        var grantingKey = grantingProvider == PermissionGrantProviderNames.User ? "u1" : "r1";
-
-        await _manager.ReplaceGrantsAsync(
-            prohibitingProvider,
-            prohibitingKey,
-            [new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Prohibited)]);
-        await _manager.ReplaceGrantsAsync(
-            grantingProvider,
-            grantingKey,
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWrite, PermissionGrantEffect.Granted)]);
-
-        var effects = (await _store.GetGrantsForSubjectAsync("u1", ["r1"]))
-            .GetEffectiveEffects(_definitions);
-
-        // 写入侧的归一化只在单个主体内成立；跨来源合并后必须由读取侧把拒绝继续传播下去。
-        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.Orders]);
-        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.OrdersWrite]);
-    }
-
-    [Fact]
-    public async Task Prohibiting_a_parent_in_one_role_disables_children_granted_by_another_role()
-    {
-        await _manager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Prohibited)]);
-        await _manager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            "r2",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
-
-        var effects = (await _store.GetGrantsForSubjectAsync("u1", ["r1", "r2"]))
-            .GetEffectiveEffects(_definitions);
-
-        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.OrdersRead]);
-    }
-
-    [Fact]
-    public async Task Prohibition_propagates_through_every_level_of_ancestors()
-    {
-        await _manager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.Orders, PermissionGrantEffect.Prohibited)]);
-        await _manager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            "r2",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWriteBatch, PermissionGrantEffect.Granted)]);
-
-        var effects = (await _store.GetGrantsForSubjectAsync("u1", ["r1", "r2"]))
-            .GetEffectiveEffects(_definitions);
-
-        // 被拒绝的是祖父级，孙子级同样必须失效。
-        Assert.Equal(PermissionGrantEffect.Prohibited, effects[TestPermissionDefinitionProvider.OrdersWriteBatch]);
     }
 
     [Fact]
@@ -354,7 +230,7 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         await _manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+            [TestPermissionDefinitionProvider.OrdersRead]);
 
         var options = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
             .UseSqlite(_connection)
@@ -362,8 +238,8 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
 
         await using var firstDb = new TestAuthorizationDbContext(options);
         await using var secondDb = new TestAuthorizationDbContext(options);
-        var first = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(firstDb, _definitions);
-        var second = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(secondDb, _definitions);
+        var first = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(firstDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(firstDb));
+        var second = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(secondDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(secondDb));
 
         // 两个上下文都把版本读进内存后才发生写入：这正是「先读后比」保护不了的窗口。
         var revision = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Revision;
@@ -373,7 +249,7 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         await first.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWrite, PermissionGrantEffect.Granted)],
+            [TestPermissionDefinitionProvider.OrdersWrite],
             revision);
 
         // 第二个上下文持有的仍是写入前的版本行，提交时必须失败而不是覆盖先写。
@@ -381,15 +257,17 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
             () => second.ReplaceGrantsAsync(
                 PermissionGrantProviderNames.Role,
                 "r1",
-                [new PermissionGrant(TestPermissionDefinitionProvider.OrdersDelete, PermissionGrantEffect.Granted)],
+                [TestPermissionDefinitionProvider.OrdersDelete],
                 revision));
 
         Assert.Equal(PermissionGrantProviderNames.Role, conflict.ProviderName);
+        // 赢家已把版本推到 2，异常必须报存储中的真实值而非落败方读到的 1。
+        Assert.Equal(2, conflict.ActualRevision);
 
         // 先写的内容原样保留。
-        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Grants;
-        Assert.Contains(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersWrite);
-        Assert.DoesNotContain(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersDelete);
+        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).PermissionNames;
+        Assert.Contains(grants, x => x == TestPermissionDefinitionProvider.OrdersWrite);
+        Assert.DoesNotContain(grants, x => x == TestPermissionDefinitionProvider.OrdersDelete);
     }
 
     [Fact]
@@ -407,11 +285,11 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
                 .Options;
 
             await using var winnerDb = new TestAuthorizationDbContext(options);
-            var winner = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(winnerDb, _definitions);
+            var winner = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(winnerDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(winnerDb));
             await winner.ReplaceGrantsAsync(
                 PermissionGrantProviderNames.Role,
                 roleKey,
-                [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+                [TestPermissionDefinitionProvider.OrdersRead]);
         });
 
         var loserOptions = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
@@ -420,20 +298,338 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
             .Options;
 
         await using var loserDb = new TestAuthorizationDbContext(loserOptions);
-        var loser = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(loserDb, _definitions);
+        var loser = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(loserDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(loserDb));
 
         var conflict = await Assert.ThrowsAsync<PermissionGrantConcurrencyException>(
             () => loser.ReplaceGrantsAsync(
                 PermissionGrantProviderNames.Role,
                 roleKey,
-                [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWrite, PermissionGrantEffect.Granted)]));
+                [TestPermissionDefinitionProvider.OrdersWrite]));
 
         Assert.Equal(roleKey, conflict.ProviderKey);
+        // 实际版本取自存储，而不是本次写入前读到的 0。
+        Assert.Equal(1, conflict.ActualRevision);
 
         // 先写的内容原样保留，没有被落败方部分覆盖。
-        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, roleKey)).Grants;
-        Assert.Contains(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersRead);
-        Assert.DoesNotContain(grants, x => x.PermissionName == TestPermissionDefinitionProvider.OrdersWrite);
+        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, roleKey)).PermissionNames;
+        Assert.Contains(grants, x => x == TestPermissionDefinitionProvider.OrdersRead);
+        Assert.DoesNotContain(grants, x => x == TestPermissionDefinitionProvider.OrdersWrite);
+    }
+
+    [Fact]
+    public async Task A_losing_first_write_leaves_nothing_pending_in_the_host_unit_of_work()
+    {
+        const string roleKey = "loser-first-write";
+
+        var interceptor = new RunOnceBeforeSaveInterceptor(async () =>
+        {
+            var options = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
+                .UseSqlite(_connection)
+                .Options;
+
+            await using var winnerDb = new TestAuthorizationDbContext(options);
+            var winner = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(winnerDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(winnerDb));
+            await winner.ReplaceGrantsAsync(
+                PermissionGrantProviderNames.Role,
+                roleKey,
+                [TestPermissionDefinitionProvider.OrdersRead]);
+        });
+
+        var loserOptions = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
+            .UseSqlite(_connection)
+            .AddInterceptors(interceptor)
+            .Options;
+
+        await using var loserDb = new TestAuthorizationDbContext(loserOptions);
+        var loser = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(loserDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(loserDb));
+
+        await Assert.ThrowsAsync<PermissionGrantConcurrencyException>(
+            () => loser.ReplaceGrantsAsync(
+                PermissionGrantProviderNames.Role,
+                roleKey,
+                [TestPermissionDefinitionProvider.OrdersWrite]));
+
+        // Manager 用的是宿主的 DbContext。调用方接住冲突后继续提交自己的工作单元是完全合法的，
+        // 此时落败方的授予不得搭车落库——否则库里会出现"授予写成功但版本没涨"的状态，
+        // 之后所有乐观并发都会拿着一个对不上的版本号做判断。
+        await loserDb.SaveChangesAsync();
+
+        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, roleKey)).PermissionNames;
+        Assert.Contains(grants, x => x == TestPermissionDefinitionProvider.OrdersRead);
+        Assert.DoesNotContain(grants, x => x == TestPermissionDefinitionProvider.OrdersWrite);
+
+        var revision = await loserDb.Set<AuthorizationRevisionRecord>()
+            .AsNoTracking()
+            .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == roleKey)
+            .Select(x => x.Version)
+            .SingleAsync();
+        Assert.Equal(1, revision);
+    }
+
+    [Fact]
+    public async Task A_losing_update_leaves_nothing_pending_in_the_host_unit_of_work()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [TestPermissionDefinitionProvider.OrdersRead]);
+
+        var options = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+
+        await using var firstDb = new TestAuthorizationDbContext(options);
+        await using var secondDb = new TestAuthorizationDbContext(options);
+        var first = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(firstDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(firstDb));
+        var second = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(secondDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(secondDb));
+
+        var revision = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Revision;
+        await firstDb.Set<AuthorizationRevisionRecord>().AsTracking().ToListAsync();
+        await secondDb.Set<AuthorizationRevisionRecord>().AsTracking().ToListAsync();
+
+        await first.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [TestPermissionDefinitionProvider.OrdersWrite],
+            revision);
+
+        await Assert.ThrowsAsync<PermissionGrantConcurrencyException>(
+            () => second.ReplaceGrantsAsync(
+                PermissionGrantProviderNames.Role,
+                "r1",
+                [TestPermissionDefinitionProvider.OrdersDelete],
+                revision));
+
+        // 更新路径同理：版本行已被赢家推高，落败方手里的增删与版本号都必须彻底作废。
+        await secondDb.SaveChangesAsync();
+
+        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).PermissionNames;
+        Assert.Contains(grants, x => x == TestPermissionDefinitionProvider.OrdersWrite);
+        Assert.DoesNotContain(grants, x => x == TestPermissionDefinitionProvider.OrdersDelete);
+
+        var actual = await secondDb.Set<AuthorizationRevisionRecord>()
+            .AsNoTracking()
+            .Where(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == "r1")
+            .Select(x => x.Version)
+            .SingleAsync();
+        Assert.Equal(2, actual);
+    }
+
+    [Fact]
+    public async Task An_unrelated_concurrency_conflict_is_not_reported_as_a_permission_conflict()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [TestPermissionDefinitionProvider.OrdersRead]);
+
+        var options = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+
+        await using var seedDb = new TestAuthorizationDbContext(options);
+        var business = new BusinessRecord { Name = "order-1", Version = 1 };
+        seedDb.Add(business);
+        await seedDb.SaveChangesAsync();
+
+        // 别人先改了这条业务记录，把它的并发令牌推走。
+        await using (var winnerDb = new TestAuthorizationDbContext(options))
+        {
+            var winner = await winnerDb.Set<BusinessRecord>().SingleAsync(x => x.Id == business.Id);
+            winner.Name = "order-1-updated";
+            winner.Version += 1;
+            await winnerDb.SaveChangesAsync();
+        }
+
+        await using var hostDb = new TestAuthorizationDbContext(options);
+        var manager = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(hostDb, _definitions, new EfCorePermissionGrantStore<TestAuthorizationDbContext>(hostDb));
+
+        // 宿主在同一个工作单元里既改业务实体（持有过期令牌），又改权限授予。
+        var stale = await hostDb.Set<BusinessRecord>().SingleAsync(x => x.Id == business.Id);
+        hostDb.Entry(stale).Property(x => x.Version).OriginalValue = 1;
+        stale.Name = "order-1-conflicting";
+
+        var revision = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).Revision;
+
+        // 冲突来自业务实体，权限版本根本没被别人动过。若无条件把它翻译成权限冲突，
+        // 界面会提示"权限已被其他管理员修改"，真正的业务并发问题就此消失。
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
+            () => manager.ReplaceGrantsAsync(
+                PermissionGrantProviderNames.Role,
+                "r1",
+                [TestPermissionDefinitionProvider.OrdersRead, TestPermissionDefinitionProvider.OrdersWrite],
+                revision));
+    }
+
+    [Fact]
+    public async Task A_single_grant_does_not_silently_drop_a_concurrent_write()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [TestPermissionDefinitionProvider.OrdersRead]);
+
+        var options = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+
+        // 交错点必须落在"读集合"与"读版本"之间：放到 SaveChanges 上是没用的，
+        // 那时 EF 的并发令牌本来就会拦下，无论有没有携带 expectedRevision。
+        // 真正的危险窗口是本次拿着旧集合、却读到了对方写完后的新版本。
+        await using var loserDb = new TestAuthorizationDbContext(options);
+        var probingStore = new WriteOnceAfterReadStore(
+            new EfCorePermissionGrantStore<TestAuthorizationDbContext>(loserDb),
+            async () =>
+            {
+                await using var winnerDb = new TestAuthorizationDbContext(options);
+                var winner = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(
+                    winnerDb,
+                    _definitions,
+                    new EfCorePermissionGrantStore<TestAuthorizationDbContext>(winnerDb));
+
+                await winner.GrantAsync(
+                    TestPermissionDefinitionProvider.OrdersWrite,
+                    PermissionGrantProviderNames.Role,
+                    "r1");
+            });
+
+        var loser = new EfCorePermissionGrantManager<TestAuthorizationDbContext>(
+            loserDb,
+            _definitions,
+            probingStore);
+
+        await loser.GrantAsync(
+            TestPermissionDefinitionProvider.OrdersDelete,
+            PermissionGrantProviderNames.Role,
+            "r1");
+
+        // 不带版本写回时，本次会拿旧集合配新版本，把对方刚加的 OrdersWrite 删掉且不报错。
+        var grants = (await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1")).PermissionNames;
+        Assert.Contains(grants, x => x == TestPermissionDefinitionProvider.OrdersRead);
+        Assert.Contains(grants, x => x == TestPermissionDefinitionProvider.OrdersWrite);
+        Assert.Contains(grants, x => x == TestPermissionDefinitionProvider.OrdersDelete);
+    }
+
+    [Fact]
+    public async Task Removing_a_provider_clears_grants_and_revision_and_is_idempotent()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [TestPermissionDefinitionProvider.OrdersRead, TestPermissionDefinitionProvider.OrdersWrite]);
+
+        var before = await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1");
+        Assert.NotEmpty(before.PermissionNames);
+        Assert.Equal(1, before.Revision);
+
+        var removed = await _manager.RemoveProviderAsync(PermissionGrantProviderNames.Role, "r1");
+        Assert.Equal(before.PermissionNames.Count, removed);
+
+        // 版本行必须一起消失：主体已经永久删除，留着它只会变成永久孤儿；
+        // 这与"撤销到空集合"不同——那种情况要保留并递增版本。
+        var after = await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1");
+        Assert.Empty(after.PermissionNames);
+        Assert.Equal(0, after.Revision);
+
+        Assert.Equal(0, await _manager.RemoveProviderAsync(PermissionGrantProviderNames.Role, "r1"));
+    }
+
+    [Fact]
+    public async Task Revoking_to_an_empty_set_keeps_the_revision()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [TestPermissionDefinitionProvider.OrdersRead]);
+
+        await _manager.ReplaceGrantsAsync(PermissionGrantProviderNames.Role, "r1", []);
+
+        // 撤销是有人还在编辑的场景：版本必须保留并递增，否则对方的乐观并发失去参照。
+        var after = await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1");
+        Assert.Empty(after.PermissionNames);
+        Assert.Equal(2, after.Revision);
+    }
+
+    [Fact]
+    public async Task A_never_settling_snapshot_fails_as_a_read_error()
+    {
+        await _manager.ReplaceGrantsAsync(
+            PermissionGrantProviderNames.Role,
+            "r1",
+            [TestPermissionDefinitionProvider.OrdersRead]);
+
+        // 每读一次版本就把它推高一格，"版本→数据→版本"永远对不上，重试必然耗尽。
+        var interceptor = new BumpRevisionAfterEachReadInterceptor(_connection);
+
+        var options = new DbContextOptionsBuilder<TestAuthorizationDbContext>()
+            .UseSqlite(_connection)
+            .AddInterceptors(interceptor)
+            .Options;
+
+        await using var db = new TestAuthorizationDbContext(options);
+        var store = new EfCorePermissionGrantStore<TestAuthorizationDbContext>(db);
+
+        // 抛的必须是读取失败，而不是保存冲突：这里没有调用方提交的期望版本，
+        // 复用 PermissionGrantConcurrencyException 会让宿主把它当成"旧页面撞车"报成 409。
+        var failure = await Assert.ThrowsAsync<UnstableGrantSnapshotException>(
+            () => store.GetGrantsAsync(PermissionGrantProviderNames.Role, "r1"));
+
+        Assert.Contains("r1", failure.Subject);
+        Assert.True(failure.Attempts > 1);
+    }
+
+    /// <summary>每次读到授权版本表之后，用另一条连接把版本推高一格。</summary>
+    private sealed class BumpRevisionAfterEachReadInterceptor(SqliteConnection connection) : DbCommandInterceptor
+    {
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!command.CommandText.Contains("AuthorizationRevision", StringComparison.Ordinal))
+                return result;
+
+            await using var bump = connection.CreateCommand();
+            bump.CommandText = "UPDATE \"AuthorizationRevisionRecord\" SET \"Version\" = \"Version\" + 1";
+            await bump.ExecuteNonQueryAsync(cancellationToken);
+
+            return result;
+        }
+    }
+
+    /// <summary>在首次返回授予快照之后执行一次给定动作，用于把并发写入夹进"读集合→读版本"之间。</summary>
+    private sealed class WriteOnceAfterReadStore(IPermissionGrantStore inner, Func<Task> afterFirstRead)
+        : IPermissionGrantStore
+    {
+        private int executed;
+
+        public async Task<PermissionGrantSet> GetGrantsAsync(
+            string providerName,
+            string providerKey,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await inner.GetGrantsAsync(providerName, providerKey, cancellationToken);
+
+            if (Interlocked.Exchange(ref executed, 1) == 0)
+            {
+                await afterFirstRead();
+            }
+
+            return result;
+        }
+
+        public Task<IReadOnlyList<PermissionGrantSet>> GetGrantsAsync(
+            string providerName,
+            IReadOnlyCollection<string> providerKeys,
+            CancellationToken cancellationToken = default)
+            => inner.GetGrantsAsync(providerName, providerKeys, cancellationToken);
+
+        public Task<SubjectPermissionGrants> GetGrantsForSubjectAsync(
+            string userId,
+            IReadOnlyCollection<string> roleIds,
+            CancellationToken cancellationToken = default)
+            => inner.GetGrantsForSubjectAsync(userId, roleIds, cancellationToken);
     }
 
     /// <summary>在被拦截上下文的首次 SaveChanges 之前执行一次给定动作，用于构造确定性的写入交错。</summary>
@@ -462,22 +658,44 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         await _manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r1",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersRead, PermissionGrantEffect.Granted)]);
+            [TestPermissionDefinitionProvider.OrdersRead]);
         await _manager.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role,
             "r2",
-            [new PermissionGrant(TestPermissionDefinitionProvider.OrdersWriteBatch, PermissionGrantEffect.Granted)]);
+            [TestPermissionDefinitionProvider.OrdersWriteBatch]);
 
         var sets = await _store.GetGrantsAsync(PermissionGrantProviderNames.Role, ["r1", "r2", "r3"]);
 
         Assert.Equal(3, sets.Count);
         Assert.Equal(["r1", "r2", "r3"], sets.Select(x => x.ProviderKey));
         // r2 授予了孙子级，写入归一化补齐了两级祖先。
-        Assert.Equal(3, sets.Single(x => x.ProviderKey == "r2").Grants.Count);
+        Assert.Equal(3, sets.Single(x => x.ProviderKey == "r2").PermissionNames.Count);
         // 从未写入过的主体返回空集合与 0 版本，而不是被跳过。
         var missing = sets.Single(x => x.ProviderKey == "r3");
-        Assert.Empty(missing.Grants);
+        Assert.Empty(missing.PermissionNames);
         Assert.Equal(0, missing.Revision);
+    }
+
+    [Theory]
+    [InlineData("", "r1")]
+    [InlineData(PermissionGrantProviderNames.Role, "  ")]
+    public async Task Blank_subject_identifiers_are_rejected_at_the_library_boundary(
+        string providerName,
+        string providerKey)
+    {
+        // 框架公共 API 的边界守卫：空白标识落库会产生谁也看不到、谁也删不掉的孤儿授予。
+        await Assert.ThrowsAsync<ArgumentException>(() => _manager.ReplaceGrantsAsync(
+            providerName,
+            providerKey,
+            [TestPermissionDefinitionProvider.OrdersRead]));
+    }
+
+    /// <summary>与授权无关的业务实体，带自己的并发令牌，用于验证 Manager 不会冒领别人的冲突。</summary>
+    private sealed class BusinessRecord
+    {
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+        public string Name { get; set; } = string.Empty;
+        public int Version { get; set; }
     }
 
     private sealed class TestAuthorizationDbContext(DbContextOptions<TestAuthorizationDbContext> options)
@@ -486,6 +704,13 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ConfigureAuthorization();
+
+            modelBuilder.Entity<BusinessRecord>(builder =>
+            {
+                builder.ToTable("BusinessRecords");
+                builder.HasKey(x => x.Id);
+                builder.Property(x => x.Version).IsConcurrencyToken();
+            });
         }
     }
 }

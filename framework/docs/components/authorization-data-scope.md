@@ -101,7 +101,7 @@ public class AllOrderScopeProvider : IDataScopeProvider<Order>
 **第二步：实现分配来源**——范围按**操作**分别分配，因为"能看"不等于"能改"：
 
 ```csharp
-public class OrganizationScopeAssignmentProvider(IRepository<RoleDataScope, Guid> scopes)
+public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
     : IDataScopeAssignmentProvider
 {
     public async ValueTask<IReadOnlyList<DataScopeAssignment>> GetAssignmentsAsync(
@@ -111,11 +111,13 @@ public class OrganizationScopeAssignmentProvider(IRepository<RoleDataScope, Guid
         CancellationToken cancellationToken = default)
     {
         var roleIds = subject.RoleIds.Select(Guid.Parse).ToList();
-        var rows = await scopes.GetListAsync(
-            x => roleIds.Contains(x.RoleId)
-                 && x.ResourceName == resourceName
-                 && x.Operation == operation,
-            cancellationToken);
+
+        var rows = await dbContext.Set<RoleDataScope>()
+            .AsNoTracking()
+            .Where(x => roleIds.Contains(x.RoleId)
+                        && x.ResourceName == resourceName
+                        && x.Operation == operation)
+            .ToListAsync(cancellationToken);
 
         return [.. rows.Select(x => new DataScopeAssignment(
             x.ResourceName, x.Operation, x.ScopeName, x.ScopeValue))];
@@ -126,51 +128,37 @@ public class OrganizationScopeAssignmentProvider(IRepository<RoleDataScope, Guid
 **第三步：所有集合入口统一走同一个范围**——列表、总数、导出必须共用，否则总数会和实际可见数据对不上：
 
 ```csharp
-public class OrderAppService(
-    IRepository<Order, Guid> orders,
-    IDataScopeApplier dataScope,
-    IQueryableAsyncExecuter asyncExecuter)
+// 先施加可见范围，再叠加业务筛选与排序分页。
+var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Read, ct);
+
+if (!string.IsNullOrWhiteSpace(keyword))
 {
-    public async Task<PagedResultDto<OrderDto>> GetPagedListAsync(
-        GetOrderPagedInputDto input,
-        CancellationToken ct)
-    {
-        var query = await orders.GetQueryableAsync(ct);
+    scoped = scoped.Where(order => order.Code.Contains(keyword));
+}
 
-        // 先施加可见范围，再叠加业务筛选与排序分页。
-        var scoped = await dataScope.ApplyAsync(query, "Orders", DataOperations.Read, ct);
+var totalCount = await scoped.LongCountAsync(ct);
+var items = await scoped.OrderBy(order => order.Code).Skip(offset).Take(limit).ToListAsync(ct);
+```
 
-        if (!string.IsNullOrWhiteSpace(input.Keyword))
-        {
-            scoped = scoped.Where(order => order.Code.Contains(input.Keyword));
-        }
+**第四步：批量操作先在范围内定位目标，再核对数量**——禁止静默跳过越权项：
 
-        var totalCount = await asyncExecuter.LongCountAsync(scoped, ct);
-        var items = await asyncExecuter.ToListAsync(
-            scoped.OrderBy(order => order.Code).Skip(input.Offset).Take(input.Limit), ct);
+```csharp
+var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Update, ct);
 
-        return new PagedResultDto<OrderDto>(totalCount, mapper.Map<List<OrderDto>>(items));
-    }
+var targets = await scoped.Where(x => ids.Contains(x.Id)).ToListAsync(ct);
+if (targets.Count != ids.Count)
+{
+    // 数量对不上说明选中项里有超出范围的，整体拒绝而不是悄悄少改几条。
+    throw new UnauthorizedAccessException("Some of the selected orders are out of your data scope.");
+}
 
-    // 批量操作先在范围内定位目标，再核对数量，禁止静默跳过越权项。
-    public async Task ApproveManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
-    {
-        var query = await orders.GetQueryableAsync(ct);
-        var scoped = await dataScope.ApplyAsync(query, "Orders", DataOperations.Update, ct);
-
-        var targets = await asyncExecuter.ToListAsync(scoped.Where(x => ids.Contains(x.Id)), ct);
-        if (targets.Count != ids.Count)
-        {
-            throw new ForbiddenException("Some of the selected orders are out of your data scope.");
-        }
-
-        foreach (var order in targets)
-        {
-            order.Approve();
-        }
-    }
+foreach (var order in targets)
+{
+    order.Approve();
 }
 ```
+
+> 与仓储、分页 DTO、异步执行器等 DDD 设施的组合写法见 [ddd-struct 文档](../ddd-struct/README.md)；本组件不依赖它们，示例刻意保持在 EF Core 与 BCL 的范围内，独立引用本包的项目可直接照搬。
 
 ## 接口参考
 

@@ -18,7 +18,7 @@ public class RoleProfile : MapsterProfile
     /// <summary>MapContext 参数名：角色 Id → 关联用户数。</summary>
     public const string UserCountsKey = "RoleUserCounts";
 
-    /// <summary>MapContext 参数名：角色 Id → 授予数（含显式拒绝）。</summary>
+    /// <summary>MapContext 参数名：角色 Id → 授予数。</summary>
     public const string PermissionCountsKey = "RolePermissionCounts";
 
     protected override void ConfigureMappings()

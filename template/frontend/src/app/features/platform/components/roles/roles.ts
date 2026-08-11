@@ -39,7 +39,7 @@ import { RoleTable } from './widgets/role-table/role-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
+import { refreshOnLanguageChange, translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
@@ -164,6 +164,12 @@ export class Roles {
         this.totalCount.set(result.totalCount);
       });
 
+    //#if (IncludeLocalization)
+    // 页面按钮文案走 transloco.translate()，本页没有筛选下拉这类读了 translationReady 的
+    // computed 被渲染，语言变化不会把视图标脏，需显式接上。
+    refreshOnLanguageChange(this.transloco);
+
+    //#endif
     // 面包屑末级文案由页面自行设置，与其他平台页保持同一约定。
     //#if (IncludeLocalization)
     effect(() => {

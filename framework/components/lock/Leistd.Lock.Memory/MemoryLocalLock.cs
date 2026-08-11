@@ -72,20 +72,10 @@ public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
         return new MemoryLockHandle(key, entry, this);
     }
 
-    public Task UnlockAsync(string key, CancellationToken cancellationToken = default)
-    {
-        if (_semaphores.TryGetValue(key, out var entry))
-            Release(key, entry);
-        else
-            _logger.LogWarning("解锁【{Key}】失败：未找到对应信号量", key);
-
-        return Task.CompletedTask;
-    }
-
     internal void Release(string key, SemaphoreEntry entry)
     {
-        entry.ReleaseLease(_timeProvider.GetUtcNow());
-        _logger.LogTrace("解锁【{Key}】成功", key);
+        if (entry.ReleaseLease(_timeProvider.GetUtcNow()))
+            _logger.LogTrace("解锁【{Key}】成功", key);
     }
 
     internal bool TryRemove(string key, SemaphoreEntry entry)

@@ -59,8 +59,7 @@
 
 <app-permission-grant-dialog
   [(open)]="permissionDialogOpen"
-  providerName="Role"
-  [providerKey]="permissionRole()?.id ?? null"
-  [subjectName]="permissionRole()?.displayName ?? ''"
+  [roleId]="permissionRole()?.id ?? null"
+  [roleName]="permissionRole()?.displayName ?? ''"
   (saved)="onPermissionsSaved()"
 />

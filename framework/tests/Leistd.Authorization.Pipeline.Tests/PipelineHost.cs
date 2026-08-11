@@ -60,7 +60,14 @@ public sealed class PipelineHost : IAsyncDisposable
             .AddAuthentication(TestAuthenticationHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
                 TestAuthenticationHandler.SchemeName, _ => { });
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options =>
+        {
+            // 显式注册一个与权限同名、但更严格的策略：除权限外还要求一个 Claim。
+            // 用来验证动态权限策略不会把宿主自己注册的同名策略盖掉。
+            options.AddPolicy(
+                OrderPermissions.Approve,
+                policy => policy.RequireClaim(PipelineFixtures.ApprovalClaim));
+        });
 
         // 第一层：功能权限。AddPermissionAuthorization 让 [Authorize(Policy = "权限名")] 生效。
         builder.Services.AddPermissionAuthorization();
@@ -150,6 +157,7 @@ public sealed class TestAuthenticationHandler(
     public const string SchemeName = "Test";
     public const string UserHeader = "X-Test-User";
     public const string RolesHeader = "X-Test-Roles";
+    public const string ClaimsHeader = "X-Test-Claims";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -163,6 +171,12 @@ public sealed class TestAuthenticationHandler(
         {
             claims.AddRange(roles.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(role => new Claim(ClaimTypes.Role, role)));
+        }
+
+        if (Request.Headers.TryGetValue(ClaimsHeader, out var extraClaims))
+        {
+            claims.AddRange(extraClaims.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(claim => new Claim(claim, "true")));
         }
 
         var identity = new ClaimsIdentity(claims, SchemeName);
@@ -231,4 +245,7 @@ public static class PipelineFixtures
     public const string OwnerUserId = "u-owner";
     public const string ColleagueUserId = "u-colleague";
     public const string OutsiderUserId = "u-outsider";
+
+    /// <summary>宿主显式注册的 Approve 策略额外要求的 Claim。</summary>
+    public const string ApprovalClaim = "order-approval";
 }

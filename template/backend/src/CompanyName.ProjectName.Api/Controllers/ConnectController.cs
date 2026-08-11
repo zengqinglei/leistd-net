@@ -165,12 +165,14 @@ public class ConnectController(
             claims[Claims.EmailVerified] = user.EmailConfirmed;
         }
 
+#if (IncludeRoles)
         if (User.HasScope(Scopes.Roles))
         {
             claims[Claims.Role] = User.GetClaims(Claims.Role)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
         }
+#endif
 
         return Ok(claims);
     }

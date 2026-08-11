@@ -43,7 +43,7 @@ builder.Services.AddResourceAuthorizationHandler<Order, OrderOwnerHandler>();
 builder.Services.AddResourceAuthorizationHandler<Order, ArchivedOrderHandler>();
 ```
 
-EF Core 实体映射需在 `DbContext.OnModelCreating` 中显式应用：
+EF Core 实体映射需在 `DbContext.OnModelCreating` 中显式应用（**并生成迁移**，见下）：
 
 ```csharp
 protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -108,27 +108,25 @@ public class ArchivedOrderHandler : IResourceAuthorizationHandler<Order>
 }
 ```
 
-**第三步：在应用服务中先加载、再裁决**：
+**第三步：先加载、再裁决**——本组件只回答"能不能"，加载与持久化用你自己的数据访问方式：
 
 ```csharp
-public class OrderAppService(
-    IRepository<Order, Guid> orders,
-    IResourceAuthorizationService resourceAuthorization)
+public class OrderService(IOrderStore orders, IResourceAuthorizationService resourceAuthorization)
 {
     // 功能权限由控制器上的 [Authorize(Policy = "Orders.Update")] 先行把关。
-    public async Task UpdateAsync(Guid id, UpdateOrderInput input, CancellationToken ct)
+    public async Task UpdateAsync(Guid id, decimal amount, CancellationToken ct)
     {
-        var order = await orders.GetByIdAsync(id, ct)
-            ?? throw new NotFoundException($"Order '{id}' was not found.");
+        var order = await orders.FindAsync(id, ct)
+            ?? throw new KeyNotFoundException($"Order '{id}' was not found.");
 
         if (!await resourceAuthorization.IsGrantedAsync(order, ResourceOperations.Update, ct))
         {
-            // 资源存在性敏感时改为 NotFoundException，由 API 威胁模型统一决定。
-            throw new ForbiddenException("You cannot update this order.");
+            // 资源存在性敏感时改为"未找到"，由 API 威胁模型统一决定。
+            throw new UnauthorizedAccessException("You cannot update this order.");
         }
 
-        order.Update(input.Amount);
-        await orders.UpdateAsync(order, ct);
+        order.Amount = amount;
+        await orders.SaveAsync(order, ct);
     }
 }
 ```
@@ -136,39 +134,36 @@ public class OrderAppService(
 **第四步：把 ACL 合并进列表查询**——列表**不能**先加载候选再逐条裁决，否则分页总数、排序和导出都会错：
 
 ```csharp
-public async Task<PagedResultDto<OrderDto>> GetSharedWithMeAsync(
-    PagedRequestDto input,
-    CancellationToken ct)
-{
-    var subject = await subjectProvider.GetCurrentSubjectAsync(ct);
+var subject = await subjectProvider.GetCurrentSubjectAsync(ct);
 
-    // 返回的是 IQueryable，数据库据此生成 IN/EXISTS 子查询。
-    var grantedKeys = resourceGrantStore.QueryGrantedResourceKeys(
-        "Orders",
-        ResourceOperations.Read,
-        subject!.UserId,
-        subject.RoleIds);
+// 返回 IQueryable，数据库据此生成 IN/EXISTS 子查询，不把候选拉到内存。
+var grantedKeys = resourceGrantStore.QueryGrantedResourceKeys(
+    "Orders",
+    ResourceOperations.Read,
+    subject!.UserId,
+    subject.RoleIds);
 
-    var query = (await orders.GetQueryableAsync(ct))
-        .Where(order => grantedKeys.Contains(order.ResourceKey));
+var query = dbContext.Set<Order>().Where(order => grantedKeys.Contains(order.ResourceKey));
 
-    var totalCount = await asyncExecuter.LongCountAsync(query, ct);
-    var items = await asyncExecuter.ToListAsync(query.Skip(input.Offset).Take(input.Limit), ct);
-
-    return new PagedResultDto<OrderDto>(totalCount, mapper.Map<List<OrderDto>>(items));
-}
+var totalCount = await query.LongCountAsync(ct);
+var items = await query.Skip(offset).Take(limit).ToListAsync(ct);
 ```
 
-**第五步：分享与回收**——`ReplaceGrantsAsync` 一次替换该实例上的全部 ACL：
+> 与仓储、分页 DTO、异步执行器等 DDD 设施的组合写法见 [ddd-struct 文档](../ddd-struct/README.md)；本组件不依赖它们，示例刻意保持在 EF Core 与 BCL 的范围内，独立引用本包的项目可直接照搬。
+
+**第五步：分享与回收**——`ReplaceGrantsAsync` 一次替换该实例上的全部 ACL，并用版本号做乐观并发：
 
 ```csharp
+var current = await resourceGrantStore.GetGrantsAsync("Orders", order.ResourceKey);
 await resourceGrantManager.ReplaceGrantsAsync("Orders", order.ResourceKey,
 [
-    new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, targetUserId, PermissionGrantEffect.Granted),
-    new ResourceGrant(ResourceOperations.Update, PermissionGrantProviderNames.Role, reviewerRoleId, PermissionGrantEffect.Granted),
+    new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, targetUserId, ResourceGrantEffect.Granted),
+    new ResourceGrant(ResourceOperations.Update, PermissionGrantProviderNames.Role, reviewerRoleId, ResourceGrantEffect.Granted),
     // 显式拒绝优先于任何来源的允许，用于"这个人例外"。
-    new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, blockedUserId, PermissionGrantEffect.Prohibited),
-], ct);
+    new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, blockedUserId, ResourceGrantEffect.Prohibited),
+], current.Revision, ct);
+// 版本不符时抛 ResourceGrantConcurrencyException：另一位管理员抢先保存了，
+// 此时直接写入会把对方刚加的显式拒绝静默抹掉，而两次保存都显示成功。
 ```
 
 **第六步：资源删除后清理 ACL**：
@@ -192,10 +187,15 @@ await resourceGrantManager.RemoveResourceAsync("Orders", order.ResourceKey, ct);
 | `IResourceAuthorizationService.IsGrantedAsync(resource, resourceName, resourceKey, operation, ct)` | 对已加载实例裁决 |
 | `IResourceAuthorizationService.IsGrantedAsync(resource, operation, ct)` | 资源实现 `IAuthorizableResource` 时的简化重载 |
 | `ResourceGrant` | 单条 ACL：`Operation`、`ProviderName`、`ProviderKey`、`Effect` |
-| `IResourceGrantStore.GetGrantsAsync(resourceName, resourceKey, ct)` | 取某实例上的全部 ACL |
+| `ResourceGrantSet` | 某实例的完整 ACL 与版本：`ResourceName`、`ResourceKey`、`Grants`、`Revision` |
+| `ResourceGrantConcurrencyException` | ACL 版本冲突：`ExpectedRevision`、`ActualRevision`（取自冲突后的重新读取），宿主通常映射为 HTTP 409 |
+| `InvalidResourceGrantEffectException` | 写入了未定义的 `ResourceGrantEffect` |
+| `InvalidResourceGrantSubjectException` | 写入了读取端无法识别的主体（非 User/Role 的 ProviderName、空标识） |
+| `UnstableGrantSnapshotException` | 稳定读取重试耗尽：取不到一致快照。属**读取失败**，与 `ResourceGrantConcurrencyException`（保存冲突，映射 409）不是一回事，调用方重试即可 |
+| `IResourceGrantStore.GetGrantsAsync(resourceName, resourceKey, ct)` | 取某实例上的全部 ACL 与当前版本，返回 `ResourceGrantSet` |
 | `IResourceGrantStore.GetEffectiveGrantsAsync(resourceName, resourceKey, userId, roleIds, ct)` | 取指定主体在某实例上每个操作的最终效果（拒绝优先） |
 | `IResourceGrantStore.QueryGrantedResourceKeys(resourceName, operation, userId, roleIds)` | 集合级入口，返回可被数据库翻译的 `IQueryable<string>`，已排除显式拒绝 |
-| `IResourceGrantManager.ReplaceGrantsAsync(resourceName, resourceKey, grants, ct)` | 原子替换某实例的全部 ACL |
+| `IResourceGrantManager.ReplaceGrantsAsync(resourceName, resourceKey, grants, expectedRevision, ct)` | 原子替换某实例的全部 ACL，返回写入后的版本；`expectedRevision` 与存储不一致时抛 `ResourceGrantConcurrencyException`，传 `null` 跳过校验（仅限种子数据） |
 | `IResourceGrantManager.RemoveResourceAsync(resourceName, resourceKey, ct)` | 幂等清理某实例的全部 ACL，返回删除行数 |
 
 `Leistd.Authorization.Resource.EntityFrameworkCore` 命名空间：
@@ -204,6 +204,7 @@ await resourceGrantManager.RemoveResourceAsync("Orders", order.ResourceKey, ct);
 | --- | --- |
 | `ResourcePermissionGrantRecord` | ACL 持久化实体：`Id`（Guid v7）、`ResourceName`、`ResourceKey`、`Operation`、`ProviderName`、`ProviderKey`、`Effect`；实现 `ICreationAuditedObject` |
 | `ResourcePermissionGrantRecordConfiguration` | EF Core 实体配置 |
+| `ResourceAuthorizationRevisionRecord` | 资源实例的 ACL 版本：`Id`、`ResourceName`、`ResourceKey`、`Version`；`Version` 为并发令牌 |
 | `EfCoreResourceGrantStore<TDbContext>` | `IResourceGrantStore` 的 EF Core 实现 |
 | `EfCoreResourceGrantManager<TDbContext>` | `IResourceGrantManager` 的 EF Core 实现 |
 | `AddResourceAuthorizationEfCore<TDbContext>()` | 注册存储与管理器（Scoped），内部调用 `AddResourceAuthorizationCore()` |
@@ -211,13 +212,27 @@ await resourceGrantManager.RemoveResourceAsync("Orders", order.ResourceKey, ct);
 
 ## 实现行为
 
-- `DefaultResourceAuthorizationService` 的判定顺序：主体不可识别返回 `false`；`IsSuperAdmin` 直接返回 `true`（与功能权限口径一致）；依次执行全部规则处理器，任一 `Deny()` 立即判定拒绝；随后查 ACL，命中 `Prohibited` 判定拒绝、命中 `Granted` 视为一次允许；最终只有 `Decision == Allowed` 才放行，`Undefined` 按默认拒绝处理。
+- `DefaultResourceAuthorizationService` 的判定顺序：主体不可识别返回 `false`；依次执行全部规则处理器，任一 `Deny()` **立即拒绝**；随后 `IsSuperAdmin` 返回 `true`；否则查 ACL，命中 `Prohibited` 判定拒绝、命中 `Granted` 视为一次允许；最终只有 `Decision == Allowed` 才放行，`Undefined` 按默认拒绝处理。
+- **超级管理员在领域规则之后才旁路**，与功能权限层不同：那一层没有领域不变量，只回答"能不能做这类事"；这一层的规则处理器表达的是资源状态本身不允许（已归档的订单谁都不能删），与"谁"无关。让超管跳过处理器会让上面那句承诺当场失效。
 - `ResourceAuthorizationContext.Allow()` 不会覆盖已经发生的 `Deny()`，因此处理器的注册顺序不影响结果。
 - 未注册 `IResourceGrantStore` 时服务仍可工作，只有规则处理器参与判定。
 - `ResourcePermissionGrantRecord` 唯一索引为 `(ResourceName, ResourceKey, Operation, ProviderName, ProviderKey)`，同一主体对同一实例同一操作不会出现两条冲突记录；另有 `(ResourceName, Operation, ProviderName, ProviderKey)` 支撑集合查询、`(ResourceName, ResourceKey)` 支撑删除清理。
 - `QueryGrantedResourceKeys` 在数据库内完成"允许集合减去拒绝集合"，不把候选拉到内存；返回结果已 `Distinct()`。
-- `Effect` 以**字符串**持久化（`varchar(32)`），与功能权限授予表口径一致。
+- **集合可见性要三者组合**：`(数据范围 OR ACL 允许) AND NOT ACL 拒绝`。只用前一个入口减不掉"数据范围放行、ACL 显式拒绝"的那一份——而"分享给部门、排除这一个人"正是显式拒绝的唯一用途。拒绝集合由 `QueryDeniedResourceKeys` 单独给出，与 `QueryGrantedResourceKeys` 对称，判据同为"不是 `Granted` 即拒绝"。
+- **集合入口答不了领域规则**：它只回答"哪些看得见/改得动"。批量操作必须在范围内取到目标后逐项执行实例授权，任一拒绝整批拒绝；只比对数量会漏掉已归档这类由资源状态决定的拒绝。
+- **判定 fail-closed**：只有明确的 `Granted` 才允许。写成"是 `Prohibited` 就拒、否则放行"会让任何非法枚举值（`(ResourceGrantEffect)0`、越界数值、自定义 Store 返回的损坏值）静默变成允许。写入端另有 `Enum.IsDefined` 校验与数据库检查约束两道拦截。
+- **全量替换带乐观并发**：唯一索引只防重复行，防不住"两人基于同一份旧快照各自保存"——被覆盖掉的往往正是显式拒绝，那个本该被排除的人会重新经由角色拿到访问权，且两次保存都显示成功。因此 ACL 与功能权限用同一口径：读取带回版本，保存回传版本，冲突抛异常而非静默覆盖。
+- `Effect` 以**字符串**持久化（`varchar(32)`）。功能权限授予表没有这一列——那一层是纯加法，行的存在即授予；资源实例这一层保留 `ResourceGrantEffect`，因为"这一条例外"是真实诉求。
 - 字段长度约束：`ResourceName` 128、`ResourceKey` 128、`Operation` 64、`ProviderName` 32、`ProviderKey` 128、`Effect` 32、`CreatorId` 64。
+
+## 升级已有数据库
+
+`ConfigureResourceAuthorization()` 只负责模型映射，不会自动改库。既有项目升级本组件后必须生成并应用一次迁移，否则第一次读取 ACL 就会因缺表失败：
+
+- **新增表 `ResourceAuthorizationRevisions`**（`Id`、`ResourceName`、`ResourceKey`、`Version` + `(ResourceName, ResourceKey)` 唯一索引）。缺失时 `GetGrantsAsync` 直接抛错。
+- **新增检查约束 `CK_ResourcePermissionGrants_Effect`**，限定 `Effect` 只能是 `Granted` / `Prohibited`。
+- 存量数据若含非法 `Effect`，迁移会因约束失败。**先清理再加约束**：这些行在判定端一律按拒绝处理（读取端 fail-closed），因此清理时应确认它们本就该是拒绝，或直接删除。
+- **必须为每个已有 ACL 的 `(ResourceName, ResourceKey)` 回填一行版本记录**（`Version = 1`）。不回填会留下"有 ACL、无版本行"的状态：版本是并发令牌，删除与替换靠它互相拦截，没有这一行时并发的 `RemoveResourceAsync` 与 `ReplaceGrantsAsync` 谁也拦不住谁，可能留下半套 ACL 或孤立版本。
 
 ## 配置项 / Options
 

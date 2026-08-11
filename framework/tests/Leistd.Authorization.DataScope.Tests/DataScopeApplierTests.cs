@@ -175,12 +175,18 @@ public class DataScopeApplierTests : IAsyncLifetime
 
     private DefaultDataScopeApplier CreateApplier(
         PermissionSubject? subject,
-        IReadOnlyList<DataScopeAssignment> assignments)
+        IReadOnlyList<DataScopeAssignment> assignments,
+        params IDataScopeProvider<TestOrder>[] extraProviders)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IDataScopeProvider<TestOrder>>(new OwnScopeProvider());
         services.AddSingleton<IDataScopeProvider<TestOrder>>(new OrganizationScopeProvider());
         services.AddSingleton<IDataScopeProvider<TestOrder>>(new AllScopeProvider());
+
+        foreach (var extra in extraProviders)
+        {
+            services.AddSingleton(extra);
+        }
 
         return new DefaultDataScopeApplier(
             new FakeSubjectProvider(subject),
@@ -248,9 +254,25 @@ public class DataScopeApplierTests : IAsyncLifetime
         }
     }
 
-    private sealed class AllScopeProvider : IDataScopeProvider<TestOrder>
+    [Fact]
+    public async Task A_provider_returning_no_predicate_does_not_open_everything()
     {
-        public const string Scope = "All";
+        // 少查一个条件、拿不到上下文而返回 null 的 Provider，绝不能被解释成"全部可见"——
+        // 那会让整张表当场放开。它只是不贡献可见性，其余范围照常生效。
+        var applier = CreateApplier(
+            Subject(),
+            [new DataScopeAssignment(Resource, DataOperations.Read, SilentScopeProvider.Scope, null)],
+            new SilentScopeProvider());
+
+        var visible = await applier.ApplyAsync(_db.Orders, Resource, DataOperations.Read);
+
+        Assert.Empty(visible);
+    }
+
+    /// <summary>返回 null 的 Provider，用于验证契约不再 fail-open。</summary>
+    private sealed class SilentScopeProvider : IDataScopeProvider<TestOrder>
+    {
+        public const string Scope = "Silent";
 
         public string ResourceName => Resource;
         public string ScopeName => Scope;
@@ -259,6 +281,20 @@ public class DataScopeApplierTests : IAsyncLifetime
             DataScopeContext context,
             CancellationToken cancellationToken = default)
             => ValueTask.FromResult<Expression<Func<TestOrder, bool>>?>(null);
+    }
+
+    private sealed class AllScopeProvider : IDataScopeProvider<TestOrder>
+    {
+        public const string Scope = "All";
+
+        public string ResourceName => Resource;
+        public string ScopeName => Scope;
+
+        // "全部可见"必须显式表达：返回 null 现在表示"本范围不贡献可见性"，会被跳过。
+        public ValueTask<Expression<Func<TestOrder, bool>>?> BuildPredicateAsync(
+            DataScopeContext context,
+            CancellationToken cancellationToken = default)
+            => ValueTask.FromResult<Expression<Func<TestOrder, bool>>?>(_ => true);
     }
 }
 

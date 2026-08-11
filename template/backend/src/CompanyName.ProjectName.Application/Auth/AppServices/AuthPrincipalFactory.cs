@@ -47,7 +47,11 @@ public class AuthPrincipalFactory(
 
         var principal = new ClaimsPrincipal(identity);
         principal.SetScopes(scopes?.Where(scope => !string.IsNullOrWhiteSpace(scope)) ??
+#if (IncludeRoles)
                             [Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Roles]);
+#else
+                            [Scopes.OpenId, Scopes.Profile, Scopes.Email]);
+#endif
         principal.SetResources(oauthOptions.Value.Resource);
         principal.SetDestinations(GetDestinations);
 
@@ -80,11 +84,13 @@ public class AuthPrincipalFactory(
                 Destinations.AccessToken,
                 Destinations.IdentityToken
             ],
+#if (IncludeRoles)
             Claims.Role when claim.Subject?.HasScope(Scopes.Roles) == true =>
             [
                 Destinations.AccessToken,
                 Destinations.IdentityToken
             ],
+#endif
             CustomClaimTypes.IsSuperAdmin =>
             [
                 Destinations.AccessToken

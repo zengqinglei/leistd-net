@@ -29,7 +29,7 @@ public record RoleOutputDto
     /// <summary>关联用户数。</summary>
     public int UserCount { get; init; }
 
-    /// <summary>已授予的权限数（含显式拒绝）。</summary>
+    /// <summary>已授予的权限数。</summary>
     public int PermissionCount { get; init; }
 
     public DateTime CreationTime { get; init; }

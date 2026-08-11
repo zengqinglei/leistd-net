@@ -181,7 +181,9 @@ function register(req: MockRequest): 'ok' {
     username: username,
     email: email,
     password: body.password,
+    //#if (IncludeRoles)
     roles: ['User'],
+    //#endif
     isActive: true,
     isSuperAdmin: false,
     isEmailVerified: false,

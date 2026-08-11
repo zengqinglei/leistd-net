@@ -30,6 +30,7 @@ describe('StartupService', () => {
     authorizationService.initialize.and.resolveTo();
     //#endif
     TestBed.configureTestingModule({
+      // prettier-ignore
       providers: [
         StartupService,
         { provide: AuthService, useValue: authService },

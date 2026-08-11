@@ -21,7 +21,6 @@ import {
   lucideCircleCheck,
   lucideEllipsis,
   lucideKey,
-  lucideKeyRound,
   lucideShieldCheck,
   lucidePencil,
   lucideSearchX,
@@ -65,7 +64,6 @@ import { UserManagementOutputDto } from '../../../../models/user-management.dto'
 
 const MEDIUM_VIEWPORT = '(min-width: 768px)';
 const LARGE_VIEWPORT = '(min-width: 1024px)';
-
 //#if (IncludeRoles)
 /** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
@@ -100,7 +98,6 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
       lucideCircleCheck,
       lucideEllipsis,
       lucideKey,
-      lucideKeyRound,
       lucideShieldCheck,
       lucidePencil,
       lucideSearchX,
@@ -135,17 +132,16 @@ export class UserTable {
   readonly canDelete = input(true);
   //#if (IncludeRoles)
   readonly canManageRoles = input(false);
-  readonly canManagePermissions = input(false);
   //#endif
 
   /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
+  // prettier-ignore
   readonly hasRowActions = computed(
     () =>
       this.canUpdate() ||
       this.canDelete() ||
       //#if (IncludeRoles)
       this.canManageRoles() ||
-      this.canManagePermissions() ||
       //#endif
       false,
   );
@@ -159,8 +155,6 @@ export class UserTable {
   //#if (IncludeRoles)
   /** 角色分配是独立命令，与资料编辑分开触发。 */
   readonly manageRoles = output<UserManagementOutputDto>();
-  /** 用户权限例外，同样是独立命令与独立权限。 */
-  readonly managePermissions = output<UserManagementOutputDto>();
   //#endif
 
   private readonly viewport = toSignal(
@@ -238,7 +232,6 @@ export class UserTable {
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
   }
-
   //#if (IncludeRoles)
   detailLabel(field: 'email' | 'roles' | 'lastLogin' | 'created'): string {
     //#if (IncludeLocalization)
@@ -308,7 +301,6 @@ export class UserTable {
   // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
-
   //#if (IncludeRoles)
   //#if (IncludeLocalization)
   rolesPopoverTitle(count: number): string {
@@ -344,27 +336,19 @@ export class UserTable {
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
-
   //#if (IncludeRoles)
   //#if (IncludeLocalization)
   rolesActionLabel(): string {
     return this.transloco.translate('users.actions.manageRoles');
   }
 
-  permissionsActionLabel(): string {
-    return this.transloco.translate('users.actions.managePermissions');
-  }
   //#else
   rolesActionLabel(): string {
     return 'Assign roles';
   }
 
-  permissionsActionLabel(): string {
-    return 'Permission exceptions';
-  }
   //#endif
   //#endif
-
   //#if (IncludeRoles)
   getVisibleRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(0, 2);
@@ -466,8 +450,8 @@ export class UserTable {
   isSelfSuperAdmin(user: UserManagementOutputDto): boolean {
     return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
   }
-
   //#if (IncludeRoles)
+
   /**
    * 角色徽章样式。
    *

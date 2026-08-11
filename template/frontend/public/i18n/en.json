@@ -140,7 +140,9 @@
       "usersTitle": "User Management",
       "usersDesc": "Full CRUD operations with permission control",
       "themeTitle": "Theme System",
-      "themeDesc": "Dark mode + Tailwind CSS + Spartan UI"
+      "themeDesc": "Dark mode + Tailwind CSS + Spartan UI",
+      "authDescWithoutRoles": "Cookie-based authentication",
+      "usersDescWithoutRoles": "Full CRUD operations"
     }
   },
   "theme": {
@@ -272,8 +274,7 @@
     },
     "actions": {
       "newUser": "New user",
-      "manageRoles": "Assign roles",
-      "managePermissions": "Permission exceptions"
+      "manageRoles": "Assign roles"
     },
     "status": {
       "active": "Active",
@@ -353,7 +354,8 @@
       "activeTitle": "Enable user",
       "activeHint": "When disabled, the user cannot sign in or call protected endpoints",
       "emailVerifiedTitle": "Email verified",
-      "emailVerifiedHint": "Used to manage the email verification status"
+      "emailVerifiedHint": "Used to manage the email verification status",
+      "descriptionWithoutRoles": "Manage the account profile and status."
     },
     "resetDialog": {
       "header": "Reset user password",
@@ -551,23 +553,11 @@
   "permissions": {
     "dialogTitle": "Permissions · {{name}}",
     "searchPlaceholder": "Search permissions",
-    "allowAll": "Allow all",
-    "resetAll": "Reset",
-    "stateInherit": "Inherit",
-    "stateGranted": "Allow",
-    "stateProhibited": "Deny",
-    "grantedCount": "{{count}} allowed",
-    "prohibitedCount": "{{count}} denied",
+    "grantedCount": "{{count}} granted",
     "groupSummary": "{{granted}}/{{total}}",
     "saved": "Permissions saved",
     "conflict": "Someone else changed these permissions. The latest values have been reloaded.",
-    "descriptionForRole": "Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.",
-    "descriptionForUser": "Inherit follows the roles assigned to this user. Deny always wins over any grant, including grants inherited from roles.",
-    "inheritedGranted": "Allowed by role",
-    "inheritedProhibited": "Denied by role",
-    "effectiveGranted": "Effective: allowed",
-    "effectiveProhibited": "Effective: denied",
-    "prohibitedByAncestor": "Denied by a parent permission",
-    "pendingChanges": "Effective results refresh after saving"
+    "description": "Check a permission to grant it. The top-level entry of each block is its read access; granting an action grants that read access too — creating users requires viewing the user list. To take an ability away from someone, change their roles.",
+    "viewAccessHint": "view list"
   }
 }

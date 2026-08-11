@@ -119,9 +119,22 @@ public class RoleAppService(
         return await MapToOutputAsync(role, cancellationToken);
     }
 
+    /// <remarks>
+    /// 幂等：角色已不存在时也继续按 provider key 清理授权并返回成功。
+    /// 删角色与清授权是两次提交，第二步失败会留下孤儿授予行；若此时还对重试报 404，
+    /// "重试即可收敛"就没有任何入口，孤儿只能永久留着。
+    /// </remarks>
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var role = await GetRoleOrThrowAsync(id, cancellationToken);
+        var role = await roleRepository.GetByIdAsync(id, cancellationToken);
+        if (role == null)
+        {
+            await permissionGrantManager.RemoveProviderAsync(
+                PermissionGrantProviderNames.Role,
+                id.ToString(),
+                cancellationToken);
+            return;
+        }
 
         if (role.IsStatic)
         {
@@ -146,14 +159,23 @@ public class RoleAppService(
                 ;
         }
 
-        // 角色被删除后其授予记录不再有主体，一并清理，避免留下无法被界面看到的孤儿授予。
-        await permissionGrantManager.ReplaceGrantsAsync(
+        // 先删角色，再清理授权——两者无法做成一个事务：授权管理器持有的是外层请求的
+        // DbContext，而工作单元会另开一个 DI scope 和另一个 DbContext，罩上去也只是两次独立提交。
+        // 为此让通用授权组件反过来依赖工作单元组件，代价远大于收益。
+        //
+        // 于是选一个无害的失败形态：第二步失败时留下的是"角色已删、授予行残留"，
+        // 而角色 Id 是 Guid v7 永不重用，这些行无人可及；RemoveProviderAsync 幂等，重试或周期清理即可。
+        // 反过来先清权限，失败时会留下"角色还在、权限已清空"——一个看着能用、实际什么都不能做的角色。
+        await roleRepository.DeleteAsync(role, cancellationToken);
+
+        // 角色被永久删除，授予与授权版本一并清理。
+        // 不能用"替换为空集合"：那是撤销语义，会保留并递增版本（给"还有人在编辑"用），
+        // 主体都没了还留着版本行只会变成永久孤儿。
+        await permissionGrantManager.RemoveProviderAsync(
             PermissionGrantProviderNames.Role,
             id.ToString(),
-            [],
-            cancellationToken: cancellationToken);
+            cancellationToken);
 
-        await roleRepository.DeleteAsync(role, cancellationToken);
         logger.LogInformation("删除角色成功 {Name} (ID: {Id})", role.Name, role.Id);
     }
 
@@ -217,7 +239,7 @@ public class RoleAppService(
 
         var permissionCounts = grantSets.ToDictionary(
             set => Guid.Parse(set.ProviderKey),
-            set => set.Grants.Count);
+            set => set.PermissionNames.Count);
 
         return new Dictionary<string, object>
         {

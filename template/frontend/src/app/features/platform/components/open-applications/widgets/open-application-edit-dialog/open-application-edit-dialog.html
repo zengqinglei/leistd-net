@@ -42,6 +42,7 @@
               <hlm-select
                 class="w-full"
                 [value]="selectedTemplate()"
+                [itemToString]="templateToLabel"
                 (valueChange)="applyTemplate($event)"
               >
                 <hlm-select-trigger buttonId="application-template" class="w-full">
@@ -113,6 +114,7 @@
                 <hlm-select
                   class="w-full"
                   [value]="formModel().applicationType"
+                  [itemToString]="applicationTypeToLabel"
                   (valueChange)="onApplicationTypeChange($event)"
                 >
                   <hlm-select-trigger buttonId="application-type" class="w-full">
@@ -142,6 +144,7 @@
                 <hlm-select
                   class="w-full"
                   [value]="formModel().clientType"
+                  [itemToString]="clientTypeToLabel"
                   (valueChange)="onClientTypeSelect($event)"
                 >
                   <hlm-select-trigger buttonId="application-client-type" class="w-full">
@@ -171,6 +174,7 @@
                 <hlm-select
                   class="w-full"
                   [value]="formModel().consentType"
+                  [itemToString]="consentTypeToLabel"
                   (valueChange)="onConsentTypeChange($event)"
                 >
                   <hlm-select-trigger buttonId="application-consent-type" class="w-full">
@@ -326,7 +330,7 @@
                   <hlm-select-placeholder>{{ requirementsPlaceholder() }}</hlm-select-placeholder>
                   <ng-template hlmSelectValues let-values>
                     <hlm-select-values-content>
-                      {{ values[0] }}
+                      {{ getRequirementLabel(values[0]) }}
                       @if (values.length > 1) {
                         (+{{ values.length - 1 }})
                       }

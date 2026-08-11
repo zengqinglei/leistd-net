@@ -43,29 +43,46 @@ public sealed class RedisDistributedLock(IConnectionMultiplexer connectionMultip
         return null;
     }
 
-    public async Task UnlockAsync(string key, CancellationToken cancellationToken = default)
-    {
-        // 显式解锁不持有 token，直接删除（用于异常兜底场景）
-        var db = connectionMultiplexer.GetDatabase();
-        await db.KeyDeleteAsync(key);
-        logger.LogDebug("解锁【{Key}】", key);
-    }
-
     private async Task<ILockHandle?> TryAcquireAsync(string key, CancellationToken cancellationToken)
     {
         var token = Guid.NewGuid().ToString("N");
-        var db = connectionMultiplexer.GetDatabase();
 
-        // 使用 LockTake API（内部封装 SET NX + 过期时间）
-        var acquired = await db.LockTakeAsync(key, token, DefaultLockExpiry);
+        var acquired = await TakeAsync(key, token, DefaultLockExpiry);
         if (!acquired)
             return null;
 
         logger.LogDebug("加锁【{Key}】成功", key);
-        return new RedisLockHandle(key, token, this);
+        return new RedisLockHandle(
+            key,
+            DefaultLockExpiry,
+            expiry => ExtendAsync(key, token, expiry),
+            () => ReleaseAsync(key, token),
+            logger);
     }
 
-    internal async Task ReleaseAsync(string key, string token)
+    /// <summary>
+    /// 抢锁：SET NX + 过期时间。
+    /// </summary>
+    private async Task<bool> TakeAsync(string key, string token, TimeSpan expiry)
+    {
+        var db = connectionMultiplexer.GetDatabase();
+        return await db.LockTakeAsync(key, token, expiry);
+    }
+
+    /// <summary>
+    /// 续期：仅当 key 仍持有本次的 token 时才延长过期时间。
+    /// </summary>
+    /// <remarks>
+    /// 必须校验 token：不校验就会在锁已经过期、被他人重新获取之后，把别人的锁续上，
+    /// 那比不续期更糟——两个持有者都会认为自己独占。
+    /// </remarks>
+    private async Task<bool> ExtendAsync(string key, string token, TimeSpan expiry)
+    {
+        var db = connectionMultiplexer.GetDatabase();
+        return await db.LockExtendAsync(key, token, expiry);
+    }
+
+    private async Task ReleaseAsync(string key, string token)
     {
         var db = connectionMultiplexer.GetDatabase();
 

@@ -43,9 +43,15 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         });
     }
 
-    public HttpClient CreateProjectClient()
+    public HttpClient CreateProjectClient() => CreateProjectClient(this);
+
+    /// <summary>
+    /// 供 <see cref="WebApplicationFactory{T}.WithWebHostBuilder"/> 派生出的宿主复用。
+    /// 那个方法返回的是基类类型，拿不到本类的实例成员。
+    /// </summary>
+    public static HttpClient CreateProjectClient(WebApplicationFactory<Program> host)
     {
-        return CreateClient(new WebApplicationFactoryClientOptions
+        return host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
             HandleCookies = false
@@ -53,12 +59,19 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     }
 
 #if (IncludeIdentity)
-    public async Task<AuthenticatedSession> LoginAsync(
+    public Task<AuthenticatedSession> LoginAsync(
+        string username,
+        string password,
+        CancellationToken cancellationToken = default)
+        => LoginAsync(this, username, password, cancellationToken);
+
+    public static async Task<AuthenticatedSession> LoginAsync(
+        WebApplicationFactory<Program> host,
         string username,
         string password,
         CancellationToken cancellationToken = default)
     {
-        var client = CreateProjectClient();
+        var client = CreateProjectClient(host);
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/session-login",
             new { UsernameOrEmail = username, Password = password },

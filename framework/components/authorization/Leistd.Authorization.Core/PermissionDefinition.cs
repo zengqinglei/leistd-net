@@ -112,11 +112,21 @@ internal sealed class PermissionGroupDefinition : IPermissionGroupDefinition
 /// </summary>
 internal sealed class PermissionDefinitionRegistry
 {
+
     private readonly Dictionary<string, PermissionDefinition> _permissions = new(StringComparer.Ordinal);
 
     public void Register(PermissionDefinition permission)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(permission.Name, nameof(permission));
+
+        // '|' 是"任一满足"策略名的分隔符：名字里带它的权限会在解析时被拆开，
+        // 每一段都找不到定义，最终以"策略不存在"的形式失败，排查成本很高。
+        if (permission.Name.Contains(PermissionPolicyNames.AnyOfSeparator, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"权限 '{permission.Name}' 含保留字符 '{PermissionPolicyNames.AnyOfSeparator}'，"
+                + "该字符用于分隔「任一满足」策略中的多个权限名。");
+        }
 
         if (!_permissions.TryAdd(permission.Name, permission))
             throw new InvalidOperationException($"权限 '{permission.Name}' 已存在，权限名称必须全局唯一。");

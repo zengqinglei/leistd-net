@@ -15,18 +15,19 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown, lucideChevronRight, lucideSearch } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
+import { HlmAccordionImports } from '@spartan-ng/helm/accordion';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import {
   HlmInputGroup,
   HlmInputGroupAddon,
   HlmInputGroupInput,
 } from '@spartan-ng/helm/input-group';
-import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { combineLatest, EMPTY, of } from 'rxjs';
-import { catchError, filter, finalize, switchMap, tap } from 'rxjs/operators';
+import { combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
+import { catchError, filter, finalize, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
@@ -35,23 +36,17 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 import {
   PermissionDefinitionGroupOutputDto,
   PermissionDefinitionOutputDto,
-  PermissionGrantEffect,
-  PermissionGrantInputDto,
   PermissionGrantsOutputDto,
-  PermissionGrantState,
-  ReplacePermissionGrantsInputDto,
 } from '../../../../shared/models/permission';
 import { PermissionManagementService } from '../../services/permission-management-service';
 
-/** 授予主体类型。与后端 `PermissionGrantProviderNames` 一致。 */
-export type PermissionGrantProvider = 'Role' | 'User';
-
-/** 权限树展平后的一行，depth 用于缩进渲染。 */
+/** 组内的一行权限；depth 0 是资源本身，更深的是可在其上执行的动作。 */
 interface PermissionRow {
   name: string;
   displayName: string;
   depth: number;
-  parentName?: string;
+  /** 顶层且带动作的行才需要标注"勾上等于能查看"——无下级的行不存在这层歧义。 */
+  hasChildren: boolean;
 }
 
 interface PermissionGroupView {
@@ -60,22 +55,20 @@ interface PermissionGroupView {
   rows: PermissionRow[];
 }
 
-/** 渲染用分组：带过滤后的行与本组授予统计。 */
+/** 渲染用分组：带过滤后的行与本组已授予数。 */
 interface PermissionGroupRender extends PermissionGroupView {
   grantedCount: number;
-  prohibitedCount: number;
 }
 
 /**
- * 权限授予编辑器，角色与用户共用。
+ * 角色权限编辑器。
  *
- * 三态：继承（未设置）/ 允许 / 拒绝。拒绝优先于任何来源的允许。
- * 选中子权限时自动补齐父级、把父级设为拒绝时清理其子孙——这与后端写入时的归一化一致，
- * 这里只是即时反馈，最终仍以后端归一化结果为准。
- * 保存一次请求完成，并携带版本号；版本冲突时提示重新加载而不是覆盖对方的修改。
+ * 授予是纯加法：勾选即授予，取消即不授予，没有"拒绝"。要收回某人的能力应当调整他的角色构成，
+ * 而不是在权限位上做减法——减法会让有效权限不可组合，排查"他为什么没权限"时必须遍历全部来源。
  *
- * 用户主体额外呈现「继承自角色」一列：用户的三态编辑的是**例外**，
- * 不显示继承来源就无法判断某一项该设成拒绝还是留在继承。
+ * 三层展示与后端定义一一对应：分组是模块，depth 0 是资源（勾上即"能看到这份列表"），
+ * 更深的是可在其上执行的动作。动作以资源为前置，因此勾动作会补齐资源、
+ * 取消资源会连带取消其动作；这与后端写入时的归一化一致，此处只是即时反馈。
  */
 @Component({
   selector: 'app-permission-grant-dialog',
@@ -84,11 +77,12 @@ interface PermissionGroupRender extends PermissionGroupView {
     HlmBadge,
     HlmButton,
     HlmSpinner,
+    ...HlmAccordionImports,
     HlmInputGroup,
     HlmInputGroupAddon,
     HlmInputGroupInput,
+    ...HlmCheckboxImports,
     ...HlmDialogImports,
-    ...HlmRadioGroupImports,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
@@ -99,10 +93,9 @@ interface PermissionGroupRender extends PermissionGroupView {
 })
 export class PermissionGrantDialog {
   readonly open = model(false);
-  readonly providerName = input<PermissionGrantProvider>('Role');
-  readonly providerKey = input<string | null>(null);
-  /** 主体展示名，仅用于标题。 */
-  readonly subjectName = input('');
+  readonly roleId = input<string | null>(null);
+  /** 角色展示名，仅用于标题。 */
+  readonly roleName = input('');
   readonly saved = output<void>();
 
   private readonly permissionService = inject(PermissionManagementService);
@@ -116,62 +109,42 @@ export class PermissionGrantDialog {
   readonly groups = signal<PermissionGroupView[]>([]);
   readonly revision = signal(0);
 
-  /** 权限名 -> 三态选择值（该主体的直接授予）。 */
-  private readonly states = signal<Record<string, PermissionGrantState>>({});
-
-  /** 权限名 -> 继承而来的效果。角色主体没有上游来源，恒为空。 */
-  private readonly inheritedEffects = signal<Record<string, PermissionGrantEffect>>({});
+  /** 已授予的权限名。 */
+  private readonly granted = signal<ReadonlySet<string>>(new Set<string>());
 
   /**
-   * 权限名 -> 后端算出的最终生效结果（拒绝优先 + 拒绝沿定义树向下传播）。
+   * 当前界面状态属于哪个角色；未成功加载时为 null。
    *
-   * 不在前端重算：直授与继承两列的组合规则里，「被祖先拒绝」这一项无法从本行的两个值推出，
-   * 界面若自行推断就会与执行层给出不同答案。
+   * 只清空状态还不够：加载失败时界面会停在"空但可编辑"，用户仍能点保存并写出一份空授予。
+   * 因此显式记录归属，保存前要求它与当前角色一致。
    */
-  private readonly effectiveResults = signal<Record<string, boolean>>({});
+  private readonly loadedRoleId = signal<string | null>(null);
 
-  /** 加载时的直授快照，用于判断是否存在尚未保存的改动。 */
-  private readonly loadedStates = signal<Record<string, PermissionGrantState>>({});
-
-  /**
-   * 是否有未保存的改动。
-   *
-   * 有改动时不展示「实际生效」——那是服务端基于已保存数据算出来的，
-   * 编辑过程中展示它会误导；而在前端就地重算又会与执行层分叉。
-   */
-  readonly hasPendingChanges = computed(() => {
-    const current = this.states();
-    const loaded = this.loadedStates();
-    const names = new Set([...Object.keys(current), ...Object.keys(loaded)]);
-    return [...names].some((name) => (current[name] ?? 'Inherit') !== (loaded[name] ?? 'Inherit'));
+  /** 加载成功且归属与当前角色一致时才允许保存。 */
+  readonly canSave = computed(() => {
+    const loaded = this.loadedRoleId();
+    return loaded !== null && loaded === this.roleId();
   });
 
   /** 父子关系缓存，用于自动补齐祖先与清理子孙。 */
   private ancestors: Record<string, string[]> = {};
   private descendants: Record<string, string[]> = {};
 
-  /** 权限搜索关键字：权限多起来后没有搜索就只能靠肉眼扫，这里按显示名与权限名同时匹配。 */
+  /** 权限搜索关键字：权限多起来后没有搜索就只能靠肉眼扫，按显示名与权限名同时匹配。 */
   readonly keyword = signal('');
 
-  /** 只有用户主体有上游来源，角色主体不渲染继承列。 */
-  readonly showsInherited = computed(() => this.providerName() === 'User');
-
-  readonly grantedCount = computed(
-    () => Object.values(this.states()).filter((state) => state === 'Granted').length,
-  );
-  readonly prohibitedCount = computed(
-    () => Object.values(this.states()).filter((state) => state === 'Prohibited').length,
-  );
+  readonly grantedCount = computed(() => this.granted().size);
 
   /**
    * 过滤并统计后的分组。
    *
-   * 只有一个组时不再套一层手风琴——那一层在单组场景下纯属多点一次；
-   * 多组时才折叠，并在组标题上显示本组的授予数，便于在几十上百个权限里快速定位。
+   * 分组一律折叠展示，并在组标题上显示本组的授予数（按**过滤后**的行统计），
+   * 便于在几十上百个权限里快速定位。搜索把某个组过滤成一行时也不特殊处理——
+   * 为此加一条"单组直接平铺"的分支，是给一个实际不出现的情形增加代码路径。
    */
   readonly visibleGroups = computed<PermissionGroupRender[]>(() => {
     const keyword = this.keyword().trim().toLowerCase();
-    const states = this.states();
+    const granted = this.granted();
 
     return this.groups()
       .map((group) => {
@@ -186,15 +159,12 @@ export class PermissionGrantDialog {
         return {
           ...group,
           rows,
-          grantedCount: group.rows.filter((row) => states[row.name] === 'Granted').length,
-          prohibitedCount: group.rows.filter((row) => states[row.name] === 'Prohibited').length,
+          // 按过滤后的行统计：搜索时若仍按完整分组计数，徽标会出现 5/1 这种读不通的组合。
+          grantedCount: rows.filter((row) => granted.has(row.name)).length,
         };
       })
       .filter((group) => group.rows.length > 0);
   });
-
-  /** 单组时不折叠：避免为唯一的分区多加一次点击。 */
-  readonly collapsible = computed(() => this.groups().length > 1);
 
   readonly hasNoMatch = computed(
     () => this.keyword().trim() !== '' && this.visibleGroups().length === 0,
@@ -204,165 +174,139 @@ export class PermissionGrantDialog {
     this.keyword.set(value);
   }
 
-  /** 折叠状态：默认全展开；搜索时强制展开，否则命中项会被折叠层藏住。 */
-  private readonly collapsedGroups = signal<ReadonlySet<string>>(new Set<string>());
+  /**
+   * 展开的分组。
+   *
+   * 只在加载完成时给一次初值，之后归用户掌握：若把它算成"本组已有授予"，
+   * 取消最后一项授予就会让整个组自己折叠起来——用户只是想改一个勾。
+   */
+  private readonly expandedGroups = signal<ReadonlySet<string>>(new Set<string>());
 
   isExpanded(groupName: string): boolean {
-    return (
-      !this.collapsible() || this.keyword().trim() !== '' || !this.collapsedGroups().has(groupName)
-    );
+    // 搜索时一律展开：命中项藏在折叠的组里等于没搜到。
+    return this.keyword().trim() !== '' || this.expandedGroups().has(groupName);
   }
 
-  toggleGroup(groupName: string): void {
-    if (!this.collapsible()) {
-      return;
-    }
+  /**
+   * 把用户手动的展开/折叠写回来。
+   *
+   * 不回写的话这个信号只反映初值：用户手动折叠某组后再搜索，isExpanded() 本来就是 true、
+   * 输入值没有变化，手风琴不会重新打开它已经关掉的组，命中项就一直藏着。
+   */
+  onGroupOpenedChange(groupName: string, opened: boolean): void {
+    const next = new Set(this.expandedGroups());
 
-    const next = new Set(this.collapsedGroups());
-    if (next.has(groupName)) {
-      next.delete(groupName);
-    } else {
+    if (opened) {
       next.add(groupName);
+    } else {
+      next.delete(groupName);
     }
-    this.collapsedGroups.set(next);
+
+    this.expandedGroups.set(next);
   }
 
-  /** 整组置为允许：逐条走同一条归一化逻辑，父子规则不会被批量操作绕过。 */
-  allowGroup(group: PermissionGroupRender): void {
-    for (const row of group.rows) {
-      this.onStateChange(row.name, 'Granted');
-    }
-  }
-
-  /** 整组重置为继承。 */
-  resetGroup(group: PermissionGroupRender): void {
-    for (const row of [...group.rows].reverse()) {
-      this.onStateChange(row.name, 'Inherit');
-    }
-  }
+  /** 409 后要求重新加载；与角色变化共用同一条请求流，不另起订阅。 */
+  private readonly reloadRequests = new Subject<void>();
 
   constructor() {
-    // 单一请求流：主体切换时用 switchMap 取消上一次加载，组件销毁时随之退订。
-    // 嵌套 subscribe 既不取消也不校验归属，快速切换主体时晚到的响应会落到新主体上，
-    // 保存时就可能把 A 的授予写给 B——两边版本都是 0 时乐观并发也拦不住。
-    combineLatest([toObservable(this.open), toObservable(this.providerKey)])
+    // 单一请求流：角色切换时用 switchMap 取消上一次加载，组件销毁时随之退订。
+    // 嵌套 subscribe 既不取消也不校验归属，快速切换角色时晚到的响应会落到新角色上。
+    combineLatest([
+      toObservable(this.open),
+      toObservable(this.roleId),
+      this.reloadRequests.pipe(startWith(undefined)),
+    ])
       .pipe(
-        filter(([open, providerKey]) => open && !!providerKey),
-        tap(() => this.loading.set(true)),
-        switchMap(([, providerKey]) => this.loadFor(providerKey as string)),
+        filter(([open, roleId]) => open && !!roleId),
+        // 先清空再加载：加载失败或响应归属不符时，界面必须停在"无角色"，
+        // 而不是留着上一个角色的状态与版本被误保存。
+        tap(() => this.resetState()),
+        switchMap(([, roleId]) => this.loadFor(roleId as string)),
         takeUntilDestroyed(),
       )
       .subscribe();
   }
 
-  stateOf(name: string): PermissionGrantState {
-    return this.states()[name] ?? 'Inherit';
+  /** 清空编辑状态并解除归属，使保存在重新加载成功前不可用。 */
+  private resetState(): void {
+    this.loadedRoleId.set(null);
+    this.granted.set(new Set<string>());
+    this.expandedGroups.set(new Set<string>());
+    this.revision.set(0);
   }
 
-  /** 该权限从角色继承到的效果；没有继承来源时返回 null。 */
-  inheritedOf(name: string): PermissionGrantEffect | null {
-    return this.inheritedEffects()[name] ?? null;
-  }
-
-  /** 后端算出的最终生效结果；存在未保存改动时返回 null，不展示过期结论。 */
-  effectiveOf(name: string): boolean | null {
-    if (this.hasPendingChanges()) {
-      return null;
-    }
-
-    return this.effectiveResults()[name] ?? null;
+  isGranted(name: string): boolean {
+    return this.granted().has(name);
   }
 
   /**
-   * 该行的直授与继承都没有明确允许，最终却是拒绝——说明拒绝来自被拒绝的祖先。
-   * 单看本行的两列解释不了这个结果，因此单独提示来源。
+   * 勾选：补齐全部祖先；取消：连带取消全部子孙。
+   *
+   * 与后端写入时的归一化一致——父权限是子权限的前置条件，
+   * 允许"子有父无"会产生一条运行时永远不成立的授予。
    */
-  isProhibitedByAncestor(name: string): boolean {
-    return (
-      this.effectiveOf(name) === false &&
-      this.stateOf(name) !== 'Prohibited' &&
-      this.inheritedOf(name) !== 'Prohibited' &&
-      (this.stateOf(name) === 'Granted' || this.inheritedOf(name) === 'Granted')
-    );
-  }
+  onCheckedChange(name: string, checked: boolean): void {
+    const next = new Set(this.granted());
 
-  onStateChange(name: string, next: PermissionGrantState): void {
-    const states = { ...this.states() };
-    states[name] = next;
-
-    if (next === 'Granted') {
-      // 允许向上补齐：父权限是子权限的前置条件。
+    if (checked) {
+      next.add(name);
       for (const ancestor of this.ancestors[name] ?? []) {
-        if (states[ancestor] !== 'Prohibited') {
-          states[ancestor] = 'Granted';
-        }
-      }
-    } else if (next === 'Prohibited') {
-      // 拒绝向下传播：子孙回落为继承，运行时同样被拒绝。
-      for (const descendant of this.descendants[name] ?? []) {
-        states[descendant] = 'Inherit';
+        next.add(ancestor);
       }
     } else {
-      // 取消父级时清理其子孙，避免出现"子有父无"的悬空授予。
+      next.delete(name);
       for (const descendant of this.descendants[name] ?? []) {
-        states[descendant] = 'Inherit';
+        next.delete(descendant);
       }
     }
 
-    this.states.set(states);
+    this.granted.set(next);
   }
 
   onSave(): void {
-    const providerKey = this.providerKey();
-    if (!providerKey) {
+    const roleId = this.roleId();
+    // 未成功加载当前角色就保存，等于把界面上的残留内容写给它。
+    if (!roleId || !this.canSave()) {
       return;
     }
 
-    const grants: PermissionGrantInputDto[] = Object.entries(this.states())
-      .filter(([, state]) => state !== 'Inherit')
-      .map(([name, state]) => ({ name, effect: state as PermissionGrantInputDto['effect'] }));
-
     this.saving.set(true);
-    this.replaceGrants(providerKey, { expectedRevision: this.revision(), grants }).subscribe({
-      next: () => {
-        this.saving.set(false);
-        toast.success(this.savedMessage());
-        this.saved.emit();
-      },
-      error: (error) => {
-        this.saving.set(false);
-        // 409 说明另一位管理员抢先保存：提示重新加载，不静默覆盖。
-        if (error?.status === 409) {
-          toast.error(this.conflictMessage());
-          this.loadFor(providerKey);
-          return;
-        }
-        toast.error(applicationErrorMessage(error));
-      },
-    });
+    this.permissionService
+      .replaceRoleGrants(roleId, {
+        expectedRevision: this.revision(),
+        permissionNames: [...this.granted()],
+      })
+      .subscribe({
+        next: () => {
+          this.saving.set(false);
+          toast.success(this.savedMessage());
+          this.saved.emit();
+        },
+        error: (error) => {
+          this.saving.set(false);
+          // 409 说明另一位管理员抢先保存：重新加载，不静默覆盖。
+          if (error?.status === 409) {
+            toast.error(this.conflictMessage());
+            this.reloadRequests.next();
+            return;
+          }
+          toast.error(applicationErrorMessage(error));
+        },
+      });
   }
 
-  private replaceGrants(providerKey: string, data: ReplacePermissionGrantsInputDto) {
-    return this.providerName() === 'User'
-      ? this.permissionService.replaceUserGrants(providerKey, data)
-      : this.permissionService.replaceRoleGrants(providerKey, data);
-  }
-
-  private loadFor(providerKey: string) {
-    const providerName = this.providerName();
-
-    return this.permissionService.getDefinitions().pipe(
+  private loadFor(roleId: string) {
+    // loading 必须在新一轮订阅时才置位：若在 switchMap 之前置位，switchMap 会紧接着退订上一轮，
+    // 上一轮的 finalize 把 loading 打回 false，界面就在本轮还在飞的时候显示成"加载完了"。
+    return defer(() => {
+      this.loading.set(true);
+      return this.permissionService.getDefinitions();
+    }).pipe(
       tap((definitionGroups) => this.buildTree(definitionGroups)),
-      switchMap(() =>
-        providerName === 'User'
-          ? this.permissionService.getUserGrants(providerKey)
-          : this.permissionService.getRoleGrants(providerKey),
-      ),
-      // 再核对一次归属：switchMap 已经取消了上一次订阅，这里防的是「响应内容与请求主体不符」，
-      // 例如服务端或 Mock 返回了另一个主体的数据。宁可不渲染，也不把别人的授予当成本主体的。
-      filter(
-        (grants) => grants.providerName === providerName && grants.providerKey === providerKey,
-      ),
+      switchMap(() => this.permissionService.getRoleGrants(roleId)),
+      // 再核对一次归属：switchMap 已经取消了上一次订阅，这里防的是「响应内容与请求角色不符」。
+      // 宁可不渲染，也不把别人的授予当成本角色的。
+      filter((grants) => grants.providerKey === roleId),
       tap((grants) => this.applyGrants(grants)),
       catchError((error: unknown) => {
         toast.error(applicationErrorMessage(error));
@@ -376,22 +320,21 @@ export class PermissionGrantDialog {
 
   private applyGrants(grants: PermissionGrantsOutputDto): void {
     this.revision.set(grants.revision);
+    this.loadedRoleId.set(grants.providerKey);
 
-    const states: Record<string, PermissionGrantState> = {};
-    const inherited: Record<string, PermissionGrantEffect> = {};
-    const effective: Record<string, boolean> = {};
-    for (const grant of grants.grants) {
-      states[grant.name] = grant.direct ?? 'Inherit';
-      if (grant.inherited) {
-        inherited[grant.name] = grant.inherited;
-      }
-      effective[grant.name] = grant.effective;
-    }
+    const granted = new Set(
+      grants.grants.filter((grant) => grant.granted).map((grant) => grant.name),
+    );
+    this.granted.set(granted);
 
-    this.states.set(states);
-    this.loadedStates.set({ ...states });
-    this.inheritedEffects.set(inherited);
-    this.effectiveResults.set(effective);
+    // 默认展开已有授予的模块，免得一进来全是折叠的空壳；此后展开与否由用户决定。
+    this.expandedGroups.set(
+      new Set(
+        this.groups()
+          .filter((group) => group.rows.some((row) => granted.has(row.name)))
+          .map((group) => group.name),
+      ),
+    );
   }
 
   private buildTree(definitionGroups: PermissionDefinitionGroupOutputDto[]): void {
@@ -409,6 +352,7 @@ export class PermissionGrantDialog {
     this.groups.set(groups);
   }
 
+  /** 展平成带 depth 的行，同时留下前置关系表供勾选联动使用。 */
   private flatten(
     definition: PermissionDefinitionOutputDto,
     depth: number,
@@ -419,7 +363,7 @@ export class PermissionGrantDialog {
       name: definition.name,
       displayName: definition.displayName,
       depth,
-      parentName: definition.parentName,
+      hasChildren: definition.children.length > 0,
     });
 
     this.ancestors[definition.name] = [...ancestorChain];
@@ -436,64 +380,31 @@ export class PermissionGrantDialog {
   //#if (IncludeLocalization)
   readonly title = computed(() => {
     this.translationReady();
-    return this.transloco.translate('permissions.dialogTitle', { name: this.subjectName() });
+    return this.transloco.translate('permissions.dialogTitle', { name: this.roleName() });
   });
-  readonly description = () =>
-    this.transloco.translate(
-      this.showsInherited() ? 'permissions.descriptionForUser' : 'permissions.descriptionForRole',
-    );
+  readonly description = () => this.transloco.translate('permissions.description');
   readonly searchPlaceholder = () => this.transloco.translate('permissions.searchPlaceholder');
   readonly noMatchLabel = () => this.transloco.translate('common.noResults');
-  readonly allowAllLabel = () => this.transloco.translate('permissions.allowAll');
-  readonly resetAllLabel = () => this.transloco.translate('permissions.resetAll');
-  readonly stateInheritLabel = () => this.transloco.translate('permissions.stateInherit');
-  readonly stateGrantedLabel = () => this.transloco.translate('permissions.stateGranted');
-  readonly stateProhibitedLabel = () => this.transloco.translate('permissions.stateProhibited');
   readonly cancelLabel = () => this.transloco.translate('common.cancel');
   readonly saveLabel = () => this.transloco.translate('common.save');
   readonly grantedLabel = (count: number) =>
     this.transloco.translate('permissions.grantedCount', { count });
-  readonly prohibitedLabel = (count: number) =>
-    this.transloco.translate('permissions.prohibitedCount', { count });
   readonly groupSummary = (granted: number, total: number) =>
     this.transloco.translate('permissions.groupSummary', { granted, total });
-  readonly inheritedLabel = (effect: PermissionGrantEffect) =>
-    this.transloco.translate(
-      effect === 'Granted' ? 'permissions.inheritedGranted' : 'permissions.inheritedProhibited',
-    );
-  readonly effectiveLabel = (granted: boolean) =>
-    this.transloco.translate(
-      granted ? 'permissions.effectiveGranted' : 'permissions.effectiveProhibited',
-    );
-  readonly ancestorProhibitedLabel = () =>
-    this.transloco.translate('permissions.prohibitedByAncestor');
-  readonly pendingChangesLabel = () => this.transloco.translate('permissions.pendingChanges');
+  readonly viewAccessHint = () => this.transloco.translate('permissions.viewAccessHint');
   private savedMessage = () => this.transloco.translate('permissions.saved');
   private conflictMessage = () => this.transloco.translate('permissions.conflict');
   //#else
-  readonly title = computed(() => `Permissions · ${this.subjectName()}`);
+  readonly title = computed(() => `Permissions · ${this.roleName()}`);
   readonly description = () =>
-    this.showsInherited()
-      ? 'Inherit follows the roles assigned to this user. Deny always wins over any grant, including grants inherited from roles.'
-      : 'Inherit leaves the permission unset. Deny always wins over any grant, including grants that come from other sources.';
+    'Check a permission to grant it. The top-level entry of each block is its read access; granting an action grants that read access too — creating users requires viewing the user list. To take an ability away from someone, change their roles.';
   readonly searchPlaceholder = () => 'Search permissions';
   readonly noMatchLabel = () => 'No results';
-  readonly allowAllLabel = () => 'Allow all';
-  readonly resetAllLabel = () => 'Reset';
-  readonly stateInheritLabel = () => 'Inherit';
-  readonly stateGrantedLabel = () => 'Allow';
-  readonly stateProhibitedLabel = () => 'Deny';
   readonly cancelLabel = () => 'Cancel';
   readonly saveLabel = () => 'Save';
-  readonly grantedLabel = (count: number) => `${count} allowed`;
-  readonly prohibitedLabel = (count: number) => `${count} denied`;
+  readonly grantedLabel = (count: number) => `${count} granted`;
   readonly groupSummary = (granted: number, total: number) => `${granted}/${total}`;
-  readonly inheritedLabel = (effect: PermissionGrantEffect) =>
-    effect === 'Granted' ? 'Allowed by role' : 'Denied by role';
-  readonly effectiveLabel = (granted: boolean) =>
-    granted ? 'Effective: allowed' : 'Effective: denied';
-  readonly ancestorProhibitedLabel = () => 'Denied by a parent permission';
-  readonly pendingChangesLabel = () => 'Effective results refresh after saving';
+  readonly viewAccessHint = () => 'view list';
   private savedMessage = () => 'Permissions saved';
   private conflictMessage = () =>
     'Someone else changed these permissions. The latest values have been reloaded.';

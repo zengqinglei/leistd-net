@@ -19,7 +19,9 @@ export interface UserOutputDto {
   isActive: boolean;
   isSuperAdmin: boolean;
   creationTime: string;
+  //#if (IncludeRoles)
   roles: string[];
+  //#endif
 }
 
 /**

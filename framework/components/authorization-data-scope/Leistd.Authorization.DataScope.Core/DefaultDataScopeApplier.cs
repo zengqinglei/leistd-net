@@ -36,6 +36,12 @@ public class DefaultDataScopeApplier(
             operation,
             cancellationToken);
 
+        // 再按当前资源与操作过滤一遍：分配来源由业务项目实现，查询漏写条件时会返回别的资源
+        // 或别的操作的分配，直接采信就等于让"能看订单"顺带放开"能改客户"。
+        assignments = [.. assignments.Where(x =>
+            string.Equals(x.ResourceName, resourceName, StringComparison.Ordinal) &&
+            string.Equals(x.Operation, operation, StringComparison.Ordinal))];
+
         if (assignments.Count == 0)
             return query.Where(_ => false);
 
@@ -59,8 +65,10 @@ public class DefaultDataScopeApplier(
             var predicate = await provider.BuildPredicateAsync(context, cancellationToken);
             if (predicate == null)
             {
-                // 该范围不施加限制，整体即为无限制。
-                return query;
+                // 本范围不贡献可见性，跳过。刻意不解释为"全部可见"：Provider 少查一个条件、
+                // 拿不到上下文而返回 null 时，那种解释会让整张表当场全部放开。
+                // "全部可见"必须由 Provider 显式返回 _ => true。
+                continue;
             }
 
             combined = combined == null ? predicate : Or(combined, predicate);

@@ -63,6 +63,9 @@ public static class OrderPermissions
     public const string Update = "Orders.Update";
     public const string Export = "Orders.Export";
 
+    /// <summary>宿主会为它显式注册一个更严格的同名策略，用于验证策略优先级。</summary>
+    public const string Approve = "Orders.Approve";
+
     /// <summary>
     /// "任一满足"策略：导出报表既对导出人开放，也对编辑人开放。
     /// 用来验证多权限策略名真的接上了检查器。
@@ -78,6 +81,7 @@ public sealed class OrderPermissionDefinitionProvider : IPermissionDefinitionPro
         var orders = group.AddPermission(OrderPermissions.Default, "订单管理");
         orders.AddChild(OrderPermissions.Read, "查看订单");
         orders.AddChild(OrderPermissions.Update, "编辑订单");
+        orders.AddChild(OrderPermissions.Approve, "审批订单");
         orders.AddChild(OrderPermissions.Export, "导出订单");
     }
 }

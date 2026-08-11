@@ -13,7 +13,6 @@ export const PERMISSIONS = {
     update: 'App.Users.Update',
     delete: 'App.Users.Delete',
     manageRoles: 'App.Users.ManageRoles',
-    managePermissions: 'App.Users.ManagePermissions',
   },
   roles: {
     default: 'App.Roles',
@@ -44,12 +43,6 @@ export interface CurrentPermissionsOutputDto {
   revision: string;
 }
 
-/** 授予效果。未出现在授予集合中即为"继承 / 未设置"。 */
-export type PermissionGrantEffect = 'Granted' | 'Prohibited';
-
-/** 权限编辑器中单个权限的三态选择值。 */
-export type PermissionGrantState = 'Inherit' | PermissionGrantEffect;
-
 export interface PermissionDefinitionOutputDto {
   name: string;
   displayName: string;
@@ -63,14 +56,10 @@ export interface PermissionDefinitionGroupOutputDto {
   permissions: PermissionDefinitionOutputDto[];
 }
 
+/** 单个权限在某角色上的授予状态。授予是纯加法，只有已授予与未授予两种。 */
 export interface PermissionGrantStateDto {
   name: string;
-  /** 该主体自身的直接授予；未设置时为 null。 */
-  direct: PermissionGrantEffect | null;
-  /** 从角色继承而来的授予（仅用户主体有值）。 */
-  inherited: PermissionGrantEffect | null;
-  /** 综合直接授予与继承后的最终结果。 */
-  effective: boolean;
+  granted: boolean;
 }
 
 export interface PermissionGrantsOutputDto {
@@ -81,12 +70,8 @@ export interface PermissionGrantsOutputDto {
   grants: PermissionGrantStateDto[];
 }
 
-export interface PermissionGrantInputDto {
-  name: string;
-  effect: PermissionGrantEffect;
-}
-
 export interface ReplacePermissionGrantsInputDto {
   expectedRevision: number;
-  grants: PermissionGrantInputDto[];
+  /** 目标权限名集合，未出现的权限视为撤销。 */
+  permissionNames: string[];
 }

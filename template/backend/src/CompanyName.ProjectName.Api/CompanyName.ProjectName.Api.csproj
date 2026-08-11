@@ -40,7 +40,9 @@
     <PackageReference Include="Leistd.Localization.AspNetCore" />
 <!--#endif-->
     <PackageReference Include="Leistd.DependencyInjection.DynamicProxy" />
+<!--#if (IncludeRoles)-->
     <PackageReference Include="Leistd.Authorization.AspNetCore" />
+    <!--#endif-->
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />

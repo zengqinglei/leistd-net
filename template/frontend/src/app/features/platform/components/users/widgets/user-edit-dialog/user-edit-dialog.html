@@ -11,9 +11,17 @@
     <hlm-dialog-header>
       <h3 hlmDialogTitle>{{ dialogHeader() }}</h3>
       <!--#if (IncludeLocalization)-->
+      <!--#if (IncludeRoles)-->
       <p hlmDialogDescription>{{ 'users.editDialog.description' | transloco }}</p>
       <!--#else-->
+      <p hlmDialogDescription>{{ 'users.editDialog.descriptionWithoutRoles' | transloco }}</p>
+      <!--#endif-->
+      <!--#else-->
+      <!--#if (IncludeRoles)-->
       <p hlmDialogDescription>Manage the account profile, roles, and status.</p>
+      <!--#else-->
+      <p hlmDialogDescription>Manage the account profile and status.</p>
+      <!--#endif-->
       <!--#endif-->
     </hlm-dialog-header>
 
@@ -42,7 +50,6 @@
                 <!-- 无图占位：常驻居中上传图标即完整语义，不再叠加首字母。 -->
                 <span class="block h-full w-full bg-primary/10"></span>
               }
-
               <!--#if (IncludeLocalization)-->
               <input
                 type="file"
@@ -270,29 +277,35 @@
                 </hlm-select-multiple>
               </div>
             }
-            <!--#endif-->
 
-            <!-- Enable user -->
-            <div class="rounded-lg border border-border p-3">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <!--#if (IncludeLocalization)-->
-                  <div class="text-sm font-medium">
-                    {{ 'users.editDialog.activeTitle' | transloco }}
+            <!--#endif-->
+            <!-- Enable user：仅新建时设置初始状态。已存在账号的启用/禁用只有列表页那两个命令一个入口，
+                 保护规则（超级管理员不得禁用自己）也只写在那里；这里再放一个开关就是第二个入口。 -->
+            @if (!isEditMode()) {
+              <div class="rounded-lg border border-border p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <!--#if (IncludeLocalization)-->
+                    <div class="text-sm font-medium">
+                      {{ 'users.editDialog.activeTitle' | transloco }}
+                    </div>
+                    <div class="mt-1 text-xs text-muted-foreground">
+                      {{ 'users.editDialog.activeHint' | transloco }}
+                    </div>
+                    <!--#else-->
+                    <div class="text-sm font-medium">Enable user</div>
+                    <div class="mt-1 text-xs text-muted-foreground">
+                      When disabled, the user cannot sign in or call protected endpoints
+                    </div>
+                    <!--#endif-->
                   </div>
-                  <div class="mt-1 text-xs text-muted-foreground">
-                    {{ 'users.editDialog.activeHint' | transloco }}
-                  </div>
-                  <!--#else-->
-                  <div class="text-sm font-medium">Enable user</div>
-                  <div class="mt-1 text-xs text-muted-foreground">
-                    When disabled, the user cannot sign in or call protected endpoints
-                  </div>
-                  <!--#endif-->
+                  <hlm-switch
+                    [checked]="formModel().isActive"
+                    (checkedChange)="setActive($event)"
+                  />
                 </div>
-                <hlm-switch [checked]="formModel().isActive" (checkedChange)="setActive($event)" />
               </div>
-            </div>
+            }
 
             <!-- Email verified -->
             <div class="rounded-lg border border-border p-3">

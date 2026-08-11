@@ -31,6 +31,26 @@ public class OpenApplicationAppService(
         OpenIddictConstants.ClientTypes.Confidential
     };
 
+    /// <summary>
+    /// 本项目实际注册的 OIDC scope（见 <c>Program.cs</c> 的 <c>RegisterScopes</c>）。
+    /// </summary>
+    /// <remarks>
+    /// 只校验 <c>scp:</c> 前缀这一类：客户端可以请求一个服务端根本没注册的 scope，
+    /// 存得下但发令牌时必然被拒——写入时报错比留一个"配置得上、用不了"的客户端好排查。
+    /// 裁掉角色能力的项目里 <c>roles</c> 不存在，界面已不展示，接口也不该收。
+    /// 其余前缀（ept:/gt:/rst:/ft:）不在此校验：为它们维护一份完整词汇表的成本远大于收益。
+    /// </remarks>
+    private static readonly HashSet<string> RegisteredScopePermissions = new(StringComparer.Ordinal)
+    {
+        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
+        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Profile,
+        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Email,
+#if (IncludeRoles)
+        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Roles,
+#endif
+        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OfflineAccess
+    };
+
     private static readonly HashSet<string> ConsentTypes = new(StringComparer.Ordinal)
     {
         OpenIddictConstants.ConsentTypes.Explicit,
@@ -124,7 +144,7 @@ public class OpenApplicationAppService(
                 ;
         }
 
-        ValidateApplication(input.ApplicationType, input.ClientType, input.ConsentType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements);
+        ValidateApplication(input.ApplicationType, input.ClientType, input.ConsentType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements, input.Permissions);
 
         // Confidential 客户端：自动生成 Secret
         string? generatedSecret = null;
@@ -183,7 +203,7 @@ public class OpenApplicationAppService(
         UpdateOpenApplicationInputDto input,
         CancellationToken cancellationToken = default)
     {
-        ValidateApplication(input.ApplicationType, input.ClientType, input.ConsentType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements);
+        ValidateApplication(input.ApplicationType, input.ClientType, input.ConsentType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements, input.Permissions);
 
         var application = await FindRequiredAsync(id, cancellationToken);
         var descriptor = new OpenIddictApplicationDescriptor();
@@ -293,7 +313,8 @@ public class OpenApplicationAppService(
         string consentType,
         IReadOnlyCollection<string> redirectUris,
         IReadOnlyCollection<string> postLogoutRedirectUris,
-        IReadOnlyCollection<string> requirements)
+        IReadOnlyCollection<string> requirements,
+        IReadOnlyCollection<string> permissions)
     {
         if (!ApplicationTypes.Contains(applicationType))
         {
@@ -333,6 +354,20 @@ public class OpenApplicationAppService(
             throw new BadRequestException("PKCE must be enabled for native/public clients.")
 #if (IncludeLocalization)
                 .WithLocalization("OpenApp:PkceRequired")
+#endif
+                ;
+        }
+
+        foreach (var permission in permissions.Where(x =>
+                     x.StartsWith(OpenIddictConstants.Permissions.Prefixes.Scope, StringComparison.Ordinal)))
+        {
+            if (RegisteredScopePermissions.Contains(permission))
+                continue;
+
+            throw new BadRequestException($"Unsupported scope permission: {permission}")
+#if (IncludeLocalization)
+                .WithLocalization("OpenApp:ScopeUnsupported")
+                .WithData("Scope", permission)
 #endif
                 ;
         }

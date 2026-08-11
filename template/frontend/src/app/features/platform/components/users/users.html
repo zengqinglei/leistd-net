@@ -34,8 +34,8 @@
           [emptyLabel]="filterEmptyLabel()"
           (valueChange)="onEmailVerifiedChange($any($event))"
         />
-
         <!--#if (IncludeRoles)-->
+
         <app-faceted-filter
           multiple
           [label]="roleFilterLabel()"
@@ -68,8 +68,8 @@
         }
       </div>
     </div>
-
     <!--#if (IncludeRoles)-->
+
     <app-user-table
       [users]="users()"
       [totalCount]="totalRecords()"
@@ -86,11 +86,10 @@
       (resetPassword)="openResetPasswordDialog($event)"
       (delete)="handleDelete($event)"
       [canManageRoles]="canManageUserRoles()"
-      [canManagePermissions]="canManageUserPermissions()"
       (manageRoles)="openRolesDialog($event)"
-      (managePermissions)="openPermissionsDialog($event)"
     />
     <!--#else-->
+
     <app-user-table
       [users]="users()"
       [totalCount]="totalRecords()"
@@ -110,7 +109,6 @@
     <!--#endif-->
   </div>
 </div>
-
 <!--#if (IncludeRoles)-->
 <app-user-edit-dialog
   [(visible)]="editDialogVisible"
@@ -130,21 +128,12 @@
   (saved)="handleSave($event)"
 />
 <!--#endif-->
-
 <!--#if (IncludeRoles)-->
 <app-user-roles-dialog
   [(open)]="rolesDialogVisible"
   [user]="rolesDialogUser()"
   [availableRoles]="availableRoles()"
   (saved)="onRolesSaved()"
-/>
-
-<app-permission-grant-dialog
-  [(open)]="permissionsDialogVisible"
-  providerName="User"
-  [providerKey]="permissionsDialogUser()?.id ?? null"
-  [subjectName]="permissionsDialogUser()?.displayName || permissionsDialogUser()?.username || ''"
-  (saved)="onPermissionsSaved()"
 />
 <!--#endif-->
 

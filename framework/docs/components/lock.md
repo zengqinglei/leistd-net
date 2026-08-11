@@ -14,6 +14,19 @@ Leistd 通过统一的 `ILock` 抽象屏蔽底层实现，使业务代码无需�
 
 > ⚠️ 内存实现仅在**单进程内**有效，多实例部署时**不能**用它做分布式互斥（详见[注意事项](#注意事项)）。
 
+## 设计约定：入口统一，实现由部署决定
+
+**业务代码一律依赖 `IDistributedLock`，不因部署形态分支，也不为个别场景另起一套锁。**
+
+内存实现同时绑定 `IDistributedLock` 是刻意为之，不是疏忽：它让"要跨实例互斥"这个意图在代码里只有一种写法，
+把"这套部署到底几个副本"留给配置回答。因此：
+
+- **多副本部署必须配置 Redis**，这是部署侧的责任。没配 Redis 就跑多副本，等于声明了自己不需要跨实例互斥；
+- 单副本与集成测试用内存实现，这不是降级，而是那种部署形态下的正确答案；
+- **不要因为"内存实现不跨进程"就绕开这个入口**去自建互斥（数据库 advisory lock、状态表抢占、
+  另立一套锁抽象等）。那样做的结果是同一件事在系统里有两种表达方式，而部署方仍然要为多副本配 Redis——
+  复杂度增加了，问题一个没少。真正的缺口应当反馈到本组件，而不是在调用侧各自绕行。
+
 ## 安装
 
 ```bash
@@ -67,7 +80,7 @@ public class OrderService(IDistributedLock distributedLock)
 }
 ```
 
-`ILockHandle` 实现 `IAsyncDisposable`，`await using` 释放时自动解锁，正常路径无需手动调用 `UnlockAsync`。
+`ILockHandle` 实现 `IAsyncDisposable`，`await using` 释放时自动解锁；需要自己控制释放时机时显式 `await handle.DisposeAsync()` 即可，同样带持有者校验。
 
 ## 接口参考
 
@@ -78,7 +91,7 @@ public class OrderService(IDistributedLock distributedLock)
 | `ILock` | 锁服务统一接口，下列三个方法的定义方 |
 | `ILock.LockAsync(key, ct)` | 阻塞加锁直到成功，返回 `ILockHandle`；取消时抛 `OperationCanceledException` |
 | `ILock.TryLockAsync(key, timeout, ct)` | 尝试加锁，超时返回 `null`（非异常） |
-| `ILock.UnlockAsync(key, ct)` | 显式解锁，异常兜底用；常态由句柄自动释放 |
+| `ILockHandle.LockLost` | 持锁资格失效时被取消（租约续期失败）；长临界区应并入自己的 `CancellationToken` |
 | `IDistributedLock : ILock` | 标记接口，表达"需要分布式锁"的依赖意图 |
 | `ILocalLock : ILock` | 标记接口，表达"需要本地锁"的依赖意图 |
 | `ILockHandle : IAsyncDisposable` | 锁句柄，`await using` 离开作用域时自动释放 |
@@ -96,13 +109,16 @@ public class OrderService(IDistributedLock distributedLock)
 - 基于 StackExchange.Redis 的 `LockTake` / `LockRelease`（SET NX + Lua 原子校验删除）。每次加锁生成随机 token，由 `ILockHandle` 释放时校验 token 再删除，避免误删他人持有的锁。
 - 锁默认过期 **30 秒**（`DefaultLockExpiry`，硬编码），即使持有者崩溃也会自动释放，避免死锁。
 - `LockAsync` / `TryLockAsync` 以 **50ms**（`PollInterval`）间隔轮询重试获取。
-- `UnlockAsync` 为异常兜底接口，直接 `KeyDelete` **不校验 token**；正常释放请依赖 `await using` 触发句柄的带 token 校验释放。
+- **释放锁只有一条路径：句柄**（`await using` 或显式 `await handle.DisposeAsync()`），它带持有者校验，只放开自己那一把。组件不提供"按 key 强制解锁"——删掉 key 不等于上一个执行者已经停止，那个操作的后置条件与本组件的核心不变量（同一时刻只有一个执行者在临界区）直接冲突。
+- **持有者卡死怎么办**：终止或隔离该实例。续期随之停止，租约到期后锁自然释放，而且这是唯一能真正让旧执行者停下来的手段。强制删 key 只会让新旧两个执行者同时以为自己独占。
+- 确有理由直接操作 Redis 键时，注入已注册的 `IConnectionMultiplexer` 自行删除——让调用点如实写着"我在删一个 Redis key"，而不是借锁抽象背书。
 
 ## 注意事项
 
 - `TryLockAsync` 返回 `null` 是约定的"未抢到锁"信号，**不抛异常**，调用方必须判空并处理降级。
 - 内存实现也绑定了 `IDistributedLock` 接口，但其互斥范围**仅限单进程**——多实例部署中切勿将其当作分布式锁，否则不同节点会同时进入临界区。
-- Redis 实现的 30 秒过期、50ms 轮询为源码硬编码常量，当前**未提供 Options 配置**；若临界区耗时可能超过 30 秒，需评估锁过期风险。
+- Redis 实现的 30 秒过期、50ms 轮询为源码硬编码常量，当前**未提供 Options 配置**。句柄会按租约的三分之一周期自动续期（续期时校验 token，不会误续别人的锁），因此临界区超过 30 秒不再等于自动失去锁。
+- **续期失败 = 失去持锁资格**，此时 `ILockHandle.LockLost` 被取消，且释放时不再删除 key（那把锁已经属于别人）。临界区里做长事务、数据迁移、批量初始化时，应把该令牌与自己的 `CancellationToken` 关联，让后续操作立即中止而不是带着幻觉继续写。进程内实现没有租约，该令牌永不取消。
 - 接口注释标注了对应的 Java 侧 `IDistributedLock` / `ILocalLock` / `AutoCloseable`，便于跨语言对照。
 
 ## 相关

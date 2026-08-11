@@ -27,6 +27,7 @@ public static class DependencyInjection
     public static ModelBuilder ConfigureResourceAuthorization(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new ResourcePermissionGrantRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new ResourceAuthorizationRevisionRecordConfiguration());
         return modelBuilder;
     }
 }

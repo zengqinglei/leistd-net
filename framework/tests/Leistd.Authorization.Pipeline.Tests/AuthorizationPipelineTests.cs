@@ -86,6 +86,38 @@ public class AuthorizationPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Explicitly_registered_policy_wins_over_the_dynamic_permission_policy()
+    {
+        const string userId = "explicit-policy";
+        await _host.GrantAsync(PermissionGrantProviderNames.User, userId, OrderPermissions.Approve);
+
+        // 宿主给 Orders.Approve 注册了更严格的同名策略（权限之外还要求一个 Claim）。
+        // 动态权限策略若把它盖掉，只有权限就能通过——那等于悄悄放宽了宿主的授权要求。
+        var withoutClaim = await _host.Client.SendAsync(
+            _host.Request(HttpMethod.Get, "/orders/approve", userId));
+        Assert.Equal(HttpStatusCode.Forbidden, withoutClaim.StatusCode);
+
+        var request = _host.Request(HttpMethod.Get, "/orders/approve", userId);
+        request.Headers.Add(TestAuthenticationHandler.ClaimsHeader, PipelineFixtures.ApprovalClaim);
+        Assert.Equal(HttpStatusCode.OK, (await _host.Client.SendAsync(request)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Any_of_policy_rejects_a_name_with_an_empty_segment()
+    {
+        const string userId = "empty-segment";
+        await _host.GrantAsync(PermissionGrantProviderNames.User, userId, OrderPermissions.Read);
+
+        // "Orders.Read|" 拆出一个空段，空段不是已定义权限，因此整个策略名不按权限策略处理，
+        // 回退后也找不到同名策略。此时应在请求期直接报"策略不存在"而不是因为
+        // "其中一段命中"就放行——写错的策略名必须大声失败。
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _host.Client.SendAsync(_host.Request(HttpMethod.Get, "/orders/empty-segment", userId)));
+
+        Assert.Contains(OrderPermissions.Read + "|", exception.Message);
+    }
+
+    [Fact]
     public async Task Any_of_policy_still_rejects_a_subject_holding_none_of_them()
     {
         const string userId = "any-of-none";
@@ -226,7 +258,7 @@ public class AuthorizationPipelineTests : IAsyncLifetime
                 ResourceOperations.Read,
                 PermissionGrantProviderNames.User,
                 PipelineFixtures.OwnerUserId,
-                PermissionGrantEffect.Granted));
+                ResourceGrantEffect.Granted));
 
         var shared = await GetAsync<List<OrderDto>>("/orders/shared", PipelineFixtures.OwnerUserId);
 
@@ -243,16 +275,59 @@ public class AuthorizationPipelineTests : IAsyncLifetime
                 ResourceOperations.Read,
                 PermissionGrantProviderNames.Role,
                 PipelineFixtures.OrgRoleId,
-                PermissionGrantEffect.Granted),
+                ResourceGrantEffect.Granted),
             new ResourceGrant(
                 ResourceOperations.Read,
                 PermissionGrantProviderNames.User,
                 PipelineFixtures.OwnerUserId,
-                PermissionGrantEffect.Prohibited));
+                ResourceGrantEffect.Prohibited));
 
         var shared = await GetAsync<List<OrderDto>>("/orders/shared", PipelineFixtures.OwnerUserId);
 
         Assert.Empty(shared);
+    }
+
+    [Fact]
+    public async Task Acl_denial_also_removes_a_resource_that_data_scope_would_show()
+    {
+        // 数据范围放行（同组织）、ACL 显式拒绝这个人——"分享给部门、排除这一个人"就是这个形状。
+        // 只用"ACL 允许减 ACL 拒绝"组合列表时减不掉它：它根本不在 ACL 允许集合里。
+        await _host.ReplaceResourceGrantsAsync(
+            ColleagueOrder,
+            new ResourceGrant(
+                ResourceOperations.Read,
+                PermissionGrantProviderNames.User,
+                PipelineFixtures.OwnerUserId,
+                ResourceGrantEffect.Prohibited));
+
+        var page = await GetAsync<PagedOrders>("/orders", PipelineFixtures.OwnerUserId);
+
+        Assert.DoesNotContain(page.Items, x => x.ResourceKey == ColleagueOrder);
+
+        // 列表与详情必须同口径：列表放出来、详情却坚称不存在，等于列表已经泄漏了存在性。
+        var detail = await _host.Client.SendAsync(_host.Request(
+            HttpMethod.Get, $"/orders/{ColleagueOrder}", PipelineFixtures.OwnerUserId, PipelineFixtures.OrgRoleId));
+        Assert.Equal(HttpStatusCode.NotFound, detail.StatusCode);
+    }
+
+    [Fact]
+    public async Task Batch_is_rejected_as_a_whole_when_a_domain_rule_denies_one_item()
+    {
+        // 已归档订单在数据范围内、功能权限也齐备，只有领域规则拦得住它。
+        // 集合入口答不了这种规则，批量必须逐项跑实例授权，且任一拒绝整批拒绝——
+        // 静默跳过越权项会让调用方以为全做完了。
+        var response = await _host.Client.SendAsync(WithBody(
+            _host.Request(HttpMethod.Post, "/orders/archive",
+                PipelineFixtures.OwnerUserId, PipelineFixtures.OrgRoleId),
+            new ArchiveOrdersRequest([OwnOrder, ArchivedOrder])));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        await _host.ExecuteAsync(async db =>
+        {
+            var own = await db.Orders.AsNoTracking().SingleAsync(x => x.ResourceKey == OwnOrder);
+            Assert.False(own.IsArchived);
+        });
     }
 
     [Fact]

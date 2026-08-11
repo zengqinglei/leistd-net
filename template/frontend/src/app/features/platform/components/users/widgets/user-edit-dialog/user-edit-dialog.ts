@@ -92,7 +92,6 @@ export class UserEditDialog {
   readonly saving = input(false);
   readonly user = input<UserManagementOutputDto | null>(null);
   readonly saved = output<CreateUserInputDto | UpdateUserInputDto>();
-
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -143,7 +142,6 @@ export class UserEditDialog {
       this.formModel().username.trim() ||
       this.unnamedLabel(),
   );
-
   //#if (IncludeLocalization)
   readonly userForm = form(this.formModel, (path) => {
     required(path.username, {
@@ -208,7 +206,6 @@ export class UserEditDialog {
     });
   });
   //#endif
-
   //#if (IncludeRoles)
   /**
    * 角色选项由父级从角色 API 注入，按 Id 提交、按显示名回显。
@@ -332,7 +329,6 @@ export class UserEditDialog {
         email: model.email.trim(),
         displayName: model.displayName.trim() || undefined,
         avatar: model.avatar.trim() || undefined,
-        isActive: model.isActive,
         isEmailVerified: model.isEmailVerified,
       });
       return;

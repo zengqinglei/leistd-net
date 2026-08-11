@@ -32,6 +32,12 @@ jobs:
       - name: 校验全部 Skill 与文档引用
         shell: pwsh
         run: pwsh scripts/validate-skills.ps1
+      - name: 校验退役符号规则自身有效
+        shell: pwsh
+        run: pwsh scripts/check-retired-terms.ps1 -SelfTest
+      - name: 校验无已删除符号与旧模型表述残留
+        shell: pwsh
+        run: pwsh scripts/check-retired-terms.ps1
       - name: 校验 i18n 词条键一致（en/zh 前后端 + 框架）
         shell: pwsh
         run: pwsh scripts/check-i18n-keys.ps1

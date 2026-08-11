@@ -68,8 +68,8 @@ export class UserManagementService {
   deleteUser(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
-
   //#if (IncludeRoles)
+
   getUserRoles(id: string): Observable<RoleBriefDto[]> {
     return this.http.get<RoleBriefDto[]>(`${this.baseUrl}/${id}/roles`);
   }

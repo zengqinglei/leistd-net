@@ -13,7 +13,9 @@ import {
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
+//#if (IncludeRoles)
 import { HlmBadge } from '@spartan-ng/helm/badge';
+//#endif
 import { HlmCardImports } from '@spartan-ng/helm/card';
 
 //#if (IncludeLocalization)
@@ -26,9 +28,17 @@ import { LayoutService } from '../../../../layout/services/layout-service';
   selector: 'app-workspace-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
+  //#if (IncludeRoles)
   imports: [...HlmCardImports, HlmBadge, TranslocoModule],
   //#else
+  imports: [...HlmCardImports, TranslocoModule],
+  //#endif
+  //#else
+  //#if (IncludeRoles)
   imports: [...HlmCardImports, HlmBadge],
+  //#else
+  imports: [...HlmCardImports],
+  //#endif
   //#endif
   templateUrl: './workspace-dashboard.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

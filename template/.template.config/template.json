@@ -120,7 +120,7 @@
           "condition": "!IncludeIdentity",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/AuthorizationController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/**",
@@ -228,7 +228,7 @@
         {
           "condition": "IncludeIdentity && !IncludeOpenIddict",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Api/Controllers/AuthorizationController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/AuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IAuthPrincipalFactory.cs",

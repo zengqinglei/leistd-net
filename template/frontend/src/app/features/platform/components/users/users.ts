@@ -84,9 +84,6 @@ import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
 import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
 //#endif
 import { UserTable } from './widgets/user-table/user-table';
-//#if (IncludeRoles)
-import { PermissionGrantDialog } from '../../widgets/permission-grant-dialog/permission-grant-dialog';
-//#endif
 
 const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
 const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
@@ -107,7 +104,6 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
     UserTable,
     //#if (IncludeRoles)
     UserRolesDialog,
-    PermissionGrantDialog,
     //#endif
     UserEditDialog,
     ResetUserPasswordDialog,
@@ -189,7 +185,6 @@ export class Users {
       //#endif
       this.selectedIsEmailVerified() !== null,
   );
-
   //#if (IncludeLocalization)
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
   private readonly translationReady = translationReady(this.transloco);
@@ -233,7 +228,6 @@ export class Users {
     { label: 'Email not verified', value: false, icon: 'lucideMail' },
   ]);
   //#endif
-
   //#if (IncludeRoles)
   /**
    * 角色筛选项来自角色 API：新建的角色立即出现在筛选器里，
@@ -248,7 +242,6 @@ export class Users {
     })),
   );
   //#endif
-
   //#if (IncludeRoles)
   // 操作入口按权限裁剪。
   readonly canCreateUser = computed(() => this.authorizationService.has(PERMISSIONS.users.create));
@@ -257,42 +250,20 @@ export class Users {
   readonly canManageUserRoles = computed(() =>
     this.authorizationService.has(PERMISSIONS.users.manageRoles),
   );
-  readonly canManageUserPermissions = computed(() =>
-    this.authorizationService.has(PERMISSIONS.users.managePermissions),
-  );
   //#else
   // 未启用角色权限模块：后端对应端点只要求已认证，前端不做额外裁剪。
   readonly canCreateUser = computed(() => true);
   readonly canUpdateUser = computed(() => true);
   readonly canDeleteUser = computed(() => true);
   readonly canManageUserRoles = computed(() => false);
-  readonly canManageUserPermissions = computed(() => false);
   //#endif
-
   //#if (IncludeRoles)
   readonly rolesDialogVisible = signal(false);
   readonly rolesDialogUser = signal<UserManagementOutputDto | null>(null);
 
-  readonly permissionsDialogVisible = signal(false);
-  readonly permissionsDialogUser = signal<UserManagementOutputDto | null>(null);
-
   openRolesDialog(user: UserManagementOutputDto): void {
     this.rolesDialogUser.set(user);
     this.rolesDialogVisible.set(true);
-  }
-
-  openPermissionsDialog(user: UserManagementOutputDto): void {
-    this.permissionsDialogUser.set(user);
-    this.permissionsDialogVisible.set(true);
-  }
-  //#endif
-
-  //#if (IncludeRoles)
-  /** 权限例外改变的是有效权限，保存后刷新列表与当前用户权限。 */
-  onPermissionsSaved(): void {
-    this.permissionsDialogVisible.set(false);
-    this.refreshRequests.next();
-    this.authorizationService.reload().subscribe({ error: () => undefined });
   }
 
   /** 角色变更会改变有效权限，保存后刷新列表与当前用户权限。 */
@@ -302,7 +273,6 @@ export class Users {
     this.authorizationService.reload().subscribe({ error: () => undefined });
   }
   //#endif
-
   //#if (IncludeLocalization)
   readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');
   readonly allEmailStatusPlaceholder = () =>
@@ -347,8 +317,8 @@ export class Users {
         error: () => this.availableRoles.set([]),
       });
     }
-    //#endif
 
+    //#endif
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe((keyword) => this.updateQuery({ keyword: keyword.trim() || null, page: 1 }, true));
@@ -375,14 +345,15 @@ export class Users {
         this.users.set(data.items);
         this.totalRecords.set(data.totalCount);
       });
-
     //#if (IncludeLocalization)
+
     // 读 translationReady 建立依赖：资源就绪 / 语言切换时标题随之重设。
     effect(() => {
       this.translationReady();
       this.layoutService.title.set(this.transloco.translate('users.page.title'));
     });
     //#else
+
     this.layoutService.title.set('User management');
     //#endif
   }
@@ -399,7 +370,6 @@ export class Users {
   onEmailVerifiedChange(value: boolean | null | undefined) {
     this.updateQuery({ isEmailVerified: serializeBoolean(value), page: 1 });
   }
-
   //#if (IncludeRoles)
   onRolesChange(values: string[]) {
     this.updateQuery({ roles: values.length ? values : null, page: 1 });

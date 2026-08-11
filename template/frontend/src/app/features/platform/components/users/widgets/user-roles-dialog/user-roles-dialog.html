@@ -11,7 +11,7 @@
           <hlm-checkbox
             [inputId]="'role-' + role.id"
             [checked]="isSelected(role.id)"
-            (changed)="toggle(role.id)"
+            (checkedChange)="toggle(role.id)"
           />
           <label class="flex flex-col" [attr.for]="'role-' + role.id">
             <span>{{ role.displayName }}</span>

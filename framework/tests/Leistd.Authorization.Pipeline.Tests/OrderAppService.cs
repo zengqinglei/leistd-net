@@ -30,7 +30,7 @@ public sealed class OrderAppService(
     /// </summary>
     public async Task<PagedOrders> GetPagedListAsync(int offset, int limit, CancellationToken ct)
     {
-        var scoped = await ScopedQueryAsync(DataOperations.Read, ct);
+        var scoped = await VisibleQueryAsync(DataOperations.Read, ct);
 
         var totalCount = await scoped.LongCountAsync(ct);
         var items = await scoped
@@ -48,7 +48,7 @@ public sealed class OrderAppService(
     /// </summary>
     public async Task<IReadOnlyList<OrderDto>> ExportAsync(CancellationToken ct)
     {
-        var scoped = await ScopedQueryAsync(DataOperations.Export, ct);
+        var scoped = await VisibleQueryAsync(DataOperations.Export, ct);
         return await scoped
             .OrderBy(order => order.Code)
             .Select(order => new OrderDto(order.ResourceKey, order.Code, order.OrganizationId, order.OwnerId))
@@ -60,7 +60,7 @@ public sealed class OrderAppService(
     /// </summary>
     public async Task<OrderDto?> GetAsync(string resourceKey, CancellationToken ct)
     {
-        var scoped = await ScopedQueryAsync(DataOperations.Read, ct);
+        var scoped = await VisibleQueryAsync(DataOperations.Read, ct);
         var order = await scoped.SingleOrDefaultAsync(x => x.ResourceKey == resourceKey, ct);
         if (order == null)
         {
@@ -78,8 +78,8 @@ public sealed class OrderAppService(
     /// </summary>
     public async Task<bool> UpdateAsync(string resourceKey, string code, CancellationToken ct)
     {
-        var scoped = await ScopedQueryAsync(DataOperations.Update, ct);
-        var order = await scoped.SingleOrDefaultAsync(x => x.ResourceKey == resourceKey, ct);
+        var scoped = await VisibleQueryAsync(DataOperations.Update, ct);
+        var order = await scoped.AsTracking().SingleOrDefaultAsync(x => x.ResourceKey == resourceKey, ct);
         if (order == null)
         {
             return false;
@@ -100,12 +100,22 @@ public sealed class OrderAppService(
     /// </summary>
     public async Task<bool> ArchiveManyAsync(IReadOnlyCollection<string> resourceKeys, CancellationToken ct)
     {
-        var scoped = await ScopedQueryAsync(DataOperations.Update, ct);
-        var targets = await scoped.Where(x => resourceKeys.Contains(x.ResourceKey)).ToListAsync(ct);
+        var scoped = await VisibleQueryAsync(DataOperations.Update, ct);
+        var targets = await scoped.AsTracking().Where(x => resourceKeys.Contains(x.ResourceKey)).ToListAsync(ct);
 
         if (targets.Count != resourceKeys.Count)
         {
             return false;
+        }
+
+        // 集合入口只答"哪些看得见/改得动"，答不了领域规则（已归档不可再改）。
+        // 逐项跑实例授权，任一拒绝整批拒绝——静默跳过越权项会让调用方以为全做完了。
+        foreach (var order in targets)
+        {
+            if (!await resourceAuthorization.IsGrantedAsync(order, ResourceOperations.Update, ct))
+            {
+                return false;
+            }
         }
 
         foreach (var order in targets)
@@ -141,8 +151,37 @@ public sealed class OrderAppService(
             .ToListAsync(ct);
     }
 
-    private async Task<IQueryable<Order>> ScopedQueryAsync(string operation, CancellationToken ct)
-        => await dataScope.ApplyAsync(dbContext.Orders.AsQueryable(), Order.Resource, operation, ct);
+    /// <summary>
+    /// 可见集合 = （数据范围 OR ACL 允许）AND NOT ACL 拒绝。
+    /// </summary>
+    /// <remarks>
+    /// 只用数据范围会漏掉"别人分享给我"的资源；只用 ACL 允许集合又减不掉数据范围放行、
+    /// 却被 ACL 显式拒绝的那一份——而"分享给部门、排除这一个人"正是显式拒绝的唯一用途。
+    /// 列表、总数、导出必须共用这一个入口，否则总数与实际可见数据对不上，
+    /// 或者列表里出现详情接口坚称不存在的资源。
+    /// </remarks>
+    private async Task<IQueryable<Order>> VisibleQueryAsync(string operation, CancellationToken ct)
+    {
+        var subject = await subjectProvider.GetCurrentSubjectAsync(ct);
+        if (subject == null)
+            return dbContext.Orders.Where(_ => false);
+
+        var scoped = await dataScope.ApplyAsync(dbContext.Orders.AsQueryable(), Order.Resource, operation, ct);
+
+        var sharedKeys = resourceGrantStore.QueryGrantedResourceKeys(
+            Order.Resource, operation, subject.UserId, subject.RoleIds);
+        var deniedKeys = resourceGrantStore.QueryDeniedResourceKeys(
+            Order.Resource, operation, subject.UserId, subject.RoleIds);
+
+        var scopedKeys = scoped.Select(order => order.ResourceKey);
+
+        // 注意：ACL 的两个集合入口内部带 AsNoTracking，而 EF 的跟踪行为由整棵查询树共享——
+        // 把它们嵌进来之后整个查询变成不跟踪，写入路径必须显式 AsTracking()，
+        // 否则改完实体 SaveChanges 什么也不会写，接口却照样返回成功。
+        return dbContext.Orders
+            .Where(order => (scopedKeys.Contains(order.ResourceKey) || sharedKeys.Contains(order.ResourceKey))
+                            && !deniedKeys.Contains(order.ResourceKey));
+    }
 }
 
 public static class OrderEndpoints
@@ -162,6 +201,16 @@ public static class OrderEndpoints
         app.MapGet("/orders/report", async (OrderAppService service, CancellationToken ct) =>
                 Results.Ok(await service.ExportAsync(ct)))
             .RequireAuthorization(OrderPermissions.ExportOrUpdate);
+
+        // 宿主显式注册了同名但更严格的策略，动态权限策略不得覆盖它。
+        app.MapGet("/orders/approve", async (OrderAppService service, CancellationToken ct) =>
+                Results.Ok(await service.ExportAsync(ct)))
+            .RequireAuthorization(OrderPermissions.Approve);
+
+        // 故意写错的策略名：含空段，任何主体都不该通过。
+        app.MapGet("/orders/empty-segment", async (OrderAppService service, CancellationToken ct) =>
+                Results.Ok(await service.ExportAsync(ct)))
+            .RequireAuthorization(OrderPermissions.Read + "|");
 
         app.MapGet("/orders/shared", async (OrderAppService service, CancellationToken ct) =>
                 Results.Ok(await service.GetSharedWithMeAsync(ct)))

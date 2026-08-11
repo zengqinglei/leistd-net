@@ -107,12 +107,8 @@ try
     await grantManager.ReplaceGrantsAsync(
         PermissionGrantProviderNames.Role,
         roleId,
-        [
-            new PermissionGrant("Orders", PermissionGrantEffect.Granted),
-            new PermissionGrant("Orders.Read", PermissionGrantEffect.Granted),
-            // 显式拒绝优先于任何来源的允许，用于"这个角色例外"。
-            new PermissionGrant("Orders.Write", PermissionGrantEffect.Prohibited),
-        ],
+        // 授予是纯加法：出现在列表里即授予，不在即不授予，没有"拒绝"这一态。
+        ["Orders", "Orders.Read"],
         expectedRevision: current.Revision);
 }
 catch (PermissionGrantConcurrencyException)
@@ -133,11 +129,9 @@ foreach (var group in definitionManager.GetGroups())
     }
 }
 
-// 下发给前端的当前用户有效权限：一次查询取回，拒绝优先合并。
+// 下发给前端的当前用户有效权限：一次查询取回，用户与各角色的授予取并集。
 var grants = await grantStore.GetGrantsForSubjectAsync(subject.UserId, subject.RoleIds);
-var effective = grants.GetEffectiveEffects(definitionManager)
-    .Where(x => x.Value == PermissionGrantEffect.Granted)
-    .Select(x => x.Key);
+var effective = grants.GetGrantedNames();
 
 // grants.Revision 变化即表示权限已被改动，客户端据此判断本地缓存是否过期。
 ```
@@ -177,24 +171,23 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 | `IPermissionDefinitionContext` | 定义期上下文：`GetOrAddGroup`、`GetPermissionOrNull`。**每个权限都必须归属于某个组**，权限管理界面按组分区渲染 |
 | `IPermissionGroupDefinition` | 权限组：`Name`、`DisplayName`、`Permissions`、`AddPermission`、`GetPermissionOrNull` |
 | `IPermissionDefinition` | 单个权限定义：`Name`、`DisplayName`、`Parent`、`Children`、`IsEnabled`、`AddChild` |
+| `IPermissionGrantManager.RemoveProviderAsync(providerName, providerKey, ct)` | 主体**永久删除**后清理其全部授予与授权版本，返回删除行数，幂等。与"替换为空集合"不同——后者是撤销语义，会保留并递增版本 |
+| `UnstableGrantSnapshotException` | 稳定读取重试耗尽：取不到一致快照。属**读取失败**，与 `PermissionGrantConcurrencyException`（保存冲突，映射 409）不是一回事，调用方重试即可 |
 | `IPermissionDefinitionManager` | 权限定义查询：`GetOrNull(name)`、`GetAll()`、`GetGroups()`、`IsEffectivelyEnabled(name)`、`GetAncestorNames(name)`、`GetDescendantNames(name)` |
 | `IPermissionSubjectProvider` | 当前权限检查主体提供器，业务项目需自行实现 |
 | `IPermissionSubjectProvider.GetCurrentSubjectAsync(ct)` | 获取当前主体，未登录/无法识别时返回 `null` |
 | `PermissionSubject` | 检查主体记录：`UserId`、`RoleIds`、`IsSuperAdmin` |
-| `PermissionGrantEffect` | 授予效果：`Granted`、`Prohibited`。**没有授予记录即表示未设置**，因此存储层只有两个取值 |
-| `PermissionGrant` | 单条授予：`PermissionName`、`Effect` |
-| `PermissionGrantSet` | 单个主体的全部授予及其并发版本：`ProviderName`、`ProviderKey`、`Grants`、`Revision`；`Empty(providerName, providerKey)` 构造空集合 |
-| `SubjectPermissionGrants` | 检查主体的全部授予：`UserGrants`、`RoleGrants`、`Revision`、`GetEffectiveEffects(definitions)`（拒绝优先合并，并沿定义树向下传播拒绝） |
+| `PermissionGrantSet` | 单个主体的全部授予及其并发版本：`ProviderName`、`ProviderKey`、`PermissionNames`、`Revision`；`Empty(providerName, providerKey)` 构造空集合 |
+| `SubjectPermissionGrants` | 检查主体的全部授予：`UserGrants`、`RoleGrants`、`Revision`、`GetGrantedNames()`（各来源取并集） |
 | `IPermissionGrantStore.GetGrantsAsync(providerName, providerKey, ct)` | 取单个主体的全部授予与版本 |
 | `IPermissionGrantStore.GetGrantsAsync(providerName, providerKeys, ct)` | 批量取同类型多个主体的授予与版本，返回顺序与入参一致；列表页用它避免按行的 N+1 |
 | `IPermissionGrantStore.GetGrantsForSubjectAsync(userId, roleIds, ct)` | 一次取回主体的用户直授加全部角色授予 |
-| `IPermissionGrantManager.GrantAsync(name, providerName, providerKey, effect, ct)` | 授予单个权限，默认 `Granted` |
+| `IPermissionGrantManager.GrantAsync(name, providerName, providerKey, ct)` | 授予单个权限 |
 | `IPermissionGrantManager.RevokeAsync(name, providerName, providerKey, ct)` | 撤销单个权限并级联撤销其全部子孙 |
-| `IPermissionGrantManager.ReplaceGrantsAsync(providerName, providerKey, grants, expectedRevision, ct)` | 原子替换某主体的全部授予，返回新版本号 |
+| `IPermissionGrantManager.ReplaceGrantsAsync(providerName, providerKey, permissionNames, expectedRevision, ct)` | 原子替换某主体的全部授予，返回新版本号 |
 | `PermissionGrantConcurrencyException` | 乐观并发冲突：`ProviderName`、`ProviderKey`、`ExpectedRevision`、`ActualRevision`；宿主应映射为 HTTP 409 |
 | `UndefinedPermissionException` | 试图授予未定义或已禁用的权限：`PermissionNames`；宿主应映射为 HTTP 400 |
-| `PermissionRequirement` | 授权需求，持有 `PermissionNames`；多个权限按"任一满足"处理 |
-| `PermissionPolicyProvider.AnyOfSeparator` | 多权限策略名的分隔符 `\|` |
+| `PermissionPolicyNames.AnyOfSeparator` | 多权限策略名的分隔符 `\|`；权限名自身不得包含该字符 |
 | `PermissionGrantProviderNames` | 授予对象类型常量：`User`、`Role` |
 
 `Leistd.Authorization.AspNetCore` 命名空间：
@@ -203,13 +196,13 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 | --- | --- |
 | `PermissionPolicyProvider : IAuthorizationPolicyProvider` | 把权限名当作策略名，动态构建携带 `PermissionRequirement` 的策略 |
 | `PermissionAuthorizationHandler` | 将 `PermissionRequirement` 委托给 `IPermissionChecker` 校验 |
-| `PermissionRequirement` | 授权需求，含单个 `PermissionName` |
+| `PermissionRequirement` | 授权需求，含 `PermissionNames`；多个权限按「任一满足」处理 |
 
 `Leistd.Authorization.EntityFrameworkCore` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |
-| `PermissionGrantRecord` | 权限授予持久化实体：`Id`（Guid v7）、`PermissionName`、`ProviderName`、`ProviderKey`、`Effect`；实现 `ICreationAuditedObject`（`CreationTime`、`CreatorId` 由审计拦截器填充） |
+| `PermissionGrantRecord` | 权限授予持久化实体：`Id`（Guid v7）、`PermissionName`、`ProviderName`、`ProviderKey`；实现 `ICreationAuditedObject`（`CreationTime`、`CreatorId` 由审计拦截器填充）。**行的存在即授予**，没有表示效果的列 |
 | `AuthorizationRevisionRecord` | 主体授权版本：`Id`、`ProviderName`、`ProviderKey`、`Version`；实现 `IModificationAuditedObject` |
 | `PermissionGrantRecordConfiguration` / `AuthorizationRevisionRecordConfiguration` | 两个实体的 EF Core 配置 |
 | `EfCorePermissionGrantStore<TDbContext>` | `IPermissionGrantStore` 的 EF Core 实现 |
@@ -219,7 +212,9 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 
 ### PermissionPolicyProvider（动态策略生成）
 
-- `GetPolicyAsync(policyName)` 先查 `IPermissionDefinitionManager.GetOrNull(policyName)`：命中已定义权限时，用 `AuthorizationPolicyBuilder` 附加一个 `PermissionRequirement(policyName)` 并构建策略；未命中时回退到 `DefaultAuthorizationPolicyProvider`，因此普通 `[Authorize]`、`[Authorize(Roles=...)]` 及显式注册的命名策略（如 "SuperAdmin"）不受影响。
+- `GetPolicyAsync(policyName)` **先问 `DefaultAuthorizationPolicyProvider`**：宿主显式注册的同名策略优先，动态策略不会把它盖掉（例如宿主为某权限名注册了"权限 + MFA"的更严格策略）。
+- 没有同名注册策略时，按 `PermissionPolicyNames.AnyOfSeparator`（`|`）拆分策略名：**每一段都是已定义权限**时才构建携带 `PermissionRequirement(names)` 的策略，多个权限按「任一满足」判定；只要有一段不是权限名（含空段），就返回 `null`，由 ASP.NET Core 以"策略不存在"在请求期报错——写错的策略名大声失败，不会因为"其中一段命中"被悄悄放行。
+- 因此普通 `[Authorize]`、`[Authorize(Roles=...)]` 及显式注册的命名策略（如 "SuperAdmin"）不受影响。
 - `GetDefaultPolicyAsync` / `GetFallbackPolicyAsync` 均直接委托给内部的 `DefaultAuthorizationPolicyProvider`。
 
 ### DefaultPermissionChecker（默认检查流程）
@@ -229,7 +224,7 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 1. **权限未定义或未启用一律拒绝**——`IsEffectivelyEnabled` 要求该权限自身与其全部祖先都处于启用状态，因此拼错的权限名、数据库残留的权限、被禁用分支下的权限都默认拒绝，超级管理员也不例外。
 2. 通过 `IPermissionSubjectProvider` 取不到当前主体（未登录）返回 `false`。
 3. `PermissionSubject.IsSuperAdmin` 为 `true` 时直接返回 `true`，**不读取授予记录**。
-4. 否则查合并后的授予效果：任一来源为 `Prohibited` 即拒绝，否则任一来源为 `Granted` 即允许，全部无结论时默认拒绝。
+4. 否则查授予集合：用户与其全部角色的授予取并集，命中即允许，否则拒绝。
 
 `DefaultPermissionChecker` 以 Scoped 注册：主体解析与授予读取在同一作用域（通常是一次 HTTP 请求）内**只发生一次**，之后同一作用域中的任意多次检查都是内存字典查找，不再回访数据库。`IsGrantedAsync(names, ct)` 对传入名称按 `StringComparer.Ordinal` 去重并过滤空白。
 
@@ -238,24 +233,22 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 所有写入都经过同一条流水线，因此单条授予、批量替换与种子数据得到一致的结果：
 
 1. **校验**：权限必须已定义且启用，否则抛 `UndefinedPermissionException`，不会把无效权限写进存储。这是该规则的**唯一执行点**（管理器是写入方，覆盖应用服务、种子数据、后台任务等全部调用路径），调用方不必也不应重复判断，只需按需把它翻译成对外契约（如 HTTP 400）。
-2. **拒绝向下传播**：被拒绝权限的全部子孙授予被移除，子孙回落为"未授予"，运行时同样拒绝。
-3. **允许向上补齐**：被允许权限的全部祖先补为允许。
+2. **向上补齐**：被授予权限的全部祖先一并授予。
 
 这使运行时的权限检查可以保持扁平字典查找，不需要回溯定义树。唯一残留是绕过 Manager 直接写 `DbContext` 的数据不会被归一化。
 
-写入归一化只在**单个主体内**成立。跨来源合并会破坏它——角色 A 拒绝 `App.Users`、角色 B 允许 `App.Users.Create` 时，合并结果是父拒子允。因此 `GetEffectiveEffects(definitions)` 在合并之后会再做一次拒绝向下传播，被拒绝权限的全部子孙一律标记为拒绝。计算有效权限时必须走这个方法，不要就地重写合并规则。
 
 ### EF Core 存储行为
 
-- `PermissionGrantRecord` 唯一性由唯一索引 `(PermissionName, ProviderName, ProviderKey)` 保证。**`Effect` 不纳入唯一索引**——它是授予的值而非标识，纳入索引会允许同一主体对同一权限同时存在允许与拒绝两行。
+- `PermissionGrantRecord` 唯一性由唯一索引 `(PermissionName, ProviderName, ProviderKey)` 保证：一行即一次授予，不存在同一主体对同一权限出现两行的可能。
 - `ReplaceGrantsAsync` 以一次 `SaveChangesAsync` 提交，是单事务操作；目标集合与现有记录做差异比对，只在真正发生变化时递增版本。
 - `expectedRevision` 与存储中的当前版本不一致时抛 `PermissionGrantConcurrencyException`，且**不做任何写入**；传 `null` 表示跳过并发校验。
 - `AuthorizationRevisionRecord.Version` 是**并发令牌**：EF 在 UPDATE 上带 `WHERE Version = @original`。仅靠「先读版本再内存比较」挡不住两个事务同时读到同一版本的情况，令牌把这段窗口交给数据库收口，落败方同样得到 `PermissionGrantConcurrencyException`。
-- 每个读取方法的数据库往返次数是常数（授予一次、版本一次），与被检查的权限数量、主体所属角色数量和批量查询的主体数量都无关，因此不存在 N+1。
+- 每个读取方法的数据库往返次数是常数（版本、授予、版本各一次），与被检查的权限数量、主体所属角色数量和批量查询的主体数量都无关，因此不存在 N+1。
+- **版本读两遍是必需的**：授予与版本若各查一次，中间夹进一次写入就会拼出"旧集合 + 新版本"——拿它去保存会被判为无冲突，乐观并发形同虚设；下发给前端则让旧权限带着新版本被缓存，此后永不刷新。两次版本一致才返回，不一致就重读；连续若干次仍不稳定时抛 `UnstableGrantSnapshotException`（读取失败，调用方重试即可），而不是复用保存冲突异常。
 - `SubjectPermissionGrants.Revision` 由用户授予版本与各角色授予版本（按角色 Key 排序）拼接而成；角色成员变更会改变参与拼接的角色集合，因此无需为成员变更额外扇出写入即可反映在版本中。
 - 只读查询均使用 `AsNoTracking()`。
-- `Effect` 以**字符串**持久化（`varchar(32)`），不存序数值：枚举成员重排序不会让既有数据错位，迁移里比较该列须用字符串字面量。
-- 字段长度约束：`PermissionName` 256、`ProviderName` 32、`ProviderKey` 128、`Effect` 32、`CreatorId` 64。
+- 字段长度约束：`PermissionName` 256、`ProviderName` 32、`ProviderKey` 128、`CreatorId` 64。
 
 ## 配置项 / Options
 
@@ -269,7 +262,7 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 - `EfCorePermissionGrantManager`/`EfCorePermissionGrantStore` 依赖调用方在 `OnModelCreating` 中执行 `modelBuilder.ConfigureAuthorization()`，否则 `PermissionGrantRecord` 不会被正确映射。
 - 权限定义（`IPermissionDefinitionProvider`）在 `PermissionDefinitionManager` 构造时一次性加载，随后祖先链、子孙集合与有效启用状态都被**预计算并缓存**，因此运行期的权限检查与授予归一化都是字典查找。运行期新增/修改权限定义需重启进程；权限**授予**（谁拥有权限）则可随时通过 `IPermissionGrantManager` 动态增删，无需重启。
 - **权限名全局唯一**：同名权限在任意组或任意层级重复注册，会在启动阶段抛 `InvalidOperationException` 而不是静默覆盖。
-- **显式拒绝优先于任何来源的允许**。如果产品不需要显式拒绝，管理界面只提供"继承/允许"两态即可，底层的 `Prohibited` 不受影响。
+- **授予是纯加法，不存在"拒绝"**。有效权限是用户授予与各角色授予的并集，因此"他为什么有这个权限"只需找出哪个来源给了它，不必遍历全部来源确认没人拒绝。要收回某人的能力，调整其角色构成，而不是在权限位上做减法。资源实例授权是另一回事，那一层有自己的 `ResourceGrantEffect`，见[资源实例授权](./authorization-resource.md)。
 - 本组件只负责"能否执行这类动作"。"能操作哪一条"见[资源实例授权](./authorization-resource.md)，"列表里有哪些条"见[数据范围](./authorization-data-scope.md)。
 
 ## 可执行参考实现

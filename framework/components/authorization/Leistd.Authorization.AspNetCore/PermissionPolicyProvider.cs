@@ -30,25 +30,23 @@ public class PermissionPolicyProvider : IAuthorizationPolicyProvider
         _permissionDefinitionManager = permissionDefinitionManager;
     }
 
-    /// <summary>多权限策略名的分隔符，表示"任一满足"。</summary>
-    public const char AnyOfSeparator = '|';
-
-    public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
+    public async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
-        var names = policyName.Split(AnyOfSeparator, StringSplitOptions.TrimEntries);
+        // 显式注册的同名策略优先：宿主可能注册了一个更严格的同名策略（例如在权限之外再要求
+        // MFA 或特定 Claim），动态生成的权限策略不得把它盖掉。
+        var registered = await _fallbackPolicyProvider.GetPolicyAsync(policyName);
+        if (registered != null)
+            return registered;
 
-        // 命中已定义权限 → 视为权限策略，且尚未被显式注册同名策略时由本提供器构建。
-        // 多段时要求每一段都已定义：只要有一段不是权限名，整个策略名就交回默认提供器。
-        if (Array.TrueForAll(names, name => _permissionDefinitionManager.GetOrNull(name) != null))
-        {
-            var policy = new AuthorizationPolicyBuilder()
-                .AddRequirements(new PermissionRequirement(names))
-                .Build();
+        var names = policyName.Split(PermissionPolicyNames.AnyOfSeparator, StringSplitOptions.TrimEntries);
 
-            return Task.FromResult<AuthorizationPolicy?>(policy);
-        }
+        // 多段时要求每一段都已定义：只要有一段不是权限名，就不按权限策略处理。
+        if (!Array.TrueForAll(names, name => _permissionDefinitionManager.GetOrNull(name) != null))
+            return null;
 
-        return _fallbackPolicyProvider.GetPolicyAsync(policyName);
+        return new AuthorizationPolicyBuilder()
+            .AddRequirements(new PermissionRequirement(names))
+            .Build();
     }
 
     public Task<AuthorizationPolicy> GetDefaultPolicyAsync()

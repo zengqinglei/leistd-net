@@ -16,10 +16,4 @@ public interface ILock
     /// 返回 null 表示锁被占用，非异常情况，调用方自行处理降级逻辑
     /// </summary>
     Task<ILockHandle?> TryLockAsync(string key, TimeSpan timeout, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 显式解锁（对应 Java unlock(key)）
-    /// 通常通过 ILockHandle.DisposeAsync 自动调用，无需手动调用
-    /// </summary>
-    Task UnlockAsync(string key, CancellationToken cancellationToken = default);
 }

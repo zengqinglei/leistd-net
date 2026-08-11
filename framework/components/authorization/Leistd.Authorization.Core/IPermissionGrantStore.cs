@@ -4,7 +4,7 @@ namespace Leistd.Authorization;
 /// 权限授予存储（只读）。
 /// </summary>
 /// <remarks>
-/// 只提供"按主体一次取回全部授予"的读取形状：多权限判断、三态组合与有效权限计算
+/// 只提供"按主体一次取回全部授予"的读取形状：多权限判断与有效权限计算
 /// 都在内存完成，因此不存在按权限逐条查询导致的 N+1。写入职责属于
 /// <see cref="IPermissionGrantManager"/>。
 /// </remarks>

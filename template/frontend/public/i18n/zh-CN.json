@@ -140,7 +140,9 @@
       "usersTitle": "用户管理",
       "usersDesc": "完整的 CRUD 操作与权限控制",
       "themeTitle": "主题系统",
-      "themeDesc": "深色模式 + Tailwind CSS + Spartan UI"
+      "themeDesc": "深色模式 + Tailwind CSS + Spartan UI",
+      "authDescWithoutRoles": "基于 Cookie 的认证",
+      "usersDescWithoutRoles": "完整的增删改查"
     }
   },
   "theme": {
@@ -272,8 +274,7 @@
     },
     "actions": {
       "newUser": "新建用户",
-      "manageRoles": "分配角色",
-      "managePermissions": "权限例外"
+      "manageRoles": "分配角色"
     },
     "status": {
       "active": "启用",
@@ -353,7 +354,8 @@
       "activeTitle": "启用用户",
       "activeHint": "禁用后用户无法登录和调用受保护接口",
       "emailVerifiedTitle": "邮箱已验证",
-      "emailVerifiedHint": "用于管理邮箱验证状态"
+      "emailVerifiedHint": "用于管理邮箱验证状态",
+      "descriptionWithoutRoles": "管理该账号的资料与状态。"
     },
     "resetDialog": {
       "header": "重置用户密码",
@@ -551,23 +553,11 @@
   "permissions": {
     "dialogTitle": "权限配置 · {{name}}",
     "searchPlaceholder": "搜索权限",
-    "allowAll": "全部允许",
-    "resetAll": "重置",
-    "stateInherit": "继承",
-    "stateGranted": "允许",
-    "stateProhibited": "拒绝",
-    "grantedCount": "允许 {{count}} 项",
-    "prohibitedCount": "拒绝 {{count}} 项",
+    "grantedCount": "已授予 {{count}} 项",
     "groupSummary": "{{granted}}/{{total}}",
     "saved": "权限已保存",
     "conflict": "权限已被他人修改，已为你重新加载最新值。",
-    "descriptionForRole": "“继承”表示不设置；“拒绝”优先于任何来源的允许。",
-    "descriptionForUser": "“继承”表示沿用该用户所属角色的结果；“拒绝”优先于任何来源的允许，包括从角色继承的允许。",
-    "inheritedGranted": "角色允许",
-    "inheritedProhibited": "角色拒绝",
-    "effectiveGranted": "实际生效：允许",
-    "effectiveProhibited": "实际生效：拒绝",
-    "prohibitedByAncestor": "被上级权限拒绝",
-    "pendingChanges": "实际生效结果将在保存后刷新"
+    "description": "勾选即授予。每一块的顶层那条就是它的查看权限；授予某个动作会一并授予该查看权限——新增用户需要先能查看用户列表。要收回某人的能力，请调整他的角色。",
+    "viewAccessHint": "查看列表"
   }
 }

@@ -1,5 +1,5 @@
 <hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
-  <hlm-dialog-content *hlmDialogPortal class="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-3xl">
+  <hlm-dialog-content *hlmDialogPortal class="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-2xl">
     <hlm-dialog-header>
       <h3 hlmDialogTitle>{{ title() }}</h3>
       <p hlmDialogDescription>{{ description() }}</p>
@@ -15,163 +15,91 @@
           <hlm-input-group-addon>
             <ng-icon name="lucideSearch" />
           </hlm-input-group-addon>
+          <!-- placeholder 不是可访问名：读屏软件在输入框获得焦点、内容非空时不再朗读它。 -->
           <input
             hlmInputGroupInput
             type="text"
+            [attr.aria-label]="searchPlaceholder()"
             [placeholder]="searchPlaceholder()"
             [value]="keyword()"
             (input)="onKeywordChange($any($event.target).value)"
           />
         </hlm-input-group>
 
-        <!--
-          统计徽章表达的是「状态」而非「危险操作」，因此沿用列表页状态徽章的做法：
-          outline + 语义色描边/底色。实心 destructive 留给删除类操作，避免读者误以为此处可点。
-        -->
-        <div class="flex items-center gap-2 sm:ml-auto">
-          @if (hasPendingChanges()) {
-            <span class="text-xs text-muted-foreground">{{ pendingChangesLabel() }}</span>
-          }
-          <span hlmBadge variant="outline" class="border-success/30 bg-success/10 text-success">{{
-            grantedLabel(grantedCount())
-          }}</span>
-          @if (prohibitedCount() > 0) {
-            <span
-              hlmBadge
-              variant="outline"
-              class="border-destructive/30 bg-destructive/10 text-destructive"
-              >{{ prohibitedLabel(prohibitedCount()) }}</span
-            >
-          }
-        </div>
+        <span class="text-sm text-muted-foreground sm:ml-auto">{{
+          grantedLabel(grantedCount())
+        }}</span>
       </div>
 
-      <div class="min-h-0 flex-1 overflow-y-auto pr-1">
+      <!--
+        滚动容器必须是画边框的这一层本身：套一层第三方滚动组件时它会撑到内容高度而不是被
+        flex 约束住，视口永远不溢出，于是分组全部展开后内容被直接裁掉且没有滚动条。
+      -->
+      <div class="min-h-0 flex-1 overflow-y-auto rounded-lg border">
         @if (hasNoMatch()) {
           <p class="py-10 text-center text-sm text-muted-foreground">{{ noMatchLabel() }}</p>
         }
 
-        @for (group of visibleGroups(); track group.name) {
-          <!--
-            单组时不套手风琴：模板默认只声明一个权限组，为唯一分区多加一次展开点击没有意义。
-            业务项目按模块声明多个组后，这里自动切换为可折叠形态。
-          -->
-          <div class="mb-4 rounded-lg border last:mb-0">
+        <div hlmAccordion type="multiple">
+          @for (group of visibleGroups(); track group.name) {
             <div
-              class="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 px-3 py-2"
+              hlmAccordionItem
+              [isOpened]="isExpanded(group.name)"
+              (openedChange)="onGroupOpenedChange(group.name, $event)"
             >
-              <button
-                type="button"
-                class="flex items-center gap-2 text-sm font-medium"
-                [disabled]="!collapsible()"
-                [attr.aria-expanded]="isExpanded(group.name)"
-                (click)="toggleGroup(group.name)"
-              >
-                @if (collapsible()) {
-                  <ng-icon
-                    [name]="isExpanded(group.name) ? 'lucideChevronDown' : 'lucideChevronRight'"
-                    size="16"
-                  />
-                }
-                {{ group.displayName }}
-                <span class="text-xs font-normal text-muted-foreground">
-                  {{ groupSummary(group.grantedCount, group.rows.length) }}
-                </span>
-              </button>
-
-              <div class="flex items-center gap-1">
-                <button hlmBtn variant="ghost" size="sm" (click)="allowGroup(group)">
-                  {{ allowAllLabel() }}
-                </button>
-                <button hlmBtn variant="ghost" size="sm" (click)="resetGroup(group)">
-                  {{ resetAllLabel() }}
-                </button>
+              <!--
+                组标题不带复选框：组是容器不是权限，标题旁摆一个与权限行同款的复选框，
+                会让人以为组本身也能被授予。折叠时的授予情况由 n/总数 徽标回显。
+              -->
+              <div class="flex items-center bg-muted/50 px-3">
+                <!-- 组标题只是展开开关，不是链接：去掉 hover 下划线。类要给 triggerClass，
+                     它才会合并进内部按钮；写在宿主上管不到那个按钮。 -->
+                <hlm-accordion-trigger class="flex-1" triggerClass="hover:no-underline">
+                  <span class="flex items-center gap-2 font-semibold">
+                    {{ group.displayName }}
+                    <span hlmBadge variant="secondary">
+                      {{ groupSummary(group.grantedCount, group.rows.length) }}
+                    </span>
+                  </span>
+                </hlm-accordion-trigger>
               </div>
-            </div>
 
-            @if (isExpanded(group.name)) {
-              <ul class="flex list-none flex-col p-0">
-                @for (row of group.rows; track row.name) {
-                  <li
-                    class="flex flex-wrap items-center justify-between gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/40"
-                    [style.padding-left.rem]="0.75 + row.depth * 1.25"
-                  >
-                    <div class="flex min-w-0 flex-wrap items-center gap-2">
-                      <span class="text-sm">{{ row.displayName }}</span>
-                      <!-- 用户主体编辑的是「例外」，不显示继承来源就无法判断该设拒绝还是留继承。 -->
-                      @if (showsInherited() && inheritedOf(row.name); as inheritedEffect) {
-                        <span
-                          hlmBadge
-                          variant="outline"
-                          [class]="
-                            inheritedEffect === 'Granted'
-                              ? 'border-success/30 bg-success/10 text-success'
-                              : 'border-destructive/30 bg-destructive/10 text-destructive'
-                          "
-                          >{{ inheritedLabel(inheritedEffect) }}</span
-                        >
-                      }
-                      <!-- 最终结果由服务端算出（拒绝优先 + 拒绝沿定义树向下传播）。
-                           本行的两列组合解释不了「被祖先拒绝」，因此额外标出来源。 -->
-                      @let effective = effectiveOf(row.name);
-                      @if (effective !== null) {
-                        <span
-                          hlmBadge
-                          variant="outline"
-                          [class]="
-                            effective
-                              ? 'border-success/30 bg-success/10 text-success'
-                              : 'border-destructive/30 bg-destructive/10 text-destructive'
-                          "
-                          >{{ effectiveLabel(effective) }}</span
-                        >
-                      }
-                      @if (isProhibitedByAncestor(row.name)) {
-                        <span class="text-xs text-destructive">{{
-                          ancestorProhibitedLabel()
-                        }}</span>
-                      }
-                    </div>
-
-                    <hlm-radio-group
-                      class="flex flex-row items-center gap-4"
-                      [value]="stateOf(row.name)"
-                      (valueChange)="onStateChange(row.name, $any($event))"
+              <hlm-accordion-content>
+                <!--
+                  缩进表达前置关系：depth 0 是资源本身（勾上即"能看到这份列表"），
+                  更深的是可在其上执行的动作。层级不可见时，勾动作把资源一并勾上会像是随机跳动。
+                -->
+                <ul class="flex list-none flex-col p-0">
+                  @for (row of group.rows; track row.name) {
+                    <li
+                      class="flex items-center gap-3 border-t py-2 pr-3 hover:bg-muted/40"
+                      [class.font-medium]="row.depth === 0"
+                      [style.padding-left.rem]="0.75 + row.depth * 1.5"
                     >
-                      <div class="flex items-center gap-1.5">
-                        <hlm-radio value="Inherit" [inputId]="row.name + '-inherit'">
-                          <hlm-radio-indicator indicator />
-                        </hlm-radio>
-                        <label class="text-xs" [attr.for]="row.name + '-inherit'">
-                          {{ stateInheritLabel() }}
-                        </label>
-                      </div>
-                      <div class="flex items-center gap-1.5">
-                        <hlm-radio value="Granted" [inputId]="row.name + '-granted'">
-                          <hlm-radio-indicator indicator />
-                        </hlm-radio>
-                        <label class="text-xs" [attr.for]="row.name + '-granted'">
-                          {{ stateGrantedLabel() }}
-                        </label>
-                      </div>
-                      <div class="flex items-center gap-1.5">
-                        <hlm-radio value="Prohibited" [inputId]="row.name + '-prohibited'">
-                          <hlm-radio-indicator indicator />
-                        </hlm-radio>
-                        <label
-                          class="text-xs text-destructive"
-                          [attr.for]="row.name + '-prohibited'"
-                        >
-                          {{ stateProhibitedLabel() }}
-                        </label>
-                      </div>
-                    </hlm-radio-group>
-                  </li>
-                }
-              </ul>
-            }
-          </div>
-        }
+                      <hlm-checkbox
+                        [inputId]="row.name"
+                        [checked]="isGranted(row.name)"
+                        (checkedChange)="onCheckedChange(row.name, $event)"
+                      />
+                      <label class="min-w-0 flex-1 cursor-pointer text-sm" [attr.for]="row.name">
+                        {{ row.displayName }}
+                        <!--
+                          顶层那条勾上等于"能看到这份列表"，光看"用户管理"四个字读不出来，
+                          会被当成分类标题。这里直接把它是什么写在旁边。
+                        -->
+                        @if (row.depth === 0 && row.hasChildren) {
+                          <span class="ml-1 text-xs font-normal text-muted-foreground">
+                            {{ viewAccessHint() }}
+                          </span>
+                        }
+                      </label>
+                    </li>
+                  }
+                </ul>
+              </hlm-accordion-content>
+            </div>
+          }
+        </div>
       </div>
     }
 
@@ -179,7 +107,10 @@
       <button hlmBtn variant="outline" type="button" (click)="open.set(false)">
         {{ cancelLabel() }}
       </button>
-      <button hlmBtn type="button" [disabled]="loading() || saving()" (click)="onSave()">
+      <button hlmBtn type="button" [disabled]="!canSave() || saving()" (click)="onSave()">
+        @if (saving()) {
+          <hlm-spinner class="size-4" />
+        }
         {{ saveLabel() }}
       </button>
     </hlm-dialog-footer>

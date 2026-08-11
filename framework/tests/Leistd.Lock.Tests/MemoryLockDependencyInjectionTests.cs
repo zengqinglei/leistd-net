@@ -42,4 +42,5 @@ public sealed class MemoryLockDependencyInjectionTests
         services.AddMemoryLocalLock();
         return services.BuildServiceProvider();
     }
+
 }

@@ -79,4 +79,21 @@ public class PermissionDefinitionManagerTests
             context.GetOrAddGroup("B").AddPermission("App.Duplicated");
         }
     }
+
+    [Fact]
+    public void Permission_names_cannot_contain_the_any_of_separator()
+    {
+        // 含 '|' 的权限名会在策略解析时被拆开，每段都找不到定义，
+        // 最终以"策略不存在"的形式失败——在定义阶段就拒绝，别把问题推到运行时。
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => TestPermissionDefinitions.CreateManager(new SeparatorInNameProvider()).GetAll().ToList());
+
+        Assert.Contains(PermissionPolicyNames.AnyOfSeparator, exception.Message);
+    }
+
+    private sealed class SeparatorInNameProvider : IPermissionDefinitionProvider
+    {
+        public void Define(IPermissionDefinitionContext context)
+            => context.GetOrAddGroup("App", "应用").AddPermission("App.A|App.B", "非法名");
+    }
 }

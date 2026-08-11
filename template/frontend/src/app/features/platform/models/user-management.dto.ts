@@ -45,7 +45,6 @@ export interface CreateUserInputDto {
   roleIds: string[];
   //#endif
 }
-
 //#if (IncludeRoles)
 /** 替换用户角色。与资料更新是两个独立命令、两个独立权限。 */
 export interface UpdateUserRolesInputDto {
@@ -53,12 +52,14 @@ export interface UpdateUserRolesInputDto {
 }
 //#endif
 
+//#if (IncludeRoles)
 /** 不含角色字段：角色分配走 PUT /api/v1/users/{id}/roles 并要求 App.Users.ManageRoles。 */
+//#endif
+/** 不含启用状态：改变账号可用性只有启用/禁用两个命令一个入口，保护规则也只写在那里。 */
 export interface UpdateUserInputDto {
   email: string;
   displayName?: string;
   avatar?: string;
-  isActive: boolean;
   isEmailVerified: boolean;
 }
 

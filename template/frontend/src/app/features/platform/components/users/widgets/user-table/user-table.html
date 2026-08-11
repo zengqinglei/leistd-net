@@ -332,19 +332,6 @@
                                       {{ actionLabel('reset', row.original) }}
                                     </button>
                                   }
-                                  <!--#if (IncludeRoles)-->
-                                  <!-- 用户权限例外：与角色分配同为独立命令，需要 App.Users.ManagePermissions。 -->
-                                  @if (canManagePermissions()) {
-                                    <button
-                                      hlmDropdownMenuItem
-                                      [disabled]="isOtherSuperAdmin(row.original)"
-                                      (click)="managePermissions.emit(row.original)"
-                                    >
-                                      <ng-icon name="lucideKeyRound" />
-                                      {{ permissionsActionLabel() }}
-                                    </button>
-                                  }
-                                  <!--#endif-->
                                   @if (canUpdate()) {
                                     <button
                                       hlmDropdownMenuItem
