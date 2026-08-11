@@ -28,6 +28,7 @@ using Leistd.RealTime.AspNetCore.SignalR;
 #endif
 #if (IncludeIdentity)
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 #if (IncludeOpenIddict || IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
@@ -302,9 +303,31 @@ try
         options.ExpireTimeSpan = TimeSpan.FromDays(7);
 #endif
         options.SlidingExpiration = true;
+
+        // 只有浏览器导航才该被重定向到登录页/拒绝页。默认行为对所有请求一律 302，
+        // 于是 API 与 OIDC 客户端拿到的是 /Account/AccessDenied——本应用没有这个路由，
+        // 再叠上 SPA 兜底，跟随重定向的客户端最后收到的是一个 HTML 200，
+        // 把"未认证/无权限"伪装成了成功。按 Accept 区分：认 text/html 的才重定向。
+        options.Events.OnRedirectToLogin = context => RespondWithStatusOrRedirect(context, StatusCodes.Status401Unauthorized);
+        options.Events.OnRedirectToAccessDenied = context => RespondWithStatusOrRedirect(context, StatusCodes.Status403Forbidden);
+
+        static Task RespondWithStatusOrRedirect(RedirectContext<CookieAuthenticationOptions> context, int statusCode)
+        {
+            if (context.Request.Headers.Accept.Any(value =>
+                    value != null && value.Contains("text/html", StringComparison.OrdinalIgnoreCase)))
+            {
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            }
+
+            context.Response.StatusCode = statusCode;
+            return Task.CompletedTask;
+        }
     });
 
-    // 撤权要对已签发的凭据即时生效：登录时的启用/锁定检查挡不住已在线的会话。
+    // 撤权要对已签发的凭据生效：登录时的启用/锁定检查挡不住已在线的会话。
+    // 覆盖范围是每一次新的 HTTP 请求和每一次新的 Hub 连接握手；
+    // 已经建立的 SignalR 连接不在其中，见 ActiveUserRequirement 的说明。
     builder.Services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
 
     builder.Services.AddAuthorization(options =>

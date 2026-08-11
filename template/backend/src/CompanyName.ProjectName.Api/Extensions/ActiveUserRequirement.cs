@@ -16,6 +16,11 @@ namespace CompanyName.ProjectName.Api.Extensions;
 ///
 /// 每请求查库是可接受的：主体解析本来就要读用户与角色，这里复用同一次读取的位置，
 /// 不需要引入安全戳、会话中心或分布式撤销。
+///
+/// **覆盖边界**：每一次新的 HTTP 请求、每一次新的 Hub 连接握手。**不包括**已经建立的
+/// SignalR 连接——SignalR 只在握手阶段执行授权，连接建立后不会重跑策略，所以被禁用的用户
+/// 仍可能在既有连接上继续收到推送。要让既有连接也断开，需要连接注册表加跨节点终止通道，
+/// 那是有明确敏感度要求的业务项目自己的事，通用模板不预置。
 /// </remarks>
 public sealed class ActiveUserRequirement : IAuthorizationRequirement;
 

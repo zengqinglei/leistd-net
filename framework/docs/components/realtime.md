@@ -148,6 +148,7 @@ public class UserStatusService(IPresenceService presenceService)
 - `RequireSubscriptionAuthorization` 默认为 `false`：默认情况下任何已连接客户端都可以 `Subscribe` 任意 `resourceKey`，如需按权限限制订阅，必须显式开启该配置并注册自定义 `IRealtimeSubscriptionAuthorizer`。
 - `PublishToResourceAsync` 推送失败只记日志、不抛异常：调用成功返回不代表订阅方一定收到消息（例如客户端未连接/未订阅该资源）。
 - `SignalRBusinessEventPublisher` 为 `internal` 类，业务代码只能通过 `IBusinessEventPublisher` 接口使用，不能直接引用具体类型。
+- **授权只在握手阶段执行一次**。`Subscribe` 只核对订阅规则，不复检账号是否仍然可用；SignalR 也不会对已建立的连接重跑端点策略。账号在连接之后被禁用或锁定时，那条连接仍可继续订阅与接收事件。要让既有连接也立即失效，需要连接注册表加跨节点终止通道，由业务项目按自身敏感度实现。
 
 ## 相关
 

@@ -195,6 +195,7 @@ await resourceGrantManager.RemoveResourceAsync("Orders", order.ResourceKey, ct);
 | `IResourceGrantStore.GetGrantsAsync(resourceName, resourceKey, ct)` | 取某实例上的全部 ACL 与当前版本，返回 `ResourceGrantSet` |
 | `IResourceGrantStore.GetEffectiveGrantsAsync(resourceName, resourceKey, userId, roleIds, ct)` | 取指定主体在某实例上每个操作的最终效果（拒绝优先） |
 | `IResourceGrantStore.QueryGrantedResourceKeys(resourceName, operation, userId, roleIds)` | 集合级入口，返回可被数据库翻译的 `IQueryable<string>`，已排除显式拒绝 |
+| `IResourceGrantStore.QueryDeniedResourceKeys(resourceName, operation, userId, roleIds)` | 与上一条对称的拒绝集合入口。集合公式要减掉"数据范围放行、ACL 显式拒绝"的那一份，而它根本不在允许集合里，只能由这个入口给出 |
 | `IResourceGrantManager.ReplaceGrantsAsync(resourceName, resourceKey, grants, expectedRevision, ct)` | 原子替换某实例的全部 ACL，返回写入后的版本；`expectedRevision` 与存储不一致时抛 `ResourceGrantConcurrencyException`，传 `null` 跳过校验（仅限种子数据） |
 | `IResourceGrantManager.RemoveResourceAsync(resourceName, resourceKey, ct)` | 幂等清理某实例的全部 ACL，返回删除行数 |
 
@@ -220,6 +221,9 @@ await resourceGrantManager.RemoveResourceAsync("Orders", order.ResourceKey, ct);
 - `QueryGrantedResourceKeys` 在数据库内完成"允许集合减去拒绝集合"，不把候选拉到内存；返回结果已 `Distinct()`。
 - **集合可见性要三者组合**：非超管为 `(数据范围 OR ACL 允许) AND NOT ACL 拒绝`；超管旁路数据范围与 ACL（含拒绝集合），只受租户、软删除这类硬边界约束。集合与单实例必须同一口径——实例判定已让超管跳过 ACL，集合这边若照减拒绝集合，就会出现"列表里看不见、按 ID 却打得开"。只用前一个入口减不掉"数据范围放行、ACL 显式拒绝"的那一份——而"分享给部门、排除这一个人"正是显式拒绝的唯一用途。拒绝集合由 `QueryDeniedResourceKeys` 单独给出，与 `QueryGrantedResourceKeys` 对称，判据同为"不是 `Granted` 即拒绝"。
 - **集合入口答不了领域规则**：它只回答"哪些看得见/改得动"。批量操作必须在范围内取到目标后逐项执行实例授权，任一拒绝整批拒绝；只比对数量会漏掉已归档这类由资源状态决定的拒绝。
+- **同一个 Read 只判一次**：列表、详情、统计、导出共用同一个查询授权入口，详情**不要**在范围内定位到之后再对同一个 `Read` 跑一次 `IsGrantedAsync`。集合公式是 `(数据范围 OR ACL 允许) AND NOT ACL 拒绝`，实例判定的判据是"规则处理器放行或 ACL 显式 `Granted`"，两个式子对同一个操作各判一次，结果就是列表列得出来、详情坚称不存在；两边 DTO 字段一样时，那个 404 想防的存在性泄漏早已被列表泄光，只剩下自相矛盾。
+- **影响读取可见性的规则处理器必须有可查询的等价谓词**，并进入统一查询；写不出谓词就说明它表达的不是可见性——那它只应承担加载后的领域不变量，或者归属于另一个操作。
+- **写操作是另一回事**：先按 `Update`/`Delete` 的数据范围定位（防水平越权），再执行资源状态等领域规则。"看得见但改不动"不矛盾，"列表里有但详情说没有"才矛盾。
 - **判定 fail-closed**：只有明确的 `Granted` 才允许。写成"是 `Prohibited` 就拒、否则放行"会让任何非法枚举值（`(ResourceGrantEffect)0`、越界数值、自定义 Store 返回的损坏值）静默变成允许。写入端另有 `Enum.IsDefined` 校验与数据库检查约束两道拦截。
 - **全量替换带乐观并发**：唯一索引只防重复行，防不住"两人基于同一份旧快照各自保存"——被覆盖掉的往往正是显式拒绝，那个本该被排除的人会重新经由角色拿到访问权，且两次保存都显示成功。因此 ACL 与功能权限用同一口径：读取带回版本，保存回传版本，冲突抛异常而非静默覆盖。
 - `Effect` 以**字符串**持久化（`varchar(32)`）。功能权限授予表没有这一列——那一层是纯加法，行的存在即授予；资源实例这一层保留 `ResourceGrantEffect`，因为"这一条例外"是真实诉求。
@@ -255,7 +259,8 @@ ASP.NET Core 宿主（真实 Web 宿主 + TestServer + Sqlite + 真实 DI 装配
 
 - 缺功能权限时在第一层就被拦下，不会走到数据范围；
 - 范围外的详情返回 404 而非 403，不泄漏资源存在性；
-- 在读取范围内但资源规则不放行 → 依然拿不到；
+- 列表与详情共用同一个可见查询入口，同一个 Read 操作不会给出两个答案；
+- 超管在集合与单实例上口径一致，但领域规则的拒绝对超管同样有效；
 - 读取范围是整个组织、更新范围只有本人 —— 能看不等于能改；
 - 领域规则的拒绝优先于所有者身份与 ACL 允许；
 - 批量操作整体拒绝，而不是静默跳过越权项；

@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Json;
 #if (IncludeOpenIddict)
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 #endif
 #if (IncludeRoles)
 using CompanyName.ProjectName.Application.Initialization;
@@ -727,6 +729,33 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
+#if (IncludeNotifications)
+    [Fact]
+    public async Task Disabling_a_user_blocks_new_hub_connections()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+
+        // 打 negotiate 而不是引 SignalR.Client：Hub 端点的授权就发生在这一步，
+        // 走的是同一条 RequireAuthorization() → 默认策略的路径，不必为一条测试加包依赖。
+        const string Negotiate = "/hubs/notifications/negotiate?negotiateVersion=1";
+        Assert.Equal(HttpStatusCode.OK, (await session.Client.PostAsync(Negotiate, null)).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+
+        // 注意这条测试锁住的是"新连接建不起来"。SignalR 只在握手阶段授权，
+        // 已经建立的连接不会因为账号被禁用而断开——那条边界写在 ActiveUserRequirement 的说明里，
+        // 需要它也失效的项目得自己做连接注册表加跨节点终止通道。
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await session.Client.PostAsync(Negotiate, null)).StatusCode);
+    }
+
+#endif
     [Fact]
     public async Task Locking_a_user_revokes_their_existing_session()
     {
@@ -783,11 +812,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         var secret = await reset.Content.ReadFromJsonAsync<ResetOpenApplicationSecretOutputDto>();
         Assert.NotNull(secret);
 
-        using var machine = factory.CreateProjectClient();
-
-        // OpenIddict 的令牌端点只收 HTTPS。TestServer 不做真实 TLS，改基地址即可让 Request.IsHttps 成立，
-        // 不必为测试在服务端放宽这条要求——那等于把生产配置改松来迁就测试。
-        machine.BaseAddress = new Uri("https://localhost");
+        using var machine = CreateHttpsClient();
 
         var token = await machine.PostAsync("/connect/token", new FormUrlEncodedContent(
         [
@@ -811,6 +836,141 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             HttpStatusCode.Forbidden,
             (await machine.GetAsync("/api/v1/open-applications?offset=0&limit=10")).StatusCode);
     }
+
+    [Fact]
+    public async Task Disabling_a_user_revokes_their_already_issued_bearer_token()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        var (clientId, clientSecret) = await CreateAuthorizationCodeClientAsync(superAdmin.Client);
+
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+        var accessToken = await AuthorizeAndExchangeAsync(session, clientId, clientSecret);
+
+        using var api = CreateHttpsClient();
+        api.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        Assert.Equal(HttpStatusCode.OK, (await api.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await api.GetAsync("/connect/userinfo")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+
+        // Cookie、OpenIddict Validation、userinfo 是三条不同的认证路径。撤权承诺覆盖 API 令牌，
+        // 不只是浏览器会话——只有 Cookie 一条测试保持绿色时，策略被改窄了也看不出来。
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.GetAsync("/connect/userinfo")).StatusCode);
+    }
+
+    private static async Task<(string ClientId, string ClientSecret)> CreateAuthorizationCodeClientAsync(
+        HttpClient superAdminClient)
+    {
+        var clientId = $"client-{Guid.CreateVersion7():N}";
+        var created = await superAdminClient.PostAsJsonAsync(
+            "/api/v1/open-applications",
+            new
+            {
+                clientId,
+                displayName = "Bearer probe",
+                applicationType = "web",
+                clientType = "confidential",
+                consentType = "explicit",
+                permissions = new[]
+                {
+                    "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid"
+                },
+                requirements = Array.Empty<string>(),
+                redirectUris = new[] { RedirectUri },
+                postLogoutRedirectUris = Array.Empty<string>()
+            });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        var application = await created.Content.ReadFromJsonAsync<OpenApplicationOutputDto>();
+        Assert.NotNull(application);
+
+        var reset = await superAdminClient.PostAsync(
+            $"/api/v1/open-applications/{application.Id}/reset-secret", null);
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        var secret = await reset.Content.ReadFromJsonAsync<ResetOpenApplicationSecretOutputDto>();
+        Assert.NotNull(secret);
+
+        return (clientId, secret.ClientSecret);
+    }
+
+    /// <summary>用登录态跑一遍授权码流程，换出该用户的 access token。</summary>
+    /// <remarks>
+    /// 授权端点没有同意页：Cookie 有效就直接 SignIn 并 302 回带 code 的回调地址，
+    /// 所以这一段比"引入 password grant"便宜得多，也不必为测试放宽服务端配置。
+    /// 服务端启用了 RequireProofKeyForCodeExchange，因此 code_challenge 必须是真的 S256。
+    /// </remarks>
+    private async Task<string> AuthorizeAndExchangeAsync(
+        AuthenticatedSession session, string clientId, string clientSecret)
+    {
+        var verifier = Guid.CreateVersion7().ToString("N") + Guid.CreateVersion7().ToString("N");
+        var challenge = Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+
+        // 另起一个客户端而不是改 session.Client：后者已经发过登录请求，BaseAddress 不再可写。
+        // 带上同一份 Cookie，授权端点才认得出登录态。
+        using var browser = CreateHttpsClient();
+        browser.DefaultRequestHeaders.Add("Cookie", session.Cookie);
+
+        var authorize = await browser.GetAsync(
+            "/connect/authorize" +
+            $"?client_id={Uri.EscapeDataString(clientId)}" +
+            $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}" +
+            "&response_type=code&scope=openid" +
+            $"&code_challenge={challenge}&code_challenge_method=S256");
+
+        Assert.Equal(HttpStatusCode.Found, authorize.StatusCode);
+
+        var code = authorize.Headers.Location!.Query.TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .Where(pair => pair.Length == 2 && pair[0] == "code")
+            .Select(pair => Uri.UnescapeDataString(pair[1]))
+            .SingleOrDefault();
+        Assert.False(string.IsNullOrWhiteSpace(code));
+
+        using var exchange = CreateHttpsClient();
+        var token = await exchange.PostAsync("/connect/token", new FormUrlEncodedContent(
+        [
+            new KeyValuePair<string, string>("grant_type", "authorization_code"),
+            new KeyValuePair<string, string>("code", code!),
+            new KeyValuePair<string, string>("redirect_uri", RedirectUri),
+            new KeyValuePair<string, string>("client_id", clientId),
+            new KeyValuePair<string, string>("client_secret", clientSecret),
+            new KeyValuePair<string, string>("code_verifier", verifier)
+        ]));
+        Assert.True(token.IsSuccessStatusCode, await token.Content.ReadAsStringAsync());
+
+        var payload = await token.Content.ReadFromJsonAsync<TokenResponse>();
+        Assert.NotNull(payload);
+
+        return payload.AccessToken;
+    }
+
+    private const string RedirectUri = "https://localhost/callback";
+
+    /// <summary>
+    /// 基地址为 https 的客户端。
+    /// </summary>
+    /// <remarks>
+    /// OpenIddict 的授权与令牌端点只收 HTTPS。TestServer 不做真实 TLS，改基地址即可让
+    /// <c>Request.IsHttps</c> 成立，不必为测试在服务端放宽这条要求——那等于把生产配置改松来迁就测试。
+    /// </remarks>
+    private HttpClient CreateHttpsClient()
+    {
+        var client = factory.CreateProjectClient();
+        client.BaseAddress = new Uri("https://localhost");
+
+        return client;
+    }
+
+    private static string Base64UrlEncode(byte[] value)
+        => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private sealed record TokenResponse(
         [property: System.Text.Json.Serialization.JsonPropertyName("access_token")] string AccessToken);
