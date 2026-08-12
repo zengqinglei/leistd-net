@@ -1,4 +1,7 @@
 #if (IncludeIdentity)
+#if (IncludeOpenIddict)
+using Microsoft.AspNetCore.Authentication;
+#endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http;
@@ -35,19 +38,31 @@ public sealed class InvalidAccountResultHandler : IAuthorizationMiddlewareResult
 
         if (invalidAccount)
         {
+#if (IncludeOpenIddict)
+            // 是否补 challenge，取决于本次请求实际由哪个方案认证成功，而不是请求头长什么样。
+            // 令牌不一定来自 Authorization 头：OpenIddict Validation 同样接受 query/form 里的
+            // access_token，SignalR 的 WebSocket/SSE 正是只能这样传。按请求头判断会漏掉那一路
+            // （401 不带 challenge），反过来还会把"顺带挂了个无关 Bearer 头的 Cookie 请求"误标成
+            // Bearer challenge。认证结果是唯一可靠的判据；重复认证不会重新解析令牌，
+            // ASP.NET Core 按方案缓存本次请求的结果。
+            var bearer = await context.AuthenticateAsync(
+                OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+#endif
+
             // 直接写状态码，不转交 ChallengeAsync：每个认证方案对 challenge 有自己的解释，
             // OpenIddict Validation 见令牌语法有效就答 403——它无从知道令牌背后的账号已经没了。
             // "这份凭据已经失效"是本应用的判断，就由本应用表达。
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
 
-            // 带 Bearer 令牌来的请求补标准 challenge：RFC 9110 对 401 的 WWW-Authenticate 是 MUST，
-            // OAuth 客户端也据此把响应识别为"令牌失效、去重新取"而不是一个普通业务错误。
-            // Cookie 请求保持裸 401——表单登录没有对应的 HTTP 认证方案名，硬造一个没有意义。
-            if (context.Request.Headers.Authorization.Any(value =>
-                    value != null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)))
+#if (IncludeOpenIddict)
+            // RFC 9110 对 401 的 WWW-Authenticate 是 MUST，OAuth 客户端也据此把响应识别为
+            // "令牌失效、去重新取"而不是一个普通业务错误。
+            // Cookie 认证的请求保持裸 401——表单登录没有对应的 HTTP 认证方案名，硬造一个没有意义。
+            if (bearer.Succeeded)
             {
                 context.Response.Headers.WWWAuthenticate = "Bearer error=\"invalid_token\"";
             }
+#endif
 
             return;
         }

@@ -897,6 +897,17 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal("Bearer", challenge.Scheme);
         Assert.Contains("invalid_token", challenge.Parameter);
 
+        // 令牌不一定走 Authorization 头：OpenIddict Validation 同样接受 query 里的 access_token，
+        // SignalR 的 WebSocket/SSE 只能这样传。按请求头判断"要不要补 challenge"会漏掉这一路。
+        using var viaQuery = CreateHttpsClient();
+        var queryResponse = await viaQuery.GetAsync(
+            $"/api/v1/auth/me?access_token={Uri.EscapeDataString(accessToken)}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, queryResponse.StatusCode);
+        var queryChallenge = Assert.Single(queryResponse.Headers.WwwAuthenticate);
+        Assert.Equal("Bearer", queryChallenge.Scheme);
+        Assert.Contains("invalid_token", queryChallenge.Parameter);
+
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.GetAsync("/connect/userinfo")).StatusCode);
     }
 
