@@ -13,9 +13,17 @@ namespace Leistd.ServiceClient.OAuth;
 public static class DependencyInjection
 {
     /// <summary>
+    /// 本服务调用身份的配置节：<c>Leistd:ServiceAuth</c>（Authority、ClientId、ClientSecret，
+    /// 可选默认 Scope）。一个业务服务作为调用方只有一个身份，全局配置一次，
+    /// 所有服务客户端共享；目标服务级差异只有 <c>Leistd:ServiceClients:&lt;服务名&gt;:Scope</c>。
+    /// </summary>
+    public const string ServiceAuthSectionName = "Leistd:ServiceAuth";
+
+    /// <summary>
     /// 为服务客户端追加 client credentials 认证（应在 <c>AddServiceClient</c> 之后调用，
-    /// 使认证处理器位于管道最内层）。认证配置绑定
-    /// 配置节 <c>Leistd:ServiceClients:&lt;服务名&gt;:Auth</c>。
+    /// 使认证处理器位于管道最内层）。认证配置来源：
+    /// 全局 <c>Leistd:ServiceAuth</c>（本服务的调用身份）+
+    /// 客户端节 <c>Leistd:ServiceClients:&lt;服务名&gt;:Scope</c>（目标服务的 scope，可省）。
     /// </summary>
     /// <param name="builder">来自 <c>AddServiceClient</c> 的 <see cref="IHttpClientBuilder"/></param>
     /// <param name="configuration">应用配置</param>
@@ -23,10 +31,23 @@ public static class DependencyInjection
         this IHttpClientBuilder builder,
         IConfiguration configuration)
     {
+        var clientName = builder.Name;
+
+        // 1. 全局调用身份
         builder.Services.Configure<ClientCredentialsOptions>(
-            builder.Name,
-            configuration.GetSection(
-                $"{ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{builder.Name}:Auth"));
+            clientName, configuration.GetSection(ServiceAuthSectionName));
+
+        // 2. 目标服务级 Scope（存在才覆盖，未配置时继承全局默认 Scope）
+        builder.Services.Configure<ClientCredentialsOptions>(clientName, options =>
+        {
+            var scope = configuration[
+                $"{ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{clientName}:Scope"];
+            if (!string.IsNullOrWhiteSpace(scope))
+            {
+                options.Scope = scope;
+            }
+        });
+
         return AddClientCredentialsCore(builder);
     }
 

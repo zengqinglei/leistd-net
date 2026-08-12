@@ -113,30 +113,33 @@ public class OrderServiceClient(HttpClient httpClient) : IOrderServiceClient
 builder.Services
     .AddServiceClient<IOrderServiceClient, OrderServiceClient, OrderServiceClientOptions>(
         "OrderService", builder.Configuration)
-    .AddClientCredentials(builder.Configuration); // 绑定 Leistd:ServiceClients:OrderService:Auth
+    .AddClientCredentials(builder.Configuration);
 ```
 
-配置：
+配置分两层——**调用身份全局一次**（一个服务作为调用方只有一个 client_id/secret），
+目标服务级差异只有地址与可选 scope：
 
 ```json
 {
   "Leistd": {
+    "ServiceAuth": {
+      "Authority": "http://identity-service",
+      "ClientId": "inventory-service",
+      "ClientSecret": "<来自密钥管理，勿入库>"
+    },
     "ServiceClients": {
       "OrderService": {
         "BaseAddress": "http://order-service",
         "Timeout": "00:00:30",
-        "LogPayloads": false,
-        "Auth": {
-          "Authority": "http://identity-service",
-          "ClientId": "inventory-service",
-          "ClientSecret": "<来自密钥管理，勿入库>",
-          "Scope": "order-api"
-        }
-      }
+        "Scope": "order-api"
+      },
+      "UserService": { "BaseAddress": "http://user-service" }
     }
   }
 }
 ```
+
+`Leistd:ServiceAuth` 可含默认 `Scope`；客户端节的 `Scope` 存在时覆盖它。
 
 `AddServiceClient` 返回 `IHttpClientBuilder`，可继续叠加宿主自己的处理器（如
 `Microsoft.Extensions.Http.Resilience` 的 `.AddStandardResilienceHandler()`）；SDK 不内置重试熔断。
@@ -255,7 +258,8 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 
 | 成员 | 说明 |
 | --- | --- |
-| `AddClientCredentials(builder, IConfiguration)` | 追加 client credentials 认证，配置绑定 `Leistd:ServiceClients:<名>:Auth` |
+| `AddClientCredentials(builder, IConfiguration)` | 追加 client credentials 认证：全局 `Leistd:ServiceAuth`（调用身份）+ 客户端节 `Scope` |
+| `DependencyInjection.ServiceAuthSectionName` | 全局调用身份配置节名常量（`Leistd:ServiceAuth`） |
 | `AddClientCredentials(builder, Action<ClientCredentialsOptions>)` | 同上，委托配置版 |
 | `ClientCredentialsOptions` | `Authority` / `TokenEndpoint`（默认 `{Authority}/connect/token`）、`ClientId`、`ClientSecret`、`Scope`、`ExpirationBuffer`（默认 60s） |
 | `IServiceTokenProvider` | token 获取抽象：`GetAccessTokenAsync(clientName)` / `Invalidate(clientName)` |
@@ -316,15 +320,15 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `UserContext.ForwardUserName` | `true` | 是否转发 `X-User-Name` |
 | `UserContext.ClaimHeaderMap` | 空 | 额外 claim → 头名映射 |
 
-`ClientCredentialsOptions`（绑定 `Leistd:ServiceClients:<服务名>:Auth`）：
+`ClientCredentialsOptions`（分层绑定：全局 `Leistd:ServiceAuth` → 客户端节 `Leistd:ServiceClients:<服务名>:Scope`）：
 
-| 属性 | 默认值 | 说明 |
-| --- | --- | --- |
-| `Authority` | `null` | 身份服务基础地址 |
-| `TokenEndpoint` | `{Authority}/connect/token` | token 端点，设置后覆盖默认推导 |
-| `ClientId` / `ClientSecret` | 空 | 客户端凭据（Secret 来自密钥管理） |
-| `Scope` | `null` | 申请的 scope，空格分隔多个 |
-| `ExpirationBuffer` | 60s | 提前刷新缓冲 |
+| 属性 | 默认值 | 配置位置 | 说明 |
+| --- | --- | --- | --- |
+| `Authority` | `null` | 全局 | 身份服务基础地址 |
+| `TokenEndpoint` | `{Authority}/connect/token` | 全局 | token 端点，设置后覆盖默认推导 |
+| `ClientId` / `ClientSecret` | 空 | 全局 | 本服务的调用凭据（Secret 来自密钥管理，环境变量 `Leistd__ServiceAuth__ClientSecret`） |
+| `Scope` | `null` | 全局默认 + 客户端节覆盖 | 申请的 scope，空格分隔多个 |
+| `ExpirationBuffer` | 60s | 全局 | 提前刷新缓冲 |
 
 `ServiceUserContextOptions`（绑定 `Leistd:ServiceUserContext`）：
 

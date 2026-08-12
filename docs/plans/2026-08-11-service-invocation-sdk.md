@@ -155,27 +155,32 @@ sequenceDiagram
 
 ### 3.8 配置约定
 
-沿用 `Leistd:` 配置节风格，每个下游服务一节：
+沿用 `Leistd:` 配置节风格。**调用身份全局一次**（一个业务服务作为调用方只有一个
+client_id/secret，配置在 `Leistd:ServiceAuth`），目标服务级差异只有地址与可选 scope：
 
 ```json
 {
   "Leistd": {
+    "ServiceAuth": {
+      "Authority": "http://identity-service",
+      "ClientId": "inventory-service",
+      "ClientSecret": "<来自密钥管理>"
+    },
     "ServiceClients": {
       "OrderService": {
         "BaseAddress": "http://order-service",
         "Timeout": "00:00:30",
-        "LogPayloads": false,
-        "Auth": {
-          "Authority": "http://identity-service",
-          "ClientId": "inventory-service",
-          "ClientSecret": "<来自密钥管理>",
-          "Scope": "order-api"
-        }
-      }
+        "Scope": "order-api"
+      },
+      "UserService": { "BaseAddress": "http://user-service" }
     }
   }
 }
 ```
+
+> 初版设计为每个 `ServiceClients:<名>:Auth` 独立配置凭据，实施评审时修正：
+> 那是「被调方=签发方」过渡形态的产物，会让 N 个客户端重复 N 份 secret。
+> 现契约下 Scope 支持全局默认 + 客户端节覆盖，凭据不支持按客户端覆盖（尚无消费方，不留兼容层）。
 
 业务 Client 包的注册体验（示例）：
 
