@@ -150,6 +150,38 @@ public class UserStatusService(IPresenceService presenceService)
 - `SignalRBusinessEventPublisher` 为 `internal` 类，业务代码只能通过 `IBusinessEventPublisher` 接口使用，不能直接引用具体类型。
 - **授权只在握手阶段执行一次**。`Subscribe` 只核对订阅规则，不复检账号是否仍然可用；SignalR 也不会对已建立的连接重跑端点策略。账号在连接之后被禁用或锁定时，那条连接仍可继续订阅与接收事件。要让既有连接也立即失效，需要连接注册表加跨节点终止通道，由业务项目按自身敏感度实现。
 
+## Bearer 认证下的 Hub 令牌传递
+
+用 Cookie 会话时不涉及本节。
+
+浏览器的 WebSocket 与 SSE 接口设不了自定义请求头。因此浏览器 SignalR 客户端配上 `accessTokenFactory` 之后，negotiate 与长轮询走 `Authorization` 头，而 WebSocket 与 SSE 只能把令牌拼进 query（`?access_token=`）。非浏览器客户端不受此限——.NET 的 SignalR 客户端走 WebSocket 时可以正常设置请求头。
+
+若宿主只接受 `Authorization: Bearer`（例如显式关闭了 query 形式的令牌提取），需要在认证中间件之前，把 Hub 路径上的 query 令牌搬进请求头：
+
+```csharp
+// 放在 UseAuthentication() 之前。
+app.Use(async (context, next) =>
+{
+    // 只对 Hub 路径生效：令牌进 URL 会落入反向代理与网关的访问日志、APM、
+    // 浏览器历史与 Referer，不要为此放开全部 API。
+    if (context.Request.Path.StartsWithSegments("/hubs/notifications") ||
+        context.Request.Path.StartsWithSegments("/hubs/realtime"))
+    {
+        // 仅在没有 Authorization 头时才采信 query：两者同时存在时以头为准，
+        // 静默覆盖会让请求以意料之外的主体通过认证。
+        if (context.Request.Headers.Authorization.Count == 0 &&
+            context.Request.Query.TryGetValue("access_token", out var token))
+        {
+            context.Request.Headers.Authorization = $"Bearer {token}";
+        }
+    }
+
+    await next();
+});
+```
+
+路径要与实际映射的 Hub 一致：`MapNotificationHub` / `MapRealTimeHub` 支持自定义路径，改过就要同步这里。
+
 ## 相关
 
 - [组件总览](./README.md)

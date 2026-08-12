@@ -179,20 +179,9 @@ try
             // OpenIddict 作为实现规范的库把三种方式都开着是本分，但"哪种方式可用"是应用的
             // 策略选择；ASP.NET Core 自己的 JwtBearerHandler 默认同样只读 Authorization 头。
             //
-            // 需要 Bearer 认证的 SignalR 时，不要把这两行删掉——浏览器的 WebSocket/SSE
-            // 设不了自定义头，令牌只能走 query，但那只是 /hubs/* 的需要，不是全部 API 的。
-            // 在认证中间件之前按路径搬运即可，作用域清楚：
-            //
-            //     app.Use(async (context, next) =>
-            //     {
-            //         if (context.Request.Path.StartsWithSegments("/hubs") &&
-            //             context.Request.Query.TryGetValue("access_token", out var token))
-            //         {
-            //             context.Request.Headers.Authorization = $"Bearer {token}";
-            //         }
-            //         await next();
-            //     });
-            //
+            // 改用 Bearer 认证的 SignalR 时不要把这两行删掉：浏览器的 WebSocket/SSE 设不了
+            // 自定义头，令牌只能走 query，但那是 Hub 路径的需要，不是全部 API 的。
+            // 按 Hub 路径定向搬运即可，配方见实时通信组件文档的"Bearer 认证下的 Hub 令牌传递"。
             // 模板自带的实时通知走 Cookie 会话（见前端 SignalRService），不受这里影响。
             options.UseAspNetCore()
                    .DisableAccessTokenExtractionFromQueryString()
