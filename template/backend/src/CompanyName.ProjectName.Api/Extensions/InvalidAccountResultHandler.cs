@@ -37,9 +37,18 @@ public sealed class InvalidAccountResultHandler : IAuthorizationMiddlewareResult
         {
             // 直接写状态码，不转交 ChallengeAsync：每个认证方案对 challenge 有自己的解释，
             // OpenIddict Validation 见令牌语法有效就答 403——它无从知道令牌背后的账号已经没了。
-            // "这份凭据已经失效"是本应用的判断，就由本应用表达，且与其余拒绝路径保持同一形状：
-            // 只有状态码，没有重定向也没有响应体。
+            // "这份凭据已经失效"是本应用的判断，就由本应用表达。
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+
+            // 带 Bearer 令牌来的请求补标准 challenge：RFC 9110 对 401 的 WWW-Authenticate 是 MUST，
+            // OAuth 客户端也据此把响应识别为"令牌失效、去重新取"而不是一个普通业务错误。
+            // Cookie 请求保持裸 401——表单登录没有对应的 HTTP 认证方案名，硬造一个没有意义。
+            if (context.Request.Headers.Authorization.Any(value =>
+                    value != null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)))
+            {
+                context.Response.Headers.WWWAuthenticate = "Bearer error=\"invalid_token\"";
+            }
+
             return;
         }
 

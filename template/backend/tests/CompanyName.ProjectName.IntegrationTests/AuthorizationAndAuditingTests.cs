@@ -831,45 +831,8 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     {
         using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
 
-        var clientId = $"client-{Guid.CreateVersion7():N}";
-        var created = await superAdmin.Client.PostAsJsonAsync(
-            "/api/v1/open-applications",
-            new
-            {
-                clientId,
-                displayName = "Workload",
-                applicationType = "service",
-                clientType = "confidential",
-                consentType = "explicit",
-                permissions = new[] { "ept:token", "gt:client_credentials" },
-                requirements = Array.Empty<string>(),
-                redirectUris = Array.Empty<string>(),
-                postLogoutRedirectUris = Array.Empty<string>()
-            });
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-
-        var application = await created.Content.ReadFromJsonAsync<OpenApplicationOutputDto>();
-        Assert.NotNull(application);
-
-        var reset = await superAdmin.Client.PostAsync(
-            $"/api/v1/open-applications/{application.Id}/reset-secret", null);
-        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
-        var secret = await reset.Content.ReadFromJsonAsync<ResetOpenApplicationSecretOutputDto>();
-        Assert.NotNull(secret);
-
-        using var machine = CreateHttpsClient();
-
-        var token = await machine.PostAsync("/connect/token", new FormUrlEncodedContent(
-        [
-            new KeyValuePair<string, string>("grant_type", "client_credentials"),
-            new KeyValuePair<string, string>("client_id", clientId),
-            new KeyValuePair<string, string>("client_secret", secret.ClientSecret)
-        ]));
-        Assert.Equal(HttpStatusCode.OK, token.StatusCode);
-
-        var payload = await token.Content.ReadFromJsonAsync<TokenResponse>();
-        Assert.NotNull(payload);
-        machine.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", payload.AccessToken);
+        using var machine = await CreateMachineClientAsync(
+            superAdmin.Client, $"client-{Guid.CreateVersion7():N}");
 
         // client_credentials 的 sub 是 client_id，代表工作负载而非人。默认策略是管理接口的兜底，
         // 它要表达的是"一个可用的自然人"——放行等于任何机器令牌都能列用户和 OAuth 客户端，
@@ -880,6 +843,26 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(
             HttpStatusCode.Forbidden,
             (await machine.GetAsync("/api/v1/open-applications?offset=0&limit=10")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Client_credentials_cannot_impersonate_a_user_by_taking_their_id_as_client_id()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var victim = await CreateUserAsync(superAdmin.Client);
+#if (IncludeRoles)
+        await GrantAsync(PermissionGrantProviderNames.User, victim.Id, PermissionConstant.Users.Default);
+#endif
+
+        // 攻击者挑一个已存在的用户 Id 当 client_id：用户 Id 从用户管理、审计日志或业务数据里
+        // 都拿得到，碰撞不是偶然而是被挑出来的。只要机器令牌的 sub 与人类主体共用一个
+        // 命名空间，sub 就会被解析成这个用户，机器令牌随之继承他的直授、角色乃至超管身份。
+        using var machine = await CreateMachineClientAsync(superAdmin.Client, victim.Id.ToString());
+
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await machine.GetAsync("/api/v1/users?offset=0&limit=10")).StatusCode);
     }
 
     [Fact]
@@ -905,8 +888,61 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         // Cookie、OpenIddict Validation、userinfo 是三条不同的认证路径。撤权承诺覆盖 API 令牌，
         // 不只是浏览器会话——只有 Cookie 一条测试保持绿色时，策略被改窄了也看不出来。
-        Assert.Equal(HttpStatusCode.Unauthorized, (await api.GetAsync("/api/v1/auth/me")).StatusCode);
+        var revoked = await api.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode);
+
+        // 401 必须带 challenge：RFC 9110 对此是 MUST，OAuth 客户端也据此把响应识别为
+        // "令牌失效、去重新取"，而不是当成一个普通业务错误重试到底。
+        var challenge = Assert.Single(revoked.Headers.WwwAuthenticate);
+        Assert.Equal("Bearer", challenge.Scheme);
+        Assert.Contains("invalid_token", challenge.Parameter);
+
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.GetAsync("/connect/userinfo")).StatusCode);
+    }
+
+    /// <summary>注册一个 client_credentials 应用，取令牌，返回已带 Bearer 的客户端。</summary>
+    private async Task<HttpClient> CreateMachineClientAsync(HttpClient superAdminClient, string clientId)
+    {
+        var created = await superAdminClient.PostAsJsonAsync(
+            "/api/v1/open-applications",
+            new
+            {
+                clientId,
+                displayName = "Workload",
+                applicationType = "service",
+                clientType = "confidential",
+                consentType = "explicit",
+                permissions = new[] { "ept:token", "gt:client_credentials" },
+                requirements = Array.Empty<string>(),
+                redirectUris = Array.Empty<string>(),
+                postLogoutRedirectUris = Array.Empty<string>()
+            });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        var application = await created.Content.ReadFromJsonAsync<OpenApplicationOutputDto>();
+        Assert.NotNull(application);
+
+        var reset = await superAdminClient.PostAsync(
+            $"/api/v1/open-applications/{application.Id}/reset-secret", null);
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        var secret = await reset.Content.ReadFromJsonAsync<ResetOpenApplicationSecretOutputDto>();
+        Assert.NotNull(secret);
+
+        var machine = CreateHttpsClient();
+        var token = await machine.PostAsync("/connect/token", new FormUrlEncodedContent(
+        [
+            new KeyValuePair<string, string>("grant_type", "client_credentials"),
+            new KeyValuePair<string, string>("client_id", clientId),
+            new KeyValuePair<string, string>("client_secret", secret.ClientSecret)
+        ]));
+        Assert.Equal(HttpStatusCode.OK, token.StatusCode);
+
+        var payload = await token.Content.ReadFromJsonAsync<TokenResponse>();
+        Assert.NotNull(payload);
+        machine.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", payload.AccessToken);
+
+        return machine;
     }
 
     private static async Task<(string ClientId, string ClientSecret)> CreateAuthorizationCodeClientAsync(

@@ -123,6 +123,8 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Extensions/ActiveUserRequirement.cs",
+            "backend/src/CompanyName.ProjectName.Api/Extensions/InvalidAccountResultHandler.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/**",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/**",
