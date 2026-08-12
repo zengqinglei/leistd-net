@@ -164,23 +164,24 @@ app.Use(async (context, next) =>
 {
     // 只对 Hub 路径生效：令牌进 URL 会落入反向代理与网关的访问日志、APM、
     // 浏览器历史与 Referer，不要为此放开全部 API。
-    if (context.Request.Path.StartsWithSegments("/hubs/notifications") ||
-        context.Request.Path.StartsWithSegments("/hubs/realtime"))
-    {
+    if (context.Request.Path.StartsWithSegments("/hubs/realtime") &&
         // 仅在没有 Authorization 头时才采信 query：两者同时存在时以头为准，
         // 静默覆盖会让请求以意料之外的主体通过认证。
-        if (context.Request.Headers.Authorization.Count == 0 &&
-            context.Request.Query.TryGetValue("access_token", out var token))
-        {
-            context.Request.Headers.Authorization = $"Bearer {token}";
-        }
+        context.Request.Headers.Authorization.Count == 0 &&
+        // 只认唯一且非空的取值：查询参数可以随手重复，`?access_token=a&access_token=b`
+        // 直接插值会拼出 `Bearer a,b`，那不是合法的单一凭据，怎么解析取决于处理器。
+        context.Request.Query.TryGetValue("access_token", out var token) &&
+        token.Count == 1 &&
+        !string.IsNullOrWhiteSpace(token[0]))
+    {
+        context.Request.Headers.Authorization = $"Bearer {token[0]}";
     }
 
     await next();
 });
 ```
 
-路径要与实际映射的 Hub 一致：`MapNotificationHub` / `MapRealTimeHub` 支持自定义路径，改过就要同步这里。
+路径要与实际映射的 Hub 一致：`RealTimeOptions.RealTimeHubPath` 默认 `/hubs/realtime`，改过就要同步这里。宿主若还映射了别的 Hub，按同样的形状各自补一段，不要图省事放宽成整个 `/hubs` 前缀——那等于把没打算走这条路的 Hub 一并放开。
 
 ## 相关
 

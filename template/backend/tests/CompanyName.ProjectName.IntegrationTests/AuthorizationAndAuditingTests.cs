@@ -870,6 +870,17 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             $"/api/v1/auth/me?access_token={Uri.EscapeDataString(accessToken)}");
 
         Assert.Equal(HttpStatusCode.Unauthorized, queryResponse.StatusCode);
+
+        // form-body 那一半（RFC 6750 §2.2）同样关掉了，一并锁住：只关一半、或者只测一半，
+        // 另一条路就会在无人察觉的情况下重新打开。
+        // 断言 401 而不是别的 4xx：401 说明请求根本没通过认证。若提取还开着，令牌会被采信，
+        // 请求就会走到模型绑定——表单体喂给 [FromBody] 的 JSON 参数，拿到的是另一种 4xx。
+        using var viaForm = CreateHttpsClient();
+        var formResponse = await viaForm.PostAsync(
+            "/api/v1/auth/change-password",
+            new FormUrlEncodedContent([new KeyValuePair<string, string>("access_token", accessToken)]));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, formResponse.StatusCode);
     }
 
     [Fact]
