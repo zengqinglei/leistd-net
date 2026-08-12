@@ -14,20 +14,22 @@ builder.Services.AddOrderServiceClient(builder.Configuration);
 ```json
 {
   "Leistd": {
+    "ServiceAuth": {
+      "Authority": "http://identity-service",
+      "ClientId": "本服务注册的 client_id",
+      "ClientSecret": "从环境变量/密钥管理注入，勿提交"
+    },
     "ServiceClients": {
-      "OrderService": {
-        "BaseAddress": "http://order-service",
-        "Auth": {
-          "Authority": "http://identity-service",
-          "ClientId": "本服务在身份服务注册的 client_id",
-          "ClientSecret": "从环境变量/密钥管理注入，勿提交",
-          "Scope": "order-api"
-        }
-      }
+      "OrderService": { "BaseAddress": "http://order-service", "Scope": "order-api" },
+      "UserService": { "BaseAddress": "http://user-service" }
     }
   }
 }
 ```
+
+`Leistd:ServiceAuth` 是**本服务自己的调用身份，全局只配一次**（一个服务作为调用方只有一个
+client_id/secret），所有服务客户端共享；目标服务级差异只有 `BaseAddress` 与可选的 `Scope`。
+ClientSecret 用环境变量注入：`Leistd__ServiceAuth__ClientSecret`。
 
 3. 业务代码注入客户端接口调用；远端错误以 `RemoteServiceException`（含远端 `traceId`、业务 `code`）抛出，可预期失败应捕获并翻译为本服务的业务异常。
 
