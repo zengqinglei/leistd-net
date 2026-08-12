@@ -167,6 +167,7 @@ public class MessageCenterController(INotificationStore notificationStore, ICurr
 - SignalR 投递失败只记日志、不抛异常：调用 `PublishToUserAsync` 成功返回不代表用户端一定收到实时推送（例如客户端未连接、连接已断开），需要"送达确认"的场景仍应依赖持久化历史 + 客户端主动拉取未读数兜底。
 - `NotificationHub` 端点默认要求登录（`RequireAuthorization`），未登录客户端无法建立 SignalR 连接、也就无法加入 `user:{userId}` 组。
 - **授权只在握手阶段执行一次**。SignalR 不会对已建立的连接重跑策略，因此账号在连接之后被禁用、锁定或删除时，那条连接仍会继续收到推送，直到客户端、服务端或传输层实际断开。特别注意**令牌过期不会自动断开**：Hub 没有配置 `CloseOnAuthenticationExpiration`，SignalR 默认不会仅因令牌到期就关闭既有连接。确需到期即断的项目要显式开启该配置，并用真实 SignalR Client 验证。要让既有连接也立即失效，需要连接注册表加跨节点终止通道，由有明确敏感度要求的业务项目自行实现；本组件不提供，也不应把业务用户仓储反向塞进来。
+- **改用 Bearer 认证时要为 Hub 路径放开 query 传令牌**。浏览器的 WebSocket 与 SSE 设不了自定义请求头，SignalR 客户端配了 `accessTokenFactory` 之后，negotiate 与长轮询发 `Authorization` 头，WebSocket/SSE 只能把令牌拼进 query。若宿主（如本仓库模板）只接受 `Authorization: Bearer`，需在认证中间件之前按路径把 query 里的 `access_token` 搬进请求头——**只对 Hub 路径**，不要为此放开全部 API：令牌进 URL 会进网关访问日志、APM、浏览器历史与 Referer。用 Cookie 会话时不涉及本条。
 
 ## 相关
 

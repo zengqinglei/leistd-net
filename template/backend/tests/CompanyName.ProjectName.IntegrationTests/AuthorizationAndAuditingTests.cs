@@ -846,6 +846,56 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     }
 
     [Fact]
+    public async Task Access_tokens_are_only_accepted_from_the_authorization_header()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        var (clientId, clientSecret) = await CreateAuthorizationCodeClientAsync(superAdmin.Client);
+
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+        var accessToken = await AuthorizeAndExchangeAsync(session, clientId, clientSecret);
+
+        // 同一个有效令牌：走 Authorization 头能认证，走 query 一律不认。
+        // 令牌进 URL 就会进网关访问日志、APM、浏览器历史与 Referer，RFC 6750 §2.3 因此写的是
+        // "除非无法用 Authorization 头，否则 SHOULD NOT"。真需要（浏览器 WebSocket/SSE 设不了
+        // 自定义头）时按路径定向搬运，见 Program.cs 中 AddValidation 处的说明——那是 /hubs/* 的
+        // 需要，不是全部 API 的。这条断言锁住这个决定：谁把全局提取重新打开，这里会红。
+        using var viaHeader = CreateHttpsClient();
+        viaHeader.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        Assert.Equal(HttpStatusCode.OK, (await viaHeader.GetAsync("/api/v1/auth/me")).StatusCode);
+
+        using var viaQuery = CreateHttpsClient();
+        var queryResponse = await viaQuery.GetAsync(
+            $"/api/v1/auth/me?access_token={Uri.EscapeDataString(accessToken)}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, queryResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_cookie_session_is_not_reported_as_a_bearer_challenge()
+    {
+        using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        using var session = await factory.LoginAsync(user.Username, TestPassword);
+
+        // Cookie 认证的请求顺带挂一个无关的 Bearer 头——按请求头形态判断的实现会把它
+        // 误标成 Bearer challenge。判据必须是"本次请求实际由哪个方案认证成功"。
+        session.Client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", "not-a-real-token");
+        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+
+        var revoked = await session.Client.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode);
+        Assert.Empty(revoked.Headers.WwwAuthenticate);
+    }
+
+    [Fact]
     public async Task Client_credentials_cannot_impersonate_a_user_by_taking_their_id_as_client_id()
     {
         using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
@@ -897,16 +947,6 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal("Bearer", challenge.Scheme);
         Assert.Contains("invalid_token", challenge.Parameter);
 
-        // 令牌不一定走 Authorization 头：OpenIddict Validation 同样接受 query 里的 access_token，
-        // SignalR 的 WebSocket/SSE 只能这样传。按请求头判断"要不要补 challenge"会漏掉这一路。
-        using var viaQuery = CreateHttpsClient();
-        var queryResponse = await viaQuery.GetAsync(
-            $"/api/v1/auth/me?access_token={Uri.EscapeDataString(accessToken)}");
-
-        Assert.Equal(HttpStatusCode.Unauthorized, queryResponse.StatusCode);
-        var queryChallenge = Assert.Single(queryResponse.Headers.WwwAuthenticate);
-        Assert.Equal("Bearer", queryChallenge.Scheme);
-        Assert.Contains("invalid_token", queryChallenge.Parameter);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await api.GetAsync("/connect/userinfo")).StatusCode);
     }

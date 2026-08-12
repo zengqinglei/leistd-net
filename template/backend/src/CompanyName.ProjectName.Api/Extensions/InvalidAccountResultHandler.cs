@@ -40,10 +40,9 @@ public sealed class InvalidAccountResultHandler : IAuthorizationMiddlewareResult
         {
 #if (IncludeOpenIddict)
             // 是否补 challenge，取决于本次请求实际由哪个方案认证成功，而不是请求头长什么样。
-            // 令牌不一定来自 Authorization 头：OpenIddict Validation 同样接受 query/form 里的
-            // access_token，SignalR 的 WebSocket/SSE 正是只能这样传。按请求头判断会漏掉那一路
-            // （401 不带 challenge），反过来还会把"顺带挂了个无关 Bearer 头的 Cookie 请求"误标成
-            // Bearer challenge。认证结果是唯一可靠的判据；重复认证不会重新解析令牌，
+            // 按请求头判断会把"顺带挂了个无关 Bearer 头的 Cookie 请求"误标成 Bearer challenge；
+            // 而将来若为 /hubs/* 放开 query 传令牌（见 Program.cs 中的说明），头判断还会反过来
+            // 漏掉那一路。认证结果是唯一可靠的判据；重复认证不会重新解析令牌，
             // ASP.NET Core 按方案缓存本次请求的结果。
             var bearer = await context.AuthenticateAsync(
                 OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);

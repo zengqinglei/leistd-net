@@ -172,7 +172,31 @@ try
         .AddValidation(options =>
         {
             options.UseLocalServer();
-            options.UseAspNetCore();
+
+            // 只接受 Authorization: Bearer。RFC 6750 §2.3 对 URI query 传令牌的措辞是
+            // "除非无法用 Authorization 头，否则 SHOULD NOT"——令牌一旦进 URL，就会进
+            // 反向代理与网关的访问日志、APM、浏览器历史和 Referer，且难以察觉。
+            // OpenIddict 作为实现规范的库把三种方式都开着是本分，但"哪种方式可用"是应用的
+            // 策略选择；ASP.NET Core 自己的 JwtBearerHandler 默认同样只读 Authorization 头。
+            //
+            // 需要 Bearer 认证的 SignalR 时，不要把这两行删掉——浏览器的 WebSocket/SSE
+            // 设不了自定义头，令牌只能走 query，但那只是 /hubs/* 的需要，不是全部 API 的。
+            // 在认证中间件之前按路径搬运即可，作用域清楚：
+            //
+            //     app.Use(async (context, next) =>
+            //     {
+            //         if (context.Request.Path.StartsWithSegments("/hubs") &&
+            //             context.Request.Query.TryGetValue("access_token", out var token))
+            //         {
+            //             context.Request.Headers.Authorization = $"Bearer {token}";
+            //         }
+            //         await next();
+            //     });
+            //
+            // 模板自带的实时通知走 Cookie 会话（见前端 SignalRService），不受这里影响。
+            options.UseAspNetCore()
+                   .DisableAccessTokenExtractionFromQueryString()
+                   .DisableAccessTokenExtractionFromBodyForm();
         });
 #endif
 // (IncludeOpenIddict)
