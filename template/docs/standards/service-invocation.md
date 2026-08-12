@@ -42,10 +42,11 @@ builder.Services.AddOrderServiceClient(builder.Configuration);
 
 ## 发布本服务的 Client 包
 
-`src/{ProjectName}.Client` 是本服务的强类型调用客户端：
+`src/{ProjectName}.Client` 是本服务的强类型调用客户端（**Refit 接口式**，HTTP 实现由源生成器产出）：
 
-- 只依赖 `Leistd.ServiceClient.Core` / `Leistd.ServiceClient.OAuth`，不引用服务内部程序集；DTO 在包内自带，与服务端 DTO 独立演进。
-- 新增对外接口时同步补充客户端方法与 DTO，并保持 `Add{ProjectName}Client` 注册入口不变。
+- 只依赖 `Leistd.ServiceClient.Refit` / `Leistd.ServiceClient.OAuth` + `Refit`（激活源生成器），不引用服务内部程序集；DTO 在包内自带，与服务端 DTO 独立演进。
+- 新增对外接口时在 Refit 接口上补充方法与特性（`[Get]`/`[Post]`/`[Multipart]` 等）及对应 DTO，并保持 `Add{ProjectName}Client` 注册入口不变。数据格式写法（JSON/表单/multipart 文件/二进制下载）见组件随包文档 `docs/service-client.md` 的「数据格式规范」。
+- **一律经 `AddRefitServiceClient` 注册**（`Add{ProjectName}Client` 已封装）：错误统一还原为 `RemoteServiceException`，不暴露 Refit 的 `ApiException`。
 - 以 NuGet 包形式随服务版本发布（`dotnet pack`），消费方按服务版本升级。
 
 集成测试 `ServiceInvocationTests` 覆盖「取令牌 → 受信恢复用户 → 伪造头阻断」闭环，改动认证或用户上下文相关代码后必须保持其通过。

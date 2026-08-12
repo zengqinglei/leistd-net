@@ -40,6 +40,7 @@
     <PackageVersion Include="Leistd.ServiceClient.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ServiceClient.OAuth" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ServiceClient.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.ServiceClient.Refit" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Domain" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Application" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Application.Contracts" Version="$(LeistdFrameworkVersion)" />
@@ -54,18 +55,19 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
     <!--#if (IncludeLocalization)-->
-    <PackageVersion Include="Microsoft.Extensions.Localization.Abstractions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Localization.Abstractions" Version="10.0.10" />
     <!--#endif-->
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageVersion Include="MailKit" Version="4.17.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Cryptography.KeyDerivation" Version="10.0.0" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageVersion Include="Refit" Version="15.0.0" />
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
