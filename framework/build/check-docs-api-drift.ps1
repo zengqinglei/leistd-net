@@ -38,6 +38,9 @@ $allow = @(
     # 第三方基类（Castle / Mapster / AutoMapper）
     'AsyncInterceptorBase','IMapperConfigurationExpression','TypeAdapterConfig','Profile','IInterceptor',
     'AddProfile','CreateMap',
+    # Refit（service-client 文档引用的第三方类型/特性；AttachmentName 为已废弃特性，文档明确禁用）
+    'StreamPart','ByteArrayPart','FileInfoPart','ApiResponse','ApiException','RefitSettings',
+    'BodySerializationMethod','AttachmentName',
     # BCL / LINQ / MSBuild 概念（散文中合法出现的非 Leistd 词）
     'GetHashCode','FormatException','SingleOrDefault','ProjectReference','EmbeddedResource','Debug',
     # 本地化：BCL/ASP.NET 本地化抽象（Leistd 在其上实现，非自有类型）

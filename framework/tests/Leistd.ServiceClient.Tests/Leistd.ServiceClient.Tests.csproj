@@ -17,6 +17,8 @@
   <ItemGroup>
     <!-- 真实管道测试宿主：直接用 TestHost（TestServer/UseTestServer/GetTestClient）。 -->
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <!-- Refit 接口声明在本程序集：需要直接引用以激活源生成器 -->
+    <PackageReference Include="Refit" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
@@ -29,6 +31,7 @@
     <ProjectReference Include="..\..\components\service-client\Leistd.ServiceClient.Core\Leistd.ServiceClient.Core.csproj" />
     <ProjectReference Include="..\..\components\service-client\Leistd.ServiceClient.OAuth\Leistd.ServiceClient.OAuth.csproj" />
     <ProjectReference Include="..\..\components\service-client\Leistd.ServiceClient.AspNetCore\Leistd.ServiceClient.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\components\service-client\Leistd.ServiceClient.Refit\Leistd.ServiceClient.Refit.csproj" />
     <ProjectReference Include="..\..\components\tracing\Leistd.Tracing.AspNetCore\Leistd.Tracing.AspNetCore.csproj" />
     <ProjectReference Include="..\..\components\security\Leistd.Security.AspNetCore\Leistd.Security.AspNetCore.csproj" />
     <ProjectReference Include="..\Leistd.TestBase\Leistd.TestBase.csproj" />
