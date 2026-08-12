@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -238,6 +239,16 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
 
     private ServiceProvider CreateCaller(ICurrentUser? currentUser)
     {
+        // 走真实配置契约：全局 Leistd:ServiceAuth（本服务调用身份，一次）+ 客户端节 Scope
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Leistd:ServiceAuth:TokenEndpoint"] = "http://identity/connect/token",
+            ["Leistd:ServiceAuth:ClientId"] = ClientId,
+            ["Leistd:ServiceAuth:ClientSecret"] = ClientSecret,
+            ["Leistd:ServiceClients:DemoService:BaseAddress"] = "http://demo-service",
+            ["Leistd:ServiceClients:DemoService:Scope"] = RequiredScope,
+        }).Build();
+
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddCorrelationIdCore(_ => { });
@@ -246,17 +257,9 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
             services.AddSingleton(currentUser);
         }
 
-        services.AddServiceClient<IDemoClient, DemoClient, DemoClientOptions>(
-                "DemoService",
-                options => options.BaseAddress = "http://demo-service")
+        services.AddServiceClient<IDemoClient, DemoClient, DemoClientOptions>("DemoService", configuration)
             .ConfigurePrimaryHttpMessageHandler(() => _resourceHost.GetTestServer().CreateHandler())
-            .AddClientCredentials(options =>
-            {
-                options.TokenEndpoint = "http://identity/connect/token";
-                options.ClientId = ClientId;
-                options.ClientSecret = ClientSecret;
-                options.Scope = RequiredScope;
-            });
+            .AddClientCredentials(configuration);
 
         services.AddHttpClient(ClientCredentialsTokenProvider.TokenHttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => _identityHost.GetTestServer().CreateHandler());

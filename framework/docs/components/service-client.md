@@ -8,7 +8,8 @@ Leistd 把服务间调用收敛为一条标准管道：`AddServiceClient` 注册
 
 | 场景 | 用法 | 包 |
 | --- | --- | --- |
-| 调用其他 Leistd 服务，需要标准管道（日志/追踪/用户头） | `AddServiceClient<TClient, TImpl, TOptions>` | `Leistd.ServiceClient.Core` |
+| 编写业务 Client 包：只声明接口 + 特性，HTTP 实现由 Refit 生成（**推荐**） | `AddRefitServiceClient<TApi, TOptions>` | `Leistd.ServiceClient.Refit` |
+| 手写客户端实现，需要标准管道（日志/追踪/用户头） | `AddServiceClient<TClient, TImpl, TOptions>` | `Leistd.ServiceClient.Core` |
 | 服务间需要 OAuth2 client credentials 认证 | 在返回的 builder 上 `.AddClientCredentials(...)` | `Leistd.ServiceClient.OAuth` |
 | 作为被调方，接收携带 `X-User-*` 头的服务调用 | `AddServiceUserContext()` + `UseServiceUserContext()` | `Leistd.ServiceClient.AspNetCore` |
 | 解析统一响应 / 还原远端错误 | `response.ReadResultAsync<T>()` 等扩展 | `Leistd.ServiceClient.Core` |
@@ -27,11 +28,62 @@ dotnet add package Leistd.ServiceClient.OAuth
 
 # 被调方：用户上下文恢复中间件（传递引用 Core）
 dotnet add package Leistd.ServiceClient.AspNetCore
+
+# Refit 接口式客户端（推荐编写业务 Client 包时使用；传递引用 Core 与 Refit）
+dotnet add package Leistd.ServiceClient.Refit
 ```
+
+> 声明 Refit 接口的项目还需直接引用 `Refit` 包以激活源生成器（接口须 public，
+> 或 internal + `InternalsVisibleTo`）。
 
 > 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
 
-## 调用方：注册客户端
+## 调用方（推荐）：Refit 接口式客户端
+
+业务 Client 包只声明接口 + Refit 特性，HTTP 实现由源生成器产出——URL 拼接、query 编码、multipart 构造均不再手写：
+
+```csharp
+public class OrderServiceClientOptions : ServiceClientOptions;
+
+public interface IOrderServiceClient
+{
+    [Get("/api/v1/orders/{id}")]
+    Task<OrderDto> GetAsync(Guid id, CancellationToken cancellationToken = default);
+
+    [Multipart]
+    [Post("/api/v1/orders/{id}/attachments")]
+    Task UploadAsync(Guid id, [AliasAs("file")] StreamPart file, CancellationToken cancellationToken = default);
+}
+```
+
+注册（配置节与手写路径相同，`Leistd:ServiceClients:OrderService`）：
+
+```csharp
+builder.Services
+    .AddRefitServiceClient<IOrderServiceClient, OrderServiceClientOptions>(
+        "OrderService", builder.Configuration)
+    .AddClientCredentials(builder.Configuration);
+```
+
+规则：
+
+- **一律经 `AddRefitServiceClient` 注册**，不要用裸 `AddRefitClient`——否则错误语义退回 Refit 默认的 `ApiException`，与手写路径的 `RemoteServiceException` 契约分叉。
+- 统一 `RefitSettings`（`LeistdRefitSettings.Create()`）：System.Text.Json Web 默认序列化 + 非 2xx 经 `ExceptionFactory` 还原为 `RemoteServiceException`；可传入自定义 `RefitSettings` 覆盖。
+- 无法内联源生成的方法形态（multipart、原始响应等）由 `Leistd.ServiceClient.Refit` 自带的 `Refit.Reflection` 反射构建器承接，业务包无需处理 RF006 诊断。
+- 远端返回统一响应信封（`Result<T>`）的服务：接口返回类型直接声明 `Task<Result<OrderDto>>`，或返回 `Task<HttpResponseMessage>` 后用 `ReadResultAsync<T>()` 解包。
+
+## 数据格式规范（Refit 路径）
+
+| 格式 | 写法 | 注意 |
+| --- | --- | --- |
+| JSON 请求体 | `[Body] OrderDto dto` | 默认 STJ Web 约定（camelCase），与 Leistd 服务端一致 |
+| 表单 `x-www-form-urlencoded` | `[Body(BodySerializationMethod.UrlEncoded)]`，接受 `IDictionary` 或普通对象 | 对象的公共可读属性→字段；`[AliasAs]` 重命名字段 |
+| 文件上传 `multipart/form-data` | 方法标 `[Multipart]`，参数用 `StreamPart(stream, fileName, contentType)` / `ByteArrayPart` / `FileInfoPart` | 字段名用 `[AliasAs]` 指定；旧 `AttachmentName` 特性已废弃禁用 |
+| 二进制/文件下载 | 返回 `Task<HttpResponseMessage>`，自行读 `Content` 流 | **原始响应不经 `ExceptionFactory`**：读流前必须先 `await response.EnsureRemoteSuccessAsync()` 完成错误还原 |
+| Query 参数 | 方法参数自动拼接；`[Query]` / `[AliasAs]` 控制命名与格式 | 值自动 URL 编码（含中文/保留字符） |
+| 响应元数据 | `Task<ApiResponse<T>>`（状态码/头） | 仅诊断场景；常规业务方法直接 `Task<T>` |
+
+## 调用方（基线）：手写客户端
 
 为下游服务定义强类型客户端与配置类型：
 
@@ -61,30 +113,33 @@ public class OrderServiceClient(HttpClient httpClient) : IOrderServiceClient
 builder.Services
     .AddServiceClient<IOrderServiceClient, OrderServiceClient, OrderServiceClientOptions>(
         "OrderService", builder.Configuration)
-    .AddClientCredentials(builder.Configuration); // 绑定 Leistd:ServiceClients:OrderService:Auth
+    .AddClientCredentials(builder.Configuration);
 ```
 
-配置：
+配置分两层——**调用身份全局一次**（一个服务作为调用方只有一个 client_id/secret），
+目标服务级差异只有地址与可选 scope：
 
 ```json
 {
   "Leistd": {
+    "ServiceAuth": {
+      "Authority": "http://identity-service",
+      "ClientId": "inventory-service",
+      "ClientSecret": "<来自密钥管理，勿入库>"
+    },
     "ServiceClients": {
       "OrderService": {
         "BaseAddress": "http://order-service",
         "Timeout": "00:00:30",
-        "LogPayloads": false,
-        "Auth": {
-          "Authority": "http://identity-service",
-          "ClientId": "inventory-service",
-          "ClientSecret": "<来自密钥管理，勿入库>",
-          "Scope": "order-api"
-        }
-      }
+        "Scope": "order-api"
+      },
+      "UserService": { "BaseAddress": "http://user-service" }
     }
   }
 }
 ```
+
+`Leistd:ServiceAuth` 可含默认 `Scope`；客户端节的 `Scope` 存在时覆盖它。
 
 `AddServiceClient` 返回 `IHttpClientBuilder`，可继续叠加宿主自己的处理器（如
 `Microsoft.Extensions.Http.Resilience` 的 `.AddStandardResilienceHandler()`）；SDK 不内置重试熔断。
@@ -183,17 +238,28 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `ServiceClientOptions` | 配置基类：`BaseAddress`、`Timeout`、`LogPayloads`、`MaxPayloadLength`、`UserContext` |
 | `UserContextForwardingOptions` | 用户头转发：`Enable`、`ForwardUserName`、`ClaimHeaderMap` |
 | `ServiceClientHeaders` | 头名常量：`UserId`（`X-User-Id`）、`UserName`（`X-User-Name`） |
+| `AddServiceClientPipeline<TOptions>(builder, serviceName)` | 在既有 `IHttpClientBuilder` 上装配标准能力（BaseAddress/Timeout/日志/追踪/用户头），供 Refit 等注册形态复用 |
 | `ReadResultAsync<T>()` / `ReadResultAsync()` | 解包统一响应，失败抛 `RemoteServiceException` |
 | `ReadContentAsync<T>()` | 未包装端点直接反序列化（同样先做错误还原） |
 | `EnsureRemoteSuccessAsync()` | 仅做非 2xx → `RemoteServiceException` 还原，供文件流等场景 |
+| `CreateRemoteErrorAsync()` | 从非 2xx 响应构造 `RemoteServiceException`（只构造不抛出，供 ExceptionFactory 等挂载点） |
 | `ServiceClientException` | 客户端侧异常（继承 `Leistd.Core` 的 `CommonException`） |
 | `RemoteServiceException` | 远端错误（继承 `ServiceClientException`）：`StatusCode`、`ErrorCode`、`RemoteTraceId`、`Errors`、`ResponseBody` |
+
+### `Leistd.ServiceClient.Refit`
+
+| 成员 | 说明 |
+| --- | --- |
+| `AddRefitServiceClient<TApi, TOptions>(services, serviceName, IConfiguration, RefitSettings?)` | 注册 Refit 接口客户端并装配标准管道，Options 绑定 `Leistd:ServiceClients:<serviceName>`；返回 `IHttpClientBuilder` |
+| `AddRefitServiceClient<TApi, TOptions>(services, serviceName, Action<TOptions>, RefitSettings?)` | 同上，委托配置版 |
+| `LeistdRefitSettings.Create(JsonSerializerOptions?)` | 统一 `RefitSettings`：STJ Web 序列化 + 非 2xx 还原为 `RemoteServiceException` |
 
 ### `Leistd.ServiceClient.OAuth`
 
 | 成员 | 说明 |
 | --- | --- |
-| `AddClientCredentials(builder, IConfiguration)` | 追加 client credentials 认证，配置绑定 `Leistd:ServiceClients:<名>:Auth` |
+| `AddClientCredentials(builder, IConfiguration)` | 追加 client credentials 认证：全局 `Leistd:ServiceAuth`（调用身份）+ 客户端节 `Scope` |
+| `DependencyInjection.ServiceAuthSectionName` | 全局调用身份配置节名常量（`Leistd:ServiceAuth`） |
 | `AddClientCredentials(builder, Action<ClientCredentialsOptions>)` | 同上，委托配置版 |
 | `ClientCredentialsOptions` | `Authority` / `TokenEndpoint`（默认 `{Authority}/connect/token`）、`ClientId`、`ClientSecret`、`Scope`、`ExpirationBuffer`（默认 60s） |
 | `IServiceTokenProvider` | token 获取抽象：`GetAccessTokenAsync(clientName)` / `Invalidate(clientName)` |
@@ -217,6 +283,12 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 - 管道各环节按可选能力**在构建时探测**：`ICorrelationIdProvider` 未注册则追踪环节直通，`ICurrentUser` 未注册或 `UserContext.Enable=false` 则用户头环节直通。处理器实例随 `HttpClientFactory` 的 handler 生命周期（默认 2 分钟）轮换，期间的 Options 变更在轮换后生效。
 - 日志处理器把传输层异常包装为 `ServiceClientException`；`OperationCanceledException` 且调用方令牌已取消时原样上抛。
 - 用户头注入读取的是**发送时刻**的 `ICurrentUser`（底层 `AsyncLocal`），处理器被缓存复用不影响每请求取值。
+
+### Leistd.ServiceClient.Refit
+
+- `AddRefitServiceClient` = `AddRefitClient<TApi>(settings, httpClientName: serviceName)` + `AddServiceClientPipeline<TOptions>`——Refit 客户端与手写客户端共享同一条 handler 管道与配置节。
+- `LeistdRefitSettings.Create()` 的 `ExceptionFactory` 对非 2xx 响应调用 `CreateRemoteErrorAsync` 构造 `RemoteServiceException`；返回 `HttpResponseMessage` 的方法不经该钩子（拿到原始响应）。
+- 包自带 `Refit.Reflection`：无法内联源生成的方法（RF006）自动落到反射构建器，可生成的方法仍走源生成实现。
 
 ### Leistd.ServiceClient.OAuth
 
@@ -248,15 +320,15 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `UserContext.ForwardUserName` | `true` | 是否转发 `X-User-Name` |
 | `UserContext.ClaimHeaderMap` | 空 | 额外 claim → 头名映射 |
 
-`ClientCredentialsOptions`（绑定 `Leistd:ServiceClients:<服务名>:Auth`）：
+`ClientCredentialsOptions`（分层绑定：全局 `Leistd:ServiceAuth` → 客户端节 `Leistd:ServiceClients:<服务名>:Scope`）：
 
-| 属性 | 默认值 | 说明 |
-| --- | --- | --- |
-| `Authority` | `null` | 身份服务基础地址 |
-| `TokenEndpoint` | `{Authority}/connect/token` | token 端点，设置后覆盖默认推导 |
-| `ClientId` / `ClientSecret` | 空 | 客户端凭据（Secret 来自密钥管理） |
-| `Scope` | `null` | 申请的 scope，空格分隔多个 |
-| `ExpirationBuffer` | 60s | 提前刷新缓冲 |
+| 属性 | 默认值 | 配置位置 | 说明 |
+| --- | --- | --- | --- |
+| `Authority` | `null` | 全局 | 身份服务基础地址 |
+| `TokenEndpoint` | `{Authority}/connect/token` | 全局 | token 端点，设置后覆盖默认推导 |
+| `ClientId` / `ClientSecret` | 空 | 全局 | 本服务的调用凭据（Secret 来自密钥管理，环境变量 `Leistd__ServiceAuth__ClientSecret`） |
+| `Scope` | `null` | 全局默认 + 客户端节覆盖 | 申请的 scope，空格分隔多个 |
+| `ExpirationBuffer` | 60s | 全局 | 提前刷新缓冲 |
 
 `ServiceUserContextOptions`（绑定 `Leistd:ServiceUserContext`）：
 

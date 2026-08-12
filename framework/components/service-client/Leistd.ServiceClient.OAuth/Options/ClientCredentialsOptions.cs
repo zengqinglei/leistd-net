@@ -1,8 +1,10 @@
 namespace Leistd.ServiceClient.OAuth.Options;
 
 /// <summary>
-/// OAuth2 client credentials 认证配置。按具名客户端（HttpClient 名）绑定
-/// 配置节 <c>Leistd:ServiceClients:&lt;服务名&gt;:Auth</c>。
+/// OAuth2 client credentials 认证配置。配置来源分两层：
+/// 全局 <c>Leistd:ServiceAuth</c>（本服务的调用身份：Authority/ClientId/ClientSecret，
+/// 一个服务只配一次）+ 客户端节 <c>Leistd:ServiceClients:&lt;服务名&gt;:Scope</c>
+/// （目标服务级 scope，未配置时继承全局默认）。
 /// </summary>
 public class ClientCredentialsOptions
 {

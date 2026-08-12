@@ -87,7 +87,27 @@ public static class DependencyInjection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
 
-        var builder = services.AddHttpClient<TClient, TImplementation>(serviceName, (provider, client) =>
+        return services.AddHttpClient<TClient, TImplementation>(serviceName)
+            .AddServiceClientPipeline<TOptions>(serviceName);
+    }
+
+    /// <summary>
+    /// 在既有 <see cref="IHttpClientBuilder"/> 上装配服务客户端标准能力：
+    /// 从 <typeparamref name="TOptions"/> 应用 BaseAddress / Timeout，并按序挂载
+    /// 调用日志 → TraceId 透传 → 用户上下文头注入。供 Refit 等其他客户端注册形态复用
+    /// （如 <c>AddRefitClient&lt;TApi&gt;(...).AddServiceClientPipeline&lt;TOptions&gt;(serviceName)</c>）。
+    /// </summary>
+    /// <typeparam name="TOptions">客户端配置类型（须已绑定，如经 <c>services.Configure</c>）</typeparam>
+    /// <param name="builder">HttpClient 构建器</param>
+    /// <param name="serviceName">下游服务名（日志类别后缀）</param>
+    public static IHttpClientBuilder AddServiceClientPipeline<TOptions>(
+        this IHttpClientBuilder builder,
+        string serviceName)
+        where TOptions : ServiceClientOptions, new()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+
+        builder.ConfigureHttpClient((provider, client) =>
         {
             var options = provider.GetRequiredService<IOptions<TOptions>>().Value;
             if (!string.IsNullOrEmpty(options.BaseAddress))

@@ -1,5 +1,5 @@
-using Leistd.ServiceClient;
 using Leistd.ServiceClient.OAuth;
+using Leistd.ServiceClient.Refit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,9 +11,11 @@ namespace CompanyName.ProjectName.Client;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册本服务客户端：装配标准调用管道（日志、TraceId 透传、用户上下文头），
-    /// 配置节 <c>Leistd:ServiceClients:MyProject</c>；存在 <c>Auth</c> 子节时自动启用
-    /// OAuth2 client credentials 认证。
+    /// 注册本服务客户端：Refit 接口实现 + 标准调用管道（日志、TraceId 透传、用户上下文头）
+    /// + 统一错误契约（<c>RemoteServiceException</c>），配置节
+    /// <c>Leistd:ServiceClients:MyProject</c>。调用方配置了全局调用身份
+    /// <c>Leistd:ServiceAuth</c> 时自动启用 OAuth2 client credentials 认证
+    /// （目标服务 scope 经 <c>Leistd:ServiceClients:MyProject:Scope</c> 指定，可省）。
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <param name="configuration">应用配置</param>
@@ -23,12 +25,11 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         var builder = services
-            .AddServiceClient<IMyProjectClient, MyProjectClient, MyProjectClientOptions>(
+            .AddRefitServiceClient<IMyProjectClient, MyProjectClientOptions>(
                 MyProjectClientDefaults.ServiceName, configuration);
 
-        var authSection = configuration.GetSection(
-            $"{Leistd.ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{MyProjectClientDefaults.ServiceName}:Auth");
-        if (authSection.Exists())
+        if (configuration.GetSection(
+                Leistd.ServiceClient.OAuth.DependencyInjection.ServiceAuthSectionName).Exists())
         {
             builder.AddClientCredentials(configuration);
         }

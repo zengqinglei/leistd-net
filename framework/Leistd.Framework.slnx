@@ -69,6 +69,7 @@
     <Project Path="components/service-client/Leistd.ServiceClient.AspNetCore/Leistd.ServiceClient.AspNetCore.csproj" />
     <Project Path="components/service-client/Leistd.ServiceClient.Core/Leistd.ServiceClient.Core.csproj" />
     <Project Path="components/service-client/Leistd.ServiceClient.OAuth/Leistd.ServiceClient.OAuth.csproj" />
+    <Project Path="components/service-client/Leistd.ServiceClient.Refit/Leistd.ServiceClient.Refit.csproj" />
   </Folder>
   <Folder Name="/components/tracing/">
     <Project Path="components/tracing/Leistd.Tracing.AspNetCore/Leistd.Tracing.AspNetCore.csproj" />

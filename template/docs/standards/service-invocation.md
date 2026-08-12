@@ -14,20 +14,22 @@ builder.Services.AddOrderServiceClient(builder.Configuration);
 ```json
 {
   "Leistd": {
+    "ServiceAuth": {
+      "Authority": "http://identity-service",
+      "ClientId": "本服务注册的 client_id",
+      "ClientSecret": "从环境变量/密钥管理注入，勿提交"
+    },
     "ServiceClients": {
-      "OrderService": {
-        "BaseAddress": "http://order-service",
-        "Auth": {
-          "Authority": "http://identity-service",
-          "ClientId": "本服务在身份服务注册的 client_id",
-          "ClientSecret": "从环境变量/密钥管理注入，勿提交",
-          "Scope": "order-api"
-        }
-      }
+      "OrderService": { "BaseAddress": "http://order-service", "Scope": "order-api" },
+      "UserService": { "BaseAddress": "http://user-service" }
     }
   }
 }
 ```
+
+`Leistd:ServiceAuth` 是**本服务自己的调用身份，全局只配一次**（一个服务作为调用方只有一个
+client_id/secret），所有服务客户端共享；目标服务级差异只有 `BaseAddress` 与可选的 `Scope`。
+ClientSecret 用环境变量注入：`Leistd__ServiceAuth__ClientSecret`。
 
 3. 业务代码注入客户端接口调用；远端错误以 `RemoteServiceException`（含远端 `traceId`、业务 `code`）抛出，可预期失败应捕获并翻译为本服务的业务异常。
 
@@ -42,10 +44,11 @@ builder.Services.AddOrderServiceClient(builder.Configuration);
 
 ## 发布本服务的 Client 包
 
-`src/{ProjectName}.Client` 是本服务的强类型调用客户端：
+`src/{ProjectName}.Client` 是本服务的强类型调用客户端（**Refit 接口式**，HTTP 实现由源生成器产出）：
 
-- 只依赖 `Leistd.ServiceClient.Core` / `Leistd.ServiceClient.OAuth`，不引用服务内部程序集；DTO 在包内自带，与服务端 DTO 独立演进。
-- 新增对外接口时同步补充客户端方法与 DTO，并保持 `Add{ProjectName}Client` 注册入口不变。
+- 只依赖 `Leistd.ServiceClient.Refit` / `Leistd.ServiceClient.OAuth` + `Refit`（激活源生成器），不引用服务内部程序集；DTO 在包内自带，与服务端 DTO 独立演进。
+- 新增对外接口时在 Refit 接口上补充方法与特性（`[Get]`/`[Post]`/`[Multipart]` 等）及对应 DTO，并保持 `Add{ProjectName}Client` 注册入口不变。数据格式写法（JSON/表单/multipart 文件/二进制下载）见组件随包文档 `docs/service-client.md` 的「数据格式规范」。
+- **一律经 `AddRefitServiceClient` 注册**（`Add{ProjectName}Client` 已封装）：错误统一还原为 `RemoteServiceException`，不暴露 Refit 的 `ApiException`。
 - 以 NuGet 包形式随服务版本发布（`dotnet pack`），消费方按服务版本升级。
 
 集成测试 `ServiceInvocationTests` 覆盖「取令牌 → 受信恢复用户 → 伪造头阻断」闭环，改动认证或用户上下文相关代码后必须保持其通过。

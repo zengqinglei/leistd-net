@@ -86,6 +86,20 @@ public static class HttpResponseMessageExtensions
             return;
         }
 
+        throw await CreateRemoteErrorAsync(response, cancellationToken);
+    }
+
+    /// <summary>
+    /// 从非 2xx 响应构造 <see cref="RemoteServiceException"/>（解析 ProblemDetails 的
+    /// <c>code</c> / <c>message</c> / <c>traceId</c> / <c>errors</c>，非 JSON 体保留原始片段），
+    /// 只构造不抛出——供 Refit <c>ExceptionFactory</c> 等「返回异常」形态的挂载点复用。
+    /// </summary>
+    /// <param name="response">非 2xx 的 HTTP 响应</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    public static async Task<RemoteServiceException> CreateRemoteErrorAsync(
+        this HttpResponseMessage response,
+        CancellationToken cancellationToken = default)
+    {
         string body;
         try
         {
@@ -93,7 +107,7 @@ public static class HttpResponseMessageExtensions
         }
         catch (System.Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new RemoteServiceException(
+            return new RemoteServiceException(
                 $"{Describe(response)} 远端返回错误，且响应体读取失败: {ex.Message}",
                 (int)response.StatusCode,
                 innerException: ex);
@@ -125,7 +139,7 @@ public static class HttpResponseMessageExtensions
             }
         }
 
-        throw new RemoteServiceException(
+        return new RemoteServiceException(
             $"{Describe(response)} 远端返回错误: {message ?? snippet}" +
             (traceId is null ? string.Empty : $" (远端 traceId: {traceId})"),
             (int)response.StatusCode,

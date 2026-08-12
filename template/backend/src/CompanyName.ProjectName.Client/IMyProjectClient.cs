@@ -1,9 +1,11 @@
 using CompanyName.ProjectName.Client.Dtos;
+using Refit;
 
 namespace CompanyName.ProjectName.Client;
 
 /// <summary>
-/// 本服务的强类型调用客户端。
+/// 本服务的强类型调用客户端（Refit 接口，HTTP 实现由源生成器产出）。
+/// 新增对外接口时在此补充方法与特性，并在 <c>Dtos/</c> 下补充对应 DTO。
 /// </summary>
 public interface IMyProjectClient
 {
@@ -11,7 +13,8 @@ public interface IMyProjectClient
     /// 获取服务基础信息（匿名端点，可用于探活与联调）。
     /// </summary>
     /// <param name="cancellationToken">取消令牌</param>
-    Task<ServiceInfoDto?> GetServiceInfoAsync(CancellationToken cancellationToken = default);
+    [Get("/api/v1/service-info")]
+    Task<ServiceInfoDto> GetServiceInfoAsync(CancellationToken cancellationToken = default);
 
 #if (IncludeIdentity)
     /// <summary>
@@ -19,6 +22,7 @@ public interface IMyProjectClient
     /// 需要认证：服务间调用须配置 client credentials 并携带用户上下文。
     /// </summary>
     /// <param name="cancellationToken">取消令牌</param>
-    Task<WhoAmIDto?> WhoAmIAsync(CancellationToken cancellationToken = default);
+    [Get("/api/v1/service-info/whoami")]
+    Task<WhoAmIDto> WhoAmIAsync(CancellationToken cancellationToken = default);
 #endif
 }
