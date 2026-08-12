@@ -79,7 +79,9 @@ graph TD
 | `Leistd.ServiceClient.OAuth` | 调用方认证（可选） | `IServiceTokenProvider` + client credentials 实现（按具名客户端缓存、过期缓冲、`SemaphoreSlim` 单飞）；Bearer 注入 handler（401 时失效重取、重试一次）；`AddClientCredentials()` 挂载扩展 | `Leistd.ServiceClient.Core` |
 | `Leistd.ServiceClient.AspNetCore` | 被调方集成（可选） | `ServiceUserContextClaimsTransformation`（认证阶段恢复用户主体，覆盖授权策略按 scheme 重认证的路径）；`UseServiceUserContext()` 中间件（剥离伪造头 + 兜底恢复）；`ServiceUserContextOptions` | `Leistd.ServiceClient.Core`、`FrameworkReference Microsoft.AspNetCore.App` |
 
-业务服务的强类型 Client 包（如 `CompanyName.ProjectName.Client`）**不属于框架**，由各业务服务随自身发布，只依赖 `Leistd.ServiceClient.*`，内容为：typed client 接口与实现、自有 DTO、一个 `AddXxxClient(...)` 注册扩展（内部调用 `AddServiceClient` + `AddClientCredentials`）。
+业务服务的强类型 Client 包（如 `CompanyName.ProjectName.Client`）**不属于框架**，由各业务服务随自身发布，只依赖 `Leistd.ServiceClient.*`，内容为：typed client 接口、自有 DTO、一个 `AddXxxClient(...)` 注册扩展。
+
+> 后续补充：第四个包 `Leistd.ServiceClient.Refit` 提供 Refit 接口式注册（`AddRefitServiceClient`，业务包只声明接口 + 特性），与手写路径共享管道与错误契约；选型依据与数据格式规范见[评估文档](../assessments/2026-08-12-refit-service-client.md)。
 
 ### 3.3 调用管道（DelegatingHandler 链）
 
