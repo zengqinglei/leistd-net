@@ -96,9 +96,26 @@ describe('SignalRService 连接生命周期', () => {
     // 相关用例在改坏实现时也照样绿——那种"通过"什么都证明不了。
     readonly invocations: { method: string; args: unknown[] }[] = [];
 
+    /** 置为 true 时 invoke() 挂起，直到 releaseInvoke() 被调用。 */
+    gateInvoke = false;
+    private invokeGates: (() => void)[] = [];
+
     invoke(method: string, ...args: unknown[]): Promise<void> {
       this.invocations.push({ method, args });
-      return Promise.resolve();
+
+      // 立即完成的 invoke 让重订阅循环在一个微任务里跑完，
+      // 制造不出"循环卡在某一轮时主体切换"的竞态。
+      if (!this.gateInvoke) {
+        return Promise.resolve();
+      }
+
+      return new Promise<void>((resolve) => this.invokeGates.push(resolve));
+    }
+
+    releaseInvoke(): void {
+      const gates = this.invokeGates;
+      this.invokeGates = [];
+      gates.forEach((resolve) => resolve());
     }
   }
 
@@ -107,8 +124,12 @@ describe('SignalRService 连接生命周期', () => {
   }
 
   afterEach(() => {
-    // 未释放的 gate 会让失败表现为 Jasmine 超时而不是断言——慢，且掩盖真实原因。
-    built.forEach((connection) => connection.completeStart());
+    // 兜底：正常路径由各用例的 finally 释放。afterEach 只在测试体提前抛出时生效——
+    // 断言失败后若还有 await 卡在未释放的 gate 上，失败会退化成 Jasmine 超时。
+    built.forEach((connection) => {
+      connection.completeStart();
+      connection.releaseInvoke();
+    });
   });
 
   beforeEach(() => {
@@ -322,13 +343,18 @@ describe('SignalRService 连接生命周期', () => {
 
     // 旧请求在 await 处让出执行权，恢复时已经不是当前主体。
     const stale = service.connect();
-    await service.reset();
-    await Promise.resolve();
-    await Promise.resolve();
+    try {
+      await service.reset();
+      await Promise.resolve();
+      await Promise.resolve();
 
-    // 一条都不该建：连接一旦写进字段，身份比对就一律为真，
-    // start() 期间收到的推送会直接落进下一个主体的界面。
-    expect(built.length).toBe(0);
+      // 一条都不该建：连接一旦写进字段，身份比对就一律为真，
+      // start() 期间收到的推送会直接落进下一个主体的界面。
+      expect(built.length).toBe(0);
+    } finally {
+      // 回归时这里会有连接卡在未完成的 start 上，不释放就等成超时。
+      built.forEach((connection) => connection.completeStart());
+    }
 
     await stale;
     expect(service.isConnected()).toBeFalse();
@@ -340,49 +366,62 @@ describe('SignalRService 连接生命周期', () => {
     // 这一轮 connect 发起时仍是当前主体，因此连接会被建出来并写进字段；
     // 切换发生在 start() 完成之前——身份判据正是为这个窗口存在的。
     const pending = service.connect();
-    await Promise.resolve();
-    await Promise.resolve();
+    try {
+      await Promise.resolve();
+      await Promise.resolve();
 
-    const notificationHub = connectionsFor('/hubs/notifications')[0];
-    const businessHub = connectionsFor('/hubs/realtime')[0];
-    expect(notificationHub).withContext('连接应当已经建出并写入字段').toBeDefined();
+      const notificationHub = connectionsFor('/hubs/notifications')[0];
+      const businessHub = connectionsFor('/hubs/realtime')[0];
+      expect(notificationHub).withContext('连接应当已经建出并写入字段').toBeDefined();
 
-    service.registerResourceEvent('OrderChanged');
-    await service.reset();
+      service.registerResourceEvent('OrderChanged');
+      await service.reset();
 
-    notificationHub.handlers.get('NotificationReceived')?.({
-      id: 'a-1',
-      title: 'A 的推送',
-      type: 'info',
-      isRead: false,
-      creationTime: '2026-01-01',
-    });
-    businessHub.handlers.get('OrderChanged')?.({ id: 'order-1' });
+      notificationHub.handlers.get('NotificationReceived')?.({
+        id: 'a-1',
+        title: 'A 的推送',
+        type: 'info',
+        isRead: false,
+        creationTime: '2026-01-01',
+      });
+      businessHub.handlers.get('OrderChanged')?.({ id: 'order-1' });
 
-    expect(service.notifications()).toEqual([]);
-    expect(service.lastResourceEvent()).toBeNull();
+      expect(service.notifications()).toEqual([]);
+      expect(service.lastResourceEvent()).toBeNull();
+    } finally {
+      built.forEach((connection) => connection.completeStart());
+    }
 
-    built.forEach((connection) => connection.completeStart());
     await pending;
-
     expect(service.isConnected()).toBeFalse();
   });
 
-  it('重连重订阅只处理自己那一代的资源，不碰下一个主体的', async () => {
+  it('重连重订阅卡在某一轮时切换主体，不会继续订阅下一个人的资源', async () => {
     await service.connect();
     await service.subscribeResource('a-order');
 
-    const business = connectionsFor('/hubs/realtime')[0];
-    business.invocations.length = 0;
+    const staleBusiness = connectionsFor('/hubs/realtime')[0];
+    staleBusiness.invocations.length = 0;
+    staleBusiness.gateInvoke = true;
 
-    // 重连回调开始后立刻切换主体：跨 await 迭代活集合，旧回调会读到新主体的 key。
-    const reconnected = business.triggerReconnected();
+    // 重连回调进入循环并卡在 A 的第一次 Subscribe 上。
+    const reconnected = staleBusiness.triggerReconnected();
+    await Promise.resolve();
+    expect(staleBusiness.invocations.length)
+      .withContext('重连回调应当已经发出第一次 Subscribe')
+      .toBe(1);
+
+    // 就在这一轮未完成时切换主体，并让新主体订阅自己的资源。
     await service.reset();
     await service.connect();
     await service.subscribeResource('b-order');
+
+    staleBusiness.releaseInvoke();
     await reconnected;
 
-    expect(business.invocations.map((call) => call.args[0])).not.toContain('b-order');
+    // 跨 await 迭代活集合时，旧回调的迭代器会读到新主体刚加入的 key，
+    // 并在上一个人的连接上把它订阅一遍。
+    expect(staleBusiness.invocations.map((call) => call.args[0])).not.toContain('b-order');
   });
 
   it('stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面', async () => {

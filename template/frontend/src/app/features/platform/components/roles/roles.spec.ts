@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
 import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
@@ -10,6 +11,7 @@ import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { of } from 'rxjs';
 
 import { Roles } from './roles';
+import { RoleTable } from './widgets/role-table/role-table';
 //#if (IncludeRoles)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
@@ -39,6 +41,11 @@ describe('Roles 页面查询闭环', () => {
     }
 
     return query;
+  }
+
+  /** 真实的子表实例：事件必须从它的 output 发出，才能覆盖模板里的绑定名。 */
+  function table(): RoleTable {
+    return fixture.debugElement.query(By.directive(RoleTable)).componentInstance as RoleTable;
   }
 
   beforeEach(async () => {
@@ -79,7 +86,7 @@ describe('Roles 页面查询闭环', () => {
   });
 
   it('翻页写进 URL，并按新页码重新请求', async () => {
-    component.onPaginationChange({ pageIndex: 2, pageSize: 20 } as PaginationState);
+    table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
     // 页码在 URL 里是 1 基（可分享、可前进后退），发给接口的是 offset。
@@ -89,10 +96,10 @@ describe('Roles 页面查询闭环', () => {
   });
 
   it('改每页条数回到第一页，请求的 offset 随之归零', async () => {
-    component.onPaginationChange({ pageIndex: 3, pageSize: 20 } as PaginationState);
+    table().paginationChange.emit({ pageIndex: 3, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
-    component.onPaginationChange({ pageIndex: 0, pageSize: 50 } as PaginationState);
+    table().paginationChange.emit({ pageIndex: 0, pageSize: 50 } as PaginationState);
     await fixture.whenStable();
 
     expect(lastQuery().offset).toBe(0);
@@ -100,10 +107,10 @@ describe('Roles 页面查询闭环', () => {
   });
 
   it('排序写进 URL 并回到第一页，转成接口排序参数', async () => {
-    component.onPaginationChange({ pageIndex: 2, pageSize: 20 } as PaginationState);
+    table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
-    component.onSortingChange([{ id: 'displayName', desc: true }] as SortingState);
+    table().sortingChange.emit([{ id: 'displayName', desc: true }] as SortingState);
     await fixture.whenStable();
 
     // 停在第 3 页换排序，看到的是另一批数据的第 3 页，等于结果错乱。
