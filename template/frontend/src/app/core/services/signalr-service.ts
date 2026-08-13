@@ -47,28 +47,55 @@ export class SignalRService {
   private readonly subscribedResources = new Set<string>();
   private readonly resourceEventNames = new Set<string>();
 
-  /** 建立 SignalR 连接（在用户登录后调用）。 */
-  async connect(): Promise<void> {
+  /** 进行中的连接过程，用于让 connect() 幂等。 */
+  private connecting: Promise<void> | null = null;
+
+  /**
+   * 建立 SignalR 连接（在用户登录后调用）。
+   *
+   * 幂等：并发调用复用同一次连接过程，不会各自建一套。
+   * 全成功或全回滚：任一 Hub 启动失败时停掉本轮已经起来的连接并清空引用——
+   * 否则失败那次会留下一条活连接，而下一次调用直接覆盖字段引用，
+   * 旧连接连同事件处理器继续往同一个 signal 里推，表现为连接泄漏加重复通知。
+   */
+  connect(): Promise<void> {
+    this.connecting ??= this.connectAllAsync().finally(() => {
+      this.connecting = null;
+    });
+
+    return this.connecting;
+  }
+
+  private async connectAllAsync(): Promise<void> {
     try {
       await Promise.all([this.connectNotificationHub(), this.connectBusinessHub()]);
       this.isConnected.set(true);
     } catch (err) {
       console.error('[SignalR] Connection failed:', err);
-      this.isConnected.set(false);
+
+      // 回滚本轮的全部连接：Promise.all 只在第一个失败时拒绝，另一条可能已经连上了。
+      await this.disconnect();
     }
   }
 
-  /** 断开所有连接。 */
+  /** 断开所有连接。无论 stop 是否抛错，引用一律清空——留着就等于泄漏。 */
   async disconnect(): Promise<void> {
-    if (this.notificationConnection) {
-      await this.notificationConnection.stop();
-      this.notificationConnection = null;
-    }
-    if (this.businessConnection) {
-      await this.businessConnection.stop();
-      this.businessConnection = null;
-    }
+    const connections = [this.notificationConnection, this.businessConnection];
+    this.notificationConnection = null;
+    this.businessConnection = null;
     this.isConnected.set(false);
+
+    for (const connection of connections) {
+      if (!connection) {
+        continue;
+      }
+
+      try {
+        await connection.stop();
+      } catch (err) {
+        console.error('[SignalR] stop failed:', err);
+      }
+    }
   }
 
   /** 注册一个业务事件名监听（推送到 lastResourceEvent 信号）。 */
