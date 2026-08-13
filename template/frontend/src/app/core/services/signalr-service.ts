@@ -2,11 +2,22 @@ import { Injectable, signal, computed } from '@angular/core';
 import {
   HubConnectionBuilder,
   HubConnection,
+  HubConnectionState,
   LogLevel,
   HttpTransportType,
 } from '@microsoft/signalr';
 
 import { environment } from '../../../environments/environment';
+
+/**
+ * 连接是否还在有效生命周期内。
+ *
+ * `Disconnected` 表示自动重连也已放弃，此时必须重建；其余状态（连接中、已连接、重连中）
+ * 都会自行恢复，重建只会白白丢掉已订阅的资源并留下一对孤儿连接。
+ */
+function isLive(connection: HubConnection | null): boolean {
+  return connection != null && connection.state !== HubConnectionState.Disconnected;
+}
 
 /** 通知 DTO（与后端 Leistd.Notifications.NotificationOutputDto 对应，类型为字符串） */
 export interface NotificationOutputDto {
@@ -41,22 +52,34 @@ export class SignalRService {
   readonly lastResourceEvent = signal<{ eventName: string; payload: unknown } | null>(null);
 
   // ── 连接状态 ──
-  readonly isConnected = signal(false);
+  private readonly notificationConnected = signal(false);
+  private readonly businessConnected = signal(false);
+
+  /**
+   * 两个 Hub 是否都可用。
+   *
+   * 必须是两者的合取：各自会独立断线重连，只跟踪其中一个的话，
+   * 业务 Hub 单独掉线时这里仍是 true，而通知 Hub 一恢复又会把它拉成 true——
+   * 界面据此显示"实时已连接"，实际有一半没回来。
+   */
+  readonly isConnected = computed(() => this.notificationConnected() && this.businessConnected());
 
   // ── 已订阅资源（重连后重新订阅） ──
   private readonly subscribedResources = new Set<string>();
   private readonly resourceEventNames = new Set<string>();
 
-  /** 进行中的连接过程，用于让 connect() 幂等。 */
+  /** 进行中的连接过程，用于让并发的 connect() 复用同一次。 */
   private connecting: Promise<void> | null = null;
 
   /**
    * 建立 SignalR 连接（在用户登录后调用）。
    *
-   * 幂等：并发调用复用同一次连接过程，不会各自建一套。
-   * 全成功或全回滚：任一 Hub 启动失败时停掉本轮已经起来的连接并清空引用——
-   * 否则失败那次会留下一条活连接，而下一次调用直接覆盖字段引用，
-   * 旧连接连同事件处理器继续往同一个 signal 里推，表现为连接泄漏加重复通知。
+   * 幂等：并发调用复用同一次连接过程；已经连上时直接返回，不重建。
+   * 只去重"进行中"的调用是不够的——连接成功后再调一次会新建一对并覆盖字段引用，
+   * 旧的两条连同事件处理器继续往同一个 signal 里推，表现为连接泄漏加重复通知。
+   * 通知组件每次初始化都会走到这里，重挂载就会触发。
+   *
+   * 全成功或全回滚：任一 Hub 启动失败时停掉本轮已经起来的连接并清空引用。
    */
   connect(): Promise<void> {
     this.connecting ??= this.connectAllAsync().finally(() => {
@@ -67,9 +90,16 @@ export class SignalRService {
   }
 
   private async connectAllAsync(): Promise<void> {
+    if (this.hasLiveConnections()) {
+      return;
+    }
+
+    // 手上的连接已经死了（自动重连耗尽）或只剩一半：先清干净再重建。
+    // 少了这一步，早退会把应用永久留在断线状态，不早退又会泄漏。
+    await this.disconnect();
+
     try {
       await Promise.all([this.connectNotificationHub(), this.connectBusinessHub()]);
-      this.isConnected.set(true);
     } catch (err) {
       console.error('[SignalR] Connection failed:', err);
 
@@ -78,12 +108,17 @@ export class SignalRService {
     }
   }
 
+  private hasLiveConnections(): boolean {
+    return isLive(this.notificationConnection) && isLive(this.businessConnection);
+  }
+
   /** 断开所有连接。无论 stop 是否抛错，引用一律清空——留着就等于泄漏。 */
   async disconnect(): Promise<void> {
     const connections = [this.notificationConnection, this.businessConnection];
     this.notificationConnection = null;
     this.businessConnection = null;
-    this.isConnected.set(false);
+    this.notificationConnected.set(false);
+    this.businessConnected.set(false);
 
     for (const connection of connections) {
       if (!connection) {
@@ -160,10 +195,12 @@ export class SignalRService {
       },
     );
 
-    this.notificationConnection.onreconnecting(() => this.isConnected.set(false));
-    this.notificationConnection.onreconnected(() => this.isConnected.set(true));
+    this.notificationConnection.onreconnecting(() => this.notificationConnected.set(false));
+    this.notificationConnection.onreconnected(() => this.notificationConnected.set(true));
+    this.notificationConnection.onclose(() => this.notificationConnected.set(false));
 
     await this.notificationConnection.start();
+    this.notificationConnected.set(true);
   }
 
   private async connectBusinessHub(): Promise<void> {
@@ -182,7 +219,12 @@ export class SignalRService {
       );
     }
 
+    // 业务 Hub 同样要维护自身状态：只有通知 Hub 上报时，它单独掉线不会被察觉。
+    this.businessConnection.onreconnecting(() => this.businessConnected.set(false));
+    this.businessConnection.onclose(() => this.businessConnected.set(false));
     this.businessConnection.onreconnected(async () => {
+      this.businessConnected.set(true);
+
       for (const resourceKey of this.subscribedResources) {
         try {
           await this.businessConnection!.invoke('Subscribe', resourceKey);
@@ -193,5 +235,6 @@ export class SignalRService {
     });
 
     await this.businessConnection.start();
+    this.businessConnected.set(true);
   }
 }

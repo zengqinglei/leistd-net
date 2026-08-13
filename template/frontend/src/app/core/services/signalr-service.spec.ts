@@ -17,7 +17,12 @@ describe('SignalRService 连接生命周期', () => {
   class FakeConnection {
     startCount = 0;
     stopCount = 0;
+    state: signalR.HubConnectionState = signalR.HubConnectionState.Disconnected;
     readonly handlers = new Map<string, (...args: unknown[]) => void>();
+
+    // 保存自动重连回调，测试据此模拟"掉线—恢复"时序。
+    private reconnecting: (() => void) | null = null;
+    private reconnected: (() => void) | null = null;
 
     constructor(readonly url: string) {}
 
@@ -25,19 +30,42 @@ describe('SignalRService 连接生命周期', () => {
       this.handlers.set(name, handler);
     }
 
-    // 自动重连回调这里不需要行为，只要能被注册。
-    readonly onreconnecting = (): void => undefined;
-    readonly onreconnected = (): void => undefined;
+    onreconnecting(handler: () => void): void {
+      this.reconnecting = handler;
+    }
+
+    onreconnected(handler: () => void): void {
+      this.reconnected = handler;
+    }
+
+    // 本用例集不模拟"连接彻底关闭"，注册即可。
+    readonly onclose = (): void => undefined;
+
+    /** 模拟自动重连：掉线 → 恢复。 */
+    dropAndRecover(): void {
+      this.state = signalR.HubConnectionState.Reconnecting;
+      this.reconnecting?.();
+      this.state = signalR.HubConnectionState.Connected;
+      this.reconnected?.();
+    }
+
+    /** 模拟掉线但尚未恢复。 */
+    drop(): void {
+      this.state = signalR.HubConnectionState.Reconnecting;
+      this.reconnecting?.();
+    }
 
     async start(): Promise<void> {
       this.startCount++;
       if ([...failing].some((fragment) => this.url.includes(fragment))) {
         throw new Error(`start failed: ${this.url}`);
       }
+      this.state = signalR.HubConnectionState.Connected;
     }
 
     async stop(): Promise<void> {
       this.stopCount++;
+      this.state = signalR.HubConnectionState.Disconnected;
     }
   }
 
@@ -93,6 +121,30 @@ describe('SignalRService 连接生命周期', () => {
     expect(built.length).toBe(2);
   });
 
+  it('已经连上之后再次调用直接返回，不重建也不泄漏', async () => {
+    await service.connect();
+    await service.connect();
+
+    // 只去重"进行中"的调用是不够的：串行第二次会新建一对并覆盖字段引用，
+    // 旧的两条连同 handler 继续往同一个 signal 里推。通知组件重挂载就会走到这里。
+    expect(built.length).toBe(2);
+    expect(built.every((connection) => connection.stopCount === 0)).toBeTrue();
+    expect(service.isConnected()).toBeTrue();
+  });
+
+  it('手上的连接已经彻底断开时，再次调用会重建', async () => {
+    await service.connect();
+    built.forEach((connection) => {
+      connection.state = signalR.HubConnectionState.Disconnected;
+    });
+
+    await service.connect();
+
+    // 自动重连耗尽后一味早退，会把应用永久留在断线状态。
+    expect(built.length).toBe(4);
+    expect(service.isConnected()).toBeTrue();
+  });
+
   it('失败之后可以重试，且不与上一轮的连接叠加', async () => {
     failing.add('/hubs/realtime');
     await service.connect();
@@ -106,6 +158,36 @@ describe('SignalRService 连接生命周期', () => {
     // 上一轮的两条都已停掉，本轮的两条各自只 start 一次。
     expect(built.filter((connection) => connection.stopCount === 0).length).toBe(2);
     expect(built.every((connection) => connection.startCount === 1)).toBeTrue();
+  });
+
+  it('业务 Hub 单独掉线时不再报告已连接', async () => {
+    await service.connect();
+    expect(service.isConnected()).toBeTrue();
+
+    // 只跟踪通知 Hub 的话，这里会一直是 true——界面显示"实时已连接"，实际一半没了。
+    connectionsFor('/hubs/realtime')[0].drop();
+    expect(service.isConnected()).toBeFalse();
+
+    connectionsFor('/hubs/realtime')[0].dropAndRecover();
+    expect(service.isConnected()).toBeTrue();
+  });
+
+  it('两个 Hub 交错恢复时，要等最后一个回来才算已连接', async () => {
+    await service.connect();
+
+    const notification = connectionsFor('/hubs/notifications')[0];
+    const business = connectionsFor('/hubs/realtime')[0];
+
+    notification.drop();
+    business.drop();
+    expect(service.isConnected()).toBeFalse();
+
+    // 通知 Hub 先恢复：此时业务 Hub 还没回来，不能因为它上报成功就整体置真。
+    notification.dropAndRecover();
+    expect(service.isConnected()).toBeFalse();
+
+    business.dropAndRecover();
+    expect(service.isConnected()).toBeTrue();
   });
 
   it('断开后可以重新连接', async () => {

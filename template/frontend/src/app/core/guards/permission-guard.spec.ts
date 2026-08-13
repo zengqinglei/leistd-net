@@ -86,11 +86,16 @@ describe('permissionGuard', () => {
   });
 
   it('不继承父路由的宽松声明', async () => {
-    // 父路由声明"有 users 权限即可进平台区"，子路由要求 roles 权限。
-    // 若守卫读的是合并后的 data，父路由那条会让这里错误放行。
+    // 复刻真实路由的形状：父路由用 permissions 数组（"拥有任一平台权限即可进平台区"），
+    // 子路由用单个 permission。两个键不同名，合并后会同时保留——这才是能触发
+    // any-of 错误放行的组合。若两边用同一个键，子会覆盖父，无论守卫读
+    // routeConfig.data 还是合并后的 data 结果都一样，用例就锁不住任何东西。
+    //
+    // 当前用户只有 users 权限：读自身 data 时要求 roles → 拦下；
+    // 误读合并后的 data 时会因为父路由的 users 而放行。
     const result = await runGuard(
       { permission: PERMISSIONS.roles.default },
-      { permission: PERMISSIONS.users.default },
+      { permissions: [PERMISSIONS.users.default] },
     );
 
     expect(result instanceof UrlTree).toBeTrue();
