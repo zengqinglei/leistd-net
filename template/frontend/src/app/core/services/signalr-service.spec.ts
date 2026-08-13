@@ -70,7 +70,10 @@ describe('SignalRService 连接生命周期', () => {
 
     // 订阅走 invoke：缺了它，subscribeResource 会直接抛错进 catch，
     // 相关用例在改坏实现时也照样绿——那种"通过"什么都证明不了。
-    invoke(): Promise<void> {
+    readonly invocations: { method: string; args: unknown[] }[] = [];
+
+    invoke(method: string, ...args: unknown[]): Promise<void> {
+      this.invocations.push({ method, args });
       return Promise.resolve();
     }
   }
@@ -255,16 +258,21 @@ describe('SignalRService 连接生命周期', () => {
     expect(service.notifications()).toEqual([]);
   });
 
-  it('reset 之后完成的订阅调用不会把旧主体的资源填回来', async () => {
+  it('reset 之后完成的订阅调用不会在下一个主体的连接上重新订阅', async () => {
     await service.connect();
 
     const pending = service.subscribeResource('order-1');
     await service.reset();
     await pending;
 
-    // 后端的订阅授权默认关闭：回填的 key 会在下一次连接后被真的重新订阅上。
     await service.connect();
-    expect(service.subscribedResourceKeys()).toEqual([]);
+    const business = connectionsFor('/hubs/realtime')[1];
+    business.dropAndRecover();
+    await Promise.resolve();
+
+    // 断言真实后果而不是内部集合：后端订阅授权默认关闭，回填的 key 一旦留下，
+    // 重连时会被真的重新订阅到下一个用户名下。
+    expect(business.invocations).toEqual([]);
   });
 
   it('旧主体的连接过程未收尾时，新主体的 connect 仍会为自己建立连接', async () => {

@@ -80,6 +80,39 @@ describe('NotificationService', () => {
     expect(service.notifications()).toEqual([]);
   });
 
+  it('请求在途时切换主体，旧 init 不再建立连接', async () => {
+    spyOn(signalR, 'disconnect').and.resolveTo();
+    (signalR.connect as jasmine.Spy).calls.reset();
+
+    const init = service.init();
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
+
+    await signalR.reset();
+    request.flush([]);
+    await init;
+
+    // 服务端 Cookie 此刻可能仍有效：这一轮 init 建成的连接会把 principal 定在
+    // 上一个人身上，下一个用户的 connect() 见到活连接就直接复用了它。
+    expect(signalR.connect).not.toHaveBeenCalled();
+  });
+
+  it('写请求在途时切换主体，旧响应不修改新主体的列表', async () => {
+    spyOn(signalR, 'disconnect').and.resolveTo();
+    signalR.notifications.set([notification('b-1', '2026-02-01T00:00:00Z')]);
+
+    const cleared = service.clearAll();
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
+
+    await signalR.reset();
+    signalR.notifications.set([notification('b-1', '2026-02-01T00:00:00Z')]);
+
+    request.flush(null);
+    await cleared;
+
+    // A 的 clearAll 在途、B 登录并加载完自己的列表，这一句会把 B 的列表清空。
+    expect(service.notifications().map((item) => item.id)).toEqual(['b-1']);
+  });
+
   it('加载失败时保留已推送的通知，并复位 loading', async () => {
     signalR.notifications.set([notification('pushed', '2026-01-02T00:00:00Z')]);
 

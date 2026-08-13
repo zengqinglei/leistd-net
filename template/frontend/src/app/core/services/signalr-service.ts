@@ -98,11 +98,6 @@ export class SignalRService {
     return generation === this.generation;
   }
 
-  /** 当前已订阅的资源（只读快照）。 */
-  subscribedResourceKeys(): string[] {
-    return [...this.subscribedResources];
-  }
-
   /**
    * 建立 SignalR 连接（在用户登录后调用）。
    *
@@ -216,9 +211,16 @@ export class SignalRService {
   registerResourceEvent(eventName: string): void {
     if (this.resourceEventNames.has(eventName)) return;
     this.resourceEventNames.add(eventName);
-    this.businessConnection?.on(eventName, (payload: unknown) =>
-      this.lastResourceEvent.set({ eventName, payload }),
-    );
+
+    const connection = this.businessConnection;
+    connection?.on(eventName, (payload: unknown) => {
+      // 动态注册的监听同样要判身份：注册时那条连接可能在主体切换后才收到事件。
+      if (this.businessConnection !== connection) {
+        return;
+      }
+
+      this.lastResourceEvent.set({ eventName, payload });
+    });
   }
 
   /** 订阅资源变更。 */
@@ -266,7 +268,7 @@ export class SignalRService {
   }
 
   private async connectNotificationHub(): Promise<void> {
-    this.notificationConnection = new HubConnectionBuilder()
+    const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/notifications'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
       })
@@ -274,30 +276,34 @@ export class SignalRService {
       .configureLogging(LogLevel.Information)
       .build();
 
-    // 回调闭包捕获建立连接时的代际：stop() 是异步的，在它完成之前仍可能收到
-    // 上一个主体的推送，直接写进共享 signal 就落到了下一个用户的界面上。
-    const generation = this.generation;
-    this.notificationConnection.on(
-      'NotificationReceived',
-      (notification: NotificationOutputDto) => {
-        if (!this.isCurrentGeneration(generation)) {
-          return;
-        }
+    // 每个回调都先确认自己仍是当前那条连接。判据用身份而不是代际：
+    // stop() 是异步的，旧连接的推送与状态回调可能晚于主体切换才到达，
+    // 而 disconnect() 已经把字段置空，身份比对天然为假。
+    // 身份判据与它保护的对象绑在一起，不会出现"又漏了一处没加检查"。
+    const isCurrent = () => this.notificationConnection === connection;
 
-        this.notifications.update((list) => [notification, ...list]);
-      },
-    );
+    connection.on('NotificationReceived', (notification: NotificationOutputDto) => {
+      if (!isCurrent()) {
+        return;
+      }
 
-    this.notificationConnection.onreconnecting(() => this.notificationConnected.set(false));
-    this.notificationConnection.onreconnected(() => this.notificationConnected.set(true));
-    this.notificationConnection.onclose(() => this.notificationConnected.set(false));
+      this.notifications.update((list) => [notification, ...list]);
+    });
 
-    await this.notificationConnection.start();
-    this.notificationConnected.set(true);
+    connection.onreconnecting(() => isCurrent() && this.notificationConnected.set(false));
+    connection.onreconnected(() => isCurrent() && this.notificationConnected.set(true));
+    connection.onclose(() => isCurrent() && this.notificationConnected.set(false));
+
+    this.notificationConnection = connection;
+    await connection.start();
+
+    if (isCurrent()) {
+      this.notificationConnected.set(true);
+    }
   }
 
   private async connectBusinessHub(): Promise<void> {
-    this.businessConnection = new HubConnectionBuilder()
+    const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/realtime'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
       })
@@ -305,11 +311,12 @@ export class SignalRService {
       .configureLogging(LogLevel.Information)
       .build();
 
-    // 重新挂载已注册的事件监听。同样捕获代际：理由见通知 Hub。
-    const generation = this.generation;
+    const isCurrent = () => this.businessConnection === connection;
+
+    // 重新挂载已注册的事件监听。判据同样是身份，理由见通知 Hub。
     for (const eventName of this.resourceEventNames) {
-      this.businessConnection.on(eventName, (payload: unknown) => {
-        if (!this.isCurrentGeneration(generation)) {
+      connection.on(eventName, (payload: unknown) => {
+        if (!isCurrent()) {
           return;
         }
 
@@ -318,21 +325,31 @@ export class SignalRService {
     }
 
     // 业务 Hub 同样要维护自身状态：只有通知 Hub 上报时，它单独掉线不会被察觉。
-    this.businessConnection.onreconnecting(() => this.businessConnected.set(false));
-    this.businessConnection.onclose(() => this.businessConnected.set(false));
-    this.businessConnection.onreconnected(async () => {
+    connection.onreconnecting(() => isCurrent() && this.businessConnected.set(false));
+    connection.onclose(() => isCurrent() && this.businessConnected.set(false));
+    connection.onreconnected(async () => {
+      if (!isCurrent()) {
+        return;
+      }
+
       this.businessConnected.set(true);
 
       for (const resourceKey of this.subscribedResources) {
+        // 重订阅打在自己这条连接上，不走字段——旧连接的晚到回调若读字段，
+        // 会拿当前主体的连接去订阅上一个人的资源。
         try {
-          await this.businessConnection!.invoke('Subscribe', resourceKey);
+          await connection.invoke('Subscribe', resourceKey);
         } catch (err) {
           console.error('[SignalR] re-subscribe failed:', resourceKey, err);
         }
       }
     });
 
-    await this.businessConnection.start();
-    this.businessConnected.set(true);
+    this.businessConnection = connection;
+    await connection.start();
+
+    if (isCurrent()) {
+      this.businessConnected.set(true);
+    }
   }
 }
