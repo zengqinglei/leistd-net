@@ -183,11 +183,17 @@ app.UseServiceUserContext(); // 必须在 UseAuthentication 之后、UseAuthoriz
 app.UseAuthorization();
 ```
 
-**信任边界**：仅当当前主体是已认证的服务客户端——含 `client_id` claim 且 `sub == client_id`
-（client credentials token 的形态；用户 token 的 `sub` 是用户 Id，不满足）——时才采信
-`X-User-*` 头。满足时把用户身份作为**主身份**加入 `HttpContext.User` 并保留调用方 client 身份，
+**信任边界**：仅当当前主体是已认证的服务客户端——含 `client_id` claim 且 `sub` 是该 client 的
+机器主体（`ClientSubject` 契约，即 `client:<client_id>`）——时才采信 `X-User-*` 头。
+满足时把用户身份作为**主身份**加入 `HttpContext.User` 并保留调用方 client 身份，
 此后 `ICurrentUser`（用户）与 `ICurrentClient`（调用方服务）双通道可用；不满足时按配置
 **剥离**这些头，阻断伪造链路。
+
+**签发端必须遵循同一契约**：认证服务签发 client credentials 令牌时，`sub` 用
+`ClientSubject.Format(clientId)` 构造（`Leistd.Security.Core` 的
+[`ClientSubject`](./security.md)）。这既是本组件的信任判据，也把机器主体与自然人主体
+（`sub` 是用户 GUID）隔离在不可碰撞的两个命名空间——否则 `client_id` 由创建者任意指定，
+挑一个已存在的用户 Id 就能让机器令牌被解析成那个人。
 
 被调方的 Bearer token 验证不属于本组件：宿主自行配置 OpenIddict Validation（或等价 JWT 验证）
 指向身份服务 issuer。
@@ -299,9 +305,10 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 
 ### Leistd.ServiceClient.AspNetCore
 
-- **恢复发生在认证阶段**：`AddServiceUserContext` 注册的 `ServiceUserContextClaimsTransformation`（`IClaimsTransformation`）在每次 `AuthenticateAsync` 内生效。仅靠中间件改写 `HttpContext.User` 不够——授权策略显式声明认证 scheme 时，`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，中间件改写的主体在该路径上会被丢弃。转换幂等（已恢复的主体原样返回）。ASP.NET Core 只消费单个 `IClaimsTransformation`（`AddAuthentication` 预注册 Noop 实现），因此注册使用 `Replace`；宿主若有自己的 `IClaimsTransformation`，需在其中自行组合本恢复逻辑（`ServiceUserContextClaimsTransformation` 是公共类型，可直接内嵌调用）。
+- **恢复发生在认证阶段**：`AddServiceUserContext` 注册的 `ServiceUserContextClaimsTransformation`（`IClaimsTransformation`）在每次 `AuthenticateAsync` 内生效。仅靠中间件改写 `HttpContext.User` 不够——授权策略显式声明认证 scheme 时，`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，中间件改写的主体在该路径上会被丢弃。转换幂等（已恢复的主体原样返回）。
+- **不吞掉宿主已有的 `IClaimsTransformation`**：ASP.NET Core 只消费单个实现（后注册者覆盖先注册者），因此 `AddServiceUserContext` 把注册时已存在的实现包进组合——**先宿主既有转换（租户、外部身份等 claims 富化），再用户上下文恢复**（恢复会更换主身份，应基于富化后的主体）。宿主若在 `AddServiceUserContext` **之后**才注册自己的转换，仍会覆盖该组合；此时由宿主负责组合（`ServiceUserContextClaimsTransformation` 是公共类型，可直接注入调用）。
 - 中间件职责：不受信时剥离用户头；受信但认证阶段未恢复时兜底恢复 `HttpContext.User`。`Enable=false` 时完全直通（不恢复也不剥离）。
-- 受信判定：主体已认证 + 含 `client_id` claim + `sub == client_id`（`sub` 缺失时回退 `ClaimTypes.NameIdentifier`）+ 可选 `RequiredScope`（同时识别空格分隔的 `scope` claim 与 OpenIddict 的多值 `oi_scp` claim）。
+- 受信判定：主体已认证 + 含 `client_id` claim + `sub` 匹配 `ClientSubject.Format(clientId)`（`sub` 缺失时回退 `ClaimTypes.NameIdentifier`）+ 可选 `RequiredScope`（同时识别空格分隔的 `scope` claim 与 OpenIddict 的多值 `oi_scp` claim）。
 - 恢复时构造 `sub` / `preferred_username` / 自定义映射 claim 的 `ClaimsIdentity`（`AuthenticationType` 默认 `ServiceUserContext`）置于主体首位，原有身份全部保留。
 - 受信但无 `X-User-Id` 头：服务以自身身份调用，主体保持不变。
 - 不受信且 `RemoveUntrustedHeaders=true`（默认）：从请求中移除 `UserIdHeader`、`UserNameHeader` 与 `HeaderClaimMap` 声明的所有头。

@@ -45,11 +45,46 @@ public static class DependencyInjection
     private static IServiceCollection AddServiceUserContextCore(IServiceCollection services)
     {
         services.AddHttpContextAccessor();
-        // ASP.NET Core 的 AuthenticationService 只消费单个 IClaimsTransformation，且
-        // AddAuthentication 会预注册 NoopClaimsTransformer——必须用 Replace 而非 TryAdd，
-        // 否则本转换永远不生效。宿主另有自己的转换时需自行组合本恢复逻辑（见组件文档）。
-        services.Replace(ServiceDescriptor.Singleton<IClaimsTransformation, ServiceUserContextClaimsTransformation>());
+        services.TryAddSingleton<ServiceUserContextClaimsTransformation>();
+
+        // ASP.NET Core 的认证服务只消费单个 IClaimsTransformation，后注册者覆盖先注册者
+        // （AddAuthentication 会预注册一个空实现）。直接 Replace 会静默删掉宿主已注册的转换
+        // （租户、外部身份等 claims 富化），因此把既有实现包进组合：宿主在前、恢复在后。
+        // 宿主若在本方法**之后**才注册自己的转换，仍会覆盖本组合——那时由宿主负责组合，
+        // ServiceUserContextClaimsTransformation 是公共类型，可直接注入调用（见组件文档）。
+        var existing = services.LastOrDefault(descriptor =>
+            descriptor.ServiceType == typeof(IClaimsTransformation));
+        if (existing is null)
+        {
+            services.AddSingleton<IClaimsTransformation>(provider =>
+                provider.GetRequiredService<ServiceUserContextClaimsTransformation>());
+            return services;
+        }
+
+        services.Remove(existing);
+        services.AddSingleton<IClaimsTransformation>(provider => new CompositeClaimsTransformation(
+            CreateInner(provider, existing),
+            provider.GetRequiredService<ServiceUserContextClaimsTransformation>()));
         return services;
+    }
+
+    /// <summary>
+    /// 按原注册描述符还原宿主既有的转换实例（实现类型 / 工厂 / 单例三种注册形态）。
+    /// </summary>
+    private static IClaimsTransformation CreateInner(IServiceProvider provider, ServiceDescriptor descriptor)
+    {
+        if (descriptor.ImplementationInstance is IClaimsTransformation instance)
+        {
+            return instance;
+        }
+
+        if (descriptor.ImplementationFactory is { } factory)
+        {
+            return (IClaimsTransformation)factory(provider);
+        }
+
+        return (IClaimsTransformation)ActivatorUtilities.CreateInstance(
+            provider, descriptor.ImplementationType!);
     }
 
     /// <summary>
