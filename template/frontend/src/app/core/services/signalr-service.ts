@@ -72,6 +72,14 @@ export class SignalRService {
   private connecting: Promise<void> | null = null;
 
   /**
+   * 认证主体代际。每次 reset() 递增。
+   *
+   * 连接过程中途发生登出时，await 回来的那对连接属于上一个主体，必须就地关掉——
+   * 否则它们会被写进字段，成为一对没人再管、却仍在以旧身份接收推送的孤儿。
+   */
+  private generation = 0;
+
+  /**
    * 建立 SignalR 连接（在用户登录后调用）。
    *
    * 幂等：并发调用复用同一次连接过程；已经连上时直接返回，不重建。
@@ -90,6 +98,10 @@ export class SignalRService {
   }
 
   private async connectAllAsync(): Promise<void> {
+    // 代际必须在第一个 await 之前捕获：晚一步读到的就是 reset() 已经递增过的值，
+    // 校验永远相等，那道防护形同虚设。
+    const generation = this.generation;
+
     if (this.hasLiveConnections()) {
       return;
     }
@@ -100,12 +112,36 @@ export class SignalRService {
 
     try {
       await Promise.all([this.connectNotificationHub(), this.connectBusinessHub()]);
+
+      if (generation !== this.generation) {
+        // 连接期间发生了主体切换：这对连接握的是上一个身份，不能留给下一个用户。
+        await this.disconnect();
+      }
     } catch (err) {
       console.error('[SignalR] Connection failed:', err);
 
       // 回滚本轮的全部连接：Promise.all 只在第一个失败时拒绝，另一条可能已经连上了。
       await this.disconnect();
     }
+  }
+
+  /**
+   * 认证主体切换时清空一切与该主体绑定的状态。
+   *
+   * SignalR 的 principal 在握手时定死，连接不会因为前端清掉用户信号而重新授权。
+   * 不断开就换人登录，下一个用户会复用上一个人的活连接，以对方的身份继续收消息，
+   * 内存里的通知列表也照样留在界面上——这不是残留，是跨用户的数据泄漏。
+   *
+   * resourceEventNames 不清：那是应用关心哪些事件名，与主体无关，
+   * 清掉会让重连后所有监听失效。
+   */
+  async reset(): Promise<void> {
+    this.generation++;
+    this.subscribedResources.clear();
+    this.notifications.set([]);
+    this.lastResourceEvent.set(null);
+
+    await this.disconnect();
   }
 
   private hasLiveConnections(): boolean {

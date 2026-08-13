@@ -13,6 +13,9 @@ import {
 import { Observable, lastValueFrom, tap } from 'rxjs';
 //#endif
 
+//#if (IncludeNotifications)
+import { SignalRService } from './signalr-service';
+//#endif
 //#if (IncludeIdentity)
 import { LoginInputDto, UserOutputDto } from '../../features/account/models/account.dto';
 //#endif
@@ -25,6 +28,9 @@ import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  //#if (IncludeNotifications)
+  private readonly signalR = inject(SignalRService);
+  //#endif
 
   private readonly _currentUser = signal<User | null>(null);
   public readonly currentUser = this._currentUser.asReadonly();
@@ -57,8 +63,19 @@ export class AuthService {
     this._currentUser.set(new User(user));
   }
 
+  /**
+   * 清空当前认证主体的一切本地状态。
+   *
+   * 登出、非静默 401、启动流进登录页三条路径都汇到这里，所以主体相关的清理
+   * 一律挂在这一处——各自记得调的做法，迟早会漏掉其中一条。
+   */
   clearAuthData(): void {
     this._currentUser.set(null);
+    //#if (IncludeNotifications)
+    // 不等待：状态与连接引用在 reset() 内部同步清掉，真正的 stop() 是网络动作，
+    // 让它在后台完成即可，不该把登出卡在网络上。
+    void this.signalR.reset();
+    //#endif
   }
 
   logout(): void {

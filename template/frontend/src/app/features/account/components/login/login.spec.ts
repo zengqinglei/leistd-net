@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
@@ -8,9 +9,15 @@ import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
 import { of, throwError } from 'rxjs';
 
 import { Login } from './login';
+//#if (IncludeRoles)
+import { permissionGuard } from '../../../../core/guards/permission-guard';
+//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeRoles)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#endif
+import { StartupService } from '../../../../core/services/startup-service';
+//#if (IncludeRoles)
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#endif
 
@@ -56,6 +63,8 @@ describe('Login', () => {
         { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => of({}) } },
         //#endif
         { provide: AuthService, useValue: authService },
+        // 真实 permissionGuard 会先等启动流结束；登录页自身不依赖它，给个已完成的桩即可。
+        { provide: StartupService, useValue: { status: signal('success' as const) } },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } },
@@ -140,6 +149,40 @@ describe('Login', () => {
   });
 
   //#if (IncludeRoles)
+  it('登录到受保护的 returnUrl 时，权限先加载完再导航', async () => {
+    queryParams = { returnUrl: '/protected' };
+    await setUp();
+    fillValidCredentials();
+
+    // 用真实 Router + 真实 permissionGuard 跑完整条路：
+    // spy 掉 Router 只能验到"调用了 navigateByUrl"，验不到导航之后 guard 怎么判。
+    // 进登录页时 StartupService 已清空权限；若在加载权限之前就跳转，
+    // guard 会在空权限下判定并把人踢到 403——从深链登录本该落到那个页面。
+    (router.navigateByUrl as jasmine.Spy).and.callThrough();
+    (authorization.load as jasmine.Spy).and.callFake(() => {
+      authorization.setPermissions({
+        permissions: [PERMISSIONS.users.default],
+        isSuperAdmin: false,
+        revision: 'r1',
+      });
+      return of(undefined) as never;
+    });
+
+    router.resetConfig([
+      {
+        path: 'protected',
+        canActivate: [permissionGuard],
+        data: { permission: PERMISSIONS.users.default },
+        children: [],
+      },
+      { path: '403-forbidden', children: [] },
+    ]);
+
+    await component.onSubmit();
+
+    expect(router.url).toBe('/protected');
+  });
+
   it('按权限决定落地页，而不是按角色名或超管标志', async () => {
     await setUp();
     fillValidCredentials();

@@ -203,6 +203,39 @@ describe('SignalRService 连接生命周期', () => {
     expect(built.length).toBe(4);
   });
 
+  it('主体切换后不复用上一个人的连接，也不残留他的通知', async () => {
+    await service.connect();
+    service.notifications.set([
+      { id: 'n1', title: 'A 的通知', type: 'info', isRead: false, creationTime: '2026-01-01' },
+    ]);
+    await service.subscribeResource('order-1');
+
+    await service.reset();
+
+    // SignalR 的 principal 在握手时定死：不断开就换人登录，下一个用户会复用
+    // 上一个人的活连接，以对方的身份继续收消息。
+    expect(built.every((connection) => connection.stopCount === 1)).toBeTrue();
+    expect(service.notifications()).toEqual([]);
+    expect(service.lastResourceEvent()).toBeNull();
+    expect(service.isConnected()).toBeFalse();
+
+    await service.connect();
+
+    // 新主体拿到的是新建的两条，不是上一个人的。
+    expect(built.length).toBe(4);
+    expect(built.slice(2).every((connection) => connection.stopCount === 0)).toBeTrue();
+  });
+
+  it('连接进行中发生主体切换时，那对连接不会留给下一个人', async () => {
+    const connecting = service.connect();
+    await service.reset();
+    await connecting;
+
+    // await 回来的连接握的是上一个身份；写进字段就成了没人再管、却仍在收推送的孤儿。
+    expect(service.isConnected()).toBeFalse();
+    expect(built.every((connection) => connection.stopCount >= 1)).toBeTrue();
+  });
+
   it('stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面', async () => {
     await service.connect();
     built.forEach((connection) => {
