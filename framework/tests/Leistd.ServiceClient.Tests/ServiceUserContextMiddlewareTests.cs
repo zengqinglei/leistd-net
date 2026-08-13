@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Leistd.ServiceClient.AspNetCore.Middlewares;
 using Leistd.ServiceClient.AspNetCore.Options;
+using Leistd.Security.Claims;
 using Leistd.ServiceClient.Constants;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -31,19 +32,19 @@ public class ServiceUserContextMiddlewareTests
         return context;
     }
 
-    /// <summary>client credentials 主体：sub == client_id。</summary>
+    /// <summary>client credentials 主体：sub 为 ClientSubject 契约形态（client:&lt;client_id&gt;）。</summary>
     private static ClaimsPrincipal ServiceClientPrincipal(string clientId = "svc-a", params Claim[] extraClaims)
     {
         var claims = new List<Claim>
         {
-            new("sub", clientId),
+            new("sub", ClientSubject.Format(clientId)),
             new("client_id", clientId),
         };
         claims.AddRange(extraClaims);
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestBearer"));
     }
 
-    /// <summary>普通用户 token 主体：sub 是用户 Id，与 client_id 不同。</summary>
+    /// <summary>普通用户 token 主体：sub 是用户 Id（GUID），不是机器主体形态。</summary>
     private static ClaimsPrincipal UserTokenPrincipal() =>
         new(new ClaimsIdentity(
             [new Claim("sub", Guid.NewGuid().ToString()), new Claim("client_id", "web-app")],
@@ -72,7 +73,7 @@ public class ServiceUserContextMiddlewareTests
     {
         var context = await RunAsync(ServiceClientPrincipal());
 
-        Assert.Equal("svc-a", context.User.FindFirst("sub")?.Value);
+        Assert.Equal(ClientSubject.Format("svc-a"), context.User.FindFirst("sub")?.Value);
         Assert.Single(context.User.Identities);
     }
 
@@ -136,7 +137,7 @@ public class ServiceUserContextMiddlewareTests
             options => options.RequiredScope = "svc.call");
 
         Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserId));
-        Assert.Equal("svc-a", context.User.FindFirst("sub")?.Value);
+        Assert.Equal(ClientSubject.Format("svc-a"), context.User.FindFirst("sub")?.Value);
     }
 
     [Fact]

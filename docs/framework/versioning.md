@@ -71,6 +71,8 @@
 
 依赖基线变化：`Microsoft.Extensions.*` 统一从 10.0.8 升至 **10.0.10**（Refit 15 要求 `Microsoft.Extensions.Http >= 10.0.10`），随包依赖下限同步抬升，消费方需要 .NET SDK 能解析 10.0.10 的 `Microsoft.Extensions.*` 包。
 
+**`Leistd.Security.Core`** 新增 `ClientSubject`（机器主体 `sub` 契约，`client:<client_id>`）：认证服务签发 client credentials 令牌时必须用 `ClientSubject.Format(clientId)` 构造 `sub`，服务间调用的用户上下文恢复以此为信任判据。这把机器主体与自然人主体（`sub` 是用户 GUID）隔离在不可碰撞的命名空间——否则任意指定的 `client_id` 可取某个真实用户 Id，使机器令牌被解析为该用户。自建认证端的宿主需同步该形态，否则服务间用户上下文不会恢复。
+
 用法与信任边界见[服务间调用客户端](../../framework/docs/components/service-client.md)；方案与决策记录见 [`docs/plans/2026-08-11-service-invocation-sdk.md`](../plans/2026-08-11-service-invocation-sdk.md)。
 
 ## 提交规范决定版本递增（Conventional Commits）

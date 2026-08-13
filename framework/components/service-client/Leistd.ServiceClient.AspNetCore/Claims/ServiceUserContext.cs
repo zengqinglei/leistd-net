@@ -23,8 +23,10 @@ internal static class ServiceUserContext
             string.Equals(identity.AuthenticationType, options.AuthenticationType, StringComparison.Ordinal));
 
     /// <summary>
-    /// 主体是否是受信的服务调用方：已认证 + 含 <c>client_id</c> claim + <c>sub == client_id</c>
-    /// （client credentials 形态；用户 token 的 <c>sub</c> 是用户 Id，不满足）+ 可选 RequiredScope。
+    /// 主体是否是受信的服务调用方：已认证 + 含 <c>client_id</c> claim +
+    /// <c>sub</c> 是该 client 的机器主体（<see cref="ClientSubject"/> 契约，
+    /// 即 <c>client:&lt;client_id&gt;</c>）+ 可选 RequiredScope。
+    /// 用户 token 的 <c>sub</c> 是用户 Id，结构上不可能匹配。
     /// </summary>
     internal static bool IsTrustedServiceCall(ClaimsPrincipal user, ServiceUserContextOptions options)
     {
@@ -41,7 +43,7 @@ internal static class ServiceUserContext
 
         var subject = user.FindFirst(SubjectClaimType)?.Value
                       ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!string.Equals(subject, clientId, StringComparison.Ordinal))
+        if (!ClientSubject.Matches(subject, clientId))
         {
             return false;
         }

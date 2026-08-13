@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
+using Leistd.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -21,15 +22,6 @@ public class ConnectController(
     IAuthPrincipalFactory principalFactory,
     IOptions<OAuthOptions> oauthOptions) : Controller
 {
-    /// <summary>
-    /// 机器主体 <c>sub</c> 的前缀，用来与自然人主体隔离命名空间。
-    /// </summary>
-    /// <remarks>
-    /// 自然人主体的 <c>sub</c> 是用户 Id（GUID），解析方按 <c>Guid.TryParse</c> 认领；
-    /// 只要机器主体也可能落进 GUID 形态，冒充就成立。前缀让两者在结构上不可碰撞。
-    /// </remarks>
-    public const string ClientSubjectPrefix = "client:";
-
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]
     [IgnoreAntiforgeryToken]
@@ -113,13 +105,9 @@ public class ConnectController(
                 Claims.Name,
                 Claims.Role);
 
-            // subject 带 client: 前缀，与自然人主体分处两个不可碰撞的命名空间。
-            // 自然人的 sub 是用户 Id（GUID），主体解析按 Guid.TryParse 认领；直接写裸 client_id
-            // 就等于把 sub 的命名空间共享给了机器主体——而 client_id 由创建者任意指定，
-            // 挑一个已存在的用户 Id（用户管理、审计日志、业务数据里都拿得到）即可让机器令牌
-            // 被解析成那个人，继承他的直授、角色乃至超管身份。加前缀后 Guid.TryParse 必然失败，
-            // 这条冒充路径在结构上就不存在，不依赖任何对 client_id 取值的输入校验。
-            identity.AddClaim(new Claim(Claims.Subject, $"{ClientSubjectPrefix}{request.ClientId!}"));
+            // 机器主体的 sub 契约由框架 ClientSubject 定义（client:<client_id>），签发端与
+            // 消费端（服务间调用的用户上下文恢复）共用同一处定义，理由见该类型的注释。
+            identity.AddClaim(new Claim(Claims.Subject, ClientSubject.Format(request.ClientId!)));
             identity.AddClaim(new Claim(Claims.Name, request.ClientId!));
 
             var principal = new ClaimsPrincipal(identity);
