@@ -23,7 +23,7 @@ describe('SignalRService 连接生命周期', () => {
 
     // 保存自动重连回调，测试据此模拟"掉线—恢复"时序。
     private reconnecting: (() => void) | null = null;
-    private reconnected: (() => void) | null = null;
+    private reconnected: (() => void | Promise<void>) | null = null;
 
     constructor(readonly url: string) {}
 
@@ -35,12 +35,18 @@ describe('SignalRService 连接生命周期', () => {
       this.reconnecting = handler;
     }
 
-    onreconnected(handler: () => void): void {
+    onreconnected(handler: () => void | Promise<void>): void {
       this.reconnected = handler;
     }
 
     // 本用例集不模拟"连接彻底关闭"，注册即可。
     readonly onclose = (): void => undefined;
+
+    /** 只触发 onreconnected，并把它的 Promise 交回给测试。 */
+    triggerReconnected(): Promise<void> {
+      this.state = signalR.HubConnectionState.Connected;
+      return Promise.resolve(this.reconnected?.()).then(() => undefined);
+    }
 
     /** 模拟自动重连：掉线 → 恢复。 */
     dropAndRecover(): void {
@@ -99,6 +105,11 @@ describe('SignalRService 连接生命周期', () => {
   function connectionsFor(fragment: string): FakeConnection[] {
     return built.filter((connection) => connection.url.includes(fragment));
   }
+
+  afterEach(() => {
+    // 未释放的 gate 会让失败表现为 Jasmine 超时而不是断言——慢，且掩盖真实原因。
+    built.forEach((connection) => connection.completeStart());
+  });
 
   beforeEach(() => {
     built = [];
@@ -306,7 +317,7 @@ describe('SignalRService 连接生命周期', () => {
     expect(service.isConnected()).toBeTrue();
   });
 
-  it('reset 之后恢复执行的旧连接请求不再建连，也不留下可写入共享状态的回调', async () => {
+  it('reset 之后恢复执行的旧连接请求不再建连', async () => {
     deferStart = true;
 
     // 旧请求在 await 处让出执行权，恢复时已经不是当前主体。
@@ -320,10 +331,58 @@ describe('SignalRService 连接生命周期', () => {
     expect(built.length).toBe(0);
 
     await stale;
+    expect(service.isConnected()).toBeFalse();
+  });
+
+  it('start 尚未完成时发生主体切换，旧连接的推送与事件都不写状态', async () => {
+    deferStart = true;
+
+    // 这一轮 connect 发起时仍是当前主体，因此连接会被建出来并写进字段；
+    // 切换发生在 start() 完成之前——身份判据正是为这个窗口存在的。
+    const pending = service.connect();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const notificationHub = connectionsFor('/hubs/notifications')[0];
+    const businessHub = connectionsFor('/hubs/realtime')[0];
+    expect(notificationHub).withContext('连接应当已经建出并写入字段').toBeDefined();
+
+    service.registerResourceEvent('OrderChanged');
+    await service.reset();
+
+    notificationHub.handlers.get('NotificationReceived')?.({
+      id: 'a-1',
+      title: 'A 的推送',
+      type: 'info',
+      isRead: false,
+      creationTime: '2026-01-01',
+    });
+    businessHub.handlers.get('OrderChanged')?.({ id: 'order-1' });
 
     expect(service.notifications()).toEqual([]);
     expect(service.lastResourceEvent()).toBeNull();
+
+    built.forEach((connection) => connection.completeStart());
+    await pending;
+
     expect(service.isConnected()).toBeFalse();
+  });
+
+  it('重连重订阅只处理自己那一代的资源，不碰下一个主体的', async () => {
+    await service.connect();
+    await service.subscribeResource('a-order');
+
+    const business = connectionsFor('/hubs/realtime')[0];
+    business.invocations.length = 0;
+
+    // 重连回调开始后立刻切换主体：跨 await 迭代活集合，旧回调会读到新主体的 key。
+    const reconnected = business.triggerReconnected();
+    await service.reset();
+    await service.connect();
+    await service.subscribeResource('b-order');
+    await reconnected;
+
+    expect(business.invocations.map((call) => call.args[0])).not.toContain('b-order');
   });
 
   it('stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面', async () => {

@@ -344,7 +344,15 @@ export class SignalRService {
 
       this.businessConnected.set(true);
 
-      for (const resourceKey of this.subscribedResources) {
+      // 先取快照再迭代：集合会被 reset 清空、被下一个主体重新填充，
+      // 跨 await 直接迭代活集合，旧回调会读到新主体的 key。
+      for (const resourceKey of [...this.subscribedResources]) {
+        // 每轮复核身份：主体可能在上一次 invoke 期间切换，
+        // 继续下去就是拿上一个人的连接去订阅剩下的资源。
+        if (!isCurrent()) {
+          return;
+        }
+
         // 重订阅打在自己这条连接上，不走字段——旧连接的晚到回调若读字段，
         // 会拿当前主体的连接去订阅上一个人的资源。
         try {
