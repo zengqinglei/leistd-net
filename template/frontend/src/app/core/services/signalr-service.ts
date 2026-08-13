@@ -71,6 +71,9 @@ export class SignalRService {
   /** 进行中的连接过程，用于让并发的 connect() 复用同一次。 */
   private connecting: Promise<void> | null = null;
 
+  /** 上面那个连接过程属于哪一代主体。跨代不可复用。 */
+  private connectingGeneration = -1;
+
   /**
    * 认证主体代际。每次 reset() 递增。
    *
@@ -78,6 +81,27 @@ export class SignalRService {
    * 否则它们会被写进字段，成为一对没人再管、却仍在以旧身份接收推送的孤儿。
    */
   private generation = 0;
+
+  /**
+   * 当前认证主体的代际。
+   *
+   * 凡是"await 之后要写用户态"的地方都必须先核对它：reset() 只清得掉调用那一刻的
+   * 状态，清不掉 A 已经发出、稍后才回来的异步操作。历史通知响应、Hub 回调、
+   * 订阅回填都会写同一批共享 signal，不核对就会把 A 的数据落到 B 的界面上。
+   */
+  get authGeneration(): number {
+    return this.generation;
+  }
+
+  /** 传入的代际是否仍是当前主体。 */
+  isCurrentGeneration(generation: number): boolean {
+    return generation === this.generation;
+  }
+
+  /** 当前已订阅的资源（只读快照）。 */
+  subscribedResourceKeys(): string[] {
+    return [...this.subscribedResources];
+  }
 
   /**
    * 建立 SignalR 连接（在用户登录后调用）。
@@ -90,18 +114,37 @@ export class SignalRService {
    * 全成功或全回滚：任一 Hub 启动失败时停掉本轮已经起来的连接并清空引用。
    */
   connect(): Promise<void> {
-    this.connecting ??= this.connectAllAsync().finally(() => {
-      this.connecting = null;
+    if (this.connecting && this.connectingGeneration === this.generation) {
+      return this.connecting;
+    }
+
+    // 上一个主体的连接过程还没收尾：它发现代际变化后会把自己建的连接断掉，
+    // 直接复用它的 Promise 会让本主体拿到一个"正常返回但什么都没连上"的结果，
+    // 在组件重挂载前一直没有实时连接。等它结束，再为本主体重新建立。
+    const previous = this.connecting;
+    const generation = this.generation;
+
+    this.connectingGeneration = generation;
+    this.connecting = (async () => {
+      await previous?.catch(() => undefined);
+      await this.connectAllAsync(generation);
+    })().finally(() => {
+      if (this.connectingGeneration === generation) {
+        this.connecting = null;
+      }
     });
 
     return this.connecting;
   }
 
-  private async connectAllAsync(): Promise<void> {
-    // 代际必须在第一个 await 之前捕获：晚一步读到的就是 reset() 已经递增过的值，
-    // 校验永远相等，那道防护形同虚设。
-    const generation = this.generation;
-
+  /**
+   * @param generation 发起本次连接请求时的认证代际。
+   *
+   * 由调用方传入而不是在这里读：本方法要等上一个主体的连接过程收尾才开始执行，
+   * 那时读到的已经是 reset() 递增过的值，代际校验永远相等、防护形同虚设。
+   * 代际属于"这次 connect 请求"，不属于"这段代码碰巧执行的时刻"。
+   */
+  private async connectAllAsync(generation: number): Promise<void> {
     if (this.hasLiveConnections()) {
       return;
     }
@@ -182,11 +225,18 @@ export class SignalRService {
   async subscribeResource(resourceKey: string): Promise<void> {
     const conn = this.businessConnection;
     if (!conn) return;
+
+    const generation = this.generation;
     try {
       if (conn.state === 'Connected') {
         await conn.invoke('Subscribe', resourceKey);
       }
-      this.subscribedResources.add(resourceKey);
+
+      // reset() 清过集合之后才回填，等于把上一个主体的订阅塞回下一个人名下；
+      // 后端的订阅授权默认关闭，那个 key 会被真的重新订阅上。
+      if (this.isCurrentGeneration(generation)) {
+        this.subscribedResources.add(resourceKey);
+      }
     } catch (err) {
       console.error('[SignalR] subscribeResource failed:', err);
     }
@@ -224,9 +274,16 @@ export class SignalRService {
       .configureLogging(LogLevel.Information)
       .build();
 
+    // 回调闭包捕获建立连接时的代际：stop() 是异步的，在它完成之前仍可能收到
+    // 上一个主体的推送，直接写进共享 signal 就落到了下一个用户的界面上。
+    const generation = this.generation;
     this.notificationConnection.on(
       'NotificationReceived',
       (notification: NotificationOutputDto) => {
+        if (!this.isCurrentGeneration(generation)) {
+          return;
+        }
+
         this.notifications.update((list) => [notification, ...list]);
       },
     );
@@ -248,11 +305,16 @@ export class SignalRService {
       .configureLogging(LogLevel.Information)
       .build();
 
-    // 重新挂载已注册的事件监听
+    // 重新挂载已注册的事件监听。同样捕获代际：理由见通知 Hub。
+    const generation = this.generation;
     for (const eventName of this.resourceEventNames) {
-      this.businessConnection.on(eventName, (payload: unknown) =>
-        this.lastResourceEvent.set({ eventName, payload }),
-      );
+      this.businessConnection.on(eventName, (payload: unknown) => {
+        if (!this.isCurrentGeneration(generation)) {
+          return;
+        }
+
+        this.lastResourceEvent.set({ eventName, payload });
+      });
     }
 
     // 业务 Hub 同样要维护自身状态：只有通知 Hub 上报时，它单独掉线不会被察觉。

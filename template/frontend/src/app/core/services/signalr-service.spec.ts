@@ -67,6 +67,12 @@ describe('SignalRService 连接生命周期', () => {
       this.stopCount++;
       this.state = signalR.HubConnectionState.Disconnected;
     }
+
+    // 订阅走 invoke：缺了它，subscribeResource 会直接抛错进 catch，
+    // 相关用例在改坏实现时也照样绿——那种"通过"什么都证明不了。
+    invoke(): Promise<void> {
+      return Promise.resolve();
+    }
   }
 
   function connectionsFor(fragment: string): FakeConnection[] {
@@ -234,6 +240,43 @@ describe('SignalRService 连接生命周期', () => {
     // await 回来的连接握的是上一个身份；写进字段就成了没人再管、却仍在收推送的孤儿。
     expect(service.isConnected()).toBeFalse();
     expect(built.every((connection) => connection.stopCount >= 1)).toBeTrue();
+  });
+
+  it('reset 窗口内到达的旧 Hub 推送不写进新主体的列表', async () => {
+    await service.connect();
+    const notificationHub = connectionsFor('/hubs/notifications')[0];
+    const push = notificationHub.handlers.get('NotificationReceived')!;
+
+    await service.reset();
+
+    // stop() 是异步的，在它完成之前仍可能收到上一个主体的推送。
+    push({ id: 'n1', title: 'A 的推送', type: 'info', isRead: false, creationTime: '2026-01-01' });
+
+    expect(service.notifications()).toEqual([]);
+  });
+
+  it('reset 之后完成的订阅调用不会把旧主体的资源填回来', async () => {
+    await service.connect();
+
+    const pending = service.subscribeResource('order-1');
+    await service.reset();
+    await pending;
+
+    // 后端的订阅授权默认关闭：回填的 key 会在下一次连接后被真的重新订阅上。
+    await service.connect();
+    expect(service.subscribedResourceKeys()).toEqual([]);
+  });
+
+  it('旧主体的连接过程未收尾时，新主体的 connect 仍会为自己建立连接', async () => {
+    const stale = service.connect();
+    await service.reset();
+
+    const fresh = service.connect();
+    await Promise.all([stale, fresh]);
+
+    // 直接复用上一个主体的 Promise，会让本主体拿到"正常返回但什么都没连上"，
+    // 在组件重挂载前一直没有实时通知。
+    expect(service.isConnected()).toBeTrue();
   });
 
   it('stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面', async () => {

@@ -38,6 +38,10 @@ export class NotificationService {
 
   /** 加载通知列表。 */
   async loadNotifications(maxCount = 50): Promise<void> {
+    // 记下发起请求时的认证代际：请求在途时登出/换人登录，响应回来仍会写同一个
+    // 共享 signal——那就是把上一个用户的历史通知落到下一个人的界面上。
+    const generation = this.signalR.authGeneration;
+
     this.loading.set(true);
     try {
       const items = await lastValueFrom(
@@ -58,6 +62,11 @@ export class NotificationService {
       merged.sort(
         (a, b) => new Date(b.creationTime).getTime() - new Date(a.creationTime).getTime(),
       );
+
+      if (!this.signalR.isCurrentGeneration(generation)) {
+        return;
+      }
+
       this.signalR.notifications.set(merged);
     } catch (err) {
       console.error('[NotificationService] Load failed:', err);

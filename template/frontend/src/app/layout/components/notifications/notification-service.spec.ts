@@ -64,6 +64,22 @@ describe('NotificationService', () => {
     expect(service.notifications().map((item) => item.id)).toEqual(['pushed', 'old']);
   });
 
+  it('请求在途时切换认证主体，旧响应不写回新主体的列表', async () => {
+    spyOn(signalR, 'disconnect').and.resolveTo();
+
+    const init = service.init();
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
+
+    // 响应还没回来就登出/换人登录：reset 递增认证代际并清空列表。
+    await signalR.reset();
+
+    request.flush([notification('a-1', '2026-01-01T00:00:00Z')]);
+    await init;
+
+    // 旧响应无条件写回共享 signal，就是把上一个用户的历史通知落到下一个人界面上。
+    expect(service.notifications()).toEqual([]);
+  });
+
   it('加载失败时保留已推送的通知，并复位 loading', async () => {
     signalR.notifications.set([notification('pushed', '2026-01-02T00:00:00Z')]);
 
