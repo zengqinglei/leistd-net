@@ -4,7 +4,16 @@ import { RouterLink } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideGauge, lucideIdCard, lucideShieldCheck, lucideUsers } from '@ng-icons/lucide';
+// prettier-ignore
+import {
+  //#if (IncludeTenancy)
+  lucideBuilding2,
+  //#endif
+  lucideGauge,
+  lucideIdCard,
+  lucideShieldCheck,
+  lucideUsers,
+} from '@ng-icons/lucide';
 import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 
 //#if (IncludeLocalization)
@@ -51,7 +60,13 @@ interface MenuGroup {
     TranslocoModule,
     //#endif
   ],
-  providers: [provideIcons({ lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck })],
+  // prettier-ignore
+  providers: [provideIcons({
+    //#if (IncludeTenancy)
+    lucideBuilding2,
+    //#endif
+    lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck,
+  })],
   templateUrl: './default-sidebar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -87,6 +102,15 @@ export class DefaultSidebar {
           icon: 'lucideShieldCheck',
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
+        },
+        //#endif
+        //#if (IncludeTenancy)
+        // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
+        {
+          label: 'layout.sidebar.tenants',
+          icon: 'lucideBuilding2',
+          route: '/platform/tenants',
+          permissions: [PERMISSIONS.tenants.default],
         },
         //#endif
       ],
@@ -142,6 +166,15 @@ export class DefaultSidebar {
           icon: 'lucideShieldCheck',
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
+        },
+        //#endif
+        //#if (IncludeTenancy)
+        // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
+        {
+          label: 'Tenant Management',
+          icon: 'lucideBuilding2',
+          route: '/platform/tenants',
+          permissions: [PERMISSIONS.tenants.default],
         },
         //#endif
       ],

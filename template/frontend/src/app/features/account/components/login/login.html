@@ -251,6 +251,97 @@
       </div>
 
       <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
+        <!--#if (IncludeTenancy)-->
+        <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="tenantName">{{ 'account.login.tenant' | transloco }}</label>
+          <!--#else-->
+          <label hlmFieldLabel for="tenantName">Tenant</label>
+          <!--#endif-->
+          @if (tenantContext.current(); as tenant) {
+            <div
+              class="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/50 px-3 py-1.5"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <ng-icon name="lucideBuilding2" class="shrink-0 text-muted-foreground" />
+                <span class="truncate text-sm font-medium">{{
+                  tenant.displayName || tenant.name
+                }}</span>
+              </div>
+              <!--#if (IncludeLocalization)-->
+              <button
+                hlmBtn
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                [attr.aria-label]="'account.login.tenantClear' | transloco"
+                (click)="clearTenant()"
+              >
+                <ng-icon name="lucideX" />
+              </button>
+              <!--#else-->
+              <button
+                hlmBtn
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Clear tenant"
+                (click)="clearTenant()"
+              >
+                <ng-icon name="lucideX" />
+              </button>
+              <!--#endif-->
+            </div>
+          } @else {
+            <hlm-input-group>
+              <!--#if (IncludeLocalization)-->
+              <input
+                hlmInputGroupInput
+                id="tenantName"
+                autocomplete="off"
+                [value]="tenantName()"
+                (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
+                (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
+                [placeholder]="'account.login.tenantPlaceholder' | transloco"
+              />
+              <button
+                hlmInputGroupButton
+                type="button"
+                align="inline-end"
+                [disabled]="tenantChecking()"
+                (click)="onConfirmTenant()"
+              >
+                {{ 'account.login.tenantConfirm' | transloco }}
+              </button>
+              <!--#else-->
+              <input
+                hlmInputGroupInput
+                id="tenantName"
+                autocomplete="off"
+                [value]="tenantName()"
+                (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
+                (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
+                placeholder="Tenant name, leave empty for host"
+              />
+              <button
+                hlmInputGroupButton
+                type="button"
+                align="inline-end"
+                [disabled]="tenantChecking()"
+                (click)="onConfirmTenant()"
+              >
+                Confirm
+              </button>
+              <!--#endif-->
+            </hlm-input-group>
+            @if (tenantError(); as error) {
+              <p class="text-sm text-destructive">{{ error }}</p>
+            }
+          }
+        </div>
+
+        <!--#endif-->
         <!-- Username/Email -->
         <div hlmField>
           <!--#if (IncludeLocalization)-->

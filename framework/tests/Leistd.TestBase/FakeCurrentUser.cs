@@ -19,19 +19,22 @@ public sealed class FakeCurrentUser : ICurrentUser
         string? email = null,
         string? phoneNumber = null,
         string[]? roles = null,
-        Claim[]? claims = null)
+        Claim[]? claims = null,
+        Guid? tenantId = null)
     {
         Id = id;
         Username = username;
         Name = name;
         Email = email;
         PhoneNumber = phoneNumber;
+        TenantId = tenantId;
         _roles = roles ?? [];
         _claims = claims ?? [];
     }
 
     public bool IsAuthenticated => Id.HasValue;
     public Guid? Id { get; }
+    public Guid? TenantId { get; }
     public string? Username { get; }
     public string? Name { get; }
     public string? Email { get; }

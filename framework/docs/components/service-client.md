@@ -149,12 +149,15 @@ builder.Services
 `AddServiceClient` 装配的处理器链（自外向内）：
 
 ```
-业务代码 → 调用日志 → TraceId 透传 → X-User-* 注入 → Bearer 认证(OAuth 包) → 网络
+业务代码 → 调用日志 → TraceId 透传 → X-User-* 注入 → X-Tenant-Id 注入 → Bearer 认证(OAuth 包) → 网络
 ```
 
 - **TraceId 透传**复用 `Leistd.Tracing.HttpClient`：宿主注册了 `AddCorrelationIdCore` /
   `AddCorrelationId` 才生效，未注册时该环节直通，本组件不代为注册。
 - **用户头注入**依赖 `ICurrentUser`：宿主注册了 `Leistd.Security`（Web 宿主 `AddSecurity()`）才生效。
+- **租户头注入**依赖 `ICurrentTenant`（[多租户组件](./multi-tenancy.md)）：值来自环境上下文而非用户
+  claim，后台任务经 `ICurrentTenant.Change()` 设定租户后无用户主体也能传递；开关
+  `ForwardTenantId` 独立于用户头的 `Enable`。
 - **Bearer 认证**由 `AddClientCredentials` 追加在最内层：401 重试对日志与上层透明。
 
 ## 用户上下文传递
@@ -165,6 +168,7 @@ builder.Services
 | --- | --- | --- |
 | `X-User-Id` | `ICurrentUser.Id` | 转发 |
 | `X-User-Name` | `ICurrentUser.Username`（UTF-8 URL 编码） | 转发（`ForwardUserName` 可关） |
+| `X-Tenant-Id` | `ICurrentTenant.Id`（环境上下文，非 claim） | 转发（`ForwardTenantId` 可关，独立于 `Enable`） |
 | 自定义 | `UserContext.ClaimHeaderMap`（claim → 头名，URL 编码） | 不转发 |
 
 角色、权限**不经头传递**：被调方对服务调用的授权应基于调用方 client 的 scope，或按用户 Id 本地判定。
@@ -183,9 +187,10 @@ app.UseServiceUserContext(); // 必须在 UseAuthentication 之后、UseAuthoriz
 app.UseAuthorization();
 ```
 
-**信任边界**：仅当当前主体是已认证的服务客户端——含 `client_id` claim 且 `sub == client_id`
-（client credentials token 的形态；用户 token 的 `sub` 是用户 Id，不满足）——时才采信
-`X-User-*` 头。满足时把用户身份作为**主身份**加入 `HttpContext.User` 并保留调用方 client 身份，
+**信任边界**：仅当当前主体是已认证的服务客户端——含 `client_id` claim 且
+`sub == client_id` 或 `sub == "client:" + client_id`（`ClientSubjectPrefix` 可配置；
+前缀形态对应签发端隔离机器与自然人 sub 命名空间的做法。用户 token 的 `sub` 是用户 Id，
+两种都不满足）——时才采信 `X-User-*` 头。满足时把用户身份作为**主身份**加入 `HttpContext.User` 并保留调用方 client 身份，
 此后 `ICurrentUser`（用户）与 `ICurrentClient`（调用方服务）双通道可用；不满足时按配置
 **剥离**这些头，阻断伪造链路。
 
@@ -236,8 +241,8 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `AddServiceClient<TClient, TImpl, TOptions>(services, serviceName, IConfiguration)` | 注册强类型客户端并装配标准管道，Options 绑定 `Leistd:ServiceClients:<serviceName>`；返回 `IHttpClientBuilder` |
 | `AddServiceClient<TClient, TImpl, TOptions>(services, serviceName, Action<TOptions>)` | 同上，委托配置版 |
 | `ServiceClientOptions` | 配置基类：`BaseAddress`、`Timeout`、`LogPayloads`、`MaxPayloadLength`、`UserContext` |
-| `UserContextForwardingOptions` | 用户头转发：`Enable`、`ForwardUserName`、`ClaimHeaderMap` |
-| `ServiceClientHeaders` | 头名常量：`UserId`（`X-User-Id`）、`UserName`（`X-User-Name`） |
+| `UserContextForwardingOptions` | 用户头转发：`Enable`、`ForwardUserName`、`ClaimHeaderMap`、`ForwardTenantId` |
+| `ServiceClientHeaders` | 头名常量：`UserId`（`X-User-Id`）、`UserName`（`X-User-Name`）、`TenantId`（`X-Tenant-Id`） |
 | `AddServiceClientPipeline<TOptions>(builder, serviceName)` | 在既有 `IHttpClientBuilder` 上装配标准能力（BaseAddress/Timeout/日志/追踪/用户头），供 Refit 等注册形态复用 |
 | `ReadResultAsync<T>()` / `ReadResultAsync()` | 解包统一响应，失败抛 `RemoteServiceException` |
 | `ReadContentAsync<T>()` | 未包装端点直接反序列化（同样先做错误还原） |
@@ -273,7 +278,7 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `AddServiceUserContext(services, Action<ServiceUserContextOptions>?)` | 同上，委托配置版 |
 | `UseServiceUserContext()` | 启用中间件（`UseAuthentication` 之后、`UseAuthorization` 之前）：剥离不受信头 + 兜底恢复 |
 | `ServiceUserContextClaimsTransformation` | `IClaimsTransformation` 实现：在每次认证内恢复用户主体（含授权策略按 scheme 重认证的路径） |
-| `ServiceUserContextOptions` | `Enable`、`UserIdHeader`、`UserNameHeader`、`HeaderClaimMap`、`RemoveUntrustedHeaders`、`RequiredScope`、`AuthenticationType` |
+| `ServiceUserContextOptions` | `Enable`、`UserIdHeader`、`UserNameHeader`、`TenantIdHeader`、`HeaderClaimMap`、`RemoveUntrustedHeaders`、`RequiredScope`、`AuthenticationType` |
 
 ## 实现行为
 
@@ -303,8 +308,9 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 - 中间件职责：不受信时剥离用户头；受信但认证阶段未恢复时兜底恢复 `HttpContext.User`。`Enable=false` 时完全直通（不恢复也不剥离）。
 - 受信判定：主体已认证 + 含 `client_id` claim + `sub == client_id`（`sub` 缺失时回退 `ClaimTypes.NameIdentifier`）+ 可选 `RequiredScope`（同时识别空格分隔的 `scope` claim 与 OpenIddict 的多值 `oi_scp` claim）。
 - 恢复时构造 `sub` / `preferred_username` / 自定义映射 claim 的 `ClaimsIdentity`（`AuthenticationType` 默认 `ServiceUserContext`）置于主体首位，原有身份全部保留。
-- 受信但无 `X-User-Id` 头：服务以自身身份调用，主体保持不变。
-- 不受信且 `RemoveUntrustedHeaders=true`（默认）：从请求中移除 `UserIdHeader`、`UserNameHeader` 与 `HeaderClaimMap` 声明的所有头。
+- **租户恢复独立于用户头**：受信调用携带 `X-Tenant-Id`（`TenantIdHeader` 可改名，置空关闭）即恢复为 `tenant_id` claim，交由多租户解析链的 Claim 贡献者定案——仅有租户上下文、没有用户的后台任务调用同样恢复。
+- 受信但既无 `X-User-Id` 也无租户头：服务以自身宿主身份调用，主体保持不变。
+- 不受信且 `RemoveUntrustedHeaders=true`（默认）：从请求中移除 `UserIdHeader`、`UserNameHeader` 与 `HeaderClaimMap` 声明的所有头。**租户头不在剥离之列**——多租户解析链的主体优先级已使伪造头无害（已认证主体的租户由 claim 定案，匿名请求的租户头只决定登录分区、不授予可见性），剥离它反而会切断 SPA 匿名登录的租户选择链路。
 
 ## 配置项 / Options
 
@@ -318,6 +324,7 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `MaxPayloadLength` | 4096 | 载荷日志截断长度 |
 | `UserContext.Enable` | `true` | 用户头转发开关 |
 | `UserContext.ForwardUserName` | `true` | 是否转发 `X-User-Name` |
+| `UserContext.ForwardTenantId` | `true` | 是否转发 `X-Tenant-Id`（独立于 `Enable`；宿主未注册 `ICurrentTenant` 时自动跳过） |
 | `UserContext.ClaimHeaderMap` | 空 | 额外 claim → 头名映射 |
 
 `ClientCredentialsOptions`（分层绑定：全局 `Leistd:ServiceAuth` → 客户端节 `Leistd:ServiceClients:<服务名>:Scope`）：
@@ -354,5 +361,6 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 
 - [链路追踪](./tracing.md)
 - [当前用户与身份信息](./security.md)
+- [多租户](./multi-tenancy.md)
 - [统一 API 响应](./response.md)
 - [业务异常与全局异常处理](./exception.md)

@@ -156,7 +156,9 @@ public class EfCoreRepository<TDbContext, TEntity, TKey>(
     public virtual async Task<TEntity?> GetByIdAsync(TKey id, CancellationToken cancellationToken = default)
     {
         var dbSet = await GetDbSetAsync(cancellationToken);
-        return await dbSet.FindAsync([id], cancellationToken);
+        // 必须走 LINQ 查询而非 FindAsync：FindAsync 绕过全局查询过滤器（软删除/租户隔离），
+        // 会让按 Id 的读取越过隔离边界
+        return await dbSet.FirstOrDefaultAsync(e => e.Id.Equals(id), cancellationToken);
     }
 
     public virtual async Task DeleteAsync(TKey id, CancellationToken cancellationToken = default)

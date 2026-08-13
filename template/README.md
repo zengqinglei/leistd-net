@@ -21,6 +21,9 @@ CompanyName.ProjectName/
 - 本地账号、登录、注册和 Cookie 认证。
 <!--#if (IncludeRoles)-->
 - 用户、角色、权限以及超级管理员授权模型。
+<!--#if (IncludeTenancy)-->
+- 多租户：租户解析与数据硬隔离、租户管理（宿主侧）、登录页租户选择；每个租户拥有独立的用户、角色与权限授予。
+<!--#endif-->
 <!--#endif-->
 <!--#if (IncludeOpenIddict)-->
 - OpenIddict OAuth 2.0/OIDC Server。

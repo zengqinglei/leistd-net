@@ -12,5 +12,6 @@
     <ProjectReference Include="..\..\components\dependency-injection\Leistd.DependencyInjection\Leistd.DependencyInjection.csproj" />
     <ProjectReference Include="..\..\components\core\Leistd.Core\Leistd.Core.csproj" />
     <ProjectReference Include="..\..\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+    <ProjectReference Include="..\..\components\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
   </ItemGroup>
 </Project>

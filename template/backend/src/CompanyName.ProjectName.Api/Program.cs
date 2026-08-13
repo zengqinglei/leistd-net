@@ -21,6 +21,9 @@ using Leistd.Tracing.AspNetCore;
 #if (IncludeRoles)
 using Leistd.Authorization.AspNetCore;
 #endif
+#if (IncludeTenancy)
+using Leistd.MultiTenancy;
+#endif
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
 using Leistd.RealTime;
@@ -270,6 +273,12 @@ try
     // 4.5. Leistd Security 服务
     builder.Services.AddSecurity();
 
+#if (IncludeTenancy)
+    // 4.5.-1 多租户：环境上下文与解析链（Claim 定案 → X-Tenant-Id 头 → tenant 查询串），
+    // 配置节 Leistd:MultiTenancy；租户存储/管理器在 Infrastructure 层注册
+    builder.Services.AddMultiTenancy(builder.Configuration);
+#endif
+
 #if (IncludeOpenIddict)
     // 4.5.0 服务间调用：受信恢复调用方携带的 X-User-* 用户上下文（配置节 Leistd:ServiceUserContext）。
     // 仅当调用方以 client credentials 令牌通过认证时才采信这些头，其余请求一律剥离，阻断伪造。
@@ -296,7 +305,16 @@ try
 #if (IncludeIdentity)
     builder.Services.AddAuthentication(options =>
     {
-#if (IncludeOpenIddict)
+#if (IncludeTenancy && IncludeOpenIddict)
+        // 多租户 + OpenIddict：默认认证方案改为按请求选择的转发方案。
+        // 多租户中间件在 UseAuthentication 之后立即依赖 HttpContext.User 做"已认证主体的
+        // 租户由 claim 定案"——若默认方案固定为 Bearer 校验，Cookie 会话在中间件阶段
+        // 是匿名的，伪造的 X-Tenant-Id 头就能改写已登录用户的租户上下文。
+        // 转发方案让 Bearer 请求走 OpenIddict 校验、其余走 Cookie，两类主体在
+        // 中间件阶段都已就绪；默认授权策略仍显式列出两个方案，行为不变。
+        options.DefaultAuthenticateScheme = "MyProjectSmart";
+        options.DefaultChallengeScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+#elif (IncludeOpenIddict)
         // 启用 OpenIddict 时，默认走其 Bearer 校验；未启用时默认走 Cookie。
         options.DefaultAuthenticateScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
@@ -305,6 +323,16 @@ try
         options.DefaultChallengeScheme = "MyProjectCookie";
 #endif
     })
+#if (IncludeTenancy && IncludeOpenIddict)
+    .AddPolicyScheme("MyProjectSmart", "按请求选择 Bearer 或 Cookie", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+            context.Request.Headers.Authorization.Any(value =>
+                value != null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                ? OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme
+                : "MyProjectCookie";
+    })
+#endif
     .AddCookie("MyProjectCookie", options =>
     {
         var isDevelopmentEnvironment = builder.Environment.IsDevelopment();
@@ -469,6 +497,13 @@ try
     // 服务间调用的用户上下文恢复：必须在认证之后（信任判定依赖已认证的调用方主体）、授权之前
     app.UseServiceUserContext();
 #endif
+#endif
+#if (IncludeTenancy)
+    // 租户会话自恢复：会话所属租户被删/停用时注销 Cookie 并恢复导航，防止死锁在错误页
+    app.UseTenantSessionRecovery("MyProjectCookie");
+    // 多租户解析与校验：认证（及受信恢复）之后——Claim 贡献者需要已认证主体；
+    // 授权之前——权限检查必须在租户上下文内执行。未知租户 404、停用租户 403
+    app.UseMultiTenancy();
 #endif
     app.UseAuthorization();
 

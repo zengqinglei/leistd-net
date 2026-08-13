@@ -90,6 +90,13 @@
       "datatype": "bool",
       "description": "是否包含多语言（i18n）支持：前端 Transloco 运行时切换 + 后端按 culture 本地化（默认语言英语）",
       "defaultValue": "false"
+    },
+    "IncludeTenancy": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "是否包含多租户模式：租户解析与数据硬隔离、租户管理 API 与页面、登录页租户选择。依赖角色权限：不得与 --include-roles false 同时使用",
+      "defaultValue": "false",
+      "isEnabled": "IncludeIdentity"
     }
   },
   "sources": [
@@ -160,7 +167,17 @@
             "frontend/src/app/features/platform/components/users/**",
             "frontend/src/app/features/platform/services/platform-user-service.ts",
             "frontend/src/app/features/platform/services/user-management-service.ts",
-            "frontend/src/app/features/platform/models/user-management.dto.ts"
+            "frontend/src/app/features/platform/models/user-management.dto.ts",
+            "backend/src/CompanyName.ProjectName.Application/Tenants/**",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/TenancyTests.cs",
+            "frontend/src/app/features/platform/components/tenants/**",
+            "frontend/src/app/features/platform/services/tenant-service.ts",
+            "frontend/src/app/shared/dtos/tenant.dto.ts",
+            "frontend/src/app/core/services/tenant-context-service.ts",
+            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
+            "frontend/_mock/api/tenant.ts",
+            "frontend/_mock/data/tenant.ts"
           ]
         },
         {
@@ -260,6 +277,21 @@
             "backend/src/CompanyName.ProjectName.Domain/Auth/Abstractions/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "frontend/src/app/features/account/components/external-auth-callback/**"
+          ]
+        },
+        {
+          "condition": "!IncludeTenancy",
+          "exclude": [
+            "backend/src/CompanyName.ProjectName.Application/Tenants/**",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/TenancyTests.cs",
+            "frontend/src/app/features/platform/components/tenants/**",
+            "frontend/src/app/features/platform/services/tenant-service.ts",
+            "frontend/src/app/shared/dtos/tenant.dto.ts",
+            "frontend/src/app/core/services/tenant-context-service.ts",
+            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
+            "frontend/_mock/api/tenant.ts",
+            "frontend/_mock/data/tenant.ts"
           ]
         },
         {

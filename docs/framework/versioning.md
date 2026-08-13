@@ -7,6 +7,40 @@
 - `framework/common.props` 在构建时自动读取 `VERSION` 作为 `VersionPrefix`，所有 `Leistd.*` 包同步该版本（无外部工具依赖）。
 - 模板 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 是字面值副本（生成项目需自包含），由发布流水线 `release.yml` 在发版时回写。
 
+## 0.14.0 多租户（含破坏性变更）
+
+新增 `multi-tenancy` 组件家族并贯通既有组件，详细用法见[多租户](../../framework/docs/components/multi-tenancy.md)；方案与决策记录见 [`docs/plans/2026-08-12-multi-tenancy.md`](../plans/2026-08-12-multi-tenancy.md)。
+
+**新增包**
+
+- `Leistd.MultiTenancy.Core`：`ICurrentTenant`（AsyncLocal 环境上下文）、`IMultiTenant` 标记接口、`MultiTenancySides`、解析链抽象、`ITenantStore` / `InMemoryTenantStore`、租户异常（映射 404/403/409）。
+- `Leistd.MultiTenancy.AspNetCore`：`UseMultiTenancy()` 中间件与默认解析链（Claim 定案 → `X-Tenant-Id` 头 → `tenant` 查询串）。
+- `Leistd.MultiTenancy.EntityFrameworkCore`：`TenantRecord` 注册表、`EfCoreTenantStore`（`IDistributedCache` 缓存）、`ITenantManager`、`MultiTenantSaveChangesInterceptor` 落值拦截器。
+
+**`Leistd.Ddd.Infrastructure`（破坏性）**
+
+- `ApplyGlobalFilters<TInterface>` 增加必填 `filterName` 首参，改用 EF 10 命名查询过滤器——软删除与租户过滤器在同一实体上 AND 叠加，此前二次调用会静默覆盖前一个过滤器。直接调用方需补过滤器名。
+- `BaseDbContext` 新增租户全局过滤器（`MultiTenantFilterName`）；实体不实现 `IMultiTenant` 时无影响。
+- **运行时语义修复**：`EfCoreRepository.GetByIdAsync` 不再走 `FindAsync`（它绕过全局查询过滤器）——此前按 Id 能取出软删除行，多租户下将构成跨租户水平越权。依赖旧行为读取已删数据的调用方，改用 `IDataFilter.Disable<ISoftDelete>()` 显式表达。
+
+**`Leistd.Security.Core`（破坏性）**
+
+- `ICurrentUser` 新增 `Guid? TenantId`（读 `tenant_id` claim；常量 `CustomClaimTypes.TenantId`）。**自定义实现必须补该成员**，否则编译失败。
+
+**`Leistd.Authorization.*`（破坏性）**
+
+- 权限定义新增多租户侧别：`GetOrAddGroup` / `AddPermission` / `AddChild` 增加可选 `side` 参数（组默认 `Both`，权限继承组、子权限继承父）；`IPermissionGroupDefinition` / `IPermissionDefinition` 新增 `Side` 属性——自定义实现需补齐。
+- 检查器判定顺序追加**侧别硬边界**：定义侧别与当前多租户上下文不匹配一律拒绝，先于授予读取与超管旁路；未注册 `ICurrentTenant` 的宿主视为 Host 侧（仅租户侧专属权限被拒，存量项目无感）。
+- `PermissionGrantRecord` / `AuthorizationRevisionRecord`（及 Resource 家族对应两表）实现 `IMultiTenant`：新增可空 `TenantId` 列，授予与版本按租户分区；唯一索引重构为宿主行（`IS NULL` 过滤）与租户行（`IS NOT NULL` 过滤）成对的带过滤唯一索引——可空列直接进唯一索引时 NULL 互不相等，宿主行会失去唯一性兜底。**需要一次 EF 迁移**；存量行 `TenantId` 为 NULL 即宿主语义，行为不变。
+
+**`Leistd.ServiceClient.*`**
+
+- 出站管道追加租户头注入（`X-Tenant-Id`，来源 `ICurrentTenant`，`UserContextForwardingOptions.ForwardTenantId` 默认开、独立于用户头开关；宿主未注册 `ICurrentTenant` 时直通）。
+- 被调方受信恢复扩展到租户：`ServiceUserContextOptions.TenantIdHeader`（默认 `X-Tenant-Id`）恢复为 `tenant_id` claim，且**独立于用户头**（仅有租户上下文的后台任务调用也恢复）；不受信来源的租户头不剥离——解析链主体优先级已使其无害，匿名登录的租户选择依赖它。
+- 受信判定兼容机器主体的命名空间前缀：`sub == client_id` 之外同时接受 `sub == ClientSubjectPrefix + client_id`（新 Options，默认 `client:`）。修复模板侧"机器主体加 `client:` 前缀防冒充"与 SDK 受信判定合并后互不兼容导致的恢复失效。
+
+**依赖变化**：CPM 新增 `Microsoft.Extensions.Caching.Abstractions` / `Microsoft.Extensions.Caching.Memory`（10.0.10）；`Leistd.Authorization.Core`、`Leistd.ServiceClient.Core`、`Leistd.Ddd.Infrastructure` 新增对 `Leistd.MultiTenancy.Core` 的依赖。
+
 ## 0.13.0 授权体系最终态（破坏性变更）
 
 本次一并完成，不保留过渡重载与兼容分支。升级需要一次代码调整加一次 EF 迁移。

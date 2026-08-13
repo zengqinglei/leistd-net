@@ -5,6 +5,9 @@ export * from './api/user';
 //#if (IncludeRoles)
 export * from './api/authorization';
 //#endif
+//#if (IncludeTenancy)
+export * from './api/tenant';
+//#endif
 //#if (IncludeOpenIddict)
 export * from './api/open-application';
 //#endif

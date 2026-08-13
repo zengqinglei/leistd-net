@@ -64,7 +64,9 @@
     "platform": "Admin platform",
     "profile": "Profile",
     "changePassword": "Change password",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "switchTenant": "Switch tenant",
+    "hostTenant": "Host"
   },
   "language": {
     "label": "Language"
@@ -93,7 +95,8 @@
       "openApplications": "Developer Apps",
       "workbench": "Workbench",
       "appSubtitle": "Admin Platform",
-      "roles": "Role Management"
+      "roles": "Role Management",
+      "tenants": "Tenant Management"
     },
     "notifications": {
       "title": "Notifications",
@@ -221,7 +224,13 @@
       "loginFailed": "Sign-in failed",
       "externalLoginFailed": "Unable to connect to the {{provider}} sign-in service, please try again later",
       "badgeReadyMain": "Ready",
-      "badgeReadySub": "to use"
+      "badgeReadySub": "to use",
+      "tenant": "Tenant",
+      "tenantPlaceholder": "Tenant name, leave empty for host",
+      "tenantConfirm": "Confirm",
+      "tenantClear": "Clear tenant",
+      "tenantNotFound": "Tenant does not exist",
+      "tenantInactive": "Tenant is deactivated"
     },
     "register": {
       "title": "Sign Up",
@@ -559,5 +568,42 @@
     "conflict": "Someone else changed these permissions. The latest values have been reloaded.",
     "description": "Check a permission to grant it. The top-level entry of each block is its read access; granting an action grants that read access too — creating users requires viewing the user list. To take an ability away from someone, change their roles.",
     "viewAccessHint": "view list"
+  },
+  "tenants": {
+    "title": "Tenant Management",
+    "searchPlaceholder": "Search tenants",
+    "create": "New tenant",
+    "colName": "Name",
+    "colDisplayName": "Display name",
+    "colStatus": "Status",
+    "colCreatedAt": "Created at",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "activated": "Tenant activated",
+    "deactivated": "Tenant deactivated",
+    "activateTitle": "Activate tenant",
+    "deactivateTitle": "Deactivate tenant",
+    "activateDescription": "Activate \"{{name}}\"? Its users will be able to sign in again.",
+    "deactivateDescription": "Deactivate \"{{name}}\"? Its users will not be able to sign in.",
+    "createTitle": "New tenant",
+    "editTitle": "Edit tenant",
+    "editDescription": "Name identifies the tenant at sign-in; users enter it to select their tenant.",
+    "fieldName": "Name",
+    "fieldDisplayName": "Display name",
+    "fieldAdminEmail": "Admin email",
+    "fieldAdminPassword": "Admin password",
+    "saved": "Tenant saved",
+    "deleted": "Tenant deleted",
+    "deleteTitle": "Delete tenant",
+    "deleteDescription": "Delete \"{{name}}\"? Users of this tenant will no longer be able to sign in.",
+    "table": {
+      "currentPageReport": "{{total}} in total",
+      "emptyTitle": "No tenants yet",
+      "emptyHint": "Create a new tenant",
+      "emptyFilteredTitle": "No matching tenants",
+      "emptyFilteredHint": "Adjust the search keyword"
+    }
   }
 }

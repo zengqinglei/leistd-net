@@ -32,6 +32,9 @@ import { TranslocoHttpLoader } from './core/i18n/transloco-loader';
 import { acceptLanguageInterceptor } from './core/interceptors/accept-language-interceptor';
 //#endif
 import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
+//#if (IncludeTenancy)
+import { tenantInterceptor } from './core/interceptors/tenant-interceptor';
+//#endif
 import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
 //#if (IncludeLocalization)
 import { LanguageService } from './core/services/language-service';
@@ -80,6 +83,9 @@ export const appConfig: ApplicationConfig = {
       withInterceptors([
         //#if (IncludeLocalization)
         acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
+        //#endif
+        //#if (IncludeTenancy)
+        tenantInterceptor, // 已选租户时为 /api/ 请求附加 X-Tenant-Id
         //#endif
         urlFormatInterceptor,
         httpErrorInterceptor, // 捕获所有 HTTP 错误并显示用户提示

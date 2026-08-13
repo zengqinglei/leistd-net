@@ -1,4 +1,5 @@
 using Leistd.Auditing;
+using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -13,10 +14,13 @@ namespace Leistd.Authorization.Resource.EntityFrameworkCore;
 /// 那个本该被排除在外的人会重新经由角色拿到访问权，且两次保存都会显示成功。
 /// 功能权限那一层已经用版本号 + 409 收口，资源这一层没有理由用更松的口径。
 /// </remarks>
-public class ResourceAuthorizationRevisionRecord : IModificationAuditedObject
+public class ResourceAuthorizationRevisionRecord : IModificationAuditedObject, IMultiTenant
 {
     /// <summary>版本记录 ID（有序 Guid v7）。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>所属租户 Id，null 为宿主。版本随 ACL 按租户分区。</summary>
+    public Guid? TenantId { get; set; }
 
     /// <summary>资源类型名。</summary>
     public string ResourceName { get; set; } = default!;
@@ -63,7 +67,13 @@ public class ResourceAuthorizationRevisionRecordConfiguration
         builder.Property(x => x.LastModifierId)
             .HasMaxLength(64);
 
+        // 版本随 ACL 按租户分区；宿主行与租户行分别用带过滤的唯一索引（NULL 唯一性说明同 ACL 表）
         builder.HasIndex(x => new { x.ResourceName, x.ResourceKey })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter($"\"{nameof(ResourceAuthorizationRevisionRecord.TenantId)}\" IS NULL");
+
+        builder.HasIndex(x => new { x.TenantId, x.ResourceName, x.ResourceKey })
+            .IsUnique()
+            .HasFilter($"\"{nameof(ResourceAuthorizationRevisionRecord.TenantId)}\" IS NOT NULL");
     }
 }

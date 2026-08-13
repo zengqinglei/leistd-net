@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Leistd.Authorization.Core\Leistd.Authorization.Core.csproj" />
     <ProjectReference Include="..\..\auditing\Leistd.Auditing.Core\Leistd.Auditing.Core.csproj" />
+    <ProjectReference Include="..\..\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -51,7 +51,7 @@ public sealed class ResourceGrantConcurrencyException(
     string resourceKey,
     long expectedRevision,
     long actualRevision)
-    : Exception(
+    : System.Exception(
         $"Resource ACL of '{resourceName}/{resourceKey}' was modified by someone else " +
         $"(expected revision {expectedRevision}, actual {actualRevision}).")
 {
@@ -75,7 +75,7 @@ public sealed class ResourceGrantConcurrencyException(
 /// 在唯一写入口拒掉，比让它躺在库里等人发现好。
 /// </remarks>
 public sealed class InvalidResourceGrantSubjectException(string resourceName, string resourceKey, string reason)
-    : Exception($"Resource grant on '{resourceName}/{resourceKey}' is not addressable: {reason}")
+    : System.Exception($"Resource grant on '{resourceName}/{resourceKey}' is not addressable: {reason}")
 {
     public string ResourceName { get; } = resourceName;
 
@@ -167,7 +167,7 @@ public sealed class InvalidResourceGrantEffectException(
     string resourceName,
     string resourceKey,
     ResourceGrantEffect effect)
-    : Exception($"Resource grant effect '{effect}' on '{resourceName}/{resourceKey}' is not a defined value.")
+    : System.Exception($"Resource grant effect '{effect}' on '{resourceName}/{resourceKey}' is not a defined value.")
 {
     public string ResourceName { get; } = resourceName;
 

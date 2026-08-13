@@ -77,6 +77,23 @@ public static class PermissionConstant
     }
 
 #endif
+#if (IncludeTenancy)
+    /// <summary>
+    /// 租户管理权限（宿主侧专属）
+    /// </summary>
+    /// <remarks>
+    /// 定义时声明 Host 侧别：租户上下文内对任何主体（含租户超管）不可见、不可授予、检查一律拒绝，
+    /// 租户管理员不会在权限树里看到"管理租户"这类平台能力。
+    /// </remarks>
+    public static class Tenants
+    {
+        public const string Default = Prefix + ".Tenants";
+        public const string Create = Default + ".Create";
+        public const string Update = Default + ".Update";
+        public const string Delete = Default + ".Delete";
+    }
+
+#endif
     /// <summary>
     /// 权限定义查看权限
     /// </summary>

@@ -1,4 +1,7 @@
 using Leistd.Authorization;
+#if (IncludeTenancy)
+using Leistd.MultiTenancy;
+#endif
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 
@@ -70,5 +73,17 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
             PermissionConstant.Permissions.Default,
             displayName: "Permission:App.Permissions"
         );
+
+#if (IncludeTenancy)
+        // 宿主侧专属：租户上下文内不可见、不可授予（子权限继承父级侧别）
+        var tenantsPermission = systemGroup.AddPermission(
+            PermissionConstant.Tenants.Default,
+            displayName: "Permission:App.Tenants",
+            side: MultiTenancySides.Host
+        );
+        tenantsPermission.AddChild(PermissionConstant.Tenants.Create, displayName: "Permission:App.Tenants.Create");
+        tenantsPermission.AddChild(PermissionConstant.Tenants.Update, displayName: "Permission:App.Tenants.Update");
+        tenantsPermission.AddChild(PermissionConstant.Tenants.Delete, displayName: "Permission:App.Tenants.Delete");
+#endif
     }
 }

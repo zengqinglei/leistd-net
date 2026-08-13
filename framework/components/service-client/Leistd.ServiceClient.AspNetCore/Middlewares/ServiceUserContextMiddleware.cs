@@ -70,6 +70,12 @@ public class ServiceUserContextMiddleware(
     {
         context.Request.Headers.Remove(opts.UserIdHeader);
         context.Request.Headers.Remove(opts.UserNameHeader);
+
+        // 注意：租户头（X-Tenant-Id）不在剥离之列。
+        // 多租户解析链的主体优先级已使伪造头失效——已认证主体的租户由 tenant_id claim 定案，
+        // 匿名请求的租户头只决定"后续认证发生在哪个租户分区"（登录页选租户），不授予任何可见性；
+        // 剥离它反而会切断 SPA 匿名登录的租户选择链路。
+
         foreach (var headerName in opts.HeaderClaimMap.Keys)
         {
             context.Request.Headers.Remove(headerName);

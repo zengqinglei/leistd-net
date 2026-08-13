@@ -2,6 +2,9 @@ using Leistd.Auditing.EntityFrameworkCore;
 #if (IncludeRoles)
 using Leistd.Authorization.EntityFrameworkCore;
 #endif
+#if (IncludeTenancy)
+using Leistd.MultiTenancy.EntityFrameworkCore;
+#endif
 using Leistd.Ddd.Infrastructure;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.EventBus.Local;
@@ -86,6 +89,10 @@ public static class DependencyInjection
             options.AddInterceptors(
                 sp.GetRequiredService<AuditSaveChangesInterceptor>(),
                 sp.GetRequiredService<LocalEventSaveChangesInterceptor>());
+#if (IncludeTenancy)
+            // 多租户落值拦截器：新增的 IMultiTenant 实体自动填充当前租户 Id
+            options.AddInterceptors(sp.GetRequiredService<MultiTenantSaveChangesInterceptor>());
+#endif
         });
 
 #if (IncludeNotifications)
@@ -95,6 +102,10 @@ public static class DependencyInjection
 #endif
 #if (IncludeRoles)
         services.AddAuthorizationEfCore<MyProjectDbContext>();
+#endif
+#if (IncludeTenancy)
+        // 租户注册表存储、管理器与落值拦截器（依赖下方注册的分布式缓存）
+        services.AddMultiTenancyEfCore<MyProjectDbContext>();
 #endif
 
         // 注册 DDD Infrastructure 基础服务（UnitOfWork + 自动仓储注册）

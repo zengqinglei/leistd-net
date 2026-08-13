@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy;
 using Leistd.Security.Users;
 using Leistd.ServiceClient.Handlers;
 using Leistd.ServiceClient.Options;
@@ -144,6 +145,16 @@ public static class DependencyInjection
             var options = provider.GetRequiredService<IOptions<TOptions>>().Value;
             return options.UserContext.Enable && provider.GetService<ICurrentUser>() is { } currentUser
                 ? new UserContextDelegatingHandler(currentUser, options.UserContext)
+                : new PassthroughDelegatingHandler();
+        });
+
+        // 4. 租户上下文头注入（宿主未注册 ICurrentTenant 或 Options 关闭时直通）；
+        //    独立于用户头开关：后台任务可能只有租户上下文而无用户主体
+        builder.AddHttpMessageHandler(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<TOptions>>().Value;
+            return options.UserContext.ForwardTenantId && provider.GetService<ICurrentTenant>() is { } currentTenant
+                ? new TenantContextDelegatingHandler(currentTenant)
                 : new PassthroughDelegatingHandler();
         });
 

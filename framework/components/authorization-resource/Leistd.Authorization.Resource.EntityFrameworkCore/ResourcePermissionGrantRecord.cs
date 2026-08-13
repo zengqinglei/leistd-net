@@ -1,4 +1,5 @@
 using Leistd.Auditing;
+using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -8,14 +9,19 @@ namespace Leistd.Authorization.Resource.EntityFrameworkCore;
 /// 资源实例 ACL 持久化实体。
 /// </summary>
 /// <remarks>
-/// 与功能权限的 <c>PermissionGrantRecord</c> 分表存储：两者的标识维度不同，
+/// <para>与功能权限的 <c>PermissionGrantRecord</c> 分表存储：两者的标识维度不同，
 /// 混表会产生大量可空列和含混索引。通用 ACL 表无法对任意业务表建立外键，
-/// 因此资源删除后需要显式调用清理，并安排周期性孤儿检查。
+/// 因此资源删除后需要显式调用清理，并安排周期性孤儿检查。</para>
+/// <para>实现 <see cref="IMultiTenant"/>：ACL 随资源按租户分区，
+/// TenantId 由多租户落值拦截器在保存时填充。</para>
 /// </remarks>
-public class ResourcePermissionGrantRecord : ICreationAuditedObject
+public class ResourcePermissionGrantRecord : ICreationAuditedObject, IMultiTenant
 {
     /// <summary>ACL 记录 ID（有序 Guid v7）。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>所属租户 Id，null 为宿主资源的 ACL。</summary>
+    public Guid? TenantId { get; set; }
 
     /// <summary>资源类型名称。</summary>
     public string ResourceName { get; set; } = default!;
@@ -82,11 +88,13 @@ public class ResourcePermissionGrantRecordConfiguration
         // 读回来还能解析成 999。约束写在数据库上，绕过 Manager 的直连写入也逃不掉。
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_ResourcePermissionGrants_Effect",
-            $"\"Effect\" IN ('{nameof(ResourceGrantEffect.Granted)}', '{nameof(ResourceGrantEffect.Prohibited)}')"));
+            $"\"{nameof(ResourcePermissionGrantRecord.Effect)}\" IN ('{nameof(ResourceGrantEffect.Granted)}', '{nameof(ResourceGrantEffect.Prohibited)}')"));
 
         builder.Property(x => x.CreatorId)
             .HasMaxLength(64);
 
+        // ACL 随资源按租户分区。宿主行与租户行分别用带过滤的唯一索引：
+        // 可空 TenantId 直接进唯一索引时 NULL 互不相等，宿主行失去唯一性兜底
         builder.HasIndex(x => new
             {
                 x.ResourceName,
@@ -95,10 +103,23 @@ public class ResourcePermissionGrantRecordConfiguration
                 x.ProviderName,
                 x.ProviderKey
             })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter($"\"{nameof(ResourcePermissionGrantRecord.TenantId)}\" IS NULL");
+
+        builder.HasIndex(x => new
+            {
+                x.TenantId,
+                x.ResourceName,
+                x.ResourceKey,
+                x.Operation,
+                x.ProviderName,
+                x.ProviderKey
+            })
+            .IsUnique()
+            .HasFilter($"\"{nameof(ResourcePermissionGrantRecord.TenantId)}\" IS NOT NULL");
 
         // 集合级查询入口：按资源类型 + 操作 + 主体过滤，支撑合并进业务查询的 IN/EXISTS。
-        builder.HasIndex(x => new { x.ResourceName, x.Operation, x.ProviderName, x.ProviderKey });
+        builder.HasIndex(x => new { x.TenantId, x.ResourceName, x.Operation, x.ProviderName, x.ProviderKey });
 
         // 资源删除后的清理入口。
         builder.HasIndex(x => new { x.ResourceName, x.ResourceKey });

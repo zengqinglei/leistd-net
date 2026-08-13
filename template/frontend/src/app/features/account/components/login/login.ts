@@ -5,12 +5,19 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
+// prettier-ignore
 import {
   lucideZap,
+  //#if (IncludeTenancy)
+  lucideBuilding2,
+  //#endif
   lucideCircleCheck,
   lucideInfo,
   lucideEye,
   lucideEyeOff,
+  //#if (IncludeTenancy)
+  lucideX,
+  //#endif
 } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -26,16 +33,28 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { environment } from '../../../../../environments/environment';
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+// prettier-ignore
+import {
+  //#if (IncludeTenancy)
+  ApplicationHttpError,
+  //#endif
+  applicationErrorMessage,
+} from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeRoles)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#endif
+//#if (IncludeTenancy)
+import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
 import { Logo } from '../../../../shared/components/logo/logo';
 import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
+//#if (IncludeTenancy)
+import { TenantService } from '../../../platform/services/tenant-service';
+//#endif
 import { AccountService } from '../../services/account-service';
 
 // GitHub 品牌图标（lucide 已下架品牌 logo，用官方 SVG path 自定义注入）
@@ -64,9 +83,14 @@ const githubIcon =
     //#endif
     Logo,
   ],
+  // prettier-ignore
   providers: [
     provideIcons({
       lucideZap,
+      //#if (IncludeTenancy)
+      lucideBuilding2,
+      lucideX,
+      //#endif
       lucideCircleCheck,
       lucideInfo,
       lucideEye,
@@ -87,6 +111,10 @@ export class Login {
   private router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  //#endif
+  //#if (IncludeTenancy)
+  private readonly tenantService = inject(TenantService);
+  protected readonly tenantContext = inject(TenantContextService);
   //#endif
 
   // 加载状态
@@ -206,6 +234,54 @@ export class Login {
       !returnUrl.includes('://')
     );
   }
+  //#if (IncludeTenancy)
+
+  // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
+  protected readonly tenantName = signal('');
+  protected readonly tenantChecking = signal(false);
+  protected readonly tenantError = signal<string | null>(null);
+
+  async onConfirmTenant(): Promise<void> {
+    const name = this.tenantName().trim();
+    if (!name || this.tenantChecking()) {
+      return;
+    }
+
+    this.tenantChecking.set(true);
+    this.tenantError.set(null);
+
+    try {
+      const tenant = await lastValueFrom(this.tenantService.getByName(name));
+      if (!tenant.isActive) {
+        this.tenantError.set(this.tenantInactiveMessage());
+        return;
+      }
+      this.tenantContext.set(tenant);
+      this.tenantName.set('');
+    } catch (error) {
+      if (error instanceof ApplicationHttpError && error.status === 404) {
+        this.tenantError.set(this.tenantNotFoundMessage());
+      } else {
+        this.tenantError.set(applicationErrorMessage(error));
+      }
+    } finally {
+      this.tenantChecking.set(false);
+    }
+  }
+
+  clearTenant(): void {
+    this.tenantContext.clear();
+    this.tenantError.set(null);
+  }
+
+  //#if (IncludeLocalization)
+  private tenantNotFoundMessage = () => this.transloco.translate('account.login.tenantNotFound');
+  private tenantInactiveMessage = () => this.transloco.translate('account.login.tenantInactive');
+  //#else
+  private tenantNotFoundMessage = () => 'Tenant does not exist';
+  private tenantInactiveMessage = () => 'Tenant is deactivated';
+  //#endif
+  //#endif
   //#if (IncludeExternalLogin)
 
   loginWithGitHub() {

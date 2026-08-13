@@ -1,3 +1,6 @@
+//#if (IncludeTenancy)
+import { HttpClient } from '@angular/common/http';
+//#endif
 // prettier-ignore
 import {
   Injectable,
@@ -6,11 +9,18 @@ import {
   //#endif
   signal,
 } from '@angular/core';
+//#if (IncludeTenancy)
+import { firstValueFrom } from 'rxjs';
+//#endif
 //#if (IncludeIdentity)
 
 import { AuthService } from './auth-service';
 //#if (IncludeRoles)
 import { AuthorizationService } from './authorization-service';
+//#endif
+//#if (IncludeTenancy)
+import { TenantContextService } from './tenant-context-service';
+import { TenantBriefOutputDto } from '../../shared/dtos/tenant.dto';
 //#endif
 import { ApplicationHttpError } from '../errors/application-http-error';
 //#endif
@@ -25,6 +35,10 @@ export class StartupService {
   //#if (IncludeRoles)
   private authorizationService = inject(AuthorizationService);
   //#endif
+  //#if (IncludeTenancy)
+  private readonly http = inject(HttpClient);
+  private readonly tenantContext = inject(TenantContextService);
+  //#endif
   private _status = signal<StartupStatus>('loading');
   private _error = signal<unknown | null>(null);
 
@@ -35,6 +49,13 @@ export class StartupService {
     this._status.set('loading');
     this._error.set(null);
 
+    //#if (IncludeTenancy)
+    // 本地存有租户时先校验其仍然存在且启用；404/停用 → 清除。
+    // 必须阻塞在认证初始化之前：后续启动请求都会携带 X-Tenant-Id，
+    // 失效租户的头会让它们全部被 403 拒绝，启动误入故障分支。
+    await this.validateTenantContext();
+
+    //#endif
     //#if (IncludeIdentity)
     const pathname = window.location.pathname;
     const hash = window.location.hash;
@@ -97,6 +118,35 @@ export class StartupService {
   private isProtectedRoute(pathname: string, hash: string): boolean {
     const route = hash.startsWith('#/') ? hash.slice(1) : pathname;
     return route.startsWith('/workspace') || route.startsWith('/platform');
+  }
+  //#endif
+  //#if (IncludeTenancy)
+
+  /** 校验本地租户上下文：不存在（404）或已停用则清除；其他故障保留，避免误清。 */
+  private async validateTenantContext(): Promise<void> {
+    const tenant = this.tenantContext.current();
+    if (!tenant) {
+      return;
+    }
+
+    try {
+      const latest = await firstValueFrom(
+        this.http.get<TenantBriefOutputDto>(
+          `/api/v1/tenants/by-name/${encodeURIComponent(tenant.name)}`,
+        ),
+      );
+      if (!latest.isActive) {
+        this.tenantContext.clear();
+        return;
+      }
+      // 顺带刷新显示名等元信息。
+      this.tenantContext.set(latest);
+    } catch (err: unknown) {
+      if (err instanceof ApplicationHttpError && err.status === 404) {
+        this.tenantContext.clear();
+      }
+      // 网络/服务故障不清除本地上下文：临时故障不应把用户踢回宿主。
+    }
   }
   //#endif
 }

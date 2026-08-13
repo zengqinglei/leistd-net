@@ -1,16 +1,30 @@
 using Leistd.Ddd.Domain.Entities.Auditing;
+#if (IncludeTenancy)
+using Leistd.MultiTenancy;
+#endif
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
+#if (IncludeTenancy)
+public class User : FullAuditedEntity<Guid>, IMultiTenant
+#else
 public class User : FullAuditedEntity<Guid>
+#endif
 {
+#if (IncludeTenancy)
     /// <summary>
-    /// 用户名（唯一）
+    /// 所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充
+    /// </summary>
+    public Guid? TenantId { get; private set; }
+
+#endif
+    /// <summary>
+    /// 用户名（租户内唯一）
     /// </summary>
     public string Username { get; private set; }
 
     /// <summary>
-    /// 邮箱（唯一）
+    /// 邮箱（租户内唯一）
     /// </summary>
     public string Email { get; private set; }
 

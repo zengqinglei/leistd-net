@@ -137,9 +137,11 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 
 > 若领域事件"未触发订阅"、审计字段全为空，几乎都是漏了这一步。拦截器由消费方挂载是 EF Core 的推荐做法（框架不代持/代挂业务的 DbContext）。
 
-### DbContext 基类与软删除运行时开关（Leistd.Ddd.Infrastructure）
+### DbContext 基类与全局过滤器运行时开关（Leistd.Ddd.Infrastructure）
 
-派生 DbContext 继承 `BaseDbContext`。若需在运行时用 `IDataFilter.Disable<ISoftDelete>()` **临时关闭软删除过滤**（见下文），DbContext 必须选用**接收 `IServiceProvider` 的构造函数重载**并把它传给 `base`：
+派生 DbContext 继承 `BaseDbContext`，即获得两个 **EF 10 命名全局查询过滤器**：软删除（`SoftDeleteFilterName`，作用于 `ISoftDelete` 实体）与租户隔离（`MultiTenantFilterName`，作用于 `IMultiTenant` 实体，见[多租户](../components/multi-tenancy.md)）。同一实体同时命中两个接口时两个过滤器 **AND 叠加**、可用 `IDataFilter` 独立开关；过滤器表达式捕获 DbContext 实例属性，EF 将其参数化并在每次查询时重估——`ICurrentTenant.Change()` 与 `IDataFilter` 开关即时生效，无需重建模型。实体不实现对应接口时过滤器不作用于它，零成本。
+
+若需在运行时用 `IDataFilter.Disable<ISoftDelete>()` / `Disable<IMultiTenant>()` **临时关闭过滤**（见下文），DbContext 必须选用**接收 `IServiceProvider` 的构造函数重载**并把它传给 `base`：
 
 ```csharp
 public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvider serviceProvider)
@@ -149,7 +151,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);      // 保留 base：套用软删除全局过滤器
+        base.OnModelCreating(modelBuilder);      // 保留 base：套用软删除与租户两个命名全局过滤器
         modelBuilder.Entity<Order>(b =>
         {
             b.ConfigureByConvention();           // 按约定配置审计者 ID 列长度（HasMaxLength(64)）
@@ -159,7 +161,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
 }
 ```
 
-> 若使用**不带 `IServiceProvider`** 的构造函数，`IsSoftDeleteFilterEnabled` 恒为 `true`，`Disable<ISoftDelete>()` 对该 DbContext 无效（查询仍会过滤已删数据）。
+> 若使用**不带 `IServiceProvider`** 的构造函数，`IsSoftDeleteFilterEnabled` 恒为 `true`、`CurrentTenantId` 恒为 `null`（宿主视角），`Disable<ISoftDelete>()` / `Disable<IMultiTenant>()` 与 `ICurrentTenant.Change()` 对该 DbContext 均无效。
 
 ## 接口参考
 
@@ -227,11 +229,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
 | `AddDddInfrastructure(configureUnitOfWork?)`（`Leistd.Ddd.Infrastructure.DependencyInjection`） | 注册基础设施的唯一 DI 入口 |
 | `BaseDbContext`（`Leistd.Ddd.Infrastructure.Persistence`） | DbContext 抽象基类，`OnModelCreating` 自动为 `ISoftDelete` 套用全局查询过滤器 |
 | `EfCoreRepository<TDbContext, TEntity>`（`Leistd.Ddd.Infrastructure.Persistence.Repositories`） | 继承 `BaseRepository<TEntity>` 的 EF Core 仓储实现，写操作后调用 `SaveChangesIfNeededAsync` |
-| `EfCoreRepository<TDbContext, TEntity, TKey>` | 继承上者并实现 `IRepository<TEntity, TKey>`；额外提供 `GetByIdAsync`（`FindAsync`）、按 `TKey` 的 `DeleteAsync`/`DeleteManyAsync`；`TKey` 约束为 `IEquatable<TKey>` |
+| `EfCoreRepository<TDbContext, TEntity, TKey>` | 继承上者并实现 `IRepository<TEntity, TKey>`；额外提供 `GetByIdAsync`（过滤查询，见实现行为）、按 `TKey` 的 `DeleteAsync`/`DeleteManyAsync`；`TKey` 约束为 `IEquatable<TKey>` |
 | `EfCoreQueryableAsyncExecuter`（同命名空间） | `IQueryableAsyncExecuter` 的 EF Core 实现，直接转调 `EntityFrameworkQueryableExtensions` 对应方法 |
 | `LocalEventSaveChangesInterceptor`（`Leistd.Ddd.Infrastructure.EventBus`） | 继承 `SaveChangesInterceptor`，见[实现行为](#实现行为) |
 | `ModelBuilderExtensions.ConfigureByConvention<TEntity>`（`Leistd.Ddd.Infrastructure.Persistence.Extensions`） | 按约定为实现 `ICreationAuditedObject`/`IModificationAuditedObject`/`IDeletionAuditedObject` 的实体配置对应审计者 ID 列的最大长度 |
-| `ModelBuilderExtensions.ApplyGlobalFilters<TInterface>` | 为所有实现 `TInterface` 的**根实体类型**（`BaseType == null`，不含继承实体）批量应用全局查询过滤器表达式 |
+| `ModelBuilderExtensions.ApplyGlobalFilters<TInterface>` | 为所有实现 `TInterface` 的**根实体类型**（`BaseType == null`，不含继承实体）批量应用**命名**全局查询过滤器（首参为过滤器名；不同名称在同一实体上 AND 叠加，同名后写覆盖先写） |
 | `RepositoryExtensions.GetQueryIncludingAsync<TEntity,TKey>`（`Leistd.Ddd.Infrastructure.Persistence.Repositories`） | 在 `IRepository<TEntity,TKey>.GetQueryableAsync` 基础上按传入的属性选择器依次 `Include` 导航属性 |
 
 ## 实现行为
@@ -239,12 +241,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
 ### Leistd.Ddd.Infrastructure（EF Core 落地）
 
 - **仓储自动注册**：`AddDddInfrastructure` 通过 `OnServiceRegistered` 钩子，在容器构建时对每个非抽象、非 `DbContext` 本身的已注册 `DbContext` 类型，反射扫描其所有 `DbSet<>` 属性，对属性对应的实体类型注册 `IRepository<TEntity>`（Scoped，实现 `EfCoreRepository<TDbContext,TEntity>`）；若实体实现 `IEntity<TKey>`，额外注册 `IRepository<TEntity,TKey>`（实现 `EfCoreRepository<TDbContext,TEntity,TKey>`）。业务侧无需逐个手工注册仓储。
-- **写操作的智能保存**：`EfCoreRepository<TDbContext,TEntity>` 的所有写方法（`InsertAsync`/`InsertManyAsync`/`UpdateAsync`/`UpdateManyAsync`/`DeleteAsync`/`DeleteManyAsync`）在完成 EF 操作后统一调用 `protected SaveChangesIfNeededAsync`：**若 `Uow.Current != null`（当前处于 UnitOfWork 内）则直接返回、不立即保存**，交由工作单元统一提交；**否则立即 `await dbContext.SaveChangesAsync()`**。`GetByIdAsync`（`TKey,TKey` 重载）使用 EF `FindAsync`，可命中已被追踪的实体。
+- **写操作的智能保存**：`EfCoreRepository<TDbContext,TEntity>` 的所有写方法（`InsertAsync`/`InsertManyAsync`/`UpdateAsync`/`UpdateManyAsync`/`DeleteAsync`/`DeleteManyAsync`）在完成 EF 操作后统一调用 `protected SaveChangesIfNeededAsync`：**若 `Uow.Current != null`（当前处于 UnitOfWork 内）则直接返回、不立即保存**，交由工作单元统一提交；**否则立即 `await dbContext.SaveChangesAsync()`**。`GetByIdAsync` 走 `FirstOrDefaultAsync` 过滤查询而非 `FindAsync`——后者绕过全局查询过滤器，会让按 Id 的读取越过软删除与租户隔离边界；因此跨租户或已软删的 Id 一律返回 `null`。
 - **本地事件收集与发布**（`LocalEventSaveChangesInterceptor`）：
   - **收集**发生在 `SavingChanges`/`SavingChangesAsync`（保存前），此时实体状态仍为 `Added`/`Modified`/`Deleted`——从 `ChangeTracker.Entries<Entity>()` 中筛出这三种状态的实体、调用其 `GetLocalEvents()` 收集事件后立即 `ClearLocalEvents()`，按 `DbContext` 实例暂存到 `ConditionalWeakTable`（避免持有 `DbContext` 引用导致泄漏，天然隔离并发的不同 `DbContext`）。若在保存后（`SavedChanges`）才收集，EF Core 此时已把实体状态置为 `Unchanged`，会被状态过滤器漏掉、导致事件丢失——这正是该拦截器把收集和发布拆成两个阶段的原因。
   - **发布**发生在 `SavedChanges`/`SavedChangesAsync`（保存成功后）：取出该 `DbContext` 暂存的事件列表；若存在 `IUnitOfWorkManager.Current`（当前处于 UnitOfWork），调用 `currentUow.AddPendingEvents(localEvents)` 加入工作单元的待发布队列（随事务提交发布）；否则（无 UnitOfWork）直接经 `ILocalEventBus.PublishAsync` 逐个发布——异步路径 `await` 逐个发布，同步路径（`SaveChanges` 而非 `SaveChangesAsync`）用 `GetAwaiter().GetResult()` 阻塞发布并记录一条 `LogWarning`（同步发布本地事件属于 sync-over-async 风险路径）。
   - **保存失败**（`SaveChangesFailed`/`SaveChangesFailedAsync`）会从暂存表中丢弃本次收集的事件，避免残留到下一次保存周期。
-- **软删除全局过滤**：`BaseDbContext.OnModelCreating` 调用 `modelBuilder.ApplyGlobalFilters<ISoftDelete>(...)`，过滤表达式为 `!IsSoftDeleteFilterEnabled || !e.IsDeleted`——过滤器被禁用时该表达式恒为 `true`（不过滤，可见已删除数据），启用时只返回未删除数据。`IsSoftDeleteFilterEnabled` 读取 `IDataFilter.IsEnabled<ISoftDelete>()`；若 `BaseDbContext` 构造时未传入 `IServiceProvider`，则默认视为**已启用**（过滤生效）。
+- **软删除与租户全局过滤**：`BaseDbContext.OnModelCreating` 以命名过滤器分别调用 `ApplyGlobalFilters<ISoftDelete>`（名 `SoftDelete`，表达式 `!IsSoftDeleteFilterEnabled || !e.IsDeleted`）与 `ApplyGlobalFilters<IMultiTenant>`（名 `MultiTenant`，表达式 `!IsMultiTenantFilterEnabled || e.TenantId == CurrentTenantId`）。过滤器被禁用时表达式恒为 `true`；租户过滤器启用且当前为宿主上下文（`CurrentTenantId == null`）时仅显示宿主行。开关读取 `IDataFilter`，`CurrentTenantId` 读取 `ICurrentTenant`（未注册或未传 `IServiceProvider` 时为宿主视角）。
 - **审计字段自动填充**（由 `Leistd.Auditing.EntityFrameworkCore` 的 `AuditSaveChangesInterceptor` 提供，Infrastructure 层通过 `AddAuditingEfCore()` 一并注册）：在 `SavingChanges` 阶段按 `ChangeTracker.Entries()` 的状态调用 `IAuditPropertySetter`——`Added` 设置创建属性；`Modified` 且实体是 `ISoftDelete { IsDeleted: true }` 时跳过（避免与删除审计重复设置）否则设置修改属性；`Deleted` 且实体实现 `ISoftDelete` 时，把状态由 `Deleted` 改为 `Modified` 并设置删除属性——即**物理删除自动转换为逻辑删除**。
 
 ### Leistd.Ddd.Domain（数据过滤器）

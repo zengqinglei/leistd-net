@@ -27,10 +27,18 @@ public class PermissionGrantRecordConfiguration : IEntityTypeConfiguration<Permi
         builder.Property(x => x.CreatorId)
             .HasMaxLength(64);
 
+        // 授予按租户分区。可空 TenantId 直接进唯一索引时，PostgreSQL/Sqlite 视 NULL 互不相等，
+        // 宿主行会失去唯一性兜底（重复授予与并发首写都拦不住），因此宿主行与租户行
+        // 分别用带过滤的唯一索引收口（"列名" 双引号引用在 PostgreSQL 与 Sqlite 上语义一致）
         builder.HasIndex(x => new { x.PermissionName, x.ProviderName, x.ProviderKey })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter($"\"{nameof(PermissionGrantRecord.TenantId)}\" IS NULL");
 
-        builder.HasIndex(x => new { x.ProviderName, x.ProviderKey });
+        builder.HasIndex(x => new { x.TenantId, x.PermissionName, x.ProviderName, x.ProviderKey })
+            .IsUnique()
+            .HasFilter($"\"{nameof(PermissionGrantRecord.TenantId)}\" IS NOT NULL");
+
+        builder.HasIndex(x => new { x.TenantId, x.ProviderName, x.ProviderKey });
     }
 }
 
@@ -60,7 +68,14 @@ public class AuthorizationRevisionRecordConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.LastModifierId)
             .HasMaxLength(64);
 
+        // 版本随授予按租户分区；宿主行与租户行分别用带过滤的唯一索引（NULL 唯一性说明同上）。
+        // 并发首写的兜底依赖这两个索引：两个事务同时为同一主体插入版本行时，落败方由数据库拒绝
         builder.HasIndex(x => new { x.ProviderName, x.ProviderKey })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter($"\"{nameof(AuthorizationRevisionRecord.TenantId)}\" IS NULL");
+
+        builder.HasIndex(x => new { x.TenantId, x.ProviderName, x.ProviderKey })
+            .IsUnique()
+            .HasFilter($"\"{nameof(AuthorizationRevisionRecord.TenantId)}\" IS NOT NULL");
     }
 }

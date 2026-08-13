@@ -43,7 +43,12 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.DisplayName).IsRequired().HasMaxLength(128);
             b.Property(e => e.Description).HasMaxLength(512);
 
+#if (IncludeTenancy)
+            // 租户内唯一：每个租户拥有自己的 Admin/Member 角色
+            b.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+#else
             b.HasIndex(e => e.Name).IsUnique();
+#endif
         });
     }
 

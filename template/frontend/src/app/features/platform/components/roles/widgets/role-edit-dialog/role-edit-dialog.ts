@@ -149,13 +149,6 @@ export class RoleEditDialog {
     return this.transloco.translate(keys[field]);
   }
   //#else
-  readonly title = computed(() => (this.isEdit() ? 'Edit role' : 'New role'));
-
-  readonly description = () =>
-    'Name is the stable identifier and cannot be changed after creation.';
-  readonly cancelLabel = () => 'Cancel';
-  readonly saveLabel = () => 'Save';
-
   fieldLabel(field: 'name' | 'displayName' | 'description' | 'isDefault'): string {
     const labels = {
       name: 'Name',
@@ -165,5 +158,12 @@ export class RoleEditDialog {
     } as const;
     return labels[field];
   }
+
+  readonly title = computed(() => (this.isEdit() ? 'Edit role' : 'New role'));
+
+  readonly description = () =>
+    'Name is the stable identifier and cannot be changed after creation.';
+  readonly cancelLabel = () => 'Cancel';
+  readonly saveLabel = () => 'Save';
   //#endif
 }

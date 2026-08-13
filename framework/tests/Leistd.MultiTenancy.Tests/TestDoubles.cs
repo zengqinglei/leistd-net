@@ -1,0 +1,71 @@
+using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Ddd.Domain.Entities.Auditing;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.Ddd.Infrastructure.Persistence;
+using Leistd.UnitOfWork.Core.Options;
+using Leistd.UnitOfWork.Core.Uow;
+using Leistd.UnitOfWork.EfCore.Database;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Leistd.MultiTenancy.Tests;
+
+/// <summary>
+/// 过滤器与落值测试的共享基础设施：多租户 + 软删除的双过滤器实体、BaseDbContext 宿主、最小服务图。
+/// </summary>
+internal class TestOrder : FullAuditedEntity<Guid>, IMultiTenant
+{
+    public Guid? TenantId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public TestOrder()
+    {
+        Id = Guid.CreateVersion7();
+    }
+
+    /// <summary>直接置软删标记（审计基类的 IsDeleted 是 protected set）。</summary>
+    public void MarkDeleted() => IsDeleted = true;
+}
+
+internal class TestFilterDbContext(DbContextOptions options, IServiceProvider? serviceProvider)
+    : BaseDbContext(options, serviceProvider)
+{
+    public DbSet<TestOrder> Orders => Set<TestOrder>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<TestOrder>().Property(x => x.Title).HasMaxLength(128);
+    }
+}
+
+/// <summary>返回固定 DbContext 实例的提供器（测试不经工作单元）。</summary>
+internal sealed class FixedDbContextProvider<TDbContext>(TDbContext dbContext) : IDbContextProvider<TDbContext>
+    where TDbContext : DbContext
+{
+    public Task<TDbContext> GetDbContextAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(dbContext);
+}
+
+/// <summary>无环境工作单元的管理器（仓储立即 SaveChanges 路径）。</summary>
+internal sealed class NullUnitOfWorkManager : IUnitOfWorkManager
+{
+    public IUnitOfWork? Current => null;
+
+    public Task<IUnitOfWork> BeginAsync(UnitOfWorkOptions? options = null, bool requiresNew = true)
+        => throw new NotSupportedException("测试不使用工作单元。");
+}
+
+internal static class FilterTestServices
+{
+    /// <summary>最小服务图：租户上下文 + 数据过滤开关（与 AddDddInfrastructure 的注册形态一致）。</summary>
+    public static ServiceProvider Create()
+    {
+        var services = new ServiceCollection();
+        services.AddMultiTenancyCore();
+        services.AddSingleton<IDataFilter, DataFilter>();
+        services.AddScoped(typeof(IDataFilter<>), typeof(DataFilter<>));
+        return services.BuildServiceProvider();
+    }
+}

@@ -10,6 +10,7 @@ namespace Leistd.RealTime.Tests;
 internal sealed class TestCurrentUser(Guid? id) : ICurrentUser
 {
     public Guid? Id { get; } = id;
+    public Guid? TenantId => null;
     public bool IsAuthenticated => Id.HasValue;
     public string? Username => null;
     public string? Name => null;

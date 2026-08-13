@@ -44,6 +44,13 @@ public class AuthPrincipalFactory(
         identity.SetClaims(Claims.Role, roleNames.ToImmutableArray());
 #endif
         identity.SetClaim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false");
+#if (IncludeTenancy)
+        // 租户 claim：多租户解析链以它定案已登录用户的租户
+        if (user.TenantId is { } tenantId)
+        {
+            identity.SetClaim(CustomClaimTypes.TenantId, tenantId.ToString());
+        }
+#endif
 
         var principal = new ClaimsPrincipal(identity);
         principal.SetScopes(scopes?.Where(scope => !string.IsNullOrWhiteSpace(scope)) ??
@@ -95,6 +102,12 @@ public class AuthPrincipalFactory(
             [
                 Destinations.AccessToken
             ],
+#if (IncludeTenancy)
+            CustomClaimTypes.TenantId =>
+            [
+                Destinations.AccessToken
+            ],
+#endif
             _ => []
         };
     }

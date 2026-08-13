@@ -26,6 +26,9 @@
     <PackageVersion Include="Leistd.Authorization.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Authorization.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Authorization.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.MultiTenancy.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.MultiTenancy.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.MultiTenancy.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.Core" Version="$(LeistdFrameworkVersion)" />

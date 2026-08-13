@@ -21,6 +21,14 @@ export const PERMISSIONS = {
     delete: 'App.Roles.Delete',
     managePermissions: 'App.Roles.ManagePermissions',
   },
+  //#if (IncludeTenancy)
+  tenants: {
+    default: 'App.Tenants',
+    create: 'App.Tenants.Create',
+    update: 'App.Tenants.Update',
+    delete: 'App.Tenants.Delete',
+  },
+  //#endif
   //#if (IncludeOpenIddict)
   openApplications: {
     default: 'App.OpenApplications',

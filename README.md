@@ -127,6 +127,7 @@ dotnet new fullstack-app -n Acme.Shop
 | `--include-notifications` | `false` | 通知中心与 SignalR 实时消息，仅在 Identity 启用时可用 |
 | `--include-openiddict` | `true` | OAuth 2.0/OIDC Server，仅在 Identity 启用时可用 |
 | `--include-external-login` | `false` | GitHub/Google 等外部登录，仅在 Identity 启用时可用 |
+| `--include-tenancy` | `false` | 多租户模式：租户解析与数据硬隔离、租户管理与登录页租户选择，仅在角色权限启用时可用 |
 
 例如，生成无认证的最小项目：
 

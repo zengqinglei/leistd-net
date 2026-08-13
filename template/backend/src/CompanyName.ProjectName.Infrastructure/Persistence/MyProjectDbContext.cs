@@ -5,6 +5,9 @@ using CompanyName.ProjectName.Domain.Auth.Entities;
 #if (IncludeRoles)
 using Leistd.Authorization.EntityFrameworkCore;
 #endif
+#if (IncludeTenancy)
+using Leistd.MultiTenancy.EntityFrameworkCore;
+#endif
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
@@ -54,6 +57,10 @@ public class MyProjectDbContext(
 #if (IncludeNotifications)
         // 通知实体配置
         modelBuilder.ConfigureNotifications();
+#endif
+#if (IncludeTenancy)
+        // 租户注册表配置
+        modelBuilder.ConfigureMultiTenancy();
 #endif
     }
 }

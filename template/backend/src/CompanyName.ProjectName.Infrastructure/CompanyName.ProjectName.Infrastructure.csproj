@@ -37,6 +37,9 @@
 <!--#if (IncludeRoles)-->
     <PackageReference Include="Leistd.Authorization.EntityFrameworkCore" />
     <!--#endif-->
+<!--#if (IncludeTenancy)-->
+    <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
+<!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.EntityFrameworkCore" />
 <!--#endif-->

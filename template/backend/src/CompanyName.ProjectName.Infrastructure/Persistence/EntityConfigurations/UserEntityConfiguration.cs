@@ -26,8 +26,15 @@ internal static class BaseEntityConfiguration
             b.Property(e => e.DisplayName).HasMaxLength(128);
             b.Property(e => e.IsSuperAdmin);
 
+#if (IncludeTenancy)
+            // 租户内唯一：跨租户允许同名/同邮箱。宿主行（TenantId 为 NULL）在 PostgreSQL 上
+            // NULL 互不相等，其唯一性由 UserDomainService 的可用性校验兜底
+            b.HasIndex(e => new { e.TenantId, e.Username }).IsUnique();
+            b.HasIndex(e => new { e.TenantId, e.Email }).IsUnique();
+#else
             b.HasIndex(e => e.Username).IsUnique();
             b.HasIndex(e => e.Email).IsUnique();
+#endif
         });
     }
 }

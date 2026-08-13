@@ -64,7 +64,9 @@
     "platform": "管理平台",
     "profile": "个人信息",
     "changePassword": "修改密码",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "switchTenant": "切换租户",
+    "hostTenant": "宿主"
   },
   "language": {
     "label": "语言"
@@ -93,7 +95,8 @@
       "openApplications": "开发应用",
       "workbench": "工作台",
       "appSubtitle": "管理平台",
-      "roles": "角色管理"
+      "roles": "角色管理",
+      "tenants": "租户管理"
     },
     "notifications": {
       "title": "通知",
@@ -221,7 +224,13 @@
       "loginFailed": "登录失败",
       "externalLoginFailed": "无法连接到 {{provider}} 登录服务，请稍后重试",
       "badgeReadyMain": "开箱",
-      "badgeReadySub": "即用"
+      "badgeReadySub": "即用",
+      "tenant": "租户",
+      "tenantPlaceholder": "租户名称，留空为宿主",
+      "tenantConfirm": "确认",
+      "tenantClear": "清除租户",
+      "tenantNotFound": "租户不存在",
+      "tenantInactive": "租户已停用"
     },
     "register": {
       "title": "注册账号",
@@ -559,5 +568,42 @@
     "conflict": "权限已被他人修改，已为你重新加载最新值。",
     "description": "勾选即授予。每一块的顶层那条就是它的查看权限；授予某个动作会一并授予该查看权限——新增用户需要先能查看用户列表。要收回某人的能力，请调整他的角色。",
     "viewAccessHint": "查看列表"
+  },
+  "tenants": {
+    "title": "租户管理",
+    "searchPlaceholder": "搜索租户",
+    "create": "新建租户",
+    "colName": "名称",
+    "colDisplayName": "显示名",
+    "colStatus": "状态",
+    "colCreatedAt": "创建时间",
+    "active": "启用",
+    "inactive": "停用",
+    "activate": "启用",
+    "deactivate": "停用",
+    "activated": "租户已启用",
+    "deactivated": "租户已停用",
+    "activateTitle": "启用租户",
+    "deactivateTitle": "停用租户",
+    "activateDescription": "启用「{{name}}」？该租户的用户将恢复登录。",
+    "deactivateDescription": "停用「{{name}}」？该租户的用户将无法登录。",
+    "createTitle": "新建租户",
+    "editTitle": "编辑租户",
+    "editDescription": "名称是登录时选择租户的标识，用户在登录页输入该名称进入租户。",
+    "fieldName": "名称",
+    "fieldDisplayName": "显示名",
+    "fieldAdminEmail": "管理员邮箱",
+    "fieldAdminPassword": "管理员密码",
+    "saved": "租户已保存",
+    "deleted": "租户已删除",
+    "deleteTitle": "删除租户",
+    "deleteDescription": "删除「{{name}}」？该租户的用户将无法再登录。",
+    "table": {
+      "currentPageReport": "共 {{total}} 条",
+      "emptyTitle": "暂无租户",
+      "emptyHint": "新建一个租户",
+      "emptyFilteredTitle": "没有匹配的租户",
+      "emptyFilteredHint": "调整搜索关键字"
+    }
   }
 }

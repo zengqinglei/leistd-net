@@ -18,6 +18,15 @@ public interface ICurrentUser
     Guid? Id { get; }
 
     /// <summary>
+    /// 所属租户 Id（来自 tenant_id claim；宿主用户为 null）
+    /// </summary>
+    /// <remarks>
+    /// 这是主体 claim 的直读值，仅反映"签发 token 时用户属于哪个租户"；
+    /// 运行时权威的租户上下文是 <c>Leistd.MultiTenancy</c> 的 <c>ICurrentTenant</c>。
+    /// </remarks>
+    Guid? TenantId { get; }
+
+    /// <summary>
     /// 用户名
     /// </summary>
     string? Username { get; }

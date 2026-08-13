@@ -4,7 +4,11 @@ import { Router } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
+// prettier-ignore
 import {
+  //#if (IncludeTenancy)
+  lucideBuilding2,
+  //#endif
   lucideChevronsUpDown,
   lucideCog,
   lucideHouse,
@@ -22,6 +26,9 @@ import { AuthorizationService } from '../../../core/services/authorization-servi
 //#endif
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../core/services/language-service';
+//#endif
+//#if (IncludeTenancy)
+import { TenantContextService } from '../../../core/services/tenant-context-service';
 //#endif
 import { ChangePasswordDialog } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialog } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
@@ -55,8 +62,12 @@ interface UserMenuItem {
     TranslocoModule,
     //#endif
   ],
+  // prettier-ignore
   providers: [
     provideIcons({
+      //#if (IncludeTenancy)
+      lucideBuilding2,
+      //#endif
       lucideChevronsUpDown,
       lucideHouse,
       lucideCog,
@@ -118,6 +129,10 @@ interface UserMenuItem {
                       user.displayName || user.username
                     }}</span>
                     <span class="truncate text-xs text-muted-foreground">{{ user.email }}</span>
+                    <!-- 当前租户；未选租户即宿主（未启用多租户时恒为空串，不渲染）。 -->
+                    @if (tenantLabel(); as label) {
+                      <span class="truncate text-xs text-muted-foreground">{{ label }}</span>
+                    }
                   </div>
                 </div>
               </hlm-dropdown-menu-label>
@@ -158,6 +173,9 @@ export class UserMenu {
   //#if (IncludeLocalization)
   private readonly languageService = inject(LanguageService);
   private readonly transloco = inject(TranslocoService);
+  //#endif
+  //#if (IncludeTenancy)
+  private readonly tenantContext = inject(TenantContextService);
   //#endif
 
   readonly profileDialogVisible = signal(false);
@@ -224,6 +242,19 @@ export class UserMenu {
         action: () => this.openChangePasswordDialog(),
       },
       { separator: true },
+      //#if (IncludeTenancy)
+      // 切换租户 = 清除本地租户上下文并退出登录：已登录会话的租户由 cookie claim 定案，
+      // 只有重新登录才能进入另一个租户。
+      {
+        //#if (IncludeLocalization)
+        label: t('menu.switchTenant'),
+        //#else
+        label: 'Switch tenant',
+        //#endif
+        icon: 'lucideBuilding2',
+        action: () => this.handleSwitchTenant(),
+      },
+      //#endif
       {
         //#if (IncludeLocalization)
         label: t('menu.logout'),
@@ -236,6 +267,33 @@ export class UserMenu {
     );
     return items;
   });
+
+  /** 当前租户显示名；未选租户即宿主。未启用多租户时恒为空串（模板据此隐藏）。 */
+  readonly tenantLabel = computed(() => {
+    //#if (IncludeTenancy)
+    //#if (IncludeLocalization)
+    this.languageService.activeLang();
+    //#endif
+    const tenant = this.tenantContext.current();
+    if (tenant) {
+      return tenant.displayName || tenant.name;
+    }
+    //#if (IncludeLocalization)
+    return this.transloco.translate('menu.hostTenant');
+    //#else
+    return 'Host';
+    //#endif
+    //#else
+    return '';
+    //#endif
+  });
+  //#if (IncludeTenancy)
+
+  handleSwitchTenant(): void {
+    this.tenantContext.clear();
+    this.authService.logout();
+  }
+  //#endif
 
   openProfileDialog(): void {
     this.profileDialogVisible.set(true);

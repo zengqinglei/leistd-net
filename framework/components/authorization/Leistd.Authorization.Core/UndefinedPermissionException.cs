@@ -12,7 +12,7 @@ namespace Leistd.Authorization;
 /// </remarks>
 /// <param name="permissionNames">未定义或已禁用的权限名。</param>
 public class UndefinedPermissionException(IReadOnlyList<string> permissionNames)
-    : Exception($"以下权限未定义或已禁用，无法授予：{string.Join(", ", permissionNames)}。")
+    : System.Exception($"以下权限未定义或已禁用，无法授予：{string.Join(", ", permissionNames)}。")
 {
     /// <summary>未定义或已禁用的权限名。</summary>
     public IReadOnlyList<string> PermissionNames { get; } = permissionNames;

@@ -1,4 +1,5 @@
 using Leistd.Auditing;
+using Leistd.MultiTenancy;
 
 namespace Leistd.Authorization.EntityFrameworkCore;
 
@@ -11,10 +12,13 @@ namespace Leistd.Authorization.EntityFrameworkCore;
 /// 因为主体版本由"用户版本 + 参与拼接的角色版本集合"共同构成，见
 /// <see cref="SubjectPermissionGrants.Revision"/>。
 /// </remarks>
-public class AuthorizationRevisionRecord : IModificationAuditedObject
+public class AuthorizationRevisionRecord : IModificationAuditedObject, IMultiTenant
 {
     /// <summary>版本记录 ID（有序 Guid v7）。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>所属租户 Id，null 为宿主。版本随授予按租户分区，各租户独立演进。</summary>
+    public Guid? TenantId { get; set; }
 
     /// <summary>授予对象类型，如 User、Role。</summary>
     public string ProviderName { get; set; } = default!;

@@ -32,6 +32,14 @@ export const PLATFORM_ROUTES: Routes = [
     data: { permission: PERMISSIONS.roles.default },
   },
   //#endif
+  //#if (IncludeTenancy)
+  {
+    path: 'tenants',
+    loadComponent: () => import('./components/tenants/tenants').then((m) => m.Tenants),
+    canActivate: [permissionGuard],
+    data: { permission: PERMISSIONS.tenants.default },
+  },
+  //#endif
   //#if (IncludeOpenIddict)
   {
     path: 'open-applications',

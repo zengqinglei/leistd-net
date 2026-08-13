@@ -85,6 +85,13 @@ public class AuthController(
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
         identity.AddClaim(new Claim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false"));
+#if (IncludeTenancy)
+        // 租户 claim：多租户解析链以它定案已登录用户的租户，请求头无法改写
+        if (user.TenantId is { } tenantId)
+        {
+            identity.AddClaim(new Claim(CustomClaimTypes.TenantId, tenantId.ToString()));
+        }
+#endif
 
 #if (IncludeRoles)
         foreach (var roleName in await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))

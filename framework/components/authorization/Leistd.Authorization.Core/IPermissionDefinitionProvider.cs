@@ -1,3 +1,5 @@
+using Leistd.MultiTenancy;
+
 namespace Leistd.Authorization;
 
 /// <summary>
@@ -30,8 +32,11 @@ public interface IPermissionDefinitionContext
     /// </summary>
     /// <param name="name">组名称</param>
     /// <param name="displayName">显示名称</param>
+    /// <param name="side">
+    /// 组的多租户侧别（默认两侧通用）。作为组内 <c>AddPermission</c> 未显式指定侧别时的继承默认值
+    /// </param>
     /// <returns>权限组</returns>
-    IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null);
+    IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null, MultiTenancySides side = MultiTenancySides.Both);
 
     /// <summary>
     /// 获取权限定义
@@ -57,6 +62,11 @@ public interface IPermissionGroupDefinition
     string? DisplayName { get; set; }
 
     /// <summary>
+    /// 组的多租户侧别，作为组内权限未显式指定侧别时的继承默认值
+    /// </summary>
+    MultiTenancySides Side { get; }
+
+    /// <summary>
     /// 组内的顶层权限（各自可再带子权限），按声明顺序排列。
     /// </summary>
     IReadOnlyList<IPermissionDefinition> Permissions { get; }
@@ -66,8 +76,9 @@ public interface IPermissionGroupDefinition
     /// </summary>
     /// <param name="name">权限名称</param>
     /// <param name="displayName">显示名称</param>
+    /// <param name="side">多租户侧别；不指定时继承组的侧别</param>
     /// <returns>权限定义</returns>
-    IPermissionDefinition AddPermission(string name, string? displayName = null);
+    IPermissionDefinition AddPermission(string name, string? displayName = null, MultiTenancySides? side = null);
 
     /// <summary>
     /// 获取组内的权限定义
@@ -108,11 +119,18 @@ public interface IPermissionDefinition
     bool IsEnabled { get; set; }
 
     /// <summary>
+    /// 多租户侧别：声明本权限属于宿主侧、租户侧还是两侧通用。
+    /// 当前上下文侧别不匹配时，权限检查一律拒绝，定义树与授予界面也应按侧别过滤
+    /// </summary>
+    MultiTenancySides Side { get; }
+
+    /// <summary>
     /// 添加子权限
     /// </summary>
     /// <param name="name">权限名称</param>
     /// <param name="displayName">显示名称</param>
+    /// <param name="side">多租户侧别；不指定时继承父权限的侧别</param>
     /// <returns>子权限定义</returns>
-    IPermissionDefinition AddChild(string name, string? displayName = null);
+    IPermissionDefinition AddChild(string name, string? displayName = null, MultiTenancySides? side = null);
 }
 

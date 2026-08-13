@@ -13,7 +13,7 @@ namespace Leistd.Authorization;
 /// 调用方直接重试即可。
 /// </remarks>
 public sealed class UnstableGrantSnapshotException(string subject, int attempts)
-    : Exception($"Could not read a consistent grant snapshot for '{subject}' after {attempts} attempts.")
+    : System.Exception($"Could not read a consistent grant snapshot for '{subject}' after {attempts} attempts.")
 {
     /// <summary>读取的目标，形如 <c>Role/{id}</c> 或资源的 <c>{name}/{key}</c>，仅用于诊断。</summary>
     public string Subject { get; } = subject;

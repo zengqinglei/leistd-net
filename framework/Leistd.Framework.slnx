@@ -43,6 +43,11 @@
     <Project Path="components/lock/Leistd.Lock.Memory/Leistd.Lock.Memory.csproj" />
     <Project Path="components/lock/Leistd.Lock.Redis/Leistd.Lock.Redis.csproj" />
   </Folder>
+  <Folder Name="/components/multi-tenancy/">
+    <Project Path="components/multi-tenancy/Leistd.MultiTenancy.AspNetCore/Leistd.MultiTenancy.AspNetCore.csproj" />
+    <Project Path="components/multi-tenancy/Leistd.MultiTenancy.Core/Leistd.MultiTenancy.Core.csproj" />
+    <Project Path="components/multi-tenancy/Leistd.MultiTenancy.EntityFrameworkCore/Leistd.MultiTenancy.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/components/notifications/">
     <Project Path="components/notifications/Leistd.Notifications.Core/Leistd.Notifications.Core.csproj" />
     <Project Path="components/notifications/Leistd.Notifications.EntityFrameworkCore/Leistd.Notifications.EntityFrameworkCore.csproj" />
@@ -96,6 +101,7 @@
     <Project Path="tests/Leistd.Exception.Tests/Leistd.Exception.Tests.csproj" />
     <Project Path="tests/Leistd.Localization.Tests/Leistd.Localization.Tests.csproj" />
     <Project Path="tests/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj" />
+    <Project Path="tests/Leistd.MultiTenancy.Tests/Leistd.MultiTenancy.Tests.csproj" />
     <Project Path="tests/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />
     <Project Path="tests/Leistd.ServiceClient.Tests/Leistd.ServiceClient.Tests.csproj" />
     <Project Path="tests/Leistd.TestBase/Leistd.TestBase.csproj" />

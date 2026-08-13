@@ -110,6 +110,7 @@ public class SystemJob(ICurrentPrincipalAccessor accessor, ICurrentUser currentU
 | --- | --- |
 | `IsAuthenticated` | 当前主体是否已认证（`Principal.Identity.IsAuthenticated`），无主体时为 `false` |
 | `Id` | 用户唯一标识，取 `sub` 或 `NameIdentifier` claim 并解析为 `Guid`，解析失败/缺失返回 `null` |
+| `TenantId` | 所属租户，取 `tenant_id` claim 并解析为 `Guid`；宿主用户返回 `null`。这是主体 claim 的直读值，运行时权威租户上下文是 [多租户组件](./multi-tenancy.md) 的 `ICurrentTenant` |
 | `Username` | 依次取 `preferred_username` / `name` / `Name` claim，均无返回 `null` |
 | `Name` | 显示名称，依次取 `name` / `GivenName` claim |
 | `Email` | 邮箱，依次取 `email` / `Email` claim |
@@ -144,6 +145,7 @@ public class SystemJob(ICurrentPrincipalAccessor accessor, ICurrentUser currentU
 | `SessionId` | `sid` | 会话标识符（OIDC 标准） |
 | `IdentityProvider` | `idp` | 身份提供者（如 github / google / microsoft） |
 | `IsSuperAdmin` | `is_super_admin` | 是否超级管理员（权限授权的超管判定约定来源） |
+| `TenantId` | `tenant_id` | 所属租户 Id（宿主用户无此 claim）。认证端签发主体时写入；多租户解析链以它为最高优先来源，已登录用户的租户由此定案 |
 
 > 仅定义与 `System.Security.Claims.ClaimTypes` 不同的自定义字段；标准字段请直接用 `ClaimTypes`。
 

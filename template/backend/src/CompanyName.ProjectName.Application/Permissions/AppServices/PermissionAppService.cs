@@ -5,6 +5,9 @@ using Leistd.Authorization;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
+#if (IncludeTenancy)
+using Leistd.MultiTenancy;
+#endif
 #if (IncludeLocalization)
 using Microsoft.Extensions.Localization;
 #endif
@@ -25,12 +28,33 @@ public class PermissionAppService(
     IPermissionGrantManager permissionGrantManager,
     IRepository<User, Guid> userRepository,
     IRepository<Role, Guid> roleRepository
+#if (IncludeTenancy)
+    ,
+    ICurrentTenant currentTenant
+#endif
 #if (IncludeLocalization)
     ,
     IStringLocalizerFactory localizerFactory
 #endif
     ) : BaseAppService, IPermissionAppService
 {
+#if (IncludeTenancy)
+    /// <summary>
+    /// 当前多租户侧别匹配：宿主侧权限（如 App.Tenants.*）对租户上下文不可见——
+    /// 检查器已有同一硬边界，这里让 current 权限集与定义树同口径，
+    /// 否则租户超管会在菜单里看到点进去必然 403 的宿主功能。
+    /// </summary>
+    private bool MatchesCurrentSide(IPermissionDefinition definition)
+        => definition.Side.HasFlag(currentTenant.IsAvailable ? MultiTenancySides.Tenant : MultiTenancySides.Host);
+
+    private bool MatchesCurrentSide(string permissionName)
+        => permissionDefinitionManager.GetOrNull(permissionName) is { } definition && MatchesCurrentSide(definition);
+#else
+    private static bool MatchesCurrentSide(IPermissionDefinition definition) => true;
+
+    private static bool MatchesCurrentSide(string permissionName) => true;
+#endif
+
     public async Task<CurrentPermissionsOutputDto> GetCurrentAsync(
         CancellationToken cancellationToken = default)
     {
@@ -50,6 +74,7 @@ public class PermissionAppService(
             var all = permissionDefinitionManager
                 .GetAll()
                 .Where(x => permissionDefinitionManager.IsEffectivelyEnabled(x.Name))
+                .Where(MatchesCurrentSide)
                 .Select(x => x.Name)
                 .ToList();
 
@@ -69,6 +94,7 @@ public class PermissionAppService(
         var permissions = grants
             .GetGrantedNames()
             .Where(permissionDefinitionManager.IsEffectivelyEnabled)
+            .Where(MatchesCurrentSide)
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();
 
@@ -91,6 +117,7 @@ public class PermissionAppService(
                 DisplayName = Localize(group.DisplayName, group.Name),
                 Permissions = group.Permissions
                     .Where(permission => permissionDefinitionManager.IsEffectivelyEnabled(permission.Name))
+                    .Where(MatchesCurrentSide)
                     .Select(ToTree)
                     .ToList()
             })
@@ -191,6 +218,7 @@ public class PermissionAppService(
             ParentName = definition.Parent?.Name,
             Children = definition.Children
                 .Where(child => permissionDefinitionManager.IsEffectivelyEnabled(child.Name))
+                .Where(MatchesCurrentSide)
                 .Select(ToTree)
                 .ToList()
         };
@@ -205,6 +233,7 @@ public class PermissionAppService(
         var states = permissionDefinitionManager
             .GetAll()
             .Where(definition => permissionDefinitionManager.IsEffectivelyEnabled(definition.Name))
+            .Where(MatchesCurrentSide)
             .Select(definition => new PermissionGrantStateDto
             {
                 Name = definition.Name,

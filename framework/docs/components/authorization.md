@@ -73,6 +73,11 @@ public class OrdersPermissionDefinitionProvider : IPermissionDefinitionProvider
         var orders = group.AddPermission("Orders", "订单管理");
         orders.AddChild("Orders.Read", "查看订单");
         orders.AddChild("Orders.Write", "编辑订单");
+
+        // 多租户宿主可声明侧别（默认 Both）：组的侧别是组内权限的继承默认值，
+        // 子权限继承父权限；宿主侧权限在租户上下文内对任何主体（含超管）都不可用。
+        var system = context.GetOrAddGroup("System", "系统管理", MultiTenancySides.Host);
+        system.AddPermission("System.Tenants", "租户管理");   // 继承组的 Host 侧别
     }
 }
 
@@ -168,9 +173,9 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 | `IPermissionChecker.IsGrantedAsync(names, ct)` | 批量检查多个权限，返回 `MultiplePermissionGrantResult` |
 | `MultiplePermissionGrantResult` | 批量检查结果，含 `Results` 字典、`AllGranted`（全部授予）、`AnyGranted`（至少一个授予） |
 | `IPermissionDefinitionProvider` | 权限定义提供者，业务项目实现 `Define` 声明权限 |
-| `IPermissionDefinitionContext` | 定义期上下文：`GetOrAddGroup`、`GetPermissionOrNull`。**每个权限都必须归属于某个组**，权限管理界面按组分区渲染 |
-| `IPermissionGroupDefinition` | 权限组：`Name`、`DisplayName`、`Permissions`、`AddPermission`、`GetPermissionOrNull` |
-| `IPermissionDefinition` | 单个权限定义：`Name`、`DisplayName`、`Parent`、`Children`、`IsEnabled`、`AddChild` |
+| `IPermissionDefinitionContext` | 定义期上下文：`GetOrAddGroup`（可选 `side` 声明组侧别）、`GetPermissionOrNull`。**每个权限都必须归属于某个组**，权限管理界面按组分区渲染 |
+| `IPermissionGroupDefinition` | 权限组：`Name`、`DisplayName`、`Side`（多租户侧别，组内权限的继承默认值）、`Permissions`、`AddPermission`、`GetPermissionOrNull` |
+| `IPermissionDefinition` | 单个权限定义：`Name`、`DisplayName`、`Parent`、`Children`、`IsEnabled`、`Side`（多租户侧别，未显式指定时继承组/父权限）、`AddChild` |
 | `IPermissionGrantManager.RemoveProviderAsync(providerName, providerKey, ct)` | 主体**永久删除**后清理其全部授予与授权版本，返回删除行数，幂等。与"替换为空集合"不同——后者是撤销语义，会保留并递增版本 |
 | `UnstableGrantSnapshotException` | 稳定读取重试耗尽：取不到一致快照。属**读取失败**，与 `PermissionGrantConcurrencyException`（保存冲突，映射 409）不是一回事，调用方重试即可 |
 | `IPermissionDefinitionManager` | 权限定义查询：`GetOrNull(name)`、`GetAll()`、`GetGroups()`、`IsEffectivelyEnabled(name)`、`GetAncestorNames(name)`、`GetDescendantNames(name)` |
@@ -202,8 +207,8 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 
 | 成员 | 说明 |
 | --- | --- |
-| `PermissionGrantRecord` | 权限授予持久化实体：`Id`（Guid v7）、`PermissionName`、`ProviderName`、`ProviderKey`；实现 `ICreationAuditedObject`（`CreationTime`、`CreatorId` 由审计拦截器填充）。**行的存在即授予**，没有表示效果的列 |
-| `AuthorizationRevisionRecord` | 主体授权版本：`Id`、`ProviderName`、`ProviderKey`、`Version`；实现 `IModificationAuditedObject` |
+| `PermissionGrantRecord` | 权限授予持久化实体：`Id`（Guid v7）、`TenantId`（可空，租户分区）、`PermissionName`、`ProviderName`、`ProviderKey`；实现 `ICreationAuditedObject`（审计拦截器填充）与 `IMultiTenant`（多租户落值拦截器填充 `TenantId`，全局过滤器使授予按租户分区）。**行的存在即授予**，没有表示效果的列 |
+| `AuthorizationRevisionRecord` | 主体授权版本：`Id`、`TenantId`（可空）、`ProviderName`、`ProviderKey`、`Version`；实现 `IModificationAuditedObject` 与 `IMultiTenant`，版本随授予按租户独立演进 |
 | `PermissionGrantRecordConfiguration` / `AuthorizationRevisionRecordConfiguration` | 两个实体的 EF Core 配置 |
 | `EfCorePermissionGrantStore<TDbContext>` | `IPermissionGrantStore` 的 EF Core 实现 |
 | `EfCorePermissionGrantManager<TDbContext>` | `IPermissionGrantManager` 的 EF Core 实现 |
@@ -222,9 +227,10 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 判定顺序：
 
 1. **权限未定义或未启用一律拒绝**——`IsEffectivelyEnabled` 要求该权限自身与其全部祖先都处于启用状态，因此拼错的权限名、数据库残留的权限、被禁用分支下的权限都默认拒绝，超级管理员也不例外。
-2. 通过 `IPermissionSubjectProvider` 取不到当前主体（未登录）返回 `false`。
-3. `PermissionSubject.IsSuperAdmin` 为 `true` 时直接返回 `true`，**不读取授予记录**。
-4. 否则查授予集合：用户与其全部角色的授予取并集，命中即允许，否则拒绝。
+2. **侧别与当前多租户上下文不匹配一律拒绝**——宿主侧权限在租户上下文内对任何主体（含超管）不可用，反之亦然；当前侧别读自 `ICurrentTenant`（可选依赖，未注册的非多租户宿主视为 Host 侧，仅租户侧专属权限被拒）。
+3. 通过 `IPermissionSubjectProvider` 取不到当前主体（未登录）返回 `false`。
+4. `PermissionSubject.IsSuperAdmin` 为 `true` 时直接返回 `true`，**不读取授予记录**。
+5. 否则查授予集合：用户与其全部角色的授予取并集，命中即允许，否则拒绝。
 
 `DefaultPermissionChecker` 以 Scoped 注册：主体解析与授予读取在同一作用域（通常是一次 HTTP 请求）内**只发生一次**，之后同一作用域中的任意多次检查都是内存字典查找，不再回访数据库。`IsGrantedAsync(names, ct)` 对传入名称按 `StringComparer.Ordinal` 去重并过滤空白。
 
@@ -240,7 +246,7 @@ public Task<IReadOnlyList<OrderDto>> GetOrders([FromQuery] OrderQuery query)
 
 ### EF Core 存储行为
 
-- `PermissionGrantRecord` 唯一性由唯一索引 `(PermissionName, ProviderName, ProviderKey)` 保证：一行即一次授予，不存在同一主体对同一权限出现两行的可能。
+- `PermissionGrantRecord` 唯一性由**宿主行与租户行成对的带过滤唯一索引**保证（`TenantId` 为 NULL 的行用 `(PermissionName, ProviderName, ProviderKey)` 加 `IS NULL` 过滤，租户行用带 `TenantId` 前缀的索引加 `IS NOT NULL` 过滤）：一行即一次授予，不存在同一主体对同一权限出现两行的可能。可空列直接进唯一索引时 NULL 互不相等，宿主行会失去唯一性兜底，这正是拆成两个过滤索引的原因。授予与版本经全局查询过滤器按租户分区，Store 查询天然只见当前租户。**升级到本版本需要一次 EF 迁移**（新增 `TenantId` 列与索引重建；存量行 NULL 即宿主语义，行为不变）。
 - `ReplaceGrantsAsync` 以一次 `SaveChangesAsync` 提交，是单事务操作；目标集合与现有记录做差异比对，只在真正发生变化时递增版本。
 - `expectedRevision` 与存储中的当前版本不一致时抛 `PermissionGrantConcurrencyException`，且**不做任何写入**；传 `null` 表示跳过并发校验。
 - `AuthorizationRevisionRecord.Version` 是**并发令牌**：EF 在 UPDATE 上带 `WHERE Version = @original`。仅靠「先读版本再内存比较」挡不住两个事务同时读到同一版本的情况，令牌把这段窗口交给数据库收口，落败方同样得到 `PermissionGrantConcurrencyException`。
@@ -285,6 +291,7 @@ ASP.NET Core 宿主（真实 Web 宿主 + TestServer + Sqlite + 真实 DI 装配
 
 ## 相关
 
+- [多租户](./multi-tenancy.md)
 - [组件总览](./README.md)
 - [资源实例授权](./authorization-resource.md)
 - [数据范围](./authorization-data-scope.md)

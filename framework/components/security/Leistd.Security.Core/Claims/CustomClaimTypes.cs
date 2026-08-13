@@ -34,4 +34,13 @@ public static class CustomClaimTypes
     /// 由认证端在签发主体时写入，便于授权策略基于 claim 判定而无需查库。
     /// </remarks>
     public const string IsSuperAdmin = "is_super_admin";
+
+    /// <summary>
+    /// 所属租户 Id（值: 租户 Guid 字符串；宿主用户无此 claim）
+    /// </summary>
+    /// <remarks>
+    /// 由认证端在签发主体时写入。多租户解析链的 Claim 贡献者以它为最高优先来源——
+    /// 已认证用户的租户由此定案，请求头与查询串无法改写。
+    /// </remarks>
+    public const string TenantId = "tenant_id";
 }

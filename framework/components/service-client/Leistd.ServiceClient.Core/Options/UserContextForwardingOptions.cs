@@ -22,4 +22,11 @@ public class UserContextForwardingOptions
     /// 默认空。角色、权限不应经头传递——被调方应基于调用方 client 的 scope 或按用户 Id 本地判定。
     /// </summary>
     public IDictionary<string, string> ClaimHeaderMap { get; set; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// 是否转发当前租户 Id（<c>X-Tenant-Id</c>，值来自 <c>ICurrentTenant</c> 环境上下文）。
+    /// 默认 <c>true</c>；宿主未注册 <c>ICurrentTenant</c>（非多租户宿主）时自动跳过。
+    /// 独立于 <see cref="Enable"/>：后台任务可能只有租户上下文而无用户主体。
+    /// </summary>
+    public bool ForwardTenantId { get; set; } = true;
 }

@@ -8,6 +8,9 @@ import {
   SendEmailCodeInputDto,
 } from '../../src/app/features/account/models/account.dto';
 import { MockException, MockRequest } from '../core/models';
+//#if (IncludeTenancy)
+import { TENANTS } from '../data/tenant';
+//#endif
 import { USERS, toUserOutput } from '../data/user';
 import { MOCK_SESSION_USER_ID, setMockSessionUserId } from '../utils/current-user';
 
@@ -30,6 +33,20 @@ function ensureEmailAvailable(email: string, currentUserId: string): void {
   }
 }
 
+//#if (IncludeTenancy)
+/** 复刻后端行为：X-Tenant-Id 指向已停用租户时登录被 403 拒绝。 */
+function ensureTenantActive(req: MockRequest): void {
+  const tenantId = req.headers.get('X-Tenant-Id');
+  if (!tenantId) {
+    return;
+  }
+  const tenant = TENANTS.find((t) => t.id === tenantId);
+  if (tenant && !tenant.isActive) {
+    throw new MockException(403, { code: 40300, message: 'Tenant is deactivated' });
+  }
+}
+
+//#endif
 function sessionLogin(usernameOrEmail: string, password: string): 'ok' {
   const user = USERS.find((u) => u.username === usernameOrEmail || u.email === usernameOrEmail);
 
@@ -227,8 +244,12 @@ export const AUTH_API = {
   'GET /api/v1/auth/captcha': () => getCaptcha(),
   'POST /api/v1/auth/send-email-code': (req: MockRequest) => sendEmailCode(req),
   'POST /api/v1/auth/logout': () => logout(),
-  'POST /api/v1/auth/session-login': (req: MockRequest) =>
-    sessionLogin(req.body.usernameOrEmail, req.body.password),
+  'POST /api/v1/auth/session-login': (req: MockRequest) => {
+    //#if (IncludeTenancy)
+    ensureTenantActive(req);
+    //#endif
+    return sessionLogin(req.body.usernameOrEmail, req.body.password);
+  },
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
   'PUT /api/v1/auth/me': (req: MockRequest) => updateCurrentUser(req),
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),

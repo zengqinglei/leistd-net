@@ -1,5 +1,5 @@
 param(
-    [string[]]$Scenarios = @("default", "minimal", "no-roles", "notifications", "no-openiddict", "external-login", "localization", "no-localization", "localization-notifications", "localization-external-login"),
+    [string[]]$Scenarios = @("default", "minimal", "tenancy", "no-roles", "notifications", "no-openiddict", "external-login", "localization", "no-localization", "localization-notifications", "localization-external-login"),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [switch]$SkipPack,
@@ -422,7 +422,10 @@ $scenarioMap = [ordered]@{
         Present = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions")
         Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
         ReadmeContains = @("本地账号", "OpenIddict")
-        ReadmeExcludes = @("通知持久化", "外部身份提供方登录")
+        ReadmeExcludes = @("通知持久化", "外部身份提供方登录", "多租户")
+        # 未启用多租户时零租户契约残留：常量、标记接口与权限名任何一处漏裁剪
+        # 都会让前后端契约或数据模型带上租户维度
+        ForbiddenTokens = @("IncludeTenancy", "IMultiTenant", "App.Tenants", "X-Tenant-Id")
     }
     "minimal" = @{
         Arguments = @("--include-identity", "false"); Frontend = $true; Lint = $false
@@ -430,6 +433,20 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions", "frontend/src/app/features/account", "backend/src/{name}.Api/Extensions/ActiveUserRequirement.cs", "backend/src/{name}.Api/Extensions/InvalidAccountResultHandler.cs")
         ReadmeContains = @("EF Core 数据访问")
         ReadmeExcludes = @("本地账号", "OpenIddict", "通知持久化", "外部身份提供方登录")
+    }
+    "tenancy" = @{
+        Arguments = @("--include-tenancy", "true"); Frontend = $true; Lint = $true
+        Present = @(
+            "backend/src/{name}.Api/Controllers/TenantController.cs",
+            "backend/src/{name}.Application/Tenants",
+            "backend/tests/{name}.IntegrationTests/TenancyTests.cs",
+            "frontend/src/app/features/platform/components/tenants",
+            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
+            "frontend/_mock/api/tenant.ts"
+        )
+        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
+        ReadmeContains = @("多租户")
+        ReadmeExcludes = @("通知持久化")
     }
     "no-roles" = @{
         Arguments = @("--include-roles", "false"); Frontend = $true; Lint = $false

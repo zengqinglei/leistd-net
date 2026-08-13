@@ -18,6 +18,9 @@
     },
     "IncludeLocalization": {
       "longName": "include-localization"
+    },
+    "IncludeTenancy": {
+      "longName": "include-tenancy"
     }
   }
 }

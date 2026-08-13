@@ -23,6 +23,10 @@
     <PackageReference Include="Leistd.Security.Core" />
 <!--#if (IncludeRoles)-->
     <PackageReference Include="Leistd.Authorization.Core" />
+<!--#if (IncludeTenancy)-->
+    <PackageReference Include="Leistd.MultiTenancy.Core" />
+    <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
+<!--#endif-->
     <!--#endif-->
     <PackageReference Include="Leistd.Lock.Core" />
     <PackageReference Include="Leistd.Ddd.Application" />

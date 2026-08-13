@@ -14,6 +14,10 @@ using CompanyName.ProjectName.Application.Permissions.Checker;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 #endif
+#if (IncludeTenancy)
+using CompanyName.ProjectName.Application.Tenants;
+using CompanyName.ProjectName.Application.Tenants.AppServices;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.Application;
@@ -61,6 +65,12 @@ public static class DependencyInjection
         services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
         services.AddTransient<IPermissionAppService, PermissionAppService>();
+#endif
+
+#if (IncludeTenancy)
+        // 租户管理（宿主侧）：写路径走框架 ITenantManager，创建后在租内种子
+        services.AddTransient<ITenantAppService, TenantAppService>();
+        services.AddTransient<ITenantSeeder, TenantSeeder>();
 #endif
 
         return services;

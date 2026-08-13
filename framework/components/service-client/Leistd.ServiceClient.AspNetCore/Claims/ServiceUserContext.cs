@@ -23,9 +23,14 @@ internal static class ServiceUserContext
             string.Equals(identity.AuthenticationType, options.AuthenticationType, StringComparison.Ordinal));
 
     /// <summary>
-    /// 主体是否是受信的服务调用方：已认证 + 含 <c>client_id</c> claim + <c>sub == client_id</c>
-    /// （client credentials 形态；用户 token 的 <c>sub</c> 是用户 Id，不满足）+ 可选 RequiredScope。
+    /// 主体是否是受信的服务调用方：已认证 + 含 <c>client_id</c> claim +
+    /// <c>sub == client_id</c> 或 <c>sub == ClientSubjectPrefix + client_id</c>
+    /// （client credentials 形态；用户 token 的 <c>sub</c> 是用户 Id，两种都不满足）+ 可选 RequiredScope。
     /// </summary>
+    /// <remarks>
+    /// 前缀形态对应签发端给机器主体隔离命名空间的做法（防 client_id 冒充 GUID 用户 Id），
+    /// 见 <see cref="ServiceUserContextOptions.ClientSubjectPrefix"/>。
+    /// </remarks>
     internal static bool IsTrustedServiceCall(ClaimsPrincipal user, ServiceUserContextOptions options)
     {
         if (user.Identity?.IsAuthenticated != true)
@@ -41,7 +46,13 @@ internal static class ServiceUserContext
 
         var subject = user.FindFirst(SubjectClaimType)?.Value
                       ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!string.Equals(subject, clientId, StringComparison.Ordinal))
+
+        var isClientSubject =
+            string.Equals(subject, clientId, StringComparison.Ordinal) ||
+            (!string.IsNullOrEmpty(options.ClientSubjectPrefix) &&
+             string.Equals(subject, options.ClientSubjectPrefix + clientId, StringComparison.Ordinal));
+
+        if (!isClientSubject)
         {
             return false;
         }
@@ -50,34 +61,52 @@ internal static class ServiceUserContext
     }
 
     /// <summary>
-    /// 从请求头恢复用户主体：用户身份置于首位成为主身份（<c>ICurrentUser</c> 的 <c>sub</c>
-    /// 解析命中用户而非 client），调用方 client 身份全部保留（<c>ICurrentClient</c> 可用）。
-    /// 请求无用户 Id 头（服务以自身身份调用）时返回 <c>null</c>。
+    /// 从请求头恢复用户/租户上下文：恢复出的身份置于首位成为主身份（<c>ICurrentUser</c> 的
+    /// <c>sub</c> 解析命中用户而非 client），调用方 client 身份全部保留（<c>ICurrentClient</c> 可用）。
+    /// 租户恢复独立于用户头——仅有租户上下文的服务调用（如后台任务）同样恢复
+    /// <c>tenant_id</c> claim，交由多租户解析链的 Claim 贡献者定案。
+    /// 请求既无用户 Id 头也无租户头（服务以自身宿主身份调用）时返回 <c>null</c>。
     /// </summary>
     internal static ClaimsPrincipal? TryRestore(
         ClaimsPrincipal principal, IHeaderDictionary headers, ServiceUserContextOptions options)
     {
+        var claims = new List<Claim>();
+
         var userId = headers[options.UserIdHeader].FirstOrDefault();
-        if (string.IsNullOrEmpty(userId))
+        if (!string.IsNullOrEmpty(userId))
+        {
+            claims.Add(new Claim(SubjectClaimType, userId));
+
+            var userName = headers[options.UserNameHeader].FirstOrDefault();
+            if (!string.IsNullOrEmpty(userName))
+            {
+                claims.Add(new Claim(PreferredUsernameClaimType, Uri.UnescapeDataString(userName)));
+            }
+
+            // 额外映射跟随用户上下文：没有用户就没有"代表谁"的扩展属性
+            foreach (var (headerName, claimType) in options.HeaderClaimMap)
+            {
+                var value = headers[headerName].FirstOrDefault();
+                if (!string.IsNullOrEmpty(value))
+                {
+                    claims.Add(new Claim(claimType, Uri.UnescapeDataString(value)));
+                }
+            }
+        }
+
+        // 租户头独立恢复：使被调方的 ICurrentTenant 与数据过滤落在正确租户分区
+        if (!string.IsNullOrEmpty(options.TenantIdHeader))
+        {
+            var tenantId = headers[options.TenantIdHeader].FirstOrDefault();
+            if (!string.IsNullOrEmpty(tenantId))
+            {
+                claims.Add(new Claim(CustomClaimTypes.TenantId, tenantId));
+            }
+        }
+
+        if (claims.Count == 0)
         {
             return null;
-        }
-
-        var claims = new List<Claim> { new(SubjectClaimType, userId) };
-
-        var userName = headers[options.UserNameHeader].FirstOrDefault();
-        if (!string.IsNullOrEmpty(userName))
-        {
-            claims.Add(new Claim(PreferredUsernameClaimType, Uri.UnescapeDataString(userName)));
-        }
-
-        foreach (var (headerName, claimType) in options.HeaderClaimMap)
-        {
-            var value = headers[headerName].FirstOrDefault();
-            if (!string.IsNullOrEmpty(value))
-            {
-                claims.Add(new Claim(claimType, Uri.UnescapeDataString(value)));
-            }
         }
 
         var userIdentity = new ClaimsIdentity(claims, options.AuthenticationType);
