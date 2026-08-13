@@ -148,6 +148,16 @@ export class SignalRService {
     // 少了这一步，早退会把应用永久留在断线状态，不早退又会泄漏。
     await this.disconnect();
 
+    // await 之后先核对一次：连接尚未建立就已经不是当前主体，直接不建。
+    // 连接一旦写进字段，下面那些 isCurrent() 的身份比对就一律为真——
+    // 身份判据能排除"已退休的旧连接"，排除不了"旧请求在 reset 之后新建的连接"。
+    //
+    // 约束：本行到两个 Hub 建连方法里的字段赋值之间**不得插入 await**。
+    // 一旦插入，reset 可以在核对之后、赋值之前发生，这道防护就静默失效了。
+    if (generation !== this.generation) {
+      return;
+    }
+
     try {
       await Promise.all([this.connectNotificationHub(), this.connectBusinessHub()]);
 

@@ -13,6 +13,7 @@ describe('SignalRService 连接生命周期', () => {
   let service: SignalRService;
   let built: FakeConnection[];
   let failing: Set<string>;
+  let deferStart = false;
 
   class FakeConnection {
     startCount = 0;
@@ -55,12 +56,29 @@ describe('SignalRService 连接生命周期', () => {
       this.reconnecting?.();
     }
 
+    /** 置为 true 时 start() 挂起，直到 completeStart() 被调用。 */
+    private startGate: (() => void) | null = null;
+
     async start(): Promise<void> {
       this.startCount++;
+
+      // 立即完成的 start 构造不出"连接已写入字段、但尚未通过最终代际校验"的窗口，
+      // 而那正是旧请求的推送可以穿透的地方。
+      if (deferStart) {
+        await new Promise<void>((resolve) => {
+          this.startGate = resolve;
+        });
+      }
+
       if ([...failing].some((fragment) => this.url.includes(fragment))) {
         throw new Error(`start failed: ${this.url}`);
       }
       this.state = signalR.HubConnectionState.Connected;
+    }
+
+    completeStart(): void {
+      this.startGate?.();
+      this.startGate = null;
     }
 
     async stop(): Promise<void> {
@@ -85,6 +103,7 @@ describe('SignalRService 连接生命周期', () => {
   beforeEach(() => {
     built = [];
     failing = new Set<string>();
+    deferStart = false;
 
     spyOn(console, 'error');
 
@@ -285,6 +304,26 @@ describe('SignalRService 连接生命周期', () => {
     // 直接复用上一个主体的 Promise，会让本主体拿到"正常返回但什么都没连上"，
     // 在组件重挂载前一直没有实时通知。
     expect(service.isConnected()).toBeTrue();
+  });
+
+  it('reset 之后恢复执行的旧连接请求不再建连，也不留下可写入共享状态的回调', async () => {
+    deferStart = true;
+
+    // 旧请求在 await 处让出执行权，恢复时已经不是当前主体。
+    const stale = service.connect();
+    await service.reset();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // 一条都不该建：连接一旦写进字段，身份比对就一律为真，
+    // start() 期间收到的推送会直接落进下一个主体的界面。
+    expect(built.length).toBe(0);
+
+    await stale;
+
+    expect(service.notifications()).toEqual([]);
+    expect(service.lastResourceEvent()).toBeNull();
+    expect(service.isConnected()).toBeFalse();
   });
 
   it('stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面', async () => {
