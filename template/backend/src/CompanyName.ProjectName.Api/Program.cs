@@ -173,7 +173,20 @@ try
         .AddValidation(options =>
         {
             options.UseLocalServer();
-            options.UseAspNetCore();
+
+            // 只接受 Authorization: Bearer。RFC 6750 §2.3 对 URI query 传令牌的措辞是
+            // "除非无法用 Authorization 头，否则 SHOULD NOT"——令牌一旦进 URL，就会进
+            // 反向代理与网关的访问日志、APM、浏览器历史和 Referer，且难以察觉。
+            // OpenIddict 作为实现规范的库把三种方式都开着是本分，但"哪种方式可用"是应用的
+            // 策略选择；ASP.NET Core 自己的 JwtBearerHandler 默认同样只读 Authorization 头。
+            //
+            // 改用 Bearer 认证的 SignalR 时不要把这两行删掉：浏览器的 WebSocket/SSE 设不了
+            // 自定义头，令牌只能走 query，但那是 Hub 路径的需要，不是全部 API 的。
+            // 按 Hub 路径定向搬运即可，配方见实时通信组件文档的"Bearer 认证下的 Hub 令牌传递"。
+            // 模板自带的实时通知走 Cookie 会话（见前端 SignalRService），不受这里影响。
+            options.UseAspNetCore()
+                   .DisableAccessTokenExtractionFromQueryString()
+                   .DisableAccessTokenExtractionFromBodyForm();
         });
 #endif
 // (IncludeOpenIddict)
@@ -311,22 +324,16 @@ try
 #endif
         options.SlidingExpiration = true;
 
-        // 只有浏览器导航才该被重定向到登录页/拒绝页。默认行为对所有请求一律 302，
-        // 于是 API 与 OIDC 客户端拿到的是 /Account/AccessDenied——本应用没有这个路由，
-        // 再叠上 SPA 兜底，跟随重定向的客户端最后收到的是一个 HTML 200，
-        // 把"未认证/无权限"伪装成了成功。按 Accept 区分：认 text/html 的才重定向。
-        options.Events.OnRedirectToLogin = context => RespondWithStatusOrRedirect(context, StatusCodes.Status401Unauthorized);
-        options.Events.OnRedirectToAccessDenied = context => RespondWithStatusOrRedirect(context, StatusCodes.Status403Forbidden);
+        // 一律返回状态码，不重定向。默认行为是 302 到 /Account/AccessDenied——本应用没有这个
+        // 路由，再叠上 SPA 兜底，跟随重定向的客户端最后收到的是一个 HTML 200，把"未认证/无权限"
+        // 伪装成了成功。这里也不去按 Accept 猜"是不是浏览器导航"：本宿主是 SPA + API，
+        // 没有任何受保护的 SSR 页面需要这条重定向分支——`/connect/authorize` 的交互式登录跳转
+        // 由它自己处理。将来真加了 Razor/SSR，再按端点元数据定向重定向，不要靠嗅探请求头。
+        options.Events.OnRedirectToLogin = context => WriteStatus(context, StatusCodes.Status401Unauthorized);
+        options.Events.OnRedirectToAccessDenied = context => WriteStatus(context, StatusCodes.Status403Forbidden);
 
-        static Task RespondWithStatusOrRedirect(RedirectContext<CookieAuthenticationOptions> context, int statusCode)
+        static Task WriteStatus(RedirectContext<CookieAuthenticationOptions> context, int statusCode)
         {
-            if (context.Request.Headers.Accept.Any(value =>
-                    value != null && value.Contains("text/html", StringComparison.OrdinalIgnoreCase)))
-            {
-                context.Response.Redirect(context.RedirectUri);
-                return Task.CompletedTask;
-            }
-
             context.Response.StatusCode = statusCode;
             return Task.CompletedTask;
         }
@@ -336,6 +343,9 @@ try
     // 覆盖范围是每一次新的 HTTP 请求和每一次新的 Hub 连接握手；
     // 已经建立的 SignalR 连接不在其中，见 ActiveUserRequirement 的说明。
     builder.Services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
+
+    // 账号失效要返回 401 而不是 403：前端只把 401 当会话失效来清理登录态。
+    builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, InvalidAccountResultHandler>();
 
     builder.Services.AddAuthorization(options =>
     {

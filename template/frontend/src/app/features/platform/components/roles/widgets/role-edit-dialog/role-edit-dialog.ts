@@ -138,16 +138,6 @@ export class RoleEditDialog {
   readonly description = () => this.transloco.translate('roles.editDescription');
   readonly cancelLabel = () => this.transloco.translate('common.cancel');
   readonly saveLabel = () => this.transloco.translate('common.save');
-
-  fieldLabel(field: 'name' | 'displayName' | 'description' | 'isDefault'): string {
-    const keys = {
-      name: 'roles.fieldName',
-      displayName: 'roles.fieldDisplayName',
-      description: 'roles.fieldDescription',
-      isDefault: 'roles.fieldIsDefault',
-    } as const;
-    return this.transloco.translate(keys[field]);
-  }
   //#else
   readonly title = computed(() => (this.isEdit() ? 'Edit role' : 'New role'));
 
@@ -155,8 +145,20 @@ export class RoleEditDialog {
     'Name is the stable identifier and cannot be changed after creation.';
   readonly cancelLabel = () => 'Cancel';
   readonly saveLabel = () => 'Save';
+  //#endif
 
+  // 条件收在方法体内而不是写两个同名方法：模板源码本身也要能通过 lint，
+  // 两份声明会触发 adjacent-overload-signatures——生成产物没事，坏的是贡献者的本地反馈。
   fieldLabel(field: 'name' | 'displayName' | 'description' | 'isDefault'): string {
+    //#if (IncludeLocalization)
+    const keys = {
+      name: 'roles.fieldName',
+      displayName: 'roles.fieldDisplayName',
+      description: 'roles.fieldDescription',
+      isDefault: 'roles.fieldIsDefault',
+    } as const;
+    return this.transloco.translate(keys[field]);
+    //#else
     const labels = {
       name: 'Name',
       displayName: 'Display name',
@@ -164,6 +166,6 @@ export class RoleEditDialog {
       isDefault: 'Assign to new users by default',
     } as const;
     return labels[field];
+    //#endif
   }
-  //#endif
 }

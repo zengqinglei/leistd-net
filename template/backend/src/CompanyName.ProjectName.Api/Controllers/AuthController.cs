@@ -96,7 +96,12 @@ public class AuthController(
         return new ClaimsPrincipal(identity);
     }
 
-    [Authorize]
+    /// <remarks>
+    /// 允许匿名：登出是幂等的 Cookie 清理，不该要求先证明自己有效。挂 [Authorize] 时，
+    /// 账号一旦被禁用或锁定，本人反而清不掉服务端 Cookie——登不出去。
+    /// 未登录调用同样返回成功，不泄漏"这个会话存不存在"。
+    /// </remarks>
+    [AllowAnonymous]
     [HttpPost("logout")]
     public async Task LogoutAsync()
     {

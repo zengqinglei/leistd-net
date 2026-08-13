@@ -166,7 +166,8 @@ public class MessageCenterController(INotificationStore notificationStore, ICurr
 - SignalR 用户组前缀 `user:{userId}` 是硬编码约定，`NotificationHub` 加入组与 `SignalRNotificationSender.SendToUserAsync` 发送组必须保持一致，不要在业务代码中自行拼接同名字符串发到 `SendToGroupAsync`（那是不同的组命名空间）。
 - SignalR 投递失败只记日志、不抛异常：调用 `PublishToUserAsync` 成功返回不代表用户端一定收到实时推送（例如客户端未连接、连接已断开），需要"送达确认"的场景仍应依赖持久化历史 + 客户端主动拉取未读数兜底。
 - `NotificationHub` 端点默认要求登录（`RequireAuthorization`），未登录客户端无法建立 SignalR 连接、也就无法加入 `user:{userId}` 组。
-- **授权只在握手阶段执行一次**。SignalR 不会对已建立的连接重跑策略，因此账号在连接之后被禁用、锁定或删除时，那条连接仍会继续收到推送，直到客户端断开或令牌过期触发重连。要让既有连接也立即失效，需要连接注册表加跨节点终止通道，由有明确敏感度要求的业务项目自行实现；本组件不提供，也不应把业务用户仓储反向塞进来。
+- **授权只在握手阶段执行一次**。SignalR 不会对已建立的连接重跑策略，因此账号在连接之后被禁用、锁定或删除时，那条连接仍会继续收到推送，直到客户端、服务端或传输层实际断开。特别注意**令牌过期不会自动断开**：Hub 没有配置 `CloseOnAuthenticationExpiration`，SignalR 默认不会仅因令牌到期就关闭既有连接。确需到期即断的项目要显式开启该配置，并用真实 SignalR Client 验证。要让既有连接也立即失效，需要连接注册表加跨节点终止通道，由有明确敏感度要求的业务项目自行实现；本组件不提供，也不应把业务用户仓储反向塞进来。
+- **用 Bearer 认证时，浏览器客户端的令牌到不了 Hub**。浏览器的 WebSocket 与 SSE 接口设不了自定义请求头，令牌只能拼进 query；若宿主只接受 `Authorization: Bearer`，握手会失败。处理方式（按 Hub 路径定向搬运，含完整示例）见[实时通信组件文档](./realtime.md#bearer-认证下的-hub-令牌传递)——两个 Hub 面对的是同一个问题，配方不在此重复；照抄时把路径换成本组件实际映射的 `MapNotificationHub` 路径（默认 `/hubs/notifications`）。用 Cookie 会话时不涉及本条。
 
 ## 相关
 

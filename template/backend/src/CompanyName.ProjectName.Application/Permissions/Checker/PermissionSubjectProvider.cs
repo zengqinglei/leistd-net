@@ -23,8 +23,11 @@ public class PermissionSubjectProvider(
         var user = await userRepository.GetByIdAsync(userIdValue, cancellationToken);
 
         // 登录时拒绝禁用与锁定账号，但已签发的 Cookie/Bearer 不会因此失效。
-        // 主体解析每请求查库，是撤权唯一即时生效的地方——这里放行就等于"禁用用户"只挡新登录，
-        // 已在线的会话照常调用全部受保护接口，与界面承诺的语义不符。
+        // 主体解析每请求查库，这里是 RBAC 路径上的每请求失效保障——放行就等于"禁用用户"只挡新登录，
+        // 已在线的会话照常调用受权限保护的接口，与界面承诺的语义不符。
+        //
+        // 它不是唯一一道：默认策略上的 ActiveUserRequirement 覆盖每一次新的 HTTP 请求与
+        // 每一次新的 Hub 握手，包括"仅要求已认证"的端点。两处判据相同，各自守住各自那条路径。
         //
         // 检查必须在超管分支之前：被禁用的超管同样要立刻失去权限。
         if (user == null || !user.IsActive || user.IsLockedOut())

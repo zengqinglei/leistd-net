@@ -49,6 +49,8 @@ $allow = @(
     'ContentResult','FileResult','StatusCodeResult','ObjectResult',
     # Redis / StackExchange 原语（lock 文档提到底层命令）
     'KeyDelete',
+    # ASP.NET Core SignalR 连接选项（notifications 文档说明"令牌过期不会自动断连"时引用）
+    'CloseOnAuthenticationExpiration',
     # 文档中的“一族方法”通配/截断写法与状态描述词（非具体 API 名）
     'SetXxx','GetGrantedPermissionsFor','PublishTo','PermissionAttribute','Completed'
 )

@@ -427,7 +427,7 @@ $scenarioMap = [ordered]@{
     "minimal" = @{
         Arguments = @("--include-identity", "false"); Frontend = $true; Lint = $false
         Present = @("backend/src/{name}.Api/Program.cs")
-        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions", "frontend/src/app/features/account")
+        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions", "frontend/src/app/features/account", "backend/src/{name}.Api/Extensions/ActiveUserRequirement.cs", "backend/src/{name}.Api/Extensions/InvalidAccountResultHandler.cs")
         ReadmeContains = @("EF Core 数据访问")
         ReadmeExcludes = @("本地账号", "OpenIddict", "通知持久化", "外部身份提供方登录")
     }
