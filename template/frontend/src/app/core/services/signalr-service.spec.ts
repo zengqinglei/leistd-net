@@ -406,17 +406,24 @@ describe('SignalRService 连接生命周期', () => {
 
     // 重连回调进入循环并卡在 A 的第一次 Subscribe 上。
     const reconnected = staleBusiness.triggerReconnected();
-    await Promise.resolve();
-    expect(staleBusiness.invocations.length)
-      .withContext('重连回调应当已经发出第一次 Subscribe')
-      .toBe(1);
+    try {
+      await Promise.resolve();
+      expect(staleBusiness.invocations.length)
+        .withContext('重连回调应当已经发出第一次 Subscribe')
+        .toBe(1);
 
-    // 就在这一轮未完成时切换主体，并让新主体订阅自己的资源。
-    await service.reset();
-    await service.connect();
-    await service.subscribeResource('b-order');
+      // 就在这一轮未完成时切换主体，并让新主体订阅自己的资源。
+      await service.reset();
+      await service.connect();
+      await service.subscribeResource('b-order');
+    } finally {
+      // 先关掉拦截再释放：缺陷被重新引入时，循环会对 b-order 再发一次 invoke，
+      // 只释放已排队的那次会让它继续挂住，用例最终以 5 秒超时收场——
+      // 杀得死缺陷，但失败得又慢又看不出原因。
+      staleBusiness.gateInvoke = false;
+      staleBusiness.releaseInvoke();
+    }
 
-    staleBusiness.releaseInvoke();
     await reconnected;
 
     // 跨 await 迭代活集合时，旧回调的迭代器会读到新主体刚加入的 key，
