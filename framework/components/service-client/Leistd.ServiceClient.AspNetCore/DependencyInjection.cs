@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.ServiceClient.AspNetCore;
 
@@ -44,8 +43,16 @@ public static class DependencyInjection
 
     private static IServiceCollection AddServiceUserContextCore(IServiceCollection services)
     {
+        // 已注册过：直接返回。否则第二次调用会把上一次的注册当成「宿主转换」再包一层，
+        // 每多调一次多嵌套一层（逻辑幂等掩盖了这一点，但每请求要多跑一遍链）。
+        // Options 配置在公共入口完成，早退不影响重复调用时的重新配置。
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(ServiceUserContextClaimsTransformation)))
+        {
+            return services;
+        }
+
         services.AddHttpContextAccessor();
-        services.TryAddSingleton<ServiceUserContextClaimsTransformation>();
+        services.AddSingleton<ServiceUserContextClaimsTransformation>();
 
         // ASP.NET Core 的认证服务只消费单个 IClaimsTransformation，后注册者覆盖先注册者
         // （AddAuthentication 会预注册一个空实现）。直接 Replace 会静默删掉宿主已注册的转换
@@ -61,15 +68,24 @@ public static class DependencyInjection
             return services;
         }
 
+        // 组合沿用被包装服务的生命周期：宿主常把 claims 转换注册为 Scoped（它往往依赖
+        // 请求级服务）。固定 Singleton 会把 scoped 依赖提升为单例——ValidateScopes 下直接
+        // 抛异常，未开启校验时则跨请求捕获状态。同生命周期下工厂拿到的就是对应作用域的
+        // provider，内层解析自然正确。
         services.Remove(existing);
-        services.AddSingleton<IClaimsTransformation>(provider => new CompositeClaimsTransformation(
-            CreateInner(provider, existing),
-            provider.GetRequiredService<ServiceUserContextClaimsTransformation>()));
+        services.Add(new ServiceDescriptor(
+            typeof(IClaimsTransformation),
+            provider => new CompositeClaimsTransformation(
+                CreateInner(provider, existing),
+                provider.GetRequiredService<ServiceUserContextClaimsTransformation>()),
+            existing.Lifetime));
         return services;
     }
 
     /// <summary>
     /// 按原注册描述符还原宿主既有的转换实例（实现类型 / 工厂 / 单例三种注册形态）。
+    /// <paramref name="provider"/> 是与原注册同生命周期的作用域 provider，
+    /// 因此实现类型的构造依赖按其原本的作用域解析。
     /// </summary>
     private static IClaimsTransformation CreateInner(IServiceProvider provider, ServiceDescriptor descriptor)
     {
