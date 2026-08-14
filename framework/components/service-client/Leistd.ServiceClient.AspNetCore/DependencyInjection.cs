@@ -65,8 +65,13 @@ public static class DependencyInjection
 
         services.AddSingleton<ServiceUserContextRegistrationMarker>();
         services.AddHttpContextAccessor();
-        // TryAdd：宿主可能已注册该公共类型（自行组合场景），此时沿用宿主的注册。
-        services.TryAddSingleton<ServiceUserContextClaimsTransformation>();
+        // 组件自有的 sealed 无状态服务，生命周期是组件的不变量：只依赖 IHttpContextAccessor
+        // 与 IOptions，正确的注册就是 Singleton，没有需要宿主定制的余地。
+        // 这里**不能**用 TryAdd——宿主若把它预注册为 Scoped，下面的 Singleton 别名/组合
+        // 就会从根容器解析 Scoped 服务而抛异常。宿主自行注册的描述符不删（不越权），
+        // 但组件内部解析拿到的是这条后注册的 Singleton。
+        // 判据：组件自有服务用 Add，宿主的扩展点才用 TryAdd。
+        services.AddSingleton<ServiceUserContextClaimsTransformation>();
 
         // ASP.NET Core 的认证服务只消费单个 IClaimsTransformation，后注册者覆盖先注册者
         // （AddAuthentication 会预注册一个空实现）。直接 Replace 会静默删掉宿主已注册的转换

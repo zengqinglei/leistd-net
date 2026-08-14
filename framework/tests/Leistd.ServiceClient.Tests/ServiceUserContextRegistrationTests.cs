@@ -292,6 +292,21 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
+    public async Task 宿主把恢复转换预注册为Scoped_组件仍按Singleton解析不崩溃()
+    {
+        // 模板正是这条路径：AddServiceUserContext 在 AddAuthentication 之前调用，
+        // 此时还没有默认 IClaimsTransformation，走的是 Singleton 别名分支。
+        // 若沿用宿主的 Scoped 注册，别名就会从根容器解析 Scoped 服务而抛异常。
+        var services = CreateServices();
+        services.AddScoped<ServiceUserContextClaimsTransformation>();
+        services.AddServiceUserContext();
+
+        var result = await TransformInScopeAsync(services);
+
+        Assert.Equal(UserId.ToString(), result.FindFirst("sub")?.Value);
+    }
+
+    [Fact]
     public async Task 宿主预注册keyed的恢复转换类型_组合仍被正常注册()
     {
         var services = CreateServices();
