@@ -43,16 +43,23 @@ public class TenantAppService(
 
     /// <inheritdoc />
     /// <remarks>
+    /// <para><b>初始停用创建，种子完成后才激活。</b>租户一旦启用，多租户中间件就会接受它——
+    /// 而此刻它还没有管理员和权限授予，匿名入口（注册端点带 <c>X-Tenant-Id</c>）能进入这个
+    /// 半成品租户并在里面留下数据。停用态创建把这个窗口关掉：中间件拒绝停用租户，
+    /// 即使补偿删除失败，残留的也是一个不对外服务的租户。</para>
     /// <para>创建 = 注册表写入 + 租内种子，两者不在一个数据库事务里：种子内持有分布式锁，
     /// 圈进事务会把锁与事务生命周期绑死；框架的 EF 管理器与仓储也分处不同工作单元作用域，
     /// 一个 <c>[UnitOfWork]</c> 圈不住注册表写入。因此以补偿取代事务。</para>
     /// <para>补偿必须覆盖**已经落库的种子数据**（角色可能已写入而用户尚未），
     /// 而不是只软删注册表——那样旧租户 Id 下会永久残留角色与授权版本，重试也只是换个新 Id。
     /// 先清种子、再删注册表，两步都幂等。</para>
+    /// <para>激活失败不触发补偿：数据已完整，只是没启用——那是安全的失败态，
+    /// 管理员在列表里启用即可，删掉一个完整的租户反而是更大的损失。</para>
     /// </remarks>
     public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
     {
-        var tenant = await tenantManager.CreateAsync(input.Name, input.DisplayName, cancellationToken);
+        var tenant = await tenantManager.CreateAsync(
+            input.Name, input.DisplayName, isActive: false, cancellationToken);
 
         try
         {
@@ -69,8 +76,10 @@ public class TenantAppService(
             throw;
         }
 
+        var activated = await tenantManager.SetActiveAsync(tenant.Id, true, cancellationToken);
+
         logger.LogInformation("已创建租户 {TenantName}（{TenantId}）并完成初始化", tenant.Name, tenant.Id);
-        return ToOutputDto(tenant);
+        return ToOutputDto(activated);
     }
 
     /// <summary>
@@ -89,13 +98,15 @@ public class TenantAppService(
     /// </remarks>
     private async Task CompensateAsync(TenantConfiguration tenant)
     {
-        using var scope = serviceScopeFactory.CreateScope();
-        var scopedCurrentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-        var scopedSeeder = scope.ServiceProvider.GetRequiredService<ITenantSeeder>();
-        var scopedManager = scope.ServiceProvider.GetRequiredService<ITenantManager>();
-
+        // 清种子与删注册表各用一个新作用域。同一个理由适用两次：一步的 SaveChanges 失败会在
+        // 它的跟踪器里留下失败实体，后一步复用这个上下文就会把那些实体带进自己的保存——
+        // 删注册表这一步尤其不能被拖累，它是"租户从此不可达"的最后保障。
         try
         {
+            using var purgeScope = serviceScopeFactory.CreateScope();
+            var scopedCurrentTenant = purgeScope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+            var scopedSeeder = purgeScope.ServiceProvider.GetRequiredService<ITenantSeeder>();
+
             using (scopedCurrentTenant.Change(tenant.Id, tenant.Name))
             {
                 await scopedSeeder.PurgeAsync(CancellationToken.None);
@@ -111,6 +122,9 @@ public class TenantAppService(
 
         try
         {
+            using var deleteScope = serviceScopeFactory.CreateScope();
+            var scopedManager = deleteScope.ServiceProvider.GetRequiredService<ITenantManager>();
+
             await scopedManager.DeleteAsync(tenant.Id, CancellationToken.None);
         }
         catch (Exception deleteError)

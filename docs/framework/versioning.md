@@ -13,9 +13,9 @@
 
 **新增包**
 
-- `Leistd.MultiTenancy.Core`：`ICurrentTenant`（AsyncLocal 环境上下文）、`IMultiTenant` 标记接口、`MultiTenancySides`、解析链抽象、`ITenantStore` / `InMemoryTenantStore`、租户异常（映射 404/403/409）。
+- `Leistd.MultiTenancy.Core`：`ICurrentTenant`（AsyncLocal 环境上下文）、`IMultiTenant` 标记接口、`MultiTenancySides`、解析链抽象、`ITenantStore` / `InMemoryTenantStore`、租户管理契约 `ITenantManager` / `TenantConfiguration` / `TenantPage`、租户异常（映射 404/403/409）。应用层只依赖本包即可完成租户管理。
 - `Leistd.MultiTenancy.AspNetCore`：`UseMultiTenancy()` 中间件与默认解析链（Claim 定案 → `X-Tenant-Id` 头 → `tenant` 查询串）。
-- `Leistd.MultiTenancy.EntityFrameworkCore`：`TenantRecord` 注册表、`EfCoreTenantStore`（`IDistributedCache` 缓存）、`ITenantManager`、`MultiTenantSaveChangesInterceptor` 落值拦截器。
+- `Leistd.MultiTenancy.EntityFrameworkCore`：`TenantRecord` 注册表、`EfCoreTenantStore`（`IDistributedCache` 缓存）、`EfCoreTenantManager`、`MultiTenantSaveChangesInterceptor` 落值拦截器。`CreateAsync` 的 `isActive` 形参用于"停用态创建、初始化完成后再激活"——租户启用即被中间件接受，创建后还要播种数据的场景必须传 `false`，否则匿名端点能进入尚无管理员的半成品租户。
 
 **`Leistd.Ddd.Infrastructure`（破坏性）**
 

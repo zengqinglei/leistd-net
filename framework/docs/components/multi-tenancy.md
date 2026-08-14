@@ -107,12 +107,27 @@ public class TenantReportJob(ICurrentTenant currentTenant, MyDbContext db)
 ```csharp
 public class TenantAppService(ITenantManager tenantManager, ITenantStore tenantStore)
 {
-    public Task<TenantRecord> CreateAsync(string name) => tenantManager.CreateAsync(name);
+    public Task<TenantConfiguration> CreateAsync(string name) => tenantManager.CreateAsync(name);
     // UpdateAsync / SetActiveAsync / DeleteAsync（软删除）同理；
     // 管理器负责名称归一化、未删除行内的唯一性校验（冲突抛 DuplicateTenantNameException → 409）
     // 与存储缓存失效
 }
 ```
+
+契约与出参都在 Core（`TenantConfiguration`），应用层依赖 `ITenantManager` 即可完成租户管理，不必引用任何持久化实现包。
+
+**创建后还要继续初始化租户数据（角色、管理员等）时，必须传 `isActive: false`**：
+
+```csharp
+var tenant = await tenantManager.CreateAsync(name, displayName, isActive: false);
+using (currentTenant.Change(tenant.Id, tenant.Name))
+{
+    await SeedAsync(tenant);          // 期间租户对外不可用
+}
+await tenantManager.SetActiveAsync(tenant.Id, true);
+```
+
+租户一旦启用，中间件就会接受它——而此刻它可能还没有管理员和权限授予，任何匿名端点（注册、找回密码）带上它的 `X-Tenant-Id` 就能进入这个半成品租户。初始化失败时的补偿也可能失败，那样留下的会是一个永久可用、无人管得住的租户。停用态创建把这个窗口整体关掉。
 
 ### 解析与校验语义
 
@@ -153,11 +168,13 @@ public class TenantAppService(ITenantManager tenantManager, ITenantStore tenantS
 | `FindAsync(Guid id, ct)` | 按 Id 查找，不存在返回 null |
 | `FindByNameAsync(string normalizedName, ct)` | 按归一化名称查找 |
 
-### `Leistd.MultiTenancy.EntityFrameworkCore.ITenantManager`
+### `Leistd.MultiTenancy.ITenantManager`
+
+出参统一为 `TenantConfiguration`（与 `ITenantStore` 共用），EF 实现见 `AddMultiTenancyEfCore<TDbContext>()`。
 
 | 成员 | 说明 |
 | --- | --- |
-| `CreateAsync(name, displayName?, ct)` | 创建（归一化 + 唯一校验） |
+| `CreateAsync(name, displayName?, isActive = true, ct)` | 创建（归一化 + 唯一校验）；创建后还要初始化租户数据时传 `isActive: false` |
 | `UpdateAsync(id, name, displayName, ct)` | 改名（失效新旧名称缓存） |
 | `SetActiveAsync(id, isActive, ct)` | 启停 |
 | `DeleteAsync(id, ct)` | 软删除（不依赖审计拦截器，绝不物理删除） |

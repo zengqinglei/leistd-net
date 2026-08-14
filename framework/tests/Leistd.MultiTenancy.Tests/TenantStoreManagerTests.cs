@@ -97,6 +97,22 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal(record.Id, byName.Id);
     }
 
+    /// <summary>
+    /// 停用态创建：调用方要在创建后继续初始化租户数据时，租户不能一出生就对外可用。
+    /// </summary>
+    [Fact]
+    public async Task Tenant_can_be_created_inactive_and_activated_afterwards()
+    {
+        var record = await _manager.CreateAsync("Acme", isActive: false);
+
+        Assert.False(record.IsActive);
+        Assert.False((await _store.FindAsync(record.Id))!.IsActive);
+        Assert.False((await _store.FindByNameAsync("ACME"))!.IsActive);
+
+        await _manager.SetActiveAsync(record.Id, true);
+        Assert.True((await _store.FindAsync(record.Id))!.IsActive);
+    }
+
     [Fact]
     public async Task Duplicate_name_is_rejected_case_insensitively()
     {
@@ -259,24 +275,37 @@ public class TenantStoreManagerTests : IAsyncLifetime
     /// 管理器的 DbContext 可能就是宿主的工作单元：名称冲突不能连带丢掉调用方尚未提交的业务变更。
     /// </summary>
     /// <remarks>
-    /// 早期实现在冲突分支里 <c>ChangeTracker.Clear()</c>，会静默清空整个跟踪器——
-    /// 调用方先改了业务实体、再调用租户管理器并捕获 409 继续执行时，那些修改凭空消失。
+    /// <para>早期实现在冲突分支里 <c>ChangeTracker.Clear()</c>，会静默清空整个跟踪器——
+    /// 调用方先改了业务实体、再调用租户管理器并捕获 409 继续执行时，那些修改凭空消失。</para>
+    /// <para>必须走**竞争**路径而不是预检路径：预检拒绝时 SaveChanges 根本没被调用，
+    /// 跟踪器也就没人动过，用例即使在有 <c>Clear()</c> 的实现下也是绿的（曾经就是这样空转的）。
+    /// 只有预检通过、保存被唯一索引拒绝时，才会执行到丢弃逻辑。</para>
     /// </remarks>
     [Fact]
     public async Task Name_conflict_does_not_discard_unrelated_pending_changes()
     {
-        await _manager.CreateAsync("Acme");
+        var competitor = new RaceInjectingInterceptor(_connection, "Contoso", "CONTOSO");
 
-        // 调用方在同一 DbContext 里改了业务实体，尚未提交
+        var racedOptions = new DbContextOptionsBuilder<TestTenantDbContext>()
+            .UseSqlite(_connection)
+            .AddInterceptors(competitor)
+            .Options;
+
+        await using var racedDb = new TestTenantDbContext(racedOptions);
+        var racedManager = new EfCoreTenantManager<TestTenantDbContext>(
+            racedDb, new UpperInvariantTenantNormalizer(), _cache, new UtcClockProvider());
+
+        // 调用方在同一 DbContext（= 宿主工作单元）里改了业务实体，尚未提交
         var note = new TestNote { Text = "caller's pending work" };
-        _db.Add(note);
+        racedDb.Add(note);
 
-        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("acme"));
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso"));
+        Assert.True(competitor.Injected, "竞争写入未发生，本测试没有覆盖数据库冲突路径");
 
         // 无关实体仍在跟踪器里等待提交，且能正常落库
-        Assert.Equal(EntityState.Added, _db.Entry(note).State);
-        await _db.SaveChangesAsync();
-        Assert.Equal("caller's pending work", (await _db.Set<TestNote>().SingleAsync()).Text);
+        Assert.Equal(EntityState.Added, racedDb.Entry(note).State);
+        await racedDb.SaveChangesAsync();
+        Assert.Equal("caller's pending work", (await racedDb.Set<TestNote>().SingleAsync()).Text);
     }
 
     /// <summary>

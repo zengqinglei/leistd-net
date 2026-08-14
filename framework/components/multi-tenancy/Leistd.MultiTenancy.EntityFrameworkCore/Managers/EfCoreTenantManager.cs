@@ -25,7 +25,11 @@ public class EfCoreTenantManager<TDbContext>(
     where TDbContext : DbContext
 {
     /// <inheritdoc />
-    public async Task<TenantConfiguration> CreateAsync(string name, string? displayName = null, CancellationToken cancellationToken = default)
+    public async Task<TenantConfiguration> CreateAsync(
+        string name,
+        string? displayName = null,
+        bool isActive = true,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -36,7 +40,8 @@ public class EfCoreTenantManager<TDbContext>(
         {
             Name = name,
             NormalizedName = normalizedName,
-            DisplayName = displayName
+            DisplayName = displayName,
+            IsActive = isActive
         };
 
         var entry = dbContext.Set<TenantRecord>().Add(record);

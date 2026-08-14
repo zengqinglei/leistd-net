@@ -9,14 +9,19 @@ import { Router, provideRouter } from '@angular/router';
 import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
 //#endif
 import { PaginationState } from '@tanstack/angular-table';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { Tenants } from './tenants';
+import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
 import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
-import { GetTenantsInputDto, TenantOutputDto } from '../../../../shared/dtos/tenant.dto';
+import {
+  CreateTenantInputDto,
+  GetTenantsInputDto,
+  TenantOutputDto,
+} from '../../../../shared/dtos/tenant.dto';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 import { TenantService } from '../../services/tenant-service';
 
@@ -55,13 +60,30 @@ describe('Tenants 页面闭环', () => {
     return fixture.debugElement.query(By.directive(TenantTable)).componentInstance as TenantTable;
   }
 
+  /** 真实的编辑对话框实例：同理，保存事件要从它发出才覆盖 (save) 绑定。 */
+  function editDialog(): TenantEditDialog {
+    return fixture.debugElement.query(By.directive(TenantEditDialog))
+      .componentInstance as TenantEditDialog;
+  }
+
+  const newTenantPayload: CreateTenantInputDto = {
+    name: 'globex',
+    displayName: 'Globex Corp.',
+    adminEmail: 'admin@globex.example.com',
+    adminPassword: 'Globex@123456',
+  };
+
   beforeEach(async () => {
     service = jasmine.createSpyObj<TenantService>('TenantService', [
       'getTenants',
+      'createTenant',
+      'updateTenant',
       'setActivation',
       'deleteTenant',
     ]);
     service.getTenants.and.returnValue(of({ items: [tenant], totalCount: 1 }) as never);
+    service.createTenant.and.returnValue(of(tenant) as never);
+    service.updateTenant.and.returnValue(of(tenant) as never);
     service.setActivation.and.returnValue(of(tenant) as never);
     service.deleteTenant.and.returnValue(of(undefined) as never);
 
@@ -148,6 +170,59 @@ describe('Tenants 页面闭环', () => {
 
     expect(confirm.open).toHaveBeenCalled();
     expect(service.setActivation).toHaveBeenCalledWith(tenant.id, false);
+    expect(service.getTenants.calls.count()).toBeGreaterThan(before);
+  });
+
+  it('新建保存走创建接口，成功后关闭对话框并刷新列表', async () => {
+    const before = service.getTenants.calls.count();
+
+    component.openCreate();
+    fixture.detectChanges();
+
+    editDialog().save.emit(newTenantPayload);
+    await fixture.whenStable();
+
+    // 创建与更新走同一个 (save) 出口，选错分支会把新建打成"更新一个不存在的租户"
+    expect(service.createTenant).toHaveBeenCalledWith(newTenantPayload);
+    expect(service.updateTenant).not.toHaveBeenCalled();
+
+    expect(component.editDialogOpen()).toBeFalse();
+    expect(service.getTenants.calls.count()).toBeGreaterThan(before);
+  });
+
+  it('编辑保存带上被编辑租户的 Id 走更新接口', async () => {
+    component.openEdit(tenant);
+    fixture.detectChanges();
+
+    const payload = { name: 'acme', displayName: 'Acme Renamed' };
+    editDialog().save.emit(payload);
+    await fixture.whenStable();
+
+    expect(service.updateTenant).toHaveBeenCalledWith(tenant.id, payload);
+    expect(service.createTenant).not.toHaveBeenCalled();
+    expect(component.editDialogOpen()).toBeFalse();
+  });
+
+  it('保存失败时对话框保持打开，不丢用户已填内容', async () => {
+    service.createTenant.and.returnValue(throwError(() => new Error('boom')) as never);
+
+    component.openCreate();
+    fixture.detectChanges();
+
+    editDialog().save.emit(newTenantPayload);
+    await fixture.whenStable();
+
+    // 关掉对话框等于连同用户填的表单一起丢掉，只能报错并留在原地
+    expect(component.editDialogOpen()).toBeTrue();
+  });
+
+  it('确认删除后调用接口并刷新列表', async () => {
+    const before = service.getTenants.calls.count();
+
+    table().delete.emit(tenant);
+    await fixture.whenStable();
+
+    expect(service.deleteTenant).toHaveBeenCalledWith(tenant.id);
     expect(service.getTenants.calls.count()).toBeGreaterThan(before);
   });
 

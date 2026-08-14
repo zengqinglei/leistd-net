@@ -12,7 +12,16 @@ public interface ITenantManager
     /// <summary>
     /// 创建租户。名称在未删除租户中大小写不敏感唯一，冲突抛 <see cref="DuplicateTenantNameException"/>
     /// </summary>
-    Task<TenantConfiguration> CreateAsync(string name, string? displayName = null, CancellationToken cancellationToken = default);
+    /// <param name="isActive">
+    /// 初始是否启用。需要在创建后继续初始化租户数据（角色、管理员等）时传 <c>false</c>：
+    /// 租户一旦启用，中间件就会接受它，匿名入口（注册等）能进入一个还没有管理员的半成品租户；
+    /// 初始化完成后再 <see cref="SetActiveAsync"/> 激活。
+    /// </param>
+    Task<TenantConfiguration> CreateAsync(
+        string name,
+        string? displayName = null,
+        bool isActive = true,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 更新租户名称与显示名。名称冲突抛 <see cref="DuplicateTenantNameException"/>
