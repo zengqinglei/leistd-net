@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Leistd.ServiceClient.AspNetCore.Middlewares;
 using Leistd.ServiceClient.AspNetCore.Options;
+using Leistd.Security.Claims;
 using Leistd.ServiceClient.Constants;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -31,19 +32,20 @@ public class ServiceUserContextMiddlewareTests
         return context;
     }
 
-    /// <summary>client credentials 主体：sub == client_id。</summary>
+    /// <summary>client credentials 主体：sub 为 ClientSubject 契约形态（client:&lt;client_id&gt;）。</summary>
     private static ClaimsPrincipal ServiceClientPrincipal(string clientId = "svc-a", params Claim[] extraClaims)
     {
         var claims = new List<Claim>
         {
-            new("sub", clientId),
+            new("sub", ClientSubject.Format(clientId)),
             new("client_id", clientId),
+            new("scope", ServiceClientScopes.Delegation),   // 默认要求委托 scope
         };
         claims.AddRange(extraClaims);
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestBearer"));
     }
 
-    /// <summary>普通用户 token 主体：sub 是用户 Id，与 client_id 不同。</summary>
+    /// <summary>普通用户 token 主体：sub 是用户 Id（GUID），不是机器主体形态。</summary>
     private static ClaimsPrincipal UserTokenPrincipal() =>
         new(new ClaimsIdentity(
             [new Claim("sub", Guid.NewGuid().ToString()), new Claim("client_id", "web-app")],
@@ -72,7 +74,7 @@ public class ServiceUserContextMiddlewareTests
     {
         var context = await RunAsync(ServiceClientPrincipal());
 
-        Assert.Equal("svc-a", context.User.FindFirst("sub")?.Value);
+        Assert.Equal(ClientSubject.Format("svc-a"), context.User.FindFirst("sub")?.Value);
         Assert.Single(context.User.Identities);
     }
 
@@ -136,7 +138,30 @@ public class ServiceUserContextMiddlewareTests
             options => options.RequiredScope = "svc.call");
 
         Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserId));
-        Assert.Equal("svc-a", context.User.FindFirst("sub")?.Value);
+        Assert.Equal(ClientSubject.Format("svc-a"), context.User.FindFirst("sub")?.Value);
+    }
+
+    [Fact]
+    public async Task 默认要求委托scope_未授予的机器令牌不能代表用户()
+    {
+        // 安全默认（fail-closed）：仅有 client_credentials 能力、未获委托 scope 的客户端，
+        // 即使知道用户 Id 也无法恢复成该用户。
+        var withoutDelegation = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", ClientSubject.Format("svc-a")), new Claim("client_id", "svc-a")],
+            "TestBearer"));
+
+        var context = await RunAsync(withoutDelegation, AddUserHeaders);
+
+        Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserId));
+        Assert.Equal(ClientSubject.Format("svc-a"), context.User.FindFirst("sub")?.Value);
+    }
+
+    [Fact]
+    public async Task 默认要求委托scope_已授予时恢复用户()
+    {
+        var context = await RunAsync(ServiceClientPrincipal(), AddUserHeaders);
+
+        Assert.Equal(UserId.ToString(), context.User.FindFirst("sub")?.Value);
     }
 
     [Fact]

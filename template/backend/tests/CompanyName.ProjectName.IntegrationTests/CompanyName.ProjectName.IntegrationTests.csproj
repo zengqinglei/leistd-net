@@ -28,6 +28,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Api\CompanyName.ProjectName.Api.csproj" />
+<!--#if (IncludeOpenIddict)-->
+    <!-- 服务间调用闭环测试经真实 Client 包发起调用 -->
+    <ProjectReference Include="..\..\src\CompanyName.ProjectName.Client\CompanyName.ProjectName.Client.csproj" />
+<!--#endif-->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Application\CompanyName.ProjectName.Application.csproj" />
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />

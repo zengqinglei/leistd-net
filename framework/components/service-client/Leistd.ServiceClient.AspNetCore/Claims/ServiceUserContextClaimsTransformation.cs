@@ -16,6 +16,9 @@ namespace Leistd.ServiceClient.AspNetCore.Claims;
 /// **重新认证**并用其结果覆盖 <c>HttpContext.User</c>——中间件改写的主体在该路径上会被丢弃。
 /// <see cref="IClaimsTransformation"/> 在每一次 <c>AuthenticateAsync</c> 内部生效（含策略重认证），
 /// 是唯一对两条路径都成立的挂载点。转换幂等：已恢复过的主体原样返回。
+///
+/// 信任判定见 <c>ServiceUserContext.IsTrustedServiceCall</c>：调用方须是
+/// <see cref="Leistd.Security.Claims.ClientSubject"/> 契约的机器主体。
 /// </remarks>
 /// <param name="httpContextAccessor">HTTP 上下文访问器（读取请求头）</param>
 /// <param name="options">恢复配置</param>

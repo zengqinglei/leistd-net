@@ -38,6 +38,7 @@ using CompanyName.ProjectName.Domain.Auth.Options;
 #if (IncludeOpenIddict)
 using System.Security.Cryptography.X509Certificates;
 using Leistd.ServiceClient.AspNetCore;
+using Leistd.ServiceClient.Constants;
 using OpenIddict.Abstractions;
 #endif
 #endif
@@ -129,7 +130,11 @@ try
 #if (IncludeRoles)
                 OpenIddictConstants.Scopes.Roles,
 #endif
-                OpenIddictConstants.Scopes.OfflineAccess);
+                OpenIddictConstants.Scopes.OfflineAccess,
+                // 服务间调用的用户委托 scope：只有被显式授予它的客户端，携带的 X-User-* 头
+                // 才会被采信并恢复为用户主体（见 Leistd.ServiceClient 的信任边界）。
+                // 拿到机器令牌 ≠ 有权代表用户，两者必须分开授予。
+                ServiceClientScopes.Delegation);
 
             if (oauthOpts.UseDevelopmentCertificates)
             {

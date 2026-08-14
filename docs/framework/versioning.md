@@ -37,7 +37,7 @@
 
 - 出站管道追加租户头注入（`X-Tenant-Id`，来源 `ICurrentTenant`，`UserContextForwardingOptions.ForwardTenantId` 默认开、独立于用户头开关；宿主未注册 `ICurrentTenant` 时直通）。
 - 被调方受信恢复扩展到租户：`ServiceUserContextOptions.TenantIdHeader`（默认 `X-Tenant-Id`）恢复为 `tenant_id` claim，且**独立于用户头**（仅有租户上下文的后台任务调用也恢复）；不受信来源的租户头不剥离——解析链主体优先级已使其无害，匿名登录的租户选择依赖它。
-- 受信判定兼容机器主体的命名空间前缀：`sub == client_id` 之外同时接受 `sub == ClientSubjectPrefix + client_id`（新 Options，默认 `client:`）。修复模板侧"机器主体加 `client:` 前缀防冒充"与 SDK 受信判定合并后互不兼容导致的恢复失效。
+- 受信判定使用 `ClientSubject` 唯一契约：`sub == "client:" + client_id`，与模板 OpenIddict 签发端保持一致，并从结构上隔离机器与自然人主体。
 
 **依赖变化**：CPM 新增 `Microsoft.Extensions.Caching.Abstractions` / `Microsoft.Extensions.Caching.Memory`（10.0.10）；`Leistd.Authorization.Core`、`Leistd.ServiceClient.Core`、`Leistd.Ddd.Infrastructure` 新增对 `Leistd.MultiTenancy.Core` 的依赖。
 
@@ -100,10 +100,12 @@
 
 - `Leistd.ServiceClient.Core`：强类型客户端注册（`AddServiceClient`）与标准管道（调用日志、TraceId 透传、`X-User-*` 用户头注入）、统一响应解包（`ReadResultAsync`）、`ServiceClientException` / `RemoteServiceException`。
 - `Leistd.ServiceClient.OAuth`：OAuth2 client credentials 令牌获取/缓存/并发单飞/401 自愈（`AddClientCredentials`）。
-- `Leistd.ServiceClient.AspNetCore`：被调方用户上下文恢复中间件（`UseServiceUserContext`），仅采信已认证服务客户端（`sub == client_id`）携带的用户头，不受信一律剥离。
+- `Leistd.ServiceClient.AspNetCore`：被调方用户上下文恢复中间件（`UseServiceUserContext`），仅采信已认证服务客户端（`sub` 为 `ClientSubject` 契约形态、且持有委托 scope）携带的用户头，不受信一律剥离。
 - `Leistd.ServiceClient.Refit`：Refit 接口式客户端注册（`AddRefitServiceClient`），与手写路径共享标准管道与 `RemoteServiceException` 错误契约；自带 `Refit.Reflection` 承接无法内联源生成的方法形态。
 
 依赖基线变化：`Microsoft.Extensions.*` 统一从 10.0.8 升至 **10.0.10**（Refit 15 要求 `Microsoft.Extensions.Http >= 10.0.10`），随包依赖下限同步抬升，消费方需要 .NET SDK 能解析 10.0.10 的 `Microsoft.Extensions.*` 包。
+
+**`Leistd.Security.Core`** 新增 `ClientSubject`（机器主体 `sub` 契约，`client:<client_id>`）：认证服务签发 client credentials 令牌时必须用 `ClientSubject.Format(clientId)` 构造 `sub`，服务间调用的用户上下文恢复以此为信任判据。这把机器主体与自然人主体（`sub` 是用户 GUID）隔离在不可碰撞的命名空间——否则任意指定的 `client_id` 可取某个真实用户 Id，使机器令牌被解析为该用户。自建认证端的宿主需同步该形态，否则服务间用户上下文不会恢复。
 
 用法与信任边界见[服务间调用客户端](../../framework/docs/components/service-client.md)；方案与决策记录见 [`docs/plans/2026-08-11-service-invocation-sdk.md`](../plans/2026-08-11-service-invocation-sdk.md)。
 

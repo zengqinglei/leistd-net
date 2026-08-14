@@ -197,6 +197,13 @@ export class Login {
       toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
       //#endif
 
+      //#if (IncludeRoles)
+      // 权限必须在任何跳转之前加载完成。进登录页时 StartupService 已清空权限缓存，
+      // 此时直接跳 returnUrl，permissionGuard 会在空权限下判定并把人踢到 403——
+      // 从受保护页面的深链登录，本该落到那个页面，却落在拒绝页。
+      await lastValueFrom(this.authorizationService.load());
+      //#endif
+
       if (this.isSafeLocalReturnUrl(returnUrl)) {
         await this.router.navigateByUrl(returnUrl);
         return;
@@ -204,7 +211,6 @@ export class Login {
 
       //#if (IncludeRoles)
       // 按权限跳转：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。
-      await lastValueFrom(this.authorizationService.load());
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
       } else {

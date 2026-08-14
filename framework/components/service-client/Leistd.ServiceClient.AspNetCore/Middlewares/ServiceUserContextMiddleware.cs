@@ -17,7 +17,9 @@ namespace Leistd.ServiceClient.AspNetCore.Middlewares;
 /// 的兜底路径）时，恢复 <c>HttpContext.User</c>。</item>
 /// </list>
 /// 信任边界见 <see cref="ServiceUserContextClaimsTransformation"/>：仅采信已认证 client
-/// credentials 主体（<c>sub == client_id</c>）携带的用户头。
+/// credentials 主体（<c>sub</c> 为 <see cref="Leistd.Security.Claims.ClientSubject"/> 契约形态，
+/// 且持有 <see cref="Leistd.ServiceClient.Constants.ServiceClientScopes.Delegation"/> 委托 scope）
+/// 携带的用户头。
 /// </remarks>
 /// <param name="next">下一个中间件</param>
 /// <param name="options">恢复配置</param>

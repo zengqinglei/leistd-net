@@ -4,6 +4,25 @@
 > 基线提交：`23d8e94`
 > 参考实现：`open-repos/sdks` 中的 java-project-sdks（Feign 客户端 + 共享拦截器）与 net-project-sdks（Mysoft.HttpBase.Sdk）
 
+## 0. 实施状态
+
+本文记录设计与决策演进，**不是当前事实的权威出处**——组件契约以
+[`framework/docs/components/service-client.md`](../../framework/docs/components/service-client.md)
+（随包分发）与源码为准，生成项目的用法以
+[`template/docs/standards/service-invocation.md`](../../template/docs/standards/service-invocation.md) 为准。
+
+**已交付**：四个包（`Core` / `OAuth` / `AspNetCore` / `Refit`）、调用日志、TraceId 与用户上下文透传、
+client credentials 认证（缓存/单飞/401 自愈）、统一响应解包与远端错误还原、被调方受信恢复用户主体、
+模板接入与端到端闭环测试。
+
+**实施中相对本文的三处修正**（下文相应位置已标注，正文其余表述以本节为准）：
+
+| 项 | 原设计 | 当前事实 |
+| --- | --- | --- |
+| D9 独立身份服务 / 纯资源服务器 | 定为目标拓扑 | **未实施**，且移出本 SDK 范围（前置条件见 §4 阶段 3 说明）。当前每个生成服务自签自验，服务间调用照常可用 |
+| 机器主体 `sub` | `subject = client_id` | `client:<client_id>`（`ClientSubject` 契约），与用户 GUID 命名空间不相交 |
+| 用户委托授权 | 未区分 | 需专用 scope `svc.delegate`，默认 fail-closed |
+
 ## 1. 目标
 
 未来将基于 template 生成多个后端服务，服务之间需要相互调用。当前互调没有统一基础设施：调用是黑盒（无统一日志）、无认证约定、TraceId 与用户上下文在服务边界断链。
@@ -41,7 +60,7 @@
 - **身份读取**：`Leistd.Security.Core` 的 `ICurrentUser` / `ICurrentClient` / `ICurrentPrincipalAccessor`（`AsyncLocal` 可切换主体，后台任务可用）。
 - **响应契约**：`Leistd.Response.Core` 的 `Result` / `Result<T>`（`{code, message, data}`，`code=0` 成功）。
 - **错误契约**：`Leistd.Exception.AspNetCore` 输出 RFC 9457 ProblemDetails，扩展字段 `code` / `message` / `traceId` / `errors`。
-- **认证服务端**：template 的 OpenIddict 已支持 client credentials 流（`/connect/token`，subject=client_id）、固定 issuer、`DisableAccessTokenEncryption()`（官方推荐的跨服务验证前提）。
+- **认证服务端**：template 的 OpenIddict 已支持 client credentials 流（`/connect/token`）、固定 issuer、`DisableAccessTokenEncryption()`（官方推荐的跨服务验证前提）。机器主体的 `sub` 形态见 §0（实施中已收敛为 `client:<client_id>`）。
 
 **缺口 = SDK 要补的四块**：调用日志 handler、用户头出站注入、client credentials 的调用方 token 管理、被调方从受信头恢复用户主体 + 响应解包/异常还原。
 
@@ -59,7 +78,7 @@
 | D6 | 业务 Client 包 DTO 归属 | 每个业务服务的 Client 包**自带 DTO**，不引用服务内部 Application 程序集 | 参考 java sdk 各 client 模块自带 DTO；共享内部程序集会把服务实现细节泄漏为公共契约，阻碍独立演进 |
 | D7 | 序列化 | `System.Text.Json`，camelCase，与 template Web 端一致 | 框架现役栈；不引入 Newtonsoft |
 | D8 | 弹性策略 | 不内置。`AddServiceClient` 返回 `IHttpClientBuilder`，宿主可自行 `.AddStandardResilienceHandler()` | 与「组件通过宿主显式组合」原则一致；避免默认重试对非幂等接口造成隐性副作用 |
-| D9 | 身份中心部署形态 | **独立身份服务**：由 template（`IncludeOpenIddict`）生成一个专职身份服务，唯一负责签发服务间 token；其余业务服务作为**纯资源服务器**，仅配置 OpenIddict Validation 指向该 issuer 验签，不各自兼任签发 | 单一信任锚：全部服务只信任一个 issuer 与一套签名密钥，新增服务只需登记 client，无需 N×N 互信配置；签发职责与业务域解耦，密钥轮换、client 管理集中一处；业务服务兼任签发会让「谁信任谁」随服务数量组合爆炸，且该服务下线会连带拖垮认证 |
+| D9 | 身份中心部署形态<br>（**未实施**，见 §0） | **独立身份服务**：由 template（`IncludeOpenIddict`）生成一个专职身份服务，唯一负责签发服务间 token；其余业务服务作为**纯资源服务器**，仅配置 OpenIddict Validation 指向该 issuer 验签，不各自兼任签发 | 单一信任锚：全部服务只信任一个 issuer 与一套签名密钥，新增服务只需登记 client，无需 N×N 互信配置；签发职责与业务域解耦，密钥轮换、client 管理集中一处；业务服务兼任签发会让「谁信任谁」随服务数量组合爆炸，且该服务下线会连带拖垮认证 |
 
 ### 3.2 组件划分
 
@@ -110,7 +129,7 @@ graph TD
 
 **入站**（`AddServiceUserContext` + `UseServiceUserContext`，中间件置于 `UseAuthentication` 之后、`UseAuthorization` 之前）：
 
-1. 当前主体是受信服务调用方（已认证 + 含 `client_id` claim + `sub == client_id`，即 client credentials 主体；用户 token 的 `sub` 是用户 Id，不满足）→ 读 `X-User-*` 头，构造用户 `ClaimsIdentity` 作为主身份并保留 client identity，此后 `ICurrentUser` / `ICurrentClient` 双通道正常工作；
+1. 当前主体是受信服务调用方（已认证 + 含 `client_id` claim + `sub` 为机器主体契约形态 `client:<client_id>`（`ClientSubject`；用户 token 的 `sub` 是用户 GUID，结构上不匹配）+ 持有委托 scope `svc.delegate`）→ 读 `X-User-*` 头，构造用户 `ClaimsIdentity` 作为主身份并保留 client identity，此后 `ICurrentUser` / `ICurrentClient` 双通道正常工作；
 2. 其他任何情况（匿名、普通用户 token）→ 忽略并**移除**请求中的 `X-User-*` 头，阻断伪造链路。
 
 恢复挂载在 `IClaimsTransformation`（认证阶段）而非仅中间件：授权策略显式声明认证 scheme 时（模板默认策略即如此），`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，只改中间件的方案在该路径上失效。中间件保留「剥离不受信头 + 兜底恢复」职责。
@@ -131,8 +150,8 @@ sequenceDiagram
 ```
 
 - **调用方**：`ClientCredentialsTokenProvider` 按具名客户端缓存 token（过期缓冲默认 60s），并发获取用 `SemaphoreSlim` 单飞；收到 401 时失效缓存、强制重取并重试一次，仍 401 则抛 `RemoteServiceException`。
-- **被调方**：宿主用 OpenIddict Validation 指向**独立身份服务**的 issuer 验签（D9；template `OAuthOptions.Issuer` + `DisableAccessTokenEncryption` 已为此铺路）；SDK 不参与验证。
-- **客户端凭据管理**：集中在独立身份服务，复用 template 的 OpenApplication（OpenIddict client）注册机制签发 client_id/secret；业务服务不自行签发。
+- **被调方**：宿主用 OpenIddict Validation 验签；SDK 不参与验证。（原设计为指向**独立身份服务**的 issuer——D9 未实施，见 §0；当前每个服务用 `UseLocalServer()` 验证自己签发的令牌。）
+- **客户端凭据管理**：复用 template 的 OpenApplication（OpenIddict client）注册机制签发 client_id/secret。（原设计集中在独立身份服务；当前调用方在**被调方**的开放应用中注册凭据。）
 
 ### 3.6 响应解包与错误还原
 
@@ -268,8 +287,9 @@ framework/docs/components/service-client.md       # 组件使用文档（随包�
 
 1. Template 后端：
    - `Program.cs` 注册 `AddServiceUserContext()` + `UseServiceUserContext()`（置于 `UseAuthentication` 之后）；
-   - 支持**资源服务器模式**（D9）：OpenIddict Validation 可配置为指向远程 issuer（独立身份服务）而非仅 `UseLocalServer()`，业务服务无需承载签发端点；
    - `Directory.Packages.props` 登记新包版本。
+
+> **资源服务器模式（D9）未实施**，且不在本 SDK 范围内收口。原计划的"Validation 指向远程 issuer"只是表象：模板的 `ActiveUserRequirement` 每请求要按 `X-User-Id` 查**本地**用户表，用户若由中央身份服务持有，本地表为空，恢复出的用户照样被拒。真正的前置条件是**用户数据归属**决策——业务服务是否保留用户表、如何从身份服务投影/同步、权限授予挂在谁身上、登录页是否保留。这是模板架构的独立议题，需单独评估后落地；在此之前每个生成服务仍是"自己签发、自己验证"，服务间调用照常可用（调用方在被调方的开放应用中注册凭据）。
 2. 新增 `CompanyName.ProjectName.Client` 类库示例（typed client + DTO + `AddProjectNameClient` 扩展），作为业务服务发布 Client 包的示范形态；`template/docs/` 补充「调用其他服务 / 被其他服务调用」指引。
 3. 按 `developing-leistd-template` 流程实际生成项目验证：双实例互调冒烟（生成两个项目实例，A 经 Client 包调 B，核对日志中的 TraceId 贯通与 `ICurrentUser` 取值）。
 
@@ -327,5 +347,5 @@ framework/docs/components/service-client.md       # 组件使用文档（随包�
 | 风险 | 缓解 |
 | --- | --- |
 | `X-User-*` 头被网关外直接暴露（外部请求携带伪造头且服务误配了受信通道） | 中间件默认剥离不受信头；文档明确要求网关/Ingress 同步剥离外部来源的 `X-User-*` 与 `X-Correlation-Id` 之外的内部头 |
-| 独立身份服务（D9）成为互调的单点 | token 缓存缓冲期内可继续调用；资源服务器验签用本地公钥不依赖身份服务在线；文档给出多副本部署、健康检查与告警建议；不做静默降级（无 token 直接失败，避免匿名调用逃逸） |
+| 独立身份服务（D9）成为互调的单点（**该拓扑未实施**，见 §0；以下为其落地后的缓解方案） | token 缓存缓冲期内可继续调用；资源服务器验签用本地公钥不依赖身份服务在线；文档给出多副本部署、健康检查与告警建议；不做静默降级（无 token 直接失败，避免匿名调用逃逸） |
 | 业务 Client 包 DTO 与服务端 DTO 漂移 | 短期靠端到端契约测试约束；中期演进 OpenAPI 生成器（见非目标） |

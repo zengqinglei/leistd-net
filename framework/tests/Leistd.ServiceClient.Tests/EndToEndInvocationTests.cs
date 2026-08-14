@@ -4,6 +4,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Leistd.Response.Core.Wrapper;
 using Leistd.Security.AspNetCore;
+using Leistd.Security.Claims;
 using Leistd.Security.Users;
 using Leistd.ServiceClient.AspNetCore;
 using Leistd.ServiceClient.Constants;
@@ -130,7 +131,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
                 var clientId = root.GetProperty("client_id").GetString()!;
                 var identity = new ClaimsIdentity(
                     [
-                        new Claim("sub", clientId),
+                        new Claim("sub", ClientSubject.Format(clientId)),
                         new Claim("client_id", clientId),
                         new Claim("scope", root.GetProperty("scope").GetString() ?? string.Empty),
                     ],

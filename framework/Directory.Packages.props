@@ -47,6 +47,10 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
     <!-- 事务相关分支测试用（EF InMemory 不支持事务，见测试选型说明）；覆盖率收集 -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
+    <!-- 传递钉扎：EF Core Sqlite 10.0.8 带入的 SQLitePCLRaw.lib.e_sqlite3 2.1.11 含高危原生库公告
+         （GHSA-2m69-gcr7-jv3q）。仅测试工程使用（IsPackable=false，不进 NuGet 与模板），
+         但没有理由让 CI 长期带着 NU1903 跑；钉到已修复版本即可，EF Core 的下限约束仍满足。 -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
   </ItemGroup>
 

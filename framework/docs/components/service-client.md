@@ -187,12 +187,27 @@ app.UseServiceUserContext(); // 必须在 UseAuthentication 之后、UseAuthoriz
 app.UseAuthorization();
 ```
 
-**信任边界**：仅当当前主体是已认证的服务客户端——含 `client_id` claim 且
-`sub == client_id` 或 `sub == "client:" + client_id`（`ClientSubjectPrefix` 可配置；
-前缀形态对应签发端隔离机器与自然人 sub 命名空间的做法。用户 token 的 `sub` 是用户 Id，
-两种都不满足）——时才采信 `X-User-*` 头。满足时把用户身份作为**主身份**加入 `HttpContext.User` 并保留调用方 client 身份，
+**信任边界**（三个条件同时满足才采信 `X-User-*` 头）：
+
+1. 当前主体已通过认证且含 `client_id` claim；
+2. `sub` 是该 client 的机器主体（`ClientSubject` 契约，即 `client:<client_id>`）；
+3. 令牌持有**委托 scope**（`RequiredScope`，默认 `svc.delegate`）。
+
+满足时把用户身份作为**主身份**加入 `HttpContext.User` 并保留调用方 client 身份，
 此后 `ICurrentUser`（用户）与 `ICurrentClient`（调用方服务）双通道可用；不满足时按配置
 **剥离**这些头，阻断伪造链路。
+
+**委托 scope 是安全默认（fail-closed）**：认证成功只说明调用方是已认证的工作负载，不等于它有权
+代表用户。若不区分两者，任何拿到 client credentials 令牌的客户端（包括只该同步公开数据的第三方
+集成）只要知道用户 Id 就能冒充该用户，继承其角色与直授权限。认证服务需在客户端注册时**显式授予**
+该 scope（OpenIddict 中为权限项 `scp:svc.delegate`），调用方在
+`Leistd:ServiceClients:<服务名>:Scope` 配置它以在取令牌时申请。
+
+**签发端必须遵循同一契约**：认证服务签发 client credentials 令牌时，`sub` 用
+`ClientSubject.Format(clientId)` 构造（`Leistd.Security.Core` 的
+[`ClientSubject`](./security.md)）。这既是本组件的信任判据，也把机器主体与自然人主体
+（`sub` 是用户 GUID）隔离在不可碰撞的两个命名空间——否则 `client_id` 由创建者任意指定，
+挑一个已存在的用户 Id 就能让机器令牌被解析成那个人。
 
 被调方的 Bearer token 验证不属于本组件：宿主自行配置 OpenIddict Validation（或等价 JWT 验证）
 指向身份服务 issuer。
@@ -243,6 +258,7 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `ServiceClientOptions` | 配置基类：`BaseAddress`、`Timeout`、`LogPayloads`、`MaxPayloadLength`、`UserContext` |
 | `UserContextForwardingOptions` | 用户头转发：`Enable`、`ForwardUserName`、`ClaimHeaderMap`、`ForwardTenantId` |
 | `ServiceClientHeaders` | 头名常量：`UserId`（`X-User-Id`）、`UserName`（`X-User-Name`）、`TenantId`（`X-Tenant-Id`） |
+| `ServiceClientScopes` | scope 常量：`Delegation`（`svc.delegate`，代表用户调用的授权开关） |
 | `AddServiceClientPipeline<TOptions>(builder, serviceName)` | 在既有 `IHttpClientBuilder` 上装配标准能力（BaseAddress/Timeout/日志/追踪/用户头），供 Refit 等注册形态复用 |
 | `ReadResultAsync<T>()` / `ReadResultAsync()` | 解包统一响应，失败抛 `RemoteServiceException` |
 | `ReadContentAsync<T>()` | 未包装端点直接反序列化（同样先做错误还原） |
@@ -278,7 +294,7 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `AddServiceUserContext(services, Action<ServiceUserContextOptions>?)` | 同上，委托配置版 |
 | `UseServiceUserContext()` | 启用中间件（`UseAuthentication` 之后、`UseAuthorization` 之前）：剥离不受信头 + 兜底恢复 |
 | `ServiceUserContextClaimsTransformation` | `IClaimsTransformation` 实现：在每次认证内恢复用户主体（含授权策略按 scheme 重认证的路径） |
-| `ServiceUserContextOptions` | `Enable`、`UserIdHeader`、`UserNameHeader`、`TenantIdHeader`、`HeaderClaimMap`、`RemoveUntrustedHeaders`、`RequiredScope`、`AuthenticationType` |
+| `ServiceUserContextOptions` | `Enable`、`UserIdHeader`、`UserNameHeader`、`TenantIdHeader`、`HeaderClaimMap`、`RemoveUntrustedHeaders`、`RequiredScope`（默认 `svc.delegate`）、`AuthenticationType` |
 
 ## 实现行为
 
@@ -304,9 +320,11 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 
 ### Leistd.ServiceClient.AspNetCore
 
-- **恢复发生在认证阶段**：`AddServiceUserContext` 注册的 `ServiceUserContextClaimsTransformation`（`IClaimsTransformation`）在每次 `AuthenticateAsync` 内生效。仅靠中间件改写 `HttpContext.User` 不够——授权策略显式声明认证 scheme 时，`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，中间件改写的主体在该路径上会被丢弃。转换幂等（已恢复的主体原样返回）。ASP.NET Core 只消费单个 `IClaimsTransformation`（`AddAuthentication` 预注册 Noop 实现），因此注册使用 `Replace`；宿主若有自己的 `IClaimsTransformation`，需在其中自行组合本恢复逻辑（`ServiceUserContextClaimsTransformation` 是公共类型，可直接内嵌调用）。
+- **恢复发生在认证阶段**：`AddServiceUserContext` 注册的 `ServiceUserContextClaimsTransformation`（`IClaimsTransformation`）在每次 `AuthenticateAsync` 内生效。仅靠中间件改写 `HttpContext.User` 不够——授权策略显式声明认证 scheme 时，`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，中间件改写的主体在该路径上会被丢弃。转换幂等（已恢复的主体原样返回）。
+- **不吞掉宿主已有的 `IClaimsTransformation`**：ASP.NET Core 只消费单个实现（后注册者覆盖先注册者），因此 `AddServiceUserContext` 把注册时已存在的**默认**实现（keyed 注册属独立空间，不受影响）包进组合——**先宿主既有转换（租户、外部身份等 claims 富化），再用户上下文恢复**（恢复会更换主身份，应基于富化后的主体）。重复调用不叠加。宿主若在其**之后**才注册自己的转换，仍会覆盖该组合；此时由宿主负责组合（`ServiceUserContextClaimsTransformation` 是公共类型，可直接注入调用）。
+- **组合保留宿主注册的生命周期与释放语义**：沿用被包装注册的生命周期（宿主常把转换注册为 Scoped，它往往依赖请求级服务），不会把 scoped 依赖提升为单例；内层由组合创建后 DI 不再跟踪它，释放责任随所有权转移到组合——宿主自行 `new` 的实例（`ImplementationInstance`）容器本就不拥有，不代为释放；内层**仅**实现 `IAsyncDisposable` 时同步释放作用域会抛 `InvalidOperationException`，与原生 DI 行为一致（请用 `await using` / `DisposeAsync`）。
 - 中间件职责：不受信时剥离用户头；受信但认证阶段未恢复时兜底恢复 `HttpContext.User`。`Enable=false` 时完全直通（不恢复也不剥离）。
-- 受信判定：主体已认证 + 含 `client_id` claim + `sub == client_id`（`sub` 缺失时回退 `ClaimTypes.NameIdentifier`）+ 可选 `RequiredScope`（同时识别空格分隔的 `scope` claim 与 OpenIddict 的多值 `oi_scp` claim）。
+- 受信判定：主体已认证 + 含 `client_id` claim + `sub` 匹配 `ClientSubject.Format(clientId)`（`sub` 缺失时回退 `ClaimTypes.NameIdentifier`）+ 持有 `RequiredScope`（默认 `svc.delegate`；同时识别空格分隔的 `scope` claim 与 OpenIddict 的多值 `oi_scp` claim）。`RequiredScope` 置空即关闭该校验——那意味着任何机器令牌都能代表任意用户，仅在部署上另有等价管控时才这么做。
 - 恢复时构造 `sub` / `preferred_username` / 自定义映射 claim 的 `ClaimsIdentity`（`AuthenticationType` 默认 `ServiceUserContext`）置于主体首位，原有身份全部保留。
 - **租户恢复独立于用户头**：受信调用携带 `X-Tenant-Id`（`TenantIdHeader` 可改名，置空关闭）即恢复为 `tenant_id` claim，交由多租户解析链的 Claim 贡献者定案——仅有租户上下文、没有用户的后台任务调用同样恢复。
 - 受信但既无 `X-User-Id` 也无租户头：服务以自身宿主身份调用，主体保持不变。
@@ -345,7 +363,7 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | `UserIdHeader` / `UserNameHeader` | `X-User-Id` / `X-User-Name` | 头名 |
 | `HeaderClaimMap` | 空 | 额外头 → claim 映射（与调用方 `ClaimHeaderMap` 对应） |
 | `RemoveUntrustedHeaders` | `true` | 不受信时剥离用户头 |
-| `RequiredScope` | `null` | 额外要求调用方 token 的 scope |
+| `RequiredScope` | `svc.delegate` | 要求调用方 token 持有的委托 scope；置空则关闭校验（不建议） |
 | `AuthenticationType` | `ServiceUserContext` | 恢复身份的 AuthenticationType |
 
 ## 注意事项

@@ -37,8 +37,9 @@ ClientSecret 用环境变量注入：`Leistd__ServiceAuth__ClientSecret`。
 
 ## 被其他服务调用
 
-- `Program.cs` 已注册 `AddServiceUserContext` + `UseServiceUserContext`（OpenIddict 场景）：仅当调用方以 client credentials 令牌通过认证（`sub == client_id`）时才采信 `X-User-*` 头并恢复用户主体，其余请求一律剥离这些头。**网关/Ingress 必须同步剥离外部来源的 `X-User-*` 头**。
+- `Program.cs` 已注册 `AddServiceUserContext` + `UseServiceUserContext`（OpenIddict 场景）。采信 `X-User-*` 头并恢复用户主体需**同时**满足：调用方以 client credentials 令牌通过认证、其 `sub` 为机器主体契约形态（`client:<client_id>`）、且令牌持有委托 scope `svc.delegate`；任一不满足都会剥离这些头。**网关/Ingress 必须同步剥离外部来源的 `X-User-*` 头**。
 - 调用方凭据在本服务的「开放应用」中注册（confidential 客户端 + `client_credentials` 授权），凭据仅创建时返回一次。
+- **代表用户调用需额外授予 `svc.delegate`**（开放应用的权限项 `scp:svc.delegate`）：拿到机器令牌只代表调用方是已认证的工作负载，不等于有权代表用户——不授予该 scope 的客户端即使知道用户 Id 也无法冒充。调用方侧在 `Leistd:ServiceClients:<服务名>:Scope` 配置该 scope 以在取令牌时申请它。
 - 默认授权策略要求可用的自然人用户：服务间调用需携带受信 `X-User-Id`；确需面向纯工作负载的端点，单独声明策略，不放宽默认策略。
 - 调用诊断：`GET /api/v1/service-info`（匿名探活）、`GET /api/v1/service-info/whoami`（回显恢复出的用户与调用方 client）。
 

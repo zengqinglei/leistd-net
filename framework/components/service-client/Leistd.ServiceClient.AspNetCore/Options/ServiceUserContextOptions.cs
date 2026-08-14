@@ -42,21 +42,17 @@ public class ServiceUserContextOptions
     public bool RemoveUntrustedHeaders { get; set; } = true;
 
     /// <summary>
-    /// 额外要求调用方 token 必须包含的 scope（可空）。
+    /// 要求调用方 token 必须包含的委托 scope，默认
+    /// <see cref="ServiceClientScopes.Delegation"/>（<c>svc.delegate</c>）。
     /// 同时识别标准 <c>scope</c>（空格分隔）与 OpenIddict 的 <c>oi_scp</c> claim。
     /// </summary>
-    public string? RequiredScope { get; set; }
-
-    /// <summary>
-    /// 机器主体 <c>sub</c> 的命名空间前缀。默认 <c>client:</c>。
-    /// </summary>
     /// <remarks>
-    /// 受信判定接受两种 client credentials 主体形态：<c>sub == client_id</c>（裸形态）
-    /// 或 <c>sub == 前缀 + client_id</c>。签发端给机器主体加前缀是为了与自然人主体
-    /// （GUID 形态的用户 Id）隔离命名空间，阻断"把 client_id 取成某个用户 Id 冒充该用户"
-    /// 的路径；本模板的 OpenIddict 签发端即采用 <c>client:</c> 前缀。置空只认裸形态。
+    /// 默认非空是**安全默认**（fail-closed）：认证成功只说明调用方是已认证的工作负载，
+    /// 不等于它有权代表用户。未授予该 scope 的客户端携带 <c>X-User-*</c> 头时，
+    /// 头会被剥离、不恢复任何用户主体。认证服务需在客户端注册时显式授予该 scope；
+    /// 部署上另有等价管控时可置空关闭该校验，但那意味着任何机器令牌都能代表任意用户。
     /// </remarks>
-    public string ClientSubjectPrefix { get; set; } = "client:";
+    public string? RequiredScope { get; set; } = ServiceClientScopes.Delegation;
 
     /// <summary>
     /// 恢复出的用户身份的 AuthenticationType，用于区分「经服务头恢复」与直接认证的用户。

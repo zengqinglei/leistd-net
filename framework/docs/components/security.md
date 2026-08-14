@@ -149,6 +149,30 @@ public class SystemJob(ICurrentPrincipalAccessor accessor, ICurrentUser currentU
 
 > 仅定义与 `System.Security.Claims.ClaimTypes` 不同的自定义字段；标准字段请直接用 `ClaimTypes`。
 
+### `Leistd.Security.Claims.ClientSubject`（机器主体 `sub` 契约）
+
+OAuth2 client credentials 令牌代表的是工作负载而非自然人，其 `sub` 必须与用户主体分处两个
+不可碰撞的命名空间——自然人的 `sub` 是用户 Id（GUID，解析方按 `Guid.TryParse` 认领），
+而 `client_id` 由客户端创建者任意指定：若直接把 `client_id` 写进 `sub`，挑一个已存在的用户 Id
+即可让机器令牌被解析成那个人，继承其授予、角色乃至超管身份。加前缀后 `Guid.TryParse` 必然失败，
+这条冒充路径在结构上不存在，不依赖对 `client_id` 取值的任何输入校验。
+
+| 成员 | 说明 |
+| --- | --- |
+| `Prefix` | 机器主体 `sub` 的前缀，常量 `client:` |
+| `Format(clientId)` | 由 `client_id` 构造机器主体 `sub`（签发端使用） |
+| `Matches(subject, clientId)` | 判定 `sub` 是否正是该 `client_id` 的机器主体（消费端使用） |
+
+```csharp
+// 签发端（认证服务的 client_credentials 流程）
+identity.AddClaim(new Claim("sub", ClientSubject.Format(request.ClientId!)));
+
+// 消费端（如服务间调用的用户上下文恢复）
+if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受信的服务调用 */ }
+```
+
+> 服务间调用的用户上下文恢复直接依赖该契约，见[服务间调用客户端](./service-client.md)的信任边界。
+
 ## 实现行为
 
 ### Leistd.Security.Core（抽象与默认实现）

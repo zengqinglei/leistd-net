@@ -94,21 +94,22 @@ public class TenantContextForwardingTests
     }
 
     private static ClaimsPrincipal ServiceClientPrincipal(string clientId = "svc-a") =>
-        new(new ClaimsIdentity([new Claim("sub", clientId), new Claim("client_id", clientId)], "TestBearer"));
-
-    /// <summary>前缀形态机器主体：签发端以 client: 前缀隔离机器与自然人的 sub 命名空间。</summary>
-    private static ClaimsPrincipal PrefixedServiceClientPrincipal(string clientId = "svc-a") =>
-        new(new ClaimsIdentity([new Claim("sub", $"client:{clientId}"), new Claim("client_id", clientId)], "TestBearer"));
+        new(new ClaimsIdentity(
+            [
+                new Claim("sub", ClientSubject.Format(clientId)),
+                new Claim("client_id", clientId),
+                new Claim("scope", ServiceClientScopes.Delegation),
+            ],
+            "TestBearer"));
 
     [Fact]
-    public async Task 前缀形态机器主体_同样受信恢复()
+    public async Task 机器主体契约_受信恢复()
     {
         var userId = Guid.NewGuid();
         var context = await RunMiddlewareAsync(
-            PrefixedServiceClientPrincipal(),
+            ServiceClientPrincipal(),
             ctx => ctx.Request.Headers[ServiceClientHeaders.UserId] = userId.ToString());
 
-        // sub == "client:" + client_id 与裸形态同样受信（对应模板 OpenIddict 签发端的命名空间隔离）
         Assert.Equal(userId.ToString(), context.User.FindFirst("sub")?.Value);
     }
 

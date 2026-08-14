@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Leistd.Security.Claims;
 using Leistd.ServiceClient.AspNetCore.Claims;
 using Leistd.ServiceClient.AspNetCore.Options;
 using Leistd.ServiceClient.Constants;
@@ -38,7 +39,11 @@ public class ServiceUserContextClaimsTransformationTests
 
     private static ClaimsPrincipal ServiceClientPrincipal(string clientId = "svc-a") =>
         new(new ClaimsIdentity(
-            [new Claim("sub", clientId), new Claim("client_id", clientId)],
+            [
+                new Claim("sub", ClientSubject.Format(clientId)),
+                new Claim("client_id", clientId),
+                new Claim("scope", ServiceClientScopes.Delegation),
+            ],
             "TestBearer"));
 
     private static void AddUserHeaders(IHeaderDictionary headers)
