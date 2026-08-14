@@ -66,7 +66,7 @@
 
 - `Leistd.ServiceClient.Core`：强类型客户端注册（`AddServiceClient`）与标准管道（调用日志、TraceId 透传、`X-User-*` 用户头注入）、统一响应解包（`ReadResultAsync`）、`ServiceClientException` / `RemoteServiceException`。
 - `Leistd.ServiceClient.OAuth`：OAuth2 client credentials 令牌获取/缓存/并发单飞/401 自愈（`AddClientCredentials`）。
-- `Leistd.ServiceClient.AspNetCore`：被调方用户上下文恢复中间件（`UseServiceUserContext`），仅采信已认证服务客户端（`sub == client_id`）携带的用户头，不受信一律剥离。
+- `Leistd.ServiceClient.AspNetCore`：被调方用户上下文恢复中间件（`UseServiceUserContext`），仅采信已认证服务客户端（`sub` 为 `ClientSubject` 契约形态、且持有委托 scope）携带的用户头，不受信一律剥离。
 - `Leistd.ServiceClient.Refit`：Refit 接口式客户端注册（`AddRefitServiceClient`），与手写路径共享标准管道与 `RemoteServiceException` 错误契约；自带 `Refit.Reflection` 承接无法内联源生成的方法形态。
 
 依赖基线变化：`Microsoft.Extensions.*` 统一从 10.0.8 升至 **10.0.10**（Refit 15 要求 `Microsoft.Extensions.Http >= 10.0.10`），随包依赖下限同步抬升，消费方需要 .NET SDK 能解析 10.0.10 的 `Microsoft.Extensions.*` 包。

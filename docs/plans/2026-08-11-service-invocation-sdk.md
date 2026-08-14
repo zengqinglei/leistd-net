@@ -110,7 +110,7 @@ graph TD
 
 **入站**（`AddServiceUserContext` + `UseServiceUserContext`，中间件置于 `UseAuthentication` 之后、`UseAuthorization` 之前）：
 
-1. 当前主体是受信服务调用方（已认证 + 含 `client_id` claim + `sub == client_id`，即 client credentials 主体；用户 token 的 `sub` 是用户 Id，不满足）→ 读 `X-User-*` 头，构造用户 `ClaimsIdentity` 作为主身份并保留 client identity，此后 `ICurrentUser` / `ICurrentClient` 双通道正常工作；
+1. 当前主体是受信服务调用方（已认证 + 含 `client_id` claim + `sub` 为机器主体契约形态 `client:<client_id>`（`ClientSubject`；用户 token 的 `sub` 是用户 GUID，结构上不匹配）+ 持有委托 scope `svc.delegate`）→ 读 `X-User-*` 头，构造用户 `ClaimsIdentity` 作为主身份并保留 client identity，此后 `ICurrentUser` / `ICurrentClient` 双通道正常工作；
 2. 其他任何情况（匿名、普通用户 token）→ 忽略并**移除**请求中的 `X-User-*` 头，阻断伪造链路。
 
 恢复挂载在 `IClaimsTransformation`（认证阶段）而非仅中间件：授权策略显式声明认证 scheme 时（模板默认策略即如此），`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，只改中间件的方案在该路径上失效。中间件保留「剥离不受信头 + 兜底恢复」职责。
@@ -268,8 +268,9 @@ framework/docs/components/service-client.md       # 组件使用文档（随包�
 
 1. Template 后端：
    - `Program.cs` 注册 `AddServiceUserContext()` + `UseServiceUserContext()`（置于 `UseAuthentication` 之后）；
-   - 支持**资源服务器模式**（D9）：OpenIddict Validation 可配置为指向远程 issuer（独立身份服务）而非仅 `UseLocalServer()`，业务服务无需承载签发端点；
    - `Directory.Packages.props` 登记新包版本。
+
+> **资源服务器模式（D9）未实施**，且不在本 SDK 范围内收口。原计划的"Validation 指向远程 issuer"只是表象：模板的 `ActiveUserRequirement` 每请求要按 `X-User-Id` 查**本地**用户表，用户若由中央身份服务持有，本地表为空，恢复出的用户照样被拒。真正的前置条件是**用户数据归属**决策——业务服务是否保留用户表、如何从身份服务投影/同步、权限授予挂在谁身上、登录页是否保留。这是模板架构的独立议题，需单独评估后落地；在此之前每个生成服务仍是"自己签发、自己验证"，服务间调用照常可用（调用方在被调方的开放应用中注册凭据）。
 2. 新增 `CompanyName.ProjectName.Client` 类库示例（typed client + DTO + `AddProjectNameClient` 扩展），作为业务服务发布 Client 包的示范形态；`template/docs/` 补充「调用其他服务 / 被其他服务调用」指引。
 3. 按 `developing-leistd-template` 流程实际生成项目验证：双实例互调冒烟（生成两个项目实例，A 经 Client 包调 B，核对日志中的 TraceId 贯通与 `ICurrentUser` 取值）。
 
