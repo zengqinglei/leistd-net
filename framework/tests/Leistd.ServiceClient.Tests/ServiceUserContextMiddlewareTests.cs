@@ -39,6 +39,7 @@ public class ServiceUserContextMiddlewareTests
         {
             new("sub", ClientSubject.Format(clientId)),
             new("client_id", clientId),
+            new("scope", ServiceClientScopes.Delegation),   // 默认要求委托 scope
         };
         claims.AddRange(extraClaims);
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestBearer"));
@@ -138,6 +139,29 @@ public class ServiceUserContextMiddlewareTests
 
         Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserId));
         Assert.Equal(ClientSubject.Format("svc-a"), context.User.FindFirst("sub")?.Value);
+    }
+
+    [Fact]
+    public async Task 默认要求委托scope_未授予的机器令牌不能代表用户()
+    {
+        // 安全默认（fail-closed）：仅有 client_credentials 能力、未获委托 scope 的客户端，
+        // 即使知道用户 Id 也无法恢复成该用户。
+        var withoutDelegation = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", ClientSubject.Format("svc-a")), new Claim("client_id", "svc-a")],
+            "TestBearer"));
+
+        var context = await RunAsync(withoutDelegation, AddUserHeaders);
+
+        Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserId));
+        Assert.Equal(ClientSubject.Format("svc-a"), context.User.FindFirst("sub")?.Value);
+    }
+
+    [Fact]
+    public async Task 默认要求委托scope_已授予时恢复用户()
+    {
+        var context = await RunAsync(ServiceClientPrincipal(), AddUserHeaders);
+
+        Assert.Equal(UserId.ToString(), context.User.FindFirst("sub")?.Value);
     }
 
     [Fact]

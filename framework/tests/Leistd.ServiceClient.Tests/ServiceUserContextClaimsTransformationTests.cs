@@ -39,7 +39,11 @@ public class ServiceUserContextClaimsTransformationTests
 
     private static ClaimsPrincipal ServiceClientPrincipal(string clientId = "svc-a") =>
         new(new ClaimsIdentity(
-            [new Claim("sub", ClientSubject.Format(clientId)), new Claim("client_id", clientId)],
+            [
+                new Claim("sub", ClientSubject.Format(clientId)),
+                new Claim("client_id", clientId),
+                new Claim("scope", ServiceClientScopes.Delegation),
+            ],
             "TestBearer"));
 
     private static void AddUserHeaders(IHeaderDictionary headers)

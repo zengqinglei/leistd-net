@@ -34,10 +34,17 @@ public class ServiceUserContextOptions
     public bool RemoveUntrustedHeaders { get; set; } = true;
 
     /// <summary>
-    /// 额外要求调用方 token 必须包含的 scope（可空）。
+    /// 要求调用方 token 必须包含的委托 scope，默认
+    /// <see cref="ServiceClientScopes.Delegation"/>（<c>svc.delegate</c>）。
     /// 同时识别标准 <c>scope</c>（空格分隔）与 OpenIddict 的 <c>oi_scp</c> claim。
     /// </summary>
-    public string? RequiredScope { get; set; }
+    /// <remarks>
+    /// 默认非空是**安全默认**（fail-closed）：认证成功只说明调用方是已认证的工作负载，
+    /// 不等于它有权代表用户。未授予该 scope 的客户端携带 <c>X-User-*</c> 头时，
+    /// 头会被剥离、不恢复任何用户主体。认证服务需在客户端注册时显式授予该 scope；
+    /// 部署上另有等价管控时可置空关闭该校验，但那意味着任何机器令牌都能代表任意用户。
+    /// </remarks>
+    public string? RequiredScope { get; set; } = ServiceClientScopes.Delegation;
 
     /// <summary>
     /// 恢复出的用户身份的 AuthenticationType，用于区分「经服务头恢复」与直接认证的用户。

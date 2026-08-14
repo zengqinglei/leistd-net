@@ -6,6 +6,7 @@ using System.Security.Claims;
 using CompanyName.ProjectName.Client;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Security.Claims;
+using Leistd.ServiceClient.Constants;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.Security.Users;
 using Leistd.Tracing.Core;
@@ -29,6 +30,10 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
 {
     private const string CallerClientId = "svc-caller";
     private const string CallerClientSecret = "SvcCaller@123456";
+
+    /// <summary>未获委托 scope 的客户端：只能以自身身份调用，不能代表用户。</summary>
+    private const string PlainClientId = "svc-plain";
+    private const string PlainClientSecret = "SvcPlain@123456";
 
     // ---------- 被调方安全 ----------
 
@@ -113,6 +118,24 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         Assert.False(Guid.TryParse(ClientSubject.Format(CallerClientId), out _));
     }
 
+    [Fact]
+    public async Task Client_without_delegation_scope_cannot_impersonate_a_user()
+    {
+        await EnsureCallerRegisteredAsync();
+        using var client = CreateHttpsClient();
+        var token = await GetMachineTokenAsync(client, PlainClientId, PlainClientSecret, scope: null);
+
+        // 未获委托 scope：即使知道管理员的用户 Id，X-User-* 头也会被剥离，
+        // 主体仍是机器身份，因而不满足「可用的自然人」默认策略。
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/service-info/whoami");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("X-User-Id", (await GetAdminIdAsync()).ToString());
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // ---------- 调用方消费路径（经真实 Client 包） ----------
 
     [Fact]
@@ -169,8 +192,9 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
             ["Leistd:ServiceAuth:TokenEndpoint"] = "https://localhost/connect/token",
             ["Leistd:ServiceAuth:ClientId"] = CallerClientId,
             ["Leistd:ServiceAuth:ClientSecret"] = CallerClientSecret,
-            // 目标服务：地址（+ 可选 scope）
+            // 目标服务：地址 + 委托 scope（代表用户调用所必需）
             ["Leistd:ServiceClients:MyProject:BaseAddress"] = "https://localhost",
+            ["Leistd:ServiceClients:MyProject:Scope"] = ServiceClientScopes.Delegation,
         }).Build();
 
         var services = new ServiceCollection();
@@ -209,15 +233,24 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         return client;
     }
 
-    private static async Task<string> GetMachineTokenAsync(HttpClient client)
+    private static async Task<string> GetMachineTokenAsync(
+        HttpClient client,
+        string clientId = CallerClientId,
+        string clientSecret = CallerClientSecret,
+        string? scope = ServiceClientScopes.Delegation)
     {
-        var response = await client.PostAsync("/connect/token", new FormUrlEncodedContent(
-            new Dictionary<string, string>
-            {
-                ["grant_type"] = "client_credentials",
-                ["client_id"] = CallerClientId,
-                ["client_secret"] = CallerClientSecret,
-            }));
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = clientId,
+            ["client_secret"] = clientSecret,
+        };
+        if (!string.IsNullOrEmpty(scope))
+        {
+            form["scope"] = scope;
+        }
+
+        var response = await client.PostAsync("/connect/token", new FormUrlEncodedContent(form));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var token = await response.Content.ReadFromJsonAsync<TokenDto>();
@@ -229,12 +262,31 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+
+        // 委托客户端：额外授予 svc.delegate，才能代表用户调用
         if (await manager.FindByClientIdAsync(CallerClientId) is null)
         {
             await manager.CreateAsync(new OpenIddictApplicationDescriptor
             {
                 ClientId = CallerClientId,
                 ClientSecret = CallerClientSecret,
+                ClientType = OpenIddictConstants.ClientTypes.Confidential,
+                Permissions =
+                {
+                    OpenIddictConstants.Permissions.Endpoints.Token,
+                    OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
+                    OpenIddictConstants.Permissions.Prefixes.Scope + ServiceClientScopes.Delegation,
+                },
+            });
+        }
+
+        // 普通机器客户端：只有取令牌的能力，没有委托 scope
+        if (await manager.FindByClientIdAsync(PlainClientId) is null)
+        {
+            await manager.CreateAsync(new OpenIddictApplicationDescriptor
+            {
+                ClientId = PlainClientId,
+                ClientSecret = PlainClientSecret,
                 ClientType = OpenIddictConstants.ClientTypes.Confidential,
                 Permissions =
                 {
