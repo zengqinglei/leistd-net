@@ -35,6 +35,9 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
     private const string PlainClientId = "svc-plain";
     private const string PlainClientSecret = "SvcPlain@123456";
 
+    /// <summary>client_id 取用户 Id 形态的客户端，用于主体命名空间碰撞回归。</summary>
+    private const string ImpersonatingClientSecret = "SvcImpersonate@123456";
+
     // ---------- 被调方安全 ----------
 
     [Fact]
@@ -101,21 +104,27 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task Machine_token_subject_should_not_collide_with_user_ids()
+    public async Task Client_id_shaped_like_a_user_id_cannot_impersonate_that_user()
     {
-        await EnsureCallerRegisteredAsync();
-        using var client = CreateHttpsClient();
-        var token = await GetMachineTokenAsync(client);
+        // 攻击复现：注册一个 client_id 恰好等于管理员用户 Id 的客户端（client_id 由创建者
+        // 任意指定，而用户 Id 在用户管理、审计日志、业务数据里都拿得到），并授予委托 scope，
+        // 使唯一的防线只剩主体命名空间。若 sub 直接写裸 client_id，该令牌会被解析成管理员；
+        // ClientSubject 契约把它变成 client:<guid>，Guid.TryParse 必然失败。
+        var adminId = await GetAdminIdAsync();
+        var impersonatingClientId = adminId.ToString();
+        await EnsureClientRegisteredAsync(impersonatingClientId, ImpersonatingClientSecret, withDelegationScope: true);
 
-        // 机器主体的 sub 走 ClientSubject 契约（client:<client_id>），与用户 GUID 命名空间不相交，
-        // 因此 client_id 取任何值都无法被解析成某个自然人。
+        using var client = CreateHttpsClient();
+        var token = await GetMachineTokenAsync(client, impersonatingClientId, ImpersonatingClientSecret);
+
+        // 不携带任何用户头：主体只可能来自 token 自身的 sub
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/service-info/whoami");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Add("X-User-Id", (await GetAdminIdAsync()).ToString());
-        var whoAmI = await (await client.SendAsync(request)).Content.ReadFromJsonAsync<WhoAmIDto>();
 
-        Assert.Equal(CallerClientId, whoAmI!.ClientId);
-        Assert.False(Guid.TryParse(ClientSubject.Format(CallerClientId), out _));
+        var response = await client.SendAsync(request);
+
+        // 仍被识别为工作负载而非管理员，因而不满足「可用的自然人」默认策略
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
@@ -260,41 +269,39 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
 
     private async Task EnsureCallerRegisteredAsync()
     {
+        // 委托客户端：额外授予 svc.delegate，才能代表用户调用
+        await EnsureClientRegisteredAsync(CallerClientId, CallerClientSecret, withDelegationScope: true);
+        // 普通机器客户端：只有取令牌的能力，没有委托 scope
+        await EnsureClientRegisteredAsync(PlainClientId, PlainClientSecret, withDelegationScope: false);
+    }
+
+    private async Task EnsureClientRegisteredAsync(string clientId, string clientSecret, bool withDelegationScope)
+    {
         using var scope = factory.Services.CreateScope();
         var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
-
-        // 委托客户端：额外授予 svc.delegate，才能代表用户调用
-        if (await manager.FindByClientIdAsync(CallerClientId) is null)
+        if (await manager.FindByClientIdAsync(clientId) is not null)
         {
-            await manager.CreateAsync(new OpenIddictApplicationDescriptor
-            {
-                ClientId = CallerClientId,
-                ClientSecret = CallerClientSecret,
-                ClientType = OpenIddictConstants.ClientTypes.Confidential,
-                Permissions =
-                {
-                    OpenIddictConstants.Permissions.Endpoints.Token,
-                    OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + ServiceClientScopes.Delegation,
-                },
-            });
+            return;
         }
 
-        // 普通机器客户端：只有取令牌的能力，没有委托 scope
-        if (await manager.FindByClientIdAsync(PlainClientId) is null)
+        var descriptor = new OpenIddictApplicationDescriptor
         {
-            await manager.CreateAsync(new OpenIddictApplicationDescriptor
+            ClientId = clientId,
+            ClientSecret = clientSecret,
+            ClientType = OpenIddictConstants.ClientTypes.Confidential,
+            Permissions =
             {
-                ClientId = PlainClientId,
-                ClientSecret = PlainClientSecret,
-                ClientType = OpenIddictConstants.ClientTypes.Confidential,
-                Permissions =
-                {
-                    OpenIddictConstants.Permissions.Endpoints.Token,
-                    OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
-                },
-            });
+                OpenIddictConstants.Permissions.Endpoints.Token,
+                OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
+            },
+        };
+        if (withDelegationScope)
+        {
+            descriptor.Permissions.Add(
+                OpenIddictConstants.Permissions.Prefixes.Scope + ServiceClientScopes.Delegation);
         }
+
+        await manager.CreateAsync(descriptor);
     }
 
     private async Task<Guid> GetAdminIdAsync()
