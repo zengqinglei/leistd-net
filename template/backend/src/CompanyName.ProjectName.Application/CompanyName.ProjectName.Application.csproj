@@ -25,7 +25,6 @@
     <PackageReference Include="Leistd.Authorization.Core" />
 <!--#if (TenancyEnabled)-->
     <PackageReference Include="Leistd.MultiTenancy.Core" />
-    <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
 <!--#endif-->
     <!--#endif-->
     <PackageReference Include="Leistd.Lock.Core" />

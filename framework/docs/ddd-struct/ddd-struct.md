@@ -139,7 +139,7 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 
 ### DbContext 基类与全局过滤器运行时开关（Leistd.Ddd.Infrastructure）
 
-派生 DbContext 继承 `BaseDbContext`，即获得两个 **EF 10 命名全局查询过滤器**：软删除（`SoftDeleteFilterName`，作用于 `ISoftDelete` 实体）与租户隔离（`MultiTenantFilterName`，作用于 `IMultiTenant` 实体，见[多租户](../components/multi-tenancy.md)）。同一实体同时命中两个接口时两个过滤器 **AND 叠加**、可用 `IDataFilter` 独立开关；过滤器表达式捕获 DbContext 实例属性，EF 将其参数化并在每次查询时重估——`ICurrentTenant.Change()` 与 `IDataFilter` 开关即时生效，无需重建模型。实体不实现对应接口时过滤器不作用于它，零成本。
+派生 DbContext 继承 `BaseDbContext`，**改写 `ConfigureModel` 而不是 `OnModelCreating`**（后者已封闭），即获得两个 **EF 10 命名全局查询过滤器**：软删除（`SoftDeleteFilterName`，作用于 `ISoftDelete` 实体）与租户隔离（`MultiTenantFilterName`，作用于 `IMultiTenant` 实体，见[多租户](../components/multi-tenancy.md)）。同一实体同时命中两个接口时两个过滤器 **AND 叠加**、可用 `IDataFilter` 独立开关；过滤器表达式捕获 DbContext 实例属性，EF 将其参数化并在每次查询时重估——`ICurrentTenant.Change()` 与 `IDataFilter` 开关即时生效，无需重建模型。实体不实现对应接口时过滤器不作用于它，零成本。
 
 若需在运行时用 `IDataFilter.Disable<ISoftDelete>()` / `Disable<IMultiTenant>()` **临时关闭过滤**（见下文），DbContext 必须选用**接收 `IServiceProvider` 的构造函数重载**并把它传给 `base`：
 
@@ -149,17 +149,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
 {
     public DbSet<Order> Orders => Set<Order>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    // 改写 ConfigureModel 而非 OnModelCreating，也不调用 base：
+    // 基类保证全局过滤器在本方法之后套用
+    protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);      // 保留 base：套用软删除与租户两个命名全局过滤器
         modelBuilder.Entity<Order>(b =>
         {
             b.ConfigureByConvention();           // 按约定配置审计者 ID 列长度（HasMaxLength(64)）
             // …其余 Fluent 配置
         });
+
+        modelBuilder.ConfigureAuthorization();   // 组件的实体配置也放这里，同样被过滤器覆盖
     }
 }
 ```
+
+> **为什么封闭 `OnModelCreating`**：全局过滤器只能作用于当时已在模型中的实体类型。若在派生类配置之前套用，那些经 `ApplyConfiguration` 才进入模型、又**没有 `DbSet` 声明**的实体（各组件的版本表就是这种形态）会完全逃过软删除与租户隔离——那是静默的越权缺口。把顺序交给基类，覆盖完整性就不再依赖派生类的书写习惯。
 
 > 若使用**不带 `IServiceProvider`** 的构造函数，`IsSoftDeleteFilterEnabled` 恒为 `true`、`CurrentTenantId` 恒为 `null`（宿主视角），`Disable<ISoftDelete>()` / `Disable<IMultiTenant>()` 与 `ICurrentTenant.Change()` 对该 DbContext 均无效。
 

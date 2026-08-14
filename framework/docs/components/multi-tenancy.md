@@ -210,6 +210,7 @@ public class TenantAppService(ITenantManager tenantManager, ITenantStore tenantS
 
 - **中间件顺序**：`UseAuthentication()` →（`UseServiceUserContext()`）→ `UseMultiTenancy()` → `UseAuthorization()`。放在认证前 Claim 贡献者拿不到主体；放在授权后权限检查会落在错误的租户分区。
 - **认证端职责**：签发 cookie/token 时必须写入 `tenant_id` claim（`CustomClaimTypes.TenantId`），否则已登录用户每次请求都会退回宿主上下文。
+- **派生 DbContext 改写 `ConfigureModel`**（`BaseDbContext` 已封闭 `OnModelCreating`）：组件实体配置必须在过滤器套用之前进入模型，否则没有 `DbSet` 声明的实体（如授权版本表）会逃过租户隔离。详见 [DDD 基座](../ddd-struct/ddd-struct.md)。
 - **绕过过滤器的红线**：`IgnoreQueryFilters()` 与 raw SQL（如 EF 的 FromSqlRaw）都会越过租户隔离，代码评审应按跨租户操作对待；需要合法跨租户时用 `Disable<IMultiTenant>()` 显式表达。
 - **租户实体的唯一约束要写成宿主行与租户行成对的部分索引**：`(TenantId, X)` 直接建唯一索引时，PostgreSQL 与 SQLite 都视 NULL 互不相等，宿主行（`TenantId IS NULL`）会失去唯一性兜底。正确形态是一条 `IS NULL` 过滤的 `(X)` 唯一索引加一条 `IS NOT NULL` 过滤的 `(TenantId, X)` 唯一索引——框架的授予、版本与租户注册表都按此配置。
 - **外部系统提供的标识必须按租户分区**：第三方身份（如 OAuth 的 `provider + providerUserId`）只在租户内唯一。不分区会让同一外部身份在跨租户登录时命中别的租户的绑定，并阻止它在多个租户各自绑定。

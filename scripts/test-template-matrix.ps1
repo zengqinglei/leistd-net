@@ -459,7 +459,9 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Application/Tenants",
             "backend/src/{name}.Application/Permissions",
             "frontend/src/app/features/platform/components/tenants",
-            "frontend/src/app/core/interceptors/tenant-interceptor.ts"
+            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
+            "frontend/src/app/core/interceptors/tenant-interceptor.spec.ts",
+            "frontend/src/app/core/services/tenant-context-service.spec.ts"
         )
         ReadmeContains = @("本地账号")
         ReadmeExcludes = @("多租户", "用户、角色、权限以及超级管理员授权模型")

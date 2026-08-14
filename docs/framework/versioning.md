@@ -19,6 +19,8 @@
 
 **`Leistd.Ddd.Infrastructure`（破坏性）**
 
+- `BaseDbContext.OnModelCreating` 改为 **sealed**，派生类改写新增的 `protected virtual void ConfigureModel(ModelBuilder)`（不再调用 `base`）。全局过滤器由基类在该方法之后套用——此前过滤器先于派生配置执行，导致经 `ApplyConfiguration` 才进入模型且无 `DbSet` 声明的实体（各组件的版本表）完全没有软删除与租户过滤器，是静默的隔离缺口。
+
 - `ApplyGlobalFilters<TInterface>` 增加必填 `filterName` 首参，改用 EF 10 命名查询过滤器——软删除与租户过滤器在同一实体上 AND 叠加，此前二次调用会静默覆盖前一个过滤器。直接调用方需补过滤器名。
 - `BaseDbContext` 新增租户全局过滤器（`MultiTenantFilterName`）；实体不实现 `IMultiTenant` 时无影响。
 - **运行时语义修复**：`EfCoreRepository.GetByIdAsync` 不再走 `FindAsync`（它绕过全局查询过滤器）——此前按 Id 能取出软删除行，多租户下将构成跨租户水平越权。依赖旧行为读取已删数据的调用方，改用 `IDataFilter.Disable<ISoftDelete>()` 显式表达。

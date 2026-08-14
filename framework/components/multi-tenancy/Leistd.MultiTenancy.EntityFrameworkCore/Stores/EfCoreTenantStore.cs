@@ -67,11 +67,16 @@ public class EfCoreTenantStore<TDbContext>(TDbContext dbContext, IDistributedCac
         return configuration;
     }
 
+    /// <summary>
+    /// 持久化实体 → Core 出参。管理器与存储共用，保证两条读路径的形状一致。
+    /// </summary>
     internal static TenantConfiguration ToConfiguration(TenantRecord record) => new()
     {
         Id = record.Id,
         Name = record.Name,
         NormalizedName = record.NormalizedName,
-        IsActive = record.IsActive
+        DisplayName = record.DisplayName,
+        IsActive = record.IsActive,
+        CreationTime = record.CreationTime
     };
 }

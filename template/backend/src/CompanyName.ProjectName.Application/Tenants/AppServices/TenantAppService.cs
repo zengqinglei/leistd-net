@@ -3,7 +3,6 @@ using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Exception.Core;
 using Leistd.MultiTenancy;
-using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
@@ -42,34 +41,42 @@ public class TenantAppService(
 
     /// <inheritdoc />
     /// <remarks>
-    /// 种子失败时补偿删除租户记录：没有管理员的租户谁也登录不进去，把它留在库里只会让
-    /// 重试撞上名称冲突，还得先人工清理。补偿而非单事务——种子内持有分布式锁，
-    /// 把它圈进一个数据库事务会把锁与事务生命周期绑死，且租户创建本就是可重试的低频操作。
+    /// <para>创建 = 注册表写入 + 租内种子，两者不在一个数据库事务里：种子内持有分布式锁，
+    /// 圈进事务会把锁与事务生命周期绑死；框架的 EF 管理器与仓储也分处不同工作单元作用域，
+    /// 一个 <c>[UnitOfWork]</c> 圈不住注册表写入。因此以补偿取代事务。</para>
+    /// <para>补偿必须覆盖**已经落库的种子数据**（角色可能已写入而用户尚未），
+    /// 而不是只软删注册表——那样旧租户 Id 下会永久残留角色与授权版本，重试也只是换个新 Id。
+    /// 先清种子、再删注册表，两步都幂等。</para>
     /// </remarks>
     public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
     {
-        var record = await tenantManager.CreateAsync(input.Name, input.DisplayName, cancellationToken);
+        var tenant = await tenantManager.CreateAsync(input.Name, input.DisplayName, cancellationToken);
 
         try
         {
             // 在新租户上下文内种子：角色、权限授予、租户管理员的所有行由落值拦截器自动归属该租户
-            using (currentTenant.Change(record.Id, record.Name))
+            using (currentTenant.Change(tenant.Id, tenant.Name))
             {
                 await tenantSeeder.SeedAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "租户 {TenantId} 初始化失败，回滚租户记录", record.Id);
+            logger.LogError(ex, "租户 {TenantId} 初始化失败，回滚租户与已写入的种子数据", tenant.Id);
 
             // 补偿用独立取消令牌：调用方取消（含超时）不应让补偿也被取消，
             // 否则恰恰在最需要清理的路径上留下半成品租户
-            await tenantManager.DeleteAsync(record.Id, CancellationToken.None);
+            using (currentTenant.Change(tenant.Id, tenant.Name))
+            {
+                await tenantSeeder.PurgeAsync(CancellationToken.None);
+            }
+
+            await tenantManager.DeleteAsync(tenant.Id, CancellationToken.None);
             throw;
         }
 
-        logger.LogInformation("已创建租户 {TenantName}（{TenantId}）并完成初始化", record.Name, record.Id);
-        return ToOutputDto(record);
+        logger.LogInformation("已创建租户 {TenantName}（{TenantId}）并完成初始化", tenant.Name, tenant.Id);
+        return ToOutputDto(tenant);
     }
 
     /// <inheritdoc />
@@ -104,30 +111,29 @@ public class TenantAppService(
             return null;
         }
 
-        var configuration = await tenantStore.FindByNameAsync(tenantNormalizer.NormalizeName(name)!, cancellationToken);
-        if (configuration is null)
+        var tenant = await tenantStore.FindByNameAsync(tenantNormalizer.NormalizeName(name)!, cancellationToken);
+        if (tenant is null)
         {
             return null;
         }
 
-        // 匿名探测只回选择租户所需的最小信息；DisplayName 需要读记录，经管理读路径取
-        var record = await tenantManager.FindAsync(configuration.Id, cancellationToken);
+        // 匿名探测只回选择租户所需的最小信息
         return new TenantLookupOutputDto
         {
-            Id = configuration.Id,
-            Name = configuration.Name,
-            DisplayName = record?.DisplayName,
-            IsActive = configuration.IsActive
+            Id = tenant.Id,
+            Name = tenant.Name,
+            DisplayName = tenant.DisplayName,
+            IsActive = tenant.IsActive
         };
     }
 
-    private static TenantOutputDto ToOutputDto(TenantRecord record) => new()
+    private static TenantOutputDto ToOutputDto(TenantConfiguration tenant) => new()
     {
-        Id = record.Id,
-        Name = record.Name,
-        DisplayName = record.DisplayName,
-        IsActive = record.IsActive,
-        CreationTime = record.CreationTime
+        Id = tenant.Id,
+        Name = tenant.Name,
+        DisplayName = tenant.DisplayName,
+        IsActive = tenant.IsActive,
+        CreationTime = tenant.CreationTime
     };
 }
 #endif

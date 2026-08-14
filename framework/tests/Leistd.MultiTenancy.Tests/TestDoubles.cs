@@ -6,6 +6,7 @@ using Leistd.UnitOfWork.Core.Options;
 using Leistd.UnitOfWork.Core.Uow;
 using Leistd.UnitOfWork.EfCore.Database;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.MultiTenancy.Tests;
@@ -28,15 +29,40 @@ internal class TestOrder : FullAuditedEntity<Guid>, IMultiTenant
     public void MarkDeleted() => IsDeleted = true;
 }
 
+/// <summary>
+/// 只经 <c>ApplyConfiguration</c> 进入模型的租户化实体（没有 DbSet 声明），
+/// 用于验证全局过滤器在派生类配置之后套用。
+/// </summary>
+internal class TestLedgerEntry : IMultiTenant
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    public Guid? TenantId { get; set; }
+
+    public string Memo { get; set; } = string.Empty;
+}
+
+internal class TestLedgerEntryConfiguration : IEntityTypeConfiguration<TestLedgerEntry>
+{
+    public void Configure(EntityTypeBuilder<TestLedgerEntry> builder)
+    {
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Memo).HasMaxLength(128);
+    }
+}
+
 internal class TestFilterDbContext(DbContextOptions options, IServiceProvider? serviceProvider)
     : BaseDbContext(options, serviceProvider)
 {
     public DbSet<TestOrder> Orders => Set<TestOrder>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
         modelBuilder.Entity<TestOrder>().Property(x => x.Title).HasMaxLength(128);
+
+        // 无 DbSet 声明、仅经 ApplyConfiguration 进入模型的实体：
+        // 过滤器必须同样覆盖它，否则"没有 DbSet 就不受隔离"会成为静默缺口
+        modelBuilder.ApplyConfiguration(new TestLedgerEntryConfiguration());
     }
 }
 

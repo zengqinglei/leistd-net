@@ -332,6 +332,15 @@ framework/docs/components/multi-tenancy.md         # 组件使用文档（随包
    - **唯一性下沉数据库**：`TenantRecord.NormalizedName` 改为未删除行上的部分唯一索引（保留删除后可复用），管理器把冲突翻译成 `DuplicateTenantNameException`；模板 `User`/`Role` 的租户唯一索引拆成宿主行（`IS NULL`）与租户行（`IS NOT NULL`）成对形态——可空列直接进唯一索引时两个 Provider 都视 NULL 互不相等，宿主行会失去兜底。Sqlite 测试真实验证约束与翻译。
    - **创建失败补偿**：种子失败时删除租户记录并重抛（补偿用独立取消令牌，避免调用方超时连带取消清理）。不采用单事务：种子内持有分布式锁，圈进数据库事务会把锁与事务生命周期绑死，且模板无 `[UnitOfWork]` 先例、集成测试跑在不支持事务的 InMemory 上——代价大于收益。失败注入测试断言无残留且名称可立即重用。
    - **未采纳**：`UserRole` 租户化（其全部查询谓词都是全局唯一的 `UserId`/`RoleId`，结构上不可能跨租户命中，加列纯冗余）；集成测试基座 InMemory→关系库（会动所有既有测试的行为基线，超出多租户范围；唯一索引与 NULL 语义已由框架侧 Sqlite 测试覆盖，作为已知限制记录）；`tenancy+localization/notifications` 组合矩阵（维度与租户正交，只会让矩阵爆炸）。
+7. **第二轮审查采纳的修复**：
+   - **补偿覆盖种子数据**：`ITenantSeeder.PurgeAsync` 与种子同处一个实现（改种子即见补偿），创建失败时先清租内数据再软删注册表。测试改为**部分播种后失败**（角色与授予已落库、用户未写入），并用模型驱动的类型清单锁住完整性——新增租户化实体时清单断言先失败，提醒同步补偿。未采用单事务：框架的 EF 管理器与仓储分处不同工作单元作用域，`[UnitOfWork]` 圈不住注册表写入，而 InMemory 测试基座下事务是 no-op、回滚无法验证。
+   - **管理契约移入 Core**：`ITenantManager`、`TenantPage`、`DuplicateTenantNameException` 迁至 `Leistd.MultiTenancy.Core`，出参统一为 `TenantConfiguration`（补 `DisplayName`/`CreationTime`，与 Store 共用），`TenantRecord` 退回持久化实体角色。模板 Application 层不再引用任何多租户 EF 包，恢复既定依赖方向。
+   - **冲突翻译收窄**：翻译前的同名查询排除本次写入的行——此前更新操作因其它约束失败时会命中自己，把任何写入错误误报成"名称重复"。新增两个测试：用 SaveChanges 拦截器在 flush 前注入竞争写入（唯一能越过预检的时点，旧测试因竞争者提前提交而空转）、以及非名称约束失败不被误报。
+   - **spec 随功能裁剪**：三个租户 spec 加入 modifier 排除清单并在矩阵 `Absent` 中断言。
+   - **租户页组件测试**：按 `roles.spec.ts` 的标尺补 5 个用例（分页与 URL 双向、搜索防抖回到首页、启停确认后刷新、取消删除不调接口）。
+
+8. **实施中发现并修复的框架级隔离缺口**（审查未提及，由补偿测试暴露）：
+   `BaseDbContext` 原先在 `base.OnModelCreating` 里套用全局过滤器，而派生类随后经 `ApplyConfiguration` 才把组件实体加入模型——**没有 `DbSet` 声明的实体（如 `AuthorizationRevisionRecord`）完全没有软删除与租户过滤器**，实测在租户上下文内可见其它租户的行。修复：`OnModelCreating` 改为 sealed，派生类改写新增的 `ConfigureModel`，过滤器由基类在其后套用，覆盖完整性不再依赖派生类的书写顺序。新增回归测试：一个只经 `ApplyConfiguration` 进入模型的租户化实体，必须同样被过滤。
 
 
 ### 阶段 5：Template 前端与 Mock

@@ -41,9 +41,8 @@ public class LocalEventInterceptorTests
     private sealed class TestDbContext(DbContextOptions options) : BaseDbContext(options)
     {
         public DbSet<TestEntity> Items => Set<TestEntity>();
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        protected override void ConfigureModel(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<TestEntity>(b =>
             {
                 b.HasKey(x => x.Id);

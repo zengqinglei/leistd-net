@@ -125,6 +125,30 @@ public class MultiTenantFilterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Entities_entering_the_model_after_derived_configuration_are_also_filtered()
+    {
+        // TestLedgerEntry 没有 DbSet 声明，只经派生类的 ApplyConfiguration 进入模型。
+        // 过滤器若在派生配置之前套用，它会对所有租户可见——这正是授权版本表踩过的坑。
+        _db.Add(new TestLedgerEntry { Memo = "a-entry", TenantId = TenantA });
+        _db.Add(new TestLedgerEntry { Memo = "b-entry", TenantId = TenantB });
+        _db.Add(new TestLedgerEntry { Memo = "host-entry" });
+        await _db.SaveChangesAsync();
+
+        using (_currentTenant.Change(TenantA))
+        {
+            Assert.Equal(["a-entry"], await _db.Set<TestLedgerEntry>().Select(x => x.Memo).ToListAsync());
+        }
+
+        using (_currentTenant.Change(TenantB))
+        {
+            Assert.Equal(["b-entry"], await _db.Set<TestLedgerEntry>().Select(x => x.Memo).ToListAsync());
+        }
+
+        // 宿主视角只见宿主行
+        Assert.Equal(["host-entry"], await _db.Set<TestLedgerEntry>().Select(x => x.Memo).ToListAsync());
+    }
+
+    [Fact]
     public async Task Repository_get_by_id_respects_tenant_isolation()
     {
         var repository = new EfCoreRepository<TestFilterDbContext, TestOrder, Guid>(

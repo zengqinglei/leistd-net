@@ -64,20 +64,41 @@ public abstract class BaseDbContext : DbContext
         _serviceProvider = serviceProvider;
     }
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    /// <summary>
+    /// 模型构建入口。<b>已封闭</b>：全局过滤器必须在派生类的实体配置之后套用，
+    /// 因此派生类改写 <see cref="ConfigureModel"/> 而不是本方法
+    /// </summary>
+    /// <remarks>
+    /// 过滤器只能作用于当时已在模型中的实体类型。若在派生类配置之前套用，
+    /// 那些经 <c>ApplyConfiguration</c> 才进入模型、又没有 <c>DbSet</c> 声明的实体
+    /// （如各组件的版本表）会完全逃过软删除与租户隔离——那是静默的越权缺口，
+    /// 不是可以靠约定避免的疏忽。这里用调用顺序在结构上保证覆盖完整。
+    /// </remarks>
+    protected sealed override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // 软删除过滤器：禁用时返回 true（不过滤），启用时只显示未删除数据
+        // 1. 派生类的实体配置（DbSet 之外的映射都在这里进入模型）
+        ConfigureModel(modelBuilder);
+
+        // 2. 软删除过滤器：禁用时返回 true（不过滤），启用时只显示未删除数据
         modelBuilder.ApplyGlobalFilters<ISoftDelete>(SoftDeleteFilterName, e =>
             !IsSoftDeleteFilterEnabled ||
             !EF.Property<bool>(e, nameof(ISoftDelete.IsDeleted)));
 
-        // 租户隔离过滤器：禁用时返回 true（全量视角）；
+        // 3. 租户隔离过滤器：禁用时返回 true（全量视角）；
         // 启用时仅显示当前租户行（宿主上下文 CurrentTenantId == null 即仅宿主行）。
         // 与软删除过滤器名称不同，二者在同一实体上 AND 叠加
         modelBuilder.ApplyGlobalFilters<IMultiTenant>(MultiTenantFilterName, e =>
             !IsMultiTenantFilterEnabled ||
             EF.Property<Guid?>(e, nameof(IMultiTenant.TenantId)) == CurrentTenantId);
+    }
+
+    /// <summary>
+    /// 配置本 DbContext 的实体映射。等价于原来的 <c>OnModelCreating</c>，
+    /// 但由基类保证它在全局过滤器之前执行——无需（也不应）调用 <c>base</c>
+    /// </summary>
+    protected virtual void ConfigureModel(ModelBuilder modelBuilder)
+    {
     }
 }

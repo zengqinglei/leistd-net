@@ -2,6 +2,7 @@ using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.Timing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -22,10 +23,19 @@ public class TenantStoreManagerTests : IAsyncLifetime
 
     internal class TestTenantDbContext(DbContextOptions<TestTenantDbContext> options) : DbContext(options)
     {
+        /// <summary>测试用的显示名长度上限，用来制造与名称无关的约束失败。</summary>
+        internal const int DisplayNameCheckLimit = 32;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.ConfigureMultiTenancy();
+
+            // SQLite 不强制 VARCHAR 长度，需显式 CHECK 才能触发非名称冲突的写入失败
+            modelBuilder.Entity<TenantRecord>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_Test_TenantRecord_DisplayName",
+                    $"\"{nameof(TenantRecord.DisplayName)}\" IS NULL OR length(\"{nameof(TenantRecord.DisplayName)}\") <= {DisplayNameCheckLimit}"));
         }
     }
 
@@ -180,32 +190,87 @@ public class TenantStoreManagerTests : IAsyncLifetime
         _db.ChangeTracker.Clear();
     }
 
+    /// <summary>
+    /// 真实竞争：预检通过之后、SaveChanges 落库之前，另一方抢先写入同名租户。
+    /// </summary>
+    /// <remarks>
+    /// 用 SaveChanges 拦截器精确插入竞争写入——这是唯一能越过管理器预检的时点。
+    /// 若竞争者提前提交，预检就会直接拒绝，唯一索引那条路径一次都走不到（曾经的测试就是这样空转的）。
+    /// </remarks>
     [Fact]
-    public async Task Manager_translates_database_conflict_into_duplicate_name_exception()
+    public async Task Losing_a_race_after_the_precheck_surfaces_as_duplicate_name()
+    {
+        var competitor = new RaceInjectingInterceptor(_connection, "Contoso", "CONTOSO");
+
+        var racedOptions = new DbContextOptionsBuilder<TestTenantDbContext>()
+            .UseSqlite(_connection)
+            .AddInterceptors(competitor)
+            .Options;
+
+        await using var racedDb = new TestTenantDbContext(racedOptions);
+        var racedManager = new EfCoreTenantManager<TestTenantDbContext>(
+            racedDb, new UpperInvariantTenantNormalizer(), _cache, new UtcClockProvider());
+
+        // 预检时库中无同名租户 → 通过；拦截器在 flush 前写入同名行 → 唯一索引拒绝本次插入
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso"));
+        Assert.True(competitor.Injected, "竞争写入未发生，本测试没有覆盖数据库冲突路径");
+    }
+
+    [Fact]
+    public async Task Other_constraint_failures_are_not_reported_as_duplicate_name()
+    {
+        // 名称未变、因别的约束失败：不能被当成名称重复。
+        // 早期实现只查"同名是否存在"，更新时必然命中自己，任何写入错误都会被误报成 409
+        var record = await _manager.CreateAsync("Acme");
+
+        var tooLongDisplayName = new string('x', TestTenantDbContext.DisplayNameCheckLimit + 1);
+        var ex = await Record.ExceptionAsync(() => _manager.UpdateAsync(record.Id, "Acme", tooLongDisplayName));
+
+        Assert.NotNull(ex);
+        Assert.IsNotType<DuplicateTenantNameException>(ex);
+    }
+
+    [Fact]
+    public async Task Name_is_reusable_after_deletion()
     {
         var first = await _manager.CreateAsync("Acme");
-
-        // 模拟竞争：管理器预检通过后、保存前，另一方已写入同名租户
-        using var connection = new SqliteConnection(_connection.ConnectionString);
-        await connection.OpenAsync();
-
-        // 同库另一连接写入（Sqlite in-memory 共享同一连接串下的库）
-        var competitorOptions = new DbContextOptionsBuilder<TestTenantDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        await using (var competitor = new TestTenantDbContext(competitorOptions))
-        {
-            competitor.Set<TenantRecord>().Add(new TenantRecord { Name = "Contoso", NormalizedName = "CONTOSO" });
-            await competitor.SaveChangesAsync();
-        }
-
-        // 落败方得到与预检一致的业务异常（映射 409），而不是原始 DbUpdateException（500）
-        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("Contoso"));
-
-        // 删除后名称可复用：部分唯一索引只约束未删除行
         await _manager.DeleteAsync(first.Id);
+
+        // 部分唯一索引只约束未删除行
         var recreated = await _manager.CreateAsync("Acme");
         Assert.NotEqual(first.Id, recreated.Id);
+    }
+
+    /// <summary>
+    /// 在被测 DbContext 执行 SaveChanges 之前，用另一个连接抢先写入同名租户。
+    /// </summary>
+    private sealed class RaceInjectingInterceptor(
+        SqliteConnection connection,
+        string name,
+        string normalizedName) : SaveChangesInterceptor
+    {
+        internal bool Injected { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!Injected)
+            {
+                Injected = true;
+
+                var options = new DbContextOptionsBuilder<TestTenantDbContext>()
+                    .UseSqlite(connection)
+                    .Options;
+
+                await using var competitor = new TestTenantDbContext(options);
+                competitor.Set<TenantRecord>().Add(new TenantRecord { Name = name, NormalizedName = normalizedName });
+                await competitor.SaveChangesAsync(cancellationToken);
+            }
+
+            return await base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
     }
 
     [Fact]

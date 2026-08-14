@@ -1,4 +1,3 @@
-using Leistd.Exception.Core;
 using Leistd.Timing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -9,6 +8,8 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 /// <see cref="ITenantManager"/> 的 EF Core 实现
 /// </summary>
 /// <remarks>
+/// <para>契约与出参（<see cref="TenantConfiguration"/>）都在 Core：<see cref="TenantRecord"/>
+/// 是本包的持久化实体，不出现在对外签名上，应用层无需引用任何持久化实现包。</para>
 /// <para>管理器自行 SaveChanges（租户管理是独立的低频管理操作）；
 /// 在外层工作单元事务内调用时仅表现为提前刷写，不破坏事务边界。</para>
 /// <para>软删除由管理器自己落标记（不经 <c>Remove()</c> 依赖审计拦截器转换）：
@@ -23,7 +24,7 @@ public class EfCoreTenantManager<TDbContext>(
     where TDbContext : DbContext
 {
     /// <inheritdoc />
-    public async Task<TenantRecord> CreateAsync(string name, string? displayName = null, CancellationToken cancellationToken = default)
+    public async Task<TenantConfiguration> CreateAsync(string name, string? displayName = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -38,12 +39,12 @@ public class EfCoreTenantManager<TDbContext>(
         };
 
         dbContext.Set<TenantRecord>().Add(record);
-        await SaveTranslatingDuplicateNameAsync(normalizedName, cancellationToken);
-        return record;
+        await SaveTranslatingDuplicateNameAsync(normalizedName, record.Id, cancellationToken);
+        return EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
 
     /// <inheritdoc />
-    public async Task<TenantRecord> UpdateAsync(Guid id, string name, string? displayName, CancellationToken cancellationToken = default)
+    public async Task<TenantConfiguration> UpdateAsync(Guid id, string name, string? displayName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -60,20 +61,20 @@ public class EfCoreTenantManager<TDbContext>(
         record.NormalizedName = normalizedName;
         record.DisplayName = displayName;
 
-        await SaveTranslatingDuplicateNameAsync(normalizedName, cancellationToken);
+        await SaveTranslatingDuplicateNameAsync(normalizedName, record.Id, cancellationToken);
         await InvalidateCacheAsync(record.Id, oldNormalizedName, normalizedName, cancellationToken);
-        return record;
+        return EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
 
     /// <inheritdoc />
-    public async Task<TenantRecord> SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default)
+    public async Task<TenantConfiguration> SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default)
     {
         var record = await GetAsync(id, cancellationToken);
         record.IsActive = isActive;
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await InvalidateCacheAsync(record.Id, record.NormalizedName, null, cancellationToken);
-        return record;
+        return EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
 
     /// <inheritdoc />
@@ -90,11 +91,13 @@ public class EfCoreTenantManager<TDbContext>(
     }
 
     /// <inheritdoc />
-    public async Task<TenantRecord?> FindAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await dbContext.Set<TenantRecord>()
+        var record = await dbContext.Set<TenantRecord>()
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted, cancellationToken);
+
+        return record is null ? null : EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
 
     /// <inheritdoc />
@@ -117,7 +120,7 @@ public class EfCoreTenantManager<TDbContext>(
             .Take(limit)
             .ToListAsync(cancellationToken);
 
-        return new TenantPage(total, items);
+        return new TenantPage(total, items.Select(EfCoreTenantStore<TDbContext>.ToConfiguration).ToList());
     }
 
     /// <summary>
@@ -126,26 +129,34 @@ public class EfCoreTenantManager<TDbContext>(
     /// <remarks>
     /// 预检（<c>EnsureNameNotTakenAsync</c>）只能给出友好错误，挡不住并发——两个请求同时通过
     /// 校验时，由数据库的部分唯一索引兜住，落败方在这里得到与预检一致的异常，而不是 500。
+    /// 判定必须排除本次写入的行（<paramref name="currentId"/>）：不排除的话，更新操作因其它约束
+    /// （如显示名超长）失败时，查同名会命中自己，把任何写入失败都误报成"名称重复"。
     /// </remarks>
-    private async Task SaveTranslatingDuplicateNameAsync(string normalizedName, CancellationToken cancellationToken)
+    private async Task SaveTranslatingDuplicateNameAsync(
+        string normalizedName,
+        Guid currentId,
+        CancellationToken cancellationToken)
     {
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is not null)
+        catch (DbUpdateException)
         {
-            // 竞争失败：确认确实是名称占用（而非其他约束），再翻译
+            // 落败方在这里判定：库中是否已有别人占用该名称
             dbContext.ChangeTracker.Clear();
-            var taken = await dbContext.Set<TenantRecord>()
+            var takenByOther = await dbContext.Set<TenantRecord>()
                 .AsNoTracking()
-                .AnyAsync(t => t.NormalizedName == normalizedName && !t.IsDeleted, cancellationToken);
+                .AnyAsync(
+                    t => t.NormalizedName == normalizedName && !t.IsDeleted && t.Id != currentId,
+                    cancellationToken);
 
-            if (taken)
+            if (takenByOther)
             {
                 throw new DuplicateTenantNameException(normalizedName);
             }
 
+            // 其它约束或数据库故障：原样上抛，不冒充名称冲突
             throw;
         }
     }
@@ -179,17 +190,4 @@ public class EfCoreTenantManager<TDbContext>(
             await cache.RemoveAsync(EfCoreTenantStore<TDbContext>.CacheKeyByName(newNormalizedName), cancellationToken);
         }
     }
-}
-
-/// <summary>
-/// 租户名称冲突异常。继承 <see cref="ConflictException"/>，经全局异常处理器映射为 HTTP 409
-/// </summary>
-/// <param name="normalizedName">冲突的归一化名称</param>
-public class DuplicateTenantNameException(string normalizedName)
-    : ConflictException($"Tenant name already exists: {normalizedName}")
-{
-    /// <summary>
-    /// 冲突的归一化名称
-    /// </summary>
-    public string NormalizedName { get; } = normalizedName;
 }

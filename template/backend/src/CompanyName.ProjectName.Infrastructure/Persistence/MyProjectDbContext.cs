@@ -41,9 +41,13 @@ public class MyProjectDbContext(
         configurationBuilder.Properties<Enum>().HaveConversion<string>().HaveMaxLength(64);
     }
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    /// <remarks>
+    /// 改写 <c>ConfigureModel</c> 而非 <c>OnModelCreating</c>：基类已封闭后者，
+    /// 以保证软删除与租户全局过滤器在本方法之后套用，覆盖这里经
+    /// <c>Configure*</c> 才进入模型的实体（它们没有 DbSet 声明）。
+    /// </remarks>
+    protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
         // 基础实体配置（始终包含）
         modelBuilder.ConfigureBaseEntities();
 #if (IncludeIdentity)

@@ -3,12 +3,16 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Tenants;
+using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.Authorization;
+using Leistd.Authorization.EntityFrameworkCore;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.MultiTenancy;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 #if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
-using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Ddd.Domain.Repositories;
-using Leistd.MultiTenancy;
 #endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -237,13 +241,22 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NotFound, unknownTenantRequest.StatusCode);
     }
 
+    /// <summary>
+    /// 部分播种后失败：角色已落库、用户尚未写入时补偿，必须连已写入的种子数据一起回滚。
+    /// 只软删注册表是不够的——旧租户 Id 下会永久残留角色与授权版本。
+    /// </summary>
     [Fact]
-    public async Task 种子失败时补偿删除租户_名称可立即重用()
+    public async Task 部分播种后失败_租户与已写入的种子数据一并回滚()
     {
-        // 注入一个必然失败的种子实现：验证补偿路径，而不是等真实故障
+        // 装饰真实种子：先让它写完角色与权限授予，再抛错——覆盖"部分落库"这条真实路径
         using var brokenHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
-                services.AddTransient<ITenantSeeder, ThrowingTenantSeeder>()));
+            {
+                // 桩把 Purge 委托给真实实现，因此按具体类型注册它——
+                // 若桩注入 ITenantSeeder 会解析到自己，形成循环依赖
+                services.AddTransient<TenantSeeder>();
+                services.AddTransient<ITenantSeeder, FailAfterRolesTenantSeeder>();
+            }));
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(brokenHost, "admin", "Admin@123456");
 
@@ -255,7 +268,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         });
         Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
 
-        // 补偿生效：没有留下无管理员的半成品租户
+        var failedTenantId = FailAfterRolesTenantSeeder.LastTenantId;
+        Assert.NotNull(failedTenantId);
+
+        // 补偿覆盖种子数据：在失败租户的上下文里，所有租户化实体都不可见
+        await AssertNoVisibleTenantDataAsync(failedTenantId.Value);
+
+        // 注册表也已回滚，没有留下无管理员的半成品租户
         using var anonymous = _factory.CreateProjectClient();
         var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/compensated");
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
@@ -266,10 +285,91 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.NotEqual(Guid.Empty, retried);
     }
 
-    private sealed class ThrowingTenantSeeder : ITenantSeeder
+    /// <summary>
+    /// 断言指定租户上下文内看不到任何租户化数据。
+    /// </summary>
+    /// <remarks>
+    /// 第一步的类型清单是**完整性锁**：新增租户化实体（或种子开始写入新实体）时，
+    /// 清单断言先失败，提醒同步补偿逻辑与此处断言——避免补偿悄悄漏掉新数据。
+    /// </remarks>
+    private async Task AssertNoVisibleTenantDataAsync(Guid tenantId)
     {
-        public Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("injected seed failure");
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+
+        var multiTenantEntities = db.Model.GetEntityTypes()
+            .Where(t => typeof(IMultiTenant).IsAssignableFrom(t.ClrType))
+            .Select(t => t.ClrType.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(
+            new[]
+            {
+                nameof(AuthorizationRevisionRecord),
+#if (IncludeExternalLogin)
+                nameof(ExternalLoginConnection),
+#endif
+                nameof(PermissionGrantRecord),
+                nameof(Role),
+                nameof(User)
+            },
+            multiTenantEntities);
+
+        using (currentTenant.Change(tenantId))
+        {
+            Assert.Empty(await db.Set<User>().ToListAsync());
+            Assert.Empty(await db.Set<Role>().ToListAsync());
+            Assert.Empty(await db.Set<PermissionGrantRecord>().ToListAsync());
+            Assert.Empty(await db.Set<AuthorizationRevisionRecord>().ToListAsync());
+#if (IncludeExternalLogin)
+            Assert.Empty(await db.Set<ExternalLoginConnection>().ToListAsync());
+#endif
+        }
+    }
+
+    /// <summary>
+    /// 走完真实种子的角色与权限写入后抛错，制造"部分落库"的失败现场。
+    /// </summary>
+    private sealed class FailAfterRolesTenantSeeder(
+        ICurrentTenant currentTenant,
+        IRepository<Role, Guid> roleRepository,
+        IPermissionDefinitionManager permissionDefinitionManager,
+        IPermissionGrantStore permissionGrantStore,
+        IPermissionGrantManager permissionGrantManager,
+        TenantSeeder inner) : ITenantSeeder
+    {
+        /// <summary>最近一次失败的租户 Id，供测试断言其数据已被清除。</summary>
+        internal static Guid? LastTenantId { get; private set; }
+
+        public async Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        {
+            LastTenantId = currentTenant.Id;
+
+            // 第一步：真实写入角色（仓储在无工作单元时立即保存，因此这一步确实落库）
+            var adminRole = new Role("Admin", "Administrator", isStatic: true, sort: 1);
+            await roleRepository.InsertAsync(adminRole, cancellationToken);
+
+            // 第二步：真实写入权限授予与授权版本
+            var existing = await permissionGrantStore.GetGrantsAsync(
+                PermissionGrantProviderNames.Role, adminRole.Id.ToString(), cancellationToken);
+            var definitions = permissionDefinitionManager
+                .GetAll()
+                .Where(d => d.Side.HasFlag(MultiTenancySides.Tenant))
+                .Where(d => permissionDefinitionManager.IsEffectivelyEnabled(d.Name))
+                .Select(d => d.Name)
+                .ToList();
+            await permissionGrantManager.ReplaceGrantsAsync(
+                PermissionGrantProviderNames.Role, adminRole.Id.ToString(), definitions,
+                expectedRevision: existing.Revision, cancellationToken);
+
+            // 第三步（创建管理员）之前失败
+            throw new InvalidOperationException("injected seed failure after roles and grants");
+        }
+
+        public Task PurgeAsync(CancellationToken cancellationToken = default)
+            => inner.PurgeAsync(cancellationToken);
     }
 
 #if (IncludeExternalLogin)

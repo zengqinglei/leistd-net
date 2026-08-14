@@ -57,6 +57,51 @@ public class TenantSeeder(
         logger.LogInformation("租户 {TenantId} 初始化完成", tenantId);
     }
 
+    /// <inheritdoc />
+    public async Task PurgeAsync(CancellationToken cancellationToken = default)
+    {
+        if (currentTenant.Id is not { } tenantId)
+        {
+            throw new InvalidOperationException("租户数据清除必须在租户上下文内执行：先 ICurrentTenant.Change(tenantId) 再调用。");
+        }
+
+        // 全部查询与写入都被租户过滤器限定在当前租户，无需手写 TenantId 条件
+        // 仓储返回 IEnumerable，物化后才能多次枚举与计数
+        var users = (await userRepository.GetListAsync(cancellationToken: cancellationToken)).ToList();
+        var roles = (await roleRepository.GetListAsync(cancellationToken: cancellationToken)).ToList();
+
+        // 授予与授权版本硬删：主体随租户一起废弃、永不恢复，留着只会变成孤儿行
+        foreach (var role in roles)
+        {
+            await permissionGrantManager.RemoveProviderAsync(
+                PermissionGrantProviderNames.Role, role.Id.ToString(), cancellationToken);
+        }
+
+        foreach (var user in users)
+        {
+            await permissionGrantManager.RemoveProviderAsync(
+                PermissionGrantProviderNames.User, user.Id.ToString(), cancellationToken);
+        }
+
+        // 主体与关联走仓储删除：审计实体转软删，与租户注册表的删除语义一致，
+        // 删除后在该租户上下文内一律不可见
+        if (users.Count > 0)
+        {
+            var userIds = users.Select(u => u.Id).ToList();
+            await userRoleRepository.DeleteManyAsync(ur => userIds.Contains(ur.UserId), cancellationToken);
+            await userRepository.DeleteManyAsync(users, cancellationToken);
+        }
+
+        if (roles.Count > 0)
+        {
+            await roleRepository.DeleteManyAsync(roles, cancellationToken);
+        }
+
+        logger.LogInformation(
+            "已清除租户 {TenantId} 的种子数据：用户 {UserCount}、角色 {RoleCount}",
+            tenantId, users.Count, roles.Count);
+    }
+
     private async Task<Role> EnsureRolesAsync(CancellationToken cancellationToken)
     {
         var adminRole = await roleRepository.GetFirstAsync(r => r.Name == AdminConstant.RoleName, cancellationToken: cancellationToken);
