@@ -53,13 +53,16 @@ public class TenantAppService(
     /// <para>补偿必须覆盖**已经落库的种子数据**（角色可能已写入而用户尚未），
     /// 而不是只软删注册表——那样旧租户 Id 下会永久残留角色与授权版本，重试也只是换个新 Id。
     /// 先清种子、再删注册表，两步都幂等。</para>
-    /// <para>激活失败不触发补偿：数据已完整，只是没启用——那是安全的失败态，
-    /// 管理员在列表里启用即可，删掉一个完整的租户反而是更大的损失。</para>
+    /// <para>激活失败不触发补偿：数据已完整——删掉一个数据完整的租户损失更大，
+    /// 宿主管理员在列表里启用即可。注意失败点决定了库里的状态：激活的库写入之前失败
+    /// 则保持停用；库已提交而缓存失效失败时，库中已是启用态、接口仍报错，
+    /// 陈旧的停用缓存最迟在 <c>EfCoreTenantStore.CacheDuration</c> 后自愈。
+    /// 两种情形都不会让一个没有管理员的租户变得可用（种子已经成功了）。</para>
     /// </remarks>
     public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
     {
         var tenant = await tenantManager.CreateAsync(
-            input.Name, input.DisplayName, isActive: false, cancellationToken);
+            input.Name, input.DisplayName, isActive: false, cancellationToken: cancellationToken);
 
         try
         {

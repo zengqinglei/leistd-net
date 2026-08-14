@@ -8,16 +8,28 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 /// 基于 EF Core 的租户存储，经 <see cref="IDistributedCache"/> 缓存查询结果
 /// </summary>
 /// <remarks>
-/// 缓存由 <see cref="ITenantManager"/> 在写入时失效；绕过管理器直接写库会留下陈旧缓存。
-/// 额外设置滑动过期作为漂移兜底。
+/// <para>缓存由 <see cref="ITenantManager"/> 在写入时失效；绕过管理器直接写库会留下陈旧缓存。</para>
+/// <para>过期策略是**绝对**过期，不是滑动过期：租户的启用状态是访问控制状态，
+/// 而 cache-aside 的失效是尽力而为的（Redis 不可用时 <c>RemoveAsync</c> 会失败）。
+/// 滑动过期下，持续有流量的租户其陈旧的"启用"条目会被每个请求续命而永不过期——
+/// 停用/删除的暴露窗口没有上界。绝对过期把失效失败的后果收成"最多
+/// <see cref="CacheDuration"/> 后自愈"。</para>
 /// </remarks>
 public class EfCoreTenantStore<TDbContext>(TDbContext dbContext, IDistributedCache cache) : ITenantStore
     where TDbContext : DbContext
 {
-    // 滑动过期兜底：正常失效走 ITenantManager，这里只兜"绕过管理器写库"的漂移
+    /// <summary>
+    /// 缓存条目存活时长，同时是停用/删除失效失败时的最大暴露窗口。
+    /// </summary>
+    /// <remarks>
+    /// 取 1 分钟：租户解析每请求一次，1 分钟上界下一个 1000 req/min 的租户仍有 999 次命中，
+    /// 代价可忽略；换来的是与 <c>ActiveUserRequirement</c>"每请求重读"同型的有界撤销语义。
+    /// </remarks>
+    public static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(1);
+
     private static readonly DistributedCacheEntryOptions CacheEntryOptions = new()
     {
-        SlidingExpiration = TimeSpan.FromMinutes(30)
+        AbsoluteExpirationRelativeToNow = CacheDuration
     };
 
     internal static string CacheKeyById(Guid id) => $"leistd:tenant:i:{id}";

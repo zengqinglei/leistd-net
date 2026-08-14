@@ -83,7 +83,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Create_normalizes_name_and_store_finds_by_id_and_name()
     {
-        var record = await _manager.CreateAsync("Acme", "Acme Inc.");
+        var record = await _manager.CreateAsync("Acme", "Acme Inc.", isActive: true);
 
         Assert.Equal("ACME", record.NormalizedName);
 
@@ -103,7 +103,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Tenant_can_be_created_inactive_and_activated_afterwards()
     {
-        var record = await _manager.CreateAsync("Acme", isActive: false);
+        var record = await _manager.CreateAsync("Acme", null, isActive: false);
 
         Assert.False(record.IsActive);
         Assert.False((await _store.FindAsync(record.Id))!.IsActive);
@@ -116,16 +116,16 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Duplicate_name_is_rejected_case_insensitively()
     {
-        await _manager.CreateAsync("Acme");
+        await _manager.CreateAsync("Acme", null, isActive: true);
 
-        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("ACME"));
-        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("acme"));
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("ACME", null, isActive: true));
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("acme", null, isActive: true));
     }
 
     [Fact]
     public async Task Rename_invalidates_old_and_new_name_cache()
     {
-        var record = await _manager.CreateAsync("Acme");
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
 
         // 预热两个缓存键
         Assert.NotNull(await _store.FindByNameAsync("ACME"));
@@ -146,7 +146,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Deactivation_is_visible_after_cache_invalidation()
     {
-        var record = await _manager.CreateAsync("Acme");
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
         Assert.True((await _store.FindAsync(record.Id))!.IsActive);
 
         await _manager.SetActiveAsync(record.Id, false);
@@ -158,7 +158,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Store_reads_through_cache_until_invalidated()
     {
-        var record = await _manager.CreateAsync("Acme");
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
         Assert.NotNull(await _store.FindAsync(record.Id));
 
         // 绕过管理器直接改库：缓存仍返回旧值——这正是"写入必须经 ITenantManager"约定的原因
@@ -176,7 +176,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Delete_is_soft_and_hides_tenant_from_store()
     {
-        var record = await _manager.CreateAsync("Acme");
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
         Assert.NotNull(await _store.FindAsync(record.Id));
 
         await _manager.DeleteAsync(record.Id);
@@ -194,10 +194,10 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Same_name_can_be_recreated_after_delete()
     {
-        var first = await _manager.CreateAsync("Acme");
+        var first = await _manager.CreateAsync("Acme", null, isActive: true);
         await _manager.DeleteAsync(first.Id);
 
-        var second = await _manager.CreateAsync("Acme");
+        var second = await _manager.CreateAsync("Acme", null, isActive: true);
 
         Assert.NotEqual(first.Id, second.Id);
         Assert.Equal(second.Id, (await _store.FindByNameAsync("ACME"))!.Id);
@@ -213,7 +213,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Database_rejects_duplicate_active_name_even_bypassing_the_manager()
     {
-        await _manager.CreateAsync("Acme");
+        await _manager.CreateAsync("Acme", null, isActive: true);
 
         // 绕过管理器预检直接写库：唯一性由数据库的部分唯一索引兜住，
         // 这正是并发创建（两个请求同时通过预检）走到的路径
@@ -245,7 +245,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
             racedDb, new UpperInvariantTenantNormalizer(), _cache, new UtcClockProvider());
 
         // 预检时库中无同名租户 → 通过；拦截器在 flush 前写入同名行 → 唯一索引拒绝本次插入
-        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso"));
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso", null, isActive: true));
         Assert.True(competitor.Injected, "竞争写入未发生，本测试没有覆盖数据库冲突路径");
     }
 
@@ -254,7 +254,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
     {
         // 名称未变、因别的约束失败：不能被当成名称重复。
         // 早期实现只查"同名是否存在"，更新时必然命中自己，任何写入错误都会被误报成 409
-        var record = await _manager.CreateAsync("Acme");
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
 
         var tooLongDisplayName = new string('x', TestTenantDbContext.DisplayNameCheckLimit + 1);
         var ex = await Record.ExceptionAsync(() => _manager.UpdateAsync(record.Id, "Acme", tooLongDisplayName));
@@ -299,7 +299,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
         var note = new TestNote { Text = "caller's pending work" };
         racedDb.Add(note);
 
-        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso"));
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso", null, isActive: true));
         Assert.True(competitor.Injected, "竞争写入未发生，本测试没有覆盖数据库冲突路径");
 
         // 无关实体仍在跟踪器里等待提交，且能正常落库
@@ -318,8 +318,8 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Precheck_rejection_leaves_the_record_untouched()
     {
-        var target = await _manager.CreateAsync("Acme");
-        await _manager.CreateAsync("Contoso");
+        var target = await _manager.CreateAsync("Acme", null, isActive: true);
+        await _manager.CreateAsync("Contoso", null, isActive: true);
 
         // 改成已被占用的名字：预检就会拒绝，实体上的赋值必须回滚
         await Assert.ThrowsAsync<DuplicateTenantNameException>(
@@ -331,14 +331,125 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal("Acme", reloaded!.Name);
     }
 
+    /// <summary>
+    /// 库已提交但缓存失效失败：异常上抛（管理员据此重试），库中状态已生效。
+    /// </summary>
+    /// <remarks>
+    /// cache-aside 的失效是尽力而为的。这里锁死失败语义：不能因为缓存删不掉就把
+    /// 已提交的停用/删除回滚（做不到），也不能把它咽下去报成功——那会让管理员以为
+    /// 租户已经停了。异常上抛 + 库为准，重试即自愈（写路径读库不读缓存）。
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Cache_invalidation_failure_after_commit_surfaces_but_database_state_stands(bool deleteInsteadOfDeactivate)
+    {
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
+
+        var brokenCache = new FailingRemoveCache(_cache);
+        var manager = new EfCoreTenantManager<TestTenantDbContext>(
+            _db, new UpperInvariantTenantNormalizer(), brokenCache, new UtcClockProvider());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => deleteInsteadOfDeactivate
+            ? manager.DeleteAsync(record.Id)
+            : manager.SetActiveAsync(record.Id, false));
+
+        // 库已提交：写路径读库不读缓存，重试会看到真实状态并再次尝试失效
+        var raw = await _db.Set<TenantRecord>().IgnoreQueryFilters().AsNoTracking()
+            .SingleAsync(t => t.Id == record.Id);
+        if (deleteInsteadOfDeactivate)
+        {
+            Assert.True(raw.IsDeleted);
+        }
+        else
+        {
+            Assert.False(raw.IsActive);
+            Assert.False(raw.IsDeleted);
+        }
+    }
+
+    /// <summary>
+    /// 缓存条目必须是绝对过期：失效失败时的暴露窗口要有上界。
+    /// </summary>
+    /// <remarks>
+    /// 滑动过期下，持续有流量的租户其陈旧"启用"条目会被每个请求续命而永不过期——
+    /// 停用一个繁忙租户可能永远不生效。这个断言锁住策略本身，因为它不可能由行为测试
+    /// 观察到（要观察得等真实时钟走过过期点）。
+    /// </remarks>
+    [Fact]
+    public async Task Cached_tenant_entries_expire_absolutely_so_failed_invalidation_self_heals()
+    {
+        var recording = new OptionsRecordingCache(_cache);
+        var store = new EfCoreTenantStore<TestTenantDbContext>(_db, recording);
+
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
+        Assert.NotNull(await store.FindAsync(record.Id));
+
+        var options = Assert.Single(recording.CapturedOptions);
+        Assert.Null(options.SlidingExpiration);
+        Assert.Equal(EfCoreTenantStore<TestTenantDbContext>.CacheDuration, options.AbsoluteExpirationRelativeToNow);
+    }
+
+    /// <summary>失效（Remove）失败、其余照常的缓存：模拟 Redis 抖动。</summary>
+    private sealed class FailingRemoveCache(IDistributedCache inner) : IDistributedCache
+    {
+        public byte[]? Get(string key) => inner.Get(key);
+
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => inner.GetAsync(key, token);
+
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => inner.Set(key, value, options);
+
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+            => inner.SetAsync(key, value, options, token);
+
+        public void Refresh(string key) => inner.Refresh(key);
+
+        public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
+
+        public void Remove(string key) => throw new InvalidOperationException("cache unavailable");
+
+        public Task RemoveAsync(string key, CancellationToken token = default)
+            => throw new InvalidOperationException("cache unavailable");
+    }
+
+    /// <summary>记录写入时使用的过期策略。</summary>
+    private sealed class OptionsRecordingCache(IDistributedCache inner) : IDistributedCache
+    {
+        internal List<DistributedCacheEntryOptions> CapturedOptions { get; } = [];
+
+        public byte[]? Get(string key) => inner.Get(key);
+
+        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => inner.GetAsync(key, token);
+
+        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+        {
+            CapturedOptions.Add(options);
+            inner.Set(key, value, options);
+        }
+
+        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+        {
+            CapturedOptions.Add(options);
+            return inner.SetAsync(key, value, options, token);
+        }
+
+        public void Refresh(string key) => inner.Refresh(key);
+
+        public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
+
+        public void Remove(string key) => inner.Remove(key);
+
+        public Task RemoveAsync(string key, CancellationToken token = default) => inner.RemoveAsync(key, token);
+    }
+
     [Fact]
     public async Task Name_is_reusable_after_deletion()
     {
-        var first = await _manager.CreateAsync("Acme");
+        var first = await _manager.CreateAsync("Acme", null, isActive: true);
         await _manager.DeleteAsync(first.Id);
 
         // 部分唯一索引只约束未删除行
-        var recreated = await _manager.CreateAsync("Acme");
+        var recreated = await _manager.CreateAsync("Acme", null, isActive: true);
         Assert.NotEqual(first.Id, recreated.Id);
     }
 
@@ -377,9 +488,9 @@ public class TenantStoreManagerTests : IAsyncLifetime
     [Fact]
     public async Task Paged_query_filters_keyword_and_excludes_deleted()
     {
-        await _manager.CreateAsync("Acme", "Acme Inc.");
-        await _manager.CreateAsync("Contoso");
-        var deleted = await _manager.CreateAsync("Acme-Old");
+        await _manager.CreateAsync("Acme", "Acme Inc.", isActive: true);
+        await _manager.CreateAsync("Contoso", null, isActive: true);
+        var deleted = await _manager.CreateAsync("Acme-Old", null, isActive: true);
         await _manager.DeleteAsync(deleted.Id);
 
         var all = await _manager.GetPagedAsync(null, 0, 10);

@@ -27,8 +27,8 @@ public class EfCoreTenantManager<TDbContext>(
     /// <inheritdoc />
     public async Task<TenantConfiguration> CreateAsync(
         string name,
-        string? displayName = null,
-        bool isActive = true,
+        string? displayName,
+        bool isActive,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);

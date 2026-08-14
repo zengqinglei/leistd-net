@@ -617,7 +617,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         internal static void Reset() => LastCreatedId = null;
 
         public async Task<TenantConfiguration> CreateAsync(
-            string name, string? displayName = null, bool isActive = true, CancellationToken cancellationToken = default)
+            string name, string? displayName, bool isActive, CancellationToken cancellationToken = default)
         {
             var created = await inner.CreateAsync(name, displayName, isActive, cancellationToken);
             LastCreatedId = created.Id;

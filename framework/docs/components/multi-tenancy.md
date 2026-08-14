@@ -214,7 +214,8 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 
 ### Leistd.MultiTenancy.EntityFrameworkCore
 
-- `EfCoreTenantStore` 经 `IDistributedCache` 缓存租户配置（键 `leistd:tenant:i:{id}` / `n:{name}`，30 分钟滑动过期兜底）；`ITenantManager` 的每次写入精确失效相关键。**写入必须经 `ITenantManager`**——绕过它直接写库会留下陈旧缓存（这也是测试证明过的行为）。
+- `EfCoreTenantStore` 经 `IDistributedCache` 缓存租户配置（键 `leistd:tenant:i:{id}` / `n:{name}`）；`ITenantManager` 的每次写入精确失效相关键。**写入必须经 `ITenantManager`**——绕过它直接写库会留下陈旧缓存（这也是测试证明过的行为）。
+- 缓存条目用**绝对**过期（`EfCoreTenantStore.CacheDuration`，默认 1 分钟），不用滑动过期。租户的启用状态是访问控制状态，而 cache-aside 的失效是尽力而为的（Redis 不可用时 `RemoveAsync` 会失败）；滑动过期下持续有流量的租户，其陈旧的"启用"条目会被每个请求续命而永不过期，**停用一个繁忙租户可能永远不生效**。绝对过期把失效失败的后果收成"最多 `CacheDuration` 后自愈"。失效本身失败时管理器抛出异常，库中状态已提交，重试即自愈（写路径读库不读缓存）。需要更严的撤销时序时，替换 `ITenantStore` 实现（`InMemoryTenantStore` 或直连库）。
 - 落值拦截器只处理 `Added` 且 `TenantId == null` 的实体；宿主上下文保存的实体保持 `null` 即宿主数据。
 - `TenantRecord` 不实现 `IMultiTenant`（它本身是宿主侧数据）。名称唯一性由**未删除行上的部分唯一索引**保证（`IsDeleted = false` 过滤，PostgreSQL 与 SQLite 通用），删除后名称可复用；管理器的先查后校验只负责给出友好错误，并发落败方由数据库拒绝后同样得到 `DuplicateTenantNameException`（映射 409）。低频与权限门禁都不能替代数据库不变量。
 
