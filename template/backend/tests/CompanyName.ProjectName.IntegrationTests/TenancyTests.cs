@@ -274,6 +274,17 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // 补偿覆盖种子数据：在失败租户的上下文里，所有租户化实体都不可见
         await AssertNoVisibleTenantDataAsync(failedTenantId.Value);
 
+        // 补偿在独立作用域里执行，因此不会把失败现场跟踪器里的实体一起提交。
+        // 复用失败现场的 DbContext 时，补偿的 SaveChanges 会写出这一行
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            Assert.Empty(await db.Set<Role>()
+                .IgnoreQueryFilters()
+                .Where(r => r.Name == FailAfterRolesTenantSeeder.GhostRoleName)
+                .ToListAsync());
+        }
+
         // 注册表也已回滚，没有留下无管理员的半成品租户
         using var anonymous = _factory.CreateProjectClient();
         var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/compensated");
@@ -334,12 +345,16 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// </summary>
     private sealed class FailAfterRolesTenantSeeder(
         ICurrentTenant currentTenant,
+        MyProjectDbContext dbContext,
         IRepository<Role, Guid> roleRepository,
         IPermissionDefinitionManager permissionDefinitionManager,
         IPermissionGrantStore permissionGrantStore,
         IPermissionGrantManager permissionGrantManager,
         TenantSeeder inner) : ITenantSeeder
     {
+        /// <summary>失败瞬间留在跟踪器里、绝不应被补偿写入数据库的实体名。</summary>
+        internal const string GhostRoleName = "GhostRoleFromDirtyTracker";
+
         /// <summary>最近一次失败的租户 Id，供测试断言其数据已被清除。</summary>
         internal static Guid? LastTenantId { get; private set; }
 
@@ -363,6 +378,11 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             await permissionGrantManager.ReplaceGrantsAsync(
                 PermissionGrantProviderNames.Role, adminRole.Id.ToString(), definitions,
                 expectedRevision: existing.Revision, cancellationToken);
+
+            // 制造"脏跟踪器"：EF 在 SaveChanges 失败后会保留 Added/Modified 实体，
+            // 这里用一个未保存的 Add 等价模拟——对补偿的影响完全相同。
+            // 若补偿复用这个 DbContext，它的下一次 SaveChanges 会把这个实体一起写进库
+            dbContext.Add(new Role(GhostRoleName, "Ghost Role"));
 
             // 第三步（创建管理员）之前失败
             throw new InvalidOperationException("injected seed failure after roles and grants");

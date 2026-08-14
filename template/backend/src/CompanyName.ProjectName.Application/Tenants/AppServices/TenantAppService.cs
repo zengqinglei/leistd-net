@@ -3,6 +3,7 @@ using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Exception.Core;
 using Leistd.MultiTenancy;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
@@ -20,6 +21,7 @@ public class TenantAppService(
     ITenantNormalizer tenantNormalizer,
     ITenantSeeder tenantSeeder,
     ICurrentTenant currentTenant,
+    IServiceScopeFactory serviceScopeFactory,
     ILogger<TenantAppService> logger) : ITenantAppService
 {
     /// <inheritdoc />
@@ -63,20 +65,61 @@ public class TenantAppService(
         catch (Exception ex)
         {
             logger.LogError(ex, "租户 {TenantId} 初始化失败，回滚租户与已写入的种子数据", tenant.Id);
-
-            // 补偿用独立取消令牌：调用方取消（含超时）不应让补偿也被取消，
-            // 否则恰恰在最需要清理的路径上留下半成品租户
-            using (currentTenant.Change(tenant.Id, tenant.Name))
-            {
-                await tenantSeeder.PurgeAsync(CancellationToken.None);
-            }
-
-            await tenantManager.DeleteAsync(tenant.Id, CancellationToken.None);
+            await CompensateAsync(tenant);
             throw;
         }
 
         logger.LogInformation("已创建租户 {TenantName}（{TenantId}）并完成初始化", tenant.Name, tenant.Id);
         return ToOutputDto(tenant);
+    }
+
+    /// <summary>
+    /// 回滚一次失败的租户创建：先清租内已写入的种子数据，再删除租户注册表。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>必须在独立作用域里执行。</b>失败现场的 DbContext 仍跟踪着写入失败的实体
+    /// （EF 在 SaveChanges 失败后不会回滚跟踪状态），用它清理会在下一次保存把那些实体一起
+    /// 写进数据库——补偿反而制造残留。新作用域拿到干净的 DbContext，只看已落库的数据。</para>
+    /// <para>两步各自兜住异常：补偿失败不能覆盖原始的种子异常（那才是调用方需要看到的原因），
+    /// 也不能阻止注册表删除——注册表一删租户即不可达，残留数据虽在但无法被访问。
+    /// 补偿自身失败以 Error 日志暴露，交由运维核查；不引入重试队列或对账作业，
+    /// 那是分布式事务基础设施，不属于模板范围。</para>
+    /// <para>用独立取消令牌：调用方取消（含超时）不应让补偿也被取消，
+    /// 否则恰恰在最需要清理的路径上留下半成品租户。</para>
+    /// </remarks>
+    private async Task CompensateAsync(TenantConfiguration tenant)
+    {
+        using var scope = serviceScopeFactory.CreateScope();
+        var scopedCurrentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var scopedSeeder = scope.ServiceProvider.GetRequiredService<ITenantSeeder>();
+        var scopedManager = scope.ServiceProvider.GetRequiredService<ITenantManager>();
+
+        try
+        {
+            using (scopedCurrentTenant.Change(tenant.Id, tenant.Name))
+            {
+                await scopedSeeder.PurgeAsync(CancellationToken.None);
+            }
+        }
+        catch (Exception purgeError)
+        {
+            logger.LogError(
+                purgeError,
+                "清除租户 {TenantId} 的种子数据失败，需人工核查残留数据",
+                tenant.Id);
+        }
+
+        try
+        {
+            await scopedManager.DeleteAsync(tenant.Id, CancellationToken.None);
+        }
+        catch (Exception deleteError)
+        {
+            logger.LogError(
+                deleteError,
+                "删除租户 {TenantId} 失败，该名称在人工清理前无法重用",
+                tenant.Id);
+        }
     }
 
     /// <inheritdoc />

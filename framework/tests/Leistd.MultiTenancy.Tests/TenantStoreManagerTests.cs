@@ -26,17 +26,34 @@ public class TenantStoreManagerTests : IAsyncLifetime
         /// <summary>测试用的显示名长度上限，用来制造与名称无关的约束失败。</summary>
         internal const int DisplayNameCheckLimit = 32;
 
+        /// <summary>与租户无关的业务实体：验证管理器失败时不连带丢弃调用方的待提交变更。</summary>
+        public DbSet<TestNote> Notes => Set<TestNote>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.ConfigureMultiTenancy();
 
             // SQLite 不强制 VARCHAR 长度，需显式 CHECK 才能触发非名称冲突的写入失败
+            modelBuilder.Entity<TestNote>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.Property(x => x.Text).HasMaxLength(64);
+            });
+
             modelBuilder.Entity<TenantRecord>()
                 .ToTable(t => t.HasCheckConstraint(
                     "CK_Test_TenantRecord_DisplayName",
                     $"\"{nameof(TenantRecord.DisplayName)}\" IS NULL OR length(\"{nameof(TenantRecord.DisplayName)}\") <= {DisplayNameCheckLimit}"));
         }
+    }
+
+    /// <summary>宿主工作单元里的普通业务实体。</summary>
+    internal class TestNote
+    {
+        public Guid Id { get; set; } = Guid.CreateVersion7();
+
+        public string Text { get; set; } = string.Empty;
     }
 
     public async Task InitializeAsync()
@@ -228,6 +245,61 @@ public class TenantStoreManagerTests : IAsyncLifetime
 
         Assert.NotNull(ex);
         Assert.IsNotType<DuplicateTenantNameException>(ex);
+
+        // 失败的修改必须从跟踪器里回滚：留着它，下一次保存就会把这个已知失败的值写出去
+        var tracked = await _db.Set<TenantRecord>().FirstAsync(t => t.Id == record.Id);
+        Assert.Equal(EntityState.Unchanged, _db.Entry(tracked).State);
+        Assert.Null(tracked.DisplayName);
+
+        await _db.SaveChangesAsync();
+        Assert.Null((await _manager.FindAsync(record.Id))!.DisplayName);
+    }
+
+    /// <summary>
+    /// 管理器的 DbContext 可能就是宿主的工作单元：名称冲突不能连带丢掉调用方尚未提交的业务变更。
+    /// </summary>
+    /// <remarks>
+    /// 早期实现在冲突分支里 <c>ChangeTracker.Clear()</c>，会静默清空整个跟踪器——
+    /// 调用方先改了业务实体、再调用租户管理器并捕获 409 继续执行时，那些修改凭空消失。
+    /// </remarks>
+    [Fact]
+    public async Task Name_conflict_does_not_discard_unrelated_pending_changes()
+    {
+        await _manager.CreateAsync("Acme");
+
+        // 调用方在同一 DbContext 里改了业务实体，尚未提交
+        var note = new TestNote { Text = "caller's pending work" };
+        _db.Add(note);
+
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("acme"));
+
+        // 无关实体仍在跟踪器里等待提交，且能正常落库
+        Assert.Equal(EntityState.Added, _db.Entry(note).State);
+        await _db.SaveChangesAsync();
+        Assert.Equal("caller's pending work", (await _db.Set<TestNote>().SingleAsync()).Text);
+    }
+
+    /// <summary>
+    /// 预检拒绝时实体完全未被触碰——赋值必须发生在预检之后。
+    /// </summary>
+    /// <remarks>
+    /// 若把赋值提到预检之前，被拒绝的改名会留在跟踪器里，下一次保存就把它写出去了。
+    /// 保存失败路径的回滚由 <c>Other_constraint_failures_are_not_reported_as_duplicate_name</c> 覆盖。
+    /// </remarks>
+    [Fact]
+    public async Task Precheck_rejection_leaves_the_record_untouched()
+    {
+        var target = await _manager.CreateAsync("Acme");
+        await _manager.CreateAsync("Contoso");
+
+        // 改成已被占用的名字：预检就会拒绝，实体上的赋值必须回滚
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(
+            () => _manager.UpdateAsync(target.Id, "Contoso", null));
+
+        // 跟踪器里不应残留"Contoso"这个改名意图
+        await _db.SaveChangesAsync();
+        var reloaded = await _manager.FindAsync(target.Id);
+        Assert.Equal("Acme", reloaded!.Name);
     }
 
     [Fact]

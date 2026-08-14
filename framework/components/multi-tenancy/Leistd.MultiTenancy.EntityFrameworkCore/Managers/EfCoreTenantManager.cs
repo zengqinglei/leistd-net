@@ -1,5 +1,6 @@
 using Leistd.Timing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Caching.Distributed;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
@@ -38,8 +39,8 @@ public class EfCoreTenantManager<TDbContext>(
             DisplayName = displayName
         };
 
-        dbContext.Set<TenantRecord>().Add(record);
-        await SaveTranslatingDuplicateNameAsync(normalizedName, record.Id, cancellationToken);
+        var entry = dbContext.Set<TenantRecord>().Add(record);
+        await SaveTranslatingDuplicateNameAsync(entry, normalizedName, cancellationToken);
         return EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
 
@@ -61,7 +62,7 @@ public class EfCoreTenantManager<TDbContext>(
         record.NormalizedName = normalizedName;
         record.DisplayName = displayName;
 
-        await SaveTranslatingDuplicateNameAsync(normalizedName, record.Id, cancellationToken);
+        await SaveTranslatingDuplicateNameAsync(dbContext.Entry(record), normalizedName, cancellationToken);
         await InvalidateCacheAsync(record.Id, oldNormalizedName, normalizedName, cancellationToken);
         return EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
@@ -129,12 +130,12 @@ public class EfCoreTenantManager<TDbContext>(
     /// <remarks>
     /// 预检（<c>EnsureNameNotTakenAsync</c>）只能给出友好错误，挡不住并发——两个请求同时通过
     /// 校验时，由数据库的部分唯一索引兜住，落败方在这里得到与预检一致的异常，而不是 500。
-    /// 判定必须排除本次写入的行（<paramref name="currentId"/>）：不排除的话，更新操作因其它约束
-    /// （如显示名超长）失败时，查同名会命中自己，把任何写入失败都误报成"名称重复"。
+    /// 判定必须排除本次写入的行：不排除的话，更新操作因其它约束（如显示名超长）失败时，
+    /// 查同名会命中自己，把任何写入失败都误报成"名称重复"。
     /// </remarks>
     private async Task SaveTranslatingDuplicateNameAsync(
+        EntityEntry<TenantRecord> entry,
         string normalizedName,
-        Guid currentId,
         CancellationToken cancellationToken)
     {
         try
@@ -143,12 +144,16 @@ public class EfCoreTenantManager<TDbContext>(
         }
         catch (DbUpdateException)
         {
-            // 落败方在这里判定：库中是否已有别人占用该名称
-            dbContext.ChangeTracker.Clear();
+            // 只丢弃本次操作的条目。DbContext 可能是宿主的工作单元，
+            // 清空整个跟踪器会连带丢掉调用方尚未提交的业务实体变更——
+            // 调用方捕获名称冲突继续执行时，那些修改会静默消失。
+            DiscardPendingChange(entry);
+
+            // 判定用 AsNoTracking 直接打库，不受跟踪器状态影响
             var takenByOther = await dbContext.Set<TenantRecord>()
                 .AsNoTracking()
                 .AnyAsync(
-                    t => t.NormalizedName == normalizedName && !t.IsDeleted && t.Id != currentId,
+                    t => t.NormalizedName == normalizedName && !t.IsDeleted && t.Id != entry.Entity.Id,
                     cancellationToken);
 
             if (takenByOther)
@@ -158,6 +163,24 @@ public class EfCoreTenantManager<TDbContext>(
 
             // 其它约束或数据库故障：原样上抛，不冒充名称冲突
             throw;
+        }
+    }
+
+    /// <summary>
+    /// 撤销本次操作在跟踪器里留下的待提交状态：新增条目脱离跟踪，
+    /// 修改条目恢复原值——否则失败的改名会留在跟踪器里，被下一次保存写出去。
+    /// </summary>
+    private static void DiscardPendingChange(EntityEntry<TenantRecord> entry)
+    {
+        switch (entry.State)
+        {
+            case EntityState.Added:
+                entry.State = EntityState.Detached;
+                break;
+            case EntityState.Modified:
+                entry.CurrentValues.SetValues(entry.OriginalValues);
+                entry.State = EntityState.Unchanged;
+                break;
         }
     }
 
