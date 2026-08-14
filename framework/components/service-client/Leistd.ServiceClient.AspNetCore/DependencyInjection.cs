@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.ServiceClient.AspNetCore;
 
@@ -41,18 +42,31 @@ public static class DependencyInjection
         return AddServiceUserContextCore(services);
     }
 
+    /// <summary>
+    /// 内部注册标记：表示本扩展方法已完成注册。
+    /// </summary>
+    /// <remarks>
+    /// 不能用 <see cref="ServiceUserContextClaimsTransformation"/> 的存在与否来推断——
+    /// 它是公共类型，宿主自行组合时会直接注册/注入它（见组件文档），其他组件也可能预先注册。
+    /// 那种情况下本方法会误判为「已执行」而跳过组合注册，恢复退回只剩中间件一条路，
+    /// 授权策略按 scheme 重认证时又会被覆盖，表现为用户上下文时有时无。
+    /// </remarks>
+    private sealed class ServiceUserContextRegistrationMarker;
+
     private static IServiceCollection AddServiceUserContextCore(IServiceCollection services)
     {
         // 已注册过：直接返回。否则第二次调用会把上一次的注册当成「宿主转换」再包一层，
         // 每多调一次多嵌套一层（逻辑幂等掩盖了这一点，但每请求要多跑一遍链）。
         // Options 配置在公共入口完成，早退不影响重复调用时的重新配置。
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(ServiceUserContextClaimsTransformation)))
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(ServiceUserContextRegistrationMarker)))
         {
             return services;
         }
 
+        services.AddSingleton<ServiceUserContextRegistrationMarker>();
         services.AddHttpContextAccessor();
-        services.AddSingleton<ServiceUserContextClaimsTransformation>();
+        // TryAdd：宿主可能已注册该公共类型（自行组合场景），此时沿用宿主的注册。
+        services.TryAddSingleton<ServiceUserContextClaimsTransformation>();
 
         // ASP.NET Core 的认证服务只消费单个 IClaimsTransformation，后注册者覆盖先注册者
         // （AddAuthentication 会预注册一个空实现）。直接 Replace 会静默删掉宿主已注册的转换

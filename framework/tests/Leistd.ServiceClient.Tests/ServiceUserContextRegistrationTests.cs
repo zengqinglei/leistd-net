@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Leistd.Security.Claims;
 using Leistd.ServiceClient.AspNetCore;
+using Leistd.ServiceClient.AspNetCore.Claims;
 using Leistd.ServiceClient.Constants;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -272,6 +273,36 @@ public class ServiceUserContextRegistrationTests
         Assert.Equal("tenant-a", result.FindFirst(TenantClaimType)?.Value);   // 默认注册被组合
         Assert.Equal(UserId.ToString(), result.FindFirst("sub")?.Value);
         Assert.NotNull(scope.ServiceProvider.GetKeyedService<IClaimsTransformation>("external")); // keyed 未被动过
+    }
+
+    [Fact]
+    public async Task 宿主预注册恢复转换的公共类型_组合仍被正常注册()
+    {
+        // 该公共类型是文档鼓励宿主注入的（自行组合场景），不能用它的存在推断扩展方法已执行——
+        // 误判会跳过组合注册，认证阶段恢复缺失，只剩中间件一条路。
+        var services = CreateServices();
+        services.AddSingleton<ServiceUserContextClaimsTransformation>();
+        services.AddScoped<IClaimsTransformation, TenantClaimsTransformation>();
+        services.AddServiceUserContext();
+
+        var result = await TransformInScopeAsync(services);
+
+        Assert.Equal("tenant-a", result.FindFirst(TenantClaimType)?.Value);
+        Assert.Equal(UserId.ToString(), result.FindFirst("sub")?.Value);
+    }
+
+    [Fact]
+    public async Task 宿主预注册keyed的恢复转换类型_组合仍被正常注册()
+    {
+        var services = CreateServices();
+        services.AddKeyedSingleton<ServiceUserContextClaimsTransformation>("external");
+        services.AddScoped<IClaimsTransformation, TenantClaimsTransformation>();
+        services.AddServiceUserContext();
+
+        var result = await TransformInScopeAsync(services);
+
+        Assert.Equal("tenant-a", result.FindFirst(TenantClaimType)?.Value);
+        Assert.Equal(UserId.ToString(), result.FindFirst("sub")?.Value);
     }
 
     [Fact]
