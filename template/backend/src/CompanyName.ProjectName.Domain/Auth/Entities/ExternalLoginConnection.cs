@@ -1,14 +1,33 @@
 #if (IncludeIdentity)
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
+#if (TenancyEnabled)
+using Leistd.MultiTenancy;
+#endif
 
 namespace CompanyName.ProjectName.Domain.Auth.Entities;
 
 /// <summary>
 /// 外部登录连接实体（GitHub、Google 等第三方身份提供商）
 /// </summary>
+#if (TenancyEnabled)
+/// <remarks>
+/// 实现 <see cref="IMultiTenant"/>：外部身份的 (Provider, ProviderUserId) 由第三方决定，
+/// 只在租户内唯一。不分区的话，同一个 GitHub 账号在租户 A 绑定后，租户 B 的登录会命中 A 的连接，
+/// 既泄漏该外部身份已被占用，又让同一账号无法在多个租户各自绑定——那是 SaaS 的正常需求。
+/// </remarks>
+public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
+#else
 public class ExternalLoginConnection : DeletionAuditedEntity<Guid>
+#endif
 {
+#if (TenancyEnabled)
+    /// <summary>
+    /// 所属租户（null 为宿主），由多租户落值拦截器在创建时填充
+    /// </summary>
+    public Guid? TenantId { get; private set; }
+
+#endif
     /// <summary>
     /// 用户 ID
     /// </summary>

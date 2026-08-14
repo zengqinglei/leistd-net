@@ -44,7 +44,7 @@ public class AuthPrincipalFactory(
         identity.SetClaims(Claims.Role, roleNames.ToImmutableArray());
 #endif
         identity.SetClaim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false");
-#if (IncludeTenancy)
+#if (TenancyEnabled)
         // 租户 claim：多租户解析链以它定案已登录用户的租户
         if (user.TenantId is { } tenantId)
         {
@@ -102,7 +102,7 @@ public class AuthPrincipalFactory(
             [
                 Destinations.AccessToken
             ],
-#if (IncludeTenancy)
+#if (TenancyEnabled)
             CustomClaimTypes.TenantId =>
             [
                 Destinations.AccessToken

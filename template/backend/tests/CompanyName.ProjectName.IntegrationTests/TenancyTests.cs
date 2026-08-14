@@ -1,7 +1,15 @@
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.Tenants;
+using Microsoft.Extensions.DependencyInjection;
+#if (IncludeExternalLogin)
+using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Users.Entities;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.MultiTenancy;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -229,6 +237,103 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NotFound, unknownTenantRequest.StatusCode);
     }
 
+    [Fact]
+    public async Task 种子失败时补偿删除租户_名称可立即重用()
+    {
+        // 注入一个必然失败的种子实现：验证补偿路径，而不是等真实故障
+        using var brokenHost = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+                services.AddTransient<ITenantSeeder, ThrowingTenantSeeder>()));
+
+        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(brokenHost, "admin", "Admin@123456");
+
+        var failed = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
+        {
+            Name = "compensated",
+            AdminEmail = "admin@compensated.example.com",
+            AdminPassword = "Tenant@123456"
+        });
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+
+        // 补偿生效：没有留下无管理员的半成品租户
+        using var anonymous = _factory.CreateProjectClient();
+        var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/compensated");
+        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+
+        // 名称立即可重用：重试不撞名，无需人工清理
+        var hostAdmin2 = await LoginHostAdminAsync();
+        var retried = await CreateTenantAsync(hostAdmin2, "compensated");
+        Assert.NotEqual(Guid.Empty, retried);
+    }
+
+    private sealed class ThrowingTenantSeeder : ITenantSeeder
+    {
+        public Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("injected seed failure");
+    }
+
+#if (IncludeExternalLogin)
+    [Fact]
+    public async Task 同一外部身份可在不同租户各自绑定_且查询按租户分区()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantAId = await CreateTenantAsync(hostAdmin, "extlogin-a");
+        var tenantBId = await CreateTenantAsync(hostAdmin, "extlogin-b");
+
+        // 外部身份的 (Provider, ProviderUserId) 由第三方决定，只在租户内唯一：
+        // 同一个 GitHub 账号必须能在两个租户各自绑定，且各租户只看得见自己的连接
+        const string provider = "github";
+        const string providerUserId = "gh-42";
+
+        var connectionAId = await BindExternalLoginAsync(tenantAId, provider, providerUserId);
+        var connectionBId = await BindExternalLoginAsync(tenantBId, provider, providerUserId);
+        Assert.NotEqual(connectionAId, connectionBId);
+
+        // 查询分区：租户 A 的按 Provider+ProviderUserId 查找命中自己的连接，而非 B 的
+        Assert.Equal(connectionAId, await FindExternalLoginAsync(tenantAId, provider, providerUserId));
+        Assert.Equal(connectionBId, await FindExternalLoginAsync(tenantBId, provider, providerUserId));
+
+        // 宿主视角看不到任何租户的连接
+        Assert.Null(await FindExternalLoginAsync(tenantId: null, provider, providerUserId));
+    }
+
+    /// <summary>在指定租户上下文内为其管理员绑定一个外部身份，返回连接 Id。</summary>
+    private async Task<Guid> BindExternalLoginAsync(Guid tenantId, string provider, string providerUserId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var users = scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>();
+        var connections = scope.ServiceProvider.GetRequiredService<IRepository<ExternalLoginConnection, Guid>>();
+
+        using (currentTenant.Change(tenantId))
+        {
+            var admin = await users.GetFirstAsync(u => u.Username == "admin", q => q.OrderBy(u => u.Id));
+            Assert.NotNull(admin);
+
+            // TenantId 由多租户落值拦截器按当前上下文填充，业务代码不手写
+            var connection = new ExternalLoginConnection(admin.Id, provider, providerUserId);
+            await connections.InsertAsync(connection);
+            return connection.Id;
+        }
+    }
+
+    /// <summary>在指定租户上下文（null 为宿主）内按外部身份查找连接，返回连接 Id 或 null。</summary>
+    private async Task<Guid?> FindExternalLoginAsync(Guid? tenantId, string provider, string providerUserId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var connections = scope.ServiceProvider.GetRequiredService<IRepository<ExternalLoginConnection, Guid>>();
+
+        using (currentTenant.Change(tenantId))
+        {
+            var found = await connections.GetFirstAsync(
+                c => c.Provider == provider && c.ProviderUserId == providerUserId,
+                q => q.OrderBy(c => c.Id));
+            return found?.Id;
+        }
+    }
+
+#endif
     [Fact]
     public async Task 删除租户后_名称可复用且旧租户不可达()
     {

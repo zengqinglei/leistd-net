@@ -14,7 +14,7 @@ using CompanyName.ProjectName.Application.Permissions.Checker;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 #endif
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 #endif
@@ -67,7 +67,7 @@ public static class DependencyInjection
         services.AddTransient<IPermissionAppService, PermissionAppService>();
 #endif
 
-#if (IncludeTenancy)
+#if (TenancyEnabled)
         // 租户管理（宿主侧）：写路径走框架 ITenantManager，创建后在租内种子
         services.AddTransient<ITenantAppService, TenantAppService>();
         services.AddTransient<ITenantSeeder, TenantSeeder>();

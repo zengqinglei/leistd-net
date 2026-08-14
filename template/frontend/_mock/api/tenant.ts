@@ -1,4 +1,4 @@
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { TENANTS, toTenantBrief, toTenantOutput } from '../data/tenant';

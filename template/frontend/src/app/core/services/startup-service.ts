@@ -1,4 +1,4 @@
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { HttpClient } from '@angular/common/http';
 //#endif
 // prettier-ignore
@@ -9,7 +9,7 @@ import {
   //#endif
   signal,
 } from '@angular/core';
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { firstValueFrom } from 'rxjs';
 //#endif
 //#if (IncludeIdentity)
@@ -18,7 +18,7 @@ import { AuthService } from './auth-service';
 //#if (IncludeRoles)
 import { AuthorizationService } from './authorization-service';
 //#endif
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { TenantContextService } from './tenant-context-service';
 import { TenantBriefOutputDto } from '../../shared/dtos/tenant.dto';
 //#endif
@@ -35,7 +35,7 @@ export class StartupService {
   //#if (IncludeRoles)
   private authorizationService = inject(AuthorizationService);
   //#endif
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   private readonly http = inject(HttpClient);
   private readonly tenantContext = inject(TenantContextService);
   //#endif
@@ -49,7 +49,7 @@ export class StartupService {
     this._status.set('loading');
     this._error.set(null);
 
-    //#if (IncludeTenancy)
+    //#if (TenancyEnabled)
     // 本地存有租户时先校验其仍然存在且启用；404/停用 → 清除。
     // 必须阻塞在认证初始化之前：后续启动请求都会携带 X-Tenant-Id，
     // 失效租户的头会让它们全部被 403 拒绝，启动误入故障分支。
@@ -120,7 +120,7 @@ export class StartupService {
     return route.startsWith('/workspace') || route.startsWith('/platform');
   }
   //#endif
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
 
   /** 校验本地租户上下文：不存在（404）或已停用则清除；其他故障保留，避免误清。 */
   private async validateTenantContext(): Promise<void> {

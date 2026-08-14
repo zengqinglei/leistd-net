@@ -326,6 +326,13 @@ framework/docs/components/multi-tenancy.md         # 组件使用文档（随包
    - 租户超管的菜单里出现"租户管理"（点进去必然 403）：检查器有侧别硬边界，但 current 权限与定义树端点对超管直接下发全部定义。修复：`PermissionAppService` 三处下发全部按当前侧别过滤，并补集成测试。
    - 租户被停用后，持该租户会话的用户被**死锁**在原始 JSON 错误页（HTML 导航、登录页、注销端点全部 403）。修复：新增 `TenantSessionRecoveryMiddleware`——已认证会话命中租户不可用异常时注销 Cookie，HTML 导航重定向自恢复、XHR 回 401（对应 ABP error-page-builder 的同类处理）。
    - 前端启动的租户有效性校验是 fire-and-forget 且校验请求自带失效租户头（先被 403 拒绝，形成鸡生蛋）。修复：校验改为阻塞在认证初始化之前；`tenant-interceptor` 对宿主级匿名探测端点（`by-name`）不附租户头。
+6. **代码审查采纳的修复**（评审意见逐条判断后落地，未采纳项附理由）：
+   - **参数依赖收口**：新增 `TenancyEnabled` computed symbol（`IncludeTenancy && IncludeRoles`），全部租户条件（内容条件与 modifier）引用它。`dotnet new` 没有"拒绝参数组合"的机制，而复合条件直接引用被禁用参数会 NRE（见 §实施记录）；computed symbol 两者都绕开——非法组合 `--include-tenancy true --include-roles false` 整体不生成租户能力，得到合法的无租户项目。矩阵新增 `tenancy-illegal` 场景断言零残留。
+   - **外部登录连接租户化**：`ExternalLoginConnection` 实现 `IMultiTenant`，唯一索引改为宿主/租户成对部分索引。第三方身份的 `(Provider, ProviderUserId)` 只在租户内唯一，不分区会让跨租户登录命中别租户的绑定（泄漏占用状态），并阻止同一账号在多租户各自绑定。查询侧无需改动——全局过滤器自动分区。矩阵新增 `tenancy-external-login` 组合场景。
+   - **唯一性下沉数据库**：`TenantRecord.NormalizedName` 改为未删除行上的部分唯一索引（保留删除后可复用），管理器把冲突翻译成 `DuplicateTenantNameException`；模板 `User`/`Role` 的租户唯一索引拆成宿主行（`IS NULL`）与租户行（`IS NOT NULL`）成对形态——可空列直接进唯一索引时两个 Provider 都视 NULL 互不相等，宿主行会失去兜底。Sqlite 测试真实验证约束与翻译。
+   - **创建失败补偿**：种子失败时删除租户记录并重抛（补偿用独立取消令牌，避免调用方超时连带取消清理）。不采用单事务：种子内持有分布式锁，圈进数据库事务会把锁与事务生命周期绑死，且模板无 `[UnitOfWork]` 先例、集成测试跑在不支持事务的 InMemory 上——代价大于收益。失败注入测试断言无残留且名称可立即重用。
+   - **未采纳**：`UserRole` 租户化（其全部查询谓词都是全局唯一的 `UserId`/`RoleId`，结构上不可能跨租户命中，加列纯冗余）；集成测试基座 InMemory→关系库（会动所有既有测试的行为基线，超出多租户范围；唯一索引与 NULL 语义已由框架侧 Sqlite 测试覆盖，作为已知限制记录）；`tenancy+localization/notifications` 组合矩阵（维度与租户正交，只会让矩阵爆炸）。
+
 
 ### 阶段 5：Template 前端与 Mock
 

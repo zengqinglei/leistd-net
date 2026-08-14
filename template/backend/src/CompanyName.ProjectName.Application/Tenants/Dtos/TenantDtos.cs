@@ -1,4 +1,4 @@
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
 

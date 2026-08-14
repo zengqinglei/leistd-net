@@ -39,7 +39,7 @@
 - 被调方受信恢复扩展到租户：`ServiceUserContextOptions.TenantIdHeader`（默认 `X-Tenant-Id`）恢复为 `tenant_id` claim，且**独立于用户头**（仅有租户上下文的后台任务调用也恢复）；不受信来源的租户头不剥离——解析链主体优先级已使其无害，匿名登录的租户选择依赖它。
 - 受信判定使用 `ClientSubject` 唯一契约：`sub == "client:" + client_id`，与模板 OpenIddict 签发端保持一致，并从结构上隔离机器与自然人主体。
 
-**依赖变化**：CPM 新增 `Microsoft.Extensions.Caching.Abstractions` / `Microsoft.Extensions.Caching.Memory`（10.0.10）；`Leistd.Authorization.Core`、`Leistd.ServiceClient.Core`、`Leistd.Ddd.Infrastructure` 新增对 `Leistd.MultiTenancy.Core` 的依赖。
+**依赖变化**：CPM 新增 `Microsoft.Extensions.Caching.Abstractions` / `Microsoft.Extensions.Caching.Memory`（10.0.10）；`Leistd.MultiTenancy.EntityFrameworkCore` 引用 `Microsoft.EntityFrameworkCore.Relational`（配置部分唯一索引，与 `Leistd.Authorization.EntityFrameworkCore` 一致）；`Leistd.Authorization.Core`、`Leistd.ServiceClient.Core`、`Leistd.Ddd.Infrastructure` 新增对 `Leistd.MultiTenancy.Core` 的依赖。
 
 ## 0.13.0 授权体系最终态（破坏性变更）
 

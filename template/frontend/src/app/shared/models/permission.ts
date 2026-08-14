@@ -21,7 +21,7 @@ export const PERMISSIONS = {
     delete: 'App.Roles.Delete',
     managePermissions: 'App.Roles.ManagePermissions',
   },
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   tenants: {
     default: 'App.Tenants',
     create: 'App.Tenants.Create',

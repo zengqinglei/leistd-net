@@ -1,4 +1,4 @@
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 

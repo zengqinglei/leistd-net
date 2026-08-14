@@ -2,7 +2,7 @@ using Leistd.Auditing.EntityFrameworkCore;
 #if (IncludeRoles)
 using Leistd.Authorization.EntityFrameworkCore;
 #endif
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using Leistd.MultiTenancy.EntityFrameworkCore;
 #endif
 using Leistd.Ddd.Infrastructure;
@@ -89,7 +89,7 @@ public static class DependencyInjection
             options.AddInterceptors(
                 sp.GetRequiredService<AuditSaveChangesInterceptor>(),
                 sp.GetRequiredService<LocalEventSaveChangesInterceptor>());
-#if (IncludeTenancy)
+#if (TenancyEnabled)
             // 多租户落值拦截器：新增的 IMultiTenant 实体自动填充当前租户 Id
             options.AddInterceptors(sp.GetRequiredService<MultiTenantSaveChangesInterceptor>());
 #endif
@@ -103,7 +103,7 @@ public static class DependencyInjection
 #if (IncludeRoles)
         services.AddAuthorizationEfCore<MyProjectDbContext>();
 #endif
-#if (IncludeTenancy)
+#if (TenancyEnabled)
         // 租户注册表存储、管理器与落值拦截器（依赖下方注册的分布式缓存）
         services.AddMultiTenancyEfCore<MyProjectDbContext>();
 #endif

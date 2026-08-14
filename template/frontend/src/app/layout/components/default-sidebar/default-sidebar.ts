@@ -6,7 +6,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   lucideBuilding2,
   //#endif
   lucideGauge,
@@ -62,7 +62,7 @@ interface MenuGroup {
   ],
   // prettier-ignore
   providers: [provideIcons({
-    //#if (IncludeTenancy)
+    //#if (TenancyEnabled)
     lucideBuilding2,
     //#endif
     lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck,
@@ -104,7 +104,7 @@ export class DefaultSidebar {
           permissions: [PERMISSIONS.roles.default],
         },
         //#endif
-        //#if (IncludeTenancy)
+        //#if (TenancyEnabled)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'layout.sidebar.tenants',
@@ -168,7 +168,7 @@ export class DefaultSidebar {
           permissions: [PERMISSIONS.roles.default],
         },
         //#endif
-        //#if (IncludeTenancy)
+        //#if (TenancyEnabled)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'Tenant Management',

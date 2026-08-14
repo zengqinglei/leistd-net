@@ -21,7 +21,7 @@ using Leistd.Tracing.AspNetCore;
 #if (IncludeRoles)
 using Leistd.Authorization.AspNetCore;
 #endif
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using Leistd.MultiTenancy;
 #endif
 #if (IncludeNotifications)
@@ -278,7 +278,7 @@ try
     // 4.5. Leistd Security 服务
     builder.Services.AddSecurity();
 
-#if (IncludeTenancy)
+#if (TenancyEnabled)
     // 4.5.-1 多租户：环境上下文与解析链（Claim 定案 → X-Tenant-Id 头 → tenant 查询串），
     // 配置节 Leistd:MultiTenancy；租户存储/管理器在 Infrastructure 层注册
     builder.Services.AddMultiTenancy(builder.Configuration);
@@ -310,7 +310,7 @@ try
 #if (IncludeIdentity)
     builder.Services.AddAuthentication(options =>
     {
-#if (IncludeTenancy && IncludeOpenIddict)
+#if (TenancyEnabled && IncludeOpenIddict)
         // 多租户 + OpenIddict：默认认证方案改为按请求选择的转发方案。
         // 多租户中间件在 UseAuthentication 之后立即依赖 HttpContext.User 做"已认证主体的
         // 租户由 claim 定案"——若默认方案固定为 Bearer 校验，Cookie 会话在中间件阶段
@@ -328,7 +328,7 @@ try
         options.DefaultChallengeScheme = "MyProjectCookie";
 #endif
     })
-#if (IncludeTenancy && IncludeOpenIddict)
+#if (TenancyEnabled && IncludeOpenIddict)
     .AddPolicyScheme("MyProjectSmart", "按请求选择 Bearer 或 Cookie", options =>
     {
         options.ForwardDefaultSelector = context =>
@@ -503,7 +503,7 @@ try
     app.UseServiceUserContext();
 #endif
 #endif
-#if (IncludeTenancy)
+#if (TenancyEnabled)
     // 租户会话自恢复：会话所属租户被删/停用时注销 Cookie 并恢复导航，防止死锁在错误页
     app.UseTenantSessionRecovery("MyProjectCookie");
     // 多租户解析与校验：认证（及受信恢复）之后——Claim 贡献者需要已认证主体；

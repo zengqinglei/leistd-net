@@ -1,4 +1,4 @@
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Exception.Core;
@@ -41,14 +41,31 @@ public class TenantAppService(
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// 种子失败时补偿删除租户记录：没有管理员的租户谁也登录不进去，把它留在库里只会让
+    /// 重试撞上名称冲突，还得先人工清理。补偿而非单事务——种子内持有分布式锁，
+    /// 把它圈进一个数据库事务会把锁与事务生命周期绑死，且租户创建本就是可重试的低频操作。
+    /// </remarks>
     public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
     {
         var record = await tenantManager.CreateAsync(input.Name, input.DisplayName, cancellationToken);
 
-        // 在新租户上下文内种子：角色、权限授予、租户管理员的所有行由落值拦截器自动归属该租户
-        using (currentTenant.Change(record.Id, record.Name))
+        try
         {
-            await tenantSeeder.SeedAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
+            // 在新租户上下文内种子：角色、权限授予、租户管理员的所有行由落值拦截器自动归属该租户
+            using (currentTenant.Change(record.Id, record.Name))
+            {
+                await tenantSeeder.SeedAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "租户 {TenantId} 初始化失败，回滚租户记录", record.Id);
+
+            // 补偿用独立取消令牌：调用方取消（含超时）不应让补偿也被取消，
+            // 否则恰恰在最需要清理的路径上留下半成品租户
+            await tenantManager.DeleteAsync(record.Id, CancellationToken.None);
+            throw;
         }
 
         logger.LogInformation("已创建租户 {TenantName}（{TenantId}）并完成初始化", record.Name, record.Id);

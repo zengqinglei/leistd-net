@@ -5,7 +5,7 @@ using Leistd.Authorization;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using Leistd.MultiTenancy;
 #endif
 #if (IncludeLocalization)
@@ -28,7 +28,7 @@ public class PermissionAppService(
     IPermissionGrantManager permissionGrantManager,
     IRepository<User, Guid> userRepository,
     IRepository<Role, Guid> roleRepository
-#if (IncludeTenancy)
+#if (TenancyEnabled)
     ,
     ICurrentTenant currentTenant
 #endif
@@ -38,7 +38,7 @@ public class PermissionAppService(
 #endif
     ) : BaseAppService, IPermissionAppService
 {
-#if (IncludeTenancy)
+#if (TenancyEnabled)
     /// <summary>
     /// 当前多租户侧别匹配：宿主侧权限（如 App.Tenants.*）对租户上下文不可见——
     /// 检查器已有同一硬边界，这里让 current 权限集与定义树同口径，

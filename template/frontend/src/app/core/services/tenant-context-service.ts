@@ -1,4 +1,4 @@
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { Injectable, signal } from '@angular/core';
 
 import { TenantBriefOutputDto } from '../../shared/dtos/tenant.dto';

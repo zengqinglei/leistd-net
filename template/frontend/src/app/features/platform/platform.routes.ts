@@ -32,7 +32,7 @@ export const PLATFORM_ROUTES: Routes = [
     data: { permission: PERMISSIONS.roles.default },
   },
   //#endif
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   {
     path: 'tenants',
     loadComponent: () => import('./components/tenants/tenants').then((m) => m.Tenants),

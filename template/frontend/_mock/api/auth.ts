@@ -8,7 +8,7 @@ import {
   SendEmailCodeInputDto,
 } from '../../src/app/features/account/models/account.dto';
 import { MockException, MockRequest } from '../core/models';
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { TENANTS } from '../data/tenant';
 //#endif
 import { USERS, toUserOutput } from '../data/user';
@@ -33,7 +33,7 @@ function ensureEmailAvailable(email: string, currentUserId: string): void {
   }
 }
 
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 /** 复刻后端行为：X-Tenant-Id 指向已停用租户时登录被 403 拒绝。 */
 function ensureTenantActive(req: MockRequest): void {
   const tenantId = req.headers.get('X-Tenant-Id');
@@ -245,7 +245,7 @@ export const AUTH_API = {
   'POST /api/v1/auth/send-email-code': (req: MockRequest) => sendEmailCode(req),
   'POST /api/v1/auth/logout': () => logout(),
   'POST /api/v1/auth/session-login': (req: MockRequest) => {
-    //#if (IncludeTenancy)
+    //#if (TenancyEnabled)
     ensureTenantActive(req);
     //#endif
     return sessionLogin(req.body.usernameOrEmail, req.body.password);

@@ -61,7 +61,7 @@ export const routes: Routes = [
       permissions: [
         PERMISSIONS.users.default,
         PERMISSIONS.roles.default,
-        //#if (IncludeTenancy)
+        //#if (TenancyEnabled)
         PERMISSIONS.tenants.default,
         //#endif
         //#if (IncludeOpenIddict)

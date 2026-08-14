@@ -6,7 +6,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   lucideBuilding2,
   //#endif
   lucideChevronsUpDown,
@@ -27,7 +27,7 @@ import { AuthorizationService } from '../../../core/services/authorization-servi
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { TenantContextService } from '../../../core/services/tenant-context-service';
 //#endif
 import { ChangePasswordDialog } from '../../../features/account/components/change-password-dialog/change-password-dialog';
@@ -65,7 +65,7 @@ interface UserMenuItem {
   // prettier-ignore
   providers: [
     provideIcons({
-      //#if (IncludeTenancy)
+      //#if (TenancyEnabled)
       lucideBuilding2,
       //#endif
       lucideChevronsUpDown,
@@ -174,7 +174,7 @@ export class UserMenu {
   private readonly languageService = inject(LanguageService);
   private readonly transloco = inject(TranslocoService);
   //#endif
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   private readonly tenantContext = inject(TenantContextService);
   //#endif
 
@@ -242,7 +242,7 @@ export class UserMenu {
         action: () => this.openChangePasswordDialog(),
       },
       { separator: true },
-      //#if (IncludeTenancy)
+      //#if (TenancyEnabled)
       // 切换租户 = 清除本地租户上下文并退出登录：已登录会话的租户由 cookie claim 定案，
       // 只有重新登录才能进入另一个租户。
       {
@@ -270,7 +270,7 @@ export class UserMenu {
 
   /** 当前租户显示名；未选租户即宿主。未启用多租户时恒为空串（模板据此隐藏）。 */
   readonly tenantLabel = computed(() => {
-    //#if (IncludeTenancy)
+    //#if (TenancyEnabled)
     //#if (IncludeLocalization)
     this.languageService.activeLang();
     //#endif
@@ -287,7 +287,7 @@ export class UserMenu {
     return '';
     //#endif
   });
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
 
   handleSwitchTenant(): void {
     this.tenantContext.clear();

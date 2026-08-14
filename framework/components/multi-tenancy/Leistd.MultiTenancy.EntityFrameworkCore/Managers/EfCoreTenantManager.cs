@@ -38,7 +38,7 @@ public class EfCoreTenantManager<TDbContext>(
         };
 
         dbContext.Set<TenantRecord>().Add(record);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveTranslatingDuplicateNameAsync(normalizedName, cancellationToken);
         return record;
     }
 
@@ -60,7 +60,7 @@ public class EfCoreTenantManager<TDbContext>(
         record.NormalizedName = normalizedName;
         record.DisplayName = displayName;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveTranslatingDuplicateNameAsync(normalizedName, cancellationToken);
         await InvalidateCacheAsync(record.Id, oldNormalizedName, normalizedName, cancellationToken);
         return record;
     }
@@ -118,6 +118,36 @@ public class EfCoreTenantManager<TDbContext>(
             .ToListAsync(cancellationToken);
 
         return new TenantPage(total, items);
+    }
+
+    /// <summary>
+    /// 保存并把名称唯一索引冲突翻译为 <see cref="DuplicateTenantNameException"/>。
+    /// </summary>
+    /// <remarks>
+    /// 预检（<c>EnsureNameNotTakenAsync</c>）只能给出友好错误，挡不住并发——两个请求同时通过
+    /// 校验时，由数据库的部分唯一索引兜住，落败方在这里得到与预检一致的异常，而不是 500。
+    /// </remarks>
+    private async Task SaveTranslatingDuplicateNameAsync(string normalizedName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is not null)
+        {
+            // 竞争失败：确认确实是名称占用（而非其他约束），再翻译
+            dbContext.ChangeTracker.Clear();
+            var taken = await dbContext.Set<TenantRecord>()
+                .AsNoTracking()
+                .AnyAsync(t => t.NormalizedName == normalizedName && !t.IsDeleted, cancellationToken);
+
+            if (taken)
+            {
+                throw new DuplicateTenantNameException(normalizedName);
+            }
+
+            throw;
+        }
     }
 
     private async Task<TenantRecord> GetAsync(Guid id, CancellationToken cancellationToken)

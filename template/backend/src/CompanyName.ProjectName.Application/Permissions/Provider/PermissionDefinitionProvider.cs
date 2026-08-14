@@ -1,5 +1,5 @@
 using Leistd.Authorization;
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using Leistd.MultiTenancy;
 #endif
 
@@ -74,7 +74,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
             displayName: "Permission:App.Permissions"
         );
 
-#if (IncludeTenancy)
+#if (TenancyEnabled)
         // 宿主侧专属：租户上下文内不可见、不可授予（子权限继承父级侧别）
         var tenantsPermission = systemGroup.AddPermission(
             PermissionConstant.Tenants.Default,

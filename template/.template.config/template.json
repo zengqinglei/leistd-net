@@ -94,9 +94,13 @@
     "IncludeTenancy": {
       "type": "parameter",
       "datatype": "bool",
-      "description": "是否包含多租户模式：租户解析与数据硬隔离、租户管理 API 与页面、登录页租户选择。依赖角色权限：不得与 --include-roles false 同时使用",
+      "description": "是否包含多租户模式：租户解析与数据硬隔离、租户管理 API 与页面、登录页租户选择。依赖角色权限，与 --include-roles false 同用时租户能力整体不生成",
       "defaultValue": "false",
       "isEnabled": "IncludeIdentity"
+    },
+    "TenancyEnabled": {
+      "type": "computed",
+      "value": "(IncludeTenancy && IncludeRoles)"
     }
   },
   "sources": [
@@ -286,7 +290,7 @@
           ]
         },
         {
-          "condition": "!IncludeTenancy",
+          "condition": "!TenancyEnabled",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Application/Tenants/**",
             "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",

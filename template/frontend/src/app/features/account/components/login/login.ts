@@ -8,14 +8,14 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
   lucideZap,
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   lucideBuilding2,
   //#endif
   lucideCircleCheck,
   lucideInfo,
   lucideEye,
   lucideEyeOff,
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   lucideX,
   //#endif
 } from '@ng-icons/lucide';
@@ -35,7 +35,7 @@ import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   ApplicationHttpError,
   //#endif
   applicationErrorMessage,
@@ -44,7 +44,7 @@ import { AuthService } from '../../../../core/services/auth-service';
 //#if (IncludeRoles)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
 //#if (IncludeLocalization)
@@ -52,7 +52,7 @@ import { LanguageSwitcher } from '../../../../shared/components/language-switche
 //#endif
 import { Logo } from '../../../../shared/components/logo/logo';
 import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { TenantService } from '../../../platform/services/tenant-service';
 //#endif
 import { AccountService } from '../../services/account-service';
@@ -87,7 +87,7 @@ const githubIcon =
   providers: [
     provideIcons({
       lucideZap,
-      //#if (IncludeTenancy)
+      //#if (TenancyEnabled)
       lucideBuilding2,
       lucideX,
       //#endif
@@ -112,7 +112,7 @@ export class Login {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
   private readonly tenantService = inject(TenantService);
   protected readonly tenantContext = inject(TenantContextService);
   //#endif
@@ -240,7 +240,7 @@ export class Login {
       !returnUrl.includes('://')
     );
   }
-  //#if (IncludeTenancy)
+  //#if (TenancyEnabled)
 
   // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
   protected readonly tenantName = signal('');

@@ -168,6 +168,47 @@ public class TenantStoreManagerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Database_rejects_duplicate_active_name_even_bypassing_the_manager()
+    {
+        await _manager.CreateAsync("Acme");
+
+        // 绕过管理器预检直接写库：唯一性由数据库的部分唯一索引兜住，
+        // 这正是并发创建（两个请求同时通过预检）走到的路径
+        _db.Set<TenantRecord>().Add(new TenantRecord { Name = "Acme", NormalizedName = "ACME" });
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => _db.SaveChangesAsync());
+        _db.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public async Task Manager_translates_database_conflict_into_duplicate_name_exception()
+    {
+        var first = await _manager.CreateAsync("Acme");
+
+        // 模拟竞争：管理器预检通过后、保存前，另一方已写入同名租户
+        using var connection = new SqliteConnection(_connection.ConnectionString);
+        await connection.OpenAsync();
+
+        // 同库另一连接写入（Sqlite in-memory 共享同一连接串下的库）
+        var competitorOptions = new DbContextOptionsBuilder<TestTenantDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+        await using (var competitor = new TestTenantDbContext(competitorOptions))
+        {
+            competitor.Set<TenantRecord>().Add(new TenantRecord { Name = "Contoso", NormalizedName = "CONTOSO" });
+            await competitor.SaveChangesAsync();
+        }
+
+        // 落败方得到与预检一致的业务异常（映射 409），而不是原始 DbUpdateException（500）
+        await Assert.ThrowsAsync<DuplicateTenantNameException>(() => _manager.CreateAsync("Contoso"));
+
+        // 删除后名称可复用：部分唯一索引只约束未删除行
+        await _manager.DeleteAsync(first.Id);
+        var recreated = await _manager.CreateAsync("Acme");
+        Assert.NotEqual(first.Id, recreated.Id);
+    }
+
+    [Fact]
     public async Task Paged_query_filters_keyword_and_excludes_deleted()
     {
         await _manager.CreateAsync("Acme", "Acme Inc.");

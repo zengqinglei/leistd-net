@@ -199,7 +199,7 @@ public class TenantAppService(ITenantManager tenantManager, ITenantStore tenantS
 
 - `EfCoreTenantStore` 经 `IDistributedCache` 缓存租户配置（键 `leistd:tenant:i:{id}` / `n:{name}`，30 分钟滑动过期兜底）；`ITenantManager` 的每次写入精确失效相关键。**写入必须经 `ITenantManager`**——绕过它直接写库会留下陈旧缓存（这也是测试证明过的行为）。
 - 落值拦截器只处理 `Added` 且 `TenantId == null` 的实体；宿主上下文保存的实体保持 `null` 即宿主数据。
-- `TenantRecord` 不实现 `IMultiTenant`（它本身是宿主侧数据），名称唯一性由管理器在未删除行内校验（带过滤唯一索引在各 Provider 语法不一，而租户创建是低频、有权限门禁的管理操作）。
+- `TenantRecord` 不实现 `IMultiTenant`（它本身是宿主侧数据）。名称唯一性由**未删除行上的部分唯一索引**保证（`IsDeleted = false` 过滤，PostgreSQL 与 SQLite 通用），删除后名称可复用；管理器的先查后校验只负责给出友好错误，并发落败方由数据库拒绝后同样得到 `DuplicateTenantNameException`（映射 409）。低频与权限门禁都不能替代数据库不变量。
 
 ### 与 DDD 基座的配合（`Leistd.Ddd.Infrastructure`）
 
@@ -211,6 +211,8 @@ public class TenantAppService(ITenantManager tenantManager, ITenantStore tenantS
 - **中间件顺序**：`UseAuthentication()` →（`UseServiceUserContext()`）→ `UseMultiTenancy()` → `UseAuthorization()`。放在认证前 Claim 贡献者拿不到主体；放在授权后权限检查会落在错误的租户分区。
 - **认证端职责**：签发 cookie/token 时必须写入 `tenant_id` claim（`CustomClaimTypes.TenantId`），否则已登录用户每次请求都会退回宿主上下文。
 - **绕过过滤器的红线**：`IgnoreQueryFilters()` 与 raw SQL（如 EF 的 FromSqlRaw）都会越过租户隔离，代码评审应按跨租户操作对待；需要合法跨租户时用 `Disable<IMultiTenant>()` 显式表达。
+- **租户实体的唯一约束要写成宿主行与租户行成对的部分索引**：`(TenantId, X)` 直接建唯一索引时，PostgreSQL 与 SQLite 都视 NULL 互不相等，宿主行（`TenantId IS NULL`）会失去唯一性兜底。正确形态是一条 `IS NULL` 过滤的 `(X)` 唯一索引加一条 `IS NOT NULL` 过滤的 `(TenantId, X)` 唯一索引——框架的授予、版本与租户注册表都按此配置。
+- **外部系统提供的标识必须按租户分区**：第三方身份（如 OAuth 的 `provider + providerUserId`）只在租户内唯一。不分区会让同一外部身份在跨租户登录时命中别的租户的绑定，并阻止它在多个租户各自绑定。
 - **缓存租户数据的 key 必须含租户 Id**（形如 "app:{tenantId}:orders:{id}"）——分布式缓存不会自动分区。
 - **租户级互斥操作的锁 key 必须含租户 Id**（形如 "app:tenant-init:{tenantId}"），否则所有租户互相排队。
 - **超级管理员不旁路租户隔离**：`IsSuperAdmin` 只旁路功能权限；跨租户数据访问必须走上面的显式姿势。

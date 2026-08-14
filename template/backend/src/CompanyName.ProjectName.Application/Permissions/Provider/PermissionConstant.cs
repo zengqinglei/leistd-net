@@ -77,7 +77,7 @@ public static class PermissionConstant
     }
 
 #endif
-#if (IncludeTenancy)
+#if (TenancyEnabled)
     /// <summary>
     /// 租户管理权限（宿主侧专属）
     /// </summary>

@@ -1,5 +1,5 @@
 param(
-    [string[]]$Scenarios = @("default", "minimal", "tenancy", "no-roles", "notifications", "no-openiddict", "external-login", "localization", "no-localization", "localization-notifications", "localization-external-login"),
+    [string[]]$Scenarios = @("default", "minimal", "tenancy", "tenancy-illegal", "tenancy-external-login", "no-roles", "notifications", "no-openiddict", "external-login", "localization", "no-localization", "localization-notifications", "localization-external-login"),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [switch]$SkipPack,
@@ -425,7 +425,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @("通知持久化", "外部身份提供方登录", "多租户")
         # 未启用多租户时零租户契约残留：常量、标记接口与权限名任何一处漏裁剪
         # 都会让前后端契约或数据模型带上租户维度
-        ForbiddenTokens = @("IncludeTenancy", "IMultiTenant", "App.Tenants", "X-Tenant-Id")
+        ForbiddenTokens = @("IncludeTenancy", "TenancyEnabled", "IMultiTenant", "App.Tenants", "X-Tenant-Id", "ICurrentTenant")
     }
     "minimal" = @{
         Arguments = @("--include-identity", "false"); Frontend = $true; Lint = $false
@@ -446,6 +446,36 @@ $scenarioMap = [ordered]@{
         )
         Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
         ReadmeContains = @("多租户")
+        ReadmeExcludes = @("通知持久化")
+    }
+    "tenancy-illegal" = @{
+        # 非法组合：多租户依赖角色权限。模板以 TenancyEnabled computed symbol 收口——
+        # 该组合不报错，而是整体不生成租户能力，得到一个合法的无租户项目。
+        # 断言零残留：任何一处条件漏改都会让租户代码带着缺失的角色/权限依赖进入生成物。
+        Arguments = @("--include-tenancy", "true", "--include-roles", "false"); Frontend = $true; Lint = $false
+        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
+        Absent = @(
+            "backend/src/{name}.Api/Controllers/TenantController.cs",
+            "backend/src/{name}.Application/Tenants",
+            "backend/src/{name}.Application/Permissions",
+            "frontend/src/app/features/platform/components/tenants",
+            "frontend/src/app/core/interceptors/tenant-interceptor.ts"
+        )
+        ReadmeContains = @("本地账号")
+        ReadmeExcludes = @("多租户", "用户、角色、权限以及超级管理员授权模型")
+        ForbiddenTokens = @("IMultiTenant", "App.Tenants", "X-Tenant-Id", "TenancyEnabled", "ICurrentTenant")
+    }
+    "tenancy-external-login" = @{
+        # 外部登录连接按 (Provider, ProviderUserId) 查找，是租户内唯一而非全局唯一的键；
+        # 两个能力必须组合验证，否则跨租户绑定同一外部身份的缺陷测不出来。
+        Arguments = @("--include-tenancy", "true", "--include-external-login", "true"); Frontend = $true; Lint = $true
+        Present = @(
+            "backend/src/{name}.Api/Controllers/TenantController.cs",
+            "backend/src/{name}.Api/Controllers/ExternalAuthController.cs",
+            "backend/src/{name}.Domain/Auth/Entities/ExternalLoginConnection.cs"
+        )
+        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
+        ReadmeContains = @("多租户", "外部身份提供方登录")
         ReadmeExcludes = @("通知持久化")
     }
     "no-roles" = @{

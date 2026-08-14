@@ -251,7 +251,7 @@
       </div>
 
       <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
-        <!--#if (IncludeTenancy)-->
+        <!--#if (TenancyEnabled)-->
         <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id -->
         <div hlmField>
           <!--#if (IncludeLocalization)-->
@@ -336,7 +336,9 @@
               <!--#endif-->
             </hlm-input-group>
             @if (tenantError(); as error) {
-              <p class="text-sm text-destructive">{{ error }}</p>
+              <!-- forceShow：租户探测是业务错误而非 Signal Forms 校验错误，
+                   没有 validator key 可匹配，但仍应复用组件的 role="alert" 与样式 -->
+              <hlm-field-error forceShow>{{ error }}</hlm-field-error>
             }
           }
         </div>

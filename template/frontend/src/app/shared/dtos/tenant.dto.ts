@@ -1,4 +1,4 @@
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { PagedRequestDto } from '../models/paged-request.dto';
 
 export interface TenantOutputDto {

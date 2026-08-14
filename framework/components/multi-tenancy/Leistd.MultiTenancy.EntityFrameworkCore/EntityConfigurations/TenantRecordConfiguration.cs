@@ -32,9 +32,12 @@ public class TenantRecordConfiguration : IEntityTypeConfiguration<TenantRecord>
         builder.Property(x => x.DeleterId)
             .HasMaxLength(64);
 
-        // 非唯一索引：唯一性由 ITenantManager 在未删除行中校验——
-        // 软删除行仍占据名称时，带过滤的唯一索引在各 Provider 上语法不一，
-        // 而租户创建是低频、有权限门禁的管理操作，管理器级校验足够
-        builder.HasIndex(x => x.NormalizedName);
+        // 唯一性交给数据库：管理器的"先查后插"挡不住并发——两个请求同时通过校验就会
+        // 写入两个同名活跃租户，之后按名称查找的结果不确定。低频与权限门禁都不是不变量。
+        // 过滤到未删除行，保留"删除后名称可复用"的语义。
+        // PostgreSQL 与 SQLite（3.23+）都支持部分索引与 false 字面量，谓词写法通用
+        builder.HasIndex(x => x.NormalizedName)
+            .IsUnique()
+            .HasFilter($"\"{nameof(TenantRecord.IsDeleted)}\" = false");
     }
 }

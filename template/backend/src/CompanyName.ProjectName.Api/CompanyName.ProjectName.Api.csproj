@@ -43,7 +43,7 @@
 <!--#if (IncludeRoles)-->
     <PackageReference Include="Leistd.Authorization.AspNetCore" />
     <!--#endif-->
-<!--#if (IncludeTenancy)-->
+<!--#if (TenancyEnabled)-->
     <PackageReference Include="Leistd.MultiTenancy.AspNetCore" />
 <!--#endif-->
     <PackageReference Include="Leistd.Security.AspNetCore" />

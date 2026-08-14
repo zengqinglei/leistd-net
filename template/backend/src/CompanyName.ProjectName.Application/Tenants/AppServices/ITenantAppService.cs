@@ -1,4 +1,4 @@
-#if (IncludeTenancy)
+#if (TenancyEnabled)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
 

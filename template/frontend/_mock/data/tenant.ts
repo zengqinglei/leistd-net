@@ -1,4 +1,4 @@
-//#if (IncludeTenancy)
+//#if (TenancyEnabled)
 import { TenantBriefOutputDto, TenantOutputDto } from '../../src/app/shared/dtos/tenant.dto';
 
 export interface MockTenant {
