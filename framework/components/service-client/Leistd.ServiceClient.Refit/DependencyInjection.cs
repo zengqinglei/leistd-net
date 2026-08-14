@@ -26,7 +26,7 @@ public static class DependencyInjection
     /// <param name="services">服务集合</param>
     /// <param name="serviceName">下游服务名：命名 HttpClient、配置节与日志类别</param>
     /// <param name="configuration">应用配置</param>
-    /// <param name="settings">自定义 <see cref="RefitSettings"/>；默认 <see cref="LeistdRefitSettings.Create"/></param>
+    /// <param name="settings">自定义 <see cref="RefitSettings"/>；默认 <see cref="ServiceClientRefitSettings.Create"/></param>
     public static IHttpClientBuilder AddRefitServiceClient<TApi, TOptions>(
         this IServiceCollection services,
         string serviceName,
@@ -49,7 +49,7 @@ public static class DependencyInjection
     /// <param name="services">服务集合</param>
     /// <param name="serviceName">下游服务名</param>
     /// <param name="configureOptions">配置委托</param>
-    /// <param name="settings">自定义 <see cref="RefitSettings"/>；默认 <see cref="LeistdRefitSettings.Create"/></param>
+    /// <param name="settings">自定义 <see cref="RefitSettings"/>；默认 <see cref="ServiceClientRefitSettings.Create"/></param>
     public static IHttpClientBuilder AddRefitServiceClient<TApi, TOptions>(
         this IServiceCollection services,
         string serviceName,
@@ -72,7 +72,7 @@ public static class DependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
 
         return services
-            .AddRefitClient<TApi>(settings ?? LeistdRefitSettings.Create(), httpClientName: serviceName)
+            .AddRefitClient<TApi>(settings ?? ServiceClientRefitSettings.Create(), httpClientName: serviceName)
             .AddServiceClientPipeline<TOptions>(serviceName);
     }
 }

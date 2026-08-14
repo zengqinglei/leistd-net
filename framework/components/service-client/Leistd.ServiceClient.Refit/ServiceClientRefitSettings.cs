@@ -5,12 +5,12 @@ using Refit;
 namespace Leistd.ServiceClient.Refit;
 
 /// <summary>
-/// Leistd 统一的 <see cref="RefitSettings"/> 工厂：System.Text.Json（Web 默认，camelCase、
+/// 服务客户端统一的 <see cref="RefitSettings"/> 工厂：System.Text.Json（Web 默认，camelCase、
 /// 大小写不敏感）序列化 + 非 2xx 响应经 <c>CreateRemoteErrorAsync</c> 还原为
 /// <c>RemoteServiceException</c>——业务代码无论走手写路径还是 Refit 路径，
 /// 捕获的都是同一错误契约，不感知 <see cref="ApiException"/>。
 /// </summary>
-public static class LeistdRefitSettings
+public static class ServiceClientRefitSettings
 {
     /// <summary>
     /// 创建统一配置的 <see cref="RefitSettings"/>。

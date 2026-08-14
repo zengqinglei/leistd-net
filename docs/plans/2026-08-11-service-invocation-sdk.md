@@ -234,7 +234,7 @@ framework/components/service-client/
 │   ├── Leistd.ServiceClient.OAuth.csproj
 │   ├── DependencyInjection.cs                    # AddClientCredentials(this IHttpClientBuilder, ...)
 │   ├── Options/ClientCredentialsOptions.cs       # Authority/TokenEndpoint、ClientId、Secret、Scope、过期缓冲
-│   ├── Models/ServiceToken.cs
+│   ├── （原设计有 Models/ServiceToken.cs；实施时收回为 provider 内的 private CachedToken）
 │   ├── Services/
 │   │   ├── IServiceTokenProvider.cs
 │   │   └── ClientCredentialsTokenProvider.cs     # 按具名客户端缓存 + 单飞
