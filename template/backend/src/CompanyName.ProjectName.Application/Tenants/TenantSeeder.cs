@@ -84,17 +84,27 @@ public class TenantSeeder(
         }
 
         // 主体与关联走仓储删除：审计实体转软删，与租户注册表的删除语义一致，
-        // 删除后在该租户上下文内一律不可见
+        // 删除后在该租户上下文内一律不可见。
+        //
+        // 顺序是**必须**的：先主体（User / Role）、最后关联（UserRole）。UserRole 是
+        // DeletionAuditedEntity，软删后仍以 Modified 状态留在跟踪器里、外键依然指向主体；
+        // 此时再 Remove 主体，EF 会按"必需关系被切断"抛 InvalidOperationException
+        // （软删发生在拦截器里，而级联检查发生在 RemoveRange 当场，来不及）。
+        // 反过来先删主体时 UserRole 还没被加载，跟踪器里没有依赖端，级联检查无事可做。
         if (users.Count > 0)
         {
-            var userIds = users.Select(u => u.Id).ToList();
-            await userRoleRepository.DeleteManyAsync(ur => userIds.Contains(ur.UserId), cancellationToken);
             await userRepository.DeleteManyAsync(users, cancellationToken);
         }
 
         if (roles.Count > 0)
         {
             await roleRepository.DeleteManyAsync(roles, cancellationToken);
+        }
+
+        if (users.Count > 0)
+        {
+            var userIds = users.Select(u => u.Id).ToList();
+            await userRoleRepository.DeleteManyAsync(ur => userIds.Contains(ur.UserId), cancellationToken);
         }
 
         logger.LogInformation(

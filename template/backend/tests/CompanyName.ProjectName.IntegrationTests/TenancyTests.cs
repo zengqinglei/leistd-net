@@ -299,14 +299,16 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     /// <summary>
-    /// 激活失败是安全的失败态：租户保持停用（进不去），但数据完整、不触发补偿。
+    /// 播种成功但激活失败：整个创建回滚，不留下"数据完整却永远停用"的租户。
     /// </summary>
     /// <remarks>
-    /// 删掉一个数据已经完整的租户，比留一个停用的租户损失大得多——
-    /// 宿主管理员在列表里点一下启用就恢复了。
+    /// 这条路径此前刻意不补偿（理由是"数据已完整"）。改成补偿的原因是并发：
+    /// 激活失败的现实成因之一是另一个宿主管理员在播种期间删掉了这个租户，
+    /// 那时数据不是完整的而是孤儿的。既然激活只有"租户不存在"和"数据库故障"两种失败、
+    /// 两种情形下租户都不可用，就统一走补偿——比留一个需要人工判断的中间态干净。
     /// </remarks>
     [Fact]
-    public async Task 激活失败时租户保持停用_已播种数据不被补偿删除()
+    public async Task 激活失败时整个创建回滚_不留下停用的孤儿租户()
     {
         using var brokenActivationHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -331,21 +333,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantId = FailActivationTenantManager.LastCreatedId;
         Assert.NotNull(tenantId);
 
-        // 停用态：匿名注册进不去，租户管理员也登不进来
-        Assert.Equal(
-            HttpStatusCode.Forbidden,
-            await ProbeAnonymousRegistrationAsync(brokenActivationHost, tenantId.Value));
+        // 补偿覆盖了一次**完整成功**的播种：角色、授予、管理员全部清掉
+        await AssertNoVisibleTenantDataAsync(brokenActivationHost, tenantId.Value);
 
-        // 数据完整：种子写入的角色与管理员都还在，没有被补偿删掉
-        using var scope = brokenActivationHost.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
-        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-
-        using (currentTenant.Change(tenantId.Value))
-        {
-            Assert.NotEmpty(await db.Set<Role>().ToListAsync());
-            Assert.NotEmpty(await db.Set<User>().ToListAsync());
-        }
+        // 注册表已回滚，租户不可达
+        using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(brokenActivationHost);
+        var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/halfway");
+        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
     }
 
     /// <summary>
@@ -491,6 +485,136 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.Empty(await db.Set<ExternalLoginConnection>().ToListAsync());
 #endif
         }
+    }
+
+    /// <summary>
+    /// 播种期间的控制面竞争：另一个合法宿主管理员在种子还没跑完时动这个租户。
+    /// </summary>
+    /// <remarks>
+    /// 用可阻塞种子把"播种中"这个瞬间拉长到可观测：种子先发出"我到了"信号，
+    /// 然后挂住等测试放行。测试在这段时间里以第二个宿主会话发起竞争操作。
+    /// 这是唯一能覆盖控制面并发的手法——真实播种是亚秒级的，靠时序碰不到。
+    /// </remarks>
+    [Fact]
+    public async Task 播种期间并发删除租户_不留下孤儿业务数据()
+    {
+        using var blockingHost = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.AddTransient<TenantSeeder>();
+                services.AddTransient<ITenantSeeder, BlockingTenantSeeder>();
+            }));
+
+        BlockingTenantSeeder.Reset();
+
+        using var creator = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
+        using var racer = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
+
+        var createTask = creator.Client.PostAsJsonAsync("/api/v1/tenants", new
+        {
+            Name = "raced-delete",
+            AdminEmail = "admin@raced-delete.example.com",
+            AdminPassword = "Tenant@123456"
+        });
+
+        // 等种子真的开始（角色已写入、管理员还没写），此刻注册表里已有一个停用租户
+        var tenantId = await BlockingTenantSeeder.WaitUntilSeedingAsync();
+
+        var delete = await racer.Client.DeleteAsync($"/api/v1/tenants/{tenantId}");
+        Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+
+        BlockingTenantSeeder.Release();
+        var created = await createTask;
+
+        // 激活撞上"租户已不存在"：按普通业务失败回 404。
+        // 宿主会话不该因为一个别人删掉的租户被登出——会话恢复只服务租户内会话
+        Assert.Equal(HttpStatusCode.NotFound, created.StatusCode);
+
+        // 关键断言：激活在补偿边界内，因此已写入的种子数据被一并清掉，
+        // 不会永久残留在一个软删租户 Id 下
+        await AssertNoVisibleTenantDataAsync(blockingHost, tenantId);
+    }
+
+    /// <summary>
+    /// 播种期间并发手动启用：租户里还没有用户，启用必须被拒绝。
+    /// </summary>
+    [Fact]
+    public async Task 播种期间并发手动启用被拒_半成品租户不会被提前暴露()
+    {
+        using var blockingHost = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.AddTransient<TenantSeeder>();
+                services.AddTransient<ITenantSeeder, BlockingTenantSeeder>();
+            }));
+
+        BlockingTenantSeeder.Reset();
+
+        using var creator = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
+        using var racer = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
+
+        var createTask = creator.Client.PostAsJsonAsync("/api/v1/tenants", new
+        {
+            Name = "raced-activate",
+            AdminEmail = "admin@raced-activate.example.com",
+            AdminPassword = "Tenant@123456"
+        });
+
+        var tenantId = await BlockingTenantSeeder.WaitUntilSeedingAsync();
+
+        // 抢先启用：租户内还没有任何用户，被业务规则挡住
+        var activate = await racer.Client.PutAsJsonAsync(
+            $"/api/v1/tenants/{tenantId}/activation", new { IsActive = true });
+        Assert.Equal(HttpStatusCode.BadRequest, activate.StatusCode);
+
+        // 仍然进不去：匿名注册撞的是停用租户
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            await ProbeAnonymousRegistrationAsync(blockingHost, tenantId));
+
+        BlockingTenantSeeder.Release();
+        var created = await createTask;
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        // 创建流程自己完成了激活，租户正常可用
+        using var tenantClient = await LoginTenantAdminAsync(blockingHost, tenantId);
+        Assert.Equal(["admin"], await GetUsernamesAsync(tenantClient));
+    }
+
+    /// <summary>
+    /// 真实种子跑到一半挂住，等测试放行；用来把"播种中"拉长成可观测的窗口。
+    /// </summary>
+    private sealed class BlockingTenantSeeder(
+        ICurrentTenant currentTenant,
+        TenantSeeder inner) : ITenantSeeder
+    {
+        private static TaskCompletionSource<Guid> _seeding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private static TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal static void Reset()
+        {
+            _seeding = new TaskCompletionSource<Guid>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        /// <summary>等到种子真的开始执行，返回正在播种的租户 Id。</summary>
+        internal static Task<Guid> WaitUntilSeedingAsync() => _seeding.Task;
+
+        /// <summary>放行种子继续执行。</summary>
+        internal static void Release() => _release.TrySetResult();
+
+        public async Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        {
+            var tenantId = currentTenant.Id ?? throw new InvalidOperationException("种子必须在租户上下文内执行");
+
+            _seeding.TrySetResult(tenantId);
+            await _release.Task;
+
+            await inner.SeedAsync(adminEmail, adminPassword, cancellationToken);
+        }
+
+        public Task PurgeAsync(CancellationToken cancellationToken = default)
+            => inner.PurgeAsync(cancellationToken);
     }
 
     /// <summary>

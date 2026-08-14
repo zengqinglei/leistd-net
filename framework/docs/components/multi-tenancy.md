@@ -63,7 +63,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 | `ITenantNormalizer` | `UpperInvariantTenantNormalizer` | Transient |
 | `ITenantResolver` | `TenantResolver` | Scoped |
 
-`AddMultiTenancyEfCore<TDbContext>` 追加：`ITenantStore` → `EfCoreTenantStore<TDbContext>`、`ITenantManager` → `EfCoreTenantManager<TDbContext>`（均 Transient，`TryAdd` 可替换）、`MultiTenantSaveChangesInterceptor`（Transient）、`IClock`（TryAdd UTC 默认）。依赖宿主已注册 `IDistributedCache`（内存或 Redis 均可）。
+`AddMultiTenancyEfCore<TDbContext>` 追加：`ITenantStore` → `EfCoreTenantStore<TDbContext>`、`ITenantManager` → `EfCoreTenantManager<TDbContext>`（均 Transient，`TryAdd` 可替换）、`MultiTenantSaveChangesInterceptor`（Transient）、`IClock`（TryAdd UTC 默认）。除 `TDbContext` 外无其它基础设施依赖。
 
 ## 使用
 
@@ -107,7 +107,9 @@ public class TenantReportJob(ICurrentTenant currentTenant, MyDbContext db)
 ```csharp
 public class TenantAppService(ITenantManager tenantManager, ITenantStore tenantStore)
 {
-    public Task<TenantConfiguration> CreateAsync(string name) => tenantManager.CreateAsync(name);
+    // isActive 没有默认值：这是安全相关的选择，必须显式表态
+    public Task<TenantConfiguration> CreateAsync(string name)
+        => tenantManager.CreateAsync(name, displayName: null, isActive: true);
     // UpdateAsync / SetActiveAsync / DeleteAsync（软删除）同理；
     // 管理器负责名称归一化、未删除行内的唯一性校验（冲突抛 DuplicateTenantNameException → 409）
     // 与存储缓存失效
@@ -174,7 +176,7 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 
 | 成员 | 说明 |
 | --- | --- |
-| `CreateAsync(name, displayName?, isActive = true, ct)` | 创建（归一化 + 唯一校验）；创建后还要初始化租户数据时传 `isActive: false` |
+| `CreateAsync(name, displayName, isActive, ct)` | 创建（归一化 + 唯一校验）。`isActive` **无默认值**：创建后还要初始化租户数据时必须传 `false` |
 | `UpdateAsync(id, name, displayName, ct)` | 改名（失效新旧名称缓存） |
 | `SetActiveAsync(id, isActive, ct)` | 启停 |
 | `DeleteAsync(id, ct)` | 软删除（不依赖审计拦截器，绝不物理删除） |
@@ -214,8 +216,9 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 
 ### Leistd.MultiTenancy.EntityFrameworkCore
 
-- `EfCoreTenantStore` 经 `IDistributedCache` 缓存租户配置（键 `leistd:tenant:i:{id}` / `n:{name}`）；`ITenantManager` 的每次写入精确失效相关键。**写入必须经 `ITenantManager`**——绕过它直接写库会留下陈旧缓存（这也是测试证明过的行为）。
-- 缓存条目用**绝对**过期（`EfCoreTenantStore.CacheDuration`，默认 1 分钟），不用滑动过期。租户的启用状态是访问控制状态，而 cache-aside 的失效是尽力而为的（Redis 不可用时 `RemoveAsync` 会失败）；滑动过期下持续有流量的租户，其陈旧的"启用"条目会被每个请求续命而永不过期，**停用一个繁忙租户可能永远不生效**。绝对过期把失效失败的后果收成"最多 `CacheDuration` 后自愈"。失效本身失败时管理器抛出异常，库中状态已提交，重试即自愈（写路径读库不读缓存）。需要更严的撤销时序时，替换 `ITenantStore` 实现（`InMemoryTenantStore` 或直连库）。
+- `EfCoreTenantStore` **不缓存**，每次解析都读库。它的返回值里带 `IsActive`，中间件据此放行或 403——这是访问控制状态，而 cache-aside 的失效是尽力而为的：缓存不可用时失效失败，已停用/已删除的租户仍被陈旧条目放行；删除之后连重试失效都做不到（租户已软删，管理器按 Id 找不到它，直接抛 `TenantNotFoundException`）。缩短 TTL 只能缩窄窗口、关不掉它，因此**启停与删除的生效由构造保证**：提交那一刻即对所有节点生效。
+- 成本可忽略：租户解析每请求一次索引查找，用的是当前请求已有的 `DbContext`，不新开连接；同一个仓库里用户判活（`ActiveUserRequirement`）本来就是每请求读库，租户表比用户表更小更热。附带收益是租户解析不再依赖分布式缓存可用——此前缓存读取失败会直接抛出，缓存一挂则所有带租户的请求全部 500。
+- 极高 RPS 且能接受撤销延迟的服务，自行包装 `ITenantStore` 装饰器加缓存。**那是一个需要显式承担陈旧风险的决定**，不由框架替所有人默认做。
 - 落值拦截器只处理 `Added` 且 `TenantId == null` 的实体；宿主上下文保存的实体保持 `null` 即宿主数据。
 - `TenantRecord` 不实现 `IMultiTenant`（它本身是宿主侧数据）。名称唯一性由**未删除行上的部分唯一索引**保证（`IsDeleted = false` 过滤，PostgreSQL 与 SQLite 通用），删除后名称可复用；管理器的先查后校验只负责给出友好错误，并发落败方由数据库拒绝后同样得到 `DuplicateTenantNameException`（映射 409）。低频与权限门禁都不能替代数据库不变量。
 

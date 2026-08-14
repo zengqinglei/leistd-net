@@ -3,9 +3,6 @@ using Leistd.Timing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.MultiTenancy.Tests;
@@ -17,7 +14,6 @@ public class TenantStoreManagerTests : IAsyncLifetime
 {
     private SqliteConnection _connection = default!;
     private TestTenantDbContext _db = default!;
-    private IDistributedCache _cache = default!;
     private EfCoreTenantStore<TestTenantDbContext> _store = default!;
     private EfCoreTenantManager<TestTenantDbContext> _manager = default!;
 
@@ -68,10 +64,9 @@ public class TenantStoreManagerTests : IAsyncLifetime
         _db = new TestTenantDbContext(options);
         await _db.Database.EnsureCreatedAsync();
 
-        _cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
-        _store = new EfCoreTenantStore<TestTenantDbContext>(_db, _cache);
+        _store = new EfCoreTenantStore<TestTenantDbContext>(_db);
         _manager = new EfCoreTenantManager<TestTenantDbContext>(
-            _db, new UpperInvariantTenantNormalizer(), _cache, new UtcClockProvider());
+            _db, new UpperInvariantTenantNormalizer(), new UtcClockProvider());
     }
 
     public async Task DisposeAsync()
@@ -123,11 +118,11 @@ public class TenantStoreManagerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Rename_invalidates_old_and_new_name_cache()
+    public async Task Rename_takes_effect_on_both_old_and_new_name_lookups()
     {
         var record = await _manager.CreateAsync("Acme", null, isActive: true);
 
-        // 预热两个缓存键
+        // 先按两条读路径各读一次：有缓存的实现会在这里落下陈旧条目
         Assert.NotNull(await _store.FindByNameAsync("ACME"));
         Assert.NotNull(await _store.FindAsync(record.Id));
 
@@ -143,33 +138,45 @@ public class TenantStoreManagerTests : IAsyncLifetime
         Assert.Equal("Contoso", byId.Name);
     }
 
+    /// <summary>
+    /// 停用在提交那一刻即生效，不存在"已提交但存储仍放行"的窗口。
+    /// </summary>
+    /// <remarks>
+    /// 存储返回值里带 IsActive，中间件据此放行或 403——它是访问控制状态。
+    /// 曾经这里挂着分布式缓存，停用的生效依赖尽力而为的失效：缓存不可用时
+    /// 陈旧条目继续放行已停用租户，删除之后连重试失效都做不到（租户已软删、按 Id 找不到）。
+    /// 现在存储直接读库，撤销时序由构造保证。
+    /// </remarks>
     [Fact]
-    public async Task Deactivation_is_visible_after_cache_invalidation()
+    public async Task Deactivation_takes_effect_immediately_on_commit()
     {
         var record = await _manager.CreateAsync("Acme", null, isActive: true);
         Assert.True((await _store.FindAsync(record.Id))!.IsActive);
 
         await _manager.SetActiveAsync(record.Id, false);
 
-        // 管理器写入即失效缓存：在途会话的下一次校验立刻看到停用
         Assert.False((await _store.FindAsync(record.Id))!.IsActive);
+        Assert.False((await _store.FindByNameAsync("ACME"))!.IsActive);
     }
 
+    /// <summary>
+    /// 绕过管理器直接改库也立即可见：存储没有自己的状态可陈旧。
+    /// </summary>
+    /// <remarks>
+    /// 有缓存的实现在这里会读到旧值，于是"写入必须经 ITenantManager"成了正确性前提；
+    /// 直接读库把它降级为一条约定（管理器负责归一化与唯一校验），
+    /// 而运维直接改库导致租户继续被放行这种事不会再发生。
+    /// </remarks>
     [Fact]
-    public async Task Store_reads_through_cache_until_invalidated()
+    public async Task Direct_database_writes_are_visible_to_the_store_immediately()
     {
         var record = await _manager.CreateAsync("Acme", null, isActive: true);
-        Assert.NotNull(await _store.FindAsync(record.Id));
+        Assert.True((await _store.FindAsync(record.Id))!.IsActive);
 
-        // 绕过管理器直接改库：缓存仍返回旧值——这正是"写入必须经 ITenantManager"约定的原因
         await _db.Set<TenantRecord>()
             .Where(t => t.Id == record.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsActive, false));
 
-        Assert.True((await _store.FindAsync(record.Id))!.IsActive);
-
-        // 经管理器的任意写入触发失效后读到真实状态
-        await _manager.SetActiveAsync(record.Id, false);
         Assert.False((await _store.FindAsync(record.Id))!.IsActive);
     }
 
@@ -242,7 +249,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
 
         await using var racedDb = new TestTenantDbContext(racedOptions);
         var racedManager = new EfCoreTenantManager<TestTenantDbContext>(
-            racedDb, new UpperInvariantTenantNormalizer(), _cache, new UtcClockProvider());
+            racedDb, new UpperInvariantTenantNormalizer(), new UtcClockProvider());
 
         // 预检时库中无同名租户 → 通过；拦截器在 flush 前写入同名行 → 唯一索引拒绝本次插入
         await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso", null, isActive: true));
@@ -293,7 +300,7 @@ public class TenantStoreManagerTests : IAsyncLifetime
 
         await using var racedDb = new TestTenantDbContext(racedOptions);
         var racedManager = new EfCoreTenantManager<TestTenantDbContext>(
-            racedDb, new UpperInvariantTenantNormalizer(), _cache, new UtcClockProvider());
+            racedDb, new UpperInvariantTenantNormalizer(), new UtcClockProvider());
 
         // 调用方在同一 DbContext（= 宿主工作单元）里改了业务实体，尚未提交
         var note = new TestNote { Text = "caller's pending work" };
@@ -332,114 +339,29 @@ public class TenantStoreManagerTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// 库已提交但缓存失效失败：异常上抛（管理员据此重试），库中状态已生效。
+    /// 删除在提交那一刻即不可达——这条路径曾经**无法**靠重试补救。
     /// </summary>
     /// <remarks>
-    /// cache-aside 的失效是尽力而为的。这里锁死失败语义：不能因为缓存删不掉就把
-    /// 已提交的停用/删除回滚（做不到），也不能把它咽下去报成功——那会让管理员以为
-    /// 租户已经停了。异常上抛 + 库为准，重试即自愈（写路径读库不读缓存）。
-    /// </remarks>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Cache_invalidation_failure_after_commit_surfaces_but_database_state_stands(bool deleteInsteadOfDeactivate)
-    {
-        var record = await _manager.CreateAsync("Acme", null, isActive: true);
-
-        var brokenCache = new FailingRemoveCache(_cache);
-        var manager = new EfCoreTenantManager<TestTenantDbContext>(
-            _db, new UpperInvariantTenantNormalizer(), brokenCache, new UtcClockProvider());
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => deleteInsteadOfDeactivate
-            ? manager.DeleteAsync(record.Id)
-            : manager.SetActiveAsync(record.Id, false));
-
-        // 库已提交：写路径读库不读缓存，重试会看到真实状态并再次尝试失效
-        var raw = await _db.Set<TenantRecord>().IgnoreQueryFilters().AsNoTracking()
-            .SingleAsync(t => t.Id == record.Id);
-        if (deleteInsteadOfDeactivate)
-        {
-            Assert.True(raw.IsDeleted);
-        }
-        else
-        {
-            Assert.False(raw.IsActive);
-            Assert.False(raw.IsDeleted);
-        }
-    }
-
-    /// <summary>
-    /// 缓存条目必须是绝对过期：失效失败时的暴露窗口要有上界。
-    /// </summary>
-    /// <remarks>
-    /// 滑动过期下，持续有流量的租户其陈旧"启用"条目会被每个请求续命而永不过期——
-    /// 停用一个繁忙租户可能永远不生效。这个断言锁住策略本身，因为它不可能由行为测试
-    /// 观察到（要观察得等真实时钟走过过期点）。
+    /// 缓存时代：删除先提交、再失效缓存，失效失败时陈旧条目继续放行；而重试删除会被
+    /// 管理器的 <c>!IsDeleted</c> 前置查询挡住（租户已软删、按 Id 找不到），
+    /// 直接抛 TenantNotFoundException，连再试一次失效的机会都没有。
+    /// 直接读库让"删除即不可达"成为构造性质，不依赖任何补救动作。
     /// </remarks>
     [Fact]
-    public async Task Cached_tenant_entries_expire_absolutely_so_failed_invalidation_self_heals()
+    public async Task Deletion_takes_effect_immediately_and_needs_no_compensating_action()
     {
-        var recording = new OptionsRecordingCache(_cache);
-        var store = new EfCoreTenantStore<TestTenantDbContext>(_db, recording);
-
         var record = await _manager.CreateAsync("Acme", null, isActive: true);
-        Assert.NotNull(await store.FindAsync(record.Id));
+        Assert.NotNull(await _store.FindAsync(record.Id));
+        Assert.NotNull(await _store.FindByNameAsync("ACME"));
 
-        var options = Assert.Single(recording.CapturedOptions);
-        Assert.Null(options.SlidingExpiration);
-        Assert.Equal(EfCoreTenantStore<TestTenantDbContext>.CacheDuration, options.AbsoluteExpirationRelativeToNow);
-    }
+        await _manager.DeleteAsync(record.Id);
 
-    /// <summary>失效（Remove）失败、其余照常的缓存：模拟 Redis 抖动。</summary>
-    private sealed class FailingRemoveCache(IDistributedCache inner) : IDistributedCache
-    {
-        public byte[]? Get(string key) => inner.Get(key);
+        Assert.Null(await _store.FindAsync(record.Id));
+        Assert.Null(await _store.FindByNameAsync("ACME"));
 
-        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => inner.GetAsync(key, token);
-
-        public void Set(string key, byte[] value, DistributedCacheEntryOptions options) => inner.Set(key, value, options);
-
-        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
-            => inner.SetAsync(key, value, options, token);
-
-        public void Refresh(string key) => inner.Refresh(key);
-
-        public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
-
-        public void Remove(string key) => throw new InvalidOperationException("cache unavailable");
-
-        public Task RemoveAsync(string key, CancellationToken token = default)
-            => throw new InvalidOperationException("cache unavailable");
-    }
-
-    /// <summary>记录写入时使用的过期策略。</summary>
-    private sealed class OptionsRecordingCache(IDistributedCache inner) : IDistributedCache
-    {
-        internal List<DistributedCacheEntryOptions> CapturedOptions { get; } = [];
-
-        public byte[]? Get(string key) => inner.Get(key);
-
-        public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => inner.GetAsync(key, token);
-
-        public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
-        {
-            CapturedOptions.Add(options);
-            inner.Set(key, value, options);
-        }
-
-        public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
-        {
-            CapturedOptions.Add(options);
-            return inner.SetAsync(key, value, options, token);
-        }
-
-        public void Refresh(string key) => inner.Refresh(key);
-
-        public Task RefreshAsync(string key, CancellationToken token = default) => inner.RefreshAsync(key, token);
-
-        public void Remove(string key) => inner.Remove(key);
-
-        public Task RemoveAsync(string key, CancellationToken token = default) => inner.RemoveAsync(key, token);
+        // 重试删除确实抛 NotFound——这正是缓存时代补救不了的原因，
+        // 现在无所谓了：第一次提交就已经生效
+        await Assert.ThrowsAsync<TenantNotFoundException>(() => _manager.DeleteAsync(record.Id));
     }
 
     [Fact]

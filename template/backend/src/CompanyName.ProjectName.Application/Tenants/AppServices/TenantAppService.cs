@@ -1,6 +1,8 @@
 #if (TenancyEnabled)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
+using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +14,7 @@ namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 /// 租户管理应用服务实现
 /// </summary>
 /// <remarks>
-/// 写路径统一走框架 <see cref="ITenantManager"/>（归一化、唯一性校验、存储缓存失效都在那里收口）；
+/// 写路径统一走框架 <see cref="ITenantManager"/>（归一化与唯一性校验在那里收口）；
 /// 创建后立即经 <see cref="ICurrentTenant.Change"/> 进入新租户上下文执行 <see cref="ITenantSeeder"/>。
 /// </remarks>
 public class TenantAppService(
@@ -21,6 +23,7 @@ public class TenantAppService(
     ITenantNormalizer tenantNormalizer,
     ITenantSeeder tenantSeeder,
     ICurrentTenant currentTenant,
+    IRepository<User, Guid> userRepository,
     IServiceScopeFactory serviceScopeFactory,
     ILogger<TenantAppService> logger) : ITenantAppService
 {
@@ -53,17 +56,21 @@ public class TenantAppService(
     /// <para>补偿必须覆盖**已经落库的种子数据**（角色可能已写入而用户尚未），
     /// 而不是只软删注册表——那样旧租户 Id 下会永久残留角色与授权版本，重试也只是换个新 Id。
     /// 先清种子、再删注册表，两步都幂等。</para>
-    /// <para>激活失败不触发补偿：数据已完整——删掉一个数据完整的租户损失更大，
-    /// 宿主管理员在列表里启用即可。注意失败点决定了库里的状态：激活的库写入之前失败
-    /// 则保持停用；库已提交而缓存失效失败时，库中已是启用态、接口仍报错，
-    /// 陈旧的停用缓存最迟在 <c>EfCoreTenantStore.CacheDuration</c> 后自愈。
-    /// 两种情形都不会让一个没有管理员的租户变得可用（种子已经成功了）。</para>
+    /// <para><b>激活在补偿边界内。</b>并发的宿主管理员可能在播种期间删掉这个租户，
+    /// 那时激活抛 <c>TenantNotFoundException</c>——此刻数据不是"已完整"而是孤儿的
+    /// （落在一个软删租户 Id 下、永远不可达），必须连同种子一起清理。
+    /// 激活失败一律走补偿是安全的：它只有"租户不存在"与"数据库故障"两种失败，
+    /// 两种情形下这个租户都不可用，而补偿是幂等的。</para>
+    /// <para>这一步能纳入补偿的前提是激活不再有尽力而为的缓存失效步骤——
+    /// <c>EfCoreTenantStore</c> 直接读库，启停在提交那一刻即生效。
+    /// 缓存时代不能这么做：Redis 抖一下就会删掉一个数据完好的租户。</para>
     /// </remarks>
     public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
     {
         var tenant = await tenantManager.CreateAsync(
             input.Name, input.DisplayName, isActive: false, cancellationToken: cancellationToken);
 
+        TenantConfiguration activated;
         try
         {
             // 在新租户上下文内种子：角色、权限授予、租户管理员的所有行由落值拦截器自动归属该租户
@@ -71,6 +78,11 @@ public class TenantAppService(
             {
                 await tenantSeeder.SeedAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
             }
+
+            // 激活也在补偿边界内：并发的宿主管理员可能在播种期间把这个租户删掉，
+            // 那时激活会抛 TenantNotFound——数据不是"已完整"而是孤儿的，必须一并清理。
+            // 这一步能安全地纳入补偿，前提是它不再有尽力而为的缓存失效步骤（存储直接读库）
+            activated = await tenantManager.SetActiveAsync(tenant.Id, true, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -78,8 +90,6 @@ public class TenantAppService(
             await CompensateAsync(tenant);
             throw;
         }
-
-        var activated = await tenantManager.SetActiveAsync(tenant.Id, true, cancellationToken);
 
         logger.LogInformation("已创建租户 {TenantName}（{TenantId}）并完成初始化", tenant.Name, tenant.Id);
         return ToOutputDto(activated);
@@ -147,13 +157,38 @@ public class TenantAppService(
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// 启用前要求租户里至少有一个用户。这条规则本身就站得住——启用一个没有管理员的租户
+    /// 毫无用途，只会成为匿名入口（注册、找回密码）的靶子；它同时挡住了控制面竞争：
+    /// 另一个宿主管理员在创建流程的播种阶段抢先手动启用，会把一个还没有管理员的
+    /// 半成品租户暴露出去。管理员写入之后再抢先启用则无害——租户功能上已经完整。
+    /// </remarks>
     public async Task<TenantOutputDto> SetActivationAsync(
         Guid id,
         UpdateTenantActivationInputDto input,
         CancellationToken cancellationToken = default)
     {
+        if (input.IsActive)
+        {
+            await EnsureTenantHasUsersAsync(id, cancellationToken);
+        }
+
         var record = await tenantManager.SetActiveAsync(id, input.IsActive, cancellationToken);
         return ToOutputDto(record);
+    }
+
+    /// <summary>
+    /// 校验目标租户内已存在用户；空租户不允许被启用。
+    /// </summary>
+    private async Task EnsureTenantHasUsersAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        using (currentTenant.Change(tenantId))
+        {
+            if (await userRepository.CountAsync(cancellationToken: cancellationToken) == 0)
+            {
+                throw new BadRequestException("This tenant has no users yet; activating it would let nobody in. Finish provisioning first.");
+            }
+        }
     }
 
     /// <inheritdoc />

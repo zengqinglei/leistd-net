@@ -14,8 +14,6 @@ public static class DependencyInjection
     /// 注册 EF Core 租户存储、管理器与落值拦截器（基于指定 DbContext）
     /// </summary>
     /// <remarks>
-    /// <para>依赖 <c>IDistributedCache</c>（租户配置缓存），宿主需已注册分布式缓存
-    /// （内存或 Redis 均可）。</para>
     /// <para>落值拦截器需宿主经 <c>options.AddInterceptors(sp.GetRequiredService&lt;MultiTenantSaveChangesInterceptor&gt;())</c>
     /// 显式挂载到 DbContext。</para>
     /// </remarks>

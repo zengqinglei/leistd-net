@@ -1,5 +1,6 @@
 #if (TenancyEnabled)
 using Leistd.MultiTenancy;
+using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Extensions;
 
@@ -18,6 +19,10 @@ namespace CompanyName.ProjectName.Api.Extensions;
 /// 前端把它当会话失效清理本地状态。此处按 Accept 区分是**恢复路径**的定向处理，
 /// 与"认证拒绝一律回状态码"的既有决策不冲突——那条针对的是权限语义，这里是会话已不成立。</para>
 /// <para>匿名请求的租户异常不经此处（继续 404/403）：登录前选错租户名理应看到明确错误。</para>
+/// <para><b>只对"租户内会话"生效</b>：判据是主体带 <c>tenant_id</c> claim。宿主会话不带这个 claim，
+/// 因此宿主管理员做租户管理时撞上"租户不存在"（例如并发删除了正在创建的租户）不会被注销——
+/// 那是一次普通的业务失败，该按 404 回给他，把他登出既莫名其妙又丢掉了正在做的事。
+/// 会被自己租户的消失卡死的只有租户内会话，恢复逻辑也只该服务它们。</para>
 /// </remarks>
 public static class TenantSessionRecoveryMiddleware
 {
@@ -35,6 +40,7 @@ public static class TenantSessionRecoveryMiddleware
             catch (System.Exception ex) when (
                 ex is TenantNotFoundException or TenantNotActiveException &&
                 context.User.Identity?.IsAuthenticated == true &&
+                context.User.FindFirst(CustomClaimTypes.TenantId) is not null &&
                 !context.Response.HasStarted)
             {
                 // 会话所属租户已不可用：注销 Cookie（Bearer 无服务端注销，仅回 401）

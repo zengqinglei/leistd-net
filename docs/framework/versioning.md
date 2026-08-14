@@ -15,7 +15,7 @@
 
 - `Leistd.MultiTenancy.Core`：`ICurrentTenant`（AsyncLocal 环境上下文）、`IMultiTenant` 标记接口、`MultiTenancySides`、解析链抽象、`ITenantStore` / `InMemoryTenantStore`、租户管理契约 `ITenantManager` / `TenantConfiguration` / `TenantPage`、租户异常（映射 404/403/409）。应用层只依赖本包即可完成租户管理。
 - `Leistd.MultiTenancy.AspNetCore`：`UseMultiTenancy()` 中间件与默认解析链（Claim 定案 → `X-Tenant-Id` 头 → `tenant` 查询串）。
-- `Leistd.MultiTenancy.EntityFrameworkCore`：`TenantRecord` 注册表、`EfCoreTenantStore`（`IDistributedCache` 缓存）、`EfCoreTenantManager`、`MultiTenantSaveChangesInterceptor` 落值拦截器。`CreateAsync` 的 `isActive` 形参用于"停用态创建、初始化完成后再激活"——租户启用即被中间件接受，创建后还要播种数据的场景必须传 `false`，否则匿名端点能进入尚无管理员的半成品租户。
+- `Leistd.MultiTenancy.EntityFrameworkCore`：`TenantRecord` 注册表、`EfCoreTenantStore`（直接读库，**不缓存**）、`EfCoreTenantManager`、`MultiTenantSaveChangesInterceptor` 落值拦截器。存储不缓存是刻意的：它的返回值带 `IsActive`，中间件据此放行——访问控制状态不能依赖尽力而为的缓存失效，否则停用/删除会出现"已提交但仍放行"的窗口，且删除之后无法补救（租户已软删，按 Id 找不到，重试失效走不到）。代价是每请求一次索引查找，与 `ActiveUserRequirement` 的用户判活同型。`CreateAsync` 的 `isActive` **无默认值**：创建后还要播种数据的场景必须传 `false`，否则匿名端点能进入尚无管理员的半成品租户。
 
 **`Leistd.Ddd.Infrastructure`（破坏性）**
 

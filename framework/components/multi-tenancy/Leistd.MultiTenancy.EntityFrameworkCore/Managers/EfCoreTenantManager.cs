@@ -1,7 +1,6 @@
 using Leistd.Timing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.Extensions.Caching.Distributed;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
@@ -13,6 +12,8 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 /// 是本包的持久化实体，不出现在对外签名上，应用层无需引用任何持久化实现包。</para>
 /// <para>管理器自行 SaveChanges（租户管理是独立的低频管理操作）；
 /// 在外层工作单元事务内调用时仅表现为提前刷写，不破坏事务边界。</para>
+/// <para>没有缓存失效步骤：<see cref="EfCoreTenantStore{TDbContext}"/> 直接读库，
+/// 因此启停与删除在提交那一刻即对所有节点生效——写入不存在"已提交但未生效"的中间态。</para>
 /// <para>软删除由管理器自己落标记（不经 <c>Remove()</c> 依赖审计拦截器转换）：
 /// 宿主未挂载审计拦截器时删除租户也绝不能退化成物理删除。
 /// <c>DeleterId</c> 不在此填充——那需要用户上下文，归审计层职责。</para>
@@ -20,7 +21,6 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 public class EfCoreTenantManager<TDbContext>(
     TDbContext dbContext,
     ITenantNormalizer normalizer,
-    IDistributedCache cache,
     IClock clock) : ITenantManager
     where TDbContext : DbContext
 {
@@ -62,13 +62,11 @@ public class EfCoreTenantManager<TDbContext>(
             await EnsureNameNotTakenAsync(normalizedName, excludeId: id, cancellationToken);
         }
 
-        var oldNormalizedName = record.NormalizedName;
         record.Name = name;
         record.NormalizedName = normalizedName;
         record.DisplayName = displayName;
 
         await SaveTranslatingDuplicateNameAsync(dbContext.Entry(record), normalizedName, cancellationToken);
-        await InvalidateCacheAsync(record.Id, oldNormalizedName, normalizedName, cancellationToken);
         return EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
 
@@ -79,7 +77,6 @@ public class EfCoreTenantManager<TDbContext>(
         record.IsActive = isActive;
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        await InvalidateCacheAsync(record.Id, record.NormalizedName, null, cancellationToken);
         return EfCoreTenantStore<TDbContext>.ToConfiguration(record);
     }
 
@@ -93,7 +90,6 @@ public class EfCoreTenantManager<TDbContext>(
         record.DeletionTime = clock.Now;
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        await InvalidateCacheAsync(record.Id, record.NormalizedName, null, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -208,14 +204,4 @@ public class EfCoreTenantManager<TDbContext>(
         }
     }
 
-    private async Task InvalidateCacheAsync(Guid id, string oldNormalizedName, string? newNormalizedName, CancellationToken cancellationToken)
-    {
-        await cache.RemoveAsync(EfCoreTenantStore<TDbContext>.CacheKeyById(id), cancellationToken);
-        await cache.RemoveAsync(EfCoreTenantStore<TDbContext>.CacheKeyByName(oldNormalizedName), cancellationToken);
-
-        if (newNormalizedName is not null && !string.Equals(newNormalizedName, oldNormalizedName, StringComparison.Ordinal))
-        {
-            await cache.RemoveAsync(EfCoreTenantStore<TDbContext>.CacheKeyByName(newNormalizedName), cancellationToken);
-        }
-    }
 }
