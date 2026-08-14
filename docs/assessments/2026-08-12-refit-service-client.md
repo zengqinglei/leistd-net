@@ -26,7 +26,8 @@
 ```
 framework/components/service-client/Leistd.ServiceClient.Refit/
 ├── DependencyInjection.cs      # AddRefitServiceClient<TApi, TOptions>(serviceName, configuration)
-├── LeistdRefitSettings.cs      # 统一 RefitSettings 工厂：STJ(Web) 序列化 + 错误契约适配
+├── ServiceClientRefitSettings.cs  # 统一 RefitSettings 工厂：STJ(Web) 序列化 + 错误契约适配
+│                                 （评估时暂名 LeistdRefitSettings，实施时按仓库命名习惯去掉品牌前缀）
 └── ...
 ```
 

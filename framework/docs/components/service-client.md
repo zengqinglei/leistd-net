@@ -68,7 +68,7 @@ builder.Services
 规则：
 
 - **一律经 `AddRefitServiceClient` 注册**，不要用裸 `AddRefitClient`——否则错误语义退回 Refit 默认的 `ApiException`，与手写路径的 `RemoteServiceException` 契约分叉。
-- 统一 `RefitSettings`（`LeistdRefitSettings.Create()`）：System.Text.Json Web 默认序列化 + 非 2xx 经 `ExceptionFactory` 还原为 `RemoteServiceException`；可传入自定义 `RefitSettings` 覆盖。
+- 统一 `RefitSettings`（`ServiceClientRefitSettings.Create()`）：System.Text.Json Web 默认序列化 + 非 2xx 经 `ExceptionFactory` 还原为 `RemoteServiceException`；可传入自定义 `RefitSettings` 覆盖。
 - 无法内联源生成的方法形态（multipart、原始响应等）由 `Leistd.ServiceClient.Refit` 自带的 `Refit.Reflection` 反射构建器承接，业务包无需处理 RF006 诊断。
 - 远端返回统一响应信封（`Result<T>`）的服务：接口返回类型直接声明 `Task<Result<OrderDto>>`，或返回 `Task<HttpResponseMessage>` 后用 `ReadResultAsync<T>()` 解包。
 
@@ -273,7 +273,7 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 | --- | --- |
 | `AddRefitServiceClient<TApi, TOptions>(services, serviceName, IConfiguration, RefitSettings?)` | 注册 Refit 接口客户端并装配标准管道，Options 绑定 `Leistd:ServiceClients:<serviceName>`；返回 `IHttpClientBuilder` |
 | `AddRefitServiceClient<TApi, TOptions>(services, serviceName, Action<TOptions>, RefitSettings?)` | 同上，委托配置版 |
-| `LeistdRefitSettings.Create(JsonSerializerOptions?)` | 统一 `RefitSettings`：STJ Web 序列化 + 非 2xx 还原为 `RemoteServiceException` |
+| `ServiceClientRefitSettings.Create(JsonSerializerOptions?)` | 统一 `RefitSettings`：STJ Web 序列化 + 非 2xx 还原为 `RemoteServiceException` |
 
 ### `Leistd.ServiceClient.OAuth`
 
@@ -308,7 +308,7 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 ### Leistd.ServiceClient.Refit
 
 - `AddRefitServiceClient` = `AddRefitClient<TApi>(settings, httpClientName: serviceName)` + `AddServiceClientPipeline<TOptions>`——Refit 客户端与手写客户端共享同一条 handler 管道与配置节。
-- `LeistdRefitSettings.Create()` 的 `ExceptionFactory` 对非 2xx 响应调用 `CreateRemoteErrorAsync` 构造 `RemoteServiceException`；返回 `HttpResponseMessage` 的方法不经该钩子（拿到原始响应）。
+- `ServiceClientRefitSettings.Create()` 的 `ExceptionFactory` 对非 2xx 响应调用 `CreateRemoteErrorAsync` 构造 `RemoteServiceException`；返回 `HttpResponseMessage` 的方法不经该钩子（拿到原始响应）。
 - 包自带 `Refit.Reflection`：无法内联源生成的方法（RF006）自动落到反射构建器，可生成的方法仍走源生成实现。
 
 ### Leistd.ServiceClient.OAuth

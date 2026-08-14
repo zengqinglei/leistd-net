@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Leistd.ServiceClient.Exceptions;
-using Leistd.ServiceClient.OAuth.Models;
 using Leistd.ServiceClient.OAuth.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,7 +25,7 @@ public class ClientCredentialsTokenProvider(
     /// </summary>
     public const string TokenHttpClientName = "Leistd.ServiceClient.OAuth.Token";
 
-    private readonly ConcurrentDictionary<string, ServiceToken> _cache = new();
+    private readonly ConcurrentDictionary<string, CachedToken> _cache = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new();
 
     /// <inheritdoc />
@@ -61,7 +60,7 @@ public class ClientCredentialsTokenProvider(
     /// <inheritdoc />
     public void Invalidate(string clientName) => _cache.TryRemove(clientName, out _);
 
-    private async Task<ServiceToken> RequestTokenAsync(
+    private async Task<CachedToken> RequestTokenAsync(
         string clientName, ClientCredentialsOptions options, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(options.ClientId))
@@ -120,7 +119,7 @@ public class ClientCredentialsTokenProvider(
         }
     }
 
-    private ServiceToken ParseToken(string clientName, string body)
+    private CachedToken ParseToken(string clientName, string body)
     {
         string? accessToken = null;
         var expiresIn = 3600d;
@@ -152,8 +151,17 @@ public class ClientCredentialsTokenProvider(
         }
 
         logger.LogDebug("服务客户端 {ClientName} 已获取访问令牌，有效期 {ExpiresIn}s", clientName, expiresIn);
-        return new ServiceToken(accessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn));
+        return new CachedToken(accessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn));
     }
 
     private static string Truncate(string value) => value.Length <= 2048 ? value : value[..2048];
+
+    // 缓存中的访问令牌（AccessToken + 过期时刻 UTC）。仅本提供者使用——它不出现在
+    // IServiceTokenProvider 的任何签名里，使用者既不构造也不接收它，因此不作为公共类型暴露。
+    // 用普通注释而非 XML 注释：后者会被编译进随包分发的 .xml 文档，让私有类型出现在公共文档产物里。
+    private sealed record CachedToken(string AccessToken, DateTimeOffset ExpiresAt)
+    {
+        // 是否已过期（含提前刷新缓冲）
+        public bool IsExpired(TimeSpan buffer) => DateTimeOffset.UtcNow >= ExpiresAt - buffer;
+    }
 }
