@@ -17,13 +17,51 @@ namespace Leistd.ServiceClient.AspNetCore.Claims;
 /// </remarks>
 /// <param name="inner">宿主既有的转换（含框架默认的空实现）</param>
 /// <param name="serviceUserContext">服务用户上下文恢复转换</param>
+/// <param name="ownsInner">
+/// 本组合是否拥有 <paramref name="inner"/> 的释放责任。原注册是实现类型或工厂时，
+/// 内层由本组合创建、DI 不再跟踪它，所有权随之转移；原注册是宿主自行 <c>new</c> 的实例
+/// （<c>ImplementationInstance</c>）时容器本就不拥有它，释放责任留在宿主。
+/// </param>
 internal sealed class CompositeClaimsTransformation(
     IClaimsTransformation inner,
-    ServiceUserContextClaimsTransformation serviceUserContext) : IClaimsTransformation
+    ServiceUserContextClaimsTransformation serviceUserContext,
+    bool ownsInner) : IClaimsTransformation, IDisposable, IAsyncDisposable
 {
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
         var enriched = await inner.TransformAsync(principal);
         return await serviceUserContext.TransformAsync(enriched);
+    }
+
+    /// <summary>
+    /// 释放内层（若本组合拥有它）。DI 跟踪本组合，因此作用域结束 / 容器关闭时会调到这里；
+    /// 同时实现同步与异步两种释放：只实现 <see cref="IAsyncDisposable"/> 时，
+    /// 同步释放容器（<c>provider.Dispose()</c>）会抛异常。
+    /// </summary>
+    public void Dispose()
+    {
+        if (ownsInner && inner is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+    }
+
+    /// <inheritdoc cref="Dispose" />
+    public async ValueTask DisposeAsync()
+    {
+        if (!ownsInner)
+        {
+            return;
+        }
+
+        switch (inner)
+        {
+            case IAsyncDisposable asyncDisposable:
+                await asyncDisposable.DisposeAsync();
+                break;
+            case IDisposable disposable:
+                disposable.Dispose();
+                break;
+        }
     }
 }

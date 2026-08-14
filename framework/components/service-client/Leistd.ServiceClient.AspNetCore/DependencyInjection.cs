@@ -72,12 +72,17 @@ public static class DependencyInjection
         // 请求级服务）。固定 Singleton 会把 scoped 依赖提升为单例——ValidateScopes 下直接
         // 抛异常，未开启校验时则跨请求捕获状态。同生命周期下工厂拿到的就是对应作用域的
         // provider，内层解析自然正确。
+        //
+        // 释放语义一并接管：内层由本组合创建后 DI 不再跟踪它，所有权转移给组合（见
+        // CompositeClaimsTransformation）；宿主自行 new 的实例容器本就不拥有，不接管。
+        var ownsInner = existing.ImplementationInstance is null;
         services.Remove(existing);
         services.Add(new ServiceDescriptor(
             typeof(IClaimsTransformation),
             provider => new CompositeClaimsTransformation(
                 CreateInner(provider, existing),
-                provider.GetRequiredService<ServiceUserContextClaimsTransformation>()),
+                provider.GetRequiredService<ServiceUserContextClaimsTransformation>(),
+                ownsInner),
             existing.Lifetime));
         return services;
     }

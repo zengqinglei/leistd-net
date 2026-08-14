@@ -41,6 +41,19 @@ public class ServiceUserContextRegistrationTests
         }
     }
 
+    /// <summary>持有需释放资源的宿主转换器（释放责任随组合转移的验证对象）。</summary>
+    private sealed class DisposableClaimsTransformation(DisposeTracker tracker) : IClaimsTransformation, IDisposable
+    {
+        public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal) => Task.FromResult(principal);
+
+        public void Dispose() => tracker.Disposed = true;
+    }
+
+    private sealed class DisposeTracker
+    {
+        public bool Disposed { get; set; }
+    }
+
     private sealed class CallCounter
     {
         private int _count;
@@ -139,6 +152,46 @@ public class ServiceUserContextRegistrationTests
         var result = await TransformInScopeAsync(services);
 
         Assert.Equal(UserId.ToString(), result.FindFirst("sub")?.Value);
+    }
+
+    [Fact]
+    public async Task 宿主转换由容器创建_作用域结束时被释放()
+    {
+        // 内层不再由 DI 跟踪（组合在自己的工厂里创建它），释放责任必须随所有权转移到组合，
+        // 否则 Scoped 宿主转换器每请求泄漏一个未释放实例。
+        var tracker = new DisposeTracker();
+        var services = CreateServices();
+        services.AddSingleton(tracker);
+        services.AddScoped<IClaimsTransformation, DisposableClaimsTransformation>();
+        services.AddServiceUserContext();
+        services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor { HttpContext = new DefaultHttpContext() });
+
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IClaimsTransformation>();
+            Assert.False(tracker.Disposed);
+        }
+
+        Assert.True(tracker.Disposed);
+    }
+
+    [Fact]
+    public async Task 宿主自行new的实例_不被组合释放()
+    {
+        // ImplementationInstance 由宿主创建，容器本就不拥有它；组合越权释放会把宿主
+        // 仍在使用的对象提前销毁。
+        var tracker = new DisposeTracker();
+        var services = CreateServices();
+        services.AddSingleton<IClaimsTransformation>(new DisposableClaimsTransformation(tracker));
+        services.AddServiceUserContext();
+        services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor { HttpContext = new DefaultHttpContext() });
+
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        provider.GetRequiredService<IClaimsTransformation>();
+        await provider.DisposeAsync();
+
+        Assert.False(tracker.Disposed);
     }
 
     [Fact]
