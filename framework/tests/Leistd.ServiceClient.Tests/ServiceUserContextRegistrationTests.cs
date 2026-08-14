@@ -49,6 +49,19 @@ public class ServiceUserContextRegistrationTests
         public void Dispose() => tracker.Disposed = true;
     }
 
+    /// <summary>仅实现 IAsyncDisposable 的宿主转换器（原生 DI 对其同步释放同样抛错）。</summary>
+    private sealed class AsyncDisposableClaimsTransformation(DisposeTracker tracker)
+        : IClaimsTransformation, IAsyncDisposable
+    {
+        public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal) => Task.FromResult(principal);
+
+        public ValueTask DisposeAsync()
+        {
+            tracker.Disposed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
+
     private sealed class DisposeTracker
     {
         public bool Disposed { get; set; }
@@ -192,6 +205,73 @@ public class ServiceUserContextRegistrationTests
         await provider.DisposeAsync();
 
         Assert.False(tracker.Disposed);
+    }
+
+    [Fact]
+    public async Task 仅异步可释放的宿主转换_经异步作用域被释放()
+    {
+        var tracker = new DisposeTracker();
+        var services = CreateServices();
+        services.AddSingleton(tracker);
+        services.AddScoped<IClaimsTransformation, AsyncDisposableClaimsTransformation>();
+        services.AddServiceUserContext();
+        services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor { HttpContext = new DefaultHttpContext() });
+
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IClaimsTransformation>();
+        }
+
+        Assert.True(tracker.Disposed);
+    }
+
+    [Fact]
+    public void 仅异步可释放的宿主转换_同步释放作用域时抛错而非静默泄漏()
+    {
+        // 与原生 DI 行为一致：async-only 服务被同步释放要显式失败，否则泄漏被藏起来。
+        var tracker = new DisposeTracker();
+        var services = CreateServices();
+        services.AddSingleton(tracker);
+        services.AddScoped<IClaimsTransformation, AsyncDisposableClaimsTransformation>();
+        services.AddServiceUserContext();
+        services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor { HttpContext = new DefaultHttpContext() });
+
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IClaimsTransformation>();
+
+        var exception = Assert.Throws<InvalidOperationException>(scope.Dispose);
+
+        Assert.Contains("IAsyncDisposable", exception.Message);
+        Assert.False(tracker.Disposed);
+    }
+
+    [Fact]
+    public async Task 宿主另有keyed注册_只组合默认注册且keyed仍可按key解析()
+    {
+        // keyed 与默认服务是独立注册空间：误把 keyed 描述符当宿主转换会破坏默认服务解析。
+        var counter = new CallCounter();
+        var services = CreateServices(counter);
+        services.AddScoped<IClaimsTransformation, TenantClaimsTransformation>();
+        services.AddKeyedSingleton<IClaimsTransformation>("external", (provider, _) =>
+            new TenantClaimsTransformation(
+                new RequestScopedTenantSource(),
+                provider.GetRequiredService<CallCounter>()));
+        services.AddServiceUserContext();
+
+        var context = new DefaultHttpContext();
+        context.Request.Headers[ServiceClientHeaders.UserId] = UserId.ToString();
+        services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor { HttpContext = context });
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        await using var scope = provider.CreateAsyncScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IClaimsTransformation>()
+            .TransformAsync(ServiceClientPrincipal());
+
+        Assert.Equal("tenant-a", result.FindFirst(TenantClaimType)?.Value);   // 默认注册被组合
+        Assert.Equal(UserId.ToString(), result.FindFirst("sub")?.Value);
+        Assert.NotNull(scope.ServiceProvider.GetKeyedService<IClaimsTransformation>("external")); // keyed 未被动过
     }
 
     [Fact]

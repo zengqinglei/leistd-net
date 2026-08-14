@@ -317,7 +317,8 @@ catch (RemoteServiceException ex) when (ex.StatusCode == 404)
 ### Leistd.ServiceClient.AspNetCore
 
 - **恢复发生在认证阶段**：`AddServiceUserContext` 注册的 `ServiceUserContextClaimsTransformation`（`IClaimsTransformation`）在每次 `AuthenticateAsync` 内生效。仅靠中间件改写 `HttpContext.User` 不够——授权策略显式声明认证 scheme 时，`PolicyEvaluator` 会按 scheme 重认证并覆盖 `HttpContext.User`，中间件改写的主体在该路径上会被丢弃。转换幂等（已恢复的主体原样返回）。
-- **不吞掉宿主已有的 `IClaimsTransformation`**：ASP.NET Core 只消费单个实现（后注册者覆盖先注册者），因此 `AddServiceUserContext` 把注册时已存在的实现包进组合——**先宿主既有转换（租户、外部身份等 claims 富化），再用户上下文恢复**（恢复会更换主身份，应基于富化后的主体）。组合**沿用被包装注册的生命周期**（宿主常把转换注册为 Scoped，它往往依赖请求级服务），不会把 scoped 依赖提升为单例。重复调用 `AddServiceUserContext` 不叠加。宿主若在其**之后**才注册自己的转换，仍会覆盖该组合；此时由宿主负责组合（`ServiceUserContextClaimsTransformation` 是公共类型，可直接注入调用）。
+- **不吞掉宿主已有的 `IClaimsTransformation`**：ASP.NET Core 只消费单个实现（后注册者覆盖先注册者），因此 `AddServiceUserContext` 把注册时已存在的**默认**实现（keyed 注册属独立空间，不受影响）包进组合——**先宿主既有转换（租户、外部身份等 claims 富化），再用户上下文恢复**（恢复会更换主身份，应基于富化后的主体）。重复调用不叠加。宿主若在其**之后**才注册自己的转换，仍会覆盖该组合；此时由宿主负责组合（`ServiceUserContextClaimsTransformation` 是公共类型，可直接注入调用）。
+- **组合保留宿主注册的生命周期与释放语义**：沿用被包装注册的生命周期（宿主常把转换注册为 Scoped，它往往依赖请求级服务），不会把 scoped 依赖提升为单例；内层由组合创建后 DI 不再跟踪它，释放责任随所有权转移到组合——宿主自行 `new` 的实例（`ImplementationInstance`）容器本就不拥有，不代为释放；内层**仅**实现 `IAsyncDisposable` 时同步释放作用域会抛 `InvalidOperationException`，与原生 DI 行为一致（请用 `await using` / `DisposeAsync`）。
 - 中间件职责：不受信时剥离用户头；受信但认证阶段未恢复时兜底恢复 `HttpContext.User`。`Enable=false` 时完全直通（不恢复也不剥离）。
 - 受信判定：主体已认证 + 含 `client_id` claim + `sub` 匹配 `ClientSubject.Format(clientId)`（`sub` 缺失时回退 `ClaimTypes.NameIdentifier`）+ 持有 `RequiredScope`（默认 `svc.delegate`；同时识别空格分隔的 `scope` claim 与 OpenIddict 的多值 `oi_scp` claim）。`RequiredScope` 置空即关闭该校验——那意味着任何机器令牌都能代表任意用户，仅在部署上另有等价管控时才这么做。
 - 恢复时构造 `sub` / `preferred_username` / 自定义映射 claim 的 `ClaimsIdentity`（`AuthenticationType` 默认 `ServiceUserContext`）置于主体首位，原有身份全部保留。

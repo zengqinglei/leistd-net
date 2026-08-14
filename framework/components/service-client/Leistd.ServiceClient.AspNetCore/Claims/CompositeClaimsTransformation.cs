@@ -34,19 +34,38 @@ internal sealed class CompositeClaimsTransformation(
     }
 
     /// <summary>
-    /// 释放内层（若本组合拥有它）。DI 跟踪本组合，因此作用域结束 / 容器关闭时会调到这里；
-    /// 同时实现同步与异步两种释放：只实现 <see cref="IAsyncDisposable"/> 时，
-    /// 同步释放容器（<c>provider.Dispose()</c>）会抛异常。
+    /// 同步释放内层（若本组合拥有它）。DI 跟踪本组合，因此作用域结束 / 容器关闭时会调到这里。
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// 内层**仅**实现 <see cref="IAsyncDisposable"/> 时抛出：与原生 DI 一致——它对这类服务
+    /// 被同步释放同样抛错，要求改用异步作用域。所有权转移到本组合后，这一行为也随之转移，
+    /// 静默跳过会把每请求（Scoped）或容器级（Singleton）的资源泄漏藏起来。
+    /// 这里不用 <c>GetAwaiter().GetResult()</c> 兜底：sync-over-async 有死锁风险，
+    /// 且同样掩盖了「该用异步作用域」这一事实。
+    /// </exception>
     public void Dispose()
     {
-        if (ownsInner && inner is IDisposable disposable)
+        if (!ownsInner)
         {
-            disposable.Dispose();
+            return;
+        }
+
+        switch (inner)
+        {
+            case IDisposable disposable:
+                disposable.Dispose();
+                break;
+            case IAsyncDisposable:
+                throw new InvalidOperationException(
+                    $"'{inner.GetType()}' type only implements IAsyncDisposable. " +
+                    "Use DisposeAsync to dispose the container/scope.");
         }
     }
 
-    /// <inheritdoc cref="Dispose" />
+    /// <summary>
+    /// 异步释放内层（若本组合拥有它）：优先 <see cref="IAsyncDisposable"/>，
+    /// 否则回退同步释放。
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         if (!ownsInner)

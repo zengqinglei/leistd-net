@@ -59,8 +59,11 @@ public static class DependencyInjection
         // （租户、外部身份等 claims 富化），因此把既有实现包进组合：宿主在前、恢复在后。
         // 宿主若在本方法**之后**才注册自己的转换，仍会覆盖本组合——那时由宿主负责组合，
         // ServiceUserContextClaimsTransformation 是公共类型，可直接注入调用（见组件文档）。
+        // 排除 keyed 注册：keyed 与默认服务是两个独立的注册空间，认证服务解析的是默认那一个。
+        // keyed 描述符的 ServiceType 同样是 IClaimsTransformation，误选后按非 keyed 方式读取
+        // ImplementationType / ImplementationFactory / ImplementationInstance 会直接出错。
         var existing = services.LastOrDefault(descriptor =>
-            descriptor.ServiceType == typeof(IClaimsTransformation));
+            descriptor.ServiceType == typeof(IClaimsTransformation) && !descriptor.IsKeyedService);
         if (existing is null)
         {
             services.AddSingleton<IClaimsTransformation>(provider =>
