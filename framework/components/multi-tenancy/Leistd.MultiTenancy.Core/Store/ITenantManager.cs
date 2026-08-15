@@ -1,7 +1,7 @@
 namespace Leistd.MultiTenancy;
 
 /// <summary>
-/// 租户管理器：租户注册表的唯一写入口，负责名称归一化、唯一性校验与存储缓存失效
+/// 租户管理器：租户注册表的唯一写入口，负责名称归一化与未删除行内的唯一性校验
 /// </summary>
 /// <remarks>
 /// 契约与出参都在 Core：应用层依赖它即可完成租户管理，不必引用任何持久化实现包。
@@ -57,7 +57,7 @@ public interface ITenantManager
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 按 Id 查找租户（管理读路径，不经存储缓存），不存在或已删除返回 null
+    /// 按 Id 查找租户（管理读路径），不存在或已删除返回 null
     /// </summary>
     Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default);
 

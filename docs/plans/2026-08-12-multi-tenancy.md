@@ -384,6 +384,9 @@ framework/docs/components/multi-tenancy.md         # 组件使用文档（随包
     - **完整性锁补上 `UserRole` 盲区。** 那份类型清单是模型驱动地枚举 `IMultiTenant` 实体，而 `UserRole` 不实现它——`PurgeAsync` 里的关联清理被误删时，本文件所有用例都不会红（用户与角色都已软删，孤儿关联行既不可见也没人查）。这是方法论问题：叫它"完整性锁"就不该有盲区。补法是显式断言该租户已软删用户对应的 `UserRole` 全部软删；注意 `IgnoreQueryFilters()` 会同时摘掉软删与租户两个过滤器，租户条件必须显式写。**反向验证**通过（删掉关联清理后立即变红）。
     - **移除 EF 包里已无使用点的 `Microsoft.Extensions.Caching.Abstractions` 直接引用**（中央版本项保留，EF Core 仍传递依赖它）。
 
+14. **第八轮审查采纳的修复**：清掉最后三处把"当前事实"讲错的缓存表述（`ITenantManager` 的类型注释与 `FindAsync` 注释、集成测试里的停用注释）。这次做了多租户范围的全仓扫描而不是只改眼前文件——前几轮的漂移都源于后者。
+    - 刻意**保留**的是被明确框成历史/依据的那些：`EfCoreTenantStore` 说明"为什么不缓存"、框架测试里"缓存时代为什么补救不了"、`TenantAppService` 说明"激活为何能纳入补偿边界"。它们是防止有人不理解取舍就把缓存加回来的护栏，删掉等于丢掉这几轮评审的结论。文档里"缓存租户数据的 key 必须含租户 Id"也保留——那是给业务代码的通用指引，与存储实现无关。
+
 ### 阶段 5：Template 前端与 Mock
 
 1. 登录页租户区、`tenant-interceptor`、`localStorage` 持久化、启动链（StartupService 先载租户再初始化认证）。

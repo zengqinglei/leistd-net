@@ -228,7 +228,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantClient = await LoginTenantAdminAsync(tenantId);
         Assert.Single(await GetUsernamesAsync(tenantClient));
 
-        // 停用：管理器写入即失效存储缓存，在途会话的下一个请求就被拒
+        // 停用在提交那一刻生效（存储直接读库），在途会话的下一个请求就被拒
         var deactivate = await hostAdmin.Client.PutAsJsonAsync(
             $"/api/v1/tenants/{tenantId}/activation", new { IsActive = false });
         Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
