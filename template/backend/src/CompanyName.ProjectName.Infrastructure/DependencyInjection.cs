@@ -104,7 +104,7 @@ public static class DependencyInjection
         services.AddAuthorizationEfCore<MyProjectDbContext>();
 #endif
 #if (TenancyEnabled)
-        // 租户注册表存储、管理器与落值拦截器（依赖下方注册的分布式缓存）
+        // 租户注册表存储、管理器与落值拦截器（存储直接读库，除 DbContext 外无基础设施依赖）
         services.AddMultiTenancyEfCore<MyProjectDbContext>();
 #endif
 
