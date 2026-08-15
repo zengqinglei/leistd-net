@@ -170,6 +170,11 @@ public class TenantAppService(
     {
         if (input.IsActive)
         {
+            // 存在性必须先判：不存在的租户里"用户数为 0"同样成立，
+            // 不先判就会把 404 讲成"这个租户还没有用户"（400）
+            _ = await tenantManager.FindAsync(id, cancellationToken)
+                ?? throw new NotFoundException($"Tenant '{id}' not found.");
+
             await EnsureTenantHasUsersAsync(id, cancellationToken);
         }
 
@@ -178,7 +183,7 @@ public class TenantAppService(
     }
 
     /// <summary>
-    /// 校验目标租户内已存在用户；空租户不允许被启用。
+    /// 校验目标租户内已存在用户；空租户不允许被启用。调用前需已确认租户存在。
     /// </summary>
     private async Task EnsureTenantHasUsersAsync(Guid tenantId, CancellationToken cancellationToken)
     {

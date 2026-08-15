@@ -7,8 +7,8 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 /// 审计字段由审计拦截器统一填充
 /// </summary>
 /// <remarks>
-/// 写入请统一通过 <see cref="ITenantManager"/>：它负责名称归一化、唯一性校验与存储缓存失效；
-/// 直接写库会留下陈旧缓存。
+/// 写入请统一通过 <see cref="ITenantManager"/>：它负责名称归一化与未删除行内的唯一性校验。
+/// 直接写库不会留下陈旧读取（存储直接读库），但会绕开这两项校验。
 /// </remarks>
 public class TenantRecord : IFullAuditedObject
 {

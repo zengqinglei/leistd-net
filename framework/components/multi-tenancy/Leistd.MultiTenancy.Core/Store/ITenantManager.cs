@@ -43,9 +43,8 @@ public interface ITenantManager
     /// 启用/停用租户
     /// </summary>
     /// <remarks>
-    /// 写入后即失效存储缓存，停用最迟在缓存条目的绝对过期窗口内对所有节点生效
-    /// （见 <c>EfCoreTenantStore</c> 的过期策略）。失效本身失败时本方法抛出——
-    /// 库中状态已提交，重试即自愈。
+    /// 停用在提交那一刻对所有节点生效：<c>EfCoreTenantStore</c> 直接读库，
+    /// 不存在"已提交但仍被放行"的窗口。
     /// </remarks>
     /// <returns>更新后的租户配置</returns>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除</exception>

@@ -111,8 +111,8 @@ public class TenantAppService(ITenantManager tenantManager, ITenantStore tenantS
     public Task<TenantConfiguration> CreateAsync(string name)
         => tenantManager.CreateAsync(name, displayName: null, isActive: true);
     // UpdateAsync / SetActiveAsync / DeleteAsync（软删除）同理；
-    // 管理器负责名称归一化、未删除行内的唯一性校验（冲突抛 DuplicateTenantNameException → 409）
-    // 与存储缓存失效
+    // 管理器负责名称归一化与未删除行内的唯一性校验
+    // （冲突抛 DuplicateTenantNameException → 409）
 }
 ```
 
@@ -145,7 +145,8 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 | --- | --- |
 | 未解析出租户 | 宿主上下文，正常放行 |
 | 租户不存在 | 抛 `TenantNotFoundException`（继承 `NotFoundException` → 404） |
-| 租户已停用/已删除 | 抛 `TenantNotActiveException`（继承 `ForbiddenException` → 403）；Store 缓存被管理器写入失效后，在途会话的下一个请求即被拒绝 |
+| 租户已停用 | 抛 `TenantNotActiveException`（继承 `ForbiddenException` → 403） |
+| 租户已删除 | 存储按 `!IsDeleted` 过滤，读不到即视为不存在 → 404（与"租户不存在"同一形状，不泄漏"这个租户曾经存在"） |
 
 ## 接口参考
 
@@ -177,10 +178,10 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 | 成员 | 说明 |
 | --- | --- |
 | `CreateAsync(name, displayName, isActive, ct)` | 创建（归一化 + 唯一校验）。`isActive` **无默认值**：创建后还要初始化租户数据时必须传 `false` |
-| `UpdateAsync(id, name, displayName, ct)` | 改名（失效新旧名称缓存） |
+| `UpdateAsync(id, name, displayName, ct)` | 改名（归一化 + 唯一校验） |
 | `SetActiveAsync(id, isActive, ct)` | 启停 |
 | `DeleteAsync(id, ct)` | 软删除（不依赖审计拦截器，绝不物理删除） |
-| `FindAsync(id, ct)` | 管理读路径按 Id 查找（不经存储缓存），不存在/已删除返回 null |
+| `FindAsync(id, ct)` | 管理读路径按 Id 查找，不存在/已删除返回 null |
 | `GetPagedAsync(keyword, offset, limit, ct)` | 分页查询（名称/显示名关键字，按创建时间倒序），返回 `TenantPage` |
 
 ### `Leistd.MultiTenancy.MultiTenancySides`

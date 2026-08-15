@@ -258,6 +258,20 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.Forbidden, loginResponse.StatusCode);
     }
 
+    /// <summary>
+    /// 启用一个不存在的租户回 404，不能被"租户内没有用户"的守卫抢先讲成 400。
+    /// </summary>
+    [Fact]
+    public async Task 启用不存在的租户返回404()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+
+        var response = await hostAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/tenants/{Guid.NewGuid()}/activation", new { IsActive = true });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     [Fact]
     public async Task 未知租户404_名称大小写不敏感()
     {
@@ -474,6 +488,25 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 nameof(User)
             },
             multiTenantEntities);
+
+        // UserRole 不实现 IMultiTenant，进不了上面那份类型清单——必须单独断言。
+        // 否则误删 PurgeAsync 里的关联清理时，本文件的用例一个都不会变红：
+        // 用户与角色都已软删，孤儿关联行既不可见也没人查。
+        // IgnoreQueryFilters 会同时摘掉软删与租户两个过滤器，所以租户条件要显式写
+        var tenantUserIds = await db.Set<User>()
+            .IgnoreQueryFilters()
+            .Where(u => u.TenantId == tenantId)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        if (tenantUserIds.Count > 0)
+        {
+            var liveLinks = await db.Set<UserRole>()
+                .IgnoreQueryFilters()
+                .Where(ur => tenantUserIds.Contains(ur.UserId) && !ur.IsDeleted)
+                .ToListAsync();
+            Assert.Empty(liveLinks);
+        }
 
         using (currentTenant.Change(tenantId))
         {
