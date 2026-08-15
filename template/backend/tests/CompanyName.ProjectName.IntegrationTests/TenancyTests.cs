@@ -11,6 +11,7 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 #if (IncludeExternalLogin)
@@ -280,6 +281,53 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             $"/api/v1/tenants/{Guid.NewGuid()}/activation", new { IsActive = true });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    /// 跨域响应必须把 <c>X-Tenant-Invalid</c> 列入 Access-Control-Expose-Headers。
+    /// </summary>
+    /// <remarks>
+    /// CORS 分离部署（前端 dev server 直连后端）是模板明确支持的模式之一。
+    /// 自定义响应头不在 CORS 安全清单里，不显式暴露则浏览器不交给 JS——
+    /// 后端照常发了头、前端 <c>error.headers.get()</c> 恒为 null，租户失效恢复静默失效。
+    /// 这条断言是必要的：后端集成测试直读 TestServer 响应头、前端单测手工构造 HttpHeaders，
+    /// 两侧都绕过浏览器的 CORS 过滤，谁也发现不了。
+    /// </remarks>
+    [Fact]
+    public async Task 跨域响应暴露租户失效标记头()
+    {
+        // 复刻"模式二：CORS 分离访问"的配置：默认 AllowAnyLocalhost=false 时不放行任何来源，
+        // CORS 中间件不会写任何响应头，这条断言也就无从谈起
+        using var corsHost = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Cors:AllowAnyLocalhost"] = "true"
+                })));
+
+        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(corsHost, "admin", "Admin@123456");
+        var tenantId = await CreateTenantAsync(hostAdmin, "cors-check");
+        using var tenantClient = await LoginTenantAdminAsync(corsHost, tenantId);
+
+        var deactivate = await hostAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/tenants/{tenantId}/activation", new { IsActive = false });
+        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/users?offset=0&limit=10");
+        request.Headers.Add("Origin", "http://localhost:4200");
+        foreach (var header in tenantClient.DefaultRequestHeaders)
+        {
+            request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        using var browserLike = ProjectWebApplicationFactory.CreateProjectClient(corsHost);
+        var response = await browserLike.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.True(response.Headers.Contains("X-Tenant-Invalid"));
+
+        var exposed = string.Join(",", response.Headers.GetValues("Access-Control-Expose-Headers"));
+        Assert.Contains("X-Tenant-Invalid", exposed, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -31,21 +31,25 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       //#if (IncludeIdentity)
-      if (error.status === 401 && !req.context.get(SILENT_AUTH)) {
-        authService.clearAuthData();
+      if (error.status === 401) {
         //#if (TenancyEnabled)
-        // 只有"会话所属租户已不可用"才清租户选择：普通会话过期清掉的话，
-        // 用户每次超时都要重选租户；而租户真的失效时不清，登录页会带着这个
-        // 已死的租户再次被拒——服务端用这个头把两者区分开
+        // 租户失效与请求是否静默无关：这个头说的是"会话所属租户已经没了"，
+        // 而 SILENT_AUTH 只表达"别为这次后台请求打断用户"。静默请求（/auth/me、
+        // /permissions/current）同样会撞上失效租户，不清的话它会留到登录页再次被拒。
+        // 反过来普通会话过期不带这个头，租户选择必须留着，否则每次超时都要重选
         if (error.headers.get('X-Tenant-Invalid')) {
           tenantContext.clear();
         }
+
         //#endif
-        const currentPath = router.url;
-        const returnUrl = currentPath.startsWith('/auth/') ? undefined : currentPath;
-        void router.navigate(['/auth/login'], {
-          queryParams: returnUrl ? { returnUrl } : undefined,
-        });
+        if (!req.context.get(SILENT_AUTH)) {
+          authService.clearAuthData();
+          const currentPath = router.url;
+          const returnUrl = currentPath.startsWith('/auth/') ? undefined : currentPath;
+          void router.navigate(['/auth/login'], {
+            queryParams: returnUrl ? { returnUrl } : undefined,
+          });
+        }
       }
 
       //#else

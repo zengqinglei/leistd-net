@@ -140,6 +140,24 @@ describe('httpErrorInterceptor', () => {
     expect(clearTenantSpy).not.toHaveBeenCalled();
   });
 
+  it('clears the tenant on a silent 401 marked X-Tenant-Invalid, without touching auth or routing', () => {
+    const tenantContext = TestBed.inject(TenantContextService);
+    const authService = TestBed.inject(AuthService);
+    const router = TestBed.inject(Router);
+    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearAuthSpy = spyOn(authService, 'clearAuthData');
+    const navigateSpy = spyOn(router, 'navigate');
+    const context = new HttpContext().set(SILENT_AUTH, true);
+
+    runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }), { context });
+
+    // 静默只表达"别为后台请求打断用户"，与"这个租户已经没了"是两件事：
+    // /auth/me 与 /permissions/current 同样会撞上失效租户，不清就留到登录页再次被拒
+    expect(clearTenantSpy).toHaveBeenCalled();
+    expect(clearAuthSpy).not.toHaveBeenCalled();
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
   //#endif
   it('honors SILENT_AUTH: skips the 401 redirect but still normalizes the error', () => {
     const authService = TestBed.inject(AuthService);

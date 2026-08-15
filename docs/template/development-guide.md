@@ -16,6 +16,8 @@
 
 修改条件化功能前先读 `template/.template.config/template.json`。条件代码、文件排除、项目引用、DI、前端路由、Mock 和文档必须作为一个场景整体调整，生成后不得残留 `<!--#if`、`<!--#endif` 或模板占位符。
 
+**前端条件块的空行放在块内部**：紧跟 `//#if` 写内容，空行留在 `//#endif` 之前。空行放在标记外侧时，开启与关闭两种形态里必有一种产生双空行或块首空行，prettier 会判 lint 失败——而只跑其中一种场景发现不了。因此条件块的格式必须按开、关两个场景分别验证。
+
 标准场景矩阵：
 
 | 场景 | 参数重点 | 目的 |
@@ -23,6 +25,9 @@
 | `default` | 默认参数 | 主路径 |
 | `minimal` | `IncludeIdentity=false` | 最小裁剪 |
 | `no-roles` | `IncludeRoles=false` | 认证但无角色权限 |
+| `tenancy` | `IncludeTenancy=true` | 多租户主路径 |
+| `tenancy-illegal` | `IncludeTenancy=true` + `IncludeRoles=false` | 非法参数组合整体不生成租户能力 |
+| `tenancy-external-login` | `IncludeTenancy=true` + `IncludeExternalLogin=true` | 外部身份按租户分区 |
 | `notifications` | `IncludeNotifications=true` | 通知与实时组合 |
 | `no-openiddict` | `IncludeOpenIddict=false` | 无开放授权服务 |
 | `external-login` | `IncludeExternalLogin=true` | 外部登录适配 |

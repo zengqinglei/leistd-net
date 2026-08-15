@@ -260,6 +260,14 @@ try
             policy.AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
+#if (TenancyEnabled)
+
+            // AllowAnyHeader 只放行**请求**头；响应头默认不交给跨域的 JS 读取
+            // （CORS 安全清单只含 Content-Type 等寥寥几个）。不显式暴露的话，
+            // 分离部署模式下前端 error.headers.get() 恒为 null，
+            // 租户失效恢复会静默失效——而两侧测试都绕过浏览器，发现不了
+            policy.WithExposedHeaders(TenantSessionRecoveryMiddleware.TenantInvalidHeader);
+#endif
 
             if (allowAnyLocalhost)
             {
