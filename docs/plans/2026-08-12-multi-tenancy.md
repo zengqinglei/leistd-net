@@ -111,7 +111,7 @@
 | D10 | SDK 租户传递 | 出站 `TenantContextDelegatingHandler` 读 `ICurrentTenant` 注入 `X-Tenant-Id`；入站沿用 ServiceUserContext 信任判定：受信服务调用恢复为 `tenant_id` claim。**实现修正**：不受信来源的租户头**不剥离**——解析链主体优先级已使其无害（已认证主体由 claim 定案，匿名头只决定登录分区），剥离反而切断 SPA 匿名登录的租户选择 | 读 `ICurrentTenant` 而非 claim，后台任务 `Change()` 后无主体也能传；信任锚复用 client credentials 身份，不新造机制 |
 | D11 | 模板参数 | `IncludeTenancy`，默认 `false`，`isEnabled: IncludeRoles` | 管理闭环依赖权限门禁与角色模型；多数服务不需要 MT，默认关闭避免为未使用能力付模型成本 |
 | D12 | 租户校验（框架原始映射） | 中间件经 `ITenantStore` 校验：未知 → `TenantNotFoundException`（映射 404），停用 → `TenantNotActiveException`（映射 403）；已删除 → 存储按 `!IsDeleted` 过滤读不到，与"不存在"同一形状（404）；`EfCoreTenantStore` **直接读库不缓存** | 校验收口一处；启用状态是访问控制状态，不挂在尽力而为的缓存失效上（第六轮结论，见 §12） |
-| D13 | 会话恢复（模板最终响应） | 已认证且带 `tenant_id` claim 的会话命中租户不可用时，`TenantSessionRecoveryMiddleware` 注销 Cookie：XHR/API 回 401、HTML 导航重定向回原地址；宿主会话与匿名请求不经此处，保持 D12 的原始映射 | 租户被停用/删除后，持该租户会话的用户会被死锁在错误页（HTML 导航、登录页、注销端点全部被拒）——恢复语义属于模板的认证形态，不下沉框架 |
+| D13 | 会话恢复（模板最终响应） | 已认证且带 `tenant_id` claim 的会话命中租户不可用时，`TenantSessionRecoveryMiddleware` 注销 Cookie：XHR/API 回 401、HTML 导航重定向回原地址；响应带 `X-Tenant-Invalid` 头，前端据此把它与普通会话过期区分开（只有前者清掉已选租户）；宿主会话与匿名请求不经此处，保持 D12 的原始映射 | 租户被停用/删除后，持该租户会话的用户会被死锁在错误页（HTML 导航、登录页、注销端点全部被拒）——恢复语义属于模板的认证形态，不下沉框架 |
 
 ### 4.2 组件划分
 
@@ -220,10 +220,10 @@ sequenceDiagram
 - 登录页租户选择区（名称输入 + `by-name` 校验，宿主登录留空），选择结果存 `localStorage`；参照 ABP tenant box 的语义——租户框只决定"后续认证发生在哪个租户分区"，本身不授予任何可见性。
 - `tenant-interceptor`（先例：`accept-language-interceptor`）为所有 `/api/` 请求附加 `X-Tenant-Id`。
 - **当前租户显示与切换**：登录后在 `user-menu` 区域展示当前租户名（宿主显示"宿主"）；"切换租户"入口 = 清 `localStorage` 租户状态 + 登出回登录页重选——`tenant_id` 已固化在 cookie/token 主体且解析链上 claim 优先，不存在"原会话内热切换"，前端不做假切换（对应 ABP "CurrentUser 解析链首 + 切换即重新登录"的语义）。
-- **租户失效兜底**：租户被停用/删除后，在途会话的下一个请求即被中间件拒绝（403/404 + 业务 code）；`httpErrorInterceptor` 识别租户失效错误码后清 `localStorage` 租户状态并跳登录页（对应 ABP `MultiTenancyMiddlewareErrorPageBuilder` 清 cookie + SignOut 的职责，SPA 形态下收敛为清本地状态 + 重登）。
+- **租户失效兜底**：租户被停用/删除后，在途会话的下一个请求被 `TenantSessionRecoveryMiddleware` 注销并回 401（HTML 导航则重定向，见 D13），响应带 `X-Tenant-Invalid` 头；`httpErrorInterceptor` 在 401 上**按该头**决定是否连带清掉 `localStorage` 里的租户选择。判据必须来自服务端：普通会话过期也是 401，清租户会让用户每次超时都重选一遍；而租户真失效时不清，跳回登录页仍带着已死的租户、登录再次被拒——两个方向都会把用户卡住（对应 ABP `MultiTenancyMiddlewareErrorPageBuilder` 清 cookie + SignOut 的同类处理）。
 - **匿名流程带租户**：邮件验证、找回密码等匿名链路的邮件链接嵌入 `?tenant={tenantId}` 查询参数（QueryString Contributor 承接，先例：ABP 密码重置链接嵌 `__tenant`）；`IncludeTenancy && IncludeIdentity` 组合下 `EmailVerificationAppService` 发信时从 `ICurrentTenant` 取值拼装。
 - `/platform/tenants` 管理页（Spartan 表格 + Dialog，先例：roles 页面），路由 `permissionGuard` 挂 `App.Tenants.Default`；租户侧用户因侧别过滤天然看不到该权限，菜单自动裁剪。既有用户/角色/权限管理页**零改动**——后端查询天然落在当前租户分区内，页面语义自动变为"本租户的用户/角色/授予"。
-- Mock 三件套（`_mock/data/tenant.ts`、`_mock/api/tenant.ts`、`index.ts` 出口）复刻端点形状、401/403、"停用租户登录被拒"与租户失效错误码，不复刻解析引擎。
+- Mock 三件套（`_mock/data/tenant.ts`、`_mock/api/tenant.ts`、`index.ts` 出口）复刻端点形状、401/403 与"停用租户登录被拒"，不复刻解析引擎。**已知覆盖边界**：mock 不模拟"会话进行中租户被停用/删除"，因此 `X-Tenant-Invalid` 恢复路径在 mock 模式下走不到——该路径由后端集成测试（标记头出现/不出现）与前端拦截器单测（带头清、裸 401 不清）两侧覆盖。
 
 **条件裁剪**：`template.json` 增 symbol `IncludeTenancy`（`isEnabled: IncludeRoles`，默认 false）+ modifier 排除清单（tenant 实体配置、Controller、AppService、前端页面/服务/Mock）；`!IncludeIdentity` 与 `IncludeIdentity && !IncludeRoles` 清单同步补全（modifiers 不级联）；矩阵新增 `tenancy` 场景并为既有场景添加 `ForbiddenTokens: ["X-Tenant-Id", "IMultiTenant", "App.Tenants"]`。
 
@@ -402,10 +402,18 @@ framework/docs/components/multi-tenancy.md         # 组件使用文档（随包
     - **顺带的端到端对账**（不在评审清单内，是这次自查扫出来的）：把文件树逐项与磁盘对齐——补上漏列的 `TenantResolveOptions.cs`、`DuplicateTenantNameException.cs`、`TenantRecordConfiguration.cs`，改掉把 `UpperInvariantTenantNormalizer` 写成独立文件的错误（它在 `ITenantNormalizer.cs` 里），并给三个异常补上映射的状态码。
     - 方法上的调整：前三轮都是"评审点哪补哪"，结果每轮补完又漏新的。这轮改成按主题把整份文档的设计章节与代码对一遍，把开放式的连载收敛成一次有边界的检查。
 
+17. **第十一轮审查采纳的修复**（一个真功能缺口，不是措辞）：
+    - **租户失效后的客户端恢复此前只做了一半。** 文档承诺"前端识别租户失效后清本地租户状态回登录"，实际链路是：恢复中间件回**裸 401** → 拦截器按通用 401 调 `clearAuthData()`（只清用户与 SignalR）→ 跳登录。`tenantContext.clear()` 存在但没人在这条路径上调，`validateTenantContext()` 只在 `StartupService` 即页面加载时跑，而 SPA 内跳转登录不触发整页加载。后果不只是状态残留：登录页仍带着那个已死的租户，用户提交登录 → 带失效 `X-Tenant-Id` → 再次被拒，**在另一个地方卡住**——正是当初催生恢复中间件的同一类死锁，我们修了服务端一半就写了文档。
+    - **终局选"补齐自动恢复"，不选"删掉承诺"。** 后者等于接受上面那个死锁；我们已经为同一类问题付过一次代价。
+    - **关键是区分两种 401**：普通会话过期**不能**清租户（否则每次超时都强迫重选），租户失效**必须**清。判据由服务端给出——恢复中间件本来就知道注销原因，附一个 `X-Tenant-Invalid` 头最便宜；客户端方案（收到 401 再回查租户）要多一次往返，还把启动校验的逻辑复制一份。恢复路径保持裸 401 的形状（不另造错误体），标记只走响应头。
+    - 两侧各补两个用例并**反向验证**：后端断言恢复 401 带头、普通未认证 401 不带（去掉发头 → 变红）；前端断言带头清租户、裸 401 不清（改成无条件清 → 变红）。
+    - Mock 不模拟"会话进行中租户失效"，该路径在 mock 模式下走不到——按既有 Mock 决策如实写成**已知覆盖边界**，而不是假装它也复刻了。
+    - 这条缺口本可以在写那句文档时就发现，只要当时验证一遍而不是照着意图写。它不是审查太细，是我埋得太深。
+
 ### 阶段 5：Template 前端与 Mock
 
 1. 登录页租户区、`tenant-interceptor`、`localStorage` 持久化、启动链（StartupService 先载租户再初始化认证）。
-2. `user-menu` 当前租户显示与"切换租户"（清状态 + 登出重登）；`httpErrorInterceptor` 租户失效兜底（清状态 + 跳登录）。
+2. `user-menu` 当前租户显示与"切换租户"（清状态 + 登出重登）；`httpErrorInterceptor` 租户失效兜底（按 `X-Tenant-Invalid` 头清租户选择 + 跳登录；普通 401 只清认证态）。
 3. 邮件验证/找回密码等匿名链路的邮件链接嵌租户查询参数（`IncludeIdentity` 组合场景）。
 4. `/platform/tenants` 页面 + 权限裁剪 + i18n；Mock 三件套与场景断言标记。
 
@@ -423,7 +431,7 @@ framework/docs/components/multi-tenancy.md         # 组件使用文档（随包
 | 中间件（TestServer） | claim 优先于头；匿名头解析；未知租户 404、停用 403；`Change` 覆盖整个下游管道；未注册 Store 时的失败语义 |
 | 授权集成 | Host 侧权限对租户主体拒绝；授予按租户分区（同名角色不同租户互不可见）；revision 并发在租户内独立 |
 | SDK 端到端 | 双宿主：A 在租户 T 内调 B，B 的 `ICurrentTenant.Id == T` 且查询落 T 分区；匿名伪造 `X-Tenant-Id` 被剥离；用户 token 场景 claim 直达 |
-| 模板矩阵 | `tenancy` 场景业务闭环（建租户 → 租户管理员登录 → 租内 CRUD → 跨租户越权全拒）；停用租户后在途会话下一请求被拒且前端清状态回登录；带租户参数的匿名邮件链路落在正确分区；其余场景零租户 token 残留 |
+| 模板矩阵 | `tenancy` 场景业务闭环（建租户 → 租户管理员登录 → 租内 CRUD → 跨租户越权全拒）；停用租户后在途会话下一请求被注销回 401 且带 `X-Tenant-Invalid`、前端据此清租户选择回登录；带租户参数的匿名邮件链路落在正确分区；其余场景零租户 token 残留 |
 
 ## 7. 风险与缓解
 

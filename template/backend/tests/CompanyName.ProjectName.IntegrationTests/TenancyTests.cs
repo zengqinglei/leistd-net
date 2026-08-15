@@ -237,6 +237,16 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var afterDeactivation = await tenantClient.GetAsync("/api/v1/users?offset=0&limit=10");
         Assert.Equal(HttpStatusCode.Unauthorized, afterDeactivation.StatusCode);
 
+        // 带租户失效标记：前端据此把它与"普通会话过期"区分开，只在这种 401 上清掉已选租户。
+        // 不带的话前端只能二选一——要么每次超时都强迫重选租户，要么跳回登录页仍带着已死的租户
+        Assert.True(afterDeactivation.Headers.Contains("X-Tenant-Invalid"));
+
+        // 反面：普通未认证 401 不带这个头，否则判据失效、前端又会在每次会话过期时清掉租户
+        using var anonymous = _factory.CreateProjectClient();
+        var ordinary = await anonymous.GetAsync("/api/v1/users?offset=0&limit=10");
+        Assert.Equal(HttpStatusCode.Unauthorized, ordinary.StatusCode);
+        Assert.False(ordinary.Headers.Contains("X-Tenant-Invalid"));
+
         // HTML 导航：注销后重定向回原地址，下一次请求已匿名、SPA 可正常加载——用户不会死锁在错误页
         using var navRequest = new HttpRequestMessage(HttpMethod.Get, "/platform/users");
         navRequest.Headers.Accept.ParseAdd("text/html");

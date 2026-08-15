@@ -3,6 +3,7 @@ import {
   HttpErrorResponse,
   HttpEvent,
   HttpHandlerFn,
+  HttpHeaders,
   HttpRequest,
 } from '@angular/common/http';
 import { Injector, provideZonelessChangeDetection, runInInjectionContext } from '@angular/core';
@@ -19,6 +20,9 @@ import { httpErrorInterceptor } from './http-error-interceptor';
 import { ApplicationHttpError } from '../errors/application-http-error';
 //#if (IncludeIdentity)
 import { AuthService } from '../services/auth-service';
+//#endif
+//#if (TenancyEnabled)
+import { TenantContextService } from '../services/tenant-context-service';
 //#endif
 
 /**
@@ -52,12 +56,17 @@ describe('httpErrorInterceptor', () => {
     return caught;
   }
 
-  function httpError(status: number, error: unknown = null): HttpErrorResponse {
+  function httpError(
+    status: number,
+    error: unknown = null,
+    headers?: Record<string, string>,
+  ): HttpErrorResponse {
     return new HttpErrorResponse({
       status,
       statusText: `status ${status}`,
       url: '/api/test',
       error,
+      headers: headers ? new HttpHeaders(headers) : undefined,
     });
   }
 
@@ -108,6 +117,30 @@ describe('httpErrorInterceptor', () => {
     expect((caught as ApplicationHttpError).status).toBe(401);
   });
 
+  //#if (TenancyEnabled)
+  it('clears the selected tenant on a 401 marked X-Tenant-Invalid', () => {
+    const tenantContext = TestBed.inject(TenantContextService);
+    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    spyOn(TestBed.inject(Router), 'navigate');
+
+    runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }));
+
+    // 不清的话，登录页会带着这个已失效的租户再次被拒——用户换个地方卡住
+    expect(clearTenantSpy).toHaveBeenCalled();
+  });
+
+  it('keeps the selected tenant on an ordinary 401', () => {
+    const tenantContext = TestBed.inject(TenantContextService);
+    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    spyOn(TestBed.inject(Router), 'navigate');
+
+    runInterceptor(httpError(401));
+
+    // 普通会话过期就清租户的话，用户每次超时都要重选一遍
+    expect(clearTenantSpy).not.toHaveBeenCalled();
+  });
+
+  //#endif
   it('honors SILENT_AUTH: skips the 401 redirect but still normalizes the error', () => {
     const authService = TestBed.inject(AuthService);
     const router = TestBed.inject(Router);

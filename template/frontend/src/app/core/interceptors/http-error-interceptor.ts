@@ -12,11 +12,17 @@ import { ApplicationHttpError } from '../errors/application-http-error';
 //#if (IncludeIdentity)
 import { AuthService } from '../services/auth-service';
 //#endif
+//#if (TenancyEnabled)
+import { TenantContextService } from '../services/tenant-context-service';
+//#endif
 
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   //#if (IncludeIdentity)
   const router = inject(Router);
   const authService = inject(AuthService);
+  //#endif
+  //#if (TenancyEnabled)
+  const tenantContext = inject(TenantContextService);
   //#endif
   return next(req).pipe(
     catchError((error: unknown) => {
@@ -27,6 +33,14 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
       //#if (IncludeIdentity)
       if (error.status === 401 && !req.context.get(SILENT_AUTH)) {
         authService.clearAuthData();
+        //#if (TenancyEnabled)
+        // 只有"会话所属租户已不可用"才清租户选择：普通会话过期清掉的话，
+        // 用户每次超时都要重选租户；而租户真的失效时不清，登录页会带着这个
+        // 已死的租户再次被拒——服务端用这个头把两者区分开
+        if (error.headers.get('X-Tenant-Invalid')) {
+          tenantContext.clear();
+        }
+        //#endif
         const currentPath = router.url;
         const returnUrl = currentPath.startsWith('/auth/') ? undefined : currentPath;
         void router.navigate(['/auth/login'], {
