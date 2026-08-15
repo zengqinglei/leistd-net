@@ -110,7 +110,8 @@
 | D9 | 超管与硬边界 | `IsSuperAdmin` 旁路功能权限，但**不旁路租户过滤器**；跨租户操作 = 显式 `ICurrentTenant.Change(null)`（宿主视角）或 `IDataFilter.Disable<IMultiTenant>()`（全量视角），均可审计 | 授权方案 §10 既定规则："租户隔离不可被超管随意旁路" |
 | D10 | SDK 租户传递 | 出站 `TenantContextDelegatingHandler` 读 `ICurrentTenant` 注入 `X-Tenant-Id`；入站沿用 ServiceUserContext 信任判定：受信服务调用恢复为 `tenant_id` claim。**实现修正**：不受信来源的租户头**不剥离**——解析链主体优先级已使其无害（已认证主体由 claim 定案，匿名头只决定登录分区），剥离反而切断 SPA 匿名登录的租户选择 | 读 `ICurrentTenant` 而非 claim，后台任务 `Change()` 后无主体也能传；信任锚复用 client credentials 身份，不新造机制 |
 | D11 | 模板参数 | `IncludeTenancy`，默认 `false`，`isEnabled: IncludeRoles` | 管理闭环依赖权限门禁与角色模型；多数服务不需要 MT，默认关闭避免为未使用能力付模型成本 |
-| D12 | 租户校验与缓存 | 中间件经 `ITenantStore` 校验：未知 → `TenantNotFoundException`（映射 404），停用 → `TenantNotActiveException`（映射 403）；已删除 → 存储按 `!IsDeleted` 过滤读不到，与"不存在"同一形状（404）；`EfCoreTenantStore` **直接读库不缓存** | 校验收口一处；启用状态是访问控制状态，不挂在尽力而为的缓存失效上（第六轮结论，见 §12） |
+| D12 | 租户校验（框架原始映射） | 中间件经 `ITenantStore` 校验：未知 → `TenantNotFoundException`（映射 404），停用 → `TenantNotActiveException`（映射 403）；已删除 → 存储按 `!IsDeleted` 过滤读不到，与"不存在"同一形状（404）；`EfCoreTenantStore` **直接读库不缓存** | 校验收口一处；启用状态是访问控制状态，不挂在尽力而为的缓存失效上（第六轮结论，见 §12） |
+| D13 | 会话恢复（模板最终响应） | 已认证且带 `tenant_id` claim 的会话命中租户不可用时，`TenantSessionRecoveryMiddleware` 注销 Cookie：XHR/API 回 401、HTML 导航重定向回原地址；宿主会话与匿名请求不经此处，保持 D12 的原始映射 | 租户被停用/删除后，持该租户会话的用户会被死锁在错误页（HTML 导航、登录页、注销端点全部被拒）——恢复语义属于模板的认证形态，不下沉框架 |
 
 ### 4.2 组件划分
 
@@ -126,9 +127,9 @@ graph TD
 
 | 包 | 角色 | 内容 | 依赖 |
 | --- | --- | --- | --- |
-| `Leistd.MultiTenancy.Core`（RootNamespace `Leistd.MultiTenancy`） | 平台无关抽象与默认实现 | `IMultiTenant`、`ICurrentTenant` / `CurrentTenant`、`ICurrentTenantAccessor` / `AsyncLocalCurrentTenantAccessor`、`BasicTenantInfo`、`MultiTenancySides`、`ITenantStore` / `TenantConfiguration`、`ITenantNormalizer`、`ITenantResolveContributor` / `TenantResolveContext` / `ITenantResolver`、`TenantNotFoundException` / `TenantNotActiveException`、`AddMultiTenancyCore()` | `Leistd.Core` |
+| `Leistd.MultiTenancy.Core`（RootNamespace `Leistd.MultiTenancy`） | 平台无关抽象与默认实现 | `IMultiTenant`、`ICurrentTenant` / `CurrentTenant`、`ICurrentTenantAccessor` / `AsyncLocalCurrentTenantAccessor`、`BasicTenantInfo`、`MultiTenancySides`、`ITenantStore` / `TenantConfiguration`、`ITenantManager` / `TenantPage`（管理契约，应用层只依赖本包即可管租户）、`ITenantNormalizer`、`ITenantResolveContributor` / `TenantResolveContext` / `ITenantResolver`、`TenantNotFoundException` / `TenantNotActiveException` / `DuplicateTenantNameException`、`AddMultiTenancyCore()` | `Leistd.Core` |
 | `Leistd.MultiTenancy.AspNetCore` | Web 宿主集成 | `MultiTenancyMiddleware`（解析 → Store 校验 → `Change` 包裹管道 → 日志 Scope `leistd.tenantId`）、`CurrentPrincipalTenantResolveContributor` / `HeaderTenantResolveContributor` / `QueryStringTenantResolveContributor`、`MultiTenancyOptions`（头名、查询串名、Contributor 链）、`AddMultiTenancy(IConfiguration \| Action)` + `UseMultiTenancy()` | `MultiTenancy.Core`、`FrameworkReference Microsoft.AspNetCore.App` |
-| `Leistd.MultiTenancy.EntityFrameworkCore` | 持久化集成 | `TenantRecord`（Guid v7、Name 归一化唯一、DisplayName、IsActive、全审计软删，**不实现** `IMultiTenant`）、`EfCoreTenantStore<TDbContext>`（直接读库，不缓存）、`ITenantManager` / `EfCoreTenantManager`（创建/改名/启停，归一化 + 唯一校验）、`MultiTenantSaveChangesInterceptor`（Added 且 `IMultiTenant` 且 `TenantId == null` 时落当前租户）、`ConfigureMultiTenancy(this ModelBuilder)`、`AddMultiTenancyEfCore<TDbContext>()` | `MultiTenancy.Core`、`Auditing.Core`、EF Core |
+| `Leistd.MultiTenancy.EntityFrameworkCore` | 持久化集成 | `TenantRecord`（Guid v7、Name 归一化唯一、DisplayName、IsActive、全审计软删，**不实现** `IMultiTenant`）、`EfCoreTenantStore<TDbContext>`（直接读库，不缓存）、`EfCoreTenantManager`（`ITenantManager` 的实现：创建/改名/启停，归一化 + 唯一校验 + 冲突翻译）、`MultiTenantSaveChangesInterceptor`（Added 且 `IMultiTenant` 且 `TenantId == null` 时落当前租户）、`ConfigureMultiTenancy(this ModelBuilder)`、`AddMultiTenancyEfCore<TDbContext>()` | `MultiTenancy.Core`、`Auditing.Core`、EF Core |
 
 既有包的增量（均为最小侵入）：
 
@@ -209,7 +210,7 @@ sequenceDiagram
 | `GET /api/v1/tenants`（分页）/ `GET {id}` | 租户列表与详情 | `App.Tenants.Default`（Host 侧） |
 | `POST /api/v1/tenants` | 创建租户 + 租内种子（管理员邮箱/初始密码入参） | `App.Tenants.Create` |
 | `PUT /api/v1/tenants/{id}` / `PUT {id}/activation` | 改名、启停 | `App.Tenants.Update` |
-| `DELETE /api/v1/tenants/{id}` | 软删（提交即生效，租户用户下次请求 404） | `App.Tenants.Delete` |
+| `DELETE /api/v1/tenants/{id}` | 软删（提交即生效；该租户的在途会话下次请求被会话恢复中间件注销——XHR 回 401、HTML 导航重定向；匿名请求则是 404） | `App.Tenants.Delete` |
 | `GET /api/v1/tenants/by-name/{name}` | 登录前租户探测（返回 Id 与 IsActive，不泄露其他信息） | 匿名 |
 
 其余后端改造：`User`/`Role`/`UserRole`/`ExternalLoginConnection` 实现 `IMultiTenant`；用户名/邮箱唯一索引改 `(TenantId, ...)`；两条认证路径写 `tenant_id` claim；`PermissionSubjectProvider` / `ActiveUserHandler` 的按请求用户重读天然落在租户分区内（无需改动，测试覆盖即可）；`SystemInitializer` 拆分宿主初始化与 `ITenantSeeder`；`Program.cs` 注册 `AddMultiTenancyCore/AddMultiTenancy/AddMultiTenancyEfCore` 并在 `UseServiceUserContext` 之后 `UseMultiTenancy()`，DbContext options 追加租户拦截器。
@@ -244,15 +245,18 @@ framework/components/multi-tenancy/
 │   ├── Resolution/
 │   │   ├── ITenantResolver.cs / TenantResolver.cs
 │   │   ├── ITenantResolveContributor.cs
-│   │   └── TenantResolveContext.cs                # TenantIdOrName + Handled（可解析为“确定是宿主”）
+│   │   ├── TenantResolveContext.cs                # TenantIdOrName + Handled（可解析为“确定是宿主”）
+│   │   └── TenantResolveOptions.cs                # Contributor 链配置
 │   ├── Store/
 │   │   ├── ITenantStore.cs                        # FindAsync(id) / FindByNameAsync(normalizedName)
 │   │   ├── TenantConfiguration.cs                 # Id / Name / NormalizedName / IsActive
-│   │   ├── ITenantNormalizer.cs / UpperInvariantTenantNormalizer.cs
+│   │   ├── ITenantManager.cs                      # 管理契约 + TenantPage（实现在 EF 包）
+│   │   ├── ITenantNormalizer.cs                   # 含 UpperInvariantTenantNormalizer 默认实现
 │   │   └── InMemoryTenantStore.cs                 # 资源服务/测试用的配置型 Store
 │   └── Exceptions/
-│       ├── TenantNotFoundException.cs             # : CommonException
-│       └── TenantNotActiveException.cs
+│       ├── TenantNotFoundException.cs             # : NotFoundException → 404
+│       ├── TenantNotActiveException.cs             # : ForbiddenException → 403
+│       └── DuplicateTenantNameException.cs        # : ConflictException → 409
 ├── Leistd.MultiTenancy.AspNetCore/
 │   ├── Leistd.MultiTenancy.AspNetCore.csproj
 │   ├── DependencyInjection.cs                     # AddMultiTenancy(IConfiguration|Action) / UseMultiTenancy()
@@ -266,8 +270,9 @@ framework/components/multi-tenancy/
     ├── Leistd.MultiTenancy.EntityFrameworkCore.csproj
     ├── DependencyInjection.cs                     # AddMultiTenancyEfCore<TDbContext>() / ConfigureMultiTenancy(ModelBuilder)
     ├── Entities/TenantRecord.cs
+    ├── EntityConfigurations/TenantRecordConfiguration.cs   # NormalizedName 未删除行部分唯一索引
     ├── Stores/EfCoreTenantStore.cs                # 直接读库，不缓存
-    ├── Managers/ITenantManager.cs / EfCoreTenantManager.cs
+    ├── Managers/EfCoreTenantManager.cs            # 契约在 Core
     └── Interceptors/MultiTenantSaveChangesInterceptor.cs
 
 framework/tests/
@@ -391,6 +396,12 @@ framework/docs/components/multi-tenancy.md         # 组件使用文档（随包
     - **上一轮我把"按目录圈定的扫描"说成了"全仓扫描"**，圈的是我心目中的"多租户区域"，恰好漏掉组合根。这次按"同时出现租户与缓存"的条件扫全仓，除组合根外还查出**本文档设计章节的六处陈旧描述**——D12 决策行、组件表、API 表的删除行、文件树、测试清单（连文件名都与实际不符）、风险表——它们都在按最初带缓存的设计陈述当前事实。评审记录（§9–§14）作为历史保留不动，设计章节必须反映终局，否则从头读这份文档的人得到的是一个已经不存在的架构。
     - 教训记在这里：范围声明要与实际执行的范围一致。"我扫了这些目录"和"我扫了全仓"是两句不同的话，把前者说成后者，等于给了后来人一个不该有的完成度承诺。
 
+16. **第十轮审查采纳的修复**（两条都采纳，并借机做了一次端到端对账）：
+    - **状态码要分层讲**：删除/停用后"租户用户下次请求 404/403"是**框架原始映射**，而模板管道里已认证且带 `tenant_id` 的会话会被 `TenantSessionRecoveryMiddleware` 接管——XHR 回 401、HTML 导航重定向。上一轮我写的"租户用户下次请求 404"恰好对它点名的那类主体是错的（既有用例断言的就是 401 与 302）。根因是**会话恢复中间件只活在评审记录里，从没进过设计章节**，于是设计章节描述的是一个没有它的世界。修法不是改一句话：D12 更名为"租户校验（框架原始映射）"，新增 **D13"会话恢复（模板最终响应）"**，API 表与风险表都指向这个分层。
+    - **契约归属写错**：组件表把 `ITenantManager` 归在 EF 包、文件树列出并不存在的 `Managers/ITenantManager.cs`——第二轮就把管理契约迁到 Core 了。Core 行补入 `ITenantManager` / `TenantPage` / `DuplicateTenantNameException`，EF 行与文件树只留实现。
+    - **顺带的端到端对账**（不在评审清单内，是这次自查扫出来的）：把文件树逐项与磁盘对齐——补上漏列的 `TenantResolveOptions.cs`、`DuplicateTenantNameException.cs`、`TenantRecordConfiguration.cs`，改掉把 `UpperInvariantTenantNormalizer` 写成独立文件的错误（它在 `ITenantNormalizer.cs` 里），并给三个异常补上映射的状态码。
+    - 方法上的调整：前三轮都是"评审点哪补哪"，结果每轮补完又漏新的。这轮改成按主题把整份文档的设计章节与代码对一遍，把开放式的连载收敛成一次有边界的检查。
+
 ### 阶段 5：Template 前端与 Mock
 
 1. 登录页租户区、`tenant-interceptor`、`localStorage` 持久化、启动链（StartupService 先载租户再初始化认证）。
@@ -421,6 +432,6 @@ framework/docs/components/multi-tenancy.md         # 组件使用文档（随包
 | 全局过滤器被绕过（`FindAsync`、raw SQL、`IgnoreQueryFilters`） | `GetByIdAsync` 本次修复并补测试；组件文档将 `IgnoreQueryFilters` / raw SQL 列为审查红线；集成测试用三路（列表/详情/更新）越权矩阵兜底 |
 | PostgreSQL 可空 `TenantId` 唯一索引对 NULL 视为互不相等，宿主行可重复 | Npgsql `AreNullsDistinct(false)`（PG 15+，模板基线满足）；Sqlite 测试场景以应用层唯一校验兜底并在文档注明 |
 | 授予表索引迁移让存量项目升级有感 | versioning.md 给出一次性迁移脚本说明（存量行 `TenantId` 置 NULL 即宿主语义，行为不变） |
-| 租户删除/停用后已发 token 仍在有效期 | 中间件每请求经 `ITenantStore` 校验且存储直接读库，停用/删除提交即生效（403/404），与 `ActiveUserRequirement` 的"每请求重读"防线同型 |
+| 租户删除/停用后已发 token 仍在有效期 | 中间件每请求经 `ITenantStore` 校验且存储直接读库，停用/删除提交即生效，与 `ActiveUserRequirement` 的"每请求重读"防线同型。**框架原始映射**是停用 403 / 删除 404；**模板最终响应**对已认证的租户会话另有恢复处理（见 D13） |
 | 多服务体系租户数据一致性（资源服务无租户表） | 资源服务默认信 token claim + 受信头，不落库；需要本地校验的服务用 `InMemoryTenantStore`（配置）或自建只读同步，文档明确两种形态的取舍 |
 | Mock 与后端租户语义漂移 | Mock 只复刻端点形状与 401/403/停用拒绝，不复刻解析引擎（沿用授权 Mock 决策 D12 口径） |
