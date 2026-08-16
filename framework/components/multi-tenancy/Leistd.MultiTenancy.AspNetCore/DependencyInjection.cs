@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy;
 
@@ -40,6 +42,12 @@ public static class DependencyInjection
     {
         services.AddMultiTenancyCore();
         services.AddHttpContextAccessor();
+
+        // DomainFormat 一旦配置就是匿名请求的权威来源，写错了必须启动期就失败——
+        // 运行期它只表现为"永不匹配"，解析会静默退回请求头，边界没了却没人知道
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>());
+        services.AddOptions<MultiTenancyOptions>().ValidateOnStart();
 
         // 默认解析链仅在链为空时装配；宿主可在其后的 Configure 中增删排序
         services.Configure<TenantResolveOptions>(options =>

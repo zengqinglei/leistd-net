@@ -42,6 +42,7 @@ using Leistd.ServiceClient.Constants;
 using OpenIddict.Abstractions;
 #endif
 #endif
+using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -239,14 +240,34 @@ try
         .ConfigureApiValidation();
 
     // 4.1. CORS 配置
+    // 转发头只信任明确列出的代理。清空 KnownProxies/KnownIPNetworks 等于"接受任何客户端的
+    // 转发头"，而 X-Forwarded-Host 会直接改写 Request.Host —— 那是子域名租户解析的权威来源，
+    // 也是生成绝对 URL（重定向、邮件链接）的依据。不配置时保留框架默认（仅环回可信），
+    // 宁可在网关后面丢掉转发头，也不要让任意客户端说了算。
+    // 部署在 ingress/网关后面时，用 ForwardedHeaders:KnownNetworks 配置代理网段，例如 "10.0.0.0/8"。
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
                                    ForwardedHeaders.XForwardedProto |
                                    ForwardedHeaders.XForwardedHost;
         options.ForwardLimit = 1;
-        options.KnownIPNetworks.Clear();
-        options.KnownProxies.Clear();
+
+        var forwardedConfig = builder.Configuration.GetSection("ForwardedHeaders");
+        foreach (var proxy in forwardedConfig.GetSection("KnownProxies").Get<string[]>() ?? [])
+        {
+            if (IPAddress.TryParse(proxy, out var address))
+            {
+                options.KnownProxies.Add(address);
+            }
+        }
+
+        foreach (var network in forwardedConfig.GetSection("KnownNetworks").Get<string[]>() ?? [])
+        {
+            if (System.Net.IPNetwork.TryParse(network, out var parsed))
+            {
+                options.KnownIPNetworks.Add(parsed);
+            }
+        }
     });
 
     builder.Services.AddCors(options =>
@@ -287,8 +308,9 @@ try
     builder.Services.AddSecurity();
 
 #if (TenancyEnabled)
-    // 4.5.-1 多租户：环境上下文与解析链（Claim 定案 → X-Tenant-Id 头 → tenant 查询串），
-    // 配置节 Leistd:MultiTenancy；租户存储/管理器在 Infrastructure 层注册
+    // 4.5.-1 多租户：环境上下文与解析链（Claim 定案 → 子域名 → X-Tenant-Id 头 → tenant 查询串），
+    // 配置节 Leistd:MultiTenancy；租户存储/管理器在 Infrastructure 层注册。
+    // 子域名解析需配 DomainFormat（形如 {0}.example.com），未配置时跳过该环节
     builder.Services.AddMultiTenancy(builder.Configuration);
 #endif
 

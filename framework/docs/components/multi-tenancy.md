@@ -149,6 +149,10 @@ builder.Services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.
 匹配规则：主机名大小写不敏感；端口不参与匹配（格式只写主机名，开发与生产共用一份配置）；恰好等于基础域（`example.com`）视为宿主入口；租户段本身不能再含点号（`a.b.example.com` 不会被当成名为 `a.b` 的租户）。
 
 > **部署注意**：只把真正用于租户的通配子域指向本应用。把整个顶级域通配过来时，`www.example.com` 会被解析成名为 `www` 的租户并因查不到而 404。
+>
+> **代理信任是前提**：解析读的是 `Request.Host`，而 `UseForwardedHeaders()` 会用 `X-Forwarded-Host` 覆盖它。若宿主把 `KnownProxies`/`KnownIPNetworks` 清空（=接受任何客户端的转发头），任意访客都能用一个请求头改写"权威来源"，这条边界即告失效。宿主必须只信任明确列出的代理网段。
+
+`DomainFormat` 写错（漏占位符、多个占位符、带 scheme/路径/端口/空白）会在**启动期**抛 `OptionsValidationException`，而不是运行期静默退回请求头解析——安全配置的错误要大声失败，不能悄悄降级。
 
 **不要提供匿名的"租户列表"接口**去做可搜索下拉框——那等于公开全部客户名单。需要"忘记租户名"的便利时，把候选列表**发到用户邮箱**，而不是渲染在登录页上。ABP 同样只暴露按名/按 Id 的单点查询（AbpTenantAppService 上没有任何返回租户集合的方法），其切换 UI 也是纯文本框。
 

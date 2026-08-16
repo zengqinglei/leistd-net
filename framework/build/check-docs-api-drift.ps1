@@ -33,6 +33,8 @@ $allow = @(
     'DbContext','DbContextOptions','DbContextOptionsBuilder','DbSet','ModelBuilder','EntityEntry','ChangeTracker',
     'EntityState','SaveChangesInterceptor','IEntityTypeConfiguration','IServiceProviderFactory',
     # ASP.NET
+    'UseForwardedHeaders','ForwardedHeadersOptions','KnownProxies','KnownIPNetworks',
+    'OptionsValidationException','IValidateOptions',
     'IExceptionHandler','AuthorizationPolicyBuilder','DefaultAuthorizationPolicyProvider','ProblemDetails',
     'ValidationProblemDetails','IProxyGenerator',   # IProxyGenerator=Castle 类型：文档不该引它，但它不是 Leistd 自有，靠源码存在性判定
     # 第三方基类（Castle / Mapster / AutoMapper）

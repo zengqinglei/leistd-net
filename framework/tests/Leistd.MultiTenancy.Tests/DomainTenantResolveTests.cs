@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.MultiTenancy.Tests;
@@ -74,6 +75,54 @@ public class DomainTenantResolveTests : IAsyncLifetime
             ("X-Test-Tenant-Claim", GlobexId.ToString()));
 
         Assert.Equal(GlobexId.ToString(), body);
+    }
+
+    /// <summary>
+    /// 非法 DomainFormat 必须在启动期失败，而不是运行期静默退回请求头解析。
+    /// </summary>
+    /// <remarks>
+    /// 这是 fail-open 的典型形态：配置写错了，系统照常启动、看起来在跑，
+    /// 而"子域名是权威来源"这条边界已经没了——请求头重新说了算。
+    /// </remarks>
+    [Theory]
+    [InlineData("example.com")]                 // 漏了占位符
+    [InlineData("{0}.{0}.example.com")]         // 多个占位符
+    [InlineData("https://{0}.example.com")]     // 带 scheme
+    [InlineData("{0}.example.com/app")]         // 带路径
+    [InlineData("{0}.example.com:5240")]        // 带端口
+    [InlineData("{0}. example.com")]            // 含空白
+    public async Task Invalid_domain_format_stops_the_host_from_starting(string format)
+    {
+        var builder = new HostBuilder().ConfigureWebHost(webHost => webHost
+            .UseTestServer()
+            .ConfigureServices(services =>
+            {
+                services.AddMultiTenancy(options => options.DomainFormat = format);
+                services.AddInMemoryTenantStore(_ => { });
+            })
+            .Configure(app => app.UseMultiTenancy()));
+
+        var error = await Assert.ThrowsAsync<OptionsValidationException>(async () =>
+        {
+            using var host = await builder.StartAsync();
+        });
+
+        Assert.Contains("DomainFormat", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Absent_domain_format_is_valid_and_simply_skips_the_contributor()
+    {
+        using var host = await new HostBuilder().ConfigureWebHost(webHost => webHost
+            .UseTestServer()
+            .ConfigureServices(services =>
+            {
+                services.AddMultiTenancy();
+                services.AddInMemoryTenantStore(_ => { });
+            })
+            .Configure(app => app.UseMultiTenancy())).StartAsync();
+
+        await host.StopAsync();
     }
 
     public async Task InitializeAsync()

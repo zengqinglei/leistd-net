@@ -10,6 +10,9 @@ using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.EntityFrameworkCore;
+using System.Net;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
@@ -328,6 +331,58 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         var exposed = string.Join(",", response.Headers.GetValues("Access-Control-Expose-Headers"));
         Assert.Contains("X-Tenant-Invalid", exposed, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 子域名部署下，来自不受信任地址的 X-Forwarded-Host 不能改写租户。
+    /// </summary>
+    /// <remarks>
+    /// <para><c>UseForwardedHeaders</c> 会用 <c>X-Forwarded-Host</c> 覆盖 <c>Request.Host</c>，
+    /// 而 Host 正是子域名解析的权威来源，且转发头中间件排在多租户中间件之前。
+    /// 把 <c>KnownProxies</c>/<c>KnownIPNetworks</c> 清空（=接受任何客户端的转发头）时，
+    /// "子域名是匿名请求权威来源"这条边界就形同虚设。</para>
+    /// <para>判据用**停用租户**：把 b 停掉，转发头若被采信就会解析到 b 并 403；
+    /// 没被采信则留在 a（或宿主）而 200。用回显不了租户的端点做断言等于什么都没测。</para>
+    /// <para>这条必须在**模板**层：它验证的是宿主管道的组合（转发头信任 × 解析链），
+    /// 框架侧那条"请求头改不动子域名"的用例测不到宿主的代理信任配置。</para>
+    /// </remarks>
+    [Fact]
+    public async Task 不受信任来源的转发头不能改写子域名解析出的租户()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        await CreateTenantAsync(hostAdmin, "subdomain-a");
+        var blockedId = await CreateTenantAsync(hostAdmin, "subdomain-b");
+
+        var deactivate = await hostAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/tenants/{blockedId}/activation", new { IsActive = false });
+        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+
+        using var domainHost = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Leistd:MultiTenancy:DomainFormat"] = "{0}.example.com"
+                }));
+
+            // TestServer 的客户端地址是环回，而环回在框架默认信任集里——不改的话
+            // 转发头会被正常采信，这条用例观测不到目标属性。换成公网测试地址，
+            // 模拟"直连的不受信任客户端"
+            builder.ConfigureServices(services =>
+                services.AddSingleton<IStartupFilter>(new UntrustedRemoteAddressFilter()));
+        });
+
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(domainHost);
+
+        using var forged = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/security-config");
+        forged.Headers.Host = "subdomain-a.example.com";
+        forged.Headers.TryAddWithoutValidation("X-Forwarded-Host", "subdomain-b.example.com");
+
+        var response = await client.SendAsync(forged);
+
+        // 采信了伪造头 → 落到已停用的 subdomain-b → 403
+        Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -706,6 +761,24 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         public Task PurgeAsync(CancellationToken cancellationToken = default)
             => inner.PurgeAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// 把远端地址改成公网测试地址（TEST-NET-3），使请求不落在任何受信任代理网段内。
+    /// </summary>
+    private sealed class UntrustedRemoteAddressFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) =>
+            app =>
+            {
+                app.Use(async (context, continuation) =>
+                {
+                    context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.10");
+                    await continuation();
+                });
+
+                next(app);
+            };
     }
 
     /// <summary>
