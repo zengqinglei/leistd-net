@@ -9,7 +9,6 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideZap,
   //#if (TenancyEnabled)
-  lucideBuilding2,
   //#endif
   lucideCircleCheck,
   lucideInfo,
@@ -88,7 +87,6 @@ const githubIcon =
     provideIcons({
       lucideZap,
       //#if (TenancyEnabled)
-      lucideBuilding2,
       lucideX,
       //#endif
       lucideCircleCheck,

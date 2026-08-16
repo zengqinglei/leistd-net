@@ -260,21 +260,20 @@
           <label hlmFieldLabel for="tenantName">Tenant</label>
           <!--#endif-->
           @if (tenantContext.current(); as tenant) {
-            <div
-              class="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/50 px-3 py-1.5"
-            >
-              <div class="flex min-w-0 items-center gap-2">
-                <ng-icon name="lucideBuilding2" class="shrink-0 text-muted-foreground" />
-                <span class="truncate text-sm font-medium">{{
-                  tenant.displayName || tenant.name
-                }}</span>
-              </div>
+            <!-- 已选中态复用与未选中态、与用户名输入框同一个 hlm-input-group 原语：
+                 手写 div 会在高度、圆角与边框 token 上各偏一点，同一张表单里三种控件三个尺寸 -->
+            <hlm-input-group>
+              <input
+                hlmInputGroupInput
+                id="tenantName"
+                readonly
+                [value]="tenant.displayName || tenant.name"
+              />
               <!--#if (IncludeLocalization)-->
               <button
-                hlmBtn
+                hlmInputGroupButton
                 type="button"
-                variant="ghost"
-                size="icon-sm"
+                align="inline-end"
                 [attr.aria-label]="'account.login.tenantClear' | transloco"
                 (click)="clearTenant()"
               >
@@ -282,17 +281,16 @@
               </button>
               <!--#else-->
               <button
-                hlmBtn
+                hlmInputGroupButton
                 type="button"
-                variant="ghost"
-                size="icon-sm"
+                align="inline-end"
                 aria-label="Clear tenant"
                 (click)="clearTenant()"
               >
                 <ng-icon name="lucideX" />
               </button>
               <!--#endif-->
-            </div>
+            </hlm-input-group>
           } @else {
             <hlm-input-group>
               <!--#if (IncludeLocalization)-->
