@@ -47,6 +47,10 @@ public static class DependencyInjection
             if (options.Contributors.Count == 0)
             {
                 options.Contributors.Add(new CurrentPrincipalTenantResolveContributor());
+
+                // 子域名排在头与查询串之前：配置了 DomainFormat 的部署里域名就是权威，
+                // 不允许匿名请求再用请求头把自己挪到别的租户。未配置时该贡献者直接跳过
+                options.Contributors.Add(new DomainTenantResolveContributor());
                 options.Contributors.Add(new HeaderTenantResolveContributor());
                 options.Contributors.Add(new QueryStringTenantResolveContributor());
             }

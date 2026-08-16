@@ -136,8 +136,21 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 默认解析链（`AddMultiTenancy` 装配，链为空时才写入默认值，可自定义增删排序）：
 
 1. **CurrentPrincipal**：已认证主体的 `tenant_id` claim 定案并终止链——含"无 claim = 宿主用户"。请求头与查询串**无法改写已登录用户的租户**，这是防跨租户水平越权的关键顺序。
-2. **Header**（`X-Tenant-Id`）：服务于匿名请求（登录前选租户、受信服务调用恢复前的原始头）。
-3. **QueryString**（`?tenant=`）：服务于邮件验证、找回密码等匿名链接。
+2. **Domain**（`{0}.example.com`）：仅在配置了 `MultiTenancyOptions.DomainFormat` 时生效，未配置直接跳过。排在头与查询串之前——子域名部署下域名是权威，匿名请求不能再用请求头把自己挪到别的租户。
+3. **Header**（`X-Tenant-Id`）：服务于匿名请求（登录前选租户、受信服务调用恢复前的原始头）。
+4. **QueryString**（`?tenant=`）：服务于邮件验证、找回密码等匿名链接。
+
+**子域名是便利性与安全性同时最优的形态**，也是 SaaS 的主流做法（Slack、Atlassian、Zendesk 等）：租户写在 URL 里，登录页不需要租户输入框，用户什么都不用记；同时系统不需要任何"列出全部租户"的接口——访客得先知道域名才能到达那个页面。
+
+```csharp
+builder.Services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.com");
+```
+
+匹配规则：主机名大小写不敏感；端口不参与匹配（格式只写主机名，开发与生产共用一份配置）；恰好等于基础域（`example.com`）视为宿主入口；租户段本身不能再含点号（`a.b.example.com` 不会被当成名为 `a.b` 的租户）。
+
+> **部署注意**：只把真正用于租户的通配子域指向本应用。把整个顶级域通配过来时，`www.example.com` 会被解析成名为 `www` 的租户并因查不到而 404。
+
+**不要提供匿名的"租户列表"接口**去做可搜索下拉框——那等于公开全部客户名单。需要"忘记租户名"的便利时，把候选列表**发到用户邮箱**，而不是渲染在登录页上。ABP 同样只暴露按名/按 Id 的单点查询（AbpTenantAppService 上没有任何返回租户集合的方法），其切换 UI 也是纯文本框。
 
 值可以是租户 Guid 或名称（名称大小写不敏感）。校验失败语义：
 
