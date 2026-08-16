@@ -10,7 +10,6 @@ using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.EntityFrameworkCore;
-using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -294,7 +293,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 自定义响应头不在 CORS 安全清单里，不显式暴露则浏览器不交给 JS——
     /// 后端照常发了头、前端 <c>error.headers.get()</c> 恒为 null，租户失效恢复静默失效。
     /// 这条断言是必要的：后端集成测试直读 TestServer 响应头、前端单测手工构造 HttpHeaders，
-    /// 两侧都绕过浏览器的 CORS 过滤，谁也发现不了。
+    /// 仅断言原始响应头存在会漏掉它；本用例带真实 Origin 并断言 Access-Control-Expose-Headers，
+    /// 因此协议层就能发现。浏览器负责的是另一半：前端读到该头、清租户状态、完成跳转的闭环。
     /// </remarks>
     [Fact]
     public async Task 跨域响应暴露租户失效标记头()
@@ -383,6 +383,50 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // 采信了伪造头 → 落到已停用的 subdomain-b → 403
         Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
+    /// 正向：配置为可信代理的来源，其转发头**应当**被采信。
+    /// </summary>
+    /// <remarks>
+    /// 只有"不可信来源被拒"这一条时，把信任逻辑改成永不生效也能让它保持绿——
+    /// 那样网关后的 X-Forwarded-* 全部失效却无人察觉。两个方向都要钉住。
+    /// </remarks>
+    [Fact]
+    public async Task 可信代理的转发头会被采信()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        await CreateTenantAsync(hostAdmin, "trusted-a");
+        var blockedId = await CreateTenantAsync(hostAdmin, "trusted-b");
+
+        var deactivate = await hostAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/tenants/{blockedId}/activation", new { IsActive = false });
+        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+
+        using var domainHost = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Leistd:MultiTenancy:DomainFormat"] = "{0}.example.com",
+                    // 把测试用的"客户端"地址声明为可信代理
+                    ["ForwardedHeaders:KnownProxies:0"] = "203.0.113.10"
+                }));
+
+            builder.ConfigureServices(services =>
+                services.AddSingleton<IStartupFilter>(new UntrustedRemoteAddressFilter()));
+        });
+
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(domainHost);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/security-config");
+        request.Headers.Host = "trusted-a.example.com";
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Host", "trusted-b.example.com");
+
+        var response = await client.SendAsync(request);
+
+        // 来源可信 → 转发头生效 → 落到已停用的 trusted-b → 403
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]

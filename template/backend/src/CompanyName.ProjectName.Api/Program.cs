@@ -252,21 +252,30 @@ try
                                    ForwardedHeaders.XForwardedHost;
         options.ForwardLimit = 1;
 
+        // 写错的地址/网段直接抛，不静默忽略：忽略在安全上是 fail-closed（不信任即可），
+        // 但表现为网关后的 X-Forwarded-* 全部失效——HTTPS 重定向、OAuth 回调、子域租户解析
+        // 一起出问题，而配置看起来是对的。这类错误要在启动时带着键名和值说清楚
         var forwardedConfig = builder.Configuration.GetSection("ForwardedHeaders");
         foreach (var proxy in forwardedConfig.GetSection("KnownProxies").Get<string[]>() ?? [])
         {
-            if (IPAddress.TryParse(proxy, out var address))
+            if (!IPAddress.TryParse(proxy, out var address))
             {
-                options.KnownProxies.Add(address);
+                throw new InvalidOperationException(
+                    $"ForwardedHeaders:KnownProxies 含非法 IP 地址：'{proxy}'。");
             }
+
+            options.KnownProxies.Add(address);
         }
 
         foreach (var network in forwardedConfig.GetSection("KnownNetworks").Get<string[]>() ?? [])
         {
-            if (System.Net.IPNetwork.TryParse(network, out var parsed))
+            if (!System.Net.IPNetwork.TryParse(network, out var parsed))
             {
-                options.KnownIPNetworks.Add(parsed);
+                throw new InvalidOperationException(
+                    $"ForwardedHeaders:KnownNetworks 含非法 CIDR 网段：'{network}'。");
             }
+
+            options.KnownIPNetworks.Add(parsed);
         }
     });
 
@@ -285,8 +294,9 @@ try
 
             // AllowAnyHeader 只放行**请求**头；响应头默认不交给跨域的 JS 读取
             // （CORS 安全清单只含 Content-Type 等寥寥几个）。不显式暴露的话，
-            // 分离部署模式下前端 error.headers.get() 恒为 null，
-            // 租户失效恢复会静默失效——而两侧测试都绕过浏览器，发现不了
+            // 分离部署模式下前端 error.headers.get() 恒为 null，租户失效恢复会静默失效。
+            // 仅断言原始响应头存在的测试发现不了；集成测试需带真实 Origin 并断言
+            // Access-Control-Expose-Headers（见 TenancyTests 的跨域用例）
             policy.WithExposedHeaders(TenantSessionRecoveryMiddleware.TenantInvalidHeader);
 #endif
 

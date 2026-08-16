@@ -17,6 +17,9 @@ public class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancyOptions
 {
     private const string TenantPlaceholder = "{0}";
 
+    /// <summary>校验时替换占位符用的示例 label：只要它合法，租户名的合法性由运行期解析保证</summary>
+    private const string SampleLabel = "t";
+
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, MultiTenancyOptions options)
     {
@@ -39,25 +42,13 @@ public class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancyOptions
             failures.Add($"包含多个 '{TenantPlaceholder}'，无法确定哪一段是租户名。");
         }
 
-        if (format.Contains("://", StringComparison.Ordinal))
+        // 把占位符换成一个合法 label 后做结构化主机名校验。
+        // 逐个排查非法字符是补不完的黑名单（?、#、@、反斜杠、空 label、其它占位符……），
+        // 而这里要判定的本来就是"替换后是不是一个合法主机名"——交给 BCL 一次判完。
+        var probe = format.Replace(TenantPlaceholder, SampleLabel, StringComparison.Ordinal);
+        if (Uri.CheckHostName(probe) != UriHostNameType.Dns)
         {
-            failures.Add("不应包含协议（scheme）：格式只匹配主机名。");
-        }
-
-        if (format.Contains('/'))
-        {
-            failures.Add("不应包含路径：格式只匹配主机名。");
-        }
-
-        // 端口写进格式会让开发（:5240）与生产各配一份，而解析本身不看端口
-        if (format.Contains(':'))
-        {
-            failures.Add("不应包含端口：解析只取主机名，端口不参与匹配。");
-        }
-
-        if (format.Any(char.IsWhiteSpace))
-        {
-            failures.Add("不应包含空白字符。");
+            failures.Add("不是合法的主机名形态：格式只匹配主机名，不能含协议、端口、路径、查询串、片段或空 label。");
         }
 
         return failures.Count == 0

@@ -91,6 +91,12 @@ public class DomainTenantResolveTests : IAsyncLifetime
     [InlineData("{0}.example.com/app")]         // 带路径
     [InlineData("{0}.example.com:5240")]        // 带端口
     [InlineData("{0}. example.com")]            // 含空白
+    [InlineData("{0}.example.com?source=x")]    // 带查询串
+    [InlineData("{0}.example.com#fragment")]    // 带片段
+    [InlineData("user@{0}.example.com")]        // 带用户信息
+    [InlineData("{0}..example.com")]            // 空 label
+    [InlineData("{0}.{1}.example.com")]         // 混入其它占位符
+    [InlineData("{0}\\example.com")]            // 反斜杠
     public async Task Invalid_domain_format_stops_the_host_from_starting(string format)
     {
         var builder = new HostBuilder().ConfigureWebHost(webHost => webHost
@@ -108,6 +114,30 @@ public class DomainTenantResolveTests : IAsyncLifetime
         });
 
         Assert.Contains("DomainFormat", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 占位符不必占满整个 label：<c>tenant-{0}.example.com</c> 是合法形态。
+    /// </summary>
+    /// <remarks>
+    /// 替换后仍是合法主机名即可；租户段本身不含点号由运行期解析保证。
+    /// </remarks>
+    [Theory]
+    [InlineData("{0}.example.com")]
+    [InlineData("tenant-{0}.example.com")]
+    [InlineData("{0}.app.example.com")]
+    public async Task Well_formed_domain_formats_start_normally(string format)
+    {
+        using var host = await new HostBuilder().ConfigureWebHost(webHost => webHost
+            .UseTestServer()
+            .ConfigureServices(services =>
+            {
+                services.AddMultiTenancy(options => options.DomainFormat = format);
+                services.AddInMemoryTenantStore(_ => { });
+            })
+            .Configure(app => app.UseMultiTenancy())).StartAsync();
+
+        await host.StopAsync();
     }
 
     [Fact]
