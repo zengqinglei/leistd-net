@@ -42,18 +42,66 @@ public class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancyOptions
             failures.Add($"包含多个 '{TenantPlaceholder}'，无法确定哪一段是租户名。");
         }
 
-        // 把占位符换成一个合法 label 后做结构化主机名校验。
-        // 逐个排查非法字符是补不完的黑名单（?、#、@、反斜杠、空 label、其它占位符……），
-        // 而这里要判定的本来就是"替换后是不是一个合法主机名"——交给 BCL 一次判完。
+        // 把占位符换成一个合法 label 后校验主机名形态。
+        //
+        // 这里刻意不用 Uri.CheckHostName：它对 DNS 名的判定比浏览器实际发送的 Host 宽松，
+        // 会放行 t_.example.com、t-.example.com、t.example-.com 这类**永远匹配不上**的格式，
+        // 于是解析静默退回请求头——正是本校验要关掉的那条路。逐 label 明确判定反而更短也更准。
         var probe = format.Replace(TenantPlaceholder, SampleLabel, StringComparison.Ordinal);
-        if (Uri.CheckHostName(probe) != UriHostNameType.Dns)
-        {
-            failures.Add("不是合法的主机名形态：格式只匹配主机名，不能含协议、端口、路径、查询串、片段或空 label。");
-        }
+        failures.AddRange(HostNameFailures(probe));
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(
                 $"MultiTenancyOptions.DomainFormat 配置非法（'{format}'）：{string.Join(" ", failures)}");
+    }
+
+    /// <summary>
+    /// 按浏览器实际会发送的 Host 形态校验：ASCII、逐 label 长度与首尾字符约束
+    /// </summary>
+    /// <remarks>
+    /// **只接受 ASCII/punycode**。国际化域名不做启动期规范化，而是要求配置方直接写 punycode 形态
+    /// （<c>xn--</c> 前缀）：浏览器发来的 Host 本就是 punycode，两边写成同一种形态才能匹配；
+    /// 若这里接受 Unicode 而运行期做字面比较，配置看着对、请求永远落不进来。
+    /// </remarks>
+    private static IEnumerable<string> HostNameFailures(string host)
+    {
+        if (host.Any(c => c > 127))
+        {
+            yield return "含非 ASCII 字符：国际化域名请填 punycode 形态（xn-- 前缀），与浏览器发送的 Host 一致。";
+            yield break;
+        }
+
+        // 主机名总长上限（RFC 1035）
+        if (host.Length > 253)
+        {
+            yield return "主机名超过 253 个字符。";
+        }
+
+        var labels = host.Split('.');
+        if (labels.Length < 2)
+        {
+            yield return "至少需要两段（例如 '{0}.example.com'）。";
+        }
+
+        foreach (var label in labels)
+        {
+            if (label.Length is 0 or > 63)
+            {
+                yield return $"存在空或超过 63 字符的段：'{label}'。";
+                continue;
+            }
+
+            if (!char.IsAsciiLetterOrDigit(label[0]) || !char.IsAsciiLetterOrDigit(label[^1]))
+            {
+                yield return $"段 '{label}' 必须以字母或数字开头和结尾。";
+                continue;
+            }
+
+            if (label.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-'))
+            {
+                yield return $"段 '{label}' 只能包含字母、数字与连字符。";
+            }
+        }
     }
 }

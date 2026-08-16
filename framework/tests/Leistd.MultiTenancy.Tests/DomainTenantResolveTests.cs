@@ -97,6 +97,12 @@ public class DomainTenantResolveTests : IAsyncLifetime
     [InlineData("{0}..example.com")]            // 空 label
     [InlineData("{0}.{1}.example.com")]         // 混入其它占位符
     [InlineData("{0}\\example.com")]            // 反斜杠
+    [InlineData("{0}_.example.com")]            // 下划线：CheckHostName 放行，浏览器不会这么发
+    [InlineData("{0}-.example.com")]            // 段尾连字符
+    [InlineData("{0}.example-.com")]            // 同上，出现在后缀段
+    [InlineData("{0}.bücher.example")]          // Unicode：应要求填 punycode
+    [InlineData("{0}")]                         // 只有一段
+    [InlineData("{0}.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com")]  // 段超 63
     public async Task Invalid_domain_format_stops_the_host_from_starting(string format)
     {
         var builder = new HostBuilder().ConfigureWebHost(webHost => webHost
@@ -126,6 +132,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
     [InlineData("{0}.example.com")]
     [InlineData("tenant-{0}.example.com")]
     [InlineData("{0}.app.example.com")]
+    [InlineData("{0}.xn--bcher-kva.example")]   // punycode 形态：与浏览器发送的 Host 一致
     public async Task Well_formed_domain_formats_start_normally(string format)
     {
         using var host = await new HostBuilder().ConfigureWebHost(webHost => webHost

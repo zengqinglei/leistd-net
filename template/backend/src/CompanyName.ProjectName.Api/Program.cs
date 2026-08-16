@@ -245,6 +245,10 @@ try
     // 也是生成绝对 URL（重定向、邮件链接）的依据。不配置时保留框架默认（仅环回可信），
     // 宁可在网关后面丢掉转发头，也不要让任意客户端说了算。
     // 部署在 ingress/网关后面时，用 ForwardedHeaders:KnownNetworks 配置代理网段，例如 "10.0.0.0/8"。
+    //
+    // 解析放在 Configure 回调内：宿主配置的最终值要到 Build() 时才叠加完（集成测试的覆盖
+    // 也在那一步生效），组合期读到的是半成品。回调在中间件构建 Options 时执行，仍属启动阶段，
+    // 抛出的异常经顶层 catch 重抛后会中止启动。
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
@@ -252,10 +256,8 @@ try
                                    ForwardedHeaders.XForwardedHost;
         options.ForwardLimit = 1;
 
-        // 写错的地址/网段直接抛，不静默忽略：忽略在安全上是 fail-closed（不信任即可），
-        // 但表现为网关后的 X-Forwarded-* 全部失效——HTTPS 重定向、OAuth 回调、子域租户解析
-        // 一起出问题，而配置看起来是对的。这类错误要在启动时带着键名和值说清楚
         var forwardedConfig = builder.Configuration.GetSection("ForwardedHeaders");
+
         foreach (var proxy in forwardedConfig.GetSection("KnownProxies").Get<string[]>() ?? [])
         {
             if (!IPAddress.TryParse(proxy, out var address))
@@ -567,7 +569,11 @@ try
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {
+    // 记完必须重抛：只记不抛的话进程会"正常"结束，编排器看到退出码 0——
+    // 配置写错、依赖起不来这类致命故障会表现成一次干净的关机，既不重启也不告警。
+    // 集成测试同理：宿主构建失败必须能被观察到，否则启动契约无法验证。
     Log.Fatal(ex, "Application terminated unexpectedly");
+    throw;
 }
 finally
 {
