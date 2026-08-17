@@ -165,8 +165,9 @@ builder.Services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.
 | 每段 1–63 字符 | 首尾为字母或数字，内部只允许字母、数字与连字符 |
 | 总长 ≤ 253 | RFC 1035 |
 | 不带末尾根点 | 配置侧只保留一种 canonical 形态；请求侧的等价写法由解析器规范化 |
+| 占位符所在段之后要有固定基础域 | `example.{0}` 非法——受管域正是按段边界取占位符之后那部分，没有基础域就无从判定 |
 
-占位符不必占满整段：`tenant-{0}.example.com` 同样合法。
+占位符不必占满整段，前后都可以有固定文本：`tenant-{0}.example.com`、`{0}-tenant.example.com` 都合法。**受管域按 DNS 段边界计算**——两者的受管域都是 `example.com`，而不是"占位符之后的原始字符串"。
 
 > **部署注意**：只把真正用于租户的通配子域指向本应用。把整个顶级域通配过来时，`www.example.com` 会被解析成名为 `www` 的租户并因查不到而 404。
 >

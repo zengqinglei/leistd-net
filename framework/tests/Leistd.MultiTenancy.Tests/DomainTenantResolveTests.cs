@@ -130,6 +130,55 @@ public class DomainTenantResolveTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// 受管域按 DNS label 边界算，不是占位符之后的原始字符串。
+    /// </summary>
+    /// <remarks>
+    /// <c>{0}-tenant.example.com</c> 的受管域应是 <c>example.com</c>。若按原始字符串取后缀，
+    /// 后缀会变成 <c>-tenant.example.com</c>，于是基础域被判为"域外"而回退请求头——
+    /// 合法格式下安全边界没有闭合。
+    /// </remarks>
+    [Theory]
+    [InlineData("acme-tenant.example.com", "tenant")]   // 合法租户段
+    [InlineData("example.com", "host")]                 // 基础域：定案为宿主
+    [InlineData("other.example.com", "host")]           // 同域但不匹配段内后缀
+    public async Task Managed_domain_is_computed_on_label_boundaries(string hostHeader, string expected)
+    {
+        using var host = await new HostBuilder().ConfigureWebHost(webHost => webHost
+            .UseTestServer()
+            .ConfigureServices(services =>
+            {
+                services.AddMultiTenancy(options => options.DomainFormat = "{0}-tenant.example.com");
+                services.AddInMemoryTenantStore(options => options.Tenants.Add(new TenantConfiguration
+                {
+                    Id = AcmeId,
+                    Name = "acme",
+                    NormalizedName = "ACME"
+                }));
+            })
+            .Configure(app =>
+            {
+                app.UseMultiTenancy();
+                app.Run(async context =>
+                {
+                    var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
+                    await context.Response.WriteAsync(currentTenant.Id?.ToString() ?? "host");
+                });
+            })).StartAsync();
+
+        using var client = host.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "http://example.com/");
+        request.Headers.TryAddWithoutValidation("Host", hostHeader);
+        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(expected == "host" ? "host" : AcmeId.ToString(), body);
+
+        await host.StopAsync();
+    }
+
+    /// <summary>
     /// 受管域**之外**的请求仍走请求头：服务间调用打的是集群内部主机名，
     /// 租户靠 X-Tenant-Id 传递，一刀切会把它打断。
     /// </summary>
@@ -214,6 +263,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
     [InlineData("{0}.example-.com")]            // 同上，出现在后缀段
     [InlineData("{0}.bücher.example")]          // Unicode：应要求填 punycode
     [InlineData("{0}")]                         // 只有一段
+    [InlineData("example.{0}")]                 // 占位符在末段：没有固定基础域
     [InlineData("{0}.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com")]  // 段超 63
     public async Task Invalid_domain_format_stops_the_host_from_starting(string format)
     {

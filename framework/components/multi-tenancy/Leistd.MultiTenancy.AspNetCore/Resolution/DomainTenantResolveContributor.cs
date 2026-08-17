@@ -101,34 +101,49 @@ public class DomainTenantResolveContributor : ITenantResolveContributor
             return HostMatch.Outside;
         }
 
-        var prefix = format[..placeholderIndex];
-        var suffix = format[(placeholderIndex + TenantPlaceholder.Length)..];
+        // 受管域按 **DNS label 边界** 切，不是"占位符之后的原始字符串"：
+        // {0}-tenant.example.com 的受管域是 example.com，若按原始后缀取成 -tenant.example.com，
+        // 基础域会被判成域外并回退请求头；而 example.{0} 的原始后缀是空串，
+        // EndsWith("") 恒真会把所有主机都圈进受管域，连服务间调用的请求头也一起废掉。
+        var afterPlaceholder = format[(placeholderIndex + TenantPlaceholder.Length)..];
+        var baseDomainStart = afterPlaceholder.IndexOf('.');
+        if (baseDomainStart < 0)
+        {
+            // 占位符所在段之后没有固定基础域（example.{0}）。校验器已在启动期拒绝，
+            // 这里防御性地当作域外：宁可交回请求头，也不要把全世界圈成受管域
+            return HostMatch.Outside;
+        }
 
-        // 受管域的判定只看后缀：主机名以它结尾，或恰好等于去掉前导点的它（基础域本身）。
+        var labelPrefix = format[..placeholderIndex];              // 段内前缀，可含固定的前置段
+        var labelSuffix = afterPlaceholder[..baseDomainStart];     // 段内后缀
+        var baseDomain = afterPlaceholder[(baseDomainStart + 1)..];
+
         // 主机名大小写不敏感（RFC 4343）
-        var baseDomain = suffix.TrimStart('.');
-        var endsWithSuffix = host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
-        var isBaseDomain = host.Equals(baseDomain, StringComparison.OrdinalIgnoreCase);
+        if (host.Equals(baseDomain, StringComparison.OrdinalIgnoreCase))
+        {
+            // 基础域本身是宿主入口
+            return HostMatch.ManagedWithoutTenant;
+        }
 
-        if (!endsWithSuffix && !isBaseDomain)
+        if (!host.EndsWith($".{baseDomain}", StringComparison.OrdinalIgnoreCase))
         {
             return HostMatch.Outside;
         }
 
-        if (isBaseDomain || !host.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        var leading = host[..^(baseDomain.Length + 1)];
+        if (!leading.StartsWith(labelPrefix, StringComparison.OrdinalIgnoreCase) ||
+            !leading.EndsWith(labelSuffix, StringComparison.OrdinalIgnoreCase))
         {
-            // 基础域是宿主入口；前缀形态不匹配（other.example.com 之于 tenant-{0}.example.com）
-            // 同样落在受管域内但不是租户
             return HostMatch.ManagedWithoutTenant;
         }
 
-        var tenantLength = host.Length - prefix.Length - suffix.Length;
+        var tenantLength = leading.Length - labelPrefix.Length - labelSuffix.Length;
         if (tenantLength <= 0)
         {
             return HostMatch.ManagedWithoutTenant;
         }
 
-        var candidate = host.Substring(prefix.Length, tenantLength);
+        var candidate = leading.Substring(labelPrefix.Length, tenantLength);
 
         // 租户段本身不能再含点号：a.b.example.com 不应被当作名为 "a.b" 的租户
         if (candidate.Contains('.'))

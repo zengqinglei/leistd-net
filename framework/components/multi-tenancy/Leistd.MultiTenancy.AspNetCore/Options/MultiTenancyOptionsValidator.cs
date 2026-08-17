@@ -42,6 +42,13 @@ public class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancyOptions
             failures.Add($"包含多个 '{TenantPlaceholder}'，无法确定哪一段是租户名。");
         }
 
+        // 占位符所在段之后必须还有固定的基础域：example.{0} 没有可比对的受管域，
+        // 运行期只能要么谁都不匹配、要么把所有主机都圈进来，两种都是错的
+        if (first >= 0 && !format[(first + TenantPlaceholder.Length)..].Contains('.'))
+        {
+            failures.Add($"'{TenantPlaceholder}' 所在段之后必须还有固定的基础域，例如 '{{0}}.example.com'。");
+        }
+
         // 把占位符换成一个合法 label 后校验主机名形态。
         //
         // 这里刻意不用 Uri.CheckHostName：它对 DNS 名的判定比浏览器实际发送的 Host 宽松，
