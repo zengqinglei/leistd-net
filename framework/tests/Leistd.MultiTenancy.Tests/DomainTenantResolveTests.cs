@@ -64,6 +64,88 @@ public class DomainTenantResolveTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// 受管域内没解析出租户时必须**就此定案为宿主**，不能把决定权交还给请求头。
+    /// </summary>
+    /// <remarks>
+    /// 只在成功提取到租户名时才写 <c>TenantIdOrName</c>、从不设 <c>Handled</c> 的话，
+    /// 基础域与多级子域都会继续走到 Header 贡献者——匿名请求在 example.com 上带个
+    /// X-Tenant-Id 就能挑任意租户，"域名是权威来源"这条契约当场失效。
+    /// </remarks>
+    [Theory]
+    [InlineData("example.com")]             // 基础域：文档定义的宿主入口
+    [InlineData("example.com.")]            // 同上的等价写法
+    [InlineData("a.b.example.com")]         // 受管域内的多级子域：不是合法租户段
+    public async Task Managed_domain_without_a_tenant_label_stays_on_host(string hostHeader)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "http://example.com/");
+        request.Headers.TryAddWithoutValidation("Host", hostHeader);
+        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal("host", await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// 前缀形态下，受管域内但不匹配前缀的主机同样定案为宿主，不回退请求头。
+    /// </summary>
+    /// <remarks>
+    /// <c>tenant-{0}.example.com</c> 部署里的 <c>other.example.com</c> 属于同一个域、
+    /// 但不是租户入口；它若能被请求头改写，前缀形态就白设了。
+    /// </remarks>
+    [Fact]
+    public async Task Prefix_format_rejects_the_header_inside_the_managed_domain()
+    {
+        using var host = await new HostBuilder().ConfigureWebHost(webHost => webHost
+            .UseTestServer()
+            .ConfigureServices(services =>
+            {
+                services.AddMultiTenancy(options => options.DomainFormat = "tenant-{0}.example.com");
+                services.AddInMemoryTenantStore(options => options.Tenants.Add(new TenantConfiguration
+                {
+                    Id = GlobexId,
+                    Name = "globex",
+                    NormalizedName = "GLOBEX"
+                }));
+            })
+            .Configure(app =>
+            {
+                app.UseMultiTenancy();
+                app.Run(async context =>
+                {
+                    var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
+                    await context.Response.WriteAsync(currentTenant.Id?.ToString() ?? "host");
+                });
+            })).StartAsync();
+
+        using var client = host.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "http://example.com/");
+        request.Headers.TryAddWithoutValidation("Host", "other.example.com");
+        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+
+        var response = await client.SendAsync(request);
+        Assert.Equal("host", await response.Content.ReadAsStringAsync());
+
+        await host.StopAsync();
+    }
+
+    /// <summary>
+    /// 受管域**之外**的请求仍走请求头：服务间调用打的是集群内部主机名，
+    /// 租户靠 X-Tenant-Id 传递，一刀切会把它打断。
+    /// </summary>
+    [Fact]
+    public async Task Requests_outside_the_managed_domain_still_use_the_header()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "http://acme.other.com/");
+        request.Headers.TryAddWithoutValidation("Host", "svc.internal.cluster.local");
+        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(GlobexId.ToString(), await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
     /// 末尾根点是 DNS 中的等价写法，不能成为绕过子域名权威的后门。
     /// </summary>
     /// <remarks>

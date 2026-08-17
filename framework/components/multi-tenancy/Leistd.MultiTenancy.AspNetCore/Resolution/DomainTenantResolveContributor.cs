@@ -48,47 +48,95 @@ public class DomainTenantResolveContributor : ITenantResolveContributor
         // 匿名请求只要在 Host 末尾多打一个点，就绕过了"子域名是权威来源"这条边界。
         // 配置侧则要求不带根点（校验器拒绝），保证两边只有一种 canonical 形态。
         var host = httpContext.Request.Host.Host.TrimEnd('.');
-        var tenant = Extract(host, options.DomainFormat);
 
-        if (!string.IsNullOrWhiteSpace(tenant))
+        switch (Match(host, options.DomainFormat, out var tenant))
         {
-            context.TenantIdOrName = tenant;
+            case HostMatch.Tenant:
+                context.TenantIdOrName = tenant;
+                break;
+
+            case HostMatch.ManagedWithoutTenant:
+                // 受管域内没有合法租户段（基础域、多级子域、前缀不匹配）：**就此定案为宿主**。
+                // 不设 Handled 的话链会继续走到 Header，匿名请求在 example.com 上带个
+                // X-Tenant-Id 就能挑任意租户——"域名是权威来源"当场失效
+                context.Handled = true;
+                break;
+
+            case HostMatch.Outside:
+                // 不属于受管域：交回链上后续贡献者。服务间调用打的是集群内部主机名、
+                // 靠 X-Tenant-Id 传租户，一刀切会把它打断
+                break;
         }
 
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// 按格式从主机名中取出租户段；不匹配时返回 null（交由链上后续贡献者处理）
-    /// </summary>
-    internal static string? Extract(string host, string format)
+    /// <summary>主机名与受管域的关系</summary>
+    private enum HostMatch
     {
+        /// <summary>不属于受管域</summary>
+        Outside,
+
+        /// <summary>属于受管域，但没有合法的租户段</summary>
+        ManagedWithoutTenant,
+
+        /// <summary>解析出了租户段</summary>
+        Tenant
+    }
+
+    /// <summary>
+    /// 判定主机名与受管域的关系，并在可能时取出租户段
+    /// </summary>
+    /// <remarks>
+    /// 三分而不是"匹配/不匹配"两分：受管域内没解析出租户时必须终止解析链（宿主），
+    /// 与"根本不是这个域的请求"是两件事——后者要把决定权交回请求头。
+    /// </remarks>
+    private static HostMatch Match(string host, string format, out string? tenant)
+    {
+        tenant = null;
+
         var placeholderIndex = format.IndexOf(TenantPlaceholder, StringComparison.Ordinal);
         if (placeholderIndex < 0)
         {
-            return null;
+            return HostMatch.Outside;
         }
 
         var prefix = format[..placeholderIndex];
         var suffix = format[(placeholderIndex + TenantPlaceholder.Length)..];
 
+        // 受管域的判定只看后缀：主机名以它结尾，或恰好等于去掉前导点的它（基础域本身）。
         // 主机名大小写不敏感（RFC 4343）
-        if (!host.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
-            !host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        var baseDomain = suffix.TrimStart('.');
+        var endsWithSuffix = host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+        var isBaseDomain = host.Equals(baseDomain, StringComparison.OrdinalIgnoreCase);
+
+        if (!endsWithSuffix && !isBaseDomain)
         {
-            return null;
+            return HostMatch.Outside;
+        }
+
+        if (isBaseDomain || !host.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            // 基础域是宿主入口；前缀形态不匹配（other.example.com 之于 tenant-{0}.example.com）
+            // 同样落在受管域内但不是租户
+            return HostMatch.ManagedWithoutTenant;
         }
 
         var tenantLength = host.Length - prefix.Length - suffix.Length;
         if (tenantLength <= 0)
         {
-            // 恰好等于基础域（example.com）时长度为 0：那是宿主入口，不是某个租户
-            return null;
+            return HostMatch.ManagedWithoutTenant;
         }
 
-        var tenant = host.Substring(prefix.Length, tenantLength);
+        var candidate = host.Substring(prefix.Length, tenantLength);
 
         // 租户段本身不能再含点号：a.b.example.com 不应被当作名为 "a.b" 的租户
-        return tenant.Contains('.') ? null : tenant;
+        if (candidate.Contains('.'))
+        {
+            return HostMatch.ManagedWithoutTenant;
+        }
+
+        tenant = candidate;
+        return HostMatch.Tenant;
     }
 }

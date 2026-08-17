@@ -136,7 +136,14 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 默认解析链（`AddMultiTenancy` 装配，链为空时才写入默认值，可自定义增删排序）：
 
 1. **CurrentPrincipal**：已认证主体的 `tenant_id` claim 定案并终止链——含"无 claim = 宿主用户"。请求头与查询串**无法改写已登录用户的租户**，这是防跨租户水平越权的关键顺序。
-2. **Domain**（`{0}.example.com`）：仅在配置了 `MultiTenancyOptions.DomainFormat` 时生效，未配置直接跳过。排在头与查询串之前——子域名部署下域名是权威，匿名请求不能再用请求头把自己挪到别的租户。
+2. **Domain**（`{0}.example.com`）：仅在配置了 `MultiTenancyOptions.DomainFormat` 时生效，未配置直接跳过。排在头与查询串之前——子域名部署下域名是权威，匿名请求不能再用请求头把自己挪到别的租户。判定分三种：
+
+   | 主机名 | 结果 |
+   | --- | --- |
+   | 受管域内且有合法租户段（`acme.example.com`） | 解析为该租户，终止链 |
+   | 受管域内但没有租户段（基础域 `example.com`、多级子域 `a.b.example.com`、前缀形态不匹配） | **定案为宿主，终止链**——不定案的话链会继续走到请求头，匿名请求在基础域上带个 `X-Tenant-Id` 就能挑任意租户 |
+   | 受管域之外（`svc.internal.cluster.local`） | 不定案，交回后续贡献者——服务间调用打的是集群内部主机名、靠 `X-Tenant-Id` 传租户，一刀切会把它打断 |
+
 3. **Header**（`X-Tenant-Id`）：服务于匿名请求（登录前选租户、受信服务调用恢复前的原始头）。
 4. **QueryString**（`?tenant=`）：服务于邮件验证、找回密码等匿名链接。
 
