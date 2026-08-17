@@ -64,6 +64,36 @@ public class DomainTenantResolveTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// 末尾根点是 DNS 中的等价写法，不能成为绕过子域名权威的后门。
+    /// </summary>
+    /// <remarks>
+    /// <c>acme.example.com.</c> 与 <c>acme.example.com</c> 在 DNS 中是同一个名字，
+    /// 而 <c>HostString.Host</c> 会原样保留那个点。字面比较匹配不上就会退回请求头，
+    /// 于是匿名请求只要在 Host 末尾多打一个点，就能用 X-Tenant-Id 挑任意租户。
+    /// 配置侧要求不带根点（唯一 canonical 形态），请求侧则必须规范化后再匹配。
+    /// </remarks>
+    [Theory]
+    [InlineData("acme.example.com.")]
+    [InlineData("acme.example.com.:5240")]
+    // 去掉的是全部末尾点而非恰好一个：只去一个的话，多打一个点绕过又回来了
+    [InlineData("acme.example.com..")]
+    public async Task Trailing_root_dot_in_the_host_is_not_a_bypass(string hostHeader)
+    {
+        // 必须显式写 Host 头：HttpClient 在构造 URI 时就会把末尾点规范化掉，
+        // 用带点的 URL 根本打不到这条路径——而攻击者是在报文里直接写这个头的
+        using var request = new HttpRequestMessage(HttpMethod.Get, "http://acme.example.com/");
+        // 不走校验的 setter：攻击者是在报文里直接写这个头的，
+        // HttpRequestHeaders.Host 的校验只是客户端的礼貌，不是服务端的保证
+        request.Headers.TryAddWithoutValidation("Host", hostHeader);
+        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+
+        var response = await _client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(AcmeId.ToString(), body);
+    }
+
+    /// <summary>
     /// claim 仍然优先于子域名：已认证主体的租户由 claim 定案，这条顺序是防跨租户越权的关键。
     /// </summary>
     [Fact]

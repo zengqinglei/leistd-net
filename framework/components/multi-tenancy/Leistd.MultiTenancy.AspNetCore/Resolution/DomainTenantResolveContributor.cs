@@ -41,8 +41,13 @@ public class DomainTenantResolveContributor : ITenantResolveContributor
             return Task.CompletedTask;
         }
 
-        // 只取主机名：端口属于部署形态，写进格式会让开发（:5240）与生产各配一份
-        var host = httpContext.Request.Host.Host;
+        // 只取主机名：端口属于部署形态，写进格式会让开发（:5240）与生产各配一份。
+        //
+        // 末尾根点要先去掉：DNS 里 acme.example.com. 与 acme.example.com 是同一个名字，
+        // 而 HostString.Host 原样保留那个点。不规范化的话字面比较匹配不上，解析会退回请求头——
+        // 匿名请求只要在 Host 末尾多打一个点，就绕过了"子域名是权威来源"这条边界。
+        // 配置侧则要求不带根点（校验器拒绝），保证两边只有一种 canonical 形态。
+        var host = httpContext.Request.Host.Host.TrimEnd('.');
         var tenant = Extract(host, options.DomainFormat);
 
         if (!string.IsNullOrWhiteSpace(tenant))

@@ -146,7 +146,20 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 builder.Services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.com");
 ```
 
-匹配规则：主机名大小写不敏感；端口不参与匹配（格式只写主机名，开发与生产共用一份配置）；恰好等于基础域（`example.com`）视为宿主入口；租户段本身不能再含点号（`a.b.example.com` 不会被当成名为 `a.b` 的租户）。
+匹配规则：主机名大小写不敏感；端口不参与匹配（格式只写主机名，开发与生产共用一份配置）；末尾根点会被规范化后再匹配（DNS 里 `acme.example.com.` 与 `acme.example.com` 是同一个名字，不规范化就会退回请求头解析，等于给了一条绕过）；恰好等于基础域（`example.com`）视为宿主入口；租户段本身不能再含点号（`a.b.example.com` 不会被当成名为 `a.b` 的租户）。
+
+**格式契约**（写错在启动期抛 `OptionsValidationException`）：
+
+| 约束 | 说明 |
+| --- | --- |
+| 恰好一个 `{0}` | 多个占位符无法确定哪段是租户名 |
+| 纯 ASCII | 国际化域名请填 punycode（`xn--` 前缀）形态，与浏览器发送的 Host 一致；不做启动期 IDN 规范化 |
+| 至少两段 | 子域名解析需要有基础域 |
+| 每段 1–63 字符 | 首尾为字母或数字，内部只允许字母、数字与连字符 |
+| 总长 ≤ 253 | RFC 1035 |
+| 不带末尾根点 | 配置侧只保留一种 canonical 形态；请求侧的等价写法由解析器规范化 |
+
+占位符不必占满整段：`tenant-{0}.example.com` 同样合法。
 
 > **部署注意**：只把真正用于租户的通配子域指向本应用。把整个顶级域通配过来时，`www.example.com` 会被解析成名为 `www` 的租户并因查不到而 404。
 >
