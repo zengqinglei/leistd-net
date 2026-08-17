@@ -33,7 +33,7 @@ export interface RegisterInputDto {
   password: string;
   captchaCode?: string;
   captchaToken?: string;
-  emailVerificationCode?: string;
+  emailVerification?: EmailVerificationInputDto;
   displayName?: string;
 }
 
@@ -59,6 +59,23 @@ export interface SendEmailCodeInputDto {
   email: string;
   captchaToken: string;
   captchaCode: string;
+}
+
+/**
+ * 邮箱验证挑战应答 DTO
+ */
+export interface EmailVerificationInputDto {
+  challengeId: string;
+  code: string;
+}
+
+/**
+ * 邮箱验证挑战输出 DTO
+ */
+export interface EmailVerificationChallengeOutputDto {
+  challengeId: string;
+  expiresInSeconds: number;
+  retryAfterSeconds: number;
 }
 
 /**

@@ -126,6 +126,11 @@ export class Register implements OnInit {
 
   public countdown = signal(0);
   private countdownIntervalId: ReturnType<typeof setInterval> | null = null;
+  private readonly emailVerificationChallenge = signal<{
+    challengeId: string;
+    email: string;
+    expiresAt: number;
+  } | null>(null);
   private _isSendingEmailCode = signal(false);
   public readonly isSendingEmailCode = this._isSendingEmailCode.asReadonly();
 
@@ -226,7 +231,14 @@ export class Register implements OnInit {
     // 一旦用户手动改动 username 即停止推导（等价原 valueChanges 逻辑）。
     effect(() => {
       const email = this.model().email;
+      const challenge = this.emailVerificationChallenge();
       untracked(() => {
+        if (challenge && challenge.email !== this.normalizeEmail(email)) {
+          this.emailVerificationChallenge.set(null);
+          this.model.update((m) => ({ ...m, emailVerificationCode: '' }));
+          this.clearCountdown();
+        }
+
         const currentUsername = this.model().username;
 
         // 用户手动改动了 username（当前值既非空也不等于我们上次自动写入的值）
@@ -299,13 +311,18 @@ export class Register implements OnInit {
 
     this._isSendingEmailCode.set(true);
     try {
-      await lastValueFrom(
+      const challenge = await lastValueFrom(
         this.accountService.sendEmailCode({
           email,
           captchaCode,
           captchaToken,
         }),
       );
+      this.emailVerificationChallenge.set({
+        challengeId: challenge.challengeId,
+        email: this.normalizeEmail(email),
+        expiresAt: Date.now() + challenge.expiresInSeconds * 1000,
+      });
       //#if (IncludeLocalization)
       toast.success(this.transloco.translate('common.success'), {
         description: this.transloco.translate('account.register.emailCodeSent'),
@@ -313,7 +330,7 @@ export class Register implements OnInit {
       //#else
       toast.success('Success', { description: 'Verification code sent, please check your email' });
       //#endif
-      this.startCountdown();
+      this.startCountdown(challenge.retryAfterSeconds);
     } catch (error) {
       this.showRequestError(error);
       this.refreshCaptcha(); // 如果验证码错误，刷新图形验证码
@@ -322,9 +339,9 @@ export class Register implements OnInit {
     }
   }
 
-  private startCountdown() {
+  private startCountdown(seconds: number) {
     this.clearCountdown();
-    this.countdown.set(60);
+    this.countdown.set(seconds);
     this.countdownIntervalId = setInterval(() => {
       const current = this.countdown();
       if (current <= 1) {
@@ -349,9 +366,21 @@ export class Register implements OnInit {
       return;
     }
 
+    const formValue = this.model();
+    const emailVerificationEnabled = this.securityConfig()?.enableEmailVerification === true;
+    const challenge = this.emailVerificationChallenge();
+    if (
+      emailVerificationEnabled &&
+      (!challenge ||
+        challenge.email !== this.normalizeEmail(formValue.email) ||
+        challenge.expiresAt <= Date.now())
+    ) {
+      this.registerForm.emailVerificationCode().markAsTouched();
+      return;
+    }
+
     this._isLoading.set(true);
     try {
-      const formValue = this.model();
       const captchaToken = this.captchaData()?.captchaToken;
 
       if (!captchaToken) {
@@ -372,7 +401,12 @@ export class Register implements OnInit {
           password: formValue.password,
           captchaCode: formValue.captchaCode,
           captchaToken: captchaToken,
-          emailVerificationCode: formValue.emailVerificationCode || undefined,
+          emailVerification: emailVerificationEnabled
+            ? {
+                challengeId: challenge!.challengeId,
+                code: formValue.emailVerificationCode,
+              }
+            : undefined,
         }),
       );
 
@@ -404,5 +438,9 @@ export class Register implements OnInit {
     //#else
     toast.error('Request failed', { description: applicationErrorMessage(error) });
     //#endif
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
   }
 }

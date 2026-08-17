@@ -31,4 +31,10 @@ public class UserRegistrationOptions
     /// </summary>
     [Range(1, 3600)]
     public int EmailCodeSendIntervalSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// 单个邮箱验证挑战允许的最大错误尝试次数
+    /// </summary>
+    [Range(1, 20)]
+    public int EmailCodeMaxAttempts { get; set; } = 5;
 }

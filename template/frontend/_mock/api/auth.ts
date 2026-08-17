@@ -6,6 +6,7 @@ import {
   SecurityConfigOutputDto,
   CaptchaOutputDto,
   SendEmailCodeInputDto,
+  EmailVerificationChallengeOutputDto,
 } from '../../src/app/features/account/models/account.dto';
 import { MockException, MockRequest } from '../core/models';
 //#if (TenancyEnabled)
@@ -18,6 +19,23 @@ const CAPTCHA_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const CAPTCHA_DIGITS = '23456789';
 const CAPTCHA_CHARACTERS = CAPTCHA_LETTERS + CAPTCHA_DIGITS;
 const captchaStore = new Map<string, string>();
+const EMAIL_VERIFICATION_ENABLED = false;
+const EMAIL_CODE = '123456';
+const EMAIL_CODE_EXPIRY_SECONDS = 300;
+const EMAIL_CODE_RETRY_SECONDS = 60;
+const EMAIL_CODE_MAX_ATTEMPTS = 5;
+
+interface EmailVerificationChallenge {
+  scope: string;
+  purpose: 'registration-email';
+  email: string;
+  code: string;
+  expiresAt: number;
+  remainingAttempts: number;
+}
+
+const emailChallengeStore = new Map<string, EmailVerificationChallenge>();
+const emailRateLimitStore = new Map<string, number>();
 
 function ensureUsernameAvailable(username: string, currentUserId: string): void {
   const exists = USERS.some((user) => user.username === username && user.id !== currentUserId);
@@ -122,7 +140,7 @@ function logout(): 'ok' {
 }
 
 function getSecurityConfig(): SecurityConfigOutputDto {
-  return { enableEmailVerification: false }; // 可以在此开启用于测试
+  return { enableEmailVerification: EMAIL_VERIFICATION_ENABLED };
 }
 
 function getCaptcha(): CaptchaOutputDto {
@@ -175,22 +193,54 @@ function validateCaptcha(captchaToken: string | undefined, captchaCode: string |
   }
 }
 
-function sendEmailCode(req: MockRequest): 'ok' {
+function sendEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   const body = req.body as SendEmailCodeInputDto;
   validateCaptcha(body.captchaToken, body.captchaCode);
-  return 'ok';
+
+  const email = normalizeEmail(body.email);
+  ensureEmailAvailable(email, '');
+  const scope = getRequestScope(req);
+  const rateKey = `${scope}:${email}`;
+  const now = Date.now();
+  if ((emailRateLimitStore.get(rateKey) ?? 0) > now) {
+    throw new MockException(400, {
+      code: 40016,
+      message: 'Verification codes are being sent too frequently',
+    });
+  }
+
+  const challengeId = crypto.randomUUID();
+  emailRateLimitStore.set(rateKey, now + EMAIL_CODE_RETRY_SECONDS * 1000);
+  emailChallengeStore.set(challengeId, {
+    scope,
+    purpose: 'registration-email',
+    email,
+    code: EMAIL_CODE,
+    expiresAt: now + EMAIL_CODE_EXPIRY_SECONDS * 1000,
+    remainingAttempts: EMAIL_CODE_MAX_ATTEMPTS,
+  });
+
+  return {
+    challengeId,
+    expiresInSeconds: EMAIL_CODE_EXPIRY_SECONDS,
+    retryAfterSeconds: EMAIL_CODE_RETRY_SECONDS,
+  };
 }
 
 function register(req: MockRequest): 'ok' {
   const body = req.body as RegisterInputDto;
 
   const username = body.username.trim();
-  const email = body.email.trim();
+  const email = normalizeEmail(body.email);
 
   ensureUsernameAvailable(username, '');
   ensureEmailAvailable(email, '');
 
-  validateCaptcha(body.captchaToken, body.captchaCode);
+  if (EMAIL_VERIFICATION_ENABLED) {
+    validateEmailChallenge(req, email, body);
+  } else {
+    validateCaptcha(body.captchaToken, body.captchaCode);
+  }
 
   // 模拟写入用户
   const newUser = {
@@ -210,6 +260,57 @@ function register(req: MockRequest): 'ok' {
 
   // 注册完可按需设置登录态，这里选择不自动登录
   return 'ok';
+}
+
+function validateEmailChallenge(req: MockRequest, email: string, body: RegisterInputDto): void {
+  const verification = body.emailVerification;
+  const challenge = verification ? emailChallengeStore.get(verification.challengeId) : undefined;
+
+  if (
+    !verification ||
+    !challenge ||
+    challenge.scope !== getRequestScope(req) ||
+    challenge.purpose !== 'registration-email' ||
+    challenge.email !== email
+  ) {
+    throw invalidEmailChallenge();
+  }
+
+  if (challenge.expiresAt <= Date.now()) {
+    emailChallengeStore.delete(verification.challengeId);
+    throw invalidEmailChallenge();
+  }
+
+  if (challenge.code !== verification.code?.trim()) {
+    challenge.remainingAttempts--;
+    if (challenge.remainingAttempts <= 0) {
+      emailChallengeStore.delete(verification.challengeId);
+    }
+    throw invalidEmailChallenge();
+  }
+
+  emailChallengeStore.delete(verification.challengeId);
+}
+
+function invalidEmailChallenge(): MockException {
+  return new MockException(400, {
+    code: 40017,
+    message: 'The email verification code is incorrect or has expired',
+  });
+}
+
+//#if (TenancyEnabled)
+function getRequestScope(req: MockRequest): string {
+  return req.headers.get('X-Tenant-Id') ?? 'host';
+}
+//#else
+function getRequestScope(_req: MockRequest): string {
+  return 'host';
+}
+//#endif
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 function getExternalLoginUrl(provider: string): { loginUrl: string; state: string } {

@@ -1,29 +1,52 @@
+using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Shared.Email;
+using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Options;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
+using Leistd.Lock.Core;
+#if (TenancyEnabled)
+using Leistd.MultiTenancy;
+#endif
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 public class EmailVerificationAppService(
     IDistributedCache distributedCache,
+    IDistributedLock distributedLock,
+    IPasswordHasher passwordHasher,
     IOptions<UserRegistrationOptions> options,
     ICaptchaAppService captchaAppService,
     IEmailSender emailSender,
-    IRepository<User, Guid> userRepository) : BaseAppService, IEmailVerificationAppService
+    ILogger<EmailVerificationAppService> logger,
+    IRepository<User, Guid> userRepository
+#if (TenancyEnabled)
+    , ICurrentTenant currentTenant
+#endif
+    ) : BaseAppService, IEmailVerificationAppService
 {
+    private const string RegistrationPurpose = "registration-email";
+    private const string CacheKeyPrefix = "MyProject:email-verification";
     private readonly UserRegistrationOptions _options = options.Value;
 
-    public async Task SendEmailCodeAsync(SendEmailCodeInputDto input, CancellationToken cancellationToken = default)
+    public async Task<EmailVerificationChallengeOutputDto> SendEmailCodeAsync(
+        SendEmailCodeInputDto input,
+        CancellationToken cancellationToken = default)
     {
         var normalizedEmail = NormalizeEmail(input.Email);
-        var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken, input.CaptchaCode, cancellationToken);
+        var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(
+            input.CaptchaToken,
+            input.CaptchaCode,
+            cancellationToken);
         if (!isValidCaptcha)
         {
             throw new BadRequestException("The image captcha is incorrect or has expired.")
@@ -33,7 +56,9 @@ public class EmailVerificationAppService(
                 ;
         }
 
-        var existingUser = await userRepository.GetFirstAsync(u => u.Email.ToLower() == normalizedEmail, cancellationToken: cancellationToken);
+        var existingUser = await userRepository.GetFirstAsync(
+            u => u.Email.ToLower() == normalizedEmail,
+            cancellationToken: cancellationToken);
         if (existingUser != null)
         {
             throw new BadRequestException("This email address is already in use.")
@@ -43,8 +68,14 @@ public class EmailVerificationAppService(
                 ;
         }
 
-        var limitKey = GetLimitCacheKey(normalizedEmail);
-        var isLimited = await distributedCache.GetStringAsync(limitKey, cancellationToken);
+        var scope = GetScope();
+        var emailDigest = GetEmailDigest(normalizedEmail);
+        var rateKey = GetRateCacheKey(scope, emailDigest);
+        await using var rateLock = await distributedLock.LockAsync(GetRateLockKey(scope, emailDigest), cancellationToken);
+        using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, rateLock.LockLost);
+        var operationToken = lockScope.Token;
+
+        var isLimited = await distributedCache.GetStringAsync(rateKey, operationToken);
         if (!string.IsNullOrEmpty(isLimited))
         {
             throw new BadRequestException("Verification codes are being sent too frequently. Please try again later.")
@@ -54,10 +85,159 @@ public class EmailVerificationAppService(
                 ;
         }
 
-        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var subject = "Account Registration Verification Code";
-        var htmlBody = $@"
-<div style='font-family: Arial, sans-serif; max-w-md: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;'>
+        var challengeId = Guid.NewGuid();
+        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString(CultureInfo.InvariantCulture);
+        var expiresIn = TimeSpan.FromMinutes(_options.EmailCodeExpiryMinutes);
+        var challenge = new EmailVerificationChallengeState
+        {
+            Scope = scope,
+            Purpose = RegistrationPurpose,
+            EmailDigest = emailDigest,
+            CodeHash = passwordHasher.HashPassword(code),
+            ExpiresAt = DateTimeOffset.UtcNow.Add(expiresIn),
+            RemainingAttempts = _options.EmailCodeMaxAttempts
+        };
+        var challengeKey = GetChallengeCacheKey(challengeId);
+
+        // Reserve the send slot before the external email call so concurrent requests cannot both send.
+        await distributedCache.SetStringAsync(rateKey, "1", new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_options.EmailCodeSendIntervalSeconds)
+        }, operationToken);
+        try
+        {
+            await distributedCache.SetStringAsync(
+                challengeKey,
+                JsonSerializer.Serialize(challenge),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn },
+                operationToken);
+            await emailSender.SendAsync(
+                normalizedEmail,
+                "Account Registration Verification Code",
+                BuildEmailBody(code),
+                operationToken);
+        }
+        catch
+        {
+            // A failed send must not strand either an unusable challenge or a rate-limit reservation.
+            try
+            {
+                await Task.WhenAll(
+                    distributedCache.RemoveAsync(challengeKey, CancellationToken.None),
+                    distributedCache.RemoveAsync(rateKey, CancellationToken.None));
+            }
+            catch (Exception cleanupException)
+            {
+                logger.LogWarning(
+                    cleanupException,
+                    "Failed to clean up email verification challenge {ChallengeId} after send failure",
+                    challengeId);
+            }
+            throw;
+        }
+
+        return new EmailVerificationChallengeOutputDto
+        {
+            ChallengeId = challengeId,
+            ExpiresInSeconds = checked((int)expiresIn.TotalSeconds),
+            RetryAfterSeconds = _options.EmailCodeSendIntervalSeconds
+        };
+    }
+
+    public async Task<bool> ValidateEmailChallengeAsync(
+        string email,
+        EmailVerificationInputDto verification,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email) ||
+            verification.ChallengeId == Guid.Empty ||
+            string.IsNullOrWhiteSpace(verification.Code))
+        {
+            return false;
+        }
+
+        var challengeKey = GetChallengeCacheKey(verification.ChallengeId);
+        await using var challengeLock = await distributedLock.LockAsync(
+            GetChallengeLockKey(verification.ChallengeId),
+            cancellationToken);
+        using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            challengeLock.LockLost);
+        var operationToken = lockScope.Token;
+
+        var serializedChallenge = await distributedCache.GetStringAsync(challengeKey, operationToken);
+        if (string.IsNullOrEmpty(serializedChallenge))
+        {
+            return false;
+        }
+
+        EmailVerificationChallengeState? challenge;
+        try
+        {
+            challenge = JsonSerializer.Deserialize<EmailVerificationChallengeState>(serializedChallenge);
+        }
+        catch (JsonException)
+        {
+            await distributedCache.RemoveAsync(challengeKey, operationToken);
+            return false;
+        }
+
+        if (challenge is null)
+        {
+            await distributedCache.RemoveAsync(challengeKey, operationToken);
+            return false;
+        }
+
+        var emailDigest = GetEmailDigest(NormalizeEmail(email));
+        if (!string.Equals(challenge.Scope, GetScope(), StringComparison.Ordinal) ||
+            !string.Equals(challenge.Purpose, RegistrationPurpose, StringComparison.Ordinal) ||
+            !FixedTimeEquals(challenge.EmailDigest, emailDigest))
+        {
+            // A request from another tenant/email must not be able to consume or exhaust this challenge.
+            return false;
+        }
+
+        var remainingLifetime = challenge.ExpiresAt - DateTimeOffset.UtcNow;
+        if (remainingLifetime <= TimeSpan.Zero)
+        {
+            await distributedCache.RemoveAsync(challengeKey, operationToken);
+            return false;
+        }
+
+        bool codeMatches;
+        try
+        {
+            codeMatches = passwordHasher.VerifyPassword(challenge.CodeHash, verification.Code.Trim());
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            await distributedCache.RemoveAsync(challengeKey, operationToken);
+            return false;
+        }
+
+        if (codeMatches)
+        {
+            await distributedCache.RemoveAsync(challengeKey, operationToken);
+            return true;
+        }
+
+        challenge = challenge with { RemainingAttempts = challenge.RemainingAttempts - 1 };
+        if (challenge.RemainingAttempts <= 0)
+        {
+            await distributedCache.RemoveAsync(challengeKey, operationToken);
+            return false;
+        }
+
+        await distributedCache.SetStringAsync(
+            challengeKey,
+            JsonSerializer.Serialize(challenge),
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = remainingLifetime },
+            operationToken);
+        return false;
+    }
+
+    private string BuildEmailBody(string code) => $@"
+<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;'>
     <div style='background-color: #0f172a; padding: 20px; text-align: center; color: white;'>
         <h2 style='margin: 0;'>Account Registration Verification Code</h2>
     </div>
@@ -71,44 +251,53 @@ public class EmailVerificationAppService(
         <p style='font-size: 14px; color: #64748b; margin-top: 30px;'>If you did not request this, please ignore this email.</p>
     </div>
 </div>";
-        var codeCacheKey = GetCodeCacheKey(normalizedEmail);
-        await distributedCache.SetStringAsync(codeCacheKey, code, new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_options.EmailCodeExpiryMinutes)
-        }, cancellationToken);
-
-        try
-        {
-            await emailSender.SendAsync(normalizedEmail, subject, htmlBody, cancellationToken);
-        }
-        catch
-        {
-            await distributedCache.RemoveAsync(codeCacheKey, cancellationToken);
-            throw;
-        }
-
-        await distributedCache.SetStringAsync(limitKey, "1", new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_options.EmailCodeSendIntervalSeconds)
-        }, cancellationToken);
-    }
-
-    public async Task<bool> ValidateEmailCodeAsync(string email, string code, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
-            return false;
-
-        var codeCacheKey = GetCodeCacheKey(NormalizeEmail(email));
-        var cachedCode = await distributedCache.GetStringAsync(codeCacheKey, cancellationToken);
-
-        if (string.IsNullOrEmpty(cachedCode) || !cachedCode.Equals(code.Trim(), StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        await distributedCache.RemoveAsync(codeCacheKey, cancellationToken);
-        return true;
-    }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
-    private static string GetCodeCacheKey(string email) => $"MyProject:EmailCode:{email}";
-    private static string GetLimitCacheKey(string email) => $"MyProject:EmailCodeLimit:{email}";
+
+    private static string GetEmailDigest(string normalizedEmail)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedEmail)));
+
+    private string GetScope()
+    {
+#if (TenancyEnabled)
+        return currentTenant.Id is { } tenantId ? $"tenant:{tenantId:N}" : "host";
+#else
+        return "host";
+#endif
+    }
+
+    private static bool FixedTimeEquals(string left, string right)
+    {
+        var leftBytes = Encoding.ASCII.GetBytes(left);
+        var rightBytes = Encoding.ASCII.GetBytes(right);
+        return leftBytes.Length == rightBytes.Length &&
+               CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
+    }
+
+    private static string GetChallengeCacheKey(Guid challengeId)
+        => $"{CacheKeyPrefix}:challenge:{challengeId:N}";
+
+    private static string GetChallengeLockKey(Guid challengeId)
+        => $"{CacheKeyPrefix}:lock:challenge:{challengeId:N}";
+
+    private static string GetRateCacheKey(string scope, string emailDigest)
+        => $"{CacheKeyPrefix}:rate:{scope}:{emailDigest}";
+
+    private static string GetRateLockKey(string scope, string emailDigest)
+        => $"{CacheKeyPrefix}:lock:rate:{scope}:{emailDigest}";
+
+    private sealed record EmailVerificationChallengeState
+    {
+        public required string Scope { get; init; }
+
+        public required string Purpose { get; init; }
+
+        public required string EmailDigest { get; init; }
+
+        public required string CodeHash { get; init; }
+
+        public required DateTimeOffset ExpiresAt { get; init; }
+
+        public required int RemainingAttempts { get; init; }
+    }
 }

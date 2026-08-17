@@ -37,6 +37,6 @@ public record RegisterInputDto
     [StringLength(10, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? CaptchaCode { get; init; }
 
-    [Display(Name = "Email verification code")]
-    public string? EmailVerificationCode { get; init; }
+    [Display(Name = "Email verification")]
+    public EmailVerificationInputDto? EmailVerification { get; init; }
 }

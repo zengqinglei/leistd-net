@@ -13,6 +13,7 @@ import {
   SecurityConfigOutputDto,
   CaptchaOutputDto,
   SendEmailCodeInputDto,
+  EmailVerificationChallengeOutputDto,
 } from '../models/account.dto';
 
 @Injectable({ providedIn: 'root' })
@@ -28,8 +29,11 @@ export class AccountService {
     return this.http.get<CaptchaOutputDto>('/api/v1/auth/captcha');
   }
 
-  sendEmailCode(data: SendEmailCodeInputDto): Observable<void> {
-    return this.http.post<void>('/api/v1/auth/send-email-code', data);
+  sendEmailCode(data: SendEmailCodeInputDto): Observable<EmailVerificationChallengeOutputDto> {
+    return this.http.post<EmailVerificationChallengeOutputDto>(
+      '/api/v1/auth/send-email-code',
+      data,
+    );
   }
 
   register(data: RegisterInputDto): Observable<void> {

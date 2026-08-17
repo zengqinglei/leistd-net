@@ -30,7 +30,7 @@ public class AuthAppService(
 
         if (options.EnableEmailVerification)
         {
-            if (string.IsNullOrWhiteSpace(input.EmailVerificationCode))
+            if (input.EmailVerification is null || input.EmailVerification.ChallengeId == Guid.Empty)
             {
                 throw new BadRequestException("Please enter the email verification code.")
 #if (IncludeLocalization)
@@ -39,7 +39,10 @@ public class AuthAppService(
                     ;
             }
 
-            var isValidEmailCode = await emailVerificationAppService.ValidateEmailCodeAsync(input.Email, input.EmailVerificationCode, cancellationToken);
+            var isValidEmailCode = await emailVerificationAppService.ValidateEmailChallengeAsync(
+                input.Email,
+                input.EmailVerification,
+                cancellationToken);
             if (!isValidEmailCode)
             {
                 throw new BadRequestException("The email verification code is incorrect or has expired.")
@@ -174,5 +177,4 @@ public class AuthAppService(
         };
     }
 }
-
 

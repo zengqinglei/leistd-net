@@ -23,7 +23,7 @@ describe('Register', () => {
   let accountService: jasmine.SpyObj<AccountService>;
   let queryParams: Record<string, string>;
 
-  async function setUp(): Promise<void> {
+  async function setUp(enableEmailVerification = false): Promise<void> {
     accountService = jasmine.createSpyObj<AccountService>('AccountService', [
       'register',
       'getCaptcha',
@@ -34,8 +34,13 @@ describe('Register', () => {
     accountService.getCaptcha.and.returnValue(
       of({ captchaToken: 'token-1', captchaImage: 'data:image/png;base64,' }) as never,
     );
-    accountService.getSecurityConfig.and.returnValue(
-      of({ enableEmailVerification: false }) as never,
+    accountService.getSecurityConfig.and.returnValue(of({ enableEmailVerification }) as never);
+    accountService.sendEmailCode.and.returnValue(
+      of({
+        challengeId: '11111111-1111-1111-1111-111111111111',
+        expiresInSeconds: 300,
+        retryAfterSeconds: 37,
+      }) as never,
     );
 
     await TestBed.configureTestingModule({
@@ -146,5 +151,46 @@ describe('Register', () => {
     expect(accountService.getCaptcha).toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
     expect(component.isLoading()).toBeFalse();
+  });
+
+  it('发送邮箱验证码后保存 challenge，并按服务端返回值倒计时', async () => {
+    await setUp(true);
+    fillValidForm();
+
+    await component.sendEmailCode();
+
+    expect(component.countdown()).toBe(37);
+  });
+
+  it('开启邮箱验证时以嵌套 challenge 契约提交注册', async () => {
+    await setUp(true);
+    fillValidForm();
+    await component.sendEmailCode();
+    component.registerForm.emailVerificationCode().value.set('123456');
+
+    await component.onSubmit();
+
+    expect(accountService.register).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        emailVerification: {
+          challengeId: '11111111-1111-1111-1111-111111111111',
+          code: '123456',
+        },
+      }),
+    );
+  });
+
+  it('发送 challenge 后修改邮箱会作废原 challenge 并拒绝提交', async () => {
+    await setUp(true);
+    fillValidForm();
+    await component.sendEmailCode();
+    component.registerForm.emailVerificationCode().value.set('123456');
+
+    component.registerForm.email().value.set('changed@example.test');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await component.onSubmit();
+
+    expect(accountService.register).not.toHaveBeenCalled();
   });
 });

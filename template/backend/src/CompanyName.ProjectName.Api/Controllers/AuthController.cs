@@ -134,9 +134,11 @@ public class AuthController(
 
     [AllowAnonymous]
     [HttpPost("send-email-code")]
-    public async Task SendEmailCodeAsync([FromBody] SendEmailCodeInputDto request, CancellationToken cancellationToken)
+    public async Task<EmailVerificationChallengeOutputDto> SendEmailCodeAsync(
+        [FromBody] SendEmailCodeInputDto request,
+        CancellationToken cancellationToken)
     {
-        await emailVerificationAppService.SendEmailCodeAsync(request, cancellationToken);
+        return await emailVerificationAppService.SendEmailCodeAsync(request, cancellationToken);
     }
 
     /// <summary>
