@@ -28,9 +28,9 @@
 
 | 服务 | 角色 | `IncludeIdentity` | `IncludeRoles` | `IncludeTenancy` | OpenIddict | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `spec-id` | 授权服务器 + Access + SaaS Control Plane | ✓ | ✓ | ✓ | **Server** | 唯一颁发令牌的服务；租户注册表与登录页归它 |
+| `identity` | 授权服务器 + Access + SaaS Control Plane | ✓ | ✓ | ✓ | **Server** | 唯一颁发令牌的服务；租户注册表与登录页归它 |
 | `crm-v2` | 模块化单体，10 模块 | ✓ | ✓ | ✓ | **Validation** | 资源服务器；模块内聚不拆服务 |
-| `spec-foundation` | 存储/KYC/通信渠道等共享能力 | ✓ | ✓ | ✓ | **Validation** | 内部划分见对方文档 |
+| `foundation` | 存储/KYC/通信渠道等共享能力 | ✓ | ✓ | ✓ | **Validation** | 内部划分见对方文档 |
 | `matrixhub` | 事件契约中枢 | 待定 | 待定 | 待定 | **Validation** | 判据见下 |
 | `tradehub` | 交易域 Owner | 待定 | 待定 | 待定 | **Validation** | 判据见下 |
 
@@ -40,7 +40,7 @@
 
 `IncludeDbMigrator`：五个服务**全部开**（生产部署形态，见 §5.2）。
 
-`IncludeNotifications`：`crm-v2` 建议开（站内通知与实时推送是 CRM 常规需求），其余按需。`IncludeLocalization`、`IncludeExternalLogin` 按产品要求定，`spec-id` 若接第三方登录则开后者。
+`IncludeNotifications`：`crm-v2` 建议开（站内通知与实时推送是 CRM 常规需求），其余按需。`IncludeLocalization`、`IncludeExternalLogin` 按产品要求定，`identity` 若接第三方登录则开后者。
 
 ## 3. 目录结构
 
@@ -53,19 +53,19 @@
 ├── docs/                          # 既有规划文档，不动
 ├── README.md                      # 既有
 │
-├── spec-id/                       # 一份完整 template 产出 = 一个未来的独立仓
+├── identity/                       # 一份完整 template 产出 = 一个未来的独立仓
 │   ├── .agents/skills/            # [T] 项目 Skill
 │   ├── backend/
 │   │   ├── src/
-│   │   │   ├── SpecId.Api/                   # [T] 保留授权服务器端点
-│   │   │   ├── SpecId.Application/
+│   │   │   ├── Identity.Api/                   # [T] 保留授权服务器端点
+│   │   │   ├── Identity.Application/
 │   │   │   │   ├── Tenants/                  # [T] 模板自带租户 CRUD 与种子
 │   │   │   │   └── Branding/                 # [B] 租户品牌：登录页与邮件页眉页脚的唯一来源
-│   │   │   ├── SpecId.Domain/
-│   │   │   ├── SpecId.Infrastructure/
-│   │   │   ├── SpecId.Client/                # [B] SDK：品牌、用户档案、凭据
-│   │   │   └── SpecId.DbMigrator/            # [T] 见 §5.2
-│   │   └── tests/SpecId.IntegrationTests/    # [T]+[B]
+│   │   │   ├── Identity.Domain/
+│   │   │   ├── Identity.Infrastructure/
+│   │   │   ├── Identity.Client/                # [B] SDK：品牌、用户档案、凭据
+│   │   │   └── Identity.DbMigrator/            # [T] 见 §5.2
+│   │   └── tests/Identity.IntegrationTests/    # [T]+[B]
 │   ├── frontend/                  # [T] 登录页按品牌渲染
 │   ├── deploy/                    # [T] 本服务自己的 Compose / K8s
 │   ├── docs/                      # [T] 含本服务的迁移与发布 runbook
@@ -86,9 +86,9 @@
 │   │   ├── Crm.Client/                       # [B] SDK
 │   │   └── Crm.DbMigrator/                   # [T]
 │   ├── frontend/                  # [T] crm-web；crm-site 若为独立站点则另起一份完整产出
-│   └── ...（deploy / docs / Dockerfile / VERSION 同 spec-id）
+│   └── ...（deploy / docs / Dockerfile / VERSION 同 identity）
 │
-├── spec-foundation/               # 同上；内部模块划分见对方专题文档
+├── foundation/               # 同上；内部模块划分见对方专题文档
 ├── matrixhub/                     # 同上
 ├── tradehub/                      # 同上
 │
@@ -96,6 +96,8 @@
 ```
 
 标记：`[F]` 框架现成 · `[T]` 模板生成后调整 · `[B]` 业务新增
+
+> **`identity` 服务的 DbContext 命名要留意。** 模板取项目名最后一段生成 DbContext（`Matrix.Tenancy` → `TenancyDbContext`），因此该服务会产出 `IdentityDbContext`——与 `Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityDbContext` 同名。当前模板不引用那套包，所以**今天不冲突**；但身份服务恰恰是最可能日后引入它的服务。届时二选一：生成后把 DbContext 改名（一个文件加引用），或把项目命名为 `IdentityService`。加公司前缀（`X.Identity`）**不解决**这个问题——替换只取最后一段。
 
 ### 3.1 两条结构约束
 
@@ -120,7 +122,7 @@
 **通用组件不新增。** 两处门槛需要说明：
 
 - **没有 Settings / Features 家族。** 租户可配置项在 20 以内时，业务侧一张配置表 + 强类型配置类足够；差异项持续增长或租户数上到几十才立项 `Leistd.Settings`。
-- **对象存储没有抽象组件。** 只有 `spec-foundation` 碰厂商 SDK，一个消费者的抽象不进通用组件（门槛是三个以上真实消费者）。
+- **对象存储没有抽象组件。** 只有 `foundation` 碰厂商 SDK，一个消费者的抽象不进通用组件（门槛是三个以上真实消费者）。
 
 **明确不做**：不把品牌等业务字段塞进 `TenantConfiguration`。租户注册表是访问控制状态（已为此去掉缓存），不能和高频读的展示数据混住。
 
@@ -143,7 +145,7 @@
 
 **现状**：模板的 OpenIddict 是一条链 `AddCore().AddServer(...).AddValidation(o => o.UseLocalServer())`。`UseLocalServer()` 表示"只信任本进程内的颁发者"。而 `IncludeOpenIddict=false` 分支是**纯 Cookie 认证，没有任何 Bearer 校验**；服务间用户上下文恢复（`AddServiceUserContext`）也整段在 OpenIddict 分支内。
 
-**因此模板今天只支持一种形态：自己既是授权服务器又是资源服务器。** 本项目"身份集中在 `spec-id`、其余服务校验它签发的令牌"这个形态模板不支持——两个取值都不对：
+**因此模板今天只支持一种形态：自己既是授权服务器又是资源服务器。** 本项目"身份集中在 `identity`、其余服务校验它签发的令牌"这个形态模板不支持——两个取值都不对：
 
 - `true`：四个业务服务各自成为授权服务器，对外暴露 `/connect/token` 等端点。这是实打实的攻击面扩张，不是"多余代码"。
 - `false`：收不了 Bearer，也没有服务间用户上下文，身份集中直接不成立。
@@ -152,7 +154,7 @@
 
 | 形态 | 装配 | 适用 |
 | --- | --- | --- |
-| Server | `AddCore` + `AddServer` + `AddValidation(UseLocalServer)` | `spec-id` |
+| Server | `AddCore` + `AddServer` + `AddValidation(UseLocalServer)` | `identity` |
 | Validation | 仅 `AddValidation`，配远端 `Issuer` + `UseSystemNetHttp`，校验 audience 与 scope | 其余四个服务 |
 | None | 现有 Cookie 分支 | 单体自用 |
 
@@ -276,7 +278,7 @@ services.AddDbContext<CrmDbContext>((sp, options) =>
 **3. 租户注册表必须钉在宿主连接上——这是分库模式最关键的约束。** 解析租户需要读注册表，而读注册表又需要连接串，存在**鸡生蛋**：如果注册表跟着业务数据搬进租户库，就永远读不到。因此：
 
 - 租户注册表（`TenantRecords`）**永远在默认/宿主库**。
-- 需要同时持有注册表与租户业务数据的服务（`spec-id`），要么用两个 DbContext，要么让 `EfCoreTenantStore` 显式走宿主连接。**框架当前把两者绑在同一个 TDbContext 上，这一点必须改。**
+- 需要同时持有注册表与租户业务数据的服务（`identity`），要么用两个 DbContext，要么让 `EfCoreTenantStore` 显式走宿主连接。**框架当前把两者绑在同一个 TDbContext 上，这一点必须改。**
 
 **4. 迁移器遍历租户**：`--apply` 要对默认库 + 每个配了连接串的租户库各跑一遍，且**部分失败会留下混合 schema 版本**——迁移器必须逐库报告结果，不能只回一个总的成功/失败。
 
@@ -298,24 +300,24 @@ services.AddDbContext<CrmDbContext>((sp, options) =>
 
 ### 6.6 非 owner 服务如何获得租户数据
 
-租户注册表归 `spec-id`。但**每个 `IncludeTenancy=true` 的服务在请求路径上都必须有一个能用的 `ITenantStore`**——多租户中间件对解析出的租户**无条件查 store** 校验存在性与 `IsActive`，无论租户来自 claim、子域名还是请求头，且它需要 `Id` 与 `Name` 才能 `Change` 上下文。分库模式下还要多拿一样东西：**该租户的连接串**。
+租户注册表归 `identity`。但**每个 `IncludeTenancy=true` 的服务在请求路径上都必须有一个能用的 `ITenantStore`**——多租户中间件对解析出的租户**无条件查 store** 校验存在性与 `IsActive`，无论租户来自 claim、子域名还是请求头，且它需要 `Id` 与 `Name` 才能 `Change` 上下文。分库模式下还要多拿一样东西：**该租户的连接串**。
 
 两条约束决定了选项：
 
 - **子域名解析是按名查。** 任何服务只要在租户子域名上接匿名流量（如 crm-web 首屏 HTML 由 `crm-v2` 托管），就必须本地能把名字解析成租户——"只信 token claim"不成立。
-- **跨服务的 `IsActive` 不可能即时一致**，除非每个请求都回访 `spec-id`。
+- **跨服务的 `IsActive` 不可能即时一致**，除非每个请求都回访 `identity`。
 
 | 形态 | 做法 | 代价 |
 | --- | --- | --- |
 | **配置清单**（当前推荐） | 四个业务服务用 `AddInMemoryTenantStore` 配置租户清单 | 新增租户或改启停 = 改配置 + 滚动四个服务 |
-| **本地只读副本**（自助开通落地时切换） | `spec-id` 发布租户生命周期事件（建/改名/启停/删/换连接串），经 MatrixHub 投影到各服务的本地副本表；Store 仍用 `EfCoreTenantStore` 读本地表 | 需要投影器 + 周期性全量对账兜住漏事件；启动时需先全量同步，否则空副本会让所有租户请求 404 |
-| ~~远程 Store~~（否决） | 各服务实现 `ITenantStore` 调 `spec-id` | 把 `spec-id` 放进每个服务每个请求的关键路径；加缓存则重新引入"访问控制状态挂在尽力而为的失效上"这一已被否决的形态 |
+| **本地只读副本**（自助开通落地时切换） | `identity` 发布租户生命周期事件（建/改名/启停/删/换连接串），经 MatrixHub 投影到各服务的本地副本表；Store 仍用 `EfCoreTenantStore` 读本地表 | 需要投影器 + 周期性全量对账兜住漏事件；启动时需先全量同步，否则空副本会让所有租户请求 404 |
+| ~~远程 Store~~（否决） | 各服务实现 `ITenantStore` 调 `identity` | 把 `identity` 放进每个服务每个请求的关键路径；加缓存则重新引入"访问控制状态挂在尽力而为的失效上"这一已被否决的形态 |
 
 **与分库模式的交互**：连接串是 `TenantConfiguration` 的字段，而 `InMemoryTenantStoreOptions.Tenants` 装的正是 `TenantConfiguration`，因此配置清单形态天然能携带连接串，两种模式在这一层自动组合。副本形态下，连接串变更也只是又一种需要投影的事件。
 
 > **注册表副本本身永远在服务的宿主库**，不随租户分库——理由同 §6.4 的鸡生蛋约束。
 
-**必须如实记录的性质**：单服务内"停用即刻生效"是框架保证的（存储直接读库、无缓存）；**跨服务则退化为最终一致**——配置清单形态下取决于滚动发布，副本形态下取决于事件传播（秒级）。因此撤销的**主控在 `spec-id` 停止签发与刷新令牌**，业务服务的 store 校验是纵深防御，其滞后窗口应当小于令牌有效期。业务服务应尽量少开租户作用域内的匿名端点，因为匿名路径拿不到令牌这层主控。
+**必须如实记录的性质**：单服务内"停用即刻生效"是框架保证的（存储直接读库、无缓存）；**跨服务则退化为最终一致**——配置清单形态下取决于滚动发布，副本形态下取决于事件传播（秒级）。因此撤销的**主控在 `identity` 停止签发与刷新令牌**，业务服务的 store 校验是纵深防御，其滞后窗口应当小于令牌有效期。业务服务应尽量少开租户作用域内的匿名端点，因为匿名路径拿不到令牌这层主控。
 
 ## 7. 测试策略
 
@@ -348,7 +350,7 @@ services.AddDbContext<CrmDbContext>((sp, options) =>
 - [ ] 已认证会话携带伪造租户头无法改写自身租户。
 - [ ] 子域名部署下匿名请求无法用请求头改写租户；受管域内无租户段的主机定案为宿主；受管域外仍可用请求头（服务间调用依赖它）。
 - [ ] 每个租户化实体都在"完整性锁"断言清单内；不实现 `IMultiTenant` 的关联表单独断言。
-- [ ] 资源服务器拒绝非 `spec-id` 签发、audience 不匹配或已过期的令牌。
+- [ ] 资源服务器拒绝非 `identity` 签发、audience 不匹配或已过期的令牌。
 - [ ] **分库模式下 `TenantId` 过滤器仍然生效**：把某租户的连接串误指到另一个租户的库，查询结果仍为空而不是泄漏整库。
 - [ ] 租户注册表始终在宿主库，不随任何租户的连接串迁移。
 
@@ -378,5 +380,5 @@ services.AddDbContext<CrmDbContext>((sp, options) =>
 | `03-多租户与License` | License 概念在本框架中不存在。它与租户是什么关系（租户属性 / 独立的授权维度）会影响权限模型；若 License 也需要独立的数据归属，还会影响 §6 的连接串解析维度（届时解析键可能不只是租户） |
 | CRM 十模块清单 | §3 的 `Modules/` 需按实际模块展开，并标注哪些模块持有租户化实体 |
 | `matrixhub` / `tradehub` 职责 | §2 的模板参数待定项 |
-| `spec-foundation` 内部划分 | 以对方两份专题文档为准，本文只负责它的模板落地形态 |
+| `foundation` 内部划分 | 以对方两份专题文档为准，本文只负责它的模板落地形态 |
 | `crm-site` 与 `crm-web` 是否两份独立前端产出 | §3 的 `crm-v2/frontend/` 形态 |
