@@ -70,7 +70,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 ### 实体按租户隔离
 
 ```csharp
-// 业务实体实现 IMultiTenant，TenantId 由拦截器在保存时填充
+// 业务实体实现 IMultiTenant，TenantId 由 BaseDbContext 在实体进入跟踪时填充
 public class Order : FullAuditedEntity<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }   // null = 宿主数据
@@ -188,7 +188,7 @@ builder.Services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.
 
 ### 写入侧：租户值何时落定
 
-新增实体的 `TenantId` 在**实体进入跟踪时**落定（`BaseDbContext` 挂 `ChangeTracker.Tracked`），不是在保存时。
+新增实体的 `TenantId` 在**实体进入跟踪时**落定（`BaseDbContext` 挂 `ChangeTracker.Tracked` 与 `ChangeTracker.StateChanged`），不是在保存时。**创建审计（`CreatorId` / `CreationTime`）走同一个钩子、同一个时刻**——两者是同一条规则的两个字段，见[审计组件](./auditing.md)。
 
 这个时机是必须的：仓储在工作单元内**不立即保存**（由 UoW 统一提交），因此"新增"与"保存"之间可能跨越 `ICurrentTenant.Change` 的边界。若在保存时刻取当前租户，下面这段会把数据静默落成宿主行——
 
@@ -202,7 +202,9 @@ await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
 
 后果是双向的：**该租户看不见自己创建的数据**（过滤器要求 `TenantId` 等于当前租户），而**宿主管理员看得见**，且没有任何报错。进入跟踪的时刻才是"这条数据属于谁"的语义时刻。
 
-显式赋过值的不覆盖；宿主上下文保持 `null` 即宿主数据；查询 materialize 出来的实体不碰。
+显式赋过值的不覆盖；宿主上下文保持 `null` 即宿主数据；查询 materialize 出来的实体不碰（`FromQuery` 跳过，且查询物化结果是 `Unchanged` 而非 `Added`）。
+
+`StateChanged` 也要订阅：`Tracked` 只在实体首次进入跟踪时触发，看不到"查询出来（`Unchanged`）之后才被改成 `Added`"的 upsert 类写法。
 
 ## 接口参考
 
@@ -276,7 +278,7 @@ await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
 - `EfCoreTenantStore` **不缓存**，每次解析都读库。它的返回值里带 `IsActive`，中间件据此放行或 403——这是访问控制状态，而 cache-aside 的失效是尽力而为的：缓存不可用时失效失败，已停用/已删除的租户仍被陈旧条目放行；删除之后连重试失效都做不到（租户已软删，管理器按 Id 找不到它，直接抛 `TenantNotFoundException`）。缩短 TTL 只能缩窄窗口、关不掉它，因此**启停与删除的生效由构造保证**：提交那一刻即对所有节点生效。
 - 成本可忽略：租户解析每请求一次索引查找，用的是当前请求已有的 `DbContext`，不新开连接；同一个仓库里用户判活（`ActiveUserRequirement`）本来就是每请求读库，租户表比用户表更小更热。附带收益是租户解析不再依赖分布式缓存可用——此前缓存读取失败会直接抛出，缓存一挂则所有带租户的请求全部 500。
 - 极高 RPS 且能接受撤销延迟的服务，自行包装 `ITenantStore` 装饰器加缓存。**那是一个需要显式承担陈旧风险的决定**，不由框架替所有人默认做。
-- 落值拦截器只处理 `Added` 且 `TenantId == null` 的实体；宿主上下文保存的实体保持 `null` 即宿主数据。
+- 落值只处理 `Added` 且 `TenantId == null` 的实体；宿主上下文保存的实体保持 `null` 即宿主数据。
 - `TenantRecord` 不实现 `IMultiTenant`（它本身是宿主侧数据）。名称唯一性由**未删除行上的部分唯一索引**保证（`IsDeleted = false` 过滤，PostgreSQL 与 SQLite 通用），删除后名称可复用；管理器的先查后校验只负责给出友好错误，并发落败方由数据库拒绝后同样得到 `DuplicateTenantNameException`（映射 409）。低频与权限门禁都不能替代数据库不变量。
 
 ### 与 DDD 基座的配合（`Leistd.Ddd.Infrastructure`）

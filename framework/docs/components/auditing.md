@@ -2,7 +2,23 @@
 
 审计用于自动记录实体的创建人/创建时间、最后修改人/修改时间，以及删除人/删除时间（软删除），免去在每个应用服务里手写这些样板代码。典型场景包括：合规审计（谁在何时创建/修改/删除了这条数据）、软删除（业务上不允许物理删除，但需要标记"已删除"并保留数据）、审计字段的统一自动填充。
 
-Leistd 通过一组标记接口（`ICreationAuditedObject` / `IModificationAuditedObject` / `IDeletionAuditedObject` 等）表达实体"具备哪些审计能力"，业务代码只需让实体实现相应接口；真正的字段填充由 `IAuditPropertySetter` 完成，EF Core 适配层通过 `SaveChangesInterceptor` 在保存前自动调用它，业务代码无需手动赋值。
+Leistd 通过一组标记接口（`ICreationAuditedObject` / `IModificationAuditedObject` / `IDeletionAuditedObject` 等）表达实体"具备哪些审计能力"，业务代码只需让实体实现相应接口；真正的字段填充由 `IAuditPropertySetter` 完成，业务代码无需手动赋值。
+
+### 填充时机：创建在"进入跟踪时"，修改与删除在"保存时"
+
+| 状态 | 时机 | 由谁调用 |
+| --- | --- | --- |
+| `Added`（`CreationTime` / `CreatorId`） | 实体**进入变更跟踪**时 | `BaseDbContext`（`ChangeTracker.Tracked` + `StateChanged`） |
+| `Modified` / `Deleted` | `SavingChanges`（保存前） | `AuditSaveChangesInterceptor` |
+
+这条分界线不是实现细节，两侧都有硬约束：
+
+- **创建审计必须早于保存。** 仓储在工作单元内不立即保存，新增与保存之间可以跨越 `ICurrentPrincipalAccessor.Change` 的边界（服务间调用的主体切换、后台任务的模拟主体）。若在保存时刻取当前用户，`CreatorId` 会静默落成外层主体。而且在保存前实体的 `CreatorId` 一直是 null——保存前读它的代码（领域事件处理器、业务校验、导出）看到的都是空。
+- **修改与删除必须留在保存时。** `Modified` / `Deleted` 是状态迁移的**结果**，跟踪事件在实体首次进入跟踪时就已触发完毕，抓不到"后来被改了"。
+
+覆盖时的三层护栏（缺一层就会污染查询出来的数据）：`FromQuery` 的实体不碰、状态必须是 `Added`、值已有则不动（种子/导入/迁移显式赋过的值保留）。
+
+> 这与 `TenantId` 的落值时机是同一条规则、同一个钩子，见[多租户组件](./multi-tenancy.md)。
 
 ## 何时使用
 
@@ -13,9 +29,11 @@ Leistd 通过一组标记接口（`ICreationAuditedObject` / `IModificationAudit
 | 实体需要软删除（标记删除而非物理删除）并记录删除人/删除时间 | 实现 `IDeletionAuditedObject`（内含 `ISoftDelete`） |
 | 实体需要以上全部审计能力 | 实现 `IFullAuditedObject` |
 | 仅编写业务代码（定义实体、消费审计字段），不关心填充逻辑 | 只引用 `Leistd.Auditing.Core` 中的接口 |
-| 使用 EF Core 作为持久化层，需要保存时自动填充审计字段 | 引用 `Leistd.Auditing.EntityFrameworkCore`，注册 `AuditSaveChangesInterceptor` |
+| 使用 EF Core 作为持久化层，需要自动填充审计字段 | 引用 `Leistd.Auditing.EntityFrameworkCore`，注册 `AuditSaveChangesInterceptor` |
 
-> 审计字段的自动填充依赖 EF Core 拦截器；若不使用 EF Core，只能引用 `Leistd.Auditing.Core` 的接口自行实现填充逻辑。
+> 审计字段的自动填充依赖 EF Core；若不使用 EF Core，只能引用 `Leistd.Auditing.Core` 的接口自行实现填充逻辑。
+>
+> **创建审计要求 DbContext 继承 `BaseDbContext`**（`Leistd.Ddd.Infrastructure`）——它才是创建审计的落点。只挂拦截器而不继承 `BaseDbContext` 的 DbContext 只有修改与删除审计，创建审计不会填充。
 
 ## 安装
 
@@ -47,9 +65,11 @@ builder.Services.AddAuditingEfCore();    // 注册 IAuditPropertySetter 与 Audi
 options.AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>());
 ```
 
+创建审计不走拦截器，由 `BaseDbContext` 从容器解析 `IAuditPropertySetter`——因此**必须把 `IServiceProvider` 传给 `BaseDbContext` 的构造函数**（模板生成的 DbContext 已经这样写）。传 null 或用单参构造时，创建审计静默不填充。
+
 ## 使用
 
-实体按需实现审计接口，`SaveChanges`/`SaveChangesAsync` 时字段会被拦截器自动填充，无需手动赋值。审计字段的 setter 用 `private set`（仅由拦截器经 EF Core 写入，业务代码不手动赋值）：
+实体按需实现审计接口，字段会自动填充（创建审计在实体进入跟踪时，修改/删除在保存时），无需手动赋值。审计字段的 setter 用 `private set`（仅由框架经 EF Core 写入，业务代码不手动赋值）：
 
 ```csharp
 public class Order : IFullAuditedObject
