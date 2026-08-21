@@ -2,7 +2,7 @@
 
 构建中大型业务系统时，最难统一的不是某个框架，而是**分层约定**：实体基类放哪、仓储接口长什么样、应用服务怎么组织、分页结果怎么返回、领域事件何时发布、软删除怎么落地。各团队各写一套，代码就难以复用与维护。
 
-`ddd-struct` 提供一套按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分的 DDD 基础类型：Domain 定义实体基类、仓储抽象与数据过滤器；Application.Contracts 提供应用服务标记接口、DTO 基类与分页约定；Application 提供应用服务基类与分页映射扩展；Infrastructure 基于 EF Core 落地仓储、提供审计/本地事件拦截器、软删除全局过滤。业务项目继承这些基类、调用 `AddDddInfrastructure()` 获得仓储自动注册与软删除全局过滤；**审计填充与领域事件发布依赖两个 SaveChanges 拦截器，需在配置 DbContext 时显式挂载**（见下方「挂载拦截器」）——这一步不可省略，否则审计字段不填充、领域事件不发布、软删除不由删转改。
+`ddd-struct` 提供一套按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分的 DDD 基础类型：Domain 定义实体基类、仓储抽象与数据过滤器；Application.Contracts 提供应用服务标记接口、DTO 基类与分页约定；Application 提供应用服务基类与分页映射扩展；Infrastructure 基于 EF Core 落地仓储、提供审计/本地事件拦截器、软删除与租户隔离全局过滤。业务项目继承这些基类、调用 `AddDddInfrastructure()` 获得仓储自动注册与全局过滤；**新增实体的环境值（`CreatorId` / `CreationTime` / `TenantId`）由 `BaseDbContext` 在实体进入跟踪时落定，修改与删除审计及领域事件发布依赖两个 SaveChanges 拦截器，需在配置 DbContext 时显式挂载**（见下方「挂载拦截器」）——这一步不可省略，否则修改/删除审计不填充、领域事件不发布、软删除不由删转改。
 
 ## 何时使用
 
@@ -39,7 +39,7 @@ dotnet add package Leistd.Ddd.Infrastructure
 
 ### 定义实体（Domain）
 
-继承审计实体基类获得创建/修改/软删除审计字段（由 `Leistd.Auditing.EntityFrameworkCore` 的拦截器在保存时填充，业务代码不手动赋值——前提是该拦截器已按「挂载拦截器」小节挂到 DbContext）；通过 `AddLocalEvent` 登记领域事件：
+继承审计实体基类获得创建/修改/软删除审计字段（框架自动填充，业务代码不手动赋值：创建审计由 `BaseDbContext` 在实体进入跟踪时写入，修改/删除审计由 `AuditSaveChangesInterceptor` 在保存时写入——后者前提是已按「挂载拦截器」小节挂到 DbContext）；通过 `AddLocalEvent` 登记领域事件：
 
 ```csharp
 public class Order : FullAuditedEntity<Guid>   // 创建+修改+软删除审计
@@ -126,16 +126,18 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     options.UseNpgsql(connectionString);   // 或其它 provider
 
     // ⚠️ 必须显式挂载这两个拦截器，否则：
-    //   - 审计字段（CreationTime/CreatorId…）不会填充
+    //   - 修改/删除审计字段（LastModifierId、DeleterId…）不会填充
     //   - 实体 AddLocalEvent 登记的领域事件不会随保存发布
     //   - 软删除不会由物理删除自动转为逻辑删除
+    // 注：创建审计（CreationTime/CreatorId）不在拦截器里，由 BaseDbContext
+    //     在实体进入跟踪时落定——但要求把 IServiceProvider 传给它的构造函数
     options.AddInterceptors(
         sp.GetRequiredService<AuditSaveChangesInterceptor>(),
         sp.GetRequiredService<LocalEventSaveChangesInterceptor>());
 });
 ```
 
-> 若领域事件"未触发订阅"、审计字段全为空，几乎都是漏了这一步。拦截器由消费方挂载是 EF Core 的推荐做法（框架不代持/代挂业务的 DbContext）。
+> 若领域事件"未触发订阅"、修改/删除审计全为空，几乎都是漏了这一步。拦截器由消费方挂载是 EF Core 的推荐做法（框架不代持/代挂业务的 DbContext）。若只有**创建**审计为空，则是 DbContext 没拿到 `IServiceProvider`。
 
 ### DbContext 基类与全局过滤器运行时开关（Leistd.Ddd.Infrastructure）
 
@@ -166,7 +168,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
 
 > **为什么封闭 `OnModelCreating`**：全局过滤器只能作用于当时已在模型中的实体类型。若在派生类配置之前套用，那些经 `ApplyConfiguration` 才进入模型、又**没有 `DbSet` 声明**的实体（各组件的版本表就是这种形态）会完全逃过软删除与租户隔离——那是静默的越权缺口。把顺序交给基类，覆盖完整性就不再依赖派生类的书写习惯。
 
-> 若使用**不带 `IServiceProvider`** 的构造函数，`IsSoftDeleteFilterEnabled` 恒为 `true`、`CurrentTenantId` 恒为 `null`（宿主视角），`Disable<ISoftDelete>()` / `Disable<IMultiTenant>()` 与 `ICurrentTenant.Change()` 对该 DbContext 均无效。
+> 若使用**不带 `IServiceProvider`** 的构造函数，`IsSoftDeleteFilterEnabled` 恒为 `true`、`CurrentTenantId` 恒为 `null`（宿主视角），`Disable<ISoftDelete>()` / `Disable<IMultiTenant>()` 与 `ICurrentTenant.Change()` 对该 DbContext 均无效，**创建审计也不会填充**。
+
+#### 新增实体的环境值：在"进入跟踪"时落定
+
+`BaseDbContext` 订阅 `ChangeTracker.Tracked` 与 `ChangeTracker.StateChanged`，对 `Added` 状态的实体落两样值：
+
+| 值 | 条件 |
+| --- | --- |
+| `TenantId`（`IMultiTenant`） | 当前有租户上下文，且实体的 `TenantId` 仍为 null |
+| `CreationTime` / `CreatorId` | 经 `IAuditPropertySetter`，值仍为空时写入 |
+
+**为什么不在保存时。** 仓储在工作单元内不立即保存，新增与保存之间可以跨越 `ICurrentTenant.Change` 或 `ICurrentPrincipalAccessor.Change` 的边界。在保存时刻取环境值，会把该租户的数据**静默落成宿主行**（该租户自己看不见、宿主管理员看得见），创建者落成外层主体——两者都不报错。进入跟踪的时刻才是"这条数据属于谁、由谁创建"的语义时刻；落盘时机是基础设施的调度结果，把身份绑在它上面等于让这些值随事务边界漂移。
+
+**为什么两个事件都订阅。** `Tracked` 只在实体首次进入跟踪时触发，看不到"查询出来（`Unchanged`）之后才被改成 `Added`"的 upsert 类写法；那种迁移只有 `StateChanged` 能捕获。
+
+**为什么不会覆盖查询出来的实体。** 三层护栏：`FromQuery` 的实体直接跳过、状态必须是 `Added`（查询物化的结果是 `Unchanged`，永远不是 `Added`）、值已有则不动（种子、导入、迁移显式赋过的值保留）。
+
+> 与 Volo.ABP 的差异：ABP 的创建审计同样落在进入跟踪时（`AbpDbContext.ChangeTracker_Tracked` → `ApplyAbpConceptsForAddedEntity`），本框架与之一致；`TenantId` 则 ABP 落在 `Entity` 基类构造函数里（更早一步，靠反射写私有 setter）。本框架选择保持领域实体基类零环境依赖，代价是"作用域内 `new`、作用域外 `Add`"这种跨作用域持有实体的写法拿不到租户值——那本身是应当避免的写法。
 
 ## 接口参考
 
@@ -252,7 +271,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
   - **发布**发生在 `SavedChanges`/`SavedChangesAsync`（保存成功后）：取出该 `DbContext` 暂存的事件列表；若存在 `IUnitOfWorkManager.Current`（当前处于 UnitOfWork），调用 `currentUow.AddPendingEvents(localEvents)` 加入工作单元的待发布队列（随事务提交发布）；否则（无 UnitOfWork）直接经 `ILocalEventBus.PublishAsync` 逐个发布——异步路径 `await` 逐个发布，同步路径（`SaveChanges` 而非 `SaveChangesAsync`）用 `GetAwaiter().GetResult()` 阻塞发布并记录一条 `LogWarning`（同步发布本地事件属于 sync-over-async 风险路径）。
   - **保存失败**（`SaveChangesFailed`/`SaveChangesFailedAsync`）会从暂存表中丢弃本次收集的事件，避免残留到下一次保存周期。
 - **软删除与租户全局过滤**：`BaseDbContext.OnModelCreating` 以命名过滤器分别调用 `ApplyGlobalFilters<ISoftDelete>`（名 `SoftDelete`，表达式 `!IsSoftDeleteFilterEnabled || !e.IsDeleted`）与 `ApplyGlobalFilters<IMultiTenant>`（名 `MultiTenant`，表达式 `!IsMultiTenantFilterEnabled || e.TenantId == CurrentTenantId`）。过滤器被禁用时表达式恒为 `true`；租户过滤器启用且当前为宿主上下文（`CurrentTenantId == null`）时仅显示宿主行。开关读取 `IDataFilter`，`CurrentTenantId` 读取 `ICurrentTenant`（未注册或未传 `IServiceProvider` 时为宿主视角）。
-- **审计字段自动填充**（由 `Leistd.Auditing.EntityFrameworkCore` 的 `AuditSaveChangesInterceptor` 提供，Infrastructure 层通过 `AddAuditingEfCore()` 一并注册）：在 `SavingChanges` 阶段按 `ChangeTracker.Entries()` 的状态调用 `IAuditPropertySetter`——`Added` 设置创建属性；`Modified` 且实体是 `ISoftDelete { IsDeleted: true }` 时跳过（避免与删除审计重复设置）否则设置修改属性；`Deleted` 且实体实现 `ISoftDelete` 时，把状态由 `Deleted` 改为 `Modified` 并设置删除属性——即**物理删除自动转换为逻辑删除**。
+- **修改/删除审计填充**（由 `Leistd.Auditing.EntityFrameworkCore` 的 `AuditSaveChangesInterceptor` 提供，Infrastructure 层通过 `AddAuditingEfCore()` 一并注册）：在 `SavingChanges` 阶段按 `ChangeTracker.Entries()` 的状态调用 `IAuditPropertySetter`——`Modified` 且实体是 `ISoftDelete { IsDeleted: true }` 时跳过（避免与删除审计重复设置）否则设置修改属性；`Deleted` 且实体实现 `ISoftDelete` 时，把状态由 `Deleted` 改为 `Modified` 并设置删除属性——即**物理删除自动转换为逻辑删除**。
+- **创建审计不在拦截器里**：`Added` 状态由 `BaseDbContext` 在实体进入跟踪时处理，见下方「DbContext 基类」小节。
 
 ### Leistd.Ddd.Domain（数据过滤器）
 
@@ -262,7 +282,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IServiceProvid
 
 - **软删除是默认行为**：对实现 `ISoftDelete` 的实体调用 `DeleteAsync`，`AuditSaveChangesInterceptor` 会把物理删除转换为逻辑删除（`IsDeleted = true`），查询默认经全局过滤器看不到这些记录；需要时用 `IDataFilter.Disable<ISoftDelete>()` 在作用域内临时关闭过滤器。
 - **拦截器必须显式挂载**：`AuditSaveChangesInterceptor` 与 `LocalEventSaveChangesInterceptor` 不会被 `AddDddInfrastructure()` 自动挂到 DbContext，必须在配置 DbContext 时 `AddInterceptors`（见「挂载拦截器」）；漏挂会导致审计不填充、领域事件不发布、软删除不转换，且**不报错、静默失效**。
-- 审计字段（创建/修改/删除时间与操作者）均为 `virtual`、`protected set`，由 `Leistd.Auditing.EntityFrameworkCore` 的拦截器在保存时填充，业务代码不要手动赋值；脱离 Infrastructure 层（如纯领域单测直接 `new` 实体）不会写入审计值。
+- 审计字段（创建/修改/删除时间与操作者）均为 `virtual`、`protected set`，由框架自动填充（创建在进入跟踪时、修改/删除在保存时），业务代码不要手动赋值；脱离 Infrastructure 层（如纯领域单测直接 `new` 实体）不会写入审计值。
 - 仓储写操作在 UnitOfWork 内**不会立即落库**——`Uow.Current != null` 时 `SaveChangesIfNeededAsync` 直接返回，依赖工作单元统一提交；脱离 UnitOfWork 调用仓储写方法时才会立即 `SaveChangesAsync`。
 - 本地事件请通过实体的 `AddLocalEvent`（`protected`，只能在实体内部调用）登记；`GetLocalEvents()`/`ClearLocalEvents()` 仅供拦截器使用，业务代码不应直接调用。同步 `SaveChanges()` 发布本地事件会记录 sync-over-async 警告，建议始终使用 `SaveChangesAsync()`。
 - 仓储自动注册依赖 `DbContext` 暴露 `public` 的 `DbSet<>` 属性；未声明为 `DbSet<>` 的实体不会被自动注册仓储。

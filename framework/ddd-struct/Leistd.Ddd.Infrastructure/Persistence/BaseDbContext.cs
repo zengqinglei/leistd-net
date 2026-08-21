@@ -12,11 +12,13 @@ namespace Leistd.Ddd.Infrastructure.Persistence;
 /// 基础 DbContext
 /// </summary>
 /// <remarks>
-/// <para>审计字段和本地事件的处理已迁移至 SaveChangesInterceptor：</para>
-/// <para>- AuditSaveChangesInterceptor：处理审计字段自动填充</para>
-/// <para>- LocalEventSaveChangesInterceptor：处理本地事件收集和发布</para>
-/// <para>- MultiTenantSaveChangesInterceptor（多租户宿主挂载）：新增实体自动填充 TenantId</para>
-/// <para>本类负责两个命名全局查询过滤器：软删除（<see cref="ISoftDelete"/>）与
+/// <para><b>新增实体的环境值（TenantId、创建审计）在"进入跟踪"时落定，本类负责</b>；
+/// 修改与删除审计留在 <c>AuditSaveChangesInterceptor</c>（保存时）。
+/// 分界线见 <see cref="ApplyConceptsForAddedEntity"/>。</para>
+/// <para>其余保存时职责仍在拦截器：</para>
+/// <para>- AuditSaveChangesInterceptor：修改/删除审计与软删除转换</para>
+/// <para>- LocalEventSaveChangesInterceptor：本地事件收集和发布</para>
+/// <para>本类还负责两个命名全局查询过滤器：软删除（<see cref="ISoftDelete"/>）与
 /// 租户隔离（<see cref="IMultiTenant"/>）。过滤器表达式捕获本实例属性，
 /// EF 将其参数化并在每次查询时重估——<c>IDataFilter</c> 开关与 <c>ICurrentTenant.Change</c>
 /// 即时生效，无需重建模型。</para>
@@ -30,6 +32,32 @@ public abstract class BaseDbContext : DbContext
     public const string MultiTenantFilterName = "MultiTenant";
 
     private readonly IServiceProvider? _serviceProvider;
+
+    private IAuditPropertySetter? _auditPropertySetter;
+    private bool _auditPropertySetterResolved;
+
+    /// <summary>
+    /// 创建审计设置器。未注册审计组件时为 null（新增实体只落 TenantId）
+    /// </summary>
+    /// <remarks>
+    /// 解析一次后缓存：注册形态是 <c>Transient</c>，而本钩子按实体逐个触发，
+    /// 批量插入时每行都解析一次纯属浪费。缓存实例是安全的——
+    /// <c>AuditPropertySetter</c> 自身无状态，<c>ICurrentUser</c> 在每次取值时
+    /// 才读 <c>ICurrentPrincipalAccessor</c>，不会把主体固化在构造时刻。
+    /// </remarks>
+    protected virtual IAuditPropertySetter? AuditPropertySetter
+    {
+        get
+        {
+            if (!_auditPropertySetterResolved)
+            {
+                _auditPropertySetter = _serviceProvider?.GetService<IAuditPropertySetter>();
+                _auditPropertySetterResolved = true;
+            }
+
+            return _auditPropertySetter;
+        }
+    }
 
     /// <summary>
     /// 软删除过滤器是否启用
@@ -56,7 +84,7 @@ public abstract class BaseDbContext : DbContext
 
     protected BaseDbContext(DbContextOptions options) : base(options)
     {
-        ChangeTracker.Tracked += OnEntityTracked;
+        SubscribeTrackingHooks();
     }
 
     protected BaseDbContext(
@@ -64,37 +92,83 @@ public abstract class BaseDbContext : DbContext
         IServiceProvider? serviceProvider) : base(options)
     {
         _serviceProvider = serviceProvider;
-        ChangeTracker.Tracked += OnEntityTracked;
+        SubscribeTrackingHooks();
     }
 
     /// <summary>
-    /// 实体进入跟踪时即落租户值
+    /// 订阅变更跟踪事件，作为"新增实体环境值"的落点
+    /// </summary>
+    /// <remarks>
+    /// <para>两个事件都要订阅。<see cref="ChangeTracker.Tracked"/> 只在实体**首次进入**跟踪时触发，
+    /// 覆盖不了"查询出来（<c>Unchanged</c>）之后才被改成 <c>Added</c>"的情形（upsert 类写法）；
+    /// 那种迁移只有 <see cref="ChangeTracker.StateChanged"/> 能看到。
+    /// 只订阅前者会留下一个不落值的缺口。</para>
+    /// </remarks>
+    private void SubscribeTrackingHooks()
+    {
+        ChangeTracker.Tracked += OnEntityTracked;
+        ChangeTracker.StateChanged += OnEntityStateChanged;
+    }
+
+    private void OnEntityTracked(object? sender, EntityTrackedEventArgs e)
+    {
+        // 查询物化出来的实体一律不碰。状态判断本已足够（物化结果是 Unchanged），
+        // 这行是把意图写在代码上的显式护栏
+        if (e.FromQuery)
+        {
+            return;
+        }
+
+        ApplyConceptsForAddedEntity(e.Entry);
+    }
+
+    private void OnEntityStateChanged(object? sender, EntityStateChangedEventArgs e)
+    {
+        if (e.NewState != EntityState.Added)
+        {
+            return;
+        }
+
+        ApplyConceptsForAddedEntity(e.Entry);
+    }
+
+    /// <summary>
+    /// 新增实体的环境值在此落定：租户归属与创建审计
     /// </summary>
     /// <remarks>
     /// <para><b>时机必须是"进入跟踪"而不是"保存"。</b>仓储在工作单元内不立即保存
-    /// （由 UoW 统一提交），因此新增与保存之间可能跨越 <c>ICurrentTenant.Change</c> 的边界：
-    /// 在租户作用域内新增、作用域退出后才提交时，若在保存时刻取当前租户，就会把该租户的数据
-    /// **静默落成宿主行**——该租户自己看不见（过滤器要求 TenantId 等于当前租户），
-    /// 而宿主管理员看得见。没有任何报错。</para>
-    /// <para>进入跟踪的时刻就是"这条数据属于谁"的语义时刻，与后续何时提交无关。</para>
-    /// <para>只处理 <c>Added</c> 且 <c>TenantId</c> 仍为 null 的实体：聚合显式赋过值的不覆盖；
-    /// 宿主上下文保持 null 即宿主数据；查询materialize 出来的实体（<c>FromQuery</c>）不碰。</para>
+    /// （由 UoW 统一提交），因此新增与保存之间可能跨越 <c>ICurrentTenant.Change</c> 或
+    /// <c>ICurrentPrincipalAccessor.Change</c> 的边界：在作用域内新增、作用域退出后才提交时，
+    /// 若在保存时刻取环境值，租户会把该租户的数据**静默落成宿主行**
+    /// （该租户自己看不见，宿主管理员看得见），创建者会落成外层主体。两者都不报错。</para>
+    /// <para>进入跟踪的时刻就是"这条数据属于谁、由谁创建"的语义时刻，与后续何时提交无关。
+    /// 落盘时机是基础设施的调度结果，把身份绑在它上面等于让审计值随事务边界漂移。</para>
+    /// <para><b>只覆盖新增，且只在值仍为空时写入</b>：显式赋过值的（种子、导入、迁移）不动。
+    /// 修改与删除审计不在这里——那两种状态是迁移的结果，只有保存时刻才知道最终形态，
+    /// 仍由 <c>AuditSaveChangesInterceptor</c> 处理。</para>
     /// </remarks>
-    private void OnEntityTracked(object? sender, EntityTrackedEventArgs e)
+    private void ApplyConceptsForAddedEntity(EntityEntry entry)
     {
-        if (e.FromQuery || e.Entry.State != EntityState.Added)
+        if (entry.State != EntityState.Added)
         {
             return;
         }
 
-        if (e.Entry.Entity is not IMultiTenant { TenantId: null })
+        SetTenantId(entry);
+        AuditPropertySetter?.SetCreationProperties(entry);
+    }
+
+    private void SetTenantId(EntityEntry entry)
+    {
+        if (entry.Entity is not IMultiTenant { TenantId: null })
         {
             return;
         }
 
+        // 宿主上下文（CurrentTenantId == null）保持 null 即宿主数据
         if (CurrentTenantId is { } tenantId)
         {
-            e.Entry.Property(nameof(IMultiTenant.TenantId)).CurrentValue = tenantId;
+            entry.Property(nameof(IMultiTenant.TenantId)).CurrentValue = tenantId;
         }
     }
 

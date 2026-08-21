@@ -4,7 +4,7 @@
 
 构建中大型业务系统时，最难统一的不是某个框架，而是**分层约定**：实体放哪、审计字段谁来填、仓储接口长什么样、应用服务怎么映射 DTO。各团队各写一套，代码就难以复用与维护。
 
-Leistd 的 DDD 分组提供一套领域驱动设计基础类型，按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分职责：Domain 定义实体基类、仓储抽象、审计接口与数据过滤器；Application.Contracts 提供 DTO 基类与分页约定；Application 提供应用服务基类；Infrastructure 基于 EF Core 落地仓储、自动审计、软删除过滤与本地事件发布。业务项目只需继承这些基类、注册 `AddDddInfrastructure()`，即可获得审计字段自动填充、软删除、仓储自动注册、领域事件随保存发布等开箱能力。权限模型不属于本分组，见[权限授权组件](../components/authorization.md)。
+Leistd 的 DDD 分组提供一套领域驱动设计基础类型，按 **Domain / Application.Contracts / Application / Infrastructure** 四层划分职责：Domain 定义实体基类、仓储抽象、审计接口与数据过滤器；Application.Contracts 提供 DTO 基类与分页约定；Application 提供应用服务基类；Infrastructure 基于 EF Core 落地仓储、自动审计、软删除与租户隔离过滤、本地事件发布。业务项目只需继承这些基类、注册 `AddDddInfrastructure()`，即可获得审计字段自动填充、软删除、仓储自动注册、领域事件随保存发布等开箱能力。权限模型不属于本分组，见[权限授权组件](../components/authorization.md)。
 
 ## 何时使用
 
@@ -69,7 +69,7 @@ builder.Services.AddDddInfrastructure(uow =>
 
 ### 定义实体（Domain）
 
-继承审计实体基类即可获得创建/修改/删除审计字段（由拦截器自动填充，业务代码不手动赋值）：
+继承审计实体基类即可获得创建/修改/删除审计字段（框架自动填充，业务代码不手动赋值）：
 
 ```csharp
 public class Order : FullAuditedEntity<Guid>   // 含创建+修改+软删除审计
@@ -219,7 +219,7 @@ public class OrderReportService(IDataFilter dataFilter, IRepository<Order, Guid>
 
 - **仓储自动注册**：`AddDddInfrastructure` 通过 `OnServiceRegistered` 钩子，扫描每个非抽象 `DbContext` 的所有 `DbSet<>`，为实体类型注册 `IRepository<TEntity>`（Scoped）；若实体实现 `IEntity<TKey>`，额外注册 `IRepository<TEntity,TKey>`。
 - **智能保存**：`EfCoreRepository` 的写操作调用 `SaveChangesIfNeededAsync`——若当前处于 UnitOfWork（`Uow.Current != null`）内则**不立即保存**，交由工作单元统一提交；否则立即 `SaveChangesAsync`。`GetByIdAsync` 使用 EF `FindAsync`，可命中已追踪实体（`TKey` 约束为 `IEquatable<TKey>`）。
-- **自动审计**：`AuditSaveChangesInterceptor` 在 `SavingChanges` 阶段按实体状态（Added/Modified/Deleted）调用 `IAuditPropertySetter`。删除操作若实体实现 `ISoftDelete`，会将状态由 `Deleted` 改为 `Modified` 并填充删除审计——即**物理删除自动转为逻辑删除**。`AuditPropertySetter` 通过 `EntityEntry` API 直接写属性（不反射），时间取自 `IClock`、用户取自 `ICurrentUser`；创建者/删除者 ID 仅在当前用户存在且原值为空时写入。
+- **自动审计**（分两个时机，见 [ddd-struct.md](./ddd-struct.md#新增实体的环境值在进入跟踪时落定)）：创建审计（`Added`）由 `BaseDbContext` 在实体**进入变更跟踪**时调用 `IAuditPropertySetter`——工作单元延迟提交时，保存时刻的当前用户可能已不是创建者，因此不能等到保存；修改与删除审计由 `AuditSaveChangesInterceptor` 在 `SavingChanges` 阶段处理——这两种状态是迁移的结果，只有保存时刻才知道最终形态。删除操作若实体实现 `ISoftDelete`，会将状态由 `Deleted` 改为 `Modified` 并填充删除审计——即**物理删除自动转为逻辑删除**。`AuditPropertySetter` 通过 `EntityEntry` API 直接写属性（不反射），时间取自 `IClock`、用户取自 `ICurrentUser`；创建者/删除者 ID 仅在当前用户存在且原值为空时写入。
 - **软删除过滤**：`BaseDbContext.OnModelCreating` 调用 `ApplyGlobalFilters<ISoftDelete>`，查询默认排除已删除数据；`IsSoftDeleteFilterEnabled` 读取 `IDataFilter.IsEnabled<ISoftDelete>()`（无 `IServiceProvider` 时默认启用），可在作用域内 `Disable()` 临时关闭。
 - **本地事件发布**：`LocalEventSaveChangesInterceptor` 在 `SavedChanges` 之后收集实体的本地事件——若有 UnitOfWork 则加入其待发布队列（随事务提交发布），否则直接经 `ILocalEventBus` 发布。注意同步 `SaveChanges` 路径会记录 sync-over-async 警告，建议始终用 `SaveChangesAsync`。
 
@@ -234,7 +234,7 @@ public class OrderReportService(IDataFilter dataFilter, IRepository<Order, Guid>
 ## 注意事项
 
 - 软删除是**默认行为**：对实现 `ISoftDelete` 的实体调用 `DeleteAsync`，记录不会被物理删除，而是置 `IsDeleted = true`；查询默认看不到这些记录，需要时用 `IDataFilter.Disable<ISoftDelete>()` 临时关闭过滤器。软删除依赖两处协作——`AuditSaveChangesInterceptor` 转换删除状态、`BaseDbContext` 的全局过滤器在查询时排除已删数据。
-- 审计字段（创建/修改/删除时间与操作者）由拦截器自动填充，业务代码**不要手动赋值**；这些属性在基类中是 `protected set`。脱离基础设施层（如纯领域单测）不会自动写入审计值。
+- 审计字段（创建/修改/删除时间与操作者）由框架自动填充，业务代码**不要手动赋值**；这些属性在基类中是 `protected set`。脱离基础设施层（如纯领域单测）不会自动写入审计值。创建审计要求 DbContext 继承 `BaseDbContext` **且**拿到 `IServiceProvider`。
 - 仓储写操作在 UnitOfWork 内不会立即落库——依赖工作单元提交；脱离 UnitOfWork 调用时才即时 `SaveChanges`。
 - 仓储注册依赖 `DbContext` 暴露 `DbSet<>` 属性；未声明为 `DbSet<>` 的实体不会被自动注册仓储。
 - 审计者 ID 列经 `ConfigureByConvention` 约定为最大长度 **64**；请在实体配置中调用该扩展以生成正确的列约束。

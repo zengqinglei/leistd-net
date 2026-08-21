@@ -23,6 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\ddd-struct\Leistd.Ddd.Infrastructure\Leistd.Ddd.Infrastructure.csproj" />
     <ProjectReference Include="..\..\components\event-bus\Leistd.EventBus.Local\Leistd.EventBus.Local.csproj" />
+    <ProjectReference Include="..\..\components\auditing\Leistd.Auditing.EntityFrameworkCore\Leistd.Auditing.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
   </ItemGroup>
 
 </Project>
