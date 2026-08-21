@@ -50,12 +50,12 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#endif
 import {
@@ -64,28 +64,36 @@ import {
   tableStateToQuery,
   toApiSorting,
 } from '../../../../shared/utils/table-query-state';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { RoleBriefDto } from '../../models/role.dto';
 //#endif
 import {
   CreateUserInputDto,
   GetUsersInputDto,
+  //#if (IdentityService)
   ResetUserPasswordInputDto,
+  //#endif
   UpdateUserInputDto,
   UserManagementOutputDto,
 } from '../../models/user-management.dto';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { RoleService } from '../../services/role-service';
 //#endif
 import { UserManagementService } from '../../services/user-management-service';
+//#if (IdentityService)
 import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
+//#endif
 import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
 //#endif
 import { UserTable } from './widgets/user-table/user-table';
 
+//#if (IdentityService)
 const USER_SORT_COLUMNS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
+//#else
+const USER_SORT_COLUMNS = ['username', 'email', 'creationTime'] as const;
+//#endif
 const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
 
 @Component({
@@ -102,11 +110,13 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
     TranslocoModule,
     //#endif
     UserTable,
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     UserRolesDialog,
     //#endif
     UserEditDialog,
+    //#if (IdentityService)
     ResetUserPasswordDialog,
+    //#endif
   ],
   providers: [
     provideIcons({
@@ -132,7 +142,7 @@ export class Users {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   private readonly roleService = inject(RoleService);
   private readonly authorizationService = inject(AuthorizationService);
   //#endif
@@ -160,31 +170,38 @@ export class Users {
   editDialogLoading = signal(false);
   editDialogSaving = signal(false);
   selectedUser = signal<UserManagementOutputDto | null>(null);
-
+  //#if (IdentityService)
   resetPasswordDialogVisible = signal(false);
   resetPasswordSaving = signal(false);
   resettingUserId = signal<string | null>(null);
+  //#endif
 
   // 搜索框即时值：随 URL 回填，输入时乐观更新，防抖后写回 URL。
   readonly searchQuery = signal(this.route.snapshot.queryParamMap.get('keyword') ?? '');
   // FacetedFilter 的取值由 URL 状态驱动。
   readonly selectedIsActive = computed(() => readBoolean(this.queryParams().get('isActive')));
+  //#if (IdentityService)
   readonly selectedIsEmailVerified = computed(() =>
     readBoolean(this.queryParams().get('isEmailVerified')),
   );
-  //#if (IncludeRoles)
+  //#endif
+  //#if (LocalAuthorization)
   readonly selectedRoles = computed(() => this.queryParams().getAll('roles'));
   //#endif
   // 是否处于筛选/搜索态：用于区分「暂无数据」与「无匹配结果」的空状态。
-  readonly hasActiveFilters = computed(
-    () =>
-      this.searchQuery().trim().length > 0 ||
-      this.selectedIsActive() !== null ||
-      //#if (IncludeRoles)
-      this.selectedRoles().length > 0 ||
-      //#endif
-      this.selectedIsEmailVerified() !== null,
-  );
+  readonly hasActiveFilters = computed(() => {
+    const commonFilters = this.searchQuery().trim().length > 0 || this.selectedIsActive() !== null;
+    //#if (LocalAuthorization)
+    const authorizationFilters = this.selectedRoles().length > 0;
+    //#else
+    const authorizationFilters = false;
+    //#endif
+    //#if (IdentityService)
+    return commonFilters || authorizationFilters || this.selectedIsEmailVerified() !== null;
+    //#else
+    return commonFilters || authorizationFilters;
+    //#endif
+  });
   //#if (IncludeLocalization)
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
   private readonly translationReady = translationReady(this.transloco);
@@ -202,6 +219,7 @@ export class Users {
     ];
   });
 
+  //#if (IdentityService)
   readonly emailVerifiedOptions = computed(() => {
     this.translationReady();
     return [
@@ -217,18 +235,21 @@ export class Users {
       },
     ];
   });
+  //#endif
   //#else
   readonly activeOptions = computed(() => [
     { label: 'Active', value: true, icon: 'lucideCircleCheck' },
     { label: 'Disabled', value: false, icon: 'lucideBan' },
   ]);
 
+  //#if (IdentityService)
   readonly emailVerifiedOptions = computed(() => [
     { label: 'Email verified', value: true, icon: 'lucideMailCheck' },
     { label: 'Email not verified', value: false, icon: 'lucideMail' },
   ]);
   //#endif
-  //#if (IncludeRoles)
+  //#endif
+  //#if (LocalAuthorization)
   /**
    * 角色筛选项来自角色 API：新建的角色立即出现在筛选器里，
    * 前端不再保留任何硬编码角色列表（旧的 Role 枚举含后端并不存在的 Operator）。
@@ -242,7 +263,7 @@ export class Users {
     })),
   );
   //#endif
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   // 操作入口按权限裁剪。
   readonly canCreateUser = computed(() => this.authorizationService.has(PERMISSIONS.users.create));
   readonly canUpdateUser = computed(() => this.authorizationService.has(PERMISSIONS.users.update));
@@ -257,7 +278,7 @@ export class Users {
   readonly canDeleteUser = computed(() => true);
   readonly canManageUserRoles = computed(() => false);
   //#endif
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   readonly rolesDialogVisible = signal(false);
   readonly rolesDialogUser = signal<UserManagementOutputDto | null>(null);
 
@@ -275,33 +296,41 @@ export class Users {
   //#endif
   //#if (IncludeLocalization)
   readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');
+  //#if (IdentityService)
   readonly allEmailStatusPlaceholder = () =>
     this.transloco.translate('users.filter.allEmailStatus');
-  //#if (IncludeRoles)
+  //#endif
+  //#if (LocalAuthorization)
   readonly allRolesPlaceholder = () => this.transloco.translate('users.filter.allRoles');
   //#endif
   readonly searchPlaceholder = () => this.transloco.translate('users.filter.searchPlaceholder');
   readonly refreshLabel = () => this.transloco.translate('common.refresh');
   readonly newUserLabel = () => this.transloco.translate('users.actions.newUser');
   readonly statusFilterLabel = () => this.transloco.translate('users.table.colStatus');
+  //#if (IdentityService)
   readonly emailFilterLabel = () => this.transloco.translate('users.filter.emailLabel');
-  //#if (IncludeRoles)
+  //#endif
+  //#if (LocalAuthorization)
   readonly roleFilterLabel = () => this.transloco.translate('users.table.colRole');
   //#endif
   readonly filterClearLabel = () => this.transloco.translate('common.clearFilter');
   readonly filterEmptyLabel = () => this.transloco.translate('common.noResults');
   //#else
   readonly allStatusPlaceholder = () => 'All statuses';
+  //#if (IdentityService)
   readonly allEmailStatusPlaceholder = () => 'All email statuses';
-  //#if (IncludeRoles)
+  //#endif
+  //#if (LocalAuthorization)
   readonly allRolesPlaceholder = () => 'All roles';
   //#endif
   readonly searchPlaceholder = () => 'Search username / email / display name...';
   readonly refreshLabel = () => 'Refresh';
   readonly newUserLabel = () => 'New user';
   readonly statusFilterLabel = () => 'Status';
+  //#if (IdentityService)
   readonly emailFilterLabel = () => 'Email status';
-  //#if (IncludeRoles)
+  //#endif
+  //#if (LocalAuthorization)
   readonly roleFilterLabel = () => 'Role';
   //#endif
   readonly filterClearLabel = () => 'Clear filter';
@@ -309,7 +338,7 @@ export class Users {
   //#endif
 
   constructor() {
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     // 角色选项端点要求 ManageRoles；无该权限时不请求，避免制造必然 403 的噪声。
     if (this.authorizationService.has(PERMISSIONS.users.manageRoles)) {
       this.roleService.getOptions().subscribe({
@@ -367,10 +396,12 @@ export class Users {
     this.updateQuery({ isActive: serializeBoolean(value), page: 1 });
   }
 
+  //#if (IdentityService)
   onEmailVerifiedChange(value: boolean | null | undefined) {
     this.updateQuery({ isEmailVerified: serializeBoolean(value), page: 1 });
   }
-  //#if (IncludeRoles)
+  //#endif
+  //#if (LocalAuthorization)
   onRolesChange(values: string[]) {
     this.updateQuery({ roles: values.length ? values : null, page: 1 });
   }
@@ -537,7 +568,7 @@ export class Users {
         error: (error) => this.showRequestError(error),
       });
   }
-
+  //#if (IdentityService)
   openResetPasswordDialog(id: string) {
     this.resettingUserId.set(id);
     this.resetPasswordDialogVisible.set(true);
@@ -571,10 +602,11 @@ export class Users {
         error: (error) => this.showRequestError(error),
       });
   }
+  //#endif
 
   private queryFromParams(params: ParamMap): GetUsersInputDto {
     const pagination = paginationFromQuery(params);
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     const roles = params.getAll('roles');
     //#endif
     return {
@@ -582,8 +614,10 @@ export class Users {
       limit: pagination.pageSize,
       keyword: params.get('keyword') || undefined,
       isActive: readBoolean(params.get('isActive')) ?? undefined,
+      //#if (IdentityService)
       isEmailVerified: readBoolean(params.get('isEmailVerified')) ?? undefined,
-      //#if (IncludeRoles)
+      //#endif
+      //#if (LocalAuthorization)
       roles: roles.length ? roles : undefined,
       //#endif
       sorting: toApiSorting(sortingFromQuery(params, USER_SORT_COLUMNS, DEFAULT_USER_SORTING)),

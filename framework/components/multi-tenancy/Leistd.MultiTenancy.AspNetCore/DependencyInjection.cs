@@ -75,4 +75,17 @@ public static class DependencyInjection
     {
         return app.UseMiddleware<MultiTenancyMiddleware>();
     }
+
+    /// <summary>
+    /// 挂载 Resource 宿主的可信租户上下文。置于 <c>UseAuthentication()</c> 之后、
+    /// <c>UseAuthorization()</c> 之前，且不得与 <see cref="UseMultiTenancy"/> 同时使用。
+    /// </summary>
+    /// <remarks>
+    /// 该入口只接受已验证主体中唯一合法的 <c>tenant_id</c>，不读取请求头、查询串、域名或
+    /// <see cref="ITenantStore"/>。租户停用由签发端停止签发/刷新和 Access Token 生命周期收敛。
+    /// </remarks>
+    public static IApplicationBuilder UseAuthenticatedTenantContext(this IApplicationBuilder app)
+    {
+        return app.UseMiddleware<AuthenticatedTenantContextMiddleware>();
+    }
 }

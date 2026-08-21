@@ -1,6 +1,10 @@
 #if (IncludeNotifications)
 using System.Net;
 using System.Net.Http.Json;
+#if (ResourceService)
+using CompanyName.ProjectName.Api.Extensions;
+using Microsoft.AspNetCore.Http;
+#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Notifications;
@@ -18,12 +22,48 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
+#if (ResourceService)
+    [Fact]
+    public async Task SignalR_query_token_is_promoted_only_on_known_hub_paths()
+    {
+        var hub = new DefaultHttpContext();
+        hub.Request.Path = "/hubs/notifications";
+        hub.Request.QueryString = new QueryString("?access_token=secret&transport=WebSockets");
+        var middleware = new HubAccessTokenMiddleware(context =>
+        {
+            Assert.Equal("Bearer secret", context.Request.Headers.Authorization);
+            Assert.False(context.Request.Query.ContainsKey("access_token"));
+            Assert.Equal("WebSockets", context.Request.Query["transport"]);
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(hub);
+
+        var api = new DefaultHttpContext();
+        api.Request.Path = "/api/v1/notifications";
+        api.Request.QueryString = new QueryString("?access_token=secret");
+        middleware = new HubAccessTokenMiddleware(context =>
+        {
+            Assert.False(context.Request.Headers.ContainsKey("Authorization"));
+            Assert.Equal("secret", context.Request.Query["access_token"]);
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(api);
+    }
+#endif
+
     [Fact]
     public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
     {
+#if (IdentityService)
         using var admin = await factory.LoginAsync("admin", "Admin@123456");
         var userId = await GetSuperAdminIdAsync(factory);
-        await using var connection = CreateHubConnection(factory, "/hubs/notifications", admin.Cookie);
+#else
+        var userId = Guid.CreateVersion7();
+        using var admin = factory.CreateResourceSession(userId, Guid.CreateVersion7());
+#endif
+        await using var connection = CreateHubConnection(factory, "/hubs/notifications", admin);
         var received = new TaskCompletionSource<NotificationOutputDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var subscription = connection.On<NotificationOutputDto>("NotificationReceived", notification => received.TrySetResult(notification));
         await connection.StartAsync();
@@ -71,10 +111,14 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
     [Fact]
     public async Task Default_realtime_subscription_should_keep_common_resources_available()
     {
+#if (IdentityService)
         using var admin = await factory.LoginAsync("admin", "Admin@123456");
+#else
+        using var admin = factory.CreateResourceSession(Guid.CreateVersion7(), Guid.CreateVersion7());
+#endif
         Assert.False(factory.Services.GetRequiredService<IOptions<RealTimeOptions>>().Value.RequireSubscriptionAuthorization);
 
-        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin.Cookie);
+        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
         var received = new TaskCompletionSource<BusinessEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var subscription = connection.On<BusinessEvent>("BusinessEvent", message => received.TrySetResult(message));
         await connection.StartAsync();
@@ -101,8 +145,15 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
                 services.AddSingleton<IRealtimeSubscriptionAuthorizer, PrefixSubscriptionAuthorizer>();
                 services.PostConfigure<RealTimeOptions>(options => options.RequireSubscriptionAuthorization = true);
             }));
+#if (IdentityService)
         using var admin = await LoginAsync(securedFactory, "admin", "Admin@123456");
-        await using var connection = CreateHubConnection(securedFactory, "/hubs/realtime", admin.Cookie);
+#else
+        using var admin = ProjectWebApplicationFactory.CreateResourceSession(
+            securedFactory,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7());
+#endif
+        await using var connection = CreateHubConnection(securedFactory, "/hubs/realtime", admin);
         await connection.StartAsync();
 
         await connection.InvokeAsync("Subscribe", "public:announcements");
@@ -117,14 +168,17 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
     private static HubConnection CreateHubConnection(
         WebApplicationFactory<Program> application,
         string path,
-        string cookie)
+        AuthenticatedSession session)
     {
         return new HubConnectionBuilder()
             .WithUrl(new Uri(application.Server.BaseAddress, path), options =>
             {
                 options.Transports = HttpTransportType.LongPolling;
                 options.HttpMessageHandlerFactory = _ => application.Server.CreateHandler();
-                options.Headers.Add("Cookie", cookie);
+                if (!string.IsNullOrEmpty(session.Cookie))
+                    options.Headers.Add("Cookie", session.Cookie);
+                foreach (var (name, value) in session.AuthenticationHeaders)
+                    options.Headers.Add(name, value);
             })
             .Build();
     }

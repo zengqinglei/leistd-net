@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-<!--#if (IncludeOpenIddict)-->
+<!--#if (IdentityService)-->
     <PackageReference Include="OpenIddict.Abstractions" />
 <!--#endif-->
     <PackageReference Include="System.Linq.Dynamic.Core" />
@@ -21,15 +21,18 @@
   <ItemGroup>
     <PackageReference Include="Leistd.ObjectMapping.Mapster" />
     <PackageReference Include="Leistd.Security.Core" />
-<!--#if (IncludeRoles)-->
+<!--#if (LocalAuthorization)-->
     <PackageReference Include="Leistd.Authorization.Core" />
-<!--#if (TenancyEnabled)-->
+<!--#if (MultiTenancy)-->
     <PackageReference Include="Leistd.MultiTenancy.Core" />
 <!--#endif-->
     <!--#endif-->
     <PackageReference Include="Leistd.Lock.Core" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />
+<!--#if (IdentityService)-->
+    <PackageReference Include="Leistd.UnitOfWork.Core" />
+<!--#endif-->
   </ItemGroup>
 
   <!-- 业务项目内部引用 -->

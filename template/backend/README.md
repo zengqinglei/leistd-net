@@ -9,6 +9,8 @@ src/
 |-- CompanyName.ProjectName.Domain/          # 领域模型和内层抽象
 |-- CompanyName.ProjectName.Application/     # 用例编排，只依赖 Domain
 |-- CompanyName.ProjectName.Infrastructure/  # EF Core 和外部适配器
+|-- CompanyName.ProjectName.Client/          # 供其他服务消费的强类型 SDK
+|-- CompanyName.ProjectName.DbMigrator/      # 独立、一次性数据库迁移入口
 `-- CompanyName.ProjectName.Api/             # 组合根和 HTTP 入口
 ```
 
@@ -52,7 +54,8 @@ dotnet run --project src/CompanyName.ProjectName.Api
 启动后检查：
 
 ```text
-GET http://localhost:5240/api/health
+GET http://localhost:5240/api/health/live
+GET http://localhost:5240/api/health/ready
 ```
 
 测试项目存在于 `tests/` 时执行：
@@ -63,33 +66,45 @@ dotnet test CompanyName.ProjectName.sln
 
 ## 数据库迁移
 
-模板不携带迁移文件。应用在所有环境启动时按以下规则自动初始化关系型数据库：
+模板携带可审查的基线迁移。API 启动时不自动迁移，也不使用 `EnsureCreatedAsync`；发布流水线必须先以 DDL 身份运行独立 `DbMigrator`，成功后再启动仅持有 DML 权限的 API：
 
-- 已有迁移文件时执行 `MigrateAsync`，应用待执行迁移。
-- 没有迁移文件时执行 `EnsureCreatedAsync`，按当前模型创建数据库。
+```bash
+dotnet run --project src/CompanyName.ProjectName.DbMigrator
+dotnet run --project src/CompanyName.ProjectName.Api
+```
+
+`DbMigrator` 先迁移服务默认目标，再从 Identity 获取 DedicatedDatabase 覆盖并按物理连接去重。每个服务使用自己的固定 schema 和迁移历史表。Identity 还会先迁移固定宿主库的 Control DbContext（租户、连接配置、OpenIddict），再迁移可按租户路由的业务 DbContext。
+
+新建 DedicatedDatabase 租户前，运维流程必须先对新目标执行一次业务 schema 迁移，再在 Identity 中建立租户与 Secret Reference：
+
+```bash
+ConnectionStrings__MigrationTarget='<migration connection string>' \
+  dotnet run --project src/CompanyName.ProjectName.DbMigrator
+```
+
+`MigrationTarget` 模式只迁移该服务的业务 schema，不迁移 Identity Control schema，也不枚举已登记租户。它用于打破“先登记租户才能枚举目标、但租户初始化前又必须先有表”的首次建库循环；日常发布仍使用不带该配置的全目标模式。
 
 修改 EF Core 模型后生成并审查迁移文件：
 
 ```bash
-dotnet ef migrations add InitialCreate \
+dotnet ef migrations add <MigrationName> \
+  --context MyProjectDbContext \
   --project src/CompanyName.ProjectName.Infrastructure \
   --startup-project src/CompanyName.ProjectName.Api \
-  --output-dir Persistence/Migrations
+  --output-dir Persistence/Migrations/Identity
 ```
 
-重新启动应用即可应用迁移，无需另行执行 `dotnet ef database update`。由 `EnsureCreated` 创建的数据库没有迁移历史，不能直接切换为迁移管理；计划持续演进结构的数据库应在首次启动前包含初始迁移，否则后续启用迁移时需要重建数据库或制定基线方案。
+生产数据库身份必须分离：API 使用 Runtime Secret 且不得执行 DDL，`DbMigrator` 使用 Migration Secret。任一目标迁移失败时进程以非零码退出并阻断发布，具体边界见 [部署说明](../docs/deploy/README.md)。
 
-生产部署会随应用启动自动创建或迁移数据库。共享或生产数据库必须在明确目标、模型或迁移内容、备份和失败恢复方案后再启动新版本，具体边界见 [部署说明](../docs/deploy/README.md)。
-
-<!--#if (IncludeIdentity)-->
+<!--#if (IdentityService)-->
 ## 认证配置
 
 首次启动会按 `DefaultAdmin` 创建管理员。生产环境必须覆盖默认密码，并持久化 Data Protection 密钥。
-<!--#if (IncludeRoles)-->
+<!--#if (LocalAuthorization)-->
 
 角色、权限和超级管理员属于不同授权维度；业务接口应同时覆盖允许、拒绝和超级管理员旁路场景。
 <!--#endif-->
-<!--#if (IncludeOpenIddict)-->
+<!--#if (IdentityService)-->
 
 OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证书不得用于生产。
 <!--#endif-->

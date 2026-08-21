@@ -1,4 +1,4 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Roles.Dtos;
 #endif
 using CompanyName.ProjectName.Application.Users.Dtos;
@@ -52,7 +52,7 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 重置用户密码
     /// </summary>
-#if (IncludeIdentity)
+#if (IdentityService)
     Task ResetPasswordAsync(Guid id, ResetUserPasswordInputDto input, CancellationToken cancellationToken = default);
 #endif
 
@@ -61,7 +61,7 @@ public interface IUserAppService : IAppService
     /// </summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     /// <summary>
     /// 查询用户当前角色
     /// </summary>

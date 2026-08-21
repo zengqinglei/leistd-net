@@ -1,5 +1,5 @@
 using Leistd.Authorization;
-#if (TenancyEnabled)
+#if (IdentityService)
 using Leistd.MultiTenancy;
 #endif
 
@@ -53,7 +53,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         rolesPermission.AddChild(PermissionConstant.Roles.Delete, displayName: "Permission:App.Roles.Delete");
         rolesPermission.AddChild(PermissionConstant.Roles.ManagePermissions, displayName: "Permission:App.Roles.ManagePermissions");
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
         var openApplicationsPermission = identityGroup.AddPermission(
             PermissionConstant.OpenApplications.Default,
             displayName: "Permission:App.OpenApplications"
@@ -74,7 +74,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
             displayName: "Permission:App.Permissions"
         );
 
-#if (TenancyEnabled)
+#if (IdentityService)
         // 宿主侧专属：租户上下文内不可见、不可授予（子权限继承父级侧别）
         var tenantsPermission = systemGroup.AddPermission(
             PermissionConstant.Tenants.Default,

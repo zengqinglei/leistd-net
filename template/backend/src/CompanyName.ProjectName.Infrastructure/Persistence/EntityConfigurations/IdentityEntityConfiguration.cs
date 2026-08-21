@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 #if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
@@ -13,7 +13,7 @@ internal static class IdentityEntityConfiguration
     internal static void ConfigureIdentity(this ModelBuilder builder)
     {
         builder.ConfigureUserIdentity();
-#if (IncludeRoles)
+#if (LocalAuthorization)
         builder.ConfigureRoles();
         builder.ConfigureUserRoles();
 #endif
@@ -32,7 +32,7 @@ internal static class IdentityEntityConfiguration
         });
     }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private static void ConfigureRoles(this ModelBuilder builder)
     {
         builder.Entity<Role>(b =>
@@ -43,7 +43,7 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.DisplayName).IsRequired().HasMaxLength(128);
             b.Property(e => e.Description).HasMaxLength(512);
 
-#if (TenancyEnabled)
+#if (MultiTenancy)
             // 租户内唯一：每个租户拥有自己的 Admin/Member 角色。
             // 宿主行与租户行分别用带过滤的唯一索引（可空列直接进唯一索引时 NULL 互不相等）
             b.HasIndex(e => e.Name)
@@ -75,7 +75,7 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.AccessToken).HasMaxLength(2048);
             b.Property(e => e.RefreshToken).HasMaxLength(2048);
 
-#if (TenancyEnabled)
+#if (MultiTenancy)
             // 租户内唯一：同一外部身份可在不同租户各自绑定。
             // 宿主行（TenantId 为 NULL）在 PostgreSQL/SQLite 中 NULL 互不相等，
             // 用带过滤的成对索引分别约束，避免宿主侧失去唯一性兜底
@@ -96,7 +96,7 @@ internal static class IdentityEntityConfiguration
     }
 #endif
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private static void ConfigureUserRoles(this ModelBuilder builder)
     {
         builder.Entity<UserRole>(b =>

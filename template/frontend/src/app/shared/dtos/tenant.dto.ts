@@ -1,4 +1,4 @@
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { PagedRequestDto } from '../models/paged-request.dto';
 
 export interface TenantOutputDto {
@@ -29,7 +29,12 @@ export interface CreateTenantInputDto {
   /** 租户初始管理员账号。 */
   adminEmail: string;
   adminPassword: string;
+  databaseMode: TenantDatabaseMode;
+  runtimeSecretReference?: string;
+  migrationSecretReference?: string;
 }
+
+export type TenantDatabaseMode = 'SharedDatabase' | 'DedicatedDatabase';
 
 export interface UpdateTenantInputDto {
   name: string;

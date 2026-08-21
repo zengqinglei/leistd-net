@@ -1,9 +1,9 @@
-//#if (IncludeIdentity)
+//#if (IdentityService)
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 
 import { AuthService } from './auth-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from './authorization-service';
 //#endif
 import { StartupService } from './startup-service';
@@ -11,7 +11,7 @@ import { ApplicationHttpError } from '../errors/application-http-error';
 
 describe('StartupService', () => {
   let authService: jasmine.SpyObj<AuthService>;
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   // 启动流在认证之后还要拉一次权限；这里桩掉协作者，本组用例只关心状态机的分支。
   let authorizationService: jasmine.SpyObj<AuthorizationService>;
   //#endif
@@ -22,7 +22,7 @@ describe('StartupService', () => {
       'initializeAuth',
       'clearAuthData',
     ]);
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     authorizationService = jasmine.createSpyObj<AuthorizationService>('AuthorizationService', [
       'initialize',
       'clear',
@@ -34,7 +34,7 @@ describe('StartupService', () => {
       providers: [
         StartupService,
         { provide: AuthService, useValue: authService },
-        //#if (IncludeRoles)
+        //#if (LocalAuthorization)
         { provide: AuthorizationService, useValue: authorizationService },
         //#endif
       ],
@@ -59,7 +59,7 @@ describe('StartupService', () => {
     await service.load();
 
     expect(authService.clearAuthData).toHaveBeenCalled();
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     // 401 视为未登录：本地权限缓存必须一并清掉，否则上一位用户的裁剪结论会留下来。
     expect(authorizationService.clear).toHaveBeenCalled();
     //#endif
@@ -90,7 +90,7 @@ describe('StartupService', () => {
 
     await service.load();
 
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     // 权限与当前用户在同一次启动中就位，Guard 与菜单才不会闪现受保护入口。
     expect(authorizationService.initialize).toHaveBeenCalled();
     //#endif

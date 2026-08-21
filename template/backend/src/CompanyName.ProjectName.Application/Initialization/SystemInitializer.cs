@@ -1,19 +1,20 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
+using CompanyName.ProjectName.Application.TenantConnections;
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Domain.Users.Constants;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Options;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using Leistd.Authorization;
 #endif
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Lock.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-#if (IncludeOpenIddict)
+#if (IdentityService)
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 #endif
@@ -24,23 +25,27 @@ namespace CompanyName.ProjectName.Application.Initialization;
 /// 系统初始化器实现
 /// </summary>
 public class SystemInitializer(
+#if (IdentityService)
     IRepository<User, Guid> userRepository,
-#if (IncludeRoles)
+#endif
+#if (LocalAuthorization)
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
 #endif
-#if (IncludeIdentity)
+#if (IdentityService)
     IPasswordHasher passwordHasher,
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
     IPermissionDefinitionManager permissionDefinitionManager,
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
 #endif
-#if (IncludeOpenIddict)
+#if (IdentityService)
     IOpenIddictScopeManager scopeManager,
 #endif
+#if (IdentityService)
     IOptions<DefaultAdminOptions> adminOptions,
+#endif
     IDistributedLock distributedLock,
     ILogger<SystemInitializer> logger) : ISystemInitializer
 {
@@ -52,7 +57,7 @@ public class SystemInitializer(
     /// </remarks>
     public const string InitializationLockKey = "MyProject:system-initialization";
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private const string MemberRoleName = "Member";
 #endif
 
@@ -83,28 +88,30 @@ public class SystemInitializer(
 
         logger.LogInformation("开始初始化系统数据 ...");
 
-#if (IncludeIdentity)
-#if (IncludeRoles)
+#if (IdentityService)
+#if (LocalAuthorization)
         var (adminRole, _) = await InitializeRolesAsync(cancellationToken);
         await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
 #endif
 
         var adminUser = await InitializeDefaultAdminAsync(cancellationToken);
-#if (IncludeRoles)
+#if (LocalAuthorization)
         await AssignAdminRoleAsync(adminUser, adminRole, cancellationToken);
 #endif
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
         await InitializeOpenIddictAsync(cancellationToken);
 #endif
 
 #else
-        await InitializeIdentitylessAdminAsync(cancellationToken);
+#if (LocalAuthorization)
+        _ = await InitializeRolesAsync(cancellationToken);
+#endif
 #endif
         logger.LogInformation("系统数据初始化完成");
     }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private async Task<(Role AdminRole, Role MemberRole)> InitializeRolesAsync(CancellationToken cancellationToken)
     {
         var adminRole = await roleRepository.GetFirstAsync(r => r.Name == AdminConstant.RoleName, cancellationToken: cancellationToken);
@@ -141,7 +148,7 @@ public class SystemInitializer(
     }
 
 #endif
-#if (IncludeIdentity)
+#if (IdentityService)
     private async Task<User> InitializeDefaultAdminAsync(CancellationToken cancellationToken)
     {
         var options = adminOptions.Value;
@@ -179,7 +186,7 @@ public class SystemInitializer(
     }
 
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private async Task AssignAdminRoleAsync(User adminUser, Role adminRole, CancellationToken cancellationToken)
     {
         if (!await userRoleRepository.AnyAsync(ur => ur.UserId == adminUser.Id && ur.RoleId == adminRole.Id, cancellationToken))
@@ -239,16 +246,24 @@ public class SystemInitializer(
     }
 
 #endif
-#if (IncludeOpenIddict)
+#if (IdentityService)
     private async Task InitializeOpenIddictAsync(CancellationToken cancellationToken)
     {
         await EnsureScopeAsync(Scopes.OpenId, "OpenID", cancellationToken);
         await EnsureScopeAsync(Scopes.Profile, "Profile", cancellationToken);
         await EnsureScopeAsync(Scopes.Email, "Email", cancellationToken);
-#if (IncludeRoles)
+#if (LocalAuthorization)
         await EnsureScopeAsync(Scopes.Roles, "Roles", cancellationToken);
 #endif
         await EnsureScopeAsync(Scopes.OfflineAccess, "Offline access", cancellationToken);
+        await EnsureScopeAsync(
+            TenantConnectionScopes.RuntimeRead,
+            "Read tenant connection routing metadata",
+            cancellationToken);
+        await EnsureScopeAsync(
+            TenantConnectionScopes.MigrationRead,
+            "Read tenant connection migration metadata",
+            cancellationToken);
     }
 
     private async Task EnsureScopeAsync(string name, string displayName, CancellationToken cancellationToken)
@@ -261,32 +276,6 @@ public class SystemInitializer(
             Name = name,
             DisplayName = displayName
         }, cancellationToken);
-    }
-#endif
-#if (!IncludeIdentity)
-    private async Task InitializeIdentitylessAdminAsync(CancellationToken cancellationToken)
-    {
-        var options = adminOptions.Value;
-        var adminUser = await userRepository.GetFirstAsync(u => u.IsSuperAdmin, q => q.OrderBy(u => u.Id), cancellationToken);
-        if (adminUser == null)
-        {
-            adminUser = await userRepository.GetFirstAsync(u => u.Username == options.Username, q => q.OrderBy(u => u.Id), cancellationToken);
-            if (adminUser == null)
-            {
-                adminUser = new User(
-                    username: options.Username,
-                    email: options.Email,
-                    displayName: options.DisplayName ?? "System Administrator"
-                );
-
-                await userRepository.InsertAsync(adminUser, cancellationToken);
-                logger.LogInformation("已创建默认管理员用户: {Username}", options.Username);
-            }
-        }
-        else
-        {
-            logger.LogInformation("超级管理员用户已存在: {Username}", adminUser.Username);
-        }
     }
 #endif
 }

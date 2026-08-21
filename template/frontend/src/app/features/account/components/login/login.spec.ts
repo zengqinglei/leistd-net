@@ -9,15 +9,15 @@ import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
 import { of, throwError } from 'rxjs';
 
 import { Login } from './login';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { permissionGuard } from '../../../../core/guards/permission-guard';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
 import { StartupService } from '../../../../core/services/startup-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#endif
 
@@ -33,7 +33,7 @@ describe('Login', () => {
   let component: Login;
   let router: Router;
   let authService: jasmine.SpyObj<AuthService>;
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   let authorization: AuthorizationService;
   //#endif
   let queryParams: Record<string, string>;
@@ -72,7 +72,7 @@ describe('Login', () => {
       ],
     }).compileComponents();
 
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     // 登录成功后会拉一次权限来决定落地页；不打桩的话这条真实请求永远等不到响应，
     // 用例会以超时失败，而不是报出真正的断言。
     authorization = TestBed.inject(AuthorizationService);
@@ -148,7 +148,7 @@ describe('Login', () => {
     expect(component.isLoading()).toBeFalse();
   });
 
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   it('登录到受保护的 returnUrl 时，权限先加载完再导航', async () => {
     queryParams = { returnUrl: '/protected' };
     await setUp();

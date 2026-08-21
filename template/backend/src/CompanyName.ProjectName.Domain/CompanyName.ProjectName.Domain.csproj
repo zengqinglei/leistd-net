@@ -16,7 +16,7 @@
     <PackageReference Include="Leistd.Exception.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
     <PackageReference Include="Leistd.Security.Core" />
-<!--#if (TenancyEnabled)-->
+<!--#if (MultiTenancy)-->
     <PackageReference Include="Leistd.MultiTenancy.Core" />
 <!--#endif-->
     <PackageReference Include="Leistd.Ddd.Domain" />

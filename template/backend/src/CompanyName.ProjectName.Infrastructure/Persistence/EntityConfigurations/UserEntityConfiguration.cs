@@ -26,7 +26,7 @@ internal static class BaseEntityConfiguration
             b.Property(e => e.DisplayName).HasMaxLength(128);
             b.Property(e => e.IsSuperAdmin);
 
-#if (TenancyEnabled)
+#if (MultiTenancy)
             // 租户内唯一：跨租户允许同名/同邮箱。可空 TenantId 直接进唯一索引时，
             // PostgreSQL/SQLite 均视 NULL 互不相等，宿主行会失去唯一性兜底，
             // 因此宿主行与租户行分别用带过滤的唯一索引收口

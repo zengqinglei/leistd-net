@@ -1,17 +1,15 @@
 import { Routes } from '@angular/router';
 
-//#if (IncludeIdentity)
 import { authGuard } from './core/guards/auth-guard';
-//#endif
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { permissionGuard } from './core/guards/permission-guard';
 //#endif
 // 布局组件导入
 import { DefaultLayout } from './layout/default/default-layout';
-//#if (IncludeIdentity)
+//#if (IdentityService)
 import { EmptyLayout } from './layout/empty/empty-layout';
 //#endif
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from './shared/models/permission';
 //#endif
 
@@ -22,7 +20,7 @@ export const routes: Routes = [
     loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
   },
 
-  //#if (IncludeIdentity)
+  //#if (IdentityService)
   // Empty Layout - 认证相关页面（登录、注册等）
   {
     path: 'auth',
@@ -30,17 +28,22 @@ export const routes: Routes = [
     loadChildren: () => import('./features/account/account.routes').then((r) => r.AUTH_ROUTES),
   },
   //#endif
+  //#if (ResourceService)
+  {
+    path: 'auth/callback',
+    loadComponent: () =>
+      import('./core/components/oidc-callback/oidc-callback').then((m) => m.OidcCallback),
+  },
+  //#endif
   // Default Layout - 用户工作区
   {
     path: 'workspace',
     component: DefaultLayout,
-    //#if (IncludeIdentity)
     canActivate: [authGuard],
-    //#endif
     loadChildren: () =>
       import('./features/workspace/workspace.routes').then((r) => r.WORKSPACE_ROUTES),
   },
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   // 已登录但无权限：与 401 的登录跳转区分开，避免"登录成功又被弹回登录页"的循环。
   {
     path: '403-forbidden',
@@ -53,18 +56,17 @@ export const routes: Routes = [
   {
     path: 'platform',
     component: DefaultLayout,
-    //#if (IncludeIdentity)
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     // 按权限放行，不按角色名。各子路由再声明各自所需的权限。
     canActivate: [authGuard, permissionGuard],
     data: {
       permissions: [
         PERMISSIONS.users.default,
         PERMISSIONS.roles.default,
-        //#if (TenancyEnabled)
+        //#if (IdentityService)
         PERMISSIONS.tenants.default,
         //#endif
-        //#if (IncludeOpenIddict)
+        //#if (IdentityService)
         PERMISSIONS.openApplications.default,
         //#endif
         PERMISSIONS.permissions.default,
@@ -72,7 +74,6 @@ export const routes: Routes = [
     },
     //#else
     canActivate: [authGuard],
-    //#endif
     //#endif
     loadChildren: () =>
       import('./features/platform/platform.routes').then((r) => r.PLATFORM_ROUTES),

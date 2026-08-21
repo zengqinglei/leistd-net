@@ -54,7 +54,7 @@ public class ExternalAuthController(
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
         identity.AddClaim(new Claim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false"));
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
         foreach (var roleName in await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
         {
             identity.AddClaim(new Claim("role", roleName));

@@ -11,7 +11,7 @@ using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
 using Leistd.Lock.Core;
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using Leistd.MultiTenancy;
 #endif
 using Microsoft.Extensions.Caching.Distributed;
@@ -29,7 +29,7 @@ public class EmailVerificationAppService(
     IEmailSender emailSender,
     ILogger<EmailVerificationAppService> logger,
     IRepository<User, Guid> userRepository
-#if (TenancyEnabled)
+#if (MultiTenancy)
     , ICurrentTenant currentTenant
 #endif
     ) : BaseAppService, IEmailVerificationAppService
@@ -259,7 +259,7 @@ public class EmailVerificationAppService(
 
     private string GetScope()
     {
-#if (TenancyEnabled)
+#if (MultiTenancy)
         return currentTenant.Id is { } tenantId ? $"tenant:{tenantId:N}" : "host";
 #else
         return "host";

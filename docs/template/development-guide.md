@@ -22,15 +22,15 @@
 
 | 场景 | 参数重点 | 目的 |
 | --- | --- | --- |
-| `default` | 默认参数 | 主路径 |
-| `minimal` | `IncludeIdentity=false` | 最小裁剪 |
-| `no-roles` | `IncludeRoles=false` | 认证但无角色权限 |
-| `tenancy` | `IncludeTenancy=true` | 多租户主路径 |
-| `tenancy-illegal` | `IncludeTenancy=true` + `IncludeRoles=false` | 非法参数组合整体不生成租户能力 |
-| `tenancy-external-login` | `IncludeTenancy=true` + `IncludeExternalLogin=true` | 外部身份按租户分区 |
-| `notifications` | `IncludeNotifications=true` | 通知与实时组合 |
-| `no-openiddict` | `IncludeOpenIddict=false` | 无开放授权服务 |
-| `external-login` | `IncludeExternalLogin=true` | 外部登录适配 |
+| `identity` | `ServiceRole=Identity` | OIDC Server、租户控制面、Identity 业务库与完整前端 |
+| `resource` | `ServiceRole=Resource` | 远程 OIDC 验证、本服务授权、动态租户连接与完整前端 |
+| `identity-notifications` | Identity + `IncludeNotifications=true` | Identity 可选通知切片 |
+| `resource-notifications` | Resource + `IncludeNotifications=true` | Resource 可选通知切片 |
+| `identity-external-login` | Identity + `IncludeExternalLogin=true` | Identity 外部登录适配；Resource 不提供该参数 |
+| `identity-localization` | Identity + `IncludeLocalization=true` | Identity 本地化切片 |
+| `resource-localization` | Resource + `IncludeLocalization=true` | Resource 本地化切片 |
+
+`ServiceRole`只有 `Identity|Resource`。旧的 `IncludeIdentity`、`IncludeRoles`、`IncludeOpenIddict`、`IncludeTenancy`和 `TenancyEnabled` 不是兼容入口，不得重新引入。
 
 ## 4. Skill 与规范
 
@@ -51,21 +51,32 @@ dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
 pwsh scripts/test-template-matrix.ps1 -SkipPack
 ```
 
+需要人工观看前端测试运行时，改用有头 Chrome（CI 仍默认 `ChromeHeadless`）：
+
+```powershell
+pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser Chrome
+```
+
 不在仓库 `NuGet.Config` 或生成项目中固化本地源。
 
 ## 6. 数据库初始化
 
-- 模板不预置迁移；所有环境启动时有迁移则执行 `MigrateAsync`，无迁移则执行 `EnsureCreatedAsync` 自动创建数据库。
-- `EnsureCreatedAsync` 不建立迁移历史。计划持续演进结构的数据库必须在首次启动前包含初始迁移，或在后续启用迁移时明确重建/基线方案。
-- 修改初始化策略时同步 `Program.cs`、生成项目 README、部署说明和模板场景断言，避免 AI 重复应用迁移，并确保生产部署把应用启动视为数据库变更操作。
+- 模板携带可审查的 EF Core 基线迁移；API 启动不执行 `MigrateAsync` 或 `EnsureCreatedAsync`。
+- 每个服务的 `DbMigrator` 是一次性部署进程，先于 API 运行，使用 DDL 身份；API 只使用 DML 身份。
+- 每个服务在所有物理数据库中使用自己的固定 schema 和迁移历史表。Identity 的租户/OIDC Control DbContext 固定连宿主 Control DB，不跟随租户路由。
+- `ConnectionStrings:MigrationTarget` 只用于首次预迁移一个尚未登记的 Dedicated 物理目标；常规发布仍从 Identity 枚举已登记目标并去重迁移。
+- 修改迁移策略时必须同步 DbMigrator、基线 migration、生成项目 README、部署说明与真实 PostgreSQL 闭环断言。
 
 ## 7. 验证
 
 ```powershell
 pwsh scripts/validate-skills.ps1
 pwsh scripts/test-template-matrix.ps1
+pwsh scripts/test-template-postgresql-e2e.ps1 -SkipPack
 ```
 
-每次运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），其下含 `generated-template/`（模板场景生成）、`local-feed/`（本地 Leistd 包，每 run 独立 pack）、`template-hive/` 与一次性 NuGet 配置——各 run 自包含、互不写对方目录，因此**多个 AI/终端可并行执行**。第三方 NuGet 包缓存跨 run 共享、只读复用于 `.tmp/nuget-cache`（按 (id,version) 内容不可变，并发安全，避免每轮重下近 1GB 依赖闭包）；restore 前脚本会定点清除该缓存里的 `Leistd.*`，强制重新解包当前源码包，避免同版本全局缓存掩盖改动。启动时只清理超过 2 小时未活动且非当前 run 的旧目录（据 `.run.lock` 判活），绝不删正在运行的 run。CI 发布目录仍使用 `framework/artifacts`。
+第三条在真实 PostgreSQL 上验证本地 Framework NuGet 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路；它要求本机已安装 Docker、`psql` 和 PowerShell。
 
-重复调试同一份已 pack 的本地包时可用 `-SkipPack`（复用当前 run 目录已有的 `local-feed`）；框架包内容变化后必须重新 pack（去掉 `-SkipPack`）。
+每次运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），其下含 `generated-template/`、`local-feed/`、`template-hive/`、`nuget-cache/` 与一次性 NuGet 配置——生成物、包源和 `globalPackagesFolder` 都不跨 run 写入，因此**多个 AI/终端可并行执行**。不得共享解包目录后再“定点清理 Leistd.*”：本地包会在版本号不变时重新 pack，清理会在另一个并发 build 期间抽走 DLL。NuGet 自身的 HTTP 缓存仍会避免重复下载。启动时只清理超过 2 小时未活动且非当前 run 的旧目录（据 `.run.lock` 判活），绝不删正在运行的 run。CI 发布目录仍使用 `framework/artifacts`。
+
+重复调试同一份已 pack 的本地包时可用 `-SkipPack`（读取共享的 `.tmp/local-feed`）；Framework 包内容变化后必须重新 pack，不得让旧的同版本包掩盖源码改动。

@@ -36,7 +36,7 @@
         <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
         <!--#if (IncludeLocalization)-->
         <h3 class="font-semibold">{{ 'landing.feature.authTitle' | transloco }}</h3>
-        <!--#if (IncludeRoles)-->
+        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           {{ 'landing.feature.authDesc' | transloco }}
         </p>
@@ -47,7 +47,7 @@
         <!--#endif-->
         <!--#else-->
         <h3 class="font-semibold">Authentication</h3>
-        <!--#if (IncludeRoles)-->
+        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           Cookie-based authentication with role and permission management
         </p>
@@ -60,7 +60,7 @@
         <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
         <!--#if (IncludeLocalization)-->
         <h3 class="font-semibold">{{ 'landing.feature.usersTitle' | transloco }}</h3>
-        <!--#if (IncludeRoles)-->
+        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           {{ 'landing.feature.usersDesc' | transloco }}
         </p>
@@ -71,7 +71,7 @@
         <!--#endif-->
         <!--#else-->
         <h3 class="font-semibold">User Management</h3>
-        <!--#if (IncludeRoles)-->
+        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           Full CRUD operations with permission control
         </p>

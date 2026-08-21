@@ -4,15 +4,9 @@
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
 
-# 配置 npm 使用淘宝镜像（加速国内构建）
-RUN npm config set registry https://registry.npmmirror.com
-
-# 升级 npm 到最新版本
-RUN npm install -g npm@latest
-
-# 复制 package.json 并安装依赖（利用 Docker 层缓存）
-COPY frontend/package.json ./
-RUN npm install --prefer-offline --no-audit
+# 锁定文件是前端构建的唯一依赖基线。
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit
 
 # 支持构建时传入 API Gateway 地址（用于前后端分离部署）
 # 使用方式: docker build --build-arg API_GATEWAY=https://api.example.com .
@@ -45,22 +39,32 @@ COPY backend/ ./backend/
 
 # Build（还原会自动拉取 Leistd.* 框架包）
 WORKDIR "/src/backend/src/CompanyName.ProjectName.Api"
-RUN dotnet publish "CompanyName.ProjectName.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "CompanyName.ProjectName.Api.csproj" -c Release -o /app/api /p:UseAppHost=false
+
+WORKDIR "/src/backend/src/CompanyName.ProjectName.DbMigrator"
+RUN dotnet publish "CompanyName.ProjectName.DbMigrator.csproj" -c Release -o /app/migrator /p:UseAppHost=false
 
 # -----------------------------------
 # Stage 3: Final Runtime Image
 # -----------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS migrator
+WORKDIR /app
+COPY --from=backend-build /app/migrator .
+ENTRYPOINT ["dotnet", "CompanyName.ProjectName.DbMigrator.dll"]
+
+# -----------------------------------
+# Stage 4: API Runtime Image
+# -----------------------------------
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS api
 WORKDIR /app
 
 EXPOSE 8080
 
 # 1. 拷贝后端构建结果
-COPY --from=backend-build /app/publish .
+COPY --from=backend-build /app/api .
 
 # 2. 拷贝前端构建结果到后端的 wwwroot 目录，让 ASP.NET Core 直接托管静态 SPA 文件
 # Angular >= 17 生产构建会输出到 dist/<project>/browser 目录
 COPY --from=frontend-build /app/dist/companyname-projectname-web/browser ./wwwroot
 
-# Production 启动会自动创建或迁移数据库，部署前必须审查并准备失败恢复方案
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.Api.dll"]

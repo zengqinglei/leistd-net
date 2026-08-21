@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
@@ -97,7 +97,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         _ = await SendChallengeAsync(host, client, email);
     }
 
-#if (TenancyEnabled)
+#if (MultiTenancy)
     [Fact]
     public async Task 租户A挑战不能在租户B使用_且B的拒绝不销毁A挑战()
     {
@@ -204,7 +204,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
             }
         });
 
-#if (TenancyEnabled)
+#if (MultiTenancy)
     private static HttpClient CreateTenantClient(WebApplicationFactory<Program> host, Guid tenantId)
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(host);

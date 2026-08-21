@@ -66,7 +66,7 @@ public class AuthAppService(
         }
 
         var user = await userDomainService.CreateUserAsync(input.Username, input.Email, input.Password, input.DisplayName, cancellationToken);
-#if (IncludeRoles)
+#if (LocalAuthorization)
         await userDomainService.AssignDefaultRolesToUserAsync(user.Id, cancellationToken);
 #endif
 
@@ -156,7 +156,7 @@ public class AuthAppService(
                 ;
         }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
         var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);
 #endif
 
@@ -171,7 +171,7 @@ public class AuthAppService(
             IsActive = user.IsActive,
             IsSuperAdmin = user.IsSuperAdmin,
             CreationTime = user.CreationTime,
-#if (IncludeRoles)
+#if (LocalAuthorization)
             Roles = [.. roleNames]
 #endif
         };

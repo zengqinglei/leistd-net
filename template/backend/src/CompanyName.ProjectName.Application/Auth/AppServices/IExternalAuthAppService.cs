@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.Contracts.AppService;

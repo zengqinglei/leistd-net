@@ -17,23 +17,24 @@ CompanyName.ProjectName/
 ## 已启用能力
 
 - EF Core 数据访问、审计字段、软删除、仓储与应用服务基座。
-<!--#if (IncludeIdentity)-->
+<!--#if (IdentityService)-->
 - 本地账号、登录、注册和 Cookie 认证。
-<!--#if (IncludeRoles)-->
+<!--#if (LocalAuthorization)-->
 - 用户、角色、权限以及超级管理员授权模型。
-<!--#if (TenancyEnabled)-->
+<!--#if (MultiTenancy)-->
 - 多租户：租户解析与数据硬隔离、租户管理（宿主侧）、登录页租户选择；每个租户拥有独立的用户、角色与权限授予。
 <!--#endif-->
 <!--#endif-->
-<!--#if (IncludeOpenIddict)-->
 - OpenIddict OAuth 2.0/OIDC Server。
-<!--#endif-->
 <!--#if (IncludeExternalLogin)-->
 - GitHub、Google 等外部身份提供方登录。
 <!--#endif-->
+<!--#endif-->
+<!--#if (ResourceService)-->
+- 远程 OIDC 令牌验证、本服务 Membership/角色/权限与租户数据隔离。
+<!--#endif-->
 <!--#if (IncludeNotifications)-->
 - 通知持久化、未读状态、通知 Hub 和业务实时 Hub。
-<!--#endif-->
 <!--#endif-->
 
 ## 本地运行
@@ -47,7 +48,7 @@ cd backend/src/CompanyName.ProjectName.Api
 dotnet run
 ```
 
-健康检查地址为 `http://localhost:5240/api/health`。
+存活与就绪检查地址分别为 `http://localhost:5240/api/health/live` 和 `http://localhost:5240/api/health/ready`。
 
 如需 PostgreSQL，在被 Git 忽略的 `backend/src/CompanyName.ProjectName.Api/appsettings.Development.json` 中配置：
 
@@ -59,19 +60,18 @@ dotnet run
 }
 ```
 
-模板不预置迁移。应用在所有环境启动时自动初始化关系型数据库：已有迁移文件则执行 `MigrateAsync`，没有迁移文件则执行 `EnsureCreatedAsync` 创建数据库。修改模型后只需生成并审查迁移文件，无需再执行 `dotnet ef database update`：
+模板预置基线迁移和独立 `DbMigrator`。API 启动时不自动修改 schema；本地和发布环境都先运行迁移入口，再启动 API：
 
 ```bash
 cd backend
-dotnet ef migrations add InitialCreate \
-  --project src/CompanyName.ProjectName.Infrastructure \
-  --startup-project src/CompanyName.ProjectName.Api \
-  --output-dir Persistence/Migrations
+dotnet run --project src/CompanyName.ProjectName.DbMigrator
+dotnet run --project src/CompanyName.ProjectName.Api
 ```
 
-由 `EnsureCreated` 创建的数据库没有迁移历史，不能直接切换为迁移管理。计划持续演进结构的数据库应在首次启动前随应用包含初始迁移；否则后续启用迁移时需要重建数据库或制定基线方案。生产部署会随应用启动自动创建或迁移数据库，因此部署前必须审查模型或迁移，并准备备份和失败恢复方案。
+API 和 `DbMigrator` 使用不同的 Runtime/Migration Secret；API 运行身份只持有 DML 权限。SharedDatabase 中各服务共用数据库实例、使用固定独立 schema 并以 `TenantId` 隔离；DedicatedDatabase 由租户配置覆盖连接，各服务仍共用该租户连接并写入自己的 schema。
+首次建立 DedicatedDatabase 租户前，先以 `ConnectionStrings__MigrationTarget` 运行各服务 DbMigrator 预建该服务 schema，再创建租户；常规发布仍使用全目标枚举模式。
 
-<!--#if (IncludeIdentity)-->
+<!--#if (IdentityService)-->
 开发环境首次启动会创建管理员账号：
 
 - 用户名：`admin`

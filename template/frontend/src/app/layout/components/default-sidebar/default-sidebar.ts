@@ -6,7 +6,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
   lucideBuilding2,
   //#endif
   lucideGauge,
@@ -19,17 +19,15 @@ import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../core/services/authorization-service';
 //#endif
 import { Logo } from '../../../shared/components/logo/logo';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../shared/models/permission';
 //#endif
 import { LayoutService } from '../../services/layout-service';
-//#if (IncludeIdentity)
 import { UserMenu } from '../user-menu/user-menu';
-//#endif
 
 interface MenuItem {
   label: string;
@@ -53,16 +51,14 @@ interface MenuGroup {
     NgIcon,
     Logo,
     ...HlmSidebarImports,
-    //#if (IncludeIdentity)
     UserMenu,
-    //#endif
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
   ],
   // prettier-ignore
   providers: [provideIcons({
-    //#if (TenancyEnabled)
+    //#if (MultiTenancy)
     lucideBuilding2,
     //#endif
     lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck,
@@ -72,7 +68,7 @@ interface MenuGroup {
 })
 export class DefaultSidebar {
   readonly layoutService = inject(LayoutService);
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
   //#endif
   //#if (IncludeLocalization)
@@ -83,7 +79,6 @@ export class DefaultSidebar {
   private readonly platformMenuGroups: MenuGroup[] = [
     // 首区不设标题：Dashboard 是全局入口而非某一类的成员，给单项加组标题只增加解析成本。
     { items: [{ label: 'layout.sidebar.dashboard', icon: 'lucideGauge', route: '/platform' }] },
-    //#if (IncludeIdentity)
     // 分组按关注点命名，不用「系统」这类兜底词——兜底词会把不相干的入口越塞越多。
     {
       label: 'layout.sidebar.groupAccess',
@@ -92,11 +87,11 @@ export class DefaultSidebar {
           label: 'layout.sidebar.users',
           icon: 'lucideUsers',
           route: '/platform/users',
-          //#if (IncludeRoles)
+          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.users.default],
           //#endif
         },
-        //#if (IncludeRoles)
+        //#if (LocalAuthorization)
         {
           label: 'layout.sidebar.roles',
           icon: 'lucideShieldCheck',
@@ -104,7 +99,7 @@ export class DefaultSidebar {
           permissions: [PERMISSIONS.roles.default],
         },
         //#endif
-        //#if (TenancyEnabled)
+        //#if (IdentityService)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'layout.sidebar.tenants',
@@ -115,8 +110,7 @@ export class DefaultSidebar {
         //#endif
       ],
     },
-    //#endif
-    //#if (IncludeOpenIddict)
+    //#if (IdentityService)
     {
       label: 'layout.sidebar.groupDeveloper',
       items: [
@@ -124,7 +118,7 @@ export class DefaultSidebar {
           label: 'layout.sidebar.openApplications',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
-          //#if (IncludeRoles)
+          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.openApplications.default],
           //#endif
         },
@@ -147,7 +141,6 @@ export class DefaultSidebar {
   private readonly platformMenuGroups: MenuGroup[] = [
     // 首区不设标题：Dashboard 是全局入口而非某一类的成员，给单项加组标题只增加解析成本。
     { items: [{ label: 'Dashboard', icon: 'lucideGauge', route: '/platform' }] },
-    //#if (IncludeIdentity)
     // 分组按关注点命名，不用「系统」这类兜底词——兜底词会把不相干的入口越塞越多。
     {
       label: 'Access control',
@@ -156,11 +149,11 @@ export class DefaultSidebar {
           label: 'User Management',
           icon: 'lucideUsers',
           route: '/platform/users',
-          //#if (IncludeRoles)
+          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.users.default],
           //#endif
         },
-        //#if (IncludeRoles)
+        //#if (LocalAuthorization)
         {
           label: 'Role Management',
           icon: 'lucideShieldCheck',
@@ -168,7 +161,7 @@ export class DefaultSidebar {
           permissions: [PERMISSIONS.roles.default],
         },
         //#endif
-        //#if (TenancyEnabled)
+        //#if (IdentityService)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'Tenant Management',
@@ -179,8 +172,7 @@ export class DefaultSidebar {
         //#endif
       ],
     },
-    //#endif
-    //#if (IncludeOpenIddict)
+    //#if (IdentityService)
     {
       label: 'Developer',
       items: [
@@ -188,7 +180,7 @@ export class DefaultSidebar {
           label: 'Developer Apps',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
-          //#if (IncludeRoles)
+          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.openApplications.default],
           //#endif
         },
@@ -241,7 +233,7 @@ export class DefaultSidebar {
    * 这里刻意不再使用"是否超级管理员"作为判据：超管的旁路已经体现在下发的权限集合里，
    * 前端再判断一次会让菜单与后端的权限语义分叉。
    */
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   private isItemVisible(item: MenuItem): boolean {
     return !item.permissions?.length || this.authorizationService.hasAny(...item.permissions);
   }

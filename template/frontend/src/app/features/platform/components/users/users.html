@@ -15,6 +15,7 @@
           />
         </hlm-input-group>
 
+        <!--#if (IdentityService)-->
         <app-faceted-filter
           [label]="statusFilterLabel()"
           [options]="activeOptions()"
@@ -34,8 +35,8 @@
           [emptyLabel]="filterEmptyLabel()"
           (valueChange)="onEmailVerifiedChange($any($event))"
         />
-        <!--#if (IncludeRoles)-->
-
+        <!--#endif-->
+        <!--#if (LocalAuthorization)-->
         <app-faceted-filter
           multiple
           [label]="roleFilterLabel()"
@@ -68,7 +69,7 @@
         }
       </div>
     </div>
-    <!--#if (IncludeRoles)-->
+    <!--#if (LocalAuthorization)-->
 
     <app-user-table
       [users]="users()"
@@ -83,7 +84,9 @@
       (sortingChange)="onSortingChange($event)"
       (edit)="openEditDialog($event)"
       (toggleActive)="handleToggleActive($event)"
+      <!--#if (IdentityService)-->
       (resetPassword)="openResetPasswordDialog($event)"
+      <!--#endif-->
       (delete)="handleDelete($event)"
       [canManageRoles]="canManageUserRoles()"
       (manageRoles)="openRolesDialog($event)"
@@ -103,13 +106,15 @@
       (sortingChange)="onSortingChange($event)"
       (edit)="openEditDialog($event)"
       (toggleActive)="handleToggleActive($event)"
+      <!--#if (IdentityService)-->
       (resetPassword)="openResetPasswordDialog($event)"
+      <!--#endif-->
       (delete)="handleDelete($event)"
     />
     <!--#endif-->
   </div>
 </div>
-<!--#if (IncludeRoles)-->
+<!--#if (LocalAuthorization)-->
 <app-user-edit-dialog
   [(visible)]="editDialogVisible"
   [loading]="editDialogLoading()"
@@ -128,7 +133,7 @@
   (saved)="handleSave($event)"
 />
 <!--#endif-->
-<!--#if (IncludeRoles)-->
+<!--#if (LocalAuthorization)-->
 <app-user-roles-dialog
   [(open)]="rolesDialogVisible"
   [user]="rolesDialogUser()"
@@ -136,9 +141,10 @@
   (saved)="onRolesSaved()"
 />
 <!--#endif-->
-
+<!--#if (IdentityService)-->
 <app-reset-user-password-dialog
   [(visible)]="resetPasswordDialogVisible"
   [(saving)]="resetPasswordSaving"
   (saved)="handleResetPassword($event)"
 />
+<!--#endif-->

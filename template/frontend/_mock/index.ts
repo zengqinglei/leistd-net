@@ -1,14 +1,14 @@
-//#if (IncludeIdentity)
+//#if (IdentityService)
 export * from './api/auth';
-export * from './api/user';
 //#endif
-//#if (IncludeRoles)
+export * from './api/user';
+//#if (LocalAuthorization)
 export * from './api/authorization';
 //#endif
-//#if (TenancyEnabled)
+//#if (IdentityService)
 export * from './api/tenant';
 //#endif
-//#if (IncludeOpenIddict)
+//#if (IdentityService)
 export * from './api/open-application';
 //#endif
 //#if (IncludeNotifications)

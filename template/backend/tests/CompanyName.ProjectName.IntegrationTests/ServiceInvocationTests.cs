@@ -1,4 +1,4 @@
-#if (IncludeOpenIddict)
+#if (IdentityService)
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -150,6 +150,9 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
     [Fact]
     public async Task Client_package_should_call_anonymous_endpoint()
     {
+        // Client 包的标准管道会在所有请求前取 client_credentials token，
+        // 即使目标端点是匿名的。每个测试独立准备客户端，不依赖 xUnit 执行顺序。
+        await EnsureCallerRegisteredAsync();
         await using var caller = CreateCallerHost();
 
         var info = await caller.GetRequiredService<IMyProjectClient>().GetServiceInfoAsync();

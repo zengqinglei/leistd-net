@@ -1,29 +1,29 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Net;
 using System.Net.Http.Json;
-#if (IncludeOpenIddict)
+#if (IdentityService)
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 #endif
-#if (IncludeOpenIddict)
+#if (IdentityService)
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 #endif
 using CompanyName.ProjectName.Application.Users.Dtos;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Domain.Users.Constants;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using Leistd.Authorization.EntityFrameworkCore;
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using Leistd.Authorization;
 #endif
 using Microsoft.EntityFrameworkCore;
@@ -36,7 +36,7 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Fact]
     public async Task Permissions_should_distinguish_users_roles_and_super_admin()
     {
@@ -210,7 +210,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             (await session.Client.GetAsync("/api/v1/users?offset=0&limit=10")).StatusCode);
     }
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
     [Fact]
     public async Task Creating_an_application_rejects_scopes_this_server_does_not_register()
     {
@@ -684,7 +684,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.OK, (await GetUsersAsync(memberSession.Client)).StatusCode);
     }
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
     [Fact]
     public async Task Creating_an_application_rejects_the_roles_scope_when_roles_are_trimmed()
     {
@@ -825,7 +825,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
     [Fact]
     public async Task Client_credentials_tokens_cannot_reach_user_management()
     {
@@ -912,7 +912,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         using var superAdmin = await factory.LoginAsync("admin", "Admin@123456");
 
         var victim = await CreateUserAsync(superAdmin.Client);
-#if (IncludeRoles)
+#if (LocalAuthorization)
         await GrantAsync(PermissionGrantProviderNames.User, victim.Id, PermissionConstant.Users.Default);
 #endif
 
@@ -1170,7 +1170,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     private static Task<HttpResponseMessage> GetUsersAsync(HttpClient client)
         => client.GetAsync("/api/v1/users?offset=0&limit=10");
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private async Task<Guid> GetRoleIdAsync(string roleName)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -1254,7 +1254,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
     private static async Task<UserManagementOutputDto> CreateUserAsync(
         HttpClient client
-#if (IncludeRoles)
+#if (LocalAuthorization)
         , List<Guid>? roleIds = null
 #endif
         )
@@ -1269,7 +1269,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
                 DisplayName = "Integration user",
                 Password = TestPassword,
                 IsActive = true,
-#if (IncludeRoles)
+#if (LocalAuthorization)
                 RoleIds = roleIds ?? []
 #endif
             });

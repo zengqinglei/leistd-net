@@ -41,7 +41,7 @@
                           <ng-icon [name]="sortIcon('email')" class="text-sm" />
                         </button>
                       }
-                      <!--#if (IncludeRoles)-->
+                      <!--#if (LocalAuthorization)-->
                       @case ('roles') {
                         <!--#if (IncludeLocalization)-->
                         <span class="whitespace-nowrap">{{
@@ -61,6 +61,7 @@
                         <span class="whitespace-nowrap">Status</span>
                         <!--#endif-->
                       }
+                      <!--#if (IdentityService)-->
                       @case ('lastLoginTime') {
                         <button
                           type="button"
@@ -75,6 +76,7 @@
                           <ng-icon [name]="sortIcon('lastLoginTime')" class="text-sm" />
                         </button>
                       }
+                      <!--#endif-->
                       @case ('creationTime') {
                         <button
                           type="button"
@@ -165,7 +167,7 @@
                         @case ('email') {
                           <span class="whitespace-nowrap text-sm">{{ row.original.email }}</span>
                         }
-                        <!--#if (IncludeRoles)-->
+                        <!--#if (LocalAuthorization)-->
                         @case ('roles') {
                           <div
                             class="flex max-w-[18rem] items-center gap-1 overflow-hidden whitespace-nowrap"
@@ -224,14 +226,17 @@
                                 statusLabel(row.original.isActive)
                               }}</span>
                             }
+                            <!--#if (IdentityService)-->
                             <span
                               hlmBadge
                               [variant]="row.original.isEmailVerified ? 'secondary' : 'outline'"
                               class="hidden @min-[1400px]:inline-flex"
                               >{{ emailVerifiedLabel(row.original.isEmailVerified) }}</span
                             >
+                            <!--#endif-->
                           </div>
                         }
+                        <!--#if (IdentityService)-->
                         @case ('lastLoginTime') {
                           <span class="text-xs text-muted-foreground whitespace-nowrap">
                             {{
@@ -241,6 +246,7 @@
                             }}
                           </span>
                         }
+                        <!--#endif-->
                         @case ('creationTime') {
                           <span class="text-xs text-muted-foreground whitespace-nowrap">{{
                             row.original.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
@@ -263,7 +269,7 @@
                                 <ng-icon name="lucidePencil" />
                               </button>
                             }
-                            <!--#if (IncludeRoles)-->
+                            <!--#if (LocalAuthorization)-->
                             <!-- 角色分配与资料编辑分离：需要 App.Users.ManageRoles 才出现。 -->
                             @if (canManageRoles()) {
                               <button
@@ -280,6 +286,7 @@
                               </button>
                             }
                             <!--#endif-->
+                            <!--#if (IdentityService)-->
                             <!-- 重置密码走 Users.Update 策略，入口与编辑同权限裁剪，避免制造必然 403 的按钮。 -->
                             @if (canUpdate()) {
                               <button
@@ -295,6 +302,7 @@
                                 <ng-icon name="lucideKey" />
                               </button>
                             }
+                            <!--#endif-->
                             @if (hasRowActions()) {
                               <button
                                 hlmBtn
@@ -321,6 +329,7 @@
                                       {{ actionLabel('edit', row.original) }}
                                     </button>
                                   }
+                                  <!--#if (IdentityService)-->
                                   @if (canUpdate()) {
                                     <button
                                       hlmDropdownMenuItem
@@ -332,6 +341,7 @@
                                       {{ actionLabel('reset', row.original) }}
                                     </button>
                                   }
+                                  <!--#endif-->
                                   @if (canUpdate()) {
                                     <button
                                       hlmDropdownMenuItem
@@ -382,7 +392,7 @@
                           <dt class="text-muted-foreground">{{ detailLabel('email') }}</dt>
                           <dd class="min-w-0 truncate">{{ row.original.email }}</dd>
                         }
-                        <!--#if (IncludeRoles)-->
+                        <!--#if (LocalAuthorization)-->
                         @if (isColumnHidden('roles')) {
                           <dt class="text-muted-foreground">{{ detailLabel('roles') }}</dt>
                           <dd class="flex flex-wrap gap-1">
@@ -396,6 +406,7 @@
                           </dd>
                         }
                         <!--#endif-->
+                        <!--#if (IdentityService)-->
                         @if (isColumnHidden('lastLoginTime')) {
                           <dt class="text-muted-foreground">{{ detailLabel('lastLogin') }}</dt>
                           <dd class="text-muted-foreground">
@@ -406,6 +417,7 @@
                             }}
                           </dd>
                         }
+                        <!--#endif-->
                         @if (isColumnHidden('creationTime')) {
                           <dt class="text-muted-foreground">{{ detailLabel('created') }}</dt>
                           <dd class="text-muted-foreground">

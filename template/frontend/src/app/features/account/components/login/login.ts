@@ -8,13 +8,13 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
   lucideZap,
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
   //#endif
   lucideCircleCheck,
   lucideInfo,
   lucideEye,
   lucideEyeOff,
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
   lucideX,
   //#endif
 } from '@ng-icons/lucide';
@@ -34,16 +34,16 @@ import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
   ApplicationHttpError,
   //#endif
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 //#endif
 //#if (IncludeLocalization)
@@ -51,7 +51,7 @@ import { LanguageSwitcher } from '../../../../shared/components/language-switche
 //#endif
 import { Logo } from '../../../../shared/components/logo/logo';
 import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { TenantService } from '../../../platform/services/tenant-service';
 //#endif
 import { AccountService } from '../../services/account-service';
@@ -86,7 +86,7 @@ const githubIcon =
   providers: [
     provideIcons({
       lucideZap,
-      //#if (TenancyEnabled)
+      //#if (MultiTenancy)
       lucideX,
       //#endif
       lucideCircleCheck,
@@ -102,7 +102,7 @@ const githubIcon =
 export class Login {
   private accountService = inject(AccountService);
   private authService = inject(AuthService);
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
   //#endif
   private route = inject(ActivatedRoute);
@@ -110,7 +110,7 @@ export class Login {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
   private readonly tenantService = inject(TenantService);
   protected readonly tenantContext = inject(TenantContextService);
   //#endif
@@ -195,7 +195,7 @@ export class Login {
       toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
       //#endif
 
-      //#if (IncludeRoles)
+      //#if (LocalAuthorization)
       // 权限必须在任何跳转之前加载完成。进登录页时 StartupService 已清空权限缓存，
       // 此时直接跳 returnUrl，permissionGuard 会在空权限下判定并把人踢到 403——
       // 从受保护页面的深链登录，本该落到那个页面，却落在拒绝页。
@@ -207,7 +207,7 @@ export class Login {
         return;
       }
 
-      //#if (IncludeRoles)
+      //#if (LocalAuthorization)
       // 按权限跳转：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
@@ -238,7 +238,7 @@ export class Login {
       !returnUrl.includes('://')
     );
   }
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
 
   // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
   protected readonly tenantName = signal('');

@@ -1,7 +1,7 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Provider;
 #endif
 using Leistd.Ddd.Application.Contracts.Dtos;
@@ -21,7 +21,7 @@ public class OpenApplicationController(IOpenApplicationAppService openApplicatio
     /// 获取开放应用列表
     /// </summary>
     [HttpGet]
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.OpenApplications.Default)]
 #endif
     public async Task<PagedResultDto<OpenApplicationOutputDto>> GetPagedListAsync(
@@ -35,7 +35,7 @@ public class OpenApplicationController(IOpenApplicationAppService openApplicatio
     /// 获取开放应用详情
     /// </summary>
     [HttpGet("{id}")]
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.OpenApplications.Default)]
 #endif
     public async Task<OpenApplicationOutputDto> GetAsync(string id, CancellationToken cancellationToken)
@@ -47,7 +47,7 @@ public class OpenApplicationController(IOpenApplicationAppService openApplicatio
     /// 创建开放应用
     /// </summary>
     [HttpPost]
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.OpenApplications.Create)]
 #endif
     public async Task<OpenApplicationOutputDto> CreateAsync(
@@ -61,7 +61,7 @@ public class OpenApplicationController(IOpenApplicationAppService openApplicatio
     /// 更新开放应用
     /// </summary>
     [HttpPut("{id}")]
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.OpenApplications.Update)]
 #endif
     public async Task<OpenApplicationOutputDto> UpdateAsync(
@@ -76,7 +76,7 @@ public class OpenApplicationController(IOpenApplicationAppService openApplicatio
     /// 删除开放应用
     /// </summary>
     [HttpDelete("{id}")]
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.OpenApplications.Delete)]
 #endif
     public async Task DeleteAsync(string id, CancellationToken cancellationToken)
@@ -88,7 +88,7 @@ public class OpenApplicationController(IOpenApplicationAppService openApplicatio
     /// 重置开放应用密钥
     /// </summary>
     [HttpPost("{id}/reset-secret")]
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.OpenApplications.ResetSecret)]
 #endif
     public async Task<ResetOpenApplicationSecretOutputDto> ResetSecretAsync(

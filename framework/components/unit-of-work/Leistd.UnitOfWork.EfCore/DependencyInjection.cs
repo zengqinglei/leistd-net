@@ -17,6 +17,7 @@ public static class DependencyInjection
     {
         // 注册 EF Core DbContext Provider（泛型服务）
         services.TryAddTransient(typeof(IDbContextProvider<>), typeof(DbContextProvider<>));
+        services.TryAddScoped<UnitOfWorkConnectionBinding>();
 
         return services;
     }

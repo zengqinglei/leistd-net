@@ -12,11 +12,12 @@ import { of } from 'rxjs';
 
 import { Users } from './users';
 import { UserTable } from './widgets/user-table/user-table';
-//#if (IncludeRoles)
+import { AuthService } from '../../../../core/services/auth-service';
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
 import { StartupService } from '../../../../core/services/startup-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#endif
 import { GetUsersInputDto } from '../../models/user-management.dto';
@@ -60,6 +61,7 @@ describe('Users 页面查询闭环', () => {
         provideRouter([{ path: 'platform/users', children: [] }]),
         provideHttpClient(),
         provideHttpClientTesting(),
+        { provide: AuthService, useValue: { currentUser: signal(null) } },
         //#if (IncludeLocalization)
         provideTransloco({
           config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
@@ -74,7 +76,7 @@ describe('Users 页面查询闭环', () => {
     router = TestBed.inject(Router);
     await router.navigate(['/platform/users']);
 
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     TestBed.inject(AuthorizationService).setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: false,

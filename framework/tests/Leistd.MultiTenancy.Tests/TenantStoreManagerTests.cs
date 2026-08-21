@@ -1,5 +1,6 @@
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.Timing;
+using Leistd.UnitOfWork.EfCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -64,9 +65,10 @@ public class TenantStoreManagerTests : IAsyncLifetime
         _db = new TestTenantDbContext(options);
         await _db.Database.EnsureCreatedAsync();
 
-        _store = new EfCoreTenantStore<TestTenantDbContext>(_db);
+        var provider = new FixedDbContextProvider<TestTenantDbContext>(_db);
+        _store = new EfCoreTenantStore<TestTenantDbContext>(provider);
         _manager = new EfCoreTenantManager<TestTenantDbContext>(
-            _db, new UpperInvariantTenantNormalizer(), new UtcClockProvider());
+            provider, new UpperInvariantTenantNormalizer(), new UtcClockProvider());
     }
 
     public async Task DisposeAsync()
@@ -81,11 +83,13 @@ public class TenantStoreManagerTests : IAsyncLifetime
         var record = await _manager.CreateAsync("Acme", "Acme Inc.", isActive: true);
 
         Assert.Equal("ACME", record.NormalizedName);
+        Assert.NotEqual(default, record.CreationTime);
 
         var byId = await _store.FindAsync(record.Id);
         Assert.NotNull(byId);
         Assert.Equal("Acme", byId.Name);
         Assert.True(byId.IsActive);
+        Assert.Equal(record.CreationTime, byId.CreationTime);
 
         var byName = await _store.FindByNameAsync("ACME");
         Assert.NotNull(byName);
@@ -249,7 +253,9 @@ public class TenantStoreManagerTests : IAsyncLifetime
 
         await using var racedDb = new TestTenantDbContext(racedOptions);
         var racedManager = new EfCoreTenantManager<TestTenantDbContext>(
-            racedDb, new UpperInvariantTenantNormalizer(), new UtcClockProvider());
+            new FixedDbContextProvider<TestTenantDbContext>(racedDb),
+            new UpperInvariantTenantNormalizer(),
+            new UtcClockProvider());
 
         // 预检时库中无同名租户 → 通过；拦截器在 flush 前写入同名行 → 唯一索引拒绝本次插入
         await Assert.ThrowsAsync<DuplicateTenantNameException>(() => racedManager.CreateAsync("Contoso", null, isActive: true));
@@ -300,7 +306,9 @@ public class TenantStoreManagerTests : IAsyncLifetime
 
         await using var racedDb = new TestTenantDbContext(racedOptions);
         var racedManager = new EfCoreTenantManager<TestTenantDbContext>(
-            racedDb, new UpperInvariantTenantNormalizer(), new UtcClockProvider());
+            new FixedDbContextProvider<TestTenantDbContext>(racedDb),
+            new UpperInvariantTenantNormalizer(),
+            new UtcClockProvider());
 
         // 调用方在同一 DbContext（= 宿主工作单元）里改了业务实体，尚未提交
         var note = new TestNote { Text = "caller's pending work" };

@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Users.DomainServices;

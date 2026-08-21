@@ -1,7 +1,9 @@
 param(
-    [string[]]$Scenarios = @("default", "minimal", "tenancy", "tenancy-illegal", "tenancy-external-login", "no-roles", "notifications", "no-openiddict", "external-login", "localization", "no-localization", "localization-notifications", "localization-external-login"),
+    [string[]]$Scenarios = @("identity", "resource", "identity-notifications", "resource-notifications", "identity-external-login", "identity-localization", "resource-localization"),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
+    [ValidateSet("ChromeHeadless", "Chrome")]
+    [string]$FrontendBrowser = "ChromeHeadless",
     [switch]$SkipPack,
     [switch]$SkipFrontend,
     [switch]$SkipRuntime
@@ -23,10 +25,9 @@ $runRoot = Join-Path $tempRoot (Join-Path "runs" $runId)
 $env:MSBUILDDISABLENODEREUSE = "1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 
-# 第三方 NuGet 缓存跨 run 共享、只读复用：nuget.org 的包按 (id,version) 内容不可变，可安全并发共享（NuGet 自带
-# 文件锁），避免每轮重下近 1GB 依赖闭包。真正会「同版本内容变化」的只有本地 pack 的 Leistd.*——restore 前定点
-# 清除缓存里的 Leistd.* 强制重新解包（见下），其余保持温热。
-$sharedPackagesRoot = Join-Path $tempRoot "nuget-cache"
+# globalPackagesFolder 必须也按 run 隔离。本地 Leistd 包在开发期间会在版本号不变时重新 pack；
+# 共享解包目录并定点清理会在并发 build 期间抽走 DLL。每个 run 独立解包，NuGet HTTP 缓存仍可复用下载内容。
+$packagesRoot = Join-Path $runRoot "nuget-cache"
 # 本地 Leistd 包源位置随模式而定：
 #  - 正常模式（本轮 pack）：per-run 独立目录，两个并行 run 各 pack 各的，杜绝共享目录重置竞争（发现#1）。
 #  - -SkipPack：消费预先 pack 到共享 .tmp/local-feed 的包（CI 先 `dotnet pack -o .tmp/local-feed` 再 -SkipPack），
@@ -241,15 +242,14 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     }
 
     $programText = Get-Content -LiteralPath (Join-Path $apiProject.DirectoryName "Program.cs") -Raw
-    if (-not $programText.Contains("await db.Database.MigrateAsync()") -or
-        -not $programText.Contains("await db.Database.EnsureCreatedAsync()")) {
-        throw "Generated API must initialize relational databases automatically at startup."
+    if ($programText.Contains("MigrateAsync(") -or $programText.Contains("EnsureCreatedAsync(")) {
+        throw "Generated API must not mutate database schema during startup."
     }
 
     $backendReadme = Get-Content -LiteralPath (Join-Path $ProjectRoot "backend/README.md") -Raw -Encoding UTF8
-    if (-not $backendReadme.Contains('无需另行执行 `dotnet ef database update`') -or
-        -not $backendReadme.Contains('生产部署会随应用启动自动创建或迁移数据库')) {
-        throw "Generated backend guidance must explain the startup migration boundary."
+    if (-not $backendReadme.Contains('DbMigrator') -or
+        -not $backendReadme.Contains('启动时不自动迁移')) {
+        throw "Generated backend guidance must explain the independent DbMigrator boundary."
     }
 
     Assert-MarkdownLinks $ProjectRoot
@@ -349,6 +349,7 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
     $startInfo.Environment['ASPNETCORE_ENVIRONMENT'] = 'Development'
     $startInfo.Environment['ASPNETCORE_URLS'] = $baseUrl
     $startInfo.Environment['ConnectionStrings__Default'] = ''
+    $startInfo.Environment['Database__InMemoryName'] = "MatrixRuntime-$([Guid]::NewGuid().ToString('N'))"
     $startInfo.Environment['SpaProxy__Enabled'] = 'false'
     $startInfo.Environment['OAuth__DisableHttpsRequirement'] = 'true'
 
@@ -378,7 +379,7 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
                 break
             }
             try {
-                $response = Invoke-WebRequest -Uri "$baseUrl/api/health" -TimeoutSec 2 -ErrorAction Stop
+                $response = Invoke-WebRequest -Uri "$baseUrl/api/health/live" -TimeoutSec 2 -ErrorAction Stop
                 if ($response.StatusCode -eq 200) {
                     $healthy = $true
                     break
@@ -417,131 +418,73 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
 }
 
 $scenarioMap = [ordered]@{
-    "default" = @{
-        Arguments = @(); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions")
-        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
-        ReadmeContains = @("本地账号", "OpenIddict")
-        ReadmeExcludes = @("通知持久化", "外部身份提供方登录", "多租户")
-        # 未启用多租户时零租户契约残留：常量、标记接口与权限名任何一处漏裁剪
-        # 都会让前后端契约或数据模型带上租户维度
-        ForbiddenTokens = @("IncludeTenancy", "TenancyEnabled", "IMultiTenant", "App.Tenants", "X-Tenant-Id", "ICurrentTenant")
-    }
-    "minimal" = @{
-        Arguments = @("--include-identity", "false"); Frontend = $true; Lint = $false
-        Present = @("backend/src/{name}.Api/Program.cs")
-        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions", "frontend/src/app/features/account", "backend/src/{name}.Api/Extensions/ActiveUserRequirement.cs", "backend/src/{name}.Api/Extensions/InvalidAccountResultHandler.cs")
-        ReadmeContains = @("EF Core 数据访问")
-        ReadmeExcludes = @("本地账号", "OpenIddict", "通知持久化", "外部身份提供方登录")
-    }
-    "tenancy" = @{
-        Arguments = @("--include-tenancy", "true"); Frontend = $true; Lint = $true
+    "identity" = @{
+        Arguments = @("--ServiceRole", "Identity"); Frontend = $true; Lint = $true
         Present = @(
+            "backend/src/{name}.Api/Controllers/AuthController.cs",
             "backend/src/{name}.Api/Controllers/TenantController.cs",
-            "backend/src/{name}.Application/Tenants",
-            "backend/tests/{name}.IntegrationTests/TenancyTests.cs",
-            "frontend/src/app/features/platform/components/tenants",
-            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
-            "frontend/_mock/api/tenant.ts"
+            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
+            "backend/src/{name}.DbMigrator"
         )
-        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
-        ReadmeContains = @("多租户")
-        ReadmeExcludes = @("通知持久化")
-    }
-    "tenancy-illegal" = @{
-        # 非法组合：多租户依赖角色权限。模板以 TenancyEnabled computed symbol 收口——
-        # 该组合不报错，而是整体不生成租户能力，得到一个合法的无租户项目。
-        # 断言零残留：任何一处条件漏改都会让租户代码带着缺失的角色/权限依赖进入生成物。
-        Arguments = @("--include-tenancy", "true", "--include-roles", "false"); Frontend = $true; Lint = $false
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
         Absent = @(
-            "backend/src/{name}.Api/Controllers/TenantController.cs",
-            "backend/src/{name}.Application/Tenants",
-            "backend/src/{name}.Application/Permissions",
-            "frontend/src/app/features/platform/components/tenants",
-            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
-            "frontend/src/app/core/interceptors/tenant-interceptor.spec.ts",
-            "frontend/src/app/core/services/tenant-context-service.spec.ts"
+            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
+            "backend/src/{name}.Api/Controllers/NotificationsController.cs"
         )
-        ReadmeContains = @("本地账号")
-        ReadmeExcludes = @("多租户", "用户、角色、权限以及超级管理员授权模型")
-        ForbiddenTokens = @("IMultiTenant", "App.Tenants", "X-Tenant-Id", "TenancyEnabled", "ICurrentTenant")
+        ReadmeContains = @()
+        ReadmeExcludes = @()
     }
-    "tenancy-external-login" = @{
-        # 外部登录连接按 (Provider, ProviderUserId) 查找，是租户内唯一而非全局唯一的键；
-        # 两个能力必须组合验证，否则跨租户绑定同一外部身份的缺陷测不出来。
-        Arguments = @("--include-tenancy", "true", "--include-external-login", "true"); Frontend = $true; Lint = $true
+    "resource" = @{
+        Arguments = @("--ServiceRole", "Resource"); Frontend = $true; Lint = $true
         Present = @(
-            "backend/src/{name}.Api/Controllers/TenantController.cs",
-            "backend/src/{name}.Api/Controllers/ExternalAuthController.cs",
-            "backend/src/{name}.Domain/Auth/Entities/ExternalLoginConnection.cs"
+            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
+            "backend/src/{name}.DbMigrator"
         )
-        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
-        ReadmeContains = @("多租户", "外部身份提供方登录")
-        ReadmeExcludes = @("通知持久化")
+        Absent = @(
+            "backend/src/{name}.Api/Controllers/AuthController.cs",
+            "backend/src/{name}.Api/Controllers/TenantController.cs",
+            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
+            "frontend/src/app/features/account"
+        )
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+        ForbiddenTokens = @("App.Tenants")
     }
-    "no-roles" = @{
-        Arguments = @("--include-roles", "false"); Frontend = $true; Lint = $false
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
-        Absent = @("backend/src/{name}.Application/Permissions", "backend/src/{name}.Domain/Permissions")
-        ReadmeContains = @("本地账号", "OpenIddict")
-        ReadmeExcludes = @("用户、角色、权限以及超级管理员授权模型")
-        # 路径存在性挡不住"文件还在、角色契约残留在里面"：DTO 字段、OAuth scope、role claim
-        # 都会让前后端契约对不上，或让 Mock 与真实后端行为分叉。只查高信号符号，
-        # 不做泛化的 "role" 扫描——HTML/ARIA 里到处是 role=，噪声会淹掉信号。
-        # 不含裸的 Claims.Role：它还作为 ClaimsIdentity(authType, nameType, roleType) 的构造参数出现，
-        # 那是框架管道而非角色契约（该重载没有两参版本，省掉会连带改变 nameType 解析）。
-        # scp:roles 是前端字面量，不含任何 C# 符号——上一轮只查符号，它就整条漏了过去。
-        ForbiddenTokens = @("roleIds", "Scopes.Roles", "SetClaims(Claims.Role", "ManageRoles", "scp:roles")
-    }
-    "notifications" = @{
-        Arguments = @("--include-notifications", "true"); Frontend = $true; Lint = $true
+    "identity-notifications" = @{
+        Arguments = @("--ServiceRole", "Identity", "--include-notifications"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
         Absent = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
-        ReadmeContains = @("通知持久化", "OpenIddict")
-        ReadmeExcludes = @("外部身份提供方登录")
+        ReadmeContains = @()
+        ReadmeExcludes = @()
     }
-    "no-openiddict" = @{
-        Arguments = @("--include-openiddict", "false"); Frontend = $true; Lint = $false
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
-        Absent = @("backend/src/{name}.Api/Controllers/AuthorizationController.cs", "backend/src/{name}.Api/Controllers/OpenApplicationController.cs")
-        ReadmeContains = @("本地账号")
-        ReadmeExcludes = @("OpenIddict", "OAuth 2.0/OIDC Server")
+    "resource-notifications" = @{
+        Arguments = @("--ServiceRole", "Resource", "--include-notifications"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
+        ReadmeContains = @()
+        ReadmeExcludes = @()
     }
-    "external-login" = @{
-        Arguments = @("--include-external-login", "true"); Frontend = $true; Lint = $true
+    "identity-external-login" = @{
+        Arguments = @("--ServiceRole", "Identity", "--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
-        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
-        ReadmeContains = @("外部身份提供方登录", "OpenIddict")
-        ReadmeExcludes = @("通知持久化")
-    }
-    "localization" = @{
-        Arguments = @("--include-localization", "true"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Resources/en.json", "backend/src/{name}.Api/Resources/zh-CN.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @()
         ReadmeContains = @()
         ReadmeExcludes = @()
     }
-    "no-localization" = @{
-        Arguments = @("--include-localization", "false"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Program.cs")
-        Absent = @("backend/src/{name}.Api/Resources", "frontend/public/i18n", "frontend/src/app/core/services/language-service.ts")
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-    }
-    # 交叉场景：本地化 + 通知（校验通知面板的本地化 gate）
-    "localization-notifications" = @{
-        Arguments = @("--include-localization", "true", "--include-notifications", "true"); Frontend = $true; Lint = $true
-        Present = @("frontend/public/i18n/en.json", "backend/src/{name}.Api/Controllers/NotificationsController.cs")
+    "identity-localization" = @{
+        Arguments = @("--ServiceRole", "Identity", "--include-localization"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @()
         ReadmeContains = @()
         ReadmeExcludes = @()
     }
-    # 交叉场景：本地化 + 外部登录（校验第三方回调页的本地化 gate）
-    "localization-external-login" = @{
-        Arguments = @("--include-localization", "true", "--include-external-login", "true"); Frontend = $true; Lint = $true
-        Present = @("frontend/public/i18n/en.json", "frontend/src/app/features/account/components/external-auth-callback")
-        Absent = @()
+    "resource-localization" = @{
+        Arguments = @("--ServiceRole", "Resource", "--include-localization"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
         ReadmeContains = @()
         ReadmeExcludes = @()
     }
@@ -597,12 +540,11 @@ if (Test-Path -LiteralPath $oldRunsRoot) {
 
 New-Item -ItemType Directory -Path $generatedRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $hiveRoot -Force | Out-Null
-# 第三方 NuGet 缓存跨 run 共享、只读复用（(id,version) 不可变，并发安全）；本 run 用它作 globalPackagesFolder。
-New-Item -ItemType Directory -Path $sharedPackagesRoot -Force | Out-Null
-$env:NUGET_PACKAGES = $sharedPackagesRoot
+New-Item -ItemType Directory -Path $packagesRoot -Force | Out-Null
+$env:NUGET_PACKAGES = $packagesRoot
 
 $escapedFeedRoot = [Security.SecurityElement]::Escape($feedRoot)
-$escapedPackagesRoot = [Security.SecurityElement]::Escape($sharedPackagesRoot)
+$escapedPackagesRoot = [Security.SecurityElement]::Escape($packagesRoot)
 $nugetConfig = @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -626,12 +568,6 @@ elseif (-not (Test-Path -LiteralPath $feedRoot)) {
     throw "-SkipPack requires an existing shared feed at '$feedRoot'（先 `dotnet pack ... -o .tmp/local-feed`，或省略 -SkipPack 以重新 pack）."
 }
 
-# 定点清除共享缓存里的 Leistd.*：NuGet 对已在 globalPackagesFolder 中的同版本包不会重新解包，
-# 若源码变了但版本号未变（本地 0.12.0），restore 会命中陈旧内容。只清 Leistd.*（几 MB，非整个 ~1GB 闭包）
-# 强制本轮重新解包新 pack 的本地包；第三方包保持温热。
-Get-ChildItem -LiteralPath $sharedPackagesRoot -Directory -Filter "leistd.*" -ErrorAction SilentlyContinue |
-    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
-
 Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", $templateRoot, "--force")
 
 $results = [System.Collections.Generic.List[object]]::new()
@@ -648,9 +584,7 @@ foreach ($scenario in $Scenarios) {
     Assert-ScenarioShape $projectRoot $projectName $definition
 
     $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-    # --force：等价于删除并重建 project.assets.json、强制重新评估依赖资产图（解决被 design-time restore
-    # 覆盖、资产图未刷新等问题）。注意：它**不**清除 globalPackagesFolder 中已提取的同 ID/同版本包——
-    # 同版本内容变化（本地 Leistd.* 0.12.0）由前面「pack 后定点清除共享缓存里的 leistd.*」处理，故此处安全。
+    # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
     Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
     Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
@@ -681,9 +615,9 @@ foreach ($scenario in $Scenarios) {
         Invoke-External "npm" @("run", "build") $frontendRoot
         $frontendValidated = $true
 
-        # 前端单测（无头、单次）：每个场景都含一条不受本地化裁剪的基础 smoke spec，
-        # 故 npm test 恒能命中 >=1 个 spec；本地化场景另含 translationReady 首帧回归测试。
-        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=ChromeHeadless") $frontendRoot
+        # 前端单测（单次）：CI 默认 ChromeHeadless，人工验收可传 -FrontendBrowser Chrome 观看有头浏览器。
+        # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含 translationReady 首帧回归测试。
+        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
         $testValidated = $true
     }
 

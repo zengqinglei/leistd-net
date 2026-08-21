@@ -39,7 +39,7 @@ $allow = @(
     'ValidationProblemDetails','IProxyGenerator',   # IProxyGenerator=Castle 类型：文档不该引它，但它不是 Leistd 自有，靠源码存在性判定
     # 第三方基类（Castle / Mapster / AutoMapper）
     'AsyncInterceptorBase','IMapperConfigurationExpression','TypeAdapterConfig','Profile','IInterceptor',
-    'AddProfile','CreateMap',
+    'AddProfile','CreateMap','ApplyAbpConceptsForAddedEntity',
     # Refit（service-client 文档引用的第三方类型/特性；AttachmentName 为已废弃特性，文档明确禁用）
     'StreamPart','ByteArrayPart','FileInfoPart','ApiResponse','ApiException','RefitSettings',
     'BodySerializationMethod','AttachmentName',

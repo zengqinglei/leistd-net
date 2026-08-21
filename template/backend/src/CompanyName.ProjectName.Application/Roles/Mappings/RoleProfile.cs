@@ -1,4 +1,4 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.ObjectMapping.Mapster;

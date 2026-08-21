@@ -6,7 +6,12 @@ namespace Leistd.UnitOfWork.Core.Database;
 public interface IDatabaseApiContainer
 {
     /// <summary>
-    /// 获取或添加数据库 API
+    /// 按稳定 key 查找数据库 API
     /// </summary>
-    IDatabaseApi GetOrAddDatabaseApi(Func<IDatabaseApi> factory);
+    IDatabaseApi? FindDatabaseApi(string key);
+
+    /// <summary>
+    /// 按稳定 key 添加数据库 API；同一 key 不允许被覆盖
+    /// </summary>
+    void AddDatabaseApi(string key, IDatabaseApi api);
 }

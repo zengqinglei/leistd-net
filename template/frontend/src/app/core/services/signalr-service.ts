@@ -1,4 +1,12 @@
-import { Injectable, signal, computed } from '@angular/core';
+// prettier-ignore
+import {
+  Injectable,
+  signal,
+  computed,
+  //#if (ResourceService)
+  inject,
+  //#endif
+} from '@angular/core';
 import {
   HubConnectionBuilder,
   HubConnection,
@@ -6,6 +14,10 @@ import {
   LogLevel,
   HttpTransportType,
 } from '@microsoft/signalr';
+//#if (ResourceService)
+import { OidcSecurityService } from 'angular-auth-oidc-client';
+import { firstValueFrom } from 'rxjs';
+//#endif
 
 import { environment } from '../../../environments/environment';
 
@@ -37,10 +49,15 @@ export interface NotificationOutputDto {
  * SignalR 全局服务：管理通知 Hub 与实时业务事件 Hub。
  *
  * 地址：Hub 经 resolveHubUrl 拼接 environment.api.gateway，与 HTTP 请求走同一后端（HubConnectionBuilder 不经过 HTTP 拦截器）。
- * 认证：模板使用 Cookie 会话，withUrl 默认 withCredentials=true 自动携带 Cookie（跨源时需后端 CORS 允许该源 + AllowCredentials）。
+ * 认证：Identity 使用 Cookie 会话；Resource 从 OIDC 会话提供短寿命 access token。
+ * 浏览器 WebSocket/SSE 无法设置 Authorization 头，SignalR 会在 Hub 连接上使用 access_token query，
+ * 后端只对两个 Hub 路径定向接受并立即从 QueryString 移除。
  */
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
+  //#if (ResourceService)
+  private readonly oidc = inject(OidcSecurityService);
+  //#endif
   private notificationConnection: HubConnection | null = null;
   private businessConnection: HubConnection | null = null;
 
@@ -281,6 +298,9 @@ export class SignalRService {
     const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/notifications'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
+        //#if (ResourceService)
+        accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
+        //#endif
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(LogLevel.Information)
@@ -316,6 +336,9 @@ export class SignalRService {
     const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/realtime'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
+        //#if (ResourceService)
+        accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
+        //#endif
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(LogLevel.Information)

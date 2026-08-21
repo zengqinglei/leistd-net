@@ -11,12 +11,16 @@
     <!-- PasswordHasher 使用 PBKDF2（Microsoft.AspNetCore.Cryptography.KeyDerivation）。
          显式声明，避免依赖其它包传递的 ASP.NET Core 共享框架。 -->
     <PackageReference Include="Microsoft.AspNetCore.Cryptography.KeyDerivation" />
-<!--#if (IncludeOpenIddict)-->
+<!--#if (IdentityService)-->
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
 <!--#endif-->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+<!--#if (ResourceService)-->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Refit" />
+<!--#endif-->
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="StackExchange.Redis" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
@@ -34,10 +38,10 @@
   <ItemGroup>
     <PackageReference Include="Leistd.Ddd.Infrastructure" />
     <PackageReference Include="Leistd.Auditing.EntityFrameworkCore" />
-<!--#if (IncludeRoles)-->
+<!--#if (LocalAuthorization)-->
     <PackageReference Include="Leistd.Authorization.EntityFrameworkCore" />
     <!--#endif-->
-<!--#if (TenancyEnabled)-->
+<!--#if (IdentityService)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
@@ -46,6 +50,10 @@
     <PackageReference Include="Leistd.EventBus.Local" />
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />
+<!--#if (ResourceService)-->
+    <PackageReference Include="Leistd.ServiceClient.Refit" />
+    <PackageReference Include="Leistd.ServiceClient.OAuth" />
+<!--#endif-->
   </ItemGroup>
 
 </Project>

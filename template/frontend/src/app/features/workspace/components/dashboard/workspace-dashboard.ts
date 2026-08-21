@@ -13,7 +13,7 @@ import {
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { HlmBadge } from '@spartan-ng/helm/badge';
 //#endif
 import { HlmCardImports } from '@spartan-ng/helm/card';
@@ -28,13 +28,13 @@ import { LayoutService } from '../../../../layout/services/layout-service';
   selector: 'app-workspace-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   imports: [...HlmCardImports, HlmBadge, TranslocoModule],
   //#else
   imports: [...HlmCardImports, TranslocoModule],
   //#endif
   //#else
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   imports: [...HlmCardImports, HlmBadge],
   //#else
   imports: [...HlmCardImports],

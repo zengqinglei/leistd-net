@@ -2,11 +2,8 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 #if (IncludeExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using Leistd.Authorization.EntityFrameworkCore;
-#endif
-#if (TenancyEnabled)
-using Leistd.MultiTenancy.EntityFrameworkCore;
 #endif
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
@@ -23,7 +20,7 @@ public class MyProjectDbContext(
 {
     // Users（始终存在）
     public DbSet<User> Users { get; set; } = null!;
-#if (IncludeRoles)
+#if (LocalAuthorization)
     // Identity 角色模型
     public DbSet<Role> Roles { get; set; } = null!;
     public DbSet<UserRole> UserRoles { get; set; } = null!;
@@ -31,7 +28,7 @@ public class MyProjectDbContext(
 #if (IncludeExternalLogin)
     public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
     public DbSet<PermissionGrantRecord> PermissionGrantRecords { get; set; } = null!;
 #endif
 
@@ -48,23 +45,21 @@ public class MyProjectDbContext(
     /// </remarks>
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasDefaultSchema("companyname-projectname");
+
         // 基础实体配置（始终包含）
         modelBuilder.ConfigureBaseEntities();
-#if (IncludeIdentity)
+#if (IdentityService)
         // 认证相关实体配置
         modelBuilder.ConfigureIdentity();
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
         // 权限授予实体配置
         modelBuilder.ConfigureAuthorization();
 #endif
 #if (IncludeNotifications)
         // 通知实体配置
         modelBuilder.ConfigureNotifications();
-#endif
-#if (TenancyEnabled)
-        // 租户注册表配置
-        modelBuilder.ConfigureMultiTenancy();
 #endif
     }
 }

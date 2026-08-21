@@ -1,4 +1,4 @@
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
@@ -71,6 +71,7 @@ describe('Tenants 页面闭环', () => {
     displayName: 'Globex Corp.',
     adminEmail: 'admin@globex.example.com',
     adminPassword: 'Globex@123456',
+    databaseMode: 'SharedDatabase',
   };
 
   beforeEach(async () => {

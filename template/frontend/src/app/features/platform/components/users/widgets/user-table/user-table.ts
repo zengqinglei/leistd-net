@@ -33,7 +33,7 @@ import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 //#endif
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
@@ -52,19 +52,19 @@ import {
   TablePaginator,
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 //#endif
 import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { RoleBriefDto } from '../../../../models/role.dto';
 //#endif
 import { UserManagementOutputDto } from '../../../../models/user-management.dto';
 
 const MEDIUM_VIEWPORT = '(min-width: 768px)';
 const LARGE_VIEWPORT = '(min-width: 1024px)';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 /** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 //#endif
@@ -80,7 +80,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     TablePaginator,
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     ...HlmPopoverImports,
     PopoverAria,
     //#endif
@@ -130,7 +130,7 @@ export class UserTable {
    */
   readonly canUpdate = input(true);
   readonly canDelete = input(true);
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   readonly canManageRoles = input(false);
   //#endif
 
@@ -140,7 +140,7 @@ export class UserTable {
     () =>
       this.canUpdate() ||
       this.canDelete() ||
-      //#if (IncludeRoles)
+      //#if (LocalAuthorization)
       this.canManageRoles() ||
       //#endif
       false,
@@ -150,9 +150,11 @@ export class UserTable {
   readonly sortingChange = output<SortingState>();
   readonly edit = output<string>();
   readonly toggleActive = output<UserManagementOutputDto>();
+  //#if (IdentityService)
   readonly resetPassword = output<string>();
+  //#endif
   readonly delete = output<UserManagementOutputDto>();
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   /** 角色分配是独立命令，与资料编辑分开触发。 */
   readonly manageRoles = output<UserManagementOutputDto>();
   //#endif
@@ -182,7 +184,7 @@ export class UserTable {
       meta: { priority: 'primary', locked: true },
     },
     { accessorKey: 'email', id: 'email', meta: { priority: 'secondary' } },
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     { accessorKey: 'roles', id: 'roles', enableSorting: false, meta: { priority: 'secondary' } },
     //#endif
     {
@@ -192,7 +194,9 @@ export class UserTable {
       enableHiding: false,
       meta: { priority: 'primary', locked: true },
     },
+    //#if (IdentityService)
     { accessorKey: 'lastLoginTime', id: 'lastLoginTime', meta: { priority: 'tertiary' } },
+    //#endif
     { accessorKey: 'creationTime', id: 'creationTime', meta: { priority: 'tertiary' } },
     {
       id: 'actions',
@@ -232,7 +236,7 @@ export class UserTable {
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
   }
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   detailLabel(field: 'email' | 'roles' | 'lastLogin' | 'created'): string {
     //#if (IncludeLocalization)
     const keys = {
@@ -301,7 +305,7 @@ export class UserTable {
   // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   //#if (IncludeLocalization)
   rolesPopoverTitle(count: number): string {
     return this.transloco.translate('users.popover.rolesTitle', { count });
@@ -336,7 +340,7 @@ export class UserTable {
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   //#if (IncludeLocalization)
   rolesActionLabel(): string {
     return this.transloco.translate('users.actions.manageRoles');
@@ -349,7 +353,7 @@ export class UserTable {
 
   //#endif
   //#endif
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   getVisibleRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(0, 2);
   }
@@ -403,7 +407,7 @@ export class UserTable {
     return isActive ? 'Active' : 'Disabled';
     //#endif
   }
-
+  //#if (IdentityService)
   emailVerifiedLabel(verified: boolean): string {
     //#if (IncludeLocalization)
     return this.transloco.translate(
@@ -413,6 +417,7 @@ export class UserTable {
     return verified ? 'Email verified' : 'Email not verified';
     //#endif
   }
+  //#endif
 
   actionLabel(
     action: 'details' | 'edit' | 'toggle' | 'reset' | 'delete',
@@ -450,7 +455,7 @@ export class UserTable {
   isSelfSuperAdmin(user: UserManagementOutputDto): boolean {
     return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
   }
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
 
   /**
    * 角色徽章样式。

@@ -10,6 +10,13 @@ export interface Environment {
    * - `object`: 按模块开启 Mock (特性开关)
    */
   useMock: boolean | MockConfig;
+  //#if (ResourceService)
+  oidc: {
+    authority: string;
+    clientId: string;
+    scope: string;
+  };
+  //#endif
   api: {
     gateway: string; // 网关地址, 为空则不使用（服务地址为完整地址）
     authService: {
@@ -31,6 +38,13 @@ export const environmentBase: Environment = {
   production: false,
   useHash: false,
   useMock: false, // 默认关闭
+  //#if (ResourceService)
+  oidc: {
+    authority: 'https://identity.example.com',
+    clientId: 'companyname-projectname-web',
+    scope: 'openid profile email roles companyname-projectname-api',
+  },
+  //#endif
   api: {
     gateway: 'https://example.com', // 本地开发的网关地址
     authService: {

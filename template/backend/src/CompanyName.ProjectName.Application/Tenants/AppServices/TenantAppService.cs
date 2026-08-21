@@ -1,4 +1,4 @@
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.Contracts.Dtos;
@@ -7,6 +7,7 @@ using Leistd.Exception.Core;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Leistd.UnitOfWork.Core.Uow;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 
@@ -19,11 +20,13 @@ namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 /// </remarks>
 public class TenantAppService(
     ITenantManager tenantManager,
+    ITenantConnectionConfigurationManager connectionConfigurationManager,
     ITenantStore tenantStore,
     ITenantNormalizer tenantNormalizer,
     ITenantSeeder tenantSeeder,
     ICurrentTenant currentTenant,
     IRepository<User, Guid> userRepository,
+    IUnitOfWorkManager unitOfWorkManager,
     IServiceScopeFactory serviceScopeFactory,
     ILogger<TenantAppService> logger) : ITenantAppService
 {
@@ -67,22 +70,38 @@ public class TenantAppService(
     /// </remarks>
     public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
     {
-        var tenant = await tenantManager.CreateAsync(
-            input.Name, input.DisplayName, isActive: false, cancellationToken: cancellationToken);
+        TenantConfiguration tenant;
+        using (var controlUnitOfWork = await unitOfWorkManager.BeginAsync())
+        {
+            tenant = await tenantManager.CreateAsync(
+                input.Name, input.DisplayName, isActive: false, cancellationToken: cancellationToken);
+
+            await connectionConfigurationManager.SetAsync(
+                tenant.Id,
+                input.DatabaseMode,
+                input.RuntimeSecretReference,
+                input.MigrationSecretReference,
+                cancellationToken);
+            await controlUnitOfWork.CompleteAsync(cancellationToken);
+        }
 
         TenantConfiguration activated;
         try
         {
             // 在新租户上下文内种子：角色、权限授予、租户管理员的所有行由落值拦截器自动归属该租户
             using (currentTenant.Change(tenant.Id, tenant.Name))
+            using (var businessUnitOfWork = await unitOfWorkManager.BeginAsync())
             {
                 await tenantSeeder.SeedAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
+                await businessUnitOfWork.CompleteAsync(cancellationToken);
             }
 
             // 激活也在补偿边界内：并发的宿主管理员可能在播种期间把这个租户删掉，
             // 那时激活会抛 TenantNotFound——数据不是"已完整"而是孤儿的，必须一并清理。
             // 这一步能安全地纳入补偿，前提是它不再有尽力而为的缓存失效步骤（存储直接读库）
+            using var activationUnitOfWork = await unitOfWorkManager.BeginAsync();
             activated = await tenantManager.SetActiveAsync(tenant.Id, true, cancellationToken);
+            await activationUnitOfWork.CompleteAsync(cancellationToken);
         }
         catch (Exception ex)
         {

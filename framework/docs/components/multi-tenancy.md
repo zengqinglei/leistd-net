@@ -9,7 +9,7 @@
 | 场景 | 使用 |
 | --- | --- |
 | 服务需要按租户隔离数据（SaaS 后台） | `Core` + `AspNetCore` + `EntityFrameworkCore` 全套 |
-| 资源服务仅消费 token 中的租户 claim，不持有租户注册表 | `Core` + `AspNetCore`，Store 用 `AddInMemoryTenantStore` 配置租户清单 |
+| 资源服务仅信任已验证 token 中的租户 claim，不持有租户注册表 | `Core` + `AspNetCore`，认证后挂载 `UseAuthenticatedTenantContext()` |
 | 后台任务/事件处理器需要在某租户上下文内执行 | `Core` 的 `ICurrentTenant.Change()` |
 | 服务间调用需要传递租户 | 由 `Leistd.ServiceClient` 承担（出站 `X-Tenant-Id`、被调方受信恢复），本组件只负责解析恢复后的 claim |
 | 非多租户项目 | 不引用、不注册——实体不实现 `IMultiTenant` 时过滤器不作用于任何实体，零成本 |
@@ -49,7 +49,7 @@ app.UseAuthorization();
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
     base.OnModelCreating(modelBuilder);   // BaseDbContext 在此套用软删除与租户全局过滤器
-    modelBuilder.ConfigureMultiTenancy(); // TenantRecord 表
+    modelBuilder.ConfigureMultiTenancy(); // TenantRecord + TenantConnectionRecord
 }
 ```
 
@@ -62,7 +62,27 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 | `ITenantNormalizer` | `UpperInvariantTenantNormalizer` | Transient |
 | `ITenantResolver` | `TenantResolver` | Scoped |
 
-`AddMultiTenancyEfCore<TDbContext>` 追加：`ITenantStore` → `EfCoreTenantStore<TDbContext>`、`ITenantManager` → `EfCoreTenantManager<TDbContext>`（均 Transient，`TryAdd` 可替换）、`IClock`（TryAdd UTC 默认）。除 `TDbContext` 外无其它基础设施依赖。**不注册任何落值组件**——落值是 `BaseDbContext` 的职责。
+`AddMultiTenancyEfCore<TDbContext>` 追加：`ITenantStore` / `ITenantManager`、`ITenantConnectionConfigurationStore` / `ITenantConnectionConfigurationManager` 的 EF Core 实现（均 Transient，`TryAdd` 可替换），以及 `IClock`（TryAdd UTC 默认）。除 `TDbContext` 外无其它基础设施依赖。**不注册通用落值拦截器**：业务实体的 `TenantId` 和创建审计归 `BaseDbContext`；宿主侧 `TenantRecord` 的创建/删除时间由 `ITenantManager` 自足保证，因此 Control DbContext 可以保持为普通 `DbContext`。
+
+### Identity 与 Resource 的两种管道
+
+Identity 持有租户注册表，需要解析匿名登录请求并检查租户启停：
+
+```csharp
+app.UseAuthentication();
+app.UseMultiTenancy();
+app.UseAuthorization();
+```
+
+Resource 不复制租户状态，只从认证组件已验证的主体建立上下文：
+
+```csharp
+app.UseAuthentication();
+app.UseAuthenticatedTenantContext();
+app.UseAuthorization();
+```
+
+`UseAuthenticatedTenantContext()` 要求非匿名端点的主体恰好包含一个合法、非空 Guid `tenant_id`；它不读 Header、QueryString、Domain 或 `ITenantStore`，因此外部输入无法改写 token 中的租户。带 `[AllowAnonymous]` 的端点原样放行，适合 liveness 和 OIDC 回调等明确匿名入口。两种中间件不应在同一宿主中同时使用。
 
 ## 使用
 
@@ -129,6 +149,36 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 ```
 
 租户一旦启用，中间件就会接受它——而此刻它可能还没有管理员和权限授予，任何匿名端点（注册、找回密码）带上它的 `X-Tenant-Id` 就能进入这个半成品租户。初始化失败时的补偿也可能失败，那样留下的会是一个永久可用、无人管得住的租户。停用态创建把这个窗口整体关掉。
+
+### 租户数据放置与连接配置
+
+Framework 只建模两种数据放置，与业务服务数量无关：
+
+| 模式 | 连接目标 | 隔离约束 |
+| --- | --- | --- |
+| `SharedDatabase` | 服务宿主的命名默认连接 | 每个服务固定 schema，业务表继续使用 `TenantId` 行隔离 |
+| `DedicatedDatabase` | 该租户覆盖的物理数据库 | 所有服务共用该租户的目标连接，仍各自使用固定 schema 和 `TenantId` |
+
+`TenantConnectionRecord` 与 `TenantRecord` 一对一存在于 Identity Control DB。它只保存 `DatabaseMode`、Runtime/Migration Secret Reference 和递增 `Version`，**不保存明文连接字符串**。`SharedDatabase` 不允许 Secret Reference；`DedicatedDatabase` 必须同时提供两个引用，用于分离 API/后台 DML 身份与 DbMigrator DDL 身份。
+
+```csharp
+await connectionManager.SetAsync(
+    tenantId,
+    TenantDatabaseMode.DedicatedDatabase,
+    runtimeSecretReference: "vault://runtime/tenant-a",
+    migrationSecretReference: "vault://migration/tenant-a");
+```
+
+`ITenantConnectionConfigurationStore` 提供单租户读取与 DbMigrator 枚举；`ITenantConnectionStringResolver` 是宿主实现的最终解析边界，输入连接名、异步返回最终连接字符串。Framework 不依赖 Identity SDK 或任何 Secret 产品 SDK；未知租户、缺失配置或 Secret 无法解析时，宿主实现必须 fail-closed，不得回退到共享库。
+
+DbContext 默认解析 `Default`。固定在 Control DB 的 DbContext 可声明独立名称：
+
+```csharp
+[TenantConnectionStringName("IdentityControl")]
+public sealed class IdentityControlDbContext : DbContext;
+```
+
+该特性只声明连接名；动态解析、UoW 绑定和 DbContext 复用由 `Leistd.UnitOfWork.EfCore` 负责。
 
 ### 解析与校验语义
 
@@ -234,12 +284,22 @@ await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
 
 | 成员 | 说明 |
 | --- | --- |
-| `CreateAsync(name, displayName, isActive, ct)` | 创建（归一化 + 唯一校验）。`isActive` **无默认值**：创建后还要初始化租户数据时必须传 `false` |
+| `CreateAsync(name, displayName, isActive, ct)` | 创建（归一化 + 唯一校验 + 规范化创建时间）。`isActive` **无默认值**：创建后还要初始化租户数据时必须传 `false` |
 | `UpdateAsync(id, name, displayName, ct)` | 改名（归一化 + 唯一校验） |
 | `SetActiveAsync(id, isActive, ct)` | 启停 |
 | `DeleteAsync(id, ct)` | 软删除（不依赖审计拦截器，绝不物理删除） |
 | `FindAsync(id, ct)` | 管理读路径按 Id 查找，不存在/已删除返回 null |
 | `GetPagedAsync(keyword, offset, limit, ct)` | 分页查询（名称/显示名关键字，按创建时间倒序），返回 `TenantPage` |
+
+### 租户连接契约
+
+| 成员 | 说明 |
+| --- | --- |
+| `ITenantConnectionConfigurationStore.FindAsync(tenantId, ct)` | 读取单个配置；缺失返回 `null` |
+| `ITenantConnectionConfigurationStore.GetListAsync(ct)` | 枚举未删除租户的配置，供单服务 DbMigrator 计算目标 |
+| `ITenantConnectionConfigurationManager.SetAsync(...)` | 创建/更新模式与两个 Secret Reference，维护不变量和版本 |
+| `ITenantConnectionStringResolver.ResolveAsync(name, ct)` | 为当前宿主/租户异步返回最终连接字符串 |
+| `[TenantConnectionStringName(name)]` | 为 DbContext 声明解析名；未声明时使用 `Default` |
 
 ### `Leistd.MultiTenancy.MultiTenancySides`
 
@@ -270,6 +330,7 @@ await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
 ### Leistd.MultiTenancy.AspNetCore
 
 - 中间件把 `Change()` 包裹整个下游管道，并压入日志 Scope `leistd.tenantId`（结构化日志按租户检索）。
+- `AuthenticatedTenantContextMiddleware` 对 `[AllowAnonymous]` 端点不要求主体；其余请求必须已认证且恰有一个有效 `tenant_id`。
 - 异常直接上抛，由 `Leistd.Exception` 全局处理器映射 HTTP 状态码；组件不自带错误页。
 
 ### Leistd.MultiTenancy.EntityFrameworkCore
@@ -278,7 +339,9 @@ await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
 - 成本可忽略：租户解析每请求一次索引查找，用的是当前请求已有的 `DbContext`，不新开连接；同一个仓库里用户判活（`ActiveUserRequirement`）本来就是每请求读库，租户表比用户表更小更热。附带收益是租户解析不再依赖分布式缓存可用——此前缓存读取失败会直接抛出，缓存一挂则所有带租户的请求全部 500。
 - 极高 RPS 且能接受撤销延迟的服务，自行包装 `ITenantStore` 装饰器加缓存。**那是一个需要显式承担陈旧风险的决定**，不由框架替所有人默认做。
 - 落值只处理 `Added` 且 `TenantId == null` 的实体；宿主上下文保存的实体保持 `null` 即宿主数据。
+- `EfCoreTenantManager` 不把租户注册表的时间完整性交给宿主：创建与软删除都使用 `IClock.Normalize(IClock.Now)` 落值。这与权限/通知业务表由 `BaseDbContext` 在进入跟踪时落创建审计并不冲突：前者要支持普通 Control DbContext，后者属于 DDD 业务数据。
 - `TenantRecord` 不实现 `IMultiTenant`（它本身是宿主侧数据）。名称唯一性由**未删除行上的部分唯一索引**保证（`IsDeleted = false` 过滤，PostgreSQL 与 SQLite 通用），删除后名称可复用；管理器的先查后校验只负责给出友好错误，并发落败方由数据库拒绝后同样得到 `DuplicateTenantNameException`（映射 409）。低频与权限门禁都不能替代数据库不变量。
+- `TenantConnectionRecord` 以 `TenantId` 为主键并与 `TenantRecord` 一对一级联删除；数据库 Check Constraint 与 Manager 双重保证 Shared/Dedicated 的 Secret Reference 不变量。
 
 ### 与 DDD 基座的配合（`Leistd.Ddd.Infrastructure`）
 
@@ -287,8 +350,8 @@ await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
 
 ## 注意事项
 
-- **中间件顺序**：`UseAuthentication()` →（`UseServiceUserContext()`）→ `UseMultiTenancy()` → `UseAuthorization()`。放在认证前 Claim 贡献者拿不到主体；放在授权后权限检查会落在错误的租户分区。
-- **认证端职责**：签发 cookie/token 时必须写入 `tenant_id` claim（`CustomClaimTypes.TenantId`），否则已登录用户每次请求都会退回宿主上下文。
+- **中间件顺序**：`UseAuthentication()` → Identity 的 `UseMultiTenancy()` **或** Resource 的 `UseAuthenticatedTenantContext()` → `UseAuthorization()`。放在认证前无法信任 claim；放在授权后权限检查会落在错误的租户分区。
+- **认证端职责**：向 Resource 签发的 token 必须恰好写入一个 `tenant_id` claim（`CustomClaimTypes.TenantId`）；缺失、重复或非 Guid 都会被 Resource 拒绝，不会回退为宿主。
 - **派生 DbContext 改写 `ConfigureModel`**（`BaseDbContext` 已封闭 `OnModelCreating`）：组件实体配置必须在过滤器套用之前进入模型，否则没有 `DbSet` 声明的实体（如授权版本表）会逃过租户隔离。详见 [DDD 基座](../ddd-struct/ddd-struct.md)。
 - **绕过过滤器的红线**：`IgnoreQueryFilters()` 与 raw SQL（如 EF 的 FromSqlRaw）都会越过租户隔离，代码评审应按跨租户操作对待；需要合法跨租户时用 `Disable<IMultiTenant>()` 显式表达。
 - **租户实体的唯一约束要写成宿主行与租户行成对的部分索引**：`(TenantId, X)` 直接建唯一索引时，PostgreSQL 与 SQLite 都视 NULL 互不相等，宿主行（`TenantId IS NULL`）会失去唯一性兜底。正确形态是一条 `IS NULL` 过滤的 `(X)` 唯一索引加一条 `IS NOT NULL` 过滤的 `(TenantId, X)` 唯一索引——框架的授予、版本与租户注册表都按此配置。
@@ -296,7 +359,7 @@ await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
 - **缓存租户数据的 key 必须含租户 Id**（形如 "app:{tenantId}:orders:{id}"）——分布式缓存不会自动分区。
 - **租户级互斥操作的锁 key 必须含租户 Id**（形如 "app:tenant-init:{tenantId}"），否则所有租户互相排队。
 - **超级管理员不旁路租户隔离**：`IsSuperAdmin` 只旁路功能权限；跨租户数据访问必须走上面的显式姿势。
-- 多服务体系中租户注册表应归属**身份服务**（token 携带 `tenant_id`），资源服务无需本地租户表；确需本地校验时用 `AddInMemoryTenantStore` 配置清单，注意它不会随身份服务自动同步。
+- 多服务体系中租户注册表应归属**Identity 服务**。Resource 不复制租户状态，在 Access Token 有效期内信任已验证的 `tenant_id`；租户停用由 Identity 停止新 token/刷新令牌并等待短寿命 token 收敛。
 
 ## 相关
 

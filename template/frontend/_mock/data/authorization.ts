@@ -47,7 +47,7 @@ export const ALL_PERMISSIONS: string[] = [
   PERMISSIONS.roles.update,
   PERMISSIONS.roles.delete,
   PERMISSIONS.roles.managePermissions,
-  //#if (IncludeOpenIddict)
+  //#if (IdentityService)
   PERMISSIONS.openApplications.default,
   PERMISSIONS.openApplications.create,
   PERMISSIONS.openApplications.update,
@@ -97,7 +97,7 @@ export const PERMISSION_DEFINITIONS = [
           ),
         ],
       },
-      //#if (IncludeOpenIddict)
+      //#if (IdentityService)
       {
         name: PERMISSIONS.openApplications.default,
         displayName: 'Developer applications',

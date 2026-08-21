@@ -3,15 +3,17 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { PagedResultDto } from '../../../shared/models/paged-result.dto';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { RoleBriefDto } from '../models/role.dto';
 //#endif
 import {
   CreateUserInputDto,
   GetUsersInputDto,
+  //#if (IdentityService)
   ResetUserPasswordInputDto,
+  //#endif
   UpdateUserInputDto,
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   UpdateUserRolesInputDto,
   //#endif
   UserManagementOutputDto,
@@ -28,9 +30,11 @@ export class UserManagementService {
     if (input.limit !== undefined) params = params.set('limit', input.limit.toString());
     if (input.keyword) params = params.set('keyword', input.keyword);
     if (input.isActive !== undefined) params = params.set('isActive', input.isActive.toString());
+    //#if (IdentityService)
     if (input.isEmailVerified !== undefined)
       params = params.set('isEmailVerified', input.isEmailVerified.toString());
-    //#if (IncludeRoles)
+    //#endif
+    //#if (LocalAuthorization)
     if (input.roles?.length) {
       for (const role of input.roles) {
         params = params.append('roles', role);
@@ -60,15 +64,16 @@ export class UserManagementService {
   disableUser(id: string): Observable<void> {
     return this.http.patch<void>(`${this.baseUrl}/${id}/disable`, {});
   }
-
+  //#if (IdentityService)
   resetPassword(id: string, data: ResetUserPasswordInputDto): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/${id}/reset-password`, data);
   }
+  //#endif
 
   deleteUser(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
 
   getUserRoles(id: string): Observable<RoleBriefDto[]> {
     return this.http.get<RoleBriefDto[]>(`${this.baseUrl}/${id}/roles`);

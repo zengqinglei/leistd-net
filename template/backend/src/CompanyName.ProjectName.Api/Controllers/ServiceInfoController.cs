@@ -26,7 +26,7 @@ public class ServiceInfoController : BaseController
             DateTimeOffset.UtcNow);
     }
 
-#if (IncludeIdentity)
+#if (IdentityService)
     /// <summary>
     /// 返回「本次调用以谁的身份进入」：用户（可能经服务调用头恢复）与调用方客户端。
     /// 默认授权策略要求可用的自然人用户——服务间调用须携带受信的 X-User-Id 才能通过；
@@ -49,7 +49,7 @@ public class ServiceInfoController : BaseController
 /// <param name="ServerTime">服务器当前时间（UTC）</param>
 public sealed record ServiceInfoOutputDto(string Service, string Version, DateTimeOffset ServerTime);
 
-#if (IncludeIdentity)
+#if (IdentityService)
 /// <summary>
 /// 当前调用身份。
 /// </summary>

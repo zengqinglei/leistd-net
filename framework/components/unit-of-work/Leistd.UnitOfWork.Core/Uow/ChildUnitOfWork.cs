@@ -50,11 +50,13 @@ internal class ChildUnitOfWork : IUnitOfWork
 
     public void AddPendingEvents(IEnumerable<ILocalEvent> events) => _parent.AddPendingEvents(events);
 
-    public IDatabaseApi GetOrAddDatabaseApi(Func<IDatabaseApi> factory) => _parent.GetOrAddDatabaseApi(factory);
+    public IDatabaseApi? FindDatabaseApi(string key) => _parent.FindDatabaseApi(key);
 
-    public ITransactionApi? FindTransactionApi() => _parent.FindTransactionApi();
+    public void AddDatabaseApi(string key, IDatabaseApi api) => _parent.AddDatabaseApi(key, api);
 
-    public void AddTransactionApi(ITransactionApi api) => _parent.AddTransactionApi(api);
+    public ITransactionApi? FindTransactionApi(string key) => _parent.FindTransactionApi(key);
+
+    public void AddTransactionApi(string key, ITransactionApi api) => _parent.AddTransactionApi(key, api);
 
     public void Dispose() { }
 

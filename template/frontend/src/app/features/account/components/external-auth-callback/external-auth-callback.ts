@@ -7,7 +7,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { AuthService } from '../../../../core/services/auth-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
 import { AccountService } from '../../services/account-service';
@@ -42,7 +42,7 @@ import { AccountService } from '../../services/account-service';
 })
 export class ExternalAuthCallback implements OnInit {
   private authService = inject(AuthService);
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
   //#endif
   private accountService = inject(AccountService);
@@ -94,7 +94,7 @@ export class ExternalAuthCallback implements OnInit {
 
       // 2. 加载用户信息并按权限跳转
       await lastValueFrom(this.authService.loadUser());
-      //#if (IncludeRoles)
+      //#if (LocalAuthorization)
       await lastValueFrom(this.authorizationService.load());
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);

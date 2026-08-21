@@ -1,10 +1,11 @@
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { Injectable, signal } from '@angular/core';
 
+//#if (IdentityService)
 import { TenantBriefOutputDto } from '../../shared/dtos/tenant.dto';
-
 const TENANT_STORAGE_KEY = 'app.tenant';
 
+//#endif
 /** 本地持久化的租户上下文（登录页选定，拦截器读取）。 */
 export interface TenantContext {
   id: string;
@@ -20,10 +21,15 @@ export interface TenantContext {
  */
 @Injectable({ providedIn: 'root' })
 export class TenantContextService {
+  //#if (IdentityService)
   private readonly _current = signal<TenantContext | null>(readFromStorage());
+  //#else
+  private readonly _current = signal<TenantContext | null>(null);
+  //#endif
   /** 当前已选租户；null 表示宿主（未选租户）。 */
   public readonly current = this._current.asReadonly();
 
+  //#if (IdentityService)
   set(tenant: TenantBriefOutputDto): void {
     const context: TenantContext = {
       id: tenant.id,
@@ -37,17 +43,25 @@ export class TenantContextService {
       // 存储不可用（隐私模式/配额）时仅保留内存态，不影响当前会话。
     }
   }
+  //#else
+  /** Resource 只接受 OIDC 库已验证 Access Token 中的 tenant_id。 */
+  setAuthenticatedTenant(tenantId: string): void {
+    this._current.set({ id: tenantId, name: tenantId });
+  }
+  //#endif
 
   clear(): void {
     this._current.set(null);
+    //#if (IdentityService)
     try {
       localStorage.removeItem(TENANT_STORAGE_KEY);
     } catch {
       // 同上：清除失败不阻断流程。
     }
+    //#endif
   }
 }
-
+//#if (IdentityService)
 function readFromStorage(): TenantContext | null {
   try {
     const raw = localStorage.getItem(TENANT_STORAGE_KEY);
@@ -59,4 +73,5 @@ function readFromStorage(): TenantContext | null {
     return null;
   }
 }
+//#endif
 //#endif

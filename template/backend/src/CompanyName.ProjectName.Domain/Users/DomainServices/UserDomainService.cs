@@ -11,11 +11,11 @@ namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 /// </summary>
 public class UserDomainService(
     IRepository<User, Guid> userRepository,
-#if (IncludeRoles)
+#if (IdentityService && LocalAuthorization)
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
 #endif
-#if (IncludeIdentity)
+#if (IdentityService)
     IPasswordHasher passwordHasher,
 #endif
     ILogger<UserDomainService> logger)
@@ -56,9 +56,14 @@ public class UserDomainService(
     /// 创建用户
     /// </summary>
     public async Task<User> CreateUserAsync(
+#if (ResourceService)
+        Guid subjectId,
+#endif
         string username,
         string email,
+#if (IdentityService)
         string password,
+#endif
         string? displayName,
         CancellationToken cancellationToken = default)
     {
@@ -85,10 +90,10 @@ public class UserDomainService(
         }
 
         // 创建用户
-#if (IncludeIdentity)
+#if (IdentityService)
         var user = new User(username, email, passwordHasher.HashPassword(password), displayName);
 #else
-        var user = new User(username, email, displayName: displayName);
+        var user = new User(subjectId, username, email, displayName: displayName);
 #endif
         await userRepository.InsertAsync(user, cancellationToken);
 
@@ -133,7 +138,7 @@ public class UserDomainService(
         user.UpdateProfile(username, email, displayName, phoneNumber, avatar);
     }
 
-#if (IncludeIdentity)
+#if (IdentityService)
     /// <summary>
     /// 修改密码
     /// </summary>
@@ -165,7 +170,7 @@ public class UserDomainService(
         return Task.CompletedTask;
     }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     public async Task<User> CreateUserWithRolesAsync(
         string username,
         string email,

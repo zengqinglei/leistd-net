@@ -1,7 +1,7 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Net;
 using System.Net.Http.Json;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Domain.Users.Constants;
 #endif
 
@@ -28,7 +28,7 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
         Assert.Empty(page.Items);
     }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     [Fact]
     public async Task Roles_filter_should_normalize_whitespace_and_duplicate_values()
     {

@@ -1,4 +1,4 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 

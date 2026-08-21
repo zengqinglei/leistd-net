@@ -1,30 +1,36 @@
-//#if (IncludeIdentity)
+//#if (IdentityService)
 import { HttpClient, HttpContext } from '@angular/common/http';
 //#endif
 // prettier-ignore
 import {
   Injectable,
-  //#if (IncludeIdentity)
   inject,
-  //#endif
   signal,
 } from '@angular/core';
-//#if (IncludeIdentity)
+//#if (IdentityService)
 import { Observable, lastValueFrom, tap } from 'rxjs';
+//#endif
+//#if (ResourceService)
+import { Router } from '@angular/router';
+import { OidcSecurityService } from 'angular-auth-oidc-client';
+import { firstValueFrom } from 'rxjs';
 //#endif
 
 //#if (IncludeNotifications)
 import { SignalRService } from './signalr-service';
 //#endif
-//#if (IncludeIdentity)
+//#if (IdentityService)
 import { LoginInputDto, UserOutputDto } from '../../features/account/models/account.dto';
 //#endif
+//#if (ResourceService)
+import { TenantContextService } from './tenant-context-service';
+//#endif
 import { User } from '../../shared/models/user.model';
-//#if (IncludeIdentity)
+//#if (IdentityService)
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 //#endif
 
-//#if (IncludeIdentity)
+//#if (IdentityService)
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -87,17 +93,96 @@ export class AuthService {
   }
 }
 //#else
-/**
- * 未启用认证模块时的占位实现：始终无登录用户。
- * 保留 currentUser 信号与 isAuthenticated()，供布局/仪表盘等只读消费。
- */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  private readonly oidc = inject(OidcSecurityService);
+  private readonly router = inject(Router);
+  private readonly tenantContext = inject(TenantContextService);
+  //#if (IncludeNotifications)
+  private readonly signalR = inject(SignalRService);
+  //#endif
   private readonly _currentUser = signal<User | null>(null);
   public readonly currentUser = this._currentUser.asReadonly();
 
   isAuthenticated(): boolean {
-    return false;
+    return this._currentUser() !== null;
   }
+
+  async initializeAuth(): Promise<void> {
+    const result = await firstValueFrom(this.oidc.checkAuth());
+    if (!result.isAuthenticated || !result.accessToken) {
+      this.clearAuthData();
+      return;
+    }
+
+    const claims = decodeJwtPayload(result.accessToken);
+    const tenantId = requireSingleTenantId(claims['tenant_id']);
+    this.tenantContext.setAuthenticatedTenant(tenantId);
+    this._currentUser.set(
+      new User({
+        id: claimString(claims['sub']),
+        username: claimString(claims['preferred_username']) || claimString(claims['name']),
+        email: claimString(claims['email']),
+        displayName: claimString(claims['name']),
+        roles: claimStrings(claims['role']),
+        isSuperAdmin: claims['is_super_admin'] === true || claims['is_super_admin'] === 'true',
+      }),
+    );
+
+    if (window.location.pathname === '/auth/callback') {
+      const returnUrl = sessionStorage.getItem('app.auth.returnUrl') || '/workspace';
+      sessionStorage.removeItem('app.auth.returnUrl');
+      await this.router.navigateByUrl(returnUrl);
+    }
+  }
+
+  login(returnUrl = '/workspace'): void {
+    sessionStorage.setItem('app.auth.returnUrl', returnUrl);
+    this.oidc.authorize();
+  }
+
+  clearAuthData(): void {
+    this._currentUser.set(null);
+    this.tenantContext.clear();
+    //#if (IncludeNotifications)
+    // Hub principal 在握手时已固定，主体切换必须断开旧连接并清空通知状态。
+    void this.signalR.reset();
+    //#endif
+  }
+
+  logout(): void {
+    this.clearAuthData();
+    this.oidc.logoff().subscribe();
+  }
+}
+
+function decodeJwtPayload(accessToken: string): Record<string, unknown> {
+  const encodedPayload = accessToken.split('.')[1];
+  if (!encodedPayload) throw new Error('The access token has no JWT payload.');
+  const normalized = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  return JSON.parse(atob(padded)) as Record<string, unknown>;
+}
+
+function requireSingleTenantId(value: unknown): string {
+  if (Array.isArray(value) || typeof value !== 'string' || !isGuid(value)) {
+    throw new Error('The validated access token must contain exactly one tenant_id claim.');
+  }
+  return value;
+}
+
+function isGuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function claimString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function claimStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 //#endif

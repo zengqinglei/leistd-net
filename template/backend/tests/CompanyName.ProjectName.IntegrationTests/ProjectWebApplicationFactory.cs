@@ -4,7 +4,20 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+#if (ResourceService)
+using System.Security.Claims;
+using System.Text.Encodings.Web;
+using Leistd.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+#endif
+#if (MultiTenancy)
+using Leistd.MultiTenancy;
+#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -35,6 +48,28 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         // 作用于工厂 → 覆盖所有测试类（Health / Localization / Notifications 等），而非逐类修补。
         builder.ConfigureServices(services =>
         {
+#if (MultiTenancy)
+            // 集成测试显式使用 EF InMemory，不经生产的 Identity/Secret 路由链。
+            services.RemoveAll<ITenantConnectionStringResolver>();
+#endif
+#if (ResourceService)
+            // Resource 模板不托管登录端点。集成测试以专用方案注入已验证主体，
+            // 不伪造生产 Bearer 验签，也不让 Resource 回退为本地 Cookie 登录。
+            services.AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = ResourceTestAuthenticationHandler.SchemeName;
+                    options.DefaultChallengeScheme = ResourceTestAuthenticationHandler.SchemeName;
+                })
+                .AddScheme<AuthenticationSchemeOptions, ResourceTestAuthenticationHandler>(
+                    ResourceTestAuthenticationHandler.SchemeName,
+                    _ => { });
+            services.AddAuthorization(options =>
+            {
+                options.DefaultPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
+                    .RequireAuthenticatedUser()
+                    .Build();
+            });
+#endif
             services.Configure<HostOptions>(options =>
             {
                 options.ServicesStartConcurrently = false;
@@ -58,7 +93,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         });
     }
 
-#if (IncludeIdentity)
+#if (IdentityService)
     public Task<AuthenticatedSession> LoginAsync(
         string username,
         string password,
@@ -85,12 +120,68 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         return new AuthenticatedSession(client, cookie);
     }
 #endif
+
+#if (ResourceService)
+    public AuthenticatedSession CreateResourceSession(Guid subjectId, Guid tenantId) =>
+        CreateResourceSession(this, subjectId, tenantId);
+
+    public static AuthenticatedSession CreateResourceSession(
+        WebApplicationFactory<Program> host,
+        Guid subjectId,
+        Guid tenantId)
+    {
+        var headers = new Dictionary<string, string>
+        {
+            [ResourceTestAuthenticationHandler.SubjectHeader] = subjectId.ToString(),
+            [ResourceTestAuthenticationHandler.TenantHeader] = tenantId.ToString()
+        };
+        var client = CreateProjectClient(host);
+        foreach (var (name, value) in headers)
+            client.DefaultRequestHeaders.Add(name, value);
+
+        return new AuthenticatedSession(client, string.Empty, headers);
+    }
+#endif
 }
 
-public sealed class AuthenticatedSession(HttpClient client, string cookie) : IDisposable
+public sealed class AuthenticatedSession(
+    HttpClient client,
+    string cookie,
+    IReadOnlyDictionary<string, string>? authenticationHeaders = null) : IDisposable
 {
     public HttpClient Client { get; } = client;
     public string Cookie { get; } = cookie;
+    public IReadOnlyDictionary<string, string> AuthenticationHeaders { get; } =
+        authenticationHeaders ?? new Dictionary<string, string>();
 
     public void Dispose() => Client.Dispose();
 }
+
+#if (ResourceService)
+internal sealed class ResourceTestAuthenticationHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    public const string SchemeName = "ProjectTests";
+    public const string SubjectHeader = "X-Project-Test-Subject";
+    public const string TenantHeader = "X-Project-Test-Tenant";
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var subject = Request.Headers[SubjectHeader].SingleOrDefault();
+        var tenant = Request.Headers[TenantHeader].SingleOrDefault();
+        if (!Guid.TryParse(subject, out var subjectId) || !Guid.TryParse(tenant, out var tenantId))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
+        var identity = new ClaimsIdentity(
+            [
+                new Claim("sub", subjectId.ToString()),
+                new Claim(CustomClaimTypes.TenantId, tenantId.ToString())
+            ],
+            SchemeName);
+        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
+        return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
+}
+#endif
