@@ -1,8 +1,10 @@
 # Framework / Template 待调整内容：文件级任务分解
 
-本文只回答**改哪些文件、每处职责是什么**。为什么要改、取舍依据见 [CRM V2 模板落地指南](./2026-08-20-crm-v2-program.md) 的 §5、§6，不在此重复。
+本文只回答**改哪些文件、每处职责是什么**。取舍依据见 [CRM V2 模板落地指南](./2026-08-20-crm-v2-program.md) 的 §5、§6，不在此重复；少数项（§2 的时机取舍、§3.3 的缺陷表现）依据只在本文，随条目就地给出。
 
 优先级：`P0` 阻塞 CRM V2 开工 · `P1` 生产上线前必须 · `P2` 可捎带 · `P3` 待决策
+
+> 状态基线：`252bbac`。§2 与 §3.5 是**已核实无待调整项**的记录，其余为待做项。
 
 ---
 
@@ -67,13 +69,38 @@ framework/Leistd.Framework.slnx                                        # 移除�
 
 ## 二、Framework：DDD 领域分层
 
-**无需改动。** 三条依据均在多租户开发中验证过：
+**无待调整项。** 新增实体的环境值落点已定案并落地（`00ae4e7`、`252bbac`），当前职责边界：
+
+```text
+framework/ddd-struct/Leistd.Ddd.Infrastructure/Persistence/
+└── BaseDbContext.cs          职责一：新增实体的环境值落点
+                                （ChangeTracker.Tracked + StateChanged）
+                                → TenantId + 创建审计（CreationTime / CreatorId）
+                                → 三层护栏：FromQuery 跳过、状态须为 Added、值已有则不动
+                              职责二：两个命名全局查询过滤器（软删除 AND 租户）
+                              职责三：封闭 OnModelCreating，保证过滤器在派生配置之后套用
+
+framework/components/auditing/Leistd.Auditing.EntityFrameworkCore/
+└── AuditSaveChangesInterceptor.cs
+                              职责：只管 Modified / Deleted（含软删除转换）
+                                → Added 已移出，不再是它的职责
+
+framework/components/multi-tenancy/Leistd.MultiTenancy.EntityFrameworkCore/
+                              职责：只做租户注册表的存储与管理
+                                → 落值组件已删除（MultiTenantSaveChangesInterceptor）
+```
+
+四条依据均在多租户开发中验证过：
 
 | 依据 | 验证方式 |
 | --- | --- |
-| `BaseDbContext.ConfigureModel` 封闭式钩子已正确——过滤器在派生配置之后套用 | 本轮修复并有回归用例（只经 `ApplyConfiguration` 入模型的实体同样被过滤） |
+| 环境值落在"进入跟踪时"是正确时机 | 与 ABP 的 `AbpDbContext.ChangeTracker_Tracked` → `SetCreationAuditProperties` 一致；四条回退验证按预期变红 |
+| 提早落值不会覆盖查询出来的数据 | 三层护栏各有用例；反向验证确认 `FromQuery` 是冗余护栏（查询物化结果是 `Unchanged`，永不为 `Added`），保留以把意图写进代码 |
+| `BaseDbContext.ConfigureModel` 封闭式钩子已正确——过滤器在派生配置之后套用 | 有回归用例（只经 `ApplyConfiguration` 入模型的实体同样被过滤） |
 | 框架组件表名**未硬编码 schema**，派生上下文一行 `HasDefaultSchema` 即可覆盖全部实体 | 已 grep 确认无 `HasDefaultSchema`、组件 `ToTable` 不带 schema |
 | 仓储与 `IQueryableAsyncExecuter` 抽象够用 | 验证项目里数据范围特性做完，Application 层未引用 EF Core |
+
+> 与 Volo.ABP 的唯一残留差异是 `TenantId`：ABP 落在 `Entity` 基类构造函数（更早一步，靠反射写私有 setter）。本框架选择保持领域实体基类零环境依赖，代价是"作用域内 `new`、作用域外 `Add`"这种跨作用域持有实体的写法拿不到租户值——那本身是应当避免的写法。取舍已记录，不再重开。
 
 ## 三、Template：业务项目模板
 
@@ -133,16 +160,39 @@ scripts/test-template-matrix.ps1                       # 改：新增 db-migrato
 docs/template/development-guide.md                     # 改：新场景进标准矩阵表
 ```
 
-### 3.3 前端权限白名单合一（P2）
+### 3.3 前端平台入口权限集合一（P1）
 
-`/platform` 父路由的 `data.permissions`（5 项）与 `AuthorizationService.canAccessPlatform`（4 项）是两份硬编码清单，新增模块要同步改两处。漏改的表现是"后端通、前端 403"，最易被误判为权限未生效。
+两份硬编码清单在**租户场景下不等价**——这不是可维护性问题，是能落到真实角色上的缺陷：
+
+| 位置 | 项数 | 含 `tenants.default` |
+| --- | --- | --- |
+| `app.routes.ts:61-71`（`/platform` 的 `data.permissions`） | 5 | **有**（`#if TenancyEnabled`） |
+| `authorization-service.ts:36-44`（`canAccessPlatform`） | 4 | **无** |
+
+一个只有租户管理权限的平台运营账号：
+
+| 位置 | 表现 |
+| --- | --- |
+| `user-menu.ts:205` | 菜单里看不到平台入口 |
+| `login.ts:212` | 登录后被重定向到非平台页 |
+| `external-auth-callback.ts:99` | 外部登录同上 |
+| 直接敲 `/platform/tenants` | **能进**（路由守卫放行） |
+
+即"后端通、前端不通"，且是租户场景专属。
 
 ```text
 template/frontend/src/app/
-├── shared/models/permission.ts                       # 改：导出"平台入口权限集"单一来源
-├── core/services/authorization-service.ts            # 改：canAccessPlatform 引用该集合
-└── app.routes.ts                                     # 改：/platform 的 data.permissions 引用同一集合
+├── shared/models/permission.ts                       # 改：紧邻 PERMISSIONS 导出
+│                                                     #   PLATFORM_ENTRY_PERMISSIONS ——
+│                                                     #   平台入口权限集的**单一来源**（含 #if 条件段）
+├── core/services/authorization-service.ts            # 改：canAccessPlatform 改引用该集合
+│                                                     #   （删掉自己那份 4 项硬编码）
+├── app.routes.ts                                     # 改：/platform 的 data.permissions 引用同一集合
+└── core/services/authorization-service.spec.ts       # 改：断言两处**同源**（集合相等）；
+                                                      #   补"仅 tenants 权限可进平台"的用例
 ```
+
+> 同源断言是这一项的关键交付物。只改成引用同一常量，下一个人仍可能在路由里手写补一项——断言让分叉在 CI 里立刻失败。
 
 ### 3.4 多服务共库的 schema 指引（P2）
 
@@ -153,14 +203,26 @@ template/README.md                                    # 改：多服务共库时
 template/docs/standards/coding-backend.md             # 改：schema 与迁移历史表的约定
 ```
 
+### 3.5 无需调整（已核实，记录以免重复排查）
+
+| 面 | 核实结论 |
+| --- | --- |
+| 模板 Controller | `TenantController` 8 个端点全带 `[Authorize(Policy=...)]`；`tenants.*` 声明 `MultiTenancySides.Host`，侧别边界经 `[Authorize]` 免费获得（检查器先于授予读取拒绝）；无 Controller/DTO 接受客户端传入的 `tenantId`（`AuthController.cs:90` 是从用户实体写 claim，不是入参）；`BaseController` 只是 `ControllerBase` 薄壳 |
+| 模板前端租户链路 | `tenant-interceptor`（附 `X-Tenant-Id`）、`tenant-context-service`、`http-error-interceptor` 的 `X-Tenant-Invalid` 恢复、租户管理页与登录页租户选择，均完整且有 spec |
+| 框架前端 | **不存在交付面**（`framework/` 下无 `package.json`，前端只在 `template/frontend`） |
+| 框架 Controller | 只有 `Response.AspNetCore/Extensions/ControllerExtensions.cs` 与 `Exception.AspNetCore` 的异常映射两个触点，与租户无关 |
+
 ## 四、执行顺序
 
-| 序 | 项 | 理由 |
-| --- | --- | --- |
-| 1 | 3.1 资源服务器模式 | 唯一阻塞 CRM V2 开工的项 |
-| 2 | 3.2 迁移形态 | 同在模板侧，可同批；生产上线前必须 |
-| 3 | 3.3 + 3.4 | 小改，随上一批捎带 |
-| 4 | 1.1 按租户分库 | 首个需要独享库的租户出现前；改动面在框架，需独立验证 |
-| 5 | 1.2 AutoMapper 去留 | 待决策 |
+| 序 | 项 | 级别 | 理由 |
+| --- | --- | --- | --- |
+| 1 | 3.3 前端权限集合一 | P1 | 最小（一个常量 + 两处引用 + 一条同源断言），且是现存缺陷，先清掉 |
+| 2 | 3.1 资源服务器模式 | P0 | 唯一阻塞 CRM V2 开工的项 |
+| 3 | 3.2 迁移形态 | P1 | 同在模板侧可同批；生产上线前必须 |
+| 4 | 3.4 schema 指引 | P2 | 纯文档，随上一批捎带 |
+| 5 | 1.1 按租户分库 | P1 | 首个需要独享库的租户出现前；改动面在框架，需独立验证 |
+| 6 | 1.2 AutoMapper 去留 | P3 | 待决策 |
 
-1.1 与 3.x 之间没有依赖，可并行；但 1.1 会改 `AddMultiTenancyEfCore` 的注册形态，届时模板的 `Infrastructure/DependencyInjection.cs` 需同步。
+3.3 排在 3.1 之前是因为它已是缺陷而非改造，且改动面不与其它项重叠。
+
+1.1 与 3.x 之间没有依赖，可并行；但 1.1 会改 `AddMultiTenancyEfCore` 的注册形态，届时模板的 `Infrastructure/DependencyInjection.cs` 需同步——该文件在 `252bbac` 刚因删除落值拦截器改过。
