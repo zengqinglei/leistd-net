@@ -15,7 +15,7 @@
 
 - `Leistd.MultiTenancy.Core`：`ICurrentTenant`（AsyncLocal 环境上下文）、`IMultiTenant` 标记接口、`MultiTenancySides`、解析链抽象、`ITenantStore` / `InMemoryTenantStore`、租户管理契约 `ITenantManager` / `TenantConfiguration` / `TenantPage`、租户异常（映射 404/403/409）。应用层只依赖本包即可完成租户管理。
 - `Leistd.MultiTenancy.AspNetCore`：`UseMultiTenancy()` 中间件与默认解析链（Claim 定案 → 子域名 → `X-Tenant-Id` 头 → `tenant` 查询串）。子域名解析由 `MultiTenancyOptions.DomainFormat`（形如 `{0}.example.com`）开关，未配置时跳过；它排在头之前，因为子域名部署下域名是权威。
-- `Leistd.MultiTenancy.EntityFrameworkCore`：`TenantRecord` 注册表、`EfCoreTenantStore`（直接读库，**不缓存**）、`EfCoreTenantManager`、`MultiTenantSaveChangesInterceptor` 落值拦截器。存储不缓存是刻意的：它的返回值带 `IsActive`，中间件据此放行——访问控制状态不能依赖尽力而为的缓存失效，否则停用/删除会出现"已提交但仍放行"的窗口，且删除之后无法补救（租户已软删，按 Id 找不到，重试失效走不到）。代价是每请求一次索引查找，与 `ActiveUserRequirement` 的用户判活同型。`CreateAsync` 的 `isActive` **无默认值**：创建后还要播种数据的场景必须传 `false`，否则匿名端点能进入尚无管理员的半成品租户。
+- `Leistd.MultiTenancy.EntityFrameworkCore`：`TenantRecord` 注册表、`EfCoreTenantStore`（直接读库，**不缓存**）、`EfCoreTenantManager`。**不含落值组件**——`TenantId` 的落值是 `BaseDbContext` 的职责（见下）。存储不缓存是刻意的：它的返回值带 `IsActive`，中间件据此放行——访问控制状态不能依赖尽力而为的缓存失效，否则停用/删除会出现"已提交但仍放行"的窗口，且删除之后无法补救（租户已软删，按 Id 找不到，重试失效走不到）。代价是每请求一次索引查找，与 `ActiveUserRequirement` 的用户判活同型。`CreateAsync` 的 `isActive` **无默认值**：创建后还要播种数据的场景必须传 `false`，否则匿名端点能进入尚无管理员的半成品租户。
 
 **`Leistd.Ddd.Infrastructure`（破坏性）**
 
@@ -23,7 +23,23 @@
 
 - `ApplyGlobalFilters<TInterface>` 增加必填 `filterName` 首参，改用 EF 10 命名查询过滤器——软删除与租户过滤器在同一实体上 AND 叠加，此前二次调用会静默覆盖前一个过滤器。直接调用方需补过滤器名。
 - `BaseDbContext` 新增租户全局过滤器（`MultiTenantFilterName`）；实体不实现 `IMultiTenant` 时无影响。
-- **运行时语义修复**：新增实体的 `TenantId` 改为在**进入跟踪时**落定（`BaseDbContext` 挂 `ChangeTracker.Tracked`），此前由 `MultiTenantSaveChangesInterceptor` 在保存时落值。仓储在工作单元内不立即保存，"在租户作用域内新增、作用域退出后才提交"会把数据静默落成宿主行——该租户看不见、宿主管理员看得见且无任何报错。拦截器保留为兜底（仍处理未经跟踪事件进入的实体）。
+- **运行时语义修复**：新增实体的**环境值统一在"进入跟踪时"落定**——`BaseDbContext` 订阅 `ChangeTracker.Tracked` 与 `ChangeTracker.StateChanged`，对 `Added` 实体落 `TenantId` 与创建审计（`CreationTime` / `CreatorId`，经 `IAuditPropertySetter`）。
+
+  此前两者都在保存时落值（分别由 `MultiTenantSaveChangesInterceptor` 与 `AuditSaveChangesInterceptor` 处理）。仓储在工作单元内不立即保存，新增与保存之间可以跨越 `ICurrentTenant.Change` / `ICurrentPrincipalAccessor.Change` 的边界：租户值会把数据静默落成宿主行（该租户看不见、宿主管理员看得见），`CreatorId` 会落成外层主体，均无任何报错。且在保存前 `CreatorId` 一直是 null，保存前读它的代码（领域事件、校验、导出）看到的都是空。与 Volo.ABP 的 `AbpDbContext.ChangeTracker_Tracked` → `SetCreationAuditProperties` 时机一致。
+
+  **修改与删除审计仍在 `SavingChanges`**（`AuditSaveChangesInterceptor`）——`Modified` / `Deleted` 是状态迁移的结果，跟踪事件抓不到。
+
+  不覆盖既有数据的三层护栏：`FromQuery` 跳过、状态必须是 `Added`、值已有则不动。
+
+  **要求**：DbContext 必须继承 `BaseDbContext` **且**选用接收 `IServiceProvider` 的构造函数重载。只挂拦截器而不满足这两条时，创建审计与租户值静默不填充。
+
+**`Leistd.MultiTenancy.EntityFrameworkCore`（破坏性）**
+
+- **删除 `MultiTenantSaveChangesInterceptor`**，`AddMultiTenancyEfCore` 不再注册它，宿主也不需再 `AddInterceptors` 挂载它。落值移到 `BaseDbContext` 之后，它在正常路径上已是死代码（值已落定，保存时被 null 判断跳过），在边缘路径上则方向相反地有害：宿主上下文新增（`TenantId` 合法为 null）、提交却发生在 `Change(tenantId)` 作用域内时，它会把宿主数据盖成租户数据。调用方只需删掉挂载语句。
+
+**`Leistd.Auditing.EntityFrameworkCore`（破坏性）**
+
+- `AuditSaveChangesInterceptor` **不再处理 `Added` 状态**。仅挂载本拦截器、但 DbContext 不继承 `BaseDbContext` 的项目会失去创建审计填充——继承 `BaseDbContext` 并传入 `IServiceProvider` 即恢复。
 - **运行时语义修复**：`EfCoreRepository.GetByIdAsync` 不再走 `FindAsync`（它绕过全局查询过滤器）——此前按 Id 能取出软删除行，多租户下将构成跨租户水平越权。依赖旧行为读取已删数据的调用方，改用 `IDataFilter.Disable<ISoftDelete>()` 显式表达。
 
 **`Leistd.Security.Core`（破坏性）**

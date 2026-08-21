@@ -129,7 +129,7 @@ graph TD
 | --- | --- | --- | --- |
 | `Leistd.MultiTenancy.Core`（RootNamespace `Leistd.MultiTenancy`） | 平台无关抽象与默认实现 | `IMultiTenant`、`ICurrentTenant` / `CurrentTenant`、`ICurrentTenantAccessor` / `AsyncLocalCurrentTenantAccessor`、`BasicTenantInfo`、`MultiTenancySides`、`ITenantStore` / `TenantConfiguration`、`ITenantManager` / `TenantPage`（管理契约，应用层只依赖本包即可管租户）、`ITenantNormalizer`、`ITenantResolveContributor` / `TenantResolveContext` / `ITenantResolver`、`TenantNotFoundException` / `TenantNotActiveException` / `DuplicateTenantNameException`、`AddMultiTenancyCore()` | `Leistd.Core` |
 | `Leistd.MultiTenancy.AspNetCore` | Web 宿主集成 | `MultiTenancyMiddleware`（解析 → Store 校验 → `Change` 包裹管道 → 日志 Scope `leistd.tenantId`）、`CurrentPrincipalTenantResolveContributor` / `HeaderTenantResolveContributor` / `QueryStringTenantResolveContributor`、`MultiTenancyOptions`（头名、查询串名、Contributor 链）、`AddMultiTenancy(IConfiguration \| Action)` + `UseMultiTenancy()` | `MultiTenancy.Core`、`FrameworkReference Microsoft.AspNetCore.App` |
-| `Leistd.MultiTenancy.EntityFrameworkCore` | 持久化集成 | `TenantRecord`（Guid v7、Name 归一化唯一、DisplayName、IsActive、全审计软删，**不实现** `IMultiTenant`）、`EfCoreTenantStore<TDbContext>`（直接读库，不缓存）、`EfCoreTenantManager`（`ITenantManager` 的实现：创建/改名/启停，归一化 + 唯一校验 + 冲突翻译）、`MultiTenantSaveChangesInterceptor`（Added 且 `IMultiTenant` 且 `TenantId == null` 时落当前租户）、`ConfigureMultiTenancy(this ModelBuilder)`、`AddMultiTenancyEfCore<TDbContext>()` | `MultiTenancy.Core`、`Auditing.Core`、EF Core |
+| `Leistd.MultiTenancy.EntityFrameworkCore` | 持久化集成 | `TenantRecord`（Guid v7、Name 归一化唯一、DisplayName、IsActive、全审计软删，**不实现** `IMultiTenant`）、`EfCoreTenantStore<TDbContext>`（直接读库，不缓存）、`EfCoreTenantManager`（`ITenantManager` 的实现：创建/改名/启停，归一化 + 唯一校验 + 冲突翻译）、`ConfigureMultiTenancy(this ModelBuilder)`、`AddMultiTenancyEfCore<TDbContext>()` | `MultiTenancy.Core`、`Auditing.Core`、EF Core |
 
 既有包的增量（均为最小侵入）：
 
@@ -173,7 +173,9 @@ protected virtual bool IsMultiTenantFilterEnabled =>
 ```
 
 - 两个实例属性被 EF 捕获为查询参数，每次执行重估——`Change()` 切换与 `IDataFilter` 开关即时生效，无需重建模型（与现有软删除过滤器同一机制，无需自定义编译查询缓存键）。
-- 落值：`MultiTenantSaveChangesInterceptor` 仅处理 `Added` 且值仍为 `null` 的实体（经 `entry.Property(...).CurrentValue` 写私有 setter）；实体构造期需要租户值的场景由聚合显式传参，不做 ABP 的实体构造函数静态取值（Leistd 实体不做服务定位）。
+- 落值：**由 `BaseDbContext` 在实体进入变更跟踪时完成**（`ChangeTracker.Tracked` + `StateChanged`），只处理 `Added` 且值仍为 `null` 的实体（经 `entry.Property(...).CurrentValue` 写私有 setter）；实体构造期需要租户值的场景由聚合显式传参，不做 ABP 的实体构造函数静态取值（Leistd 实体不做服务定位）。
+
+  > **实施期修正**：本方案原设计为 `MultiTenantSaveChangesInterceptor` 在 `SavingChanges` 落值，实施中发现该时机错误——工作单元延迟提交时，"租户作用域内新增、作用域退出后提交"会把数据静默落成宿主行。落值已移到进入跟踪时，该拦截器随之删除（它在正常路径是死代码，在"宿主新增、租户作用域内提交"时会反向把宿主数据盖成租户数据）。创建审计（`CreatorId` / `CreationTime`）出于同一原因也移到此处，与 ABP 的 `ChangeTracker_Tracked` → `SetCreationAuditProperties` 一致。
 - 越权语义：租户上下文内按 Id 取他租户实体 → 过滤器使其"不可见"，统一表现为 404（与授权方案的资源不可见口径一致）。
 - 宿主视角（`TenantId == null` 行）与全量视角（`Disable<IMultiTenant>()`）语义不同，组件文档必须分别给出示例与警告。
 
@@ -272,8 +274,8 @@ framework/components/multi-tenancy/
     ├── Entities/TenantRecord.cs
     ├── EntityConfigurations/TenantRecordConfiguration.cs   # NormalizedName 未删除行部分唯一索引
     ├── Stores/EfCoreTenantStore.cs                # 直接读库，不缓存
-    ├── Managers/EfCoreTenantManager.cs            # 契约在 Core
-    └── Interceptors/MultiTenantSaveChangesInterceptor.cs
+    └── Managers/EfCoreTenantManager.cs            # 契约在 Core
+                                                   # 落值不在本包：见「实施期修正」
 
 framework/tests/
 └── Leistd.MultiTenancy.Tests/                     # 单元 + Sqlite 过滤器 + TestServer 中间件端到端

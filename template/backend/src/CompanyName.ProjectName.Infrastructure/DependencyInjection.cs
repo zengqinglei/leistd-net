@@ -85,14 +85,12 @@ public static class DependencyInjection
                 .Ignore(RelationalEventId.MultipleCollectionIncludeWarning)
                 .Ignore(RelationalEventId.PendingModelChangesWarning));
 
-            // ✅ 添加 SaveChanges 拦截器（EF Core 官方推荐的最佳实践）
+            // 保存时刻的职责：修改/删除审计（含软删除转换）与领域事件发布。
+            // 新增实体的环境值（CreatorId、CreationTime、TenantId）不在这里——
+            // 由 BaseDbContext 在实体进入变更跟踪时落定，见框架 ddd-struct 文档
             options.AddInterceptors(
                 sp.GetRequiredService<AuditSaveChangesInterceptor>(),
                 sp.GetRequiredService<LocalEventSaveChangesInterceptor>());
-#if (TenancyEnabled)
-            // 多租户落值拦截器：新增的 IMultiTenant 实体自动填充当前租户 Id
-            options.AddInterceptors(sp.GetRequiredService<MultiTenantSaveChangesInterceptor>());
-#endif
         });
 
 #if (IncludeNotifications)

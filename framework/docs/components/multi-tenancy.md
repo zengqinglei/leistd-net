@@ -2,7 +2,7 @@
 
 业务服务经常需要让多个租户共用一套部署：每个租户拥有独立的用户、角色、权限授予和业务数据，彼此完全不可见；同时宿主（平台方）管理租户的生命周期。要正确做到这一点，至少要回答四个问题：当前请求属于哪个租户（解析）、这个租户是否存在且可用（校验）、查询和写入如何被限制在该租户分区内（隔离）、租户身份如何跨服务传递（传播）。
 
-本组件家族把这四件事收敛为一套原语：`ICurrentTenant` 环境上下文（AsyncLocal，跨 `await`、跨后台任务、跨事件处理器流动）、可扩展的解析链与校验中间件、配合 DDD 基座全局查询过滤器的 `IMultiTenant` 标记接口与写入落值拦截器，以及租户注册表的存储与管理原语。
+本组件家族把这四件事收敛为一套原语：`ICurrentTenant` 环境上下文（AsyncLocal，跨 `await`、跨后台任务、跨事件处理器流动）、可扩展的解析链与校验中间件、配合 DDD 基座全局查询过滤器与写入落值的 `IMultiTenant` 标记接口，以及租户注册表的存储与管理原语。
 
 ## 何时使用
 
@@ -21,7 +21,7 @@
 ```bash
 dotnet add package Leistd.MultiTenancy.Core                # 领域/应用层：IMultiTenant、ICurrentTenant
 dotnet add package Leistd.MultiTenancy.AspNetCore          # Web 宿主：中间件与解析链
-dotnet add package Leistd.MultiTenancy.EntityFrameworkCore # 基础设施层：租户注册表与落值拦截器
+dotnet add package Leistd.MultiTenancy.EntityFrameworkCore # 基础设施层：租户注册表的存储与管理
 ```
 
 ## 配置
@@ -29,13 +29,12 @@ dotnet add package Leistd.MultiTenancy.EntityFrameworkCore # 基础设施层：�
 ```csharp
 // Program.cs（Web 宿主，含租户注册表的完整形态）
 builder.Services.AddMultiTenancy(builder.Configuration);          // 上下文 + 解析链，绑定 Leistd:MultiTenancy
-builder.Services.AddMultiTenancyEfCore<MyDbContext>();            // TenantRecord 存储 + 管理器 + 落值拦截器
+builder.Services.AddMultiTenancyEfCore<MyDbContext>();            // TenantRecord 存储 + 管理器
 
+// 租户落值不需要挂任何拦截器：DbContext 继承 BaseDbContext 并拿到 IServiceProvider 即生效
 builder.Services.AddDbContext<MyDbContext>((sp, options) =>
 {
     options.UseNpgsql(connectionString);
-    options.AddInterceptors(
-        sp.GetRequiredService<MultiTenantSaveChangesInterceptor>()); // 显式挂载，与审计拦截器同型
 });
 
 var app = builder.Build();
@@ -63,7 +62,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 | `ITenantNormalizer` | `UpperInvariantTenantNormalizer` | Transient |
 | `ITenantResolver` | `TenantResolver` | Scoped |
 
-`AddMultiTenancyEfCore<TDbContext>` 追加：`ITenantStore` → `EfCoreTenantStore<TDbContext>`、`ITenantManager` → `EfCoreTenantManager<TDbContext>`（均 Transient，`TryAdd` 可替换）、`MultiTenantSaveChangesInterceptor`（Transient）、`IClock`（TryAdd UTC 默认）。除 `TDbContext` 外无其它基础设施依赖。
+`AddMultiTenancyEfCore<TDbContext>` 追加：`ITenantStore` → `EfCoreTenantStore<TDbContext>`、`ITenantManager` → `EfCoreTenantManager<TDbContext>`（均 Transient，`TryAdd` 可替换）、`IClock`（TryAdd UTC 默认）。除 `TDbContext` 外无其它基础设施依赖。**不注册任何落值组件**——落值是 `BaseDbContext` 的职责。
 
 ## 使用
 
