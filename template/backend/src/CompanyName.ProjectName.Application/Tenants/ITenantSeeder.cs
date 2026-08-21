@@ -1,4 +1,4 @@
-#if (TenancyEnabled)
+#if (MultiTenancy)
 namespace CompanyName.ProjectName.Application.Tenants;
 
 /// <summary>

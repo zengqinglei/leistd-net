@@ -1,5 +1,5 @@
-#if (IncludeIdentity)
-#if (IncludeOpenIddict)
+#if (IdentityService)
+#if (IdentityService)
 using Microsoft.AspNetCore.Authentication;
 #endif
 using Microsoft.AspNetCore.Authorization;
@@ -38,7 +38,7 @@ public sealed class InvalidAccountResultHandler : IAuthorizationMiddlewareResult
 
         if (invalidAccount)
         {
-#if (IncludeOpenIddict)
+#if (IdentityService)
             // 是否补 challenge，取决于本次请求实际由哪个方案认证成功，而不是请求头长什么样。
             // 按请求头判断会把"顺带挂了个无关 Bearer 头的 Cookie 请求"误标成 Bearer challenge；
             // 而将来若为 /hubs/* 放开 query 传令牌（见 Program.cs 中的说明），头判断还会反过来
@@ -53,7 +53,7 @@ public sealed class InvalidAccountResultHandler : IAuthorizationMiddlewareResult
             // "这份凭据已经失效"是本应用的判断，就由本应用表达。
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
             // RFC 9110 对 401 的 WWW-Authenticate 是 MUST，OAuth 客户端也据此把响应识别为
             // "令牌失效、去重新取"而不是一个普通业务错误。
             // Cookie 认证的请求保持裸 401——表单登录没有对应的 HTTP 认证方案名，硬造一个没有意义。

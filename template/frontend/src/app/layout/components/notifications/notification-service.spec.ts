@@ -1,6 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+//#if (ResourceService)
+import { OidcSecurityService } from 'angular-auth-oidc-client';
+import { of } from 'rxjs';
+//#endif
 
 import { NotificationService } from './notification-service';
 import { NotificationOutputDto, SignalRService } from '../../../core/services/signalr-service';
@@ -19,7 +23,17 @@ describe('NotificationService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      // prettier-ignore
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        //#if (ResourceService)
+        {
+          provide: OidcSecurityService,
+          useValue: { getAccessToken: () => of('resource-access-token') },
+        },
+        //#endif
+      ],
     });
 
     service = TestBed.inject(NotificationService);

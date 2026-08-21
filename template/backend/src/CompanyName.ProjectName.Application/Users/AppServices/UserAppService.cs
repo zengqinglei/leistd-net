@@ -1,15 +1,15 @@
 using System.Linq.Dynamic.Core;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 #endif
 using CompanyName.ProjectName.Application.Users.Dtos;
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #endif
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using Leistd.Authorization;
 #endif
 using Leistd.Ddd.Application.AppService;
@@ -28,14 +28,14 @@ namespace CompanyName.ProjectName.Application.Users.AppServices;
 /// </summary>
 public class UserAppService(
     IRepository<User, Guid> userRepository,
-#if (IncludeRoles)
+#if (LocalAuthorization)
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
 #endif
-#if (IncludeIdentity)
+#if (IdentityService)
     IPasswordHasher passwordHasher,
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
     IPermissionChecker permissionChecker,
 #endif
     UserDomainService userDomainService,
@@ -44,7 +44,7 @@ public class UserAppService(
     IObjectMapper objectMapper,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
-#if (IncludeRoles)
+#if (LocalAuthorization)
     /// <summary>角色名称最大长度，与 Role 实体的持久化约束保持一致。</summary>
     private const int RoleNameMaxLength = 64;
 
@@ -69,13 +69,13 @@ public class UserAppService(
             userQuery = userQuery.Where(u => u.IsActive == input.IsActive.Value);
         }
 
-#if (IncludeIdentity)
+#if (IdentityService)
         if (input.IsEmailVerified.HasValue)
         {
             userQuery = userQuery.Where(u => u.EmailConfirmed == input.IsEmailVerified.Value);
         }
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
 
         if (input.Roles is { Count: > 0 })
         {
@@ -136,22 +136,22 @@ public class UserAppService(
 
         logger.LogInformation("开始创建用户 {Username}... 邮箱：{Email}", username, email);
 
-#if (IncludeIdentity)
-#if (IncludeRoles)
+#if (LocalAuthorization)
         // 创建时携带角色等同于一次角色分配，因此除创建权限外还必须持有 ManageRoles，
         // 否则只拥有创建权限的主体可以直接造出一个管理员账号。
         var roles = input.RoleIds.Count > 0
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
             : await GetDefaultRolesAsync(cancellationToken);
 #endif
+#if (IdentityService)
         var user = await userDomainService.CreateUserAsync(username, email, input.Password, displayName, cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
 #else
-        var user = await userDomainService.CreateUserAsync(username, email, "", displayName, cancellationToken);
+        var user = await userDomainService.CreateUserAsync(input.SubjectId, username, email, displayName, cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, false);
 #endif
         await userRepository.UpdateAsync(user, cancellationToken);
-#if (IncludeRoles)
+#if (LocalAuthorization)
         await AssignRolesAsync(user.Id, roles, cancellationToken);
 #endif
 
@@ -188,8 +188,17 @@ public class UserAppService(
         }
 
         // 启用状态原样带过：它只由 Enable/Disable 两个命令写入，那里才有"超管不得禁用自己"的保护。
-#if (IncludeIdentity)
-        user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), user.IsActive, input.IsEmailVerified);
+#if (IdentityService)
+        user.UpdateManagement(
+            email,
+            input.DisplayName?.Trim(),
+            input.Avatar?.Trim(),
+            user.IsActive,
+#if (IdentityService)
+            input.IsEmailVerified);
+#else
+            false);
+#endif
 #else
         user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), user.IsActive, false);
 #endif
@@ -246,7 +255,7 @@ public class UserAppService(
         await userRepository.UpdateAsync(user, cancellationToken);
     }
 
-#if (IncludeIdentity)
+#if (IdentityService)
     /// <summary>
     /// 重置用户密码
     /// </summary>
@@ -310,7 +319,7 @@ public class UserAppService(
         return user;
     }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     /// <summary>
     /// 查询用户当前角色。
     /// </summary>
@@ -440,7 +449,7 @@ public class UserAppService(
             return [];
         }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
         var userIds = users.Select(u => u.Id).ToList();
         var userRoles = (await userRoleRepository.GetListAsync(ur => userIds.Contains(ur.UserId), cancellationToken)).ToList();
         var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
@@ -454,7 +463,7 @@ public class UserAppService(
 
     private async Task<UserManagementOutputDto> MapToOutputAsync(User user, CancellationToken cancellationToken)
     {
-#if (IncludeRoles)
+#if (LocalAuthorization)
         var userRoles = (await userRoleRepository.GetListAsync(ur => ur.UserId == user.Id, cancellationToken)).ToList();
         var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
         var roles = roleIds.Count == 0 ? [] : (await roleRepository.GetListAsync(r => roleIds.Contains(r.Id), cancellationToken)).ToList();
@@ -464,7 +473,7 @@ public class UserAppService(
 #endif
     }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private static Dictionary<string, object> CreateMappingContext(List<UserRole> userRoles, List<Role> roles)
     {
         return new Dictionary<string, object>

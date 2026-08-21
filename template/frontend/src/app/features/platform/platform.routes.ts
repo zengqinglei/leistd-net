@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 
 import { permissionGuard } from '../../core/guards/permission-guard';
 import { PERMISSIONS } from '../../shared/models/permission';
@@ -14,17 +14,15 @@ export const PLATFORM_ROUTES: Routes = [
     path: '',
     loadComponent: () => import('./components/dashboard/dashboard').then((m) => m.Dashboard),
   },
-  //#if (IncludeIdentity)
   {
     path: 'users',
     loadComponent: () => import('./components/users/users').then((m) => m.Users),
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.users.default },
     //#endif
   },
-  //#endif
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   {
     path: 'roles',
     loadComponent: () => import('./components/roles/roles').then((m) => m.Roles),
@@ -32,7 +30,7 @@ export const PLATFORM_ROUTES: Routes = [
     data: { permission: PERMISSIONS.roles.default },
   },
   //#endif
-  //#if (TenancyEnabled)
+  //#if (IdentityService)
   {
     path: 'tenants',
     loadComponent: () => import('./components/tenants/tenants').then((m) => m.Tenants),
@@ -40,12 +38,12 @@ export const PLATFORM_ROUTES: Routes = [
     data: { permission: PERMISSIONS.tenants.default },
   },
   //#endif
-  //#if (IncludeOpenIddict)
+  //#if (IdentityService)
   {
     path: 'open-applications',
     loadComponent: () =>
       import('./components/open-applications/open-applications').then((m) => m.OpenApplications),
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.openApplications.default },
     //#endif

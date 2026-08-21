@@ -9,7 +9,7 @@ import {
   EmailVerificationChallengeOutputDto,
 } from '../../src/app/features/account/models/account.dto';
 import { MockException, MockRequest } from '../core/models';
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { TENANTS } from '../data/tenant';
 //#endif
 import { USERS, toUserOutput } from '../data/user';
@@ -51,7 +51,7 @@ function ensureEmailAvailable(email: string, currentUserId: string): void {
   }
 }
 
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 /** 复刻后端行为：X-Tenant-Id 指向已停用租户时登录被 403 拒绝。 */
 function ensureTenantActive(req: MockRequest): void {
   const tenantId = req.headers.get('X-Tenant-Id');
@@ -248,7 +248,7 @@ function register(req: MockRequest): 'ok' {
     username: username,
     email: email,
     password: body.password,
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     roles: ['User'],
     //#endif
     isActive: true,
@@ -299,7 +299,7 @@ function invalidEmailChallenge(): MockException {
   });
 }
 
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 function getRequestScope(req: MockRequest): string {
   return req.headers.get('X-Tenant-Id') ?? 'host';
 }
@@ -346,7 +346,7 @@ export const AUTH_API = {
   'POST /api/v1/auth/send-email-code': (req: MockRequest) => sendEmailCode(req),
   'POST /api/v1/auth/logout': () => logout(),
   'POST /api/v1/auth/session-login': (req: MockRequest) => {
-    //#if (TenancyEnabled)
+    //#if (MultiTenancy)
     ensureTenantActive(req);
     //#endif
     return sessionLogin(req.body.usernameOrEmail, req.body.password);

@@ -57,7 +57,7 @@ public static class PermissionConstant
         public const string ManagePermissions = Default + ".ManagePermissions";
     }
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
     /// <summary>
     /// 开放应用（OAuth2 客户端）管理权限
     /// </summary>
@@ -77,7 +77,7 @@ public static class PermissionConstant
     }
 
 #endif
-#if (TenancyEnabled)
+#if (IdentityService)
     /// <summary>
     /// 租户管理权限（宿主侧专属）
     /// </summary>
@@ -92,7 +92,6 @@ public static class PermissionConstant
         public const string Update = Default + ".Update";
         public const string Delete = Default + ".Delete";
     }
-
 #endif
     /// <summary>
     /// 权限定义查看权限

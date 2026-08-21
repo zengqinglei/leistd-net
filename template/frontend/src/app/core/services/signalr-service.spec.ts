@@ -1,5 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import * as signalR from '@microsoft/signalr';
+//#if (ResourceService)
+import { OidcSecurityService } from 'angular-auth-oidc-client';
+import { of } from 'rxjs';
+//#endif
 
 import { SignalRService } from './signalr-service';
 
@@ -14,6 +18,7 @@ describe('SignalRService 连接生命周期', () => {
   let built: FakeConnection[];
   let failing: Set<string>;
   let deferStart = false;
+  let withUrl: jasmine.Spy;
 
   class FakeConnection {
     startCount = 0;
@@ -142,7 +147,7 @@ describe('SignalRService 连接生命周期', () => {
     // 只替换 build，让真正的 builder 负责链式调用；URL 从 withUrl 的调用记录里取。
     // 不去 spy 类导出本身：那要求 fake 与构造签名兼容，类型上通不过，
     // 而且会把"构造 builder"这件事也一并接管，测试就开始验证 SignalR 客户端而不是本服务。
-    const withUrl = spyOn(signalR.HubConnectionBuilder.prototype, 'withUrl').and.callThrough();
+    withUrl = spyOn(signalR.HubConnectionBuilder.prototype, 'withUrl').and.callThrough();
     spyOn(signalR.HubConnectionBuilder.prototype, 'build').and.callFake(() => {
       const url = withUrl.calls.mostRecent().args[0];
       const connection = new FakeConnection(url);
@@ -151,7 +156,18 @@ describe('SignalRService 连接生命周期', () => {
       return connection as unknown as signalR.HubConnection;
     });
 
+    //#if (ResourceService)
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: OidcSecurityService,
+          useValue: { getAccessToken: () => of('resource-access-token') },
+        },
+      ],
+    });
+    //#else
     TestBed.configureTestingModule({});
+    //#endif
     service = TestBed.inject(SignalRService);
   });
 
@@ -162,6 +178,14 @@ describe('SignalRService 连接生命周期', () => {
     expect(service.isConnected()).toBeTrue();
   });
 
+  //#if (ResourceService)
+  it('Resource Hub 从 OIDC 会话获取 access token', async () => {
+    await service.connect();
+
+    const options = withUrl.calls.first().args[1] as signalR.IHttpConnectionOptions;
+    expect(await options.accessTokenFactory?.()).toBe('resource-access-token');
+  });
+  //#endif
   it('一个 Hub 失败时停掉本轮已连上的另一个，不留活连接', async () => {
     failing.add('/hubs/realtime');
 

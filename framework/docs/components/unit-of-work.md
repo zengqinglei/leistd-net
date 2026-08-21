@@ -156,8 +156,8 @@ public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 | `IUnitOfWork.RollbackAsync(ct)` | 回滚；幂等（已回滚再调无副作用） |
 | `IUnitOfWork.AddPendingEvents(events)` | 由基础设施层登记待发布的领域事件 |
 | `IAmbientUnitOfWork.Get() / Set(uow)` | 读取/设置当前线程上下文中的工作单元（`AsyncLocal`） |
-| `IDatabaseApiContainer.GetOrAddDatabaseApi(factory)` | 获取或惰性创建该工作单元的 `IDatabaseApi` |
-| `ITransactionApiContainer.FindTransactionApi()` | 查找事务 API，无则 `null` |
+| `IDatabaseApiContainer.FindDatabaseApi(key)` / `AddDatabaseApi(key, api)` | 按稳定 key 管理工作单元中的多个数据库 API；同 key 不允许覆盖 |
+| `ITransactionApiContainer.FindTransactionApi(key)` | 按物理目标 key 查找事务 API，无则 `null` |
 | `ITransactionApiContainer.AddTransactionApi(key, api)` | 向容器登记一个事务 API（供基础设施层实现接入） |
 | `ITransactionApi.CommitAsync()` | 提交事务 |
 | `ISupportsSavingChanges.SaveChangesAsync(ct)` / `ISupportsRollback.RollbackAsync(ct)` | 数据库/事务 API 的可选实现，供工作单元在提交/回滚时调用 |
@@ -171,6 +171,7 @@ public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 | 成员 | 说明 |
 | --- | --- |
 | `IDbContextProvider<TDbContext>.GetDbContextAsync(ct)` | 获取受工作单元管理的 `DbContext`；不在工作单元内时直接返回 Scoped 实例 |
+| `DbContextCreationContext.Current` | 宿主 `AddDbContext` 同步 Options 回调读取的已异步解析连接上下文 |
 
 ## 实现行为
 
@@ -184,9 +185,11 @@ public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 
 ### Leistd.UnitOfWork.EfCore
 
-- `IDbContextProvider<TDbContext>` 注册为 **Scoped**。`GetDbContextAsync` 有两种模式：不在工作单元内时直接从 Scoped 容器返回 `DbContext`（适合简单 CRUD）；在工作单元内则从工作单元自身的 Scope 获取，并通过 `GetOrAddDatabaseApi` 保证整个工作单元内复用同一 `DbContext`。
-- 当工作单元 `IsTransactional` 时，首个 `DbContext` 会 `BeginTransactionAsync` 开启数据库事务（按 `Options.IsolationLevel` 指定隔离级别）；后续 `DbContext` 若是关系型且共享连接，则通过 `UseTransaction` 复用同一事务，否则各自开事务并登记到 `AttendedDbContexts`，提交/回滚时统一处理。
-- `Options.Timeout` 仅对关系型数据库生效，且仅在 `CommandTimeout` 未设置时按秒应用。
+- `IDbContextProvider<TDbContext>` 注册为 **Scoped**。在工作单元内按 DbContext 类型 key 复用实例；不在工作单元内仍每次通过当前 Scoped 容器创建/获取。
+- 宿主注册了 `ITenantConnectionStringResolver` 时，Provider 先根据 DbContext 上的 `[TenantConnectionStringName]` 异步解析连接（未标记使用 `Default`），再用 `DbContextCreationContext.Current` 把结果传入同步 `AddDbContext` Options 回调。回调不得执行远程调用或 sync-over-async。未注册 Resolver 时保持普通单连接 DbContext 行为。
+- 一个 UoW 在首次获取 DbContext 时绑定当前租户和物理数据库目标。UoW 存活期内切换租户或让后续 DbContext 解析到不同物理目标会立即失败，避免把一个原子边界静默拆成跨库操作。
+- 当 UoW `IsTransactional` 时，同一物理关系型目标上的多个 DbContext 共用一个连接与 EF Core 事务，提交/回滚由最外层 UoW 统一处理。非关系型 Provider 可参与 UoW 的保存/生命周期，但不声称具备关系型共享事务语义。
+- `Options.Timeout` 仅对关系型数据库生效，且仅在 EF Core 命令超时未设置时按秒应用。
 - `EfCoreDatabaseApi.Dispose` **不显式释放 `DbContext`**——`DbContext` 由工作单元创建的 Scope 在释放时统一回收，避免重复 Dispose。
 
 ## 配置项 / Options
@@ -197,7 +200,7 @@ public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 | --- | --- | --- | --- |
 | `IsTransactional` | `bool` | `false`（`UnitOfWorkManager.BeginAsync` 在未传 options 时置为 `true`） | 是否开启数据库事务 |
 | `IsolationLevel` | `IsolationLevel?` | `null`（用数据库默认） | 事务隔离级别 |
-| `Timeout` | `TimeSpan?` | `null` | 命令超时（仅关系型数据库） |
+| `Timeout` | `TimeSpan?` | `null` | EF Core 命令超时（仅关系型数据库） |
 
 `[UnitOfWork]` 特性额外属性 `IsDisabled`（默认 `false`）：置 `true` 时生成的工作单元 `IsTransactional = false`，即不开启事务。
 

@@ -1,3 +1,8 @@
+using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
+using System.Reflection;
+using Leistd.MultiTenancy;
 using Leistd.UnitOfWork.Core.Uow;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -6,126 +11,175 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Leistd.UnitOfWork.EfCore.Database;
 
 /// <summary>
-/// DbContext provider implementation
-/// 支持两种模式：
-/// 1. 默认模式：不需要 UnitOfWork，直接从 Scoped 容器获取 DbContext（适合简单 CRUD）
-/// 2. UnitOfWork 模式：在 UnitOfWork 内，从 UnitOfWork 的 Scope 获取 DbContext（适合事务场景）
+/// 在工作单元内按 DbContext 类型复用实例，并在创建前异步解析租户连接。
 /// </summary>
 public class DbContextProvider<TDbContext>(
     IUnitOfWorkManager unitOfWorkManager,
     IServiceProvider serviceProvider) : IDbContextProvider<TDbContext>
     where TDbContext : DbContext
 {
+    private static readonly string ConnectionStringName =
+        typeof(TDbContext).GetCustomAttribute<TenantConnectionStringNameAttribute>()?.Name ?? "Default";
+    private static readonly string DatabaseApiKey = $"EfCoreDbContext:{typeof(TDbContext).FullName}";
+
+    /// <inheritdoc />
     public async Task<TDbContext> GetDbContextAsync(CancellationToken cancellationToken = default)
     {
         var unitOfWork = unitOfWorkManager.Current;
-
-        // 模式 1：没有 UnitOfWork - 直接从当前 Scoped 容器获取
-        if (unitOfWork == null)
+        if (unitOfWork is null)
         {
-            // 不在 UnitOfWork 内，直接从 Scoped ServiceProvider 获取 DbContext
-            // 适用于简单的 CRUD 操作，无需显式开启事务
-            return serviceProvider.GetRequiredService<TDbContext>();
+            return await CreateDbContextAsync(serviceProvider, existingConnection: null, cancellationToken);
         }
 
-        // 模式 2：有 UnitOfWork - 从 UnitOfWork 的 Scope 获取
-        // 从当前工作单元的作用域获取 ServiceProvider。
         var uowServiceProvider = GetServiceProvider(unitOfWork);
+        var binding = uowServiceProvider.GetRequiredService<UnitOfWorkConnectionBinding>();
+        var tenantId = uowServiceProvider.GetService<ICurrentTenant>()?.Id;
+        binding.EnsureTenant(tenantId);
 
-        // 在 UnitOfWork 内，从 UnitOfWork 获取或创建 DbContext
-        var databaseApi = unitOfWork.GetOrAddDatabaseApi(() =>
+        if (unitOfWork.FindDatabaseApi(DatabaseApiKey) is EfCoreDatabaseApi<TDbContext> existingApi)
         {
-            var dbContext = unitOfWork.Options.IsTransactional
-                ? CreateDbContextWithTransactionAsync(unitOfWork, uowServiceProvider, cancellationToken).Result  // 需要事务
-                : uowServiceProvider.GetRequiredService<TDbContext>();      // 不需要事务
+            return existingApi.DbContext;
+        }
 
-            // 应用 Timeout 设置
-            ApplyTimeout(dbContext, unitOfWork);
+        var resolvedConnectionString = await ResolveConnectionStringAsync(uowServiceProvider, cancellationToken);
+        var targetKey = resolvedConnectionString is null ? binding.TargetKey : CreateTargetKey(resolvedConnectionString);
+        var activeTransaction = targetKey is null
+            ? null
+            : unitOfWork.FindTransactionApi($"EfCoreTransaction:{targetKey}") as EfCoreTransactionApi;
+        var dbContext = await CreateDbContextAsync(
+            uowServiceProvider,
+            activeTransaction?.DbContextTransaction.GetDbTransaction().Connection,
+            cancellationToken,
+            resolvedConnectionString);
 
-            return new EfCoreDatabaseApi<TDbContext>(dbContext);
-        });
+        var actualTargetKey = dbContext.Database.IsRelational()
+            ? CreateTargetKey(dbContext.Database.GetConnectionString())
+            : $"NonRelational:{typeof(TDbContext).FullName}:{dbContext.Database.ProviderName}";
+        binding.Bind(tenantId, actualTargetKey);
+        targetKey ??= actualTargetKey;
 
-        var efCoreApi = (EfCoreDatabaseApi<TDbContext>)databaseApi;
-        return efCoreApi.DbContext;
+        if (!string.Equals(targetKey, actualTargetKey, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The DbContext configuration did not use the resolved physical database target.");
+        }
+
+        var transactionKey = $"EfCoreTransaction:{targetKey}";
+        activeTransaction ??= unitOfWork.FindTransactionApi(transactionKey) as EfCoreTransactionApi;
+
+        ApplyTimeout(dbContext, unitOfWork);
+
+        if (unitOfWork.Options.IsTransactional)
+        {
+            await EnlistOrBeginTransactionAsync(
+                unitOfWork,
+                transactionKey,
+                dbContext,
+                activeTransaction,
+                cancellationToken);
+        }
+
+        unitOfWork.AddDatabaseApi(DatabaseApiKey, new EfCoreDatabaseApi<TDbContext>(dbContext));
+        return dbContext;
     }
 
-    private async Task<TDbContext> CreateDbContextWithTransactionAsync(
+    private static async Task EnlistOrBeginTransactionAsync(
         IUnitOfWork unitOfWork,
-        IServiceProvider serviceProvider,
-        CancellationToken cancellationToken = default)
+        string transactionKey,
+        TDbContext dbContext,
+        EfCoreTransactionApi? activeTransaction,
+        CancellationToken cancellationToken)
     {
-        var activeTransaction = unitOfWork.FindTransactionApi() as EfCoreTransactionApi;
-
-        if (activeTransaction == null)
+        if (activeTransaction is null)
         {
-            // 场景 1：第一个 DbContext，创建新事务
-            var dbContext = serviceProvider.GetRequiredService<TDbContext>();
-
-            // 创建数据库事务
-            var dbTransaction = unitOfWork.Options.IsolationLevel.HasValue
+            var transaction = unitOfWork.Options.IsolationLevel.HasValue
                 ? await dbContext.Database.BeginTransactionAsync(unitOfWork.Options.IsolationLevel.Value, cancellationToken)
                 : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            // 创建 TransactionApi 并添加到 UnitOfWork
-            var transactionApi = new EfCoreTransactionApi(dbTransaction, dbContext);
-            unitOfWork.AddTransactionApi(transactionApi);
-
-            return dbContext;
+            unitOfWork.AddTransactionApi(transactionKey, new EfCoreTransactionApi(transaction, dbContext));
+            return;
         }
-        else
+
+        if (!dbContext.Database.IsRelational())
         {
-            // 场景 2：已有事务，复用或添加到 AttendedDbContexts
-            var dbContext = serviceProvider.GetRequiredService<TDbContext>();
-
-            if (dbContext.HasRelationalTransactionManager())
-            {
-                // 关系型数据库：使用 UseTransaction 共享事务
-                await dbContext.Database.UseTransactionAsync(activeTransaction.DbContextTransaction.GetDbTransaction(), cancellationToken);
-            }
-            else
-            {
-                // 非关系型数据库：创建新事务
-                await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            }
-
-            // 添加到 AttendedDbContexts，以便在 Commit/Rollback 时统一处理
-            activeTransaction.AttendedDbContexts.Add(dbContext);
-
-            return dbContext;
+            throw new InvalidOperationException(
+                "Multiple transactional DbContext types require a relational provider that can share a connection.");
         }
+
+        await dbContext.Database.UseTransactionAsync(
+            activeTransaction.DbContextTransaction.GetDbTransaction(),
+            cancellationToken);
+        activeTransaction.AttendedDbContexts.Add(dbContext);
     }
 
-    private void ApplyTimeout(TDbContext dbContext, IUnitOfWork unitOfWork)
+    private static async Task<TDbContext> CreateDbContextAsync(
+        IServiceProvider provider,
+        DbConnection? existingConnection,
+        CancellationToken cancellationToken,
+        string? resolvedConnectionString = null)
     {
-        if (unitOfWork.Options.Timeout.HasValue)
+        var connectionString = resolvedConnectionString ??
+            await ResolveConnectionStringAsync(provider, cancellationToken);
+
+        if (connectionString is null && existingConnection is null)
         {
-            // 检查是否为关系型数据库
-            if (dbContext.Database.IsRelational())
-            {
-                // 只在未设置 CommandTimeout 时应用
-                if (!dbContext.Database.GetCommandTimeout().HasValue)
-                {
-                    dbContext.Database.SetCommandTimeout((int)unitOfWork.Options.Timeout.Value.TotalSeconds);
-                }
-            }
+            return provider.GetRequiredService<TDbContext>();
+        }
+
+        using (DbContextCreationContext.Change(connectionString ?? existingConnection!.ConnectionString, existingConnection))
+        {
+            return provider.GetRequiredService<TDbContext>();
         }
     }
 
-    /// <summary>
-    /// 从 UnitOfWork 获取 ServiceProvider。
-    /// 由于 IUnitOfWork 接口不暴露 ServiceProvider，需要转换为具体类型
-    /// </summary>
+    private static async Task<string?> ResolveConnectionStringAsync(
+        IServiceProvider provider,
+        CancellationToken cancellationToken)
+    {
+        var resolver = provider.GetService<ITenantConnectionStringResolver>();
+        if (resolver is null)
+        {
+            return null;
+        }
+
+        var connectionString = await resolver.ResolveAsync(ConnectionStringName, cancellationToken);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException("The tenant connection string resolver returned an empty value.");
+        }
+
+        return connectionString;
+    }
+
+    private static string CreateTargetKey(string? connectionString)
+    {
+        if (connectionString is null)
+        {
+            return $"ConfiguredDbContext:{typeof(TDbContext).FullName}";
+        }
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(connectionString));
+        return Convert.ToHexString(bytes);
+    }
+
+    private static void ApplyTimeout(TDbContext dbContext, IUnitOfWork unitOfWork)
+    {
+        if (unitOfWork.Options.Timeout.HasValue &&
+            dbContext.Database.IsRelational() &&
+            !dbContext.Database.GetCommandTimeout().HasValue)
+        {
+            dbContext.Database.SetCommandTimeout((int)unitOfWork.Options.Timeout.Value.TotalSeconds);
+        }
+    }
+
     private static IServiceProvider GetServiceProvider(IUnitOfWork unitOfWork)
     {
-        // 转换为具体的 UnitOfWork 类型以访问 ServiceProvider
-        if (unitOfWork is Core.Uow.UnitOfWork concreteUow)
+        if (unitOfWork is Core.Uow.UnitOfWork concreteUnitOfWork)
         {
-            return concreteUow.ServiceProvider;
+            return concreteUnitOfWork.ServiceProvider;
         }
 
         throw new InvalidOperationException(
-            $"Cannot get ServiceProvider from UnitOfWork. " +
-            $"Expected type: {typeof(Core.Uow.UnitOfWork).FullName}, " +
-            $"Actual type: {unitOfWork.GetType().FullName}");
+            $"Cannot get ServiceProvider from unit of work type '{unitOfWork.GetType().FullName}'.");
     }
 }

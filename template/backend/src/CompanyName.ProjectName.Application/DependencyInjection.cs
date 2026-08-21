@@ -1,20 +1,21 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Application.Auth.AppServices;
-#if (IncludeOpenIddict)
+#if (IdentityService)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
+using CompanyName.ProjectName.Application.TenantConnections.AppServices;
 #endif
 #endif
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using Leistd.ObjectMapping.Mapster;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using Leistd.Authorization;
 using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Checker;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 #endif
-#if (TenancyEnabled)
+#if (IdentityService)
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 #endif
@@ -34,16 +35,17 @@ public static class DependencyInjection
         // 系统初始化
         services.AddTransient<ISystemInitializer, SystemInitializer>();
 
-#if (IncludeIdentity)
+#if (IdentityService)
         // 认证
         services.AddTransient<ICaptchaAppService, CaptchaAppService>();
         services.AddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
         services.AddTransient<IAuthAppService, AuthAppService>();
 
-#if (IncludeOpenIddict)
+#if (IdentityService)
         // OAuth token 主体工厂 + 开放应用管理（仅 OpenIddict）
         services.AddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
         services.AddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
+        services.AddTransient<ITenantConnectionAppService, TenantConnectionAppService>();
 #endif
 
 #if (IncludeExternalLogin)
@@ -55,7 +57,7 @@ public static class DependencyInjection
         // 用户管理
         services.AddTransient<IUserAppService, UserAppService>();
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
         // 角色管理
         services.AddTransient<IRoleAppService, RoleAppService>();
 
@@ -67,7 +69,7 @@ public static class DependencyInjection
         services.AddTransient<IPermissionAppService, PermissionAppService>();
 #endif
 
-#if (TenancyEnabled)
+#if (IdentityService)
         // 租户管理（宿主侧）：写路径走框架 ITenantManager，创建后在租内种子
         services.AddTransient<ITenantAppService, TenantAppService>();
         services.AddTransient<ITenantSeeder, TenantSeeder>();

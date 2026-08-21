@@ -1,4 +1,4 @@
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using Leistd.MultiTenancy;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;

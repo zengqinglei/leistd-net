@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 namespace CompanyName.ProjectName.Domain.Auth.Options;
 
 /// <summary>

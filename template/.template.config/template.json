@@ -51,56 +51,56 @@
       "valueTransform": "FullNameKebab",
       "replaces": "companyname-projectname"
     },
-    "IncludeIdentity": {
+    "ServiceRole": {
       "type": "parameter",
-      "datatype": "bool",
-      "description": "是否包含认证模块（登录/注册/JWT）",
-      "defaultValue": "true"
+      "datatype": "choice",
+      "description": "服务角色：Identity 持有 OIDC 与租户控制面；Resource 验证远端令牌并持有本服务授权",
+      "defaultValue": "Identity",
+      "choices": [
+        {
+          "choice": "Identity",
+          "description": "身份、租户、OIDC 应用与本服务授权"
+        },
+        {
+          "choice": "Resource",
+          "description": "远端令牌验证、租户数据隔离与本服务授权"
+        }
+      ]
     },
-    "IncludeRoles": {
-      "type": "parameter",
-      "datatype": "bool",
-      "description": "是否包含角色权限系统",
-      "defaultValue": "true",
-      "isEnabled": "IncludeIdentity"
+    "IdentityService": {
+      "type": "computed",
+      "value": "(ServiceRole == \"Identity\")"
+    },
+    "ResourceService": {
+      "type": "computed",
+      "value": "(ServiceRole == \"Resource\")"
+    },
+    "LocalAuthorization": {
+      "type": "computed",
+      "value": "true"
+    },
+    "MultiTenancy": {
+      "type": "computed",
+      "value": "true"
     },
     "IncludeNotifications": {
       "type": "parameter",
       "datatype": "bool",
       "description": "是否包含实时通知和通知中心（SignalR）",
-      "defaultValue": "false",
-      "isEnabled": "IncludeIdentity"
-    },
-    "IncludeOpenIddict": {
-      "type": "parameter",
-      "datatype": "bool",
-      "description": "是否包含 OpenIddict OAuth2/OIDC Server（第三方应用接入、开放应用管理）",
-      "defaultValue": "true",
-      "isEnabled": "IncludeIdentity"
+      "defaultValue": "false"
     },
     "IncludeExternalLogin": {
       "type": "parameter",
       "datatype": "bool",
       "description": "是否包含外部登录（GitHub / Google 等第三方身份提供商）",
       "defaultValue": "false",
-      "isEnabled": "IncludeIdentity"
+      "isEnabled": "(ServiceRole == \"Identity\")"
     },
     "IncludeLocalization": {
       "type": "parameter",
       "datatype": "bool",
       "description": "是否包含多语言（i18n）支持：前端 Transloco 运行时切换 + 后端按 culture 本地化（默认语言英语）",
       "defaultValue": "false"
-    },
-    "IncludeTenancy": {
-      "type": "parameter",
-      "datatype": "bool",
-      "description": "是否包含多租户模式：租户解析与数据硬隔离、租户管理 API 与页面、登录页租户选择。依赖角色权限，与 --include-roles false 同用时租户能力整体不生成",
-      "defaultValue": "false",
-      "isEnabled": "IncludeIdentity"
-    },
-    "TenancyEnabled": {
-      "type": "computed",
-      "value": "(IncludeTenancy && IncludeRoles)"
     }
   },
   "sources": [
@@ -128,8 +128,13 @@
           ]
         },
         {
-          "condition": "!IncludeIdentity",
+          "condition": "ResourceService",
           "exclude": [
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Identity/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Control/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/IdentityControlDbContext.cs",
+            "backend/src/CompanyName.ProjectName.Api/IdentityControlDbContextFactory.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/LocalTenantConnectionStringResolver.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
@@ -152,73 +157,24 @@
             "frontend/_mock/api/open-application.ts",
             "frontend/_mock/data/open-applications.ts",
             "frontend/src/app/features/account/**",
-            "frontend/src/app/layout/components/user-menu/**",
-            "frontend/src/app/core/guards/auth-guard.ts",
-            "frontend/src/app/core/guards/role-guard.ts",
+            "frontend/src/app/features/platform/components/users/widgets/reset-user-password-dialog/**",
             "frontend/src/app/core/guards/super-admin-guard.ts",
             "frontend/_mock/api/auth.ts",
-            "frontend/_mock/api/user.ts",
-            "frontend/_mock/data/user.ts",
-            "frontend/_mock/utils/current-user.ts",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Notifications/**",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationsAndRealTimeTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",
-            "frontend/src/app/core/services/signalr-service.ts",
-            "frontend/src/app/core/services/signalr-service.spec.ts",
-            "frontend/src/app/layout/components/notifications/**",
-            "frontend/_mock/api/notification.ts",
-            "frontend/_mock/data/notifications.ts",
-            "frontend/src/app/features/platform/components/users/**",
-            "frontend/src/app/features/platform/services/platform-user-service.ts",
-            "frontend/src/app/features/platform/services/user-management-service.ts",
-            "frontend/src/app/features/platform/models/user-management.dto.ts",
             "backend/src/CompanyName.ProjectName.Application/Tenants/**",
+            "backend/src/CompanyName.ProjectName.Application/TenantConnections/**",
             "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/TenantConnectionController.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenancyTests.cs",
             "frontend/src/app/features/platform/components/tenants/**",
             "frontend/src/app/features/platform/services/tenant-service.ts",
-            "frontend/src/app/shared/dtos/tenant.dto.ts",
-            "frontend/src/app/core/services/tenant-context-service.ts",
-            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
             "frontend/_mock/api/tenant.ts",
             "frontend/_mock/data/tenant.ts",
-            "frontend/src/app/core/services/tenant-context-service.spec.ts",
-            "frontend/src/app/core/interceptors/tenant-interceptor.spec.ts",
             "frontend/src/app/features/platform/components/tenants/tenants.spec.ts"
           ]
         },
         {
-          "condition": "!IncludeIdentity",
-          "exclude": [
-            "backend/src/CompanyName.ProjectName.Application/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Domain/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Application/Roles/**",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/Role.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/UserRole.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Constants/AdminConstant.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/RoleController.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/PermissionController.cs",
-            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/UpdateUserRolesInputDto.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/UserRolesQueryTests.cs",
-            "frontend/src/app/core/guards/permission-guard.ts",
-            "frontend/src/app/core/guards/permission-guard.spec.ts",
-            "frontend/src/app/core/services/authorization-service.ts",
-            "frontend/src/app/core/services/authorization-service.spec.ts",
-            "frontend/src/app/shared/models/permission.ts",
-            "frontend/src/app/features/public/components/forbidden/**",
-            "frontend/src/app/features/platform/components/roles/**",
-            "frontend/src/app/features/platform/components/users/widgets/user-roles-dialog/**",
-            "frontend/src/app/features/platform/services/role-service.ts",
-            "frontend/src/app/features/platform/services/permission-management-service.ts",
-            "frontend/src/app/features/platform/models/role.dto.ts",
-            "frontend/src/app/features/platform/widgets/permission-grant-dialog/**",
-            "frontend/_mock/api/authorization.ts",
-            "frontend/_mock/data/authorization.ts"
-          ]
-        },
-        {
-          "condition": "!IncludeIdentity || !IncludeNotifications",
+          "condition": "!IncludeNotifications",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationsController.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Notifications/**",
@@ -231,53 +187,7 @@
           ]
         },
         {
-          "condition": "IncludeIdentity && !IncludeRoles",
-          "exclude": [
-            "backend/src/CompanyName.ProjectName.Application/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Domain/Permissions/**",
-            "backend/src/CompanyName.ProjectName.Application/Roles/**",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/Role.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Entities/UserRole.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Users/Constants/AdminConstant.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/RoleController.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/PermissionController.cs",
-            "backend/src/CompanyName.ProjectName.Application/Users/Dtos/UpdateUserRolesInputDto.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/UserRolesQueryTests.cs",
-            "frontend/src/app/core/guards/permission-guard.ts",
-            "frontend/src/app/core/guards/permission-guard.spec.ts",
-            "frontend/src/app/core/services/authorization-service.ts",
-            "frontend/src/app/core/services/authorization-service.spec.ts",
-            "frontend/src/app/shared/models/permission.ts",
-            "frontend/src/app/features/public/components/forbidden/**",
-            "frontend/src/app/features/platform/components/roles/**",
-            "frontend/src/app/features/platform/components/users/widgets/user-roles-dialog/**",
-            "frontend/src/app/features/platform/services/role-service.ts",
-            "frontend/src/app/features/platform/services/permission-management-service.ts",
-            "frontend/src/app/features/platform/models/role.dto.ts",
-            "frontend/src/app/features/platform/widgets/permission-grant-dialog/**",
-            "frontend/_mock/api/authorization.ts",
-            "frontend/_mock/data/authorization.ts"
-          ]
-        },
-        {
-          "condition": "IncludeIdentity && !IncludeOpenIddict",
-          "exclude": [
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/ConnectController.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/AuthPrincipalFactory.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IAuthPrincipalFactory.cs",
-            "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
-            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptions.cs",
-            "frontend/src/app/features/platform/components/open-applications/**",
-            "frontend/src/app/features/platform/services/open-application-service.ts",
-            "frontend/src/app/features/platform/models/open-application.dto.ts",
-            "frontend/_mock/api/open-application.ts",
-            "frontend/_mock/data/open-applications.ts"
-          ]
-        },
-        {
-          "condition": "IncludeIdentity && !IncludeExternalLogin",
+          "condition": "IdentityService && !IncludeExternalLogin",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/ExternalAuthAppService.cs",
@@ -293,21 +203,12 @@
           ]
         },
         {
-          "condition": "!TenancyEnabled",
+          "condition": "IdentityService",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Application/Tenants/**",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/TenancyTests.cs",
-            "frontend/src/app/features/platform/components/tenants/**",
-            "frontend/src/app/features/platform/services/tenant-service.ts",
-            "frontend/src/app/shared/dtos/tenant.dto.ts",
-            "frontend/src/app/core/services/tenant-context-service.ts",
-            "frontend/src/app/core/interceptors/tenant-interceptor.ts",
-            "frontend/_mock/api/tenant.ts",
-            "frontend/_mock/data/tenant.ts",
-            "frontend/src/app/core/services/tenant-context-service.spec.ts",
-            "frontend/src/app/core/interceptors/tenant-interceptor.spec.ts",
-            "frontend/src/app/features/platform/components/tenants/tenants.spec.ts"
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Resource/**",
+            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionClient.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionClientOptions.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs"
           ]
         },
         {
@@ -322,7 +223,7 @@
           ]
         },
         {
-          "condition": "!IncludeLocalization || !IncludeIdentity",
+          "condition": "!IncludeLocalization || ResourceService",
           "exclude": [
             "backend/tests/CompanyName.ProjectName.IntegrationTests/LocalizationTests.cs"
           ]

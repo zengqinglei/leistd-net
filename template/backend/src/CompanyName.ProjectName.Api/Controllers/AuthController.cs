@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
@@ -85,7 +85,7 @@ public class AuthController(
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
         identity.AddClaim(new Claim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false"));
-#if (TenancyEnabled)
+#if (MultiTenancy)
         // 租户 claim：多租户解析链以它定案已登录用户的租户，请求头无法改写
         if (user.TenantId is { } tenantId)
         {
@@ -93,7 +93,7 @@ public class AuthController(
         }
 #endif
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
         foreach (var roleName in await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
         {
             identity.AddClaim(new Claim("role", roleName));

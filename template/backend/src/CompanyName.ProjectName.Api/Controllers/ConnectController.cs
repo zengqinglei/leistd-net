@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -167,7 +167,7 @@ public class ConnectController(
             claims[Claims.EmailVerified] = user.EmailConfirmed;
         }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
         if (User.HasScope(Scopes.Roles))
         {
             claims[Claims.Role] = User.GetClaims(Claims.Role)

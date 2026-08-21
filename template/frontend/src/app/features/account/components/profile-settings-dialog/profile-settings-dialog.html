@@ -76,7 +76,7 @@
                 <!--#else-->
                 <span hlmBadge variant="destructive">Super Admin</span>
                 <!--#endif-->
-                <!--#if (IncludeRoles)-->
+                <!--#if (LocalAuthorization)-->
               } @else if (roleLabels().length > 0) {
                 @for (role of roleLabels(); track role) {
                   <span hlmBadge variant="secondary">{{ role }}</span>

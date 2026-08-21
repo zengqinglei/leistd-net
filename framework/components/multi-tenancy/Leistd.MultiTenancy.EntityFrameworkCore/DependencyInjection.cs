@@ -25,6 +25,10 @@ public static class DependencyInjection
         services.TryAddSingleton<IClock, UtcClockProvider>();
         services.TryAddTransient<ITenantStore, EfCoreTenantStore<TDbContext>>();
         services.TryAddTransient<ITenantManager, EfCoreTenantManager<TDbContext>>();
+        services.TryAddTransient<ITenantConnectionConfigurationStore,
+            EfCoreTenantConnectionConfigurationStore<TDbContext>>();
+        services.TryAddTransient<ITenantConnectionConfigurationManager,
+            EfCoreTenantConnectionConfigurationManager<TDbContext>>();
         return services;
     }
 
@@ -34,6 +38,7 @@ public static class DependencyInjection
     public static ModelBuilder ConfigureMultiTenancy(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new TenantRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantConnectionRecordConfiguration());
         return modelBuilder;
     }
 }

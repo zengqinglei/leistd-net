@@ -29,6 +29,7 @@
     <PackageVersion Include="Leistd.MultiTenancy.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.UnitOfWork.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.Core" Version="$(LeistdFrameworkVersion)" />
@@ -74,6 +75,7 @@
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
+    <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.5.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
     <PackageVersion Include="System.Linq.Dynamic.Core" Version="1.7.2" />

@@ -1,4 +1,4 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
 

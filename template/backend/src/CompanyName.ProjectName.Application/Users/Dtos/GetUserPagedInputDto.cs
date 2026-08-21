@@ -21,13 +21,15 @@ public record GetUserPagedInputDto : PagedRequestDto
     [Display(Name = "Active status")]
     public bool? IsActive { get; init; }
 
+#if (IdentityService)
     /// <summary>
     /// 邮箱是否已验证
     /// </summary>
     [Display(Name = "Email verification status")]
     public bool? IsEmailVerified { get; init; }
+#endif
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     /// <summary>
     /// 角色名称（多选，命中任一角色即匹配）。单项长度上限与 Role 实体一致（64），在应用服务中校验。
     /// </summary>

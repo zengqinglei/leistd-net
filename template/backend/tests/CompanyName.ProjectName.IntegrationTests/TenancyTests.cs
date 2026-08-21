@@ -1,4 +1,4 @@
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -484,7 +484,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         using var brokenActivationHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
-                services.AddTransient<EfCoreTenantManager<MyProjectDbContext>>();
+                services.AddTransient<EfCoreTenantManager<IdentityControlDbContext>>();
                 services.AddTransient<ITenantManager, FailActivationTenantManager>();
             }));
 
@@ -586,8 +586,18 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var failedTenantId = FailAfterRolesTenantSeeder.LastTenantId;
         Assert.NotNull(failedTenantId);
 
-        // 补偿覆盖种子数据：在失败租户的上下文里，所有租户化实体都不可见
-        await AssertNoVisibleTenantDataAsync(brokenHost, failedTenantId.Value);
+        // EF InMemory 不提供真实事务，不用它证明授权记录回滚；
+        // 这里只回归补偿后租户主体不可访问，事务原子性由 PostgreSQL 端到端用例验收。
+        using (var scope = brokenHost.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+            using (tenant.Change(failedTenantId.Value))
+            {
+                Assert.Empty(await db.Set<User>().ToListAsync());
+                Assert.Empty(await db.Set<Role>().ToListAsync());
+            }
+        }
 
         // 补偿在独立作用域里执行，因此不会把失败现场跟踪器里的实体一起提交。
         // 复用失败现场的 DbContext 时，补偿的 SaveChanges 会写出这一行
@@ -831,10 +841,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     private sealed class FailAfterRolesTenantSeeder(
         ICurrentTenant currentTenant,
         MyProjectDbContext dbContext,
-        IRepository<Role, Guid> roleRepository,
-        IPermissionDefinitionManager permissionDefinitionManager,
-        IPermissionGrantStore permissionGrantStore,
-        IPermissionGrantManager permissionGrantManager,
         TenantSeeder inner) : ITenantSeeder
     {
         /// <summary>失败瞬间留在跟踪器里、绝不应被补偿写入数据库的实体名。</summary>
@@ -847,30 +853,16 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         {
             LastTenantId = currentTenant.Id;
 
-            // 第一步：真实写入角色（仓储在无工作单元时立即保存，因此这一步确实落库）
-            var adminRole = new Role("Admin", "Administrator", isStatic: true, sort: 1);
-            await roleRepository.InsertAsync(adminRole, cancellationToken);
-
-            // 第二步：真实写入权限授予与授权版本
-            var existing = await permissionGrantStore.GetGrantsAsync(
-                PermissionGrantProviderNames.Role, adminRole.Id.ToString(), cancellationToken);
-            var definitions = permissionDefinitionManager
-                .GetAll()
-                .Where(d => d.Side.HasFlag(MultiTenancySides.Tenant))
-                .Where(d => permissionDefinitionManager.IsEffectivelyEnabled(d.Name))
-                .Select(d => d.Name)
-                .ToList();
-            await permissionGrantManager.ReplaceGrantsAsync(
-                PermissionGrantProviderNames.Role, adminRole.Id.ToString(), definitions,
-                expectedRevision: existing.Revision, cancellationToken);
+            // 走完真实播种后在业务 UoW 提交前失败，同时覆盖
+            // 角色、授权、管理员和关联数据的回滚/补偿。
+            await inner.SeedAsync(adminEmail, adminPassword, cancellationToken);
 
             // 制造"脏跟踪器"：EF 在 SaveChanges 失败后会保留 Added/Modified 实体，
             // 这里用一个未保存的 Add 等价模拟——对补偿的影响完全相同。
             // 若补偿复用这个 DbContext，它的下一次 SaveChanges 会把这个实体一起写进库
             dbContext.Add(new Role(GhostRoleName, "Ghost Role"));
 
-            // 第三步（创建管理员）之前失败
-            throw new InvalidOperationException("injected seed failure after roles and grants");
+            throw new InvalidOperationException("injected seed failure before business unit-of-work commit");
         }
 
         public Task PurgeAsync(CancellationToken cancellationToken = default)
@@ -942,7 +934,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// <summary>
     /// 种子正常完成，但最后一步激活失败。
     /// </summary>
-    private sealed class FailActivationTenantManager(EfCoreTenantManager<MyProjectDbContext> inner) : ITenantManager
+    private sealed class FailActivationTenantManager(EfCoreTenantManager<IdentityControlDbContext> inner) : ITenantManager
     {
         internal static Guid? LastCreatedId { get; private set; }
 

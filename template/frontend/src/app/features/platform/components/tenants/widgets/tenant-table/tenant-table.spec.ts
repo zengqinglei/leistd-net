@@ -1,4 +1,4 @@
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';

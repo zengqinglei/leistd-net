@@ -54,8 +54,8 @@ public class UnitOfWork : IUnitOfWork
     /// <inheritdoc/>
     public IServiceProvider ServiceProvider { get; }
 
-    private IDatabaseApi? _databaseApi;
-    private ITransactionApi? _transactionApi;
+    private readonly Dictionary<string, IDatabaseApi> _databaseApis = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ITransactionApi> _transactionApis = new(StringComparer.Ordinal);
 
     private System.Exception? _exception;
     private bool _isCompleting;
@@ -102,12 +102,14 @@ public class UnitOfWork : IUnitOfWork
             _isCompleting = true;
 
             // SaveChanges 后发布 BeforeCommit，并重复处理事件产生的新变更。
-            var databaseApi = (_databaseApi as ISupportsSavingChanges);
-            if (databaseApi != null)
+            if (_databaseApis.Values.OfType<ISupportsSavingChanges>().Any())
             {
                 while (true)
                 {
-                    await databaseApi.SaveChangesAsync(cancellationToken);
+                    foreach (var databaseApi in _databaseApis.Values.OfType<ISupportsSavingChanges>())
+                    {
+                        await databaseApi.SaveChangesAsync(cancellationToken);
+                    }
 
                     if (!_pendingEvents.Any())
                     {
@@ -170,25 +172,39 @@ public class UnitOfWork : IUnitOfWork
     }
 
     /// <inheritdoc/>
-    public IDatabaseApi GetOrAddDatabaseApi(Func<IDatabaseApi> factory)
+    public IDatabaseApi? FindDatabaseApi(string key)
     {
-        if (_databaseApi == null)
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        return _databaseApis.GetValueOrDefault(key);
+    }
+
+    /// <inheritdoc/>
+    public void AddDatabaseApi(string key, IDatabaseApi api)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(api);
+        if (!_databaseApis.TryAdd(key, api))
         {
-            _databaseApi = factory();
+            throw new InvalidOperationException($"Database API key '{key}' is already registered in this unit of work.");
         }
-        return _databaseApi;
     }
 
     /// <inheritdoc/>
-    public ITransactionApi? FindTransactionApi()
+    public ITransactionApi? FindTransactionApi(string key)
     {
-        return _transactionApi;
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        return _transactionApis.GetValueOrDefault(key);
     }
 
     /// <inheritdoc/>
-    public void AddTransactionApi(ITransactionApi api)
+    public void AddTransactionApi(string key, ITransactionApi api)
     {
-        _transactionApi = api;
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(api);
+        if (!_transactionApis.TryAdd(key, api))
+        {
+            throw new InvalidOperationException($"Transaction API key '{key}' is already registered in this unit of work.");
+        }
     }
 
     /// <inheritdoc/>
@@ -305,7 +321,10 @@ public class UnitOfWork : IUnitOfWork
     {
         try
         {
-            _databaseApi?.Dispose();
+            foreach (var databaseApi in _databaseApis.Values)
+            {
+                databaseApi.Dispose();
+            }
         }
         catch
         {
@@ -316,7 +335,10 @@ public class UnitOfWork : IUnitOfWork
     {
         try
         {
-            _transactionApi?.Dispose();
+            foreach (var transactionApi in _transactionApis.Values)
+            {
+                transactionApi.Dispose();
+            }
         }
         catch
         {
@@ -338,11 +360,11 @@ public class UnitOfWork : IUnitOfWork
     {
         try
         {
-            if (_databaseApi is ISupportsRollback databaseApi)
+            foreach (var databaseApi in _databaseApis.Values.OfType<ISupportsRollback>())
             {
                 await databaseApi.RollbackAsync(cancellationToken);
             }
-            if (_transactionApi is ISupportsRollback transactionApi)
+            foreach (var transactionApi in _transactionApis.Values.OfType<ISupportsRollback>())
             {
                 await transactionApi.RollbackAsync(cancellationToken);
             }
@@ -355,9 +377,9 @@ public class UnitOfWork : IUnitOfWork
     /// <inheritdoc/>
     protected virtual async Task CommitTransactionsAsync()
     {
-        if (_transactionApi != null)
+        foreach (var transactionApi in _transactionApis.Values)
         {
-            await _transactionApi.CommitAsync();
+            await transactionApi.CommitAsync();
         }
     }
 

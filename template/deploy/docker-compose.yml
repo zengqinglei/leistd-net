@@ -1,9 +1,28 @@
-version: '3.8'
-
 services:
+  db-migrator:
+    image: ghcr.io/zengqinglei/companyname-projectname-migrator:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: migrator
+    environment:
+      - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=postgres;Password=${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required};GSS Encryption Mode=Disable
+      # Resource DbMigrator 使用独立客户端凭据，只授予 tenant-migration.read。
+      - Leistd__ServiceClients__Identity__Scope=tenant-migration.read
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - companyname-projectname-network
+
   backend:
     image: ghcr.io/zengqinglei/companyname-projectname:latest
     container_name: companyname-projectname
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: api
     ports:
       - "80:8080"
     environment:
@@ -12,7 +31,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
 
       # Database Configuration (PostgreSQL)
-      - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=postgres;Password=YourSecurePassword!;GSS Encryption Mode=Disable
+      - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=${APP_DB_USER:?APP_DB_USER is required};Password=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required};GSS Encryption Mode=Disable
+      # Resource API 的身份只能查运行时路由，不授予迁移元数据 scope。
+      - Leistd__ServiceClients__Identity__Scope=tenant-routing.read
 
       # Redis Configuration — matches the bundled redis service below (no password, no TLS).
       # Production password: set it on BOTH sides —
@@ -27,11 +48,6 @@ services:
       - DefaultAdmin__Password=Admin@123456
       - DefaultAdmin__Email=admin@companyname-projectname.com # optional
       - DefaultAdmin__Nickname=System Administrator # optional
-
-      # JWT Configuration (Change SecretKey in production!)
-      - Jwt__SecretKey=MyProject-SuperSecretKey-ForProduction-MinimumLength32Characters!
-      - Jwt__Issuer=MyProject # optional
-      - Jwt__Audience=MyProject # optional
 
       # CORS Configuration (optional)
       - Cors__AllowAnyLocalhost=false
@@ -57,11 +73,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-migrator:
+        condition: service_completed_successfully
       redis:
         condition: service_started
 
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -78,12 +96,15 @@ services:
     environment:
       TZ: Asia/Shanghai
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: YourSecurePassword!
+      POSTGRES_PASSWORD: ${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required}
       POSTGRES_DB: MyProject
       POSTGRES_INITDB_ARGS: "-E UTF8"
+      APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
 
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./postgres/01-create-app-role.sh:/docker-entrypoint-initdb.d/01-create-app-role.sh:ro
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

@@ -40,7 +40,7 @@
             <!--#endif-->
             <span class="font-medium">{{ user.email || '-' }}</span>
           </div>
-          <!--#if (IncludeRoles)-->
+          <!--#if (LocalAuthorization)-->
           <div class="flex items-center gap-3">
             <!--#if (IncludeLocalization)-->
             <span class="text-muted-foreground w-20">{{

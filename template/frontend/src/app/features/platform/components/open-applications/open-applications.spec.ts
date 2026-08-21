@@ -12,11 +12,11 @@ import { of } from 'rxjs';
 
 import { OpenApplications } from './open-applications';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
 import { StartupService } from '../../../../core/services/startup-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#endif
 import { GetOpenApplicationsInputDto } from '../../models/open-application.dto';
@@ -74,7 +74,7 @@ describe('OpenApplications 页面查询闭环', () => {
     router = TestBed.inject(Router);
     await router.navigate(['/platform/open-applications']);
 
-    //#if (IncludeRoles)
+    //#if (LocalAuthorization)
     TestBed.inject(AuthorizationService).setPermissions({
       permissions: [PERMISSIONS.openApplications.default],
       isSuperAdmin: false,

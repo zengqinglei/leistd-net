@@ -39,12 +39,14 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
             {
                 var instance = CreateOriginalInstance(descriptor, sp);
                 var proxyGenerator = sp.GetRequiredService<IProxyGenerator>();
-                var interceptors = interceptorTypes
+                var resolvedInterceptors = interceptorTypes
                     .Select(t => sp.GetRequiredService(t))
-                    .Cast<IInterceptor>()
                     .OrderBy(interceptor => interceptor is BaseAsyncInterceptor asyncInterceptor
                         ? asyncInterceptor.Order
                         : 0)
+                    .ToArray();
+                var interceptors = resolvedInterceptors
+                    .Select(ToCastleInterceptor)
                     .ToArray();
 
                 if (descriptor.ServiceType.IsInterface)
@@ -62,6 +64,14 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
             },
             descriptor.Lifetime);
     }
+
+    private static IInterceptor ToCastleInterceptor(object interceptor) => interceptor switch
+    {
+        IInterceptor synchronous => synchronous,
+        IAsyncInterceptor asynchronous => asynchronous.ToInterceptor(),
+        _ => throw new InvalidOperationException(
+            $"Interceptor '{interceptor.GetType().FullName}' must implement Castle IInterceptor or IAsyncInterceptor.")
+    };
 
     private static object CreateOriginalInstance(ServiceDescriptor descriptor, IServiceProvider sp)
     {

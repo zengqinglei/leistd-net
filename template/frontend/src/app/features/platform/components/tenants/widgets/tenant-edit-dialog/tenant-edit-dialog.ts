@@ -21,18 +21,20 @@ import {
   required,
 } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 import {
   CreateTenantInputDto,
+  TenantDatabaseMode,
   TenantOutputDto,
   UpdateTenantInputDto,
 } from '../../../../../../shared/dtos/tenant.dto';
@@ -44,6 +46,9 @@ interface TenantEditFormModel {
   displayName: string;
   adminEmail: string;
   adminPassword: string;
+  databaseMode: TenantDatabaseMode;
+  runtimeSecretReference: string;
+  migrationSecretReference: string;
 }
 
 /**
@@ -54,7 +59,17 @@ interface TenantEditFormModel {
  */
 @Component({
   selector: 'app-tenant-edit-dialog',
-  imports: [FormField, HlmButton, HlmInput, ...HlmDialogImports, ...HlmFieldImports],
+  imports: [
+    FormField,
+    HlmButton,
+    HlmInput,
+    ...HlmDialogImports,
+    ...HlmFieldImports,
+    ...HlmToggleGroupImports,
+    //#if (IncludeLocalization)
+    TranslocoModule,
+    //#endif
+  ],
   templateUrl: './tenant-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -68,12 +83,18 @@ export class TenantEditDialog {
   //#endif
 
   readonly isEdit = computed(() => this.tenant() !== null);
+  readonly isDedicatedDatabase = computed(
+    () => this.formModel().databaseMode === 'DedicatedDatabase',
+  );
 
   protected readonly formModel = signal<TenantEditFormModel>({
     name: '',
     displayName: '',
     adminEmail: '',
     adminPassword: '',
+    databaseMode: 'SharedDatabase',
+    runtimeSecretReference: '',
+    migrationSecretReference: '',
   });
 
   readonly tenantForm = form(this.formModel, (path) => {
@@ -102,6 +123,14 @@ export class TenantEditDialog {
       message: this.transloco.translate('common.validation.passwordRule'),
       when: () => !this.isEdit(),
     });
+    required(path.runtimeSecretReference, {
+      message: this.transloco.translate('common.validation.required'),
+      when: () => !this.isEdit() && this.isDedicatedDatabase(),
+    });
+    required(path.migrationSecretReference, {
+      message: this.transloco.translate('common.validation.required'),
+      when: () => !this.isEdit() && this.isDedicatedDatabase(),
+    });
     //#else
     required(path.name, { message: 'This field is required.' });
     maxLength(path.name, 64, { message: 'Must not exceed 64 characters.' });
@@ -124,6 +153,14 @@ export class TenantEditDialog {
         'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
       when: () => !this.isEdit(),
     });
+    required(path.runtimeSecretReference, {
+      message: 'This field is required.',
+      when: () => !this.isEdit() && this.isDedicatedDatabase(),
+    });
+    required(path.migrationSecretReference, {
+      message: 'This field is required.',
+      when: () => !this.isEdit() && this.isDedicatedDatabase(),
+    });
     //#endif
   });
 
@@ -140,6 +177,9 @@ export class TenantEditDialog {
         displayName: tenant?.displayName ?? '',
         adminEmail: '',
         adminPassword: '',
+        databaseMode: 'SharedDatabase',
+        runtimeSecretReference: '',
+        migrationSecretReference: '',
       });
     });
   }
@@ -165,7 +205,30 @@ export class TenantEditDialog {
       displayName,
       adminEmail: model.adminEmail.trim(),
       adminPassword: model.adminPassword,
+      databaseMode: model.databaseMode,
+      runtimeSecretReference: this.isDedicatedDatabase()
+        ? model.runtimeSecretReference.trim()
+        : undefined,
+      migrationSecretReference: this.isDedicatedDatabase()
+        ? model.migrationSecretReference.trim()
+        : undefined,
     } satisfies CreateTenantInputDto);
+  }
+
+  setDatabaseMode(value: TenantDatabaseMode | TenantDatabaseMode[] | null | undefined): void {
+    const databaseMode = Array.isArray(value) ? value[0] : value;
+    if (databaseMode !== 'SharedDatabase' && databaseMode !== 'DedicatedDatabase') {
+      return;
+    }
+
+    this.formModel.update((current) => ({
+      ...current,
+      databaseMode,
+      runtimeSecretReference:
+        databaseMode === 'SharedDatabase' ? '' : current.runtimeSecretReference,
+      migrationSecretReference:
+        databaseMode === 'SharedDatabase' ? '' : current.migrationSecretReference,
+    }));
   }
 
   //#if (IncludeLocalization)
@@ -178,22 +241,42 @@ export class TenantEditDialog {
   readonly cancelLabel = () => this.transloco.translate('common.cancel');
   readonly saveLabel = () => this.transloco.translate('common.save');
 
-  fieldLabel(field: 'name' | 'displayName' | 'adminEmail' | 'adminPassword'): string {
+  fieldLabel(
+    field:
+      | 'name'
+      | 'displayName'
+      | 'adminEmail'
+      | 'adminPassword'
+      | 'runtimeSecretReference'
+      | 'migrationSecretReference',
+  ): string {
     const keys = {
       name: 'tenants.fieldName',
       displayName: 'tenants.fieldDisplayName',
       adminEmail: 'tenants.fieldAdminEmail',
       adminPassword: 'tenants.fieldAdminPassword',
+      runtimeSecretReference: 'tenants.fieldRuntimeSecretReference',
+      migrationSecretReference: 'tenants.fieldMigrationSecretReference',
     } as const;
     return this.transloco.translate(keys[field]);
   }
   //#else
-  fieldLabel(field: 'name' | 'displayName' | 'adminEmail' | 'adminPassword'): string {
+  fieldLabel(
+    field:
+      | 'name'
+      | 'displayName'
+      | 'adminEmail'
+      | 'adminPassword'
+      | 'runtimeSecretReference'
+      | 'migrationSecretReference',
+  ): string {
     const labels = {
       name: 'Name',
       displayName: 'Display name',
       adminEmail: 'Admin email',
       adminPassword: 'Admin password',
+      runtimeSecretReference: 'Runtime Secret reference',
+      migrationSecretReference: 'Migration Secret reference',
     } as const;
     return labels[field];
   }

@@ -35,6 +35,77 @@
       </hlm-field>
 
       @if (!isEdit()) {
+        <fieldset hlmFieldSet>
+          <!--#if (IncludeLocalization)-->
+          <legend hlmFieldLegend>{{ 'tenants.databasePlacement' | transloco }}</legend>
+          <p hlmFieldDescription>
+            {{ 'tenants.databasePlacementDescription' | transloco }}
+          </p>
+          <!--#else-->
+          <legend hlmFieldLegend>Database placement</legend>
+          <p hlmFieldDescription>
+            Shared uses each service's default database; dedicated resolves this tenant's Secret
+            references.
+          </p>
+          <!--#endif-->
+          <hlm-toggle-group
+            type="single"
+            variant="outline"
+            [nullable]="false"
+            [value]="formModel().databaseMode"
+            (valueChange)="setDatabaseMode($event)"
+          >
+            <button hlmToggleGroupItem type="button" value="SharedDatabase">
+              <!--#if (IncludeLocalization)-->
+              <ng-container>{{ 'tenants.sharedDatabase' | transloco }}</ng-container>
+              <!--#else-->
+              <ng-container>Shared database</ng-container>
+              <!--#endif-->
+            </button>
+            <button hlmToggleGroupItem type="button" value="DedicatedDatabase">
+              <!--#if (IncludeLocalization)-->
+              <ng-container>{{ 'tenants.dedicatedDatabase' | transloco }}</ng-container>
+              <!--#else-->
+              <ng-container>Dedicated database</ng-container>
+              <!--#endif-->
+            </button>
+          </hlm-toggle-group>
+        </fieldset>
+
+        @if (isDedicatedDatabase()) {
+          <hlm-field>
+            <label hlmFieldLabel for="tenant-runtime-secret-reference">{{
+              fieldLabel('runtimeSecretReference')
+            }}</label>
+            <input
+              hlmInput
+              id="tenant-runtime-secret-reference"
+              class="w-full"
+              autocomplete="off"
+              [formField]="tenantForm.runtimeSecretReference"
+            />
+            @for (error of tenantForm.runtimeSecretReference().errors(); track error.kind) {
+              <hlm-field-error>{{ error.message }}</hlm-field-error>
+            }
+          </hlm-field>
+
+          <hlm-field>
+            <label hlmFieldLabel for="tenant-migration-secret-reference">{{
+              fieldLabel('migrationSecretReference')
+            }}</label>
+            <input
+              hlmInput
+              id="tenant-migration-secret-reference"
+              class="w-full"
+              autocomplete="off"
+              [formField]="tenantForm.migrationSecretReference"
+            />
+            @for (error of tenantForm.migrationSecretReference().errors(); track error.kind) {
+              <hlm-field-error>{{ error.message }}</hlm-field-error>
+            }
+          </hlm-field>
+        }
+
         <hlm-field>
           <label hlmFieldLabel for="tenant-admin-email">{{ fieldLabel('adminEmail') }}</label>
           <input

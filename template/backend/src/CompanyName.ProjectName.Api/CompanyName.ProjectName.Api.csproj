@@ -15,8 +15,11 @@
 
 
   <ItemGroup>
-<!--#if (IncludeOpenIddict)-->
+<!--#if (IdentityService || ResourceService)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
+<!--#endif-->
+<!--#if (ResourceService)-->
+    <PackageReference Include="OpenIddict.Validation.SystemNetHttp" />
 <!--#endif-->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
@@ -40,16 +43,16 @@
     <PackageReference Include="Leistd.Localization.AspNetCore" />
 <!--#endif-->
     <PackageReference Include="Leistd.DependencyInjection.DynamicProxy" />
-<!--#if (IncludeRoles)-->
+<!--#if (LocalAuthorization)-->
     <PackageReference Include="Leistd.Authorization.AspNetCore" />
     <!--#endif-->
-<!--#if (TenancyEnabled)-->
+<!--#if (MultiTenancy)-->
     <PackageReference Include="Leistd.MultiTenancy.AspNetCore" />
 <!--#endif-->
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />
-<!--#if (IncludeOpenIddict)-->
+<!--#if (IdentityService)-->
     <PackageReference Include="Leistd.ServiceClient.AspNetCore" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->

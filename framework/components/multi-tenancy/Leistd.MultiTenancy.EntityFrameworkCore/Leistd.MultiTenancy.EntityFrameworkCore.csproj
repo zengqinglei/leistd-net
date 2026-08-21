@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
     <ProjectReference Include="..\..\auditing\Leistd.Auditing.Core\Leistd.Auditing.Core.csproj" />
+    <ProjectReference Include="..\..\unit-of-work\Leistd.UnitOfWork.EfCore\Leistd.UnitOfWork.EfCore.csproj" />
   </ItemGroup>
 
 </Project>

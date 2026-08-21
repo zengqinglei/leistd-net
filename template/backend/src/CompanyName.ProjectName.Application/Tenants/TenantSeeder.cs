@@ -1,4 +1,4 @@
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;

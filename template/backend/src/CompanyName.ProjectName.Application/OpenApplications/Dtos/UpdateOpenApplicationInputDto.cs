@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;

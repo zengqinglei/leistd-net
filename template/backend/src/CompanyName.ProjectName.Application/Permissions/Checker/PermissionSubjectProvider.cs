@@ -30,7 +30,11 @@ public class PermissionSubjectProvider(
         // 每一次新的 Hub 握手，包括"仅要求已认证"的端点。两处判据相同，各自守住各自那条路径。
         //
         // 检查必须在超管分支之前：被禁用的超管同样要立刻失去权限。
-        if (user == null || !user.IsActive || user.IsLockedOut())
+        if (user == null || !user.IsActive
+#if (IdentityService)
+            || user.IsLockedOut()
+#endif
+           )
             return null;
 
         if (user.IsSuperAdmin)

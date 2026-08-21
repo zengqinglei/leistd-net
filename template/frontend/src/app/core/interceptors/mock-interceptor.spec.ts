@@ -2,16 +2,16 @@ import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-//#if (IncludeOpenIddict)
+//#if (IdentityService)
 import { OPEN_APPLICATION_API } from '../../../../_mock/api/open-application';
 //#endif
 import { MOCK_APIS, mockInterceptor } from '../../../../_mock/core/interceptor';
-//#if (IncludeOpenIddict)
+//#if (IdentityService)
 import { USERS } from '../../../../_mock/data/user';
 import { setMockSessionUserId } from '../../../../_mock/utils/current-user';
 //#endif
 import { environment } from '../../../environments/environment';
-//#if (IncludeOpenIddict)
+//#if (IdentityService)
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
@@ -23,7 +23,7 @@ describe('mockInterceptor', () => {
 
   beforeEach(() => {
     environment.useMock = true;
-    //#if (IncludeOpenIddict)
+    //#if (IdentityService)
     // 开放应用接口有权限门（与后端策略一一对应），本组用例关注的是拦截器本身，
     // 因此先建立一个有权限的会话，避免被 401 挡在门外。
     setMockSessionUserId(USERS.find((user) => user.isSuperAdmin)!.id);
@@ -36,7 +36,7 @@ describe('mockInterceptor', () => {
           provide: MOCK_APIS,
           // prettier-ignore
           useValue: {
-            //#if (IncludeOpenIddict)
+            //#if (IdentityService)
             ...OPEN_APPLICATION_API,
             //#endif
             'GET /api/items': [{ id: 'all' }],
@@ -51,7 +51,7 @@ describe('mockInterceptor', () => {
 
   afterEach(() => {
     environment.useMock = originalUseMock;
-    //#if (IncludeOpenIddict)
+    //#if (IdentityService)
     setMockSessionUserId(null);
     //#endif
   });
@@ -91,7 +91,7 @@ describe('mockInterceptor', () => {
         },
       });
   });
-  //#if (IncludeOpenIddict)
+  //#if (IdentityService)
 
   it('returns a confidential client secret only in the create response', (done) => {
     const clientId = `spec-confidential-${crypto.randomUUID()}`;

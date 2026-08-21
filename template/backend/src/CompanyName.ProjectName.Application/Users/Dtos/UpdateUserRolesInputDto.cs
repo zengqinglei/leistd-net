@@ -1,4 +1,4 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;

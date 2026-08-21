@@ -1,5 +1,5 @@
 using Leistd.Ddd.Domain.Entities.Auditing;
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using Leistd.MultiTenancy;
 #endif
 
@@ -8,13 +8,13 @@ namespace CompanyName.ProjectName.Domain.Users.Entities;
 /// <summary>
 /// 角色实体
 /// </summary>
-#if (TenancyEnabled)
+#if (MultiTenancy)
 public class Role : FullAuditedEntity<Guid>, IMultiTenant
 #else
 public class Role : FullAuditedEntity<Guid>
 #endif
 {
-#if (TenancyEnabled)
+#if (MultiTenancy)
     /// <summary>
     /// 所属租户（null 为宿主角色），由多租户落值拦截器在创建时填充
     /// </summary>

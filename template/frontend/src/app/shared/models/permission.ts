@@ -21,7 +21,7 @@ export const PERMISSIONS = {
     delete: 'App.Roles.Delete',
     managePermissions: 'App.Roles.ManagePermissions',
   },
-  //#if (TenancyEnabled)
+  //#if (IdentityService)
   tenants: {
     default: 'App.Tenants',
     create: 'App.Tenants.Create',
@@ -29,7 +29,7 @@ export const PERMISSIONS = {
     delete: 'App.Tenants.Delete',
   },
   //#endif
-  //#if (IncludeOpenIddict)
+  //#if (IdentityService)
   openApplications: {
     default: 'App.OpenApplications',
     create: 'App.OpenApplications.Create',

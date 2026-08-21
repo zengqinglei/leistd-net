@@ -1,8 +1,9 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Linq.Dynamic.Core;
 using System.Security.Cryptography;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+using CompanyName.ProjectName.Application.TenantConnections;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Exception.Core;
@@ -45,10 +46,12 @@ public class OpenApplicationAppService(
         OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
         OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Profile,
         OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Email,
-#if (IncludeRoles)
+#if (LocalAuthorization)
         OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Roles,
 #endif
-        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OfflineAccess
+        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OfflineAccess,
+        OpenIddictConstants.Permissions.Prefixes.Scope + TenantConnectionScopes.RuntimeRead,
+        OpenIddictConstants.Permissions.Prefixes.Scope + TenantConnectionScopes.MigrationRead
     };
 
     private static readonly HashSet<string> ConsentTypes = new(StringComparer.Ordinal)

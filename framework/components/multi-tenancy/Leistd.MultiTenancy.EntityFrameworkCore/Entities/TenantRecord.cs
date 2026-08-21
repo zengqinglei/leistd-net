@@ -4,7 +4,7 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
 /// <summary>
 /// 租户持久化实体（宿主侧数据，<b>不实现</b> <see cref="IMultiTenant"/>，不受租户过滤器影响）。
-/// 审计字段由审计拦截器统一填充
+/// 创建与删除时间由 <see cref="ITenantManager"/> 填充，用户审计字段由宿主审计拦截器填充
 /// </summary>
 /// <remarks>
 /// 写入请统一通过 <see cref="ITenantManager"/>：它负责名称归一化与未删除行内的唯一性校验。

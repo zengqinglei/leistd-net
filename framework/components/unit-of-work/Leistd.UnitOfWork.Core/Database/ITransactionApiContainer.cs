@@ -8,10 +8,10 @@ public interface ITransactionApiContainer
     /// <summary>
     /// 查找事务 API
     /// </summary>
-    ITransactionApi? FindTransactionApi();
+    ITransactionApi? FindTransactionApi(string key);
 
     /// <summary>
     /// 添加事务 API
     /// </summary>
-    void AddTransactionApi(ITransactionApi api);
+    void AddTransactionApi(string key, ITransactionApi api);
 }

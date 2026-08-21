@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+// prettier-ignore
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  //#if (IdentityService)
+  signal,
+  //#endif
+} from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
@@ -6,7 +15,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
   lucideBuilding2,
   //#endif
   lucideChevronsUpDown,
@@ -21,17 +30,19 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 
 import { AuthService } from '../../../core/services/auth-service';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../core/services/authorization-service';
 //#endif
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { TenantContextService } from '../../../core/services/tenant-context-service';
 //#endif
+//#if (IdentityService)
 import { ChangePasswordDialog } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialog } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
+//#endif
 import { LayoutService } from '../../services/layout-service';
 
 /** 用户菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
@@ -51,13 +62,16 @@ interface UserMenuItem {
   selector: 'app-user-menu',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // prettier-ignore
   imports: [
     NgIcon,
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
     ...HlmSidebarImports,
+    //#if (IdentityService)
     ProfileSettingsDialog,
     ChangePasswordDialog,
+    //#endif
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
@@ -65,7 +79,7 @@ interface UserMenuItem {
   // prettier-ignore
   providers: [
     provideIcons({
-      //#if (TenancyEnabled)
+      //#if (MultiTenancy)
       lucideBuilding2,
       //#endif
       lucideChevronsUpDown,
@@ -152,7 +166,7 @@ interface UserMenuItem {
         </li>
       </ul>
     }
-
+    //#if (IdentityService)
     <app-profile-settings-dialog
       [visible]="profileDialogVisible()"
       (visibleChange)="profileDialogVisible.set($event)"
@@ -161,11 +175,12 @@ interface UserMenuItem {
       [visible]="changePasswordDialogVisible()"
       (visibleChange)="changePasswordDialogVisible.set($event)"
     />
+    //#endif
   `,
 })
 export class UserMenu {
   readonly authService = inject(AuthService);
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
   //#endif
   private readonly router = inject(Router);
@@ -174,13 +189,13 @@ export class UserMenu {
   private readonly languageService = inject(LanguageService);
   private readonly transloco = inject(TranslocoService);
   //#endif
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
   private readonly tenantContext = inject(TenantContextService);
   //#endif
-
+  //#if (IdentityService)
   readonly profileDialogVisible = signal(false);
   readonly changePasswordDialogVisible = signal(false);
-
+  //#endif
   readonly userMenuItems = computed<UserMenuItem[]>(() => {
     //#if (IncludeLocalization)
     // 建立对活动语言的依赖，语言切换时重新计算菜单文案。
@@ -199,7 +214,7 @@ export class UserMenu {
         icon: 'lucideHouse',
         action: () => this.router.navigate(['/workspace']),
       });
-      //#if (IncludeRoles)
+      //#if (LocalAuthorization)
     } else if (
       this.layoutService.currentUrl().startsWith('/workspace') &&
       this.authorizationService.canAccessPlatform()
@@ -223,6 +238,7 @@ export class UserMenu {
     }
 
     items.push(
+      //#if (IdentityService)
       {
         //#if (IncludeLocalization)
         label: t('menu.profile'),
@@ -241,8 +257,9 @@ export class UserMenu {
         icon: 'lucideLock',
         action: () => this.openChangePasswordDialog(),
       },
+      //#endif
       { separator: true },
-      //#if (TenancyEnabled)
+      //#if (MultiTenancy)
       // 切换租户 = 清除本地租户上下文并退出登录：已登录会话的租户由 cookie claim 定案，
       // 只有重新登录才能进入另一个租户。
       {
@@ -270,7 +287,7 @@ export class UserMenu {
 
   /** 当前租户显示名；未选租户即宿主。未启用多租户时恒为空串（模板据此隐藏）。 */
   readonly tenantLabel = computed(() => {
-    //#if (TenancyEnabled)
+    //#if (MultiTenancy)
     //#if (IncludeLocalization)
     this.languageService.activeLang();
     //#endif
@@ -287,14 +304,14 @@ export class UserMenu {
     return '';
     //#endif
   });
-  //#if (TenancyEnabled)
+  //#if (MultiTenancy)
 
   handleSwitchTenant(): void {
     this.tenantContext.clear();
     this.authService.logout();
   }
   //#endif
-
+  //#if (IdentityService)
   openProfileDialog(): void {
     this.profileDialogVisible.set(true);
   }
@@ -303,7 +320,7 @@ export class UserMenu {
     this.profileDialogVisible.set(false);
     this.changePasswordDialogVisible.set(true);
   }
-
+  //#endif
   handleLogout(): void {
     this.authService.logout();
   }

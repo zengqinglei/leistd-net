@@ -14,8 +14,9 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 ## 生产边界
 
 - 密钥和生产凭据由环境变量或密钥管理系统提供，不写入仓库。
-- 当前应用会在启动时自动应用已有的 EF Core 迁移；没有迁移文件时自动创建数据库，详见 [后端迁移策略](../../backend/README.md#数据库迁移)。部署新版本本身就是数据库变更操作，不再重复执行迁移命令。
-- 部署前必须审查模型或迁移，确认生产连接身份具备创建数据库和修改结构所需的权限，并明确备份、启动超时、失败恢复及新旧版本并存时的兼容性。
+- API 启动时不执行 DDL。部署流水线先以 Migration Secret 运行一次性 `DbMigrator`，成功后再发布 API，详见 [后端迁移策略](../../backend/README.md#数据库迁移)。
+- API 使用 Runtime Secret 且只持有 DML 权限；`DbMigrator` 使用独立 DDL 身份。部署前必须审查迁移，并明确备份、超时、失败恢复及新旧版本并存时的兼容性。
+- DedicatedDatabase 首次建库时，先对目标连接以 `ConnectionStrings__MigrationTarget` 运行每个服务的 DbMigrator，再在 Identity 创建租户。该模式只迁移当前服务的业务 schema，不会把 Identity Control schema 写入租户目标。
 - 数据迁移、备份、回滚、健康检查和核心路径验证必须在执行前明确。
 - 生产部署、回滚、重启、流量切换及真实数据操作必须由用户明确确认。
 

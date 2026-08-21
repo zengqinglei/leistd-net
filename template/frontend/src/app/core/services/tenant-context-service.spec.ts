@@ -1,4 +1,4 @@
-//#if (TenancyEnabled)
+//#if (IdentityService)
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 

@@ -1,17 +1,17 @@
 using Leistd.Ddd.Domain.Entities.Auditing;
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using Leistd.MultiTenancy;
 #endif
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
-#if (TenancyEnabled)
+#if (MultiTenancy)
 public class User : FullAuditedEntity<Guid>, IMultiTenant
 #else
 public class User : FullAuditedEntity<Guid>
 #endif
 {
-#if (TenancyEnabled)
+#if (MultiTenancy)
     /// <summary>
     /// 所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充
     /// </summary>
@@ -28,7 +28,7 @@ public class User : FullAuditedEntity<Guid>
     /// </summary>
     public string Email { get; private set; }
 
-#if (IncludeIdentity)
+#if (IdentityService)
     /// <summary>
     /// 邮箱是否已验证
     /// </summary>
@@ -70,7 +70,7 @@ public class User : FullAuditedEntity<Guid>
     /// </summary>
     public bool IsSuperAdmin { get; private set; }
 
-#if (IncludeIdentity)
+#if (IdentityService)
     /// <summary>
     /// 是否锁定
     /// </summary>
@@ -103,12 +103,24 @@ public class User : FullAuditedEntity<Guid>
         Email = null!;
     }
 
-    public User(string username, string email, string? passwordHash = null, string? displayName = null)
+    public User(
+#if (ResourceService)
+        Guid subjectId,
+#endif
+        string username,
+        string email,
+        string? passwordHash = null,
+        string? displayName = null)
     {
+#if (IdentityService)
         Id = Guid.CreateVersion7();
+#else
+        if (subjectId == Guid.Empty) throw new ArgumentException("Subject Id cannot be empty.", nameof(subjectId));
+        Id = subjectId;
+#endif
         Username = username;
         Email = email;
-#if (IncludeIdentity)
+#if (IdentityService)
         PasswordHash = passwordHash;
 #endif
         DisplayName = displayName ?? username;
@@ -117,7 +129,7 @@ public class User : FullAuditedEntity<Guid>
     public void Update(string? displayName, string? phoneNumber, string? avatar)
     {
         DisplayName = displayName;
-#if (IncludeIdentity)
+#if (IdentityService)
         PhoneNumber = phoneNumber;
 #endif
         Avatar = avatar;
@@ -129,7 +141,7 @@ public class User : FullAuditedEntity<Guid>
         DisplayName = displayName;
         Avatar = avatar;
         IsActive = isActive;
-#if (IncludeIdentity)
+#if (IdentityService)
         EmailConfirmed = emailConfirmed;
 #endif
     }
@@ -139,7 +151,7 @@ public class User : FullAuditedEntity<Guid>
         Username = username;
         Email = email;
         DisplayName = displayName;
-#if (IncludeIdentity)
+#if (IdentityService)
         PhoneNumber = phoneNumber;
 #endif
         Avatar = avatar;
@@ -160,7 +172,7 @@ public class User : FullAuditedEntity<Guid>
         IsActive = false;
     }
 
-#if (IncludeIdentity)
+#if (IdentityService)
     public void UpdatePasswordHash(string passwordHash)
     {
         PasswordHash = passwordHash;

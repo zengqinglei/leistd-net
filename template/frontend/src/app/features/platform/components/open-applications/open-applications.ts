@@ -48,12 +48,12 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 //#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
 //#endif
 import {
@@ -117,7 +117,7 @@ export class OpenApplications {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
   //#endif
   //#if (IncludeLocalization)
@@ -140,7 +140,7 @@ export class OpenApplications {
     sortingFromQuery(this.queryParams(), APPLICATION_SORT_COLUMNS, DEFAULT_APPLICATION_SORTING),
   );
 
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   // 操作入口按权限裁剪；前端隐藏只影响体验，后端仍逐个请求校验。
   readonly canCreate = computed(() =>
     this.authorizationService.has(PERMISSIONS.openApplications.create),

@@ -1,7 +1,7 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Application.Auth.Dtos;
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Roles.Dtos;
 #endif
 using CompanyName.ProjectName.Application.Users.Dtos;
@@ -18,25 +18,25 @@ public class UserProfile : MapsterProfile
 {
     protected override void ConfigureMappings()
     {
-#if (IncludeIdentity)
+#if (IdentityService)
         CreateMap<User, UserOutputDto>()
-#if (IncludeRoles)
+#if (LocalAuthorization)
             .Map(dest => dest.Roles, src => ResolveRoles(src))
 #endif
             ;
 #endif
 
         CreateMap<User, UserManagementOutputDto>()
-#if (IncludeIdentity)
+#if (IdentityService)
             .Map(dest => dest.IsEmailVerified, src => src.EmailConfirmed)
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
             .Map(dest => dest.Roles, src => ResolveRoleBriefs(src))
 #endif
             ;
     }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
     private static string[] ResolveRoles(User source)
         => [.. ResolveRoleEntities(source).Select(role => role.Name)];
 

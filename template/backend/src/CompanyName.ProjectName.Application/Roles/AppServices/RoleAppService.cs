@@ -1,4 +1,4 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using System.Linq.Dynamic.Core;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;

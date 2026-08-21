@@ -1,3 +1,4 @@
+using Leistd.UnitOfWork.EfCore.Database;
 using Microsoft.EntityFrameworkCore;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
@@ -21,26 +22,29 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 /// <see cref="ITenantStore"/> 装饰器——那是一个需要显式承担陈旧风险的决定，
 /// 不该由框架替所有人默认做。</para>
 /// </remarks>
-public class EfCoreTenantStore<TDbContext>(TDbContext dbContext) : ITenantStore
+public class EfCoreTenantStore<TDbContext>(IDbContextProvider<TDbContext> dbContextProvider) : ITenantStore
     where TDbContext : DbContext
 {
     /// <inheritdoc />
     public async Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var record = await Query().FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        var record = await (await QueryAsync(cancellationToken))
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
         return record is null ? null : ToConfiguration(record);
     }
 
     /// <inheritdoc />
     public async Task<TenantConfiguration?> FindByNameAsync(string normalizedName, CancellationToken cancellationToken = default)
     {
-        var record = await Query().FirstOrDefaultAsync(t => t.NormalizedName == normalizedName, cancellationToken);
+        var record = await (await QueryAsync(cancellationToken))
+            .FirstOrDefaultAsync(t => t.NormalizedName == normalizedName, cancellationToken);
         return record is null ? null : ToConfiguration(record);
     }
 
-    private IQueryable<TenantRecord> Query()
+    private async Task<IQueryable<TenantRecord>> QueryAsync(CancellationToken cancellationToken)
         // 显式排除软删除行：不依赖宿主 DbContext 是否配置了全局软删除过滤器
-        => dbContext.Set<TenantRecord>().AsNoTracking().Where(t => !t.IsDeleted);
+        => (await dbContextProvider.GetDbContextAsync(cancellationToken))
+            .Set<TenantRecord>().AsNoTracking().Where(t => !t.IsDeleted);
 
     /// <summary>
     /// 持久化实体 → Core 出参。管理器与存储共用，保证两条读路径的形状一致。

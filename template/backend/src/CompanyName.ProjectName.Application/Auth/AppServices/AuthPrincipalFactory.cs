@@ -1,8 +1,8 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Collections.Immutable;
 using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Options;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -15,7 +15,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 public class AuthPrincipalFactory(
-#if (IncludeRoles)
+#if (LocalAuthorization)
     UserDomainService userDomainService,
 #endif
     IOptions<OAuthOptions> oauthOptions) : IAuthPrincipalFactory
@@ -25,7 +25,7 @@ public class AuthPrincipalFactory(
         IEnumerable<string>? scopes = null,
         CancellationToken cancellationToken = default)
     {
-#if (IncludeRoles)
+#if (LocalAuthorization)
         var roleNames = await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken);
 #endif
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
@@ -40,11 +40,11 @@ public class AuthPrincipalFactory(
             identity.SetClaim(Claims.Picture, user.Avatar!);
         }
 
-#if (IncludeRoles)
+#if (LocalAuthorization)
         identity.SetClaims(Claims.Role, roleNames.ToImmutableArray());
 #endif
         identity.SetClaim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false");
-#if (TenancyEnabled)
+#if (MultiTenancy)
         // 租户 claim：多租户解析链以它定案已登录用户的租户
         if (user.TenantId is { } tenantId)
         {
@@ -54,7 +54,7 @@ public class AuthPrincipalFactory(
 
         var principal = new ClaimsPrincipal(identity);
         principal.SetScopes(scopes?.Where(scope => !string.IsNullOrWhiteSpace(scope)) ??
-#if (IncludeRoles)
+#if (LocalAuthorization)
                             [Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Roles]);
 #else
                             [Scopes.OpenId, Scopes.Profile, Scopes.Email]);
@@ -91,7 +91,7 @@ public class AuthPrincipalFactory(
                 Destinations.AccessToken,
                 Destinations.IdentityToken
             ],
-#if (IncludeRoles)
+#if (LocalAuthorization)
             Claims.Role when claim.Subject?.HasScope(Scopes.Roles) == true =>
             [
                 Destinations.AccessToken,
@@ -102,7 +102,7 @@ public class AuthPrincipalFactory(
             [
                 Destinations.AccessToken
             ],
-#if (TenancyEnabled)
+#if (MultiTenancy)
             CustomClaimTypes.TenantId =>
             [
                 Destinations.AccessToken

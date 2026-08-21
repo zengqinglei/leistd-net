@@ -1,11 +1,11 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Exception.Core;
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using Leistd.MultiTenancy;
 #endif
 #if (IncludeLocalization)
@@ -28,7 +28,7 @@ public class PermissionAppService(
     IPermissionGrantManager permissionGrantManager,
     IRepository<User, Guid> userRepository,
     IRepository<Role, Guid> roleRepository
-#if (TenancyEnabled)
+#if (MultiTenancy)
     ,
     ICurrentTenant currentTenant
 #endif
@@ -38,9 +38,9 @@ public class PermissionAppService(
 #endif
     ) : BaseAppService, IPermissionAppService
 {
-#if (TenancyEnabled)
+#if (MultiTenancy)
     /// <summary>
-    /// 当前多租户侧别匹配：宿主侧权限（如 App.Tenants.*）对租户上下文不可见——
+    /// 当前多租户侧别匹配：宿主侧权限对租户上下文不可见——
     /// 检查器已有同一硬边界，这里让 current 权限集与定义树同口径，
     /// 否则租户超管会在菜单里看到点进去必然 403 的宿主功能。
     /// </summary>

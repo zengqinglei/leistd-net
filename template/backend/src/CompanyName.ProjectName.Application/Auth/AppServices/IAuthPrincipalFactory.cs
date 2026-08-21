@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (IdentityService)
 using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Users.Entities;
 

@@ -37,7 +37,7 @@ export class AuthorizationService {
     this.hasAny(
       PERMISSIONS.users.default,
       PERMISSIONS.roles.default,
-      //#if (IncludeOpenIddict)
+      //#if (IdentityService)
       PERMISSIONS.openApplications.default,
       //#endif
       PERMISSIONS.permissions.default,

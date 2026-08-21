@@ -1,4 +1,4 @@
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using CompanyName.ProjectName.Application.Permissions.Provider;

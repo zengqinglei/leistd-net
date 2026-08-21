@@ -105,5 +105,6 @@
     <Project Path="tests/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />
     <Project Path="tests/Leistd.ServiceClient.Tests/Leistd.ServiceClient.Tests.csproj" />
     <Project Path="tests/Leistd.TestBase/Leistd.TestBase.csproj" />
+    <Project Path="tests/Leistd.UnitOfWork.Tests/Leistd.UnitOfWork.Tests.csproj" />
   </Folder>
 </Solution>

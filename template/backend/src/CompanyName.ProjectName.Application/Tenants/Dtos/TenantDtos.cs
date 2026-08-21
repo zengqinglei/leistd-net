@@ -1,6 +1,7 @@
-#if (TenancyEnabled)
+#if (MultiTenancy)
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.MultiTenancy;
 
 namespace CompanyName.ProjectName.Application.Tenants.Dtos;
 
@@ -62,6 +63,15 @@ public record CreateTenantInputDto
     [MinLength(8)]
     [MaxLength(128)]
     public required string AdminPassword { get; init; }
+
+    /// <summary>默认共享数据库；选择独立数据库时必须同时提供两个 Secret 引用。</summary>
+    public TenantDatabaseMode DatabaseMode { get; init; } = TenantDatabaseMode.SharedDatabase;
+
+    [MaxLength(512)]
+    public string? RuntimeSecretReference { get; init; }
+
+    [MaxLength(512)]
+    public string? MigrationSecretReference { get; init; }
 }
 
 /// <summary>

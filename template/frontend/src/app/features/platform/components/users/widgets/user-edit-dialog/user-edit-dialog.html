@@ -11,13 +11,13 @@
     <hlm-dialog-header>
       <h3 hlmDialogTitle>{{ dialogHeader() }}</h3>
       <!--#if (IncludeLocalization)-->
-      <!--#if (IncludeRoles)-->
+      <!--#if (LocalAuthorization)-->
       <p hlmDialogDescription>{{ 'users.editDialog.description' | transloco }}</p>
       <!--#else-->
       <p hlmDialogDescription>{{ 'users.editDialog.descriptionWithoutRoles' | transloco }}</p>
       <!--#endif-->
       <!--#else-->
-      <!--#if (IncludeRoles)-->
+      <!--#if (LocalAuthorization)-->
       <p hlmDialogDescription>Manage the account profile, roles, and status.</p>
       <!--#else-->
       <p hlmDialogDescription>Manage the account profile and status.</p>
@@ -98,6 +98,25 @@
           </div>
 
           <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <!--#if (ResourceService)-->
+            @if (!isEditMode()) {
+              <div hlmField class="md:col-span-2">
+                <label hlmFieldLabel for="user-subject-id">Identity subject Id</label>
+                <input
+                  hlmInput
+                  id="user-subject-id"
+                  class="w-full font-mono"
+                  [formField]="userForm.subjectId"
+                  placeholder="00000000-0000-0000-0000-000000000000"
+                />
+                @for (error of userForm.subjectId().errors(); track error.kind) {
+                  @if (error.message) {
+                    <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+                  }
+                }
+              </div>
+            }
+            <!--#endif-->
             <!-- Username -->
             <div hlmField>
               <!--#if (IncludeLocalization)-->
@@ -189,7 +208,7 @@
                 }
               }
             </div>
-
+            <!--#if (IdentityService)-->
             <!-- Initial password（仅新建模式） -->
             @if (!isEditMode()) {
               <div hlmField>
@@ -235,12 +254,13 @@
                 }
               </div>
             }
+            <!--#endif-->
           </section>
 
           <hlm-separator />
 
           <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <!--#if (IncludeRoles)-->
+            <!--#if (LocalAuthorization)-->
             <!--
               初始角色：仅「新建 + 持有角色分配权限」时可见。
               编辑态不在此处改角色——资料更新与角色分配是两个命令、两个权限，
@@ -306,7 +326,7 @@
                 </div>
               </div>
             }
-
+            <!--#if (IdentityService)-->
             <!-- Email verified -->
             <div class="rounded-lg border border-border p-3">
               <div class="flex items-center justify-between gap-3">
@@ -331,6 +351,7 @@
                 />
               </div>
             </div>
+            <!--#endif-->
           </section>
         </div>
 

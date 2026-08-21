@@ -1,4 +1,4 @@
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { requirePermission } from './authorization';
 //#endif
 import {
@@ -7,7 +7,7 @@ import {
   UpdateOpenApplicationInputDto,
 } from '../../src/app/features/platform/models/open-application.dto';
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../src/app/shared/models/permission';
 //#endif
 import { MockException, MockRequest } from '../core/models';
@@ -40,7 +40,7 @@ function sortApplications(items: MockOpenApplication[], sorting?: unknown) {
 }
 
 function getOpenApplications(req: MockRequest) {
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   requirePermission(PERMISSIONS.openApplications.default);
   //#endif
   const keyword = getQueryValue(req.queryParams['keyword']);
@@ -81,7 +81,7 @@ function getOpenApplications(req: MockRequest) {
 }
 
 function getOpenApplication(req: MockRequest) {
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   requirePermission(PERMISSIONS.openApplications.default);
   //#endif
   const id = req.params['id'];
@@ -121,7 +121,7 @@ function validateApplication(
 }
 
 function createOpenApplication(req: MockRequest) {
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   requirePermission(PERMISSIONS.openApplications.create);
   //#endif
   const body = req.body as CreateOpenApplicationInputDto;
@@ -152,7 +152,7 @@ function createOpenApplication(req: MockRequest) {
 }
 
 function updateOpenApplication(req: MockRequest) {
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   requirePermission(PERMISSIONS.openApplications.update);
   //#endif
   const id = req.params['id'];
@@ -182,7 +182,7 @@ function updateOpenApplication(req: MockRequest) {
 }
 
 function deleteOpenApplication(req: MockRequest) {
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   requirePermission(PERMISSIONS.openApplications.delete);
   //#endif
   const id = req.params['id'];
@@ -194,7 +194,7 @@ function deleteOpenApplication(req: MockRequest) {
 }
 
 function resetOpenApplicationSecret(req: MockRequest) {
-  //#if (IncludeRoles)
+  //#if (LocalAuthorization)
   requirePermission(PERMISSIONS.openApplications.resetSecret);
   //#endif
   const id = req.params['id'];

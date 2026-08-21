@@ -1,4 +1,4 @@
-//#if (TenancyEnabled)
+//#if (MultiTenancy)
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -131,6 +131,34 @@ describe('TenantEditDialog', () => {
     expect(dto.displayName).toBeUndefined();
     expect(dto.adminEmail).toBe('admin@example.test');
     expect(dto.adminPassword).toBe('Passw0rd! ');
+    expect(dto.databaseMode).toBe('SharedDatabase');
+    expect(dto.runtimeSecretReference).toBeUndefined();
+    expect(dto.migrationSecretReference).toBeUndefined();
+  });
+
+  it('独立数据库模式要求运行时和迁移 Secret 引用', async () => {
+    dialog().tenantForm.name().value.set('acme');
+    dialog().tenantForm.adminEmail().value.set('admin@example.test');
+    dialog().tenantForm.adminPassword().value.set('Passw0rd!');
+    dialog().tenantForm.databaseMode().value.set('DedicatedDatabase');
+    await fixture.whenStable();
+
+    expect(document.getElementById('tenant-runtime-secret-reference')).not.toBeNull();
+    expect(document.getElementById('tenant-migration-secret-reference')).not.toBeNull();
+    expect(dialog().tenantForm().invalid()).toBeTrue();
+
+    dialog().tenantForm.runtimeSecretReference().value.set('vault://runtime/acme');
+    dialog().tenantForm.migrationSecretReference().value.set('vault://migration/acme');
+    await fixture.whenStable();
+    dialog().onSubmit();
+
+    expect(host.saved[0]).toEqual(
+      jasmine.objectContaining({
+        databaseMode: 'DedicatedDatabase',
+        runtimeSecretReference: 'vault://runtime/acme',
+        migrationSecretReference: 'vault://migration/acme',
+      }),
+    );
   });
 
   it('编辑提交只带名称与显示名，不夹带管理员字段', async () => {

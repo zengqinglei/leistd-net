@@ -1,4 +1,4 @@
-//#if (IncludeRoles)
+//#if (LocalAuthorization)
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';

@@ -1,8 +1,8 @@
 using Leistd.Auditing.EntityFrameworkCore;
-#if (IncludeRoles)
+#if (LocalAuthorization)
 using Leistd.Authorization.EntityFrameworkCore;
 #endif
-#if (TenancyEnabled)
+#if (IdentityService)
 using Leistd.MultiTenancy.EntityFrameworkCore;
 #endif
 using Leistd.Ddd.Infrastructure;
@@ -12,9 +12,20 @@ using Leistd.Lock.Redis;
 using Leistd.Lock.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Leistd.UnitOfWork.EfCore.Database;
+using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+#if (MultiTenancy)
+using Leistd.MultiTenancy;
+#endif
+#if (ResourceService)
+using Leistd.ServiceClient.OAuth;
+using Leistd.ServiceClient.Refit;
+#endif
+using CompanyName.ProjectName.Infrastructure.TenantConnections;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
 using CompanyName.ProjectName.Infrastructure.Notifications;
@@ -26,7 +37,7 @@ using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Infrastructure.Shared.Security.Aes;
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
-#if (IncludeIdentity)
+#if (IdentityService)
 using CompanyName.ProjectName.Domain.Shared.Email;
 using CompanyName.ProjectName.Infrastructure.Email;
 #endif
@@ -55,29 +66,81 @@ public static class DependencyInjection
 
         // ✅ 注册基础设施服务
         services.AddMemoryCache();
+        var useExplicitInMemoryDatabase =
+            !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"]);
+
+        if (!useExplicitInMemoryDatabase)
+        {
+#if (ResourceService)
+            var identityClient = services.AddRefitServiceClient<
+                IIdentityTenantConnectionClient,
+                IdentityTenantConnectionClientOptions>("Identity", configuration);
+            if (configuration.GetSection(Leistd.ServiceClient.OAuth.DependencyInjection.ServiceAuthSectionName).Exists())
+            {
+                identityClient.AddClientCredentials(configuration);
+            }
+            identityClient.AddStandardResilienceHandler();
+
+            services.AddScoped<ITenantConnectionStringResolver, IdentityTenantConnectionStringResolver>();
+#else
+            services.AddScoped<ITenantConnectionStringResolver, LocalTenantConnectionStringResolver>();
+#endif
+        }
+        services.AddSingleton<ISecretResolver, ConfigurationSecretResolver>();
+        services.AddScoped<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
 
         services.Configure<EncryptionOptions>(configuration.GetSection(EncryptionOptions.SectionName));
 
-        // ✅ 注册 DbContext（使用拦截器）
-        services.AddDbContext<MyProjectDbContext>((sp, options) =>
+#if (IdentityService)
+        services.AddDbContext<IdentityControlDbContext>((_, options) =>
         {
-            var connectionString = configuration.GetConnectionString("Default");
-            if (!string.IsNullOrEmpty(connectionString))
+            var connectionString = configuration.GetConnectionString(IdentityControlDbContext.ConnectionStringName)
+                ?? configuration.GetConnectionString("Default");
+            if (!string.IsNullOrWhiteSpace(connectionString))
             {
                 options.UseNpgsql(connectionString, npgsql =>
-                    npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Control", "companyname-projectname"));
+            }
+            else
+            {
+                var databaseName = configuration["Database:InMemoryName"];
+                options.UseInMemoryDatabase($"{(string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName)}-control");
+                options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
+            }
+
+            options.UseOpenIddict();
+        });
+#endif
+
+        // ✅ 注册租户业务 DbContext（使用拦截器）
+        services.AddDbContext<MyProjectDbContext>((sp, options) =>
+        {
+            var creationContext = DbContextCreationContext.Current;
+            var connectionString = creationContext?.ConnectionString ?? configuration.GetConnectionString("Default");
+            if (!string.IsNullOrEmpty(connectionString))
+            {
+                void ConfigureNpgsql(NpgsqlDbContextOptionsBuilder npgsql)
+                {
+                    npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "companyname-projectname");
+                }
+
+                if (creationContext?.ExistingConnection is NpgsqlConnection existingConnection)
+                {
+                    options.UseNpgsql(existingConnection, ConfigureNpgsql);
+                }
+                else
+                {
+                    options.UseNpgsql(connectionString, ConfigureNpgsql);
+                }
             }
             else
             {
                 var databaseName = configuration["Database:InMemoryName"];
                 options.UseInMemoryDatabase(string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName);
+                options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
 
             }
-
-#if (IncludeOpenIddict)
-            // 注册 OpenIddict EF Core 实体映射
-            options.UseOpenIddict();
-#endif
 
             // 抑制多集合 Include 警告（已全局启用 SplitQuery）
             // 抑制 PendingModelChangesWarning（OpenIddict 通过 UseOpenIddict() 动态注册实体，不在 Migration 快照中）
@@ -98,12 +161,12 @@ public static class DependencyInjection
         // 通知“清空全部”能力：框架 INotificationStore 未提供删除，走自定义 EF 清理服务。
         services.AddScoped<INotificationCleanupService, NotificationCleanupService>();
 #endif
-#if (IncludeRoles)
+#if (LocalAuthorization)
         services.AddAuthorizationEfCore<MyProjectDbContext>();
 #endif
-#if (TenancyEnabled)
+#if (IdentityService)
         // 租户注册表存储、管理器与落值拦截器（存储直接读库，除 DbContext 外无基础设施依赖）
-        services.AddMultiTenancyEfCore<MyProjectDbContext>();
+        services.AddMultiTenancyEfCore<IdentityControlDbContext>();
 #endif
 
         // 注册 DDD Infrastructure 基础服务（UnitOfWork + 自动仓储注册）
@@ -138,7 +201,7 @@ public static class DependencyInjection
         // AES 加密服务（无状态，使用 Transient 生命周期）
         services.AddTransient<IAesEncryptionProvider, AesEncryptionProvider>();
 
-#if (IncludeIdentity)
+#if (IdentityService)
         // 邮件发送服务
         services.AddTransient<IEmailSender, MailKitEmailSender>();
 #endif

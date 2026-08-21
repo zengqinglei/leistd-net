@@ -24,7 +24,7 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
       'scp:openid',
       'scp:profile',
       'scp:email',
-      //#if (IncludeRoles)
+      //#if (LocalAuthorization)
       'scp:roles',
       //#endif
       'scp:offline_access',
@@ -54,7 +54,7 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
       'scp:openid',
       'scp:profile',
       'scp:email',
-      //#if (IncludeRoles)
+      //#if (LocalAuthorization)
       'scp:roles',
       //#endif
       'scp:offline_access',
