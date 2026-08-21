@@ -40,6 +40,36 @@ public class TenantStampingInterceptorTests : IAsyncLifetime
         await _provider.DisposeAsync();
     }
 
+    /// <summary>
+    /// 在租户作用域内新增、退出作用域后才提交，仍须归属该租户。
+    /// </summary>
+    /// <remarks>
+    /// 仓储在工作单元内不立即保存（由 UoW 统一提交），因此新增与保存之间可能跨越
+    /// <c>Change</c> 的边界。若在**保存时刻**取当前租户，这条数据会静默落成宿主行——
+    /// 该租户自己看不见（过滤器要求 TenantId 等于当前租户），宿主管理员却看得见，
+    /// 且没有任何报错。落值时机必须是"进入跟踪"。
+    /// </remarks>
+    [Fact]
+    public async Task Entity_added_inside_a_tenant_scope_keeps_that_tenant_when_saved_later()
+    {
+        var tenantId = Guid.NewGuid();
+        var order = new TestOrder { Title = "in-scope-add" };
+
+        using (_currentTenant.Change(tenantId))
+        {
+            _db.Orders.Add(order);      // 仓储在 UoW 内不保存，等同于此
+        }
+
+        await _db.SaveChangesAsync();   // 作用域已退出，UoW 在这里统一提交
+
+        var stamped = await _db.Orders.IgnoreQueryFilters()
+            .Where(o => o.Title == "in-scope-add")
+            .Select(o => o.TenantId)
+            .SingleAsync();
+
+        Assert.Equal(tenantId, stamped);
+    }
+
     [Fact]
     public async Task Added_entity_gets_current_tenant_id()
     {

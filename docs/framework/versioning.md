@@ -23,6 +23,7 @@
 
 - `ApplyGlobalFilters<TInterface>` 增加必填 `filterName` 首参，改用 EF 10 命名查询过滤器——软删除与租户过滤器在同一实体上 AND 叠加，此前二次调用会静默覆盖前一个过滤器。直接调用方需补过滤器名。
 - `BaseDbContext` 新增租户全局过滤器（`MultiTenantFilterName`）；实体不实现 `IMultiTenant` 时无影响。
+- **运行时语义修复**：新增实体的 `TenantId` 改为在**进入跟踪时**落定（`BaseDbContext` 挂 `ChangeTracker.Tracked`），此前由 `MultiTenantSaveChangesInterceptor` 在保存时落值。仓储在工作单元内不立即保存，"在租户作用域内新增、作用域退出后才提交"会把数据静默落成宿主行——该租户看不见、宿主管理员看得见且无任何报错。拦截器保留为兜底（仍处理未经跟踪事件进入的实体）。
 - **运行时语义修复**：`EfCoreRepository.GetByIdAsync` 不再走 `FindAsync`（它绕过全局查询过滤器）——此前按 Id 能取出软删除行，多租户下将构成跨租户水平越权。依赖旧行为读取已删数据的调用方，改用 `IDataFilter.Disable<ISoftDelete>()` 显式表达。
 
 **`Leistd.Security.Core`（破坏性）**

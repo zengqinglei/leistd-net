@@ -3,6 +3,7 @@ using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.Ddd.Infrastructure.Persistence;
@@ -55,6 +56,7 @@ public abstract class BaseDbContext : DbContext
 
     protected BaseDbContext(DbContextOptions options) : base(options)
     {
+        ChangeTracker.Tracked += OnEntityTracked;
     }
 
     protected BaseDbContext(
@@ -62,6 +64,38 @@ public abstract class BaseDbContext : DbContext
         IServiceProvider? serviceProvider) : base(options)
     {
         _serviceProvider = serviceProvider;
+        ChangeTracker.Tracked += OnEntityTracked;
+    }
+
+    /// <summary>
+    /// 实体进入跟踪时即落租户值
+    /// </summary>
+    /// <remarks>
+    /// <para><b>时机必须是"进入跟踪"而不是"保存"。</b>仓储在工作单元内不立即保存
+    /// （由 UoW 统一提交），因此新增与保存之间可能跨越 <c>ICurrentTenant.Change</c> 的边界：
+    /// 在租户作用域内新增、作用域退出后才提交时，若在保存时刻取当前租户，就会把该租户的数据
+    /// **静默落成宿主行**——该租户自己看不见（过滤器要求 TenantId 等于当前租户），
+    /// 而宿主管理员看得见。没有任何报错。</para>
+    /// <para>进入跟踪的时刻就是"这条数据属于谁"的语义时刻，与后续何时提交无关。</para>
+    /// <para>只处理 <c>Added</c> 且 <c>TenantId</c> 仍为 null 的实体：聚合显式赋过值的不覆盖；
+    /// 宿主上下文保持 null 即宿主数据；查询materialize 出来的实体（<c>FromQuery</c>）不碰。</para>
+    /// </remarks>
+    private void OnEntityTracked(object? sender, EntityTrackedEventArgs e)
+    {
+        if (e.FromQuery || e.Entry.State != EntityState.Added)
+        {
+            return;
+        }
+
+        if (e.Entry.Entity is not IMultiTenant { TenantId: null })
+        {
+            return;
+        }
+
+        if (CurrentTenantId is { } tenantId)
+        {
+            e.Entry.Property(nameof(IMultiTenant.TenantId)).CurrentValue = tenantId;
+        }
     }
 
     /// <summary>

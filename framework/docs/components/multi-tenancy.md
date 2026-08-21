@@ -186,6 +186,24 @@ builder.Services.AddMultiTenancy(options => options.DomainFormat = "{0}.example.
 | 租户已停用 | 抛 `TenantNotActiveException`（继承 `ForbiddenException` → 403） |
 | 租户已删除 | 存储按 `!IsDeleted` 过滤，读不到即视为不存在 → 404（与"租户不存在"同一形状，不泄漏"这个租户曾经存在"） |
 
+### 写入侧：租户值何时落定
+
+新增实体的 `TenantId` 在**实体进入跟踪时**落定（`BaseDbContext` 挂 `ChangeTracker.Tracked`），不是在保存时。
+
+这个时机是必须的：仓储在工作单元内**不立即保存**（由 UoW 统一提交），因此"新增"与"保存"之间可能跨越 `ICurrentTenant.Change` 的边界。若在保存时刻取当前租户，下面这段会把数据静默落成宿主行——
+
+```csharp
+using (currentTenant.Change(tenantId))
+{
+    await repository.InsertAsync(entity);   // UoW 内不保存
+}                                          // 作用域退出
+await unitOfWork.CompleteAsync();          // 此刻已无租户上下文
+```
+
+后果是双向的：**该租户看不见自己创建的数据**（过滤器要求 `TenantId` 等于当前租户），而**宿主管理员看得见**，且没有任何报错。进入跟踪的时刻才是"这条数据属于谁"的语义时刻。
+
+显式赋过值的不覆盖；宿主上下文保持 `null` 即宿主数据；查询 materialize 出来的实体不碰。
+
 ## 接口参考
 
 ### `Leistd.MultiTenancy.IMultiTenant`
