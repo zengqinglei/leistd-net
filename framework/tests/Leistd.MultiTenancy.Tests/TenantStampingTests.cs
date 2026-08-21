@@ -1,4 +1,3 @@
-using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,9 +6,10 @@ using Xunit;
 namespace Leistd.MultiTenancy.Tests;
 
 /// <summary>
-/// 租户落值拦截器：新增实体自动填充当前租户，显式赋值不覆盖，宿主上下文保持 null。
+/// 租户落值：新增实体在**进入变更跟踪时**自动填充当前租户，显式赋值不覆盖，
+/// 宿主上下文保持 null。落值由 <c>BaseDbContext</c> 完成，不挂任何拦截器。
 /// </summary>
-public class TenantStampingInterceptorTests : IAsyncLifetime
+public class TenantStampingTests : IAsyncLifetime
 {
     private ServiceProvider _provider = default!;
     private SqliteConnection _connection = default!;
@@ -24,9 +24,9 @@ public class TenantStampingInterceptorTests : IAsyncLifetime
         _connection = new SqliteConnection("DataSource=:memory:");
         await _connection.OpenAsync();
 
+        // 刻意不挂任何落值拦截器：落值是 BaseDbContext 的职责
         var options = new DbContextOptionsBuilder<TestFilterDbContext>()
             .UseSqlite(_connection)
-            .AddInterceptors(new MultiTenantSaveChangesInterceptor(_currentTenant))
             .Options;
 
         _db = new TestFilterDbContext(options, _provider);
@@ -109,6 +109,35 @@ public class TenantStampingInterceptorTests : IAsyncLifetime
         await _db.SaveChangesAsync();
 
         Assert.Null(order.TenantId);
+    }
+
+    /// <summary>
+    /// 宿主上下文新增、却在租户作用域内提交：必须保持宿主行。
+    /// </summary>
+    /// <remarks>
+    /// 这是删除 <c>MultiTenantSaveChangesInterceptor</c> 的回归锁。落值在 ② 之后，
+    /// 那个在 ③ 落值的拦截器在正常路径上已是死代码，但在本场景里方向相反地有害——
+    /// 它会把合法的宿主数据（<c>TenantId</c> 本就该是 null）盖成租户数据。
+    /// 同一条边界漂移，只是方向反过来。
+    /// </remarks>
+    [Fact]
+    public async Task Entity_added_in_host_context_stays_host_when_committed_inside_a_tenant_scope()
+    {
+        var order = new TestOrder { Title = "host-add-tenant-commit" };
+
+        _db.Orders.Add(order);          // 宿主上下文，无租户
+
+        using (_currentTenant.Change(Guid.NewGuid()))
+        {
+            await _db.SaveChangesAsync();   // 提交却发生在租户作用域内
+        }
+
+        var stamped = await _db.Orders.IgnoreQueryFilters()
+            .Where(o => o.Title == "host-add-tenant-commit")
+            .Select(o => o.TenantId)
+            .SingleAsync();
+
+        Assert.Null(stamped);
     }
 
     [Fact]
