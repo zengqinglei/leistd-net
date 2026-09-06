@@ -1,26 +1,19 @@
 using Leistd.Ddd.Domain.Entities.Auditing;
-#if (MultiTenancy)
 using Leistd.MultiTenancy;
-#endif
+using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
 /// <summary>
 /// 角色实体
 /// </summary>
-#if (MultiTenancy)
 public class Role : FullAuditedEntity<Guid>, IMultiTenant
-#else
-public class Role : FullAuditedEntity<Guid>
-#endif
 {
-#if (MultiTenancy)
     /// <summary>
     /// 所属租户（null 为宿主角色），由多租户落值拦截器在创建时填充
     /// </summary>
     public Guid? TenantId { get; private set; }
 
-#endif
     /// <summary>
     /// 角色名称（Admin, Member 等，租户内唯一）
     /// </summary>
@@ -89,5 +82,10 @@ public class Role : FullAuditedEntity<Guid>
     public void UnsetDefault()
     {
         IsDefault = false;
+    }
+
+    public bool CanBeDeleted()
+    {
+        return !IsStatic;
     }
 }

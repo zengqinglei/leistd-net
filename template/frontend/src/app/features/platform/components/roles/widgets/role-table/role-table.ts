@@ -1,15 +1,9 @@
-import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { DatePipe } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  output,
-  signal,
-} from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+//#if (IncludeLocalization)
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+//#else
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+//#endif
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -47,12 +41,19 @@ import {
   TablePaginator,
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
-import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+} from '../../../../../../shared/models/table-column-meta';
+import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
+import {
+  tableSortAria,
+  tableSortIcon,
+  toggleTableSort,
+} from '../../../../../../shared/utils/table-sorting';
+import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
 import { RoleOutputDto } from '../../../../models/role.dto';
-
-const MEDIUM_VIEWPORT = '(min-width: 768px)';
-const LARGE_VIEWPORT = '(min-width: 1024px)';
 
 /**
  * 角色列表表格。
@@ -94,7 +95,6 @@ const LARGE_VIEWPORT = '(min-width: 1024px)';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RoleTable {
-  private readonly breakpointObserver = inject(BreakpointObserver);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
 
@@ -103,8 +103,8 @@ export class RoleTable {
     // 需要显式把语言变化接到变更检测上，否则切换语言后整张表停在旧语言。
     refreshOnLanguageChange(this.transloco);
   }
-  //#endif
 
+  //#endif
   readonly roles = input<RoleOutputDto[]>([]);
   readonly totalCount = input(0);
   readonly pagination = input<PaginationState>({ pageIndex: 0, pageSize: 20 });
@@ -128,22 +128,7 @@ export class RoleTable {
   readonly delete = output<RoleOutputDto>();
   readonly managePermissions = output<RoleOutputDto>();
 
-  private readonly viewport = toSignal(
-    this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),
-    {
-      initialValue: {
-        matches: false,
-        breakpoints: { [MEDIUM_VIEWPORT]: false, [LARGE_VIEWPORT]: false },
-      } satisfies BreakpointState,
-    },
-  );
-
-  private readonly tableViewport = computed(() => {
-    const breakpoints = this.viewport().breakpoints;
-    if (breakpoints[LARGE_VIEWPORT] === true) return 'desktop' as const;
-    if (breakpoints[MEDIUM_VIEWPORT] === true) return 'tablet' as const;
-    return 'mobile' as const;
-  });
+  private readonly tableViewport = tableViewportSignal();
 
   protected readonly columns: ColumnDef<RoleOutputDto>[] = [
     {
@@ -170,14 +155,7 @@ export class RoleTable {
       id: 'actions',
       enableSorting: false,
       enableHiding: false,
-      meta: {
-        priority: 'primary',
-        locked: true,
-        headClass:
-          'w-px px-2 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border',
-        cellClass:
-          'w-px px-2 py-2 whitespace-nowrap sticky right-0 z-10 bg-card group-hover:bg-muted/50 border-l border-border',
-      },
+      meta: ACTIONS_COLUMN_META,
     },
   ];
 
@@ -207,19 +185,16 @@ export class RoleTable {
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
   // 移动端/平板端「行展开」补偿：被隐藏的列不会丢数据，点行首箭头即可展开查看。
-  private readonly expandedRows = signal<ReadonlySet<string>>(new Set());
+  private readonly expandableRows = createExpandableRows();
+
   readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
 
   isRowExpanded(id: string): boolean {
-    return this.expandedRows().has(id);
+    return this.expandableRows.isExpanded(id);
   }
 
   toggleRow(id: string): void {
-    const next = new Set(this.expandedRows());
-    if (!next.delete(id)) {
-      next.add(id);
-    }
-    this.expandedRows.set(next);
+    this.expandableRows.toggle(id);
   }
 
   isColumnHidden(id: string): boolean {
@@ -227,22 +202,15 @@ export class RoleTable {
   }
 
   toggleSort(columnId: string): void {
-    const column = this.table.getColumn(columnId);
-    column?.toggleSorting(column.getIsSorted() === 'asc');
+    toggleTableSort(this.table, columnId);
   }
 
   sortIcon(columnId: string): string {
-    const direction = this.table.getColumn(columnId)?.getIsSorted();
-    return direction === 'asc'
-      ? 'lucideSortAsc'
-      : direction === 'desc'
-        ? 'lucideSortDesc'
-        : 'lucideArrowUpDown';
+    return tableSortIcon(this.table, columnId);
   }
 
   sortAria(columnId: string): 'ascending' | 'descending' | 'none' {
-    const direction = this.table.getColumn(columnId)?.getIsSorted();
-    return direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none';
+    return tableSortAria(this.table, columnId);
   }
 
   /** 每页条数变化：回到第一页并广播新的分页状态。 */

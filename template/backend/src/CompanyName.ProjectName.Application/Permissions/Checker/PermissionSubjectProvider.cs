@@ -1,7 +1,11 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Users;
+using Leistd.Authorization.Permissions;
+using Leistd.Timing;
+using Leistd.Authorization.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Permissions.Checker;
 
@@ -11,7 +15,8 @@ namespace CompanyName.ProjectName.Application.Permissions.Checker;
 public class PermissionSubjectProvider(
     ICurrentUser currentUser,
     IRepository<User, Guid> userRepository,
-    IRepository<UserRole, Guid> userRoleRepository) : IPermissionSubjectProvider
+    IRepository<UserRole, Guid> userRoleRepository,
+    IClock clock) : IPermissionSubjectProvider
 {
     public async Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
     {
@@ -30,11 +35,7 @@ public class PermissionSubjectProvider(
         // 每一次新的 Hub 握手，包括"仅要求已认证"的端点。两处判据相同，各自守住各自那条路径。
         //
         // 检查必须在超管分支之前：被禁用的超管同样要立刻失去权限。
-        if (user == null || !user.IsActive
-#if (IdentityService)
-            || user.IsLockedOut()
-#endif
-           )
+        if (user == null || user.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed)
             return null;
 
         if (user.IsSuperAdmin)

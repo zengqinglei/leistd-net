@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,29 +10,27 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Options;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Exception.Core;
-using Leistd.Lock.Core;
-#if (MultiTenancy)
 using Leistd.MultiTenancy;
-#endif
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Leistd.ExceptionHandling;
+using Leistd.Lock;
+using Leistd.Lock.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 public class EmailVerificationAppService(
     IDistributedCache distributedCache,
     IDistributedLock distributedLock,
-    IPasswordHasher passwordHasher,
+    IVerificationCodeDigest codeDigest,
     IOptions<UserRegistrationOptions> options,
     ICaptchaAppService captchaAppService,
     IEmailSender emailSender,
     ILogger<EmailVerificationAppService> logger,
     IRepository<User, Guid> userRepository
-#if (MultiTenancy)
     , ICurrentTenant currentTenant
-#endif
     ) : BaseAppService, IEmailVerificationAppService
 {
     private const string RegistrationPurpose = "registration-email";
@@ -42,6 +41,18 @@ public class EmailVerificationAppService(
         SendEmailCodeInputDto input,
         CancellationToken cancellationToken = default)
     {
+        // 功能关闭时明确拒绝。不拒绝的话请求会一路走到摘要计算，
+        // 在"密钥未配置"处失败——那个错误对调用方毫无意义，
+        // 因为它真正的问题是这个功能压根没开
+        if (!options.Value.EnableEmailVerification)
+        {
+            throw new BadRequestException("Email verification is not enabled.")
+#if (IncludeLocalization)
+                .WithCode("Auth:EmailVerificationDisabled")
+#endif
+                ;
+        }
+
         var normalizedEmail = NormalizeEmail(input.Email);
         var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(
             input.CaptchaToken,
@@ -51,7 +62,7 @@ public class EmailVerificationAppService(
         {
             throw new BadRequestException("The image captcha is incorrect or has expired.")
 #if (IncludeLocalization)
-                .WithLocalization("Auth:CaptchaInvalid")
+                .WithCode("Auth:CaptchaInvalid")
 #endif
                 ;
         }
@@ -63,7 +74,7 @@ public class EmailVerificationAppService(
         {
             throw new BadRequestException("This email address is already in use.")
 #if (IncludeLocalization)
-                .WithLocalization("Auth:EmailAlreadyUsed")
+                .WithCode("Auth:EmailAlreadyUsed")
 #endif
                 ;
         }
@@ -80,7 +91,7 @@ public class EmailVerificationAppService(
         {
             throw new BadRequestException("Verification codes are being sent too frequently. Please try again later.")
 #if (IncludeLocalization)
-                .WithLocalization("Auth:EmailCodeSendTooFrequent")
+                .WithCode("Auth:EmailCodeSendTooFrequent")
 #endif
                 ;
         }
@@ -93,7 +104,7 @@ public class EmailVerificationAppService(
             Scope = scope,
             Purpose = RegistrationPurpose,
             EmailDigest = emailDigest,
-            CodeHash = passwordHasher.HashPassword(code),
+            CodeHash = codeDigest.Compute(code),
             ExpiresAt = DateTimeOffset.UtcNow.Add(expiresIn),
             RemainingAttempts = _options.EmailCodeMaxAttempts
         };
@@ -207,7 +218,7 @@ public class EmailVerificationAppService(
         bool codeMatches;
         try
         {
-            codeMatches = passwordHasher.VerifyPassword(challenge.CodeHash, verification.Code.Trim());
+            codeMatches = codeDigest.Matches(challenge.CodeHash, verification.Code.Trim());
         }
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         {
@@ -259,11 +270,7 @@ public class EmailVerificationAppService(
 
     private string GetScope()
     {
-#if (MultiTenancy)
         return currentTenant.Id is { } tenantId ? $"tenant:{tenantId:N}" : "host";
-#else
-        return "host";
-#endif
     }
 
     private static bool FixedTimeEquals(string left, string right)

@@ -4,6 +4,7 @@ using System.Text;
 using Leistd.ServiceClient.OAuth.Handlers;
 using Leistd.ServiceClient.OAuth.Services;
 using Xunit;
+using Leistd.ServiceClient.OAuth.Abstractions;
 
 namespace Leistd.ServiceClient.Tests;
 

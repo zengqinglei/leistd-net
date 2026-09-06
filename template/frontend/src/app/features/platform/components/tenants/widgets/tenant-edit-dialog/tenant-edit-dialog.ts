@@ -32,14 +32,13 @@ import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
+import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
 import {
   CreateTenantInputDto,
   TenantDatabaseMode,
   TenantOutputDto,
   UpdateTenantInputDto,
 } from '../../../../../../shared/dtos/tenant.dto';
-
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
 
 interface TenantEditFormModel {
   name: string;
@@ -84,7 +83,7 @@ export class TenantEditDialog {
 
   readonly isEdit = computed(() => this.tenant() !== null);
   readonly isDedicatedDatabase = computed(
-    () => this.formModel().databaseMode === 'DedicatedDatabase',
+    () => this.formModel().databaseMode === 'dedicatedDatabase',
   );
 
   protected readonly formModel = signal<TenantEditFormModel>({
@@ -92,7 +91,7 @@ export class TenantEditDialog {
     displayName: '',
     adminEmail: '',
     adminPassword: '',
-    databaseMode: 'SharedDatabase',
+    databaseMode: 'sharedDatabase',
     runtimeSecretReference: '',
     migrationSecretReference: '',
   });
@@ -150,7 +149,7 @@ export class TenantEditDialog {
     });
     pattern(path.adminPassword, PASSWORD_RULE, {
       message:
-        'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
+        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
       when: () => !this.isEdit(),
     });
     required(path.runtimeSecretReference, {
@@ -177,7 +176,7 @@ export class TenantEditDialog {
         displayName: tenant?.displayName ?? '',
         adminEmail: '',
         adminPassword: '',
-        databaseMode: 'SharedDatabase',
+        databaseMode: 'sharedDatabase',
         runtimeSecretReference: '',
         migrationSecretReference: '',
       });
@@ -217,7 +216,7 @@ export class TenantEditDialog {
 
   setDatabaseMode(value: TenantDatabaseMode | TenantDatabaseMode[] | null | undefined): void {
     const databaseMode = Array.isArray(value) ? value[0] : value;
-    if (databaseMode !== 'SharedDatabase' && databaseMode !== 'DedicatedDatabase') {
+    if (databaseMode !== 'sharedDatabase' && databaseMode !== 'dedicatedDatabase') {
       return;
     }
 
@@ -225,9 +224,9 @@ export class TenantEditDialog {
       ...current,
       databaseMode,
       runtimeSecretReference:
-        databaseMode === 'SharedDatabase' ? '' : current.runtimeSecretReference,
+        databaseMode === 'sharedDatabase' ? '' : current.runtimeSecretReference,
       migrationSecretReference:
-        databaseMode === 'SharedDatabase' ? '' : current.migrationSecretReference,
+        databaseMode === 'sharedDatabase' ? '' : current.migrationSecretReference,
     }));
   }
 

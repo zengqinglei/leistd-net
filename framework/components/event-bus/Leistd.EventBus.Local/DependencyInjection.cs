@@ -1,22 +1,31 @@
-using Leistd.EventBus.Core.EventBus;
-using Leistd.EventBus.Local.EventBus;
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.EventBus.Abstractions;
 
 namespace Leistd.EventBus.Local;
 
+/// <summary>
+/// 进程内事件总线的注册入口：注册 <c>IEventBus</c> / <c>ILocalEventBus</c> 与按约定发现的 <c>IEventHandler</c>。
+/// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册本地事件总线 (Singleton)
-    /// 适用于 Web、Console、BackgroundService 等多种应用场景
+    /// 注册单例进程内事件总线。
     /// </summary>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddLocalEventBus();
+    ///
+    /// // 处理器按 IEventHandler&lt;TEvent&gt; 注册，发布方只依赖 ILocalEventBus
+    /// builder.Services.AddScoped&lt;IEventHandler&lt;OrderPlaced&gt;, OrderPlacedNotifier&gt;();
+    /// </code>
+    /// </example>
     public static IServiceCollection AddLocalEventBus(this IServiceCollection services)
     {
-        // 注册为 Singleton，全局共享一个实例
-        // 内部通过 IServiceScopeFactory 创建独立的 scope 来解析 Scoped 的 EventHandler
         services.AddSingleton<LocalEventBus>();
         services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<LocalEventBus>());
         services.AddSingleton<ILocalEventBus>(sp => sp.GetRequiredService<LocalEventBus>());
+        // 调度器必须复用同一实例，才能排空该实例上的待发布事件。
+        services.AddSingleton<ILocalEventDispatcher>(sp => sp.GetRequiredService<LocalEventBus>());
         return services;
     }
 }

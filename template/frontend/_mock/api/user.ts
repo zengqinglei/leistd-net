@@ -1,7 +1,9 @@
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
-//#if (LocalAuthorization)
+import { parseMockSorting } from '../core/sorting';
 import { ROLES } from '../data/authorization';
+//#if (LocalIdentity)
+import { ensureAcceptablePassword } from '../data/password-policy';
 //#endif
 import { USERS, toUserManagementOutput } from '../data/user';
 
@@ -12,30 +14,24 @@ function getQueryValue(value: unknown) {
     : String(normalized);
 }
 
-function sortUsers(users: typeof USERS, sorting?: string) {
-  if (!sorting) {
-    return users.sort((a, b) => a.username.localeCompare(b.username));
-  }
+/** 与后端 `UserAppService.ApplySorting` 同一份字段清单。 */
+//#if (LocalIdentity)
+const USER_SORT_FIELDS = ['username', 'email', 'lastLoginTime', 'creationTime'] as const;
+//#else
+const USER_SORT_FIELDS = ['username', 'email', 'creationTime'] as const;
+//#endif
 
-  const [field, direction] = sorting.split(' ');
-  const order = direction === 'desc' ? -1 : 1;
-  const supportedFields = [
-    'username',
-    'email',
-    'displayName',
-    'isActive',
-    'isEmailVerified',
-    'creationTime',
-    'lastLoginTime',
-  ];
-  if (!supportedFields.includes(field)) {
-    return users.sort((a, b) => a.username.localeCompare(b.username));
-  }
+function sortUsers(users: typeof USERS, sorting?: string) {
+  const { field, descending } = parseMockSorting(sorting, USER_SORT_FIELDS, 'username');
+  const order = descending ? -1 : 1;
 
   return users.sort((a, b) => {
-    const left = field === 'displayName' ? a.displayName : a[field as keyof typeof a];
-    const right = field === 'displayName' ? b.displayName : b[field as keyof typeof b];
-    return String(left ?? '').localeCompare(String(right ?? '')) * order;
+    const left = a[field as keyof typeof a];
+    const right = b[field as keyof typeof b];
+    const compared = String(left ?? '').localeCompare(String(right ?? '')) * order;
+    // 与后端一样固定追加 id 作为稳定次序，且不随方向反转：否则排序键有并列值时，
+    // 翻页会重复或漏掉同一行
+    return compared !== 0 ? compared : a.id.localeCompare(b.id);
   });
 }
 
@@ -46,10 +42,8 @@ export function getUsers(params: any): PagedResultDto<any> {
   const keyword = getQueryValue(params.keyword)?.toLowerCase();
   const isActive = getQueryValue(params.isActive);
   const isEmailVerified = getQueryValue(params.isEmailVerified);
-  //#if (LocalAuthorization)
   const rolesParam = params.roles;
   const roles: string[] = Array.isArray(rolesParam) ? rolesParam : rolesParam ? [rolesParam] : [];
-  //#endif
   const sorting = getQueryValue(params.sorting);
 
   if (keyword) {
@@ -69,12 +63,10 @@ export function getUsers(params: any): PagedResultDto<any> {
     users = users.filter((user) => user.isEmailVerified === (isEmailVerified === 'true'));
   }
 
-  //#if (LocalAuthorization)
   if (roles.length) {
     users = users.filter((user) => user.roles.some((r) => roles.includes(r)));
   }
 
-  //#endif
   users = sortUsers(users, sorting);
 
   return {
@@ -86,7 +78,7 @@ export function getUsers(params: any): PagedResultDto<any> {
 export function getUserById(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: 'User not found' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'User not found' });
   }
   return toUserManagementOutput(user);
 }
@@ -96,11 +88,29 @@ export function addUser(value: any) {
   const email = String(value.email ?? '').trim();
   const userExists = USERS.some((w) => w.username === username || w.email === email);
   if (userExists) {
-    throw new MockException(400, { code: 40000, message: 'Username or email already exists' });
+    throw new MockException(400, {
+      code: 'Error:BadRequest',
+      message: 'Username or email already exists',
+    });
+  }
+  //#if (LocalIdentity)
+  // 复刻后端口令策略：创建用户必须显式给出合规口令，没有默认值。
+  ensureAcceptablePassword(value.password, 'Password');
+
+  //#else
+  // 复刻后端 CreateUserInputDto：SubjectId 必填，且就是本服务 Membership 的主键。
+  const subjectId = String(value.subjectId ?? '').trim();
+  if (!subjectId) {
+    throw new MockException(400, { code: 'Error:BadRequest', message: 'SubjectId is required.' });
   }
 
+  //#endif
   const newUser = {
+    //#if (LocalIdentity)
     id: crypto.randomUUID(),
+    //#else
+    id: subjectId,
+    //#endif
     username,
     email,
     displayName: value.displayName,
@@ -112,7 +122,6 @@ export function addUser(value: any) {
     isSuperAdmin: false,
     isEmailVerified: value.isEmailVerified ?? false,
     creationTime: new Date().toISOString(),
-    //#if (LocalAuthorization)
     // 创建时按 Id 提交角色；未指定则落到默认角色，与后端一致。
     roles: (value.roleIds?.length
       ? ROLES.filter((role: { id: string }) => value.roleIds.includes(role.id)).map(
@@ -121,8 +130,12 @@ export function addUser(value: any) {
       : ROLES.filter((role: { isDefault: boolean }) => role.isDefault).map(
           (role: { name: string }) => role.name,
         )) as string[],
+    //#if (LocalIdentity)
+    password: value.password,
+    //#else
+    // Resource 形态没有本地口令，空串仅满足 MockUser 结构。
+    password: '',
     //#endif
-    password: value.password || 'Admin@123456',
   };
   USERS.push(newUser);
   return toUserManagementOutput(newUser);
@@ -132,7 +145,7 @@ export function updateUser(id: string, value: any) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 40400,
+      code: 'Error:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
@@ -143,9 +156,7 @@ export function updateUser(id: string, value: any) {
     avatar: value.avatar,
     isActive: value.isActive,
     isEmailVerified: value.isEmailVerified,
-    //#if (LocalAuthorization)
     // 普通更新不接受角色：角色分配是独立命令，走 PUT /api/v1/users/:id/roles。
-    //#endif
   });
   return toUserManagementOutput(user);
 }
@@ -154,7 +165,7 @@ export function enableUser(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 40400,
+      code: 'Error:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
@@ -165,35 +176,45 @@ export function disableUser(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 40400,
+      code: 'Error:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
   user.isActive = false;
 }
 
+//#if (LocalIdentity)
 export function resetPassword(id: string, value: any) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 40400,
+      code: 'Error:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
+  if (user.isSuperAdmin) {
+    throw new MockException(400, {
+      code: 'Error:BadRequest',
+      message:
+        "The built-in super administrator's password cannot be reset by other administrators.",
+    });
+  }
+  ensureAcceptablePassword(value.password, 'Password');
   user.password = value.password;
 }
 
+//#endif
 export function deleteUser(id: string) {
   const index = USERS.findIndex((w) => w.id === id);
   if (index < 0) {
     throw new MockException(404, {
-      code: 40400,
+      code: 'Error:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
   if (USERS[index].isSuperAdmin) {
     throw new MockException(400, {
-      code: 40000,
+      code: 'Error:BadRequest',
       message: 'The built-in super administrator cannot be deleted',
     });
   }
@@ -207,8 +228,10 @@ export const USER_API = {
   'PUT /api/v1/users/:id': (req: MockRequest) => updateUser(req.params.id, req.body),
   'PATCH /api/v1/users/:id/enable': (req: MockRequest) => enableUser(req.params.id),
   'PATCH /api/v1/users/:id/disable': (req: MockRequest) => disableUser(req.params.id),
+  //#if (LocalIdentity)
   'POST /api/v1/users/:id/reset-password': (req: MockRequest) =>
     resetPassword(req.params.id, req.body),
+  //#endif
   'DELETE /api/v1/users/:id': (req: MockRequest) => deleteUser(req.params.id),
   'POST /api/v1/user/avatar': 'ok',
   'POST /api/v1/register': { msg: 'ok' },

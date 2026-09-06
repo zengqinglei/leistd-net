@@ -66,7 +66,7 @@ const DEFAULT_ROLE_SORTING: SortingState = [{ id: 'sort', desc: false }];
 /**
  * 角色管理页。
  *
- * 角色数据全部来自 API：前端不再保留任何硬编码角色列表，新建的角色立即可用于用户分配。
+ * 角色数据以 API 为唯一数据源，新建的角色立即可用于用户分配。
  * 列表状态（分页、排序、关键字）落在 URL 查询参数上，刷新与前进后退均可复原。
  */
 @Component({

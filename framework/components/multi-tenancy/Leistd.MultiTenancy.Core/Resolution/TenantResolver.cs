@@ -1,10 +1,9 @@
 using Microsoft.Extensions.Options;
 
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.Resolution;
 
 /// <summary>
-/// <see cref="ITenantResolver"/> 默认实现：按 <see cref="TenantResolveOptions.Contributors"/> 顺序执行，
-/// 首个有定论（解析出租户或确定为宿主）的贡献者终止链
+/// 按配置顺序执行租户解析贡献者。
 /// </summary>
 /// <remarks>
 /// 以 Scoped 注册：注入的 <paramref name="serviceProvider"/> 即当前请求作用域，

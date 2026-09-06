@@ -10,7 +10,7 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// （CompanyName.ProjectName.Client）探活与联调。
 /// </summary>
 [Route("api/v1/service-info")]
-public class ServiceInfoController : BaseController
+public sealed class ServiceInfoController : BaseController
 {
     /// <summary>
     /// 服务基础信息（匿名）：服务名、版本与服务器时间。
@@ -26,7 +26,7 @@ public class ServiceInfoController : BaseController
             DateTimeOffset.UtcNow);
     }
 
-#if (IdentityService)
+#if (LocalIdentity)
     /// <summary>
     /// 返回「本次调用以谁的身份进入」：用户（可能经服务调用头恢复）与调用方客户端。
     /// 默认授权策略要求可用的自然人用户——服务间调用须携带受信的 X-User-Id 才能通过；
@@ -49,12 +49,12 @@ public class ServiceInfoController : BaseController
 /// <param name="ServerTime">服务器当前时间（UTC）</param>
 public sealed record ServiceInfoOutputDto(string Service, string Version, DateTimeOffset ServerTime);
 
-#if (IdentityService)
+#if (LocalIdentity)
 /// <summary>
 /// 当前调用身份。
 /// </summary>
 /// <param name="UserId">当前用户 Id（服务间调用时来自受信恢复的 X-User-Id）</param>
-/// <param name="UserName">当前用户名</param>
+/// <param name="Username">当前用户名</param>
 /// <param name="ClientId">调用方客户端 Id（client credentials 调用时存在）</param>
-public sealed record WhoAmIOutputDto(Guid? UserId, string? UserName, string? ClientId);
+public sealed record WhoAmIOutputDto(Guid? UserId, string? Username, string? ClientId);
 #endif

@@ -54,7 +54,7 @@ describe('permissionGuard', () => {
     authorization.setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: false,
-      revision: 'r1',
+      versionToken: 'r1',
     });
   });
 
@@ -113,7 +113,7 @@ describe('permissionGuard', () => {
     await Promise.resolve();
     expect(settled).toBeFalse();
 
-    // 权限要到启动流结束才可信；此前放行会闪现受保护页面，拦截又会误伤刷新。
+    // 权限只在启动流结束后可信；在此之前既不能放行受保护页面，也不能拒绝刷新。
     status.set('success');
     await expectAsync(pending).toBeResolvedTo(true);
   });

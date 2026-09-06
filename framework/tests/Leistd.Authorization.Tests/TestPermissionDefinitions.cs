@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Leistd.Authorization.Services;
+using Leistd.Authorization.Abstractions;
 
 namespace Leistd.Authorization.Tests;
 

@@ -1,6 +1,6 @@
 # Leistd Framework
 
-Leistd 是面向 **.NET 10** 的 DDD 应用框架基座，从 `leistd-net` 模板中抽取，独立版本化、以 NuGet 包形式发布，供模板生成的业务项目（及其它项目）复用。
+Leistd 是面向 **.NET 10** 的 DDD 应用框架基座，独立版本化、以 NuGet 包形式发布，供模板生成的业务项目（及其它项目）复用。
 
 框架采用单点版本、中央包管理（CPM）、PDB 内嵌和 Source Link 源码调试。
 
@@ -13,7 +13,8 @@ Leistd 是面向 **.NET 10** 的 DDD 应用框架基座，从 `leistd-net` 模�
 dotnet build framework/Leistd.Framework.slnx -c Release
 
 # 本地打包（固定输出 .tmp/local-feed，每个项目产出内嵌 PDB 的 .nupkg）
-dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
+# 直接 dotnet pack 是往目录里追加：组件删除后旧包会残留，被隔离消费验证当成当前代码的问题
+pwsh framework/build/pack-local-feed.ps1
 ```
 
 > 正式打包与发布由 CI 全自动完成（push 触发，见 `.github/workflows/release.yml`），本地一般无需手动发布。

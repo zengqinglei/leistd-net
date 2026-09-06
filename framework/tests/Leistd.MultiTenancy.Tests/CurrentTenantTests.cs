@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.MultiTenancy.Services;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.Tests;
 

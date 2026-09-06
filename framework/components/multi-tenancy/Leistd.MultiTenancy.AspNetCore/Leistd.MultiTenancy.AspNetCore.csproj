@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Leistd.MultiTenancy</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

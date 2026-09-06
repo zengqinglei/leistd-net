@@ -1,13 +1,16 @@
-#if (MultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Exception.Core;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Leistd.UnitOfWork.Core.Uow;
+using Leistd.UnitOfWork;
+using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Stores;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.ObjectMapping.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 
@@ -28,6 +31,7 @@ public class TenantAppService(
     IRepository<User, Guid> userRepository,
     IUnitOfWorkManager unitOfWorkManager,
     IServiceScopeFactory serviceScopeFactory,
+    IObjectMapper objectMapper,
     ILogger<TenantAppService> logger) : ITenantAppService
 {
     /// <inheritdoc />
@@ -49,29 +53,14 @@ public class TenantAppService(
 
     /// <inheritdoc />
     /// <remarks>
-    /// <para><b>初始停用创建，种子完成后才激活。</b>租户一旦启用，多租户中间件就会接受它——
-    /// 而此刻它还没有管理员和权限授予，匿名入口（注册端点带 <c>X-Tenant-Id</c>）能进入这个
-    /// 半成品租户并在里面留下数据。停用态创建把这个窗口关掉：中间件拒绝停用租户，
-    /// 即使补偿删除失败，残留的也是一个不对外服务的租户。</para>
-    /// <para>创建 = 注册表写入 + 租内种子，两者不在一个数据库事务里：种子内持有分布式锁，
-    /// 圈进事务会把锁与事务生命周期绑死；框架的 EF 管理器与仓储也分处不同工作单元作用域，
-    /// 一个 <c>[UnitOfWork]</c> 圈不住注册表写入。因此以补偿取代事务。</para>
-    /// <para>补偿必须覆盖**已经落库的种子数据**（角色可能已写入而用户尚未），
-    /// 而不是只软删注册表——那样旧租户 Id 下会永久残留角色与授权版本，重试也只是换个新 Id。
-    /// 先清种子、再删注册表，两步都幂等。</para>
-    /// <para><b>激活在补偿边界内。</b>并发的宿主管理员可能在播种期间删掉这个租户，
-    /// 那时激活抛 <c>TenantNotFoundException</c>——此刻数据不是"已完整"而是孤儿的
-    /// （落在一个软删租户 Id 下、永远不可达），必须连同种子一起清理。
-    /// 激活失败一律走补偿是安全的：它只有"租户不存在"与"数据库故障"两种失败，
-    /// 两种情形下这个租户都不可用，而补偿是幂等的。</para>
-    /// <para>这一步能纳入补偿的前提是激活不再有尽力而为的缓存失效步骤——
-    /// <c>EfCoreTenantStore</c> 直接读库，启停在提交那一刻即生效。
-    /// 缓存时代不能这么做：Redis 抖一下就会删掉一个数据完好的租户。</para>
+    /// 租户先以停用态写入注册表，连接配置提交后在租户上下文中播种，完成后才激活。
+    /// 注册表与租户数据库不共享事务，因此失败时以幂等补偿清除种子数据并删除注册表记录。
+    /// 激活也属于补偿边界；存储直接读库，状态在提交后生效，不存在额外缓存失效步骤。
     /// </remarks>
     public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
     {
         TenantConfiguration tenant;
-        using (var controlUnitOfWork = await unitOfWorkManager.BeginAsync())
+        using (var controlUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
         {
             tenant = await tenantManager.CreateAsync(
                 input.Name, input.DisplayName, isActive: false, cancellationToken: cancellationToken);
@@ -81,6 +70,8 @@ public class TenantAppService(
                 input.DatabaseMode,
                 input.RuntimeSecretReference,
                 input.MigrationSecretReference,
+                // 租户刚在同一事务里创建，连接配置必然尚不存在
+                expectedVersion: null,
                 cancellationToken);
             await controlUnitOfWork.CompleteAsync(cancellationToken);
         }
@@ -90,27 +81,25 @@ public class TenantAppService(
         {
             // 在新租户上下文内种子：角色、权限授予、租户管理员的所有行由落值拦截器自动归属该租户
             using (currentTenant.Change(tenant.Id, tenant.Name))
-            using (var businessUnitOfWork = await unitOfWorkManager.BeginAsync())
+            using (var businessUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
             {
                 await tenantSeeder.SeedAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
                 await businessUnitOfWork.CompleteAsync(cancellationToken);
             }
 
-            // 激活也在补偿边界内：并发的宿主管理员可能在播种期间把这个租户删掉，
-            // 那时激活会抛 TenantNotFound——数据不是"已完整"而是孤儿的，必须一并清理。
-            // 这一步能安全地纳入补偿，前提是它不再有尽力而为的缓存失效步骤（存储直接读库）
-            using var activationUnitOfWork = await unitOfWorkManager.BeginAsync();
+            // 激活失败与播种失败使用同一补偿路径。
+            using var activationUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
             activated = await tenantManager.SetActiveAsync(tenant.Id, true, cancellationToken);
             await activationUnitOfWork.CompleteAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "租户 {TenantId} 初始化失败，回滚租户与已写入的种子数据", tenant.Id);
+            logger.LogError(ex, "Tenant {TenantId} initialization failed; rolling back the tenant and seeded data", tenant.Id);
             await CompensateAsync(tenant);
             throw;
         }
 
-        logger.LogInformation("已创建租户 {TenantName}（{TenantId}）并完成初始化", tenant.Name, tenant.Id);
+        logger.LogInformation("Tenant {TenantName} ({TenantId}) created and initialized", tenant.Name, tenant.Id);
         return ToOutputDto(activated);
     }
 
@@ -118,21 +107,13 @@ public class TenantAppService(
     /// 回滚一次失败的租户创建：先清租内已写入的种子数据，再删除租户注册表。
     /// </summary>
     /// <remarks>
-    /// <para><b>必须在独立作用域里执行。</b>失败现场的 DbContext 仍跟踪着写入失败的实体
-    /// （EF 在 SaveChanges 失败后不会回滚跟踪状态），用它清理会在下一次保存把那些实体一起
-    /// 写进数据库——补偿反而制造残留。新作用域拿到干净的 DbContext，只看已落库的数据。</para>
-    /// <para>两步各自兜住异常：补偿失败不能覆盖原始的种子异常（那才是调用方需要看到的原因），
-    /// 也不能阻止注册表删除——注册表一删租户即不可达，残留数据虽在但无法被访问。
-    /// 补偿自身失败以 Error 日志暴露，交由运维核查；不引入重试队列或对账作业，
-    /// 那是分布式事务基础设施，不属于模板范围。</para>
-    /// <para>用独立取消令牌：调用方取消（含超时）不应让补偿也被取消，
-    /// 否则恰恰在最需要清理的路径上留下半成品租户。</para>
+    /// 清种子与删注册表分别使用干净的依赖注入作用域，避免复用失败 DbContext 的跟踪状态。
+    /// 两步独立捕获并记录异常，且不覆盖触发补偿的原始异常；即使清种子失败仍继续删除注册表。
+    /// 补偿使用独立取消令牌，不随调用方取消而中止。
     /// </remarks>
     private async Task CompensateAsync(TenantConfiguration tenant)
     {
-        // 清种子与删注册表各用一个新作用域。同一个理由适用两次：一步的 SaveChanges 失败会在
-        // 它的跟踪器里留下失败实体，后一步复用这个上下文就会把那些实体带进自己的保存——
-        // 删注册表这一步尤其不能被拖累，它是"租户从此不可达"的最后保障。
+        // 两个步骤各用干净作用域，避免前一步失败的跟踪状态污染后一步。
         try
         {
             using var purgeScope = serviceScopeFactory.CreateScope();
@@ -148,7 +129,7 @@ public class TenantAppService(
         {
             logger.LogError(
                 purgeError,
-                "清除租户 {TenantId} 的种子数据失败，需人工核查残留数据",
+                "Failed to purge seed data for tenant {TenantId}; residual data requires manual inspection",
                 tenant.Id);
         }
 
@@ -163,7 +144,7 @@ public class TenantAppService(
         {
             logger.LogError(
                 deleteError,
-                "删除租户 {TenantId} 失败，该名称在人工清理前无法重用",
+                "Failed to delete tenant {TenantId}; its name cannot be reused until manually cleaned up",
                 tenant.Id);
         }
     }
@@ -219,7 +200,7 @@ public class TenantAppService(
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await tenantManager.DeleteAsync(id, cancellationToken);
-        logger.LogInformation("已删除租户 {TenantId}（软删除，业务数据保留）", id);
+        logger.LogInformation("Tenant {TenantId} deleted (soft delete; business data retained)", id);
     }
 
     /// <inheritdoc />
@@ -236,23 +217,10 @@ public class TenantAppService(
             return null;
         }
 
-        // 匿名探测只回选择租户所需的最小信息
-        return new TenantLookupOutputDto
-        {
-            Id = tenant.Id,
-            Name = tenant.Name,
-            DisplayName = tenant.DisplayName,
-            IsActive = tenant.IsActive
-        };
+        // 匿名探测只回选择租户所需的最小信息——该投影由 TenantLookupOutputDto 的字段集表达
+        return objectMapper.Map<TenantConfiguration, TenantLookupOutputDto>(tenant);
     }
 
-    private static TenantOutputDto ToOutputDto(TenantConfiguration tenant) => new()
-    {
-        Id = tenant.Id,
-        Name = tenant.Name,
-        DisplayName = tenant.DisplayName,
-        IsActive = tenant.IsActive,
-        CreationTime = tenant.CreationTime
-    };
+    private TenantOutputDto ToOutputDto(TenantConfiguration tenant)
+        => objectMapper.Map<TenantConfiguration, TenantOutputDto>(tenant);
 }
-#endif

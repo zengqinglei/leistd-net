@@ -1,4 +1,4 @@
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { HttpClient, HttpContext } from '@angular/common/http';
 //#endif
 // prettier-ignore
@@ -7,10 +7,10 @@ import {
   inject,
   signal,
 } from '@angular/core';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { Observable, lastValueFrom, tap } from 'rxjs';
 //#endif
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { Router } from '@angular/router';
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { firstValueFrom } from 'rxjs';
@@ -19,18 +19,18 @@ import { firstValueFrom } from 'rxjs';
 //#if (IncludeNotifications)
 import { SignalRService } from './signalr-service';
 //#endif
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { LoginInputDto, UserOutputDto } from '../../features/account/models/account.dto';
 //#endif
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { TenantContextService } from './tenant-context-service';
 //#endif
 import { User } from '../../shared/models/user.model';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 //#endif
 
-//#if (IdentityService)
+//#if (LocalIdentity)
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);

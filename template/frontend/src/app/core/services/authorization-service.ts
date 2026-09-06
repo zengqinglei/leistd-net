@@ -2,7 +2,10 @@ import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, lastValueFrom, tap } from 'rxjs';
 
-import { CurrentPermissionsOutputDto, PERMISSIONS } from '../../shared/models/permission';
+import {
+  CurrentPermissionsOutputDto,
+  PLATFORM_ENTRY_PERMISSIONS,
+} from '../../shared/models/permission';
 import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 
 /**
@@ -17,15 +20,15 @@ export class AuthorizationService {
 
   private readonly _permissions = signal<ReadonlySet<string>>(new Set<string>());
   private readonly _isSuperAdmin = signal(false);
-  private readonly _revision = signal('');
+  private readonly _versionToken = signal('');
 
   /** 授权版本。变化即表示权限已被改动，页面应重新拉取受影响数据。 */
-  readonly revision = this._revision.asReadonly();
+  readonly versionToken = this._versionToken.asReadonly();
   readonly isSuperAdmin = this._isSuperAdmin.asReadonly();
   readonly permissions = computed(() => [...this._permissions()]);
 
   /** 是否已加载过权限。未加载完成前一律按"无权限"处理，避免闪现受保护入口。 */
-  readonly loaded = computed(() => this._revision() !== '');
+  readonly loaded = computed(() => this._versionToken() !== '');
 
   /**
    * 是否可以进入平台管理区。
@@ -33,16 +36,7 @@ export class AuthorizationService {
    * 判据是"拥有任一平台入口权限"，而不是"是不是 Admin 角色"或"是不是超级管理员"——
    * 后两者都会让前端可见性与后端的权限语义再次分叉。
    */
-  readonly canAccessPlatform = computed(() =>
-    this.hasAny(
-      PERMISSIONS.users.default,
-      PERMISSIONS.roles.default,
-      //#if (IdentityService)
-      PERMISSIONS.openApplications.default,
-      //#endif
-      PERMISSIONS.permissions.default,
-    ),
-  );
+  readonly canAccessPlatform = computed(() => this.hasAny(...PLATFORM_ENTRY_PERMISSIONS));
 
   async initialize(): Promise<void> {
     await lastValueFrom(this.load());
@@ -66,13 +60,13 @@ export class AuthorizationService {
   setPermissions(result: CurrentPermissionsOutputDto): void {
     this._permissions.set(new Set(result.permissions));
     this._isSuperAdmin.set(result.isSuperAdmin);
-    this._revision.set(result.revision);
+    this._versionToken.set(result.versionToken);
   }
 
   clear(): void {
     this._permissions.set(new Set<string>());
     this._isSuperAdmin.set(false);
-    this._revision.set('');
+    this._versionToken.set('');
   }
 
   /** 是否拥有指定权限。 */

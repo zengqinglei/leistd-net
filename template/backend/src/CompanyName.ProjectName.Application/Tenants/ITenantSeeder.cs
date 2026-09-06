@@ -1,4 +1,3 @@
-#if (MultiTenancy)
 namespace CompanyName.ProjectName.Application.Tenants;
 
 /// <summary>
@@ -26,4 +25,3 @@ public interface ITenantSeeder
     /// </remarks>
     Task PurgeAsync(CancellationToken cancellationToken = default);
 }
-#endif

@@ -23,13 +23,41 @@ public class ServiceUserContextMiddlewareTests
         configureOptions?.Invoke(options);
         var middleware = new ServiceUserContextMiddleware(
             _ => Task.CompletedTask,
-            Microsoft.Extensions.Options.Options.Create(options),
+            new MutableOptionsMonitor<ServiceUserContextOptions>(options),
             NullLogger<ServiceUserContextMiddleware>.Instance);
 
         var context = new DefaultHttpContext { User = user };
         configureRequest?.Invoke(context);
         await middleware.InvokeAsync(context);
         return context;
+    }
+
+    [Fact]
+    public async Task Enabled_switch_is_read_for_each_request()
+    {
+        var monitor = new MutableOptionsMonitor<ServiceUserContextOptions>(new());
+        var middleware = new ServiceUserContextMiddleware(
+            _ => Task.CompletedTask,
+            monitor,
+            NullLogger<ServiceUserContextMiddleware>.Instance);
+
+        var first = new DefaultHttpContext { User = ServiceClientPrincipal() };
+        AddUserHeaders(first);
+        await middleware.InvokeAsync(first);
+
+        monitor.Set(new ServiceUserContextOptions { Enabled = false });
+        var second = new DefaultHttpContext { User = ServiceClientPrincipal() };
+        AddUserHeaders(second);
+        await middleware.InvokeAsync(second);
+
+        monitor.Set(new ServiceUserContextOptions { Enabled = true });
+        var third = new DefaultHttpContext { User = ServiceClientPrincipal() };
+        AddUserHeaders(third);
+        await middleware.InvokeAsync(third);
+
+        Assert.Equal(UserId.ToString(), first.User.FindFirst("sub")?.Value);
+        Assert.Equal(ClientSubject.Format("svc-a"), second.User.FindFirst("sub")?.Value);
+        Assert.Equal(UserId.ToString(), third.User.FindFirst("sub")?.Value);
     }
 
     /// <summary>client credentials 主体：sub 为 ClientSubject 契约形态（client:&lt;client_id&gt;）。</summary>
@@ -54,7 +82,7 @@ public class ServiceUserContextMiddlewareTests
     private static void AddUserHeaders(HttpContext context)
     {
         context.Request.Headers[ServiceClientHeaders.UserId] = UserId.ToString();
-        context.Request.Headers[ServiceClientHeaders.UserName] = Uri.EscapeDataString("张三");
+        context.Request.Headers[ServiceClientHeaders.Username] = Uri.EscapeDataString("张三");
     }
 
     [Fact]
@@ -84,7 +112,7 @@ public class ServiceUserContextMiddlewareTests
         var context = await RunAsync(UserTokenPrincipal(), AddUserHeaders);
 
         Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserId));
-        Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserName));
+        Assert.False(context.Request.Headers.ContainsKey(ServiceClientHeaders.Username));
         Assert.NotEqual(UserId.ToString(), context.User.FindFirst("sub")?.Value);
     }
 
@@ -185,7 +213,7 @@ public class ServiceUserContextMiddlewareTests
         var context = await RunAsync(
             new ClaimsPrincipal(new ClaimsIdentity()),
             AddUserHeaders,
-            options => options.Enable = false);
+            options => options.Enabled = false);
 
         Assert.True(context.Request.Headers.ContainsKey(ServiceClientHeaders.UserId));
     }

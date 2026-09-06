@@ -1,5 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Leistd.Authorization.DataScope.Services;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.DataScope;
 
@@ -16,6 +19,15 @@ public static class DependencyInjection
     /// <see cref="IDataScopeAssignmentProvider"/>；后者由业务项目提供，
     /// 决定"当前主体在某类资源上被分配了哪些范围"。
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddDataScopeCore();
+    /// builder.Services.AddDataScopeProvider&lt;Order, OrderOwnDataScopeProvider&gt;();
+    ///
+    /// // 集合级入口：列表、总数、导出必须全部经它取候选集
+    /// var scoped = await dataScopeApplier.ApplyAsync(query, "Orders", "Read", ct);
+    /// </code>
+    /// </example>
     public static IServiceCollection AddDataScopeCore(this IServiceCollection services)
     {
         services.TryAddScoped<IDataScopeApplier, DefaultDataScopeApplier>();

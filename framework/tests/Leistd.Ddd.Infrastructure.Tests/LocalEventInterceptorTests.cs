@@ -1,14 +1,15 @@
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Ddd.Infrastructure.Persistence;
-using Leistd.EventBus.Core.Event;
-using Leistd.EventBus.Core.EventBus;
-using Leistd.EventBus.Core.EventHandler;
+using Leistd.EventBus;
 using Leistd.EventBus.Local;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Leistd.EventBus.EventHandlers;
+using Leistd.EventBus.Events;
+using Leistd.EventBus.Abstractions;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 

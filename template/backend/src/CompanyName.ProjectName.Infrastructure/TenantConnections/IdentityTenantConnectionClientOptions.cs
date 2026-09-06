@@ -1,4 +1,4 @@
-#if (ResourceService)
+#if (!LocalIdentity)
 using Leistd.ServiceClient.Options;
 
 namespace CompanyName.ProjectName.Infrastructure.TenantConnections;

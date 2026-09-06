@@ -1,27 +1,25 @@
 using System.Data;
 
-namespace Leistd.UnitOfWork.Core.Options;
+namespace Leistd.UnitOfWork.Options;
 
 /// <summary>
-/// Unit of work options
+/// 工作单元的事务选项。
 /// </summary>
 public interface IUnitOfWorkOptions
 {
     /// <summary>
-    /// Is this UOW transactional?
-    /// Uses default value if not supplied.
+    /// 本工作单元是否开启事务。未显式设置时取默认选项的值。
     /// </summary>
     bool IsTransactional { get; }
 
     /// <summary>
-    /// If this UOW is transactional, this option indicated the isolation level of the transaction.
-    /// Uses default value if not supplied.
+    /// 事务隔离级别，仅在 <see cref="IsTransactional"/> 为 <see langword="true"/> 时生效。
+    /// 为 <see langword="null"/> 时取默认选项的值。
     /// </summary>
     IsolationLevel? IsolationLevel { get; }
 
     /// <summary>
-    /// Timeout of UOW As milliseconds.
-    /// Uses default value if not supplied.
+    /// 工作单元的超时时长。为 <see langword="null"/> 时取默认选项的值。
     /// </summary>
     TimeSpan? Timeout { get; }
 }

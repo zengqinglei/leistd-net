@@ -1,4 +1,4 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using System.Text.Json;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;

@@ -1,4 +1,3 @@
-#if (LocalAuthorization)
 using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
@@ -19,4 +18,3 @@ public record UpdateUserRolesInputDto
     [MaxLength(20, ErrorMessage = "{0} cannot contain more than {1} items.")]
     public List<Guid> RoleIds { get; init; } = [];
 }
-#endif

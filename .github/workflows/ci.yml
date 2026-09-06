@@ -23,24 +23,10 @@ jobs:
           python-version: '3.12'
       - name: 安装 Skill 校验依赖
         run: python -m pip install PyYAML==6.0.2
-      - name: 校验组件文档与索引一致
+      # 闸门清单的唯一来源是 check-all.ps1；新增闸门只改那一处，本文件不必跟着改
+      - name: 全部静态闸门
         shell: pwsh
-        run: pwsh framework/build/check-docs-sync.ps1
-      - name: 校验文档 API 引用与源码不漂移
-        shell: pwsh
-        run: pwsh framework/build/check-docs-api-drift.ps1
-      - name: 校验全部 Skill 与文档引用
-        shell: pwsh
-        run: pwsh scripts/validate-skills.ps1
-      - name: 校验退役符号规则自身有效
-        shell: pwsh
-        run: pwsh scripts/check-retired-terms.ps1 -SelfTest
-      - name: 校验无已删除符号与旧模型表述残留
-        shell: pwsh
-        run: pwsh scripts/check-retired-terms.ps1
-      - name: 校验 i18n 词条键一致（en/zh 前后端 + 框架）
-        shell: pwsh
-        run: pwsh scripts/check-i18n-keys.ps1
+        run: pwsh scripts/check-all.ps1
 
   template-matrix:
     name: 模板全场景矩阵
@@ -59,7 +45,7 @@ jobs:
           cache-dependency-path: template/frontend/package-lock.json
       - name: 打包当前 Framework
         shell: pwsh
-        run: dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
+        run: pwsh framework/build/pack-local-feed.ps1
       - name: 校验 NuGet 包内容与隔离消费
         shell: pwsh
         run: pwsh framework/build/test-package-consumption.ps1

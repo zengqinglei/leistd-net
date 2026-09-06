@@ -79,10 +79,8 @@ export class ProfileSettingsDialog {
   readonly saving = signal(false);
   readonly user = computed(() => this.authService.currentUser());
 
-  //#if (LocalAuthorization)
   /** 角色徽章直接展示后端返回的角色名，不再依赖前端硬编码的角色枚举与标签映射。 */
   readonly roleLabels = computed(() => this.authService.currentUser()?.roles ?? []);
-  //#endif
   readonly avatarPreview = signal('');
 
   // 表单模型（Signal Forms）

@@ -1,4 +1,4 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;

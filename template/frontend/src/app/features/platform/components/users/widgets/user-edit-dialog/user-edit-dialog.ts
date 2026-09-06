@@ -26,7 +26,7 @@ import {
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { lucideEye, lucideEyeOff, lucideImagePlus } from '@ng-icons/lucide';
 //#else
 import { lucideImagePlus } from '@ng-icons/lucide';
@@ -37,7 +37,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import {
   HlmInputGroup,
   HlmInputGroupInput,
@@ -52,10 +52,11 @@ import { HlmSwitch } from '@spartan-ng/helm/switch';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
-import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
-//#if (LocalAuthorization)
-import { RoleBriefDto } from '../../../../models/role.dto';
+//#if (LocalIdentity)
+import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
 //#endif
+import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import { RoleBriefDto } from '../../../../models/role.dto';
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
@@ -64,9 +65,6 @@ import {
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
 const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
-//#if (IdentityService)
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
-//#endif
 
 @Component({
   selector: 'app-user-edit-dialog',
@@ -77,7 +75,7 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
     HlmButton,
     HlmSpinner,
     HlmInput,
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupButton,
@@ -95,7 +93,7 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$
   providers: [
     provideIcons({
       lucideImagePlus,
-      //#if (IdentityService)
+      //#if (LocalIdentity)
       lucideEye,
       lucideEyeOff,
       //#endif
@@ -142,23 +140,21 @@ export class UserEditDialog {
 
   // 表单模型（Signal Forms）
   protected readonly formModel = signal({
-    //#if (ResourceService)
+    //#if (!LocalIdentity)
     subjectId: '',
     //#endif
     username: '',
     email: '',
     displayName: '',
     avatar: '',
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     password: '',
     //#endif
     isActive: true,
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     isEmailVerified: false,
     //#endif
-    //#if (LocalAuthorization)
     roleIds: [] as string[],
-    //#endif
   });
 
   readonly displayName = computed(
@@ -191,7 +187,7 @@ export class UserEditDialog {
     maxLength(path.displayName, 128, {
       message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
     });
-    //#if (ResourceService)
+    //#if (!LocalIdentity)
     required(path.subjectId, { message: this.transloco.translate('common.validation.required') });
     pattern(
       path.subjectId,
@@ -202,7 +198,7 @@ export class UserEditDialog {
       },
     );
     //#endif
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     // 初始密码仅在新建模式校验（编辑模式无密码字段）。
     required(path.password, {
       message: this.transloco.translate('common.validation.required'),
@@ -232,7 +228,7 @@ export class UserEditDialog {
     emailValidator(path.email, { message: 'Please enter a valid email address.' });
     maxLength(path.email, 256, { message: '' });
     maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
-    //#if (ResourceService)
+    //#if (!LocalIdentity)
     required(path.subjectId, { message: 'This field is required.' });
     pattern(
       path.subjectId,
@@ -243,7 +239,7 @@ export class UserEditDialog {
       },
     );
     //#endif
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     // 初始密码仅在新建模式校验（编辑模式无密码字段）。
     required(path.password, {
       message: 'This field is required.',
@@ -251,13 +247,12 @@ export class UserEditDialog {
     });
     pattern(path.password, PASSWORD_RULE, {
       message:
-        'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
+        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
       when: () => !this.isEditMode(),
     });
     //#endif
   });
   //#endif
-  //#if (LocalAuthorization)
   /**
    * 角色选项由父级从角色 API 注入，按 Id 提交、按显示名回显。
    * 仅在「新建 + 持有角色分配权限」时展示：编辑态的角色变更走独立的角色分配入口，
@@ -275,7 +270,6 @@ export class UserEditDialog {
   // 角色 Id → 显示名，用于 hlm-select-multiple 触发器回显。
   readonly roleLabel = (value: string): string =>
     this.roleOptions().find((option) => option.value === value)?.label ?? value;
-  //#endif
 
   constructor() {
     // 同时依赖 visible 与 user：每次对话框打开都重置表单，避免新建模式残留上次输入
@@ -287,23 +281,21 @@ export class UserEditDialog {
       }
       const avatar = user?.avatar ?? '';
       this.formModel.set({
-        //#if (ResourceService)
+        //#if (!LocalIdentity)
         subjectId: user?.id ?? '',
         //#endif
         username: user?.username ?? '',
         email: user?.email ?? '',
         displayName: user?.displayName ?? '',
         avatar,
-        //#if (IdentityService)
+        //#if (LocalIdentity)
         password: '',
         //#endif
         isActive: user?.isActive ?? true,
-        //#if (IdentityService)
+        //#if (LocalIdentity)
         isEmailVerified: user?.isEmailVerified ?? false,
         //#endif
-        //#if (LocalAuthorization)
         roleIds: user ? (user.roles ?? []).map((role) => role.id) : [],
-        //#endif
       });
       this.avatarPreview.set(avatar);
     });
@@ -361,7 +353,7 @@ export class UserEditDialog {
   setActive(checked: boolean): void {
     this.formModel.update((m) => ({ ...m, isActive: checked }));
   }
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   setEmailVerified(checked: boolean): void {
     this.formModel.update((m) => ({ ...m, isEmailVerified: checked }));
   }
@@ -388,7 +380,7 @@ export class UserEditDialog {
         email: model.email.trim(),
         displayName: model.displayName.trim() || undefined,
         avatar: model.avatar.trim() || undefined,
-        //#if (IdentityService)
+        //#if (LocalIdentity)
         isEmailVerified: model.isEmailVerified,
         //#endif
       });
@@ -396,26 +388,24 @@ export class UserEditDialog {
     }
 
     this.saved.emit({
-      //#if (ResourceService)
+      //#if (!LocalIdentity)
       subjectId: model.subjectId,
       //#endif
       username: model.username.trim(),
       email: model.email.trim(),
       displayName: model.displayName.trim() || undefined,
       avatar: model.avatar.trim() || undefined,
-      //#if (IdentityService)
+      //#if (LocalIdentity)
       password: model.password,
       //#endif
       isActive: model.isActive,
-      //#if (IdentityService)
+      //#if (LocalIdentity)
       isEmailVerified: model.isEmailVerified,
       //#endif
-      //#if (LocalAuthorization)
       roleIds: this.canAssignRoles() ? model.roleIds : [],
-      //#endif
     });
   }
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   protected readonly showPassword = signal(false);
   //#endif
 }

@@ -4,8 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace Leistd.Lock.Memory.HostedServices;
 
 /// <summary>
-/// 内存锁清理后台服务
-/// 定期清理长时间空闲的 Semaphore 资源，防止内存泄漏
+/// 定期回收长时间空闲的内存锁条目。
 /// </summary>
 public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
 {
@@ -22,6 +21,7 @@ public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
     private bool _disposed;
     private int _stopping;
 
+    /// <summary>创建清理后台服务，周期性回收无人等待的信号量条目。</summary>
     public MemoryLockCleanupHostedService(
         MemoryLocalLock memoryLock,
         ILogger<MemoryLockCleanupHostedService> logger)
@@ -39,6 +39,7 @@ public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
         _timeProvider = timeProvider;
     }
 
+    /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
         lock (_lifecycleLock)
@@ -57,13 +58,14 @@ public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken) => StopCore();
 
     internal int CleanupOnce()
     {
         if (Volatile.Read(ref _stopping) != 0) return 0;
 
-        _logger.LogTrace("开始清理超时 Semaphore 锁...");
+        _logger.LogTrace("Cleaning up expired semaphore locks...");
         var removedCount = 0;
         var now = _memoryLock.GetUtcNow();
         foreach (var (key, entry) in _memoryLock.Semaphores)
@@ -73,10 +75,10 @@ public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
             if (entry.TryRetire(now, MaxIdleTime) && _memoryLock.TryRemove(key, entry))
             {
                 removedCount++;
-                _logger.LogTrace("清理超时 Semaphore 锁【{Key}】", key);
+                _logger.LogTrace("Cleaned up expired semaphore lock [{Key}]", key);
             }
         }
-        _logger.LogTrace("清理超时 Semaphore 锁完成");
+        _logger.LogTrace("Expired semaphore lock cleanup completed");
         return removedCount;
     }
 
@@ -88,7 +90,7 @@ public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "清理超时 Semaphore 锁失败");
+            _logger.LogError(exception, "Failed to clean up expired semaphore locks");
         }
     }
 
@@ -109,6 +111,7 @@ public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public void Dispose()
     {
         lock (_lifecycleLock)
@@ -116,8 +119,7 @@ public sealed class MemoryLockCleanupHostedService : IHostedService, IDisposable
             _disposed = true;
         }
 
-        // System timers run callbacks on the thread pool, so synchronously waiting here cannot
-        // capture a request synchronization context and ensures dependent singletons stay alive.
+        // 计时器在线程池回调，同步等待可确保依赖的单例在停止完成前仍存活。
         StopCore().GetAwaiter().GetResult();
     }
 }

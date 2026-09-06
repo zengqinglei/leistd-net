@@ -1,4 +1,3 @@
-//#if (MultiTenancy)
 import { PagedRequestDto } from '../models/paged-request.dto';
 
 export interface TenantOutputDto {
@@ -12,7 +11,7 @@ export interface TenantOutputDto {
 }
 
 /** 匿名按名称解析租户的返回体（登录页租户选择用）。 */
-export interface TenantBriefOutputDto {
+export interface TenantLookupOutputDto {
   id: string;
   name: string;
   displayName?: string;
@@ -34,7 +33,7 @@ export interface CreateTenantInputDto {
   migrationSecretReference?: string;
 }
 
-export type TenantDatabaseMode = 'SharedDatabase' | 'DedicatedDatabase';
+export type TenantDatabaseMode = 'sharedDatabase' | 'dedicatedDatabase';
 
 export interface UpdateTenantInputDto {
   name: string;
@@ -44,4 +43,3 @@ export interface UpdateTenantInputDto {
 export interface SetTenantActivationInputDto {
   isActive: boolean;
 }
-//#endif

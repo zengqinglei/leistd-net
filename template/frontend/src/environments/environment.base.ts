@@ -10,7 +10,7 @@ export interface Environment {
    * - `object`: 按模块开启 Mock (特性开关)
    */
   useMock: boolean | MockConfig;
-  //#if (ResourceService)
+  //#if (RemoteTokenAuth)
   oidc: {
     authority: string;
     clientId: string;
@@ -38,7 +38,7 @@ export const environmentBase: Environment = {
   production: false,
   useHash: false,
   useMock: false, // 默认关闭
-  //#if (ResourceService)
+  //#if (RemoteTokenAuth)
   oidc: {
     authority: 'https://identity.example.com',
     clientId: 'companyname-projectname-web',

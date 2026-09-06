@@ -1,11 +1,11 @@
-namespace Leistd.UnitOfWork.Core.Events;
+namespace Leistd.UnitOfWork.Events;
 
 /// <summary>
-/// 工作单元事件处理器特性 - 声明处理器在工作单元的哪个阶段执行
+/// 指定事件处理器的工作单元执行阶段。
 /// </summary>
 /// <example>
 /// <code><![CDATA[
-/// [UnitOfWorkEventHandler(Phase = UowPhase.AfterCommit)]
+/// [UnitOfWorkEventHandler(Phase = UnitOfWorkPhase.AfterCommit)]
 /// public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 /// {
 ///     public async Task HandleAsync(UserCreatedEvent @event)

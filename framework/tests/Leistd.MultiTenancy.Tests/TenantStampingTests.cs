@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.Tests;
 

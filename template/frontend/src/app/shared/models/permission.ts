@@ -21,7 +21,7 @@ export const PERMISSIONS = {
     delete: 'App.Roles.Delete',
     managePermissions: 'App.Roles.ManagePermissions',
   },
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   tenants: {
     default: 'App.Tenants',
     create: 'App.Tenants.Create',
@@ -29,7 +29,7 @@ export const PERMISSIONS = {
     delete: 'App.Tenants.Delete',
   },
   //#endif
-  //#if (IdentityService)
+  //#if (OpenIddictServer)
   openApplications: {
     default: 'App.OpenApplications',
     create: 'App.OpenApplications.Create',
@@ -43,12 +43,37 @@ export const PERMISSIONS = {
   },
 } as const;
 
+/**
+ * 进入 `/platform` 所需的权限集：**任一**命中即可放行。
+ *
+ * 这是唯一来源，`/platform` 父路由的 `data.permissions` 与
+ * `AuthorizationService.canAccessPlatform` 都必须引用它，不得各自硬编码。
+ *
+ * 两处曾是两份清单，在多租户场景下并不等价——路由含 `tenants.default`、
+ * `canAccessPlatform` 不含，于是只有租户管理权限的平台运营账号：菜单里看不到入口、
+ * 登录后被重定向到别处，但直接敲 `/platform/tenants` 却能进。
+ * 表现为"后端通、前端不通"，最容易被误判成权限没生效。
+ *
+ * 新增平台模块时只改这里；`authorization-service.spec.ts` 里有一条断言锁住两处同源。
+ */
+export const PLATFORM_ENTRY_PERMISSIONS = [
+  PERMISSIONS.users.default,
+  PERMISSIONS.roles.default,
+  //#if (LocalIdentity)
+  PERMISSIONS.tenants.default,
+  //#endif
+  //#if (OpenIddictServer)
+  PERMISSIONS.openApplications.default,
+  //#endif
+  PERMISSIONS.permissions.default,
+] as const;
+
 /** 当前用户的有效权限。 */
 export interface CurrentPermissionsOutputDto {
   permissions: string[];
   isSuperAdmin: boolean;
-  /** 授权版本，变化即表示本地缓存已过期。 */
-  revision: string;
+  /** 有效权限的版本标记，变化即表示本地缓存已过期。 */
+  versionToken: string;
 }
 
 export interface PermissionDefinitionOutputDto {
@@ -74,12 +99,12 @@ export interface PermissionGrantsOutputDto {
   providerName: string;
   providerKey: string;
   /** 乐观并发版本，保存时原样回传。 */
-  revision: number;
+  version: number;
   grants: PermissionGrantStateDto[];
 }
 
 export interface ReplacePermissionGrantsInputDto {
-  expectedRevision: number;
+  expectedVersion: number;
   /** 目标权限名集合，未出现的权限视为撤销。 */
   permissionNames: string[];
 }

@@ -1,4 +1,4 @@
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.ConnectionStrings;
 
 /// <summary>
 /// 从租户控制数据库读取连接配置。缺失配置返回 <see langword="null"/>，调用方必须失败关闭。

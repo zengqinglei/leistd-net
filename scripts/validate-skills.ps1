@@ -23,7 +23,7 @@ $skillSets = @(
     @{ Path = "skills"; Kind = "distribution"; Expected = @("leistd-net-framework") }
 )
 $requiredSkillMarkers = @{
-    "developing-leistd-framework" = @("test-package-consumption.ps1", "兼容性")
+    "developing-leistd-framework" = @("test-package-consumption.ps1", "不保留未发布兼容层")
     "maintaining-leistd-repository" = @("单独修改 framework 或 template", "多个交付面")
     "leistd-net-framework" = @("目标包未安装时", "启动真实宿主")
     "leistd-project-workflow" = @("以用户的最终意图决定交付边界", "缺失规范或文档不阻断低风险任务", "references/bootstrap.md")

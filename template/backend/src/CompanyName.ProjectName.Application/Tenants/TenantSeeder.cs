@@ -1,12 +1,16 @@
-#if (MultiTenancy)
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Lock.Core;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.Logging;
+using Leistd.Authorization.Constants;
+using Leistd.Lock;
+using Leistd.Authorization.Abstractions;
+using Leistd.Lock.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Tenants;
 
@@ -24,7 +28,7 @@ public class TenantSeeder(
     IRepository<User, Guid> userRepository,
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
-    IPasswordHasher passwordHasher,
+    UserDomainService userDomainService,
     IPermissionDefinitionManager permissionDefinitionManager,
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
@@ -39,22 +43,22 @@ public class TenantSeeder(
     {
         if (currentTenant.Id is not { } tenantId)
         {
-            throw new InvalidOperationException("租户种子必须在租户上下文内执行：先 ICurrentTenant.Change(tenantId) 再调用。");
+            throw new InvalidOperationException("Tenant seeding must run inside a tenant context: call ICurrentTenant.Change(tenantId) first.");
         }
 
-        // 锁 key 含租户 Id：租户级互斥操作的约定，不同租户互不排队
+        // 按租户互斥，避免不同租户相互阻塞。
         await using var lockHandle = await distributedLock.LockAsync($"MyProject:tenant-init:{tenantId}", cancellationToken);
         using var lockScope = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lockHandle.LockLost);
         cancellationToken = lockScope.Token;
 
-        logger.LogInformation("开始初始化租户 {TenantId} ...", tenantId);
+        logger.LogInformation("Initializing tenant {TenantId}...", tenantId);
 
         var adminRole = await EnsureRolesAsync(cancellationToken);
         await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
         var adminUser = await EnsureTenantAdminAsync(adminEmail, adminPassword, cancellationToken);
         await AssignAdminRoleAsync(adminUser, adminRole, cancellationToken);
 
-        logger.LogInformation("租户 {TenantId} 初始化完成", tenantId);
+        logger.LogInformation("Tenant {TenantId} initialized", tenantId);
     }
 
     /// <inheritdoc />
@@ -62,15 +66,14 @@ public class TenantSeeder(
     {
         if (currentTenant.Id is not { } tenantId)
         {
-            throw new InvalidOperationException("租户数据清除必须在租户上下文内执行：先 ICurrentTenant.Change(tenantId) 再调用。");
+            throw new InvalidOperationException("Tenant data purge must run inside a tenant context: call ICurrentTenant.Change(tenantId) first.");
         }
 
-        // 全部查询与写入都被租户过滤器限定在当前租户，无需手写 TenantId 条件
-        // 仓储返回 IEnumerable，物化后才能多次枚举与计数
+        // 租户过滤器限定查询和写入；先物化以支持后续多次枚举。
         var users = (await userRepository.GetListAsync(cancellationToken: cancellationToken)).ToList();
         var roles = (await roleRepository.GetListAsync(cancellationToken: cancellationToken)).ToList();
 
-        // 授予与授权版本硬删：主体随租户一起废弃、永不恢复，留着只会变成孤儿行
+        // 永久废弃主体时硬删授予和授权版本，避免孤儿行。
         foreach (var role in roles)
         {
             await permissionGrantManager.RemoveProviderAsync(
@@ -83,14 +86,8 @@ public class TenantSeeder(
                 PermissionGrantProviderNames.User, user.Id.ToString(), cancellationToken);
         }
 
-        // 主体与关联走仓储删除：审计实体转软删，与租户注册表的删除语义一致，
-        // 删除后在该租户上下文内一律不可见。
-        //
-        // 顺序是**必须**的：先主体（User / Role）、最后关联（UserRole）。UserRole 是
-        // DeletionAuditedEntity，软删后仍以 Modified 状态留在跟踪器里、外键依然指向主体；
-        // 此时再 Remove 主体，EF 会按"必需关系被切断"抛 InvalidOperationException
-        // （软删发生在拦截器里，而级联检查发生在 RemoveRange 当场，来不及）。
-        // 反过来先删主体时 UserRole 还没被加载，跟踪器里没有依赖端，级联检查无事可做。
+        // 主体和关联均软删除；必须先删主体再加载关联。
+        // 关联先进入 Modified 状态会使 EF 在删除必需关系主体时立即报错。
         if (users.Count > 0)
         {
             await userRepository.DeleteManyAsync(users, cancellationToken);
@@ -108,7 +105,7 @@ public class TenantSeeder(
         }
 
         logger.LogInformation(
-            "已清除租户 {TenantId} 的种子数据：用户 {UserCount}、角色 {RoleCount}",
+            "Purged seed data for tenant {TenantId}: {UserCount} user(s), {RoleCount} role(s)",
             tenantId, users.Count, roles.Count);
     }
 
@@ -151,13 +148,12 @@ public class TenantSeeder(
             providerKey,
             cancellationToken);
 
-        if (existing.Revision != 0)
+        if (existing.Version != 0)
         {
             return;
         }
 
-        // 只播种租户侧可见的定义：宿主侧权限（如 App.Tenants.*）授了也过不了检查器的侧别硬边界，
-        // 且不应出现在租户的授予记录里
+        // 只播种租户侧可见的权限定义。
         var definitions = permissionDefinitionManager
             .GetAll()
             .Where(definition => definition.Side.HasFlag(MultiTenancySides.Tenant))
@@ -169,29 +165,36 @@ public class TenantSeeder(
             PermissionGrantProviderNames.Role,
             providerKey,
             definitions,
-            expectedRevision: existing.Revision,
+            expectedVersion: existing.Version,
             cancellationToken);
 
-        logger.LogInformation("已为租户 {RoleName} 角色播种权限授予，共 {Count} 项", adminRole.Name, definitions.Count);
+        logger.LogInformation("Seeded permission grants for tenant role {RoleName}: {Count} item(s)", adminRole.Name, definitions.Count);
     }
 
+    /// <summary>
+    /// 建立租户管理员：<b>普通用户</b> + 本租户 Admin 角色
+    /// </summary>
+    /// <remarks>
+    /// <para><b>刻意不打 <c>IsSuperAdmin</c>。</b>那是宿主的防锁死逃生舱，代价与适用范围见
+    /// <c>UserDomainService.CreateSuperAdminAsync</c>。租户侧不需要它：本租户 Admin 角色已在
+    /// 上一步拿到全部 Tenant 侧权限（含权限管理本身），升级后新增的权限由租户管理员自己授给
+    /// 自己的角色，不存在锁死。</para>
+    /// <para>于是租户管理员的权限完全由角色承载：在租户自己的角色页里可查看、可编辑、可撤销，
+    /// 撤权即时生效。</para>
+    /// </remarks>
     private async Task<User> EnsureTenantAdminAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken)
     {
-        // 用户名租户内唯一：每个租户都有自己的 admin
         var adminUser = await userRepository.GetFirstAsync(u => u.Username == TenantAdminUsername, q => q.OrderBy(u => u.Id), cancellationToken);
         if (adminUser == null)
         {
-            adminUser = new User(
-                username: TenantAdminUsername,
-                email: adminEmail,
-                passwordHash: passwordHasher.HashPassword(adminPassword),
-                displayName: "Tenant Administrator"
-            );
-
-            // 租户内超管：旁路本租户功能权限，但不越过租户过滤器，也过不了宿主侧权限的侧别边界
-            adminUser.MarkAsSuperAdmin();
-            await userRepository.InsertAsync(adminUser, cancellationToken);
-            logger.LogInformation("已创建租户管理员用户: {Username}", TenantAdminUsername);
+            adminUser = await userDomainService.CreateUserAsync(
+                TenantAdminUsername,
+                adminEmail,
+                adminPassword,
+                displayName: "Tenant Administrator",
+                passwordSubject: "Tenant admin password",
+                cancellationToken);
+            logger.LogInformation("Tenant admin user created: {Username}", TenantAdminUsername);
         }
 
         return adminUser;
@@ -205,4 +208,3 @@ public class TenantSeeder(
         }
     }
 }
-#endif

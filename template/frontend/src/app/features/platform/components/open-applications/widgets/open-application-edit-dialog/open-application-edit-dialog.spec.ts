@@ -1,4 +1,4 @@
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 //#if (IncludeLocalization)

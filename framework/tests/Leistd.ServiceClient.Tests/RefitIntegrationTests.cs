@@ -5,8 +5,8 @@ using Leistd.ServiceClient.Http;
 using Leistd.ServiceClient.Options;
 using Leistd.ServiceClient.Refit;
 using Leistd.TestBase;
-using Leistd.Tracing.Core;
-using Leistd.Tracing.Core.Services;
+using Leistd.Tracing;
+using Leistd.Tracing.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Refit;
 using Xunit;
+using Leistd.Tracing.Abstractions;
 
 namespace Leistd.ServiceClient.Tests;
 
@@ -114,11 +115,11 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
         app.MapGet("/api/download", () => Results.Bytes(DownloadPayload, "application/octet-stream"));
 
         app.MapGet("/api/download-error", () => Results.Json(
-            new { status = 500, code = 500001, message = "存储不可用", traceId = "rt-download" },
+            new { status = 500, code = "Storage:Unavailable", message = "存储不可用", traceId = "rt-download" },
             statusCode: 500));
 
         app.MapGet("/api/error", () => Results.Json(
-            new { status = 404, code = 404001, message = "条目不存在", traceId = "rt-error" },
+            new { status = 404, code = "Item:NotFound", message = "条目不存在", traceId = "rt-error" },
             statusCode: 404));
 
         await app.StartAsync();
@@ -239,7 +240,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(
             () => response.EnsureRemoteSuccessAsync());
-        Assert.Equal(500001, exception.ErrorCode);
+        Assert.Equal("Storage:Unavailable", exception.ErrorCode);
         Assert.Equal("rt-download", exception.RemoteTraceId);
     }
 
@@ -251,8 +252,8 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => api.FailAsync());
 
-        Assert.Equal(404, exception.StatusCode);
-        Assert.Equal(404001, exception.ErrorCode);
+        Assert.Equal(404, exception.RemoteStatusCode);
+        Assert.Equal("Item:NotFound", exception.ErrorCode);
         Assert.Equal("rt-error", exception.RemoteTraceId);
         Assert.Contains("条目不存在", exception.Message);
         Assert.IsNotAssignableFrom<ApiException>(exception); // 错误契约与手写路径统一

@@ -96,19 +96,17 @@ dotnet ef migrations add <MigrationName> \
 
 生产数据库身份必须分离：API 使用 Runtime Secret 且不得执行 DDL，`DbMigrator` 使用 Migration Secret。任一目标迁移失败时进程以非零码退出并阻断发布，具体边界见 [部署说明](../docs/deploy/README.md)。
 
-<!--#if (IdentityService)-->
+<!--#if (LocalIdentity)-->
 ## 认证配置
 
-首次启动会按 `DefaultAdmin` 创建管理员。生产环境必须覆盖默认密码，并持久化 Data Protection 密钥。
-<!--#if (LocalAuthorization)-->
+首次启动会按 `DefaultAdmin` 创建管理员。**`DefaultAdmin:Password` 没有默认值**，必须由部署注入（环境变量或 `dotnet user-secrets`）——缺失、空值或等于本模板曾发布过的示例值都会在启动期被拒绝。另需持久化 Data Protection 密钥。
 
 角色、权限和超级管理员属于不同授权维度；业务接口应同时覆盖允许、拒绝和超级管理员旁路场景。
-<!--#endif-->
-<!--#if (IdentityService)-->
+<!--#if (OpenIddictServer)-->
 
 OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证书不得用于生产。
 <!--#endif-->
-<!--#if (IncludeExternalLogin)-->
+<!--#if (ExternalLogin)-->
 
 外部登录凭据通过 `ExternalAuth` 配置或密钥系统提供，不写入仓库。
 <!--#endif-->

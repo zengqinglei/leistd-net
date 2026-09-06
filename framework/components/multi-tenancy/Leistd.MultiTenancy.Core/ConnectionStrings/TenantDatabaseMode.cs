@@ -1,4 +1,6 @@
-namespace Leistd.MultiTenancy;
+using Leistd.MultiTenancy.Abstractions;
+
+namespace Leistd.MultiTenancy.ConnectionStrings;
 
 /// <summary>
 /// 租户的数据放置方式。

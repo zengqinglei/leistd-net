@@ -7,10 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-<!--#if (IdentityService)-->
+<!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.Abstractions" />
 <!--#endif-->
-    <PackageReference Include="System.Linq.Dynamic.Core" />
 <!--#if (IncludeLocalization)-->
     <!-- 权限定义的显示名按请求 culture 在响应阶段翻译，需要本地化抽象。 -->
     <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" />
@@ -21,18 +20,13 @@
   <ItemGroup>
     <PackageReference Include="Leistd.ObjectMapping.Mapster" />
     <PackageReference Include="Leistd.Security.Core" />
-<!--#if (LocalAuthorization)-->
     <PackageReference Include="Leistd.Authorization.Core" />
-<!--#if (MultiTenancy)-->
     <PackageReference Include="Leistd.MultiTenancy.Core" />
-<!--#endif-->
-    <!--#endif-->
     <PackageReference Include="Leistd.Lock.Core" />
+    <PackageReference Include="Leistd.Ddd.Domain" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />
-<!--#if (IdentityService)-->
     <PackageReference Include="Leistd.UnitOfWork.Core" />
-<!--#endif-->
   </ItemGroup>
 
   <!-- 业务项目内部引用 -->

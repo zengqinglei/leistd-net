@@ -11,8 +11,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
-    <ProjectReference Include="..\..\exception\Leistd.Exception.Core\Leistd.Exception.Core.csproj" />
+    <ProjectReference Include="..\\..\\core\\Leistd.Core\\Leistd.Core.csproj" />
+    <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
+    <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 

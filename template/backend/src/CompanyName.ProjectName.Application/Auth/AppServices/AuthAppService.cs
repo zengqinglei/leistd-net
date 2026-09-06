@@ -1,30 +1,58 @@
+using Leistd.UnitOfWork.Attributes;
+using CompanyName.ProjectName.Application.Users.Mappings;
+using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Exception.Core;
 using Leistd.Security.Users;
 using Microsoft.Extensions.Logging;
 
 using CompanyName.ProjectName.Domain.Users.Options;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
+using Leistd.ExceptionHandling;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
-public class AuthAppService(
+internal sealed class AuthAppService(
     IRepository<User, Guid> userRepository,
     UserDomainService userDomainService,
     ICurrentUser currentUser,
     ICaptchaAppService captchaAppService,
     IEmailVerificationAppService emailVerificationAppService,
+    SessionSignInService sessionSignInService,
+    IObjectMapper objectMapper,
     IOptions<UserRegistrationOptions> securityOptions,
     ILogger<AuthAppService> logger) : BaseAppService(), IAuthAppService
 {
+    public async Task<ClaimsPrincipal> AuthenticateSessionAsync(
+        LoginInputDto input,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await userDomainService.ValidateCredentialsAsync(
+            input.UsernameOrEmail,
+            input.Password,
+            cancellationToken);
+        if (user is null)
+        {
+            throw new UnauthorizedException($"Login failed: user not found or incorrect password - {input.UsernameOrEmail}")
+#if (IncludeLocalization)
+                .WithCode("Auth:InvalidCredentials")
+                .WithData("UsernameOrEmail", input.UsernameOrEmail)
+#endif
+                ;
+        }
 
+        return await sessionSignInService.SignInAsync(user, cancellationToken: cancellationToken);
+    }
+
+    /// <remarks>建用户与分配默认角色必须同生共死：拆开后注册失败会留下没有任何角色的用户。</remarks>
+    [UnitOfWork]
     public async Task<UserOutputDto> RegisterAsync(RegisterInputDto input, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("开始注册用户 {Username}... 邮箱：{Email}", input.Username, input.Email);
+        logger.LogInformation("Registering user {Username} with email {Email}", input.Username, input.Email);
 
         var options = securityOptions.Value;
 
@@ -34,7 +62,7 @@ public class AuthAppService(
             {
                 throw new BadRequestException("Please enter the email verification code.")
 #if (IncludeLocalization)
-                    .WithLocalization("Auth:EmailCodeRequired")
+                    .WithCode("Auth:EmailCodeRequired")
 #endif
                     ;
             }
@@ -47,7 +75,7 @@ public class AuthAppService(
             {
                 throw new BadRequestException("The email verification code is incorrect or has expired.")
 #if (IncludeLocalization)
-                    .WithLocalization("Auth:EmailCodeInvalid")
+                    .WithCode("Auth:EmailCodeInvalid")
 #endif
                     ;
             }
@@ -59,20 +87,20 @@ public class AuthAppService(
             {
                 throw new BadRequestException("The image captcha is incorrect or has expired.")
 #if (IncludeLocalization)
-                    .WithLocalization("Auth:CaptchaInvalid")
+                    .WithCode("Auth:CaptchaInvalid")
 #endif
                     ;
             }
         }
 
-        var user = await userDomainService.CreateUserAsync(input.Username, input.Email, input.Password, input.DisplayName, cancellationToken);
-#if (LocalAuthorization)
-        await userDomainService.AssignDefaultRolesToUserAsync(user.Id, cancellationToken);
-#endif
+        var user = await userDomainService.CreateUserAsync(
+            input.Username, input.Email, input.Password, input.DisplayName,
+            cancellationToken: cancellationToken);
+        var roleNames = await userDomainService.AssignDefaultRolesToUserAsync(user.Id, cancellationToken);
 
-        logger.LogInformation("用户注册成功 (ID: {Id})", user.Id);
+        logger.LogInformation("User registered (ID: {Id})", user.Id);
 
-        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+        return ToOutput(user, roleNames);
     }
 
     /// <summary>
@@ -95,13 +123,13 @@ public class AuthAppService(
         {
             throw new NotFoundException($"User {userId} not found.")
 #if (IncludeLocalization)
-                .WithLocalization("User:NotFound")
+                .WithCode("User:NotFound")
                 .WithData("Id", userId)
 #endif
                 ;
         }
 
-        logger.LogInformation("开始更新当前用户资料 (ID: {UserId})", user.Id);
+        logger.LogInformation("Updating current user profile (ID: {UserId})", user.Id);
 
         await userDomainService.UpdateProfileAsync(
             user,
@@ -113,7 +141,7 @@ public class AuthAppService(
             cancellationToken);
 
         await userRepository.UpdateAsync(user, cancellationToken);
-        logger.LogInformation("更新当前用户资料成功 (ID: {UserId})", user.Id);
+        logger.LogInformation("Current user profile updated (ID: {UserId})", user.Id);
 
         return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
     }
@@ -129,18 +157,18 @@ public class AuthAppService(
         {
             throw new NotFoundException($"User {userId} not found.")
 #if (IncludeLocalization)
-                .WithLocalization("User:NotFound")
+                .WithCode("User:NotFound")
                 .WithData("Id", userId)
 #endif
                 ;
         }
 
-        logger.LogInformation("开始修改当前用户密码 (ID: {UserId})", user.Id);
+        logger.LogInformation("Changing current user password (ID: {UserId})", user.Id);
 
         await userDomainService.ChangePasswordAsync(user, input.CurrentPassword, input.NewPassword, cancellationToken);
         await userRepository.UpdateAsync(user, cancellationToken);
 
-        logger.LogInformation("修改当前用户密码成功 (ID: {UserId})", user.Id);
+        logger.LogInformation("Current user password changed (ID: {UserId})", user.Id);
     }
 
     private async Task<UserOutputDto> GetCurrentUserOutputAsync(Guid userId, CancellationToken cancellationToken)
@@ -150,31 +178,25 @@ public class AuthAppService(
         {
             throw new NotFoundException($"User {userId} not found.")
 #if (IncludeLocalization)
-                .WithLocalization("User:NotFound")
+                .WithCode("User:NotFound")
                 .WithData("Id", userId)
 #endif
                 ;
         }
 
-#if (LocalAuthorization)
         var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);
-#endif
 
-        return new UserOutputDto
-        {
-            Id = user.Id,
-            Username = user.Username,
-            Email = user.Email,
-            DisplayName = user.DisplayName,
-            Avatar = user.Avatar,
-            PhoneNumber = user.PhoneNumber,
-            IsActive = user.IsActive,
-            IsSuperAdmin = user.IsSuperAdmin,
-            CreationTime = user.CreationTime,
-#if (LocalAuthorization)
-            Roles = [.. roleNames]
-#endif
-        };
+        return ToOutput(user, roleNames);
+    }
+
+    /// <remarks>
+    /// 角色名由调用方给出：写路径刚分配完角色、关联行尚未落库，映射配置里的实体连接查不到。
+    /// 经 <see cref="UserProfile.RoleNamesKey"/> 传入，仍走已注册的 <c>User → UserOutputDto</c> 映射。
+    /// </remarks>
+    private UserOutputDto ToOutput(User user, List<string> roleNames)
+    {
+        return objectMapper.Map<User, UserOutputDto>(
+            user,
+            new Dictionary<string, object> { [UserProfile.RoleNamesKey] = roleNames });
     }
 }
-

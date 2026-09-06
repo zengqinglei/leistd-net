@@ -1,9 +1,9 @@
-using Leistd.EventBus.Core.Event;
-using Leistd.EventBus.Core.EventBus;
-using Leistd.EventBus.Core.EventHandler;
 using Leistd.EventBus.Local;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.EventBus.EventHandlers;
+using Leistd.EventBus.Events;
+using Leistd.EventBus.Abstractions;
 
 namespace Leistd.EventBus.Tests;
 
@@ -11,7 +11,7 @@ namespace Leistd.EventBus.Tests;
 /// 回归测试：本地事件按<b>运行时类型</b>路由到具体 handler。
 /// </summary>
 /// <remarks>
-/// 防止重载陷阱回归：以基接口（ILocalEvent）的静态类型发布时，曾误选泛型重载
+/// 防止重载陷阱回归：以基接口（ILocalEvent）的静态类型发布时，容易误选泛型重载
 /// 泛型发布重载曾按基接口类型解析处理器，导致找不到具体 handler 并静默丢事件。
 /// </remarks>
 public class LocalEventBusPublishRoutingTests

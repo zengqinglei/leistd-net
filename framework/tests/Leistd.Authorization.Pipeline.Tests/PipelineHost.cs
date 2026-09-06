@@ -1,3 +1,5 @@
+using Leistd.UnitOfWork.EntityFrameworkCore;
+using Leistd.UnitOfWork;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Leistd.Authorization.AspNetCore;
@@ -16,6 +18,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Resource.Grants;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.Pipeline.Tests;
 
@@ -68,6 +74,12 @@ public sealed class PipelineHost : IAsyncDisposable
                 OrderPermissions.Approve,
                 policy => policy.RequireClaim(PipelineFixtures.ApprovalClaim));
         });
+
+        // 工作单元 + EF 提供方：授权与资源 ACL 的 EF 存储经 IDbContextProvider 取上下文
+        // （只有它会设置 DbContextCreationContext.Current），因此这是宿主必须自行注册的前置，
+        // 与 AddMultiTenancyEfCore 同一约定——组件不替其它组件注册基础设施。
+        builder.Services.AddUnitOfWork();
+        builder.Services.AddUnitOfWorkEfCore();
 
         // 第一层：功能权限。AddPermissionAuthorization 让 [Authorize(Policy = "权限名")] 生效。
         builder.Services.AddPermissionAuthorization();

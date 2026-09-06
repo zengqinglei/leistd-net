@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Leistd.Localization</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

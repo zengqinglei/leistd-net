@@ -60,7 +60,7 @@ public sealed class MemoryLocalLockCleanupTests
         var oldHandle = await memoryLock.LockAsync(Key);
         var oldEntry = memoryLock.Semaphores[Key];
         Assert.True(memoryLock.Semaphores.TryRemove(
-            new KeyValuePair<string, Leistd.Lock.Memory.Entry.SemaphoreEntry>(Key, oldEntry)));
+            new KeyValuePair<string, SemaphoreEntry>(Key, oldEntry)));
 
         await using var replacementHandle = await memoryLock.LockAsync(Key);
 

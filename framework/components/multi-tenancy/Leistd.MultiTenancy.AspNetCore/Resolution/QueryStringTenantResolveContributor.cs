@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Http;
+using Leistd.MultiTenancy.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Leistd.MultiTenancy.AspNetCore.Options;
 
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
 /// <summary>
-/// 从查询串解析租户（默认参数名 <c>tenant</c>），服务于邮件验证、找回密码等匿名链路的链接场景
+/// 从查询参数解析匿名请求的租户。
 /// </summary>
 public class QueryStringTenantResolveContributor : ITenantResolveContributor
 {

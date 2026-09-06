@@ -1,4 +1,5 @@
 using Leistd.Auditing;
+using Leistd.Auditing.Abstractions;
 
 namespace Leistd.Ddd.Domain.Entities.Auditing;
 

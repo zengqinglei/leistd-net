@@ -1,7 +1,7 @@
-namespace Leistd.Tracing.Core.Attributes;
+namespace Leistd.Tracing.Attributes;
 
 /// <summary>
-/// 自动开启 TraceId 作用域的注解
+/// 为方法或类型启用自动 TraceId 作用域。
 /// </summary>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, Inherited = true)]
 public class CorrelationIdAttribute : Attribute

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import * as signalR from '@microsoft/signalr';
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { of } from 'rxjs';
 //#endif
@@ -156,7 +156,7 @@ describe('SignalRService 连接生命周期', () => {
       return connection as unknown as signalR.HubConnection;
     });
 
-    //#if (ResourceService)
+    //#if (!LocalIdentity)
     TestBed.configureTestingModule({
       providers: [
         {
@@ -178,7 +178,7 @@ describe('SignalRService 连接生命周期', () => {
     expect(service.isConnected()).toBeTrue();
   });
 
-  //#if (ResourceService)
+  //#if (!LocalIdentity)
   it('Resource Hub 从 OIDC 会话获取 access token', async () => {
     await service.connect();
 

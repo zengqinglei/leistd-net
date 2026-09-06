@@ -16,7 +16,7 @@ public interface IMyProjectClient
     [Get("/api/v1/service-info")]
     Task<ServiceInfoDto> GetServiceInfoAsync(CancellationToken cancellationToken = default);
 
-#if (IdentityService)
+#if (LocalIdentity)
     /// <summary>
     /// 查询本次调用在被调方呈现的身份（用户 + 调用方客户端），用于服务间调用联调。
     /// 需要认证：服务间调用须配置 client credentials 并携带用户上下文。

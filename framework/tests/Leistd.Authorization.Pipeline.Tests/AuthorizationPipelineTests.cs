@@ -4,6 +4,10 @@ using Leistd.Authorization.Resource;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.Authorization.Constants;
+using Leistd.Authorization.Resource.Grants;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Pipeline.Tests;
 

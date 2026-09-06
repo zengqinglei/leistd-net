@@ -13,13 +13,9 @@ import { of } from 'rxjs';
 import { Users } from './users';
 import { UserTable } from './widgets/user-table/user-table';
 import { AuthService } from '../../../../core/services/auth-service';
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-//#endif
 import { StartupService } from '../../../../core/services/startup-service';
-//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
-//#endif
 import { GetUsersInputDto } from '../../models/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
 
@@ -76,13 +72,11 @@ describe('Users 页面查询闭环', () => {
     router = TestBed.inject(Router);
     await router.navigate(['/platform/users']);
 
-    //#if (LocalAuthorization)
     TestBed.inject(AuthorizationService).setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: false,
-      revision: 'r1',
+      versionToken: 'r1',
     });
-    //#endif
 
     fixture = TestBed.createComponent(Users);
     component = fixture.componentInstance;

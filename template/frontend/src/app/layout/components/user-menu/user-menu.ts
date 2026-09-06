@@ -4,7 +4,7 @@ import {
   Component,
   computed,
   inject,
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   signal,
   //#endif
 } from '@angular/core';
@@ -15,9 +15,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  //#if (MultiTenancy)
   lucideBuilding2,
-  //#endif
   lucideChevronsUpDown,
   lucideCog,
   lucideHouse,
@@ -30,16 +28,12 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 
 import { AuthService } from '../../../core/services/auth-service';
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../core/services/authorization-service';
-//#endif
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
-//#if (MultiTenancy)
 import { TenantContextService } from '../../../core/services/tenant-context-service';
-//#endif
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { ChangePasswordDialog } from '../../../features/account/components/change-password-dialog/change-password-dialog';
 import { ProfileSettingsDialog } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
 //#endif
@@ -68,7 +62,7 @@ interface UserMenuItem {
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
     ...HlmSidebarImports,
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     ProfileSettingsDialog,
     ChangePasswordDialog,
     //#endif
@@ -79,9 +73,7 @@ interface UserMenuItem {
   // prettier-ignore
   providers: [
     provideIcons({
-      //#if (MultiTenancy)
       lucideBuilding2,
-      //#endif
       lucideChevronsUpDown,
       lucideHouse,
       lucideCog,
@@ -166,7 +158,7 @@ interface UserMenuItem {
         </li>
       </ul>
     }
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     <app-profile-settings-dialog
       [visible]="profileDialogVisible()"
       (visibleChange)="profileDialogVisible.set($event)"
@@ -180,19 +172,15 @@ interface UserMenuItem {
 })
 export class UserMenu {
   readonly authService = inject(AuthService);
-  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
-  //#endif
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
   //#if (IncludeLocalization)
   private readonly languageService = inject(LanguageService);
   private readonly transloco = inject(TranslocoService);
   //#endif
-  //#if (MultiTenancy)
   private readonly tenantContext = inject(TenantContextService);
-  //#endif
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   readonly profileDialogVisible = signal(false);
   readonly changePasswordDialogVisible = signal(false);
   //#endif
@@ -214,14 +202,10 @@ export class UserMenu {
         icon: 'lucideHouse',
         action: () => this.router.navigate(['/workspace']),
       });
-      //#if (LocalAuthorization)
     } else if (
       this.layoutService.currentUrl().startsWith('/workspace') &&
       this.authorizationService.canAccessPlatform()
     ) {
-      //#else
-    } else if (this.layoutService.currentUrl().startsWith('/workspace')) {
-      //#endif
       items.push({
         //#if (IncludeLocalization)
         label: t('menu.platform'),
@@ -238,7 +222,7 @@ export class UserMenu {
     }
 
     items.push(
-      //#if (IdentityService)
+      //#if (LocalIdentity)
       {
         //#if (IncludeLocalization)
         label: t('menu.profile'),
@@ -259,7 +243,6 @@ export class UserMenu {
       },
       //#endif
       { separator: true },
-      //#if (MultiTenancy)
       // 切换租户 = 清除本地租户上下文并退出登录：已登录会话的租户由 cookie claim 定案，
       // 只有重新登录才能进入另一个租户。
       {
@@ -271,7 +254,6 @@ export class UserMenu {
         icon: 'lucideBuilding2',
         action: () => this.handleSwitchTenant(),
       },
-      //#endif
       {
         //#if (IncludeLocalization)
         label: t('menu.logout'),
@@ -285,9 +267,8 @@ export class UserMenu {
     return items;
   });
 
-  /** 当前租户显示名；未选租户即宿主。未启用多租户时恒为空串（模板据此隐藏）。 */
+  /** 当前租户显示名；未选租户即宿主。 */
   readonly tenantLabel = computed(() => {
-    //#if (MultiTenancy)
     //#if (IncludeLocalization)
     this.languageService.activeLang();
     //#endif
@@ -300,18 +281,13 @@ export class UserMenu {
     //#else
     return 'Host';
     //#endif
-    //#else
-    return '';
-    //#endif
   });
-  //#if (MultiTenancy)
 
   handleSwitchTenant(): void {
     this.tenantContext.clear();
     this.authService.logout();
   }
-  //#endif
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   openProfileDialog(): void {
     this.profileDialogVisible.set(true);
   }

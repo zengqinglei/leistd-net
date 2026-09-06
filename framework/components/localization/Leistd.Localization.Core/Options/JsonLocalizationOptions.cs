@@ -1,13 +1,13 @@
 using System.Reflection;
 using Microsoft.Extensions.Localization;
 
-namespace Leistd.Localization.Core.Options;
+namespace Leistd.Localization.Options;
 
 /// <summary>
 /// Leistd JSON 本地化选项。
 /// </summary>
 /// <remarks>
-/// 资源为随程序集嵌入的 JSON 文件（ABP 式 <c>culture</c> + <c>texts</c> 结构），
+/// 资源为随程序集嵌入的 JSON 文件（顶层 <c>culture</c> + <c>texts</c> 两段结构），
 /// 按 <see cref="ResourcesPath"/> 下的 <c>{culture}.json</c> 命名；查表时按 culture 回落到 <see cref="DefaultCulture"/>。
 /// </remarks>
 public sealed class JsonLocalizationOptions
@@ -24,11 +24,9 @@ public sealed class JsonLocalizationOptions
     public IList<Assembly> ResourceAssemblies { get; } = [];
 
     /// <summary>
-    /// 显式登记「走 JSON 词条表」的资源标记类型集合（精确到类型，而非整程序集）。
-    /// 仅 <see cref="IStringLocalizer{TResourceSource}"/> 且 <c>TResourceSource</c> 在此集合中时走 JSON；
-    /// 其余 typed localizer 一律委派微软官方 <c>ResourceManagerStringLocalizerFactory</c>（RESX）。
-    /// 为空时不接管任何 typed localizer，宿主既有 RESX / 第三方本地化完全不受影响。
+    /// 获取使用 JSON 词条的资源标记类型。
     /// </summary>
+    /// <remarks>未登记的强类型本地化器仍使用宿主的默认工厂；集合为空时不接管任何类型。</remarks>
     public ISet<Type> JsonResourceTypes { get; } = new HashSet<Type>();
 
     /// <summary>

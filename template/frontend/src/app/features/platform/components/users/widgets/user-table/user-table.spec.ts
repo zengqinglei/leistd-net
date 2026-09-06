@@ -145,9 +145,7 @@ describe('UserTable', () => {
   it('一个可用操作都没有时不渲染溢出菜单', () => {
     fixture.componentRef.setInput('canUpdate', false);
     fixture.componentRef.setInput('canDelete', false);
-    //#if (LocalAuthorization)
     fixture.componentRef.setInput('canManageRoles', false);
-    //#endif
     fixture.detectChanges();
 
     // 点开即空的按钮比没有按钮更糟：它承诺了一个并不存在的能力。

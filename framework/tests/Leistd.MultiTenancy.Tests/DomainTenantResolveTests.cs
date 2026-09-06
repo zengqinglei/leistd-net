@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Leistd.MultiTenancy.AspNetCore;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -8,6 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Leistd.MultiTenancy.Stores;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.Tests;
 

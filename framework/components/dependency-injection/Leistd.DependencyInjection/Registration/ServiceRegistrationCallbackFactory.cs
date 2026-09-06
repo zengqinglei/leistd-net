@@ -1,0 +1,125 @@
+using Microsoft.Extensions.DependencyInjection;
+using Leistd.DependencyInjection.Extensions;
+using Leistd.DependencyInjection.Abstractions;
+
+namespace Leistd.DependencyInjection.Registration;
+
+/// <summary>
+/// 在构建服务提供程序前执行注册校验和描述符回调。
+/// </summary>
+public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServiceCollection>
+{
+    private readonly ServiceProviderOptions _options;
+
+    /// <summary>
+    /// 创建工厂。
+    /// </summary>
+    /// <param name="options">服务提供器校验选项；未指定时使用 Microsoft DI 默认值。</param>
+    public ServiceRegistrationCallbackFactory(ServiceProviderOptions? options = null)
+    {
+        _options = options ?? new ServiceProviderOptions();
+    }
+
+    /// <summary>
+    /// 返回待处理的服务集合。
+    /// </summary>
+    public IServiceCollection CreateBuilder(IServiceCollection services)
+    {
+        return services;
+    }
+
+    /// <summary>
+    /// 执行校验和回调后构建服务提供程序。
+    /// </summary>
+    public IServiceProvider CreateServiceProvider(IServiceCollection services)
+    {
+        // 校验必须先执行，否则回调改写后的工厂描述符会与原始工厂注册混淆。
+        foreach (var validator in services.GetRegistrationValidatorList())
+        {
+            validator.Invoke(services);
+        }
+
+        var actionList = services.GetRegistrationActionList();
+
+        if (actionList.Any())
+        {
+            // 织入把描述符改写成工厂型，Microsoft DI 从此无法校验它的构造函数图——
+            // 于是开着 ValidateOnBuild 反而恰好漏掉最需要校验的那批服务。
+            // 先用未改写的副本校验一次，把这块覆盖面补回来。
+            //
+            // 这一步的前提是注册回调必须是纯函数（只往 context 记拦截器，不往集合加服务）。
+            // 曾经不是：DDD 基座在回调里按 DbContext 注册仓储，导致此处看到的依赖图不完整，
+            // 把尚未注册的依赖误报成缺失。仓储改由 AddDddDbContext<T>() 显式注册后前提成立。
+            ValidateBeforeRewrite(services);
+
+
+            ProcessServiceRegistrations(services, actionList);
+        }
+
+        return services.BuildServiceProvider(_options);
+    }
+
+    // 用未改写的副本校验一次，补回被织入服务丢掉的 ValidateOnBuild 覆盖。
+    // 必须用副本：BuildServiceProvider 会 MakeReadOnly，在原集合上做之后就改不动了。
+    private void ValidateBeforeRewrite(IServiceCollection services)
+    {
+        if (!_options.ValidateOnBuild)
+        {
+            return;
+        }
+
+        IServiceCollection probe = new ServiceCollection();
+        foreach (var descriptor in services)
+        {
+            probe.Add(descriptor);
+        }
+
+        // 只为校验而构建，随即释放；校验阶段不解析任何服务，因此不产生副作用。
+        ((IDisposable)probe.BuildServiceProvider(_options)).Dispose();
+    }
+
+    private void ProcessServiceRegistrations(
+        IServiceCollection services,
+        ServiceRegistrationActionList actionList)
+    {
+        // 回调可能修改服务集合，因此遍历快照。
+        var descriptors = services.ToList();
+
+        foreach (var descriptor in descriptors)
+        {
+            // 键控注册的实现信息挂在 Keyed* 系列属性上；读非键控属性只会得到 null，
+            // 于是回调看不出实现类型，仅按服务类型判定的约定会连键控注册一起命中。
+            var implementationType = descriptor.IsKeyedService
+                ? descriptor.KeyedImplementationType ?? descriptor.KeyedImplementationInstance?.GetType()
+                : descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType();
+
+            // 跳过不可能实例化的类型；保留实现类型未知的工厂注册供回调按服务类型判断。
+            if (implementationType is { IsAbstract: true } or { IsInterface: true })
+            {
+                continue;
+            }
+
+            var context = new OnServiceRegisteredContext(
+                descriptor.ServiceType,
+                implementationType,
+                descriptor.ServiceKey);
+
+            foreach (var action in actionList)
+            {
+                action.Invoke(context);
+            }
+
+            OnRegistrationProcessed(services, descriptor, context);
+        }
+    }
+
+    /// <summary>
+    /// 单个服务注册回调执行完成后的扩展点。
+    /// </summary>
+    protected virtual void OnRegistrationProcessed(
+        IServiceCollection services,
+        ServiceDescriptor descriptor,
+        IOnServiceRegisteredContext context)
+    {
+    }
+}

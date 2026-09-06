@@ -1,20 +1,24 @@
-#if (IdentityService)
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
+#if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections;
 #endif
-#if (LocalAuthorization)
+#endif
 using CompanyName.ProjectName.Domain.Users.Constants;
-#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
+#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Options;
-#if (LocalAuthorization)
-using Leistd.Authorization;
 #endif
+using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Lock.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-#if (IdentityService)
+using Leistd.Authorization.Constants;
+using Leistd.Authorization.Abstractions;
+using Leistd.Lock;
+using Leistd.Lock.Abstractions;
+#if (OpenIddictServer)
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 #endif
@@ -25,25 +29,21 @@ namespace CompanyName.ProjectName.Application.Initialization;
 /// 系统初始化器实现
 /// </summary>
 public class SystemInitializer(
-#if (IdentityService)
+#if (LocalIdentity)
     IRepository<User, Guid> userRepository,
 #endif
-#if (LocalAuthorization)
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
+#if (LocalIdentity)
+    UserDomainService userDomainService,
 #endif
-#if (IdentityService)
-    IPasswordHasher passwordHasher,
-#endif
-#if (LocalAuthorization)
     IPermissionDefinitionManager permissionDefinitionManager,
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
-#endif
-#if (IdentityService)
+#if (OpenIddictServer)
     IOpenIddictScopeManager scopeManager,
 #endif
-#if (IdentityService)
+#if (LocalIdentity)
     IOptions<DefaultAdminOptions> adminOptions,
 #endif
     IDistributedLock distributedLock,
@@ -57,25 +57,12 @@ public class SystemInitializer(
     /// </remarks>
     public const string InitializationLockKey = "MyProject:system-initialization";
 
-#if (LocalAuthorization)
     private const string MemberRoleName = "Member";
-#endif
 
     /// <remarks>
-    /// 整个初始化在 <see cref="IDistributedLock"/> 内串行执行。这里每一步都是"先查存在、
-    /// 不存在再建"，单实例下幂等，多实例同时启动就全是竞争窗口：角色名、用户名、
-    /// OpenIddict 客户端各自的唯一索引会冲突，权限播种会撞上授权版本冲突，异常一路冒泡穿过
-    /// <c>ApplicationBootstrapper</c>，落败的那个实例直接起不来。加锁之后落败方是排队而不是撞车：
-    /// 等前一个做完，再把同一套幂等检查走一遍，发现该建的都在、版本已大于 0，全部跳过。
-    ///
-    /// 只在权限播种处捕获冲突并不够——角色创建的窗口更靠前，堵了后面也走不到。
-    ///
-    /// 锁的实际作用范围由部署决定：多副本部署必须配置 Redis（<c>AddRedisDistributedLock</c>），
-    /// 单副本走内存实现即可。入口统一为 <see cref="IDistributedLock"/>，业务代码不因部署形态而变。
-    ///
-    /// 初始化可能长时间持锁（迁移、播种、外部依赖抖动），而基于租约的实现无法保证"拿到锁就一直持有"。
-    /// 因此把 <see cref="ILockHandle.LockLost"/> 并进本次的取消令牌：一旦失去持锁资格，
-    /// 后续操作立即中止，由启动失败暴露出来，而不是与新的持有者同时往同一套数据里写。
+    /// 初始化在 <see cref="IDistributedLock"/> 内串行执行，避免多实例并发创建角色、用户、
+    /// OIDC 客户端或权限授予。多副本部署必须使用跨实例锁实现；单副本可使用内存实现。
+    /// <see cref="ILockHandle.LockLost"/> 会取消后续写入，防止失去租约的实例继续与新持有者并发初始化。
     /// </remarks>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -86,32 +73,25 @@ public class SystemInitializer(
 
         cancellationToken = lockScope.Token;
 
-        logger.LogInformation("开始初始化系统数据 ...");
+        logger.LogInformation("Initializing system data...");
 
-#if (IdentityService)
-#if (LocalAuthorization)
+#if (LocalIdentity)
         var (adminRole, _) = await InitializeRolesAsync(cancellationToken);
         await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
-#endif
 
         var adminUser = await InitializeDefaultAdminAsync(cancellationToken);
-#if (LocalAuthorization)
         await AssignAdminRoleAsync(adminUser, adminRole, cancellationToken);
-#endif
 
-#if (IdentityService)
+#if (OpenIddictServer)
         await InitializeOpenIddictAsync(cancellationToken);
 #endif
 
 #else
-#if (LocalAuthorization)
         _ = await InitializeRolesAsync(cancellationToken);
 #endif
-#endif
-        logger.LogInformation("系统数据初始化完成");
+        logger.LogInformation("System data initialization completed");
     }
 
-#if (LocalAuthorization)
     private async Task<(Role AdminRole, Role MemberRole)> InitializeRolesAsync(CancellationToken cancellationToken)
     {
         var adminRole = await roleRepository.GetFirstAsync(r => r.Name == AdminConstant.RoleName, cancellationToken: cancellationToken);
@@ -126,7 +106,7 @@ public class SystemInitializer(
                 sort: 1
             );
             await roleRepository.InsertAsync(adminRole, cancellationToken);
-            logger.LogInformation("已创建系统角色: {RoleName}", AdminConstant.RoleName);
+            logger.LogInformation("System role created: {RoleName}", AdminConstant.RoleName);
         }
 
         var memberRole = await roleRepository.GetFirstAsync(r => r.Name == MemberRoleName, cancellationToken: cancellationToken);
@@ -141,14 +121,13 @@ public class SystemInitializer(
                 sort: 100
             );
             await roleRepository.InsertAsync(memberRole, cancellationToken);
-            logger.LogInformation("已创建系统角色: {RoleName}", MemberRoleName);
+            logger.LogInformation("System role created: {RoleName}", MemberRoleName);
         }
 
         return (adminRole, memberRole);
     }
 
-#endif
-#if (IdentityService)
+#if (LocalIdentity)
     private async Task<User> InitializeDefaultAdminAsync(CancellationToken cancellationToken)
     {
         var options = adminOptions.Value;
@@ -158,42 +137,40 @@ public class SystemInitializer(
             adminUser = await userRepository.GetFirstAsync(u => u.Username == options.Username, q => q.OrderBy(u => u.Id), cancellationToken);
             if (adminUser == null)
             {
-                var passwordHash = passwordHasher.HashPassword(options.Password);
-                adminUser = new User(
-                    username: options.Username,
-                    email: options.Email,
-                    passwordHash: passwordHash,
-                    displayName: options.DisplayName ?? "System Administrator"
-                );
-
-                adminUser.MarkAsSuperAdmin();
-                await userRepository.InsertAsync(adminUser, cancellationToken);
-                logger.LogInformation("已创建默认管理员用户: {Username}", options.Username);
+                // 实体创建的核心逻辑（口令策略、哈希、超管标记、落库）在领域服务里，
+                // 应用层只负责判断"是否需要创建"
+                adminUser = await userDomainService.CreateSuperAdminAsync(
+                    options.Username,
+                    options.Email,
+                    options.Password!,
+                    options.DisplayName ?? "System Administrator",
+                    passwordSubject: $"{DefaultAdminOptions.SectionName}:Password",
+                    cancellationToken);
+                logger.LogInformation("Default admin user created: {Username}", options.Username);
             }
             else
             {
                 adminUser.MarkAsSuperAdmin();
                 await userRepository.UpdateAsync(adminUser, cancellationToken);
-                logger.LogInformation("已将默认管理员用户标记为超级管理员: {Username}", adminUser.Username);
+                logger.LogInformation("Default admin user marked as super admin: {Username}", adminUser.Username);
             }
         }
         else
         {
-            logger.LogInformation("超级管理员用户已存在: {Username}", adminUser.Username);
+            logger.LogInformation("Super admin user already exists: {Username}", adminUser.Username);
         }
 
         return adminUser;
     }
 
 #endif
-#if (LocalAuthorization)
     private async Task AssignAdminRoleAsync(User adminUser, Role adminRole, CancellationToken cancellationToken)
     {
         if (!await userRoleRepository.AnyAsync(ur => ur.UserId == adminUser.Id && ur.RoleId == adminRole.Id, cancellationToken))
         {
             var userRole = new UserRole(adminUser.Id, adminRole.Id);
             await userRoleRepository.InsertAsync(userRole, cancellationToken);
-            logger.LogInformation("已为管理员用户分配 {RoleName} 角色", AdminConstant.RoleName);
+            logger.LogInformation("Assigned role {RoleName} to the admin user", AdminConstant.RoleName);
         }
     }
 
@@ -201,17 +178,9 @@ public class SystemInitializer(
     /// 在 Admin 角色尚未有过任何授予写入时，把当前全部权限定义播种给它。
     /// </summary>
     /// <remarks>
-    /// 判据是授权版本为 0，而不是"本次新建了角色"。初始化没有事务，角色是立即落库的，
-    /// 因此"角色已建、权限未播"是可达状态；只认"本次新建"的话，那一次中断会让 Admin 永久缺权限。
-    /// 版本为 0 精确表示"从未写过授予"，既涵盖刚创建，也涵盖上次中断；而人工清空权限会把版本推到
-    /// 大于 0，不会被误当成未播种再补回来。
-    ///
-    /// 只播种一次，之后 Admin 就是一个诚实的普通角色：可编辑、可撤权，代码里不存在
-    /// "某个角色自动全权"的第二条旁路（唯一旁路是 <c>User.IsSuperAdmin</c>）。
-    ///
-    /// 不在每次启动时补齐缺失权限：纯加法模型无法区分"版本升级新增的定义"与"管理员明确撤销的权限"，
-    /// 补齐必然把人工撤权又加回来，"可撤权"就成了空话。升级后新增的权限由管理员显式授予，
-    /// 期间超级管理员凭 <c>IsSuperAdmin</c> 旁路照常可用，不存在把人锁在门外的风险。
+    /// 授权版本为 0 表示从未写入授予，可覆盖角色已创建但播种中断的状态。
+    /// 首次播种后 Admin 按普通角色管理：权限可撤销，启动过程不会自动补回缺失权限。
+    /// 新增权限由管理员显式授予；宿主超级管理员负责避免权限管理被锁死。
     /// </remarks>
     private async Task SeedAdminRolePermissionsAsync(Role adminRole, CancellationToken cancellationToken)
     {
@@ -221,7 +190,7 @@ public class SystemInitializer(
             providerKey,
             cancellationToken);
 
-        if (existing.Revision != 0)
+        if (existing.Version != 0)
         {
             return;
         }
@@ -236,25 +205,22 @@ public class SystemInitializer(
             PermissionGrantProviderNames.Role,
             providerKey,
             definitions,
-            expectedRevision: existing.Revision,
+            expectedVersion: existing.Version,
             cancellationToken);
 
         logger.LogInformation(
-            "已为 {RoleName} 角色播种权限授予，共 {Count} 项（此后该角色可被编辑与撤权，不再自动补齐）",
+            "Seeded permission grants for role {RoleName}: {Count} item(s) (the role can be edited and revoked afterwards; grants are not auto-replenished)",
             adminRole.Name,
             definitions.Count);
     }
 
-#endif
-#if (IdentityService)
+#if (OpenIddictServer)
     private async Task InitializeOpenIddictAsync(CancellationToken cancellationToken)
     {
         await EnsureScopeAsync(Scopes.OpenId, "OpenID", cancellationToken);
         await EnsureScopeAsync(Scopes.Profile, "Profile", cancellationToken);
         await EnsureScopeAsync(Scopes.Email, "Email", cancellationToken);
-#if (LocalAuthorization)
         await EnsureScopeAsync(Scopes.Roles, "Roles", cancellationToken);
-#endif
         await EnsureScopeAsync(Scopes.OfflineAccess, "Offline access", cancellationToken);
         await EnsureScopeAsync(
             TenantConnectionScopes.RuntimeRead,

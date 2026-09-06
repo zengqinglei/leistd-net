@@ -1,13 +1,15 @@
-namespace Leistd.UnitOfWork.Core.Events;
+using Leistd.UnitOfWork;
+
+namespace Leistd.UnitOfWork.Events;
 
 /// <summary>
-/// Unit of work event args
+/// 工作单元事件的事件参数。
 /// </summary>
-public class UnitOfWorkEventArgs(Uow.IUnitOfWork unitOfWork) : EventArgs
+public class UnitOfWorkEventArgs(IUnitOfWork unitOfWork) : EventArgs
 {
     /// <summary>
-    /// Reference to the unit of work related to this event.
+    /// 触发本事件的工作单元。
     /// </summary>
-    public Uow.IUnitOfWork UnitOfWork { get; } = unitOfWork;
+    public IUnitOfWork UnitOfWork { get; } = unitOfWork;
 }
 

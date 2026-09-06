@@ -1,5 +1,10 @@
 using Leistd.MultiTenancy;
 using Xunit;
+using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Services;
+using Leistd.Authorization.Constants;
+using Leistd.Authorization.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.Authorization.Tests;
 

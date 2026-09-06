@@ -1,6 +1,8 @@
 using Leistd.Authorization;
-#if (IdentityService)
 using Leistd.MultiTenancy;
+using Leistd.Authorization.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
+#if (LocalIdentity)
 #endif
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
@@ -9,18 +11,9 @@ namespace CompanyName.ProjectName.Application.Permissions.Provider;
 /// 权限定义提供器
 /// </summary>
 /// <remarks>
-/// 权限管理界面完全由这里的定义驱动：新增一个权限只需在此声明，
-/// 无需改动前端的权限树或后端的授予存储。
-///
-/// 三层结构，与 ABP 的权限定义一致：
-/// <list type="bullet">
-/// <item><b>组</b>——模块，只做展示与批量操作的容器，本身不是权限；</item>
-/// <item><b>资源权限</b>——模块下的一类对象（用户、角色），显示名用名词；
-/// 它同时就是该资源的读权限，勾上即"能看到这份列表"；</item>
-/// <item><b>动作权限</b>——可在该资源上执行的操作，显示名只用动词。</item>
-/// </list>
-///
-/// 动作以资源权限为前置：不能查看列表就谈不上在列表上新增，写入时据此补齐祖先。
+/// 权限管理界面与授予存储均由这里的定义驱动。组仅用于模块展示与批量操作；
+/// 资源权限同时表示读取该资源，子权限表示可执行的动作。
+/// 动作权限以资源权限为祖先，写入授予时会自动补齐该祖先。
 /// </remarks>
 public class PermissionDefinitionProvider : IPermissionDefinitionProvider
 {
@@ -53,7 +46,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         rolesPermission.AddChild(PermissionConstant.Roles.Delete, displayName: "Permission:App.Roles.Delete");
         rolesPermission.AddChild(PermissionConstant.Roles.ManagePermissions, displayName: "Permission:App.Roles.ManagePermissions");
 
-#if (IdentityService)
+#if (OpenIddictServer)
         var openApplicationsPermission = identityGroup.AddPermission(
             PermissionConstant.OpenApplications.Default,
             displayName: "Permission:App.OpenApplications"
@@ -74,7 +67,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
             displayName: "Permission:App.Permissions"
         );
 
-#if (IdentityService)
+#if (LocalIdentity)
         // 宿主侧专属：租户上下文内不可见、不可授予（子权限继承父级侧别）
         var tenantsPermission = systemGroup.AddPermission(
             PermissionConstant.Tenants.Default,

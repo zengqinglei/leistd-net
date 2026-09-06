@@ -1,4 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Users.Passwords;
+#endif
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
@@ -7,7 +10,7 @@ namespace CompanyName.ProjectName.Application.Users.Dtos;
 /// </summary>
 public record CreateUserInputDto
 {
-#if (ResourceService)
+#if (!LocalIdentity)
     /// <summary>Identity 签发的稳定 sub，也是本服务 Membership 主键。</summary>
     public required Guid SubjectId { get; init; }
 
@@ -32,22 +35,21 @@ public record CreateUserInputDto
     [StringLength(1500000, ErrorMessage = "{0} is too large. Compress it and try again.")]
     public string? Avatar { get; init; }
 
-#if (IdentityService)
+#if (LocalIdentity)
     [Display(Name = "Password")]
     [Required(ErrorMessage = "{0} is required.")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0} must be between {2} and {1} characters.")]
-    [RegularExpression(@"^(?=.*[a-zA-Z])(?=.*\d).{6,}$",
-        ErrorMessage = "{0} must be at least 6 characters and contain both letters and numbers.")]
+    // 仅快速反馈；权威在服务端 PasswordPolicy
+    [StringLength(PasswordPolicy.MaximumLength, MinimumLength = PasswordPolicy.MinimumLength,
+        ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public required string Password { get; init; }
 #endif
 
     public bool IsActive { get; init; } = true;
 
-#if (IdentityService)
+#if (LocalIdentity)
     public bool IsEmailVerified { get; init; }
 #endif
 
-#if (LocalAuthorization)
     /// <summary>
     /// 初始角色 Id 集合。按 Id 提交而非角色名，角色名只用于展示。
     /// </summary>
@@ -58,5 +60,4 @@ public record CreateUserInputDto
     [Display(Name = "Roles")]
     [MaxLength(20, ErrorMessage = "{0} cannot contain more than {1} items.")]
     public List<Guid> RoleIds { get; init; } = [];
-#endif
 }

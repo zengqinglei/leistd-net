@@ -7,7 +7,9 @@ using Leistd.ServiceClient.Constants;
 using Leistd.ServiceClient.Handlers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.ServiceClient.Tests;
 
@@ -16,6 +18,8 @@ namespace Leistd.ServiceClient.Tests;
 /// </summary>
 public class TenantContextForwardingTests
 {
+    private sealed class TestServiceClientOptions : ServiceClient.Options.ServiceClientOptions;
+
     private sealed class FakeCurrentTenant(Guid? id) : ICurrentTenant
     {
         public bool IsAvailable => Id.HasValue;
@@ -38,7 +42,9 @@ public class TenantContextForwardingTests
     private static async Task<HttpRequestMessage> SendAsync(Guid? tenantId, Action<HttpRequestMessage>? configure = null)
     {
         var capturing = new CapturingHandler();
-        var handler = new TenantContextDelegatingHandler(new FakeCurrentTenant(tenantId))
+        var monitor = new MutableOptionsMonitor<TestServiceClientOptions>(new());
+        var handler = new TenantContextDelegatingHandler<TestServiceClientOptions>(
+            new FakeCurrentTenant(tenantId), monitor)
         {
             InnerHandler = capturing
         };
@@ -48,6 +54,33 @@ public class TenantContextForwardingTests
         configure?.Invoke(request);
         await invoker.SendAsync(request, CancellationToken.None);
         return capturing.Request!;
+    }
+
+    [Fact]
+    public async Task Tenant_forwarding_switch_is_read_for_each_request()
+    {
+        var tenantId = Guid.NewGuid();
+        var capture = new CaptureHandler();
+        var monitor = new MutableOptionsMonitor<TestServiceClientOptions>(new());
+        var handler = new TenantContextDelegatingHandler<TestServiceClientOptions>(
+            new FakeCurrentTenant(tenantId), monitor)
+        {
+            InnerHandler = capture
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/one"), default);
+        monitor.Set(new TestServiceClientOptions
+        {
+            UserContext = new ServiceClient.Options.UserContextForwardingOptions { ForwardTenantId = false }
+        });
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/two"), default);
+        monitor.Set(new TestServiceClientOptions());
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/three"), default);
+
+        Assert.True(capture.Requests[0].Headers.Contains(ServiceClientHeaders.TenantId));
+        Assert.False(capture.Requests[1].Headers.Contains(ServiceClientHeaders.TenantId));
+        Assert.True(capture.Requests[2].Headers.Contains(ServiceClientHeaders.TenantId));
     }
 
     [Fact]
@@ -78,13 +111,12 @@ public class TenantContextForwardingTests
         Assert.Equal(preset, request.Headers.GetValues(ServiceClientHeaders.TenantId).Single());
     }
 
-    // ---- 被调方恢复 ----
 
     private static async Task<HttpContext> RunMiddlewareAsync(ClaimsPrincipal user, Action<HttpContext>? configureRequest = null)
     {
         var middleware = new ServiceUserContextMiddleware(
             _ => Task.CompletedTask,
-            Microsoft.Extensions.Options.Options.Create(new ServiceUserContextOptions()),
+            new MutableOptionsMonitor<ServiceUserContextOptions>(new()),
             NullLogger<ServiceUserContextMiddleware>.Instance);
 
         var context = new DefaultHttpContext { User = user };

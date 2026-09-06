@@ -1,9 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
-using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Leistd.Security.Users;
+using Leistd.RealTime.AspNetCore.SignalR.Hubs;
+using Leistd.RealTime.Abstractions;
 
 namespace Leistd.RealTime.Tests;
 
@@ -55,15 +56,15 @@ internal sealed class RecordingGroupManager : IGroupManager
     }
 }
 
-internal sealed class ThrowingAuthorizer : IRealtimeSubscriptionAuthorizer
+internal sealed class ThrowingAuthorizer : IRealTimeSubscriptionAuthorizer
 {
-    public Task<bool> AuthorizeAsync(RealtimeSubscriptionContext context, CancellationToken cancellationToken = default) =>
+    public Task<bool> AuthorizeAsync(RealTimeSubscriptionContext context, CancellationToken cancellationToken = default) =>
         throw new InvalidOperationException("Authorization should not be evaluated for public subscriptions.");
 }
 
-internal sealed class DenyingAuthorizer : IRealtimeSubscriptionAuthorizer
+internal sealed class DenyingAuthorizer : IRealTimeSubscriptionAuthorizer
 {
-    public Task<bool> AuthorizeAsync(RealtimeSubscriptionContext context, CancellationToken cancellationToken = default) =>
+    public Task<bool> AuthorizeAsync(RealTimeSubscriptionContext context, CancellationToken cancellationToken = default) =>
         Task.FromResult(false);
 }
 

@@ -1,4 +1,4 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
 

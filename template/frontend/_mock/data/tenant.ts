@@ -1,5 +1,4 @@
-//#if (MultiTenancy)
-import { TenantBriefOutputDto, TenantOutputDto } from '../../src/app/shared/dtos/tenant.dto';
+import { TenantLookupOutputDto, TenantOutputDto } from '../../src/app/shared/dtos/tenant.dto';
 
 export interface MockTenant {
   id: string;
@@ -37,7 +36,7 @@ export function toTenantOutput(tenant: MockTenant): TenantOutputDto {
   };
 }
 
-export function toTenantBrief(tenant: MockTenant): TenantBriefOutputDto {
+export function toTenantLookup(tenant: MockTenant): TenantLookupOutputDto {
   return {
     id: tenant.id,
     name: tenant.name,
@@ -45,4 +44,3 @@ export function toTenantBrief(tenant: MockTenant): TenantBriefOutputDto {
     isActive: tenant.isActive,
   };
 }
-//#endif

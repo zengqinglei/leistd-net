@@ -2,7 +2,6 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Leistd.Response.Core.Wrapper;
 using Leistd.Security.AspNetCore;
 using Leistd.Security.Claims;
 using Leistd.Security.Users;
@@ -15,8 +14,8 @@ using Leistd.ServiceClient.OAuth.Services;
 using Leistd.ServiceClient.Options;
 using Leistd.TestBase;
 using Leistd.Tracing.AspNetCore;
-using Leistd.Tracing.Core;
-using Leistd.Tracing.Core.Services;
+using Leistd.Tracing;
+using Leistd.Tracing.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -27,6 +26,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Leistd.Tracing.Abstractions;
 
 namespace Leistd.ServiceClient.Tests;
 
@@ -59,7 +59,6 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
         await _resourceHost.DisposeAsync();
     }
 
-    // ---------- 身份服务宿主：标准 client_credentials token 端点形态 ----------
 
     private async Task<WebApplication> StartIdentityHostAsync()
     {
@@ -93,7 +92,6 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
         return app;
     }
 
-    // ---------- 资源服务宿主：Bearer 验证 + 追踪 + 用户上下文恢复 ----------
 
     private sealed class TokenPolicy
     {
@@ -139,7 +137,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
                 return Task.FromResult(AuthenticateResult.Success(
                     new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 return Task.FromResult(AuthenticateResult.Fail(ex));
             }
@@ -175,24 +173,28 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
 
         app.MapGet("/api/whoami", (ICurrentUser currentUser, Leistd.Security.Clients.ICurrentClient currentClient,
                 ICorrelationIdProvider correlationId) =>
-            Results.Json(Result<object>.Ok(new
+            Results.Json(new
             {
-                userId = currentUser.Id,
-                userName = currentUser.Username,
-                clientId = currentClient.ClientId,
-                traceId = correlationId.Get(),
-            }))).RequireAuthorization();
+                code = 0,
+                data = new
+                {
+                    userId = currentUser.Id,
+                    username = currentUser.Username,
+                    clientId = currentClient.ClientId,
+                    traceId = correlationId.Get(),
+                },
+            })).RequireAuthorization();
 
         // 匿名端点：验证伪造头被剥离后 ICurrentUser 不会被污染
         app.MapGet("/api/echo-user", (ICurrentUser currentUser) =>
-            Results.Json(Result<object>.Ok(new { userId = currentUser.Id })));
+            Results.Json(new { code = 0, data = new { userId = currentUser.Id } }));
 
         app.MapGet("/api/fail", () => Results.Json(new
         {
             type = "https://err/business",
             title = "Not Found",
             status = 404,
-            code = 404001,
+            code = "Order:NotFound",
             message = "订单不存在",
             traceId = "remote-trace-42",
             errors = (object?)null,
@@ -202,7 +204,6 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
         return app;
     }
 
-    // ---------- 调用方 ----------
 
     public sealed class DemoClientOptions : ServiceClientOptions;
 
@@ -215,7 +216,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
         Task FailAsync();
     }
 
-    public sealed record WhoAmI(Guid? UserId, string? UserName, string? ClientId, string? TraceId);
+    public sealed record WhoAmI(Guid? UserId, string? Username, string? ClientId, string? TraceId);
 
     public sealed class DemoClient(HttpClient httpClient) : IDemoClient
     {
@@ -268,7 +269,6 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
         return services.BuildServiceProvider();
     }
 
-    // ---------- 场景 ----------
 
     [Fact]
     public async Task 全链路_令牌获取_追踪与用户上下文透传_被调方双通道身份生效()
@@ -286,7 +286,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
 
         Assert.NotNull(result);
         Assert.Equal(userId, result.UserId);          // X-User-Id → 被调方 ICurrentUser.Id
-        Assert.Equal("张三", result.UserName);        // X-User-Name URL 编码往返
+        Assert.Equal("张三", result.Username);        // X-Username URL 编码往返
         Assert.Equal(ClientId, result.ClientId);      // 调用方 client 身份保留（ICurrentClient）
         Assert.Equal("trace-e2e-1", result.TraceId);  // TraceId 全链路透传
         Assert.Equal(1, _tokenRequests);
@@ -340,8 +340,8 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(client.FailAsync);
 
-        Assert.Equal(404, exception.StatusCode);
-        Assert.Equal(404001, exception.ErrorCode);
+        Assert.Equal(404, exception.RemoteStatusCode);
+        Assert.Equal("Order:NotFound", exception.ErrorCode);
         Assert.Equal("remote-trace-42", exception.RemoteTraceId);
         Assert.Contains("订单不存在", exception.Message);
     }

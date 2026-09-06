@@ -1,13 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Leistd.Notifications.EntityFrameworkCore.Entities;
 
-namespace Leistd.Notifications.EntityFrameworkCore;
+namespace Leistd.Notifications.EntityFrameworkCore.EntityConfigurations;
 
 /// <summary>
 /// NotificationRecord EF Core 实体配置。
 /// </summary>
 public class NotificationRecordConfiguration : IEntityTypeConfiguration<NotificationRecord>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<NotificationRecord> builder)
     {
         // 表名沿用 EF Core 默认约定（实体名 NotificationRecord），不显式指定，避免框架前缀污染宿主库。

@@ -1,10 +1,8 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using System.Collections.Immutable;
 using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Options;
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Domain.Users.DomainServices;
-#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Security.Claims;
 using Microsoft.Extensions.Options;
@@ -15,9 +13,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 public class AuthPrincipalFactory(
-#if (LocalAuthorization)
     UserDomainService userDomainService,
-#endif
     IOptions<OAuthOptions> oauthOptions) : IAuthPrincipalFactory
 {
     public async Task<ClaimsPrincipal> CreateAsync(
@@ -25,9 +21,7 @@ public class AuthPrincipalFactory(
         IEnumerable<string>? scopes = null,
         CancellationToken cancellationToken = default)
     {
-#if (LocalAuthorization)
         var roleNames = await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken);
-#endif
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
         identity.SetClaim(Claims.Subject, user.Id.ToString());
@@ -40,25 +34,17 @@ public class AuthPrincipalFactory(
             identity.SetClaim(Claims.Picture, user.Avatar!);
         }
 
-#if (LocalAuthorization)
         identity.SetClaims(Claims.Role, roleNames.ToImmutableArray());
-#endif
         identity.SetClaim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false");
-#if (MultiTenancy)
         // 租户 claim：多租户解析链以它定案已登录用户的租户
         if (user.TenantId is { } tenantId)
         {
             identity.SetClaim(CustomClaimTypes.TenantId, tenantId.ToString());
         }
-#endif
 
         var principal = new ClaimsPrincipal(identity);
         principal.SetScopes(scopes?.Where(scope => !string.IsNullOrWhiteSpace(scope)) ??
-#if (LocalAuthorization)
                             [Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Roles]);
-#else
-                            [Scopes.OpenId, Scopes.Profile, Scopes.Email]);
-#endif
         principal.SetResources(oauthOptions.Value.Resource);
         principal.SetDestinations(GetDestinations);
 
@@ -91,23 +77,19 @@ public class AuthPrincipalFactory(
                 Destinations.AccessToken,
                 Destinations.IdentityToken
             ],
-#if (LocalAuthorization)
             Claims.Role when claim.Subject?.HasScope(Scopes.Roles) == true =>
             [
                 Destinations.AccessToken,
                 Destinations.IdentityToken
             ],
-#endif
             CustomClaimTypes.IsSuperAdmin =>
             [
                 Destinations.AccessToken
             ],
-#if (MultiTenancy)
             CustomClaimTypes.TenantId =>
             [
                 Destinations.AccessToken
             ],
-#endif
             _ => []
         };
     }

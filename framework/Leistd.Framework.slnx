@@ -3,6 +3,9 @@
   <Folder Name="/components/aop/">
     <Project Path="components/aop/Leistd.DynamicProxy/Leistd.DynamicProxy.csproj" />
   </Folder>
+  <Folder Name="/components/aspnetcore-signalr/">
+    <Project Path="components/aspnetcore-signalr/Leistd.AspNetCore.SignalR/Leistd.AspNetCore.SignalR.csproj" />
+  </Folder>
   <Folder Name="/components/auditing/">
     <Project Path="components/auditing/Leistd.Auditing.Core/Leistd.Auditing.Core.csproj" />
     <Project Path="components/auditing/Leistd.Auditing.EntityFrameworkCore/Leistd.Auditing.EntityFrameworkCore.csproj" />
@@ -22,6 +25,9 @@
   <Folder Name="/components/core/">
     <Project Path="components/core/Leistd.Core/Leistd.Core.csproj" />
   </Folder>
+  <Folder Name="/components/data/">
+    <Project Path="components/data/Leistd.Data/Leistd.Data.csproj" />
+  </Folder>
   <Folder Name="/components/dependency-injection/">
     <Project Path="components/dependency-injection/Leistd.DependencyInjection/Leistd.DependencyInjection.csproj" />
     <Project Path="components/dependency-injection/Leistd.DependencyInjection.DynamicProxy/Leistd.DependencyInjection.DynamicProxy.csproj" />
@@ -30,9 +36,9 @@
     <Project Path="components/event-bus/Leistd.EventBus.Core/Leistd.EventBus.Core.csproj" />
     <Project Path="components/event-bus/Leistd.EventBus.Local/Leistd.EventBus.Local.csproj" />
   </Folder>
-  <Folder Name="/components/exception/">
-    <Project Path="components/exception/Leistd.Exception.AspNetCore/Leistd.Exception.AspNetCore.csproj" />
-    <Project Path="components/exception/Leistd.Exception.Core/Leistd.Exception.Core.csproj" />
+  <Folder Name="/components/exception-handling/">
+    <Project Path="components/exception-handling/Leistd.ExceptionHandling.AspNetCore/Leistd.ExceptionHandling.AspNetCore.csproj" />
+    <Project Path="components/exception-handling/Leistd.ExceptionHandling.Core/Leistd.ExceptionHandling.Core.csproj" />
   </Folder>
   <Folder Name="/components/localization/">
     <Project Path="components/localization/Leistd.Localization.AspNetCore/Leistd.Localization.AspNetCore.csproj" />
@@ -54,7 +60,6 @@
     <Project Path="components/notifications/Leistd.Notifications.AspNetCore.SignalR/Leistd.Notifications.AspNetCore.SignalR.csproj" />
   </Folder>
   <Folder Name="/components/object-mapping/">
-    <Project Path="components/object-mapping/Leistd.ObjectMapping.AutoMapper/Leistd.ObjectMapping.AutoMapper.csproj" />
     <Project Path="components/object-mapping/Leistd.ObjectMapping.Core/Leistd.ObjectMapping.Core.csproj" />
     <Project Path="components/object-mapping/Leistd.ObjectMapping.Mapster/Leistd.ObjectMapping.Mapster.csproj" />
   </Folder>
@@ -83,7 +88,7 @@
   </Folder>
   <Folder Name="/components/unit-of-work/">
     <Project Path="components/unit-of-work/Leistd.UnitOfWork.Core/Leistd.UnitOfWork.Core.csproj" />
-    <Project Path="components/unit-of-work/Leistd.UnitOfWork.EfCore/Leistd.UnitOfWork.EfCore.csproj" />
+    <Project Path="components/unit-of-work/Leistd.UnitOfWork.EntityFrameworkCore/Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/ddd-struct/">
     <Project Path="ddd-struct/Leistd.Ddd.Application.Contracts/Leistd.Ddd.Application.Contracts.csproj" />
@@ -92,19 +97,25 @@
     <Project Path="ddd-struct/Leistd.Ddd.Infrastructure/Leistd.Ddd.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Leistd.AspNetCore.SignalR.Tests/Leistd.AspNetCore.SignalR.Tests.csproj" />
     <Project Path="tests/Leistd.Authorization.Tests/Leistd.Authorization.Tests.csproj" />
     <Project Path="tests/Leistd.Authorization.DataScope.Tests/Leistd.Authorization.DataScope.Tests.csproj" />
     <Project Path="tests/Leistd.Authorization.Pipeline.Tests/Leistd.Authorization.Pipeline.Tests.csproj" />
     <Project Path="tests/Leistd.Authorization.Resource.Tests/Leistd.Authorization.Resource.Tests.csproj" />
     <Project Path="tests/Leistd.Ddd.Infrastructure.Tests/Leistd.Ddd.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Leistd.DependencyInjection.Tests/Leistd.DependencyInjection.Tests.csproj" />
     <Project Path="tests/Leistd.EventBus.Tests/Leistd.EventBus.Tests.csproj" />
-    <Project Path="tests/Leistd.Exception.Tests/Leistd.Exception.Tests.csproj" />
+    <Project Path="tests/Leistd.ExceptionHandling.Tests/Leistd.ExceptionHandling.Tests.csproj" />
     <Project Path="tests/Leistd.Localization.Tests/Leistd.Localization.Tests.csproj" />
     <Project Path="tests/Leistd.Lock.Tests/Leistd.Lock.Tests.csproj" />
     <Project Path="tests/Leistd.MultiTenancy.Tests/Leistd.MultiTenancy.Tests.csproj" />
+    <Project Path="tests/Leistd.Notifications.Tests/Leistd.Notifications.Tests.csproj" />
     <Project Path="tests/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />
+    <Project Path="tests/Leistd.Response.Tests/Leistd.Response.Tests.csproj" />
+    <Project Path="tests/Leistd.Security.Tests/Leistd.Security.Tests.csproj" />
     <Project Path="tests/Leistd.ServiceClient.Tests/Leistd.ServiceClient.Tests.csproj" />
     <Project Path="tests/Leistd.TestBase/Leistd.TestBase.csproj" />
+    <Project Path="tests/Leistd.Tracing.Tests/Leistd.Tracing.Tests.csproj" />
     <Project Path="tests/Leistd.UnitOfWork.Tests/Leistd.UnitOfWork.Tests.csproj" />
   </Folder>
 </Solution>

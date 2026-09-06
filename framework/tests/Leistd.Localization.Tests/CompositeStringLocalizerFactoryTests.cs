@@ -1,6 +1,7 @@
 using Leistd.Localization.AspNetCore;
-using Leistd.Localization.Core.Json;
-using Leistd.Localization.Core.Options;
+using MsOptions = Microsoft.Extensions.Options.Options;
+using Leistd.Localization.Json;
+using Leistd.Localization.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,14 +22,14 @@ public class CompositeStringLocalizerFactoryTests
 
     private static CompositeStringLocalizerFactory CreateFactory()
     {
-        var options = Options.Create(new JsonLocalizationOptions());
+        var options = MsOptions.Create(new JsonLocalizationOptions());
         options.Value.ResourceAssemblies.Add(typeof(CompositeStringLocalizerFactoryTests).Assembly);
         // 仅把 JsonResource 精确登记为 JSON 资源类型；ResxResource 虽同程序集但未登记。
         options.Value.JsonResourceTypes.Add(typeof(JsonResource));
 
         var json = new JsonStringLocalizerFactory(new JsonLocalizationResourceReader(options), options);
         var fallback = new ResourceManagerStringLocalizerFactory(
-            Options.Create(new LocalizationOptions()),
+            MsOptions.Create(new LocalizationOptions()),
             NullLoggerFactory.Instance);
 
         return new CompositeStringLocalizerFactory(json, fallback, options);
@@ -80,7 +81,6 @@ public class CompositeStringLocalizerFactoryTests
         Assert.IsType<ResourceManagerStringLocalizer>(localizer);
     }
 
-    // ---- 完整 DI 注册（AddJsonLocalization）解析验证 ----
 
     [Fact]
     public void Parameterless_localizer_resolves_to_json_not_resource_manager()

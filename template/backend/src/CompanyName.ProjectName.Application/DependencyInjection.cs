@@ -1,25 +1,24 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.AppServices;
-#if (IdentityService)
-using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 using CompanyName.ProjectName.Application.TenantConnections.AppServices;
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 #endif
 #endif
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using Leistd.ObjectMapping.Mapster;
-#if (LocalAuthorization)
 using Leistd.Authorization;
 using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Checker;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
-#endif
-#if (IdentityService)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 #endif
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.Authorization.Abstractions;
 
 namespace CompanyName.ProjectName.Application;
 
@@ -32,45 +31,40 @@ public static class DependencyInjection
             options.AddProfiles(typeof(DependencyInjection).Assembly);
         });
 
-        // 系统初始化
         services.AddTransient<ISystemInitializer, SystemInitializer>();
 
-#if (IdentityService)
-        // 认证
+#if (LocalIdentity)
         services.AddTransient<ICaptchaAppService, CaptchaAppService>();
         services.AddTransient<IEmailVerificationAppService, EmailVerificationAppService>();
+        services.AddTransient<SessionSignInService>();
         services.AddTransient<IAuthAppService, AuthAppService>();
 
-#if (IdentityService)
-        // OAuth token 主体工厂 + 开放应用管理（仅 OpenIddict）
+#if (OpenIddictServer)
+        // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。
         services.AddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
         services.AddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
-        services.AddTransient<ITenantConnectionAppService, TenantConnectionAppService>();
 #endif
+        // 租户连接配置管理随租户控制面存在（外层 LocalIdentity 即是），与是否签发令牌无关。
+        // 不能放进上面那个"仅自签发令牌"的块：Controller 与应用服务类型受 LocalIdentity 保护，
+        // 注册若更窄，Cookie 会话形态下 Controller 在而注册不在，请求以 500 收场
+        services.AddTransient<ITenantConnectionAppService, TenantConnectionAppService>();
 
-#if (IncludeExternalLogin)
-        // 外部认证（仅 ExternalLogin）
+#if (ExternalLogin)
         services.AddTransient<IExternalAuthAppService, ExternalAuthAppService>();
 #endif
 #endif
 
-        // 用户管理
         services.AddTransient<IUserAppService, UserAppService>();
 
-#if (LocalAuthorization)
-        // 角色管理
         services.AddTransient<IRoleAppService, RoleAppService>();
 
-        // 权限
         services.AddPermissionAuthorizationCore();
         // Scoped：一次请求内的主体解析结果被 PermissionSubjectProvider 与 IPermissionChecker 共享。
         services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
         services.AddTransient<IPermissionAppService, PermissionAppService>();
-#endif
 
-#if (IdentityService)
-        // 租户管理（宿主侧）：写路径走框架 ITenantManager，创建后在租内种子
+#if (LocalIdentity)
         services.AddTransient<ITenantAppService, TenantAppService>();
         services.AddTransient<ITenantSeeder, TenantSeeder>();
 #endif

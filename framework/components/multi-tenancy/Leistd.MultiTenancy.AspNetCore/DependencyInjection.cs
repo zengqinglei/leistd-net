@@ -3,22 +3,40 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Leistd.AmbientContext;
+using Leistd.MultiTenancy.AspNetCore.Options;
+using Leistd.MultiTenancy.AspNetCore.Middlewares;
+using Leistd.MultiTenancy.AspNetCore.AmbientContext;
+using Leistd.MultiTenancy.AspNetCore.Resolution;
+using Leistd.MultiTenancy.Resolution;
 
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.AspNetCore;
 
 /// <summary>
-/// Web 宿主多租户注册与管道挂载
+/// 提供 ASP.NET Core 多租户注册和管道扩展。
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// 配置节名：<c>Leistd:MultiTenancy</c>
+    /// 获取默认配置节名称 <c>Leistd:MultiTenancy</c>。
     /// </summary>
     public const string ConfigurationSection = "Leistd:MultiTenancy";
 
     /// <summary>
-    /// 注册多租户 Web 集成（含核心服务），从 <c>Leistd:MultiTenancy</c> 配置节绑定选项
+    /// 从默认配置节注册多租户 Web 集成。
     /// </summary>
+    /// <example>
+    /// <code>
+    /// // 宿主服务：持有租户注册表，解析后校验
+    /// builder.Services.AddMultiTenancy(options =&gt; options.DomainFormat = "{0}.example.com");
+    ///
+    /// // 资源服务：只消费已验证令牌的 claim，无注册表
+    /// builder.Services.AddMultiTenancy(options =&gt; options.ValidateResolvedTenant = false);
+    ///
+    /// // UseAuthentication() 之后、UseAuthorization() 之前
+    /// app.UseMultiTenancy();
+    /// </code>
+    /// </example>
     public static IServiceCollection AddMultiTenancy(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<MultiTenancyOptions>(configuration.GetSection(ConfigurationSection));
@@ -26,7 +44,7 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 注册多租户 Web 集成（含核心服务）
+    /// 使用委托配置注册多租户 Web 集成。
     /// </summary>
     public static IServiceCollection AddMultiTenancy(this IServiceCollection services, Action<MultiTenancyOptions>? configure = null)
     {
@@ -43,49 +61,55 @@ public static class DependencyInjection
         services.AddMultiTenancyCore();
         services.AddHttpContextAccessor();
 
-        // DomainFormat 一旦配置就是匿名请求的权威来源，写错了必须启动期就失败——
-        // 运行期它只表现为"永不匹配"，解析会静默退回请求头，边界没了却没人知道
+        // 非 HTTP 入口的租户维度：Hub 调用、后台作业不经本组件的中间件，
+        // 由环境上下文原语按主体的租户声明建立 ICurrentTenant。
+        services.TryAddEnumerable(
+            ServiceDescriptor.Transient<IAmbientContextContributor, TenantAmbientContextContributor>());
+
+        // 域名是匿名请求的权威来源，格式错误必须在启动时失败。
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>());
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantStoreRegistrationValidator>());
+
         services.AddOptions<MultiTenancyOptions>().ValidateOnStart();
 
-        // 默认解析链仅在链为空时装配；宿主可在其后的 Configure 中增删排序
-        services.Configure<TenantResolveOptions>(options =>
-        {
-            if (options.Contributors.Count == 0)
+        // 仅为空链装配默认贡献者，保留宿主自定义顺序。
+        services.AddOptions<TenantResolveOptions>()
+            .Configure(options =>
             {
+                if (options.Contributors.Count > 0)
+                {
+                    return;
+                }
+
                 options.Contributors.Add(new CurrentPrincipalTenantResolveContributor());
 
-                // 子域名排在头与查询串之前：配置了 DomainFormat 的部署里域名就是权威，
-                // 不允许匿名请求再用请求头把自己挪到别的租户。未配置时该贡献者直接跳过
+                // 已配置域名时优先于外部可控的请求头和查询串。
                 options.Contributors.Add(new DomainTenantResolveContributor());
                 options.Contributors.Add(new HeaderTenantResolveContributor());
                 options.Contributors.Add(new QueryStringTenantResolveContributor());
-            }
-        });
+            });
+
+        // 关闭注册表校验时在最终配置阶段强制只信主体 claim。
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IPostConfigureOptions<TenantResolveOptions>,
+                PrincipalOnlyTenantResolveEnforcer>());
 
         return services;
     }
 
     /// <summary>
-    /// 挂载多租户中间件。置于 <c>UseAuthentication()</c>（及 <c>UseServiceUserContext()</c>）之后、
-    /// <c>UseAuthorization()</c> 之前
+    /// 在认证和受信上下文恢复之后、授权之前挂载多租户中间件。
     /// </summary>
+    /// <remarks>
+    /// <c>ValidateResolvedTenant</c> 为 <see langword="true"/> 时校验注册表；为
+    /// <see langword="false"/> 时只信已认证主体的租户声明。
+    /// </remarks>
     public static IApplicationBuilder UseMultiTenancy(this IApplicationBuilder app)
     {
         return app.UseMiddleware<MultiTenancyMiddleware>();
     }
 
-    /// <summary>
-    /// 挂载 Resource 宿主的可信租户上下文。置于 <c>UseAuthentication()</c> 之后、
-    /// <c>UseAuthorization()</c> 之前，且不得与 <see cref="UseMultiTenancy"/> 同时使用。
-    /// </summary>
-    /// <remarks>
-    /// 该入口只接受已验证主体中唯一合法的 <c>tenant_id</c>，不读取请求头、查询串、域名或
-    /// <see cref="ITenantStore"/>。租户停用由签发端停止签发/刷新和 Access Token 生命周期收敛。
-    /// </remarks>
-    public static IApplicationBuilder UseAuthenticatedTenantContext(this IApplicationBuilder app)
-    {
-        return app.UseMiddleware<AuthenticatedTenantContextMiddleware>();
-    }
 }

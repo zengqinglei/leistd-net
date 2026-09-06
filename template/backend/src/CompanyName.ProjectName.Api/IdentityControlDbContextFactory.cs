@@ -1,9 +1,8 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
-using OpenIddict.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Api;
 
@@ -21,16 +20,16 @@ public sealed class IdentityControlDbContextFactory : IDesignTimeDbContextFactor
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString(IdentityControlDbContext.ConnectionStringName)
-            ?? configuration.GetConnectionString("Default")
+        var connectionString = configuration.GetControlPlaneConnectionString()
             ?? PlaceholderConnectionString;
         var options = new DbContextOptionsBuilder<IdentityControlDbContext>()
             .UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Control", "companyname-projectname"))
-            .UseOpenIddict()
+                npgsql.MigrationsHistoryTable(
+                    DatabaseSchema.ControlMigrationsHistoryTable, DatabaseSchema.Name))
             .Options;
 
-        return new IdentityControlDbContext(options);
+        // 设计时工具（dotnet ef）没有 DI 容器也没有请求主体，不接审计
+        return new IdentityControlDbContext(options, serviceProvider: null);
     }
 }
 #endif

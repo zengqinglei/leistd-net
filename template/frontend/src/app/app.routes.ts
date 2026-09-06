@@ -1,17 +1,13 @@
 import { Routes } from '@angular/router';
 
 import { authGuard } from './core/guards/auth-guard';
-//#if (LocalAuthorization)
 import { permissionGuard } from './core/guards/permission-guard';
-//#endif
 // 布局组件导入
 import { DefaultLayout } from './layout/default/default-layout';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { EmptyLayout } from './layout/empty/empty-layout';
 //#endif
-//#if (LocalAuthorization)
-import { PERMISSIONS } from './shared/models/permission';
-//#endif
+import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
 
 export const routes: Routes = [
   // 公开页面
@@ -20,7 +16,7 @@ export const routes: Routes = [
     loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
   },
 
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   // Empty Layout - 认证相关页面（登录、注册等）
   {
     path: 'auth',
@@ -28,7 +24,7 @@ export const routes: Routes = [
     loadChildren: () => import('./features/account/account.routes').then((r) => r.AUTH_ROUTES),
   },
   //#endif
-  //#if (ResourceService)
+  //#if (!LocalIdentity)
   {
     path: 'auth/callback',
     loadComponent: () =>
@@ -43,38 +39,23 @@ export const routes: Routes = [
     loadChildren: () =>
       import('./features/workspace/workspace.routes').then((r) => r.WORKSPACE_ROUTES),
   },
-  //#if (LocalAuthorization)
   // 已登录但无权限：与 401 的登录跳转区分开，避免"登录成功又被弹回登录页"的循环。
   {
     path: '403-forbidden',
     loadComponent: () =>
       import('./features/public/components/forbidden/forbidden').then((m) => m.Forbidden),
   },
-  //#endif
 
   // Default Layout - 平台管理
   {
     path: 'platform',
     component: DefaultLayout,
-    //#if (LocalAuthorization)
     // 按权限放行，不按角色名。各子路由再声明各自所需的权限。
     canActivate: [authGuard, permissionGuard],
     data: {
-      permissions: [
-        PERMISSIONS.users.default,
-        PERMISSIONS.roles.default,
-        //#if (IdentityService)
-        PERMISSIONS.tenants.default,
-        //#endif
-        //#if (IdentityService)
-        PERMISSIONS.openApplications.default,
-        //#endif
-        PERMISSIONS.permissions.default,
-      ],
+      // 引用单一来源，不要在这里手写清单；缘由见 PLATFORM_ENTRY_PERMISSIONS 的注释
+      permissions: [...PLATFORM_ENTRY_PERMISSIONS],
     },
-    //#else
-    canActivate: [authGuard],
-    //#endif
     loadChildren: () =>
       import('./features/platform/platform.routes').then((r) => r.PLATFORM_ROUTES),
   },

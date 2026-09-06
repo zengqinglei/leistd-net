@@ -1,7 +1,7 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Microsoft.Extensions.DependencyInjection;
 
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 #endif
 
@@ -20,7 +20,7 @@ public static class DependencyInjection
         // 用户管理领域服务
         services.AddTransient<UserDomainService>();
 
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
         // 外部认证领域服务
         services.AddTransient<ExternalAuthDomainService>();
 #endif

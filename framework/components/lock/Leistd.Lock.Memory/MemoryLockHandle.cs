@@ -1,11 +1,8 @@
-using Leistd.Lock.Core;
-using Leistd.Lock.Memory.Entry;
+using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Memory;
 
-/// <summary>
-/// 内存锁句柄，释放时归还信号量
-/// </summary>
+// 内存锁句柄，释放时归还信号量
 internal sealed class MemoryLockHandle(
     string key,
     SemaphoreEntry entry,

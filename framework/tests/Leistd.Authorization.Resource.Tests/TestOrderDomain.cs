@@ -1,5 +1,8 @@
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Resource.Tests;
 

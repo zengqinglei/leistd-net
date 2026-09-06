@@ -25,7 +25,7 @@ export class RoleService {
     return this.http.get<PagedResultDto<RoleOutputDto>>(this.baseUrl, { params });
   }
 
-  /** 角色选项来自后端，前端不再保留任何硬编码角色列表。 */
+  /** 角色选项以 API 为唯一数据源。 */
   getOptions(): Observable<RoleBriefDto[]> {
     return this.http.get<RoleBriefDto[]>(`${this.baseUrl}/options`);
   }

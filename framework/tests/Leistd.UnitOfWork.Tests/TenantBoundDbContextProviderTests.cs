@@ -1,14 +1,16 @@
 using System.Data.Common;
 using Leistd.MultiTenancy;
-using Leistd.UnitOfWork.Core;
-using Leistd.UnitOfWork.Core.Options;
-using Leistd.UnitOfWork.Core.Uow;
-using Leistd.UnitOfWork.EfCore;
-using Leistd.UnitOfWork.EfCore.Database;
+using Leistd.UnitOfWork.Options;
+using Leistd.UnitOfWork.EntityFrameworkCore;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.Data;
+using Leistd.Data.Attributes;
+using Leistd.Data.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.UnitOfWork.Tests;
 
@@ -30,7 +32,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMultiTenancyCore();
-        services.AddSingleton<ITenantConnectionStringResolver>(_resolver);
+        services.AddSingleton<IConnectionStringResolver>(_resolver);
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<FirstDbContext>((_, options) => ConfigureSqlite(options, connectionString));
@@ -96,7 +98,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
         using (var unitOfWork = await manager.BeginAsync())
         {
-            var unitOfWorkProvider = ((Core.Uow.UnitOfWork)unitOfWork).ServiceProvider;
+            var unitOfWorkProvider = ((Leistd.UnitOfWork.DefaultUnitOfWork)unitOfWork).ServiceProvider;
             var firstProvider = unitOfWorkProvider.GetRequiredService<IDbContextProvider<FirstDbContext>>();
             var secondProvider = unitOfWorkProvider.GetRequiredService<IDbContextProvider<SecondDbContext>>();
             (await firstProvider.GetDbContextAsync()).FirstRows.Add(new FirstRow());
@@ -125,6 +127,34 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
             using (currentTenant.Change(Guid.NewGuid()))
             {
                 await Assert.ThrowsAsync<InvalidOperationException>(() => secondProvider.GetDbContextAsync());
+            }
+        }
+    }
+
+    /// <summary>
+    /// 切换租户后复用同一个 DbContext 类型同样必须被拒绝。
+    /// </summary>
+    /// <remarks>
+    /// 与上一条的区别在于走的是"命中已创建实例"的快路径：那条路径在解析连接之前就返回，
+    /// 因此不经过 <c>Bind</c>。归属校验必须独立地放在快路径之前，否则同一个 DbContext
+    /// 被复用时租户切换就检查不到——上一条用例走的是创建新 DbContext 的慢路径，覆盖不到这里。
+    /// </remarks>
+    [Fact]
+    public async Task Tenant_switch_is_rejected_even_when_the_same_dbcontext_type_is_reused()
+    {
+        var currentTenant = _services.GetRequiredService<ICurrentTenant>();
+        var manager = _services.GetRequiredService<IUnitOfWorkManager>();
+        var firstProvider = _services.GetRequiredService<IDbContextProvider<FirstDbContext>>();
+
+        using (currentTenant.Change(_tenantId))
+        using (var unitOfWork = await manager.BeginAsync())
+        {
+            await firstProvider.GetDbContextAsync();
+
+            using (currentTenant.Change(Guid.NewGuid()))
+            {
+                // 同一个类型，第二次获取会命中已创建实例
+                await Assert.ThrowsAsync<InvalidOperationException>(() => firstProvider.GetDbContextAsync());
             }
         }
     }
@@ -171,11 +201,55 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
         using var unitOfWork = await manager.BeginAsync(new UnitOfWorkOptions { IsTransactional = false });
-        var scopedProvider = ((Core.Uow.UnitOfWork)unitOfWork).ServiceProvider
+        var scopedProvider = ((Leistd.UnitOfWork.DefaultUnitOfWork)unitOfWork).ServiceProvider
             .GetRequiredService<IDbContextProvider<InMemoryDbContext>>();
         (await scopedProvider.GetDbContextAsync()).Rows.Add(new FirstRow());
 
         await unitOfWork.CompleteAsync();
+    }
+
+    /// <summary>
+    /// 无解析器、两个 DbContext 分别配置到不同数据库时必须立即失败
+    /// </summary>
+    /// <remarks>
+    /// 不拦的话后果是静默写错库：第二个 DbContext 会收到第一个已绑定目标的连接，
+    /// 宿主回调采纳 <c>ExistingConnection</c> 后，它本来配置的库根本不会被访问。
+    /// 两个库恰好有同名表时不会报任何错——写入落到了调用方并未选择的库上。
+    /// 有解析器时目标由解析结果定案，不走这条路径。
+    /// </remarks>
+    [Fact]
+    public async Task Two_dbcontext_types_on_different_targets_without_a_resolver_fail_fast()
+    {
+        var connA = $"Data Source=different-a-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        var connB = $"Data Source=different-b-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        await using var anchorA = new SqliteConnection(connA);
+        await anchorA.OpenAsync();
+        await using var anchorB = new SqliteConnection(connB);
+        await anchorB.OpenAsync();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddUnitOfWork();
+        services.AddUnitOfWorkEfCore();
+        services.AddDbContext<FirstDbContext>((_, o) => ConfigureSqlite(o, connA));
+        services.AddDbContext<SecondDbContext>((_, o) => ConfigureSqlite(o, connB));
+        await using var provider = services.BuildServiceProvider();
+
+        await using (var init = provider.CreateAsyncScope())
+        {
+            await init.ServiceProvider.GetRequiredService<FirstDbContext>().Database.EnsureCreatedAsync();
+            await init.ServiceProvider.GetRequiredService<SecondDbContext>().Database.EnsureCreatedAsync();
+        }
+
+        var manager = provider.GetRequiredService<IUnitOfWorkManager>();
+        using var unitOfWork = await manager.BeginAsync();
+        var sp = ((Leistd.UnitOfWork.DefaultUnitOfWork)unitOfWork).ServiceProvider;
+        (await sp.GetRequiredService<IDbContextProvider<FirstDbContext>>().GetDbContextAsync())
+            .FirstRows.Add(new FirstRow());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sp.GetRequiredService<IDbContextProvider<SecondDbContext>>().GetDbContextAsync());
+        Assert.Contains("different physical database", error.Message, StringComparison.Ordinal);
     }
 
     private static void ConfigureSqlite(DbContextOptionsBuilder options, string fallbackConnectionString)
@@ -191,7 +265,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         }
     }
 
-    private sealed class MutableResolver(string connectionString) : ITenantConnectionStringResolver
+    private sealed class MutableResolver(string connectionString) : IConnectionStringResolver
     {
         public string ConnectionString { get; set; } = connectionString;
         public bool WasAwaited { get; private set; }
@@ -218,7 +292,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         public DbSet<SecondRow> SecondRows => Set<SecondRow>();
     }
 
-    [TenantConnectionStringName("Control")]
+    [ConnectionStringName("Control")]
     private sealed class ControlDbContext(DbContextOptions<ControlDbContext> options) : DbContext(options);
 
     private sealed class InMemoryDbContext(DbContextOptions<InMemoryDbContext> options) : DbContext(options)

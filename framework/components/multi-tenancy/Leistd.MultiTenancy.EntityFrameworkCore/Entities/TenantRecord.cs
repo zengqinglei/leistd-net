@@ -1,10 +1,12 @@
 using Leistd.Auditing;
+using Leistd.MultiTenancy.Stores;
+using Leistd.Auditing.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 
-namespace Leistd.MultiTenancy.EntityFrameworkCore;
+namespace Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 
 /// <summary>
-/// 租户持久化实体（宿主侧数据，<b>不实现</b> <see cref="IMultiTenant"/>，不受租户过滤器影响）。
-/// 创建与删除时间由 <see cref="ITenantManager"/> 填充，用户审计字段由宿主审计拦截器填充
+/// 表示宿主侧的持久化租户记录。
 /// </summary>
 /// <remarks>
 /// 写入请统一通过 <see cref="ITenantManager"/>：它负责名称归一化与未删除行内的唯一性校验。
@@ -12,20 +14,31 @@ namespace Leistd.MultiTenancy.EntityFrameworkCore;
 /// </remarks>
 public class TenantRecord : IFullAuditedObject
 {
-    /// <summary>租户 Id（有序 Guid v7）</summary>
+    /// <summary>获取或设置租户标识。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
-    /// <summary>租户名称（业务标识，大小写不敏感唯一）</summary>
+    /// <summary>获取或设置大小写不敏感的唯一租户名称。</summary>
     public string Name { get; set; } = default!;
 
-    /// <summary>归一化名称（查询键）</summary>
+    /// <summary>获取或设置归一化查询键。</summary>
     public string NormalizedName { get; set; } = default!;
 
-    /// <summary>显示名称（可选）</summary>
+    /// <summary>获取或设置显示名称。</summary>
     public string? DisplayName { get; set; }
 
-    /// <summary>是否启用。停用租户的请求会被多租户中间件拒绝</summary>
+    /// <summary>获取或设置租户是否启用。</summary>
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// 租户生命周期的并发版本，同时作为 EF 并发令牌。
+    /// </summary>
+    /// <remarks>
+    /// 启用、停用、改名与连接配置的创建/修改全部竞争这一个版本，因此同一租户的这些管理操作互斥，
+    /// 并发时落败方抛 <c>TenantConcurrencyConflictException</c>（409）。
+    /// 这道串行化让「改路由前必须已停用」成为数据库层面的不变量。
+    /// 取舍论证见 multi-tenancy 组件文档「租户管理」。
+    /// </remarks>
+    public long Version { get; set; } = 1;
 
     /// <inheritdoc />
     public DateTime CreationTime { get; set; }

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Leistd.MultiTenancy.AspNetCore;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -7,6 +8,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
+using Leistd.MultiTenancy.Exceptions;
+using Leistd.MultiTenancy.Stores;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.Tests;
 
@@ -130,7 +134,7 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
     public async Task Unknown_tenant_throws_not_found()
     {
         // 未配置全局异常处理器的 TestServer 会把异常原样抛给调用方；
-        // 真实宿主由 Leistd.Exception 映射为 404
+        // 真实宿主由 Leistd.ExceptionHandling 映射为 404
         await Assert.ThrowsAsync<TenantNotFoundException>(
             () => GetAsync("/", ("X-Tenant-Id", Guid.NewGuid().ToString())));
     }

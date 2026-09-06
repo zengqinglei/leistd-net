@@ -1,6 +1,7 @@
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
+import { parseMockSorting } from '../core/sorting';
 import {
   ALL_PERMISSIONS,
   MockRole,
@@ -22,20 +23,20 @@ import { getCurrentUser } from '../utils/current-user';
 function requireUser() {
   const user = getCurrentUser();
   if (!user) {
-    throw new MockException(401, { code: 40100, message: 'Not authenticated' });
+    throw new MockException(401, { code: 'Error:Unauthorized', message: 'Not authenticated' });
   }
   return user;
 }
 
 /** 计算当前用户的有效权限：超管全量，否则取其角色授予的并集。 */
-function effectivePermissionsOf(username: string): { permissions: string[]; revision: string } {
+function effectivePermissionsOf(username: string): { permissions: string[]; versionToken: string } {
   const user = USERS.find((candidate) => candidate.username === username);
   if (!user) {
-    return { permissions: [], revision: 'anonymous' };
+    return { permissions: [], versionToken: 'anonymous' };
   }
 
   if (user.isSuperAdmin) {
-    return { permissions: [...ALL_PERMISSIONS], revision: 'super-admin' };
+    return { permissions: [...ALL_PERMISSIONS], versionToken: 'super-admin' };
   }
 
   const granted = new Set<string>();
@@ -48,7 +49,7 @@ function effectivePermissionsOf(username: string): { permissions: string[]; revi
     }
 
     const entry = PERMISSION_GRANTS[grantKey('Role', role.id)];
-    parts.push(`${role.id}:${entry?.revision ?? 0}`);
+    parts.push(`${role.id}:${entry?.version ?? 0}`);
     for (const name of entry?.permissionNames ?? []) {
       granted.add(name);
     }
@@ -56,7 +57,7 @@ function effectivePermissionsOf(username: string): { permissions: string[]; revi
 
   return {
     permissions: [...granted].sort(),
-    revision: `r${parts.sort().join(',')}`,
+    versionToken: `r${parts.sort().join(',')}`,
   };
 }
 
@@ -65,16 +66,19 @@ export function requirePermission(permission: string) {
   const user = requireUser();
   const { permissions } = effectivePermissionsOf(user.username);
   if (!permissions.includes(permission)) {
-    throw new MockException(403, { code: 40300, message: `Missing permission: ${permission}` });
+    throw new MockException(403, {
+      code: 'Error:Forbidden',
+      message: `Missing permission: ${permission}`,
+    });
   }
   return user;
 }
 
 export function getCurrentPermissions() {
   const user = requireUser();
-  const { permissions, revision } = effectivePermissionsOf(user.username);
+  const { permissions, versionToken } = effectivePermissionsOf(user.username);
   const target = USERS.find((candidate) => candidate.username === user.username);
-  return { permissions, isSuperAdmin: target?.isSuperAdmin ?? false, revision };
+  return { permissions, isSuperAdmin: target?.isSuperAdmin ?? false, versionToken };
 }
 
 export function getPermissionDefinitions() {
@@ -89,7 +93,7 @@ function requireAnyPermission(candidates: string[]) {
   const { permissions } = effectivePermissionsOf(user.username);
   if (!candidates.some((permission) => permissions.includes(permission))) {
     throw new MockException(403, {
-      code: 40300,
+      code: 'Error:Forbidden',
       message: `Missing any of: ${candidates.join(', ')}`,
     });
   }
@@ -122,10 +126,12 @@ export function getRoles(params: Record<string, unknown>): PagedResultDto<unknow
 
 type MockRoleRow = MockRole & { userCount: number; permissionCount: number };
 
-/** 复刻列表页的列排序；未识别的字段回落到默认的排序号 + 名称。 */
+/** 与后端 `RoleAppService.ApplySorting` 同一份字段清单。 */
+const ROLE_SORT_FIELDS = ['displayName', 'sort', 'creationTime'] as const;
+
+/** 复刻列表页的列排序；不在白名单内的字段与后端一样是 400。 */
 function sortRoles(rows: MockRoleRow[], sorting: string): void {
-  const [field, direction] = sorting.trim().split(/\s+/);
-  const descending = direction === 'desc';
+  const { field, descending } = parseMockSorting(sorting, ROLE_SORT_FIELDS, 'sort');
   const pick = (row: MockRoleRow): string | number => {
     switch (field) {
       case 'displayName':
@@ -144,19 +150,36 @@ function sortRoles(rows: MockRoleRow[], sorting: string): void {
       typeof leftValue === 'number' && typeof rightValue === 'number'
         ? leftValue - rightValue
         : String(leftValue).localeCompare(String(rightValue));
-    return (
-      (compared !== 0 ? compared : left.name.localeCompare(right.name)) * (descending ? -1 : 1)
-    );
+    const directed = compared * (descending ? -1 : 1);
+    if (directed !== 0) {
+      return directed;
+    }
+
+    // 与后端一致：排序号相同时按名称，名称始终升序（它是给人看的次序，不随主排序方向反转）
+    if (field === 'sort') {
+      const byName = left.name.localeCompare(right.name);
+      if (byName !== 0) {
+        return byName;
+      }
+    }
+
+    // 稳定次序与后端同为 id，同样不随方向反转
+    return left.id.localeCompare(right.id);
   });
 }
 
 export function getRoleOptions() {
   requirePermission('App.Users.ManageRoles');
-  return ROLES.sort((left, right) => left.sort - right.sort).map((role) => ({
-    id: role.id,
-    name: role.name,
-    displayName: role.displayName,
-  }));
+  // 与后端 GetAllAsync 同为 Sort → Name（角色名唯一，因此不需要再补稳定键）。
+  // 排副本而不是 ROLES 本身：ROLES.sort() 会原地重排这份全局 Mock 数据，
+  // 把"取一次选项"变成对其他接口可见的副作用
+  return [...ROLES]
+    .sort((left, right) => left.sort - right.sort || left.name.localeCompare(right.name))
+    .map((role) => ({
+      id: role.id,
+      name: role.name,
+      displayName: role.displayName,
+    }));
 }
 
 export function createRole(body: Record<string, unknown>) {
@@ -164,7 +187,10 @@ export function createRole(body: Record<string, unknown>) {
 
   const name = String(body['name'] ?? '').trim();
   if (ROLES.some((role) => role.name === name)) {
-    throw new MockException(400, { code: 40000, message: `Role '${name}' already exists.` });
+    throw new MockException(400, {
+      code: 'Error:BadRequest',
+      message: `Role '${name}' already exists.`,
+    });
   }
 
   const role = {
@@ -178,7 +204,7 @@ export function createRole(body: Record<string, unknown>) {
     creationTime: new Date().toISOString(),
   };
   ROLES.push(role);
-  PERMISSION_GRANTS[grantKey('Role', role.id)] = { revision: 0, permissionNames: [] };
+  PERMISSION_GRANTS[grantKey('Role', role.id)] = { version: 0, permissionNames: [] };
 
   return { ...role, userCount: 0, permissionCount: 0 };
 }
@@ -188,7 +214,7 @@ export function updateRole(id: string, body: Record<string, unknown>) {
 
   const role = ROLES.find((candidate) => candidate.id === id);
   if (!role) {
-    throw new MockException(404, { code: 40400, message: 'Role does not exist' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Role does not exist' });
   }
 
   role.displayName = String(body['displayName'] ?? role.displayName);
@@ -209,13 +235,13 @@ export function deleteRole(id: string) {
 
   const index = ROLES.findIndex((candidate) => candidate.id === id);
   if (index < 0) {
-    throw new MockException(404, { code: 40400, message: 'Role does not exist' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Role does not exist' });
   }
 
   const role = ROLES[index];
   if (role.isStatic) {
     throw new MockException(400, {
-      code: 40000,
+      code: 'Error:BadRequest',
       message: `Built-in role '${role.name}' cannot be deleted.`,
     });
   }
@@ -223,7 +249,7 @@ export function deleteRole(id: string) {
   const assigned = USERS.filter((user) => user.roles.includes(role.name)).length;
   if (assigned > 0) {
     throw new MockException(400, {
-      code: 40000,
+      code: 'Error:BadRequest',
       message: `Role '${role.name}' still has ${assigned} assigned user(s).`,
     });
   }
@@ -234,7 +260,7 @@ export function deleteRole(id: string) {
 
 function buildGrantsResponse(providerName: string, providerKey: string) {
   const entry = PERMISSION_GRANTS[grantKey(providerName, providerKey)] ?? {
-    revision: 0,
+    version: 0,
     permissionNames: [],
   };
   const granted = new Set(entry.permissionNames);
@@ -242,7 +268,7 @@ function buildGrantsResponse(providerName: string, providerKey: string) {
   return {
     providerName,
     providerKey,
-    revision: entry.revision,
+    version: entry.version,
     grants: ALL_PERMISSIONS.map((name) => ({ name, granted: granted.has(name) })),
   };
 }
@@ -256,13 +282,13 @@ export function replaceRoleGrants(roleId: string, body: Record<string, unknown>)
   requirePermission('App.Roles.ManagePermissions');
 
   const key = grantKey('Role', roleId);
-  const entry = PERMISSION_GRANTS[key] ?? { revision: 0, permissionNames: [] };
-  const expected = Number(body['expectedRevision'] ?? 0);
+  const entry = PERMISSION_GRANTS[key] ?? { version: 0, permissionNames: [] };
+  const expected = Number(body['expectedVersion'] ?? 0);
 
   // 复刻乐观并发：版本不匹配返回 409，而不是静默覆盖对方的修改。
-  if (expected !== entry.revision) {
+  if (expected !== entry.version) {
     throw new MockException(409, {
-      code: 40900,
+      code: 'Error:Conflict',
       message: 'The permissions were changed by someone else. Reload and try again.',
     });
   }
@@ -271,12 +297,12 @@ export function replaceRoleGrants(roleId: string, body: Record<string, unknown>)
   const unknown = permissionNames.filter((name) => !ALL_PERMISSIONS.includes(name));
   if (unknown.length > 0) {
     throw new MockException(400, {
-      code: 40000,
+      code: 'Error:BadRequest',
       message: `Permission '${unknown[0]}' is not defined or is disabled.`,
     });
   }
 
-  PERMISSION_GRANTS[key] = { revision: entry.revision + 1, permissionNames: [...permissionNames] };
+  PERMISSION_GRANTS[key] = { version: entry.version + 1, permissionNames: [...permissionNames] };
   return buildGrantsResponse('Role', roleId);
 }
 
@@ -285,7 +311,7 @@ export function getUserRoles(userId: string) {
 
   const user = USERS.find((candidate) => candidate.id === userId);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: 'User does not exist' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'User does not exist' });
   }
 
   return ROLES.filter((role) => user.roles.includes(role.name)).map((role) => ({
@@ -300,7 +326,7 @@ export function replaceUserRoles(userId: string, body: Record<string, unknown>) 
 
   const user = USERS.find((candidate) => candidate.id === userId);
   if (!user) {
-    throw new MockException(404, { code: 40400, message: 'User does not exist' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'User does not exist' });
   }
 
   const roleIds = (body['roleIds'] as string[]) ?? [];

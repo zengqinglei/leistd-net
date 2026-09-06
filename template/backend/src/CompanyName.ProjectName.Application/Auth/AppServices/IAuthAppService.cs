@@ -1,5 +1,6 @@
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
+using System.Security.Claims;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
@@ -8,7 +9,12 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// </summary>
 public interface IAuthAppService : IAppService
 {
-
+    /// <summary>
+    /// 验证本地账号并创建会话主体
+    /// </summary>
+    Task<ClaimsPrincipal> AuthenticateSessionAsync(
+        LoginInputDto input,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 用户注册

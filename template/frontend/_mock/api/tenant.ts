@@ -1,7 +1,7 @@
-//#if (MultiTenancy)
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
-import { TENANTS, toTenantBrief, toTenantOutput } from '../data/tenant';
+import { ensureAcceptablePassword } from '../data/password-policy';
+import { TENANTS, toTenantLookup, toTenantOutput } from '../data/tenant';
 
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;
@@ -35,7 +35,7 @@ export function getTenants(params: any): PagedResultDto<any> {
 export function getTenantById(id: string) {
   const tenant = TENANTS.find((t) => t.id === id);
   if (!tenant) {
-    throw new MockException(404, { code: 40400, message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
   }
   return toTenantOutput(tenant);
 }
@@ -45,17 +45,19 @@ export function getTenantByName(name: string) {
   const normalized = decodeURIComponent(name).toLowerCase();
   const tenant = TENANTS.find((t) => t.name.toLowerCase() === normalized);
   if (!tenant) {
-    throw new MockException(404, { code: 40400, message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
   }
-  return toTenantBrief(tenant);
+  return toTenantLookup(tenant);
 }
 
 export function createTenant(value: any) {
   const name = String(value.name ?? '').trim();
   // 名称冲突复刻后端 409 形状。
   if (TENANTS.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-    throw new MockException(409, { code: 40900, message: 'Tenant name already exists' });
+    throw new MockException(409, { code: 'Error:Conflict', message: 'Tenant name already exists' });
   }
+  // 复刻后端租户播种路径的口令策略（主体措辞与后端一致）。
+  ensureAcceptablePassword(value.adminPassword, 'Tenant admin password');
 
   const newTenant = {
     id: crypto.randomUUID(),
@@ -71,12 +73,12 @@ export function createTenant(value: any) {
 export function updateTenant(id: string, value: any) {
   const tenant = TENANTS.find((t) => t.id === id);
   if (!tenant) {
-    throw new MockException(404, { code: 40400, message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
   }
 
   const name = String(value.name ?? '').trim();
   if (TENANTS.some((t) => t.id !== id && t.name.toLowerCase() === name.toLowerCase())) {
-    throw new MockException(409, { code: 40900, message: 'Tenant name already exists' });
+    throw new MockException(409, { code: 'Error:Conflict', message: 'Tenant name already exists' });
   }
 
   tenant.name = name;
@@ -87,7 +89,7 @@ export function updateTenant(id: string, value: any) {
 export function setTenantActivation(id: string, value: any) {
   const tenant = TENANTS.find((t) => t.id === id);
   if (!tenant) {
-    throw new MockException(404, { code: 40400, message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
   }
   tenant.isActive = value.isActive === true;
   return toTenantOutput(tenant);
@@ -96,7 +98,7 @@ export function setTenantActivation(id: string, value: any) {
 export function deleteTenant(id: string) {
   const index = TENANTS.findIndex((t) => t.id === id);
   if (index < 0) {
-    throw new MockException(404, { code: 40400, message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
   }
   TENANTS.splice(index, 1);
 }
@@ -111,4 +113,3 @@ export const TENANT_API = {
   'PUT /api/v1/tenants/:id': (req: MockRequest) => updateTenant(req.params.id, req.body),
   'DELETE /api/v1/tenants/:id': (req: MockRequest) => deleteTenant(req.params.id),
 };
-//#endif

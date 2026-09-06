@@ -1,8 +1,6 @@
 # 通知
 
-通知组件为应用提供**站内通知**能力：业务代码通过统一的发布接口触发通知，框架负责补齐通知信息、（可选）持久化到数据库、并通过 SignalR 实时推送给指定用户、指定分组或全体在线用户。典型场景包括：审批结果提醒、数据变更提示、系统公告、工作流状态变更通知等，兼顾"通知历史可查"与"到达即弹出"两种诉求。
-
-Leistd 通过 `INotificationPublisher` 抽象业务侧的发布入口，内部再拆分为持久化（`INotificationStore`）与实时投递（`INotificationSender`）两个可选、可插拔的关注点：不接持久化包时通知只走实时推送、不接实时推送包时发布器可只落库，二者互不依赖对方存在。
+站内通知：业务代码经 `INotificationPublisher` 发布，框架补齐信息、写入收件人历史（`INotificationStore`），再推给收件人（`INotificationSender`）。
 
 ## 何时使用
 
@@ -12,8 +10,6 @@ Leistd 通过 `INotificationPublisher` 抽象业务侧的发布入口，内部�
 | 需要通知到达即时弹出/刷新，无需等待用户刷新页面 | 引入 `Leistd.Notifications.AspNetCore.SignalR`，注册 `INotificationSender` |
 | 同时需要历史记录 + 实时推送（最常见） | 两个实现包都引入，业务只注入 `INotificationPublisher` |
 | 仅编写业务代码（发布通知），不关心底层持久化/传输 | 只引用 `Leistd.Notifications.Core` 中的接口 |
-
-> 发布到用户组（`PublishToGroupAsync`）与全体（`PublishToAllAsync`）**不会写入持久化存储**，仅用于实时广播场景（详见[实现行为](#实现行为)）；需要保留历史记录的通知必须走 `PublishToUserAsync`。
 
 ## 安装
 
@@ -28,21 +24,14 @@ dotnet add package Leistd.Notifications.EntityFrameworkCore
 dotnet add package Leistd.Notifications.AspNetCore.SignalR
 ```
 
-> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
-
-## 配置 Provider
+## 注册
 
 在 `Program.cs` / DI 配置中按需注册：
 
 ```csharp
-// EF Core 持久化（TDbContext 需已在 OnModelCreating 中调用 ConfigureNotifications）
 services.AddNotificationsEfCore<MyProjectDbContext>();
 
-// SignalR 实时推送（内部会调用 AddNotifications 注册 INotificationPublisher）
-builder.Services.AddNotificationsSignalR(opt =>
-{
-    // 复用 Leistd.RealTime 的 RealTimeOptions 配置项（KeepAliveInterval、EnableRedisBackplane 等）
-});
+builder.Services.AddNotificationsSignalR();
 ```
 
 在 `OnModelCreating` 中应用通知实体的 EF Core 配置：
@@ -57,21 +46,19 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 映射通知 Hub 端点（需登录）：
 
 ```csharp
-app.MapNotificationHub(); // 默认路径 /hubs/notifications，可传参覆盖
+app.MapNotificationHub();
 ```
 
-DI 方法说明：
+`AddNotificationsSignalR()` 会同时注册 Core 发布器与 SignalR 传输，但不注册持久化，也不映射业务实时 Hub。`MapNotificationHub()` 默认映射到 `/hubs/notifications` 并要求登录。
 
-| 方法 | 所属包 | 作用 |
-| --- | --- | --- |
-| `AddNotifications()` | `Leistd.Notifications.Core` | 以 **Transient** 注册 `INotificationPublisher`→`NotificationPublisher`。仅注册发布器本身，不含存储/传输 |
-| `AddNotificationsEfCore<TDbContext>()` | `Leistd.Notifications.EntityFrameworkCore` | 以 **Transient** 注册 `INotificationStore`→`EfCoreNotificationStore<TDbContext>`（基于指定 `DbContext`） |
-| `ConfigureNotifications()` | `Leistd.Notifications.EntityFrameworkCore` | `ModelBuilder` 扩展，应用 `NotificationRecordConfiguration`；在 `OnModelCreating` 中调用 |
-| `AddNotificationsSignalR(configure?)` | `Leistd.Notifications.AspNetCore.SignalR` | 内部调用 `AddNotifications()` + `AddNotificationSignalRTransport()`，并以 **Singleton** 注册 `INotificationSender`→`SignalRNotificationSender`。**不**注册持久化，也不注册实时业务 Hub |
-| `AddNotificationSignalRTransport(configure?)` | `Leistd.Notifications.AspNetCore.SignalR` | 注册通知 SignalR 传输所需的最小基础设施（`AddSignalR`、`RealTimeOptions`、`IUserIdProvider`），供 `AddNotificationsSignalR` 内部调用，一般无需单独调用 |
-| `MapNotificationHub(path?)` | `Leistd.Notifications.AspNetCore.SignalR` | 映射 `NotificationHub` 端点，默认路径 `/hubs/notifications`（`DefaultNotificationHubPath`），要求已登录（`RequireAuthorization`） |
+> `INotificationSender` 以 `IEnumerable<T>` 注入，可同时注册多个传输通道，发布时逐一调用。
+> `INotificationStore` 是**必需且唯一**的依赖：通知的定义就是有历史、可补看、计入未读数，未注册时解析 `INotificationPublisher` 直接失败；多个持久化去处只会带来「写了一半」的不一致。只要瞬态推送、不要历史的场景属于[实时通信](./realtime.md)，不属于本组件。
 
-> `INotificationStore` 与 `INotificationSender` 均以 `IEnumerable<T>` 形式注入 `NotificationPublisher`：可同时注册多个实现（如多个存储），发布时会逐一遍历调用。
+> **前置**：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`。本家族的 EF 存储与管理器经
+> `IDbContextProvider<TDbContext>` 取上下文——只有它会设置 `DbContextCreationContext.Current`，
+> 宿主的 `AddDbContext` 回调据此拿到本工作单元已解析的连接。直接注入 `TDbContext` 会让独立库租户的数据
+> 落到宿主配置的默认连接上、并脱离工作单元事务，两者都是静默的。与 `AddMultiTenancyEfCore` 同一约定：
+> 组件不替其它组件注册基础设施。
 
 ## 使用
 
@@ -82,7 +69,6 @@ public class OrderNotifier(INotificationPublisher notificationPublisher)
 {
     public async Task ApproveOrderAsync(string userId, string orderNo)
     {
-        // —— 主业务流程 ——
         await notificationPublisher.PublishToUserAsync(userId, new NotificationOutputDto
         {
             Title = "订单已通过审批",
@@ -115,11 +101,9 @@ public class MessageCenterController(INotificationStore notificationStore, ICurr
 | --- | --- |
 | `INotificationPublisher` | 通知发布器，业务层唯一入口，不感知底层传输 |
 | `INotificationPublisher.PublishToUserAsync(userId, notification, ct)` | 推送给指定用户；`userId` 为 `string` |
-| `INotificationPublisher.PublishToGroupAsync(groupName, notification, ct)` | 推送给指定用户组；`groupName` 为 `string` |
-| `INotificationPublisher.PublishToAllAsync(notification, ct)` | 推送给所有在线用户 |
 | `INotificationSender` | 通知投递器，只负责传输、不负责持久化，由具体传输实现（如 SignalR）实现 |
-| `INotificationSender.SendToUserAsync/SendToGroupAsync/SendToAllAsync` | 与 `INotificationPublisher` 对应的三个投递方法，签名一致 |
-| `INotificationStore` | 通知持久化接口，可选实现 |
+| `INotificationSender.SendToUserAsync(userId, notification, ct)` | 与 `INotificationPublisher` 对应的投递方法，签名一致 |
+| `INotificationStore` | 通知持久化接口；**必需且只能有一个**实现 |
 | `INotificationStore.SaveAsync(notification, userId, ct)` | 保存通知 |
 | `INotificationStore.GetByUserAsync(userId, maxCount = 50, ct)` | 按创建时间**倒序**获取用户通知列表，默认最多 50 条 |
 | `INotificationStore.MarkAsReadAsync(notificationId, userId, ct)` | 标记单条通知为已读 |
@@ -132,45 +116,43 @@ public class MessageCenterController(INotificationStore notificationStore, ICurr
 
 ### Leistd.Notifications.Core（`NotificationPublisher` 默认发布器）
 
-- **`PublishToUserAsync` 会写入持久化存储**：先遍历注入的所有 `INotificationStore` 依次 `SaveAsync`，再遍历所有 `INotificationSender` 依次 `SendToUserAsync`。
-- **`PublishToGroupAsync` 与 `PublishToAllAsync` 不写入任何存储**，只遍历 `INotificationSender` 完成实时投递——这是源码中的明确不对称设计：组播/广播通知不落库、不计入用户的历史通知与未读数。
-- 三个方法发布前都会通过 `EnsureCreationTime` 补齐时间：若传入的 `notification.CreationTime` 为默认值（`default`），用 `IClock` 归一化后的当前时间（`clock.Normalize(clock.Now)`）填充；已显式赋值的 `CreationTime` 不会被覆盖。
-- 多个 `INotificationStore` / `INotificationSender` 均按注入顺序 `foreach` **串行 `await`**，非并行、非后台任务。
+- `PublishToUserAsync` 先写入 Store，再依次调用所有 Sender。Store 是必需依赖；先落库再推送——推送失败只是这一次没送到，历史还在，反过来则是历史丢了。
+- 发布前通过 `EnsureCreationTime` 定下时间：为默认值（`default`）时取 `clock.Now`，否则用调用方传入的值；两者都经 `clock.Normalize` 归一化为 UTC（`Local` 转换、`Unspecified` 视为 UTC），与框架其余时间线同一基准。
+- 多个 `INotificationSender` 按注入顺序 `foreach` **串行 `await`**，非并行、非后台任务。`INotificationStore` 只允许一个：多个持久化去处只会带来「写了一半」的不一致。
 
 ### Leistd.Notifications.AspNetCore.SignalR（实时推送）
 
-- `NotificationHub` 在客户端连接（`OnConnectedAsync`）时，取 `ICurrentUser.Id`（取不到则回退 `Context.UserIdentifier`），加入 SignalR 组 `user:{userId}`；取不到用户标识则只记警告日志，不加入任何组。
-- `SignalRNotificationSender` 的投递目标：`SendToUserAsync` 发到组 `user:{userId}`（即与 `NotificationHub` 加入的组前缀严格一致）；`SendToGroupAsync` 直接发到调用方传入的 `groupName`（不加前缀，与用户组是不同的组命名空间）；`SendToAllAsync` 发给 `Clients.All`。三者统一使用事件名 `NotificationReceived`（`SendAsync` 的方法名，前端通过 `connection.on("NotificationReceived", ...)` 订阅）。
-- 三个投递方法内部都用 `try/catch` 包裹 `SendAsync`：推送失败（如底层 SignalR 传输异常）只记 `LogError`，**不向上抛出**，不会导致 `PublishTo*Async` 失败。
+- `NotificationHub` 没有可供客户端调用的方法，也不做分组；它只是接收端点。
+- `SignalRNotificationSender.SendToUserAsync` 用 SignalR 自带的 `Clients.User(userId)` 寻址；事件名固定为 `NotificationReceived`（前端 `connection.on("NotificationReceived", ...)` 订阅）。
+- `SendToUserAsync` 内部用 `try/catch` 包裹 `SendAsync`：推送失败（如底层 SignalR 传输异常）只记 `LogError`，**不向上抛出**，不会导致 `PublishToUserAsync` 失败。
 - `AddNotificationsSignalR` 内部会先调用 `AddNotifications()`（若未单独调用也会补齐 `INotificationPublisher` 注册），因此只需要引用 SignalR 包并调用它，无需再显式调用 `AddNotifications()`。
-- `AddNotificationSignalRTransport` 复用 `Leistd.RealTime` 的 `RealTimeOptions`（`KeepAliveInterval`、`ClientTimeoutInterval`、`EnableDetailedErrors`、`EnableRedisBackplane` 等），并在 `UserIdClaimTypes` 未显式配置时默认使用 `["sub", ClaimTypes.NameIdentifier]`；同时以 `TryAddSingleton` 注册 `IUserIdProvider`→`ClaimsSignalRUserIdProvider`（已存在注册则不覆盖）。
+- `AddNotificationsSignalR` 的 SignalR 部分只调用基座的 `AddSignalRAmbientContext()`：SignalR 注册、Hub 调用的环境上下文与 `UserIdentifier` 解析都由基座提供，本组件不重复注册，也不碰 `HubOptions`。
 - `MapNotificationHub` 只映射通知自身的 Hub，**不会**代为映射 `Leistd.RealTime` 的业务实时 Hub；如项目同时需要业务实时事件，需另行调用 `AddRealTimeSignalR` 与 `MapRealTimeHub`。
 
 ### Leistd.Notifications.EntityFrameworkCore（持久化）
 
 - `EfCoreNotificationStore<TDbContext>` 为**泛型**实现，绑定到调用方指定的 `TDbContext`（`where TDbContext : DbContext`），通过 `dbContext.Set<NotificationRecord>()` 操作，宿主 DbContext 需自行包含该实体（由 `ConfigureNotifications()` 提供配置）。
-- `NotificationRecord` 实现 `ICreationAuditedObject`，`CreationTime` / `CreatorId` 由审计拦截器在 `SaveChanges` 时统一填充，`SaveAsync` 自身不手动赋值。
+- `NotificationRecord` 实现 `ICreationAuditedObject`。`CreationTime` 由发布器定好、`FromDto` 带入：留空转而依赖审计拦截器，等于把落库时间挂在「宿主是否给这个 DbContext 挂了审计拦截器」上——没挂就是 `default(DateTime)`，而通知列表按它排序。`CreatorId` 仍由审计拦截器填充。
 - `GetByUserAsync` 按 `CreationTime` **倒序**排序、`Take(maxCount)` 截断（默认 50）。
 - `MarkAsReadAsync` **幂等**：`notificationId` 无法解析为 `Guid` 时直接返回；查不到记录，或记录已是 `IsRead: true` 时也直接返回、不产生额外的 `SaveChanges`；仅在确实从未读变为已读时才更新 `IsRead` 与 `ReadAt` 并保存。
 - `MarkAllAsReadAsync` 只查询 `IsRead == false` 的记录批量标记；无未读记录时直接返回，不调用 `SaveChangesAsync`。
 - 索引：`(UserId, CreationTime)` 支撑"拉取用户通知列表"，`(UserId, IsRead)` 支撑"未读数"查询；表名沿用 EF Core 默认约定（`NotificationRecord`），不额外加框架前缀。
 
-## 配置项 / Options
-
-`Leistd.Notifications.Core` / `Leistd.Notifications.EntityFrameworkCore` 当前无独立 Options 类。`AddNotificationsSignalR` / `AddNotificationSignalRTransport` 复用 `Leistd.RealTime.RealTimeOptions`（连接保活、Redis 背板、用户标识 Claim 类型等），配置方式与实时组件一致。
-
 ## 注意事项
 
-- `PublishToGroupAsync` / `PublishToAllAsync` 不写入 `INotificationStore`：若业务需要"组内通知也能在历史列表看到"，需自行在业务代码中额外调用 `INotificationStore.SaveAsync`（对每个目标用户分别保存），组件不会隐式补齐。
+- **本组件只面向人**：每条通知都有归属用户、写入历史、计入未读数。需要推给「此刻在线的连接」（无归属、无历史）时用 [实时通信](./realtime.md) 的 `IBusinessEventPublisher`——那是瞬态推送的职责，不是没有历史的通知。
+
+- 本家族无独立 Options。心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；`UserIdentifier` 的 claim 解析顺序在 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions`。本组件不依赖实时通信组件。
+- 全员公告要进历史时是扇出：受众由业务决定，逐个调用 `PublishToUserAsync`。框架不提供「发给一个组」的入口——那会让受众解析与历史归属两件事混在一处。
 - `NotificationOutputDto.Id` 默认由 DTO 构造时生成（`Guid.CreateVersion7().ToString("N")`），持久化层 `NotificationRecord.FromDto` 会尝试用它解析为实体 `Guid` 主键；若传入的 `Id` 不是合法 Guid 字符串，会静默改为新生成的 `Guid.CreateVersion7()`（即持久化后的 Id 可能与发布时传入的字符串不同）。
-- SignalR 用户组前缀 `user:{userId}` 是硬编码约定，`NotificationHub` 加入组与 `SignalRNotificationSender.SendToUserAsync` 发送组必须保持一致，不要在业务代码中自行拼接同名字符串发到 `SendToGroupAsync`（那是不同的组命名空间）。
+- **传给 `PublishToUserAsync` 的 `userId` 必须等于该客户端的 SignalR `UserIdentifier`**，否则推送静默落空。`UserIdentifier` 由 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions.UserIdClaimTypes` 按顺序从 claim 解析（默认 `sub`、`ClaimTypes.NameIdentifier`），只有这一处定义。
 - SignalR 投递失败只记日志、不抛异常：调用 `PublishToUserAsync` 成功返回不代表用户端一定收到实时推送（例如客户端未连接、连接已断开），需要"送达确认"的场景仍应依赖持久化历史 + 客户端主动拉取未读数兜底。
-- `NotificationHub` 端点默认要求登录（`RequireAuthorization`），未登录客户端无法建立 SignalR 连接、也就无法加入 `user:{userId}` 组。
-- **授权只在握手阶段执行一次**。SignalR 不会对已建立的连接重跑策略，因此账号在连接之后被禁用、锁定或删除时，那条连接仍会继续收到推送，直到客户端、服务端或传输层实际断开。特别注意**令牌过期不会自动断开**：Hub 没有配置 `CloseOnAuthenticationExpiration`，SignalR 默认不会仅因令牌到期就关闭既有连接。确需到期即断的项目要显式开启该配置，并用真实 SignalR Client 验证。要让既有连接也立即失效，需要连接注册表加跨节点终止通道，由有明确敏感度要求的业务项目自行实现；本组件不提供，也不应把业务用户仓储反向塞进来。
+- `NotificationHub` 端点默认要求登录（`RequireAuthorization`），未登录客户端无法建立 SignalR 连接、也就收不到任何推送。
+- **Hub 调用的上下文与有效性由 SignalR 基座保证**。`AddNotificationsSignalR()` 内部走 `Leistd.AspNetCore.SignalR` 的 `AddSignalRAmbientContext()`：每次 Hub 调用前按连接主体建立 `ICurrentUser` / `ICurrentTenant` / `ICorrelationIdProvider`。**但 `NotificationHub` 没有可供客户端调用的方法**，因此连接建立后不会再触发复评——授权只在握手时执行一次，账号之后被禁用不会主动关闭既有连接。需要立即断连的项目自建终止通道。
+- **多副本部署必须配置 SignalR 背板**，否则推送只到达连在本节点的客户端。通知已落库，用户刷新后仍能看到，因此降级较软——但实时性会静默失效。配置方式见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
+- **令牌过期本身不会自动断开连接**：Hub 没有配置 `CloseOnAuthenticationExpiration`，SignalR 默认不因令牌到期关闭既有连接。确需到期即断的项目要显式开启该配置，并用真实 SignalR Client 验证。
 - **用 Bearer 认证时，浏览器客户端的令牌到不了 Hub**。浏览器的 WebSocket 与 SSE 接口设不了自定义请求头，令牌只能拼进 query；若宿主只接受 `Authorization: Bearer`，握手会失败。处理方式（按 Hub 路径定向搬运，含完整示例）见[实时通信组件文档](./realtime.md#bearer-认证下的-hub-令牌传递)——两个 Hub 面对的是同一个问题，配方不在此重复；照抄时把路径换成本组件实际映射的 `MapNotificationHub` 路径（默认 `/hubs/notifications`）。用 Cookie 会话时不涉及本条。
 
 ## 相关
 
-- [组件总览](./README.md)
-- [依赖注入](./dependency-injection.md)
 - [当前用户与身份信息](./security.md)

@@ -1,4 +1,4 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -9,7 +9,7 @@ using Leistd.Security.Claims;
 using Leistd.ServiceClient.Constants;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.Security.Users;
-using Leistd.Tracing.Core;
+using Leistd.Tracing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,7 +38,6 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
     /// <summary>client_id 取用户 Id 形态的客户端，用于主体命名空间碰撞回归。</summary>
     private const string ImpersonatingClientSecret = "SvcImpersonate@123456";
 
-    // ---------- 被调方安全 ----------
 
     [Fact]
     public async Task Service_info_should_be_anonymous()
@@ -145,7 +144,6 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    // ---------- 调用方消费路径（经真实 Client 包） ----------
 
     [Fact]
     public async Task Client_package_should_call_anonymous_endpoint()
@@ -189,7 +187,9 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(
             () => caller.GetRequiredService<IMyProjectClient>().WhoAmIAsync());
 
-        Assert.Equal((int)HttpStatusCode.Forbidden, exception.StatusCode);
+        // RemoteStatusCode 是远端那次请求的状态码；继承来的 StatusCode 是本服务对外的 502
+        Assert.Equal((int)HttpStatusCode.Forbidden, exception.RemoteStatusCode);
+        Assert.Equal((int)HttpStatusCode.BadGateway, exception.StatusCode);
     }
 
     /// <summary>
@@ -212,7 +212,7 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddCorrelationIdCore(_ => { });
-        services.AddSingleton<ICurrentPrincipalAccessor, TestCurrentPrincipalAccessor>();
+        services.AddSingleton<ICurrentPrincipalAccessor, CurrentPrincipalAccessor>();
         services.AddTransient<ICurrentUser, CurrentUser>();
 
         services.AddMyProjectClient(configuration)
@@ -225,14 +225,6 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
 
     private static ClaimsPrincipal CreateUserPrincipal(Guid userId) =>
         new(new ClaimsIdentity([new Claim("sub", userId.ToString())], "TestCaller"));
-
-    /// <summary>调用方宿主里的主体访问器：无 HTTP 上下文，只认 <c>Change</c> 显式设定的主体。</summary>
-    private sealed class TestCurrentPrincipalAccessor : CurrentPrincipalAccessor
-    {
-        protected override ClaimsPrincipal? GetClaimsPrincipal() => null;
-    }
-
-    // ---------- 辅助 ----------
 
     /// <summary>
     /// OpenIddict 的令牌端点只收 HTTPS。TestServer 不做真实 TLS，改基地址即可让
@@ -316,7 +308,7 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
 
     private sealed record ServiceInfoDto(string Service, string Version, DateTimeOffset ServerTime);
 
-    private sealed record WhoAmIDto(Guid? UserId, string? UserName, string? ClientId);
+    private sealed record WhoAmIDto(Guid? UserId, string? Username, string? ClientId);
 
     private sealed record TokenDto(string access_token);
 }

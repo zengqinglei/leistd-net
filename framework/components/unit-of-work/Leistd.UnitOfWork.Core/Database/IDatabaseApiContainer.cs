@@ -1,17 +1,13 @@
-namespace Leistd.UnitOfWork.Core.Database;
+namespace Leistd.UnitOfWork.Database;
 
 /// <summary>
-/// 数据库 API 容器接口
+/// 管理挂在同一个工作单元上的数据库 API。
 /// </summary>
 public interface IDatabaseApiContainer
 {
-    /// <summary>
-    /// 按稳定 key 查找数据库 API
-    /// </summary>
+    /// <summary>按稳定键查找数据库 API；不存在返回 <see langword="null"/>。</summary>
     IDatabaseApi? FindDatabaseApi(string key);
 
-    /// <summary>
-    /// 按稳定 key 添加数据库 API；同一 key 不允许被覆盖
-    /// </summary>
+    /// <summary>登记一个数据库 API。已存在的键不可替换。</summary>
     void AddDatabaseApi(string key, IDatabaseApi api);
 }

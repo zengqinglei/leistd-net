@@ -47,7 +47,7 @@ export const ALL_PERMISSIONS: string[] = [
   PERMISSIONS.roles.update,
   PERMISSIONS.roles.delete,
   PERMISSIONS.roles.managePermissions,
-  //#if (IdentityService)
+  //#if (OpenIddictServer)
   PERMISSIONS.openApplications.default,
   PERMISSIONS.openApplications.create,
   PERMISSIONS.openApplications.update,
@@ -97,7 +97,7 @@ export const PERMISSION_DEFINITIONS = [
           ),
         ],
       },
-      //#if (IdentityService)
+      //#if (OpenIddictServer)
       {
         name: PERMISSIONS.openApplications.default,
         displayName: 'Developer applications',
@@ -140,9 +140,9 @@ function leaf(name: string, displayName: string, parentName: string) {
  * 演示账号各自代表一种典型场景：`role_admin` 全权，`role_member` 只读用户列表，
  * 用于演示"有效权限是各来源授予的并集"。
  */
-export const PERMISSION_GRANTS: Record<string, { revision: number; permissionNames: string[] }> = {
-  'Role/role_admin': { revision: 1, permissionNames: [...ALL_PERMISSIONS] },
-  'Role/role_member': { revision: 1, permissionNames: [PERMISSIONS.users.default] },
+export const PERMISSION_GRANTS: Record<string, { version: number; permissionNames: string[] }> = {
+  'Role/role_admin': { version: 1, permissionNames: [...ALL_PERMISSIONS] },
+  'Role/role_member': { version: 1, permissionNames: [PERMISSIONS.users.default] },
 };
 
 export function grantKey(providerName: string, providerKey: string): string {

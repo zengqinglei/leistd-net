@@ -1,15 +1,5 @@
-import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { DatePipe } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  output,
-  signal,
-} from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -33,9 +23,7 @@ import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
-//#if (LocalAuthorization)
 import { HlmPopoverImports } from '@spartan-ng/helm/popover';
-//#endif
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
@@ -52,22 +40,24 @@ import {
   TablePaginator,
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
-//#if (LocalAuthorization)
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
-//#endif
-import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+} from '../../../../../../shared/models/table-column-meta';
+import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
-//#if (LocalAuthorization)
+import {
+  tableSortAria,
+  tableSortIcon,
+  toggleTableSort,
+} from '../../../../../../shared/utils/table-sorting';
+import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
 import { RoleBriefDto } from '../../../../models/role.dto';
-//#endif
 import { UserManagementOutputDto } from '../../../../models/user-management.dto';
 
-const MEDIUM_VIEWPORT = '(min-width: 768px)';
-const LARGE_VIEWPORT = '(min-width: 1024px)';
-//#if (LocalAuthorization)
 /** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
-//#endif
 
 @Component({
   selector: 'app-user-table',
@@ -80,10 +70,8 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     TablePaginator,
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
-    //#if (LocalAuthorization)
     ...HlmPopoverImports,
     PopoverAria,
-    //#endif
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
@@ -112,7 +100,6 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 })
 export class UserTable {
   private readonly authService = inject(AuthService);
-  private readonly breakpointObserver = inject(BreakpointObserver);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
@@ -130,9 +117,7 @@ export class UserTable {
    */
   readonly canUpdate = input(true);
   readonly canDelete = input(true);
-  //#if (LocalAuthorization)
   readonly canManageRoles = input(false);
-  //#endif
 
   /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
   // prettier-ignore
@@ -140,9 +125,7 @@ export class UserTable {
     () =>
       this.canUpdate() ||
       this.canDelete() ||
-      //#if (LocalAuthorization)
       this.canManageRoles() ||
-      //#endif
       false,
   );
 
@@ -150,31 +133,14 @@ export class UserTable {
   readonly sortingChange = output<SortingState>();
   readonly edit = output<string>();
   readonly toggleActive = output<UserManagementOutputDto>();
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   readonly resetPassword = output<string>();
   //#endif
   readonly delete = output<UserManagementOutputDto>();
-  //#if (LocalAuthorization)
   /** 角色分配是独立命令，与资料编辑分开触发。 */
   readonly manageRoles = output<UserManagementOutputDto>();
-  //#endif
 
-  private readonly viewport = toSignal(
-    this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),
-    {
-      initialValue: {
-        matches: false,
-        breakpoints: { [MEDIUM_VIEWPORT]: false, [LARGE_VIEWPORT]: false },
-      } satisfies BreakpointState,
-    },
-  );
-
-  private readonly tableViewport = computed(() => {
-    const breakpoints = this.viewport().breakpoints;
-    if (breakpoints[LARGE_VIEWPORT] === true) return 'desktop' as const;
-    if (breakpoints[MEDIUM_VIEWPORT] === true) return 'tablet' as const;
-    return 'mobile' as const;
-  });
+  private readonly tableViewport = tableViewportSignal();
 
   protected readonly columns: ColumnDef<UserManagementOutputDto>[] = [
     {
@@ -184,9 +150,7 @@ export class UserTable {
       meta: { priority: 'primary', locked: true },
     },
     { accessorKey: 'email', id: 'email', meta: { priority: 'secondary' } },
-    //#if (LocalAuthorization)
     { accessorKey: 'roles', id: 'roles', enableSorting: false, meta: { priority: 'secondary' } },
-    //#endif
     {
       accessorKey: 'isActive',
       id: 'status',
@@ -194,7 +158,7 @@ export class UserTable {
       enableHiding: false,
       meta: { priority: 'primary', locked: true },
     },
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     { accessorKey: 'lastLoginTime', id: 'lastLoginTime', meta: { priority: 'tertiary' } },
     //#endif
     { accessorKey: 'creationTime', id: 'creationTime', meta: { priority: 'tertiary' } },
@@ -202,14 +166,7 @@ export class UserTable {
       id: 'actions',
       enableSorting: false,
       enableHiding: false,
-      meta: {
-        priority: 'primary',
-        locked: true,
-        headClass:
-          'w-px px-2 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border',
-        cellClass:
-          'w-px px-2 py-2 whitespace-nowrap sticky right-0 z-10 bg-card group-hover:bg-muted/50 border-l border-border',
-      },
+      meta: ACTIONS_COLUMN_META,
     },
   ];
 
@@ -218,25 +175,21 @@ export class UserTable {
   );
 
   // 移动端/平板端「行展开」补偿：被隐藏的列不会丢数据，点行首箭头即可展开查看。
-  private readonly expandedRows = signal<ReadonlySet<string>>(new Set());
+  private readonly expandableRows = createExpandableRows();
+
   readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
 
   isRowExpanded(id: string): boolean {
-    return this.expandedRows().has(id);
+    return this.expandableRows.isExpanded(id);
   }
 
   toggleRow(id: string): void {
-    const next = new Set(this.expandedRows());
-    if (!next.delete(id)) {
-      next.add(id);
-    }
-    this.expandedRows.set(next);
+    this.expandableRows.toggle(id);
   }
 
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
   }
-  //#if (LocalAuthorization)
   detailLabel(field: 'email' | 'roles' | 'lastLogin' | 'created'): string {
     //#if (IncludeLocalization)
     const keys = {
@@ -256,25 +209,6 @@ export class UserTable {
     return labels[field];
     //#endif
   }
-  //#else
-  detailLabel(field: 'email' | 'lastLogin' | 'created'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      email: 'users.table.colEmail',
-      lastLogin: 'users.table.colLastLogin',
-      created: 'users.table.colCreatedAt',
-    } as const;
-    return this.transloco.translate(keys[field]);
-    //#else
-    const labels = {
-      email: 'Email',
-      lastLogin: 'Last sign-in',
-      created: 'Created at',
-    } as const;
-    return labels[field];
-    //#endif
-  }
-  //#endif
 
   detailsLabel(): string {
     //#if (IncludeLocalization)
@@ -305,7 +239,6 @@ export class UserTable {
   // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
-  //#if (LocalAuthorization)
   //#if (IncludeLocalization)
   rolesPopoverTitle(count: number): string {
     return this.transloco.translate('users.popover.rolesTitle', { count });
@@ -315,32 +248,23 @@ export class UserTable {
     return `Roles (${count})`;
   }
   //#endif
-  //#endif
 
   toggleSort(columnId: string): void {
-    const column = this.table.getColumn(columnId);
-    column?.toggleSorting(column.getIsSorted() === 'asc');
+    toggleTableSort(this.table, columnId);
   }
 
   sortIcon(columnId: string): string {
-    const direction = this.table.getColumn(columnId)?.getIsSorted();
-    return direction === 'asc'
-      ? 'lucideSortAsc'
-      : direction === 'desc'
-        ? 'lucideSortDesc'
-        : 'lucideArrowUpDown';
+    return tableSortIcon(this.table, columnId);
   }
 
   sortAria(columnId: string): 'ascending' | 'descending' | 'none' {
-    const direction = this.table.getColumn(columnId)?.getIsSorted();
-    return direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none';
+    return tableSortAria(this.table, columnId);
   }
 
   /** 每页条数变化：回到第一页并广播新的分页状态。 */
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
-  //#if (LocalAuthorization)
   //#if (IncludeLocalization)
   rolesActionLabel(): string {
     return this.transloco.translate('users.actions.manageRoles');
@@ -352,8 +276,6 @@ export class UserTable {
   }
 
   //#endif
-  //#endif
-  //#if (LocalAuthorization)
   getVisibleRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(0, 2);
   }
@@ -361,7 +283,6 @@ export class UserTable {
   getHiddenRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(2);
   }
-  //#endif
 
   paginatorLabels(): TablePaginatorLabels {
     //#if (IncludeLocalization)
@@ -407,7 +328,7 @@ export class UserTable {
     return isActive ? 'Active' : 'Disabled';
     //#endif
   }
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   emailVerifiedLabel(verified: boolean): string {
     //#if (IncludeLocalization)
     return this.transloco.translate(
@@ -455,7 +376,6 @@ export class UserTable {
   isSelfSuperAdmin(user: UserManagementOutputDto): boolean {
     return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
   }
-  //#if (LocalAuthorization)
 
   /**
    * 角色徽章样式。
@@ -466,5 +386,4 @@ export class UserTable {
   getRoleVariant(): BadgeVariant {
     return 'outline';
   }
-  //#endif
 }

@@ -86,7 +86,7 @@
 <!-- 揭示 Client Secret 弹窗（重置 / 新建后复用） -->
 <app-secret-reveal-dialog
   [visible]="secretDialogVisible()"
-  (visibleChange)="secretDialogVisible.set($event)"
+  (visibleChange)="onSecretDialogVisibleChange($event)"
   [secret]="secretValue()"
   [header]="secretHeader()"
 />

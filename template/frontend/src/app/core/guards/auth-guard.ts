@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { CanActivateFn, Router } from '@angular/router';
 //#else
 import { CanActivateFn } from '@angular/router';
@@ -9,7 +9,7 @@ import { AuthService } from '../services/auth-service';
 
 export const authGuard: CanActivateFn = (_route, state) => {
   const authService = inject(AuthService);
-  //#if (IdentityService)
+  //#if (LocalIdentity)
   const router = inject(Router);
   //#endif
 
@@ -17,7 +17,7 @@ export const authGuard: CanActivateFn = (_route, state) => {
     return true;
   }
 
-  //#if (ResourceService)
+  //#if (!LocalIdentity)
   authService.login(state.url);
   return false;
   //#else

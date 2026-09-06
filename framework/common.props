@@ -11,9 +11,20 @@
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <VersionPrefix>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\VERSION').Trim())</VersionPrefix>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!--
+      Release 视告警为错误：CI 只构建 Release，而 check-all.ps1 不编译，
+      构建告警此前没有任何一道闸门看得见（CS0419 就是这么留到评审才被发现的）。
+      Debug 保持宽松，本地迭代不被未用变量之类的临时告警打断。
+    -->
+    <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release'">true</TreatWarningsAsErrors>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      让 framework/.editorconfig 里的 IDE 规则在构建期生效（默认只在 IDE 内提示）。
+      目前唯一被提到 error 的是 IDE0130「命名空间与目录一致」——它是"目录即命名空间"
+      这条约定的机械闸门，见 framework/.editorconfig 的说明。
+    -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <!-- NuGet 包元数据 -->
@@ -27,8 +38,11 @@
     <PackageTags>leistd ddd aspnetcore framework dotnet</PackageTags>
     <PackageReadmeFile>NuGet.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- CS1591: 缺少 XML 注释；CS0436: 类型冲突（生成文档时容忍） -->
-    <NoWarn>$(NoWarn);CS1591;CS0436</NoWarn>
+    <!-- CS0436: 类型冲突（生成文档时容忍）。
+         CS1591（公共可见成员缺 XML 注释）刻意**不**放进 NoWarn：随包 .xml 是消费者与 AI
+         唯一能看到的契约来源，缺注释应当在构建时就红。编译器的「publicly visible」判据比
+         任何正则都准，因此这道闸门由它承担，scripts/check-doc-comment-shape.py 只管形态。 -->
+    <NoWarn>$(NoWarn);CS0436</NoWarn>
     <!-- 默认所有框架项目可打包，纯内部项目可在自身 csproj 覆盖为 false -->
     <IsPackable>true</IsPackable>
   </PropertyGroup>

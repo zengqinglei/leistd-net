@@ -1,7 +1,9 @@
-#if (MultiTenancy)
 using System.ComponentModel.DataAnnotations;
+using CompanyName.ProjectName.Application.TenantConnections;
+using CompanyName.ProjectName.Domain.Users.Passwords;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.MultiTenancy;
+using Leistd.MultiTenancy.ConnectionStrings;
 
 namespace CompanyName.ProjectName.Application.Tenants.Dtos;
 
@@ -43,7 +45,7 @@ public record TenantLookupOutputDto : EntityDto
 /// <summary>
 /// 创建租户入参：同时提供租户管理员的初始凭据，创建后立即在租内种子
 /// </summary>
-public record CreateTenantInputDto
+public record CreateTenantInputDto : IValidatableObject
 {
     [Required]
     [MaxLength(64)]
@@ -60,8 +62,9 @@ public record CreateTenantInputDto
 
     /// <summary>租户管理员初始密码</summary>
     [Required]
-    [MinLength(8)]
-    [MaxLength(128)]
+    // 仅快速反馈；权威在服务端 PasswordPolicy
+    [MinLength(PasswordPolicy.MinimumLength)]
+    [MaxLength(PasswordPolicy.MaximumLength)]
     public required string AdminPassword { get; init; }
 
     /// <summary>默认共享数据库；选择独立数据库时必须同时提供两个 Secret 引用。</summary>
@@ -72,6 +75,19 @@ public record CreateTenantInputDto
 
     [MaxLength(512)]
     public string? MigrationSecretReference { get; init; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// 单字段注解表达不了"模式与 Secret 引用是否匹配"这条跨字段规则。判据与更新连接配置
+    /// 共用同一个实现，见 <see cref="TenantConnectionInputValidator"/>。
+    /// </remarks>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
+        TenantConnectionInputValidator.Validate(
+            DatabaseMode,
+            RuntimeSecretReference,
+            MigrationSecretReference,
+            nameof(RuntimeSecretReference),
+            nameof(MigrationSecretReference));
 }
 
 /// <summary>
@@ -95,4 +111,3 @@ public record UpdateTenantActivationInputDto
     /// <summary>停用后该租户的请求自下一次校验起被拒绝（403）</summary>
     public required bool IsActive { get; init; }
 }
-#endif

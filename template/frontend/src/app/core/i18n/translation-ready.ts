@@ -12,7 +12,7 @@ import { TranslocoService, Translation } from '@jsverse/transloco';
  * 为什么承载 Translation 对象而非活动语言字符串：selectTranslation() 会触发 load() 并在**加载完成后**
  * 发射当前语言的词条对象、且在每次语言切换后再次发射。若把信号值映射为语言字符串，
  * 首帧初值 'en' 与加载完成后再次得到的 'en' 在 toSignal 默认的 Object.is 比较下相等 → 不通知下游，
- * 裸键仍被缓存。改为承载词条对象（每次加载/切换是不同引用）并以 undefined 为初值，
+ * 裸键仍会被缓存。因此信号承载词条对象（每次加载/切换是不同引用）并以 undefined 为初值，
  * 保证「首个 JSON 到达」这一次也会触发下游重算。读取处仅用于建立响应式依赖，不消费其值。
  *
  * @example

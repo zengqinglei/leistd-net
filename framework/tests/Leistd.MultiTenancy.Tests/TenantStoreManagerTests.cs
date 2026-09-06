@@ -1,10 +1,16 @@
+using Leistd.TestBase;
 using Leistd.MultiTenancy.EntityFrameworkCore;
-using Leistd.Timing;
-using Leistd.UnitOfWork.EfCore.Database;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
+using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
+using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
+using Leistd.Timing;
+using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
+using Leistd.MultiTenancy.Exceptions;
+using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.Tests;
 

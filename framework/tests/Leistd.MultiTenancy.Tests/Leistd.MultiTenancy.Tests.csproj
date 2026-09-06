@@ -2,9 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <IsPackable>false</IsPackable>
     <IsPublishable>false</IsPublishable>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageReadmeFile></PackageReadmeFile>
   </PropertyGroup>
@@ -34,9 +34,10 @@
     <ProjectReference Include="..\..\components\multi-tenancy\Leistd.MultiTenancy.AspNetCore\Leistd.MultiTenancy.AspNetCore.csproj" />
     <ProjectReference Include="..\..\components\multi-tenancy\Leistd.MultiTenancy.EntityFrameworkCore\Leistd.MultiTenancy.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\components\unit-of-work\Leistd.UnitOfWork.Core\Leistd.UnitOfWork.Core.csproj" />
-    <ProjectReference Include="..\..\components\unit-of-work\Leistd.UnitOfWork.EfCore\Leistd.UnitOfWork.EfCore.csproj" />
+    <ProjectReference Include="..\..\components\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\ddd-struct\Leistd.Ddd.Domain\Leistd.Ddd.Domain.csproj" />
     <ProjectReference Include="..\..\ddd-struct\Leistd.Ddd.Infrastructure\Leistd.Ddd.Infrastructure.csproj" />
+    <ProjectReference Include="..\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 
 </Project>

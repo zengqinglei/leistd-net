@@ -42,8 +42,7 @@
       "minLength": "Must be at least {{min}} characters.",
       "maxLength": "Must not exceed {{max}} characters.",
       "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
-      "passwordRule": "Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.",
-      "passwordWeak": "Password must be at least 6 characters and include letters and digits.",
+      "passwordRule": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
       "passwordMismatch": "The two passwords do not match.",
       "passwordSameAsCurrent": "The new password must differ from the current one.",
       "phonePattern": "Only digits, spaces, and + - ( ) are allowed."
@@ -143,9 +142,7 @@
       "usersTitle": "User Management",
       "usersDesc": "Full CRUD operations with permission control",
       "themeTitle": "Theme System",
-      "themeDesc": "Dark mode + Tailwind CSS + Spartan UI",
-      "authDescWithoutRoles": "Cookie-based authentication",
-      "usersDescWithoutRoles": "Full CRUD operations"
+      "themeDesc": "Dark mode + Tailwind CSS + Spartan UI"
     }
   },
   "theme": {
@@ -172,7 +169,7 @@
     "changePassword": {
       "header": "Change Password",
       "subtitle": "Enter your current password and set a new sign-in password.",
-      "rules": "Password rules: 8–20 characters, and must include uppercase letters, lowercase letters, numbers, and special characters.",
+      "rules": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
       "currentPassword": "Current Password",
       "newPassword": "New Password",
       "confirmPassword": "Confirm New Password",
@@ -250,7 +247,7 @@
       "resendCountdown": "Resend in {{seconds}}s",
       "sendCode": "Get Code",
       "password": "Password",
-      "passwordPlaceholder": "Contains letters and digits, at least 6 characters",
+      "passwordPlaceholder": "At least 12 characters",
       "confirmPassword": "Confirm Password",
       "confirmPasswordPlaceholder": "Enter the password again",
       "submit": "Sign Up",
@@ -356,20 +353,19 @@
       "displayNameLabel": "Display name",
       "displayNamePlaceholder": "Enter a display name",
       "passwordLabel": "Initial password",
-      "passwordPlaceholder": "Enter an initial password",
+      "passwordPlaceholder": "At least 12 characters",
       "passwordRequired": "Enter an initial password",
       "rolesLabel": "Roles",
       "rolesPlaceholder": "Select roles",
       "activeTitle": "Enable user",
       "activeHint": "When disabled, the user cannot sign in or call protected endpoints",
       "emailVerifiedTitle": "Email verified",
-      "emailVerifiedHint": "Used to manage the email verification status",
-      "descriptionWithoutRoles": "Manage the account profile and status."
+      "emailVerifiedHint": "Used to manage the email verification status"
     },
     "resetDialog": {
       "header": "Reset user password",
       "warning": "After the reset, the user must sign in with the new password.",
-      "ruleHint": "New password rule: 8-20 characters, and must include uppercase letters, lowercase letters, digits and special characters.",
+      "ruleHint": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
       "newPasswordLabel": "New password",
       "newPasswordPlaceholder": "Enter a new password",
       "confirmButton": "Confirm reset"

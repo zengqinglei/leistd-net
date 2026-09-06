@@ -19,9 +19,8 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import { PASSWORD_RULE } from '../../../../core/validation/password-rule';
 import { AccountService } from '../../services/account-service';
-
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
 
 @Component({
   selector: 'app-change-password-dialog',
@@ -112,7 +111,7 @@ export class ChangePasswordDialog {
     required(path.newPassword, { message: 'This field is required.' });
     pattern(path.newPassword, PASSWORD_RULE, {
       message:
-        'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
+        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
     });
     validate(path.newPassword, (ctx) => {
       const newPassword = ctx.value();

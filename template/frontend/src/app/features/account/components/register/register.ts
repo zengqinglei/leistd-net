@@ -45,6 +45,7 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { lastValueFrom } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import { PASSWORD_RULE } from '../../../../core/validation/password-rule';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
@@ -95,7 +96,7 @@ export class Register implements OnInit {
   private destroyRef = inject(DestroyRef);
   //#if (IncludeLocalization)
   public readonly transloco = inject(TranslocoService);
-  // 属性位置的文案（无法在标签属性里用 #if 分支）经此对象绑定
+  // 属性位置的文案（无法在标签属性里用条件指令分支）经此对象绑定
   readonly i18n = {
     captcha: () => this.transloco.translate('account.register.captcha'),
     captchaPlaceholder: () => this.transloco.translate('account.register.captchaPlaceholder'),
@@ -168,8 +169,8 @@ export class Register implements OnInit {
       when: () => this.securityConfig()?.enableEmailVerification === true,
     });
     required(path.password, { message: this.transloco.translate('common.validation.required') });
-    pattern(path.password, /^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/, {
-      message: this.transloco.translate('common.validation.passwordWeak'),
+    pattern(path.password, PASSWORD_RULE, {
+      message: this.transloco.translate('common.validation.passwordRule'),
     });
     required(path.confirmPassword, {
       message: this.transloco.translate('common.validation.required'),
@@ -204,8 +205,9 @@ export class Register implements OnInit {
       when: () => this.securityConfig()?.enableEmailVerification === true,
     });
     required(path.password, { message: 'This field is required.' });
-    pattern(path.password, /^(?=.*[a-zA-Z])(?=.*\d).{6,100}$/, {
-      message: 'Password must be at least 6 characters and include letters and digits.',
+    pattern(path.password, PASSWORD_RULE, {
+      message:
+        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
     });
     required(path.confirmPassword, { message: 'This field is required.' });
     validate(path.confirmPassword, (ctx) => {

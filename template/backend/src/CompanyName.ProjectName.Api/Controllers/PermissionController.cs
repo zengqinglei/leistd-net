@@ -1,10 +1,10 @@
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using Leistd.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Leistd.Authorization.Constants;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -12,12 +12,14 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// 权限管理控制器
 /// </summary>
 /// <remarks>
-/// 与 OpenIddict 的 <see cref="ConnectController"/> 无关：后者负责 OAuth2/OIDC 协议端点，
-/// 本控制器负责功能权限的定义查询与授予管理。
+/// 负责功能权限的定义查询与授予管理。
+#if (OpenIddictServer)
+/// 与 <see cref="ConnectController"/> 无关——后者负责 OAuth2/OIDC 协议端点，是另一个维度。
+#endif
 /// </remarks>
 [Authorize]
 [Route("api/v1/permissions")]
-public class PermissionController(IPermissionAppService permissionAppService) : BaseController
+public sealed class PermissionController(IPermissionAppService permissionAppService) : BaseController
 {
     /// <summary>
     /// 获取当前用户的有效权限与授权版本（仅要求已认证）
@@ -76,4 +78,3 @@ public class PermissionController(IPermissionAppService permissionAppService) : 
     }
 
 }
-#endif

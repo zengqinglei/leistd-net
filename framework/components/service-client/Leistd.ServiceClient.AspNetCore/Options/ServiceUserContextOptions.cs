@@ -10,7 +10,7 @@ public class ServiceUserContextOptions
     /// <summary>
     /// 是否启用。默认 <c>true</c>；<c>false</c> 时中间件直接放行（也不剥离头）。
     /// </summary>
-    public bool Enable { get; set; } = true;
+    public bool Enabled { get; set; } = true;
 
     /// <summary>
     /// 用户 Id 头名。默认 <see cref="ServiceClientHeaders.UserId"/>。
@@ -18,21 +18,18 @@ public class ServiceUserContextOptions
     public string UserIdHeader { get; set; } = ServiceClientHeaders.UserId;
 
     /// <summary>
-    /// 用户名头名（值经 UTF-8 URL 编码）。默认 <see cref="ServiceClientHeaders.UserName"/>。
+    /// 用户名头名（值经 UTF-8 URL 编码）。默认 <see cref="ServiceClientHeaders.Username"/>。
     /// </summary>
-    public string UserNameHeader { get; set; } = ServiceClientHeaders.UserName;
+    public string UsernameHeader { get; set; } = ServiceClientHeaders.Username;
 
     /// <summary>
-    /// 租户 Id 头名。默认 <see cref="ServiceClientHeaders.TenantId"/>。
-    /// 受信服务调用时恢复为 <c>tenant_id</c> claim，交由多租户解析链的 Claim 贡献者定案；
-    /// 置空字符串可关闭租户头恢复。不受信来源的该头不剥离（解析链主体优先级已使其无害，
-    /// 且匿名登录的租户选择依赖它）。
+    /// 获取或设置租户标识请求头名称。
     /// </summary>
+    /// <remarks>受信调用会将该值恢复为租户声明；置空可关闭恢复。</remarks>
     public string TenantIdHeader { get; set; } = ServiceClientHeaders.TenantId;
 
     /// <summary>
-    /// 额外的请求头 → claim 映射（key 为头名，value 为 claim 类型），
-    /// 与调用方 <c>UserContextForwardingOptions.ClaimHeaderMap</c> 相对应。默认空。
+    /// 获取请求头名称到声明类型的附加映射。
     /// </summary>
     public IDictionary<string, string> HeaderClaimMap { get; set; } = new Dictionary<string, string>();
 
@@ -42,15 +39,10 @@ public class ServiceUserContextOptions
     public bool RemoveUntrustedHeaders { get; set; } = true;
 
     /// <summary>
-    /// 要求调用方 token 必须包含的委托 scope，默认
-    /// <see cref="ServiceClientScopes.Delegation"/>（<c>svc.delegate</c>）。
-    /// 同时识别标准 <c>scope</c>（空格分隔）与 OpenIddict 的 <c>oi_scp</c> claim。
+    /// 获取或设置调用方令牌必须包含的委托范围。
     /// </summary>
     /// <remarks>
-    /// 默认非空是**安全默认**（fail-closed）：认证成功只说明调用方是已认证的工作负载，
-    /// 不等于它有权代表用户。未授予该 scope 的客户端携带 <c>X-User-*</c> 头时，
-    /// 头会被剥离、不恢复任何用户主体。认证服务需在客户端注册时显式授予该 scope；
-    /// 部署上另有等价管控时可置空关闭该校验，但那意味着任何机器令牌都能代表任意用户。
+    /// 默认为 <see cref="ServiceClientScopes.Delegation"/>。置空会允许任意已认证工作负载恢复用户身份。
     /// </remarks>
     public string? RequiredScope { get; set; } = ServiceClientScopes.Delegation;
 

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
-#if (IdentityService)
+using Leistd.MultiTenancy.ConnectionStrings;
+#if (LocalIdentity)
 using Leistd.MultiTenancy;
 #endif
 
@@ -12,6 +13,13 @@ public sealed record TenantMigrationTarget(Guid TenantId, string ConnectionStrin
         SHA256.HashData(Encoding.UTF8.GetBytes(ConnectionString)));
 }
 
+/// <summary>
+/// 枚举需要施加迁移的物理目标。
+/// </summary>
+/// <remarks>
+/// 仅供 DbMigrator 一次性作业调用。配置无效时抛出 BCL 异常并终止作业；
+/// 请求入口不直接调用此接口。
+/// </remarks>
 public interface ITenantMigrationTargetProvider
 {
     Task<IReadOnlyList<TenantMigrationTarget>> GetDedicatedTargetsAsync(
@@ -19,7 +27,7 @@ public interface ITenantMigrationTargetProvider
 }
 
 internal sealed class TenantMigrationTargetProvider(
-#if (IdentityService)
+#if (LocalIdentity)
     ITenantConnectionConfigurationStore connectionStore,
 #else
     IIdentityTenantConnectionClient identityClient,
@@ -29,7 +37,7 @@ internal sealed class TenantMigrationTargetProvider(
     public async Task<IReadOnlyList<TenantMigrationTarget>> GetDedicatedTargetsAsync(
         CancellationToken cancellationToken = default)
     {
-#if (IdentityService)
+#if (LocalIdentity)
         var configurations = await connectionStore.GetListAsync(cancellationToken);
         var dedicated = configurations
             .Where(x => x.DatabaseMode == TenantDatabaseMode.DedicatedDatabase)
@@ -46,13 +54,17 @@ internal sealed class TenantMigrationTargetProvider(
         {
             if (string.IsNullOrWhiteSpace(secretReference))
             {
-                throw new InvalidOperationException("A dedicated tenant is missing its migration Secret reference.");
+                throw new InvalidOperationException(
+                    $"Tenant '{tenantId}' is configured for a dedicated database but has no migration " +
+                    "Secret reference. Fix its connection configuration before running the migrator.");
             }
 
             var connectionString = await secretResolver.ResolveAsync(secretReference, cancellationToken);
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                throw new InvalidOperationException("A migration Secret resolved to an empty value.");
+                throw new InvalidOperationException(
+                    $"The migration Secret '{secretReference}' for tenant '{tenantId}' resolved to an " +
+                    "empty value.");
             }
 
             targets.Add(new TenantMigrationTarget(tenantId, connectionString));

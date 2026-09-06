@@ -11,17 +11,9 @@
     <hlm-dialog-header>
       <h3 hlmDialogTitle>{{ dialogHeader() }}</h3>
       <!--#if (IncludeLocalization)-->
-      <!--#if (LocalAuthorization)-->
       <p hlmDialogDescription>{{ 'users.editDialog.description' | transloco }}</p>
       <!--#else-->
-      <p hlmDialogDescription>{{ 'users.editDialog.descriptionWithoutRoles' | transloco }}</p>
-      <!--#endif-->
-      <!--#else-->
-      <!--#if (LocalAuthorization)-->
       <p hlmDialogDescription>Manage the account profile, roles, and status.</p>
-      <!--#else-->
-      <p hlmDialogDescription>Manage the account profile and status.</p>
-      <!--#endif-->
       <!--#endif-->
     </hlm-dialog-header>
 
@@ -98,7 +90,7 @@
           </div>
 
           <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <!--#if (ResourceService)-->
+            <!--#if (!LocalIdentity)-->
             @if (!isEditMode()) {
               <div hlmField class="md:col-span-2">
                 <label hlmFieldLabel for="user-subject-id">Identity subject Id</label>
@@ -208,7 +200,7 @@
                 }
               }
             </div>
-            <!--#if (IdentityService)-->
+            <!--#if (LocalIdentity)-->
             <!-- Initial password（仅新建模式） -->
             @if (!isEditMode()) {
               <div hlmField>
@@ -260,7 +252,6 @@
           <hlm-separator />
 
           <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <!--#if (LocalAuthorization)-->
             <!--
               初始角色：仅「新建 + 持有角色分配权限」时可见。
               编辑态不在此处改角色——资料更新与角色分配是两个命令、两个权限，
@@ -298,7 +289,6 @@
               </div>
             }
 
-            <!--#endif-->
             <!-- Enable user：仅新建时设置初始状态。已存在账号的启用/禁用只有列表页那两个命令一个入口，
                  保护规则（超级管理员不得禁用自己）也只写在那里；这里再放一个开关就是第二个入口。 -->
             @if (!isEditMode()) {
@@ -326,7 +316,7 @@
                 </div>
               </div>
             }
-            <!--#if (IdentityService)-->
+            <!--#if (LocalIdentity)-->
             <!-- Email verified -->
             <div class="rounded-lg border border-border p-3">
               <div class="flex items-center justify-between gap-3">

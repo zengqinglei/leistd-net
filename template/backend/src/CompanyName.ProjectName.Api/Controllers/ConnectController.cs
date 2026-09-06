@@ -1,10 +1,13 @@
-#if (IdentityService)
+#if (LocalIdentity)
+using Leistd.Timing;
+using Leistd.ExceptionHandling;
 using System.Security.Claims;
+using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Exception.Core;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
@@ -17,10 +20,11 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
-public class ConnectController(
+public sealed class ConnectController(
     IRepository<User, Guid> userRepository,
     IAuthPrincipalFactory principalFactory,
-    IOptions<OAuthOptions> oauthOptions) : Controller
+    IOptions<OAuthOptions> oauthOptions,
+    IClock clock) : Controller
 {
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]
@@ -28,9 +32,11 @@ public class ConnectController(
     public async Task<IActionResult> AuthorizeAsync(CancellationToken cancellationToken)
     {
         var request = HttpContext.GetOpenIddictServerRequest()
-            ?? throw new InvalidOperationException("OpenID Connect authorization request is unavailable.");
+            ?? throw new InternalServerException(
+                "The OpenID Connect authorization request is unavailable. "
+                + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
-        var result = await HttpContext.AuthenticateAsync("MyProjectCookie");
+        var result = await HttpContext.AuthenticateAsync(AuthenticationSchemeNames.SessionCookie);
         if (!result.Succeeded || result.Principal == null)
         {
             var returnUrl = Request.PathBase + Request.Path + QueryString.Create(
@@ -49,7 +55,7 @@ public class ConnectController(
         }
 
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
-        if (user == null || !user.IsActive || user.IsLockedOut())
+        if (user == null || user.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed)
         {
             return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
@@ -63,7 +69,7 @@ public class ConnectController(
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> LogoutAsync()
     {
-        await HttpContext.SignOutAsync("MyProjectCookie");
+        await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
         return SignOut(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
@@ -73,7 +79,9 @@ public class ConnectController(
     public async Task<IActionResult> ExchangeAsync(CancellationToken cancellationToken)
     {
         var request = HttpContext.GetOpenIddictServerRequest()
-            ?? throw new InvalidOperationException("OpenID Connect token request is unavailable.");
+            ?? throw new InternalServerException(
+                "The OpenID Connect token request is unavailable. "
+                + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
         if (request.IsAuthorizationCodeGrantType() || request.IsRefreshTokenGrantType())
         {
@@ -85,7 +93,7 @@ public class ConnectController(
             }
 
             var user = await userRepository.GetByIdAsync(userId, cancellationToken);
-            if (user == null || !user.IsActive || user.IsLockedOut())
+            if (user == null || user.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed)
             {
                 return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
@@ -121,7 +129,7 @@ public class ConnectController(
 
         throw new BadRequestException($"Unsupported grant type: {request.GrantType}")
 #if (IncludeLocalization)
-            .WithLocalization("Auth:UnsupportedGrantType")
+            .WithCode("Auth:UnsupportedGrantType")
             .WithData("GrantType", request.GrantType)
 #endif
             ;
@@ -167,14 +175,12 @@ public class ConnectController(
             claims[Claims.EmailVerified] = user.EmailConfirmed;
         }
 
-#if (LocalAuthorization)
         if (User.HasScope(Scopes.Roles))
         {
             claims[Claims.Role] = User.GetClaims(Claims.Role)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
         }
-#endif
 
         return Ok(claims);
     }

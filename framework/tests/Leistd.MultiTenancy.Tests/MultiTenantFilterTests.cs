@@ -1,3 +1,4 @@
+using Leistd.TestBase;
 using Leistd.Auditing;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Infrastructure.Persistence.Repositories;
@@ -5,6 +6,8 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.Auditing.Abstractions;
 
 namespace Leistd.MultiTenancy.Tests;
 
@@ -128,7 +131,7 @@ public class MultiTenantFilterTests : IAsyncLifetime
     public async Task Entities_entering_the_model_after_derived_configuration_are_also_filtered()
     {
         // TestLedgerEntry 没有 DbSet 声明，只经派生类的 ApplyConfiguration 进入模型。
-        // 过滤器若在派生配置之前套用，它会对所有租户可见——这正是授权版本表踩过的坑。
+        // 过滤器若在派生配置之前套用，没有 DbSet 声明的实体（如授权版本表）会对所有租户可见。
         _db.Add(new TestLedgerEntry { Memo = "a-entry", TenantId = TenantA });
         _db.Add(new TestLedgerEntry { Memo = "b-entry", TenantId = TenantB });
         _db.Add(new TestLedgerEntry { Memo = "host-entry" });

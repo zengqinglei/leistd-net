@@ -2,13 +2,15 @@ using Leistd.MultiTenancy;
 using Leistd.Security.Users;
 using Leistd.ServiceClient.Handlers;
 using Leistd.ServiceClient.Options;
-using Leistd.Tracing.Core.Options;
-using Leistd.Tracing.Core.Services;
+using Leistd.Tracing.Options;
+using Leistd.Tracing.Services;
 using Leistd.Tracing.HttpClient.Handlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.Tracing.Abstractions;
 
 namespace Leistd.ServiceClient;
 
@@ -28,12 +30,10 @@ public static class DependencyInjection
     public const string LoggerCategoryPrefix = "Leistd.ServiceClient";
 
     /// <summary>
-    /// 注册强类型服务客户端，装配标准调用管道（自外向内）：
-    /// 调用日志 → TraceId 透传 → 用户上下文头注入 →（可选，见 OAuth 包）Bearer 认证。
-    /// Options 绑定配置节 <c>Leistd:ServiceClients:&lt;serviceName&gt;</c>。
+    /// 注册强类型服务客户端并装配标准调用管道。
     /// </summary>
     /// <remarks>
-    /// TraceId 透传与用户上下文注入是**跟随宿主显式组合**的可选能力：
+    /// TraceId 透传与用户上下文注入是<b>跟随宿主显式组合</b>的可选能力：
     /// 宿主注册了 <c>AddCorrelationIdCore</c>（Leistd.Tracing）才透传 TraceId；
     /// 注册了 <c>ICurrentUser</c>（如 Leistd.Security 的 <c>AddSecurity()</c>）才注入用户头。
     /// 未注册时对应环节自动直通，本方法不代为注册。
@@ -45,6 +45,14 @@ public static class DependencyInjection
     /// <param name="serviceName">下游服务名：命名 HttpClient、配置节与日志类别</param>
     /// <param name="configuration">应用配置</param>
     /// <returns><see cref="IHttpClientBuilder"/>，可继续追加认证（OAuth 包）、弹性等处理器</returns>
+    /// <example>
+    /// <code>
+    /// builder.Services
+    ///     .AddServiceClient&lt;IIdentityApi, IdentityApiClient, IdentityClientOptions&gt;(
+    ///         "identity", builder.Configuration)
+    ///     .AddClientCredentials(builder.Configuration);
+    /// </code>
+    /// </example>
     public static IHttpClientBuilder AddServiceClient<TClient, TImplementation, TOptions>(
         this IServiceCollection services,
         string serviceName,
@@ -93,11 +101,9 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 在既有 <see cref="IHttpClientBuilder"/> 上装配服务客户端标准能力：
-    /// 从 <typeparamref name="TOptions"/> 应用 BaseAddress / Timeout，并按序挂载
-    /// 调用日志 → TraceId 透传 → 用户上下文头注入。供 Refit 等其他客户端注册形态复用
-    /// （如 <c>AddRefitClient&lt;TApi&gt;(...).AddServiceClientPipeline&lt;TOptions&gt;(serviceName)</c>）。
+    /// 在现有客户端构建器上装配服务客户端标准管道。
     /// </summary>
+    /// <remarks>依次应用日志、链路标识、用户上下文和租户上下文处理器。</remarks>
     /// <typeparam name="TOptions">客户端配置类型（须已绑定，如经 <c>services.Configure</c>）</typeparam>
     /// <param name="builder">HttpClient 构建器</param>
     /// <param name="serviceName">下游服务名（日志类别后缀）</param>
@@ -122,7 +128,7 @@ public static class DependencyInjection
             client.Timeout = options.Timeout;
         });
 
-        // 1. 调用日志（最外层：覆盖含认证重试在内的完整调用）
+        // 日志必须位于最外层，才能覆盖认证重试在内的完整调用。
         builder.AddHttpMessageHandler(provider =>
         {
             var options = provider.GetRequiredService<IOptions<TOptions>>().Value;
@@ -131,30 +137,30 @@ public static class DependencyInjection
             return new ServiceClientLoggingHandler(logger, serviceName, options.LogPayloads, options.MaxPayloadLength);
         });
 
-        // 2. TraceId 透传（复用 Leistd.Tracing.HttpClient；宿主未注册 tracing 时直通）
+        // 可选组件未注册时使用直通处理器，保持宿主显式组合。
         builder.AddHttpMessageHandler(provider =>
             provider.GetService<ICorrelationIdProvider>() is { } correlationIdProvider
                 ? new CorrelationIdDelegatingHandler(
                     correlationIdProvider,
-                    provider.GetRequiredService<IOptions<CorrelationIdOptions>>())
+                    provider.GetRequiredService<IOptionsMonitor<CorrelationIdOptions>>())
                 : new PassthroughDelegatingHandler());
 
-        // 3. 用户上下文头注入（宿主未注册 ICurrentUser 或 Options 关闭时直通）
         builder.AddHttpMessageHandler(provider =>
         {
-            var options = provider.GetRequiredService<IOptions<TOptions>>().Value;
-            return options.UserContext.Enable && provider.GetService<ICurrentUser>() is { } currentUser
-                ? new UserContextDelegatingHandler(currentUser, options.UserContext)
+            return provider.GetService<ICurrentUser>() is { } currentUser
+                ? new UserContextDelegatingHandler<TOptions>(
+                    currentUser,
+                    provider.GetRequiredService<IOptionsMonitor<TOptions>>())
                 : new PassthroughDelegatingHandler();
         });
 
-        // 4. 租户上下文头注入（宿主未注册 ICurrentTenant 或 Options 关闭时直通）；
-        //    独立于用户头开关：后台任务可能只有租户上下文而无用户主体
+        // 租户转发独立于用户转发，后台任务可能只有租户上下文。
         builder.AddHttpMessageHandler(provider =>
         {
-            var options = provider.GetRequiredService<IOptions<TOptions>>().Value;
-            return options.UserContext.ForwardTenantId && provider.GetService<ICurrentTenant>() is { } currentTenant
-                ? new TenantContextDelegatingHandler(currentTenant)
+            return provider.GetService<ICurrentTenant>() is { } currentTenant
+                ? new TenantContextDelegatingHandler<TOptions>(
+                    currentTenant,
+                    provider.GetRequiredService<IOptionsMonitor<TOptions>>())
                 : new PassthroughDelegatingHandler();
         });
 

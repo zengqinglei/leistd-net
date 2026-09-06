@@ -1,4 +1,4 @@
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.ConnectionStrings;
 
 /// <summary>
 /// 租户连接配置快照。只包含 Secret 引用，不包含连接字符串明文。

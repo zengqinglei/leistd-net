@@ -1,4 +1,3 @@
-//#if (MultiTenancy)
 import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -161,4 +160,3 @@ describe('TenantTable', () => {
     expect(component.isRowExpanded('1')).toBeFalse();
   });
 });
-//#endif

@@ -8,15 +8,11 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
   lucideZap,
-  //#if (MultiTenancy)
-  //#endif
   lucideCircleCheck,
   lucideInfo,
   lucideEye,
   lucideEyeOff,
-  //#if (MultiTenancy)
   lucideX,
-  //#endif
 } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -34,26 +30,19 @@ import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
-  //#if (MultiTenancy)
   ApplicationHttpError,
-  //#endif
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-//#endif
-//#if (MultiTenancy)
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
-//#endif
+import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
 //#if (IncludeLocalization)
 import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
 //#endif
 import { Logo } from '../../../../shared/components/logo/logo';
 import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
-//#if (MultiTenancy)
 import { TenantService } from '../../../platform/services/tenant-service';
-//#endif
 import { AccountService } from '../../services/account-service';
 
 // GitHub 品牌图标（lucide 已下架品牌 logo，用官方 SVG path 自定义注入）
@@ -86,9 +75,7 @@ const githubIcon =
   providers: [
     provideIcons({
       lucideZap,
-      //#if (MultiTenancy)
       lucideX,
-      //#endif
       lucideCircleCheck,
       lucideInfo,
       lucideEye,
@@ -102,18 +89,14 @@ const githubIcon =
 export class Login {
   private accountService = inject(AccountService);
   private authService = inject(AuthService);
-  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
-  //#endif
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
-  //#if (MultiTenancy)
   private readonly tenantService = inject(TenantService);
   protected readonly tenantContext = inject(TenantContextService);
-  //#endif
 
   // 加载状态
   private _isLoading = signal(false);
@@ -147,7 +130,8 @@ export class Login {
     minLength(path.password, 6, {
       message: this.transloco.translate('common.validation.minLength', { min: 6 }),
     });
-    maxLength(path.password, 100, { message: '' });
+    // 登录只设防滥用上限，不校验口令策略：策略生效前设置的旧口令也必须能登录。
+    maxLength(path.password, PASSWORD_MAX_LENGTH, { message: '' });
   });
   //#else
   readonly loginForm = form(this.model, (path) => {
@@ -155,13 +139,12 @@ export class Login {
     minLength(path.usernameOrEmail, 3, { message: 'Must be at least 3 characters.' });
     maxLength(path.usernameOrEmail, 256, { message: '' });
     required(path.password, { message: 'This field is required.' });
-    minLength(path.password, 6, { message: 'Must be at least 6 characters.' });
-    maxLength(path.password, 100, { message: '' });
+    maxLength(path.password, PASSWORD_MAX_LENGTH, { message: '' });
   });
   //#endif
 
   constructor() {
-    // 进入登录页面时清理旧的认证信息
+    // 进入登录页面时清理现有认证信息
     this.authService.clearAuthData();
   }
 
@@ -195,28 +178,22 @@ export class Login {
       toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
       //#endif
 
-      //#if (LocalAuthorization)
       // 权限必须在任何跳转之前加载完成。进登录页时 StartupService 已清空权限缓存，
       // 此时直接跳 returnUrl，permissionGuard 会在空权限下判定并把人踢到 403——
       // 从受保护页面的深链登录，本该落到那个页面，却落在拒绝页。
       await lastValueFrom(this.authorizationService.load());
-      //#endif
 
       if (this.isSafeLocalReturnUrl(returnUrl)) {
         await this.router.navigateByUrl(returnUrl);
         return;
       }
 
-      //#if (LocalAuthorization)
       // 按权限跳转：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
       } else {
         this.router.navigate(['/workspace']);
       }
-      //#else
-      this.router.navigate(['/workspace']);
-      //#endif
     } catch (error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('account.login.loginFailed'), {
@@ -238,7 +215,6 @@ export class Login {
       !returnUrl.includes('://')
     );
   }
-  //#if (MultiTenancy)
 
   // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
   protected readonly tenantName = signal('');
@@ -285,8 +261,7 @@ export class Login {
   private tenantNotFoundMessage = () => 'Tenant does not exist';
   private tenantInactiveMessage = () => 'Tenant is deactivated';
   //#endif
-  //#endif
-  //#if (IncludeExternalLogin)
+  //#if (ExternalLogin)
 
   loginWithGitHub() {
     this.loginWithExternalProvider('github', 'GitHub');

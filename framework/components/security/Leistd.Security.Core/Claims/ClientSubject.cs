@@ -4,14 +4,9 @@ namespace Leistd.Security.Claims;
 /// 机器主体（OAuth2 client credentials 令牌代表的工作负载）的 <c>sub</c> 契约。
 /// </summary>
 /// <remarks>
-/// 自然人主体的 <c>sub</c> 是用户 Id（GUID），解析方按 <c>Guid.TryParse</c> 认领。
-/// 若机器主体直接把 <c>client_id</c> 写进 <c>sub</c>，两者就共享同一命名空间——
-/// 而 <c>client_id</c> 由客户端创建者任意指定，挑一个已存在的用户 Id 即可让机器令牌
-/// 被解析成那个人，继承其授予、角色乃至超管身份。加前缀后 <c>Guid.TryParse</c> 必然失败，
-/// 这条冒充路径在结构上不存在，不依赖对 <c>client_id</c> 取值的任何输入校验。
-///
-/// 签发端（认证服务）按 <see cref="Format"/> 构造 <c>sub</c>，
-/// 消费端（如服务间调用的用户上下文恢复）按 <see cref="Matches"/> 判定，契约只此一处。
+/// 自然人主体的 <c>sub</c> 是 GUID 用户 Id；机器主体使用带前缀的独立命名空间，
+/// 防止可自定义的 <c>client_id</c> 被解析为用户身份。
+/// 签发端按 <see cref="Format"/> 构造，消费端按 <see cref="Matches"/> 判定。
 /// </remarks>
 public static class ClientSubject
 {
@@ -25,6 +20,16 @@ public static class ClientSubject
     /// </summary>
     /// <param name="clientId">客户端标识</param>
     public static string Format(string clientId) => Prefix + clientId;
+
+    /// <summary>
+    /// 判断 <paramref name="subject"/> 是否为机器主体（任意客户端）。
+    /// </summary>
+    /// <remarks>
+    /// 仅按前缀区分工作负载与自然人；允许哪个客户端由 scope 判定。
+    /// </remarks>
+    /// <param name="subject">待判定的 <c>sub</c> 值（可空）</param>
+    public static bool IsMachine(string? subject) =>
+        subject is not null && subject.StartsWith(Prefix, StringComparison.Ordinal);
 
     /// <summary>
     /// 判断 <paramref name="subject"/> 是否正是 <paramref name="clientId"/> 对应的机器主体 <c>sub</c>。

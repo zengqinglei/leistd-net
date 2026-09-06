@@ -1,4 +1,4 @@
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 @Component({

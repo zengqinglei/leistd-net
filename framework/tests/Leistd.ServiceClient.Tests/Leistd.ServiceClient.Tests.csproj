@@ -7,9 +7,9 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <IsPackable>false</IsPackable>
     <IsPublishable>false</IsPublishable>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageReadmeFile></PackageReadmeFile>
   </PropertyGroup>
@@ -34,6 +34,10 @@
     <ProjectReference Include="..\..\components\service-client\Leistd.ServiceClient.Refit\Leistd.ServiceClient.Refit.csproj" />
     <ProjectReference Include="..\..\components\tracing\Leistd.Tracing.AspNetCore\Leistd.Tracing.AspNetCore.csproj" />
     <ProjectReference Include="..\..\components\security\Leistd.Security.AspNetCore\Leistd.Security.AspNetCore.csproj" />
+    <!-- 契约测试：钉住 ServiceClient 内联的读取形状与 Leistd.Response 的写出形状一致。
+         生产代码刻意不引用 Response（信封只是"被调方长什么样"的反序列化目标），
+         测试引用两边才能验证它们没有漂移。 -->
+    <ProjectReference Include="..\..\components\response\Leistd.Response.Core\Leistd.Response.Core.csproj" />
     <ProjectReference Include="..\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 

@@ -1,4 +1,3 @@
-#if (MultiTenancy)
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
@@ -13,7 +12,7 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// </summary>
 [Authorize]
 [Route("api/v1/tenants")]
-public class TenantController(ITenantAppService tenantAppService) : BaseController
+public sealed class TenantController(ITenantAppService tenantAppService) : BaseController
 {
     /// <summary>
     /// 分页查询租户
@@ -84,4 +83,3 @@ public class TenantController(ITenantAppService tenantAppService) : BaseControll
         return tenant is null ? NotFound() : tenant;
     }
 }
-#endif

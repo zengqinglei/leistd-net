@@ -2,16 +2,20 @@ import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-//#if (IdentityService)
+//#if (OpenIddictServer)
 import { OPEN_APPLICATION_API } from '../../../../_mock/api/open-application';
 //#endif
 import { MOCK_APIS, mockInterceptor } from '../../../../_mock/core/interceptor';
-//#if (IdentityService)
+//#if (OpenIddictServer)
+// USERS 只被开放应用那组用例用到（建一个有权限的会话）
 import { USERS } from '../../../../_mock/data/user';
+//#endif
+//#if (LocalIdentity)
+// setMockSessionUserId 的使用范围更宽：清会话是所有有本地身份的形态都要做的
 import { setMockSessionUserId } from '../../../../_mock/utils/current-user';
 //#endif
 import { environment } from '../../../environments/environment';
-//#if (IdentityService)
+//#if (OpenIddictServer)
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
@@ -23,7 +27,7 @@ describe('mockInterceptor', () => {
 
   beforeEach(() => {
     environment.useMock = true;
-    //#if (IdentityService)
+    //#if (OpenIddictServer)
     // 开放应用接口有权限门（与后端策略一一对应），本组用例关注的是拦截器本身，
     // 因此先建立一个有权限的会话，避免被 401 挡在门外。
     setMockSessionUserId(USERS.find((user) => user.isSuperAdmin)!.id);
@@ -36,7 +40,7 @@ describe('mockInterceptor', () => {
           provide: MOCK_APIS,
           // prettier-ignore
           useValue: {
-            //#if (IdentityService)
+            //#if (OpenIddictServer)
             ...OPEN_APPLICATION_API,
             //#endif
             'GET /api/items': [{ id: 'all' }],
@@ -51,7 +55,7 @@ describe('mockInterceptor', () => {
 
   afterEach(() => {
     environment.useMock = originalUseMock;
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     setMockSessionUserId(null);
     //#endif
   });
@@ -91,7 +95,7 @@ describe('mockInterceptor', () => {
         },
       });
   });
-  //#if (IdentityService)
+  //#if (OpenIddictServer)
 
   it('returns a confidential client secret only in the create response', (done) => {
     const clientId = `spec-confidential-${crypto.randomUUID()}`;

@@ -1,8 +1,9 @@
-#if (MultiTenancy)
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Tenants;
+using CompanyName.ProjectName.Application.Tenants.AppServices;
+using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Authorization;
@@ -16,7 +17,13 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-#if (IncludeExternalLogin)
+using Leistd.Authorization.EntityFrameworkCore.Entities;
+using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
+using Leistd.MultiTenancy.Stores;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.Timing;
+using Leistd.UnitOfWork;
+#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 
@@ -45,7 +52,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
     private async Task<AuthenticatedSession> LoginHostAdminAsync()
     {
-        var session = await _factory.LoginAsync("admin", "Admin@123456");
+        var session = await _factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         _disposables.Add(session);
         return session;
     }
@@ -122,13 +129,95 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             .ToList();
     }
 
+    /// <summary>
+    /// 租户管理员是<b>普通用户 + Admin 角色</b>，不是超管
+    /// </summary>
+    /// <remarks>
+    /// <para><c>IsSuperAdmin</c> 是宿主的防锁死逃生舱：旁路功能权限、资源实例授权与数据范围过滤，
+    /// 且不可停用、不可删除、没有撤销入口。给租户用户打上它会带来三个真实后果——</para>
+    /// <para>1. 任何直接读 <c>is_super_admin</c> claim、不经权限检查器的判定点
+    /// （自定义授权策略就是这种）会失去侧别边界，成为跨租户越权；</para>
+    /// <para>2. 该用户在自己租户内无法被停用或删除；</para>
+    /// <para>3. 数据范围与资源实例授权在租户内被整体旁路。</para>
+    /// <para>租户不需要逃生舱：Admin 角色已带全部 Tenant 侧权限（含权限管理本身），
+    /// 升级后新增的权限由租户管理员自己授给自己的角色。</para>
+    /// </remarks>
+    [Fact]
+    public async Task 租户管理员不是超管_权限由Admin角色承载()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "roleonly");
+
+        using var scope = _factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        using (currentTenant.Change(tenantId))
+        {
+            var users = scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>();
+            var tenantAdmin = await users.GetFirstAsync(u => u.Username == "admin");
+
+            Assert.NotNull(tenantAdmin);
+            Assert.False(tenantAdmin.IsSuperAdmin);
+
+            Assert.True(tenantAdmin.CanBeDisabled());
+            Assert.True(tenantAdmin.CanBeDeleted());
+
+            var userRoles = scope.ServiceProvider.GetRequiredService<IRepository<UserRole, Guid>>();
+            Assert.True(await userRoles.AnyAsync(ur => ur.UserId == tenantAdmin.Id));
+        }
+    }
+
+    /// <summary>租户管理员能行使 Tenant 侧权限，但取不到任何宿主侧权限</summary>
+    [Fact]
+    public async Task 租户管理员有本租户权限_但无宿主侧权限()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "hostsideguard");
+        var tenantClient = await LoginTenantAdminAsync(tenantId);
+
+        var roles = await tenantClient.GetAsync("/api/v1/roles?offset=0&limit=10");
+        Assert.Equal(HttpStatusCode.OK, roles.StatusCode);
+
+        var tenants = await tenantClient.GetAsync("/api/v1/tenants?offset=0&limit=10");
+        Assert.Equal(HttpStatusCode.Forbidden, tenants.StatusCode);
+    }
+
+    /// <summary>领域服务拒绝在租户上下文里造超管</summary>
+    /// <remarks>
+    /// 这一条只覆盖领域服务这道关。数据库那道兜底（检查约束 <c>CK_User_SuperAdminIsHostOnly</c>，
+    /// 挡的是数据修复脚本、批量导入与直接 SQL）用的是真实 PostgreSQL 才生效的 DDL，
+    /// 本套用例跑在内存提供程序上，验证它的地方是 <c>test-template-postgresql-e2e.ps1</c>。
+    /// </remarks>
+    [Fact]
+    public async Task 领域服务拒绝在租户上下文创建超管()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "noescape");
+
+        using var scope = _factory.Services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var users = scope.ServiceProvider
+            .GetRequiredService<CompanyName.ProjectName.Domain.Users.DomainServices.UserDomainService>();
+
+        using (currentTenant.Change(tenantId))
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                users.CreateSuperAdminAsync(
+                    "escape-hatch",
+                    "escape@example.com",
+                    "Tenant@123456",
+                    displayName: null,
+                    passwordSubject: "test"));
+
+            Assert.Contains(tenantId.ToString(), error.Message, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task 建租户即种子_租户管理员可登录并只见本租户用户()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "acme");
 
-        // 匿名探测：登录页租户选择的数据源
         using var anonymous = _factory.CreateProjectClient();
         var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/ACME");
         Assert.Equal(HttpStatusCode.OK, lookup.StatusCode);
@@ -147,7 +236,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "isolation-a");
 
-        // 宿主管理员列表：不含租户用户
         var hostUsernames = await GetUsernamesAsync(hostAdmin.Client);
         Assert.Contains("admin", hostUsernames);
         Assert.DoesNotContain(hostUsernames, name => name.StartsWith("isolation"));
@@ -170,7 +258,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantAClient = await LoginTenantAdminAsync(tenantAId);
         var tenantBClient = await LoginTenantAdminAsync(tenantBId);
 
-        // 取租户 B 管理员的用户 Id
         var bUsers = await tenantBClient.GetAsync("/api/v1/users?offset=0&limit=10");
         using var bBody = JsonDocument.Parse(await bUsers.Content.ReadAsStringAsync());
         var bAdminId = bBody.RootElement.GetProperty("items").EnumerateArray().First()
@@ -188,7 +275,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantId = await CreateTenantAsync(hostAdmin, "sidecheck");
         var tenantClient = await LoginTenantAdminAsync(tenantId);
 
-        // 租户超管的 current 权限集与检查器同口径：宿主侧权限不下发，
+        // 租户管理员的 current 权限集与检查器同口径：宿主侧权限不下发，
         // 前端菜单/路由据此裁剪，不会出现点进去必然 403 的宿主功能
         var current = await tenantClient.GetAsync("/api/v1/permissions/current");
         Assert.Equal(HttpStatusCode.OK, current.StatusCode);
@@ -196,7 +283,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.DoesNotContain("App.Tenants", body);
         Assert.Contains("App.Users", body);
 
-        // 宿主超管则相反：宿主侧权限在集合内
         var hostCurrent = await hostAdmin.Client.GetAsync("/api/v1/permissions/current");
         Assert.Contains("App.Tenants", await hostCurrent.Content.ReadAsStringAsync());
     }
@@ -209,7 +295,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         var tenantClient = await LoginTenantAdminAsync(tenantId);
 
-        // 租户超管也过不了宿主侧权限的侧别硬边界
         var list = await tenantClient.GetAsync("/api/v1/tenants?offset=0&limit=10");
         Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
 
@@ -217,7 +302,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         {
             Name = "evil",
             AdminEmail = "evil@example.com",
-            AdminPassword = "Evil@123456"
+            AdminPassword = "TenancyTests!Evil"
         });
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
     }
@@ -262,7 +347,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var navResponse = await navClient.SendAsync(navRequest);
         Assert.Equal(HttpStatusCode.Redirect, navResponse.StatusCode);
 
-        // 再登录同样被拒（登录请求也在租户校验之后）
         using var relogin = _factory.CreateProjectClient();
         relogin.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
         var loginResponse = await relogin.PostAsJsonAsync(
@@ -308,7 +392,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                     ["Cors:AllowAnyLocalhost"] = "true"
                 })));
 
-        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(corsHost, "admin", "Admin@123456");
+        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(corsHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var tenantId = await CreateTenantAsync(hostAdmin, "cors-check");
         using var tenantClient = await LoginTenantAdminAsync(corsHost, tenantId);
 
@@ -341,9 +425,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 而 Host 正是子域名解析的权威来源，且转发头中间件排在多租户中间件之前。
     /// 把 <c>KnownProxies</c>/<c>KnownIPNetworks</c> 清空（=接受任何客户端的转发头）时，
     /// "子域名是匿名请求权威来源"这条边界就形同虚设。</para>
-    /// <para>判据用**停用租户**：把 b 停掉，转发头若被采信就会解析到 b 并 403；
+    /// <para>判据用停用租户：把 b 停掉，转发头若被采信就会解析到 b 并 403；
     /// 没被采信则留在 a（或宿主）而 200。用回显不了租户的端点做断言等于什么都没测。</para>
-    /// <para>这条必须在**模板**层：它验证的是宿主管道的组合（转发头信任 × 解析链），
+    /// <para>这条必须在模板层：它验证的是宿主管道的组合（转发头信任 × 解析链），
     /// 框架侧那条"请求头改不动子域名"的用例测不到宿主的代理信任配置。</para>
     /// </remarks>
     [Fact]
@@ -380,13 +464,12 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         var response = await client.SendAsync(forged);
 
-        // 采信了伪造头 → 落到已停用的 subdomain-b → 403
         Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     /// <summary>
-    /// 正向：配置为可信代理的来源，其转发头**应当**被采信。
+    /// 正向：配置为可信代理的来源，其转发头应当被采信。
     /// </summary>
     /// <remarks>
     /// 只有"不可信来源被拒"这一条时，把信任逻辑改成永不生效也能让它保持绿——
@@ -409,7 +492,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Leistd:MultiTenancy:DomainFormat"] = "{0}.example.com",
-                    // 把测试用的"客户端"地址声明为可信代理
                     ["ForwardedHeaders:KnownProxies:0"] = "203.0.113.10"
                 }));
 
@@ -425,7 +507,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         var response = await client.SendAsync(request);
 
-        // 来源可信 → 转发头生效 → 落到已停用的 trusted-b → 403
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -458,7 +539,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         ProbingTenantSeeder.Reset();
         ProbingTenantSeeder.Probe = tenantId => ProbeAnonymousRegistrationAsync(probingHost, tenantId);
 
-        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(probingHost, "admin", "Admin@123456");
+        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(probingHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var tenantId = await CreateTenantAsync(hostAdmin, "provisioning");
 
         // 探测发生在种子中途（角色、管理员都还没写完）：中间件必须拒绝这个尚未启用的租户
@@ -469,14 +550,52 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(["admin"], await GetUsernamesAsync(tenantClient));
     }
 
+    [Fact]
+    public async Task 外层工作单元存在时_租户创建的三个阶段仍使用独立边界()
+    {
+        using var host = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<TenantCreationUnitOfWorkProbe>();
+                services.AddTransient<EfCoreTenantManager<IdentityControlDbContext>>();
+                services.AddTransient<ITenantManager, RecordingTenantManager>();
+                services.AddTransient<TenantSeeder>();
+                services.AddTransient<ITenantSeeder, RecordingTenantSeeder>();
+            }));
+
+        using var scope = host.Services.CreateScope();
+        var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        using var outerUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+
+        var name = $"outer-{Guid.NewGuid():N}";
+        var tenant = await scope.ServiceProvider.GetRequiredService<ITenantAppService>().CreateAsync(
+            new CreateTenantInputDto
+            {
+                Name = name,
+                DisplayName = $"{name} Inc.",
+                AdminEmail = $"admin@{name}.example.com",
+                AdminPassword = "Tenant@123456"
+            });
+
+        Assert.True(tenant.IsActive);
+        Assert.Same(outerUnitOfWork, unitOfWorkManager.Current);
+
+        var observations = scope.ServiceProvider
+            .GetRequiredService<TenantCreationUnitOfWorkProbe>()
+            .Observations;
+        Assert.Equal(["control", "business", "activation"], observations.Select(item => item.Phase));
+        Assert.All(observations, item => Assert.NotEqual(outerUnitOfWork.Id, item.UnitOfWorkId));
+        Assert.Equal(3, observations.Select(item => item.UnitOfWorkId).Distinct().Count());
+    }
+
     /// <summary>
     /// 播种成功但激活失败：整个创建回滚，不留下"数据完整却永远停用"的租户。
     /// </summary>
     /// <remarks>
-    /// 这条路径此前刻意不补偿（理由是"数据已完整"）。改成补偿的原因是并发：
-    /// 激活失败的现实成因之一是另一个宿主管理员在播种期间删掉了这个租户，
-    /// 那时数据不是完整的而是孤儿的。既然激活只有"租户不存在"和"数据库故障"两种失败、
-    /// 两种情形下租户都不可用，就统一走补偿——比留一个需要人工判断的中间态干净。
+    /// 激活失败**必须**走补偿，不能因为"种子数据已完整"就放过：激活失败的现实成因之一
+    /// 是另一个宿主管理员在播种期间删掉了这个租户，那时数据不是完整的而是孤儿的
+    /// （落在一个软删租户 Id 下、永远不可达）。激活只有"租户不存在"和"数据库故障"两种失败，
+    /// 两种情形下租户都不可用，因此统一补偿——比留一个需要人工判断的中间态干净。
     /// </remarks>
     [Fact]
     public async Task 激活失败时整个创建回滚_不留下停用的孤儿租户()
@@ -491,7 +610,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         FailActivationTenantManager.Reset();
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
-            brokenActivationHost, "admin", "Admin@123456");
+            brokenActivationHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var failed = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
         {
@@ -504,10 +623,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantId = FailActivationTenantManager.LastCreatedId;
         Assert.NotNull(tenantId);
 
-        // 补偿覆盖了一次**完整成功**的播种：角色、授予、管理员全部清掉
+        // 补偿覆盖了一次完整成功的播种：角色、授予、管理员全部清掉
         await AssertNoVisibleTenantDataAsync(brokenActivationHost, tenantId.Value);
 
-        // 注册表已回滚，租户不可达
         using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(brokenActivationHost);
         var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/halfway");
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
@@ -531,7 +649,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         FailingPurgeTenantSeeder.Reset();
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
-            brokenPurgeHost, "admin", "Admin@123456");
+            brokenPurgeHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var failed = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
         {
@@ -573,7 +691,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 services.AddTransient<ITenantSeeder, FailAfterRolesTenantSeeder>();
             }));
 
-        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(brokenHost, "admin", "Admin@123456");
+        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(brokenHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var failed = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
         {
@@ -587,7 +705,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.NotNull(failedTenantId);
 
         // EF InMemory 不提供真实事务，不用它证明授权记录回滚；
-        // 这里只回归补偿后租户主体不可访问，事务原子性由 PostgreSQL 端到端用例验收。
+        // 这里只回归补偿后租户主体不可访问。事务原子性要在真实关系型数据库上验收，
+        // 属于本项目自己的集成/端到端环境，不由这个用例承担。
         using (var scope = brokenHost.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
@@ -599,8 +718,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             }
         }
 
-        // 补偿在独立作用域里执行，因此不会把失败现场跟踪器里的实体一起提交。
-        // 复用失败现场的 DbContext 时，补偿的 SaveChanges 会写出这一行
+        // 独立补偿作用域不得提交失败现场仍在跟踪的实体。
         using (var scope = brokenHost.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
@@ -610,14 +728,11 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 .ToListAsync());
         }
 
-        // 注册表也已回滚，没有留下无管理员的半成品租户
         using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(brokenHost);
         var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/compensated");
         Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
 
-        // 名称立即可重用：重试不撞名，无需人工清理。
-        // 这一步刻意换回健康宿主——派生宿主与工厂共用同一个 InMemory 库（databaseName 是工厂的实例字段），
-        // 因此这里验证的是"同一个注册表 + 完好的种子"下的重试
+        // 派生宿主与工厂共享数据库，用健康宿主验证同一注册表可直接重试。
         var hostAdmin2 = await LoginHostAdminAsync();
         var retried = await CreateTenantAsync(hostAdmin2, "compensated");
         Assert.NotEqual(Guid.Empty, retried);
@@ -627,7 +742,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 断言指定租户上下文内看不到任何租户化数据。
     /// </summary>
     /// <remarks>
-    /// 第一步的类型清单是**完整性锁**：新增租户化实体（或种子开始写入新实体）时，
+    /// 第一步的类型清单是完整性锁：新增租户化实体（或种子开始写入新实体）时，
     /// 清单断言先失败，提醒同步补偿逻辑与此处断言——避免补偿悄悄漏掉新数据。
     /// </remarks>
     private static async Task AssertNoVisibleTenantDataAsync(
@@ -646,8 +761,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(
             new[]
             {
-                nameof(AuthorizationRevisionRecord),
-#if (IncludeExternalLogin)
+                nameof(AuthorizationVersionRecord),
+#if (ExternalLogin)
                 nameof(ExternalLoginConnection),
 #endif
                 nameof(PermissionGrantRecord),
@@ -680,8 +795,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.Empty(await db.Set<User>().ToListAsync());
             Assert.Empty(await db.Set<Role>().ToListAsync());
             Assert.Empty(await db.Set<PermissionGrantRecord>().ToListAsync());
-            Assert.Empty(await db.Set<AuthorizationRevisionRecord>().ToListAsync());
-#if (IncludeExternalLogin)
+            Assert.Empty(await db.Set<AuthorizationVersionRecord>().ToListAsync());
+#if (ExternalLogin)
             Assert.Empty(await db.Set<ExternalLoginConnection>().ToListAsync());
 #endif
         }
@@ -707,8 +822,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         BlockingTenantSeeder.Reset();
 
-        using var creator = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
-        using var racer = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
+        using var creator = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var racer = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var createTask = creator.Client.PostAsJsonAsync("/api/v1/tenants", new
         {
@@ -750,8 +865,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         BlockingTenantSeeder.Reset();
 
-        using var creator = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
-        using var racer = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", "Admin@123456");
+        using var creator = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var racer = await ProjectWebApplicationFactory.LoginAsync(blockingHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var createTask = creator.Client.PostAsJsonAsync("/api/v1/tenants", new
         {
@@ -767,7 +882,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             $"/api/v1/tenants/{tenantId}/activation", new { IsActive = true });
         Assert.Equal(HttpStatusCode.BadRequest, activate.StatusCode);
 
-        // 仍然进不去：匿名注册撞的是停用租户
         Assert.Equal(
             HttpStatusCode.Forbidden,
             await ProbeAnonymousRegistrationAsync(blockingHost, tenantId));
@@ -776,7 +890,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var created = await createTask;
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
 
-        // 创建流程自己完成了激活，租户正常可用
         using var tenantClient = await LoginTenantAdminAsync(blockingHost, tenantId);
         Assert.Equal(["admin"], await GetUsernamesAsync(tenantClient));
     }
@@ -905,6 +1018,84 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             => inner.PurgeAsync(cancellationToken);
     }
 
+    private sealed class TenantCreationUnitOfWorkProbe
+    {
+        private readonly List<(string Phase, Guid UnitOfWorkId)> _observations = [];
+
+        public IReadOnlyList<(string Phase, Guid UnitOfWorkId)> Observations => _observations;
+
+        public void Record(string phase, IUnitOfWorkManager unitOfWorkManager)
+        {
+            var unitOfWork = unitOfWorkManager.Current
+                ?? throw new InvalidOperationException($"Tenant creation phase '{phase}' has no active unit of work.");
+            _observations.Add((phase, unitOfWork.Id));
+        }
+    }
+
+    private sealed class RecordingTenantSeeder(
+        TenantSeeder inner,
+        IUnitOfWorkManager unitOfWorkManager,
+        TenantCreationUnitOfWorkProbe probe) : ITenantSeeder
+    {
+        public Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        {
+            probe.Record("business", unitOfWorkManager);
+            return inner.SeedAsync(adminEmail, adminPassword, cancellationToken);
+        }
+
+        public Task PurgeAsync(CancellationToken cancellationToken = default)
+            => inner.PurgeAsync(cancellationToken);
+    }
+
+    private sealed class RecordingTenantManager(
+        EfCoreTenantManager<IdentityControlDbContext> inner,
+        IUnitOfWorkManager unitOfWorkManager,
+        TenantCreationUnitOfWorkProbe probe) : ITenantManager
+    {
+        public Task<TenantConfiguration> CreateAsync(
+            string name,
+            string? displayName,
+            bool isActive,
+            CancellationToken cancellationToken = default)
+        {
+            probe.Record("control", unitOfWorkManager);
+            return inner.CreateAsync(name, displayName, isActive, cancellationToken);
+        }
+
+        public Task<TenantConfiguration> SetActiveAsync(
+            Guid id,
+            bool isActive,
+            CancellationToken cancellationToken = default)
+        {
+            if (isActive)
+            {
+                probe.Record("activation", unitOfWorkManager);
+            }
+
+            return inner.SetActiveAsync(id, isActive, cancellationToken);
+        }
+
+        public Task<TenantConfiguration> UpdateAsync(
+            Guid id,
+            string name,
+            string? displayName,
+            CancellationToken cancellationToken = default)
+            => inner.UpdateAsync(id, name, displayName, cancellationToken);
+
+        public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+            => inner.DeleteAsync(id, cancellationToken);
+
+        public Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default)
+            => inner.FindAsync(id, cancellationToken);
+
+        public Task<TenantPage> GetPagedAsync(
+            string? keyword,
+            int offset,
+            int limit,
+            CancellationToken cancellationToken = default)
+            => inner.GetPagedAsync(keyword, offset, limit, cancellationToken);
+    }
+
     /// <summary>
     /// 种子失败、且清种子也失败并在自己的作用域里留下脏跟踪器。
     /// </summary>
@@ -966,7 +1157,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             => inner.GetPagedAsync(keyword, offset, limit, cancellationToken);
     }
 
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
     [Fact]
     public async Task 同一外部身份可在不同租户各自绑定_且查询按租户分区()
     {
@@ -983,11 +1174,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var connectionBId = await BindExternalLoginAsync(tenantBId, provider, providerUserId);
         Assert.NotEqual(connectionAId, connectionBId);
 
-        // 查询分区：租户 A 的按 Provider+ProviderUserId 查找命中自己的连接，而非 B 的
         Assert.Equal(connectionAId, await FindExternalLoginAsync(tenantAId, provider, providerUserId));
         Assert.Equal(connectionBId, await FindExternalLoginAsync(tenantBId, provider, providerUserId));
 
-        // 宿主视角看不到任何租户的连接
         Assert.Null(await FindExternalLoginAsync(tenantId: null, provider, providerUserId));
     }
 
@@ -998,6 +1187,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
         var users = scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>();
         var connections = scope.ServiceProvider.GetRequiredService<IRepository<ExternalLoginConnection, Guid>>();
+        var clock = scope.ServiceProvider.GetRequiredService<IClock>();
 
         using (currentTenant.Change(tenantId))
         {
@@ -1005,7 +1195,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.NotNull(admin);
 
             // TenantId 由多租户落值拦截器按当前上下文填充，业务代码不手写
-            var connection = new ExternalLoginConnection(admin.Id, provider, providerUserId);
+            var connection = new ExternalLoginConnection(admin.Id, provider, providerUserId, clock.Now);
             await connections.InsertAsync(connection);
             return connection.Id;
         }
@@ -1037,15 +1227,12 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var delete = await hostAdmin.Client.DeleteAsync($"/api/v1/tenants/{tenantId}");
         Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
 
-        // 旧租户请求：软删后不可达（404）
         using var stale = _factory.CreateProjectClient();
         stale.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
         var staleRequest = await stale.GetAsync("/api/v1/auth/security-config");
         Assert.Equal(HttpStatusCode.NotFound, staleRequest.StatusCode);
 
-        // 名称可复用（管理器在未删除行内校验唯一）
         var recreated = await CreateTenantAsync(hostAdmin, "recycled");
         Assert.NotEqual(tenantId, recreated);
     }
 }
-#endif

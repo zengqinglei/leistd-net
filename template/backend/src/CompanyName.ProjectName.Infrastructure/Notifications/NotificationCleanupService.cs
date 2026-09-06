@@ -1,6 +1,7 @@
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Notifications.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Leistd.Notifications.EntityFrameworkCore.Entities;
 
 namespace CompanyName.ProjectName.Infrastructure.Notifications;
 

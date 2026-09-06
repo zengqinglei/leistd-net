@@ -1,18 +1,18 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
-using Leistd.Localization.Core.Options;
+using Leistd.Localization.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace Leistd.Localization.Core.Json;
+namespace Leistd.Localization.Json;
 
 /// <summary>
 /// 读取并缓存随程序集嵌入的 JSON 本地化资源。
 /// </summary>
 /// <remarks>
-/// 资源文件结构（ABP 式）：<c>{ "culture": "en", "texts": { "Key": "Value" } }</c>；
+/// 资源文件结构：<c>{ "culture": "en", "texts": { "Key": "Value" } }</c>；
 /// 缺 <c>culture</c> 段的文件被忽略。同一 culture 的键在多个程序集出现时，
 /// 按 <see cref="JsonLocalizationOptions.ResourceAssemblies"/> 顺序后者覆盖前者。
 /// 每个 culture 的合并结果按需加载一次并缓存。
@@ -57,14 +57,10 @@ public sealed class JsonLocalizationResourceReader(
         return texts;
     }
 
-    /// <summary>
-    /// 在程序集嵌入清单中定位 <c>{ResourcesPath}.{culture}.json</c>（大小写不敏感，兼容目录分隔差异）。
-    /// </summary>
-    /// <remarks>
-    /// 精确后缀匹配：清单名须以 <c>.{ResourcesPath}.{culture}.json</c> 结尾（<c>ResourcesPath</c> 为空时退化为 <c>.{culture}.json</c>），
-    /// 避免仅凭 <c>Contains</c> 命中同程序集下相似目录的错误资源。命中多个候选时抛出
-    /// <see cref="InvalidOperationException"/>——歧义应在启动预热阶段暴露，而非静默取第一个埋雷。
-    /// </remarks>
+    // 在程序集嵌入清单中定位 {ResourcesPath}.{culture}.json（大小写不敏感，兼容目录分隔差异）。
+    // 精确后缀匹配：清单名须以 .{ResourcesPath}.{culture}.json 结尾（ResourcesPath 为空时退化为 .{culture}.json），
+    // 避免仅凭 Contains 命中同程序集下相似目录的错误资源。命中多个候选时抛出
+    // InvalidOperationException——歧义应在启动预热阶段暴露，而非静默取第一个埋雷。
     private string? ResolveResourceName(Assembly assembly, string culture)
     {
         var pathHint = _options.ResourcesPath.Replace('/', '.').Replace('\\', '.').Trim('.');
@@ -79,8 +75,8 @@ public sealed class JsonLocalizationResourceReader(
         if (matches.Count > 1)
         {
             throw new InvalidOperationException(
-                $"程序集 '{assembly.GetName().Name}' 中 culture '{culture}' 命中多个本地化资源候选：" +
-                $"{string.Join(", ", matches)}。请确保逻辑后缀 '{suffix}' 在单个程序集内唯一。");
+                $"Multiple localization resource candidates matched culture '{culture}' in assembly '{assembly.GetName().Name}': " +
+                $"{string.Join(", ", matches)}. Ensure the logical suffix '{suffix}' is unique within a single assembly.");
         }
 
         return matches.Count == 1 ? matches[0] : null;
@@ -96,7 +92,7 @@ public sealed class JsonLocalizationResourceReader(
         catch (JsonException ex)
         {
             // 坏文件不该拖垮整个本地化：跳过并告警，其余程序集/键正常加载
-            _logger.LogWarning(ex, "本地化资源 {ResourceName} 不是合法 JSON，已跳过。", resourceName);
+            _logger.LogWarning(ex, "Localization resource {ResourceName} is not valid JSON; skipped.", resourceName);
             return null;
         }
 
@@ -104,7 +100,7 @@ public sealed class JsonLocalizationResourceReader(
         {
             var root = document.RootElement;
 
-            // 缺 culture 段的文件忽略（与 ABP 行为一致）
+            // 缺 culture 段的文件忽略
             if (!root.TryGetProperty("culture", out var cultureElement)
                 || cultureElement.ValueKind != JsonValueKind.String)
                 return null;
@@ -114,7 +110,7 @@ public sealed class JsonLocalizationResourceReader(
             if (!string.Equals(declaredCulture, expectedCulture, StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning(
-                    "本地化资源 {ResourceName} 声明的 culture '{Declared}' 与文件名 culture '{Expected}' 不一致，请核对。",
+                    "Localization resource {ResourceName} declares culture '{Declared}' which does not match the file-name culture '{Expected}'; please verify.",
                     resourceName,
                     declaredCulture,
                     expectedCulture);

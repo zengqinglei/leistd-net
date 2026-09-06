@@ -34,50 +34,44 @@
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
       <div class="p-6 rounded-xl bg-card border border-border">
         <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
+        <h3 class="font-semibold">Authentication</h3>
         <!--#if (IncludeLocalization)-->
         <h3 class="font-semibold">{{ 'landing.feature.authTitle' | transloco }}</h3>
-        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           {{ 'landing.feature.authDesc' | transloco }}
         </p>
         <!--#else-->
         <p class="text-sm text-muted-foreground mt-2">
-          {{ 'landing.feature.authDescWithoutRoles' | transloco }}
+          Cookie-based authentication with role and permission management
         </p>
-        <!--#endif-->
         <!--#else-->
         <h3 class="font-semibold">Authentication</h3>
-        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           Cookie-based authentication with role and permission management
         </p>
         <!--#else-->
         <p class="text-sm text-muted-foreground mt-2">Cookie-based authentication</p>
         <!--#endif-->
-        <!--#endif-->
       </div>
       <div class="p-6 rounded-xl bg-card border border-border">
         <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
+        <h3 class="font-semibold">User Management</h3>
         <!--#if (IncludeLocalization)-->
         <h3 class="font-semibold">{{ 'landing.feature.usersTitle' | transloco }}</h3>
-        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           {{ 'landing.feature.usersDesc' | transloco }}
         </p>
         <!--#else-->
         <p class="text-sm text-muted-foreground mt-2">
-          {{ 'landing.feature.usersDescWithoutRoles' | transloco }}
+          Full CRUD operations with permission control
         </p>
-        <!--#endif-->
         <!--#else-->
         <h3 class="font-semibold">User Management</h3>
-        <!--#if (LocalAuthorization)-->
         <p class="text-sm text-muted-foreground mt-2">
           Full CRUD operations with permission control
         </p>
         <!--#else-->
         <p class="text-sm text-muted-foreground mt-2">Full CRUD operations</p>
-        <!--#endif-->
         <!--#endif-->
       </div>
       <div class="p-6 rounded-xl bg-card border border-border">

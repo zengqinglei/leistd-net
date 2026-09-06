@@ -1,3 +1,4 @@
+using static Leistd.TestBase.DbContextProviderFor;
 using System.Data.Common;
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
@@ -5,6 +6,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.Authorization.Constants;
+using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Resource.EntityFrameworkCore.Managers;
+using Leistd.Authorization.Resource.EntityFrameworkCore.Stores;
+using Leistd.Authorization.Resource.Grants;
+using Leistd.Authorization.Resource.Services;
+using Leistd.Authorization.Exceptions;
+using Leistd.Authorization.Resource.EntityFrameworkCore.Entities;
+using Leistd.Authorization.Resource.Exceptions;
+using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Resource.Tests;
 
@@ -32,8 +43,8 @@ public class ResourceAuthorizationTests : IAsyncLifetime
         _db = new TestOrderDbContext(options);
         await _db.Database.EnsureCreatedAsync();
 
-        _store = new EfCoreResourceGrantStore<TestOrderDbContext>(_db);
-        _manager = new EfCoreResourceGrantManager<TestOrderDbContext>(_db);
+        _store = new EfCoreResourceGrantStore<TestOrderDbContext>(Fixed(_db));
+        _manager = new EfCoreResourceGrantManager<TestOrderDbContext>(Fixed(_db));
 
         _ownOrder = new TestOrder
         {
@@ -74,7 +85,6 @@ public class ResourceAuthorizationTests : IAsyncLifetime
         var service = CreateService(Subject(OwnerUserId), withOwnerHandler: true);
 
         Assert.True(await service.IsGrantedAsync(_ownOrder, ResourceOperations.Read));
-        // 水平越权：同一个操作对别人的实例必须被拒绝。
         Assert.False(await service.IsGrantedAsync(_otherOrder, ResourceOperations.Read));
     }
 
@@ -90,7 +100,6 @@ public class ResourceAuthorizationTests : IAsyncLifetime
         var service = CreateService(Subject(OwnerUserId));
 
         Assert.True(await service.IsGrantedAsync(_otherOrder, ResourceOperations.Read));
-        // 只授予了读，改仍然被拒绝。
         Assert.False(await service.IsGrantedAsync(_otherOrder, ResourceOperations.Update));
     }
 
@@ -117,7 +126,6 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Granted)
         ]);
 
-        // 领域规则：已归档的订单一律不可删除，即使有 ACL。
         var service = CreateService(Subject(OwnerUserId), withOwnerHandler: true, withArchivedDenyHandler: true);
 
         Assert.False(await service.IsGrantedAsync(_ownOrder, ResourceOperations.Delete));
@@ -148,7 +156,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Granted)
         ]);
 
-        var grantedKeys = _store.QueryGrantedResourceKeys(
+        var grantedKeys = await _store.QueryGrantedResourceKeysAsync(
             TestOrder.Resource,
             ResourceOperations.Read,
             OwnerUserId,
@@ -175,7 +183,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Prohibited)
         ]);
 
-        var grantedKeys = _store.QueryGrantedResourceKeys(
+        var grantedKeys = await _store.QueryGrantedResourceKeysAsync(
             TestOrder.Resource,
             ResourceOperations.Read,
             OwnerUserId,
@@ -193,7 +201,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Granted)
         ]);
 
-        var grantedKeys = _store.QueryGrantedResourceKeys(
+        var grantedKeys = await _store.QueryGrantedResourceKeysAsync(
             TestOrder.Resource,
             ResourceOperations.Read,
             OwnerUserId,
@@ -231,7 +239,6 @@ public class ResourceAuthorizationTests : IAsyncLifetime
         Assert.False(await service.IsGrantedAsync(
             _ownOrder, TestOrder.Resource, _ownOrder.ResourceKey, ResourceOperations.Delete));
 
-        // 但没有领域规则拦截时，超管仍能旁路缺失的 ACL。
         var withoutRule = CreateService(new PermissionSubject("u-root", [], IsSuperAdmin: true));
         Assert.True(await withoutRule.IsGrantedAsync(
             _otherOrder, TestOrder.Resource, _otherOrder.ResourceKey, ResourceOperations.Read));
@@ -248,7 +255,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
     {
         // 读取端只按 User/Role 匹配主体：写进别的 ProviderName 或空标识的记录既不放行也不拒绝，
         // 只是永远匹配不上，成为查不出原因的脏数据。
-        await Assert.ThrowsAsync<InvalidResourceGrantSubjectException>(
+        await Assert.ThrowsAsync<InvalidResourceGrantException>(
             () => _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
             [
                 new ResourceGrant(operation, providerName, providerKey, ResourceGrantEffect.Granted)
@@ -266,16 +273,14 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Granted)
         ]);
 
-        // 每读一次版本就把它推高一格，"版本→数据→版本"永远对不上，重试必然耗尽。
         var options = new DbContextOptionsBuilder<TestOrderDbContext>()
             .UseSqlite(_connection)
-            .AddInterceptors(new BumpRevisionAfterEachReadInterceptor(_connection))
+            .AddInterceptors(new BumpVersionAfterEachReadInterceptor(_connection))
             .Options;
 
         await using var db = new TestOrderDbContext(options);
-        var store = new EfCoreResourceGrantStore<TestOrderDbContext>(db);
+        var store = new EfCoreResourceGrantStore<TestOrderDbContext>(Fixed(db));
 
-        // 抛的必须是读取失败，而不是保存冲突：这里没有调用方提交的期望版本。
         var failure = await Assert.ThrowsAsync<UnstableGrantSnapshotException>(
             () => store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey));
 
@@ -283,7 +288,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
     }
 
     /// <summary>每次读到资源版本表之后，用另一条连接把版本推高一格。</summary>
-    private sealed class BumpRevisionAfterEachReadInterceptor(SqliteConnection connection) : DbCommandInterceptor
+    private sealed class BumpVersionAfterEachReadInterceptor(SqliteConnection connection) : DbCommandInterceptor
     {
         public override async ValueTask<DbDataReader> ReaderExecutedAsync(
             DbCommand command,
@@ -291,11 +296,11 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             DbDataReader result,
             CancellationToken cancellationToken = default)
         {
-            if (!command.CommandText.Contains("ResourceAuthorizationRevisions", StringComparison.Ordinal))
+            if (!command.CommandText.Contains("ResourceAuthorizationVersions", StringComparison.Ordinal))
                 return result;
 
             await using var bump = connection.CreateCommand();
-            bump.CommandText = "UPDATE \"ResourceAuthorizationRevisions\" SET \"Version\" = \"Version\" + 1";
+            bump.CommandText = "UPDATE \"ResourceAuthorizationVersions\" SET \"Version\" = \"Version\" + 1";
             await bump.ExecuteNonQueryAsync(cancellationToken);
 
             return result;
@@ -307,7 +312,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
     {
         // 枚举在 .NET 里能承载任意底层值，(ResourceGrantEffect)999 是合法表达式。
         // 判定端 fail-closed 之后它会让整个资源变成"谁都不许访问"，因此必须在写入口拒掉。
-        var invalid = await Assert.ThrowsAsync<InvalidResourceGrantEffectException>(
+        var invalid = await Assert.ThrowsAsync<InvalidResourceGrantException>(
             () => _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
             [
                 new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
@@ -315,11 +320,12 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             ]));
 
         Assert.Equal(TestOrder.Resource, invalid.ResourceName);
+        // 两类非法写入合并为一个异常类型后，"是哪一类"由 Reason 承载，这里钉住它
+        Assert.Contains("999", invalid.Reason, StringComparison.Ordinal);
 
-        // 未定义值不得留下任何痕迹。
         var set = await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey);
         Assert.Empty(set.Grants);
-        Assert.Equal(0, set.Revision);
+        Assert.Equal(0, set.Version);
     }
 
     [Fact]
@@ -330,13 +336,12 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             new ServiceCollection().BuildServiceProvider(),
             new CorruptedEffectStore());
 
-        // 授权判定必须 fail-closed：读不懂的效果一律当作没有授予，而不是"不是拒绝就放行"。
         Assert.False(await service.IsGrantedAsync(
             _otherOrder, TestOrder.Resource, _otherOrder.ResourceKey, ResourceOperations.Read));
     }
 
     [Fact]
-    public async Task Replacing_acl_with_a_stale_revision_is_rejected()
+    public async Task Replacing_acl_with_a_stale_version_is_rejected()
     {
         var stale = await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey);
 
@@ -347,7 +352,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Granted),
             new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
                 ResourceGrantEffect.Prohibited)
-        ], stale.Revision);
+        ], stale.Version);
 
         // B：基于 A 之前的旧页面保存，若不校验版本，A 刚加的显式拒绝会被静默抹掉，
         // 被排除的人重新经由角色拿到访问权，而两次保存都会显示成功。
@@ -356,10 +361,10 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             [
                 new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.Role, "r-review",
                     ResourceGrantEffect.Granted)
-            ], stale.Revision));
+            ], stale.Version));
 
-        Assert.Equal(stale.Revision, conflict.ExpectedRevision);
-        Assert.Equal(1, conflict.ActualRevision);
+        Assert.Equal(stale.Version, conflict.ExpectedVersion);
+        Assert.Equal(1, conflict.ActualVersion);
 
         var current = await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey);
         Assert.Contains(current.Grants, x =>
@@ -414,15 +419,15 @@ public class ResourceAuthorizationTests : IAsyncLifetime
 
         // 集合查询必须与单实例判定同口径：只在这里放行，列表、分页、统计、导出就会把
         // 单条判定明确拒绝的资源照样列出来。
-        var grantedKeys = await _store
-            .QueryGrantedResourceKeys(TestOrder.Resource, ResourceOperations.Read, OtherUserId, ["r-corrupt"])
-            .ToListAsync();
+        var grantedKeyQuery = await _store
+            .QueryGrantedResourceKeysAsync(TestOrder.Resource, ResourceOperations.Read, OtherUserId, ["r-corrupt"]);
+        var grantedKeys = await grantedKeyQuery.ToListAsync();
 
         Assert.DoesNotContain(_otherOrder.ResourceKey, grantedKeys);
     }
 
     [Fact]
-    public async Task Removing_a_resource_also_clears_its_revision()
+    public async Task Removing_a_resource_also_clears_its_version()
     {
         await _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
         [
@@ -430,14 +435,14 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Granted)
         ]);
 
-        Assert.Equal(1, (await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey)).Revision);
+        Assert.Equal(1, (await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey)).Version);
 
         await _manager.RemoveResourceAsync(TestOrder.Resource, _ownOrder.ResourceKey);
 
         // 版本行留着会持续累积孤儿记录，资源 Key 被重用时新资源还会继承上一任的版本号。
         var after = await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey);
         Assert.Empty(after.Grants);
-        Assert.Equal(0, after.Revision);
+        Assert.Equal(0, after.Version);
     }
 
     [Fact]
@@ -451,12 +456,12 @@ public class ResourceAuthorizationTests : IAsyncLifetime
                 ResourceGrantEffect.Granted)
         ]);
 
-        // 冲突必须发生在 SaveChanges 上：传一个过期的 expectedRevision 会在内存检查阶段就抛出，
+        // 冲突必须发生在 SaveChanges 上：传一个过期的 expectedVersion 会在内存检查阶段就抛出，
         // 那时还没动过任何实体，回滚路径根本走不到。
         var interceptor = new RunOnceBeforeSaveInterceptor(async () =>
         {
             await using var winnerDb = new TestOrderDbContext(options);
-            var winner = new EfCoreResourceGrantManager<TestOrderDbContext>(winnerDb);
+            var winner = new EfCoreResourceGrantManager<TestOrderDbContext>(Fixed(winnerDb));
             await winner.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
             [
                 new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
@@ -472,8 +477,8 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             .Options;
 
         await using var loserDb = new TestOrderDbContext(loserOptions);
-        var loser = new EfCoreResourceGrantManager<TestOrderDbContext>(loserDb);
-        var loserStore = new EfCoreResourceGrantStore<TestOrderDbContext>(loserDb);
+        var loser = new EfCoreResourceGrantManager<TestOrderDbContext>(Fixed(loserDb));
+        var loserStore = new EfCoreResourceGrantStore<TestOrderDbContext>(Fixed(loserDb));
 
         var snapshot = await loserStore.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey);
 
@@ -482,7 +487,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             [
                 new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
                     ResourceGrantEffect.Prohibited)
-            ], snapshot.Revision));
+            ], snapshot.Version));
 
         // 冲突之后跟踪器里不得残留"从未落库的 Prohibited"：同一 scoped DbContext 后续的 tracking
         // 查询会拿到它，重试时甚至会判成"没有变化"而跳过写入。
@@ -540,19 +545,21 @@ public class ResourceAuthorizationTests : IAsyncLifetime
             return Task.FromResult(effects);
         }
 
-        public IQueryable<string> QueryGrantedResourceKeys(
+        public Task<IQueryable<string>> QueryGrantedResourceKeysAsync(
             string resourceName,
             string operation,
             string userId,
-            IReadOnlyCollection<string> roleIds)
-            => Array.Empty<string>().AsQueryable();
+            IReadOnlyCollection<string> roleIds,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Array.Empty<string>().AsQueryable());
 
-        public IQueryable<string> QueryDeniedResourceKeys(
+        public Task<IQueryable<string>> QueryDeniedResourceKeysAsync(
             string resourceName,
             string operation,
             string userId,
-            IReadOnlyCollection<string> roleIds)
-            => Array.Empty<string>().AsQueryable();
+            IReadOnlyCollection<string> roleIds,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Array.Empty<string>().AsQueryable());
     }
 
     [Fact]
@@ -632,5 +639,115 @@ public class ResourceAuthorizationTests : IAsyncLifetime
 
             return ValueTask.CompletedTask;
         }
+    }
+
+
+    [Fact]
+    public async Task Removing_a_provider_clears_its_acl_across_every_resource()
+    {
+        // 缺这个入口时删除用户不只留孤儿行：主体标识被重用后旧 ACL 会重新生效——
+        // 新用户拿到旧用户被分享过的资源，既不报错也不出现在任何审计里
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _otherOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
+                ResourceGrantEffect.Granted),
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OwnerUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+
+        var removed = await _manager.RemoveProviderAsync(
+            PermissionGrantProviderNames.User, OtherUserId);
+
+        Assert.Equal(2, removed);
+
+        Assert.Empty((await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey)).Grants);
+        var otherAcl = await _store.GetGrantsAsync(TestOrder.Resource, _otherOrder.ResourceKey);
+        Assert.Single(otherAcl.Grants);
+
+        Assert.Equal(OwnerUserId, otherAcl.Grants[0].ProviderKey);
+    }
+
+    [Fact]
+    public async Task Removing_a_provider_advances_the_version_of_affected_resources()
+    {
+        // 内容变了而版本不变，等于让持有旧集合的编辑者通过并发校验、把刚删掉的授予又写回去
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+        var before = (await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey)).Version;
+
+        await _manager.RemoveProviderAsync(PermissionGrantProviderNames.User, OtherUserId);
+
+        var after = (await _store.GetGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey)).Version;
+        Assert.True(after > before, $"version must advance: {before} -> {after}");
+
+        await Assert.ThrowsAsync<ResourceGrantConcurrencyException>(() =>
+            _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey, [], before));
+    }
+
+    [Fact]
+    public async Task Removing_a_provider_only_advances_the_version_of_the_resource_it_touched()
+    {
+        // 版本行按「资源名 + 资源 Key」定位，而 ResourceKey 在不同资源名下可以重复。
+        // 若批量查询用扁平的 key 集合下推，就会捞到另一个资源类型上同名 key 的版本行，
+        // 把无关资源的版本一并推高——那些资源的编辑者会凭空撞 409，且查不出原因。
+        const string OtherResourceName = "Invoices";
+        var sharedKey = _ownOrder.ResourceKey;
+
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, sharedKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+        await _manager.ReplaceGrantsAsync(OtherResourceName, sharedKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OwnerUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+
+        var untouchedBefore = (await _store.GetGrantsAsync(OtherResourceName, sharedKey)).Version;
+
+        await _manager.RemoveProviderAsync(PermissionGrantProviderNames.User, OtherUserId);
+
+        var untouchedAfter = await _store.GetGrantsAsync(OtherResourceName, sharedKey);
+        Assert.Equal(untouchedBefore, untouchedAfter.Version);
+        Assert.Single(untouchedAfter.Grants);
+
+        await _manager.ReplaceGrantsAsync(OtherResourceName, sharedKey, [], untouchedBefore);
+    }
+
+    [Fact]
+    public async Task Removing_a_provider_is_idempotent()
+    {
+        Assert.Equal(0, await _manager.RemoveProviderAsync(
+            PermissionGrantProviderNames.User, "u-never-granted"));
+
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+
+        Assert.Equal(1, await _manager.RemoveProviderAsync(
+            PermissionGrantProviderNames.User, OtherUserId));
+        Assert.Equal(0, await _manager.RemoveProviderAsync(
+            PermissionGrantProviderNames.User, OtherUserId));
+    }
+
+    [Fact]
+    public async Task Removing_a_provider_rejects_blank_identifiers()
+    {
+        // 空白标识会命中一批本不该动的行；框架公共 API 的边界守卫
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _manager.RemoveProviderAsync(PermissionGrantProviderNames.User, "  "));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _manager.RemoveProviderAsync("  ", OtherUserId));
     }
 }

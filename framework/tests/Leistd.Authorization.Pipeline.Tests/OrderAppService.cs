@@ -4,6 +4,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Leistd.Authorization.Resource.Grants;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Resource.Abstractions;
+using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.Pipeline.Tests;
 
@@ -143,11 +147,12 @@ public sealed class OrderAppService(
             return [];
         }
 
-        var grantedKeys = resourceGrantStore.QueryGrantedResourceKeys(
+        var grantedKeys = await resourceGrantStore.QueryGrantedResourceKeysAsync(
             Order.Resource,
             ResourceOperations.Read,
             subject.UserId,
-            subject.RoleIds);
+            subject.RoleIds,
+            ct);
 
         return await dbContext.Orders
             .Where(order => grantedKeys.Contains(order.ResourceKey))
@@ -180,10 +185,10 @@ public sealed class OrderAppService(
 
         var scoped = await dataScope.ApplyAsync(dbContext.Orders.AsQueryable(), Order.Resource, operation, ct);
 
-        var sharedKeys = resourceGrantStore.QueryGrantedResourceKeys(
-            Order.Resource, operation, subject.UserId, subject.RoleIds);
-        var deniedKeys = resourceGrantStore.QueryDeniedResourceKeys(
-            Order.Resource, operation, subject.UserId, subject.RoleIds);
+        var sharedKeys = await resourceGrantStore.QueryGrantedResourceKeysAsync(
+            Order.Resource, operation, subject.UserId, subject.RoleIds, ct);
+        var deniedKeys = await resourceGrantStore.QueryDeniedResourceKeysAsync(
+            Order.Resource, operation, subject.UserId, subject.RoleIds, ct);
 
         var scopedKeys = scoped.Select(order => order.ResourceKey);
 

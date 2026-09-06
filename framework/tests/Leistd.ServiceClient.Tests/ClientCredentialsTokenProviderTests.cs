@@ -4,6 +4,7 @@ using Leistd.ServiceClient.OAuth.Options;
 using Leistd.ServiceClient.OAuth.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.ServiceClient.OAuth.Abstractions;
 
 namespace Leistd.ServiceClient.Tests;
 
@@ -156,6 +157,6 @@ public class ClientCredentialsTokenProviderTests
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
             provider.GetAccessTokenAsync(ClientName));
 
-        Assert.Contains("Authority 或 TokenEndpoint", exception.Message);
+        Assert.Contains("Authority or TokenEndpoint", exception.Message);
     }
 }

@@ -1,11 +1,9 @@
 namespace Leistd.ServiceClient.OAuth.Options;
 
 /// <summary>
-/// OAuth2 client credentials 认证配置。配置来源分两层：
-/// 全局 <c>Leistd:ServiceAuth</c>（本服务的调用身份：Authority/ClientId/ClientSecret，
-/// 一个服务只配一次）+ 客户端节 <c>Leistd:ServiceClients:&lt;服务名&gt;:Scope</c>
-/// （目标服务级 scope，未配置时继承全局默认）。
+/// 配置 OAuth 2.0 client credentials 认证。
 /// </summary>
+/// <remarks>服务调用身份全局共享，目标服务可单独覆盖申请范围。</remarks>
 public class ClientCredentialsOptions
 {
     /// <summary>
@@ -55,6 +53,6 @@ public class ClientCredentialsOptions
             return $"{Authority.TrimEnd('/')}/connect/token";
         }
 
-        throw new InvalidOperationException("ClientCredentialsOptions 需要配置 Authority 或 TokenEndpoint。");
+        throw new InvalidOperationException("ClientCredentialsOptions requires either Authority or TokenEndpoint to be configured.");
     }
 }
