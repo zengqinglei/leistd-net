@@ -244,7 +244,118 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 ---
 
-## 7. 提交前自检
+## 7. 测试
+
+测试项目的**布局、命名与 csproj** 由 `scripts/check-test-layout.py` 与 `scripts/check-csproj-conventions.py` 强制；
+写什么样的用例没有机械判据，按下面的口径。
+
+### 7.1 目录与命名
+
+```text
+framework/tests/
+├── Directory.Build.props        共享属性与测试包（TargetFramework、打包覆盖、xunit、runner、coverlet）
+├── shared/                      非测试项目：Leistd.TestBase（收编的替身与断言词汇）
+├── components/<kebab-家族>/     与 framework/components/ 同名同结构
+└── ddd-struct/                  与 framework/ddd-struct/ 并列，保住依赖方向的一级划分
+```
+
+- **测试项目名 = `Leistd.<真实包前缀>.Tests`**，前缀必须是该家族下某个包的前缀。
+  不得发明包名段（曾出现过 `Leistd.Authorization.Pipeline.Tests`，而没有任何包叫这个名字）。
+  跨家族的端到端用例放进主家族测试项目的 `EndToEnd/` 子目录。
+- **家族没有独立测试项目时目录不存在**，并在 `check-test-layout.py` 的 `WAIVERS` 里写明理由。
+  这道闸门补的是覆盖率阈值的盲区：程序集从未被任何测试加载时根本不出现在覆盖率报告里，
+  任何百分比门槛都对它无效。
+- **csproj 只写自己的东西**：`FrameworkReference`、特有 `PackageReference`、`ProjectReference`。
+  共享属性和测试包已在 `tests/Directory.Build.props` 注入，重复声明会被闸门拦下。
+
+### 7.2 项目内部组织
+
+项目根只放用例文件，文件名表达**被测行为**而不是被测类名。出现下面任一情形才分子目录：
+
+| 情形 | 子目录 |
+| --- | --- |
+| 用例文件多于约 10 个 | 按**被测包名去掉家族前缀**分：`Core/`、`AspNetCore/`、`EntityFrameworkCore/`、`Memory/`、`Redis/`、`OAuth/`、`Refit/` |
+| 存在跨实现的抽象契约套件 | 套件放 `Contracts/`，各实现的派生与专属用例放实现名目录 |
+| 本项目专用的测试替身 | `TestDoubles/` |
+| 夹具内容文件 | `TestResources/` |
+
+子目录名经 IDE0130 变成命名空间段，同样受 `check-csproj-conventions.py` 的自重复/缩写规则约束。
+被测包名与家族名冲突时（`Leistd.ObjectMapping.Tests.Mapster` 里裸写 `Mapster` 会解析到自身）
+用完整限定名引入，不要为此改目录名。
+
+### 7.3 写什么样的用例
+
+- **一个行为一个文件**，断言可观察行为而不是实现细节。
+- **注释解释"为什么这条断言存在"**：回归自哪次故障、错了会怎样。不复述代码在做什么。
+- **分支组合用 `[Theory]` + `[InlineData]`**，不要把同一逻辑复制成多个 `[Fact]`。
+- **每个 `DependencyInjection.cs` 至少三条用例**——注册结果与生命周期、重复调用幂等、
+  与相邻组件的覆盖/共存关系。用 `Leistd.TestBase.Assertions.ServiceCollectionAssertions`。
+  显式组合模型里"注册面正确"就是公共契约，且编译期完全看不出来。
+- **同一契约有多个实现时先写抽象契约套件**（`Contracts/` 下的 `abstract class`），
+  各实现派生。`ILock` 曾在内存与 Redis 上给出不同的零超时语义，靠人记得"两边都改"挡不住。
+- **实体配置、唯一索引、全局查询过滤器必须用关系型 Provider**（SQLite in-memory）。
+  EF InMemory 全内存求值，会让被违反的约束和不可翻译的查询静默通过。
+  只碰变更跟踪器、不碰 DDL 的测试可以用 InMemory。
+- **替身优先用官方实现**：时间用 `FakeTimeProvider`（`Microsoft.Extensions.TimeProvider.Testing`），
+  日志用 `FakeLogger`（`Microsoft.Extensions.Diagnostics.Testing`）。手写替身只在官方没有时才写。
+- **替身被两个以上项目重复发明就上移到 `Leistd.TestBase`**；语义只是相近的留在各自项目里，
+  强行合并会让替身长出一堆只服务某一个调用方的开关。
+
+### 7.4 不追求的覆盖
+
+**覆盖率是体检指标，不是目标。** 下面几类零覆盖是合理的，不必也不应该为它们写用例：
+
+| 类别 | 例 | 为什么不写 |
+| --- | --- | --- |
+| 诊断字符串 | `ToString()` 重写 | 字符串拼接，无分支。断言它等于把实现抄一遍 |
+| 单行转发 | `GetDefaultPolicyAsync() => _fallback.GetDefaultPolicyAsync()` | 被测的是框架自己的实现 |
+| 空实现 | `StopAsync() => Task.CompletedTask` | 没有可失败的行为 |
+| 需要外部服务的私有细节 | Redis 键前缀拼接 | 没有真实服务就只能造假，造假证明不了它 |
+| 纯声明 | 接口、DTO、标记特性、常量 | 无可执行代码 |
+
+反过来，**下面几类即使只有一两行也必须写**：
+
+- **注册面**：`AddXxx()` / `MapXxx()` / `UseXxx()`。显式组合模型里它就是契约。
+- **安全语义**：端点是否要求登录、权限归属判定、主体解析。漏掉的表现是越权而不是报错。
+- **失败与放弃路径**：保存失败后丢弃已收集的领域事件、子工作单元不得提交、取消令牌是否真的传下去。
+  这些只在出事时才执行，没有用例就等于从未运行过。
+- **同一逻辑的第二个入口**：同步/异步保存、配置绑定/委托两个重载。
+  只覆盖一条时，另一条改坏不会红。
+- **可翻译性**：谓词是否真被翻译成 SQL、唯一索引是否真进了 DDL。
+  这类必须用关系型 Provider，InMemory 会让它们静默通过。
+
+判断标准只有一条：**这行代码坏掉时，症状是"报错"还是"静默给出错误结果"。**
+后者才需要用例。
+
+**覆盖率不设门禁，CI 也不收集**——设了固定 fail-under 就会诱导为数字补测试，
+而上面这张表里最该补的那几类恰恰不是靠百分比找出来的。需要体检时本地跑：
+
+```bash
+dotnet test framework/Leistd.Framework.slnx -c Release \
+  --settings framework/build/coverage.runsettings --collect:"XPlat Code Coverage"
+```
+
+分工要说清：`scripts/check-test-layout.py` 保证到**家族**这一级——家族有测试项目、
+项目名对得上、已登记进解决方案。**它证明不了家族内每个发布包都被加载**，
+那要么读覆盖率、要么反射公共 API 做对账，都是人工体检，不做机械门禁。
+
+### 7.5 不要引入的模式
+
+**不要把整套应用启动放进测试基类。** 有的模块化框架让测试基类在构造函数里加载模块图、
+逐程序集扫描类型、构建容器，而 xUnit 对每个测试方法新建一次测试类实例——单例成本因此随
+模块数与业务类型数增长，实测可达 50–65 毫秒。Leistd 没有模块系统也没有约定注册
+（全仓库仅 `MapsterProfile` 一处程序集扫描），测试里建的是十几个描述符的小容器，
+单例成本约 14 毫秒。**这个差距来自架构，不是测试技巧，但也因此只需一次误改就能失去。**
+
+具体约束：
+
+- 组件与 DDD 基座里新增程序集扫描（`GetTypes()`、`DefinedTypes`、`Assembly.Load`）必须有明确理由，
+  且不得进入 `AddXxx()` 的公共路径——只能在调用方显式要求扫描时发生。
+- 需要真实宿主的用例（`TestHost` / `WebApplicationFactory`）用 `IClassFixture` 或
+  collection fixture 共享，不要每个用例建一个宿主。宿主构建约 0.5–0.8 秒，
+  它是测试时长里唯一的大头。
+
+## 8. 提交前自检
 
 ```bash
 dotnet build framework/Leistd.Framework.slnx -c Release                         # 0 错误
@@ -260,7 +371,7 @@ CI 也只调它一处；新增闸门加进那个脚本即可，本文件与 `ci.
 
 本地 NuGet 包统一输出到仓库根 `.tmp/local-feed`，不要临时发明其它产物目录；CI 发布产物仍使用 `framework/artifacts`。包消费检查会验证 DLL、XML、随包文档和依赖闭包，并在 `.tmp/package-consumer/` 使用隔离 NuGet 配置构建最小消费项目；本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包。新增第三方包时确认已在 `framework/Directory.Packages.props` 登记；新增包发布前确认 `PackageId` 唯一。
 
-## 8. 脚本与命令的跨平台约定
+## 9. 脚本与命令的跨平台约定
 
 框架面向 Mac / Linux / Windows 三平台开发者，构建与工具命令必须可移植：
 

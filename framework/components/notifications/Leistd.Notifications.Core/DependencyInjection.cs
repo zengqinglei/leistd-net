@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Notifications.Services;
 using Leistd.Notifications.Abstractions;
 
@@ -30,7 +31,9 @@ public static class DependencyInjection
     /// </example>
     public static IServiceCollection AddNotifications(this IServiceCollection services)
     {
-        services.AddTransient<INotificationPublisher, NotificationPublisher>();
+        // 幂等：通知与实时两个包都会经各自注册入口调到这里，宿主两个都装是常态。
+        // 不幂等会让 INotificationPublisher 出现两条，按 IEnumerable 解析时重复发布。
+        services.TryAddTransient<INotificationPublisher, NotificationPublisher>();
         return services;
     }
 }

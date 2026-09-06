@@ -59,7 +59,7 @@ IMPLEMENTATION_ONLY_DIRS = {"Services"}
 PUBLIC_INTERFACE_RE = re.compile(r"^public interface ([A-Za-z0-9_]+)", re.M)
 
 
-def namespace_segment_problems(csproj: pathlib.Path, assembly_name: str, root_ns: str) -> list[str]:
+def namespace_segment_problems(csproj: Path, assembly_name: str, root_ns: str) -> list[str]:
     problems: list[str] = []
     package_words = {w.lower().rstrip("s") for w in assembly_name.split(".") if w != "Leistd"}
     for folder in sorted(csproj.parent.rglob("*")):

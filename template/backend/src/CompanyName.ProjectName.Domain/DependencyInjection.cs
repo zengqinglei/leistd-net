@@ -1,5 +1,6 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 #if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
@@ -17,12 +18,13 @@ public static class DependencyInjection
     /// </summary>
     public static IServiceCollection AddDomainServices(this IServiceCollection services)
     {
-        // 用户管理领域服务
-        services.AddTransient<UserDomainService>();
+        // 用户管理领域服务。TryAdd：组合根拆分后重复调用是常态，
+        // 重复注册会让同一实现出现多条，按 IEnumerable 解析时重复执行
+        services.TryAddTransient<UserDomainService>();
 
 #if (ExternalLogin)
         // 外部认证领域服务
-        services.AddTransient<ExternalAuthDomainService>();
+        services.TryAddTransient<ExternalAuthDomainService>();
 #endif
 
         return services;

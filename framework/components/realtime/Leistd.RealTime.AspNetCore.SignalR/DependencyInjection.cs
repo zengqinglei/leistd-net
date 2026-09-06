@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Leistd.AspNetCore.SignalR;
 using Leistd.RealTime.Options;
@@ -44,7 +45,9 @@ public static class DependencyInjection
         // 主体/租户/链路标识与 UserIdentifier 解析全靠基座。
         services.AddSignalRAmbientContext();
 
-        services.AddSingleton<IBusinessEventPublisher, SignalRBusinessEventPublisher>();
+        // 幂等：宿主同时装通知与实时时两个入口都会走到这里，重复注册会让
+        // IBusinessEventPublisher 出现两条，按 IEnumerable 解析时同一事件推两遍。
+        services.TryAddSingleton<IBusinessEventPublisher, SignalRBusinessEventPublisher>();
 
         return services;
     }
