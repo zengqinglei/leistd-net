@@ -11,8 +11,9 @@
   <!-- Leistd.* 框架包（NuGet 模式下使用；本地源码模式由 ProjectReference 取代）。
        版本统一取 $(LeistdFrameworkVersion)，单点维护。 -->
   <ItemGroup>
-    <PackageVersion Include="Leistd.Exception.Core" Version="$(LeistdFrameworkVersion)" />
-    <PackageVersion Include="Leistd.Exception.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.ExceptionHandling.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Data" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.ExceptionHandling.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <!--#if (IncludeLocalization)-->
     <PackageVersion Include="Leistd.Localization.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Localization.AspNetCore" Version="$(LeistdFrameworkVersion)" />
@@ -78,7 +79,6 @@
     <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.5.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
-    <PackageVersion Include="System.Linq.Dynamic.Core" Version="1.7.2" />
     <PackageVersion Include="xunit" Version="2.9.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>

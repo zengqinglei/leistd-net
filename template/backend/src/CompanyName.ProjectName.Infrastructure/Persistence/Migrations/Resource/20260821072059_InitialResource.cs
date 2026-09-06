@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Leistd.Authorization.EntityFrameworkCore.Entities;
 
 #nullable disable
 
@@ -15,7 +16,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 name: "companyname-projectname");
 
             migrationBuilder.CreateTable(
-                name: "AuthorizationRevisionRecord",
+                name: "AuthorizationVersionRecord",
                 schema: "companyname-projectname",
                 columns: table => new
                 {
@@ -29,7 +30,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_AuthorizationRevisionRecord", x => x.Id);
+                    table.PrimaryKey("PK_AuthorizationVersionRecord", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -100,6 +101,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
+                    table.CheckConstraint("CK_User_SuperAdminIsHostOnly", "NOT (\"IsSuperAdmin\" AND \"TenantId\" IS NOT NULL)");
                 });
 
             migrationBuilder.CreateTable(
@@ -138,17 +140,17 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AuthorizationRevisionRecord_ProviderName_ProviderKey",
+                name: "IX_AuthorizationVersionRecord_ProviderName_ProviderKey",
                 schema: "companyname-projectname",
-                table: "AuthorizationRevisionRecord",
+                table: "AuthorizationVersionRecord",
                 columns: new[] { "ProviderName", "ProviderKey" },
                 unique: true,
                 filter: "\"TenantId\" IS NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AuthorizationRevisionRecord_TenantId_ProviderName_ProviderK~",
+                name: "IX_AuthorizationVersionRecord_TenantId_ProviderName_ProviderK~",
                 schema: "companyname-projectname",
-                table: "AuthorizationRevisionRecord",
+                table: "AuthorizationVersionRecord",
                 columns: new[] { "TenantId", "ProviderName", "ProviderKey" },
                 unique: true,
                 filter: "\"TenantId\" IS NOT NULL");
@@ -224,7 +226,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "AuthorizationRevisionRecord",
+                name: "AuthorizationVersionRecord",
                 schema: "companyname-projectname");
 
             migrationBuilder.DropTable(

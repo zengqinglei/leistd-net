@@ -1,13 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Leistd.Authorization.EntityFrameworkCore.Entities;
 
-namespace Leistd.Authorization.EntityFrameworkCore;
+namespace Leistd.Authorization.EntityFrameworkCore.EntityConfigurations;
 
 /// <summary>
 /// PermissionGrantRecord EF Core 实体配置。
 /// </summary>
 public class PermissionGrantRecordConfiguration : IEntityTypeConfiguration<PermissionGrantRecord>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<PermissionGrantRecord> builder)
     {
         builder.HasKey(x => x.Id);
@@ -43,11 +45,12 @@ public class PermissionGrantRecordConfiguration : IEntityTypeConfiguration<Permi
 }
 
 /// <summary>
-/// AuthorizationRevisionRecord EF Core 实体配置。
+/// AuthorizationVersionRecord EF Core 实体配置。
 /// </summary>
-public class AuthorizationRevisionRecordConfiguration : IEntityTypeConfiguration<AuthorizationRevisionRecord>
+public class AuthorizationVersionRecordConfiguration : IEntityTypeConfiguration<AuthorizationVersionRecord>
 {
-    public void Configure(EntityTypeBuilder<AuthorizationRevisionRecord> builder)
+    /// <inheritdoc />
+    public void Configure(EntityTypeBuilder<AuthorizationVersionRecord> builder)
     {
         builder.HasKey(x => x.Id);
 
@@ -72,10 +75,10 @@ public class AuthorizationRevisionRecordConfiguration : IEntityTypeConfiguration
         // 并发首写的兜底依赖这两个索引：两个事务同时为同一主体插入版本行时，落败方由数据库拒绝
         builder.HasIndex(x => new { x.ProviderName, x.ProviderKey })
             .IsUnique()
-            .HasFilter($"\"{nameof(AuthorizationRevisionRecord.TenantId)}\" IS NULL");
+            .HasFilter($"\"{nameof(AuthorizationVersionRecord.TenantId)}\" IS NULL");
 
         builder.HasIndex(x => new { x.TenantId, x.ProviderName, x.ProviderKey })
             .IsUnique()
-            .HasFilter($"\"{nameof(AuthorizationRevisionRecord.TenantId)}\" IS NOT NULL");
+            .HasFilter($"\"{nameof(AuthorizationVersionRecord.TenantId)}\" IS NOT NULL");
     }
 }

@@ -1,13 +1,15 @@
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Exception.Core;
-#if (MultiTenancy)
 using Leistd.MultiTenancy;
-#endif
+using Leistd.Authorization.Constants;
+using Leistd.Authorization.Exceptions;
+using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Abstractions;
+using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.Abstractions;
 #if (IncludeLocalization)
 using Microsoft.Extensions.Localization;
 #endif
@@ -28,32 +30,24 @@ public class PermissionAppService(
     IPermissionGrantManager permissionGrantManager,
     IRepository<User, Guid> userRepository,
     IRepository<Role, Guid> roleRepository
-#if (MultiTenancy)
     ,
     ICurrentTenant currentTenant
-#endif
 #if (IncludeLocalization)
     ,
     IStringLocalizerFactory localizerFactory
 #endif
     ) : BaseAppService, IPermissionAppService
 {
-#if (MultiTenancy)
     /// <summary>
     /// 当前多租户侧别匹配：宿主侧权限对租户上下文不可见——
     /// 检查器已有同一硬边界，这里让 current 权限集与定义树同口径，
-    /// 否则租户超管会在菜单里看到点进去必然 403 的宿主功能。
+    /// 否则租户管理员会在菜单里看到点进去必然 403 的宿主功能。
     /// </summary>
     private bool MatchesCurrentSide(IPermissionDefinition definition)
         => definition.Side.HasFlag(currentTenant.IsAvailable ? MultiTenancySides.Tenant : MultiTenancySides.Host);
 
     private bool MatchesCurrentSide(string permissionName)
         => permissionDefinitionManager.GetOrNull(permissionName) is { } definition && MatchesCurrentSide(definition);
-#else
-    private static bool MatchesCurrentSide(IPermissionDefinition definition) => true;
-
-    private static bool MatchesCurrentSide(string permissionName) => true;
-#endif
 
     public async Task<CurrentPermissionsOutputDto> GetCurrentAsync(
         CancellationToken cancellationToken = default)
@@ -63,7 +57,7 @@ public class PermissionAppService(
         {
             throw new UnauthorizedException("The current request is not authenticated.")
 #if (IncludeLocalization)
-                .WithLocalization("Auth:Unauthenticated")
+                .WithCode("Auth:Unauthenticated")
 #endif
                 ;
         }
@@ -82,7 +76,7 @@ public class PermissionAppService(
             {
                 Permissions = all,
                 IsSuperAdmin = true,
-                Revision = "super-admin"
+                VersionToken = "super-admin"
             };
         }
 
@@ -102,7 +96,7 @@ public class PermissionAppService(
         {
             Permissions = permissions,
             IsSuperAdmin = false,
-            Revision = grants.Revision
+            VersionToken = grants.VersionToken
         };
     }
 
@@ -149,36 +143,40 @@ public class PermissionAppService(
     {
         await EnsureSubjectExistsAsync(providerName, providerKey, cancellationToken);
 
+        // 框架异常自带状态码：并发冲突 409、未定义权限 400（"权限是否已定义且启用"由授予管理器
+        // 统一把关，它是写入方、覆盖全部调用路径，此处不重复判断）。因此这里**没有**必须写的
+        // try/catch——只在启用本地化时捕获一次，为的是挂上展示文案键。
+        // 用 bare throw 而不是新建异常包一层：后者会丢掉原始异常类型，调用方就无法再按类型区分。
+#if (IncludeLocalization)
         try
         {
             await permissionGrantManager.ReplaceGrantsAsync(
                 providerName,
                 providerKey,
                 input.PermissionNames,
-                input.ExpectedRevision,
+                input.ExpectedVersion,
                 cancellationToken);
         }
         catch (PermissionGrantConcurrencyException exception)
         {
-            throw new ConflictException(
-                    "The permissions were changed by someone else. Reload and try again.",
-                    exception)
-#if (IncludeLocalization)
-                .WithLocalization("Permission:ConcurrencyConflict")
-#endif
-                ;
+            exception.WithCode("Permission:ConcurrencyConflict");
+            throw;
         }
-        // "权限是否已定义且启用"由授予管理器统一把关（它是写入方，覆盖全部调用路径），
-        // 这里只负责把领域异常翻译成对外契约与展示文案，不重复这条判断。
         catch (UndefinedPermissionException exception)
         {
-            throw new BadRequestException(exception.Message, exception)
-#if (IncludeLocalization)
-                .WithLocalization("Permission:UndefinedPermission")
-                .WithData("Name", string.Join(", ", exception.PermissionNames))
-#endif
-                ;
+            exception
+                .WithCode("Permission:UndefinedPermission")
+                .WithData("Name", string.Join(", ", exception.PermissionNames));
+            throw;
         }
+#else
+        await permissionGrantManager.ReplaceGrantsAsync(
+            providerName,
+            providerKey,
+            input.PermissionNames,
+            input.ExpectedVersion,
+            cancellationToken);
+#endif
 
         return await GetGrantsAsync(providerName, providerKey, cancellationToken);
     }
@@ -245,7 +243,7 @@ public class PermissionAppService(
         {
             ProviderName = providerName,
             ProviderKey = providerKey,
-            Revision = direct.Revision,
+            Version = direct.Version,
             Grants = states
         };
     }
@@ -266,7 +264,7 @@ public class PermissionAppService(
         {
             throw new BadRequestException($"'{providerKey}' is not a valid subject key.")
 #if (IncludeLocalization)
-                .WithLocalization("Permission:InvalidProviderKey")
+                .WithCode("Permission:InvalidProviderKey")
 #endif
                 ;
         }
@@ -277,7 +275,7 @@ public class PermissionAppService(
             PermissionGrantProviderNames.Role => await roleRepository.AnyAsync(r => r.Id == id, cancellationToken),
             _ => throw new BadRequestException($"Unsupported provider '{providerName}'.")
 #if (IncludeLocalization)
-                .WithLocalization("Permission:UnsupportedProvider")
+                .WithCode("Permission:UnsupportedProvider")
                 .WithData("Provider", providerName)
 #endif
         };
@@ -286,7 +284,7 @@ public class PermissionAppService(
         {
             throw new NotFoundException($"Subject '{providerName}/{providerKey}' was not found.")
 #if (IncludeLocalization)
-                .WithLocalization("Permission:SubjectNotFound")
+                .WithCode("Permission:SubjectNotFound")
 #endif
                 ;
         }
@@ -294,4 +292,3 @@ public class PermissionAppService(
         return id;
     }
 }
-#endif

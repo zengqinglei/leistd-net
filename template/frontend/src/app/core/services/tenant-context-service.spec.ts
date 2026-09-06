@@ -1,4 +1,4 @@
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 

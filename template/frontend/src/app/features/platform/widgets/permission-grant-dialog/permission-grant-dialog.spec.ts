@@ -1,4 +1,3 @@
-//#if (LocalAuthorization)
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
@@ -51,7 +50,7 @@ function grants(providerKey: string, granted: boolean) {
   return {
     providerName: 'Role',
     providerKey,
-    revision: 7,
+    version: 7,
     grants: [{ name: 'App.Users', granted }],
   };
 }
@@ -107,7 +106,7 @@ describe('PermissionGrantDialog', () => {
     await fixture.whenStable();
 
     expect(dialog().isGranted('App.Users')).toBeTrue();
-    expect(dialog().revision()).toBe(7);
+    expect(dialog().version()).toBe(7);
   });
 
   it('ignores a response whose subject does not match the request', async () => {
@@ -119,7 +118,7 @@ describe('PermissionGrantDialog', () => {
     await fixture.whenStable();
 
     expect(dialog().isGranted('App.Users')).toBeFalse();
-    expect(dialog().revision()).toBe(0);
+    expect(dialog().version()).toBe(0);
   });
 
   it('drops the previous subject state when loading the next one fails', async () => {
@@ -140,7 +139,7 @@ describe('PermissionGrantDialog', () => {
     // 加载失败后界面不得留着 A 的状态与版本，否则保存会把 A 的授予写给 B；
     // 两边版本恰好相同时乐观并发也拦不住。
     expect(dialog().isGranted('App.Users')).toBeFalse();
-    expect(dialog().revision()).toBe(0);
+    expect(dialog().version()).toBe(0);
     expect(dialog().canSave()).toBeFalse();
   });
 
@@ -264,4 +263,3 @@ describe('PermissionGrantDialog', () => {
     );
   });
 });
-//#endif

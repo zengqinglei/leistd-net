@@ -10,15 +10,52 @@ namespace Leistd.ServiceClient.Tests;
 public class UserContextForwardingTests
 {
     private static readonly Guid UserId = Guid.NewGuid();
+    private sealed class TestServiceClientOptions : ServiceClientOptions;
+
+    [Fact]
+    public void Username_header_uses_final_protocol_name()
+    {
+        Assert.Equal("X-Username", ServiceClientHeaders.Username);
+    }
 
     private static async Task<HttpRequestMessage> SendAsync(
         FakeCurrentUser user, UserContextForwardingOptions options, HttpRequestMessage? request = null)
     {
         var capture = new CaptureHandler();
-        var handler = new UserContextDelegatingHandler(user, options) { InnerHandler = capture };
+        var monitor = new MutableOptionsMonitor<TestServiceClientOptions>(new() { UserContext = options });
+        var handler = new UserContextDelegatingHandler<TestServiceClientOptions>(user, monitor)
+        {
+            InnerHandler = capture
+        };
         using var invoker = new HttpMessageInvoker(handler);
         await invoker.SendAsync(request ?? new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None);
         return capture.Requests.Single();
+    }
+
+    [Fact]
+    public async Task Enabled_switch_is_read_for_each_request()
+    {
+        var capture = new CaptureHandler();
+        var monitor = new MutableOptionsMonitor<TestServiceClientOptions>(new());
+        var handler = new UserContextDelegatingHandler<TestServiceClientOptions>(
+            new FakeCurrentUser(id: UserId, username: "ada"), monitor)
+        {
+            InnerHandler = capture
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/one"), default);
+        monitor.Set(new TestServiceClientOptions
+        {
+            UserContext = new UserContextForwardingOptions { Enabled = false }
+        });
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/two"), default);
+        monitor.Set(new TestServiceClientOptions());
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/three"), default);
+
+        Assert.True(capture.Requests[0].Headers.Contains(ServiceClientHeaders.UserId));
+        Assert.False(capture.Requests[1].Headers.Contains(ServiceClientHeaders.UserId));
+        Assert.True(capture.Requests[2].Headers.Contains(ServiceClientHeaders.UserId));
     }
 
     [Fact]
@@ -29,7 +66,7 @@ public class UserContextForwardingTests
         var sent = await SendAsync(user, new UserContextForwardingOptions());
 
         Assert.Equal(UserId.ToString(), sent.Headers.GetValues(ServiceClientHeaders.UserId).Single());
-        var encodedName = sent.Headers.GetValues(ServiceClientHeaders.UserName).Single();
+        var encodedName = sent.Headers.GetValues(ServiceClientHeaders.Username).Single();
         Assert.Equal("张三", Uri.UnescapeDataString(encodedName));
         Assert.DoesNotContain('张', encodedName); // 头值必须是 ASCII 安全的
     }
@@ -52,7 +89,7 @@ public class UserContextForwardingTests
         var sent = await SendAsync(new FakeCurrentUser(), new UserContextForwardingOptions());
 
         Assert.False(sent.Headers.Contains(ServiceClientHeaders.UserId));
-        Assert.False(sent.Headers.Contains(ServiceClientHeaders.UserName));
+        Assert.False(sent.Headers.Contains(ServiceClientHeaders.Username));
     }
 
     [Fact]
@@ -60,7 +97,7 @@ public class UserContextForwardingTests
     {
         var user = new FakeCurrentUser(id: UserId, username: "someone");
 
-        var sent = await SendAsync(user, new UserContextForwardingOptions { Enable = false });
+        var sent = await SendAsync(user, new UserContextForwardingOptions { Enabled = false });
 
         Assert.False(sent.Headers.Contains(ServiceClientHeaders.UserId));
     }
@@ -70,10 +107,10 @@ public class UserContextForwardingTests
     {
         var user = new FakeCurrentUser(id: UserId, username: "someone");
 
-        var sent = await SendAsync(user, new UserContextForwardingOptions { ForwardUserName = false });
+        var sent = await SendAsync(user, new UserContextForwardingOptions { ForwardUsername = false });
 
         Assert.True(sent.Headers.Contains(ServiceClientHeaders.UserId));
-        Assert.False(sent.Headers.Contains(ServiceClientHeaders.UserName));
+        Assert.False(sent.Headers.Contains(ServiceClientHeaders.Username));
     }
 
     [Fact]

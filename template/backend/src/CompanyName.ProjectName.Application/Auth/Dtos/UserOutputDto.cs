@@ -11,8 +11,6 @@ public record UserOutputDto
     public bool IsActive { get; init; }
     public bool IsSuperAdmin { get; init; }
     public DateTime CreationTime { get; init; }
-#if (LocalAuthorization)
     /// <summary>已分配角色名，仅用于展示；权限判断一律走 /api/v1/permissions/current。</summary>
     public required string[] Roles { get; init; }
-#endif
 }

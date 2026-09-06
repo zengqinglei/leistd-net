@@ -1,14 +1,13 @@
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.Resolution;
 
 /// <summary>
-/// 租户解析链配置
+/// 配置租户解析链。
 /// </summary>
 public class TenantResolveOptions
 {
     /// <summary>
-    /// 解析贡献者链，按顺序执行，首个有定论者胜出。
-    /// Web 宿主经 <c>AddMultiTenancy()</c> 装配默认链（Claim → Domain → Header → QueryString），可增删排序；
-    /// 其中 Domain 仅在配置了 <c>MultiTenancyOptions.DomainFormat</c> 时参与解析
+    /// 获取按顺序执行的租户解析贡献者。
     /// </summary>
+    /// <remarks>首个完成解析的贡献者终止解析链。</remarks>
     public IList<ITenantResolveContributor> Contributors { get; } = [];
 }

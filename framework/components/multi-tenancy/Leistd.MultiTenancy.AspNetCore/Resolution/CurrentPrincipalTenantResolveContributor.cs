@@ -1,14 +1,17 @@
 using Microsoft.AspNetCore.Http;
+using Leistd.MultiTenancy.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Leistd.MultiTenancy.AspNetCore.Options;
 
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
 /// <summary>
-/// 从已认证主体的租户 claim 解析租户。
-/// <b>必须位于链首</b>：已认证用户的租户由 claim 定案且终止链（含"无 claim = 宿主用户"），
-/// 请求头与查询串无法改写已登录用户的租户——这是防跨租户水平越权的关键顺序
+/// 从已认证主体的租户声明解析租户。
 /// </summary>
+/// <remarks>
+/// 必须位于解析链首；无租户声明表示宿主用户，且认证主体一旦处理便不允许后续来源改写租户。
+/// </remarks>
 public class CurrentPrincipalTenantResolveContributor : ITenantResolveContributor
 {
     /// <inheritdoc />
@@ -24,9 +27,10 @@ public class CurrentPrincipalTenantResolveContributor : ITenantResolveContributo
         {
             var options = context.ServiceProvider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value;
 
-            // 有定论：有 claim 即租户，无 claim 即宿主，两种情况都终止链
+            // 认证主体即使没有租户声明也必须终止解析，防止请求参数改写宿主身份。
             context.Handled = true;
-            context.TenantIdOrName = user.FindFirst(options.TenantClaimType)?.Value;
+            // 判定与非 HTTP 入口共用 TenantClaimReader，避免两处漂移。
+            context.TenantIdOrName = TenantClaimReader.Read(user, options.TenantClaimType);
         }
 
         return Task.CompletedTask;

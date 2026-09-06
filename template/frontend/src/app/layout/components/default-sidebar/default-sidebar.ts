@@ -6,9 +6,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  //#if (MultiTenancy)
   lucideBuilding2,
-  //#endif
   lucideGauge,
   lucideIdCard,
   lucideShieldCheck,
@@ -19,13 +17,9 @@ import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../core/services/authorization-service';
-//#endif
 import { Logo } from '../../../shared/components/logo/logo';
-//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../shared/models/permission';
-//#endif
 import { LayoutService } from '../../services/layout-service';
 import { UserMenu } from '../user-menu/user-menu';
 
@@ -58,9 +52,7 @@ interface MenuGroup {
   ],
   // prettier-ignore
   providers: [provideIcons({
-    //#if (MultiTenancy)
     lucideBuilding2,
-    //#endif
     lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck,
   })],
   templateUrl: './default-sidebar.html',
@@ -68,9 +60,7 @@ interface MenuGroup {
 })
 export class DefaultSidebar {
   readonly layoutService = inject(LayoutService);
-  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
-  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
@@ -87,19 +77,15 @@ export class DefaultSidebar {
           label: 'layout.sidebar.users',
           icon: 'lucideUsers',
           route: '/platform/users',
-          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.users.default],
-          //#endif
         },
-        //#if (LocalAuthorization)
         {
           label: 'layout.sidebar.roles',
           icon: 'lucideShieldCheck',
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
         },
-        //#endif
-        //#if (IdentityService)
+        //#if (LocalIdentity)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'layout.sidebar.tenants',
@@ -110,7 +96,7 @@ export class DefaultSidebar {
         //#endif
       ],
     },
-    //#if (IdentityService)
+    //#if (OpenIddictServer)
     {
       label: 'layout.sidebar.groupDeveloper',
       items: [
@@ -118,9 +104,7 @@ export class DefaultSidebar {
           label: 'layout.sidebar.openApplications',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
-          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.openApplications.default],
-          //#endif
         },
       ],
     },
@@ -149,19 +133,15 @@ export class DefaultSidebar {
           label: 'User Management',
           icon: 'lucideUsers',
           route: '/platform/users',
-          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.users.default],
-          //#endif
         },
-        //#if (LocalAuthorization)
         {
           label: 'Role Management',
           icon: 'lucideShieldCheck',
           route: '/platform/roles',
           permissions: [PERMISSIONS.roles.default],
         },
-        //#endif
-        //#if (IdentityService)
+        //#if (LocalIdentity)
         // 宿主侧专属：租户用户的 current 权限里不会出现 App.Tenants，按权限自动裁剪。
         {
           label: 'Tenant Management',
@@ -172,7 +152,7 @@ export class DefaultSidebar {
         //#endif
       ],
     },
-    //#if (IdentityService)
+    //#if (OpenIddictServer)
     {
       label: 'Developer',
       items: [
@@ -180,9 +160,7 @@ export class DefaultSidebar {
           label: 'Developer Apps',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
-          //#if (LocalAuthorization)
           permissions: [PERMISSIONS.openApplications.default],
-          //#endif
         },
       ],
     },
@@ -230,18 +208,11 @@ export class DefaultSidebar {
   /**
    * 菜单可见性只按权限判断。
    *
-   * 这里刻意不再使用"是否超级管理员"作为判据：超管的旁路已经体现在下发的权限集合里，
-   * 前端再判断一次会让菜单与后端的权限语义分叉。
+   * 超级管理员旁路已体现在下发的权限集合中，前端不另建身份判据。
    */
-  //#if (LocalAuthorization)
   private isItemVisible(item: MenuItem): boolean {
     return !item.permissions?.length || this.authorizationService.hasAny(...item.permissions);
   }
-  //#else
-  private isItemVisible(_item: MenuItem): boolean {
-    return true;
-  }
-  //#endif
 
   isItemActive(item: MenuItem): boolean {
     const currentUrl = this.layoutService.currentUrl();

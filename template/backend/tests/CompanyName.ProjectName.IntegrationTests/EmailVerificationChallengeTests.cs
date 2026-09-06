@@ -1,4 +1,4 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
@@ -37,7 +37,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         {
             Username = $"legacy_{Guid.NewGuid():N}"[..32],
             Email = email,
-            Password = "Passw0rd!",
+            Password = "VerificationTests!Pw",
             EmailVerificationCode = challenge.Code
         });
         Assert.Equal(HttpStatusCode.BadRequest, legacyContract.StatusCode);
@@ -97,7 +97,6 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         _ = await SendChallengeAsync(host, client, email);
     }
 
-#if (MultiTenancy)
     [Fact]
     public async Task 租户A挑战不能在租户B使用_且B的拒绝不销毁A挑战()
     {
@@ -140,7 +139,6 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientA, email)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientB, email)).StatusCode);
     }
-#endif
 
     private WebApplicationFactory<Program> CreateEmailVerificationHost()
     {
@@ -196,7 +194,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         {
             Username = username,
             Email = email,
-            Password = "Passw0rd!",
+            Password = "VerificationTests!Pw",
             EmailVerification = new
             {
                 challenge.ChallengeId,
@@ -204,7 +202,6 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
             }
         });
 
-#if (MultiTenancy)
     private static HttpClient CreateTenantClient(WebApplicationFactory<Program> host, Guid tenantId)
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(host);
@@ -217,7 +214,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
             host,
             "admin",
-            "Admin@123456");
+            ProjectWebApplicationFactory.TestAdminPassword);
         using var response = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
         {
             Name = name,
@@ -229,7 +226,6 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return body.RootElement.GetProperty("id").GetGuid();
     }
-#endif
 
     private sealed record ChallengeCredentials(Guid ChallengeId, string Code);
 

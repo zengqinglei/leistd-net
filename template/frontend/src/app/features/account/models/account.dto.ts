@@ -19,9 +19,7 @@ export interface UserOutputDto {
   isActive: boolean;
   isSuperAdmin: boolean;
   creationTime: string;
-  //#if (LocalAuthorization)
   roles: string[];
-  //#endif
 }
 
 /**
@@ -103,7 +101,6 @@ export interface ChangePasswordInputDto {
  */
 export interface ExternalLoginUrlOutputDto {
   loginUrl: string;
-  state: string;
 }
 
 /**

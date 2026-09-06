@@ -10,9 +10,13 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-<!--#if (IdentityService)-->
+<!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
 <!--#endif-->
+  </ItemGroup>
+  <!-- Leistd 框架引用 -->
+  <ItemGroup>
+    <PackageReference Include="Leistd.Data" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />

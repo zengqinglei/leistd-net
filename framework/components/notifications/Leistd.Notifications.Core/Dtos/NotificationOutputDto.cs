@@ -1,4 +1,6 @@
-namespace Leistd.Notifications;
+using Leistd.Notifications.Constants;
+
+namespace Leistd.Notifications.Dtos;
 
 /// <summary>
 /// 通知传输对象（DTO）—— 不含持久化细节。

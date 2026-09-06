@@ -1,15 +1,9 @@
-import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { DatePipe } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  output,
-  signal,
-} from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+//#if (IncludeLocalization)
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+//#else
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+//#endif
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -47,12 +41,19 @@ import {
   TablePaginatorLabels,
 } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
-import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
+import {
+  ACTIONS_COLUMN_META,
+  tableColumnVisibility,
+} from '../../../../../../shared/models/table-column-meta';
+import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
+import {
+  tableSortAria,
+  tableSortIcon,
+  toggleTableSort,
+} from '../../../../../../shared/utils/table-sorting';
+import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
 import { OpenApplicationOutputDto } from '../../../../models/open-application.dto';
-
-const MEDIUM_VIEWPORT = '(min-width: 768px)';
-const LARGE_VIEWPORT = '(min-width: 1024px)';
 
 type PopoverMode = 'permissions' | 'redirectUris';
 
@@ -96,11 +97,10 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OpenApplicationTable {
-  private readonly breakpointObserver = inject(BreakpointObserver);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  //#endif
 
+  //#endif
   readonly applications = input<OpenApplicationOutputDto[]>([]);
   readonly totalCount = input(0);
   readonly pagination = input<PaginationState>({ pageIndex: 0, pageSize: 20 });
@@ -127,22 +127,7 @@ export class OpenApplicationTable {
   readonly delete = output<string>();
   readonly resetSecret = output<string>();
 
-  private readonly viewport = toSignal(
-    this.breakpointObserver.observe([MEDIUM_VIEWPORT, LARGE_VIEWPORT]),
-    {
-      initialValue: {
-        matches: false,
-        breakpoints: { [MEDIUM_VIEWPORT]: false, [LARGE_VIEWPORT]: false },
-      } satisfies BreakpointState,
-    },
-  );
-
-  private readonly tableViewport = computed(() => {
-    const breakpoints = this.viewport().breakpoints;
-    if (breakpoints[LARGE_VIEWPORT] === true) return 'desktop' as const;
-    if (breakpoints[MEDIUM_VIEWPORT] === true) return 'tablet' as const;
-    return 'mobile' as const;
-  });
+  private readonly tableViewport = tableViewportSignal();
 
   protected readonly columns: ColumnDef<OpenApplicationOutputDto>[] = [
     {
@@ -181,14 +166,7 @@ export class OpenApplicationTable {
       id: 'actions',
       enableSorting: false,
       enableHiding: false,
-      meta: {
-        priority: 'primary',
-        locked: true,
-        headClass:
-          'w-px px-2 text-right whitespace-nowrap sticky right-0 z-20 bg-card border-l border-border',
-        cellClass:
-          'w-px px-2 py-2 whitespace-nowrap sticky right-0 z-10 bg-card group-hover:bg-muted/50 border-l border-border',
-      },
+      meta: ACTIONS_COLUMN_META,
     },
   ];
 
@@ -197,19 +175,16 @@ export class OpenApplicationTable {
   );
 
   // 移动端/平板端「行展开」补偿：被隐藏的列不会丢数据，点行首箭头即可展开查看。
-  private readonly expandedRows = signal<ReadonlySet<string>>(new Set());
+  private readonly expandableRows = createExpandableRows();
+
   readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
 
   isRowExpanded(id: string): boolean {
-    return this.expandedRows().has(id);
+    return this.expandableRows.isExpanded(id);
   }
 
   toggleRow(id: string): void {
-    const next = new Set(this.expandedRows());
-    if (!next.delete(id)) {
-      next.add(id);
-    }
-    this.expandedRows.set(next);
+    this.expandableRows.toggle(id);
   }
 
   isColumnHidden(id: string): boolean {
@@ -251,22 +226,15 @@ export class OpenApplicationTable {
   //#endif
 
   toggleSort(columnId: string): void {
-    const column = this.table.getColumn(columnId);
-    column?.toggleSorting(column.getIsSorted() === 'asc');
+    toggleTableSort(this.table, columnId);
   }
 
   sortIcon(columnId: string): string {
-    const direction = this.table.getColumn(columnId)?.getIsSorted();
-    return direction === 'asc'
-      ? 'lucideSortAsc'
-      : direction === 'desc'
-        ? 'lucideSortDesc'
-        : 'lucideArrowUpDown';
+    return tableSortIcon(this.table, columnId);
   }
 
   sortAria(columnId: string): 'ascending' | 'descending' | 'none' {
-    const direction = this.table.getColumn(columnId)?.getIsSorted();
-    return direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none';
+    return tableSortAria(this.table, columnId);
   }
 
   /** 每页条数变化：回到第一页并广播新的分页状态。 */

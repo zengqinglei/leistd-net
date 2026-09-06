@@ -16,12 +16,14 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 
 模板通过 `PackageReference` 消费框架；`Api` 是组合根，Application 不依赖 Infrastructure。模板源可编辑不等于交付完成，必须验证实际生成结果。
 
+模板源码不产随包 XML，非公开成员可在确有契约价值时使用 XML 注释。注释不设密度或行数配额：`<summary>` 一句话，`<remarks>` 只写会改变正确用法的契约，行内 `//` 只解释非显然的原因。`///` 仍禁 Markdown `**…**`（不渲染）。
+
 ## 方案与实施计划
 
 涉及 Template 技术选型、结构调整、参数迁移或跨场景改造时，先读取 `docs/README.md` 并搜索同主题最新文档：
 
-- 仍在比较候选或诊断现状时，跨会话材料写入 `docs/assessments/YYYY-MM-DD-<topic>.md`；
-- 方案已经选定且需要任务分解、实施顺序和验收时，写入 `docs/plans/YYYY-MM-DD-<topic>.md`；
+- 仍在比较候选或诊断现状时，跨会话材料写入 `docs/assessments/YYYY-MM-DD-<topic>.md`，**选定方案后删除**；
+- 方案已经选定且需要任务分解、实施顺序和验收时，写入 `docs/plans/YYYY-MM-DD-<topic>.md`，**任务全部完成后删除**；
 - 长期模板维护规则才写入 `docs/template/`；
 - 当前实现已经成立后，生成项目必须知道的工程事实才写入 `template/docs/`。
 
@@ -56,8 +58,8 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 ## 验证入口
 
 ```powershell
-pwsh scripts/validate-skills.ps1
-pwsh scripts/test-template-matrix.ps1 -Scenarios default
+pwsh scripts/check-all.ps1                                 # 全部静态闸门（唯一清单来源）
+pwsh scripts/test-template-matrix.ps1
 ```
 
 参数裁剪或共享资产变化使用完整矩阵。未执行的条件场景和风险必须说明。

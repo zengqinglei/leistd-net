@@ -4,14 +4,14 @@ using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.OAuth.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Leistd.ServiceClient.OAuth.Abstractions;
 
 namespace Leistd.ServiceClient.OAuth.Services;
 
 /// <summary>
-/// 基于 OAuth2 client credentials 流的令牌提供者：
-/// 向身份服务 token 端点（默认 <c>/connect/token</c>）以 <c>grant_type=client_credentials</c>
-/// 换取访问令牌，按具名客户端缓存至过期缓冲，并用信号量单飞防止并发重复获取。
+/// 获取并缓存 client credentials 访问令牌。
 /// </summary>
+/// <remarks>令牌按客户端隔离，并通过单飞控制避免并发重复获取。</remarks>
 /// <param name="httpClientFactory">HttpClient 工厂（token 请求使用独立客户端 <see cref="TokenHttpClientName"/>，避免管道递归）</param>
 /// <param name="optionsMonitor">具名认证配置</param>
 /// <param name="logger">日志</param>
@@ -41,7 +41,7 @@ public class ClientCredentialsTokenProvider(
         await gate.WaitAsync(cancellationToken);
         try
         {
-            // 双检：等待期间可能已有并发请求完成获取
+            // 等待期间其他请求可能已刷新缓存，进入临界区后必须再次检查。
             if (_cache.TryGetValue(clientName, out cached) && !cached.IsExpired(options.ExpirationBuffer))
             {
                 return cached.AccessToken;
@@ -65,7 +65,7 @@ public class ClientCredentialsTokenProvider(
     {
         if (string.IsNullOrWhiteSpace(options.ClientId))
         {
-            throw new ServiceClientException($"服务客户端 {clientName} 未配置 ClientId，无法获取访问令牌。");
+            throw new ServiceClientException($"Service client {clientName} has no ClientId configured; cannot obtain an access token.");
         }
 
         string tokenEndpoint;
@@ -75,7 +75,7 @@ public class ClientCredentialsTokenProvider(
         }
         catch (InvalidOperationException ex)
         {
-            throw new ServiceClientException($"服务客户端 {clientName} 认证配置无效: {ex.Message}", ex);
+            throw new ServiceClientException($"Service client {clientName} has invalid authentication configuration: {ex.Message}", ex);
         }
 
         var form = new Dictionary<string, string>
@@ -100,10 +100,10 @@ public class ClientCredentialsTokenProvider(
         {
             response = await httpClient.SendAsync(request, cancellationToken);
         }
-        catch (System.Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             throw new ServiceClientException(
-                $"服务客户端 {clientName} 获取访问令牌失败（{tokenEndpoint} 不可达）: {ex.Message}", ex);
+                $"Service client {clientName} failed to obtain an access token ({tokenEndpoint} unreachable): {ex.Message}", ex);
         }
 
         using (response)
@@ -112,7 +112,7 @@ public class ClientCredentialsTokenProvider(
             if (!response.IsSuccessStatusCode)
             {
                 throw new ServiceClientException(
-                    $"服务客户端 {clientName} 获取访问令牌失败: {(int)response.StatusCode} {tokenEndpoint} {Truncate(body)}");
+                    $"Service client {clientName} failed to obtain an access token: {(int)response.StatusCode} {tokenEndpoint} {Truncate(body)}");
             }
 
             return ParseToken(clientName, body);
@@ -142,26 +142,22 @@ public class ClientCredentialsTokenProvider(
         catch (JsonException ex)
         {
             throw new ServiceClientException(
-                $"服务客户端 {clientName} 的令牌响应不是有效 JSON: {ex.Message}", ex);
+                $"Token response for service client {clientName} is not valid JSON: {ex.Message}", ex);
         }
 
         if (string.IsNullOrEmpty(accessToken))
         {
-            throw new ServiceClientException($"服务客户端 {clientName} 的令牌响应缺少 access_token。");
+            throw new ServiceClientException($"Token response for service client {clientName} is missing access_token.");
         }
 
-        logger.LogDebug("服务客户端 {ClientName} 已获取访问令牌，有效期 {ExpiresIn}s", clientName, expiresIn);
+        logger.LogDebug("Service client {ClientName} obtained an access token; expires in {ExpiresIn}s", clientName, expiresIn);
         return new CachedToken(accessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn));
     }
 
     private static string Truncate(string value) => value.Length <= 2048 ? value : value[..2048];
 
-    // 缓存中的访问令牌（AccessToken + 过期时刻 UTC）。仅本提供者使用——它不出现在
-    // IServiceTokenProvider 的任何签名里，使用者既不构造也不接收它，因此不作为公共类型暴露。
-    // 用普通注释而非 XML 注释：后者会被编译进随包分发的 .xml 文档，让私有类型出现在公共文档产物里。
     private sealed record CachedToken(string AccessToken, DateTimeOffset ExpiresAt)
     {
-        // 是否已过期（含提前刷新缓冲）
         public bool IsExpired(TimeSpan buffer) => DateTimeOffset.UtcNow >= ExpiresAt - buffer;
     }
 }

@@ -4,6 +4,9 @@ using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Authorization.Resource;
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Resource.Abstractions;
+using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.Pipeline.Tests;
 

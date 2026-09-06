@@ -104,6 +104,14 @@ jobs:
           if ($logText -match '(?im)(BREAKING CHANGE)|(^[a-z]+(\([^)]*\))?!:)') { $bump = 'major' }
           elseif ($logText -match '(?im)^feat(\([^)]*\))?:') { $bump = 'minor' }
 
+          # SemVer 第 4 条：0.y.z 是初始开发期，公共 API 不承诺稳定，
+          # 因此该期间的破坏性变更按 minor 递增，不进 1.0.0。
+          # 进 1.0.0 必须是一次显式决定（手动抬 VERSION），不能由任意一条带 ! 的
+          # 提交顺带触发——否则「第一次不兼容改动」就成了发布 1.0 的时间点。
+          # 破坏性变更本身不会被吞掉：release notes 仍按 ! / BREAKING CHANGE 归入
+          # 「破坏性变更」小节，消费者照样看得到。
+          if ($bump -eq 'major' -and $maj -eq 0) { $bump = 'minor' }
+
           switch ($bump) {
             'major' { $maj++; $min = 0; $pat = 0 }
             'minor' { $min++; $pat = 0 }

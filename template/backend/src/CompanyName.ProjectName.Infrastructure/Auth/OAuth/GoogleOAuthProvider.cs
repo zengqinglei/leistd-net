@@ -1,8 +1,8 @@
-#if (IdentityService)
+#if (LocalIdentity)
+using Leistd.ExceptionHandling;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using Leistd.Exception.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -20,12 +20,14 @@ public class GoogleOAuthProvider(
     private const string TokenEndpoint = "https://oauth2.googleapis.com/token";
     private const string UserInfoEndpoint = "https://www.googleapis.com/oauth2/v2/userinfo";
 
+    public string Name => "google";
+
     public string GetAuthorizationUrl(string redirectUri, string state)
     {
         var clientId = configuration["ExternalAuth:Google:ClientId"]
             ?? throw new NotFoundException("Client ID for external identity provider Google is not configured.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:ClientIdNotConfigured")
+                .WithCode("ExternalAuth:ClientIdNotConfigured")
                 .WithData("Provider", "Google")
 #endif
             ;
@@ -41,14 +43,14 @@ public class GoogleOAuthProvider(
         var clientId = configuration["ExternalAuth:Google:ClientId"]
             ?? throw new NotFoundException("Client ID for external identity provider Google is not configured.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:ClientIdNotConfigured")
+                .WithCode("ExternalAuth:ClientIdNotConfigured")
                 .WithData("Provider", "Google")
 #endif
             ;
         var clientSecret = configuration["ExternalAuth:Google:ClientSecret"]
             ?? throw new NotFoundException("Client secret for external identity provider Google is not configured.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:ClientSecretNotConfigured")
+                .WithCode("ExternalAuth:ClientSecretNotConfigured")
                 .WithData("Provider", "Google")
 #endif
             ;
@@ -69,10 +71,10 @@ public class GoogleOAuthProvider(
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            logger.LogError("Google Token 交换失败: {StatusCode} {Content}", response.StatusCode, errorContent);
+            logger.LogError("Google token exchange failed: {StatusCode} {Content}", response.StatusCode, errorContent);
             throw new BadRequestException($"Failed to obtain access token: {response.StatusCode}")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:AccessTokenExchangeFailed")
+                .WithCode("ExternalAuth:AccessTokenExchangeFailed")
                 .WithData("StatusCode", response.StatusCode)
 #endif
             ;
@@ -83,10 +85,10 @@ public class GoogleOAuthProvider(
 
         if (tokenResponse == null || !tokenResponse.TryGetValue("access_token", out var accessTokenElement))
         {
-            logger.LogError("解析 Google Access Token 失败: {Response}", responseContent);
+            logger.LogError("Failed to parse Google access token: {Response}", responseContent);
             throw new BadRequestException("Failed to parse the access token.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:AccessTokenParseFailed")
+                .WithCode("ExternalAuth:AccessTokenParseFailed")
 #endif
             ;
         }
@@ -96,7 +98,7 @@ public class GoogleOAuthProvider(
         {
             throw new BadRequestException("Access token is empty.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:AccessTokenEmpty")
+                .WithCode("ExternalAuth:AccessTokenEmpty")
 #endif
             ;
         }
@@ -124,7 +126,7 @@ public class GoogleOAuthProvider(
         {
             throw new BadRequestException("Failed to obtain external user information.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:UserInfoFetchFailed")
+                .WithCode("ExternalAuth:UserInfoFetchFailed")
 #endif
             ;
         }
@@ -134,7 +136,7 @@ public class GoogleOAuthProvider(
         {
             throw new BadRequestException("The external user ID is missing.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:UserIdMissing")
+                .WithCode("ExternalAuth:UserIdMissing")
 #endif
             ;
         }

@@ -1,10 +1,13 @@
 using Leistd.MultiTenancy;
 using Leistd.ServiceClient.Constants;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.ServiceClient.Options;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.ServiceClient.Handlers;
 
 /// <summary>
-/// 租户上下文出站处理器：当前存在租户上下文时注入 <c>X-Tenant-Id</c> 头
+/// 将当前租户标识写入出站请求头。
 /// </summary>
 /// <remarks>
 /// 读取 <see cref="ICurrentTenant"/>（环境上下文）而非用户 claim——
@@ -12,14 +15,19 @@ namespace Leistd.ServiceClient.Handlers;
 /// <c>tenant_id</c> claim 在 token 内传递，本头服务于 client credentials 通道。
 /// 请求已有同名头时不覆盖。
 /// </remarks>
-public class TenantContextDelegatingHandler(ICurrentTenant currentTenant) : DelegatingHandler
+public class TenantContextDelegatingHandler<TOptions>(
+    ICurrentTenant currentTenant,
+    IOptionsMonitor<TOptions> optionsMonitor) : DelegatingHandler
+    where TOptions : ServiceClientOptions
 {
     /// <inheritdoc />
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        if (currentTenant.Id is { } tenantId &&
+        var options = optionsMonitor.CurrentValue.UserContext;
+        if (options.ForwardTenantId &&
+            currentTenant.Id is { } tenantId &&
             !request.Headers.Contains(ServiceClientHeaders.TenantId))
         {
             request.Headers.TryAddWithoutValidation(ServiceClientHeaders.TenantId, tenantId.ToString());

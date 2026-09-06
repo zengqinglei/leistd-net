@@ -1,8 +1,8 @@
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.ObjectMapping.Mapster;
 using Mapster;
+using Leistd.ObjectMapping.Mapster.Mapping;
 
 namespace CompanyName.ProjectName.Application.Roles.Mappings;
 
@@ -42,4 +42,3 @@ public class RoleProfile : MapsterProfile
         return 0;
     }
 }
-#endif

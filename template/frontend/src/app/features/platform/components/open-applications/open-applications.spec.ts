@@ -12,19 +12,13 @@ import { of } from 'rxjs';
 
 import { OpenApplications } from './open-applications';
 import { OpenApplicationTable } from './widgets/open-application-table/open-application-table';
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-//#endif
 import { StartupService } from '../../../../core/services/startup-service';
-//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
-//#endif
 import { GetOpenApplicationsInputDto } from '../../models/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 
-/**
- * 开放应用页面的查询闭环。该目录此前只有 .ts 与 .html，没有任何测试。
- */
+/** 开放应用页面的查询闭环。 */
 describe('OpenApplications 页面查询闭环', () => {
   let fixture: ComponentFixture<OpenApplications>;
   let component: OpenApplications;
@@ -74,13 +68,11 @@ describe('OpenApplications 页面查询闭环', () => {
     router = TestBed.inject(Router);
     await router.navigate(['/platform/open-applications']);
 
-    //#if (LocalAuthorization)
     TestBed.inject(AuthorizationService).setPermissions({
       permissions: [PERMISSIONS.openApplications.default],
       isSuperAdmin: false,
-      revision: 'r1',
+      versionToken: 'r1',
     });
-    //#endif
 
     fixture = TestBed.createComponent(OpenApplications);
     component = fixture.componentInstance;
@@ -119,6 +111,30 @@ describe('OpenApplications 页面查询闭环', () => {
     expect(router.url).toContain('page=1');
     expect(lastQuery().offset).toBe(0);
     expect(lastQuery().sorting).toBeTruthy();
+  });
+
+  it('Secret 弹窗关闭后不再持有上一次的 secret', () => {
+    // 关闭弹窗只更新 visible 时，secret 与标题会留在组件状态里，
+    // 下一次误打开弹窗会显示上一次生成的 secret。
+    component.secretValue.set('generated-secret');
+    component.secretHeader.set('Client created');
+    component.secretDialogVisible.set(true);
+
+    component.onSecretDialogVisibleChange(false);
+
+    expect(component.secretDialogVisible()).toBeFalse();
+    expect(component.secretValue()).toBe('');
+    expect(component.secretHeader()).toBe('');
+  });
+
+  it('Secret 弹窗打开时不清空 secret', () => {
+    component.secretValue.set('generated-secret');
+    component.secretHeader.set('Client created');
+
+    component.onSecretDialogVisibleChange(true);
+
+    expect(component.secretDialogVisible()).toBeTrue();
+    expect(component.secretValue()).toBe('generated-secret');
   });
 
   it('URL 状态回填组件：刷新与前进后退可复原', async () => {

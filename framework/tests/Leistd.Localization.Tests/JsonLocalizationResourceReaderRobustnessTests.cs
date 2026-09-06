@@ -1,5 +1,6 @@
-using Leistd.Localization.Core.Json;
-using Leistd.Localization.Core.Options;
+using Leistd.Localization.Json;
+using MsOptions = Microsoft.Extensions.Options.Options;
+using Leistd.Localization.Options;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -13,7 +14,7 @@ public class JsonLocalizationResourceReaderRobustnessTests
 {
     private static JsonLocalizationResourceReader CreateReader(string resourcesPath)
     {
-        var options = Options.Create(new JsonLocalizationOptions { ResourcesPath = resourcesPath });
+        var options = MsOptions.Create(new JsonLocalizationOptions { ResourcesPath = resourcesPath });
         options.Value.ResourceAssemblies.Add(typeof(JsonLocalizationResourceReaderRobustnessTests).Assembly);
         // logger 省略：走 null → NullLogger，验证不依赖日志断言
         return new JsonLocalizationResourceReader(options);

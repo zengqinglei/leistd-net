@@ -1,13 +1,16 @@
-#if (IdentityService)
+#if (LocalIdentity)
+using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.ConnectionStrings;
 using CompanyName.ProjectName.Application.TenantConnections.Dtos;
-using Leistd.Exception.Core;
 using Leistd.MultiTenancy;
+using Leistd.ObjectMapping.Abstractions;
 
 namespace CompanyName.ProjectName.Application.TenantConnections.AppServices;
 
 public sealed class TenantConnectionAppService(
     ITenantConnectionConfigurationStore store,
-    ITenantConnectionConfigurationManager manager) : ITenantConnectionAppService
+    ITenantConnectionConfigurationManager manager,
+    IObjectMapper objectMapper) : ITenantConnectionAppService
 {
     public async Task<TenantConnectionOutputDto> GetAsync(
         Guid tenantId,
@@ -24,26 +27,14 @@ public sealed class TenantConnectionAppService(
     {
         var configuration = await store.FindAsync(tenantId, cancellationToken)
             ?? throw new NotFoundException("Tenant connection configuration was not found.");
-        return new TenantRuntimeConnectionOutputDto
-        {
-            TenantId = configuration.TenantId,
-            DatabaseMode = configuration.DatabaseMode,
-            RuntimeSecretReference = configuration.RuntimeSecretReference,
-            Version = configuration.Version
-        };
+        return objectMapper.Map<TenantConnectionConfiguration, TenantRuntimeConnectionOutputDto>(configuration);
     }
 
     public async Task<IReadOnlyList<TenantMigrationConnectionOutputDto>> GetMigrationListAsync(
         CancellationToken cancellationToken = default)
     {
         var configurations = await store.GetListAsync(cancellationToken);
-        return configurations.Select(configuration => new TenantMigrationConnectionOutputDto
-        {
-            TenantId = configuration.TenantId,
-            DatabaseMode = configuration.DatabaseMode,
-            MigrationSecretReference = configuration.MigrationSecretReference,
-            Version = configuration.Version
-        }).ToList();
+        return [.. configurations.Select(objectMapper.Map<TenantConnectionConfiguration, TenantMigrationConnectionOutputDto>)];
     }
 
     public async Task<TenantConnectionOutputDto> UpdateAsync(
@@ -56,17 +47,12 @@ public sealed class TenantConnectionAppService(
             input.DatabaseMode,
             input.RuntimeSecretReference,
             input.MigrationSecretReference,
+            input.ExpectedVersion,
             cancellationToken);
         return ToOutput(configuration);
     }
 
-    private static TenantConnectionOutputDto ToOutput(TenantConnectionConfiguration configuration) => new()
-    {
-        TenantId = configuration.TenantId,
-        DatabaseMode = configuration.DatabaseMode,
-        RuntimeSecretReference = configuration.RuntimeSecretReference,
-        MigrationSecretReference = configuration.MigrationSecretReference,
-        Version = configuration.Version
-    };
+    private TenantConnectionOutputDto ToOutput(TenantConnectionConfiguration configuration)
+        => objectMapper.Map<TenantConnectionConfiguration, TenantConnectionOutputDto>(configuration);
 }
 #endif

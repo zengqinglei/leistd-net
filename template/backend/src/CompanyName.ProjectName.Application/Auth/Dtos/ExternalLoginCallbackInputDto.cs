@@ -1,4 +1,4 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
@@ -18,7 +18,8 @@ public record ExternalLoginCallbackInputDto
     /// <summary>
     /// 状态参数
     /// </summary>
+    [Required(ErrorMessage = "State is required.")]
     [StringLength(100, ErrorMessage = "State cannot exceed 100 characters.")]
-    public string? State { get; init; }
+    public required string State { get; init; }
 }
 #endif

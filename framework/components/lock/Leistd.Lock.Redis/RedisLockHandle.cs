@@ -1,22 +1,16 @@
-using Leistd.Lock.Core;
 using Microsoft.Extensions.Logging;
+using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Redis;
 
-/// <summary>
-/// Redis 锁句柄：持有 key + token，后台按租约周期续期，释放时原子校验后删除。
-/// </summary>
-/// <remarks>
-/// 不续期的租约只能保证"拿到锁的那一刻是独占的"。临界区一旦超过租约时长——数据库阻塞、
-/// 网络抖动、批量初始化——锁会自动过期，另一个实例合法进入，而当前进程仍在写，两边都以为自己独占。
-/// 因此这里持续续期；续期失败即通过 <see cref="LockLost"/> 通知持有者，让它中止而不是带着幻觉继续。
-/// </remarks>
+// 后台续约维持临界区互斥；续约失败必须通知持有者中止操作。
 internal sealed class RedisLockHandle : ILockHandle
 {
     private readonly string key;
     private readonly Func<TimeSpan, Task<bool>> extend;
     private readonly Func<Task> release;
     private readonly ILogger logger;
+    private readonly TimeProvider timeProvider;
     private readonly CancellationTokenSource lockLost = new();
     private readonly CancellationTokenSource renewalStopped = new();
     private readonly Task renewalLoop;
@@ -32,12 +26,14 @@ internal sealed class RedisLockHandle : ILockHandle
         TimeSpan expiry,
         Func<TimeSpan, Task<bool>> extend,
         Func<Task> release,
-        ILogger logger)
+        ILogger logger,
+        TimeProvider? timeProvider = null)
     {
         this.key = key;
         this.extend = extend;
         this.release = release;
         this.logger = logger;
+        this.timeProvider = timeProvider ?? TimeProvider.System;
 
         // 续期间隔取租约的三分之一：允许连续两次失败仍来得及在过期前放弃。
         var interval = TimeSpan.FromMilliseconds(Math.Max(expiry.TotalMilliseconds / 3, 1));
@@ -60,7 +56,6 @@ internal sealed class RedisLockHandle : ILockHandle
         }
         catch (OperationCanceledException)
         {
-            // 正常停止。
         }
 
         renewalStopped.Dispose();
@@ -85,11 +80,11 @@ internal sealed class RedisLockHandle : ILockHandle
         {
             while (!renewalStopped.IsCancellationRequested)
             {
-                await Task.Delay(interval, renewalStopped.Token);
+                await Task.Delay(interval, timeProvider, renewalStopped.Token);
 
                 if (!await extend(expiry))
                 {
-                    logger.LogWarning("续期锁【{Key}】失败，持锁资格已失效", key);
+                    logger.LogWarning("Failed to renew lock [{Key}]; lock ownership has been lost", key);
                     await lockLost.CancelAsync();
                     return;
                 }
@@ -102,7 +97,7 @@ internal sealed class RedisLockHandle : ILockHandle
         catch (Exception exception)
         {
             // 续期通道本身出问题（连接断开等）同样意味着无法再证明自己持有锁。
-            logger.LogWarning(exception, "续期锁【{Key}】异常，持锁资格视为失效", key);
+            logger.LogWarning(exception, "Error while renewing lock [{Key}]; lock ownership is treated as lost", key);
             await lockLost.CancelAsync();
         }
     }

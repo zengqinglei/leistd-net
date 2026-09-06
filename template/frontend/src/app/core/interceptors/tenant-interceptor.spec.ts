@@ -1,4 +1,4 @@
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { HttpHandlerFn, HttpRequest } from '@angular/common/http';
 import { Injector, provideZonelessChangeDetection, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';

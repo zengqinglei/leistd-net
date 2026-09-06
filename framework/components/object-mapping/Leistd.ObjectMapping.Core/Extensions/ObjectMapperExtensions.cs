@@ -1,12 +1,14 @@
-namespace Leistd.ObjectMapping.Core.Extensions;
+using Leistd.ObjectMapping.Abstractions;
+
+namespace Leistd.ObjectMapping.Extensions;
 
 /// <summary>
-/// 对象映射器扩展方法
+/// 提供集合对象映射扩展。
 /// </summary>
 public static class ObjectMapperExtensions
 {
     /// <summary>
-    /// 批量映射
+    /// 将对象序列映射为目标类型列表。
     /// </summary>
     public static List<TDestination> MapList<TSource, TDestination>(
         this IObjectMapper mapper,

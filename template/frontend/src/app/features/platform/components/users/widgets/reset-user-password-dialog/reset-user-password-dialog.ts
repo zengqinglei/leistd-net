@@ -26,9 +26,8 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
+import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
 import { ResetUserPasswordInputDto } from '../../../../models/user-management.dto';
-
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
 
 @Component({
   selector: 'app-reset-user-password-dialog',
@@ -82,7 +81,7 @@ export class ResetUserPasswordDialog {
     required(path.password, { message: 'This field is required.' });
     pattern(path.password, PASSWORD_RULE, {
       message:
-        'Password must be 8–20 characters and include uppercase, lowercase, digits, and special characters.',
+        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
     });
   });
   //#endif

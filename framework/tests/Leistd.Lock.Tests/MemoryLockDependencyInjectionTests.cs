@@ -1,9 +1,9 @@
-using Leistd.Lock.Core;
 using Leistd.Lock.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Tests;
 

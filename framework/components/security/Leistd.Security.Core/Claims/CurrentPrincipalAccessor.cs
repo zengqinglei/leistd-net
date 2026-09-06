@@ -1,11 +1,18 @@
 using System.Security.Claims;
+using Leistd.Disposables;
 
 namespace Leistd.Security.Claims;
 
 /// <summary>
-/// 当前认证主体访问器抽象基类
+/// 支持异步流覆盖的认证主体访问器。
 /// </summary>
-public abstract class CurrentPrincipalAccessor : ICurrentPrincipalAccessor
+/// <remarks>
+/// 直接使用即"只认显式建立的主体"：适用于没有认证中间件的入口（后台作业、消息消费者、
+/// Hub 调用），未经 <see cref="Change"/> 或 <c>IAmbientContext.Begin</c> 建立时
+/// <see cref="Principal"/> 为 <see langword="null"/>。
+/// Web 宿主由 <c>AddSecurity()</c> 换成读 <c>HttpContext.User</c> 的派生实现。
+/// </remarks>
+public class CurrentPrincipalAccessor : ICurrentPrincipalAccessor
 {
     private readonly AsyncLocal<ClaimsPrincipal?> _currentPrincipal = new();
 
@@ -14,26 +21,24 @@ public abstract class CurrentPrincipalAccessor : ICurrentPrincipalAccessor
     {
         get
         {
-            // 优先使用显式设置的 Principal
             var principal = _currentPrincipal.Value;
             if (principal is not null)
                 return principal;
 
-            // 回退到实际认证源（由派生类实现）
             return GetClaimsPrincipal();
         }
     }
 
     /// <summary>
-    /// 获取实际的认证主体（由派生类实现）
+    /// 获取底层认证源中的主体；默认没有底层来源。
     /// </summary>
-    /// <returns>认证主体，如果未认证则返回 null</returns>
+    /// <returns>认证主体，没有则返回 <see langword="null"/>。</returns>
     /// <remarks>
-    /// 派生类实现示例：
-    /// - HttpContextCurrentPrincipalAccessor: 从 HttpContext.User 获取
-    /// - TestCurrentPrincipalAccessor: 返回 null 或测试用户
+    /// 默认返回 <see langword="null"/> 而不是强制派生：绝大多数入口没有独立于
+    /// <see cref="Change"/> 的主体来源，null 也是这里唯一安全的回落——猜一个主体
+    /// 会让调用方读到不属于当前作用域的身份。
     /// </remarks>
-    protected abstract ClaimsPrincipal? GetClaimsPrincipal();
+    protected virtual ClaimsPrincipal? GetClaimsPrincipal() => null;
 
     /// <inheritdoc />
     public IDisposable Change(ClaimsPrincipal principal)
@@ -45,22 +50,7 @@ public abstract class CurrentPrincipalAccessor : ICurrentPrincipalAccessor
 
         return new DisposeAction(() =>
         {
-            _currentPrincipal.Value = parent;  // 自动恢复父上下文
+            _currentPrincipal.Value = parent;
         });
-    }
-}
-
-/// <summary>
-/// Dispose 动作包装器
-/// </summary>
-/// <param name="action">要执行的动作</param>
-file sealed class DisposeAction(Action action) : IDisposable
-{
-    private Action? _action = action ?? throw new ArgumentNullException(nameof(action));
-
-    public void Dispose()
-    {
-        var action = Interlocked.Exchange(ref _action, null);
-        action?.Invoke();
     }
 }

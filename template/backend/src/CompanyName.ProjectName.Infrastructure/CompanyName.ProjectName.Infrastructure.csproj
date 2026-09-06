@@ -7,17 +7,26 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- 测试程序集可见内部类型。租户连接解析链（Refit 客户端契约与其 DTO）刻意是 internal——
+         它们是基础设施的实现细节，不该出现在应用层的可选面上。但集成测试宿主会
+         RemoveAll<IConnectionStringResolver>() 换成 EF InMemory，因此解析器本身
+         在集成测试里根本不被执行；要钉住"缓存按租户分区"和"一个调用方取消不牵连搭车者"
+         这两条，只能对真实类型做单元测试。 -->
+    <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="MailKit" />
-    <!-- PasswordHasher 使用 PBKDF2（Microsoft.AspNetCore.Cryptography.KeyDerivation）。
-         显式声明，避免依赖其它包传递的 ASP.NET Core 共享框架。 -->
+    <!-- PasswordHasher 使用 PBKDF2-HMAC-SHA256（Microsoft.AspNetCore.Cryptography.KeyDerivation），
+         密文自带格式版本与迭代数。显式声明，避免依赖其它包传递的 ASP.NET Core 共享框架。 -->
     <PackageReference Include="Microsoft.AspNetCore.Cryptography.KeyDerivation" />
-<!--#if (IdentityService)-->
+<!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
 <!--#endif-->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http" />
-<!--#if (ResourceService)-->
+<!--#if (!LocalIdentity)-->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Refit" />
 <!--#endif-->
@@ -36,12 +45,11 @@
 
   <!-- Leistd 框架引用 -->
   <ItemGroup>
+    <PackageReference Include="Leistd.Data" />
     <PackageReference Include="Leistd.Ddd.Infrastructure" />
     <PackageReference Include="Leistd.Auditing.EntityFrameworkCore" />
-<!--#if (LocalAuthorization)-->
     <PackageReference Include="Leistd.Authorization.EntityFrameworkCore" />
-    <!--#endif-->
-<!--#if (IdentityService)-->
+<!--#if (LocalIdentity)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
@@ -50,7 +58,7 @@
     <PackageReference Include="Leistd.EventBus.Local" />
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />
-<!--#if (ResourceService)-->
+<!--#if (!LocalIdentity)-->
     <PackageReference Include="Leistd.ServiceClient.Refit" />
     <PackageReference Include="Leistd.ServiceClient.OAuth" />
 <!--#endif-->

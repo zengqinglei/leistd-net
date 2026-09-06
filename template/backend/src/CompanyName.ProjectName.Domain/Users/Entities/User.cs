@@ -1,23 +1,17 @@
 using Leistd.Ddd.Domain.Entities.Auditing;
-#if (MultiTenancy)
 using Leistd.MultiTenancy;
-#endif
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
-#if (MultiTenancy)
 public class User : FullAuditedEntity<Guid>, IMultiTenant
-#else
-public class User : FullAuditedEntity<Guid>
-#endif
 {
-#if (MultiTenancy)
     /// <summary>
     /// 所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充
     /// </summary>
     public Guid? TenantId { get; private set; }
 
-#endif
     /// <summary>
     /// 用户名（租户内唯一）
     /// </summary>
@@ -28,7 +22,7 @@ public class User : FullAuditedEntity<Guid>
     /// </summary>
     public string Email { get; private set; }
 
-#if (IdentityService)
+#if (LocalIdentity)
     /// <summary>
     /// 邮箱是否已验证
     /// </summary>
@@ -70,7 +64,7 @@ public class User : FullAuditedEntity<Guid>
     /// </summary>
     public bool IsSuperAdmin { get; private set; }
 
-#if (IdentityService)
+#if (LocalIdentity)
     /// <summary>
     /// 是否锁定
     /// </summary>
@@ -104,7 +98,7 @@ public class User : FullAuditedEntity<Guid>
     }
 
     public User(
-#if (ResourceService)
+#if (!LocalIdentity)
         Guid subjectId,
 #endif
         string username,
@@ -112,7 +106,7 @@ public class User : FullAuditedEntity<Guid>
         string? passwordHash = null,
         string? displayName = null)
     {
-#if (IdentityService)
+#if (LocalIdentity)
         Id = Guid.CreateVersion7();
 #else
         if (subjectId == Guid.Empty) throw new ArgumentException("Subject Id cannot be empty.", nameof(subjectId));
@@ -120,7 +114,7 @@ public class User : FullAuditedEntity<Guid>
 #endif
         Username = username;
         Email = email;
-#if (IdentityService)
+#if (LocalIdentity)
         PasswordHash = passwordHash;
 #endif
         DisplayName = displayName ?? username;
@@ -129,7 +123,7 @@ public class User : FullAuditedEntity<Guid>
     public void Update(string? displayName, string? phoneNumber, string? avatar)
     {
         DisplayName = displayName;
-#if (IdentityService)
+#if (LocalIdentity)
         PhoneNumber = phoneNumber;
 #endif
         Avatar = avatar;
@@ -141,7 +135,7 @@ public class User : FullAuditedEntity<Guid>
         DisplayName = displayName;
         Avatar = avatar;
         IsActive = isActive;
-#if (IdentityService)
+#if (LocalIdentity)
         EmailConfirmed = emailConfirmed;
 #endif
     }
@@ -151,7 +145,7 @@ public class User : FullAuditedEntity<Guid>
         Username = username;
         Email = email;
         DisplayName = displayName;
-#if (IdentityService)
+#if (LocalIdentity)
         PhoneNumber = phoneNumber;
 #endif
         Avatar = avatar;
@@ -160,6 +154,21 @@ public class User : FullAuditedEntity<Guid>
     public void MarkAsSuperAdmin()
     {
         IsSuperAdmin = true;
+    }
+
+    public bool CanBeManagedBy(Guid? actorUserId)
+    {
+        return !IsSuperAdmin || Id == actorUserId;
+    }
+
+    public bool CanBeDisabled()
+    {
+        return !IsSuperAdmin;
+    }
+
+    public bool CanBeDeleted()
+    {
+        return !IsSuperAdmin;
     }
 
     public void Enable()
@@ -172,7 +181,7 @@ public class User : FullAuditedEntity<Guid>
         IsActive = false;
     }
 
-#if (IdentityService)
+#if (LocalIdentity)
     public void UpdatePasswordHash(string passwordHash)
     {
         PasswordHash = passwordHash;
@@ -206,16 +215,29 @@ public class User : FullAuditedEntity<Guid>
         AccessFailedCount++;
     }
 
-    public void RecordLoginSuccess(string? ip = null)
+    public void RecordLoginSuccess(DateTime now, string? ip = null)
     {
-        LastLoginTime = DateTime.UtcNow;
+        LastLoginTime = now;
         LastLoginIp = ip;
         AccessFailedCount = 0;
     }
 
-    public bool IsLockedOut()
-    {
-        return IsLocked && (!LockoutEnd.HasValue || LockoutEnd.Value > DateTime.UtcNow);
-    }
 #endif
+
+    public UserAccessStatus GetAccessStatus(DateTime now)
+    {
+        if (!IsActive)
+        {
+            return UserAccessStatus.Disabled;
+        }
+
+#if (LocalIdentity)
+        if (IsLocked && (!LockoutEnd.HasValue || LockoutEnd.Value > now))
+        {
+            return UserAccessStatus.LockedOut;
+        }
+#endif
+
+        return UserAccessStatus.Allowed;
+    }
 }

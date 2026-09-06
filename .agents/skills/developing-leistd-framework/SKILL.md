@@ -22,6 +22,9 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 - 组件通过宿主显式组合，不替其他组件注册服务、映射端点或隐式挂载拦截器。
 - 公共 API、命名、目录和依赖沿用同类组件规范，避免无实际收益的新抽象。
 - 组件文档示例只使用该组件真实依赖；DDD 组合示例留在 DDD 文档。
+- 注释按 `development-guide` §4.1 分层：`<summary>` 一句话；`<example>` 只给主要入口和易误用路径；`<remarks>` 只留会改变正确用法的契约。不按行数或比例凑密度。
+- 行内 `//` 只标注"看起来可以删但不能删"的地方；复述代码在做什么的注释一律删。
+- 组件文档套 §4.3 骨架：必选段固定顺序与名称，可选段有才出现，`注意事项` 与 `相关` 恒在末尾。
 
 ## 方案与实施计划
 
@@ -39,22 +42,21 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 1. 检查分支、工作区和用户已有改动，确认受影响家族、依赖方向、公共表面和消费点。
 2. 用邻近实现、现有测试和调用方建立当前行为基线。
 3. 实施最小变更，并为行为风险补充对应测试和 XML 注释。
-4. 公共 API、包依赖、注册、默认值或运行时语义变化时评估兼容性，并同步目标家族文档。
+4. 公共 API、包依赖、注册、默认值或运行时语义变化时同步所有当前消费者和目标家族文档，不保留未发布兼容层。
 5. 构建、测试、执行文档检查，并打包到 `.tmp/local-feed`。
 6. 检查受影响 `.nupkg` 的程序集、XML、随包文档和依赖，并从隔离本地源完成还原与构建。
 7. Template 已消费该能力时使用 `developing-leistd-template` 验证受影响场景；未消费时运行组件家族集成测试，公共集成方式变化时再建立 `.tmp/` 下的临时宿主验证。
 
-使用者可见的组件契约写入 `framework/docs/components/{family}.md`，DDD 基座契约写入 `framework/docs/ddd-struct/`；仅供仓库维护者使用的稳定规则写入 `docs/framework/`。编写前先参考最新同类内容并按组件特性组织，不使用固定章节模板。公共能力缺少对应文档时主动创建并更新索引，只覆盖使用者必须知道的安装、注册、调用、默认行为和限制。
+使用者可见的组件契约写入 `framework/docs/components/{family}.md`，DDD 基座契约写入 `framework/docs/ddd-struct/`；仅供仓库维护者使用的稳定规则写入 `docs/framework/`。**组件文档骨架由 `development-guide` §4.3 规定并由 `scripts/check-docs-skeleton.py` 强制**：导语一段 ≤120 可见字，必选段 `何时使用 / 安装 / 使用 / 接口参考 / 注意事项` 顺序固定；需要组合根操作时写 `注册`，需要 Provider 选择时写 `配置`，可选段无内容就删除。`接口参考` 只列关键类型与入口，精确签名交给随包 XML。公共能力缺少对应文档时主动创建并更新索引，只覆盖使用者必须知道的安装、注册、调用、默认行为和限制。
 
 ## 验证入口
 
 ```powershell
 dotnet build framework/Leistd.Framework.slnx -c Release
 dotnet test framework/Leistd.Framework.slnx -c Release
-dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
+pwsh scripts/check-all.ps1            # 全部静态闸门（唯一清单来源，-List 只看清单）
+pwsh framework/build/pack-local-feed.ps1
 pwsh framework/build/test-package-consumption.ps1
-pwsh framework/build/check-docs-sync.ps1
-pwsh framework/build/check-docs-api-drift.ps1
 ```
 
 本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包，CI 检查全部包。根据变更选择最小充分集合；未执行项和原因必须如实说明。

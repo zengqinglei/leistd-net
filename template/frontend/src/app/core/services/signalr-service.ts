@@ -3,7 +3,7 @@ import {
   Injectable,
   signal,
   computed,
-  //#if (ResourceService)
+  //#if (!LocalIdentity)
   inject,
   //#endif
 } from '@angular/core';
@@ -14,7 +14,7 @@ import {
   LogLevel,
   HttpTransportType,
 } from '@microsoft/signalr';
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { firstValueFrom } from 'rxjs';
 //#endif
@@ -55,7 +55,7 @@ export interface NotificationOutputDto {
  */
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
-  //#if (ResourceService)
+  //#if (!LocalIdentity)
   private readonly oidc = inject(OidcSecurityService);
   //#endif
   private notificationConnection: HubConnection | null = null;
@@ -119,8 +119,8 @@ export class SignalRService {
    * 建立 SignalR 连接（在用户登录后调用）。
    *
    * 幂等：并发调用复用同一次连接过程；已经连上时直接返回，不重建。
-   * 只去重"进行中"的调用是不够的——连接成功后再调一次会新建一对并覆盖字段引用，
-   * 旧的两条连同事件处理器继续往同一个 signal 里推，表现为连接泄漏加重复通知。
+   * 连接成功后再次调用也不能新建连接，否则被覆盖字段引用无法触达的连接及其处理器
+   * 会继续向同一个 signal 推送，造成连接泄漏和重复通知。
    * 通知组件每次初始化都会走到这里，重挂载就会触发。
    *
    * 全成功或全回滚：任一 Hub 启动失败时停掉本轮已经起来的连接并清空引用。
@@ -298,7 +298,7 @@ export class SignalRService {
     const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/notifications'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-        //#if (ResourceService)
+        //#if (!LocalIdentity)
         accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
         //#endif
       })
@@ -336,7 +336,7 @@ export class SignalRService {
     const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl('/hubs/realtime'), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-        //#if (ResourceService)
+        //#if (!LocalIdentity)
         accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
         //#endif
       })

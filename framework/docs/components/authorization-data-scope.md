@@ -1,8 +1,6 @@
 # 数据范围
 
-数据范围回答"列表、统计、导出和批量操作能看到**哪些候选数据**"。它和功能权限、资源实例授权解决的是三个不同问题：功能权限判断"能否执行这类动作"，资源实例授权判断"能否操作这一条"，数据范围决定"集合里有哪些条"。典型场景是后台管理系统里的"本人的订单""本部门及下级部门的订单""我负责区域的客户"——这类**集合关系**必须在查询构造阶段翻译成 SQL 谓词，不能先把候选加载出来再逐条判断，否则分页总数、排序、导出和性能全都会错。
-
-Framework 只定义策略、组合语义和查询扩展点，**不内置**"部门""组织树""本人/本部门"等业务概念：具体范围由业务项目注册 Provider 实现，组织展开、项目成员等关系仍留在业务表里，不复制到通用授权表。
+数据范围决定列表、统计、导出能看到**哪些候选数据**，在查询构造阶段翻译成 SQL 谓词而不是先加载再过滤。Framework 只定义策略与组合语义，「本人」「本部门」等业务概念由业务项目注册 Provider 实现。
 
 ## 何时使用
 
@@ -14,19 +12,15 @@ Framework 只定义策略、组合语义和查询扩展点，**不内置**"部�
 | 只按精确 ID 打开单个资源，几乎没有列表 | 不需要本组件，见[资源实例授权](./authorization-resource.md) |
 | 只需要判断"能否执行这类动作" | 不需要本组件，见[功能权限](./authorization.md) |
 
-去掉数据范围并不会让复杂度消失，只会把集合查询的复杂度转移到 ACL 的物化、JOIN、同步和清理上。
-
 ## 安装
 
 ```bash
 dotnet add package Leistd.Authorization.DataScope.Core
 ```
 
-> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
-
 本家族只有一个包，且只依赖 BCL 的 `Expression`/`IQueryable`，不依赖 EF Core，也不依赖 DDD 基座——`IRepository.GetQueryableAsync()` 返回的 `IQueryable<TEntity>` 可以直接交给本组件，不需要额外的适配包。
 
-## 配置 Provider
+## 注册
 
 ```csharp
 builder.Services.AddDataScopeCore();
@@ -74,7 +68,6 @@ public class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
         DataScopeContext context,
         CancellationToken cancellationToken = default)
     {
-        // ScopeValue 的语义由本 Provider 解释；组织树展开属于业务职责。
         var organizationIds = context.Assignments
             .Where(x => x.ScopeName == Scope && x.ScopeValue is not null)
             .Select(x => x.ScopeValue!)
@@ -85,8 +78,6 @@ public class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
     }
 }
 
-// "全部可见"必须显式返回 _ => true；不贡献可见性则返回 _ => false。
-// 没有"什么都不返回就等于不限制"的写法——那种写法一旦被误用，整张表当场放开。
 public class AllOrderScopeProvider : IDataScopeProvider<Order>
 {
     public string ResourceName => "Orders";
@@ -129,7 +120,6 @@ public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
 **第三步：所有集合入口统一走同一个范围**——列表、总数、导出必须共用，否则总数会和实际可见数据对不上：
 
 ```csharp
-// 先施加可见范围，再叠加业务筛选与排序分页。
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Read, ct);
 
 if (!string.IsNullOrWhiteSpace(keyword))
@@ -149,7 +139,6 @@ var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOp
 var targets = await scoped.Where(x => ids.Contains(x.Id)).ToListAsync(ct);
 if (targets.Count != ids.Count)
 {
-    // 数量对不上说明选中项里有超出范围的，整体拒绝而不是悄悄少改几条。
     throw new UnauthorizedAccessException("Some of the selected orders are out of your data scope.");
 }
 
@@ -159,7 +148,7 @@ foreach (var order in targets)
 }
 ```
 
-> 与仓储、分页 DTO、异步执行器等 DDD 设施的组合写法见 [ddd-struct 文档](../ddd-struct/README.md)；本组件不依赖它们，示例刻意保持在 EF Core 与 BCL 的范围内，独立引用本包的项目可直接照搬。
+> 与仓储、分页 DTO、异步执行器等 DDD 设施的组合写法见 [DDD 四层基座](../ddd-struct/ddd-struct.md)；本组件不依赖它们，示例刻意保持在 EF Core 与 BCL 的范围内，独立引用本包的项目可直接照搬。
 
 ## 接口参考
 
@@ -168,7 +157,6 @@ foreach (var order in targets)
 | 成员 | 说明 |
 | --- | --- |
 | `DataOperations` | 内置操作名常量：`Read`、`Update`、`Delete`、`Export`；业务可自行扩展 |
-| `DataScopeDefinition` | 范围定义元数据：`ResourceName`、`Operation`、`ScopeName`、`DisplayName`，供管理界面渲染 |
 | `DataScopeAssignment` | 范围分配：`ResourceName`、`Operation`、`ScopeName`、`ScopeValue` |
 | `DataScopeContext` | 解析上下文：`Subject`、`ResourceName`、`Operation`、`Assignments` |
 | `IDataScopeProvider<TEntity>.ResourceName` / `.ScopeName` | 本 Provider 负责的资源与范围 |
@@ -190,10 +178,6 @@ foreach (var order in targets)
 6. 谓词签名不可空：`_ => true` 表示"全部可见"，`_ => false` 表示"本范围不贡献可见性"。并集之下这两者含义分明，不存在"没返回谓词"这一态——它一旦被解释成"不限制"，整张表就当场放开。
 7. 合并两个独立 Lambda 时会把参数统一到同一个 `ParameterExpression` 上，否则合并结果无法被数据库翻译。
 
-## 配置项 / Options
-
-当前无配置项：两个 DI 扩展方法均无参数，也未暴露 Options 类。
-
 ## 注意事项
 
 - **谓词必须可被数据库翻译**。不要在 `BuildPredicateAsync` 返回的表达式里调用只能客户端求值的方法，也不要先把候选加载到内存再过滤。请在**关系型** Provider 上编写测试：EF Core 的 InMemory Provider 全部在内存求值，不可翻译的谓词会静默通过，等于没有验证。
@@ -201,29 +185,11 @@ foreach (var order in targets)
 - **读和写可以用不同范围**。`DataScopeAssignment` 带 `Operation` 维度，不要假设"能看就能改"。
 - **硬边界不归本组件管**。租户隔离、软删除应通过 EF Core 全局查询过滤器始终生效，因此永远与业务范围做 AND，不会被这里的并集放宽。
 - **不要把集合关系展开成资源 ACL**。组织或负责人一变就要重写大量记录并产生孤儿；反之，文档分享这类一次性授予也不适合做成范围。
+- **同一资源既有范围又有 ACL 授予时，组合公式由[资源实例授权](./authorization-resource.md#将-acl-合并进列表)定义**：`(数据范围 OR ACL 允许) AND NOT ACL 拒绝`。本组件只承担 `OR` 的那一半——它没有"拒绝"语义，`ApplyAsync` 之后仍须在同一个查询入口扣除 ACL 拒绝集合，否则"范围放行但被显式拒绝"的资源仍然可见。ACL 允许要并入并集时可写成一个 `IDataScopeProvider`，但主体必须同时拿到对应 `ScopeName` 的 `DataScopeAssignment`——ACL 记录本身不产生分配。
 - `IPermissionSubjectProvider` 与 `IDataScopeAssignmentProvider` 都没有默认实现，必须由业务项目提供。
-
-## 可执行参考实现
-
-本文档的示例代码不是凭空写的：`framework/tests/Leistd.Authorization.Pipeline.Tests` 是一个真实的
-ASP.NET Core 宿主（真实 Web 宿主 + TestServer + Sqlite + 真实 DI 装配），把三层授权串起来跑通了
-设计文档中的标准执行链，并覆盖了以下负向场景：
-
-- 缺功能权限时在第一层就被拦下，不会走到数据范围；
-- 范围外的详情返回 404 而非 403，不泄漏资源存在性；
-- 列表与详情共用同一个可见查询入口，同一个 Read 操作不会给出两个答案；
-- 超管在集合与单实例上口径一致，但领域规则的拒绝对超管同样有效；
-- 读取范围是整个组织、更新范围只有本人 —— 能看不等于能改；
-- 领域规则的拒绝优先于所有者身份与 ACL 允许；
-- 批量操作整体拒绝，而不是静默跳过越权项；
-- 列表、总数与导出共用同一个范围入口，三者始终一致；
-- ACL 以子查询合并进集合查询，显式拒绝会把资源从结果里移除。
-
-改动本组件的公共行为时，请连同该工程一起更新——它是这些语义唯一的可执行事实来源。
 
 ## 相关
 
-- [组件总览](./README.md)
 - [功能权限](./authorization.md)
 - [资源实例授权](./authorization-resource.md)
 - [DDD 基座](../ddd-struct/ddd-struct.md)

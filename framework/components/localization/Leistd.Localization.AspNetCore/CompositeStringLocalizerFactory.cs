@@ -1,25 +1,17 @@
-using Leistd.Localization.Core.Json;
-using Leistd.Localization.Core.Options;
+using Leistd.Localization.Json;
+using Leistd.Localization.Options;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.Localization.AspNetCore;
 
 /// <summary>
-/// 组合本地化工厂：按**显式登记的资源标记类型**路由，避免全局接管宿主既有本地化。
+/// 组合本地化工厂：按<b>显式登记的资源标记类型</b>路由，避免全局接管宿主既有本地化。
 /// </summary>
 /// <remarks>
-/// 作为通用 NuGet 组件，本工厂不应把宿主所有 <see cref="IStringLocalizer{T}"/> 都吞进单张 JSON 词条表——
-/// 更不应因某程序集登记了 JSON 资源，就把该程序集内所有类型（含本应走 RESX 的类型）都拉进 JSON 分支。
-/// 路由规则（精确到类型）：
-/// <list type="bullet">
-///   <item><c>TResourceSource</c> 在 <see cref="JsonLocalizationOptions.JsonResourceTypes"/> 中 → 走
-///   <see cref="JsonStringLocalizerFactory"/>（框架的全局键 JSON 词条表）。</item>
-///   <item>其余（宿主 RESX、Identity/MVC 扩展、第三方库、同程序集内未登记的类型）→ 委派微软官方
-///   <see cref="ResourceManagerStringLocalizerFactory"/>，继续沿用 RESX 语义。</item>
-/// </list>
-/// <see cref="Create(string, string)"/> 默认走官方工厂（RESX 按 baseName/location 定位）；不为 baseName 形态做 JSON 猜测。
-/// 框架自身的全局 JSON 词条视图由无参 <see cref="IStringLocalizer"/> 直取 JSON 工厂提供（见 DI 注册），不经本工厂。
+/// 路由规则精确到<b>类型</b>，不按程序集：<c>TResourceSource</c> 登记在
+/// <see cref="JsonLocalizationOptions.JsonResourceTypes"/> 中则走 JSON，其余一律委派官方 RESX 工厂。
+/// <see cref="Create(string, string)"/> 一律走官方工厂，不为 baseName 形态做 JSON 猜测。
 /// </remarks>
 public sealed class CompositeStringLocalizerFactory : IStringLocalizerFactory
 {
@@ -27,6 +19,7 @@ public sealed class CompositeStringLocalizerFactory : IStringLocalizerFactory
     private readonly IStringLocalizerFactory _fallback;
     private readonly HashSet<Type> _jsonResourceTypes;
 
+    /// <summary>创建组合工厂。已登记的资源标记类型走 JSON 实现，其余交回宿主既有工厂。</summary>
     public CompositeStringLocalizerFactory(
         JsonStringLocalizerFactory json,
         ResourceManagerStringLocalizerFactory fallback,

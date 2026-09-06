@@ -1,18 +1,18 @@
 using Leistd.Auditing;
 using Leistd.MultiTenancy;
+using Leistd.Auditing.Abstractions;
+using Leistd.Authorization.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 
-namespace Leistd.Authorization.EntityFrameworkCore;
+namespace Leistd.Authorization.EntityFrameworkCore.Entities;
 
 /// <summary>
-/// 权限授予持久化实体。实现创建审计接口，审计字段由审计拦截器统一填充。
+/// 表示持久化的权限授予记录。
 /// </summary>
 /// <remarks>
-/// <para>唯一性由 <c>(TenantId, PermissionName, ProviderName, ProviderKey)</c> 唯一索引保证：
-/// 一行即代表一次授予，没有"拒绝"这一维，因此不存在同一主体对同一权限出现两行的可能。</para>
-/// <para>实现 <see cref="IMultiTenant"/>：授予按租户分区——全局查询过滤器使 Store 的既有查询
-/// 天然只见当前租户的授予，TenantId 由多租户落值拦截器在保存时填充。</para>
-/// <para>写入请统一通过 <see cref="IPermissionGrantManager"/>，它会在写入时补齐祖先并级联清理子孙；
-/// 直接构造本实体写库会绕过归一化。</para>
+/// 一行即代表一次授予，没有"拒绝"这一维，同一主体对同一权限不会出现两行。
+/// 实现 <see cref="IMultiTenant"/>：授予按租户分区，<c>TenantId</c> 由 <c>BaseDbContext</c> 在实体<b>进入变更跟踪时</b>落定。
+/// 写入统一通过 <see cref="IPermissionGrantManager"/>；直接构造本实体写库会绕过归一化。
 /// </remarks>
 public class PermissionGrantRecord : ICreationAuditedObject, IMultiTenant
 {

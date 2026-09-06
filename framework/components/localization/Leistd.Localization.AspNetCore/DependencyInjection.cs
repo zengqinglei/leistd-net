@@ -1,9 +1,10 @@
 using System.Globalization;
-using Leistd.Localization.Core.Json;
-using Leistd.Localization.Core.Options;
+using Leistd.Localization.Json;
+using Leistd.Localization.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
+using Leistd.Localization.AspNetCore.HostedServices;
 
 namespace Leistd.Localization.AspNetCore;
 
@@ -13,7 +14,7 @@ namespace Leistd.Localization.AspNetCore;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册基于嵌入 JSON 的本地化：<see cref="CompositeStringLocalizerFactory"/> 按**资源标记类型**路由
+    /// 注册基于嵌入 JSON 的本地化：<see cref="CompositeStringLocalizerFactory"/> 按<b>资源标记类型</b>路由
     /// （仅 <see cref="JsonLocalizationOptions.JsonResourceTypes"/> 中的类型走 JSON，其余委派官方 RESX），
     /// 及 <see cref="IStringLocalizer"/> / <see cref="IStringLocalizer{T}"/> 解析，并配置支持语言与默认语言。
     /// </summary>
@@ -21,13 +22,22 @@ public static class DependencyInjection
     /// <param name="supportedCultures">支持的语言（首个作为默认/回落语言）。默认 <c>["en", "zh-CN"]</c>。</param>
     /// <param name="configure">进一步配置本地化选项（如追加资源程序集、登记 JSON 资源标记类型）。</param>
     /// <remarks>
-    /// 本方法仅注册服务，不挂载中间件；请求 culture 解析由宿主显式调用
-    /// <see cref="UseJsonRequestLocalization"/> 完成（不替宿主隐式挂载中间件）。
-    /// 框架默认将本组件所在程序集登记为资源程序集之一，用于分发通用键（<c>Error:*</c>）。
-    /// 不全局接管宿主本地化：框架自身的全局键通过无参 <see cref="IStringLocalizer"/>（直取 JSON 工厂）分发；
-    /// 未显式登记为 JSON 资源类型的 <see cref="IStringLocalizer{T}"/>（宿主 RESX、Identity/MVC 扩展、第三方库，
-    /// 乃至同程序集内未登记的类型）一律走微软官方 <see cref="ResourceManagerStringLocalizerFactory"/>。
+    /// 仅注册服务，不挂载中间件：请求 culture 解析由宿主显式调用 <see cref="UseJsonRequestLocalization"/>。
+    /// 本组件所在程序集被默认登记为资源程序集之一，用于分发通用键（<c>Error:*</c>）。
+    /// 不全局接管宿主本地化——未登记为 JSON 资源类型的 <see cref="IStringLocalizer{T}"/> 一律走官方 RESX 工厂。
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddJsonLocalization(options =&gt;
+    /// {
+    ///     options.ResourceAssemblies.Add(typeof(Program).Assembly);
+    ///     options.JsonResourceTypes.Add(typeof(OrderResource));   // 未登记的类型走官方 RESX
+    ///     options.DefaultCulture = "zh-CN";
+    /// });
+    ///
+    /// app.UseJsonRequestLocalization();
+    /// </code>
+    /// </example>
     public static IServiceCollection AddJsonLocalization(
         this IServiceCollection services,
         string[]? supportedCultures = null,
@@ -80,9 +90,9 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 启用请求 culture 解析中间件（QueryString / Cookie / Accept-Language 三 provider）。
-    /// 必须在任何读取当前 culture 的中间件之前调用。
+    /// 启用请求区域性解析中间件。
     /// </summary>
+    /// <remarks>必须在任何读取当前区域性的中间件之前调用。</remarks>
     public static IApplicationBuilder UseJsonRequestLocalization(this IApplicationBuilder app)
         => app.UseRequestLocalization();
 }

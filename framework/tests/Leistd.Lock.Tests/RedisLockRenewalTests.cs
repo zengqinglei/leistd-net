@@ -1,8 +1,8 @@
-using Leistd.Lock.Core;
 using Leistd.Lock.Redis;
 using Microsoft.Extensions.Logging.Abstractions;
 using StackExchange.Redis;
 using Xunit;
+using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Tests;
 

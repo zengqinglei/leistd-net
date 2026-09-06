@@ -55,14 +55,14 @@
             [value]="formModel().databaseMode"
             (valueChange)="setDatabaseMode($event)"
           >
-            <button hlmToggleGroupItem type="button" value="SharedDatabase">
+            <button hlmToggleGroupItem type="button" value="sharedDatabase">
               <!--#if (IncludeLocalization)-->
               <ng-container>{{ 'tenants.sharedDatabase' | transloco }}</ng-container>
               <!--#else-->
               <ng-container>Shared database</ng-container>
               <!--#endif-->
             </button>
-            <button hlmToggleGroupItem type="button" value="DedicatedDatabase">
+            <button hlmToggleGroupItem type="button" value="dedicatedDatabase">
               <!--#if (IncludeLocalization)-->
               <ng-container>{{ 'tenants.dedicatedDatabase' | transloco }}</ng-container>
               <!--#else-->

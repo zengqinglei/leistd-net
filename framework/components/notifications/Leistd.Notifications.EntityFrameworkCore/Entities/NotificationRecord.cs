@@ -1,10 +1,13 @@
 using System.Text.Json;
 using Leistd.Auditing;
+using Leistd.Notifications.Dtos;
+using Leistd.Notifications.Constants;
+using Leistd.Auditing.Abstractions;
 
-namespace Leistd.Notifications.EntityFrameworkCore;
+namespace Leistd.Notifications.EntityFrameworkCore.Entities;
 
 /// <summary>
-/// 通知持久化实体。实现创建审计接口，审计字段由审计拦截器统一填充。
+/// 表示持久化的用户通知。
 /// </summary>
 public class NotificationRecord : ICreationAuditedObject
 {
@@ -44,8 +47,6 @@ public class NotificationRecord : ICreationAuditedObject
     /// <summary>扩展元数据（JSON）。</summary>
     public string? MetadataJson { get; set; }
 
-    // --- 审计字段（ICreationAuditedObject，由审计拦截器填充）---
-
     /// <inheritdoc />
     public DateTime CreationTime { get; set; }
 
@@ -67,17 +68,20 @@ public class NotificationRecord : ICreationAuditedObject
             Link = notification.Link,
             Icon = notification.Icon,
             IsRead = notification.IsRead,
+            // 发布方已经定好创建时刻（NotificationPublisher 会补齐），此处必须带过来。
+            // 留空转而依赖审计拦截器，等于把落库时间挂在"宿主是否给这个 DbContext
+            // 挂了审计拦截器"上——没挂就是 default(DateTime)，而通知列表按它排序。
+            CreationTime = notification.CreationTime,
             RelatedEntityId = notification.RelatedEntityId,
             RelatedEntityType = notification.RelatedEntityType,
             MetadataJson = notification.Metadata != null
                 ? JsonSerializer.Serialize(notification.Metadata)
                 : null
-            // CreationTime / CreatorId 由审计拦截器填充
         };
     }
 
     /// <summary>
-    /// 转换为 <see cref="NotificationOutputDto"/> DTO。
+    /// 转换为 <see cref="NotificationOutputDto"/>。
     /// </summary>
     public NotificationOutputDto ToDto()
     {

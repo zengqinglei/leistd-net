@@ -2,6 +2,7 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using Leistd.Data.Constants;
 
 namespace CompanyName.ProjectName.Api;
 
@@ -30,7 +31,7 @@ public sealed class MyProjectDbContextFactory : IDesignTimeDbContextFactory<MyPr
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("Default");
+        var connectionString = configuration.GetConnectionString(ConnectionStringNames.Default);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             connectionString = PlaceholderConnectionString;
@@ -38,7 +39,8 @@ public sealed class MyProjectDbContextFactory : IDesignTimeDbContextFactory<MyPr
 
         var optionsBuilder = new DbContextOptionsBuilder<MyProjectDbContext>()
             .UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "companyname-projectname"));
+                npgsql.MigrationsHistoryTable(
+                    DatabaseSchema.BusinessMigrationsHistoryTable, DatabaseSchema.Name));
 
         // 设计时无需运行时服务（审计/软删除过滤等仅在 SaveChanges 生效），serviceProvider 传 null。
         return new MyProjectDbContext(optionsBuilder.Options, serviceProvider: null);

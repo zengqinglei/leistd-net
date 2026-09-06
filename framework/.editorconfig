@@ -1,0 +1,20 @@
+# Leistd 框架代码风格。只作用于 framework/ —— template/ 是独立交付面，
+# 生成项目不该继承框架的内部约定。
+
+root = false
+
+[*.cs]
+
+# ── 目录即命名空间 ────────────────────────────────────────────────────────────
+#
+# 规则：类型的命名空间 = 项目 RootNamespace + 从项目根到该文件的目录路径。
+#
+# 为什么用分析器而不是写进文档：这条约定此前只存在于"照着邻居抄"里，结果分成了两套——
+# ServiceClient / Tracing / Security / UnitOfWork 等按目录派生，而 MultiTenancy /
+# Notifications / Authorization.EntityFrameworkCore 把命名空间压平到包根。
+# 两套都自洽，但没有任何东西阻止第三套出现。IDE0130 是唯一能机械判定这件事的闸门，
+# 且新建文件时 IDE 会自动填对命名空间，约定因此不会再腐化。
+#
+# 设成 error 而非 warning：框架构建线是 0 警告，warning 在这里等于没有约束力。
+dotnet_style_namespace_match_folder = true:error
+dotnet_diagnostic.IDE0130.severity = error

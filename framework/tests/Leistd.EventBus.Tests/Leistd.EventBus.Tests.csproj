@@ -2,10 +2,10 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- 测试项目：覆盖 common.props 的打包/文档约定 -->
     <IsPackable>false</IsPackable>
     <IsPublishable>false</IsPublishable>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageReadmeFile></PackageReadmeFile>
   </PropertyGroup>

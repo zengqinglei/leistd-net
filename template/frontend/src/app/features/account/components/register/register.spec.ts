@@ -77,8 +77,8 @@ describe('Register', () => {
     component.registerForm.email().value.set('someone@example.test');
     component.registerForm.username().value.set('someone');
     component.registerForm.captchaCode().value.set('1234');
-    component.registerForm.password().value.set('Passw0rd!');
-    component.registerForm.confirmPassword().value.set('Passw0rd!');
+    component.registerForm.password().value.set('RegisterSpec!Pw1');
+    component.registerForm.confirmPassword().value.set('RegisterSpec!Pw1');
   }
 
   beforeEach(() => {
@@ -98,7 +98,9 @@ describe('Register', () => {
   it('两次密码不一致时表单非法', async () => {
     await setUp();
     fillValidForm();
-    component.registerForm.confirmPassword().value.set('Different1!');
+    // 长度合法但与上面不同：本用例测的是"两次不一致"，
+    // 不该因为长度不足而由另一条规则拒绝——那样断言会通过，但通过的原因是错的
+    component.registerForm.confirmPassword().value.set('RegisterSpec!Pw2');
 
     await component.onSubmit();
 

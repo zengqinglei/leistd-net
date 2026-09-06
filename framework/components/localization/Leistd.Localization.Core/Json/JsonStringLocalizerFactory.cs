@@ -1,8 +1,8 @@
-using Leistd.Localization.Core.Options;
+using Leistd.Localization.Options;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
-namespace Leistd.Localization.Core.Json;
+namespace Leistd.Localization.Json;
 
 /// <summary>
 /// 创建 <see cref="JsonStringLocalizer"/> 的工厂。
@@ -18,7 +18,9 @@ public sealed class JsonStringLocalizerFactory(
 {
     private readonly JsonStringLocalizer _shared = new(reader, options);
 
+    /// <inheritdoc />
     public IStringLocalizer Create(Type resourceSource) => _shared;
 
+    /// <inheritdoc />
     public IStringLocalizer Create(string baseName, string location) => _shared;
 }

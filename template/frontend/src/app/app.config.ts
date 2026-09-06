@@ -20,7 +20,7 @@ import { provideTransloco, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { authInterceptor, LogLevel, provideAuth } from 'angular-auth-oidc-client';
 //#endif
 //#if (IncludeLocalization)
@@ -35,7 +35,7 @@ import { TranslocoHttpLoader } from './core/i18n/transloco-loader';
 import { acceptLanguageInterceptor } from './core/interceptors/accept-language-interceptor';
 //#endif
 import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { tenantInterceptor } from './core/interceptors/tenant-interceptor';
 //#endif
 import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
@@ -70,7 +70,7 @@ export const appConfig: ApplicationConfig = {
     // 注册全局错误处理器，替换 Angular 默认的 ErrorHandler
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideRouter(routes, ...routerFeatures),
-    //#if (ResourceService)
+    //#if (!LocalIdentity)
     provideAuth({
       config: {
         authority: environment.oidc.authority,
@@ -103,12 +103,10 @@ export const appConfig: ApplicationConfig = {
         //#if (IncludeLocalization)
         acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
         //#endif
-        //#if (MultiTenancy)
-        //#if (IdentityService)
+        //#if (LocalIdentity)
         tenantInterceptor, // 已选租户时为 /api/ 请求附加 X-Tenant-Id
         //#endif
-        //#endif
-        //#if (ResourceService)
+        //#if (!LocalIdentity)
         authInterceptor(),
         //#endif
         urlFormatInterceptor,

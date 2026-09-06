@@ -8,20 +8,20 @@ import {
 } from '@angular/common/http';
 import { Injector, provideZonelessChangeDetection, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { provideRouter, Router } from '@angular/router';
 //#endif
 import { Observable, throwError } from 'rxjs';
 
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { SILENT_AUTH } from './http-context-tokens';
 //#endif
 import { httpErrorInterceptor } from './http-error-interceptor';
 import { ApplicationHttpError } from '../errors/application-http-error';
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { AuthService } from '../services/auth-service';
 //#endif
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { TenantContextService } from '../services/tenant-context-service';
 //#endif
 
@@ -37,7 +37,7 @@ describe('httpErrorInterceptor', () => {
       // prettier-ignore
       providers: [
         provideZonelessChangeDetection(),
-        //#if (IdentityService)
+        //#if (LocalIdentity)
         provideRouter([]),
         //#endif
       ],
@@ -101,7 +101,7 @@ describe('httpErrorInterceptor', () => {
     expect(caught).toBe(original);
     expect(caught instanceof ApplicationHttpError).toBe(false);
   });
-  //#if (IdentityService)
+  //#if (LocalIdentity)
 
   it('clears auth data and redirects to /auth/login on 401', () => {
     const authService = TestBed.inject(AuthService);
@@ -117,7 +117,6 @@ describe('httpErrorInterceptor', () => {
     expect((caught as ApplicationHttpError).status).toBe(401);
   });
 
-  //#if (MultiTenancy)
   it('clears the selected tenant on a 401 marked X-Tenant-Invalid', () => {
     const tenantContext = TestBed.inject(TenantContextService);
     const clearTenantSpy = spyOn(tenantContext, 'clear');
@@ -158,7 +157,6 @@ describe('httpErrorInterceptor', () => {
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  //#endif
   it('honors SILENT_AUTH: skips the 401 redirect but still normalizes the error', () => {
     const authService = TestBed.inject(AuthService);
     const router = TestBed.inject(Router);

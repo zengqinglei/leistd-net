@@ -1,10 +1,10 @@
 # 前端组件库选型
 
-> 架构决策记录。本文只记「决定 + 依据 + 影响 + 备选」这类长期约束；迁移的执行细节与任务分解在 [`docs/plans/2026-07-24-primeng-to-spartan-migration.md`](../plans/2026-07-24-primeng-to-spartan-migration.md)。
+> 架构决策记录。只记「决定 + 依据 + 影响 + 备选」这类长期约束，不记执行细节。
 
 ## 决定
 
-模板前端（`template/frontend`）采用 **Spartan UI（spartan.ng）** 作为 UI 组件库，取代原 PrimeNG。
+模板前端（`template/frontend`）采用 **Spartan UI（spartan.ng）** 作为 UI 组件库。
 
 - 组件消费模式：headless 逻辑层 `@spartan-ng/brain`（npm 依赖）+ 样式层 helm（经 CLI 复制进本仓库 `libs/ui/`，**属自有代码**）。
 - 样式基座：Tailwind CSS v4，组件主题走 CSS 变量（oklch token）。
@@ -18,19 +18,16 @@
 
 ## 依据
 
-1. **PrimeNG 不再可持续**：PrimeNG ≥22 转 PrimeUI 商业双许可，MIT 版仓库 2026-06-29 归档；本项目所属组织不满足 Community 免费资格，继续使用意味着商业许可成本或停留在已归档、不再维护且锁定 Angular 21 的旧版。
-2. **架构免疫供应商锁定**：helm 样式层复制进本仓库成为自有代码，上游停摆也不失能——直接对冲 PrimeNG 事件暴露的第三方断供风险。
-3. **技术栈零摩擦**：与既有 Tailwind 4 一等公民集成，`.dark` class 深色模式逐字同构，zoneless-ready。
-4. **顺应主流**：命中 2025–2026 headless/shadcn 趋势；Angular 官方亦在 v21 推出 `@angular/aria` headless 基座，方向一致。
-5. 许可为 MIT。
+1. helm 代码归仓库所有，可直接审查、定制并避免运行时主题封装。
+2. Brain 与 Tailwind CSS v4、`.dark` 深色模式和 zoneless Angular 直接组合。
+3. Spartan、Tailwind、TanStack Table、Lucide 和 Geist 均满足当前许可要求。
 
-## 影响
+## 维护约束
 
-- 组件层需整体迁移（约 26 类组件、自有拦截器/异常处理/主题服务/共享组件，见 plan）。
-- 主题能力收敛：删除 PrimeNG 运行时换色（preset/主色/表面色），保留亮/暗/系统三态 + 单一品牌主题；业务项目按品牌改 CSS 变量。
-- 前置依赖：必须先升级到 Angular 22（Spartan 只支持最近两个大版本）。
+- 主题保留亮、暗、系统三态和一套品牌 token；业务项目通过 CSS 变量调整品牌。
+- Angular 与 Spartan 版本必须位于双方支持范围内。
 - helm 组件升级走官方 `ng g @spartan-ng/cli:healthcheck`；**改动过的组件禁用 `migrate-helm-libraries`（会覆盖自定义）**，需对照上游手动合入。
-- 生成项目继承此选型；`template/docs/standards/` 与生成项目 Skill 中的 UI 约定随之更新。
+- 修改组件约定时同步 `template/docs/standards/` 与生成项目 Skill。
 
 ## 备选（未采纳）
 

@@ -32,9 +32,32 @@ public class ServiceUserContextClaimsTransformationTests
 
         var transformation = new ServiceUserContextClaimsTransformation(
             accessor,
-            Microsoft.Extensions.Options.Options.Create(options),
+            new MutableOptionsMonitor<ServiceUserContextOptions>(options),
             NullLogger<ServiceUserContextClaimsTransformation>.Instance);
         return await transformation.TransformAsync(principal);
+    }
+
+    [Fact]
+    public async Task Enabled_switch_is_read_for_each_transformation()
+    {
+        var monitor = new MutableOptionsMonitor<ServiceUserContextOptions>(new());
+        var context = new DefaultHttpContext();
+        AddUserHeaders(context.Request.Headers);
+        var transformation = new ServiceUserContextClaimsTransformation(
+            new HttpContextAccessor { HttpContext = context },
+            monitor,
+            NullLogger<ServiceUserContextClaimsTransformation>.Instance);
+
+        var first = await transformation.TransformAsync(ServiceClientPrincipal());
+        monitor.Set(new ServiceUserContextOptions { Enabled = false });
+        var secondPrincipal = ServiceClientPrincipal();
+        var second = await transformation.TransformAsync(secondPrincipal);
+        monitor.Set(new ServiceUserContextOptions { Enabled = true });
+        var third = await transformation.TransformAsync(ServiceClientPrincipal());
+
+        Assert.Equal(UserId.ToString(), first.FindFirst("sub")?.Value);
+        Assert.Same(secondPrincipal, second);
+        Assert.Equal(UserId.ToString(), third.FindFirst("sub")?.Value);
     }
 
     private static ClaimsPrincipal ServiceClientPrincipal(string clientId = "svc-a") =>
@@ -49,7 +72,7 @@ public class ServiceUserContextClaimsTransformationTests
     private static void AddUserHeaders(IHeaderDictionary headers)
     {
         headers[ServiceClientHeaders.UserId] = UserId.ToString();
-        headers[ServiceClientHeaders.UserName] = Uri.EscapeDataString("张三");
+        headers[ServiceClientHeaders.Username] = Uri.EscapeDataString("张三");
     }
 
     [Fact]
@@ -111,7 +134,7 @@ public class ServiceUserContextClaimsTransformationTests
         var principal = ServiceClientPrincipal();
 
         var result = await TransformAsync(
-            principal, AddUserHeaders, options => options.Enable = false);
+            principal, AddUserHeaders, options => options.Enabled = false);
 
         Assert.Same(principal, result);
     }

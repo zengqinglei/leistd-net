@@ -57,7 +57,7 @@ public static class PermissionConstant
         public const string ManagePermissions = Default + ".ManagePermissions";
     }
 
-#if (IdentityService)
+#if (OpenIddictServer)
     /// <summary>
     /// 开放应用（OAuth2 客户端）管理权限
     /// </summary>
@@ -77,12 +77,12 @@ public static class PermissionConstant
     }
 
 #endif
-#if (IdentityService)
+#if (LocalIdentity)
     /// <summary>
     /// 租户管理权限（宿主侧专属）
     /// </summary>
     /// <remarks>
-    /// 定义时声明 Host 侧别：租户上下文内对任何主体（含租户超管）不可见、不可授予、检查一律拒绝，
+    /// 定义时声明 Host 侧别：租户上下文内对任何主体（含租户管理员）不可见、不可授予、检查一律拒绝，
     /// 租户管理员不会在权限树里看到"管理租户"这类平台能力。
     /// </remarks>
     public static class Tenants

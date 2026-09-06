@@ -1,4 +1,3 @@
-//#if (MultiTenancy)
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
@@ -71,7 +70,7 @@ describe('Tenants 页面闭环', () => {
     displayName: 'Globex Corp.',
     adminEmail: 'admin@globex.example.com',
     adminPassword: 'Globex@123456',
-    databaseMode: 'SharedDatabase',
+    databaseMode: 'sharedDatabase',
   };
 
   beforeEach(async () => {
@@ -119,7 +118,7 @@ describe('Tenants 页面闭环', () => {
         PERMISSIONS.tenants.delete,
       ],
       isSuperAdmin: false,
-      revision: 'r1',
+      versionToken: 'r1',
     });
 
     fixture = TestBed.createComponent(Tenants);
@@ -236,4 +235,3 @@ describe('Tenants 页面闭环', () => {
     expect(service.deleteTenant).not.toHaveBeenCalled();
   });
 });
-//#endif

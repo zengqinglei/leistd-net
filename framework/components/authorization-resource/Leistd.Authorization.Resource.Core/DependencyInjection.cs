@@ -1,5 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Leistd.Authorization.Resource.Services;
+using Leistd.Authorization.Resource.Grants;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Resource;
 
@@ -16,6 +20,12 @@ public static class DependencyInjection
     /// 若未注册 <see cref="IResourceGrantStore"/>，则只有领域规则处理器参与判定，
     /// 适合"只用所有者/成员规则、不需要显式 ACL"的项目。
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddResourceAuthorizationCore();
+    /// builder.Services.AddResourceAuthorizationHandler&lt;Order, OrderOwnerHandler&gt;();
+    /// </code>
+    /// </example>
     public static IServiceCollection AddResourceAuthorizationCore(this IServiceCollection services)
     {
         services.TryAddScoped<IResourceAuthorizationService, DefaultResourceAuthorizationService>();

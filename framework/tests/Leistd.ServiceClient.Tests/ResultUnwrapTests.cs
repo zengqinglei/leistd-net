@@ -53,7 +53,7 @@ public class ResultUnwrapTests
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Equal(50001, exception.ErrorCode);
+        Assert.Equal("50001", exception.ErrorCode);   // 信封的 code 是数字，按不变文化转字符串
         Assert.Contains("库存不足", exception.Message);
     }
 
@@ -63,18 +63,33 @@ public class ResultUnwrapTests
         using var response = Response(HttpStatusCode.UnprocessableContent,
             """
             {"type":"https://err/validation","title":"Unprocessable Entity","status":422,
-             "code":422001,"message":"参数校验失败","traceId":"00-abc-def-01",
+             "code":"Order:Invalid","message":"参数校验失败","traceId":"00-abc-def-01",
              "errors":[{"field":"name","detail":"必填","code":"Required"}]}
             """);
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Equal(422, exception.StatusCode);
-        Assert.Equal(422001, exception.ErrorCode);
+        Assert.Equal(422, exception.RemoteStatusCode);
+        Assert.Equal("Order:Invalid", exception.ErrorCode);
         Assert.Equal("00-abc-def-01", exception.RemoteTraceId);
         Assert.Contains("00-abc-def-01", exception.Message);
         var error = Assert.Single(exception.Errors);
         Assert.Equal(("name", "必填", "Required"), (error.Field, error.Detail, error.Code));
+    }
+
+    [Fact]
+    public async Task 远端发数字错误码时_按原样保留()
+    {
+        // 互操作：Problem Details 的错误码是字符串词条键，统一响应信封的是数字。
+        // 两种都要认——丢掉任一种，调用方就无法按错误码分支。
+        using var response = Response(HttpStatusCode.NotFound,
+            """{"status":404,"code":404001,"message":"不存在","traceId":"t-2"}""");
+
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
+
+        Assert.Equal("404001", exception.ErrorCode);
+        Assert.Equal("t-2", exception.RemoteTraceId);
+        Assert.Contains("不存在", exception.Message);
     }
 
     [Fact]
@@ -84,7 +99,7 @@ public class ResultUnwrapTests
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Equal(502, exception.StatusCode);
+        Assert.Equal(502, exception.RemoteStatusCode);
         Assert.Null(exception.ErrorCode);
         Assert.Contains("<html>gateway error</html>", exception.ResponseBody);
     }
@@ -96,7 +111,7 @@ public class ResultUnwrapTests
 
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Contains("响应体为空", exception.Message);
+        Assert.Contains("response body is empty", exception.Message);
     }
 
     [Fact]
@@ -106,7 +121,7 @@ public class ResultUnwrapTests
 
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Contains("反序列化失败", exception.Message);
+        Assert.Contains("deserialization failed", exception.Message);
     }
 
     [Fact]
@@ -125,11 +140,11 @@ public class ResultUnwrapTests
     public async Task 未包装端点_非2xx同样还原远端错误()
     {
         using var response = Response(HttpStatusCode.NotFound,
-            """{"status":404,"code":404001,"message":"不存在","traceId":"t-1"}""");
+            """{"status":404,"code":"Order:NotFound","message":"不存在","traceId":"t-1"}""");
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadContentAsync<OrderDto>());
 
-        Assert.Equal(404001, exception.ErrorCode);
+        Assert.Equal("Order:NotFound", exception.ErrorCode);
         Assert.Equal("t-1", exception.RemoteTraceId);
     }
 }

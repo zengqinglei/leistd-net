@@ -33,7 +33,7 @@ ClientSecret 用环境变量注入：`Leistd__ServiceAuth__ClientSecret`。
 
 3. 业务代码注入客户端接口调用；远端错误以 `RemoteServiceException`（含远端 `traceId`、业务 `code`）抛出，可预期失败应捕获并翻译为本服务的业务异常。
 
-当前用户的 Id/用户名会自动经 `X-User-Id` / `X-User-Name` 头传给被调方；后台任务先用 `ICurrentPrincipalAccessor.Change(...)` 设定主体再调用。
+当前用户的 Id/用户名会自动经 `X-User-Id` / `X-Username` 头传给被调方；后台任务先用 `ICurrentPrincipalAccessor.Change(...)` 设定主体再调用。
 
 ## 被其他服务调用
 

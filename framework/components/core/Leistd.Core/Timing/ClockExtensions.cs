@@ -1,33 +1,50 @@
-using System;
-
 namespace Leistd.Timing;
 
 /// <summary>
-/// 时钟服务扩展方法，用于处理时区边界计算（对齐业务自然日）
+/// 提供业务自然日到 UTC 时刻的转换扩展。
 /// </summary>
+/// <remarks>
+/// <b>时区必须由调用方显式传入</b>，没有默认值。时区是业务输入（租户设置、用户偏好、报表参数），
+/// 不是宿主的环境属性；需要"服务器时区"语义的调用方自己传 <see cref="TimeZoneInfo.Local"/>。
+/// 理由见 core 组件文档。
+/// </remarks>
 public static class ClockExtensions
 {
     /// <summary>
-    /// 获取当前系统本地日期对应的 UTC 零点（锚点）。
-    /// 用于按天统计时的基准点，消除了直接比较 Local Time 或 UTC Date 带来的时区漂移问题。
-    /// 例如：北京时间 2026-05-28 00:00:00 -> 返回 UTC 2026-05-27 16:00:00Z
+    /// 获取指定时区今日零点对应的 UTC 时刻。
     /// </summary>
+    /// <remarks>
+    /// 例：时区为 <c>Asia/Shanghai</c>、当前 UTC 为 <c>2026-05-27T20:00:00Z</c> 时，
+    /// 该时区的当日是 05-28，返回 <c>2026-05-27T16:00:00Z</c>。
+    /// </remarks>
     /// <param name="clock">时钟实例</param>
-    /// <returns>本地今日零点的 UTC 时间</returns>
-    public static DateTime GetLocalMidnightInUtc(this IClock clock)
+    /// <param name="timeZone">用于判定"今日"的时区</param>
+    /// <returns>该时区今日零点对应的 UTC 时间（<see cref="DateTimeKind.Utc"/>）</returns>
+    public static DateTime GetMidnightInUtc(this IClock clock, TimeZoneInfo timeZone)
     {
-        var nowUtc = clock.Now;
-        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, TimeZoneInfo.Local);
-        return TimeZoneInfo.ConvertTimeToUtc(nowLocal.Date, TimeZoneInfo.Local);
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(timeZone);
+
+        var nowUtc = DateTime.SpecifyKind(clock.Normalize(clock.Now), DateTimeKind.Utc);
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone);
+
+        // 本地零点是 Unspecified 的墙钟时间，按给定时区折回 UTC
+        return TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(localNow.Date, DateTimeKind.Unspecified),
+            timeZone);
     }
 
     /// <summary>
-    /// 获取当前时区相对于 UTC 的偏移小时数
+    /// 取指定时区当前相对 UTC 的偏移小时数（已计入夏令时）
     /// </summary>
     /// <param name="clock">时钟实例</param>
-    /// <returns>偏移小时数</returns>
-    public static double GetLocalUtcOffsetHours(this IClock clock)
+    /// <param name="timeZone">目标时区</param>
+    public static double GetUtcOffsetHours(this IClock clock, TimeZoneInfo timeZone)
     {
-        return TimeZoneInfo.Local.GetUtcOffset(clock.Now).TotalHours;
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(timeZone);
+
+        var nowUtc = DateTime.SpecifyKind(clock.Normalize(clock.Now), DateTimeKind.Utc);
+        return timeZone.GetUtcOffset(nowUtc).TotalHours;
     }
 }

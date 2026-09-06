@@ -1,4 +1,3 @@
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 using CompanyName.ProjectName.Application.Roles.Dtos;
@@ -13,7 +12,7 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// </summary>
 [Authorize]
 [Route("api/v1/roles")]
-public class RoleController(IRoleAppService roleAppService) : BaseController
+public sealed class RoleController(IRoleAppService roleAppService) : BaseController
 {
     /// <summary>
     /// 获取角色列表（需要角色查看权限）
@@ -82,4 +81,3 @@ public class RoleController(IRoleAppService roleAppService) : BaseController
         await roleAppService.DeleteAsync(id, cancellationToken);
     }
 }
-#endif

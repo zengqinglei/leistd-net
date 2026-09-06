@@ -19,12 +19,18 @@ export function getUserByToken(_req: MockRequest): MockUser {
   const userId = MOCK_SESSION_USER_ID ?? readMockSessionUserId();
   MOCK_SESSION_USER_ID = userId;
   if (!userId) {
-    throw new MockException(401, { code: 40100, message: 'No authentication token provided' });
+    throw new MockException(401, {
+      code: 'Error:Unauthorized',
+      message: 'No authentication token provided',
+    });
   }
   const user = USERS.find((item) => item.id === userId);
 
   if (!user) {
-    throw new MockException(401, { code: 40100, message: 'Invalid authentication token' });
+    throw new MockException(401, {
+      code: 'Error:Unauthorized',
+      message: 'Invalid authentication token',
+    });
   }
 
   return user;

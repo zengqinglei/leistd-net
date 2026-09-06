@@ -1,7 +1,7 @@
 namespace Leistd.Security.Claims;
 
 /// <summary>
-/// 自定义 Claims 类型定义
+/// 定义 Leistd 使用的自定义声明类型。
 /// </summary>
 /// <remarks>
 /// 仅包含与 System.Security.Claims.ClaimTypes 不同的自定义字段。
@@ -10,21 +10,18 @@ namespace Leistd.Security.Claims;
 public static class CustomClaimTypes
 {
     /// <summary>
-    /// 客户端标识符（用于 API Key 认证）
+    /// OAuth2/OIDC 客户端标识符。
     /// </summary>
     public const string ClientId = "client_id";
 
     /// <summary>
-    /// 会话标识符（OIDC 标准）
+    /// 表示 OIDC 会话标识符。
     /// </summary>
     public const string SessionId = "sid";
 
     /// <summary>
-    /// 身份提供者（OIDC 标准）
+    /// 表示身份提供者。
     /// </summary>
-    /// <remarks>
-    /// 值示例: github, google, microsoft
-    /// </remarks>
     public const string IdentityProvider = "idp";
 
     /// <summary>

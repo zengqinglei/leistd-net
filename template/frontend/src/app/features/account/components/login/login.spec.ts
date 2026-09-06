@@ -9,17 +9,11 @@ import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
 import { of, throwError } from 'rxjs';
 
 import { Login } from './login';
-//#if (LocalAuthorization)
 import { permissionGuard } from '../../../../core/guards/permission-guard';
-//#endif
 import { AuthService } from '../../../../core/services/auth-service';
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-//#endif
 import { StartupService } from '../../../../core/services/startup-service';
-//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
-//#endif
 
 /**
  * 登录提交路径。
@@ -33,9 +27,7 @@ describe('Login', () => {
   let component: Login;
   let router: Router;
   let authService: jasmine.SpyObj<AuthService>;
-  //#if (LocalAuthorization)
   let authorization: AuthorizationService;
-  //#endif
   let queryParams: Record<string, string>;
 
   async function setUp(): Promise<void> {
@@ -72,12 +64,10 @@ describe('Login', () => {
       ],
     }).compileComponents();
 
-    //#if (LocalAuthorization)
     // 登录成功后会拉一次权限来决定落地页；不打桩的话这条真实请求永远等不到响应，
     // 用例会以超时失败，而不是报出真正的断言。
     authorization = TestBed.inject(AuthorizationService);
     spyOn(authorization, 'load').and.returnValue(of(undefined) as never);
-    //#endif
 
     fixture = TestBed.createComponent(Login);
     component = fixture.componentInstance;
@@ -148,7 +138,6 @@ describe('Login', () => {
     expect(component.isLoading()).toBeFalse();
   });
 
-  //#if (LocalAuthorization)
   it('登录到受保护的 returnUrl 时，权限先加载完再导航', async () => {
     queryParams = { returnUrl: '/protected' };
     await setUp();
@@ -163,7 +152,7 @@ describe('Login', () => {
       authorization.setPermissions({
         permissions: [PERMISSIONS.users.default],
         isSuperAdmin: false,
-        revision: 'r1',
+        versionToken: 'r1',
       });
       return of(undefined) as never;
     });
@@ -189,7 +178,7 @@ describe('Login', () => {
 
     // 平台入口可见性由权限集合决定：这里通过真实的 setPermissions 造状态，
     // 而不是打桩 canAccessPlatform——打桩就绕过了"判据是权限而非角色"这件事本身。
-    authorization.setPermissions({ permissions: [], isSuperAdmin: true, revision: 'r1' });
+    authorization.setPermissions({ permissions: [], isSuperAdmin: true, versionToken: 'r1' });
 
     await component.onSubmit();
     expect(router.navigate).toHaveBeenCalledWith(['/workspace']);
@@ -198,11 +187,10 @@ describe('Login', () => {
     authorization.setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: false,
-      revision: 'r2',
+      versionToken: 'r2',
     });
 
     await component.onSubmit();
     expect(router.navigate).toHaveBeenCalledWith(['/platform']);
   });
-  //#endif
 });

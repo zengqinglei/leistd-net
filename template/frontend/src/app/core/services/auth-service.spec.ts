@@ -1,4 +1,4 @@
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -41,7 +41,7 @@ describe('AuthService', () => {
   });
 });
 //#endif
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { OidcSecurityService } from 'angular-auth-oidc-client';

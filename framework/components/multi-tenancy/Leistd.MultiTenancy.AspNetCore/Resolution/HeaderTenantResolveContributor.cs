@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Http;
+using Leistd.MultiTenancy.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Leistd.MultiTenancy.AspNetCore.Options;
 
-namespace Leistd.MultiTenancy;
+namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
 /// <summary>
-/// 从请求头解析租户（默认 <c>X-Tenant-Id</c>）。
-/// 仅对匿名请求生效（认证请求已被链首的 Claim 贡献者定案）——
-/// 匿名头解析只决定"后续认证发生在哪个租户分区"，本身不授予任何数据可见性
+/// 从请求头解析匿名请求的租户。
 /// </summary>
+/// <remarks>请求头只选择认证分区，不授予数据访问权限。</remarks>
 public class HeaderTenantResolveContributor : ITenantResolveContributor
 {
     /// <inheritdoc />

@@ -1,24 +1,29 @@
 using Leistd.Security.Users;
 using Leistd.ServiceClient.Constants;
 using Leistd.ServiceClient.Options;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.ServiceClient.Handlers;
 
 /// <summary>
-/// 用户上下文出站转发处理器：把当前用户（<see cref="ICurrentUser"/>）的 Id、用户名及
-/// 配置映射的 claim 写入出站请求头，供被调方在受信前提下恢复用户主体。
-/// 仅在请求尚无同名头时追加；当前无认证用户时不做任何处理。
+/// 将当前用户上下文写入出站请求头。
 /// </summary>
+/// <remarks>仅转发已认证用户，且不覆盖请求已有的同名头。</remarks>
 /// <param name="currentUser">当前用户（读取时机为每次发送，而非构造时）</param>
-/// <param name="options">转发配置</param>
-public sealed class UserContextDelegatingHandler(ICurrentUser currentUser, UserContextForwardingOptions options)
+/// <param name="optionsMonitor">服务客户端配置监视器</param>
+/// <typeparam name="TOptions">当前服务客户端选项类型。</typeparam>
+public sealed class UserContextDelegatingHandler<TOptions>(
+    ICurrentUser currentUser,
+    IOptionsMonitor<TOptions> optionsMonitor)
     : DelegatingHandler
+    where TOptions : ServiceClientOptions
 {
     /// <inheritdoc />
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        if (!options.Enable || !currentUser.IsAuthenticated)
+        var options = optionsMonitor.CurrentValue.UserContext;
+        if (!options.Enabled || !currentUser.IsAuthenticated)
         {
             return await base.SendAsync(request, cancellationToken);
         }
@@ -28,9 +33,9 @@ public sealed class UserContextDelegatingHandler(ICurrentUser currentUser, UserC
             AddHeaderIfAbsent(request, ServiceClientHeaders.UserId, userId.ToString());
         }
 
-        if (options.ForwardUserName && !string.IsNullOrEmpty(currentUser.Username))
+        if (options.ForwardUsername && !string.IsNullOrEmpty(currentUser.Username))
         {
-            AddHeaderIfAbsent(request, ServiceClientHeaders.UserName, Uri.EscapeDataString(currentUser.Username));
+            AddHeaderIfAbsent(request, ServiceClientHeaders.Username, Uri.EscapeDataString(currentUser.Username));
         }
 
         foreach (var (claimType, headerName) in options.ClaimHeaderMap)

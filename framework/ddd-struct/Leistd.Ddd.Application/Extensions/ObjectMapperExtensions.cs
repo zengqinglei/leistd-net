@@ -1,16 +1,17 @@
 using Leistd.Ddd.Application.Contracts.Dtos;
-using Leistd.ObjectMapping.Core;
-using Leistd.ObjectMapping.Core.Extensions;
+using Leistd.ObjectMapping.Extensions;
+using Leistd.ObjectMapping;
+using Leistd.ObjectMapping.Abstractions;
 
 namespace Leistd.Ddd.Application.Extensions;
 
 /// <summary>
-/// 应用层对象映射器扩展方法
+/// 提供应用层分页对象映射扩展。
 /// </summary>
 public static class ObjectMapperExtensions
 {
     /// <summary>
-    /// 分页映射
+    /// 映射分页结果中的项目并保留总数。
     /// </summary>
     public static PagedResultDto<TDestination> MapPagedResult<TSource, TDestination>(
         this IObjectMapper mapper,

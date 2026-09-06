@@ -1,4 +1,3 @@
-#if (LocalAuthorization)
 using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.Permissions.Dtos;
@@ -19,9 +18,9 @@ public record CurrentPermissionsOutputDto
     [Display(Name = "Super administrator")]
     public bool IsSuperAdmin { get; init; }
 
-    /// <summary>授权版本。变化即表示本地缓存的权限已过期。</summary>
-    [Display(Name = "Revision")]
-    public required string Revision { get; init; }
+    /// <summary>有效权限的版本标记。变化即表示本地缓存已过期。</summary>
+    [Display(Name = "Version token")]
+    public required string VersionToken { get; init; }
 }
 
 /// <summary>
@@ -85,8 +84,8 @@ public record PermissionGrantsOutputDto
     public required string ProviderKey { get; init; }
 
     /// <summary>乐观并发版本，保存时原样回传。</summary>
-    [Display(Name = "Revision")]
-    public long Revision { get; init; }
+    [Display(Name = "Version")]
+    public long Version { get; init; }
 
     [Display(Name = "Grants")]
     public required IReadOnlyList<PermissionGrantStateDto> Grants { get; init; }
@@ -100,12 +99,11 @@ public record ReplacePermissionGrantsInputDto
     /// <summary>
     /// 期望的当前版本。与服务端不一致时返回 409，避免两个管理员同时保存时后写覆盖前写。
     /// </summary>
-    [Display(Name = "Expected revision")]
-    public long ExpectedRevision { get; init; }
+    [Display(Name = "Expected version")]
+    public long ExpectedVersion { get; init; }
 
     /// <summary>目标权限名集合，未出现的权限视为撤销。</summary>
     [Display(Name = "Permissions")]
     [MaxLength(500, ErrorMessage = "{0} cannot contain more than {1} items.")]
     public IReadOnlyList<string> PermissionNames { get; init; } = [];
 }
-#endif

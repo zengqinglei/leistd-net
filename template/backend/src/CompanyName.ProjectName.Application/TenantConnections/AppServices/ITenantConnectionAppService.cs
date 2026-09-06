@@ -1,4 +1,4 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.TenantConnections.Dtos;
 
 namespace CompanyName.ProjectName.Application.TenantConnections.AppServices;

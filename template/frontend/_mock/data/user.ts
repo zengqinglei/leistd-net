@@ -1,7 +1,5 @@
-//#if (LocalAuthorization)
 import { ROLES } from './authorization';
-//#endif
-//#if (IdentityService)
+//#if (LocalIdentity)
 import { UserOutputDto } from '../../src/app/features/account/models/account.dto';
 //#endif
 import { UserManagementOutputDto } from '../../src/app/features/platform/models/user-management.dto';
@@ -19,9 +17,7 @@ export interface MockUser {
   isEmailVerified: boolean;
   creationTime: string;
   lastLoginTime?: string;
-  //#if (LocalAuthorization)
   roles: string[];
-  //#endif
 }
 
 export const USERS: MockUser[] = [
@@ -37,9 +33,7 @@ export const USERS: MockUser[] = [
     isEmailVerified: true,
     creationTime: '2025-01-01T00:00:00Z',
     lastLoginTime: '2026-06-10T08:00:00Z',
-    //#if (LocalAuthorization)
     roles: ['Admin'],
-    //#endif
   },
   {
     id: 'user_demo',
@@ -53,12 +47,10 @@ export const USERS: MockUser[] = [
     isEmailVerified: true,
     creationTime: '2025-06-01T00:00:00Z',
     lastLoginTime: '2026-06-09T12:00:00Z',
-    //#if (LocalAuthorization)
     roles: ['Member'],
-    //#endif
   },
 ];
-//#if (IdentityService)
+//#if (LocalIdentity)
 export function toUserOutput(user: MockUser): UserOutputDto {
   return {
     id: user.id,
@@ -70,10 +62,8 @@ export function toUserOutput(user: MockUser): UserOutputDto {
     isActive: user.isActive,
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
-    //#if (LocalAuthorization)
     // 当前用户模型只需要角色名（用于展示徽章），不需要 Id。
     roles: user.roles,
-    //#endif
   };
 }
 //#endif
@@ -85,20 +75,18 @@ export function toUserManagementOutput(user: MockUser): UserManagementOutputDto 
     displayName: user.displayName,
     avatar: user.avatar,
     isActive: user.isActive,
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     isEmailVerified: user.isEmailVerified,
     //#endif
-    //#if (LocalAuthorization)
     // 角色以 Id + 名称的结构返回：Id 用于提交，名称仅用于展示与筛选。
     roles: ROLES.filter((role) => user.roles.includes(role.name)).map((role) => ({
       id: role.id,
       name: role.name,
       displayName: role.displayName,
     })),
-    //#endif
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
-    //#if (IdentityService)
+    //#if (LocalIdentity)
     lastLoginTime: user.lastLoginTime,
     //#endif
   };

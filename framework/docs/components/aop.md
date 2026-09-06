@@ -1,8 +1,6 @@
 # 动态代理拦截器基类
 
-横切关注点——事务边界、链路追踪、缓存、日志、权限校验——往往散落在每个业务方法的开头与结尾，重复且容易遗漏。AOP（面向切面编程）通过动态代理把这些逻辑收敛到**拦截器**里，由框架在方法调用前后自动织入，业务代码保持纯净。
-
-Leistd 基于 [Castle DynamicProxy](https://github.com/castleproject/Core) 与 `Castle.Core.AsyncInterceptor` 构建拦截能力。`Leistd.DynamicProxy` 提供统一的拦截器基类 `BaseAsyncInterceptor`：它同时支持同步与异步方法的拦截，并约定了一个 `Order` 排序属性，让多个拦截器在同一服务上按确定顺序织入。框架内置的链路追踪、工作单元等组件都以它为基类编写拦截器。
+事务边界、链路追踪、日志这类横切逻辑散落在每个业务方法里，重复且易漏。Leistd 基于 [Castle DynamicProxy](https://github.com/castleproject/Core) 把它们收敛到拦截器：`BaseAsyncInterceptor` 统一同步与异步织入，`Order` 决定多个拦截器的顺序。
 
 ## 何时使用
 
@@ -21,8 +19,6 @@ Leistd 基于 [Castle DynamicProxy](https://github.com/castleproject/Core) 与 `
 dotnet add package Leistd.DynamicProxy
 ```
 
-> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
-
 ## 使用
 
 继承 `BaseAsyncInterceptor`，重写两个 `InterceptAsync` 重载（分别对应无返回值与有返回值的方法），在调用 `proceed` 前后插入横切逻辑。构造函数可正常注入依赖：
@@ -30,7 +26,7 @@ dotnet add package Leistd.DynamicProxy
 ```csharp
 using System.Diagnostics;
 using Castle.DynamicProxy;
-using Leistd.DynamicProxy;
+using Leistd.DynamicProxy.Interceptors;
 using Microsoft.Extensions.Logging;
 
 public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInterceptor
@@ -89,10 +85,6 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 | `InterceptAsync(invocation, proceedInfo, proceed)` | 来自基类，需重写；拦截**无返回值**方法，调用 `proceed(...)` 执行原方法 |
 | `InterceptAsync<TResult>(invocation, proceedInfo, proceed)` | 来自基类，需重写；拦截**有返回值**方法，返回原方法结果 |
 
-## 配置项 / Options
-
-本组件当前无配置项（无 Options 类、无 DI 扩展方法）。`Order` 通过在子类中重写属性来控制，不通过配置文件。
-
 ## 注意事项
 
 - `Order` 语义是**数值越小越先执行（越靠外层）**，可为负数。内置 `CorrelationIdInterceptor`（链路追踪）取 `Order = -1000` 以确保位于最外层、最先初始化上下文。
@@ -102,7 +94,6 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 
 ## 相关
 
-- [组件总览](./README.md)
 - [依赖注入](./dependency-injection.md)
 - [链路追踪](./tracing.md)
 - [工作单元](./unit-of-work.md)

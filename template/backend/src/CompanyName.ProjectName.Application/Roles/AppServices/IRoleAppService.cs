@@ -1,4 +1,3 @@
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
@@ -45,4 +44,3 @@ public interface IRoleAppService : IAppService
     /// </summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
-#endif

@@ -1,9 +1,7 @@
-#if (IdentityService)
+#if (LocalIdentity)
 using System.Net;
 using System.Net.Http.Json;
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Domain.Users.Constants;
-#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -16,7 +14,7 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
     [Fact]
     public async Task Unknown_roles_should_return_an_empty_page_instead_of_matching_everyone()
     {
-        using var admin = await factory.LoginAsync("admin", "Admin@123456");
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var response = await admin.Client.GetAsync(
             "/api/v1/users?offset=0&limit=10&roles=__no_such_role__");
@@ -28,11 +26,10 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
         Assert.Empty(page.Items);
     }
 
-#if (LocalAuthorization)
     [Fact]
     public async Task Roles_filter_should_normalize_whitespace_and_duplicate_values()
     {
-        using var admin = await factory.LoginAsync("admin", "Admin@123456");
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var role = Uri.EscapeDataString(AdminConstant.RoleName);
         var padded = Uri.EscapeDataString($"  {AdminConstant.RoleName}  ");
 
@@ -45,12 +42,11 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
         Assert.True(page.TotalCount >= 1);
         Assert.All(page.Items, user => Assert.Contains(AdminConstant.RoleName, user.Roles.Select(role => role.Name)));
     }
-#endif
 
     [Fact]
     public async Task Roles_filter_should_reject_more_than_twenty_items()
     {
-        using var admin = await factory.LoginAsync("admin", "Admin@123456");
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var query = string.Join("&", Enumerable.Range(0, 21).Select(i => $"roles=role-{i}"));
 
         var response = await admin.Client.GetAsync($"/api/v1/users?offset=0&limit=10&{query}");
@@ -61,7 +57,7 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
     [Fact]
     public async Task Roles_filter_should_accept_a_role_name_at_the_domain_length_limit()
     {
-        using var admin = await factory.LoginAsync("admin", "Admin@123456");
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var atLimit = new string('r', 64);
 
         var response = await admin.Client.GetAsync(
@@ -73,7 +69,7 @@ public sealed class UserRolesQueryTests(ProjectWebApplicationFactory factory)
     [Fact]
     public async Task Roles_filter_should_reject_a_role_name_over_the_domain_length_limit()
     {
-        using var admin = await factory.LoginAsync("admin", "Admin@123456");
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var overlong = new string('r', 65);
 
         var response = await admin.Client.GetAsync(

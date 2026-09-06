@@ -1,13 +1,15 @@
+using Leistd.TestBase;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Ddd.Infrastructure.Persistence;
-using Leistd.UnitOfWork.Core.Options;
-using Leistd.UnitOfWork.Core.Uow;
-using Leistd.UnitOfWork.EfCore.Database;
+using Leistd.UnitOfWork.Options;
+using Leistd.UnitOfWork;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.Tests;
 
@@ -66,20 +68,12 @@ internal class TestFilterDbContext(DbContextOptions options, IServiceProvider? s
     }
 }
 
-/// <summary>返回固定 DbContext 实例的提供器（测试不经工作单元）。</summary>
-internal sealed class FixedDbContextProvider<TDbContext>(TDbContext dbContext) : IDbContextProvider<TDbContext>
-    where TDbContext : DbContext
-{
-    public Task<TDbContext> GetDbContextAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(dbContext);
-}
-
 /// <summary>无环境工作单元的管理器（仓储立即 SaveChanges 路径）。</summary>
 internal sealed class NullUnitOfWorkManager : IUnitOfWorkManager
 {
     public IUnitOfWork? Current => null;
 
-    public Task<IUnitOfWork> BeginAsync(UnitOfWorkOptions? options = null, bool requiresNew = true)
+    public Task<IUnitOfWork> BeginAsync(UnitOfWorkOptions? options = null, bool requiresNew = false)
         => throw new NotSupportedException("测试不使用工作单元。");
 }
 

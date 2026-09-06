@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using CompanyName.ProjectName.Domain.Users.Passwords;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
@@ -10,9 +11,9 @@ public record ChangePasswordInputDto
 
     [Display(Name = "New password")]
     [Required(ErrorMessage = "{0} is required.")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0} must be between {2} and {1} characters.")]
-    [RegularExpression(@"^(?=.*[a-zA-Z])(?=.*\d).{6,}$",
-        ErrorMessage = "{0} must be at least 6 characters and contain both letters and numbers.")]
+    // 仅快速反馈；权威在服务端 PasswordPolicy
+    [StringLength(PasswordPolicy.MaximumLength, MinimumLength = PasswordPolicy.MinimumLength,
+        ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public required string NewPassword { get; init; }
 
     [Display(Name = "Confirm password")]

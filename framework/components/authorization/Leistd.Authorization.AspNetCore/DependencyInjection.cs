@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
-using Leistd.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.Authorization.AspNetCore.Permissions;
+using Leistd.Authorization.Abstractions;
 
 namespace Leistd.Authorization.AspNetCore;
 
@@ -16,6 +17,15 @@ public static class DependencyInjection
     /// 依赖调用方已注册 <see cref="IPermissionChecker"/> 与
     /// <see cref="IPermissionDefinitionManager"/>，并已调用 <c>AddAuthorization()</c>。
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddPermissionAuthorization();
+    ///
+    /// // 策略名即权限名；| 表示"任一满足"
+    /// [Authorize(Policy = "Orders.Update|Orders.Manage")]
+    /// public Task&lt;IActionResult&gt; UpdateAsync(long id) =&gt; /* ... */;
+    /// </code>
+    /// </example>
     public static IServiceCollection AddPermissionAuthorization(this IServiceCollection services)
     {
         services.AddPermissionAuthorizationCore();

@@ -15,7 +15,7 @@
           />
         </hlm-input-group>
 
-        <!--#if (IdentityService)-->
+        <!--#if (LocalIdentity)-->
         <app-faceted-filter
           [label]="statusFilterLabel()"
           [options]="activeOptions()"
@@ -36,7 +36,6 @@
           (valueChange)="onEmailVerifiedChange($any($event))"
         />
         <!--#endif-->
-        <!--#if (LocalAuthorization)-->
         <app-faceted-filter
           multiple
           [label]="roleFilterLabel()"
@@ -47,7 +46,6 @@
           [emptyLabel]="filterEmptyLabel()"
           (valuesChange)="onRolesChange($event)"
         />
-        <!--#endif-->
       </div>
 
       <div class="flex items-center justify-end gap-3 shrink-0">
@@ -69,7 +67,6 @@
         }
       </div>
     </div>
-    <!--#if (LocalAuthorization)-->
 
     <app-user-table
       [users]="users()"
@@ -84,37 +81,15 @@
       (sortingChange)="onSortingChange($event)"
       (edit)="openEditDialog($event)"
       (toggleActive)="handleToggleActive($event)"
-      <!--#if (IdentityService)-->
+      <!--#if (LocalIdentity)-->
       (resetPassword)="openResetPasswordDialog($event)"
       <!--#endif-->
       (delete)="handleDelete($event)"
       [canManageRoles]="canManageUserRoles()"
       (manageRoles)="openRolesDialog($event)"
     />
-    <!--#else-->
-
-    <app-user-table
-      [users]="users()"
-      [totalCount]="totalRecords()"
-      [pagination]="pagination()"
-      [sorting]="sorting()"
-      [loading]="loading()"
-      [filtered]="hasActiveFilters()"
-      [canUpdate]="canUpdateUser()"
-      [canDelete]="canDeleteUser()"
-      (paginationChange)="onPaginationChange($event)"
-      (sortingChange)="onSortingChange($event)"
-      (edit)="openEditDialog($event)"
-      (toggleActive)="handleToggleActive($event)"
-      <!--#if (IdentityService)-->
-      (resetPassword)="openResetPasswordDialog($event)"
-      <!--#endif-->
-      (delete)="handleDelete($event)"
-    />
-    <!--#endif-->
   </div>
 </div>
-<!--#if (LocalAuthorization)-->
 <app-user-edit-dialog
   [(visible)]="editDialogVisible"
   [loading]="editDialogLoading()"
@@ -124,24 +99,13 @@
   [canAssignRoles]="canManageUserRoles()"
   (saved)="handleSave($event)"
 />
-<!--#else-->
-<app-user-edit-dialog
-  [(visible)]="editDialogVisible"
-  [loading]="editDialogLoading()"
-  [saving]="editDialogSaving()"
-  [user]="selectedUser()"
-  (saved)="handleSave($event)"
-/>
-<!--#endif-->
-<!--#if (LocalAuthorization)-->
 <app-user-roles-dialog
   [(open)]="rolesDialogVisible"
   [user]="rolesDialogUser()"
   [availableRoles]="availableRoles()"
   (saved)="onRolesSaved()"
 />
-<!--#endif-->
-<!--#if (IdentityService)-->
+<!--#if (LocalIdentity)-->
 <app-reset-user-password-dialog
   [(visible)]="resetPasswordDialogVisible"
   [(saving)]="resetPasswordSaving"

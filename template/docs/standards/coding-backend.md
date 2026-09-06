@@ -2,9 +2,7 @@
 
 本文档为模板项目默认的 .NET 10、EF Core、DDD 后端开发规范。若新项目未采用该技术栈，不应把本文规则作为通用默认事实。
 
-> **注意**: 本文档中的所有开发活动，都必须同时遵循 **[项目通用开发规范](./coding-common.md)** 中定义的 Git 工作流和提交规范。
-
----
+同时遵循 [项目通用开发规范](./coding-common.md)。
 
 ## 1. 核心技术栈
 
@@ -15,8 +13,6 @@
 - **对象映射**: Mapster（`Leistd.ObjectMapping.Mapster` + `IObjectMapper`）
 - **依赖注入**: Microsoft.Extensions.DependencyInjection
 - **日志**: Serilog
-
----
 
 ## 2. 分层架构规范
 
@@ -53,6 +49,7 @@
 #### Domain Layer（{ProjectName}.Domain）
 - **职责**: 核心业务逻辑（领域对象行为、领域服务、业务规则）
 - **包含**: Entities、ValueObjects、DomainServices、Events、Specifications
+- **目录归类**: `Entities` 只放实体和聚合；`ValueObjects` 放领域内部的不可变值类型（包括有限状态枚举）；`Options` 只放配置绑定类型。端口的输入/输出模型按所属接口放在 `Abstractions`，不因为使用 `record` 就归为值对象。
 - **接口定义**: 第三方服务接口、持久化接口（IRepository）
 - **严格禁止**:
   - 引用 `Microsoft.EntityFrameworkCore`
@@ -178,7 +175,7 @@ public class User : FullAuditedEntity<Guid>
         Id = Guid.NewGuid();
         Username = username;
         Email = email;
-        // CreationTime 等审计字段由框架审计拦截器在保存时自动填充，
+        // CreationTime 等创建审计字段在实体进入变更跟踪时由框架自动填充，
         // 不在实体内手写；如需业务时间字段，方法应接收 DateTime now 参数（见 §3.2.1）
     }
 
@@ -398,8 +395,8 @@ public record GetUserPagedInputDto : PagedRequestDto
 ### 5.1 Leistd 框架能力优先
 
 **优先使用 Leistd 框架已有能力**:
-- ✅ 分页查询使用 `GetPagedListAsync`（来自 `Leistd.Ddd.Infrastructure.Repositories.EfCoreRepository`）
-- ✅ IQueryable 异步扩展使用 `Leistd.Ddd.Infrastructure.Repositories` 提供的方法
+- ✅ 分页查询使用 `GetPagedListAsync`（来自 `Leistd.Ddd.Infrastructure.Persistence.Repositories.EfCoreRepository`）
+- ✅ IQueryable 异步扩展使用 `Leistd.Ddd.Infrastructure.Persistence.Repositories` 提供的方法
 - ✅ 实体基类使用 `Entity<TKey>`、`FullAuditedEntity<TKey>` 等
 - ✅ DTO 映射使用 Mapster（继承 `MapsterProfile` 声明映射，注册结构参考现有 Profile）
 
@@ -451,7 +448,30 @@ var apiKeys = await query
 
 ### 6.1 异常类型
 
-使用 `Leistd.Exception.Core` 提供的异常类型。**异常类型 → HTTP 状态码的完整映射以 [API 规范](./api.md) §4「异常类型映射」为单一权威来源**（含 `ConflictException`/409 等），此处不重复维护，避免不一致。
+使用 `Leistd.ExceptionHandling.Core` 提供的异常类型。**异常类型 → HTTP 状态码的完整映射以 [API 规范](./api.md) §4「异常类型映射」为单一权威来源**（含 `ConflictException`/409 等），此处不重复维护，避免不一致。
+
+#### 用哪一族：看代码在不在请求路径上
+
+| 位置 | 用什么 | 为什么 |
+| --- | --- | --- |
+| **请求路径**（Controller、AppService、Domain、Infrastructure 里被请求触发的代码，含 DbContext 解析器一类每请求都会走的组件） | **必须**用 `Leistd.ExceptionHandling.Core` 家族 | 全局处理器只认这一族。其余异常一律被兜底转成 500 + "系统错误"，**原始消息被丢弃**，同时产出 Error 级日志加堆栈 |
+| **启动期 / 组合期**（`Program.cs`、`Add*Services`、`IValidateOptions`） | BCL 异常（`InvalidOperationException` 等） | 没有 HTTP 响应也没有终端用户，进程就该起不来 |
+| **参数与编程契约**（`ArgumentException`、重复 key、不该发生的状态） | BCL 异常 | 是缺陷不是业务失败，不该被翻译成状态码 |
+| **一次性作业**（DbMigrator 之类控制台入口） | BCL 异常 | 同启动期；同一能力若同时有请求入口，由请求入口转换为 `Leistd.ExceptionHandling.Core` 异常 |
+
+在请求路径上用 BCL 异常的三个副作用（都不会立刻暴露，所以容易漏）：
+
+1. **信息丢失**：客户端拿到的永远是"系统错误"，"这个租户没配连接"与"数据库连不上"无法区分。
+2. **日志级别错位**：兜底走 Error + 堆栈。运营数据缺失这类问题会持续刷 Error，久了告警就没人看。
+3. **重试语义错误**：500 对调用方意味着"可重试"。而配置缺失重试一万次也一样，会让服务间调用的重试策略空转。
+
+选型对照：配置/数据缺失 → `NotFoundException`(404)；状态冲突 → `ConflictException`(409)；上游或 Secret 后端暂时不可达 → `ServiceUnavailableException`(503，语义上可重试)；确属服务端故障 → **显式** `InternalServerException`(500)，别让兜底处理器替你决定。
+
+#### 配置错误在启动期失败，不要留到运行期
+
+缺连接串、格式写错的 `DomainFormat` 这类**部署配置错误**，若留到运行期，表现是每个请求失败一次、而进程"健康"地跑着。用 `AddOptions<T>().Validate(...).ValidateOnStart()`。
+
+> **组合期不能直接读配置来做判断。**`Add*Services(configuration)` 拿到的配置还不是最终值——集成测试通过 `WebApplicationFactory` 追加的覆盖此刻尚未合入，直接判断会误伤测试。要用 `.Configure<IConfiguration>((o, c) => ...)` 从 DI 取，让求值发生在配置定案之后。
 
 **示例**:
 ```csharp
@@ -521,42 +541,3 @@ logger.LogError(ex, "创建用户失败: {Username}", input.Username);
 - **以下留在表现层属合理边界、不算越层**（避免过度下沉）：后台服务取请求作用域服务推进工单状态机（调度编排）、连接/端点准入的存在性探针（等价鉴权）、后台 Worker 直写技术性日志实体（fire-and-forget 技术数据）、下发外部的 UTC 线缆时间戳直接用明确 UTC 取法（见 §3.2.1）。
 
 ---
-
-## 附录：规范检查清单
-
-### ✅ 分层架构检查
-
-- [ ] HTTP 相关处理保留在 API 层
-- [ ] Application 层协调业务逻辑
-- [ ] Domain 层包含核心业务逻辑
-- [ ] Infrastructure 层负责技术实现
-- [ ] Domain 层无 EF Core 引用
-
-### ✅ 编码规范检查
-
-- [ ] 使用主构造函数
-- [ ] 使用文件范围 namespace
-- [ ] DTO 使用 record 类型
-- [ ] 异步方法名以 `Async` 结尾
-- [ ] 实体使用充血模型
-- [ ] 时间通过 `IClock` 获取，无 `DateTime.Now/UtcNow` 直用
-- [ ] 实体时间方法接收 `now` 参数（不在实体内取时间）
-
-### ✅ 命名规范检查
-
-- [ ] DTO 命名符合规范
-- [ ] Dto 参数命名为 `input`
-- [ ] 返回对象命名为 `result`
-- [ ] 仓储注入命名为 `{entity}Repository`
-- [ ] 领域服务命名为 `{Entity}DomainService`
-
-### ✅ Leistd 框架使用检查
-
-- [ ] 优先使用 Leistd 框架已有能力
-- [ ] 应用服务继承自 `IAppService`
-- [ ] 分页查询使用 `GetPagedListAsync`
-- [ ] DTO 映射使用 Mapster（`IObjectMapper` + `MapsterProfile`）
-- [ ] 使用 Leistd 提供的异步扩展方法
-
----
-

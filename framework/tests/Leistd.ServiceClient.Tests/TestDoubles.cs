@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.ServiceClient.Tests;
 
@@ -30,11 +31,22 @@ internal sealed class CaptureHandler : HttpMessageHandler
 /// <summary>
 /// 抛出异常的终端处理器。
 /// </summary>
-internal sealed class ThrowingHandler(Func<CancellationToken, System.Exception> exceptionFactory) : HttpMessageHandler
+internal sealed class ThrowingHandler(Func<CancellationToken, Exception> exceptionFactory) : HttpMessageHandler
 {
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken) =>
         throw exceptionFactory(cancellationToken);
+}
+
+internal sealed class MutableOptionsMonitor<TOptions>(TOptions currentValue) : IOptionsMonitor<TOptions>
+{
+    public TOptions CurrentValue { get; private set; } = currentValue;
+
+    public TOptions Get(string? name) => CurrentValue;
+
+    public IDisposable? OnChange(Action<TOptions, string?> listener) => null;
+
+    public void Set(TOptions value) => CurrentValue = value;
 }
 
 /// <summary>
@@ -42,14 +54,14 @@ internal sealed class ThrowingHandler(Func<CancellationToken, System.Exception> 
 /// </summary>
 internal sealed class ListLogger : ILogger
 {
-    public List<(LogLevel Level, string Message, System.Exception? Exception)> Entries { get; } = [];
+    public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
     public bool IsEnabled(LogLevel logLevel) => true;
 
     public void Log<TState>(
-        LogLevel logLevel, EventId eventId, TState state, System.Exception? exception,
-        Func<TState, System.Exception?, string> formatter) =>
+        LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter) =>
         Entries.Add((logLevel, formatter(state, exception), exception));
 }

@@ -1,4 +1,3 @@
-//#if (MultiTenancy)
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -120,7 +119,7 @@ describe('TenantEditDialog', () => {
     dialog().tenantForm.displayName().value.set('   ');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');
     // 尾部空格：密码里的空白是密码的一部分，被 trim 掉用户就再也登不进去。
-    dialog().tenantForm.adminPassword().value.set('Passw0rd! ');
+    dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1 ');
     await fixture.whenStable();
 
     dialog().onSubmit();
@@ -130,8 +129,8 @@ describe('TenantEditDialog', () => {
     // 显示名可选：空字符串会被存成一个空的显示名，比不填更难改回来。
     expect(dto.displayName).toBeUndefined();
     expect(dto.adminEmail).toBe('admin@example.test');
-    expect(dto.adminPassword).toBe('Passw0rd! ');
-    expect(dto.databaseMode).toBe('SharedDatabase');
+    expect(dto.adminPassword).toBe('TenantSpec!Pw1 ');
+    expect(dto.databaseMode).toBe('sharedDatabase');
     expect(dto.runtimeSecretReference).toBeUndefined();
     expect(dto.migrationSecretReference).toBeUndefined();
   });
@@ -139,8 +138,8 @@ describe('TenantEditDialog', () => {
   it('独立数据库模式要求运行时和迁移 Secret 引用', async () => {
     dialog().tenantForm.name().value.set('acme');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');
-    dialog().tenantForm.adminPassword().value.set('Passw0rd!');
-    dialog().tenantForm.databaseMode().value.set('DedicatedDatabase');
+    dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
+    dialog().tenantForm.databaseMode().value.set('dedicatedDatabase');
     await fixture.whenStable();
 
     expect(document.getElementById('tenant-runtime-secret-reference')).not.toBeNull();
@@ -154,7 +153,7 @@ describe('TenantEditDialog', () => {
 
     expect(host.saved[0]).toEqual(
       jasmine.objectContaining({
-        databaseMode: 'DedicatedDatabase',
+        databaseMode: 'dedicatedDatabase',
         runtimeSecretReference: 'vault://runtime/acme',
         migrationSecretReference: 'vault://migration/acme',
       }),
@@ -174,4 +173,3 @@ describe('TenantEditDialog', () => {
     expect(host.saved[0]).toEqual({ name: 'acme-renamed', displayName: 'Acme Inc.' });
   });
 });
-//#endif

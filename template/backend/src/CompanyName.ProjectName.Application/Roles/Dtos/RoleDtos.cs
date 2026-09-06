@@ -1,4 +1,3 @@
-#if (LocalAuthorization)
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
 
@@ -107,4 +106,3 @@ public record UpdateRoleInputDto
 
     public bool IsDefault { get; init; }
 }
-#endif

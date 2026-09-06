@@ -48,14 +48,10 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-//#endif
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
-//#if (LocalAuthorization)
 import { PERMISSIONS } from '../../../../shared/models/permission';
-//#endif
 import {
   paginationFromQuery,
   sortingFromQuery,
@@ -117,9 +113,7 @@ export class OpenApplications {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
-  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
-  //#endif
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
@@ -140,7 +134,6 @@ export class OpenApplications {
     sortingFromQuery(this.queryParams(), APPLICATION_SORT_COLUMNS, DEFAULT_APPLICATION_SORTING),
   );
 
-  //#if (LocalAuthorization)
   // 操作入口按权限裁剪；前端隐藏只影响体验，后端仍逐个请求校验。
   readonly canCreate = computed(() =>
     this.authorizationService.has(PERMISSIONS.openApplications.create),
@@ -154,13 +147,6 @@ export class OpenApplications {
   readonly canResetSecret = computed(() =>
     this.authorizationService.has(PERMISSIONS.openApplications.resetSecret),
   );
-  //#else
-  // 未启用权限模块：后端对应端点只要求已认证，前端不做额外裁剪。
-  readonly canCreate = computed(() => true);
-  readonly canUpdate = computed(() => true);
-  readonly canDelete = computed(() => true);
-  readonly canResetSecret = computed(() => true);
-  //#endif
 
   editDialogVisible = signal(false);
   editDialogLoading = signal(false);
@@ -169,6 +155,21 @@ export class OpenApplications {
 
   // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
   secretDialogVisible = signal(false);
+
+  /**
+   * 弹窗可见性变化的唯一入口。
+   *
+   * 关闭时连带清空 secret 与标题：留着的话，下一次误打开弹窗会显示上一次的 secret。
+   * 这是状态正确性，不是"擦除内存明文"——JavaScript 字符串无法可靠擦除，
+   * 服务端的保证是"一次生成、一次返回、以后不可读取"。
+   */
+  onSecretDialogVisibleChange(visible: boolean): void {
+    if (!visible) {
+      this.secretValue.set('');
+      this.secretHeader.set('');
+    }
+    this.secretDialogVisible.set(visible);
+  }
   secretValue = signal('');
   secretHeader = signal('');
 

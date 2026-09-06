@@ -1,15 +1,17 @@
-#if (LocalAuthorization)
-using System.Linq.Dynamic.Core;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;
+using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Exception.Core;
-using Leistd.ObjectMapping.Core;
 using Microsoft.Extensions.Logging;
+using Leistd.Authorization.Constants;
+using Leistd.ExceptionHandling;
+using Leistd.ObjectMapping;
+using Leistd.Authorization.Abstractions;
+using Leistd.ObjectMapping.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
 
@@ -39,14 +41,39 @@ public class RoleAppService(
 
         var totalCount = await asyncExecuter.LongCountAsync(query, cancellationToken);
 
-        // 默认按排序号再按名称；显式排序由列表页的列头传入。
-        var sorting = string.IsNullOrWhiteSpace(input.Sorting) ? "sort asc, name asc" : input.Sorting;
         var roles = await asyncExecuter.ToListAsync(
-            query.OrderBy(sorting).Skip(input.Offset).Take(input.Limit),
+            ApplySorting(query, input.Sorting).Skip(input.Offset).Take(input.Limit),
             cancellationToken);
 
         var result = await MapToOutputsAsync(roles, cancellationToken);
         return new PagedResultDto<RoleOutputDto>(totalCount, result);
+    }
+
+    /// <summary>
+    /// 角色列表的可排序字段
+    /// </summary>
+    /// <remarks>
+    /// <para>不给"未传 sorting"单开一条分支：<see cref="SortingRequest.Parse"/> 已经把缺省字段
+    /// 定为 <c>sort</c>，于是省略排序与显式 <c>sort asc</c> 走的是同一段代码、结果必然一致。
+    /// 这两者必须一致——列表页即使 URL 上没有排序参数，也会把默认排序状态转成 <c>sort asc</c>
+    /// 发出来，所以它们是同一个列表的两种调用方式；各写一遍就会各自漂移。</para>
+    /// <para>排序号相同时按名称，与 <see cref="GetAllAsync"/> 同口径。名称始终升序：
+    /// 它是给人看的次序，不是调用方选的排序键。末尾固定追加 <c>Id</c> 收口——排序键有并列值时，
+    /// 缺少稳定次序会让同一行在翻页时重复出现或整行漏掉。</para>
+    /// </remarks>
+    private static IQueryable<Role> ApplySorting(IQueryable<Role> query, string? sorting)
+    {
+        var (field, descending) = SortingRequest.Parse(sorting, "sort");
+
+        var ordered = field switch
+        {
+            "displayName" => SortingRequest.By(query, r => r.DisplayName, descending),
+            "sort" => SortingRequest.By(query, r => r.Sort, descending).ThenBy(r => r.Name),
+            "creationTime" => SortingRequest.By(query, r => r.CreationTime, descending),
+            _ => throw SortingRequest.UnknownField(field)
+        };
+
+        return ordered.ThenBy(r => r.Id);
     }
 
     public async Task<IReadOnlyList<RoleBriefDto>> GetAllAsync(CancellationToken cancellationToken = default)
@@ -75,7 +102,7 @@ public class RoleAppService(
         {
             throw new BadRequestException($"Role '{name}' already exists.")
 #if (IncludeLocalization)
-                .WithLocalization("Role:NameAlreadyUsed")
+                .WithCode("Role:NameAlreadyUsed")
                 .WithData("Name", name)
 #endif
                 ;
@@ -90,7 +117,7 @@ public class RoleAppService(
             sort: input.Sort);
 
         await roleRepository.InsertAsync(role, cancellationToken);
-        logger.LogInformation("创建角色成功 {Name} (ID: {Id})", role.Name, role.Id);
+        logger.LogInformation("Role created: {Name} (ID: {Id})", role.Name, role.Id);
 
         return await MapToOutputAsync(role, cancellationToken);
     }
@@ -114,7 +141,7 @@ public class RoleAppService(
         }
 
         await roleRepository.UpdateAsync(role, cancellationToken);
-        logger.LogInformation("更新角色成功 {Name} (ID: {Id})", role.Name, role.Id);
+        logger.LogInformation("Role updated: {Name} (ID: {Id})", role.Name, role.Id);
 
         return await MapToOutputAsync(role, cancellationToken);
     }
@@ -136,11 +163,11 @@ public class RoleAppService(
             return;
         }
 
-        if (role.IsStatic)
+        if (!role.CanBeDeleted())
         {
             throw new BadRequestException($"Built-in role '{role.Name}' cannot be deleted.")
 #if (IncludeLocalization)
-                .WithLocalization("Role:StaticRoleCannotBeDeleted")
+                .WithCode("Role:StaticRoleCannotBeDeleted")
                 .WithData("Name", role.Name)
 #endif
                 ;
@@ -152,20 +179,15 @@ public class RoleAppService(
             throw new BadRequestException(
                     $"Role '{role.Name}' still has {userCount} assigned user(s). Reassign them before deleting.")
 #if (IncludeLocalization)
-                .WithLocalization("Role:RoleStillAssigned")
+                .WithCode("Role:RoleStillAssigned")
                 .WithData("Name", role.Name)
                 .WithData("UserCount", userCount.ToString())
 #endif
                 ;
         }
 
-        // 先删角色，再清理授权——两者无法做成一个事务：授权管理器持有的是外层请求的
-        // DbContext，而工作单元会另开一个 DI scope 和另一个 DbContext，罩上去也只是两次独立提交。
-        // 为此让通用授权组件反过来依赖工作单元组件，代价远大于收益。
-        //
-        // 于是选一个无害的失败形态：第二步失败时留下的是"角色已删、授予行残留"，
-        // 而角色 Id 是 Guid v7 永不重用，这些行无人可及；RemoveProviderAsync 幂等，重试或周期清理即可。
-        // 反过来先清权限，失败时会留下"角色还在、权限已清空"——一个看着能用、实际什么都不能做的角色。
+        // 角色删除与授权清理独立提交；先删角色，使清理失败时的残留授予不可达。
+        // 角色 Id 不复用且 RemoveProviderAsync 幂等，因此可安全重试清理。
         await roleRepository.DeleteAsync(role, cancellationToken);
 
         // 角色被永久删除，授予与授权版本一并清理。
@@ -176,7 +198,7 @@ public class RoleAppService(
             id.ToString(),
             cancellationToken);
 
-        logger.LogInformation("删除角色成功 {Name} (ID: {Id})", role.Name, role.Id);
+        logger.LogInformation("Role deleted: {Name} (ID: {Id})", role.Name, role.Id);
     }
 
     private async Task<Role> GetRoleOrThrowAsync(Guid id, CancellationToken cancellationToken)
@@ -186,7 +208,7 @@ public class RoleAppService(
         {
             throw new NotFoundException($"Role '{id}' was not found.")
 #if (IncludeLocalization)
-                .WithLocalization("Role:NotFound")
+                .WithCode("Role:NotFound")
                 .WithData("Id", id.ToString())
 #endif
                 ;
@@ -248,4 +270,3 @@ public class RoleAppService(
         };
     }
 }
-#endif

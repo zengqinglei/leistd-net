@@ -11,28 +11,24 @@ namespace Leistd.ServiceClient.AspNetCore.Claims;
 /// 在认证阶段恢复服务用户上下文的 <see cref="IClaimsTransformation"/>。
 /// </summary>
 /// <remarks>
-/// 恢复必须发生在这里而不能只靠中间件改写 <c>HttpContext.User</c>：
-/// 授权策略显式声明认证 scheme 时（如模板的默认策略），<c>PolicyEvaluator</c> 会按 scheme
-/// **重新认证**并用其结果覆盖 <c>HttpContext.User</c>——中间件改写的主体在该路径上会被丢弃。
-/// <see cref="IClaimsTransformation"/> 在每一次 <c>AuthenticateAsync</c> 内部生效（含策略重认证），
-/// 是唯一对两条路径都成立的挂载点。转换幂等：已恢复过的主体原样返回。
-///
-/// 信任判定见 <c>ServiceUserContext.IsTrustedServiceCall</c>：调用方须是
-/// <see cref="Leistd.Security.Claims.ClientSubject"/> 契约的机器主体。
+/// 恢复必须在 <see cref="IClaimsTransformation"/> 里而不能只靠中间件改写 <c>HttpContext.User</c>：
+/// 授权策略显式声明认证 scheme 时，<c>PolicyEvaluator</c> 会重新认证并覆盖中间件写入的主体。
+/// 转换幂等：已恢复过的主体原样返回。
+/// 信任判定见 <c>ServiceUserContext.IsTrustedServiceCall</c>——调用方须是 <see cref="Leistd.Security.Claims.ClientSubject"/> 契约的机器主体。
 /// </remarks>
 /// <param name="httpContextAccessor">HTTP 上下文访问器（读取请求头）</param>
-/// <param name="options">恢复配置</param>
+/// <param name="optionsMonitor">恢复配置监视器</param>
 /// <param name="logger">日志</param>
 public sealed class ServiceUserContextClaimsTransformation(
     IHttpContextAccessor httpContextAccessor,
-    IOptions<ServiceUserContextOptions> options,
+    IOptionsMonitor<ServiceUserContextOptions> optionsMonitor,
     ILogger<ServiceUserContextClaimsTransformation> logger) : IClaimsTransformation
 {
     /// <inheritdoc />
     public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
-        var opts = options.Value;
-        if (!opts.Enable ||
+        var opts = optionsMonitor.CurrentValue;
+        if (!opts.Enabled ||
             ServiceUserContext.IsEnriched(principal, opts) ||
             !ServiceUserContext.IsTrustedServiceCall(principal, opts))
         {
@@ -52,7 +48,7 @@ public sealed class ServiceUserContextClaimsTransformation(
         }
 
         logger.LogDebug(
-            "已从服务调用头恢复用户上下文: {UserId}",
+            "Restored user context from service invocation headers: {UserId}",
             restored.FindFirst(ServiceUserContext.SubjectClaimType)?.Value);
         return Task.FromResult(restored);
     }

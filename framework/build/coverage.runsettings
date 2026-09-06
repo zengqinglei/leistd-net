@@ -3,7 +3,7 @@
   框架测试覆盖率配置（P8 骨架）。
   - 收集器：coverlet.collector（cobertura 格式），配合 dotnet test 的 XPlat Code Coverage 收集器。
   - 排除：接口/DTO/marker、生成代码、测试项目自身。
-  - 阈值策略（分层，见 docs/assessments 单测评估）：
+  - 阈值策略（分层）：
       Tier A（UnitOfWork.Core / Exception.* / Security.Core / Auditing.EfCore /
               DI.DynamicProxy / Tracing.Core）目标 95% 行 / 90% 分支；
       Tier B 其余有逻辑组件 80% / 70%；Tier C（接口/DTO）不设门槛。

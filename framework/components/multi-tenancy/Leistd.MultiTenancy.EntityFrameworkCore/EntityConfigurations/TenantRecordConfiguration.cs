@@ -1,16 +1,24 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 
-namespace Leistd.MultiTenancy.EntityFrameworkCore;
+namespace Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
 
 /// <summary>
-/// TenantRecord EF Core 实体配置
+/// 配置租户记录的 EF Core 映射。
 /// </summary>
 public class TenantRecordConfiguration : IEntityTypeConfiguration<TenantRecord>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<TenantRecord> builder)
     {
         builder.HasKey(x => x.Id);
+
+        // 并发令牌：租户生命周期的所有写路径（启停、改名、连接配置创建与修改）
+        // 都要竞争它，把"改路由前必须已停用"从一句注释变成数据库层面的不变量
+        builder.Property(x => x.Version)
+            .IsRequired()
+            .IsConcurrencyToken();
 
         builder.Property(x => x.Name)
             .HasMaxLength(64)

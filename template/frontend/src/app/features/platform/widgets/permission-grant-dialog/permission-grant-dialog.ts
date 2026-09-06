@@ -107,7 +107,7 @@ export class PermissionGrantDialog {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly groups = signal<PermissionGroupView[]>([]);
-  readonly revision = signal(0);
+  readonly version = signal(0);
 
   /** 已授予的权限名。 */
   private readonly granted = signal<ReadonlySet<string>>(new Set<string>());
@@ -232,7 +232,7 @@ export class PermissionGrantDialog {
     this.loadedRoleId.set(null);
     this.granted.set(new Set<string>());
     this.expandedGroups.set(new Set<string>());
-    this.revision.set(0);
+    this.version.set(0);
   }
 
   isGranted(name: string): boolean {
@@ -273,7 +273,7 @@ export class PermissionGrantDialog {
     this.saving.set(true);
     this.permissionService
       .replaceRoleGrants(roleId, {
-        expectedRevision: this.revision(),
+        expectedVersion: this.version(),
         permissionNames: [...this.granted()],
       })
       .subscribe({
@@ -319,7 +319,7 @@ export class PermissionGrantDialog {
   }
 
   private applyGrants(grants: PermissionGrantsOutputDto): void {
-    this.revision.set(grants.revision);
+    this.version.set(grants.version);
     this.loadedRoleId.set(grants.providerKey);
 
     const granted = new Set(

@@ -42,8 +42,7 @@
       "minLength": "至少需要 {{min}} 个字符",
       "maxLength": "不能超过 {{max}} 个字符",
       "usernamePattern": "只能为 3~64 位字母、数字或下划线",
-      "passwordRule": "密码需为 8~20 位，且包含大写字母、小写字母、数字和特殊字符",
-      "passwordWeak": "密码至少 6 位，且需包含字母和数字",
+      "passwordRule": "密码至少 12 位，最长 256 位。更长的口令短语比短而复杂的密码更安全。",
       "passwordMismatch": "两次输入的密码不一致",
       "passwordSameAsCurrent": "新密码不能与当前密码相同",
       "phonePattern": "只能包含数字、空格及 + - ( ) 符号"
@@ -143,9 +142,7 @@
       "usersTitle": "用户管理",
       "usersDesc": "完整的 CRUD 操作与权限控制",
       "themeTitle": "主题系统",
-      "themeDesc": "深色模式 + Tailwind CSS + Spartan UI",
-      "authDescWithoutRoles": "基于 Cookie 的认证",
-      "usersDescWithoutRoles": "完整的增删改查"
+      "themeDesc": "深色模式 + Tailwind CSS + Spartan UI"
     }
   },
   "theme": {
@@ -172,7 +169,7 @@
     "changePassword": {
       "header": "修改密码",
       "subtitle": "请输入当前密码，并设置新的登录密码。",
-      "rules": "新密码规则：8~20 位，且必须同时包含大写字母、小写字母、数字和特殊字符。",
+      "rules": "密码至少 12 位，最长 256 位。更长的口令短语比短而复杂的密码更安全。",
       "currentPassword": "当前密码",
       "newPassword": "新密码",
       "confirmPassword": "确认新密码",
@@ -250,7 +247,7 @@
       "resendCountdown": "{{seconds}}s 后重发",
       "sendCode": "获取验证码",
       "password": "密码",
-      "passwordPlaceholder": "包含字母和数字，6位以上",
+      "passwordPlaceholder": "至少 12 位",
       "confirmPassword": "确认密码",
       "confirmPasswordPlaceholder": "再次输入密码",
       "submit": "注册账号",
@@ -356,20 +353,19 @@
       "displayNameLabel": "显示名称",
       "displayNamePlaceholder": "请输入显示名称",
       "passwordLabel": "初始密码",
-      "passwordPlaceholder": "请输入初始密码",
+      "passwordPlaceholder": "至少 12 位",
       "passwordRequired": "请输入初始密码",
       "rolesLabel": "角色",
       "rolesPlaceholder": "请选择角色",
       "activeTitle": "启用用户",
       "activeHint": "禁用后用户无法登录和调用受保护接口",
       "emailVerifiedTitle": "邮箱已验证",
-      "emailVerifiedHint": "用于管理邮箱验证状态",
-      "descriptionWithoutRoles": "管理该账号的资料与状态。"
+      "emailVerifiedHint": "用于管理邮箱验证状态"
     },
     "resetDialog": {
       "header": "重置用户密码",
       "warning": "重置后用户需要使用新密码登录。",
-      "ruleHint": "新密码规则：8~20 位，且必须同时包含大写字母、小写字母、数字和特殊字符。",
+      "ruleHint": "密码至少 12 位，最长 256 位。更长的口令短语比短而复杂的密码更安全。",
       "newPasswordLabel": "新密码",
       "newPasswordPlaceholder": "请输入新密码",
       "confirmButton": "确认重置"

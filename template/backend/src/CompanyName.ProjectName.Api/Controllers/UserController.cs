@@ -1,7 +1,5 @@
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
-#endif
 using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
@@ -15,15 +13,13 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// </summary>
 [Authorize]
 [Route("api/v1/users")]
-public class UserController(IUserAppService userAppService) : BaseController
+public sealed class UserController(IUserAppService userAppService) : BaseController
 {
     /// <summary>
     /// 获取用户列表（需要用户查看权限）
     /// </summary>
     [HttpGet]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Default)]
-#endif
     public async Task<PagedResultDto<UserManagementOutputDto>> GetPagedListAsync(
         [FromQuery] GetUserPagedInputDto input,
         CancellationToken cancellationToken)
@@ -35,9 +31,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// 获取用户详情（需要用户查看权限）
     /// </summary>
     [HttpGet("{id}")]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Default)]
-#endif
     public async Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken)
     {
         return await userAppService.GetAsync(id, cancellationToken);
@@ -47,9 +41,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// 创建用户（需要用户创建权限）
     /// </summary>
     [HttpPost]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Create)]
-#endif
     public async Task<UserManagementOutputDto> CreateAsync(
         [FromBody] CreateUserInputDto input,
         CancellationToken cancellationToken)
@@ -61,9 +53,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// 更新用户（需要用户更新权限）
     /// </summary>
     [HttpPut("{id}")]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Update)]
-#endif
     public async Task<UserManagementOutputDto> UpdateAsync(
         Guid id,
         [FromBody] UpdateUserInputDto input,
@@ -76,9 +66,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// 启用用户（需要用户更新权限）
     /// </summary>
     [HttpPatch("{id}/enable")]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Update)]
-#endif
     public async Task EnableAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.EnableAsync(id, cancellationToken);
@@ -88,9 +76,7 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// 禁用用户（需要用户更新权限）
     /// </summary>
     [HttpPatch("{id}/disable")]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Update)]
-#endif
     public async Task DisableAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.DisableAsync(id, cancellationToken);
@@ -99,11 +85,9 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// <summary>
     /// 重置用户密码（需要用户更新权限）
     /// </summary>
-#if (IdentityService)
+#if (LocalIdentity)
     [HttpPost("{id}/reset-password")]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Update)]
-#endif
     public async Task ResetPasswordAsync(
         Guid id,
         [FromBody] ResetUserPasswordInputDto input,
@@ -117,15 +101,12 @@ public class UserController(IUserAppService userAppService) : BaseController
     /// 删除用户（需要用户删除权限）
     /// </summary>
     [HttpDelete("{id}")]
-#if (LocalAuthorization)
     [Authorize(Policy = PermissionConstant.Users.Delete)]
-#endif
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.DeleteAsync(id, cancellationToken);
     }
 
-#if (LocalAuthorization)
     /// <summary>
     /// 查询用户角色（需要角色分配权限）
     /// </summary>
@@ -152,5 +133,4 @@ public class UserController(IUserAppService userAppService) : BaseController
     {
         return await userAppService.ReplaceRolesAsync(id, input, cancellationToken);
     }
-#endif
 }

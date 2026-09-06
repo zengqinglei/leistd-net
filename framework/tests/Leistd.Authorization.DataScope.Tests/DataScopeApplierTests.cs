@@ -3,6 +3,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.Authorization.DataScope.Services;
+using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.DataScope.Tests;
 

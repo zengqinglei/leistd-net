@@ -10,23 +10,17 @@ namespace Leistd.ServiceClient.AspNetCore.Middlewares;
 /// 被调方用户上下文中间件（置于 <c>UseAuthentication</c> 之后、<c>UseAuthorization</c> 之前）。
 /// </summary>
 /// <remarks>
-/// 两项职责：
-/// <list type="number">
-/// <item>调用方**不受信**时按配置剥离请求中的 <c>X-User-*</c> 头，阻断伪造链路；</item>
-/// <item>受信但认证阶段未恢复（宿主未注册 <see cref="ServiceUserContextClaimsTransformation"/>
-/// 的兜底路径）时，恢复 <c>HttpContext.User</c>。</item>
-/// </list>
-/// 信任边界见 <see cref="ServiceUserContextClaimsTransformation"/>：仅采信已认证 client
-/// credentials 主体（<c>sub</c> 为 <see cref="Leistd.Security.Claims.ClientSubject"/> 契约形态，
-/// 且持有 <see cref="Leistd.ServiceClient.Constants.ServiceClientScopes.Delegation"/> 委托 scope）
-/// 携带的用户头。
+/// 两项职责：调用方不受信时按配置剥离请求中的 <c>X-User-*</c> 头，阻断伪造链路；
+/// 受信但认证阶段未恢复时，恢复 <c>HttpContext.User</c>。
+/// 信任边界见 <see cref="ServiceUserContextClaimsTransformation"/>——仅采信已认证 client
+/// credentials 主体携带的用户头。
 /// </remarks>
 /// <param name="next">下一个中间件</param>
-/// <param name="options">恢复配置</param>
+/// <param name="optionsMonitor">恢复配置监视器</param>
 /// <param name="logger">日志</param>
 public class ServiceUserContextMiddleware(
     RequestDelegate next,
-    IOptions<ServiceUserContextOptions> options,
+    IOptionsMonitor<ServiceUserContextOptions> optionsMonitor,
     ILogger<ServiceUserContextMiddleware> logger)
 {
     /// <summary>
@@ -35,8 +29,8 @@ public class ServiceUserContextMiddleware(
     /// <param name="context">HTTP 上下文</param>
     public async Task InvokeAsync(HttpContext context)
     {
-        var opts = options.Value;
-        if (!opts.Enable)
+        var opts = optionsMonitor.CurrentValue;
+        if (!opts.Enabled)
         {
             await next(context);
             return;
@@ -56,7 +50,7 @@ public class ServiceUserContextMiddleware(
             {
                 context.User = restored;
                 logger.LogDebug(
-                    "已从服务调用头恢复用户上下文: {UserId}",
+                    "Restored user context from service invocation headers: {UserId}",
                     restored.FindFirst(ServiceUserContext.SubjectClaimType)?.Value);
             }
         }
@@ -71,7 +65,7 @@ public class ServiceUserContextMiddleware(
     private static void RemoveUserHeaders(HttpContext context, ServiceUserContextOptions opts)
     {
         context.Request.Headers.Remove(opts.UserIdHeader);
-        context.Request.Headers.Remove(opts.UserNameHeader);
+        context.Request.Headers.Remove(opts.UsernameHeader);
 
         // 注意：租户头（X-Tenant-Id）不在剥离之列。
         // 多租户解析链的主体优先级已使伪造头失效——已认证主体的租户由 tenant_id claim 定案，

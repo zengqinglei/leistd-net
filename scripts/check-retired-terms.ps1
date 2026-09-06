@@ -7,9 +7,15 @@
     文档与注释不会因为类型删除而编译失败，因此漂移只能靠扫描发现——此前就出现过
     随包文档仍在教 `PermissionGrantEffect` 的情况。
 
-    两类规则，都刻意收窄，宁可漏也不要吵：
+    **一条规则值得留在这里，前提是那个错误会复发。**只守着"已经过去且不会回来的事"的规则，
+    修完就该删——否则闸门表会一路堆积，每条都有维护成本与误报面，最终没人再看它。
+    判据示例：AI 按训练记忆写已删除的 API（会复发，留）；某次移植遗留的跨语言对照
+    （一次性，清理完即删除该规则，2026-09-03 已按此删掉 java 规则）。
+
+    三类规则，都刻意收窄，宁可漏也不要吵：
       1. 已删除的符号 —— 名字本身就是证据；
-      2. 断言旧模型的**短语** —— 不用裸词。"三态""显式拒绝"在别处是合法的：
+      2. 外部参考框架的痕迹 —— 交付面里不应出现"照 ABP 怎么做"这类指引；
+      3. 断言旧模型的**短语** —— 不用裸词。"三态""显式拒绝"在别处是合法的：
          主题切换是亮/暗/跟随系统三态，资源实例授权保留了自己的 ResourceGrantEffect，
          而"没有显式拒绝"这类否定句正是新模型的正确表述。裸词黑名单会把它们一并报掉，
          一个吵闹的闸门很快就会被关掉。
@@ -61,6 +67,44 @@ $retiredSymbols = @(
     "PermissionGrantRecord\.ForRole"
 )
 
+# 外部参考框架的痕迹。设计时参考过别的框架是正常的，但**交付面里不该留下指向它的引用**：
+#
+#   - framework/docs/ 与 template/ 是对外分发内容，出现"参考 ABP 的做法"会把使用者引向
+#     一份我们并不遵循、也不会同步的外部契约；
+#   - docs/ 里的稳定规范同理，读者无法判断哪部分是我们的决定、哪部分是照抄。
+#
+# 历史 assessment 与 plan 里记录"当时参考了什么"是证据，因此走 $historicalPaths 豁免。
+#
+# 用单词边界而不是子串：abp 是常见的 base64/哈希片段（package-lock 已排除，但 .md 里的
+# 校验和、示例令牌同样会命中），裸子串会把它们一并报掉。
+#
+# 类型名那条必须显式关掉大小写不敏感（`(?-i:...)`）：PowerShell 的 `-match` 默认忽略大小写，
+# 于是 `[A-Z]` 连小写也匹配，`abpx` 这种普通词会被当成 `AbpXxx` 类型名报出来。
+# 自测里就有这个样例，别把它删掉。
+$foreignFrameworkSymbols = @(
+    "\bABP\b",
+    "(?-i:\bAbp[A-Z]\w*)",
+    "\bVolo\.",
+    "abp\.io"
+)
+
+# 路线图与升级动作短语。§4.1 把"曾经是什么样、为什么改、升级动作"归给
+# docs/framework/versioning.md（仓库内、不分发），把"将来会怎样"排除在随包内容之外：
+# 消费者装上某个版本时只关心它现在是什么。
+#
+# **只作用于分发面**——framework 的源码与随包文档、template 载荷。docs/ 是仓库内部规划场所，
+# 谈将来正是它的职责，不受本规则约束。
+# 分发面：随 NuGet 包或 dotnet new 出去的内容。docs/ 是仓库内部规划与规范场所，
+# 既要能谈将来，也要能引用"对应 Java XXX"这类反例来说明规则本身，因此不在作用域内。
+$distributionScopes = @("framework/components", "framework/ddd-struct", "framework/docs", "template/")
+$roadmapPhrases = @(
+    "后续引入",
+    "届时",
+    "升级到本版本",
+    "未来版本",
+    "将来支持"
+)
+
 # 短语 → 豁免路径片段。资源实例授权那一层保留了 ResourceGrantEffect，
 # "显式拒绝优先"在那里是当前正确的描述，不是漂移。
 $retiredPhrases = @{
@@ -102,6 +146,16 @@ if ($SelfTest) {
         @{ Rule = "symbol"; Text = "ResourceGrantEffect.Granted";                     ShouldMatch = $false }
         @{ Rule = "phrase"; Text = "任一来源三态组合后取并集";                        ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "亮/暗/跟随系统三态";                              ShouldMatch = $false }
+        @{ Rule = "foreign"; Text = "参考 ABP 的多租户实现";                          ShouldMatch = $true }
+        @{ Rule = "foreign"; Text = "using Volo.Abp.MultiTenancy;";                   ShouldMatch = $true }
+        @{ Rule = "foreign"; Text = "详见 https://abp.io/docs";                       ShouldMatch = $true }
+        @{ Rule = "foreign"; Text = "AbpTenantResolver 的形态";                       ShouldMatch = $true }
+        @{ Rule = "foreign"; Text = "sha512-4fjYABPvFnQ7iyaBPKKS9";                   ShouldMatch = $false }
+        @{ Rule = "foreign"; Text = "labpartner 与 abpx 都是普通单词";                 ShouldMatch = $false }
+        @{ Rule = "roadmap"; Text = "以及后续引入分布式权限缓存时的失效信号";                ShouldMatch = $true }
+        @{ Rule = "roadmap"; Text = "需把存储改成 1:N，届时第 3、4 级按名字查";              ShouldMatch = $true }
+        @{ Rule = "roadmap"; Text = "升级到本版本需要一次 EF 迁移";                        ShouldMatch = $true }
+        @{ Rule = "roadmap"; Text = "当前每租户一条配置，业务 DbContext 解析到 Default";     ShouldMatch = $false }
     )
 
     $failures = New-Object System.Collections.Generic.List[string]
@@ -111,6 +165,16 @@ if ($SelfTest) {
         if ($case.Rule -eq "symbol") {
             foreach ($symbol in $retiredSymbols) {
                 if ($case.Text -match $symbol) { $matched = $true; break }
+            }
+        }
+        elseif ($case.Rule -eq "foreign") {
+            foreach ($symbol in $foreignFrameworkSymbols) {
+                if ($case.Text -match $symbol) { $matched = $true; break }
+            }
+        }
+        elseif ($case.Rule -eq "roadmap") {
+            foreach ($phrase in $roadmapPhrases) {
+                if ($case.Text.Contains($phrase)) { $matched = $true; break }
             }
         }
         else {
@@ -164,6 +228,26 @@ foreach ($file in $files) {
             }
         }
 
+        foreach ($symbol in $foreignFrameworkSymbols) {
+            if ($line -match $symbol) {
+                $problems.Add("$relative`:$($index + 1) 引用了外部参考框架 '$symbol'")
+            }
+        }
+
+        $normalizedPath = $relative.Replace('\', '/')
+        $inDistribution = $false
+        foreach ($scope in $distributionScopes) {
+            if ($normalizedPath.StartsWith($scope)) { $inDistribution = $true; break }
+        }
+
+        if ($inDistribution) {
+            foreach ($phrase in $roadmapPhrases) {
+                if ($line.Contains($phrase)) {
+                    $problems.Add("$relative`:$($index + 1) 分发面出现路线图/升级动作表述 '$phrase'；归 docs/framework/versioning.md")
+                }
+            }
+        }
+
         foreach ($phrase in $retiredPhrases.Keys) {
             if (-not $line.Contains($phrase)) { continue }
 
@@ -187,4 +271,4 @@ if ($problems.Count -gt 0) {
     exit 1
 }
 
-Write-Host "✅ 废弃符号/表述扫描通过（已扫描 $scanned 个文件）。" -ForegroundColor Green
+Write-Host "✅ 废弃符号/外部框架痕迹扫描通过（已扫描 $scanned 个文件）。" -ForegroundColor Green

@@ -1,4 +1,3 @@
-#if (LocalAuthorization)
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 
@@ -37,4 +36,3 @@ public interface IPermissionAppService : IAppService
         ReplacePermissionGrantsInputDto input,
         CancellationToken cancellationToken = default);
 }
-#endif

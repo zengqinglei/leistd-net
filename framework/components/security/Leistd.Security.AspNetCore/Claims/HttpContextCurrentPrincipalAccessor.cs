@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http;
 namespace Leistd.Security.AspNetCore.Claims;
 
 /// <summary>
-/// 基于 HttpContext 的认证主体访问器
+/// 从当前 HTTP 上下文读取认证主体。
 /// </summary>
 /// <param name="httpContextAccessor">HTTP 上下文访问器</param>
 public class HttpContextCurrentPrincipalAccessor(IHttpContextAccessor httpContextAccessor)

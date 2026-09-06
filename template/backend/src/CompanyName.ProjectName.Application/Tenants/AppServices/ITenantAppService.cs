@@ -1,4 +1,3 @@
-#if (MultiTenancy)
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
 
@@ -30,4 +29,3 @@ public interface ITenantAppService
     /// <summary>登录前按名称探测租户（匿名），不存在返回 null</summary>
     Task<TenantLookupOutputDto?> FindByNameAsync(string name, CancellationToken cancellationToken = default);
 }
-#endif

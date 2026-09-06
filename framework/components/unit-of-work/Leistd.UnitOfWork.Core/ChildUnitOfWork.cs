@@ -1,0 +1,60 @@
+using Leistd.UnitOfWork.Events;
+using Leistd.UnitOfWork.Database;
+using Leistd.UnitOfWork.Options;
+using Leistd.EventBus.Events;
+
+namespace Leistd.UnitOfWork;
+
+// 子工作单元（委托给父工作单元处理，用于嵌套场景）
+internal class ChildUnitOfWork : IUnitOfWork
+{
+    private readonly IUnitOfWork _parent;
+
+    public Guid Id => _parent.Id;
+    public IUnitOfWorkOptions Options => _parent.Options;
+    public IUnitOfWork? Outer => _parent.Outer;
+    public IServiceProvider ServiceProvider => _parent.ServiceProvider;
+    public bool IsDisposed => _parent.IsDisposed;
+    public bool IsCompleted => _parent.IsCompleted;
+
+    public event EventHandler<UnitOfWorkFailedEventArgs>? Failed
+    {
+        add => _parent.Failed += value;
+        remove => _parent.Failed -= value;
+    }
+
+    /// <remarks>
+    /// 子工作单元没有独立生命周期；<see cref="Failed"/> 的 add/remove 直接委托给父级，
+    /// 不创建额外的中转委托。释放通知仍是管理器的内部契约，不由子级暴露。
+    /// </remarks>
+    public ChildUnitOfWork(IUnitOfWork parent)
+    {
+        _parent = parent;
+    }
+
+    public void SetOuter(IUnitOfWork? outer) => _parent.SetOuter(outer);
+
+    public void Initialize(UnitOfWorkOptions options) => _parent.Initialize(options);
+
+    // 转发给父级：子工作单元没有自己的数据库 API，全部登记在父级上
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) => _parent.SaveChangesAsync(cancellationToken);
+
+    public Task CompleteAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task RollbackAsync(CancellationToken cancellationToken = default) => _parent.RollbackAsync(cancellationToken);
+
+    public void AddPendingEvents(IEnumerable<ILocalEvent> events) => _parent.AddPendingEvents(events);
+
+    public IDatabaseApi? FindDatabaseApi(string key) => _parent.FindDatabaseApi(key);
+
+    public void AddDatabaseApi(string key, IDatabaseApi api) => _parent.AddDatabaseApi(key, api);
+
+    public ITransactionApi? FindTransactionApi(string key) => _parent.FindTransactionApi(key);
+
+    public void AddTransactionApi(string key, ITransactionApi api) => _parent.AddTransactionApi(key, api);
+
+    public void Dispose() { }
+
+    /// <inheritdoc />
+    public override string ToString() => $"[ChildUnitOfWork {Id}]";
+}

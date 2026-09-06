@@ -1,23 +1,34 @@
-using Leistd.Timing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Leistd.Timing;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
+using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
+using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
+using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
 /// <summary>
-/// 多租户 EF Core 持久化依赖注入与模型配置
+/// 提供多租户 EF Core 存储注册和模型配置。
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册 EF Core 租户注册表存储与管理器（基于指定 DbContext）
+    /// 使用指定 DbContext 注册租户和连接配置存储。
     /// </summary>
     /// <remarks>
-    /// <para><b>不注册任何落值组件。</b>新增实体的 <c>TenantId</c> 由 <c>BaseDbContext</c>
-    /// 在实体进入变更跟踪时落定（与创建审计同一钩子），无需挂载拦截器。
-    /// 落值放在保存时刻会让租户值随工作单元的事务边界漂移。</para>
+    /// 不注册租户落值组件；DDD 基座在实体进入跟踪时写入 <c>TenantId</c>。
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddMultiTenancyEfCore&lt;ControlDbContext&gt;();
+    ///
+    /// // 控制面上下文没有软删除过滤器，查询必须使用未删除入口。
+    /// var tenants = await controlDb.UndeletedTenants().ToListAsync(ct);
+    /// </code>
+    /// </example>
     public static IServiceCollection AddMultiTenancyEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
@@ -33,8 +44,11 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 将租户注册表实体配置应用到 DbContext。在 OnModelCreating 中调用
+    /// 将租户注册表实体映射应用到模型。
     /// </summary>
+    /// <remarks>
+    /// 不添加查询过滤器；读取注册表必须使用 <c>TenantQueryableExtensions</c> 的未删除入口。
+    /// </remarks>
     public static ModelBuilder ConfigureMultiTenancy(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new TenantRecordConfiguration());

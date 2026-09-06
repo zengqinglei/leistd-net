@@ -1,4 +1,3 @@
-//#if (MultiTenancy)
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -6,7 +5,7 @@ import { Observable } from 'rxjs';
 import {
   CreateTenantInputDto,
   GetTenantsInputDto,
-  TenantBriefOutputDto,
+  TenantLookupOutputDto,
   TenantOutputDto,
   UpdateTenantInputDto,
 } from '../../../shared/dtos/tenant.dto';
@@ -30,8 +29,8 @@ export class TenantService {
   }
 
   /** 匿名按名称解析租户（登录页租户选择用），404 表示不存在。 */
-  getByName(name: string): Observable<TenantBriefOutputDto> {
-    return this.http.get<TenantBriefOutputDto>(
+  getByName(name: string): Observable<TenantLookupOutputDto> {
+    return this.http.get<TenantLookupOutputDto>(
       `${this.baseUrl}/by-name/${encodeURIComponent(name)}`,
     );
   }
@@ -52,4 +51,3 @@ export class TenantService {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 }
-//#endif

@@ -1,29 +1,27 @@
 using Leistd.Auditing.EntityFrameworkCore;
-#if (LocalAuthorization)
 using Leistd.Authorization.EntityFrameworkCore;
-#endif
-#if (IdentityService)
+#if (LocalIdentity)
 using Leistd.MultiTenancy.EntityFrameworkCore;
 #endif
 using Leistd.Ddd.Infrastructure;
+using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.EventBus.Local;
 using Leistd.Lock.Redis;
 using Leistd.Lock.Memory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Leistd.UnitOfWork.EfCore.Database;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-#if (MultiTenancy)
 using Leistd.MultiTenancy;
-#endif
-#if (ResourceService)
+#if (!LocalIdentity)
 using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.Refit;
+using static Leistd.ServiceClient.OAuth.DependencyInjection;
 #endif
 using CompanyName.ProjectName.Infrastructure.TenantConnections;
 #if (IncludeNotifications)
@@ -31,98 +29,162 @@ using Leistd.Notifications.EntityFrameworkCore;
 using CompanyName.ProjectName.Infrastructure.Notifications;
 #endif
 
-using CompanyName.ProjectName.Domain.Shared.Security.Aes;
-using CompanyName.ProjectName.Domain.Shared.Security.Aes.Options;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
-using CompanyName.ProjectName.Infrastructure.Shared.Security.Aes;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Infrastructure.Shared.Security.VerificationCodes;
+using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
+#endif
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
-#if (IdentityService)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Shared.Email;
 using CompanyName.ProjectName.Infrastructure.Email;
 #endif
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 #endif
 using StackExchange.Redis;
+using Leistd.Auditing.EntityFrameworkCore.Interceptors;
+using Leistd.Data;
+using Leistd.Data.Constants;
+using Leistd.Data.Abstractions;
 
 namespace CompanyName.ProjectName.Infrastructure;
 
 /// <summary>
-/// Infrastructure 层依赖注入配置
+/// 提供基础设施层服务注册。
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册 Infrastructure 层服务
+    /// 注册基础设施层服务。
     /// </summary>
     public static IServiceCollection AddInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // 注册本地事件总线
+        // 所有上下文共用内存库命名和事务警告策略。
+        void UseInMemoryFallback(DbContextOptionsBuilder options, string? suffix)
+        {
+            var databaseName = configuration["Database:InMemoryName"];
+            var baseName = string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName;
+            options.UseInMemoryDatabase(suffix is null ? baseName : baseName + suffix);
+            options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
+        }
+
         services.AddLocalEventBus();
 
-        // ✅ 注册基础设施服务
         services.AddMemoryCache();
         var useExplicitInMemoryDatabase =
             !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"]);
 
         if (!useExplicitInMemoryDatabase)
         {
-#if (ResourceService)
+            // 真实数据库模式必须有共享库目标；在最终配置合并后执行启动校验。
+            services.AddOptions<TenantConnectionResolutionOptions>()
+                .Configure<IConfiguration>((options, config) =>
+                {
+                    options.DefaultConnectionString = config.GetConnectionString(ConnectionStringNames.Default);
+                    options.InMemoryName = config["Database:InMemoryName"];
+                })
+                .Validate(
+                    options => options.HasDatabaseTarget,
+                    "No database target is configured. Set ConnectionStrings:Default, " +
+                    "or set Database:InMemoryName to run against an in-memory store.")
+                .ValidateOnStart();
+
+#if (!LocalIdentity)
+            // 路由缓存期限决定租户改路由前的排空等待时间，必须显式配置。
+            services.AddOptions<TenantRouteCacheOptions>()
+                .Configure<IConfiguration>((options, config) =>
+                {
+                    var configured = config.GetSection(TenantRouteCacheOptions.SectionName)["CacheLifetime"];
+                    if (TimeSpan.TryParse(configured, out var lifetime))
+                    {
+                        options.CacheLifetime = lifetime;
+                    }
+                })
+                .Validate(
+                    options => options.IsLifetimeUsable,
+                    $"TenantRouting:CacheLifetime is required and must be greater than zero and at most " +
+                    $"{TenantRouteCacheOptions.MaximumCacheLifetime}. It determines how long a changed tenant " +
+                    "route may still be served by warm instances, and therefore how long the deactivate-and-drain " +
+                    "step must wait before the route can be changed.")
+                .ValidateOnStart();
+
             var identityClient = services.AddRefitServiceClient<
                 IIdentityTenantConnectionClient,
                 IdentityTenantConnectionClientOptions>("Identity", configuration);
-            if (configuration.GetSection(Leistd.ServiceClient.OAuth.DependencyInjection.ServiceAuthSectionName).Exists())
+            if (configuration.GetSection(ServiceAuthSectionName).Exists())
             {
                 identityClient.AddClientCredentials(configuration);
             }
             identityClient.AddStandardResilienceHandler();
 
-            services.AddScoped<ITenantConnectionStringResolver, IdentityTenantConnectionStringResolver>();
+            // 宿主级单例跨请求合并同租户回源，且隔离同进程中的不同宿主。
+            services.AddSingleton<TenantRouteResolutionCoordinator>();
+            services.AddScoped<IConnectionStringResolver, IdentityTenantConnectionStringResolver>();
 #else
-            services.AddScoped<ITenantConnectionStringResolver, LocalTenantConnectionStringResolver>();
+            services.AddScoped<IConnectionStringResolver, LocalTenantConnectionStringResolver>();
 #endif
         }
         services.AddSingleton<ISecretResolver, ConfigurationSecretResolver>();
-        services.AddScoped<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
 
-        services.Configure<EncryptionOptions>(configuration.GetSection(EncryptionOptions.SectionName));
-
-#if (IdentityService)
-        services.AddDbContext<IdentityControlDbContext>((_, options) =>
+#if (LocalIdentity)
+        services.AddDbContext<IdentityControlDbContext>((sp, options) =>
         {
-            var connectionString = configuration.GetConnectionString(IdentityControlDbContext.ConnectionStringName)
-                ?? configuration.GetConnectionString("Default");
+            // 控制面不继承 BaseDbContext，必须显式挂载修改和删除审计拦截器。
+            options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
+
+            var connectionString = configuration.GetControlPlaneConnectionString();
             if (!string.IsNullOrWhiteSpace(connectionString))
             {
                 options.UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory_Control", "companyname-projectname"));
+                    npgsql.MigrationsHistoryTable(
+                        DatabaseSchema.ControlMigrationsHistoryTable, DatabaseSchema.Name));
             }
             else
             {
-                var databaseName = configuration["Database:InMemoryName"];
-                options.UseInMemoryDatabase($"{(string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName)}-control");
-                options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
+                UseInMemoryFallback(options, "-control");
             }
 
+        });
+#endif
+
+#if (OpenIddictServer)
+        // OIDC 与控制面同库同 schema，但使用独立迁移历史。
+        // 动态注入的 OIDC 实体不在快照中，因此只在此处抑制模型差异警告。
+        services.AddDbContext<OpenIddictDbContext>(options =>
+        {
+            var connectionString = configuration.GetControlPlaneConnectionString();
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                options.UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable(
+                        OpenIddictDbContext.MigrationsHistoryTable, DatabaseSchema.Name));
+            }
+            else
+            {
+                UseInMemoryFallback(options, "-openiddict");
+            }
+
+            options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
             options.UseOpenIddict();
         });
 #endif
 
-        // ✅ 注册租户业务 DbContext（使用拦截器）
         services.AddDbContext<MyProjectDbContext>((sp, options) =>
         {
             var creationContext = DbContextCreationContext.Current;
-            var connectionString = creationContext?.ConnectionString ?? configuration.GetConnectionString("Default");
+            var connectionString = creationContext?.ConnectionString ?? configuration.GetConnectionString(ConnectionStringNames.Default);
             if (!string.IsNullOrEmpty(connectionString))
             {
                 void ConfigureNpgsql(NpgsqlDbContextOptionsBuilder npgsql)
                 {
                     npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "companyname-projectname");
+                    npgsql.MigrationsHistoryTable(
+                        DatabaseSchema.BusinessMigrationsHistoryTable, DatabaseSchema.Name);
                 }
 
                 if (creationContext?.ExistingConnection is NpgsqlConnection existingConnection)
@@ -136,43 +198,42 @@ public static class DependencyInjection
             }
             else
             {
-                var databaseName = configuration["Database:InMemoryName"];
-                options.UseInMemoryDatabase(string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName);
-                options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
-
+                UseInMemoryFallback(options, suffix: null);
             }
 
-            // 抑制多集合 Include 警告（已全局启用 SplitQuery）
-            // 抑制 PendingModelChangesWarning（OpenIddict 通过 UseOpenIddict() 动态注册实体，不在 Migration 快照中）
+            // SplitQuery 已处理多集合查询；模型与迁移不一致仍必须失败。
             options.ConfigureWarnings(w => w
-                .Ignore(RelationalEventId.MultipleCollectionIncludeWarning)
-                .Ignore(RelationalEventId.PendingModelChangesWarning));
+                .Ignore(RelationalEventId.MultipleCollectionIncludeWarning));
 
-            // 保存时刻的职责：修改/删除审计（含软删除转换）与领域事件发布。
-            // 新增实体的环境值（CreatorId、CreationTime、TenantId）不在这里——
-            // 由 BaseDbContext 在实体进入变更跟踪时落定，见框架 ddd-struct 文档
-            options.AddInterceptors(
-                sp.GetRequiredService<AuditSaveChangesInterceptor>(),
-                sp.GetRequiredService<LocalEventSaveChangesInterceptor>());
+            // 保存拦截器处理修改/删除审计、领域事件和并发标记。
+            // 新增实体的环境值在进入 BaseDbContext 跟踪时落定。
+            options.AddDddInterceptors(sp);
         });
 
 #if (IncludeNotifications)
         services.AddNotificationsEfCore<MyProjectDbContext>();
-        // 通知“清空全部”能力：框架 INotificationStore 未提供删除，走自定义 EF 清理服务。
+        // 框架存储不提供批量删除，模板以专用服务实现通知清理。
         services.AddScoped<INotificationCleanupService, NotificationCleanupService>();
 #endif
-#if (LocalAuthorization)
         services.AddAuthorizationEfCore<MyProjectDbContext>();
-#endif
-#if (IdentityService)
-        // 租户注册表存储、管理器与落值拦截器（存储直接读库，除 DbContext 外无基础设施依赖）
+#if (LocalIdentity)
         services.AddMultiTenancyEfCore<IdentityControlDbContext>();
 #endif
 
-        // 注册 DDD Infrastructure 基础服务（UnitOfWork + 自动仓储注册）
         services.AddDddInfrastructure();
 
-        // 分布式缓存 + 分布式锁（优先 Redis，否则内存降级）
+        // 每个注册过的 DbContext 都必须显式接入：漏掉的上下文会逃出租户过滤器闸门，
+        // 构建容器时会直接失败。不传选项即"只登记、不注册仓储"。
+        services.AddDddDbContext<MyProjectDbContext>(options => options.AddDefaultRepositories());
+#if (LocalIdentity)
+        // 控制面上下文的租户注册表经自己的 Store 访问，不需要仓储。
+        services.AddDddDbContext<IdentityControlDbContext>();
+#endif
+#if (OpenIddictServer)
+        // OpenIddict 自有实体不是 Leistd 实体，只登记。
+        services.AddDddDbContext<OpenIddictDbContext>();
+#endif
+
         var redisConnStr = configuration.GetConnectionString("Redis");
 
         if (!string.IsNullOrEmpty(redisConnStr))
@@ -187,7 +248,7 @@ public static class DependencyInjection
                 options.InstanceName = "MyProject:";
             });
 
-            services.AddRedisDistributedLock(redisConfig.ToString());
+            services.AddRedisDistributedLock(redisConfig.ToString(), configuration);
         }
         else
         {
@@ -195,24 +256,31 @@ public static class DependencyInjection
             services.AddMemoryLocalLock();
         }
 
-        // 密码哈希服务（无状态，使用 Transient 生命周期）
         services.AddTransient<IPasswordHasher, PasswordHasher>();
+#if (LocalIdentity)
+        // 验证码摘要与口令哈希具有不同的密钥和成本契约。
+        services.AddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
+#endif
 
-        // AES 加密服务（无状态，使用 Transient 生命周期）
-        services.AddTransient<IAesEncryptionProvider, AesEncryptionProvider>();
-
-#if (IdentityService)
-        // 邮件发送服务
+#if (LocalIdentity)
         services.AddTransient<IEmailSender, MailKitEmailSender>();
 #endif
 
-#if (IncludeExternalLogin)
-        // 外部认证 OAuth 提供商（Keyed DI）
+#if (ExternalLogin)
         services.AddHttpClient();
-        services.AddKeyedScoped<IOAuthProvider, GitHubOAuthProvider>("github");
-        services.AddKeyedScoped<IOAuthProvider, GoogleOAuthProvider>("google");
+        services.AddScoped<IOAuthProvider, GitHubOAuthProvider>();
+        services.AddScoped<IOAuthProvider, GoogleOAuthProvider>();
 #endif
 
+        return services;
+    }
+
+    /// <summary>
+    /// 注册仅供 DbMigrator 使用的租户迁移目标枚举器。
+    /// </summary>
+    public static IServiceCollection AddTenantMigrationServices(this IServiceCollection services)
+    {
+        services.AddScoped<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
         return services;
     }
 }

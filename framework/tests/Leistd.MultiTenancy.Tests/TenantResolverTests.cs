@@ -1,6 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.MultiTenancy.AspNetCore.Resolution;
+using Leistd.MultiTenancy.AspNetCore;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Leistd.MultiTenancy.Resolution;
+using MsOptions = Microsoft.Extensions.Options.Options;
 
 namespace Leistd.MultiTenancy.Tests;
 
@@ -39,7 +43,7 @@ public class TenantResolverTests
 
         return new TenantResolver(
             new ServiceCollection().BuildServiceProvider(),
-            Options.Create(options));
+            MsOptions.Create(options));
     }
 
     [Fact]

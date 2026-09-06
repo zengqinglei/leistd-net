@@ -7,9 +7,7 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { AuthService } from '../../../../core/services/auth-service';
-//#if (LocalAuthorization)
 import { AuthorizationService } from '../../../../core/services/authorization-service';
-//#endif
 import { AccountService } from '../../services/account-service';
 
 /**
@@ -42,9 +40,7 @@ import { AccountService } from '../../services/account-service';
 })
 export class ExternalAuthCallback implements OnInit {
   private authService = inject(AuthService);
-  //#if (LocalAuthorization)
   private readonly authorizationService = inject(AuthorizationService);
-  //#endif
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -94,16 +90,12 @@ export class ExternalAuthCallback implements OnInit {
 
       // 2. 加载用户信息并按权限跳转
       await lastValueFrom(this.authService.loadUser());
-      //#if (LocalAuthorization)
       await lastValueFrom(this.authorizationService.load());
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
       } else {
         this.router.navigate(['/workspace']);
       }
-      //#else
-      this.router.navigate(['/workspace']);
-      //#endif
     } catch (err) {
       console.error('External login callback processing failed', err);
       //#if (IncludeLocalization)

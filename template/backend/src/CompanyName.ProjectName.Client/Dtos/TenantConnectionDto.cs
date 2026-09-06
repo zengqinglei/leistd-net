@@ -1,4 +1,5 @@
-#if (IdentityService)
+#if (LocalIdentity)
+using Leistd.MultiTenancy.ConnectionStrings;
 namespace CompanyName.ProjectName.Client.Dtos;
 
 public enum TenantDatabaseMode

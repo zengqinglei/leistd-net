@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-//#if (ResourceService)
+//#if (!LocalIdentity)
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { of } from 'rxjs';
 //#endif
@@ -27,7 +27,7 @@ describe('NotificationService', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        //#if (ResourceService)
+        //#if (!LocalIdentity)
         {
           provide: OidcSecurityService,
           useValue: { getAccessToken: () => of('resource-access-token') },

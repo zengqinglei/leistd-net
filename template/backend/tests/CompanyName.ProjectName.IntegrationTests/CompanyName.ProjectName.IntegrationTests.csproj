@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Api\CompanyName.ProjectName.Api.csproj" />
-<!--#if (IdentityService)-->
+<!--#if (LocalIdentity)-->
     <!-- 服务间调用闭环测试经真实 Client 包发起调用 -->
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Client\CompanyName.ProjectName.Client.csproj" />
 <!--#endif-->
