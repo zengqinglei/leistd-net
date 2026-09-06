@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    单元测试：不建宿主、不连数据库、不发 HTTP。
+    与 IntegrationTests 的分工见 docs/standards/testing.md §1 的风险分级表——
+    纯函数、领域规则、权限判断在这里；数据库、DI 装配、序列化、外部适配在集成测试。
+
+    一个宿主约 0.5–0.8 秒，集成测试的时长几乎全在这上面。能在这一层验证的规则
+    放到集成测试里，会让整套测试的耗时随测试类数量线性增长。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- AddApplicationServices 里的映射器注册依赖 ILogger<>；单元测试不建宿主，自己带日志实现 -->
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CompanyName.ProjectName.Application\CompanyName.ProjectName.Application.csproj" />
+    <ProjectReference Include="..\..\src\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

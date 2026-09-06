@@ -636,7 +636,7 @@ elseif (-not (Test-Path -LiteralPath $feedRoot)) {
 # 到那一步再排查代价极高（本仓库为此付过一整轮）。在这里拦住。
 Invoke-External "pwsh" @("-File", (Join-Path $repoRoot "scripts/check-template-symbols.ps1"))
 
-# Python 闸门的解释器：CI/Unix 常为 python3，Windows 通常只有 python（约定见 docs/framework/development-guide.md §7）
+# Python 闸门的解释器：CI/Unix 常为 python3，Windows 通常只有 python（约定见 docs/framework/development-guide.md §9）
 $pythonCmd = $null
 foreach ($candidate in @("python3", "python")) {
     $found = Get-Command $candidate -ErrorAction SilentlyContinue

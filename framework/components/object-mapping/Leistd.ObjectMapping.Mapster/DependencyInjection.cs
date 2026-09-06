@@ -2,6 +2,7 @@ using System.Reflection;
 using Mapster;
 using MapsterMapper;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.ObjectMapping.Mapster.Options;
@@ -36,7 +37,7 @@ public static class DependencyInjection
             services.Configure(configure);
         }
 
-        services.AddSingleton<IMapper>(sp =>
+        services.TryAddSingleton<IMapper>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<MapsterOptions>>().Value;
             var logger = sp.GetRequiredService<ILogger<MapsterObjectMapper>>();
@@ -58,7 +59,7 @@ public static class DependencyInjection
             return new Mapper(config);
         });
 
-        services.AddSingleton<IObjectMapper, MapsterObjectMapper>();
+        services.TryAddSingleton<IObjectMapper, MapsterObjectMapper>();
 
         return services;
     }

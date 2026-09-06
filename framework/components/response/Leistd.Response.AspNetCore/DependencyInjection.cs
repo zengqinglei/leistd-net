@@ -1,4 +1,5 @@
 using Leistd.Response.AspNetCore.Filters;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Leistd.Response.AspNetCore;
@@ -29,7 +30,19 @@ public static class DependencyInjection
     /// </example>
     public static IMvcBuilder AddResponseWrapper(this IMvcBuilder builder)
     {
-        builder.AddMvcOptions(options => options.Filters.Add<ResultWrapperFilter>());
+        builder.AddMvcOptions(options =>
+        {
+            // 幂等：宿主组合根拆分时重复调用是常态，挂两遍会把响应包两层信封，
+            // 而症状只在运行时的响应体里显形。
+            if (options.Filters.OfType<TypeFilterAttribute>()
+                .Any(f => f.ImplementationType == typeof(ResultWrapperFilter)))
+            {
+                return;
+            }
+
+            options.Filters.Add<ResultWrapperFilter>();
+        });
+
         return builder;
     }
 }

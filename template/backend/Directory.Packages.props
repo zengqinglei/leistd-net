@@ -68,6 +68,8 @@
     <PackageVersion Include="Microsoft.Extensions.Localization.Abstractions" Version="10.0.10" />
     <!--#endif-->
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
+    <!-- 单元测试在裸 ServiceCollection 上断言注册面，需要 AddLogging（应用层注册依赖 ILogger<>） -->
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageVersion Include="MailKit" Version="4.17.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Cryptography.KeyDerivation" Version="10.0.0" />

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.AspNetCore.SignalR;
 using Leistd.Notifications.AspNetCore.SignalR.Hubs;
 using Leistd.Notifications.AspNetCore.SignalR.Services;
@@ -36,7 +37,12 @@ public static class DependencyInjection
         // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，主体/租户/链路标识与
         // UserIdentifier 解析全靠基座。基座注册是幂等的，与 realtime 组件同时装也只有一份过滤器。
         services.AddSignalRAmbientContext();
-        services.AddSingleton<INotificationSender, SignalRNotificationSender>();
+        // 按实现类型去重，不按服务类型：INotificationSender 是累加型扩展点，
+        // 发布器以 IEnumerable<T> 注入并逐一调用，宿主可以同时装邮件、WebPush 等通道。
+        // 用 TryAddSingleton 会按服务类型判重——宿主已注册任一 Sender 时，
+        // SignalR 这一路就再也进不来，且没有任何报错。
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<INotificationSender, SignalRNotificationSender>());
         return services;
     }
 

@@ -23,10 +23,38 @@
 dotnet test
 ```
 
+### 2.1 两个测试项目，分工由成本决定
+
+```text
+backend/tests/
+├── CompanyName.ProjectName.UnitTests/          不建宿主、不连库、不发 HTTP
+│   ├── Domain/          领域规则、值对象、策略判定
+│   ├── Application/     应用层契约与纯逻辑，依赖用假实现从构造函数传入
+│   └── Registration/    在 IServiceCollection 上断言注册结果
+└── CompanyName.ProjectName.IntegrationTests/   经真实宿主验证端到端行为
+    ├── Fixtures/        ProjectWebApplicationFactory、共享装配基类
+    └── <各 *Tests.cs>
+```
+
+**一个 `WebApplicationFactory` 宿主约 0.5–0.8 秒**，集成测试的时长几乎全在这上面，
+且它随测试类数量和配置变体数量线性增长。因此：
+
+- 能在单元测试里验证的规则不要放进集成测试。§1 的风险分级表就是这条线。
+- 集成测试每类一个 `IClassFixture<ProjectWebApplicationFactory>`，**不要每个用例建宿主**。
+- 需要改配置的用例用 `WithWebHostBuilder` 派生宿主，但**同类配置变体应当归组复用**，
+  而不是每个用例一个——一个测试类里起七八个派生宿主，这个类就会独占整套测试的大部分时间。
+
+### 2.2 通用要求
+
 - 测试名称应表达行为和条件，沿用邻近项目风格。
 - 数据库测试使用隔离数据库、独立 schema 或可靠清理机制。
+- 实体配置、唯一索引与全局查询过滤器必须用关系型 Provider 验证；
+  EF InMemory 全内存求值，会让被违反的约束和不可翻译的查询静默通过。
 - 外部服务使用 fake、mock 或明确的测试环境。
+  时间用 `FakeTimeProvider`、日志用 `FakeLogger`，不手写替身。
 - 领域规则、状态变化、权限和错误语义应通过可观察行为断言。
+- 组合根的每个 `AddXxx()` 至少覆盖：注册结果与生命周期、重复调用幂等。
+  注册面是契约，编译期看不出错。
 
 ## 3. 前端
 

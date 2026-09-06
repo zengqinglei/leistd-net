@@ -3,7 +3,7 @@ name: CI
 # PR 与非发布推送的质量闸门（与 release.yml 分离，不发包）：
 #   - docs-sync：组件文档、Skill 与引用一致性
 #   - template-matrix：打包当前框架并验证全部条件场景的生成、运行与前后端构建
-#   - test：框架单元测试 + 覆盖率（P8）
+#   - test：框架单元测试
 on:
   pull_request:
     branches: [main, develop]
@@ -66,5 +66,8 @@ jobs:
         run: dotnet restore framework/Leistd.Framework.slnx
       - name: 构建
         run: dotnet build framework/Leistd.Framework.slnx -c Release --no-restore
-      - name: 测试 + 覆盖率
-        run: dotnet test framework/Leistd.Framework.slnx -c Release --no-build --settings framework/build/coverage.runsettings --collect:"XPlat Code Coverage"
+      # 不收集覆盖率：此前收集 23 份 cobertura 却没有任何下游步骤消费，
+      # 产物直接丢弃，只留下"我们在度量覆盖率"的假信号。
+      # 覆盖率定位为按需体检，命令见 framework/build/coverage.runsettings
+      - name: 测试
+        run: dotnet test framework/Leistd.Framework.slnx -c Release --no-build
