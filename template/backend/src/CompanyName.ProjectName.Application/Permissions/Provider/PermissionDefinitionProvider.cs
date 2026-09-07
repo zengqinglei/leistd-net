@@ -66,6 +66,10 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
             PermissionConstant.Permissions.Default,
             displayName: "Permission:App.Permissions"
         );
+        systemGroup.AddPermission(
+            PermissionConstant.Settings.Default,
+            displayName: "Permission:App.Settings"
+        );
 
 #if (LocalIdentity)
         // 宿主侧专属：租户上下文内不可见、不可授予（子权限继承父级侧别）

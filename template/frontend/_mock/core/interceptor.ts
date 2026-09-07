@@ -5,6 +5,9 @@ import { catchError, delay, mergeMap, tap } from 'rxjs/operators';
 
 import { MockConfig, MockException, MockRequest, MockResponse } from './models';
 import { environment } from '../../src/environments/environment';
+//#if (!LocalIdentity)
+import { syncMockSubjectFromBearer } from '../utils/current-user';
+//#endif
 
 type MockApiHandler = (request: MockRequest) => unknown;
 type MockApiRegistry = Record<string, MockApiHandler | unknown>;
@@ -50,6 +53,12 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
     params: matchingRule.urlParams,
   };
 
+  //#if (!LocalIdentity)
+  // 没有本地身份的形态没有任何 Mock 请求会建立会话（登录走远端 OIDC，不经 HttpClient）。
+  // 在分发前从浏览器已持有的令牌把主体补进会话，各 Mock 照原样按会话取主体即可。
+  syncMockSubjectFromBearer(mockRequest);
+
+  //#endif
   if (mockConfig.log) {
     logMock('Mock intercepted', method, url, mockRequest);
   }

@@ -124,6 +124,9 @@
     "{0} must be between {1} and {2}.": "{0} must be between {1} and {2}.",
     "{0} is required.": "{0} is required.",
     "{0} is too large. Compress it and try again.": "{0} is too large. Compress it and try again.",
-    "{0} must be between {2} and {1} characters.": "{0} must be between {2} and {1} characters."
+    "{0} must be between {2} and {1} characters.": "{0} must be between {2} and {1} characters.",
+    "Setting:Display.Language": "Language",
+    "Setting:Display.TimeZone": "Time zone",
+    "Permission:App.Settings": "Manage settings"
   }
 }

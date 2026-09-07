@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Leistd.Settings</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UndefinedSettingException / SettingScopeNotAllowedException 继承 BadRequestException；
+         此前是经 MultiTenancy.Core 传递拿到的，多租户类型 Core 一个都没用到。 -->
+    <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
+    <ProjectReference Include="..\..\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+  </ItemGroup>
+
+</Project>

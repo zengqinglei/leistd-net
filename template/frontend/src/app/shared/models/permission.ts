@@ -41,6 +41,9 @@ export const PERMISSIONS = {
   permissions: {
     default: 'App.Permissions',
   },
+  settings: {
+    default: 'App.Settings',
+  },
 } as const;
 
 /**

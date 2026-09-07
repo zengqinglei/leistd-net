@@ -6,12 +6,14 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 //#if (IncludeLocalization)
 import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
 //#endif
+import { toast } from '@spartan-ng/brain/sonner';
 import { of, throwError } from 'rxjs';
 
 import { Login } from './login';
 import { permissionGuard } from '../../../../core/guards/permission-guard';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { SessionContextService } from '../../../../core/services/session-context-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 
@@ -64,10 +66,10 @@ describe('Login', () => {
       ],
     }).compileComponents();
 
-    // 登录成功后会拉一次权限来决定落地页；不打桩的话这条真实请求永远等不到响应，
-    // 用例会以超时失败，而不是报出真正的断言。
+    // 登录成功后会建立会话上下文（拉权限 + 拉设置）来决定落地页；不打桩的话这些真实请求
+    // 永远等不到响应，用例会以超时失败，而不是报出真正的断言。
     authorization = TestBed.inject(AuthorizationService);
-    spyOn(authorization, 'load').and.returnValue(of(undefined) as never);
+    spyOn(TestBed.inject(SessionContextService), 'establish').and.resolveTo();
 
     fixture = TestBed.createComponent(Login);
     component = fixture.componentInstance;
@@ -124,6 +126,26 @@ describe('Login', () => {
     });
   }
 
+  it('会话建立失败时只弹失败提示，不弹成功提示', async () => {
+    await setUp();
+    fillValidCredentials();
+    (TestBed.inject(SessionContextService).establish as jasmine.Spy).and.rejectWith(
+      new Error('settings unavailable'),
+    );
+    // toast 是模块级单例对象，组件与此处引用同一个，改它的方法组件立刻看得见。
+    const success = spyOn(toast, 'success');
+    const error = spyOn(toast, 'error');
+
+    await component.onSubmit();
+
+    // 先弹「登录成功」再弹「登录失败」的话，用户看到的是两条互相打脸的提示，
+    // 而人还停在登录页——提示必须等会话真的建立完再发。
+    expect(success).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
   it('登录失败时不跳转，并复位加载状态', async () => {
     await setUp();
     fillValidCredentials();
@@ -145,16 +167,15 @@ describe('Login', () => {
 
     // 用真实 Router + 真实 permissionGuard 跑完整条路：
     // spy 掉 Router 只能验到"调用了 navigateByUrl"，验不到导航之后 guard 怎么判。
-    // 进登录页时 StartupService 已清空权限；若在加载权限之前就跳转，
+    // 进登录页时会话上下文已被清空；若在建立它之前就跳转，
     // guard 会在空权限下判定并把人踢到 403——从深链登录本该落到那个页面。
     (router.navigateByUrl as jasmine.Spy).and.callThrough();
-    (authorization.load as jasmine.Spy).and.callFake(() => {
+    (TestBed.inject(SessionContextService).establish as jasmine.Spy).and.callFake(async () => {
       authorization.setPermissions({
         permissions: [PERMISSIONS.users.default],
         isSuperAdmin: false,
         versionToken: 'r1',
       });
-      return of(undefined) as never;
     });
 
     router.resetConfig([

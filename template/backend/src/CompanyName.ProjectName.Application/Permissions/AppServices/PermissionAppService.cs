@@ -186,21 +186,21 @@ public class PermissionAppService(
     /// </summary>
     /// <remarks>
     /// 定义本身是 Singleton、启动时加载，存的是本地化键；翻译必须发生在响应阶段，
-    /// 否则先到的那个请求的语言会被固化给所有人。词条缺失时回退到键，再回退到权限名，
-    /// 保证界面永远不会出现空白节点。
+    /// 否则先到的那个请求的语言会被固化给所有人。翻译不可得时回退到权限名而不是键——
+    /// 键带 <c>Permission:</c> 这样的内部前缀，直接摆到界面上是给用户看内部标识。
     /// </remarks>
     private string Localize(string? displayNameKey, string fallback)
     {
-        if (string.IsNullOrWhiteSpace(displayNameKey))
-            return fallback;
-
 #if (IncludeLocalization)
-        var localizer = localizerFactory.Create(typeof(PermissionAppService));
-        var localized = localizer[displayNameKey];
-        return localized.ResourceNotFound ? displayNameKey : localized.Value;
-#else
-        return displayNameKey;
+        if (!string.IsNullOrWhiteSpace(displayNameKey))
+        {
+            var localizer = localizerFactory.Create(typeof(PermissionAppService));
+            var localized = localizer[displayNameKey];
+            if (!localized.ResourceNotFound)
+                return localized.Value;
+        }
 #endif
+        return fallback;
     }
 
     /// <remarks>

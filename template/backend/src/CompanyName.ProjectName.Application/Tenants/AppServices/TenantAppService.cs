@@ -11,6 +11,7 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.ObjectMapping.Abstractions;
+using Leistd.Ddd.Application.AppService;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 
@@ -32,7 +33,7 @@ public class TenantAppService(
     IUnitOfWorkManager unitOfWorkManager,
     IServiceScopeFactory serviceScopeFactory,
     IObjectMapper objectMapper,
-    ILogger<TenantAppService> logger) : ITenantAppService
+    ILogger<TenantAppService> logger) : BaseAppService, ITenantAppService
 {
     /// <inheritdoc />
     public async Task<PagedResultDto<TenantOutputDto>> GetPagedAsync(

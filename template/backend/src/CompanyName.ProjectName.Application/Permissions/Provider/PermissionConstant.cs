@@ -94,6 +94,19 @@ public static class PermissionConstant
     }
 #endif
     /// <summary>
+    /// 设置管理权限
+    /// </summary>
+    /// <remarks>
+    /// 只约束"改租户默认值"，因此是一个扁平权限而非"资源 + 动作"：查看设置不需要权限
+    /// （个人偏好是个人数据），没有可作为资源层的读权限，硬造一个就没人检查。
+    /// </remarks>
+    public static class Settings
+    {
+        /// <summary>修改当前租户的设置默认值。</summary>
+        public const string Default = Prefix + ".Settings";
+    }
+
+    /// <summary>
     /// 权限定义查看权限
     /// </summary>
     public static class Permissions

@@ -3,6 +3,7 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 using Leistd.Authorization.EntityFrameworkCore;
+using Leistd.Settings.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
@@ -50,6 +51,8 @@ public class MyProjectDbContext(
 #endif
         // 权限授予实体配置
         modelBuilder.ConfigureAuthorization();
+        // 设置值实体配置
+        modelBuilder.ConfigureSettings();
 #if (IncludeNotifications)
         // 通知实体配置
         modelBuilder.ConfigureNotifications();

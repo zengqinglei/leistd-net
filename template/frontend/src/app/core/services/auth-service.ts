@@ -11,7 +11,6 @@ import {
 import { Observable, lastValueFrom, tap } from 'rxjs';
 //#endif
 //#if (!LocalIdentity)
-import { Router } from '@angular/router';
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { firstValueFrom } from 'rxjs';
 //#endif
@@ -72,8 +71,9 @@ export class AuthService {
   /**
    * 清空当前认证主体的一切本地状态。
    *
-   * 登出、非静默 401、启动流进登录页三条路径都汇到这里，所以主体相关的清理
-   * 一律挂在这一处——各自记得调的做法，迟早会漏掉其中一条。
+   * 只清认证数据。权限与设置也跟着主体走，但它们的清理在 <c>SessionContextService.clear()</c>：
+   * 非静默 401 与启动流进登录页都走那个入口，一处清三样，避免各自记得调而漏掉一条。
+   * <c>logout()</c> 之后是整页跳转，内存状态随页面重建，不必再走一遍。
    */
   clearAuthData(): void {
     this._currentUser.set(null);
@@ -96,7 +96,6 @@ export class AuthService {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly oidc = inject(OidcSecurityService);
-  private readonly router = inject(Router);
   private readonly tenantContext = inject(TenantContextService);
   //#if (IncludeNotifications)
   private readonly signalR = inject(SignalRService);
@@ -128,12 +127,22 @@ export class AuthService {
         isSuperAdmin: claims['is_super_admin'] === true || claims['is_super_admin'] === 'true',
       }),
     );
+  }
 
-    if (window.location.pathname === '/auth/callback') {
-      const returnUrl = sessionStorage.getItem('app.auth.returnUrl') || '/workspace';
-      sessionStorage.removeItem('app.auth.returnUrl');
-      await this.router.navigateByUrl(returnUrl);
-    }
+  /**
+   * 取出并清掉登录前记下的落地地址；没记过就回落 /workspace。
+   *
+   * **导航不在 initializeAuth 里做**：那时启动流还停在 loading，而 permissionGuard 要等
+   * 启动状态离开 loading 才放行——导航到 /platform 会形成
+   * 启动 → 确立主体 → 导航 → Guard 等启动 的环。权限与设置也还没就位，
+   * 即使落到 /workspace 不卡住，也是在无权限状态下渲染。
+   * 因此由 OIDC 回调组件在会话上下文就绪后消费它，而这里不判「是否在回调页」——
+   * 唯一的调用方就是那个只挂在 /auth/callback 上的组件。
+   */
+  takeReturnUrl(): string {
+    const returnUrl = sessionStorage.getItem('app.auth.returnUrl') || '/workspace';
+    sessionStorage.removeItem('app.auth.returnUrl');
+    return returnUrl;
   }
 
   login(returnUrl = '/workspace'): void {

@@ -102,6 +102,7 @@ if ($SelfTest) {
 $allow = @(
     # BCL / 常用
     'DateTime','TimeSpan','Guid','Task','ValueTask','CancellationToken','IDisposable','IAsyncDisposable','FakeTimeProvider',
+    'TimeZoneInfo','TryFindSystemTimeZoneById','HasIanaId',   # 时区值域判定：设置组件文档要求宿主只收 IANA 标识
     'IEnumerable','IReadOnlyList','IReadOnlyCollection','IList','List','IDictionary','Dictionary','ConcurrentDictionary',
     'IQueryable','Func','Action','Nullable','Exception','ArgumentNullException','InvalidOperationException',
     'OperationCanceledException','TimeoutException','HttpRequestException','ValidationException','String','Boolean','Int32',

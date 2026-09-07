@@ -103,7 +103,7 @@ frontend/
 ```
 
 <!--#if (IncludeLocalization)-->
-> 静态资源用 Angular `public/` 约定（构建后映射到站点根），**没有 `src/assets`**。多语言词条 `public/i18n/{lang}.json` 存放各语言文案（见 §7）。
+> 静态资源用 Angular `public/` 约定（构建后映射到站点根），**没有 `src/assets`**。多语言词条 `public/i18n/{lang}.json` 存放各语言文案（见 §8）。
 <!--#else-->
 > 静态资源用 Angular `public/` 约定（构建后映射到站点根），**没有 `src/assets`**。
 <!--#endif-->
@@ -247,18 +247,36 @@ AI 极易只改一端，务必六环全改。
 
 ---
 
+## 7. 日期与时区
+
+时间一律以 UTC 传输与存储，只在展示时按会话时区换算。时区取自 `Display.TimeZone` 设置（IANA 名），由 `SettingContextService` 在启动时载入。
+
+- **业务日期一律用 `appDate` 管道，不要用 Angular 的 `date`**：`date` 的时区参数只接受 `+0800` 这类固定偏移，传 IANA 名（`Asia/Shanghai`）会在内部解析失败后**静默回落到浏览器时区**——界面照常渲染，时区设置却没生效，编译和端到端都发现不了；固定偏移也表达不了夏令时。`appDate` 基于原生 `Intl.DateTimeFormat`，直接接受 IANA 名并自带夏令时规则。用法是把会话时区显式传进去：
+
+  ```html
+  {{ row.creationTime | appDate: 'full' : displayTimeZone() }}
+  ```
+
+  ```ts
+  protected readonly displayTimeZone = inject(SettingContextService).timeZone;
+  ```
+
+时区值只收 IANA 名。后端会连 Windows 时区 ID（`China Standard Time` 之类）一起解析出来，但浏览器的 `Intl.DateTimeFormat` 对它抛错——所以写入端已按 `HasIanaId` 卡住，前端不必再判一次，但也不要绕过接口自己塞值。
+
+---
+
 <!--#if (IncludeLocalization)-->
-## 7. 多语言（i18n）
+## 8. 多语言（i18n）
 
 > 本项目已启用多语言（`--include-localization true`）。默认语言英语，支持 en + zh-CN 运行时切换。
 
-### 7.1 方案与默认语言
+### 8.1 方案与默认语言
 
 - **运行时库 Transloco**（`@jsverse/transloco`）：JSON 词条运行时加载，用户即时切换语言、单包部署——**不用** Angular 编译期 `$localize`（那是按 locale 出多包、无法运行时切换）。
 - **默认语言英语（`en`）**，支持 `en` + `zh-CN`；回落语言 `en`。
 - 词条文件 `public/i18n/{en,zh-CN}.json`，运行时按 `{baseHref}i18n/{lang}.json` fetch（loader 用 `APP_BASE_HREF` 前缀，兼容子路径部署）。
 
-### 7.2 文案归属（三类，各一处权威）
+### 8.2 文案归属（三类，各一处权威）
 
 | 类别 | 归属 | 用法 |
 | --- | --- | --- |
@@ -267,7 +285,7 @@ AI 极易只改一端，务必六环全改。
 
 - **业务错误不在前端翻译**：后端按 `Accept-Language` 已产出本地化 `message`，前端 `http-error-interceptor` 优先显示它。默认按 **HTTP 状态码**统一处理即可，**无需**消费细分业务 `code`；仅在极少数需要对某个具体错误做差异化 UI 行为（如高亮某输入框）时，才读 `code` 分支——对应后端那处 `WithCode("46")`。前端词条只保留纯客户端兜底（网络断开、后端不可达）。
 
-### 7.3 关键接线（`core/`）
+### 8.3 关键接线（`core/`）
 
 - `core/services/language-service.ts`：`setActiveLang(lang)` 驱动 `TranslocoService.setActiveLang`、同步 `<html lang>`；活动语言持久化到 localStorage（镜像 `theme-service` 形态：signal + `isPlatformBrowser` 守卫）。语言只驱动 Transloco，不联动任何 UI 组件库文案。
 - `core/i18n/transloco-loader.ts`：按 `{baseHref}i18n/{lang}.json` 取词条（用 `APP_BASE_HREF` 前缀而非绝对 `/i18n/`，以支持子路径部署）。
@@ -275,12 +293,12 @@ AI 极易只改一端，务必六环全改。
 - `app.config.ts`：`provideTransloco`（`defaultLang: 'en'`）+ `TranslocoHttpLoader`。
 - 语言选择器用 Spartan **dropdown-menu**（`hlmDropdownMenuTrigger` + `ng-template` 模板驱动菜单项，触发按钮用 `hlmBtn`，与铃铛/主题按钮风格一致），封装在 `shared/components/language-switcher`，挂在 `layout/components/default-header` 最右图标区（后台页在铃铛右侧）。
 
-### 7.4 新增文案
+### 8.4 新增文案
 
 - UI 文案：在 `public/i18n/{en,zh-CN}.json` 各加一条键（`模块.语义`，如 `menu.orders`），模板用 `| transloco`。**两语言必须同时加**（CI 有 `scripts/check-i18n-keys.ps1` 键一致性闸门，缺一即红）。
 - **响应式**：`.ts` 里要随语言切换更新的文案，别在字段初始化时 `translate()` 定死；改为在 `computed`/getter 里调用 `translate()` 并读一次 `transloco.langChanges$`（或 `languageService.activeLang()`）建立依赖，切换时自动重算。
 - 业务错误文案：改后端资源（见 `api.md` §异常本地化），**不在前端加**。
-- 数据格式（日期/货币/数字）用 Angular `DatePipe`/`CurrencyPipe`/`DecimalPipe`。注意 **`LOCALE_ID` 是启动期注入、不随运行时语言切换自动改变**；如需格式也跟随切换，需自行传 locale 参数或重建相关视图，别假设它会自动联动。
+- 货币/数字用 Angular `CurrencyPipe`/`DecimalPipe`。注意 **`LOCALE_ID` 是启动期注入、不随运行时语言切换自动改变**；如需格式也跟随切换，需自行传 locale 参数或重建相关视图，别假设它会自动联动。
 <!--#endif-->
 
 ---

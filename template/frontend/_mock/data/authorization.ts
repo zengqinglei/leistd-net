@@ -55,6 +55,7 @@ export const ALL_PERMISSIONS: string[] = [
   PERMISSIONS.openApplications.resetSecret,
   //#endif
   PERMISSIONS.permissions.default,
+  PERMISSIONS.settings.default,
 ];
 
 /**
@@ -123,6 +124,12 @@ export const PERMISSION_DEFINITIONS = [
       {
         name: PERMISSIONS.permissions.default,
         displayName: 'Permission catalog',
+        parentName: undefined,
+        children: [],
+      },
+      {
+        name: PERMISSIONS.settings.default,
+        displayName: 'Settings',
         parentName: undefined,
         children: [],
       },

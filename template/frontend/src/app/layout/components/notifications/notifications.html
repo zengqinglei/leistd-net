@@ -95,7 +95,7 @@
                         <span class="bg-primary h-2 w-2 rounded-full"></span>
                       }
                       <span class="text-muted-foreground text-xs whitespace-nowrap">{{
-                        n.creationTime | date: 'MM-dd HH:mm'
+                        n.creationTime | appDate: 'monthDayTime' : displayTimeZone()
                       }}</span>
                     </span>
                   </span>

@@ -35,6 +35,7 @@ import {
 } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { SessionContextService } from '../../../../core/services/session-context-service';
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
 //#if (IncludeLocalization)
@@ -90,6 +91,7 @@ export class Login {
   private accountService = inject(AccountService);
   private authService = inject(AuthService);
   private readonly authorizationService = inject(AuthorizationService);
+  private readonly sessionContext = inject(SessionContextService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   //#if (IncludeLocalization)
@@ -144,8 +146,10 @@ export class Login {
   //#endif
 
   constructor() {
-    // 进入登录页面时清理现有认证信息
-    this.authService.clearAuthData();
+    // 进入登录页时清理上一个主体的全部痕迹：认证数据、权限、设置。
+    // 只清认证数据不够——已登录用户在 SPA 内导航到这里不会重跑应用初始化器，
+    // 旧权限和设置会留在内存里，新用户登录后若权限加载失败就会看到上一个人的偏好。
+    this.sessionContext.clear();
   }
 
   /**
@@ -168,7 +172,14 @@ export class Login {
       await lastValueFrom(this.authService.login(loginInput));
       await lastValueFrom(this.authService.loadUser());
 
-      // 登录成功提示
+      // 会话上下文必须在任何跳转之前建立完成。进登录页时它已被清空，此时直接跳 returnUrl：
+      // permissionGuard 会在空权限下判定并把人踢到 403——从受保护页面的深链登录，
+      // 本该落到那个页面，却落在拒绝页。设置也在这里就位，否则保存过的显示偏好
+      // 要到下一次硬刷新才生效（SPA 内跳转不会重跑应用初始化器）。
+      await this.sessionContext.establish();
+
+      // 成功提示放在会话建立之后：它一旦失败就走 catch 弹「登录失败」，
+      // 提前提示会让用户先看到成功、紧接着看到失败，而人还停在登录页。
       //#if (IncludeLocalization)
       toast.success(this.transloco.translate('account.login.loginSuccess'), {
         description: this.transloco.translate('account.login.welcomeBack'),
@@ -177,11 +188,6 @@ export class Login {
       //#else
       toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
       //#endif
-
-      // 权限必须在任何跳转之前加载完成。进登录页时 StartupService 已清空权限缓存，
-      // 此时直接跳 returnUrl，permissionGuard 会在空权限下判定并把人踢到 403——
-      // 从受保护页面的深链登录，本该落到那个页面，却落在拒绝页。
-      await lastValueFrom(this.authorizationService.load());
 
       if (this.isSafeLocalReturnUrl(returnUrl)) {
         await this.router.navigateByUrl(returnUrl);

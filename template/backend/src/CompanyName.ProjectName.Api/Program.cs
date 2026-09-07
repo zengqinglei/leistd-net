@@ -16,6 +16,7 @@ using Leistd.ExceptionHandling.AspNetCore;
 using CompanyName.ProjectName.Api;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Permissions.AppServices;
+using CompanyName.ProjectName.Application.Settings.AppServices;
 using Leistd.Localization.AspNetCore;
 #endif
 using Leistd.Security.AspNetCore;
@@ -263,6 +264,7 @@ try
             // 只有显式登记的强类型资源才路由到 JSON。
             options.JsonResourceTypes.Add(typeof(ApiResource));
             options.JsonResourceTypes.Add(typeof(PermissionAppService));
+            options.JsonResourceTypes.Add(typeof(SettingAppService));
         });
 #endif
     // liveness 只表示本进程存活，不依赖外部服务。

@@ -95,6 +95,7 @@ export interface ChangePasswordInputDto {
   newPassword: string;
   confirmPassword: string;
 }
+//#if (ExternalLogin)
 
 /**
  * 外部登录 URL 输出 DTO
@@ -111,3 +112,4 @@ export interface ExternalLoginCallbackInputDto {
   code: string;
   state: string;
 }
+//#endif

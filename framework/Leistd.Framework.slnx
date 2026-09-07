@@ -71,6 +71,10 @@
     <Project Path="components/response/Leistd.Response.AspNetCore/Leistd.Response.AspNetCore.csproj" />
     <Project Path="components/response/Leistd.Response.Core/Leistd.Response.Core.csproj" />
   </Folder>
+  <Folder Name="/components/settings/">
+    <Project Path="components/settings/Leistd.Settings.Core/Leistd.Settings.Core.csproj" />
+    <Project Path="components/settings/Leistd.Settings.EntityFrameworkCore/Leistd.Settings.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/components/security/">
     <Project Path="components/security/Leistd.Security.AspNetCore/Leistd.Security.AspNetCore.csproj" />
     <Project Path="components/security/Leistd.Security.Core/Leistd.Security.Core.csproj" />
@@ -146,6 +150,9 @@
   </Folder>
   <Folder Name="/tests/components/security/">
     <Project Path="tests/components/security/Leistd.Security.Tests/Leistd.Security.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/components/settings/">
+    <Project Path="tests/components/settings/Leistd.Settings.Tests/Leistd.Settings.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/components/service-client/">
     <Project Path="tests/components/service-client/Leistd.ServiceClient.Tests/Leistd.ServiceClient.Tests.csproj" />

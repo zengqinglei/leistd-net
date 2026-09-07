@@ -24,6 +24,7 @@
 | 对象映射 | 统一的 IObjectMapper 对象映射抽象，实现为 Mapster。 | `Leistd.ObjectMapping.Core`、`Leistd.ObjectMapping.Mapster` | [`object-mapping`](./object-mapping.md) |
 | 实时通信 | 通用业务事件实时推送通道：按 resourceKey 订阅与订阅授权扩展点，基于 SignalR 实现 | `Leistd.RealTime.Core`、`Leistd.RealTime.AspNetCore.SignalR` | [`realtime`](./realtime.md) |
 | 统一 API 响应 | 统一 {code, message, data} 响应模型与 ASP.NET Core 自动包装过滤器 | `Leistd.Response.Core`、`Leistd.Response.AspNetCore` | [`response`](./response.md) |
+| 设置 | 运行期可改的设置：业务声明定义，框架按 用户 → 租户 → 代码默认值 回落解析并持久化 | `Leistd.Settings.Core`、`Leistd.Settings.EntityFrameworkCore` | [`settings`](./settings.md) |
 | 服务间调用客户端 | 服务互调标准管道：Refit 接口式/手写强类型客户端注册、调用日志、TraceId 与用户上下文透传、client credentials 认证（缓存/401 自愈）、统一响应解包与远端错误还原、被调方受信恢复用户主体 | `Leistd.ServiceClient.Core`、`Leistd.ServiceClient.Refit`、`Leistd.ServiceClient.OAuth`、`Leistd.ServiceClient.AspNetCore` | [`service-client`](./service-client.md) |
 | 当前用户与身份信息 | 通过 ICurrentUser / ICurrentClient / ICurrentPrincipalAccessor 强类型读取当前登录用户与客户端身份，并支持临时切换主体。 | `Leistd.Security.Core`、`Leistd.Security.AspNetCore` | [`security`](./security.md) |
 | 链路追踪 | 全链路标识以 `System.Diagnostics.Activity` 的 TraceId 为准（无 Activity 时生成 W3C 形态标识），自动注入日志 Scope，并在 ASP.NET Core 入站与 HttpClient 出站之间透传。 | `Leistd.Tracing.Core`、`Leistd.Tracing.AspNetCore`、`Leistd.Tracing.HttpClient` | [`tracing`](./tracing.md) |

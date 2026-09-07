@@ -18,6 +18,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
+using Leistd.Settings.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Abstractions;
@@ -767,6 +768,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 #endif
                 nameof(PermissionGrantRecord),
                 nameof(Role),
+                nameof(SettingRecord),
                 nameof(User)
             },
             multiTenantEntities);

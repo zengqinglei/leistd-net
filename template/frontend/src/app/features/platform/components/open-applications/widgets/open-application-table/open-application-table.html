@@ -278,7 +278,7 @@
                         }
                         @case ('creationTime') {
                           <span class="text-xs text-muted-foreground whitespace-nowrap">{{
-                            row.original.creationTime | date: 'yyyy-MM-dd HH:mm:ss'
+                            row.original.creationTime | appDate: 'full' : displayTimeZone()
                           }}</span>
                         }
                         @case ('actions') {
@@ -457,7 +457,7 @@
                         @if (isColumnHidden('creationTime')) {
                           <dt class="text-muted-foreground">{{ detailLabel('created') }}</dt>
                           <dd class="text-muted-foreground">
-                            {{ row.original.creationTime | date: 'yyyy-MM-dd HH:mm:ss' }}
+                            {{ row.original.creationTime | appDate: 'full' : displayTimeZone() }}
                           </dd>
                         }
                       </dl>

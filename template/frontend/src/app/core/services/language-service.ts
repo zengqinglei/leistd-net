@@ -1,5 +1,5 @@
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
-import { computed, effect, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
+import { computed, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
 
 export const SUPPORTED_LANGS = ['en', 'zh-CN'] as const;
@@ -23,9 +23,15 @@ export const LANG_OPTIONS: LangMeta[] = [
 ];
 
 /**
- * 语言服务：管理活动语言，驱动 Transloco 文案并持久化到 localStorage。
+ * 语言服务：管理活动语言并驱动 Transloco 文案。
  *
- * 形态镜像 ThemeService：signal 状态 + effect 持久化 + isPlatformBrowser 守卫（SSR 安全）。
+ * **活动语言有两个来源，本地存储只认其中一个。** 存进 localStorage 的是「这台设备的偏好」
+ * ——未登录访客的显式选择，也是主体离开后的回落值。账户设置里的语言只在内存生效：
+ * 它属于某个账户，写进设备存储就分不清「这台机器习惯用哪种语言」和「上一个登录的人用哪种」，
+ * 于是共享机器上 A 退出后，B 会在登录页看到 A 的语言。
+ *
+ * 账户语言不落盘也不会有「先英文闪一下再变中文」：外壳只在启动流成功后渲染，
+ * 而账户语言在启动流里就应用完了。
  */
 @Injectable({ providedIn: 'root' })
 export class LanguageService {
@@ -35,7 +41,7 @@ export class LanguageService {
   private readonly transloco = inject(TranslocoService);
   private readonly document = inject(DOCUMENT);
 
-  private readonly activeLangState = signal<Lang>(this.loadLang());
+  private readonly activeLangState = signal<Lang>(this.loadDeviceLang());
 
   readonly activeLang = this.activeLangState.asReadonly();
   readonly options = LANG_OPTIONS;
@@ -44,18 +50,33 @@ export class LanguageService {
   );
 
   constructor() {
-    // 初次即应用一次，并在语言变化时持久化
     this.applyLang(this.activeLang());
-
-    effect(() => {
-      const lang = this.activeLang();
-      if (isPlatformBrowser(this.platformId)) {
-        localStorage.setItem(LanguageService.STORAGE_KEY, lang);
-      }
-    });
   }
 
-  setActiveLang(lang: Lang): void {
+  /**
+   * 切到指定语言，并记为本设备偏好。
+   *
+   * 只有「未登录时的显式选择」走这里：已登录的选择属于账户，走
+   * {@link applyAccountLang} 并由切换器写回设置。
+   */
+  setDeviceLang(lang: Lang): void {
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.setItem(LanguageService.STORAGE_KEY, lang);
+    }
+    this.setActive(lang);
+  }
+
+  /** 应用账户设置里的语言，只改内存不落盘（理由见类注释）。 */
+  applyAccountLang(lang: Lang): void {
+    this.setActive(lang);
+  }
+
+  /** 回到本设备偏好：主体离开、或新主体的设置没加载上来时用。 */
+  resetToDeviceLang(): void {
+    this.setActive(this.loadDeviceLang());
+  }
+
+  private setActive(lang: Lang): void {
     if (lang === this.activeLang()) {
       return;
     }
@@ -70,7 +91,7 @@ export class LanguageService {
     this.document.documentElement.lang = lang;
   }
 
-  private loadLang(): Lang {
+  private loadDeviceLang(): Lang {
     if (!isPlatformBrowser(this.platformId)) {
       return DEFAULT_LANG;
     }

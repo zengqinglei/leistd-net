@@ -5,8 +5,10 @@ import { Observable, map, tap } from 'rxjs';
 import { AuthService } from '../../../core/services/auth-service';
 import {
   ChangePasswordInputDto,
+  //#if (ExternalLogin)
   ExternalLoginCallbackInputDto,
   ExternalLoginUrlOutputDto,
+  //#endif
   RegisterInputDto,
   UpdateCurrentUserInputDto,
   UserOutputDto,
@@ -49,6 +51,7 @@ export class AccountService {
   changePassword(data: ChangePasswordInputDto): Observable<void> {
     return this.http.post('/api/v1/auth/change-password', data).pipe(map(() => undefined));
   }
+  //#if (ExternalLogin)
 
   getExternalLoginUrl(provider: 'github' | 'google'): Observable<ExternalLoginUrlOutputDto> {
     return this.http.get<ExternalLoginUrlOutputDto>(`/api/v1/external-auth/${provider}/login-url`);
@@ -57,4 +60,5 @@ export class AccountService {
   externalLoginCallback(provider: string, data: ExternalLoginCallbackInputDto): Observable<void> {
     return this.http.post<void>(`/api/v1/external-auth/${provider}/callback`, data);
   }
+  //#endif
 }

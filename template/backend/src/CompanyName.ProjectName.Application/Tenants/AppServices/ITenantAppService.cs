@@ -1,12 +1,13 @@
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Ddd.Application.Contracts.AppService;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 
 /// <summary>
 /// 租户管理应用服务（宿主侧能力）
 /// </summary>
-public interface ITenantAppService
+public interface ITenantAppService : IAppService
 {
     /// <summary>分页查询租户</summary>
     Task<PagedResultDto<TenantOutputDto>> GetPagedAsync(GetTenantPagedInputDto input, CancellationToken cancellationToken = default);
