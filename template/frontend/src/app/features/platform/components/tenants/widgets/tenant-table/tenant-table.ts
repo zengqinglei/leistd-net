@@ -1,9 +1,4 @@
-import { DatePipe } from '@angular/common';
-//#if (IncludeLocalization)
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
-//#else
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-//#endif
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -34,6 +29,7 @@ import {
 //#if (IncludeLocalization)
 import { refreshOnLanguageChange } from '../../../../../../core/i18n/translation-ready';
 //#endif
+import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import {
   TablePaginator,
   TablePaginatorLabels,
@@ -43,6 +39,7 @@ import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
 } from '../../../../../../shared/models/table-column-meta';
+import { AppDate } from '../../../../../../shared/pipes/app-date.pipe';
 import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
@@ -56,7 +53,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
 @Component({
   selector: 'app-tenant-table',
   imports: [
-    DatePipe,
+    AppDate,
     NgIcon,
     HlmBadge,
     HlmButton,
@@ -85,6 +82,9 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantTable {
+  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
+  // 会让同一时刻在不同页面显示成不同时间。
+  protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
 

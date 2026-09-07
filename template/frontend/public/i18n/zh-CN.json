@@ -68,7 +68,8 @@
     "hostTenant": "宿主"
   },
   "language": {
-    "label": "语言"
+    "label": "语言",
+    "saveFailed": "本次已切换，但账户偏好未保存"
   },
   "httpError": {
     "400": "发出的请求有错误，服务器没有进行新建或修改数据的操作。",
@@ -95,7 +96,9 @@
       "workbench": "工作台",
       "appSubtitle": "管理平台",
       "roles": "角色管理",
-      "tenants": "租户管理"
+      "tenants": "租户管理",
+      "groupOther": "其它",
+      "settings": "设置"
     },
     "notifications": {
       "title": "通知",
@@ -127,6 +130,16 @@
     "placeholder": {
       "title": "工作区",
       "comingSoon": "功能开发中，敬请期待..."
+    },
+    "settings": {
+      "title": "设置",
+      "description": "管理你的账户偏好与系统默认值",
+      "account": "账户",
+      "accountDescription": "只影响你自己，留空则继承系统默认值",
+      "system": "系统",
+      "systemDescription": "所有用户的默认值，用户可各自覆盖",
+      "reset": "恢复默认",
+      "empty": "此分组下没有可配置项"
     }
   },
   "landing": {

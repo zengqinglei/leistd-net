@@ -1,3 +1,7 @@
+using Leistd.Settings.Abstractions;
+using CompanyName.ProjectName.Application.Settings.Provider;
+using CompanyName.ProjectName.Application.Settings.AppServices;
+using CompanyName.ProjectName.Application.Settings.Timing;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.TenantConnections.AppServices;
@@ -62,7 +66,13 @@ public static class DependencyInjection
         // Scoped：一次请求内的主体解析结果被 PermissionSubjectProvider 与 IPermissionChecker 共享。
         services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
+        services.AddSingleton<ISettingDefinitionProvider, SettingDefinitionProvider>();
         services.AddTransient<IPermissionAppService, PermissionAppService>();
+        // 设置对所有服务形态都开放：Controller 与设置页在 Resource 模式下同样保留，
+        // 少了这条注册，认证用户一访问 /api/v1/settings 就因解析不到构造参数返回 500。
+        services.AddTransient<ISettingAppService, SettingAppService>();
+        // 服务端产出给人看的时间文本时注入它；DTO 保持 UTC 交给前端渲染，不必经过这里。
+        services.AddTransient<IUserTimeZoneProvider, UserTimeZoneProvider>();
 
 #if (LocalIdentity)
         services.AddTransient<ITenantAppService, TenantAppService>();

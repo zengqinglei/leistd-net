@@ -124,6 +124,9 @@
     "{0} must be between {1} and {2}.": "{0} 必须介于 {1} 与 {2} 之间。",
     "{0} is required.": "{0}不能为空",
     "{0} is too large. Compress it and try again.": "{0}内容过大，请压缩后重试",
-    "{0} must be between {2} and {1} characters.": "{0}长度必须在 {2}-{1} 个字符之间"
+    "{0} must be between {2} and {1} characters.": "{0}长度必须在 {2}-{1} 个字符之间",
+    "Setting:Display.Language": "界面语言",
+    "Setting:Display.TimeZone": "时区",
+    "Permission:App.Settings": "管理设置"
   }
 }

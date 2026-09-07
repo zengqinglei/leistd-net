@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Leistd.Authorization.EntityFrameworkCore.Entities;
 
 #nullable disable
 
@@ -32,6 +31,33 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 {
                     table.PrimaryKey("PK_AuthorizationVersionRecord", x => x.Id);
                 });
+
+#if (IncludeNotifications)
+            migrationBuilder.CreateTable(
+                name: "NotificationRecord",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    Title = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Content = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    Type = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    Link = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    Icon = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    IsRead = table.Column<bool>(type: "boolean", nullable: false),
+                    ReadAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RelatedEntityId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    RelatedEntityType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    MetadataJson = table.Column<string>(type: "text", nullable: true),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_NotificationRecord", x => x.Id);
+                });
+#endif
 
             migrationBuilder.CreateTable(
                 name: "PermissionGrantRecords",
@@ -75,6 +101,23 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Roles", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SettingRecord",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    UserId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    ScopeKey = table.Column<string>(type: "character varying(192)", maxLength: 192, nullable: false),
+                    Name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    Value = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SettingRecord", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -148,12 +191,26 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 filter: "\"TenantId\" IS NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AuthorizationVersionRecord_TenantId_ProviderName_ProviderK~",
+                name: "IX_AuthorizationVersionRecord_TenantId_ProviderName_ProviderKey",
                 schema: "companyname-projectname",
                 table: "AuthorizationVersionRecord",
                 columns: new[] { "TenantId", "ProviderName", "ProviderKey" },
                 unique: true,
                 filter: "\"TenantId\" IS NOT NULL");
+
+#if (IncludeNotifications)
+            migrationBuilder.CreateIndex(
+                name: "IX_NotificationRecord_UserId_CreationTime",
+                schema: "companyname-projectname",
+                table: "NotificationRecord",
+                columns: new[] { "UserId", "CreationTime" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_NotificationRecord_UserId_IsRead",
+                schema: "companyname-projectname",
+                table: "NotificationRecord",
+                columns: new[] { "UserId", "IsRead" });
+#endif
 
             migrationBuilder.CreateIndex(
                 name: "IX_PermissionGrantRecords_PermissionName_ProviderName_Provider~",
@@ -176,6 +233,13 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 schema: "companyname-projectname",
                 table: "PermissionGrantRecords",
                 columns: new[] { "TenantId", "ProviderName", "ProviderKey" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SettingRecord_ScopeKey_Name",
+                schema: "companyname-projectname",
+                table: "SettingRecord",
+                columns: new[] { "ScopeKey", "Name" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserRoles_RoleId",
@@ -229,8 +293,18 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 name: "AuthorizationVersionRecord",
                 schema: "companyname-projectname");
 
+#if (IncludeNotifications)
+            migrationBuilder.DropTable(
+                name: "NotificationRecord",
+                schema: "companyname-projectname");
+#endif
+
             migrationBuilder.DropTable(
                 name: "PermissionGrantRecords",
+                schema: "companyname-projectname");
+
+            migrationBuilder.DropTable(
+                name: "SettingRecord",
                 schema: "companyname-projectname");
 
             migrationBuilder.DropTable(

@@ -1,9 +1,10 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.TenantConnections.Dtos;
+using Leistd.Ddd.Application.Contracts.AppService;
 
 namespace CompanyName.ProjectName.Application.TenantConnections.AppServices;
 
-public interface ITenantConnectionAppService
+public interface ITenantConnectionAppService : IAppService
 {
     Task<TenantConnectionOutputDto> GetAsync(Guid tenantId, CancellationToken cancellationToken = default);
 

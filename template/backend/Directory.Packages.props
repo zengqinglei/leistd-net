@@ -33,6 +33,8 @@
     <PackageVersion Include="Leistd.UnitOfWork.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Settings.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Settings.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />

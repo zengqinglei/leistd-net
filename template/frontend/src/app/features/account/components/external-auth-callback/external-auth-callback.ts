@@ -8,6 +8,7 @@ import { lastValueFrom } from 'rxjs';
 
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { SessionContextService } from '../../../../core/services/session-context-service';
 import { AccountService } from '../../services/account-service';
 
 /**
@@ -41,6 +42,7 @@ import { AccountService } from '../../services/account-service';
 export class ExternalAuthCallback implements OnInit {
   private authService = inject(AuthService);
   private readonly authorizationService = inject(AuthorizationService);
+  private readonly sessionContext = inject(SessionContextService);
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -88,9 +90,10 @@ export class ExternalAuthCallback implements OnInit {
         this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }),
       );
 
-      // 2. 加载用户信息并按权限跳转
+      // 2. 建立会话上下文（权限 + 设置）并按权限跳转。
+      //    设置也必须在这里就位：SPA 内跳转不会重跑应用初始化器。
       await lastValueFrom(this.authService.loadUser());
-      await lastValueFrom(this.authorizationService.load());
+      await this.sessionContext.establish();
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
       } else {

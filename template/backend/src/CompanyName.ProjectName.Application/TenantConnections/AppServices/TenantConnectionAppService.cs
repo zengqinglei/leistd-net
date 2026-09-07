@@ -4,13 +4,14 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using CompanyName.ProjectName.Application.TenantConnections.Dtos;
 using Leistd.MultiTenancy;
 using Leistd.ObjectMapping.Abstractions;
+using Leistd.Ddd.Application.AppService;
 
 namespace CompanyName.ProjectName.Application.TenantConnections.AppServices;
 
 public sealed class TenantConnectionAppService(
     ITenantConnectionConfigurationStore store,
     ITenantConnectionConfigurationManager manager,
-    IObjectMapper objectMapper) : ITenantConnectionAppService
+    IObjectMapper objectMapper) : BaseAppService, ITenantConnectionAppService
 {
     public async Task<TenantConnectionOutputDto> GetAsync(
         Guid tenantId,

@@ -49,6 +49,7 @@
     <PackageReference Include="Leistd.Ddd.Infrastructure" />
     <PackageReference Include="Leistd.Auditing.EntityFrameworkCore" />
     <PackageReference Include="Leistd.Authorization.EntityFrameworkCore" />
+    <PackageReference Include="Leistd.Settings.EntityFrameworkCore" />
 <!--#if (LocalIdentity)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
 <!--#endif-->

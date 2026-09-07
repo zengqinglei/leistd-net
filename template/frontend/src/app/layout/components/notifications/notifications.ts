@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -32,7 +31,9 @@ import { ConfirmService } from '../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
+import { SettingContextService } from '../../../core/settings/setting-context-service';
 import { PopoverAria } from '../../../shared/directives/popover-aria';
+import { AppDate } from '../../../shared/pipes/app-date.pipe';
 
 /**
  * 通知中心：铃铛 + 未读角标 + popover 通知列表（标记已读 / 单条或全部清除）。
@@ -47,7 +48,7 @@ import { PopoverAria } from '../../../shared/directives/popover-aria';
     NgIcon,
     HlmButton,
     HlmBadge,
-    DatePipe,
+    AppDate,
     ...HlmPopoverImports,
     ...HlmTooltipImports,
     PopoverAria,
@@ -70,6 +71,9 @@ import { PopoverAria } from '../../../shared/directives/popover-aria';
 })
 export class Notifications implements OnInit {
   private readonly router = inject(Router);
+  // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
+  // 会让同一时刻在不同页面显示成不同时间。
+  protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   private readonly confirmService = inject(ConfirmService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);

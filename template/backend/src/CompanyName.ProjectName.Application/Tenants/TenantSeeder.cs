@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
 using Leistd.Lock;
 using Leistd.Authorization.Abstractions;
+using Leistd.Settings.Abstractions;
 using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.Abstractions;
 
@@ -33,6 +34,7 @@ public class TenantSeeder(
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
     IDistributedLock distributedLock,
+    ISettingStore settingStore,
     ILogger<TenantSeeder> logger) : ITenantSeeder
 {
     private const string MemberRoleName = "Member";
@@ -103,6 +105,9 @@ public class TenantSeeder(
             var userIds = users.Select(u => u.Id).ToList();
             await userRoleRepository.DeleteManyAsync(ur => userIds.Contains(ur.UserId), cancellationToken);
         }
+
+        // 设置行带租户归属：租户永久废弃后它们既读不到也删不掉，必须一并清理。
+        await settingStore.RemoveAllAsync(cancellationToken);
 
         logger.LogInformation(
             "Purged seed data for tenant {TenantId}: {UserCount} user(s), {RoleCount} role(s)",

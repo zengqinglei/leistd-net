@@ -68,7 +68,8 @@
     "hostTenant": "Host"
   },
   "language": {
-    "label": "Language"
+    "label": "Language",
+    "saveFailed": "Switched for now, but your account preference was not saved"
   },
   "httpError": {
     "400": "The request was malformed; the server did not create or modify data.",
@@ -95,7 +96,9 @@
       "workbench": "Workbench",
       "appSubtitle": "Admin Platform",
       "roles": "Role Management",
-      "tenants": "Tenant Management"
+      "tenants": "Tenant Management",
+      "groupOther": "Other",
+      "settings": "Settings"
     },
     "notifications": {
       "title": "Notifications",
@@ -127,6 +130,16 @@
     "placeholder": {
       "title": "Workspace",
       "comingSoon": "This feature is under development, stay tuned..."
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Manage your account preferences and system defaults",
+      "account": "Account",
+      "accountDescription": "Applies to you only; leave blank to inherit the system default",
+      "system": "System",
+      "systemDescription": "Defaults for everyone here; each user may override them",
+      "reset": "Reset to default",
+      "empty": "No configurable items in this section"
     }
   },
   "landing": {

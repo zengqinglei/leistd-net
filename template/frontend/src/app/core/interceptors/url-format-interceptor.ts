@@ -7,6 +7,7 @@ import {
 } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+import { SKIP_GATEWAY } from './http-context-tokens';
 import { environment } from '../../../environments/environment';
 
 /**
@@ -24,7 +25,7 @@ export const urlFormatInterceptor: HttpInterceptorFn = (
 ): Observable<HttpEvent<unknown>> => {
   let url = req.url;
 
-  if (shouldSkipUrlFormat(url)) {
+  if (req.context.get(SKIP_GATEWAY) || shouldSkipUrlFormat(url)) {
     return next(req);
   }
 

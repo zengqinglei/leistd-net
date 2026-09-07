@@ -9,6 +9,7 @@ import {
   lucideBuilding2,
   lucideGauge,
   lucideIdCard,
+  lucideSettings,
   lucideShieldCheck,
   lucideUsers,
 } from '@ng-icons/lucide';
@@ -53,7 +54,7 @@ interface MenuGroup {
   // prettier-ignore
   providers: [provideIcons({
     lucideBuilding2,
-    lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck,
+    lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck, lucideSettings,
   })],
   templateUrl: './default-sidebar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -109,12 +110,28 @@ export class DefaultSidebar {
       ],
     },
     //#endif
+    {
+      label: 'layout.sidebar.groupOther',
+      items: [
+        // 不设权限：账户偏好是个人数据，任何登录用户都能改自己的。
+        // 租户默认值那一栏由页面内按 App.Settings 裁剪。
+        { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
+      ],
+    },
   ];
 
   private readonly workspaceMenuGroups: MenuGroup[] = [
     {
       items: [
         { label: 'layout.sidebar.workbench', icon: 'lucideGauge', route: '/workspace/dashboard' },
+      ],
+    },
+    {
+      label: 'layout.sidebar.groupOther',
+      items: [
+        // 设置页在 workspace 区：它只要求认证，普通用户也进得去（platform 区要管理权限）。
+        // 两个区都放入口，管理员不必为改自己的偏好切换区域。
+        { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
       ],
     },
   ];
@@ -165,10 +182,26 @@ export class DefaultSidebar {
       ],
     },
     //#endif
+    {
+      label: 'Other',
+      items: [
+        // 不设权限：账户偏好是个人数据，任何登录用户都能改自己的。
+        // 租户默认值那一栏由页面内按 App.Settings 裁剪。
+        { label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' },
+      ],
+    },
   ];
 
   private readonly workspaceMenuGroups: MenuGroup[] = [
     { items: [{ label: 'Workbench', icon: 'lucideGauge', route: '/workspace/dashboard' }] },
+    {
+      label: 'Other',
+      items: [
+        // 设置页在 workspace 区：它只要求认证，普通用户也进得去（platform 区要管理权限）。
+        // 两个区都放入口，管理员不必为改自己的偏好切换区域。
+        { label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' },
+      ],
+    },
   ];
   //#endif
 

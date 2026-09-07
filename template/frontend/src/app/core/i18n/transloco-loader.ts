@@ -1,7 +1,9 @@
 import { APP_BASE_HREF, PlatformLocation } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Translation, TranslocoLoader } from '@jsverse/transloco';
+
+import { SKIP_GATEWAY } from '../interceptors/http-context-tokens';
 
 /**
  * 运行时词条加载器：从 {baseHref}i18n/{lang}.json 加载翻译。
@@ -17,7 +19,11 @@ export class TranslocoHttpLoader implements TranslocoLoader {
   private readonly baseHref = this.resolveBaseHref();
 
   getTranslation(lang: string) {
-    return this.http.get<Translation>(`${this.baseHref}i18n/${lang}.json`);
+    // 词条随前端一起发布，必须从站点自身取：默认会被加上网关前缀，
+    // 前后端分域时就变成向 API 服务器要静态文件。
+    return this.http.get<Translation>(`${this.baseHref}i18n/${lang}.json`, {
+      context: new HttpContext().set(SKIP_GATEWAY, true),
+    });
   }
 
   private resolveBaseHref(): string {

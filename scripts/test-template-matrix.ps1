@@ -474,6 +474,9 @@ $scenarioMap = [ordered]@{
         )
         ReadmeContains = @()
         ReadmeExcludes = @()
+        # 外部登录关闭：Mock 路由、客户端方法与 DTO 都不得留下。
+        # 这类残留编译、lint、单测全都放得过——Mock 会对一个后端返回 404 的端点回成功。
+        ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto")
     }
     "resource" = @{
         Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
@@ -514,7 +517,11 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @()
         ReadmeExcludes = @()
         # OIDC 契约不得残留：端点路径与 OpenIddict 类型都不该出现在产物里
-        ForbiddenTokens = @("connect/token", "connect/authorize", "OpenIddict", "App.OpenApplications")
+        ForbiddenTokens = @(
+            "connect/token", "connect/authorize", "OpenIddict", "App.OpenApplications",
+            # 外部登录同样关闭（见 identity 场景的同组断言）
+            "external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto"
+        )
     }
     "identity-notifications" = @{
         Arguments = @("--include-notifications"); Frontend = $true; Lint = $true

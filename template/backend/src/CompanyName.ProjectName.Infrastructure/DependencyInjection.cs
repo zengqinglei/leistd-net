@@ -1,5 +1,6 @@
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Authorization.EntityFrameworkCore;
+using Leistd.Settings.EntityFrameworkCore;
 #if (LocalIdentity)
 using Leistd.MultiTenancy.EntityFrameworkCore;
 #endif
@@ -216,6 +217,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationCleanupService, NotificationCleanupService>();
 #endif
         services.AddAuthorizationEfCore<MyProjectDbContext>();
+        services.AddSettingsEfCore<MyProjectDbContext>();
 #if (LocalIdentity)
         services.AddMultiTenancyEfCore<IdentityControlDbContext>();
 #endif

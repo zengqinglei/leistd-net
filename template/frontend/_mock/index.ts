@@ -3,6 +3,7 @@ export * from './api/auth';
 //#endif
 export * from './api/user';
 export * from './api/authorization';
+export * from './api/setting';
 //#if (LocalIdentity)
 export * from './api/tenant';
 //#endif

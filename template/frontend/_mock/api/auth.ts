@@ -12,7 +12,11 @@ import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
 import { TENANTS } from '../data/tenant';
 import { USERS, toUserOutput } from '../data/user';
-import { MOCK_SESSION_USER_ID, setMockSessionUserId } from '../utils/current-user';
+import {
+  MOCK_SESSION_USER_ID,
+  setMockSessionTenantKey,
+  setMockSessionUserId,
+} from '../utils/current-user';
 
 const CAPTCHA_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const CAPTCHA_DIGITS = '23456789';
@@ -62,11 +66,14 @@ function ensureTenantActive(req: MockRequest): void {
   }
 }
 
-function sessionLogin(usernameOrEmail: string, password: string): 'ok' {
+function sessionLogin(usernameOrEmail: string, password: string, tenantKey: string): 'ok' {
   const user = USERS.find((u) => u.username === usernameOrEmail || u.email === usernameOrEmail);
 
   if (user && user.password === password) {
     setMockSessionUserId(user.id);
+    // 租户在登录这一刻定案，之后由会话（真实环境是 cookie 里的租户声明）说话；
+    // 认证后的接口不再看 X-Tenant-Id，与后端的解析链一致。
+    setMockSessionTenantKey(tenantKey);
     return 'ok';
   }
 
@@ -314,6 +321,7 @@ function getRequestScope(req: MockRequest): string {
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+//#if (ExternalLogin)
 
 function getExternalLoginUrl(provider: string): { loginUrl: string } {
   const state = Math.random().toString(36).substring(7);
@@ -336,11 +344,16 @@ function getExternalLoginUrl(provider: string): { loginUrl: string } {
   return { loginUrl };
 }
 
-function externalLoginCallback(): 'ok' {
-  // Mock: 直接登录为第一个测试用户
+function externalLoginCallback(req: MockRequest): 'ok' {
+  // Mock: 直接登录为第一个测试用户。
+  // 回调仍是匿名请求，会带上登录前选定的租户头（tenantInterceptor 给所有 /api/ 请求附加），
+  // 真实后端在这一步进入该租户上下文并把租户写进认证主体——所以这里也要按头定案，
+  // 固定成宿主会让后续所有设置读写落到错误的作用域。
   setMockSessionUserId(USERS[0].id);
+  setMockSessionTenantKey(getRequestScope(req));
   return 'ok';
 }
+//#endif
 
 export const AUTH_API = {
   'POST /api/v1/auth/register': (req: MockRequest) => register(req),
@@ -350,12 +363,19 @@ export const AUTH_API = {
   'POST /api/v1/auth/logout': () => logout(),
   'POST /api/v1/auth/session-login': (req: MockRequest) => {
     ensureTenantActive(req);
-    return sessionLogin(req.body.usernameOrEmail, req.body.password);
+    // 登录是匿名阶段，此时 X-Tenant-Id 决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
+    return sessionLogin(
+      req.body.usernameOrEmail,
+      req.body.password,
+      req.headers.get('X-Tenant-Id') ?? 'host',
+    );
   },
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
   'PUT /api/v1/auth/me': (req: MockRequest) => updateCurrentUser(req),
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
+  //#if (ExternalLogin)
   'GET /api/v1/external-auth/:provider/login-url': (req: MockRequest) =>
     getExternalLoginUrl(req.params.provider),
-  'POST /api/v1/external-auth/:provider/callback': () => externalLoginCallback(),
+  'POST /api/v1/external-auth/:provider/callback': (req: MockRequest) => externalLoginCallback(req),
+  //#endif
 };
