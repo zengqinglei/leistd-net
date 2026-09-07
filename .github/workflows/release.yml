@@ -17,6 +17,9 @@ jobs:
     # 跳过机器人自身回写提交与 [skip ci]，避免死循环；schedule/dispatch 没有 head_commit。
     if: github.event_name != 'push' || (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]'))
     runs-on: ubuntu-latest
+    # 不设 concurrency（同时发两个 tag 是合法的），但必须有上限：
+    # 没有上限时挂死一次按默认 360 分钟计费
+    timeout-minutes: 30
     permissions:
       contents: write      # 回写 VERSION / 打 tag / 建 Release
       id-token: write      # nuget.org Trusted Publishing（stable/beta）
