@@ -298,6 +298,11 @@ framework/tests/
   只碰变更跟踪器、不碰 DDL 的测试可以用 InMemory。
 - **替身优先用官方实现**：时间用 `FakeTimeProvider`（`Microsoft.Extensions.TimeProvider.Testing`），
   日志用 `FakeLogger`（`Microsoft.Extensions.Diagnostics.Testing`）。手写替身只在官方没有时才写。
+- **需要外部服务的用例可以跳过，但跳过的代价必须由 CI 承担。**
+  `dotnet test framework/Leistd.Framework.slnx` 必须在没装 Redis / PostgreSQL 的机器上全绿，
+  所以这类用例用 `[SkippableFact]` + `Skip.IfNot(可达性, 原因)`，默认连本机端口、可用环境变量覆盖。
+  作为交换，**CI 必须显式提供该服务并在跑测试前探活**——服务缺失时那一步直接红，
+  而不是让这一批用例悄无声息地跳过去。当前只有 `Leistd.Lock.Tests` 的 Redis 契约走这条路。
 - **替身被两个以上项目重复发明就上移到 `Leistd.TestBase`**；语义只是相近的留在各自项目里，
   强行合并会让替身长出一堆只服务某一个调用方的开关。
 

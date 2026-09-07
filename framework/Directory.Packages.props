@@ -43,6 +43,9 @@
          IsTestProject=true，于是 dotnet test 把它当测试程序集启动并失败 -->
     <PackageVersion Include="xunit.assert" Version="2.9.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- 条件跳过：xunit 2.x 没有动态 Skip API。仅 Lock 测试项目使用——
+         真实 Redis 契约用例在没有 Redis 的机器上跳过，而不是让仓库的提交前自检整体失败 -->
+    <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
     <!-- 事务相关分支测试用（EF InMemory 不支持事务，见测试选型说明）；覆盖率收集 -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />

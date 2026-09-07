@@ -1,6 +1,9 @@
 using Leistd.Lock.Abstractions;
 using Xunit;
 
+// SkippableFact 在没有跳过时与普通 Fact 行为一致；
+// 内存派生永不跳过，Redis 派生在没有服务时跳过。
+
 namespace Leistd.Lock.Tests.Contracts;
 
 /// <summary>
@@ -16,11 +19,12 @@ namespace Leistd.Lock.Tests.Contracts;
 public abstract class LockContractTests
 {
     /// <summary>构造被测实现。同一个实例内的键必须互斥。</summary>
+    /// <remarks>需要外部服务的实现在这里调用 <c>Skip.IfNot(...)</c>——没有服务时整类跳过。</remarks>
     protected abstract ILock CreateLock();
 
     private static string NewKey() => $"key-{Guid.NewGuid():N}";
 
-    [Fact]
+    [SkippableFact]
     public async Task Lock_returns_a_handle_for_a_free_key()
     {
         await using var handle = await CreateLock().LockAsync(NewKey());
@@ -28,7 +32,7 @@ public abstract class LockContractTests
         Assert.NotNull(handle);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Try_lock_succeeds_on_a_free_key()
     {
         await using var handle = await CreateLock().TryLockAsync(NewKey(), TimeSpan.FromSeconds(1));
@@ -37,7 +41,7 @@ public abstract class LockContractTests
     }
 
     // 零超时的语义是"试一次、不等待"，不是"不试"。漂移就发生在这里。
-    [Fact]
+    [SkippableFact]
     public async Task Zero_timeout_still_attempts_once()
     {
         await using var handle = await CreateLock().TryLockAsync(NewKey(), TimeSpan.Zero);
@@ -45,7 +49,7 @@ public abstract class LockContractTests
         Assert.NotNull(handle);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Zero_timeout_on_a_held_key_returns_null_instead_of_waiting()
     {
         var sut = CreateLock();
@@ -55,7 +59,7 @@ public abstract class LockContractTests
         Assert.Null(await sut.TryLockAsync(key, TimeSpan.Zero));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Try_lock_times_out_on_a_held_key_and_returns_null()
     {
         var sut = CreateLock();
@@ -66,7 +70,7 @@ public abstract class LockContractTests
     }
 
     // 释放后立即可再取：否则一次失败的临界区会永久锁死这个键。
-    [Fact]
+    [SkippableFact]
     public async Task Releasing_the_handle_frees_the_key()
     {
         var sut = CreateLock();
@@ -79,7 +83,7 @@ public abstract class LockContractTests
     }
 
     // 不同键之间不得互相阻塞——按键互斥是这个接口存在的全部理由。
-    [Fact]
+    [SkippableFact]
     public async Task Different_keys_do_not_block_each_other()
     {
         var sut = CreateLock();
@@ -90,7 +94,7 @@ public abstract class LockContractTests
     }
 
     // 负超时是调用方的编程错误，必须当场抛而不是当成零或无限等待。
-    [Fact]
+    [SkippableFact]
     public async Task Negative_timeout_is_rejected()
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
@@ -99,7 +103,7 @@ public abstract class LockContractTests
 
     // 等待中被取消必须抛 OperationCanceledException，而不是返回 null——
     // 返回 null 会被调用方当成"锁被占用"而走降级路径，把取消吞掉。
-    [Fact]
+    [SkippableFact]
     public async Task Cancellation_while_waiting_throws_rather_than_returning_null()
     {
         var sut = CreateLock();
@@ -111,7 +115,7 @@ public abstract class LockContractTests
             () => sut.TryLockAsync(key, TimeSpan.FromSeconds(10), cts.Token));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Cancellation_while_blocking_throws()
     {
         var sut = CreateLock();
@@ -124,7 +128,7 @@ public abstract class LockContractTests
 
     // 取消或超时之后这个键必须仍然可用：失败路径若没有归还内部租约，
     // 键会被永久占住，而症状要到很久以后才显形。
-    [Fact]
+    [SkippableFact]
     public async Task A_failed_attempt_does_not_leak_the_key()
     {
         var sut = CreateLock();
@@ -139,7 +143,7 @@ public abstract class LockContractTests
     }
 
     // 未失效时 LockLost 不得被取消，否则调用方关联它之后会立刻被打断。
-    [Fact]
+    [SkippableFact]
     public async Task Lock_lost_is_not_signalled_while_the_handle_is_held()
     {
         await using var handle = await CreateLock().LockAsync(NewKey());
@@ -148,7 +152,7 @@ public abstract class LockContractTests
     }
 
     // 并发争用下同一时刻只能有一个持有者。
-    [Fact]
+    [SkippableFact]
     public async Task Only_one_caller_holds_the_key_at_a_time()
     {
         var sut = CreateLock();

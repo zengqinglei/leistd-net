@@ -3,7 +3,8 @@ name: CI
 # PR 与非发布推送的质量闸门（与 release.yml 分离，不发包）：
 #   - docs-sync：组件文档、Skill 与引用一致性
 #   - template-matrix：打包当前框架并验证全部条件场景的生成、运行与前后端构建
-#   - test：框架单元测试
+#   - test：框架单元测试（含真实 Redis 的分布式锁契约）
+#   - postgresql-e2e：模板在真实 PostgreSQL 上的迁移与租户隔离
 on:
   pull_request:
     branches: [main, develop]
@@ -11,10 +12,16 @@ on:
     branches: [develop]
   workflow_dispatch:
 
+# 同一分支的新推送作废旧 run：8 分钟的矩阵跑三遍没有意义，且会堵住队列
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   docs-sync:
     name: 文档与 Skill 同步闸门
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: 安装 Python
@@ -31,6 +38,9 @@ jobs:
   template-matrix:
     name: 模板全场景矩阵
     runs-on: ubuntu-latest
+    # 本地实测 8 分钟；矩阵里 Angular healthcheck 的交互提示与 Karma 的 Chrome 都有挂死先例，
+    # 没有上限时一次卡死按默认 360 分钟计费并堵住队列
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: 安装 .NET 10 SDK
@@ -56,6 +66,19 @@ jobs:
   test:
     name: 框架单元测试
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 分布式锁的 Redis 契约用例需要真实服务：没有服务时它们会跳过而不是失败
+    # （提交前自检必须在没装 Redis 的机器上也全绿），因此这里显式提供并在下面 ping 一次
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - name: 安装 .NET 10 SDK
@@ -69,5 +92,30 @@ jobs:
       # 不收集覆盖率：此前收集 23 份 cobertura 却没有任何下游步骤消费，
       # 产物直接丢弃，只留下"我们在度量覆盖率"的假信号。
       # 覆盖率定位为按需体检，命令见 framework/build/coverage.runsettings
+      # 跳过是本地的让步，不是 CI 的。少了 Redis 服务时这一步直接红，
+      # 而不是让锁的契约用例悄无声息地跳过去
+      - name: 确认 Redis 可用
+        run: |
+          docker run --rm --network host redis:7-alpine \
+            redis-cli -h 127.0.0.1 -p 6379 ping | grep -q PONG
       - name: 测试
         run: dotnet test framework/Leistd.Framework.slnx -c Release --no-build
+
+  postgresql-e2e:
+    name: 模板 PostgreSQL 端到端
+    runs-on: ubuntu-latest
+    # 本地实测 36 秒（冷约 70–80 秒，含镜像拉取）；关键路径是 template-matrix，
+    # 因此这个作业并行跑不增加 CI 墙钟
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      # 矩阵的运行时冒烟跑在 EF InMemory 上：不建表、不翻译查询，
+      # 因而验不到迁移路由、租户跨库隔离、Secret 分离这几类"不报错只给错结果"的失效。
+      # 脚本自带 postgres:15-alpine 容器与清理；不加 -SkipPack，作业自包含、不依赖其它作业的 feed
+      - name: 打包 + 生成 + 迁移 + 真实库隔离验证
+        shell: pwsh
+        run: pwsh scripts/test-template-postgresql-e2e.ps1
