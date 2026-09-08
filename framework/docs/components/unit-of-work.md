@@ -99,14 +99,15 @@ finally
 
 ### 在事务内提前冲刷
 
-工作单元内的写入在 `CompleteAsync` 前不保证已发送到数据库。创建后返回时，优先用仓储返回的实体构造输出，不再回查。
+工作单元内的写入在 `CompleteAsync` 前不保证已发送到数据库。创建后返回时，优先用已跟踪实体构造输出，不再回查。
 
 仅在需要数据库生成值、计算列、触发器结果或新并发标记时手动冲刷：
 
 ```csharp
-var order = await orderRepository.InsertAsync(new Order(input));
+var order = new Order(input);
+dbContext.Orders.Add(order);
 await unitOfWorkManager.Current!.SaveChangesAsync();
-await orderLineRepository.InsertManyAsync(CreateLines(order.Id));
+dbContext.OrderLines.AddRange(CreateLines(order.Id));
 ```
 
 `SaveChangesAsync()` 只冲刷挂起变更，不提交事务；后续回滚仍会撤销这些写入。

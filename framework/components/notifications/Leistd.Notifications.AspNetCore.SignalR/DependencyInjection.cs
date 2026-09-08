@@ -37,10 +37,7 @@ public static class DependencyInjection
         // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，主体/租户/链路标识与
         // UserIdentifier 解析全靠基座。基座注册是幂等的，与 realtime 组件同时装也只有一份过滤器。
         services.AddSignalRAmbientContext();
-        // 按实现类型去重，不按服务类型：INotificationChannel 是累加型扩展点，
-        // 发布器以 IEnumerable<T> 注入并逐一调用，宿主可以同时装邮件、WebPush 等通道。
-        // 用 TryAddSingleton 会按服务类型判重——宿主已注册任一 Channel 时，
-        // SignalR 这一路就再也进不来，且没有任何报错。
+        // 渠道是累加扩展点，按实现类型去重，保留宿主注册的其他渠道。
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<INotificationChannel, SignalRNotificationChannel>());
         return services;

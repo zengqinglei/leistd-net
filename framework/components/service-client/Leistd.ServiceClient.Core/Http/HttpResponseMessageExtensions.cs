@@ -9,11 +9,8 @@ namespace Leistd.ServiceClient.Http;
 /// 服务调用响应读取扩展：裸载荷读取、信封解包与远端错误还原。
 /// </summary>
 /// <remarks>
-/// <para><b>常规路径是 <see cref="ReadContentAsync{T}"/></b>——本框架的服务成功时直出裸载荷、
-/// 失败时返回 RFC 9457 Problem Details（见 exception-handling 组件），不包信封。</para>
-/// <para><see cref="ReadResultAsync{T}"/> 是<b>互操作</b>路径：被调方产出
-/// <c>{code, message, data}</c> 信封时才用它，典型是既有遗留服务。</para>
-/// <para>两条路径的错误处理相同，都经 <see cref="CreateRemoteErrorAsync"/> 还原远端错误。</para>
+/// <see cref="ReadContentAsync{T}"/> 读取裸载荷；<see cref="ReadResultAsync{T}"/> 用于远端信封。
+/// 两者均通过 <see cref="CreateRemoteErrorAsync"/> 还原远端错误。
 /// </remarks>
 public static class HttpResponseMessageExtensions
 {
@@ -193,10 +190,7 @@ public static class HttpResponseMessageExtensions
             errors: envelope.Errors);
     }
 
-    // 远端信封的读取形状，刻意内联而不引用 Leistd.Response.Core：
-    // 它在这里只是一个反序列化目标——描述「被调方长什么样」，
-    // 不是本服务的响应契约。为两个互操作方法让每个 service-client
-    // 消费者都传染上信封包，代价与收益不匹配。
+    // 远端信封仅作为反序列化形状，不使客户端依赖本服务的响应组件。
     private sealed class ResultEnvelope<T>
     {
         public int Code { get; init; }

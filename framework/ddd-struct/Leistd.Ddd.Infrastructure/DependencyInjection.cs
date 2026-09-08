@@ -57,23 +57,19 @@ public static class DependencyInjection
 
         services.TryAddSingleton<ConcurrencyStampSaveChangesInterceptor>();
 
-        services.AddSingleton<IDataFilter, DataFilter>(); // 非泛型版本，单例
+        services.AddSingleton<IDataFilter, DataFilter>();
         services.AddSingleton(typeof(IDataFilter<>), typeof(DataFilter<>)); // 状态由 AsyncLocal 隔离
 
         services.AddUnitOfWork(configureUnitOfWork);
 
         services.AddUnitOfWorkEfCore();
 
-        // 上下文清单由 AddDddDbContext<TDbContext>() 显式登记，不再扫描容器。
+        // 上下文清单由 AddDddDbContext<TDbContext>() 显式登记。
         GetOrCreateTrackedDbContextTypes(services);
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IHostedService, MultiTenantFilterGuard>());
 
-        // 显式登记换来一个新的"忘写"模式：注册了 DbContext 却没调 AddDddDbContext。
-        // 后果是这个上下文逃出租户过滤器闸门——一道防跨租户泄漏的检查静默不覆盖它。
-        // 校验器由 Leistd 的 IServiceProviderFactory 在构建时执行。宿主用裸
-        // BuildServiceProvider() 时它根本不跑，框架也就查不出漏登记：闸门只看已登记的上下文，
-        // 漏掉的那个自始至终不可见。因此该 Factory 是完整 DDD 组合的必要步骤，不是可选优化。
+        // 通过 Leistd 服务提供器工厂校验 DbContext 是否全部显式登记，避免遗漏租户过滤器检查。
         services.AddRegistrationValidator(EnsureEveryDbContextIsDeclared);
 
         return services;
@@ -83,13 +79,9 @@ public static class DependencyInjection
     /// 把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，并按选项注册仓储。
     /// </summary>
     /// <remarks>
-    /// <para><b>每个注册过的 DbContext 都必须调用一次</b>，包括不需要仓储的——
-    /// 漏掉的上下文会逃出租户过滤器闸门。宿主装了 Leistd 的
-    /// <c>IServiceProviderFactory</c>（框架的拦截器织入本来就依赖它）时，漏写在构建容器时
-    /// 直接失败；<b>不装则框架查不出漏登记</b>——校验器不执行，闸门也只看已登记的上下文。
-    /// 该 Factory 因此是完整 DDD 组合的必要步骤。</para>
-    /// <para>仓储是显式开关：不传选项即"只登记、不注册仓储"，适用于控制面这类
-    /// 只需要工作单元与闸门的上下文。</para>
+    /// 每个已注册 DbContext 都须登记，包括不需要仓储的上下文。
+    /// 宿主必须使用 Leistd 服务提供器工厂，才能在构建容器时检测漏登记。
+    /// 省略选项时仅登记上下文，不注册仓储。
     /// </remarks>
     /// <example>
     /// <code>
@@ -182,10 +174,7 @@ public static class DependencyInjection
             {
                 var keyedInterface = typeof(IRepository<,>).MakeGenericType(entityType, keyType);
 
-                // AddRepository 的泛型约束只能表达 IRepository<TEntity>——TKey 不在它的签名里。
-                // 带主键的实体这里还会注册 IRepository<TEntity,TKey>，只实现无主键接口的自定义
-                // 仓储能编译通过却生成不可赋值的描述符，要到 ValidateOnBuild 才炸且信息含糊。
-                // 显式点名注册点错了就该当场说清楚。
+                // 带主键实体还会注册 IRepository<TEntity,TKey>，须同时验证自定义仓储实现该接口。
                 if (!keyedInterface.IsAssignableFrom(implementationType))
                 {
                     throw new InvalidOperationException(

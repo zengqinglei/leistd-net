@@ -25,13 +25,17 @@ public interface IUnitOfWorkManager
     /// </remarks>
     /// <example>
     /// <code>
-    /// // 并入环境工作单元；没有环境工作单元时新建
-    /// await using var uow = await unitOfWorkManager.BeginAsync(cancellationToken: ct);
-    /// await repository.InsertAsync(entity, ct);
-    /// await uow.CompleteAsync(ct);
-    ///
-    /// // 独立提交边界（补偿、控制面写入）
-    /// await using var inner = await unitOfWorkManager.BeginAsync(requiresNew: true);
+    /// using var uow = await unitOfWorkManager.BeginAsync();
+    /// try
+    /// {
+    ///     await ImportAsync(ct);
+    ///     await uow.CompleteAsync(ct);
+    /// }
+    /// catch
+    /// {
+    ///     await uow.RollbackAsync();
+    ///     throw;
+    /// }
     /// </code>
     /// </example>
     Task<IUnitOfWork> BeginAsync(UnitOfWorkOptions? options = null, bool requiresNew = false);

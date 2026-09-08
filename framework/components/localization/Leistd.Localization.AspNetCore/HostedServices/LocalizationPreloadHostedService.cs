@@ -6,10 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Localization.AspNetCore.HostedServices;
 
-// 启动时预热各支持语言的资源缓存：把首个请求才会触发的解析/合并提前到启动阶段，
-// 让坏资源、culture 声明不一致等问题在启动日志里就暴露，而非在生产首个请求时才隐性发生（P4）。
-// 复用 RequestLocalizationOptions.SupportedUICultures 作为预热清单，避免与 supportedCultures 配置重复。
-// 读取器自身对坏文件容错（跳过 + 告警），故此处即便某语言资源有问题也不会让启动失败。
+// 按 SupportedUICultures 预热资源缓存，不另设语言清单；读取器按自身规则处理坏资源。
 internal sealed class LocalizationPreloadHostedService(
     JsonLocalizationResourceReader reader,
     IOptions<RequestLocalizationOptions> requestLocalizationOptions,

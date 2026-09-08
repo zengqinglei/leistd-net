@@ -165,16 +165,7 @@ await grantManager.ReplaceGrantsAsync(
 
 ## 注意事项
 
-- `IPermissionSubjectProvider` **刻意没有默认实现**，未注册时 `DefaultPermissionChecker` 在
-  DI 解析阶段直接失败（不是"静默拒绝"）。框架给不出正确的默认值，原因有三，缺一条都会
-  变成看起来能用的错实现：
-  - `PermissionSubject.RoleIds` 是**角色 Id**，而 claim 里通常只有角色**名**。拿名字充当 Id
-    会让 `IPermissionGrantStore` 查不到任何授予，且不报错。
-  - `IsSuperAdmin` 必须来自可信来源。若从 claim 读，被降权的超管在令牌过期前仍是超管。
-  - **账号失效必须每请求判定**。登录时拒绝禁用与锁定账号，但已签发的 Cookie/Bearer 不会因此
-    失效；主体解析是 RBAC 路径上的失效保障，跳过它等于"禁用用户"只挡新登录，已在线的会话
-    照常调用受权限保护的接口。
-  实现参照模板生成项目里的主体提供器：接业务的用户与角色模型，每请求查库。
+- `IPermissionSubjectProvider` 没有默认实现，未注册时 DI 解析直接失败。业务实现必须提供角色 Id、从可信来源判定 `IsSuperAdmin`，并在请求期反映账号禁用或锁定状态。
 - `IsSuperAdmin` 的来源必须可信；它会在定义、启用状态与多租户侧别校验通过后跳过 Store。
 - 所有授予写入都经 `IPermissionGrantManager`，不直接写 DbContext，否则会绕过定义校验、祖先补齐与版本。
 - 主体永久删除时调用 `RemoveProviderAsync`；软删除不清理授予。

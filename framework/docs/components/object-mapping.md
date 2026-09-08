@@ -62,7 +62,7 @@ IQueryable<OrderDto> query = orders
     .Select(o => new OrderDto { Id = o.Id, Total = o.Total });
 ```
 
-映射库的查询投影把"查哪些列"藏进映射配置，改一处映射会静默改变 SQL；显式 `Select` 让列清单和查询待在一起。
+查询投影使用显式 `Select`，避免映射配置静默改变 SQL 列清单。
 
 ## 接口参考
 
@@ -83,7 +83,7 @@ IQueryable<OrderDto> query = orders
 - 以 Singleton 注册 `IMapper`（`new Mapper(config)`）：基础配置 `config.Default.PreserveReference(true)` 启用循环引用保护。
 - `MapsterOptions.Configurators` 中的每个委托接收 `TypeAdapterConfig`；`ValidateMappings = true` 时在启动阶段调用 `config.Compile()` 提前编译并校验。
 - 提供 `MapsterProfile` 抽象基类：子类重写 `ConfigureMappings()`，用 `CreateMap<TSource, TDestination>()` 声明映射。
-- `DependencyInjection.AddProfiles(options, assemblies)` 扫描程序集中所有非抽象的 `MapsterProfile` 子类；通常写作 `options.AddProfiles(assemblies)`。
+- `options.AddProfiles(assemblies)` 扫描非抽象的 `MapsterProfile` 子类。
 - 带上下文的 `Map(source, contextItems)` 通过 `MapContextScope` 将上下文写入 `MapContext.Current.Parameters`。
 - 额外提供 `MapsterObjectMapper.Map<TDestination>(object source)`（按运行时类型映射），不属于 `IObjectMapper` 接口，需引用具体类型才能调用。
 

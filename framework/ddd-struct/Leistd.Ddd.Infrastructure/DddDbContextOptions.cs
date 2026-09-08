@@ -24,12 +24,8 @@ public sealed class DddDbContextOptions
     /// 为本上下文<b>按 <c>DbSet&lt;T&gt;</c> 声明</b>派生的实体注册默认仓储。
     /// </summary>
     /// <remarks>
-    /// <para>实体来源是本上下文类型上公开的 <c>DbSet&lt;T&gt;</c> 属性，且 <c>T</c> 实现
-    /// <see cref="IEntity"/>。这是<b>有意的选择信号</b>——声明 <c>DbSet&lt;T&gt;</c> 等于宣布
-    /// "这是我要直接查询的实体"。</para>
-    /// <para>只经 <c>modelBuilder</c> 映射、不暴露 <c>DbSet&lt;T&gt;</c> 的实体不在其中
-    /// （注册阶段拿不到 EF Core 模型，只能反射类型）。确实需要时用
-    /// <see cref="AddDefaultRepository{TEntity}"/> 点名。</para>
+    /// 实体来源是公开 <c>DbSet&lt;T&gt;</c> 属性中实现 <see cref="IEntity"/> 的类型。
+    /// 仅经模型配置映射的实体需用 <see cref="AddDefaultRepository{TEntity}"/> 显式登记。
     /// </remarks>
     public DddDbContextOptions AddDefaultRepositories()
     {

@@ -29,9 +29,7 @@ public class PermissionGrantRecordConfiguration : IEntityTypeConfiguration<Permi
         builder.Property(x => x.CreatorId)
             .HasMaxLength(64);
 
-        // 授予按租户分区。可空 TenantId 直接进唯一索引时，PostgreSQL/Sqlite 视 NULL 互不相等，
-        // 宿主行会失去唯一性兜底（重复授予与并发首写都拦不住），因此宿主行与租户行
-        // 分别用带过滤的唯一索引收口（"列名" 双引号引用在 PostgreSQL 与 Sqlite 上语义一致）
+        // 可空 TenantId 的唯一索引不能约束宿主重复行，故宿主与租户分别使用过滤唯一索引。
         builder.HasIndex(x => new { x.PermissionName, x.ProviderName, x.ProviderKey })
             .IsUnique()
             .HasFilter($"\"{nameof(PermissionGrantRecord.TenantId)}\" IS NULL");

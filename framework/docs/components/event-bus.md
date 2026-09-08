@@ -33,7 +33,7 @@ builder.Services.AddLocalEventBus();
 事件处理器需**自行注册**（总线不做程序集扫描）。处理器在每次发布时通过独立 Scope 解析，因此 Scoped 注册可正常工作：
 
 ```csharp
-builder.Services.AddScoped<IEventHandler<OrderCreatedEvent>, OrderCreatedHandler>();
+builder.Services.AddScoped<IEventHandler<OrderPlacedEvent>, OrderPlacedHandler>();
 ```
 
 ## 使用
@@ -55,14 +55,14 @@ public class OrderPlacedEvent : LocalEvent
 }
 ```
 
-> **应用层发布 vs 领域事件**：这里主动 `PublishAsync` 是**应用流程派发**的用法。若事件表达的是**聚合根状态变更**，采用 [DDD 四层基座](../ddd-struct/ddd-struct.md) 的项目推荐在实体内 `AddLocalEvent(...)`、随保存由拦截器自动发布，从而与工作单元/事务对齐——两者底层都走 `IEventBus`，按事件语义选择发布位置。
+DDD 项目中由聚合记录并随保存发布事件的组合方式见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 订阅方实现 `IEventHandler<TEvent>` 并注册到 DI：
 
 ```csharp
-public class OrderCreatedHandler : IEventHandler<OrderCreatedEvent>
+public class OrderPlacedHandler : IEventHandler<OrderPlacedEvent>
 {
-    public Task HandleAsync(OrderCreatedEvent @event, CancellationToken cancellationToken = default)
+    public Task HandleAsync(OrderPlacedEvent @event, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }
@@ -78,7 +78,7 @@ public class OrderCreatedHandler : IEventHandler<OrderCreatedEvent>
 | 成员 | 说明 |
 | --- | --- |
 | `IEventBus` | 事件总线统一接口，发布事件的定义方 |
-| `IEventBus.PublishAsync<TEvent>(@event, ct)` | 泛型发布。**同样按运行时类型解析处理器**——内部直接委托到非泛型重载，两者行为一致 |
+| `IEventBus.PublishAsync<TEvent>(@event, ct)` | 泛型发布；按运行时类型解析处理器 |
 | `IEventBus.PublishAsync(IEvent @event, ct)` | 非泛型发布，按事件运行时实际类型解析处理器 |
 | `ILocalEventBus : IEventBus` | 本地事件总线标记接口，表达"进程内事件"的依赖意图，无新增成员 |
 | `IEventHandler<in TEvent>` | 事件处理器接口（`TEvent : IEvent`），实现 `HandleAsync` 订阅事件 |
@@ -95,7 +95,7 @@ public class OrderCreatedHandler : IEventHandler<OrderCreatedEvent>
 - 处理器按解析顺序 `foreach` **串行 `await`**（非并行），且在发布方上下文中同步等待全部完成，不是后台异步投递。
 - 所有处理器都会执行；单个失败原样抛出，多个失败包装为 `AggregateException`，取消异常不参与聚合。
 - 未解析到任何处理器时**静默返回**，不报错。
-- 泛型 `PublishAsync<TEvent>` 仅委托到非泛型 `PublishAsync(IEvent)`（两者同一实现路径，行为一致）；非泛型按事件运行时类型解析处理器，内部用 `ConcurrentDictionary` 缓存 `EventHandlerWrapperImpl<>` 以恢复泛型上下文。
+- 泛型与非泛型重载都按事件运行时类型解析处理器。
 
 ## 与工作单元的关系
 

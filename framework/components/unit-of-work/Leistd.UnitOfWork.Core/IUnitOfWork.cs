@@ -11,7 +11,7 @@ namespace Leistd.UnitOfWork;
 public interface IUnitOfWork : IDatabaseApiContainer, ITransactionApiContainer, IDisposable
 {
     /// <summary>
-    /// Occurs synchronously when the unit of work is disposed without completing.
+    /// 未完成即释放工作单元时同步触发。
     /// </summary>
     event EventHandler<UnitOfWorkFailedEventArgs>? Failed;
 
@@ -19,13 +19,8 @@ public interface IUnitOfWork : IDatabaseApiContainer, ITransactionApiContainer, 
     /// 工作单元释放时同步触发，无论是否已完成。
     /// </summary>
     /// <remarks>
-    /// <para><b>这是生命周期契约的一部分，自定义实现必须发出它。</b>
-    /// <see cref="IUnitOfWorkManager"/> 为每个显式边界建了一个独立 DI 作用域，
-    /// 并靠本事件回收该作用域、把环境工作单元恢复成外层的那个。不发出它，
-    /// 作用域会一直挂着（其中的 scoped 服务与 DbContext 都不释放），
-    /// 而后续代码看到的"当前工作单元"仍是这个已经释放的实例。</para>
-    /// <para><see cref="IDisposable.Dispose"/> 必须幂等，且本事件<b>只发一次</b>：
-    /// 重复发出会让管理器重复释放同一个作用域。</para>
+    /// 自定义实现必须在释放时发出一次本事件，供管理器回收 DI 作用域并恢复外层工作单元。
+    /// <see cref="IDisposable.Dispose"/> 必须幂等。
     /// </remarks>
     event EventHandler<UnitOfWorkEventArgs>? Disposed;
 
@@ -48,9 +43,8 @@ public interface IUnitOfWork : IDatabaseApiContainer, ITransactionApiContainer, 
     /// 获取本工作单元的服务作用域。
     /// </summary>
     /// <remarks>
-    /// <para>EF Core 提供方在<b>本工作单元的作用域</b>里解析 DbContext 与连接绑定
-    /// （管理器为每个新工作单元创建独立 scope），因此自定义实现必须提供它。</para>
-    /// <para>子工作单元转发父级的作用域：它没有自己的生命周期，数据库与事务都登记在父级上。</para>
+    /// 自定义实现必须提供当前边界的 DI 作用域，供数据库提供方解析上下文与连接。
+    /// 子工作单元复用父级作用域、数据库与事务。
     /// </remarks>
     IServiceProvider ServiceProvider { get; }
 
@@ -78,10 +72,9 @@ public interface IUnitOfWork : IDatabaseApiContainer, ITransactionApiContainer, 
     /// 把已登记数据库 API 的挂起变更推送到数据库，<b>不提交事务</b>。
     /// </summary>
     /// <remarks>
-    /// <b>事务型</b>下冲刷不等于提交：事务仍开着，回滚照样撤销这些变更。<b>非事务型</b>每次冲刷各自落库、不可撤回。
-    /// 仅在必须先落库才能拿到值时需要：自增主键、计算列或触发器结果、保存时换发的并发标记。
-    /// 已回滚时为空操作；已完成或已释放时抛 <see cref="InvalidOperationException"/>——
-    /// 那之后事务已经不在，冲刷会落到事务之外。
+    /// 事务型冲刷仍可回滚；非事务型每次冲刷独立持久化。
+    /// 需要数据库生成值时可提前调用。已回滚时为空操作；
+    /// 已完成或已释放时抛 <see cref="InvalidOperationException"/>。
     /// </remarks>
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 

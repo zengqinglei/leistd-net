@@ -3,11 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.Email.Smtp.Options;
 
-// 启动期校验 SmtpOptions，非法取值直接阻止宿主启动。
-// 这四条的共同点是：留到运行期才发现的话，代价是"用户已经点了发送"——
-// 注册验证码这类流程会因此把一个永远收不到码的挑战交给用户。
-// 只校验能在启动期机械判定的边界；连通性与认证不在此校验（那要真连一次，
-// 且失败会以异常形式在发送时暴露，不是静默错误）。
+// 只校验本地配置；连通性与认证由发送路径验证。
 internal sealed class SmtpOptionsValidator : IValidateOptions<SmtpOptions>
 {
     /// <inheritdoc />
@@ -51,10 +47,7 @@ internal sealed class SmtpOptionsValidator : IValidateOptions<SmtpOptions>
             : ValidateOptionsResult.Fail($"{SmtpOptions.SectionName}: {string.Join(" ", failures)}");
     }
 
-    // 用发送路径同一个构造来判定，两边就不可能漂移。
-    // MailboxAddress.TryParse 不能用：它接受 "Name <user@host>" 这种完整形态，而
-    // MailboxAddress(name, address) 的地址参数只接受 addr-spec——那类取值能过启动校验，
-    // 却让每一封走默认发件人的信在构造阶段抛 ParseException，启动校验的意义正好被绕开。
+    // 与发送路径共用 addr-spec 构造规则；TryParse 还接受带显示名的完整邮箱。
     private static bool IsAddrSpec(string value)
     {
         try

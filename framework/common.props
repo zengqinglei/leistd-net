@@ -11,11 +11,7 @@
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <VersionPrefix>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\VERSION').Trim())</VersionPrefix>
-    <!--
-      Release 视告警为错误：CI 只构建 Release，而 check-all.ps1 不编译，
-      构建告警此前没有任何一道闸门看得见（CS0419 就是这么留到评审才被发现的）。
-      Debug 保持宽松，本地迭代不被未用变量之类的临时告警打断。
-    -->
+    <!-- Release 将告警视为错误；Debug 允许本地增量迭代。 -->
     <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release'">true</TreatWarningsAsErrors>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -38,10 +34,7 @@
     <PackageTags>leistd ddd aspnetcore framework dotnet</PackageTags>
     <PackageReadmeFile>NuGet.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- CS0436: 类型冲突（生成文档时容忍）。
-         CS1591（公共可见成员缺 XML 注释）刻意**不**放进 NoWarn：随包 .xml 是消费者与 AI
-         唯一能看到的契约来源，缺注释应当在构建时就红。编译器的「publicly visible」判据比
-         任何正则都准，因此这道闸门由它承担，scripts/check-doc-comment-shape.py 只管形态。 -->
+    <!-- 容忍 CS0436 类型冲突；保留 CS1591 检查，确保公共 API 的随包 XML 完整。 -->
     <NoWarn>$(NoWarn);CS0436</NoWarn>
     <!-- 默认所有框架项目可打包，纯内部项目可在自身 csproj 覆盖为 false -->
     <IsPackable>true</IsPackable>
@@ -76,14 +69,9 @@
   </ItemGroup>
 
   <!--
-    组件用法文档随包分发（P5 / 引用链路 L4）。
-    项目目录布局：
-    - 通用组件：components/<家族>/<项目>/  → 项目目录的父目录名即家族名（如 lock），文档 docs/components/<家族>.md。
-    - DDD 基座：ddd-struct/<项目>/         → 父目录名为 ddd-struct，统一文档 docs/ddd-struct/ddd-struct.md。
-    统一：_LeistdParentDir = 项目目录的父目录名。
-      component 分支打包 docs/components/<父目录名>.md（仅真实家族存在，Exists 保护）；
-      ddd-struct 分支在父目录名为 ddd-struct 时打包统一文档。
-    同家族多个包都内置该家族文档（用户装任一包即可就地拿到用法），打进包内 docs/ 目录。
+    按项目父目录选择家族文档，放入包内 docs/。
+    components/<家族>/<项目> 使用 docs/components/<家族>.md；
+    ddd-struct/<项目> 使用统一的 docs/ddd-struct/ddd-struct.md。
   -->
   <PropertyGroup>
     <_LeistdParentDir>$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName($(MSBuildProjectDirectory)))))</_LeistdParentDir>

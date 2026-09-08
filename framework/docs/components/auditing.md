@@ -81,7 +81,7 @@ await dbContext.SaveChangesAsync();
 | `Added` | 进入变更跟踪时 | `BaseDbContext` 或 `EntityTrackingExtensions` |
 | `Modified` / `Deleted` | `SavingChanges` | `AuditSaveChangesInterceptor` |
 
-创建审计不等到保存：延迟提交可能跨越用户或租户上下文，进入跟踪时才能准确表达“谁在哪个租户下创建”。`Tracked` 和 `StateChanged` 两个路径都会处理，覆盖先查询后切换为 `Added` 的实体。
+创建审计在进入跟踪时落值；`Tracked` 和 `StateChanged` 两条路径都覆盖。
 
 ### 软删除
 
@@ -97,7 +97,7 @@ await dbContext.SaveChangesAsync();
 - 创建和删除字段仅在尚未设置时填充。
 - `LastModificationTime` 在每次修改时刷新；当前用户存在时同步更新 `LastModifierId`。
 - 时间经 `IClock.Normalize` 归一化。
-- `IAuditPropertySetter` 为了避免 Core 依赖 EF Core 而接收 `object`；EF Core 实现只接受 `EntityEntry`，其他类型会抛出 `ArgumentException`。
+- EF Core 的 `IAuditPropertySetter` 实现只接受 `EntityEntry`，其他类型抛 `ArgumentException`。
 
 ## 注意事项
 

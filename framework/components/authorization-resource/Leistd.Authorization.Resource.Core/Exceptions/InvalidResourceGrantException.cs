@@ -8,9 +8,7 @@ namespace Leistd.Authorization.Resource.Exceptions;
 /// 表示资源授权主体或效果无效。
 /// </summary>
 /// <remarks>
-/// 两类非法写入合并为一个类型，差别由 <see cref="Reason"/> 表达（处置方式相同：修调用方传进来的数据）。
-/// 必须在写入口拒掉：未知 ProviderName 会成为永远匹配不上的脏数据，
-/// 而非法枚举效果一旦落库就把该资源静默变成"任何人都不许访问"。
+/// <see cref="Reason"/> 区分主体与效果校验失败，由调用方修正输入。
 /// </remarks>
 /// <param name="resourceName">资源类型名。</param>
 /// <param name="resourceKey">资源实例 Key。</param>

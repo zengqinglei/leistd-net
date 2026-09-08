@@ -1,6 +1,6 @@
 # 统一 API 响应
 
-统一 Web API 的返回结构，让前端用同一套逻辑解析成功与失败。`Result` / `Result<T>` 是响应模型，ASP.NET Core 侧的结果过滤器自动把控制器返回的普通对象包装成统一响应——业务代码照常 `return data`。
+`Result` / `Result<T>` 定义统一响应，ASP.NET Core 过滤器自动包装控制器返回的普通成功对象。
 
 ## 何时使用
 
@@ -48,13 +48,10 @@ builder.Services.AddControllers()
 [Route("api/users")]
 public class UserController(IUserService userService) : ControllerBase
 {
-    // 直接返回数据，过滤器自动包成 Result<object?>
-    // 客户端收到：{ "code": 0, "message": null, "data": { ... } }
     [HttpGet("{id}")]
     public async Task<IActionResult> GetAsync(long id)
         => Ok(await userService.GetAsync(id));
 
-    // 不希望被包装的接口（如导出文件），标注 NoWrap
     [HttpGet("export")]
     [NoWrap]
     public IActionResult Export() => File(bytes, "text/csv", "users.csv");
@@ -70,11 +67,10 @@ public class OrderController(IOrderService service) : ControllerBase
     public IActionResult Create(CreateOrderInput input)
     {
         if (!ModelState.IsValid)
-            // HTTP 状态码显式给出；信封式契约要求恒为 200 时这里传 200
             return this.FailResult(400, 40001, "参数不合法");
 
         var order = service.Create(input);
-        return this.OkResult(order, "下单成功"); // 包成 Result<Order>，HTTP 200
+        return this.OkResult(order, "下单成功");
     }
 }
 ```

@@ -98,7 +98,7 @@ if (!await authorization.IsGrantedAsync(
 }
 ```
 
-功能权限应在控制器上先行检查，实例授权在加载后检查。存在性敏感的 API 可在拒绝时统一返回 404，但应由宿主的威胁模型决定。
+功能权限应在控制器上先行检查，实例授权在加载后检查。存在性敏感的 API 可按宿主威胁模型在拒绝时统一返回 404。
 
 ### 将 ACL 合并进列表
 
@@ -164,7 +164,7 @@ await grantManager.RemoveProviderAsync(
     ct);
 ```
 
-主体标识被重用时，遗留 ACL 会重新生效。软删除主体可恢复，不调用清理入口。
+永久删除主体时必须清理 ACL，避免标识复用后遗留授权重新生效；软删除不清理。
 
 ## 接口参考
 
@@ -189,7 +189,7 @@ await grantManager.RemoveProviderAsync(
 - ACL 唯一键为 `(ResourceName, ResourceKey, Operation, ProviderName, ProviderKey)`，单个主体对同一实例操作只有一个效果。
 - `QueryGrantedResourceKeysAsync` 在数据库内完成允许集合减拒绝集合，并返回去重的 `IQueryable<string>`。
 - `ResourceAuthorizationVersionRecord.Version` 是 EF Core 并发令牌。全量替换只在 ACL 实际变化时递增版本。
-- `RemoveProviderAsync` 保留资源版本行并推进受影响资源的版本，防止旧编辑快照将已删授予写回。
+- `RemoveProviderAsync` 推进受影响资源的版本，防止旧快照写回已删除授予。
 - `ResourceGrantEffect` 以字符串持久化，只有已定义的 `Granted` 会产生允许；非法值失败关闭。
 
 ## 注意事项

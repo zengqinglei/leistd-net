@@ -4,8 +4,7 @@ namespace Leistd.Email.Smtp.Options;
 /// 配置 SMTP 发信。
 /// </summary>
 /// <remarks>
-/// 全部取值在宿主启动时校验（<c>ValidateOnStart</c>）：一个没配好 SMTP 的部署应当在接流量
-/// 之前失败，而不是在第一个用户注册时才失败。
+/// 注册发送器时启用启动期配置校验；连接与认证在发送时验证。
 /// </remarks>
 public sealed class SmtpOptions
 {
@@ -20,8 +19,7 @@ public sealed class SmtpOptions
 
     /// <summary>获取或设置登录用户名；为空表示匿名投递。</summary>
     /// <remarks>
-    /// 与 <see cref="Password"/> 必须同时给出或同时留空。只给一个会让"以为在认证、其实没有"
-    /// 成为默认行为——服务器可能按匿名中继接受，也可能直接拒收，两种都不在配置阶段暴露。
+    /// 与 <see cref="Password"/> 必须同时给出或同时留空。
     /// </remarks>
     public string? Username { get; set; }
 

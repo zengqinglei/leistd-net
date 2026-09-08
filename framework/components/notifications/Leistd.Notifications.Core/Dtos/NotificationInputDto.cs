@@ -6,12 +6,8 @@ namespace Leistd.Notifications.Dtos;
 /// 要发布的通知内容——尚未归属到任何收件人。
 /// </summary>
 /// <remarks>
-/// 与 <see cref="NotificationOutputDto"/> 的区别就是身份：本类型只描述"通知说了什么"，
-/// 而<b>谁的通知、哪一条</b>由发布器在收件人边界定案（<c>Id</c>、<c>CreationTime</c>、<c>IsRead</c>）。
-/// 两者曾是同一个类型，于是同一份内容发给第二个用户时两条记录带着同一个主键，
-/// 第二次落库直接冲突；而"客户端看到的 ID 是公告 ID 还是这个人的记录 ID"也说不清。
-/// 现在说得清：<see cref="NotificationOutputDto.Id"/> 恒为<b>该用户的那条记录</b>，
-/// 标记已读用的就是它。
+/// 同一内容可发布给多个收件人；发布器为每次发布创建独立的
+/// <see cref="NotificationOutputDto"/>，确定记录标识、创建时间和未读状态。
 /// </remarks>
 public record NotificationInputDto
 {

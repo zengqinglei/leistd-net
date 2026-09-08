@@ -11,7 +11,7 @@
 | 业务项目要覆盖或追加框架默认文案 | 在自己的程序集放同名键的 `{culture}.json` 并登记该程序集 |
 | 与 `Leistd.ExceptionHandling` 配合，让错误消息本地化 | 异常用 `WithCode("模块:键")` 给出错误码（它同时是词条键）、`WithData` 传占位参数（`Message` 始终是英文诊断，见 [`exception-handling`](./exception-handling.md)） |
 
-未注册本地化时，框架异常处理器会直接使用原消息。
+未注册本地化时，业务异常默认回落到 HTTP 状态标题；只有 `AsUserFacing()` 或启用 `FallbackToExceptionMessage` 才公开原消息。字段校验错误仍使用自身消息。
 
 ## 安装
 
@@ -92,7 +92,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 | --- | --- |
 | `JsonStringLocalizer` | `IStringLocalizer` 实现，按 culture 回落查嵌入 JSON，未命中返回键本身 |
 | `JsonStringLocalizerFactory` | `IStringLocalizerFactory` 实现，`Create(Type)` / `Create(string,string)` 返回同一共享视图 |
-| `JsonLocalizationResourceReader` | 读取并缓存各程序集嵌入 JSON，按登记顺序合并键 |
+| `JsonLocalizationResourceReader` | 读取并缓存嵌入 JSON，按程序集登记顺序合并键 |
 | `JsonLocalizationOptions.ResourceAssemblies` | 承载嵌入 JSON 的程序集集合，后登记者覆盖前者 |
 | `JsonLocalizationOptions.ResourcesPath` | 嵌入资源逻辑目录，默认 `Resources` |
 | `JsonLocalizationOptions.DefaultCulture` | 默认/回落语言，默认 `en` |
@@ -113,7 +113,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 
 ## 注意事项
 
-- 未调用 `AddJsonLocalization` 时，异常处理器直接使用原消息。
+- 未调用 `AddJsonLocalization` 时，异常处理器遵循自身的安全回退规则，不会无条件公开异常消息。
 - 资源 JSON 必须 `EmbeddedResource`；仅作为 `Content` 不会被读取。
 - 文案键必须全局唯一；JSON 工厂对所有已登记类型提供同一合并视图。
 

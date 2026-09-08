@@ -15,9 +15,7 @@ public interface ITenantConnectionConfigurationManager
     /// <param name="runtimeSecretReference">运行时 DML Secret 引用</param>
     /// <param name="migrationSecretReference">迁移 DDL Secret 引用</param>
     /// <param name="expectedVersion">
-    /// 调用方读到的版本，<see langword="null"/> 表示调用方预期该配置<b>尚不存在</b>（首次创建）。
-    /// <b>没有"不检查"这个取值</b>：这一行决定租户数据落在哪个库，丢更新是静默的，
-    /// 留一个跳过检查的入口就等于留一条默认后写者胜出的路径
+    /// 调用方读到的版本；<see langword="null"/> 表示预期配置尚不存在，不表示跳过并发校验。
     /// </param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除。</exception>

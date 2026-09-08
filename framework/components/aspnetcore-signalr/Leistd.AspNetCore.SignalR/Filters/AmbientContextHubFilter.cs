@@ -14,30 +14,18 @@ namespace Leistd.AspNetCore.SignalR.Filters;
 /// 为每次 Hub 调用建立环境上下文，并复评宿主授权策略。
 /// </summary>
 /// <remarks>
-/// <para><b>它补的是 SignalR 的结构性落差</b>：握手是一次 HTTP 请求，会走完整中间件管道，
-/// 因此主体、租户、链路标识与端点策略都成立；而 WebSocket 升级之后的<b>方法调用不经中间件</b>，
-/// 上述四项全部不成立。症状是订阅授权拿不到判断材料、账号禁用对已建连接无效、
-/// Hub 里落库把多租户实体写成宿主行——三者同一个根。</para>
-/// <para>连接的 <c>ClaimsPrincipal</c> 是握手时认证出来的，作为身份来源可信；
-/// 但"这个身份现在还有效吗"必须复评，见 <see cref="HubIdentityOptions.PolicyName"/>。</para>
-/// <para>本过滤器是<b>全局</b>的，因此不属于任何单个 Hub 组件——realtime 与 notifications
-/// 都需要它，谁都不该拥有它。</para>
+/// Hub 方法调用不经过 HTTP 中间件。本过滤器基于握手主体建立调用上下文，
+/// 并按 <see cref="HubIdentityOptions.PolicyName"/> 和复评间隔检查身份有效性；对全部 Hub 生效。
 /// </remarks>
 public sealed class AmbientContextHubFilter(
     IOptions<HubIdentityOptions> options,
     ILogger<AmbientContextHubFilter> logger,
     TimeProvider? timeProvider = null) : IHubFilter
 {
-    // 时间源可注入：复评节流窗口靠它计时，写死 DateTimeOffset.UtcNow 的话
-    // 「RevalidationInterval 到底有没有生效」只能靠真等一段时间来验证。
-    // 默认落 TimeProvider.System，宿主无需为此多配一项。
+    // 通过注入时间源计算身份复评间隔。
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
-    // 上下文一律建立，复评只对有身份的连接做——两件事分开：
-    // 匿名 Hub 仍需要链路标识和宿主自定义贡献者，但没有身份可复评。
-    // 判匿名要看 IsAuthenticated 而不是 principal is null：ASP.NET Core 给未认证请求的是
-    // 一个非 null 的空 ClaimsPrincipal，按 null 判会让 [AllowAnonymous] 的 Hub 撞上
-    // 默认策略的 RequireAuthenticatedUser 被 Abort()。
+    // 匿名连接也建立上下文，但只对 IsAuthenticated 主体复评；非 null 不代表已认证。
     private static ClaimsPrincipal Principal(HubCallerContext context) => context.User ?? new ClaimsPrincipal();
 
     private static bool IsAuthenticated(ClaimsPrincipal principal) =>
@@ -52,9 +40,7 @@ public sealed class AmbientContextHubFilter(
     {
         var principal = Principal(invocationContext.Context);
 
-        // 复评必须在上下文之内：宿主的授权 handler 通常读环境态（如 ICurrentUser.Id）
-        // 而不是 AuthorizationHandlerContext.User——那是为 HTTP 路径写的正常写法。
-        // 先复评会让它读到空主体，把每个人都判成失效并中止连接。
+        // 先建立上下文再复评，使授权处理器可读取当前用户等环境态。
         using (Begin(invocationContext.ServiceProvider, principal))
         {
             if (IsAuthenticated(principal))

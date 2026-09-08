@@ -7,8 +7,7 @@ namespace Leistd.Settings.Exceptions;
 /// 表示把设置写入了它的定义未允许的层级。
 /// </summary>
 /// <remarks>
-/// 由写入方抛出：允许写进未声明的层级，等于让回落顺序失去意义——
-/// 读取时按"用户级 → 租户级 → 默认值"回落，而那一层本不该存在值。
+/// 由写入方校验设置定义允许的层级。
 /// </remarks>
 /// <param name="settingName">设置名。</param>
 /// <param name="scope">被拒绝的层级。</param>

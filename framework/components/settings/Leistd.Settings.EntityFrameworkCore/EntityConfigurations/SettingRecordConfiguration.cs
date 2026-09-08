@@ -29,9 +29,7 @@ public class SettingRecordConfiguration : IEntityTypeConfiguration<SettingRecord
             .HasMaxLength(2000)
             .IsRequired();
 
-        // 同一层级下同名设置只能有一行，并且是按层级批量读取的覆盖索引。
-        // 键用非空的 ScopeKey 而不是 (TenantId, UserId)：那两列可为 NULL，
-        // 多个 NULL 互不相等会让宿主级与租户级默认值不受任何约束（见 SettingRecord.ScopeKey）。
+        // 用非空 ScopeKey 约束同层级设置唯一性，避免可空 TenantId/UserId 使宿主行失去约束。
         builder.HasIndex(x => new { x.ScopeKey, x.Name }).IsUnique();
     }
 }

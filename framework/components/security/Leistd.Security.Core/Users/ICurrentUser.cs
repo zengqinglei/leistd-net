@@ -16,11 +16,8 @@ public interface ICurrentUser
     /// 获取用户标识符。
     /// </summary>
     /// <remarks>
-    /// <b>返回 <see langword="null"/> 不等于未认证</b>：机器主体（client credentials）的
-    /// <c>sub</c> 按 <see cref="Claims.ClientSubject"/> 契约形如 <c>client:&lt;client_id&gt;</c>，
-    /// 不是 GUID，因此这里为 <see langword="null"/> 而 <see cref="IsAuthenticated"/> 仍为
-    /// <see langword="true"/>。这是区分工作负载与自然人的判据，不是缺陷——审计的创建者字段
-    /// 因此对机器写入留空，也是对的。
+    /// <see langword="null"/> 不代表未认证：机器主体的 <c>sub</c> 不是 GUID，
+    /// 其 <see cref="IsAuthenticated"/> 仍可为 <see langword="true"/>；机器写入的用户审计标识为空。
     /// </remarks>
     Guid? Id { get; }
 

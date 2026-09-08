@@ -1,6 +1,6 @@
 # 动态代理拦截器基类
 
-事务边界、链路追踪、日志这类横切逻辑散落在每个业务方法里，重复且易漏。Leistd 基于 [Castle DynamicProxy](https://github.com/castleproject/Core) 把它们收敛到拦截器：`BaseAsyncInterceptor` 统一同步与异步织入，`Order` 决定多个拦截器的顺序。
+`BaseAsyncInterceptor` 基于 Castle DynamicProxy 统一同步与异步方法的横切逻辑，`Order` 决定多个拦截器的顺序。
 
 ## 何时使用
 
@@ -31,10 +31,8 @@ using Microsoft.Extensions.Logging;
 
 public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInterceptor
 {
-    // 越小越先执行（越靠外层）。默认 0；此处设为较晚执行
     public override int Order => 100;
 
-    // 无返回值的方法
     protected override async Task InterceptAsync(
         IInvocation invocation,
         IInvocationProceedInfo proceedInfo,
@@ -43,7 +41,7 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
         var start = Stopwatch.GetTimestamp();
         try
         {
-            await proceed(invocation, proceedInfo); // 调用被代理的原方法
+            await proceed(invocation, proceedInfo);
         }
         finally
         {
@@ -52,7 +50,6 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
         }
     }
 
-    // 有返回值的方法
     protected override async Task<TResult> InterceptAsync<TResult>(
         IInvocation invocation,
         IInvocationProceedInfo proceedInfo,
@@ -80,7 +77,7 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 
 | 成员 | 说明 |
 | --- | --- |
-| `BaseAsyncInterceptor` | 异步拦截器抽象基类，继承自 `AsyncInterceptorBase`（`Castle.Core.AsyncInterceptor`），同时支持同步与异步方法的拦截 |
+| `BaseAsyncInterceptor` | 同时支持同步与异步方法的拦截器基类 |
 | `BaseAsyncInterceptor.Order` | `virtual int`，拦截器执行顺序；**数值越小越先执行（越靠外层）**，默认 `0` |
 | `InterceptAsync(invocation, proceedInfo, proceed)` | 来自基类，需重写；拦截**无返回值**方法，调用 `proceed(...)` 执行原方法 |
 | `InterceptAsync<TResult>(invocation, proceedInfo, proceed)` | 来自基类，需重写；拦截**有返回值**方法，返回原方法结果 |

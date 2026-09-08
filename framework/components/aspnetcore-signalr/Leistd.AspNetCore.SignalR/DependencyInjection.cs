@@ -17,15 +17,8 @@ public static class DependencyInjection
     /// 注册 SignalR、<see cref="AmbientContextHubFilter"/> 与 <see cref="ClaimsSignalRUserIdProvider"/>。
     /// </summary>
     /// <remarks>
-    /// <para>各 Hub 组件（realtime、notifications）都调用本方法而不是各自
-    /// <c>AddSignalR()</c>：过滤器是全局的，注册两次会让每次调用建立两层上下文。
-    /// 本方法幂等——重复调用只保留一个过滤器。</para>
-    /// <para>不配置 <c>HubOptions</c>（心跳、超时、详细错误）：那是 SignalR 自身的选项，
-    /// 宿主用 <c>AddSignalR(o =&gt; ...)</c> 或 <c>Configure&lt;HubOptions&gt;</c> 直接配，
-    /// 框架再套一层只会覆盖宿主已配的值。</para>
-    /// <para>本方法自己补齐 Hub 调用所需的非 HTTP 环境上下文，宿主无需先注册。
-    /// <c>AddSecurity()</c> 只在宿主还有 Controller/HTTP 路径、需要从 <c>HttpContext.User</c>
-    /// 读主体时才注册——它会把主体来源换成 HttpContext，与本方法的调用顺序无关。</para>
+    /// 幂等注册全局过滤器与非 HTTP 环境上下文，不覆盖宿主的 HubOptions。
+    /// HTTP 主体读取另由 <c>AddSecurity()</c> 注册，与本方法的调用顺序无关。
     /// </remarks>
     /// <param name="services">服务集合。</param>
     /// <param name="configure">连接主体解析与复检选项。</param>
@@ -43,9 +36,7 @@ public static class DependencyInjection
         services.AddSignalR();
         UseClaimsUserIdProvider(services);
 
-        // 幂等：realtime 与 notifications 都会调本方法，而 HubOptions.Filters 不可读，
-        // 注册两次就会让每次调用建立两层上下文并复评两遍。用标记服务判重，
-        // 与 ServiceUserContext 的注册守卫同一写法。
+        // 多个上层组件可重复注册基座，用标记服务避免重复挂载上下文过滤器。
         if (services.Any(d => d.ServiceType == typeof(HubAmbientContextMarker)))
         {
             return services;
@@ -60,14 +51,9 @@ public static class DependencyInjection
 
     // 只顶掉 SignalR 自带的默认实现，不碰宿主的。
     //
-    // TryAdd 不行：AddSignalR() 内部已 TryAdd 了 DefaultUserIdProvider，而宿主往往先自己调
-    // AddSignalR(o => ...) 配心跳，于是框架的 TryAdd 永远是空操作，UserIdClaimTypes 成为
-    // 永不生效的摆设——DefaultUserIdProvider 只认 ClaimTypes.NameIdentifier，只签 sub 的主体
-    // 解析不出标识，按用户寻址的推送全部落空。
+    // AddSignalR 已注册默认 UserIdProvider；仅替换框架默认项，保留宿主自定义实现。
     //
-    // Replace 也不行：它会连宿主显式注册的实现一起顶掉，而 IUserIdProvider 是 SignalR 的
-    // 公开扩展点。且 Replace 移除的是第一条、追加到末尾，[默认, 宿主] 会被改写成 [宿主, 本框架]，
-    // 反而让本框架的胜出。
+    // 不能直接 Replace：它只移除首项并追加，可能改变宿主自定义实现的优先级。
     //
     // 因此只看"当前会胜出的那一条"：是默认实现才换掉，其余情形一律不动。
     private static void UseClaimsUserIdProvider(IServiceCollection services)

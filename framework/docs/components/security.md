@@ -1,6 +1,6 @@
 # 当前用户与身份信息
 
-把「现在是谁在调用」收敛为强类型抽象：`ICurrentUser` / `ICurrentClient` 暴露常用身份属性，`ICurrentPrincipalAccessor` 提供底层 `ClaimsPrincipal` 并支持临时切换。业务代码不直接读 `HttpContext`。
+`ICurrentUser` / `ICurrentClient` 暴露当前身份，`ICurrentPrincipalAccessor` 提供底层 `ClaimsPrincipal` 和临时切换能力。
 
 ## 何时使用
 
@@ -87,8 +87,7 @@ public class ReportService(ICurrentClient currentClient)
 }
 ```
 
-在后台任务或测试中建立身份，用 `IAmbientContext`——它连同已注册的租户、链路标识一起建立，
-只切主体会让其余维度停留在进入前的值：
+后台任务或测试用 `IAmbientContext` 同时建立已注册的主体、租户与链路维度：
 
 ```csharp
 public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
@@ -149,7 +148,7 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 | `IsSuperAdmin` | `is_super_admin` | 是否超级管理员（权限授权的超管判定约定来源） |
 | `TenantId` | `tenant_id` | 所属租户 Id（宿主用户无此 claim）。认证端签发主体时写入；多租户解析链以它为最高优先来源，已登录用户的租户由此定案 |
 
-> 仅定义与 `System.Security.Claims.ClaimTypes` 不同的自定义字段；标准字段请直接用 `ClaimTypes`。
+标准字段直接使用 `System.Security.Claims.ClaimTypes`。
 
 ### `Leistd.Security.Claims.ClientSubject`（机器主体 `sub` 契约）
 

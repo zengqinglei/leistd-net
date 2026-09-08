@@ -11,9 +11,7 @@ namespace Leistd.Settings.Services;
 /// 按 用户级 → 租户级 → 代码默认值 的顺序解析设置。
 /// </summary>
 /// <remarks>
-/// Scoped 且请求内只查一次库：设置的读取频率远高于变更，而一次请求内多次读取必须看到
-/// 同一份值——否则同一个请求里前后两次判断可能不一致。跨请求的变更下一请求即可见，
-/// 因此不需要分布式缓存，也就没有跨节点失效问题。
+/// 按作用域缓存已读取的设置，同一作用域内保持一致；跨作用域重新读取，不使用分布式缓存。
 /// </remarks>
 /// <param name="definitionManager">设置定义。</param>
 /// <param name="store">设置值存储。</param>
@@ -79,9 +77,7 @@ public sealed class DefaultSettingProvider(
             return;
         }
 
-        // 两次查询都成功后才一起发布：先写 _tenantValues 的话，用户级查询一旦失败或被取消，
-        // 缓存就停在「租户级已加载、用户级为 null」的半截状态；调用方在同一 scope 内重试时
-        // 这里会因为 _tenantValues 不为 null 直接返回，之后读用户级即空引用。
+        // 两次查询成功后再一起发布缓存，避免失败重试读到半初始化状态。
         var tenantValues = await store.GetAllAsync(SettingScopes.Tenant, userId: null, cancellationToken);
 
         var userId = currentUser.Id?.ToString();

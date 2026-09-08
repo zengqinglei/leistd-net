@@ -43,13 +43,8 @@ public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServi
 
         if (actionList.Any())
         {
-            // 织入把描述符改写成工厂型，Microsoft DI 从此无法校验它的构造函数图——
-            // 于是开着 ValidateOnBuild 反而恰好漏掉最需要校验的那批服务。
-            // 先用未改写的副本校验一次，把这块覆盖面补回来。
-            //
-            // 这一步的前提是注册回调必须是纯函数（只往 context 记拦截器，不往集合加服务）。
-            // 曾经不是：DDD 基座在回调里按 DbContext 注册仓储，导致此处看到的依赖图不完整，
-            // 把尚未注册的依赖误报成缺失。仓储改由 AddDddDbContext<T>() 显式注册后前提成立。
+            // 工厂型描述符无法验证构造链，须在织入前校验原始注册。
+            // 注册回调只登记拦截器，不得向集合追加服务。
             ValidateBeforeRewrite(services);
 
 

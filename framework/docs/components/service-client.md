@@ -92,7 +92,7 @@ var response = await httpClient.GetAsync($"api/v1/orders/{id}");
 var order = await response.ReadContentAsync<OrderDto>();
 ```
 
-`ReadResultAsync<T>()` 是**互操作**路径：被调方产出 `{code, message, data}` 信封时才用它，典型是既有遗留服务；Refit 接口对应写成 `Task<Result<T>>`。两条路径的错误处理相同。
+`ReadResultAsync<T>()` 仅用于被调方产出 `{code, message, data}` 信封的互操作路径；Refit 接口对应写成 `Task<Result<T>>`。两条路径的错误处理相同。
 
 返回 `HttpResponseMessage` 的 Refit 方法不经错误工厂；读取流前必须调用 `EnsureRemoteSuccessAsync()`。
 
@@ -119,7 +119,7 @@ var order = await response.ReadContentAsync<OrderDto>();
 - 租户头读取 `ICurrentTenant`，与用户转发开关独立。
 - `AddClientCredentials` 只在请求没有 `Authorization` 头时介入。收到 401 后使 token 失效、重取并重试一次。
 
-OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发获取使用单飞。token 请求使用独立客户端，不会递归进入业务管道。
+OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发获取合并为一次；token 请求使用独立客户端。
 
 ### 委托用户上下文
 
@@ -140,7 +140,7 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 2. `sub` 等于 `ClientSubject.Format(clientId)`，即 `client:<client_id>`。
 3. token 持有 `RequiredScope`，默认 `svc.delegate`。
 
-恢复后，用户身份作为主身份，原调用方身份仍保留；`ICurrentUser` 与 `ICurrentClient` 可同时使用。不可信调用默认移除用户头。租户头不在移除范围，它由多租户组件的主体优先规则继续约束。
+恢复后用户身份作为主身份，原调用方身份仍保留，`ICurrentUser` 与 `ICurrentClient` 可同时使用。不可信调用默认移除用户头；租户头继续由多租户组件约束。
 
 ### 调用日志
 

@@ -14,12 +14,7 @@
   - 共享组件放 `framework/components/<kebab-分组>/Leistd.Xxx/`，分组与现有保持一致。新分组用 kebab-case。
   - DDD 基础类型放 `framework/ddd-struct/Leistd.Ddd.Xxx/`。
 - `PackageId` 默认等于项目名（= 程序集名），**无需**在 csproj 显式设置。
-- **包名回答「装哪个」，命名空间回答「这个概念叫什么」——两者刻意解耦。**
-  打包边界的调整（把类型从抽象包挪到实现包）不应变成消费者的源码破坏；
-  一个概念也不该让调用方记两个词。微软自己就是这么做的：
-  `Microsoft.Extensions.Logging.Abstractions` 里的 `ILogger` 在 `Microsoft.Extensions.Logging`，
-  `Microsoft.Extensions.Caching.Abstractions` 里**一个 `.Abstractions` 命名空间都没有**。
-  结论一句话：**打包后缀不进命名空间。**
+- 包名表达分发边界，命名空间表达概念；`.Core` 等抽象打包后缀不进入命名空间，具体规则见下文。
 
 - `RootNamespace` 规则（由 `scripts/check-csproj-conventions.py` 强制）：
   - **包名以 `.Core` 结尾的一律显式声明为剥掉 `.Core` 的形态**（`Leistd.Security.Core` → `Leistd.Security`，
@@ -41,20 +36,9 @@
   | 有并列子话题 | **按内容分**：契约与实现同处一个内容目录 | `Leistd.Security.Core` 的 `Users/`（`ICurrentUser` + `CurrentUser`）、`Claims/`、`Clients/`；`Leistd.Core` 的 `Timing/`；`Leistd.UnitOfWork.Core` 的包根 / `Database/` / `Options/` |
   | 只有单一中心概念 | **按层次分**：`Abstractions/` 放契约、`Services/` 放实现 | `lock`、`event-bus`、`object-mapping`、`notifications`、`multi-tenancy` 等 14 个家族 |
 
-  按内容分对消费者更省事（`using Leistd.Security.Users;` 一次拿到接口与实现），
-  按层次分则要为契约多写一个 `using`——这是接受的取舍，与微软把 `ILogger` 放在
-  `Microsoft.Extensions.Logging` 根上的做法不同。选按层次分的理由是源码组织：
-  契约与实现共存于一个包时（`Leistd.MultiTenancy.Core` 30 个文件中 18 个含实现），
-  把契约归拢便于查找；在「目录即命名空间」（IDE0130）下这必然反映到 API 表面。
+- `Services/` 只放实现；契约归 `Abstractions/` 或内容目录。
 
-- **两种形态里 `Services/` 一律只放实现**（由闸门强制）。它在框架内恒定表示「实现」，
-  契约混进去会让这个词失去含义。契约归 `Abstractions/` 或内容目录。
-
-- **扩展类（`XxxExtensions`）按形态落位**：按层次分的包放 `Extensions/`，与 `Abstractions/`、
-  `Services/` 并列——它既不是契约也不是实现，那两个目录都不该收；按内容分的包则与被扩展的类型
-  同处内容目录（`Leistd.Core` 的 `Timing/ClockExtensions.cs`、`Leistd.ServiceClient.Core` 的
-  `Http/HttpResponseMessageExtensions.cs`）。这条不设闸门：形态由「有没有并列子话题」判定，
-  没有机械依据，做成闸门会误伤按内容分的正确放法。
+- 扩展类在按层次分的包中放 `Extensions/`；按内容分的包中与被扩展类型同目录。
 
 - `DependencyInjection.cs` 始终留在包根。
 
@@ -125,11 +109,11 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 
 ### 4.1 信息分层
 
-遵循 Microsoft 的 [XML 文档建议](https://learn.microsoft.com/dotnet/csharp/language-reference/xmldoc/recommended-tags)：公开 API 至少有 `<summary>`，使用完整句子，并用 `<param>`、`<returns>`、`<exception>` 和 `cref` 表达可校验的契约。本仓库在此基础上采用以下精简规则：
+参考 Microsoft 的 [XML 文档建议](https://learn.microsoft.com/dotnet/csharp/language-reference/xmldoc/recommended-tags)与[命名指南](https://learn.microsoft.com/dotnet/standard/design-guidelines/naming-guidelines)：优先用名称和类型表达职责，注释补充非显然契约。本仓库要求公共 API 提供 `<summary>` 或显式继承文档，并采用以下分工：
 
 | 内容 | 位置 | 约束 |
 | --- | --- | --- |
-| API 是什么 | `<summary>` | 一句话；全部公开成员 |
+| API 是什么 | `<summary>` / `<inheritdoc/>` | 一句话或继承既有契约；全部公开成员 |
 | 参数、返回值与异常 | `<param>`、`<returns>`、`<exception>` | 只补签名无法表达的信息 |
 | 前置条件、失败形态、顺序、线程和生命周期 | `<remarks>` | 只写会改变正确用法的契约 |
 | 主要注册入口和非显然主路径 | `<example>` + `<code>` | 使用真实、可编译的最小示例 |
@@ -137,12 +121,13 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 | 看似可删但必须保留的实现约束 | 行内 `//` | 独占一行，通常 1–3 行 |
 | 实施过程和历史 | Git、PR、CI | 不写入源码和分发文档 |
 
-- `<remarks>` 只保留会改变正确用法的契约；设计论证放组件文档，过程记录交给 Git。短是默认方向，完整性优先于行数。
+- `<remarks>` 保留影响正确用法的契约；组件文档说明必要的使用取舍，过程记录交给 Git。
 - `<example>` 用于主要注册入口和容易误用的主路径；可从签名直接推出的调用不补示例。
 - 接口或基类定义公共契约；实现没有新增语义时使用 `<inheritdoc/>`，不复制同一段说明。
 - XML 不使用 Markdown `**…**`；行内代码用 `<c>`，引用 API 用 `<see cref="..."/>`。
 - `<para>` 仅用于两个以上段落。
 - 行内注释解释“为什么必须这样”，不复述代码正在做什么。
+- 示例中的 API、依赖和变量必须可用；XML 内的代码不会自动参与 C# 编译，关键路径需单独验证。
 
 Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓库也不为这些数字设硬闸门；统计只用于发现趋势，审查仍回到必要性、准确性与唯一性。
 
@@ -188,7 +173,6 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 | `## 相关` | 有内容真正相关的兄弟文档 |
 
 **顺序规则：必选段之间的相对顺序固定；可选段按读者需要它的时机插入；`## 注意事项` 与 `## 相关` 恒在最后两段。**
-读者读到「注意事项」时应该已经读完全部用法——把它后面再挂一段家族话题，等于让最重要的告警不是最后一眼看到的东西。
 
 - **没有配置项就不写 `## 配置项`**，不写「当前无配置项」。空壳段只消耗读者的目录，不提供信息。
 - **`## 相关` 里不放恒定链接**。每篇都指向组件总览与依赖注入等于没有指向；无真正相关的兄弟文档时整段删除。
@@ -286,7 +270,7 @@ framework/tests/
 ### 7.3 写什么样的用例
 
 - **一个行为一个文件**，断言可观察行为而不是实现细节。
-- **注释解释"为什么这条断言存在"**：回归自哪次故障、错了会怎样。不复述代码在做什么。
+- 测试注释解释断言保护的行为，不复述代码或记录修复轮次。
 - **分支组合用 `[Theory]` + `[InlineData]`**，不要把同一逻辑复制成多个 `[Fact]`。
 - **每个 `DependencyInjection.cs` 至少三条用例**——注册结果与生命周期、重复调用幂等、
   与相邻组件的覆盖/共存关系。用 `Leistd.TestBase.Assertions.ServiceCollectionAssertions`。
@@ -329,8 +313,7 @@ framework/tests/
 - **可翻译性**：谓词是否真被翻译成 SQL、唯一索引是否真进了 DDL。
   这类必须用关系型 Provider，InMemory 会让它们静默通过。
 
-判断标准只有一条：**这行代码坏掉时，症状是"报错"还是"静默给出错误结果"。**
-后者才需要用例。
+优先覆盖静默错误，同时验证公共契约规定的异常、取消与拒绝行为。
 
 **覆盖率不设门禁，CI 也不收集**——设了固定 fail-under 就会诱导为数字补测试，
 而上面这张表里最该补的那几类恰恰不是靠百分比找出来的。需要体检时本地跑：
@@ -346,19 +329,11 @@ dotnet test framework/Leistd.Framework.slnx -c Release \
 
 ### 7.5 不要引入的模式
 
-**不要把整套应用启动放进测试基类。** 有的模块化框架让测试基类在构造函数里加载模块图、
-逐程序集扫描类型、构建容器，而 xUnit 对每个测试方法新建一次测试类实例——单例成本因此随
-模块数与业务类型数增长，实测可达 50–65 毫秒。Leistd 没有模块系统也没有约定注册
-（全仓库仅 `MapsterProfile` 一处程序集扫描），测试里建的是十几个描述符的小容器，
-单例成本约 14 毫秒。**这个差距来自架构，不是测试技巧，但也因此只需一次误改就能失去。**
-
-具体约束：
+单元测试只组合所需服务，不在每个测试类构造中启动整个应用。
 
 - 组件与 DDD 基座里新增程序集扫描（`GetTypes()`、`DefinedTypes`、`Assembly.Load`）必须有明确理由，
   且不得进入 `AddXxx()` 的公共路径——只能在调用方显式要求扫描时发生。
-- 需要真实宿主的用例（`TestHost` / `WebApplicationFactory`）用 `IClassFixture` 或
-  collection fixture 共享，不要每个用例建一个宿主。宿主构建约 0.5–0.8 秒，
-  它是测试时长里唯一的大头。
+- 需要真实宿主的用例（`TestHost` / `WebApplicationFactory`）用 `IClassFixture` 或 collection fixture 共享。
 
 ## 8. 提交前自检
 

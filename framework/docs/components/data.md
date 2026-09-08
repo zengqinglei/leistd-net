@@ -57,6 +57,5 @@ builder.Services.AddScoped<IConnectionStringResolver, ConfigurationConnectionStr
 
 ## 注意事项
 
-- Framework **不提供** `IConnectionStringResolver` 的租户实现：回源目标、Secret 产品、缓存与
-  single-flight 策略都属于具体部署拓扑，留在业务项目的 Infrastructure 层。
+- Framework 不提供 `IConnectionStringResolver` 的租户实现；Secret 来源、缓存与并发合并策略由宿主决定。
 - 解析器按请求解析，注册为 `Scoped`；`AffinityKey` 的实现必须避免 I/O，否则每次取 DbContext 都会付代价。

@@ -57,10 +57,7 @@ public sealed class JsonLocalizationResourceReader(
         return texts;
     }
 
-    // 在程序集嵌入清单中定位 {ResourcesPath}.{culture}.json（大小写不敏感，兼容目录分隔差异）。
-    // 精确后缀匹配：清单名须以 .{ResourcesPath}.{culture}.json 结尾（ResourcesPath 为空时退化为 .{culture}.json），
-    // 避免仅凭 Contains 命中同程序集下相似目录的错误资源。命中多个候选时抛出
-    // InvalidOperationException——歧义应在启动预热阶段暴露，而非静默取第一个埋雷。
+    // 按资源路径和 culture 精确匹配嵌入资源后缀；多个候选视为歧义并抛异常。
     private string? ResolveResourceName(Assembly assembly, string culture)
     {
         var pathHint = _options.ResourcesPath.Replace('/', '.').Replace('\\', '.').Trim('.');

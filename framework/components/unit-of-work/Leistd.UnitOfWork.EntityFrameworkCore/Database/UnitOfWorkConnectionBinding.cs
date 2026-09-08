@@ -1,12 +1,7 @@
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
-// 固定一个工作单元的连接归属与物理连接目标。
-// 两个维度都要固定，缺一不可：
-// 物理目标防的是"一个原子边界被静默拆成跨库操作"——两个不同的库意味着两个事务，
-// 提交会变成部分成功。
-// 归属防的是共享库形态下的"一个工作单元写了两个归属的数据"——那种情况下两个归属
-// 解析到同一个连接串，物理目标完全相同，只比对目标发现不了。归属键对本层是不透明的，
-// 由 IConnectionAffinityProvider 提供（多租户实现返回当前租户 Id）。
+// 同时固定连接归属与物理目标，分别防止跨归属写入和跨库事务。
+// 归属键由 IConnectionAffinityProvider 提供，本层不解释其内容。
 internal sealed class UnitOfWorkConnectionBinding
 {
     private bool _isBound;

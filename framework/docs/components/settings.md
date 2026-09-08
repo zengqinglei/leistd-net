@@ -11,7 +11,7 @@
 | 只声明设置、只读取（应用层、领域服务） | 只引用 `Leistd.Settings.Core` |
 | 需要持久化设置值 | 引用 `Leistd.Settings.EntityFrameworkCore` |
 
-**部署期配置不属于本组件。** 凭据、信任边界、解析协议、事务隔离级别放进设置页，等于给运行期一个能悄悄拆掉安全与正确性保证的开关。
+凭据、信任边界、解析协议和事务隔离级别属于部署配置，不应进入运行期设置。
 
 ## 安装
 
@@ -111,9 +111,9 @@ await settingManager.SetAsync("Display.TimeZone", null, SettingScopes.User, user
 - 定义未允许的层级即使库里有值也不参与回落——改一次 `Scopes` 不会让历史遗留行悄悄重新生效。
 - 匿名调用只回落到租户级，不查用户级。
 - `ISettingProvider` 为 Scoped，一次请求内每个层级只查一次库并复用结果；`ISettingDefinitionManager` 为 Singleton。
-- 设置名重复注册在**首次访问定义时**失败——定义是惰性汇总的，容器不会主动实例化 `ISettingDefinitionManager`，所以这个失败发生在第一次读写设置时，而不是宿主启动时。读写未定义的名称抛 `UndefinedSettingException`；写入定义未允许的层级抛 `SettingScopeNotAllowedException`。
+- 设置名重复在首次访问定义时失败。读写未定义名称抛 `UndefinedSettingException`；写入未允许层级抛 `SettingScopeNotAllowedException`。
 - 层级由 `SettingRecord` 的两个字段共同表达：`TenantId` 交给多租户查询过滤器隔离，`UserId` 为 `null` 即租户级。不设可独立修改的 Scope 列，避免出现自相矛盾的第二事实源。
-- 唯一索引落在 `(ScopeKey, Name)` 上。`ScopeKey` 是由租户与层级派生的非空存储完整性键，调用方既不提供也不修改：`(TenantId, UserId, Name)` 里那两列可为 `null`，而 PostgreSQL、SQLite 等把多个 NULL 视为互不相等，宿主级与租户级默认值这两个最常用层级会完全不受约束，并发首次写入插出重复行后，按名称读取整个层级就直接失败。
+- 唯一索引为 `(ScopeKey, Name)`；`ScopeKey` 由租户和层级派生，避免可空 `TenantId`/`UserId` 使唯一约束失效。
 - 表名沿用宿主 `DbSet` 属性名，组件不写死。
 
 ## 按用户时区展示时间
@@ -125,10 +125,10 @@ await settingManager.SetAsync("Display.TimeZone", null, SettingScopes.User, user
 | 设置名 | `Display.TimeZone` |
 | 值 | **只接受 IANA 时区名**（如 `Asia/Shanghai`）。`UTC` 本身也是合法 IANA 标识 |
 | 清除覆盖 | 写入 `null` 只清掉当前层，读取继续向下一层回落（用户 → 租户 → 代码默认值） |
-| 最终缺值 | 三层都没有值时如何降级由消费端决定——服务端通常用服务器时区，浏览器端用本地时区 |
+| 最终缺值 | 三层都没有值时由消费端明确选择回退值 |
 | 层级 | `SettingScopes.All`：租户给默认值，用户可各自覆盖 |
 
-**写入端必须把值域限定成 IANA**，不能只判断「能不能解析」：.NET 的 `TryFindSystemTimeZoneById` 连 Windows 时区 ID（`China Standard Time` 之类）一起认，而浏览器的 `Intl.DateTimeFormat` 对它抛错。只按能否解析放行，就会存进一个后端认、前端用不了的值，界面静默回落到本地时区，表现为「保存成功但不生效」。判定加一条 `TimeZoneInfo.HasIanaId` 即可，两端认的就是同一个集合。
+写入端必须用 `TimeZoneInfo.HasIanaId` 将值域限制为 IANA；只调用 `TryFindSystemTimeZoneById` 会同时接受浏览器不支持的 Windows 时区 ID。
 
 设置组件本身不做时区转换：转换是 `TimeZoneInfo` 的事，「用谁的时区、日边界怎么算」是宿主的决定。项目模板给出了服务端与前端两侧的完整做法。
 
