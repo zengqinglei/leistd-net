@@ -14,18 +14,11 @@ public static class DependencyInjection
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <remarks>
-    /// 仅用于没有可用 SMTP 的环境，且必须是宿主的主动选择。生产环境注册它等于静默丢信。
+    /// 用于明确不需要实际投递的环境，不作为发送失败时的兜底。
     /// </remarks>
     /// <example>
     /// <code>
-    /// if (builder.Environment.IsDevelopment())
-    /// {
-    ///     builder.Services.AddNullEmailSender();
-    /// }
-    /// else
-    /// {
-    ///     builder.Services.AddSmtpEmailSender(builder.Configuration);
-    /// }
+    /// services.AddNullEmailSender();
     /// </code>
     /// </example>
     public static IServiceCollection AddNullEmailSender(this IServiceCollection services)

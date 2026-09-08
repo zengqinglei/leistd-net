@@ -67,9 +67,7 @@ public class MultiTenancyMiddleware(RequestDelegate next, ILogger<MultiTenancyMi
         }
         else
         {
-            // 不校验形态下解析链只有主体贡献者，值来自已验证令牌的 claim；
-            // 签发方在发这个 claim 之前已校验过租户，此处只需确认它是个合法 Id。
-            // 名称不可得（没有注册表可查），保持 null——它只用于日志与展示
+            // 该模式只采信已验证主体的租户 Id；没有注册表可查，名称保持 null。
             if (!Guid.TryParse(result.TenantIdOrName, out tenantId) || tenantId == Guid.Empty)
             {
                 throw new TenantNotFoundException(result.TenantIdOrName);

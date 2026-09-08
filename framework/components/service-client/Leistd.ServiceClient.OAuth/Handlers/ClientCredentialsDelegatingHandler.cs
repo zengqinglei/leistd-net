@@ -39,9 +39,7 @@ public sealed class ClientCredentialsDelegatingHandler(
             return response;
         }
 
-        // 401 可能来自令牌吊销或密钥轮换，强制刷新一次。
-        // 先释放这个 401：接下来的取令牌是一次网络往返，期间没有理由攥着它的连接；
-        // 而取令牌本身可能抛异常，那条路径上就再没有人释放它了。
+        // 401 时强制刷新一次；刷新前释放首个响应，避免取令牌失败时泄漏连接。
         response.Dispose();
 
         tokenProvider.Invalidate(clientName);

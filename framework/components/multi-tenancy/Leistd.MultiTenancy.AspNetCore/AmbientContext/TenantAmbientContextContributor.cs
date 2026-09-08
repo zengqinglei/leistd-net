@@ -8,9 +8,7 @@ namespace Leistd.MultiTenancy.AspNetCore.AmbientContext;
 
 // 非 HTTP 入口的租户维度：从主体的租户声明建立 ICurrentTenant。
 //
-// 只认 claim，不跑完整解析链：Hub 调用与后台作业没有请求头与查询串，
-// 而解析链的其它贡献者会去读 IHttpContextAccessor（那里为 null）或采信不可信来源。
-// 这也与既有政策一致——已认证用户的租户由 claim 定案，请求参数无法改写。
+// 非 HTTP 入口只从已验证主体的 claim 建立租户，不读取请求参数。
 //
 // 不做租户存在性与启用状态校验：那是请求入口的职责（MultiTenancyMiddleware），
 // 连接建立之后的失效判定统一走宿主授权策略。
@@ -36,9 +34,7 @@ internal sealed class TenantAmbientContextContributor(
             return currentTenant.Change(null);
         }
 
-        // 有声明但不是 Guid：这是签发端与消费端的口径不一致，属于配置错误。
-        // 绝不能退回宿主视角——那会把一个租户用户静默放进宿主分区，
-        // 既读得到别人的数据，写入也落错归属，且没有任何信号。
+        // 非法租户 claim 属于契约错误，不能回退到宿主分区。
         if (!Guid.TryParse(claimValue, out var tenantId))
         {
             throw new InvalidOperationException(

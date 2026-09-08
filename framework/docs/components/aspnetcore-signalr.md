@@ -38,7 +38,7 @@ builder.Services.AddSignalRAmbientContext(options =>
 
 `AddSignalRAmbientContext` 幂等：realtime 与 notifications 同时安装时也只挂一份过滤器。
 
-心跳、超时、详细错误属于 SignalR 自身的 `HubOptions`，本包不碰——用标准写法配置，不会被框架覆盖：
+心跳、超时和详细错误仍通过 SignalR 的 `HubOptions` 配置：
 
 ```csharp
 builder.Services.AddSignalR(options =>
@@ -92,7 +92,7 @@ options.DefaultPolicy = new AuthorizationPolicyBuilder()
 
 ### 有效性复评
 
-- **只在 `InvokeMethodAsync` 上执行**；握手已由端点策略覆盖。这决定了复评的实际时机：客户端下一次调用 Hub 方法时才会被评到，框架**不主动断开**已建立的连接。因此**没有客户端可调方法的纯接收 Hub 只在握手时授权一次**，之后账号被禁用不会被感知；令牌到期是否关闭连接由 SignalR 的 `CloseOnAuthenticationExpiration` 决定。需要即时断连的项目自建终止通道。
+- 只在 `InvokeMethodAsync` 上复评；框架不主动断开已建立连接。纯接收 Hub 只在握手时授权，令牌到期关闭由 SignalR 的 `CloseOnAuthenticationExpiration` 决定。
 - **在环境上下文之内执行**，因此宿主为 HTTP 路径写的授权 handler（读 `ICurrentUser` 等环境态）可原样生效，账号有效性只有一处定义。
 - 不通过时 `HubCallerContext.Abort()` 并抛 `HubException`，客户端需重连并重新认证。
 - 节流状态存放在 `HubCallerContext.Items`，随连接生命周期。
@@ -118,18 +118,12 @@ builder.Services.AddSignalR().AddStackExchangeRedis(redisConnectionString);
 
 宿主自行安装 `Microsoft.AspNetCore.SignalR.StackExchangeRedis`；本包不带任何背板 Provider，也不代为注册——副本数是部署侧的决定，框架检测不到。背板与本包的注册顺序无关。
 
-背板负责的是**消息路由**。它不解决这两件事：
-
-| 需求 | 背板能否解决 | 正确做法 |
-|---|---|---|
-| 跨节点把消息送到订阅者 | ✅ 这正是它的职责 | 配置背板 |
-| 查询「某用户此刻是否在线」 | ❌ 背板不维护连接注册表 | 需要独立的共享注册表（如 Redis 集合 + 心跳 TTL），由宿主实现 |
-| 保证消息一定送达 | ❌ SignalR 是尽力而为 | 需要送达保证时落库并由客户端补拉，[通知组件](./notifications.md)即此形态 |
+背板只解决跨节点路由。共享在线状态需宿主自建注册表；断线后的消息补拉需持久化，可使用[通知组件](./notifications.md)。
 
 ## 注意事项
 
 - `AddSignalRAmbientContext` 自己补齐 Hub 调用所需的非 HTTP 环境上下文，宿主无需先注册。同时有 Controller/HTTP 路径时再调宿主 security 包的注册入口，把主体来源换成 `HttpContext.User`；两者调用顺序无关。
-- 复评默认不节流：Hub 调用频率远低于 HTTP 请求，而账号有效性判定通常是一次主键查询。高频 Hub（如光标同步）再按实测放宽。
+- 复评默认不节流；高频 Hub 应按实测配置 `RevalidationInterval`。
 - 复评评估的是策略的 `Requirements`，不涉及认证方案——身份来自握手时已认证的连接主体。
 - 本包只提供基座，不映射任何 Hub 端点，也不注册背板。
 - 本包不配置 `HubOptions`：心跳、超时、详细错误是 SignalR 自身的选项，由宿主用 `AddSignalR(o => ...)` 直接配置。

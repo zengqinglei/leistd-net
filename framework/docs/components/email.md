@@ -1,6 +1,6 @@
 # 邮件发送
 
-统一的 `IEmailSender` 抽象与 SMTP 实现。发送失败一律抛异常；没有可用 SMTP 的环境显式注册空发送器，不存在"配置不对就悄悄不发"的回落。
+提供统一的 `IEmailSender` 抽象、SMTP 投递与显式空发送器。
 
 ## 何时使用
 
@@ -10,7 +10,7 @@
 | 本地开发或演示，没有可用 SMTP，且不需要看邮件内容 | `Leistd.Email.Core` 的 `AddNullEmailSender()` |
 | 本地要看到邮件内容（验证码、重置链接） | 仍用 `Leistd.Email.Smtp`，指向本机邮件捕获器：`docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit` |
 | 只写发信调用、不关心投递介质 | 只引用 `Leistd.Email.Core` 中的接口 |
-| 需要队列、重试、退避 | 本组件不提供。宿主自己排队，或由调用方决定补偿 |
+| 需要队列、重试、退避 | 本组件不提供，由宿主组合 |
 | 需要按模板渲染正文 | 本组件不提供。正文由调用方给出字符串 |
 
 ## 安装
@@ -57,23 +57,6 @@ public class RegistrationService(IEmailSender emailSender)
 }
 ```
 
-**发送失败会抛异常**，调用方据此决定补偿。占用了外部资源的流程必须在失败路径上撤回：
-
-```csharp
-await cache.SetStringAsync(rateKey, "1", rateOptions, ct);
-try
-{
-    await cache.SetStringAsync(challengeKey, payload, challengeOptions, ct);
-    await emailSender.SendAsync(message, ct);
-}
-catch
-{
-    // 发不出去时既不能留下用不了的挑战，也不能占着限流槽位
-    await Task.WhenAll(cache.RemoveAsync(challengeKey), cache.RemoveAsync(rateKey));
-    throw;
-}
-```
-
 不指定发件人时使用配置里的默认发件身份；需要按业务线区分发件人时给出 `FromAddress`：
 
 ```csharp
@@ -92,7 +75,7 @@ await emailSender.SendAsync(new EmailMessage
 | 成员 | 说明 |
 | --- | --- |
 | `IEmailSender` | 发信入口，业务层只依赖它 |
-| `IEmailSender.SendAsync(message, ct)` | 发送一封邮件；**任何失败都抛异常**，不返回成功/失败标志 |
+| `IEmailSender.SendAsync(message, ct)` | 发送一封邮件 |
 | `EmailMessage.To` | 收件人地址（必填） |
 | `EmailMessage.Subject` | 主题（必填） |
 | `EmailMessage.Body` | 正文（必填） |
@@ -101,8 +84,6 @@ await emailSender.SendAsync(new EmailMessage
 | `EmailMessage.FromName` | 发件显示名；语义与 `FromAddress` 成对，见「注意事项」 |
 | `NullEmailSender` | 不投递、只按 Warning 记录的实现，由 `AddNullEmailSender()` 注册 |
 | `SmtpEmailSender` | SMTP 实现，由 `AddSmtpEmailSender()` 注册 |
-
-`EmailMessage` 用对象而非多个 `SendAsync` 重载承载参数：日后追加抄送、附件等维度只是新增 `init` 属性，对既有调用方非破坏。
 
 ## 配置项（`Leistd:Email:Smtp`）
 
@@ -136,24 +117,23 @@ await emailSender.SendAsync(new EmailMessage
 
 ## 实现行为
 
+SMTP 连接、认证或投递失败均原样抛出；重试和补偿由调用方决定。`NullEmailSender` 只能显式注册，不会在 SMTP 配置或发送失败时自动回落。
+
 ### Leistd.Email.Core（`NullEmailSender`）
 
 - 不连接任何服务器，不投递，返回成功。
 - 按 **Warning** 级别记录收件人与主题，**不记录正文**。级别是"本环境不会真的发信"的唯一信号，因此不用 Debug——降级后，误把它注册进生产的部署会完全静默地丢掉每一封信。
 - 不记正文是有意的：验证码、重置链接进应用日志等于把凭据留在日志里。要看内容请用 SMTP 指向本机邮件捕获器。
-- 必须由宿主主动注册；它**不是**发送失败时的兜底。
+- 必须由宿主主动注册。
 
 ### Leistd.Email.Smtp（`SmtpEmailSender`）
 
 - 每次发送新建一个 `SmtpClient`，发完 `QUIT` 断开，不复用连接。
 - `EnableSsl` 为 `true` 时按端口选握手方式：465 用隐式 TLS，其余用 STARTTLS。两者不可互换——对 465 用 STARTTLS 会卡在等待明文问候，对 587 用隐式 TLS 会握手失败。
 - 仅在 `Username` 非空时认证。用户名与口令由启动期校验保证成对，取到一半时当场抛，而不是跳过认证继续发送。
-- 连接、认证、投递的任何失败原样上抛，不包装、不记为已发送。
 
 ## 注意事项
 
-- **发送失败一定抛异常**，不存在返回值形式的失败信号。占用了限流槽位、挑战缓存或数据库行的流程必须在 `catch` 里撤回，否则用户会拿到一个永远收不到码的挑战。
-- **`NullEmailSender` 只能显式注册。** 任何"配置看起来不对就跳过发送"的回落都会让调用方误以为信已发出，因此本组件不提供这种行为——包括对占位主机名之类的特殊值。
 - **发件地址与显示名成对取用。** 给出 `FromAddress` 而不给 `FromName` 时，显示名为空，不会贴上 `DefaultFromName`；否则会发出"自定义地址 + 系统署名"这种没人想要的组合，而且不报错。
 - `IsBodyHtml` 取错不会报错，只会让收件人看到转义后的 HTML 源码或没有排版的信。
 - 组件不排队、不重试、不退避。一次 `SendAsync` 就是一次同步投递尝试，耗时受 SMTP 往返影响；放在请求路径上时需要考虑它对响应时间的贡献。

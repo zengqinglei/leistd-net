@@ -6,9 +6,7 @@ namespace Leistd.MultiTenancy.Exceptions;
 /// 表示租户连接配置版本不匹配。
 /// </summary>
 /// <remarks>
-/// 这一行决定该租户的数据落在哪个库，丢更新的后果是"以为改了、其实被别人覆盖回去"，
-/// 而且不会有任何报错——两个管理员同时改模式时，后提交的那次静默胜出。
-/// 因此写入必须携带预期版本，不匹配就拒绝，由调用方重读后决定如何合并。
+/// 写入必须携带预期版本；冲突时由调用方重新读取并决定如何合并。
 /// </remarks>
 /// <param name="tenantId">目标租户</param>
 /// <param name="expectedVersion">调用方预期的版本；<see langword="null"/> 表示调用方预期该配置尚不存在</param>

@@ -51,8 +51,7 @@ app.MapNotificationHub();
 
 `AddNotificationsSignalR()` 会同时注册 Core 发布器与 SignalR 传输，但不注册持久化，也不映射业务实时 Hub。`MapNotificationHub()` 默认映射到 `/hubs/notifications` 并要求登录。
 
-> `INotificationChannel` 以 `IEnumerable<T>` 注入，可同时注册多个传输通道，发布时逐一调用。
-> `INotificationStore` 是**必需且唯一**的依赖：通知的定义就是有历史、可补看、计入未读数，未注册时解析 `INotificationPublisher` 直接失败；多个持久化去处只会带来「写了一半」的不一致。只要瞬态推送、不要历史的场景属于[实时通信](./realtime.md)，不属于本组件。
+`INotificationChannel` 可注册多个；`INotificationStore` 必须且只能注册一个。只要瞬态推送而不要历史时使用[实时通信](./realtime.md)。
 
 > **前置**：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`。本家族的 EF 存储与管理器经
 > `IDbContextProvider<TDbContext>` 取上下文——只有它会设置 `DbContextCreationContext.Current`，
@@ -82,14 +81,15 @@ public class OrderNotifier(INotificationPublisher notificationPublisher)
 }
 ```
 
-**查询通知历史**——注入 `INotificationStore`（无需依赖 `INotificationPublisher`）：
+查询通知历史只需注入 `INotificationStore`：
 
 ```csharp
-public class MessageCenterController(INotificationStore notificationStore, ICurrentUser currentUser) : BaseController
+public class MessageCenter(INotificationStore notificationStore)
 {
-    [HttpGet]
-    public async Task<IReadOnlyList<NotificationOutputDto>> GetListAsync(int maxCount = 50, CancellationToken ct = default)
-        => await notificationStore.GetByUserAsync(currentUser.Id!.ToString()!, maxCount, ct);
+    public Task<IReadOnlyList<NotificationOutputDto>> GetListAsync(
+        string userId,
+        CancellationToken ct = default)
+        => notificationStore.GetByUserAsync(userId, 50, ct);
 }
 ```
 
@@ -118,9 +118,9 @@ public class MessageCenterController(INotificationStore notificationStore, ICurr
 ### Leistd.Notifications.Core（`NotificationPublisher` 默认发布器）
 
 - `PublishToUserAsync` 先写入 Store，再依次调用所有渠道（`INotificationChannel`）。Store 是必需依赖；先落库再推送——推送失败只是这一次没送到，历史还在，反过来则是历史丢了。
-- 创建时刻只来自 `IClock.Now`：发布输入里没有这个字段，调用方传不进 `Local`/`Unspecified` 的时间，因此「通知列表的排序基准与其它时间线对不上」不再可能发生——不是靠归一化去救，而是取消了这个入口。
-- **`INotificationChannel` 不是 realtime 组件的替代品，两者寻址模型不同。** realtime 是<b>资源订阅</b>寻址（客户端先 `Subscribe(resourceKey)`，每次订阅无条件过 `IRealTimeSubscriptionAuthorizer`），它自己的文档也写明「Hub 只做资源订阅，不建任何用户分组：按用户寻址用 `Clients.User(userId)`」；通知是<b>用户</b>寻址，收件人服务端已知，没有授权决定可做。通知的 SignalR 渠道因此挂自己的空 Hub、只借用 [SignalR 基座](./aspnetcore-signalr.md)解析 `UserIdentifier`——复用 realtime 的 Hub 能省一条 WebSocket，但会让只装通知的宿主被迫为用不到的资源订阅注册授权器（`MapRealTimeHub` 缺它就起不来），两个组件也不再能独立安装。
-- **业务代码只注入 `INotificationPublisher`。** 直接注入 `INotificationChannel` 调 `DeliverAsync` 会跳过历史写入，表现是"实时到达、刷新后铃铛空白、未读数不涨"，而且不报错。两者签名同构（都是 `(userId, notification, ct)`），编译期分不出来——发布器是「发一次通知」这个用例，`INotificationChannel` 是「某一种介质怎么送」这个实现。
+- 创建时刻只来自 `IClock.Now`，发布输入不能指定。
+- 通知按用户寻址并保留历史；realtime 按客户端订阅的资源寻址。两个组件使用各自的 Hub，可独立安装。
+- 业务代码只注入 `INotificationPublisher`；直接调用 `INotificationChannel` 会绕过历史写入。
 - 多个 `INotificationChannel` 按注入顺序 `foreach` **串行 `await`**，非并行、非后台任务。`INotificationStore` 只允许一个：多个持久化去处只会带来「写了一半」的不一致。
 
 ### Leistd.Notifications.AspNetCore.SignalR（实时推送）

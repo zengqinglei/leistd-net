@@ -82,10 +82,7 @@ public class DefaultResourceAuthorizationService(
 
             if (acl.TryGetValue(operation, out var effect))
             {
-                // 只认明确的 Granted，其余一律拒绝。
-                // 写成"是 Prohibited 就拒、否则放行"会让任何非法值 fail-open——
-                // (ResourceGrantEffect)0、越界数值、自定义 Store 返回的损坏值都会被当成允许。
-                // 授权判定必须 fail-closed：读不懂的东西一律当作没有授予。
+                // 仅明确的 Granted 允许访问，未知或损坏的授予值一律拒绝。
                 if (effect != ResourceGrantEffect.Granted)
                     return false;
 

@@ -20,10 +20,8 @@ public interface IConnectionStringResolver
     /// 未声明时为 <see cref="ConnectionStringNames.Default"/>
     /// </param>
     /// <remarks>
-    /// <b>契约只有两条</b>：给定连接名返回一个非空连接字符串；解析不出就抛异常（空串或空白按失败处理）。
-    /// <b>实现必须失败关闭</b>：配置缺失、依赖不可达、凭据无法解析都要抛，
-    /// 不得静默回退到某个"默认"连接——回退意味着数据写到了调用方并未选择的库。
-    /// 本抽象不描述任何解析策略；租户感知实现的策略见 multi-tenancy 组件文档。
+    /// 解析失败必须抛异常，不返回空值，也不回退到调用方未选择的数据库。
+    /// 具体解析策略由实现决定。
     /// </remarks>
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>最终连接字符串；解析不出时抛异常，不返回 null 或空串</returns>

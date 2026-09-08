@@ -16,7 +16,7 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 
 模板通过 `PackageReference` 消费框架；`Api` 是组合根，Application 不依赖 Infrastructure。模板源可编辑不等于交付完成，必须验证实际生成结果。
 
-模板源码不产随包 XML，非公开成员可在确有契约价值时使用 XML 注释。注释不设密度或行数配额：`<summary>` 一句话，`<remarks>` 只写会改变正确用法的契约，行内 `//` 只解释非显然的原因。`///` 仍禁 Markdown `**…**`（不渲染）。
+模板源码不产随包 XML，非公开成员可按需使用 XML 注释。注释只保留职责和非显然契约，XML 不使用 Markdown 强调。
 
 ## 方案与实施计划
 
@@ -49,11 +49,11 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
    确有缺口就反馈到框架组件，由那一层收口。
 3. 沿用最新同类模板实现，修改源码、测试和确有长期价值的文档。
 4. 涉及框架契约时先打包到 `.tmp/local-feed`，再走 NuGet 消费路径。
-5. 在 `.tmp/` 下生成受影响场景，检查残留占位符和条件标记。
-6. 对生成项目执行后端还原、构建、测试及必要的前端构建。
+5. 在 `.tmp/` 下生成受影响场景，检查占位符、条件裁剪与格式；只改文案时不重复运行无关测试。
+6. 代码或配置变化时，对生成项目执行相关还原、构建与测试。
 7. 权限、审计、通知、实时或数据库变化时补充对应业务闭环验证。
 
-模板维护规则写入 `docs/template/`。生成后业务项目的通用协作流程写入 `template/.agents/skills/leistd-project-workflow/`，生成项目的长期工程事实由 `template/docs/README.md` 索引；满足沉淀条件但没有同类文档时主动创建最小权威文档，只写已验证且必要的信息，不携带固定需求、报告、配置或规范模板。
+维护规则归 `docs/template/`，项目协作流程归 `template/.agents/skills/leistd-project-workflow/`，生成项目的长期事实由 `template/docs/README.md` 索引。只沉淀已验证、需复用的信息。
 
 ## 验证入口
 

@@ -51,7 +51,7 @@ var order = await store.FindAsync(id)
         .WithData("OrderId", id);
 ```
 
-`Message` 是面向日志和运维的英文诊断；`Code` 是稳定的机器契约，同时是本地化资源键。`WithData` 为本地化资源提供具名占位参数。
+`Message` 是英文诊断；`Code` 是稳定的机器契约和本地化资源键，`WithData` 提供具名占位参数。
 
 未显式调用 `WithCode` 时，`Code` 由 HTTP 状态码生成通用值，如 `Error:BadRequest` 或 `Error:NotFound`，因此顶层 `code` 始终非空。已对外的错误码不应重命名。
 
@@ -85,9 +85,7 @@ throw new UnprocessableEntityException(
 }
 ```
 
-`detail` 是本地化后的用户消息，`field` 是字段路径，字段级 `code` 可空。字段名遵循宿主的 JSON 命名策略。
-
-`ConfigureApiValidation()` 可将 `[ApiController]` 的自动 400 校验也转换为同一 `errors` 数组契约。400 与 422 共用 `urn:leistd:problem:validation-error`。
+`detail` 是本地化消息，`field` 是字段路径，字段级 `code` 可空。`ConfigureApiValidation()` 也将 `[ApiController]` 的自动 400 校验转换为该数组契约。
 
 ### 错误响应与本地化
 

@@ -43,11 +43,7 @@ public class TenantConnectionRecordConfiguration : IEntityTypeConfiguration<Tena
             $"AND {Column(nameof(TenantConnectionRecord.MigrationSecretReference))} IS NOT NULL)"));
     }
 
-    // 按属性名拼列标识符。假定这三个属性的列名等于属性名——启用全局命名约定（如 snake_case）
-    // 的消费方需自行重建本约束：先 ToTable(t => t.HasCheckConstraint(ModeSecretsCheckConstraintName, null))
-    // 移除，再按自己的列名添加。
-    // 不从 EF 元数据取真实列名：IEntityTypeConfiguration 在约定之前执行，配置期读到的还是属性名。
-    // 失败是大声的——列名不匹配时 PostgreSQL 建表即报"列不存在"，SQL 不会静默绑到别的列上。
-    // 双引号是 PostgreSQL 与 SQLite 通用的标准标识符引号。
+    // 约束使用属性名作为列名，双引号适用于 PostgreSQL 与 SQLite。
+    // 采用列名约定时，宿主须按实际列名重建约束；配置阶段约定尚未执行。
     private static string Column(string propertyName) => $"\"{propertyName}\"";
 }

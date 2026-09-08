@@ -3,7 +3,7 @@ using Castle.DynamicProxy;
 namespace Leistd.DynamicProxy.Interceptors;
 
 /// <summary>
-/// Base class for async interceptors (supports both sync and async methods)
+/// 支持同步与异步方法的拦截器基类。
 /// </summary>
 public abstract class BaseAsyncInterceptor : AsyncInterceptorBase
 {

@@ -98,15 +98,8 @@ graph TD
     serviceClient --> multiTenancy
 ```
 
-`Leistd.Core` 除时钟与通用异常外，还承载**环境上下文原语**（`IAmbientContext` / `IAmbientContextContributor`）：
-它是跨维度的组合点，任何单个维度的组件都不该拥有它；放在零依赖包里，使各维度登记贡献者时不产生新的包依赖边。
-实现在 `Leistd.Security.Core`（主体是所有维度的输入），租户与链路标识两个贡献者分别由
-`Leistd.MultiTenancy.AspNetCore` 与 `Leistd.Tracing.Core` 登记——图中不额外画这两条边，它们复用既有依赖。
+`Leistd.Core` 还承载跨维度的环境上下文原语；主体实现在 `Leistd.Security.Core`，租户与链路贡献者分别由 `Leistd.MultiTenancy.AspNetCore` 和 `Leistd.Tracing.Core` 登记。
 
 无跨分组 Leistd 依赖的独立分组：`aop`（动态代理）、`core`（核心原语）、`data`（连接解析契约）、`email`（邮件发送）、`event-bus`（事件总线）、`lock`（分布式锁与本地锁）、`localization`（多语言本地化，仅依赖 `Microsoft.Extensions.Localization.Abstractions`）、`object-mapping`（对象映射）。`response` 依赖 `exception-handling`，图中已画。注意 `auditing`/`authorization`/`realtime` 的 `.Core` 抽象包本身无 Leistd 组件依赖；图中的入边来自它们各自的 EF Core / SignalR / AspNetCore 子包（如 `Leistd.Authorization.EntityFrameworkCore` 引用 `Leistd.Auditing.Core`，`Leistd.MultiTenancy.AspNetCore` 引用 `Leistd.Security.Core`；`multi-tenancy → auditing` 一边来自 `Leistd.MultiTenancy.EntityFrameworkCore` 的租户注册表审计接口）。`Leistd.Authorization.Core` 引用 `Leistd.MultiTenancy.Core` 承载权限定义的多租户侧别。
 
-> 注：图中标注真实的 `ProjectReference` 依赖（含各家族的 EF Core / SignalR 子包边）。
-> `authorization`/`authorizationResource`/`notifications` → `unit-of-work` 三条边来自各家族的
-> `.EntityFrameworkCore` 子包：它们的存储与管理器经 `IDbContextProvider<TDbContext>` 取上下文
-> （只有它会设置 `DbContextCreationContext.Current`，从而拿到本工作单元已解析的连接），
-> 与 `multi-tenancy` 同一口径。`notifications`/`realtime` 的实时推送实现另依赖 `Microsoft.AspNetCore.SignalR`（外部依赖，未单独列出）。组件与 `ddd-struct` **无正向编译期依赖**——实际方向相反：`Leistd.Ddd.Infrastructure` 引用 `Leistd.Auditing.EntityFrameworkCore`、`Leistd.Security.Core`、`Leistd.MultiTenancy.Core`。
+图中只画 Leistd 包的直接 `ProjectReference`；外部 SignalR 依赖不单列。组件不依赖 `ddd-struct`，实际方向是 `Leistd.Ddd.Infrastructure` 引用组件包。

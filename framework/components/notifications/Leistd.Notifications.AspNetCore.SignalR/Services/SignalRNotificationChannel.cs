@@ -20,9 +20,7 @@ public class SignalRNotificationChannel(
     /// <inheritdoc />
     public async Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
     {
-        // 用 SignalR 自带的按用户寻址，不自建 user:{id} 分组：分组要求"Hub 加组时算出的键"
-        // 与"调用方传进来的键"字符串相等，而前者是框架内部推导，调用方看不见也对不齐。
-        // Clients.User 匹配的是 UserIdentifier，它由基座的 UserIdProvider 一处定义。
+        // 按 UserIdentifier 寻址，其生成规则由 SignalR 基座的 UserIdProvider 统一提供。
         //
         // 这里不吞异常：跨渠道隔离与日志由发布器统一负责（见 INotificationChannel），
         // 各实现各吞一遍会让"取消"也被伪装成"送达失败"，而且这条保证会取决于每个实现者。

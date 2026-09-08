@@ -10,7 +10,7 @@
 - **UI 组件库**: Spartan UI（`@spartan-ng/brain` 无头基元 + helm 样式层）
 - **原子化CSS**: Tailwind CSS v4+
 - **命令行工具**: Angular CLI v22+
-- **开发语言**: TypeScript 6.0+
+- **开发语言**: TypeScript，版本遵循项目依赖及 Angular 编译器的 peer 范围
 - **状态管理**: Angular Signals
 - **表单**: Angular Signal Forms（`@angular/forms/signals`，在 Angular 22 仍为 experimental）；禁止 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 静态拦截）
 - **数据表格**: TanStack Table（`@tanstack/angular-table` headless 引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页/筛选展示复用 `shared/components/table-paginator`、`faceted-filter`，列按优先级响应式裁剪
@@ -22,93 +22,35 @@
 
 ## 2. 目录结构
 
-遵循关注点分离原则，组织清晰的目录结构。
+目录按职责划分，按需新增子目录，不预建空层级。
 
-```
+```text
 frontend/
-├── _mock/                                    # Mock 服务 (完全独立于源码，用于前端独立开发和测试)
-│   ├── api/                                  # API Mock 处理器 (模拟后端API端点)
-│   │   └── *.ts
-│   ├── data/                                 # 纯粹的模拟数据源
-│   │   └── *.ts
-│   └── index.ts                              # Mock 服务启动入口（用于导出api）
+├── _mock/                 # 独立开发用的 API 处理器与数据
+├── libs/ui/               # 项目持有的 Spartan Helm 组件
 ├── src/
 │   ├── app/
-│   │   ├── core/                             # 核心逻辑 (非UI, 应用级单例服务和配置)
-│   │   │   ├── guards/                       # 路由守卫
-│   │   │   │   └── auth-guard.ts             #   - e.g., 检查用户是否登录
-│   │   │   ├── interceptors/                 # HTTP 拦截器
-│   │   │   │   └── token-interceptor.ts      #   - e.g., 自动为请求附加认证Token
-│   │   │   ├── handlers/                     # 处理程序
-│   │   │   │   └── global-error-handler.ts   #   - e.g., 全局异常处理
-│   │   │   └── services/                     # 应用级核心服务 (非业务，提供基础能力)
-│   │   │       └── startup-service.ts        #   - 应用初始化服务 (用于 APP_INITIALIZER)
-│   │   ├── features/                         # 业务功能模块 (按业务领域划分)
-│   │   │   └── {module-name}/                # 单个业务模块 (e.g., products, users)
-│   │   │       ├── components/               # 页面级"智能"组件 (Smart Components)
-│   │   │       │   └── {page-name}/          #   - 负责业务逻辑、状态管理和与服务交互
-│   │   │       │       ├── {page-name}.html
-│   │   │       │       ├── {page-name}.css
-│   │   │       │       └── {page-name}.ts    # v20+ 规范: 移除 .component 后缀
-│   │   │       ├── widgets/                  # 特性内可复用的"哑"组件 (Dumb Components)
-│   │   │       │   └── {widget-name}/        #   - 只在此特性内部复用，不具备全局性
-│   │   │       │       ├── {widget-name}.html
-│   │   │       │       ├── {widget-name}.css
-│   │   │       │       └── {widget-name}.ts
-│   │   │       ├── resolvers/                # 路由数据解析器 (在路由激活前预先获取数据)
-│   │   │       │   └── {feature}-resolver.ts
-│   │   │       ├── services/                 # 业务服务 (实现该特性的业务逻辑和API调用)
-│   │   │       │   └── {feature}-service.ts
-│   │   │       ├── models/                   # 数据模型 (定义该特性的数据结构)
-│   │   │       │   ├── {feature}.dto.ts      #   - DTO (Data Transfer Object): 精确匹配API契约
-│   │   │       │   ├── {feature}.model.ts    #   - 领域模型 (Domain Model): 前端使用的丰富模型，可带方法
-│   │   │       │   └── {feature}.enum.ts     #   - 枚举 (Enums): 该特性相关的状态、类型等
-│   │   │       └── {module-name}.routes.ts   # 路由定义 (该特性的所有子路由)
-│   │   ├── layout/                           # 应用布局 (负责应用的整体视觉结构)
-│   │   │   ├── components/                   # 布局共享组件 (e.g., header, footer, sidebar)
-│   │   │   ├── default/                      # 默认布局 (用于大部分需要登录的后台页面)
-│   │   │   ├── empty/                        # 空白布局 (用于登录、404、打印等无导航的页面)
-│   │   │   ├── landing/                      # 落地页布局 (用于无需登录的营销或产品介绍页)
-│   │   │   └── services/                     # 布局服务 (管理布局状态和主题)
-│   │   │       ├── layout-service.ts         #   - 管理侧边栏开关、面包屑等状态
-│   │   │       └── theme-service.ts          #   - 管理应用主题 (e.g., light/dark mode)
-│   │   ├── shared/                           # 全局共享资源 (跨所有业务特性复用，必须是纯粹、通用的)
-│   │   │   ├── dtos/                         # 跨特性/跨层复用的 API 契约 (与后端 DTO 一一对应)
-│   │   │   │   ├── auth.dto.ts               #   - e.g., 登录入参与当前用户输出，core 与 account 都要用
-│   │   │   │   └── tenant.dto.ts             #   - e.g., 租户查询契约，core 启动流与平台特性都要用
-│   │   │   ├── components/                   # 全局可复用的"哑"组件 (UI-Kit, 只负责展示和交互，不含业务逻辑)
-│   │   │   │   ├── button/                   #   - 自定义按钮
-│   │   │   │   ├── card/                     #   - 通用卡片容器
-│   │   │   │   └── modal/                    #   - 模态框/对话框框架
-│   │   │   ├── directives/                   # 全局可复用的属性/结构指令
-│   │   │   │   └── highlight.ts              #   - v20+ 规范: 移除 .directive 后缀
-│   │   │   ├── pipes/                        # 全局可复用的管道
-│   │   │   │   └── format-date-pipe.ts       #   - v20+ 规范: {pipe-name}-pipe.ts
-│   │   │   └── models/                       # 全局共享的前端模型 (领域模型与展示模型，不是 API 契约)
-│   │   │       ├── user.model.ts             #   - e.g., User模型几乎在所有地方都可能用到
-│   │   │       └── product.model.ts          #   - e.g., Product模型可能在订单、购物车、推荐等多个特性中用到
-│   │   ├── app.config.ts                     # 应用级配置 (依赖注入、提供商、拦截器注册)
-│   │   ├── app.ts                            # 应用根组件 (v20+ 规范)
-│   │   ├── app.routes.ts                     # 应用主路由 (定义布局与特性模块的懒加载关系)
-│   │   └── main.ts                           # 应用启动文件 (bootstrapApplication)
-│   └── environments/                         # 环境配置 (用于区分不同部署环境的变量)
-│       ├── environment.base.ts               # 基础环境配置 (所有环境共享的通用变量)
-│       ├── environment.ts                    # 默认开发环境 (ng serve 时使用)
-│       ├── environment.prod.ts               # 生产环境 (ng build --configuration production 时使用)
-│       ├── environment.test.ts               # 测试环境 (e.g., 用于QA服务器或自动化测试)
-│       └── environment.debug.ts              # 本地调试环境 (用于需要开启特殊调试标志的本地开发)
-├── public/                                   # 静态资源 (构建后位于站点根；无 src/assets)
-│   ├── images/                              # 图片
-<!--#if (IncludeLocalization)-->
-│   └── i18n/                                # 多语言词条 ({lang}.json，运行时 fetch /i18n/)
-<!--#endif-->
-└── ... (package.json, angular.json, etc.)
+│   │   ├── core/          # 应用级服务、认证、拦截器与启动逻辑
+│   │   ├── features/      # 业务页面及其服务、模型、路由
+│   │   ├── layout/        # 布局与导航
+│   │   ├── shared/
+│   │   │   ├── dtos/      # 跨特性、跨层共享的 API 契约
+│   │   │   ├── models/    # 前端模型，不承载 API 契约
+│   │   │   ├── components/
+│   │   │   ├── directives/
+│   │   │   └── pipes/
+│   │   ├── app.config.ts
+│   │   ├── app.routes.ts
+│   │   └── app.ts
+│   ├── environments/     # 公共配置与各部署环境的覆盖
+│   └── main.ts            # bootstrapApplication 入口
+└── public/                # 构建后映射到站点根的静态资源
 ```
 
+特性内的组件、服务与契约就近组织；跨特性契约放入 `shared/dtos`，避免 `core` 反向依赖 `features`。基础按钮、卡片、对话框优先使用 `libs/ui`，不在 `shared` 重建组件库。
+
 <!--#if (IncludeLocalization)-->
-> 静态资源用 Angular `public/` 约定（构建后映射到站点根），**没有 `src/assets`**。多语言词条 `public/i18n/{lang}.json` 存放各语言文案（见 §8）。
-<!--#else-->
-> 静态资源用 Angular `public/` 约定（构建后映射到站点根），**没有 `src/assets`**。
+多语言词条放在 `public/i18n/{lang}.json`，见 §8。
 <!--#endif-->
 
 ---
@@ -117,7 +59,7 @@ frontend/
 
 ### 3.1 编码风格
 
-- **必须** 遵循 **[Angular 官方代码风格指南](https://angular.io/guide/styleguide)**
+- 遵循 [Angular 官方代码风格指南](https://angular.dev/style-guide)
 - 使用 ESLint 和 Prettier 进行静态检查与自动格式化
 
 ### 3.2 命名约定
@@ -132,14 +74,10 @@ frontend/
 | Pipe | `{name}-pipe.ts` | `format-date-pipe.ts` |
 | Guard | `{name}-guard.ts` | `auth-guard.ts` |
 
-**文件命名风格**:
-- Component: `xxx.ts`（参考现有组件命名风格）
-- Service: `xxx-service.ts`（参考现有服务命名风格）
-
 ### 3.3 类型驱动
 
 - 所有 API 的请求参数和响应数据 **必须** 使用 `interface` 或 `class` 进行严格定义
-- JSDoc 应用于描述方法的功能和业务逻辑，**严禁** 在 JSDoc 中重复 TypeScript 的类型定义
+- 优先让命名表达意图；JSDoc 只补充不明显的使用契约，行内注释只解释关键约束，不复述类型或语句。
 
 ---
 
@@ -207,18 +145,18 @@ frontend/
 - **必须** 实现一个全局错误处理机制 (`ErrorHandler`)
 - 业务代码中**可以**通过 `catchError` 优先处理特定异常，但**严禁**"吞噬"异常
 
-### 5.4 Mock 开发 ⚠️
+### 5.4 Mock 开发
 
 - 每个后端新端点**同步补 mock**（数据 + 处理器 + 注册三件套：`_mock/data` + `_mock/api` + `_mock/index.ts`），让前端**脱离后端独立跑**。
 - Mock 代码**必须与业务源码分离**，存放在 `_mock` 目录下。
-- ⚠️ **mock 的校验/守卫要与后端逐道一致**：后端有几道守卫，mock 里就复刻几道（含过滤匹配语义：子串 vs 精确等），保证独立跑时行为与真后端一致——**空壳 mock 会掩盖真实行为差异**。
+- Mock 与后端保持可观察行为一致，包括认证、权限、参数校验、过滤语义和失败响应；不要求复制后端内部实现。
 
 ### 5.5 测试
 
 - `service`、`pipe` 和包含复杂业务逻辑的函数 **必须** 有单元测试覆盖
 - 核心的共享组件和业务流程 **应** 编写组件测试或端到端测试
 
-### 5.6 连锁字段"改一路改全" ⚠️
+### 5.6 跨层字段同步
 
 新增/改一个贯穿前后端的字段（如一个可筛选项），**从后端到前端到 mock 的每一环都要改到**，漏任一环即前后端不一致：
 
@@ -226,7 +164,7 @@ frontend/
 后端入参 DTO → 应用层过滤逻辑 → 前端 DTO → 前端 service 传参 → mock 处理器 → mock 数据
 ```
 
-AI 极易只改一端，务必六环全改。
+按字段影响范围逐项核对，不遗漏消费方。
 
 ---
 
@@ -234,13 +172,7 @@ AI 极易只改一端，务必六环全改。
 
 ### 6.1 公共组件位置
 
-前端公共组件在目录 `src/app/shared` 中：
-
-- **分页相关 DTO**: 分页请求和响应数据模型
-- **Logo 组件**: 应用 Logo 组件
-- **平台图标**: 各平台的图标组件
-- **主题配置**: 主题相关的配置和服务
-- **公共常量**: 全局共享的常量定义
+跨特性展示组件放入 `src/app/shared/components`，API 契约与前端模型按 §2 分开；主题等应用级服务放入 `core/services`。
 
 ### 6.2 使用原则
 
@@ -279,14 +211,14 @@ AI 极易只改一端，务必六环全改。
 - **默认语言英语（`en`）**，支持 `en` + `zh-CN`；回落语言 `en`。
 - 词条文件 `public/i18n/{en,zh-CN}.json`，运行时按 `{baseHref}i18n/{lang}.json` fetch（loader 用 `APP_BASE_HREF` 前缀，兼容子路径部署）。
 
-### 8.2 文案归属（三类，各一处权威）
+### 8.2 文案归属
 
 | 类别 | 归属 | 用法 |
 | --- | --- | --- |
 | UI 静态文案（菜单、按钮、标签） | 前端词条（权威） | 模板 `{{ 'menu.users' \| transloco }}` / 服务 `transloco.translate('key')` |
 | 业务错误消息 | **后端资源**（权威，见 [`api.md`](./api.md)） | 前端直接显示后端已本地化的 `message`，不在前端重复维护业务错误词条 |
 
-- **业务错误不在前端翻译**：后端按 `Accept-Language` 已产出本地化 `message`，前端 `http-error-interceptor` 优先显示它。默认按 **HTTP 状态码**统一处理即可，**无需**消费细分业务 `code`；仅在极少数需要对某个具体错误做差异化 UI 行为（如高亮某输入框）时，才读 `code` 分支——对应后端那处 `WithCode("46")`。前端词条只保留纯客户端兜底（网络断开、后端不可达）。
+- 后端按 `Accept-Language` 返回本地化消息；`http-error-interceptor` 归一化错误，由发起操作的 feature 展示。仅在需要差异化 UI 行为时按业务 `code` 分支。前端词条提供网络断开、后端不可达等客户端兜底。
 
 ### 8.3 关键接线（`core/`）
 
@@ -305,4 +237,3 @@ AI 极易只改一端，务必六环全改。
 <!--#endif-->
 
 ---
-

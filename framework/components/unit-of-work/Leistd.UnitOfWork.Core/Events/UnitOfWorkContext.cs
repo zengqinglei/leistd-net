@@ -14,9 +14,7 @@ public static class UnitOfWorkContext
 
     // 进入一个阶段，返回时还原进入前的值——阶段是可嵌套作用域，不是"进入即置位、退出即清空"。
     //
-    // 嵌套是真实形态：BeforeCommit 处理器里可以开一个 requiresNew 的独立工作单元，
-    // 它自己也会走一遍阶段。退出时清空会让外层剩余处理器读到 null，
-    // 于是 AfterCommit 处理器提前执行、BeforeCommit 处理器被跳过。
+    // 独立嵌套工作单元退出时恢复外层阶段，不能直接清空。
     internal static IDisposable EnterPhase(UnitOfWorkPhase phase)
     {
         var previous = _currentPhase.Value;

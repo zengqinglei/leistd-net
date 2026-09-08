@@ -25,12 +25,8 @@ public class SettingRecord : IMultiTenant
     /// 存储完整性键：把租户与层级编码成非空字符串。
     /// </summary>
     /// <remarks>
-    /// 唯一索引落在它与 <c>Name</c> 上，而不是 <c>(TenantId, UserId, Name)</c>：后两者可为
-    /// <see langword="null"/>，而 PostgreSQL、SQLite 等把多个 NULL 视为互不相等，宿主级与
-    /// 租户级默认值这两个最常用层级根本不受唯一索引约束，并发首次写入会插出重复行，
-    /// 之后按名称读取整个层级就会因重复键直接失败。
-    /// <para>它不是新的业务事实源：由写入端与 <c>TenantId</c> 同刻从同一个
-    /// <c>ICurrentTenant</c> 派生，调用方既不提供也不修改它。</para>
+    /// 与 <c>Name</c> 组成唯一索引，避免可空 TenantId/UserId 使宿主与租户默认值失去唯一约束。
+    /// 由写入端根据当前租户和层级派生，不由调用方单独指定。
     /// </remarks>
     public string ScopeKey { get; set; } = default!;
 

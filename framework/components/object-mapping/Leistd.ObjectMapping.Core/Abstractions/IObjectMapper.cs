@@ -7,7 +7,7 @@ namespace Leistd.ObjectMapping.Abstractions;
 /// <code>
 /// var dto = objectMapper.Map&lt;Order, OrderDto&gt;(order);
 ///
-    /// objectMapper.Map(input, existingOrder);
+/// objectMapper.Map(input, existingOrder);
 /// </code>
 /// </example>
 public interface IObjectMapper

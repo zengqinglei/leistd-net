@@ -51,13 +51,11 @@ public static class DependencyInjection
 
     private static IServiceCollection AddSmtpEmailSenderCore(this IServiceCollection services)
     {
-        // 配置错了的代价是"用户已经点了发送"：注册验证码这类流程会把一个永远收不到码的
-        // 挑战交给用户。必须在接流量之前失败。
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<SmtpOptions>, SmtpOptionsValidator>());
         services.AddOptions<SmtpOptions>().ValidateOnStart();
 
-        // 实现类型只注册一次，接口作别名转发，避免重复调用产生两份实例。
+        // 接口与实现类型共享同一实例。
         services.TryAddSingleton<SmtpEmailSender>();
         services.TryAddSingleton<IEmailSender>(sp => sp.GetRequiredService<SmtpEmailSender>());
 

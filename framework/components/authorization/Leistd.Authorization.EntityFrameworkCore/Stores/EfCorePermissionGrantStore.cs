@@ -167,12 +167,7 @@ public class EfCorePermissionGrantStore<TDbContext>(IDbContextProvider<TDbContex
             });
     }
 
-    // 在一致的版本快照下读取授予。
-    // 授予集合与版本是两次查询，中间可能夹进一次写入，于是拼出"旧集合 + 新版本"——
-    // 拿它去保存会被判为无冲突，乐观并发形同虚设；下发给前端则会让旧权限带着新版本被缓存下来，
-    // 此后永不刷新。这里用"读版本 → 读数据 → 再读版本"确认期间无人写入，不一致就重来。
-    // 比起为此开 REPEATABLE READ 事务，多读一行带索引的版本记录代价可以忽略，
-    // 且不依赖具体数据库的隔离级别实现。
+    // 读版本、读授予、再读版本；仅返回版本稳定的快照，避免把旧数据与新版本组合。
     private static async Task<TResult> ReadStableAsync<TData, TResult>(
         string providerName,
         string providerKey,
@@ -194,9 +189,7 @@ public class EfCorePermissionGrantStore<TDbContext>(IDbContextProvider<TDbContex
 
             if (attempt >= MaxAttempts)
             {
-                // 宁可失败也不返回撕裂的快照：调用方据此写入会静默丢失他人的修改。
-                // 这是读取失败而不是保存冲突——此处没有调用方提交的期望版本，
-                // 复用保存冲突异常会让宿主把它当成"旧页面撞车"报成 409。
+                // 无法取得一致快照属于读取失败，不是调用方提交的版本冲突。
                 throw new UnstableGrantSnapshotException($"{providerName}/{providerKey}", attempt);
             }
         }

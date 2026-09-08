@@ -17,18 +17,19 @@ public static class DependencyInjection
     /// 注册 EF Core 通知持久化存储（基于指定 DbContext）。
     /// </summary>
     /// <remarks>
-    /// <b>前置</b>：宿主须已注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>——
-    /// 本家族的存储与管理器经 <c>IDbContextProvider&lt;TDbContext&gt;</c> 取上下文
-    /// （只有它会设置 <c>DbContextCreationContext.Current</c>，从而拿到本工作单元已解析的连接）。
-    /// 与 <c>AddMultiTenancyEfCore</c> 同一约定：组件不替其它组件注册基础设施。
+    /// 宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>；
+    /// 本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文。
     /// </remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddNotificationsEfCore&lt;AppDbContext&gt;();
     ///
     /// // DbContext 里映射通知表
-    /// protected override void ConfigureModel(ModelBuilder modelBuilder)
-    ///     =&gt; modelBuilder.ConfigureNotifications();
+    /// protected override void OnModelCreating(ModelBuilder modelBuilder)
+    /// {
+    ///     base.OnModelCreating(modelBuilder);
+    ///     modelBuilder.ConfigureNotifications();
+    /// }
     /// </code>
     /// </example>
     public static IServiceCollection AddNotificationsEfCore<TDbContext>(this IServiceCollection services)

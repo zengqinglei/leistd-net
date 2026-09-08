@@ -80,7 +80,7 @@ public class ProductProfileService(IBusinessEventPublisher eventPublisher)
 
 - Hub 只做资源订阅，不建任何用户分组：按用户寻址用 SignalR 自带的 `Clients.User(userId)`。
 - `Subscribe` **无条件**经过 `IRealTimeSubscriptionAuthorizer`，被拒绝时抛出 `HubException`；`Unsubscribe` 始终允许。
-- 资源组名为 `resource:{resourceKey}`，订阅侧与发布侧共用同一生成处。**刻意不把租户拼进组名**：那样看似深度防御，实际会让"从非请求上下文发布"（如后台作业给某租户推送）推到错误的组、事件静默丢失——用必然发生的静默失效去防一个需要 bug 才发生的问题。租户隔离由 `IRealTimeSubscriptionAuthorizer` 承担，它在 Hub 调用内可直接读 `ICurrentTenant`。推送失败只记录错误，不向上抛出。
+- 资源组名为 `resource:{resourceKey}`，不会自动拼租户；租户隔离必须由 `IRealTimeSubscriptionAuthorizer` 判定。推送失败只记录错误。
 
 ## 配置项
 
@@ -121,7 +121,7 @@ app.Use(async (context, next) =>
 ## 注意事项
 
 - **多副本部署必须配置 SignalR 背板**，否则发布方所在节点之外的订阅者收不到事件，且静默无信号。配置方式见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
-- **本组件不提供在线状态查询**。SignalR 背板只路由消息，不维护「谁连着」的共享注册表，所以多实例下的在线状态需要独立的连接注册表（如 Redis 集合 + 心跳 TTL）——那是业务功能，由宿主实现。多数场景其实不需要它：直接推送即可，收不到就是不在线，通知的历史记录负责补看。
+- 本组件不提供在线状态查询；多实例在线状态需要宿主维护共享连接注册表。
 - 订阅授权**没有开关**：授权器无条件参与每一次 `Subscribe`。未注册授权器时宿主启动失败；`AddAllowAllRealTimeSubscriptions()` 是「公共资源随便订阅」的显式选择。
 - `PublishToResourceAsync` 推送失败只记日志、不抛异常：调用成功返回不代表订阅方一定收到消息（例如客户端未连接/未订阅该资源）。
 - **Hub 方法调用的上下文与有效性由 SignalR 基座保证**。`AddRealTimeSignalR()` 内部走

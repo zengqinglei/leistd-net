@@ -1,6 +1,6 @@
 # 链路追踪
 
-为每次请求生成全局唯一 TraceId，并让它随上下文、日志与下游 HTTP 调用一路传递。`ICorrelationIdProvider` 基于 `AsyncLocal` 保存当前值；日志键固定为 `leistd.correlationId.traceId`，是跨语言链路检索的约定键。
+链路追踪复用 `Activity.TraceId`，没有 Activity 时生成 W3C TraceId，并在上下文、日志与下游 HTTP 调用间传递。
 
 ## 何时使用
 
@@ -91,7 +91,7 @@ public class ReportJob
 | --- | --- |
 | `ICorrelationIdProvider` | 链路追踪核心抽象（`Leistd.Tracing.Services`） |
 | `ICorrelationIdProvider.Get()` | 返回当前上下文的 TraceId；上下文未初始化时返回 `null` |
-| `ICorrelationIdProvider.Create()` | 生成新的 TraceId（32 位无连字符 UUID，`Guid.ToString("N")`） |
+| `ICorrelationIdProvider.Create()` | 有 Activity 时复用其 TraceId，否则用 `ActivityTraceId.CreateRandom()` 生成 W3C TraceId |
 | `ICorrelationIdProvider.Change(correlationId)` | 切换当前上下文 TraceId，返回 `IDisposable`；`Dispose` 时恢复为切换前的值 |
 | `CorrelationIdProvider` | 默认实现，基于 `AsyncLocal<string?>` 保存上下文（Singleton） |
 | `[CorrelationId]` | 标注在方法或类上（`Leistd.Tracing.Attributes`），触发 AOP 自动开启 TraceId 作用域 |
@@ -106,7 +106,7 @@ public class ReportJob
 
 ## 实现行为
 
-- `CorrelationIdProvider` 基于 `AsyncLocal` 传播上下文；`Change` 可嵌套，释放时恢复上一层值。
+- `CorrelationIdProvider` 用 `AsyncLocal` 保存显式切换值；`Change` 可嵌套，释放时恢复上一层值。
 - `CorrelationIdInterceptor` 的 `Order` 为 `-1000`，在其他拦截器之前建立 TraceId 和日志作用域；已有 TraceId 时不覆盖。
 - 入站中间件按 `HeaderNames` 顺序取首个有效值，缺失时生成，并按配置回写响应头。
 - 出站处理器只在请求尚无目标头时转发当前 TraceId。

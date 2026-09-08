@@ -131,8 +131,6 @@ var cacheKey = currentTenant.ScopeKey($"catalog:category:{id:N}");
 
 **不是所有标识都该调它**：用来判断「你是哪个租户」的数据本身（租户注册表、租户连接配置）在任何上下文下都指向同一份，加租户段反而会按调用时机分裂成多份。这类标识保持原样。
 
-它刻意做成显式调用，而不是藏进某个缓存包装类型里自动拼——自动拼就必须再补一个「本次不要拼」的开关，调用方仍要逐处判断，却多了一层不透明。
-
 ### 解析与校验
 
 `AddMultiTenancy` 在解析链为空时按以下顺序装配：
@@ -201,13 +199,7 @@ await connectionManager.SetAsync(
 
 `expectedVersion: null` 表示预期配置不存在；更新时必须传入读到的版本。预期与实际不一致时抛 `TenantConnectionVersionConflictException`，不提供跳过并发检查的入口。
 
-修改已有连接或轮换 Secret 前必须停用租户，否则抛 `TenantConnectionChangeRequiresInactiveTenantException`。标准流程是：
-
-1. 停用租户。
-2. 等待 `max(Access Token 有效期, 路由缓存 TTL)` 以排空旧路由。
-3. 迁移并校验数据。
-4. 更新连接配置。
-5. 重新启用租户。
+修改已有连接或轮换 Secret 前必须停用租户，否则抛 `TenantConnectionChangeRequiresInactiveTenantException`。宿主还需在变更前排空仍使用旧路由的请求。
 
 最终连接解析由 `Leistd.Data.Abstractions.IConnectionStringResolver` 完成。宿主实现应遵循：
 

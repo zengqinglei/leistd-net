@@ -20,12 +20,8 @@ namespace Leistd.ExceptionHandling.AspNetCore.Handlers;
 /// 全局异常处理器：把未捕获异常转成 RFC 9457 ProblemDetails 响应。
 /// </summary>
 /// <remarks>
-/// 由 <c>AddGlobalExceptionHandler()</c> 注册为 <see cref="IExceptionHandler"/>。
-/// <para>本类刻意不拆出"本地化"子组件：三级回落是线性的、无交叉状态，拆出去换到的是更少的行数
-/// 而不是更少的失效模式，代价却是多一个类型与一处注入。<b>再加第四级回落、或本地化开始持有
-/// 自己的状态时</b>，那时才值得拆。</para>
-/// 非 <c>BusinessException</c> 先归一化再输出；<c>Options.Enabled</c> 为 <see langword="false"/>
-/// 或路径命中 <c>ExcludePatterns</c> 时直接放行、交回框架默认处理。
+/// 由 <c>AddGlobalExceptionHandler()</c> 注册；先归一化异常，再生成响应。
+/// 禁用处理器或路径命中 <c>ExcludePatterns</c> 时交回宿主处理。
 /// </remarks>
 public sealed class BusinessExceptionHandler(
     IOptionsMonitor<GlobalExceptionOptions> optionsMonitor,
@@ -33,7 +29,7 @@ public sealed class BusinessExceptionHandler(
     IProblemDetailsService problemDetailsService,
     IServiceProvider serviceProvider) : IExceptionHandler
 {
-    // 未注册本地化组件时沿用原始消息。
+    // 本地化可选；缺失时遵循安全回退规则。
     private readonly IStringLocalizer? _localizer = serviceProvider.GetService<IStringLocalizer>();
 
     // 依次按异常码、状态码和最终回退规则生成用户消息。

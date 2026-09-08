@@ -28,8 +28,7 @@ public static class DependencyInjection
     /// </example>
     /// <remarks>
     /// 在 <c>AddAmbientContext()</c> 的基础上把主体来源换成 <c>HttpContext.User</c>。
-    /// 用 <c>Replace</c> 而非 <c>Add</c>：与 <c>AddAmbientContext()</c> 的调用顺序无关，
-    /// 且不留下一条永远不会被解析到的描述符。
+    /// 与 <c>AddAmbientContext()</c> 的调用顺序无关。
     /// </remarks>
     public static IServiceCollection AddSecurity(this IServiceCollection services)
     {

@@ -88,9 +88,7 @@ public interface IDataScopeProvider<TEntity>
     /// 谓词。"全部可见"必须显式返回 <c>_ =&gt; true</c>，"本范围不贡献任何可见性"返回 <c>_ =&gt; false</c>。
     /// </returns>
     /// <remarks>
-    /// 返回类型刻意不可空：多个范围之间取并集，<c>null</c> 与 <c>_ =&gt; false</c> 本就是同一个意思，
-    /// 多出来的这一态只会诱发"null 大概表示不限制吧"的误读——那种误读会让整张表当场全部放开。
-    /// 范围收窄要靠显式表达，放开也是。
+    /// 返回非空谓词；多个范围按并集合并，允许与拒绝均须显式表达。
     /// </remarks>
     ValueTask<Expression<Func<TEntity, bool>>> BuildPredicateAsync(
         DataScopeContext context,

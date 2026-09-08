@@ -74,9 +74,7 @@ public class NotificationRecord : ICreationAuditedObject
             Link = notification.Link,
             Icon = notification.Icon,
             IsRead = notification.IsRead,
-            // 发布方已经定好创建时刻（NotificationPublisher 会补齐），此处必须带过来。
-            // 留空转而依赖审计拦截器，等于把落库时间挂在"宿主是否给这个 DbContext
-            // 挂了审计拦截器"上——没挂就是 default(DateTime)，而通知列表按它排序。
+            // 保留发布方的创建时间，不依赖宿主是否挂载审计拦截器。
             CreationTime = notification.CreationTime,
             RelatedEntityId = notification.RelatedEntityId,
             RelatedEntityType = notification.RelatedEntityType,

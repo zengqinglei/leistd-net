@@ -13,9 +13,7 @@ namespace Leistd.Email.Smtp;
 /// 经 SMTP 发信的 <see cref="IEmailSender"/>。
 /// </summary>
 /// <remarks>
-/// 任何失败（连不上、认证失败、被拒收）都原样抛出。本类不含"配置看起来不对就跳过发送"
-/// 的分支——那种回落会让调用方以为信已发出；没有可用 SMTP 时请注册
-/// <see cref="NullEmailSender"/>。
+/// 每次调用建立独立连接，连接、认证与投递异常原样传播，不自动重试。
 /// </remarks>
 public sealed class SmtpEmailSender(
     IOptions<SmtpOptions> options,
@@ -34,9 +32,7 @@ public sealed class SmtpEmailSender(
 
         if (!string.IsNullOrWhiteSpace(current.Username))
         {
-            // 用户名与口令成对，由 SmtpOptionsValidator 在启动期保证。这里把不变量重述一遍
-            // 不是防御性冗余：取到一半说明校验器没接上，而"跳过认证继续发送"会让服务器
-            // 按匿名中继接受或拒收，两种都不指向真正的原因。
+            // 即使绕过启动校验，也不能把缺少口令误当作匿名投递。
             var password = current.Password
                 ?? throw new InvalidOperationException(
                     $"{SmtpOptions.SectionName}: Username is set but Password is missing. " +
@@ -51,8 +47,7 @@ public sealed class SmtpEmailSender(
         logger.LogInformation("Email sent to {To} with subject {Subject}", message.To, message.Subject);
     }
 
-    // 465 是隐式 TLS（连上即握手），其余端口走 STARTTLS。两者不可互换：
-    // 对 465 用 StartTls 会卡在等待明文问候，对 587 用 SslOnConnect 会握手失败。
+    // 465 要求连接即 TLS，其余加密端口使用 STARTTLS。
     private static SecureSocketOptions ResolveSocketOptions(SmtpOptions current)
         => current.EnableSsl
             ? current.Port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls
@@ -62,8 +57,7 @@ public sealed class SmtpEmailSender(
     {
         var mime = new MimeMessage();
 
-        // 发件地址与显示名成对取用：给了地址就按给的显示名（可为空），
-        // 不与配置默认值交叉拼装，避免"自定义地址 + 默认署名"。
+        // 自定义发件身份不混用配置中的默认署名。
         var (address, display) = message.FromAddress is { Length: > 0 }
             ? (message.FromAddress, message.FromName)
             : (current.DefaultFromAddress, current.DefaultFromName);

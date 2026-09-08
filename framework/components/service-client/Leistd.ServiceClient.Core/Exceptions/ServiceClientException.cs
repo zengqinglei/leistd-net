@@ -3,14 +3,12 @@ using Leistd.ExceptionHandling;
 namespace Leistd.ServiceClient.Exceptions;
 
 /// <summary>
-/// 服务调用客户端异常：网络失败、超时、响应反序列化失败等<b>未到达远端业务逻辑</b>
-/// 或<b>无法解析远端结果</b>的错误。远端明确返回的业务错误用其派生类
-/// <see cref="RemoteServiceException"/> 表达。
+/// 表示服务调用的传输或响应解析失败。
 /// </summary>
 /// <remarks>
-/// <para><b>映射为 HTTP 503</b>（可重试）：上游连不上、超时、响应无法解析都是上游故障，
-/// 不是调用方请求有误，503 的可重试语义也让调用方的重试策略成立。</para>
-/// <para>对外状态码由构造函数决定，派生类可覆盖——见 <see cref="RemoteServiceException"/>。</para>
+/// 默认状态码为 HTTP 503；派生类可通过构造函数指定其他状态码。
+/// 是否重试由调用方根据操作幂等性与失败情况决定。
+/// 远端明确返回的错误使用 <see cref="RemoteServiceException"/>。
 /// </remarks>
 public class ServiceClientException : BusinessException
 {

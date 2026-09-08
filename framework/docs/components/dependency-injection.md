@@ -115,7 +115,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 | `IServiceCollection.AddRegistrationValidator(validator)` | 注册一个校验器，构建 `IServiceProvider` 时在所有回调之前执行；入参为完整服务集合，用于发现回调只能跳过、无法让宿主失败的形态 |
 | `IOnServiceRegisteredContext` | 公开 `ServiceType`、可空 `ImplementationType` 和扩展数据 |
 | `ServiceRegistrationCallbackFactory` | 只执行回调，不做 AOP 织入 |
-| `ServiceRegistrationCallbackFactory.OnRegistrationProcessed(context, services)`（`protected virtual`）| 每个服务回调处理完成后的扩展点；`DynamicProxy` 子类正是重写它完成拦截器织入，也可自行继承重写做自定义后处理 |
+| `ServiceRegistrationCallbackFactory.OnRegistrationProcessed(...)` | 每个服务回调处理后的扩展点 |
 | `DynamicProxyServiceRegistrationCallbackFactory` | 执行回调，并把 `AddInterceptor()` 收集到的拦截器织入服务代理 |
 | `DynamicProxyRegistrationExtensions.AddInterceptor(context, type)` | 为当前服务追加拦截器类型；通常写作 `context.AddInterceptor(type)` |
 | `DynamicProxyRegistrationExtensions.GetInterceptorTypes(context)` | 获取当前服务收集到的拦截器类型；通常写作 `context.GetInterceptorTypes()` |
@@ -135,7 +135,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 | keyed 注册 | 忽略——按键解析，不参与单服务解析 |
 | 开放泛型（`typeof(IFoo<>)`） | 不在范围内——`TService` 是封闭类型，匹配不到那种描述符 |
 
-它枚举**全部**描述符而不是只看第一条：单服务解析由最后一条胜出，只看第一条会在「第一条恰是本类型、后面还有别的实现」时放行。
+它检查全部描述符，避免后注册的冲突实现被遗漏。
 
 ## 实现行为
 

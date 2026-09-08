@@ -17,10 +17,8 @@ public interface ITenantManager
     /// <param name="name">租户名称，大小写不敏感唯一；归一化后落库</param>
     /// <param name="displayName">展示名，可为 <c>null</c></param>
     /// <param name="isActive">
-    /// 初始是否启用。<b>故意不给默认值</b>：这是安全相关的选择，最危险的取值不该是最省事的写法。
-    /// 需要在创建后继续初始化租户数据（角色、管理员等）时必须传 <c>false</c>——
-    /// 租户一旦启用，中间件就会接受它，匿名入口（注册等）能进入一个还没有管理员的半成品租户；
-    /// 初始化完成后再用 <see cref="SetActiveAsync"/> 激活。
+    /// 初始是否启用。需要继续初始化角色、管理员等数据时传 <c>false</c>，
+    /// 初始化完成后用 <see cref="SetActiveAsync"/> 激活。
     /// </param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>创建出的租户配置</returns>

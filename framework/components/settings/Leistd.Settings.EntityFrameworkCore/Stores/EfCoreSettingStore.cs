@@ -11,13 +11,8 @@ namespace Leistd.Settings.EntityFrameworkCore.Stores;
 /// 使用 EF Core 持久化设置值。
 /// </summary>
 /// <remarks>
-/// DbContext 一律经 <see cref="IDbContextProvider{TDbContext}"/> 获取，不直接注入
-/// <typeparamref name="TDbContext"/>：只有它会设置 <c>DbContextCreationContext.Current</c>，
-/// 宿主的 <c>AddDbContext</c> 回调据此拿到本工作单元已解析的连接。直接注入会让独立库租户的
-/// 设置落到宿主配置的默认连接上，且不进工作单元事务——两者都是静默的。
-/// <para>行的定位一律走 <c>ScopeKey</c>：它非空，因此唯一索引对宿主级与租户级也真正生效
-/// （见 <see cref="SettingRecord.ScopeKey"/>）。租户隔离仍由多租户查询过滤器承担，
-/// <c>ScopeKey</c> 里带租户只是为了让约束覆盖到宿主行。</para>
+/// 通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接。
+/// <see cref="SettingRecord.ScopeKey"/> 保证各层级唯一性；租户隔离仍由查询过滤器承担。
 /// </remarks>
 /// <typeparam name="TDbContext">宿主 DbContext 类型（需包含 SettingRecord 配置）。</typeparam>
 /// <param name="dbContextProvider">工作单元内的 DbContext 提供器。</param>
@@ -95,9 +90,7 @@ public class EfCoreSettingStore<TDbContext>(
         await dbContext.Set<SettingRecord>().ExecuteDeleteAsync(cancellationToken);
     }
 
-    // 层级标记放在用户标识之前，租户级不带标识、用户级带：这样任意用户标识都不可能
-    // 生成租户级的键。用「保留值」区分（比如拿某个字面量当租户级）行不通——契约只要求
-    // 用户标识非空白，恰好等于那个保留值的用户就会覆盖掉整个租户的默认值。
+    // 用独立层级段区分租户与用户设置，避免用户标识与租户级保留值冲突。
     //
     //   {tenant}:t            租户级（宿主为 h:t）
     //   {tenant}:u:{userId}   用户级
@@ -113,9 +106,7 @@ public class EfCoreSettingStore<TDbContext>(
                 return $"{tenantSegment}:t";
 
             case SettingScopes.User:
-                // 用户级必须带标识：缺了它会写出 UserId 为 null（按实体契约即租户级）
-                // 而 ScopeKey 是用户级的行——两个字段各说各话，正是 ScopeKey 要避免的状态。
-                // ISettingManager 已经拦过一道，但本契约是公开的，直接消费它的宿主同样要挡住。
+                // 直接消费 Store 时也须校验用户标识，保持 UserId 与 ScopeKey 层级一致。
                 ArgumentException.ThrowIfNullOrWhiteSpace(userId);
                 return $"{tenantSegment}:u:{userId}";
 

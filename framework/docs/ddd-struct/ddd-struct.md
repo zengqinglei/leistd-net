@@ -8,7 +8,7 @@ DDD 基座为 Domain、Application.Contracts、Application 和 Infrastructure �
 | --- | --- | --- |
 | Domain | `Leistd.Ddd.Domain` | 实体、审计基类、仓储契约、数据过滤器 |
 | Application.Contracts | `Leistd.Ddd.Application.Contracts` | 应用服务契约、DTO、分页类型 |
-| Application | `Leistd.Ddd.Application` | 应用服务基类（约定标记 + 预留扩展缝）、分页映射 |
+| Application | `Leistd.Ddd.Application` | 应用服务标记基类、分页映射 |
 | Infrastructure | `Leistd.Ddd.Infrastructure` | EF Core 仓储、DbContext 基类、过滤器和本地事件 |
 
 业务项目通常每层建立一个工程并只引用对应包，层间依赖为 Application → Application.Contracts → Domain。
@@ -40,20 +40,9 @@ DbContext"的唯一拦截点。装了 `DynamicProxyServiceRegistrationCallbackFa
 同一实体被两个上下文各注册一次会**直接抛异常**：Microsoft DI 让后注册的静默胜出，调用方
 无从知道读的是哪个库。
 
-### BaseAppService 是预留的扩展缝
+### 应用服务基类
 
-`BaseAppService` 当前不含共享行为，保留它是为了留住一条**版本推送通道**：「继承」写在生成后的
-项目代码里，而类住在框架包里，只有生成代码已经继承，框架才能在后续版本下发应用服务层的公共
-行为并靠升级包生效。删掉它，已生成的项目只能逐个回改。
-
-它同时实现 `IAppService`，继承即满足标记，派生类不必重复声明。注意 `IAppService`
-**不参与注册与织入**：本框架注册一律显式手写，拦截器织入判据是特性（如 `[UnitOfWork]`）。
-标记只是把"这个类型是应用服务"写进类型系统，供阅读与后续分析器使用。
-
-**可以加**不需要注入状态的成员：`protected` 帮助方法、模板方法钩子、约定常量。
-**不要加** `IServiceProvider` 或延迟服务定位器（暴露时钟、映射器、当前用户之类）——那会把真实
-依赖从构造签名里藏起来，是 .NET 依赖注入指南明确列出的反模式。应用服务需要什么就在自己的
-构造函数里声明。横切关注点由 AOP 拦截器 + 特性承担，不走继承。
+`BaseAppService` 当前只实现 `IAppService` 标记，不参与注册或织入；服务仍需显式注册，横切行为由特性和拦截器提供。派生服务的依赖应保留在构造函数中，不通过 `IServiceProvider` 隐藏。
 
 ## 安装
 
@@ -66,7 +55,7 @@ dotnet add package Leistd.Ddd.Infrastructure
 
 ## 注册
 
-四步缺一不可：
+注册基础设施、每个 DbContext 和所需拦截器：
 
 ```csharp
 // 1. 拦截器织入与漏登记校验都由这个工厂驱动，不装则两者都不生效
@@ -206,7 +195,7 @@ public class AppDbContext(
 public class Order : FullAuditedEntity<Guid>, IAggregateRoot<Guid>;
 ```
 
-`IAggregateRoot<TKey>` 是接口而非基类，因此可与任意实体或审计基类组合。该标记不限制仓储泛型；需要强制“只为聚合根建仓储”的项目应使用架构测试。
+`IAggregateRoot<TKey>` 可与实体或审计基类组合；该标记本身不限制仓储泛型。
 
 ### 值对象
 
@@ -243,7 +232,7 @@ public class Document : Entity<Guid>, IHasConcurrencyStamp
 
 `ConfigureByConvention()` 将该属性配置为必填、最长 40 的并发令牌。`ConcurrencyStampSaveChangesInterceptor` 在新增时补种空值，在修改时换发；并发更新的落败方收到 `DbUpdateConcurrencyException`。
 
-框架不提供手动 `Renew()`，避免遗漏调用时静默失去并发保护。断开连接更新时，应将客户端回传的标记设置为 EF Core `OriginalValue`。
+断开连接更新时，应将客户端回传的标记设置为 EF Core `OriginalValue`。
 
 ## 注意事项
 

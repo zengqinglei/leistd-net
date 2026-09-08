@@ -98,9 +98,7 @@ public class UnitOfWorkEventHandlerInterceptor(ILogger<UnitOfWorkEventHandlerInt
 
         // 不在工作单元的提交流程里（直接发布，或工作单元外发布）：按 AfterCommit 语义执行一次。
         //
-        // BeforeCommit 处理器在这条路上必须跳过，且要记 Warning：这条路的发布点在
-        // SavedChanges 之后，数据已落库，"我的异常能回滚事务"这个契约无从兑现。
-        // 带着假承诺执行比跳过更危险，但"写了却不执行"也必须留下痕迹
+        // 没有工作单元时无法兑现 BeforeCommit 回滚契约，跳过处理器并记录告警。
         if (currentPhase is null)
         {
             if (declaredPhase == UnitOfWorkPhase.BeforeCommit)

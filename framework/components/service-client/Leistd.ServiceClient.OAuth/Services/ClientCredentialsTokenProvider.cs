@@ -22,9 +22,7 @@ public class ClientCredentialsTokenProvider(
     ILogger<ClientCredentialsTokenProvider> logger,
     TimeProvider? timeProvider = null) : IServiceTokenProvider
 {
-    // 时间源可注入：令牌缓存的过期判定与「提前 ExpirationBuffer 刷新」都靠它，
-    // 写死 DateTimeOffset.UtcNow 的话这两条只能靠真的等到过期才能验证。
-    // 默认落 TimeProvider.System，宿主无需为此多配一项。
+    // 通过注入时间源判断令牌过期及提前刷新窗口。
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     /// <summary>

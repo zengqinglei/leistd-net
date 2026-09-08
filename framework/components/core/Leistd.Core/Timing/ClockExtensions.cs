@@ -4,9 +4,7 @@ namespace Leistd.Timing;
 /// 提供业务自然日到 UTC 时刻的转换扩展。
 /// </summary>
 /// <remarks>
-/// <b>时区必须由调用方显式传入</b>，没有默认值。时区是业务输入（租户设置、用户偏好、报表参数），
-/// 不是宿主的环境属性；需要"服务器时区"语义的调用方自己传 <see cref="TimeZoneInfo.Local"/>。
-/// 理由见 core 组件文档。
+/// 时区由调用方按租户、用户或报表需求显式传入，不默认使用宿主时区。
 /// </remarks>
 public static class ClockExtensions
 {

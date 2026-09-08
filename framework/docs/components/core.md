@@ -41,7 +41,7 @@ public class DailyReportService(IClock clock)
     public DateTime NowUtc() => clock.Now; // 默认实现始终返回 UTC
 
     // 统计"今天"的数据：用本地自然日零点的 UTC 锚点做范围下界，避免时区漂移
-    public (DateTime from, DateTime to) TodayRangeUtc()
+    public (DateTime from, DateTime to) TodayRangeUtc(TimeZoneInfo tenantTimeZone)
     {
         // 时区必须显式给出：它是业务输入（租户设置/用户偏好），不是宿主的环境属性
         var from = clock.GetMidnightInUtc(tenantTimeZone);   // 该时区今日 00:00 对应的 UTC 时刻
@@ -84,25 +84,15 @@ public class InsufficientStockException(string sku)
 ### Leistd.Core（UtcClockProvider）
 
 - `Now` 取自注入的 `TimeProvider`（默认 `TimeProvider.System`），固定为 UTC。
-- **不提供切换时间类型的开关**：实体主键用时间有序的 `Guid.CreateVersion7()`、审计时间线、跨服务传递的 `DateTime` 都以 UTC 为共同基准，换成本地时间会让这些保证各自失效且不报错。按用户时区展示在呈现层做。
-- 建在 `TimeProvider` 之上是为了让全框架只有一个时间源：测试用 `FakeTimeProvider` 推进时间，审计时间戳、内存锁清理与定时器会一起跟着走。宿主未注册 `TimeProvider` 时 DI 会选中无参构造函数，行为等同 `TimeProvider.System`。
+- 不提供本地时间开关；持久化和服务间传递使用 UTC，按用户时区展示由呈现层处理。
+- 测试可注入 `FakeTimeProvider`；未注册 `TimeProvider` 时等同使用 `TimeProvider.System`。
 - `Normalize` 的规则：`Unspecified` 假定为 UTC（`SpecifyKind`）；`Local` 调用 `ToUniversalTime()` 转 UTC；`Utc` 原样返回。
 - `GetMidnightInUtc(timeZone)` 按**传入时区**计算：取当前 UTC → 转该时区 → 取当日零点 → 再转回 UTC。例如时区为 `Asia/Shanghai`、当前 UTC 为 `2026-05-27T20:00:00Z` 时（该时区已是 05-28），返回 `2026-05-27T16:00:00Z`。
 - 该实现无状态，以 Singleton 注册即可。
 
 ## 注意事项
 
-- 默认 `IClock` 实现始终基于 **UTC**。两个日边界扩展方法**要求显式传入 `TimeZoneInfo`**，没有默认值。
-
-  **为什么不读 `TimeZoneInfo.Local`**——"进程所在主机的时区"在三种常见部署下都是错的，且错得没有信号：
-
-  | 部署形态 | 后果 |
-  | --- | --- |
-  | 容器（默认 UTC） | "本地今日"变成 UTC 今日，报表边界整体偏移 |
-  | 多租户 SaaS | 各租户分处不同时区，"本地"根本不是单一值 |
-  | 多可用区 | 各实例给出不同的日边界，统计结果随路由漂移 |
-
-  时区是**业务输入**（租户设置、用户偏好、报表参数），不是宿主的环境属性。需要"服务器时区"语义时自行传 `TimeZoneInfo.Local`——那时它是一个写出来的决定。
+- 默认实现始终基于 UTC。日边界扩展必须显式传入业务时区，不能用宿主的 `TimeZoneInfo.Local` 代替租户或用户时区。
 - `Leistd.Core` 本身不注册任何服务；`IClock` 的注册由 `Leistd.Ddd.Infrastructure` 完成。脱离 DDD 分组单独使用时务必手动 `AddSingleton<IClock, UtcClockProvider>()`，否则注入会失败。
 - `CommonException` 是一个轻量基类（仅 `message` + 可选 `innerException`），不携带错误码等元数据；语义化的业务异常请使用[异常处理](./exception-handling.md)组件的 `BusinessException` 体系。
 

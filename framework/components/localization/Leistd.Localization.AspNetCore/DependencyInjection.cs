@@ -58,9 +58,7 @@ public static class DependencyInjection
         //（TResourceSource 登记在 JsonResourceTypes 才走 JSON，其余委派官方 RESX），从而不接管宿主既有本地化。
         services.AddSingleton<IStringLocalizerFactory, CompositeStringLocalizerFactory>();
         services.AddTransient(typeof(IStringLocalizer<>), typeof(StringLocalizer<>));
-        // 无参 IStringLocalizer 是框架自身的全局 JSON 词条视图（业务/框架键，如 Error:* / 登录失败）：
-        // 直接取自 JSON 工厂，绕过组合工厂的按类型路由——否则 Create(typeof(object)) 会因 object 未登记
-        // 落入 RESX 分支，导致业务错误消息无法本地化。
+        // 无参 IStringLocalizer 直接使用全局 JSON 词条；按 object 路由会误入 RESX 分支。
         services.AddTransient<IStringLocalizer>(sp =>
             sp.GetRequiredService<JsonStringLocalizerFactory>().Create(typeof(object)));
 

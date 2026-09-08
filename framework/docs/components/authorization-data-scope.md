@@ -18,7 +18,7 @@
 dotnet add package Leistd.Authorization.DataScope.Core
 ```
 
-本家族只有一个包，且只依赖 BCL 的 `Expression`/`IQueryable`，不依赖 EF Core，也不依赖 DDD 基座——`IRepository.GetQueryableAsync()` 返回的 `IQueryable<TEntity>` 可以直接交给本组件，不需要额外的适配包。
+本包依赖 `Leistd.Authorization.Core` 和 Microsoft DI 抽象，不依赖 EF Core 或 DDD 基座；它只接收 `IQueryable<TEntity>` 与表达式。
 
 ## 注册
 
@@ -28,19 +28,18 @@ builder.Services.AddDataScopeCore();
 // 业务实现：当前主体在某类资源的某个操作上被分配了哪些范围
 builder.Services.AddScoped<IDataScopeAssignmentProvider, OrganizationScopeAssignmentProvider>();
 
-// 每种范围一个 Provider，同一实体可注册多个
+// 注册本文的“本人”范围；同一实体可按需添加其他 Provider
 builder.Services.AddDataScopeProvider<Order, OwnOrderScopeProvider>();
-builder.Services.AddDataScopeProvider<Order, OrganizationOrderScopeProvider>();
 ```
 
 依赖调用方已注册 `IPermissionSubjectProvider`；`IDataScopeAssignmentProvider` 必须由业务项目提供，Framework 不规定范围分配存放在哪里（可以是角色配置表、组织架构，或外部策略服务）。
 
 ## 使用
 
-**第一步：实现范围 Provider**——返回**谓词**而不是改写后的查询，这样多个范围才能取并集：
+实现范围 Provider，返回谓词以便多个范围取并集：
 
 ```csharp
-public class OwnOrderScopeProvider(ICurrentUser currentUser) : IDataScopeProvider<Order>
+public class OwnOrderScopeProvider : IDataScopeProvider<Order>
 {
     public const string Scope = "Own";
 
@@ -56,41 +55,9 @@ public class OwnOrderScopeProvider(ICurrentUser currentUser) : IDataScopeProvide
             order => order.OwnerId == userId);
     }
 }
-
-public class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
-{
-    public const string Scope = "Organization";
-
-    public string ResourceName => "Orders";
-    public string ScopeName => Scope;
-
-    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
-        DataScopeContext context,
-        CancellationToken cancellationToken = default)
-    {
-        var organizationIds = context.Assignments
-            .Where(x => x.ScopeName == Scope && x.ScopeValue is not null)
-            .Select(x => x.ScopeValue!)
-            .ToList();
-
-        return ValueTask.FromResult<Expression<Func<Order, bool>>>(
-            order => organizationIds.Contains(order.OrganizationId));
-    }
-}
-
-public class AllOrderScopeProvider : IDataScopeProvider<Order>
-{
-    public string ResourceName => "Orders";
-    public string ScopeName => "All";
-
-    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
-        DataScopeContext context,
-        CancellationToken cancellationToken = default)
-        => ValueTask.FromResult<Expression<Func<Order, bool>>>(_ => true);
-}
 ```
 
-**第二步：实现分配来源**——范围按**操作**分别分配，因为"能看"不等于"能改"：
+分配来源按操作返回范围；"能看"不等于"能改"：
 
 ```csharp
 public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
@@ -117,7 +84,7 @@ public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
 }
 ```
 
-**第三步：所有集合入口统一走同一个范围**——列表、总数、导出必须共用，否则总数会和实际可见数据对不上：
+列表、总数和导出必须复用施加范围后的同一查询：
 
 ```csharp
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Read, ct);
@@ -131,7 +98,7 @@ var totalCount = await scoped.LongCountAsync(ct);
 var items = await scoped.OrderBy(order => order.Code).Skip(offset).Take(limit).ToListAsync(ct);
 ```
 
-**第四步：批量操作先在范围内定位目标，再核对数量**——禁止静默跳过越权项：
+批量操作应先在范围内定位目标并核对数量，不能静默跳过越权项：
 
 ```csharp
 var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Update, ct);
@@ -148,7 +115,7 @@ foreach (var order in targets)
 }
 ```
 
-> 与仓储、分页 DTO、异步执行器等 DDD 设施的组合写法见 [DDD 四层基座](../ddd-struct/ddd-struct.md)；本组件不依赖它们，示例刻意保持在 EF Core 与 BCL 的范围内，独立引用本包的项目可直接照搬。
+DDD 仓储与分页组合见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 接口参考
 
@@ -176,7 +143,6 @@ foreach (var order in targets)
 4. 分配了一个没有对应 Provider 的范围：跳过该分配，**不会**因此放宽范围。
 5. 多个分配之间取**并集**（OR）：一个主体常常同时拥有多种范围（例如"本人"加"某几个组织"）。
 6. 谓词签名不可空：`_ => true` 表示"全部可见"，`_ => false` 表示"本范围不贡献可见性"。并集之下这两者含义分明，不存在"没返回谓词"这一态——它一旦被解释成"不限制"，整张表就当场放开。
-7. 合并两个独立 Lambda 时会把参数统一到同一个 `ParameterExpression` 上，否则合并结果无法被数据库翻译。
 
 ## 注意事项
 

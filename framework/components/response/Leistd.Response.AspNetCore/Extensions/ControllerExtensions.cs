@@ -38,9 +38,7 @@ public static class ControllerExtensions
     /// <param name="code">非零业务状态码。</param>
     /// <param name="message">失败消息。</param>
     /// <remarks>
-    /// 状态码显式传入，不从 <paramref name="code"/> 推导：那要求业务错误码必须编成
-    /// 「前三位是 HTTP 状态码」，等于框架替宿主定死错误码编码方案，且与本框架自身的
-    /// 字符串错误键（<c>Error:NotFound</c> 等）无法共存。
+    /// HTTP 状态码由 <paramref name="statusCode"/> 显式给出，不从业务错误码推导。
     /// </remarks>
     public static IActionResult FailResult(this ControllerBase controller, int statusCode, int code, string message)
     {

@@ -38,9 +38,7 @@ public static class DependencyInjection
         // 权限授予只有一个权威存储：两个上下文各注册一次时会静默取一条，授予写进/读自
         // 宿主没预期的那个库——症状是越权或全员 403，而不是报错。
         //
-        // 只断言 Store，不断言 Manager：第二个上下文在上面这一步就已经被拒；而 Manager 是
-        // 业务编排，"框架给默认实现、宿主可在组合根替换"是标准 DI 语义，由下面的 TryAdd 表达。
-        // 对它加断言会把宿主自定义 Manager 这种合法替换也拒掉。
+        // Manager 允许宿主替换，仅 Store 要求唯一权威实现。
         services.EnsureSingleAuthoritative<IPermissionGrantStore, EfCorePermissionGrantStore<TDbContext>>(
             ServiceLifetime.Transient,
             "Permission grants have a single authoritative store; map the authorization tables in one DbContext.");
@@ -65,4 +63,3 @@ public static class DependencyInjection
         return modelBuilder;
     }
 }
-

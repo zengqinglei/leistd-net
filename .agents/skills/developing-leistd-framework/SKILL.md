@@ -22,9 +22,7 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 - 组件通过宿主显式组合，不替其他组件注册服务、映射端点或隐式挂载拦截器。
 - 公共 API、命名、目录和依赖沿用同类组件规范，避免无实际收益的新抽象。
 - 组件文档示例只使用该组件真实依赖；DDD 组合示例留在 DDD 文档。
-- 注释按 `development-guide` §4.1 分层：`<summary>` 一句话；`<example>` 只给主要入口和易误用路径；`<remarks>` 只留会改变正确用法的契约。不按行数或比例凑密度。
-- 行内 `//` 只标注"看起来可以删但不能删"的地方；复述代码在做什么的注释一律删。
-- 组件文档套 §4.3 骨架：必选段固定顺序与名称，可选段有才出现，`注意事项` 与 `相关` 恒在末尾。
+- 注释与组件文档按 `docs/framework/development-guide.md` §4 编写；公共契约在接口或基类定义，实现使用继承文档。
 
 ## 方案与实施计划
 
@@ -43,11 +41,11 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 2. 用邻近实现、现有测试和调用方建立当前行为基线。
 3. 实施最小变更，并为行为风险补充对应测试和 XML 注释。
 4. 公共 API、包依赖、注册、默认值或运行时语义变化时同步所有当前消费者和目标家族文档，不保留未发布兼容层。
-5. 构建、测试、执行文档检查，并打包到 `.tmp/local-feed`。
-6. 检查受影响 `.nupkg` 的程序集、XML、随包文档和依赖，并从隔离本地源完成还原与构建。
-7. Template 已消费该能力时使用 `developing-leistd-template` 验证受影响场景；未消费时运行组件家族集成测试，公共集成方式变化时再建立 `.tmp/` 下的临时宿主验证。
+5. 按变化选择验证：Markdown 检查引用与骨架；XML 变更构建受影响项目，关键示例单独编译；行为变化运行相关测试。
+6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时验证隔离消费。
+7. 影响 Template 消费方式时使用 `developing-leistd-template` 验证相关生成场景；其他运行时语义由组件测试或最小宿主验证。
 
-使用者可见的组件契约写入 `framework/docs/components/{family}.md`，DDD 基座契约写入 `framework/docs/ddd-struct/`；仅供仓库维护者使用的稳定规则写入 `docs/framework/`。**组件文档骨架由 `development-guide` §4.3 规定并由 `scripts/check-docs-skeleton.py` 强制**：导语一段 ≤120 可见字，必选段 `何时使用 / 安装 / 使用 / 接口参考 / 注意事项` 顺序固定；需要组合根操作时写 `注册`，需要 Provider 选择时写 `配置`，可选段无内容就删除。`接口参考` 只列关键类型与入口，精确签名交给随包 XML。公共能力缺少对应文档时主动创建并更新索引，只覆盖使用者必须知道的安装、注册、调用、默认行为和限制。
+组件契约归 `framework/docs/components/{family}.md`，DDD 组合归 `framework/docs/ddd-struct/`，维护规则归 `docs/framework/`。缺少必要文档时创建最小权威说明并更新索引，不复制精确签名或维护过程。
 
 ## 验证入口
 

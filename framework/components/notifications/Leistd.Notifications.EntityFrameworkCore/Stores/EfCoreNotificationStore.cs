@@ -11,10 +11,7 @@ namespace Leistd.Notifications.EntityFrameworkCore.Stores;
 /// 使用 EF Core 持久化用户通知和已读状态。
 /// </summary>
 /// <remarks>
-/// DbContext 一律经 <see cref="IDbContextProvider{TDbContext}"/> 获取，不直接注入
-/// <typeparamref name="TDbContext"/>：只有它会设置 <c>DbContextCreationContext.Current</c>，
-/// 宿主的 <c>AddDbContext</c> 回调据此拿到本工作单元已解析的连接。直接注入会让独立库租户的
-/// 通知落到宿主配置的默认连接上，且不进工作单元事务——两者都是静默的。
+/// 通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接，参与工作单元。
 /// </remarks>
 /// <typeparam name="TDbContext">宿主 DbContext 类型（需包含 NotificationRecord 配置）。</typeparam>
 public class EfCoreNotificationStore<TDbContext>(
