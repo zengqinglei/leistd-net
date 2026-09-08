@@ -29,10 +29,6 @@ import { LayoutService } from '../../../../layout/services/layout-service';
   imports: [...HlmCardImports, HlmBadge, TranslocoModule],
   //#else
   imports: [...HlmCardImports, HlmBadge],
-  //#else
-  imports: [...HlmCardImports, HlmBadge],
-  //#else
-  imports: [...HlmCardImports],
   //#endif
   templateUrl: './workspace-dashboard.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

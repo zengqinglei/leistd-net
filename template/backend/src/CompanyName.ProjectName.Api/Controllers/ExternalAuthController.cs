@@ -168,11 +168,19 @@ public sealed class ExternalAuthController(
             Encoding.UTF8.GetBytes(right));
     }
 
-    private static BadRequestException InvalidState() =>
-        new BadRequestException("Invalid or expired external authentication state.")
+    /// <remarks>
+    /// 不写成链式：<c>WithCode</c> 返回基类型 <c>BusinessException</c>，链在表达式体里会让本方法的
+    /// 返回类型退化，同时开启外部登录与本地化时直接编译不过（只开一个时那行或整个文件被裁掉，
+    /// 单场景编译因此看不出来）。语句形式两种生成结果都保住 BadRequestException 这个更具体的契约。
+    /// </remarks>
+    private static BadRequestException InvalidState()
+    {
+        var exception = new BadRequestException("Invalid or expired external authentication state.");
 #if (IncludeLocalization)
-            .WithCode("ExternalAuth:InvalidState")
+        exception.WithCode("ExternalAuth:InvalidState");
 #endif
-            ;
+
+        return exception;
+    }
 }
 #endif

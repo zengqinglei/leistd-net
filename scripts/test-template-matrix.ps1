@@ -1,5 +1,7 @@
 param(
-    [string[]]$Scenarios = @("identity", "resource", "standalone", "identity-notifications", "resource-notifications", "identity-external-login", "identity-localization", "resource-localization"),
+    # 不给就跑全量：全量清单是 $AllScenarios（见下），不写死在这里，
+    # 否则「加了场景定义却忘了加进清单」会让新场景静默不跑——下面有断言兜住
+    [string[]]$Scenarios = @(),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [ValidateSet("ChromeHeadless", "Chrome")]
@@ -557,6 +559,24 @@ $scenarioMap = [ordered]@{
         ReadmeContains = @()
         ReadmeExcludes = @()
     }
+    # 全开组合：三个可选特性两两之间的条件块会互相影响，而单开场景各自都能编过。
+    # 曾漏过的实例：ExternalAuthController 的 InvalidState 工厂在「外部登录 + 本地化」
+    # 同时开启时才编译失败（只开外部登录时 WithCode 那行被裁掉，只开本地化时整个文件被裁掉）。
+    "identity-all-features" = @{
+        Arguments = @("--include-notifications","--include-external-login","--include-localization")
+        Frontend = $true; Lint = $true
+        Present = @(
+            "backend/src/{name}.Api/Controllers/NotificationController.cs",
+            "backend/src/{name}.Api/Controllers/ExternalAuthController.cs",
+            "backend/src/{name}.Api/Resources/en.json",
+            "frontend/public/i18n/en.json",
+            "frontend/src/app/features/account/components/external-auth-callback",
+            "frontend/src/app/layout/components/notifications/notification-service.ts"
+        )
+        Absent = @()
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+    }
     "resource-localization" = @{
         Arguments = @("--service-role","Resource","--include-localization"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
@@ -568,9 +588,33 @@ $scenarioMap = [ordered]@{
     }
 }
 
+# 全量清单显式排序：定义用哈希表（无序），执行顺序要稳定才便于比对历史日志
+$AllScenarios = @(
+    "identity", "resource", "standalone",
+    "identity-notifications", "resource-notifications",
+    "identity-external-login",
+    "identity-localization", "resource-localization",
+    "identity-all-features"
+)
+
+# 定义与全量清单必须一一对应。只加定义不加清单，新场景会静默不跑——
+# 那比没加更糟：CI 绿着，而它本该覆盖的东西一直没被覆盖。
+$definedOnly = @($scenarioMap.Keys | Where-Object { $_ -notin $AllScenarios })
+$listedOnly = @($AllScenarios | Where-Object { -not $scenarioMap.Contains($_) })
+if ($definedOnly.Count -gt 0) {
+    throw "These scenarios are defined but absent from `$AllScenarios, so they would never run: $($definedOnly -join ', ')"
+}
+if ($listedOnly.Count -gt 0) {
+    throw "These scenarios are listed in `$AllScenarios but have no definition: $($listedOnly -join ', ')"
+}
+
+if ($Scenarios.Count -eq 0) {
+    $Scenarios = $AllScenarios
+}
+
 foreach ($scenario in $Scenarios) {
     if (-not $scenarioMap.Contains($scenario)) {
-        throw "Unknown scenario '$scenario'. Valid scenarios: $($scenarioMap.Keys -join ', ')"
+        throw "Unknown scenario '$scenario'. Valid scenarios: $($AllScenarios -join ', ')"
     }
 }
 

@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 import angular from 'angular-eslint';
 
 import eslintConfigPrettier from 'eslint-config-prettier/flat';
-import * as importPlugin from 'eslint-plugin-import';
+import { importX } from 'eslint-plugin-import-x';
 import unusedImports from 'eslint-plugin-unused-imports';
 
 export default defineConfig(
@@ -13,7 +13,7 @@ export default defineConfig(
   {
     files: ['**/*.ts'],
     plugins: {
-      import: importPlugin,
+      'import-x': importX,
       'unused-imports': unusedImports,
     },
     extends: [
@@ -36,9 +36,9 @@ export default defineConfig(
       '@angular-eslint/no-pipe-impure': 'error',
       '@angular-eslint/prefer-output-readonly': 'error',
       '@typescript-eslint/no-unused-vars': 'off',
-      'import/no-duplicates': 'error',
-      'import/no-unassigned-import': 'error',
-      'import/order': [
+      'import-x/no-duplicates': 'error',
+      'import-x/no-unassigned-import': 'error',
+      'import-x/order': [
         'error',
         {
           alphabetize: { order: 'asc' },

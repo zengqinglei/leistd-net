@@ -2,6 +2,8 @@ import { ColumnDef } from '@tanstack/angular-table';
 
 import { tableColumnVisibility } from './table-column-meta';
 
+import type { AppTableFeatures } from './table-features';
+
 interface TestRow {
   id: string;
   summary: string;
@@ -10,7 +12,7 @@ interface TestRow {
 }
 
 describe('tableColumnVisibility', () => {
-  const columns: ColumnDef<TestRow>[] = [
+  const columns: ColumnDef<AppTableFeatures, TestRow>[] = [
     { accessorKey: 'id', id: 'id', meta: { priority: 'primary' } },
     { accessorKey: 'summary', id: 'summary', meta: { priority: 'secondary' } },
     { accessorKey: 'detail', id: 'detail', meta: { priority: 'tertiary' } },
