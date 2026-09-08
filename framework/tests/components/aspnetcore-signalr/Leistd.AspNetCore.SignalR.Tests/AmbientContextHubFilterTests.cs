@@ -13,6 +13,7 @@ using Leistd.Security.Claims;
 using Xunit;
 using MsOptions = Microsoft.Extensions.Options.Options;
 using Leistd.TestBase.Doubles;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Leistd.AspNetCore.SignalR.Tests;
 
@@ -119,6 +120,27 @@ public class AmbientContextHubFilterTests
         Assert.Equal(1, provider.GetRequiredService<RequirePrincipalHandler>().Invocations);
     }
 
+    // 节流窗口靠注入的时间源计时。推进过窗口后必须再评一次——否则「窗口到期后重新复评」
+    // 这件事只能靠真的等 5 分钟来验证，于是通常就不验证了。
+    [Fact]
+    public async Task Revalidation_runs_again_once_the_throttling_window_has_passed()
+    {
+        var time = new FakeTimeProvider();
+        var (filter, provider, context) = Build(
+            Authenticated(),
+            new HubIdentityOptions { RevalidationInterval = TimeSpan.FromMinutes(5) },
+            time);
+
+        await filter.InvokeMethodAsync(Invocation(provider, context), _ => ValueTask.FromResult<object?>(null));
+        await filter.InvokeMethodAsync(Invocation(provider, context), _ => ValueTask.FromResult<object?>(null));
+        Assert.Equal(1, provider.GetRequiredService<RequirePrincipalHandler>().Invocations);
+
+        time.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+        await filter.InvokeMethodAsync(Invocation(provider, context), _ => ValueTask.FromResult<object?>(null));
+
+        Assert.Equal(2, provider.GetRequiredService<RequirePrincipalHandler>().Invocations);
+    }
+
     [Fact]
     public async Task Revalidation_runs_on_every_invocation_by_default()
     {
@@ -164,7 +186,8 @@ public class AmbientContextHubFilterTests
 
     private static (AmbientContextHubFilter Filter, ServiceProvider Provider, TestHubCallerContext Context) Build(
         ClaimsPrincipal? principal,
-        HubIdentityOptions? options = null)
+        HubIdentityOptions? options = null,
+        TimeProvider? timeProvider = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -185,7 +208,8 @@ public class AmbientContextHubFilterTests
         var provider = services.BuildServiceProvider();
         var filter = new AmbientContextHubFilter(
             MsOptions.Create(options ?? new HubIdentityOptions()),
-            NullLogger<AmbientContextHubFilter>.Instance);
+            NullLogger<AmbientContextHubFilter>.Instance,
+            timeProvider);
 
         return (filter, provider, new TestHubCallerContext(principal));
     }

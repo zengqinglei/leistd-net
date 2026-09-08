@@ -1,28 +1,4 @@
 /**
- * 登录请求 DTO
- */
-export interface LoginInputDto {
-  usernameOrEmail: string;
-  password: string;
-}
-
-/**
- * 用户输出 DTO
- */
-export interface UserOutputDto {
-  id: string;
-  username: string;
-  email: string;
-  displayName?: string;
-  avatar?: string;
-  phoneNumber?: string;
-  isActive: boolean;
-  isSuperAdmin: boolean;
-  creationTime: string;
-  roles: string[];
-}
-
-/**
  * 用户注册请求 DTO
  */
 export interface RegisterInputDto {

@@ -15,6 +15,7 @@
       与 Leistd.MultiTenancy.EntityFrameworkCore 同口径。
     -->
     <ProjectReference Include="..\..\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\dependency-injection\Leistd.DependencyInjection\Leistd.DependencyInjection.csproj" />
   </ItemGroup>
 
   <ItemGroup>

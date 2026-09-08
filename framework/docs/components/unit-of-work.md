@@ -164,6 +164,8 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 | `IUnitOfWork.SaveChangesAsync` | 冲刷挂起变更，不提交事务 |
 | `IUnitOfWork.CompleteAsync` | 完成并提交；不可重复调用 |
 | `IUnitOfWork.RollbackAsync` | 回滚；幂等 |
+| `IUnitOfWork.Failed` | 未完成即释放时同步触发 |
+| `IUnitOfWork.Disposed` | 释放时同步触发，无论是否已完成；管理器靠它回收边界作用域并恢复外层环境。**自定义实现必须发出它，且只发一次，`Dispose()` 必须幂等**——不发出则该边界的 DI 作用域永不释放 |
 | `[UnitOfWork]` | 声明工作单元边界并可覆盖选项 |
 | `[UnitOfWorkEventHandler]` | 声明事件处理阶段 |
 | `IDbContextProvider<TDbContext>` | 获取受当前工作单元管理的 DbContext |

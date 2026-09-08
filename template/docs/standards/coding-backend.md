@@ -54,7 +54,9 @@
 - **严格禁止**:
   - 引用 `Microsoft.EntityFrameworkCore`
   - 使用 EF Core 特性（Include、ThenInclude）
-  - 领域服务之间相互依赖
+  - 领域服务之间形成依赖**环**
+- **领域服务之间的单向依赖**：仅用于复用另一个领域服务的**变更行为**（例如"首次外部登录分配默认角色"这类领域策略——把它挪到应用层编排会让规则漂出领域），并在类上就近注释说明为什么这段不属于应用层。**读取不要跨领域服务调用**，由调用方自己取。
+  - 环由 DI 保障，不设静态闸门：构造注入的环会被 Microsoft DI 检出并响亮失败（`ValidateOnBuild` 时在容器构建期，否则首次解析时抛 `A circular dependency was detected`）。集成测试的宿主以 `Development` 环境启动，而 `Program.cs` 在该环境开 `ValidateOnBuild`/`ValidateScopes`——真实组合根的可解析性因此已在 CI 里被校验；而仓库禁止服务定位器，不存在绕过构造注入的隐藏环。
 
 #### Infrastructure Layer（{ProjectName}.Infrastructure）
 - **职责**: 数据持久化、第三方服务对接实现
@@ -107,7 +109,8 @@ public class UserAppService(
 
 ### 3.2.1 时间获取（IClock）
 
-- **禁止直接使用** `DateTime.Now` / `DateTime.UtcNow`：它们隐藏依赖、不可测、易引入时区/时钟问题。
+- **禁止就地读取当前时间**：`DateTime.Now` / `DateTime.UtcNow` / `DateTimeOffset.Now` / `DateTimeOffset.UtcNow` / `TimeProvider.System.GetUtcNow()` 一律不用。它们隐藏依赖、不可测、易引入时区/时钟问题；只点名 `DateTime` 挡不住 `DateTimeOffset.UtcNow`——两者问题相同。
+  - **把 `TimeProvider.System` 当默认时间源传进来不在此列**：`TimeProvider? timeProvider = null` + `timeProvider ?? TimeProvider.System` 是 .NET 官方的可测时钟形态，接缝在构造签名上，测试用 `FakeTimeProvider` 覆盖。框架组件用这一形态（业务项目注入 `IClock` 即可）。
 - **统一通过** `Leistd.Timing.IClock` 获取当前时间（`clock.Now`）。`IClock` 由框架注册，直接注入即可。
 - **领域对象（实体）保持 POCO，不注入服务**：实体的时间赋值方法应接收 `DateTime now` 参数，由调用方（领域服务/应用服务）注入 `IClock` 后传入。
 
@@ -141,7 +144,7 @@ public void RecordLoginSuccess(string? ip = null)
 补充约定：
 
 - **契约里的时间字段写明单位**，避免消费方误判量级（普通事件用秒、需亚秒精度的用毫秒），字段名或文档标注单位。
-- **对外的线缆时间戳明确用 UTC**。若 `IClock` 不保证 UTC 语义，此类**边界**时间戳直接用明确的 UTC 取法属**合理例外**（仅限对外序列化边界，不下沉进领域）。
+- **对外的线缆时间戳同样注入 `IClock`**。`IClock` 已承诺一律 UTC（且刻意不提供切换开关），因此不存在「边界可以用另一种取时间方式」的例外——序列化成 `DateTimeOffset` 时由 UTC 的 `DateTime` 隐式转换得到 `+00:00`。
 
 ### 3.3 充血模型设计
 
@@ -353,8 +356,11 @@ builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
 | 创建输入 | `Create{Entity}InputDto` | `CreateUserInputDto` |
 | 更新输入 | `Update{Entity}InputDto` | `UpdateUserInputDto` |
 | 输出 | `{Entity}OutputDto` | `UserOutputDto` |
+| SDK 单形态响应 | `{Concept}Dto` | `ServiceInfoDto`、`WhoAmIDto` |
 
 > 分页输入 DTO 继承 `PagedRequestDto`、字段约定见 [API 规范](./api.md) §6。
+>
+> `Client` SDK（`{ProjectName}.Client`）里没有请求/响应成对关系的单形态响应用 `{Concept}Dto`，不强套 `OutputDto`——Input/Output 后缀的作用是区分成对的请求与响应类型。
 
 **分页 DTO 示例**:
 ```csharp

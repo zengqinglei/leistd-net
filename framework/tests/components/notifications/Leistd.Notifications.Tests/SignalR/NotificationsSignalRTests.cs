@@ -36,13 +36,13 @@ public class NotificationsSignalRTests
             .AddNotificationsSignalR()
             .BuildServiceProvider();
 
-        Assert.Single(provider.GetServices<INotificationSender>());
-        Assert.IsType<SignalRNotificationSender>(provider.GetServices<INotificationSender>().Single());
+        Assert.Single(provider.GetServices<INotificationChannel>());
+        Assert.IsType<SignalRNotificationChannel>(provider.GetServices<INotificationChannel>().Single());
     }
 
     /// <summary>SignalR 传输与宿主自己的传输通道并存，重复注册也只有一条。</summary>
     /// <remarks>
-    /// <see cref="INotificationSender"/> 是累加型扩展点：发布器以 <c>IEnumerable&lt;T&gt;</c>
+    /// <see cref="INotificationChannel"/> 是累加型扩展点：发布器以 <c>IEnumerable&lt;T&gt;</c>
     /// 注入并逐一调用，宿主同时装邮件、WebPush 是设计内的用法（随包文档亦如此承诺）。
     /// 按服务类型判重会让"宿主已装了别的通道"变成"SignalR 这一路静默消失"——
     /// 不报错，只是推送再也不到达，因此必须按实现类型判重。
@@ -51,22 +51,22 @@ public class NotificationsSignalRTests
     public void Signalr_sender_coexists_with_host_transports_and_stays_single_on_repeat()
     {
         var services = new ServiceCollection().AddLogging();
-        services.AddSingleton<INotificationSender, HostEmailSender>();
+        services.AddSingleton<INotificationChannel, HostEmailChannel>();
 
         services.AddNotificationsSignalR();
         services.AddNotificationsSignalR();
 
         using var provider = services.BuildServiceProvider();
-        var senders = provider.GetServices<INotificationSender>().ToArray();
+        var senders = provider.GetServices<INotificationChannel>().ToArray();
 
         Assert.Equal(2, senders.Length);
-        Assert.Single(senders, s => s is HostEmailSender);
-        Assert.Single(senders, s => s is SignalRNotificationSender);
+        Assert.Single(senders, s => s is HostEmailChannel);
+        Assert.Single(senders, s => s is SignalRNotificationChannel);
     }
 
-    private sealed class HostEmailSender : INotificationSender
+    private sealed class HostEmailChannel : INotificationChannel
     {
-        public Task SendToUserAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
+        public Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
             => Task.CompletedTask;
     }
 
@@ -98,11 +98,10 @@ public class NotificationsSignalRTests
     public async Task Notifications_are_addressed_by_user_identifier_not_by_group()
     {
         var clients = new RecordingHubClients();
-        var sender = new SignalRNotificationSender(
-            new StubHubContext(clients), NullLogger<SignalRNotificationSender>.Instance);
+        var channel = new SignalRNotificationChannel(new StubHubContext(clients));
         var notification = Notification();
 
-        await sender.SendToUserAsync("user-1", notification);
+        await channel.DeliverAsync("user-1", notification);
 
         var (userId, method, payload) = Assert.Single(clients.Sent);
         Assert.Equal("user-1", userId);
@@ -111,18 +110,16 @@ public class NotificationsSignalRTests
         Assert.Empty(clients.GroupSends);
     }
 
-    // 投递失败不得冒泡：通知是尽力而为的旁路，推送挂掉不能让业务写入回滚。
-    // 持久化已经完成，用户下次拉列表仍能看到。
+    // 送达失败向上抛，不在渠道里吞：跨渠道隔离与日志由发布器统一负责，
+    // 各实现各吞一遍会让"取消"也被伪装成"送达失败"，且这条保证会取决于每个实现者。
     [Fact]
-    public async Task Transport_failure_is_swallowed_so_the_business_call_survives()
+    public async Task A_transport_failure_propagates_to_the_publisher()
     {
         var clients = new RecordingHubClients { Throw = new InvalidOperationException("hub down") };
-        var sender = new SignalRNotificationSender(
-            new StubHubContext(clients), NullLogger<SignalRNotificationSender>.Instance);
+        var channel = new SignalRNotificationChannel(new StubHubContext(clients));
 
-        await sender.SendToUserAsync("user-1", Notification());
-
-        Assert.Empty(clients.Sent);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => channel.DeliverAsync("user-1", Notification()));
     }
 
     /// <summary>Hub 端点必须要求登录。</summary>

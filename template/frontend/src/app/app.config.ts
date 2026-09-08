@@ -11,7 +11,9 @@ import {
   provideRouter,
   RouterFeatures,
   withComponentInputBinding,
+  //#if (LocalIdentity)
   withHashLocation,
+  //#endif
   withInMemoryScrolling,
   withViewTransitions,
 } from '@angular/router';
@@ -54,8 +56,10 @@ const routerFeatures: RouterFeatures[] = [
   withViewTransitions(),
   // 配置导航时的滚动行为，导航后滚动到页面顶部
   withInMemoryScrolling({ anchorScrolling: 'enabled', scrollPositionRestoration: 'enabled' }),
+  //#if (LocalIdentity)
   // 根据环境配置决定是否启用哈希路由
   ...(environment.useHash ? [withHashLocation()] : []),
+  //#endif
 ];
 
 export const appConfig: ApplicationConfig = {

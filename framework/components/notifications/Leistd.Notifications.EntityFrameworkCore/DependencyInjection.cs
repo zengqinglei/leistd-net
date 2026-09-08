@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Notifications.EntityFrameworkCore.EntityConfigurations;
 using Leistd.Notifications.EntityFrameworkCore.Stores;
@@ -33,21 +34,11 @@ public static class DependencyInjection
     public static IServiceCollection AddNotificationsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        var implementationType = typeof(EfCoreNotificationStore<TDbContext>);
 
-        // 两个上下文各注册一次时 Microsoft DI 静默取最后一条：通知会落进宿主没预期的那个库，
-        // 读回来的也是那一个，全程没有信号。发布器只消费一个权威存储，这里直接拒绝。
-        // 重复登记同一个上下文是无害的，按幂等处理。
-        if (services.FirstOrDefault(d => d.ServiceType == typeof(INotificationStore)) is { } existing
-            && existing.ImplementationType != implementationType)
-        {
-            throw new InvalidOperationException(
-                $"An {nameof(INotificationStore)} is already registered as " +
-                $"'{existing.ImplementationType?.FullName ?? "<factory>"}'. Notifications have a single " +
-                $"authoritative store; registering '{implementationType.FullName}' would silently win by " +
-                "ordering and user notifications would be written to a different database than the caller " +
-                "expects. Map NotificationRecord in one DbContext.");
-        }
+        // 发布器只消费一个权威存储：两个上下文各注册一次时会静默取一条，通知落进宿主没预期的库。
+        services.EnsureSingleAuthoritative<INotificationStore, EfCoreNotificationStore<TDbContext>>(
+            ServiceLifetime.Transient,
+            "Notifications have a single authoritative store; map NotificationRecord in one DbContext.");
 
         services.TryAddTransient<INotificationStore, EfCoreNotificationStore<TDbContext>>();
         return services;

@@ -33,7 +33,7 @@ import { translationReady } from '../../../core/i18n/translation-ready';
 //#endif
 import { SettingContextService } from '../../../core/settings/setting-context-service';
 import { PopoverAria } from '../../../shared/directives/popover-aria';
-import { AppDate } from '../../../shared/pipes/app-date.pipe';
+import { AppDate } from '../../../shared/pipes/app-date-pipe';
 
 /**
  * 通知中心：铃铛 + 未读角标 + popover 通知列表（标记已读 / 单条或全部清除）。

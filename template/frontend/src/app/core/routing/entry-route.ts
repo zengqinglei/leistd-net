@@ -4,7 +4,7 @@
  * 为什么不读 `Router.url`：启动流跑在 `provideAppInitializer` 里、初始导航之前，
  * 那时它一律是 `/`——直接打开 `/platform/users` 这种深链时，用它记落地地址会记成 `/`，
  * 用它判断"当前在哪条路由上"会把 OIDC 回调页误判成普通页面。地址栏在两个阶段都准，
- * 因此这里只认地址栏，不再掺第二个来源。哈希路由（`environment.useHash`）下整条应用
+ * 因此这里只认地址栏，不再掺第二个来源。哈希路由下整条应用
  * URL 都落在 `location.hash` 里，查询串也在其中。
  */
 export function entryRouteUrl(): string {

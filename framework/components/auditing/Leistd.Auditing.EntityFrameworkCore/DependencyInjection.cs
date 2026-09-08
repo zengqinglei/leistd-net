@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
 using Leistd.Auditing.EntityFrameworkCore.Services;
 using Leistd.Timing;
@@ -32,10 +33,10 @@ public static class DependencyInjection
     public static IServiceCollection AddAuditingEfCore(this IServiceCollection services)
     {
         // 当前用户是可选依赖，必须通过工厂按匿名场景解析。
-        services.AddTransient<IAuditPropertySetter>(sp => new AuditPropertySetter(
+        services.TryAddTransient<IAuditPropertySetter>(sp => new AuditPropertySetter(
             sp.GetRequiredService<IClock>(),
             sp.GetService<Leistd.Security.Users.ICurrentUser>()));
-        services.AddTransient<AuditSaveChangesInterceptor>();
+        services.TryAddTransient<AuditSaveChangesInterceptor>();
         return services;
     }
 

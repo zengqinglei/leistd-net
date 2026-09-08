@@ -41,7 +41,7 @@ import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
 } from '../../../../../../shared/models/table-column-meta';
-import { AppDate } from '../../../../../../shared/pipes/app-date.pipe';
+import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {

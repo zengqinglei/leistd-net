@@ -70,7 +70,7 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         using var subscription = connection.On<NotificationOutputDto>("NotificationReceived", notification => received.TrySetResult(notification));
         await connection.StartAsync();
 
-        var notification = new NotificationOutputDto
+        var notification = new NotificationInputDto
         {
             Title = "Integration notification",
             Content = "Notification persistence and SignalR delivery"
@@ -82,22 +82,27 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         }
 
         var pushed = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.Equal(notification.Id, pushed.Id);
         Assert.Equal(1, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
 
+        // 身份由发布器在收件人边界定案，调用方并不知道它——因此这里断言的是那条保证本身：
+        // 推送里的 ID 必须就是落库那条的 ID，否则客户端拿推送的 ID 去标记已读会命不中。
         var notifications = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
-        Assert.Contains(notifications!, item => item.Id == notification.Id && !item.IsRead);
+        var stored = Assert.Single(notifications!);
+        Assert.Equal(stored.Id, pushed.Id);
+        Assert.False(stored.IsRead);
+        Assert.Equal(notification.Title, stored.Title);
+        var notificationId = stored.Id;
 
-        var markRead = await admin.Client.PutAsync($"/api/v1/notifications/{notification.Id}/read", null);
+        var markRead = await admin.Client.PutAsync($"/api/v1/notifications/{notificationId}/read", null);
         Assert.Equal(HttpStatusCode.OK, markRead.StatusCode);
         Assert.Equal(0, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
 
         // 删除单条：持久删除指定通知
-        var clearOne = await admin.Client.DeleteAsync($"/api/v1/notifications/{notification.Id}");
+        var clearOne = await admin.Client.DeleteAsync($"/api/v1/notifications/{notificationId}");
         Assert.Equal(HttpStatusCode.OK, clearOne.StatusCode);
 
         var afterClearOne = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
-        Assert.DoesNotContain(afterClearOne!, item => item.Id == notification.Id);
+        Assert.DoesNotContain(afterClearOne!, item => item.Id == notificationId);
 
         // 清空全部：持久删除当前用户的通知记录
         var clearAll = await admin.Client.DeleteAsync("/api/v1/notifications");

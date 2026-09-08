@@ -73,6 +73,9 @@ frontend/
 │   │   │       ├── layout-service.ts         #   - 管理侧边栏开关、面包屑等状态
 │   │   │       └── theme-service.ts          #   - 管理应用主题 (e.g., light/dark mode)
 │   │   ├── shared/                           # 全局共享资源 (跨所有业务特性复用，必须是纯粹、通用的)
+│   │   │   ├── dtos/                         # 跨特性/跨层复用的 API 契约 (与后端 DTO 一一对应)
+│   │   │   │   ├── auth.dto.ts               #   - e.g., 登录入参与当前用户输出，core 与 account 都要用
+│   │   │   │   └── tenant.dto.ts             #   - e.g., 租户查询契约，core 启动流与平台特性都要用
 │   │   │   ├── components/                   # 全局可复用的"哑"组件 (UI-Kit, 只负责展示和交互，不含业务逻辑)
 │   │   │   │   ├── button/                   #   - 自定义按钮
 │   │   │   │   ├── card/                     #   - 通用卡片容器
@@ -81,7 +84,7 @@ frontend/
 │   │   │   │   └── highlight.ts              #   - v20+ 规范: 移除 .directive 后缀
 │   │   │   ├── pipes/                        # 全局可复用的管道
 │   │   │   │   └── format-date-pipe.ts       #   - v20+ 规范: {pipe-name}-pipe.ts
-│   │   │   └── models/                       # 全局共享的数据模型 (仅当模型被多个不相关特性使用时)
+│   │   │   └── models/                       # 全局共享的前端模型 (领域模型与展示模型，不是 API 契约)
 │   │   │       ├── user.model.ts             #   - e.g., User模型几乎在所有地方都可能用到
 │   │   │       └── product.model.ts          #   - e.g., Product模型可能在订单、购物车、推荐等多个特性中用到
 │   │   ├── app.config.ts                     # 应用级配置 (依赖注入、提供商、拦截器注册)

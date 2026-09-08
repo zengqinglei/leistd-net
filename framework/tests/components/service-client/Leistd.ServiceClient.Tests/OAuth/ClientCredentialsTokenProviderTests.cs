@@ -6,6 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.ServiceClient.OAuth.Abstractions;
 using Leistd.TestBase.Doubles;
+using Microsoft.Extensions.Time.Testing;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.ServiceClient.Tests.OAuth;
 
@@ -15,7 +18,8 @@ public class ClientCredentialsTokenProviderTests
 
     private static (IServiceTokenProvider Provider, CapturingHttpMessageHandler TokenEndpoint) Create(
         Action<ClientCredentialsOptions>? configure = null,
-        Func<HttpRequestMessage, HttpResponseMessage>? responder = null)
+        Func<HttpRequestMessage, HttpResponseMessage>? responder = null,
+        TimeProvider? timeProvider = null)
     {
         var tokenEndpoint = new CapturingHttpMessageHandler();
         var issued = 0;
@@ -36,10 +40,50 @@ public class ClientCredentialsTokenProviderTests
             options.ClientSecret = "secret";
             options.Scope = "demo-api";
         }));
-        services.AddSingleton<IServiceTokenProvider, ClientCredentialsTokenProvider>();
+        if (timeProvider is null)
+        {
+            services.AddSingleton<IServiceTokenProvider, ClientCredentialsTokenProvider>();
+        }
+        else
+        {
+            services.AddSingleton<IServiceTokenProvider>(sp => new ClientCredentialsTokenProvider(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<IOptionsMonitor<ClientCredentialsOptions>>(),
+                sp.GetRequiredService<ILogger<ClientCredentialsTokenProvider>>(),
+                timeProvider));
+        }
 
         var provider = services.BuildServiceProvider();
         return (provider.GetRequiredService<IServiceTokenProvider>(), tokenEndpoint);
+    }
+
+    // 缓存过期判定与"提前 ExpirationBuffer 刷新"都走注入的时间源。推进到缓冲区内必须换新令牌
+    // ——否则这条逻辑只能靠真的等到过期才能验证，本轮加的时间接缝也就只是摆设。
+    [Fact]
+    public async Task 令牌_在过期缓冲区内被重新获取()
+    {
+        var time = new FakeTimeProvider();
+        var (provider, endpoint) = Create(
+            options =>
+            {
+                options.Authority = "http://identity";
+                options.ClientId = "svc-a";
+                options.ClientSecret = "secret";
+                options.ExpirationBuffer = TimeSpan.FromSeconds(60);
+            },
+            timeProvider: time);
+
+        var first = await provider.GetAccessTokenAsync(ClientName);
+        var cached = await provider.GetAccessTokenAsync(ClientName);
+        Assert.Equal(first, cached);
+        Assert.Single(endpoint.Requests);
+
+        // expires_in 是 3600 秒，缓冲 60 秒：推进到 3550 秒时已进入缓冲区
+        time.Advance(TimeSpan.FromSeconds(3550));
+        var refreshed = await provider.GetAccessTokenAsync(ClientName);
+
+        Assert.NotEqual(first, refreshed);
+        Assert.Equal(2, endpoint.Requests.Count);
     }
 
     [Fact]

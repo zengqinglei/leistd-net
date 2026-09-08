@@ -3,22 +3,20 @@ using Leistd.Notifications.Constants;
 namespace Leistd.Notifications.Dtos;
 
 /// <summary>
-/// 通知传输对象（DTO）—— 不含持久化细节。
+/// 要发布的通知内容——尚未归属到任何收件人。
 /// </summary>
-public record NotificationOutputDto
+/// <remarks>
+/// 与 <see cref="NotificationOutputDto"/> 的区别就是身份：本类型只描述"通知说了什么"，
+/// 而<b>谁的通知、哪一条</b>由发布器在收件人边界定案（<c>Id</c>、<c>CreationTime</c>、<c>IsRead</c>）。
+/// 两者曾是同一个类型，于是同一份内容发给第二个用户时两条记录带着同一个主键，
+/// 第二次落库直接冲突；而"客户端看到的 ID 是公告 ID 还是这个人的记录 ID"也说不清。
+/// 现在说得清：<see cref="NotificationOutputDto.Id"/> 恒为<b>该用户的那条记录</b>，
+/// 标记已读用的就是它。
+/// </remarks>
+public record NotificationInputDto
 {
-    /// <summary>
-    /// 该用户这条通知记录的 ID；标记已读用的就是它。
-    /// </summary>
-    /// <remarks>
-    /// 必填、无默认值：身份只在两处产生——发布器按收件人定案，或持久化读取时映射回来。
-    /// 留一个"自己生成 Guid"的默认值等于开了第二个身份入口，而那正是同一份内容扇出给
-    /// 多个用户时两条记录带同一主键的来源。
-    /// </remarks>
-    public required string Id { get; init; }
-
     /// <summary>通知标题。</summary>
-    public string Title { get; init; } = default!;
+    public required string Title { get; init; }
 
     /// <summary>通知内容（可选）。</summary>
     public string? Content { get; init; }
@@ -31,13 +29,6 @@ public record NotificationOutputDto
 
     /// <summary>图标标识（可选，由前端解释）。</summary>
     public string? Icon { get; init; }
-
-    /// <summary>是否已读。</summary>
-    public bool IsRead { get; init; }
-
-    /// <summary>创建时间（UTC）。</summary>
-    /// <remarks>必填：与 <see cref="Id"/> 同一处定案，持久化层不生成也不替换。</remarks>
-    public required DateTime CreationTime { get; init; }
 
     /// <summary>关联实体 ID（可选）。</summary>
     public string? RelatedEntityId { get; init; }

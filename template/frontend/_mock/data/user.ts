@@ -1,8 +1,8 @@
 import { ROLES } from './authorization';
-//#if (LocalIdentity)
-import { UserOutputDto } from '../../src/app/features/account/models/account.dto';
-//#endif
 import { UserManagementOutputDto } from '../../src/app/features/platform/models/user-management.dto';
+//#if (LocalIdentity)
+import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
+//#endif
 
 export interface MockUser {
   id: string;
@@ -51,6 +51,7 @@ export const USERS: MockUser[] = [
   },
 ];
 //#if (LocalIdentity)
+
 export function toUserOutput(user: MockUser): UserOutputDto {
   return {
     id: user.id,
@@ -67,6 +68,7 @@ export function toUserOutput(user: MockUser): UserOutputDto {
   };
 }
 //#endif
+
 export function toUserManagementOutput(user: MockUser): UserManagementOutputDto {
   return {
     id: user.id,

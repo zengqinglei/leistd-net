@@ -119,6 +119,23 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 | `DynamicProxyServiceRegistrationCallbackFactory` | 执行回调，并把 `AddInterceptor()` 收集到的拦截器织入服务代理 |
 | `DynamicProxyRegistrationExtensions.AddInterceptor(context, type)` | 为当前服务追加拦截器类型；通常写作 `context.AddInterceptor(type)` |
 | `DynamicProxyRegistrationExtensions.GetInterceptorTypes(context)` | 获取当前服务收集到的拦截器类型；通常写作 `context.GetInterceptorTypes()` |
+| `IServiceCollection.EnsureSingleAuthoritative<TService, TImplementation>(expectedLifetime, reason)` | 注册期断言：`TService` 上不得已有别的实现、也不得是同一实现的不同生命周期，违反则抛 `InvalidOperationException`（`reason` 是给宿主看的一句话）。只用于「多个实现说不通」的**存储**类服务；业务编排型服务用 `TryAdd*` 表达「默认实现可被宿主替换」即可。边界见下节 |
+
+### `EnsureSingleAuthoritative` 的支持边界
+
+刻意收窄，不覆盖全部 `ServiceDescriptor` 形态：
+
+| 已有的注册形态 | 判定 |
+| --- | --- |
+| 同一封闭类型、同一生命周期 | 通过——重复登记是幂等的 |
+| 同一封闭类型、不同生命周期 | **冲突**——放行会让紧随其后的 `TryAdd*` 保留宿主那条错的 |
+| 别的实现类型 | 冲突 |
+| 实例注册（`AddSingleton<TService>(instance)`） | 按实例真实类型判定；其生命周期恒为单例，故只有期望生命周期也是单例时才通过 |
+| 工厂注册（`ImplementationFactory`） | **冲突**——问不出实现身份，而「不确定」不能当成「没问题」 |
+| keyed 注册 | 忽略——按键解析，不参与单服务解析 |
+| 开放泛型（`typeof(IFoo<>)`） | 不在范围内——`TService` 是封闭类型，匹配不到那种描述符 |
+
+它枚举**全部**描述符而不是只看第一条：单服务解析由最后一条胜出，只看第一条会在「第一条恰是本类型、后面还有别的实现」时放行。
 
 ## 实现行为
 

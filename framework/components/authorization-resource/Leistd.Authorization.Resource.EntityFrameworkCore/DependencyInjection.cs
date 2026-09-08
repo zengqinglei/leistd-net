@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.DependencyInjection.Extensions;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Authorization.Resource.EntityFrameworkCore.EntityConfigurations;
 using Leistd.Authorization.Resource.EntityFrameworkCore.Managers;
 using Leistd.Authorization.Resource.EntityFrameworkCore.Stores;
@@ -30,9 +32,15 @@ public static class DependencyInjection
     public static IServiceCollection AddResourceAuthorizationEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
+        // 同权限授予：资源 ACL 只有一个权威存储，落错库的症状是越权而不是报错。
+        // 同样只断言 Store——Manager 允许宿主替换，理由见 AddAuthorizationEfCore。
+        services.EnsureSingleAuthoritative<IResourceGrantStore, EfCoreResourceGrantStore<TDbContext>>(
+            ServiceLifetime.Scoped,
+            "Resource grants have a single authoritative store; map the resource ACL tables in one DbContext.");
+
         services.AddResourceAuthorizationCore();
-        services.AddScoped<IResourceGrantStore, EfCoreResourceGrantStore<TDbContext>>();
-        services.AddScoped<IResourceGrantManager, EfCoreResourceGrantManager<TDbContext>>();
+        services.TryAddScoped<IResourceGrantStore, EfCoreResourceGrantStore<TDbContext>>();
+        services.TryAddScoped<IResourceGrantManager, EfCoreResourceGrantManager<TDbContext>>();
         return services;
     }
 

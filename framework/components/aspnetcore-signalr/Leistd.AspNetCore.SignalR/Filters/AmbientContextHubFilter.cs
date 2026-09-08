@@ -25,8 +25,14 @@ namespace Leistd.AspNetCore.SignalR.Filters;
 /// </remarks>
 public sealed class AmbientContextHubFilter(
     IOptions<HubIdentityOptions> options,
-    ILogger<AmbientContextHubFilter> logger) : IHubFilter
+    ILogger<AmbientContextHubFilter> logger,
+    TimeProvider? timeProvider = null) : IHubFilter
 {
+    // 时间源可注入：复评节流窗口靠它计时，写死 DateTimeOffset.UtcNow 的话
+    // 「RevalidationInterval 到底有没有生效」只能靠真等一段时间来验证。
+    // 默认落 TimeProvider.System，宿主无需为此多配一项。
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     // 上下文一律建立，复评只对有身份的连接做——两件事分开：
     // 匿名 Hub 仍需要链路标识和宿主自定义贡献者，但没有身份可复评。
     // 判匿名要看 IsAuthenticated 而不是 principal is null：ASP.NET Core 给未认证请求的是
@@ -118,7 +124,7 @@ public sealed class AmbientContextHubFilter(
         if (interval.HasValue &&
             callerContext.Items.TryGetValue(LastRevalidatedKey, out var last) &&
             last is DateTimeOffset lastAt &&
-            DateTimeOffset.UtcNow - lastAt < interval.Value)
+            _timeProvider.GetUtcNow() - lastAt < interval.Value)
         {
             return;
         }
@@ -134,7 +140,7 @@ public sealed class AmbientContextHubFilter(
             ? await authorization.AuthorizeAsync(principal, resource: null, policyName)
             : await AuthorizeWithDefaultPolicyAsync(serviceProvider, authorization, principal);
 
-        callerContext.Items[LastRevalidatedKey] = DateTimeOffset.UtcNow;
+        callerContext.Items[LastRevalidatedKey] = _timeProvider.GetUtcNow();
 
         if (result.Succeeded)
         {

@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map, tap } from 'rxjs';
 
 import { AuthService } from '../../../core/services/auth-service';
+import { UserOutputDto } from '../../../shared/dtos/auth.dto';
 import {
   ChangePasswordInputDto,
   //#if (ExternalLogin)
@@ -11,7 +12,6 @@ import {
   //#endif
   RegisterInputDto,
   UpdateCurrentUserInputDto,
-  UserOutputDto,
   SecurityConfigOutputDto,
   CaptchaOutputDto,
   SendEmailCodeInputDto,
