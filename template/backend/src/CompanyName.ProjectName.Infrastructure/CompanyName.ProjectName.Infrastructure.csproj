@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MailKit" />
     <!-- PasswordHasher 使用 PBKDF2-HMAC-SHA256（Microsoft.AspNetCore.Cryptography.KeyDerivation），
          密文自带格式版本与迭代数。显式声明，避免依赖其它包传递的 ASP.NET Core 共享框架。 -->
     <PackageReference Include="Microsoft.AspNetCore.Cryptography.KeyDerivation" />
@@ -52,6 +51,7 @@
     <PackageReference Include="Leistd.Settings.EntityFrameworkCore" />
 <!--#if (LocalIdentity)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
+    <PackageReference Include="Leistd.Email.Smtp" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.EntityFrameworkCore" />

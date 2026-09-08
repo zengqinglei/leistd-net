@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using CompanyName.ProjectName.Domain.Shared.Email;
+using Leistd.Email.Abstractions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -250,20 +250,16 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         private readonly ConcurrentDictionary<string, string> _codes = new(StringComparer.OrdinalIgnoreCase);
         private int _failNext;
 
-        public Task SendAsync(
-            string to,
-            string subject,
-            string htmlBody,
-            CancellationToken cancellationToken = default)
+        public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
         {
             if (Interlocked.Exchange(ref _failNext, 0) == 1)
             {
                 throw new InvalidOperationException("Simulated email delivery failure.");
             }
 
-            var match = VerificationCodeRegex().Match(htmlBody);
+            var match = VerificationCodeRegex().Match(message.Body);
             Assert.True(match.Success, "The verification email did not contain a six-digit code.");
-            _codes[to] = match.Groups[1].Value;
+            _codes[message.To] = match.Groups[1].Value;
             return Task.CompletedTask;
         }
 

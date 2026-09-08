@@ -29,7 +29,9 @@ public class CaptchaAppService(
         var lineY = RandomNumberGenerator.GetInt32(5, 35);
         var angle = RandomNumberGenerator.GetInt32(-15, 15);
 
-        var svg = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"130\" height=\"44\"><rect width=\"100%\" height=\"100%\" fill=\"{bg}\"/><line x1=\"0\" y1=\"{lineY}\" x2=\"130\" y2=\"{44 - lineY}\" stroke=\"#94a3b8\" stroke-width=\"2\" opacity=\"0.6\"/><text x=\"50%\" y=\"50%\" font-size=\"24\" font-family=\"monospace\" fill=\"#0f172a\" font-weight=\"bold\" font-style=\"italic\" textLength=\"88\" lengthAdjust=\"spacingAndGlyphs\" dominant-baseline=\"central\" text-anchor=\"middle\" transform=\"rotate({angle}, 65, 22)\">{code}</text></svg>";
+        // viewBox 不能省：没有它，宿主给 <img> 设高度只会裁剪画布而不是等比缩放，
+        // 验证码字符会被切掉一截——而这在页面上看起来只是「图有点怪」，不报错。
+        var svg = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"130\" height=\"44\" viewBox=\"0 0 130 44\"><rect width=\"100%\" height=\"100%\" fill=\"{bg}\"/><line x1=\"0\" y1=\"{lineY}\" x2=\"130\" y2=\"{44 - lineY}\" stroke=\"#94a3b8\" stroke-width=\"2\" opacity=\"0.6\"/><text x=\"50%\" y=\"50%\" font-size=\"24\" font-family=\"monospace\" fill=\"#0f172a\" font-weight=\"bold\" font-style=\"italic\" textLength=\"88\" lengthAdjust=\"spacingAndGlyphs\" dominant-baseline=\"central\" text-anchor=\"middle\" transform=\"rotate({angle}, 65, 22)\">{code}</text></svg>";
 
         var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
         var imageBase64 = $"data:image/svg+xml;base64,{base64}";

@@ -46,6 +46,18 @@ dotnet run
 
 存活与就绪检查地址分别为 `http://localhost:5240/api/health/live` 和 `http://localhost:5240/api/health/ready`。
 
+<!--#if (LocalIdentity)-->
+### 邮件
+
+`Leistd:Email:Smtp` 默认指向本机邮件捕获器，本地起一个即可看到真实投出去的信：
+
+```bash
+docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit   # 收件箱在 http://localhost:8025
+```
+
+邮箱验证默认关闭（`UserRegistration:EnableEmailVerification`）。开启后没有可达的 SMTP 会**发信失败并向调用方报错**，不会静默跳过——注册流程据此撤回已占用的限流槽位。生产环境须覆盖 `Host`/`Port`/`EnableSsl`/`DefaultFromAddress`，`Username`/`Password` 属于凭据，用环境变量或 user-secrets 注入。
+<!--#endif-->
+
 如需 PostgreSQL，在被 Git 忽略的 `backend/src/CompanyName.ProjectName.Api/appsettings.Development.json` 中配置：
 
 ```json

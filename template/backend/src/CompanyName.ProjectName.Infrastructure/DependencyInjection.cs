@@ -38,8 +38,7 @@ using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
 #if (LocalIdentity)
-using CompanyName.ProjectName.Domain.Shared.Email;
-using CompanyName.ProjectName.Infrastructure.Email;
+using Leistd.Email.Smtp;
 #endif
 #if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
@@ -265,7 +264,7 @@ public static class DependencyInjection
 #endif
 
 #if (LocalIdentity)
-        services.AddTransient<IEmailSender, MailKitEmailSender>();
+        services.AddSmtpEmailSender(configuration);
 #endif
 
 #if (ExternalLogin)

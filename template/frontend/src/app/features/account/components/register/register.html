@@ -246,7 +246,7 @@
         <!-- Captcha -->
         <div hlmField>
           <label hlmFieldLabel for="captchaCode">{{ i18n.captcha() }}</label>
-          <div class="flex gap-3 h-11 items-center">
+          <div class="flex gap-3 h-8 items-center">
             <input
               hlmInput
               id="captchaCode"
@@ -257,7 +257,7 @@
             @if (captchaData(); as captcha) {
               <button
                 type="button"
-                class="h-11 w-[130px] rounded-lg overflow-hidden border border-border p-0 shadow-sm shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all bg-muted flex items-center justify-center"
+                class="h-8 w-[95px] rounded-lg overflow-hidden border border-border p-0 shadow-sm shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all bg-muted flex items-center justify-center"
                 (click)="refreshCaptcha()"
                 [hlmTooltip]="i18n.captchaRefresh()"
                 position="top"
