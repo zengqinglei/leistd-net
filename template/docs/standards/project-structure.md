@@ -22,12 +22,16 @@ backend/src/
 ├── {ProjectName}.Domain/
 ├── {ProjectName}.Application/
 ├── {ProjectName}.Infrastructure/
+├── {ProjectName}.Client/
+├── {ProjectName}.DbMigrator/
 └── {ProjectName}.Api/
 ```
 
 - Domain 保存领域模型和内层抽象。
 - Application 编排用例并依赖 Domain，不依赖 Infrastructure。
 - Infrastructure 实现持久化和外部适配。
+- Client 提供给其他服务消费的强类型 SDK。
+- DbMigrator 是独立的一次性数据库迁移入口。
 - Api 是组合根，负责注册服务、映射端点和启动应用。
 
 测试项目按实际测试类型放在 `backend/tests/` 或解决方案现有位置，不为目录完整性创建空项目。

@@ -1,17 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/dotnetcli.host",
   "symbolInfo": {
-    "IncludeIdentity": {
-      "longName": "include-identity"
-    },
-    "IncludeRoles": {
-      "longName": "include-roles"
+    "ServiceRole": {
+      "longName": "service-role"
     },
     "IncludeNotifications": {
       "longName": "include-notifications"
-    },
-    "IncludeOpenIddict": {
-      "longName": "include-openiddict"
     },
     "IncludeExternalLogin": {
       "longName": "include-external-login"

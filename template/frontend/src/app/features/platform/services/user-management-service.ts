@@ -3,11 +3,15 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { PagedResultDto } from '../../../shared/models/paged-result.dto';
+import { RoleBriefDto } from '../models/role.dto';
 import {
   CreateUserInputDto,
   GetUsersInputDto,
+  //#if (LocalIdentity)
   ResetUserPasswordInputDto,
+  //#endif
   UpdateUserInputDto,
+  UpdateUserRolesInputDto,
   UserManagementOutputDto,
 } from '../models/user-management.dto';
 
@@ -22,9 +26,15 @@ export class UserManagementService {
     if (input.limit !== undefined) params = params.set('limit', input.limit.toString());
     if (input.keyword) params = params.set('keyword', input.keyword);
     if (input.isActive !== undefined) params = params.set('isActive', input.isActive.toString());
+    //#if (LocalIdentity)
     if (input.isEmailVerified !== undefined)
       params = params.set('isEmailVerified', input.isEmailVerified.toString());
-    if (input.role) params = params.set('role', input.role);
+    //#endif
+    if (input.roles?.length) {
+      for (const role of input.roles) {
+        params = params.append('roles', role);
+      }
+    }
     if (input.sorting) params = params.set('sorting', input.sorting);
     return this.http.get<PagedResultDto<UserManagementOutputDto>>(this.baseUrl, { params });
   }
@@ -48,12 +58,22 @@ export class UserManagementService {
   disableUser(id: string): Observable<void> {
     return this.http.patch<void>(`${this.baseUrl}/${id}/disable`, {});
   }
-
+  //#if (LocalIdentity)
   resetPassword(id: string, data: ResetUserPasswordInputDto): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/${id}/reset-password`, data);
   }
+  //#endif
 
   deleteUser(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+
+  getUserRoles(id: string): Observable<RoleBriefDto[]> {
+    return this.http.get<RoleBriefDto[]>(`${this.baseUrl}/${id}/roles`);
+  }
+
+  /** 角色分配独立于资料更新，需要 App.Users.ManageRoles。 */
+  replaceUserRoles(id: string, data: UpdateUserRolesInputDto): Observable<RoleBriefDto[]> {
+    return this.http.put<RoleBriefDto[]>(`${this.baseUrl}/${id}/roles`, data);
   }
 }

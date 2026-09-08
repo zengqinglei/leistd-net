@@ -1,57 +1,44 @@
 # 多语言本地化（JSON 资源）
 
-需要按用户语言返回文案（错误消息、提示、标题）时，传统做法是把中文/英文字符串写死在代码里，无法随请求切换语言。Leistd 的本地化组件提供一个**基于嵌入 JSON 资源**的 `IStringLocalizer` 实现：代码里只写**文案键**，真正的文案放在随程序集分发的 `{culture}.json` 里，运行时按当前 culture 查表产出。
-
-它坐在 .NET 标准的 `Microsoft.Extensions.Localization` 抽象之上——消费者拿到的是原生 `IStringLocalizer` / `IStringLocalizer<T>`，没有 Leistd 私有抽象。核心路由规则一句话：**程序集负责加载、类型负责路由**——JSON 与官方 RESX **并存**：`ResourceAssemblies` 声明从哪些程序集加载 JSON 词条；`IStringLocalizer<T>` 仅当 `TResourceSource` 登记在 `JsonResourceTypes` 时走 JSON，其余（含同程序集内未登记的类型、宿主既有 RESX、第三方库）一律委派微软官方工厂。框架自身的全局键通过无参 `IStringLocalizer` 直取 JSON，不接管宿主本地化。
+本地化组件从程序集内嵌的 `{culture}.json` 加载文案，并将未登记的强类型资源委派给 .NET RESX 工厂。
 
 ## 何时使用
 
 | 场景 | 用法 |
 | --- | --- |
-| Web API 需按 `Accept-Language` 返回本地化文案 | 引用 `Leistd.Localization.AspNetCore`，`AddJsonLocalization` + `UseJsonRequestLocalization` |
+| Web API 需按 Accept-Language 请求头返回本地化文案 | 引用 `Leistd.Localization.AspNetCore`，`AddJsonLocalization` + `UseJsonRequestLocalization` |
 | 领域/类库层只需注入 `IStringLocalizer` 查文案，不依赖 ASP.NET Core | 只引用 `Leistd.Localization.Core` |
 | 业务项目要覆盖或追加框架默认文案 | 在自己的程序集放同名键的 `{culture}.json` 并登记该程序集 |
-| 与 `Leistd.Exception` 配合，让错误消息本地化 | 启用本地化后，异常用 `WithLocalization("模块:键")` 挂展示键、`WithData` 传占位参数（`Message` 始终是英文诊断，见 [`exception`](./exception.md) 的三分离契约） |
+| 与 `Leistd.ExceptionHandling` 配合，让错误消息本地化 | 异常用 `WithCode("模块:键")` 给出错误码（它同时是词条键）、`WithData` 传占位参数（`Message` 始终是英文诊断，见 [`exception-handling`](./exception-handling.md)） |
 
-> 资源为 JSON（ABP 式 `culture` + `texts`），不是 RESX。未注册本地化时，依赖 `IStringLocalizer` 的组件（如异常处理器）自动退回"直出原字符串"，行为与未引入本组件时一致。
+未注册本地化时，框架异常处理器会直接使用原消息。
 
 ## 安装
 
 ```bash
-# 本地化抽象与 JSON localizer（领域/类库层可只引 Core）
 dotnet add package Leistd.Localization.Core
-
-# ASP.NET Core 装配（Web 宿主项目引用，已传递引用 Core）
 dotnet add package Leistd.Localization.AspNetCore
 ```
 
-## 配置 Provider
+## 注册
 
 在 `Program.cs` 注册本地化并接入请求 culture 中间件：
 
 ```csharp
-// 声明支持语言（首个为默认/回落语言），并登记承载资源的程序集
 builder.Services.AddJsonLocalization(
-    supportedCultures: ["en", "zh-CN"],       // 默认语言 = en（英语）
+    supportedCultures: ["en", "zh-CN"],
     configure: options =>
     {
-        // 加载：追加业务项目自身程序集的资源（覆盖/扩展框架默认键）
         options.ResourceAssemblies.Add(typeof(Program).Assembly);
-
-        // 路由：若要让某个 typed IStringLocalizer<T> 走 JSON（典型如 DataAnnotations 校验消息用的
-        // 资源标记类型），必须显式登记该类型；未登记的类型走官方 RESX。
         options.JsonResourceTypes.Add(typeof(MyResourceMarker));
     });
 
 var app = builder.Build();
 
-// 必须在任何读取当前 culture 的中间件之前
 app.UseJsonRequestLocalization();
 ```
 
-`AddJsonLocalization` 注册**组合工厂** `CompositeStringLocalizerFactory` 为 `IStringLocalizerFactory`，开放 `IStringLocalizer` / `IStringLocalizer<T>` 解析，并配置 `RequestLocalizationOptions`（默认语言 + 支持语言）。`UseJsonRequestLocalization` 包装 `UseRequestLocalization`，启用 QueryString / Cookie / `Accept-Language` 三个 culture provider。框架自身程序集默认已登记，用于分发通用键（`Error:*`、`Title:*`）。
-
-> 组合工厂**不全局接管**宿主本地化：框架全局键通过无参 `IStringLocalizer`（直取 JSON 工厂）分发；`IStringLocalizer<T>` 仅当 `TResourceSource` 显式登记在 `JsonLocalizationOptions.JsonResourceTypes` 时走 JSON，其余（含同程序集内未登记的类型、宿主 RESX、第三方库）一律委派微软官方 `ResourceManagerStringLocalizerFactory`。
+`supportedCultures` 的首项是默认语言。无参 `IStringLocalizer` 读取 JSON；`IStringLocalizer<T>` 只有在 `T` 已加入 `JsonResourceTypes` 时读取 JSON，否则使用 `ResourceManagerStringLocalizerFactory`。`UseJsonRequestLocalization` 应放在所有读取当前 culture 的中间件之前。
 
 ## 资源文件
 
@@ -81,12 +68,10 @@ app.UseJsonRequestLocalization();
 </ItemGroup>
 ```
 
-- **缺 `culture` 段的文件被忽略**（与 ABP 行为一致）。
-- **具名占位符**：值里的 `{Name}` 由调用方参数填充（位置参数走 `IStringLocalizer["key", args]`；与异常配合时由 `WithData("Name", value)` 填充）。
-- **覆盖**：同一键在多个已登记程序集出现时，**后登记者覆盖前者**，业务项目因此可覆盖框架默认文案。
-- **坏文件容错**：某个资源不是合法 JSON 时，读取器**跳过该文件并告警**（`ILogger` Warning），其余程序集/键正常加载，绝不因单个坏文件拖垮整个本地化。
-- **culture 声明校验**：文件内 `culture` 段与文件名解析出的 culture 不一致时**仍加载键值，仅告警**（多为复制粘贴漏改），避免因笔误整份文案丢失。
-- **启动预热**：`AddJsonLocalization` 会注册一个 `IHostedService`，在启动阶段按支持语言预热资源缓存——把上述解析/告警提前到启动日志暴露，而非在生产首个请求时才隐性发生。
+- 缺少 `culture` 的文件会被忽略。
+- 同一 culture 的键按 `ResourceAssemblies` 顺序合并，后登记的程序集覆盖前者。
+- 无效 JSON 会被跳过并记录 Warning；文件名与 `culture` 不一致时仍加载，但记录 Warning。
+- 启动服务按支持语言预热资源缓存。
 
 ## 使用
 
@@ -95,15 +80,13 @@ app.UseJsonRequestLocalization();
 ```csharp
 public class OrderNotifier(IStringLocalizer localizer)
 {
-    public string StockWarning() => localizer["Order:StockInsufficient", "A1"]; // 位置参数 {0}
+    public string StockWarning() => localizer["Order:StockInsufficient", "A1"];
 }
 ```
 
 按当前 `CultureInfo.CurrentUICulture` 逐级回落（`zh-Hans-CN` → `zh-Hans` → `zh`），再回落到默认语言；**仍未命中则返回键本身**（.NET "键即默认值" 语义）。
 
 ## 接口参考
-
-`Leistd.Localization.Core` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |
@@ -114,21 +97,10 @@ public class OrderNotifier(IStringLocalizer localizer)
 | `JsonLocalizationOptions.ResourcesPath` | 嵌入资源逻辑目录，默认 `Resources` |
 | `JsonLocalizationOptions.DefaultCulture` | 默认/回落语言，默认 `en` |
 
-`Leistd.Localization.AspNetCore` 命名空间：
-
-| 成员 | 说明 |
-| --- | --- |
 | `AddJsonLocalization(supportedCultures?, configure?)` | 注册 JSON localizer 栈并配置支持语言（首个为默认/回落语言，默认 `["en","zh-CN"]`） |
-| `UseJsonRequestLocalization()` | 接入请求 culture 解析中间件（QueryString / Cookie / Accept-Language） |
+| `UseJsonRequestLocalization()` | 接入请求 culture 解析中间件（查询参数、Cookie、Accept-Language 请求头） |
 
-## 实现行为
-
-- **资源源与路由**：框架键走嵌入 JSON；typed `IStringLocalizer<T>` 由组合工厂按 `JsonResourceTypes` 精确分流——登记类型走 JSON，其余委派微软官方 `ResourceManagerStringLocalizerFactory`（RESX），二者并存、互不接管。
-- **回落链**：当前 UI culture 及其父链，末尾追加 `DefaultCulture`；每级去重。
-- **合并与覆盖**：各程序集同 culture 的键合并进一张表，按 `ResourceAssemblies` 顺序后者覆盖前者；每个 culture 合并结果缓存一次。
-- **未命中**：返回请求的键本身，且 `LocalizedString.ResourceNotFound` 为 `true`（调用方可据此判断是否漏配）。
-
-## 配置项 / Options
+## 配置项
 
 `JsonLocalizationOptions`：
 
@@ -141,12 +113,11 @@ public class OrderNotifier(IStringLocalizer localizer)
 
 ## 注意事项
 
-- 未调用 `AddJsonLocalization` 时，`IStringLocalizer` 未注册；依赖它的 `Leistd.Exception` 全局处理器会自动退回"直出原消息"，因此**是否启用本地化不影响未启用方的行为**。
+- 未调用 `AddJsonLocalization` 时，异常处理器直接使用原消息。
 - 资源 JSON 必须 `EmbeddedResource`；仅作为 `Content` 不会被读取。
-- 键为**全局唯一**的文案键（如 `Order:StockInsufficient`），不按类型/目录分资源——JSON 工厂对任意登记类型返回同一合并视图（读取全部已登记资源程序集）。注意这只描述 **JSON 工厂内部**；对外的组合工厂仍按 `JsonResourceTypes` 分流，未登记类型不会进入该合并视图，而是走官方 RESX。
+- 文案键必须全局唯一；JSON 工厂对所有已登记类型提供同一合并视图。
 
 ## 相关
 
-- [组件总览](./README.md)
-- [业务异常与全局异常处理](./exception.md)（错误消息本地化）
+- [业务异常与全局异常处理](./exception-handling.md)（错误消息本地化）
 - [核心基础库](./core.md)

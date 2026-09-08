@@ -1,20 +1,28 @@
 using Leistd.Ddd.Domain.Entities.Auditing;
+using Leistd.MultiTenancy;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
 
-public class User : FullAuditedEntity<Guid>
+public class User : FullAuditedEntity<Guid>, IMultiTenant
 {
     /// <summary>
-    /// 用户名（唯一）
+    /// 所属租户（null 为宿主用户），由多租户落值拦截器在创建时填充
+    /// </summary>
+    public Guid? TenantId { get; private set; }
+
+    /// <summary>
+    /// 用户名（租户内唯一）
     /// </summary>
     public string Username { get; private set; }
 
     /// <summary>
-    /// 邮箱（唯一）
+    /// 邮箱（租户内唯一）
     /// </summary>
     public string Email { get; private set; }
 
-#if (IncludeIdentity)
+#if (LocalIdentity)
     /// <summary>
     /// 邮箱是否已验证
     /// </summary>
@@ -42,9 +50,9 @@ public class User : FullAuditedEntity<Guid>
     public string? Avatar { get; private set; }
 
     /// <summary>
-    /// 昵称
+    /// 显示名称
     /// </summary>
-    public string? Nickname { get; private set; }
+    public string? DisplayName { get; private set; }
 
     /// <summary>
     /// 是否启用
@@ -56,7 +64,7 @@ public class User : FullAuditedEntity<Guid>
     /// </summary>
     public bool IsSuperAdmin { get; private set; }
 
-#if (IncludeIdentity)
+#if (LocalIdentity)
     /// <summary>
     /// 是否锁定
     /// </summary>
@@ -89,43 +97,55 @@ public class User : FullAuditedEntity<Guid>
         Email = null!;
     }
 
-    public User(string username, string email, string? passwordHash = null, string? nickname = null)
+    public User(
+#if (!LocalIdentity)
+        Guid subjectId,
+#endif
+        string username,
+        string email,
+        string? passwordHash = null,
+        string? displayName = null)
     {
+#if (LocalIdentity)
         Id = Guid.CreateVersion7();
+#else
+        if (subjectId == Guid.Empty) throw new ArgumentException("Subject Id cannot be empty.", nameof(subjectId));
+        Id = subjectId;
+#endif
         Username = username;
         Email = email;
-#if (IncludeIdentity)
+#if (LocalIdentity)
         PasswordHash = passwordHash;
 #endif
-        Nickname = nickname ?? username;
+        DisplayName = displayName ?? username;
     }
 
-    public void Update(string? nickname, string? phoneNumber, string? avatar)
+    public void Update(string? displayName, string? phoneNumber, string? avatar)
     {
-        Nickname = nickname;
-#if (IncludeIdentity)
+        DisplayName = displayName;
+#if (LocalIdentity)
         PhoneNumber = phoneNumber;
 #endif
         Avatar = avatar;
     }
 
-    public void UpdateManagement(string email, string? nickname, string? avatar, bool isActive, bool emailConfirmed)
+    public void UpdateManagement(string email, string? displayName, string? avatar, bool isActive, bool emailConfirmed)
     {
         Email = email;
-        Nickname = nickname;
+        DisplayName = displayName;
         Avatar = avatar;
         IsActive = isActive;
-#if (IncludeIdentity)
+#if (LocalIdentity)
         EmailConfirmed = emailConfirmed;
 #endif
     }
 
-    public void UpdateProfile(string username, string email, string? nickname, string? phoneNumber, string? avatar)
+    public void UpdateProfile(string username, string email, string? displayName, string? phoneNumber, string? avatar)
     {
         Username = username;
         Email = email;
-        Nickname = nickname;
-#if (IncludeIdentity)
+        DisplayName = displayName;
+#if (LocalIdentity)
         PhoneNumber = phoneNumber;
 #endif
         Avatar = avatar;
@@ -134,6 +154,21 @@ public class User : FullAuditedEntity<Guid>
     public void MarkAsSuperAdmin()
     {
         IsSuperAdmin = true;
+    }
+
+    public bool CanBeManagedBy(Guid? actorUserId)
+    {
+        return !IsSuperAdmin || Id == actorUserId;
+    }
+
+    public bool CanBeDisabled()
+    {
+        return !IsSuperAdmin;
+    }
+
+    public bool CanBeDeleted()
+    {
+        return !IsSuperAdmin;
     }
 
     public void Enable()
@@ -146,7 +181,7 @@ public class User : FullAuditedEntity<Guid>
         IsActive = false;
     }
 
-#if (IncludeIdentity)
+#if (LocalIdentity)
     public void UpdatePasswordHash(string passwordHash)
     {
         PasswordHash = passwordHash;
@@ -180,16 +215,29 @@ public class User : FullAuditedEntity<Guid>
         AccessFailedCount++;
     }
 
-    public void RecordLoginSuccess(string? ip = null)
+    public void RecordLoginSuccess(DateTime now, string? ip = null)
     {
-        LastLoginTime = DateTime.UtcNow;
+        LastLoginTime = now;
         LastLoginIp = ip;
         AccessFailedCount = 0;
     }
 
-    public bool IsLockedOut()
-    {
-        return IsLocked && (!LockoutEnd.HasValue || LockoutEnd.Value > DateTime.UtcNow);
-    }
 #endif
+
+    public UserAccessStatus GetAccessStatus(DateTime now)
+    {
+        if (!IsActive)
+        {
+            return UserAccessStatus.Disabled;
+        }
+
+#if (LocalIdentity)
+        if (IsLocked && (!LockoutEnd.HasValue || LockoutEnd.Value > now))
+        {
+            return UserAccessStatus.LockedOut;
+        }
+#endif
+
+        return UserAccessStatus.Allowed;
+    }
 }

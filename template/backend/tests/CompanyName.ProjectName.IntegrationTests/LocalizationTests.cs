@@ -57,7 +57,6 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         Assert.NotEqual(enMessage, zhMessage);
     }
 
-    // ---- DataAnnotations 校验消息本地化（与业务异常同一 culture 通道）----
 
     private static async Task<string> PostInvalidRegisterAndReadErrorsAsync(HttpClient client)
     {

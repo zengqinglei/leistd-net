@@ -1,10 +1,19 @@
+// prettier-ignore
+import {
+  ChangeDetectionStrategy,
+  Component,
+  //#if (IncludeLocalization)
+  effect,
+  //#endif
+  inject,
+  //#if (!IncludeLocalization)
+  OnInit,
+  //#endif
+} from '@angular/core';
 //#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
-//#else
-import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 //#endif
-import { CardModule } from 'primeng/card';
+import { HlmCardImports } from '@spartan-ng/helm/card';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
@@ -16,9 +25,9 @@ import { LayoutService } from '../../../../layout/services/layout-service';
   selector: 'app-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
-  imports: [CardModule, TranslocoModule],
+  imports: [...HlmCardImports, TranslocoModule],
   //#else
-  imports: [CardModule],
+  imports: [...HlmCardImports],
   //#endif
   templateUrl: './dashboard.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

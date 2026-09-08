@@ -18,20 +18,58 @@
     "create": "Create",
     "edit": "Edit",
     "delete": "Delete",
+    "details": "View details",
     "close": "Close",
     "copy": "Copy",
     "add": "Add",
-    "actions": "Actions"
+    "remove": "Remove",
+    "uploadAvatar": "Upload avatar",
+    "actions": "Actions",
+    "rowsPerPage": "Items per page",
+    "pageOf": "Page {{page}} of {{total}}",
+    "pagination": {
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "toggleSidebar": "Toggle sidebar",
+    "clearFilter": "Clear filter",
+    "noResults": "No results",
+    "validation": {
+      "required": "This field is required.",
+      "email": "Please enter a valid email address.",
+      "minLength": "Must be at least {{min}} characters.",
+      "maxLength": "Must not exceed {{max}} characters.",
+      "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
+      "passwordRule": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
+      "passwordMismatch": "The two passwords do not match.",
+      "passwordSameAsCurrent": "The new password must differ from the current one.",
+      "phonePattern": "Only digits, spaces, and + - ( ) are allowed."
+    },
+    "noData": "No data",
+    "paginator": {
+      "report": "{{from}}-{{to}} of {{total}}",
+      "rowsPerPage": "Rows per page",
+      "page": "Page",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    }
   },
   "menu": {
     "workspace": "Workspace",
     "platform": "Admin platform",
     "profile": "Profile",
     "changePassword": "Change password",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "switchTenant": "Switch tenant",
+    "hostTenant": "Host"
   },
   "language": {
-    "label": "Language"
+    "label": "Language",
+    "saveFailed": "Switched for now, but your account preference was not saved"
   },
   "httpError": {
     "400": "The request was malformed; the server did not create or modify data.",
@@ -46,63 +84,30 @@
     "503": "Service unavailable; the server is temporarily overloaded or under maintenance.",
     "504": "Gateway timeout."
   },
-  "primeng": {
-    "accept": "Yes",
-    "reject": "No",
-    "choose": "Choose",
-    "upload": "Upload",
-    "cancel": "Cancel",
-    "clear": "Clear",
-    "apply": "Apply",
-    "dayNames": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-    "dayNamesShort": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-    "dayNamesMin": ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"],
-    "monthNames": [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December"
-    ],
-    "monthNamesShort": [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec"
-    ],
-    "today": "Today",
-    "weekHeader": "Wk",
-    "emptyMessage": "No results found",
-    "emptyFilterMessage": "No results found"
-  },
   "layout": {
     "sidebar": {
+      "navigation": "Navigation",
       "appTitle": "Template Project",
       "dashboard": "Dashboard",
-      "groupSystem": "System",
+      "groupAccess": "Access control",
+      "groupDeveloper": "Developer",
       "users": "User Management",
       "openApplications": "Developer Apps",
-      "workbench": "Workbench"
+      "workbench": "Workbench",
+      "appSubtitle": "Admin Platform",
+      "roles": "Role Management",
+      "tenants": "Tenant Management",
+      "groupOther": "Other",
+      "settings": "Settings"
     },
     "notifications": {
       "title": "Notifications",
       "markAllRead": "Mark all as read",
-      "empty": "No notifications"
+      "clearAll": "Clear all",
+      "clearOne": "Dismiss",
+      "empty": "No notifications",
+      "clearAllConfirm": "Clear all notifications? This cannot be undone.",
+      "unreadAria": "Notifications ({{count}} unread)"
     }
   },
   "platform": {
@@ -117,7 +122,7 @@
     "dashboard": {
       "title": "Workspace",
       "username": "Username",
-      "nickname": "Nickname",
+      "displayName": "Display name",
       "email": "Email",
       "roles": "Roles",
       "noUserInfo": "No user information available"
@@ -125,12 +130,22 @@
     "placeholder": {
       "title": "Workspace",
       "comingSoon": "This feature is under development, stay tuned..."
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Manage your account preferences and system defaults",
+      "account": "Account",
+      "accountDescription": "Applies to you only; leave blank to inherit the system default",
+      "system": "System",
+      "systemDescription": "Defaults for everyone here; each user may override them",
+      "reset": "Reset to default",
+      "empty": "No configurable items in this section"
     }
   },
   "landing": {
     "hero": {
       "title": "Template Project",
-      "subtitle": "A full-stack application development template based on Angular + PrimeNG + .NET 10 DDD architecture",
+      "subtitle": "A full-stack application development template based on Angular + Spartan UI + .NET 10 DDD architecture",
       "login": "Sign In",
       "register": "Sign Up"
     },
@@ -140,19 +155,16 @@
       "usersTitle": "User Management",
       "usersDesc": "Full CRUD operations with permission control",
       "themeTitle": "Theme System",
-      "themeDesc": "Dark mode + Tailwind CSS + PrimeNG"
+      "themeDesc": "Dark mode + Tailwind CSS + Spartan UI"
     }
   },
   "theme": {
-    "config": {
-      "mode": "Theme Mode",
-      "default": "Default",
+    "toggle": "Switch theme",
+    "current": "Theme: {{mode}}",
+    "mode": {
       "light": "Light",
       "system": "System",
-      "dark": "Dark",
-      "primary": "Primary",
-      "surface": "Surface",
-      "presets": "Presets"
+      "dark": "Dark"
     }
   },
   "app": {
@@ -170,42 +182,31 @@
     "changePassword": {
       "header": "Change Password",
       "subtitle": "Enter your current password and set a new sign-in password.",
-      "rules": "Password rules: 8–20 characters, and must include uppercase letters, lowercase letters, numbers, and special characters.",
+      "rules": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
       "currentPassword": "Current Password",
-      "currentPasswordRequired": "Please enter your current password",
       "newPassword": "New Password",
-      "newPasswordRuleError": "The new password does not meet the requirements; it must include uppercase and lowercase letters, numbers, and special characters",
       "confirmPassword": "Confirm New Password",
-      "confirmPasswordRequired": "Please re-enter the new password",
-      "sameAsCurrentError": "The new password cannot be the same as the current password",
-      "mismatchError": "The two new passwords do not match",
       "submit": "Update Password",
       "updateSuccess": "Password updated"
     },
     "profile": {
       "header": "Profile",
-      "subtitle": "Update your username, email, nickname, phone number, and avatar.",
+      "subtitle": "Update your username, email, display name, phone number, and avatar.",
       "invalidFileSizeSummary": "File too large",
       "invalidFileSizeDetail": "The avatar size cannot exceed 1MB",
       "invalidFileTypeSummary": "Unsupported format",
       "invalidFileTypeDetail": "Please upload a PNG, JPG, or WEBP image",
       "superAdminTag": "Super Admin",
       "adminTag": "Admin",
-      "avatarHint": "Hover over the avatar and click + to re-upload; the selection previews instantly.",
+      "avatarHint": "PNG, JPG or WebP",
       "username": "Username",
       "usernamePlaceholder": "Please enter a username",
-      "usernameRequired": "Username cannot be empty",
-      "usernameFormatError": "Username must be 3–64 characters of letters, numbers, or underscores",
       "email": "Email",
       "emailPlaceholder": "Please enter an email",
-      "emailError": "Please enter a valid email; length cannot exceed 256 characters",
-      "nickname": "Nickname",
-      "nicknamePlaceholder": "Please enter a nickname",
-      "nicknameError": "Nickname length cannot exceed 128 characters",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "Enter a display name",
       "phoneNumber": "Phone Number",
       "phoneNumberPlaceholder": "Please enter a phone number",
-      "phoneNumberLengthError": "Phone number length cannot exceed 20 characters",
-      "phoneNumberPatternError": "Phone number supports only digits, spaces, and the symbols + - ( )",
       "guestUser": "Guest user",
       "updateSuccess": "Profile updated"
     },
@@ -221,24 +222,30 @@
       "password": "Password",
       "passwordPlaceholder": "Please enter your password",
       "noAccount": "Don't have an account?",
-      "registerNow": "Register now",
+      "registerNow": "Sign up now",
       "submit": "Sign In",
       "or": "OR",
       "testAccount": "Test Account",
       "adminRole": "Administrator",
       "badgeFastDev": "Fast Development",
+      "badgeModernArch": "Modern Architecture",
+      "loginSuccess": "Signed in successfully",
+      "welcomeBack": "Welcome back!",
+      "loginFailed": "Sign-in failed",
+      "externalLoginFailed": "Unable to connect to the {{provider}} sign-in service, please try again later",
       "badgeReadyMain": "Ready",
       "badgeReadySub": "to use",
-      "badgeModernArch": "Modern Architecture",
-      "loginSuccess": "Login successful",
-      "welcomeBack": "Welcome back!",
-      "loginFailed": "Login failed",
-      "externalLoginFailed": "Unable to connect to the {{provider}} login service, please try again later"
+      "tenant": "Tenant",
+      "tenantPlaceholder": "Tenant name, leave empty for host",
+      "tenantConfirm": "Confirm",
+      "tenantClear": "Clear tenant",
+      "tenantNotFound": "Tenant does not exist",
+      "tenantInactive": "Tenant is deactivated"
     },
     "register": {
-      "title": "Create Account",
-      "subtitle": "Welcome aboard, please fill in the following information to register a new account",
-      "badgeFastRegister": "Quick Registration",
+      "title": "Sign Up",
+      "subtitle": "Welcome aboard, please fill in the following information to create your account",
+      "badgeFastRegister": "Quick Sign-up",
       "badgeSecure": "Security Guaranteed",
       "email": "Email",
       "emailPlaceholder": "Enter your email address",
@@ -253,24 +260,18 @@
       "resendCountdown": "Resend in {{seconds}}s",
       "sendCode": "Get Code",
       "password": "Password",
-      "passwordPlaceholder": "Contains letters and digits, at least 6 characters",
+      "passwordPlaceholder": "At least 12 characters",
       "confirmPassword": "Confirm Password",
       "confirmPasswordPlaceholder": "Enter the password again",
-      "submit": "Create Account",
+      "submit": "Sign Up",
       "haveAccount": "Already have an account?",
       "loginNow": "Sign in directly",
       "emailRequired": "Please enter a valid email first",
       "captchaRequired": "Please enter the captcha first",
       "emailCodeSent": "Verification code sent, please check your email",
       "captchaTokenMissing": "Please refresh to get the captcha",
-      "registerSuccess": "Registration successful",
-      "registerSuccessDetail": "Account created successfully, please sign in",
-      "errRequired": "This field is required",
-      "errEmailInvalid": "Invalid email format",
-      "errUsernamePattern": "Only letters, digits and underscores are allowed",
-      "errPasswordPattern": "Password must be at least 6 characters and contain letters and digits",
-      "errMinLength": "At least {{min}} characters required",
-      "errPasswordMismatch": "The two passwords do not match"
+      "registerSuccess": "Account created",
+      "registerSuccessDetail": "Account created successfully, please sign in"
     },
     "externalCallback": {
       "processingAria": "Completing sign-in",
@@ -286,11 +287,13 @@
     "filter": {
       "allStatus": "All statuses",
       "allEmailStatus": "All email statuses",
+      "emailLabel": "Email status",
       "allRoles": "All roles",
       "searchPlaceholder": "Search username / email / display name..."
     },
     "actions": {
-      "newUser": "New user"
+      "newUser": "New user",
+      "manageRoles": "Assign roles"
     },
     "status": {
       "active": "Active",
@@ -317,16 +320,18 @@
       "deleteHeader": "Confirm delete"
     },
     "table": {
-      "currentPageReport": "{totalRecords} in total",
+      "currentPageReport": "{{total}} in total",
       "colUser": "User",
       "colEmail": "Email",
       "colRole": "Role",
       "colStatus": "Status",
-      "colLastLogin": "Last login",
+      "colLastLogin": "Last sign-in",
       "colCreatedAt": "Created at",
       "colActions": "Actions",
       "emptyTitle": "No users yet",
-      "emptyHint": "Create a new user"
+      "emptyHint": "Create a new user",
+      "emptyFilteredTitle": "No matching users",
+      "emptyFilteredHint": "Adjust the search or filters"
     },
     "popover": {
       "noRoles": "No roles",
@@ -345,30 +350,26 @@
     "editDialog": {
       "editHeader": "Edit user",
       "createHeader": "New user",
+      "description": "Manage the account profile, roles, and status.",
       "loading": "Loading user information...",
       "unnamedUser": "Unnamed user",
       "noEmail": "No email set",
-      "avatarHint": "Hover over the avatar and click + to re-upload; the preview updates instantly.",
+      "avatarHint": "PNG, JPG or WebP",
       "avatarTooLargeSummary": "File too large",
       "avatarTooLargeDetail": "The avatar size cannot exceed 1MB",
       "avatarBadTypeSummary": "Unsupported format",
       "avatarBadTypeDetail": "Please upload a PNG, JPG or WEBP image",
       "usernameLabel": "Username",
       "usernamePlaceholder": "Enter a username",
-      "usernameRequired": "Username is required",
-      "usernamePattern": "Username must be 3-64 letters, digits or underscores",
       "emailLabel": "Email",
       "emailPlaceholder": "Enter an email",
-      "emailInvalid": "Enter a valid email, no longer than 256 characters",
       "displayNameLabel": "Display name",
       "displayNamePlaceholder": "Enter a display name",
-      "displayNameMaxLength": "Display name cannot exceed 128 characters",
       "passwordLabel": "Initial password",
+      "passwordPlaceholder": "At least 12 characters",
       "passwordRequired": "Enter an initial password",
-      "passwordRule": "Password does not meet the rules: 8-20 characters including uppercase and lowercase letters, digits and special characters",
       "rolesLabel": "Roles",
       "rolesPlaceholder": "Select roles",
-      "rolesRequired": "Select at least one role",
       "activeTitle": "Enable user",
       "activeHint": "When disabled, the user cannot sign in or call protected endpoints",
       "emailVerifiedTitle": "Email verified",
@@ -377,11 +378,15 @@
     "resetDialog": {
       "header": "Reset user password",
       "warning": "After the reset, the user must sign in with the new password.",
-      "ruleHint": "New password rule: 8-20 characters, and must include uppercase letters, lowercase letters, digits and special characters.",
+      "ruleHint": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
       "newPasswordLabel": "New password",
-      "newPasswordRequired": "Enter a new password",
-      "newPasswordRule": "The new password does not meet the rules: it must include uppercase and lowercase letters, digits and special characters",
+      "newPasswordPlaceholder": "Enter a new password",
       "confirmButton": "Confirm reset"
+    },
+    "rolesDialog": {
+      "title": "Roles · {{name}}",
+      "description": "The user inherits every permission granted to the selected roles.",
+      "saved": "Roles updated"
     }
   },
   "openApp": {
@@ -395,6 +400,8 @@
     "filter": {
       "allAppTypes": "All application types",
       "allClientTypes": "All client types",
+      "appTypeLabel": "Application type",
+      "clientTypeLabel": "Client type",
       "searchPlaceholder": "Search by name / Client ID..."
     },
     "toast": {
@@ -423,6 +430,7 @@
     "dialog": {
       "editHeader": "Edit Open Application",
       "createHeader": "New Open Application",
+      "description": "Configure the client's identity, type, and OAuth capabilities.",
       "loading": "Loading open application..."
     },
     "field": {
@@ -433,7 +441,12 @@
       "clientIdPlaceholder": "e.g. my-desktop-app",
       "applicationType": "Application type",
       "clientType": "Client type",
-      "consentType": "Consent"
+      "consentType": "Consent",
+      "clientId": "Client ID",
+      "redirectUris": "Redirect URIs",
+      "postLogoutRedirectUris": "Post Logout Redirect URIs",
+      "permissions": "Permissions",
+      "requirements": "Requirements"
     },
     "template": {
       "web": "Web PKCE client",
@@ -475,7 +488,7 @@
       "authorization": "Authorization capabilities"
     },
     "redirectUri": {
-      "hint": "Callback URI after login completes",
+      "hint": "Callback URI after sign-in completes",
       "placeholder": "https://example.com/callback or my-desktop-app://oauth/callback",
       "invalid": "Please enter a valid absolute URI without a fragment.",
       "empty": "No Redirect URI configured yet"
@@ -497,25 +510,115 @@
       "offlineAccessHint": "refresh_token is allowed; consider also granting the offline_access scope."
     },
     "table": {
-      "currentPageReport": "{totalRecords} total",
+      "currentPageReport": "{{total}} total",
       "colApp": "Application",
       "colType": "Type",
       "colPermissions": "Capabilities",
       "colSecurity": "Security",
+      "colRedirectUris": "Redirect URIs",
+      "colPostLogoutRedirectUris": "Post logout redirect URIs",
       "colCreatedAt": "Created at",
       "noPkce": "No PKCE",
       "secretSet": "Secret set",
       "noSecret": "No secret",
       "emptyTitle": "No open applications yet",
-      "emptyHint": "Create a new open application"
+      "emptyHint": "Create a new open application",
+      "emptyFilteredTitle": "No matching open applications",
+      "emptyFilteredHint": "Adjust the search or filters"
     },
     "popover": {
       "empty": "Nothing configured"
     }
   },
-  "role": {
-    "admin": "Administrator",
-    "operator": "Operator",
-    "member": "Member"
+  "forbidden": {
+    "title": "Access denied",
+    "description": "You are signed in, but you do not have permission to view this page. Ask an administrator to grant it.",
+    "backToWorkspace": "Back to workspace",
+    "backHome": "Go home"
+  },
+  "roles": {
+    "searchPlaceholder": "Search roles",
+    "create": "New role",
+    "colName": "Role",
+    "colUsers": "Users",
+    "colPermissions": "Permissions",
+    "static": "Built-in",
+    "default": "Default",
+    "staticRoleHint": "Built-in roles cannot be deleted",
+    "createTitle": "New role",
+    "editTitle": "Edit role",
+    "editDescription": "Name is the stable identifier and cannot be changed after creation.",
+    "fieldName": "Name",
+    "fieldDisplayName": "Display name",
+    "fieldDescription": "Description",
+    "fieldIsDefault": "Assign to new users by default",
+    "saved": "Role saved",
+    "deleted": "Role deleted",
+    "deleteTitle": "Delete role",
+    "deleteDescription": "Delete \"{{name}}\"? Its permission grants will be removed as well.",
+    "configurePermissions": "Configure permissions",
+    "title": "Role Management",
+    "colSort": "Sort",
+    "colCreatedAt": "Created at",
+    "table": {
+      "currentPageReport": "{{total}} in total",
+      "emptyTitle": "No roles yet",
+      "emptyHint": "Create a new role",
+      "emptyFilteredTitle": "No matching roles",
+      "emptyFilteredHint": "Adjust the search keyword"
+    }
+  },
+  "permissions": {
+    "dialogTitle": "Permissions · {{name}}",
+    "searchPlaceholder": "Search permissions",
+    "grantedCount": "{{count}} granted",
+    "groupSummary": "{{granted}}/{{total}}",
+    "saved": "Permissions saved",
+    "conflict": "Someone else changed these permissions. The latest values have been reloaded.",
+    "description": "Check a permission to grant it. The top-level entry of each block is its read access; granting an action grants that read access too — creating users requires viewing the user list. To take an ability away from someone, change their roles.",
+    "viewAccessHint": "view list"
+  },
+  "tenants": {
+    "title": "Tenant Management",
+    "searchPlaceholder": "Search tenants",
+    "create": "New tenant",
+    "colName": "Name",
+    "colDisplayName": "Display name",
+    "colStatus": "Status",
+    "colCreatedAt": "Created at",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "activated": "Tenant activated",
+    "deactivated": "Tenant deactivated",
+    "activateTitle": "Activate tenant",
+    "deactivateTitle": "Deactivate tenant",
+    "activateDescription": "Activate \"{{name}}\"? Its users will be able to sign in again.",
+    "deactivateDescription": "Deactivate \"{{name}}\"? Its users will not be able to sign in.",
+    "createTitle": "New tenant",
+    "editTitle": "Edit tenant",
+    "editDescription": "Name identifies the tenant at sign-in; users enter it to select their tenant.",
+    "fieldName": "Name",
+    "fieldDisplayName": "Display name",
+    "fieldAdminEmail": "Admin email",
+    "fieldAdminPassword": "Admin password",
+    "databasePlacement": "Database placement",
+    "databasePlacementDescription": "Shared uses each service's default database; dedicated resolves this tenant's Secret references.",
+    "sharedDatabase": "Shared database",
+    "dedicatedDatabase": "Dedicated database",
+    "fieldRuntimeSecretReference": "Runtime Secret reference",
+    "fieldMigrationSecretReference": "Migration Secret reference",
+    "saved": "Tenant saved",
+    "deleted": "Tenant deleted",
+    "deleteTitle": "Delete tenant",
+    "deleteDescription": "Delete \"{{name}}\"? Users of this tenant will no longer be able to sign in.",
+    "table": {
+      "currentPageReport": "{{total}} in total",
+      "emptyTitle": "No tenants yet",
+      "emptyHint": "Create a new tenant",
+      "emptyFilteredTitle": "No matching tenants",
+      "emptyFilteredHint": "Adjust the search keyword"
+    }
   }
 }

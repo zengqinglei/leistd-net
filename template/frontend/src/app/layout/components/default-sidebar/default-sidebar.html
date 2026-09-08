@@ -1,88 +1,58 @@
-<aside
-  class="bg-surface-0 dark:bg-surface-900 border-r border-surface-200 dark:border-surface-800 flex flex-col h-full transition-all duration-300 ease-in-out"
-  [ngClass]="{
-    'w-64': !layoutService.sidebarCollapsed() || isMobileMenuOpen(),
-    'w-20': layoutService.sidebarCollapsed() && !isMobileMenuOpen(),
-  }"
->
-  <div
-    [class.gap-3]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
-    [class.gap-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-    class="h-16 px-6 flex items-center justify-between border-b border-surface-200 dark:border-surface-800 shrink-0 overflow-hidden transition-all duration-300 ease-in-out"
-  >
-    <div class="flex items-center gap-3">
-      <app-logo size="normal" />
-
-      <span
-        class="font-bold text-lg tracking-tight bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out"
-        [class.max-w-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-        [class.opacity-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-        [class.max-w-40]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
-        [class.opacity-100]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
-      >
-        <!--#if (IncludeLocalization)-->
-        {{ 'layout.sidebar.appTitle' | transloco }}
-        <!--#else-->
-        Template Project
-        <!--#endif-->
-      </span>
-    </div>
-
-    <p-button
-      icon="pi pi-times"
-      [text]="true"
-      [rounded]="true"
-      severity="secondary"
-      class="md:hidden min-w-[44px] min-h-[44px]"
-      styleClass="w-10 h-10"
-      (onClick)="mobileMenuClosed.emit()"
-    >
-    </p-button>
+<hlm-sidebar collapsible="icon" [mobileTitle]="navLabel()">
+  <div hlmSidebarHeader>
+    <ul hlmSidebarMenu>
+      <li hlmSidebarMenuItem>
+        <!-- Spartan 品牌头：用 menu-button 基元（size=lg），折叠为 icon 时自动收成居中的方形图标，避免自绘容器溢出裁剪。 -->
+        <a hlmSidebarMenuButton size="lg" [routerLink]="layoutService.homeRoute()">
+          <app-logo size="normal" />
+          <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+            <!--#if (IncludeLocalization)-->
+            <span class="truncate text-sm font-medium">{{
+              'layout.sidebar.appTitle' | transloco
+            }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{
+              'layout.sidebar.appSubtitle' | transloco
+            }}</span>
+            <!--#else-->
+            <span class="truncate text-sm font-medium">Template Project</span>
+            <span class="truncate text-xs text-muted-foreground">Admin Platform</span>
+            <!--#endif-->
+          </div>
+        </a>
+      </li>
+    </ul>
   </div>
 
-  <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar overflow-x-hidden">
-    <ul class="list-none p-0 m-0">
-      @for (group of menuGroups(); track $index) {
+  <div hlmSidebarContent>
+    @for (group of menuGroups(); track $index) {
+      <div hlmSidebarGroup>
         @if (group.label) {
-          <li
-            class="px-3 pt-5 pb-1 text-xs font-medium text-muted-color/70 uppercase tracking-wider whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out"
-            [class.max-h-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-            [class.opacity-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-          >
-            {{ group.label }}
-          </li>
+          <div hlmSidebarGroupLabel>{{ group.label }}</div>
         }
-        @for (item of group.items; track item.route) {
-          <li>
-            <a
-              [routerLink]="item.route"
-              [pTooltip]="
-                layoutService.sidebarCollapsed() && !isMobileMenuOpen() ? item.label : undefined
-              "
-              tooltipPosition="right"
-              class="flex items-center cursor-pointer px-3 py-4 md:py-3 rounded-md text-color hover:bg-surface-100 dark:hover:bg-surface-800 transition-all duration-300 ease-in-out focus:outline-none min-h-[44px] md:min-h-0"
-              [class.gap-3]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
-              [class.gap-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-              [class.!text-primary-600]="isItemActive(item)"
-              [class.dark:!text-primary-400]="isItemActive(item)"
-              [class.font-bold]="isItemActive(item)"
-              (click)="isMobileMenuOpen() && mobileMenuClosed.emit()"
-            >
-              <div class="w-8 h-8 flex items-center justify-center shrink-0">
-                <i class="pi {{ item.icon }} text-xl"></i>
-              </div>
-              <span
-                class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out"
-                [class.max-w-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-                [class.opacity-0]="layoutService.sidebarCollapsed() && !isMobileMenuOpen()"
-                [class.max-w-60]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
-                [class.opacity-100]="!layoutService.sidebarCollapsed() || isMobileMenuOpen()"
-                >{{ item.label }}</span
-              >
-            </a>
-          </li>
-        }
-      }
-    </ul>
-  </nav>
-</aside>
+        <div hlmSidebarGroupContent>
+          <ul hlmSidebarMenu>
+            @for (item of group.items; track item.route) {
+              <li hlmSidebarMenuItem>
+                <a
+                  hlmSidebarMenuButton
+                  class="data-active:bg-primary/10! data-active:text-primary! data-active:font-semibold!"
+                  [routerLink]="item.route"
+                  [isActive]="isItemActive(item)"
+                  [tooltip]="item.label"
+                >
+                  <ng-icon [name]="item.icon" />
+                  <span>{{ item.label }}</span>
+                </a>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Spartan canonical：侧栏底部（nav-user 模式）——仅用户菜单，折叠时收成图标。 -->
+  <div hlmSidebarFooter>
+    <app-user-menu />
+  </div>
+</hlm-sidebar>

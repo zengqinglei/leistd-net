@@ -2,9 +2,7 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
-//#if (IncludeOpenIddict)
-using OpenIddict.EntityFrameworkCore;
-//#endif
+using Leistd.Data.Constants;
 
 namespace CompanyName.ProjectName.Api;
 
@@ -33,21 +31,16 @@ public sealed class MyProjectDbContextFactory : IDesignTimeDbContextFactory<MyPr
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("Default");
+        var connectionString = configuration.GetConnectionString(ConnectionStringNames.Default);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             connectionString = PlaceholderConnectionString;
         }
 
         var optionsBuilder = new DbContextOptionsBuilder<MyProjectDbContext>()
-            .UseNpgsql(connectionString);
-
-//#if (IncludeOpenIddict)
-        // OpenIddict 实体在运行时由 AddOpenIddict().UseEntityFrameworkCore() 注册进模型，
-        // 设计时不走该 DI 路径，需显式 UseOpenIddict() 把其实体加入模型，
-        // 否则生成的迁移会缺少 OpenIddict 表（OpenIddictApplications/Scopes/Tokens/Authorizations）。
-        optionsBuilder.UseOpenIddict();
-//#endif
+            .UseNpgsql(connectionString, npgsql =>
+                npgsql.MigrationsHistoryTable(
+                    DatabaseSchema.BusinessMigrationsHistoryTable, DatabaseSchema.Name));
 
         // 设计时无需运行时服务（审计/软删除过滤等仅在 SaveChanges 生效），serviceProvider 传 null。
         return new MyProjectDbContext(optionsBuilder.Options, serviceProvider: null);

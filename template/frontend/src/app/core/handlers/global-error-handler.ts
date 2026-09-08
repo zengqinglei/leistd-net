@@ -1,9 +1,18 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ErrorHandler, Injectable, inject } from '@angular/core';
+// prettier-ignore
+import {
+  ErrorHandler,
+  Injectable,
+  //#if (IncludeLocalization)
+  inject,
+  //#endif
+} from '@angular/core';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MessageService } from 'primeng/api';
+import { toast } from '@spartan-ng/brain/sonner';
+
+import { ApplicationHttpError } from '../errors/application-http-error';
 
 /**
  * 全局错误处理器
@@ -19,17 +28,16 @@ import { MessageService } from 'primeng/api';
  */
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
-  private readonly messageService = inject(MessageService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  //#endif
 
+  //#endif
   handleError(error: unknown): void {
     console.error('Global error caught:', error);
 
     // HTTP 错误应该已经被 httpErrorInterceptor 处理
     // 如果到达这里，记录警告但不重复显示
-    if (error instanceof HttpErrorResponse) {
+    if (error instanceof HttpErrorResponse || error instanceof ApplicationHttpError) {
       console.warn(
         'HTTP error reached GlobalErrorHandler, this should not happen. Check interceptor configuration.',
       );
@@ -38,28 +46,23 @@ export class GlobalErrorHandler implements ErrorHandler {
 
     // 处理 JavaScript 运行时错误
     if (error instanceof Error) {
-      this.messageService.add({
-        severity: 'error',
-        //#if (IncludeLocalization)
-        summary: this.transloco.translate('common.appError'),
-        //#else
-        summary: 'Application error',
-        //#endif
-        detail: error.message,
-      });
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('common.appError'), { description: error.message });
+      //#else
+      toast.error('Application error', { description: error.message });
+      //#endif
       return;
     }
 
     // 处理未知类型的错误
-    this.messageService.add({
-      severity: 'error',
-      //#if (IncludeLocalization)
-      summary: this.transloco.translate('common.unknownError'),
-      detail: this.transloco.translate('common.unexpectedError'),
-      //#else
-      summary: 'Unknown error',
-      detail: 'An unexpected error occurred. Please refresh the page and try again.',
-      //#endif
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.unknownError'), {
+      description: this.transloco.translate('common.unexpectedError'),
     });
+    //#else
+    toast.error('Unknown error', {
+      description: 'An unexpected error occurred. Please refresh the page and try again.',
+    });
+    //#endif
   }
 }

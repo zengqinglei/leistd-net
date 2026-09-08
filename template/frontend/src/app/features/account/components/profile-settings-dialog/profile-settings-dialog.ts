@@ -1,75 +1,65 @@
-import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, model, signal } from '@angular/core';
 import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  model,
-  signal,
-} from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+  form,
+  required,
+  email as emailValidator,
+  maxLength,
+  pattern,
+  FormField,
+} from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { MessageService } from 'primeng/api';
-import { AvatarModule } from 'primeng/avatar';
-import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { FileSelectEvent, FileUploadModule } from 'primeng/fileupload';
-import { InputTextModule } from 'primeng/inputtext';
-import { TagModule } from 'primeng/tag';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideImagePlus } from '@ng-icons/lucide';
+import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
-import { DIALOG_CONFIGS } from '../../../../shared/constants/dialog-config.constants';
 import { AccountService } from '../../services/account-service';
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
+const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const PHONE_PATTERN = /^[0-9+\-()\s]{0,20}$/;
 
 @Component({
   selector: 'app-profile-settings-dialog',
   standalone: true,
-  //#if (IncludeLocalization)
   imports: [
-    CommonModule,
-    ReactiveFormsModule,
+    FormField,
+    NgIcon,
+    HlmButton,
+    HlmSpinner,
+    HlmInput,
+    HlmBadge,
+    ...HlmDialogImports,
+    ...HlmFieldImports,
+    //#if (IncludeLocalization)
     TranslocoModule,
-    DialogModule,
-    ButtonModule,
-    AvatarModule,
-    FileUploadModule,
-    InputTextModule,
-    TagModule,
+    //#endif
   ],
-  //#else
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    DialogModule,
-    ButtonModule,
-    AvatarModule,
-    FileUploadModule,
-    InputTextModule,
-    TagModule,
-  ],
-  //#endif
+  providers: [provideIcons({ lucideImagePlus })],
   templateUrl: './profile-settings-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProfileSettingsDialogComponent {
+export class ProfileSettingsDialog {
   readonly visible = model(false);
 
-  private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly accountService = inject(AccountService);
-  private readonly messageService = inject(MessageService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   private readonly guestLabel = () => this.transloco.translate('account.profile.guestUser');
   readonly dialogHeader = () => this.transloco.translate('account.profile.header');
-  readonly uploadMessages = () => ({
+  private readonly uploadMessages = () => ({
     sizeSummary: this.transloco.translate('account.profile.invalidFileSizeSummary'),
     sizeDetail: this.transloco.translate('account.profile.invalidFileSizeDetail'),
     typeSummary: this.transloco.translate('account.profile.invalidFileTypeSummary'),
@@ -78,7 +68,7 @@ export class ProfileSettingsDialogComponent {
   //#else
   private readonly guestLabel = () => 'Guest user';
   readonly dialogHeader = () => 'Profile';
-  readonly uploadMessages = () => ({
+  private readonly uploadMessages = () => ({
     sizeSummary: 'File too large',
     sizeDetail: 'The avatar size cannot exceed 1MB',
     typeSummary: 'Unsupported format',
@@ -86,77 +76,88 @@ export class ProfileSettingsDialogComponent {
   });
   //#endif
 
-  readonly dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly saving = signal(false);
   readonly user = computed(() => this.authService.currentUser());
+
+  /** 角色徽章直接展示后端返回的角色名，不再依赖前端硬编码的角色枚举与标签映射。 */
+  readonly roleLabels = computed(() => this.authService.currentUser()?.roles ?? []);
   readonly avatarPreview = signal('');
+
+  // 表单模型（Signal Forms）
+  protected readonly formModel = signal({
+    username: '',
+    email: '',
+    displayName: '',
+    phoneNumber: '',
+    avatar: '',
+  });
+
   readonly displayName = computed(
     () =>
-      this.form.controls.nickname.value.trim() ||
-      this.user()?.nickname ||
+      this.formModel().displayName.trim() ||
+      this.user()?.displayName ||
       this.user()?.username ||
       this.guestLabel(),
   );
-  readonly avatarLabel = computed(() => {
-    const text = this.displayName().trim();
-    return (text.charAt(0) || 'U').toUpperCase();
-  });
-  readonly avatarStyle = computed(() => {
-    const seed = (
-      this.form.controls.username.value ||
-      this.user()?.username ||
-      this.displayName()
-    ).trim();
-    let total = 0;
 
-    for (const char of seed) {
-      total += char.charCodeAt(0);
-    }
-
-    const palette = [
-      { background: '#dbeafe', color: '#1d4ed8' },
-      { background: '#dcfce7', color: '#15803d' },
-      { background: '#fef3c7', color: '#b45309' },
-      { background: '#fce7f3', color: '#be185d' },
-      { background: '#ede9fe', color: '#6d28d9' },
-    ];
-
-    return palette[total % palette.length];
-  });
-
-  readonly form = this.fb.nonNullable.group({
-    username: [
-      '',
-      [
-        Validators.required,
-        Validators.minLength(3),
-        Validators.maxLength(64),
-        Validators.pattern(/^[a-zA-Z0-9_]+$/),
-      ],
-    ],
-    email: ['', [Validators.required, Validators.email, Validators.maxLength(256)]],
-    nickname: ['', [Validators.maxLength(128)]],
-    phoneNumber: ['', [Validators.maxLength(20), Validators.pattern(PHONE_PATTERN)]],
-    avatar: [''],
-  });
-
-  constructor() {
-    effect(() => {
-      if (this.visible()) {
-        const user = this.user();
-        const avatar = user?.avatar ?? '';
-
-        this.form.reset({
-          username: user?.username ?? '',
-          email: user?.email ?? '',
-          nickname: user?.nickname ?? '',
-          phoneNumber: user?.phoneNumber ?? '',
-          avatar,
-        });
-
-        this.avatarPreview.set(avatar);
-      }
+  //#if (IncludeLocalization)
+  readonly profileForm = form(this.formModel, (path) => {
+    required(path.username, {
+      message: this.transloco.translate('common.validation.required'),
     });
+    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
+      message: this.transloco.translate('common.validation.usernamePattern'),
+    });
+    required(path.email, { message: this.transloco.translate('common.validation.required') });
+    emailValidator(path.email, {
+      message: this.transloco.translate('common.validation.email'),
+    });
+    maxLength(path.email, 256, { message: '' });
+    maxLength(path.displayName, 128, {
+      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
+    });
+    maxLength(path.phoneNumber, 20, {
+      message: this.transloco.translate('common.validation.maxLength', { max: 20 }),
+    });
+    pattern(path.phoneNumber, PHONE_PATTERN, {
+      message: this.transloco.translate('common.validation.phonePattern'),
+    });
+  });
+  //#else
+  readonly profileForm = form(this.formModel, (path) => {
+    required(path.username, { message: 'This field is required.' });
+    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
+      message: 'Must be 3–64 letters, digits, or underscores.',
+    });
+    required(path.email, { message: 'This field is required.' });
+    emailValidator(path.email, {
+      message: 'Please enter a valid email address.',
+    });
+    maxLength(path.email, 256, { message: '' });
+    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
+    maxLength(path.phoneNumber, 20, { message: 'Must not exceed 20 characters.' });
+    pattern(path.phoneNumber, PHONE_PATTERN, {
+      message: 'Only digits, spaces, and + - ( ) are allowed.',
+    });
+  });
+  //#endif
+
+  /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约；打开时用当前用户回填表单。 */
+  onDialogStateChange(state: BrnDialogState): void {
+    const open = state === 'open';
+    this.visible.set(open);
+    if (open) {
+      const user = this.user();
+      const avatar = user?.avatar ?? '';
+      this.formModel.set({
+        username: user?.username ?? '',
+        email: user?.email ?? '',
+        displayName: user?.displayName ?? '',
+        phoneNumber: user?.phoneNumber ?? '',
+        avatar,
+      });
+      this.avatarPreview.set(avatar);
+    }
   }
 
   hasAvatarImage(): boolean {
@@ -168,20 +169,38 @@ export class ProfileSettingsDialogComponent {
     );
   }
 
-  onAvatarSelect(event: FileSelectEvent): void {
-    const file = event.files?.[0];
+  onAvatarSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
 
     if (!file) {
+      return;
+    }
+
+    const messages = this.uploadMessages();
+
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+      toast.error(messages.typeSummary, { description: messages.typeDetail });
+      input.value = '';
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_SIZE) {
+      toast.error(messages.sizeSummary, { description: messages.sizeDetail });
+      input.value = '';
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : '';
-      this.form.controls.avatar.setValue(result);
+      this.formModel.update((m) => ({ ...m, avatar: result }));
       this.avatarPreview.set(result);
     };
     reader.readAsDataURL(file);
+
+    // 允许再次选择同一文件时仍触发 change 事件
+    input.value = '';
   }
 
   onHide(): void {
@@ -189,19 +208,19 @@ export class ProfileSettingsDialogComponent {
   }
 
   onSubmit(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (this.profileForm().invalid()) {
+      this.profileForm().markAsTouched();
       return;
     }
 
     this.saving.set(true);
-    const { username, email, nickname, phoneNumber, avatar } = this.form.getRawValue();
+    const { username, email, displayName, phoneNumber, avatar } = this.formModel();
 
     this.accountService
       .updateCurrentUser({
         username: username.trim(),
         email: email.trim(),
-        nickname: nickname.trim() || undefined,
+        displayName: displayName.trim() || undefined,
         phoneNumber: phoneNumber.trim() || undefined,
         avatar: avatar.trim() || undefined,
       })
@@ -209,22 +228,23 @@ export class ProfileSettingsDialogComponent {
       .subscribe({
         next: () => {
           //#if (IncludeLocalization)
-          this.messageService.add({
-            severity: 'success',
-            summary: this.transloco.translate('common.success'),
-            detail: this.transloco.translate('account.profile.updateSuccess'),
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('account.profile.updateSuccess'),
           });
           //#else
-          this.messageService.add({
-            severity: 'success',
-            summary: 'Success',
-            detail: 'Profile updated',
-          });
+          toast.success('Success', { description: 'Profile updated' });
           //#endif
           this.visible.set(false);
         },
+        error: (error) => {
+          //#if (IncludeLocalization)
+          toast.error(this.transloco.translate('common.requestError'), {
+            description: applicationErrorMessage(error),
+          });
+          //#else
+          toast.error('Request failed', { description: applicationErrorMessage(error) });
+          //#endif
+        },
       });
   }
-
-  protected readonly maxAvatarSize = MAX_AVATAR_SIZE;
 }

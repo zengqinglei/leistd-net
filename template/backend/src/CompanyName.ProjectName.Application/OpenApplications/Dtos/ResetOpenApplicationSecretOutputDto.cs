@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 
 /// <summary>

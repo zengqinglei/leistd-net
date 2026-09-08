@@ -1,7 +1,6 @@
-import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import { Provider } from '@angular/core';
 
-import { MOCK_APIS, MockInterceptor } from './interceptor';
+import { MOCK_APIS } from './interceptor';
 import { MockConfig } from './models';
 import * as allApis from '../index';
 
@@ -21,13 +20,10 @@ export function provideMock(config: boolean | MockConfig): Provider[] {
     .filter((value) => typeof value === 'object' && value !== null)
     .reduce((acc, current) => ({ ...acc, ...current }), {});
 
-  return [
-    { provide: MOCK_APIS, useValue: apis },
-    { provide: HTTP_INTERCEPTORS, useClass: MockInterceptor, multi: true },
-  ];
+  return [{ provide: MOCK_APIS, useValue: apis }];
 }
 
-function shouldProvideMock(config: boolean | MockConfig): boolean {
+export function shouldProvideMock(config: boolean | MockConfig): boolean {
   return typeof config === 'boolean' ? config : config.enable || hasPatterns(config.include);
 }
 

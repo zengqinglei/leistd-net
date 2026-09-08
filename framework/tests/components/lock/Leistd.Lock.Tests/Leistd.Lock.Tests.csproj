@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- 契约套件对 Redis 的派生需要真实服务；没有服务时跳过而不是整体失败 -->
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\components\lock\Leistd.Lock.Memory\Leistd.Lock.Memory.csproj" />
+    <ProjectReference Include="..\..\..\..\components\lock\Leistd.Lock.Redis\Leistd.Lock.Redis.csproj" />
+  </ItemGroup>
+
+</Project>

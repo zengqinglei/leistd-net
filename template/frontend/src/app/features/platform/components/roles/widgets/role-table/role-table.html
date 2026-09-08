@@ -1,0 +1,337 @@
+<div class="flex flex-col gap-4">
+  <div class="@container rounded-md border border-border overflow-hidden">
+    @defer {
+      <div hlmTableContainer class="w-full overflow-x-auto">
+        <table hlmTable class="w-full">
+          <thead hlmTHead class="bg-card sticky top-0 z-10">
+            @for (headerGroup of table.getHeaderGroups(); track headerGroup.id) {
+              <tr hlmTr class="text-sm font-medium">
+                @for (header of headerGroup.headers; track header.id) {
+                  <th
+                    hlmTh
+                    [class]="header.column.columnDef.meta?.headClass ?? 'px-6'"
+                    [attr.aria-sort]="sortAria(header.column.id)"
+                  >
+                    @switch (header.column.id) {
+                      @case ('displayName') {
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                          (click)="toggleSort('displayName')"
+                        >
+                          {{ columnLabel('role') }}
+                          <ng-icon [name]="sortIcon('displayName')" class="text-sm" />
+                        </button>
+                      }
+                      @case ('userCount') {
+                        <span class="whitespace-nowrap">{{ columnLabel('users') }}</span>
+                      }
+                      @case ('permissionCount') {
+                        <span class="whitespace-nowrap">{{ columnLabel('permissions') }}</span>
+                      }
+                      @case ('sort') {
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                          (click)="toggleSort('sort')"
+                        >
+                          {{ columnLabel('sort') }}
+                          <ng-icon [name]="sortIcon('sort')" class="text-sm" />
+                        </button>
+                      }
+                      @case ('creationTime') {
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 whitespace-nowrap hover:text-foreground transition-colors"
+                          (click)="toggleSort('creationTime')"
+                        >
+                          {{ columnLabel('created') }}
+                          <ng-icon [name]="sortIcon('creationTime')" class="text-sm" />
+                        </button>
+                      }
+                      @case ('actions') {
+                        <span class="sr-only">{{ actionsLabel() }}</span>
+                      }
+                    }
+                  </th>
+                }
+              </tr>
+            }
+          </thead>
+
+          <tbody hlmTBody>
+            @if (loading()) {
+              <tr hlmTr>
+                <td
+                  hlmTd
+                  [attr.colspan]="table.getVisibleLeafColumns().length"
+                  class="h-32 text-center"
+                >
+                  <hlm-spinner class="mx-auto" />
+                  <span class="sr-only">Loading</span>
+                </td>
+              </tr>
+            } @else {
+              @for (row of table.getRowModel().rows; track row.original.id) {
+                <tr hlmTr class="group text-sm hover:bg-muted/50 transition-colors">
+                  @for (cell of row.getVisibleCells(); track cell.id) {
+                    <td hlmTd [class]="cell.column.columnDef.meta?.cellClass ?? 'px-6 py-2'">
+                      @switch (cell.column.id) {
+                        @case ('displayName') {
+                          <div class="flex min-w-0 items-center gap-3">
+                            @if (hasCollapsedColumns()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon-sm"
+                                class="-ml-2 shrink-0"
+                                [attr.aria-label]="actionLabel('details')"
+                                [attr.aria-expanded]="isRowExpanded(row.original.id)"
+                                (click)="toggleRow(row.original.id)"
+                              >
+                                <ng-icon
+                                  name="lucideChevronRight"
+                                  class="transition-transform duration-200"
+                                  [class.rotate-90]="isRowExpanded(row.original.id)"
+                                />
+                              </button>
+                            }
+                            <div class="min-w-0 flex flex-col">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-foreground text-sm font-medium truncate">{{
+                                  row.original.displayName
+                                }}</span>
+                                @if (row.original.isStatic) {
+                                  <span hlmBadge variant="secondary">{{
+                                    badgeLabel('static')
+                                  }}</span>
+                                }
+                                @if (row.original.isDefault) {
+                                  <span hlmBadge variant="outline">{{
+                                    badgeLabel('default')
+                                  }}</span>
+                                }
+                              </div>
+                              <span class="text-xs text-muted-foreground truncate">{{
+                                row.original.name
+                              }}</span>
+                            </div>
+                          </div>
+                        }
+                        @case ('userCount') {
+                          <span class="whitespace-nowrap text-sm">{{
+                            row.original.userCount
+                          }}</span>
+                        }
+                        @case ('permissionCount') {
+                          <span class="whitespace-nowrap text-sm">{{
+                            row.original.permissionCount
+                          }}</span>
+                        }
+                        @case ('sort') {
+                          <span class="text-xs text-muted-foreground whitespace-nowrap">{{
+                            row.original.sort
+                          }}</span>
+                        }
+                        @case ('creationTime') {
+                          <span class="text-xs text-muted-foreground whitespace-nowrap">{{
+                            row.original.creationTime | appDate: 'full' : displayTimeZone()
+                          }}</span>
+                        }
+                        @case ('actions') {
+                          <!-- 操作列（3 项）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。 -->
+                          <div class="flex items-center justify-end gap-1">
+                            @if (canManagePermissions()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden sm:inline-flex"
+                                [hlmTooltip]="actionLabel('permissions')"
+                                [attr.aria-label]="
+                                  actionLabel('permissions') + ' - ' + row.original.displayName
+                                "
+                                (click)="managePermissions.emit(row.original)"
+                              >
+                                <ng-icon name="lucideKeyRound" />
+                              </button>
+                            }
+                            @if (canUpdate()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden sm:inline-flex"
+                                [hlmTooltip]="actionLabel('edit')"
+                                [attr.aria-label]="
+                                  actionLabel('edit') + ' - ' + row.original.displayName
+                                "
+                                (click)="edit.emit(row.original)"
+                              >
+                                <ng-icon name="lucidePencil" />
+                              </button>
+                            }
+                            @if (hasRowActions()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                align="end"
+                                [attr.aria-label]="actionsLabel()"
+                                [hlmDropdownMenuTrigger]="rowMenu"
+                              >
+                                <ng-icon name="lucideEllipsis" />
+                              </button>
+                            }
+                            <ng-template #rowMenu>
+                              <hlm-dropdown-menu>
+                                <hlm-dropdown-menu-group>
+                                  @if (canManagePermissions()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      class="sm:hidden"
+                                      (click)="managePermissions.emit(row.original)"
+                                    >
+                                      <ng-icon name="lucideKeyRound" />
+                                      {{ actionLabel('permissions') }}
+                                    </button>
+                                  }
+                                  @if (canUpdate()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      class="sm:hidden"
+                                      (click)="edit.emit(row.original)"
+                                    >
+                                      <ng-icon name="lucidePencil" />
+                                      {{ actionLabel('edit') }}
+                                    </button>
+                                  }
+                                </hlm-dropdown-menu-group>
+                                @if (canDelete()) {
+                                  <hlm-dropdown-menu-separator />
+                                  <!-- 内置角色禁用删除并给出原因提示，而不是静默隐藏入口。 -->
+                                  <button
+                                    hlmDropdownMenuItem
+                                    variant="destructive"
+                                    [disabled]="row.original.isStatic"
+                                    [attr.aria-label]="
+                                      row.original.isStatic
+                                        ? actionLabel('staticHint')
+                                        : actionLabel('delete') + ' - ' + row.original.displayName
+                                    "
+                                    (click)="delete.emit(row.original)"
+                                  >
+                                    <ng-icon name="lucideTrash2" />
+                                    {{
+                                      row.original.isStatic
+                                        ? actionLabel('staticHint')
+                                        : actionLabel('delete')
+                                    }}
+                                  </button>
+                                }
+                              </hlm-dropdown-menu>
+                            </ng-template>
+                          </div>
+                        }
+                      }
+                    </td>
+                  }
+                </tr>
+                <!-- 行展开：呈现在移动端/平板端被隐藏的列，避免「隐藏=丢数据」。 -->
+                @if (hasCollapsedColumns() && isRowExpanded(row.original.id)) {
+                  <tr hlmTr class="bg-muted/30 hover:bg-muted/30">
+                    <td
+                      hlmTd
+                      [attr.colspan]="table.getVisibleLeafColumns().length"
+                      class="px-6 pb-3 pt-2"
+                    >
+                      <dl
+                        class="grid grid-cols-[minmax(5rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm"
+                      >
+                        @if (isColumnHidden('userCount')) {
+                          <dt class="text-muted-foreground">{{ columnLabel('users') }}</dt>
+                          <dd class="min-w-0">{{ row.original.userCount }}</dd>
+                        }
+                        @if (isColumnHidden('permissionCount')) {
+                          <dt class="text-muted-foreground">{{ columnLabel('permissions') }}</dt>
+                          <dd class="min-w-0">{{ row.original.permissionCount }}</dd>
+                        }
+                        @if (isColumnHidden('sort')) {
+                          <dt class="text-muted-foreground">{{ columnLabel('sort') }}</dt>
+                          <dd class="text-muted-foreground">{{ row.original.sort }}</dd>
+                        }
+                        @if (isColumnHidden('creationTime')) {
+                          <dt class="text-muted-foreground">{{ columnLabel('created') }}</dt>
+                          <dd class="text-muted-foreground">
+                            {{ row.original.creationTime | appDate: 'full' : displayTimeZone() }}
+                          </dd>
+                        }
+                      </dl>
+                    </td>
+                  </tr>
+                }
+              } @empty {
+                <tr hlmTr class="hover:bg-transparent">
+                  <td
+                    hlmTd
+                    [attr.colspan]="table.getVisibleLeafColumns().length"
+                    class="!p-0 !border-0"
+                  >
+                    <div
+                      class="flex flex-col items-center justify-center h-64 text-muted-foreground"
+                    >
+                      <ng-icon
+                        [name]="filtered() ? 'lucideSearchX' : 'lucideShieldCheck'"
+                        class="text-5xl opacity-30 mb-3"
+                      />
+                      @if (filtered()) {
+                        <!--#if (IncludeLocalization)-->
+                        <p class="text-base font-medium m-0">
+                          {{ 'roles.table.emptyFilteredTitle' | transloco }}
+                        </p>
+                        <p class="text-sm mt-1 opacity-70">
+                          {{ 'roles.table.emptyFilteredHint' | transloco }}
+                        </p>
+                        <!--#else-->
+                        <p class="text-base font-medium m-0">No matching roles</p>
+                        <p class="text-sm mt-1 opacity-70">Adjust the search keyword</p>
+                        <!--#endif-->
+                      } @else {
+                        <!--#if (IncludeLocalization)-->
+                        <p class="text-base font-medium m-0">
+                          {{ 'roles.table.emptyTitle' | transloco }}
+                        </p>
+                        <p class="text-sm mt-1 opacity-70">
+                          {{ 'roles.table.emptyHint' | transloco }}
+                        </p>
+                        <!--#else-->
+                        <p class="text-base font-medium m-0">No roles yet</p>
+                        <p class="text-sm mt-1 opacity-70">Create a new role</p>
+                        <!--#endif-->
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <!-- 分页栏：独立于表格卡片，置于其下方（对齐参考站的现代化布局）。 -->
+  @if (totalCount() > 0) {
+    <app-table-paginator
+      [labels]="paginatorLabels()"
+      [rows]="pagination().pageSize"
+      [canPrev]="table.getCanPreviousPage()"
+      [canNext]="table.getCanNextPage()"
+      (firstPage)="table.firstPage()"
+      (prevPage)="table.previousPage()"
+      (nextPage)="table.nextPage()"
+      (lastPage)="table.lastPage()"
+      (rowsChange)="changePageSize($event)"
+    />
+  }
+</div>

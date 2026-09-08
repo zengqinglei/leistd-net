@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using CompanyName.ProjectName.Domain.Users.Passwords;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
@@ -21,14 +22,14 @@ public record RegisterInputDto
 
     [Display(Name = "Password")]
     [Required(ErrorMessage = "{0} is required.")]
-    [StringLength(100, MinimumLength = 6, ErrorMessage = "{0} must be between {2} and {1} characters.")]
-    [RegularExpression(@"^(?=.*[a-zA-Z])(?=.*\d).{6,}$",
-        ErrorMessage = "{0} must be at least 6 characters and contain both letters and numbers.")]
+    // 只做快速反馈，安全不变量在服务端 PasswordPolicy（下限必须与它一致，否则前置校验形同虚设）
+    [StringLength(PasswordPolicy.MaximumLength, MinimumLength = PasswordPolicy.MinimumLength,
+        ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public required string Password { get; init; }
 
-    [Display(Name = "Nickname")]
+    [Display(Name = "DisplayName")]
     [StringLength(128, ErrorMessage = "{0} cannot exceed {1} characters.")]
-    public string? Nickname { get; init; }
+    public string? DisplayName { get; init; }
 
     [Display(Name = "Captcha token")]
     public string? CaptchaToken { get; init; }
@@ -37,6 +38,6 @@ public record RegisterInputDto
     [StringLength(10, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? CaptchaCode { get; init; }
 
-    [Display(Name = "Email verification code")]
-    public string? EmailVerificationCode { get; init; }
+    [Display(Name = "Email verification")]
+    public EmailVerificationInputDto? EmailVerification { get; init; }
 }

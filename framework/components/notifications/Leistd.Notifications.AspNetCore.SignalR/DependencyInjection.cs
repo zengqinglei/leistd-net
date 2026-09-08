@@ -1,11 +1,11 @@
-using Leistd.RealTime.AspNetCore.SignalR;
-using Leistd.RealTime;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using System.Security.Claims;
+using Leistd.AspNetCore.SignalR;
+using Leistd.Notifications.AspNetCore.SignalR.Hubs;
+using Leistd.Notifications.AspNetCore.SignalR.Services;
+using Leistd.Notifications.Abstractions;
 
 namespace Leistd.Notifications.AspNetCore.SignalR;
 
@@ -24,47 +24,25 @@ public static class DependencyInjection
     /// 内部只注册通知传输所需的 SignalR 能力，不注册实时业务 Hub、在线状态或业务事件发布器。
     /// 通知持久化请另行调用通知 EF Core 包提供的 AddNotificationsEfCore 泛型方法。
     /// </remarks>
-    public static IServiceCollection AddNotificationsSignalR(
-        this IServiceCollection services,
-        Action<RealTimeOptions>? configure = null)
+    /// <example>
+    /// <code>
+    /// builder.Services.AddNotificationsSignalR();
+    ///
+    /// app.MapNotificationHub();   // 默认 /hubs/notifications，要求登录
+    /// </code>
+    /// </example>
+    public static IServiceCollection AddNotificationsSignalR(this IServiceCollection services)
     {
         services.AddNotifications();
-        services.AddNotificationSignalRTransport(configure);
-        services.AddSingleton<INotificationSender, SignalRNotificationSender>();
-        return services;
-    }
-
-    /// <summary>
-    /// 注册通知 SignalR 传输所需的最小基础设施。
-    /// </summary>
-    public static IServiceCollection AddNotificationSignalRTransport(
-        this IServiceCollection services,
-        Action<RealTimeOptions>? configure = null)
-    {
-        var options = new RealTimeOptions();
-        configure?.Invoke(options);
-        services.Configure<RealTimeOptions>(opt =>
-        {
-            opt.RealTimeHubPath = options.RealTimeHubPath;
-            opt.KeepAliveInterval = options.KeepAliveInterval;
-            opt.ClientTimeoutInterval = options.ClientTimeoutInterval;
-            opt.EnableDetailedErrors = options.EnableDetailedErrors;
-            opt.UserIdClaimTypes = options.UserIdClaimTypes.Count > 0
-                ? options.UserIdClaimTypes
-                : ["sub", ClaimTypes.NameIdentifier];
-            opt.EnableRedisBackplane = options.EnableRedisBackplane;
-            opt.RedisConnectionString = options.RedisConnectionString;
-            opt.RequireSubscriptionAuthorization = options.RequireSubscriptionAuthorization;
-        });
-
-        services.AddSignalR(opt =>
-        {
-            opt.EnableDetailedErrors = options.EnableDetailedErrors;
-            opt.KeepAliveInterval = options.KeepAliveInterval;
-            opt.ClientTimeoutInterval = options.ClientTimeoutInterval;
-        });
-
-        services.TryAddSingleton<IUserIdProvider, ClaimsSignalRUserIdProvider>();
+        // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，主体/租户/链路标识与
+        // UserIdentifier 解析全靠基座。基座注册是幂等的，与 realtime 组件同时装也只有一份过滤器。
+        services.AddSignalRAmbientContext();
+        // 按实现类型去重，不按服务类型：INotificationSender 是累加型扩展点，
+        // 发布器以 IEnumerable<T> 注入并逐一调用，宿主可以同时装邮件、WebPush 等通道。
+        // 用 TryAddSingleton 会按服务类型判重——宿主已注册任一 Sender 时，
+        // SignalR 这一路就再也进不来，且没有任何报错。
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<INotificationSender, SignalRNotificationSender>());
         return services;
     }
 

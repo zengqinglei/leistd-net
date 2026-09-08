@@ -1,29 +1,71 @@
 #if (IncludeNotifications)
+using Leistd.Notifications;
+using CompanyName.ProjectName.Api.Middlewares;
+using Leistd.Notifications.Dtos;
 using System.Net;
 using System.Net.Http.Json;
+#if (!LocalIdentity)
+using CompanyName.ProjectName.Api.Extensions;
+using Microsoft.AspNetCore.Http;
+#endif
+using CompanyName.ProjectName.Api.RealTime;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.Notifications;
-using Leistd.RealTime;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
+using Leistd.Notifications.Abstractions;
+using Leistd.RealTime.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
 public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
+#if (!LocalIdentity)
     [Fact]
-    public async Task Notification_should_be_persisted_pushed_and_marked_as_read()
+    public async Task SignalR_query_token_is_promoted_only_on_known_hub_paths()
     {
-        using var admin = await factory.LoginAsync("admin", "Admin@123456");
+        var hub = new DefaultHttpContext();
+        hub.Request.Path = "/hubs/notifications";
+        hub.Request.QueryString = new QueryString("?access_token=secret&transport=WebSockets");
+        var middleware = new HubAccessTokenMiddleware(context =>
+        {
+            Assert.Equal("Bearer secret", context.Request.Headers.Authorization);
+            Assert.False(context.Request.Query.ContainsKey("access_token"));
+            Assert.Equal("WebSockets", context.Request.Query["transport"]);
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(hub);
+
+        var api = new DefaultHttpContext();
+        api.Request.Path = "/api/v1/notifications";
+        api.Request.QueryString = new QueryString("?access_token=secret");
+        middleware = new HubAccessTokenMiddleware(context =>
+        {
+            Assert.False(context.Request.Headers.ContainsKey("Authorization"));
+            Assert.Equal("secret", context.Request.Query["access_token"]);
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(api);
+    }
+#endif
+
+    [Fact]
+    public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
+    {
+#if (LocalIdentity)
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
         var userId = await GetSuperAdminIdAsync(factory);
-        await using var connection = CreateHubConnection(factory, "/hubs/notifications", admin.Cookie);
+#else
+        var userId = Guid.CreateVersion7();
+        using var admin = factory.CreateResourceSession(userId, Guid.CreateVersion7());
+#endif
+        await using var connection = CreateHubConnection(factory, "/hubs/notifications", admin);
         var received = new TaskCompletionSource<NotificationOutputDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var subscription = connection.On<NotificationOutputDto>("NotificationReceived", notification => received.TrySetResult(notification));
         await connection.StartAsync();
@@ -50,6 +92,20 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         Assert.Equal(HttpStatusCode.OK, markRead.StatusCode);
         Assert.Equal(0, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
 
+        // 删除单条：持久删除指定通知
+        var clearOne = await admin.Client.DeleteAsync($"/api/v1/notifications/{notification.Id}");
+        Assert.Equal(HttpStatusCode.OK, clearOne.StatusCode);
+
+        var afterClearOne = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
+        Assert.DoesNotContain(afterClearOne!, item => item.Id == notification.Id);
+
+        // 清空全部：持久删除当前用户的通知记录
+        var clearAll = await admin.Client.DeleteAsync("/api/v1/notifications");
+        Assert.Equal(HttpStatusCode.OK, clearAll.StatusCode);
+
+        var afterClear = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
+        Assert.Empty(afterClear!);
+
         // 显式停止连接，排空 SignalR 后台循环（持有 CTS），避免与 await using 释放竞争导致类清理期 ObjectDisposedException
         await connection.StopAsync();
     }
@@ -57,10 +113,16 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
     [Fact]
     public async Task Default_realtime_subscription_should_keep_common_resources_available()
     {
-        using var admin = await factory.LoginAsync("admin", "Admin@123456");
-        Assert.False(factory.Services.GetRequiredService<IOptions<RealTimeOptions>>().Value.RequireSubscriptionAuthorization);
+#if (LocalIdentity)
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+#else
+        using var admin = factory.CreateResourceSession(Guid.CreateVersion7(), Guid.CreateVersion7());
+#endif
+        // 开关已移除：订阅授权无条件生效，模板默认只放行 public: 命名空间。
+        Assert.IsType<PublicResourceSubscriptionAuthorizer>(
+            factory.Services.GetRequiredService<IRealTimeSubscriptionAuthorizer>());
 
-        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin.Cookie);
+        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
         var received = new TaskCompletionSource<BusinessEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var subscription = connection.On<BusinessEvent>("BusinessEvent", message => received.TrySetResult(message));
         await connection.StartAsync();
@@ -77,18 +139,17 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         await connection.StopAsync();
     }
 
+    // 默认授权器就会拒绝非 public: 的 key：客户端能给任意字符串，组名又不含租户段，
+    // 放行任意 key 等于允许已认证用户订阅别的租户的资源。
     [Fact]
-    public async Task Enabled_subscription_authorization_should_allow_common_and_reject_forbidden_resources()
+    public async Task Default_subscription_authorization_should_allow_public_and_reject_other_resources()
     {
-        await using var securedFactory = factory.WithWebHostBuilder(builder =>
-            builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<IRealtimeSubscriptionAuthorizer>();
-                services.AddSingleton<IRealtimeSubscriptionAuthorizer, PrefixSubscriptionAuthorizer>();
-                services.PostConfigure<RealTimeOptions>(options => options.RequireSubscriptionAuthorization = true);
-            }));
-        using var admin = await LoginAsync(securedFactory, "admin", "Admin@123456");
-        await using var connection = CreateHubConnection(securedFactory, "/hubs/realtime", admin.Cookie);
+#if (LocalIdentity)
+        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+#else
+        using var admin = factory.CreateResourceSession(Guid.CreateVersion7(), Guid.CreateVersion7());
+#endif
+        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
         await connection.StartAsync();
 
         await connection.InvokeAsync("Subscribe", "public:announcements");
@@ -96,45 +157,27 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
             connection.InvokeAsync("Subscribe", "private:42"));
         Assert.Contains("Subscription forbidden", exception.ToString(), StringComparison.OrdinalIgnoreCase);
 
-        // securedFactory 是派生工厂，须在连接后台循环排空后再随 await using 释放，否则类清理期出现 CTS 已释放的竞争
         await connection.StopAsync();
     }
 
     private static HubConnection CreateHubConnection(
         WebApplicationFactory<Program> application,
         string path,
-        string cookie)
+        AuthenticatedSession session)
     {
         return new HubConnectionBuilder()
             .WithUrl(new Uri(application.Server.BaseAddress, path), options =>
             {
                 options.Transports = HttpTransportType.LongPolling;
                 options.HttpMessageHandlerFactory = _ => application.Server.CreateHandler();
-                options.Headers.Add("Cookie", cookie);
+                if (!string.IsNullOrEmpty(session.Cookie))
+                    options.Headers.Add("Cookie", session.Cookie);
+                foreach (var (name, value) in session.AuthenticationHeaders)
+                    options.Headers.Add(name, value);
             })
             .Build();
     }
 
-    private static async Task<AuthenticatedSession> LoginAsync(
-        WebApplicationFactory<Program> application,
-        string username,
-        string password)
-    {
-        var client = application.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            AllowAutoRedirect = false,
-            HandleCookies = false
-        });
-        var response = await client.PostAsJsonAsync(
-            "/api/v1/auth/session-login",
-            new { UsernameOrEmail = username, Password = password });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        var cookie = string.Join("; ", response.Headers.GetValues("Set-Cookie")
-            .Select(value => value.Split(';', 2)[0]));
-        client.DefaultRequestHeaders.Add("Cookie", cookie);
-        return new AuthenticatedSession(client, cookie);
-    }
 
     private static async Task<Guid> GetSuperAdminIdAsync(WebApplicationFactory<Program> application)
     {
@@ -145,14 +188,5 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
 
     private sealed record BusinessEvent(string Value);
 
-    private sealed class PrefixSubscriptionAuthorizer : IRealtimeSubscriptionAuthorizer
-    {
-        public Task<bool> AuthorizeAsync(
-            RealtimeSubscriptionContext context,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(context.ResourceKey.StartsWith("public:", StringComparison.Ordinal));
-        }
-    }
 }
 #endif

@@ -1,14 +1,26 @@
-#if (IncludeIdentity)
+#if (LocalIdentity)
+using Leistd.MultiTenancy;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.Domain.Auth.Entities;
 
 /// <summary>
 /// 外部登录连接实体（GitHub、Google 等第三方身份提供商）
 /// </summary>
-public class ExternalLoginConnection : DeletionAuditedEntity<Guid>
+/// <remarks>
+/// 实现 <see cref="IMultiTenant"/>：外部身份的 (Provider, ProviderUserId) 由第三方决定，
+/// 只在租户内唯一。不分区的话，同一个 GitHub 账号在租户 A 绑定后，租户 B 的登录会命中 A 的连接，
+/// 既泄漏该外部身份已被占用，又让同一账号无法在多个租户各自绑定——那是 SaaS 的正常需求。
+/// </remarks>
+public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
 {
+    /// <summary>
+    /// 所属租户（null 为宿主），由多租户落值拦截器在创建时填充
+    /// </summary>
+    public Guid? TenantId { get; private set; }
+
     /// <summary>
     /// 用户 ID
     /// </summary>
@@ -74,6 +86,7 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>
         Guid userId,
         string provider,
         string providerUserId,
+        DateTime syncedAt,
         string? providerUsername = null,
         string? providerEmail = null,
         string? providerAvatarUrl = null)
@@ -85,10 +98,11 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>
         ProviderUsername = providerUsername;
         ProviderEmail = providerEmail;
         ProviderAvatarUrl = providerAvatarUrl;
-        LastSyncTime = DateTime.UtcNow;
+        LastSyncTime = syncedAt;
     }
 
     public void Update(
+        DateTime syncedAt,
         string? providerUsername = null,
         string? providerEmail = null,
         string? providerAvatarUrl = null)
@@ -96,15 +110,19 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>
         ProviderUsername = providerUsername;
         ProviderEmail = providerEmail;
         ProviderAvatarUrl = providerAvatarUrl;
-        LastSyncTime = DateTime.UtcNow;
+        LastSyncTime = syncedAt;
     }
 
-    public void UpdateTokens(string? accessToken, string? refreshToken = null, DateTime? expiresAt = null)
+    public void UpdateTokens(
+        DateTime syncedAt,
+        string? accessToken,
+        string? refreshToken = null,
+        DateTime? expiresAt = null)
     {
         AccessToken = accessToken;
         RefreshToken = refreshToken;
         ExpiresAt = expiresAt;
-        LastSyncTime = DateTime.UtcNow;
+        LastSyncTime = syncedAt;
     }
 }
 #endif

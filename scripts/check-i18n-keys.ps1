@@ -95,7 +95,7 @@ function Compare-Placeholders([string]$Label, [string]$EnPath, [string]$ZhPath, 
 }
 
 # 校验代码里静态引用的 key 都存在于资源（避免运行时裸键）
-function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex]$Pattern, [string]$EnPath, [scriptblock]$Selector) {
+function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex[]]$Patterns, [string]$EnPath, [scriptblock]$Selector) {
     if (-not (Test-Path $EnPath)) { return }
     $keySet = [System.Collections.Generic.HashSet[string]]::new()
     $flat = New-Object System.Collections.Generic.List[string]
@@ -110,7 +110,12 @@ function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex]$Patt
         } | ForEach-Object {
             $content = Get-Content -LiteralPath $_.FullName -Raw
             if ([string]::IsNullOrEmpty($content)) { return }
-            foreach ($m in $Pattern.Matches($content)) { [void]$referenced.Add($m.Groups[1].Value) }
+            # 去掉 C# XML 文档注释行：示例代码里的键（如 <c>WithCode("User:EmailAlreadyUsed")</c>）
+            # 是说明用法，不是真实引用，不该要求资源里存在
+            $content = ($content -split "`n" | Where-Object { $_.TrimStart() -notlike '///*' }) -join "`n"
+            foreach ($pattern in $Patterns) {
+                foreach ($m in $pattern.Matches($content)) { [void]$referenced.Add($m.Groups[1].Value) }
+            }
         }
     }
     $missing = @($referenced | Where-Object { -not $keySet.Contains($_) } | Sort-Object)
@@ -123,10 +128,8 @@ function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex]$Patt
 }
 
 # 前端 Transloco 插值必须用双大括号 {{name}}；单大括号 {name} 是常见误用（Transloco 不会替换）。
-# 例外：PrimeNG 模板占位符（如 {totalRecords}）走 PrimeNG 自己的替换，保留单括号——用白名单放过。
 function Test-TranslocoInterpolation([string]$EnPath) {
     if (-not (Test-Path $EnPath)) { return }
-    $primengTokens = @('totalRecords', 'first', 'last', 'rows', 'totalPages', 'currentPage')
     $flat = New-Object System.Collections.Generic.List[string]
     $root = Get-Content -LiteralPath $EnPath -Raw | ConvertFrom-Json
     Get-JsonFlatKeys $root '' $flat
@@ -139,16 +142,14 @@ function Test-TranslocoInterpolation([string]$EnPath) {
         $stripped = [regex]::Replace($v, '\{\{[^}]+\}\}', '')
         foreach ($m in [regex]::Matches($stripped, '\{([a-zA-Z][a-zA-Z0-9_]*)\}')) {
             $name = $m.Groups[1].Value
-            if ($primengTokens -notcontains $name) {
-                $bad.Add("$k → 单括号 '{$name}'（Transloco 应用 '{{$name}}'）")
-            }
+            $bad.Add("$k → 单括号 '{$name}'（Transloco 应用 '{{$name}}'）")
         }
     }
     if ($bad.Count -gt 0) {
         $script:problems.Add("前端 Transloco 插值误用（$($bad.Count) 处）：$([string]::Join('; ', $bad))")
     }
     else {
-        Write-Host "  OK  前端 Transloco 插值：双大括号规范（PrimeNG {totalRecords} 等已白名单放过）。" -ForegroundColor Green
+        Write-Host "  OK  前端 Transloco 插值全部使用双大括号规范。" -ForegroundColor Green
     }
 }
 
@@ -161,7 +162,7 @@ Compare-KeySets `
     -ZhPath (Join-Path $RepoRoot "template/frontend/public/i18n/zh-CN.json") `
     -Selector { param($r) $r }
 
-# 后端：ABP 式，键在 texts 段下
+# 后端：顶层 culture + texts 两段结构，键在 texts 段下
 Compare-KeySets `
     -Label "后端(Api/Resources)" `
     -EnPath (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") `
@@ -189,15 +190,24 @@ Compare-Placeholders "框架(Localization.Core)" `
 
 Write-Host ""
 Write-Host "-- 代码引用键存在性（静态可发现部分）--" -ForegroundColor Cyan
-# 后端 WithLocalization("模块:键")
-Test-KeyReferences "后端 WithLocalization" `
+# 后端 WithCode("模块:键")——错误码同时是展示词条键，见 exception 组件文档
+Test-KeyReferences "后端 WithCode" `
     @("template/backend/src") `
-    ([regex]'WithLocalization\("([^"]+)"') `
+    ([regex]'WithCode\("([^"]+)"') `
     (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") { param($r) $r.texts }
-# 前端 transloco.translate('key') 与 'key' | transloco（点号分段键，排除动态拼接）
+# 框架自身的 WithCode（异常归一化用的 Error:* 通用键），对照框架资源
+Test-KeyReferences "框架 WithCode" `
+    @("framework/components") `
+    ([regex]'WithCode\("([^"]+)"') `
+    (Join-Path $RepoRoot "framework/components/localization/Leistd.Localization.Core/Resources/en.json") { param($r) $r.texts }
+# 前端 transloco.translate('key') 与 'key' | transloco（点号分段键，排除动态拼接）。
+# 必须锚定在 transloco 上下文里：仅凭「带点号的字符串字面量」判定会把权限名等常量表误判成翻译键。
 Test-KeyReferences "前端 translate/pipe" `
     @("template/frontend/src") `
-    ([regex]"(?:transloco\.translate\(|[\[]?[^\S\r\n]*)'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'\s*(?:\||,|\))") `
+    @(
+        [regex]"transloco\.translate\(\s*'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'",
+        [regex]"'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'\s*\|\s*transloco"
+    ) `
     (Join-Path $RepoRoot "template/frontend/public/i18n/en.json") { param($r) $r }
 
 Write-Host ""

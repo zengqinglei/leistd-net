@@ -1,55 +1,61 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-// 导入所需的 PrimeNG 模块
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
-import { ToastModule } from 'primeng/toast';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideRefreshCw } from '@ng-icons/lucide';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmToaster } from '@spartan-ng/helm/sonner';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
+import {
+  ApplicationHttpError,
+  applicationErrorMessage,
+} from './core/errors/application-http-error';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, ProgressSpinnerModule, CardModule, ButtonModule, ToastModule],
+  imports: [RouterOutlet, HlmToaster, HlmSpinner, HlmButton, NgIcon, ...HlmCardImports],
+  providers: [provideIcons({ lucideRefreshCw })],
   template: `
-    <!-- Toast 消息组件 - 用于显示全局错误和通知 -->
-    <p-toast />
+    <!-- 全局 toast 宿主 -->
+    <hlm-toaster />
 
     @switch (startupService.status()) {
       @case ('success') {
         <router-outlet></router-outlet>
       }
       @case ('loading') {
-        <div
-          class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950"
-        >
-          <p-progressSpinner [ariaLabel]="loadingLabel()"></p-progressSpinner>
+        <div class="h-screen w-full flex items-center justify-center bg-background">
+          <hlm-spinner class="text-4xl" [attr.aria-label]="loadingLabel()" />
         </div>
       }
       @case ('failed') {
-        <div
-          class="h-screen w-full flex items-center justify-center bg-surface-50 dark:bg-surface-950"
-        >
+        <div class="h-screen w-full flex items-center justify-center bg-background">
           @if (startupService.error(); as error) {
-            <p-card [header]="failedHeader()" [style]="{ width: '360px', textAlign: 'center' }">
-              <p>{{ formatHttpError(error) }}</p>
-              <ng-template pTemplate="footer">
-                <p-button
-                  [label]="retryLabel()"
-                  icon="pi pi-refresh"
-                  (click)="onRetryClick()"
-                  [loading]="isRetrying()"
-                  [disabled]="isRetrying()"
-                >
-                </p-button>
-              </ng-template>
-            </p-card>
+            <section hlmCard class="w-[360px] text-center">
+              <div hlmCardHeader>
+                <h3 hlmCardTitle>{{ failedHeader() }}</h3>
+              </div>
+              <div hlmCardContent>
+                <p>{{ formatHttpError(error) }}</p>
+              </div>
+              <div hlmCardFooter class="justify-center">
+                <button hlmBtn (click)="onRetryClick()" [disabled]="isRetrying()">
+                  @if (isRetrying()) {
+                    <hlm-spinner class="text-base" data-icon="inline-start" />
+                  } @else {
+                    <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+                  }
+                  {{ retryLabel() }}
+                </button>
+              </div>
+            </section>
           }
         </div>
       }
@@ -80,42 +86,30 @@ export class App {
     this._isRetrying.set(false);
   }
 
+  // 拦截器已把 HTTP 错误归一化为类型化 ApplicationHttpError，这里按其契约展示。
   protected formatHttpError(error: unknown): string {
-    if (error instanceof HttpErrorResponse) {
-      if (error.error instanceof ErrorEvent) {
-        // 客户端或网络错误
+    if (error instanceof ApplicationHttpError) {
+      if (error.code) {
         //#if (IncludeLocalization)
-        return this.transloco.translate('app.startup.clientError', {
-          message: error.error.message,
+        return this.transloco.translate('app.startup.requestFailed', {
+          message: applicationErrorMessage(error),
+          code: error.code,
         });
         //#else
-        return `Client error: ${error.error.message}`;
-        //#endif
-      } else {
-        // 后端返回的错误
-        const contentType = error.headers.get('Content-Type');
-        if (contentType?.includes('application/json') && error.error?.message) {
-          //#if (IncludeLocalization)
-          return this.transloco.translate('app.startup.requestFailed', {
-            message: error.error.message,
-            code: error.error.code,
-          });
-          //#else
-          return `Request failed: ${error.error.message} (code: ${error.error.code})`;
-          //#endif
-        }
-        //#if (IncludeLocalization)
-        return this.transloco.translate('app.startup.serverError', {
-          status: error.status,
-          statusText: error.statusText,
-        });
-        //#else
-        return `Unknown server error: ${error.status} - ${error.statusText}`;
+        return `Request failed: ${applicationErrorMessage(error)} (code: ${error.code})`;
         //#endif
       }
+      //#if (IncludeLocalization)
+      return this.transloco.translate('app.startup.serverError', {
+        status: error.status,
+        statusText: applicationErrorMessage(error),
+      });
+      //#else
+      return `Unknown server error: ${error.status} - ${applicationErrorMessage(error)}`;
+      //#endif
     }
 
-    // 处理非 HttpErrorResponse 的其他未知错误
+    // 处理非 ApplicationHttpError 的其他未知错误
     if (error instanceof Error) {
       //#if (IncludeLocalization)
       return this.transloco.translate('app.startup.unknownErrorDetail', { message: error.message });

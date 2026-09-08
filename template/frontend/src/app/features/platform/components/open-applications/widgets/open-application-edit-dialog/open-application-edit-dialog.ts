@@ -1,47 +1,37 @@
-import { CommonModule } from '@angular/common';
-//#if (IncludeLocalization)
+// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   effect,
+  //#if (IncludeLocalization)
   inject,
+  //#endif
   input,
   model,
   output,
   signal,
 } from '@angular/core';
-//#else
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  input,
-  model,
-  output,
-  signal,
-} from '@angular/core';
-//#endif
-import { FormsModule } from '@angular/forms';
+import { form, required, disabled, validate, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { DividerModule } from 'primeng/divider';
-import { InputTextModule } from 'primeng/inputtext';
-import { MultiSelectModule } from 'primeng/multiselect';
-import { SelectModule } from 'primeng/select';
-import { TagModule } from 'primeng/tag';
-import { TextareaModule } from 'primeng/textarea';
-import { TooltipModule } from 'primeng/tooltip';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideCircleCheck } from '@ng-icons/lucide';
+import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmSeparator } from '@spartan-ng/helm/separator';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
-import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
-import { DIALOG_CONFIGS } from '../../../../../../shared/constants/dialog-config.constants';
+import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationClientType,
@@ -50,12 +40,13 @@ import {
   OpenApplicationType,
   UpdateOpenApplicationInputDto,
 } from '../../../../models/open-application.dto';
+import { UriListEditor } from '../uri-list-editor/uri-list-editor';
 
 type OpenApplicationTemplate = 'web' | 'desktop' | 'service';
 
 interface OpenApplicationEditFormModel {
   clientId: string;
-  displayName?: string;
+  displayName: string;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
   consentType: OpenApplicationConsentType;
@@ -63,8 +54,6 @@ interface OpenApplicationEditFormModel {
   postLogoutRedirectUris: string[];
   permissions: string[];
   requirements: string[];
-  redirectUriInput: string;
-  postLogoutRedirectUriInput: string;
 }
 
 const authorizationCodePermissions = [
@@ -84,26 +73,27 @@ const authorizationCodePermissions = [
 @Component({
   selector: 'app-open-application-edit-dialog',
   imports: [
-    CommonModule,
-    FormsModule,
-    DialogModule,
-    ButtonModule,
-    InputTextModule,
-    TextareaModule,
-    SelectModule,
-    MultiSelectModule,
-    TagModule,
-    DividerModule,
-    TooltipModule,
+    FormField,
+    NgIcon,
+    HlmBadge,
+    HlmButton,
+    HlmInput,
+    HlmSpinner,
+    HlmSeparator,
+    ...HlmDialogImports,
+    ...HlmFieldImports,
+    ...HlmSelectImports,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
-    DialogLoadingComponent,
+    DialogLoading,
+    UriListEditor,
   ],
+  providers: [provideIcons({ lucideCircleCheck })],
   templateUrl: './open-application-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class OpenApplicationEditDialogComponent {
+export class OpenApplicationEditDialog {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -121,10 +111,19 @@ export class OpenApplicationEditDialogComponent {
   readonly redirectUriPlaceholder = () =>
     this.transloco.translate('openApp.redirectUri.placeholder');
   readonly addLabel = () => this.transloco.translate('common.add');
+  readonly removeUriLabel = () => this.transloco.translate('common.remove');
   readonly permissionsPlaceholder = () =>
     this.transloco.translate('openApp.permissions.placeholder');
   readonly requirementsPlaceholder = () =>
     this.transloco.translate('openApp.requirements.placeholder');
+  readonly redirectUrisLabel = () => this.transloco.translate('openApp.field.redirectUris');
+  readonly postLogoutUrisLabel = () =>
+    this.transloco.translate('openApp.field.postLogoutRedirectUris');
+  readonly redirectUriHint = () => this.transloco.translate('openApp.redirectUri.hint');
+  readonly postLogoutUriHint = () => this.transloco.translate('openApp.postLogoutUri.hint');
+  readonly redirectUriInvalid = () => this.transloco.translate('openApp.redirectUri.invalid');
+  readonly redirectUriEmpty = () => this.transloco.translate('openApp.redirectUri.empty');
+  readonly postLogoutUriEmpty = () => this.transloco.translate('openApp.postLogoutUri.empty');
   //#else
   readonly dialogHeader = () =>
     this.isEditMode() ? 'Edit Open Application' : 'New Open Application';
@@ -134,67 +133,110 @@ export class OpenApplicationEditDialogComponent {
   readonly redirectUriPlaceholder = () =>
     'https://example.com/callback or my-desktop-app://oauth/callback';
   readonly addLabel = () => 'Add';
+  readonly removeUriLabel = () => 'Remove';
   readonly permissionsPlaceholder = () => 'Select authorization capabilities';
   readonly requirementsPlaceholder = () => 'Select security requirements';
+  readonly redirectUrisLabel = () => 'Redirect URIs';
+  readonly postLogoutUrisLabel = () => 'Post Logout Redirect URIs';
+  readonly redirectUriHint = () => 'Callback URI after sign-in completes';
+  readonly postLogoutUriHint = () => 'Redirect URI after logout';
+  readonly redirectUriInvalid = () => 'Please enter a valid absolute URI without a fragment.';
+  readonly redirectUriEmpty = () => 'No Redirect URI configured yet';
+  readonly postLogoutUriEmpty = () => 'No Post Logout Redirect URI configured yet';
   //#endif
-  visible = model(false);
-  loading = input(false);
-  saving = input(false);
-  application = input<OpenApplicationOutputDto | null>(null);
+  readonly visible = model(false);
+  readonly loading = input(false);
+  readonly saving = input(false);
+  readonly application = input<OpenApplicationOutputDto | null>(null);
   readonly saved = output<CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto>();
 
-  formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
-  dialogConfig = DIALOG_CONFIGS.MEDIUM;
+  protected readonly formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
   selectedTemplate = signal<OpenApplicationTemplate | null>(null);
 
   isEditMode = computed(() => !!this.application());
   isTemplateLocked = computed(() => !!this.selectedTemplate() && !this.isEditMode());
   isConfidentialClient = computed(() => this.formModel().clientType === 'confidential');
   isServiceType = computed(() => this.formModel().applicationType === 'service');
-  isValid = computed(() => {
-    const model = this.formModel();
-    if (!this.isEditMode() && !model.clientId.trim()) {
-      return false;
-    }
-    if (!model.applicationType || !model.clientType || !model.consentType) {
-      return false;
-    }
-    if (
-      (model.applicationType === 'native' || model.clientType === 'public') &&
-      !model.requirements.includes('ft:pkce')
-    ) {
-      return false;
-    }
-    return true;
+
+  //#if (IncludeLocalization)
+  readonly applicationForm = form(this.formModel, (path) => {
+    required(path.clientId, {
+      message: this.transloco.translate('common.validation.required'),
+      when: () => !this.isEditMode(),
+    });
+    // 编辑模式禁用 Client ID（不可改）。
+    disabled(path.clientId, { when: () => this.isEditMode() });
+    // 跨字段：Native / Public 客户端必须启用 PKCE。
+    validate(path.requirements, (ctx) => {
+      const requirements = ctx.value();
+      const applicationType = ctx.valueOf(path.applicationType);
+      const clientType = ctx.valueOf(path.clientType);
+      if (
+        (applicationType === 'native' || clientType === 'public') &&
+        !requirements.includes('ft:pkce')
+      ) {
+        return {
+          kind: 'pkceRequired',
+          message: this.transloco.translate('openApp.requirements.pkceRequired'),
+        };
+      }
+      return null;
+    });
   });
+  //#else
+  readonly applicationForm = form(this.formModel, (path) => {
+    required(path.clientId, {
+      message: 'This field is required.',
+      when: () => !this.isEditMode(),
+    });
+    // 编辑模式禁用 Client ID（不可改）。
+    disabled(path.clientId, { when: () => this.isEditMode() });
+    // 跨字段：Native / Public 客户端必须启用 PKCE。
+    validate(path.requirements, (ctx) => {
+      const requirements = ctx.value();
+      const applicationType = ctx.valueOf(path.applicationType);
+      const clientType = ctx.valueOf(path.clientType);
+      if (
+        (applicationType === 'native' || clientType === 'public') &&
+        !requirements.includes('ft:pkce')
+      ) {
+        return { kind: 'pkceRequired', message: 'Native/Public clients must enable PKCE.' };
+      }
+      return null;
+    });
+  });
+  //#endif
 
   //#if (IncludeLocalization)
   // 读一次 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，选项标签重新翻译。
   readonly templateOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.template.web'), value: 'web' },
-      { label: this.transloco.translate('openApp.template.desktop'), value: 'desktop' },
-      { label: this.transloco.translate('openApp.template.service'), value: 'service' },
+      { label: this.transloco.translate('openApp.template.web'), value: 'web' as const },
+      { label: this.transloco.translate('openApp.template.desktop'), value: 'desktop' as const },
+      { label: this.transloco.translate('openApp.template.service'), value: 'service' as const },
     ];
   });
 
   readonly applicationTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.appType.web'), value: 'web' },
-      { label: this.transloco.translate('openApp.appType.native'), value: 'native' },
-      { label: this.transloco.translate('openApp.appType.service'), value: 'service' },
+      { label: this.transloco.translate('openApp.appType.web'), value: 'web' as const },
+      { label: this.transloco.translate('openApp.appType.native'), value: 'native' as const },
+      { label: this.transloco.translate('openApp.appType.service'), value: 'service' as const },
     ];
   });
 
   readonly clientTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.clientType.publicLabel'), value: 'public' },
+      {
+        label: this.transloco.translate('openApp.clientType.publicLabel'),
+        value: 'public' as const,
+      },
       {
         label: this.transloco.translate('openApp.clientType.confidentialLabel'),
-        value: 'confidential',
+        value: 'confidential' as const,
       },
     ];
   });
@@ -202,10 +244,22 @@ export class OpenApplicationEditDialogComponent {
   readonly consentTypeOptions = computed(() => {
     this.translationReady();
     return [
-      { label: this.transloco.translate('openApp.consentType.implicit'), value: 'implicit' },
-      { label: this.transloco.translate('openApp.consentType.explicit'), value: 'explicit' },
-      { label: this.transloco.translate('openApp.consentType.external'), value: 'external' },
-      { label: this.transloco.translate('openApp.consentType.systematic'), value: 'systematic' },
+      {
+        label: this.transloco.translate('openApp.consentType.implicit'),
+        value: 'implicit' as const,
+      },
+      {
+        label: this.transloco.translate('openApp.consentType.explicit'),
+        value: 'explicit' as const,
+      },
+      {
+        label: this.transloco.translate('openApp.consentType.external'),
+        value: 'external' as const,
+      },
+      {
+        label: this.transloco.translate('openApp.consentType.systematic'),
+        value: 'systematic' as const,
+      },
     ];
   });
 
@@ -306,27 +360,27 @@ export class OpenApplicationEditDialogComponent {
   });
   //#else
   readonly templateOptions = computed(() => [
-    { label: 'Web PKCE client', value: 'web' },
-    { label: 'Desktop PKCE client', value: 'desktop' },
-    { label: 'Service confidential client', value: 'service' },
+    { label: 'Web PKCE client', value: 'web' as const },
+    { label: 'Desktop PKCE client', value: 'desktop' as const },
+    { label: 'Service confidential client', value: 'service' as const },
   ]);
 
   readonly applicationTypeOptions = computed(() => [
-    { label: 'Web', value: 'web' },
-    { label: 'Desktop/Native', value: 'native' },
-    { label: 'Service', value: 'service' },
+    { label: 'Web', value: 'web' as const },
+    { label: 'Desktop/Native', value: 'native' as const },
+    { label: 'Service', value: 'service' as const },
   ]);
 
   readonly clientTypeOptions = computed(() => [
-    { label: 'Public', value: 'public' },
-    { label: 'Confidential', value: 'confidential' },
+    { label: 'Public', value: 'public' as const },
+    { label: 'Confidential', value: 'confidential' as const },
   ]);
 
   readonly consentTypeOptions = computed(() => [
-    { label: 'Implicit consent', value: 'implicit' },
-    { label: 'Explicit consent', value: 'explicit' },
-    { label: 'External consent', value: 'external' },
-    { label: 'Systematic consent', value: 'systematic' },
+    { label: 'Implicit consent', value: 'implicit' as const },
+    { label: 'Explicit consent', value: 'explicit' as const },
+    { label: 'External consent', value: 'external' as const },
+    { label: 'Systematic consent', value: 'systematic' as const },
   ]);
 
   readonly permissionOptions = computed(() => [
@@ -380,8 +434,29 @@ export class OpenApplicationEditDialogComponent {
   }));
   //#endif
 
+  /**
+   * Select 触发器上显示的文本。
+   *
+   * 触发器渲染的是 `itemToString(value)`，不传就退化成把值本身字符串化——
+   * 下拉里是"桌面/原生"，选完输入框里却是 `native`，同一个东西两个说法。
+   * 这些是箭头函数属性而非方法：传给 input 的引用必须稳定，否则每轮变更检测都换一个新函数。
+   */
+  readonly applicationTypeToLabel = (value: string): string =>
+    this.applicationTypeLabels()[value] ?? value;
+
+  readonly clientTypeToLabel = (value: string): string => this.clientTypeLabels()[value] ?? value;
+
+  readonly consentTypeToLabel = (value: string): string => this.consentTypeLabels()[value] ?? value;
+
+  readonly templateToLabel = (value: string): string =>
+    this.templateOptions().find((option) => option.value === value)?.label ?? value;
+
   getPermissionLabel(value: string): string {
     return this.permissionLabels()[value] ?? value;
+  }
+
+  getRequirementLabel(value: string): string {
+    return this.requirementOptions().find((option) => option.value === value)?.label ?? value;
   }
 
   constructor() {
@@ -395,7 +470,7 @@ export class OpenApplicationEditDialogComponent {
       if (application) {
         this.formModel.set({
           clientId: application.clientId,
-          displayName: application.displayName,
+          displayName: application.displayName ?? '',
           applicationType: application.applicationType,
           clientType: application.clientType,
           consentType: application.consentType,
@@ -403,8 +478,6 @@ export class OpenApplicationEditDialogComponent {
           postLogoutRedirectUris: [...application.postLogoutRedirectUris],
           permissions: [...application.permissions],
           requirements: [...application.requirements],
-          redirectUriInput: '',
-          postLogoutRedirectUriInput: '',
         });
       } else {
         this.formModel.set(this.createEmptyModel());
@@ -423,12 +496,14 @@ export class OpenApplicationEditDialogComponent {
       postLogoutRedirectUris: [],
       permissions: [...authorizationCodePermissions],
       requirements: ['ft:pkce'],
-      redirectUriInput: '',
-      postLogoutRedirectUriInput: '',
     };
   }
 
-  applyTemplate(template: OpenApplicationTemplate) {
+  applyTemplate(template: OpenApplicationTemplate | null | undefined) {
+    if (!template) {
+      this.selectedTemplate.set(null);
+      return;
+    }
     this.selectedTemplate.set(template);
     if (template === 'desktop') {
       this.formModel.update((model) => ({
@@ -475,16 +550,24 @@ export class OpenApplicationEditDialogComponent {
     }));
   }
 
-  onClientTypeChange() {
-    if (this.formModel().clientType === 'public') {
-      this.formModel.update((model) => ({
-        ...model,
-        requirements: this.ensurePkce(model.requirements),
-      }));
+  onApplicationTypeChange(value: OpenApplicationType | null | undefined) {
+    if (!value) {
+      return;
     }
+    this.formModel.update((model) => ({ ...model, applicationType: value }));
   }
 
-  onClientTypeSelect(clientType: OpenApplicationClientType) {
+  onConsentTypeChange(value: OpenApplicationConsentType | null | undefined) {
+    if (!value) {
+      return;
+    }
+    this.formModel.update((model) => ({ ...model, consentType: value }));
+  }
+
+  onClientTypeSelect(clientType: OpenApplicationClientType | null | undefined) {
+    if (!clientType) {
+      return;
+    }
     this.formModel.update((model) => ({
       ...model,
       clientType,
@@ -495,12 +578,22 @@ export class OpenApplicationEditDialogComponent {
     }));
   }
 
-  addRedirectUri() {
-    this.addUri('redirectUris', 'redirectUriInput');
+  addRedirectUri(uri: string) {
+    this.formModel.update((model) => ({
+      ...model,
+      redirectUris: model.redirectUris.includes(uri)
+        ? model.redirectUris
+        : [...model.redirectUris, uri],
+    }));
   }
 
-  addPostLogoutRedirectUri() {
-    this.addUri('postLogoutRedirectUris', 'postLogoutRedirectUriInput');
+  addPostLogoutRedirectUri(uri: string) {
+    this.formModel.update((model) => ({
+      ...model,
+      postLogoutRedirectUris: model.postLogoutRedirectUris.includes(uri)
+        ? model.postLogoutRedirectUris
+        : [...model.postLogoutRedirectUris, uri],
+    }));
   }
 
   removeRedirectUri(uri: string) {
@@ -517,14 +610,12 @@ export class OpenApplicationEditDialogComponent {
     }));
   }
 
-  isRedirectUriInputInvalid() {
-    const value = this.formModel().redirectUriInput.trim();
-    return !!value && !this.isValidRedirectUri(value);
-  }
-
-  isPostLogoutRedirectUriInputInvalid() {
-    const value = this.formModel().postLogoutRedirectUriInput.trim();
-    return !!value && !this.isValidRedirectUri(value);
+  /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约。 */
+  onDialogStateChange(state: BrnDialogState): void {
+    this.visible.set(state === 'open');
+    if (state === 'closed') {
+      this.onHide();
+    }
   }
 
   onHide() {
@@ -534,7 +625,8 @@ export class OpenApplicationEditDialogComponent {
   }
 
   save() {
-    if (!this.isValid()) {
+    if (this.applicationForm().invalid()) {
+      this.applicationForm().markAsTouched();
       return;
     }
 
@@ -564,35 +656,6 @@ export class OpenApplicationEditDialogComponent {
       permissions: model.permissions,
       requirements: model.requirements,
     });
-  }
-
-  private addUri(
-    listKey: 'redirectUris' | 'postLogoutRedirectUris',
-    inputKey: 'redirectUriInput' | 'postLogoutRedirectUriInput',
-  ) {
-    const value = this.formModel()[inputKey].trim();
-    if (!value || !this.isValidRedirectUri(value)) {
-      return;
-    }
-
-    this.formModel.update((model) => ({
-      ...model,
-      [listKey]: model[listKey].includes(value) ? model[listKey] : [...model[listKey], value],
-      [inputKey]: '',
-    }));
-  }
-
-  private isValidRedirectUri(value: string) {
-    if (!/^[a-z][a-z0-9+.-]*:/i.test(value) || /\s/.test(value)) {
-      return false;
-    }
-
-    try {
-      const uri = new URL(value);
-      return !!uri.protocol && !uri.hash;
-    } catch {
-      return false;
-    }
   }
 
   private ensurePkce(requirements: string[]) {

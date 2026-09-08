@@ -116,6 +116,22 @@ if ($packageFiles.Count -eq 0) {
 }
 
 $packages = @($packageFiles | ForEach-Object { Get-PackageMetadata $_ })
+
+# feed 里不得存在没有对应源码项目的包。持久化 feed 会保留已被删除的组件——
+# 消费它等于在验证一个仓库里已经不存在的东西，而它带来的告警（例如已删组件的
+# 传递依赖漏洞）会被当成当前代码的问题去排查。
+$projectIds = @(
+    Get-ChildItem -LiteralPath (Join-Path $repoRoot "framework") -Recurse -File -Filter "Leistd.*.csproj" |
+        Where-Object { $_.FullName -notmatch "[\\/](obj|bin)[\\/]" -and $_.FullName -notmatch "[\\/]tests[\\/]" } |
+        ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_.Name) }
+)
+$orphaned = @($packages | Where-Object { $_.Id -notin $projectIds })
+if ($orphaned.Count -gt 0) {
+    throw ("The feed contains packages with no source project: {0}. " -f (($orphaned.Id | Sort-Object) -join ', ')) +
+        "This happens when a component is removed but a persistent feed keeps its old .nupkg. " +
+        "Delete the feed directory and pack again, or pass -FeedPath pointing at a per-run feed."
+}
+
 $duplicates = @($packages | Group-Object Id | Where-Object Count -gt 1)
 if ($duplicates.Count -gt 0) {
     throw "The feed must contain one version per package id. Duplicates: $($duplicates.Name -join ', ')"

@@ -1,13 +1,8 @@
-#if (IncludeIdentity)
-using System.Security.Claims;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
-using Leistd.Ddd.Domain.Repositories;
-using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Options;
-using Leistd.Exception.Core;
-using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,12 +14,10 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// 认证控制器
 /// </summary>
 [Route("api/v1/auth")]
-public class AuthController(
+public sealed class AuthController(
     IAuthAppService authService,
     ICaptchaAppService captchaAppService,
     IEmailVerificationAppService emailVerificationAppService,
-    UserDomainService userDomainService,
-    IRepository<User, Guid> userRepository,
     IOptions<UserRegistrationOptions> securityOptions) : BaseController
 {
     [AllowAnonymous]
@@ -32,73 +25,22 @@ public class AuthController(
     [IgnoreAntiforgeryToken]
     public async Task SessionLoginAsync([FromBody] LoginInputDto request, CancellationToken cancellationToken)
     {
-        // 验证凭据
-        var user = await userDomainService.ValidateCredentialsAsync(
-            request.UsernameOrEmail,
-            request.Password,
-            cancellationToken);
+        var principal = await authService.AuthenticateSessionAsync(request, cancellationToken);
 
-        if (user == null)
-        {
-            throw new UnauthorizedException($"Login failed: user not found or incorrect password - {request.UsernameOrEmail}")
-#if (IncludeLocalization)
-                .WithLocalization("Auth:InvalidCredentials")
-                .WithData("UsernameOrEmail", request.UsernameOrEmail)
-#endif
-                ;
-        }
-
-        if (!user.IsActive)
-        {
-            throw new UnauthorizedException($"Login failed: user is disabled - user: {user.Username}")
-#if (IncludeLocalization)
-                .WithLocalization("Auth:UserDisabled")
-                .WithData("Username", user.Username)
-#endif
-                ;
-        }
-
-        if (user.IsLockedOut())
-        {
-            throw new UnauthorizedException($"Login failed: user is locked out - user: {user.Username}, locked until: {user.LockoutEnd}")
-#if (IncludeLocalization)
-                .WithLocalization("Auth:UserLockedOut")
-                .WithData("Username", user.Username)
-                .WithData("LockoutEnd", user.LockoutEnd)
-#endif
-                ;
-        }
-
-        // 记录登录成功并建立 Cookie 会话
-        user.RecordLoginSuccess();
-        await userRepository.UpdateAsync(user, cancellationToken);
-
-        var principal = await CreateCookiePrincipalAsync(user, cancellationToken);
-
-        await HttpContext.SignInAsync("MyProjectCookie", principal,
+        await HttpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, principal,
             new AuthenticationProperties { IsPersistent = true });
     }
 
-    private async Task<ClaimsPrincipal> CreateCookiePrincipalAsync(User user, CancellationToken cancellationToken)
-    {
-        var identity = new ClaimsIdentity("MyProjectCookie");
-        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
-        identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
-        identity.AddClaim(new Claim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false"));
-
-        foreach (var roleName in await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
-        {
-            identity.AddClaim(new Claim("role", roleName));
-        }
-
-        return new ClaimsPrincipal(identity);
-    }
-
-    [Authorize]
+    /// <remarks>
+    /// 允许匿名：登出是幂等的 Cookie 清理，不该要求先证明自己有效。挂 [Authorize] 时，
+    /// 账号一旦被禁用或锁定，本人反而清不掉服务端 Cookie——登不出去。
+    /// 未登录调用同样返回成功，不泄漏"这个会话存不存在"。
+    /// </remarks>
+    [AllowAnonymous]
     [HttpPost("logout")]
     public async Task LogoutAsync()
     {
-        await HttpContext.SignOutAsync("MyProjectCookie");
+        await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
     }
 
     [AllowAnonymous]
@@ -120,9 +62,11 @@ public class AuthController(
 
     [AllowAnonymous]
     [HttpPost("send-email-code")]
-    public async Task SendEmailCodeAsync([FromBody] SendEmailCodeInputDto request, CancellationToken cancellationToken)
+    public async Task<EmailVerificationChallengeOutputDto> SendEmailCodeAsync(
+        [FromBody] SendEmailCodeInputDto request,
+        CancellationToken cancellationToken)
     {
-        await emailVerificationAppService.SendEmailCodeAsync(request, cancellationToken);
+        return await emailVerificationAppService.SendEmailCodeAsync(request, cancellationToken);
     }
 
     /// <summary>

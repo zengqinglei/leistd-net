@@ -13,7 +13,7 @@ export interface UserOutputDto {
   id: string;
   username: string;
   email: string;
-  nickname?: string;
+  displayName?: string;
   avatar?: string;
   phoneNumber?: string;
   isActive: boolean;
@@ -31,8 +31,8 @@ export interface RegisterInputDto {
   password: string;
   captchaCode?: string;
   captchaToken?: string;
-  emailVerificationCode?: string;
-  nickname?: string;
+  emailVerification?: EmailVerificationInputDto;
+  displayName?: string;
 }
 
 /**
@@ -60,12 +60,29 @@ export interface SendEmailCodeInputDto {
 }
 
 /**
+ * 邮箱验证挑战应答 DTO
+ */
+export interface EmailVerificationInputDto {
+  challengeId: string;
+  code: string;
+}
+
+/**
+ * 邮箱验证挑战输出 DTO
+ */
+export interface EmailVerificationChallengeOutputDto {
+  challengeId: string;
+  expiresInSeconds: number;
+  retryAfterSeconds: number;
+}
+
+/**
  * 当前用户资料更新请求 DTO
  */
 export interface UpdateCurrentUserInputDto {
   username: string;
   email: string;
-  nickname?: string;
+  displayName?: string;
   phoneNumber?: string;
   avatar?: string;
 }
@@ -78,13 +95,13 @@ export interface ChangePasswordInputDto {
   newPassword: string;
   confirmPassword: string;
 }
+//#if (ExternalLogin)
 
 /**
  * 外部登录 URL 输出 DTO
  */
 export interface ExternalLoginUrlOutputDto {
   loginUrl: string;
-  state: string;
 }
 
 /**
@@ -95,3 +112,4 @@ export interface ExternalLoginCallbackInputDto {
   code: string;
   state: string;
 }
+//#endif

@@ -1,32 +1,44 @@
+// prettier-ignore
+import {
+  ChangeDetectionStrategy,
+  Component,
+  //#if (IncludeLocalization)
+  effect,
+  //#endif
+  inject,
+  //#if (!IncludeLocalization)
+  OnInit,
+  //#endif
+} from '@angular/core';
 //#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, effect, inject } from '@angular/core';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
-//#else
-import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 //#endif
-import { CardModule } from 'primeng/card';
-import { TagModule } from 'primeng/tag';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmCardImports } from '@spartan-ng/helm/card';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
-import { RoleLabelPipe } from '../../../../shared/pipes/role-label.pipe';
 
 @Component({
-  selector: 'app-workspace-dashboard-page',
+  selector: 'app-workspace-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
-  imports: [CardModule, TagModule, RoleLabelPipe, TranslocoModule],
+  imports: [...HlmCardImports, HlmBadge, TranslocoModule],
   //#else
-  imports: [CardModule, TagModule, RoleLabelPipe],
+  imports: [...HlmCardImports, HlmBadge],
+  //#else
+  imports: [...HlmCardImports, HlmBadge],
+  //#else
+  imports: [...HlmCardImports],
   //#endif
   templateUrl: './workspace-dashboard.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 //#if (IncludeLocalization)
-export class WorkspaceDashboardPage {
+export class WorkspaceDashboard {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
   private readonly transloco = inject(TranslocoService);
@@ -43,7 +55,7 @@ export class WorkspaceDashboardPage {
   }
 }
 //#else
-export class WorkspaceDashboardPage implements OnInit {
+export class WorkspaceDashboard implements OnInit {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
 

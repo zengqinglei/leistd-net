@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (LocalIdentity)
 using System.Collections.Immutable;
 using System.Security.Claims;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -12,7 +12,9 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
-public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<OAuthOptions> oauthOptions) : IAuthPrincipalFactory
+public class AuthPrincipalFactory(
+    UserDomainService userDomainService,
+    IOptions<OAuthOptions> oauthOptions) : IAuthPrincipalFactory
 {
     public async Task<ClaimsPrincipal> CreateAsync(
         User user,
@@ -23,7 +25,7 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
         identity.SetClaim(Claims.Subject, user.Id.ToString());
-        identity.SetClaim(Claims.Name, user.Nickname ?? user.Username);
+        identity.SetClaim(Claims.Name, user.DisplayName ?? user.Username);
         identity.SetClaim(Claims.PreferredUsername, user.Username);
         identity.SetClaim(Claims.Email, user.Email);
 
@@ -34,6 +36,11 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
 
         identity.SetClaims(Claims.Role, roleNames.ToImmutableArray());
         identity.SetClaim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false");
+        // 租户 claim：多租户解析链以它定案已登录用户的租户
+        if (user.TenantId is { } tenantId)
+        {
+            identity.SetClaim(CustomClaimTypes.TenantId, tenantId.ToString());
+        }
 
         var principal = new ClaimsPrincipal(identity);
         principal.SetScopes(scopes?.Where(scope => !string.IsNullOrWhiteSpace(scope)) ??
@@ -76,6 +83,10 @@ public class AuthPrincipalFactory(UserDomainService userDomainService, IOptions<
                 Destinations.IdentityToken
             ],
             CustomClaimTypes.IsSuperAdmin =>
+            [
+                Destinations.AccessToken
+            ],
+            CustomClaimTypes.TenantId =>
             [
                 Destinations.AccessToken
             ],

@@ -1,14 +1,16 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 using Leistd.Authorization.EntityFrameworkCore;
+using Leistd.Settings.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
 #endif
 using Microsoft.EntityFrameworkCore;
 using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
+using Leistd.Authorization.EntityFrameworkCore.Entities;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence;
 
@@ -18,17 +20,13 @@ public class MyProjectDbContext(
 {
     // Users（始终存在）
     public DbSet<User> Users { get; set; } = null!;
-#if (IncludeIdentity)
-    // Identity（认证模块）
+    // Identity 角色模型
     public DbSet<Role> Roles { get; set; } = null!;
     public DbSet<UserRole> UserRoles { get; set; } = null!;
-#endif
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
     public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif
-#if (IncludeRoles)
     public DbSet<PermissionGrantRecord> PermissionGrantRecords { get; set; } = null!;
-#endif
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -36,19 +34,25 @@ public class MyProjectDbContext(
         configurationBuilder.Properties<Enum>().HaveConversion<string>().HaveMaxLength(64);
     }
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    /// <remarks>
+    /// 改写 <c>ConfigureModel</c> 而非 <c>OnModelCreating</c>：基类已封闭后者，
+    /// 以保证软删除与租户全局过滤器在本方法之后套用，覆盖这里经
+    /// <c>Configure*</c> 才进入模型的实体（它们没有 DbSet 声明）。
+    /// </remarks>
+    protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
+        modelBuilder.HasDefaultSchema(DatabaseSchema.Name);
+
         // 基础实体配置（始终包含）
         modelBuilder.ConfigureBaseEntities();
-#if (IncludeIdentity)
+#if (LocalIdentity)
         // 认证相关实体配置
         modelBuilder.ConfigureIdentity();
 #endif
-#if (IncludeRoles)
         // 权限授予实体配置
         modelBuilder.ConfigureAuthorization();
-#endif
+        // 设置值实体配置
+        modelBuilder.ConfigureSettings();
 #if (IncludeNotifications)
         // 通知实体配置
         modelBuilder.ConfigureNotifications();

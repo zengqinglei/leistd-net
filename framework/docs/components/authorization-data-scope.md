@@ -1,0 +1,195 @@
+# 数据范围
+
+数据范围决定列表、统计、导出能看到**哪些候选数据**，在查询构造阶段翻译成 SQL 谓词而不是先加载再过滤。Framework 只定义策略与组合语义，「本人」「本部门」等业务概念由业务项目注册 Provider 实现。
+
+## 何时使用
+
+| 场景 | 推荐 |
+| --- | --- |
+| 有后台列表、分页总数、聚合统计、导出或批量审批 | 引入本组件，所有集合入口统一走 `IDataScopeApplier` |
+| 可见范围是"本人/本组织/下级组织/负责区域"等集合关系 | 引入本组件；用 ACL 物化这类关系会产生大量同步写与孤儿记录 |
+| 数据量大，不可能加载候选后逐条检查 | 引入本组件 |
+| 只按精确 ID 打开单个资源，几乎没有列表 | 不需要本组件，见[资源实例授权](./authorization-resource.md) |
+| 只需要判断"能否执行这类动作" | 不需要本组件，见[功能权限](./authorization.md) |
+
+## 安装
+
+```bash
+dotnet add package Leistd.Authorization.DataScope.Core
+```
+
+本家族只有一个包，且只依赖 BCL 的 `Expression`/`IQueryable`，不依赖 EF Core，也不依赖 DDD 基座——`IRepository.GetQueryableAsync()` 返回的 `IQueryable<TEntity>` 可以直接交给本组件，不需要额外的适配包。
+
+## 注册
+
+```csharp
+builder.Services.AddDataScopeCore();
+
+// 业务实现：当前主体在某类资源的某个操作上被分配了哪些范围
+builder.Services.AddScoped<IDataScopeAssignmentProvider, OrganizationScopeAssignmentProvider>();
+
+// 每种范围一个 Provider，同一实体可注册多个
+builder.Services.AddDataScopeProvider<Order, OwnOrderScopeProvider>();
+builder.Services.AddDataScopeProvider<Order, OrganizationOrderScopeProvider>();
+```
+
+依赖调用方已注册 `IPermissionSubjectProvider`；`IDataScopeAssignmentProvider` 必须由业务项目提供，Framework 不规定范围分配存放在哪里（可以是角色配置表、组织架构，或外部策略服务）。
+
+## 使用
+
+**第一步：实现范围 Provider**——返回**谓词**而不是改写后的查询，这样多个范围才能取并集：
+
+```csharp
+public class OwnOrderScopeProvider(ICurrentUser currentUser) : IDataScopeProvider<Order>
+{
+    public const string Scope = "Own";
+
+    public string ResourceName => "Orders";
+    public string ScopeName => Scope;
+
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
+        DataScopeContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = context.Subject.UserId;
+        return ValueTask.FromResult<Expression<Func<Order, bool>>>(
+            order => order.OwnerId == userId);
+    }
+}
+
+public class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
+{
+    public const string Scope = "Organization";
+
+    public string ResourceName => "Orders";
+    public string ScopeName => Scope;
+
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
+        DataScopeContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var organizationIds = context.Assignments
+            .Where(x => x.ScopeName == Scope && x.ScopeValue is not null)
+            .Select(x => x.ScopeValue!)
+            .ToList();
+
+        return ValueTask.FromResult<Expression<Func<Order, bool>>>(
+            order => organizationIds.Contains(order.OrganizationId));
+    }
+}
+
+public class AllOrderScopeProvider : IDataScopeProvider<Order>
+{
+    public string ResourceName => "Orders";
+    public string ScopeName => "All";
+
+    public ValueTask<Expression<Func<Order, bool>>> BuildPredicateAsync(
+        DataScopeContext context,
+        CancellationToken cancellationToken = default)
+        => ValueTask.FromResult<Expression<Func<Order, bool>>>(_ => true);
+}
+```
+
+**第二步：实现分配来源**——范围按**操作**分别分配，因为"能看"不等于"能改"：
+
+```csharp
+public class OrganizationScopeAssignmentProvider(ScopeDbContext dbContext)
+    : IDataScopeAssignmentProvider
+{
+    public async ValueTask<IReadOnlyList<DataScopeAssignment>> GetAssignmentsAsync(
+        PermissionSubject subject,
+        string resourceName,
+        string operation,
+        CancellationToken cancellationToken = default)
+    {
+        var roleIds = subject.RoleIds.Select(Guid.Parse).ToList();
+
+        var rows = await dbContext.Set<RoleDataScope>()
+            .AsNoTracking()
+            .Where(x => roleIds.Contains(x.RoleId)
+                        && x.ResourceName == resourceName
+                        && x.Operation == operation)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(x => new DataScopeAssignment(
+            x.ResourceName, x.Operation, x.ScopeName, x.ScopeValue))];
+    }
+}
+```
+
+**第三步：所有集合入口统一走同一个范围**——列表、总数、导出必须共用，否则总数会和实际可见数据对不上：
+
+```csharp
+var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Read, ct);
+
+if (!string.IsNullOrWhiteSpace(keyword))
+{
+    scoped = scoped.Where(order => order.Code.Contains(keyword));
+}
+
+var totalCount = await scoped.LongCountAsync(ct);
+var items = await scoped.OrderBy(order => order.Code).Skip(offset).Take(limit).ToListAsync(ct);
+```
+
+**第四步：批量操作先在范围内定位目标，再核对数量**——禁止静默跳过越权项：
+
+```csharp
+var scoped = await dataScope.ApplyAsync(dbContext.Set<Order>(), "Orders", DataOperations.Update, ct);
+
+var targets = await scoped.Where(x => ids.Contains(x.Id)).ToListAsync(ct);
+if (targets.Count != ids.Count)
+{
+    throw new UnauthorizedAccessException("Some of the selected orders are out of your data scope.");
+}
+
+foreach (var order in targets)
+{
+    order.Approve();
+}
+```
+
+> 与仓储、分页 DTO、异步执行器等 DDD 设施的组合写法见 [DDD 四层基座](../ddd-struct/ddd-struct.md)；本组件不依赖它们，示例刻意保持在 EF Core 与 BCL 的范围内，独立引用本包的项目可直接照搬。
+
+## 接口参考
+
+`Leistd.Authorization.DataScope` 命名空间：
+
+| 成员 | 说明 |
+| --- | --- |
+| `DataOperations` | 内置操作名常量：`Read`、`Update`、`Delete`、`Export`；业务可自行扩展 |
+| `DataScopeAssignment` | 范围分配：`ResourceName`、`Operation`、`ScopeName`、`ScopeValue` |
+| `DataScopeContext` | 解析上下文：`Subject`、`ResourceName`、`Operation`、`Assignments` |
+| `IDataScopeProvider<TEntity>.ResourceName` / `.ScopeName` | 本 Provider 负责的资源与范围 |
+| `IDataScopeProvider<TEntity>.BuildPredicateAsync(context, ct)` | 构造该范围的查询谓词；"全部可见"显式返回 `_ => true`，"不贡献可见性"返回 `_ => false` |
+| `IDataScopeAssignmentProvider.GetAssignmentsAsync(subject, resourceName, operation, ct)` | 业务实现：取当前主体在该资源该操作上的全部范围分配 |
+| `IDataScopeApplier.ApplyAsync(query, resourceName, operation, ct)` | 把可见范围合并进查询，返回施加范围后的 `IQueryable<TEntity>` |
+| `AddDataScopeCore()` | 注册 `IDataScopeApplier`（Scoped） |
+| `AddDataScopeProvider<TEntity, TProvider>()` | 注册某实体的一种范围 Provider（Scoped） |
+
+## 实现行为
+
+`DefaultDataScopeApplier` 的组合规则：
+
+1. 主体不可识别：返回空结果集（`Where(_ => false)`），默认拒绝而不是放行全部。
+2. `IsSuperAdmin`：原样返回查询，不施加范围。
+3. 没有任何分配：返回空结果集。
+4. 分配了一个没有对应 Provider 的范围：跳过该分配，**不会**因此放宽范围。
+5. 多个分配之间取**并集**（OR）：一个主体常常同时拥有多种范围（例如"本人"加"某几个组织"）。
+6. 谓词签名不可空：`_ => true` 表示"全部可见"，`_ => false` 表示"本范围不贡献可见性"。并集之下这两者含义分明，不存在"没返回谓词"这一态——它一旦被解释成"不限制"，整张表就当场放开。
+7. 合并两个独立 Lambda 时会把参数统一到同一个 `ParameterExpression` 上，否则合并结果无法被数据库翻译。
+
+## 注意事项
+
+- **谓词必须可被数据库翻译**。不要在 `BuildPredicateAsync` 返回的表达式里调用只能客户端求值的方法，也不要先把候选加载到内存再过滤。请在**关系型** Provider 上编写测试：EF Core 的 InMemory Provider 全部在内存求值，不可翻译的谓词会静默通过，等于没有验证。
+- **列表、总数、导出、批量必须共用同一个范围入口**，否则分页总数会与实际可见数据不一致。
+- **读和写可以用不同范围**。`DataScopeAssignment` 带 `Operation` 维度，不要假设"能看就能改"。
+- **硬边界不归本组件管**。租户隔离、软删除应通过 EF Core 全局查询过滤器始终生效，因此永远与业务范围做 AND，不会被这里的并集放宽。
+- **不要把集合关系展开成资源 ACL**。组织或负责人一变就要重写大量记录并产生孤儿；反之，文档分享这类一次性授予也不适合做成范围。
+- **同一资源既有范围又有 ACL 授予时，组合公式由[资源实例授权](./authorization-resource.md#将-acl-合并进列表)定义**：`(数据范围 OR ACL 允许) AND NOT ACL 拒绝`。本组件只承担 `OR` 的那一半——它没有"拒绝"语义，`ApplyAsync` 之后仍须在同一个查询入口扣除 ACL 拒绝集合，否则"范围放行但被显式拒绝"的资源仍然可见。ACL 允许要并入并集时可写成一个 `IDataScopeProvider`，但主体必须同时拿到对应 `ScopeName` 的 `DataScopeAssignment`——ACL 记录本身不产生分配。
+- `IPermissionSubjectProvider` 与 `IDataScopeAssignmentProvider` 都没有默认实现，必须由业务项目提供。
+
+## 相关
+
+- [功能权限](./authorization.md)
+- [资源实例授权](./authorization-resource.md)
+- [DDD 基座](../ddd-struct/ddd-struct.md)

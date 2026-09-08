@@ -1,6 +1,8 @@
+node_modules*/
 .angular/
 .tmp/
 coverage/
 dist/
 package-lock.json
 public/**/*.svg
+libs/ui/

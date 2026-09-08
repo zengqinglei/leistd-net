@@ -1,11 +1,11 @@
-<div class="min-h-screen w-full flex overflow-hidden bg-surface-50 dark:bg-surface-950">
+<div class="min-h-screen w-full flex overflow-hidden bg-background">
   <!-- Left Column: Branding/Visuals -->
   <div
-    class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden text-white bg-[#0f172a]"
+    class="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden text-slate-900 dark:text-white bg-blue-50 dark:bg-[#0f172a]"
   >
     <!-- Deep Base Gradient -->
     <div
-      class="absolute inset-0 z-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#172554]"
+      class="absolute inset-0 z-0 bg-gradient-to-br from-blue-100 dark:from-[#020617] via-white dark:via-[#0f172a] to-indigo-100 dark:to-[#172554]"
     ></div>
 
     <!-- Speed Lines Background -->
@@ -61,7 +61,7 @@
 
     <!-- Glowing Burst Effect -->
     <div
-      class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-primary-500/10 rounded-full blur-[80px] z-0 mix-blend-screen animate-pulse"
+      class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-blue-500/10 rounded-full blur-[80px] z-0 mix-blend-screen animate-pulse"
       style="animation-duration: 4s"
     ></div>
 
@@ -70,7 +70,7 @@
       <app-logo size="large" />
       <div>
         <h1
-          class="text-3xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-primary-50 to-primary-100 drop-shadow-sm"
+          class="text-2xl font-semibold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-700 dark:from-blue-50 to-indigo-600 dark:to-blue-100 drop-shadow-sm"
         >
           <!--#if (IncludeLocalization)-->
           {{ 'account.brand.title' | transloco }}
@@ -87,11 +87,15 @@
             <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
           </span>
           <!--#if (IncludeLocalization)-->
-          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium">
+          <p
+            class="text-xs text-blue-700/80 dark:text-blue-200/80 tracking-[0.15em] uppercase font-medium"
+          >
             {{ 'account.brand.subtitle' | transloco }}
           </p>
           <!--#else-->
-          <p class="text-xs text-primary-200/80 tracking-[0.15em] uppercase font-medium">
+          <p
+            class="text-xs text-blue-700/80 dark:text-blue-200/80 tracking-[0.15em] uppercase font-medium"
+          >
             Full-stack development template based on Angular + .NET
           </p>
           <!--#endif-->
@@ -105,15 +109,15 @@
         <!-- Central Hub -->
         <div class="relative z-20 flex flex-col items-center">
           <div
-            class="w-36 h-36 bg-gradient-to-b from-slate-900 to-blue-950 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(37,99,235,0.4)] flex items-center justify-center relative overflow-hidden"
+            class="w-36 h-36 bg-gradient-to-b from-blue-200 dark:from-slate-900 to-indigo-300 dark:to-blue-950 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(37,99,235,0.4)] flex items-center justify-center relative overflow-hidden"
           >
             <div class="absolute inset-0 bg-blue-500/10 animate-pulse"></div>
-            <i class="pi pi-bolt text-6xl text-cyan-400 z-10"></i>
+            <ng-icon name="lucideZap" class="text-5xl text-cyan-600 dark:text-cyan-400 z-10" />
             <div
               class="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/10 to-transparent h-[200%] w-full animate-[scan_1.5s_linear_infinite] -translate-y-1/2"
             ></div>
           </div>
-          <div class="mt-4 w-24 h-2 bg-blue-900/50 rounded-full blur-sm"></div>
+          <div class="mt-4 w-24 h-2 bg-blue-300/50 dark:bg-blue-900/50 rounded-full blur-sm"></div>
         </div>
 
         <!-- Orbiting Particles -->
@@ -130,53 +134,67 @@
 
         <!-- Floating Badges -->
         <div
-          class="absolute top-10 -right-4 p-3 pr-5 bg-slate-900/90 backdrop-blur-md border-l-4 border-cyan-400 rounded-r-lg shadow-2xl animate-[bounce_4s_infinite]"
+          class="absolute top-10 -right-4 p-3 pr-5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-l-4 border-cyan-400 rounded-r-lg shadow-2xl animate-[bounce_4s_infinite]"
         >
           <div class="flex flex-col">
             <!--#if (IncludeLocalization)-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">{{
-              'account.login.badgeFastDev' | transloco
-            }}</span>
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
+              >{{ 'account.login.badgeFastDev' | transloco }}</span
+            >
             <!--#else-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1"
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
               >Fast Development</span
             >
             <!--#endif-->
             <div class="flex items-end gap-2">
               <!--#if (IncludeLocalization)-->
-              <span class="text-2xl font-mono font-bold text-white leading-none">{{
-                'account.login.badgeReadyMain' | transloco
-              }}</span>
-              <span class="text-xs text-cyan-400 font-mono mb-1">{{
+              <span
+                class="text-2xl font-mono font-semibold text-slate-900 dark:text-white leading-none"
+                >{{ 'account.login.badgeReadyMain' | transloco }}</span
+              >
+              <span class="text-xs text-cyan-600 dark:text-cyan-400 font-mono mb-1">{{
                 'account.login.badgeReadySub' | transloco
               }}</span>
               <!--#else-->
-              <span class="text-2xl font-mono font-bold text-white leading-none">Ready</span>
-              <span class="text-xs text-cyan-400 font-mono mb-1">to use</span>
+              <span
+                class="text-2xl font-mono font-semibold text-slate-900 dark:text-white leading-none"
+                >Ready</span
+              >
+              <span class="text-xs text-cyan-600 dark:text-cyan-400 font-mono mb-1">to use</span>
               <!--#endif-->
-              <i class="pi pi-bolt text-green-400 text-xs mb-1 ml-2"></i>
+              <ng-icon name="lucideZap" class="text-green-400 text-xs mb-1 ml-2" />
             </div>
           </div>
         </div>
 
         <div
-          class="absolute bottom-10 -left-4 p-3 pl-5 bg-slate-900/90 backdrop-blur-md border-r-4 border-blue-600 rounded-l-lg shadow-2xl animate-[bounce_5s_infinite]"
+          class="absolute bottom-10 -left-4 p-3 pl-5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-r-4 border-blue-600 rounded-l-lg shadow-2xl animate-[bounce_5s_infinite]"
           style="animation-delay: 1s"
         >
           <div class="flex flex-col items-end">
             <!--#if (IncludeLocalization)-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1">{{
-              'account.login.badgeModernArch' | transloco
-            }}</span>
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
+              >{{ 'account.login.badgeModernArch' | transloco }}</span
+            >
             <!--#else-->
-            <span class="text-[10px] text-blue-300 uppercase tracking-wider font-bold mb-1"
+            <span
+              class="text-xs text-blue-700 dark:text-blue-300 uppercase tracking-wider font-semibold mb-1"
               >Modern Architecture</span
             >
             <!--#endif-->
             <div class="flex items-end gap-2">
-              <i class="pi pi-check-circle text-blue-500 text-xs mb-1 mr-2"></i>
-              <span class="text-2xl font-mono font-bold text-white leading-none">Full</span>
-              <span class="text-xs text-blue-400 font-mono mb-1">Stack</span>
+              <ng-icon
+                name="lucideCircleCheck"
+                class="text-blue-600 dark:text-blue-500 text-xs mb-1 mr-2"
+              />
+              <span
+                class="text-2xl font-mono font-semibold text-slate-900 dark:text-white leading-none"
+                >Full</span
+              >
+              <span class="text-xs text-blue-600 dark:text-blue-400 font-mono mb-1">Stack</span>
             </div>
           </div>
         </div>
@@ -185,11 +203,13 @@
 
     <!-- Footer Copyright -->
     <div class="relative z-10 flex justify-between items-end">
-      <div class="text-xs text-blue-300/50">&copy; 2026 Template. All rights reserved.</div>
+      <div class="text-xs text-blue-700/50 dark:text-blue-300/50">
+        &copy; 2026 Template. All rights reserved.
+      </div>
       <div class="flex gap-2">
         <span class="h-1 w-8 bg-blue-500/50 rounded-full"></span>
         <span class="h-1 w-4 bg-cyan-500/50 rounded-full"></span>
-        <span class="h-1 w-2 bg-white/50 rounded-full"></span>
+        <span class="h-1 w-2 bg-slate-400/50 dark:bg-white/50 rounded-full"></span>
       </div>
     </div>
   </div>
@@ -197,32 +217,7 @@
   <!-- Right Column: Login Form -->
   <div class="flex-1 flex items-center justify-center p-8 relative">
     <div class="absolute top-4 right-4 flex gap-2 z-50">
-      <p-button
-        [icon]="themeService.modeIcon()"
-        [text]="true"
-        [rounded]="true"
-        severity="secondary"
-        styleClass="w-9 h-9"
-        (onClick)="themeService.toggleTheme()"
-      >
-      </p-button>
-      <div class="relative">
-        <p-button
-          icon="pi pi-palette"
-          [text]="true"
-          [rounded]="true"
-          severity="secondary"
-          styleClass="w-9 h-9"
-          pStyleClass="@next"
-          enterFromClass="hidden"
-          enterActiveClass="animate-scalein"
-          leaveToClass="hidden"
-          leaveActiveClass="animate-fadeout"
-          [hideOnOutsideClick]="true"
-        >
-        </p-button>
-        <app-theme-configurator />
-      </div>
+      <app-theme-mode-toggle />
       <!--#if (IncludeLocalization)-->
       <app-language-switcher />
       <!--#endif-->
@@ -231,198 +226,257 @@
       <!-- Mobile Header -->
       <div class="lg:hidden text-center mb-8">
         <div
-          class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary-100 text-primary-600 mb-4"
+          class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary mb-4"
         >
-          <i class="pi pi-bolt text-2xl"></i>
+          <ng-icon name="lucideZap" class="text-2xl" />
         </div>
         <!--#if (IncludeLocalization)-->
-        <h2 class="text-2xl font-bold">{{ 'account.brand.title' | transloco }}</h2>
+        <h2 class="text-2xl font-semibold">{{ 'account.brand.title' | transloco }}</h2>
         <!--#else-->
-        <h2 class="text-2xl font-bold">Template Project</h2>
+        <h2 class="text-2xl font-semibold">Template Project</h2>
         <!--#endif-->
       </div>
 
       <!-- Form Header -->
       <div>
         <!--#if (IncludeLocalization)-->
-        <h2 class="text-3xl font-bold text-color mb-2">{{ 'account.login.title' | transloco }}</h2>
-        <p class="text-muted-color text-sm">{{ 'account.login.subtitle' | transloco }}</p>
+        <h2 class="text-2xl font-semibold mb-2">{{ 'account.login.title' | transloco }}</h2>
+        <p class="text-muted-foreground text-sm">{{ 'account.login.subtitle' | transloco }}</p>
         <!--#else-->
-        <h2 class="text-3xl font-bold text-color mb-2">Sign In</h2>
-        <p class="text-muted-color text-sm">Welcome back, please enter your account information</p>
+        <h2 class="text-2xl font-semibold mb-2">Sign In</h2>
+        <p class="text-muted-foreground text-sm">
+          Welcome back, please enter your account information
+        </p>
         <!--#endif-->
       </div>
 
-      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="flex flex-col gap-5">
-        <!-- Username/Email -->
-        <div class="flex flex-col gap-2">
+      <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
+        <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id -->
+        <div hlmField>
           <!--#if (IncludeLocalization)-->
-          <label for="usernameOrEmail" class="font-medium text-color">{{
+          <label hlmFieldLabel for="tenantName">{{ 'account.login.tenant' | transloco }}</label>
+          <!--#else-->
+          <label hlmFieldLabel for="tenantName">Tenant</label>
+          <!--#endif-->
+          @if (tenantContext.current(); as tenant) {
+            <!-- 已选中态复用与未选中态、与用户名输入框同一个 hlm-input-group 原语：
+                 手写 div 会在高度、圆角与边框 token 上各偏一点，同一张表单里三种控件三个尺寸 -->
+            <hlm-input-group>
+              <input
+                hlmInputGroupInput
+                id="tenantName"
+                readonly
+                [value]="tenant.displayName || tenant.name"
+              />
+              <!--#if (IncludeLocalization)-->
+              <button
+                hlmInputGroupButton
+                type="button"
+                align="inline-end"
+                [attr.aria-label]="'account.login.tenantClear' | transloco"
+                (click)="clearTenant()"
+              >
+                <ng-icon name="lucideX" />
+              </button>
+              <!--#else-->
+              <button
+                hlmInputGroupButton
+                type="button"
+                align="inline-end"
+                aria-label="Clear tenant"
+                (click)="clearTenant()"
+              >
+                <ng-icon name="lucideX" />
+              </button>
+              <!--#endif-->
+            </hlm-input-group>
+          } @else {
+            <hlm-input-group>
+              <!--#if (IncludeLocalization)-->
+              <input
+                hlmInputGroupInput
+                id="tenantName"
+                autocomplete="off"
+                [value]="tenantName()"
+                (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
+                (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
+                [placeholder]="'account.login.tenantPlaceholder' | transloco"
+              />
+              <button
+                hlmInputGroupButton
+                type="button"
+                align="inline-end"
+                [disabled]="tenantChecking()"
+                (click)="onConfirmTenant()"
+              >
+                {{ 'account.login.tenantConfirm' | transloco }}
+              </button>
+              <!--#else-->
+              <input
+                hlmInputGroupInput
+                id="tenantName"
+                autocomplete="off"
+                [value]="tenantName()"
+                (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
+                (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
+                placeholder="Tenant name, leave empty for host"
+              />
+              <button
+                hlmInputGroupButton
+                type="button"
+                align="inline-end"
+                [disabled]="tenantChecking()"
+                (click)="onConfirmTenant()"
+              >
+                Confirm
+              </button>
+              <!--#endif-->
+            </hlm-input-group>
+            @if (tenantError(); as error) {
+              <!-- forceShow：租户探测是业务错误而非 Signal Forms 校验错误，
+                   没有 validator key 可匹配，但仍应复用组件的 role="alert" 与样式 -->
+              <hlm-field-error forceShow>{{ error }}</hlm-field-error>
+            }
+          }
+        </div>
+
+        <!-- Username/Email -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="usernameOrEmail">{{
             'account.login.usernameOrEmail' | transloco
           }}</label>
           <input
-            pInputText
+            hlmInput
             id="usernameOrEmail"
-            formControlName="usernameOrEmail"
             class="w-full"
+            [formField]="loginForm.usernameOrEmail"
             [placeholder]="'account.login.usernameOrEmailPlaceholder' | transloco"
-            [ngClass]="{
-              'ng-invalid ng-dirty':
-                loginForm.get('usernameOrEmail')?.invalid &&
-                loginForm.get('usernameOrEmail')?.touched,
-            }"
           />
-          @if (
-            loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched
-          ) {
-            <small class="text-red-500">
-              {{ 'account.login.usernameOrEmailPlaceholder' | transloco }}
-            </small>
-          }
           <!--#else-->
-          <label for="usernameOrEmail" class="font-medium text-color">Username or Email</label>
+          <label hlmFieldLabel for="usernameOrEmail">Username or Email</label>
           <input
-            pInputText
+            hlmInput
             id="usernameOrEmail"
-            formControlName="usernameOrEmail"
             class="w-full"
+            [formField]="loginForm.usernameOrEmail"
             placeholder="Please enter your username or email"
-            [ngClass]="{
-              'ng-invalid ng-dirty':
-                loginForm.get('usernameOrEmail')?.invalid &&
-                loginForm.get('usernameOrEmail')?.touched,
-            }"
           />
-          @if (
-            loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched
-          ) {
-            <small class="text-red-500"> Please enter your username or email </small>
-          }
           <!--#endif-->
+          @for (error of loginForm.usernameOrEmail().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
         </div>
 
         <!-- Password -->
-        <div class="flex flex-col gap-2">
+        <div hlmField>
           <!--#if (IncludeLocalization)-->
-          <label for="password" class="font-medium text-color">{{
-            'account.login.password' | transloco
-          }}</label>
-          <div class="relative">
-            <p-password
-              id="password"
-              formControlName="password"
-              [feedback]="false"
-              [toggleMask]="true"
-              [fluid]="true"
-              inputClass="w-full"
-              [placeholder]="'account.login.passwordPlaceholder' | transloco"
-            >
-            </p-password>
-          </div>
-          @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
-            <small class="text-red-500">
-              {{ 'account.login.passwordPlaceholder' | transloco }}
-            </small>
-          }
+          <label hlmFieldLabel for="password">{{ 'account.login.password' | transloco }}</label>
           <!--#else-->
-          <label for="password" class="font-medium text-color">Password</label>
-          <div class="relative">
-            <p-password
-              id="password"
-              formControlName="password"
-              [feedback]="false"
-              [toggleMask]="true"
-              [fluid]="true"
-              inputClass="w-full"
-              placeholder="Please enter your password"
-            >
-            </p-password>
-          </div>
-          @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
-            <small class="text-red-500"> Please enter your password </small>
-          }
+          <label hlmFieldLabel for="password">Password</label>
           <!--#endif-->
+          <hlm-input-group>
+            <!--#if (IncludeLocalization)-->
+            <input
+              hlmInputGroupInput
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              [formField]="loginForm.password"
+              [placeholder]="'account.login.passwordPlaceholder' | transloco"
+            />
+            <!--#else-->
+            <input
+              hlmInputGroupInput
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              [formField]="loginForm.password"
+              placeholder="Please enter your password"
+            />
+            <!--#endif-->
+            <button
+              hlmInputGroupButton
+              type="button"
+              size="icon-sm"
+              align="inline-end"
+              (click)="showPassword.set(!showPassword())"
+            >
+              <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+            </button>
+          </hlm-input-group>
+          @for (error of loginForm.password().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
         </div>
 
-        <div class="flex items-center justify-end gap-1 mt-1 text-base text-color">
+        <div class="flex items-center justify-end gap-1 mt-1 text-base">
           <!--#if (IncludeLocalization)-->
           <span>{{ 'account.login.noAccount' | transloco }}</span>
           <a
             [routerLink]="['/auth/register']"
-            class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
+            class="font-semibold text-primary hover:underline transition-colors"
             >{{ 'account.login.registerNow' | transloco }}</a
           >
           <!--#else-->
           <span>Don't have an account?</span>
           <a
             [routerLink]="['/auth/register']"
-            class="font-bold text-primary hover:text-primary-emphasis hover:underline transition-colors"
-            >Register now</a
+            class="font-semibold text-primary hover:underline transition-colors"
+            >Sign up now</a
           >
           <!--#endif-->
         </div>
 
         <!-- Submit Button -->
-        <!--#if (IncludeLocalization)-->
-        <p-button
-          [label]="'account.login.submit' | transloco"
-          type="submit"
-          [loading]="isLoading()"
-          [fluid]="true"
-          [rounded]="true"
-        >
-        </p-button>
-        <!--#else-->
-        <p-button
-          label="Sign In"
-          type="submit"
-          [loading]="isLoading()"
-          [fluid]="true"
-          [rounded]="true"
-        >
-        </p-button>
-        <!--#endif-->
-        <!--#if (IncludeExternalLogin)-->
+        <button hlmBtn type="submit" class="w-full" [disabled]="isLoading()">
+          @if (isLoading()) {
+            <hlm-spinner class="text-base" data-icon="inline-start" />
+          }
+          <!--#if (IncludeLocalization)-->
+          {{ 'account.login.submit' | transloco }}
+          <!--#else-->
+          Sign In
+          <!--#endif-->
+        </button>
+        <!--#if (ExternalLogin)-->
 
         <!-- Divider -->
         <div class="relative flex py-2 items-center my-2">
-          <div class="flex-grow border-t border-surface"></div>
+          <div class="flex-grow border-t border-border"></div>
           <!--#if (IncludeLocalization)-->
-          <span
-            class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2"
-            >{{ 'account.login.or' | transloco }}</span
-          >
+          <span class="flex-shrink mx-4 text-muted-foreground text-sm bg-background px-2">{{
+            'account.login.or' | transloco
+          }}</span>
           <!--#else-->
-          <span
-            class="flex-shrink mx-4 text-muted-color text-sm bg-surface-0 dark:bg-surface-900 px-2"
-            >OR</span
-          >
+          <span class="flex-shrink mx-4 text-muted-foreground text-sm bg-background px-2">OR</span>
           <!--#endif-->
-          <div class="flex-grow border-t border-surface"></div>
+          <div class="flex-grow border-t border-border"></div>
         </div>
 
         <!-- Social Login: Full Width -->
         <div class="flex gap-4">
-          <p-button
-            label="GitHub"
-            icon="pi pi-github"
-            class="flex-1"
-            [fluid]="true"
-            severity="secondary"
-            [outlined]="true"
-            [loading]="isLoading()"
-            (onClick)="loginWithGitHub()"
-          >
-          </p-button>
-
-          <p-button
+          <button
+            hlmBtn
             type="button"
-            severity="secondary"
-            [outlined]="true"
+            variant="outline"
             class="flex-1"
-            [fluid]="true"
-            [loading]="isLoading()"
-            (onClick)="loginWithGoogle()"
+            [disabled]="isLoading()"
+            (click)="loginWithGitHub()"
+          >
+            <ng-icon name="github" data-icon="inline-start" />
+            GitHub
+          </button>
+
+          <button
+            hlmBtn
+            type="button"
+            variant="outline"
+            class="flex-1"
+            [disabled]="isLoading()"
+            (click)="loginWithGoogle()"
           >
             <svg class="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path
@@ -442,41 +496,37 @@
                 fill="#EA4335"
               />
             </svg>
-            <span class="font-medium text-color">Google</span>
-          </p-button>
+            <span class="font-medium">Google</span>
+          </button>
         </div>
         <!--#endif-->
       </form>
 
       <!-- Test Account Hint -->
       @if (isMockEnabled()) {
-        <div
-          class="mt-8 p-4 bg-surface-0 dark:bg-surface-900 rounded-xl border border-surface shadow-md"
-        >
+        <div class="mt-8 p-4 bg-card rounded-xl border border-border shadow-md">
           <!--#if (IncludeLocalization)-->
-          <h4 class="font-bold text-color mb-2 flex items-center gap-2">
-            <i class="pi pi-info-circle text-primary"></i>
+          <h4 class="font-semibold mb-2 flex items-center gap-2">
+            <ng-icon name="lucideInfo" class="text-primary" />
             {{ 'account.login.testAccount' | transloco }}
           </h4>
           <!--#else-->
-          <h4 class="font-bold text-color mb-2 flex items-center gap-2">
-            <i class="pi pi-info-circle text-primary"></i> Test Account
+          <h4 class="font-semibold mb-2 flex items-center gap-2">
+            <ng-icon name="lucideInfo" class="text-primary" /> Test Account
           </h4>
           <!--#endif-->
           <div class="grid grid-cols-1 gap-2 text-sm">
-            <div
-              class="bg-surface-50 dark:bg-surface-800 p-2 rounded shadow-sm border border-surface"
-            >
+            <div class="bg-muted p-2 rounded shadow-sm border border-border">
               <!--#if (IncludeLocalization)-->
-              <span class="block text-xs text-muted-color mb-1">{{
+              <span class="block text-xs text-muted-foreground mb-1">{{
                 'account.login.adminRole' | transloco
               }}</span>
               <!--#else-->
-              <span class="block text-xs text-muted-color mb-1">Administrator</span>
+              <span class="block text-xs text-muted-foreground mb-1">Administrator</span>
               <!--#endif-->
-              <span class="font-mono text-color">admin</span>
-              <span class="text-muted-color mx-1">/</span>
-              <span class="font-mono text-color">Admin&#64;123456</span>
+              <span class="font-mono">admin</span>
+              <span class="text-muted-foreground mx-1">/</span>
+              <span class="font-mono">Admin&#64;123456</span>
             </div>
           </div>
         </div>

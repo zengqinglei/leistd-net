@@ -1,28 +1,28 @@
 # leistd-net
 
-> **为 AI 时代设计的 .NET 10 + Angular 21 全栈 DDD 基座**：框架让 AI 按真实 API 写代码，Skills 按场景提供执行知识，模板验证可运行的端到端组合。
+> **为 AI 时代设计的 .NET 10 + Angular 22 全栈 DDD 基座**：框架让 AI 按真实 API 写代码，Skills 按场景提供执行知识，模板验证可运行的端到端组合。
 
 [![Release](https://github.com/zengqinglei/leistd-net/actions/workflows/release.yml/badge.svg)](https://github.com/zengqinglei/leistd-net/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## 为什么是 leistd-net
 
-传统脚手架解决"代码怎么起步"，但在 AI 参与开发的当下，真正的瓶颈变成了两件事：**AI 会不会用错框架 API（凭记忆臆造）**，和 **AI 交付的东西可不可信、可不可追溯**。leistd-net 把这两件事作为一等目标来设计：
+传统脚手架解决"代码怎么起步"。AI 参与开发之后，瓶颈变成两件事：**AI 会不会凭记忆臆造框架 API**，和**它交付的东西可不可追溯**。leistd-net 把这两件事当一等目标：
 
-- 🤖 **AI 按真实 API 编码，不臆造**——每个 `Leistd.*` 包内置随版本分发的用法文档，配套 Skill 引导 AI「先查随包文档 / 包内 XML，再写代码」，并用 CI 校验文档与源码不漂移。AI 用的是**你安装的那个版本的真实 API**，不是训练记忆里的猜测。
-- 🔄 **AI 按任务风险完成闭环**——模板携带一个跨工具项目 Skill，按需加载方案、实现、审查、测试、协调和部署知识；简单改动直接实施，高风险动作由人确认。
-- 🧩 **文档按价值自主沉淀**——AI 先读源码、配置和最新同类文档，只把需要跨会话、跨成员或长期复用的信息写入权威位置，不生成例行报告和占位模板。
+- 🤖 **按真实 API 编码**——每个 `Leistd.*` 包内置随版本分发的用法文档，XML 注释提供精确契约与关键示例；配套 Skill 引导 AI 先查已安装版本再写代码，CI 校验文档与源码不漂移。
+- 🔄 **按风险完成闭环**——模板携带跨工具项目 Skill，按需加载方案、实现、审查、测试与部署知识；简单改动直接实施，高风险动作由人确认。
+- 🧩 **文档按价值沉淀**——只把需要跨会话或长期复用的信息写入权威位置，不生成例行报告与占位模板。
 
-技术上，它把"可复用框架能力"与"业务项目脚手架"清晰分离：
+两个交付面清晰分离：
 
-- **`framework/`** —— Leistd 框架基座（33 个 `Leistd.*` 包 / 15 个能力分组 + DDD 四层基础类型）：AOP、DI、事件总线、异常、分布式锁、对象映射、统一响应、安全、链路追踪、工作单元、通知、实时、审计、授权。统一版本、中央包管理（CPM）、Source Link 源码调试，以 NuGet 发布，**每个包内置随版本文档**。
-- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 21 前端，DDD 四层，可条件裁剪认证/权限）。生成的项目通过 NuGet 引用 framework，并自带跨工具项目 Skill 与工程规范。
+- **`framework/`** —— 按能力分组的 `Leistd.*` 组件 + DDD 四层基础类型：AOP、DI、核心原语、连接解析、事件总线、异常、本地化、分布式锁、多租户、对象映射、统一响应、安全、服务间调用、链路追踪、工作单元、审计、通知、实时、授权（含资源实例授权与数据范围）。完整清单见[组件总览](framework/docs/components/README.md)。统一版本、中央包管理（CPM）、Source Link 源码调试，以 NuGet 发布，**每个包内置随版本文档**。
+- **`template/`** —— 基于 `dotnet new` 的全栈项目模板（.NET 10 后端 + Angular 22 前端，DDD 四层），支持 `Identity` / `Standalone` / `Resource` 三种服务形态，可选通知、外部登录与本地化。生成的项目通过 NuGet 引用 framework，并自带项目 Skill 与工程规范。
 
 ---
 
 ## AI 协作开发（核心特性）
 
-仓库维护与模板生成项目分别使用自己的项目级 Skill，并从所属交付面的源码和文档建立事实。
+仓库维护与生成项目各用自己的 Skill，从所属交付面的源码与文档建立事实。
 
 ### 维护本仓库
 
@@ -39,6 +39,19 @@ npx skills add ./.agents/skills --agent claude-code --skill developing-leistd-fr
 ```
 
 复制的适配不会自动跟随权威源更新，修改 `.agents/skills/` 后应重新执行命令。生成的 `.claude/skills/` 和 `skills-lock.json` 是本地适配产物，不提交到仓库。
+
+#### 引入第三方 Skill
+
+引入外部 Skill（如前端 UI 库 `spartan`）时，先将其拉取到 `.agents/skills/` 作为权威源（随仓库提交），再按上面的方式生成本地适配，与自有 Skill 统一管理：
+
+```bash
+# 拉取第三方 Skill 到 .agents/skills/（权威源，提交）
+npx skills add spartan-ng/spartan
+# 生成 Claude Code 本地适配（.claude/skills/，不提交）
+npx skills add ./.agents/skills --agent claude-code --skill spartan -y
+```
+
+配套的 MCP server 在仓库根 [`.mcp.json`](.mcp.json) 声明（如 `@spartan-ng/mcp`），随仓库提交、开箱可用。
 
 ### 生成项目
 
@@ -62,13 +75,13 @@ npx skills add ./.agents/skills --agent claude-code --skill developing-leistd-fr
 leistd-net/
 ├── .agents/skills/     # 仓库内部维护 Skill
 ├── framework/          # Leistd 框架（NuGet 化，独立版本）
-│   ├── components/     #   共享组件（15 个能力分组，33 个包）
-│   ├── ddd-struct/     #   DDD 四层基础类型（4 个包）
+│   ├── components/     #   共享组件（按能力分组，清单见 framework/docs/components/README.md）
+│   ├── ddd-struct/     #   DDD 四层基础类型
 │   ├── docs/           #   面向使用者的组件文档（随包分发）
 │   └── build/          #   pack / push / 文档-源码漂移校验 脚本
 ├── template/           # dotnet new 项目模板
 │   ├── backend/        #   .NET 10 + DDD 后端
-│   ├── frontend/       #   Angular 21 前端
+│   ├── frontend/       #   Angular 22 前端
 │   ├── .agents/skills/ #   跨工具项目 Skill
 │   └── docs/           #   项目规范及按需沉淀的长期文档
 ├── scripts/            # 本地开发与 CI 共用的仓库级验证脚本
@@ -109,16 +122,15 @@ dotnet new fullstack-app -n Acme.Shop
 
 | 参数 | 默认值 | 能力 |
 | --- | --- | --- |
-| `--include-identity` | `true` | 本地账号、登录、注册与 Cookie 认证 |
-| `--include-roles` | `true` | 角色与权限，仅在 Identity 启用时可用 |
-| `--include-notifications` | `false` | 通知中心与 SignalR 实时消息，仅在 Identity 启用时可用 |
-| `--include-openiddict` | `true` | OAuth 2.0/OIDC Server，仅在 Identity 启用时可用 |
-| `--include-external-login` | `false` | GitHub/Google 等外部登录，仅在 Identity 启用时可用 |
+| `--service-role` | `Identity` | 服务形态：`Identity` 身份中心（OIDC 签发 + 本地用户 + 租户控制面）；`Standalone` 一体化应用（Cookie 会话 + 本地用户 + 租户控制面，不带授权服务器）；`Resource` 业务服务（校验远端令牌，持有本服务的角色与权限） |
+| `--include-notifications` | `false` | 通知中心与 SignalR 实时消息 |
+| `--include-external-login` | `false` | GitHub/Google 等外部登录，仅在有本地用户的形态（`Identity`/`Standalone`）下有效 |
+| `--include-localization` | `false` | 多语言（i18n）：前端运行时切换 + 后端按 culture 本地化 |
 
-例如，生成无认证的最小项目：
+所有服务形态均包含角色与权限、租户解析与数据隔离。例如，生成校验远端令牌的业务服务：
 
 ```bash
-dotnet new fullstack-app -n Acme.Service --include-identity false
+dotnet new fullstack-app -n Acme.Service --service-role Resource
 ```
 
 ### 本地构建框架
@@ -127,8 +139,8 @@ dotnet new fullstack-app -n Acme.Service --include-identity false
 # 构建
 dotnet build framework/Leistd.Framework.slnx -c Release
 
-# 本地包固定输出到 .tmp/local-feed（dotnet CLI 三平台命令一致）
-dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
+# 本地包固定输出到 .tmp/local-feed；脚本会先清空该目录，避免已删除组件的旧包残留
+pwsh framework/build/pack-local-feed.ps1
 ```
 
 ---
@@ -168,7 +180,7 @@ dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
 | 层 | 技术 |
 | --- | --- |
 | 后端 | .NET 10 · ASP.NET Core · EF Core · OpenIddict |
-| 前端 | Angular 21 · PrimeNG · Tailwind CSS |
+| 前端 | Angular 22 · Spartan UI · Tailwind CSS |
 | 数据 | PostgreSQL 15+ / 内存（开发）· Redis 7+（可选） |
 | 部署 | Docker · Docker Compose |
 

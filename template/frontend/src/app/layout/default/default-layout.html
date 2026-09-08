@@ -1,46 +1,14 @@
-<!-- 应用主布局容器 -->
-<div data-layout="default" class="flex h-screen overflow-hidden bg-surface-50 dark:bg-surface-950">
-  <!-- 桌面端侧边栏 -->
-  <app-default-sidebar [isMobileMenuOpen]="false" class="hidden md:block h-full shrink-0">
-  </app-default-sidebar>
+<!-- 应用主布局容器：hlmSidebarWrapper 包裹侧边栏与主内容区（inset 卡片）。 -->
+<div hlmSidebarWrapper data-layout="default" class="h-svh">
+  <!-- 侧边栏（inset 变体：内容区浮为圆角卡片；桌面折叠为图标轨，移动端渲染为 sheet） -->
+  <app-default-sidebar />
 
-  <!-- 移动端抽屉 -->
-  <p-drawer
-    class="md:hidden"
-    position="left"
-    [visible]="isMobileMenuOpen()"
-    [modal]="true"
-    [dismissible]="true"
-    [showCloseIcon]="false"
-    [closable]="false"
-    [blockScroll]="true"
-    styleClass="!w-64 max-w-full overflow-hidden"
-    (visibleChange)="isMobileMenuOpen.set($event)"
-  >
-    <ng-template #headless>
-      <app-default-sidebar
-        [isMobileMenuOpen]="true"
-        (mobileMenuClosed)="closeMobileMenu()"
-        class="h-full w-full"
-      >
-      </app-default-sidebar>
-    </ng-template>
-  </p-drawer>
+  <!-- 主内容区（inset）：Header + 内容；inset 变体自带 m-2 / 圆角 / 阴影。 -->
+  <main hlmSidebarInset class="overflow-hidden">
+    <app-default-header />
 
-  <!-- 右侧：Header + 内容区域 + Footer -->
-  <div class="flex-1 flex flex-col min-w-0">
-    <!-- Header -->
-    <app-default-header (toggleMobileMenu)="toggleMobileMenu()"></app-default-header>
-
-    <!-- 主内容区域 -->
-    <!-- 使用 bg-surface-50 dark:bg-surface-950 作为背景色，自动适配 Light/Dark -->
-    <main
-      class="flex-1 overflow-auto bg-surface-50 dark:bg-surface-950 custom-scrollbar scroll-smooth"
-    >
+    <div class="flex-1 overflow-auto scroll-smooth">
       <router-outlet></router-outlet>
-    </main>
-
-    <!-- Footer -->
-    <app-default-footer></app-default-footer>
-  </div>
+    </div>
+  </main>
 </div>

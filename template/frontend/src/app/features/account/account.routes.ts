@@ -13,7 +13,7 @@ export const AUTH_ROUTES: Routes = [
     path: 'register',
     loadComponent: () => import('./components/register/register').then((m) => m.Register),
   },
-  //#if (IncludeExternalLogin)
+  //#if (ExternalLogin)
   {
     path: 'external-callback',
     loadComponent: () =>

@@ -1,6 +1,6 @@
 # 前端项目
 
-本项目基于 Angular、PrimeNG 和 Tailwind CSS 构建。
+本项目基于 Angular、Spartan UI 和 Tailwind CSS 构建。
 
 有关详细的开发规范、目录结构和编码准则，请参阅项目根目录下的 [前端开发规范](../docs/standards/coding-frontend.md)。
 
@@ -11,7 +11,7 @@
 在开始之前，请确保您已安装以下必需工具：
 
 - **Node.js**: v18+
-- **Angular CLI**: v21+
+- **Angular CLI**: v22+
 
 您可以通过以下命令验证是否已成功安装：
 
@@ -32,9 +32,19 @@ ng version
 npm install
 ```
 
-### 2. 配置环境与选择联调模式
+### 2. 创建本机调试配置
 
-本地开发使用 `src/environments/environment.debug.ts`（`npm start` 默认加载）。**关键是 `api.gateway` 怎么填，取决于你用哪种前后端联调模式**：
+`npm start`（`ng serve -c debug`）加载 `src/environments/environment.debug.ts`。这个文件**不在版本库里**——每个人的后端地址和联调模式都不一样，跟踪它只会让大家互相覆盖。首次克隆后从 `environment.dev.ts` 复制一份：
+
+```bash
+cp src/environments/environment.dev.ts src/environments/environment.debug.ts
+```
+
+之后随便改，改动不会被提交。**没有这个文件 `npm start` 会直接失败**，这一步不能跳过。
+
+### 3. 填写 api.gateway 并选择联调模式
+
+**关键是 `api.gateway` 怎么填，取决于你用哪种前后端联调模式**：
 
 #### 模式一：SPA 同源访问（推荐）
 
@@ -77,7 +87,7 @@ export const environment = {
 > 配套：后端需设 `Cors.AllowAnyLocalhost=true`（开发用）。访问方式：浏览器打开 `http://localhost:4200/`。
 > 注意：跨域携带 cookie 对 SameSite/Secure 要求更严，若登录后 cookie 不生效，优先改用模式一。
 
-### 3. 启动开发服务器
+### 4. 启动开发服务器
 
 本项目已预置了多套环境配置，您可以根据需要启动对应的开发服务器。
 
@@ -262,5 +272,5 @@ frontend/
 ## 更多资源
 
 - **Angular CLI**: [官方文档](https://angular.dev/tools/cli)
-- **PrimeNG**: [官方文档](https://primeng.org/)
+- **Spartan UI**: [官方文档](https://spartan.ng/)
 - **Tailwind CSS**: [官方文档](https://tailwindcss.com/docs)

@@ -1,7 +1,9 @@
 param(
-    [string[]]$Scenarios = @("default", "minimal", "no-roles", "notifications", "no-openiddict", "external-login", "localization", "no-localization", "localization-notifications", "localization-external-login"),
+    [string[]]$Scenarios = @("identity", "resource", "standalone", "identity-notifications", "resource-notifications", "identity-external-login", "identity-localization", "resource-localization"),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
+    [ValidateSet("ChromeHeadless", "Chrome")]
+    [string]$FrontendBrowser = "ChromeHeadless",
     [switch]$SkipPack,
     [switch]$SkipFrontend,
     [switch]$SkipRuntime
@@ -23,13 +25,12 @@ $runRoot = Join-Path $tempRoot (Join-Path "runs" $runId)
 $env:MSBUILDDISABLENODEREUSE = "1"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 
-# 第三方 NuGet 缓存跨 run 共享、只读复用：nuget.org 的包按 (id,version) 内容不可变，可安全并发共享（NuGet 自带
-# 文件锁），避免每轮重下近 1GB 依赖闭包。真正会「同版本内容变化」的只有本地 pack 的 Leistd.*——restore 前定点
-# 清除缓存里的 Leistd.* 强制重新解包（见下），其余保持温热。
-$sharedPackagesRoot = Join-Path $tempRoot "nuget-cache"
+# globalPackagesFolder 必须也按 run 隔离。本地 Leistd 包在开发期间会在版本号不变时重新 pack；
+# 共享解包目录并定点清理会在并发 build 期间抽走 DLL。每个 run 独立解包，NuGet HTTP 缓存仍可复用下载内容。
+$packagesRoot = Join-Path $runRoot "nuget-cache"
 # 本地 Leistd 包源位置随模式而定：
 #  - 正常模式（本轮 pack）：per-run 独立目录，两个并行 run 各 pack 各的，杜绝共享目录重置竞争（发现#1）。
-#  - -SkipPack：消费预先 pack 到共享 .tmp/local-feed 的包（CI 先 `dotnet pack -o .tmp/local-feed` 再 -SkipPack），
+#  - -SkipPack：消费预先 pack 到共享 .tmp/local-feed 的包（CI 先 `pack-local-feed.ps1` 再 -SkipPack），
 #    只读复用、并发安全。
 $sharedFeedRoot = Join-Path $tempRoot "local-feed"
 $feedRoot = if ($SkipPack) { $sharedFeedRoot } else { Join-Path $runRoot "local-feed" }
@@ -77,6 +78,23 @@ function Invoke-External([string]$Command, [string[]]$Arguments, [string]$Workin
     Push-Location $WorkingDirectory
     try {
         & $Command @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Command failed with exit code ${LASTEXITCODE}: $Command $($Arguments -join ' ')"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+# 与 Invoke-External 同型，但显式关闭子进程的 stdin。
+# 用于那些会无条件发问、又没有非交互开关的 CLI：拿到 EOF 即取默认值，
+# 从而让脚本在交互终端下也保持无人值守。
+function Invoke-ExternalWithClosedInput([string]$Command, [string[]]$Arguments, [string]$WorkingDirectory = $repoRoot) {
+    Write-Host "> $Command $($Arguments -join ' ')  (stdin closed)" -ForegroundColor DarkGray
+    Push-Location $WorkingDirectory
+    try {
+        $null | & $Command @Arguments
         if ($LASTEXITCODE -ne 0) {
             throw "Command failed with exit code ${LASTEXITCODE}: $Command $($Arguments -join ' ')"
         }
@@ -147,6 +165,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         ".agents/skills/leistd-project-workflow/references/quality.md",
         ".agents/skills/leistd-project-workflow/references/delivery.md",
         ".agents/skills/leistd-project-workflow/references/documentation.md",
+        ".agents/skills/spartan/SKILL.md",
         "docs/README.md",
         "docs/standards/api.md",
         "docs/standards/coding-common.md",
@@ -157,7 +176,8 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         "docs/standards/testing.md",
         "docs/standards/ui-design.md",
         "docs/deploy/README.md",
-        "backend/README.md"
+        "backend/README.md",
+        "frontend/components.json"
     )
     foreach ($relativePath in $requiredFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot $relativePath))) {
@@ -167,8 +187,14 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
 
     $skillRoot = Join-Path $ProjectRoot ".agents/skills"
     $skillNames = @(Get-ChildItem -LiteralPath $skillRoot -Directory | ForEach-Object Name)
-    if ($skillNames.Count -ne 1 -or $skillNames[0] -ne "leistd-project-workflow") {
-        throw "Generated project must contain only leistd-project-workflow in $skillRoot"
+    # 生成项目预期携带 leistd-project-workflow（项目协作）与 spartan（前端 UI 库 CLI 用法）。
+    $allowedSkills = @("leistd-project-workflow", "spartan")
+    if (-not ($skillNames -contains "leistd-project-workflow")) {
+        throw "Generated project must contain leistd-project-workflow in $skillRoot"
+    }
+    $unexpectedSkills = @($skillNames | Where-Object { $allowedSkills -notcontains $_ })
+    if ($unexpectedSkills.Count -gt 0) {
+        throw "Generated project has unexpected skills in $skillRoot : $($unexpectedSkills -join ', ')"
     }
 
     $projectReadme = Get-Content -LiteralPath (Join-Path $ProjectRoot "README.md") -Raw -Encoding UTF8
@@ -178,7 +204,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
         }
     }
 
-    $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "tech-stack.md", "testing.md", "ui-design.md")
+    $expectedStandards = @("api.md", "coding-backend.md", "coding-common.md", "coding-frontend.md", "project-structure.md", "service-invocation.md", "tech-stack.md", "testing.md", "ui-design.md")
     $standardsRoot = Join-Path $ProjectRoot "docs/standards"
     $actualStandards = @(Get-ChildItem -LiteralPath $standardsRoot -File -Filter "*.md" | ForEach-Object Name | Sort-Object)
     $standardDifference = Compare-Object ($expectedStandards | Sort-Object) $actualStandards
@@ -233,15 +259,14 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     }
 
     $programText = Get-Content -LiteralPath (Join-Path $apiProject.DirectoryName "Program.cs") -Raw
-    if (-not $programText.Contains("await db.Database.MigrateAsync()") -or
-        -not $programText.Contains("await db.Database.EnsureCreatedAsync()")) {
-        throw "Generated API must initialize relational databases automatically at startup."
+    if ($programText.Contains("MigrateAsync(") -or $programText.Contains("EnsureCreatedAsync(")) {
+        throw "Generated API must not mutate database schema during startup."
     }
 
     $backendReadme = Get-Content -LiteralPath (Join-Path $ProjectRoot "backend/README.md") -Raw -Encoding UTF8
-    if (-not $backendReadme.Contains('无需另行执行 `dotnet ef database update`') -or
-        -not $backendReadme.Contains('生产部署会随应用启动自动创建或迁移数据库')) {
-        throw "Generated backend guidance must explain the startup migration boundary."
+    if (-not $backendReadme.Contains('DbMigrator') -or
+        -not $backendReadme.Contains('启动时不自动迁移')) {
+        throw "Generated backend guidance must explain the independent DbMigrator boundary."
     }
 
     Assert-MarkdownLinks $ProjectRoot
@@ -273,6 +298,42 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
+    # RequiredTokens：指定文件必须含指定片段。用于断言"剪裁后留下的是对的那一份"，
+    # 与 ForbiddenTokens（不该留的没留下）互补——只查缺失会漏掉"两份都在"的情形
+    if ($Definition.RequiredTokens) {
+        foreach ($entry in $Definition.RequiredTokens.GetEnumerator()) {
+            $relativePath = $entry.Key.Replace("{name}", $ProjectName)
+            $filePath = Join-Path $ProjectRoot $relativePath
+            if (-not (Test-Path -LiteralPath $filePath)) {
+                throw "Scenario '$($Definition.Name)' is missing required file: $relativePath"
+            }
+
+            $content = Get-Content -LiteralPath $filePath -Raw -Encoding UTF8
+            foreach ($token in $entry.Value) {
+                if (-not ($content -and $content.Contains($token))) {
+                    throw "Scenario '$($Definition.Name)' file $relativePath is missing required token '$token'"
+                }
+            }
+        }
+    }
+
+    if ($Definition.ForbiddenTokens) {
+        $sourceRoots = @("backend/src", "frontend/src", "frontend/_mock") |
+            ForEach-Object { Join-Path $ProjectRoot $_ } |
+            Where-Object { Test-Path -LiteralPath $_ }
+
+        $sourceFiles = Get-ChildItem -LiteralPath $sourceRoots -Recurse -File -Include *.cs, *.ts -ErrorAction SilentlyContinue
+        foreach ($file in $sourceFiles) {
+            $content = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
+            foreach ($token in $Definition.ForbiddenTokens) {
+                if ($content -and $content.Contains($token)) {
+                    $relative = $file.FullName.Substring($ProjectRoot.Length).TrimStart('/', '\')
+                    throw "Scenario '$($Definition.Name)' leaks trimmed contract token '$token' in $relative"
+                }
+            }
+        }
+    }
+
     $mockInterceptorPath = Join-Path $ProjectRoot "frontend/_mock/core/interceptor.ts"
     $mockInterceptor = Get-Content -LiteralPath $mockInterceptorPath -Raw -Encoding UTF8
     foreach ($marker in @("MOCK_ROUTE_NOT_FOUND", "Mock Route Not Found", "startsWith('/api/')")) {
@@ -281,7 +342,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
         }
     }
 
-    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/core/services/notification-service.ts"
+    $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/components/notifications/notification-service.ts"
     if (Test-Path -LiteralPath $notificationServicePath) {
         $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
         foreach ($marker in @("environment.useMock", "useMock.enable", "await this.signalR.connect()")) {
@@ -324,8 +385,13 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
     $startInfo.Environment['ASPNETCORE_ENVIRONMENT'] = 'Development'
     $startInfo.Environment['ASPNETCORE_URLS'] = $baseUrl
     $startInfo.Environment['ConnectionStrings__Default'] = ''
+    $startInfo.Environment['Database__InMemoryName'] = "MatrixRuntime-$([Guid]::NewGuid().ToString('N'))"
     $startInfo.Environment['SpaProxy__Enabled'] = 'false'
     $startInfo.Environment['OAuth__DisableHttpsRequirement'] = 'true'
+    # 超级管理员密码现在是启动期必填（基础配置里刻意不放可用密码）。
+    # 不用模板曾发布过的示例值：那些会被校验拒绝，正是要验证的行为
+    $startInfo.Environment['DefaultAdmin__Password'] = 'MatrixRuntime!Adm1n'
+    $startInfo.Environment['VerificationCodes__Key'] = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
 
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
@@ -353,7 +419,7 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
                 break
             }
             try {
-                $response = Invoke-WebRequest -Uri "$baseUrl/api/health" -TimeoutSec 2 -ErrorAction Stop
+                $response = Invoke-WebRequest -Uri "$baseUrl/api/health/live" -TimeoutSec 2 -ErrorAction Stop
                 if ($response.StatusCode -eq 200) {
                     $healthy = $true
                     break
@@ -392,75 +458,103 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
 }
 
 $scenarioMap = [ordered]@{
-    "default" = @{
+    "identity" = @{
         Arguments = @(); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions")
-        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
-        ReadmeContains = @("本地账号", "OpenIddict")
-        ReadmeExcludes = @("通知持久化", "外部身份提供方登录")
+        Present = @(
+            "backend/src/{name}.Api/Controllers/AuthController.cs",
+            "backend/src/{name}.Api/Controllers/TenantController.cs",
+            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
+            "backend/src/{name}.DbMigrator"
+        )
+        Absent = @(
+            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
+            "backend/src/{name}.Api/Controllers/NotificationController.cs"
+        )
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+        # 外部登录关闭：Mock 路由、客户端方法与 DTO 都不得留下。
+        # 这类残留编译、lint、单测全都放得过——Mock 会对一个后端返回 404 的端点回成功。
+        ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto")
     }
-    "minimal" = @{
-        Arguments = @("--include-identity", "false"); Frontend = $true; Lint = $false
-        Present = @("backend/src/{name}.Api/Program.cs")
-        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "backend/src/{name}.Application/Permissions", "frontend/src/app/features/account")
-        ReadmeContains = @("EF Core 数据访问")
-        ReadmeExcludes = @("本地账号", "OpenIddict", "通知持久化", "外部身份提供方登录")
+    "resource" = @{
+        Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
+        Present = @(
+            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
+            "backend/src/{name}.DbMigrator"
+        )
+        Absent = @(
+            "backend/src/{name}.Api/Controllers/AuthController.cs",
+            "backend/src/{name}.Api/Controllers/TenantController.cs",
+            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
+            "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
+            "frontend/src/app/features/account"
+        )
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+        ForbiddenTokens = @("App.Tenants")
     }
-    "no-roles" = @{
-        Arguments = @("--include-roles", "false"); Frontend = $true; Lint = $false
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
-        Absent = @("backend/src/{name}.Application/Permissions", "backend/src/{name}.Domain/Permissions")
-        ReadmeContains = @("本地账号", "OpenIddict")
-        ReadmeExcludes = @("用户、角色、权限以及超级管理员授权模型")
+    "standalone" = @{
+        # Cookie 会话形态：有本地用户与租户控制面，但不签发 OIDC 令牌。
+        # 目的是不让内部系统带着用不到的授权服务器上线——未使用的 /connect/* 端点
+        # 与 OpenIddict 存储不是"多余代码"，是需要防护、打补丁、审计的攻击面
+        Arguments = @("--service-role","Standalone"); Frontend = $true; Lint = $true
+        Present = @(
+            "backend/src/{name}.Api/Controllers/AuthController.cs",
+            "backend/src/{name}.Api/Controllers/UserController.cs",
+            "backend/src/{name}.Api/Controllers/TenantController.cs",
+            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs"
+        )
+        Absent = @(
+            "backend/src/{name}.Api/Controllers/ConnectController.cs",
+            "backend/src/{name}.Api/Controllers/OpenApplicationController.cs",
+            "backend/src/{name}.Application/OpenApplications",
+            "backend/src/{name}.Domain/Auth/Options/OAuthOptions.cs",
+            "frontend/src/app/features/platform/components/open-applications"
+        )
+        ReadmeContains = @()
+        ReadmeExcludes = @()
+        # OIDC 契约不得残留：端点路径与 OpenIddict 类型都不该出现在产物里
+        ForbiddenTokens = @(
+            "connect/token", "connect/authorize", "OpenIddict", "App.OpenApplications",
+            # 外部登录同样关闭（见 identity 场景的同组断言）
+            "external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto"
+        )
     }
-    "notifications" = @{
-        Arguments = @("--include-notifications", "true"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/NotificationsController.cs", "frontend/src/app/core/services/notification-service.ts")
+    "identity-notifications" = @{
+        Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/NotificationController.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
         Absent = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
-        ReadmeContains = @("通知持久化", "OpenIddict")
-        ReadmeExcludes = @("外部身份提供方登录")
+        ReadmeContains = @()
+        ReadmeExcludes = @()
     }
-    "no-openiddict" = @{
-        Arguments = @("--include-openiddict", "false"); Frontend = $true; Lint = $false
-        Present = @("backend/src/{name}.Api/Controllers/AuthController.cs")
-        Absent = @("backend/src/{name}.Api/Controllers/AuthorizationController.cs", "backend/src/{name}.Api/Controllers/OpenApplicationController.cs")
-        ReadmeContains = @("本地账号")
-        ReadmeExcludes = @("OpenIddict", "OAuth 2.0/OIDC Server")
+    "resource-notifications" = @{
+        Arguments = @("--service-role","Resource","--include-notifications"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/NotificationController.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
+        ReadmeContains = @()
+        ReadmeExcludes = @()
     }
-    "external-login" = @{
-        Arguments = @("--include-external-login", "true"); Frontend = $true; Lint = $true
+    "identity-external-login" = @{
+        Arguments = @("--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
-        Absent = @("backend/src/{name}.Api/Controllers/NotificationsController.cs")
-        ReadmeContains = @("外部身份提供方登录", "OpenIddict")
-        ReadmeExcludes = @("通知持久化")
-    }
-    "localization" = @{
-        Arguments = @("--include-localization", "true"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Resources/en.json", "backend/src/{name}.Api/Resources/zh-CN.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @()
         ReadmeContains = @()
         ReadmeExcludes = @()
     }
-    "no-localization" = @{
-        Arguments = @("--include-localization", "false"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Program.cs")
-        Absent = @("backend/src/{name}.Api/Resources", "frontend/public/i18n", "frontend/src/app/core/services/language-service.ts")
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-    }
-    # 交叉场景：本地化 + 通知（校验通知面板的本地化 gate）
-    "localization-notifications" = @{
-        Arguments = @("--include-localization", "true", "--include-notifications", "true"); Frontend = $true; Lint = $true
-        Present = @("frontend/public/i18n/en.json", "backend/src/{name}.Api/Controllers/NotificationsController.cs")
+    "identity-localization" = @{
+        Arguments = @("--include-localization"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @()
         ReadmeContains = @()
         ReadmeExcludes = @()
     }
-    # 交叉场景：本地化 + 外部登录（校验第三方回调页的本地化 gate）
-    "localization-external-login" = @{
-        Arguments = @("--include-localization", "true", "--include-external-login", "true"); Frontend = $true; Lint = $true
-        Present = @("frontend/public/i18n/en.json", "frontend/src/app/features/account/components/external-auth-callback")
-        Absent = @()
+    "resource-localization" = @{
+        Arguments = @("--service-role","Resource","--include-localization"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
+        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
         ReadmeContains = @()
         ReadmeExcludes = @()
     }
@@ -475,6 +569,27 @@ foreach ($scenario in $Scenarios) {
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 [IO.File]::WriteAllText($lockFile, ("pid={0} started={1}" -f $PID, (Get-Date -Format "o")), [Text.UTF8Encoding]::new($false))
 
+# 安全门禁：生产依赖闭包不得含 high 及以上漏洞。10 个场景共用模板的两份 lockfile，
+# 故在循环前各审计一次即可；advisory 端点偶发抖动，用重试消化（完整审计属依赖治理任务）。
+if (-not $SkipFrontend) {
+    $auditTargets = @(
+        (Join-Path $repoRoot "template/frontend"),
+        (Join-Path $repoRoot "template/.template.config/localization/frontend")
+    )
+    foreach ($auditRoot in $auditTargets) {
+        for ($auditAttempt = 1; $auditAttempt -le 3; $auditAttempt++) {
+            try {
+                Invoke-External "npm" @("audit", "--omit=dev", "--audit-level=high", "--package-lock-only") $auditRoot
+                break
+            }
+            catch {
+                if ($auditAttempt -ge 3) { throw }
+                Start-Sleep -Seconds (5 * $auditAttempt)
+            }
+        }
+    }
+}
+
 # 清理陈旧 run 目录：仅删「非本 run」且「超过 $staleRunAgeHours 未活动」的目录，绝不删正在运行的 run——
 # 支持多 AI/终端并行执行。活动判据：目录里 .run.lock（无则回退目录本身）的最后写入时间。被锁清不掉也无妨（尽力而为）。
 $oldRunsRoot = Join-Path $tempRoot "runs"
@@ -484,7 +599,10 @@ if (Test-Path -LiteralPath $oldRunsRoot) {
         Where-Object { $_.FullName -ne $runRoot } |
         Where-Object {
             $lock = Join-Path $_.FullName ".run.lock"
-            $activityTime = if (Test-Path -LiteralPath $lock) { (Get-Item -LiteralPath $lock).LastWriteTime } else { $_.LastWriteTime }
+            # TOCTOU 安全：Test-Path 与读取之间锁可能被并行 run 删除，Get-Item 加 SilentlyContinue 返回 $null 后回退目录时间，
+            # 避免在 $ErrorActionPreference=Stop 下因「文件已消失」中止整轮清理（进而中止整轮门禁）。
+            $lockItem = if (Test-Path -LiteralPath $lock) { Get-Item -LiteralPath $lock -ErrorAction SilentlyContinue } else { $null }
+            $activityTime = if ($lockItem) { $lockItem.LastWriteTime } else { $_.LastWriteTime }
             $activityTime -lt $staleBefore
         } |
         ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
@@ -492,12 +610,11 @@ if (Test-Path -LiteralPath $oldRunsRoot) {
 
 New-Item -ItemType Directory -Path $generatedRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $hiveRoot -Force | Out-Null
-# 第三方 NuGet 缓存跨 run 共享、只读复用（(id,version) 不可变，并发安全）；本 run 用它作 globalPackagesFolder。
-New-Item -ItemType Directory -Path $sharedPackagesRoot -Force | Out-Null
-$env:NUGET_PACKAGES = $sharedPackagesRoot
+New-Item -ItemType Directory -Path $packagesRoot -Force | Out-Null
+$env:NUGET_PACKAGES = $packagesRoot
 
 $escapedFeedRoot = [Security.SecurityElement]::Escape($feedRoot)
-$escapedPackagesRoot = [Security.SecurityElement]::Escape($sharedPackagesRoot)
+$escapedPackagesRoot = [Security.SecurityElement]::Escape($packagesRoot)
 $nugetConfig = @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -518,19 +635,36 @@ if (-not $SkipPack) {
     Invoke-External "dotnet" @("pack", "framework/Leistd.Framework.slnx", "-c", $Configuration, "-o", $feedRoot)
 }
 elseif (-not (Test-Path -LiteralPath $feedRoot)) {
-    throw "-SkipPack requires an existing shared feed at '$feedRoot'（先 `dotnet pack ... -o .tmp/local-feed`，或省略 -SkipPack 以重新 pack）."
+    throw "-SkipPack requires an existing shared feed at '$feedRoot'（先 `pwsh framework/build/pack-local-feed.ps1`，或省略 -SkipPack 以重新 pack）."
 }
 
-# 定点清除共享缓存里的 Leistd.*：NuGet 对已在 globalPackagesFolder 中的同版本包不会重新解包，
-# 若源码变了但版本号未变（本地 0.12.0），restore 会命中陈旧内容。只清 Leistd.*（几 MB，非整个 ~1GB 闭包）
-# 强制本轮重新解包新 pack 的本地包；第三方包保持温热。
-Get-ChildItem -LiteralPath $sharedPackagesRoot -Directory -Filter "leistd.*" -ErrorAction SilentlyContinue |
-    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+# 生成前先校验符号一致性：悬空引用、注释里的指令字面形式、恒真嵌套这三类问题，
+# 模板引擎要么抛只有文件名的 NullReferenceException、要么静默少生成整段代码，
+# 到那一步再排查代价极高（本仓库为此付过一整轮）。在这里拦住。
+Invoke-External "pwsh" @("-File", (Join-Path $repoRoot "scripts/check-template-symbols.ps1"))
+
+# Python 闸门的解释器：CI/Unix 常为 python3，Windows 通常只有 python（约定见 docs/framework/development-guide.md §9）
+$pythonCmd = $null
+foreach ($candidate in @("python3", "python")) {
+    $found = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($found -and ((& $found.Name --version 2>&1) -match 'Python 3\.')) { $pythonCmd = $found.Name; break }
+}
+if (-not $pythonCmd) { throw "未找到 Python 3 解释器（python3/python），无法运行 Python 静态闸门。" }
+
+# using 守卫窄于用法 —— 生成后表现为 CS0246，而下面只编译 $Scenarios 里的几个场景，
+# 排不到的符号组合要等真实使用者踩。这一步在全部符号取值上求值，比矩阵严。
+Invoke-External $pythonCmd @((Join-Path $repoRoot "scripts/check-using-guards.py"))
+
+# 连接解析路径上的 sync-over-async。基线验收标准第 6 条此前只是文字声明，
+# 没有任何检查兜着；这条路径每次取 DbContext 都执行，阻塞会在线程池饥饿下自我放大。
+Invoke-External $pythonCmd @((Join-Path $repoRoot "scripts/check-async-boundaries.py"))
 
 Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", $templateRoot, "--force")
 
 $results = [System.Collections.Generic.List[object]]::new()
 foreach ($scenario in $Scenarios) {
+    # 心跳：刷新锁文件时间戳，防止长时间运行的 run 被并行进程按 stale 目录清理。
+    [IO.File]::SetLastWriteTimeUtc($lockFile, [DateTime]::UtcNow)
     $definition = $scenarioMap[$scenario]
     $definition["Name"] = $scenario
     $projectName = Get-ScenarioProjectName $scenario
@@ -541,9 +675,7 @@ foreach ($scenario in $Scenarios) {
     Assert-ScenarioShape $projectRoot $projectName $definition
 
     $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-    # --force：等价于删除并重建 project.assets.json、强制重新评估依赖资产图（解决被 design-time restore
-    # 覆盖、资产图未刷新等问题）。注意：它**不**清除 globalPackagesFolder 中已提取的同 ID/同版本包——
-    # 同版本内容变化（本地 Leistd.* 0.12.0）由前面「pack 后定点清除共享缓存里的 leistd.*」处理，故此处安全。
+    # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
     Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
     Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
@@ -565,6 +697,13 @@ foreach ($scenario in $Scenarios) {
         $frontendRoot = Join-Path $projectRoot "frontend"
         $env:HUSKY = "0"
         Invoke-External "npm" @("ci") $frontendRoot
+        Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
+        # healthcheck 末尾会无条件询问"是否升级依赖"，默认 N。
+        # 该 CLI 没有能覆盖这个提示的非交互开关——实测 --interactive=false、--defaults
+        # 与 CI=true 三者都不生效（提示由它自带的提示库发出，不走 Angular schematic 提示）。
+        # 因此显式把 stdin 关掉：拿到 EOF 就取默认值 N，有无 TTY 行为一致，
+        # 不依赖"调用方恰好重定向了 stdin"
+        Invoke-ExternalWithClosedInput "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
         if ($definition.Lint) {
             Invoke-External "npm" @("run", "lint") $frontendRoot
             $lintValidated = $true
@@ -572,9 +711,9 @@ foreach ($scenario in $Scenarios) {
         Invoke-External "npm" @("run", "build") $frontendRoot
         $frontendValidated = $true
 
-        # 前端单测（无头、单次）：每个场景都含一条不受本地化裁剪的基础 smoke spec，
-        # 故 npm test 恒能命中 >=1 个 spec；本地化场景另含 translationReady 首帧回归测试。
-        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=ChromeHeadless") $frontendRoot
+        # 前端单测（单次）：CI 默认 ChromeHeadless，人工验收可传 -FrontendBrowser Chrome 观看有头浏览器。
+        # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含 translationReady 首帧回归测试。
+        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
         $testValidated = $true
     }
 

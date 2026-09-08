@@ -2,7 +2,7 @@
 
 ## 版本来源（VERSION 文件）
 
-框架版本的**唯一来源**是仓库根的 **`VERSION`** 文件（基准 `x.y.z`），它存的是**最近一次已发布的正式版**。
+框架版本的**唯一来源**是仓库根的 `VERSION` 文件（`x.y.z`），构建和发布都以它为基准。
 
 - `framework/common.props` 在构建时自动读取 `VERSION` 作为 `VersionPrefix`，所有 `Leistd.*` 包同步该版本（无外部工具依赖）。
 - 模板 `template/backend/Directory.Build.props` 的 `<LeistdFrameworkVersion>` 是字面值副本（生成项目需自包含），由发布流水线 `release.yml` 在发版时回写。
@@ -15,9 +15,23 @@
 | --- | --- | --- |
 | 普通提交 / `fix:` | Patch（默认） | `fix: 修复锁超时` → 0.8.0 → 0.8.1 |
 | `feat:` / `feat(scope):` | Minor | `feat: 新增 Redis 锁` → 0.8.x → 0.9.0 |
-| `feat!:` / 任意类型带 `!` / 含 `BREAKING CHANGE` | Major | → 1.0.0 |
+| `feat!:` / 任意类型带 `!` / 含 `BREAKING CHANGE` | Major | `0.12.0` → **`0.13.0`**（见下方 0.x 规则）；`1.4.2` → `2.0.0` |
 
 > **提交信息务必遵循 [Conventional Commits](https://www.conventionalcommits.org/)** —— 它直接决定版本如何递增。
+
+### 0.x 期间的破坏性变更按 Minor 递增
+
+依据 [SemVer 第 4 条](https://semver.org/lang/zh-CN/#spec-item-4)：`0.y.z` 是初始开发期，
+公共 API 不承诺稳定。因此当前主版本为 `0` 时，`!` / `BREAKING CHANGE` 递增 **Minor** 而不是 Major。
+
+这条规则解决的是：破坏性变更在 0.x 阶段是常态，若照搬"带 `!` 就进 Major"，
+**第一条不兼容改动就会把版本推到 `1.0.0`** —— 而 1.0 意味着 API 稳定承诺，
+那是一次产品决定，不该由某条提交顺带触发。
+
+破坏性变更**不会被隐藏**：release notes 仍按 `!` / `BREAKING CHANGE` 归入「破坏性变更」小节，
+升级 0.x 小版本时必须照常阅读。
+
+进入 `1.0.0` 需要显式抬 `VERSION`，见下方「本地手动操作」。
 
 ## 分支 → 包类型
 
@@ -65,8 +79,8 @@ dotnet add package Leistd.Core --prerelease
 ## 本地手动操作（不发布）
 
 ```bash
-# 打包（用 VERSION 文件的版本，固定产出到本地 feed）
-dotnet pack framework/Leistd.Framework.slnx -c Release -o .tmp/local-feed
+# 打包（用 VERSION 文件的版本，固定产出到本地 feed，产出前先清空）
+pwsh framework/build/pack-local-feed.ps1
 
 # 想发布更高的基准版本：直接编辑 VERSION 文件即可（CI 在此基础上按提交递增）
 ```

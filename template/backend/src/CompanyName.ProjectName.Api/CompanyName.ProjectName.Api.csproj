@@ -6,6 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- 测试程序集可见内部类型。启动门禁的确认逻辑（解析发现文档、比对 issuer、取 JWKS）
+         必须被真实执行过：只测布尔门禁的前后状态，等于没测"什么情况下才算确认通过"，
+         而那正是这道门禁的全部内容。 -->
+    <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
+  </ItemGroup>
+
 <!--#if (IncludeLocalization)-->
   <ItemGroup>
     <!-- 本地化资源随程序集嵌入（业务文案键，按 culture 查表） -->
@@ -15,8 +22,11 @@
 
 
   <ItemGroup>
-<!--#if (IncludeOpenIddict)-->
+<!--#if (ServiceUserContextEnabled)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
+<!--#endif-->
+<!--#if (!LocalIdentity)-->
+    <PackageReference Include="OpenIddict.Validation.SystemNetHttp" />
 <!--#endif-->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
@@ -35,15 +45,22 @@
 
   <!-- Leistd 框架引用 -->
   <ItemGroup>
-    <PackageReference Include="Leistd.Exception.AspNetCore" />
+    <PackageReference Include="Leistd.Data" />
+    <PackageReference Include="Leistd.ExceptionHandling.AspNetCore" />
 <!--#if (IncludeLocalization)-->
     <PackageReference Include="Leistd.Localization.AspNetCore" />
 <!--#endif-->
     <PackageReference Include="Leistd.DependencyInjection.DynamicProxy" />
     <PackageReference Include="Leistd.Authorization.AspNetCore" />
+    <PackageReference Include="Leistd.MultiTenancy.AspNetCore" />
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />
+<!--#if (ServiceUserContextEnabled)-->
+    <!-- 服务间用户/租户上下文的受信恢复是**消费侧**能力：Identity 与 Resource 都要，
+         Standalone 没有机器令牌这回事。条件必须与 Program.cs 的 using 和调用点一致 -->
+    <PackageReference Include="Leistd.ServiceClient.AspNetCore" />
+<!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.Core" />
     <PackageReference Include="Leistd.Notifications.AspNetCore.SignalR" />

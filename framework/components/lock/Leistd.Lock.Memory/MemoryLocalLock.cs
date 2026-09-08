@@ -1,13 +1,11 @@
-using Leistd.Lock.Core;
-using Leistd.Lock.Memory.Entry;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using Leistd.Lock.Abstractions;
 
 namespace Leistd.Lock.Memory;
 
 /// <summary>
-/// 内存本地锁实现
-/// 使用 SemaphoreSlim(1,1) per key，适用于单机/测试场景
+/// 使用按键隔离的进程内信号量提供互斥。
 /// </summary>
 public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
 {
@@ -17,6 +15,7 @@ public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
 
     internal ConcurrentDictionary<string, SemaphoreEntry> Semaphores => _semaphores;
 
+    /// <summary>创建进程内锁实现。</summary>
     public MemoryLocalLock(ILogger<MemoryLocalLock> logger)
         : this(logger, TimeProvider.System)
     {
@@ -28,9 +27,10 @@ public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
         _timeProvider = timeProvider;
     }
 
+    /// <inheritdoc />
     public async Task<ILockHandle> LockAsync(string key, CancellationToken cancellationToken = default)
     {
-        _logger.LogTrace("开始加锁【{Key}】...", key);
+        _logger.LogTrace("Acquiring lock [{Key}]...", key);
         var entry = AcquireEntryLease(key);
         try
         {
@@ -42,13 +42,16 @@ public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
             throw;
         }
 
-        _logger.LogTrace("加锁【{Key}】成功", key);
+        _logger.LogTrace("Lock [{Key}] acquired", key);
         return new MemoryLockHandle(key, entry, this);
     }
 
+    /// <inheritdoc />
     public async Task<ILockHandle?> TryLockAsync(string key, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        _logger.LogTrace("开始尝试加锁【{Key}】...", key);
+        ArgumentOutOfRangeException.ThrowIfLessThan(timeout, TimeSpan.Zero);
+
+        _logger.LogTrace("Trying to acquire lock [{Key}]...", key);
         var entry = AcquireEntryLease(key);
         bool acquired;
         try
@@ -64,28 +67,18 @@ public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
         if (!acquired)
         {
             entry.AbandonLease();
-            _logger.LogDebug("尝试加锁【{Key}】失败：超时", key);
+            _logger.LogDebug("Failed to acquire lock [{Key}]: timeout", key);
             return null;
         }
 
-        _logger.LogTrace("尝试加锁【{Key}】成功", key);
+        _logger.LogTrace("Lock [{Key}] acquired on try", key);
         return new MemoryLockHandle(key, entry, this);
-    }
-
-    public Task UnlockAsync(string key, CancellationToken cancellationToken = default)
-    {
-        if (_semaphores.TryGetValue(key, out var entry))
-            Release(key, entry);
-        else
-            _logger.LogWarning("解锁【{Key}】失败：未找到对应信号量", key);
-
-        return Task.CompletedTask;
     }
 
     internal void Release(string key, SemaphoreEntry entry)
     {
-        entry.ReleaseLease(_timeProvider.GetUtcNow());
-        _logger.LogTrace("解锁【{Key}】成功", key);
+        if (entry.ReleaseLease(_timeProvider.GetUtcNow()))
+            _logger.LogTrace("Lock [{Key}] released", key);
     }
 
     internal bool TryRemove(string key, SemaphoreEntry entry)
@@ -112,6 +105,7 @@ public sealed class MemoryLocalLock : ILocalLock, IDistributedLock, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public void Dispose()
     {
         foreach (var (key, entry) in _semaphores)

@@ -1,8 +1,13 @@
-//#if (IncludeIdentity)
+//#if (LocalIdentity)
 export * from './api/auth';
-export * from './api/user';
 //#endif
-//#if (IncludeOpenIddict)
+export * from './api/user';
+export * from './api/authorization';
+export * from './api/setting';
+//#if (LocalIdentity)
+export * from './api/tenant';
+//#endif
+//#if (OpenIddictServer)
 export * from './api/open-application';
 //#endif
 //#if (IncludeNotifications)

@@ -1,46 +1,66 @@
 using CompanyName.ProjectName.Api.Extensions;
+using CompanyName.ProjectName.Api.Middlewares;
+using Leistd.MultiTenancy.AspNetCore;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
 
 using CompanyName.ProjectName.Application;
 using CompanyName.ProjectName.Domain;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Options;
+#endif
 using CompanyName.ProjectName.Domain.Shared.Json;
 using CompanyName.ProjectName.Infrastructure;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.DependencyInjection.DynamicProxy;
-using Leistd.Exception.AspNetCore;
-#if (IncludeLocalization)
+using Leistd.ExceptionHandling.AspNetCore;
 using CompanyName.ProjectName.Api;
+#if (IncludeLocalization)
+using CompanyName.ProjectName.Application.Permissions.AppServices;
+using CompanyName.ProjectName.Application.Settings.AppServices;
 using Leistd.Localization.AspNetCore;
 #endif
 using Leistd.Security.AspNetCore;
+using Leistd.Security.Claims;
 using Leistd.Tracing.AspNetCore;
-#if (IncludeRoles)
 using Leistd.Authorization.AspNetCore;
-#endif
+using Leistd.MultiTenancy;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
-using Leistd.RealTime;
+using Leistd.RealTime.Abstractions;
 using Leistd.RealTime.AspNetCore.SignalR;
+using CompanyName.ProjectName.Api.RealTime;
 #endif
-#if (IncludeIdentity)
+#if (LocalIdentity)
 using Microsoft.AspNetCore.Authentication;
-#if (IncludeOpenIddict || IncludeExternalLogin)
-using CompanyName.ProjectName.Domain.Auth.Options;
-#endif
-#if (IncludeOpenIddict)
+using Microsoft.AspNetCore.Authentication.Cookies;
+#if (OpenIddictServer)
 using System.Security.Cryptography.X509Certificates;
+using Leistd.ServiceClient.Constants;
 using OpenIddict.Abstractions;
 #endif
 #endif
+#if (ServiceUserContextEnabled)
+using Leistd.ServiceClient.AspNetCore;
+#endif
+#if (!LocalIdentity)
+using CompanyName.ProjectName.Api.Options;
+using OpenIddict.Validation.AspNetCore;
+#endif
+using System.Net;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Microsoft.AspNetCore.Authorization;
-#if (IncludeIdentity)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Shared.Email.Options;
+using CompanyName.ProjectName.Application.Auth;
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Application.TenantConnections;
+#endif
 #endif
 using Microsoft.Extensions.FileProviders;
+using Leistd.DependencyInjection.DynamicProxy.Registration;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -51,26 +71,51 @@ try
     Log.Information("Starting web application ...");
     var builder = WebApplication.CreateBuilder(args);
 
-    // 1. 基础架构设置 (DI Factory, Logging, WebServer, HttpClient)
-    builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
+    builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory(
+        new ServiceProviderOptions
+        {
+            ValidateScopes = builder.Environment.IsDevelopment(),
+            ValidateOnBuild = builder.Environment.IsDevelopment()
+        }));
 
     builder.AddMyProjectInfrastructure();
     builder.Services.AddMyProjectWebServer();
 
-    // 2. 业务层服务注册 (Domain -> Infrastructure -> Application)
     builder.Services.AddDomainServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
     builder.Services.AddApplicationServices();
 
-    // 2.5. 配置选项
-    builder.Services.AddOptions<DefaultAdminOptions>()
+#if (LocalIdentity)
+    var defaultAdminOptions = builder.Services.AddOptions<DefaultAdminOptions>()
         .Bind(builder.Configuration.GetSection(DefaultAdminOptions.SectionName));
-#if (IncludeIdentity)
-#if (IncludeOpenIddict)
+
+    // 邮箱验证开启时，HMAC 密钥必须跨实例和重启稳定。
+    builder.Services.AddOptions<VerificationCodeOptions>()
+        .Bind(builder.Configuration.GetSection(VerificationCodeOptions.SectionName))
+        .Validate<IConfiguration>(
+            (options, config) =>
+                !config.GetValue<bool>("UserRegistration:EnableEmailVerification")
+                || options.IsKeyUsable,
+            $"{VerificationCodeOptions.SectionName}:Key is required when " +
+            "UserRegistration:EnableEmailVerification is true, and must be at least " +
+            $"{VerificationCodeOptions.MinimumKeyBytes} base64-encoded bytes.")
+        .ValidateOnStart();
+
+    // 拒绝缺失或已公开的超级管理员密码。
+    defaultAdminOptions
+        .Validate(
+            options => options.IsPasswordUsable,
+            $"{DefaultAdminOptions.SectionName}:Password is required and must not be one of the sample " +
+            "values published with this template. Inject it from the deployment (environment variable " +
+            "or user-secrets); there is deliberately no default.")
+        .ValidateOnStart();
+#endif
+#if (LocalIdentity)
+#if (OpenIddictServer)
     builder.Services.AddOptions<OAuthOptions>()
         .Bind(builder.Configuration.GetSection(OAuthOptions.SectionName));
 #endif
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
     builder.Services.AddOptions<ExternalAuthOptions>()
         .Bind(builder.Configuration.GetSection(ExternalAuthOptions.SectionName));
 #endif
@@ -84,13 +129,12 @@ try
         .ValidateOnStart();
 #endif
 
-#if (IncludeOpenIddict)
-    // 2.6. OpenIddict OAuth 2.0 / OIDC 服务端
+#if (OpenIddictServer)
     builder.Services.AddOpenIddict()
         .AddCore(options =>
         {
             options.UseEntityFrameworkCore()
-                .UseDbContext<MyProjectDbContext>();
+                .UseDbContext<OpenIddictDbContext>();
         })
         .AddServer(options =>
         {
@@ -98,8 +142,8 @@ try
                 .SetTokenEndpointUris("/connect/token")
                 .SetUserInfoEndpointUris("/connect/userinfo")
                 .SetEndSessionEndpointUris("/connect/logout");
+            options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10));
 
-            // 设置固定 issuer（跨服务验证场景必须）
             var oauthOpts = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
             if (!string.IsNullOrWhiteSpace(oauthOpts.Issuer))
             {
@@ -111,7 +155,7 @@ try
             options.AllowRefreshTokenFlow();
             options.AllowClientCredentialsFlow();
 
-            // 禁用 access token 加密，允许跨服务验证（官方推荐）
+            // 资源服务需要直接验证 access token。
             options.DisableAccessTokenEncryption();
 
             options.RegisterScopes(
@@ -119,7 +163,11 @@ try
                 OpenIddictConstants.Scopes.Profile,
                 OpenIddictConstants.Scopes.Email,
                 OpenIddictConstants.Scopes.Roles,
-                OpenIddictConstants.Scopes.OfflineAccess);
+                OpenIddictConstants.Scopes.OfflineAccess,
+                // 机器令牌只在显式拥有 delegation scope 时才能代表用户。
+                ServiceClientScopes.Delegation,
+                TenantConnectionScopes.RuntimeRead,
+                TenantConnectionScopes.MigrationRead);
 
             if (oauthOpts.UseDevelopmentCertificates)
             {
@@ -144,7 +192,6 @@ try
                 }
             }
 
-            // 内网 S2S 调用禁用 HTTPS 要求
             if (oauthOpts.DisableHttpsRequirement)
             {
                 options.UseAspNetCore()
@@ -166,54 +213,119 @@ try
         .AddValidation(options =>
         {
             options.UseLocalServer();
-            options.UseAspNetCore();
+
+            // 普通 API 只接受 Bearer 头，避免令牌进入 URL 和访问日志。
+            // SignalR 若需 query 令牌，应只在 Hub 路径定向转换。
+            options.UseAspNetCore()
+                   .DisableAccessTokenExtractionFromQueryString()
+                   .DisableAccessTokenExtractionFromBodyForm();
         });
 #endif
-// (IncludeOpenIddict)
+#if (!LocalIdentity)
+    // Resource 只验证 Identity 签发的 Bearer token。
+    const string RemoteIdentityConfigurationError =
+        "Resource services require Authentication:Issuer (an absolute http(s) URI) and Authentication:Audience.";
 
-    // 3. 注册应用启动引导程序 (替代手动 InitializeApplicationAsync)
+    builder.Services.AddOptions<RemoteIdentityOptions>()
+        .Bind(builder.Configuration.GetSection(RemoteIdentityOptions.SectionName))
+        .Validate(options => options.IsUsable, RemoteIdentityConfigurationError)
+        .ValidateOnStart();
+
+    // OpenIddict 组合期需要已验证的 issuer。
+    var remoteIdentity = builder.Configuration
+        .GetSection(RemoteIdentityOptions.SectionName)
+        .Get<RemoteIdentityOptions>() ?? new RemoteIdentityOptions();
+    if (!remoteIdentity.IsUsable)
+    {
+        throw new InvalidOperationException(RemoteIdentityConfigurationError);
+    }
+
+    builder.Services.AddOpenIddict()
+        .AddValidation(options =>
+        {
+            options.SetIssuer(remoteIdentity.IssuerUri!);
+            options.AddAudiences(remoteIdentity.Audience!);
+            options.UseSystemNetHttp();
+            options.UseAspNetCore()
+                .DisableAccessTokenExtractionFromQueryString()
+                .DisableAccessTokenExtractionFromBodyForm();
+        });
+#endif
+
     builder.Services.AddHostedService<ApplicationBootstrapper>();
 
-    // 4. API 层基础设施 (Exception, HealthChecks, Controllers)
     builder.Services.AddGlobalExceptionHandler(builder.Configuration);
 #if (IncludeLocalization)
-    // 多语言：默认英语，支持中英；错误消息与校验消息随请求 culture 本地化。
-    // 业务错误文案键的资源在本项目 Resources/{en,zh-CN}.json（覆盖/扩展框架默认 Error:* 键）。
     builder.Services.AddJsonLocalization(
         supportedCultures: ["en", "zh-CN"],
         configure: options =>
         {
             options.ResourceAssemblies.Add(typeof(Program).Assembly);
-            // 显式登记 DataAnnotations 校验消息的标记类型走 JSON（组合工厂按类型精确路由，
-            // 未登记则委派官方 RESX）；否则 factory.Create(typeof(ApiResource)) 取不到 JSON 校验文案。
+            // 只有显式登记的强类型资源才路由到 JSON。
             options.JsonResourceTypes.Add(typeof(ApiResource));
+            options.JsonResourceTypes.Add(typeof(PermissionAppService));
+            options.JsonResourceTypes.Add(typeof(SettingAppService));
         });
 #endif
-    builder.Services.AddHealthChecks();
+    // liveness 只表示本进程存活，不依赖外部服务。
+    var healthChecks = builder.Services.AddHealthChecks()
+        .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
+            tags: ["live"]);
+#if (RemoteTokenAuth)
+    // readiness 在启动时确认 Identity 元数据可达，并锁存结果。
+    builder.Services.AddSingleton<RemoteIdentityReadinessGate>();
+    builder.Services.AddHttpClient(nameof(RemoteIdentityReadinessInitializer));
+    builder.Services.AddHostedService<RemoteIdentityReadinessInitializer>();
+    healthChecks.AddCheck<RemoteIdentityReadinessCheck>("remote-identity", tags: ["ready"]);
+#else
+    healthChecks.AddCheck("ready-self",
+        () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
+        tags: ["ready"]);
+#endif
     builder.Services.AddMyProjectSpaProxy();
-    // HTTP 管道 JSON 配置：ProblemDetails / IProblemDetailsService（业务 422、异常响应）走此配置——
-    // 与下方 MVC 的 AddJsonOptions 用同一 ConfigureWebApi，令业务响应 / 400 / 422 命名策略一致、跟随宿主。
+    // HTTP 与 MVC 共用同一 JSON 配置，统一业务响应和 ProblemDetails。
     builder.Services.ConfigureHttpJsonOptions(options => JsonOptions.ConfigureWebApi(options.SerializerOptions));
     builder.Services.AddControllers()
         .AddJsonOptions(options => JsonOptions.ConfigureWebApi(options.JsonSerializerOptions))
 #if (IncludeLocalization)
-        // DataAnnotations 校验消息随 culture 本地化：ErrorMessage/Display 的英文句子即文案键（en 默认值），
-        // zh-CN.json 用同一句子作键映射中文。Provider 指向 ApiResource 标记类型（工厂返回共享视图）。
+        // DataAnnotations 使用 ApiResource 的 JSON 资源。
         .AddDataAnnotationsLocalization(options =>
             options.DataAnnotationLocalizerProvider = (_, factory) => factory.Create(typeof(ApiResource)))
 #endif
-        // [ApiController] 自动 400 校验产出与业务 422 一致的 RFC 9457 errors 数组形态（统一两条校验路径）。
         .ConfigureApiValidation();
 
-    // 4.1. CORS 配置
+    // X-Forwarded-Host 影响租户解析和绝对 URL，因此只信任显式配置的代理。
+    // 在 Options 回调内读取 Build 阶段已合并的最终配置。
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
                                    ForwardedHeaders.XForwardedProto |
                                    ForwardedHeaders.XForwardedHost;
         options.ForwardLimit = 1;
-        options.KnownIPNetworks.Clear();
-        options.KnownProxies.Clear();
+
+        var forwardedConfig = builder.Configuration.GetSection("ForwardedHeaders");
+
+        foreach (var proxy in forwardedConfig.GetSection("KnownProxies").Get<string[]>() ?? [])
+        {
+            if (!IPAddress.TryParse(proxy, out var address))
+            {
+                throw new InvalidOperationException(
+                    $"ForwardedHeaders:KnownProxies contains an invalid IP address: '{proxy}'.");
+            }
+
+            options.KnownProxies.Add(address);
+        }
+
+        foreach (var network in forwardedConfig.GetSection("KnownNetworks").Get<string[]>() ?? [])
+        {
+            if (!System.Net.IPNetwork.TryParse(network, out var parsed))
+            {
+                throw new InvalidOperationException(
+                    $"ForwardedHeaders:KnownNetworks contains an invalid CIDR range: '{network}'.");
+            }
+
+            options.KnownIPNetworks.Add(parsed);
+        }
     });
 
     builder.Services.AddCors(options =>
@@ -227,54 +339,85 @@ try
             policy.AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
+#if (LocalIdentity)
+
+            // 跨域前端需要读取租户失效响应头以触发会话恢复。
+            policy.WithExposedHeaders(TenantSessionRecoveryMiddleware.TenantInvalidHeader);
+#endif
 
             if (allowAnyLocalhost)
             {
-                // 允许所有 Localhost 端口访问 (仅用于开发环境配置)
                 policy.SetIsOriginAllowed(origin => new Uri(origin).Host == "localhost");
             }
             else if (allowedOrigins.Length > 0)
             {
-                // 生产环境限制特定域名
                 policy.WithOrigins(allowedOrigins);
             }
-            // 否则默认不允许任何来源 (安全默认值)
         });
     });
 
-    // 4.5. Leistd Security 服务
     builder.Services.AddSecurity();
 
-#if (IncludeNotifications)
-    // 4.5.1 Leistd Notifications — 通知 Hub 与业务实时 Hub 显式注册
-    // AddNotificationsSignalR 只注册通知传输；模板前端还会连接 /hubs/realtime 订阅业务事件，
-    // 因此业务实时能力需要显式调用 AddRealTimeSignalR。
-    void ConfigureSignalR(RealTimeOptions opt)
+#if (LocalIdentity)
+    // Identity 持有租户注册表，因此校验解析结果。
+    builder.Services.AddMultiTenancy(builder.Configuration);
+#else
+    // Resource 不持有注册表，只信已验证令牌的 tenant_id claim。
+    builder.Services.AddMultiTenancy(options =>
     {
-        opt.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    }
-
-    builder.Services.AddRealTimeSignalR(ConfigureSignalR);
-    builder.Services.AddNotificationsSignalR(ConfigureSignalR);
+        builder.Configuration.GetSection("Leistd:MultiTenancy").Bind(options);
+        options.ValidateResolvedTenant = false;
+    });
 #endif
 
-    // 4.6. DataProtection 配置（生产环境必需）
+#if (ServiceUserContextEnabled)
+    // 仅为已认证的 client credentials 调用恢复转发用户上下文。
+    builder.Services.AddServiceUserContext(builder.Configuration);
+#endif
+
+#if (IncludeNotifications)
+    // 心跳、超时、详细错误是 SignalR 自身的选项，由宿主直接配置。
+    builder.Services.AddSignalR(options =>
+    {
+        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    });
+
+    // 通知与业务事件使用不同的 SignalR 传输，必须分别注册。
+    builder.Services.AddRealTimeSignalR();
+    builder.Services.AddNotificationsSignalR();
+
+    // 订阅授权必须由宿主明确选择：Subscribe 无条件走授权器，框架不给默认实现。
+    // 组名不含租户段，Subscribe 收的是客户端给的任意字符串，所以默认只放行显式公共的
+    // public: 命名空间；订阅租户内资源时在 PublicResourceSubscriptionAuthorizer 里加判定。
+    builder.Services.AddSingleton<IRealTimeSubscriptionAuthorizer, PublicResourceSubscriptionAuthorizer>();
+#endif
+
     builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
 
-    // 5. 安全配置 (AuthN & AuthZ)
-#if (IncludeIdentity)
+#if (LocalIdentity)
     builder.Services.AddAuthentication(options =>
     {
-#if (IncludeOpenIddict)
-        // 启用 OpenIddict 时，默认走其 Bearer 校验；未启用时默认走 Cookie。
-        options.DefaultAuthenticateScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+#if (OpenIddictServer)
+        // 多租户解析前必须按请求恢复 Bearer 或 Cookie 主体，防止请求头改写已登录用户的租户。
+        options.DefaultAuthenticateScheme = "MyProjectSmart";
         options.DefaultChallengeScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
 #else
-        options.DefaultAuthenticateScheme = "MyProjectCookie";
-        options.DefaultChallengeScheme = "MyProjectCookie";
+        // 不签发令牌时只恢复 Cookie 会话。
+        options.DefaultAuthenticateScheme = AuthenticationSchemeNames.SessionCookie;
+        options.DefaultChallengeScheme = AuthenticationSchemeNames.SessionCookie;
 #endif
     })
-    .AddCookie("MyProjectCookie", options =>
+#if (OpenIddictServer)
+    .AddPolicyScheme("MyProjectSmart", "Selects Bearer or Cookie per request", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+            context.Request.Headers.Authorization.Any(value =>
+                value != null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                ? OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme
+                : AuthenticationSchemeNames.SessionCookie;
+    })
+#endif
+    .AddCookie(AuthenticationSchemeNames.SessionCookie, options =>
     {
         var isDevelopmentEnvironment = builder.Environment.IsDevelopment();
 
@@ -285,91 +428,44 @@ try
         options.Cookie.SecurePolicy = isDevelopmentEnvironment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         options.Cookie.IsEssential = true;
 
-#if (IncludeOpenIddict)
+#if (OpenIddictServer)
         var oauthConfig = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
         options.ExpireTimeSpan = TimeSpan.FromDays(oauthConfig.CookieExpireDays);
 #else
         options.ExpireTimeSpan = TimeSpan.FromDays(7);
 #endif
         options.SlidingExpiration = true;
-    });
 
-    builder.Services.AddAuthorization(options =>
-    {
-        var schemes = new[]
+        // API 拒绝必须返回 401/403，不能被 Cookie 重定向和 SPA 回退转换为 HTML 200。
+        options.Events.OnRedirectToLogin = context => WriteStatus(context, StatusCodes.Status401Unauthorized);
+        options.Events.OnRedirectToAccessDenied = context => WriteStatus(context, StatusCodes.Status403Forbidden);
+
+        static Task WriteStatus(RedirectContext<CookieAuthenticationOptions> context, int statusCode)
         {
-#if (IncludeOpenIddict)
-            OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme,
-#endif
-            "MyProjectCookie"
-        };
-
-        options.DefaultPolicy = new AuthorizationPolicyBuilder()
-            .AddAuthenticationSchemes(schemes)
-            .RequireAuthenticatedUser()
-            .Build();
-
-        // 超级管理员策略：基于 is_super_admin claim 判定（无需查库）
-        options.AddPolicy("SuperAdmin", policy => policy
-            .AddAuthenticationSchemes(schemes)
-            .RequireAuthenticatedUser()
-            .RequireClaim(Leistd.Security.Claims.CustomClaimTypes.IsSuperAdmin, "true"));
+            context.Response.StatusCode = statusCode;
+            return Task.CompletedTask;
+        }
     });
+
 #else
-    builder.Services.AddAuthorization();
-#endif
-#if (IncludeRoles)
-    // 将权限定义接入微软授权 Policy 管道，使 [Authorize(Policy = "权限名")] 生效
-    builder.Services.AddPermissionAuthorization();
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme =
+            OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme =
+            OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+    });
 #endif
 
-    // --- 构建应用 ---
+    builder.Services.AddApiAuthorization();
+    // 将权限定义作为 ASP.NET Core 授权策略解析。
+    builder.Services.AddPermissionAuthorization();
+
     var app = builder.Build();
 
-    // 在应用启动前自动迁移或创建数据库，确保数据库就绪后再接收请求。
-    using (var scope = app.Services.CreateScope())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
-        if (db.Database.IsRelational())
-        {
-            // 模板默认不内置迁移：
-            // - 已添加迁移（dotnet ef migrations add）-> 走 Migrate 应用迁移；
-            // - 尚无任何迁移 -> 走 EnsureCreated 直接按当前模型建表。
-            // 注意：同一数据库不要在两种方式间切换。
-            var hasMigrations = db.Database.GetMigrations().Any();
-            if (hasMigrations)
-            {
-                var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
-                if (pendingMigrations.Count > 0)
-                {
-                    logger.LogInformation("检测到关系型数据库，正在应用 {Count} 个待执行迁移...", pendingMigrations.Count);
-                    await db.Database.MigrateAsync();
-                    logger.LogInformation("数据库迁移完成");
-                }
-                else
-                {
-                    logger.LogInformation("检测到关系型数据库，迁移已是最新，无需处理");
-                }
-            }
-            else
-            {
-                logger.LogInformation("检测到关系型数据库且无迁移，使用 EnsureCreated 按当前模型创建表结构...");
-                await db.Database.EnsureCreatedAsync();
-                logger.LogInformation("数据库表结构创建完成");
-            }
-        }
-        else
-        {
-            logger.LogInformation("使用内存数据库，跳过迁移");
-        }
-    }
-
-    // 7. 中间件管道配置
     app.UseForwardedHeaders();
 #if (IncludeLocalization)
-    // 请求 culture 解析（QueryString / Cookie / Accept-Language）——须在读取 culture 的中间件（含全局异常处理）之前
+    // 在所有读取当前区域性的中间件之前解析请求区域性。
     app.UseJsonRequestLocalization();
 #endif
     var webRootPath = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
@@ -402,32 +498,54 @@ try
     });
     app.UseGlobalExceptionHandler();
     app.UseCorrelationId();
-    app.MapHealthChecks("/api/health").AllowAnonymous();
+    app.MapHealthChecks("/api/health/live", new HealthCheckOptions
+    {
+        Predicate = registration => registration.Tags.Contains("live")
+    }).AllowAnonymous();
+    app.MapHealthChecks("/api/health/ready", new HealthCheckOptions
+    {
+        Predicate = registration => registration.Tags.Contains("ready")
+    }).AllowAnonymous();
 
     app.UseCors();
 
-    app.UseSecurity();
-#if (IncludeIdentity)
-    app.UseAuthentication();
+#if (!LocalIdentity && IncludeNotifications)
+    // 仅 Hub 允许 SignalR 浏览器客户端的 access_token query；普通 API 仍只接受 Bearer header。
+    app.UseHubAccessToken();
 #endif
+    app.UseAuthentication();
+#if (ServiceUserContextEnabled)
+    // 转发上下文的信任判定依赖已认证的调用方主体。
+    app.UseServiceUserContext();
+#endif
+#if (LocalIdentity)
+    // 租户失效时注销 Cookie，避免会话困在不可用租户中。
+    app.UseTenantSessionRecovery(AuthenticationSchemeNames.SessionCookie);
+#endif
+    // 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
+    app.UseMultiTenancy();
     app.UseAuthorization();
 
     app.MapControllers();
 
 #if (IncludeNotifications)
-    // SignalR 端点：通知 Hub 与实时业务事件 Hub 各自显式映射。
-    // 若项目只保留通知能力，可删除 MapRealTimeHub 以及上面的 AddRealTimeSignalR。
+    // 通知与业务事件 Hub 必须分别映射。
     app.MapNotificationHub();
     app.MapRealTimeHub();
 #endif
 
     app.MapMyProjectSpaFallback();
 
+    // API 只验证 schema；所有 DDL 由 DbMigrator 施加。
+    await app.VerifyDatabaseSchemaAsync();
+
     app.Run();
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {
+    // 重抛以便宿主和测试观察到非零退出。
     Log.Fatal(ex, "Application terminated unexpectedly");
+    throw;
 }
 finally
 {

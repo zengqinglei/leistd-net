@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
@@ -49,7 +50,7 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 重置用户密码
     /// </summary>
-#if (IncludeIdentity)
+#if (LocalIdentity)
     Task ResetPasswordAsync(Guid id, ResetUserPasswordInputDto input, CancellationToken cancellationToken = default);
 #endif
 
@@ -57,4 +58,17 @@ public interface IUserAppService : IAppService
     /// 删除用户（软删除）
     /// </summary>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 查询用户当前角色
+    /// </summary>
+    Task<IReadOnlyList<RoleBriefDto>> GetRolesAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 替换用户角色。需要 App.Users.ManageRoles。
+    /// </summary>
+    Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
+        Guid id,
+        UpdateUserRolesInputDto input,
+        CancellationToken cancellationToken = default);
 }

@@ -4,7 +4,7 @@ using Leistd.Security.Claims;
 namespace Leistd.Security.Users;
 
 /// <summary>
-/// 当前用户实现
+/// 从当前 <see cref="ClaimsPrincipal"/> 提供强类型用户信息。
 /// </summary>
 /// <param name="principalAccessor">认证主体访问器</param>
 public class CurrentUser(ICurrentPrincipalAccessor principalAccessor) : ICurrentUser
@@ -32,12 +32,22 @@ public class CurrentUser(ICurrentPrincipalAccessor principalAccessor) : ICurrent
     }
 
     /// <inheritdoc />
+    public Guid? TenantId
+    {
+        get
+        {
+            var tenantValue = FindFirstValue(CustomClaimTypes.TenantId);
+            return Guid.TryParse(tenantValue, out var tenantId) ? tenantId : null;
+        }
+    }
+
+    /// <inheritdoc />
     public string? Username =>
         FindFirstValue(PreferredUsernameClaimType, NameClaimType, ClaimTypes.Name);
 
     /// <inheritdoc />
     public string? Name =>
-        FindFirstValue(NameClaimType, ClaimTypes.GivenName);
+        FindFirstValue(NameClaimType, ClaimTypes.Name);
 
     /// <inheritdoc />
     public string? Email =>

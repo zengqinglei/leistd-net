@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { PagedResultDto } from '../../../shared/models/paged-result.dto';
-import { UserOutputDto } from '../../account/models/account.dto';
+import { UserManagementOutputDto } from '../models/user-management.dto';
 
 @Injectable({
   providedIn: 'root',
@@ -17,7 +17,7 @@ export class PlatformUserService {
     limit?: number;
     keyword?: string;
     isActive?: boolean;
-  }): Observable<PagedResultDto<UserOutputDto>> {
+  }): Observable<PagedResultDto<UserManagementOutputDto>> {
     let params = new HttpParams();
 
     if (input?.offset !== undefined) {
@@ -33,6 +33,6 @@ export class PlatformUserService {
       params = params.set('isActive', input.isActive.toString());
     }
 
-    return this.http.get<PagedResultDto<UserOutputDto>>(this.baseUrl, { params });
+    return this.http.get<PagedResultDto<UserManagementOutputDto>>(this.baseUrl, { params });
   }
 }

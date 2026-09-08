@@ -12,7 +12,7 @@ public class ApplicationBootstrapper(
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("开始应用启动引导");
+        logger.LogInformation("Starting application bootstrap");
         using var scope = serviceProvider.CreateScope();
 
         // 1. 初始化系统数据（角色、用户、权限）
@@ -20,7 +20,7 @@ public class ApplicationBootstrapper(
         var systemInitializer = scope.ServiceProvider.GetRequiredService<ISystemInitializer>();
         await systemInitializer.InitializeAsync(cancellationToken);
 
-        logger.LogInformation("应用启动引导完成");
+        logger.LogInformation("Application bootstrap completed");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

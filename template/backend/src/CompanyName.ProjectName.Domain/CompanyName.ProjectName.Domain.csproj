@@ -13,9 +13,10 @@
 
   <!-- Leistd 框架引用 -->
   <ItemGroup>
-    <PackageReference Include="Leistd.Exception.Core" />
+    <PackageReference Include="Leistd.ExceptionHandling.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
     <PackageReference Include="Leistd.Security.Core" />
+    <PackageReference Include="Leistd.MultiTenancy.Core" />
     <PackageReference Include="Leistd.Ddd.Domain" />
   </ItemGroup>
 

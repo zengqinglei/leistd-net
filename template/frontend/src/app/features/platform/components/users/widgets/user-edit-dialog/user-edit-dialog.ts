@@ -1,35 +1,62 @@
-import { CommonModule } from '@angular/common';
+// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   effect,
+  //#if (IncludeLocalization)
   inject,
+  //#endif
   input,
   model,
   output,
   signal,
 } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  form,
+  required,
+  email as emailValidator,
+  minLength,
+  maxLength,
+  pattern,
+  disabled,
+  FormField,
+} from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
-import { AvatarModule } from 'primeng/avatar';
-import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { DividerModule } from 'primeng/divider';
-import { FileSelectEvent, FileUploadModule } from 'primeng/fileupload';
-import { InputTextModule } from 'primeng/inputtext';
-import { MultiSelectModule } from 'primeng/multiselect';
-import { PasswordModule } from 'primeng/password';
-import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+//#if (LocalIdentity)
+import { lucideEye, lucideEyeOff, lucideImagePlus } from '@ng-icons/lucide';
+//#else
+import { lucideImagePlus } from '@ng-icons/lucide';
+//#endif
+import { BrnDialogState } from '@spartan-ng/brain/dialog';
+import { toast } from '@spartan-ng/brain/sonner';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+//#if (LocalIdentity)
+import {
+  HlmInputGroup,
+  HlmInputGroupInput,
+  HlmInputGroupButton,
+} from '@spartan-ng/helm/input-group';
+//#endif
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmSeparator } from '@spartan-ng/helm/separator';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
+import { HlmSwitch } from '@spartan-ng/helm/switch';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
-import { DialogLoadingComponent } from '../../../../../../shared/components/dialog-loading/dialog-loading';
-import { DIALOG_CONFIGS } from '../../../../../../shared/constants/dialog-config.constants';
-import { ROLE_LABEL_MAP } from '../../../../../../shared/models/role.enum';
+//#if (LocalIdentity)
+import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
+//#endif
+import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import { RoleBriefDto } from '../../../../models/role.dto';
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
@@ -37,38 +64,50 @@ import {
 } from '../../../../models/user-management.dto';
 
 const MAX_AVATAR_SIZE = 1024 * 1024;
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/;
+const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 @Component({
   selector: 'app-user-edit-dialog',
+  standalone: true,
   imports: [
-    CommonModule,
-    ReactiveFormsModule,
+    FormField,
+    NgIcon,
+    HlmButton,
+    HlmSpinner,
+    HlmInput,
+    //#if (LocalIdentity)
+    HlmInputGroup,
+    HlmInputGroupInput,
+    HlmInputGroupButton,
+    //#endif
+    HlmSwitch,
+    HlmSeparator,
+    ...HlmDialogImports,
+    ...HlmFieldImports,
+    ...HlmSelectImports,
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
-    DialogModule,
-    ButtonModule,
-    AvatarModule,
-    FileUploadModule,
-    InputTextModule,
-    PasswordModule,
-    ToggleSwitchModule,
-    MultiSelectModule,
-    DividerModule,
-    DialogLoadingComponent,
+    DialogLoading,
+  ],
+  providers: [
+    provideIcons({
+      lucideImagePlus,
+      //#if (LocalIdentity)
+      lucideEye,
+      lucideEyeOff,
+      //#endif
+    }),
   ],
   templateUrl: './user-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UserEditDialogComponent {
-  visible = model(false);
-  loading = input(false);
-  saving = input(false);
-  user = input<UserManagementOutputDto | null>(null);
+export class UserEditDialog {
+  readonly visible = model(false);
+  readonly loading = input(false);
+  readonly saving = input(false);
+  readonly user = input<UserManagementOutputDto | null>(null);
   readonly saved = output<CreateUserInputDto | UpdateUserInputDto>();
-
-  private readonly fb = inject(FormBuilder);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -79,7 +118,7 @@ export class UserEditDialogComponent {
       this.isEditMode() ? 'users.editDialog.editHeader' : 'users.editDialog.createHeader',
     );
   readonly rolesPlaceholder = () => this.transloco.translate('users.editDialog.rolesPlaceholder');
-  readonly avatarMessages = () => ({
+  private readonly avatarMessages = () => ({
     sizeSummary: this.transloco.translate('users.editDialog.avatarTooLargeSummary'),
     sizeDetail: this.transloco.translate('users.editDialog.avatarTooLargeDetail'),
     typeSummary: this.transloco.translate('users.editDialog.avatarBadTypeSummary'),
@@ -89,7 +128,7 @@ export class UserEditDialogComponent {
   private readonly unnamedLabel = () => 'Unnamed user';
   readonly dialogHeader = () => (this.isEditMode() ? 'Edit user' : 'New user');
   readonly rolesPlaceholder = () => 'Select roles';
-  readonly avatarMessages = () => ({
+  private readonly avatarMessages = () => ({
     sizeSummary: 'File too large',
     sizeDetail: 'The avatar size cannot exceed 1MB',
     typeSummary: 'Unsupported format',
@@ -97,66 +136,140 @@ export class UserEditDialogComponent {
   });
   //#endif
 
-  dialogConfig = DIALOG_CONFIGS.SMALL;
   readonly avatarPreview = signal('');
+
+  // 表单模型（Signal Forms）
+  protected readonly formModel = signal({
+    //#if (!LocalIdentity)
+    subjectId: '',
+    //#endif
+    username: '',
+    email: '',
+    displayName: '',
+    avatar: '',
+    //#if (LocalIdentity)
+    password: '',
+    //#endif
+    isActive: true,
+    //#if (LocalIdentity)
+    isEmailVerified: false,
+    //#endif
+    roleIds: [] as string[],
+  });
+
   readonly displayName = computed(
     () =>
-      this.form.controls.displayName.value.trim() ||
-      this.form.controls.username.value.trim() ||
+      this.formModel().displayName.trim() ||
+      this.formModel().username.trim() ||
       this.unnamedLabel(),
   );
-  readonly avatarLabel = computed(() => (this.displayName().trim().charAt(0) || 'U').toUpperCase());
-  readonly avatarStyle = computed(() => {
-    const seed = (this.form.controls.username.value || this.displayName()).trim();
-    let total = 0;
-
-    for (const char of seed) {
-      total += char.charCodeAt(0);
-    }
-
-    const palette = [
-      { background: '#dbeafe', color: '#1d4ed8' },
-      { background: '#dcfce7', color: '#15803d' },
-      { background: '#fef3c7', color: '#b45309' },
-      { background: '#fce7f3', color: '#be185d' },
-      { background: '#ede9fe', color: '#6d28d9' },
-    ];
-
-    return palette[total % palette.length];
-  });
-  readonly form = this.fb.nonNullable.group({
-    username: [
-      '',
-      [
-        Validators.required,
-        Validators.minLength(3),
-        Validators.maxLength(64),
-        Validators.pattern(/^[a-zA-Z0-9_]+$/),
-      ],
-    ],
-    email: ['', [Validators.required, Validators.email, Validators.maxLength(256)]],
-    displayName: ['', [Validators.maxLength(128)]],
-    avatar: [''],
-    password: ['', [Validators.required, Validators.pattern(PASSWORD_RULE)]],
-    isActive: [true],
-    isEmailVerified: [false],
-    roles: [['Member'], [Validators.required]],
-  });
-
   //#if (IncludeLocalization)
-  // 本地化模式：ROLE_LABEL_MAP 值是词条键，读 translationReady 建立依赖，资源就绪 / 语言切换时 computed 重算，标签重新翻译。
-  readonly roleOptions = computed(() => {
-    this.translationReady();
-    return Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({
-      label: this.transloco.translate(label),
-      value,
-    }));
+  readonly userForm = form(this.formModel, (path) => {
+    required(path.username, {
+      message: this.transloco.translate('common.validation.required'),
+    });
+    minLength(path.username, 3, {
+      message: this.transloco.translate('common.validation.usernamePattern'),
+    });
+    maxLength(path.username, 64, {
+      message: this.transloco.translate('common.validation.usernamePattern'),
+    });
+    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
+      message: this.transloco.translate('common.validation.usernamePattern'),
+    });
+    // 编辑模式禁用用户名（不可改）。
+    disabled(path.username, { when: () => this.isEditMode() });
+    required(path.email, { message: this.transloco.translate('common.validation.required') });
+    emailValidator(path.email, {
+      message: this.transloco.translate('common.validation.email'),
+    });
+    maxLength(path.email, 256, { message: '' });
+    maxLength(path.displayName, 128, {
+      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
+    });
+    //#if (!LocalIdentity)
+    required(path.subjectId, { message: this.transloco.translate('common.validation.required') });
+    pattern(
+      path.subjectId,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      {
+        message: 'Enter a valid Identity subject GUID.',
+        when: () => !this.isEditMode(),
+      },
+    );
+    //#endif
+    //#if (LocalIdentity)
+    // 初始密码仅在新建模式校验（编辑模式无密码字段）。
+    required(path.password, {
+      message: this.transloco.translate('common.validation.required'),
+      when: () => !this.isEditMode(),
+    });
+    pattern(path.password, PASSWORD_RULE, {
+      message: this.transloco.translate('common.validation.passwordRule'),
+      when: () => !this.isEditMode(),
+    });
+    //#endif
   });
   //#else
-  readonly roleOptions = computed(() =>
-    Object.entries(ROLE_LABEL_MAP).map(([value, label]) => ({ label, value })),
-  );
+  readonly userForm = form(this.formModel, (path) => {
+    required(path.username, { message: 'This field is required.' });
+    minLength(path.username, 3, {
+      message: 'Must be 3–64 letters, digits, or underscores.',
+    });
+    maxLength(path.username, 64, {
+      message: 'Must be 3–64 letters, digits, or underscores.',
+    });
+    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
+      message: 'Must be 3–64 letters, digits, or underscores.',
+    });
+    // 编辑模式禁用用户名（不可改）。
+    disabled(path.username, { when: () => this.isEditMode() });
+    required(path.email, { message: 'This field is required.' });
+    emailValidator(path.email, { message: 'Please enter a valid email address.' });
+    maxLength(path.email, 256, { message: '' });
+    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
+    //#if (!LocalIdentity)
+    required(path.subjectId, { message: 'This field is required.' });
+    pattern(
+      path.subjectId,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      {
+        message: 'Enter a valid Identity subject GUID.',
+        when: () => !this.isEditMode(),
+      },
+    );
+    //#endif
+    //#if (LocalIdentity)
+    // 初始密码仅在新建模式校验（编辑模式无密码字段）。
+    required(path.password, {
+      message: 'This field is required.',
+      when: () => !this.isEditMode(),
+    });
+    pattern(path.password, PASSWORD_RULE, {
+      message:
+        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
+      when: () => !this.isEditMode(),
+    });
+    //#endif
+  });
   //#endif
+  /**
+   * 角色选项由父级从角色 API 注入，按 Id 提交、按显示名回显。
+   * 仅在「新建 + 持有角色分配权限」时展示：编辑态的角色变更走独立的角色分配入口，
+   * 因此只持有 Users.Update 的主体在这里看不到也提交不了角色。
+   */
+  readonly availableRoles = input<RoleBriefDto[]>([]);
+  readonly canAssignRoles = input(false);
+
+  readonly roleOptions = computed(() =>
+    this.availableRoles().map((role) => ({ label: role.displayName, value: role.id })),
+  );
+
+  readonly showRoleField = computed(() => !this.isEditMode() && this.canAssignRoles());
+
+  // 角色 Id → 显示名，用于 hlm-select-multiple 触发器回显。
+  readonly roleLabel = (value: string): string =>
+    this.roleOptions().find((option) => option.value === value)?.label ?? value;
 
   constructor() {
     // 同时依赖 visible 与 user：每次对话框打开都重置表单，避免新建模式残留上次输入
@@ -167,25 +280,24 @@ export class UserEditDialogComponent {
         return;
       }
       const avatar = user?.avatar ?? '';
-      this.form.reset({
+      this.formModel.set({
+        //#if (!LocalIdentity)
+        subjectId: user?.id ?? '',
+        //#endif
         username: user?.username ?? '',
         email: user?.email ?? '',
         displayName: user?.displayName ?? '',
         avatar,
+        //#if (LocalIdentity)
         password: '',
+        //#endif
         isActive: user?.isActive ?? true,
+        //#if (LocalIdentity)
         isEmailVerified: user?.isEmailVerified ?? false,
-        roles: user ? [...user.roles] : ['Member'],
+        //#endif
+        roleIds: user ? (user.roles ?? []).map((role) => role.id) : [],
       });
       this.avatarPreview.set(avatar);
-
-      if (user) {
-        this.form.controls.username.disable();
-        this.form.controls.password.disable();
-      } else {
-        this.form.controls.username.enable();
-        this.form.controls.password.enable();
-      }
     });
   }
 
@@ -202,25 +314,54 @@ export class UserEditDialogComponent {
     );
   }
 
-  onAvatarSelect(event: FileSelectEvent) {
-    const file = event.files?.[0];
+  onAvatarSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
 
     if (!file) {
+      return;
+    }
+
+    const messages = this.avatarMessages();
+
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+      toast.error(messages.typeSummary, { description: messages.typeDetail });
+      input.value = '';
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_SIZE) {
+      toast.error(messages.sizeSummary, { description: messages.sizeDetail });
+      input.value = '';
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : '';
-      this.form.controls.avatar.setValue(result);
+      this.formModel.update((m) => ({ ...m, avatar: result }));
       this.avatarPreview.set(result);
     };
     reader.readAsDataURL(file);
+
+    // 允许再次选择同一文件时仍触发 change 事件
+    input.value = '';
   }
 
-  hasPasswordRuleError() {
-    const control = this.form.controls.password;
-    return control.touched && control.hasError('pattern');
+  // hlm-switch 为 CVA（checked 非 ModelSignal），Signal Forms 的 [formField] 不适配；
+  // 直接以 [checked]/(checkedChange) 双向绑定回写模型信号。
+  setActive(checked: boolean): void {
+    this.formModel.update((m) => ({ ...m, isActive: checked }));
+  }
+  //#if (LocalIdentity)
+  setEmailVerified(checked: boolean): void {
+    this.formModel.update((m) => ({ ...m, isEmailVerified: checked }));
+  }
+  //#endif
+
+  /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约。 */
+  onDialogStateChange(state: BrnDialogState): void {
+    this.visible.set(state === 'open');
   }
 
   onHide() {
@@ -228,35 +369,43 @@ export class UserEditDialogComponent {
   }
 
   save() {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (this.userForm().invalid()) {
+      this.userForm().markAsTouched();
       return;
     }
 
-    const model = this.form.getRawValue();
+    const model = this.formModel();
     if (this.isEditMode()) {
       this.saved.emit({
         email: model.email.trim(),
         displayName: model.displayName.trim() || undefined,
         avatar: model.avatar.trim() || undefined,
-        isActive: model.isActive,
+        //#if (LocalIdentity)
         isEmailVerified: model.isEmailVerified,
-        roles: model.roles,
+        //#endif
       });
       return;
     }
 
     this.saved.emit({
+      //#if (!LocalIdentity)
+      subjectId: model.subjectId,
+      //#endif
       username: model.username.trim(),
       email: model.email.trim(),
       displayName: model.displayName.trim() || undefined,
       avatar: model.avatar.trim() || undefined,
+      //#if (LocalIdentity)
       password: model.password,
+      //#endif
       isActive: model.isActive,
+      //#if (LocalIdentity)
       isEmailVerified: model.isEmailVerified,
-      roles: model.roles,
+      //#endif
+      roleIds: this.canAssignRoles() ? model.roleIds : [],
     });
   }
-
-  protected readonly maxAvatarSize = MAX_AVATAR_SIZE;
+  //#if (LocalIdentity)
+  protected readonly showPassword = signal(false);
+  //#endif
 }

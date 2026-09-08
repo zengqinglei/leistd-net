@@ -23,4 +23,16 @@ export const NOTIFICATION_API = {
     NOTIFICATIONS.forEach((n) => (n.isRead = true));
     return null;
   },
+
+  'DELETE /api/v1/notifications': () => {
+    // 持久清空：原地清空数组，后续 GET 返回空列表。
+    NOTIFICATIONS.length = 0;
+    return null;
+  },
+
+  'DELETE /api/v1/notifications/:id': (req: MockRequest) => {
+    const index = NOTIFICATIONS.findIndex((n) => n.id === req.params.id);
+    if (index !== -1) NOTIFICATIONS.splice(index, 1);
+    return null;
+  },
 };

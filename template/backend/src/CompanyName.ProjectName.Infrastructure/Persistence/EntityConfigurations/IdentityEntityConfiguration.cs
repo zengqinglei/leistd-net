@@ -1,5 +1,5 @@
-#if (IncludeIdentity)
-#if (IncludeExternalLogin)
+#if (LocalIdentity)
+#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -15,7 +15,7 @@ internal static class IdentityEntityConfiguration
         builder.ConfigureUserIdentity();
         builder.ConfigureRoles();
         builder.ConfigureUserRoles();
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
         builder.ConfigureExternalLoginConnections();
 #endif
     }
@@ -40,11 +40,19 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.DisplayName).IsRequired().HasMaxLength(128);
             b.Property(e => e.Description).HasMaxLength(512);
 
-            b.HasIndex(e => e.Name).IsUnique();
+            // 租户内唯一：每个租户拥有自己的 Admin/Member 角色。
+            // 宿主行与租户行分别用带过滤的唯一索引（可空列直接进唯一索引时 NULL 互不相等）
+            b.HasIndex(e => e.Name)
+                .IsUnique()
+                .HasFilter($"\"{nameof(Role.TenantId)}\" IS NULL");
+
+            b.HasIndex(e => new { e.TenantId, e.Name })
+                .IsUnique()
+                .HasFilter($"\"{nameof(Role.TenantId)}\" IS NOT NULL");
         });
     }
 
-#if (IncludeExternalLogin)
+#if (ExternalLogin)
     private static void ConfigureExternalLoginConnections(this ModelBuilder builder)
     {
         builder.Entity<ExternalLoginConnection>(b =>
@@ -59,7 +67,16 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.AccessToken).HasMaxLength(2048);
             b.Property(e => e.RefreshToken).HasMaxLength(2048);
 
-            b.HasIndex(e => new { e.Provider, e.ProviderUserId }).IsUnique();
+            // 租户内唯一：同一外部身份可在不同租户各自绑定。
+            // 宿主行（TenantId 为 NULL）在 PostgreSQL/SQLite 中 NULL 互不相等，
+            // 用带过滤的成对索引分别约束，避免宿主侧失去唯一性兜底
+            b.HasIndex(e => new { e.Provider, e.ProviderUserId })
+                .IsUnique()
+                .HasFilter($"\"{nameof(ExternalLoginConnection.TenantId)}\" IS NULL");
+
+            b.HasIndex(e => new { e.TenantId, e.Provider, e.ProviderUserId })
+                .IsUnique()
+                .HasFilter($"\"{nameof(ExternalLoginConnection.TenantId)}\" IS NOT NULL");
             b.HasIndex(e => e.UserId);
 
             b.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);

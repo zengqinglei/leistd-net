@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import {
   ApplicationConfig,
   ErrorHandler,
@@ -16,11 +16,16 @@ import {
   withViewTransitions,
 } from '@angular/router';
 //#if (IncludeLocalization)
-import { provideTransloco } from '@jsverse/transloco';
+import { provideTransloco, TranslocoService } from '@jsverse/transloco';
 //#endif
-import Aura from '@primeuix/themes/aura';
-import { MessageService } from 'primeng/api';
-import { providePrimeNG } from 'primeng/config';
+import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
+//#if (!LocalIdentity)
+import { authInterceptor, LogLevel, provideAuth } from 'angular-auth-oidc-client';
+//#endif
+//#if (IncludeLocalization)
+import { firstValueFrom } from 'rxjs';
+//#endif
 
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -30,9 +35,16 @@ import { TranslocoHttpLoader } from './core/i18n/transloco-loader';
 import { acceptLanguageInterceptor } from './core/interceptors/accept-language-interceptor';
 //#endif
 import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
+//#if (LocalIdentity)
+import { tenantInterceptor } from './core/interceptors/tenant-interceptor';
+//#endif
 import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
+//#if (IncludeLocalization)
+import { LanguageService } from './core/services/language-service';
+//#endif
 import { StartupService } from './core/services/startup-service';
-import { provideMock } from '../../_mock/core/providers';
+import { mockInterceptor } from '../../_mock/core/interceptor';
+import { provideMock, shouldProvideMock } from '../../_mock/core/providers';
 
 // 定义路由特性，用于增强应用功能和用户体验
 const routerFeatures: RouterFeatures[] = [
@@ -49,23 +61,31 @@ const routerFeatures: RouterFeatures[] = [
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZonelessChangeDetection(),
+    // Spartan：Angular 21+ 需注册，确保 CDK overlay 层级正确（避免盖过固定定位的 toaster）
+    provideSpartanHlm(),
+    // 移动端点击侧栏菜单项（导航）后自动收起遮罩侧栏；非导航的下拉触发器单独关闭该行为。
+    provideHlmSidebarConfig({ closeMobileSidebarOnMenuButtonClick: true }),
     // 注册全局错误监听器
     provideBrowserGlobalErrorListeners(),
     // 注册全局错误处理器，替换 Angular 默认的 ErrorHandler
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideRouter(routes, ...routerFeatures),
-    providePrimeNG({
-      theme: {
-        preset: Aura,
-        options: {
-          darkModeSelector: '.dark',
-          cssLayer: {
-            name: 'primeng',
-            order: 'theme, base, primeng',
-          },
-        },
+    //#if (!LocalIdentity)
+    provideAuth({
+      config: {
+        authority: environment.oidc.authority,
+        clientId: environment.oidc.clientId,
+        redirectUrl: `${window.location.origin}/auth/callback`,
+        postLogoutRedirectUri: window.location.origin,
+        responseType: 'code',
+        scope: environment.oidc.scope,
+        silentRenew: false,
+        useRefreshToken: false,
+        secureRoutes: [`${window.location.origin}/api`, '/api'],
+        logLevel: environment.production ? LogLevel.Error : LogLevel.Warn,
       },
     }),
+    //#endif
     //#if (IncludeLocalization)
     provideTransloco({
       config: {
@@ -83,16 +103,29 @@ export const appConfig: ApplicationConfig = {
         //#if (IncludeLocalization)
         acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
         //#endif
+        //#if (LocalIdentity)
+        tenantInterceptor, // 已选租户时为 /api/ 请求附加 X-Tenant-Id
+        //#endif
+        //#if (!LocalIdentity)
+        authInterceptor(),
+        //#endif
         urlFormatInterceptor,
         httpErrorInterceptor, // 捕获所有 HTTP 错误并显示用户提示
+        ...(shouldProvideMock(environment.useMock) ? [mockInterceptor] : []),
       ]),
-      withInterceptorsFromDi(), // 启用对基于类的拦截器的支持
     ),
+    //#if (IncludeLocalization)
+    // 首帧前预加载活动语言词条：LanguageService 构造时从 localStorage 解析活动语言并设为 active，
+    // 随后加载对应 JSON。确保 shell 与各页首次渲染时 translate() 不命中未加载的裸键（消除首帧缺翻译告警）。
+    provideAppInitializer(() => {
+      inject(LanguageService);
+      const transloco = inject(TranslocoService);
+      return firstValueFrom(transloco.load(transloco.getActiveLang()));
+    }),
+    //#endif
     // 在应用初始化时加载关键数据
     provideAppInitializer(() => inject(StartupService).load()),
     // 注册 Mock 服务
     ...provideMock(environment.useMock),
-    // 注册 PrimeNG MessageService
-    MessageService,
   ],
 };

@@ -1,0 +1,150 @@
+<hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+    <hlm-dialog-header>
+      <h2 hlmDialogTitle>{{ title() }}</h2>
+      <p hlmDialogDescription>{{ description() }}</p>
+    </hlm-dialog-header>
+
+    <form class="flex flex-col gap-4 py-2" (ngSubmit)="onSubmit()">
+      <hlm-field>
+        <label hlmFieldLabel for="tenant-name">{{ fieldLabel('name') }}</label>
+        <input
+          hlmInput
+          id="tenant-name"
+          class="w-full"
+          autocomplete="off"
+          [formField]="tenantForm.name"
+        />
+        @for (error of tenantForm.name().errors(); track error.kind) {
+          <hlm-field-error>{{ error.message }}</hlm-field-error>
+        }
+      </hlm-field>
+
+      <hlm-field>
+        <label hlmFieldLabel for="tenant-display-name">{{ fieldLabel('displayName') }}</label>
+        <input
+          hlmInput
+          id="tenant-display-name"
+          class="w-full"
+          autocomplete="off"
+          [formField]="tenantForm.displayName"
+        />
+        @for (error of tenantForm.displayName().errors(); track error.kind) {
+          <hlm-field-error>{{ error.message }}</hlm-field-error>
+        }
+      </hlm-field>
+
+      @if (!isEdit()) {
+        <fieldset hlmFieldSet>
+          <!--#if (IncludeLocalization)-->
+          <legend hlmFieldLegend>{{ 'tenants.databasePlacement' | transloco }}</legend>
+          <p hlmFieldDescription>
+            {{ 'tenants.databasePlacementDescription' | transloco }}
+          </p>
+          <!--#else-->
+          <legend hlmFieldLegend>Database placement</legend>
+          <p hlmFieldDescription>
+            Shared uses each service's default database; dedicated resolves this tenant's Secret
+            references.
+          </p>
+          <!--#endif-->
+          <hlm-toggle-group
+            type="single"
+            variant="outline"
+            [nullable]="false"
+            [value]="formModel().databaseMode"
+            (valueChange)="setDatabaseMode($event)"
+          >
+            <button hlmToggleGroupItem type="button" value="sharedDatabase">
+              <!--#if (IncludeLocalization)-->
+              <ng-container>{{ 'tenants.sharedDatabase' | transloco }}</ng-container>
+              <!--#else-->
+              <ng-container>Shared database</ng-container>
+              <!--#endif-->
+            </button>
+            <button hlmToggleGroupItem type="button" value="dedicatedDatabase">
+              <!--#if (IncludeLocalization)-->
+              <ng-container>{{ 'tenants.dedicatedDatabase' | transloco }}</ng-container>
+              <!--#else-->
+              <ng-container>Dedicated database</ng-container>
+              <!--#endif-->
+            </button>
+          </hlm-toggle-group>
+        </fieldset>
+
+        @if (isDedicatedDatabase()) {
+          <hlm-field>
+            <label hlmFieldLabel for="tenant-runtime-secret-reference">{{
+              fieldLabel('runtimeSecretReference')
+            }}</label>
+            <input
+              hlmInput
+              id="tenant-runtime-secret-reference"
+              class="w-full"
+              autocomplete="off"
+              [formField]="tenantForm.runtimeSecretReference"
+            />
+            @for (error of tenantForm.runtimeSecretReference().errors(); track error.kind) {
+              <hlm-field-error>{{ error.message }}</hlm-field-error>
+            }
+          </hlm-field>
+
+          <hlm-field>
+            <label hlmFieldLabel for="tenant-migration-secret-reference">{{
+              fieldLabel('migrationSecretReference')
+            }}</label>
+            <input
+              hlmInput
+              id="tenant-migration-secret-reference"
+              class="w-full"
+              autocomplete="off"
+              [formField]="tenantForm.migrationSecretReference"
+            />
+            @for (error of tenantForm.migrationSecretReference().errors(); track error.kind) {
+              <hlm-field-error>{{ error.message }}</hlm-field-error>
+            }
+          </hlm-field>
+        }
+
+        <hlm-field>
+          <label hlmFieldLabel for="tenant-admin-email">{{ fieldLabel('adminEmail') }}</label>
+          <input
+            hlmInput
+            id="tenant-admin-email"
+            type="email"
+            class="w-full"
+            autocomplete="off"
+            [formField]="tenantForm.adminEmail"
+          />
+          @for (error of tenantForm.adminEmail().errors(); track error.kind) {
+            <hlm-field-error>{{ error.message }}</hlm-field-error>
+          }
+        </hlm-field>
+
+        <hlm-field>
+          <label hlmFieldLabel for="tenant-admin-password">{{ fieldLabel('adminPassword') }}</label>
+          <input
+            hlmInput
+            id="tenant-admin-password"
+            type="password"
+            class="w-full"
+            autocomplete="new-password"
+            [formField]="tenantForm.adminPassword"
+          />
+          @for (error of tenantForm.adminPassword().errors(); track error.kind) {
+            <hlm-field-error>{{ error.message }}</hlm-field-error>
+          }
+        </hlm-field>
+      }
+    </form>
+
+    <hlm-dialog-footer>
+      <button hlmBtn variant="outline" type="button" (click)="open.set(false)">
+        {{ cancelLabel() }}
+      </button>
+      <button hlmBtn type="button" [disabled]="tenantForm().invalid()" (click)="onSubmit()">
+        {{ saveLabel() }}
+      </button>
+    </hlm-dialog-footer>
+  </hlm-dialog-content>
+</hlm-dialog>

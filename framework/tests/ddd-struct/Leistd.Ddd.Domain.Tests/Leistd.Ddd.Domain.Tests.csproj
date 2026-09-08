@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- DataFilter 经容器按标记类型解析 IDataFilter<T>；Domain 包只依赖抽象，测试需要实现 -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\ddd-struct\Leistd.Ddd.Domain\Leistd.Ddd.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

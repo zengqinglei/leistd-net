@@ -1,9 +1,42 @@
-version: '3.8'
-
 services:
+  db-migrator:
+    image: ghcr.io/zengqinglei/companyname-projectname-migrator:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: migrator
+    # **必须显式传 --apply。**DbMigrator 默认只做只读预演（迁移是不可逆的生产数据变更，
+    # "跑一下看看"和"改掉生产库"不该是同一个动作）。不传的话它 dry-run 后以 0 退出，
+    # backend 的 service_completed_successfully 被满足、随即因 schema 未迁移而启动失败。
+    # 预演留给发布前的人工/流水线审核步骤，不要用它充当部署 Job
+    command: ["--apply"]
+    environment:
+      - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=postgres;Password=${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required};GSS Encryption Mode=Disable
+#if (RemoteTokenAuth)
+      # Resource 的迁移目标清单存在 Identity 的控制库里，必须回源查询。
+      # 这些值没有可用默认值：`:?` 让缺配在 compose 阶段就带着变量名失败，
+      # 而不是让 DbMigrator 打到 identity.example.com 再收 401
+      - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}
+      - Leistd__ServiceAuth__Authority=${IDENTITY_AUTHORITY:?IDENTITY_AUTHORITY is required for a Resource service}
+      - Leistd__ServiceAuth__ClientId=${MIGRATOR_CLIENT_ID:?MIGRATOR_CLIENT_ID is required for a Resource service}
+      - Leistd__ServiceAuth__ClientSecret=${MIGRATOR_CLIENT_SECRET:?MIGRATOR_CLIENT_SECRET is required for a Resource service}
+      # 迁移身份只授予迁移元数据 scope，不给运行时路由
+      - Leistd__ServiceClients__Identity__Scope=tenant-migration.read
+#endif
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - companyname-projectname-network
+
   backend:
     image: ghcr.io/zengqinglei/companyname-projectname:latest
     container_name: companyname-projectname
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: api
     ports:
       - "80:8080"
     environment:
@@ -12,7 +45,22 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
 
       # Database Configuration (PostgreSQL)
-      - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=postgres;Password=YourSecurePassword!;GSS Encryption Mode=Disable
+      - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=${APP_DB_USER:?APP_DB_USER is required};Password=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required};GSS Encryption Mode=Disable
+#if (RemoteTokenAuth)
+      # Resource 校验远端签发的令牌，并回源 Identity 解析租户路由。
+      # 全部无默认值：漏配时 compose 立刻带变量名失败，
+      # 而不是静默落到 appsettings 里的 identity.example.com 占位值
+      - Authentication__Issuer=${IDENTITY_ISSUER:?IDENTITY_ISSUER is required for a Resource service}
+      - Authentication__Audience=${RESOURCE_AUDIENCE:?RESOURCE_AUDIENCE is required for a Resource service}
+      - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}
+      - Leistd__ServiceAuth__Authority=${IDENTITY_AUTHORITY:?IDENTITY_AUTHORITY is required for a Resource service}
+      - Leistd__ServiceAuth__ClientId=${RESOURCE_CLIENT_ID:?RESOURCE_CLIENT_ID is required for a Resource service}
+      - Leistd__ServiceAuth__ClientSecret=${RESOURCE_CLIENT_SECRET:?RESOURCE_CLIENT_SECRET is required for a Resource service}
+      # 运行时身份只查路由，不给迁移元数据 scope
+      - Leistd__ServiceClients__Identity__Scope=tenant-routing.read
+      # 路由缓存 TTL：改租户数据落点前的排空等待取 max(令牌有效期, 本值)
+      - TenantRouting__CacheLifetime=${TENANT_ROUTE_CACHE_TTL:-00:10:00}
+#endif
 
       # Redis Configuration — matches the bundled redis service below (no password, no TLS).
       # Production password: set it on BOTH sides —
@@ -22,16 +70,15 @@ services:
       #   or a TLS-terminating proxy); only then add ssl=true to the value.
       - ConnectionStrings__Redis=redis:6379,abortConnect=false
 
-      # Default Admin User (Change in production!)
+#if (LocalIdentity)
+      # 首次启动创建的超级管理员。Resource 不持有本地用户，因此这一段只在本地身份形态生成
       - DefaultAdmin__Username=admin # optional
-      - DefaultAdmin__Password=Admin@123456
+      # 必须由部署环境提供（.env 或 CI secret）。`:?` 让缺失时 compose 直接报错而不是
+      # 用一个能登录的已知密码把服务拉起来
+      - DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:?set DEFAULT_ADMIN_PASSWORD before deploying}
       - DefaultAdmin__Email=admin@companyname-projectname.com # optional
-      - DefaultAdmin__Nickname=System Administrator # optional
-
-      # JWT Configuration (Change SecretKey in production!)
-      - Jwt__SecretKey=MyProject-SuperSecretKey-ForProduction-MinimumLength32Characters!
-      - Jwt__Issuer=MyProject # optional
-      - Jwt__Audience=MyProject # optional
+      - DefaultAdmin__DisplayName=System Administrator # optional
+#endif
 
       # CORS Configuration (optional)
       - Cors__AllowAnyLocalhost=false
@@ -57,11 +104,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-migrator:
+        condition: service_completed_successfully
       redis:
         condition: service_started
 
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -78,12 +127,15 @@ services:
     environment:
       TZ: Asia/Shanghai
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: YourSecurePassword!
+      POSTGRES_PASSWORD: ${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required}
       POSTGRES_DB: MyProject
       POSTGRES_INITDB_ARGS: "-E UTF8"
+      APP_DB_USER: ${APP_DB_USER:?APP_DB_USER is required}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
 
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./postgres/01-create-app-role.sh:/docker-entrypoint-initdb.d/01-create-app-role.sh:ro
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

@@ -1,13 +1,14 @@
-import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
 import { AuthService } from '../../../../core/services/auth-service';
+import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { SessionContextService } from '../../../../core/services/session-context-service';
 import { AccountService } from '../../services/account-service';
 
 /**
@@ -20,18 +21,16 @@ import { AccountService } from '../../services/account-service';
  */
 @Component({
   selector: 'app-external-auth-callback',
-  imports: [CommonModule, ProgressSpinnerModule],
+  imports: [HlmSpinner],
   template: `
-    <main
-      class="flex min-h-screen items-center justify-center bg-surface-50 px-4 dark:bg-surface-950"
-    >
+    <main class="flex min-h-screen items-center justify-center bg-background px-4">
       <section class="text-center">
         @if (error()) {
-          <h1 class="mb-3 text-2xl font-semibold text-red-500">{{ failedTitle() }}</h1>
-          <p class="text-surface-600 dark:text-surface-300">{{ error() }}</p>
+          <h1 class="mb-3 text-2xl font-semibold text-destructive">{{ failedTitle() }}</h1>
+          <p class="text-muted-foreground">{{ error() }}</p>
         } @else {
-          <p-progress-spinner [ariaLabel]="processingAria()" />
-          <h1 class="mt-4 text-2xl font-semibold text-surface-900 dark:text-surface-0">
+          <hlm-spinner class="text-4xl" [attr.aria-label]="processingAria()" />
+          <h1 class="mt-4 text-2xl font-semibold text-foreground">
             {{ processingTitle() }}
           </h1>
         }
@@ -42,6 +41,8 @@ import { AccountService } from '../../services/account-service';
 })
 export class ExternalAuthCallback implements OnInit {
   private authService = inject(AuthService);
+  private readonly authorizationService = inject(AuthorizationService);
+  private readonly sessionContext = inject(SessionContextService);
   private accountService = inject(AccountService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -59,7 +60,7 @@ export class ExternalAuthCallback implements OnInit {
   protected readonly processingTitle = () =>
     this.transloco.translate('account.externalCallback.processing');
   //#else
-  protected readonly failedTitle = () => 'Login failed';
+  protected readonly failedTitle = () => 'Sign-in failed';
   protected readonly processingAria = () => 'Completing sign-in';
   protected readonly processingTitle = () => 'Processing third-party sign-in';
   //#endif
@@ -89,9 +90,11 @@ export class ExternalAuthCallback implements OnInit {
         this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }),
       );
 
-      // 2. 加载用户信息并根据角色跳转
+      // 2. 建立会话上下文（权限 + 设置）并按权限跳转。
+      //    设置也必须在这里就位：SPA 内跳转不会重跑应用初始化器。
       await lastValueFrom(this.authService.loadUser());
-      if (this.authService.currentUser()?.isAdmin()) {
+      await this.sessionContext.establish();
+      if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
       } else {
         this.router.navigate(['/workspace']);

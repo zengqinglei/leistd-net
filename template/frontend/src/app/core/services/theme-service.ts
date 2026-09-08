@@ -1,6 +1,5 @@
 import { isPlatformBrowser } from '@angular/common';
 import {
-  afterNextRender,
   DestroyRef,
   PLATFORM_ID,
   computed,
@@ -9,65 +8,24 @@ import {
   Injectable,
   signal,
 } from '@angular/core';
-import { palette, updatePrimaryPalette, updateSurfacePalette, usePreset } from '@primeuix/themes';
-import Aura from '@primeuix/themes/aura';
-import Lara from '@primeuix/themes/lara';
-import Material from '@primeuix/themes/material';
-import Nora from '@primeuix/themes/nora';
-
-import type { PaletteDesignToken } from '@primeuix/themes/types';
 
 export const THEME_MODES = ['system', 'light', 'dark'] as const;
-export const THEME_PRESET_NAMES = ['Aura', 'Material', 'Lara', 'Nora'] as const;
-export const THEME_PRIMARY_NAMES = [
-  'emerald',
-  'green',
-  'lime',
-  'red',
-  'orange',
-  'amber',
-  'yellow',
-  'teal',
-  'cyan',
-  'sky',
-  'blue',
-  'indigo',
-  'violet',
-  'purple',
-  'fuchsia',
-  'pink',
-  'rose',
-] as const;
-export const THEME_SURFACE_NAMES = ['slate', 'gray', 'zinc', 'neutral', 'stone'] as const;
-
 export type ThemeMode = (typeof THEME_MODES)[number];
-export type ThemePresetName = (typeof THEME_PRESET_NAMES)[number];
-export type ThemePrimaryName = (typeof THEME_PRIMARY_NAMES)[number];
-export type ThemeSurfaceName = (typeof THEME_SURFACE_NAMES)[number];
-
-export const THEME_PRESETS = { Aura, Material, Lara, Nora } as const satisfies Record<
-  ThemePresetName,
-  unknown
->;
 
 export interface ThemePreferences {
   mode: ThemeMode;
-  preset: ThemePresetName;
-  primary: ThemePrimaryName | null;
-  surface: ThemeSurfaceName | null;
 }
 
 const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
   mode: 'system',
-  preset: 'Aura',
-  primary: null,
-  surface: null,
 };
 
-function getPalette(name: ThemePrimaryName | ThemeSurfaceName): PaletteDesignToken {
-  return palette(`{${name}}`) as PaletteDesignToken;
-}
-
+/**
+ * 主题服务：管理亮/暗/跟随系统三态，切换 `<html>` 的 `.dark` class 并持久化。
+ *
+ * Spartan/Tailwind 主题走 CSS 变量（styles.css 的 :root / :root.dark），
+ * 不需要运行时换色 API。品牌定制由项目改 CSS 变量完成。
+ */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   static readonly STORAGE_KEY = 'theme_config';
@@ -83,11 +41,11 @@ export class ThemeService {
   readonly modeIcon = computed(() => {
     switch (this.mode()) {
       case 'light':
-        return 'pi pi-sun';
+        return 'lucideSun';
       case 'dark':
-        return 'pi pi-moon';
+        return 'lucideMoon';
       default:
-        return 'pi pi-desktop';
+        return 'lucideMonitor';
     }
   });
   readonly isDarkTheme = computed(() => {
@@ -97,7 +55,6 @@ export class ThemeService {
 
   constructor() {
     this.watchSystemTheme();
-    afterNextRender(() => this.applyThemePreferences(this.preferences()));
 
     effect(() => {
       const preferences = this.preferences();
@@ -128,26 +85,6 @@ export class ThemeService {
     this.preferencesState.update((preferences) => ({ ...preferences, mode }));
   }
 
-  updatePreferences(preferences: Partial<ThemePreferences>): void {
-    this.preferencesState.update((current) => ({ ...current, ...preferences }));
-    this.applyThemePreferences(this.preferences());
-  }
-
-  private applyThemePreferences(preferences: ThemePreferences): void {
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
-    }
-
-    usePreset(THEME_PRESETS[preferences.preset]);
-
-    if (preferences.primary) {
-      updatePrimaryPalette(getPalette(preferences.primary));
-    }
-    if (preferences.surface) {
-      updateSurfacePalette(getPalette(preferences.surface));
-    }
-  }
-
   private loadPreferences(): ThemePreferences {
     if (!isPlatformBrowser(this.platformId)) {
       return DEFAULT_THEME_PREFERENCES;
@@ -164,19 +101,6 @@ export class ThemeService {
         mode: THEME_MODES.includes(parsed.mode as ThemeMode)
           ? (parsed.mode as ThemeMode)
           : DEFAULT_THEME_PREFERENCES.mode,
-        preset: THEME_PRESET_NAMES.includes(parsed.preset as ThemePresetName)
-          ? (parsed.preset as ThemePresetName)
-          : DEFAULT_THEME_PREFERENCES.preset,
-        primary:
-          parsed.primary === null ||
-          THEME_PRIMARY_NAMES.includes(parsed.primary as ThemePrimaryName)
-            ? (parsed.primary ?? null)
-            : DEFAULT_THEME_PREFERENCES.primary,
-        surface:
-          parsed.surface === null ||
-          THEME_SURFACE_NAMES.includes(parsed.surface as ThemeSurfaceName)
-            ? (parsed.surface ?? null)
-            : DEFAULT_THEME_PREFERENCES.surface,
       };
     } catch {
       localStorage.removeItem(ThemeService.STORAGE_KEY);

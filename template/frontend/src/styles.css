@@ -1,73 +1,132 @@
-@import 'primeicons/primeicons.css';
-@import 'tailwindcss';
+@layer theme, base, components, utilities;
 
-@plugin "tailwindcss-primeui";
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css';
 
-@custom-variant dark (&:where(.dark, .dark *));
+@import '@spartan-ng/brain/hlm-tailwind-preset.css';
+
+/* 正文字体：Geist（对齐参考站）。业务项目可替换为品牌字体或改回系统字体栈。 */
+@import '@fontsource/geist';
 
 html,
 body {
+  scrollbar-gutter: stable;
   height: 100%;
-  font-size: 14px;
-  color: var(--p-text-color);
-  background-color: light-dark(var(--p-surface-50), var(--p-surface-950));
 }
 
-:root {
-  --app-scrollbar-size: 0.8rem;
-  --app-scrollbar-thumb: color-mix(in srgb, var(--p-surface-400) 82%, transparent);
-  --app-scrollbar-thumb-hover: color-mix(in srgb, var(--p-primary-color) 28%, var(--p-surface-500));
-  --app-scrollbar-thumb-active: color-mix(
-    in srgb,
-    var(--p-primary-color) 44%,
-    var(--p-surface-600)
-  );
-}
-
-.dark {
-  --app-scrollbar-thumb: color-mix(in srgb, var(--p-surface-500) 82%, transparent);
-  --app-scrollbar-thumb-hover: color-mix(in srgb, var(--p-primary-color) 34%, var(--p-surface-400));
-  --app-scrollbar-thumb-active: color-mix(
-    in srgb,
-    var(--p-primary-color) 50%,
-    var(--p-surface-300)
-  );
-}
-
+/* 全局细滚动条：用 CSS 标准属性 + Spartan 语义色变量（现代浏览器原生支持，无需 webkit 伪元素）。 */
 * {
-  scrollbar-color: var(--app-scrollbar-thumb) transparent;
+  scrollbar-color: var(--border) transparent;
   scrollbar-width: thin;
 }
 
-*::-webkit-scrollbar {
-  width: var(--app-scrollbar-size);
-  height: var(--app-scrollbar-size);
+/*
+ * 语义色使用规范（保持克制、避免花哨）：
+ * - primary            : 主操作 / 最高强调（主按钮、当前项、最高权限分类）
+ * - destructive（红）  : 仅危险 / 删除 / 错误（删除、错误提示、校验失败、无 PKCE 等安全风险），不用于普通分类
+ * - warning（amber）   : 需注意但非错误（一次性密钥提示、重置告警）
+ * - success（绿）      : 正态 / 成功（启用、已验证、成功 toast）
+ * - secondary / muted  : 次要 / 中性（普通分类、禁用态、辅助文字）
+ * 字号沿用 Tailwind type scale（text-xs 起，勿用 text-[10px] 等 off-scale）；字重仅 medium/semibold，font-bold 留给展示型大数字。
+ */
+
+/* Spartan UI 主题变量（ng g @spartan-ng/cli:ui-theme, neutral）。业务项目按品牌改这些 CSS 变量。 */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --warning: oklch(0.769 0.188 70.08);
+  --warning-foreground: oklch(0.208 0.042 265.755);
+  --success: oklch(0.627 0.194 149.214);
+  --success-foreground: oklch(0.208 0.042 265.755);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  color-scheme: light;
 }
 
-*::-webkit-scrollbar-track {
-  border-radius: 999px;
-  background: transparent;
+:root.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --warning: oklch(0.769 0.188 70.08);
+  --warning-foreground: oklch(0.208 0.042 265.755);
+  --success: oklch(0.627 0.194 149.214);
+  --success-foreground: oklch(0.208 0.042 265.755);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.439 0 0);
+
+  color-scheme: dark;
 }
 
-*::-webkit-scrollbar-thumb {
-  min-height: 2.5rem;
-  border: 2px solid transparent;
-  border-radius: 999px;
-
-  background: var(--app-scrollbar-thumb);
-  background-clip: content-box;
+/* 字体与语义色接入 Tailwind：body 用 font-sans；success 与 warning 暴露为语义工具类。 */
+@theme {
+  --font-sans: 'Geist', system-ui, sans-serif;
 }
 
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--app-scrollbar-thumb-hover);
-  background-clip: content-box;
+@theme inline {
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
 }
 
-*::-webkit-scrollbar-thumb:active {
-  background: var(--app-scrollbar-thumb-active);
-  background-clip: content-box;
-}
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
 
-*::-webkit-scrollbar-corner {
-  background: transparent;
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  /* Tailwind v4 preflight 不再给 button 默认手型光标，这里补回（对齐参考站）。 */
+  button:not([disabled]),
+  [role='button']:not([disabled]) {
+    cursor: pointer;
+  }
 }

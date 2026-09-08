@@ -119,7 +119,8 @@
                 "input": "public"
               }
             ],
-            "styles": ["src/styles.css"]
+            "styles": ["src/styles.css"],
+            "karmaConfig": "karma.conf.js"
           }
         }
       }

@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (LocalIdentity)
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
 /// <summary>
@@ -10,10 +10,5 @@ public record ExternalLoginUrlOutputDto
     /// 登录 URL
     /// </summary>
     public required string LoginUrl { get; init; }
-
-    /// <summary>
-    /// 状态参数
-    /// </summary>
-    public required string State { get; init; }
 }
 #endif

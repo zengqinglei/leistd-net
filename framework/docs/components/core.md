@@ -1,15 +1,13 @@
 # 核心原语：时钟与通用异常
 
-`Leistd.Core` 是整个框架最底层的零依赖基础包，只提供两类被反复复用的原语：**时钟抽象**（`IClock`）与**通用异常基类**（`CommonException`）。它不引入任何业务概念，也几乎不引入第三方依赖（仅引用 `Microsoft.Extensions.Logging.Abstractions`），因此可以被其它所有 Leistd 组件安全地共同引用而不会带来依赖膨胀。
-
-为什么需要它：直接调用 `DateTime.UtcNow` 会让代码与系统时钟强耦合，单元测试无法控制"现在"，按天统计还容易踩到时区漂移的坑；而散落在各处、各自继承 `System.Exception` 的异常类型则无法被框架统一识别和处理。`Leistd.Core` 把这两件事收敛为可注入、可替换的抽象：时间统一通过 `IClock` 获取，框架级异常统一从 `CommonException` 派生，使上层组件（异常处理、DDD 审计等）能据此做统一的可测试与可拦截设计。
+`Leistd.Core` 是最底层的基础包，只放跨组件复用的原语：时钟抽象 `IClock` 让「现在」可注入、可测试，异常基类 `CommonException` 供上层统一识别。
 
 ## 何时使用
 
 | 场景 | 用法 |
 | --- | --- |
 | 需要获取当前时间且希望单元测试可控（mock 时间） | 注入 `IClock`，不要直接用 `DateTime.UtcNow` |
-| 按"自然日"做统计，需消除时区漂移 | `IClock` + `ClockExtensions.GetLocalMidnightInUtc()` |
+| 按"自然日"做统计，需消除时区漂移 | `IClock` + `ClockExtensions.GetMidnightInUtc(timeZone)`（时区显式传入） |
 | 标准化外部传入的 `DateTime`（统一为 UTC） | `IClock.Normalize(dateTime)` |
 | 定义框架/业务异常的根基类型 | 派生自 `CommonException`（如异常处理组件的 `BusinessException`） |
 
@@ -22,9 +20,7 @@
 dotnet add package Leistd.Core
 ```
 
-> 本仓库的模板项目通过中央包管理（CPM）统一版本，添加时无需写版本号。
-
-## 配置 Provider
+## 注册
 
 `Leistd.Core` 自身**不提供** DI 扩展方法。`IClock` 的默认实现 `UtcClockProvider` 由上层的 DDD 基础设施包注册（参见 `Leistd.Ddd.Infrastructure`）：
 
@@ -47,7 +43,8 @@ public class DailyReportService(IClock clock)
     // 统计"今天"的数据：用本地自然日零点的 UTC 锚点做范围下界，避免时区漂移
     public (DateTime from, DateTime to) TodayRangeUtc()
     {
-        var from = clock.GetLocalMidnightInUtc();   // 本地今日 00:00 对应的 UTC 时刻
+        // 时区必须显式给出：它是业务输入（租户设置/用户偏好），不是宿主的环境属性
+        var from = clock.GetMidnightInUtc(tenantTimeZone);   // 该时区今日 00:00 对应的 UTC 时刻
         return (from, clock.Now);
     }
 
@@ -71,13 +68,12 @@ public class InsufficientStockException(string sku)
 | --- | --- |
 | `IClock` | 时钟抽象接口，统一时间获取入口，便于测试 mock 与时区策略统一 |
 | `IClock.Now` | 当前时间（`DateTime`）；默认实现返回 UTC |
-| `IClock.Kind` | 时间类型（`DateTimeKind`）；默认实现为 `Utc` |
-| `IClock.Normalize(dateTime)` | 标准化时间，确保 `Kind` 一致；默认实现：`Unspecified` 视为 UTC，`Local` 转 UTC，`Utc` 原样返回 |
-| `UtcClockProvider : IClock` | 默认实现，`Now` 返回 `DateTime.UtcNow`，`Kind` 为 `Utc` |
-| `ClockExtensions.GetLocalMidnightInUtc(this IClock)` | 扩展方法，返回"系统本地今日零点"对应的 UTC 时刻，按天统计的基准锚点 |
-| `ClockExtensions.GetLocalUtcOffsetHours(this IClock)` | 扩展方法，返回当前时区相对 UTC 的偏移小时数（`double`） |
+| `IClock.Normalize(dateTime)` | 归一化为 UTC：`Unspecified` 视为 UTC，`Local` 转 UTC，`Utc` 原样返回 |
+| `UtcClockProvider : IClock` | 默认实现，取值委托给 `TimeProvider`（默认 `TimeProvider.System`） |
+| `ClockExtensions.GetMidnightInUtc(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**今日零点对应的 UTC 时刻，按天统计的基准锚点 |
+| `ClockExtensions.GetUtcOffsetHours(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**当前相对 UTC 的偏移小时数（`double`，已计入夏令时） |
 
-`Leistd.Exception` 命名空间：
+`Leistd.Exceptions` 命名空间：
 
 | 成员 | 说明 |
 | --- | --- |
@@ -87,22 +83,29 @@ public class InsufficientStockException(string sku)
 
 ### Leistd.Core（UtcClockProvider）
 
-- `Now` 直接返回 `DateTime.UtcNow`，`Kind` 固定为 `DateTimeKind.Utc`；推荐数据库统一以 UTC 存储、展示时再按用户时区转换，可规避夏令时问题。
+- `Now` 取自注入的 `TimeProvider`（默认 `TimeProvider.System`），固定为 UTC。
+- **不提供切换时间类型的开关**：实体主键用时间有序的 `Guid.CreateVersion7()`、审计时间线、跨服务传递的 `DateTime` 都以 UTC 为共同基准，换成本地时间会让这些保证各自失效且不报错。按用户时区展示在呈现层做。
+- 建在 `TimeProvider` 之上是为了让全框架只有一个时间源：测试用 `FakeTimeProvider` 推进时间，审计时间戳、内存锁清理与定时器会一起跟着走。宿主未注册 `TimeProvider` 时 DI 会选中无参构造函数，行为等同 `TimeProvider.System`。
 - `Normalize` 的规则：`Unspecified` 假定为 UTC（`SpecifyKind`）；`Local` 调用 `ToUniversalTime()` 转 UTC；`Utc` 原样返回。
-- `GetLocalMidnightInUtc` 基于 `TimeZoneInfo.Local` 计算：取当前 UTC → 转本地 → 取本地日期零点 → 再转回 UTC。例如北京时间 `2026-05-28 00:00:00` 返回 UTC `2026-05-27 16:00:00Z`。
+- `GetMidnightInUtc(timeZone)` 按**传入时区**计算：取当前 UTC → 转该时区 → 取当日零点 → 再转回 UTC。例如时区为 `Asia/Shanghai`、当前 UTC 为 `2026-05-27T20:00:00Z` 时（该时区已是 05-28），返回 `2026-05-27T16:00:00Z`。
 - 该实现无状态，以 Singleton 注册即可。
-
-## 配置项 / Options
-
-当前无配置项。`UtcClockProvider` 与 `CommonException` 均无 Options 类，时区行为由系统 `TimeZoneInfo.Local` 决定。
 
 ## 注意事项
 
-- 默认 `IClock` 实现始终基于 **UTC**；`GetLocalMidnightInUtc` / `GetLocalUtcOffsetHours` 依赖**进程所在主机的本地时区**（`TimeZoneInfo.Local`），容器化部署时需确认容器时区设置是否符合预期。
+- 默认 `IClock` 实现始终基于 **UTC**。两个日边界扩展方法**要求显式传入 `TimeZoneInfo`**，没有默认值。
+
+  **为什么不读 `TimeZoneInfo.Local`**——"进程所在主机的时区"在三种常见部署下都是错的，且错得没有信号：
+
+  | 部署形态 | 后果 |
+  | --- | --- |
+  | 容器（默认 UTC） | "本地今日"变成 UTC 今日，报表边界整体偏移 |
+  | 多租户 SaaS | 各租户分处不同时区，"本地"根本不是单一值 |
+  | 多可用区 | 各实例给出不同的日边界，统计结果随路由漂移 |
+
+  时区是**业务输入**（租户设置、用户偏好、报表参数），不是宿主的环境属性。需要"服务器时区"语义时自行传 `TimeZoneInfo.Local`——那时它是一个写出来的决定。
 - `Leistd.Core` 本身不注册任何服务；`IClock` 的注册由 `Leistd.Ddd.Infrastructure` 完成。脱离 DDD 分组单独使用时务必手动 `AddSingleton<IClock, UtcClockProvider>()`，否则注入会失败。
-- `CommonException` 是一个轻量基类（仅 `message` + 可选 `innerException`），不携带错误码等元数据；语义化的业务异常请使用[异常处理](./exception.md)组件的 `BusinessException` 体系。
+- `CommonException` 是一个轻量基类（仅 `message` + 可选 `innerException`），不携带错误码等元数据；语义化的业务异常请使用[异常处理](./exception-handling.md)组件的 `BusinessException` 体系。
 
 ## 相关
 
-- [组件总览](./README.md)
-- [异常处理](./exception.md)
+- [异常处理](./exception-handling.md)

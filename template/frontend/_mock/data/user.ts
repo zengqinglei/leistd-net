@@ -1,4 +1,7 @@
+import { ROLES } from './authorization';
+//#if (LocalIdentity)
 import { UserOutputDto } from '../../src/app/features/account/models/account.dto';
+//#endif
 import { UserManagementOutputDto } from '../../src/app/features/platform/models/user-management.dto';
 
 export interface MockUser {
@@ -6,7 +9,7 @@ export interface MockUser {
   username: string;
   email: string;
   password: string;
-  nickname?: string;
+  displayName?: string;
   avatar?: string;
   phoneNumber?: string;
   isActive: boolean;
@@ -23,7 +26,7 @@ export const USERS: MockUser[] = [
     username: 'admin',
     email: 'admin@example.com',
     password: 'Admin@123456',
-    nickname: 'Administrator',
+    displayName: 'Administrator',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
     isActive: true,
     isSuperAdmin: true,
@@ -37,7 +40,7 @@ export const USERS: MockUser[] = [
     username: 'demo',
     email: 'demo@example.com',
     password: 'Demo@123456',
-    nickname: 'Demo User',
+    displayName: 'Demo User',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=demo',
     isActive: true,
     isSuperAdmin: false,
@@ -47,34 +50,44 @@ export const USERS: MockUser[] = [
     roles: ['Member'],
   },
 ];
-
+//#if (LocalIdentity)
 export function toUserOutput(user: MockUser): UserOutputDto {
   return {
     id: user.id,
     username: user.username,
     email: user.email,
-    nickname: user.nickname,
+    displayName: user.displayName,
     avatar: user.avatar,
     phoneNumber: user.phoneNumber,
     isActive: user.isActive,
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
+    // 当前用户模型只需要角色名（用于展示徽章），不需要 Id。
     roles: user.roles,
   };
 }
-
+//#endif
 export function toUserManagementOutput(user: MockUser): UserManagementOutputDto {
   return {
     id: user.id,
     username: user.username,
     email: user.email,
-    displayName: user.nickname,
+    displayName: user.displayName,
     avatar: user.avatar,
     isActive: user.isActive,
+    //#if (LocalIdentity)
     isEmailVerified: user.isEmailVerified,
-    roles: user.roles,
+    //#endif
+    // 角色以 Id + 名称的结构返回：Id 用于提交，名称仅用于展示与筛选。
+    roles: ROLES.filter((role) => user.roles.includes(role.name)).map((role) => ({
+      id: role.id,
+      name: role.name,
+      displayName: role.displayName,
+    })),
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
+    //#if (LocalIdentity)
     lastLoginTime: user.lastLoginTime,
+    //#endif
   };
 }

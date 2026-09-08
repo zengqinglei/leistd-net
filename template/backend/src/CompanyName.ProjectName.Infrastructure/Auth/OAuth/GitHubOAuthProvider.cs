@@ -1,9 +1,9 @@
-#if (IncludeIdentity)
+#if (LocalIdentity)
+using Leistd.ExceptionHandling;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Web;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using Leistd.Exception.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -21,12 +21,14 @@ public class GitHubOAuthProvider(
     private const string TokenEndpoint = "https://github.com/login/oauth/access_token";
     private const string UserInfoEndpoint = "https://api.github.com/user";
 
+    public string Name => "github";
+
     public string GetAuthorizationUrl(string redirectUri, string state)
     {
         var clientId = configuration["ExternalAuth:Github:ClientId"]
             ?? throw new NotFoundException("Client ID for external identity provider GitHub is not configured.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:ClientIdNotConfigured")
+                .WithCode("ExternalAuth:ClientIdNotConfigured")
                 .WithData("Provider", "GitHub")
 #endif
             ;
@@ -42,14 +44,14 @@ public class GitHubOAuthProvider(
         var clientId = configuration["ExternalAuth:Github:ClientId"]
             ?? throw new NotFoundException("Client ID for external identity provider GitHub is not configured.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:ClientIdNotConfigured")
+                .WithCode("ExternalAuth:ClientIdNotConfigured")
                 .WithData("Provider", "GitHub")
 #endif
             ;
         var clientSecret = configuration["ExternalAuth:Github:ClientSecret"]
             ?? throw new NotFoundException("Client secret for external identity provider GitHub is not configured.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:ClientSecretNotConfigured")
+                .WithCode("ExternalAuth:ClientSecretNotConfigured")
                 .WithData("Provider", "GitHub")
 #endif
             ;
@@ -73,10 +75,10 @@ public class GitHubOAuthProvider(
 
         if (string.IsNullOrEmpty(accessToken))
         {
-            logger.LogError("获取 GitHub Access Token 失败: {Response}", responseContent);
+            logger.LogError("Failed to obtain GitHub access token: {Response}", responseContent);
             throw new BadRequestException("Failed to obtain GitHub access token.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:GitHubTokenFailed")
+                .WithCode("ExternalAuth:GitHubTokenFailed")
 #endif
             ;
         }
@@ -103,7 +105,7 @@ public class GitHubOAuthProvider(
         {
             throw new BadRequestException("Failed to obtain GitHub user information.")
 #if (IncludeLocalization)
-                .WithLocalization("ExternalAuth:GitHubUserInfoFailed")
+                .WithCode("ExternalAuth:GitHubUserInfoFailed")
 #endif
             ;
         }
@@ -113,7 +115,7 @@ public class GitHubOAuthProvider(
             ProviderId = userInfo["id"].GetInt64().ToString(),
             Email = userInfo.TryGetValue("email", out var email) ? email.GetString() : null,
             Username = userInfo["login"].GetString()!,
-            Nickname = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
+            DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("avatar_url", out var avatar) ? avatar.GetString() : null
         };
     }

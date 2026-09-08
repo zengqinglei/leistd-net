@@ -7,10 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-<!--#if (IncludeOpenIddict)-->
+<!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.Abstractions" />
 <!--#endif-->
-    <PackageReference Include="System.Linq.Dynamic.Core" />
+<!--#if (IncludeLocalization)-->
+    <!-- 权限定义的显示名按请求 culture 在响应阶段翻译，需要本地化抽象。 -->
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" />
+<!--#endif-->
   </ItemGroup>
 
   <!-- Leistd 框架引用 -->
@@ -18,8 +21,13 @@
     <PackageReference Include="Leistd.ObjectMapping.Mapster" />
     <PackageReference Include="Leistd.Security.Core" />
     <PackageReference Include="Leistd.Authorization.Core" />
+    <PackageReference Include="Leistd.Settings.Core" />
+    <PackageReference Include="Leistd.MultiTenancy.Core" />
+    <PackageReference Include="Leistd.Lock.Core" />
+    <PackageReference Include="Leistd.Ddd.Domain" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />
+    <PackageReference Include="Leistd.UnitOfWork.Core" />
   </ItemGroup>
 
   <!-- 业务项目内部引用 -->

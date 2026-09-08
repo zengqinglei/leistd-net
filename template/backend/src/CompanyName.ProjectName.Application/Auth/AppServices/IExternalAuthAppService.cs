@@ -1,7 +1,7 @@
-#if (IncludeIdentity)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.Contracts.AppService;
+using System.Security.Claims;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
@@ -13,11 +13,14 @@ public interface IExternalAuthAppService : IAppService
     /// <summary>
     /// 获取外部登录 URL
     /// </summary>
-    ExternalLoginUrlOutputDto GetLoginUrl(string provider);
+    ExternalLoginUrlOutputDto GetLoginUrl(string provider, string state);
 
     /// <summary>
     /// 处理外部登录回调
     /// </summary>
-    Task<User> AuthenticateExternalUserAsync(string provider, ExternalLoginCallbackInputDto request, CancellationToken cancellationToken = default);
+    Task<ClaimsPrincipal> AuthenticateExternalUserAsync(
+        string provider,
+        ExternalLoginCallbackInputDto request,
+        CancellationToken cancellationToken = default);
 }
 #endif

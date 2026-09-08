@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      使用关系型 Provider 而非 InMemory：SettingRecordConfiguration 的唯一索引与长度约束
+      只有真正建库时才生效，InMemory 全内存求值会让配置整块静默通过。
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\components\settings\Leistd.Settings.Core\Leistd.Settings.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\components\settings\Leistd.Settings.EntityFrameworkCore\Leistd.Settings.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
+  </ItemGroup>
+
+</Project>

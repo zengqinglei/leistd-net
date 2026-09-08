@@ -15,7 +15,7 @@ export const NOTIFICATIONS: NotificationOutputDto[] = [
     id: '00000000-0000-0000-0000-000000000002',
     title: 'Data updated: the customer order sync task has completed',
     content:
-      'Data you follow has changed. This content is intentionally longer to verify that the PrimeNG tooltip width adapts to the viewport after truncation.',
+      'Data you follow has changed. This content is intentionally longer to verify that the tooltip width adapts to the viewport after truncation.',
     type: 'DataChange',
     isRead: true,
     creationTime: new Date(Date.now() - 3_600_000).toISOString(),

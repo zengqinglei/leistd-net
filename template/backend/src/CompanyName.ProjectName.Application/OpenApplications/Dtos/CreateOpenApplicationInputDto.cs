@@ -1,4 +1,4 @@
-#if (IncludeIdentity)
+#if (LocalIdentity)
 using System.ComponentModel.DataAnnotations;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;

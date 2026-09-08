@@ -1,10 +1,13 @@
+import { requirePermission } from './authorization';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationOutputDto,
   UpdateOpenApplicationInputDto,
 } from '../../src/app/features/platform/models/open-application.dto';
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
+import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
+import { parseMockSorting } from '../core/sorting';
 import { MockOpenApplication, OPEN_APPLICATIONS } from '../data/open-applications';
 
 const applications = OPEN_APPLICATIONS;
@@ -21,19 +24,24 @@ function getQueryValue(value: unknown) {
     : String(normalized);
 }
 
+/** 与后端 `OpenApplicationAppService.ApplySorting` 同一份字段清单。 */
+const APPLICATION_SORT_FIELDS = ['clientId', 'displayName', 'creationTime'] as const;
+
 function sortApplications(items: MockOpenApplication[], sorting?: unknown) {
-  const expression = getQueryValue(sorting) ?? 'clientId asc';
-  const [field, direction = 'asc'] = expression.split(' ');
-  const multiplier = direction.toLowerCase() === 'desc' ? -1 : 1;
+  const { field, descending } = parseMockSorting(sorting, APPLICATION_SORT_FIELDS, 'clientId');
+  const multiplier = descending ? -1 : 1;
 
   return [...items].sort((a, b) => {
     const left = String(a[field as keyof MockOpenApplication] ?? '').toLowerCase();
     const right = String(b[field as keyof MockOpenApplication] ?? '').toLowerCase();
-    return left.localeCompare(right) * multiplier;
+    const compared = left.localeCompare(right) * multiplier;
+    // 与后端一样固定追加 clientId 作为稳定次序，且不随方向反转
+    return compared !== 0 ? compared : a.clientId.localeCompare(b.clientId);
   });
 }
 
 function getOpenApplications(req: MockRequest) {
+  requirePermission(PERMISSIONS.openApplications.default);
   const keyword = getQueryValue(req.queryParams['keyword']);
   const applicationType = getQueryValue(req.queryParams['applicationType']);
   const clientType = getQueryValue(req.queryParams['clientType']);
@@ -72,6 +80,7 @@ function getOpenApplications(req: MockRequest) {
 }
 
 function getOpenApplication(req: MockRequest) {
+  requirePermission(PERMISSIONS.openApplications.default);
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
@@ -109,6 +118,7 @@ function validateApplication(
 }
 
 function createOpenApplication(req: MockRequest) {
+  requirePermission(PERMISSIONS.openApplications.create);
   const body = req.body as CreateOpenApplicationInputDto;
   validateApplication(body);
 
@@ -132,10 +142,12 @@ function createOpenApplication(req: MockRequest) {
   };
 
   applications.unshift(newApplication);
-  return toOutput(newApplication);
+  // 创建响应一次性返回明文 Secret（列表/详情仍通过 toOutput 隐藏），供前端弹窗展示。
+  return { ...toOutput(newApplication), clientSecret: newApplication.clientSecret };
 }
 
 function updateOpenApplication(req: MockRequest) {
+  requirePermission(PERMISSIONS.openApplications.update);
   const id = req.params['id'];
   const body = req.body as UpdateOpenApplicationInputDto;
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
@@ -163,6 +175,7 @@ function updateOpenApplication(req: MockRequest) {
 }
 
 function deleteOpenApplication(req: MockRequest) {
+  requirePermission(PERMISSIONS.openApplications.delete);
   const id = req.params['id'];
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
   if (index !== -1) {
@@ -172,6 +185,7 @@ function deleteOpenApplication(req: MockRequest) {
 }
 
 function resetOpenApplicationSecret(req: MockRequest) {
+  requirePermission(PERMISSIONS.openApplications.resetSecret);
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {

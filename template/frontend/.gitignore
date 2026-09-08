@@ -42,4 +42,6 @@ testem.log
 Thumbs.db
 
 # Local environment settings
+# 本机调试配置从 environment.dev.ts 复制而来，不进版本库（见 README.md 快速开始）。
 src/environments/environment.debug.ts
+src/environments/environment.local.ts
