@@ -1,13 +1,9 @@
 #if (LocalIdentity)
-using Leistd.Timing;
 using Leistd.ExceptionHandling;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Domain.Auth.Options;
-using CompanyName.ProjectName.Domain.Users.Entities;
-using CompanyName.ProjectName.Domain.Users.ValueObjects;
-using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
@@ -20,11 +16,22 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
+/// <summary>
+/// OpenID Connect 协议端点：授权、令牌、注销与 userinfo。
+/// </summary>
+/// <remarks>
+/// 本类是全项目唯一不继承 <c>BaseController</c> 的控制器，属规范允许的例外：这些端点要返回
+/// <c>SignIn</c> / <c>SignOut</c> / <c>Challenge</c> / <c>Redirect</c> 这类结果并与 Cookie 方案交互，
+/// 需要 <see cref="Controller"/> 而不是统一信封的基类；响应形状由 OpenIddict 与 OIDC 规范决定，
+/// 不能被包成项目的统一信封。
+///
+/// 端点只做协议映射：主体装配与用户解析在 <see cref="IAuthPrincipalFactory"/>，
+/// 这里只把"装配不出来"翻译成对应的协议响应。<b>签发点</b>的账号状态检查在那个工厂里；
+/// 运行期的持续撤权在授权管道的 <c>ActiveUserRequirement</c>，与本控制器无关。
+/// </remarks>
 public sealed class ConnectController(
-    IRepository<User, Guid> userRepository,
     IAuthPrincipalFactory principalFactory,
-    IOptions<OAuthOptions> oauthOptions,
-    IClock clock) : Controller
+    IOptions<OAuthOptions> oauthOptions) : Controller
 {
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]
@@ -54,13 +61,12 @@ public sealed class ConnectController(
             return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        var user = await userRepository.GetByIdAsync(userId, cancellationToken);
-        if (user == null || user.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed)
+        var principal = await principalFactory.CreateAsync(userId, request.GetScopes(), cancellationToken);
+        if (principal == null)
         {
             return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        var principal = await principalFactory.CreateAsync(user, request.GetScopes(), cancellationToken);
         return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
@@ -92,16 +98,15 @@ public sealed class ConnectController(
                 return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 
-            var user = await userRepository.GetByIdAsync(userId, cancellationToken);
-            if (user == null || user.GetAccessStatus(clock.Now) != UserAccessStatus.Allowed)
+            var scopes = request.GetScopes().Any()
+                ? request.GetScopes()
+                : result.Principal?.GetScopes() ?? [];
+            var principal = await principalFactory.CreateAsync(userId, scopes, cancellationToken);
+            if (principal == null)
             {
                 return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 
-            var scopes = request.GetScopes().Any()
-                ? request.GetScopes()
-                : result.Principal?.GetScopes() ?? [];
-            var principal = await principalFactory.CreateAsync(user, scopes, cancellationToken);
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
@@ -147,39 +152,10 @@ public sealed class ConnectController(
             return Challenge(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        var user = await userRepository.GetByIdAsync(userId, cancellationToken);
-        if (user == null)
+        var claims = await principalFactory.CreateUserInfoAsync(userId, User, cancellationToken);
+        if (claims == null)
         {
             return Challenge(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-        }
-
-        var claims = new Dictionary<string, object>(StringComparer.Ordinal)
-        {
-            [Claims.Subject] = user.Id.ToString()
-        };
-
-        if (User.HasScope(Scopes.Profile))
-        {
-            claims[Claims.Name] = user.DisplayName ?? user.Username;
-            claims[Claims.PreferredUsername] = user.Username;
-            if (Uri.TryCreate(user.Avatar, UriKind.Absolute, out var avatarUri) &&
-                (avatarUri.Scheme == Uri.UriSchemeHttp || avatarUri.Scheme == Uri.UriSchemeHttps))
-            {
-                claims[Claims.Picture] = user.Avatar;
-            }
-        }
-
-        if (User.HasScope(Scopes.Email))
-        {
-            claims[Claims.Email] = user.Email;
-            claims[Claims.EmailVerified] = user.EmailConfirmed;
-        }
-
-        if (User.HasScope(Scopes.Roles))
-        {
-            claims[Claims.Role] = User.GetClaims(Claims.Role)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
         }
 
         return Ok(claims);

@@ -1,4 +1,4 @@
-import { AppDate } from './app-date.pipe';
+import { AppDate } from './app-date-pipe';
 
 /**
  * 按 IANA 时区渲染时刻。

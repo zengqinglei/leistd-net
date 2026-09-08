@@ -10,7 +10,7 @@
 
 在开始之前，请确保您已安装以下必需工具：
 
-- **Node.js**: v18+
+- **Node.js**: 满足 Angular 22 的 `^22.22.3 || ^24.15.0 || >=26.0.0`（即 22.22.3+、24.15.0+ 或 26+，其间的奇数主版本不受支持）
 - **Angular CLI**: v22+
 
 您可以通过以下命令验证是否已成功安装：
@@ -102,7 +102,7 @@ export const environment = {
   ng serve -c dev     # 开发环境
   ng serve -c test    # 测试环境
   ng serve -c uat     # UAT 环境
-  ng serve -c prod    # 生产环境
+  ng serve -c production  # 生产环境
   ```
 
 服务器启动后：**模式一**（SPA 同源）在浏览器打开后端地址 `http://localhost:5240/`；**模式二**（CORS 分离）打开 `http://localhost:4200/`。应用支持热重载，任何对源文件的修改都会自动刷新页面。
@@ -121,13 +121,33 @@ export const environment = {
 
 ### 主要配置选项
 
+需要按环境改动的通常只有这几项（完整类型见 `src/environments/environment.base.ts`）：
+
 ```typescript
-export const environment = {
+export const environment: Environment = {
+  ...environmentBase,
   production: false,
-  apiUrl: 'http://localhost:8080/api', // 后端 API 地址
-  // 在此添加其他环境特定的设置
+  useMock: false, // true 开启全部 Mock；也可按模块传对象
+  api: {
+    ...environmentBase.api, // authService、envService 等其余必填项沿用基础配置
+    gateway: '', // 网关地址；留空表示各服务地址即完整地址
+    appService: { url: 'http://localhost:5240' },
+  },
 };
 ```
+
+> `api` 是必填对象，直接重写会漏掉其中的其他必填项——展开 `...environmentBase.api` 再覆盖要改的那几个。
+<!--#if (LocalIdentity)-->
+
+哈希路由用 `useHash: true`（部署在无法配置回退规则的静态宿主时用得上）。
+<!--#else-->
+
+OIDC 授权服务器地址、客户端 ID 与 scope 在 `oidc` 下配置。
+
+**部署要求**：回调地址是无 fragment 的普通路径 `/auth/callback`，反向代理或静态宿主
+必须把它与其余 SPA 深链一并回退到 `index.html`，否则授权服务器跳回来时会命中 404。
+本形态不提供哈希路由——哈希路由只从 fragment 读路由，回调组件不会被渲染。
+<!--#endif-->
 
 使用特定环境：
 

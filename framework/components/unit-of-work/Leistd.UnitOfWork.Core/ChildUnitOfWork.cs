@@ -23,9 +23,20 @@ internal class ChildUnitOfWork : IUnitOfWork
         remove => _parent.Failed -= value;
     }
 
+    /// <inheritdoc/>
     /// <remarks>
-    /// 子工作单元没有独立生命周期；<see cref="Failed"/> 的 add/remove 直接委托给父级，
-    /// 不创建额外的中转委托。释放通知仍是管理器的内部契约，不由子级暴露。
+    /// 同样委托给父级：子工作单元的 <see cref="Dispose"/> 是空操作（生命周期归父级），
+    /// 因此"释放"这件事只会由父级发出一次。管理器也只为父级那次边界建了作用域。
+    /// </remarks>
+    public event EventHandler<UnitOfWorkEventArgs>? Disposed
+    {
+        add => _parent.Disposed += value;
+        remove => _parent.Disposed -= value;
+    }
+
+    /// <remarks>
+    /// 子工作单元没有独立生命周期；<see cref="Failed"/> 与 <see cref="Disposed"/> 的
+    /// add/remove 直接委托给父级，不创建额外的中转委托。
     /// </remarks>
     public ChildUnitOfWork(IUnitOfWork parent)
     {

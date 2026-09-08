@@ -9,6 +9,8 @@
     <ProjectReference Include="..\..\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
     <!-- 取 DbContext 经 IDbContextProvider，理由同 Leistd.Authorization.EntityFrameworkCore -->
     <ProjectReference Include="..\..\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
+
+<ProjectReference Include="..\..\dependency-injection\Leistd.DependencyInjection\Leistd.DependencyInjection.csproj" />
   </ItemGroup>
 
   <ItemGroup>

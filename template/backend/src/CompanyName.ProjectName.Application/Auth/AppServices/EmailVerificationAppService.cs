@@ -15,6 +15,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling;
+using Leistd.Timing;
 using Leistd.Lock;
 using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.Abstractions;
@@ -29,6 +30,7 @@ public class EmailVerificationAppService(
     ICaptchaAppService captchaAppService,
     IEmailSender emailSender,
     ILogger<EmailVerificationAppService> logger,
+    IClock clock,
     IRepository<User, Guid> userRepository
     , ICurrentTenant currentTenant
     ) : BaseAppService, IEmailVerificationAppService
@@ -105,7 +107,7 @@ public class EmailVerificationAppService(
             Purpose = RegistrationPurpose,
             EmailDigest = emailDigest,
             CodeHash = codeDigest.Compute(code),
-            ExpiresAt = DateTimeOffset.UtcNow.Add(expiresIn),
+            ExpiresAt = clock.Now.Add(expiresIn),
             RemainingAttempts = _options.EmailCodeMaxAttempts
         };
         var challengeKey = GetChallengeCacheKey(challengeId);
@@ -208,7 +210,7 @@ public class EmailVerificationAppService(
             return false;
         }
 
-        var remainingLifetime = challenge.ExpiresAt - DateTimeOffset.UtcNow;
+        var remainingLifetime = challenge.ExpiresAt - clock.Now;
         if (remainingLifetime <= TimeSpan.Zero)
         {
             await distributedCache.RemoveAsync(challengeKey, operationToken);
@@ -303,7 +305,7 @@ public class EmailVerificationAppService(
 
         public required string CodeHash { get; init; }
 
-        public required DateTimeOffset ExpiresAt { get; init; }
+        public required DateTime ExpiresAt { get; init; }
 
         public required int RemainingAttempts { get; init; }
     }

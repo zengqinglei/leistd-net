@@ -5,6 +5,7 @@ using Leistd.TestBase.Doubles;
 using Leistd.Timing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Leistd.Notifications.Tests.Core;
 
@@ -13,13 +14,13 @@ public class NotificationPublisherTests
     [Fact]
     public async Task Publishing_to_a_user_writes_history_and_pushes()
     {
-        var (publisher, store, sender) = Build();
+        var (publisher, store, channel) = Build();
 
         await publisher.PublishToUserAsync("user-1", New("标题"));
 
         Assert.Single(store.Saved);
         Assert.Equal("user-1", store.Saved[0].UserId);
-        Assert.Single(sender.ToUser);
+        Assert.Single(channel.ToUser);
     }
 
     // 通知只面向人：每条都落历史。瞬态推送是 realtime 组件的职责，不在本契约内。
@@ -39,11 +40,15 @@ public class NotificationPublisherTests
     public void Resolving_the_publisher_without_a_store_fails()
     {
         var sp = new ServiceCollection()
+            .AddLogging()   // 必须先装：否则抛出的可能是"缺 ILogger"，这条用例就证明不了缺存储
             .AddSingleton<IClock>(new FakeClock())
             .AddNotifications()
             .BuildServiceProvider();
 
-        Assert.Throws<InvalidOperationException>(() => sp.GetRequiredService<INotificationPublisher>());
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => sp.GetRequiredService<INotificationPublisher>());
+
+        Assert.Contains(nameof(INotificationStore), exception.Message);
     }
 
     // 先落库再推送：推送失败只是这一次没送到，历史还在。
@@ -53,33 +58,19 @@ public class NotificationPublisherTests
         var order = new List<string>();
         var publisher = new NotificationPublisher(
             new FakeClock(),
-            [new CallbackSender(() => order.Add("push"))],
-            new CallbackStore(() => order.Add("save")));
+            [new CallbackChannel(() => order.Add("push"))],
+            new CallbackStore(() => order.Add("save")),
+            NullLogger<NotificationPublisher>.Instance);
 
         await publisher.PublishToUserAsync("user-1", New("标题"));
 
         Assert.Equal(["save", "push"], order);
     }
 
-    // 框架时间一律 UTC：调用方显式传的 Local/Unspecified 也要归一化，
-    // 否则通知列表的排序基准与其它时间线对不上。
-    [Theory]
-    [InlineData(DateTimeKind.Local)]
-    [InlineData(DateTimeKind.Unspecified)]
-    public async Task An_explicit_creation_time_is_normalized_to_utc(DateTimeKind kind)
-    {
-        var (publisher, store, _) = Build();
-        var supplied = DateTime.SpecifyKind(new DateTime(2026, 3, 1, 8, 0, 0), kind);
-
-        await publisher.PublishToUserAsync("user-1", New("标题") with { CreationTime = supplied });
-
-        var saved = store.Saved[0].Notification.CreationTime;
-        Assert.Equal(DateTimeKind.Utc, saved.Kind);
-        Assert.Equal(kind == DateTimeKind.Local ? supplied.ToUniversalTime() : supplied, saved);
-    }
-
+    // 创建时刻只能来自时钟：发布输入里没有这个字段，调用方传不进 Local/Unspecified 的时间，
+    // 「通知列表排序基准与其它时间线对不上」这类问题因此不再可能发生，而不是靠归一化去救。
     [Fact]
-    public async Task Creation_time_is_filled_in_when_the_caller_leaves_it_unset()
+    public async Task Creation_time_always_comes_from_the_clock()
     {
         var clock = new FakeClock();
         var (publisher, store, _) = Build(clock);
@@ -87,16 +78,121 @@ public class NotificationPublisherTests
         await publisher.PublishToUserAsync("user-1", New("标题"));
 
         Assert.Equal(clock.Now, store.Saved[0].Notification.CreationTime);
+        Assert.Equal(DateTimeKind.Utc, store.Saved[0].Notification.CreationTime.Kind);
     }
 
-    private static NotificationOutputDto New(string title) => new() { Title = title };
+    // 同一份内容扇出给多个用户是多条独立记录。入参曾是带 Id 的输出 DTO，调用方复用一个对象
+    // 逐人发布时两条记录带同一个主键，第二次落库直接冲突——身份必须在收件人边界产生。
+    [Fact]
+    public async Task The_same_content_becomes_an_independent_record_per_recipient()
+    {
+        var (publisher, store, _) = Build();
+        var content = New("全员公告");
 
-    private static (NotificationPublisher Publisher, RecordingStore Store, RecordingSender Sender) Build(
+        await publisher.PublishToUserAsync("user-1", content);
+        await publisher.PublishToUserAsync("user-2", content);
+
+        var ids = store.Saved.Select(x => x.Notification.Id).ToArray();
+        Assert.Equal(2, ids.Distinct().Count());
+        Assert.DoesNotContain(ids, string.IsNullOrWhiteSpace);
+    }
+
+    // 客户端拿实时推送里的 ID 去标记已读，必须命中自己那条记录：两侧的 ID 只能是同一个。
+    [Fact]
+    public async Task The_pushed_notification_carries_the_same_id_as_the_stored_one()
+    {
+        var (publisher, store, channel) = Build();
+
+        await publisher.PublishToUserAsync("user-1", New("标题"));
+
+        Assert.Equal(store.Saved[0].Notification.Id, channel.ToUser[0].Notification.Id);
+    }
+
+    // 未读状态由发布器定：新发布的通知一定是未读，不看调用方。
+    [Fact]
+    public async Task A_freshly_published_notification_is_unread()
+    {
+        var (publisher, store, _) = Build();
+
+        await publisher.PublishToUserAsync("user-1", New("标题"));
+
+        Assert.False(store.Saved[0].Notification.IsRead);
+    }
+
+    // 跨渠道隔离归发布器：一个宿主自定义渠道抛错，后面的渠道仍要收到，历史也已经落库。
+    // 契约曾要求"每个实现自己吞异常"——那让这条保证取决于每个实现者是否记得。
+    [Fact]
+    public async Task A_failing_channel_does_not_stop_the_remaining_channels()
+    {
+        var store = new RecordingStore();
+        var second = new RecordingChannel();
+        var publisher = new NotificationPublisher(
+            new FakeClock(),
+            [new CallbackChannel(() => throw new InvalidOperationException("channel down")), second],
+            store,
+            NullLogger<NotificationPublisher>.Instance);
+
+        await publisher.PublishToUserAsync("user-1", New("标题"));
+
+        Assert.Single(store.Saved);
+        Assert.Single(second.ToUser);
+    }
+
+    // 取消是调用方主动放弃这次操作，要如实传播——不能被隔离逻辑伪装成"某个渠道失败了"。
+    [Fact]
+    public async Task Caller_cancellation_propagates_instead_of_being_treated_as_a_channel_failure()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var second = new RecordingChannel();
+        // 渠道接住真实 token 再 ThrowIfCancellationRequested：无条件抛 OCE 的写法证明不了
+        // "调用方的 token 真的传到了渠道"，那条链断掉时用例照样绿。
+        CancellationToken received = default;
+        var first = new TokenCapturingChannel(ct =>
+        {
+            received = ct;
+            ct.ThrowIfCancellationRequested();
+        });
+        var publisher = new NotificationPublisher(
+            new FakeClock(), [first, second], new RecordingStore(),
+            NullLogger<NotificationPublisher>.Instance);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => publisher.PublishToUserAsync("user-1", New("标题"), cts.Token));
+
+        Assert.Equal(cts.Token, received);
+        Assert.Empty(second.ToUser);
+    }
+
+    // 边界：渠道自身超时抛 OCE，而调用方 token 并未取消——那仍是一次渠道故障，
+    // 应按普通失败隔离并继续。发布器的 `when (ct.IsCancellationRequested)` 过滤器就是干这个的。
+    [Fact]
+    public async Task A_channel_timeout_is_isolated_when_the_caller_did_not_cancel()
+    {
+        var second = new RecordingChannel();
+        var publisher = new NotificationPublisher(
+            new FakeClock(),
+            [new CallbackChannel(() => throw new OperationCanceledException()), second],
+            new RecordingStore(),
+            NullLogger<NotificationPublisher>.Instance);
+
+        await publisher.PublishToUserAsync("user-1", New("标题"));
+
+        Assert.Single(second.ToUser);
+    }
+
+    private static NotificationInputDto New(string title) => new() { Title = title };
+
+    private static (NotificationPublisher Publisher, RecordingStore Store, RecordingChannel Channel) Build(
         FakeClock? clock = null)
     {
         var store = new RecordingStore();
-        var sender = new RecordingSender();
-        return (new NotificationPublisher(clock ?? new FakeClock(), [sender], store), store, sender);
+        var channel = new RecordingChannel();
+        return (
+            new NotificationPublisher(
+                clock ?? new FakeClock(), [channel], store, NullLogger<NotificationPublisher>.Instance),
+            store,
+            channel);
     }
 
     private sealed class RecordingStore : INotificationStore
@@ -137,25 +233,34 @@ public class NotificationPublisherTests
         public Task<int> GetUnreadCountAsync(string userId, CancellationToken ct = default) => Task.FromResult(0);
     }
 
-    private sealed class CallbackSender(Action onSend) : INotificationSender
+    private sealed class CallbackChannel(Action onSend) : INotificationChannel
     {
-        public Task SendToUserAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
+        public Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
         {
             onSend();
             return Task.CompletedTask;
         }
     }
 
-    private sealed class RecordingSender : INotificationSender
+    /// <summary>把收到的 <see cref="CancellationToken"/> 交给外部检查。</summary>
+    private sealed class TokenCapturingChannel(Action<CancellationToken> onDeliver) : INotificationChannel
     {
-        public List<string> ToUser { get; } = [];
-
-        public Task SendToUserAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
+        public Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
         {
-            ToUser.Add(userId);
+            onDeliver(ct);
             return Task.CompletedTask;
         }
+    }
 
+    private sealed class RecordingChannel : INotificationChannel
+    {
+        // 连通知一起记：推送里的 ID 必须与落库的那条一致，只记 userId 验不到这件事。
+        public List<(string UserId, NotificationOutputDto Notification)> ToUser { get; } = [];
 
+        public Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
+        {
+            ToUser.Add((userId, notification));
+            return Task.CompletedTask;
+        }
     }
 }

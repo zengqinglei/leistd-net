@@ -54,6 +54,9 @@ $gates = @(
     @{ Name = "模板条件符号";              Cmd = "pwsh"; Args = @("scripts/check-template-symbols.ps1") }
     @{ Name = "模板 using/import 守卫";    Cmd = $pythonCmd; Args = @("scripts/check-using-guards.py") }
     @{ Name = "动态连接路径异步边界";      Cmd = $pythonCmd; Args = @("scripts/check-async-boundaries.py") }
+    # 自检先跑：豁免机制本身失效时，紧随其后的那次"通过"没有意义
+    @{ Name = "时间源规则自检";            Cmd = $pythonCmd; Args = @("scripts/check-clock-access.py", "--self-test") }
+    @{ Name = "时间源可替换";              Cmd = $pythonCmd; Args = @("scripts/check-clock-access.py") }
     @{ Name = "DbContext 访问口径";        Cmd = $pythonCmd; Args = @("scripts/check-dbcontext-access.py") }
     @{ Name = "csproj 约定";               Cmd = $pythonCmd; Args = @("scripts/check-csproj-conventions.py") }
     # 覆盖率报告发现不了"程序集从未被任何测试加载"——那种包根本不出现在报告里

@@ -42,7 +42,8 @@ public class DefaultUnitOfWork : IUnitOfWork
     public event EventHandler<UnitOfWorkFailedEventArgs>? Failed;
 
     // 管理器据此同步释放工作单元作用域。
-    internal event EventHandler<UnitOfWorkEventArgs>? Disposed;
+    /// <inheritdoc/>
+    public event EventHandler<UnitOfWorkEventArgs>? Disposed;
 
     /// <inheritdoc/>
     public IServiceProvider ServiceProvider { get; }

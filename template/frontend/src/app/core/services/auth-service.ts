@@ -19,7 +19,7 @@ import { firstValueFrom } from 'rxjs';
 import { SignalRService } from './signalr-service';
 //#endif
 //#if (LocalIdentity)
-import { LoginInputDto, UserOutputDto } from '../../features/account/models/account.dto';
+import { LoginInputDto, UserOutputDto } from '../../shared/dtos/auth.dto';
 //#endif
 //#if (!LocalIdentity)
 import { TenantContextService } from './tenant-context-service';

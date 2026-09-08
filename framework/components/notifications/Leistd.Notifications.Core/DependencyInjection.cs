@@ -23,7 +23,7 @@ public static class DependencyInjection
     /// // 宿主还须注册一个 INotificationStore 实现（见通知家族文档），否则解析发布器即失败
     ///
     /// // 实时投递是可选关注点，单独注册
-    /// await notificationPublisher.PublishToUserAsync(userId, new NotificationOutputDto
+    /// await notificationPublisher.PublishToUserAsync(userId, new NotificationInputDto
     /// {
     ///     Title = "审批通过", Type = NotificationTypes.Workflow,
     /// }, ct);

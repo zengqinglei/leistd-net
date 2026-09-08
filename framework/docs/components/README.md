@@ -1,6 +1,6 @@
 # Leistd 组件总览
 
-本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **22 个能力分组、46 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
+本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **23 个能力分组、48 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 组件清单
 
@@ -32,51 +32,68 @@
 
 ## 依赖关系
 
-下图依据各分组 `dependsOn` 勾勒组件间依赖（箭头由「依赖方」指向「被依赖方」，底层 `Leistd.Core` 在最下）。
+下图按各分组 csproj 的**直接** `ProjectReference` 勾勒组件间依赖（箭头由「依赖方」指向「被依赖方」，底层 `Leistd.Core` 在最下）。传递依赖不画。
+
+`aop`、`core`、`data`、`event-bus`、`localization`、`lock`、`object-mapping` **没有任何跨分组依赖**（家族内只有 `*.Core` ← 实现包），因此图中只作为被依赖方出现或不出现——不是漏画。
 
 ```mermaid
 graph TD
     dependency-injection-dynamic-proxy[DI DynamicProxy 织入] --> dependency-injection[服务注册回调]
     dependency-injection-dynamic-proxy --> aop[动态代理拦截器基类]
 
-    event-bus[事件总线] --> core[核心原语：时钟与通用异常]
-    exception[业务异常与全局异常处理] --> core
+    exception[业务异常与全局异常处理] --> core[核心原语：时钟与通用异常]
     tracing[链路追踪] --> core
+    tracing --> dependency-injection
     tracing --> dependency-injection-dynamic-proxy
 
     unit-of-work[工作单元与事务] --> aop
+    unit-of-work --> dependency-injection
     unit-of-work --> dependency-injection-dynamic-proxy
-    unit-of-work --> event-bus
+    unit-of-work --> event-bus[事件总线]
     unit-of-work --> exception
+    unit-of-work --> data[连接解析契约]
 
+    security[当前用户与身份信息] --> core
     auditing[审计] --> core
+    auditing --> security
     multiTenancy[多租户] --> core
     multiTenancy --> exception
     multiTenancy --> auditing
-    multiTenancy --> security[当前用户与身份信息]
+    multiTenancy --> security
+    multiTenancy --> unit-of-work
+    multiTenancy --> data
     authorization[权限授权] --> auditing
+    authorization --> dependency-injection
+    authorization --> exception
     authorization --> multiTenancy
     authorization --> unit-of-work
     authorizationResource[资源实例授权] --> authorization
     authorizationResource --> auditing
+    authorizationResource --> dependency-injection
+    authorizationResource --> exception
     authorizationResource --> multiTenancy
     authorizationResource --> unit-of-work
     authorizationDataScope[数据范围] --> authorization
+    settings[设置] --> dependency-injection
+    settings --> exception
+    settings --> security
+    settings --> multiTenancy
+    settings --> unit-of-work
     notifications[通知] --> core
     notifications --> auditing
-    notifications --> security
+    notifications --> dependency-injection
     notifications --> unit-of-work
-    notifications --> realtime[实时通信]
     notifications --> signalr[SignalR 基座]
-    realtime --> security
+    realtime[实时通信] --> security
     realtime --> signalr
     signalr --> core
     signalr --> security
+    response[统一 API 响应] --> exception
 
     serviceClient[服务间调用客户端] --> core
     serviceClient --> security
     serviceClient --> tracing
-    serviceClient --> response[统一 API 响应]
+    serviceClient --> exception
     serviceClient --> multiTenancy
 ```
 
@@ -85,7 +102,7 @@ graph TD
 实现在 `Leistd.Security.Core`（主体是所有维度的输入），租户与链路标识两个贡献者分别由
 `Leistd.MultiTenancy.AspNetCore` 与 `Leistd.Tracing.Core` 登记——图中不额外画这两条边，它们复用既有依赖。
 
-无外部 Leistd 依赖的独立分组：`aop`（动态代理）、`core`（核心原语）、`lock`（分布式锁与本地锁）、`localization`（多语言本地化，仅依赖 `Microsoft.Extensions.Localization.Abstractions`）、`object-mapping`（对象映射）、`response`（统一 API 响应）。注意 `auditing`/`authorization`/`realtime` 的 `.Core` 抽象包本身无 Leistd 组件依赖；图中的入边来自它们各自的 EF Core / SignalR / AspNetCore 子包（如 `Leistd.Authorization.EntityFrameworkCore` 引用 `Leistd.Auditing.Core`，`Leistd.MultiTenancy.AspNetCore` 引用 `Leistd.Security.Core`；`multi-tenancy → auditing` 一边来自 `Leistd.MultiTenancy.EntityFrameworkCore` 的租户注册表审计接口）。`Leistd.Authorization.Core` 引用 `Leistd.MultiTenancy.Core` 承载权限定义的多租户侧别。
+无跨分组 Leistd 依赖的独立分组：`aop`（动态代理）、`core`（核心原语）、`data`（连接解析契约）、`event-bus`（事件总线）、`lock`（分布式锁与本地锁）、`localization`（多语言本地化，仅依赖 `Microsoft.Extensions.Localization.Abstractions`）、`object-mapping`（对象映射）。`response` 依赖 `exception-handling`，图中已画。注意 `auditing`/`authorization`/`realtime` 的 `.Core` 抽象包本身无 Leistd 组件依赖；图中的入边来自它们各自的 EF Core / SignalR / AspNetCore 子包（如 `Leistd.Authorization.EntityFrameworkCore` 引用 `Leistd.Auditing.Core`，`Leistd.MultiTenancy.AspNetCore` 引用 `Leistd.Security.Core`；`multi-tenancy → auditing` 一边来自 `Leistd.MultiTenancy.EntityFrameworkCore` 的租户注册表审计接口）。`Leistd.Authorization.Core` 引用 `Leistd.MultiTenancy.Core` 承载权限定义的多租户侧别。
 
 > 注：图中标注真实的 `ProjectReference` 依赖（含各家族的 EF Core / SignalR 子包边）。
 > `authorization`/`authorizationResource`/`notifications` → `unit-of-work` 三条边来自各家族的

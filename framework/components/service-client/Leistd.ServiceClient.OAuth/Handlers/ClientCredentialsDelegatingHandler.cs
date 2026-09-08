@@ -40,13 +40,19 @@ public sealed class ClientCredentialsDelegatingHandler(
         }
 
         // 401 可能来自令牌吊销或密钥轮换，强制刷新一次。
+        // 先释放这个 401：接下来的取令牌是一次网络往返，期间没有理由攥着它的连接；
+        // 而取令牌本身可能抛异常，那条路径上就再没有人释放它了。
+        response.Dispose();
+
         tokenProvider.Invalidate(clientName);
         var freshToken = await tokenProvider.GetAccessTokenAsync(clientName, cancellationToken);
 
-        var retryRequest = await CloneRequestAsync(request, cancellationToken);
+        // 克隆出来的请求由本方法负责释放（连同它复制的 ByteArrayContent）；
+        // 调用方传进来的 request 不在此处释放，所有权仍归调用方。
+        using var retryRequest = await CloneRequestAsync(request, cancellationToken);
         retryRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", freshToken);
-        response.Dispose();
 
+        // 最终响应交给调用方释放。
         return await base.SendAsync(retryRequest, cancellationToken);
     }
 

@@ -490,11 +490,15 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Api/Controllers/TenantController.cs",
             "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
-            "frontend/src/app/features/account"
+            "frontend/src/app/features/account",
+            "frontend/src/app/shared/dtos/auth.dto.ts"
         )
         ReadmeContains = @()
         ReadmeExcludes = @()
-        ForbiddenTokens = @("App.Tenants")
+        # 哈希路由与 OIDC 回调不能共存：回调地址是无 fragment 的普通路径，
+        # 而哈希路由只从 fragment 读路由，回调组件不会被渲染。这个组合运行期不成立，
+        # 因此不是"默认关掉的开关"，而是根本不生成——留着开关等于留一个开了就坏的东西。
+        ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "standalone" = @{
         # Cookie 会话形态：有本地用户与租户控制面，但不签发 OIDC 令牌。
@@ -536,6 +540,8 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
         ReadmeContains = @()
         ReadmeExcludes = @()
+        # 同 resource：哈希路由与 OIDC 回调不可共存；本地登录契约也不属于这种形态
+        ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "identity-external-login" = @{
         Arguments = @("--include-external-login"); Frontend = $true; Lint = $true
@@ -557,6 +563,8 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
         ReadmeContains = @()
         ReadmeExcludes = @()
+        # 同 resource：哈希路由与 OIDC 回调不可共存；本地登录契约也不属于这种形态
+        ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
 }
 

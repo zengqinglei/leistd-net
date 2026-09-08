@@ -154,6 +154,7 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Email/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
             "backend/src/CompanyName.ProjectName.Client/Dtos/WhoAmIDto.cs",
+            "frontend/src/app/shared/dtos/auth.dto.ts",
             "frontend/src/app/features/account/**",
             "frontend/src/app/features/platform/components/users/widgets/reset-user-password-dialog/**",
             "frontend/src/app/core/guards/super-admin-guard.ts",

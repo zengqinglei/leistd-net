@@ -2,6 +2,7 @@ using Leistd.Security.Clients;
 using Leistd.Security.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Leistd.Timing;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -10,7 +11,7 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// （CompanyName.ProjectName.Client）探活与联调。
 /// </summary>
 [Route("api/v1/service-info")]
-public sealed class ServiceInfoController : BaseController
+public sealed class ServiceInfoController(IClock clock) : BaseController
 {
     /// <summary>
     /// 服务基础信息（匿名）：服务名、版本与服务器时间。
@@ -23,7 +24,7 @@ public sealed class ServiceInfoController : BaseController
         return new ServiceInfoOutputDto(
             assemblyName.Name ?? "unknown",
             assemblyName.Version?.ToString() ?? "unknown",
-            DateTimeOffset.UtcNow);
+            clock.Now);
     }
 
 #if (LocalIdentity)

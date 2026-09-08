@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Leistd.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Settings.Abstractions;
 using Leistd.Settings.EntityFrameworkCore.EntityConfigurations;
@@ -36,34 +37,14 @@ public static class DependencyInjection
     public static IServiceCollection AddSettingsEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        var implementationType = typeof(EfCoreSettingStore<TDbContext>);
 
-        // 两个上下文各注册一次时 Microsoft DI 静默取最后一条：设置会落进宿主没预期的那个库，
-        // 读回来的也是那一个，全程没有信号。设置只有一个权威存储，这里直接拒绝。
-        //
-        // 必须枚举全部而不是看第一条：单服务解析由最后一条胜出，只看第一条会在
-        // "第一条恰是本类型、后面还有别的实现"时放行，而实际胜出的仍是后者。
-        // keyed 注册要排除：它按键解析，不参与 ISettingStore 的单服务解析，不构成冲突。
-        var existing = services
-            .Where(d => d.ServiceType == typeof(ISettingStore) && !d.IsKeyedService)
-            .ToList();
-
-        var conflicting = existing.FirstOrDefault(d => d.ImplementationType != implementationType);
-        if (conflicting is not null)
-        {
-            throw new InvalidOperationException(
-                $"An {nameof(ISettingStore)} is already registered as " +
-                $"'{conflicting.ImplementationType?.FullName ?? "<factory>"}'. Settings have a single authoritative " +
-                $"store; registering '{implementationType.FullName}' would silently win by ordering and values " +
-                "would be written to a different database than the caller expects. Map SettingRecord in one DbContext.");
-        }
+        // 设置只有一个权威存储：两个上下文各注册一次时会静默取一条，值写进宿主没预期的库。
+        services.EnsureSingleAuthoritative<ISettingStore, EfCoreSettingStore<TDbContext>>(
+            ServiceLifetime.Transient,
+            "Settings have a single authoritative store; map SettingRecord in one DbContext.");
 
         services.AddSettingsCore();
-        // 同一个上下文重复登记按幂等处理；TryAdd 在这里已足够，因为上面已排除异类实现。
-        if (existing.Count == 0)
-        {
-            services.AddTransient<ISettingStore, EfCoreSettingStore<TDbContext>>();
-        }
+        services.TryAddTransient<ISettingStore, EfCoreSettingStore<TDbContext>>();
 
         return services;
     }

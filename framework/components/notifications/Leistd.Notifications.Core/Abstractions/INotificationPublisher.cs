@@ -15,16 +15,11 @@ namespace Leistd.Notifications.Abstractions;
 public interface INotificationPublisher
 {
     /// <summary>推送通知给指定用户，并写入该用户的通知历史。</summary>
-    Task PublishToUserAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default);
-
-}
-
-/// <summary>
-/// 通知投递器 —— 只负责传输，不负责持久化。
-/// </summary>
-public interface INotificationSender
-{
-    /// <summary>投递通知给指定用户。</summary>
-    Task SendToUserAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default);
+    /// <remarks>
+    /// 入参是<b>内容</b>（<see cref="NotificationInputDto"/>），不带身份：这条记录的 ID、
+    /// 创建时刻与未读状态由发布器在收件人边界定案。同一份 <paramref name="notification"/>
+    /// 发给多个用户，得到的是多条各自独立的记录。
+    /// </remarks>
+    Task PublishToUserAsync(string userId, NotificationInputDto notification, CancellationToken ct = default);
 
 }

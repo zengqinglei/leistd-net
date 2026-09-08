@@ -11,12 +11,14 @@ using Microsoft.Extensions.Logging;
 using CompanyName.ProjectName.Application.OpenApplications.Mappings;
 using Leistd.ObjectMapping.Abstractions;
 using OpenIddict.Abstractions;
+using Leistd.Timing;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.AppServices;
 
 public class OpenApplicationAppService(
     IOpenIddictApplicationManager applicationManager,
     IObjectMapper objectMapper,
+    IClock clock,
     ILogger<OpenApplicationAppService> logger) : BaseAppService, IOpenApplicationAppService
 {
     private const string PkceRequirement = "ft:pkce";
@@ -205,7 +207,7 @@ public class OpenApplicationAppService(
             input.PostLogoutRedirectUris,
             input.Permissions,
             input.Requirements);
-        descriptor.Properties[OpenApplicationProfile.CreationTimePropertyName] = JsonSerializer.SerializeToElement(DateTimeOffset.UtcNow);
+        descriptor.Properties[OpenApplicationProfile.CreationTimePropertyName] = JsonSerializer.SerializeToElement(clock.Now);
 
         try
         {

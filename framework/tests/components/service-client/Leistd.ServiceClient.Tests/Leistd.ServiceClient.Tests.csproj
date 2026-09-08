@@ -2,6 +2,8 @@
 
   <!-- 端到端双宿主（身份服务 + 资源服务）需要 ASP.NET Core 共享框架。 -->
   <ItemGroup>
+    <!-- 时间接缝用官方 FakeTimeProvider 驱动，不手写时间替身 -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

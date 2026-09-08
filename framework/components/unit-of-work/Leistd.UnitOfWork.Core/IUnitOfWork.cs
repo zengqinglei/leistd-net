@@ -16,6 +16,20 @@ public interface IUnitOfWork : IDatabaseApiContainer, ITransactionApiContainer, 
     event EventHandler<UnitOfWorkFailedEventArgs>? Failed;
 
     /// <summary>
+    /// 工作单元释放时同步触发，无论是否已完成。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>这是生命周期契约的一部分，自定义实现必须发出它。</b>
+    /// <see cref="IUnitOfWorkManager"/> 为每个显式边界建了一个独立 DI 作用域，
+    /// 并靠本事件回收该作用域、把环境工作单元恢复成外层的那个。不发出它，
+    /// 作用域会一直挂着（其中的 scoped 服务与 DbContext 都不释放），
+    /// 而后续代码看到的"当前工作单元"仍是这个已经释放的实例。</para>
+    /// <para><see cref="IDisposable.Dispose"/> 必须幂等，且本事件<b>只发一次</b>：
+    /// 重复发出会让管理器重复释放同一个作用域。</para>
+    /// </remarks>
+    event EventHandler<UnitOfWorkEventArgs>? Disposed;
+
+    /// <summary>
     /// 获取工作单元的唯一标识。
     /// </summary>
     Guid Id { get; }

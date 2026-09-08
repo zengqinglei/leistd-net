@@ -15,11 +15,18 @@ namespace Leistd.ServiceClient.OAuth.Services;
 /// <param name="httpClientFactory">HttpClient 工厂（token 请求使用独立客户端 <see cref="TokenHttpClientName"/>，避免管道递归）</param>
 /// <param name="optionsMonitor">具名认证配置</param>
 /// <param name="logger">日志</param>
+/// <param name="timeProvider">时间源；省略时使用 <see cref="TimeProvider.System"/>。</param>
 public class ClientCredentialsTokenProvider(
     IHttpClientFactory httpClientFactory,
     IOptionsMonitor<ClientCredentialsOptions> optionsMonitor,
-    ILogger<ClientCredentialsTokenProvider> logger) : IServiceTokenProvider
+    ILogger<ClientCredentialsTokenProvider> logger,
+    TimeProvider? timeProvider = null) : IServiceTokenProvider
 {
+    // 时间源可注入：令牌缓存的过期判定与「提前 ExpirationBuffer 刷新」都靠它，
+    // 写死 DateTimeOffset.UtcNow 的话这两条只能靠真的等到过期才能验证。
+    // 默认落 TimeProvider.System，宿主无需为此多配一项。
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     /// <summary>
     /// token 请求专用 HttpClient 名（无认证与用户头处理器，避免管道递归）。
     /// </summary>
@@ -32,7 +39,8 @@ public class ClientCredentialsTokenProvider(
     public async Task<string> GetAccessTokenAsync(string clientName, CancellationToken cancellationToken = default)
     {
         var options = optionsMonitor.Get(clientName);
-        if (_cache.TryGetValue(clientName, out var cached) && !cached.IsExpired(options.ExpirationBuffer))
+        if (_cache.TryGetValue(clientName, out var cached) &&
+            !cached.IsExpired(_timeProvider.GetUtcNow(), options.ExpirationBuffer))
         {
             return cached.AccessToken;
         }
@@ -42,7 +50,8 @@ public class ClientCredentialsTokenProvider(
         try
         {
             // 等待期间其他请求可能已刷新缓存，进入临界区后必须再次检查。
-            if (_cache.TryGetValue(clientName, out cached) && !cached.IsExpired(options.ExpirationBuffer))
+            if (_cache.TryGetValue(clientName, out cached) &&
+                !cached.IsExpired(_timeProvider.GetUtcNow(), options.ExpirationBuffer))
             {
                 return cached.AccessToken;
             }
@@ -151,13 +160,13 @@ public class ClientCredentialsTokenProvider(
         }
 
         logger.LogDebug("Service client {ClientName} obtained an access token; expires in {ExpiresIn}s", clientName, expiresIn);
-        return new CachedToken(accessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn));
+        return new CachedToken(accessToken, _timeProvider.GetUtcNow().AddSeconds(expiresIn));
     }
 
     private static string Truncate(string value) => value.Length <= 2048 ? value : value[..2048];
 
     private sealed record CachedToken(string AccessToken, DateTimeOffset ExpiresAt)
     {
-        public bool IsExpired(TimeSpan buffer) => DateTimeOffset.UtcNow >= ExpiresAt - buffer;
+        public bool IsExpired(DateTimeOffset now, TimeSpan buffer) => now >= ExpiresAt - buffer;
     }
 }

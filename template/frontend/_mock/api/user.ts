@@ -233,6 +233,4 @@ export const USER_API = {
     resetPassword(req.params.id, req.body),
   //#endif
   'DELETE /api/v1/users/:id': (req: MockRequest) => deleteUser(req.params.id),
-  'POST /api/v1/user/avatar': 'ok',
-  'POST /api/v1/register': { msg: 'ok' },
 };

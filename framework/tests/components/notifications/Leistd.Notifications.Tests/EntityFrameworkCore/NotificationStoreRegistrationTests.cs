@@ -23,6 +23,21 @@ public class NotificationStoreRegistrationTests
     }
 
     // 重复登记同一个上下文无害，按幂等处理。
+    // 宿主提前把同一个实现登记成错误的生命周期：必须拒绝。放行的话紧随其后的 TryAdd 会因
+    // "已有注册"不再补正确那条，框架最终保留宿主那个错的——EF 存储被登记成单例尤其糟，
+    // 它会捕获作用域内的上下文。
+    [Fact]
+    public void A_host_registration_with_the_wrong_lifetime_is_rejected()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<INotificationStore, EfCoreNotificationStore<FirstDbContext>>();
+
+        var error = Assert.Throws<InvalidOperationException>(
+            () => services.AddNotificationsEfCore<FirstDbContext>());
+
+        Assert.Contains("Singleton", error.Message);
+    }
+
     [Fact]
     public void Registering_the_same_context_twice_is_idempotent()
     {
@@ -32,6 +47,8 @@ public class NotificationStoreRegistrationTests
 
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(INotificationStore));
         Assert.Equal(typeof(EfCoreNotificationStore<FirstDbContext>), descriptor.ImplementationType);
+        // 生命周期一并钉住：四家的保障要对称，否则误改一处不会红
+        Assert.Equal(ServiceLifetime.Transient, descriptor.Lifetime);
     }
 
     private sealed class FirstDbContext(DbContextOptions<FirstDbContext> options) : DbContext(options);

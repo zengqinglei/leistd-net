@@ -60,7 +60,13 @@ public class NotificationRecord : ICreationAuditedObject
     {
         return new NotificationRecord
         {
-            Id = Guid.TryParse(notification.Id, out var id) ? id : Guid.CreateVersion7(),
+            // 身份由发布器定案，存储不替它发明：解析不出来就是上游给了个非法 ID，
+            // 悄悄换一个会让客户端手里的 ID 与库里的对不上，标记已读永远命不中。
+            Id = Guid.TryParse(notification.Id, out var id)
+                ? id
+                : throw new ArgumentException(
+                    $"Notification id '{notification.Id}' is not a GUID. The publisher assigns it; " +
+                    "a store must not substitute one.", nameof(notification)),
             UserId = userId,
             Title = notification.Title,
             Content = notification.Content,

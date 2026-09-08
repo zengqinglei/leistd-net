@@ -1,17 +1,17 @@
 import {
   ChangePasswordInputDto,
   UpdateCurrentUserInputDto,
-  UserOutputDto,
   RegisterInputDto,
   SecurityConfigOutputDto,
   CaptchaOutputDto,
   SendEmailCodeInputDto,
   EmailVerificationChallengeOutputDto,
 } from '../../src/app/features/account/models/account.dto';
+import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
 import { TENANTS } from '../data/tenant';
-import { USERS, toUserOutput } from '../data/user';
+import { MockUser, USERS, toUserOutput } from '../data/user';
 import {
   MOCK_SESSION_USER_ID,
   setMockSessionTenantKey,
@@ -83,16 +83,29 @@ function sessionLogin(usernameOrEmail: string, password: string, tenantKey: stri
   });
 }
 
-function getCurrentUser(_req: MockRequest): UserOutputDto {
-  if (!MOCK_SESSION_USER_ID) {
+/**
+ * 当前认证主体——受保护端点的唯一入口。
+ *
+ * 没有会话、或会话里的 ID 匹配不到 Mock 用户，一律 401。**不能回落到 USERS[0]**：
+ * 那会让匿名的资料修改与改密码"成功"，改掉的还是默认用户，于是 Mock 证明了一个
+ * 生产环境不存在的行为——真后端在这两个端点上都是 401。
+ * 展示用的 persona 回落只属于 Resource 形态的权限演示路径，不能进数据修改路径。
+ */
+function requireCurrentMockUser(): MockUser {
+  const user = MOCK_SESSION_USER_ID ? USERS.find((u) => u.id === MOCK_SESSION_USER_ID) : undefined;
+  if (!user) {
     throw new MockException(401, { code: 'Error:Unauthorized', message: 'Not authenticated' });
   }
-  const user = USERS.find((u) => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
-  return toUserOutput(user);
+  return user;
+}
+
+function getCurrentUser(_req: MockRequest): UserOutputDto {
+  return toUserOutput(requireCurrentMockUser());
 }
 
 function updateCurrentUser(req: MockRequest): UserOutputDto {
-  const user = USERS.find((u) => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
+  // 先确立主体再读 body：匿名写入不得在失败前碰到任何用户数据
+  const user = requireCurrentMockUser();
   const body = req.body as UpdateCurrentUserInputDto;
 
   const username = body.username.trim();
@@ -119,7 +132,7 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
 }
 
 function changePassword(req: MockRequest): 'ok' {
-  const user = USERS.find((u) => u.id === MOCK_SESSION_USER_ID) ?? USERS[0];
+  const user = requireCurrentMockUser();
   const body = req.body as ChangePasswordInputDto;
 
   if (user.password !== body.currentPassword) {
