@@ -146,7 +146,12 @@ public class RedisLockRenewalTests
             Interlocked.Increment(ref extendCount);
 
             return ExtendThrows
-                ? Task.FromException<bool>(new RedisConnectionException(ConnectionFailureType.SocketFailure, "boom"))
+                ? Task.FromException<bool>(new RedisConnectionException(
+                    ConnectionFailureType.SocketFailure,
+                    CommandFlags.None,
+                    "boom",
+                    innerException: null,
+                    CommandStatus.Unknown))
                 : Task.FromResult(ExtendResult);
         }
 

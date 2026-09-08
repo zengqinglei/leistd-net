@@ -21,13 +21,7 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-import {
-  ColumnDef,
-  createAngularTable,
-  getCoreRowModel,
-  PaginationState,
-  SortingState,
-} from '@tanstack/angular-table';
+import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-table';
 
 //#if (IncludeLocalization)
 import { refreshOnLanguageChange } from '../../../../../../core/i18n/translation-ready';
@@ -41,6 +35,10 @@ import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
 } from '../../../../../../shared/models/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
@@ -130,7 +128,7 @@ export class RoleTable {
 
   private readonly tableViewport = tableViewportSignal();
 
-  protected readonly columns: ColumnDef<RoleOutputDto>[] = [
+  protected readonly columns: ColumnDef<AppTableFeatures, RoleOutputDto>[] = [
     {
       accessorKey: 'displayName',
       id: 'displayName',
@@ -163,10 +161,9 @@ export class RoleTable {
     tableColumnVisibility(this.columns, this.tableViewport()),
   );
 
-  protected readonly table = createAngularTable<RoleOutputDto>(() => ({
+  protected readonly table = injectAppTable(() => ({
     data: this.roles(),
     columns: this.columns,
-    getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     manualSorting: true,
     rowCount: this.totalCount(),

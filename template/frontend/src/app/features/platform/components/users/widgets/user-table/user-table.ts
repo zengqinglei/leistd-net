@@ -26,13 +26,7 @@ import { HlmPopoverImports } from '@spartan-ng/helm/popover';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-import {
-  ColumnDef,
-  createAngularTable,
-  getCoreRowModel,
-  PaginationState,
-  SortingState,
-} from '@tanstack/angular-table';
+import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-table';
 
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
@@ -45,6 +39,10 @@ import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
 } from '../../../../../../shared/models/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
@@ -146,7 +144,7 @@ export class UserTable {
 
   private readonly tableViewport = tableViewportSignal();
 
-  protected readonly columns: ColumnDef<UserManagementOutputDto>[] = [
+  protected readonly columns: ColumnDef<AppTableFeatures, UserManagementOutputDto>[] = [
     {
       accessorKey: 'username',
       id: 'username',
@@ -222,10 +220,9 @@ export class UserTable {
     //#endif
   }
 
-  protected readonly table = createAngularTable<UserManagementOutputDto>(() => ({
+  protected readonly table = injectAppTable(() => ({
     data: this.users(),
     columns: this.columns,
-    getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     manualSorting: true,
     rowCount: this.totalCount(),

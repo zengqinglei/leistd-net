@@ -68,6 +68,8 @@ export const environment = {
 
 > 配套：后端需开启 `SpaProxy.Enabled=true`、`SpaProxy.Target=http://localhost:4200`，详见 [后端 README · 前后端联调](../backend/README.md)。
 > 访问方式：浏览器打开**后端地址**（如 `http://localhost:5240/`），不是 4200。
+>
+> 代价：**热更新（HMR）在这个模式下不可用**。dev server 的 live-reload 走 WebSocket 升级，而 SPA 代理基于 `HttpClient`，转发不了 upgrade（浏览器控制台会反复出现 `WebSocket connection to 'ws://<后端地址>/?token=...' failed`）。改代码后手动刷新即可；需要热更新时临时切模式二。应用自身的 SignalR 不受影响——它直连后端，不经这个代理。
 
 #### 模式二：CORS 分离访问
 
@@ -237,6 +239,11 @@ npm run format:fix     # 自动格式化代码
   ```bash
   npm test
   ```
+
+  > 单元测试跑在 Karma + Jasmine 4.6 上，`@types/jasmine` 与之保持同一主版本——这是
+  > `karma-jasmine@5.1.0` 的依赖范围（`jasmine-core: ^4.1.0`）之内的组合。调整测试依赖时，
+  > 要核对浏览器里实际加载的版本，以及通过 / 失败 / 跳过三种报告语义；只看根依赖的版本号
+  > 判断不出实际运行的是哪一份。
 
 - **端到端 (E2E) 测试**：
   ```bash

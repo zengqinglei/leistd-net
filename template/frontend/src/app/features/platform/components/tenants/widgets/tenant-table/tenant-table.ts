@@ -19,12 +19,7 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
-import {
-  ColumnDef,
-  createAngularTable,
-  getCoreRowModel,
-  PaginationState,
-} from '@tanstack/angular-table';
+import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 
 //#if (IncludeLocalization)
 import { refreshOnLanguageChange } from '../../../../../../core/i18n/translation-ready';
@@ -39,6 +34,10 @@ import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
 } from '../../../../../../shared/models/table-column-meta';
+import {
+  injectAppTable,
+  type AppTableFeatures,
+} from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
 import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
@@ -115,7 +114,7 @@ export class TenantTable {
   private readonly tableViewport = tableViewportSignal();
 
   // 后端租户列表不支持字段排序（契约只有 offset/limit/keyword），全部列不排序。
-  protected readonly columns: ColumnDef<TenantOutputDto>[] = [
+  protected readonly columns: ColumnDef<AppTableFeatures, TenantOutputDto>[] = [
     {
       accessorKey: 'name',
       id: 'name',
@@ -153,10 +152,9 @@ export class TenantTable {
     tableColumnVisibility(this.columns, this.tableViewport()),
   );
 
-  protected readonly table = createAngularTable<TenantOutputDto>(() => ({
+  protected readonly table = injectAppTable(() => ({
     data: this.tenants(),
     columns: this.columns,
-    getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     rowCount: this.totalCount(),
     onPaginationChange: (updater) =>

@@ -26,6 +26,95 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+#if (ExternalLogin)
+            modelBuilder.Entity("CompanyName.ProjectName.Domain.Auth.Entities.ExternalLoginConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessToken")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatorId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("DeleterId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastModifierId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("LastSyncTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ProviderAvatarUrl")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("ProviderEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ProviderUserId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ProviderUsername")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("RefreshToken")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Provider", "ProviderUserId")
+                        .IsUnique()
+                        .HasFilter("\"TenantId\" IS NULL");
+
+                    b.HasIndex("TenantId", "Provider", "ProviderUserId")
+                        .IsUnique()
+                        .HasFilter("\"TenantId\" IS NOT NULL");
+
+                    b.ToTable("ExternalLoginConnections", "companyname-projectname");
+                });
+#endif
+
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -443,6 +532,19 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
                     b.ToTable("SettingRecord", "companyname-projectname");
                 });
+
+#if (ExternalLogin)
+            modelBuilder.Entity("CompanyName.ProjectName.Domain.Auth.Entities.ExternalLoginConnection", b =>
+                {
+                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+#endif
 
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.UserRole", b =>
                 {

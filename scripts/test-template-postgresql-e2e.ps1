@@ -134,8 +134,14 @@ try {
     [IO.File]::WriteAllText($nugetConfigPath, $nugetConfig, [Text.UTF8Encoding]::new($false))
     Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", (Join-Path $repoRoot "template"), "--force")
     $projects = @(
-        # 参数以能力布尔表达：Identity 形态两者皆开，Resource 形态两者皆关
-        @{ Name = "E2E.Identity"; Arguments = @(); Root = Join-Path $generatedRoot "identity" },
+        # 参数以能力布尔表达：Identity 形态两者皆开，Resource 形态两者皆关。
+        # Identity 侧把三个可选特性全开：矩阵的运行时冒烟跑在 EF InMemory 上（不建表），
+        # 只有这里会把迁移真的应用到 PostgreSQL，因此模型与迁移是否对齐只能在这条路上验。
+        # 曾漏过的实例：ExternalLoginConnections 表不在初始迁移里，开启外部登录的项目
+        # 用自己的迁移建不出库（EF 报 PendingModelChangesWarning），而单场景编译一切正常。
+        @{ Name = "E2E.Identity"
+           Arguments = @("--include-notifications","--include-external-login","--include-localization")
+           Root = Join-Path $generatedRoot "identity" },
         @{ Name = "E2E.Resource"
            Arguments = @("--service-role", "Resource")
            Root = Join-Path $generatedRoot "resource" }
