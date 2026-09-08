@@ -19,6 +19,8 @@
     <PackageVersion Include="Leistd.Localization.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <!--#endif-->
     <PackageVersion Include="Leistd.DependencyInjection.DynamicProxy" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Email.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Email.Smtp" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Memory" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Lock.Redis" Version="$(LeistdFrameworkVersion)" />

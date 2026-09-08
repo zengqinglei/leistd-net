@@ -24,6 +24,9 @@
     <PackageReference Include="Leistd.Settings.Core" />
     <PackageReference Include="Leistd.MultiTenancy.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
+<!--#if (LocalIdentity)-->
+    <PackageReference Include="Leistd.Email.Core" />
+<!--#endif-->
     <PackageReference Include="Leistd.Ddd.Domain" />
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />

@@ -53,7 +53,6 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Microsoft.AspNetCore.Authorization;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Domain.Shared.Email.Options;
 using CompanyName.ProjectName.Application.Auth;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections;
@@ -121,10 +120,6 @@ try
 #endif
     builder.Services.AddOptions<UserRegistrationOptions>()
         .Bind(builder.Configuration.GetSection(UserRegistrationOptions.SectionName))
-        .ValidateDataAnnotations()
-        .ValidateOnStart();
-    builder.Services.AddOptions<SmtpOptions>()
-        .Bind(builder.Configuration.GetSection(SmtpOptions.SectionName))
         .ValidateDataAnnotations()
         .ValidateOnStart();
 #endif

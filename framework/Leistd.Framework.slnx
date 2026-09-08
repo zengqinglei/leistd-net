@@ -32,6 +32,10 @@
     <Project Path="components/dependency-injection/Leistd.DependencyInjection/Leistd.DependencyInjection.csproj" />
     <Project Path="components/dependency-injection/Leistd.DependencyInjection.DynamicProxy/Leistd.DependencyInjection.DynamicProxy.csproj" />
   </Folder>
+  <Folder Name="/components/email/">
+    <Project Path="components/email/Leistd.Email.Core/Leistd.Email.Core.csproj" />
+    <Project Path="components/email/Leistd.Email.Smtp/Leistd.Email.Smtp.csproj" />
+  </Folder>
   <Folder Name="/components/event-bus/">
     <Project Path="components/event-bus/Leistd.EventBus.Core/Leistd.EventBus.Core.csproj" />
     <Project Path="components/event-bus/Leistd.EventBus.Local/Leistd.EventBus.Local.csproj" />
@@ -120,6 +124,9 @@
   </Folder>
   <Folder Name="/tests/components/dependency-injection/">
     <Project Path="tests/components/dependency-injection/Leistd.DependencyInjection.Tests/Leistd.DependencyInjection.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/components/email/">
+    <Project Path="tests/components/email/Leistd.Email.Tests/Leistd.Email.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/components/event-bus/">
     <Project Path="tests/components/event-bus/Leistd.EventBus.Tests/Leistd.EventBus.Tests.csproj" />
