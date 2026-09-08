@@ -26,6 +26,7 @@
     <!-- 第三方 -->
     <PackageVersion Include="Castle.Core" Version="5.2.1" />
     <PackageVersion Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />
+    <PackageVersion Include="MailKit" Version="4.17.0" />
     <PackageVersion Include="Mapster" Version="10.0.7" />
     <PackageVersion Include="Refit" Version="15.0.0" />
     <PackageVersion Include="Refit.HttpClientFactory" Version="15.0.0" />

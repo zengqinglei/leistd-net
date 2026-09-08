@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using CompanyName.ProjectName.Domain.Shared.Email;
+using Leistd.Email.Abstractions;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.Options;
@@ -125,9 +125,12 @@ public class EmailVerificationAppService(
                 new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiresIn },
                 operationToken);
             await emailSender.SendAsync(
-                normalizedEmail,
-                "Account Registration Verification Code",
-                BuildEmailBody(code),
+                new EmailMessage
+                {
+                    To = normalizedEmail,
+                    Subject = "Account Registration Verification Code",
+                    Body = BuildEmailBody(code),
+                },
                 operationToken);
         }
         catch
