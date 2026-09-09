@@ -94,11 +94,11 @@
       "users": "User Management",
       "openApplications": "Developer Apps",
       "workbench": "Workbench",
-      "appSubtitle": "Admin Platform",
       "roles": "Role Management",
       "tenants": "Tenant Management",
       "groupOther": "Other",
-      "settings": "Settings"
+      "settings": "Settings",
+      "switchArea": "Switch area"
     },
     "notifications": {
       "title": "Notifications",
@@ -130,17 +130,25 @@
     "placeholder": {
       "title": "Workspace",
       "comingSoon": "This feature is under development, stay tuned..."
-    },
-    "settings": {
-      "title": "Settings",
-      "description": "Manage your account preferences and system defaults",
-      "account": "Account",
-      "accountDescription": "Applies to you only; leave blank to inherit the system default",
-      "system": "System",
-      "systemDescription": "Defaults for everyone here; each user may override them",
-      "reset": "Reset to default",
-      "empty": "No configurable items in this section"
     }
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Manage your account preferences and system defaults",
+    "account": "Account",
+    "accountDescription": "Applies to you only; leave blank to inherit the system default",
+    "system": "System",
+    "systemDescription": "Defaults for everyone here; each user may override them",
+    "reset": "Reset to default",
+    "empty": "No configurable items in this section",
+    "timeZoneSearch": "Search city or UTC offset",
+    "timeZoneEmpty": "No matching time zone",
+    "browserTimeZone": "browser",
+    "groups": "Setting categories",
+    "followSystem": "Follows your system",
+    "hostScopeHint": "Applies to all instances (~30s)",
+    "saved": "Saved",
+    "saving": "Saving…"
   },
   "landing": {
     "hero": {
@@ -240,7 +248,12 @@
       "tenantConfirm": "Confirm",
       "tenantClear": "Clear tenant",
       "tenantNotFound": "Tenant does not exist",
-      "tenantInactive": "Tenant is deactivated"
+      "tenantInactive": "Tenant is deactivated",
+      "tenantFromDomain": "Determined by the site address.",
+      "tenantResolving": "Identifying tenant from the site address…",
+      "tenantUnavailable": "The tenant this address points to is unavailable. Contact your administrator.",
+      "tenantProbeFailed": "Could not determine the tenant for this address. Check your connection and try again.",
+      "tenantProbeRetry": "Retry"
     },
     "register": {
       "title": "Sign Up",
@@ -584,6 +597,7 @@
     "create": "New tenant",
     "colName": "Name",
     "colDisplayName": "Display name",
+    "colDescription": "Description",
     "colStatus": "Status",
     "colCreatedAt": "Created at",
     "active": "Active",
@@ -601,6 +615,7 @@
     "editDescription": "Name identifies the tenant at sign-in; users enter it to select their tenant.",
     "fieldName": "Name",
     "fieldDisplayName": "Display name",
+    "fieldDescription": "Description",
     "fieldAdminEmail": "Admin email",
     "fieldAdminPassword": "Admin password",
     "databasePlacement": "Database placement",
@@ -619,6 +634,12 @@
       "emptyHint": "Create a new tenant",
       "emptyFilteredTitle": "No matching tenants",
       "emptyFilteredHint": "Adjust the search keyword"
-    }
+    },
+    "detailTitle": "Tenant detail",
+    "detailSectionIdentity": "Identity",
+    "detailSectionPlacement": "Database placement",
+    "detailSecretHint": "Only Secret reference names are shown; connection strings are never returned.",
+    "fieldDatabaseMode": "Database placement",
+    "fieldConnectionVersion": "Connection version"
   }
 }

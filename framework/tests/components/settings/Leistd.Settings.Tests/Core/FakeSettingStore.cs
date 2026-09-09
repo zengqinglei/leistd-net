@@ -1,5 +1,6 @@
 using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
+using Leistd.Settings.Exceptions;
 
 namespace Leistd.Settings.Tests.Core;
 
@@ -9,6 +10,14 @@ internal sealed class FakeSettingStore : ISettingStore
     public Dictionary<string, string> Tenant { get; } = new(StringComparer.Ordinal);
 
     public Dictionary<string, string> User { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>宿主层（进程级）那一行。</summary>
+    public Dictionary<string, string> Host { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>当前上下文能否读写宿主层；置 false 即模拟租户上下文。</summary>
+    public bool CanAccessHostScope { get; set; } = true;
+
+    public int HostReads { get; private set; }
 
     public int TenantReads { get; private set; }
 
@@ -24,6 +33,19 @@ internal sealed class FakeSettingStore : ISettingStore
         string? userId,
         CancellationToken cancellationToken = default)
     {
+        if (scope == SettingScopes.Host)
+        {
+            if (!CanAccessHostScope)
+            {
+                // 与 EfCoreSettingStore 一致：租户上下文下这一层根本不该被读到
+                return Task.FromException<IReadOnlyDictionary<string, string>>(
+                    new HostScopeUnavailableException());
+            }
+
+            HostReads++;
+            return Task.FromResult<IReadOnlyDictionary<string, string>>(Host);
+        }
+
         if (scope == SettingScopes.User)
         {
             UserReads++;
@@ -47,6 +69,7 @@ internal sealed class FakeSettingStore : ISettingStore
         RemoveAllCalls++;
         Tenant.Clear();
         User.Clear();
+        Host.Clear();
         return Task.CompletedTask;
     }
 

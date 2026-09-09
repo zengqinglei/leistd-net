@@ -5,9 +5,10 @@ import { TranslocoService, Translation } from '@jsverse/transloco';
 /**
  * 返回一个「翻译就绪」跟踪信号，用于让 computed/effect 在**资源异步加载完成**与**语言切换**时都重新求值。
  *
- * 为什么不用 langChanges$：它只在语言**切换**时发射。首帧若词条 JSON 尚未加载完，
- * translate(key) 会返回键本身（裸键），而此后语言未变、langChanges$ 不再发射，
- * 依赖它的 computed/effect 不会重算 → 裸键残留（Angular zoneless 下不会自动补偿）。
+ * 为什么不用 langChanges$：它只跟踪**语言取值**（订阅时发一次当前语言，之后每次切换再发），
+ * 不跟踪词条是否已加载。首帧若词条 JSON 尚未加载完，translate(key) 会返回键本身（裸键），
+ * 而此后语言未变、langChanges$ 不再发射，依赖它的 computed/effect 不会重算 → 裸键残留
+ * （Angular zoneless 下不会自动补偿）。
  *
  * 为什么承载 Translation 对象而非活动语言字符串：selectTranslation() 会触发 load() 并在**加载完成后**
  * 发射当前语言的词条对象、且在每次语言切换后再次发射。若把信号值映射为语言字符串，

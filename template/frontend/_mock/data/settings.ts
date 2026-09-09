@@ -8,9 +8,16 @@
 export interface MockSettingDefinition {
   name: string;
   displayName: string;
+  /** 分组标识；设置页左侧按它分类。真实后端会把未分组的归入 `Other`。 */
+  group: string;
   defaultValue: string | null;
   allowsTenantScope: boolean;
   allowsUserScope: boolean;
+  /** 进程级设置：只有宿主那一份，租户与用户都不能覆盖。 */
+  allowsHostScope?: boolean;
+  /** 数值型设置的取值区间；界面据此渲染带上下界的数字输入框。 */
+  minimum?: number;
+  maximum?: number;
 }
 
 export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
@@ -18,18 +25,61 @@ export const SETTING_DEFINITIONS: MockSettingDefinition[] = [
   {
     name: 'Display.Language',
     displayName: '界面语言',
-    defaultValue: 'en',
-    allowsTenantScope: true,
+    group: 'Display',
+    // 留空即"跟随系统"：客户端按浏览器语言渲染，租户没有默认值可给
+    defaultValue: null,
+    allowsTenantScope: false,
     allowsUserScope: true,
   },
   //#endif
   {
     name: 'Display.TimeZone',
     displayName: '时区',
-    defaultValue: 'Asia/Shanghai',
-    allowsTenantScope: true,
+    group: 'Display',
+    defaultValue: null,
+    allowsTenantScope: false,
     allowsUserScope: true,
   },
+  // 进程级：两个层级标记都是 false，只有 allowsHostScope。真实后端在租户上下文下
+  // 根本不下发这类设置，Mock 只有宿主视角，因此照常列出。
+  {
+    name: 'Logging.MinimumLevel',
+    displayName: '最小日志级别',
+    group: 'Logging',
+    defaultValue: 'Information',
+    allowsTenantScope: false,
+    allowsUserScope: false,
+    allowsHostScope: true,
+  },
+  {
+    name: 'Logging.RequestLevel',
+    displayName: '请求日志级别',
+    group: 'Logging',
+    defaultValue: 'Information',
+    allowsTenantScope: false,
+    allowsUserScope: false,
+    allowsHostScope: true,
+  },
+  //#if (LocalIdentity)
+  {
+    name: 'Registration.EnableEmailVerification',
+    displayName: '要求邮箱验证',
+    group: 'Registration',
+    defaultValue: 'false',
+    allowsTenantScope: true,
+    allowsUserScope: false,
+  },
+  {
+    name: 'Registration.CaptchaExpiryMinutes',
+    displayName: '图形验证码有效期（分钟）',
+    group: 'Registration',
+    defaultValue: '5',
+    allowsTenantScope: true,
+    allowsUserScope: false,
+    minimum: 1,
+    maximum: 60,
+  },
+  //#endif
 ];
 
 /**

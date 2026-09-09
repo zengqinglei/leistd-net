@@ -5,5 +5,5 @@
     "types": []
   },
   "include": ["src/**/*.ts", "_mock/**/*.ts", "libs/ui/**/src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts"]
+  "exclude": ["src/**/*.spec.ts", "_mock/**/*.spec.ts"]
 }

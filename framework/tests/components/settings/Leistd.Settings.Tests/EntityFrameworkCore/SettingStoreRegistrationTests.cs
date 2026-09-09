@@ -87,6 +87,8 @@ public class SettingStoreRegistrationTests
 
     private sealed class ThrowingSettingStore : ISettingStore
     {
+        public bool CanAccessHostScope => throw new NotSupportedException();
+
         public Task<IReadOnlyDictionary<string, string>> GetAllAsync(
             Definitions.SettingScopes scope,
             string? userId,

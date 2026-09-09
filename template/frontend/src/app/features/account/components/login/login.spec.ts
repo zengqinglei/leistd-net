@@ -7,7 +7,7 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
-import { of, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 
 import { Login } from './login';
 import { permissionGuard } from '../../../../core/guards/permission-guard';
@@ -15,7 +15,19 @@ import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { StartupService } from '../../../../core/services/startup-service';
+//#if (LocalIdentity)
+import { TenantContextService } from '../../../../core/services/tenant-context-service';
+//#endif
+//#if (LocalIdentity)
+import { TenantByHostOutputDto } from '../../../../shared/dtos/tenant.dto';
+//#endif
 import { PERMISSIONS } from '../../../../shared/models/permission';
+//#if (LocalIdentity)
+import { TenantService } from '../../../platform/services/tenant-service';
+//#endif
+//#if (ExternalLogin)
+import { AccountService } from '../../services/account-service';
+//#endif
 
 /**
  * 登录提交路径。
@@ -31,6 +43,10 @@ describe('Login', () => {
   let authService: jasmine.SpyObj<AuthService>;
   let authorization: AuthorizationService;
   let queryParams: Record<string, string>;
+  //#if (LocalIdentity)
+  // 主机名探测的返回值。默认"域名不表态"，与本机开发一致；租户相关用例逐个覆盖它。
+  let byHost: Observable<TenantByHostOutputDto>;
+  //#endif
 
   async function setUp(): Promise<void> {
     authService = jasmine.createSpyObj<AuthService>('AuthService', [
@@ -57,6 +73,11 @@ describe('Login', () => {
         { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => of({}) } },
         //#endif
         { provide: AuthService, useValue: authService },
+        //#if (LocalIdentity)
+        // 登录页构造时就会按主机名探测一次租户；不打桩的话它会挂在一个永不返回的请求上，
+        // 租户区会一直停在 pending，所有与租户有关的断言都测不到真实分支。
+        { provide: TenantService, useValue: { getByHost: () => byHost } },
+        //#endif
         // 真实 permissionGuard 会先等启动流结束；登录页自身不依赖它，给个已完成的桩即可。
         { provide: StartupService, useValue: { status: signal('success' as const) } },
         {
@@ -88,7 +109,14 @@ describe('Login', () => {
 
   beforeEach(() => {
     queryParams = {};
+    //#if (LocalIdentity)
+    byHost = of({ decision: 'undecided' as const });
+    localStorage.clear();
+    //#endif
   });
+  //#if (LocalIdentity)
+  afterEach(() => localStorage.clear());
+  //#endif
 
   it('表单非法时不发起登录请求', async () => {
     await setUp();
@@ -214,4 +242,178 @@ describe('Login', () => {
     await component.onSubmit();
     expect(router.navigate).toHaveBeenCalledWith(['/platform']);
   });
+  //#if (LocalIdentity)
+  /**
+   * 主机名定案的三档结果。
+   *
+   * 关键在于**"宿主定案"与"域名不表态"必须分开**：两者都当成"没有租户"时，
+   * 宿主域上会残留上次记住的租户，而服务端已按宿主处理请求——
+   * 界面显示的和实际生效的不是同一个租户上下文，登录会落在用户没选的那一侧。
+   */
+  describe('按主机名定案租户', () => {
+    const domainTenant = {
+      id: '019ff8ed-221b-7673-9ba8-6b6dd5a638ab',
+      name: 'acme',
+      displayName: 'Acme Inc.',
+      isActive: true,
+    };
+
+    /**
+     * 造出"上次记住的租户"。
+     *
+     * 直接写存储而不是调 `TenantContextService.set`：探测在组件构造时就跑，
+     * 得让上下文在服务初始化那一刻就已经有值，否则测不到"探测把它清掉"这件事。
+     */
+    function rememberTenant(): void {
+      localStorage.setItem(
+        'app.tenant',
+        JSON.stringify({
+          id: '019ff8ed-3333-7673-9ba8-6b6dd5a638ab',
+          name: 'remembered',
+          displayName: 'Remembered Inc.',
+        }),
+      );
+    }
+
+    it('域名指向租户：定住该租户且不再允许手选', async () => {
+      byHost = of({ decision: 'tenant' as const, tenant: domainTenant });
+      await setUp();
+
+      expect(TestBed.inject(TenantContextService).current()?.name).toBe('acme');
+      expect(component.tenantLocked()).toBeTrue();
+      expect(component.tenantSelectionBlocked()).toBeTrue();
+    });
+
+    it('域名定案为宿主：清掉记住的租户，也不允许再选', async () => {
+      byHost = of({ decision: 'host' as const });
+      rememberTenant();
+      await setUp();
+
+      expect(TestBed.inject(TenantContextService).current()).toBeNull();
+      expect(component.tenantLocked()).toBeTrue();
+    });
+
+    it('域名不表态：保留记住的租户，仍可手选', async () => {
+      byHost = of({ decision: 'undecided' as const });
+      rememberTenant();
+      await setUp();
+
+      expect(TestBed.inject(TenantContextService).current()?.name).toBe('remembered');
+      expect(component.tenantLocked()).toBeFalse();
+      expect(component.tenantSelectionBlocked()).toBeFalse();
+    });
+
+    // 域名指向的租户不在库里（或已停用）：这个部署当前用不了。
+    // 不能退回"让用户自己挑一个"——挑了也会被域名覆盖。
+    it('域名指向的租户不可用：清空、保持锁定并给出提示', async () => {
+      byHost = of({ decision: 'tenant' as const });
+      await setUp();
+
+      expect(TestBed.inject(TenantContextService).current()).toBeNull();
+      expect(component.tenantLocked()).toBeTrue();
+      expect(component.tenantError()).toBeTruthy();
+    });
+
+    /**
+     * 探测失败不等于"域名不表态"。
+     *
+     * 未配置子域名格式的部署本来就正常返回 undecided，走不到这条分支；能走到的是
+     * "域名指向的租户解析不了"（租户解析中间件直接 404）或后端不可达。把它折进 undecided，
+     * 就是在不知道域名会怎么解析的情况下让人手选一个注定被覆盖的租户，然后带着它去登录。
+     */
+    it('探测失败不当作域名不表态：不开放手选、不放行登录，并给出原因', async () => {
+      byHost = throwError(() => new Error('offline'));
+      await setUp();
+      fillValidCredentials();
+
+      expect(component.hostProbe()).toBe('failed');
+      expect(component.tenantSelectionBlocked()).toBeTrue();
+      expect(component.tenantError()).toBeTruthy();
+
+      // 清除也算一次手动改租户：同样不放行，否则用户能在"不知道域名会怎么解析"时
+      // 把上下文改成宿主，然后带着它去登录。
+      TestBed.inject(TenantContextService).set(domainTenant);
+      component.clearTenant();
+      expect(TestBed.inject(TenantContextService).current()?.name).toBe('acme');
+
+      await component.onSubmit();
+
+      expect(authService.login).not.toHaveBeenCalled();
+    });
+
+    // 挡住之后必须给一条出路：瞬时故障不该让人只剩"刷新整页"，尤其表单可能已经填好。
+    it('探测失败后可以重试，重试拿到定案即恢复', async () => {
+      byHost = throwError(() => new Error('offline'));
+      await setUp();
+      expect(component.authBlocked()).toBeTrue();
+
+      byHost = of({ decision: 'undecided' as const });
+      await component.retryHostProbe();
+
+      expect(component.hostProbe()).toBe('undecided');
+      expect(component.authBlocked()).toBeFalse();
+      expect(component.tenantError()).toBeNull();
+      expect(component.tenantSelectionBlocked()).toBeFalse();
+    });
+
+    /**
+     * 探测未回来时不发认证请求。
+     *
+     * 服务端按主机名解析租户且不接受请求头改写：此时提交，界面上显示着上次记住的租户，
+     * 请求却落到域名对应的那个上下文里，而探测响应随后又会把前端状态改掉。
+     */
+    it('探测未回来时不发认证请求', async () => {
+      byHost = new Observable<TenantByHostOutputDto>(() => undefined);
+      await setUp();
+      fillValidCredentials();
+
+      expect(component.authBlocked()).toBeTrue();
+
+      await component.onSubmit();
+
+      expect(authService.login).not.toHaveBeenCalled();
+    });
+
+    // 反向的一条：域名已定案时禁止**选择**，但恰恰应该放行登录。
+    // 把两件事共用一个条件，就会把子域名部署的登录整个挡死。
+    it('域名已定案时禁止选择、但照常放行登录', async () => {
+      byHost = of({ decision: 'tenant' as const, tenant: domainTenant });
+      await setUp();
+      fillValidCredentials();
+
+      expect(component.tenantSelectionBlocked()).toBeTrue();
+      expect(component.authBlocked()).toBeFalse();
+
+      await component.onSubmit();
+
+      expect(authService.login).toHaveBeenCalled();
+    });
+    //#if (ExternalLogin)
+
+    // 第三方登录走的是同一条约束：回调最终也落在按主机名解析出的那个上下文里。
+    it('探测未回来时第三方登录也不发起', async () => {
+      byHost = new Observable<TenantByHostOutputDto>(() => undefined);
+      await setUp();
+      const externalLogin = spyOn(TestBed.inject(AccountService), 'getExternalLoginUrl');
+
+      component.loginWithGitHub();
+
+      expect(externalLogin).not.toHaveBeenCalled();
+    });
+    //#endif
+
+    // 探测未回来时不接受手选：它一回来就会覆盖上下文，此时选的会被无声换掉。
+    it('探测未回来时租户区不可操作，且手选被忽略', async () => {
+      byHost = new Observable<TenantByHostOutputDto>(() => undefined);
+      await setUp();
+
+      expect(component.tenantSelectionBlocked()).toBeTrue();
+
+      component.tenantName.set('acme');
+      await component.onConfirmTenant();
+
+      expect(TestBed.inject(TenantContextService).current()).toBeNull();
+    });
+  });
+  //#endif
 });

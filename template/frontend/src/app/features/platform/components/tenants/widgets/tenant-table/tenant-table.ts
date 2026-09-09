@@ -9,6 +9,7 @@ import {
   lucideChevronRight,
   lucideCircleCheck,
   lucideEllipsis,
+  lucideInfo,
   lucidePencil,
   lucideSearchX,
   lucideTrash2,
@@ -72,6 +73,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
       lucideChevronRight,
       lucideCircleCheck,
       lucideEllipsis,
+      lucideInfo,
       lucidePencil,
       lucideSearchX,
       lucideTrash2,
@@ -84,6 +86,7 @@ export class TenantTable {
   // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
   // 会让同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
+  protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
 
@@ -103,10 +106,8 @@ export class TenantTable {
   readonly canUpdate = input(true);
   readonly canDelete = input(true);
 
-  /** 一个可用操作都没有时不渲染溢出菜单，避免留下点开即空的按钮。 */
-  readonly hasRowActions = computed(() => this.canUpdate() || this.canDelete());
-
   readonly paginationChange = output<PaginationState>();
+  readonly details = output<TenantOutputDto>();
   readonly edit = output<TenantOutputDto>();
   readonly toggleActive = output<TenantOutputDto>();
   readonly delete = output<TenantOutputDto>();
@@ -127,6 +128,12 @@ export class TenantTable {
       id: 'displayName',
       enableSorting: false,
       meta: { priority: 'secondary' },
+    },
+    {
+      accessorKey: 'description',
+      id: 'description',
+      enableSorting: false,
+      meta: { priority: 'tertiary' },
     },
     {
       accessorKey: 'isActive',
@@ -190,11 +197,12 @@ export class TenantTable {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
 
-  columnLabel(field: 'name' | 'displayName' | 'status' | 'created'): string {
+  columnLabel(field: 'name' | 'displayName' | 'description' | 'status' | 'created'): string {
     //#if (IncludeLocalization)
     const keys = {
       name: 'tenants.colName',
       displayName: 'tenants.colDisplayName',
+      description: 'tenants.colDescription',
       status: 'tenants.colStatus',
       created: 'tenants.colCreatedAt',
     } as const;
@@ -203,6 +211,7 @@ export class TenantTable {
     const labels = {
       name: 'Name',
       displayName: 'Display name',
+      description: 'Description',
       status: 'Status',
       created: 'Created at',
     } as const;

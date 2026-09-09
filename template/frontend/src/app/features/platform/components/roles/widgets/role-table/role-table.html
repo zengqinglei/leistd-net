@@ -135,7 +135,8 @@
                         }
                         @case ('creationTime') {
                           <span class="text-xs text-muted-foreground whitespace-nowrap">{{
-                            row.original.creationTime | appDate: 'full' : displayTimeZone()
+                            row.original.creationTime
+                              | appDate: 'full' : displayTimeZone() : displayLocale()
                           }}</span>
                         }
                         @case ('actions') {
@@ -263,7 +264,10 @@
                         @if (isColumnHidden('creationTime')) {
                           <dt class="text-muted-foreground">{{ columnLabel('created') }}</dt>
                           <dd class="text-muted-foreground">
-                            {{ row.original.creationTime | appDate: 'full' : displayTimeZone() }}
+                            {{
+                              row.original.creationTime
+                                | appDate: 'full' : displayTimeZone() : displayLocale()
+                            }}
                           </dd>
                         }
                       </dl>

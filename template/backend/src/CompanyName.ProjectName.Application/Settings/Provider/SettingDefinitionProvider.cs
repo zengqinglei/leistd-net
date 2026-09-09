@@ -1,5 +1,12 @@
+using System.Globalization;
+using CompanyName.ProjectName.Application.Settings.Hosting;
 using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
+using Microsoft.Extensions.Configuration;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Users.Options;
+using Microsoft.Extensions.Options;
+#endif
 
 namespace CompanyName.ProjectName.Application.Settings.Provider;
 
@@ -17,27 +24,116 @@ namespace CompanyName.ProjectName.Application.Settings.Provider;
 /// 本地化项目按 <c>Setting:{name}</c> 查词条翻译，查不到才回落到这里的文案——
 /// 键由名称推导，不必在定义里再抄一遍。</para>
 /// </remarks>
-public class SettingDefinitionProvider : ISettingDefinitionProvider
+/// <param name="configuration">
+/// 部署配置：日志类设置的代码默认值取自它（见 <see cref="LoggingBaseline"/>），
+/// 清除覆盖值即回落到部署基线，而不是回落到一个写死的级别。
+/// </param>
+#if (LocalIdentity)
+/// <param name="registrationOptions">
+/// 注册策略的部署基线：注册类设置的代码默认值取自它，因此 <c>appsettings</c> 仍是
+/// 部署期唯一的真相，设置表只承载租户级覆盖。
+/// </param>
+public class SettingDefinitionProvider(
+    IConfiguration configuration,
+    IOptions<UserRegistrationOptions> registrationOptions) : ISettingDefinitionProvider
 {
+#else
+public class SettingDefinitionProvider(IConfiguration configuration) : ISettingDefinitionProvider
+{
+#endif
     /// <inheritdoc />
     public void Define(ISettingDefinitionContext context)
     {
 #if (IncludeLocalization)
-        // 界面语言：租户给默认值，用户可各自覆盖。只有装了本地化才有多种语言可选，
-        // 因此这一项随本地化一起裁剪——单语言应用里让人挑语言是个假开关。
+        // 界面语言：**只有用户级**，没有租户默认值。
+        //
+        // 浏览器本来就知道这台机器偏好哪种语言（navigator.language，HTML 标准），
+        // 那份信息比任何租户级默认值都准——同一个租户里既有说中文的也有说英文的，
+        // 给它设一个"全租户默认语言"只会让另一半人每次登录都先看到不对的语言再自己改回来。
+        //
+        // 代码默认值刻意留空，含义是"跟随系统"：客户端在没有用户覆盖时按浏览器语言渲染，
+        // 匹配不上支持列表才回落到 DEFAULT_LANG。写死 "en" 会让浏览器是中文的人也拿到英文。
         context.Add(
             SettingConstant.Display.Language,
-            // 与前端的 DEFAULT_LANG 和 transloco 的 defaultLang 保持一致：
-            // 这里写反会让用户在登录页看到英文、进入首页后被切成另一种语言。
-            defaultValue: "en",
-            scopes: SettingScopes.All,
-            displayName: "Language").IsVisibleToClients = true;
+            defaultValue: null,
+            scopes: SettingScopes.User,
+            displayName: "Language",
+            group: SettingConstant.Groups.Display).IsVisibleToClients = true;
 
 #endif
+        // 时区同理：`Intl.DateTimeFormat().resolvedOptions().timeZone` 直接给出这台机器的
+        // IANA 时区名（ECMA-402，2017 年起各端普遍可用），比租户默认值准得多。
+        // 留空即"跟随系统"；服务端产出文本时回落到 TimeZoneInfo.Local（见 UserTimeZoneProvider）。
         context.Add(
             SettingConstant.Display.TimeZone,
-            defaultValue: "Asia/Shanghai",
-            scopes: SettingScopes.All,
-            displayName: "Time zone").IsVisibleToClients = true;
+            defaultValue: null,
+            scopes: SettingScopes.User,
+            displayName: "Time zone",
+            group: SettingConstant.Groups.Display).IsVisibleToClients = true;
+
+        // 日志是**进程级**的：一个进程只有一个 logger，按租户各存一份无从生效，
+        // 因此用 Host 层——租户上下文的写入会被就地拒绝，而不是写进去不起作用。
+        //
+        // 默认值取部署基线（Serilog 配置节），与注册策略取 appsettings 是同一个口径：
+        // 配置给基线、设置表给运行期覆盖。写死成 Information 的话，部署把级别配成
+        // Warning 也会被顶掉，而清除覆盖值同样回不到部署基线。
+        var loggingBaseline = LoggingBaseline.From(configuration);
+
+        context.Add(
+            SettingConstant.Logging.MinimumLevel,
+            defaultValue: loggingBaseline.MinimumLevel,
+            scopes: SettingScopes.Host,
+            displayName: "Minimum log level",
+            group: SettingConstant.Groups.Logging).IsVisibleToClients = true;
+
+        // 正常完成的请求记成哪一级。调到 Verbose 就等于关掉请求日志——
+        // 全局最小级别通常是 Information，Verbose 的记录不会落盘。
+        context.Add(
+            SettingConstant.Logging.RequestLevel,
+            defaultValue: loggingBaseline.RequestLevel,
+            scopes: SettingScopes.Host,
+            displayName: "Request log level",
+            group: SettingConstant.Groups.Logging).IsVisibleToClients = true;
+#if (LocalIdentity)
+
+        // 注册策略按租户：同一套部署下，不同租户可以有不同的注册门槛。
+        // 默认值取自 appsettings 的 UserRegistration 段，配置仍是部署基线。
+        var registration = registrationOptions.Value;
+
+        context.Add(
+            SettingConstant.Registration.EnableEmailVerification,
+            defaultValue: registration.EnableEmailVerification ? "true" : "false",
+            scopes: SettingScopes.Tenant,
+            displayName: "Require email verification",
+            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Registration.CaptchaExpiryMinutes,
+            defaultValue: registration.CaptchaExpiryMinutes.ToString(CultureInfo.InvariantCulture),
+            scopes: SettingScopes.Tenant,
+            displayName: "Captcha lifetime (minutes)",
+            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Registration.EmailCodeExpiryMinutes,
+            defaultValue: registration.EmailCodeExpiryMinutes.ToString(CultureInfo.InvariantCulture),
+            scopes: SettingScopes.Tenant,
+            displayName: "Email code lifetime (minutes)",
+            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Registration.EmailCodeSendIntervalSeconds,
+            defaultValue: registration.EmailCodeSendIntervalSeconds.ToString(CultureInfo.InvariantCulture),
+            scopes: SettingScopes.Tenant,
+            displayName: "Email code send interval (seconds)",
+            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Registration.EmailCodeMaxAttempts,
+            defaultValue: registration.EmailCodeMaxAttempts.ToString(CultureInfo.InvariantCulture),
+            scopes: SettingScopes.Tenant,
+            displayName: "Email code max attempts",
+            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+#endif
     }
 }

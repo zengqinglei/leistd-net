@@ -11,4 +11,13 @@ export const SETTINGS = {
     //#endif
     timeZone: 'Display.TimeZone',
   },
+  logging: {
+    minimumLevel: 'Logging.MinimumLevel',
+    requestLevel: 'Logging.RequestLevel',
+  },
+  //#if (LocalIdentity)
+  registration: {
+    enableEmailVerification: 'Registration.EnableEmailVerification',
+  },
+  //#endif
 } as const;

@@ -55,12 +55,17 @@
         <!--#endif-->
       </div>
       @if (notifications().length === 0) {
-        <div class="text-muted-foreground py-10 text-center text-sm">
-          <ng-icon name="lucideInbox" class="mb-2 block text-2xl opacity-60" />
+        <!-- 图标与文案各自成行、整体居中：原来靠 ng-icon 上的 `block` 让图标独占一行，
+             而组件自身的 host 样式把它按行内盒渲染，结果是图标与文字挤在一行、基线还错开。
+             改用 flex 列布局，对齐不再取决于哪一条 display 规则赢。 -->
+        <div
+          class="text-muted-foreground flex flex-col items-center justify-center gap-2 py-10 text-sm"
+        >
+          <ng-icon name="lucideInbox" class="text-2xl opacity-60" />
           <!--#if (IncludeLocalization)-->
-          {{ 'layout.notifications.empty' | transloco }}
+          <span>{{ 'layout.notifications.empty' | transloco }}</span>
           <!--#else-->
-          No notifications
+          <span>No notifications</span>
           <!--#endif-->
         </div>
       } @else {
@@ -95,7 +100,8 @@
                         <span class="bg-primary h-2 w-2 rounded-full"></span>
                       }
                       <span class="text-muted-foreground text-xs whitespace-nowrap">{{
-                        n.creationTime | appDate: 'monthDayTime' : displayTimeZone()
+                        n.creationTime
+                          | appDate: 'monthDayTime' : displayTimeZone() : displayLocale()
                       }}</span>
                     </span>
                   </span>

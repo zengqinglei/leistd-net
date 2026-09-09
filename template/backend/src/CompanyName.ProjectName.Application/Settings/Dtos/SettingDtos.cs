@@ -14,19 +14,33 @@ namespace CompanyName.ProjectName.Application.Settings.Dtos;
 /// </remarks>
 /// <param name="Name">设置名称。</param>
 /// <param name="DisplayName">已按请求 culture 翻译的显示名称。</param>
+/// <param name="Group">所属分组的稳定标识；界面按它分类摆放，未分组的归入"其他"。</param>
+/// <param name="GroupDisplayName">已按请求 culture 翻译的分组名称。</param>
 /// <param name="UserValue">当前用户的个人覆盖值；<see langword="null"/> 表示未覆盖。</param>
 /// <param name="TenantValue">当前租户的默认覆盖值；<see langword="null"/> 表示未覆盖。</param>
 /// <param name="DefaultValue">代码默认值。</param>
 /// <param name="AllowsTenantScope">是否允许写入租户级默认值。</param>
 /// <param name="AllowsUserScope">是否允许用户覆盖为个人偏好。</param>
+/// <param name="Minimum">数值型设置的下界；非数值型为 <see langword="null"/>。</param>
+/// <param name="Maximum">数值型设置的上界；非数值型为 <see langword="null"/>。</param>
+/// <param name="AllowsHostScope">
+/// 是否是进程级设置（只有宿主那一份，租户与用户都不能覆盖）。
+/// 为 <see langword="true"/> 时另两个层级标记都是 <see langword="false"/>，
+/// 界面据此把它归到系统页而不是账户页。
+/// </param>
 public record SettingOutputDto(
     string Name,
     string DisplayName,
+    string Group,
+    string GroupDisplayName,
     string? UserValue,
     string? TenantValue,
     string? DefaultValue,
     bool AllowsTenantScope,
-    bool AllowsUserScope);
+    bool AllowsUserScope,
+    bool AllowsHostScope,
+    int? Minimum = null,
+    int? Maximum = null);
 
 /// <summary>
 /// 写入一项设置。

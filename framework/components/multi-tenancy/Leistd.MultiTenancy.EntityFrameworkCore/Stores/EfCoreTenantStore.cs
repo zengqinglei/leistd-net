@@ -44,6 +44,7 @@ public class EfCoreTenantStore<TDbContext>(IDbContextProvider<TDbContext> dbCont
         Name = record.Name,
         NormalizedName = record.NormalizedName,
         DisplayName = record.DisplayName,
+        Description = record.Description,
         IsActive = record.IsActive,
         CreationTime = record.CreationTime
     };

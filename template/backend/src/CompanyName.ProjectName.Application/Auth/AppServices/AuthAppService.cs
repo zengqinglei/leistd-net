@@ -2,6 +2,7 @@ using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Application.Users.Mappings;
 using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppService;
@@ -10,7 +11,6 @@ using Leistd.Security.Users;
 using Microsoft.Extensions.Logging;
 
 using CompanyName.ProjectName.Domain.Users.Options;
-using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using Leistd.ExceptionHandling;
 
@@ -24,7 +24,7 @@ internal sealed class AuthAppService(
     IEmailVerificationAppService emailVerificationAppService,
     SessionSignInService sessionSignInService,
     IObjectMapper objectMapper,
-    IOptions<UserRegistrationOptions> securityOptions,
+    IUserRegistrationPolicyProvider registrationPolicy,
     ILogger<AuthAppService> logger) : BaseAppService(), IAuthAppService
 {
     public async Task<ClaimsPrincipal> AuthenticateSessionAsync(
@@ -54,7 +54,7 @@ internal sealed class AuthAppService(
     {
         logger.LogInformation("Registering user {Username} with email {Email}", input.Username, input.Email);
 
-        var options = securityOptions.Value;
+        var options = await registrationPolicy.GetAsync(cancellationToken);
 
         if (options.EnableEmailVerification)
         {

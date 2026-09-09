@@ -3,6 +3,7 @@ using Leistd.MultiTenancy.Abstractions;
 using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.EntityFrameworkCore.Entities;
+using Leistd.Settings.Exceptions;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
 namespace Leistd.Settings.EntityFrameworkCore.Stores;
@@ -13,6 +14,10 @@ namespace Leistd.Settings.EntityFrameworkCore.Stores;
 /// <remarks>
 /// 通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接。
 /// <see cref="SettingRecord.ScopeKey"/> 保证各层级唯一性；租户隔离仍由查询过滤器承担。
+/// <para>
+/// <see cref="SettingScopes.Host"/> 与宿主的租户级共用同一行（<c>h:t</c>）：宿主视角本就走租户层，
+/// 而设置名全局唯一，两者不会撞在一起。它的意义在于<b>禁止</b>租户各存一份。
+/// </para>
 /// </remarks>
 /// <typeparam name="TDbContext">宿主 DbContext 类型（需包含 SettingRecord 配置）。</typeparam>
 /// <param name="dbContextProvider">工作单元内的 DbContext 提供器。</param>
@@ -22,6 +27,13 @@ public class EfCoreSettingStore<TDbContext>(
     ICurrentTenant currentTenant) : ISettingStore
     where TDbContext : DbContext
 {
+    /// <inheritdoc />
+    /// <remarks>
+    /// 宿主上下文（<c>TenantId</c> 为 <see langword="null"/>）才读得到宿主那一行：租户上下文下
+    /// 查询过滤器会滤掉它，专属库形态下连的还是租户自己的库。
+    /// </remarks>
+    public bool CanAccessHostScope => currentTenant.Id is null;
+
     /// <inheritdoc />
     public async Task<IReadOnlyDictionary<string, string>> GetAllAsync(
         SettingScopes scope,
@@ -110,11 +122,23 @@ public class EfCoreSettingStore<TDbContext>(
                 ArgumentException.ThrowIfNullOrWhiteSpace(userId);
                 return $"{tenantSegment}:u:{userId}";
 
+            case SettingScopes.Host:
+                // 进程级设置只有宿主那一行，因此必须在宿主上下文读写：租户上下文下
+                // 查询过滤器会把宿主行滤掉（专属库形态下连的还是租户自己的库），
+                // 读到的是空、写进去的是租户行——两者都不报错，只是静默不生效。
+                // 这条不变式在存储边界上就地拦住，不靠调用方自觉。
+                if (currentTenant.Id is not null)
+                {
+                    throw new HostScopeUnavailableException(tenantId: currentTenant.Id?.ToString());
+                }
+
+                return $"{tenantSegment}:t";
+
             default:
                 // None 与 All 不对应任何一行：前者不是层级，后者是「两层都允许」的定义侧标记。
                 // 走到这里说明调用方绕过了 ISettingManager 的校验，静默按某一层处理会写错地方。
                 throw new ArgumentOutOfRangeException(
-                    nameof(scope), scope, "Only Tenant and User scopes address a stored row.");
+                    nameof(scope), scope, "Only Tenant, User and Host scopes address a stored row.");
         }
     }
 }

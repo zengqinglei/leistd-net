@@ -91,12 +91,76 @@ export class LanguageService {
     this.document.documentElement.lang = lang;
   }
 
+  /**
+   * 本设备的语言：显式选过的 → 跟随系统 → 回落默认。
+   *
+   * 中间那一档是关键：没显式选过时按**浏览器语言**走，而不是直接落到 `DEFAULT_LANG`。
+   * 直接落默认的话，浏览器是中文的人第一次进来也会看到英文，得自己改一次——
+   * 而这份偏好操作系统早就告诉浏览器了。
+   */
   private loadDeviceLang(): Lang {
     if (!isPlatformBrowser(this.platformId)) {
       return DEFAULT_LANG;
     }
 
-    const stored = localStorage.getItem(LanguageService.STORAGE_KEY);
-    return SUPPORTED_LANGS.includes(stored as Lang) ? (stored as Lang) : DEFAULT_LANG;
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(LanguageService.STORAGE_KEY);
+    } catch {
+      // 隐私模式/配额：读不到就当没选过
+    }
+
+    if (SUPPORTED_LANGS.includes(stored as Lang)) {
+      return stored as Lang;
+    }
+
+    return systemLang() ?? DEFAULT_LANG;
+  }
+}
+
+/**
+ * 浏览器偏好的语言里第一个本端支持的。
+ *
+ * 按 `navigator.languages` 的偏好顺序逐个匹配：先精确匹配（`zh-CN` → `zh-CN`），
+ * 再按主语言子标签匹配（`en-GB` → `en`、`zh-Hans-CN` → `zh-CN`）。只比字符串相等
+ * 会让 `en-GB`、`en-US` 这些最常见的取值全部落空。
+ *
+ * `navigator.languages` 在 Safari（始终）与 Chrome 隐身模式下会被截成一项以降低指纹面，
+ * 因此取不到时退回 `navigator.language`（前者的首项，两者同源）。
+ */
+function systemLang(): Lang | undefined {
+  let preferred: readonly string[];
+  try {
+    preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
+  } catch {
+    return undefined;
+  }
+
+  for (const tag of preferred) {
+    if (!tag) {
+      continue;
+    }
+
+    const exact = SUPPORTED_LANGS.find((lang) => lang.toLowerCase() === tag.toLowerCase());
+    if (exact) {
+      return exact;
+    }
+
+    const primary = primarySubtag(tag);
+    const byPrimary = SUPPORTED_LANGS.find((lang) => primarySubtag(lang) === primary);
+    if (byPrimary) {
+      return byPrimary;
+    }
+  }
+
+  return undefined;
+}
+
+/** 语言标签的主语言子标签（`zh-Hans-CN` → `zh`）；解析不了就取第一段。 */
+function primarySubtag(tag: string): string {
+  try {
+    return new Intl.Locale(tag).language.toLowerCase();
+  } catch {
+    return tag.split('-')[0]!.toLowerCase();
   }
 }

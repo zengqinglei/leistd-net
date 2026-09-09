@@ -128,6 +128,40 @@ public class TenantStoreManagerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Description_round_trips_through_create_update_and_both_read_paths()
+    {
+        var record = await _manager.CreateAsync(
+            "Acme", "Acme Inc.", isActive: true, description: "华东区自营资金账户");
+
+        Assert.Equal("华东区自营资金账户", record.Description);
+
+        // 两条读路径都要带上：只在其中一条映射，界面会随入口不同显示成有或没有
+        var byId = await _store.FindAsync(record.Id);
+        Assert.NotNull(byId);
+        Assert.Equal("华东区自营资金账户", byId.Description);
+
+        var byName = await _store.FindByNameAsync("ACME");
+        Assert.NotNull(byName);
+        Assert.Equal("华东区自营资金账户", byName.Description);
+
+        var updated = await _manager.UpdateAsync(record.Id, "Acme", "Acme Inc.", description: "改过的描述");
+        Assert.Equal("改过的描述", updated.Description);
+    }
+
+    [Fact]
+    public async Task Updating_with_a_null_description_clears_it()
+    {
+        // 清空必须真的落库：把"未传"当成"不改"会让界面上清不掉描述。
+        var record = await _manager.CreateAsync("Acme", null, isActive: true, description: "初始描述");
+
+        await _manager.UpdateAsync(record.Id, "Acme", null, description: null);
+
+        var reloaded = await _store.FindAsync(record.Id);
+        Assert.NotNull(reloaded);
+        Assert.Null(reloaded.Description);
+    }
+
+    [Fact]
     public async Task Rename_takes_effect_on_both_old_and_new_name_lookups()
     {
         var record = await _manager.CreateAsync("Acme", null, isActive: true);

@@ -15,6 +15,9 @@
                       @case ('displayName') {
                         <span class="whitespace-nowrap">{{ columnLabel('displayName') }}</span>
                       }
+                      @case ('description') {
+                        <span class="whitespace-nowrap">{{ columnLabel('description') }}</span>
+                      }
                       @case ('status') {
                         <span class="whitespace-nowrap">{{ columnLabel('status') }}</span>
                       }
@@ -78,6 +81,12 @@
                             row.original.displayName || '-'
                           }}</span>
                         }
+                        @case ('description') {
+                          <span
+                            class="block max-w-[22rem] truncate text-sm text-muted-foreground"
+                            >{{ row.original.description || '-' }}</span
+                          >
+                        }
                         @case ('status') {
                           @if (row.original.isActive) {
                             <span
@@ -94,7 +103,8 @@
                         }
                         @case ('creationTime') {
                           <span class="text-xs text-muted-foreground whitespace-nowrap">{{
-                            row.original.creationTime | appDate: 'full' : displayTimeZone()
+                            row.original.creationTime
+                              | appDate: 'full' : displayTimeZone() : displayLocale()
                           }}</span>
                         }
                         @case ('actions') {
@@ -113,21 +123,26 @@
                                 <ng-icon name="lucidePencil" />
                               </button>
                             }
-                            @if (hasRowActions()) {
-                              <button
-                                hlmBtn
-                                variant="ghost"
-                                size="icon"
-                                align="end"
-                                [attr.aria-label]="actionsLabel()"
-                                [hlmDropdownMenuTrigger]="rowMenu"
-                              >
-                                <ng-icon name="lucideEllipsis" />
-                              </button>
-                            }
+                            <!-- 溢出菜单不按修改权限裁剪：菜单里的"详情"只读，
+                                 能看到这张列表就能看详情。按 canUpdate||canDelete 藏起来时，
+                                 只有查看权限的人反而完全没有详情入口。 -->
+                            <button
+                              hlmBtn
+                              variant="ghost"
+                              size="icon"
+                              align="end"
+                              [attr.aria-label]="actionsLabel()"
+                              [hlmDropdownMenuTrigger]="rowMenu"
+                            >
+                              <ng-icon name="lucideEllipsis" />
+                            </button>
                             <ng-template #rowMenu>
                               <hlm-dropdown-menu>
                                 <hlm-dropdown-menu-group>
+                                  <button hlmDropdownMenuItem (click)="details.emit(row.original)">
+                                    <ng-icon name="lucideInfo" />
+                                    {{ actionLabel('details') }}
+                                  </button>
                                   @if (canUpdate()) {
                                     <button
                                       hlmDropdownMenuItem
@@ -186,6 +201,10 @@
                           <dt class="text-muted-foreground">{{ columnLabel('displayName') }}</dt>
                           <dd class="min-w-0">{{ row.original.displayName || '-' }}</dd>
                         }
+                        @if (isColumnHidden('description')) {
+                          <dt class="text-muted-foreground">{{ columnLabel('description') }}</dt>
+                          <dd class="min-w-0">{{ row.original.description || '-' }}</dd>
+                        }
                         @if (isColumnHidden('status')) {
                           <dt class="text-muted-foreground">{{ columnLabel('status') }}</dt>
                           <dd class="min-w-0">{{ statusLabel(row.original.isActive) }}</dd>
@@ -193,7 +212,10 @@
                         @if (isColumnHidden('creationTime')) {
                           <dt class="text-muted-foreground">{{ columnLabel('created') }}</dt>
                           <dd class="text-muted-foreground">
-                            {{ row.original.creationTime | appDate: 'full' : displayTimeZone() }}
+                            {{
+                              row.original.creationTime
+                                | appDate: 'full' : displayTimeZone() : displayLocale()
+                            }}
                           </dd>
                         }
                       </dl>

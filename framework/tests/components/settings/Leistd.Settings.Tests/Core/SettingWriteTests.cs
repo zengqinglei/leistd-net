@@ -33,6 +33,41 @@ public class SettingWriteTests
         Assert.Empty(store.Writes);
     }
 
+    /// <summary>
+    /// 进程级设置只能写宿主那一层，租户级与用户级都要被拒。
+    /// </summary>
+    /// <remarks>
+    /// 不拒的话，租户各写一份自己的日志级别，界面上显示得好好的、实际一个都不生效——
+    /// 这类"看着改了其实没改"最难被发现。
+    /// </remarks>
+    [Fact]
+    public async Task A_host_scoped_setting_rejects_tenant_and_user_writes()
+    {
+        var (manager, store) = Build();
+
+        await manager.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Host);
+
+        var write = Assert.Single(store.Writes);
+        Assert.Equal(SettingScopes.Host, write.Scope);
+        Assert.Null(write.UserId);
+
+        await Assert.ThrowsAsync<SettingScopeNotAllowedException>(
+            () => manager.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Tenant));
+        await Assert.ThrowsAsync<SettingScopeNotAllowedException>(
+            () => manager.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.User, "u1"));
+    }
+
+    // 反过来同样要拦：可分层覆盖的设置不该被当成进程级来写，否则它会落到宿主行上，
+    // 而读取仍按租户层回落——写进去的那个值谁也读不到。
+    [Fact]
+    public async Task A_layered_setting_rejects_host_writes()
+    {
+        var (manager, _) = Build();
+
+        await Assert.ThrowsAsync<SettingScopeNotAllowedException>(
+            () => manager.SetAsync("Display.Language", "zh-CN", SettingScopes.Host));
+    }
+
     [Fact]
     public async Task Writing_a_user_scope_value_requires_a_user_id()
     {
@@ -78,6 +113,7 @@ public class SettingWriteTests
         {
             context.Add("Display.Language", "zh-CN", SettingScopes.All);
             context.Add("Export.MaxRowsPerFile", "Acme", SettingScopes.Tenant);
+            context.Add("Logging.MinimumLevel", "Information", SettingScopes.Host);
         }
     }
 }

@@ -84,6 +84,9 @@ export class LanguageSwitcher {
     // （见 SessionContextService），不写回的话这里切过的语言下次登录就被覆盖，
     // 切换器看起来会失灵。
     if (this.authService.isAuthenticated()) {
+      // 先应用再写回：界面立刻响应，持久化在后台完成。日期的书写方式取自活动语言
+      // （见 SettingContextService.displayLocale），所以文案与日期在这一步就一起变了，
+      // 不需要等服务端确认，也不需要写完再重取一次设置快照。
       this.languageService.applyAccountLang(lang);
       this.settingService
         .setForCurrentUser({ name: SETTINGS.display.language, value: lang })

@@ -31,6 +31,9 @@ public class TenantRecordConfiguration : IEntityTypeConfiguration<TenantRecord>
         builder.Property(x => x.DisplayName)
             .HasMaxLength(128);
 
+        builder.Property(x => x.Description)
+            .HasMaxLength(256);
+
         builder.Property(x => x.CreatorId)
             .HasMaxLength(64);
 

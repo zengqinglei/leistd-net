@@ -20,6 +20,7 @@ public interface ITenantManager
     /// 初始是否启用。需要继续初始化角色、管理员等数据时传 <c>false</c>，
     /// 初始化完成后用 <see cref="SetActiveAsync"/> 激活。
     /// </param>
+    /// <param name="description">可选的简短描述，可为 <c>null</c></param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>创建出的租户配置</returns>
     /// <exception cref="ArgumentException"><paramref name="name"/> 为空或全空白</exception>
@@ -28,16 +29,27 @@ public interface ITenantManager
         string name,
         string? displayName,
         bool isActive,
+        string? description = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 更新租户名称和显示名称。
+    /// 更新租户名称、显示名称与描述。
     /// </summary>
+    /// <remarks>
+    /// 三个字段都<b>按传入值覆盖</b>，没有"不传即保留原值"这一档：
+    /// <paramref name="displayName"/> 或 <paramref name="description"/> 传 <c>null</c> 即清空。
+    /// 调用方要保留原值就得把原值读出来一起传。
+    /// </remarks>
     /// <returns>更新后的租户配置</returns>
     /// <exception cref="ArgumentException"><paramref name="name"/> 为空或全空白</exception>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除</exception>
     /// <exception cref="DuplicateTenantNameException">新名称已被其它未删除租户占用</exception>
-    Task<TenantConfiguration> UpdateAsync(Guid id, string name, string? displayName, CancellationToken cancellationToken = default);
+    Task<TenantConfiguration> UpdateAsync(
+        Guid id,
+        string name,
+        string? displayName,
+        string? description = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 更改租户启用状态。

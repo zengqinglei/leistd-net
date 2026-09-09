@@ -8,6 +8,7 @@ import { of, throwError } from 'rxjs';
 import { LanguageSwitcher } from './language-switcher';
 import { AuthService } from '../../../core/services/auth-service';
 import { LanguageService } from '../../../core/services/language-service';
+import { SettingContextService } from '../../../core/settings/setting-context-service';
 import { SettingService } from '../../../core/settings/setting-service';
 
 /**
@@ -60,6 +61,37 @@ describe('LanguageSwitcher', () => {
     expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
     // 落盘就分不清「这台机器的偏好」和「上一个登录者的偏好」了。
     expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('en');
+  });
+
+  /**
+   * 切语言之后，文案与日期必须同时换。
+   *
+   * 这是"文案变成中文、列表里的日期还是 Sep 4, 2026 6:16 PM"那类不一致的闸门。
+   * 日期的书写方式取自**活动语言**（见 SettingContextService.displayLocale），
+   * 与切换器改的是同一个东西，所以不存在"等服务端确认后才跟上"的中间态；
+   * 若哪天又改回从设置快照推导，这条就会红。
+   */
+  it('切语言后日期的书写方式立刻跟着变，不必等设置写回', () => {
+    setUp(true);
+    const settingContext = TestBed.inject(SettingContextService);
+    expect(settingContext.displayLocale()).toBe('en');
+
+    component.select('zh-CN');
+
+    expect(settingContext.displayLocale()).toBe('zh-CN');
+  });
+
+  // 写回失败同理：界面已经切了，日期不能留在旧语言上——那会是永久性的分叉，
+  // 而不是一瞬间的不同步。
+  it('账户写回失败也不让文案与日期分叉', () => {
+    setUp(true);
+    settingService.setForCurrentUser.and.returnValue(throwError(() => new Error('network down')));
+    spyOn(toast, 'error');
+
+    component.select('zh-CN');
+
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
+    expect(TestBed.inject(SettingContextService).displayLocale()).toBe('zh-CN');
   });
 
   it('says so when the account write fails, instead of swallowing it', () => {

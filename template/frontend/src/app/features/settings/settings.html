@@ -1,0 +1,260 @@
+<div class="flex h-full flex-col overflow-hidden">
+  <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+    <div class="flex w-full min-w-0 flex-col gap-8">
+      <header class="flex flex-col gap-2">
+        <h1
+          class="text-2xl leading-none font-extrabold tracking-tight"
+          data-testid="settings-title"
+        >
+          <!--#if (IncludeLocalization)-->
+          {{ 'settings.title' | transloco }}
+          <!--#else-->
+          Settings
+          <!--#endif-->
+        </h1>
+        <!--#if (IncludeLocalization)-->
+        <p class="text-muted-foreground text-sm">
+          {{ 'settings.description' | transloco }}
+        </p>
+        <!--#else-->
+        <p class="text-muted-foreground text-sm">
+          Manage your account preferences and system defaults
+        </p>
+        <!--#endif-->
+      </header>
+
+      <div class="flex flex-col gap-6 md:flex-row md:items-start">
+        <!-- 左侧分类：设置多起来之后一页平铺就找不到东西了。分类来自后端的分组标识，
+             因此新增一项设置会自动出现在对应类别里，不需要前端再登记一次。 -->
+        <nav
+          class="md:w-48 md:shrink-0"
+          data-testid="settings-groups"
+          [attr.aria-label]="groupsLabel()"
+        >
+          <ul class="flex flex-row gap-1 overflow-x-auto md:flex-col md:overflow-visible">
+            @for (group of groups(); track group.key) {
+              <li>
+                <button
+                  type="button"
+                  class="w-full rounded-md px-3 py-2 text-start text-sm whitespace-nowrap transition-colors"
+                  [class]="
+                    group.key === activeGroup()?.key
+                      ? 'bg-primary/10 text-primary font-semibold'
+                      : 'text-muted-foreground hover:bg-muted/50'
+                  "
+                  [attr.aria-current]="group.key === activeGroup()?.key ? 'true' : null"
+                  [attr.data-testid]="'settings-group-' + group.key"
+                  (click)="selectGroup(group.key)"
+                >
+                  {{ group.label }}
+                </button>
+              </li>
+            }
+          </ul>
+        </nav>
+
+        <main
+          class="min-w-0 flex-auto"
+          data-testid="settings-panel"
+          [attr.data-scope]="scope()"
+          [attr.data-group]="activeGroup()?.key"
+        >
+          <header class="flex flex-col gap-2">
+            <h2 class="text-xl leading-none font-bold tracking-tight">
+              {{ activeGroup()?.label || panelTitle() }}
+            </h2>
+            <p class="text-muted-foreground text-sm">{{ panelDescription() }}</p>
+          </header>
+          <hlm-separator class="my-4" />
+
+          <!-- 两列布局，窄屏自动落回单列。用 @container 而不是视口断点：右侧面板的宽度
+               还受左侧分类栏与侧边栏折叠影响，按视口判断会在"视口够宽但面板很窄"时挤成两列。 -->
+          <div class="@container w-full max-w-5xl">
+            <div class="grid gap-x-8 gap-y-6 @2xl:grid-cols-2">
+              @for (setting of activeGroup()?.settings ?? []; track setting.name) {
+                <hlm-field>
+                  <label hlmFieldLabel [for]="setting.name">{{ setting.displayName }}</label>
+                  <div class="flex items-center gap-2">
+                    @if (isTimeZone(setting)) {
+                      <hlm-combobox
+                        class="flex-1"
+                        [value]="draftOf(setting, scope())"
+                        [disabled]="isRowSaving(setting, scope())"
+                        [filter]="timeZoneFilter"
+                        [itemToString]="timeZoneToString"
+                        [attr.data-testid]="'setting-combobox-' + setting.name"
+                        (valueChange)="onSelect(setting, scope(), $event)"
+                      >
+                        <!-- justify-between + font-normal 是官方用法：触发器本身是个
+                           hlmBtn，按钮默认把内容居中并加粗，不给这两个类的话选中的时区
+                           会居中显示、字重也和旁边的下拉不一样。 -->
+                        <hlm-combobox-trigger
+                          [buttonId]="setting.name"
+                          class="w-full justify-between font-normal"
+                        >
+                          <hlm-combobox-value [placeholder]="inheritedLabelOf(setting, scope())" />
+                        </hlm-combobox-trigger>
+                        <hlm-combobox-content *hlmComboboxPortal>
+                          <hlm-combobox-input [placeholder]="timeZoneSearchLabel()" />
+                          <div hlmComboboxList>
+                            <hlm-combobox-empty>{{ timeZoneEmptyLabel() }}</hlm-combobox-empty>
+                            @for (group of timeZones; track group.region) {
+                              <div hlmComboboxGroup>
+                                <div hlmComboboxLabel>{{ group.region }}</div>
+                                @for (zone of group.zones; track zone.value) {
+                                  <hlm-combobox-item [value]="zone.value">
+                                    <span class="truncate">{{ zone.city }}</span>
+                                    @if (zone.isBrowser) {
+                                      <span
+                                        class="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[10px]"
+                                      >
+                                        {{ browserTimeZoneLabel() }}
+                                      </span>
+                                    }
+                                    <span class="text-muted-foreground ms-auto ps-2 text-xs">
+                                      {{ zone.offsetLabel }}
+                                    </span>
+                                  </hlm-combobox-item>
+                                }
+                              </div>
+                            }
+                          </div>
+                        </hlm-combobox-content>
+                      </hlm-combobox>
+                    } @else if (choicesOf(setting); as choices) {
+                      <hlm-select
+                        class="flex-1"
+                        [value]="draftOf(setting, scope())"
+                        [disabled]="isRowSaving(setting, scope())"
+                        [itemToString]="labelFnOf(setting)"
+                        [attr.data-testid]="'setting-select-' + setting.name"
+                        (valueChange)="onSelect(setting, scope(), $event)"
+                      >
+                        <hlm-select-trigger [buttonId]="setting.name" class="w-full">
+                          <hlm-select-value [placeholder]="inheritedLabelOf(setting, scope())" />
+                        </hlm-select-trigger>
+                        <hlm-select-content *hlmSelectPortal>
+                          @for (choice of choices; track choice.value) {
+                            <hlm-select-item [value]="choice.value">{{
+                              choice.label
+                            }}</hlm-select-item>
+                          }
+                        </hlm-select-content>
+                      </hlm-select>
+                    } @else if (isBoolean(setting)) {
+                      <!-- 真值只有两种：开关一次点击就完成，两项下拉要点两次。
+                         布局类必须放在**包裹层**上：hlm-switch 的 class 会被透传并 twMerge 到
+                         内部 brn-switch 上，给它 flex-1 会盖掉自身的固定宽度，开关就被拉成一整行
+                         （官方用法也是把 hlm-switch 原样放进 label，不给布局类）。 -->
+                      <div class="flex flex-1 items-center">
+                        <hlm-switch
+                          [inputId]="setting.name"
+                          [checked]="isChecked(setting, scope())"
+                          [disabled]="isRowSaving(setting, scope())"
+                          [attr.data-testid]="'setting-switch-' + setting.name"
+                          (checkedChange)="onToggle(setting, scope(), $event)"
+                        />
+                      </div>
+                    } @else {
+                      <!-- 数值型把上下界交给浏览器（区间由服务端下发，值域仍以服务端为准）。
+                         用 change 而不是 input 提交：原生 change 在失焦或回车时触发，
+                         正好是"这次输入结束了"；按键即写会把 60 途经的 6 也存进去并生效。
+
+                         这里刻意**不**跟着写入禁用：提交发生在失焦或回车时，光标往往还在框里，
+                         禁用会当场把焦点弹走、接着输入的字也丢了。离散控件（开关、下拉）没有
+                         这个问题——它们点一下就结束，所以那几个才禁用。 -->
+                      <input
+                        hlmInput
+                        class="flex-1"
+                        [id]="setting.name"
+                        [type]="isNumeric(setting) ? 'number' : 'text'"
+                        [attr.min]="setting.minimum"
+                        [attr.max]="setting.maximum"
+                        [attr.inputmode]="isNumeric(setting) ? 'numeric' : null"
+                        [attr.data-testid]="'setting-input-' + setting.name"
+                        [value]="draftOf(setting, scope())"
+                        [placeholder]="inheritedOf(setting, scope()) || systemDefaultOf(setting)"
+                        (input)="onInput(setting, scope(), $event)"
+                        (change)="onCommit(setting, scope(), $event)"
+                      />
+                    }
+                    <button
+                      type="button"
+                      hlmBtn
+                      size="sm"
+                      variant="ghost"
+                      [attr.data-testid]="'setting-reset-' + setting.name"
+                      [disabled]="isRowSaving(setting, scope())"
+                      [attr.aria-label]="resetLabel()"
+                      [hlmTooltip]="resetLabel()"
+                      (click)="reset(setting, scope())"
+                    >
+                      <ng-icon name="lucideRotateCcw" size="16" />
+                    </button>
+                  </div>
+                  @if (levelDescriptionOf(setting, scope()); as levelHint) {
+                    <p class="text-muted-foreground text-xs">{{ levelHint }}</p>
+                  }
+                  <!-- 这一行常驻并预留一行高度：写入状态在这里进出就不会把下面的内容顶来顶去。
+                     刻意**不**显示设置名与继承值——设置名是给开发看的标识，摆在标签下面像是
+                     在解释这一项的含义；继承值控件的占位符已经显示了，重复一遍反而让人以为
+                     那才是当前生效的值。 -->
+                  <hlm-field-description class="flex min-h-4 flex-wrap items-center gap-x-2">
+                    @if (setting.allowsHostScope) {
+                      <!-- 进程级设置的生效范围与延迟不写出来的话，改完在别的实例上没变会被当成 bug -->
+                      <span class="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[10px]">
+                        {{ hostScopeHint() }}
+                      </span>
+                    }
+                    <!-- 写入状态接在**常驻的**描述行末尾：不新开一行，状态进出就不会把下面的
+                       内容顶来顶去；同时反馈落在用户刚碰的那个控件正下方，视线不用移动。 -->
+                    @if (stateOf(setting, scope()); as state) {
+                      @switch (state.status) {
+                        @case ('saving') {
+                          <span class="text-muted-foreground inline-flex items-center gap-1">
+                            <hlm-spinner class="text-[10px]" />
+                            {{ savingLabel() }}
+                          </span>
+                        }
+                        @case ('saved') {
+                          <!-- 成功用语义色 success，不用主题主色：主色在别处表示"可点"，
+                             拿它表示"成功"会和链接、选中态混成一片。 -->
+                          <span class="text-success inline-flex items-center gap-1" role="status">
+                            <ng-icon name="lucideCircleCheck" size="12" />
+                            {{ savedLabel() }}
+                          </span>
+                        }
+                        @case ('error') {
+                          <!-- 失败必须带原因：只给一个红叉，用户既不知道是值不合法还是没权限，
+                             也就无从修正。 -->
+                          <span
+                            class="text-destructive inline-flex items-center gap-1"
+                            role="alert"
+                          >
+                            <ng-icon name="lucideCircleX" size="12" class="shrink-0" />
+                            {{ state.message }}
+                          </span>
+                        }
+                      }
+                    }
+                  </hlm-field-description>
+                </hlm-field>
+              } @empty {
+                <p
+                  class="text-muted-foreground @2xl:col-span-2 text-sm"
+                  data-testid="settings-empty"
+                >
+                  <!--#if (IncludeLocalization)-->
+                  {{ 'settings.empty' | transloco }}
+                  <!--#else-->
+                  No configurable items in this section
+                  <!--#endif-->
+                </p>
+              }
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+</div>

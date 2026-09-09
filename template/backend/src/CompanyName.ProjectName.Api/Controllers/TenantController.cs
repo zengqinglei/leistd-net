@@ -2,6 +2,8 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.MultiTenancy.AspNetCore.Resolution;
+using Leistd.MultiTenancy.Resolution;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -81,5 +83,48 @@ public sealed class TenantController(ITenantAppService tenantAppService) : BaseC
     {
         var tenant = await tenantAppService.FindByNameAsync(name, cancellationToken);
         return tenant is null ? NotFound() : tenant;
+    }
+
+    /// <summary>
+    /// 按当前请求的主机名探测租户（匿名）：子域名部署下让登录页把租户显示成只读，
+    /// 用户不必手敲租户名。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 只按<b>主机名</b>解析，刻意不接受用户名之类的入参：那会需要一个匿名的
+    /// 「这个账号属于哪些租户」查询，同时泄露账号是否存在与租户拓扑，一份邮箱字典就能刷出来。
+    /// 主机名是调用方自己带来的，回显它不泄露任何新信息。
+    /// </para>
+    /// <para>
+    /// 复用框架的 <see cref="DomainTenantResolveContributor"/> 而不是在这里重写主机名匹配：
+    /// 两处各写一份，受管域判定与"域内但非租户"这类分支迟早不一致。
+    /// </para>
+    /// </remarks>
+    [AllowAnonymous]
+    [HttpGet("by-host")]
+    public async Task<TenantByHostOutputDto> FindByHostAsync(
+        [FromServices] IServiceProvider serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        var context = new TenantResolveContext(serviceProvider);
+        await new DomainTenantResolveContributor().ResolveAsync(context);
+
+        if (context.TenantIdOrName is { Length: > 0 } tenantName)
+        {
+            var tenant = await tenantAppService.FindByNameAsync(tenantName, cancellationToken);
+            return new TenantByHostOutputDto
+            {
+                Decision = HostTenantDecision.Tenant,
+                Tenant = tenant
+            };
+        }
+
+        // context.Handled 是框架给"受管域内但不指向租户"的标记，必须与"根本不是受管域"分开回传：
+        // 两者都讲成"没有租户"时，界面会在宿主域上继续显示上次记住的那个租户，
+        // 而服务端此刻已按宿主处理请求——显示的和生效的不是同一个租户上下文。
+        return new TenantByHostOutputDto
+        {
+            Decision = context.Handled ? HostTenantDecision.Host : HostTenantDecision.Undecided
+        };
     }
 }

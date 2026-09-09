@@ -58,6 +58,7 @@ using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.TenantConnections;
 #endif
 #endif
+using CompanyName.ProjectName.Api.Logging;
 using Microsoft.Extensions.FileProviders;
 using Leistd.DependencyInjection.DynamicProxy.Registration;
 
@@ -475,6 +476,7 @@ try
         RequestPath = "/uploads"
     });
 
+    var loggingSettings = app.Services.GetRequiredService<LoggingSettingState>();
     app.UseSerilogRequestLogging(options =>
     {
         options.GetLevel = (httpContext, elapsed, ex) =>
@@ -488,7 +490,10 @@ try
                 return Serilog.Events.LogEventLevel.Verbose;
             }
 
-            return Serilog.Events.LogEventLevel.Information;
+            // 正常完成的请求记成哪一级由设置决定：调到 Verbose 就等于关掉请求日志
+            // （全局最小级别通常是 Information，Verbose 不会落盘）。
+            // 失败与 5xx 不受它影响——那是排障必需的，不该被一个运维开关关掉。
+            return loggingSettings.RequestLevel;
         };
     });
     app.UseGlobalExceptionHandler();

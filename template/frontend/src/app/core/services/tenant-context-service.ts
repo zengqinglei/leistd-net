@@ -80,7 +80,11 @@ function readFromStorage(): TenantContext | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<TenantContext>;
     if (typeof parsed.id !== 'string' || typeof parsed.name !== 'string') return null;
-    return { id: parsed.id, name: parsed.name, displayName: parsed.displayName };
+    return {
+      id: parsed.id,
+      name: parsed.name,
+      displayName: parsed.displayName,
+    };
   } catch {
     return null;
   }

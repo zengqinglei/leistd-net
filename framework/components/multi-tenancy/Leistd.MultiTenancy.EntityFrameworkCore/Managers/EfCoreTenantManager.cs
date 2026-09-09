@@ -30,6 +30,7 @@ public class EfCoreTenantManager<TDbContext>(
         string name,
         string? displayName,
         bool isActive,
+        string? description = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -43,6 +44,7 @@ public class EfCoreTenantManager<TDbContext>(
             Name = name,
             NormalizedName = normalizedName,
             DisplayName = displayName,
+            Description = description,
             IsActive = isActive,
             CreationTime = clock.Normalize(clock.Now)
         };
@@ -53,7 +55,12 @@ public class EfCoreTenantManager<TDbContext>(
     }
 
     /// <inheritdoc />
-    public async Task<TenantConfiguration> UpdateAsync(Guid id, string name, string? displayName, CancellationToken cancellationToken = default)
+    public async Task<TenantConfiguration> UpdateAsync(
+        Guid id,
+        string name,
+        string? displayName,
+        string? description = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
@@ -69,6 +76,7 @@ public class EfCoreTenantManager<TDbContext>(
         record.Name = name;
         record.NormalizedName = normalizedName;
         record.DisplayName = displayName;
+        record.Description = description;
         record.Version++;
 
         await SaveTenantAsync(dbContext, id, dbContext.Entry(record), normalizedName, cancellationToken);

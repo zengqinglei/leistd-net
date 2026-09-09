@@ -16,6 +16,9 @@ import { Notifications } from './notifications';
 import { ApplicationHttpError } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
+import { LanguageService } from '../../../core/services/language-service';
+//#endif
+//#if (IncludeLocalization)
 
 const EN: Record<string, string> = {
   'layout.notifications.title': 'Notifications',
@@ -70,6 +73,11 @@ describe('Notifications', () => {
         { provide: ConfirmService, useValue: confirmService },
         //#if (IncludeLocalization)
         { provide: TranslocoService, useValue: transloco },
+        // 面板里的时间要一个书写 locale，它取自活动语言（见 SettingContextService）。
+        // 真实 LanguageService 会在构造时调 transloco.setActiveLang——上面那个最小桩
+        // 撑不住它，而本组用例要的是"能在测试里换翻译"，不是验语言那条链路，
+        // 所以这里给语言服务一个定值替身。
+        { provide: LanguageService, useValue: { activeLang: signal('en') } },
         //#endif
       ],
     });

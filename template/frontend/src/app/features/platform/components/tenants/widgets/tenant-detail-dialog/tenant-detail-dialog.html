@@ -1,0 +1,89 @@
+<hlm-dialog [state]="open() ? 'open' : 'closed'" (stateChanged)="open.set($event === 'open')">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+    <hlm-dialog-header>
+      <h2 hlmDialogTitle>{{ title() }}</h2>
+    </hlm-dialog-header>
+
+    @if (tenant(); as t) {
+      <div class="flex flex-col gap-4 py-2">
+        <section class="flex flex-col gap-2">
+          <h3 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+            {{ label('sectionIdentity') }}
+          </h3>
+          <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm">
+            <dt class="text-muted-foreground">{{ label('name') }}</dt>
+            <dd class="min-w-0 font-medium">{{ t.name }}</dd>
+
+            <dt class="text-muted-foreground">{{ label('displayName') }}</dt>
+            <dd class="min-w-0">{{ t.displayName || '-' }}</dd>
+
+            <dt class="text-muted-foreground">{{ label('description') }}</dt>
+            <dd class="min-w-0 break-words">{{ t.description || '-' }}</dd>
+
+            <dt class="text-muted-foreground">{{ label('status') }}</dt>
+            <dd class="min-w-0">{{ statusLabel(t.isActive) }}</dd>
+
+            <dt class="text-muted-foreground">{{ label('created') }}</dt>
+            <dd class="text-muted-foreground min-w-0">
+              {{ t.creationTime | appDate: 'full' : displayTimeZone() : displayLocale() }}
+            </dd>
+          </dl>
+        </section>
+
+        @if (canManage()) {
+          <hlm-separator />
+
+          <section class="flex flex-col gap-2">
+            <h3 class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              {{ label('sectionPlacement') }}
+            </h3>
+
+            @if (connectionLoading()) {
+              <div class="flex items-center gap-2 py-2">
+                <hlm-spinner class="text-base" />
+              </div>
+            } @else if (connectionError(); as error) {
+              <!-- 配置段单独降级：标识段照常呈现，不因一个副请求失败把整个详情打空 -->
+              <p class="text-destructive text-sm" role="alert">{{ error }}</p>
+            } @else if (connection(); as c) {
+              <dl
+                class="grid grid-cols-[minmax(6rem,auto)_1fr] items-start gap-x-4 gap-y-2 text-sm"
+              >
+                <dt class="text-muted-foreground">{{ label('databaseMode') }}</dt>
+                <dd class="min-w-0">{{ databaseModeLabel(c.databaseMode) }}</dd>
+
+                @if (isDedicatedDatabase()) {
+                  <dt class="text-muted-foreground">{{ label('runtimeSecretReference') }}</dt>
+                  <dd class="min-w-0 font-mono text-xs break-all">
+                    {{ c.runtimeSecretReference || '-' }}
+                  </dd>
+
+                  <dt class="text-muted-foreground">{{ label('migrationSecretReference') }}</dt>
+                  <dd class="min-w-0 font-mono text-xs break-all">
+                    {{ c.migrationSecretReference || '-' }}
+                  </dd>
+                }
+
+                <dt class="text-muted-foreground">{{ label('version') }}</dt>
+                <dd class="text-muted-foreground min-w-0 font-mono text-xs">{{ c.version }}</dd>
+              </dl>
+
+              @if (isDedicatedDatabase()) {
+                <p class="text-muted-foreground text-xs">{{ label('secretHint') }}</p>
+              }
+            }
+          </section>
+        }
+      </div>
+    }
+
+    <hlm-dialog-footer>
+      @if (canManage()) {
+        <button hlmBtn variant="outline" type="button" (click)="onEdit()">
+          {{ label('edit') }}
+        </button>
+      }
+      <button hlmBtn type="button" (click)="open.set(false)">{{ label('close') }}</button>
+    </hlm-dialog-footer>
+  </hlm-dialog-content>
+</hlm-dialog>

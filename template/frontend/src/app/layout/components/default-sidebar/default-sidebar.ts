@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -7,12 +7,17 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
   lucideBuilding2,
+  lucideCheck,
+  lucideChevronsUpDown,
+  lucideCog,
   lucideGauge,
+  lucideHouse,
   lucideIdCard,
   lucideSettings,
   lucideShieldCheck,
   lucideUsers,
 } from '@ng-icons/lucide';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSidebarImports } from '@spartan-ng/helm/sidebar';
 
 //#if (IncludeLocalization)
@@ -45,6 +50,7 @@ interface MenuGroup {
     RouterLink,
     NgIcon,
     Logo,
+    ...HlmDropdownMenuImports,
     ...HlmSidebarImports,
     UserMenu,
     //#if (IncludeLocalization)
@@ -53,7 +59,7 @@ interface MenuGroup {
   ],
   // prettier-ignore
   providers: [provideIcons({
-    lucideBuilding2,
+    lucideBuilding2, lucideCheck, lucideChevronsUpDown, lucideCog, lucideHouse,
     lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck, lucideSettings,
   })],
   templateUrl: './default-sidebar.html',
@@ -62,6 +68,7 @@ interface MenuGroup {
 export class DefaultSidebar {
   readonly layoutService = inject(LayoutService);
   private readonly authorizationService = inject(AuthorizationService);
+  private readonly router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
@@ -113,9 +120,15 @@ export class DefaultSidebar {
     {
       label: 'layout.sidebar.groupOther',
       items: [
-        // 不设权限：账户偏好是个人数据，任何登录用户都能改自己的。
-        // 租户默认值那一栏由页面内按 App.Settings 裁剪。
-        { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
+        // 平台侧放的是**系统默认值**（租户级），按 App.Settings 裁剪；
+        // 个人偏好在工作空间侧的同名入口。两者作用域不同，因此各区一个入口，
+        // 而不是一个页面用 Tab 切换——那样容易把私人偏好当租户默认值改。
+        {
+          label: 'layout.sidebar.settings',
+          icon: 'lucideSettings',
+          route: '/platform/settings',
+          permissions: [PERMISSIONS.settings.default],
+        },
       ],
     },
   ];
@@ -129,8 +142,7 @@ export class DefaultSidebar {
     {
       label: 'layout.sidebar.groupOther',
       items: [
-        // 设置页在 workspace 区：它只要求认证，普通用户也进得去（platform 区要管理权限）。
-        // 两个区都放入口，管理员不必为改自己的偏好切换区域。
+        // 工作空间侧只放**账户偏好**：个人数据，任何登录用户都能改自己的，不设权限。
         { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
       ],
     },
@@ -185,9 +197,14 @@ export class DefaultSidebar {
     {
       label: 'Other',
       items: [
-        // 不设权限：账户偏好是个人数据，任何登录用户都能改自己的。
-        // 租户默认值那一栏由页面内按 App.Settings 裁剪。
-        { label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' },
+        // 平台侧放的是**系统默认值**（租户级），按 App.Settings 裁剪；
+        // 个人偏好在工作空间侧的同名入口。两者作用域不同，因此各区一个入口。
+        {
+          label: 'Settings',
+          icon: 'lucideSettings',
+          route: '/platform/settings',
+          permissions: [PERMISSIONS.settings.default],
+        },
       ],
     },
   ];
@@ -197,13 +214,76 @@ export class DefaultSidebar {
     {
       label: 'Other',
       items: [
-        // 设置页在 workspace 区：它只要求认证，普通用户也进得去（platform 区要管理权限）。
-        // 两个区都放入口，管理员不必为改自己的偏好切换区域。
+        // 工作空间侧只放**账户偏好**：个人数据，任何登录用户都能改自己的，不设权限。
         { label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' },
       ],
     },
   ];
   //#endif
+
+  /**
+   * 可去的区域。
+   *
+   * 只有一个可去区域时（无平台权限的普通用户），品牌块退回普通链接——
+   * 给一个只有当前项的下拉，点开只会让人以为坏了。
+   */
+  readonly areaOptions = computed(() => {
+    //#if (IncludeLocalization)
+    this.translationReady();
+    //#endif
+    const isPlatform = this.layoutService.isPlatform();
+    const areas = [
+      {
+        route: '/workspace/dashboard',
+        icon: 'lucideHouse',
+        //#if (IncludeLocalization)
+        label: this.transloco.translate('menu.workspace'),
+        //#else
+        label: 'Workspace',
+        //#endif
+        current: !isPlatform,
+      },
+    ];
+
+    // 进平台要权限；回工作空间无条件——与头像菜单同一口径。
+    if (this.authorizationService.canAccessPlatform()) {
+      areas.push({
+        route: '/platform',
+        icon: 'lucideCog',
+        //#if (IncludeLocalization)
+        label: this.transloco.translate('menu.platform'),
+        //#else
+        label: 'Admin platform',
+        //#endif
+        current: isPlatform,
+      });
+    }
+
+    return areas;
+  });
+
+  readonly currentAreaLabel = computed(
+    () => this.areaOptions().find((area) => area.current)?.label ?? '',
+  );
+
+  //#if (IncludeLocalization)
+  readonly appTitle = computed(() => {
+    this.translationReady();
+    return this.transloco.translate('layout.sidebar.appTitle');
+  });
+
+  readonly switchAreaLabel = computed(() => {
+    this.translationReady();
+    return this.transloco.translate('layout.sidebar.switchArea');
+  });
+  //#else
+  readonly appTitle = () => 'Template Project';
+  readonly switchAreaLabel = () => 'Switch area';
+  //#endif
+
+  goToArea(route: string): void {
+    void this.router.navigate([route]);
+  }
 
   readonly menuGroups = computed(() => {
     const groups = this.layoutService.isPlatform()

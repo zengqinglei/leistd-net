@@ -43,6 +43,7 @@ import {
 interface TenantEditFormModel {
   name: string;
   displayName: string;
+  description: string;
   adminEmail: string;
   adminPassword: string;
   databaseMode: TenantDatabaseMode;
@@ -89,6 +90,7 @@ export class TenantEditDialog {
   protected readonly formModel = signal<TenantEditFormModel>({
     name: '',
     displayName: '',
+    description: '',
     adminEmail: '',
     adminPassword: '',
     databaseMode: 'sharedDatabase',
@@ -104,6 +106,9 @@ export class TenantEditDialog {
     });
     maxLength(path.displayName, 128, {
       message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
+    });
+    maxLength(path.description, 256, {
+      message: this.transloco.translate('common.validation.maxLength', { max: 256 }),
     });
     // 管理员账号仅在新建模式提供并校验（编辑模式无该字段）。
     required(path.adminEmail, {
@@ -134,6 +139,7 @@ export class TenantEditDialog {
     required(path.name, { message: 'This field is required.' });
     maxLength(path.name, 64, { message: 'Must not exceed 64 characters.' });
     maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
+    maxLength(path.description, 256, { message: 'Must not exceed 256 characters.' });
     // 管理员账号仅在新建模式提供并校验（编辑模式无该字段）。
     required(path.adminEmail, {
       message: 'This field is required.',
@@ -174,6 +180,7 @@ export class TenantEditDialog {
       this.formModel.set({
         name: tenant?.name ?? '',
         displayName: tenant?.displayName ?? '',
+        description: tenant?.description ?? '',
         adminEmail: '',
         adminPassword: '',
         databaseMode: 'sharedDatabase',
@@ -190,11 +197,16 @@ export class TenantEditDialog {
 
     const model = this.formModel();
     const displayName = model.displayName.trim() || undefined;
+    // 清空描述要能传达到后端：编辑时传 null 而不是 undefined——
+    // undefined 会被 JSON 序列化丢掉，后端读到的是"未提供"，旧值就留在库里；
+    // 传 null 后端会把字段置空（而不是存成空字符串）。
+    const description = model.description.trim();
 
     if (this.isEdit()) {
       this.save.emit({
         name: model.name.trim(),
         displayName,
+        description: description || null,
       } satisfies UpdateTenantInputDto);
       return;
     }
@@ -202,6 +214,7 @@ export class TenantEditDialog {
     this.save.emit({
       name: model.name.trim(),
       displayName,
+      description: description || undefined,
       adminEmail: model.adminEmail.trim(),
       adminPassword: model.adminPassword,
       databaseMode: model.databaseMode,
@@ -244,6 +257,7 @@ export class TenantEditDialog {
     field:
       | 'name'
       | 'displayName'
+      | 'description'
       | 'adminEmail'
       | 'adminPassword'
       | 'runtimeSecretReference'
@@ -252,6 +266,7 @@ export class TenantEditDialog {
     const keys = {
       name: 'tenants.fieldName',
       displayName: 'tenants.fieldDisplayName',
+      description: 'tenants.fieldDescription',
       adminEmail: 'tenants.fieldAdminEmail',
       adminPassword: 'tenants.fieldAdminPassword',
       runtimeSecretReference: 'tenants.fieldRuntimeSecretReference',
@@ -264,6 +279,7 @@ export class TenantEditDialog {
     field:
       | 'name'
       | 'displayName'
+      | 'description'
       | 'adminEmail'
       | 'adminPassword'
       | 'runtimeSecretReference'
@@ -272,6 +288,7 @@ export class TenantEditDialog {
     const labels = {
       name: 'Name',
       displayName: 'Display name',
+      description: 'Description',
       adminEmail: 'Admin email',
       adminPassword: 'Admin password',
       runtimeSecretReference: 'Runtime Secret reference',

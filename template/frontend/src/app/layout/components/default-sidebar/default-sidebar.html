@@ -2,23 +2,55 @@
   <div hlmSidebarHeader>
     <ul hlmSidebarMenu>
       <li hlmSidebarMenuItem>
-        <!-- Spartan 品牌头：用 menu-button 基元（size=lg），折叠为 icon 时自动收成居中的方形图标，避免自绘容器溢出裁剪。 -->
-        <a hlmSidebarMenuButton size="lg" [routerLink]="layoutService.homeRoute()">
-          <app-logo size="normal" />
-          <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-            <!--#if (IncludeLocalization)-->
-            <span class="truncate text-sm font-medium">{{
-              'layout.sidebar.appTitle' | transloco
-            }}</span>
-            <span class="truncate text-xs text-muted-foreground">{{
-              'layout.sidebar.appSubtitle' | transloco
-            }}</span>
-            <!--#else-->
-            <span class="truncate text-sm font-medium">Template Project</span>
-            <span class="truncate text-xs text-muted-foreground">Admin Platform</span>
-            <!--#endif-->
-          </div>
-        </a>
+        <!-- Spartan 品牌头：用 menu-button 基元（size=lg），折叠为 icon 时自动收成居中的方形图标，避免自绘容器溢出裁剪。
+             同时是**区域切换器**：副标题显示当前区域（原来写死 "Admin Platform"，在工作空间区是错的），
+             点开可切到另一区。切换入口也在头像菜单里，但那里不易发现，而区域标识本就该在这。 -->
+        @if (areaOptions().length > 1) {
+          <button
+            hlmSidebarMenuButton
+            size="lg"
+            [hlmDropdownMenuTrigger]="areaMenu"
+            [attr.aria-label]="switchAreaLabel()"
+            data-testid="area-switcher"
+          >
+            <app-logo size="normal" />
+            <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+              <span class="truncate text-sm font-medium">{{ appTitle() }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{ currentAreaLabel() }}</span>
+            </div>
+            <ng-icon
+              name="lucideChevronsUpDown"
+              class="ml-auto text-base group-data-[collapsible=icon]:hidden"
+            />
+          </button>
+          <ng-template #areaMenu>
+            <hlm-dropdown-menu>
+              <hlm-dropdown-menu-label>{{ switchAreaLabel() }}</hlm-dropdown-menu-label>
+              <hlm-dropdown-menu-separator />
+              @for (area of areaOptions(); track area.route) {
+                <button
+                  hlmDropdownMenuItem
+                  [attr.data-testid]="'area-option-' + area.route"
+                  (click)="goToArea(area.route)"
+                >
+                  <ng-icon [name]="area.icon" />
+                  {{ area.label }}
+                  @if (area.current) {
+                    <ng-icon name="lucideCheck" class="ml-auto text-base" />
+                  }
+                </button>
+              }
+            </hlm-dropdown-menu>
+          </ng-template>
+        } @else {
+          <a hlmSidebarMenuButton size="lg" [routerLink]="layoutService.homeRoute()">
+            <app-logo size="normal" />
+            <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+              <span class="truncate text-sm font-medium">{{ appTitle() }}</span>
+              <span class="truncate text-xs text-muted-foreground">{{ currentAreaLabel() }}</span>
+            </div>
+          </a>
+        }
       </li>
     </ul>
   </div>

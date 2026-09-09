@@ -1,6 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.AppServices;
-using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Lock.Abstractions;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -103,7 +103,9 @@ public class CaptchaConsumptionTests
         services.AddLogging();
         services.AddSingleton<IDistributedCache>(cache);
         services.AddSingleton<IDistributedLock>(captchaLock);
-        services.Configure<UserRegistrationOptions>(options => options.CaptchaExpiryMinutes = 5);
+        // 注册策略现在按租户从设置里解析；本组用例只关心 token 的消费与加锁，
+        // 给一个固定策略即可，不必把整条设置链拉进来。
+        services.AddSingleton<IUserRegistrationPolicyProvider>(new FixedRegistrationPolicy());
         services.AddSingleton<ICaptchaAppService, CaptchaAppService>();
 
         var provider = services.BuildServiceProvider();
@@ -304,6 +306,18 @@ public class CaptchaConsumptionTests
                 _notOwned.Add($"{operation}（调用 {caller}，锁属于 {owner}）");
             }
         }
+    }
+
+    /// <summary>固定的注册策略：本组用例不验策略解析，只需要一个确定的有效期。</summary>
+    private sealed class FixedRegistrationPolicy : IUserRegistrationPolicyProvider
+    {
+        public Task<UserRegistrationPolicy> GetAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new UserRegistrationPolicy(
+                EnableEmailVerification: false,
+                CaptchaExpiryMinutes: 5,
+                EmailCodeExpiryMinutes: 5,
+                EmailCodeSendIntervalSeconds: 60,
+                EmailCodeMaxAttempts: 5));
     }
 }
 #endif

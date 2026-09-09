@@ -34,6 +34,7 @@ import {
   tap,
 } from 'rxjs/operators';
 
+import { TenantDetailDialog } from './widgets/tenant-detail-dialog/tenant-detail-dialog';
 import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
 import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
@@ -68,6 +69,7 @@ import { TenantService } from '../../services/tenant-service';
     HlmInputGroupInput,
     ...HlmTooltipImports,
     TenantTable,
+    TenantDetailDialog,
     TenantEditDialog,
     //#if (IncludeLocalization)
     TranslocoModule,
@@ -110,6 +112,9 @@ export class Tenants {
 
   readonly editDialogOpen = signal(false);
   readonly editingTenant = signal<TenantOutputDto | null>(null);
+
+  readonly detailDialogOpen = signal(false);
+  readonly detailTenant = signal<TenantOutputDto | null>(null);
 
   // 操作入口按权限裁剪；前端隐藏只影响体验，后端仍逐个请求校验。
   readonly canCreate = computed(() => this.authorizationService.has(PERMISSIONS.tenants.create));
@@ -181,6 +186,16 @@ export class Tenants {
   openEdit(tenant: TenantOutputDto): void {
     this.editingTenant.set(tenant);
     this.editDialogOpen.set(true);
+  }
+
+  openDetail(tenant: TenantOutputDto): void {
+    this.detailTenant.set(tenant);
+    this.detailDialogOpen.set(true);
+  }
+
+  /** 详情里点「编辑」：详情已自行关闭，这里只负责接力打开编辑。 */
+  onDetailEdit(tenant: TenantOutputDto): void {
+    this.openEdit(tenant);
   }
 
   onSave(payload: CreateTenantInputDto | UpdateTenantInputDto): void {

@@ -23,7 +23,9 @@ public sealed class DefaultSettingManager(
     {
         var definition = definitionManager.GetOrNull(name) ?? throw new UndefinedSettingException(name);
 
-        if (scope is not (SettingScopes.Tenant or SettingScopes.User) || !definition.Scopes.HasFlag(scope))
+        // 只有这三个是"能落到某一行"的层级：None 不是层级，All 是定义侧的"两层都允许"。
+        if (scope is not (SettingScopes.Tenant or SettingScopes.User or SettingScopes.Host)
+            || !definition.Scopes.HasFlag(scope))
         {
             throw new SettingScopeNotAllowedException(name, scope, definition.Scopes);
         }

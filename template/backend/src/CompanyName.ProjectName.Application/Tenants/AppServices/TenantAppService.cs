@@ -64,7 +64,11 @@ public class TenantAppService(
         using (var controlUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
         {
             tenant = await tenantManager.CreateAsync(
-                input.Name, input.DisplayName, isActive: false, cancellationToken: cancellationToken);
+                input.Name,
+                input.DisplayName,
+                isActive: false,
+                input.Description,
+                cancellationToken);
 
             await connectionConfigurationManager.SetAsync(
                 tenant.Id,
@@ -153,7 +157,8 @@ public class TenantAppService(
     /// <inheritdoc />
     public async Task<TenantOutputDto> UpdateAsync(Guid id, UpdateTenantInputDto input, CancellationToken cancellationToken = default)
     {
-        var record = await tenantManager.UpdateAsync(id, input.Name, input.DisplayName, cancellationToken);
+        var record = await tenantManager.UpdateAsync(
+            id, input.Name, input.DisplayName, input.Description, cancellationToken);
         return ToOutputDto(record);
     }
 

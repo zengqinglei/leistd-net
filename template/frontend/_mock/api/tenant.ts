@@ -1,7 +1,14 @@
+import { TenantByHostOutputDto } from '../../src/app/shared/dtos/tenant.dto';
 import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
-import { TENANTS, toTenantLookup, toTenantOutput } from '../data/tenant';
+import {
+  MockTenant,
+  TENANTS,
+  toTenantConnection,
+  toTenantLookup,
+  toTenantOutput,
+} from '../data/tenant';
 
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;
@@ -50,6 +57,26 @@ export function getTenantByName(name: string) {
   return toTenantLookup(tenant);
 }
 
+/**
+ * 按主机名探测租户（匿名）。
+ *
+ * Mock 里没有 `DomainFormat` 这类部署配置，`localhost` 也不是任何受管域，
+ * 因此**恒定回"域名不表态"**——这正是真实后端在同一条件下的回答，
+ * 登录页据此保留记住的租户并允许手选。
+ */
+export function getTenantByHost(): TenantByHostOutputDto {
+  return { decision: 'undecided' };
+}
+
+/** 租户连接配置：真实后端要求 App.Tenants.Update，Mock 不做权限，仅复刻投影形状。 */
+export function getTenantConnection(tenantId: string) {
+  const tenant = TENANTS.find((t) => t.id === tenantId);
+  if (!tenant) {
+    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
+  }
+  return toTenantConnection(tenant);
+}
+
 export function createTenant(value: any) {
   const name = String(value.name ?? '').trim();
   // 名称冲突复刻后端 409 形状。
@@ -63,9 +90,15 @@ export function createTenant(value: any) {
     id: crypto.randomUUID(),
     name,
     displayName: value.displayName?.trim() || undefined,
+    description: value.description?.trim() || undefined,
     isActive: true,
     creationTime: new Date().toISOString(),
-  };
+    databaseMode:
+      value.databaseMode === 'dedicatedDatabase' ? 'dedicatedDatabase' : 'sharedDatabase',
+    runtimeSecretReference: value.runtimeSecretReference || undefined,
+    migrationSecretReference: value.migrationSecretReference || undefined,
+    connectionVersion: 1,
+  } satisfies MockTenant;
   TENANTS.push(newTenant);
   return toTenantOutput(newTenant);
 }
@@ -83,6 +116,8 @@ export function updateTenant(id: string, value: any) {
 
   tenant.name = name;
   tenant.displayName = value.displayName?.trim() || undefined;
+  // 整体覆盖，与后端一致：省略与显式 null 都清空描述，没有"不传即保留"这一档。
+  tenant.description = value.description?.trim() || undefined;
   return toTenantOutput(tenant);
 }
 
@@ -105,6 +140,8 @@ export function deleteTenant(id: string) {
 
 export const TENANT_API = {
   'GET /api/v1/tenants': (req: MockRequest) => getTenants(req.queryParams),
+  // by-host / by-name 必须排在 :id 之前，否则会被当成一个 id 走到按 id 查询那条上
+  'GET /api/v1/tenants/by-host': () => getTenantByHost(),
   'GET /api/v1/tenants/by-name/:name': (req: MockRequest) => getTenantByName(req.params.name),
   'GET /api/v1/tenants/:id': (req: MockRequest) => getTenantById(req.params.id),
   'POST /api/v1/tenants': (req: MockRequest) => createTenant(req.body),
@@ -112,4 +149,6 @@ export const TENANT_API = {
     setTenantActivation(req.params.id, req.body),
   'PUT /api/v1/tenants/:id': (req: MockRequest) => updateTenant(req.params.id, req.body),
   'DELETE /api/v1/tenants/:id': (req: MockRequest) => deleteTenant(req.params.id),
+  'GET /api/v1/tenant-connections/:tenantId': (req: MockRequest) =>
+    getTenantConnection(req.params.tenantId),
 };

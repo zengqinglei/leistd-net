@@ -511,6 +511,87 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    /// <summary>
+    /// 按主机名探测：<b>三档结果必须分开</b>。
+    /// </summary>
+    /// <remarks>
+    /// "受管域但不指向租户（宿主）"与"根本不是受管域"在后续解析上语义不同：前者已经定案，
+    /// 请求头不再能改写；后者允许记住的租户继续生效。两者都回成"没有租户"时，登录页会在
+    /// 宿主域上继续显示上次记住的租户，而这次请求已按宿主处理——界面显示的与实际生效的
+    /// 不是同一个租户上下文。这一条只有把两档分开断言才钉得住。
+    /// </remarks>
+    [Fact]
+    public async Task 按主机名探测区分租户_宿主与未定案()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        await CreateTenantAsync(hostAdmin, "byhost-a");
+
+        using var domainHost = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Leistd:MultiTenancy:DomainFormat"] = "{0}.example.com"
+                })));
+
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(domainHost);
+
+        async Task<JsonDocument> ProbeAsync(string host)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/tenants/by-host");
+            request.Headers.Host = host;
+            var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        }
+
+        // 租户子域：定案到该租户，并回显它的标识
+        using var tenantProbe = await ProbeAsync("byhost-a.example.com");
+        Assert.Equal("tenant", tenantProbe.RootElement.GetProperty("decision").GetString());
+        Assert.Equal(
+            "byhost-a",
+            tenantProbe.RootElement.GetProperty("tenant").GetProperty("name").GetString());
+
+        // 受管域的根：定案为宿主，没有租户
+        using var hostProbe = await ProbeAsync("example.com");
+        Assert.Equal("host", hostProbe.RootElement.GetProperty("decision").GetString());
+        Assert.True(
+            hostProbe.RootElement.TryGetProperty("tenant", out var hostTenant) is false
+            || hostTenant.ValueKind == JsonValueKind.Null);
+
+        // 域外主机：域名不表态，后续解析来源仍可决定租户
+        using var outsideProbe = await ProbeAsync("localhost");
+        Assert.Equal("undecided", outsideProbe.RootElement.GetProperty("decision").GetString());
+    }
+
+    /// <summary>
+    /// 子域名指向一个不存在的租户时，请求在**租户解析阶段**就被拒，探测端点根本到不了。
+    /// </summary>
+    /// <remarks>
+    /// 这条钉住的是"探测救不了配错的子域名"这件事：中间件按主机名解析出一个不存在的租户名，
+    /// 整个请求（含匿名的探测端点）一律 404。登录页因此走探测失败那条分支，退回手填——
+    /// 而在这个主机名上手填任何租户同样会被域名覆盖掉。
+    /// 换句话说，这是部署配置问题，不是界面能兜住的状态；把它写成用例是为了让
+    /// 有人日后把探测端点"改成能穿过解析失败"时，先看到这里的取舍。
+    /// </remarks>
+    [Fact]
+    public async Task 子域名指向不存在的租户时请求在解析阶段被拒()
+    {
+        using var domainHost = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Leistd:MultiTenancy:DomainFormat"] = "{0}.example.com"
+                })));
+
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(domainHost);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/tenants/by-host");
+        request.Headers.Host = $"absent-{Guid.NewGuid():N}.example.com";
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     [Fact]
     public async Task 未知租户404_名称大小写不敏感()
     {
@@ -1058,10 +1139,11 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             string name,
             string? displayName,
             bool isActive,
+            string? description = null,
             CancellationToken cancellationToken = default)
         {
             probe.Record("control", unitOfWorkManager);
-            return inner.CreateAsync(name, displayName, isActive, cancellationToken);
+            return inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
         }
 
         public Task<TenantConfiguration> SetActiveAsync(
@@ -1081,8 +1163,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Guid id,
             string name,
             string? displayName,
+            string? description = null,
             CancellationToken cancellationToken = default)
-            => inner.UpdateAsync(id, name, displayName, cancellationToken);
+            => inner.UpdateAsync(id, name, displayName, description, cancellationToken);
 
         public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
             => inner.DeleteAsync(id, cancellationToken);
@@ -1134,9 +1217,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         internal static void Reset() => LastCreatedId = null;
 
         public async Task<TenantConfiguration> CreateAsync(
-            string name, string? displayName, bool isActive, CancellationToken cancellationToken = default)
+            string name,
+            string? displayName,
+            bool isActive,
+            string? description = null,
+            CancellationToken cancellationToken = default)
         {
-            var created = await inner.CreateAsync(name, displayName, isActive, cancellationToken);
+            var created = await inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
             LastCreatedId = created.Id;
             return created;
         }
@@ -1146,8 +1233,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 ? throw new InvalidOperationException("injected activation failure")
                 : inner.SetActiveAsync(id, isActive, cancellationToken);
 
-        public Task<TenantConfiguration> UpdateAsync(Guid id, string name, string? displayName, CancellationToken cancellationToken = default)
-            => inner.UpdateAsync(id, name, displayName, cancellationToken);
+        public Task<TenantConfiguration> UpdateAsync(
+            Guid id,
+            string name,
+            string? displayName,
+            string? description = null,
+            CancellationToken cancellationToken = default)
+            => inner.UpdateAsync(id, name, displayName, description, cancellationToken);
 
         public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
             => inner.DeleteAsync(id, cancellationToken);
