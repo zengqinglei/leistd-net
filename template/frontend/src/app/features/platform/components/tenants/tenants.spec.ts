@@ -4,9 +4,6 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { PaginationState } from '@tanstack/angular-table';
 import { of, throwError } from 'rxjs';
 
@@ -14,6 +11,9 @@ import { Tenants } from './tenants';
 import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialog';
 import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
+//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import {
@@ -97,10 +97,7 @@ describe('Tenants 页面闭环', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         { provide: TenantService, useValue: service },
         { provide: ConfirmService, useValue: confirm },

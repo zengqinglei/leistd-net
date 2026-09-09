@@ -1,14 +1,11 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-import { of } from 'rxjs';
-//#endif
 
 import { SettingContextService } from './setting-context-service';
 import { SettingOutputDto } from './setting.dto';
 //#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../i18n/transloco.testing';
 import { LanguageService } from '../services/language-service';
 //#endif
 
@@ -46,12 +43,8 @@ describe('SettingContextService', () => {
         SettingContextService,
         provideHttpClient(),
         provideHttpClientTesting(),
-        // 日期书写用的 locale 取自活动语言，本服务因此依赖 LanguageService；
-        // 用真实 transloco 配空加载器，手写桩补不齐它依赖的内部配置。
-        provideTransloco({
-          config: { availableLangs: ['en', 'zh-CN'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => of({}) } },
+        // 日期书写用的 locale 取自活动语言，本服务因此依赖 LanguageService。
+        ...provideTranslocoTesting(['en', 'zh-CN']),
       ],
       //#else
       providers: [SettingContextService, provideHttpClient(), provideHttpClientTesting()],

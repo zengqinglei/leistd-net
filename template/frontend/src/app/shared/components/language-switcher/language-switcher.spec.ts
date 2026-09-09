@@ -1,11 +1,13 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
 import { toast } from '@spartan-ng/brain/sonner';
 import { of, throwError } from 'rxjs';
 
 import { LanguageSwitcher } from './language-switcher';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
+//#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { LanguageService } from '../../../core/services/language-service';
 import { SettingContextService } from '../../../core/settings/setting-context-service';
@@ -37,10 +39,7 @@ describe('LanguageSwitcher', () => {
         // 真实 AuthService 会拉起认证栈；这里只关心「已登录还是没登录」。
         { provide: AuthService, useValue: authService },
         { provide: SettingService, useValue: settingService },
-        provideTransloco({
-          config: { availableLangs: ['en', 'zh-CN'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => of({}) } },
+        ...provideTranslocoTesting(['en', 'zh-CN']),
       ],
     });
     localStorage.setItem(LanguageService.STORAGE_KEY, 'en');

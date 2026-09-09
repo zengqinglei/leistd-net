@@ -3,14 +3,14 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, throwError } from 'rxjs';
 
 import { Login } from './login';
 import { permissionGuard } from '../../../../core/guards/permission-guard';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
+//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
@@ -65,12 +65,7 @@ describe('Login', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        // 组件模板用了 transloco 管道，手写 TranslocoService 桩补不齐它依赖的内部配置；
-        // 用真实 provider 配一个空加载器，文案回落成键名即可，本组用例不关心文案。
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => of({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         { provide: AuthService, useValue: authService },
         //#if (LocalIdentity)

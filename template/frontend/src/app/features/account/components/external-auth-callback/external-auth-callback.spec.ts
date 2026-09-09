@@ -3,12 +3,12 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { of } from 'rxjs';
 
 import { ExternalAuthCallback } from './external-auth-callback';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
+//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { AccountService } from '../../services/account-service';
@@ -48,10 +48,7 @@ describe('ExternalAuthCallback', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         { provide: AccountService, useValue: accountService },
         { provide: AuthService, useValue: authService },

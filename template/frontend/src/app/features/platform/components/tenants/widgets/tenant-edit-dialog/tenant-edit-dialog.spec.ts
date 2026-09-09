@@ -1,11 +1,11 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 
 import { TenantEditDialog } from './tenant-edit-dialog';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 import {
   CreateTenantInputDto,
   TenantOutputDto,
@@ -63,12 +63,7 @@ describe('TenantEditDialog', () => {
       providers: [
         provideZonelessChangeDetection(),
         //#if (IncludeLocalization)
-        // 用真实 transloco 配空词条：校验消息与标题都走 translate()，缺词条时回落成键名，
-        // 本组用例只关心字段是否存在、表单是否放行、提交出去的载荷长什么样。
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
       ],
     });

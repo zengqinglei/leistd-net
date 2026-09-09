@@ -4,14 +4,14 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { of } from 'rxjs';
 
 import { Users } from './users';
 import { UserTable } from './widgets/user-table/user-table';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
+//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
@@ -59,10 +59,7 @@ describe('Users 页面查询闭环', () => {
         provideHttpClientTesting(),
         { provide: AuthService, useValue: { currentUser: signal(null) } },
         //#if (IncludeLocalization)
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         { provide: UserManagementService, useValue: service },
         { provide: StartupService, useValue: { status: signal('success' as const) } },

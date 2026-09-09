@@ -2,12 +2,12 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { of } from 'rxjs';
 
 import { SAVING_MIN_MS, Settings } from './settings';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../core/i18n/transloco.testing';
+//#endif
 import { AuthService } from '../../core/services/auth-service';
 import { SettingOutputDto } from '../../core/settings/setting.dto';
 
@@ -58,10 +58,7 @@ function pageProviders(): unknown[] {
     // （无本地身份的形态下是整个 OIDC 客户端），本组用例只关心页面的行为。
     { provide: AuthService, useValue: { clearAuthData: () => undefined } },
     //#if (IncludeLocalization)
-    provideTransloco({
-      config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-    }),
-    { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+    ...provideTranslocoTesting(['en']),
     //#endif
   ];
 }

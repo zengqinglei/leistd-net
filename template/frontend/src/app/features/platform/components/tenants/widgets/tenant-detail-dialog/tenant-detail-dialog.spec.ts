@@ -2,12 +2,12 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { Observable, Subject } from 'rxjs';
 
 import { TenantDetailDialog } from './tenant-detail-dialog';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 import { TenantConnectionOutputDto } from '../../../../../../shared/dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
@@ -60,10 +60,7 @@ describe('TenantDetailDialog', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         {
           provide: TenantConnectionService,
