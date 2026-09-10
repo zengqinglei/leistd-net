@@ -170,6 +170,7 @@ HTTP/1.1 200 OK
 - 全局处理器解析顺序：**`Code` → 状态码通用码（`Error:NotFound` 等）→ 兜底**，绝不把裸键漏给用户；查询全程 `try/catch` 隔离，本地化失败不覆盖原始 `code`。**响应结构不变**，仅 `message`/`detail`/`title` 随语言变，`code`/`traceId` 不变。
 - **未启用多语言（off-mode）时**：没有 `IStringLocalizer`，业务错误对外只有状态码英文短语。`Message` 仍只进日志——这是刻意的安全默认。需要某条消息落地给用户，用 `AsUserFacing()` 显式声明。
 - 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等）。前端**直接显示后端 `message`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §8.2）。
+- **400 / 409 / 422 必须带码。** 这三类的状态本身说不清原因（"你的输入有问题"，但哪条规则没过只有消息知道），不带码就会被归一成 `Error:BadRequest` → "请求无效。"，具体原因只留在服务端日志里，用户无从修正——而这既不报错也不影响任何测试，所以有静态闸门 `scripts/check-error-codes.py` 守着。401 / 403 / 404 不在此列：状态本身即原因；500 / 503 更不在此列：那些消息是内部诊断，被通用文案盖住是对的。
 - **DataAnnotations 校验消息**也随 culture 本地化：DTO 的 `ErrorMessage`/`Display` 用英文句子作键（`"{0} is required."`），`zh-CN.json` 按同一句子映射中文；`Program.cs` 已接线 `AddDataAnnotationsLocalization(...DataAnnotationLocalizerProvider...)`。这样参数校验与业务异常在同一请求下**同语言**。
 
 **示例（`Message` 恒为英文诊断，`Code` 给出身份）**：
@@ -177,7 +178,9 @@ HTTP/1.1 200 OK
 ```csharp
 // 业务规则验证失败（400，未设 Code 时为 Error:BadRequest）
 if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-    throw new BadRequestException($"Username '{username}' already exists.");
+    throw new BadRequestException($"Username '{username}' already exists.")
+        .WithCode("User:UsernameTaken")
+        .WithData("Username", username);
 
 // 资源不存在（404，未设 Code 时为 Error:NotFound）
 var user = await userRepository.GetAsync(id, cancellationToken);

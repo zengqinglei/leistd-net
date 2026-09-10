@@ -197,7 +197,12 @@ public class TenantAppService(
         {
             if (await userRepository.CountAsync(cancellationToken: cancellationToken) == 0)
             {
-                throw new BadRequestException("This tenant has no users yet; activating it would let nobody in. Finish provisioning first.");
+                throw new BadRequestException(
+                    "This tenant has no users yet; activating it would let nobody in. Finish provisioning first.")
+#if (IncludeLocalization)
+                    .WithCode("Tenant:ActivateWithoutUsers")
+#endif
+                    ;
             }
         }
     }

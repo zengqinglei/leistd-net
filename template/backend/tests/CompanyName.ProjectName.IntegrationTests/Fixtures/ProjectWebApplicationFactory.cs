@@ -32,8 +32,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     /// </summary>
     /// <remarks>
     /// 以字面量散在各调用点时，改动测试凭据要逐处追平；集中之后是改一行。
-    /// 刻意不用模板曾发布过的示例密码：那些值已进入公开仓库历史、生产校验会拒绝它们，
-    /// 测试若继续沿用就等于测不到那条校验。
+    /// 取值要满足密码策略（见 <c>PasswordPolicy</c>），否则测试宿主自己就起不来。
     /// </remarks>
     public const string TestAdminPassword = "IntegrationTests!Adm1n";
 

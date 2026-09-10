@@ -47,27 +47,14 @@ public class PasswordPolicyTests
         Assert.False(PasswordPolicy.IsAcceptable(new string('a', PasswordPolicy.MaximumLength + 1)));
     }
 
-    // 发布过的示例值已进入公开仓库历史，等同于已泄漏——即使长度够也必须拒绝。
+    // 策略只管长度：够长就接受，即使看起来是常见形态。要拦已泄漏口令由业务项目接泄漏库，
+    // 在本类之外加一步校验（见 PasswordPolicy 的说明）。
     [Fact]
-    public void Previously_published_sample_values_are_rejected()
+    public void A_long_enough_password_is_accepted_even_if_it_looks_weak()
     {
-        Assert.All(PasswordPolicy.Rejected, p => Assert.False(PasswordPolicy.IsAcceptable(p)));
-    }
+        Assert.True(PasswordPolicy.IsAcceptable("Admin@123456"));
+        Assert.True(PasswordPolicy.IsAcceptable("123456789012"));
 
-    [Fact]
-    public void Rejected_list_is_matched_case_insensitively()
-    {
-        Assert.False(PasswordPolicy.IsAcceptable("aDmIn@123456"));
-    }
-
-    // 失败必须抛 400 而不是 500，且消息带上主体，否则调用方看不出是哪个配置项不合格。
-    [Fact]
-    public void Ensure_reports_the_subject_in_a_bad_request()
-    {
-        var ex = Assert.Throws<BadRequestException>(
-            () => PasswordPolicy.Ensure("short", "DefaultAdmin:Password"));
-
-        Assert.Contains("DefaultAdmin:Password", ex.Message);
     }
 
     [Fact]
