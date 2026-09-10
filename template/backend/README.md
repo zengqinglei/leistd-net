@@ -99,7 +99,7 @@ dotnet ef migrations add <MigrationName> \
 <!--#if (LocalIdentity)-->
 ## 认证配置
 
-首次启动会按 `DefaultAdmin` 创建管理员。**`DefaultAdmin:Password` 没有默认值**，必须由部署注入（环境变量或 `dotnet user-secrets`）——缺失、空值或等于本模板曾发布过的示例值都会在启动期被拒绝。另需持久化 Data Protection 密钥。
+首次启动会按 `DefaultAdmin` 创建管理员。**`DefaultAdmin:Password` 没有默认值**，必须由部署注入（环境变量或 `dotnet user-secrets`）——缺失、空值或不满足密码策略（至少 12 个字符）都会在启动期被拒绝。另需持久化 Data Protection 密钥。
 
 角色、权限和超级管理员属于不同授权维度；业务接口应同时覆盖允许、拒绝和超级管理员旁路场景。
 <!--#if (OpenIddictServer)-->

@@ -58,6 +58,41 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
     }
 
 
+    /// <summary>
+    /// 业务校验的<b>具体原因</b>要传到客户端，不能被通用文案盖掉。
+    /// </summary>
+    /// <remarks>
+    /// 异常处理器按错误码查词条，查不到就按状态码归一（<c>Error:BadRequest</c> → "请求无效。"）。
+    /// 抛出点只带消息不带码时，界面上就只剩那句通用话，原因只留在服务端日志里——管理员看着
+    /// "请求无效"完全无从修正。这里用"给日志级别写一个非法取值"这条真实场景钉住：400、
+    /// 且消息里说的是这个取值本身的问题。
+    /// <para>
+    /// 400 一律要带码，有静态闸门守着（<c>scripts/check-error-codes.py</c>）；这条用例守的是
+    /// 另一半——码到词条这条链真的接上了。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Business_validation_reason_reaches_the_client()
+    {
+        using var session = await factory.LoginAsync(
+            "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        session.Client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN");
+
+        var response = await session.Client.PutAsJsonAsync(
+            "/api/v1/settings/current-tenant",
+            new { Name = "Logging.MinimumLevel", Value = "Chatty" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var message = body.RootElement.GetProperty("message").GetString();
+
+        Assert.NotNull(message);
+        Assert.DoesNotContain("请求无效", message);
+        // 非法取值与可选值都要出现在文案里，否则改不动
+        Assert.Contains("Chatty", message);
+        Assert.Contains("日志级别", message);
+    }
+
     private static async Task<string> PostInvalidRegisterAndReadErrorsAsync(HttpClient client)
     {
         // 空用户名 + 非法邮箱 → 触发 [ApiController] 自动 400 校验；经 ConfigureApiValidation

@@ -74,7 +74,11 @@ public class UserAppService(
             if (roleNames.Exists(r => r.Length > RoleNameMaxLength))
             {
                 throw new BadRequestException(
-                    $"Role name cannot exceed {RoleNameMaxLength} characters.");
+                    $"Role name cannot exceed {RoleNameMaxLength} characters.")
+#if (IncludeLocalization)
+                    .WithCode("Role:NameTooLong").WithData("MaximumLength", RoleNameMaxLength)
+#endif
+                    ;
             }
             if (roleNames.Count > 0)
             {

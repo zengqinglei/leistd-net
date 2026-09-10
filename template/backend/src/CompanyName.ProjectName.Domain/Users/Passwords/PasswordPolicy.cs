@@ -12,8 +12,11 @@ namespace CompanyName.ProjectName.Domain.Users.Passwords;
 /// <b>不要在各入口另写一套规则</b>：多套规则并存时，最宽的那一套就是系统的真实下限，
 /// 而"哪一套最宽"没人会持续核对。新增创建口令的入口一律调用本类。</para>
 /// <para><b>选长度而不选复杂度正则。</b>复杂度规则把用户推向 <c>Passw0rd!</c> 这类可预测形态，
-/// 却挡不住它；而长度直接增加搜索空间。因此这里的规则是：足够长、允许长口令、
-/// 拒绝已知弱密码与项目自带的示例值。</para>
+/// 却挡不住它；而长度直接增加搜索空间。因此这里只有一条规则：足够长，且允许长口令。</para>
+/// <para><b>不内置弱口令名单。</b>通用模板不该替业务项目钉死"哪些口令算弱"——名单短了没有实效，
+/// 长了就是把一份会过时的数据塞进模板。要拦已泄漏口令，在业务项目里接一份泄漏库
+/// （如 Have I Been Pwned 的 k-anonymity 接口）并在本类之外的调用链上加一步校验；
+/// 本类保持"长度即策略"，各入口仍只调它一处。</para>
 /// <para>上限存在只为防御拒绝服务（哈希开销随输入增长），不是安全要求，所以设得很宽。</para>
 /// </remarks>
 public static class PasswordPolicy
@@ -24,57 +27,70 @@ public static class PasswordPolicy
     /// <summary>最大长度。仅为防御哈希开销型拒绝服务，不是安全要求</summary>
     public const int MaximumLength = 256;
 
-    /// <summary>
-    /// 曾作为默认值/示例发布过的口令，以及最常见的弱口令
-    /// </summary>
-    /// <remarks>
-    /// 发布过的示例值必须拒绝：它们已进入公开仓库历史，等同于已泄漏。
-    /// 这里刻意只列极少数——完整的泄漏口令库属于业务项目按需接入的能力
-    /// （如 Have I Been Pwned 的 k-anonymity 接口），不该塞进模板。
-    /// </remarks>
-    public static readonly string[] Rejected =
-    [
-        "Admin@123456", "admin", "password", "Password1!", "P@ssw0rd", "123456789012"
-    ];
-
     /// <summary>密码是否满足策略</summary>
     public static bool IsAcceptable(string? password) => Describe(password) is null;
 
     /// <summary>
     /// 校验密码，不通过则抛 <see cref="BadRequestException"/>（400）
     /// </summary>
+    /// <remarks>
+    /// 每种不通过的原因带自己的错误码与占位参数，界面上看到的才是"密码长度至少 12 个字符"
+    /// 这样的具体原因。不带码时异常会按状态码归一成通用文案（<c>Error:BadRequest</c> →
+    /// "请求无效"），管理员完全无从修正——而日志里明明写着原因。
+    /// <para>
+    /// <paramref name="subject"/> 只进异常消息（供日志与无本地化形态），不进本地化文案：
+    /// 它是 <c>DefaultAdmin:Password</c> 这类内部标识，不该出现在给用户看的句子里。
+    /// </para>
+    /// </remarks>
     /// <param name="password">待校验口令</param>
-    /// <param name="subject">用于错误消息的主体描述，如 <c>"DefaultAdmin:Password"</c></param>
+    /// <param name="subject">用于错误消息与日志的主体描述，如 <c>"DefaultAdmin:Password"</c></param>
     public static void Ensure(string? password, string subject)
     {
         var problem = Describe(password);
-        if (problem is not null)
+        if (problem is null)
         {
-            throw new BadRequestException($"{subject} {problem}");
+            return;
         }
+
+        var exception = new BadRequestException($"{subject} {problem.Value.Message}");
+#if (IncludeLocalization)
+        exception.WithCode(problem.Value.Code);
+        foreach (var (name, value) in problem.Value.Data)
+        {
+            exception.WithData(name, value);
+        }
+#endif
+        throw exception;
     }
 
+    /// <summary>不满足策略的原因：错误码、英文消息与本地化占位参数。</summary>
+    private readonly record struct Problem(
+        string Code,
+        string Message,
+        (string Name, object? Value)[] Data);
+
     /// <summary>返回不满足策略的原因；满足则返回 <see langword="null"/></summary>
-    private static string? Describe(string? password)
+    private static Problem? Describe(string? password)
     {
         if (string.IsNullOrWhiteSpace(password))
         {
-            return "is required.";
+            return new Problem("Security:PasswordRequired", "is required.", []);
         }
 
         if (password.Length < MinimumLength)
         {
-            return $"must be at least {MinimumLength} characters long.";
+            return new Problem(
+                "Security:PasswordTooShort",
+                $"must be at least {MinimumLength} characters long.",
+                [("MinimumLength", MinimumLength)]);
         }
 
         if (password.Length > MaximumLength)
         {
-            return $"must be at most {MaximumLength} characters long.";
-        }
-
-        if (Rejected.Contains(password, StringComparer.OrdinalIgnoreCase))
-        {
-            return "is a well-known or previously published value and cannot be used.";
+            return new Problem(
+                "Security:PasswordTooLong",
+                $"must be at most {MaximumLength} characters long.",
+                [("MaximumLength", MaximumLength)]);
         }
 
         return null;

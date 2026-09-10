@@ -8,6 +8,7 @@ using CompanyName.ProjectName.Domain;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Domain.Users.Passwords;
 #endif
 using CompanyName.ProjectName.Domain.Shared.Json;
 using CompanyName.ProjectName.Infrastructure;
@@ -105,9 +106,9 @@ try
     defaultAdminOptions
         .Validate(
             options => options.IsPasswordUsable,
-            $"{DefaultAdminOptions.SectionName}:Password is required and must not be one of the sample " +
-            "values published with this template. Inject it from the deployment (environment variable " +
-            "or user-secrets); there is deliberately no default.")
+            $"{DefaultAdminOptions.SectionName}:Password is required and must satisfy the password " +
+            $"policy (at least {PasswordPolicy.MinimumLength} characters). Inject it from the " +
+            "deployment (environment variable or user-secrets); there is deliberately no default.")
         .ValidateOnStart();
 #endif
 #if (LocalIdentity)

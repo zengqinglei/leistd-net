@@ -156,28 +156,49 @@ public class SettingAppService(
         // 放行会让每个消费方都要再判一次空，等于把清除做成两套协议。
         if (value.Length == 0)
             throw new BadRequestException(
-                $"An empty value is not accepted for '{name}'. Send null to clear the override.");
+                $"An empty value is not accepted for '{name}'. Send null to clear the override.")
+#if (IncludeLocalization)
+                .WithCode("Setting:EmptyValueRejected").WithData("Name", name)
+#endif
+                ;
 
         switch (name)
         {
 #if (IncludeLocalization)
             case SettingConstant.Display.Language when !SupportedLanguages.Contains(value):
                 throw new BadRequestException(
-                    $"'{value}' is not a supported language. Supported: {string.Join(", ", SupportedLanguages)}.");
+                    $"'{value}' is not a supported language. Supported: {string.Join(", ", SupportedLanguages)}.")
+                    .WithCode("Setting:LanguageUnsupported")
+                    .WithData("Value", value)
+                    .WithData("Supported", string.Join(", ", SupportedLanguages));
 #endif
             // 与读取端共用同一套判定，不会出现"写得进去却解析不出来"。
             case SettingConstant.Display.TimeZone when !userTimeZoneProvider.IsValidId(value):
-                throw new BadRequestException($"'{value}' is not a valid IANA time zone id.");
+                throw new BadRequestException($"'{value}' is not a valid IANA time zone id.")
+#if (IncludeLocalization)
+                    .WithCode("Setting:TimeZoneInvalid").WithData("Value", value)
+#endif
+                    ;
 
             case SettingConstant.Logging.MinimumLevel or SettingConstant.Logging.RequestLevel
                 when !SettingConstant.Logging.Levels.Contains(value, StringComparer.Ordinal):
                 throw new BadRequestException(
-                    $"'{value}' is not a valid log level. Valid: {string.Join(", ", SettingConstant.Logging.Levels)}.");
+                    $"'{value}' is not a valid log level. Valid: {string.Join(", ", SettingConstant.Logging.Levels)}.")
+#if (IncludeLocalization)
+                    .WithCode("Setting:LogLevelInvalid")
+                    .WithData("Value", value)
+                    .WithData("Valid", string.Join(", ", SettingConstant.Logging.Levels))
+#endif
+                    ;
 #if (LocalIdentity)
 
             case SettingConstant.Registration.EnableEmailVerification
                 when value is not ("true" or "false"):
-                throw new BadRequestException($"'{value}' is not a boolean; use 'true' or 'false'.");
+                throw new BadRequestException($"'{value}' is not a boolean; use 'true' or 'false'.")
+#if (IncludeLocalization)
+                    .WithCode("Setting:BooleanRequired").WithData("Value", value)
+#endif
+                    ;
 
             // 开启前必须确认部署已经给了可用的摘要密钥。
             //
@@ -192,7 +213,13 @@ public class SettingAppService(
                     "Email verification cannot be enabled: this deployment has no usable "
                     + $"{VerificationCodeOptions.SectionName}:Key. Provide a stable Base64 key of at "
                     + $"least {VerificationCodeOptions.MinimumKeyBytes} bytes from the deployment "
-                    + "(environment variable, user-secrets or a secret store) and restart.");
+                    + "(environment variable, user-secrets or a secret store) and restart.")
+#if (IncludeLocalization)
+                    .WithCode("Setting:EmailVerificationKeyMissing")
+                    .WithData("Section", VerificationCodeOptions.SectionName)
+                    .WithData("MinimumKeyBytes", VerificationCodeOptions.MinimumKeyBytes)
+#endif
+                    ;
 
             // 区间读 SettingConstant.Registration.Ranges 那一份，与下发给界面的
             // minimum/maximum 同源：分开写两份时，界面让填的和服务端收的会各走一边。
@@ -237,7 +264,14 @@ public class SettingAppService(
         if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             || parsed < min || parsed > max)
         {
-            throw new BadRequestException($"'{name}' must be an integer between {min} and {max}.");
+            throw new BadRequestException($"'{name}' must be an integer between {min} and {max}.")
+#if (IncludeLocalization)
+                .WithCode("Setting:ValueOutOfRange")
+                .WithData("Name", name)
+                .WithData("Minimum", min)
+                .WithData("Maximum", max)
+#endif
+                ;
         }
     }
 

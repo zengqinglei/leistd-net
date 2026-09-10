@@ -113,7 +113,7 @@ npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "companyname-projectname"
 
 - 用户名：`admin`
 - 密码：由部署注入 `DefaultAdmin__Password`（环境变量或 `dotnet user-secrets`）。
-  **基础配置里没有可用的默认密码**——缺失、空值或等于本模板曾发布过的示例值都会导致启动失败。
+  **基础配置里没有可用的默认密码**——缺失、空值或不满足密码策略（至少 12 个字符）都会导致启动失败。
   这是刻意的：开源模板里的默认管理员密码等于公开凭据，而漏配的部署会照常启动、照常能登录。
 
 部署前必须通过安全配置注入 `DefaultAdmin__Password`（不存在可覆盖的默认值，缺失即启动失败）。
