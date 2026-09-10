@@ -65,7 +65,6 @@
     "preferences": "Preferences",
     "changePassword": "Change password",
     "logout": "Sign out",
-    "switchTenant": "Switch tenant",
     "hostTenant": "Host"
   },
   "language": {

@@ -65,7 +65,6 @@
     "preferences": "偏好设置",
     "changePassword": "修改密码",
     "logout": "退出登录",
-    "switchTenant": "切换租户",
     "hostTenant": "宿主"
   },
   "language": {

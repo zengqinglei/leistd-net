@@ -15,7 +15,6 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  lucideBuilding2,
   lucideChevronsUpDown,
   lucideCog,
   lucideHouse,
@@ -74,7 +73,6 @@ interface UserMenuItem {
   // prettier-ignore
   providers: [
     provideIcons({
-      lucideBuilding2,
       lucideChevronsUpDown,
       lucideHouse,
       lucideCog,
@@ -257,17 +255,9 @@ export class UserMenu {
         action: () => this.router.navigate(['/workspace/settings']),
       },
       { separator: true },
-      // 切换租户 = 清除本地租户上下文并退出登录：已登录会话的租户由 cookie claim 定案，
-      // 只有重新登录才能进入另一个租户。
-      {
-        //#if (IncludeLocalization)
-        label: t('menu.switchTenant'),
-        //#else
-        label: 'Switch tenant',
-        //#endif
-        icon: 'lucideBuilding2',
-        action: () => this.handleSwitchTenant(),
-      },
+      // 这里刻意没有「切换租户」：已登录会话的租户由 cookie claim 定案，换租户只能重新登录，
+      // 所以那一项做的事其实就是退出登录，再单列一个入口只是让人以为存在会话内切换。
+      // 换租户走登录页：退出 → 登录页按域名定案，或（域名不表态时）在那里清掉 / 换一个租户。
       {
         //#if (IncludeLocalization)
         label: t('menu.logout'),
@@ -297,10 +287,6 @@ export class UserMenu {
     //#endif
   });
 
-  handleSwitchTenant(): void {
-    this.tenantContext.clear();
-    this.authService.logout();
-  }
   //#if (LocalIdentity)
   openProfileDialog(): void {
     this.profileDialogVisible.set(true);
