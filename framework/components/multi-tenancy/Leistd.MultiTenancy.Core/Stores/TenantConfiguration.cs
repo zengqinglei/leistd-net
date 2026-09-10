@@ -17,6 +17,9 @@ public class TenantConfiguration
     /// <summary>获取可选的显示名称。</summary>
     public string? DisplayName { get; init; }
 
+    /// <summary>获取可选的简短描述。</summary>
+    public string? Description { get; init; }
+
     /// <summary>获取租户是否启用。</summary>
     public bool IsActive { get; init; } = true;
 

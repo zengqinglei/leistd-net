@@ -1,15 +1,15 @@
 import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { PaginationState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
 
 import { TenantTable } from './tenant-table';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
 
 /**
@@ -51,12 +51,7 @@ describe('TenantTable', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        // 模板用了 transloco 管道：配真实 provider 加空加载器，文案回落成键名，
-        // 本组用例关心的是分页与列可见性状态，不是具体文案。
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         {
           provide: BreakpointObserver,
@@ -106,17 +101,27 @@ describe('TenantTable', () => {
     expect(emitted).toEqual([{ pageIndex: 0, pageSize: 50 }]);
   });
 
-  it('一个可用操作都没有时不渲染溢出菜单', () => {
+  // 租户表的溢出菜单里有一项只读的"详情"，因此它不随修改权限消失——
+  // 能看到这张列表就能看详情。按 canUpdate||canDelete 藏起来时，只有查看权限的人
+  // 反而完全没有详情入口，那才是真正的功能缺口。
+  it('只有查看权限时每一行仍然有操作菜单入口', async () => {
     fixture.componentRef.setInput('canUpdate', false);
     fixture.componentRef.setInput('canDelete', false);
-    fixture.detectChanges();
 
-    // 点开即空的按钮比没有按钮更糟：它承诺了一个并不存在的能力。
-    expect(component.hasRowActions()).toBeFalse();
+    // 表格整体包在 @defer 里（默认 on idle），测试里得显式把它渲染出来，
+    // 否则 DOM 查询永远是空的——那会让断言"通过"成假的。
+    const [tableBlock] = await fixture.getDeferBlocks();
+    await tableBlock.render(DeferBlockState.Complete);
+    await fixture.whenStable();
 
-    fixture.componentRef.setInput('canDelete', true);
-    fixture.detectChanges();
-    expect(component.hasRowActions()).toBeTrue();
+    const host = fixture.nativeElement as HTMLElement;
+    const rows = host.querySelectorAll('tbody tr');
+    // 用图标定位而不是 aria-label：后者随语言变，图标是结构
+    const triggers = host.querySelectorAll('tbody ng-icon[name="lucideEllipsis"]');
+
+    // 按 canUpdate||canDelete 裁剪时这里会是 0，只有查看权限的人也就没有了详情入口。
+    expect(rows.length).toBe(2);
+    expect(triggers.length).toBe(2);
   });
 
   it('窄视口下标记存在被折叠的列，桌面端不标记', () => {

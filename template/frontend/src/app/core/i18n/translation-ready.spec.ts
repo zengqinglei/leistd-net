@@ -5,16 +5,13 @@ import {
   runInInjectionContext,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import {
-  provideTransloco,
-  Translation,
-  TranslocoLoader,
-  TranslocoService,
-  TRANSLOCO_LOADER,
-} from '@jsverse/transloco';
+import { Translation, TranslocoLoader, TranslocoService } from '@jsverse/transloco';
 import { Subject } from 'rxjs';
 
 import { translationReady } from './translation-ready';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from './transloco.testing';
+//#endif
 
 /**
  * 可控加载器：getTranslation() 返回一个待外部 resolve 的 Subject，模拟「首个 JSON 资源延迟到达」。
@@ -47,10 +44,7 @@ describe('translationReady', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideTransloco({
-          config: { availableLangs: ['en', 'zh-CN'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: loader },
+        ...provideTranslocoTesting(['en', 'zh-CN'], loader),
       ],
     });
     transloco = TestBed.inject(TranslocoService);

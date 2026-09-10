@@ -5,6 +5,7 @@ using Leistd.Settings.Definitions;
 using Leistd.Settings.EntityFrameworkCore;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 using Leistd.Settings.EntityFrameworkCore.Stores;
+using Leistd.Settings.Exceptions;
 using Leistd.TestBase.Doubles;
 using Xunit;
 
@@ -240,6 +241,45 @@ public sealed class EfCoreSettingStoreTests : IDisposable
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => _store.GetAllAsync(scope, null));
+    }
+
+    /// <summary>
+    /// 进程级设置在租户上下文下读写会就地失败，而不是静默落到租户行上。
+    /// </summary>
+    /// <remarks>
+    /// 租户上下文下宿主行会被查询过滤器滤掉（专属库形态连的还是租户自己的库），
+    /// 读到空、写成租户行——两者都不报错。这条不变式必须在存储边界拦住：
+    /// 上层忘了切宿主上下文时，得到的是异常而不是一个不生效的值。
+    /// </remarks>
+    [Fact]
+    public async Task Host_scope_is_refused_outside_the_host_context()
+    {
+        var tenantStore = NewStore(Guid.NewGuid());
+
+        // 解析端靠这一项决定"要不要去读宿主层"，不能靠捕获异常来判断上下文
+        Assert.False(tenantStore.CanAccessHostScope);
+        Assert.True(_store.CanAccessHostScope);
+
+        await Assert.ThrowsAsync<HostScopeUnavailableException>(
+            () => tenantStore.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Host, null));
+        await Assert.ThrowsAsync<HostScopeUnavailableException>(
+            () => tenantStore.GetAllAsync(SettingScopes.Host, null));
+    }
+
+    // 宿主上下文下进程级与租户级共用同一行：宿主视角本就走租户层，
+    // 设置名全局唯一，两者不会互相覆盖。
+    [Fact]
+    public async Task Host_scope_and_the_host_tenant_row_are_the_same_row()
+    {
+        await _store.SetAsync("Logging.MinimumLevel", "Debug", SettingScopes.Host, null);
+        await _store.SetAsync("Display.Language", "zh-CN", SettingScopes.Tenant, null);
+
+        var viaHost = await _store.GetAllAsync(SettingScopes.Host, null);
+        var viaTenant = await _store.GetAllAsync(SettingScopes.Tenant, null);
+
+        Assert.Equal("Debug", viaHost["Logging.MinimumLevel"]);
+        Assert.Equal("zh-CN", viaHost["Display.Language"]);
+        Assert.Equal(viaTenant, viaHost);
     }
 
     public void Dispose()

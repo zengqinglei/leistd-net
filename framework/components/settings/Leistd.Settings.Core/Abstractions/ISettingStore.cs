@@ -11,6 +11,16 @@ namespace Leistd.Settings.Abstractions;
 /// </remarks>
 public interface ISettingStore
 {
+    /// <summary>
+    /// 当前上下文能否读写<b>宿主层</b>（<see cref="SettingScopes.Host"/>）。
+    /// </summary>
+    /// <remarks>
+    /// 由存储实现回答：宿主层只有一行，它是否可达取决于当前连的是哪个库、以及租户过滤器
+    /// 会不会把它滤掉——这两件事只有存储知道。租户上下文下它不可达，读出来的既不是那一行，
+    /// 也不能当成"没设过"，因此调用方必须先问这一项，而不是拿到空值就回落到代码默认值。
+    /// </remarks>
+    bool CanAccessHostScope { get; }
+
     /// <summary>读取当前租户下某一层级的全部设置值。</summary>
     /// <param name="scope">要读取的层级。</param>
     /// <param name="userId">用户级时的用户标识；租户级传 <see langword="null"/>。</param>

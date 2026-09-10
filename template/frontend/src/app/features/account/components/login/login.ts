@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { form, minLength, maxLength, required, FormField } from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
@@ -43,6 +43,7 @@ import { LanguageSwitcher } from '../../../../shared/components/language-switche
 //#endif
 import { Logo } from '../../../../shared/components/logo/logo';
 import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
+import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
 import { TenantService } from '../../../platform/services/tenant-service';
 import { AccountService } from '../../services/account-service';
 
@@ -150,12 +151,21 @@ export class Login {
     // 只清认证数据不够——已登录用户在 SPA 内导航到这里不会重跑应用初始化器，
     // 旧权限和设置会留在内存里，新用户登录后若权限加载失败就会看到上一个人的偏好。
     this.sessionContext.clear();
+
+    // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
+    void this.resolveTenantFromHost();
   }
 
   /**
    * 提交登录表单
    */
   async onSubmit() {
+    // 租户上下文没定案就不发认证请求。按钮已经禁用，这里再挡一次是因为回车提交、
+    // 以及探测在"表单填完、按钮刚点下"之间才失败的时序都绕不过表单事件。
+    if (this.authBlocked()) {
+      return;
+    }
+
     if (this.loginForm().invalid()) {
       this.loginForm().markAsTouched();
       return;
@@ -223,13 +233,118 @@ export class Login {
   }
 
   // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
-  protected readonly tenantName = signal('');
+  readonly tenantName = signal('');
   protected readonly tenantChecking = signal(false);
-  protected readonly tenantError = signal<string | null>(null);
+  readonly tenantError = signal<string | null>(null);
+
+  /**
+   * 主机名探测的进度与结果。
+   *
+   * 五档，缺一不可：
+   * - `pending` 探测未回来。它一旦定案就会覆盖当前上下文，所以这段时间租户区不可操作，
+   *   认证入口也不能放行——否则用户会带着一个即将被换掉的租户点下登录。
+   * - `tenant` / `host` 域名已定案，界面不能再改。
+   * - `undecided` 域名不表态（未配置子域名格式的部署），交回用户手填。
+   * - `failed` 探测**没能完成**。这不等于"域名不表态"：域名不存在的租户时租户解析中间件
+   *   直接 404，那是"这个地址指向一个用不了的租户"；瞬时网络故障也证明不了域名没有约束。
+   *   把失败折进 undecided，等于在不知道域名会怎么解析的情况下让人手选一个注定被覆盖的
+   *   租户，然后带着它去登录。
+   */
+  readonly hostProbe = signal<HostTenantDecision | 'pending' | 'failed'>('pending');
+
+  /**
+   * 租户由**域名**定案，界面不能再改。
+   *
+   * 两种定案都要锁：指向某个租户，或指向宿主。服务端按主机名解析且不允许请求头改写，
+   * 前端放开选择只会让界面显示的租户与服务端将要用的那个不一致——
+   * 用户以为在某个租户下登录，请求其实落在宿主（或反之）。
+   */
+  readonly tenantLocked = computed(() => {
+    const decision = this.hostProbe();
+    return decision === 'host' || decision === 'tenant';
+  });
+
+  /**
+   * 租户区不接受操作：探测还没回来、探测失败，或域名已经定案。
+   *
+   * 只有明确拿到 `undecided` 才开放手选。前两种情形下界面并不知道域名会怎么解析，
+   * 让人先挑一个，结果只会被随后的定案无声换掉。
+   */
+  readonly tenantSelectionBlocked = computed(
+    () => this.hostProbe() !== 'undecided' || this.tenantLocked(),
+  );
+
+  /**
+   * 租户上下文还没定案，认证入口一律等它。
+   *
+   * 与 {@link tenantSelectionBlocked} 分开：域名已经定案时不允许**选择**，但恰恰应该允许
+   * 登录。反过来，探测未回来或失败时不能登录——服务端按主机名解析且不接受请求头改写，
+   * 此时提交等于在前端显示着一个租户、请求却落到另一个上下文里。
+   */
+  readonly authBlocked = computed(
+    () => this.hostProbe() === 'pending' || this.hostProbe() === 'failed',
+  );
+
+  /**
+   * 开机按主机名探测一次租户：子域名部署下用户完全不必填。
+   *
+   * 三档结果分别处理——把"宿主定案"和"域名不表态"混成一档，会让宿主域上残留着
+   * 上次记住的租户，而请求已经按宿主发出去了。
+   */
+  private async resolveTenantFromHost(): Promise<void> {
+    try {
+      const result = await lastValueFrom(this.tenantService.getByHost());
+      switch (result.decision) {
+        case 'tenant':
+          // 租户不存在或已停用时 tenant 为空：清掉记住的那个，并保持锁定，
+          // 让界面提示这个域名不可用，而不是让人换一个反正会被覆盖的租户。
+          if (result.tenant?.isActive) {
+            this.tenantContext.set(result.tenant);
+          } else {
+            this.tenantContext.clear();
+            this.tenantError.set(this.tenantUnavailableMessage());
+          }
+          break;
+
+        case 'host':
+          // 受管域但不指向租户：服务端会按宿主处理，记住的租户必须清掉。
+          this.tenantContext.clear();
+          break;
+
+        case 'undecided':
+          // 域名不表态：保持现状（上次记住的租户，或空白待填）。
+          break;
+      }
+
+      this.hostProbe.set(result.decision);
+    } catch {
+      // 保留成独立的失败态：未配置子域名格式的部署本来就正常返回 undecided，走不到这里。
+      // 能走到这里的是"域名指向的租户解析不了"（中间件 404）或后端不可达，两者都不能
+      // 推断成"域名不表态"，所以不开放手选、也不放行登录，只给出原因和重试。
+      this.hostProbe.set('failed');
+      this.tenantError.set(this.tenantProbeFailedMessage());
+    }
+  }
+
+  /**
+   * 重试域名探测。
+   *
+   * 瞬时故障不该让人只剩"刷新整页"这一条路——尤其表单可能已经填好了。
+   */
+  async retryHostProbe(): Promise<void> {
+    if (this.hostProbe() !== 'failed') {
+      return;
+    }
+
+    this.hostProbe.set('pending');
+    this.tenantError.set(null);
+    await this.resolveTenantFromHost();
+  }
 
   async onConfirmTenant(): Promise<void> {
     const name = this.tenantName().trim();
-    if (!name || this.tenantChecking()) {
+    // 探测未回来 / 域名已定案时不接受手选：前者会被随后的探测结果覆盖，后者本就不该能改。
+    if (!name || this.tenantChecking() || this.tenantSelectionBlocked()) {
       return;
     }
 
@@ -256,6 +371,11 @@ export class Login {
   }
 
   clearTenant(): void {
+    // 与手选同一条闸门：清除也是一次手动改租户，探测未回来或失败时同样不该放行。
+    if (this.tenantSelectionBlocked()) {
+      return;
+    }
+
     this.tenantContext.clear();
     this.tenantError.set(null);
   }
@@ -263,9 +383,17 @@ export class Login {
   //#if (IncludeLocalization)
   private tenantNotFoundMessage = () => this.transloco.translate('account.login.tenantNotFound');
   private tenantInactiveMessage = () => this.transloco.translate('account.login.tenantInactive');
+  private tenantUnavailableMessage = () =>
+    this.transloco.translate('account.login.tenantUnavailable');
+  private tenantProbeFailedMessage = () =>
+    this.transloco.translate('account.login.tenantProbeFailed');
   //#else
   private tenantNotFoundMessage = () => 'Tenant does not exist';
   private tenantInactiveMessage = () => 'Tenant is deactivated';
+  private tenantUnavailableMessage = () =>
+    'The tenant this address points to is unavailable. Contact your administrator.';
+  private tenantProbeFailedMessage = () =>
+    'Could not determine the tenant for this address. Check your connection and try again.';
   //#endif
   //#if (ExternalLogin)
 
@@ -281,6 +409,11 @@ export class Login {
    * 通用第三方登录
    */
   private async loginWithExternalProvider(provider: 'github' | 'google', label: string) {
+    // 与本地登录同一条约束：第三方回调最终也落在按主机名解析出的那个上下文里。
+    if (this.authBlocked()) {
+      return;
+    }
+
     this._isLoading.set(true);
     try {
       const response = await lastValueFrom(this.accountService.getExternalLoginUrl(provider));

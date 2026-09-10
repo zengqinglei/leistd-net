@@ -24,6 +24,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Control
                     Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     NormalizedName = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     DisplayName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    Description = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     Version = table.Column<long>(type: "bigint", nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),

@@ -88,6 +88,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Control
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<string>("DisplayName")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");

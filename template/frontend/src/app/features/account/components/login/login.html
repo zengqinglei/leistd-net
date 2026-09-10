@@ -269,27 +269,40 @@
                 [value]="tenant.displayName || tenant.name"
               />
               <!--#if (IncludeLocalization)-->
-              <button
-                hlmInputGroupButton
-                type="button"
-                align="inline-end"
-                [attr.aria-label]="'account.login.tenantClear' | transloco"
-                (click)="clearTenant()"
-              >
-                <ng-icon name="lucideX" />
-              </button>
+              @if (!tenantSelectionBlocked()) {
+                <button
+                  hlmInputGroupButton
+                  type="button"
+                  align="inline-end"
+                  [attr.aria-label]="'account.login.tenantClear' | transloco"
+                  (click)="clearTenant()"
+                >
+                  <ng-icon name="lucideX" />
+                </button>
+              }
               <!--#else-->
-              <button
-                hlmInputGroupButton
-                type="button"
-                align="inline-end"
-                aria-label="Clear tenant"
-                (click)="clearTenant()"
-              >
-                <ng-icon name="lucideX" />
-              </button>
+              @if (!tenantSelectionBlocked()) {
+                <button
+                  hlmInputGroupButton
+                  type="button"
+                  align="inline-end"
+                  aria-label="Clear tenant"
+                  (click)="clearTenant()"
+                >
+                  <ng-icon name="lucideX" />
+                </button>
+              }
               <!--#endif-->
             </hlm-input-group>
+            @if (tenantLocked()) {
+              <!--#if (IncludeLocalization)-->
+              <p class="text-muted-foreground text-xs">
+                {{ 'account.login.tenantFromDomain' | transloco }}
+              </p>
+              <!--#else-->
+              <p class="text-muted-foreground text-xs">Determined by the site address.</p>
+              <!--#endif-->
+            }
           } @else {
             <hlm-input-group>
               <!--#if (IncludeLocalization)-->
@@ -297,6 +310,7 @@
                 hlmInputGroupInput
                 id="tenantName"
                 autocomplete="off"
+                [disabled]="tenantSelectionBlocked()"
                 [value]="tenantName()"
                 (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
                 (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
@@ -306,7 +320,7 @@
                 hlmInputGroupButton
                 type="button"
                 align="inline-end"
-                [disabled]="tenantChecking()"
+                [disabled]="tenantChecking() || tenantSelectionBlocked()"
                 (click)="onConfirmTenant()"
               >
                 {{ 'account.login.tenantConfirm' | transloco }}
@@ -316,6 +330,7 @@
                 hlmInputGroupInput
                 id="tenantName"
                 autocomplete="off"
+                [disabled]="tenantSelectionBlocked()"
                 [value]="tenantName()"
                 (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
                 (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
@@ -325,18 +340,70 @@
                 hlmInputGroupButton
                 type="button"
                 align="inline-end"
-                [disabled]="tenantChecking()"
+                [disabled]="tenantChecking() || tenantSelectionBlocked()"
                 (click)="onConfirmTenant()"
               >
                 Confirm
               </button>
               <!--#endif-->
             </hlm-input-group>
-            @if (tenantError(); as error) {
-              <!-- forceShow：租户探测是业务错误而非 Signal Forms 校验错误，
-                   没有 validator key 可匹配，但仍应复用组件的 role="alert" 与样式 -->
-              <hlm-field-error forceShow>{{ error }}</hlm-field-error>
+            <!-- 未选中态也要交代原因，否则一个灰掉的输入框看着像坏了 -->
+            @if (hostProbe() === 'pending') {
+              <!--#if (IncludeLocalization)-->
+              <p class="text-muted-foreground text-xs">
+                {{ 'account.login.tenantResolving' | transloco }}
+              </p>
+              <!--#else-->
+              <p class="text-muted-foreground text-xs">Identifying tenant from the site address…</p>
+              <!--#endif-->
+            } @else if (tenantLocked()) {
+              <!--#if (IncludeLocalization)-->
+              <p class="text-muted-foreground text-xs">
+                {{ 'account.login.tenantFromDomain' | transloco }}
+              </p>
+              <!--#else-->
+              <p class="text-muted-foreground text-xs">Determined by the site address.</p>
+              <!--#endif-->
             }
+          }
+          <!-- 错误行放在两个分支**之外**：探测失败时可能还留着上次记住的租户，
+               那时渲染的是"已选中"分支，错误挂在另一支里就永远不显示。 -->
+          @if (tenantError(); as error) {
+            <!-- forceShow：租户探测是业务错误而非 Signal Forms 校验错误，
+                 没有 validator key 可匹配，但仍应复用组件的 role="alert" 与样式 -->
+            <hlm-field-error forceShow>{{ error }}</hlm-field-error>
+          }
+          @if (hostProbe() === 'failed') {
+            <!-- 探测失败时登录被挡住，必须给一条出路：不给重试，用户只剩刷新整页，
+                 而表单可能已经填好了。 -->
+            <!-- 按钮套一层 div：hlm-field 的容器给直接子元素铺了整行宽的规则，
+                 那条规则的优先级高于按钮自己的 w-fit，套一层让 div 去铺满，
+                 按钮就按内容宽度收住了。 -->
+            <div>
+              <!--#if (IncludeLocalization)-->
+              <button
+                hlmBtn
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="tenant-probe-retry"
+                (click)="retryHostProbe()"
+              >
+                {{ 'account.login.tenantProbeRetry' | transloco }}
+              </button>
+              <!--#else-->
+              <button
+                hlmBtn
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="tenant-probe-retry"
+                (click)="retryHostProbe()"
+              >
+                Retry
+              </button>
+              <!--#endif-->
+            </div>
           }
         </div>
 
@@ -431,7 +498,9 @@
         </div>
 
         <!-- Submit Button -->
-        <button hlmBtn type="submit" class="w-full" [disabled]="isLoading()">
+        <!-- 租户上下文没定案时不放行：服务端按主机名解析，此时提交等于在界面上显示着
+             一个租户、请求却落到另一个上下文里。 -->
+        <button hlmBtn type="submit" class="w-full" [disabled]="isLoading() || authBlocked()">
           @if (isLoading()) {
             <hlm-spinner class="text-base" data-icon="inline-start" />
           }
@@ -463,7 +532,7 @@
             type="button"
             variant="outline"
             class="flex-1"
-            [disabled]="isLoading()"
+            [disabled]="isLoading() || authBlocked()"
             (click)="loginWithGitHub()"
           >
             <ng-icon name="github" data-icon="inline-start" />
@@ -475,7 +544,7 @@
             type="button"
             variant="outline"
             class="flex-1"
-            [disabled]="isLoading()"
+            [disabled]="isLoading() || authBlocked()"
             (click)="loginWithGoogle()"
           >
             <svg class="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

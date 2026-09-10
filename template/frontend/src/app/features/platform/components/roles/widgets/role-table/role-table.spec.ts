@@ -3,13 +3,13 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
 
 import { RoleTable } from './role-table';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 import { RoleOutputDto } from '../../../../models/role.dto';
 
 /**
@@ -53,12 +53,7 @@ describe('RoleTable', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        // 模板用了 transloco 管道：配真实 provider 加空加载器，文案回落成键名，
-        // 本组用例关心的是分页与排序状态，不是具体文案。
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         {
           provide: BreakpointObserver,

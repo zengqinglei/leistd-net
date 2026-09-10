@@ -94,11 +94,11 @@
       "users": "用户管理",
       "openApplications": "开发应用",
       "workbench": "工作台",
-      "appSubtitle": "管理平台",
       "roles": "角色管理",
       "tenants": "租户管理",
       "groupOther": "其它",
-      "settings": "设置"
+      "settings": "设置",
+      "switchArea": "切换区域"
     },
     "notifications": {
       "title": "通知",
@@ -130,17 +130,25 @@
     "placeholder": {
       "title": "工作区",
       "comingSoon": "功能开发中，敬请期待..."
-    },
-    "settings": {
-      "title": "设置",
-      "description": "管理你的账户偏好与系统默认值",
-      "account": "账户",
-      "accountDescription": "只影响你自己，留空则继承系统默认值",
-      "system": "系统",
-      "systemDescription": "所有用户的默认值，用户可各自覆盖",
-      "reset": "恢复默认",
-      "empty": "此分组下没有可配置项"
     }
+  },
+  "settings": {
+    "title": "设置",
+    "description": "管理你的账户偏好与系统默认值",
+    "account": "账户",
+    "accountDescription": "只影响你自己，留空则继承系统默认值",
+    "system": "系统",
+    "systemDescription": "所有用户的默认值，用户可各自覆盖",
+    "reset": "恢复默认",
+    "empty": "此分组下没有可配置项",
+    "timeZoneSearch": "搜索城市或 UTC 偏移",
+    "timeZoneEmpty": "没有匹配的时区",
+    "browserTimeZone": "浏览器",
+    "groups": "设置分类",
+    "followSystem": "跟随系统",
+    "hostScopeHint": "全实例生效（约 30 秒）",
+    "saved": "已保存",
+    "saving": "保存中…"
   },
   "landing": {
     "hero": {
@@ -240,7 +248,12 @@
       "tenantConfirm": "确认",
       "tenantClear": "清除租户",
       "tenantNotFound": "租户不存在",
-      "tenantInactive": "租户已停用"
+      "tenantInactive": "租户已停用",
+      "tenantFromDomain": "由站点地址自动识别。",
+      "tenantResolving": "正在按站点地址识别租户…",
+      "tenantUnavailable": "该地址指向的租户当前不可用，请联系管理员。",
+      "tenantProbeFailed": "无法确定该地址对应的租户，请检查网络后重试。",
+      "tenantProbeRetry": "重试"
     },
     "register": {
       "title": "注册账号",
@@ -584,6 +597,7 @@
     "create": "新建租户",
     "colName": "名称",
     "colDisplayName": "显示名",
+    "colDescription": "描述",
     "colStatus": "状态",
     "colCreatedAt": "创建时间",
     "active": "启用",
@@ -601,6 +615,7 @@
     "editDescription": "名称是登录时选择租户的标识，用户在登录页输入该名称进入租户。",
     "fieldName": "名称",
     "fieldDisplayName": "显示名",
+    "fieldDescription": "描述",
     "fieldAdminEmail": "管理员邮箱",
     "fieldAdminPassword": "管理员密码",
     "databasePlacement": "数据库放置方式",
@@ -619,6 +634,12 @@
       "emptyHint": "新建一个租户",
       "emptyFilteredTitle": "没有匹配的租户",
       "emptyFilteredHint": "调整搜索关键字"
-    }
+    },
+    "detailTitle": "租户详情",
+    "detailSectionIdentity": "标识",
+    "detailSectionPlacement": "数据库放置",
+    "detailSecretHint": "仅显示密钥引用名，接口不返回连接串。",
+    "fieldDatabaseMode": "数据库放置",
+    "fieldConnectionVersion": "连接配置版本"
   }
 }

@@ -24,6 +24,14 @@ export const PLATFORM_ROUTES: Routes = [
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.roles.default },
   },
+  {
+    // 系统默认值（租户级）在平台侧：读者是管理员，影响整租户。
+    // 与账户偏好（/workspace/settings）同一个组件，作用域由 data.scope 决定。
+    path: 'settings',
+    loadComponent: () => import('../settings/settings').then((m) => m.Settings),
+    canActivate: [permissionGuard],
+    data: { permission: PERMISSIONS.settings.default, scope: 'system' },
+  },
   //#if (LocalIdentity)
   {
     path: 'tenants',

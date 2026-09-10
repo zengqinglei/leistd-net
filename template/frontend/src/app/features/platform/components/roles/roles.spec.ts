@@ -4,14 +4,14 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { of } from 'rxjs';
 
 import { Roles } from './roles';
 import { RoleTable } from './widgets/role-table/role-table';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
+//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
@@ -55,10 +55,7 @@ describe('Roles 页面查询闭环', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
         { provide: RoleService, useValue: service },
         { provide: StartupService, useValue: { status: signal('success' as const) } },

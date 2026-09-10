@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import {
   CreateTenantInputDto,
   GetTenantsInputDto,
+  TenantByHostOutputDto,
   TenantLookupOutputDto,
   TenantOutputDto,
   UpdateTenantInputDto,
@@ -26,6 +27,16 @@ export class TenantService {
 
   getTenant(id: string): Observable<TenantOutputDto> {
     return this.http.get<TenantOutputDto>(`${this.baseUrl}/${id}`);
+  }
+
+  /**
+   * 按当前主机名探测租户（匿名）。
+   *
+   * 子域名部署下由服务端定案，登录页据此把租户显示成只读。回的是**三档定案结果**
+   * （租户 / 宿主 / 域名不表态），不是"有没有租户"——见 {@link TenantByHostOutputDto}。
+   */
+  getByHost(): Observable<TenantByHostOutputDto> {
+    return this.http.get<TenantByHostOutputDto>(`${this.baseUrl}/by-host`);
   }
 
   /** 匿名按名称解析租户（登录页租户选择用），404 表示不存在。 */

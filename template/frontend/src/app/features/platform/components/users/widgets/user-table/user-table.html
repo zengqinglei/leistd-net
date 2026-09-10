@@ -237,7 +237,8 @@
                           <span class="text-xs text-muted-foreground whitespace-nowrap">
                             {{
                               row.original.lastLoginTime
-                                ? (row.original.lastLoginTime | appDate: 'full' : displayTimeZone())
+                                ? (row.original.lastLoginTime
+                                  | appDate: 'full' : displayTimeZone() : displayLocale())
                                 : '-'
                             }}
                           </span>
@@ -245,7 +246,8 @@
                         <!--#endif-->
                         @case ('creationTime') {
                           <span class="text-xs text-muted-foreground whitespace-nowrap">{{
-                            row.original.creationTime | appDate: 'full' : displayTimeZone()
+                            row.original.creationTime
+                              | appDate: 'full' : displayTimeZone() : displayLocale()
                           }}</span>
                         }
                         @case ('actions') {
@@ -404,7 +406,8 @@
                           <dd class="text-muted-foreground">
                             {{
                               row.original.lastLoginTime
-                                ? (row.original.lastLoginTime | appDate: 'full' : displayTimeZone())
+                                ? (row.original.lastLoginTime
+                                  | appDate: 'full' : displayTimeZone() : displayLocale())
                                 : '-'
                             }}
                           </dd>
@@ -413,7 +416,10 @@
                         @if (isColumnHidden('creationTime')) {
                           <dt class="text-muted-foreground">{{ detailLabel('created') }}</dt>
                           <dd class="text-muted-foreground">
-                            {{ row.original.creationTime | appDate: 'full' : displayTimeZone() }}
+                            {{
+                              row.original.creationTime
+                                | appDate: 'full' : displayTimeZone() : displayLocale()
+                            }}
                           </dd>
                         }
                       </dl>

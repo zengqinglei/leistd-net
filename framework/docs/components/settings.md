@@ -56,6 +56,13 @@ public class DisplaySettingDefinitionProvider : ISettingDefinitionProvider
 
         // 只允许租户级覆盖，且不下发客户端（运维阈值不该出现在界面上）
         context.Add("Export.MaxRowsPerFile", defaultValue: "50000", scopes: SettingScopes.Tenant);
+
+        // 进程级：一个进程只有一个 logger，按租户各存一份无从生效。只允许在宿主上下文读写
+        context.Add(
+            "Logging.MinimumLevel",
+            defaultValue: "Information",
+            scopes: SettingScopes.Host,
+            group: "Logging").IsVisibleToClients = true;
     }
 }
 ```
@@ -69,6 +76,8 @@ public class ReportService(ISettingProvider settings)
     {
         var timeZone = await settings.GetOrNullAsync("Display.TimeZone", ct);
         var maxRows = await settings.GetAsync<int>("Export.MaxRowsPerFile", ct);
+        // 进程级设置只在宿主上下文读得到；租户请求里读它会抛 HostScopeUnavailableException
+        var logLevel = await settings.GetOrNullAsync("Logging.MinimumLevel", ct);
         ...
     }
 }
@@ -93,8 +102,8 @@ await settingManager.SetAsync("Display.TimeZone", null, SettingScopes.User, user
 | --- | --- |
 | `ISettingDefinitionProvider.Define(context)` | 业务声明有哪些设置 |
 | `ISettingDefinitionContext.Add(name, defaultValue?, scopes?, displayName?)` | 添加定义；名称全局唯一 |
-| `ISettingDefinition` | `Name`、`DisplayName`、`DefaultValue`、`Scopes`、`IsVisibleToClients`；`DisplayName` 原样返回不翻译，宿主要本地化就把它当回落文案 |
-| `SettingScopes` | `Tenant`、`User`、`All`、`None`；代码默认值不在其中 |
+| `ISettingDefinition` | `Name`、`DisplayName`、`DefaultValue`、`Scopes`、`Group`、`IsVisibleToClients`；`DisplayName` 与 `Group` 都原样返回不翻译，宿主要本地化就把它们当回落文案与词条键 |
+| `SettingScopes` | `Tenant`、`User`、`All`、`Host`、`None`；代码默认值不在其中 |
 | `ISettingDefinitionManager` | 汇总全部定义并提供查询 |
 | `ISettingProvider.GetOrNullAsync(name, ct)` | 读取当前生效值 |
 | `ISettingProvider.GetAsync<T>(name, ct)` | 读取并转换类型 |
@@ -109,6 +118,10 @@ await settingManager.SetAsync("Display.TimeZone", null, SettingScopes.User, user
 
 - 回落顺序为 **用户级 → 租户级 → 代码默认值**。宿主视角走租户级那一层（`TenantId` 为 `null` 的行），不额外引入「全局」层。
 - 定义未允许的层级即使库里有值也不参与回落——改一次 `Scopes` 不会让历史遗留行悄悄重新生效。
+- `SettingScopes.Host` 是**进程级**：整个进程只有一份值，且**不与其它层级组合**——`Host | User` 这类组合在定义阶段就被拒绝（`ArgumentException`），因为它没有一致的读取解释。给的是日志级别这类一个进程只有一个实例的东西：按租户各存一份无从生效，写进去只会让界面显示一个不起作用的值。它与宿主的租户级共用同一行（`ScopeKey` 为 `h:t`，宿主视角本就走租户层），读写都只允许发生在宿主上下文：租户上下文下查询过滤器会滤掉宿主行（专属库形态连的还是租户自己的库），因此存储实现就地抛异常，而不是静默读到空或写成租户行。
+- 进程级设置**不接在回落链上**：`ISettingProvider` 在宿主上下文直接读宿主那一行，没有值才用代码默认值；租户上下文下它读不到——`GetOrNullAsync` 抛 `HostScopeUnavailableException`，`GetAllAsync` 干脆不包含它。刻意不返回代码默认值：那个值看着有效，调用方分不出「这就是当前生效的级别」和「这一层在当前上下文根本读不到」。存储侧由 `ISettingStore.CanAccessHostScope` 回答可达性，解析端据此决定要不要去读，而不是靠捕获异常判断上下文。
+- **宿主作用域 ≠ 进程内状态同步。** 框架管到「宿主设置的定义、层级与持久化」为止：改完设置要让本进程真的换行为（例如把日志级别推到 logger 上）、以及让**其它实例**也跟上，是宿主项目的事——模板的做法是一个应用器（写入后就地调用）加一个周期刷新的后台任务。需要在租户请求里读进程级配置的消费者，应当读那份进程内运行期状态，而不是每个请求去问设置存储。
+- `Group` 只承载**分组标识**，不承载分组文案，理由与 `DisplayName` 相同：定义一次性加载并缓存，拿不到请求 culture。分组是信息架构而非控件元数据——设置多起来之后界面要按关注点分类摆放，而"哪些设置属于同一件事"只有定义方知道；放到客户端另抄一份，新增设置忘了登记就会落在界面之外，既不报错也查不出来。未分组返回 `null`，由宿主决定归处。
 - 匿名调用只回落到租户级，不查用户级。
 - `ISettingProvider` 为 Scoped，一次请求内每个层级只查一次库并复用结果；`ISettingDefinitionManager` 为 Singleton。
 - 设置名重复在首次访问定义时失败。读写未定义名称抛 `UndefinedSettingException`；写入未允许层级抛 `SettingScopeNotAllowedException`。

@@ -25,6 +25,9 @@ public record TenantOutputDto : EntityDto
 
     public string? DisplayName { get; init; }
 
+    /// <summary>简短描述，说明该租户的用途。</summary>
+    public string? Description { get; init; }
+
     public required bool IsActive { get; init; }
 
     public required DateTime CreationTime { get; init; }
@@ -43,6 +46,48 @@ public record TenantLookupOutputDto : EntityDto
 }
 
 /// <summary>
+/// 域名对租户的定案结果
+/// </summary>
+/// <remarks>
+/// 三档必须分开，不能合成"有没有租户"两档：<see cref="Host"/> 是域名已经定了案（宿主），
+/// <see cref="Undecided"/> 是域名不表态、后续解析来源仍可决定。把两者都讲成"没有租户"，
+/// 登录页会在宿主域上继续显示上次记住的租户，而服务端已按宿主处理请求——
+/// 界面与实际生效的租户上下文对不上。
+/// </remarks>
+public enum HostTenantDecision
+{
+    /// <summary>主机名不在受管域内，或未配置 <c>DomainFormat</c>：域名不参与定案。</summary>
+    Undecided,
+
+    /// <summary>受管域内但未指向任何租户：定案为宿主，请求头不再能改写。</summary>
+    Host,
+
+    /// <summary>受管域内的租户子域：定案为该租户。</summary>
+    Tenant
+}
+
+/// <summary>
+/// 按主机名解析租户的结果
+/// </summary>
+public record TenantByHostOutputDto
+{
+    /// <summary>定案结果。</summary>
+    public required HostTenantDecision Decision { get; init; }
+
+    /// <summary>
+    /// 定案到的租户，只有 <see cref="HostTenantDecision.Tenant"/> 时才可能有值。
+    /// </summary>
+    /// <remarks>
+    /// 可空是因为契约不能承诺它非空（解析放行后租户被删掉这类窄窗口），
+    /// 而不是"子域名写错了"那种情况——那种请求在<b>租户解析阶段</b>就被拒了，
+    /// 连这个匿名端点都到不了（见 <c>子域名指向不存在的租户时请求在解析阶段被拒</c>）。
+    /// 真的取不到时 <see cref="Decision"/> 仍是 <see cref="HostTenantDecision.Tenant"/>：
+    /// 域名已经定了案，界面不该因此退回让用户自己挑一个——挑了也会被域名覆盖。
+    /// </remarks>
+    public TenantLookupOutputDto? Tenant { get; init; }
+}
+
+/// <summary>
 /// 创建租户入参：同时提供租户管理员的初始凭据，创建后立即在租内种子
 /// </summary>
 public record CreateTenantInputDto : IValidatableObject
@@ -53,6 +98,10 @@ public record CreateTenantInputDto : IValidatableObject
 
     [MaxLength(128)]
     public string? DisplayName { get; init; }
+
+    /// <summary>简短描述，说明该租户的用途。</summary>
+    [MaxLength(256)]
+    public string? Description { get; init; }
 
     /// <summary>租户管理员邮箱</summary>
     [Required]
@@ -101,6 +150,10 @@ public record UpdateTenantInputDto
 
     [MaxLength(128)]
     public string? DisplayName { get; init; }
+
+    /// <summary>简短描述；传 <c>null</c> 即清空。</summary>
+    [MaxLength(256)]
+    public string? Description { get; init; }
 }
 
 /// <summary>

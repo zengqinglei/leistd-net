@@ -11,7 +11,11 @@ namespace Leistd.Settings.Abstractions;
 /// {
 ///     public void Define(ISettingDefinitionContext context)
 ///     {
-///         context.Add("Display.TimeZone", defaultValue: "Asia/Shanghai", scopes: SettingScopes.All)
+///         context.Add(
+///                    "Display.TimeZone",
+///                    defaultValue: "Asia/Shanghai",
+///                    scopes: SettingScopes.All,
+///                    group: "Display")
 ///                .IsVisibleToClients = true;
 ///
 ///         // 只允许租户级覆盖，且不下发客户端
@@ -38,12 +42,14 @@ public interface ISettingDefinitionContext
     /// <param name="defaultValue">代码默认值。</param>
     /// <param name="scopes">允许覆盖该设置的层级；默认只允许租户级。</param>
     /// <param name="displayName">显示名称。</param>
+    /// <param name="group">所属分组的稳定标识；界面按它把设置分类摆放。</param>
     /// <returns>新建的设置定义。</returns>
     ISettingDefinition Add(
         string name,
         string? defaultValue = null,
         SettingScopes scopes = SettingScopes.Tenant,
-        string? displayName = null);
+        string? displayName = null,
+        string? group = null);
 
     /// <summary>获取设置定义；不存在时返回 <see langword="null"/>。</summary>
     /// <param name="name">设置名称。</param>

@@ -25,6 +25,20 @@ public interface ISettingDefinition
     SettingScopes Scopes { get; }
 
     /// <summary>
+    /// 所属分组的稳定标识；<see langword="null"/> 表示未分组。
+    /// </summary>
+    /// <remarks>
+    /// 只承载<b>分组标识</b>，不承载分组的展示文案——与 <see cref="DisplayName"/> 同一理由：
+    /// 定义一次性加载并缓存，拿不到请求 culture。宿主按这个标识去查自己的词条表。
+    /// <para>
+    /// 分组是<b>信息架构</b>，不是控件元数据：设置多起来之后，界面需要按关注点把它们分开摆，
+    /// 而"哪些设置属于同一件事"只有定义方知道。放在客户端另抄一份，
+    /// 新增设置忘了登记就会落在界面之外——没有报错，只是没人看得见。
+    /// </para>
+    /// </remarks>
+    string? Group { get; set; }
+
+    /// <summary>
     /// 是否允许下发到客户端。
     /// </summary>
     /// <remarks>

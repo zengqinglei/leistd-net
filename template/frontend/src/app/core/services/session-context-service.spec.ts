@@ -1,9 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 
 import { AuthService } from './auth-service';
 import { AuthorizationService } from './authorization-service';
@@ -11,6 +8,9 @@ import { AuthorizationService } from './authorization-service';
 import { LanguageService } from './language-service';
 //#endif
 import { SessionContextService } from './session-context-service';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../i18n/transloco.testing';
+//#endif
 import { SettingContextService } from '../settings/setting-context-service';
 import { SettingOutputDto } from '../settings/setting.dto';
 
@@ -18,11 +18,16 @@ function timeZoneSetting(userValue: string | null): SettingOutputDto {
   return {
     name: 'Display.TimeZone',
     displayName: '时区',
+    group: 'Display',
+    groupDisplayName: '显示',
     userValue,
     tenantValue: null,
     defaultValue: 'Asia/Shanghai',
     allowsTenantScope: true,
     allowsUserScope: true,
+    allowsHostScope: false,
+    minimum: null,
+    maximum: null,
   };
 }
 //#if (IncludeLocalization)
@@ -31,11 +36,16 @@ function languageSetting(userValue: string | null): SettingOutputDto {
   return {
     name: 'Display.Language',
     displayName: '界面语言',
+    group: 'Display',
+    groupDisplayName: '显示',
     userValue,
     tenantValue: null,
     defaultValue: 'en',
     allowsTenantScope: true,
     allowsUserScope: true,
+    allowsHostScope: false,
+    minimum: null,
+    maximum: null,
   };
 }
 //#endif
@@ -54,6 +64,12 @@ describe('SessionContextService', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
+    //#if (IncludeLocalization)
+    // 显式定住本设备语言。不定的话初始语言会跟随**运行测试那台机器**的系统语言
+    // （LanguageService 现在会读 navigator.languages），于是断言初始值是 'en' 的用例
+    // 在系统语言为中文的机器上就红了——那不是被测行为变了，是用例依赖了环境。
+    localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
+    //#endif
     authService = jasmine.createSpyObj<AuthService>('AuthService', ['clearAuthData']);
     TestBed.configureTestingModule({
       //#if (IncludeLocalization)
@@ -63,10 +79,7 @@ describe('SessionContextService', () => {
         // 真实 AuthService 会拉起认证栈（无本地身份的形态下是整个 OIDC 客户端）；
         // 用 spy 替身：既避开那条依赖链，又能断言清理确实把认证数据也带上了。
         { provide: AuthService, useValue: authService },
-        provideTransloco({
-          config: { availableLangs: ['en', 'zh-CN'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en', 'zh-CN']),
       ],
       //#else
       providers: [
@@ -83,7 +96,12 @@ describe('SessionContextService', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.verify();
+    //#if (IncludeLocalization)
+    localStorage.removeItem(LanguageService.STORAGE_KEY);
+    //#endif
+  });
 
   /**
    * 依次完成 establish() 内部的两次请求。

@@ -26,6 +26,9 @@ public class TenantRecord : IFullAuditedObject
     /// <summary>获取或设置显示名称。</summary>
     public string? DisplayName { get; set; }
 
+    /// <summary>获取或设置简短描述，供管理界面说明该租户的用途。</summary>
+    public string? Description { get; set; }
+
     /// <summary>获取或设置租户是否启用。</summary>
     public bool IsActive { get; set; } = true;
 

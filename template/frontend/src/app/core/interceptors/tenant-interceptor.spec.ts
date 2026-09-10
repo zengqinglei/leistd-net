@@ -54,12 +54,19 @@ describe('tenantInterceptor', () => {
     expect(send('/assets/config.json').headers.has('X-Tenant-Id')).toBe(false);
   });
 
-  it('租户探测端点不附加租户头', () => {
-    // 该端点是宿主级匿名查询：附上失效租户头会让"校验本地租户是否仍可用"
-    // 先被 403 拒绝，形成清不掉失效上下文的死锁
-    context.set(tenant);
+  /**
+   * 两个租户探测端点都不附租户头。
+   *
+   * 它们是宿主级匿名查询：附上失效租户头，"这个租户还能用吗"这一问本身会先被租户解析
+   * 拒掉，而登录页在探测失败时会锁住租户区不许改，于是重试仍带同一个头、仍失败——
+   * 失效的本地租户谁也清不掉。by-host 是后加的端点，漏掉它就是漏掉了这条恢复路径。
+   */
+  for (const url of ['/api/v1/tenants/by-name/acme', '/api/v1/tenants/by-host'] as const) {
+    it(`租户探测端点不附加租户头：${url}`, () => {
+      context.set(tenant);
 
-    expect(send('/api/v1/tenants/by-name/acme').headers.has('X-Tenant-Id')).toBe(false);
-  });
+      expect(send(url).headers.has('X-Tenant-Id')).toBe(false);
+    });
+  }
 });
 //#endif

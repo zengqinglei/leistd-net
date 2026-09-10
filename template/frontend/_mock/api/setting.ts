@@ -102,11 +102,17 @@ export const SETTING_API = {
     return SETTING_DEFINITIONS.map((definition) => ({
       name: definition.name,
       displayName: definition.displayName,
+      group: definition.group,
+      // 真实后端按 `SettingGroup:{group}` 查词条；Mock 不做本地化，回显标识本身
+      groupDisplayName: definition.group,
       userValue: USER_SETTING_VALUES.get(`${tenantKey}:${subjectId}:${definition.name}`) ?? null,
       tenantValue: TENANT_SETTING_VALUES.get(`${tenantKey}:${definition.name}`) ?? null,
       defaultValue: definition.defaultValue,
       allowsTenantScope: definition.allowsTenantScope,
       allowsUserScope: definition.allowsUserScope,
+      allowsHostScope: definition.allowsHostScope ?? false,
+      minimum: definition.minimum ?? null,
+      maximum: definition.maximum ?? null,
     }));
   },
 

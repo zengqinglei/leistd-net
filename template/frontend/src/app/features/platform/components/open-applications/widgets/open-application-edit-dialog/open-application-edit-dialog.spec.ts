@@ -1,12 +1,11 @@
 //#if (LocalIdentity)
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-//#if (IncludeLocalization)
-import { provideTransloco, Translation, TranslocoLoader } from '@jsverse/transloco';
-import { Observable, of } from 'rxjs';
-//#endif
 
 import { OpenApplicationEditDialog } from './open-application-edit-dialog';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 
 /**
  * 下拉触发器与选项文案一致性回归。
@@ -15,14 +14,6 @@ import { OpenApplicationEditDialog } from './open-application-edit-dialog';
  * 下拉里写着"桌面/原生"，选完输入框里却是 `native`，同一个东西两个说法。
  * 这类不一致编译期与 lint 都发现不了，只有把选项点开、选中、再读触发器才暴露得出来。
  */
-//#if (IncludeLocalization)
-class EmptyTranslationLoader implements TranslocoLoader {
-  getTranslation(): Observable<Translation> {
-    return of({});
-  }
-}
-
-//#endif
 @Component({
   imports: [OpenApplicationEditDialog],
   template: ` <app-open-application-edit-dialog [(visible)]="visible" /> `,
@@ -41,13 +32,7 @@ describe('OpenApplicationEditDialog', () => {
       providers: [
         provideZonelessChangeDetection(),
         //#if (IncludeLocalization)
-        // 用真实 Transloco 配空词条：模板里同时有 `| transloco` 管道与 translate() 调用，
-        // 手写桩要把 config/langChanges$/scope 解析全补齐才跑得起来，不如让它自己跑。
-        // 词条缺失时返回键本身，正好满足本组用例——只关心两处显示是不是同一个字符串。
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', reRenderOnLangChange: false },
-          loader: EmptyTranslationLoader,
-        }),
+        ...provideTranslocoTesting(['en']),
         //#endif
       ],
     });

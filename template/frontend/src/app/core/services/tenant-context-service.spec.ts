@@ -37,6 +37,26 @@ describe('TenantContextService', () => {
     expect(localStorage.getItem('app.tenant')).toContain(tenant.id);
   });
 
+  // 上下文里刻意**不存**"来自域名还是手填"：那是每次打开登录页现探的结论，不是租户的属性。
+  // 存下来的话，换到一个域名不表态的地址后，界面仍会把租户锁成不可改。
+  it('恢复上下文时忽略历史记录里多出来的字段', () => {
+    localStorage.setItem(
+      'app.tenant',
+      JSON.stringify({
+        id: tenant.id,
+        name: tenant.name,
+        displayName: tenant.displayName,
+        source: 'domain',
+      }),
+    );
+
+    expect(create().current()).toEqual({
+      id: tenant.id,
+      name: tenant.name,
+      displayName: tenant.displayName,
+    });
+  });
+
   it('新实例从 localStorage 恢复上下文', () => {
     create().set(tenant);
 

@@ -1,27 +1,27 @@
 using System.Security.Cryptography;
 using System.Text;
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Lock.Abstractions;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
 public class CaptchaAppService(
     IDistributedCache distributedCache,
     IDistributedLock distributedLock,
-    IOptions<UserRegistrationOptions> options) : BaseAppService, ICaptchaAppService
+    IUserRegistrationPolicyProvider registrationPolicy) : BaseAppService, ICaptchaAppService
 {
     private const string CaptchaLetters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     private const string CaptchaDigits = "23456789";
     private const string CaptchaCharacters = CaptchaLetters + CaptchaDigits;
-    private readonly UserRegistrationOptions _options = options.Value;
     private static readonly string[] BgColors = ["#f0fdf4", "#f8fafc", "#fffbeb", "#fef2f2", "#f0f9ff"];
 
     public async Task<CaptchaOutputDto> GenerateCaptchaAsync(CancellationToken cancellationToken = default)
     {
+        // 注册策略按租户从设置里解析，不再是全进程一份的 IOptions
+        var policy = await registrationPolicy.GetAsync(cancellationToken);
         var code = GenerateCode(4);
         var token = Guid.NewGuid().ToString("N");
 
@@ -40,7 +40,7 @@ public class CaptchaAppService(
         var cacheKey = GetCacheKey(token);
         var cacheOptions = new DistributedCacheEntryOptions
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_options.CaptchaExpiryMinutes)
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(policy.CaptchaExpiryMinutes)
         };
         await distributedCache.SetStringAsync(cacheKey, code, cacheOptions, cancellationToken);
 

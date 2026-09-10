@@ -1,11 +1,11 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-//#if (IncludeLocalization)
-import { provideTransloco, TRANSLOCO_LOADER } from '@jsverse/transloco';
-//#endif
 
 import { TenantEditDialog } from './tenant-edit-dialog';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 import {
   CreateTenantInputDto,
   TenantOutputDto,
@@ -63,12 +63,7 @@ describe('TenantEditDialog', () => {
       providers: [
         provideZonelessChangeDetection(),
         //#if (IncludeLocalization)
-        // 用真实 transloco 配空词条：校验消息与标题都走 translate()，缺词条时回落成键名，
-        // 本组用例只关心字段是否存在、表单是否放行、提交出去的载荷长什么样。
-        provideTransloco({
-          config: { availableLangs: ['en'], defaultLang: 'en', fallbackLang: 'en' },
-        }),
-        { provide: TRANSLOCO_LOADER, useValue: { getTranslation: () => Promise.resolve({}) } },
+        ...provideTranslocoTesting(['en']),
         //#endif
       ],
     });
@@ -160,7 +155,7 @@ describe('TenantEditDialog', () => {
     );
   });
 
-  it('编辑提交只带名称与显示名，不夹带管理员字段', async () => {
+  it('编辑提交只带标识字段，不夹带管理员字段', async () => {
     await switchToEdit();
 
     dialog().tenantForm.name().value.set('acme-renamed');
@@ -169,7 +164,24 @@ describe('TenantEditDialog', () => {
     dialog().onSubmit();
 
     // 编辑载荷里出现 adminEmail/adminPassword，等于用一组空凭据覆盖租户管理员。
-    expect(Object.keys(host.saved[0]).sort()).toEqual(['displayName', 'name']);
-    expect(host.saved[0]).toEqual({ name: 'acme-renamed', displayName: 'Acme Inc.' });
+    expect(Object.keys(host.saved[0]).sort()).toEqual(['description', 'displayName', 'name']);
+    expect(host.saved[0]).toEqual({
+      name: 'acme-renamed',
+      displayName: 'Acme Inc.',
+      // 未填描述时必须是显式 null 而不是缺字段：缺字段会被后端当成"未提供"，
+      // 于是"清空描述"永远保存不下去。
+      description: null,
+    });
+  });
+
+  it('编辑时改描述随载荷一起提交', async () => {
+    await switchToEdit();
+
+    dialog().tenantForm.description().value.set('华东区自营资金账户');
+    await fixture.whenStable();
+
+    dialog().onSubmit();
+
+    expect(host.saved[0]).toEqual(jasmine.objectContaining({ description: '华东区自营资金账户' }));
   });
 });

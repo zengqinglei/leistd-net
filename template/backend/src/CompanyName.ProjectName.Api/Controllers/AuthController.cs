@@ -2,11 +2,10 @@
 using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Application.Auth.Policies;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -18,7 +17,7 @@ public sealed class AuthController(
     IAuthAppService authService,
     ICaptchaAppService captchaAppService,
     IEmailVerificationAppService emailVerificationAppService,
-    IOptions<UserRegistrationOptions> securityOptions) : BaseController
+    IUserRegistrationPolicyProvider registrationPolicy) : BaseController
 {
     [AllowAnonymous]
     [HttpPost("session-login")]
@@ -45,12 +44,16 @@ public sealed class AuthController(
 
     [AllowAnonymous]
     [HttpGet("security-config")]
-    public Task<SecurityConfigOutputDto> GetSecurityConfigAsync()
+    public async Task<SecurityConfigOutputDto> GetSecurityConfigAsync(CancellationToken cancellationToken)
     {
-        return Task.FromResult(new SecurityConfigOutputDto
+        // 按租户解析：同一套部署下，不同租户的注册门槛可以不同，
+        // 而登录页拿到的必须是**它所在那个租户**的那一份。
+        var policy = await registrationPolicy.GetAsync(cancellationToken);
+
+        return new SecurityConfigOutputDto
         {
-            EnableEmailVerification = securityOptions.Value.EnableEmailVerification
-        });
+            EnableEmailVerification = policy.EnableEmailVerification
+        };
     }
 
     [AllowAnonymous]

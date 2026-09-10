@@ -12,11 +12,12 @@ export const WORKSPACE_ROUTES: Routes = [
       import('./components/dashboard/workspace-dashboard').then((m) => m.WorkspaceDashboard),
   },
   {
-    // 设置页挂在 workspace 而不是 platform：platform 的父路由要求管理类权限
-    // （见 PLATFORM_ENTRY_PERMISSIONS），普通登录用户进不去，而账户偏好是每个人的
-    // 个人数据。workspace 只要求认证，正合适。「系统」页签仍按 App.Settings 在页面内裁剪。
+    // 账户偏好（当前用户自己）挂在 workspace：platform 的父路由要求管理类权限
+    // （见 PLATFORM_ENTRY_PERMISSIONS），普通登录用户进不去，而个人偏好是每个人的
+    // 个人数据，只要求认证即可。系统默认值是另一件事，在 /platform/settings。
     path: 'settings',
-    loadComponent: () => import('./components/settings/settings').then((m) => m.Settings),
+    loadComponent: () => import('../settings/settings').then((m) => m.Settings),
+    data: { scope: 'account' },
   },
   {
     path: 'placeholder',

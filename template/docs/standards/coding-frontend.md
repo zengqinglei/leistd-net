@@ -184,17 +184,28 @@ frontend/
 
 ## 7. 日期与时区
 
-时间一律以 UTC 传输与存储，只在展示时按会话时区换算。时区取自 `Display.TimeZone` 设置（IANA 名），由 `SettingContextService` 在启动时载入。
+时间一律以 UTC 传输与存储，只在展示时按会话时区换算。时区取自 `Display.TimeZone`（IANA 名），书写方式取自界面语言，两者都由 `SettingContextService` 提供。
 
-- **业务日期一律用 `appDate` 管道，不要用 Angular 的 `date`**：`date` 的时区参数只接受 `+0800` 这类固定偏移，传 IANA 名（`Asia/Shanghai`）会在内部解析失败后**静默回落到浏览器时区**——界面照常渲染，时区设置却没生效，编译和端到端都发现不了；固定偏移也表达不了夏令时。`appDate` 基于原生 `Intl.DateTimeFormat`，直接接受 IANA 名并自带夏令时规则。用法是把会话时区显式传进去：
+- **业务日期一律用 `appDate` 管道，不要用 Angular 的 `date`**：`date` 的时区参数只接受 `+0800` 这类固定偏移，传 IANA 名（`Asia/Shanghai`）会在内部解析失败后**静默回落到浏览器时区**——界面照常渲染，时区设置却没生效，编译和端到端都发现不了；固定偏移也表达不了夏令时。`appDate` 基于原生 `Intl.DateTimeFormat`，直接接受 IANA 名并自带夏令时规则。用法是把时区与 locale 都显式传进去：
 
   ```html
-  {{ row.creationTime | appDate: 'full' : displayTimeZone() }}
+  {{ row.creationTime | appDate: 'full' : displayTimeZone() : displayLocale() }}
   ```
 
   ```ts
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
+  protected readonly displayLocale = inject(SettingContextService).displayLocale;
   ```
+
+- **三个参数管三件互不相干的事，由三个不同的地方决定，别互相替代**：
+  - **槽位**决定"要什么、多细"，由调用点定：`full`（到秒）/ `short`（到分）/ `date` / `time` / `monthDayTime`（通知列表这类窄位置，不带年也不带秒）。
+  - **时区**决定"哪一刻"。
+  - **locale** 决定"怎么写"（字段顺序、月份写法、12/24 小时制），取界面语言。
+- **精度不要做成设置项**：一列要不要秒是这一列的用途决定的，通知列表要窄、审计详情要能对时。给它一个全局开关只会让两处被同一个值拽着走，而用户不会为了看通知去改一个叫"日期格式"的开关。
+- **界面语言取"此刻正在用的那个"，不要从持久化的设置里再推一份**：账户设置只是这份偏好的持久化，运行时还有设备选择与系统语言两个来源。从设置快照推导，切语言后文案立刻变、日期要等快照回来才跟上，写回失败时更是一直分叉，访客在登录页切的语言则根本推不出来。
+- **书写方式由界面语言驱动，不要由时区驱动**：时区回答"哪一刻"，locale 才编码"日期怎么读"。Web 平台也没有时区→地区的映射：`Intl` 只给时区 id，要从 `Asia/Shanghai` 推出 `zh-CN` 得自带一份 IANA `zone.tab` 的时区→国家表，而它既随时区拆分改名而漂移，又不是个函数（`Europe/Zurich` 对应德/法/意三种写法，`UTC` 没有国家）。
+- **不要新增"自定义格式串"这类设置**：月日顺序、12/24 小时本就是 locale 属性；让人手填 `yyyy-MM-dd` 这样的 pattern，填错既不报错也不好查，只会静默渲染出错误日期。要给某个语种改写法，就在管道的 `WRITING_OVERRIDES` 里加一条并写清依据（目前只有一条：中文按 GB/T 7408 用短横线）。真要让用户独立选 12/24 小时制，用 `Intl` 自己的表达方式——`hourCycle` 选项或 locale 扩展 `en-US-u-hc-h23`——而不是自造格式串。
+- **时区候选项按"能否真的渲染"判定**，不要拿 `Intl.supportedValuesOf('timeZone')` 当合法清单去过滤：它只列**规范名**，`UTC`、`Asia/Kolkata`、`America/Argentina/Buenos_Aires` 都不在其中却都能用，过滤会把它们静默删掉。
 
 时区值只收 IANA 名。后端会连 Windows 时区 ID（`China Standard Time` 之类）一起解析出来，但浏览器的 `Intl.DateTimeFormat` 对它抛错——所以写入端已按 `HasIanaId` 卡住，前端不必再判一次，但也不要绕过接口自己塞值。
 

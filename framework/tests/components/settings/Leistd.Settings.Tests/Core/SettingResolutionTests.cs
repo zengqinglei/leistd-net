@@ -112,6 +112,59 @@ public class SettingResolutionTests
         Assert.Contains("Display.Language", visible.Keys);
     }
 
+    /// <summary>
+    /// 宿主上下文下，进程级设置从宿主那一行读出来；清掉那一行才回落到代码默认值。
+    /// </summary>
+    /// <remarks>
+    /// 这条钉的是公共读取契约：把 Host 加进定义与写入端，却漏了解析端，症状是"写进去了、
+    /// 读出来还是默认值"，而写入与界面都看不出异常——最难从现象反推的一类问题。
+    /// </remarks>
+    [Fact]
+    public async Task A_host_value_is_resolved_in_the_host_context()
+    {
+        var store = new FakeSettingStore();
+        store.Host["Logging.MinimumLevel"] = "Debug";
+
+        Assert.Equal("Debug", await Build(store).GetOrNullAsync("Logging.MinimumLevel"));
+
+        store.Host.Clear();
+        Assert.Equal("Information", await Build(store).GetOrNullAsync("Logging.MinimumLevel"));
+    }
+
+    // 进程级设置不接在租户级的回落链上：库里存在同名的租户行也不参与解析，
+    // 否则改一次定义就会让历史遗留行悄悄顶替进程级的值。
+    [Fact]
+    public async Task A_tenant_row_never_stands_in_for_a_host_value()
+    {
+        var store = new FakeSettingStore();
+        store.Tenant["Logging.MinimumLevel"] = "leaked";
+
+        Assert.Equal("Information", await Build(store).GetOrNullAsync("Logging.MinimumLevel"));
+    }
+
+    /// <summary>
+    /// 租户上下文下进程级设置不可读：单项读取抛错，批量读取不包含它。
+    /// </summary>
+    /// <remarks>
+    /// 这里刻意不返回代码默认值。那个值看着有效，调用方分不出"这就是当前生效的级别"
+    /// 和"这一层在当前上下文根本读不到"，而前者会被直接展示或用于判断。
+    /// </remarks>
+    [Fact]
+    public async Task A_host_setting_is_not_readable_in_a_tenant_context()
+    {
+        var store = new FakeSettingStore { CanAccessHostScope = false };
+        store.Host["Logging.MinimumLevel"] = "Debug";
+
+        await Assert.ThrowsAsync<HostScopeUnavailableException>(
+            () => Build(store).GetOrNullAsync("Logging.MinimumLevel"));
+
+        var all = await Build(store).GetAllAsync();
+        Assert.DoesNotContain("Logging.MinimumLevel", all.Keys);
+        // 其余设置照常解析：一项读不到不该把整批读取打断
+        Assert.Contains("Display.Language", all.Keys);
+        Assert.Equal(0, store.HostReads);
+    }
+
     // 第一次加载中途失败会在请求级缓存里留下半截状态：租户级已写入、用户级还是 null。
     // 调用方捕获异常后在同一 scope 内重试时，加载会因为「租户级已加载」直接返回，
     // 之后读用户级就是空引用——所以两次查询必须一起发布。
@@ -143,6 +196,7 @@ public class SettingResolutionTests
             context.Add("Display.Language", "zh-CN", SettingScopes.All).IsVisibleToClients = true;
             context.Add("Display.PageSize", "20", SettingScopes.All).IsVisibleToClients = true;
             context.Add("Export.MaxRowsPerFile", "Acme", SettingScopes.Tenant);
+            context.Add("Logging.MinimumLevel", "Information", SettingScopes.Host).IsVisibleToClients = true;
         }
     }
 }

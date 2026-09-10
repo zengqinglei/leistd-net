@@ -95,6 +95,7 @@ export class OpenApplicationTable {
   // 时间统一按设置里的展示时区渲染：服务端存 UTC，每处各自用浏览器时区
   // 会让同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
+  protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif

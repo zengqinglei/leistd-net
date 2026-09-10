@@ -1,5 +1,8 @@
 using Leistd.Settings.Abstractions;
 using CompanyName.ProjectName.Application.Settings.Provider;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Policies;
+#endif
 using CompanyName.ProjectName.Application.Settings.AppServices;
 using CompanyName.ProjectName.Application.Settings.Timing;
 #if (LocalIdentity)
@@ -73,6 +76,10 @@ public static class DependencyInjection
         services.AddTransient<ISettingAppService, SettingAppService>();
         // 服务端产出给人看的时间文本时注入它；DTO 保持 UTC 交给前端渲染，不必经过这里。
         services.AddTransient<IUserTimeZoneProvider, UserTimeZoneProvider>();
+#if (LocalIdentity)
+        // 注册策略按租户从设置里解析；appsettings 仍是部署基线（设置定义的默认值取自它）。
+        services.AddTransient<IUserRegistrationPolicyProvider, UserRegistrationPolicyProvider>();
+#endif
 
 #if (LocalIdentity)
         services.AddTransient<ITenantAppService, TenantAppService>();

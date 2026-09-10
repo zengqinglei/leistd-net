@@ -4,16 +4,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Auth.Dtos;
+using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Email.Abstractions;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using CompanyName.ProjectName.Domain.Users.Options;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling;
 using Leistd.Timing;
 using Leistd.Lock;
@@ -26,7 +25,7 @@ public class EmailVerificationAppService(
     IDistributedCache distributedCache,
     IDistributedLock distributedLock,
     IVerificationCodeDigest codeDigest,
-    IOptions<UserRegistrationOptions> options,
+    IUserRegistrationPolicyProvider registrationPolicy,
     ICaptchaAppService captchaAppService,
     IEmailSender emailSender,
     ILogger<EmailVerificationAppService> logger,
@@ -37,7 +36,6 @@ public class EmailVerificationAppService(
 {
     private const string RegistrationPurpose = "registration-email";
     private const string CacheKeyPrefix = "MyProject:email-verification";
-    private readonly UserRegistrationOptions _options = options.Value;
 
     public async Task<EmailVerificationChallengeOutputDto> SendEmailCodeAsync(
         SendEmailCodeInputDto input,
@@ -46,7 +44,8 @@ public class EmailVerificationAppService(
         // 功能关闭时明确拒绝。不拒绝的话请求会一路走到摘要计算，
         // 在"密钥未配置"处失败——那个错误对调用方毫无意义，
         // 因为它真正的问题是这个功能压根没开
-        if (!options.Value.EnableEmailVerification)
+        var policy = await registrationPolicy.GetAsync(cancellationToken);
+        if (!policy.EnableEmailVerification)
         {
             throw new BadRequestException("Email verification is not enabled.")
 #if (IncludeLocalization)
@@ -100,7 +99,7 @@ public class EmailVerificationAppService(
 
         var challengeId = Guid.NewGuid();
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString(CultureInfo.InvariantCulture);
-        var expiresIn = TimeSpan.FromMinutes(_options.EmailCodeExpiryMinutes);
+        var expiresIn = TimeSpan.FromMinutes(policy.EmailCodeExpiryMinutes);
         var challenge = new EmailVerificationChallengeState
         {
             Scope = scope,
@@ -108,14 +107,14 @@ public class EmailVerificationAppService(
             EmailDigest = emailDigest,
             CodeHash = codeDigest.Compute(code),
             ExpiresAt = clock.Now.Add(expiresIn),
-            RemainingAttempts = _options.EmailCodeMaxAttempts
+            RemainingAttempts = policy.EmailCodeMaxAttempts
         };
         var challengeKey = GetChallengeCacheKey(challengeId);
 
         // Reserve the send slot before the external email call so concurrent requests cannot both send.
         await distributedCache.SetStringAsync(rateKey, "1", new DistributedCacheEntryOptions
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(_options.EmailCodeSendIntervalSeconds)
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(policy.EmailCodeSendIntervalSeconds)
         }, operationToken);
         try
         {
@@ -129,7 +128,7 @@ public class EmailVerificationAppService(
                 {
                     To = normalizedEmail,
                     Subject = "Account Registration Verification Code",
-                    Body = BuildEmailBody(code),
+                    Body = BuildEmailBody(code, policy.EmailCodeExpiryMinutes),
                 },
                 operationToken);
         }
@@ -156,7 +155,7 @@ public class EmailVerificationAppService(
         {
             ChallengeId = challengeId,
             ExpiresInSeconds = checked((int)expiresIn.TotalSeconds),
-            RetryAfterSeconds = _options.EmailCodeSendIntervalSeconds
+            RetryAfterSeconds = policy.EmailCodeSendIntervalSeconds
         };
     }
 
@@ -252,7 +251,7 @@ public class EmailVerificationAppService(
         return false;
     }
 
-    private string BuildEmailBody(string code) => $@"
+    private static string BuildEmailBody(string code, int expiryMinutes) => $@"
 <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;'>
     <div style='background-color: #0f172a; padding: 20px; text-align: center; color: white;'>
         <h2 style='margin: 0;'>Account Registration Verification Code</h2>
@@ -263,7 +262,7 @@ public class EmailVerificationAppService(
         <div style='margin: 20px 0; text-align: center;'>
             <span style='font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #2563eb;'>{code}</span>
         </div>
-        <p style='font-size: 14px; color: #64748b;'>This code will expire in {_options.EmailCodeExpiryMinutes} minutes. Please do not share it with anyone.</p>
+        <p style='font-size: 14px; color: #64748b;'>This code will expire in {expiryMinutes} minutes. Please do not share it with anyone.</p>
         <p style='font-size: 14px; color: #64748b; margin-top: 30px;'>If you did not request this, please ignore this email.</p>
     </div>
 </div>";

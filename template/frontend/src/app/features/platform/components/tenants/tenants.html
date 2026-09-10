@@ -45,12 +45,20 @@
       [canUpdate]="canUpdate()"
       [canDelete]="canDelete()"
       (paginationChange)="onPaginationChange($event)"
+      (details)="openDetail($event)"
       (edit)="openEdit($event)"
       (toggleActive)="onToggleActive($event)"
       (delete)="onDelete($event)"
     />
   </div>
 </div>
+
+<app-tenant-detail-dialog
+  [(open)]="detailDialogOpen"
+  [tenant]="detailTenant()"
+  [canManage]="canUpdate()"
+  (edit)="onDetailEdit($event)"
+/>
 
 <app-tenant-edit-dialog
   [(open)]="editDialogOpen"

@@ -179,6 +179,8 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 
 租户名在未删除行内唯一；名称冲突抛 `DuplicateTenantNameException`。租户修改与连接配置共享 `TenantRecord.Version`，并发冲突抛 `TenantConcurrencyConflictException`。
 
+`displayName`（≤128）与 `description`（≤256）都是可选的展示字段，只供管理界面呈现，不参与解析与唯一性判定。两者按传入值覆盖——传 `null` 即清空，因此调用方要区分"不改"与"清空"时必须自己先读一次当前值。
+
 ### 配置租户连接
 
 | 模式 | 连接目标 | 隔离 |
