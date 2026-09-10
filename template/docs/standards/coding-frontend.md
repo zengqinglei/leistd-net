@@ -50,7 +50,7 @@ frontend/
 特性内的组件、服务与契约就近组织；跨特性契约放入 `shared/dtos`，避免 `core` 反向依赖 `features`。基础按钮、卡片、对话框优先使用 `libs/ui`，不在 `shared` 重建组件库。
 
 <!--#if (IncludeLocalization)-->
-多语言词条放在 `public/i18n/{lang}.json`，见 §8。
+多语言词条放在 `public/i18n/{lang}.json`，见 §9。
 <!--#endif-->
 
 ---
@@ -211,18 +211,38 @@ frontend/
 
 ---
 
+## 8. 导航与菜单分组
+
+侧栏菜单是**信息架构**，不是控件清单：分组摆错了既不报错也不影响功能，只是让人找不到入口。两个区各有一套菜单（`layout/components/default-sidebar`），判据相同。
+
+| 分组 | 放什么 | 现有入口 |
+| --- | --- | --- |
+| 工作 | 进来先看的东西：本区落地页、待办、我的任务 | 平台「仪表盘」/ 工作空间「工作台」 |
+| 业务 | 这个系统"做业务"的地方 | 模板只放一个「示例模块」占位，下游项目在这里加自己的 |
+| 系统 | 谁能用、能用什么 | 用户管理、角色管理、租户管理 |
+| 开发者 | 面向集成方的东西 | 开发应用（OAuth 客户端）|
+| 运维 | 系统怎么跑 | 系统配置（监控、日志、后台任务同属这一类）|
+
+- **不设「其它」这类兜底组。** 兜底组会把不相干的入口越塞越多，最后谁也说不清该往哪找。新入口必须落进上面某一类；落不进就说明该新开一类，并把判据补进这张表。
+- **按用户的目的分组，不按后端模块或表结构分组。** 用户找的是"我要做什么"，不是"这属于哪个服务"。
+- **个人偏好不进主导航**，它属于头像菜单（个人资料 / 偏好设置 / 修改密码 一簇）；主导航放的是这个区**能做的事**。系统配置是管理动作，留在运维组。
+- 菜单项只按权限裁剪（`permissions` 任一命中即可见），整组为空时**整组消失**，不留空标题——空标题看起来像加载失败。
+- 分组骨架有用例钉住（`default-sidebar.spec.ts`）：改分组要同时改用例，避免"顺手挪一个入口"没人察觉。
+
+---
+
 <!--#if (IncludeLocalization)-->
-## 8. 多语言（i18n）
+## 9. 多语言（i18n）
 
 > 本项目已启用多语言（`--include-localization true`）。默认语言英语，支持 en + zh-CN 运行时切换。
 
-### 8.1 方案与默认语言
+### 9.1 方案与默认语言
 
 - **运行时库 Transloco**（`@jsverse/transloco`）：JSON 词条运行时加载，用户即时切换语言、单包部署——**不用** Angular 编译期 `$localize`（那是按 locale 出多包、无法运行时切换）。
 - **默认语言英语（`en`）**，支持 `en` + `zh-CN`；回落语言 `en`。
 - 词条文件 `public/i18n/{en,zh-CN}.json`，运行时按 `{baseHref}i18n/{lang}.json` fetch（loader 用 `APP_BASE_HREF` 前缀，兼容子路径部署）。
 
-### 8.2 文案归属
+### 9.2 文案归属
 
 | 类别 | 归属 | 用法 |
 | --- | --- | --- |
@@ -231,7 +251,7 @@ frontend/
 
 - 后端按 `Accept-Language` 返回本地化消息；`http-error-interceptor` 归一化错误，由发起操作的 feature 展示。仅在需要差异化 UI 行为时按业务 `code` 分支。前端词条提供网络断开、后端不可达等客户端兜底。
 
-### 8.3 关键接线（`core/`）
+### 9.3 关键接线（`core/`）
 
 - `core/services/language-service.ts`：`setActiveLang(lang)` 驱动 `TranslocoService.setActiveLang`、同步 `<html lang>`；活动语言持久化到 localStorage（镜像 `theme-service` 形态：signal + `isPlatformBrowser` 守卫）。语言只驱动 Transloco，不联动任何 UI 组件库文案。
 - `core/i18n/transloco-loader.ts`：按 `{baseHref}i18n/{lang}.json` 取词条（用 `APP_BASE_HREF` 前缀而非绝对 `/i18n/`，以支持子路径部署）。
@@ -239,7 +259,7 @@ frontend/
 - `app.config.ts`：`provideTransloco`（`defaultLang: 'en'`）+ `TranslocoHttpLoader`。
 - 语言选择器用 Spartan **dropdown-menu**（`hlmDropdownMenuTrigger` + `ng-template` 模板驱动菜单项，触发按钮用 `hlmBtn`，与铃铛/主题按钮风格一致），封装在 `shared/components/language-switcher`，挂在 `layout/components/default-header` 最右图标区（后台页在铃铛右侧）。
 
-### 8.4 新增文案
+### 9.4 新增文案
 
 - UI 文案：在 `public/i18n/{en,zh-CN}.json` 各加一条键（`模块.语义`，如 `menu.orders`），模板用 `| transloco`。**两语言必须同时加**（CI 有 `scripts/check-i18n-keys.ps1` 键一致性闸门，缺一即红）。
 - **响应式**：`.ts` 里要随语言切换更新的文案，别在字段初始化时 `translate()` 定死；改为在 `computed`/getter 里调用 `translate()` 并读一次 `transloco.langChanges$`（或 `languageService.activeLang()`）建立依赖，切换时自动重算。

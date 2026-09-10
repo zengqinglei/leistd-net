@@ -21,6 +21,7 @@ import {
   lucideHouse,
   lucideLock,
   lucideLogOut,
+  lucideSettings,
   lucideUserPen,
 } from '@ng-icons/lucide';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
@@ -78,6 +79,7 @@ interface UserMenuItem {
       lucideHouse,
       lucideCog,
       lucideUserPen,
+      lucideSettings,
       lucideLock,
       lucideLogOut,
     }),
@@ -242,6 +244,18 @@ export class UserMenu {
         action: () => this.openChangePasswordDialog(),
       },
       //#endif
+      // 偏好设置属于"我自己"这一簇，和个人资料、修改密码在一处，不进主导航——
+      // 主导航放的是这个区能做的事，个人偏好是每个人自己的东西（各家产品也都放在头像里）。
+      // 不带 LocalIdentity 守卫：偏好设置在所有服务形态下都有。
+      {
+        //#if (IncludeLocalization)
+        label: t('menu.preferences'),
+        //#else
+        label: 'Preferences',
+        //#endif
+        icon: 'lucideSettings',
+        action: () => this.router.navigate(['/workspace/settings']),
+      },
       { separator: true },
       // 切换租户 = 清除本地租户上下文并退出登录：已登录会话的租户由 cookie claim 定案，
       // 只有重新登录才能进入另一个租户。
