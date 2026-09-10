@@ -13,6 +13,7 @@ import {
   lucideGauge,
   lucideHouse,
   lucideIdCard,
+  lucideLayers,
   lucideSettings,
   lucideShieldCheck,
   lucideUsers,
@@ -42,6 +43,24 @@ interface MenuGroup {
   items: MenuItem[];
 }
 
+/*
+ * 菜单分组的判据（新增入口按这个落位，两个区各自成立）
+ *
+ * 工作     进来先看的东西：本区落地页、待办、我的任务。
+ * 业务     这个系统"做业务"的地方。模板只放一个示例模块占位，下游项目在这里加自己的菜单。
+ * 系统     谁能用、能用什么：用户、角色、租户。
+ * 开发者   面向集成方的东西：OAuth 应用、API 凭据、Webhook。
+ * 运维     系统怎么跑：配置、监控、日志、后台任务。
+ *
+ * 三条规则：
+ * 1. **不设「其它」这类兜底组。** 兜底组会把不相干的入口越塞越多，最后谁也说不清该往哪找。
+ *    新入口必须落进上面某一类；落不进就说明该新开一类，并把判据补在这里。
+ * 2. **按用户的目的分组，不按后端模块或表结构分组。** 用户找的是"我要做什么"，
+ *    不是"这属于哪个服务"。
+ * 3. **个人偏好不进主导航。** 它属于头像菜单（个人资料 / 偏好设置 / 修改密码 在一处），
+ *    主导航放的是这个区能做的事。
+ */
+
 @Component({
   selector: 'app-default-sidebar',
   standalone: true,
@@ -60,7 +79,7 @@ interface MenuGroup {
   // prettier-ignore
   providers: [provideIcons({
     lucideBuilding2, lucideCheck, lucideChevronsUpDown, lucideCog, lucideHouse,
-    lucideGauge, lucideUsers, lucideIdCard, lucideShieldCheck, lucideSettings,
+    lucideGauge, lucideUsers, lucideIdCard, lucideLayers, lucideShieldCheck, lucideSettings,
   })],
   templateUrl: './default-sidebar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -75,11 +94,13 @@ export class DefaultSidebar {
   //#if (IncludeLocalization)
   // 存词条键，展示时按 translationReady 响应式翻译；资源就绪 / 语言切换时 menuGroups computed 重算，标签随之更新。
   private readonly platformMenuGroups: MenuGroup[] = [
-    // 首区不设标题：Dashboard 是全局入口而非某一类的成员，给单项加组标题只增加解析成本。
-    { items: [{ label: 'layout.sidebar.dashboard', icon: 'lucideGauge', route: '/platform' }] },
-    // 分组按关注点命名，不用「系统」这类兜底词——兜底词会把不相干的入口越塞越多。
     {
-      label: 'layout.sidebar.groupAccess',
+      label: 'layout.sidebar.groupWork',
+      items: [{ label: 'layout.sidebar.dashboard', icon: 'lucideGauge', route: '/platform' }],
+    },
+    // 管理侧的业务菜单加在这里（工作之后、系统之前）：管理员先看业务，再管系统与运维。
+    {
+      label: 'layout.sidebar.groupSystem',
       items: [
         {
           label: 'layout.sidebar.users',
@@ -118,13 +139,12 @@ export class DefaultSidebar {
     },
     //#endif
     {
-      label: 'layout.sidebar.groupOther',
+      label: 'layout.sidebar.groupOperations',
       items: [
-        // 平台侧放的是**系统默认值**（租户级），按 App.Settings 裁剪；
-        // 个人偏好在工作空间侧的同名入口。两者作用域不同，因此各区一个入口，
-        // 而不是一个页面用 Tab 切换——那样容易把私人偏好当租户默认值改。
+        // 这里是**系统配置**（租户级默认值），按 App.Settings 裁剪。个人偏好不在主导航，
+        // 在头像菜单里——两者作用域不同，混在一个入口容易把私人偏好当成全租户默认值改。
         {
-          label: 'layout.sidebar.settings',
+          label: 'layout.sidebar.systemSettings',
           icon: 'lucideSettings',
           route: '/platform/settings',
           permissions: [PERMISSIONS.settings.default],
@@ -135,15 +155,21 @@ export class DefaultSidebar {
 
   private readonly workspaceMenuGroups: MenuGroup[] = [
     {
+      label: 'layout.sidebar.groupWork',
       items: [
         { label: 'layout.sidebar.workbench', icon: 'lucideGauge', route: '/workspace/dashboard' },
       ],
     },
     {
-      label: 'layout.sidebar.groupOther',
+      // 模板在这里只放一个示例模块：下游项目把它换成自己的业务入口，
+      // 分组本身与判据留着，新入口就不必再重新想一遍该摆哪。
+      label: 'layout.sidebar.groupBusiness',
       items: [
-        // 工作空间侧只放**账户偏好**：个人数据，任何登录用户都能改自己的，不设权限。
-        { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
+        {
+          label: 'layout.sidebar.exampleModule',
+          icon: 'lucideLayers',
+          route: '/workspace/placeholder',
+        },
       ],
     },
   ];
@@ -152,11 +178,13 @@ export class DefaultSidebar {
   private readonly translationReady = translationReady(this.transloco);
   //#else
   private readonly platformMenuGroups: MenuGroup[] = [
-    // 首区不设标题：Dashboard 是全局入口而非某一类的成员，给单项加组标题只增加解析成本。
-    { items: [{ label: 'Dashboard', icon: 'lucideGauge', route: '/platform' }] },
-    // 分组按关注点命名，不用「系统」这类兜底词——兜底词会把不相干的入口越塞越多。
     {
-      label: 'Access control',
+      label: 'Work',
+      items: [{ label: 'Dashboard', icon: 'lucideGauge', route: '/platform' }],
+    },
+    // 管理侧的业务菜单加在这里（工作之后、系统之前）：管理员先看业务，再管系统与运维。
+    {
+      label: 'System',
       items: [
         {
           label: 'User Management',
@@ -195,12 +223,12 @@ export class DefaultSidebar {
     },
     //#endif
     {
-      label: 'Other',
+      label: 'Operations',
       items: [
-        // 平台侧放的是**系统默认值**（租户级），按 App.Settings 裁剪；
-        // 个人偏好在工作空间侧的同名入口。两者作用域不同，因此各区一个入口。
+        // 这里是**系统配置**（租户级默认值），按 App.Settings 裁剪。个人偏好不在主导航，
+        // 在头像菜单里——两者作用域不同，混在一个入口容易把私人偏好当成全租户默认值改。
         {
-          label: 'Settings',
+          label: 'System settings',
           icon: 'lucideSettings',
           route: '/platform/settings',
           permissions: [PERMISSIONS.settings.default],
@@ -210,13 +238,15 @@ export class DefaultSidebar {
   ];
 
   private readonly workspaceMenuGroups: MenuGroup[] = [
-    { items: [{ label: 'Workbench', icon: 'lucideGauge', route: '/workspace/dashboard' }] },
     {
-      label: 'Other',
-      items: [
-        // 工作空间侧只放**账户偏好**：个人数据，任何登录用户都能改自己的，不设权限。
-        { label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' },
-      ],
+      label: 'Work',
+      items: [{ label: 'Workbench', icon: 'lucideGauge', route: '/workspace/dashboard' }],
+    },
+    {
+      // 模板在这里只放一个示例模块：下游项目把它换成自己的业务入口，
+      // 分组本身与判据留着，新入口就不必再重新想一遍该摆哪。
+      label: 'Business',
+      items: [{ label: 'Example module', icon: 'lucideLayers', route: '/workspace/placeholder' }],
     },
   ];
   //#endif

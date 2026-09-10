@@ -62,9 +62,9 @@
     "workspace": "Workspace",
     "platform": "Admin platform",
     "profile": "Profile",
+    "preferences": "Preferences",
     "changePassword": "Change password",
     "logout": "Sign out",
-    "switchTenant": "Switch tenant",
     "hostTenant": "Host"
   },
   "language": {
@@ -88,17 +88,20 @@
     "sidebar": {
       "navigation": "Navigation",
       "appTitle": "Template Project",
+      "switchArea": "Switch area",
+      "groupWork": "Work",
       "dashboard": "Dashboard",
-      "groupAccess": "Access control",
-      "groupDeveloper": "Developer",
-      "users": "User Management",
-      "openApplications": "Developer Apps",
       "workbench": "Workbench",
+      "groupBusiness": "Business",
+      "exampleModule": "Example module",
+      "groupSystem": "System",
+      "users": "User Management",
       "roles": "Role Management",
       "tenants": "Tenant Management",
-      "groupOther": "Other",
-      "settings": "Settings",
-      "switchArea": "Switch area"
+      "groupDeveloper": "Developer",
+      "openApplications": "Developer Apps",
+      "groupOperations": "Operations",
+      "systemSettings": "System settings"
     },
     "notifications": {
       "title": "Notifications",
@@ -128,8 +131,8 @@
       "noUserInfo": "No user information available"
     },
     "placeholder": {
-      "title": "Workspace",
-      "comingSoon": "This feature is under development, stay tuned..."
+      "title": "Example module",
+      "comingSoon": "A placeholder for your own business modules — replace this page and its menu entry under \"Business\"."
     }
   },
   "settings": {

@@ -15,12 +15,12 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
 import {
-  lucideBuilding2,
   lucideChevronsUpDown,
   lucideCog,
   lucideHouse,
   lucideLock,
   lucideLogOut,
+  lucideSettings,
   lucideUserPen,
 } from '@ng-icons/lucide';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
@@ -73,11 +73,11 @@ interface UserMenuItem {
   // prettier-ignore
   providers: [
     provideIcons({
-      lucideBuilding2,
       lucideChevronsUpDown,
       lucideHouse,
       lucideCog,
       lucideUserPen,
+      lucideSettings,
       lucideLock,
       lucideLogOut,
     }),
@@ -242,18 +242,22 @@ export class UserMenu {
         action: () => this.openChangePasswordDialog(),
       },
       //#endif
-      { separator: true },
-      // 切换租户 = 清除本地租户上下文并退出登录：已登录会话的租户由 cookie claim 定案，
-      // 只有重新登录才能进入另一个租户。
+      // 偏好设置属于"我自己"这一簇，和个人资料、修改密码在一处，不进主导航——
+      // 主导航放的是这个区能做的事，个人偏好是每个人自己的东西（各家产品也都放在头像里）。
+      // 不带 LocalIdentity 守卫：偏好设置在所有服务形态下都有。
       {
         //#if (IncludeLocalization)
-        label: t('menu.switchTenant'),
+        label: t('menu.preferences'),
         //#else
-        label: 'Switch tenant',
+        label: 'Preferences',
         //#endif
-        icon: 'lucideBuilding2',
-        action: () => this.handleSwitchTenant(),
+        icon: 'lucideSettings',
+        action: () => this.router.navigate(['/workspace/settings']),
       },
+      { separator: true },
+      // 这里刻意没有「切换租户」：已登录会话的租户由 cookie claim 定案，换租户只能重新登录，
+      // 所以那一项做的事其实就是退出登录，再单列一个入口只是让人以为存在会话内切换。
+      // 换租户走登录页：退出 → 登录页按域名定案，或（域名不表态时）在那里清掉 / 换一个租户。
       {
         //#if (IncludeLocalization)
         label: t('menu.logout'),
@@ -283,10 +287,6 @@ export class UserMenu {
     //#endif
   });
 
-  handleSwitchTenant(): void {
-    this.tenantContext.clear();
-    this.authService.logout();
-  }
   //#if (LocalIdentity)
   openProfileDialog(): void {
     this.profileDialogVisible.set(true);
