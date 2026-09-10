@@ -16,13 +16,17 @@ import { LayoutService } from '../../services/layout-service';
 const WORK = 'layout.sidebar.groupWork';
 const BUSINESS = 'layout.sidebar.groupBusiness';
 const SYSTEM = 'layout.sidebar.groupSystem';
+//#if (OpenIddictServer)
 const DEVELOPER = 'layout.sidebar.groupDeveloper';
+//#endif
 const OPERATIONS = 'layout.sidebar.groupOperations';
 //#else
 const WORK = 'Work';
 const BUSINESS = 'Business';
 const SYSTEM = 'System';
+//#if (OpenIddictServer)
 const DEVELOPER = 'Developer';
+//#endif
 const OPERATIONS = 'Operations';
 //#endif
 
