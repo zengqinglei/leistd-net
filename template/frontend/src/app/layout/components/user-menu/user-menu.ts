@@ -49,8 +49,8 @@ interface UserMenuItem {
 
 /**
  * 侧栏底部用户菜单（Spartan canonical：`hlm-sidebar-footer` 内的 nav-user 模式）。
- * 头像 + 姓名/邮箱两行 + 下拉（区段切换 / 个人信息 / 修改密码 / 退出），并承载对应对话框。
- * 折叠为图标时自动收成头像方块。
+ * 头像 + 姓名/邮箱两行 + 下拉：区域切换、"我自己"这一簇个人入口、退出，并承载对应对话框。
+ * 具体项见 `userMenuItems`，构成由 user-menu.spec.ts 钉住。折叠为图标时自动收成头像方块。
  */
 @Component({
   selector: 'app-user-menu',
