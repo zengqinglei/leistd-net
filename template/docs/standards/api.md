@@ -169,6 +169,7 @@ HTTP/1.1 200 OK
 - **`Code` 一经对外即为契约**，重命名它是破坏性变更。这是"一个标识符同时承担机器身份与词条键"的代价，换来的是不必为每个错误维护两个必须同步的字符串。
 - 全局处理器解析顺序：**`Code` → 状态码通用码（`Error:NotFound` 等）→ 兜底**，绝不把裸键漏给用户；查询全程 `try/catch` 隔离，本地化失败不覆盖原始 `code`。**响应结构不变**，仅 `message`/`detail`/`title` 随语言变，`code`/`traceId` 不变。
 - **未启用多语言（off-mode）时**：没有 `IStringLocalizer`，业务错误对外只有状态码英文短语。`Message` 仍只进日志——这是刻意的安全默认。需要某条消息落地给用户，用 `AsUserFacing()` 显式声明。
+- **`AsUserFacing()` 不能替代 `WithCode`。** 按上面的解析顺序，通用码词条（`Error:BadRequest` 等）在框架资源里是配齐的，所以启用多语言时第二步必然命中，永远走不到"直出 `Message`"那一步——`AsUserFacing()` 在这种形态下是死代码，只有 off-mode（没有 localizer）才生效。要让原因显示出来只有一条路：带码 + 配词条。
 - 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等）。前端**直接显示后端 `message`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §9.2）。
 - **400 / 409 / 422 必须带码。** 这三类的状态本身说不清原因（"你的输入有问题"，但哪条规则没过只有消息知道），不带码就会被归一成 `Error:BadRequest` → "请求无效。"，具体原因只留在服务端日志里，用户无从修正——而这既不报错也不影响任何测试，所以有静态闸门 `scripts/check-error-codes.py` 守着。401 / 403 / 404 不在此列：状态本身即原因；500 / 503 更不在此列：那些消息是内部诊断，被通用文案盖住是对的。
 - **DataAnnotations 校验消息**也随 culture 本地化：DTO 的 `ErrorMessage`/`Display` 用英文句子作键（`"{0} is required."`），`zh-CN.json` 按同一句子映射中文；`Program.cs` 已接线 `AddDataAnnotationsLocalization(...DataAnnotationLocalizerProvider...)`。这样参数校验与业务异常在同一请求下**同语言**。
