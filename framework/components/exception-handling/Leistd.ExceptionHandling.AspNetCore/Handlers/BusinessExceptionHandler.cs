@@ -32,40 +32,64 @@ public sealed class BusinessExceptionHandler(
     // 本地化可选；缺失时遵循安全回退规则。
     private readonly IStringLocalizer? _localizer = serviceProvider.GetService<IStringLocalizer>();
 
-    // 依次按异常码、状态码和最终回退规则生成用户消息。
-    // 本地化失败不能覆盖原始业务异常。
+    // 生成呈现给用户的消息：专属词条 → 原始消息 → 状态码通用词条 → 状态短语。
+    //
+    // 原始消息排在通用词条**之前**是有意的：通用词条（"请求无效。"）说不出哪条规则没过，
+    // 而抛出点的消息说得出。把通用词条放前面，等于让一句没有信息量的话盖住唯一有用的那句，
+    // 于是"某个抛出点忘了配词条"的后果是用户完全无从修正——原因只剩在服务端日志里。
+    // 通用词条因此退到兜底位：它只在消息不该外露（5xx）或压根没有消息时才出场。
+    //
+    // 本地化查询全程 try/catch：本地化失败不该覆盖原始业务异常。
     private string Localize(BusinessException ex, GlobalExceptionOptions options)
     {
-        if (_localizer is null)
-            return LastResort(ex, options);
-
-        try
+        if (_localizer is not null)
         {
-            var byCode = _localizer[ex.Code];
-            if (!byCode.ResourceNotFound)
-                return Fill(byCode.Value, ex.LocalizationData);
-
-            var genericCode = GenericErrorCodes.ForStatus(ex.StatusCode);
-            if (!string.Equals(ex.Code, genericCode, StringComparison.Ordinal))
+            try
             {
-                var generic = _localizer[genericCode];
+                var byCode = _localizer[ex.Code];
+                if (!byCode.ResourceNotFound)
+                    return Fill(byCode.Value, ex.LocalizationData);
+            }
+            catch
+            {
+                // 落到下面的回退链
+            }
+        }
+
+        if (CanExposeMessage(ex, options) && !string.IsNullOrWhiteSpace(ex.Message))
+            return ex.Message;
+
+        return GenericText(ex);
+    }
+
+    // 消息能不能给用户看，由宿主的统一策略按状态码类别决定，不看抛出点。
+    private static bool CanExposeMessage(BusinessException ex, GlobalExceptionOptions options)
+        => options.MessageExposure switch
+        {
+            BusinessMessageExposure.All => true,
+            BusinessMessageExposure.ClientErrors => ex.StatusCode is >= 400 and < 500,
+            _ => false,
+        };
+
+    // 兜底：状态码通用词条，再不行用状态短语。
+    private string GenericText(BusinessException ex)
+    {
+        if (_localizer is not null)
+        {
+            try
+            {
+                var generic = _localizer[GenericErrorCodes.ForStatus(ex.StatusCode)];
                 if (!generic.ResourceNotFound)
                     return Fill(generic.Value, ex.LocalizationData);
             }
+            catch
+            {
+                // 落到状态短语
+            }
+        }
 
-            return LastResort(ex, options);
-        }
-        catch
-        {
-            return LastResort(ex, options);
-        }
+        return GetProblemTitle(ex.StatusCode);
     }
-
-    // 默认只公开显式标记的用户消息，其余异常以状态短语兜底。
-    private static string LastResort(BusinessException ex, GlobalExceptionOptions options)
-        => options.FallbackToExceptionMessage || ex.IsUserFacingMessage
-            ? ex.Message
-            : GetProblemTitle(ex.StatusCode);
 
     // 每个字段错误同时携带本地化消息、字段名和可选机器码。
     private ErrorItem[] BuildErrorItems(UnprocessableEntityException exception)

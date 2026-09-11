@@ -103,22 +103,28 @@ throw new UnprocessableEntityException(
 }
 ```
 
-容器存在 `IStringLocalizer` 时，用户消息按以下顺序解析：
+用户消息按以下顺序解析：
 
-1. 显式 `Code`。
-2. HTTP 状态码对应的通用错误码。
-3. 安全回落消息。
+1. `Code` 对应的词条。
+2. `MessageExposure` 允许时直出 `Message`（默认允许 4xx）。
+3. HTTP 状态码通用错误码对应的词条。
+4. HTTP 状态短语。
+
+第 2 步排在通用词条**之前**是有意的：通用词条（"请求无效。"）说不出哪条规则没过，抛出点的消息说得出。
+让通用词条盖住消息，等于"漏配一条词条"的代价是用户完全无从修正——原因只剩在日志里。
+通用词条因此只在消息不该外露（默认下的 5xx）或压根没有消息时出场。
+
+消息该不该给用户看，是宿主的一条统一策略，不由抛出点各自决定：
+
+| `MessageExposure` | 效果 |
+| --- | --- |
+| `None` | 一律不直出，只用词条与状态短语。对外网关用 |
+| `ClientErrors`（默认） | 只直出 4xx。4xx 说的是"你的输入哪里不对"，5xx 是内部诊断 |
+| `All` | 5xx 也直出。仅内部系统适用 |
+
+配置经 `IOptionsMonitor` 读取，改配置即时生效。`Message` 无论哪档都完整进日志。
 
 本地化失败不会改写原异常的 `Code` 或 HTTP 语义。`traceId` 优先使用 `Activity.Current.TraceId`，否则使用 `HttpContext.TraceIdentifier`。
-
-当未注册本地化且最后一级回落被使用时，默认只有显式 `AsUserFacing()` 的异常会直出 `Message`：
-
-```csharp
-throw new BadRequestException("The verification code has expired.")
-    .AsUserFacing();
-```
-
-`FallbackToExceptionMessage = true` 会向用户直出运维消息，只应用于可接受该风险的内部系统。
 
 ### 非业务异常映射
 
@@ -145,7 +151,7 @@ throw new BadRequestException("The verification code has expired.")
 | `InternalServerException` | 500 | `Error:InternalServer` |
 | `ServiceUnavailableException` | 503 | `Error:ServiceUnavailable` |
 
-`BusinessException` 提供 `StatusCode`、`Code`、`Details`、`LocalizationData`、`WithCode()`、`WithDetails()`、`WithData()` 和 `AsUserFacing()`。`ValidationError` 表示抛出方的字段错误，`ErrorItem` 是处理器输出的字段契约。
+`BusinessException` 提供 `StatusCode`、`Code`、`Details`、`LocalizationData`、`WithCode()`、`WithDetails()` 和 `WithData()`。`ValidationError` 表示抛出方的字段错误，`ErrorItem` 是处理器输出的字段契约。
 
 | Web 入口 | 用途 |
 | --- | --- |
@@ -160,7 +166,7 @@ throw new BadRequestException("The verification code has expired.")
 | `Enabled` | `true` | 是否接管异常 |
 | `ExcludePatterns` | 空 | 跳过处理的路径模式，支持 `前缀/**` 和 `*` |
 | `IncludeExceptionDetails` | `false` | 是否输出业务详情和堆栈 |
-| `FallbackToExceptionMessage` | `false` | 最终回落时是否直出 `Exception.Message` |
+| `MessageExposure` | `ClientErrors` | 词条未命中时 `Message` 的直出范围：`None` / `ClientErrors` / `All` |
 
 ## 注意事项
 
