@@ -25,13 +25,17 @@ public class GlobalExceptionOptions
     public bool IncludeExceptionDetails { get; set; }
 
     /// <summary>
-    /// 获取或设置词条未命中时是否回落到 <c>Exception.Message</c>。
+    /// 词条未命中时，业务异常的 <c>Message</c> 呈现给终端用户的范围。默认 <see cref="BusinessMessageExposure.ClientErrors"/>。
     /// </summary>
     /// <remarks>
-    /// 默认只有显式 <c>BusinessException.AsUserFacing()</c> 的异常才直出 <c>Message</c> 原文，
-    /// 其余一律使用状态码通用文案（<c>Error:NotFound</c> 等）。<c>Message</c> 无论如何都进日志。
-    /// 置为 <see langword="true"/> 恢复无条件直出：仅适用于内部系统，且要接受未配词条的异常把运维英文暴露给终端用户。
-    /// 诊断详情与堆栈由 <see cref="IncludeExceptionDetails"/> 独立控制。
+    /// <b>默认就把原因说出来</b>：4xx 的消息直出，5xx 的不直出。错误原因是产品行为的一部分，
+    /// 不该因为"某个抛出点忘了声明"而变成一句无信息量的通用话；而真正需要藏起来的是 5xx 的
+    /// 内部诊断，那按状态码类别一刀切就够了，不必让每个调用点各自判断。
+    /// <para>
+    /// 有词条时仍以词条优先（见处理器的解析顺序），本项只管"没有词条可用"的那一档。
+    /// 诊断详情与堆栈由 <see cref="IncludeExceptionDetails"/> 独立控制，二者互不影响。
+    /// </para>
+    /// <para>本项经 <c>IOptionsMonitor</c> 读取，改配置即时生效，不必重启。</para>
     /// </remarks>
-    public bool FallbackToExceptionMessage { get; set; }
+    public BusinessMessageExposure MessageExposure { get; set; } = BusinessMessageExposure.ClientErrors;
 }

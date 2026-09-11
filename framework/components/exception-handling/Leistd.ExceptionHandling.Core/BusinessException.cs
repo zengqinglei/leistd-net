@@ -34,16 +34,6 @@ namespace Leistd.ExceptionHandling
         public string? Details { get; private set; }
 
         /// <summary>
-        /// 获取诊断消息是否可直接呈现给终端用户。
-        /// </summary>
-        /// <remarks>
-        /// <see cref="Exception.Message"/> 面向运维、统一用英文，而 HTTP 边界在词条全部未命中时可能回落到它。
-        /// 本标记让"这条消息我确认可以给用户看"成为显式声明：只有标记过的异常，
-        /// 或宿主把 <c>GlobalExceptionOptions.FallbackToExceptionMessage</c> 置为 <see langword="true"/> 时，该消息才会呈现出去。
-        /// </remarks>
-        public bool IsUserFacingMessage { get; private set; }
-
-        /// <summary>
         /// 本地化占位参数，供资源中的具名占位符（如 <c>{Sku}</c>）填充；未启用本地化时忽略。
         /// </summary>
         public IReadOnlyDictionary<string, object?> LocalizationData => _localizationData;
@@ -88,20 +78,6 @@ namespace Leistd.ExceptionHandling
         public BusinessException WithDetails(string details)
         {
             this.Details = details;
-            return this;
-        }
-
-        /// <summary>
-        /// 声明 <see cref="Exception.Message"/> 可直接呈现给终端用户。
-        /// </summary>
-        /// <remarks>
-        /// 适用于消息本身就是写给用户看的场景（且不含内部标识、路径或技术细节）。
-        /// 需要多语言时仍应改用 <see cref="WithCode(string)"/> 并配词条——本标记只是
-        /// "无词条可用时允许直出原文"的许可，不替代本地化。
-        /// </remarks>
-        public BusinessException AsUserFacing()
-        {
-            this.IsUserFacingMessage = true;
             return this;
         }
 
