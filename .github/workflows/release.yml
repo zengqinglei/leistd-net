@@ -17,8 +17,18 @@ jobs:
     # 跳过机器人自身回写提交与 [skip ci]，避免死循环；schedule/dispatch 没有 head_commit。
     if: github.event_name != 'push' || (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]'))
     runs-on: ubuntu-latest
-    # 不设 concurrency（同时发两个 tag 是合法的），但必须有上限：
-    # 没有上限时挂死一次按默认 360 分钟计费
+    # 同一分支的发布必须排队：版本推算是对 tag 命名空间的「读—改—写」，
+    # stable 还要把版本回写 main。两个 run 并行时各自读到同一状态、算出同一个 tag，
+    # 后落地的那个被 remote rejected（2026-09-11 两次合并撞出 v0.13.0-beta.148 即此）。
+    # 按 ref 分组：stable / beta 各自排队，互不阻塞。
+    #
+    # cancel-in-progress: false —— 发布不能半途掐断（包已推 nuget，tag 未落）。
+    # 代价是连续合并时中间那次可能在排队中被更新的 run 顶掉，那一版没有自己的 beta tag；
+    # 它的内容会随下一版发出，可以接受。
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    # 必须有上限：没有上限时挂死一次按默认 360 分钟计费
     timeout-minutes: 30
     permissions:
       contents: write      # 回写 VERSION / 打 tag / 建 Release
@@ -27,8 +37,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # nightly 固定构建 develop；其余构建触发分支。
-          ref: ${{ (github.event_name == 'schedule') && 'develop' || github.ref }}
+          # nightly 固定构建 develop；其余构建**触发的那个提交**，不是分支当下的 tip。
+          #
+          # 写分支名会让"发了什么"取决于 checkout 那一刻分支在哪：两次合并挨得近时，
+          # 两个 run 都检出同一个 tip，于是 beta 序号（按距上一个 stable tag 的提交数算）
+          # 也一模一样，第二个 run 必然撞 tag。写 SHA 之后每个 run 各自对应一个提交，
+          # 序号天然不同，tag 也就不会撞。
+          ref: ${{ (github.event_name == 'schedule') && 'develop' || github.sha }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
