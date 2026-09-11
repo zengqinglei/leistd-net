@@ -3,6 +3,8 @@
   <ItemGroup>
     <!-- 契约套件对 Redis 的派生需要真实服务；没有服务时跳过而不是整体失败 -->
     <PackageReference Include="Xunit.SkippableFact" />
+    <!-- 续期用例推进假时钟，不睡真实时间 -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
   <ItemGroup>
