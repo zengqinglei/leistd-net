@@ -17,6 +17,7 @@ import { LayoutService } from '../../services/layout-service';
 //#if (IncludeLocalization)
 // 空词条下 translate() 回落成键名，所以按**键**断言：改一句中文不该让这组用例变红。
 const WORKSPACE = 'menu.workspace';
+const PLATFORM = 'menu.platform';
 //#if (LocalIdentity)
 const PROFILE = 'menu.profile';
 const CHANGE_PASSWORD = 'menu.changePassword';
@@ -25,6 +26,7 @@ const PREFERENCES = 'menu.preferences';
 const LOGOUT = 'menu.logout';
 //#else
 const WORKSPACE = 'Workspace';
+const PLATFORM = 'Admin platform';
 //#if (LocalIdentity)
 const PROFILE = 'Profile';
 const CHANGE_PASSWORD = 'Change password';
@@ -44,7 +46,13 @@ const LOGOUT = 'Sign out';
  *    多出一项就会红。
  */
 describe('UserMenu 菜单构成', () => {
-  function build(options: { platform: boolean }): UserMenu {
+  /**
+   * `platform`（此刻在哪个区）与 `canAccessPlatform`（有没有权限进管理侧）是两个独立输入。
+   *
+   * 把它们绑成同一个布尔值，就漏掉了最常见的那个状态：管理员待在工作空间。
+   * 而"回管理平台"这个入口只在那个状态下出现——绑在一起时，整段删掉用例也不会红。
+   */
+  function build(options: { platform: boolean; canAccessPlatform?: boolean }): UserMenu {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -57,7 +65,10 @@ describe('UserMenu 菜单构成', () => {
             currentUrl: signal(options.platform ? '/platform' : '/workspace/dashboard'),
           },
         },
-        { provide: AuthorizationService, useValue: { canAccessPlatform: () => options.platform } },
+        {
+          provide: AuthorizationService,
+          useValue: { canAccessPlatform: () => options.canAccessPlatform ?? options.platform },
+        },
         // currentUser / current 只被模板用到，这组用例只构造类；给出去是为了满足注入。
         { provide: AuthService, useValue: { currentUser: signal(null), logout: () => undefined } },
         { provide: TenantContextService, useValue: { current: signal(null) } },
@@ -95,6 +106,17 @@ describe('UserMenu 菜单构成', () => {
 
   it('平台侧多一个回工作空间的入口', () => {
     expect(labelsOf(build({ platform: true }))).toEqual([WORKSPACE, ...personalItems, LOGOUT]);
+  });
+
+  it('管理员待在工作空间时多一个回管理平台的入口', () => {
+    const menu = build({ platform: false, canAccessPlatform: true });
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+
+    expect(labelsOf(menu)).toEqual([PLATFORM, ...personalItems, LOGOUT]);
+
+    menu.userMenuItems().find((item) => item.label === PLATFORM)!.action!();
+    expect(navigate).toHaveBeenCalledWith(['/platform']);
   });
 
   it('偏好设置指向账户作用域的设置页', () => {
