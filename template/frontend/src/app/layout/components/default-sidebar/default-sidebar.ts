@@ -39,26 +39,18 @@ interface MenuItem {
 }
 
 interface MenuGroup {
-  label?: string;
+  /** 分组标题，必填：没有标题的组就是变相的兜底组（见 docs/standards/coding-frontend.md §8）。 */
+  label: string;
   items: MenuItem[];
 }
 
 /*
- * 菜单分组的判据（新增入口按这个落位，两个区各自成立）
+ * 下面两套菜单是这个系统的**信息架构**，不是控件清单。
  *
- * 工作     进来先看的东西：本区落地页、待办、我的任务。
- * 业务     这个系统"做业务"的地方。模板只放一个示例模块占位，下游项目在这里加自己的菜单。
- * 系统     谁能用、能用什么：用户、角色、租户。
- * 开发者   面向集成方的东西：OAuth 应用、API 凭据、Webhook。
- * 运维     系统怎么跑：配置、监控、日志、后台任务。
- *
- * 三条规则：
- * 1. **不设「其它」这类兜底组。** 兜底组会把不相干的入口越塞越多，最后谁也说不清该往哪找。
- *    新入口必须落进上面某一类；落不进就说明该新开一类，并把判据补在这里。
- * 2. **按用户的目的分组，不按后端模块或表结构分组。** 用户找的是"我要做什么"，
- *    不是"这属于哪个服务"。
- * 3. **个人偏好不进主导航。** 它属于头像菜单（个人资料 / 偏好设置 / 修改密码 在一处），
- *    主导航放的是这个区能做的事。
+ * 分组判据（工作 / 业务 / 系统 / 开发者 / 运维 各放什么，以及"不设兜底组"等规则）
+ * 只写在 docs/standards/coding-frontend.md §8 一处——新增入口先去那张表里找落位，
+ * 落不进就在那里新开一类。判据在这里再抄一份，改的时候必然只改一边。
+ * 分组骨架由 default-sidebar.spec.ts 钉住。
  */
 
 @Component({
@@ -328,7 +320,7 @@ export class DefaultSidebar {
       .map((group) => ({
         ...group,
         //#if (IncludeLocalization)
-        label: group.label ? this.transloco.translate(group.label) : group.label,
+        label: this.transloco.translate(group.label),
         items: group.items
           .filter((item) => this.isItemVisible(item))
           .map((item) => ({ ...item, label: this.transloco.translate(item.label) })),

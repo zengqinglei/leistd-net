@@ -58,9 +58,7 @@
   <div hlmSidebarContent>
     @for (group of menuGroups(); track $index) {
       <div hlmSidebarGroup>
-        @if (group.label) {
-          <div hlmSidebarGroupLabel>{{ group.label }}</div>
-        }
+        <div hlmSidebarGroupLabel>{{ group.label }}</div>
         <div hlmSidebarGroupContent>
           <ul hlmSidebarMenu>
             @for (item of group.items; track item.route) {
