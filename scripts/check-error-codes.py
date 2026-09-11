@@ -6,10 +6,13 @@
 界面上只剩那句通用话，用户无从修正——而这既不报错也不影响任何测试。
 
 判据：模板后端源码里 400 / 409 / 422 这三类业务异常的 throw 语句，必须在同一条语句内出现
-`.WithCode("...")`。个别刻意直出英文原文（不配词条）的，用 `.AsUserFacing()` 显式声明，也算通过。
+`.WithCode("...")`。
 
-注意这条闸门只保证**有多语言**的形态能显示具体原因。无多语言形态下框架的安全默认是
-"消息只进日志"（见 api.md §4.1），要让某条消息落地给用户需在该抛出点显式 `.AsUserFacing()`。
+`.AsUserFacing()` **不是替代品**：处理器的解析顺序是"自定义码词条 → 状态码通用码词条 →
+直出 Message"，而框架资源里 `Error:BadRequest` 这类通用码词条是配齐的，于是有多语言时
+第二步必然命中、永远走不到"直出 Message"那一步。也就是说 `AsUserFacing()` 只在**无多语言**
+形态下起作用（那时没有 localizer），有多语言时它是死代码。要让原因显示出来只有一条路：
+带码 + 配词条（词条缺失由 i18n 闸门另行拦住）。
 """
 import re
 import sys
@@ -72,7 +75,7 @@ def main() -> int:
             for match in THROW.finditer(text):
                 checked += 1
                 statement = statement_at(text, match.start())
-                if ".WithCode(" in statement or ".AsUserFacing(" in statement:
+                if ".WithCode(" in statement:
                     continue
                 line = text.count("\n", 0, match.start()) + 1
                 problems.append(
