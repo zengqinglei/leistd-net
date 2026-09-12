@@ -110,7 +110,18 @@ services:
         condition: service_started
 
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health/ready || exit 1"]
+      # 用 bash 的 /dev/tcp 而不是 wget/curl：**aspnet 运行时镜像里两个都没有**。
+      # 用 wget 时 healthcheck 恒定失败（`wget: not found`），容器一直是 unhealthy，
+      # 而服务其实是好的——依赖它的编排（compose 的 depends_on、K8s readiness）会一直等下去。
+      # CMD + bash，不是 CMD-SHELL：CMD-SHELL 走 /bin/sh（Debian 上是 dash），dash 不支持 /dev/tcp。
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/localhost/8080
+          && printf 'GET /api/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          && grep -q '200 OK' <&3
       interval: 30s
       timeout: 10s
       retries: 3
