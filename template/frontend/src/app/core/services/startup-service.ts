@@ -22,6 +22,12 @@ import { entryRoutePath } from '../routing/entry-route';
 
 export type StartupStatus = 'loading' | 'success' | 'failed';
 
+/**
+ * 需要完成认证与会话初始化的顶层路由前缀。
+ * 与 app.routes.ts 中使用 authGuard 的路由保持一致，由 app.routes.spec.ts 校验。
+ */
+export const PROTECTED_ROUTE_PREFIXES = ['/workspace', '/platform'] as const;
+
 @Injectable({ providedIn: 'root' })
 export class StartupService {
   private authService = inject(AuthService);
@@ -113,7 +119,7 @@ export class StartupService {
   }
   private isProtectedRoute(): boolean {
     const route = entryRoutePath();
-    return route.startsWith('/workspace') || route.startsWith('/platform');
+    return PROTECTED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));
   }
   //#if (LocalIdentity)
 

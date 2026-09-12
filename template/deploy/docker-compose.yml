@@ -110,7 +110,16 @@ services:
         condition: service_started
 
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health/ready || exit 1"]
+      # aspnet:10.0 不包含 wget/curl，使用 Bash /dev/tcp 请求就绪端点。
+      # 必须使用 CMD；CMD-SHELL 通过不支持 /dev/tcp 的 /bin/sh 执行。
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/localhost/8080
+          && printf 'GET /api/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          && grep -q '200 OK' <&3
       interval: 30s
       timeout: 10s
       retries: 3

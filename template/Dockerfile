@@ -1,7 +1,8 @@
 # -----------------------------------
 # Stage 1: Build Frontend (Angular)
 # -----------------------------------
-FROM node:20-alpine AS frontend-build
+# Angular CLI 要求 Node >= 22.22.3。
+FROM node:22-alpine AS frontend-build
 WORKDIR /app
 
 # 锁定文件是前端构建的唯一依赖基线。
@@ -47,7 +48,8 @@ RUN dotnet publish "CompanyName.ProjectName.DbMigrator.csproj" -c Release -o /ap
 # -----------------------------------
 # Stage 3: Final Runtime Image
 # -----------------------------------
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS migrator
+# DbMigrator 引用 Microsoft.AspNetCore.App，运行镜像必须包含 ASP.NET Core 共享框架。
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS migrator
 WORKDIR /app
 COPY --from=backend-build /app/migrator .
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.DbMigrator.dll"]

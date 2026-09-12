@@ -10,12 +10,6 @@ import { EmptyLayout } from './layout/empty/empty-layout';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
 
 export const routes: Routes = [
-  // 公开页面
-  {
-    path: '',
-    loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
-  },
-
   //#if (LocalIdentity)
   // Empty Layout - 认证相关页面（登录、注册等）
   {
@@ -58,6 +52,12 @@ export const routes: Routes = [
     },
     loadChildren: () =>
       import('./features/platform/platform.routes').then((r) => r.PLATFORM_ROUTES),
+  },
+
+  // 空路径按前缀匹配，必须位于所有具体路由之后。
+  {
+    path: '',
+    loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
   },
 
   // 兜底路由
