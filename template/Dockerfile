@@ -1,8 +1,7 @@
 # -----------------------------------
 # Stage 1: Build Frontend (Angular)
 # -----------------------------------
-# Angular 22 的 CLI 要求 Node >= 22.22.3；node:20 会在 `ng build` 处以 exit 3 失败，
-# 而报错出现在容器构建日志深处，看起来像前端代码问题。
+# Angular CLI 要求 Node >= 22.22.3。
 FROM node:22-alpine AS frontend-build
 WORKDIR /app
 
@@ -49,10 +48,7 @@ RUN dotnet publish "CompanyName.ProjectName.DbMigrator.csproj" -c Release -o /ap
 # -----------------------------------
 # Stage 3: Final Runtime Image
 # -----------------------------------
-# aspnet 而不是 runtime：DbMigrator 的 csproj 声明了
-# <FrameworkReference Include="Microsoft.AspNetCore.App" />（Program.cs 用 Host.CreateApplicationBuilder）。
-# 用 runtime 镜像时它以 "No frameworks were found" 启动失败——本地 dotnet run 一切正常，
-# 只有容器里才炸，而迁移器是部署链路上第一个跑的东西。
+# DbMigrator 引用 Microsoft.AspNetCore.App，运行镜像必须包含 ASP.NET Core 共享框架。
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS migrator
 WORKDIR /app
 COPY --from=backend-build /app/migrator .

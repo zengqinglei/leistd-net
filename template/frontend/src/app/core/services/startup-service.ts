@@ -23,19 +23,8 @@ import { entryRoutePath } from '../routing/entry-route';
 export type StartupStatus = 'loading' | 'success' | 'failed';
 
 /**
- * 需要先拿到主体才能渲染的路由前缀。
- *
- * **它必须与 `app.routes.ts` 里挂了 `authGuard` 的那几条顶层路由一一对应**，
- * 而这条对应关系**没有任何运行期机制维持**：`app.routes.ts` 引了
- * `permissionGuard`、而 `permissionGuard` 引了本文件，反向再引 `routes` 会成环。
- *
- * 所以它由 `startup-service.routes.spec.ts` 钉住：**新增一个带 `authGuard` 的区而忘了
- * 加进这里，那条用例会红**。忘了加的后果是那个区不需要等主体就位就渲染——
- * 表现是受保护入口一闪而过，而不是报错。
- *
- * 出处：CRM V2 平台地基的 crm 服务报告（2026-09）。它那一侧的处置是反过来写
- * 「一切都受保护，只有 /auth/* 例外」——**模板不能照抄**，因为模板有公开区（`''`）
- * 与 `403-forbidden`，两者都必须在未认证时可达。
+ * 需要完成认证与会话初始化的顶层路由前缀。
+ * 与 app.routes.ts 中使用 authGuard 的路由保持一致，由 app.routes.spec.ts 校验。
  */
 export const PROTECTED_ROUTE_PREFIXES = ['/workspace', '/platform'] as const;
 
