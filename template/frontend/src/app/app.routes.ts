@@ -10,12 +10,6 @@ import { EmptyLayout } from './layout/empty/empty-layout';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
 
 export const routes: Routes = [
-  // 公开页面
-  {
-    path: '',
-    loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
-  },
-
   //#if (LocalIdentity)
   // Empty Layout - 认证相关页面（登录、注册等）
   {
@@ -61,5 +55,20 @@ export const routes: Routes = [
   },
 
   // 兜底路由
+  // 公开页面。
+  //
+  // **必须排在所有具体路径之后。** 空路径按前缀匹配，配上 `loadChildren` 就会匹配**任何** URL；
+  // 而路由器进入懒加载配置后匹配不上**不会退回来重试兄弟路由**。
+  // 它排在第一位时，`/auth/callback` 这类具体路径会被它吞掉——
+  // 症状是「授权码换到了令牌、查询串被清掉、页面回到首页，而回调组件从未构造」，**全程无报错**。
+  //
+  // 出处：CRM V2 平台地基的 crm 服务实测（2026-09；它那一侧的处置是删掉整个公开区，
+  // 那是它的产品决策，不是模板该跟的；模板这里只调顺序，公开区保留）。
+  // 顺序由 `app.routes.spec.ts` 钉住。
+  {
+    path: '',
+    loadChildren: () => import('./features/public/public.routes').then((r) => r.PUBLIC_ROUTES),
+  },
+
   { path: '**', redirectTo: '' },
 ];
