@@ -18,8 +18,8 @@ public class OperationRecordProfile : MapsterProfile
     /// MapContext 参数名：读者是否为宿主。
     /// </summary>
     /// <remarks>
-    /// 不是宿主（或没给）时 <see cref="OperationRecordOutputDto.FailureDetail"/> 与
-    /// <see cref="OperationRecordOutputDto.CorrelationId"/> 一律置空——<b>字段级裁剪必须在服务端做</b>，
+    /// 不是宿主（或没给）时 <see cref="OperationRecordOutputDto.FailureDetail"/>、
+    /// <see cref="OperationRecordOutputDto.CorrelationId"/> 与 <see cref="OperationRecordOutputDto.ActorTenantId"/> 一律置空——<b>字段级裁剪必须在服务端做</b>，
     /// 交给界面"不显示"只是把数据下发了却假装看不见。列表与导出走同一个映射，裁剪口径自然一致。
     /// </remarks>
     public const string IncludeHostOnlyFieldsKey = "IncludeHostOnlyFields";
@@ -30,6 +30,7 @@ public class OperationRecordProfile : MapsterProfile
             .Map(dest => dest.Outcome, src => src.Outcome.ToString())
             .Map(dest => dest.FailureDetail, src => IncludeHostOnlyFields() ? src.FailureDetail : null)
             .Map(dest => dest.CorrelationId, src => IncludeHostOnlyFields() ? src.CorrelationId : null)
+            .Map(dest => dest.ActorTenantId, src => IncludeHostOnlyFields() ? src.ActorTenantId : null)
             .Map(dest => dest.ActorIsTarget, src =>
                 src.ActorId == null && src.Outcome == OperationRecordOutcome.Succeeded && IsSelfActing(src.Action));
 

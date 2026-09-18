@@ -27,14 +27,16 @@ public sealed class OperationRecordingTests
         Claim[]? claims = null,
         string? displayName = "Grace Hopper",
         string? username = "grace",
-        OperationRecordOptions? options = null)
+        OperationRecordOptions? options = null,
+        FakeOperationActionDefinitionManager? definitions = null,
+        bool inHostContext = false)
     {
         var store = new RecordingOperationRecordStore();
         var collector = new FakeLogCollector();
         var recorder = new OperationRecorder(
             store,
-            new FakeOperationActionDefinitionManager(),
-            new FakeCurrentTenant(TenantId),
+            definitions ?? new FakeOperationActionDefinitionManager(),
+            new FakeCurrentTenant(inHostContext ? null : TenantId),
             new FakeCurrentUser(id: UserId, username: username, name: displayName, claims: claims),
             new FakeCorrelationIdProvider("0af7651916cd43dd8448eb211c80319c"),
             // 官方 FakeTimeProvider 驱动真实的 IClock 实现：断言钉的是生产代码的时间口径，
@@ -320,49 +322,107 @@ public sealed class OperationRecordingTests
     }
 
     /// <summary>
-    /// 可见性由动作定义盖章；<b>未登记的动作码盖最严格的那一档</b>
+    /// 未登记的动作码在两条路径上都当场拒绝，什么都不写
     /// </summary>
     /// <remarks>
-    /// 这是一条<b>安全属性</b>，不是默认值偏好：审计表在多租户下由租户管理员直接阅读，
-    /// 未登记的码若默认可见给租户，就是默认泄露。反过来最坏只是"租户暂时看不到某些记录"，
-    /// 补登记即可修复——安全默认往紧里选。
+    /// 可见性取自动作定义，未登记的码没有可见性可盖：默认给租户看是泄露，
+    /// 默认只给宿主看又会让租户上下文里写下的记录谁都看不见（回归点：早先盖 Host 且不报错）。
+    /// 被拒路径上也不被 catch 吞掉——这是确定性的编码错误，不是写库故障。
     /// </remarks>
     [Fact]
-    public async Task An_unregistered_action_is_stamped_with_the_most_restrictive_visibility()
+    public async Task An_unregistered_action_is_rejected_on_both_paths()
     {
-        var (recorder, store, _) = Create();
+        var (recorder, store, _) = Create(definitions: new FakeOperationActionDefinitionManager(otherCodes: null));
 
-        await recorder.RecordSucceededAsync("never.registered", OperationTarget.For("t"), "b");
-
-        Assert.Equal(OperationVisibility.Host, Assert.Single(store.Written).Visibility);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => recorder.RecordSucceededAsync("never.registered", OperationTarget.For("t"), "b"));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => recorder.RecordFailedAsync("never.registered", OperationTarget.For("t"), "b"));
+        Assert.Empty(store.Written);
     }
 
     /// <summary>已登记的动作码按它自己声明的可见性盖章。</summary>
     [Theory]
     [InlineData(OperationVisibility.Tenant)]
     [InlineData(OperationVisibility.Actor)]
-    [InlineData(OperationVisibility.Host)]
     public async Task A_registered_action_is_stamped_with_its_declared_visibility(OperationVisibility declared)
     {
-        var store = new RecordingOperationRecordStore();
-        var recorder = new OperationRecorder(
-            store,
-            new FakeOperationActionDefinitionManager(
-                new Dictionary<string, OperationVisibility>(StringComparer.Ordinal)
-                {
-                    ["user.created"] = declared
-                }),
-            new FakeCurrentTenant(TenantId),
-            new FakeCurrentUser(id: UserId),
-            new FakeCorrelationIdProvider(null),
-            new UtcClockProvider(new FakeTimeProvider(FixedNow)),
-            Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+        var (recorder, store, _) = Create(definitions: Registered("user.created", declared));
 
         await recorder.RecordSucceededAsync("user.created", OperationTarget.For("u-1"), "b");
 
-        Assert.Equal(declared, Assert.Single(store.Written).Visibility);
+        var written = Assert.Single(store.Written);
+        Assert.Equal(declared, written.Visibility);
+        Assert.Equal(TenantId, written.TenantId);
+        Assert.Equal(TenantId, written.ActorTenantId);
     }
+
+    /// <summary>宿主可见的动作在宿主上下文里照常记成功。</summary>
+    [Fact]
+    public async Task A_host_action_succeeds_in_the_host_context()
+    {
+        var (recorder, store, _) = Create(definitions: Registered("tenant.created", OperationVisibility.Host), inHostContext: true);
+
+        await recorder.RecordSucceededAsync("tenant.created", OperationTarget.For("t-1"), "App.Tenants.Create");
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(OperationVisibility.Host, written.Visibility);
+        Assert.Null(written.TenantId);
+        Assert.Null(written.ActorTenantId);
+    }
+
+    /// <summary>
+    /// 宿主可见的动作不能在租户上下文里记成功
+    /// </summary>
+    /// <remarks>
+    /// 记在租户层谁都看不见（租户读者按可见性滤掉、宿主按租户维度查不到），
+    /// 挪到宿主层又脱离了租户库里的业务事务。两头都不对，只能让调用方改登记或改记录位置。
+    /// </remarks>
+    [Fact]
+    public async Task A_host_action_cannot_succeed_inside_a_tenant()
+    {
+        var (recorder, store, _) = Create(definitions: Registered("tenant.created", OperationVisibility.Host));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => recorder.RecordSucceededAsync("tenant.created", OperationTarget.For("t-1"), "App.Tenants.Create"));
+        Assert.Empty(store.Written);
+    }
+
+    /// <summary>
+    /// 租户上下文里被拒的宿主动作写进宿主层，来源租户另存
+    /// </summary>
+    /// <remarks>
+    /// 典型场景是租户用户调用宿主接口被拒——宿主最该看到的安全事件。
+    /// 回归点：早先留在租户层，租户读者看不到、宿主也查不到，谁都看不见。
+    /// </remarks>
+    [Fact]
+    public async Task A_rejected_host_action_inside_a_tenant_is_written_to_the_host_layer()
+    {
+        var (recorder, store, _) = Create(definitions: Registered("tenant.created", OperationVisibility.Host));
+
+        await recorder.RecordFailedAsync("tenant.created", OperationTarget.None, "App.Tenants.Create");
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(OperationVisibility.Host, written.Visibility);
+        Assert.Null(written.TenantId);
+        Assert.Equal(TenantId, written.ActorTenantId);
+    }
+
+    /// <summary>租户可见的失败记录仍留在该租户的层里。</summary>
+    [Fact]
+    public async Task A_rejected_tenant_action_stays_in_the_tenant_layer()
+    {
+        var (recorder, store, _) = Create(definitions: Registered("user.disabled", OperationVisibility.Tenant));
+
+        await recorder.RecordFailedAsync("user.disabled", OperationTarget.For("u-1"), "App.Users.Update");
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(TenantId, written.TenantId);
+        Assert.Equal(TenantId, written.ActorTenantId);
+    }
+
+    private static FakeOperationActionDefinitionManager Registered(string code, OperationVisibility visibility)
+        => new(new Dictionary<string, OperationVisibility>(StringComparer.Ordinal) { [code] = visibility }, otherCodes: null);
 
     /// <summary>超长字段在写入前留下告警，供排查"记录为什么被截断"。</summary>
     [Fact]

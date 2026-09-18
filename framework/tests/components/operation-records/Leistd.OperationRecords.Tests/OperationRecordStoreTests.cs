@@ -3,8 +3,10 @@ using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Stores;
 using Leistd.OperationRecords.Tests.TestDoubles;
 using Leistd.TestBase.Doubles;
+using Leistd.UnitOfWork;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Leistd.OperationRecords.Tests;
@@ -20,6 +22,7 @@ public sealed class OperationRecordStoreTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
     private readonly TestDbContext _db;
+    private readonly ServiceProvider _services;
     private readonly EfCoreOperationRecordStore<TestDbContext> _store;
 
     public OperationRecordStoreTests()
@@ -28,11 +31,18 @@ public sealed class OperationRecordStoreTests : IDisposable
         _db = new TestDbContext(
             new DbContextOptionsBuilder<TestDbContext>().UseSqlite(_connection).Options);
         _db.Database.EnsureCreated();
-        _store = new EfCoreOperationRecordStore<TestDbContext>(new FixedDbContextProvider<TestDbContext>(_db));
+        // 本组只关心表结构与查询：上下文固定成同一个，失败记录的独立工作单元因此落回同一张表。
+        // 事务边界与跨层写入由 FailedRecordIsolationTests 在真实路由下验证。
+        _services = new ServiceCollection().AddLogging().AddUnitOfWork().BuildServiceProvider();
+        _store = new EfCoreOperationRecordStore<TestDbContext>(
+            new FixedDbContextProvider<TestDbContext>(_db),
+            _services.GetRequiredService<IUnitOfWorkManager>(),
+            new FakeCurrentTenant(null));
     }
 
     public void Dispose()
     {
+        _services.Dispose();
         _db.Dispose();
         _connection.Dispose();
     }

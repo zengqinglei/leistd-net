@@ -48,8 +48,21 @@ public sealed class OperationRecordInfo
     /// <summary>记录标识（有序 Guid v7，本身即按写入时间单调）。</summary>
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
-    /// <summary>租户归属；<see langword="null"/> 表示宿主。</summary>
+    /// <summary>记录所在的层：<see langword="null"/> 表示宿主层，否则是该租户的层。</summary>
+    /// <remarks>
+    /// 通常就是操作发生时的租户上下文；唯一的例外是 <see cref="OperationVisibility.Host"/> 的失败记录——
+    /// 它们一律写进宿主层（此值为 <see langword="null"/>），来源租户由 <see cref="ActorTenantId"/> 保留。
+    /// 否则一条"租户用户试图调用宿主接口被拒"的记录会留在租户层，租户读者按可见性看不到它，
+    /// 宿主又按租户维度查不到它，谁都看不见——而那正是宿主最该看到的安全事件。
+    /// </remarks>
     public Guid? TenantId { get; init; }
+
+    /// <summary>操作发生时的租户上下文；<see langword="null"/> 表示宿主。</summary>
+    /// <remarks>
+    /// 回答"什么人"的另一半：<see cref="ActorId"/> 只在它所属的租户里有意义。
+    /// 与 <see cref="TenantId"/> 不同的行，就是从租户上下文写进宿主层的那些记录。
+    /// </remarks>
+    public Guid? ActorTenantId { get; init; }
 
     /// <summary>做了什么：业务动作码，如 <c>identity.user.created</c>。</summary>
     /// <remarks>
@@ -88,11 +101,10 @@ public sealed class OperationRecordInfo
     /// <para><b>为什么要把可见性反规范化到记录上。</b>可见性本身定义在动作上
     /// （<see cref="IOperationActionDefinition.Visibility"/>），但查询必须能在数据库里按它过滤——
     /// 查出来再内存过滤会让总数与当页双双算错，分页直接失效。</para>
-    /// <para><b>未登记动作码盖 <see cref="OperationVisibility.Host"/>，是刻意选最严格的一档。</b>
-    /// 这张表在多租户下由租户管理员直接阅读；未登记的码默认可见给租户就是默认泄露，
-    /// 而反过来最坏只是"租户暂时看不到某些记录"，补登记即可修复。安全默认往紧里选。</para>
+    /// <para><b>必填、没有默认值。</b>可见性是安全边界，任何默认值都是替写入方做的决定：
+    /// 默认给租户看是泄露，默认只给宿主看又会让租户层的记录谁都看不见。</para>
     /// </remarks>
-    public OperationVisibility Visibility { get; init; } = OperationVisibility.Host;
+    public required OperationVisibility Visibility { get; init; }
 
     /// <summary>为什么没成：失败原因的稳定错误码，兼本地化资源键。</summary>
     /// <remarks>
@@ -115,7 +127,11 @@ public sealed class OperationRecordInfo
     /// <summary>什么时间（UTC）。</summary>
     public DateTime CreationTime { get; init; }
 
-    /// <summary>什么人：操作人标识。机器主体的 <c>sub</c> 不是 GUID，此时为 <see langword="null"/>。</summary>
+    /// <summary>什么人：操作人标识，取主体声明的原始值；匿名请求为 <see langword="null"/>。</summary>
+    /// <remarks>
+    /// 不要求是 GUID：机器主体（<c>client:&lt;client_id&gt;</c>）与后台作业主体的 <c>sub</c> 原样记下，
+    /// 否则这两类操作会全部记成无主的。
+    /// </remarks>
     public string? ActorId { get; init; }
 
     /// <summary>什么人：操作人显示名的<b>快照</b>。</summary>

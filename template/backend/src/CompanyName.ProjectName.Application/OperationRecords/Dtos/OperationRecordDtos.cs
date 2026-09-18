@@ -92,6 +92,15 @@ public record OperationRecordOutputDto
     /// </summary>
     /// <remarks>对租户是无用且泄露内部拓扑的标识，故与 <see cref="FailureDetail"/> 同样裁剪。</remarks>
     public string? CorrelationId { get; init; }
+
+    /// <summary>
+    /// 操作发生时的租户；<b>仅宿主可见</b>，宿主上下文里的操作为空。
+    /// </summary>
+    /// <remarks>
+    /// 租户用户调用宿主接口被拒时，记录写进宿主层，靠它回答"是哪个租户的人"。
+    /// 对租户读者它恒为自己，没有信息量，故同样裁剪。
+    /// </remarks>
+    public Guid? ActorTenantId { get; init; }
 }
 
 /// <summary>

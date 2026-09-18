@@ -414,6 +414,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<Guid?>("ActorTenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("ArchivedTime")
                         .HasColumnType("timestamp with time zone");
 
@@ -656,6 +659,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     b.Property<string>("ActorName")
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("ActorTenantId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("AuthorizationBasis")
                         .IsRequired()

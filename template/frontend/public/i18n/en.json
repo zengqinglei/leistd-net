@@ -634,6 +634,7 @@
       "colTime": "Time",
       "colBasis": "Authorized by",
       "colCorrelationId": "Trace ID",
+      "colActorTenantId": "Operator tenant",
       "colFailure": "Reason",
       "colFailureDetail": "Technical detail",
       "impersonatedBy": "acting on behalf, by {{name}}",

@@ -1,5 +1,7 @@
+using Leistd.MultiTenancy.Abstractions;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
+using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,21 +16,50 @@ namespace Leistd.OperationRecords.EntityFrameworkCore.Stores;
 /// </remarks>
 /// <typeparam name="TDbContext">宿主 DbContext 类型（需包含 OperationRecord 配置）。</typeparam>
 /// <param name="dbContextProvider">工作单元内的 DbContext 提供器。</param>
+/// <param name="unitOfWorkManager">工作单元管理器，失败记录据它独立提交。</param>
+/// <param name="currentTenant">当前租户上下文，失败记录据它切到记录所在的层。</param>
 public class EfCoreOperationRecordStore<TDbContext>(
-    IDbContextProvider<TDbContext> dbContextProvider) : IOperationRecordStore
+    IDbContextProvider<TDbContext> dbContextProvider,
+    IUnitOfWorkManager unitOfWorkManager,
+    ICurrentTenant currentTenant) : IOperationRecordStore
     where TDbContext : DbContext
 {
     /// <inheritdoc />
     /// <remarks>
-    /// <para>与 <c>EfCoreSettingStore</c>、<c>EfCoreNotificationStore</c> 同型：就地保存。
+    /// <para>成功记录与 <c>EfCoreSettingStore</c>、<c>EfCoreNotificationStore</c> 同型：就地保存。
     /// 这不等于"立即提交"——有环境工作单元时写入落进它的事务，由它决定提交还是回滚；
-    /// 没有工作单元时 <see cref="IDbContextProvider{TDbContext}"/> 给的是当前作用域新建的上下文，
-    /// 保存即生效。</para>
-    /// <para><b>本存储不自行开启事务。</b>一条记录要不要扛过外层回滚，取决于调用方在哪里记——
-    /// 那只有宿主知道。组件替它开第二个事务会与外层未提交的写入互相加锁，
-    /// 这正是工作单元组件对 <c>requiresNew</c> 的告诫。</para>
+    /// 没有工作单元时 <see cref="IDbContextProvider{TDbContext}"/> 给的是当前作用域新建的上下文，保存即生效。</para>
+    /// <para>失败记录先切到记录所在的租户层，再在新开的工作单元里写入并提交。切租户必须在开工作单元之前：
+    /// 工作单元按开启时的租户绑定连接，开了再切会被连接归属校验拒绝。</para>
     /// </remarks>
     public async Task InsertAsync(OperationRecordInfo record, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        if (record.Outcome == OperationRecordOutcome.Succeeded)
+        {
+            // 成功记录跟随调用方的事务，连的是当前租户的库；归属对不上就会写进别人的库。
+            if (record.TenantId != currentTenant.Id)
+            {
+                throw new InvalidOperationException(
+                    $"A succeeded operation record for tenant '{record.TenantId}' cannot be written "
+                    + $"inside the context of tenant '{currentTenant.Id}'.");
+            }
+
+            await AddAsync(record, cancellationToken);
+            return;
+        }
+
+        // 同层时不切：切换会丢掉当前上下文里的租户名
+        using (record.TenantId == currentTenant.Id ? null : currentTenant.Change(record.TenantId))
+        using (var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        {
+            await AddAsync(record, cancellationToken);
+            await unitOfWork.CompleteAsync(cancellationToken);
+        }
+    }
+
+    private async Task AddAsync(OperationRecordInfo record, CancellationToken cancellationToken)
     {
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         dbContext.Set<OperationRecord>().Add(OperationRecord.FromInfo(record));

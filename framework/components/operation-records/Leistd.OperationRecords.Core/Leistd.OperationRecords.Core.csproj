@@ -16,10 +16,14 @@
   </ItemGroup>
 
   <!--
-    刻意不引用 unit-of-work：本包不开启也不提交事务。写入落在调用方所处的边界里，
-    "这条记录要不要扛过外层回滚"由宿主按它的锁分布决定。全框架其它组件对该家族的依赖
-    都只是 .EntityFrameworkCore 包为取 IDbContextProvider 而引，没有一个用到 IUnitOfWorkManager。
+    刻意不引用 unit-of-work：本包只决定记录写进哪一层，事务边界由存储按记录结果执行
+    （契约见 IOperationRecordStore.InsertAsync），独立提交落在持有工作单元依赖的 .EntityFrameworkCore 包里。
   -->
+
+  <ItemGroup>
+    <!-- 记录器是 internal 实现，用例直接构造它来钉住上下文补齐的口径 -->
+    <InternalsVisibleTo Include="Leistd.OperationRecords.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />

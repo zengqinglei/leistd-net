@@ -67,6 +67,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ActorTenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     Action = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
                     TargetId = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
                     AuthorizationBasis = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
@@ -96,6 +97,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ActorTenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     Action = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
                     TargetId = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
                     AuthorizationBasis = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),

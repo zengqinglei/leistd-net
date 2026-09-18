@@ -191,6 +191,10 @@
                         <dd class="min-w-0 font-mono text-xs break-all">
                           {{ row.original.authorizationBasis }}
                         </dd>
+                        @if (row.original.actorTenantId; as actorTenantId) {
+                          <dt class="text-muted-foreground">{{ detailLabel('actorTenantId') }}</dt>
+                          <dd class="min-w-0 font-mono text-xs break-all">{{ actorTenantId }}</dd>
+                        }
                         <!-- 链路标识常驻展开区：把这条记录接到日志上的唯一钥匙。 -->
                         <dt class="text-muted-foreground">{{ detailLabel('correlationId') }}</dt>
                         <dd class="min-w-0 font-mono text-xs break-all">

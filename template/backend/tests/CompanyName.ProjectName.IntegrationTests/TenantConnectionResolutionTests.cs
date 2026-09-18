@@ -14,9 +14,8 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// Resource 宿主的连接解析：缓存必须按租户与连接名分区，单飞不得把取消传染给搭车者。
 /// </summary>
 /// <remarks>
-/// <para>为什么是单元测试而不是走宿主：集成测试工厂会
-/// <c>RemoveAll&lt;IConnectionStringResolver&gt;()</c> 换成 EF InMemory，
-/// 生产解析链在集成测试里根本不执行。这里按生产的注册方式装配
+/// <para>为什么是单元测试而不是走宿主：集成测试宿主跑在内存库模式，
+/// 不注册租户连接解析，生产解析链在集成测试里根本不执行。这里按生产的注册方式装配
 /// （<c>AddRemoteTenantConnectionResolution</c> + 本服务的 Identity 适配器），只把 HTTP 客户端换成假件。</para>
 /// </remarks>
 public class TenantConnectionResolutionTests

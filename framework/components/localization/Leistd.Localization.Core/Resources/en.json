@@ -19,6 +19,7 @@
     "Title:403": "Forbidden",
     "Title:404": "Not Found",
     "Title:409": "Conflict",
+    "Title:415": "Unsupported Media Type",
     "Title:422": "Unprocessable Entity",
     "Title:500": "Internal Server Error",
     "Title:502": "Bad Gateway",

@@ -14,9 +14,15 @@ public interface IOperationRecordStore
 {
     /// <summary>写入一条记录。</summary>
     /// <remarks>
-    /// <b>实现不得自行开启事务。</b>写入落在调用方所处的事务边界里：有环境工作单元就跟随它，
-    /// 没有就即时生效。"这条记录要不要扛过外层回滚"是调用位置的问题，只有宿主清楚它的锁分布，
-    /// 组件擅自开第二个事务会与外层未提交的写入互相加锁。
+    /// <para>事务边界由记录的结果决定，这是契约的一部分，实现必须照做：</para>
+    /// <list type="bullet">
+    /// <item><see cref="OperationRecordOutcome.Succeeded"/>：落在调用方所处的事务边界里，
+    /// 有环境工作单元就跟随它提交或回滚，没有就即时生效。记录的
+    /// <see cref="OperationRecordInfo.TenantId"/> 必须与当前租户上下文一致。</item>
+    /// <item><see cref="OperationRecordOutcome.Failed"/>：在 <see cref="OperationRecordInfo.TenantId"/>
+    /// 所指的层里<b>独立写入并提交</b>，不随调用方回滚——失败记录描述的是一次没发生的变更，
+    /// 没有可以同生共死的对象，而业务拒绝之后几乎总是紧跟着回滚。</item>
+    /// </list>
     /// </remarks>
     /// <param name="record">要写入的记录。</param>
     /// <param name="cancellationToken">取消令牌。</param>

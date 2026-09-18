@@ -380,7 +380,15 @@ export class OperationRecordTable {
   }
 
   detailLabel(
-    field: 'actor' | 'target' | 'time' | 'basis' | 'correlationId' | 'failure' | 'failureDetail',
+    field:
+      | 'actor'
+      | 'target'
+      | 'time'
+      | 'basis'
+      | 'correlationId'
+      | 'actorTenantId'
+      | 'failure'
+      | 'failureDetail',
   ): string {
     //#if (IncludeLocalization)
     const keys = {
@@ -389,6 +397,7 @@ export class OperationRecordTable {
       time: 'operationRecords.table.colTime',
       basis: 'operationRecords.table.colBasis',
       correlationId: 'operationRecords.table.colCorrelationId',
+      actorTenantId: 'operationRecords.table.colActorTenantId',
       failure: 'operationRecords.table.colFailure',
       failureDetail: 'operationRecords.table.colFailureDetail',
     } as const;
@@ -400,6 +409,7 @@ export class OperationRecordTable {
       time: 'Time',
       basis: 'Authorized by',
       correlationId: 'Trace ID',
+      actorTenantId: 'Operator tenant',
       failure: 'Reason',
       failureDetail: 'Technical detail',
     } as const;

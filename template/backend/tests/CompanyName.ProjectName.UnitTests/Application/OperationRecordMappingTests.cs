@@ -40,6 +40,7 @@ public sealed class OperationRecordMappingTests : IDisposable
 
         Assert.Null(output.FailureDetail);
         Assert.Null(output.CorrelationId);
+        Assert.Null(output.ActorTenantId);
         Assert.Equal("Failed", output.Outcome);
         Assert.Equal("Setting:Invalid", output.FailureCode);
     }
@@ -51,6 +52,7 @@ public sealed class OperationRecordMappingTests : IDisposable
 
         Assert.Equal("stack trace", output.FailureDetail);
         Assert.Equal("corr-1", output.CorrelationId);
+        Assert.Equal(SourceTenantId, output.ActorTenantId);
     }
 
     [Fact]
@@ -73,6 +75,7 @@ public sealed class OperationRecordMappingTests : IDisposable
                 TargetId = "user-1",
                 AuthorizationBasis = "anonymous",
                 Outcome = OperationRecordOutcome.Succeeded,
+                Visibility = OperationVisibility.Tenant,
             },
             includeHostOnlyFields: false);
 
@@ -93,6 +96,8 @@ public sealed class OperationRecordMappingTests : IDisposable
             record,
             new Dictionary<string, object> { [OperationRecordProfile.IncludeHostOnlyFieldsKey] = includeHostOnlyFields });
 
+    private static readonly Guid SourceTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
     private static OperationRecordInfo FailedRecord() => new()
     {
         Action = "setting.changed",
@@ -102,5 +107,7 @@ public sealed class OperationRecordMappingTests : IDisposable
         FailureCode = "Setting:Invalid",
         FailureDetail = "stack trace",
         CorrelationId = "corr-1",
+        Visibility = OperationVisibility.Host,
+        ActorTenantId = SourceTenantId,
     };
 }

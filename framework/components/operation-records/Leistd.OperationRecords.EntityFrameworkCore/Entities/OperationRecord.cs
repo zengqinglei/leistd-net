@@ -21,6 +21,9 @@ public class OperationRecord : IMultiTenant
     /// <inheritdoc />
     public Guid? TenantId { get; set; }
 
+    /// <summary>操作发生时的租户上下文；<see langword="null"/> 表示宿主。</summary>
+    public Guid? ActorTenantId { get; set; }
+
     /// <summary>业务动作码。</summary>
     public string Action { get; set; } = default!;
 
@@ -72,6 +75,7 @@ public class OperationRecord : IMultiTenant
     {
         Id = info.Id,
         TenantId = info.TenantId,
+        ActorTenantId = info.ActorTenantId,
         Action = Truncate(info.Action, OperationRecordInfo.MaxActionLength)!,
         TargetId = Truncate(info.TargetId, OperationRecordInfo.MaxTargetIdLength)!,
         AuthorizationBasis = Truncate(info.AuthorizationBasis, OperationRecordInfo.MaxAuthorizationBasisLength)!,
@@ -96,6 +100,7 @@ public class OperationRecord : IMultiTenant
     {
         Id = Id,
         TenantId = TenantId,
+        ActorTenantId = ActorTenantId,
         Action = Action,
         TargetId = TargetId,
         AuthorizationBasis = AuthorizationBasis,

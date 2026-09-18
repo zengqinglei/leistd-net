@@ -66,9 +66,9 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
         dbContext.ChangeTracker.Clear();
 
         var archiveService = scope.ServiceProvider.GetRequiredService<IOperationRecordArchiveService>();
-        var moved = await archiveService.ArchiveOlderThanAsync(cutoff, batchSize: 100);
+        var result = await archiveService.ArchiveOlderThanAsync(cutoff, batchSize: 100);
 
-        Assert.Equal(2, moved);
+        Assert.Equal(new OperationRecordArchiveResult(Archived: 2, Databases: 1, FailedDatabases: 0), result);
 
         // 读原表要 IgnoreQueryFilters：这里跑在无租户上下文里，不加的话租户那两行本就看不见，
         // 断言会在"漏掉过滤器"的缺陷下依然全绿——那样这套用例就白写了。
@@ -139,6 +139,22 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
 
         await ApplyHostSettingsAsync();
         Assert.Equal((false, 365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
+    }
+
+    /// <summary>
+    /// 归档表覆盖原表的每一列
+    /// </summary>
+    /// <remarks>
+    /// 搬运是逐字段复制，原表加了列而归档表没跟上，搬完照样报成功，缺的那列到查归档时才会发现。
+    /// </remarks>
+    [Fact]
+    public void The_archive_carries_every_record_column()
+    {
+        var archiveColumns = typeof(OperationRecordArchive).GetProperties().Select(property => property.Name).ToHashSet();
+
+        Assert.Empty(typeof(OperationRecord).GetProperties()
+            .Select(property => property.Name)
+            .Where(name => !archiveColumns.Contains(name)));
     }
 
     private async Task SetHostAsync(string name, string? value)

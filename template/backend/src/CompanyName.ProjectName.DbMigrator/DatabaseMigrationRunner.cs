@@ -150,7 +150,8 @@ public sealed class DatabaseMigrationRunner(
             return new MigrationReport(plans);
         }
 
-        foreach (var target in targets.DistinctBy(x => x.Fingerprint, StringComparer.Ordinal))
+        // 提供器已按物理库去重，与运行时逐库作业同一份清单
+        foreach (var target in targets)
         {
             plans.Add(await ProcessBusinessAsync(target.ConnectionString, target.Fingerprint, apply, cancellationToken));
         }

@@ -14,14 +14,21 @@ namespace CompanyName.ProjectName.Infrastructure.OperationRecords;
 public interface IOperationRecordArchiveService
 {
     /// <summary>
-    /// 把创建时间早于 <paramref name="cutoffUtc"/> 的记录分批搬入归档表。
+    /// 在宿主库与每个独立库里，把创建时间早于 <paramref name="cutoffUtc"/> 的记录分批搬入归档表。
     /// </summary>
+    /// <remarks>某个库失败只记错误日志并计入结果，其余库照常执行。</remarks>
     /// <param name="cutoffUtc">截止时刻（UTC，不含）。</param>
     /// <param name="batchSize">单批条数。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>搬走的总条数。</returns>
-    Task<int> ArchiveOlderThanAsync(
+    /// <returns>搬走的总条数与各库的执行情况。</returns>
+    Task<OperationRecordArchiveResult> ArchiveOlderThanAsync(
         DateTime cutoffUtc,
         int batchSize,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>一次归档的结果。</summary>
+/// <param name="Archived">搬走的总条数。</param>
+/// <param name="Databases">处理的物理库数（含宿主库）。</param>
+/// <param name="FailedDatabases">失败的库数；大于 0 时对应的错误日志里有库的指纹。</param>
+public sealed record OperationRecordArchiveResult(int Archived, int Databases, int FailedDatabases);

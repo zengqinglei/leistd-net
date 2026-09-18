@@ -97,8 +97,7 @@ internal sealed class AuthAppService(
                     OperationRecordAuthorizations.CredentialsPresented,
                     OperationFailure.FromCode(
                         "Auth:InvalidCredentials",
-                        $$"""{"attempts":{{attempts}},"windowMinutes":{{FailedLoginWindowMinutes}}}"""),
-                    cancellationToken);
+                        $$"""{"attempts":{{attempts}},"windowMinutes":{{FailedLoginWindowMinutes}}}"""));
             }
 
             throw new UnauthorizedException($"Login failed: user not found or incorrect password - {input.UsernameOrEmail}")
@@ -255,8 +254,7 @@ internal sealed class AuthAppService(
             OperationRecordAuthorizations.CredentialsPresented,
             OperationFailure.FromCode(
                 "Auth:UserTemporarilyLockedOut",
-                $$"""{"maxFailedAttempts":{{policy.Lockout.MaxFailedAttempts}},"minutes":{{(int)policy.Lockout.Duration.TotalMinutes}}}"""),
-            cancellationToken);
+                $$"""{"maxFailedAttempts":{{policy.Lockout.MaxFailedAttempts}},"minutes":{{(int)policy.Lockout.Duration.TotalMinutes}}}"""));
     }
 
     private static BusinessException TwoFactorChallengeExpired() =>

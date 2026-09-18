@@ -35,6 +35,10 @@ public static class OperationRecordHttpContextExtensions
     /// 一声不响地失效。要不要记，全由调用方通过注解决定。</para>
     /// <para><b>唯一的例外是匿名请求，一律不记。</b>这不是偏好而是安全属性：匿名请求没有操作人，
     /// 记下来等于把审计表变成一个不需要凭据的写入面，任何人都能往里灌数据。</para>
+    /// <para><b>授权依据取实际未通过的那个策略。</b>端点只有一个具名策略时就是它；叠了多个时
+    /// （如权限策略之外再要求近期 MFA），逐个重新评估，取最具体（最后声明）的未通过者——
+    /// 只在被拒路径上发生。都评估通过（策略依赖请求期状态而前后不一致）时记为 <c>-</c>，
+    /// 不猜一个可能是错的名字。</para>
     /// <para>调用方应在确认授权结果为 Forbidden 之后调用本方法。</para>
     /// </remarks>
     /// <param name="context">当前请求上下文。</param>
@@ -54,11 +58,7 @@ public static class OperationRecordHttpContextExtensions
             return;
         }
 
-        // 类级 [Authorize] 用默认策略、Policy 为空；取动作上真正的权限策略名。
-        var authorizationBasis = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>()
-            .Select(data => data.Policy)
-            .LastOrDefault(name => !string.IsNullOrEmpty(name))
-            ?? UnknownAuthorizationBasis;
+        var authorizationBasis = await ResolveFailedPolicyAsync(context, endpoint) ?? UnknownAuthorizationBasis;
 
         var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
         // 目标只带标识、不带名字：此刻调用方正因为**无权访问该目标**而被拒。
@@ -67,8 +67,41 @@ public static class OperationRecordHttpContextExtensions
         await recorder.RecordFailedAsync(
             declared.Action,
             OperationTarget.For(ResolveTargetId(context, declared)),
-            authorizationBasis,
-            cancellationToken: context.RequestAborted);
+            authorizationBasis);
+    }
+
+    // 实际未通过的具名策略。按书写顺序取最后一个会在叠加策略时记错：权限策略之后再叠
+    // 一个 MFA 策略，被 MFA 拒绝时记下的却是权限名，而且只能靠特性书写顺序规避。
+    // 类级 [Authorize] 用默认策略、Policy 为空，不参与。
+    private static async Task<string?> ResolveFailedPolicyAsync(HttpContext context, Endpoint endpoint)
+    {
+        var policyNames = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>()
+            .Select(data => data.Policy)
+            .OfType<string>()
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (policyNames.Count <= 1)
+        {
+            return policyNames.SingleOrDefault();
+        }
+
+        var policyProvider = context.RequestServices.GetRequiredService<IAuthorizationPolicyProvider>();
+        var authorizationService = context.RequestServices.GetRequiredService<IAuthorizationService>();
+
+        // 从最具体（最后声明，通常是动作级）的往前找；资源与授权中间件一致，传 HttpContext。
+        for (var index = policyNames.Count - 1; index >= 0; index--)
+        {
+            var policy = await policyProvider.GetPolicyAsync(policyNames[index]);
+            if (policy is not null
+                && !(await authorizationService.AuthorizeAsync(context.User, context, policy)).Succeeded)
+            {
+                return policyNames[index];
+            }
+        }
+
+        return null;
     }
 
     // 目标标识：按声明顺序取路由值并以 '/' 连接。

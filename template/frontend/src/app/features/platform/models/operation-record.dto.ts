@@ -71,6 +71,13 @@ export interface OperationRecordOutputDto {
    * 链路标识，用于按它去日志里查这次调用的完整细节；**仅宿主可见**。
    */
   correlationId?: string;
+
+  /**
+   * 操作发生时的租户；**仅宿主可见**，宿主上下文里的操作为空。
+   *
+   * 租户用户调用宿主接口被拒时，记录落在宿主这边，靠它回答"是哪个租户的人"。
+   */
+  actorTenantId?: string;
 }
 
 /**

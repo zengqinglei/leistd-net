@@ -1,5 +1,6 @@
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Infrastructure.OperationRecords;
+using Leistd.Lock.Abstractions;
 using Leistd.Timing;
 using Microsoft.Extensions.Options;
 
@@ -15,13 +16,18 @@ namespace CompanyName.ProjectName.Api.HostedServices.BackgroundJobs;
 /// <para>执行时刻与批大小是部署调优参数，在构造时取一次：此时宿主设置还没加载进配置，
 /// 启动期校验也已通过，排期不会因为一条不合规的设置而失效。</para>
 /// <para><b>搬运而非删除</b>，理由见 <see cref="OperationRecordRetentionOptions"/>。</para>
+/// <para><b>多副本只跑一份。</b>每个副本都在同一时刻醒来，用分布式锁非阻塞地抢一次，抢不到就跳过本轮；
+/// 锁丢失时本轮随之取消，已提交的批次不受影响。单副本或未配 Redis 时退化为进程内锁。</para>
 /// </remarks>
 public sealed class OperationRecordArchiveJob(
     IServiceScopeFactory scopeFactory,
+    IDistributedLock distributedLock,
     IOptionsMonitor<OperationRecordRetentionOptions> retention,
     IClock clock,
     ILogger<OperationRecordArchiveJob> logger) : BackgroundService
 {
+    private const string LockKey = "MyProject:operation-record-archive";
+
     // 执行时刻与批大小：构造时取一次（见类型说明）
     private readonly OperationRecordRetentionOptions _options = retention.CurrentValue;
 
@@ -81,22 +87,45 @@ public sealed class OperationRecordArchiveJob(
                 return;
             }
 
+            // 零等待：别的副本已在跑本轮，这一份直接让出，不排队等它跑完再重复一遍
+            await using var lockHandle = await distributedLock.TryLockAsync(LockKey, TimeSpan.Zero, stoppingToken);
+            if (lockHandle is null)
+            {
+                logger.LogDebug("Operation record archiving is running on another replica; skipping this run.");
+                return;
+            }
+
+            using var runScope = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, lockHandle.LockLost);
             var cutoff = clock.Now.AddDays(-current.RetentionDays);
 
-            // 每轮一个独立 scope：本服务是单例，长期持有 scoped 的 DbContext 会让它
-            // 活得和进程一样久，跟踪的实体只增不减。
+            // 每轮一个独立 scope：本服务是单例，长期持有 scoped 服务会让它们活得和进程一样久。
             using var scope = scopeFactory.CreateScope();
             var archiveService = scope.ServiceProvider.GetRequiredService<IOperationRecordArchiveService>();
 
-            var moved = await archiveService.ArchiveOlderThanAsync(
-                cutoff, _options.BatchSize, stoppingToken);
+            var result = await archiveService.ArchiveOlderThanAsync(cutoff, _options.BatchSize, runScope.Token);
 
-            logger.LogInformation(
-                "Archived {Count} operation record(s) created before {Cutoff:o}.", moved, cutoff);
+            if (result.FailedDatabases > 0)
+            {
+                logger.LogWarning(
+                    "Archived {Count} operation record(s) created before {Cutoff:o}; {Failed} of {Databases} database(s) "
+                    + "failed and will be retried at the next scheduled run.",
+                    result.Archived, cutoff, result.FailedDatabases, result.Databases);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Archived {Count} operation record(s) created before {Cutoff:o} across {Databases} database(s).",
+                    result.Archived, cutoff, result.Databases);
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // 停机途中被取消，不是故障。
+        }
+        catch (OperationCanceledException)
+        {
+            // 锁丢失（如 Redis 续期失败）：本轮到此为止，已提交的批次不受影响，下一轮接着搬。
+            logger.LogWarning("Operation record archiving lost its lock; the run was stopped and will resume next time.");
         }
         catch (Exception ex)
         {

@@ -11,8 +11,14 @@ internal sealed class TenantMigrationTargetProvider(ITenantConnectionConfigurati
     {
         var connections = await connectionStore.GetListAsync(name, cancellationToken);
 
-        // 存储已经按名字解析并排除了"一条连接都没有"的租户；这里只做形态转换，
-        // 指纹在 TenantMigrationTarget 上生成，用于日志与去重
-        return [.. connections.Select(x => new TenantMigrationTarget(x.TenantId, x.ConnectionString))];
+        // 存储已经按名字解析并排除了"一条连接都没有"的租户；这里按物理库合并，
+        // 迁移与运行时逐库作业都从这里取清单，去重规则只此一处
+        return
+        [
+            .. connections
+                .Select(x => new TenantMigrationTarget(x.TenantId, x.ConnectionString))
+                .GroupBy(x => x.Fingerprint, StringComparer.Ordinal)
+                .Select(group => group.MinBy(x => x.TenantId)!)
+        ];
     }
 }

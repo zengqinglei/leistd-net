@@ -200,8 +200,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
                 : Task.CompletedTask;
 
         public Task RecordFailedAsync(
-            string action, OperationTarget target, string authorizationBasis,
-            OperationFailure failure = default, CancellationToken cancellationToken = default)
+            string action, OperationTarget target, string authorizationBasis, OperationFailure failure = default)
             => Task.CompletedTask;
     }
 

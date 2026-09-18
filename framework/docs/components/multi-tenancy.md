@@ -304,7 +304,8 @@ public sealed class IdentityTenantConnectionStore(IIdentityTenantConnectionClien
 
 - **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `NotFoundException`。控制库上下文直接注入、不经 `IDbContextProvider`——Provider 创建任何上下文前都会调用解析器，经 Provider 取控制库会形成递归。
 - **远端解析**：结果按 `TenantRouting:CacheLifetime`（必填，0 到 1 小时，缺省即启动失败）缓存；同租户并发请求合并为一次回源，调用方取消只取消自己的等待；回源在独立服务作用域里执行；响应的 `TenantId` 与请求不一致时抛 `InternalServerException`，校验在使用连接串和写缓存之前。
-- **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按迁移作业所属服务的连接名枚举。一条连接都没登记的租户不出现（它们跟着宿主自己的库迁移）；登记过却解析不出这个名字的租户会让作业整体停下（`InvalidOperationException`），不跳过——跳过的库会停在旧结构上，下一次发版才炸。本地迁移作业同样要解密，必须与 API 共享密钥环。
+- **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按迁移作业所属服务的连接名枚举。结果按物理库去重（同一连接串只出现一次，代表租户取标识最小者），与运行时逐库作业是同一份清单；一条连接都没登记的租户不出现（它们跟着宿主自己的库迁移）；登记过却解析不出这个名字的租户会让作业整体停下（`InvalidOperationException`），不跳过——跳过的库会停在旧结构上，下一次发版才炸。本地迁移作业同样要解密，必须与 API 共享密钥环。
+- **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是与迁移目标同一份的独立库清单，停用租户照常列出，结果里没有连接串。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `BeginAsync(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余。写法不同的同一个库、或登记成宿主库的连接会多列一次，逐库逻辑须能重复执行。
 
 ```json
 {
@@ -336,7 +337,8 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举。EF 包提供控制库实现；资源服务由宿主实现 HTTP 版本，**按名字问、按名字答，一次只出一条** |
 | `TenantConnectionLookupResult` | `HasAnyConnection` 区分"不分库"与"缺这个名字"；`Connection` 是命中的那一条 |
 | `TenantRouteCacheOptions` | `CacheLifetime`（必填，不超过 `MaximumCacheLifetime` 1 小时） |
-| `ITenantMigrationTargetProvider` | `GetDedicatedTargetsAsync(name, ct)` 按连接名枚举目标 `TenantMigrationTarget(TenantId, ConnectionString)`，`Fingerprint` 为连接串的 SHA-256 |
+| `ITenantMigrationTargetProvider` | `GetDedicatedTargetsAsync(name, ct)` 按连接名枚举独立物理库 `TenantMigrationTarget(TenantId, ConnectionString)`，每个库一条，`Fingerprint` 为连接串的 SHA-256 |
+| `ITenantDatabaseEnumerator` | `GetDatabasesAsync(name, ct)` 列出运行时要逐库处理的物理库 `TenantDatabase(TenantId, Fingerprint)`；`TenantId` 为 `null` 即宿主库（`TenantDatabase.Host`） |
 | `Leistd.MultiTenancy.Abstractions.MultiTenancySides` | 表示权限属于 `Tenant`、`Host` 或 `Both` |
 
 `ITenantStore` 只有 EF 一种实现，由 `AddMultiTenancyEfCore<TDbContext>()` 注册。资源服务不注册它：把 `ValidateResolvedTenant` 置为 `false` 后解析链只信已验证主体的租户声明，中间件不查注册表。

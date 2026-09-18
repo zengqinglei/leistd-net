@@ -9,26 +9,17 @@ using Microsoft.Extensions.Options;
 
 namespace Leistd.OperationRecords.Services;
 
-/// <summary>
-/// <see cref="IOperationRecorder"/> 的默认实现：从当前上下文补齐操作人、时间与链路标识。
-/// </summary>
-/// <remarks>
-/// <para><b>时间由本类填充</b>，与 <c>EfCoreTenantConnectionConfigurationManager</c> 同型：
-/// 审计属性的自动填充要宿主自己把 <c>AuditSaveChangesInterceptor</c> 挂到目标 DbContext，
-/// 漏挂是静默的，得到的会是一张时间全为零的审计表——"什么时间"塌掉，整张表就没用了。</para>
-/// <para><b>本类不碰事务。</b>写入落在调用方所处的边界里，由存储原样提交或跟随回滚。
-/// "这条记录要不要扛过外层回滚"只有宿主清楚它的锁分布；组件替它开第二个事务，
-/// 会与外层未提交的写入互相加锁——那正是工作单元组件对 <c>requiresNew</c> 的告诫。</para>
-/// </remarks>
-/// <param name="store">持久化存储。</param>
-/// <param name="actionDefinitions">动作定义索引，写入时据它给记录盖上可见性。</param>
-/// <param name="currentTenant">当前租户上下文。</param>
-/// <param name="currentUser">当前用户，操作人信息取自它。</param>
-/// <param name="correlationIdProvider">链路标识提供器。</param>
-/// <param name="clock">时钟。</param>
-/// <param name="options">配置，提供识别真实操作人的 claim 类型。</param>
-/// <param name="logger">日志。</param>
-public class OperationRecorder(
+// IOperationRecorder 的默认实现：从当前上下文补齐操作人、时间与链路标识。
+//
+// internal：宿主经 IOperationRecorder 使用或装饰它。公开具体类而只按接口注册，
+// 注入具体类能编译通过、运行时才解析失败。
+//
+// 时间由本类填充，与 EfCoreTenantConnectionConfigurationManager 同型：审计属性的自动填充
+// 要宿主自己把 AuditSaveChangesInterceptor 挂到目标 DbContext，漏挂是静默的，
+// 得到的会是一张时间全为零的审计表——"什么时间"塌掉，整张表就没用了。
+//
+// 本类只决定记录"写进哪一层"（TenantId），事务边界由存储按结果执行（见 IOperationRecordStore）。
+internal sealed class OperationRecorder(
     IOperationRecordStore store,
     IOperationActionDefinitionManager actionDefinitions,
     ICurrentTenant currentTenant,
@@ -38,41 +29,54 @@ public class OperationRecorder(
     IOptions<OperationRecordOptions> options,
     ILogger<OperationRecorder> logger) : IOperationRecorder
 {
-    /// <inheritdoc />
     public Task RecordSucceededAsync(
         string action,
         OperationTarget target,
         string authorizationBasis,
         CancellationToken cancellationToken = default)
     {
-        Validate(action, authorizationBasis);
+        var definition = GetDefinition(action, authorizationBasis);
+
+        // 宿主可见的成功记录只能写在宿主上下文里：租户上下文的事务连的是租户的库，
+        // 记在租户层谁都看不见，挪到宿主层又脱离了业务事务，两头都不对，只能让调用方改。
+        if (definition.Visibility == OperationVisibility.Host && currentTenant.Id is { } tenantId)
+        {
+            throw new InvalidOperationException(
+                $"Operation action '{action}' is host-visible but succeeded inside tenant '{tenantId}'. "
+                + "Register it as tenant-visible, or record it after switching to the host context.");
+        }
 
         // 成功路径不吞异常：这条记录与它描述的那次变更同处一个边界，
         // 审计写不进去就该让业务一起失败——"发生了但没记"和"记了但没发生"一样不可接受。
         return store.InsertAsync(
-            Create(action, target, authorizationBasis, OperationRecordOutcome.Succeeded, OperationFailure.None),
+            Create(action, target, authorizationBasis, definition.Visibility, currentTenant.Id,
+                OperationRecordOutcome.Succeeded, OperationFailure.None),
             cancellationToken);
     }
 
-    /// <inheritdoc />
     public async Task RecordFailedAsync(
         string action,
         OperationTarget target,
         string authorizationBasis,
-        OperationFailure failure = default,
-        CancellationToken cancellationToken = default)
+        OperationFailure failure = default)
     {
         // 校验放在 try 之外：下面那个 catch 吞的是"写库没成功"这类运行期故障，
-        // 而参数漏传是调用方的编码错误，确定性地每次都发生，必须当场响而不是被吞掉。
-        Validate(action, authorizationBasis);
+        // 而参数漏传、动作码未登记是调用方的编码错误，确定性地每次都发生，必须当场响而不是被吞掉。
+        var definition = GetDefinition(action, authorizationBasis);
+
+        // 宿主可见的失败记录写进宿主层：留在租户层的话租户读者按可见性看不到、宿主按租户维度查不到。
+        // 失败记录本就独立提交，换一层写不牵动任何业务事务。
+        var tenantId = definition.Visibility == OperationVisibility.Host ? null : currentTenant.Id;
 
         try
         {
+            // 不可取消：被审计的一方断开连接，不能让这条审计作废。
             await store.InsertAsync(
-                Create(action, target, authorizationBasis, OperationRecordOutcome.Failed, failure),
-                cancellationToken);
+                Create(action, target, authorizationBasis, definition.Visibility, tenantId,
+                    OperationRecordOutcome.Failed, failure),
+                CancellationToken.None);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception)
         {
             logger.LogError(
                 exception,
@@ -88,10 +92,18 @@ public class OperationRecorder(
     //
     // 目标不在这里校验：OperationTarget 把空白吸收成 None（标识为 "-"），
     // 空白标识在类型层面就构造不出来，校验点前移到了值对象里。
-    private static void Validate(string action, string authorizationBasis)
+    //
+    // 动作码必须已登记：记录的可见性取自定义，未登记的码没有可见性可盖——默认给租户看是泄露，
+    // 默认只给宿主看又会让租户上下文里写下的记录谁都看不见。与权限未定义同一处理。
+    private IOperationActionDefinition GetDefinition(string action, string authorizationBasis)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
         ArgumentException.ThrowIfNullOrWhiteSpace(authorizationBasis);
+
+        return actionDefinitions.GetOrNull(action)
+            ?? throw new InvalidOperationException(
+                $"Operation action '{action}' is not registered. "
+                + "Register it through an IOperationActionDefinitionProvider.");
     }
 
     // 从当前上下文补齐四问的答案。超长字段在存储侧被截断（列有长度上限），这里提前预警：
@@ -100,6 +112,8 @@ public class OperationRecorder(
         string action,
         OperationTarget target,
         string authorizationBasis,
+        OperationVisibility visibility,
+        Guid? tenantId,
         OperationRecordOutcome outcome,
         OperationFailure failure)
     {
@@ -127,16 +141,14 @@ public class OperationRecorder(
 
         return new OperationRecordInfo
         {
-            TenantId = currentTenant.Id,
+            TenantId = tenantId,
+            ActorTenantId = currentTenant.Id,
             Action = action,
             TargetId = target.Id,
             TargetName = target.Name,
             AuthorizationBasis = authorizationBasis,
             Outcome = outcome,
-            // 未登记的动作码盖最严格的一档（Host），不是盖"租户可见"：
-            // 这张表由租户管理员直接阅读，未知来源的记录默认可见给租户就是默认泄露。
-            // 反过来最坏只是租户暂时看不到某些记录，补登记即可修复。
-            Visibility = actionDefinitions.GetOrNull(action)?.Visibility ?? OperationVisibility.Host,
+            Visibility = visibility,
             FailureCode = failure.Code,
             FailureData = failure.Data,
             FailureDetail = failure.Detail,

@@ -90,9 +90,9 @@ public interface IOperationActionDefinitionManager
 {
     /// <summary>按动作码查找；不存在时返回 <see langword="null"/>。</summary>
     /// <remarks>
-    /// 返回 <see langword="null"/> 表示这是一个<b>未登记</b>的码——通常来自尚未迁移的下游业务。
-    /// 调用方应据此降级（界面原样显示裸码），而不是抛错：审计记录是既成事实，
-    /// 不能因为定义缺失就让整页读不出来。
+    /// 返回 <see langword="null"/> 表示这是一个<b>未登记</b>的码。写入时它是编码错误，记录器直接抛出；
+    /// 读取历史记录时遇到它（码后来被移除了），调用方应据此降级（界面原样显示裸码），而不是抛错：
+    /// 审计记录是既成事实，不能因为定义缺失就让整页读不出来。
     /// </remarks>
     IOperationActionDefinition? GetOrNull(string code);
 

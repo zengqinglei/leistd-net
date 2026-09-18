@@ -43,6 +43,8 @@ public static class DependencyInjection
         // 连接相同的共享库租户仍必须绑定不同的工作单元归属。
         services.TryAddTransient<IConnectionAffinityProvider, TenantConnectionAffinityProvider>();
         services.TryAddScoped<ITenantResolver, TenantResolver>();
+        // 逐库作业的清单：注册了租户连接解析就列出独立库，没有就只有宿主库，宿主不必按模式分支注册
+        services.TryAddTransient<ITenantDatabaseEnumerator, TenantDatabaseEnumerator>();
         return services;
     }
 

@@ -634,6 +634,7 @@
       "colTime": "时间",
       "colBasis": "授权依据",
       "colCorrelationId": "链路标识",
+      "colActorTenantId": "操作人所属租户",
       "colFailure": "原因",
       "colFailureDetail": "技术详情",
       "impersonatedBy": "由 {{name}} 模拟操作",

@@ -22,6 +22,9 @@ public class OperationRecordArchive
     /// <summary>原记录所属租户；<b>不是</b>多租户过滤维度，见类型说明。</summary>
     public Guid? TenantId { get; set; }
 
+    /// <summary>操作发生时的租户上下文；<see langword="null"/> 表示宿主。</summary>
+    public Guid? ActorTenantId { get; set; }
+
     /// <summary>业务动作码。</summary>
     public string Action { get; set; } = default!;
 

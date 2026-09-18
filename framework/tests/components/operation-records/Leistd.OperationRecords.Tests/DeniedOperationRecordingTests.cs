@@ -23,10 +23,17 @@ public sealed class DeniedOperationRecordingTests
         string method = "PUT",
         bool authenticated = true,
         object[]? metadata = null,
-        Dictionary<string, object?>? routeValues = null)
+        Dictionary<string, object?>? routeValues = null,
+        Claim[]? claims = null)
     {
         var store = new RecordingOperationRecordStore();
         var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy("App.Orders.Update", policy => policy.RequireClaim("permission", "App.Orders.Update"));
+            options.AddPolicy("Security.RecentMfa", policy => policy.RequireClaim("amr", "mfa"));
+        });
         services.AddSingleton<IOperationRecordStore>(store);
         services.AddSingleton<IOperationRecorder>(
             _ => new PassThroughRecorder(store));
@@ -36,7 +43,7 @@ public sealed class DeniedOperationRecordingTests
             RequestServices = services.BuildServiceProvider(),
             // 认证与否只看 ClaimsIdentity 有没有 authenticationType，与有没有 claim 无关
             User = authenticated
-                ? new ClaimsPrincipal(new ClaimsIdentity([], "TestBearer"))
+                ? new ClaimsPrincipal(new ClaimsIdentity(claims ?? [], "TestBearer"))
                 : new ClaimsPrincipal(new ClaimsIdentity())
         };
         context.Request.Method = method;
@@ -65,8 +72,7 @@ public sealed class DeniedOperationRecordingTests
             string action,
             OperationTarget target,
             string basis,
-            OperationFailure failure = default,
-            CancellationToken ct = default)
+            OperationFailure failure = default)
             => store.InsertAsync(new OperationRecordInfo
             {
                 Action = action,
@@ -74,10 +80,11 @@ public sealed class DeniedOperationRecordingTests
                 TargetName = target.Name,
                 AuthorizationBasis = basis,
                 Outcome = OperationRecordOutcome.Failed,
+                Visibility = OperationVisibility.Tenant,
                 FailureCode = failure.Code,
                 FailureData = failure.Data,
                 FailureDetail = failure.Detail
-            }, ct);
+            });
     }
 
     [Fact]
@@ -200,5 +207,32 @@ public sealed class DeniedOperationRecordingTests
         await context.RecordDeniedOperationAsync();
 
         Assert.Equal("App.Roles.Update", Assert.Single(store.Written).AuthorizationBasis);
+    }
+
+    /// <summary>
+    /// 叠了多个策略时，授权依据取实际没通过的那个，而不是书写顺序上的最后一个
+    /// </summary>
+    /// <remarks>
+    /// 回归点：早先取最后一个具名策略。权限策略之后再叠一个近期 MFA 策略，
+    /// 被权限拒绝时记下的却是 MFA，业务只能靠调整特性顺序规避，而那只是换了一种情况记错。
+    /// </remarks>
+    [Theory]
+    [InlineData("amr", "mfa", "App.Orders.Update")]
+    [InlineData("permission", "App.Orders.Update", "Security.RecentMfa")]
+    public async Task The_basis_is_the_policy_that_actually_failed(
+        string claimType, string claimValue, string expectedBasis)
+    {
+        var (context, store) = Create(
+            metadata:
+            [
+                new AuthorizeAttribute { Policy = "App.Orders.Update" },
+                new AuthorizeAttribute { Policy = "Security.RecentMfa" },
+                new OperationRecordActionAttribute("orders.updated")
+            ],
+            claims: [new Claim(claimType, claimValue)]);
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Equal(expectedBasis, Assert.Single(store.Written).AuthorizationBasis);
     }
 }

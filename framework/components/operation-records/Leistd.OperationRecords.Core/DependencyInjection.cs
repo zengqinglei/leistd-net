@@ -25,7 +25,10 @@ public static class DependencyInjection
     ///
     /// // 用例里显式记录
     /// await operationRecorder.RecordSucceededAsync(
-    ///     OperationRecordActions.UserCreated, user.Id.ToString(), "App.Users.Create", ct);
+    ///     OperationRecordActions.UserCreated,
+    ///     OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+    ///     "App.Users.Create",
+    ///     ct);
     /// </code>
     /// </example>
     /// <param name="services">服务集合。</param>
@@ -40,7 +43,7 @@ public static class DependencyInjection
 
         // 动作定义索引是启动期事实，单例即可；宿主用
         // AddSingleton<IOperationActionDefinitionProvider, XxxProvider>() 登记自己的动作。
-        // 宿主一个都不登记时这里得到空索引——界面按"未登记码"降级为原样显示裸码，
+        // 写入要求动作码已登记；读取时遇到已不再登记的历史码，界面降级为原样显示裸码，
         // 而不是让整页读不出来：审计记录是既成事实，不能因为定义缺失就取不到。
         services.TryAddSingleton<IOperationActionDefinitionManager, OperationActionDefinitionManager>();
         return services;

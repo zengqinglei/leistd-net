@@ -32,14 +32,15 @@ internal sealed class FakeOperationActionDefinition(
 }
 
 /// <summary>
-/// 按给定的"动作码 → 可见性"表作答；表里没有的一律当作<b>未登记</b>。
+/// 按给定的"动作码 → 可见性"表作答；表里没有的码按 <paramref name="otherCodes"/> 作答。
 /// </summary>
 /// <remarks>
-/// 默认构造是空表，因此不关心可见性的用例照常走"未登记"分支，
-/// 记录器据此盖上最严格的 <see cref="OperationVisibility.Host"/>。
+/// 默认把任何码都当作已登记的 <see cref="OperationVisibility.Tenant"/>，不关心可见性的用例因此不必逐个登记；
+/// 验证"未登记"的用例显式传 <c>otherCodes: null</c>。
 /// </remarks>
 internal sealed class FakeOperationActionDefinitionManager(
-    IReadOnlyDictionary<string, OperationVisibility>? registered = null) : IOperationActionDefinitionManager
+    IReadOnlyDictionary<string, OperationVisibility>? registered = null,
+    OperationVisibility? otherCodes = OperationVisibility.Tenant) : IOperationActionDefinitionManager
 {
     private readonly IReadOnlyDictionary<string, OperationVisibility> _registered =
         registered ?? new Dictionary<string, OperationVisibility>(StringComparer.Ordinal);
@@ -47,7 +48,7 @@ internal sealed class FakeOperationActionDefinitionManager(
     public IOperationActionDefinition? GetOrNull(string code)
         => _registered.TryGetValue(code, out var visibility)
             ? new FakeOperationActionDefinition(code, visibility)
-            : null;
+            : otherCodes is { } fallback ? new FakeOperationActionDefinition(code, fallback) : null;
 
     public IReadOnlyList<IOperationActionDefinition> GetAll()
         => [.. _registered.Select(pair => new FakeOperationActionDefinition(pair.Key, pair.Value))];
