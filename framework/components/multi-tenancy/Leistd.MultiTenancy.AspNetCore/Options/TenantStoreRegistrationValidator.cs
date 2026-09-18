@@ -26,8 +26,8 @@ internal sealed class TenantStoreRegistrationValidator(IServiceProvider serviceP
 
         return ValidateOptionsResult.Fail(
             "MultiTenancyOptions.ValidateResolvedTenant is true but no ITenantStore is registered. " +
-            "Hosts that own the tenant registry should call AddMultiTenancyEfCore<TDbContext>() " +
-            "(or AddInMemoryTenantStore for configuration-driven tenants); resource services that only " +
+            "Hosts that own the tenant registry should call AddMultiTenancyEfCore<TDbContext>(); " +
+            "resource services that only " +
             "consume the tenant claim should set ValidateResolvedTenant to false — the resolve chain then " +
             "narrows to the principal contributor alone and no store is needed.");
     }

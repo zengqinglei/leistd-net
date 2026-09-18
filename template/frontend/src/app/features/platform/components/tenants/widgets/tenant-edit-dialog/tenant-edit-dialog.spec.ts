@@ -125,34 +125,43 @@ describe('TenantEditDialog', () => {
     expect(dto.displayName).toBeUndefined();
     expect(dto.adminEmail).toBe('admin@example.test');
     expect(dto.adminPassword).toBe('TenantSpec!Pw1 ');
-    expect(dto.databaseMode).toBe('sharedDatabase');
-    expect(dto.runtimeSecretReference).toBeUndefined();
-    expect(dto.migrationSecretReference).toBeUndefined();
   });
 
-  it('独立数据库模式要求运行时和迁移 Secret 引用', async () => {
+  // 分库只在新建时定案，所以连接串是新建载荷的一部分：登记先于播种，种子才会落进那个库。
+  // 建好之后再登记第一条连接，后端会以 409 拒绝——那时数据已经在回落库里，登记不会把它们搬过去。
+  it('新建载荷带上连接串', async () => {
     dialog().tenantForm.name().value.set('acme');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');
     dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
-    dialog().tenantForm.databaseMode().value.set('dedicatedDatabase');
+    dialog().tenantForm.connectionString().value.set('  Host=acme;Database=acme  ');
     await fixture.whenStable();
 
-    expect(document.getElementById('tenant-runtime-secret-reference')).not.toBeNull();
-    expect(document.getElementById('tenant-migration-secret-reference')).not.toBeNull();
-    expect(dialog().tenantForm().invalid()).toBeTrue();
-
-    dialog().tenantForm.runtimeSecretReference().value.set('vault://runtime/acme');
-    dialog().tenantForm.migrationSecretReference().value.set('vault://migration/acme');
-    await fixture.whenStable();
     dialog().onSubmit();
 
-    expect(host.saved[0]).toEqual(
-      jasmine.objectContaining({
-        databaseMode: 'dedicatedDatabase',
-        runtimeSecretReference: 'vault://runtime/acme',
-        migrationSecretReference: 'vault://migration/acme',
-      }),
+    expect(Object.keys(host.saved[0]).sort()).toEqual([
+      'adminEmail',
+      'adminPassword',
+      'connectionString',
+      'description',
+      'displayName',
+      'name',
+    ]);
+    expect((host.saved[0] as CreateTenantInputDto).connectionString).toBe(
+      'Host=acme;Database=acme',
     );
+  });
+
+  // 留空必须是 undefined 而不是空串：后端对"提供了连接串但它是空的"按 400 拒绝，
+  // 而这里表达的是"不分库"，两者不能长成同一个请求。
+  it('连接串留空即不分库，传 undefined 而不是空串', async () => {
+    dialog().tenantForm.name().value.set('acme');
+    dialog().tenantForm.adminEmail().value.set('admin@example.test');
+    dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
+    await fixture.whenStable();
+
+    dialog().onSubmit();
+
+    expect((host.saved[0] as CreateTenantInputDto).connectionString).toBeUndefined();
   });
 
   it('编辑提交只带标识字段，不夹带管理员字段', async () => {

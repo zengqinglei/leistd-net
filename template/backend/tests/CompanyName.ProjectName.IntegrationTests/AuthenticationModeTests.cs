@@ -41,11 +41,11 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
     /// 内部控制面策略的完整判定矩阵
     /// </summary>
     /// <remarks>
-    /// <para>这两条策略保护的端点直接返回租户连接配置（数据落在哪个库、Secret 引用），
+    /// <para>这两条策略保护的端点直接返回租户连接配置（数据落在哪个库、解密后的连接串），
     /// 且接受<b>任意</b> <c>tenantId</c>——控制库是普通 <c>DbContext</c>、没有租户过滤器。
     /// 因此它们必须只对机器主体开放：任何自然人主体命中都是跨租户越权。</para>
     /// <para>因此判定里<b>不能</b>有"或者是超管"这一支：超管 claim 不经权限检查器、不受侧别边界
-    /// 约束，只要有一个租户内的主体拿到它，就能读到别的租户的 Secret 引用。这组用例把每一条路
+    /// 约束，只要有一个租户内的主体拿到它，就能读到别的租户的数据库连接串。这组用例把每一条路
     /// 都钉死，包括那条看起来很自然的旁路。</para>
     /// <para>认证方案层面的收窄（只列 Bearer、Cookie 到不了）无法在此断言——
     /// <c>IAuthorizationService.AuthorizeAsync</c> 不经过认证中间件；它由策略注册本身保证。</para>

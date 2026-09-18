@@ -101,7 +101,7 @@ internal sealed class ExternalAuthAppService(
             externalUserInfo,
             cancellationToken);
 
-        return await sessionSignInService.SignInAsync(user, roleNames, cancellationToken);
+        return await sessionSignInService.SignInAsync(user, roleNames, cancellationToken: cancellationToken);
     }
 
     private IOAuthProvider GetProvider(string provider)

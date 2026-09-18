@@ -20,11 +20,11 @@ public class TenantResolver(IServiceProvider serviceProvider, IOptions<TenantRes
         foreach (var contributor in options.Value.Contributors)
         {
             await contributor.ResolveAsync(context);
-            result.AppliedResolvers.Add(contributor.Name);
 
             if (context.HasResolvedTenantOrHost())
             {
                 result.TenantIdOrName = context.TenantIdOrName;
+                result.AppliedResolver = contributor.Name;
                 break;
             }
         }

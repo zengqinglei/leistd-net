@@ -1,4 +1,6 @@
 using Leistd.Settings.Abstractions;
+using Leistd.OperationRecords.Abstractions;
+using CompanyName.ProjectName.Application.OperationRecords;
 using CompanyName.ProjectName.Application.Settings.Provider;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Policies;
@@ -19,6 +21,7 @@ using Leistd.Authorization;
 using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Checker;
 using CompanyName.ProjectName.Application.Permissions.Provider;
+using CompanyName.ProjectName.Application.OperationRecords.AppServices;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Tenants;
@@ -70,12 +73,18 @@ public static class DependencyInjection
         services.AddScoped<IPermissionSubjectProvider, PermissionSubjectProvider>();
         services.AddSingleton<IPermissionDefinitionProvider, PermissionDefinitionProvider>();
         services.AddSingleton<ISettingDefinitionProvider, SettingDefinitionProvider>();
+        // 动作定义与权限、设置同属"启动期一次性登记"的定义族，注册方式与它们一致。
+        // 不注册的话管理器拿到空索引：界面按"未登记码"降级为原样显示裸码，
+        // 症状是页面照常能用、只是动作列全是机器码——不会报错，所以很容易漏。
+        services.AddSingleton<IOperationActionDefinitionProvider, OperationActionDefinitionProvider>();
         services.AddTransient<IPermissionAppService, PermissionAppService>();
         // 设置对所有服务形态都开放：Controller 与设置页在 Resource 模式下同样保留，
         // 少了这条注册，认证用户一访问 /api/v1/settings 就因解析不到构造参数返回 500。
         services.AddTransient<ISettingAppService, SettingAppService>();
         // 服务端产出给人看的时间文本时注入它；DTO 保持 UTC 交给前端渲染，不必经过这里。
         services.AddTransient<IUserTimeZoneProvider, UserTimeZoneProvider>();
+        // 操作记录对所有服务形态开放：Resource 形态同样有带策略的写端点，被拒与成功都要能查。
+        services.AddTransient<IOperationRecordAppService, OperationRecordAppService>();
 #if (LocalIdentity)
         // 注册策略按租户从设置里解析；appsettings 仍是部署基线（设置定义的默认值取自它）。
         services.AddTransient<IUserRegistrationPolicyProvider, UserRegistrationPolicyProvider>();
@@ -84,6 +93,7 @@ public static class DependencyInjection
 #if (LocalIdentity)
         services.AddTransient<ITenantAppService, TenantAppService>();
         services.AddTransient<ITenantSeeder, TenantSeeder>();
+        services.AddTransient<ITenantImpersonationAppService, TenantImpersonationAppService>();
 #endif
 
         return services;

@@ -1,4 +1,4 @@
-using CompanyName.ProjectName.Infrastructure.TenantConnections;
+using Leistd.MultiTenancy.ConnectionStrings;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

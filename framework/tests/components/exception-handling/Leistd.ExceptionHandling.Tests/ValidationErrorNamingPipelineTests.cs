@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Localization;
 using Xunit;
 using Leistd.ExceptionHandling.AspNetCore.Constants;
 
@@ -43,7 +44,7 @@ public class ValidationErrorNamingPipelineTests
 
     // 非弃用宿主构建（.NET 10）：HostBuilder + ConfigureWebHost(UseTestServer)，避免 WebHostBuilder(ASPDEPR004)
     // 与 TestServer(IWebHostBuilder)(ASPDEPR008)。TestServer/UseTestServer/GetTestClient 由 Microsoft.AspNetCore.TestHost 提供。
-    private static Task<IHost> StartHostAsync()
+    private static Task<IHost> StartHostAsync(IStringLocalizer? localizer = null)
     {
         return new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -56,6 +57,10 @@ public class ValidationErrorNamingPipelineTests
                         services.AddProblemDetails();
                         services.AddExceptionHandler<BusinessExceptionHandler>();
                         services.Configure<GlobalExceptionOptions>(o => o.Enabled = true);
+                        if (localizer is not null)
+                        {
+                            services.AddSingleton(localizer);
+                        }
 
                         // 同一命名策略应用到两套 JSON 配置——正是模板组合根的做法。
                         services.ConfigureHttpJsonOptions(o => ApplyUpper(o.SerializerOptions));
@@ -121,6 +126,68 @@ public class ValidationErrorNamingPipelineTests
         Assert.Equal(ProblemTypes.ValidationError, ReadType(body422));
     }
 
+    // 字段名要与请求体的 JSON 契约同名，前端才能把错误落回对应的输入框。
+    // 自动 400 原本写出 C# 属性名（Name），而业务 422 的约定与 JSON 契约都是 camelCase（name）——
+    // 同一个字段在两条路径上叫法不同，调用方只能靠大小写不敏感去猜。
+    // 用全大写策略断言：跟随的是宿主策略，而不是写死了某一种命名。
+    [Fact]
+    public async Task Auto400_field_names_follow_the_host_json_naming_policy()
+    {
+        using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+
+        Assert.Equal(["DISPLAYNAME"], await ReadFieldsAsync(client, "/probe/auto-properties"));
+    }
+
+    // 两条校验路径的标题同一取法：业务 422 按 Title:{状态码} 本地化，自动 400 原本写死英文。
+    [Fact]
+    public async Task Auto400_title_is_localized_the_same_way_as_business_errors()
+    {
+        var localizer = new StubLocalizer(new Dictionary<string, string> { ["Title:400"] = "请求参数有误" });
+        using var host = await StartHostAsync(localizer);
+        using var client = host.GetTestClient();
+
+        var response = await client.PostAsJsonAsync("/probe/auto", new { });
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal("请求参数有误", document.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task Auto400_title_keeps_the_english_sentence_without_localization()
+    {
+        using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+
+        var response = await client.PostAsJsonAsync("/probe/auto", new { });
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal("One or more validation errors occurred.", document.RootElement.GetProperty("title").GetString());
+    }
+
+    private static async Task<List<string?>> ReadFieldsAsync(HttpClient client, string path)
+    {
+        var response = await client.PostAsJsonAsync(path, new { });
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("errors").EnumerateArray()
+            .Select(item => item.GetProperty("FIELD").GetString())
+            .Distinct()
+            .ToList();
+    }
+
+    private sealed class StubLocalizer(IReadOnlyDictionary<string, string> map) : IStringLocalizer
+    {
+        public LocalizedString this[string name] =>
+            map.TryGetValue(name, out var value)
+                ? new LocalizedString(name, value, resourceNotFound: false)
+                : new LocalizedString(name, name, resourceNotFound: true);
+
+        public LocalizedString this[string name, params object[] arguments] => this[name];
+
+        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) =>
+            map.Select(kv => new LocalizedString(kv.Key, kv.Value, resourceNotFound: false));
+    }
+
     [Fact]
     public async Task Auto400_emits_the_w3c_trace_id_without_span_metadata()
     {
@@ -154,9 +221,19 @@ public sealed class ProbeController : ControllerBase
     [HttpPost("auto")]
     public IActionResult Auto([FromBody] ProbeInput input) => Ok();
 
+    // 属性式 DTO（模板的输入 DTO 都是这种写法）。位置记录的键来自构造参数，不受命名策略影响，见 ConfigureApiValidation 的说明。
+    [HttpPost("auto-properties")]
+    public IActionResult AutoProperties([FromBody] ProbePropertyInput input) => Ok();
+
     // 业务 422：抛 UnprocessableEntityException → 全局 BusinessExceptionHandler 产出 errors。
     [HttpPost("manual")]
     public IActionResult Manual() => throw new UnprocessableEntityException("phone", "invalid phone");
 }
 
 public sealed record ProbeInput([Required] string Name);
+
+public sealed record ProbePropertyInput
+{
+    [Required]
+    public string? DisplayName { get; init; }
+}

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Leistd.OperationRecords</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 操作人取自 ICurrentUser；模拟登录的真实操作人 claim 名归口在 Security 的 CustomClaimTypes -->
+    <ProjectReference Include="..\..\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+    <!-- 记录带租户归属：写入的 TenantId 由记录器显式盖章，不依赖宿主 DbContext 是否为 BaseDbContext -->
+    <ProjectReference Include="..\..\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
+    <!-- CorrelationId 让记录可以保持窄：细节留在日志里，按同一个链路标识回查 -->
+    <ProjectReference Include="..\..\tracing\Leistd.Tracing.Core\Leistd.Tracing.Core.csproj" />
+    <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    刻意不引用 unit-of-work：本包不开启也不提交事务。写入落在调用方所处的边界里，
+    "这条记录要不要扛过外层回滚"由宿主按它的锁分布决定。全框架其它组件对该家族的依赖
+    都只是 .EntityFrameworkCore 包为取 IDbContextProvider 而引，没有一个用到 IUnitOfWorkManager。
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>

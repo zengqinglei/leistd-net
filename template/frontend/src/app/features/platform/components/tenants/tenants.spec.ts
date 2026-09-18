@@ -70,7 +70,6 @@ describe('Tenants 页面闭环', () => {
     displayName: 'Globex Corp.',
     adminEmail: 'admin@globex.example.com',
     adminPassword: 'Globex@123456',
-    databaseMode: 'sharedDatabase',
   };
 
   beforeEach(async () => {

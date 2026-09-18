@@ -5,7 +5,7 @@
 宿主的 `AddDbContext` 回调据此拿到本工作单元已解析的连接。直接注入 `TDbContext`
 （或具体 DbContext 类型）会让 DI 走宿主回调的**回落分支**，于是：
 
-  - `TenantDatabaseMode.DedicatedDatabase` 的租户，其数据落到宿主配置的默认连接上；
+  - 登记了自己连接的租户，其数据落到宿主配置的默认连接上；
   - 写入脱离工作单元的事务与 `UnitOfWorkConnectionBinding` 的归属/目标校验；
   - 返回 `IQueryable` 的入口（资源 ACL 的两个集合查询）与调用方的业务查询出自不同实例，
     `Contains` 无法翻译进同一条 SQL。

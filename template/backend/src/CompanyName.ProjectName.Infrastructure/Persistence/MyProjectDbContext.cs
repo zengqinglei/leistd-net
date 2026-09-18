@@ -3,12 +3,15 @@ using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 using Leistd.Authorization.EntityFrameworkCore;
+using Leistd.OperationRecords.EntityFrameworkCore;
+using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.Settings.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure.Persistence;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
 #endif
 using Microsoft.EntityFrameworkCore;
+using CompanyName.ProjectName.Infrastructure.OperationRecords;
 using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 
@@ -27,6 +30,12 @@ public class MyProjectDbContext(
     public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif
     public DbSet<PermissionGrantRecord> PermissionGrantRecords { get; set; } = null!;
+    // 声明 DbSet 只为让表名取复数（EF 默认按实体名单数建表），查询一律经 IOperationRecordStore
+    public DbSet<OperationRecord> OperationRecords { get; set; } = null!;
+
+    // 到期归档表。它不实现 IMultiTenant，因此不受租户全局过滤器约束——
+    // 归档作业跑在无租户上下文里，套上过滤器会让它只搬走宿主那部分且不报错。
+    public DbSet<OperationRecordArchive> OperationRecordArchives { get; set; } = null!;
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -53,6 +62,10 @@ public class MyProjectDbContext(
         modelBuilder.ConfigureAuthorization();
         // 设置值实体配置
         modelBuilder.ConfigureSettings();
+        // 操作记录实体配置
+        modelBuilder.ConfigureOperationRecords();
+        // 操作记录归档表（模板自有，框架不提供——它的契约刻意没有删除入口）
+        modelBuilder.ConfigureOperationRecordArchives();
 #if (IncludeNotifications)
         // 通知实体配置
         modelBuilder.ConfigureNotifications();

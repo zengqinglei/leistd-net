@@ -22,6 +22,7 @@
     <PackageReference Include="Leistd.Security.Core" />
     <PackageReference Include="Leistd.Authorization.Core" />
     <PackageReference Include="Leistd.Settings.Core" />
+    <PackageReference Include="Leistd.OperationRecords.Core" />
     <PackageReference Include="Leistd.MultiTenancy.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
 <!--#if (LocalIdentity)-->

@@ -1,5 +1,5 @@
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using CompanyName.ProjectName.Infrastructure.TenantConnections;
+using Leistd.MultiTenancy.ConnectionStrings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -25,6 +25,16 @@ public sealed class DatabaseMigrationRunner(
     ITenantMigrationTargetProvider targetProvider,
     ILogger<DatabaseMigrationRunner> logger)
 {
+    /// <summary>
+    /// 业务上下文的连接名，即租户连接登记里要查的名字。
+    /// </summary>
+    /// <remarks>
+    /// <c>MyProjectDbContext</c> 没有声明 <c>[ConnectionStringName]</c>，因此用默认名。
+    /// 业务项目把上下文改名为服务名（如 <c>Crm</c>）时，这里要跟着改成同一个名字——
+    /// 迁移作业与运行时必须问同一个名字，否则会迁错库。
+    /// </remarks>
+    private const string BusinessConnectionStringName = ConnectionStringNames.Default;
+
     /// <summary>表示一个物理目标的迁移计划。</summary>
     /// <param name="Target">连接串指纹或 <c>default</c>。</param>
     /// <param name="Scope">同一目标上的模型范围。</param>
@@ -126,7 +136,11 @@ public sealed class DatabaseMigrationRunner(
         IReadOnlyList<TenantMigrationTarget> targets;
         try
         {
-            targets = await targetProvider.GetDedicatedTargetsAsync(cancellationToken);
+            // 用本服务业务上下文的连接名问：租户在这个名字下没登记，就回落到它的默认名登记；
+            // 两者都没有的分库租户会让作业整体停下，而不是被静默跳过
+            targets = await targetProvider.GetDedicatedTargetsAsync(
+                BusinessConnectionStringName,
+                cancellationToken);
         }
         catch (Exception exception) when (IsFirstInstall(exception, apply, controlPlan))
         {

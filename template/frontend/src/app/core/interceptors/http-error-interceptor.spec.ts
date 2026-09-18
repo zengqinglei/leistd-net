@@ -14,6 +14,9 @@ import { Observable, throwError } from 'rxjs';
 import { SILENT_AUTH } from './http-context-tokens';
 import { httpErrorInterceptor } from './http-error-interceptor';
 import { ApplicationHttpError } from '../errors/application-http-error';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../i18n/transloco.testing';
+//#endif
 import { entryRouteUrl } from '../routing/entry-route';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
@@ -52,6 +55,9 @@ describe('httpErrorInterceptor', () => {
         provideRouter([]),
         { provide: SessionContextService, useValue: sessionContext },
         { provide: AuthService, useValue: authService },
+        //#if (IncludeLocalization)
+        ...provideTranslocoTesting(),
+        //#endif
       ],
     });
     injector = TestBed.inject(Injector);
@@ -98,6 +104,14 @@ describe('httpErrorInterceptor', () => {
     const caught = runInterceptor(httpError(0, new ProgressEvent('error')));
     expect(caught).toBeInstanceOf(ApplicationHttpError);
     expect((caught as ApplicationHttpError).status).toBe(0);
+    // 展示的是本地化的"连不上服务器"，不是浏览器给开发者看的原始异常文本（空词条下回落成键名）。
+    //#if (IncludeLocalization)
+    expect((caught as ApplicationHttpError).message).toBe('common.networkError');
+    //#else
+    expect((caught as ApplicationHttpError).message).toBe(
+      'Unable to reach the server. Check your connection and try again.',
+    );
+    //#endif
   });
 
   it('parses an RFC 9457 errors array (code + details)', () => {

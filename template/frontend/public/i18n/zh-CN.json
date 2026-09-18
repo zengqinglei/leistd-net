@@ -4,6 +4,7 @@
     "unknownError": "未知错误",
     "appError": "应用错误",
     "unexpectedError": "应用发生了未知错误，请刷新页面重试。",
+    "networkError": "无法连接到服务器，请检查网络后重试。",
     "requestError": "请求错误",
     "authFailedReLogin": "身份验证失败，请重新登录。",
     "retry": "重试",
@@ -42,6 +43,7 @@
       "minLength": "至少需要 {{min}} 个字符",
       "maxLength": "不能超过 {{max}} 个字符",
       "usernamePattern": "只能为 3~64 位字母、数字或下划线",
+      "roleNamePattern": "只能为 2~64 位字母、数字或下划线",
       "passwordRule": "密码至少 12 位，最长 256 位。更长的口令短语比短而复杂的密码更安全。",
       "passwordMismatch": "两次输入的密码不一致",
       "passwordSameAsCurrent": "新密码不能与当前密码相同",
@@ -101,7 +103,8 @@
       "groupDeveloper": "开发者",
       "openApplications": "开发应用",
       "groupOperations": "运维",
-      "systemSettings": "系统配置"
+      "systemSettings": "系统配置",
+      "operationRecords": "操作记录"
     },
     "notifications": {
       "title": "通知",
@@ -151,7 +154,15 @@
     "followSystem": "跟随系统",
     "hostScopeHint": "全实例生效（约 30 秒）",
     "saved": "已保存",
-    "saving": "保存中…"
+    "saving": "保存中…",
+    "logLevelHints": {
+      "Verbose": "记录一切，含逐条 SQL 与请求细节。仅短时排障用，长期开会迅速吃满磁盘。",
+      "Debug": "记录调试细节。排查问题时开，日常不建议。",
+      "Information": "记录正常业务流程。默认级别。",
+      "Warning": "只记录警告与错误，正常流程不落盘。",
+      "Error": "只记录错误。会漏掉\"没报错但不对\"的线索。",
+      "Fatal": "只记录导致进程终止的故障。几乎等于关掉日志。"
+    }
   },
   "landing": {
     "hero": {
@@ -405,6 +416,81 @@
       "saved": "角色已更新"
     }
   },
+  "operationRecords": {
+    "page": {
+      "title": "操作记录"
+    },
+    "filter": {
+      "searchPlaceholder": "搜索动作 / 目标 / 操作人...",
+      "dateRange": "时间范围",
+      "category": "类别",
+      "action": "动作",
+      "outcome": "结果",
+      "export": "导出",
+      "exportFailed": "导出失败"
+    },
+    "categories": {
+      "authentication": "认证",
+      "account": "账号",
+      "authorization": "授权",
+      "tenant": "租户",
+      "configuration": "配置",
+      "data": "数据"
+    },
+    "outcome": {
+      "succeeded": "成功",
+      "failed": "被拒绝"
+    },
+    "actions": {
+      "user.created": "创建了用户 {{target}}",
+      "user.updated": "更新了用户 {{target}}",
+      "user.deleted": "删除了用户 {{target}}",
+      "user.roles-replaced": "调整了用户 {{target}} 的角色",
+      "role.created": "创建了角色 {{target}}",
+      "role.deleted": "删除了角色 {{target}}",
+      "permission-grants.replaced": "调整了 {{target}} 的权限",
+      "tenant.created": "创建了租户 {{target}}",
+      "tenant.updated": "更新了租户 {{target}}",
+      "tenant.activation-changed": "变更了租户 {{target}} 的启用状态",
+      "tenant.deleted": "删除了租户 {{target}}",
+      "setting.changed": "修改了设置 {{target}}",
+      "operation-records.exported": "导出了操作记录",
+      "auth.login.succeeded": "登录了系统",
+      "auth.login.failed": "登录失败（{{target}}）",
+      "auth.password.changed": "修改了自己的密码",
+      "auth.registered": "注册了账号 {{target}}",
+      "impersonation.started": "开始以 {{target}} 的身份操作",
+      "impersonation.ended": "结束了模拟操作",
+      "tenant.impersonation-started": "以租户 {{target}} 的管理员身份登录",
+      "tenant.impersonation-ended": "结束了对租户 {{target}} 的模拟",
+      "auth.token.issued": "签发了访问令牌"
+    },
+    "actionsNoTarget": {
+      "user.created": "创建用户",
+      "role.created": "创建角色"
+    },
+    "failures": {
+      "Auth_InvalidCredentials": "用户名或密码不正确"
+    },
+    "table": {
+      "currentPageReport": "共 {{total}} 条",
+      "colAction": "动作",
+      "colOutcome": "结果",
+      "colActor": "操作人",
+      "colTarget": "目标",
+      "colTime": "时间",
+      "colBasis": "授权依据",
+      "colCorrelationId": "链路标识",
+      "colFailure": "原因",
+      "colFailureDetail": "技术详情",
+      "impersonatedBy": "由 {{name}} 模拟操作",
+      "unknownActor": "匿名",
+      "emptyTitle": "暂无操作记录",
+      "emptyHint": "有受审计的操作发生后即会出现在这里",
+      "emptyFilteredTitle": "没有匹配的记录",
+      "emptyFilteredHint": "调整搜索条件试试"
+    }
+  },
   "openApp": {
     "page": {
       "title": "开放应用管理"
@@ -621,12 +707,17 @@
     "fieldDescription": "描述",
     "fieldAdminEmail": "管理员邮箱",
     "fieldAdminPassword": "管理员密码",
-    "databasePlacement": "数据库放置方式",
-    "databasePlacementDescription": "共享模式使用各服务的默认数据库；独立模式通过该租户的 Secret 引用解析连接。",
-    "sharedDatabase": "共享数据库",
-    "dedicatedDatabase": "独立数据库",
-    "fieldRuntimeSecretReference": "运行时 Secret 引用",
-    "fieldMigrationSecretReference": "迁移 Secret 引用",
+    "fieldConnectionName": "连接名",
+    "fieldConnectionString": "连接串",
+    "createConnectionHint": "可选。留空即不分库，该租户使用各服务自己配置的数据库。分库只能在这里定案：库须事先建好并迁移过，建好之后再改要先迁移数据。",
+    "shardRequiresInactive": "要让该租户单独分库，请先停用它：它现在的数据都在各服务自己配置的库里，登记连接不会把这些数据搬过去。",
+    "addConnection": "添加连接",
+    "changeConnectionString": "改连接串",
+    "connectionsEmpty": "该租户不单独分库，各服务使用自己配置的数据库。",
+    "connectionNameInvalid": "连接名只能是小写字母、数字与连字符，长度 1 到 64 位。",
+    "connectionNameTaken": "该连接名已登记，要换连接串请用「改连接串」。",
+    "deleteConnectionTitle": "删除连接",
+    "deleteConnectionDescription": "删除连接「{{name}}」？该服务之后使用自己配置的数据库。",
     "saved": "租户已保存",
     "deleted": "租户已删除",
     "deleteTitle": "删除租户",
@@ -640,9 +731,20 @@
     },
     "detailTitle": "租户详情",
     "detailSectionIdentity": "标识",
-    "detailSectionPlacement": "数据库放置",
-    "detailSecretHint": "仅显示密钥引用名，接口不返回连接串。",
-    "fieldDatabaseMode": "数据库放置",
-    "fieldConnectionVersion": "连接配置版本"
+    "detailSectionConnections": "数据库连接",
+    "detailSecretHint": "连接串加密存储、接口从不返回；保存即整串覆盖。",
+    "fieldConnectionVersion": "版本",
+    "impersonate": "以租户身份登录",
+    "impersonateConfirm": "以「{{name}}」的管理员身份登录？退出前你将离开宿主上下文。",
+    "impersonateFailed": "无法以该租户身份登录。"
+  },
+  "impersonation": {
+    "banner": "正以租户 {{tenant}} 的身份操作 · 由 {{impersonator}} 发起",
+    "exit": "退出模拟",
+    "exited": "已回到你自己的账号。",
+    "exitFailed": "无法结束模拟。",
+    "badge": "模拟中 · {{tenant}}",
+    "title": "正在模拟租户",
+    "note": "此期间的所有操作都会记在该租户账号上。"
   }
 }

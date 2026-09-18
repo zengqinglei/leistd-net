@@ -53,6 +53,108 @@
 
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
+    <!--#if (LocalIdentity)-->
+    <!-- 模拟登录状态：常驻在顶栏里，而不是在顶栏上方另起一整行红色横幅。
+         横幅会把整页往下推 44px，进出模拟时布局整体跳动，饱和红底也过于刺眼。
+         但这个状态必须一直看得见——此刻的每一次操作都记在租户账号上——所以不用会自动消失的
+         toast，也不用只在悬停时出现的 tooltip（按无障碍规范，tooltip 里不能放可点击的退出按钮）。
+         配色用语义色 warning，与操作记录表里"由 X 模拟操作"的提示同一口径。
+         outline 变体自带 dark: 与 aria-expanded: 的底色和边框，前缀不同不会被合并掉，须逐一覆盖。
+         窄屏只留图标；完整说明与退出按钮在浮层里。 -->
+    @if (impersonation.status(); as impersonationStatus) {
+      @if (impersonationStatus.isImpersonating) {
+        <hlm-popover align="end" sideOffset="10">
+          <!--#if (IncludeLocalization)-->
+          <button
+            type="button"
+            hlmBtn
+            hlmPopoverTrigger
+            size="sm"
+            variant="outline"
+            class="border-warning/60 bg-warning/15 hover:bg-warning/25 aria-expanded:bg-warning/25 dark:border-warning/50 dark:bg-warning/15 dark:hover:bg-warning/25 max-w-48 gap-1.5 rounded-full"
+            data-testid="impersonation-indicator"
+            [attr.aria-label]="
+              'impersonation.banner'
+                | transloco
+                  : {
+                      tenant: impersonationStatus.tenantName,
+                      impersonator: impersonationStatus.impersonatorName,
+                    }
+            "
+          >
+            <ng-icon name="lucideVenetianMask" />
+            <span class="hidden truncate sm:inline">{{
+              'impersonation.badge' | transloco: { tenant: impersonationStatus.tenantName }
+            }}</span>
+          </button>
+          <hlm-popover-content
+            *hlmPopoverPortal
+            class="w-72 max-w-[90vw]"
+            [appPopoverAria]="'impersonation.title' | transloco"
+          >
+            <div class="flex flex-col gap-2 text-sm">
+              <p class="font-medium">{{ 'impersonation.title' | transloco }}</p>
+              <p class="text-muted-foreground">
+                {{
+                  'impersonation.banner'
+                    | transloco
+                      : {
+                          tenant: impersonationStatus.tenantName,
+                          impersonator: impersonationStatus.impersonatorName,
+                        }
+                }}
+              </p>
+              <p class="text-muted-foreground text-xs">{{ 'impersonation.note' | transloco }}</p>
+              <button hlmBtn size="sm" class="mt-1 self-end" (click)="endImpersonation()">
+                {{ 'impersonation.exit' | transloco }}
+              </button>
+            </div>
+          </hlm-popover-content>
+          <!--#else-->
+          <button
+            type="button"
+            hlmBtn
+            hlmPopoverTrigger
+            size="sm"
+            variant="outline"
+            class="border-warning/60 bg-warning/15 hover:bg-warning/25 aria-expanded:bg-warning/25 dark:border-warning/50 dark:bg-warning/15 dark:hover:bg-warning/25 max-w-48 gap-1.5 rounded-full"
+            data-testid="impersonation-indicator"
+            [attr.aria-label]="
+              'Acting as tenant ' +
+              impersonationStatus.tenantName +
+              ' · started by ' +
+              impersonationStatus.impersonatorName
+            "
+          >
+            <ng-icon name="lucideVenetianMask" />
+            <span class="hidden truncate sm:inline"
+              >Impersonating · {{ impersonationStatus.tenantName }}</span
+            >
+          </button>
+          <hlm-popover-content
+            *hlmPopoverPortal
+            class="w-72 max-w-[90vw]"
+            appPopoverAria="Impersonating a tenant"
+          >
+            <div class="flex flex-col gap-2 text-sm">
+              <p class="font-medium">Impersonating a tenant</p>
+              <p class="text-muted-foreground">
+                Acting as tenant {{ impersonationStatus.tenantName }} · started by
+                {{ impersonationStatus.impersonatorName }}
+              </p>
+              <p class="text-muted-foreground text-xs">
+                Everything you do now is recorded under this tenant's account.
+              </p>
+              <button hlmBtn size="sm" class="mt-1 self-end" (click)="endImpersonation()">
+                Exit impersonation
+              </button>
+            </div>
+          </hlm-popover-content>
+          <!--#endif-->
+        </hlm-popover>
+      }
+    }
+    <!--#endif-->
     <!-- Theme Toggle -->
     <app-theme-mode-toggle />
     <!--#if (IncludeNotifications)-->

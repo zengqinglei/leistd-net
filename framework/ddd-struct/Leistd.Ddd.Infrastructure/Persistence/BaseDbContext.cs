@@ -87,15 +87,16 @@ public abstract class BaseDbContext : DbContext
         }
     }
 
-    /// <summary>
-    /// 获取软删除过滤器是否启用。
-    /// </summary>
-    protected virtual bool IsSoftDeleteFilterEnabled => DataFilter?.IsEnabled<ISoftDelete>() ?? true;
+    // 这两个开关刻意**不可覆写**：它们只是 IDataFilter 运行期状态的投影，语义是
+    // "本次作用域内要不要过滤"，而写入侧的 TenantId 落值不受它们影响（见 SetTenantId）。
+    //
+    // 若开成 protected virtual，派生上下文覆写成 false 会得到"读不过滤、写照样落租户"的
+    // 半吊子状态——不报错、无告警，数据带着租户归属写进去而查询看得见全部。
+    // 想让整个上下文不参与多租户，正确做法是**不把 IMultiTenant 实体映射进来**
+    // （MultiTenantFilterGuard 的启动期断言也是这么说的），而不是从这里开一道门。
+    private bool IsSoftDeleteFilterEnabled => DataFilter?.IsEnabled<ISoftDelete>() ?? true;
 
-    /// <summary>
-    /// 获取租户过滤器是否启用。
-    /// </summary>
-    protected virtual bool IsMultiTenantFilterEnabled => DataFilter?.IsEnabled<IMultiTenant>() ?? true;
+    private bool IsMultiTenantFilterEnabled => DataFilter?.IsEnabled<IMultiTenant>() ?? true;
 
     /// <summary>
     /// 获取当前租户标识；<see langword="null"/> 表示宿主视角。

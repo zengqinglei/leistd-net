@@ -3,8 +3,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling.AspNetCore.Handlers;
 using Leistd.ExceptionHandling.AspNetCore.Options;
 using Leistd.ExceptionHandling.AspNetCore.Constants;
@@ -19,9 +22,27 @@ public static class DependencyInjection
     /// <summary>
     /// 将自动模型校验响应配置为统一的 Problem Details 格式。
     /// </summary>
-    /// <remarks>在 <c>AddControllers()</c> 后调用，使 400 与业务校验的 <c>errors</c> 结构一致。</remarks>
+    /// <remarks>
+    /// <para>在 <c>AddControllers()</c> 后调用，使 400 与业务校验的 <c>errors</c> 结构一致。</para>
+    /// <para><c>errors[].field</c> 跟随宿主的 JSON 命名策略（请求体里叫 <c>name</c>，这里就是 <c>name</c>），
+    /// 调用方据此把错误落回对应的输入项；标题与业务异常同一取法（<c>Title:{状态码}</c> 本地化）。</para>
+    /// <para>字段名换算只作用于属性式 DTO（<c>{ get; init; }</c>）。位置记录（<c>record X([Required] string Name)</c>）
+    /// 的校验键取自构造参数，ASP.NET 不对它应用命名策略，仍是 C# 参数名——输入 DTO 应写成属性式。</para>
+    /// </remarks>
     public static IMvcBuilder ConfigureApiValidation(this IMvcBuilder builder)
     {
+        // 模型校验的键默认是 C# 属性名，而请求体与业务 422 的字段名都按 JSON 命名策略写——
+        // 同一个字段两种叫法，调用方只能大小写不敏感地去猜。宿主没设命名策略时属性名即 JSON 名，无需处理。
+        builder.Services.AddOptions<MvcOptions>()
+            .Configure<IOptions<JsonOptions>>((mvcOptions, jsonOptions) =>
+            {
+                if (jsonOptions.Value.JsonSerializerOptions.PropertyNamingPolicy is { } namingPolicy)
+                {
+                    mvcOptions.ModelMetadataDetailsProviders.Add(
+                        new SystemTextJsonValidationMetadataProvider(namingPolicy));
+                }
+            });
+
         builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
             options.InvalidModelStateResponseFactory = context =>
@@ -39,7 +60,10 @@ public static class DependencyInjection
                 var problem = new ProblemDetails
                 {
                     Type = ProblemTypes.ValidationError,
-                    Title = "One or more validation errors occurred.",
+                    Title = ProblemTitles.Localize(
+                        context.HttpContext.RequestServices.GetService<IStringLocalizer>(),
+                        StatusCodes.Status400BadRequest,
+                        fallback: "One or more validation errors occurred."),
                     Status = StatusCodes.Status400BadRequest,
                     Instance = context.HttpContext.Request.Path
                 };

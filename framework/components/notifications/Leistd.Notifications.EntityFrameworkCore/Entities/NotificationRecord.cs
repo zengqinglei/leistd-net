@@ -3,14 +3,24 @@ using Leistd.Auditing;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Constants;
 using Leistd.Auditing.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.Notifications.EntityFrameworkCore.Entities;
 
 /// <summary>
 /// 表示持久化的用户通知。
 /// </summary>
-public class NotificationRecord : ICreationAuditedObject
+/// <remarks>
+/// 实现 <see cref="IMultiTenant"/>：通知按 <c>UserId</c> 独立查询，属于"能被独立查询"的对象，
+/// 因此自带租户维度，而不是依赖用户标识全局唯一这一间接事实。
+/// <para>宿主若把本实体映射进继承 <c>BaseDbContext</c> 的上下文，查询过滤与写入落值由基座接管；
+/// 在无租户上下文（后台作业）中发布的通知会落成宿主行。</para>
+/// </remarks>
+public class NotificationRecord : ICreationAuditedObject, IMultiTenant
 {
+    /// <summary>所属租户 ID；<see langword="null"/> 表示宿主。</summary>
+    public Guid? TenantId { get; set; }
+
     /// <summary>通知 ID（有序 Guid v7）。</summary>
     public Guid Id { get; set; } = Guid.CreateVersion7();
 

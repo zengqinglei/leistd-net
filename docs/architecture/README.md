@@ -8,5 +8,6 @@
 | [三层交付与 AI 协作](./collaboration-scenarios.md) | Framework、Skills、Template 的场景、步骤与文档读写链路 |
 | [前端组件库选型](./frontend-ui-library.md) | 模板前端采用 Spartan UI（替代 PrimeNG）的决定、依据、影响与备选 |
 | [隔离与授权场景](./isolation-and-authorization-scenarios.md) | 多租户、功能权限、数据范围的适用边界、组合顺序与各自的验证策略 |
+| [操作记录长期约束](./operation-records-principles.md) | 两个 genre 的判据、语言锁死的否决性证据、注解不回填名字的安全边界、可见性分层与模拟登录透明度 |
 
 具体框架维护规范位于 [`docs/framework/`](../framework/README.md)，模板维护规范位于 [`docs/template/`](../template/README.md)。一次性诊断和实施计划分别进入 `docs/assessments/` 与 `docs/plans/`。

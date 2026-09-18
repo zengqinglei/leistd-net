@@ -18,7 +18,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
+using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.Settings.EntityFrameworkCore.Entities;
+#if (IncludeNotifications)
+using Leistd.Notifications.EntityFrameworkCore.Entities;
+#endif
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Abstractions;
@@ -847,16 +851,23 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 #if (ExternalLogin)
                 nameof(ExternalLoginConnection),
 #endif
+#if (IncludeNotifications)
+                nameof(NotificationRecord),
+#endif
+                // 操作记录无条件存在（不像通知那样可裁剪），因此这一项不带守卫
+                nameof(OperationRecord),
                 nameof(PermissionGrantRecord),
                 nameof(Role),
                 nameof(SettingRecord),
-                nameof(User)
+                nameof(User),
+                nameof(UserRole)
             },
             multiTenantEntities);
 
-        // UserRole 不实现 IMultiTenant，进不了上面那份类型清单——必须单独断言。
-        // 否则误删 PurgeAsync 里的关联清理时，本文件的用例一个都不会变红：
-        // 用户与角色都已软删，孤儿关联行既不可见也没人查。
+        // UserRole 已实现 IMultiTenant，因此也在上面那份类型清单里了。这条显式查询**仍然保留**：
+        // 清单只证明"它受过滤器管辖"，而这里证明"确实没有活着的孤儿关联行"。
+        // 两者覆盖不同的失效——若 TenantId 因故没落上，租户上下文内的 Assert.Empty 会看不见它，
+        // 只有跨过全部过滤器、按 tenantUserIds 直查才抓得住。
         // IgnoreQueryFilters 会同时摘掉软删与租户两个过滤器，所以租户条件要显式写
         var tenantUserIds = await db.Set<User>()
             .IgnoreQueryFilters()
@@ -879,8 +890,15 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.Empty(await db.Set<Role>().ToListAsync());
             Assert.Empty(await db.Set<PermissionGrantRecord>().ToListAsync());
             Assert.Empty(await db.Set<AuthorizationVersionRecord>().ToListAsync());
+            Assert.Empty(await db.Set<UserRole>().ToListAsync());
+            // 创建流程里埋了"用户已创建"的操作记录：补偿若漏清它，留下的是一条带租户归属的孤儿审计行——
+            // 上面那份类型清单只证明它受过滤器管辖，证明不了补偿真的清干净了。
+            Assert.Empty(await db.Set<OperationRecord>().ToListAsync());
 #if (ExternalLogin)
             Assert.Empty(await db.Set<ExternalLoginConnection>().ToListAsync());
+#endif
+#if (IncludeNotifications)
+            Assert.Empty(await db.Set<NotificationRecord>().ToListAsync());
 #endif
         }
     }

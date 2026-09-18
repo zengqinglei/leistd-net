@@ -371,19 +371,23 @@ namespace {ProjectName}.Application.Users.Dtos;
 /// </summary>
 public record GetUserPagedInputDto : PagedRequestDto
 {
-    [Display(Name = "搜索关键字")]
-    [MaxLength(256, ErrorMessage = "{0}长度不能超过 {1} 个字符")]
+    [Display(Name = "Search keyword")]
+    [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? Keyword { get; init; }
 
-    [Display(Name = "是否启用")]
+    [Display(Name = "Active status")]
     public bool? IsActive { get; init; }
 }
 ```
 
 **DTO 验证规范**:
 - ✅ 使用 Data Annotations 进行模型验证
-- ✅ 错误消息使用占位符（`{0}不能为空`）
+- ✅ `Display(Name)` 与 `ErrorMessage` 写**英文原文**，它们同时是本地化资源键：中文由 `Api/Resources/zh-CN.json` 的同名词条提供。直接写中文会绕过本地化，英文界面也显示中文
+- ✅ 错误消息使用占位符（`{0} is required.`），优先复用资源里已有的模板
+- ✅ 每个校验特性都显式写 `ErrorMessage`：不写时落成 .NET 内置英文（"The Name field is required."），它不是资源键，中文界面照样是英文
 - ✅ 所有属性必须添加 `[Display(Name = "xxx")]`
+- ✅ 入参 DTO 写成属性式（`{ get; init; }`），不用位置记录：校验失败返回的 `errors[].field` 按 JSON 命名策略与请求体字段同名，位置记录的键取自构造参数，不在换算范围内
+- ✅ 前端表单按同一组规则做即时校验（长度、格式），服务端校验是兜底而不是用户第一次得知规则的地方
 - ✅ 必填属性使用 `required` 修饰符
 - ✅ 字段验证只在入口 DTO 做，内层信任（见 [通用编码规范 §5.2](./coding-common.md)）
 

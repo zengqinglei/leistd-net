@@ -30,7 +30,10 @@
 
 ### 2.2 空响应
 
-无返回对象的操作（删除、启用/禁用、登出等）使用无泛型 `Task`，成功时返回 HTTP 200 且无响应体。普通业务 Controller 不使用 `IActionResult` 表达成功结果；只有同一端点需要返回 `Redirect`、`Forbid`、`SignIn` 等多种协议结果时才使用它。
+无返回对象的操作（删除、启用/禁用、登出等）使用无泛型 `Task`，成功时返回 HTTP 200 且无响应体。普通业务 Controller 不使用 `IActionResult` 表达成功结果；只有下面两种情形才使用它：
+
+1. 同一端点需要返回 `Redirect`、`Forbid`、`SignIn` 等**多种协议结果**；
+2. 端点返回的是**文件下载**（如 CSV 导出）——带 content-type 与文件名的响应没有"裸对象"的表达方式，`File(...)` 必然产出 action result。此时应用服务返回**字节与元数据**（内容、媒体类型、建议文件名），由 Controller 包成 `File(...)`：应用层依赖 MVC 返回类型就只能从 Controller 调用了。
 
 ```text
 HTTP/1.1 200 OK

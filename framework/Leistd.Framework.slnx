@@ -67,6 +67,11 @@
     <Project Path="components/object-mapping/Leistd.ObjectMapping.Core/Leistd.ObjectMapping.Core.csproj" />
     <Project Path="components/object-mapping/Leistd.ObjectMapping.Mapster/Leistd.ObjectMapping.Mapster.csproj" />
   </Folder>
+  <Folder Name="/components/operation-records/">
+    <Project Path="components/operation-records/Leistd.OperationRecords.Core/Leistd.OperationRecords.Core.csproj" />
+    <Project Path="components/operation-records/Leistd.OperationRecords.EntityFrameworkCore/Leistd.OperationRecords.EntityFrameworkCore.csproj" />
+    <Project Path="components/operation-records/Leistd.OperationRecords.AspNetCore/Leistd.OperationRecords.AspNetCore.csproj" />
+  </Folder>
   <Folder Name="/components/realtime/">
     <Project Path="components/realtime/Leistd.RealTime.Core/Leistd.RealTime.Core.csproj" />
     <Project Path="components/realtime/Leistd.RealTime.AspNetCore.SignalR/Leistd.RealTime.AspNetCore.SignalR.csproj" />
@@ -148,6 +153,9 @@
   </Folder>
   <Folder Name="/tests/components/object-mapping/">
     <Project Path="tests/components/object-mapping/Leistd.ObjectMapping.Tests/Leistd.ObjectMapping.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/components/operation-records/">
+    <Project Path="tests/components/operation-records/Leistd.OperationRecords.Tests/Leistd.OperationRecords.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/components/realtime/">
     <Project Path="tests/components/realtime/Leistd.RealTime.Tests/Leistd.RealTime.Tests.csproj" />

@@ -56,7 +56,7 @@ public class TenantResolverTests
 
         Assert.Equal("t-first", result.TenantIdOrName);
         Assert.False(second.Executed);
-        Assert.Equal(["first"], result.AppliedResolvers);
+        Assert.Equal("first", result.AppliedResolver);
     }
 
     [Fact]
@@ -82,7 +82,8 @@ public class TenantResolverTests
         var result = await resolver.ResolveAsync();
 
         Assert.Equal("t2", result.TenantIdOrName);
-        Assert.Equal(["first", "second"], result.AppliedResolvers);
+        // 前一个没给出结论就继续，记的是给出结论的那一个
+        Assert.Equal("second", result.AppliedResolver);
     }
 
     [Fact]
@@ -93,6 +94,6 @@ public class TenantResolverTests
         var result = await resolver.ResolveAsync();
 
         Assert.Null(result.TenantIdOrName);
-        Assert.Equal(2, result.AppliedResolvers.Count);
+        Assert.Null(result.AppliedResolver);
     }
 }

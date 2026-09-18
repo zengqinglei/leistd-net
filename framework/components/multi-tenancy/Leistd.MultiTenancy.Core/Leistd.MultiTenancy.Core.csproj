@@ -8,12 +8,22 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+    <!-- 远端连接解析：路由缓存与 TenantRouting 配置节绑定 -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\\..\\core\\Leistd.Core\\Leistd.Core.csproj" />
     <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
     <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 本地解析在 EF 包里，与远端解析共用同一套路由判定（连接名白名单、按放置方式选目标、失败关闭）；
+         单飞、跨租户校验等安全关键路径的用例要直接构造 internal 类型 -->
+    <InternalsVisibleTo Include="Leistd.MultiTenancy.EntityFrameworkCore" />
+    <InternalsVisibleTo Include="Leistd.MultiTenancy.Tests" />
   </ItemGroup>
 
 </Project>

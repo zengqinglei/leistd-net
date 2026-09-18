@@ -16,7 +16,7 @@ public record UpdateCurrentUserInputDto
     [StringLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public required string Email { get; init; }
 
-    [Display(Name = "DisplayName")]
+    [Display(Name = "Display name")]
     [StringLength(128, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 

@@ -1,0 +1,204 @@
+using System.Security.Claims;
+using Leistd.OperationRecords.Abstractions;
+using Leistd.OperationRecords.AspNetCore.Attributes;
+using Leistd.OperationRecords.AspNetCore.Extensions;
+using Leistd.OperationRecords.Tests.TestDoubles;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Leistd.OperationRecords.Tests;
+
+/// <summary>
+/// 授权阶段的拒绝：注解决定记不记，框架不再二次筛选。
+/// </summary>
+/// <remarks>
+/// <c>[Authorize(Policy = ...)]</c> 的拒绝发生在授权阶段，请求到不了应用服务，
+/// 那里的记录调用看不见它——于是"谁在反复尝试他没有的权限"这类问题没有任何痕迹可查。
+/// </remarks>
+public sealed class DeniedOperationRecordingTests
+{
+    private static (HttpContext Context, RecordingOperationRecordStore Store) Create(
+        string method = "PUT",
+        bool authenticated = true,
+        object[]? metadata = null,
+        Dictionary<string, object?>? routeValues = null)
+    {
+        var store = new RecordingOperationRecordStore();
+        var services = new ServiceCollection();
+        services.AddSingleton<IOperationRecordStore>(store);
+        services.AddSingleton<IOperationRecorder>(
+            _ => new PassThroughRecorder(store));
+
+        var context = new DefaultHttpContext
+        {
+            RequestServices = services.BuildServiceProvider(),
+            // 认证与否只看 ClaimsIdentity 有没有 authenticationType，与有没有 claim 无关
+            User = authenticated
+                ? new ClaimsPrincipal(new ClaimsIdentity([], "TestBearer"))
+                : new ClaimsPrincipal(new ClaimsIdentity())
+        };
+        context.Request.Method = method;
+
+        if (metadata is not null)
+        {
+            context.SetEndpoint(new Endpoint(
+                _ => Task.CompletedTask, new EndpointMetadataCollection(metadata), "test"));
+        }
+
+        foreach (var (key, value) in routeValues ?? new())
+        {
+            context.Request.RouteValues[key] = value;
+        }
+
+        return (context, store);
+    }
+
+    /// <summary>把调用原样转成一条记录，避免本组用例依赖记录器的上下文补齐逻辑。</summary>
+    private sealed class PassThroughRecorder(IOperationRecordStore store) : IOperationRecorder
+    {
+        public Task RecordSucceededAsync(string action, OperationTarget target, string basis, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task RecordFailedAsync(
+            string action,
+            OperationTarget target,
+            string basis,
+            OperationFailure failure = default,
+            CancellationToken ct = default)
+            => store.InsertAsync(new OperationRecordInfo
+            {
+                Action = action,
+                TargetId = target.Id,
+                TargetName = target.Name,
+                AuthorizationBasis = basis,
+                Outcome = OperationRecordOutcome.Failed,
+                FailureCode = failure.Code,
+                FailureData = failure.Data,
+                FailureDetail = failure.Detail
+            }, ct);
+    }
+
+    [Fact]
+    public async Task An_endpoint_with_the_attribute_is_recorded()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new AuthorizeAttribute { Policy = "App.Roles.Update" },
+            new OperationRecordActionAttribute("identity.role.updated", "id")
+        ], routeValues: new() { ["id"] = "r-1" });
+
+        await context.RecordDeniedOperationAsync();
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal("identity.role.updated", written.Action);
+        Assert.Equal("r-1", written.TargetId);
+        Assert.Equal("App.Roles.Update", written.AuthorizationBasis);
+        Assert.Equal(OperationRecordOutcome.Failed, written.Outcome);
+    }
+
+    /// <summary>没有注解就不记：注解是唯一的开关。</summary>
+    [Fact]
+    public async Task An_endpoint_without_the_attribute_is_not_recorded()
+    {
+        var (context, store) = Create(metadata: [new AuthorizeAttribute { Policy = "App.Roles.Update" }]);
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Empty(store.Written);
+    }
+
+    /// <summary>
+    /// 注解在哪就记哪，不按 HTTP 方法二次否决
+    /// </summary>
+    /// <remarks>
+    /// 回归点：早先额外过滤了只记 POST/PUT/PATCH/DELETE。开发者把注解打在敏感的 <c>GET</c>
+    /// 导出端点上，已经明确表达了"这个动作值得留痕"，框架再筛一道会让它静默失效——
+    /// 而失效的表现是"审计里什么都没有"，没有任何报错提示。
+    /// </remarks>
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("POST")]
+    [InlineData("DELETE")]
+    public async Task The_http_method_does_not_override_the_attribute(string method)
+    {
+        var (context, store) = Create(method: method, metadata:
+        [
+            new OperationRecordActionAttribute("data.export.requested")
+        ]);
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Single(store.Written);
+    }
+
+    /// <summary>
+    /// 匿名请求一律不记
+    /// </summary>
+    /// <remarks>
+    /// 这不是偏好而是安全属性：匿名请求没有操作人，记下来等于把审计表变成一个
+    /// 不需要凭据的写入面，任何人都能往里灌数据。
+    /// </remarks>
+    [Fact]
+    public async Task An_anonymous_request_is_never_recorded()
+    {
+        var (context, store) = Create(authenticated: false, metadata:
+        [
+            new OperationRecordActionAttribute("identity.role.updated", "id")
+        ], routeValues: new() { ["id"] = "r-1" });
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Empty(store.Written);
+    }
+
+    /// <summary>目标标识按声明顺序取多个路由值拼接。</summary>
+    /// <remarks>
+    /// 目标标识不总是一个值：按 <c>(租户, 连接名)</c> 逐行登记的资源，标识是 <c>{tenantId}/{name}</c>。
+    /// 只取第一段会让被拒记录与成功路径的写法分叉，按目标检索就只能查到一半。
+    /// </remarks>
+    [Fact]
+    public async Task Multiple_route_keys_are_joined_in_declaration_order()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new OperationRecordActionAttribute("tenant-connection.updated", "tenantId", "name")
+        ], routeValues: new() { ["tenantId"] = "t-1", ["name"] = "crm" });
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Equal("t-1/crm", Assert.Single(store.Written).TargetId);
+    }
+
+    /// <summary>缺任何一段就整体记为占位值，不记半截。</summary>
+    /// <remarks>半截的标识既检索不到成功路径写下的那条，又看起来像一个真实存在的目标。</remarks>
+    [Fact]
+    public async Task A_missing_route_value_yields_the_placeholder_rather_than_half_an_identifier()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new OperationRecordActionAttribute("tenant-connection.updated", "tenantId", "name")
+        ], routeValues: new() { ["tenantId"] = "t-1" });
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Equal("-", Assert.Single(store.Written).TargetId);
+    }
+
+    /// <summary>取动作上的策略名，而不是类级 <c>[Authorize]</c> 的空策略。</summary>
+    [Fact]
+    public async Task The_policy_name_comes_from_the_action_not_the_controller()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new AuthorizeAttribute(),                                   // 类级：Policy 为空
+            new AuthorizeAttribute { Policy = "App.Roles.Update" },     // 动作级：真正的策略
+            new OperationRecordActionAttribute("identity.role.updated")
+        ]);
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Equal("App.Roles.Update", Assert.Single(store.Written).AuthorizationBasis);
+    }
+}

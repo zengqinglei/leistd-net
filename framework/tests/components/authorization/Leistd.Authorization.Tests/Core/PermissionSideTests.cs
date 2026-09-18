@@ -19,18 +19,18 @@ public class PermissionSideTests
     private const string TenantOnly = "App.Workbench";
     private const string BothSides = "App.Orders";
 
-    /// <summary>组声明 Host 侧别，组内权限与子权限默认继承；显式声明可覆盖。</summary>
+    /// <summary>每条权限显式声明侧别；子权限不声明时继承父权限。</summary>
     private sealed class SidedDefinitionProvider : IPermissionDefinitionProvider
     {
         public void Define(IPermissionDefinitionContext context)
         {
-            var system = context.GetOrAddGroup("Group.System", "系统", MultiTenancySides.Host);
-            var tenants = system.AddPermission(HostOnly, "租户管理");
+            var system = context.GetOrAddGroup("Group.System", "系统");
+            var tenants = system.AddPermission(HostOnly, MultiTenancySides.Host, "租户管理");
             tenants.AddChild(HostOnlyChild, "创建租户");
 
             var app = context.GetOrAddGroup("Group.App", "应用");
-            app.AddPermission(BothSides, "订单管理");
-            app.AddPermission(TenantOnly, "租户工作台", MultiTenancySides.Tenant);
+            app.AddPermission(BothSides, MultiTenancySides.Both, "订单管理");
+            app.AddPermission(TenantOnly, MultiTenancySides.Tenant, "租户工作台");
         }
     }
 
@@ -121,7 +121,7 @@ public class PermissionSideTests
     }
 
     [Fact]
-    public void Side_is_inherited_from_group_and_parent_unless_overridden()
+    public void Side_is_declared_per_permission_and_inherited_by_children()
     {
         var manager = TestPermissionDefinitions.CreateManager(new SidedDefinitionProvider());
 

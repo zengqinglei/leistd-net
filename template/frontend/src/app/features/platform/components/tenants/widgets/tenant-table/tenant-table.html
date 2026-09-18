@@ -166,6 +166,15 @@
                                       {{ toggleLabel(row.original.isActive) }}
                                     </button>
                                   }
+                                  @if (canImpersonate()) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      (click)="impersonate.emit(row.original)"
+                                    >
+                                      <ng-icon name="lucideLogIn" />
+                                      {{ impersonateLabel() }}
+                                    </button>
+                                  }
                                 </hlm-dropdown-menu-group>
                                 @if (canDelete()) {
                                   <hlm-dropdown-menu-separator />

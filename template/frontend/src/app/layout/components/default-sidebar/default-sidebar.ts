@@ -10,6 +10,7 @@ import {
   lucideCheck,
   lucideChevronsUpDown,
   lucideCog,
+  lucideDatabase,
   lucideGauge,
   lucideHouse,
   lucideIdCard,
@@ -72,6 +73,7 @@ interface MenuGroup {
   providers: [provideIcons({
     lucideBuilding2, lucideCheck, lucideChevronsUpDown, lucideCog, lucideHouse,
     lucideGauge, lucideUsers, lucideIdCard, lucideLayers, lucideShieldCheck, lucideSettings,
+    lucideDatabase,
   })],
   templateUrl: './default-sidebar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -140,6 +142,13 @@ export class DefaultSidebar {
           icon: 'lucideSettings',
           route: '/platform/settings',
           permissions: [PERMISSIONS.settings.default],
+        },
+        // 审计属运维：读者是排查问题和对账的人，不是改配置的人。
+        {
+          label: 'layout.sidebar.operationRecords',
+          icon: 'lucideDatabase',
+          route: '/platform/operation-records',
+          permissions: [PERMISSIONS.operationRecords.default],
         },
       ],
     },
@@ -224,6 +233,13 @@ export class DefaultSidebar {
           icon: 'lucideSettings',
           route: '/platform/settings',
           permissions: [PERMISSIONS.settings.default],
+        },
+        // 审计属运维：读者是排查问题和对账的人，不是改配置的人。
+        {
+          label: 'Operation records',
+          icon: 'lucideDatabase',
+          route: '/platform/operation-records',
+          permissions: [PERMISSIONS.operationRecords.default],
         },
       ],
     },

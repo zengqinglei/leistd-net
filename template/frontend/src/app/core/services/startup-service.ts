@@ -12,6 +12,9 @@ import { firstValueFrom } from 'rxjs';
 //#endif
 
 import { AuthService } from './auth-service';
+//#if (LocalIdentity)
+import { ImpersonationService } from './impersonation-service';
+//#endif
 import { SessionContextService } from './session-context-service';
 //#if (LocalIdentity)
 import { TenantContextService } from './tenant-context-service';
@@ -35,6 +38,7 @@ export class StartupService {
   //#if (LocalIdentity)
   private readonly http = inject(HttpClient);
   private readonly tenantContext = inject(TenantContextService);
+  private readonly impersonation = inject(ImpersonationService);
   //#endif
   private _status = signal<StartupStatus>('loading');
   private _error = signal<unknown | null>(null);
@@ -89,6 +93,10 @@ export class StartupService {
       // 权限与设置在同一次启动中就位：Guard 与菜单按权限裁剪、界面按设置渲染由它派生的
       // 状态，未就位前一律按无权限处理，避免受保护入口闪现。
       await this.sessionContext.establish();
+      //#if (LocalIdentity)
+      // 模拟态只有服务端的会话声明知道；顶栏的模拟提示要在外壳首帧就位，否则会闪一下"正常会话"。
+      await this.impersonation.load();
+      //#endif
       this._status.set('success');
     } catch (err: unknown) {
       if (err instanceof ApplicationHttpError && err.status === 401) {

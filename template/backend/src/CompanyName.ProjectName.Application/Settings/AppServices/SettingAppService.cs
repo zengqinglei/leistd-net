@@ -12,6 +12,8 @@ using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
 using Leistd.UnitOfWork.Attributes;
 using Leistd.Ddd.Application.AppService;
+using CompanyName.ProjectName.Application.OperationRecords;
+using Leistd.OperationRecords.Abstractions;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Microsoft.Extensions.Options;
@@ -42,6 +44,7 @@ public class SettingAppService(
     IPermissionChecker permissionChecker,
     ICurrentUser currentUser,
     ICurrentTenant currentTenant,
+    IOperationRecorder operationRecorder,
     IEnumerable<IHostSettingApplier> hostSettingAppliers
 #if (LocalIdentity)
     ,
@@ -140,6 +143,16 @@ public class SettingAppService(
                 await applier.ApplyAsync(cancellationToken);
             }
         }
+
+        // 目标标识带出作用域：同一个设置名在宿主与租户两层各有一行，
+        // 只记名字会让两层的变更在审计里长得一模一样，分不出改的是哪一层。
+        // 用户级设置（SetForCurrentUserAsync）刻意不记：个人偏好不改变能力边界也不改变共享数据，
+        // 却是高频写入——审计表的价值来自密度。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.SettingChanged,
+            OperationTarget.For($"{scope}/{input.Name}", input.Name),
+            PermissionConstant.Settings.Default,
+            cancellationToken);
     }
 
     // 值域在服务端把关，不能只靠界面的候选项：脚本、旧版客户端和迁移进来的数据都绕得过界面，

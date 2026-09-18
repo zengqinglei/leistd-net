@@ -57,5 +57,5 @@ builder.Services.AddScoped<IConnectionStringResolver, ConfigurationConnectionStr
 
 ## 注意事项
 
-- Framework 不提供 `IConnectionStringResolver` 的租户实现；Secret 来源、缓存与并发合并策略由宿主决定。
+- 租户感知的 `IConnectionStringResolver` 由[多租户](./multi-tenancy.md)提供（本地直连控制库或远端回源）。**解析用的名字就是本 DbContext 的 `[ConnectionStringName]`**：租户按 `(租户, 连接名)` 逐行登记连接，一条都没登记即用本服务自己配置的库。连接串加密存放在控制库里，宿主须配置持久化的 Data Protection 密钥环。
 - 解析器按请求解析，注册为 `Scoped`；`AffinityKey` 的实现必须避免 I/O，否则每次取 DbContext 都会付代价。

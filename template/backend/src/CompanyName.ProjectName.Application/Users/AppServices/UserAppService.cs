@@ -1,4 +1,5 @@
 using Leistd.UnitOfWork.Attributes;
+using CompanyName.ProjectName.Application.OperationRecords;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Dtos;
@@ -16,6 +17,7 @@ using Leistd.ExceptionHandling;
 using Leistd.ObjectMapping;
 using Leistd.Authorization.Abstractions;
 using Leistd.ObjectMapping.Abstractions;
+using Leistd.OperationRecords.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Users.AppServices;
 
@@ -28,6 +30,7 @@ public class UserAppService(
     IRepository<UserRole, Guid> userRoleRepository,
     IPermissionChecker permissionChecker,
     UserDomainService userDomainService,
+    IOperationRecorder operationRecorder,
     ICurrentUser currentUser,
     ILogger<UserAppService> logger,
     IObjectMapper objectMapper,
@@ -167,6 +170,14 @@ public class UserAppService(
         var userRoles = await AssignRolesAsync(user.Id, roles, cancellationToken);
 
         logger.LogInformation("User created (ID: {Id})", user.Id);
+
+        // 跟随本方法的 [UnitOfWork] 边界：建用户回滚，这条记录一并回滚，不留"记了但没发生"的假账
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserCreated,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Create,
+            cancellationToken);
+
         return MapToOutput(user, userRoles, roles);
     }
 
@@ -213,6 +224,16 @@ public class UserAppService(
         await userRepository.UpdateAsync(user, cancellationToken);
 
         logger.LogInformation("User updated (ID: {Id})", user.Id);
+
+        // 补齐成功路径：此前只有 UserController 上的 [OperationRecordAction] 记被拒的更新，
+        // 成功反而不留痕——而注解自己的文档写着"与成功路径使用的值逐字一致"，它预设了这里存在。
+        // 本方法没有 [UnitOfWork]：写入即时生效，不随后续失败回滚。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserUpdated,
+            OperationTarget.For(id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
+
         return await MapToOutputAsync(user, cancellationToken);
     }
 
@@ -308,6 +329,14 @@ public class UserAppService(
 
         await userRepository.DeleteAsync(user, cancellationToken);
         logger.LogInformation("User deleted (ID: {Id})", id);
+
+        // 名字在删除前就握在手里（user 变量即是）：删完再查什么都查不到，
+        // 而审计要回答的正是"当时删掉的是谁"。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserDeleted,
+            OperationTarget.For(id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Delete,
+            cancellationToken);
     }
 
     private async Task<User> GetUserOrThrowAsync(Guid id, CancellationToken cancellationToken)
@@ -370,6 +399,15 @@ public class UserAppService(
         await ReplaceUserRolesAsync(id, roles, cancellationToken);
 
         logger.LogInformation("User roles replaced (ID: {Id}, role count: {Count})", id, roles.Count);
+
+        // 本方法标了 [UnitOfWork]：这条记录跟随该工作单元，角色替换回滚则记录一并回滚——
+        // 成功记录必须与它描述的那次变更同生共死。与下面的 UpdateAsync 不同，那里没有工作单元。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserRolesReplaced,
+            OperationTarget.For(id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.ManageRoles,
+            cancellationToken);
+
         return ToRoleBriefs(roles);
     }
 

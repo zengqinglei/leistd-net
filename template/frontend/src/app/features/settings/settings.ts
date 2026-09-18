@@ -564,7 +564,12 @@ export class Settings {
     }
 
     const effective = this.draftOf(setting, scope) || this.systemOrInheritedValue(setting, scope);
-    return LOG_LEVEL_DESCRIPTIONS[effective] ?? '';
+    const description = LOG_LEVEL_DESCRIPTIONS[effective];
+    //#if (IncludeLocalization)
+    return description ? this.transloco.translate(description) : '';
+    //#else
+    return description ?? '';
+    //#endif
   }
 
   /** 本层没设值时实际生效的那个值（继承来的，或跟随系统探测到的）。 */

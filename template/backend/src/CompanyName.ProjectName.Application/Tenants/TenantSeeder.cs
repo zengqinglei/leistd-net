@@ -38,7 +38,6 @@ public class TenantSeeder(
     ILogger<TenantSeeder> logger) : ITenantSeeder
 {
     private const string MemberRoleName = "Member";
-    private const string TenantAdminUsername = "admin";
 
     /// <inheritdoc />
     public async Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
@@ -189,17 +188,17 @@ public class TenantSeeder(
     /// </remarks>
     private async Task<User> EnsureTenantAdminAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken)
     {
-        var adminUser = await userRepository.GetFirstAsync(u => u.Username == TenantAdminUsername, q => q.OrderBy(u => u.Id), cancellationToken);
+        var adminUser = await userRepository.GetFirstAsync(u => u.Username == AdminConstant.TenantAdminUsername, q => q.OrderBy(u => u.Id), cancellationToken);
         if (adminUser == null)
         {
             adminUser = await userDomainService.CreateUserAsync(
-                TenantAdminUsername,
+                AdminConstant.TenantAdminUsername,
                 adminEmail,
                 adminPassword,
                 displayName: "Tenant Administrator",
                 passwordSubject: "Tenant admin password",
                 cancellationToken);
-            logger.LogInformation("Tenant admin user created: {Username}", TenantAdminUsername);
+            logger.LogInformation("Tenant admin user created: {Username}", AdminConstant.TenantAdminUsername);
         }
 
         return adminUser;

@@ -1,7 +1,10 @@
 using CompanyName.ProjectName.Api.Extensions;
 using CompanyName.ProjectName.Api.Middlewares;
 using Leistd.MultiTenancy.AspNetCore;
+using CompanyName.ProjectName.Api.HostedServices.BackgroundServices;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
+using CompanyName.ProjectName.Api.HostedServices.Workers;
+using CompanyName.ProjectName.Api.Options;
 
 using CompanyName.ProjectName.Application;
 using CompanyName.ProjectName.Domain;
@@ -44,7 +47,6 @@ using OpenIddict.Abstractions;
 using Leistd.ServiceClient.AspNetCore;
 #endif
 #if (!LocalIdentity)
-using CompanyName.ProjectName.Api.Options;
 using OpenIddict.Validation.AspNetCore;
 #endif
 using System.Net;
@@ -251,6 +253,21 @@ try
 
     builder.Services.AddHostedService<ApplicationBootstrapper>();
 
+    // 进程内后台任务队列。**一个实例、三处注册**：单例本体、以队列接口解析到它、
+    // 以托管服务解析到它。三者若各自 new 一个，生产者写进 A 的队列，
+    // 而被主机启动消费的是 B——工作项永远不会执行，且没有任何报错。
+    builder.Services.AddSingleton<BackgroundTaskWorker>();
+    builder.Services.AddSingleton<IBackgroundTaskQueue>(sp => sp.GetRequiredService<BackgroundTaskWorker>());
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<BackgroundTaskWorker>());
+
+    // 操作记录到期归档。默认关闭：审计表只增不减是安全的默认值，
+    // 要启用就得有人显式写进配置，那一刻他也为保留期负了责。
+    builder.Services.AddOptions<OperationRecordRetentionOptions>()
+        .Bind(builder.Configuration.GetSection(OperationRecordRetentionOptions.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+    builder.Services.AddHostedService<OperationRecordArchiveBackgroundService>();
+
     builder.Services.AddGlobalExceptionHandler(builder.Configuration);
 #if (IncludeLocalization)
     builder.Services.AddJsonLocalization(
@@ -389,7 +406,7 @@ try
     builder.Services.AddSingleton<IRealTimeSubscriptionAuthorizer, PublicResourceSubscriptionAuthorizer>();
 #endif
 
-    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
+    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
 
 #if (LocalIdentity)
     builder.Services.AddAuthentication(options =>

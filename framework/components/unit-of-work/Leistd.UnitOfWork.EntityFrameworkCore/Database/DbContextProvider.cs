@@ -13,7 +13,8 @@ using Leistd.Data.Abstractions;
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
 
 /// <summary>
-/// 在工作单元内按 DbContext 类型复用实例，并在创建前异步解析最终连接串、校验连接归属与物理目标未变。
+/// 在工作单元内按 DbContext 类型复用实例，并在创建前异步解析最终连接串、校验连接归属与物理目标未变；
+/// 工作单元之外若作用域内已有实例的连接与本次解析结果不一致，拒绝返回它（不静默改道）。
 /// </summary>
 public class DbContextProvider<TDbContext>(
     IUnitOfWorkManager unitOfWorkManager,
@@ -32,11 +33,11 @@ public class DbContextProvider<TDbContext>(
         var unitOfWork = unitOfWorkManager.Current;
         if (unitOfWork is null)
         {
-            // 工作单元之外无需固定连接归属。
-            return CreateDbContext(
-                serviceProvider,
-                await ResolveConnectionStringAsync(serviceProvider, cancellationToken),
-                existingConnection: null);
+            // 工作单元之外无需固定连接归属，但仍不许静默改道——理由见 EnsureResolvedTargetIsUsed。
+            var resolvedOutsideUnitOfWork = await ResolveConnectionStringAsync(serviceProvider, cancellationToken);
+            var scopedDbContext = CreateDbContext(serviceProvider, resolvedOutsideUnitOfWork, existingConnection: null);
+            EnsureResolvedTargetIsUsed(scopedDbContext, resolvedOutsideUnitOfWork);
+            return scopedDbContext;
         }
 
         var uowServiceProvider = GetServiceProvider(unitOfWork);
@@ -170,6 +171,43 @@ public class DbContextProvider<TDbContext>(
 
         var configured = probe.Database.GetConnectionString();
         return configured is null ? null : CreateTargetKey(configured);
+    }
+
+    // 工作单元之外取到的 DbContext 由当前 DI 作用域持有（AddDbContext 默认 Scoped）：同一作用域里第一次创建之后，
+    // 再取拿到的都是那个实例，宿主回调不会再执行。于是这里解析出的连接串只是"应当用的"，不等于"实际在用的"。
+    //
+    // 典型事故：请求里先在宿主上下文取过一次（授权阶段读权限授予就会），随后 ICurrentTenant.Change 到分库租户再取，
+    // 拿到的仍是宿主库上的实例——计数、查找都在宿主库里执行，得出"该租户没有用户"这类完全不报错的错答案。
+    //
+    // 另一种做法是工作单元之外一律拒绝取 DbContext。本组件刻意不这么做：宿主侧大量读取本就不需要事务，
+    // 一刀切会逼着这些路径都包一层工作单元。这里只拒绝"解析出的连接与实例实际连接不一致"这一种情形，
+    // 它正是唯一会静默连错库的情形。判据与工作单元路径同一把尺（CreateTargetKey），不另立等价规则。
+    //
+    // 修正方式：在目标租户上下文内新开工作单元（BeginAsync(requiresNew: true)）。工作单元自带独立作用域，
+    // DbContext 会按解析出的连接重新创建。
+    private static void EnsureResolvedTargetIsUsed(TDbContext dbContext, string? resolvedConnectionString)
+    {
+        // 无解析器（宿主自己配置连接）或非关系型：没有"应当用哪个库"可比。
+        if (resolvedConnectionString is null || !dbContext.Database.IsRelational())
+        {
+            return;
+        }
+
+        if (string.Equals(
+                CreateTargetKey(resolvedConnectionString),
+                CreateTargetKey(dbContext.Database.GetConnectionString()),
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The DbContext '{typeof(TDbContext).FullName}' held by the current service scope was created for a " +
+            $"different database than the one now resolved for '{ConnectionStringName}' (typically after " +
+            "ICurrentTenant.Change). Outside a unit of work the scoped instance cannot be re-targeted, so using it " +
+            "would silently read and write the wrong database. Begin a new unit of work inside the target tenant " +
+            "scope (IUnitOfWorkManager.BeginAsync(requiresNew: true)); it owns its own scope and creates the " +
+            "DbContext for the resolved connection.");
     }
 
     // 连接解析必须在调用此同步方法前完成。

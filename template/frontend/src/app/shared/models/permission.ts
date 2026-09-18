@@ -27,6 +27,7 @@ export const PERMISSIONS = {
     create: 'App.Tenants.Create',
     update: 'App.Tenants.Update',
     delete: 'App.Tenants.Delete',
+    impersonation: 'App.Tenants.Impersonation',
   },
   //#endif
   //#if (OpenIddictServer)
@@ -43,6 +44,10 @@ export const PERMISSIONS = {
   },
   settings: {
     default: 'App.Settings',
+  },
+  operationRecords: {
+    default: 'App.OperationRecords',
+    export: 'App.OperationRecords.Export',
   },
 } as const;
 
@@ -69,6 +74,9 @@ export const PLATFORM_ENTRY_PERMISSIONS = [
   PERMISSIONS.openApplications.default,
   //#endif
   PERMISSIONS.permissions.default,
+  // 只持有审计查看权限的岗位（安全、合规）也要进得来：漏了这一项，
+  // 那个角色的账号菜单里看不到入口、登录后还会被重定向走。
+  PERMISSIONS.operationRecords.default,
 ] as const;
 
 /** 当前用户的有效权限。 */

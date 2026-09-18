@@ -3,6 +3,8 @@ using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
+using CompanyName.ProjectName.Application.Tenants.AppServices;
+using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ public sealed class AuthController(
     IAuthAppService authService,
     ICaptchaAppService captchaAppService,
     IEmailVerificationAppService emailVerificationAppService,
+    ITenantImpersonationAppService impersonationAppService,
     IUserRegistrationPolicyProvider registrationPolicy) : BaseController
 {
     [AllowAnonymous]
@@ -81,6 +84,32 @@ public sealed class AuthController(
     {
         return await authService.RegisterAsync(request, cancellationToken);
     }
+
+    /// <summary>
+    /// 结束模拟登录，会话切回发起人
+    /// </summary>
+    /// <remarks>
+    /// 只要求已认证而不要求 <c>App.Tenants.Impersonation</c>：模拟期间持有的是<b>被模拟者</b>的权限，
+    /// 租户管理员没有那条宿主侧权限。要求它会让人退不出去——只能靠退出登录，
+    /// 而那等于把"回到自己的账号"变成一次重新登录。
+    /// </remarks>
+    [Authorize]
+    [HttpPost("end-impersonation")]
+    public async Task EndImpersonationAsync(CancellationToken cancellationToken)
+    {
+        var principal = await impersonationAppService.EndImpersonationAsync(cancellationToken);
+
+        await HttpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, principal,
+            new AuthenticationProperties { IsPersistent = true });
+    }
+
+    /// <summary>
+    /// 当前会话的模拟状态（供界面在顶栏显示模拟提示）
+    /// </summary>
+    [Authorize]
+    [HttpGet("impersonation")]
+    public Task<ImpersonationStatusOutputDto> GetImpersonationStatusAsync(CancellationToken cancellationToken)
+        => impersonationAppService.GetStatusAsync(cancellationToken);
 
     /// <summary>
     /// 获取当前用户信息

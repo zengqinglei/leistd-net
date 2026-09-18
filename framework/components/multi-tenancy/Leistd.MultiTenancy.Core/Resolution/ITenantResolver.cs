@@ -22,7 +22,11 @@ public class TenantResolveResult
     public string? TenantIdOrName { get; set; }
 
     /// <summary>
-    /// 获取已执行的贡献者名称。
+    /// 获取或设置终止解析链的贡献者名称；<see langword="null"/> 表示没有贡献者给出结论。
     /// </summary>
-    public List<string> AppliedResolvers { get; } = [];
+    /// <remarks>
+    /// 只记命中的那一个，不记全部执行过的：这是诊断信息，而解析在每个请求上都会发生，
+    /// 为一行 Debug 日志在热路径上分配一个列表并不值得。
+    /// </remarks>
+    public string? AppliedResolver { get; set; }
 }

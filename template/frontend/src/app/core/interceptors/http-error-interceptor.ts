@@ -1,7 +1,14 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+//#if (IncludeLocalization)
+import { Injector, inject } from '@angular/core';
+//#else
 import { inject } from '@angular/core';
+//#endif
 //#if (LocalIdentity)
 import { Router } from '@angular/router';
+//#endif
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { catchError, throwError } from 'rxjs';
 
@@ -16,6 +23,11 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const sessionContext = inject(SessionContextService);
   const tenantContext = inject(TenantContextService);
+  //#if (IncludeLocalization)
+  // 不能在这里直接注入 TranslocoService：它加载词条走 HttpClient，HttpClient 又要经过本拦截器，
+  // 构造期注入就是循环依赖。出错时再按需取——那时它早已构造完成。
+  const injector = inject(Injector);
+  //#endif
   //#if (LocalIdentity)
   const router = inject(Router);
   //#endif
@@ -67,7 +79,15 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         }
       }
 
+      //#if (IncludeLocalization)
+      const networkErrorMessage =
+        error.status === 0
+          ? injector.get(TranslocoService).translate('common.networkError')
+          : undefined;
+      return throwError(() => ApplicationHttpError.from(error, networkErrorMessage));
+      //#else
       return throwError(() => ApplicationHttpError.from(error));
+      //#endif
     }),
   );
 };

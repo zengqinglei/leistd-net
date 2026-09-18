@@ -32,6 +32,14 @@ export const PLATFORM_ROUTES: Routes = [
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.settings.default, scope: 'system' },
   },
+  {
+    // 运维审计：谁在什么时候做了什么。只读，无写端点。
+    path: 'operation-records',
+    loadComponent: () =>
+      import('./components/operation-records/operation-records').then((m) => m.OperationRecords),
+    canActivate: [permissionGuard],
+    data: { permission: PERMISSIONS.operationRecords.default },
+  },
   //#if (LocalIdentity)
   {
     path: 'tenants',

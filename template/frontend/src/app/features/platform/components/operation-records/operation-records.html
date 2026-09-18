@@ -1,0 +1,154 @@
+<div class="flex flex-col h-full overflow-hidden">
+  <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+    <!-- 工具栏在三种宽度下的形态：
+         宽屏一行排下；中屏左组（搜索与三个筛选）占第一行，右组（时间范围、导出、刷新）整体换到
+         第二行并靠右；窄屏搜索、时间范围各占一行，筛选并排换行，导出与刷新平分一行。
+         做到这一点靠左组的 flex-auto（基准取内容宽度）：flex-wrap 按基准判断放不放得下，放不下就让
+         右组整体换行。先前左组是 flex-1（基准 0），它总能"挤进"同一行，于是在组内把自己折成三行，
+         右组被垂直居中夹在中间，1024 宽时搜索框单独一行、「结果」掉到第三行。
+         也不写死一个基准宽度——中英文下筛选按钮宽度不同，写死的值总有一种语言不够。
+         搜索框的 min-w-56 仍保留：左组自身放不下时，让筛选换到下一行，而不是把搜索框榨空。 -->
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+      <div class="flex min-w-0 flex-auto flex-wrap items-center gap-3">
+        <hlm-input-group class="w-full sm:w-auto sm:max-w-xs sm:min-w-56 sm:flex-1">
+          <hlm-input-group-addon>
+            <ng-icon name="lucideSearch" />
+          </hlm-input-group-addon>
+          <input
+            hlmInputGroupInput
+            type="text"
+            [placeholder]="searchPlaceholder()"
+            [value]="searchQuery()"
+            (input)="onSearchQueryChange($any($event.target).value)"
+          />
+        </hlm-input-group>
+
+        <!-- 类别 / 动作 / 结果三个筛选器，与用户管理等列表页统一用 app-faceted-filter：
+             它自带搜索框、清空与选中态 Badge。**动作与类别会随业务增长**，固定下拉迟早翻不完，
+             而搜索是这个组件本来就有的能力。
+
+             选项由服务端下发（见 filterOptions），**不在前端硬编码动作码**——那等于把服务端的
+             登记复制一份过来，两处迟早漂移，症状是"某个动作在筛选框里选不到"，没有任何报错。
+             选项已按读者可见性裁剪：租户读者拿不到宿主侧动作。 -->
+        <app-faceted-filter
+          [label]="categoryLabel()"
+          [options]="categoryFilterOptions()"
+          [value]="selectedCategory()"
+          [searchPlaceholder]="categoryLabel()"
+          [clearLabel]="clearFilterLabel()"
+          [emptyLabel]="filterEmptyLabel()"
+          (valueChange)="onCategoryChange($event)"
+        />
+
+        <!-- 动作候选随类别联动：不联动的话，选了"认证"却仍列出全部动作，
+             选中跨类别的一项会让两个条件相交为空，界面显示"没有匹配"，
+             而人看不出是自己把条件选矛盾了。 -->
+        <app-faceted-filter
+          [label]="actionLabel()"
+          [options]="actionFilterOptions()"
+          [value]="selectedAction()"
+          [searchPlaceholder]="actionLabel()"
+          [clearLabel]="clearFilterLabel()"
+          [emptyLabel]="filterEmptyLabel()"
+          (valueChange)="onActionChange($event)"
+        />
+
+        <app-faceted-filter
+          [label]="outcomeLabel()"
+          [options]="outcomeFilterOptions()"
+          [value]="selectedOutcome()"
+          [searchPlaceholder]="outcomeLabel()"
+          [clearLabel]="clearFilterLabel()"
+          [emptyLabel]="filterEmptyLabel()"
+          (valueChange)="onOutcomeChange($event)"
+        />
+      </div>
+
+      <!-- 只读页：这里只有时间范围、导出与刷新。没有「新建」——记录由系统写入，不由人添加。
+           导出单独授权：整批带离系统的影响面与在线翻页不是一个量级，
+           因此按 operationRecords.export 而不是查看权限裁剪。
+
+           ml-auto 让这一组无论与左组同行还是换到下一行都靠右；窄屏下按钮用 flex-1 平分一行
+           而不是 w-full——两个 w-full 并排会把溢出甩到左边，把按钮推出屏幕。 -->
+      <div class="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+        <!-- 时间范围：选的是展示时区里的日期，写回 URL 前换算成 UTC（见 onRangeChange）。
+
+             用 hlm-date-range-input 而不是 hlm-date-picker-trigger，即官方文档的 Input Picker 用法。
+             它 hostDirectives 上挂着 HlmInputGroup，**本身就是输入框**，并自带 inline-end 的
+             清空（lucideX）与日历（lucideCalendar）两个按钮。
+
+             为什么不是触发器：trigger 的模板是「有日期就显示日期、否则才渲染 <ng-content />」，
+             投影进去的日历图标一旦选中区间就会被顶掉。先前为此把图标摆到触发器外侧，
+             结果窄屏下它孤零零吊在按钮左边，而且这个「按钮组里的非按钮宽控件」正是上面那段
+             溢出的来源。换成输入框后，图标回到框内，控件也变得可收缩。
+
+             它同时 provideBrnDatePickerTrigger(自身)，因此父组件的
+             contentChild(BrnDatePickerTriggerToken) 仍能找到它，可原位替换触发器。
+
+             **parseDate / formatInputDates 必须自己传。** 默认实现是 new Date(...) 与
+             toDateString()，两者都按**浏览器时区**；而本页区间按**展示时区**解释
+             （见 zoned-time.ts）。不覆盖的话，用户一点进输入框文本就跳成另一天，
+             手输的区间整体偏一个时区差，且全程不报错。 -->
+        <hlm-date-range-picker
+          class="w-full sm:w-auto"
+          [date]="selectedRange()"
+          [formatDates]="formatRange()"
+          (dateChange)="onRangeChange($event)"
+        >
+          <!-- 18rem（288px）是量出来的，不是估的，而且要按最长的那种语言量：写法随界面语言变
+               （见 formatRange）。中文 "2026-09-17 ~ 2026-09-18" 实测 171px；英文
+               "Sep 17, 2026 ~ Sep 18, 2026" 约 188px，最宽的组合（Nov 28 ~ Nov 28）约 190px。
+               输入框扣掉左右内边距与框内两个图标按钮后，可用宽度约为总宽减 77px。
+               先前按中文量出的 17rem 在英文下只剩 5~7px——换个字体就截断，这种地方别按"差不多"取值；
+               18rem 给英文留约 21px。
+               还要按字号量：输入框是 text-base md:text-sm，md 以下字号是 16px 而不是 14px，
+               同一串英文宽出约 15%，18rem 在 640~767px 之间会截掉最后一位，所以这一段用 20rem。
+               以后加语种，按该语种最长的写法、在两种字号下各量一次。 -->
+          <hlm-date-range-input
+            class="w-full sm:w-[20rem] md:w-[18rem]"
+            inputId="filter-date-range"
+            showClear
+            [placeholder]="dateRangeLabel()"
+            [clearAriaLabel]="clearFilterLabel()"
+            [calendarAriaLabel]="dateRangeLabel()"
+            [parseDate]="parseRangeInput()"
+            [formatInputDates]="formatRange()"
+          />
+        </hlm-date-range-picker>
+
+        @if (canExport()) {
+          <button
+            hlmBtn
+            variant="secondary"
+            class="flex-1 sm:flex-none"
+            [disabled]="exporting()"
+            (click)="onExport()"
+            [hlmTooltip]="exportLabel()"
+          >
+            <ng-icon name="lucideDownload" data-icon="inline-start" />
+            {{ exportLabel() }}
+          </button>
+        }
+        <button
+          hlmBtn
+          variant="secondary"
+          class="flex-1 sm:flex-none"
+          (click)="reloadList()"
+          [hlmTooltip]="refreshLabel()"
+        >
+          <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
+          {{ refreshLabel() }}
+        </button>
+      </div>
+    </div>
+
+    <app-operation-record-table
+      [records]="records()"
+      [totalCount]="totalRecords()"
+      [pagination]="pagination()"
+      [loading]="loading()"
+      [filtered]="hasActiveFilters()"
+      (paginationChange)="onPaginationChange($event)"
+    />
+  </div>
+</div>

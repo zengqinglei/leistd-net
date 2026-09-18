@@ -140,12 +140,10 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Identity/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Control/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/IdentityControlDbContext.cs",
-            "backend/src/CompanyName.ProjectName.Api/IdentityControlDbContextFactory.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/LocalTenantConnectionStringResolver.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/DesignTime/IdentityControlDbContextFactory.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/AuthController.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Api/Extensions/ActiveUserRequirement.cs",
-            "backend/src/CompanyName.ProjectName.Api/Extensions/InvalidAccountResultHandler.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/**",
             "backend/src/CompanyName.ProjectName.Domain/Users/Options/UserRegistrationOptions.cs",
@@ -212,7 +210,7 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Resource/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionClient.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionClientOptions.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenantConnectionResolutionTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceReadinessGateTests.cs"
           ]
@@ -251,7 +249,7 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ServiceInvocationTests.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/OpenIddictDbContext.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/OpenIddict/**",
-            "backend/src/CompanyName.ProjectName.Api/OpenIddictDbContextFactory.cs"
+            "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/DesignTime/OpenIddictDbContextFactory.cs"
           ]
         }
       ]

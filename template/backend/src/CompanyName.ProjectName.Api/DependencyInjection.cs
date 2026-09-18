@@ -1,5 +1,6 @@
-#if (LocalIdentity)
+// 授权结果处理器在所有服务形态下都存在（被拒的写端点要留痕），因此本 using 无条件
 using CompanyName.ProjectName.Api.Extensions;
+#if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth;
 #endif
 #if (OpenIddictServer)
@@ -41,10 +42,12 @@ public static class DependencyInjection
         // 覆盖范围是每一次新的 HTTP 请求和每一次新的 Hub 连接握手；
         // 已经建立的 SignalR 连接不在其中，见 ActiveUserRequirement 的说明。
         services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
-
-        // 账号失效要返回 401 而不是 403：前端只把 401 当会话失效来清理登录态。
-        services.AddSingleton<IAuthorizationMiddlewareResultHandler, InvalidAccountResultHandler>();
 #endif
+
+        // ASP.NET Core 只认一个结果处理器，因此"账号失效改判 401"与"被拒写端点留痕"
+        // 收在同一个类里。**无条件注册**：资源服务形态没有本地账号，但一样有带策略的写端点，
+        // 放进 LocalIdentity 守卫会让那半边静默没有授权阶段的审计。
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, ApiAuthorizationResultHandler>();
 
         services.AddAuthorization(options =>
         {

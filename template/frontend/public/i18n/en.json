@@ -4,6 +4,7 @@
     "unknownError": "Unknown error",
     "appError": "Application error",
     "unexpectedError": "An unexpected error occurred. Please refresh the page and try again.",
+    "networkError": "Unable to reach the server. Check your connection and try again.",
     "requestError": "Request error",
     "authFailedReLogin": "Authentication failed. Please sign in again.",
     "retry": "Retry",
@@ -42,6 +43,7 @@
       "minLength": "Must be at least {{min}} characters.",
       "maxLength": "Must not exceed {{max}} characters.",
       "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
+      "roleNamePattern": "Must be 2–64 letters, digits, or underscores.",
       "passwordRule": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
       "passwordMismatch": "The two passwords do not match.",
       "passwordSameAsCurrent": "The new password must differ from the current one.",
@@ -101,7 +103,8 @@
       "groupDeveloper": "Developer",
       "openApplications": "Developer Apps",
       "groupOperations": "Operations",
-      "systemSettings": "System settings"
+      "systemSettings": "System settings",
+      "operationRecords": "Operation records"
     },
     "notifications": {
       "title": "Notifications",
@@ -151,7 +154,15 @@
     "followSystem": "Follows your system",
     "hostScopeHint": "Applies to all instances (~30s)",
     "saved": "Saved",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "logLevelHints": {
+      "Verbose": "Logs everything, including every SQL statement and request detail. For short troubleshooting only; left on, it fills the disk quickly.",
+      "Debug": "Logs debugging details. Turn it on while investigating; not recommended day to day.",
+      "Information": "Logs the normal business flow. The default level.",
+      "Warning": "Logs only warnings and errors; the normal flow is not written.",
+      "Error": "Logs only errors. You may miss clues that are wrong without raising an error.",
+      "Fatal": "Logs only failures that stop the process. Almost the same as turning logging off."
+    }
   },
   "landing": {
     "hero": {
@@ -405,6 +416,81 @@
       "saved": "Roles updated"
     }
   },
+  "operationRecords": {
+    "page": {
+      "title": "Operation records"
+    },
+    "filter": {
+      "searchPlaceholder": "Search action / target / operator...",
+      "dateRange": "Date range",
+      "category": "Category",
+      "action": "Action",
+      "outcome": "Outcome",
+      "export": "Export",
+      "exportFailed": "Export failed"
+    },
+    "categories": {
+      "authentication": "Authentication",
+      "account": "Accounts",
+      "authorization": "Authorization",
+      "tenant": "Tenants",
+      "configuration": "Configuration",
+      "data": "Data"
+    },
+    "outcome": {
+      "succeeded": "Succeeded",
+      "failed": "Rejected"
+    },
+    "actions": {
+      "user.created": "Created user {{target}}",
+      "user.updated": "Updated user {{target}}",
+      "user.deleted": "Deleted user {{target}}",
+      "user.roles-replaced": "Changed roles for user {{target}}",
+      "role.created": "Created role {{target}}",
+      "role.deleted": "Deleted role {{target}}",
+      "permission-grants.replaced": "Changed permissions for {{target}}",
+      "tenant.created": "Created tenant {{target}}",
+      "tenant.updated": "Updated tenant {{target}}",
+      "tenant.activation-changed": "Changed activation of tenant {{target}}",
+      "tenant.deleted": "Deleted tenant {{target}}",
+      "setting.changed": "Changed setting {{target}}",
+      "operation-records.exported": "Exported operation records",
+      "auth.login.succeeded": "Signed in",
+      "auth.login.failed": "Failed to sign in ({{target}})",
+      "auth.password.changed": "Changed their own password",
+      "auth.registered": "Registered account {{target}}",
+      "impersonation.started": "Started acting as {{target}}",
+      "impersonation.ended": "Ended impersonation",
+      "tenant.impersonation-started": "Signed in as the administrator of tenant {{target}}",
+      "tenant.impersonation-ended": "Ended impersonation of tenant {{target}}",
+      "auth.token.issued": "Issued an access token"
+    },
+    "actionsNoTarget": {
+      "user.created": "Created a user",
+      "role.created": "Created a role"
+    },
+    "failures": {
+      "Auth_InvalidCredentials": "Incorrect username or password"
+    },
+    "table": {
+      "currentPageReport": "{{total}} in total",
+      "colAction": "Action",
+      "colOutcome": "Outcome",
+      "colActor": "Operator",
+      "colTarget": "Target",
+      "colTime": "Time",
+      "colBasis": "Authorized by",
+      "colCorrelationId": "Trace ID",
+      "colFailure": "Reason",
+      "colFailureDetail": "Technical detail",
+      "impersonatedBy": "acting on behalf, by {{name}}",
+      "unknownActor": "Anonymous",
+      "emptyTitle": "No operation records yet",
+      "emptyHint": "Records appear here as soon as an audited operation runs",
+      "emptyFilteredTitle": "No matching records",
+      "emptyFilteredHint": "Adjust the search"
+    }
+  },
   "openApp": {
     "page": {
       "title": "Open Applications"
@@ -621,12 +707,17 @@
     "fieldDescription": "Description",
     "fieldAdminEmail": "Admin email",
     "fieldAdminPassword": "Admin password",
-    "databasePlacement": "Database placement",
-    "databasePlacementDescription": "Shared uses each service's default database; dedicated resolves this tenant's Secret references.",
-    "sharedDatabase": "Shared database",
-    "dedicatedDatabase": "Dedicated database",
-    "fieldRuntimeSecretReference": "Runtime Secret reference",
-    "fieldMigrationSecretReference": "Migration Secret reference",
+    "fieldConnectionName": "Connection name",
+    "fieldConnectionString": "Connection string",
+    "createConnectionHint": "Optional. Leave empty to keep this tenant in the database each service is already configured with. Sharding can only be decided here: the database must already exist and be migrated, and it cannot be changed afterwards without migrating the data.",
+    "shardRequiresInactive": "To give this tenant a database of its own, deactivate it first: its data currently lives in the database each service is configured with, and registering a connection does not move it.",
+    "addConnection": "Add connection",
+    "changeConnectionString": "Change connection string",
+    "connectionsEmpty": "This tenant has no database of its own; every service uses the database it is configured with.",
+    "connectionNameInvalid": "Use lowercase letters, digits and hyphens only, 1 to 64 characters.",
+    "connectionNameTaken": "This connection name is already registered; change its connection string instead.",
+    "deleteConnectionTitle": "Delete connection",
+    "deleteConnectionDescription": "Delete connection \"{{name}}\"? That service will go back to the database it is configured with.",
     "saved": "Tenant saved",
     "deleted": "Tenant deleted",
     "deleteTitle": "Delete tenant",
@@ -640,9 +731,20 @@
     },
     "detailTitle": "Tenant detail",
     "detailSectionIdentity": "Identity",
-    "detailSectionPlacement": "Database placement",
-    "detailSecretHint": "Only Secret reference names are shown; connection strings are never returned.",
-    "fieldDatabaseMode": "Database placement",
-    "fieldConnectionVersion": "Connection version"
+    "detailSectionConnections": "Database connections",
+    "detailSecretHint": "The connection string is stored encrypted and never returned; saving replaces it in full.",
+    "fieldConnectionVersion": "Version",
+    "impersonate": "Sign in as tenant",
+    "impersonateConfirm": "Sign in as the administrator of “{{name}}”? You will leave the host context until you exit.",
+    "impersonateFailed": "Could not sign in as this tenant."
+  },
+  "impersonation": {
+    "banner": "Acting as tenant {{tenant}} · started by {{impersonator}}",
+    "exit": "Exit impersonation",
+    "exited": "Returned to your own account.",
+    "exitFailed": "Could not end impersonation.",
+    "badge": "Impersonating · {{tenant}}",
+    "title": "Impersonating a tenant",
+    "note": "Everything you do now is recorded under this tenant's account."
   }
 }

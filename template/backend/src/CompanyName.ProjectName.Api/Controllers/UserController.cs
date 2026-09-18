@@ -1,8 +1,10 @@
+using CompanyName.ProjectName.Application.OperationRecords;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -42,6 +44,8 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpPost]
     [Authorize(Policy = PermissionConstant.Users.Create)]
+    // 创建类端点还没有目标标识，省略路由键，被拒记录的目标记为 "-"
+    [OperationRecordAction(OperationRecordActions.UserCreated)]
     public async Task<UserManagementOutputDto> CreateAsync(
         [FromBody] CreateUserInputDto input,
         CancellationToken cancellationToken)
@@ -54,6 +58,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpPut("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserUpdated, "id")]
     public async Task<UserManagementOutputDto> UpdateAsync(
         Guid id,
         [FromBody] UpdateUserInputDto input,
@@ -102,6 +107,8 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Delete)]
+    // 目标标识取路由上的 id，与成功路径写下的值逐字一致，按目标检索才查得全
+    [OperationRecordAction(OperationRecordActions.UserDeleted, "id")]
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.DeleteAsync(id, cancellationToken);
@@ -126,6 +133,8 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </remarks>
     [HttpPut("{id}/roles")]
     [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
+    // 目标标识取路由上的 id，与成功路径写下的值逐字一致，按目标检索才查得全
+    [OperationRecordAction(OperationRecordActions.UserRolesReplaced, "id")]
     public async Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
         Guid id,
         [FromBody] UpdateUserRolesInputDto input,

@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Abstractions;
 using System.Linq.Expressions;
 using Leistd.Authorization.DataScope;
 using Leistd.Authorization.EntityFrameworkCore;
@@ -81,7 +82,7 @@ public sealed class OrderPermissionDefinitionProvider : IPermissionDefinitionPro
     public void Define(IPermissionDefinitionContext context)
     {
         var group = context.GetOrAddGroup("Orders", "订单");
-        var orders = group.AddPermission(OrderPermissions.Default, "订单管理");
+        var orders = group.AddPermission(OrderPermissions.Default, MultiTenancySides.Both, "订单管理");
         orders.AddChild(OrderPermissions.Read, "查看订单");
         orders.AddChild(OrderPermissions.Update, "编辑订单");
         orders.AddChild(OrderPermissions.Approve, "审批订单");

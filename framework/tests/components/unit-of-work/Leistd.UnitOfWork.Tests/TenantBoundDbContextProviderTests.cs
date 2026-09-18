@@ -252,6 +252,50 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         Assert.Contains("different physical database", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 工作单元之外，改道后的连接不能静默复用作用域里已创建的 DbContext
+    /// </summary>
+    /// <remarks>
+    /// <para>生产事故的最小复现。<c>AddDbContext</c> 默认 Scoped：同一作用域里第一次取到的实例
+    /// 此后一直被复用，宿主回调不会再执行。请求里先在宿主上下文取过一次（授权阶段读权限就会），
+    /// 再 <c>ICurrentTenant.Change</c> 到分库租户去取，拿到的仍是宿主库上的那个实例——
+    /// 查询在宿主库执行，得出"该租户没有用户"这类<b>完全不报错的错答案</b>。</para>
+    /// <para>用改写解析结果来模拟"切到分库租户"，与
+    /// <c>Physical_target_switch_inside_one_unit_of_work_is_rejected</c> 同一手法；
+    /// 区别在于那条走工作单元路径，这条走工作单元之外。</para>
+    /// </remarks>
+    [Fact]
+    public async Task Outside_a_unit_of_work_a_rerouted_connection_is_rejected_instead_of_reusing_the_scoped_dbcontext()
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var provider = scope.ServiceProvider.GetRequiredService<IDbContextProvider<FirstDbContext>>();
+
+        await provider.GetDbContextAsync();
+        _resolver.ConnectionString = "Data Source=rerouted-target;Mode=Memory;Cache=Shared";
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetDbContextAsync());
+        Assert.Contains("unit of work", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 工作单元之外，连接未变时照旧复用作用域里的同一个 DbContext
+    /// </summary>
+    /// <remarks>
+    /// 校验只拦"改道"，不能误伤宿主侧大量本来就在工作单元之外的读取——
+    /// 那些路径每次解析出的都是同一个连接。
+    /// </remarks>
+    [Fact]
+    public async Task Outside_a_unit_of_work_an_unchanged_connection_keeps_reusing_the_scoped_dbcontext()
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var provider = scope.ServiceProvider.GetRequiredService<IDbContextProvider<FirstDbContext>>();
+
+        var first = await provider.GetDbContextAsync();
+        var second = await provider.GetDbContextAsync();
+
+        Assert.Same(first, second);
+    }
+
     private static void ConfigureSqlite(DbContextOptionsBuilder options, string fallbackConnectionString)
     {
         var creation = DbContextCreationContext.Current;

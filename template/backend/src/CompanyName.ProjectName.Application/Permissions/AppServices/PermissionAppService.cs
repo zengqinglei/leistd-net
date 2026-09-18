@@ -1,6 +1,9 @@
+using CompanyName.ProjectName.Application.OperationRecords;
 using CompanyName.ProjectName.Application.Permissions.Dtos;
+using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
+using Leistd.OperationRecords.Abstractions;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
@@ -30,6 +33,8 @@ public class PermissionAppService(
     IPermissionGrantManager permissionGrantManager,
     IRepository<User, Guid> userRepository,
     IRepository<Role, Guid> roleRepository
+    ,
+    IOperationRecorder operationRecorder
     ,
     ICurrentTenant currentTenant
 #if (IncludeLocalization)
@@ -178,7 +183,69 @@ public class PermissionAppService(
             cancellationToken);
 #endif
 
+        // 权限授予变更是整套权限体系里最敏感的写操作之一——它直接改变"这个主体能做什么"。
+        // 目标标识用 $"{providerName}/{providerKey}"，与 PermissionController 上注解拼出的
+        // "Role/{roleId}" 逐字一致；两边写法一旦分叉，按目标检索就只能查到一半，且不会报错。
+        // 本方法没有 [UnitOfWork]：授予管理器自己管事务，这条记录写入即时生效。
+        //
+        // 授权依据按 providerName 判定，**不能写死成角色那个权限**：本方法是通用的
+        // （providerName 取值域见 PermissionGrantProviderNames：User 与 Role 两种），
+        // 写死会让"给用户直授权限"这条路径在审计表里留下一条撒谎的"凭什么"——
+        // 而这种错编译器抓不到，只会在事后追责时把人指错方向。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.PermissionGrantsReplaced,
+            OperationTarget.For(
+                $"{providerName}/{providerKey}",
+                await ResolveSubjectNameOrNullAsync(providerName, providerKey, cancellationToken)),
+            providerName == PermissionGrantProviderNames.User
+                ? OperationRecordAuthorizations.DirectUserGrant
+                : PermissionConstant.Roles.ManagePermissions,
+            cancellationToken);
+
         return await GetGrantsAsync(providerName, providerKey, cancellationToken);
+    }
+
+    /// <summary>
+    /// 取主体的显示名，供审计记录的目标名快照使用；取不到时返回 <see langword="null"/>。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为一个审计字段额外查一次库，是值得的。</b>权限授予替换是 <c>Critical</c> 级动作
+    /// ——"改一个角色能做什么"——而目标若显示成裸 GUID，恰恰让这条最该被看懂的记录最难看懂。</para>
+    /// <para><b>但绝不能让它把一次已成功的授权变更变成 500。</b>授予此刻已经写入，
+    /// 查名只是为了让记录好看；查不到就退化为无名，记录照常落库。
+    /// 取消照常向上传播——那不是故障，是调用方主动中止。</para>
+    /// <para>名字取值规则与其他调用点一致：显示名优先，退到名称/登录名。</para>
+    /// </remarks>
+    private async Task<string?> ResolveSubjectNameOrNullAsync(
+        string providerName,
+        string providerKey,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(providerKey, out var id))
+        {
+            return null;
+        }
+
+        try
+        {
+            // 用 GetByIdAsync 而不是按谓词查：这里就是按主键取实体。
+            // （IRepository 提供的是 GetOneAsync / GetFirstAsync / GetByIdAsync / AnyAsync / GetListAsync，
+            //  没有 FirstOrDefaultAsync——那是 EF 对 IQueryable 的扩展方法，不在仓储契约上。）
+            return providerName switch
+            {
+                PermissionGrantProviderNames.User =>
+                    await userRepository.GetByIdAsync(id, cancellationToken)
+                        is { } user ? user.DisplayName ?? user.Username : null,
+                PermissionGrantProviderNames.Role =>
+                    await roleRepository.GetByIdAsync(id, cancellationToken)
+                        is { } role ? role.DisplayName ?? role.Name : null,
+                _ => null
+            };
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

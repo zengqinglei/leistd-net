@@ -4,6 +4,8 @@ using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.MultiTenancy.AspNetCore.Resolution;
 using Leistd.MultiTenancy.Resolution;
+using CompanyName.ProjectName.Application.Auth;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,8 +16,30 @@ namespace CompanyName.ProjectName.Api.Controllers;
 /// </summary>
 [Authorize]
 [Route("api/v1/tenants")]
-public sealed class TenantController(ITenantAppService tenantAppService) : BaseController
+public sealed class TenantController(
+    ITenantAppService tenantAppService,
+    ITenantImpersonationAppService impersonationAppService) : BaseController
 {
+    /// <summary>
+    /// 以该租户管理员的身份登录（模拟登录）
+    /// </summary>
+    /// <remarks>
+    /// <para>宿主无法跨租户读写：全局过滤器按 <c>TenantId == CurrentTenantId</c> 分区，
+    /// 而租户一旦分库更没有跨库查询。要在租户里处理问题，正途是<b>进到那个租户的上下文</b>，
+    /// 而不是在宿主界面上关掉过滤器。</para>
+    /// <para>会话 Cookie 被整体换成目标租户管理员的主体，并附带发起人声明；
+    /// 已认证请求的租户由 cookie claim 定案（请求头改写不了），因此必须重新签发而不是加个头。</para>
+    /// </remarks>
+    [HttpPost("{id:guid}/impersonate")]
+    [Authorize(Policy = PermissionConstant.Tenants.Impersonation)]
+    public async Task ImpersonateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var principal = await impersonationAppService.ImpersonateAsync(id, cancellationToken);
+
+        await HttpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, principal,
+            new AuthenticationProperties { IsPersistent = true });
+    }
+
     /// <summary>
     /// 分页查询租户
     /// </summary>

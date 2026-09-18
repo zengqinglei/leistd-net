@@ -28,15 +28,16 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Control
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatorId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
-
-                    b.Property<int>("DatabaseMode")
-                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone");
@@ -45,24 +46,18 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Control
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<string>("MigrationSecretReference")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("RuntimeSecretReference")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                    b.Property<string>("ProtectedConnectionString")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
-                    b.HasKey("TenantId");
+                    b.HasKey("TenantId", "Name");
 
-                    b.ToTable("TenantConnectionRecord", "companyname-projectname", t =>
-                        {
-                            t.HasCheckConstraint("CK_TenantConnectionRecord_ModeSecrets", "(\"DatabaseMode\" = 0 AND \"RuntimeSecretReference\" IS NULL AND \"MigrationSecretReference\" IS NULL) OR (\"DatabaseMode\" = 1 AND \"RuntimeSecretReference\" IS NOT NULL AND \"MigrationSecretReference\" IS NOT NULL)");
-                        });
+                    b.ToTable("TenantConnectionRecord", "companyname-projectname");
                 });
 
             modelBuilder.Entity("Leistd.MultiTenancy.EntityFrameworkCore.TenantRecord", b =>
@@ -132,8 +127,8 @@ b.HasKey("Id");
             modelBuilder.Entity("Leistd.MultiTenancy.EntityFrameworkCore.TenantConnectionRecord", b =>
                 {
                     b.HasOne("Leistd.MultiTenancy.EntityFrameworkCore.TenantRecord", null)
-                        .WithOne()
-                        .HasForeignKey("Leistd.MultiTenancy.EntityFrameworkCore.TenantConnectionRecord", "TenantId")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

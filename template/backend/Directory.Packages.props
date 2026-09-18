@@ -40,6 +40,9 @@
     <PackageVersion Include="Leistd.Notifications.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.OperationRecords.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.OperationRecords.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.OperationRecords.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.RealTime.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.RealTime.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ObjectMapping.Mapster" Version="$(LeistdFrameworkVersion)" />
@@ -66,6 +69,12 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.11" />
+    <!-- 设计时 DbContext 工厂（Infrastructure/Persistence/DesignTime）要自建 ConfigurationBuilder
+         读取 appsettings 与环境变量。Api 是 Web SDK、由共享框架白送这三个包；Infrastructure 是
+         普通类库，必须显式声明——与本项目"用到什么就声明什么、不吃共享框架传递依赖"的口径一致。 -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
     <!--#if (IncludeLocalization)-->

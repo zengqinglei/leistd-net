@@ -87,6 +87,11 @@ throw new UnprocessableEntityException(
 
 `detail` 是本地化消息，`field` 是字段路径，字段级 `code` 可空。`ConfigureApiValidation()` 也将 `[ApiController]` 的自动 400 校验转换为该数组契约。
 
+两条路径的字段名与标题取法一致：
+
+- `field` 跟随宿主的 JSON 命名策略，与请求体里的字段同名（camelCase 宿主下是 `name` 而不是 `Name`），调用方可以直接把错误落回对应输入项。自动 400 的换算只作用于属性式 DTO；位置记录的校验键取自构造参数，ASP.NET 不对它应用命名策略，输入 DTO 应写成属性式。
+- `title` 按 `Title:{状态码}` 查本地化词条，未命中回退英文。它是问题类型的概括，**说不出哪条规则没过**；向用户展示时应取 `errors[].detail`。
+
 ### 错误响应与本地化
 
 一般业务错误响应包含：

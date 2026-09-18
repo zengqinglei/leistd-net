@@ -1,22 +1,23 @@
 #if (!LocalIdentity)
+using CompanyName.ProjectName.Infrastructure.TenantConnections;
+using Leistd.Data.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy;
-using CompanyName.ProjectName.Infrastructure.TenantConnections;
-using Microsoft.Extensions.Caching.Memory;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
 /// <summary>
-/// Resource 宿主的连接解析：缓存必须按租户分区，单飞不得把取消传染给搭车者。
+/// Resource 宿主的连接解析：缓存必须按租户与连接名分区，单飞不得把取消传染给搭车者。
 /// </summary>
 /// <remarks>
 /// <para>为什么是单元测试而不是走宿主：集成测试工厂会
 /// <c>RemoveAll&lt;IConnectionStringResolver&gt;()</c> 换成 EF InMemory，
-/// 生产解析链在集成测试里根本不执行。要钉住这两条只能对真实类型下手，
-/// 因此 Infrastructure 对本测试程序集开了 <c>InternalsVisibleTo</c>。</para>
+/// 生产解析链在集成测试里根本不执行。这里按生产的注册方式装配
+/// （<c>AddRemoteTenantConnectionResolution</c> + 本服务的 Identity 适配器），只把 HTTP 客户端换成假件。</para>
 /// </remarks>
 public class TenantConnectionResolutionTests
 {
@@ -36,16 +37,16 @@ public class TenantConnectionResolutionTests
     {
         var currentTenant = new FakeCurrentTenant();
         var client = new FakeConnectionClient();
-        var resolver = Build(currentTenant, client);
+        await using var provider = BuildHost(currentTenant, client);
 
         currentTenant.Id = TenantA;
-        var first = await resolver.ResolveAsync("Default");
+        var first = await ResolveAsync(provider);
 
         currentTenant.Id = TenantB;
-        var second = await resolver.ResolveAsync("Default");
+        var second = await ResolveAsync(provider);
 
-        Assert.Equal("resolved:runtime/aaaaaaaa", first);
-        Assert.Equal("resolved:runtime/bbbbbbbb", second);
+        Assert.Equal("Host=tenant-aaaaaaaa", first);
+        Assert.Equal("Host=tenant-bbbbbbbb", second);
         Assert.NotEqual(first, second);
     }
 
@@ -55,12 +56,44 @@ public class TenantConnectionResolutionTests
     {
         var currentTenant = new FakeCurrentTenant { Id = TenantA };
         var client = new FakeConnectionClient();
-        var resolver = Build(currentTenant, client);
+        await using var provider = BuildHost(currentTenant, client);
 
-        await resolver.ResolveAsync("Default");
-        await resolver.ResolveAsync("Default");
+        await ResolveAsync(provider);
+        await ResolveAsync(provider);
 
         Assert.Equal(1, client.CallCount);
+    }
+
+    /// <summary>
+    /// 一条连接都没登记的租户用本服务自己的配置，且不再回源
+    /// </summary>
+    /// <remarks>
+    /// 这是"不分库"的正常路径：去掉模式标志位之后，判据就是"该租户有没有登记过任何连接"。
+    /// </remarks>
+    [Fact]
+    public async Task A_tenant_without_registrations_uses_the_host_connection()
+    {
+        var currentTenant = new FakeCurrentTenant { Id = TenantA };
+        var client = new FakeConnectionClient { HasAnyConnection = false };
+        await using var provider = BuildHost(currentTenant, client);
+
+        Assert.Equal("Host=host-default", await ResolveAsync(provider));
+    }
+
+    /// <summary>
+    /// 分库租户缺这个服务的连接时失败关闭，不回落到本服务的库
+    /// </summary>
+    /// <remarks>
+    /// 本服务的库里没有它的数据，静默连过去就是把它的写入落进别人的库。
+    /// </remarks>
+    [Fact]
+    public async Task A_registered_tenant_missing_this_name_is_refused()
+    {
+        var currentTenant = new FakeCurrentTenant { Id = TenantA };
+        var client = new FakeConnectionClient { HasAnyConnection = true, ReturnConnection = false };
+        await using var provider = BuildHost(currentTenant, client);
+
+        await Assert.ThrowsAsync<InternalServerException>(() => ResolveAsync(provider));
     }
 
     /// <summary>
@@ -77,7 +110,7 @@ public class TenantConnectionResolutionTests
     {
         var currentTenant = new FakeCurrentTenant { Id = TenantA };
         var client = new FakeConnectionClient { BlockUntilReleased = true };
-        var resolver = Build(currentTenant, client);
+        await using var provider = BuildHost(currentTenant, client);
 
         using var initiator = new CancellationTokenSource();
         Task<string> initiatorTask;
@@ -85,17 +118,16 @@ public class TenantConnectionResolutionTests
 
         try
         {
-            initiatorTask = resolver.ResolveAsync("Default", initiator.Token);
+            initiatorTask = ResolveAsync(provider, initiator.Token);
 
             // 等到远端调用确实在飞，再让第二个调用方搭车
             await client.Started.Task;
-            joinerTask = resolver.ResolveAsync("Default", CancellationToken.None);
+            joinerTask = ResolveAsync(provider, CancellationToken.None);
 
             await initiator.CancelAsync();
 
             // 发起者必须及时以取消收场。带缺陷的版本里它会继续等共享任务完成，
-            // 于是这里超时——而不是让整个测试进程挂死等到 CI 超时。
-            // 挂死的失败没有任何诊断信息，比断言失败更难查
+            // 于是这里超时——而不是让整个测试进程挂死等到 CI 超时
             Assert.Same(
                 initiatorTask,
                 await Task.WhenAny(initiatorTask, Task.Delay(TimeSpan.FromSeconds(5))));
@@ -103,79 +135,38 @@ public class TenantConnectionResolutionTests
         }
         finally
         {
-            // 必须无条件释放：inflight 字典是 static 的，
-            // 留下一个未完成的条目会污染同类里后续用例
+            // 必须无条件释放，留下一个未完成的共享任务会挂住容器释放
             client.Release();
         }
 
         // 搭车者必须照常拿到结果：共享任务不该被别人的令牌掐断
-        Assert.Equal("resolved:runtime/aaaaaaaa", await joinerTask.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Host=tenant-aaaaaaaa", await joinerTask.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(1, client.CallCount);
     }
 
     /// <summary>
-    /// 远端返回的配置不属于所问的租户时必须失败关闭
+    /// 远端返回的结果不属于所问的租户时必须失败关闭
     /// </summary>
     /// <remarks>
     /// 不校验的话，B 租户的库目标会被写进以 A 租户为键的缓存，此后 A 的每个请求都命中它——
     /// 读写都落到别人的库上，且不报任何错。串租户不必来自攻击：Identity 侧的缓存、分页或
-    /// 序列化缺陷都能产生它。校验必须在解析 Secret 与写缓存之前，否则错误路由已经落库。
+    /// 序列化缺陷都能产生它。校验必须在使用连接串与写缓存之前，否则错误路由已经落库。
     /// </remarks>
     [Fact]
-    public async Task Remote_configuration_for_another_tenant_is_rejected()
+    public async Task Remote_result_for_another_tenant_is_rejected()
     {
         var currentTenant = new FakeCurrentTenant { Id = TenantA };
         var client = new FakeConnectionClient { RespondWithTenantId = TenantB };
-        var resolver = Build(currentTenant, client);
+        await using var provider = BuildHost(currentTenant, client);
 
-        var error = await Assert.ThrowsAsync<InternalServerException>(
-            () => resolver.ResolveAsync("Default"));
+        var error = await Assert.ThrowsAsync<InternalServerException>(() => ResolveAsync(provider));
         Assert.Contains(TenantA.ToString(), error.Message, StringComparison.Ordinal);
         Assert.Contains(TenantB.ToString(), error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Host=", error.Message, StringComparison.Ordinal);
 
         // 失败之后不得留下缓存条目：留下的话下一次请求会命中错误路由而不再触发校验
-        await Assert.ThrowsAsync<InternalServerException>(() => resolver.ResolveAsync("Default"));
+        await Assert.ThrowsAsync<InternalServerException>(() => ResolveAsync(provider));
         Assert.Equal(2, client.CallCount);
-    }
-
-    private static IdentityTenantConnectionStringResolver Build(
-        ICurrentTenant currentTenant,
-        FakeConnectionClient client)
-        => BuildHost(currentTenant, client).Resolver;
-
-    /// <summary>
-    /// 经真实容器装配：协调器要在自己的作用域里跑共享任务，远端依赖必须能从容器解析。
-    /// </summary>
-    /// <remarks>
-    /// 远端依赖注册为 <b>Scoped</b> 且"释放后不可用"，这样"共享任务用了谁的作用域"
-    /// 就变成可断言的事实而不是注释里的承诺。
-    /// </remarks>
-    private static (IdentityTenantConnectionStringResolver Resolver, ServiceProvider Provider) BuildHost(
-        ICurrentTenant currentTenant,
-        FakeConnectionClient client)
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Default"] = "Host=host-default"
-            })
-            .Build();
-
-        var services = new ServiceCollection();
-        services.AddSingleton<IConfiguration>(configuration);
-        services.AddSingleton<IMemoryCache>(new MemoryCache(new MemoryCacheOptions()));
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(
-            new TenantRouteCacheOptions { CacheLifetime = TimeSpan.FromMinutes(10) }));
-        services.AddSingleton(currentTenant);
-        // 每个用例一份协调器：共享实例会让用例之间串在飞状态
-        services.AddSingleton<TenantRouteResolutionCoordinator>();
-        services.AddScoped<IIdentityTenantConnectionClient>(_ => new ScopeBoundClient(client));
-        services.AddScoped<ISecretResolver>(_ => new ScopeBoundSecretResolver());
-        services.AddScoped<IdentityTenantConnectionStringResolver>();
-
-        var provider = services.BuildServiceProvider();
-        return (provider.CreateScope().ServiceProvider
-            .GetRequiredService<IdentityTenantConnectionStringResolver>(), provider);
     }
 
     /// <summary>
@@ -185,7 +176,6 @@ public class TenantConnectionResolutionTests
     /// 共享任务被刻意设计成比发起者活得更久（发起者取消不取消它）。既然如此，
     /// 它就不能持有发起者请求作用域里的实例——那个作用域随时可能先释放，
     /// 表现是负载一上来偶发 <c>ObjectDisposedException</c>，几乎无法定位。
-    /// 因此远端依赖必须来自协调器自己开的作用域。
     /// 本用例用"释放后即不可用"的 scoped 假件把这条从注释变成断言。
     /// </remarks>
     [Fact]
@@ -193,8 +183,7 @@ public class TenantConnectionResolutionTests
     {
         var currentTenant = new FakeCurrentTenant { Id = TenantA };
         var client = new FakeConnectionClient { BlockUntilReleased = true };
-        var (_, provider) = BuildHost(currentTenant, client);
-        await using var _provider = provider;
+        await using var provider = BuildHost(currentTenant, client);
 
         Task<string> initiatorTask;
         Task<string> joinerTask;
@@ -203,7 +192,7 @@ public class TenantConnectionResolutionTests
         try
         {
             initiatorTask = initiatorScope.ServiceProvider
-                .GetRequiredService<IdentityTenantConnectionStringResolver>()
+                .GetRequiredService<IConnectionStringResolver>()
                 .ResolveAsync("Default");
 
             await client.Started.Task;
@@ -213,7 +202,7 @@ public class TenantConnectionResolutionTests
 
             using var joinerScope = provider.CreateScope();
             joinerTask = joinerScope.ServiceProvider
-                .GetRequiredService<IdentityTenantConnectionStringResolver>()
+                .GetRequiredService<IConnectionStringResolver>()
                 .ResolveAsync("Default");
         }
         finally
@@ -221,9 +210,40 @@ public class TenantConnectionResolutionTests
             client.Release();
         }
 
-        Assert.Equal("resolved:runtime/aaaaaaaa", await initiatorTask.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal("resolved:runtime/aaaaaaaa", await joinerTask.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Host=tenant-aaaaaaaa", await initiatorTask.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Host=tenant-aaaaaaaa", await joinerTask.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(1, client.CallCount);
+    }
+
+    private static async Task<string> ResolveAsync(ServiceProvider provider, CancellationToken cancellationToken = default)
+    {
+        using var scope = provider.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IConnectionStringResolver>()
+            .ResolveAsync("Default", cancellationToken);
+    }
+
+    /// <summary>
+    /// 按生产注册方式装配；远端依赖注册为 <b>Scoped</b> 且"释放后不可用"，
+    /// 这样"共享任务用了谁的作用域"就变成可断言的事实而不是注释里的承诺。
+    /// </summary>
+    private static ServiceProvider BuildHost(ICurrentTenant currentTenant, FakeConnectionClient client)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Default"] = "Host=host-default",
+                ["TenantRouting:CacheLifetime"] = "00:10:00"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton(currentTenant);
+        services.AddRemoteTenantConnectionResolution();
+        services.AddScoped<IIdentityTenantConnectionClient>(_ => new ScopeBoundClient(client));
+        services.AddScoped<ITenantConnectionConfigurationStore, IdentityTenantConnectionStore>();
+
+        return services.BuildServiceProvider();
     }
 
     /// <summary>释放后即不可用的 scoped 包装：证明共享任务没有用调用方的作用域</summary>
@@ -233,33 +253,21 @@ public class TenantConnectionResolutionTests
 
         public void Dispose() => _disposed = true;
 
-        public Task<RemoteTenantRuntimeConnectionConfiguration> GetRuntimeAsync(
+        public Task<RemoteTenantConnectionLookup> GetRuntimeAsync(
             Guid tenantId,
+            string name,
             CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return inner.GetRuntimeAsync(tenantId, cancellationToken);
+            return inner.GetRuntimeAsync(tenantId, name, cancellationToken);
         }
 
-        public Task<IReadOnlyList<RemoteTenantMigrationConnectionConfiguration>> GetMigrationListAsync(
+        public Task<IReadOnlyList<RemoteTenantMigrationConnection>> GetMigrationListAsync(
+            string name,
             CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return inner.GetMigrationListAsync(cancellationToken);
-        }
-    }
-
-    /// <summary>同上</summary>
-    private sealed class ScopeBoundSecretResolver : ISecretResolver, IDisposable
-    {
-        private bool _disposed;
-
-        public void Dispose() => _disposed = true;
-
-        public Task<string> ResolveAsync(string secretReference, CancellationToken cancellationToken = default)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            return Task.FromResult($"resolved:{secretReference}");
+            return inner.GetMigrationListAsync(name, cancellationToken);
         }
     }
 
@@ -279,15 +287,22 @@ public class TenantConnectionResolutionTests
 
         public bool BlockUntilReleased { get; init; }
 
-        /// <summary>非空时，无论问的是哪个租户都返回这个租户的配置（模拟 Identity 侧串租户）</summary>
+        /// <summary>该租户是否登记过任何连接；false 即"不分库"</summary>
+        public bool HasAnyConnection { get; init; } = true;
+
+        /// <summary>false 表示登记过但没有这个名字，也没有默认名可回落</summary>
+        public bool ReturnConnection { get; init; } = true;
+
+        /// <summary>非空时，无论问的是哪个租户都返回这个租户的结果（模拟 Identity 侧串租户）</summary>
         public Guid? RespondWithTenantId { get; init; }
 
         public int CallCount { get; private set; }
 
         public void Release() => _release.TrySetResult();
 
-        public async Task<RemoteTenantRuntimeConnectionConfiguration> GetRuntimeAsync(
+        public async Task<RemoteTenantConnectionLookup> GetRuntimeAsync(
             Guid tenantId,
+            string name,
             CancellationToken cancellationToken = default)
         {
             CallCount++;
@@ -301,16 +316,23 @@ public class TenantConnectionResolutionTests
                 await _release.Task;
             }
 
-            return new RemoteTenantRuntimeConnectionConfiguration
+            return new RemoteTenantConnectionLookup
             {
                 TenantId = RespondWithTenantId ?? tenantId,
-                DatabaseMode = RemoteTenantDatabaseMode.DedicatedDatabase,
-                RuntimeSecretReference = $"runtime/{tenantId.ToString()[..8]}",
-                Version = 1
+                HasAnyConnection = HasAnyConnection,
+                Connection = HasAnyConnection && ReturnConnection
+                    ? new RemoteTenantConnection
+                    {
+                        Name = name,
+                        ConnectionString = $"Host=tenant-{tenantId.ToString()[..8]}",
+                        Version = 1
+                    }
+                    : null
             };
         }
 
-        public Task<IReadOnlyList<RemoteTenantMigrationConnectionConfiguration>> GetMigrationListAsync(
+        public Task<IReadOnlyList<RemoteTenantMigrationConnection>> GetMigrationListAsync(
+            string name,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

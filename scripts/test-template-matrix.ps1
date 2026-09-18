@@ -470,7 +470,7 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.DbMigrator"
         )
         Absent = @(
-            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs",
+            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
             "backend/src/{name}.Api/Controllers/NotificationController.cs"
         )
@@ -483,7 +483,7 @@ $scenarioMap = [ordered]@{
     "resource" = @{
         Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
         Present = @(
-            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStringResolver.cs",
+            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
             "backend/src/{name}.DbMigrator"
         )
