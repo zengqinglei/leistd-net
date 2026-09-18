@@ -25,7 +25,7 @@ public class ClientCredentialsBindingTests
     }
 
     [Fact]
-    public void 全局身份一次配置_多个客户端共享_Scope按目标服务区分()
+    public void Global_identity_is_shared_and_scopes_differ_per_client()
     {
         var configValues = new Dictionary<string, string?>
         {
@@ -45,7 +45,7 @@ public class ClientCredentialsBindingTests
     }
 
     [Fact]
-    public void 客户端未配置Scope_继承全局默认Scope()
+    public void Client_without_scope_inherits_the_global_default()
     {
         var configValues = new Dictionary<string, string?>
         {
@@ -62,7 +62,7 @@ public class ClientCredentialsBindingTests
     }
 
     [Fact]
-    public void 客户端Scope覆盖全局默认Scope()
+    public void Client_scope_overrides_the_global_default()
     {
         var configValues = new Dictionary<string, string?>
         {
@@ -77,7 +77,7 @@ public class ClientCredentialsBindingTests
     }
 
     [Fact]
-    public void 无全局Scope也无客户端Scope_保持为空()
+    public void Scope_stays_empty_when_neither_global_nor_client_sets_it()
     {
         var configValues = new Dictionary<string, string?>
         {

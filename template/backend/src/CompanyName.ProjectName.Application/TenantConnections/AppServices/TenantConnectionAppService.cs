@@ -1,10 +1,12 @@
 #if (LocalIdentity)
 using System.Text.RegularExpressions;
 using CompanyName.ProjectName.Application.TenantConnections.Dtos;
+using CompanyName.ProjectName.Application.TenantConnections.Mappings;
 using CompanyName.ProjectName.Domain.Tenants.Connections;
 using Leistd.Ddd.Application.AppService;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.ObjectMapping.Abstractions;
 
 namespace CompanyName.ProjectName.Application.TenantConnections.AppServices;
 
@@ -20,7 +22,8 @@ namespace CompanyName.ProjectName.Application.TenantConnections.AppServices;
 public sealed class TenantConnectionAppService(
     ITenantConnectionDirectory directory,
     ITenantConnectionConfigurationStore store,
-    ITenantConnectionConfigurationManager manager) : BaseAppService, ITenantConnectionAppService
+    ITenantConnectionConfigurationManager manager,
+    IObjectMapper objectMapper) : BaseAppService, ITenantConnectionAppService
 {
     public async Task<IReadOnlyList<TenantConnectionOutputDto>> GetListAsync(
         Guid tenantId,
@@ -30,15 +33,8 @@ public sealed class TenantConnectionAppService(
             ?? throw new NotFoundException("Tenant was not found.");
 
         // 空列表是合法结果，表示该租户不单独分库——不要把它当成 404
-        return
-        [
-            .. entries.Select(entry => new TenantConnectionOutputDto
-            {
-                TenantId = tenantId,
-                Name = entry.Name,
-                Version = entry.Version
-            })
-        ];
+        var context = new Dictionary<string, object> { [TenantConnectionProfile.TenantIdKey] = tenantId };
+        return [.. entries.Select(entry => objectMapper.Map<TenantConnectionEntry, TenantConnectionOutputDto>(entry, context))];
     }
 
     public async Task<TenantRuntimeConnectionOutputDto> GetRuntimeAsync(
@@ -51,19 +47,7 @@ public sealed class TenantConnectionAppService(
         var lookup = await store.FindAsync(tenantId, name, cancellationToken)
             ?? throw new NotFoundException("Tenant was not found.");
 
-        return new TenantRuntimeConnectionOutputDto
-        {
-            TenantId = lookup.TenantId,
-            HasAnyConnection = lookup.HasAnyConnection,
-            Connection = lookup.Connection is { } connection
-                ? new TenantConnectionDetailOutputDto
-                {
-                    Name = connection.Name,
-                    ConnectionString = connection.ConnectionString,
-                    Version = connection.Version
-                }
-                : null
-        };
+        return objectMapper.Map<TenantConnectionLookupResult, TenantRuntimeConnectionOutputDto>(lookup);
     }
 
     public async Task<IReadOnlyList<TenantMigrationConnectionOutputDto>> GetMigrationListAsync(
@@ -73,15 +57,7 @@ public sealed class TenantConnectionAppService(
         EnsureValidName(name);
 
         var connections = await store.GetListAsync(name, cancellationToken);
-        return
-        [
-            .. connections.Select(x => new TenantMigrationConnectionOutputDto
-            {
-                TenantId = x.TenantId,
-                Name = x.Name,
-                ConnectionString = x.ConnectionString
-            })
-        ];
+        return objectMapper.Map<IReadOnlyList<TenantMigrationConnection>, List<TenantMigrationConnectionOutputDto>>(connections);
     }
 
     public async Task<TenantConnectionOutputDto> SetAsync(
@@ -100,12 +76,7 @@ public sealed class TenantConnectionAppService(
             input.ExpectedVersion,
             cancellationToken);
 
-        return new TenantConnectionOutputDto
-        {
-            TenantId = configuration.TenantId,
-            Name = configuration.Name,
-            Version = configuration.Version
-        };
+        return objectMapper.Map<TenantConnectionConfiguration, TenantConnectionOutputDto>(configuration);
     }
 
     public Task RemoveAsync(

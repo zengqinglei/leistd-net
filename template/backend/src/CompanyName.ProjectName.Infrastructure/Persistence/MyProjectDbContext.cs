@@ -1,5 +1,5 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
-#if (ExternalLogin)
+#if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 #endif
 using Leistd.Authorization.EntityFrameworkCore;
@@ -26,6 +26,9 @@ public class MyProjectDbContext(
     // Identity 角色模型
     public DbSet<Role> Roles { get; set; } = null!;
     public DbSet<UserRole> UserRoles { get; set; } = null!;
+#if (LocalIdentity)
+    public DbSet<UserSession> UserSessions { get; set; } = null!;
+#endif
 #if (ExternalLogin)
     public DbSet<ExternalLoginConnection> ExternalLoginConnections { get; set; } = null!;
 #endif

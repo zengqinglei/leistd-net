@@ -1,13 +1,4 @@
-// prettier-ignore
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  //#if (LocalIdentity)
-  signal,
-  //#endif
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
@@ -18,10 +9,8 @@ import {
   lucideChevronsUpDown,
   lucideCog,
   lucideHouse,
-  lucideLock,
   lucideLogOut,
-  lucideSettings,
-  lucideUserPen,
+  lucideUserCog,
 } from '@ng-icons/lucide';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
@@ -33,10 +22,6 @@ import { AuthorizationService } from '../../../core/services/authorization-servi
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
 import { TenantContextService } from '../../../core/services/tenant-context-service';
-//#if (LocalIdentity)
-import { ChangePasswordDialog } from '../../../features/account/components/change-password-dialog/change-password-dialog';
-import { ProfileSettingsDialog } from '../../../features/account/components/profile-settings-dialog/profile-settings-dialog';
-//#endif
 import { LayoutService } from '../../services/layout-service';
 
 /** 用户菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
@@ -49,7 +34,7 @@ interface UserMenuItem {
 
 /**
  * 侧栏底部用户菜单（Spartan canonical：`hlm-sidebar-footer` 内的 nav-user 模式）。
- * 头像 + 姓名/邮箱两行 + 下拉：区域切换、"我自己"这一簇个人入口、退出，并承载对应对话框。
+ * 头像 + 姓名/邮箱两行 + 下拉：区域切换、个人设置、退出。
  * 具体项见 `userMenuItems`，构成由 user-menu.spec.ts 钉住。折叠为图标时自动收成头像方块。
  */
 @Component({
@@ -62,10 +47,6 @@ interface UserMenuItem {
     ...HlmAvatarImports,
     ...HlmDropdownMenuImports,
     ...HlmSidebarImports,
-    //#if (LocalIdentity)
-    ProfileSettingsDialog,
-    ChangePasswordDialog,
-    //#endif
     //#if (IncludeLocalization)
     TranslocoModule,
     //#endif
@@ -76,9 +57,7 @@ interface UserMenuItem {
       lucideChevronsUpDown,
       lucideHouse,
       lucideCog,
-      lucideUserPen,
-      lucideSettings,
-      lucideLock,
+      lucideUserCog,
       lucideLogOut,
     }),
   ],
@@ -158,16 +137,6 @@ interface UserMenuItem {
         </li>
       </ul>
     }
-    //#if (LocalIdentity)
-    <app-profile-settings-dialog
-      [visible]="profileDialogVisible()"
-      (visibleChange)="profileDialogVisible.set($event)"
-    />
-    <app-change-password-dialog
-      [visible]="changePasswordDialogVisible()"
-      (visibleChange)="changePasswordDialogVisible.set($event)"
-    />
-    //#endif
   `,
 })
 export class UserMenu {
@@ -180,10 +149,6 @@ export class UserMenu {
   private readonly transloco = inject(TranslocoService);
   //#endif
   private readonly tenantContext = inject(TenantContextService);
-  //#if (LocalIdentity)
-  readonly profileDialogVisible = signal(false);
-  readonly changePasswordDialogVisible = signal(false);
-  //#endif
   readonly userMenuItems = computed<UserMenuItem[]>(() => {
     //#if (IncludeLocalization)
     // 建立对活动语言的依赖，语言切换时重新计算菜单文案。
@@ -222,36 +187,16 @@ export class UserMenu {
     }
 
     items.push(
-      //#if (LocalIdentity)
+      // 个人资料、账户安全、偏好都是个人设置的面板，这里只留一个入口直达；
+      // 管理人员从管理平台点它会回到工作空间——个人设置只有一处，管理平台不另放一份。
+      // 不带 LocalIdentity 守卫：没有本地身份时个人设置里仍有偏好面板。
       {
         //#if (IncludeLocalization)
-        label: t('menu.profile'),
+        label: t('menu.personalSettings'),
         //#else
-        label: 'Profile',
+        label: 'Personal settings',
         //#endif
-        icon: 'lucideUserPen',
-        action: () => this.openProfileDialog(),
-      },
-      {
-        //#if (IncludeLocalization)
-        label: t('menu.changePassword'),
-        //#else
-        label: 'Change password',
-        //#endif
-        icon: 'lucideLock',
-        action: () => this.openChangePasswordDialog(),
-      },
-      //#endif
-      // 偏好设置属于"我自己"这一簇，和个人资料、修改密码在一处，不进主导航——
-      // 主导航放的是这个区能做的事，个人偏好是每个人自己的东西（各家产品也都放在头像里）。
-      // 不带 LocalIdentity 守卫：偏好设置在所有服务形态下都有。
-      {
-        //#if (IncludeLocalization)
-        label: t('menu.preferences'),
-        //#else
-        label: 'Preferences',
-        //#endif
-        icon: 'lucideSettings',
+        icon: 'lucideUserCog',
         action: () => this.router.navigate(['/workspace/settings']),
       },
       { separator: true },
@@ -287,16 +232,6 @@ export class UserMenu {
     //#endif
   });
 
-  //#if (LocalIdentity)
-  openProfileDialog(): void {
-    this.profileDialogVisible.set(true);
-  }
-
-  openChangePasswordDialog(): void {
-    this.profileDialogVisible.set(false);
-    this.changePasswordDialogVisible.set(true);
-  }
-  //#endif
   handleLogout(): void {
     this.authService.logout();
   }

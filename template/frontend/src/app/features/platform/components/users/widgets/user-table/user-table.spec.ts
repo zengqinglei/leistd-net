@@ -2,7 +2,11 @@ import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
+//#if (LocalIdentity)
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
+//#else
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+//#endif
 import { provideRouter } from '@angular/router';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
@@ -76,6 +80,24 @@ describe('UserTable', () => {
     fixture.detectChanges();
   });
 
+  //#if (LocalIdentity)
+  it('锁定中的用户带锁定标记，其余用户没有', async () => {
+    fixture.componentRef.setInput('users', [
+      { ...user('1', 'alice'), isLockedOut: true, lockoutEnd: '2026-01-01T00:15:00Z' },
+      user('2', 'bob'),
+    ]);
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const badges = host.querySelectorAll('[data-testid="user-locked"]');
+    expect(badges.length).toBe(1);
+    expect(badges[0].closest('tr')?.textContent).toContain('alice');
+  });
+
+  //#endif
   it('当前页与总页数按父级传入的分页状态派生', () => {
     expect(component.currentPage()).toBe(1);
     expect(component.totalPages()).toBe(3); // 42 条 / 每页 20

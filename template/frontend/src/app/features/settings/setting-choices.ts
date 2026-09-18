@@ -35,21 +35,6 @@ const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
 ];
 
 /**
- * 真值只有两种的设置：用开关而不是两项下拉。
- *
- * 存的仍是 `'true'` / `'false'` 字符串——设置值在契约上一律是字符串，
- * 控件形态是界面的事，不改契约。
- */
-//#if (LocalIdentity)
-export const BOOLEAN_SETTINGS: ReadonlySet<string> = new Set<string>([
-  SETTINGS.registration.enableEmailVerification,
-]);
-//#else
-// 没有本地身份的形态下不存在注册策略，也就没有布尔型设置。
-export const BOOLEAN_SETTINGS: ReadonlySet<string> = new Set<string>();
-//#endif
-
-/**
  * 日志级别的说明文案。
  *
  * 选完在下面显示对应说明：级别名本身（Verbose / Debug / …）说不出"选了它会多打多少日志"，

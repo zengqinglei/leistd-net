@@ -237,339 +237,352 @@
         <!--#endif-->
       </div>
 
-      <!-- Form Header -->
-      <div>
-        <!--#if (IncludeLocalization)-->
-        <h2 class="text-2xl font-semibold mb-2">{{ 'account.login.title' | transloco }}</h2>
-        <p class="text-muted-foreground text-sm">{{ 'account.login.subtitle' | transloco }}</p>
-        <!--#else-->
-        <h2 class="text-2xl font-semibold mb-2">Sign In</h2>
-        <p class="text-muted-foreground text-sm">
-          Welcome back, please enter your account information
-        </p>
-        <!--#endif-->
-      </div>
-
-      <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
-        <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id -->
-        <div hlmField>
+      @if (twoFactorToken(); as token) {
+        <!-- 登录第二步：密码已通过，尚待验证码 -->
+        <app-two-factor-challenge
+          [token]="token"
+          (completed)="onTwoFactorCompleted()"
+          (cancelled)="twoFactorToken.set(null)"
+        />
+      } @else {
+        <!-- Form Header -->
+        <div>
           <!--#if (IncludeLocalization)-->
-          <label hlmFieldLabel for="tenantName">{{ 'account.login.tenant' | transloco }}</label>
+          <h2 class="text-2xl font-semibold mb-2">{{ 'account.login.title' | transloco }}</h2>
+          <p class="text-muted-foreground text-sm">{{ 'account.login.subtitle' | transloco }}</p>
           <!--#else-->
-          <label hlmFieldLabel for="tenantName">Tenant</label>
+          <h2 class="text-2xl font-semibold mb-2">Sign In</h2>
+          <p class="text-muted-foreground text-sm">
+            Welcome back, please enter your account information
+          </p>
           <!--#endif-->
-          @if (tenantContext.current(); as tenant) {
-            <!-- 已选中态复用与未选中态、与用户名输入框同一个 hlm-input-group 原语：
+        </div>
+
+        <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
+          <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id -->
+          <div hlmField>
+            <!--#if (IncludeLocalization)-->
+            <label hlmFieldLabel for="tenantName">{{ 'account.login.tenant' | transloco }}</label>
+            <!--#else-->
+            <label hlmFieldLabel for="tenantName">Tenant</label>
+            <!--#endif-->
+            @if (tenantContext.current(); as tenant) {
+              <!-- 已选中态复用与未选中态、与用户名输入框同一个 hlm-input-group 原语：
                  手写 div 会在高度、圆角与边框 token 上各偏一点，同一张表单里三种控件三个尺寸 -->
-            <hlm-input-group>
-              <input
-                hlmInputGroupInput
-                id="tenantName"
-                readonly
-                [value]="tenant.displayName || tenant.name"
-              />
-              <!--#if (IncludeLocalization)-->
-              @if (!tenantSelectionBlocked()) {
+              <hlm-input-group>
+                <input
+                  hlmInputGroupInput
+                  id="tenantName"
+                  readonly
+                  [value]="tenant.displayName || tenant.name"
+                />
+                <!--#if (IncludeLocalization)-->
+                @if (!tenantSelectionBlocked()) {
+                  <button
+                    hlmInputGroupButton
+                    type="button"
+                    align="inline-end"
+                    [attr.aria-label]="'account.login.tenantClear' | transloco"
+                    (click)="clearTenant()"
+                  >
+                    <ng-icon name="lucideX" />
+                  </button>
+                }
+                <!--#else-->
+                @if (!tenantSelectionBlocked()) {
+                  <button
+                    hlmInputGroupButton
+                    type="button"
+                    align="inline-end"
+                    aria-label="Clear tenant"
+                    (click)="clearTenant()"
+                  >
+                    <ng-icon name="lucideX" />
+                  </button>
+                }
+                <!--#endif-->
+              </hlm-input-group>
+              @if (tenantLocked()) {
+                <!--#if (IncludeLocalization)-->
+                <p class="text-muted-foreground text-xs">
+                  {{ 'account.login.tenantFromDomain' | transloco }}
+                </p>
+                <!--#else-->
+                <p class="text-muted-foreground text-xs">Determined by the site address.</p>
+                <!--#endif-->
+              }
+            } @else {
+              <hlm-input-group>
+                <!--#if (IncludeLocalization)-->
+                <input
+                  hlmInputGroupInput
+                  id="tenantName"
+                  autocomplete="off"
+                  [disabled]="tenantSelectionBlocked()"
+                  [value]="tenantName()"
+                  (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
+                  (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
+                  [placeholder]="'account.login.tenantPlaceholder' | transloco"
+                />
                 <button
                   hlmInputGroupButton
                   type="button"
                   align="inline-end"
-                  [attr.aria-label]="'account.login.tenantClear' | transloco"
-                  (click)="clearTenant()"
+                  [disabled]="tenantChecking() || tenantSelectionBlocked()"
+                  (click)="onConfirmTenant()"
                 >
-                  <ng-icon name="lucideX" />
+                  {{ 'account.login.tenantConfirm' | transloco }}
                 </button>
-              }
-              <!--#else-->
-              @if (!tenantSelectionBlocked()) {
+                <!--#else-->
+                <input
+                  hlmInputGroupInput
+                  id="tenantName"
+                  autocomplete="off"
+                  [disabled]="tenantSelectionBlocked()"
+                  [value]="tenantName()"
+                  (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
+                  (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
+                  placeholder="Tenant name, leave empty for host"
+                />
                 <button
                   hlmInputGroupButton
                   type="button"
                   align="inline-end"
-                  aria-label="Clear tenant"
-                  (click)="clearTenant()"
+                  [disabled]="tenantChecking() || tenantSelectionBlocked()"
+                  (click)="onConfirmTenant()"
                 >
-                  <ng-icon name="lucideX" />
+                  Confirm
                 </button>
+                <!--#endif-->
+              </hlm-input-group>
+              <!-- 未选中态也要交代原因，否则一个灰掉的输入框看着像坏了 -->
+              @if (hostProbe() === 'pending') {
+                <!--#if (IncludeLocalization)-->
+                <p class="text-muted-foreground text-xs">
+                  {{ 'account.login.tenantResolving' | transloco }}
+                </p>
+                <!--#else-->
+                <p class="text-muted-foreground text-xs">
+                  Identifying tenant from the site address…
+                </p>
+                <!--#endif-->
+              } @else if (tenantLocked()) {
+                <!--#if (IncludeLocalization)-->
+                <p class="text-muted-foreground text-xs">
+                  {{ 'account.login.tenantFromDomain' | transloco }}
+                </p>
+                <!--#else-->
+                <p class="text-muted-foreground text-xs">Determined by the site address.</p>
+                <!--#endif-->
               }
-              <!--#endif-->
-            </hlm-input-group>
-            @if (tenantLocked()) {
-              <!--#if (IncludeLocalization)-->
-              <p class="text-muted-foreground text-xs">
-                {{ 'account.login.tenantFromDomain' | transloco }}
-              </p>
-              <!--#else-->
-              <p class="text-muted-foreground text-xs">Determined by the site address.</p>
-              <!--#endif-->
             }
-          } @else {
-            <hlm-input-group>
-              <!--#if (IncludeLocalization)-->
-              <input
-                hlmInputGroupInput
-                id="tenantName"
-                autocomplete="off"
-                [disabled]="tenantSelectionBlocked()"
-                [value]="tenantName()"
-                (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
-                (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
-                [placeholder]="'account.login.tenantPlaceholder' | transloco"
-              />
-              <button
-                hlmInputGroupButton
-                type="button"
-                align="inline-end"
-                [disabled]="tenantChecking() || tenantSelectionBlocked()"
-                (click)="onConfirmTenant()"
-              >
-                {{ 'account.login.tenantConfirm' | transloco }}
-              </button>
-              <!--#else-->
-              <input
-                hlmInputGroupInput
-                id="tenantName"
-                autocomplete="off"
-                [disabled]="tenantSelectionBlocked()"
-                [value]="tenantName()"
-                (input)="tenantName.set($any($event.target).value); tenantError.set(null)"
-                (keydown.enter)="$event.preventDefault(); onConfirmTenant()"
-                placeholder="Tenant name, leave empty for host"
-              />
-              <button
-                hlmInputGroupButton
-                type="button"
-                align="inline-end"
-                [disabled]="tenantChecking() || tenantSelectionBlocked()"
-                (click)="onConfirmTenant()"
-              >
-                Confirm
-              </button>
-              <!--#endif-->
-            </hlm-input-group>
-            <!-- 未选中态也要交代原因，否则一个灰掉的输入框看着像坏了 -->
-            @if (hostProbe() === 'pending') {
-              <!--#if (IncludeLocalization)-->
-              <p class="text-muted-foreground text-xs">
-                {{ 'account.login.tenantResolving' | transloco }}
-              </p>
-              <!--#else-->
-              <p class="text-muted-foreground text-xs">Identifying tenant from the site address…</p>
-              <!--#endif-->
-            } @else if (tenantLocked()) {
-              <!--#if (IncludeLocalization)-->
-              <p class="text-muted-foreground text-xs">
-                {{ 'account.login.tenantFromDomain' | transloco }}
-              </p>
-              <!--#else-->
-              <p class="text-muted-foreground text-xs">Determined by the site address.</p>
-              <!--#endif-->
-            }
-          }
-          <!-- 错误行放在两个分支**之外**：探测失败时可能还留着上次记住的租户，
+            <!-- 错误行放在两个分支**之外**：探测失败时可能还留着上次记住的租户，
                那时渲染的是"已选中"分支，错误挂在另一支里就永远不显示。 -->
-          @if (tenantError(); as error) {
-            <!-- forceShow：租户探测是业务错误而非 Signal Forms 校验错误，
+            @if (tenantError(); as error) {
+              <!-- forceShow：租户探测是业务错误而非 Signal Forms 校验错误，
                  没有 validator key 可匹配，但仍应复用组件的 role="alert" 与样式 -->
-            <hlm-field-error forceShow>{{ error }}</hlm-field-error>
-          }
-          @if (hostProbe() === 'failed') {
-            <!-- 探测失败时登录被挡住，必须给一条出路：不给重试，用户只剩刷新整页，
+              <hlm-field-error forceShow>{{ error }}</hlm-field-error>
+            }
+            @if (hostProbe() === 'failed') {
+              <!-- 探测失败时登录被挡住，必须给一条出路：不给重试，用户只剩刷新整页，
                  而表单可能已经填好了。 -->
-            <!-- 按钮套一层 div：hlm-field 的容器给直接子元素铺了整行宽的规则，
+              <!-- 按钮套一层 div：hlm-field 的容器给直接子元素铺了整行宽的规则，
                  那条规则的优先级高于按钮自己的 w-fit，套一层让 div 去铺满，
                  按钮就按内容宽度收住了。 -->
-            <div>
-              <!--#if (IncludeLocalization)-->
-              <button
-                hlmBtn
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="tenant-probe-retry"
-                (click)="retryHostProbe()"
-              >
-                {{ 'account.login.tenantProbeRetry' | transloco }}
-              </button>
-              <!--#else-->
-              <button
-                hlmBtn
-                type="button"
-                variant="outline"
-                size="sm"
-                data-testid="tenant-probe-retry"
-                (click)="retryHostProbe()"
-              >
-                Retry
-              </button>
-              <!--#endif-->
-            </div>
-          }
-        </div>
-
-        <!-- Username/Email -->
-        <div hlmField>
-          <!--#if (IncludeLocalization)-->
-          <label hlmFieldLabel for="usernameOrEmail">{{
-            'account.login.usernameOrEmail' | transloco
-          }}</label>
-          <input
-            hlmInput
-            id="usernameOrEmail"
-            class="w-full"
-            [formField]="loginForm.usernameOrEmail"
-            [placeholder]="'account.login.usernameOrEmailPlaceholder' | transloco"
-          />
-          <!--#else-->
-          <label hlmFieldLabel for="usernameOrEmail">Username or Email</label>
-          <input
-            hlmInput
-            id="usernameOrEmail"
-            class="w-full"
-            [formField]="loginForm.usernameOrEmail"
-            placeholder="Please enter your username or email"
-          />
-          <!--#endif-->
-          @for (error of loginForm.usernameOrEmail().errors(); track error.kind) {
-            @if (error.message) {
-              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              <div>
+                <!--#if (IncludeLocalization)-->
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="tenant-probe-retry"
+                  (click)="retryHostProbe()"
+                >
+                  {{ 'account.login.tenantProbeRetry' | transloco }}
+                </button>
+                <!--#else-->
+                <button
+                  hlmBtn
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="tenant-probe-retry"
+                  (click)="retryHostProbe()"
+                >
+                  Retry
+                </button>
+                <!--#endif-->
+              </div>
             }
-          }
-        </div>
+          </div>
 
-        <!-- Password -->
-        <div hlmField>
-          <!--#if (IncludeLocalization)-->
-          <label hlmFieldLabel for="password">{{ 'account.login.password' | transloco }}</label>
-          <!--#else-->
-          <label hlmFieldLabel for="password">Password</label>
-          <!--#endif-->
-          <hlm-input-group>
+          <!-- Username/Email -->
+          <div hlmField>
             <!--#if (IncludeLocalization)-->
+            <label hlmFieldLabel for="usernameOrEmail">{{
+              'account.login.usernameOrEmail' | transloco
+            }}</label>
             <input
-              hlmInputGroupInput
-              id="password"
-              [type]="showPassword() ? 'text' : 'password'"
-              [formField]="loginForm.password"
-              [placeholder]="'account.login.passwordPlaceholder' | transloco"
+              hlmInput
+              id="usernameOrEmail"
+              class="w-full"
+              [formField]="loginForm.usernameOrEmail"
+              [placeholder]="'account.login.usernameOrEmailPlaceholder' | transloco"
             />
             <!--#else-->
+            <label hlmFieldLabel for="usernameOrEmail">Username or Email</label>
             <input
-              hlmInputGroupInput
-              id="password"
-              [type]="showPassword() ? 'text' : 'password'"
-              [formField]="loginForm.password"
-              placeholder="Please enter your password"
+              hlmInput
+              id="usernameOrEmail"
+              class="w-full"
+              [formField]="loginForm.usernameOrEmail"
+              placeholder="Please enter your username or email"
             />
             <!--#endif-->
-            <button
-              hlmInputGroupButton
-              type="button"
-              size="icon-sm"
-              align="inline-end"
-              (click)="showPassword.set(!showPassword())"
-            >
-              <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
-            </button>
-          </hlm-input-group>
-          @for (error of loginForm.password().errors(); track error.kind) {
-            @if (error.message) {
-              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            @for (error of loginForm.usernameOrEmail().errors(); track error.kind) {
+              @if (error.message) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
             }
-          }
-        </div>
+          </div>
 
-        <div class="flex items-center justify-end gap-1 mt-1 text-base">
-          <!--#if (IncludeLocalization)-->
-          <span>{{ 'account.login.noAccount' | transloco }}</span>
-          <a
-            [routerLink]="['/auth/register']"
-            class="font-semibold text-primary hover:underline transition-colors"
-            >{{ 'account.login.registerNow' | transloco }}</a
-          >
-          <!--#else-->
-          <span>Don't have an account?</span>
-          <a
-            [routerLink]="['/auth/register']"
-            class="font-semibold text-primary hover:underline transition-colors"
-            >Sign up now</a
-          >
-          <!--#endif-->
-        </div>
+          <!-- Password -->
+          <div hlmField>
+            <!--#if (IncludeLocalization)-->
+            <label hlmFieldLabel for="password">{{ 'account.login.password' | transloco }}</label>
+            <!--#else-->
+            <label hlmFieldLabel for="password">Password</label>
+            <!--#endif-->
+            <hlm-input-group>
+              <!--#if (IncludeLocalization)-->
+              <input
+                hlmInputGroupInput
+                id="password"
+                [type]="showPassword() ? 'text' : 'password'"
+                [formField]="loginForm.password"
+                [placeholder]="'account.login.passwordPlaceholder' | transloco"
+              />
+              <!--#else-->
+              <input
+                hlmInputGroupInput
+                id="password"
+                [type]="showPassword() ? 'text' : 'password'"
+                [formField]="loginForm.password"
+                placeholder="Please enter your password"
+              />
+              <!--#endif-->
+              <button
+                hlmInputGroupButton
+                type="button"
+                size="icon-sm"
+                align="inline-end"
+                (click)="showPassword.set(!showPassword())"
+              >
+                <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+              </button>
+            </hlm-input-group>
+            @for (error of loginForm.password().errors(); track error.kind) {
+              @if (error.message) {
+                <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+              }
+            }
+          </div>
 
-        <!-- Submit Button -->
-        <!-- 租户上下文没定案时不放行：服务端按主机名解析，此时提交等于在界面上显示着
+          <div class="flex items-center justify-end gap-1 mt-1 text-base">
+            <!--#if (IncludeLocalization)-->
+            <span>{{ 'account.login.noAccount' | transloco }}</span>
+            <a
+              [routerLink]="['/auth/register']"
+              class="font-semibold text-primary hover:underline transition-colors"
+              >{{ 'account.login.registerNow' | transloco }}</a
+            >
+            <!--#else-->
+            <span>Don't have an account?</span>
+            <a
+              [routerLink]="['/auth/register']"
+              class="font-semibold text-primary hover:underline transition-colors"
+              >Sign up now</a
+            >
+            <!--#endif-->
+          </div>
+
+          <!-- Submit Button -->
+          <!-- 租户上下文没定案时不放行：服务端按主机名解析，此时提交等于在界面上显示着
              一个租户、请求却落到另一个上下文里。 -->
-        <button hlmBtn type="submit" class="w-full" [disabled]="isLoading() || authBlocked()">
-          @if (isLoading()) {
-            <hlm-spinner class="text-base" data-icon="inline-start" />
-          }
-          <!--#if (IncludeLocalization)-->
-          {{ 'account.login.submit' | transloco }}
-          <!--#else-->
-          Sign In
-          <!--#endif-->
-        </button>
-        <!--#if (ExternalLogin)-->
-
-        <!-- Divider -->
-        <div class="relative flex py-2 items-center my-2">
-          <div class="flex-grow border-t border-border"></div>
-          <!--#if (IncludeLocalization)-->
-          <span class="flex-shrink mx-4 text-muted-foreground text-sm bg-background px-2">{{
-            'account.login.or' | transloco
-          }}</span>
-          <!--#else-->
-          <span class="flex-shrink mx-4 text-muted-foreground text-sm bg-background px-2">OR</span>
-          <!--#endif-->
-          <div class="flex-grow border-t border-border"></div>
-        </div>
-
-        <!-- Social Login: Full Width -->
-        <div class="flex gap-4">
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            class="flex-1"
-            [disabled]="isLoading() || authBlocked()"
-            (click)="loginWithGitHub()"
-          >
-            <ng-icon name="github" data-icon="inline-start" />
-            GitHub
+          <button hlmBtn type="submit" class="w-full" [disabled]="isLoading() || authBlocked()">
+            @if (isLoading()) {
+              <hlm-spinner class="text-base" data-icon="inline-start" />
+            }
+            <!--#if (IncludeLocalization)-->
+            {{ 'account.login.submit' | transloco }}
+            <!--#else-->
+            Sign In
+            <!--#endif-->
           </button>
+          <!--#if (ExternalLogin)-->
 
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            class="flex-1"
-            [disabled]="isLoading() || authBlocked()"
-            (click)="loginWithGoogle()"
-          >
-            <svg class="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.11s.13-1.45.35-2.11V7.05H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.95l3.66-2.84z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84c.87-2.6 3.3-4.51 6.16-4.51z"
-                fill="#EA4335"
-              />
-            </svg>
-            <span class="font-medium">Google</span>
-          </button>
-        </div>
-        <!--#endif-->
-      </form>
+          <!-- Divider -->
+          <div class="relative flex py-2 items-center my-2">
+            <div class="flex-grow border-t border-border"></div>
+            <!--#if (IncludeLocalization)-->
+            <span class="flex-shrink mx-4 text-muted-foreground text-sm bg-background px-2">{{
+              'account.login.or' | transloco
+            }}</span>
+            <!--#else-->
+            <span class="flex-shrink mx-4 text-muted-foreground text-sm bg-background px-2"
+              >OR</span
+            >
+            <!--#endif-->
+            <div class="flex-grow border-t border-border"></div>
+          </div>
+
+          <!-- Social Login: Full Width -->
+          <div class="flex gap-4">
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="flex-1"
+              [disabled]="isLoading() || authBlocked()"
+              (click)="loginWithGitHub()"
+            >
+              <ng-icon name="github" data-icon="inline-start" />
+              GitHub
+            </button>
+
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="flex-1"
+              [disabled]="isLoading() || authBlocked()"
+              (click)="loginWithGoogle()"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#4285F4"
+                />
+                <path
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
+                />
+                <path
+                  d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.11s.13-1.45.35-2.11V7.05H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.95l3.66-2.84z"
+                  fill="#FBBC05"
+                />
+                <path
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84c.87-2.6 3.3-4.51 6.16-4.51z"
+                  fill="#EA4335"
+                />
+              </svg>
+              <span class="font-medium">Google</span>
+            </button>
+          </div>
+          <!--#endif-->
+        </form>
+      }
 
       <!-- Test Account Hint -->
       @if (isMockEnabled()) {

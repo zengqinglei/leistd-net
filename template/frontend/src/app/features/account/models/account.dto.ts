@@ -14,8 +14,54 @@ export interface RegisterInputDto {
 /**
  * 注册安全配置输出 DTO
  */
+/** 登录第二步：验证码与恢复码二选一。 */
+export interface TwoFactorLoginInputDto {
+  token: string;
+  code?: string;
+  recoveryCode?: string;
+}
+
+export interface TwoFactorStatusOutputDto {
+  enabled: boolean;
+  recoveryCodesLeft: number;
+  /** 所在租户要求两步验证（此时不能停用）。 */
+  requiredByPolicy: boolean;
+}
+
+export interface TwoFactorSetupOutputDto {
+  /** Base32 密钥，供无法扫码时手动输入。 */
+  secret: string;
+  /** otpauth:// 地址，二维码的内容。 */
+  otpAuthUri: string;
+}
+
+export interface TwoFactorRecoveryCodesOutputDto {
+  recoveryCodes: string[];
+}
+
+export interface DisableTwoFactorInputDto {
+  password: string;
+  code: string;
+}
+
+/** 一个登录中的会话（登录设备）。 */
+export interface UserSessionOutputDto {
+  id: string;
+  creationTime: string;
+  /** 最近活跃时间，按分钟节流更新。 */
+  lastSeenTime: string;
+  ipAddress?: string | null;
+  /** User-Agent 原文，界面归纳成"浏览器 · 系统"。 */
+  userAgent?: string | null;
+  /** 模拟登录建立的会话：发起人名称。 */
+  impersonatorName?: string | null;
+  isCurrent: boolean;
+}
+
 export interface SecurityConfigOutputDto {
   enableEmailVerification: boolean;
+  /** 部署具备发邮箱验证码的前提；为 false 时"验证我的邮箱"只说明暂不可用，不给发送按钮。 */
+  emailVerificationAvailable: boolean;
 }
 
 /**
@@ -60,7 +106,11 @@ export interface UpdateCurrentUserInputDto {
   email: string;
   displayName?: string;
   phoneNumber?: string;
-  avatar?: string;
+}
+
+/** 设置自己的头像：图片的 data URL（浏览器端已裁剪缩放）；`null` 清除。 */
+export interface SetAvatarInputDto {
+  avatar: string | null;
 }
 
 /**
@@ -87,5 +137,26 @@ export interface ExternalLoginCallbackInputDto {
   provider: string;
   code: string;
   state: string;
+}
+
+/** 本人的外部账号绑定情况。 */
+export interface ExternalLoginsOutputDto {
+  /** 是否设有密码；没有时最后一个绑定不能解绑。 */
+  hasPassword: boolean;
+  /** 部署已配置的提供商，各附带本人的绑定。 */
+  providers: ExternalLoginProviderOutputDto[];
+}
+
+export interface ExternalLoginProviderOutputDto {
+  provider: string;
+  /** 本人在该提供商下的绑定；未绑定时缺省。 */
+  link?: ExternalLoginLinkOutputDto | null;
+}
+
+export interface ExternalLoginLinkOutputDto {
+  id: string;
+  providerUsername?: string | null;
+  providerEmail?: string | null;
+  creationTime: string;
 }
 //#endif

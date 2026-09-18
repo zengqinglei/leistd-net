@@ -2,6 +2,7 @@ using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Exceptions;
 using Leistd.Settings.Services;
+using Leistd.TestBase.Doubles;
 using Xunit;
 
 namespace Leistd.Settings.Tests.Core;
@@ -101,9 +102,11 @@ public class SettingWriteTests
     private static (ISettingManager Manager, FakeSettingStore Store) Build()
     {
         var store = new FakeSettingStore();
+        var definitions = new SettingDefinitionManager([new WriteTestDefinitionProvider()]);
         var manager = new DefaultSettingManager(
-            new SettingDefinitionManager([new WriteTestDefinitionProvider()]),
-            store);
+            definitions,
+            store,
+            new DefaultSettingProvider(definitions, store, new FakeCurrentUser(Guid.NewGuid())));
         return (manager, store);
     }
 

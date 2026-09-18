@@ -43,13 +43,17 @@
 
 #### Application Layer（{ProjectName}.Application）
 - **职责**: 协调业务逻辑（调用领域对象行为、领域服务、发布/订阅事件）
-- **包含**: AppServices、Dtos、Mappings、EventHandlers
+- **包含**: AppServices、Dtos、Mappings、Events、EventHandlers，以及按需的 Constants（名字常量）、Abstractions（由宿主实现的端口）、
+  Provider（框架扩展点的实现，如定义提供程序、权限主体提供程序，与它们用到的名字常量）、Policies（策略及其提供程序）
+- **目录归类**: 按类型分的目录都是功能模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`、`Settings/Hosting`）只放不属于这些类型的协作类型。类名以 `Event` 结尾的放模块的 `Events/`（这里只放由应用层发布、不来自实体的事件），以 `EventHandler` 结尾的放 `EventHandlers/`（如 `Settings/Events`、`Settings/EventHandlers`、`Auth/EventHandlers`）。
 - **可以**: 使用 EF Core 的 `Include`、`GetQueryIncludingAsync` 进行数据查询和聚合
 
 #### Domain Layer（{ProjectName}.Domain）
 - **职责**: 核心业务逻辑（领域对象行为、领域服务、业务规则）
 - **包含**: Entities、ValueObjects、DomainServices、Events、Specifications
-- **目录归类**: `Entities` 只放实体和聚合；`ValueObjects` 放领域内部的不可变值类型（包括有限状态枚举）；`Options` 只放配置绑定类型。端口的输入/输出模型按所属接口放在 `Abstractions`，不因为使用 `record` 就归为值对象。
+- **目录归类**: 实体发出的事件放模块的 `Events/`（如 `Auth/Events`），处理器在应用层；以 `Policy` 结尾的规则类型放模块的 `Policies/`（如 `Users/Policies`）；
+  认得实体、按实体做判定的无状态服务是领域服务，归 `DomainServices/` 并以 `DomainService` 结尾；不认识任何实体的通用算法（编码、一次性口令等）按能力放 `Shared/`（如 `Shared/Text`、`Shared/Security/OneTimeCodes`），
+  子目录名别与常用类型重名（`Shared/Encoding` 会遮住 `System.Text.Encoding`）；`Entities` 只放实体和聚合；`ValueObjects` 放领域内部的不可变值类型（包括有限状态枚举）；`Options` 只放配置绑定类型。端口的输入/输出模型按所属接口放在 `Abstractions`，不因为使用 `record` 就归为值对象。
 - **接口定义**: 第三方服务接口、持久化接口（IRepository）
 - **严格禁止**:
   - 引用 `Microsoft.EntityFrameworkCore`
@@ -200,6 +204,7 @@ public class User : FullAuditedEntity<Guid>
 - ❌ DTO 转换
 - ❌ 事务管理
 - ❌ 数据查询和聚合
+- ❌ 缓存、通知等副作用：由实体 `AddLocalEvent(...)` 发出本地事件，事务提交后由事件处理器处理，领域服务与调用方都不必各自记得去做；处理器实现 `IEventHandler<TEvent>` 并在应用层 `DependencyInjection` 显式注册
 
 **示例**:
 ```csharp
@@ -344,6 +349,22 @@ builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
 - 授权策略名、权限名等**跨处引用的标识符用常量**，禁裸魔法串在多处各写——否则单侧改动漂移会致授权静默失配，且无编译报错。
 - 参见 [API 规范](./api.md) 的权限命名约定。
 
+### 3.9 运行期可改的配置：设置与 Options 的分工
+
+按取值的层级选路，不要为某个配置另写一套"提供方 + 快照 + 应用器"：
+
+| 层级 | 做法 |
+| --- | --- |
+| 租户级、用户级 | 消费方经应用层的策略提供方读 `ISettingProvider`；不做成 Options——`IConfiguration` 整个进程一份，没有租户维度 |
+| 宿主级 | 在 `Api/Configuration/HostSettingBindings.All` 加一行"设置名 → 配置键"，消费方注入 `IOptionsMonitor<T>` / `IOptionsSnapshot<T>`（不要 `IOptions<T>`，它启动后不再读新值）；本身订阅配置重载的库（如 Serilog 的 `MinimumLevel`）直接映射到它读的键 |
+| 宿主级，但消费方既不读 Options 也不订阅配置 | 才实现 `IHostSettingApplier`，把值推到消费方上 |
+
+- 宿主级设置经优先级最高的配置源覆盖部署配置：宿主开始接收请求之前先推入一次，写入的事务提交后本进程随即生效，其它实例由周期刷新跟上；没设的项自然回落到配置文件与环境变量。
+- 逐项合规、组合起来让 Options 校验不过的一组（如只设了发信账号、还没设口令）整组不生效，沿用上一组并记错误日志，消费方不会在改正之前每次取值都抛异常。
+- 这类设置的代码默认值取部署基线（`HostSettingDefaults`），不要从 `IConfiguration` 现取——设置加载后读到的是覆盖后的值，「重置」就回不到基线。
+- 部署期就定死的配置（凭据、连接、协议参数）照常用 `IOptions<T>`，也不要在服务里直接读 `IConfiguration["键"]`——已有 Options 类型就用它。
+- 覆盖后的值同样经过 Options 的校验；写入端仍要按区间与格式校验，别让不合规的值进库。
+
 ---
 
 ## 4. 命名规范
@@ -408,7 +429,12 @@ public record GetUserPagedInputDto : PagedRequestDto
 - ✅ 分页查询使用 `GetPagedListAsync`（来自 `Leistd.Ddd.Infrastructure.Persistence.Repositories.EfCoreRepository`）
 - ✅ IQueryable 异步扩展使用 `Leistd.Ddd.Infrastructure.Persistence.Repositories` 提供的方法
 - ✅ 实体基类使用 `Entity<TKey>`、`FullAuditedEntity<TKey>` 等
-- ✅ DTO 映射使用 Mapster（继承 `MapsterProfile` 声明映射，注册结构参考现有 Profile）
+- ✅ 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 取，**不直接构造注入**：直接注入的实例在对象激活时就按宿主库创建，
+  分库租户下读写会落到宿主库（框架在同一作用域再按租户取上下文时会拒绝，表现为 500）。控制库上下文固定在宿主连接、不参与租户路由，可以直接注入
+- ✅ DTO 映射使用 Mapster（继承 `MapsterProfile` 声明映射，注册结构参考现有 Profile）：实体、存储模型或框架模型到 DTO 的**投影**一律走模块 `Mappings/` 下的 Profile，
+  调用方才知道的值（当前时刻、当前会话、读者身份）经 MapContext 传入；由多个来源**拼装**、带计算或本地化的结果 DTO 直接构造。不在 DTO 上写 `FromXxx` 之类的映射静态方法
+- ✅ 请求外的异步活（发邮件等）交给表现层的 `IBackgroundTaskQueue`（`HostedServices/Workers`），并发互斥用 `IDistributedLock`，不另起线程或自造锁
+- ✅ 可还原的加密直接用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串固定带版本，解密只捕获 `CryptographicException`；不另立加密接口
 
 ### 5.2 仓储常用方法
 
@@ -526,11 +552,17 @@ logger.LogError(ex, "创建用户失败: {Username}", input.Username);
 
 - **实时/长连类**：WebSocket 端点、推送 Hub、连接注册表 → 一个"实时通信"大类。
 - **网关/代理类**：反向代理转发、网关中间件。
-- **鉴权类**：授权策略、授权特性、身份/凭据组装。
-- **配置/组装类**：强类型 Options、DI/管道扩展方法。
+- **鉴权类**：授权策略、授权特性、身份/凭据组装 → `Auth/`。
+- **配置/组装类**：强类型 Options → `Options/`；宿主组装用的扩展方法（`*Extensions`）→ `Hosting/`。命名空间用描述性名称，
+  不用笼统的 `Extensions`（微软《框架设计准则》：避免给专放扩展方法的命名空间起 "Extensions" 这类泛名），
+  也不把非扩展类放进去。
+- **健康检查类**：`IHealthCheck` 实现 → `HealthChecks/`，类名 `*HealthCheck`；启动期锁存的就绪标志与检查放在同一个类里（官方示例同一写法）。
 - **后台服务类**：见 §7.2。
+- **过滤器类**：类名以 `Filter` 结尾的（MVC/Hub 过滤器、通知投递过滤器等）统一放顶层 `Filters/`，不按所属功能域分散收纳。
 
 已是清晰单一关注点的目录保持顶层，不强行再套壳。
+
+请求体上限沿用 Kestrel 默认（约 30 MB），不在全局放宽；需要更大上传的端点用 `[RequestSizeLimit]` / `[RequestFormLimits]` 单独放宽（微软文件上传文档的建议：全局放宽扩大了拒绝服务的攻击面）。
 
 ### 7.2 后台服务按运行形态三分 + 后缀统一
 

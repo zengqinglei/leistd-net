@@ -17,6 +17,8 @@ export interface MockUser {
   isEmailVerified: boolean;
   creationTime: string;
   lastLoginTime?: string;
+  /** 登录锁定：有值即锁定中；null 表示无期限（管理员锁定）。 */
+  lockoutEnd?: string | null;
   roles: string[];
 }
 
@@ -61,6 +63,7 @@ export function toUserOutput(user: MockUser): UserOutputDto {
     avatar: user.avatar,
     phoneNumber: user.phoneNumber,
     isActive: user.isActive,
+    isEmailVerified: user.isEmailVerified,
     isSuperAdmin: user.isSuperAdmin,
     creationTime: user.creationTime,
     // 当前用户模型只需要角色名（用于展示徽章），不需要 Id。
@@ -90,6 +93,10 @@ export function toUserManagementOutput(user: MockUser): UserManagementOutputDto 
     creationTime: user.creationTime,
     //#if (LocalIdentity)
     lastLoginTime: user.lastLoginTime,
+    isLockedOut:
+      user.lockoutEnd === null ||
+      (user.lockoutEnd !== undefined && new Date(user.lockoutEnd).getTime() > Date.now()),
+    lockoutEnd: user.lockoutEnd ?? null,
     //#endif
   };
 }

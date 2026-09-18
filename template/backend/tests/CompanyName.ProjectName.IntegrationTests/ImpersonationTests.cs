@@ -116,7 +116,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     /// 租户上下文下无论是否被授予都不通过。断言的是这个行为，不是某一层的实现。
     /// </remarks>
     [Fact]
-    public async Task 租户管理员访问开放应用一律被拒()
+    public async Task Tenant_admin_cannot_access_open_applications()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "openappedge");
@@ -136,7 +136,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     /// 这条断言盯的是授予面，与上一条盯的执行面互补。
     /// </remarks>
     [Fact]
-    public async Task 租户Admin角色不含开放应用权限()
+    public async Task Tenant_admin_role_has_no_open_application_permissions()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "grantedge");
@@ -159,14 +159,19 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     /// 请求头改写不了），所以模拟登录必须<b>重新签发会话</b>，而不是加一个租户头。
     /// </remarks>
     [Fact]
-    public async Task 宿主模拟登录进入租户后可退回()
+    public async Task Host_can_impersonate_into_a_tenant_and_return()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "impersonated");
+        var (_, hostAdminName) = await ReadIdentityAsync(hostAdmin.Client);
 
         // 进入：会话被换成租户管理员，且带上发起人声明
         var enter = await hostAdmin.Client.PostAsync($"/api/v1/tenants/{tenantId}/impersonate", null);
         Assert.Equal(HttpStatusCode.OK, enter.StatusCode);
+
+        // 发起人原来那个会话随 Cookie 被换掉而结束：留着的话，设备列表里会多出一个再也用不上的会话，
+        // 被复制走的旧 Cookie 也仍然有效
+        Assert.Equal(HttpStatusCode.Unauthorized, (await hostAdmin.Client.GetAsync("/api/v1/auth/me")).StatusCode);
 
         var impersonatedCookie = string.Join("; ", enter.Headers.GetValues("Set-Cookie")
             .Select(value => value.Split(';', 2)[0]));
@@ -178,7 +183,6 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
         var status = await impersonated.GetFromJsonAsync<JsonElement>("/api/v1/auth/impersonation");
         Assert.True(status.GetProperty("isImpersonating").GetBoolean());
         // 顶栏与操作记录同一取法：发起人取显示名，租户取显示名（CreateTenantAsync 设为 "{name} Inc."）。
-        var (_, hostAdminName) = await ReadIdentityAsync(hostAdmin.Client);
         Assert.Equal(hostAdminName, status.GetProperty("impersonatorName").GetString());
         Assert.Equal("impersonated Inc.", status.GetProperty("tenantName").GetString());
 
@@ -197,6 +201,9 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
 
         var restoredStatus = await restored.GetFromJsonAsync<JsonElement>("/api/v1/auth/impersonation");
         Assert.False(restoredStatus.GetProperty("isImpersonating").GetBoolean());
+
+        // 模拟会话同样随退出而结束
+        Assert.Equal(HttpStatusCode.Unauthorized, (await impersonated.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
     /// <summary>
@@ -211,7 +218,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     /// 模拟期间的所有记录都会丢掉"由谁模拟操作"，而且不报错。</para>
     /// </remarks>
     [Fact]
-    public async Task 模拟登录在宿主与租户两侧各留开始与结束记录()
+    public async Task Impersonation_records_start_and_end_on_both_sides()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var (hostAdminId, hostAdminName) = await ReadIdentityAsync(hostAdmin.Client);
@@ -226,9 +233,13 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
 
         var exit = await impersonated.PostAsync("/api/v1/auth/end-impersonation", null);
         Assert.Equal(HttpStatusCode.OK, exit.StatusCode);
+        using var restored = ProjectWebApplicationFactory.CreateProjectClient(factory);
+        restored.DefaultRequestHeaders.Add("Cookie", string.Join("; ", exit.Headers.GetValues("Set-Cookie")
+            .Select(value => value.Split(';', 2)[0])));
 
         // 宿主记录跨用例共享（同一个夹具），只看本用例这个租户的。
-        var hostRecords = (await ReadRecordsAsync(hostAdmin.Client))
+        // 读取用退出后签发的会话：进入模拟时，原来那个会话已经结束
+        var hostRecords = (await ReadRecordsAsync(restored))
             .Where(r => r.TargetId == tenantId.ToString() || r.Action.StartsWith("impersonation.", StringComparison.Ordinal))
             .ToList();
         var hostStarted = Assert.Single(hostRecords, r => r.Action == "tenant.impersonation-started");
@@ -253,18 +264,20 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     /// 取并集时，选了类别再选动作一条都不会少——界面上的动作候选随类别联动，就是在类别之内收窄。
     /// </remarks>
     [Fact]
-    public async Task 操作记录的类别与动作筛选取交集()
+    public async Task Operation_record_category_and_action_filters_intersect()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "filterand");
         var enter = await hostAdmin.Client.PostAsync($"/api/v1/tenants/{tenantId}/impersonate", null);
         Assert.Equal(HttpStatusCode.OK, enter.StatusCode);
 
-        var categoryOnly = await ReadRecordsAsync(hostAdmin.Client, "&categories=tenant");
+        // 进入模拟后原会话已结束，另开一个宿主会话来读
+        var reader = await LoginHostAdminAsync();
+        var categoryOnly = await ReadRecordsAsync(reader.Client, "&categories=tenant");
         Assert.Contains(categoryOnly, r => r.Action == "tenant.created");
 
         var both = await ReadRecordsAsync(
-            hostAdmin.Client, "&categories=tenant&actions=tenant.impersonation-started");
+            reader.Client, "&categories=tenant&actions=tenant.impersonation-started");
         Assert.NotEmpty(both);
         Assert.All(both, r => Assert.Equal("tenant.impersonation-started", r.Action));
     }
@@ -278,7 +291,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     /// 这也是不必在应用服务里重复一遍宿主判断的依据。
     /// </remarks>
     [Fact]
-    public async Task 租户上下文内不能发起模拟登录()
+    public async Task Impersonation_cannot_start_in_a_tenant_context()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "nonested");

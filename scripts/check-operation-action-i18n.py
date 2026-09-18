@@ -27,7 +27,7 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
 
 ACTIONS_SOURCE = os.path.join(
     ROOT, 'template', 'backend', 'src', 'CompanyName.ProjectName.Application',
-    'OperationRecords', 'OperationRecordActions.cs')
+    'OperationRecords', 'Provider', 'OperationRecordActions.cs')
 I18N_DIR = os.path.join(ROOT, 'template', 'frontend', 'public', 'i18n')
 LOCALES = ('en', 'zh-CN')
 

@@ -223,6 +223,15 @@
                               }}</span>
                             }
                             <!--#if (LocalIdentity)-->
+                            @if (row.original.isLockedOut) {
+                              <span
+                                hlmBadge
+                                variant="destructive"
+                                data-testid="user-locked"
+                                [hlmTooltip]="lockedHint(row.original)"
+                                >{{ lockedLabel() }}</span
+                              >
+                            }
                             <span
                               hlmBadge
                               [variant]="row.original.isEmailVerified ? 'secondary' : 'outline'"
@@ -335,6 +344,27 @@
                                     >
                                       <ng-icon name="lucideKey" />
                                       {{ actionLabel('reset', row.original) }}
+                                    </button>
+                                  }
+                                  @if (canUpdate() && row.original.isLockedOut) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      data-testid="user-unlock"
+                                      (click)="unlock.emit(row.original)"
+                                    >
+                                      <ng-icon name="lucideLockOpen" />
+                                      {{ actionLabel('unlock', row.original) }}
+                                    </button>
+                                  }
+                                  @if (canUpdate() && row.original.isTwoFactorEnabled) {
+                                    <button
+                                      hlmDropdownMenuItem
+                                      data-testid="user-reset-two-factor"
+                                      [disabled]="isOtherSuperAdmin(row.original)"
+                                      (click)="resetTwoFactor.emit(row.original)"
+                                    >
+                                      <ng-icon name="lucideShieldOff" />
+                                      {{ actionLabel('resetTwoFactor', row.original) }}
                                     </button>
                                   }
                                   <!--#endif-->

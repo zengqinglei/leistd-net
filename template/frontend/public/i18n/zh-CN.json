@@ -63,11 +63,9 @@
   "menu": {
     "workspace": "工作空间",
     "platform": "管理平台",
-    "profile": "个人信息",
-    "preferences": "偏好设置",
-    "changePassword": "修改密码",
     "logout": "退出登录",
-    "hostTenant": "宿主"
+    "hostTenant": "宿主",
+    "personalSettings": "个人设置"
   },
   "language": {
     "label": "语言",
@@ -102,9 +100,12 @@
       "tenants": "租户管理",
       "groupDeveloper": "开发者",
       "openApplications": "开发应用",
-      "groupOperations": "运维",
-      "systemSettings": "系统配置",
-      "operationRecords": "操作记录"
+      "systemSettings": "系统设置",
+      "operationRecords": "操作记录",
+      "groupIdentity": "身份与访问",
+      "groupAudit": "审计",
+      "groupPersonal": "个人",
+      "settings": "设置"
     },
     "notifications": {
       "title": "通知",
@@ -139,18 +140,11 @@
     }
   },
   "settings": {
-    "title": "设置",
-    "description": "管理你的账户偏好与系统默认值",
-    "account": "账户",
-    "accountDescription": "只影响你自己，留空则继承系统默认值",
-    "system": "系统",
-    "systemDescription": "所有用户的默认值，用户可各自覆盖",
     "reset": "恢复默认",
     "empty": "此分组下没有可配置项",
     "timeZoneSearch": "搜索城市或 UTC 偏移",
     "timeZoneEmpty": "没有匹配的时区",
     "browserTimeZone": "浏览器",
-    "groups": "设置分类",
     "followSystem": "跟随系统",
     "hostScopeHint": "全实例生效（约 30 秒）",
     "saved": "已保存",
@@ -162,6 +156,43 @@
       "Warning": "只记录警告与错误，正常流程不落盘。",
       "Error": "只记录错误。会漏掉\"没报错但不对\"的线索。",
       "Fatal": "只记录导致进程终止的故障。几乎等于关掉日志。"
+    },
+    "personal": {
+      "title": "个人设置",
+      "description": "管理你的个人资料、账户安全与偏好"
+    },
+    "system": {
+      "title": "系统设置",
+      "description": "本租户（或宿主）下所有人的默认值与策略，个人偏好可以覆盖默认值"
+    },
+    "navigation": "设置导航",
+    "openNavigation": "打开设置导航",
+    "panels": {
+      "profile": {
+        "title": "个人资料",
+        "description": "你的头像、名称与联系方式"
+      },
+      "security": {
+        "title": "账户与安全",
+        "description": "你的密码与登录方式"
+      },
+      "notifications": {
+        "title": "通知",
+        "description": "选择每类通知从哪些渠道收到。安全提醒的站内通知始终开启；邮件只发往已验证的邮箱"
+      },
+      "preferences": {
+        "title": "偏好",
+        "description": "语言与时区，只对你生效；留空即跟随系统"
+      }
+    },
+    "secretSet": "已设置（输入新值即替换）",
+    "secretUnset": "未设置",
+    "emailTest": {
+      "title": "发送测试邮件",
+      "description": "使用上面当前生效的设置发送；改动请先保存。",
+      "recipient": "收件地址",
+      "send": "发送测试邮件",
+      "sent": "测试邮件已发送到 {{to}}"
     }
   },
   "landing": {
@@ -203,24 +234,98 @@
   "account": {
     "changePassword": {
       "header": "修改密码",
-      "subtitle": "请输入当前密码，并设置新的登录密码。",
+      "subtitle": "请输入当前密码，并设置新的登录密码。修改后，其他设备上的登录会随之退出。",
       "rules": "密码至少 12 位，最长 256 位。更长的口令短语比短而复杂的密码更安全。",
       "currentPassword": "当前密码",
       "newPassword": "新密码",
       "confirmPassword": "确认新密码",
       "submit": "更新密码",
-      "updateSuccess": "密码已更新"
+      "updateSuccess": "密码已更新，其他设备已退出登录"
+    },
+    "sessions": {
+      "header": "登录设备",
+      "subtitle": "这些设备当前登录着你的账号。遇到不认识的设备，请让它退出并修改密码。",
+      "current": "当前设备",
+      "unknownDevice": "未知设备",
+      "ip": "IP {{ip}}",
+      "lastSeen": "最近活跃 {{time}}",
+      "signedInAt": "登录于 {{time}}",
+      "impersonatedBy": "由 {{name}} 通过模拟登录进入",
+      "revoke": "退出",
+      "revokeOthers": "退出其他所有设备",
+      "revokeConfirm": "确定让这台设备退出登录吗？它需要重新登录才能继续使用。",
+      "revokeOthersConfirm": "确定让除当前设备以外的所有设备退出登录吗？它们需要重新登录才能继续使用。",
+      "revoked": "该设备已退出登录",
+      "revokedOthers": "已让 {{count}} 台设备退出登录",
+      "loadFailed": "无法加载登录设备。"
+    },
+    "twoFactor": {
+      "header": "两步验证",
+      "subtitleOff": "登录时除了密码，还要输入手机上身份验证器应用生成的验证码。",
+      "subtitleOn": "登录时在密码之后，还要输入身份验证器应用上的验证码。",
+      "on": "已启用",
+      "turnOn": "启用",
+      "turnOff": "停用",
+      "regenerate": "重新生成恢复码",
+      "recoveryCodesLeft": "还有 {{count}} 个恢复码可用",
+      "requiredByPolicy": "你所在的组织要求启用两步验证，不能停用。",
+      "disableHint": "输入当前密码和身份验证器应用上的验证码以停用。",
+      "regenerateHint": "输入身份验证器应用上的验证码。重新生成后，旧的恢复码全部失效。",
+      "passwordLabel": "当前密码",
+      "codeLabel": "验证码",
+      "confirmDisable": "停用",
+      "confirmRegenerate": "重新生成",
+      "enabledToast": "两步验证已启用，其他设备已退出登录。",
+      "disabledToast": "两步验证已停用，其他设备已退出登录。",
+      "loadFailed": "无法加载两步验证状态。",
+      "scanTitle": "1. 把账号添加到身份验证器应用",
+      "scanHint": "用 Google Authenticator、Microsoft Authenticator 等应用扫描二维码。",
+      "manualHint": "无法扫码？改为手动输入这个密钥：",
+      "copyKey": "复制密钥",
+      "copied": "已复制",
+      "qrAlt": "身份验证器应用的二维码",
+      "verifyTitle": "2. 输入应用上显示的 6 位验证码",
+      "enable": "验证并启用",
+      "setupLoadFailed": "无法开始设置。",
+      "recoveryCodesWarning": "请把这些恢复码保存在安全的地方。手机丢失时，每个恢复码可以代替验证码登录一次。它们不会再次显示。",
+      "copyCodes": "复制",
+      "downloadCodes": "下载",
+      "savedCodes": "我已保存"
+    },
+    "twoFactorLogin": {
+      "title": "两步验证",
+      "codeHint": "输入身份验证器应用上的 6 位验证码。",
+      "recoveryHint": "输入你保存的恢复码之一。",
+      "codeLabel": "验证码",
+      "recoveryLabel": "恢复码",
+      "submit": "验证",
+      "useRecovery": "手机不在身边？改用恢复码",
+      "useCode": "改用验证码",
+      "back": "返回登录"
+    },
+    "twoFactorRequired": {
+      "title": "启用两步验证",
+      "description": "你所在的组织要求启用两步验证，完成设置后才能继续使用。",
+      "signOut": "退出登录"
+    },
+    "externalLogins": {
+      "header": "已绑定的外部账号",
+      "subtitle": "除了密码，也可以用这些账号登录。请至少保留一种登录方式。",
+      "notLinked": "未绑定",
+      "linkedAs": "已绑定 {{name}}，绑定于 {{time}}",
+      "link": "绑定",
+      "unlink": "解绑",
+      "unlinkConfirm": "确定解绑 {{provider}} 账号吗？解绑后不能再用它登录。",
+      "unlinked": "已解绑",
+      "linked": "外部账号已绑定",
+      "lastMethod": "唯一的登录方式",
+      "loadFailed": "无法加载已绑定的外部账号。",
+      "none": "部署未配置任何外部登录方式。"
     },
     "profile": {
-      "header": "个人信息",
-      "subtitle": "更新用户名、邮箱、显示名称、手机号和头像。",
-      "invalidFileSizeSummary": "文件过大",
-      "invalidFileSizeDetail": "头像大小不能超过 1MB",
-      "invalidFileTypeSummary": "格式不支持",
-      "invalidFileTypeDetail": "请上传 PNG、JPG 或 WEBP 图片",
       "superAdminTag": "超级管理员",
       "adminTag": "管理员",
-      "avatarHint": "PNG、JPG 或 WebP",
+      "avatarHint": "PNG、JPG 或 WebP，会裁成正方形",
       "username": "用户名",
       "usernamePlaceholder": "请输入用户名",
       "email": "邮箱",
@@ -230,7 +335,29 @@
       "phoneNumber": "手机号",
       "phoneNumberPlaceholder": "请输入手机号",
       "guestUser": "未登录用户",
-      "updateSuccess": "个人资料已更新"
+      "updateSuccess": "个人资料已更新",
+      "discardChanges": "撤销修改",
+      "removeAvatar": "移除头像",
+      "avatarUpdated": "头像已更新",
+      "avatarRemoved": "头像已移除",
+      "avatarRejectedSummary": "这张图片不能用作头像",
+      "avatarRejected": {
+        "type": "请选择 PNG、JPG 或 WebP 图片。",
+        "size": "图片不能超过 10 MB。",
+        "decode": "无法读取这张图片，请换一张试试。"
+      },
+      "emailVerified": "已验证",
+      "emailUnverified": "未验证",
+      "emailChangeHint": "保存后需要重新验证新邮箱。",
+      "sendCode": "发送验证码",
+      "resendCode": "重新发送",
+      "resendIn": "{{seconds}} 秒后可重发",
+      "codeLabel": "验证码",
+      "codePlaceholder": "邮件中的 6 位验证码",
+      "confirmCode": "验证",
+      "codeSent": "验证码已发送到 {{email}}",
+      "emailVerifiedSuccess": "邮箱已验证",
+      "emailVerificationUnavailable": "当前部署还没有配置邮箱验证，暂时无法验证。"
     },
     "brand": {
       "title": "模板项目",
@@ -326,7 +453,10 @@
       "active": "启用",
       "inactive": "禁用",
       "emailVerified": "邮箱已验证",
-      "emailUnverified": "邮箱未验证"
+      "emailUnverified": "邮箱未验证",
+      "locked": "已锁定",
+      "lockedUntil": "锁定至 {{time}}",
+      "lockedIndefinitely": "已被锁定，需管理员解除"
     },
     "toast": {
       "created": "用户创建成功",
@@ -336,7 +466,9 @@
       "deleted": "用户已删除",
       "passwordReset": "密码已重置",
       "cannotDeleteSummary": "无法删除",
-      "cannotDeleteSuperAdmin": "系统内置超级管理员不允许删除"
+      "cannotDeleteSuperAdmin": "系统内置超级管理员不允许删除",
+      "unlocked": "已解除锁定",
+      "twoFactorReset": "已重置两步验证"
     },
     "confirm": {
       "enableMessage": "确定要启用用户 {{name}} 吗？",
@@ -344,7 +476,11 @@
       "enableHeader": "确认启用",
       "disableHeader": "确认禁用",
       "deleteMessage": "确定要删除用户 {{name}} 吗？删除后该用户将无法继续登录。",
-      "deleteHeader": "确认删除"
+      "deleteHeader": "确认删除",
+      "unlockMessage": "确定解除用户 {{name}} 的登录锁定吗？失败次数会一并清零。",
+      "unlockHeader": "确认解除锁定",
+      "resetTwoFactorMessage": "确定重置用户 {{name}} 的两步验证吗？该用户会在所有设备上退出登录，之后只凭密码即可登录。",
+      "resetTwoFactorHeader": "确认重置两步验证"
     },
     "table": {
       "currentPageReport": "共 {{total}} 条",
@@ -372,7 +508,9 @@
       "enable": "启用",
       "superAdminNoReset": "系统内置超级管理员的密码不允许被其他管理员重置",
       "resetPassword": "重置密码",
-      "superAdminNoDelete": "系统内置超级管理员不允许删除"
+      "superAdminNoDelete": "系统内置超级管理员不允许删除",
+      "unlock": "解除锁定",
+      "resetTwoFactor": "重置两步验证"
     },
     "editDialog": {
       "editHeader": "编辑用户",
@@ -383,7 +521,7 @@
       "noEmail": "未设置邮箱",
       "avatarHint": "PNG、JPG 或 WebP",
       "avatarTooLargeSummary": "文件过大",
-      "avatarTooLargeDetail": "头像大小不能超过 1MB",
+      "avatarTooLargeDetail": "图片不能超过 10 MB",
       "avatarBadTypeSummary": "格式不支持",
       "avatarBadTypeDetail": "请上传 PNG、JPG 或 WEBP 图片",
       "usernameLabel": "用户名",
@@ -400,7 +538,8 @@
       "activeTitle": "启用用户",
       "activeHint": "禁用后用户无法登录和调用受保护接口",
       "emailVerifiedTitle": "邮箱已验证",
-      "emailVerifiedHint": "用于管理邮箱验证状态"
+      "emailVerifiedHint": "用于管理邮箱验证状态",
+      "avatarDecodeFailed": "无法读取这张图片，请换一张试试"
     },
     "resetDialog": {
       "header": "重置用户密码",
@@ -445,6 +584,8 @@
       "user.created": "创建了用户 {{target}}",
       "user.updated": "更新了用户 {{target}}",
       "user.deleted": "删除了用户 {{target}}",
+      "user.unlocked": "解除了用户 {{target}} 的登录锁定",
+      "user.two-factor-reset": "重置了用户 {{target}} 的两步验证",
       "user.roles-replaced": "调整了用户 {{target}} 的角色",
       "role.created": "创建了角色 {{target}}",
       "role.deleted": "删除了角色 {{target}}",
@@ -457,7 +598,18 @@
       "operation-records.exported": "导出了操作记录",
       "auth.login.succeeded": "登录了系统",
       "auth.login.failed": "登录失败（{{target}}）",
+      "auth.locked-out": "账号 {{target}} 因连续登录失败被锁定",
       "auth.password.changed": "修改了自己的密码",
+      "auth.avatar.changed": "更换了头像",
+      "auth.email.verified": "验证了邮箱",
+      "auth.session.revoked": "退出了一台登录设备（{{target}}）",
+      "auth.sessions.others-revoked": "退出了其他所有登录设备",
+      "auth.two-factor.enabled": "启用了两步验证",
+      "auth.two-factor.disabled": "停用了两步验证",
+      "auth.two-factor.recovery-codes-regenerated": "重新生成了恢复码",
+      "auth.two-factor.recovery-code-used": "账号 {{target}} 用恢复码完成了登录",
+      "auth.external-login.linked": "绑定了外部账号 {{target}}",
+      "auth.external-login.unlinked": "解绑了外部账号 {{target}}",
       "auth.registered": "注册了账号 {{target}}",
       "impersonation.started": "开始以 {{target}} 的身份操作",
       "impersonation.ended": "结束了模拟操作",
@@ -470,7 +622,8 @@
       "role.created": "创建角色"
     },
     "failures": {
-      "Auth_InvalidCredentials": "用户名或密码不正确"
+      "Auth_InvalidCredentials": "用户名或密码不正确",
+      "Auth_UserTemporarilyLockedOut": "连续登录失败次数达到上限"
     },
     "table": {
       "currentPageReport": "共 {{total}} 条",

@@ -4,7 +4,7 @@ using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.MultiTenancy.AspNetCore.Resolution;
 using Leistd.MultiTenancy.Resolution;
-using CompanyName.ProjectName.Application.Auth;
+using CompanyName.ProjectName.Application.Auth.Constants;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

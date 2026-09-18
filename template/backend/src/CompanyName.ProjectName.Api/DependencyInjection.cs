@@ -1,16 +1,18 @@
 // 授权结果处理器在所有服务形态下都存在（被拒的写端点要留痕），因此本 using 无条件
-using CompanyName.ProjectName.Api.Extensions;
+using CompanyName.ProjectName.Api.Auth;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth;
+using CompanyName.ProjectName.Application.Auth.Constants;
 #endif
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Application.TenantConnections;
+using CompanyName.ProjectName.Application.TenantConnections.Constants;
 using Leistd.Security.Claims;
 #endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
+#endif
+#if (LocalIdentity)
 using System.Security.Claims;
 #endif
 #if (OpenIddictServer || !LocalIdentity)
@@ -37,13 +39,6 @@ public static class DependencyInjection
     /// </remarks>
     public static IServiceCollection AddApiAuthorization(this IServiceCollection services)
     {
-#if (LocalIdentity)
-        // 撤权要对已签发的凭据生效：登录时的启用/锁定检查挡不住已在线的会话。
-        // 覆盖范围是每一次新的 HTTP 请求和每一次新的 Hub 连接握手；
-        // 已经建立的 SignalR 连接不在其中，见 ActiveUserRequirement 的说明。
-        services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
-#endif
-
         // ASP.NET Core 只认一个结果处理器，因此"账号失效改判 401"与"被拒写端点留痕"
         // 收在同一个类里。**无条件注册**：资源服务形态没有本地账号，但一样有带策略的写端点，
         // 放进 LocalIdentity 守卫会让那半边静默没有授权阶段的审计。
@@ -67,12 +62,14 @@ public static class DependencyInjection
                 AuthenticationSchemeNames.SessionCookie
             };
 
-            // 撤权要对已签发的凭据生效：登录时的启用/锁定检查挡不住已在线的会话。
-            // ActiveUserRequirement 覆盖每一次新的 HTTP 请求与每一次新的 Hub 握手
+            // 默认策略表达的是"一个自然人"，而不是"任何通过了认证的东西"：client_credentials 的令牌
+            // （sub 形如 client:<client_id>，代表工作负载）不满足，答 403。不开角色时管理控制器只剩 [Authorize]，
+            // 放行等于任何机器令牌都能列用户和 OAuth 客户端；面向工作负载的端点单独声明自己的策略。
+            // 账号停用、删除后的撤权不在这里：会话与令牌在那一刻被撤销，认证阶段就不再通过
             options.DefaultPolicy = new AuthorizationPolicyBuilder()
                 .AddAuthenticationSchemes(humanSchemes)
                 .RequireAuthenticatedUser()
-                .AddRequirements(new ActiveUserRequirement())
+                .RequireAssertion(context => IsNaturalPerson(context.User))
                 .Build();
 
 #if (OpenIddictServer)
@@ -85,6 +82,12 @@ public static class DependencyInjection
         return services;
     }
 
+#if (LocalIdentity)
+    // 与 ICurrentUser.Id 同一口径：sub（或 NameIdentifier）是用户 Id 才是自然人
+    private static bool IsNaturalPerson(ClaimsPrincipal user) =>
+        Guid.TryParse(user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out _);
+
+#endif
 #if (OpenIddictServer)
     /// <summary>
     /// 注册一条只对<b>机器主体</b>开放的内部控制面策略

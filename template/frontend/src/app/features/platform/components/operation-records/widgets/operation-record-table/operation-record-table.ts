@@ -42,6 +42,8 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'user.created': (t) => `Created user ${t}`,
   'user.updated': (t) => `Updated user ${t}`,
   'user.deleted': (t) => `Deleted user ${t}`,
+  'user.unlocked': (t) => `Unlocked user ${t}`,
+  'user.two-factor-reset': (t) => `Reset two-factor authentication for user ${t}`,
   'user.roles-replaced': (t) => `Changed roles for user ${t}`,
   'role.created': (t) => `Created role ${t}`,
   'role.deleted': (t) => `Deleted role ${t}`,
@@ -54,7 +56,18 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'operation-records.exported': () => 'Exported operation records',
   'auth.login.succeeded': () => 'Signed in',
   'auth.login.failed': (t) => `Failed to sign in (${t})`,
+  'auth.locked-out': (t) => `Account ${t} was locked after repeated failed sign-ins`,
   'auth.password.changed': () => 'Changed their own password',
+  'auth.avatar.changed': () => 'Changed their avatar',
+  'auth.email.verified': () => 'Verified their email address',
+  'auth.session.revoked': (t) => `Signed out a device (${t})`,
+  'auth.sessions.others-revoked': () => 'Signed out all other devices',
+  'auth.two-factor.enabled': () => 'Turned on two-factor authentication',
+  'auth.two-factor.disabled': () => 'Turned off two-factor authentication',
+  'auth.two-factor.recovery-codes-regenerated': () => 'Regenerated recovery codes',
+  'auth.two-factor.recovery-code-used': (t) => `Account ${t} signed in with a recovery code`,
+  'auth.external-login.linked': (t) => `Linked external account ${t}`,
+  'auth.external-login.unlinked': (t) => `Unlinked external account ${t}`,
   'auth.registered': (t) => `Registered account ${t}`,
   'impersonation.started': (t) => `Started acting as ${t}`,
   'impersonation.ended': () => 'Ended impersonation',
@@ -72,6 +85,7 @@ const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
 /** 失败原因的英文文案，与 `en.json` 的 `operationRecords.failures` 同步。 */
 const FAILURE_REASONS: Record<string, string> = {
   Auth_InvalidCredentials: 'Incorrect username or password',
+  Auth_UserTemporarilyLockedOut: 'Too many failed sign-in attempts',
 };
 //#endif
 

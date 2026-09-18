@@ -1,8 +1,9 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.SignIn;
 using System.Security.Claims;
-using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.Auth.AppServices;
-using CompanyName.ProjectName.Application.OperationRecords;
+using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Leistd.OperationRecords.Abstractions;
@@ -30,6 +31,7 @@ internal sealed class TenantImpersonationAppService(
     ITenantStore tenantStore,
     IRepository<User, Guid> userRepository,
     SessionSignInService sessionSignInService,
+    IUserSessionAppService userSessionAppService,
     ICurrentUser currentUser,
     ICurrentPrincipalAccessor currentPrincipalAccessor,
     ICurrentTenant currentTenant,
@@ -135,6 +137,10 @@ internal sealed class TenantImpersonationAppService(
             await impersonatorUnitOfWork.CompleteAsync(cancellationToken);
         }
 
+        // Cookie 即将整体换成被模拟者的，发起人原来那个会话随之结束（退出模拟时另登记一个新会话）。
+        // 放在最后：前面任何一步失败都不下发新 Cookie，这时原会话必须还在，否则发起人会被连带踢下线。
+        await userSessionAppService.EndCurrentSessionAsync(cancellationToken);
+
         return principal;
     }
 
@@ -214,6 +220,9 @@ internal sealed class TenantImpersonationAppService(
                 cancellationToken);
             await impersonatedUnitOfWork.CompleteAsync(cancellationToken);
         }
+
+        // 模拟会话登记在被模拟的租户里，此刻环境租户仍是它，正好就地结束
+        await userSessionAppService.EndCurrentSessionAsync(cancellationToken);
 
         return principal;
     }

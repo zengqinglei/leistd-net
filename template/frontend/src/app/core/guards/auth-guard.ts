@@ -14,6 +14,12 @@ export const authGuard: CanActivateFn = (_route, state) => {
   //#endif
 
   if (authService.isAuthenticated()) {
+    //#if (LocalIdentity)
+    // 受限会话（组织要求两步验证而本人尚未启用）只能去设置页；服务端同样只放行设置所需的接口
+    if (authService.currentUser()?.twoFactorSetupRequired) {
+      return router.createUrlTree(['/auth/two-factor-setup']);
+    }
+    //#endif
     return true;
   }
 

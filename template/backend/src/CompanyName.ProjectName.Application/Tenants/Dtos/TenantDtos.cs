@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using CompanyName.ProjectName.Domain.Users.Passwords;
+using CompanyName.ProjectName.Domain.Users.Policies;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.ConnectionStrings;
@@ -79,7 +79,7 @@ public record TenantByHostOutputDto
     /// <remarks>
     /// 可空是因为契约不能承诺它非空（解析放行后租户被删掉这类窄窗口），
     /// 而不是"子域名写错了"那种情况——那种请求在<b>租户解析阶段</b>就被拒了，
-    /// 连这个匿名端点都到不了（见 <c>子域名指向不存在的租户时请求在解析阶段被拒</c>）。
+    /// 连这个匿名端点都到不了（见 <c>Subdomain_of_a_missing_tenant_is_rejected_during_resolution</c>）。
     /// 真的取不到时 <see cref="Decision"/> 仍是 <see cref="HostTenantDecision.Tenant"/>：
     /// 域名已经定了案，界面不该因此退回让用户自己挑一个——挑了也会被域名覆盖。
     /// </remarks>

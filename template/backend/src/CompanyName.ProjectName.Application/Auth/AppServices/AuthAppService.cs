@@ -1,5 +1,8 @@
+using CompanyName.ProjectName.Application.Auth.SignIn;
+using CompanyName.ProjectName.Application.Auth.TwoFactor;
 using Leistd.UnitOfWork.Attributes;
-using CompanyName.ProjectName.Application.OperationRecords;
+using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Users.Mappings;
 using Leistd.OperationRecords.Abstractions;
 using System.Security.Cryptography;
@@ -16,6 +19,14 @@ using Leistd.Security.Users;
 using Microsoft.Extensions.Logging;
 
 using CompanyName.ProjectName.Domain.Users.Options;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
+using CompanyName.ProjectName.Domain.Users.Policies;
+using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
+using CompanyName.ProjectName.Application.Auth.Sessions;
+using CompanyName.ProjectName.Domain.Auth.DomainServices;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.Timing;
+using Leistd.Lock.Abstractions;
 using System.Security.Claims;
 using Leistd.ExceptionHandling;
 
@@ -28,21 +39,47 @@ internal sealed class AuthAppService(
     ICaptchaAppService captchaAppService,
     IEmailVerificationAppService emailVerificationAppService,
     SessionSignInService sessionSignInService,
+    UserSessionDomainService userSessionDomainService,
+    IUserSessionAppService userSessionAppService,
+    TwoFactorChallengeStore twoFactorChallengeStore,
+    TwoFactorDomainService twoFactorDomainService,
     IOperationRecorder operationRecorder,
     IDistributedCache distributedCache,
     IObjectMapper objectMapper,
     IUserRegistrationPolicyProvider registrationPolicy,
+    ILoginSecurityPolicyProvider loginSecurityPolicy,
+    ISecurityAlertPublisher securityAlerts,
+    ICurrentTenant currentTenant,
+    IClock clock,
+    IDistributedLock distributedLock,
     ILogger<AuthAppService> logger) : BaseAppService(), IAuthAppService
 {
-    public async Task<ClaimsPrincipal> AuthenticateSessionAsync(
+    public async Task<SessionLoginResult> AuthenticateSessionAsync(
         LoginInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var user = await userDomainService.ValidateCredentialsAsync(
+        var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
+        var now = clock.Now;
+        var result = await userDomainService.ValidateCredentialsAsync(
             input.UsernameOrEmail,
             input.Password,
+            policy.Lockout,
+            now,
             cancellationToken);
-        if (user is null)
+
+        if (result.Status == CredentialValidationStatus.LockedOut)
+        {
+            var lockedUser = result.User!;
+            // 锁定期间的每次尝试都记一条的话，又是一个匿名刷表的面
+            if (result.LockoutTriggered)
+            {
+                await RecordLockedOutAsync(lockedUser, policy, cancellationToken);
+            }
+
+            throw SessionSignInService.LockedOut(lockedUser, now);
+        }
+
+        if (result.Status == CredentialValidationStatus.InvalidCredentials)
         {
             // 目标取被尝试的标识，而不是操作人——此刻没有主体。"谁在被试"正是这条记录的价值，
             // 也是"有人在爆破"唯一能被看出来的地方。用户输入受 MaxTargetIdLength 截断保护。
@@ -72,16 +109,162 @@ internal sealed class AuthAppService(
                 ;
         }
 
-        // 同理，登录成功的"什么人"也由目标承载：SignInAsync 只往响应里种 Cookie，
-        // 本次请求的主体仍是匿名，操作人字段为空是诚实的。
-        await operationRecorder.RecordSucceededAsync(
+        var user = result.User!;
+        var outcome = await sessionSignInService.StartAsync(user, cancellationToken: cancellationToken);
+
+        // 还要第二步时先不记成功：密码对了不等于登录成功，第二步通过时再记（见 CompleteTwoFactorLoginAsync）
+        if (outcome.Principal is not null)
+        {
+            await RecordLoginSucceededAsync(user, cancellationToken);
+        }
+
+        return outcome;
+    }
+
+    /// <summary>
+    /// 登录第二步：校验验证码或恢复码，通过后签发会话。
+    /// </summary>
+    /// <remarks>
+    /// <para>锁定中的账号不校验验证码，与第一步同理：否则锁定期间照样能一个个试。</para>
+    /// <para>输错计入账号的登录失败次数：第二步的 10⁶ 空间只靠单个挑战的尝试上限挡不住——
+    /// 知道密码的人可以反复走第一步领新挑战。</para>
+    /// </remarks>
+    public async Task<ClaimsPrincipal> CompleteTwoFactorLoginAsync(
+        TwoFactorLoginInputDto input,
+        CancellationToken cancellationToken = default)
+    {
+        var challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        if (challenge is null || challenge.TenantId != currentTenant.Id)
+        {
+            throw TwoFactorChallengeExpired();
+        }
+
+        // 同一用户的第二步串行执行，与验证码挑战同一做法：输错次数记在缓存里，
+        // 并发请求会读到同一个次数，不加锁就能在一个挑战上试出远超上限的次数。锁内重读挑战
+        await using var userLock = await distributedLock.LockAsync(
+            $"MyProject:2fa-login:lock:{challenge.UserId:N}", cancellationToken);
+        challenge = await twoFactorChallengeStore.GetAsync(input.Token, cancellationToken);
+        var user = challenge is not null
+            ? await userRepository.GetByIdAsync(challenge.UserId, cancellationToken)
+            : null;
+        if (challenge is null || user is null)
+        {
+            throw TwoFactorChallengeExpired();
+        }
+
+        var now = clock.Now;
+        try
+        {
+            SessionSignInService.EnsureAllowed(user, now);
+        }
+        catch
+        {
+            await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+            throw;
+        }
+
+        bool verified;
+        var usedRecoveryCode = false;
+        if (!string.IsNullOrWhiteSpace(input.RecoveryCode))
+        {
+            verified = usedRecoveryCode = twoFactorDomainService.UseRecoveryCode(user, input.RecoveryCode);
+        }
+        else if (!string.IsNullOrWhiteSpace(input.Code))
+        {
+            verified = twoFactorDomainService.VerifyCode(user, input.Code, now);
+        }
+        else
+        {
+            throw new BadRequestException("Enter the verification code or a recovery code.")
+#if (IncludeLocalization)
+                .WithCode("Auth:TwoFactorCodeRequired")
+#endif
+                ;
+        }
+
+        if (!verified)
+        {
+            var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
+            var lockedOut = user.RecordAccessFailed(now, policy.Lockout);
+            await userRepository.UpdateAsync(user, cancellationToken);
+
+            if (lockedOut)
+            {
+                await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+                await RecordLockedOutAsync(user, policy, cancellationToken);
+                throw SessionSignInService.LockedOut(user, now);
+            }
+
+            if (!await twoFactorChallengeStore.RecordFailureAsync(input.Token, challenge, cancellationToken))
+            {
+                throw TwoFactorChallengeExpired();
+            }
+
+            throw new UnauthorizedException("The verification code is incorrect.")
+                // 错误码在不含本地化的形态下也要带：界面按它区分"重输"与"回到密码那一步"
+                .WithCode("Auth:TwoFactorCodeInvalid");
+        }
+
+        await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+        // 用掉的步与恢复码必须落库，否则同一个码还能再用一次
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        if (usedRecoveryCode)
+        {
+            await operationRecorder.RecordSucceededAsync(
+                OperationRecordActions.AuthTwoFactorRecoveryCodeUsed,
+                OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+                OperationRecordAuthorizations.CredentialsPresented,
+                cancellationToken);
+        }
+
+        await RecordLoginSucceededAsync(user, cancellationToken);
+        return await sessionSignInService.SignInAsync(user, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// 换发当前会话：结束现在这个，按账号最新状态签发一个新的。
+    /// </summary>
+    /// <remarks>受限会话的用户完成两步验证设置后调用，换掉带限制声明的那一个。</remarks>
+    public async Task<ClaimsPrincipal> ReissueSessionAsync(CancellationToken cancellationToken = default)
+    {
+        var user = await GetCurrentUserEntityAsync(cancellationToken);
+        await userSessionAppService.EndCurrentSessionAsync(cancellationToken);
+        return await sessionSignInService.SignInAsync(user, cancellationToken: cancellationToken);
+    }
+
+    // 登录成功的"什么人"由目标承载：SignInAsync 只往响应里种 Cookie，
+    // 本次请求的主体仍是匿名，操作人字段为空是诚实的。
+    private Task RecordLoginSucceededAsync(User user, CancellationToken cancellationToken) =>
+        operationRecorder.RecordSucceededAsync(
             OperationRecordActions.AuthLoginSucceeded,
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
             OperationRecordAuthorizations.CredentialsPresented,
             cancellationToken);
 
-        return await sessionSignInService.SignInAsync(user, cancellationToken: cancellationToken);
+    // 只在"这一次恰好触发锁定"时记：一个锁定期内至多一条，写入量有界。本人同时收到一条安全提醒
+    private async Task RecordLockedOutAsync(User user, LoginSecurityPolicy policy, CancellationToken cancellationToken)
+    {
+        await securityAlerts.PublishAsync(
+            user.Id,
+            new SecurityAlert(SecurityAlertKind.LockedOut, Until: user.LockoutEnd),
+            cancellationToken);
+        await operationRecorder.RecordFailedAsync(
+            OperationRecordActions.AuthLockedOut,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            OperationRecordAuthorizations.CredentialsPresented,
+            OperationFailure.FromCode(
+                "Auth:UserTemporarilyLockedOut",
+                $$"""{"maxFailedAttempts":{{policy.Lockout.MaxFailedAttempts}},"minutes":{{(int)policy.Lockout.Duration.TotalMinutes}}}"""),
+            cancellationToken);
     }
+
+    private static BusinessException TwoFactorChallengeExpired() =>
+        new UnauthorizedException("The sign-in attempt has expired. Sign in again.")
+#if (IncludeLocalization)
+            .WithCode("Auth:TwoFactorChallengeExpired")
+#endif
+        ;
 
     /// <summary>失败登录的计数窗口（分钟）。</summary>
     private const int FailedLoginWindowMinutes = 5;
@@ -205,7 +388,9 @@ internal sealed class AuthAppService(
     public async Task<UserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         var userId = currentUser.Id!.Value;
-        return await GetCurrentUserOutputAsync(userId, cancellationToken);
+        var output = await GetCurrentUserOutputAsync(userId, cancellationToken);
+        // 受限会话由会话声明而不是账号字段决定：同一个账号换个没开强制的租户登录就不受限
+        return output with { TwoFactorSetupRequired = currentUser.FindClaim(TwoFactorClaimTypes.SetupRequired) is not null };
     }
 
     /// <summary>
@@ -233,7 +418,6 @@ internal sealed class AuthAppService(
             input.Email,
             input.DisplayName,
             input.PhoneNumber,
-            input.Avatar,
             cancellationToken);
 
         await userRepository.UpdateAsync(user, cancellationToken);
@@ -243,7 +427,7 @@ internal sealed class AuthAppService(
     }
 
     /// <summary>
-    /// 修改密码
+    /// 修改密码，并撤销除当前以外的全部会话
     /// </summary>
     public async Task ChangePasswordAsync(ChangePasswordInputDto input, CancellationToken cancellationToken = default)
     {
@@ -264,6 +448,10 @@ internal sealed class AuthAppService(
         await userDomainService.ChangePasswordAsync(user, input.CurrentPassword, input.NewPassword, cancellationToken);
         await userRepository.UpdateAsync(user, cancellationToken);
 
+        // 凭据换了，以旧密码建立的其他会话随之失效；发起修改的这台保留，免得改完密码自己也被踢出去
+        await userSessionDomainService.RevokeAllAsync(user.Id, currentUser.GetSessionId(), cancellationToken);
+        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordChanged), cancellationToken);
+
         logger.LogInformation("Current user password changed (ID: {UserId})", user.Id);
 
         // 改自己的密码：此刻主体已建立，操作人字段有值，目标即本人。
@@ -272,6 +460,100 @@ internal sealed class AuthAppService(
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// 设置或清除自己的头像
+    /// </summary>
+    /// <remarks>
+    /// 本人只能上传图片（外部地址来自外部登录提供方，不由本人随手填）；
+    /// 浏览器端已裁剪缩放，这里按 <see cref="AvatarPolicy"/> 校验体积与真实类型。
+    /// </remarks>
+    public async Task<UserOutputDto> SetCurrentUserAvatarAsync(SetAvatarInputDto input, CancellationToken cancellationToken = default)
+    {
+        var user = await GetCurrentUserEntityAsync(cancellationToken);
+        if (!string.IsNullOrEmpty(input.Avatar) && !AvatarPolicy.TryReadImage(input.Avatar, out _))
+        {
+            AvatarPolicy.EnsureValid(input.Avatar);
+            // 外部地址本身合法，但不是本人上传的入口能写的东西
+            throw new BadRequestException("The avatar must be a PNG, JPEG or WebP image.")
+#if (IncludeLocalization)
+                .WithCode("User:AvatarInvalid")
+#endif
+                ;
+        }
+
+        user.SetAvatar(input.Avatar);
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.AuthAvatarChanged,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            OperationRecordAuthorizations.AuthenticatedSelf,
+            cancellationToken);
+
+        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// 给自己当前的邮箱发验证码
+    /// </summary>
+    public async Task<EmailVerificationChallengeOutputDto> SendCurrentUserEmailCodeAsync(CancellationToken cancellationToken = default)
+    {
+        var user = await GetCurrentUserEntityAsync(cancellationToken);
+        if (user.EmailConfirmed)
+        {
+            throw new BadRequestException("This email address has already been verified.")
+#if (IncludeLocalization)
+                .WithCode("Auth:EmailAlreadyVerified")
+#endif
+                ;
+        }
+
+        return await emailVerificationAppService.SendAccountEmailCodeAsync(user.Email, cancellationToken);
+    }
+
+    /// <summary>
+    /// 用验证码确认自己当前的邮箱
+    /// </summary>
+    /// <remarks>
+    /// 校验针对的是<b>此刻</b>账号上的邮箱：发码之后改过邮箱的话，旧验证码对新地址无效，
+    /// 不能用它把一个没验证过的新地址标成已验证。
+    /// </remarks>
+    public async Task<UserOutputDto> ConfirmCurrentUserEmailAsync(EmailVerificationInputDto input, CancellationToken cancellationToken = default)
+    {
+        var user = await GetCurrentUserEntityAsync(cancellationToken);
+        if (!await emailVerificationAppService.ValidateAccountEmailChallengeAsync(user.Email, input, cancellationToken))
+        {
+            throw new BadRequestException("The email verification code is incorrect or has expired.")
+#if (IncludeLocalization)
+                .WithCode("Auth:EmailCodeInvalid")
+#endif
+                ;
+        }
+
+        user.ConfirmEmail();
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.AuthEmailVerified,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            OperationRecordAuthorizations.AuthenticatedSelf,
+            cancellationToken);
+
+        return await GetCurrentUserOutputAsync(user.Id, cancellationToken);
+    }
+
+    private async Task<User> GetCurrentUserEntityAsync(CancellationToken cancellationToken)
+    {
+        var userId = currentUser.Id!.Value;
+        return await userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundException($"User {userId} not found.")
+#if (IncludeLocalization)
+                .WithCode("User:NotFound")
+                .WithData("Id", userId)
+#endif
+                ;
     }
 
     private async Task<UserOutputDto> GetCurrentUserOutputAsync(Guid userId, CancellationToken cancellationToken)

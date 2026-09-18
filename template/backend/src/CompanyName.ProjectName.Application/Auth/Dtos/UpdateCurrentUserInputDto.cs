@@ -24,8 +24,4 @@ public record UpdateCurrentUserInputDto
     [MaxLength(20, ErrorMessage = "{0} cannot exceed {1} characters.")]
     [RegularExpression(@"^[0-9+\-()\s]{0,20}$", ErrorMessage = "{0} has an invalid format.")]
     public string? PhoneNumber { get; init; }
-
-    [Display(Name = "Avatar")]
-    [StringLength(1500000, ErrorMessage = "{0} is too large. Compress it and try again.")]
-    public string? Avatar { get; init; }
 }

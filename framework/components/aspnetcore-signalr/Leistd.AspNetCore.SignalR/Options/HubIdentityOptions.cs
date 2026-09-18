@@ -13,7 +13,7 @@ public sealed class HubIdentityOptions
     /// <remarks>
     /// 复评的目的是让"账号被禁用/锁定"对<b>已建立的连接</b>生效。ASP.NET Core 只在
     /// 握手那次 HTTP 请求上跑端点策略，此后连接一直有效；宿主的默认策略里通常已经
-    /// 有账号有效性要求（如 <c>ActiveUserRequirement</c>），复评即复用同一份判定，
+    /// 有宿主自定义的账号有效性要求，复评即复用同一份判定，
     /// 不引入第二处定义。
     /// </remarks>
     public string? PolicyName { get; set; }

@@ -1,5 +1,6 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth;
+using CompanyName.ProjectName.Application.Auth.SignIn;
+using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
@@ -8,6 +9,9 @@ using CompanyName.ProjectName.Application.Tenants.Dtos;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Api.Auth;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -20,17 +24,50 @@ public sealed class AuthController(
     ICaptchaAppService captchaAppService,
     IEmailVerificationAppService emailVerificationAppService,
     ITenantImpersonationAppService impersonationAppService,
-    IUserRegistrationPolicyProvider registrationPolicy) : BaseController
+    IUserSessionAppService sessionAppService,
+    ITwoFactorAppService twoFactorAppService,
+    IUserRegistrationPolicyProvider registrationPolicy,
+    IOptions<VerificationCodeOptions> verificationCodeOptions) : BaseController
 {
+    /// <summary>
+    /// 账号密码登录。已启用两步验证时不下发会话，返回第二步凭据
+    /// </summary>
     [AllowAnonymous]
     [HttpPost("session-login")]
     [IgnoreAntiforgeryToken]
-    public async Task SessionLoginAsync([FromBody] LoginInputDto request, CancellationToken cancellationToken)
+    public async Task<SessionLoginOutputDto> SessionLoginAsync([FromBody] LoginInputDto request, CancellationToken cancellationToken)
     {
-        var principal = await authService.AuthenticateSessionAsync(request, cancellationToken);
+        var result = await authService.AuthenticateSessionAsync(request, cancellationToken);
+        return await CompleteSessionLoginAsync(HttpContext, result);
+    }
+
+    /// <summary>
+    /// 登录第二步：提交验证码或恢复码
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("two-factor")]
+    [IgnoreAntiforgeryToken]
+    public async Task TwoFactorLoginAsync([FromBody] TwoFactorLoginInputDto request, CancellationToken cancellationToken)
+    {
+        var principal = await authService.CompleteTwoFactorLoginAsync(request, cancellationToken);
 
         await HttpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, principal,
             new AuthenticationProperties { IsPersistent = true });
+    }
+
+    /// <summary>
+    /// 按第一步的结果下发会话或第二步凭据。外部登录回调与账号密码登录共用。
+    /// </summary>
+    internal static async Task<SessionLoginOutputDto> CompleteSessionLoginAsync(HttpContext httpContext, SessionLoginResult result)
+    {
+        if (result.Principal is null)
+        {
+            return new SessionLoginOutputDto { RequiresTwoFactor = true, TwoFactorToken = result.TwoFactorToken };
+        }
+
+        await httpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, result.Principal,
+            new AuthenticationProperties { IsPersistent = true });
+        return new SessionLoginOutputDto();
     }
 
     /// <remarks>
@@ -39,13 +76,17 @@ public sealed class AuthController(
     /// 未登录调用同样返回成功，不泄漏"这个会话存不存在"。
     /// </remarks>
     [AllowAnonymous]
+    [AllowDuringTwoFactorSetup]
     [HttpPost("logout")]
-    public async Task LogoutAsync()
+    public async Task LogoutAsync(CancellationToken cancellationToken)
     {
+        // 先结束服务端会话再删 Cookie：只删 Cookie 的话，被复制走的那份 Cookie 仍然有效
+        await sessionAppService.EndCurrentSessionAsync(cancellationToken);
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
     }
 
     [AllowAnonymous]
+    [AllowDuringTwoFactorSetup]
     [HttpGet("security-config")]
     public async Task<SecurityConfigOutputDto> GetSecurityConfigAsync(CancellationToken cancellationToken)
     {
@@ -55,7 +96,8 @@ public sealed class AuthController(
 
         return new SecurityConfigOutputDto
         {
-            EnableEmailVerification = policy.EnableEmailVerification
+            EnableEmailVerification = policy.EnableEmailVerification,
+            EmailVerificationAvailable = verificationCodeOptions.Value.IsKeyUsable
         };
     }
 
@@ -94,6 +136,7 @@ public sealed class AuthController(
     /// 而那等于把"回到自己的账号"变成一次重新登录。
     /// </remarks>
     [Authorize]
+    [AllowDuringTwoFactorSetup]
     [HttpPost("end-impersonation")]
     public async Task EndImpersonationAsync(CancellationToken cancellationToken)
     {
@@ -107,6 +150,7 @@ public sealed class AuthController(
     /// 当前会话的模拟状态（供界面在顶栏显示模拟提示）
     /// </summary>
     [Authorize]
+    [AllowDuringTwoFactorSetup]
     [HttpGet("impersonation")]
     public Task<ImpersonationStatusOutputDto> GetImpersonationStatusAsync(CancellationToken cancellationToken)
         => impersonationAppService.GetStatusAsync(cancellationToken);
@@ -115,6 +159,7 @@ public sealed class AuthController(
     /// 获取当前用户信息
     /// </summary>
     [Authorize]
+    [AllowDuringTwoFactorSetup]
     [HttpGet("me")]
     public async Task<UserOutputDto> GetCurrentUserAsync(CancellationToken cancellationToken)
     {
@@ -132,7 +177,120 @@ public sealed class AuthController(
     }
 
     /// <summary>
-    /// 修改密码
+    /// 设置或清除自己的头像（图片 data URL；为空即清除）
+    /// </summary>
+    [Authorize]
+    [HttpPut("me/avatar")]
+    public async Task<UserOutputDto> SetCurrentUserAvatarAsync([FromBody] SetAvatarInputDto request, CancellationToken cancellationToken)
+    {
+        return await authService.SetCurrentUserAvatarAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// 给自己当前的邮箱发验证码
+    /// </summary>
+    [Authorize]
+    [HttpPost("me/email-verification")]
+    public async Task<EmailVerificationChallengeOutputDto> SendCurrentUserEmailCodeAsync(CancellationToken cancellationToken)
+    {
+        return await authService.SendCurrentUserEmailCodeAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// 用验证码确认自己当前的邮箱
+    /// </summary>
+    [Authorize]
+    [HttpPost("me/email-verification/confirm")]
+    public async Task<UserOutputDto> ConfirmCurrentUserEmailAsync([FromBody] EmailVerificationInputDto request, CancellationToken cancellationToken)
+    {
+        return await authService.ConfirmCurrentUserEmailAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// 自己的登录设备（仍然有效的会话），当前设备在前
+    /// </summary>
+    [Authorize]
+    [HttpGet("me/sessions")]
+    public Task<IReadOnlyList<UserSessionOutputDto>> GetCurrentUserSessionsAsync(CancellationToken cancellationToken)
+        => sessionAppService.GetCurrentUserSessionsAsync(cancellationToken);
+
+    /// <summary>
+    /// 让自己的某台设备退出登录
+    /// </summary>
+    [Authorize]
+    [HttpDelete("me/sessions/{id:guid}")]
+    public Task RevokeCurrentUserSessionAsync(Guid id, CancellationToken cancellationToken)
+        => sessionAppService.RevokeCurrentUserSessionAsync(id, cancellationToken);
+
+    /// <summary>
+    /// 让除当前设备以外的全部设备退出登录
+    /// </summary>
+    [Authorize]
+    [HttpPost("me/sessions/revoke-others")]
+    public Task<int> RevokeOtherCurrentUserSessionsAsync(CancellationToken cancellationToken)
+        => sessionAppService.RevokeOtherCurrentUserSessionsAsync(cancellationToken);
+
+    /// <summary>
+    /// 自己的两步验证状态
+    /// </summary>
+    [Authorize]
+    [AllowDuringTwoFactorSetup]
+    [HttpGet("me/two-factor")]
+    public Task<TwoFactorStatusOutputDto> GetTwoFactorStatusAsync(CancellationToken cancellationToken)
+        => twoFactorAppService.GetStatusAsync(cancellationToken);
+
+    /// <summary>
+    /// 开始设置两步验证：生成待启用的密钥
+    /// </summary>
+    [Authorize]
+    [AllowDuringTwoFactorSetup]
+    [HttpPost("me/two-factor/setup")]
+    public Task<TwoFactorSetupOutputDto> BeginTwoFactorSetupAsync(CancellationToken cancellationToken)
+        => twoFactorAppService.BeginSetupAsync(cancellationToken);
+
+    /// <summary>
+    /// 用验证码确认并启用两步验证，返回恢复码
+    /// </summary>
+    /// <remarks>受限会话（租户要求两步验证而此前未启用）启用成功后换发一个不受限的会话。</remarks>
+    [Authorize]
+    [AllowDuringTwoFactorSetup]
+    [HttpPost("me/two-factor/enable")]
+    public async Task<TwoFactorRecoveryCodesOutputDto> EnableTwoFactorAsync(
+        [FromBody] TwoFactorCodeInputDto request,
+        CancellationToken cancellationToken)
+    {
+        var output = await twoFactorAppService.EnableAsync(request, cancellationToken);
+
+        if (User.HasClaim(claim => claim.Type == TwoFactorClaimTypes.SetupRequired))
+        {
+            var principal = await authService.ReissueSessionAsync(cancellationToken);
+            await HttpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, principal,
+                new AuthenticationProperties { IsPersistent = true });
+        }
+
+        return output;
+    }
+
+    /// <summary>
+    /// 停用两步验证（要密码与验证码）
+    /// </summary>
+    [Authorize]
+    [HttpPost("me/two-factor/disable")]
+    public Task DisableTwoFactorAsync([FromBody] DisableTwoFactorInputDto request, CancellationToken cancellationToken)
+        => twoFactorAppService.DisableAsync(request, cancellationToken);
+
+    /// <summary>
+    /// 重新生成恢复码（要验证码）
+    /// </summary>
+    [Authorize]
+    [HttpPost("me/two-factor/recovery-codes")]
+    public Task<TwoFactorRecoveryCodesOutputDto> RegenerateRecoveryCodesAsync(
+        [FromBody] TwoFactorCodeInputDto request,
+        CancellationToken cancellationToken)
+        => twoFactorAppService.RegenerateRecoveryCodesAsync(request, cancellationToken);
+
+    /// <summary>
+    /// 修改密码（其他设备随之退出登录）
     /// </summary>
     [Authorize]
     [HttpPost("change-password")]

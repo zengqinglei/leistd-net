@@ -78,6 +78,18 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           //#endif
         }
       }
+      //#if (LocalIdentity)
+
+      // 受限会话（组织要求两步验证而本人尚未启用）调了设置之外的接口：带去设置页。
+      // 路由守卫已经挡住了页面导航，这里兜住的是页面之外发出的请求（例如会话中途被改成受限）。
+      if (
+        error.status === 403 &&
+        (error.error as { code?: string } | null)?.code === 'Auth:TwoFactorSetupRequired' &&
+        !isOnAuthRoute()
+      ) {
+        void router.navigateByUrl('/auth/two-factor-setup');
+      }
+      //#endif
 
       //#if (IncludeLocalization)
       const networkErrorMessage =

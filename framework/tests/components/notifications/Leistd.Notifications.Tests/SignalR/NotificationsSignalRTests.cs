@@ -66,6 +66,8 @@ public class NotificationsSignalRTests
 
     private sealed class HostEmailChannel : INotificationChannel
     {
+        public string Name => "Email";
+
         public Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
             => Task.CompletedTask;
     }

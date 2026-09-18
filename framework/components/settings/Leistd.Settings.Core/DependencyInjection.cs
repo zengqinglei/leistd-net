@@ -18,6 +18,9 @@ public static class DependencyInjection
     /// <see cref="ISettingProvider"/> 为 Scoped，一次请求内只查一次库并复用结果。</para>
     /// <para>还需要一个 <see cref="ISettingStore"/> 实现（如 <c>AddSettingsEfCore&lt;TDbContext&gt;()</c>）：
     /// 缺失时解析 <see cref="ISettingProvider"/> 直接失败，而不是静默只返回默认值。</para>
+    /// <para>机密设置（<see cref="ISettingDefinition.IsEncrypted"/>）用宿主的 Data Protection 加解密：
+    /// 宿主须 <c>AddDataProtection()</c> 并配置持久化、可共享的密钥环；没注册时只有读写机密设置会失败，
+    /// 不定义机密设置的宿主不受影响。要换密钥设施就在 Data Protection 这一层换（密钥存储与密钥加密都可替换）。</para>
     /// </remarks>
     /// <example>
     /// <code>

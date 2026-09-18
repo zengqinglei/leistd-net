@@ -14,10 +14,11 @@ public static class DataProtectionExtensions
     /// 注册持久化的 Data Protection 密钥环：配置了 Redis 时存 Redis，否则存文件系统。
     /// </summary>
     /// <remarks>
-    /// <para>除认证 Cookie 与防伪令牌外，控制库里租户独立库的连接串也用这套密钥环加密。
-    /// 读写同一控制库的进程（API、DbMigrator）必须共享同一密钥环与应用名，否则一方写入的
-    /// 连接串另一方解不开，该租户的请求与迁移都会被拒绝。</para>
-    /// <para>密钥丢失等于连接串丢失：生产环境必须把密钥持久化到共享且有备份的位置。
+    /// <para>除认证 Cookie 与防伪令牌外，启用本地身份时还有三类落库数据用这套密钥环加密：
+    /// 控制库里租户独立库的连接串、设置表里的机密设置（如发信口令）、用户的两步验证密钥。
+    /// 读写同一个库的进程（API、DbMigrator）必须共享同一密钥环与应用名，否则一方写入的
+    /// 密文另一方解不开：租户连接串解不开时该租户的请求与迁移都会被拒绝。</para>
+    /// <para>密钥丢失等于这些数据丢失：生产环境必须把密钥持久化到共享且有备份的位置。
     /// 不用 Redis 时，用 <c>DataProtection:KeysPath</c> 把各进程指向同一个目录。</para>
     /// </remarks>
     /// <param name="services">服务集合</param>

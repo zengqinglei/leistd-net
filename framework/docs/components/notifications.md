@@ -72,7 +72,7 @@ public class OrderNotifier(INotificationPublisher notificationPublisher)
         {
             Title = "订单已通过审批",
             Content = $"订单 {orderNo} 已通过审批",
-            Type = NotificationTypes.Workflow,
+            Type = "Approval", // 类别由业务项目自己定义
             Link = $"/orders/{orderNo}",
             RelatedEntityId = orderNo,
             RelatedEntityType = "Order",
@@ -102,22 +102,25 @@ public class MessageCenter(INotificationStore notificationStore)
 | `INotificationPublisher` | 通知发布器，业务层唯一入口，不感知底层传输 |
 | `INotificationPublisher.PublishToUserAsync(userId, notification, ct)` | 推送给指定用户；`userId` 为 `string`，`notification` 为 `NotificationInputDto` |
 | `INotificationChannel` | 通知外发渠道，只负责把已定案的通知送出去，由具体介质实现（如 SignalR）。**不是业务入口**——业务代码用 `INotificationPublisher` |
+| `INotificationChannel.Name` | 渠道名，投递过滤按它区分；站内实时推送用 `INotificationChannel.InAppName` |
 | `INotificationChannel.DeliverAsync(userId, notification, ct)` | 投递给指定用户；`notification` 已由发布器补齐 `Id`/`CreationTime` |
+| `INotificationDeliveryFilter.ShouldDeliverAsync(userId, notification, channel, ct)` | 这条通知是否经该渠道投给该用户；默认一律投递，宿主按用户偏好替换 |
+| `INotificationChannel.InAppName` | 站内渠道名（`"InApp"`）：通知历史与实时推送共用这一个开关；这是框架自己的渠道，业务渠道名由业务项目在各自的渠道实现上定义 |
 | `INotificationStore` | 通知持久化接口；**必需且只能有一个**实现 |
 | `INotificationStore.SaveAsync(notification, userId, ct)` | 保存通知 |
 | `INotificationStore.GetByUserAsync(userId, maxCount = 50, ct)` | 按创建时间**倒序**获取用户通知列表，默认最多 50 条 |
 | `INotificationStore.MarkAsReadAsync(notificationId, userId, ct)` | 标记单条通知为已读 |
 | `INotificationStore.MarkAllAsReadAsync(userId, ct)` | 标记用户所有通知为已读 |
 | `INotificationStore.GetUnreadCountAsync(userId, ct)` | 获取用户未读通知数量 |
-| `NotificationInputDto` | 发布输入：`Title`（必填）、`Content?`、`Type`（默认 `NotificationTypes.System`）、`Link?`、`Icon?`、`RelatedEntityId?`、`RelatedEntityType?`、`Metadata?`。**不含身份**——`Id`/`CreationTime`/`IsRead` 由发布器按收件人定案 |
+| `NotificationInputDto` | 发布输入：`Title`（必填）、`Content?`、`Type`（业务自定义字符串，默认 `NotificationInputDto.DefaultType`，即 `"System"`）、`Link?`、`Icon?`、`RelatedEntityId?`、`RelatedEntityType?`、`Metadata?`。**不含身份**——`Id`/`CreationTime`/`IsRead` 由发布器按收件人定案 |
 | `NotificationOutputDto` | 读取与实时传输输出：在 `NotificationInputDto` 的字段上加 `Id`、`IsRead`、`CreationTime`。`Id` 恒为**该用户的那条记录**，标记已读用的就是它 |
-| `NotificationTypes` | 通知类型字符串常量：`System`="System"、`DataChange`="DataChange"、`Workflow`="Workflow"；业务可自定义任意字符串，不限于这三个 |
 
 ## 实现行为
 
 ### Leistd.Notifications.Core（`NotificationPublisher` 默认发布器）
 
 - `PublishToUserAsync` 先写入 Store，再依次调用所有渠道（`INotificationChannel`）。Store 是必需依赖；先落库再推送——推送失败只是这一次没送到，历史还在，反过来则是历史丢了。
+- 投不投由 `INotificationDeliveryFilter` 决定：先问站内（`INotificationChannel.InAppName`），不投则既不写 Store、也不调用站内渠道；其余渠道逐个按 `Name` 问。默认过滤器一律投递；要按用户偏好过滤时，在 `AddNotifications` 之前注册自己的实现（或之后用 `Replace`）。过滤器抛出的异常会让本次发布失败，而不是替收件人猜一个投或不投。
 - 创建时刻只来自 `IClock.Now`，发布输入不能指定。
 - 通知按用户寻址并保留历史；realtime 按客户端订阅的资源寻址。两个组件使用各自的 Hub，可独立安装。
 - 业务代码只注入 `INotificationPublisher`；直接调用 `INotificationChannel` 会绕过历史写入。

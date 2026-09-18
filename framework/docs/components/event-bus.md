@@ -85,7 +85,7 @@ public class OrderPlacedHandler : IEventHandler<OrderPlacedEvent>
 | `IEvent` | 事件接口，含 `EventId`（Guid，用于幂等/追踪）与 `OccurredOn`（事件发生时间） |
 | `ILocalEvent : IEvent` | 本地事件标记接口 |
 | `BaseEvent : IEvent` | 事件抽象基类，构造时生成 `EventId`、设 `OccurredOn = DateTime.UtcNow`，标注 `[Serializable]` |
-| `LocalEvent : BaseEvent, ILocalEvent` | 本地事件抽象基类，业务事件通常继承它 |
+| `LocalEvent : BaseEvent, ILocalEvent` | 本地事件抽象基类，业务事件通常继承它；无参构造取系统当前时刻，`LocalEvent(occurredOn)` 用发布方给的时刻——发布方已从可替换的时间源（如 `IClock`）取了"现在"时用后者 |
 
 ## 实现行为
 

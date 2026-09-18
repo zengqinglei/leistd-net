@@ -63,6 +63,7 @@ import {
 } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 import { formatAppDate, parseAppCalendarDate } from '../../../../shared/pipes/app-date-pipe';
+import { saveBlob } from '../../../../shared/utils/download-file';
 import { paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
 import {
   isoToZonedDate,
@@ -559,7 +560,13 @@ export class OperationRecords {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
-        next: (blob) => this.saveCsv(blob),
+        // 文件名在客户端生成：`responseType: 'blob'` 拿不到 `Content-Disposition`
+        // （那要额外读响应头），而服务端已经给了同样形状的名字，这里保持一致即可。
+        next: (blob) =>
+          saveBlob(
+            blob,
+            `operation-records-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}.csv`,
+          ),
         error: (error: unknown) => this.showExportError(error),
       });
   }
@@ -600,24 +607,6 @@ export class OperationRecords {
       queryParamsHandling: 'merge',
       replaceUrl,
     });
-  }
-
-  /**
-   * 把拿到的 CSS 字节存成文件。
-   *
-   * **`revokeObjectURL` 不能省**：`createObjectURL` 建的引用会一直持有整个 blob，
-   * 不释放的话每导出一次就泄漏一份，直到页面关闭。
-   *
-   * 文件名在客户端生成：`responseType: 'blob'` 拿不到 `Content-Disposition`
-   * （那要额外读响应头），而服务端已经给了同样形状的名字，这里保持一致即可。
-   */
-  private saveCsv(blob: Blob): void {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `operation-records-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   }
 
   private showExportError(error: unknown): void {

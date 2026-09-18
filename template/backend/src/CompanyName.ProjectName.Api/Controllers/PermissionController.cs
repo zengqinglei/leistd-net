@@ -1,4 +1,7 @@
-using CompanyName.ProjectName.Application.OperationRecords;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Api.Auth;
+#endif
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using CompanyName.ProjectName.Application.Permissions.Provider;
@@ -26,6 +29,10 @@ public sealed class PermissionController(IPermissionAppService permissionAppServ
     /// <summary>
     /// 获取当前用户的有效权限与授权版本（仅要求已认证）
     /// </summary>
+#if (LocalIdentity)
+    // 界面启动就要读：受限会话也得能渲染出两步验证设置页
+    [AllowDuringTwoFactorSetup]
+#endif
     [HttpGet("current")]
     public async Task<CurrentPermissionsOutputDto> GetCurrentAsync(CancellationToken cancellationToken)
     {

@@ -68,6 +68,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.11" />
     <!-- 设计时 DbContext 工厂（Infrastructure/Persistence/DesignTime）要自建 ConfigurationBuilder
          读取 appsettings 与环境变量。Api 是 Web SDK、由共享框架白送这三个包；Infrastructure 是

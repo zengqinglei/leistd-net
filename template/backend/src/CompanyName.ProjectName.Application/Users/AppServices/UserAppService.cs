@@ -1,8 +1,17 @@
 using Leistd.UnitOfWork.Attributes;
-using CompanyName.ProjectName.Application.OperationRecords;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Sessions;
+using CompanyName.ProjectName.Domain.Auth.DomainServices;
+using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
+using CompanyName.ProjectName.Application.Users.Mappings;
+using Leistd.Timing;
+#endif
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
+using CompanyName.ProjectName.Application.Users.Avatars;
 using CompanyName.ProjectName.Application.Users.Dtos;
+using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -18,6 +27,9 @@ using Leistd.ObjectMapping;
 using Leistd.Authorization.Abstractions;
 using Leistd.ObjectMapping.Abstractions;
 using Leistd.OperationRecords.Abstractions;
+#if (OpenIddictServer)
+using OpenIddict.Abstractions;
+#endif
 
 namespace CompanyName.ProjectName.Application.Users.AppServices;
 
@@ -31,8 +43,18 @@ public class UserAppService(
     IPermissionChecker permissionChecker,
     UserDomainService userDomainService,
     IOperationRecorder operationRecorder,
+#if (LocalIdentity)
+    UserSessionDomainService userSessionDomainService,
+    ISecurityAlertPublisher securityAlerts,
+#endif
+#if (OpenIddictServer)
+    IOpenIddictTokenManager tokenManager,
+#endif
     ICurrentUser currentUser,
     ILogger<UserAppService> logger,
+#if (LocalIdentity)
+    IClock clock,
+#endif
     IObjectMapper objectMapper,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IUserAppService
 {
@@ -158,6 +180,7 @@ public class UserAppService(
         var roles = input.RoleIds.Count > 0
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
             : await GetDefaultRolesAsync(cancellationToken);
+        AvatarPolicy.EnsureValid(input.Avatar?.Trim());
 #if (LocalIdentity)
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);
@@ -209,16 +232,20 @@ public class UserAppService(
                 ;
         }
 
+        // 编辑表单会把读到的头像地址原样送回，那表示"没改"，换回存储的原值再校验。
+        var avatar = AvatarUrls.ResolveSubmitted(user, input.Avatar);
+        AvatarPolicy.EnsureValid(avatar);
+
         // 启用状态原样带过：它只由 Enable/Disable 两个命令写入，那里才有"超管不得禁用自己"的保护。
 #if (LocalIdentity)
         user.UpdateManagement(
             email,
             input.DisplayName?.Trim(),
-            input.Avatar?.Trim(),
+            avatar,
             user.IsActive,
             input.IsEmailVerified);
 #else
-        user.UpdateManagement(email, input.DisplayName?.Trim(), input.Avatar?.Trim(), user.IsActive, false);
+        user.UpdateManagement(email, input.DisplayName?.Trim(), avatar, user.IsActive, false);
 #endif
         // 角色不在此处变更：普通资料更新与角色分配是两个命令、两个权限。
         await userRepository.UpdateAsync(user, cancellationToken);
@@ -281,11 +308,16 @@ public class UserAppService(
 
         user.Disable();
         await userRepository.UpdateAsync(user, cancellationToken);
+#if (LocalIdentity)
+
+        // 已在线的会话与已签发的令牌随之作废：登录时的启用检查挡不住它们
+        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
+#endif
     }
 
 #if (LocalIdentity)
     /// <summary>
-    /// 重置用户密码
+    /// 重置用户密码，并撤销该用户的全部会话
     /// </summary>
     public async Task ResetPasswordAsync(Guid id, ResetUserPasswordInputDto input, CancellationToken cancellationToken = default)
     {
@@ -301,6 +333,77 @@ public class UserAppService(
 
         userDomainService.ResetPassword(user, input.Password);
         await userRepository.UpdateAsync(user, cancellationToken);
+
+        // 密码被管理员重置，意味着账号可能已不在本人掌控之下：此前的会话全部作废。
+        // 重置的是自己时保留当前这台，免得操作完把自己踢出去
+        await RevokeAllAccessAsync(
+            user.Id,
+            user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
+            cancellationToken);
+        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordReset), cancellationToken);
+    }
+
+    /// <summary>
+    /// 解除用户的登录锁定
+    /// </summary>
+    /// <remarks>
+    /// 未锁定时静默成功、不留记录：解锁是幂等的，重复点击不该在操作记录里留下一串没发生过的事。
+    /// </remarks>
+    public async Task UnlockAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        if (!user.IsLocked && user.AccessFailedCount == 0)
+        {
+            return;
+        }
+
+        user.Unlock();
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserUnlocked,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// 重置用户的两步验证：停用并清掉密钥与恢复码，该用户的会话全部失效
+    /// </summary>
+    /// <remarks>
+    /// 给丢了手机又没了恢复码的人用。会话一并作废：能走到这一步，说明账号的第二道门已经不在本人手里。
+    /// 所在租户要求两步验证时，本人下次登录会被带去重新设置。
+    /// </remarks>
+    public async Task ResetTwoFactorAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var user = await GetUserOrThrowAsync(id, cancellationToken);
+        if (!user.CanBeManagedBy(currentUser.Id))
+        {
+            throw new BadRequestException("The built-in super administrator cannot be operated on by other administrators.")
+#if (IncludeLocalization)
+                .WithCode("User:SuperAdminOperationForbidden")
+#endif
+                ;
+        }
+
+        if (!user.TwoFactorEnabled)
+        {
+            return;
+        }
+
+        user.DisableTwoFactor();
+        await userRepository.UpdateAsync(user, cancellationToken);
+        await RevokeAllAccessAsync(
+            user.Id,
+            user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
+            cancellationToken);
+
+        await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.TwoFactorReset), cancellationToken);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserTwoFactorReset,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
     }
 #endif
 
@@ -327,6 +430,9 @@ public class UserAppService(
                 ;
         }
 
+#if (LocalIdentity)
+        await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
+#endif
         await userRepository.DeleteAsync(user, cancellationToken);
         logger.LogInformation("User deleted (ID: {Id})", id);
 
@@ -353,6 +459,15 @@ public class UserAppService(
         }
 
         return user;
+    }
+
+    /// <inheritdoc />
+    public async Task<UserAvatarOutputDto?> GetAvatarAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var user = await userRepository.GetByIdAsync(id, cancellationToken);
+        return user is not null && AvatarPolicy.TryReadImage(user.Avatar, out var image)
+            ? new UserAvatarOutputDto(image.ContentType, image.Bytes)
+            : null;
     }
 
     /// <summary>
@@ -534,13 +649,41 @@ public class UserAppService(
         return objectMapper.Map<List<Role>, List<RoleBriefDto>>(ordered);
     }
 
-    private static Dictionary<string, object> CreateMappingContext(List<UserRole> userRoles, List<Role> roles)
+    private Dictionary<string, object> CreateMappingContext(List<UserRole> userRoles, List<Role> roles)
     {
         return new Dictionary<string, object>
         {
             ["UserRoles"] = userRoles,
-            ["Roles"] = roles
+            ["Roles"] = roles,
+#if (LocalIdentity)
+            [UserProfile.NowKey] = clock.Now,
+#endif
         };
     }
 
+#if (LocalIdentity)
+    /// <summary>
+    /// 作废该用户已建立的会话与已签发的令牌。
+    /// </summary>
+    /// <remarks>
+    /// 撤权要对已签发的凭据生效：会话 Cookie 由会话校验按登记的会话拒绝，Bearer 令牌由令牌记录校验按撤销状态拒绝，
+    /// 两者都在认证阶段就失效。与写入同在一个工作单元里，撤不掉就整体失败，不留"账号停了、令牌还能用"的状态。
+    /// </remarks>
+    /// <param name="userId">用户 Id。</param>
+    /// <param name="keepSessionId">保留的会话（管理员操作的是自己时保留当前这台），没有则为 null。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private async Task RevokeAllAccessAsync(Guid userId, Guid? keepSessionId, CancellationToken cancellationToken)
+    {
+        await userSessionDomainService.RevokeAllAsync(userId, keepSessionId, cancellationToken);
+#if (OpenIddictServer)
+        // 逐个撤销而不是 RevokeBySubjectAsync：后者在 EF 存储里是批量 ExecuteUpdate，只有关系型提供程序支持，
+        // 而未配连接串时本模板跑在 EF InMemory 上。先取全再逐个改，也避免边读边写占着同一个连接
+        var tokens = await tokenManager.FindBySubjectAsync(userId.ToString(), cancellationToken).ToListAsync(cancellationToken);
+        foreach (var token in tokens)
+        {
+            await tokenManager.TryRevokeAsync(token, cancellationToken);
+        }
+#endif
+    }
+#endif
 }

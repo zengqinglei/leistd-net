@@ -134,6 +134,12 @@ export const next = 1;
 
 > 这些是 leistd-net 的维护事实，**不要写进 `template/` 源码注释**（见 `developing-leistd-template` skill 的「对外分发边界」）：生成项目里既没有另外两份副本，也没有模板矩阵与仓库 E2E，业务开发者无从按此核对。模板注释只写生成项目自身运行与持续开发需要的知识。
 
+### 3.7 错误码随本地化裁剪，界面分支用的码除外
+
+细分错误码同时是本地化词条键，模板里的 `WithCode(...)` 通常包在 `#if (IncludeLocalization)` 内，不含本地化的形态下响应里是状态码通用码。**前端据以分支的错误码例外，必须无条件下发**（如 `Auth:TwoFactorSetupRequired` 驱动拦截器跳设置页、`Auth:TwoFactorCodeInvalid` 区分重输与退回）——裁掉它不会编译失败，只会让不含本地化的形态静默丢行为。
+
+集成测试断言错误码时用 `ExpectedErrorCode.Of(细分码, 通用码)` 按形态取值；要守的行为本身（被拒、跳转、可重试）不依赖错误码，在所有形态下照样断言。只跑全功能场景发现不了这类问题，须经 `identity`、`resource` 等不含本地化的场景验证。
+
 ## 4. Skill 与规范
 
 - `template/.agents/skills/leistd-project-workflow/` 是跨工具项目协作入口，不依赖 `CLAUDE.md`、`AGENTS.md` 或其他工具专属文件。

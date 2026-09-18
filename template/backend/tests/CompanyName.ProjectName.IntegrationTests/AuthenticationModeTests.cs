@@ -2,6 +2,7 @@ using Leistd.Authorization.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections;
+using CompanyName.ProjectName.Application.TenantConnections.Constants;
 using Leistd.Authorization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;

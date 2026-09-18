@@ -1,4 +1,4 @@
-using CompanyName.ProjectName.Application.OperationRecords;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Domain.Users.Entities;

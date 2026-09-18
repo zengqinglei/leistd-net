@@ -1,5 +1,3 @@
-using Leistd.Notifications.Constants;
-
 namespace Leistd.Notifications.Dtos;
 
 /// <summary>
@@ -23,8 +21,8 @@ public record NotificationOutputDto
     /// <summary>通知内容（可选）。</summary>
     public string? Content { get; init; }
 
-    /// <summary>通知类型（字符串，见 <see cref="NotificationTypes"/>）。</summary>
-    public string Type { get; init; } = NotificationTypes.System;
+    /// <summary>通知类型（业务自定义的字符串；未指定时为 <see cref="NotificationInputDto.DefaultType"/>）。</summary>
+    public string Type { get; init; } = NotificationInputDto.DefaultType;
 
     /// <summary>点击跳转路由（可选）。</summary>
     public string? Link { get; init; }

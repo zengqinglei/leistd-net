@@ -115,7 +115,7 @@ public class ServiceUserContextRegistrationTests
             "TestBearer"));
 
     [Fact]
-    public async Task 宿主Scoped转换_两者都生效且不被提升为单例()
+    public async Task Host_scoped_transformation_is_composed_without_becoming_singleton()
     {
         var services = CreateServices();
         services.AddScoped<IClaimsTransformation, TenantClaimsTransformation>();
@@ -128,7 +128,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主Transient工厂注册_同样被组合()
+    public async Task Host_transient_factory_registration_is_composed()
     {
         var services = CreateServices();
         services.AddTransient<IClaimsTransformation>(provider => new TenantClaimsTransformation(
@@ -143,7 +143,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主单例实例注册_同样被组合()
+    public async Task Host_singleton_instance_registration_is_composed()
     {
         var counter = new CallCounter();
         var services = CreateServices(counter);
@@ -158,7 +158,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主未注册转换_恢复照常生效()
+    public async Task Restoration_works_without_a_host_transformation()
     {
         var services = CreateServices();
         services.AddServiceUserContext();
@@ -169,7 +169,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主转换由容器创建_作用域结束时被释放()
+    public async Task Container_created_host_transformation_is_disposed_with_the_scope()
     {
         // 内层不再由 DI 跟踪（组合在自己的工厂里创建它），释放责任必须随所有权转移到组合，
         // 否则 Scoped 宿主转换器每请求泄漏一个未释放实例。
@@ -191,7 +191,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主自行new的实例_不被组合释放()
+    public async Task Host_supplied_instance_is_not_disposed_by_the_composition()
     {
         // ImplementationInstance 由宿主创建，容器本就不拥有它；组合越权释放会把宿主
         // 仍在使用的对象提前销毁。
@@ -209,7 +209,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 仅异步可释放的宿主转换_经异步作用域被释放()
+    public async Task Async_disposable_host_transformation_is_disposed_by_an_async_scope()
     {
         var tracker = new DisposeTracker();
         var services = CreateServices();
@@ -228,7 +228,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public void 仅异步可释放的宿主转换_同步释放作用域时抛错而非静默泄漏()
+    public void Async_disposable_host_transformation_throws_on_sync_scope_dispose()
     {
         // 与原生 DI 行为一致：async-only 服务被同步释放要显式失败，否则泄漏被藏起来。
         var tracker = new DisposeTracker();
@@ -249,7 +249,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主另有keyed注册_只组合默认注册且keyed仍可按key解析()
+    public async Task Only_the_default_registration_is_composed_and_keyed_ones_still_resolve()
     {
         // keyed 与默认服务是独立注册空间：误把 keyed 描述符当宿主转换会破坏默认服务解析。
         var counter = new CallCounter();
@@ -276,7 +276,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主预注册恢复转换的公共类型_组合仍被正常注册()
+    public async Task Preregistered_restoring_transformation_type_is_still_composed()
     {
         // 该公共类型是文档鼓励宿主注入的（自行组合场景），不能用它的存在推断扩展方法已执行——
         // 误判会跳过组合注册，认证阶段恢复缺失，只剩中间件一条路。
@@ -292,7 +292,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主把恢复转换预注册为Scoped_组件仍按Singleton解析不崩溃()
+    public async Task Scoped_preregistration_of_the_restoring_transformation_still_resolves_as_singleton()
     {
         // 模板正是这条路径：AddServiceUserContext 在 AddAuthentication 之前调用，
         // 此时还没有默认 IClaimsTransformation，走的是 Singleton 别名分支。
@@ -307,7 +307,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 宿主预注册keyed的恢复转换类型_组合仍被正常注册()
+    public async Task Keyed_preregistration_of_the_restoring_transformation_is_still_composed()
     {
         var services = CreateServices();
         services.AddKeyedSingleton<ServiceUserContextClaimsTransformation>("external");
@@ -321,7 +321,7 @@ public class ServiceUserContextRegistrationTests
     }
 
     [Fact]
-    public async Task 重复注册_宿主转换只跑一次_不叠加嵌套()
+    public async Task Repeated_registration_runs_the_host_transformation_once()
     {
         var counter = new CallCounter();
         var services = CreateServices(counter);

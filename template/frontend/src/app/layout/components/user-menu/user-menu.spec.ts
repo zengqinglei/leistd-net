@@ -18,20 +18,12 @@ import { LayoutService } from '../../services/layout-service';
 // 空词条下 translate() 回落成键名，所以按**键**断言：改一句中文不该让这组用例变红。
 const WORKSPACE = 'menu.workspace';
 const PLATFORM = 'menu.platform';
-//#if (LocalIdentity)
-const PROFILE = 'menu.profile';
-const CHANGE_PASSWORD = 'menu.changePassword';
-//#endif
-const PREFERENCES = 'menu.preferences';
+const PERSONAL_SETTINGS = 'menu.personalSettings';
 const LOGOUT = 'menu.logout';
 //#else
 const WORKSPACE = 'Workspace';
 const PLATFORM = 'Admin platform';
-//#if (LocalIdentity)
-const PROFILE = 'Profile';
-const CHANGE_PASSWORD = 'Change password';
-//#endif
-const PREFERENCES = 'Preferences';
+const PERSONAL_SETTINGS = 'Personal settings';
 const LOGOUT = 'Sign out';
 //#endif
 
@@ -39,8 +31,8 @@ const LOGOUT = 'Sign out';
  * 头像菜单的构成。
  *
  * 这里钉住的是两条决定，它们改错了都不报错：
- * 1. **个人偏好在这儿**（`default-sidebar.spec.ts` 只证明它不在侧栏——入口被整个删掉、
- *    路由写错，那组用例照样全绿）。
+ * 1. **个人设置在这儿有一个入口**，管理平台上也能直达（侧栏只在工作空间放它，
+ *    管理人员不回工作空间就只能靠这里）。
  * 2. **没有「切换租户」**。理由见 `docs/standards/coding-frontend.md` §8：会话租户由
  *    cookie claim 定案，换租户只能重新登录。所以用例按**完整序列**断言而不是逐项存在，
  *    多出一项就会红。
@@ -91,14 +83,7 @@ describe('UserMenu 菜单构成', () => {
       .filter((item) => !item.separator)
       .map((item) => item.label);
 
-  // prettier-ignore
-  const personalItems = [
-    //#if (LocalIdentity)
-    PROFILE,
-    CHANGE_PASSWORD,
-    //#endif
-    PREFERENCES,
-  ];
+  const personalItems = [PERSONAL_SETTINGS];
 
   it('普通用户：个人一簇 + 退出，没有别的入口', () => {
     expect(labelsOf(build({ platform: false }))).toEqual([...personalItems, LOGOUT]);
@@ -119,15 +104,14 @@ describe('UserMenu 菜单构成', () => {
     expect(navigate).toHaveBeenCalledWith(['/platform']);
   });
 
-  it('偏好设置指向账户作用域的设置页', () => {
-    const menu = build({ platform: false });
+  it('个人设置指向工作空间的个人设置页，在管理平台上也一样', () => {
+    const menu = build({ platform: true });
     const router = TestBed.inject(Router);
     const navigate = spyOn(router, 'navigate').and.resolveTo(true);
 
-    const preferences = menu.userMenuItems().find((item) => item.label === PREFERENCES);
-    preferences!.action!();
+    menu.userMenuItems().find((item) => item.label === PERSONAL_SETTINGS)!.action!();
 
-    // /platform/settings 是租户级默认值（管理动作），两者不能混
+    // /platform/settings 是系统默认值与策略（管理动作），两者不能混
     expect(navigate).toHaveBeenCalledWith(['/workspace/settings']);
   });
 });

@@ -1,7 +1,7 @@
 // DbException 与 SqlState 都在 System.Data.Common（BCL）：按它分流不必让应用层
 // 引用任何数据库驱动，与 ConnectionStringGuard 选 DbConnectionStringBuilder 是同一条理由。
 using System.Data.Common;
-using CompanyName.ProjectName.Application.OperationRecords;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 // ConnectionStringGuard 在 ...Application.TenantConnections，与本文件所在的
 // ...Application.Tenants.AppServices 是平行分支而非父子，**不会自动可达**，必须显式 using。

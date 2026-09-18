@@ -88,6 +88,8 @@
       (toggleActive)="handleToggleActive($event)"
       <!--#if (LocalIdentity)-->
       (resetPassword)="openResetPasswordDialog($event)"
+      (unlock)="handleUnlock($event)"
+      (resetTwoFactor)="handleResetTwoFactor($event)"
       <!--#endif-->
       (delete)="handleDelete($event)"
       [canManageRoles]="canManageUserRoles()"

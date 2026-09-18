@@ -152,6 +152,8 @@ HTTP/1.1 200 OK
 - `WithDetails("...")`：补充可对外返回的业务详情；该内容不受开发环境限制，不得包含敏感或内部诊断信息。
 - `WithData("Name", value)`：为本地化文案的具名占位符 `{Name}` 提供值（仅启用多语言时用）。
 
+前端要据以分支的错误码（据此跳转、切换界面状态，而不只是显示消息）是机器契约：无论是否启用多语言都要 `WithCode`，改名按破坏性变更处理，并有集成测试断言它。
+
 <!--#if (IncludeLocalization)-->
 ### 4.1 异常本地化
 
@@ -205,6 +207,12 @@ throw new BadRequestException("Insufficient balance.").WithCode("Wallet:Insuffic
 ### 5.1 用户认证
 
 - 默认使用 Bearer Token（OpenIddict 校验）或 Cookie Session。
+<!--#if (LocalIdentity)-->
+- Cookie 会话在服务端登记（`UserSessions`，即个人设置里的「登录设备」）：每个请求都确认会话仍然有效，所以撤销——退出某台设备、退出其他所有设备、修改密码、管理员重置密码、退出登录——对已发出的 Cookie 立即生效。确认结果缓存 1 分钟；多实例部署未配 Redis 时，其他实例上的撤销至多滞后这么久。
+<!--#if (OpenIddictServer)-->
+- 自签发的访问令牌不在会话撤销的范围内，按有效期自然失效。
+<!--#endif-->
+<!--#endif-->
 - 所有需要用户身份的接口必须校验认证状态。
 - 认证失败统一返回 401，不暴露内部认证细节。
 

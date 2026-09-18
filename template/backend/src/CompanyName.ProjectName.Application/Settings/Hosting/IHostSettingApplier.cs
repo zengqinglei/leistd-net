@@ -12,8 +12,8 @@ namespace CompanyName.ProjectName.Application.Settings.Hosting;
 /// 应用层只声明契约，不知道被应用到了什么东西上。
 /// </para>
 /// <para>
-/// 两处会调它：写入设置成功之后（本进程立即生效），以及后台的周期刷新
-/// （其它实例跟上——设置行是共享的，而进程内状态不是）。
+/// 三处会调它：宿主开始接收请求之前（把库里的值接上来）、写入设置的事务提交之后（本进程立即生效），
+/// 以及后台的周期刷新（其它实例跟上——设置行是共享的，而进程内状态不是）。
 /// </para>
 /// </remarks>
 public interface IHostSettingApplier

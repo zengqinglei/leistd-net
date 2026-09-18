@@ -2,8 +2,12 @@
 using CompanyName.ProjectName.Application.Auth.Dtos;
 #endif
 using CompanyName.ProjectName.Application.Roles.Dtos;
+using CompanyName.ProjectName.Application.Users.Avatars;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
+#endif
 using Leistd.ObjectMapping.Mapster;
 using Mapster;
 using Leistd.ObjectMapping.Mapster.Mapping;
@@ -23,6 +27,10 @@ public class UserProfile : MapsterProfile
     /// 传本键即可绕开回查——调用方本来就知道它刚分配了哪些角色。
     /// </remarks>
     public const string RoleNamesKey = "RoleNames";
+
+    /// <summary>MapContext 参数名：当前时刻，用来判定锁定是否仍在生效。</summary>
+    /// <remarks>过期的临时锁定在库里仍是 <c>IsLocked</c>（下次登录失败或成功时才清），只看字段会误报"已锁定"。</remarks>
+    public const string NowKey = "Now";
 #endif
 
     /// <summary>MapContext 参数名：用户角色关联行。</summary>
@@ -36,12 +44,20 @@ public class UserProfile : MapsterProfile
 #if (LocalIdentity)
         CreateMap<User, UserOutputDto>()
             .Map(dest => dest.Roles, src => ResolveRoles(src))
+            .Map(dest => dest.Avatar, src => AvatarUrls.For(src.Id, src.Avatar))
+            .Map(dest => dest.IsEmailVerified, src => src.EmailConfirmed)
+            .Map(dest => dest.IsTwoFactorEnabled, src => src.TwoFactorEnabled)
+            .Ignore(dest => dest.TwoFactorSetupRequired)
             ;
 #endif
 
         CreateMap<User, UserManagementOutputDto>()
+            .Map(dest => dest.Avatar, src => AvatarUrls.For(src.Id, src.Avatar))
 #if (LocalIdentity)
             .Map(dest => dest.IsEmailVerified, src => src.EmailConfirmed)
+            .Map(dest => dest.IsLockedOut, src => ResolveIsLockedOut(src))
+            .Map(dest => dest.LockoutEnd, src => ResolveIsLockedOut(src) ? src.LockoutEnd : null)
+            .Map(dest => dest.IsTwoFactorEnabled, src => src.TwoFactorEnabled)
 #endif
             .Map(dest => dest.Roles, src => ResolveRoleBriefs(src))
             ;
@@ -58,6 +74,17 @@ public class UserProfile : MapsterProfile
         }
 
         return [.. ResolveRoleEntities(source).Select(role => role.Name)];
+    }
+
+    // 调用方没给时刻时按库里的字段报：宁可多报一个已过期的锁定，也不要漏报一个生效中的
+    private static bool ResolveIsLockedOut(User source)
+    {
+        if (MapContext.Current?.Parameters.TryGetValue(NowKey, out var nowObj) == true && nowObj is DateTime now)
+        {
+            return source.GetAccessStatus(now) == UserAccessStatus.LockedOut;
+        }
+
+        return source.IsLocked;
     }
 #endif
 

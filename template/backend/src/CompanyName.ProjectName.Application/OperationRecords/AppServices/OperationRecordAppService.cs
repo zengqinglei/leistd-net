@@ -10,6 +10,9 @@ using Leistd.MultiTenancy.Abstractions;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.Security.Users;
 using Leistd.Timing;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.OperationRecords.Mappings;
+using Leistd.ObjectMapping.Abstractions;
 
 namespace CompanyName.ProjectName.Application.OperationRecords.AppServices;
 
@@ -27,6 +30,7 @@ public class OperationRecordAppService(
     ICurrentTenant currentTenant,
     ICurrentUser currentUser,
     IOperationRecorder operationRecorder,
+    IObjectMapper objectMapper,
     IClock clock) : BaseAppService, IOperationRecordAppService
 {
     /// <inheritdoc />
@@ -76,7 +80,7 @@ public class OperationRecordAppService(
 
         return new PagedResultDto<OperationRecordOutputDto>(
             page.TotalCount,
-            [.. page.Items.Select(info => OperationRecordOutputDto.FromInfo(info, isHostReader))]);
+            MapRecords(page.Items, isHostReader));
     }
 
     /// <inheritdoc />
@@ -95,12 +99,7 @@ public class OperationRecordAppService(
             Categories = [.. visible.Select(definition => definition.Category).Distinct(StringComparer.Ordinal)],
             Actions =
             [
-                .. visible.Select(definition => new OperationActionOptionDto
-                {
-                    Code = definition.Code,
-                    Category = definition.Category,
-                    Severity = definition.Severity.ToString(),
-                })
+                .. visible.Select(definition => objectMapper.Map<IOperationActionDefinition, OperationActionOptionDto>(definition))
             ],
         };
     }
@@ -134,8 +133,8 @@ public class OperationRecordAppService(
                 outcome: ParseOutcome(input.Outcome),
                 cancellationToken: cancellationToken);
 
-            // 经 FromInfo 转换，字段级裁剪自动继承：租户读者的技术详情与链路标识恒为空。
-            rows = [.. page.Items.Select(info => OperationRecordOutputDto.FromInfo(info, isHostReader))];
+            // 与列表同一个映射，字段级裁剪自动继承：租户读者的技术详情与链路标识恒为空。
+            rows = MapRecords(page.Items, isHostReader);
         }
 
         var content = BuildCsv(rows, isHostReader);
@@ -303,5 +302,12 @@ public class OperationRecordAppService(
         var isHostReader = currentTenant.Id is null;
         return actionDefinitions.GetAll()
             .Where(definition => isHostReader || definition.Visibility != OperationVisibility.Host);
+    }
+
+    // 宿主读者才看得到技术详情与链路标识，裁剪在映射里（见 OperationRecordProfile）
+    private List<OperationRecordOutputDto> MapRecords(IReadOnlyList<OperationRecordInfo> records, bool isHostReader)
+    {
+        var context = new Dictionary<string, object> { [OperationRecordProfile.IncludeHostOnlyFieldsKey] = isHostReader };
+        return [.. records.Select(record => objectMapper.Map<OperationRecordInfo, OperationRecordOutputDto>(record, context))];
     }
 }

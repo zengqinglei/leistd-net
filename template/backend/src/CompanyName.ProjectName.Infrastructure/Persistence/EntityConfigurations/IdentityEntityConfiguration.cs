@@ -1,7 +1,5 @@
 #if (LocalIdentity)
-#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
-#endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +13,7 @@ internal static class IdentityEntityConfiguration
         builder.ConfigureUserIdentity();
         builder.ConfigureRoles();
         builder.ConfigureUserRoles();
+        builder.ConfigureUserSessions();
 #if (ExternalLogin)
         builder.ConfigureExternalLoginConnections();
 #endif
@@ -27,6 +26,9 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.PasswordHash).HasMaxLength(256);
             b.Property(e => e.PhoneNumber).HasMaxLength(32);
             b.Property(e => e.LastLoginIp).HasMaxLength(45);
+            b.Property(e => e.TwoFactorSecret).HasMaxLength(512);
+            // 十个 SHA-256 十六进制摘要加分隔符
+            b.Property(e => e.TwoFactorRecoveryCodes).HasMaxLength(1024);
         });
     }
 
@@ -52,6 +54,23 @@ internal static class IdentityEntityConfiguration
         });
     }
 
+    private static void ConfigureUserSessions(this ModelBuilder builder)
+    {
+        builder.Entity<UserSession>(b =>
+        {
+            b.ConfigureByConvention();
+
+            b.Property(e => e.IpAddress).HasMaxLength(UserSession.IpAddressMaxLength);
+            b.Property(e => e.UserAgent).HasMaxLength(UserSession.UserAgentMaxLength);
+            b.Property(e => e.ImpersonatorName).HasMaxLength(UserSession.ImpersonatorNameMaxLength);
+
+            b.HasIndex(e => e.UserId);
+
+            // 会话没有独立于用户的意义：用户行被物理删除时一并删除
+            b.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
 #if (ExternalLogin)
     private static void ConfigureExternalLoginConnections(this ModelBuilder builder)
     {
@@ -69,14 +88,15 @@ internal static class IdentityEntityConfiguration
 
             // 租户内唯一：同一外部身份可在不同租户各自绑定。
             // 宿主行（TenantId 为 NULL）在 PostgreSQL/SQLite 中 NULL 互不相等，
-            // 用带过滤的成对索引分别约束，避免宿主侧失去唯一性兜底
+            // 用带过滤的成对索引分别约束，避免宿主侧失去唯一性兜底。
+            // 只约束未删除的行：解绑是软删除，留着的旧行不能挡住同一外部账号重新绑定
             b.HasIndex(e => new { e.Provider, e.ProviderUserId })
                 .IsUnique()
-                .HasFilter($"\"{nameof(ExternalLoginConnection.TenantId)}\" IS NULL");
+                .HasFilter($"\"{nameof(ExternalLoginConnection.TenantId)}\" IS NULL AND NOT \"{nameof(ExternalLoginConnection.IsDeleted)}\"");
 
             b.HasIndex(e => new { e.TenantId, e.Provider, e.ProviderUserId })
                 .IsUnique()
-                .HasFilter($"\"{nameof(ExternalLoginConnection.TenantId)}\" IS NOT NULL");
+                .HasFilter($"\"{nameof(ExternalLoginConnection.TenantId)}\" IS NOT NULL AND NOT \"{nameof(ExternalLoginConnection.IsDeleted)}\"");
             b.HasIndex(e => e.UserId);
 
             b.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);

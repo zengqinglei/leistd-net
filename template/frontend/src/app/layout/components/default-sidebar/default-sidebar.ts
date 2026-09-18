@@ -92,9 +92,9 @@ export class DefaultSidebar {
       label: 'layout.sidebar.groupWork',
       items: [{ label: 'layout.sidebar.dashboard', icon: 'lucideGauge', route: '/platform' }],
     },
-    // 管理侧的业务菜单加在这里（工作之后、系统之前）：管理员先看业务，再管系统与运维。
+    // 管理侧的业务菜单加在这里（工作之后、身份与访问之前）：管理员先看业务，再管人和系统。
     {
-      label: 'layout.sidebar.groupSystem',
+      label: 'layout.sidebar.groupIdentity',
       items: [
         {
           label: 'layout.sidebar.users',
@@ -132,23 +132,28 @@ export class DefaultSidebar {
       ],
     },
     //#endif
+    // 审计：谁在什么时候做了什么。读者是排查问题和对账的人，不是改配置的人。
     {
-      label: 'layout.sidebar.groupOperations',
+      label: 'layout.sidebar.groupAudit',
       items: [
-        // 这里是**系统配置**（租户级默认值），按 App.Settings 裁剪。个人偏好不在主导航，
-        // 在头像菜单里——两者作用域不同，混在一个入口容易把私人偏好当成全租户默认值改。
-        {
-          label: 'layout.sidebar.systemSettings',
-          icon: 'lucideSettings',
-          route: '/platform/settings',
-          permissions: [PERMISSIONS.settings.default],
-        },
-        // 审计属运维：读者是排查问题和对账的人，不是改配置的人。
         {
           label: 'layout.sidebar.operationRecords',
           icon: 'lucideDatabase',
           route: '/platform/operation-records',
           permissions: [PERMISSIONS.operationRecords.default],
+        },
+      ],
+    },
+    // 系统设置是本租户（或宿主）的默认值与策略，按 App.Settings 裁剪；
+    // 个人设置不在这里，在工作空间的「个人」组——两者作用域不同，混在一处容易把私人偏好当成全租户默认值改。
+    {
+      label: 'layout.sidebar.groupSystem',
+      items: [
+        {
+          label: 'layout.sidebar.systemSettings',
+          icon: 'lucideSettings',
+          route: '/platform/settings',
+          permissions: [PERMISSIONS.settings.default],
         },
       ],
     },
@@ -173,6 +178,14 @@ export class DefaultSidebar {
         },
       ],
     },
+    // 关于"我自己"的：个人资料、账户安全、偏好、通知。每个登录用户都有，所以放在工作空间；
+    // 管理人员也是用户，从头像菜单进同一处，管理平台不另放一份。
+    {
+      label: 'layout.sidebar.groupPersonal',
+      items: [
+        { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
+      ],
+    },
   ];
 
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -183,9 +196,9 @@ export class DefaultSidebar {
       label: 'Work',
       items: [{ label: 'Dashboard', icon: 'lucideGauge', route: '/platform' }],
     },
-    // 管理侧的业务菜单加在这里（工作之后、系统之前）：管理员先看业务，再管系统与运维。
+    // 管理侧的业务菜单加在这里（工作之后、身份与访问之前）：管理员先看业务，再管人和系统。
     {
-      label: 'System',
+      label: 'Identity & access',
       items: [
         {
           label: 'User Management',
@@ -223,23 +236,27 @@ export class DefaultSidebar {
       ],
     },
     //#endif
+    // 审计：谁在什么时候做了什么。读者是排查问题和对账的人，不是改配置的人。
     {
-      label: 'Operations',
+      label: 'Audit',
       items: [
-        // 这里是**系统配置**（租户级默认值），按 App.Settings 裁剪。个人偏好不在主导航，
-        // 在头像菜单里——两者作用域不同，混在一个入口容易把私人偏好当成全租户默认值改。
-        {
-          label: 'System settings',
-          icon: 'lucideSettings',
-          route: '/platform/settings',
-          permissions: [PERMISSIONS.settings.default],
-        },
-        // 审计属运维：读者是排查问题和对账的人，不是改配置的人。
         {
           label: 'Operation records',
           icon: 'lucideDatabase',
           route: '/platform/operation-records',
           permissions: [PERMISSIONS.operationRecords.default],
+        },
+      ],
+    },
+    // 系统设置是本租户（或宿主）的默认值与策略；个人设置在工作空间的「个人」组。
+    {
+      label: 'System',
+      items: [
+        {
+          label: 'System settings',
+          icon: 'lucideSettings',
+          route: '/platform/settings',
+          permissions: [PERMISSIONS.settings.default],
         },
       ],
     },
@@ -255,6 +272,11 @@ export class DefaultSidebar {
       // 分组本身与判据留着，新入口就不必再重新想一遍该摆哪。
       label: 'Business',
       items: [{ label: 'Example module', icon: 'lucideLayers', route: '/workspace/placeholder' }],
+    },
+    // 关于"我自己"的：个人资料、账户安全、偏好、通知。管理人员也从头像菜单进同一处。
+    {
+      label: 'Personal',
+      items: [{ label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' }],
     },
   ];
   //#endif

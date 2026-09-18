@@ -2,6 +2,7 @@
 using CompanyName.ProjectName.Application.Permissions.Provider;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections;
+using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 using CompanyName.ProjectName.Application.TenantConnections.AppServices;
 using CompanyName.ProjectName.Application.TenantConnections.Dtos;

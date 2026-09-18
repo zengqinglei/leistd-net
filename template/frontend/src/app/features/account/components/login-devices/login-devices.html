@@ -1,0 +1,84 @@
+<section
+  class="border-border flex flex-col gap-4 rounded-lg border p-4 sm:p-6"
+  data-testid="security-sessions"
+>
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div class="flex flex-col gap-1">
+      <h3 class="text-base leading-none font-semibold">{{ t('account.sessions.header') }}</h3>
+      <p class="text-muted-foreground text-sm">{{ t('account.sessions.subtitle') }}</p>
+    </div>
+    @if (hasOthers()) {
+      <button
+        hlmBtn
+        variant="outline"
+        size="sm"
+        class="shrink-0 self-start"
+        data-testid="revoke-other-sessions"
+        [disabled]="busy() !== null"
+        (click)="revokeOthers()"
+      >
+        @if (othersBusy()) {
+          <hlm-spinner class="text-base" data-icon="inline-start" />
+        } @else {
+          <ng-icon name="lucideLogOut" data-icon="inline-start" />
+        }
+        {{ t('account.sessions.revokeOthers') }}
+      </button>
+    }
+  </header>
+
+  @if (loadFailed()) {
+    <div class="flex items-center gap-3 text-sm">
+      <span class="text-muted-foreground">{{ t('account.sessions.loadFailed') }}</span>
+      <button hlmBtn variant="link" size="sm" class="px-0" (click)="reload()">
+        {{ t('common.retry') }}
+      </button>
+    </div>
+  } @else if (sessions() === null) {
+    <div class="flex justify-center py-6">
+      <hlm-spinner class="text-muted-foreground text-xl" />
+    </div>
+  } @else {
+    <ul class="border-border divide-border divide-y rounded-md border">
+      @for (row of rows(); track row.id) {
+        <li class="flex items-center gap-3 p-3" data-testid="session-row">
+          <div
+            class="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-md"
+          >
+            <ng-icon [name]="row.icon" />
+          </div>
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="truncate text-sm font-medium">{{ row.title }}</span>
+              @if (row.isCurrent) {
+                <span hlmBadge variant="secondary" data-testid="current-session">{{
+                  t('account.sessions.current')
+                }}</span>
+              }
+            </div>
+            <p class="text-muted-foreground text-xs break-words">{{ row.detail }}</p>
+            @if (row.impersonation) {
+              <p class="text-muted-foreground text-xs italic">{{ row.impersonation }}</p>
+            }
+          </div>
+          @if (!row.isCurrent) {
+            <button
+              hlmBtn
+              variant="ghost"
+              size="sm"
+              class="shrink-0"
+              data-testid="revoke-session"
+              [disabled]="busy() !== null"
+              (click)="revoke(row.id)"
+            >
+              @if (busy() === row.id) {
+                <hlm-spinner class="text-base" data-icon="inline-start" />
+              }
+              {{ t('account.sessions.revoke') }}
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>

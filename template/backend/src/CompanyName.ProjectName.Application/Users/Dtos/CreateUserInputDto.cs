@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Domain.Users.Passwords;
+using CompanyName.ProjectName.Domain.Users.Policies;
 #endif
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;

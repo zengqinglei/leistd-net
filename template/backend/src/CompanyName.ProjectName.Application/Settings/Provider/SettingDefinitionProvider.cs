@@ -2,7 +2,6 @@ using System.Globalization;
 using CompanyName.ProjectName.Application.Settings.Hosting;
 using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
-using Microsoft.Extensions.Configuration;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Options;
 using Microsoft.Extensions.Options;
@@ -24,9 +23,9 @@ namespace CompanyName.ProjectName.Application.Settings.Provider;
 /// 本地化项目按 <c>Setting:{name}</c> 查词条翻译，查不到才回落到这里的文案——
 /// 键由名称推导，不必在定义里再抄一遍。</para>
 /// </remarks>
-/// <param name="configuration">
-/// 部署配置：日志类设置的代码默认值取自它（见 <see cref="LoggingBaseline"/>），
-/// 清除覆盖值即回落到部署基线，而不是回落到一个写死的级别。
+/// <param name="hostDefaults">
+/// 覆盖部署配置的宿主级设置（日志级别、审计、发信参数）的部署基线，这些设置的代码默认值取自它
+/// （见 <see cref="HostSettingDefaults"/>）：清除覆盖值即回落到部署配置，而不是回落到一个写死的值。
 /// </param>
 #if (LocalIdentity)
 /// <param name="registrationOptions">
@@ -34,11 +33,11 @@ namespace CompanyName.ProjectName.Application.Settings.Provider;
 /// 部署期唯一的真相，设置表只承载租户级覆盖。
 /// </param>
 public class SettingDefinitionProvider(
-    IConfiguration configuration,
+    HostSettingDefaults hostDefaults,
     IOptions<UserRegistrationOptions> registrationOptions) : ISettingDefinitionProvider
 {
 #else
-public class SettingDefinitionProvider(IConfiguration configuration) : ISettingDefinitionProvider
+public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISettingDefinitionProvider
 {
 #endif
     /// <inheritdoc />
@@ -77,23 +76,37 @@ public class SettingDefinitionProvider(IConfiguration configuration) : ISettingD
         // 默认值取部署基线（Serilog 配置节），与注册策略取 appsettings 是同一个口径：
         // 配置给基线、设置表给运行期覆盖。写死成 Information 的话，部署把级别配成
         // Warning 也会被顶掉，而清除覆盖值同样回不到部署基线。
-        var loggingBaseline = LoggingBaseline.From(configuration);
-
         context.Add(
             SettingConstant.Logging.MinimumLevel,
-            defaultValue: loggingBaseline.MinimumLevel,
+            defaultValue: hostDefaults.Get(SettingConstant.Logging.MinimumLevel),
             scopes: SettingScopes.Host,
             displayName: "Minimum log level",
-            group: SettingConstant.Groups.Logging).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Operations).IsVisibleToClients = true;
 
         // 正常完成的请求记成哪一级。调到 Verbose 就等于关掉请求日志——
         // 全局最小级别通常是 Information，Verbose 的记录不会落盘。
         context.Add(
             SettingConstant.Logging.RequestLevel,
-            defaultValue: loggingBaseline.RequestLevel,
+            defaultValue: hostDefaults.Get(SettingConstant.Logging.RequestLevel),
             scopes: SettingScopes.Host,
             displayName: "Request log level",
-            group: SettingConstant.Groups.Logging).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Operations).IsVisibleToClients = true;
+
+        // 操作记录保留期同样是进程级：归档任务跨租户统一执行。默认值取部署基线，
+        // 部署没打开时这里也是关——一个默认就会动审计数据的开关不该由代码替部署决定。
+        context.Add(
+            SettingConstant.Audit.RetentionEnabled,
+            defaultValue: hostDefaults.Get(SettingConstant.Audit.RetentionEnabled),
+            scopes: SettingScopes.Host,
+            displayName: "Archive expired operation records",
+            group: SettingConstant.Groups.Audit).IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Audit.RetentionDays,
+            defaultValue: hostDefaults.Get(SettingConstant.Audit.RetentionDays),
+            scopes: SettingScopes.Host,
+            displayName: "Operation record retention (days)",
+            group: SettingConstant.Groups.Audit).IsVisibleToClients = true;
 #if (LocalIdentity)
 
         // 注册策略按租户：同一套部署下，不同租户可以有不同的注册门槛。
@@ -134,6 +147,77 @@ public class SettingDefinitionProvider(IConfiguration configuration) : ISettingD
             scopes: SettingScopes.Tenant,
             displayName: "Email code max attempts",
             group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+
+        // 登录失败锁定按租户：对外开放注册的租户与只有内部员工的租户，能接受的门槛不同。
+        context.Add(
+            SettingConstant.Security.LockoutMaxFailedAttempts,
+            defaultValue: SettingConstant.Security.DefaultLockoutMaxFailedAttempts.ToString(CultureInfo.InvariantCulture),
+            scopes: SettingScopes.Tenant,
+            displayName: "Lock the account after this many failed sign-ins (0 = never)",
+            group: SettingConstant.Groups.Security).IsVisibleToClients = true;
+
+        context.Add(
+            SettingConstant.Security.LockoutDurationMinutes,
+            defaultValue: SettingConstant.Security.DefaultLockoutDurationMinutes.ToString(CultureInfo.InvariantCulture),
+            scopes: SettingScopes.Tenant,
+            displayName: "Lockout duration (minutes)",
+            group: SettingConstant.Groups.Security).IsVisibleToClients = true;
+
+        // 开启后，没启用两步验证的人登录只拿到受限会话，必须先完成设置才能做别的事。
+        // 默认关闭：打开它会让所有尚未设置的人下次登录时被拦下，这得是管理员有意的决定
+        context.Add(
+            SettingConstant.Security.RequireTwoFactor,
+            defaultValue: "false",
+            scopes: SettingScopes.Tenant,
+            displayName: "Require two-factor authentication for everyone",
+            group: SettingConstant.Groups.Security).IsVisibleToClients = true;
+
+        // 发信参数是进程级的：整个部署共用一个发信通道。默认值取部署基线，与日志级别同一口径
+        AddEmail(context, SettingConstant.Email.SmtpHost, "SMTP host");
+        AddEmail(context, SettingConstant.Email.SmtpPort, "SMTP port");
+        AddEmail(context, SettingConstant.Email.SmtpEnableSsl, "Use TLS");
+        AddEmail(context, SettingConstant.Email.SmtpUsername, "SMTP username");
+        // 口令是机密设置：加密落库，界面只写不读；没有默认值，未设置时发信端用配置里的口令
+        AddEmail(context, SettingConstant.Email.SmtpPassword, "SMTP password").IsEncrypted = true;
+        AddEmail(context, SettingConstant.Email.DefaultFromAddress, "Sender address");
+        AddEmail(context, SettingConstant.Email.DefaultFromName, "Sender name");
+#if (IncludeNotifications)
+
+        // 通知偏好是个人的：谁收什么由本人决定，不设租户默认值
+        AddNotificationPreference(context, SettingConstant.Notifications.SecurityEmail, true, "Security alerts by email");
+        AddNotificationPreference(context, SettingConstant.Notifications.SystemInApp, true, "System notifications in the app");
+        AddNotificationPreference(context, SettingConstant.Notifications.SystemEmail, false, "System notifications by email");
+#endif
 #endif
     }
+#if (LocalIdentity)
+
+#if (IncludeNotifications)
+    private static void AddNotificationPreference(
+        ISettingDefinitionContext context,
+        string name,
+        bool defaultValue,
+        string displayName)
+    {
+        context.Add(
+            name,
+            defaultValue ? "true" : "false",
+            SettingScopes.User,
+            displayName,
+            SettingConstant.Groups.Notifications).IsVisibleToClients = true;
+    }
+
+#endif
+    private ISettingDefinition AddEmail(ISettingDefinitionContext context, string name, string displayName)
+    {
+        var definition = context.Add(
+            name,
+            hostDefaults.Get(name),
+            SettingScopes.Host,
+            displayName,
+            SettingConstant.Groups.Email);
+        definition.IsVisibleToClients = true;
+        return definition;
+    }
+#endif
 }

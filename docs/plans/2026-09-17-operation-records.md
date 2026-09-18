@@ -154,7 +154,7 @@
 > 三项查证结果：
 > - **后端无导出先例**：全仓无 `FileContentResult`/`FileStreamResult`/`text/csv`；控制器里的 `IActionResult` 只出现在 OpenIddict 协议端点。
 > - **前端无下载先例**：无 `Blob`/`createObjectURL`/`responseType: 'blob'`（唯一命中的 `responseType: 'code'` 是 OAuth 参数）。
-> - **无后台任务基础设施**：框架无 job/queue 组件；模板的三个 `IHostedService` 全是启动期初始化器（`ApplicationBootstrapper`、`RemoteIdentityReadinessInitializer`、`HostSettingRefresher`），不是任务队列。
+> - **无后台任务基础设施**：框架无 job/queue 组件；模板的三个 `IHostedService` 全是启动期初始化器（`ApplicationInitializer`、`RemoteIdentityReadinessInitializer`、`HostSettingRefreshJob`），不是任务队列。
 >
 > 所以「**异步生成 + 下载链接**」要额外引入：任务队列 + 产物存储 + 过期清理 + 状态查询端点。**那是一个独立子系统，量级超过任务 1–6 之和**，不该塞在一个复选框里。
 >
@@ -208,7 +208,7 @@
     **刻意不照抄参考项目的 `CreateUnbounded`**：操作记录写入量与请求量同阶，无界队列只会把
     「生产快于消费」推迟到内存耗尽才暴露。每项独立 try/catch（`ExecuteAsync` 一旦抛出就不再被调度，
     一个坏工作项会让整个队列永久停摆）。
-  - `BackgroundServices/OperationRecordArchiveBackgroundService.cs`：每日定时，算到下一个固定时刻而非固定间隔
+  - `BackgroundServices/OperationRecordArchiveJob.cs`：每日定时，算到下一个固定时刻而非固定间隔
     （固定间隔会让「凌晨跑」随重启逐渐漂移到业务高峰）。
   - `Infrastructure/OperationRecords/`：归档实体 + 服务，**方案 B 搬历史表**。
 - [x] **归档不碰框架的不变量**：`IOperationRecordStore` 注释明写「没有更新与删除……保留策略属于运维范畴」，

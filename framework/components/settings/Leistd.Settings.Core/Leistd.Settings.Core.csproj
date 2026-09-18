@@ -12,4 +12,9 @@
     <ProjectReference Include="..\..\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 机密设置的默认加解密：只引用抽象，密钥环由宿主的 AddDataProtection 提供 -->
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" />
+  </ItemGroup>
+
 </Project>

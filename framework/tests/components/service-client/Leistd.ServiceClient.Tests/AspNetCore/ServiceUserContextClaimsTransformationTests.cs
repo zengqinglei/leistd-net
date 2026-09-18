@@ -77,7 +77,7 @@ public class ServiceUserContextClaimsTransformationTests
     }
 
     [Fact]
-    public async Task 受信服务主体_认证阶段即恢复用户为主身份()
+    public async Task Trusted_service_principal_restores_the_user_during_authentication()
     {
         var result = await TransformAsync(ServiceClientPrincipal(), AddUserHeaders);
 
@@ -88,7 +88,7 @@ public class ServiceUserContextClaimsTransformationTests
     }
 
     [Fact]
-    public async Task 已恢复过的主体_幂等原样返回()
+    public async Task Already_restored_principal_is_returned_unchanged()
     {
         var first = await TransformAsync(ServiceClientPrincipal(), AddUserHeaders);
 
@@ -98,7 +98,7 @@ public class ServiceUserContextClaimsTransformationTests
     }
 
     [Fact]
-    public async Task 非服务主体_不做任何处理()
+    public async Task Non_service_principal_is_left_alone()
     {
         var userToken = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim("sub", Guid.NewGuid().ToString()), new Claim("client_id", "web-app")],
@@ -110,7 +110,7 @@ public class ServiceUserContextClaimsTransformationTests
     }
 
     [Fact]
-    public async Task 无HTTP上下文_原样返回()
+    public async Task Missing_http_context_returns_the_principal_unchanged()
     {
         var principal = ServiceClientPrincipal();
 
@@ -120,7 +120,7 @@ public class ServiceUserContextClaimsTransformationTests
     }
 
     [Fact]
-    public async Task 无用户头_原样返回()
+    public async Task Missing_user_header_returns_the_principal_unchanged()
     {
         var principal = ServiceClientPrincipal();
 
@@ -130,7 +130,7 @@ public class ServiceUserContextClaimsTransformationTests
     }
 
     [Fact]
-    public async Task 整体关闭_原样返回()
+    public async Task Disabled_feature_returns_the_principal_unchanged()
     {
         var principal = ServiceClientPrincipal();
 

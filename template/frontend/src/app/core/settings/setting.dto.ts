@@ -25,10 +25,19 @@ export interface SettingOutputDto {
    * 后端在租户上下文下根本不下发这类设置——改不了也不适用于该租户。
    */
   allowsHostScope: boolean;
-  /** 数值型设置的下界；非数值型为 `null`。值域仍以服务端为准，这里只用于渲染合适的控件。 */
-  minimum: number | null;
-  /** 数值型设置的上界；非数值型为 `null`。 */
-  maximum: number | null;
+  /**
+   * 数值型设置的下界；非数值型不带这个字段（服务端省掉值为 null 的属性）。
+   * 值域仍以服务端为准，这里只用于渲染合适的控件。
+   */
+  minimum?: number | null;
+  /** 数值型设置的上界；非数值型不带这个字段。 */
+  maximum?: number | null;
+  /** 布尔型设置：值只能是 `'true'` / `'false'`，渲染成开关。 */
+  isBoolean?: boolean;
+  /** 机密设置（加密落库）：各层的值都不下发，渲染成只写的口令框。 */
+  isSecret?: boolean;
+  /** 机密设置在可写的那一层是否已经设过值。 */
+  hasSecretValue?: boolean;
 }
 
 /** 写入一项设置；`value` 为 null 表示清除该层级，回落到下一层。 */

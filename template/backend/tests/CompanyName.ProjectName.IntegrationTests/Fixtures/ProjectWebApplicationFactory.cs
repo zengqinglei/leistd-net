@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using CompanyName.ProjectName.Api.Extensions;
 #if (RemoteTokenAuth)
+using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
 #endif
 using Microsoft.AspNetCore.Hosting;
@@ -22,6 +22,7 @@ using Microsoft.Extensions.Options;
 using Leistd.MultiTenancy;
 using Leistd.Data;
 using Leistd.Data.Abstractions;
+using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -75,7 +76,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             // 测试宿主里没有真实 Identity，启动探针永远探不通。这里直接把门禁置为已开：
             // 其它用例要测的是业务端点，不是"等 Identity 就绪"这件事。
             // 门禁本身的语义（未确认前拒绝流量、确认后锁存）由 ResourceReadinessGateTests 单独钉住
-            // 只摘这一个托管服务：RemoveAll<IHostedService>() 会把 ApplicationBootstrapper
+            // 只摘这一个托管服务：RemoveAll<IHostedService>() 会把 ApplicationInitializer
             // 一起摘掉，那是其它用例赖以初始化的东西
             var probe = services.SingleOrDefault(descriptor =>
                 descriptor.ServiceType == typeof(IHostedService) &&
@@ -85,7 +86,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 services.Remove(probe);
             }
 
-            var openedGate = new RemoteIdentityReadinessGate();
+            var openedGate = new RemoteIdentityReadinessHealthCheck();
             openedGate.MarkReady();
             services.AddSingleton(openedGate);
 #endif

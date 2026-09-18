@@ -1,6 +1,7 @@
 using Leistd.Timing;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Filters;
 using Microsoft.Extensions.Logging;
 
 namespace Leistd.Notifications.Services;
@@ -10,11 +11,13 @@ namespace Leistd.Notifications.Services;
 /// </summary>
 /// <remarks>
 /// 必须注册一个权威存储；可注册多个投递渠道。存储失败终止发布，渠道失败相互隔离。
+/// 每个渠道投不投由 <see cref="INotificationDeliveryFilter"/> 决定，站内渠道同时决定是否落库。
 /// </remarks>
 public class NotificationPublisher(
     IClock clock,
     IEnumerable<INotificationChannel> channels,
     INotificationStore store,
+    INotificationDeliveryFilter filter,
     ILogger<NotificationPublisher> logger) : INotificationPublisher
 {
     /// <inheritdoc />
@@ -36,12 +39,26 @@ public class NotificationPublisher(
             Metadata = notification.Metadata
         };
 
+        // 站内是历史与实时推送共同的开关：不投站内，就既不落库也不推送
+        var inApp = await filter.ShouldDeliverAsync(userId, userNotification, INotificationChannel.InAppName, ct);
+
         // 先保存，再投递同一记录，确保客户端可用推送中的 ID 查询或标记已读。
-        await store.SaveAsync(userNotification, userId, ct);
+        if (inApp)
+        {
+            await store.SaveAsync(userNotification, userId, ct);
+        }
 
         // 隔离渠道故障，但不吞掉调用方的取消。
         foreach (var channel in channels)
         {
+            var allowed = channel.Name == INotificationChannel.InAppName
+                ? inApp
+                : await filter.ShouldDeliverAsync(userId, userNotification, channel.Name, ct);
+            if (!allowed)
+            {
+                continue;
+            }
+
             try
             {
                 await channel.DeliverAsync(userId, userNotification, ct);

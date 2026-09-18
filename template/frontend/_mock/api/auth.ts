@@ -6,6 +6,12 @@ import {
   CaptchaOutputDto,
   SendEmailCodeInputDto,
   EmailVerificationChallengeOutputDto,
+  EmailVerificationInputDto,
+  SetAvatarInputDto,
+  UserSessionOutputDto,
+  TwoFactorRecoveryCodesOutputDto,
+  TwoFactorSetupOutputDto,
+  TwoFactorStatusOutputDto,
 } from '../../src/app/features/account/models/account.dto';
 import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
 import { MockException, MockRequest } from '../core/models';
@@ -30,7 +36,7 @@ const EMAIL_CODE_MAX_ATTEMPTS = 5;
 
 interface EmailVerificationChallenge {
   scope: string;
-  purpose: 'registration-email';
+  purpose: 'registration-email' | 'account-email';
   email: string;
   code: string;
   expiresAt: number;
@@ -122,12 +128,70 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
   ensureUsernameAvailable(username, user.id);
   ensureEmailAvailable(email, user.id);
 
+  // 换了邮箱即回到未验证，与后端 User.UpdateProfile 同一规则
+  if (normalizeEmail(user.email) !== normalizeEmail(email)) {
+    user.isEmailVerified = false;
+  }
+
   user.username = username;
   user.email = email;
   user.displayName = body.displayName?.trim() || undefined;
   user.phoneNumber = body.phoneNumber?.trim() || undefined;
-  user.avatar = body.avatar?.trim() || undefined;
 
+  return toUserOutput(user);
+}
+
+function setCurrentUserAvatar(req: MockRequest): UserOutputDto {
+  const user = requireCurrentMockUser();
+  const body = req.body as SetAvatarInputDto;
+  user.avatar = body.avatar?.trim() || undefined;
+  return toUserOutput(user);
+}
+
+function sendCurrentUserEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
+  const user = requireCurrentMockUser();
+  if (user.isEmailVerified) {
+    throw new MockException(400, {
+      code: 'Auth:EmailAlreadyVerified',
+      message: 'This email address has already been verified.',
+    });
+  }
+
+  const challengeId = crypto.randomUUID();
+  emailChallengeStore.set(challengeId, {
+    scope: getRequestScope(req),
+    purpose: 'account-email',
+    email: normalizeEmail(user.email),
+    code: EMAIL_CODE,
+    expiresAt: Date.now() + EMAIL_CODE_EXPIRY_SECONDS * 1000,
+    remainingAttempts: EMAIL_CODE_MAX_ATTEMPTS,
+  });
+
+  return {
+    challengeId,
+    expiresInSeconds: EMAIL_CODE_EXPIRY_SECONDS,
+    retryAfterSeconds: EMAIL_CODE_RETRY_SECONDS,
+  };
+}
+
+function confirmCurrentUserEmail(req: MockRequest): UserOutputDto {
+  const user = requireCurrentMockUser();
+  const body = req.body as EmailVerificationInputDto;
+  const challenge = emailChallengeStore.get(body.challengeId);
+  if (
+    !challenge ||
+    challenge.purpose !== 'account-email' ||
+    challenge.email !== normalizeEmail(user.email) ||
+    challenge.code !== body.code.trim()
+  ) {
+    throw new MockException(400, {
+      code: 'Auth:EmailCodeInvalid',
+      message: 'The email verification code is incorrect or has expired.',
+    });
+  }
+
+  emailChallengeStore.delete(body.challengeId);
+  user.isEmailVerified = true;
   return toUserOutput(user);
 }
 
@@ -159,7 +223,134 @@ function changePassword(req: MockRequest): 'ok' {
   ensureAcceptablePassword(body.newPassword, 'New password');
 
   user.password = body.newPassword;
+  // 与服务端一致：改密码后其他设备退出登录
+  mockSessions = mockSessions.filter((s) => s.isCurrent);
   return 'ok';
+}
+
+/**
+ * 当前会话之外预置两台"别的设备"，让登录设备一节在 mock 下有内容可看、可撤销。
+ * 模块级状态：撤销后在本次页面生命周期内保持，刷新即复原。
+ */
+const MOCK_SESSION_NOW = Date.now();
+let mockSessions: UserSessionOutputDto[] = [
+  {
+    id: 'mock-session-current',
+    creationTime: new Date(MOCK_SESSION_NOW - 2 * 3600_000).toISOString(),
+    lastSeenTime: new Date(MOCK_SESSION_NOW).toISOString(),
+    ipAddress: '127.0.0.1',
+    userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent,
+    isCurrent: true,
+  },
+  {
+    id: 'mock-session-phone',
+    creationTime: new Date(MOCK_SESSION_NOW - 3 * 86400_000).toISOString(),
+    lastSeenTime: new Date(MOCK_SESSION_NOW - 5 * 3600_000).toISOString(),
+    ipAddress: '203.0.113.24',
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    isCurrent: false,
+  },
+  {
+    id: 'mock-session-laptop',
+    creationTime: new Date(MOCK_SESSION_NOW - 6 * 86400_000).toISOString(),
+    lastSeenTime: new Date(MOCK_SESSION_NOW - 26 * 3600_000).toISOString(),
+    ipAddress: '198.51.100.7',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.2739.42',
+    isCurrent: false,
+  },
+];
+
+/**
+ * 两步验证：mock 下验证码固定为 {@link MOCK_TWO_FACTOR_CODE}，只演示设置与管理界面；
+ * 登录不走第二步（mock 没有服务端会话可言）。
+ */
+const MOCK_TWO_FACTOR_CODE = '123456';
+let mockTwoFactor = { enabled: false, recoveryCodesLeft: 0 };
+
+function mockRecoveryCodes(): TwoFactorRecoveryCodesOutputDto {
+  const codes = Array.from(
+    { length: 10 },
+    (_, i) => `mock-${String(i).padStart(4, '0')}-code-demo`,
+  );
+  mockTwoFactor = { enabled: true, recoveryCodesLeft: codes.length };
+  return { recoveryCodes: codes };
+}
+
+function ensureMockTwoFactorCode(code: string | undefined): void {
+  if (code !== MOCK_TWO_FACTOR_CODE) {
+    throw new MockException(400, {
+      code: 'Auth:TwoFactorCodeInvalid',
+      message: `The verification code is incorrect (mock code: ${MOCK_TWO_FACTOR_CODE}).`,
+    });
+  }
+}
+
+function getTwoFactorStatus(): TwoFactorStatusOutputDto {
+  requireCurrentMockUser();
+  return { ...mockTwoFactor, requiredByPolicy: false };
+}
+
+function beginTwoFactorSetup(): TwoFactorSetupOutputDto {
+  const user = requireCurrentMockUser();
+  const secret = 'JBSWY3DPEHPK3PXP';
+  return {
+    secret,
+    otpAuthUri: `otpauth://totp/Mock:${encodeURIComponent(user.username)}?secret=${secret}&issuer=Mock`,
+  };
+}
+
+function enableTwoFactor(req: MockRequest): TwoFactorRecoveryCodesOutputDto {
+  requireCurrentMockUser();
+  ensureMockTwoFactorCode(req.body?.code);
+  mockSessions = mockSessions.filter((s) => s.isCurrent);
+  return mockRecoveryCodes();
+}
+
+function disableTwoFactor(req: MockRequest): 'ok' {
+  const user = requireCurrentMockUser();
+  if (req.body?.password !== user.password) {
+    throw new MockException(400, {
+      code: 'Security:CurrentPasswordIncorrect',
+      message: 'The current password is incorrect.',
+    });
+  }
+  ensureMockTwoFactorCode(req.body?.code);
+  mockTwoFactor = { enabled: false, recoveryCodesLeft: 0 };
+  mockSessions = mockSessions.filter((s) => s.isCurrent);
+  return 'ok';
+}
+
+function regenerateRecoveryCodes(req: MockRequest): TwoFactorRecoveryCodesOutputDto {
+  requireCurrentMockUser();
+  ensureMockTwoFactorCode(req.body?.code);
+  return mockRecoveryCodes();
+}
+
+function getSessions(): UserSessionOutputDto[] {
+  requireCurrentMockUser();
+  return mockSessions;
+}
+
+function revokeSession(req: MockRequest): 'ok' {
+  requireCurrentMockUser();
+  const id = String(req.params.id);
+  if (mockSessions.some((s) => s.id === id && s.isCurrent)) {
+    throw new MockException(400, {
+      code: 'Auth:CannotRevokeCurrentSession',
+      message: 'Use sign-out to end the current session.',
+    });
+  }
+  mockSessions = mockSessions.filter((s) => s.id !== id);
+  return 'ok';
+}
+
+function revokeOtherSessions(): number {
+  requireCurrentMockUser();
+  const count = mockSessions.filter((s) => !s.isCurrent).length;
+  mockSessions = mockSessions.filter((s) => s.isCurrent);
+  return count;
 }
 
 function logout(): 'ok' {
@@ -168,7 +359,7 @@ function logout(): 'ok' {
 }
 
 function getSecurityConfig(): SecurityConfigOutputDto {
-  return { enableEmailVerification: EMAIL_VERIFICATION_ENABLED };
+  return { enableEmailVerification: EMAIL_VERIFICATION_ENABLED, emailVerificationAvailable: true };
 }
 
 function getCaptcha(): CaptchaOutputDto {
@@ -336,6 +527,38 @@ function normalizeEmail(email: string): string {
 }
 //#if (ExternalLogin)
 
+/** mock 下的外部账号绑定：只演示列表与解绑；绑定要跳真实的提供商，mock 走不通。 */
+let mockExternalLinks: {
+  id: string;
+  provider: string;
+  providerUsername: string;
+  creationTime: string;
+}[] = [
+  {
+    id: 'mock-link-github',
+    provider: 'github',
+    providerUsername: 'octocat',
+    creationTime: '2026-06-01T00:00:00Z',
+  },
+];
+
+function getExternalLinks() {
+  const user = requireCurrentMockUser();
+  return {
+    hasPassword: !!user.password,
+    providers: ['github', 'google'].map((provider) => ({
+      provider,
+      link: mockExternalLinks.find((l) => l.provider === provider) ?? null,
+    })),
+  };
+}
+
+function unlinkExternalLogin(req: MockRequest): 'ok' {
+  requireCurrentMockUser();
+  mockExternalLinks = mockExternalLinks.filter((l) => l.id !== String(req.params.id));
+  return 'ok';
+}
+
 function getExternalLoginUrl(provider: string): { loginUrl: string } {
   const state = Math.random().toString(36).substring(7);
   const redirectUri = encodeURIComponent(`${window.location.origin}/#/auth/external-callback`);
@@ -385,10 +608,27 @@ export const AUTH_API = {
   },
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
   'PUT /api/v1/auth/me': (req: MockRequest) => updateCurrentUser(req),
+  'PUT /api/v1/auth/me/avatar': (req: MockRequest) => setCurrentUserAvatar(req),
+  'POST /api/v1/auth/me/email-verification': (req: MockRequest) => sendCurrentUserEmailCode(req),
+  'POST /api/v1/auth/me/email-verification/confirm': (req: MockRequest) =>
+    confirmCurrentUserEmail(req),
+  'GET /api/v1/auth/me/two-factor': () => getTwoFactorStatus(),
+  'POST /api/v1/auth/me/two-factor/setup': () => beginTwoFactorSetup(),
+  'POST /api/v1/auth/me/two-factor/enable': (req: MockRequest) => enableTwoFactor(req),
+  'POST /api/v1/auth/me/two-factor/disable': (req: MockRequest) => disableTwoFactor(req),
+  'POST /api/v1/auth/me/two-factor/recovery-codes': (req: MockRequest) =>
+    regenerateRecoveryCodes(req),
+  'GET /api/v1/auth/me/sessions': () => getSessions(),
+  'DELETE /api/v1/auth/me/sessions/:id': (req: MockRequest) => revokeSession(req),
+  'POST /api/v1/auth/me/sessions/revoke-others': () => revokeOtherSessions(),
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
   //#if (ExternalLogin)
   'GET /api/v1/external-auth/:provider/login-url': (req: MockRequest) =>
     getExternalLoginUrl(req.params.provider),
   'POST /api/v1/external-auth/:provider/callback': (req: MockRequest) => externalLoginCallback(req),
+  'GET /api/v1/external-auth/links': () => getExternalLinks(),
+  'GET /api/v1/external-auth/:provider/link-url': (req: MockRequest) =>
+    getExternalLoginUrl(req.params.provider),
+  'DELETE /api/v1/external-auth/links/:id': (req: MockRequest) => unlinkExternalLogin(req),
   //#endif
 };

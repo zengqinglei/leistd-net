@@ -46,4 +46,18 @@ public interface ISettingDefinition
     /// 面向终端用户的接口只应返回显式标记为可见的项。
     /// </remarks>
     bool IsVisibleToClients { get; set; }
+
+    /// <summary>
+    /// 是否为机密设置：值落库前加密，读取时解密。
+    /// </summary>
+    /// <remarks>
+    /// <para>用于口令、令牌一类的值：数据库单独泄漏时不应连带泄漏它们。加解密用宿主的 Data Protection
+    /// （<c>IDataProtectionProvider</c>）——框架不持有密钥，宿主没注册 Data Protection 时，
+    /// 第一次写入或读取机密设置就会失败，而不是悄悄存成明文。</para>
+    /// <para>机密设置<b>永不下发客户端</b>：即使同时标记了 <see cref="IsVisibleToClients"/>，
+    /// <see cref="ISettingProvider.GetAllAsync"/> 按"仅客户端可见"读取时也不包含它。
+    /// 可见标记只表示"界面上有这一项可以写"，宿主据此给出只写的输入框。</para>
+    /// <para>代码默认值不加密：机密设置的默认值应当为空，由宿主在未设置时自行回落（例如回落到配置文件）。</para>
+    /// </remarks>
+    bool IsEncrypted { get; set; }
 }

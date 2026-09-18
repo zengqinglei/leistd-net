@@ -1,5 +1,6 @@
 using Leistd.Notifications.Abstractions;
 using Leistd.Notifications.Dtos;
+using Leistd.Notifications.Filters;
 using Leistd.Notifications.Services;
 using Leistd.TestBase.Doubles;
 using Leistd.Timing;
@@ -60,6 +61,7 @@ public class NotificationPublisherTests
             new FakeClock(),
             [new CallbackChannel(() => order.Add("push"))],
             new CallbackStore(() => order.Add("save")),
+            DeliverAll.Instance,
             NullLogger<NotificationPublisher>.Instance);
 
         await publisher.PublishToUserAsync("user-1", New("标题"));
@@ -130,6 +132,7 @@ public class NotificationPublisherTests
             new FakeClock(),
             [new CallbackChannel(() => throw new InvalidOperationException("channel down")), second],
             store,
+            DeliverAll.Instance,
             NullLogger<NotificationPublisher>.Instance);
 
         await publisher.PublishToUserAsync("user-1", New("标题"));
@@ -155,7 +158,7 @@ public class NotificationPublisherTests
         });
         var publisher = new NotificationPublisher(
             new FakeClock(), [first, second], new RecordingStore(),
-            NullLogger<NotificationPublisher>.Instance);
+            DeliverAll.Instance, NullLogger<NotificationPublisher>.Instance);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => publisher.PublishToUserAsync("user-1", New("标题"), cts.Token));
@@ -174,11 +177,66 @@ public class NotificationPublisherTests
             new FakeClock(),
             [new CallbackChannel(() => throw new OperationCanceledException()), second],
             new RecordingStore(),
+            DeliverAll.Instance,
             NullLogger<NotificationPublisher>.Instance);
 
         await publisher.PublishToUserAsync("user-1", New("标题"));
 
         Assert.Single(second.ToUser);
+    }
+
+    // 站内关掉：历史不落，站内渠道不推；别的渠道照常按自己的偏好投
+    [Fact]
+    public async Task When_in_app_is_filtered_out_nothing_is_saved_or_pushed_but_other_channels_still_deliver()
+    {
+        var store = new RecordingStore();
+        var inApp = new RecordingChannel();
+        var email = new RecordingChannel("Email");
+        var publisher = new NotificationPublisher(
+            new FakeClock(), [inApp, email], store,
+            new FilterStub((_, channel) => channel != INotificationChannel.InAppName),
+            NullLogger<NotificationPublisher>.Instance);
+
+        await publisher.PublishToUserAsync("user-1", New("标题"));
+
+        Assert.Empty(store.Saved);
+        Assert.Empty(inApp.ToUser);
+        Assert.Single(email.ToUser);
+    }
+
+    [Fact]
+    public async Task A_filtered_out_channel_is_skipped_while_in_app_is_kept()
+    {
+        var store = new RecordingStore();
+        var email = new RecordingChannel("Email");
+        var publisher = new NotificationPublisher(
+            new FakeClock(), [email], store,
+            new FilterStub((_, channel) => channel != "Email"),
+            NullLogger<NotificationPublisher>.Instance);
+
+        await publisher.PublishToUserAsync("user-1", New("标题"));
+
+        Assert.Single(store.Saved);
+        Assert.Empty(email.ToUser);
+    }
+
+    // 过滤器按类别决定：它得拿到通知本身，而不只是收件人
+    [Fact]
+    public async Task The_filter_sees_the_notification_type_and_the_channel_name()
+    {
+        var seen = new List<(string Type, string Channel)>();
+        var publisher = new NotificationPublisher(
+            new FakeClock(), [new RecordingChannel("Email")], new RecordingStore(),
+            new FilterStub((notification, channel) =>
+            {
+                seen.Add((notification.Type, channel));
+                return true;
+            }),
+            NullLogger<NotificationPublisher>.Instance);
+
+        await publisher.PublishToUserAsync("user-1", New("标题") with { Type = "Security" });
+
+        Assert.Equal([("Security", INotificationChannel.InAppName), ("Security", "Email")], seen);
     }
 
     private static NotificationInputDto New(string title) => new() { Title = title };
@@ -190,7 +248,7 @@ public class NotificationPublisherTests
         var channel = new RecordingChannel();
         return (
             new NotificationPublisher(
-                clock ?? new FakeClock(), [channel], store, NullLogger<NotificationPublisher>.Instance),
+                clock ?? new FakeClock(), [channel], store, DeliverAll.Instance, NullLogger<NotificationPublisher>.Instance),
             store,
             channel);
     }
@@ -235,6 +293,8 @@ public class NotificationPublisherTests
 
     private sealed class CallbackChannel(Action onSend) : INotificationChannel
     {
+        public string Name => INotificationChannel.InAppName;
+
         public Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
         {
             onSend();
@@ -245,6 +305,8 @@ public class NotificationPublisherTests
     /// <summary>把收到的 <see cref="CancellationToken"/> 交给外部检查。</summary>
     private sealed class TokenCapturingChannel(Action<CancellationToken> onDeliver) : INotificationChannel
     {
+        public string Name => INotificationChannel.InAppName;
+
         public Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
         {
             onDeliver(ct);
@@ -252,8 +314,10 @@ public class NotificationPublisherTests
         }
     }
 
-    private sealed class RecordingChannel : INotificationChannel
+    private sealed class RecordingChannel(string name = INotificationChannel.InAppName) : INotificationChannel
     {
+        public string Name => name;
+
         // 连通知一起记：推送里的 ID 必须与落库的那条一致，只记 userId 验不到这件事。
         public List<(string UserId, NotificationOutputDto Notification)> ToUser { get; } = [];
 
@@ -262,5 +326,19 @@ public class NotificationPublisherTests
             ToUser.Add((userId, notification));
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class DeliverAll : INotificationDeliveryFilter
+    {
+        public static readonly DeliverAll Instance = new();
+
+        public Task<bool> ShouldDeliverAsync(string userId, NotificationOutputDto notification, string channel, CancellationToken ct = default)
+            => Task.FromResult(true);
+    }
+
+    private sealed class FilterStub(Func<NotificationOutputDto, string, bool> allow) : INotificationDeliveryFilter
+    {
+        public Task<bool> ShouldDeliverAsync(string userId, NotificationOutputDto notification, string channel, CancellationToken ct = default)
+            => Task.FromResult(allow(notification, channel));
     }
 }

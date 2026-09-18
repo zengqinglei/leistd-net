@@ -4,8 +4,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Web;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using Microsoft.Extensions.Configuration;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 
@@ -14,7 +15,7 @@ namespace CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 /// </summary>
 public class GitHubOAuthProvider(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<ExternalAuthOptions> options,
     ILogger<GitHubOAuthProvider> logger) : IOAuthProvider
 {
     private const string AuthorizationEndpoint = "https://github.com/login/oauth/authorize";
@@ -25,7 +26,7 @@ public class GitHubOAuthProvider(
 
     public string GetAuthorizationUrl(string redirectUri, string state)
     {
-        var clientId = configuration["ExternalAuth:Github:ClientId"]
+        var clientId = options.Value.Github?.ClientId
             ?? throw new NotFoundException("Client ID for external identity provider GitHub is not configured.")
 #if (IncludeLocalization)
                 .WithCode("ExternalAuth:ClientIdNotConfigured")
@@ -41,14 +42,14 @@ public class GitHubOAuthProvider(
         string redirectUri,
         CancellationToken cancellationToken = default)
     {
-        var clientId = configuration["ExternalAuth:Github:ClientId"]
+        var clientId = options.Value.Github?.ClientId
             ?? throw new NotFoundException("Client ID for external identity provider GitHub is not configured.")
 #if (IncludeLocalization)
                 .WithCode("ExternalAuth:ClientIdNotConfigured")
                 .WithData("Provider", "GitHub")
 #endif
             ;
-        var clientSecret = configuration["ExternalAuth:Github:ClientSecret"]
+        var clientSecret = options.Value.Github?.ClientSecret
             ?? throw new NotFoundException("Client secret for external identity provider GitHub is not configured.")
 #if (IncludeLocalization)
                 .WithCode("ExternalAuth:ClientSecretNotConfigured")

@@ -17,6 +17,11 @@ export interface UserManagementOutputDto {
   creationTime: string;
   //#if (LocalIdentity)
   lastLoginTime?: string;
+  /** 登录锁定正在生效（登录失败触发的临时锁定，或管理员锁定）。 */
+  isLockedOut?: boolean;
+  /** 锁定截止时间；无期限时为空。 */
+  lockoutEnd?: string | null;
+  isTwoFactorEnabled?: boolean;
   //#endif
 }
 

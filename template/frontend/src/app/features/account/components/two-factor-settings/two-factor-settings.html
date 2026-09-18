@@ -1,0 +1,174 @@
+<section
+  class="border-border flex flex-col gap-4 rounded-lg border p-4 sm:p-6"
+  data-testid="security-two-factor"
+>
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div class="flex flex-col gap-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class="text-base leading-none font-semibold">{{ t('account.twoFactor.header') }}</h3>
+        @if (status()?.enabled) {
+          <span
+            hlmBadge
+            variant="outline"
+            class="border-success/30 bg-success/10 text-success"
+            data-testid="two-factor-on"
+            >{{ t('account.twoFactor.on') }}</span
+          >
+        }
+      </div>
+      <p class="text-muted-foreground text-sm">
+        {{
+          status()?.enabled ? t('account.twoFactor.subtitleOn') : t('account.twoFactor.subtitleOff')
+        }}
+      </p>
+    </div>
+    @if (status(); as s) {
+      @if (!s.enabled && mode() === 'idle') {
+        <button
+          hlmBtn
+          size="sm"
+          class="shrink-0 self-start"
+          data-testid="two-factor-turn-on"
+          (click)="setMode('setup')"
+        >
+          <ng-icon name="lucideShieldCheck" data-icon="inline-start" />
+          {{ t('account.twoFactor.turnOn') }}
+        </button>
+      }
+    }
+  </header>
+
+  @if (loadFailed()) {
+    <div class="flex items-center gap-3 text-sm">
+      <span class="text-muted-foreground">{{ t('account.twoFactor.loadFailed') }}</span>
+      <button hlmBtn variant="link" size="sm" class="px-0" (click)="reload()">
+        {{ t('common.retry') }}
+      </button>
+    </div>
+  } @else if (status(); as s) {
+    @switch (mode()) {
+      @case ('setup') {
+        <app-two-factor-setup (enabled)="onEnabled($event)" (cancelled)="setMode('idle')" />
+      }
+      @case ('codes') {
+        <app-recovery-codes [codes]="codes()" (done)="finishCodes()" />
+      }
+      @case ('disable') {
+        <form
+          class="flex flex-col gap-3"
+          novalidate
+          data-testid="two-factor-disable-form"
+          (submit)="$event.preventDefault(); disable()"
+        >
+          <p class="text-muted-foreground text-sm">{{ t('account.twoFactor.disableHint') }}</p>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <input
+              hlmInput
+              type="password"
+              autocomplete="current-password"
+              [attr.aria-label]="t('account.twoFactor.passwordLabel')"
+              [placeholder]="t('account.twoFactor.passwordLabel')"
+              [value]="password()"
+              (input)="onPasswordInput($event)"
+            />
+            <input
+              hlmInput
+              class="font-mono tracking-widest"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="7"
+              [attr.aria-label]="t('account.twoFactor.codeLabel')"
+              [placeholder]="t('account.twoFactor.codeLabel')"
+              [value]="code()"
+              (input)="onCodeInput($event)"
+            />
+          </div>
+          <div class="flex gap-2">
+            <button
+              hlmBtn
+              variant="destructive"
+              type="submit"
+              [disabled]="!password() || !codeValid() || busy()"
+            >
+              @if (busy()) {
+                <hlm-spinner class="text-base" data-icon="inline-start" />
+              }
+              {{ t('account.twoFactor.confirmDisable') }}
+            </button>
+            <button hlmBtn variant="ghost" type="button" (click)="setMode('idle')">
+              {{ t('common.cancel') }}
+            </button>
+          </div>
+        </form>
+      }
+      @case ('regenerate') {
+        <form
+          class="flex flex-col gap-3"
+          novalidate
+          data-testid="two-factor-regenerate-form"
+          (submit)="$event.preventDefault(); regenerate()"
+        >
+          <p class="text-muted-foreground text-sm">{{ t('account.twoFactor.regenerateHint') }}</p>
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <input
+              hlmInput
+              class="font-mono tracking-widest sm:w-40"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="7"
+              [attr.aria-label]="t('account.twoFactor.codeLabel')"
+              [placeholder]="t('account.twoFactor.codeLabel')"
+              [value]="code()"
+              (input)="onCodeInput($event)"
+            />
+            <div class="flex gap-2">
+              <button hlmBtn type="submit" [disabled]="!codeValid() || busy()">
+                @if (busy()) {
+                  <hlm-spinner class="text-base" data-icon="inline-start" />
+                }
+                {{ t('account.twoFactor.confirmRegenerate') }}
+              </button>
+              <button hlmBtn variant="ghost" type="button" (click)="setMode('idle')">
+                {{ t('common.cancel') }}
+              </button>
+            </div>
+          </div>
+        </form>
+      }
+      @default {
+        @if (s.enabled) {
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span class="text-muted-foreground text-sm" data-testid="recovery-codes-left">{{
+              t('account.twoFactor.recoveryCodesLeft', { count: s.recoveryCodesLeft })
+            }}</span>
+            <div class="flex flex-wrap gap-2">
+              <button hlmBtn variant="outline" size="sm" (click)="setMode('regenerate')">
+                {{ t('account.twoFactor.regenerate') }}
+              </button>
+              @if (!s.requiredByPolicy) {
+                <button
+                  hlmBtn
+                  variant="outline"
+                  size="sm"
+                  data-testid="two-factor-turn-off"
+                  (click)="setMode('disable')"
+                >
+                  {{ t('account.twoFactor.turnOff') }}
+                </button>
+              }
+            </div>
+          </div>
+          @if (s.requiredByPolicy) {
+            <p class="text-muted-foreground text-xs">
+              {{ t('account.twoFactor.requiredByPolicy') }}
+            </p>
+          }
+        }
+      }
+    }
+  } @else {
+    <div class="flex justify-center py-6">
+      <hlm-spinner class="text-muted-foreground text-xl" />
+    </div>
+  }
+</section>

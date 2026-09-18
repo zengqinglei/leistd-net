@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Leistd.Auditing;
 using Leistd.Notifications.Dtos;
-using Leistd.Notifications.Constants;
 using Leistd.Auditing.Abstractions;
 using Leistd.MultiTenancy.Abstractions;
 
@@ -34,7 +33,7 @@ public class NotificationRecord : ICreationAuditedObject, IMultiTenant
     public string? Content { get; set; }
 
     /// <summary>通知类型（字符串）。</summary>
-    public string Type { get; set; } = NotificationTypes.System;
+    public string Type { get; set; } = NotificationInputDto.DefaultType;
 
     /// <summary>点击跳转路由。</summary>
     public string? Link { get; set; }

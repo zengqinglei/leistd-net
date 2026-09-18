@@ -271,7 +271,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
 
 
     [Fact]
-    public async Task 全链路_令牌获取_追踪与用户上下文透传_被调方双通道身份生效()
+    public async Task Full_call_acquires_a_token_and_forwards_trace_and_user_context()
     {
         var userId = Guid.NewGuid();
         await using var caller = CreateCaller(new FakeCurrentUser(id: userId, username: "张三"));
@@ -293,7 +293,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 令牌缓存_连续调用只取一次令牌()
+    public async Task Consecutive_calls_acquire_the_token_once()
     {
         await using var caller = CreateCaller(new FakeCurrentUser(id: Guid.NewGuid()));
         var client = caller.GetRequiredService<IDemoClient>();
@@ -305,7 +305,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 令牌被吊销_401自愈重取后调用成功()
+    public async Task Revoked_token_recovers_after_a_401_and_the_call_succeeds()
     {
         await using var caller = CreateCaller(new FakeCurrentUser(id: Guid.NewGuid()));
         var client = caller.GetRequiredService<IDemoClient>();
@@ -320,7 +320,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 无用户上下文_以服务自身身份调用()
+    public async Task Call_without_user_context_uses_the_service_identity()
     {
         await using var caller = CreateCaller(currentUser: null);
         var client = caller.GetRequiredService<IDemoClient>();
@@ -333,7 +333,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 远端业务错误_还原为RemoteServiceException含远端traceId()
+    public async Task Remote_business_error_is_restored_with_the_remote_trace_id()
     {
         await using var caller = CreateCaller(new FakeCurrentUser(id: Guid.NewGuid()));
         var client = caller.GetRequiredService<IDemoClient>();
@@ -347,7 +347,7 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 匿名请求伪造用户头_被调方剥离后不污染ICurrentUser()
+    public async Task Forged_user_header_on_an_anonymous_request_does_not_reach_current_user()
     {
         using var rawClient = _resourceHost.GetTestServer().CreateClient();
         rawClient.DefaultRequestHeaders.Add(ServiceClientHeaders.UserId, Guid.NewGuid().ToString());

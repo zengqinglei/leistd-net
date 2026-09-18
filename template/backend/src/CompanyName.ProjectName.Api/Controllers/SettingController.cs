@@ -1,3 +1,6 @@
+#if (LocalIdentity)
+using CompanyName.ProjectName.Api.Auth;
+#endif
 using CompanyName.ProjectName.Application.Settings.AppServices;
 using CompanyName.ProjectName.Application.Settings.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -18,6 +21,10 @@ namespace CompanyName.ProjectName.Api.Controllers;
 public sealed class SettingController(ISettingAppService settingAppService) : BaseController
 {
     /// <summary>获取各层级的设置覆盖值（用户级、租户级与代码默认值分别给出）。</summary>
+#if (LocalIdentity)
+    // 界面启动就要读：受限会话也得能渲染出两步验证设置页
+    [AllowDuringTwoFactorSetup]
+#endif
     [HttpGet]
     public Task<IReadOnlyList<SettingOutputDto>> GetAsync(CancellationToken cancellationToken = default)
         => settingAppService.GetAsync(cancellationToken);
@@ -35,4 +42,13 @@ public sealed class SettingController(ISettingAppService settingAppService) : Ba
         [FromBody] SetSettingInputDto input,
         CancellationToken cancellationToken = default)
         => settingAppService.SetForCurrentTenantAsync(input, cancellationToken);
+#if (LocalIdentity)
+
+    /// <summary>用当前生效的发信参数发一封测试邮件（宿主，需要设置管理权限）。</summary>
+    [HttpPost("email/test")]
+    public Task SendTestEmailAsync(
+        [FromBody] SendTestEmailInputDto input,
+        CancellationToken cancellationToken = default)
+        => settingAppService.SendTestEmailAsync(input, cancellationToken);
+#endif
 }

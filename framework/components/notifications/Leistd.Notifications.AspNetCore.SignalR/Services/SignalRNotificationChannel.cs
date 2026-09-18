@@ -18,6 +18,10 @@ public class SignalRNotificationChannel(
     private const string EventName = "NotificationReceived";
 
     /// <inheritdoc />
+    /// <remarks>实时推送是站内通知的一部分，与通知历史同进同退。</remarks>
+    public string Name => INotificationChannel.InAppName;
+
+    /// <inheritdoc />
     public async Task DeliverAsync(string userId, NotificationOutputDto notification, CancellationToken ct = default)
     {
         // 按 UserIdentifier 寻址，其生成规则由 SignalR 基座的 UserIdProvider 统一提供。

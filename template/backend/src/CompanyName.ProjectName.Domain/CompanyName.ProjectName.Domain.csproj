@@ -9,6 +9,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+<!--#if (LocalIdentity)-->
+    <!-- 两步验证密钥用宿主的 Data Protection 加密，只引用抽象 -->
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" />
+<!--#endif-->
   </ItemGroup>
 
   <!-- Leistd 框架引用 -->

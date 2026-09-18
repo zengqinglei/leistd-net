@@ -45,7 +45,7 @@ public class ClientCredentialsHandlerTests
     }
 
     [Fact]
-    public async Task 出站请求_附加Bearer令牌()
+    public async Task Outgoing_request_gets_a_bearer_token()
     {
         var (invoker, server, _) = Create();
 
@@ -55,7 +55,7 @@ public class ClientCredentialsHandlerTests
     }
 
     [Fact]
-    public async Task 收到401_强刷令牌重试一次且请求体完整()
+    public async Task Unauthorized_response_refreshes_the_token_and_retries_once_with_the_full_body()
     {
         var (invoker, server, tokens) = Create(request =>
             request.Headers.Authorization!.Parameter == "token-gen1"
@@ -77,7 +77,7 @@ public class ClientCredentialsHandlerTests
     }
 
     [Fact]
-    public async Task 重试后仍401_原样返回不再重试()
+    public async Task Second_unauthorized_response_is_returned_without_another_retry()
     {
         var (invoker, server, tokens) = Create(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
 
@@ -90,7 +90,7 @@ public class ClientCredentialsHandlerTests
     }
 
     [Fact]
-    public async Task 请求自带Authorization_不介入也不重试()
+    public async Task Request_with_its_own_authorization_is_left_alone()
     {
         var (invoker, server, tokens) = Create(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
 

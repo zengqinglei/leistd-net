@@ -46,6 +46,7 @@ import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle
 import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
 import { TenantService } from '../../../platform/services/tenant-service';
 import { AccountService } from '../../services/account-service';
+import { TwoFactorChallenge } from '../two-factor-challenge/two-factor-challenge';
 
 // GitHub 品牌图标（lucide 已下架品牌 logo，用官方 SVG path 自定义注入）
 const githubIcon =
@@ -72,6 +73,7 @@ const githubIcon =
     TranslocoModule,
     //#endif
     Logo,
+    TwoFactorChallenge,
   ],
   // prettier-ignore
   providers: [
@@ -146,6 +148,16 @@ export class Login {
   });
   //#endif
 
+  /**
+   * 第二步凭据：密码已通过、尚待验证码。有值时登录页换成验证码那一步。
+   *
+   * 外部登录回调遇到已启用两步验证的账号时，经导航状态把凭据带过来（不放进地址栏）。
+   */
+  protected readonly twoFactorToken = signal<string | null>(
+    (this.router.currentNavigation()?.extras.state as { twoFactorToken?: string } | undefined)
+      ?.twoFactorToken ?? null,
+  );
+
   constructor() {
     // 进入登录页时清理上一个主体的全部痕迹：认证数据、权限、设置。
     // 只清认证数据不够——已登录用户在 SPA 内导航到这里不会重跑应用初始化器，
@@ -179,37 +191,13 @@ export class Login {
       const loginInput = { usernameOrEmail, password };
       const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
-      await lastValueFrom(this.authService.login(loginInput));
-      await lastValueFrom(this.authService.loadUser());
-
-      // 会话上下文必须在任何跳转之前建立完成。进登录页时它已被清空，此时直接跳 returnUrl：
-      // permissionGuard 会在空权限下判定并把人踢到 403——从受保护页面的深链登录，
-      // 本该落到那个页面，却落在拒绝页。设置也在这里就位，否则保存过的显示偏好
-      // 要到下一次硬刷新才生效（SPA 内跳转不会重跑应用初始化器）。
-      await this.sessionContext.establish();
-
-      // 成功提示放在会话建立之后：它一旦失败就走 catch 弹「登录失败」，
-      // 提前提示会让用户先看到成功、紧接着看到失败，而人还停在登录页。
-      //#if (IncludeLocalization)
-      toast.success(this.transloco.translate('account.login.loginSuccess'), {
-        description: this.transloco.translate('account.login.welcomeBack'),
-        duration: 3000,
-      });
-      //#else
-      toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
-      //#endif
-
-      if (this.isSafeLocalReturnUrl(returnUrl)) {
-        await this.router.navigateByUrl(returnUrl);
+      const result = await lastValueFrom(this.authService.login(loginInput));
+      if (result?.requiresTwoFactor && result.twoFactorToken) {
+        this.twoFactorToken.set(result.twoFactorToken);
         return;
       }
 
-      // 按权限跳转：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。
-      if (this.authorizationService.canAccessPlatform()) {
-        this.router.navigate(['/platform']);
-      } else {
-        this.router.navigate(['/workspace']);
-      }
+      await this.finishLogin(returnUrl);
     } catch (error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('account.login.loginFailed'), {
@@ -220,6 +208,64 @@ export class Login {
       //#endif
     } finally {
       this._isLoading.set(false);
+    }
+  }
+
+  /** 第二步通过、会话已下发：接着建立会话上下文并跳转。 */
+  protected async onTwoFactorCompleted(): Promise<void> {
+    this._isLoading.set(true);
+    try {
+      await this.finishLogin(this.route.snapshot.queryParamMap.get('returnUrl'));
+    } catch (error) {
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('account.login.loginFailed'), {
+        description: applicationErrorMessage(error),
+      });
+      //#else
+      toast.error('Login failed', { description: applicationErrorMessage(error) });
+      //#endif
+    } finally {
+      this._isLoading.set(false);
+    }
+  }
+
+  /** 会话已下发之后的共同收尾：取当前用户、建立会话上下文、提示并跳转。 */
+  private async finishLogin(returnUrl: string | null): Promise<void> {
+    await lastValueFrom(this.authService.loadUser());
+
+    // 受限会话（组织要求两步验证而本人尚未启用）：先去设置，别的页面都进不去
+    if (this.authService.currentUser()?.twoFactorSetupRequired) {
+      await this.router.navigate(['/auth/two-factor-setup']);
+      return;
+    }
+
+    // 会话上下文必须在任何跳转之前建立完成。进登录页时它已被清空，此时直接跳 returnUrl：
+    // permissionGuard 会在空权限下判定并把人踢到 403——从受保护页面的深链登录，
+    // 本该落到那个页面，却落在拒绝页。设置也在这里就位，否则保存过的显示偏好
+    // 要到下一次硬刷新才生效（SPA 内跳转不会重跑应用初始化器）。
+    await this.sessionContext.establish();
+
+    // 成功提示放在会话建立之后：它一旦失败就走 catch 弹「登录失败」，
+    // 提前提示会让用户先看到成功、紧接着看到失败，而人还停在登录页。
+    //#if (IncludeLocalization)
+    toast.success(this.transloco.translate('account.login.loginSuccess'), {
+      description: this.transloco.translate('account.login.welcomeBack'),
+      duration: 3000,
+    });
+    //#else
+    toast.success('Signed in successfully', { description: 'Welcome back!', duration: 3000 });
+    //#endif
+
+    if (this.isSafeLocalReturnUrl(returnUrl)) {
+      await this.router.navigateByUrl(returnUrl);
+      return;
+    }
+
+    // 按权限跳转：拥有任一平台入口权限才进管理区，而不是按角色名或超管标志判断。
+    if (this.authorizationService.canAccessPlatform()) {
+      this.router.navigate(['/platform']);
+    } else {
+      this.router.navigate(['/workspace']);
     }
   }
 

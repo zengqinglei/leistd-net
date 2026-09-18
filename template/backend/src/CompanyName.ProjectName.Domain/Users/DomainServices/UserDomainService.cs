@@ -1,5 +1,6 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Domain.Users.Passwords;
+using CompanyName.ProjectName.Domain.Users.Policies;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
 #endif
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -182,7 +183,6 @@ public class UserDomainService(
         string email,
         string? displayName,
         string? phoneNumber,
-        string? avatar,
         CancellationToken cancellationToken = default)
     {
         // 检查用户名唯一性
@@ -207,7 +207,7 @@ public class UserDomainService(
                 ;
         }
 
-        user.UpdateProfile(username, email, displayName, phoneNumber, avatar);
+        user.UpdateProfile(username, email, displayName, phoneNumber);
     }
 
 #if (LocalIdentity)
@@ -314,11 +314,19 @@ public class UserDomainService(
     }
 
     /// <summary>
-    /// 验证用户凭据
+    /// 校验用户名密码，并按 <paramref name="lockout"/> 累计失败、触发锁定。
     /// </summary>
-    public async Task<User?> ValidateCredentialsAsync(
+    /// <remarks>
+    /// <para>锁定中的账号<b>不校验密码</b>，直接返回 <see cref="CredentialValidationStatus.LockedOut"/>：
+    /// 锁定期间若仍按密码对错给出不同结果，攻击者照样能一个个试，锁定就只是换了一种报错。</para>
+    /// <para>没有密码的账号（只经外部登录）输错不计数：那里没有可猜的密码，
+    /// 计数只会让别人能把它锁住，连外部登录一起挡在外面。</para>
+    /// </remarks>
+    public async Task<CredentialValidationResult> ValidateCredentialsAsync(
         string usernameOrEmail,
         string password,
+        LoginLockoutPolicy lockout,
+        DateTime now,
         CancellationToken cancellationToken = default)
     {
         var user = await userRepository.GetFirstAsync(
@@ -326,17 +334,27 @@ public class UserDomainService(
             q => q.OrderBy(u => u.Id),
             cancellationToken);
 
-        if (user == null)
+        if (user == null || user.PasswordHash == null)
         {
-            return null;
+            return new CredentialValidationResult(CredentialValidationStatus.InvalidCredentials, user);
         }
 
-        if (user.PasswordHash == null || !passwordHasher.VerifyPassword(user.PasswordHash, password))
+        if (user.GetAccessStatus(now) == UserAccessStatus.LockedOut)
         {
-            return null;
+            return new CredentialValidationResult(CredentialValidationStatus.LockedOut, user);
         }
 
-        return user;
+        if (passwordHasher.VerifyPassword(user.PasswordHash, password))
+        {
+            return new CredentialValidationResult(CredentialValidationStatus.Succeeded, user);
+        }
+
+        var lockedOut = user.RecordAccessFailed(now, lockout);
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        return lockedOut
+            ? new CredentialValidationResult(CredentialValidationStatus.LockedOut, user, LockoutTriggered: true)
+            : new CredentialValidationResult(CredentialValidationStatus.InvalidCredentials, user);
     }
 #endif
 }

@@ -113,5 +113,97 @@ public class ExternalAuthDomainService(
         // 由调用方按既有回落取角色。
         return (user, assignedRoleNames);
     }
+
+    /// <summary>
+    /// 把一个外部身份绑定到已登录的用户（"绑定"模式，而不是登录或建号）。
+    /// </summary>
+    /// <remarks>
+    /// 一个外部身份只能属于一个用户：已绑在别人名下时拒绝，而不是改绑——
+    /// 改绑等于让任何能登录这个外部账号的人把它从原主人那里抢走。
+    /// 同一提供商每人只绑一个，界面按提供商展示，多个同类绑定说不清哪个在用。
+    /// </remarks>
+    public async Task<ExternalLoginConnection> LinkAsync(
+        User user,
+        string provider,
+        ExternalUserInfo externalUserInfo,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await externalLoginRepository.GetFirstAsync(
+            c => c.Provider == provider && c.ProviderUserId == externalUserInfo.ProviderId,
+            q => q.OrderBy(c => c.Id),
+            cancellationToken);
+        if (existing is not null && existing.UserId != user.Id)
+        {
+            throw new BadRequestException($"This {provider} account is already linked to another user.")
+#if (IncludeLocalization)
+                .WithCode("ExternalAuth:AlreadyLinked")
+                .WithData("Provider", provider)
+#endif
+                ;
+        }
+
+        if (existing is not null)
+        {
+            existing.Update(clock.Now, externalUserInfo.Username, externalUserInfo.Email, externalUserInfo.AvatarUrl);
+            await externalLoginRepository.UpdateAsync(existing, cancellationToken);
+            return existing;
+        }
+
+        if (await externalLoginRepository.AnyAsync(c => c.UserId == user.Id && c.Provider == provider, cancellationToken))
+        {
+            throw new BadRequestException($"A {provider} account is already linked. Unlink it first.")
+#if (IncludeLocalization)
+                .WithCode("ExternalAuth:ProviderAlreadyLinked")
+                .WithData("Provider", provider)
+#endif
+                ;
+        }
+
+        var connection = new ExternalLoginConnection(
+            userId: user.Id,
+            provider: provider,
+            providerUserId: externalUserInfo.ProviderId,
+            syncedAt: clock.Now,
+            providerUsername: externalUserInfo.Username,
+            providerEmail: externalUserInfo.Email,
+            providerAvatarUrl: externalUserInfo.AvatarUrl);
+        await externalLoginRepository.InsertAsync(connection, cancellationToken);
+
+        logger.LogInformation("User {Username} linked a {Provider} login connection", user.Username, provider);
+        return connection;
+    }
+
+    /// <summary>
+    /// 解绑用户的一个外部身份。
+    /// </summary>
+    /// <remarks>
+    /// 必须还剩一种登录方式（设有密码，或还有别的绑定），否则解绑之后这个账号就再也登不进来了。
+    /// </remarks>
+    /// <returns>被解绑的连接；不存在或不属于该用户时为 null。</returns>
+    public async Task<ExternalLoginConnection?> UnlinkAsync(
+        User user,
+        Guid connectionId,
+        CancellationToken cancellationToken = default)
+    {
+        var connection = await externalLoginRepository.GetByIdAsync(connectionId, cancellationToken);
+        if (connection is null || connection.UserId != user.Id)
+            return null;
+
+        var otherLinks = await externalLoginRepository.CountAsync(
+            c => c.UserId == user.Id && c.Id != connectionId,
+            cancellationToken);
+        if (user.PasswordHash is null && otherLinks == 0)
+        {
+            throw new BadRequestException("This is your only way to sign in. Set a password or link another account first.")
+#if (IncludeLocalization)
+                .WithCode("ExternalAuth:LastSignInMethod")
+#endif
+                ;
+        }
+
+        await externalLoginRepository.DeleteAsync(connection, cancellationToken);
+        logger.LogInformation("User {Username} unlinked a {Provider} login connection", user.Username, connection.Provider);
+        return connection;
+    }
 }
 #endif

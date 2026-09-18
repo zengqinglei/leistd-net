@@ -1,11 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
-using CompanyName.ProjectName.Api.Logging;
+using CompanyName.ProjectName.Api.Options;
+using Leistd.OperationRecords.Abstractions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Serilog.Events;
 using Xunit;
 
@@ -55,17 +58,19 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
 
     /// <summary>宿主此刻真正生效的全局最小级别。</summary>
     /// <remarks>
-    /// 读的是那个 <c>LoggingLevelSwitch</c>——它正是 <c>MinimumLevel.ControlledBy</c> 接管
-    /// 全局级别的东西，本轮要钉的就是"它别把部署基线顶掉"。只断言接口下发的
+    /// 问的是本宿主容器里那个 Serilog logger 实例：最小级别由 Serilog 从配置读、并随配置重载更新，
+    /// 本轮要钉的就是"设置覆盖后真的生效、清除后回到部署基线"。只断言接口下发的
     /// <c>defaultValue</c> 不够：那只证明界面显示对了，证明不了 logger 真的按这个级别打。
     /// <para>
-    /// 刻意不走 <c>ILoggerFactory.IsEnabled</c>：Serilog 的 <c>Log.Logger</c> 是<b>静态</b>的，
-    /// 别的测试类的宿主释放时会把它关掉，于是那种断言在单独跑这一个类时是绿的、
-    /// 全量跑就红——结果取决于测试类的执行与释放顺序，而不是被测行为。
+    /// 刻意不走静态的 <c>Log.Logger</c> 或 <c>ILoggerFactory</c>：别的测试类的宿主释放时会把静态 logger 关掉，
+    /// 那种断言在单独跑这一个类时是绿的、全量跑就红。容器里的实例是本宿主自己的，级别判定不受此影响。
     /// </para>
     /// </remarks>
     private static LogEventLevel EffectiveMinimumLevel(WebApplicationFactory<Program> host)
-        => host.Services.GetRequiredService<LoggingSettingState>().MinimumLevel.MinimumLevel;
+    {
+        var logger = host.Services.GetRequiredService<Serilog.ILogger>();
+        return Enum.GetValues<LogEventLevel>().First(logger.IsEnabled);
+    }
 
     private static async Task<JsonElement> ReadSettingAsync(HttpClient client, string name)
     {
@@ -96,7 +101,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     /// 而清除覆盖值同样回不到部署基线——两者都表现为"配置文件不起作用"。
     /// </remarks>
     [Fact]
-    public async Task 日志级别的默认值取自部署基线_清除覆盖后回落到它()
+    public async Task Log_level_default_comes_from_deployment_and_clearing_restores_it()
     {
         var host = HostWith(new Dictionary<string, string?>
         {
@@ -114,11 +119,15 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         Assert.Equal("Warning", baseline.GetProperty("defaultValue").GetString());
         Assert.Null(OverrideOrNull(baseline, "tenantValue"));
 
+        Assert.Equal(LogEventLevel.Warning, EffectiveMinimumLevel(host));
+
         Assert.Equal(
             HttpStatusCode.OK,
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, "Debug")).StatusCode);
         var overridden = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
         Assert.Equal("Debug", OverrideOrNull(overridden, "tenantValue"));
+        // 写入即生效：设置经配置源覆盖 Serilog:MinimumLevel，Serilog 订阅了它的重载
+        Assert.Equal(LogEventLevel.Debug, EffectiveMinimumLevel(host));
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -126,12 +135,80 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         var cleared = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
         Assert.Null(OverrideOrNull(cleared, "tenantValue"));
         Assert.Equal("Warning", cleared.GetProperty("defaultValue").GetString());
+        Assert.Equal(LogEventLevel.Warning, EffectiveMinimumLevel(host));
+    }
+
+    // 请求日志级别同样经配置源进 Options：写入即生效，清除回到类型默认值
+    [Fact]
+    public async Task Request_log_level_follows_the_setting_and_resets_to_default()
+    {
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(
+            factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var monitor = factory.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, "Verbose")).StatusCode);
+        Assert.Equal(LogEventLevel.Verbose, monitor.CurrentValue.Level);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, null)).StatusCode);
+        Assert.Equal(LogEventLevel.Information, monitor.CurrentValue.Level);
+    }
+
+    /// <summary>
+    /// 宿主级设置在写入的事务提交之后才应用到本进程。
+    /// </summary>
+    /// <remarks>
+    /// 让写入之后的操作记录失败，整次保存随之失败回滚。测试库是 EF InMemory、没有事务，写进去的行不会撤回，
+    /// 所以这里断言的是"进程里没用上"：应用若发生在提交之前，这次失败的写入就已经被带进了配置。
+    /// </remarks>
+    [Fact]
+    public async Task Host_setting_is_applied_only_after_commit()
+    {
+        var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddTransient<IOperationRecorder, SettingChangeFailingRecorder>()));
+        _disposables.Add(host);
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(
+            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var monitor = host.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
+        var before = monitor.CurrentValue.Level;
+
+        try
+        {
+            using var response = await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, "Verbose");
+
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+            Assert.Equal(before, monitor.CurrentValue.Level);
+        }
+        finally
+        {
+            // 行已留在共用的 InMemory 库里，经正常宿主清掉，免得周期刷新或同库的其它用例读到
+            using var cleaner = await ProjectWebApplicationFactory.LoginAsync(
+                factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+            await WriteAsync(cleaner.Client, SettingConstant.Logging.RequestLevel, null);
+        }
+    }
+
+    private sealed class SettingChangeFailingRecorder : IOperationRecorder
+    {
+        public Task RecordSucceededAsync(
+            string action, OperationTarget target, string authorizationBasis, CancellationToken cancellationToken = default)
+            => action == OperationRecordActions.SettingChanged
+                ? throw new InvalidOperationException("Simulated failure after the setting was written.")
+                : Task.CompletedTask;
+
+        public Task RecordFailedAsync(
+            string action, OperationTarget target, string authorizationBasis,
+            OperationFailure failure = default, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 
     // Serilog 的最小级别有两种合法写法，标量那种也要认出来——
     // 只读 MinimumLevel:Default 的话，写成 "MinimumLevel": "Error" 的部署会被当成没配。
     [Fact]
-    public async Task 部署基线也认标量写法的最小级别()
+    public async Task Deployment_baseline_accepts_the_scalar_minimum_level()
     {
         var host = HostWith(new Dictionary<string, string?>
         {
@@ -153,11 +230,11 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     /// <remarks>
     /// 这是最常见的真实形态：模板 <c>appsettings.json</c> 里已有对象写法，部署再用环境变量
     /// 给出标量写法。固定优先对象写法，就会让文件里的级别顶掉环境变量里的——而 Serilog 自己
-    /// 用的是环境变量那个，于是 <c>MinimumLevel.ControlledBy</c> 把它正确解析出的级别又改回去，
-    /// 表现为"环境变量配的日志级别不起作用"。所以这里连真实 logger 一起断言。
+    /// 用的是环境变量那个，界面显示的基线就和实际生效的对不上，
+    /// 清除覆盖值也回不到真正的部署基线。所以这里连真实 logger 一起断言。
     /// </remarks>
     [Fact]
-    public async Task 高优先级配置源的最小级别不被低优先级的另一种写法顶掉()
+    public async Task Higher_priority_minimum_level_wins_over_the_other_form()
     {
         // appsettings.json 提供 Serilog:MinimumLevel:Default = Information（低优先级）
         var host = HostWith(new Dictionary<string, string?>
@@ -182,7 +259,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     // 反方向同样不能顶掉：更高优先级的源用对象写法时，它才是基线。
     // 只把 ?? 两边换个位置就会在这条上错。
     [Fact]
-    public async Task 反向并存时更高优先级的对象写法胜出()
+    public async Task Higher_priority_object_form_wins_when_reversed()
     {
         var host = HostWith(
             new Dictionary<string, string?> { ["Serilog:MinimumLevel"] = "Error" },
@@ -211,7 +288,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     /// 抛 500——这个开关允许进入一个缺少运行前提的状态。密钥仍由配置提供，不进设置表。
     /// </remarks>
     [Fact]
-    public async Task 缺少摘要密钥时不允许开启邮箱验证()
+    public async Task Email_verification_cannot_be_enabled_without_a_digest_key()
     {
         var host = HostWith(new Dictionary<string, string?>
         {
@@ -232,7 +309,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
 
     // 有密钥的部署可以按租户开启：这条挡住"把校验写成一律拒绝"。
     [Fact]
-    public async Task 有摘要密钥时可以开启邮箱验证()
+    public async Task Email_verification_can_be_enabled_with_a_digest_key()
     {
         using var admin = await factory.LoginAsync(
             "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -268,8 +345,34 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         return client;
     }
 
+#if (LocalIdentity)
+    /// <summary>
+    /// 布尔型设置由服务端标注，界面据此渲染开关；写入同样按这份清单把关。
+    /// </summary>
+    /// <remarks>界面各记一份清单时，漏登记的布尔设置会渲染成要手打 true 的文本框。</remarks>
     [Fact]
-    public async Task 宿主能改进程级设置_并且值域在服务端把关()
+    public async Task Boolean_settings_are_flagged_and_accept_only_true_or_false()
+    {
+        using var hostAdmin = await factory.LoginAsync(
+            "admin", ProjectWebApplicationFactory.TestAdminPassword);
+
+        var listed = await hostAdmin.Client.GetFromJsonAsync<JsonElement>("/api/v1/settings");
+        var flagged = listed.EnumerateArray()
+            .Where(s => s.TryGetProperty("isBoolean", out var b) && b.GetBoolean())
+            .Select(s => s.GetProperty("name").GetString())
+            .ToHashSet();
+
+        Assert.Equal(SettingConstant.BooleanSettings.ToHashSet(), flagged);
+
+        var rejected = await hostAdmin.Client.PutAsJsonAsync(
+            "/api/v1/settings/current-tenant",
+            new { Name = SettingConstant.Security.RequireTwoFactor, Value = "yes" });
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+    }
+
+#endif
+    [Fact]
+    public async Task Host_can_change_process_settings_within_the_allowed_range()
     {
         using var hostAdmin = await factory.LoginAsync(
             "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -309,7 +412,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
     /// 界面却把它显示成已生效。两条都要拦。
     /// </remarks>
     [Fact]
-    public async Task 租户上下文既看不到也改不了进程级设置()
+    public async Task Tenant_context_can_neither_see_nor_change_process_settings()
     {
         using var hostAdmin = await factory.LoginAsync(
             "admin", ProjectWebApplicationFactory.TestAdminPassword);

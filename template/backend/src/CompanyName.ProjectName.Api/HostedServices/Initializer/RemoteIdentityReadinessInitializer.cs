@@ -1,13 +1,13 @@
 #if (RemoteTokenAuth)
 using System.Text.Json;
-using CompanyName.ProjectName.Api.Extensions;
+using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.Options;
 using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Api.HostedServices.Initializer;
 
 /// <summary>
-/// 启动期确认签发方的元数据与签名密钥可用，成功即打开 <see cref="RemoteIdentityReadinessGate"/>
+/// 启动期确认签发方的元数据与签名密钥可用，成功即打开 <see cref="RemoteIdentityReadinessHealthCheck"/>
 /// </summary>
 /// <remarks>
 /// 探针要求发现文档可解析、<c>issuer</c> 与本地配置精确一致，且 <c>jwks_uri</c>
@@ -15,7 +15,7 @@ namespace CompanyName.ProjectName.Api.HostedServices.Initializer;
 /// 和具体租户，不属于本探针声明的就绪范围。
 /// </remarks>
 internal sealed class RemoteIdentityReadinessInitializer(
-    RemoteIdentityReadinessGate gate,
+    RemoteIdentityReadinessHealthCheck readiness,
     IHttpClientFactory httpClientFactory,
     IOptions<RemoteIdentityOptions> remoteIdentityOptions,
     ILogger<RemoteIdentityReadinessInitializer> logger) : BackgroundService
@@ -92,7 +92,7 @@ internal sealed class RemoteIdentityReadinessInitializer(
             {
                 await ConfirmAsync(client, issuer, metadataUrl, stoppingToken);
 
-                gate.MarkReady();
+                readiness.MarkReady();
                 logger.LogInformation(
                     "Remote identity metadata and signing keys confirmed at {MetadataUrl}; " +
                     "the service is now ready.",

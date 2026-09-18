@@ -200,6 +200,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     AccessFailedCount = table.Column<int>(type: "integer", nullable: false),
                     LastLoginTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     LastLoginIp = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
+                    TwoFactorEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    TwoFactorSecret = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    TwoFactorRecoveryCodes = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
+                    TwoFactorLastUsedStep = table.Column<long>(type: "bigint", nullable: true),
                     CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     LastModifierId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
@@ -289,6 +293,33 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "UserSessions",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LastSeenTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    IpAddress = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
+                    UserAgent = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    ImpersonatorName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserSessions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_UserSessions_Users_UserId",
+                        column: x => x.UserId,
+                        principalSchema: "companyname-projectname",
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_AuthorizationVersionRecord_ProviderName_ProviderKey",
                 schema: "companyname-projectname",
@@ -312,7 +343,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "ExternalLoginConnections",
                 columns: new[] { "Provider", "ProviderUserId" },
                 unique: true,
-                filter: "\"TenantId\" IS NULL");
+                filter: "\"TenantId\" IS NULL AND NOT \"IsDeleted\"");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ExternalLoginConnections_TenantId_Provider_ProviderUserId",
@@ -320,7 +351,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "ExternalLoginConnections",
                 columns: new[] { "TenantId", "Provider", "ProviderUserId" },
                 unique: true,
-                filter: "\"TenantId\" IS NOT NULL");
+                filter: "\"TenantId\" IS NOT NULL AND NOT \"IsDeleted\"");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ExternalLoginConnections_UserId",
@@ -423,6 +454,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_UserSessions_UserId",
+                schema: "companyname-projectname",
+                table: "UserSessions",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
                 schema: "companyname-projectname",
                 table: "Users",
@@ -492,6 +529,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
             migrationBuilder.DropTable(
                 name: "UserRoles",
+                schema: "companyname-projectname");
+
+            migrationBuilder.DropTable(
+                name: "UserSessions",
                 schema: "companyname-projectname");
 
             migrationBuilder.DropTable(

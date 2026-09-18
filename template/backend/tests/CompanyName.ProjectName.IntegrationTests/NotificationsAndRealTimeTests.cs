@@ -5,7 +5,6 @@ using Leistd.Notifications.Dtos;
 using System.Net;
 using System.Net.Http.Json;
 #if (!LocalIdentity)
-using CompanyName.ProjectName.Api.Extensions;
 using Microsoft.AspNetCore.Http;
 using Leistd.MultiTenancy.Abstractions;
 #endif

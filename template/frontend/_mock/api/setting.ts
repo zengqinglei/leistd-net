@@ -105,14 +105,24 @@ export const SETTING_API = {
       group: definition.group,
       // 真实后端按 `SettingGroup:{group}` 查词条；Mock 不做本地化，回显标识本身
       groupDisplayName: definition.group,
-      userValue: USER_SETTING_VALUES.get(`${tenantKey}:${subjectId}:${definition.name}`) ?? null,
-      tenantValue: TENANT_SETTING_VALUES.get(`${tenantKey}:${definition.name}`) ?? null,
-      defaultValue: definition.defaultValue,
+      // 机密设置与真实后端一致：一个值都不下发，只报告是否设过
+      userValue: definition.isSecret
+        ? null
+        : (USER_SETTING_VALUES.get(`${tenantKey}:${subjectId}:${definition.name}`) ?? null),
+      tenantValue: definition.isSecret
+        ? null
+        : (TENANT_SETTING_VALUES.get(`${tenantKey}:${definition.name}`) ?? null),
+      defaultValue: definition.isSecret ? null : definition.defaultValue,
       allowsTenantScope: definition.allowsTenantScope,
       allowsUserScope: definition.allowsUserScope,
       allowsHostScope: definition.allowsHostScope ?? false,
-      minimum: definition.minimum ?? null,
-      maximum: definition.maximum ?? null,
+      // 与真实后端一致：值为 null 的属性不下发，没有区间的设置不带这两个字段
+      ...(definition.minimum === undefined ? {} : { minimum: definition.minimum }),
+      ...(definition.maximum === undefined ? {} : { maximum: definition.maximum }),
+      isBoolean: definition.isBoolean ?? false,
+      isSecret: definition.isSecret ?? false,
+      hasSecretValue:
+        !!definition.isSecret && TENANT_SETTING_VALUES.has(`${tenantKey}:${definition.name}`),
     }));
   },
 
@@ -132,4 +142,12 @@ export const SETTING_API = {
     assertValidValue(name, value);
     return write(TENANT_SETTING_VALUES, `${getMockSessionTenantKey()}:${name}`, value);
   },
+  //#if (LocalIdentity)
+
+  // mock 下不真的发信，只演示界面
+  'POST /api/v1/settings/email/test': () => {
+    requirePermission(PERMISSIONS.settings.default);
+    return 'ok';
+  },
+  //#endif
 };

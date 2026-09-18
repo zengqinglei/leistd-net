@@ -34,6 +34,7 @@
     "angular-auth-oidc-client": "22.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "qrcode": "^1.5.4",
     "rxjs": "~7.8.2",
     "tailwind-merge": "^3.6.0",
     "tslib": "^2.8.1"
@@ -46,6 +47,7 @@
     "@spartan-ng/cli": "1.4.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/jasmine": "~4.6.6",
+    "@types/qrcode": "^1.5.6",
     "angular-eslint": "^22.5.0",
     "debug": "^4.4.3",
     "eslint": "^10.10.0",
@@ -53,6 +55,7 @@
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-unused-imports": "^4.4.1",
     "husky": "^9.1.7",
+    "istanbul-lib-instrument": "^6.0.3",
     "jasmine-core": "~4.6.1",
     "karma": "~6.4.4",
     "karma-chrome-launcher": "~3.2.0",

@@ -1,5 +1,5 @@
 #if (RemoteTokenAuth)
-using CompanyName.ProjectName.Api.Extensions;
+using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -134,13 +134,12 @@ public class ResourceReadinessGateTests
     [Fact]
     public async Task Readiness_is_unhealthy_until_remote_identity_is_confirmed()
     {
-        var gate = new RemoteIdentityReadinessGate();
-        var check = new RemoteIdentityReadinessCheck(gate);
+        var check = new RemoteIdentityReadinessHealthCheck();
 
         var before = await check.CheckHealthAsync(new HealthCheckContext());
         Assert.Equal(HealthStatus.Unhealthy, before.Status);
 
-        gate.MarkReady();
+        check.MarkReady();
 
         var after = await check.CheckHealthAsync(new HealthCheckContext());
         Assert.Equal(HealthStatus.Healthy, after.Status);
@@ -157,16 +156,16 @@ public class ResourceReadinessGateTests
     [Fact]
     public void Readiness_never_falls_back_once_confirmed()
     {
-        var gate = new RemoteIdentityReadinessGate();
+        var gate = new RemoteIdentityReadinessHealthCheck();
         gate.MarkReady();
 
         Assert.True(gate.IsReady);
 
         // 门禁没有、也不应该有"关回去"的入口
-        Assert.Null(typeof(RemoteIdentityReadinessGate).GetMethod("MarkNotReady"));
+        Assert.Null(typeof(RemoteIdentityReadinessHealthCheck).GetMethod("MarkNotReady"));
         Assert.DoesNotContain(
-            typeof(RemoteIdentityReadinessGate).GetProperties(),
-            property => property.Name == nameof(RemoteIdentityReadinessGate.IsReady) && property.CanWrite);
+            typeof(RemoteIdentityReadinessHealthCheck).GetProperties(),
+            property => property.Name == nameof(RemoteIdentityReadinessHealthCheck.IsReady) && property.CanWrite);
     }
 }
 #endif

@@ -1,0 +1,229 @@
+using CompanyName.ProjectName.Application.Auth.TwoFactor;
+using CompanyName.ProjectName.Domain.Auth.DomainServices;
+using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Auth.Options;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
+using CompanyName.ProjectName.Application.Auth.Policies;
+using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Domain.Users.ValueObjects;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.Security.Claims;
+using Leistd.Timing;
+using Leistd.ExceptionHandling;
+using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.Auth.Abstractions;
+
+namespace CompanyName.ProjectName.Application.Auth.SignIn;
+
+internal sealed class SessionSignInService(
+    IRepository<User, Guid> userRepository,
+    UserDomainService userDomainService,
+    UserSessionDomainService userSessionDomainService,
+    IRepository<UserSession, Guid> sessionRepository,
+    IOptions<UserSessionOptions> sessionOptions,
+    TwoFactorChallengeStore twoFactorChallengeStore,
+    ILoginSecurityPolicyProvider loginSecurityPolicy,
+    ISecurityAlertPublisher securityAlerts,
+    IRequestClientInfo clientInfo,
+    IClock clock)
+{
+    // OIDC 标准声明名，ICurrentUser 按它们分别读用户名与显示名。
+    private const string PreferredUsernameClaimType = "preferred_username";
+    private const string DisplayNameClaimType = "name";
+
+    /// <summary>
+    /// 登录第一步（密码或外部登录）通过之后决定去向。
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item>已启用两步验证：不签发会话，只发第二步凭据。</item>
+    /// <item>租户要求两步验证而本人未启用：签发<b>受限会话</b>（带 <see cref="TwoFactorClaimTypes.SetupRequired"/>），
+    /// 服务端只放行完成设置所需的接口。</item>
+    /// <item>否则直接签发会话。</item>
+    /// </list>
+    /// 账号是否可登录（停用、锁定）在发第二步凭据之前就判：否则停用的账号也能走到输验证码那一步。
+    /// </remarks>
+    /// <param name="user">第一步已认出的用户。</param>
+    /// <param name="roleNames">同 <see cref="SignInAsync"/>。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public async Task<SessionLoginResult> StartAsync(
+        User user,
+        List<string>? roleNames = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureAllowed(user, clock.Now);
+
+        if (user.TwoFactorEnabled)
+        {
+            return SessionLoginResult.TwoFactorRequired(
+                await twoFactorChallengeStore.CreateAsync(user.Id, user.TenantId, cancellationToken));
+        }
+
+        var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
+        IEnumerable<Claim>? restriction = policy.RequireTwoFactor
+            ? [new Claim(TwoFactorClaimTypes.SetupRequired, "true")]
+            : null;
+
+        return SessionLoginResult.SignedIn(
+            await SignInAsync(user, roleNames, restriction, cancellationToken));
+    }
+
+    /// <param name="user">登录用户。</param>
+    /// <param name="roleNames">
+    /// 调用方已知的角色名。为 <see langword="null"/> 时回查数据库。
+    /// 首次外部登录必须传入：此时角色关联行与用户同在一个未提交的边界内，回查得到空集合，
+    /// 签发出的主体会少掉全部角色。
+    /// </param>
+    /// <param name="additionalClaims">
+    /// 追加到主体上的额外声明（模拟登录的发起人声明）。会话主体是这些声明的唯一载体——
+    /// 已认证请求的租户由 cookie claim 定案，请求头改写不了，所以模拟态也必须落在这里。
+    /// </param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <remarks>
+    /// 模拟登录复用本方法，因此 <c>RecordLoginSuccess</c> 也会记在被模拟的账号上：
+    /// 换来的是访问校验（禁用、锁定）只有一条实现，不会出现"正常登录拒绝、模拟登录放行"的偏差。
+    /// 代价是该账号的"最近登录"含模拟进入的时刻，排查登录异常时需要结合审计日志区分。
+    /// <para>每次签发都登记一个会话（见 <see cref="UserSessionDomainService"/>），会话 Id 写进 <c>sid</c> 声明。
+    /// 登记跟随调用方的租户上下文与工作单元：模拟登录在目标租户的工作单元里调用，会话就落在那个租户的库里。</para>
+    /// </remarks>
+    public async Task<ClaimsPrincipal> SignInAsync(
+        User user,
+        List<string>? roleNames = null,
+        IEnumerable<Claim>? additionalClaims = null,
+        CancellationToken cancellationToken = default)
+    {
+        var now = clock.Now;
+        EnsureAllowed(user, now);
+
+        var previousIp = user.LastLoginIp;
+        user.RecordLoginSuccess(now, clientInfo.IpAddress);
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        var extraClaims = additionalClaims?.ToList() ?? [];
+        var impersonatorName = ReadImpersonatorName(extraClaims);
+        var newDevice = await IsNewDeviceAsync(user.Id, previousIp, impersonatorName, cancellationToken);
+        var session = await userSessionDomainService.StartAsync(
+            user.Id, clientInfo.IpAddress, clientInfo.UserAgent, impersonatorName, cancellationToken);
+        if (newDevice)
+        {
+            await securityAlerts.PublishAsync(
+                user.Id,
+                new SecurityAlert(SecurityAlertKind.NewDeviceSignIn, clientInfo.IpAddress, clientInfo.UserAgent),
+                cancellationToken);
+        }
+
+        var identity = new ClaimsIdentity(AuthenticationSchemeNames.SessionCookie);
+        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+        identity.AddClaim(new Claim(CustomClaimTypes.SessionId, session.Id.ToString()));
+        identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
+        // ICurrentUser 的约定：Username 取 preferred_username，Name 是显示名、取 name。
+        // 只写 ClaimTypes.Name 时两者都读到登录名，操作记录的操作人列就与目标列口径不一——
+        // 同一个人在这边是 "admin"，在那边（目标名按 DisplayName ?? Username）是 "System Administrator"。
+        // ClaimTypes.Name 保持登录名不动：它是 Identity.Name，框架外的中间件按它认人。
+        identity.AddClaim(new Claim(PreferredUsernameClaimType, user.Username));
+        if (!string.IsNullOrWhiteSpace(user.DisplayName))
+        {
+            identity.AddClaim(new Claim(DisplayNameClaimType, user.DisplayName));
+        }
+        identity.AddClaim(new Claim(CustomClaimTypes.IsSuperAdmin, user.IsSuperAdmin ? "true" : "false"));
+
+        if (user.TenantId is { } tenantId)
+        {
+            identity.AddClaim(new Claim(CustomClaimTypes.TenantId, tenantId.ToString()));
+        }
+
+        foreach (var roleName in roleNames
+            ?? await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
+        {
+            identity.AddClaim(new Claim("role", roleName));
+        }
+
+        foreach (var claim in extraClaims)
+        {
+            identity.AddClaim(claim);
+        }
+
+        return new ClaimsPrincipal(identity);
+    }
+
+    // "新设备"的判据刻意取保守：IP 与上次登录不同，**并且**没有一个同浏览器标识的有效会话。
+    // 只看其中一项都太吵——退出后同一台电脑再登录没有会话可比，换个 Wi-Fi 同一个浏览器 IP 就变。
+    // 第一次登录（没有上次 IP）与模拟登录（不是本人）都不提醒。
+    private async Task<bool> IsNewDeviceAsync(
+        Guid userId,
+        string? previousIp,
+        string? impersonatorName,
+        CancellationToken cancellationToken)
+    {
+        if (impersonatorName is not null || previousIp is null || previousIp == clientInfo.IpAddress)
+            return false;
+
+        var cutoff = clock.Now - sessionOptions.Value.IdleTimeout;
+        return !await sessionRepository.AnyAsync(
+            s => s.UserId == userId && s.LastSeenTime > cutoff && s.UserAgent == clientInfo.UserAgent,
+            cancellationToken);
+    }
+
+    // 模拟登录的会话记下发起人，名称缺席时退回发起人 Id——设备列表里至少要看得出"这不是本人登录的"。
+    private static string? ReadImpersonatorName(List<Claim> claims)
+    {
+        if (claims.FirstOrDefault(c => c.Type == ImpersonationClaimTypes.ImpersonatorUserId) is not { } impersonator)
+            return null;
+
+        return claims.FirstOrDefault(c => c.Type == ImpersonationClaimTypes.ImpersonatorName)?.Value ?? impersonator.Value;
+    }
+
+    /// <summary>
+    /// 账号锁定时的登录错误。临时锁定（登录失败触发）告诉用户还要等多久；管理员锁定只说联系管理员。
+    /// </summary>
+    /// <remarks>
+    /// 不带锁定截止的时刻本身：服务端的时刻要按用户时区换算才有意义，"还有几分钟"则不需要。
+    /// </remarks>
+    public static BusinessException LockedOut(User user, DateTime now)
+    {
+        if (user.IsTemporarilyLockedOut(now))
+        {
+            var minutes = (int)Math.Ceiling((user.LockoutEnd!.Value - now).TotalMinutes);
+            return new UnauthorizedException(
+                $"Too many failed sign-in attempts. Try again in {minutes} minute(s).")
+#if (IncludeLocalization)
+                .WithCode("Auth:UserTemporarilyLockedOut")
+                .WithData("Minutes", minutes)
+#endif
+                ;
+        }
+
+        return new UnauthorizedException("This account is locked. Contact your administrator.")
+#if (IncludeLocalization)
+            .WithCode("Auth:UserLockedOut")
+#endif
+            ;
+    }
+
+    internal static void EnsureAllowed(User user, DateTime now)
+    {
+        var accessStatus = user.GetAccessStatus(now);
+        switch (accessStatus)
+        {
+            case UserAccessStatus.Allowed:
+                return;
+            case UserAccessStatus.Disabled:
+                throw new UnauthorizedException($"Login failed: user is disabled - user: {user.Username}")
+#if (IncludeLocalization)
+                    .WithCode("Auth:UserDisabled")
+                    .WithData("Username", user.Username)
+#endif
+                    ;
+            case UserAccessStatus.LockedOut:
+                throw LockedOut(user, now);
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(accessStatus),
+                    accessStatus,
+                    "Unsupported user access status.");
+        }
+    }
+}

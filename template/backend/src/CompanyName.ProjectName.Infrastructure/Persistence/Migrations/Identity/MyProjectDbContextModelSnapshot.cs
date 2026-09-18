@@ -102,15 +102,56 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
                     b.HasIndex("Provider", "ProviderUserId")
                         .IsUnique()
-                        .HasFilter("\"TenantId\" IS NULL");
+                        .HasFilter("\"TenantId\" IS NULL AND NOT \"IsDeleted\"");
 
                     b.HasIndex("TenantId", "Provider", "ProviderUserId")
                         .IsUnique()
-                        .HasFilter("\"TenantId\" IS NOT NULL");
+                        .HasFilter("\"TenantId\" IS NOT NULL AND NOT \"IsDeleted\"");
 
                     b.ToTable("ExternalLoginConnections", "companyname-projectname");
                 });
 #endif
+
+            modelBuilder.Entity("CompanyName.ProjectName.Domain.Auth.Entities.UserSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatorId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ImpersonatorName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
+                    b.Property<DateTime>("LastSeenTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserSessions", "companyname-projectname");
+                });
 
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.Role", b =>
                 {
@@ -261,6 +302,20 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("TwoFactorEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<long?>("TwoFactorLastUsedStep")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TwoFactorRecoveryCodes")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("TwoFactorSecret")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
 
                     b.Property<string>("Username")
                         .IsRequired()
@@ -714,6 +769,15 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     b.Navigation("User");
                 });
 #endif
+
+            modelBuilder.Entity("CompanyName.ProjectName.Domain.Auth.Entities.UserSession", b =>
+                {
+                    b.HasOne("CompanyName.ProjectName.Domain.Users.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
 
             modelBuilder.Entity("CompanyName.ProjectName.Domain.Users.Entities.UserRole", b =>
                 {
