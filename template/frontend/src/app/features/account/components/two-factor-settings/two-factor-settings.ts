@@ -25,6 +25,7 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 import { AuthService } from '../../../../core/services/auth-service';
 import { TwoFactorStatusOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
+import { OtpCodeInput } from '../otp-code-input/otp-code-input';
 import { RecoveryCodes } from '../recovery-codes/recovery-codes';
 import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
 
@@ -37,7 +38,16 @@ type Mode = 'idle' | 'setup' | 'codes' | 'disable' | 'regenerate';
  */
 @Component({
   selector: 'app-two-factor-settings',
-  imports: [NgIcon, HlmBadge, HlmButton, HlmInput, HlmSpinner, RecoveryCodes, TwoFactorSetup],
+  imports: [
+    NgIcon,
+    HlmBadge,
+    HlmButton,
+    HlmInput,
+    HlmSpinner,
+    OtpCodeInput,
+    RecoveryCodes,
+    TwoFactorSetup,
+  ],
   providers: [provideIcons({ lucideShieldCheck })],
   templateUrl: './two-factor-settings.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -92,10 +102,6 @@ export class TwoFactorSettings {
 
   protected onPasswordInput(event: Event): void {
     this.password.set((event.target as HTMLInputElement).value);
-  }
-
-  protected onCodeInput(event: Event): void {
-    this.code.set((event.target as HTMLInputElement).value);
   }
 
   protected onEnabled(codes: string[]): void {

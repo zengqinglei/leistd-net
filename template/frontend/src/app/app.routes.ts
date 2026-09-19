@@ -7,6 +7,7 @@ import { DefaultLayout } from './layout/default/default-layout';
 //#if (LocalIdentity)
 import { EmptyLayout } from './layout/empty/empty-layout';
 //#endif
+import { WorkspaceLayout } from './layout/workspace/workspace-layout';
 import { PLATFORM_ENTRY_PERMISSIONS } from './shared/models/permission';
 
 export const routes: Routes = [
@@ -25,10 +26,10 @@ export const routes: Routes = [
       import('./core/components/oidc-callback/oidc-callback').then((m) => m.OidcCallback),
   },
   //#endif
-  // Default Layout - 用户工作区
+  // 工作空间：面向业务用户，顶栏导航。入口多了需要分组时换回 DefaultLayout（见 coding-frontend.md §8）
   {
     path: 'workspace',
-    component: DefaultLayout,
+    component: WorkspaceLayout,
     canActivate: [authGuard],
     loadChildren: () =>
       import('./features/workspace/workspace.routes').then((r) => r.WORKSPACE_ROUTES),

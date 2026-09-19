@@ -87,6 +87,7 @@
   "layout": {
     "sidebar": {
       "navigation": "Navigation",
+      "navigationDescription": "Browse the sections of this area.",
       "appTitle": "Template Project",
       "switchArea": "Switch area",
       "groupWork": "Work",
@@ -106,6 +107,9 @@
       "groupAudit": "Audit",
       "groupPersonal": "Personal",
       "settings": "Settings"
+    },
+    "topbar": {
+      "openNavigation": "Open navigation"
     },
     "notifications": {
       "title": "Notifications",
@@ -144,6 +148,7 @@
     "empty": "No configurable items in this section",
     "timeZoneSearch": "Search city or UTC offset",
     "timeZoneEmpty": "No matching time zone",
+    "timeZoneToggle": "Show time zones",
     "browserTimeZone": "browser",
     "followSystem": "Follows your system",
     "hostScopeHint": "Applies to all instances (~30s)",
@@ -279,7 +284,7 @@
       "disabledToast": "Two-factor authentication is off. Other devices were signed out.",
       "loadFailed": "Couldn't load the two-factor status.",
       "scanTitle": "1. Add this account to your authenticator app",
-      "scanHint": "Scan the QR code with an app such as Google Authenticator or Microsoft Authenticator.",
+      "scanHint": "Scan the QR code with an app such as Google Authenticator, Microsoft Authenticator or Tencent Authenticator.",
       "manualHint": "Can't scan it? Enter this key instead:",
       "copyKey": "Copy key",
       "copied": "Copied",

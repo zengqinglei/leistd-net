@@ -26,6 +26,7 @@ import {
 import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { AccountService } from '../../services/account-service';
+import { OtpCodeInput } from '../otp-code-input/otp-code-input';
 
 /**
  * 登录第二步：输入身份验证器应用上的验证码，或手机不在身边时输入恢复码。
@@ -35,7 +36,7 @@ import { AccountService } from '../../services/account-service';
  */
 @Component({
   selector: 'app-two-factor-challenge',
-  imports: [NgIcon, HlmButton, HlmInput, HlmSpinner],
+  imports: [NgIcon, HlmButton, HlmInput, HlmSpinner, OtpCodeInput],
   providers: [provideIcons({ lucideArrowLeft, lucideShieldCheck })],
   templateUrl: './two-factor-challenge.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

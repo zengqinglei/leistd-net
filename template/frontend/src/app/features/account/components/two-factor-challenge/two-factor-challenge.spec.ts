@@ -60,8 +60,26 @@ describe('TwoFactorChallenge', () => {
   it('提交验证码，通过后通知登录页', async () => {
     account.completeTwoFactorLogin.and.returnValue(of(undefined));
 
-    type('123 456');
+    type('123456');
     await submit();
+
+    expect(account.completeTwoFactorLogin).toHaveBeenCalledOnceWith({
+      token: 'challenge-token',
+      code: '123456',
+    });
+    expect(completed).toBe(1);
+  });
+
+  // 验证器应用与短信常把验证码显示成"123 456"，整段粘贴进来也要能直接提交
+  it('粘贴带分隔的验证码时只保留数字，输满即提交', async () => {
+    account.completeTwoFactorLogin.and.returnValue(of(undefined));
+
+    const input = (fixture.nativeElement as HTMLElement).querySelector('input') as HTMLInputElement;
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', '123 456');
+    input.dispatchEvent(new ClipboardEvent('paste', { clipboardData }));
+    await fixture.whenStable();
+    fixture.detectChanges();
 
     expect(account.completeTwoFactorLogin).toHaveBeenCalledOnceWith({
       token: 'challenge-token',

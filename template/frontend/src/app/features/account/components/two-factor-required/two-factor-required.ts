@@ -16,6 +16,7 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
+import { AuthShell } from '../auth-shell/auth-shell';
 import { RecoveryCodes } from '../recovery-codes/recovery-codes';
 import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
 
@@ -27,41 +28,37 @@ import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
  */
 @Component({
   selector: 'app-two-factor-required',
-  imports: [NgIcon, HlmButton, RecoveryCodes, TwoFactorSetup],
+  imports: [NgIcon, HlmButton, AuthShell, RecoveryCodes, TwoFactorSetup],
   providers: [provideIcons({ lucideShieldCheck })],
   template: `
-    <div class="bg-background flex min-h-svh justify-center px-4 py-10 sm:items-center">
-      <div class="flex w-full max-w-xl flex-col gap-6" data-testid="two-factor-required">
-        <div class="flex flex-col gap-2">
-          <h1 class="flex items-center gap-2 text-2xl font-semibold">
-            <ng-icon name="lucideShieldCheck" class="text-primary" />
-            {{ t('account.twoFactorRequired.title') }}
-          </h1>
-          <p class="text-muted-foreground text-sm">
-            {{ t('account.twoFactorRequired.description') }}
-          </p>
-        </div>
-
-        <div class="border-border rounded-lg border p-4 sm:p-6">
-          @if (codes(); as recoveryCodes) {
-            <app-recovery-codes [codes]="recoveryCodes" (done)="continue()" />
-          } @else {
-            <app-two-factor-setup [cancellable]="false" (enabled)="codes.set($event)" />
-          }
-        </div>
-
-        <button
-          hlmBtn
-          variant="link"
-          size="sm"
-          class="text-muted-foreground self-start px-0"
-          type="button"
-          (click)="logout()"
-        >
-          {{ t('account.twoFactorRequired.signOut') }}
-        </button>
+    <app-auth-shell width="wide" [showLanguageSwitcher]="false">
+      <div class="flex flex-col gap-2" data-testid="two-factor-required">
+        <h1 class="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <ng-icon name="lucideShieldCheck" class="text-primary" />
+          {{ t('account.twoFactorRequired.title') }}
+        </h1>
+        <p class="text-muted-foreground text-sm">
+          {{ t('account.twoFactorRequired.description') }}
+        </p>
       </div>
-    </div>
+
+      @if (codes(); as recoveryCodes) {
+        <app-recovery-codes [codes]="recoveryCodes" (done)="continue()" />
+      } @else {
+        <app-two-factor-setup [cancellable]="false" (enabled)="codes.set($event)" />
+      }
+
+      <button
+        hlmBtn
+        variant="link"
+        size="sm"
+        class="text-muted-foreground self-start px-0"
+        type="button"
+        (click)="logout()"
+      >
+        {{ t('account.twoFactorRequired.signOut') }}
+      </button>
+    </app-auth-shell>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

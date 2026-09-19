@@ -121,7 +121,7 @@
 | `Domain/Tenants/Connections/ITenantConnectionDirectory.cs`、`Infrastructure/TenantConnections/TenantConnectionDirectory.cs` | 迁入 | 契约进 Core、实现进 EntityFrameworkCore |
 | `Application/TenantConnections/ConnectionStringGuard.cs`、`EnsureValidName` | 迁入 | 连接管理器对非法连接名、不可解析的连接串直接抛带码的 400，不再以 `ArgumentException` 变 500 |
 | `Infrastructure/TenantConnections/IdentityTenantConnectionClient.cs`、`IdentityTenantConnectionStore.cs`、选项 | 迁入（**待确认**） | 端点契约由框架定义之后，远端连接存储可随之由框架提供（`Leistd.MultiTenancy.ServiceClient`）。这推翻了 `ITenantConnectionConfigurationStore` 注释里"框架不认识任何具体服务的 HTTP 接口"，需确认 |
-| `Infrastructure/TenantConnections/InMemoryTenantDatabaseEnumerator.cs` | 迁入 | Core：未登记连接存储时的单库清单，按注册自动选择 |
+| ~~`Infrastructure/TenantConnections/InMemoryTenantDatabaseEnumerator.cs`~~ | **已完成** | `AddMultiTenancyCore()` 注册枚举器，未注册连接解析时只列宿主库；模板删除该类与分支，测试工厂改用 `UseSetting` 走内存库注册路径 |
 | `Application/Tenants/AppServices/TenantAppService.cs`、接口、DTO、`TenantProfile` | 拆分 | Core 租户管理用例：分页、查询、更新、启停、删除、按名与按域名解析；创建编排（先停用登记 → 同一控制面工作单元登记连接 → 新工作单元开通 → 启用）与失败补偿（顺序固定）。开通与清理经 `ITenantProvisioner`（`Seed` / `Purge`），启用前置条件经 `ITenantActivationGuard`，数据库错误描述经提供程序钩子（现为 PostgreSQL 错误码） |
 | `Api/Controllers/TenantController.cs` | 拆分 | `MapTenantManagement()`；`POST {id}/impersonate` 留模板 |
 | `Api/Middlewares/TenantSessionRecoveryMiddleware.cs` | 迁入 | MultiTenancy.AspNetCore 可选中间件；Cookie 方案与响应头名经选项 |
@@ -159,3 +159,89 @@
 1. 远端连接存储是否由框架提供（第四节 5）。
 2. 通知保留期默认值：建议启用、已读 90 天、未读 365 天。
 3. 桥接包的粒度：`Notifications.Settings`、`Notifications.Email` 各成一包，还是合并为一个 `Notifications.Integration`。
+
+## 八、使用场景与定制策略
+
+名称为暂定，以实现为准。本节用于在实施前校验组件公开面：每个场景都必须能用下面的方式落地，落不了就是公开面缺口。
+
+### 1. 标准接入
+
+```csharp
+builder.Services
+    .AddBackgroundJobs(o => o.ApplicationPrefix = "Crm")
+    .AddOperationRecordsEfCore<CrmDbContext>()
+    .AddOperationRecordRetention()                       // Cluster 周期任务，默认关闭
+    .AddNotificationsEfCore<CrmDbContext>()
+    .AddNotificationRetention()                          // Cluster 周期任务，默认开启
+    .AddSingleton<IOperationActionDefinitionProvider, CrmOperationActions>();
+
+var api = app.MapGroup("/api/v1");
+api.MapGroup("/operation-records").MapOperationRecords(o =>
+{
+    o.ReadPolicy = CrmPermissions.OperationRecords.Default;
+    o.ExportPolicy = CrmPermissions.OperationRecords.Export;
+});
+api.MapGroup("/notifications").MapNotifications();
+```
+
+### 2. 业务使用场景
+
+| 场景 | 用法 |
+| --- | --- |
+| 订单删除被规则拒绝要留痕，业务随后回滚 | 登记动作码；`RecordFailedAsync(..., OperationFailure.FromCode("Order:AlreadyShipped", data))`。失败记录独立提交，不用再写 `DurableFailureOperationRecorder` |
+| 每晚回收超期未跟进的线索（每个租户库都要跑） | `IRecurringJob` + `AddRecurringJob<LeadRecycleJob>("crm.lead-recycle", 每日 02:00, RecurringJobScope.Cluster)`；作业内 `ITenantDatabaseRunner.RunAsync(...)` 逐库执行 |
+| 每个副本定时刷新本地汇率缓存 | 同上，`RecurringJobScope.EveryInstance`，不加锁 |
+| 注册成功后发欢迎邮件（丢了可接受） | `IBackgroundTaskQueue`：入队时的租户、主体、链路自动带到执行时 |
+| 结算单生成（必须完成、失败要重试） | `IBackgroundJobManager.EnqueueAsync(args)`，由 Quartz 或 Hangfire 提供器实现；业务代码不直接引用调度器 |
+| 审批待办通知，站内 + 邮件 | `INotificationPublisher` 发业务类型；邮件渠道来自桥接包，业务只实现 `INotificationRecipientResolver`（从员工表取邮箱）；用户偏好按设置名 `{前缀}.{类型}.{渠道}` 自动生效 |
+| 租户级"线索自动分配阈值" | 设置定义带区间元数据，`MapSettings()` 界面自动出现并校验；业务规则另写 `ISettingValueValidator` |
+| 宿主级"外部接口超时"进 `IOptionsMonitor<CrmApiOptions>` | 设置定义 + `Leistd.Settings.Hosting` 一行绑定，改完所有副本在刷新周期内生效 |
+| CRM 服务开通租户时建默认销售管道 | 实现 `ITenantProvisioner.SeedAsync / PurgeAsync`；开通编排、失败补偿、启用顺序由组件保证 |
+| 多服务部署下建租户同时登记 crm、foundation 两条命名连接 | 租户管理用例的创建输入接受多条命名连接，在同一控制面工作单元里原子登记（替代 identity 的 `CreateWithConnectionsAsync`） |
+| 商机看板变更实时推送 | `IBusinessEventPublisher.PublishToResourceAsync`；订阅授权用前缀授权器，或自写 `IRealTimeSubscriptionAuthorizer` |
+| 资源服务读取自己的租户库 | 远端连接存储包（待确认 1）；Identity 服务 `MapTenantConnections()` 提供机器端点 |
+
+### 3. 定制分级（优先级从上到下，能用上层就不用下层）
+
+| 层级 | 做法 | 适用 |
+| --- | --- | --- |
+| L0 配置 | 选项 / 配置节 | 路由前缀、策略名、保留天数、调度时间、单个作业开关、锁前缀、导出上限 |
+| L1 端点约定 | 在 `Map*` 返回的构建器或外层路由组上加约定 | 限流、OpenAPI 标签、响应包装、附加元数据（如两步验证放行） |
+| L2 钩子 | 实现组件声明的窄接口 | 主体目录、租户开通、启用前置、设置值校验、收件人解析、主体即目标标记 |
+| L3 替换服务 | 注册早于组件或 `Replace` | 换存储实现、给查询用例加装饰（收窄范围）、换调度提供器 |
+| L4 不调 `Map*`，自写端点 | 在 Core 用例服务上写自己的端点 | 路由形状或 DTO 与组件不同、BFF 聚合、Excel 导出 |
+| L5 反馈到组件 | 两个以上业务仓需要同一定制 | 提需求补 L0～L2 的公开面，不在业务仓各写一份 |
+
+**红线**（组件不提供、也不接受绕过）：放宽可见性、删除或修改操作记录、给操作记录表加业务列、修改已发布的动作码、把组件源码拷进业务仓修改。
+
+### 4. 具体定制场景
+
+| 定制需求 | 层级 | 策略 |
+| --- | --- | --- |
+| 路由改成 `/api/crm/audit-logs` | L0 | 外层 `MapGroup("/api/crm/audit-logs")` |
+| 字段名、分页形状与组件不同 | L4 | 不调 `MapOperationRecords()`，用查询用例服务自写端点 |
+| 导出改 Excel | L4 | 查询用例提供行序列，业务端点自行写 Excel；CSV 端点不映射即可 |
+| 操作记录只看本部门 | L3 | 装饰查询用例追加过滤；只能收窄，不能放宽可见性 |
+| 新增企业微信通知渠道 | L2 | 实现 `INotificationChannel`；偏好设置按命名规则自动适用 |
+| 某类通知必达（不受偏好影响） | L0 | 桥接包选项里登记"必达组合" |
+| 按租户设不同的通知保留期 | L5 | 首期保留期为宿主级；确有需求时补保留策略钩子 |
+| 关掉某个组件的周期任务 / 改执行时间 | L0 | 作业级开关与调度配置；一次性进程关全局开关 |
+| 换成 Quartz 集群调度 | L3 | 引用提供器包，作业代码不变 |
+| 组件端点也要两步验证放行 | L1 | 按组件公开的端点名常量加元数据 |
+| 组件端点也要包 `Result` | L1 | 路由组上 `WithResultWrapper()` |
+| 权限授予要支持用户直授、部门 | L0 + L2 | 选项开放主体类型；主体目录钩子解析这些类型 |
+| identity 建管理员、crm 建默认数据 | L2 | 各服务实现自己的 `ITenantProvisioner`，多个实现按注册顺序执行、按逆序清理 |
+| 修改组件的错误提示文案 | L0 | 业务资源里覆盖同名键（后注册的程序集覆盖框架默认译文） |
+| 存储换成非 EF 实现 | L3 | 实现 `I*Store` 并先于组件注册；维护任务由该实现提供 |
+
+### 5. 三个业务仓现有临时处理的去向
+
+| 临时处理 | 替代 |
+| --- | --- |
+| `DurableFailureOperationRecorder` 及注册 | 删除，框架失败记录已独立提交（已完成） |
+| crm 端点"权限策略放最后"的特性顺序约束 | 删除，授权依据取实际未通过的策略（已完成） |
+| 三仓共享的"遍历物理库"通用类 | `ITenantDatabaseEnumerator`（已完成）+ `ITenantDatabaseRunner`（阶段 2） |
+| 三仓各自的每日归档、执行记录清理后台服务 | 操作记录保留期由组件提供；执行记录清理改写为 `IRecurringJob`（Cluster） |
+| foundation 唯一的 Hangfire 探测任务 | 改为 `IRecurringJob`；若需持久化重试，引用 Hangfire 提供器包 |
+| identity 的 `CreateWithConnectionsAsync` | 租户管理用例的多连接创建 |
+| 三仓的 SQLite 双库测试宿主 | 暂不提供测试包（原审查第 11 条），待阶段 7 完成后再评估 |

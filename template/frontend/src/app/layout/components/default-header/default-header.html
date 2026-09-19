@@ -4,55 +4,64 @@
 >
   <!-- 折叠按钮 + 分隔线 + 路由面包屑 -->
   <div class="flex items-center gap-2 flex-1 min-w-0">
-    <!--#if (IncludeLocalization)-->
-    <button
-      hlmSidebarTrigger
-      size="icon"
-      position="bottom"
-      [attr.aria-label]="'common.toggleSidebar' | transloco"
-      [hlmTooltip]="sidebarTip"
-    ></button>
-    <!--#else-->
-    <button
-      hlmSidebarTrigger
-      size="icon"
-      position="bottom"
-      aria-label="Toggle sidebar"
-      [hlmTooltip]="sidebarTip"
-    ></button>
-    <!--#endif-->
-    <ng-template #sidebarTip>
-      <span class="flex items-center gap-2">
-        <!--#if (IncludeLocalization)-->
-        {{ 'common.toggleSidebar' | transloco }}
-        <!--#else-->
-        Toggle sidebar
-        <!--#endif-->
-        <kbd hlmKbdGroup><kbd hlmKbd>⌘ B</kbd></kbd>
-      </span>
-    </ng-template>
-
-    <hlm-separator orientation="vertical" class="me-2 !h-6 !self-center" />
-
-    <nav hlmBreadcrumb class="overflow-hidden">
-      <ol hlmBreadcrumbList>
-        <li hlmBreadcrumbItem class="hidden sm:inline-flex">
+    @if (layout() === 'topbar') {
+      <app-workspace-nav />
+    } @else {
+      <!--#if (IncludeLocalization)-->
+      <button
+        hlmSidebarTrigger
+        size="icon"
+        position="bottom"
+        [attr.aria-label]="'common.toggleSidebar' | transloco"
+        [hlmTooltip]="sidebarTip"
+      ></button>
+      <!--#else-->
+      <button
+        hlmSidebarTrigger
+        size="icon"
+        position="bottom"
+        aria-label="Toggle sidebar"
+        [hlmTooltip]="sidebarTip"
+      ></button>
+      <!--#endif-->
+      <ng-template #sidebarTip>
+        <span class="flex items-center gap-2">
           <!--#if (IncludeLocalization)-->
-          <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{ homeLabel() | transloco }}</a>
+          {{ 'common.toggleSidebar' | transloco }}
           <!--#else-->
-          <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{ homeLabel() }}</a>
+          Toggle sidebar
           <!--#endif-->
-        </li>
-        <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
-        <li hlmBreadcrumbItem class="min-w-0">
-          <span hlmBreadcrumbPage class="truncate">{{ layoutService.title() }}</span>
-        </li>
-      </ol>
-    </nav>
+          <kbd hlmKbdGroup><kbd hlmKbd>⌘ B</kbd></kbd>
+        </span>
+      </ng-template>
+
+      <hlm-separator orientation="vertical" class="me-2 !h-6 !self-center" />
+
+      <nav hlmBreadcrumb class="overflow-hidden">
+        <ol hlmBreadcrumbList>
+          <li hlmBreadcrumbItem class="hidden sm:inline-flex">
+            <!--#if (IncludeLocalization)-->
+            <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{
+              homeLabel() | transloco
+            }}</a>
+            <!--#else-->
+            <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{ homeLabel() }}</a>
+            <!--#endif-->
+          </li>
+          <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
+          <li hlmBreadcrumbItem class="min-w-0">
+            <span hlmBreadcrumbPage class="truncate">{{ layoutService.title() }}</span>
+          </li>
+        </ol>
+      </nav>
+    }
   </div>
 
   <!-- Right Actions -->
   <div class="flex items-center gap-2 md:gap-4">
+    @if (layout() === 'topbar') {
+      <app-workspace-nav placement="end" />
+    }
     <!--#if (LocalIdentity)-->
     <!-- 模拟登录状态：常驻在顶栏里，而不是在顶栏上方另起一整行红色横幅。
          横幅会把整页往下推 44px，进出模拟时布局整体跳动，饱和红底也过于刺眼。
@@ -165,5 +174,9 @@
     <!-- Language Switcher: 铃铛右侧 -->
     <app-language-switcher />
     <!--#endif-->
+    @if (layout() === 'topbar') {
+      <!-- 侧栏布局里头像在侧栏底部；顶栏布局没有侧栏，放在最右 -->
+      <app-user-menu variant="topbar" />
+    }
   </div>
 </header>

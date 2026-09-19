@@ -7,6 +7,7 @@ import { lucideLogOut, lucideMonitor, lucideSmartphone, lucideTablet } from '@ng
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmItemImports } from '@spartan-ng/helm/item';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
@@ -37,7 +38,7 @@ const OTHERS = 'others';
  */
 @Component({
   selector: 'app-login-devices',
-  imports: [NgIcon, HlmBadge, HlmButton, HlmSpinner],
+  imports: [NgIcon, HlmBadge, HlmButton, HlmSpinner, ...HlmItemImports],
   providers: [provideIcons({ lucideLogOut, lucideMonitor, lucideSmartphone, lucideTablet })],
   templateUrl: './login-devices.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

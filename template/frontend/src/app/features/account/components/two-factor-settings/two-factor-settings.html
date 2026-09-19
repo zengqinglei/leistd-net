@@ -1,11 +1,11 @@
 <section
-  class="border-border flex flex-col gap-4 rounded-lg border p-4 sm:p-6"
+  class="border-border flex flex-col gap-4 rounded-xl border p-4 sm:p-6"
   data-testid="security-two-factor"
 >
   <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div class="flex flex-col gap-1">
       <div class="flex flex-wrap items-center gap-2">
-        <h3 class="text-base leading-none font-semibold">{{ t('account.twoFactor.header') }}</h3>
+        <h3 class="text-sm leading-none font-semibold">{{ t('account.twoFactor.header') }}</h3>
         @if (status()?.enabled) {
           <span
             hlmBadge
@@ -61,7 +61,7 @@
           (submit)="$event.preventDefault(); disable()"
         >
           <p class="text-muted-foreground text-sm">{{ t('account.twoFactor.disableHint') }}</p>
-          <div class="grid gap-3 sm:grid-cols-2">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               hlmInput
               type="password"
@@ -71,16 +71,10 @@
               [value]="password()"
               (input)="onPasswordInput($event)"
             />
-            <input
-              hlmInput
-              class="font-mono tracking-widest"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              maxlength="7"
-              [attr.aria-label]="t('account.twoFactor.codeLabel')"
-              [placeholder]="t('account.twoFactor.codeLabel')"
-              [value]="code()"
-              (input)="onCodeInput($event)"
+            <app-otp-code-input
+              inputId="two-factor-disable-code"
+              [label]="t('account.twoFactor.codeLabel')"
+              [(value)]="code"
             />
           </div>
           <div class="flex gap-2">
@@ -109,17 +103,11 @@
           (submit)="$event.preventDefault(); regenerate()"
         >
           <p class="text-muted-foreground text-sm">{{ t('account.twoFactor.regenerateHint') }}</p>
-          <div class="flex flex-col gap-2 sm:flex-row">
-            <input
-              hlmInput
-              class="font-mono tracking-widest sm:w-40"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              maxlength="7"
-              [attr.aria-label]="t('account.twoFactor.codeLabel')"
-              [placeholder]="t('account.twoFactor.codeLabel')"
-              [value]="code()"
-              (input)="onCodeInput($event)"
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <app-otp-code-input
+              inputId="two-factor-regenerate-code"
+              [label]="t('account.twoFactor.codeLabel')"
+              [(value)]="code"
             />
             <div class="flex gap-2">
               <button hlmBtn type="submit" [disabled]="!codeValid() || busy()">

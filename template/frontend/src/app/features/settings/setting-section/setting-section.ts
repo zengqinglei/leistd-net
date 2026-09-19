@@ -4,6 +4,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCircleCheck, lucideCircleX, lucideRotateCcw } from '@ng-icons/lucide';
+import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmComboboxImports } from '@spartan-ng/helm/combobox';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -85,6 +86,7 @@ export const SAVING_MIN_MS = 400;
   //#if (IncludeLocalization)
   imports: [
     NgIcon,
+    HlmBadge,
     HlmButton,
     HlmInput,
     HlmSpinner,
@@ -101,6 +103,7 @@ export const SAVING_MIN_MS = 400;
   //#else
   imports: [
     NgIcon,
+    HlmBadge,
     HlmButton,
     HlmInput,
     HlmSpinner,
@@ -200,6 +203,11 @@ export class SettingSection {
     return this.transloco.translate('settings.timeZoneEmpty');
   });
 
+  protected readonly timeZoneToggleLabel = computed(() => {
+    this.translationReady();
+    return this.transloco.translate('settings.timeZoneToggle');
+  });
+
   protected readonly browserTimeZoneLabel = computed(() => {
     this.translationReady();
     return this.transloco.translate('settings.browserTimeZone');
@@ -239,6 +247,7 @@ export class SettingSection {
 
   protected readonly timeZoneSearchLabel = computed(() => 'Search city or UTC offset');
   protected readonly timeZoneEmptyLabel = computed(() => 'No matching time zone');
+  protected readonly timeZoneToggleLabel = computed(() => 'Show time zones');
   protected readonly browserTimeZoneLabel = computed(() => 'browser');
   protected readonly followSystemLabel = computed(() => 'Follows your system');
   protected readonly hostScopeHint = computed(() => 'Applies to all instances (~30s)');

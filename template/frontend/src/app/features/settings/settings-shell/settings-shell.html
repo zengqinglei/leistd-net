@@ -23,8 +23,8 @@
                 <!-- hlmSheetClose 只能挂在 button 上；链接在点选后由抽屉上下文关闭 -->
                 <a
                   hlmBtn
-                  class="justify-start"
-                  [variant]="activePanel()?.path === panel.path ? 'secondary' : 'ghost'"
+                  variant="ghost"
+                  class="justify-start aria-[current=page]:bg-primary/10 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
                   [routerLink]="[panel.path]"
                   [attr.aria-current]="activePanel()?.path === panel.path ? 'page' : null"
                   (click)="ctx.close()"
@@ -38,7 +38,7 @@
         </hlm-sheet>
         <div class="flex min-w-0 flex-col gap-2">
           <h1
-            class="text-2xl leading-none font-extrabold tracking-tight"
+            class="text-2xl leading-none font-semibold tracking-tight"
             data-testid="settings-title"
           >
             {{ heading() }}
@@ -60,8 +60,8 @@
           @for (panel of panels(); track panel.path) {
             <a
               hlmBtn
-              class="justify-start"
-              [variant]="activePanel()?.path === panel.path ? 'secondary' : 'ghost'"
+              variant="ghost"
+              class="justify-start aria-[current=page]:bg-primary/10 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
               [routerLink]="[panel.path]"
               [attr.aria-current]="activePanel()?.path === panel.path ? 'page' : null"
               [attr.data-testid]="'settings-panel-link-' + panel.path"
@@ -75,7 +75,7 @@
         <main class="flex min-w-0 flex-auto flex-col gap-4">
           @if (activePanel(); as panel) {
             <header class="flex flex-col gap-1">
-              <h2 class="text-xl leading-none font-bold tracking-tight">{{ panel.label }}</h2>
+              <h2 class="text-base leading-none font-semibold">{{ panel.label }}</h2>
               @if (panel.description) {
                 <p class="text-muted-foreground text-sm">{{ panel.description }}</p>
               }

@@ -22,14 +22,14 @@
             [alt]="t('account.twoFactor.qrAlt')"
             width="160"
             height="160"
-            class="size-40 shrink-0 self-center rounded-md border border-border bg-white p-1 sm:self-auto"
+            class="size-40 shrink-0 self-center rounded-lg border border-border bg-white p-1 sm:self-auto"
             data-testid="two-factor-qr"
           />
         }
         <div class="flex min-w-0 flex-col gap-2">
           <span class="text-muted-foreground text-xs">{{ t('account.twoFactor.manualHint') }}</span>
           <code
-            class="bg-muted rounded-md px-3 py-2 font-mono text-sm break-all select-all"
+            class="bg-muted rounded-lg px-3 py-2 font-mono text-sm break-all select-all"
             data-testid="two-factor-secret"
             >{{ groupedSecret() }}</code
           >
@@ -52,18 +52,11 @@
       <label class="text-sm font-medium" for="two-factor-setup-code">{{
         t('account.twoFactor.verifyTitle')
       }}</label>
-      <div class="flex flex-col gap-2 sm:flex-row">
-        <input
-          hlmInput
-          id="two-factor-setup-code"
-          class="font-mono tracking-widest sm:w-40"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          maxlength="7"
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <app-otp-code-input
+          inputId="two-factor-setup-code"
           data-testid="two-factor-setup-code"
-          [attr.aria-label]="t('account.twoFactor.codeLabel')"
-          [value]="code()"
-          (input)="onCodeInput($event)"
+          [(value)]="code"
         />
         <div class="flex gap-2">
           <button hlmBtn type="submit" [disabled]="!canSubmit()" data-testid="two-factor-enable">

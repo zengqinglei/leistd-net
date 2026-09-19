@@ -6,17 +6,9 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
-import {
-  lucideZap,
-  lucideCircleCheck,
-  lucideInfo,
-  lucideEye,
-  lucideEyeOff,
-  lucideX,
-} from '@ng-icons/lucide';
+import { lucideInfo, lucideEye, lucideEyeOff, lucideX } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 import {
@@ -38,14 +30,10 @@ import { AuthorizationService } from '../../../../core/services/authorization-se
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
-//#if (IncludeLocalization)
-import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
-//#endif
-import { Logo } from '../../../../shared/components/logo/logo';
-import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
 import { TenantService } from '../../../platform/services/tenant-service';
 import { AccountService } from '../../services/account-service';
+import { AuthShell } from '../auth-shell/auth-shell';
 import { TwoFactorChallenge } from '../two-factor-challenge/two-factor-challenge';
 
 // GitHub 品牌图标（lucide 已下架品牌 logo，用官方 SVG path 自定义注入）
@@ -65,22 +53,17 @@ const githubIcon =
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupButton,
-    ThemeModeToggle,
-    ...HlmCardImports,
     ...HlmFieldImports,
     //#if (IncludeLocalization)
-    LanguageSwitcher,
     TranslocoModule,
     //#endif
-    Logo,
+    AuthShell,
     TwoFactorChallenge,
   ],
   // prettier-ignore
   providers: [
     provideIcons({
-      lucideZap,
       lucideX,
-      lucideCircleCheck,
       lucideInfo,
       lucideEye,
       lucideEyeOff,

@@ -552,7 +552,7 @@ try
     Directory.CreateDirectory(uploadsRoot);
 
     app.UseDefaultFiles();
-    app.UseStaticFiles();
+    app.UseStaticFiles(SpaExtensions.CreateSpaStaticFileOptions());
     app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = new PhysicalFileProvider(uploadsRoot),

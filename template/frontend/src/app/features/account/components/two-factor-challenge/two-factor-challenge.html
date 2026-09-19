@@ -29,17 +29,13 @@
         (input)="onInput($event)"
       />
     } @else {
-      <input
-        hlmInput
-        class="font-mono text-lg tracking-[0.4em] placeholder:font-sans placeholder:text-sm placeholder:tracking-normal"
-        inputmode="numeric"
-        autocomplete="one-time-code"
-        maxlength="7"
+      <app-otp-code-input
+        inputId="two-factor-code"
         data-testid="two-factor-code-input"
-        [attr.aria-label]="t('account.twoFactorLogin.codeLabel')"
-        [placeholder]="t('account.twoFactorLogin.codeLabel')"
-        [value]="value()"
-        (input)="onInput($event)"
+        [label]="t('account.twoFactorLogin.codeLabel')"
+        [autofocus]="true"
+        [(value)]="value"
+        (completed)="submit()"
       />
     }
     <button

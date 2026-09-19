@@ -87,6 +87,7 @@
   "layout": {
     "sidebar": {
       "navigation": "导航",
+      "navigationDescription": "浏览本区域的各项功能。",
       "appTitle": "模板项目",
       "switchArea": "切换区域",
       "groupWork": "工作",
@@ -106,6 +107,9 @@
       "groupAudit": "审计",
       "groupPersonal": "个人",
       "settings": "设置"
+    },
+    "topbar": {
+      "openNavigation": "打开导航"
     },
     "notifications": {
       "title": "通知",
@@ -144,6 +148,7 @@
     "empty": "此分组下没有可配置项",
     "timeZoneSearch": "搜索城市或 UTC 偏移",
     "timeZoneEmpty": "没有匹配的时区",
+    "timeZoneToggle": "展开时区列表",
     "browserTimeZone": "浏览器",
     "followSystem": "跟随系统",
     "hostScopeHint": "全实例生效（约 30 秒）",
@@ -279,7 +284,7 @@
       "disabledToast": "两步验证已停用，其他设备已退出登录。",
       "loadFailed": "无法加载两步验证状态。",
       "scanTitle": "1. 把账号添加到身份验证器应用",
-      "scanHint": "用 Google Authenticator、Microsoft Authenticator 等应用扫描二维码。",
+      "scanHint": "用 Google Authenticator、Microsoft Authenticator、腾讯身份验证器等应用扫描二维码。",
       "manualHint": "无法扫码？改为手动输入这个密钥：",
       "copyKey": "复制密钥",
       "copied": "已复制",

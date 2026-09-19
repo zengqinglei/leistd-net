@@ -56,14 +56,14 @@
 
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
-          <h3 class="m-0 truncate text-lg font-semibold">{{ displayName() }}</h3>
+          <h3 class="m-0 truncate text-base font-semibold">{{ displayName() }}</h3>
           @if (user()?.isSuperAdmin) {
             <!--#if (IncludeLocalization)-->
-            <span hlmBadge variant="destructive">{{
+            <span hlmBadge variant="default">{{
               'account.profile.superAdminTag' | transloco
             }}</span>
             <!--#else-->
-            <span hlmBadge variant="destructive">Super Admin</span>
+            <span hlmBadge variant="default">Super Admin</span>
             <!--#endif-->
           } @else if (roleLabels().length > 0) {
             @for (role of roleLabels(); track role) {

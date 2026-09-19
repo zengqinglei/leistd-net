@@ -11,7 +11,7 @@
     >
       <!-- 一页里有多个分组时才出分组标题：单组面板的标题已经由外壳给出，再写一遍是重复。 -->
       @if (groups().length > 1) {
-        <h3 class="text-base leading-none font-semibold">{{ group.label }}</h3>
+        <h3 class="text-sm leading-none font-semibold">{{ group.label }}</h3>
       }
       <!-- 两列布局，窄屏自动落回单列。用 @container 而不是视口断点：面板宽度还受左侧面板导航
            与侧边栏折叠影响，按视口判断会在"视口够宽但面板很窄"时挤成两列。 -->
@@ -41,7 +41,10 @@
                       <hlm-combobox-value [placeholder]="inheritedLabelOf(setting, scope())" />
                     </hlm-combobox-trigger>
                     <hlm-combobox-content *hlmComboboxPortal>
-                      <hlm-combobox-input [placeholder]="timeZoneSearchLabel()" />
+                      <hlm-combobox-input
+                        [placeholder]="timeZoneSearchLabel()"
+                        [triggerAriaLabel]="timeZoneToggleLabel()"
+                      />
                       <div hlmComboboxList>
                         <hlm-combobox-empty>{{ timeZoneEmptyLabel() }}</hlm-combobox-empty>
                         @for (group of timeZones; track group.region) {
@@ -51,9 +54,7 @@
                               <hlm-combobox-item [value]="zone.value">
                                 <span class="truncate">{{ zone.city }}</span>
                                 @if (zone.isBrowser) {
-                                  <span
-                                    class="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[10px]"
-                                  >
+                                  <span hlmBadge variant="secondary">
                                     {{ browserTimeZoneLabel() }}
                                   </span>
                                 }
@@ -147,7 +148,7 @@
               <hlm-field-description class="flex min-h-4 flex-wrap items-center gap-x-2">
                 @if (setting.allowsHostScope) {
                   <!-- 进程级设置的生效范围与延迟不写出来的话，改完在别的实例上没变会被当成 bug -->
-                  <span class="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[10px]">
+                  <span hlmBadge variant="secondary">
                     {{ hostScopeHint() }}
                   </span>
                 }

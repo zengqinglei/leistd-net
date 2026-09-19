@@ -95,7 +95,8 @@ frontend/
 - **必须** 优先使用 Tailwind CSS v4 的原子类进行布局和微调
 - 自定义样式使用 Tailwind CSS v4
 - 任何自定义样式都**必须**与 Spartan UI 的主题风格保持一致（基于 Spartan 主题的 CSS 变量与 `.dark` class）
-- 登录/注册/落地页属**品牌隔离层**：允许使用具体色值（`blue-*`、hex 等）营造品牌视觉，这些页面的样式**不是**业务页面可复制的范式；业务页面一律使用语义化主题变量
+- 所有页面一律使用语义化主题变量，不写具体色值（`blue-*`、hex 等）。换品牌改 `src/styles.css` 里的令牌：品牌色亮暗成对改（同一色相，亮色 L≈0.52、暗色 L≈0.72），中性色带一点跟随品牌色相的彩度
+- 登录、注册、强制启用两步验证共用 `features/account/components/auth-shell`（品牌标识 + 居中卡片 + 主题/语言切换）。这几页在一次登录里连续经过，外观必须一致
 
 ### 4.3 有限语义色板
 
@@ -126,6 +127,50 @@ frontend/
 - **两层结构**：brain 层 `@spartan-ng/brain` 是无头基元，作为 npm 依赖引入、不改；helm 层是样式实现，通过 CLI **复制进本项目** `libs/ui/`，属自有代码，可自由修改。
 - **加组件**：`ng g @spartan-ng/cli:ui --name=<comp>`，把对应 helm 组件生成到 `libs/ui/`。
 - **升级**：升级 `@spartan-ng/brain` + `@spartan-ng/cli` 后跑 `ng g @spartan-ng/cli:healthcheck` 检查兼容性；**已改过的 helm 组件禁用 `migrate-helm-libraries`**（它会用上游版本覆盖自定义改动），需对照上游变更**手动合入**。为保稳定，锁定 brain / CLI 的小版本，只走官方 `healthcheck` 流程升级。
+- **已定制的 helm 组件**（升级时逐个对照上游手动合入）：
+
+  | 组件 | 改动 | 原因 |
+  | --- | --- | --- |
+  | `button` | `default` / `lg` 加 `pointer-coarse:h-11`，`icon` / `icon-lg` 加 `pointer-coarse:size-11` | 触屏设备的点按目标不小于 44px；`xs` / `sm` 是刻意选的紧凑尺寸，不改 |
+  | `input`、`input-group` | 加 `pointer-coarse:h-11` | 与按钮同高，表单里并排时对齐 |
+  | `select`（trigger） | `data-[size=default]` 下加 `pointer-coarse:h-11` | 同上 |
+  | `dropdown-menu`（`hlm-dropdown-menu-trigger.ts`） | 改 `menuPosition` 后调用 CDK 触发器的 `ngOnChanges`，让已建好的 overlay 更新定位策略 | 上游直接赋值，不经过 `ngOnChanges`，菜单打开过一次后再改 `side` / `align` 不生效；侧栏内容在桌面与手机抽屉间复用同一实例，用户菜单与区域切换器的方向随断点变化，会被摆错。由 `dropdown-side-switch.spec.ts` 钉住，上游修复后删除 |
+  | `sidebar`（`hlm-sidebar.ts`） | 手机端抽屉加视觉隐藏的 `hlmSheetHeader`（标题 + 说明），新增 `mobileTitle` / `mobileDescription` 输入 | 抽屉是对话框，读屏器需要名称与说明；上游 shadcn 有这一段，spartan 移植时缺了（[spartan-ng/spartan#1758](https://github.com/spartan-ng/spartan/issues/1758)），上游补上后删除 |
+
+  用 `pointer-coarse` 而不是屏幕宽度判断：平板横屏很宽，但仍是手指操作。
+
+  升级步骤：升级 brain / CLI 后跑 `healthcheck`；未定制的组件用 `ng g @spartan-ng/cli:migrate-helm-libraries --libraries=<name>` 同步到新版本（传 `--libraries` 即非交互）；表中组件同样先同步，再对照上表把定制补回（`git diff` 可看出被覆盖的那几行）。helm 与 CLI 版本脱节时，新参数与无障碍改进不会自动到位——升级 CLI 不等于 helm 已更新。
+
+### 4.8 视觉规范
+
+字号按**层级**用，每一档只有一个职责，不出现档外值（`text-[10px]` 之类）。正文基准是 14px——按钮、输入框、表格、卡片描述都是这个字号，这是组件已经定下的。
+
+| 档位 | 用途 | 写法 |
+| --- | --- | --- |
+| 24px | 页面标题，每页一次 | `text-2xl font-semibold tracking-tight` |
+| 16px | 面板标题、卡片标题 | `text-base font-semibold` |
+| 14px | 分区标题 | `text-sm font-semibold` |
+| 14px | 正文、表格、按钮、输入 | `text-sm` |
+| 12px | 辅助说明、时间戳、徽章 | `text-xs` |
+| 30px | 仅仪表盘大数字 | `text-3xl` + `tabular-nums` |
+
+- 字重只用 400 / 500 / 600，不用 `font-bold` / `font-extrabold`。
+- 加在图标、`hlm-spinner` 上的 `text-*` 是图标尺寸，不受上表约束。
+- 输入框的 `text-base md:text-sm` 不要改：iOS Safari 遇到小于 16px 的输入框会在聚焦时放大页面。
+
+圆角三档，由元素的角色决定：
+
+| 档位 | 用于 |
+| --- | --- |
+| `rounded-xl` | 页面级容器：卡片、对话框、表格外框、设置面板的分区卡片 |
+| `rounded-lg` | 控件（按钮、输入框，组件已是）；嵌在卡片或对话框里的块、代码框、行项、图标块 |
+| `rounded-full` | 徽章、头像 |
+
+嵌套的块用 `lg` 而不是 `xl`：内外同一个圆角，层次就分不出来。组件内部的小元素（菜单项、清除按钮）跟随所在组件的写法。
+
+- **当前项**：侧栏、顶栏、设置面板导航统一用 `bg-primary/10 text-primary font-semibold`（按组件的状态属性挂，如 `data-active:`、`aria-[current=page]:`）。
+- **间距**：兄弟元素之间用 `flex` / `grid` + `gap-*`，不用 `space-y-*` 与逐个元素的外边距。页面外框统一 `p-4 sm:p-6`。
+- **暗色**：表面分五层逐级提亮（`sidebar` < `background` < `card` < `popover` < `muted`），不用纯黑；层级都在 `styles.css` 里定好，页面不写 `dark:` 颜色覆盖。
 
 ---
 
@@ -213,7 +258,7 @@ frontend/
 
 ## 8. 导航与菜单分组
 
-侧栏菜单是**信息架构**，不是控件清单：分组摆错了既不报错也不影响功能，只是让人找不到入口。两个区各有一套菜单（`layout/components/default-sidebar`），判据相同。
+导航菜单是**信息架构**，不是控件清单：分组摆错了既不报错也不影响功能，只是让人找不到入口。两个区各有一套菜单，都定义在 `layout/services/navigation-service.ts` 一处，管理平台的侧栏与工作空间的顶栏都从这里读，判据相同。
 
 | 分组 | 放什么 | 现有入口 |
 | --- | --- | --- |
@@ -233,6 +278,7 @@ frontend/
 - 菜单项只按权限裁剪（`permissions` 任一命中即可见），整组为空时**整组消失**，不留空标题——空标题看起来像加载失败。
 - 上面这些都有用例钉住：侧栏分组骨架在 `default-sidebar.spec.ts`，头像菜单的构成（含"不放切换租户"）在 `user-menu.spec.ts`，后者按**完整序列**断言——多一项少一项都会红。改导航要同时改用例，避免"顺手挪一个入口"没人察觉。
 - 设置页的面板（个人设置、系统设置各一套）走子路由，面板名进 URL：刷新、分享、头像菜单直达都落在同一面板。
+- **布局按服务对象选**：管理平台面向内部员工，条目多、会增长、需要按权限整组裁剪，用侧栏（`DefaultLayout`）；工作空间面向业务用户，内容优先，用顶栏（`WorkspaceLayout`），「个人」组（`placement: 'end'`）靠右、以图标按钮呈现（与主题、通知、语言同排，名称放在提示与可访问名里），其余靠左、用文字链接。工作空间的主导航超过 7 项，或需要分组标题与按权限整组裁剪时，把路由换回 `DefaultLayout`——菜单定义不用动。
 
 ---
 

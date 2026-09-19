@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 //#if (IncludeLocalization)
 //#if (LocalIdentity)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
@@ -36,6 +36,8 @@ import { LayoutService } from '../../services/layout-service';
 //#if (IncludeNotifications)
 import { Notifications } from '../notifications/notifications';
 //#endif
+import { UserMenu } from '../user-menu/user-menu';
+import { WorkspaceNav } from '../workspace-nav/workspace-nav';
 
 @Component({
   selector: 'app-default-header',
@@ -49,6 +51,8 @@ import { Notifications } from '../notifications/notifications';
     ...HlmKbdImports,
     ...HlmSeparatorImports,
     ...HlmTooltipImports,
+    UserMenu,
+    WorkspaceNav,
     //#if (LocalIdentity)
     NgIcon,
     ...HlmPopoverImports,
@@ -69,6 +73,12 @@ import { Notifications } from '../notifications/notifications';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DefaultHeader {
+  /**
+   * `sidebar`：配合侧栏，左侧是折叠按钮与面包屑，头像在侧栏底部。
+   * `topbar`：没有侧栏，左侧是品牌与导航，头像放在最右。
+   */
+  readonly layout = input<'sidebar' | 'topbar'>('sidebar');
+
   readonly layoutService = inject(LayoutService);
   //#if (LocalIdentity)
   readonly impersonation = inject(ImpersonationService);

@@ -1,19 +1,19 @@
 <div class="flex w-full max-w-3xl flex-col gap-8">
   <!-- 每一节一个卡片：标题说"这是什么"，描述说"为什么要管它"。 -->
   <section
-    class="border-border flex flex-col gap-4 rounded-lg border p-4 sm:p-6"
+    class="border-border flex flex-col gap-4 rounded-xl border p-4 sm:p-6"
     data-testid="security-password"
   >
     <header class="flex flex-col gap-1">
       <!--#if (IncludeLocalization)-->
-      <h3 class="text-base leading-none font-semibold">
+      <h3 class="text-sm leading-none font-semibold">
         {{ 'account.changePassword.header' | transloco }}
       </h3>
       <p class="text-muted-foreground text-sm">
         {{ 'account.changePassword.subtitle' | transloco }}
       </p>
       <!--#else-->
-      <h3 class="text-base leading-none font-semibold">Change password</h3>
+      <h3 class="text-sm leading-none font-semibold">Change password</h3>
       <p class="text-muted-foreground text-sm">
         Enter your current password and set a new sign-in password. Other devices will be signed
         out.

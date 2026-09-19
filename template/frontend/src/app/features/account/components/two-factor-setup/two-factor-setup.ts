@@ -14,7 +14,6 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideCopy } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { toDataURL } from 'qrcode';
 import { finalize } from 'rxjs/operators';
@@ -25,6 +24,7 @@ import { translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { injectCopyToClipboard } from '../../../../shared/utils/clipboard';
 import { AccountService } from '../../services/account-service';
+import { OtpCodeInput } from '../otp-code-input/otp-code-input';
 
 /**
  * 设置两步验证：把密钥添加到身份验证器应用，再输入应用上的验证码确认启用。
@@ -34,7 +34,7 @@ import { AccountService } from '../../services/account-service';
  */
 @Component({
   selector: 'app-two-factor-setup',
-  imports: [NgIcon, HlmButton, HlmInput, HlmSpinner],
+  imports: [NgIcon, HlmButton, HlmSpinner, OtpCodeInput],
   providers: [provideIcons({ lucideCheck, lucideCopy })],
   templateUrl: './two-factor-setup.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -101,10 +101,6 @@ export class TwoFactorSetup {
     });
   }
 
-  protected onCodeInput(event: Event): void {
-    this.code.set((event.target as HTMLInputElement).value);
-  }
-
   // 剪贴板不可用（非安全上下文等）时用户仍能手动选中复制
   protected copySecret(): void {
     const secret = this.secret();
@@ -140,7 +136,7 @@ const ENGLISH: Record<string, string> = {
   'common.cancel': 'Cancel',
   'account.twoFactor.scanTitle': '1. Add this account to your authenticator app',
   'account.twoFactor.scanHint':
-    'Scan the QR code with an app such as Google Authenticator or Microsoft Authenticator.',
+    'Scan the QR code with an app such as Google Authenticator, Microsoft Authenticator or Tencent Authenticator.',
   'account.twoFactor.manualHint': "Can't scan it? Enter this key instead:",
   'account.twoFactor.copyKey': 'Copy key',
   'account.twoFactor.copied': 'Copied',
