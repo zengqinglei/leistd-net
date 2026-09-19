@@ -6,16 +6,22 @@ import {
   prepareAvatarImage,
 } from './avatar-image';
 
-/** 画一张指定尺寸的 PNG 当作用户选的原图。 */
-async function pngFile(width: number, height: number): Promise<File> {
+/**
+ * 画一张指定尺寸的 PNG 当作用户选的原图。
+ *
+ * 用同步的 toDataURL 而不是 toBlob：Chromium 在主线程上按空闲时间渐进编码 PNG，
+ * 用例连续执行时主线程少有空闲，最坏约 6.7s 才回调，超过 Jasmine 默认的 5s 超时。
+ */
+function pngFile(width: number, height: number): File {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d')!;
   context.fillStyle = '#3366cc';
   context.fillRect(0, 0, width, height);
-  const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'));
-  return new File([blob], 'photo.png', { type: 'image/png' });
+  const base64 = canvas.toDataURL('image/png').split(',')[1];
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  return new File([bytes], 'photo.png', { type: 'image/png' });
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -29,7 +35,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 describe('prepareAvatarImage', () => {
   it('非正方形的原图居中裁成正方形并缩放到固定边长', async () => {
-    const dataUrl = await prepareAvatarImage(await pngFile(800, 400));
+    const dataUrl = await prepareAvatarImage(pngFile(800, 400));
 
     expect(dataUrl).toMatch(/^data:image\/(webp|jpeg);base64,/);
     const image = await loadImage(dataUrl);
