@@ -73,11 +73,13 @@ public class EfCoreOperationRecordStore<TDbContext>(
         DateTime? endTime,
         int skip,
         int take,
-        OperationRecordVisibilityScope scope = default,
+        OperationRecordVisibilityScope scope,
         IReadOnlyCollection<string>? actions = null,
         OperationRecordOutcome? outcome = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(scope);
+
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         var query = dbContext.Set<OperationRecord>().AsNoTracking();
 
@@ -101,7 +103,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
         {
             var actorId = scope.ActorId;
             var includesHostRecords = scope.IncludesHostRecords;
-            // 两个布尔都先落成局部变量再进表达式树：直接写 scope.XXX 会把整个结构体
+            // 两个值都先落成局部变量再进表达式树：直接写 scope.XXX 会把整个对象
             // 捕获进查询，EF 需要把成员访问翻译成 SQL，翻不动时报的是很难对上号的运行期错。
             // Actor 层对宿主整层放行，对其余读者只放行"本人"。
             //

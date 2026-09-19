@@ -21,14 +21,12 @@ internal sealed class FakeOperationActionDefinition(
     string code,
     OperationVisibility visibility,
     string category = "test",
-    OperationSeverity severity = OperationSeverity.Info,
-    bool tracksChanges = false) : IOperationActionDefinition
+    OperationSeverity severity = OperationSeverity.Info) : IOperationActionDefinition
 {
     public string Code { get; } = code;
     public string Category { get; } = category;
     public OperationVisibility Visibility { get; } = visibility;
     public OperationSeverity Severity { get; } = severity;
-    public bool TracksChanges { get; } = tracksChanges;
 }
 
 /// <summary>
@@ -77,7 +75,7 @@ internal sealed class RecordingOperationRecordStore : IOperationRecordStore
 
     public Task<OperationRecordPage> GetPagedListAsync(
         string? keyword, DateTime? startTime, DateTime? endTime,
-        int skip, int take, OperationRecordVisibilityScope scope = default,
+        int skip, int take, OperationRecordVisibilityScope scope,
         IReadOnlyCollection<string>? actions = null,
         OperationRecordOutcome? outcome = null,
         CancellationToken cancellationToken = default)
@@ -92,7 +90,7 @@ internal sealed class ThrowingOperationRecordStore(Exception failure) : IOperati
 
     public Task<OperationRecordPage> GetPagedListAsync(
         string? keyword, DateTime? startTime, DateTime? endTime,
-        int skip, int take, OperationRecordVisibilityScope scope = default,
+        int skip, int take, OperationRecordVisibilityScope scope,
         IReadOnlyCollection<string>? actions = null,
         OperationRecordOutcome? outcome = null,
         CancellationToken cancellationToken = default)

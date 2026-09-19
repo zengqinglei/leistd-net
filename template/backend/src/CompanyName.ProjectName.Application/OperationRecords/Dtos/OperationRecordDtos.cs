@@ -174,6 +174,11 @@ public record ExportOperationRecordsInputDto : IValidatableObject
 
     /// <summary>按结果筛选；为空则不过滤。取值 <c>Succeeded</c> 或 <c>Failed</c>。</summary>
     [Display(Name = "Outcome")]
+    [AllowedValues(
+        null,
+        nameof(OperationRecordOutcome.Succeeded),
+        nameof(OperationRecordOutcome.Failed),
+        ErrorMessage = "{0} is not an allowed value.")]
     public string? Outcome { get; init; }
 
     /// <summary>导出条数，取值 1–<see cref="MaximumExportCount"/>。</summary>
@@ -182,7 +187,7 @@ public record ExportOperationRecordsInputDto : IValidatableObject
     public int Limit { get; init; } = MaximumExportCount;
 
     /// <summary>
-    /// 与分页查询同样的入口校验：起止倒置、结果取值非法都在这里拒掉。
+    /// 与分页查询同样的入口校验：起止倒置在这里拒掉，结果取值由属性上的 <c>[AllowedValues]</c> 限定。
     /// </summary>
     /// <remarks>
     /// 两处校验必须一致。导出这条路径放行了分页会拒的输入，就会出现
@@ -195,15 +200,6 @@ public record ExportOperationRecordsInputDto : IValidatableObject
             yield return new ValidationResult(
                 "The start time must not be later than the end time.",
                 [nameof(StartTime), nameof(EndTime)]);
-        }
-
-        if (!string.IsNullOrWhiteSpace(Outcome)
-            && !Enum.TryParse<OperationRecordOutcome>(Outcome, ignoreCase: true, out _))
-        {
-            yield return new ValidationResult(
-                $"'{Outcome}' is not a valid outcome. Valid values: "
-                + $"{nameof(OperationRecordOutcome.Succeeded)}, {nameof(OperationRecordOutcome.Failed)}.",
-                [nameof(Outcome)]);
         }
     }
 }
@@ -273,6 +269,11 @@ public record GetOperationRecordPagedInputDto : PagedRequestDto, IValidatableObj
     /// NIST AU-3 与 OWASP 都把 success/fail 列为审计记录的必需内容，混进动作码就没法独立筛选与告警。
     /// </remarks>
     [Display(Name = "Outcome")]
+    [AllowedValues(
+        null,
+        nameof(OperationRecordOutcome.Succeeded),
+        nameof(OperationRecordOutcome.Failed),
+        ErrorMessage = "{0} is not an allowed value.")]
     public string? Outcome { get; init; }
 
     /// <summary>
@@ -289,18 +290,6 @@ public record GetOperationRecordPagedInputDto : PagedRequestDto, IValidatableObj
             yield return new ValidationResult(
                 "The start time must not be later than the end time.",
                 [nameof(StartTime), nameof(EndTime)]);
-        }
-
-        // 非法的结果取值必须在入口拒掉，不能静默当作"不过滤"。
-        // 同上一条的理由：静默放行会让调用方看到**全量结果**却以为筛过了，
-        // 而对一张审计表来说，把"筛选条件没生效"显示成"这就是全部"同样是误导。
-        if (!string.IsNullOrWhiteSpace(Outcome)
-            && !Enum.TryParse<OperationRecordOutcome>(Outcome, ignoreCase: true, out _))
-        {
-            yield return new ValidationResult(
-                $"'{Outcome}' is not a valid outcome. Valid values: "
-                + $"{nameof(OperationRecordOutcome.Succeeded)}, {nameof(OperationRecordOutcome.Failed)}.",
-                [nameof(Outcome)]);
         }
     }
 }

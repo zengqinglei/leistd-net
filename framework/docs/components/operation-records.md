@@ -185,8 +185,8 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 | `IOperationActionDefinitionManager` | 动作定义的只读索引；`GetOrNull` 返回 `null` 即未登记。写入时记录器据此抛错；读取历史记录时调用方据此降级（原样显示裸码） |
 | `OperationRecordOptions` | `ImpersonatorIdClaimType` / `ImpersonatorNameClaimType`，默认值取自 `CustomClaimTypes` |
 | `IOperationRecordStore.InsertAsync(record, ct)` | 写入；成功记录跟随调用方的事务，失败记录在 `record.TenantId` 所指的层里独立提交 |
-| `IOperationRecordStore.GetPagedListAsync(keyword, startTime, endTime, skip, take, scope, actions, outcome, ct)` | 按创建时间倒序分页；关键字匹配动作码、目标标识与操作人名；时间两端都是**闭区间**且按 UTC 比较。`scope`／`actions`／`outcome` 均可选，**取消令牌务必具名传**——它前面有三个可选参数，按位置传时一旦再插入新参数，令牌会静默落到别的参数位上 |
-| `OperationRecordVisibilityScope` | 可见范围，**由调用方算好**；`default` 表示不过滤，`Host` 见全部，`ForTenantReader(actorId)` 见租户层加本人的 `Actor` 层。**存储不判定"谁是宿主"**——那需要它不该有的上下文依赖 |
+| `IOperationRecordStore.GetPagedListAsync(keyword, startTime, endTime, skip, take, scope, actions, outcome, ct)` | 按创建时间倒序分页；关键字匹配动作码、目标标识与操作人名；时间两端都是**闭区间**且按 UTC 比较。`scope` **必填**；`actions`／`outcome` 可选，**取消令牌务必具名传**——它前面有两个可选参数，按位置传时一旦再插入新参数，令牌会静默落到别的参数位上 |
+| `OperationRecordVisibilityScope` | 可见范围，**由调用方算好**，只能从三个入口取得：`Host` 见全部，`ForTenantReader(actorId)` 见租户层加本人的 `Actor` 层，`Unrestricted` 不过滤（仅供不代表读者的内部任务）。没有默认值——可见性是安全边界，漏传即越权。**存储不判定"谁是宿主"**——那需要它不该有的上下文依赖 |
 | `AddOperationRecords(services)` | 注册记录器 |
 | `AddOperationRecordsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddOperationRecords()` |
 | `ConfigureOperationRecords(modelBuilder)` | 映射 `OperationRecord` 实体 |

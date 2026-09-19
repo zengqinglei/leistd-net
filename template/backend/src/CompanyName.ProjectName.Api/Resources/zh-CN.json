@@ -243,6 +243,7 @@
     "{0} cannot exceed {1} characters.": "{0}长度不能超过 {1} 个字符",
     "{0} has an invalid format.": "{0}格式不正确",
     "{0} is not a valid email address.": "{0}不是有效的邮箱地址",
+    "{0} is not an allowed value.": "{0}取值无效",
     "{0} is required.": "{0}不能为空",
     "{0} is too large. Compress it and try again.": "{0}内容过大，请压缩后重试",
     "{0} must be 0 or greater.": "{0} 不能小于 0。",

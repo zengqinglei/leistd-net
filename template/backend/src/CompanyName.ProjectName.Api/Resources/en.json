@@ -243,6 +243,7 @@
     "{0} cannot exceed {1} characters.": "{0} cannot exceed {1} characters.",
     "{0} has an invalid format.": "{0} has an invalid format.",
     "{0} is not a valid email address.": "{0} is not a valid email address.",
+    "{0} is not an allowed value.": "{0} is not an allowed value.",
     "{0} is required.": "{0} is required.",
     "{0} is too large. Compress it and try again.": "{0} is too large. Compress it and try again.",
     "{0} must be 0 or greater.": "{0} must be 0 or greater.",

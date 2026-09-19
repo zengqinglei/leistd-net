@@ -240,15 +240,13 @@ public class OperationRecordAppService(
             isHostReader);
     }
 
-    /// <summary>解析结果筛选值；非法或为空都返回 <see langword="null"/>（不过滤）。</summary>
+    /// <summary>解析结果筛选值；为空返回 <see langword="null"/>（不过滤）。</summary>
     /// <remarks>
-    /// 必须与两个入参 DTO 的 <c>Validate</c> 用同一个 <c>ignoreCase</c>：不一致会让校验放行的值
-    /// 在这里解析失败、静默退化成"不过滤"——而那正是 <c>Validate</c> 要拦的那种误导。
+    /// 取值已由入参 DTO 上的 <c>[AllowedValues]</c> 限定为成员名称，这里按名称严格解析；
+    /// 不用 <c>Enum.TryParse</c> 兜底——它会把数字与逗号组合当作合法值。
     /// </remarks>
     private static OperationRecordOutcome? ParseOutcome(string? outcome) =>
-        Enum.TryParse<OperationRecordOutcome>(outcome, ignoreCase: true, out var parsed)
-            ? parsed
-            : null;
+        outcome is null ? null : Enum.Parse<OperationRecordOutcome>(outcome);
 
     /// <summary>把类别展开成动作码，并与显式给出的动作码取交集；都未给出时返回 <see langword="null"/>。</summary>
     /// <remarks>

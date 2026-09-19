@@ -9,7 +9,7 @@ namespace CompanyName.ProjectName.Application.OperationRecords.Provider;
 /// <para><b>与 <see cref="OperationRecordActions"/> 是两层，不是替代关系。</b>
 /// 常量类仍然保留并被逐字引用——控制器上的 <c>[OperationRecordAction(...)]</c> 是特性参数，
 /// 必须是<b>编译期常量</b>，换不成定义对象。这里是在常量之上补一层元数据
-/// （类别、严重度、可见性、是否带变更明细），让界面能按类别筛选、让闸门能断言文案齐全、
+/// （类别、严重度、可见性），让界面能按类别筛选、让闸门能断言文案齐全、
 /// 让 <c>Critical</c> 动作可以直接接告警。</para>
 /// <para>可见性逐条显式声明，<b>没有默认值</b>：省略时静默落到"租户可见"，
 /// 而宿主侧动作落成租户可见就是跨租户信息泄露，且只在真的建了租户之后才暴露。</para>
@@ -18,7 +18,7 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
 {
     public void Define(IOperationActionDefinitionContext context)
     {
-        // 账号：用户与角色自身的增删改。都带变更明细——"改了什么"是这类记录的第一追问。
+        // 账号：用户与角色自身的增删改。
         context.Add(
             OperationRecordActions.UserCreated,
             OperationCategories.Account,
@@ -26,8 +26,7 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         context.Add(
             OperationRecordActions.UserUpdated,
             OperationCategories.Account,
-            OperationVisibility.Tenant,
-            tracksChanges: true);
+            OperationVisibility.Tenant);
         context.Add(
             OperationRecordActions.UserDeleted,
             OperationCategories.Account,
@@ -49,14 +48,12 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordActions.UserRolesReplaced,
             OperationCategories.Authorization,
             OperationVisibility.Tenant,
-            OperationSeverity.Critical,
-            tracksChanges: true);
+            OperationSeverity.Critical);
         context.Add(
             OperationRecordActions.PermissionGrantsReplaced,
             OperationCategories.Authorization,
             OperationVisibility.Tenant,
-            OperationSeverity.Critical,
-            tracksChanges: true);
+            OperationSeverity.Critical);
 
         // 租户：宿主侧动作，可见性必须是 Host。落成 Tenant 就是跨租户信息泄露——
         // 甲租户的管理员会看到乙租户被创建、被停用。
@@ -68,14 +65,12 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         context.Add(
             OperationRecordActions.TenantUpdated,
             OperationCategories.Tenant,
-            OperationVisibility.Host,
-            tracksChanges: true);
+            OperationVisibility.Host);
         context.Add(
             OperationRecordActions.TenantActivationChanged,
             OperationCategories.Tenant,
             OperationVisibility.Host,
-            OperationSeverity.Critical,
-            tracksChanges: true);
+            OperationSeverity.Critical);
         context.Add(
             OperationRecordActions.TenantDeleted,
             OperationCategories.Tenant,
@@ -87,8 +82,7 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         context.Add(
             OperationRecordActions.SettingChanged,
             OperationCategories.Configuration,
-            OperationVisibility.Tenant,
-            tracksChanges: true);
+            OperationVisibility.Tenant);
 
         // 导出审计日志本身是安全事件：谁把历史带走了必须留痕。
         // 可见性取租户级——导出的是该租户自己的记录，租户管理员有权知道谁导走了。

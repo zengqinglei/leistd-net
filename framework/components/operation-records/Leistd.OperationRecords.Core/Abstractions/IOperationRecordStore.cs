@@ -41,7 +41,7 @@ public interface IOperationRecordStore
     /// <param name="skip">跳过条数。</param>
     /// <param name="take">取回条数。</param>
     /// <param name="scope">
-    /// 可见范围，由调用方算好；默认不加限制，与旧行为一致。
+    /// 可见范围，由调用方算好；必填，不过滤须显式传 <see cref="OperationRecordVisibilityScope.Unrestricted"/>。
     /// <b>本存储不判定"谁是宿主"</b>——那需要它不该有的上下文依赖，见
     /// <see cref="OperationRecordVisibilityScope"/>。
     /// </param>
@@ -62,7 +62,7 @@ public interface IOperationRecordStore
         DateTime? endTime,
         int skip,
         int take,
-        OperationRecordVisibilityScope scope = default,
+        OperationRecordVisibilityScope scope,
         IReadOnlyCollection<string>? actions = null,
         OperationRecordOutcome? outcome = null,
         CancellationToken cancellationToken = default);

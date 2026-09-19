@@ -11,9 +11,12 @@ namespace Leistd.OperationRecords.Abstractions;
 /// <para><b>租户维度不在此列。</b>跨租户隔离由 <c>IMultiTenant</c> 的全局查询过滤器承担
 /// （谓词是 <c>TenantId == CurrentTenantId</c>，宿主视角下即 <c>TenantId == null</c>），
 /// 本类型只在同一层内部再分一次"这条给不给看"。</para>
-/// <para>默认值（<c>default</c>）表示<b>不加限制</b>：既有调用方不传它时行为与从前一致。</para>
+/// <para><b>可见性是安全边界，没有默认值。</b>实例只能从 <see cref="Host"/>、
+/// <see cref="ForTenantReader"/> 与 <see cref="Unrestricted"/> 取得：做成值类型的话，
+/// <c>default</c> 总得落在某个取值上，落在"不过滤"就是漏记一个参数即越权，
+/// 落在"最严"又会让宿主查出空结果。不过滤只能显式写出来。</para>
 /// </remarks>
-public readonly record struct OperationRecordVisibilityScope
+public sealed class OperationRecordVisibilityScope
 {
     private OperationRecordVisibilityScope(bool restricted, bool includesHostRecords, string? actorId)
     {
@@ -22,18 +25,7 @@ public readonly record struct OperationRecordVisibilityScope
         ActorId = actorId;
     }
 
-    /// <summary>
-    /// 是否施加可见性限制。<c>default</c> 时为 <see langword="false"/>，即<b>不过滤</b>。
-    /// </summary>
-    /// <remarks>
-    /// <para><b>字段特意取"是否受限"而不是"是否不受限"</b>：结构体的 <c>default</c> 把所有
-    /// 布尔置为 <see langword="false"/>，只有这个方向才能让"什么都不传"落到"与从前一致"，
-    /// 而不是落到"把所有 Host 层记录静默滤光"。反过来命名会让每个不传参数的调用方
-    /// 都掉进同一个坑，且症状是"查出来是空的"这种最难联想到默认值的表现。</para>
-    /// <para><b>这也意味着忘记传 <c>scope</c> 就是不过滤。</b>这个取舍是刻意的：本存储的契约是
-    /// "只负责写入与查询，不做租户判定"，可见性判定属于调用方；让组件在参数缺失时
-    /// 自作主张收紧，会把一个它无权做的决定藏在默认值里。真正的边界由调用方显式表达。</para>
-    /// </remarks>
+    /// <summary>是否施加可见性限制；仅 <see cref="Unrestricted"/> 为 <see langword="false"/>。</summary>
     public bool IsRestricted { get; }
 
     /// <summary>读者能否看到 <see cref="OperationVisibility.Host"/> 层的记录。</summary>
@@ -51,8 +43,11 @@ public readonly record struct OperationRecordVisibilityScope
     /// <summary>宿主视角：所有层级都可见。</summary>
     public static OperationRecordVisibilityScope Host { get; } = new(true, true, null);
 
-    /// <summary>不加限制，与不传本参数等价（即 <c>default</c>）。</summary>
-    public static OperationRecordVisibilityScope Unrestricted { get; } = default;
+    /// <summary>
+    /// 不加可见性限制，供不代表某个读者的内部任务使用（如归档、导出到运维系统）。
+    /// </summary>
+    /// <remarks>面向用户的查询应使用 <see cref="Host"/> 或 <see cref="ForTenantReader"/>。</remarks>
+    public static OperationRecordVisibilityScope Unrestricted { get; } = new(false, true, null);
 
     /// <summary>
     /// 租户视角：看不到 <c>Host</c> 层；<c>Actor</c> 层仅当记录的操作人是本人。

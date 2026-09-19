@@ -18,7 +18,7 @@ namespace Leistd.OperationRecords.Abstractions;
 ///     {
 ///         context.Add("user.created", OperationCategories.Account, OperationVisibility.Tenant);
 ///         context.Add("permission-grants.replaced", OperationCategories.Authorization,
-///             OperationVisibility.Tenant, OperationSeverity.Critical, tracksChanges: true);
+///             OperationVisibility.Tenant, OperationSeverity.Critical);
 ///     }
 /// }
 /// </code>
@@ -49,14 +49,12 @@ public interface IOperationActionDefinitionContext
     /// 判据是这条记录描述的操作属于谁的边界。
     /// </param>
     /// <param name="severity">严重度，默认 <see cref="OperationSeverity.Info"/>。</param>
-    /// <param name="tracksChanges">该动作是否携带字段级变更明细。</param>
     /// <returns>登记后的定义。</returns>
     IOperationActionDefinition Add(
         string code,
         string category,
         OperationVisibility visibility,
-        OperationSeverity severity = OperationSeverity.Info,
-        bool tracksChanges = false);
+        OperationSeverity severity = OperationSeverity.Info);
 
     /// <summary>按动作码查找定义；不存在时返回 <see langword="null"/>。</summary>
     IOperationActionDefinition? GetOrNull(string code);
@@ -78,9 +76,6 @@ public interface IOperationActionDefinition
 
     /// <summary>严重度。</summary>
     OperationSeverity Severity { get; }
-
-    /// <summary>是否携带字段级变更明细。</summary>
-    bool TracksChanges { get; }
 }
 
 /// <summary>
