@@ -52,7 +52,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 
 ## 使用
 
-动作码与授权依据都由业务自己定义并保持稳定——框架只把它们原样存下去，从不解释，因此不提供枚举也不提供常量。动作码还要保持稳定，界面按它本地化：
+动作码、类别与授权依据都由业务自己定义并保持稳定——框架只把它们原样存下去，从不解释，因此不提供枚举也不提供常量。动作码还要保持稳定，界面按它本地化：
 
 ```csharp
 public static class OperationRecordActions
@@ -60,6 +60,13 @@ public static class OperationRecordActions
     public const string UserCreated = "identity.user.created";
     public const string UserDisabled = "identity.user.disabled";
     public const string PasswordChanged = "identity.user.password-changed";
+}
+
+/// <summary>动作的类别，驱动界面的分类筛选。</summary>
+public static class OperationRecordCategories
+{
+    public const string Account = "account";
+    public const string Authentication = "authentication";
 }
 
 /// <summary>不由权限把守的操作，凭什么放行。</summary>
@@ -80,9 +87,9 @@ public class AppOperationActionDefinitionProvider : IOperationActionDefinitionPr
 {
     public void Define(IOperationActionDefinitionContext context)
     {
-        context.Add(OperationRecordActions.UserCreated, OperationCategories.Account, OperationVisibility.Tenant);
-        context.Add(OperationRecordActions.UserDisabled, OperationCategories.Account, OperationVisibility.Tenant);
-        context.Add(OperationRecordActions.PasswordChanged, OperationCategories.Authentication, OperationVisibility.Actor);
+        context.Add(OperationRecordActions.UserCreated, OperationRecordCategories.Account, OperationVisibility.Tenant);
+        context.Add(OperationRecordActions.UserDisabled, OperationRecordCategories.Account, OperationVisibility.Tenant);
+        context.Add(OperationRecordActions.PasswordChanged, OperationRecordCategories.Authentication, OperationVisibility.Actor);
     }
 }
 
@@ -180,8 +187,7 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 | `OperationRecordOutcome` | `Succeeded`、`Failed`；只有两档 |
 | `OperationVisibility` | `Tenant` / `Host` / `Actor`；写入时由动作定义盖章。`Host` 表示记录属于宿主层，见「可见性与记录所在的层」 |
 | `OperationSeverity` | `Info` / `Notice` / `Critical`；描述动作本身有多要紧，与结果好坏无关 |
-| `OperationCategories` | 类别常量（认证、账号、授权、租户、配置、数据）；是字符串而非枚举，业务可自定义 |
-| `IOperationActionDefinitionProvider` | 登记本模块的动作定义；宿主用 `AddSingleton<IOperationActionDefinitionProvider, ...>()` 注册 |
+| `IOperationActionDefinitionProvider` | 登记本模块的动作定义；宿主用 `AddSingleton<IOperationActionDefinitionProvider, ...>()` 注册。类别是业务定义的字符串，框架不预置清单 |
 | `IOperationActionDefinitionManager` | 动作定义的只读索引；`GetOrNull` 返回 `null` 即未登记。写入时记录器据此抛错；读取历史记录时调用方据此降级（原样显示裸码） |
 | `OperationRecordOptions` | `ImpersonatorIdClaimType` / `ImpersonatorNameClaimType`，默认值取自 `CustomClaimTypes` |
 | `IOperationRecordStore.InsertAsync(record, ct)` | 写入；成功记录跟随调用方的事务，失败记录在 `record.TenantId` 所指的层里独立提交 |

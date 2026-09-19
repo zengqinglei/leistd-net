@@ -258,7 +258,6 @@ public record GetOperationRecordPagedInputDto : PagedRequestDto, IValidatableObj
     public List<string>? Categories { get; init; }
 
     /// <summary>按动作码筛选（多选，命中任一即匹配）；为空则不过滤。与类别同时给出时取交集。</summary>
-    /// <remarks>与 <see cref="Categories"/> 同时给出时取<b>并集</b>：两者都是"我想看哪些动作"。</remarks>
     [Display(Name = "Actions")]
     [MaxLength(50, ErrorMessage = "{0} cannot contain more than {1} items.")]
     public List<string>? Actions { get; init; }

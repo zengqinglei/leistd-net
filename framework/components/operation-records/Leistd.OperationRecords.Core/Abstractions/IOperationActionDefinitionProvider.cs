@@ -16,8 +16,8 @@ namespace Leistd.OperationRecords.Abstractions;
 /// {
 ///     public void Define(IOperationActionDefinitionContext context)
 ///     {
-///         context.Add("user.created", OperationCategories.Account, OperationVisibility.Tenant);
-///         context.Add("permission-grants.replaced", OperationCategories.Authorization,
+///         context.Add("user.created", "account", OperationVisibility.Tenant);
+///         context.Add("permission-grants.replaced", "authorization",
 ///             OperationVisibility.Tenant, OperationSeverity.Critical);
 ///     }
 /// }
@@ -41,7 +41,7 @@ public interface IOperationActionDefinitionContext
     /// </summary>
     /// <param name="code">动作码，全局唯一且一经发布不可更改（如 <c>user.created</c>）。</param>
     /// <param name="category">
-    /// 类别，驱动界面分类筛选；取值见 <see cref="OperationCategories"/>，业务可自定义。
+    /// 类别，驱动界面分类筛选；取值由业务定义（如 <c>"account"</c>），框架不预置清单。
     /// </param>
     /// <param name="visibility">
     /// 可见性，<b>必填</b>。没有默认值是刻意的：省略时静默落到"租户可见"，

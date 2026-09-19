@@ -55,7 +55,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         Guid? id = null,
         OperationRecordOutcome outcome = OperationRecordOutcome.Succeeded,
         // 默认沿用 OperationRecordInfo 自身的安全默认（Host）：不关心可见性的用例
-        // 因此都落在最严格的一档，而"不传 scope 即不过滤"保证它们照常查得到。
+        // 因此都落在最严格的一档，查询时显式传 Unrestricted 照常查得到。
         OperationVisibility visibility = OperationVisibility.Host,
         string? actorId = null) => new()
         {
@@ -243,17 +243,14 @@ public sealed class OperationRecordStoreTests : IDisposable
     }
 
     /// <summary>
-    /// 不传可见范围等于不过滤
+    /// <c>Unrestricted</c> 不按可见性过滤，三层记录都返回
     /// </summary>
     /// <remarks>
-    /// <para>结构体的 <c>default</c> 把所有布尔置为 <see langword="false"/>，所以字段必须取
-    /// "<b>是否受限</b>"而不是"是否不受限"——反过来命名会让每个不传该参数的调用方
-    /// 静默滤光全部 <c>Host</c> 层记录，而症状只是"查出来是空的"，最难联想到默认值。</para>
-    /// <para>本用例连同下面那条一起，把"默认宽松、显式收紧"这个方向钉死：
-    /// 若有人反转布尔语义，这里会立刻红。</para>
+    /// 它供不代表某个读者的内部任务使用；与 <c>Host</c> 的差别在于不走可见性谓词，
+    /// 此处钉住"显式不过滤"确实不过滤。
     /// </remarks>
     [Fact]
-    public async Task Omitting_the_visibility_scope_filters_nothing()
+    public async Task The_unrestricted_scope_filters_nothing()
     {
         await _store.InsertAsync(Info(action: "host.only", visibility: OperationVisibility.Host));
         await _store.InsertAsync(Info(action: "tenant.visible", visibility: OperationVisibility.Tenant));
@@ -351,13 +348,10 @@ public sealed class OperationRecordStoreTests : IDisposable
     }
 
     /// <summary>
-    /// 不传筛选参数等于不过滤
+    /// 不传 <c>actions</c> 与 <c>outcome</c> 时不按它们过滤
     /// </summary>
     /// <remarks>
-    /// 与可见范围那条同因：给可选参数选默认值时，"什么都不传"必须落到"与从前一致"。
-    /// <c>scope</c> 那次我把字段命名成"是否不受限"，结构体 <c>default</c> 使它为
-    /// <see langword="false"/>，语义恰好反转，13 个既有用例红掉才发现。修好后若没有专门用例，
-    /// 同类反转再发生一次依旧无人察觉——本用例就是那道锁。
+    /// 这两个是筛选条件，缺省即"不限"；与可见范围不同，它们不是安全边界，不需要调用方显式表态。
     /// </remarks>
     [Fact]
     public async Task Omitting_the_filters_matches_everything()

@@ -21,24 +21,24 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         // 账号：用户与角色自身的增删改。
         context.Add(
             OperationRecordActions.UserCreated,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant);
         context.Add(
             OperationRecordActions.UserUpdated,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant);
         context.Add(
             OperationRecordActions.UserDeleted,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.RoleCreated,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant);
         context.Add(
             OperationRecordActions.RoleDeleted,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
 
@@ -46,12 +46,12 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         // 事后追责最先看的就是它们，必须能独立筛出来、能接告警。
         context.Add(
             OperationRecordActions.UserRolesReplaced,
-            OperationCategories.Authorization,
+            OperationRecordCategories.Authorization,
             OperationVisibility.Tenant,
             OperationSeverity.Critical);
         context.Add(
             OperationRecordActions.PermissionGrantsReplaced,
-            OperationCategories.Authorization,
+            OperationRecordCategories.Authorization,
             OperationVisibility.Tenant,
             OperationSeverity.Critical);
 
@@ -59,21 +59,21 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         // 甲租户的管理员会看到乙租户被创建、被停用。
         context.Add(
             OperationRecordActions.TenantCreated,
-            OperationCategories.Tenant,
+            OperationRecordCategories.Tenant,
             OperationVisibility.Host,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.TenantUpdated,
-            OperationCategories.Tenant,
+            OperationRecordCategories.Tenant,
             OperationVisibility.Host);
         context.Add(
             OperationRecordActions.TenantActivationChanged,
-            OperationCategories.Tenant,
+            OperationRecordCategories.Tenant,
             OperationVisibility.Host,
             OperationSeverity.Critical);
         context.Add(
             OperationRecordActions.TenantDeleted,
-            OperationCategories.Tenant,
+            OperationRecordCategories.Tenant,
             OperationVisibility.Host,
             OperationSeverity.Critical);
 
@@ -81,14 +81,14 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         // 宿主级设置的记录由写入时的租户上下文（null）自然落到宿主侧。
         context.Add(
             OperationRecordActions.SettingChanged,
-            OperationCategories.Configuration,
+            OperationRecordCategories.Configuration,
             OperationVisibility.Tenant);
 
         // 导出审计日志本身是安全事件：谁把历史带走了必须留痕。
         // 可见性取租户级——导出的是该租户自己的记录，租户管理员有权知道谁导走了。
         context.Add(
             OperationRecordActions.OperationRecordsExported,
-            OperationCategories.Data,
+            OperationRecordCategories.Data,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
 
@@ -97,27 +97,27 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         // 认证事件。OWASP 明列为必需内容，此前本项目完全没有留痕。
         context.Add(
             OperationRecordActions.AuthLoginSucceeded,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor);
         context.Add(
             OperationRecordActions.AuthLoginFailed,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
         // 账号被锁定：租户管理员要能看到"谁被锁了"，才知道该不该去解锁、是不是有人在爆破
         context.Add(
             OperationRecordActions.AuthLockedOut,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.UserUnlocked,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.UserTwoFactorReset,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
         // 登出刻意不记：控制器上是 [AllowAnonymous] 的幂等 SignOut，注释写明"未登录调用同样
@@ -125,75 +125,75 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         // 任何能力边界，信息量几乎为零。不留一个永不被写入的码。
         context.Add(
             OperationRecordActions.AuthPasswordChanged,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
             OperationSeverity.Notice);
         // 本人资料上的两件事，只本人（与上层）可见，与改密码同一口径。
         context.Add(
             OperationRecordActions.AuthAvatarChanged,
-            OperationCategories.Account,
+            OperationRecordCategories.Account,
             OperationVisibility.Actor);
         context.Add(
             OperationRecordActions.AuthEmailVerified,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor);
         context.Add(
             OperationRecordActions.AuthSessionRevoked,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.AuthOtherSessionsRevoked,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.AuthTwoFactorEnabled,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.AuthTwoFactorDisabled,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.AuthTwoFactorRecoveryCodesRegenerated,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor);
         // 用恢复码登录时还没有主体，记录的操作人为空；租户可见，才有人看得到
         context.Add(
             OperationRecordActions.AuthTwoFactorRecoveryCodeUsed,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
 #if (ExternalLogin)
         // 登录方式的增减：绑定一个外部账号等于多开一扇门
         context.Add(
             OperationRecordActions.AuthExternalLoginLinked,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
             OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.AuthExternalLoginUnlinked,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
             OperationSeverity.Notice);
 #endif
         context.Add(
             OperationRecordActions.AuthRegistered,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Tenant);
 
         // 模拟登录：Tenant 可见是刻意的，见常量上的说明。Critical——它改变的是"谁在操作"。
         context.Add(
             OperationRecordActions.ImpersonationStarted,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Tenant,
             OperationSeverity.Critical);
         context.Add(
             OperationRecordActions.ImpersonationEnded,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
 
@@ -201,12 +201,12 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         // 它写的是宿主的人去了哪家，对任何一个租户都不该可见。
         context.Add(
             OperationRecordActions.TenantImpersonationStarted,
-            OperationCategories.Tenant,
+            OperationRecordCategories.Tenant,
             OperationVisibility.Host,
             OperationSeverity.Critical);
         context.Add(
             OperationRecordActions.TenantImpersonationEnded,
-            OperationCategories.Tenant,
+            OperationRecordCategories.Tenant,
             OperationVisibility.Host,
             OperationSeverity.Notice);
 #endif
@@ -214,7 +214,7 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
 
         context.Add(
             OperationRecordActions.AuthTokenIssued,
-            OperationCategories.Authentication,
+            OperationRecordCategories.Authentication,
             OperationVisibility.Actor);
 #endif
     }
