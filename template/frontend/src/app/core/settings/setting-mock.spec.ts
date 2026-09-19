@@ -66,8 +66,18 @@ describe('settings mock', () => {
     setMockSessionTenantKey(null);
   });
 
-  it('registers the three settings endpoints', () => {
+  it('registers the settings endpoints', () => {
+    //#if (LocalIdentity)
+    // 发信参数只存在于本地身份形态，测试邮件端点随之而来
+    expect(Object.keys(SETTING_API).sort()).toEqual([
+      get,
+      'POST /api/v1/settings/email/test',
+      putTenant,
+      putUser,
+    ]);
+    //#else
     expect(Object.keys(SETTING_API).sort()).toEqual([get, putTenant, putUser]);
+    //#endif
   });
 
   // Controller 整体 [Authorize]：匿名一律 401，不是空列表。

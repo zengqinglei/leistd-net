@@ -312,7 +312,6 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
         -Username "e2e_identity_runtime" -Password $identityRuntimePassword -ExpectFailure
 
     $identityRuntimeShared = "Host=127.0.0.1;Port=$script:postgresPort;Database=leistd_shared;Username=e2e_identity_runtime;Password=$identityRuntimePassword"
-    $identityRuntimeDedicated = "Host=127.0.0.1;Port=$script:postgresPort;Database=leistd_dedicated;Username=e2e_identity_runtime;Password=$identityRuntimePassword"
     $apiPort = Get-FreeTcpPort
     $baseUrl = "http://127.0.0.1:$apiPort"
     $apiAssembly = Join-Path $generatedRoot "identity/backend/src/E2E.Identity.Api/bin/$Configuration/net10.0/E2E.Identity.Api.dll"
@@ -335,8 +334,6 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
     # 不用模板曾发布过的示例密码：生产校验会拒绝它们，沿用就等于测不到那条校验
     $startInfo.Environment["DefaultAdmin__Password"] = "E2ETests!Adm1n"
     $startInfo.Environment["VerificationCodes__Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
-    $startInfo.Environment["TenantSecrets__dedicated-runtime"] = $identityRuntimeDedicated
-    $startInfo.Environment["TenantSecrets__dedicated-migration"] = $adminDedicated
 
     $apiProcess = [Diagnostics.Process]::new()
     $apiProcess.StartInfo = $startInfo
@@ -362,29 +359,67 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
 
     $sharedBody = @{
         name = "shared-e2e"; displayName = "Shared E2E"; adminEmail = "shared@example.test"
-        adminPassword = "E2ETenant!Adm1n"; databaseMode = "SharedDatabase"
+        adminPassword = "E2ETenant!Adm1n"
     } | ConvertTo-Json
     $sharedResponse = Invoke-WebRequest -Uri "$baseUrl/api/v1/tenants" -Method Post `
         -ContentType "application/json" -Body $sharedBody -WebSession $apiSession
     $sharedTenant = $sharedResponse.Content | ConvertFrom-Json
 
+    # 分库在建租户时定案：带上连接串，登记先于播种，种子因此直接落进专属库。
+    # 只登记默认名这一条，所有服务都回落到它——一租户一库、各服务不同 schema。
+    # 运行与迁移共用这一条，因此要 DDL 权限：用 admin 连接。它只写不读，由 API 加密后落库。
     $dedicatedBody = @{
         name = "dedicated-e2e"; displayName = "Dedicated E2E"; adminEmail = "dedicated@example.test"
-        adminPassword = "E2ETenant!Adm1n"; databaseMode = "DedicatedDatabase"
-        runtimeSecretReference = "dedicated-runtime"; migrationSecretReference = "dedicated-migration"
+        adminPassword = "E2ETenant!Adm1n"; connectionString = $adminDedicated
     } | ConvertTo-Json
     $dedicatedResponse = Invoke-WebRequest -Uri "$baseUrl/api/v1/tenants" -Method Post `
         -ContentType "application/json" -Body $dedicatedBody -WebSession $apiSession
     $dedicatedTenant = $dedicatedResponse.Content | ConvertFrom-Json
 
+    # 建租户那一步已经把连接登记好了，这里只核对结果
+    $dedicatedConnections = (Invoke-WebRequest `
+        -Uri "$baseUrl/api/v1/tenant-connections/$($dedicatedTenant.id)" -WebSession $apiSession).Content | ConvertFrom-Json
+    Assert-Equal "1" ([string]$dedicatedConnections.Count) "The connection supplied at creation was not registered."
+    Assert-Equal "default" ([string]$dedicatedConnections[0].name) "The connection was not registered under the default name."
+
+    # 事后把一个在用租户改成分库必须被拒（409）：它已有的数据连同租户管理员都在回落库里，
+    # 登记一落解析就改指空库，租户当场登不上。这是本流程唯一能分库的时点之外的那条路。
+    $connectionBody = @{ expectedVersion = $null; connectionString = $adminDedicated } | ConvertTo-Json
+    $lateShardStatus = $null
+    try {
+        Invoke-WebRequest -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)/default" -Method Put `
+            -ContentType "application/json" -Body $connectionBody -WebSession $apiSession | Out-Null
+        $lateShardStatus = 200
+    }
+    catch {
+        if ($_.Exception.Response) { $lateShardStatus = [int]$_.Exception.Response.StatusCode }
+    }
+    Assert-Equal "409" "$lateShardStatus" "Sharding an already-serving tenant after creation was not rejected."
+
+    # 共享租户一条都不登记：列表必须是空的——既是"不分库"在接口上的唯一表征，
+    # 也证明上面那次被拒的登记没有留下半条记录
+    $sharedConnections = (Invoke-WebRequest `
+        -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)" -WebSession $apiSession).Content | ConvertFrom-Json
+    if ($sharedConnections.Count -ne 0) {
+        throw "A tenant without registrations must report an empty connection list."
+    }
+
     $sharedTenantUserSql = 'SELECT count(*) FROM "e2e-identity"."Users" WHERE "TenantId" = ''{0}'' AND NOT "IsDeleted";' -f $sharedTenant.id
     $dedicatedTenantUserSql = 'SELECT count(*) FROM "e2e-identity"."Users" WHERE "TenantId" = ''{0}'' AND NOT "IsDeleted";' -f $dedicatedTenant.id
-    $secretReferencesSql = 'SELECT "RuntimeSecretReference" || ''|'' || "MigrationSecretReference" FROM "e2e-identity"."TenantConnectionRecord" WHERE "TenantId" = ''{0}'';' -f $dedicatedTenant.id
+    $protectedConnectionSql = 'SELECT "ProtectedConnectionString" FROM "e2e-identity"."TenantConnectionRecord" WHERE "TenantId" = ''{0}'' AND "Name" = ''default'';' -f $dedicatedTenant.id
     Assert-Equal "1" (Invoke-Postgres "leistd_shared" $sharedTenantUserSql) "Shared tenant data was not stored in the default target."
     Assert-Equal "0" (Invoke-Postgres "leistd_dedicated" $sharedTenantUserSql) "Shared tenant data leaked into the dedicated target."
     Assert-Equal "0" (Invoke-Postgres "leistd_shared" $dedicatedTenantUserSql) "Dedicated tenant data leaked into the default target."
     Assert-Equal "1" (Invoke-Postgres "leistd_dedicated" $dedicatedTenantUserSql) "Dedicated tenant data was not stored in its target."
-    Assert-Equal "dedicated-runtime|dedicated-migration" (Invoke-Postgres "leistd_shared" $secretReferencesSql) "Secret references were not stored separately."
+    # Encrypted at rest: the column must hold a value, and that value must not be the plaintext
+    # connection string (which would put the database password in every backup and read replica).
+    $protectedConnection = [string](Invoke-Postgres "leistd_shared" $protectedConnectionSql)
+    if ([string]::IsNullOrWhiteSpace($protectedConnection)) {
+        throw "The dedicated tenant's connection string was not stored."
+    }
+    if ($protectedConnection -match 'Host=|Password=') {
+        throw "The dedicated tenant's connection string was stored in plaintext."
+    }
 
     # 超管只属于宿主：CK_User_SuperAdminIsHostOnly。领域服务那道关由集成测试覆盖，但那套跑在
     # 内存提供程序上——检查约束是 PostgreSQL 才生效的 DDL，只有真库能证明它拦得住数据修复脚本、
@@ -399,20 +434,44 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
         throw "The super-admin UPDATE failed for a reason other than the check constraint: $constraintViolation"
     }
 
-    $brokenBody = @{
-        name = "broken-e2e"; adminEmail = "broken@example.test"; adminPassword = "E2ETenant!Adm1n"
-        databaseMode = "DedicatedDatabase"; runtimeSecretReference = "missing-runtime"
-        migrationSecretReference = "missing-migration"
-    } | ConvertTo-Json
+    # 连接名不合法必须在入口就被拒（400），不能落成一行谁也解析不出来的登记。
+    # 名字归一化为小写后须匹配 ^[a-z0-9-]{1,64}$，下划线不在其中。
+    $badNameStatus = $null
     try {
-        Invoke-WebRequest -Uri "$baseUrl/api/v1/tenants" -Method Post -ContentType "application/json" `
-            -Body $brokenBody -WebSession $apiSession | Out-Null
-        throw "Tenant creation with an unresolved Secret unexpectedly succeeded."
+        Invoke-WebRequest -Uri "$baseUrl/api/v1/tenant-connections/$($sharedTenant.id)/crm_db" -Method Put `
+            -ContentType "application/json" -Body $connectionBody -WebSession $apiSession | Out-Null
+        $badNameStatus = 200
     }
     catch {
-        if ($_.Exception.Message -eq "Tenant creation with an unresolved Secret unexpectedly succeeded.") { throw }
+        if ($_.Exception.Response) { $badNameStatus = [int]$_.Exception.Response.StatusCode }
     }
-    Assert-Equal "0" (Invoke-Postgres "leistd_shared" 'SELECT count(*) FROM "e2e-identity"."TenantRecord" WHERE "NormalizedName" = ''BROKEN-E2E'' AND NOT "IsDeleted";') "Failed tenant provisioning left an active tenant."
+    Assert-Equal "400" "$badNameStatus" "An invalid connection name was not rejected with 400."
+    Assert-Equal "0" (Invoke-Postgres "leistd_shared" 'SELECT count(*) FROM "e2e-identity"."TenantConnectionRecord" WHERE "Name" NOT IN (''default'');') "An invalid connection name was persisted."
+
+    # 删除等同于把路由改回共享库，而该租户已有的数据连同它的管理员都在专属库里——
+    # 放行就是让那些数据搁浅。所以与"事后把在用租户改成分库"同一条判据：租户还在服务时必须被拒。
+    # 先把这条契约本身钉住，再验证停用之后确实删得掉；只做后者的话，这条保护改没了也不会有人发现。
+    $version = ((Invoke-WebRequest -Uri "$baseUrl/api/v1/tenant-connections/$($dedicatedTenant.id)" `
+        -WebSession $apiSession).Content | ConvertFrom-Json)[0].version
+    $activeRemoveStatus = $null
+    try {
+        Invoke-WebRequest -Method Delete -WebSession $apiSession `
+            -Uri "$baseUrl/api/v1/tenant-connections/$($dedicatedTenant.id)/default?expectedVersion=$version" | Out-Null
+        $activeRemoveStatus = 200
+    }
+    catch {
+        if ($_.Exception.Response) { $activeRemoveStatus = [int]$_.Exception.Response.StatusCode }
+    }
+    Assert-Equal "409" "$activeRemoveStatus" "Removing a connection while the tenant is still serving was not rejected."
+
+    # 停用之后才允许删：删掉登记就回到"不分库"，该名字之后回落到服务自己的配置。
+    # 被拒的那次不写入、也不推进租户版本（IsActive 检查在版本自增之前），因此沿用同一个 $version。
+    Invoke-WebRequest -Method Put -WebSession $apiSession `
+        -Uri "$baseUrl/api/v1/tenants/$($dedicatedTenant.id)/activation" `
+        -ContentType "application/json" -Body (@{ isActive = $false } | ConvertTo-Json) | Out-Null
+    Invoke-WebRequest -Method Delete -WebSession $apiSession `
+        -Uri "$baseUrl/api/v1/tenant-connections/$($dedicatedTenant.id)/default?expectedVersion=$version" | Out-Null
+    Assert-Equal "0" (Invoke-Postgres "leistd_shared" ('SELECT count(*) FROM "e2e-identity"."TenantConnectionRecord" WHERE "TenantId" = ''{0}'';' -f $dedicatedTenant.id)) "Removing the registration left the row behind."
 
     Write-Host "PostgreSQL template E2E passed: package -> generate -> migrate -> API -> shared/dedicated isolation." -ForegroundColor Green
     Write-Host "Artifacts: $runRoot"

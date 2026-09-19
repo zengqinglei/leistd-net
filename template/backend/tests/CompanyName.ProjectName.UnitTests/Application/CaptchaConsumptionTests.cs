@@ -37,7 +37,7 @@ public class CaptchaConsumptionTests
     private static readonly AsyncLocal<int> Invocation = new();
 
     [Fact]
-    public async Task 同一个token并发验证_只有一个成功且读删全程持锁()
+    public async Task Concurrent_validation_of_one_token_succeeds_once_under_the_lock()
     {
         var (service, cache, captchaLock, token, code) = await CreateChallengeAsync();
 
@@ -64,7 +64,7 @@ public class CaptchaConsumptionTests
     }
 
     [Fact]
-    public async Task 验证码错误也消费掉token_随后正确的也失败()
+    public async Task Wrong_code_consumes_the_token_so_the_correct_one_fails_afterwards()
     {
         var (service, cache, _, token, code) = await CreateChallengeAsync();
         cache.LetFirstReaderProceed();   // 本用例不需要制造竞争

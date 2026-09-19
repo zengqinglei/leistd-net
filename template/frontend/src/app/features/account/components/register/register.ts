@@ -23,14 +23,7 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import {
-  lucideUserPlus,
-  lucideUsers,
-  lucideShield,
-  lucideZap,
-  lucideEye,
-  lucideEyeOff,
-} from '@ng-icons/lucide';
+import { lucideEye, lucideEyeOff } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -46,13 +39,9 @@ import { lastValueFrom } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { PASSWORD_RULE } from '../../../../core/validation/password-rule';
-//#if (IncludeLocalization)
-import { LanguageSwitcher } from '../../../../shared/components/language-switcher/language-switcher';
-//#endif
-import { Logo } from '../../../../shared/components/logo/logo';
-import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
+import { AuthShell } from '../auth-shell/auth-shell';
 
 @Component({
   selector: 'app-register',
@@ -67,21 +56,15 @@ import { AccountService } from '../../services/account-service';
     HlmInputGroup,
     HlmInputGroupInput,
     HlmInputGroupButton,
-    ThemeModeToggle,
     ...HlmFieldImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    LanguageSwitcher,
     TranslocoModule,
     //#endif
-    Logo,
+    AuthShell,
   ],
   providers: [
     provideIcons({
-      lucideUserPlus,
-      lucideUsers,
-      lucideShield,
-      lucideZap,
       lucideEye,
       lucideEyeOff,
     }),

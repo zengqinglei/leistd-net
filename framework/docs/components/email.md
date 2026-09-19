@@ -131,6 +131,7 @@ SMTP 连接、认证或投递失败均原样抛出；重试和补偿由调用方
 - 每次发送新建一个 `SmtpClient`，发完 `QUIT` 断开，不复用连接。
 - `EnableSsl` 为 `true` 时按端口选握手方式：465 用隐式 TLS，其余用 STARTTLS。两者不可互换——对 465 用 STARTTLS 会卡在等待明文问候，对 587 用隐式 TLS 会握手失败。
 - 仅在 `Username` 非空时认证。用户名与口令由启动期校验保证成对，取到一半时当场抛，而不是跳过认证继续发送。
+- 参数每封信取 `IOptionsMonitor<SmtpOptions>.CurrentValue`：配置源重载后（文件改动，或宿主注册的可重载配置源）下一封信即用新值，不必重启。重算出的值同样过启动期那套校验，不合规时发信抛 `OptionsValidationException`；`IOptionsMonitor` 在重载回调里就重算，因此触发重载的一方也会收到包着它的 `AggregateException`。
 
 ## 注意事项
 

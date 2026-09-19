@@ -36,6 +36,8 @@ internal sealed class SettingDefinition : ISettingDefinition
     public SettingScopes Scopes { get; }
     public string? Group { get; set; }
     public bool IsVisibleToClients { get; set; }
+
+    public bool IsEncrypted { get; set; }
 }
 
 // 设置定义上下文：名称全局唯一，重复注册在首次访问定义时失败。

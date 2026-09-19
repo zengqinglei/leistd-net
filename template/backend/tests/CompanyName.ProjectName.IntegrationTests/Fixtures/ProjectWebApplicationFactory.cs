@@ -1,14 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
-using CompanyName.ProjectName.Api.Extensions;
 #if (RemoteTokenAuth)
+using CompanyName.ProjectName.Api.HealthChecks;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
 #endif
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 #if (!LocalIdentity)
 using System.Security.Claims;
@@ -19,9 +18,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #endif
-using Leistd.MultiTenancy;
-using Leistd.Data;
-using Leistd.Data.Abstractions;
+using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -41,13 +38,19 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+
+        // 注册阶段就被读取的键（选数据库分支、选锁实现）必须经 UseSetting 注入：
+        // 下面 ConfigureAppConfiguration 加的配置在 Program 注册服务时还不可见，
+        // 放在那里会被静默忽略——测试宿主会走真实库分支、按开发机的环境变量去连 Redis，
+        // 而不是走生产里同一套内存库注册路径。
+        builder.UseSetting("ConnectionStrings:Default", "");
+        builder.UseSetting("ConnectionStrings:Redis", "");
+        builder.UseSetting("Database:InMemoryName", databaseName);
+
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Default"] = "",
-                ["ConnectionStrings:Redis"] = "",
-                ["Database:InMemoryName"] = databaseName,
                 ["SpaProxy:Enabled"] = "false",
                 ["OAuth:DisableHttpsRequirement"] = "true",
                 ["DefaultAdmin:Username"] = "admin",
@@ -69,13 +72,11 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         // 作用于工厂 → 覆盖所有测试类（Health / Localization / Notifications 等），而非逐类修补。
         builder.ConfigureServices(services =>
         {
-            // 集成测试显式使用 EF InMemory，不经生产的 Identity/Secret 路由链。
-            services.RemoveAll<IConnectionStringResolver>();
 #if (RemoteTokenAuth)
             // 测试宿主里没有真实 Identity，启动探针永远探不通。这里直接把门禁置为已开：
             // 其它用例要测的是业务端点，不是"等 Identity 就绪"这件事。
             // 门禁本身的语义（未确认前拒绝流量、确认后锁存）由 ResourceReadinessGateTests 单独钉住
-            // 只摘这一个托管服务：RemoveAll<IHostedService>() 会把 ApplicationBootstrapper
+            // 只摘这一个托管服务：RemoveAll<IHostedService>() 会把 ApplicationInitializer
             // 一起摘掉，那是其它用例赖以初始化的东西
             var probe = services.SingleOrDefault(descriptor =>
                 descriptor.ServiceType == typeof(IHostedService) &&
@@ -85,7 +86,7 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 services.Remove(probe);
             }
 
-            var openedGate = new RemoteIdentityReadinessGate();
+            var openedGate = new RemoteIdentityReadinessHealthCheck();
             openedGate.MarkReady();
             services.AddSingleton(openedGate);
 #endif

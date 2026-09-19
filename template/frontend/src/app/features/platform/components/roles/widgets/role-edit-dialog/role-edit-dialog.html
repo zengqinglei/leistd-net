@@ -43,6 +43,9 @@
           autocomplete="off"
           [formField]="roleForm.description"
         />
+        @for (error of roleForm.description().errors(); track error.kind) {
+          <hlm-field-error>{{ error.message }}</hlm-field-error>
+        }
       </hlm-field>
 
       <div class="flex items-center gap-3 text-sm">

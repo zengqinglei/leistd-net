@@ -7,6 +7,17 @@ import { SignalRService, NotificationOutputDto } from '../../../core/services/si
 export type { NotificationOutputDto } from '../../../core/services/signalr-service';
 
 /**
+ * 各通知类型的图标。类型由后端业务定义（见 `AppNotificationTypes`），新增类型时在这里补一行；
+ * 没登记的（包括默认的系统通知）用通用图标。
+ */
+// prettier-ignore
+const TYPE_ICONS: Readonly<Record<string, string>> = {
+  //#if (LocalIdentity)
+  Security: 'lucideShieldAlert',
+  //#endif
+};
+
+/**
  * 通知管理服务：通知列表/已读（HTTP）+ SignalR 实时推送桥接。
  * 铃铛面板使用此服务获取数据。
  */
@@ -140,14 +151,6 @@ export class NotificationService {
 
   /** 通知类型图标（lucide 图标名；仅区分形状，颜色统一由视图控制）。 */
   getIcon(type: string): string {
-    switch (type) {
-      case 'DataChange':
-        return 'lucideDatabase';
-      case 'Workflow':
-        return 'lucideNetwork';
-      case 'System':
-      default:
-        return 'lucideInfo';
-    }
+    return TYPE_ICONS[type] ?? 'lucideInfo';
   }
 }

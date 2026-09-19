@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Leistd.OperationRecords</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 操作人取自 ICurrentUser；模拟登录的真实操作人 claim 名归口在 Security 的 CustomClaimTypes -->
+    <ProjectReference Include="..\..\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
+    <!-- 记录带租户归属：写入的 TenantId 由记录器显式盖章，不依赖宿主 DbContext 是否为 BaseDbContext -->
+    <ProjectReference Include="..\..\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
+    <!-- CorrelationId 让记录可以保持窄：细节留在日志里，按同一个链路标识回查 -->
+    <ProjectReference Include="..\..\tracing\Leistd.Tracing.Core\Leistd.Tracing.Core.csproj" />
+    <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    刻意不引用 unit-of-work：本包只决定记录写进哪一层，事务边界由存储按记录结果执行
+    （契约见 IOperationRecordStore.InsertAsync），独立提交落在持有工作单元依赖的 .EntityFrameworkCore 包里。
+  -->
+
+  <ItemGroup>
+    <!-- 记录器是 internal 实现，用例直接构造它来钉住上下文补齐的口径 -->
+    <InternalsVisibleTo Include="Leistd.OperationRecords.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+</Project>

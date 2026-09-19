@@ -1,8 +1,10 @@
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Authorization.EntityFrameworkCore;
+using Leistd.OperationRecords.EntityFrameworkCore;
 using Leistd.Settings.EntityFrameworkCore;
 #if (LocalIdentity)
 using Leistd.MultiTenancy.EntityFrameworkCore;
+using CompanyName.ProjectName.Domain.Tenants.Connections;
 #endif
 using Leistd.Ddd.Infrastructure;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
@@ -17,9 +19,11 @@ using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using CompanyName.ProjectName.Infrastructure.OperationRecords;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.MultiTenancy;
 #if (!LocalIdentity)
+using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.Refit;
 using static Leistd.ServiceClient.OAuth.DependencyInjection;
@@ -48,7 +52,6 @@ using StackExchange.Redis;
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
 using Leistd.Data;
 using Leistd.Data.Constants;
-using Leistd.Data.Abstractions;
 
 namespace CompanyName.ProjectName.Infrastructure;
 
@@ -95,24 +98,6 @@ public static class DependencyInjection
                 .ValidateOnStart();
 
 #if (!LocalIdentity)
-            // 路由缓存期限决定租户改路由前的排空等待时间，必须显式配置。
-            services.AddOptions<TenantRouteCacheOptions>()
-                .Configure<IConfiguration>((options, config) =>
-                {
-                    var configured = config.GetSection(TenantRouteCacheOptions.SectionName)["CacheLifetime"];
-                    if (TimeSpan.TryParse(configured, out var lifetime))
-                    {
-                        options.CacheLifetime = lifetime;
-                    }
-                })
-                .Validate(
-                    options => options.IsLifetimeUsable,
-                    $"TenantRouting:CacheLifetime is required and must be greater than zero and at most " +
-                    $"{TenantRouteCacheOptions.MaximumCacheLifetime}. It determines how long a changed tenant " +
-                    "route may still be served by warm instances, and therefore how long the deactivate-and-drain " +
-                    "step must wait before the route can be changed.")
-                .ValidateOnStart();
-
             var identityClient = services.AddRefitServiceClient<
                 IIdentityTenantConnectionClient,
                 IdentityTenantConnectionClientOptions>("Identity", configuration);
@@ -122,14 +107,16 @@ public static class DependencyInjection
             }
             identityClient.AddStandardResilienceHandler();
 
-            // 宿主级单例跨请求合并同租户回源，且隔离同进程中的不同宿主。
-            services.AddSingleton<TenantRouteResolutionCoordinator>();
-            services.AddScoped<IConnectionStringResolver, IdentityTenantConnectionStringResolver>();
+            // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（必须显式配置，
+            // 它决定租户改路由前的排空等待）；同租户并发回源合并为一次。本服务只适配 Identity 的端点。
+            services.AddRemoteTenantConnectionResolution();
+            services.AddScoped<ITenantConnectionConfigurationStore, IdentityTenantConnectionStore>();
 #else
-            services.AddScoped<IConnectionStringResolver, LocalTenantConnectionStringResolver>();
+            // 本地解析：直接读本服务的控制库；控制库固定在宿主连接上，不参与租户路由。
+            services.AddLocalTenantConnectionResolution<IdentityControlDbContext>(
+                options => options.ControlPlaneConnectionStringName = IdentityControlDbContext.ConnectionStringName);
 #endif
         }
-        services.AddSingleton<ISecretResolver, ConfigurationSecretResolver>();
 
 #if (LocalIdentity)
         services.AddDbContext<IdentityControlDbContext>((sp, options) =>
@@ -217,8 +204,14 @@ public static class DependencyInjection
 #endif
         services.AddAuthorizationEfCore<MyProjectDbContext>();
         services.AddSettingsEfCore<MyProjectDbContext>();
+        services.AddOperationRecordsEfCore<MyProjectDbContext>();
+        // 框架的记录存储刻意没有删除入口（保留策略属于运维范畴），归档因此由模板自己实现。
+        services.AddScoped<IOperationRecordArchiveService, OperationRecordArchiveService>();
 #if (LocalIdentity)
         services.AddMultiTenancyEfCore<IdentityControlDbContext>();
+        // 管理面要列出某租户的全部连接登记，而框架的连接存储只按名字问答（远端形态下一次只出一条）。
+        // 这个窄口定义在应用层、实现落在这里：读控制库要 EF，而应用层不引用 EF。
+        services.AddTransient<ITenantConnectionDirectory, TenantConnectionDirectory>();
 #endif
 
         services.AddDddInfrastructure();
@@ -235,21 +228,20 @@ public static class DependencyInjection
         services.AddDddDbContext<OpenIddictDbContext>();
 #endif
 
+        // 连接串使用 StackExchange.Redis 原生格式（host:port,password=...,ssl=true），原样交给官方解析器。
         var redisConnStr = configuration.GetConnectionString("Redis");
 
         if (!string.IsNullOrEmpty(redisConnStr))
         {
-            var redisConfig = Shared.Redis.RedisConnectionStringParser.Parse(redisConnStr);
-
-            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConfig));
+            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
 
             services.AddStackExchangeRedisCache(options =>
             {
-                options.ConfigurationOptions = redisConfig;
+                options.Configuration = redisConnStr;
                 options.InstanceName = "MyProject:";
             });
 
-            services.AddRedisDistributedLock(redisConfig.ToString(), configuration);
+            services.AddRedisDistributedLock(redisConnStr, configuration);
         }
         else
         {
@@ -273,15 +265,6 @@ public static class DependencyInjection
         services.AddScoped<IOAuthProvider, GoogleOAuthProvider>();
 #endif
 
-        return services;
-    }
-
-    /// <summary>
-    /// 注册仅供 DbMigrator 使用的租户迁移目标枚举器。
-    /// </summary>
-    public static IServiceCollection AddTenantMigrationServices(this IServiceCollection services)
-    {
-        services.AddScoped<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
         return services;
     }
 }

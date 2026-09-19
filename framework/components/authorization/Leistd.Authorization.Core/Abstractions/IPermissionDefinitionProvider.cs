@@ -13,7 +13,7 @@ namespace Leistd.Authorization.Abstractions;
 ///     public void Define(IPermissionDefinitionContext context)
 ///     {
 ///         var group = context.GetOrAddGroup("Orders");
-///         var orders = group.AddPermission("Orders.Read");
+///         var orders = group.AddPermission("Orders.Read", MultiTenancySides.Both);
 ///         orders.AddChild("Orders.Update");   // 授予子权限时祖先自动补齐
 ///     }
 /// }
@@ -42,11 +42,9 @@ public interface IPermissionDefinitionContext
     /// </summary>
     /// <param name="name">组名称</param>
     /// <param name="displayName">显示名称</param>
-    /// <param name="side">
-    /// 组的多租户侧别（默认两侧通用）。作为组内 <c>AddPermission</c> 未显式指定侧别时的继承默认值
-    /// </param>
     /// <returns>权限组</returns>
-    IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null, MultiTenancySides side = MultiTenancySides.Both);
+    /// <remarks>组不带侧别：侧别由每个权限在 <c>AddPermission</c> 处显式声明，见那里的说明。</remarks>
+    IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null);
 
     /// <summary>
     /// 获取权限定义。
@@ -72,11 +70,6 @@ public interface IPermissionGroupDefinition
     string? DisplayName { get; set; }
 
     /// <summary>
-    /// 获取组内权限默认继承的多租户侧别。
-    /// </summary>
-    MultiTenancySides Side { get; }
-
-    /// <summary>
     /// 组内的顶层权限（各自可再带子权限），按声明顺序排列。
     /// </summary>
     IReadOnlyList<IPermissionDefinition> Permissions { get; }
@@ -85,10 +78,14 @@ public interface IPermissionGroupDefinition
     /// 向组添加权限。
     /// </summary>
     /// <param name="name">权限名称</param>
+    /// <param name="side">
+    /// 多租户侧别，<b>必填</b>。没有默认值是刻意的：省略时静默落到 <c>Both</c>（"租户管理员也拿得到"），
+    /// 而宿主全局资源落成 <c>Both</c> 就是跨租户越权，且只在真的建了租户之后才暴露。
+    /// 判据是这条权限背后的数据带不带租户维度。
+    /// </param>
     /// <param name="displayName">显示名称</param>
-    /// <param name="side">多租户侧别；不指定时继承组的侧别</param>
     /// <returns>权限定义</returns>
-    IPermissionDefinition AddPermission(string name, string? displayName = null, MultiTenancySides? side = null);
+    IPermissionDefinition AddPermission(string name, MultiTenancySides side, string? displayName = null);
 
     /// <summary>
     /// 获取组内的权限定义。

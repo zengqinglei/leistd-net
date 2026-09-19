@@ -28,7 +28,6 @@
 <!--#if (!LocalIdentity)-->
     <PackageReference Include="OpenIddict.Validation.SystemNetHttp" />
 <!--#endif-->
-    <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
@@ -52,6 +51,8 @@
 <!--#endif-->
     <PackageReference Include="Leistd.DependencyInjection.DynamicProxy" />
     <PackageReference Include="Leistd.Authorization.AspNetCore" />
+    <!-- 授权阶段被拒的补记：注解 + HttpContext 扩展，在所有服务形态下都需要 -->
+    <PackageReference Include="Leistd.OperationRecords.AspNetCore" />
     <PackageReference Include="Leistd.MultiTenancy.AspNetCore" />
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />

@@ -1,19 +1,22 @@
+using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
+using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
+using Leistd.MultiTenancy.Exceptions;
+using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Stores;
-using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
-using Leistd.MultiTenancy.Exceptions;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
 public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
 {
+    private const string Name = "crm";
+
     private ServiceProvider _provider = default!;
     private SqliteConnection _connection = default!;
     private TestDbContext _dbContext = default!;
@@ -30,15 +33,15 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connection));
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
+        services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
         services.AddMultiTenancyEfCore<TestDbContext>();
 
         _provider = services.BuildServiceProvider();
-        var provider = _provider;
-        _dbContext = provider.GetRequiredService<TestDbContext>();
+        _dbContext = _provider.GetRequiredService<TestDbContext>();
         await _dbContext.Database.EnsureCreatedAsync();
-        _tenantManager = provider.GetRequiredService<ITenantManager>();
-        _manager = provider.GetRequiredService<ITenantConnectionConfigurationManager>();
-        _store = provider.GetRequiredService<ITenantConnectionConfigurationStore>();
+        _tenantManager = _provider.GetRequiredService<ITenantManager>();
+        _manager = _provider.GetRequiredService<ITenantConnectionConfigurationManager>();
+        _store = _provider.GetRequiredService<ITenantConnectionConfigurationStore>();
     }
 
     public async Task DisposeAsync()
@@ -48,43 +51,87 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         await _connection.DisposeAsync();
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task A_registration_requires_a_connection_string(string connectionString)
+    {
+        var tenant = await CreateTenantAsync();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _manager.SetAsync(tenant.Id, Name, connectionString, expectedVersion: null));
+    }
+
     [Fact]
-    public async Task Shared_database_rejects_secret_references()
+    public async Task Connection_strings_longer_than_the_limit_are_rejected()
     {
         var tenant = await CreateTenantAsync();
 
         await Assert.ThrowsAsync<ArgumentException>(() => _manager.SetAsync(
             tenant.Id,
-            TenantDatabaseMode.SharedDatabase,
-            "runtime/tenant",
-            null,
+            Name,
+            new string('x', TenantConnectionConfiguration.MaxConnectionStringLength + 1),
             expectedVersion: null));
     }
 
-    [Theory]
-    [InlineData(null, "migration/tenant")]
-    [InlineData("runtime/tenant", null)]
-    [InlineData("", "migration/tenant")]
-    [InlineData("runtime/tenant", "  ")]
-    public async Task Dedicated_database_requires_both_secret_references(
-        string? runtimeSecretReference,
-        string? migrationSecretReference)
+    [Fact]
+    public async Task The_connection_string_is_trimmed_before_it_is_stored()
     {
         var tenant = await CreateTenantAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => _manager.SetAsync(
-            tenant.Id,
-            TenantDatabaseMode.DedicatedDatabase,
-            runtimeSecretReference,
-            migrationSecretReference,
-            expectedVersion: null));
+        var configuration = await _manager.SetAsync(tenant.Id, Name, "  Host=tenant  ", expectedVersion: null);
+
+        Assert.Equal("Host=tenant", configuration.ConnectionString);
+        Assert.Equal("Host=tenant", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
+    }
+
+    // 管理员填 Crm 还是 crm 都命中同一行，避免"大小写不同于是走到拒绝分支"的支持问题
+    [Theory]
+    [InlineData("Crm")]
+    [InlineData("CRM")]
+    [InlineData("  crm  ")]
+    public async Task Names_are_normalized_to_lower_case(string name)
+    {
+        var tenant = await CreateTenantAsync();
+
+        var configuration = await _manager.SetAsync(tenant.Id, name, "Host=tenant", expectedVersion: null);
+
+        Assert.Equal("crm", configuration.Name);
+        Assert.Equal("crm", (await _store.FindAsync(tenant.Id, "crm"))!.Connection!.Name);
+    }
+
+    [Theory]
+    [InlineData("crm_db")]
+    [InlineData("crm db")]
+    [InlineData("crm.db")]
+    [InlineData("")]
+    public async Task Invalid_names_are_rejected(string name)
+    {
+        var tenant = await CreateTenantAsync();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _manager.SetAsync(tenant.Id, name, "Host=tenant", expectedVersion: null));
+    }
+
+    // 同一租户的不同名字是各自独立的行，各有各的版本
+    [Fact]
+    public async Task Registrations_of_one_tenant_are_independent_per_name()
+    {
+        var tenant = await CreateTenantAsync();
+
+        var crm = await _manager.SetAsync(tenant.Id, "crm", "Host=crm", expectedVersion: null);
+        var foundation = await _manager.SetAsync(tenant.Id, "foundation", "Host=foundation", expectedVersion: null);
+
+        Assert.Equal(1, crm.Version);
+        Assert.Equal(1, foundation.Version);
+        Assert.Equal(2, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.TenantId == tenant.Id));
     }
 
     /// <summary>
     /// 创建时间与修改时间由管理器填充，不依赖宿主是否接入审计层。
     /// </summary>
     /// <remarks>
-    /// 这一行决定该租户的数据落在哪个库，所以"配置在何时被改过"必须无条件可查。
+    /// 这一行决定该租户在这个服务的数据落在哪个库，所以"配置在何时被改过"必须无条件可查。
     /// 用户字段（<c>CreatorId</c> / <c>LastModifierId</c>）由宿主审计层补充：控制面上下文
     /// 用 <c>ChangeTracker.EnableCreationAuditing</c> 接上同一时机原语，本测试的上下文没接，
     /// 因此这里只钉时间字段。
@@ -94,19 +141,15 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        await _manager.SetAsync(tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
 
-        var created = await _dbContext.Set<TenantConnectionRecord>()
-            .AsNoTracking()
-            .SingleAsync(x => x.TenantId == tenant.Id);
+        var created = await ReadRecordAsync(tenant.Id);
         Assert.NotEqual(default, created.CreationTime);
         Assert.Null(created.LastModificationTime);
 
-        await _manager.SetAsync(tenant.Id, TenantDatabaseMode.DedicatedDatabase, "runtime/t", "migration/t", expectedVersion: 1);
+        await _manager.SetAsync(tenant.Id, Name, "Host=two", expectedVersion: 1);
 
-        var updated = await _dbContext.Set<TenantConnectionRecord>()
-            .AsNoTracking()
-            .SingleAsync(x => x.TenantId == tenant.Id);
+        var updated = await ReadRecordAsync(tenant.Id);
         Assert.Equal(created.CreationTime, updated.CreationTime);
         Assert.NotNull(updated.LastModificationTime);
     }
@@ -116,81 +159,38 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var created = await _manager.SetAsync(
-            tenant.Id,
-            TenantDatabaseMode.DedicatedDatabase,
-            "runtime/tenant-v1",
-            "migration/tenant-v1",
-            expectedVersion: null);
-        var updated = await _manager.SetAsync(
-            tenant.Id,
-            TenantDatabaseMode.DedicatedDatabase,
-            "runtime/tenant-v2",
-            "migration/tenant-v2",
-            expectedVersion: 1);
+        var created = await _manager.SetAsync(tenant.Id, Name, "Host=v1", expectedVersion: null);
+        var updated = await _manager.SetAsync(tenant.Id, Name, "Host=v2", expectedVersion: 1);
 
         Assert.Equal(1, created.Version);
         Assert.Equal(2, updated.Version);
         Assert.Single(await _dbContext.Set<TenantConnectionRecord>().ToListAsync());
-
-        var stored = await _store.FindAsync(tenant.Id);
-        Assert.NotNull(stored);
-        Assert.Equal("runtime/tenant-v2", stored.RuntimeSecretReference);
-        Assert.Equal("migration/tenant-v2", stored.MigrationSecretReference);
+        Assert.Equal("Host=v2", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
     }
 
     [Fact]
     public async Task Missing_tenant_is_rejected()
     {
-        await Assert.ThrowsAsync<TenantNotFoundException>(() => _manager.SetAsync(
-            Guid.NewGuid(),
-            TenantDatabaseMode.SharedDatabase,
-            null,
-            null,
-            expectedVersion: null));
+        await Assert.ThrowsAsync<TenantNotFoundException>(
+            () => _manager.SetAsync(Guid.NewGuid(), Name, "Host=tenant", expectedVersion: null));
     }
 
     [Fact]
-    public async Task Shared_database_is_an_explicit_record_not_a_missing_configuration()
-    {
-        var tenant = await CreateTenantAsync();
-
-        Assert.Null(await _store.FindAsync(tenant.Id));
-
-        var configuration = await _manager.SetAsync(
-            tenant.Id,
-            TenantDatabaseMode.SharedDatabase,
-            null,
-            null,
-            expectedVersion: null);
-
-        Assert.Equal(TenantDatabaseMode.SharedDatabase, configuration.DatabaseMode);
-        Assert.Null(configuration.RuntimeSecretReference);
-        Assert.Null(configuration.MigrationSecretReference);
-    }
-
-    [Fact]
-    public async Task Configuration_string_representation_does_not_expose_secret_references()
+    public async Task Configuration_string_representation_does_not_expose_the_connection_string()
     {
         var tenant = await CreateTenantAsync();
         var configuration = await _manager.SetAsync(
-            tenant.Id,
-            TenantDatabaseMode.DedicatedDatabase,
-            "runtime/highly-sensitive-reference",
-            "migration/highly-sensitive-reference",
-            expectedVersion: null);
+            tenant.Id, Name, "Host=highly-sensitive-host;Password=highly-sensitive", expectedVersion: null);
 
-        var text = configuration.ToString();
-
-        Assert.DoesNotContain("highly-sensitive", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("highly-sensitive", configuration.ToString(), StringComparison.Ordinal);
     }
 
     /// <summary>
     /// 预期版本与实际状态的四种组合，只有两种放行
     /// </summary>
     /// <remarks>
-    /// 丢更新在这一行是静默的：两个管理员同时改放置模式，后提交的那次覆盖前一次且不报错，
-    /// 而"该租户的数据落在哪个库"已经变了。因此四种组合都要钉住，不能只测匹配那一种。
+    /// 丢更新在这一行是静默的：两个管理员同时改同一个名字的连接，后提交的那次覆盖前一次且不报错，
+    /// 而"该租户在这个服务的数据落在哪个库"已经变了。因此四种组合都要钉住，不能只测匹配那一种。
     /// </remarks>
     [Fact]
     public async Task Expected_version_must_match_actual_state()
@@ -198,124 +198,168 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         var tenant = await CreateTenantAsync();
 
         // 预期不存在 + 实际不存在 → 放行（创建）
-        var created = await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        var created = await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
         Assert.Equal(1, created.Version);
 
-        // 预期不存在 + 实际已存在 → 冲突。以为在创建，实际会覆盖别人刚建的配置
+        // 预期不存在 + 实际已存在 → 冲突。以为在创建，实际会覆盖别人刚登记的连接
         var createOverExisting = await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
-            () => _manager.SetAsync(
-                tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null));
+            () => _manager.SetAsync(tenant.Id, Name, "Host=two", expectedVersion: null));
         Assert.Null(createOverExisting.ExpectedVersion);
         Assert.Equal(1, createOverExisting.ActualVersion);
 
         // 预期陈旧版本 + 实际更新 → 冲突
         var stale = await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
-            () => _manager.SetAsync(
-                tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: 99));
+            () => _manager.SetAsync(tenant.Id, Name, "Host=two", expectedVersion: 99));
         Assert.Equal(99, stale.ExpectedVersion);
         Assert.Equal(1, stale.ActualVersion);
 
         // 预期版本 + 实际相符 → 放行（更新）
-        var updated = await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: 1);
+        var updated = await _manager.SetAsync(tenant.Id, Name, "Host=two", expectedVersion: 1);
         Assert.Equal(2, updated.Version);
     }
 
     /// <summary>冲突时不得留下任何写入</summary>
     [Fact]
-    public async Task Version_conflict_leaves_the_stored_configuration_untouched()
+    public async Task Version_conflict_leaves_the_stored_registration_untouched()
     {
         var tenant = await CreateTenantAsync();
-        await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
 
         await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
-            () => _manager.SetAsync(
-                tenant.Id,
-                TenantDatabaseMode.DedicatedDatabase,
-                "runtime/hijack",
-                "migration/hijack",
-                expectedVersion: 42));
+            () => _manager.SetAsync(tenant.Id, Name, "Host=hijack", expectedVersion: 42));
 
-        var stored = await _store.FindAsync(tenant.Id);
-        Assert.NotNull(stored);
-        Assert.Equal(TenantDatabaseMode.SharedDatabase, stored.DatabaseMode);
+        var stored = (await _store.FindAsync(tenant.Id, Name))!.Connection!;
+        Assert.Equal("Host=one", stored.ConnectionString);
         Assert.Equal(1, stored.Version);
-        Assert.Null(stored.RuntimeSecretReference);
     }
 
     /// <summary>
-    /// 在用租户不允许改连接配置
+    /// 在用租户不允许改连接
     /// </summary>
     /// <remarks>
-    /// 路由改了不等于数据跟着走：资源服务按租户缓存解析结果，已缓存的实例继续写旧库、
+    /// 路由改了不等于数据跟着走：资源服务按租户与连接名缓存解析结果，已缓存的实例继续写旧库、
     /// 冷启动的实例开始写新库，同一租户在两个物理位置同时产生新数据，且双方都不报错。
     /// 这是数据分叉，不是传播延迟，所以必须在唯一写入口上挡住，而不是靠流程约束。
     /// </remarks>
     [Fact]
-    public async Task Changing_the_configuration_of_an_active_tenant_is_rejected()
+    public async Task Changing_a_registration_of_an_active_tenant_is_rejected()
     {
         var tenant = await CreateTenantAsync();
-        await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
-
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
         await _tenantManager.SetActiveAsync(tenant.Id, true);
 
         var rejected = await Assert.ThrowsAsync<TenantConnectionChangeRequiresInactiveTenantException>(
-            () => _manager.SetAsync(
-                tenant.Id,
-                TenantDatabaseMode.DedicatedDatabase,
-                "runtime/moved",
-                "migration/moved",
-                expectedVersion: 1));
+            () => _manager.SetAsync(tenant.Id, Name, "Host=moved", expectedVersion: 1));
         Assert.Equal(tenant.Id, rejected.TenantId);
 
-        // 被拒之后配置必须原样
-        var stored = await _store.FindAsync(tenant.Id);
-        Assert.NotNull(stored);
-        Assert.Equal(TenantDatabaseMode.SharedDatabase, stored.DatabaseMode);
+        var stored = (await _store.FindAsync(tenant.Id, Name))!.Connection!;
+        Assert.Equal("Host=one", stored.ConnectionString);
         Assert.Equal(1, stored.Version);
+    }
+
+    /// <summary>删除同样是改路由：在用租户不允许删</summary>
+    [Fact]
+    public async Task Removing_a_registration_of_an_active_tenant_is_rejected()
+    {
+        var tenant = await CreateTenantAsync();
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
+        await _tenantManager.SetActiveAsync(tenant.Id, true);
+
+        await Assert.ThrowsAsync<TenantConnectionChangeRequiresInactiveTenantException>(
+            () => _manager.RemoveAsync(tenant.Id, Name, expectedVersion: 1));
+
+        Assert.NotNull((await _store.FindAsync(tenant.Id, Name))!.Connection);
     }
 
     /// <summary>停用之后可以改——这就是标准切换流程的第 4 步</summary>
     [Fact]
-    public async Task Changing_the_configuration_is_allowed_once_the_tenant_is_deactivated()
+    public async Task Changing_a_registration_is_allowed_once_the_tenant_is_deactivated()
     {
         var tenant = await CreateTenantAsync();
-        await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
         await _tenantManager.SetActiveAsync(tenant.Id, true);
         await _tenantManager.SetActiveAsync(tenant.Id, false);
 
-        var moved = await _manager.SetAsync(
-            tenant.Id,
-            TenantDatabaseMode.DedicatedDatabase,
-            "runtime/moved",
-            "migration/moved",
-            expectedVersion: 1);
+        var moved = await _manager.SetAsync(tenant.Id, Name, "Host=moved", expectedVersion: 1);
 
-        Assert.Equal(TenantDatabaseMode.DedicatedDatabase, moved.DatabaseMode);
+        Assert.Equal("Host=moved", moved.ConnectionString);
         Assert.Equal(2, moved.Version);
     }
 
     /// <summary>
-    /// 首次创建不受停用态约束
+    /// 把"不分库"的在用租户改成分库，必须先停用
     /// </summary>
     /// <remarks>
-    /// 此前没有任何配置，解析器对该租户直接抛 404 且从不写缓存，不存在需要排空的陈旧路由。
-    /// 把首创也一并禁掉会让"给漏配的在用租户补配置"变成必须先停机，而那本来是修复动作。
+    /// 这一条登记落下之前，该租户的种子、管理员与既有业务数据都活在服务自己配置的库里。
+    /// 登记一落，解析立刻改指新库，而那些数据不会跟着走：新库里没有管理员，租户当场登不上；
+    /// 旧库里留着一份带口令散列的孤儿账号。它与"改已有的那一行"是同一类事故——判据都是数据落点变了，
+    /// 而不是"这一行是不是首次写"。
     /// </remarks>
     [Fact]
-    public async Task First_configuration_is_allowed_even_while_the_tenant_is_active()
+    public async Task The_first_connection_of_an_active_tenant_is_rejected()
     {
         var tenant = await CreateTenantAsync();
         await _tenantManager.SetActiveAsync(tenant.Id, true);
 
-        var created = await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        var rejected = await Assert.ThrowsAsync<TenantConnectionChangeRequiresInactiveTenantException>(
+            () => _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null));
+        Assert.Equal(tenant.Id, rejected.TenantId);
 
-        Assert.Equal(1, created.Version);
+        // 拒绝之后不得留下任何登记：留下半条就等于悄悄分了库
+        Assert.Empty(await _dbContext.Set<TenantConnectionRecord>().AsNoTracking().ToListAsync());
+    }
+
+    /// <summary>
+    /// 已是分库租户时，补一个此前没有的名字在启用态下照常放行
+    /// </summary>
+    /// <remarks>
+    /// 这一档不是数据落点变更：该租户已经登记过连接，缺这个名字的服务此前按"登记过却缺这个名字"
+    /// 失败关闭（见 <c>TenantConnectionTargets.Select</c>），回落库里根本没有它的数据，
+    /// 补登不会搁浅任何东西。而这恰恰是修复动作——为它要求停机，等于罚正在救火的人。
+    /// </remarks>
+    [Fact]
+    public async Task Adding_a_missing_name_to_a_sharded_tenant_is_allowed_while_it_is_active()
+    {
+        var tenant = await CreateTenantAsync();
+        await _manager.SetAsync(tenant.Id, "default", "Host=one-db", expectedVersion: null);
+        await _tenantManager.SetActiveAsync(tenant.Id, true);
+
+        var added = await _manager.SetAsync(tenant.Id, Name, "Host=crm-db", expectedVersion: null);
+
+        Assert.Equal(1, added.Version);
+        Assert.Equal("Host=crm-db", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
+    }
+
+    // 删除把租户从分库改回不分库：该名字之后回落到服务自己的配置
+    [Fact]
+    public async Task Removing_the_registration_makes_the_tenant_fall_back_again()
+    {
+        var tenant = await CreateTenantAsync();
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
+
+        await _manager.RemoveAsync(tenant.Id, Name, expectedVersion: 1);
+
+        var lookup = await _store.FindAsync(tenant.Id, Name);
+        Assert.False(lookup!.HasAnyConnection);
+        Assert.Empty(await _dbContext.Set<TenantConnectionRecord>().Where(x => x.TenantId == tenant.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Removing_with_a_stale_or_missing_version_conflicts()
+    {
+        var tenant = await CreateTenantAsync();
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
+
+        var stale = await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
+            () => _manager.RemoveAsync(tenant.Id, Name, expectedVersion: 42));
+        Assert.Equal(1, stale.ActualVersion);
+
+        // 删一个根本不存在的名字同样是冲突：调用方以为自己读到过它
+        var missing = await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
+            () => _manager.RemoveAsync(tenant.Id, "foundation", expectedVersion: 1));
+        Assert.Null(missing.ActualVersion);
+
+        Assert.NotNull((await _store.FindAsync(tenant.Id, Name))!.Connection);
     }
 
     /// <summary>
@@ -326,15 +370,13 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     /// 两个事务都先读到 v1：双方预检都过，先提交的把版本推到 v2，后提交的并发令牌命中 0 行。
     /// 数据库因此没有丢更新，但若不转换异常，调用方拿到的是 500——而契约承诺 409。</para>
     /// <para>用两个独立 DbContext 各自先把记录读进变更跟踪器来构造这个交错：manager 内部再查时
-    /// 拿到的是本上下文已跟踪的实例（<c>OriginalValue</c> 仍是 v1），
-    /// 于是两边的预检都通过。串行调用同一个 manager 是复现不出来的。</para>
+    /// 拿到的是本上下文已跟踪的实例（<c>OriginalValue</c> 仍是 v1），于是两边的预检都通过。</para>
     /// </remarks>
     [Fact]
     public async Task Simultaneous_commits_surface_as_a_version_conflict_not_a_server_error()
     {
         var tenant = await CreateTenantAsync();
-        await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
 
         await using var scopeA = _provider.CreateAsyncScope();
         await using var scopeB = _provider.CreateAsyncScope();
@@ -346,13 +388,11 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         var managerA = scopeA.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
         var managerB = scopeB.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
 
-        var winner = await managerA.SetAsync(
-            tenant.Id, TenantDatabaseMode.DedicatedDatabase, "runtime/a", "migration/a", expectedVersion: 1);
+        var winner = await managerA.SetAsync(tenant.Id, Name, "Host=a", expectedVersion: 1);
         Assert.Equal(2, winner.Version);
 
         var conflict = await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
-            () => managerB.SetAsync(
-                tenant.Id, TenantDatabaseMode.DedicatedDatabase, "runtime/b", "migration/b", expectedVersion: 1));
+            () => managerB.SetAsync(tenant.Id, Name, "Host=b", expectedVersion: 1));
 
         // 报出的"实际版本"必须是重读后的真实值，好让调用方知道该以什么为基准重试
         Assert.Equal(1, conflict.ExpectedVersion);
@@ -360,15 +400,12 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         Assert.IsType<DbUpdateConcurrencyException>(conflict.InnerException);
 
         // 败者的写入不得落库
-        var stored = await _store.FindAsync(tenant.Id);
-        Assert.NotNull(stored);
-        Assert.Equal("runtime/a", stored.RuntimeSecretReference);
+        Assert.Equal("Host=a", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
 
         static async Task TrackAsync(AsyncServiceScope scope, Guid tenantId)
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-            await dbContext.Set<TenantConnectionRecord>()
-                .FirstOrDefaultAsync(x => x.TenantId == tenantId);
+            await dbContext.Set<TenantConnectionRecord>().FirstOrDefaultAsync(x => x.TenantId == tenantId);
         }
     }
 
@@ -376,71 +413,57 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     /// 路由事务读到"已停用"之后、写入之前，激活提交 —— 必须由数据库拦下
     /// </summary>
     /// <remarks>
-    /// <para>这是「改路由要求租户已停用」这条不变量真正需要证明的交错。只读一次
-    /// <c>IsActive</c> 在 READ COMMITTED 下挡不住它：读不持锁，激活可以在读之后提交。
-    /// 若不拦，最终租户是启用状态、热实例用旧路由、冷实例用新路由，
-    /// 同一租户同时往两个库写新数据，双方都不报错。</para>
-    /// <para>用两个独立作用域构造交错：路由侧先把租户行读进变更跟踪器（此时 IsActive=false），
-    /// 激活侧在另一个上下文把它改成启用并提交，然后路由侧才写入。
-    /// 路由侧带的是过期的租户版本，UPDATE 命中 0 行。</para>
+    /// 只读一次 <c>IsActive</c> 在 READ COMMITTED 下挡不住它：读不持锁，激活可以在读之后提交。
+    /// 若不拦，最终租户是启用状态、热实例用旧路由、冷实例用新路由，同一租户同时往两个库写新数据。
+    /// 路由侧带的是过期的租户版本，UPDATE 命中 0 行。
     /// </remarks>
     [Fact]
     public async Task Activation_committed_between_the_route_read_and_write_is_rejected()
     {
         var tenant = await CreateTenantAsync();
-        await _manager.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        await _manager.SetAsync(tenant.Id, Name, "Host=one", expectedVersion: null);
 
         await using var routeScope = _provider.CreateAsyncScope();
         var routeDbContext = routeScope.ServiceProvider.GetRequiredService<TestDbContext>();
 
         // 路由侧先读租户行：此刻 IsActive = false，检查会通过
-        var trackedTenant = await routeDbContext.Set<TenantRecord>()
-            .FirstAsync(x => x.Id == tenant.Id);
+        var trackedTenant = await routeDbContext.Set<TenantRecord>().FirstAsync(x => x.Id == tenant.Id);
         Assert.False(trackedTenant.IsActive);
         await routeDbContext.Set<TenantConnectionRecord>().FirstOrDefaultAsync(x => x.TenantId == tenant.Id);
 
         // 另一个上下文完成激活并提交
         await using (var activationScope = _provider.CreateAsyncScope())
         {
-            var activationManager = activationScope.ServiceProvider.GetRequiredService<ITenantManager>();
-            await activationManager.SetActiveAsync(tenant.Id, true);
+            await activationScope.ServiceProvider.GetRequiredService<ITenantManager>()
+                .SetActiveAsync(tenant.Id, true);
         }
 
         // 路由侧此时才写入：它读到的租户版本已过期
         var routeManager = routeScope.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
         await Assert.ThrowsAsync<TenantConcurrencyConflictException>(
-            () => routeManager.SetAsync(
-                tenant.Id,
-                TenantDatabaseMode.DedicatedDatabase,
-                "runtime/moved",
-                "migration/moved",
-                expectedVersion: 1));
+            () => routeManager.SetAsync(tenant.Id, Name, "Host=moved", expectedVersion: 1));
 
         // 路由必须原样：租户已被激活，而它的数据落点没有被改动
-        var stored = await _store.FindAsync(tenant.Id);
-        Assert.NotNull(stored);
-        Assert.Equal(TenantDatabaseMode.SharedDatabase, stored.DatabaseMode);
+        Assert.Equal("Host=one", (await _store.FindAsync(tenant.Id, Name))!.Connection!.ConnectionString);
     }
 
     /// <summary>
-    /// 并发首次创建：败者是 409，不是主键冲突导致的 500
+    /// 并发首次登记：败者是 409，不是主键冲突导致的 500
     /// </summary>
     /// <remarks>
-    /// 两个请求都以 <c>expectedVersion: null</c> 创建，都读到"配置不存在"，
-    /// 都要推进同一个租户版本 —— 败者在插入之前就冲突。
-    /// 靠租户版本而不是识别主键冲突：后者是 provider 相关的，
-    /// 且容易把别的约束错误也误判成 409。
+    /// 两个请求都以 <c>expectedVersion: null</c> 登记同一个名字，都读到"这一行不存在"，
+    /// 都要推进同一个租户版本 —— 败者在插入之前就冲突。靠租户版本而不是识别主键冲突：
+    /// 后者是 provider 相关的，且容易把别的约束错误也误判成 409。
     /// </remarks>
     [Fact]
-    public async Task Concurrent_first_creation_conflicts_instead_of_violating_the_primary_key()
+    public async Task Concurrent_first_registration_conflicts_instead_of_violating_the_primary_key()
     {
         var tenant = await CreateTenantAsync();
 
         await using var scopeA = _provider.CreateAsyncScope();
         await using var scopeB = _provider.CreateAsyncScope();
 
-        // 屏障：两边都要在任何一方写入之前读到租户行与"配置不存在"
+        // 屏障：两边都要在任何一方写入之前读到租户行与"这一行不存在"
         foreach (var scope in new[] { scopeA, scopeB })
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
@@ -452,17 +475,13 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         var managerA = scopeA.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
         var managerB = scopeB.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
 
-        var created = await managerA.SetAsync(
-            tenant.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
+        var created = await managerA.SetAsync(tenant.Id, Name, "Host=a", expectedVersion: null);
         Assert.Equal(1, created.Version);
 
-        // 败者在自己的 SetAsync 里重新查询时会看到 A 已提交的行，于是被 expectedVersion
-        // 预检拦下——报的是"预期不存在却已存在"，比"租户被并发修改"更准确。
-        // 两者都是 409；关键是不会落成主键冲突导致的 500
+        // 败者重查时会看到 A 已提交的行，于是被 expectedVersion 预检拦下——
+        // 报的是"预期不存在却已存在"。关键是不会落成主键冲突导致的 500
         var conflict = await Assert.ThrowsAsync<TenantConnectionVersionConflictException>(
-            () => managerB.SetAsync(
-                tenant.Id, TenantDatabaseMode.DedicatedDatabase, "runtime/b", "migration/b",
-                expectedVersion: null));
+            () => managerB.SetAsync(tenant.Id, Name, "Host=b", expectedVersion: null));
         Assert.Null(conflict.ExpectedVersion);
         Assert.Equal(1, conflict.ActualVersion);
 
@@ -470,16 +489,54 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// 并发冲突只丢弃本操作涉及的行，不碰同一工作单元里的其它实体
+    /// </summary>
+    /// <remarks>
+    /// <c>DbContext</c> 是宿主的工作单元。用 <c>ChangeTracker.Clear()</c> 收拾现场会把
+    /// 调用方尚未提交的其它实体一并抹掉——调用方捕获 409 后继续处理时，
+    /// 那些修改静默消失且没有任何信号。冲突处理只该管自己那两行。
+    /// </remarks>
+    [Fact]
+    public async Task A_conflict_does_not_discard_unrelated_pending_changes()
+    {
+        var target = await CreateTenantAsync();
+        var unrelated = await CreateTenantAsync();
+        await _manager.SetAsync(target.Id, Name, "Host=one", expectedVersion: null);
+
+        await using var scope = _provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+
+        // 同一工作单元里，调用方对另一个租户做了尚未提交的修改
+        var pending = await dbContext.Set<TenantRecord>().FirstAsync(x => x.Id == unrelated.Id);
+        pending.DisplayName = "edited-by-caller";
+
+        // 目标租户上制造并发冲突：另一个上下文先推进它的版本
+        await dbContext.Set<TenantRecord>().FirstAsync(x => x.Id == target.Id);
+        await dbContext.Set<TenantConnectionRecord>().FirstOrDefaultAsync(x => x.TenantId == target.Id);
+        await using (var other = _provider.CreateAsyncScope())
+        {
+            await other.ServiceProvider.GetRequiredService<ITenantManager>().SetActiveAsync(target.Id, true);
+        }
+
+        var manager = scope.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
+        await Assert.ThrowsAsync<TenantConcurrencyConflictException>(
+            () => manager.SetAsync(target.Id, Name, "Host=x", expectedVersion: 1));
+
+        // 调用方的那笔修改必须还在，并且仍能提交
+        Assert.Equal(EntityState.Modified, dbContext.Entry(pending).State);
+        await dbContext.SaveChangesAsync();
+
+        var reread = await _dbContext.Set<TenantRecord>().AsNoTracking().FirstAsync(x => x.Id == unrelated.Id);
+        Assert.Equal("edited-by-caller", reread.DisplayName);
+    }
+
+    /// <summary>
     /// 陈旧改名必须是 409 并发，而不是泄漏成 500
     /// </summary>
     /// <remarks>
-    /// <para>改名同时参与两个竞争：名称唯一，和租户生命周期版本。
-    /// <c>DbUpdateConcurrencyException</c> 继承 <c>DbUpdateException</c>，
-    /// 所以若把名称冲突那一档写在前面，陈旧改名会先走进名称判定；
-    /// 而库里并没有别的同名租户，于是原样上抛 EF 异常——调用方拿到 500，
-    /// 而项目里明明已经定义了对应的 409。</para>
-    /// <para>本用例构造的正是这个交错：改名侧先读到租户行，另一侧完成启停并提交，
-    /// 改名侧才写入。此时它带的租户版本已过期，且没有任何名称冲突。</para>
+    /// 改名同时参与两个竞争：名称唯一，和租户生命周期版本。<c>DbUpdateConcurrencyException</c>
+    /// 继承 <c>DbUpdateException</c>，所以若把名称冲突那一档写在前面，陈旧改名会先走进名称判定；
+    /// 而库里并没有别的同名租户，于是原样上抛 EF 异常——调用方拿到 500，而项目里明明已经定义了对应的 409。
     /// </remarks>
     [Fact]
     public async Task A_stale_rename_conflicts_as_concurrency_not_as_a_server_error()
@@ -488,18 +545,14 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
 
         await using var renameScope = _provider.CreateAsyncScope();
         var renameDbContext = renameScope.ServiceProvider.GetRequiredService<TestDbContext>();
-
-        // 改名侧先把租户行读进跟踪器
         await renameDbContext.Set<TenantRecord>().FirstAsync(x => x.Id == tenant.Id);
 
-        // 另一侧完成启停并提交，推进版本
         await using (var activationScope = _provider.CreateAsyncScope())
         {
-            var other = activationScope.ServiceProvider.GetRequiredService<ITenantManager>();
-            await other.SetActiveAsync(tenant.Id, true);
+            await activationScope.ServiceProvider.GetRequiredService<ITenantManager>()
+                .SetActiveAsync(tenant.Id, true);
         }
 
-        // 改名侧此时才写入：版本已过期，且新名字没有被任何人占用
         var renameManager = renameScope.ServiceProvider.GetRequiredService<ITenantManager>();
         await Assert.ThrowsAsync<TenantConcurrencyConflictException>(
             () => renameManager.UpdateAsync(tenant.Id, $"renamed-{Guid.NewGuid():N}", null));
@@ -516,55 +569,11 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
             () => _tenantManager.UpdateAsync(subject.Id, taken.Name, null));
     }
 
-    /// <summary>
-    /// 并发冲突只丢弃本次操作涉及的行，不碰同一工作单元里的其它实体
-    /// </summary>
-    /// <remarks>
-    /// <c>DbContext</c> 是宿主的工作单元。用 <c>ChangeTracker.Clear()</c> 收拾现场会把
-    /// 调用方尚未提交的其它实体一并抹掉——调用方捕获 409 后继续处理时，
-    /// 那些修改静默消失且没有任何信号。冲突处理只该管自己那两行。
-    /// </remarks>
-    [Fact]
-    public async Task A_conflict_does_not_discard_unrelated_pending_changes()
-    {
-        var target = await CreateTenantAsync();
-        var unrelated = await CreateTenantAsync();
-        await _manager.SetAsync(
-            target.Id, TenantDatabaseMode.SharedDatabase, null, null, expectedVersion: null);
-
-        await using var scope = _provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<TestDbContext>();
-
-        // 同一工作单元里，调用方对另一个租户做了尚未提交的修改
-        var pending = await dbContext.Set<TenantRecord>().FirstAsync(x => x.Id == unrelated.Id);
-        pending.DisplayName = "edited-by-caller";
-
-        // 目标租户上制造并发冲突：另一个上下文先推进它的版本
-        await dbContext.Set<TenantRecord>().FirstAsync(x => x.Id == target.Id);
-        await dbContext.Set<TenantConnectionRecord>().FirstOrDefaultAsync(x => x.TenantId == target.Id);
-        await using (var other = _provider.CreateAsyncScope())
-        {
-            await other.ServiceProvider.GetRequiredService<ITenantManager>()
-                .SetActiveAsync(target.Id, true);
-        }
-
-        var manager = scope.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
-        await Assert.ThrowsAsync<TenantConcurrencyConflictException>(
-            () => manager.SetAsync(
-                target.Id, TenantDatabaseMode.DedicatedDatabase, "runtime/x", "migration/x",
-                expectedVersion: 1));
-
-        // 调用方的那笔修改必须还在，并且仍能提交
-        Assert.Equal(EntityState.Modified, dbContext.Entry(pending).State);
-        await dbContext.SaveChangesAsync();
-
-        var reread = await _dbContext.Set<TenantRecord>().AsNoTracking()
-            .FirstAsync(x => x.Id == unrelated.Id);
-        Assert.Equal("edited-by-caller", reread.DisplayName);
-    }
-
     private Task<TenantConfiguration> CreateTenantAsync() =>
         _tenantManager.CreateAsync($"tenant-{Guid.NewGuid():N}", null, isActive: false);
+
+    private Task<TenantConnectionRecord> ReadRecordAsync(Guid tenantId) =>
+        _dbContext.Set<TenantConnectionRecord>().AsNoTracking().SingleAsync(x => x.TenantId == tenantId);
 
     private sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(options)
     {

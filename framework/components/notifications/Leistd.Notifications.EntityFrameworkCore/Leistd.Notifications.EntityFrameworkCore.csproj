@@ -8,6 +8,8 @@
     <ProjectReference Include="..\Leistd.Notifications.Core\Leistd.Notifications.Core.csproj" />
     <ProjectReference Include="..\..\auditing\Leistd.Auditing.Core\Leistd.Auditing.Core.csproj" />
     <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
+    <!-- IMultiTenant：通知按用户独立查询，需自带租户维度 -->
+    <ProjectReference Include="..\..\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
     <!-- 取 DbContext 经 IDbContextProvider，理由同 Leistd.Authorization.EntityFrameworkCore -->
     <ProjectReference Include="..\..\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\dependency-injection\Leistd.DependencyInjection\Leistd.DependencyInjection.csproj" />

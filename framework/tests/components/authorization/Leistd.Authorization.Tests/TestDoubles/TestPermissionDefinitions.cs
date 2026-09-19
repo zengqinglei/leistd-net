@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Abstractions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Leistd.Authorization.Services;
 using Leistd.Authorization.Abstractions;
@@ -34,13 +35,13 @@ public sealed class TestPermissionDefinitionProvider : IPermissionDefinitionProv
     {
         var group = context.GetOrAddGroup("App", "应用权限");
 
-        var orders = group.AddPermission(Orders, "订单管理");
+        var orders = group.AddPermission(Orders, MultiTenancySides.Both, "订单管理");
         orders.AddChild(OrdersRead, "查看订单");
         var write = orders.AddChild(OrdersWrite, "编辑订单");
         write.AddChild(OrdersWriteBatch, "批量编辑订单");
         orders.AddChild(OrdersDelete, "删除订单");
 
-        var reports = group.AddPermission(Reports, "报表");
+        var reports = group.AddPermission(Reports, MultiTenancySides.Both, "报表");
         reports.IsEnabled = false;
         reports.AddChild(ReportsView, "查看报表");
     }

@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.Abstractions;
+using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

@@ -22,7 +22,7 @@ public class LoggingHandlerTests
     }
 
     [Fact]
-    public async Task 成功调用_输出Information摘要()
+    public async Task Successful_call_logs_an_information_summary()
     {
         var (invoker, logger) = Create(new CapturingHttpMessageHandler());
 
@@ -34,7 +34,7 @@ public class LoggingHandlerTests
     }
 
     [Fact]
-    public async Task 非2xx响应_输出Warning摘要()
+    public async Task Non_success_response_logs_a_warning_summary()
     {
         var (invoker, logger) = Create(new CapturingHttpMessageHandler
         {
@@ -47,7 +47,7 @@ public class LoggingHandlerTests
     }
 
     [Fact]
-    public async Task 传输层异常_包装为ServiceClientException并输出Error()
+    public async Task Transport_failure_is_wrapped_and_logged_as_error()
     {
         var (invoker, logger) = Create(new ThrowingHttpMessageHandler(_ => new HttpRequestException("connection refused")));
 
@@ -60,7 +60,7 @@ public class LoggingHandlerTests
     }
 
     [Fact]
-    public async Task 调用方主动取消_不包装原样上抛()
+    public async Task Caller_cancellation_propagates_unwrapped()
     {
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -71,7 +71,7 @@ public class LoggingHandlerTests
     }
 
     [Fact]
-    public async Task 开启载荷日志_记录请求响应体并截断_敏感头脱敏()
+    public async Task Payload_logging_truncates_bodies_and_redacts_sensitive_headers()
     {
         var (invoker, logger) = Create(
             new CapturingHttpMessageHandler

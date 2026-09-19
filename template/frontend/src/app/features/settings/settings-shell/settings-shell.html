@@ -1,0 +1,89 @@
+<div class="flex h-full flex-col overflow-hidden">
+  <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+    <div class="flex w-full min-w-0 flex-col gap-6">
+      <header class="flex items-start gap-3">
+        <!-- 窄屏：面板导航收进抽屉，点选后自动关闭 -->
+        <hlm-sheet side="left">
+          <button
+            type="button"
+            hlmSheetTrigger
+            hlmBtn
+            size="icon-sm"
+            variant="outline"
+            class="mt-0.5 shrink-0 md:hidden"
+            data-testid="settings-nav-trigger"
+            [attr.aria-label]="openNavLabel()"
+          >
+            <ng-icon name="lucideMenu" />
+          </button>
+          <hlm-sheet-content *hlmSheetPortal="let ctx">
+            <h2 hlmSheetTitle class="px-4 pt-4 text-base font-semibold">{{ heading() }}</h2>
+            <nav class="flex flex-col gap-1 p-4" [attr.aria-label]="navLabel()">
+              @for (panel of panels(); track panel.path) {
+                <!-- hlmSheetClose 只能挂在 button 上；链接在点选后由抽屉上下文关闭 -->
+                <a
+                  hlmBtn
+                  variant="ghost"
+                  class="justify-start aria-[current=page]:bg-primary/10 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
+                  [routerLink]="[panel.path]"
+                  [attr.aria-current]="activePanel()?.path === panel.path ? 'page' : null"
+                  (click)="ctx.close()"
+                >
+                  <ng-icon [name]="panel.icon" />
+                  {{ panel.label }}
+                </a>
+              }
+            </nav>
+          </hlm-sheet-content>
+        </hlm-sheet>
+        <div class="flex min-w-0 flex-col gap-2">
+          <h1
+            class="text-2xl leading-none font-semibold tracking-tight"
+            data-testid="settings-title"
+          >
+            {{ heading() }}
+          </h1>
+          @if (description()) {
+            <p class="text-muted-foreground text-sm">{{ description() }}</p>
+          }
+        </div>
+      </header>
+
+      <hlm-separator />
+
+      <div class="flex flex-col gap-6 md:flex-row md:items-start">
+        <nav
+          class="hidden md:flex md:w-52 md:shrink-0 md:flex-col md:gap-1"
+          data-testid="settings-panels"
+          [attr.aria-label]="navLabel()"
+        >
+          @for (panel of panels(); track panel.path) {
+            <a
+              hlmBtn
+              variant="ghost"
+              class="justify-start aria-[current=page]:bg-primary/10 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
+              [routerLink]="[panel.path]"
+              [attr.aria-current]="activePanel()?.path === panel.path ? 'page' : null"
+              [attr.data-testid]="'settings-panel-link-' + panel.path"
+            >
+              <ng-icon [name]="panel.icon" />
+              {{ panel.label }}
+            </a>
+          }
+        </nav>
+
+        <main class="flex min-w-0 flex-auto flex-col gap-4">
+          @if (activePanel(); as panel) {
+            <header class="flex flex-col gap-1">
+              <h2 class="text-base leading-none font-semibold">{{ panel.label }}</h2>
+              @if (panel.description) {
+                <p class="text-muted-foreground text-sm">{{ panel.description }}</p>
+              }
+            </header>
+          }
+          <router-outlet />
+        </main>
+      </div>
+    </div>
+  </div>
+</div>

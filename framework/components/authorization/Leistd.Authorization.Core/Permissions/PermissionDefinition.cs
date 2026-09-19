@@ -21,9 +21,9 @@ internal sealed class PermissionDefinition : IPermissionDefinition
     internal PermissionDefinition(
         PermissionDefinitionRegistry registry,
         string name,
+        MultiTenancySides side,
         string? displayName = null,
-        PermissionDefinition? parent = null,
-        MultiTenancySides side = MultiTenancySides.Both)
+        PermissionDefinition? parent = null)
     {
         _registry = registry;
         Name = name;
@@ -35,7 +35,7 @@ internal sealed class PermissionDefinition : IPermissionDefinition
     public IPermissionDefinition AddChild(string name, string? displayName = null, MultiTenancySides? side = null)
     {
         // 子权限默认继承父权限侧别：宿主侧资源的动作权限不必逐个声明
-        var child = new PermissionDefinition(_registry, name, displayName, this, side ?? Side);
+        var child = new PermissionDefinition(_registry, name, side ?? Side, displayName, this);
         _registry.Register(child);
         _children.Add(child);
         return child;
@@ -50,26 +50,23 @@ internal sealed class PermissionGroupDefinition : IPermissionGroupDefinition
 
     public string Name { get; }
     public string? DisplayName { get; set; }
-    public MultiTenancySides Side { get; }
 
     public IReadOnlyList<IPermissionDefinition> Permissions => _permissions;
 
     internal PermissionGroupDefinition(
         PermissionDefinitionRegistry registry,
         string name,
-        string? displayName = null,
-        MultiTenancySides side = MultiTenancySides.Both)
+        string? displayName = null)
     {
         _registry = registry;
         Name = name;
         DisplayName = displayName;
-        Side = side;
     }
 
-    public IPermissionDefinition AddPermission(string name, string? displayName = null, MultiTenancySides? side = null)
+    // 组不承载侧别：侧别必须逐条权限显式声明，组级默认值会让"忘了声明"变成"看起来声明过"
+    public IPermissionDefinition AddPermission(string name, MultiTenancySides side, string? displayName = null)
     {
-        // 权限默认继承组侧别
-        var permission = new PermissionDefinition(_registry, name, displayName, parent: null, side ?? Side);
+        var permission = new PermissionDefinition(_registry, name, side, displayName, parent: null);
         _registry.Register(permission);
         _permissions.Add(permission);
         return permission;
@@ -152,11 +149,11 @@ internal sealed class PermissionDefinitionContext : IPermissionDefinitionContext
     private readonly Dictionary<string, PermissionGroupDefinition> _groups = new(StringComparer.Ordinal);
     private readonly PermissionDefinitionRegistry _registry = new();
 
-    public IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null, MultiTenancySides side = MultiTenancySides.Both)
+    public IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null)
     {
         if (!_groups.TryGetValue(name, out var group))
         {
-            group = new PermissionGroupDefinition(_registry, name, displayName, side);
+            group = new PermissionGroupDefinition(_registry, name, displayName);
             _groups[name] = group;
         }
         else if (displayName != null && group.DisplayName != displayName)

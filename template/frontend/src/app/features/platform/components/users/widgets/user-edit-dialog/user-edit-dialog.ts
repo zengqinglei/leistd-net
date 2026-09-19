@@ -56,15 +56,17 @@ import { translationReady } from '../../../../../../core/i18n/translation-ready'
 import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
 //#endif
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+import {
+  AvatarImageRejected,
+  isAvatarImageUrl,
+  prepareAvatarImage,
+} from '../../../../../../shared/utils/avatar-image';
 import { RoleBriefDto } from '../../../../models/role.dto';
 import {
   CreateUserInputDto,
   UpdateUserInputDto,
   UserManagementOutputDto,
 } from '../../../../models/user-management.dto';
-
-const MAX_AVATAR_SIZE = 1024 * 1024;
-const ACCEPTED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 @Component({
   selector: 'app-user-edit-dialog',
@@ -123,6 +125,7 @@ export class UserEditDialog {
     sizeDetail: this.transloco.translate('users.editDialog.avatarTooLargeDetail'),
     typeSummary: this.transloco.translate('users.editDialog.avatarBadTypeSummary'),
     typeDetail: this.transloco.translate('users.editDialog.avatarBadTypeDetail'),
+    decodeDetail: this.transloco.translate('users.editDialog.avatarDecodeFailed'),
   });
   //#else
   private readonly unnamedLabel = () => 'Unnamed user';
@@ -130,9 +133,10 @@ export class UserEditDialog {
   readonly rolesPlaceholder = () => 'Select roles';
   private readonly avatarMessages = () => ({
     sizeSummary: 'File too large',
-    sizeDetail: 'The avatar size cannot exceed 1MB',
+    sizeDetail: 'The image cannot exceed 10 MB',
     typeSummary: 'Unsupported format',
     typeDetail: 'Please upload a PNG, JPG or WEBP image',
+    decodeDetail: 'This image could not be read. Try another one.',
   });
   //#endif
 
@@ -306,46 +310,37 @@ export class UserEditDialog {
   }
 
   hasAvatarImage() {
-    const avatar = this.avatarPreview();
-    return (
-      avatar.startsWith('data:image/') ||
-      avatar.startsWith('http://') ||
-      avatar.startsWith('https://')
-    );
+    return isAvatarImageUrl(this.avatarPreview());
   }
 
-  onAvatarSelect(event: Event) {
+  /**
+   * 选完图片先在浏览器里裁成正方形、缩到 256 再放进表单：服务端对头像有体积上限，
+   * 不处理就提交原图多半会被拒（与个人资料面板共用同一处理）。
+   */
+  async onAvatarSelect(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-
+    // 允许再次选择同一文件时仍触发 change 事件
+    input.value = '';
     if (!file) {
       return;
     }
 
-    const messages = this.avatarMessages();
-
-    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
-      toast.error(messages.typeSummary, { description: messages.typeDetail });
-      input.value = '';
-      return;
-    }
-
-    if (file.size > MAX_AVATAR_SIZE) {
-      toast.error(messages.sizeSummary, { description: messages.sizeDetail });
-      input.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
+    try {
+      const result = await prepareAvatarImage(file);
       this.formModel.update((m) => ({ ...m, avatar: result }));
       this.avatarPreview.set(result);
-    };
-    reader.readAsDataURL(file);
-
-    // 允许再次选择同一文件时仍触发 change 事件
-    input.value = '';
+    } catch (error: unknown) {
+      const messages = this.avatarMessages();
+      const reason = error instanceof AvatarImageRejected ? error.reason : 'decode';
+      if (reason === 'type') {
+        toast.error(messages.typeSummary, { description: messages.typeDetail });
+      } else if (reason === 'size') {
+        toast.error(messages.sizeSummary, { description: messages.sizeDetail });
+      } else {
+        toast.error(messages.typeSummary, { description: messages.decodeDetail });
+      }
+    }
   }
 
   // hlm-switch 为 CVA（checked 非 ModelSignal），Signal Forms 的 [formField] 不适配；

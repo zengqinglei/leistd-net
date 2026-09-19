@@ -1,5 +1,3 @@
-using Leistd.Notifications.Constants;
-
 namespace Leistd.Notifications.Dtos;
 
 /// <summary>
@@ -17,8 +15,17 @@ public record NotificationInputDto
     /// <summary>通知内容（可选）。</summary>
     public string? Content { get; init; }
 
-    /// <summary>通知类型（字符串，见 <see cref="NotificationTypes"/>）。</summary>
-    public string Type { get; init; } = NotificationTypes.System;
+    /// <summary>
+    /// 未指定类型时的通知类型。
+    /// </summary>
+    /// <remarks>
+    /// 框架只约定这一个默认值；其余类别（安全提醒、审批、数据变更……）由业务项目按自己的领域定义，
+    /// 通知偏好、前端图标等都按这个字符串区分。
+    /// </remarks>
+    public const string DefaultType = "System";
+
+    /// <summary>通知类型（业务自定义的字符串；未指定时为 <see cref="DefaultType"/>）。</summary>
+    public string Type { get; init; } = DefaultType;
 
     /// <summary>点击跳转路由（可选）。</summary>
     public string? Link { get; init; }

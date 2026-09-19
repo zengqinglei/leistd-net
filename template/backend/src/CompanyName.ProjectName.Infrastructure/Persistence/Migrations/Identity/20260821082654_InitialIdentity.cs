@@ -50,6 +50,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     RelatedEntityId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     RelatedEntityType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     MetadataJson = table.Column<string>(type: "text", nullable: true),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true)
                 },
@@ -58,6 +59,65 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     table.PrimaryKey("PK_NotificationRecord", x => x.Id);
                 });
 #endif
+
+            migrationBuilder.CreateTable(
+                name: "OperationRecordArchives",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ActorTenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Action = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
+                    TargetId = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    AuthorizationBasis = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    Outcome = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ArchivedTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ActorId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    ActorName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    ImpersonatorId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    ImpersonatorName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    CorrelationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    TargetName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    Visibility = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    FailureCode = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    FailureData = table.Column<string>(type: "text", nullable: true),
+                    FailureDetail = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_OperationRecordArchives", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "OperationRecords",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    ActorTenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Action = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
+                    TargetId = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    AuthorizationBasis = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    Outcome = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ActorId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    ActorName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    ImpersonatorId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    ImpersonatorName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    CorrelationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    TargetName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    Visibility = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    FailureCode = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    FailureData = table.Column<string>(type: "text", nullable: true),
+                    FailureDetail = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_OperationRecords", x => x.Id);
+                });
 
             migrationBuilder.CreateTable(
                 name: "PermissionGrantRecords",
@@ -142,6 +202,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     AccessFailedCount = table.Column<int>(type: "integer", nullable: false),
                     LastLoginTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     LastLoginIp = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
+                    TwoFactorEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    TwoFactorSecret = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    TwoFactorRecoveryCodes = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
+                    TwoFactorLastUsedStep = table.Column<long>(type: "bigint", nullable: true),
                     CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     LastModifierId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
@@ -203,6 +267,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     RoleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     LastModifierId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
@@ -230,6 +295,33 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "UserSessions",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LastSeenTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    IpAddress = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
+                    UserAgent = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    ImpersonatorName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserSessions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_UserSessions_Users_UserId",
+                        column: x => x.UserId,
+                        principalSchema: "companyname-projectname",
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_AuthorizationVersionRecord_ProviderName_ProviderKey",
                 schema: "companyname-projectname",
@@ -253,7 +345,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "ExternalLoginConnections",
                 columns: new[] { "Provider", "ProviderUserId" },
                 unique: true,
-                filter: "\"TenantId\" IS NULL");
+                filter: "\"TenantId\" IS NULL AND NOT \"IsDeleted\"");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ExternalLoginConnections_TenantId_Provider_ProviderUserId",
@@ -261,7 +353,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "ExternalLoginConnections",
                 columns: new[] { "TenantId", "Provider", "ProviderUserId" },
                 unique: true,
-                filter: "\"TenantId\" IS NOT NULL");
+                filter: "\"TenantId\" IS NOT NULL AND NOT \"IsDeleted\"");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ExternalLoginConnections_UserId",
@@ -283,6 +375,27 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "NotificationRecord",
                 columns: new[] { "UserId", "IsRead" });
 #endif
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OperationRecordArchives_TenantId_CreationTime",
+                schema: "companyname-projectname",
+                table: "OperationRecordArchives",
+                columns: new[] { "TenantId", "CreationTime" },
+                descending: new[] { false, true });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OperationRecords_TenantId_CreationTime",
+                schema: "companyname-projectname",
+                table: "OperationRecords",
+                columns: new[] { "TenantId", "CreationTime" },
+                descending: new[] { false, true });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OperationRecords_TenantId_Visibility_CreationTime",
+                schema: "companyname-projectname",
+                table: "OperationRecords",
+                columns: new[] { "TenantId", "Visibility", "CreationTime" },
+                descending: new[] { false, false, true });
 
             migrationBuilder.CreateIndex(
                 name: "IX_PermissionGrantRecords_PermissionName_ProviderName_Provider~",
@@ -343,6 +456,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_UserSessions_UserId",
+                schema: "companyname-projectname",
+                table: "UserSessions",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
                 schema: "companyname-projectname",
                 table: "Users",
@@ -395,6 +514,14 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 #endif
 
             migrationBuilder.DropTable(
+                name: "OperationRecordArchives",
+                schema: "companyname-projectname");
+
+            migrationBuilder.DropTable(
+                name: "OperationRecords",
+                schema: "companyname-projectname");
+
+            migrationBuilder.DropTable(
                 name: "PermissionGrantRecords",
                 schema: "companyname-projectname");
 
@@ -404,6 +531,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
             migrationBuilder.DropTable(
                 name: "UserRoles",
+                schema: "companyname-projectname");
+
+            migrationBuilder.DropTable(
+                name: "UserSessions",
                 schema: "companyname-projectname");
 
             migrationBuilder.DropTable(

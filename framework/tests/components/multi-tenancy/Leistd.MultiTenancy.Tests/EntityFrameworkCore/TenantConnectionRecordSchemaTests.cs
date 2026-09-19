@@ -1,20 +1,20 @@
+using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
+using Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
+using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
 /// <summary>
-/// 租户连接记录的表级不变量：模式与 Secret 引用的一致性由数据库检查约束钉住，
-/// 不只靠管理器校验。
+/// 租户连接登记的表级形态：主键是 <c>(TenantId, Name)</c>，密文非空，同一租户可登记多条。
 /// </summary>
 /// <remarks>
-/// 这一行决定该租户的数据落在哪个库。绕过管理器直接写库（迁移脚本、运维手工修数、
-/// 未来新增的写入路径）同样不能造出"独立库但没有 Secret 引用"——那样的行解析不出连接，
-/// 该租户的请求会全部失败；也不能造出"共享库却带着 Secret 引用"——那是配置意图不明。
+/// 去掉模式标志位之后，<b>行的存在本身就是判据</b>，所以旧的"模式与连接串一致性"检查约束也一并删掉了。
+/// 现在需要数据库钉住的是另外两件事：同一租户同一名字不能重复登记（复合主键），
+/// 以及不能登记一条没有连接串的空行（密文非空）——那样的行会让解析既不回落也取不到值。
 /// </remarks>
 public class TenantConnectionRecordSchemaTests : IAsyncLifetime
 {
@@ -37,53 +37,87 @@ public class TenantConnectionRecordSchemaTests : IAsyncLifetime
         await _connection.DisposeAsync();
     }
 
-    [Theory]
-    // 独立库却缺 Secret 引用：解析不出连接
-    [InlineData(TenantDatabaseMode.DedicatedDatabase, null, null)]
-    [InlineData(TenantDatabaseMode.DedicatedDatabase, "runtime", null)]
-    [InlineData(TenantDatabaseMode.DedicatedDatabase, null, "migration")]
-    // 共享库却带 Secret 引用：配置意图不明
-    [InlineData(TenantDatabaseMode.SharedDatabase, "runtime", "migration")]
-    [InlineData(TenantDatabaseMode.SharedDatabase, "runtime", null)]
-    public async Task Inconsistent_mode_and_secret_references_are_rejected_by_the_database(
-        TenantDatabaseMode mode,
-        string? runtimeSecret,
-        string? migrationSecret)
+    // 一个租户在 identity、foundation、crm 各一条，正是这次改造的目标形态
+    [Fact]
+    public async Task One_tenant_can_register_several_named_connections()
     {
-        _dbContext.Set<TenantConnectionRecord>().Add(new TenantConnectionRecord
-        {
-            TenantId = await SeedTenantAsync(),
-            DatabaseMode = mode,
-            RuntimeSecretReference = runtimeSecret,
-            MigrationSecretReference = migrationSecret,
-            Version = 1
-        });
+        var tenantId = await SeedTenantAsync();
 
-        var error = await Record.ExceptionAsync(() => _dbContext.SaveChangesAsync());
-        Assert.NotNull(error);
+        Add(tenantId, "default", "ciphertext-default");
+        Add(tenantId, "crm", "ciphertext-crm");
+        Add(tenantId, "foundation", "ciphertext-foundation");
+        await _dbContext.SaveChangesAsync();
+
+        Assert.Equal(3, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.TenantId == tenantId));
+    }
+
+    // 同名重复登记会让"这个名字用哪一条"变成不确定，必须由主键拦下
+    [Fact]
+    public async Task The_same_name_cannot_be_registered_twice_for_one_tenant()
+    {
+        var tenantId = await SeedTenantAsync();
+        Add(tenantId, "crm", "ciphertext-one");
+        await _dbContext.SaveChangesAsync();
+        _dbContext.ChangeTracker.Clear();
+
+        Add(tenantId, "crm", "ciphertext-two");
+
+        Assert.NotNull(await Record.ExceptionAsync(() => _dbContext.SaveChangesAsync()));
         _dbContext.ChangeTracker.Clear();
     }
 
-    [Theory]
-    [InlineData(TenantDatabaseMode.SharedDatabase, null, null)]
-    [InlineData(TenantDatabaseMode.DedicatedDatabase, "runtime", "migration")]
-    public async Task Consistent_mode_and_secret_references_are_accepted(
-        TenantDatabaseMode mode,
-        string? runtimeSecret,
-        string? migrationSecret)
+    // 不同租户用同一个名字是正常的：crm 服务在每个分库租户那里都有一条
+    [Fact]
+    public async Task Different_tenants_may_use_the_same_name()
     {
+        var first = await SeedTenantAsync();
+        var second = await SeedTenantAsync();
+
+        Add(first, "crm", "ciphertext-one");
+        Add(second, "crm", "ciphertext-two");
+        await _dbContext.SaveChangesAsync();
+
+        Assert.Equal(2, await _dbContext.Set<TenantConnectionRecord>().CountAsync(x => x.Name == "crm"));
+    }
+
+    // 空密文的行解析既不回落也取不到值，是纯粹的坏数据
+    [Fact]
+    public async Task A_registration_without_a_ciphertext_is_rejected_by_the_database()
+    {
+        var tenantId = await SeedTenantAsync();
+        Add(tenantId, "crm", null!);
+
+        Assert.NotNull(await Record.ExceptionAsync(() => _dbContext.SaveChangesAsync()));
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public void The_model_has_a_composite_key_and_no_mode_column()
+    {
+        var entity = _dbContext.Model.FindEntityType(typeof(TenantConnectionRecord))!;
+
+        Assert.Equal(
+            [nameof(TenantConnectionRecord.TenantId), nameof(TenantConnectionRecord.Name)],
+            entity.FindPrimaryKey()!.Properties.Select(x => x.Name));
+        Assert.Equal(
+            TenantConnectionConfiguration.MaxNameLength,
+            entity.FindProperty(nameof(TenantConnectionRecord.Name))!.GetMaxLength());
+        Assert.Equal(
+            TenantConnectionRecordConfiguration.MaxProtectedConnectionStringLength,
+            entity.FindProperty(nameof(TenantConnectionRecord.ProtectedConnectionString))!.GetMaxLength());
+        Assert.False(entity.FindProperty(nameof(TenantConnectionRecord.ProtectedConnectionString))!.IsNullable);
+        // 模式标志位已经没有了：行的存在本身就是判据，随之删掉的还有旧的"模式与连接串一致性"检查约束
+        Assert.DoesNotContain(entity.GetProperties(), p => p.Name.Contains("Mode", StringComparison.Ordinal));
+    }
+
+    private void Add(Guid tenantId, string name, string protectedConnectionString) =>
         _dbContext.Set<TenantConnectionRecord>().Add(new TenantConnectionRecord
         {
-            TenantId = await SeedTenantAsync(),
-            DatabaseMode = mode,
-            RuntimeSecretReference = runtimeSecret,
-            MigrationSecretReference = migrationSecret,
+            TenantId = tenantId,
+            Name = name,
+            ProtectedConnectionString = protectedConnectionString,
             Version = 1
         });
-
-        await _dbContext.SaveChangesAsync();
-        Assert.Equal(1, await _dbContext.Set<TenantConnectionRecord>().CountAsync());
-    }
 
     private async Task<Guid> SeedTenantAsync()
     {
@@ -91,6 +125,7 @@ public class TenantConnectionRecordSchemaTests : IAsyncLifetime
         var tenant = new TenantRecord { Name = $"t{suffix}", NormalizedName = $"T{suffix}".ToUpperInvariant() };
         _dbContext.Set<TenantRecord>().Add(tenant);
         await _dbContext.SaveChangesAsync();
+        _dbContext.ChangeTracker.Clear();
         return tenant.Id;
     }
 

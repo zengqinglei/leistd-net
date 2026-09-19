@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { toast } from '@spartan-ng/brain/sonner';
@@ -41,6 +41,7 @@ describe('Login', () => {
   let component: Login;
   let router: Router;
   let authService: jasmine.SpyObj<AuthService>;
+  let currentUser: WritableSignal<{ twoFactorSetupRequired?: boolean } | null>;
   let authorization: AuthorizationService;
   let queryParams: Record<string, string>;
   //#if (LocalIdentity)
@@ -49,11 +50,12 @@ describe('Login', () => {
   //#endif
 
   async function setUp(): Promise<void> {
-    authService = jasmine.createSpyObj<AuthService>('AuthService', [
-      'login',
-      'loadUser',
-      'clearAuthData',
-    ]);
+    currentUser = signal<{ twoFactorSetupRequired?: boolean } | null>(null);
+    authService = jasmine.createSpyObj<AuthService>(
+      'AuthService',
+      ['login', 'loadUser', 'clearAuthData'],
+      { currentUser: currentUser as never },
+    );
     // 具体载荷与本用例无关：登录流程只关心"成功/失败"和随后的跳转。
     authService.login.and.returnValue(of(undefined) as never);
     authService.loadUser.and.returnValue(of(undefined) as never);
@@ -133,6 +135,37 @@ describe('Login', () => {
 
     expect(authService.login).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/platform/users');
+  });
+
+  it('已启用两步验证时换成验证码那一步，不取当前用户也不跳转', async () => {
+    await setUp();
+    authService.login.and.returnValue(
+      of({ requiresTwoFactor: true, twoFactorToken: 'challenge-token' }) as never,
+    );
+    fillValidCredentials();
+
+    await component.onSubmit();
+    fixture.detectChanges();
+
+    expect(authService.loadUser).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="two-factor-challenge"]'),
+    ).not.toBeNull();
+  });
+
+  it('受限会话（组织要求两步验证）直接去设置页，不建立会话上下文', async () => {
+    await setUp();
+    authService.loadUser.and.callFake(() => {
+      currentUser.set({ twoFactorSetupRequired: true });
+      return of(undefined) as never;
+    });
+    fillValidCredentials();
+
+    await component.onSubmit();
+
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/two-factor-setup']);
+    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
   });
 
   for (const hostile of ['//evil.example.com', 'https://evil.example.com', 'javascript://evil']) {

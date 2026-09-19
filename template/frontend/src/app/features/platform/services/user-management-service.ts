@@ -62,6 +62,16 @@ export class UserManagementService {
   resetPassword(id: string, data: ResetUserPasswordInputDto): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/${id}/reset-password`, data);
   }
+
+  /** 解除用户的登录锁定。 */
+  unlockUser(id: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/${id}/unlock`, {});
+  }
+
+  /** 重置用户的两步验证（给丢了手机和恢复码的人用），该用户的会话全部失效。 */
+  resetTwoFactor(id: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/${id}/reset-two-factor`, {});
+  }
   //#endif
 
   deleteUser(id: string): Observable<void> {

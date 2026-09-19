@@ -11,12 +11,14 @@ import { Router } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
+// prettier-ignore
 import {
   lucideBell,
-  lucideDatabase,
   lucideInbox,
   lucideInfo,
-  lucideNetwork,
+  //#if (LocalIdentity)
+  lucideShieldAlert,
+  //#endif
   lucideTrash2,
 } from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
@@ -60,9 +62,10 @@ import { AppDate } from '../../../shared/pipes/app-date-pipe';
     provideIcons({
       lucideBell,
       lucideInbox,
-      lucideDatabase,
-      lucideNetwork,
       lucideInfo,
+      //#if (LocalIdentity)
+      lucideShieldAlert,
+      //#endif
       lucideTrash2,
     }),
   ],

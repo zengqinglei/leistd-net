@@ -147,7 +147,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task JSON与路由与Query_按Web约定序列化并正确编码()
+    public async Task Json_route_and_query_follow_web_conventions()
     {
         await using var caller = CreateCaller();
         var api = caller.GetRequiredService<IFormatApi>();
@@ -161,7 +161,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 标准管道随Refit客户端生效_TraceId与用户头透传()
+    public async Task Standard_pipeline_applies_to_refit_clients()
     {
         var userId = Guid.NewGuid();
         await using var caller = CreateCaller(new FakeCurrentUser(id: userId));
@@ -179,7 +179,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 表单UrlEncoded_字段按值序列化()
+    public async Task Url_encoded_form_serializes_field_values()
     {
         await using var caller = CreateCaller();
         var api = caller.GetRequiredService<IFormatApi>();
@@ -197,7 +197,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Multipart上传_文件名与ContentType与内容完整()
+    public async Task Multipart_upload_keeps_file_name_content_type_and_content()
     {
         await using var caller = CreateCaller();
         var api = caller.GetRequiredService<IFormatApi>();
@@ -215,7 +215,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 二进制下载_原始响应读流且错误检查可用()
+    public async Task Binary_download_streams_the_raw_response_with_error_checks()
     {
         await using var caller = CreateCaller();
         var api = caller.GetRequiredService<IFormatApi>();
@@ -229,7 +229,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 下载端点出错_原始响应不经ExceptionFactory_需显式错误还原()
+    public async Task Download_error_bypasses_the_exception_factory_and_needs_explicit_restore()
     {
         await using var caller = CreateCaller();
         var api = caller.GetRequiredService<IFormatApi>();
@@ -245,7 +245,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task 远端错误_经ExceptionFactory还原为RemoteServiceException而非ApiException()
+    public async Task Remote_error_becomes_RemoteServiceException_instead_of_ApiException()
     {
         await using var caller = CreateCaller();
         var api = caller.GetRequiredService<IFormatApi>();

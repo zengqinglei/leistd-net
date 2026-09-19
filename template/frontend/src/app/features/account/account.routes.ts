@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
 
+import { twoFactorSetupGuard } from './guards/two-factor-setup-guard';
+
 /**
  * 认证模块路由配置
  * 用于 Empty Layout 的子路由
@@ -8,6 +10,15 @@ export const AUTH_ROUTES: Routes = [
   {
     path: 'login',
     loadComponent: () => import('./components/login/login').then((m) => m.Login),
+  },
+  {
+    // 组织要求两步验证而本人尚未启用：受限会话只能到这里
+    path: 'two-factor-setup',
+    canActivate: [twoFactorSetupGuard],
+    loadComponent: () =>
+      import('./components/two-factor-required/two-factor-required').then(
+        (m) => m.TwoFactorRequired,
+      ),
   },
   {
     path: 'register',

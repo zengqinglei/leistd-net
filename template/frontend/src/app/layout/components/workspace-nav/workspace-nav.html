@@ -1,0 +1,104 @@
+@if (placement() === 'start') {
+  <!-- 窄屏：导航收进抽屉，点选后自动关闭 -->
+  <hlm-sheet side="left">
+    <!--#if (IncludeLocalization)-->
+    <button
+      type="button"
+      hlmSheetTrigger
+      hlmBtn
+      variant="ghost"
+      size="icon"
+      class="md:hidden"
+      data-testid="workspace-nav-trigger"
+      [attr.aria-label]="'layout.topbar.openNavigation' | transloco"
+    >
+      <ng-icon name="lucideMenu" />
+    </button>
+    <!--#else-->
+    <button
+      type="button"
+      hlmSheetTrigger
+      hlmBtn
+      variant="ghost"
+      size="icon"
+      class="md:hidden"
+      data-testid="workspace-nav-trigger"
+      aria-label="Open navigation"
+    >
+      <ng-icon name="lucideMenu" />
+    </button>
+    <!--#endif-->
+    <hlm-sheet-content *hlmSheetPortal="let ctx">
+      <h2 hlmSheetTitle class="px-4 pt-4 text-base font-semibold">{{ appTitle() }}</h2>
+      <nav class="flex flex-col gap-4 p-4" [attr.aria-label]="ariaLabel()">
+        @for (group of groups(); track group.label) {
+          <div class="flex flex-col gap-1">
+            <span class="text-muted-foreground px-2.5 text-xs font-medium">{{ group.label }}</span>
+            @for (item of group.items; track item.route) {
+              <!-- hlmSheetClose 只能挂在 button 上；链接在点选后由抽屉上下文关闭 -->
+              <a
+                hlmBtn
+                variant="ghost"
+                class="justify-start aria-[current=page]:bg-primary/10 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
+                [routerLink]="item.route"
+                [attr.aria-current]="isItemActive(item) ? 'page' : null"
+                (click)="ctx.close()"
+              >
+                <ng-icon [name]="item.icon" />
+                {{ item.label }}
+              </a>
+            }
+          </div>
+        }
+      </nav>
+    </hlm-sheet-content>
+  </hlm-sheet>
+
+  <a
+    class="flex shrink-0 items-center gap-2 text-sm font-semibold"
+    [routerLink]="layoutService.homeRoute()"
+  >
+    <app-logo />
+    <span class="hidden sm:inline">{{ appTitle() }}</span>
+  </a>
+}
+
+@if (placement() === 'start') {
+  <nav hlmNavigationMenu class="hidden md:flex" [attr.aria-label]="ariaLabel()">
+    <ul hlmNavigationMenuList class="gap-1">
+      @for (item of items(); track item.route) {
+        <li hlmNavigationMenuItem>
+          <a
+            hlmNavigationMenuLink
+            class="data-active:bg-primary/10 data-active:font-semibold data-active:text-primary"
+            [routerLink]="item.route"
+            [active]="isItemActive(item)"
+            [attr.aria-current]="isItemActive(item) ? 'page' : null"
+            [attr.data-testid]="'workspace-nav-' + item.route"
+          >
+            {{ item.label }}
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+} @else {
+  <!-- 右侧与主题、通知、语言同一排：用同款图标按钮，名称放进提示与可访问名 -->
+  <nav class="hidden items-center gap-2 md:flex" [attr.aria-label]="ariaLabel()">
+    @for (item of items(); track item.route) {
+      <a
+        hlmBtn
+        variant="outline"
+        size="icon"
+        class="aria-[current=page]:border-primary/30 aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary dark:aria-[current=page]:bg-primary/15"
+        [routerLink]="item.route"
+        [attr.aria-current]="isItemActive(item) ? 'page' : null"
+        [attr.aria-label]="item.label"
+        [hlmTooltip]="item.label"
+        [attr.data-testid]="'workspace-nav-' + item.route"
+      >
+        <ng-icon [name]="item.icon" />
+      </a>
+    }
+  </nav>
+}

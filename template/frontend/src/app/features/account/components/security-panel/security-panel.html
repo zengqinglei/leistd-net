@@ -1,0 +1,170 @@
+<div class="flex w-full max-w-3xl flex-col gap-8">
+  <!-- 每一节一个卡片：标题说"这是什么"，描述说"为什么要管它"。 -->
+  <section
+    class="border-border flex flex-col gap-4 rounded-xl border p-4 sm:p-6"
+    data-testid="security-password"
+  >
+    <header class="flex flex-col gap-1">
+      <!--#if (IncludeLocalization)-->
+      <h3 class="text-sm leading-none font-semibold">
+        {{ 'account.changePassword.header' | transloco }}
+      </h3>
+      <p class="text-muted-foreground text-sm">
+        {{ 'account.changePassword.subtitle' | transloco }}
+      </p>
+      <!--#else-->
+      <h3 class="text-sm leading-none font-semibold">Change password</h3>
+      <p class="text-muted-foreground text-sm">
+        Enter your current password and set a new sign-in password. Other devices will be signed
+        out.
+      </p>
+      <!--#endif-->
+    </header>
+    <form
+      novalidate
+      class="flex flex-col gap-4"
+      data-testid="change-password-form"
+      (submit)="$event.preventDefault(); onSubmit()"
+    >
+      <div class="flex flex-col gap-4">
+        <div
+          class="rounded-lg border border-border bg-muted px-4 py-3 text-xs text-muted-foreground"
+        >
+          <!--#if (IncludeLocalization)-->
+          {{ 'account.changePassword.rules' | transloco }}
+          <!--#else-->
+          Password rules: at least 12 characters. Longer passphrases are encouraged.
+          <!--#endif-->
+        </div>
+
+        <!-- Current Password -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="current-password">{{
+            'account.changePassword.currentPassword' | transloco
+          }}</label>
+          <!--#else-->
+          <label hlmFieldLabel for="current-password">Current Password</label>
+          <!--#endif-->
+          <hlm-input-group>
+            <input
+              hlmInputGroupInput
+              id="current-password"
+              [type]="showCurrentPassword() ? 'text' : 'password'"
+              [formField]="changeForm.currentPassword"
+            />
+            <button
+              hlmInputGroupButton
+              type="button"
+              size="icon-sm"
+              align="inline-end"
+              (click)="showCurrentPassword.set(!showCurrentPassword())"
+            >
+              <ng-icon [name]="showCurrentPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+            </button>
+          </hlm-input-group>
+          @for (error of changeForm.currentPassword().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+
+        <!-- New Password -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="new-password">{{
+            'account.changePassword.newPassword' | transloco
+          }}</label>
+          <!--#else-->
+          <label hlmFieldLabel for="new-password">New Password</label>
+          <!--#endif-->
+          <hlm-input-group>
+            <input
+              hlmInputGroupInput
+              id="new-password"
+              [type]="showNewPassword() ? 'text' : 'password'"
+              [formField]="changeForm.newPassword"
+            />
+            <button
+              hlmInputGroupButton
+              type="button"
+              size="icon-sm"
+              align="inline-end"
+              (click)="showNewPassword.set(!showNewPassword())"
+            >
+              <ng-icon [name]="showNewPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+            </button>
+          </hlm-input-group>
+          @for (error of changeForm.newPassword().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+
+        <!-- Confirm Password -->
+        <div hlmField>
+          <!--#if (IncludeLocalization)-->
+          <label hlmFieldLabel for="confirm-password">{{
+            'account.changePassword.confirmPassword' | transloco
+          }}</label>
+          <!--#else-->
+          <label hlmFieldLabel for="confirm-password">Confirm New Password</label>
+          <!--#endif-->
+          <hlm-input-group>
+            <input
+              hlmInputGroupInput
+              id="confirm-password"
+              [type]="showConfirmPassword() ? 'text' : 'password'"
+              [formField]="changeForm.confirmPassword"
+            />
+            <button
+              hlmInputGroupButton
+              type="button"
+              size="icon-sm"
+              align="inline-end"
+              (click)="showConfirmPassword.set(!showConfirmPassword())"
+            >
+              <ng-icon [name]="showConfirmPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+            </button>
+          </hlm-input-group>
+          @for (error of changeForm.confirmPassword().errors(); track error.kind) {
+            @if (error.message) {
+              <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            }
+          }
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <!--#if (IncludeLocalization)-->
+        <button hlmBtn type="submit" [disabled]="saving()">
+          @if (saving()) {
+            <hlm-spinner class="text-base" data-icon="inline-start" />
+          } @else {
+            <ng-icon name="lucideLock" data-icon="inline-start" />
+          }
+          {{ 'account.changePassword.submit' | transloco }}
+        </button>
+        <!--#else-->
+        <button hlmBtn type="submit" [disabled]="saving()">
+          @if (saving()) {
+            <hlm-spinner class="text-base" data-icon="inline-start" />
+          } @else {
+            <ng-icon name="lucideLock" data-icon="inline-start" />
+          }
+          Update Password
+        </button>
+        <!--#endif-->
+      </div>
+    </form>
+  </section>
+
+  <app-two-factor-settings (sessionsChanged)="loginDevices()?.reload()" />
+  <!--#if (ExternalLogin)-->
+
+  <app-external-logins />
+  <!--#endif-->
+
+  <app-login-devices />
+</div>

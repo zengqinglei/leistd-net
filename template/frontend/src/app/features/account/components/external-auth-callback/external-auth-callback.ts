@@ -3,13 +3,16 @@ import { ActivatedRoute, Router } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
+import { toast } from '@spartan-ng/brain/sonner';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
+import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { AccountService } from '../../services/account-service';
+import { EXTERNAL_LINK_PENDING_KEY } from '../external-logins/external-logins';
 
 /**
  * 外部登录回调组件
@@ -84,15 +87,35 @@ export class ExternalAuthCallback implements OnInit {
       return;
     }
 
+    // 绑定外部账号时出发前记下了提供商：这次回来是绑定，不是登录
+    const pendingLink = sessionStorage.getItem(EXTERNAL_LINK_PENDING_KEY);
+    sessionStorage.removeItem(EXTERNAL_LINK_PENDING_KEY);
+    if (pendingLink === provider) {
+      await this.completeLink(provider, code, state ?? '');
+      return;
+    }
+
     try {
       // 1. 将 code+state 发送到后端建立 Cookie session
-      await lastValueFrom(
+      const result = await lastValueFrom(
         this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }),
       );
+
+      // 已启用两步验证：会话还没下发，回登录页做第二步（凭据走导航状态，不进地址栏）
+      if (result?.requiresTwoFactor && result.twoFactorToken) {
+        await this.router.navigate(['/auth/login'], {
+          state: { twoFactorToken: result.twoFactorToken },
+        });
+        return;
+      }
 
       // 2. 建立会话上下文（权限 + 设置）并按权限跳转。
       //    设置也必须在这里就位：SPA 内跳转不会重跑应用初始化器。
       await lastValueFrom(this.authService.loadUser());
+      if (this.authService.currentUser()?.twoFactorSetupRequired) {
+        await this.router.navigate(['/auth/two-factor-setup']);
+        return;
+      }
       await this.sessionContext.establish();
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
@@ -107,5 +130,37 @@ export class ExternalAuthCallback implements OnInit {
       this.error.set('Third-party sign-in failed. Please go back and try again.');
       //#endif
     }
+  }
+
+  /** 完成绑定并回到「账户与安全」面板；失败也回去，由那里的列表反映实际状态。 */
+  private async completeLink(provider: string, code: string, state: string): Promise<void> {
+    try {
+      await lastValueFrom(
+        this.accountService.linkExternalLogin(provider, { provider, code, state }),
+      );
+      //#if (IncludeLocalization)
+      toast.success(this.transloco.translate('account.externalLogins.linked'));
+      //#else
+      toast.success('Account linked');
+      //#endif
+    } catch (error) {
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('common.requestError'), {
+        description: applicationErrorMessage(error),
+      });
+      //#else
+      toast.error('Request failed', { description: applicationErrorMessage(error) });
+      //#endif
+    }
+
+    // 回调页整页加载时启动流程不取当前用户（它按登录流程处理），这里补上再回设置页；
+    // 取不到说明会话已不在，交给路由守卫带去登录页
+    try {
+      await lastValueFrom(this.authService.loadUser());
+      await this.sessionContext.establish();
+    } catch {
+      // 由守卫处理
+    }
+    await this.router.navigate(['/workspace/settings/security']);
   }
 }

@@ -74,7 +74,7 @@ public class TenantContextForwardingTests
     }
 
     [Fact]
-    public async Task 租户上下文存在_注入租户头()
+    public async Task Tenant_context_adds_the_tenant_header()
     {
         var tenantId = Guid.NewGuid();
         var request = await SendAsync(tenantId);
@@ -83,7 +83,7 @@ public class TenantContextForwardingTests
     }
 
     [Fact]
-    public async Task 宿主上下文_不注入租户头()
+    public async Task Host_context_adds_no_tenant_header()
     {
         var request = await SendAsync(tenantId: null);
 
@@ -91,7 +91,7 @@ public class TenantContextForwardingTests
     }
 
     [Fact]
-    public async Task 请求已有同名头_不覆盖()
+    public async Task Existing_header_is_not_overwritten()
     {
         var preset = Guid.NewGuid().ToString();
         var request = await SendAsync(
@@ -124,7 +124,7 @@ public class TenantContextForwardingTests
             "TestBearer"));
 
     [Fact]
-    public async Task 机器主体契约_受信恢复()
+    public async Task Machine_principal_contract_is_trusted_for_restoration()
     {
         var userId = Guid.NewGuid();
         var context = await RunMiddlewareAsync(
@@ -135,7 +135,7 @@ public class TenantContextForwardingTests
     }
 
     [Fact]
-    public async Task 受信服务调用_仅租户头无用户头_恢复租户claim()
+    public async Task Trusted_call_with_only_a_tenant_header_restores_the_tenant_claim()
     {
         var tenantId = Guid.NewGuid();
         var context = await RunMiddlewareAsync(
@@ -148,7 +148,7 @@ public class TenantContextForwardingTests
     }
 
     [Fact]
-    public async Task 受信服务调用_用户头与租户头同时恢复()
+    public async Task Trusted_call_restores_user_and_tenant_headers_together()
     {
         var userId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
@@ -165,7 +165,7 @@ public class TenantContextForwardingTests
     }
 
     [Fact]
-    public async Task 不受信来源_不恢复claim_但保留租户头()
+    public async Task Untrusted_source_restores_no_claims_but_keeps_the_tenant_header()
     {
         var tenantId = Guid.NewGuid();
         var context = await RunMiddlewareAsync(

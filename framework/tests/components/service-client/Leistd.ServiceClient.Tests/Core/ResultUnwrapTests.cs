@@ -25,7 +25,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 成功信封_返回data()
+    public async Task Success_envelope_returns_data()
     {
         var id = Guid.NewGuid();
         using var response = Response(HttpStatusCode.OK,
@@ -39,7 +39,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 无数据信封_code为0不抛异常()
+    public async Task Envelope_without_data_and_zero_code_does_not_throw()
     {
         using var response = Response(HttpStatusCode.OK, """{"code":0,"message":"ok"}""");
 
@@ -47,7 +47,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 信封code非0_抛RemoteServiceException()
+    public async Task Nonzero_envelope_code_throws_RemoteServiceException()
     {
         using var response = Response(HttpStatusCode.OK, """{"code":50001,"message":"库存不足"}""");
 
@@ -58,7 +58,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 非2xx的ProblemDetails_还原code与traceId与字段错误()
+    public async Task Problem_details_restore_code_trace_id_and_field_errors()
     {
         using var response = Response(HttpStatusCode.UnprocessableContent,
             """
@@ -78,7 +78,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 远端发数字错误码时_按原样保留()
+    public async Task Numeric_remote_error_code_is_kept_as_is()
     {
         // 互操作：Problem Details 的错误码是字符串词条键，统一响应信封的是数字。
         // 两种都要认——丢掉任一种，调用方就无法按错误码分支。
@@ -93,7 +93,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 非2xx的非JSON响应_保留原始体片段()
+    public async Task Non_json_error_response_keeps_a_body_excerpt()
     {
         using var response = Response(HttpStatusCode.BadGateway, "<html>gateway error</html>", "text/html");
 
@@ -105,7 +105,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 空响应体_抛ServiceClientException()
+    public async Task Empty_body_throws_ServiceClientException()
     {
         using var response = Response(HttpStatusCode.OK, null);
 
@@ -115,7 +115,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 非法JSON_抛ServiceClientException()
+    public async Task Invalid_json_throws_ServiceClientException()
     {
         using var response = Response(HttpStatusCode.OK, "not-json");
 
@@ -125,7 +125,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 未包装端点_ReadContentAsync直接反序列化()
+    public async Task Unwrapped_endpoint_is_deserialized_directly()
     {
         var id = Guid.NewGuid();
         using var response = Response(HttpStatusCode.OK, $$$"""{"id":"{{{id}}}","name":"raw"}""");
@@ -137,7 +137,7 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task 未包装端点_非2xx同样还原远端错误()
+    public async Task Unwrapped_endpoint_error_is_restored_as_well()
     {
         using var response = Response(HttpStatusCode.NotFound,
             """{"status":404,"code":"Order:NotFound","message":"不存在","traceId":"t-1"}""");

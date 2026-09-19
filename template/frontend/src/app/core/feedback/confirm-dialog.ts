@@ -28,7 +28,7 @@ export interface ConfirmContext {
   template: `
     <div class="flex flex-col gap-4">
       <div class="flex items-start gap-4">
-        <div class="bg-muted inline-flex size-10 shrink-0 items-center justify-center rounded-md">
+        <div class="bg-muted inline-flex size-10 shrink-0 items-center justify-center rounded-lg">
           <ng-icon name="lucideTriangleAlert" class="text-destructive text-2xl" />
         </div>
         <div class="flex flex-col gap-1.5">

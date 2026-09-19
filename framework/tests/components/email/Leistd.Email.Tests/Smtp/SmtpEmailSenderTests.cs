@@ -1,6 +1,9 @@
+using System.Globalization;
 using Leistd.Email.Abstractions;
 using Leistd.Email.Smtp;
 using Leistd.Email.Smtp.Options;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -31,9 +34,7 @@ public sealed class SmtpEmailSenderTests
         };
         configure?.Invoke(options);
 
-        return new SmtpEmailSender(
-            Microsoft.Extensions.Options.Options.Create(options),
-            NullLogger<SmtpEmailSender>.Instance);
+        return new SmtpEmailSender(new FixedOptionsMonitor(options), NullLogger<SmtpEmailSender>.Instance);
     }
 
     private static EmailMessage Message() => new()
@@ -74,4 +75,46 @@ public sealed class SmtpEmailSenderTests
     [Fact]
     public async Task A_null_message_is_rejected()
         => await Assert.ThrowsAsync<ArgumentNullException>(() => Sender().SendAsync(null!));
+
+    // 参数每封信取当前值：配置重载后下一封信就用新值，且新值同样过校验，而不是停在进程启动时那份
+    [Fact]
+    public async Task A_configuration_reload_is_used_and_validated_by_the_next_message()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Leistd:Email:Smtp:Host"] = "127.0.0.1",
+                ["Leistd:Email:Smtp:Port"] = UnreachablePort.ToString(CultureInfo.InvariantCulture),
+                ["Leistd:Email:Smtp:EnableSsl"] = "false",
+                ["Leistd:Email:Smtp:DefaultFromAddress"] = "noreply@example.com",
+            })
+            .Build();
+        using var provider = new ServiceCollection()
+            .AddLogging()
+            .AddSmtpEmailSender(configuration)
+            .BuildServiceProvider();
+        var sender = provider.GetRequiredService<IEmailSender>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        // 重载前参数合规，失败在连接上
+        var before = await Assert.ThrowsAnyAsync<Exception>(() => sender.SendAsync(Message(), cts.Token));
+        Assert.IsNotType<OptionsValidationException>(before);
+
+        configuration["Leistd:Email:Smtp:DefaultFromAddress"] = "";
+        // IOptionsMonitor 在重载回调里就重算并校验，不合规的新值会让 Reload 本身抛出；这里关心的是下一封信
+        Assert.IsType<AggregateException>(Record.Exception(configuration.Reload));
+
+        var after = await Assert.ThrowsAsync<OptionsValidationException>(() => sender.SendAsync(Message(), cts.Token));
+        Assert.Contains("DefaultFromAddress", after.Message);
+    }
+
+    // 固定值的替身：只验发送行为的用例绕开校验与重载
+    private sealed class FixedOptionsMonitor(SmtpOptions options) : IOptionsMonitor<SmtpOptions>
+    {
+        public SmtpOptions CurrentValue => options;
+
+        public SmtpOptions Get(string? name) => options;
+
+        public IDisposable? OnChange(Action<SmtpOptions, string?> listener) => null;
+    }
 }

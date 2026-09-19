@@ -1,7 +1,12 @@
+#if (LocalIdentity)
+using CompanyName.ProjectName.Api.Auth;
+#endif
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.AppServices;
 using CompanyName.ProjectName.Application.Permissions.Dtos;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using Leistd.Authorization;
+using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Leistd.Authorization.Constants;
@@ -24,6 +29,10 @@ public sealed class PermissionController(IPermissionAppService permissionAppServ
     /// <summary>
     /// 获取当前用户的有效权限与授权版本（仅要求已认证）
     /// </summary>
+#if (LocalIdentity)
+    // 界面启动就要读：受限会话也得能渲染出两步验证设置页
+    [AllowDuringTwoFactorSetup]
+#endif
     [HttpGet("current")]
     public async Task<CurrentPermissionsOutputDto> GetCurrentAsync(CancellationToken cancellationToken)
     {
@@ -65,6 +74,10 @@ public sealed class PermissionController(IPermissionAppService permissionAppServ
     /// </summary>
     [HttpPut("grants/roles/{roleId}")]
     [Authorize(Policy = PermissionConstant.Roles.ManagePermissions)]
+    // 目标标识必须拼成 "Role/{roleId}"：成功路径写的是 $"{providerName}/{providerKey}"，
+    // 两边逐字一致，按目标检索才查得全。只取路由值会让被拒记录与成功记录分叉，且不报任何错。
+    [OperationRecordAction(OperationRecordActions.PermissionGrantsReplaced, "roleId",
+        TargetIdPrefix = PermissionGrantProviderNames.Role + "/")]
     public async Task<PermissionGrantsOutputDto> ReplaceRoleGrantsAsync(
         Guid roleId,
         [FromBody] ReplacePermissionGrantsInputDto input,

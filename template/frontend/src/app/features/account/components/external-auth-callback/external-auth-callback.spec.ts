@@ -1,6 +1,7 @@
 //#if (ExternalLogin)
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
@@ -32,7 +33,9 @@ describe('ExternalAuthCallback', () => {
     ]);
     accountService.externalLoginCallback.and.returnValue(of(undefined) as never);
 
-    const authService = jasmine.createSpyObj<AuthService>('AuthService', ['loadUser']);
+    const authService = jasmine.createSpyObj<AuthService>('AuthService', ['loadUser'], {
+      currentUser: signal(null) as never,
+    });
     authService.loadUser.and.returnValue(of(undefined) as never);
 
     const sessionContext = {

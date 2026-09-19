@@ -18,15 +18,17 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
+using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.Settings.EntityFrameworkCore.Entities;
+#if (IncludeNotifications)
+using Leistd.Notifications.EntityFrameworkCore.Entities;
+#endif
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
-#if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Entities;
-#endif
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -144,7 +146,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 升级后新增的权限由租户管理员自己授给自己的角色。</para>
     /// </remarks>
     [Fact]
-    public async Task 租户管理员不是超管_权限由Admin角色承载()
+    public async Task Tenant_admin_is_not_super_admin_and_gets_permissions_from_the_admin_role()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "roleonly");
@@ -169,7 +171,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
     /// <summary>租户管理员能行使 Tenant 侧权限，但取不到任何宿主侧权限</summary>
     [Fact]
-    public async Task 租户管理员有本租户权限_但无宿主侧权限()
+    public async Task Tenant_admin_has_tenant_permissions_but_no_host_permissions()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "hostsideguard");
@@ -189,7 +191,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 本套用例跑在内存提供程序上，验证它的地方是 <c>test-template-postgresql-e2e.ps1</c>。
     /// </remarks>
     [Fact]
-    public async Task 领域服务拒绝在租户上下文创建超管()
+    public async Task Domain_service_refuses_to_create_a_super_admin_in_a_tenant()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "noescape");
@@ -214,7 +216,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 建租户即种子_租户管理员可登录并只见本租户用户()
+    public async Task Created_tenant_is_seeded_and_its_admin_sees_only_its_users()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "acme");
@@ -232,7 +234,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 宿主视角只见宿主用户_伪造租户头无法改写已登录会话()
+    public async Task Host_sees_only_host_users_and_a_forged_tenant_header_is_ignored()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "isolation-a");
@@ -250,7 +252,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 跨租户按Id取数不可见_表现为404()
+    public async Task Cross_tenant_lookup_by_id_returns_404()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantAId = await CreateTenantAsync(hostAdmin, "cross-a");
@@ -270,7 +272,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 租户管理员的current权限不含宿主侧权限_菜单据此裁剪()
+    public async Task Tenant_admin_current_permissions_exclude_host_permissions()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "sidecheck");
@@ -289,7 +291,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 租户管理员不能访问租户管理API_宿主侧权限对租户拒绝()
+    public async Task Tenant_admin_cannot_reach_tenant_management_api()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "boundary");
@@ -309,7 +311,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 停用租户后_在途会话与再登录均被拒()
+    public async Task Deactivated_tenant_rejects_existing_sessions_and_new_sign_ins()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "frozen");
@@ -360,7 +362,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 启用一个不存在的租户回 404，不能被"租户内没有用户"的守卫抢先讲成 400。
     /// </summary>
     [Fact]
-    public async Task 启用不存在的租户返回404()
+    public async Task Activating_a_missing_tenant_returns_404()
     {
         var hostAdmin = await LoginHostAdminAsync();
 
@@ -382,7 +384,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 因此协议层就能发现。浏览器负责的是另一半：前端读到该头、清租户状态、完成跳转的闭环。
     /// </remarks>
     [Fact]
-    public async Task 跨域响应暴露租户失效标记头()
+    public async Task Cors_response_exposes_the_tenant_invalid_header()
     {
         // 复刻"模式二：CORS 分离访问"的配置：默认 AllowAnyLocalhost=false 时不放行任何来源，
         // CORS 中间件不会写任何响应头，这条断言也就无从谈起
@@ -432,7 +434,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 框架侧那条"请求头改不动子域名"的用例测不到宿主的代理信任配置。</para>
     /// </remarks>
     [Fact]
-    public async Task 不受信任来源的转发头不能改写子域名解析出的租户()
+    public async Task Untrusted_forwarded_headers_cannot_change_the_subdomain_tenant()
     {
         var hostAdmin = await LoginHostAdminAsync();
         await CreateTenantAsync(hostAdmin, "subdomain-a");
@@ -477,7 +479,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 那样网关后的 X-Forwarded-* 全部失效却无人察觉。两个方向都要钉住。
     /// </remarks>
     [Fact]
-    public async Task 可信代理的转发头会被采信()
+    public async Task Trusted_proxy_forwarded_headers_are_honored()
     {
         var hostAdmin = await LoginHostAdminAsync();
         await CreateTenantAsync(hostAdmin, "trusted-a");
@@ -521,7 +523,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 不是同一个租户上下文。这一条只有把两档分开断言才钉得住。
     /// </remarks>
     [Fact]
-    public async Task 按主机名探测区分租户_宿主与未定案()
+    public async Task Host_name_probe_distinguishes_tenant_host_and_undecided()
     {
         var hostAdmin = await LoginHostAdminAsync();
         await CreateTenantAsync(hostAdmin, "byhost-a");
@@ -574,7 +576,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 有人日后把探测端点"改成能穿过解析失败"时，先看到这里的取舍。
     /// </remarks>
     [Fact]
-    public async Task 子域名指向不存在的租户时请求在解析阶段被拒()
+    public async Task Subdomain_of_a_missing_tenant_is_rejected_during_resolution()
     {
         using var domainHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureAppConfiguration((_, configuration) =>
@@ -593,7 +595,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 未知租户404_名称大小写不敏感()
+    public async Task Unknown_tenant_returns_404_and_names_are_case_insensitive()
     {
         using var anonymous = _factory.CreateProjectClient();
 
@@ -609,7 +611,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 种子进行中的租户必须还没启用：否则它已经能被中间件接受，而此刻还没有管理员和权限授予。
     /// </summary>
     [Fact]
-    public async Task 种子进行中租户尚未启用_匿名注册进不去半成品租户()
+    public async Task Tenant_being_seeded_is_inactive_and_rejects_registration()
     {
         using var probingHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -633,7 +635,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     [Fact]
-    public async Task 外层工作单元存在时_租户创建的三个阶段仍使用独立边界()
+    public async Task Tenant_creation_phases_keep_their_own_boundaries_inside_an_outer_unit_of_work()
     {
         using var host = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -680,7 +682,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 两种情形下租户都不可用，因此统一补偿——比留一个需要人工判断的中间态干净。
     /// </remarks>
     [Fact]
-    public async Task 激活失败时整个创建回滚_不留下停用的孤儿租户()
+    public async Task Failed_activation_rolls_back_creation_without_an_orphan_tenant()
     {
         using var brokenActivationHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -722,7 +724,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 甚至因它们再次失败——于是租户既没清干净、又留在注册表里对外可用。
     /// </remarks>
     [Fact]
-    public async Task 清种子失败时注册表仍被删除_补偿两步互不牵连()
+    public async Task Registry_is_removed_even_when_seed_cleanup_fails()
     {
         using var brokenPurgeHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -761,7 +763,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 只软删注册表是不够的——旧租户 Id 下会永久残留角色与授权版本。
     /// </summary>
     [Fact]
-    public async Task 部分播种后失败_租户与已写入的种子数据一并回滚()
+    public async Task Partial_seeding_failure_rolls_back_tenant_and_seed_data()
     {
         // 装饰真实种子：先让它写完角色与权限授予，再抛错——覆盖"部分落库"这条真实路径
         using var brokenHost = _factory.WithWebHostBuilder(builder =>
@@ -847,16 +849,24 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 #if (ExternalLogin)
                 nameof(ExternalLoginConnection),
 #endif
+#if (IncludeNotifications)
+                nameof(NotificationRecord),
+#endif
+                // 操作记录无条件存在（不像通知那样可裁剪），因此这一项不带守卫
+                nameof(OperationRecord),
                 nameof(PermissionGrantRecord),
                 nameof(Role),
                 nameof(SettingRecord),
-                nameof(User)
+                nameof(User),
+                nameof(UserRole),
+                nameof(UserSession)
             },
             multiTenantEntities);
 
-        // UserRole 不实现 IMultiTenant，进不了上面那份类型清单——必须单独断言。
-        // 否则误删 PurgeAsync 里的关联清理时，本文件的用例一个都不会变红：
-        // 用户与角色都已软删，孤儿关联行既不可见也没人查。
+        // UserRole 已实现 IMultiTenant，因此也在上面那份类型清单里了。这条显式查询**仍然保留**：
+        // 清单只证明"它受过滤器管辖"，而这里证明"确实没有活着的孤儿关联行"。
+        // 两者覆盖不同的失效——若 TenantId 因故没落上，租户上下文内的 Assert.Empty 会看不见它，
+        // 只有跨过全部过滤器、按 tenantUserIds 直查才抓得住。
         // IgnoreQueryFilters 会同时摘掉软删与租户两个过滤器，所以租户条件要显式写
         var tenantUserIds = await db.Set<User>()
             .IgnoreQueryFilters()
@@ -879,8 +889,16 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             Assert.Empty(await db.Set<Role>().ToListAsync());
             Assert.Empty(await db.Set<PermissionGrantRecord>().ToListAsync());
             Assert.Empty(await db.Set<AuthorizationVersionRecord>().ToListAsync());
+            Assert.Empty(await db.Set<UserRole>().ToListAsync());
+            // 创建流程里埋了"用户已创建"的操作记录：补偿若漏清它，留下的是一条带租户归属的孤儿审计行——
+            // 上面那份类型清单只证明它受过滤器管辖，证明不了补偿真的清干净了。
+            Assert.Empty(await db.Set<OperationRecord>().ToListAsync());
+            Assert.Empty(await db.Set<UserSession>().ToListAsync());
 #if (ExternalLogin)
             Assert.Empty(await db.Set<ExternalLoginConnection>().ToListAsync());
+#endif
+#if (IncludeNotifications)
+            Assert.Empty(await db.Set<NotificationRecord>().ToListAsync());
 #endif
         }
     }
@@ -894,7 +912,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 这是唯一能覆盖控制面并发的手法——真实播种是亚秒级的，靠时序碰不到。
     /// </remarks>
     [Fact]
-    public async Task 播种期间并发删除租户_不留下孤儿业务数据()
+    public async Task Concurrent_delete_during_seeding_leaves_no_orphan_data()
     {
         using var blockingHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -937,7 +955,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// 播种期间并发手动启用：租户里还没有用户，启用必须被拒绝。
     /// </summary>
     [Fact]
-    public async Task 播种期间并发手动启用被拒_半成品租户不会被提前暴露()
+    public async Task Concurrent_activation_during_seeding_is_rejected()
     {
         using var blockingHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -1253,7 +1271,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
 #if (ExternalLogin)
     [Fact]
-    public async Task 同一外部身份可在不同租户各自绑定_且查询按租户分区()
+    public async Task Same_external_identity_links_per_tenant_and_queries_are_partitioned()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantAId = await CreateTenantAsync(hostAdmin, "extlogin-a");
@@ -1313,7 +1331,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
 #endif
     [Fact]
-    public async Task 删除租户后_名称可复用且旧租户不可达()
+    public async Task Deleted_tenant_name_is_reusable_and_the_old_tenant_is_unreachable()
     {
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "recycled");

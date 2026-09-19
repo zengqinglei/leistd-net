@@ -1,4 +1,4 @@
-import { AppDate } from './app-date-pipe';
+import { AppDate, formatAppDate, parseAppCalendarDate } from './app-date-pipe';
 
 /**
  * 时区换算与书写方式。
@@ -105,5 +105,50 @@ describe('AppDate', () => {
     expect(pipe.transform(undefined, 'full', 'Asia/Shanghai')).toBe('');
     expect(pipe.transform('', 'full', 'Asia/Shanghai')).toBe('');
     expect(pipe.transform('not-a-date', 'full', 'Asia/Shanghai')).toBe('');
+  });
+});
+
+/**
+ * 日期区间输入框的手输解析：显示成什么写法，就要能按同一写法认回来。
+ *
+ * 断言一律走"渲染 → 解析"的往返，不抄 ICU 输出，理由同上。
+ */
+describe('parseAppCalendarDate', () => {
+  const days = [
+    new Date(2026, 0, 1),
+    new Date(2026, 8, 17),
+    new Date(2028, 1, 29),
+    new Date(2026, 11, 31),
+  ];
+
+  it('各语言下显示出来的日期都能原样认回', () => {
+    for (const locale of ['zh-CN', 'en', 'en-GB', 'de', 'fr', 'ja']) {
+      for (const day of days) {
+        const shown = formatAppDate(day, 'date', undefined, locale);
+        expect(parseAppCalendarDate(shown, locale)?.getTime())
+          .withContext(`${locale}: ${shown}`)
+          .toBe(day.getTime());
+      }
+    }
+  });
+
+  it('手输时不必逐字照抄标点与大小写', () => {
+    const day = new Date(2026, 8, 17);
+    const relaxed = formatAppDate(day, 'date', undefined, 'en').toLowerCase().replace(/,/g, '');
+
+    expect(parseAppCalendarDate(relaxed, 'en')?.getTime()).toBe(day.getTime());
+  });
+
+  it('YYYY-MM-DD 在任何语言下都认', () => {
+    expect(parseAppCalendarDate('2026-09-17', 'en')?.getTime()).toBe(
+      new Date(2026, 8, 17).getTime(),
+    );
+  });
+
+  it('不存在的日期与认不出的文本返回 null，而不是滚到别的日子', () => {
+    expect(parseAppCalendarDate('2026-02-31', 'zh-CN')).toBeNull();
+    expect(parseAppCalendarDate('2026-02-31', 'en')).toBeNull();
+    expect(parseAppCalendarDate('hello', 'en')).toBeNull();
+    expect(parseAppCalendarDate('', 'en')).toBeNull();
   });
 });

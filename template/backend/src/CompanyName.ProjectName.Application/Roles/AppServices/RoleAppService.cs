@@ -1,3 +1,5 @@
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;
 using CompanyName.ProjectName.Application.Shared.Paging;
@@ -12,6 +14,7 @@ using Leistd.ExceptionHandling;
 using Leistd.ObjectMapping;
 using Leistd.Authorization.Abstractions;
 using Leistd.ObjectMapping.Abstractions;
+using Leistd.OperationRecords.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
 
@@ -23,6 +26,7 @@ public class RoleAppService(
     IRepository<UserRole, Guid> userRoleRepository,
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
+    IOperationRecorder operationRecorder,
     IObjectMapper objectMapper,
     ILogger<RoleAppService> logger,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IRoleAppService
@@ -119,6 +123,14 @@ public class RoleAppService(
         await roleRepository.InsertAsync(role, cancellationToken);
         logger.LogInformation("Role created: {Name} (ID: {Id})", role.Name, role.Id);
 
+        // 目标名取显示名、退到名称：同类记录必须用同一套取值规则，
+        // 一半存显示名一半存名称会让同一张表里的同类行长得不一样。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.RoleCreated,
+            OperationTarget.For(role.Id, role.DisplayName ?? role.Name),
+            PermissionConstant.Roles.Create,
+            cancellationToken);
+
         return await MapToOutputAsync(role, cancellationToken);
     }
 
@@ -199,6 +211,16 @@ public class RoleAppService(
             cancellationToken);
 
         logger.LogInformation("Role deleted: {Name} (ID: {Id})", role.Name, role.Id);
+
+        // 只记真正删掉了角色的这条路径：上面 role == null 那支是幂等清理，什么也没删，
+        // 记下来会让审计里出现一堆"删除了一个本来就不存在的角色"。
+        // 名字必须在删除前就握在手里（role 变量即是）：删完再查就什么都查不到了，
+        // 而审计要回答的正是"当时删掉的是哪一个"。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.RoleDeleted,
+            OperationTarget.For(id, role.DisplayName ?? role.Name),
+            PermissionConstant.Roles.Delete,
+            cancellationToken);
     }
 
     private async Task<Role> GetRoleOrThrowAsync(Guid id, CancellationToken cancellationToken)

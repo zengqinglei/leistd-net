@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Notifications.Services;
 using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Filters;
 
 namespace Leistd.Notifications;
 
@@ -25,7 +26,7 @@ public static class DependencyInjection
     /// // 实时投递是可选关注点，单独注册
     /// await notificationPublisher.PublishToUserAsync(userId, new NotificationInputDto
     /// {
-    ///     Title = "审批通过", Type = NotificationTypes.Workflow,
+    ///     Title = "审批通过", Type = "Approval", // 类别由业务项目自己定义
     /// }, ct);
     /// </code>
     /// </example>
@@ -34,6 +35,8 @@ public static class DependencyInjection
         // 幂等：通知与实时两个包都会经各自注册入口调到这里，宿主两个都装是常态。
         // 不幂等会让 INotificationPublisher 出现两条，按 IEnumerable 解析时重复发布。
         services.TryAddTransient<INotificationPublisher, NotificationPublisher>();
+        // 默认一律投递；宿主有通知偏好时先注册自己的过滤器（或之后 Replace）
+        services.TryAddSingleton<INotificationDeliveryFilter, DeliverAllNotificationFilter>();
         return services;
     }
 }

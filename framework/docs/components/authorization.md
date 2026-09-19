@@ -56,20 +56,17 @@ public class OrdersPermissionDefinitionProvider : IPermissionDefinitionProvider
     public void Define(IPermissionDefinitionContext context)
     {
         var group = context.GetOrAddGroup("Orders", "订单管理");
-        var orders = group.AddPermission("Orders", "订单管理");
+        var orders = group.AddPermission("Orders", MultiTenancySides.Both, "订单管理");
         orders.AddChild("Orders.Read", "查看订单");
         orders.AddChild("Orders.Write", "编辑订单");
 
-        var system = context.GetOrAddGroup(
-            "System",
-            "系统管理",
-            MultiTenancySides.Host);
-        system.AddPermission("System.Tenants", "租户管理");
+        var system = context.GetOrAddGroup("System", "系统管理");
+        system.AddPermission("System.Tenants", MultiTenancySides.Host, "租户管理");
     }
 }
 ```
 
-每个权限必须属于权限组，名称全局唯一。子权限继承父权限和组的多租户侧别；宿主侧权限在租户上下文中始终拒绝。
+每个权限必须属于权限组，名称全局唯一。**多租户侧别必填**，没有默认值：省略会静默落到 `Both`（"租户管理员也拿得到"），而宿主全局资源落成 `Both` 就是跨租户越权，且只在真的建了租户之后才暴露。判据是这条权限背后的数据带不带租户维度。子权限不声明时继承父权限；宿主侧权限在租户上下文中始终拒绝。
 
 定义在 `PermissionDefinitionManager` 首次构造时加载并预计算祖先、子孙与有效状态。修改定义需重启进程；授予可运行时更改。
 

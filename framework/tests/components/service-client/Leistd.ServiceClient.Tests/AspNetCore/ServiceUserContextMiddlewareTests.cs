@@ -87,7 +87,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 受信服务调用_恢复用户为主身份并保留client身份()
+    public async Task Trusted_service_call_restores_the_user_and_keeps_the_client_identity()
     {
         var context = await RunAsync(ServiceClientPrincipal(), AddUserHeaders);
 
@@ -99,7 +99,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 受信服务调用_无用户头_保持client主体不变()
+    public async Task Trusted_service_call_without_user_header_keeps_the_client_principal()
     {
         var context = await RunAsync(ServiceClientPrincipal());
 
@@ -108,7 +108,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 普通用户token携带用户头_不受信且剥离头()
+    public async Task User_token_with_user_header_is_untrusted_and_header_is_stripped()
     {
         var context = await RunAsync(UserTokenPrincipal(), AddUserHeaders);
 
@@ -118,7 +118,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 匿名请求携带用户头_剥离头()
+    public async Task Anonymous_request_user_header_is_stripped()
     {
         var context = await RunAsync(new ClaimsPrincipal(new ClaimsIdentity()), AddUserHeaders);
 
@@ -126,7 +126,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 关闭剥离_不受信时保留头但不恢复用户()
+    public async Task Stripping_disabled_keeps_header_without_restoring_the_user()
     {
         var context = await RunAsync(
             UserTokenPrincipal(), AddUserHeaders,
@@ -137,7 +137,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 要求scope_标准scope形态命中()
+    public async Task Required_scope_matches_the_standard_scope_claim()
     {
         var context = await RunAsync(
             ServiceClientPrincipal("svc-a", new Claim("scope", "other svc.call")),
@@ -148,7 +148,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 要求scope_OpenIddict形态命中()
+    public async Task Required_scope_matches_the_openiddict_scope_claim()
     {
         var context = await RunAsync(
             ServiceClientPrincipal("svc-a", new Claim("oi_scp", "svc.call")),
@@ -159,7 +159,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 要求scope_缺失时不受信()
+    public async Task Missing_required_scope_is_untrusted()
     {
         var context = await RunAsync(
             ServiceClientPrincipal(),
@@ -171,7 +171,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 默认要求委托scope_未授予的机器令牌不能代表用户()
+    public async Task Machine_token_without_the_delegation_scope_cannot_act_as_a_user()
     {
         // 安全默认（fail-closed）：仅有 client_credentials 能力、未获委托 scope 的客户端，
         // 即使知道用户 Id 也无法恢复成该用户。
@@ -186,7 +186,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 默认要求委托scope_已授予时恢复用户()
+    public async Task Machine_token_with_the_delegation_scope_restores_the_user()
     {
         var context = await RunAsync(ServiceClientPrincipal(), AddUserHeaders);
 
@@ -194,7 +194,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 自定义头Claim映射_按配置恢复()
+    public async Task Custom_header_claim_mapping_is_applied_on_restore()
     {
         var context = await RunAsync(
             ServiceClientPrincipal(),
@@ -209,7 +209,7 @@ public class ServiceUserContextMiddlewareTests
     }
 
     [Fact]
-    public async Task 整体关闭_不恢复也不剥离()
+    public async Task Disabled_feature_neither_restores_nor_strips()
     {
         var context = await RunAsync(
             new ClaimsPrincipal(new ClaimsIdentity()),

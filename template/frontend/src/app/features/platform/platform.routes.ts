@@ -25,12 +25,31 @@ export const PLATFORM_ROUTES: Routes = [
     data: { permission: PERMISSIONS.roles.default },
   },
   {
-    // 系统默认值（租户级）在平台侧：读者是管理员，影响整租户。
-    // 与账户偏好（/workspace/settings）同一个组件，作用域由 data.scope 决定。
+    // 系统设置在平台侧：读者是管理员，影响本租户（或宿主）下所有人。
+    // 一个后端设置分组就是一个面板（:group 是分组标识的短横线写法），面板清单由后端决定；
+    // 空路径由外壳在设置取回后导向第一个面板，见 SystemSettings。
     path: 'settings',
-    loadComponent: () => import('../settings/settings').then((m) => m.Settings),
+    loadComponent: () =>
+      import('../settings/system-settings/system-settings').then((m) => m.SystemSettings),
     canActivate: [permissionGuard],
-    data: { permission: PERMISSIONS.settings.default, scope: 'system' },
+    data: { permission: PERMISSIONS.settings.default },
+    children: [
+      { path: '', children: [] },
+      {
+        path: ':group',
+        loadComponent: () =>
+          import('../settings/setting-section/setting-section').then((m) => m.SettingSection),
+        data: { scope: 'system' },
+      },
+    ],
+  },
+  {
+    // 审计：谁在什么时候做了什么。只读，无写端点。
+    path: 'operation-records',
+    loadComponent: () =>
+      import('./components/operation-records/operation-records').then((m) => m.OperationRecords),
+    canActivate: [permissionGuard],
+    data: { permission: PERMISSIONS.operationRecords.default },
   },
   //#if (LocalIdentity)
   {

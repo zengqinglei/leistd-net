@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Abstractions;
 using Xunit;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Abstractions;
@@ -78,8 +79,8 @@ public class PermissionDefinitionManagerTests
     {
         public void Define(IPermissionDefinitionContext context)
         {
-            context.GetOrAddGroup("A").AddPermission("App.Duplicated");
-            context.GetOrAddGroup("B").AddPermission("App.Duplicated");
+            context.GetOrAddGroup("A").AddPermission("App.Duplicated", MultiTenancySides.Both);
+            context.GetOrAddGroup("B").AddPermission("App.Duplicated", MultiTenancySides.Both);
         }
     }
 
@@ -97,6 +98,6 @@ public class PermissionDefinitionManagerTests
     private sealed class SeparatorInNameProvider : IPermissionDefinitionProvider
     {
         public void Define(IPermissionDefinitionContext context)
-            => context.GetOrAddGroup("App", "应用").AddPermission("App.A|App.B", "非法名");
+            => context.GetOrAddGroup("App", "应用").AddPermission("App.A|App.B", MultiTenancySides.Both, "非法名");
     }
 }

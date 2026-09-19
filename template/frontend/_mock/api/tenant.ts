@@ -10,6 +10,9 @@ import {
   toTenantOutput,
 } from '../data/tenant';
 
+/** 连接名的合法形态，与后端 `TenantConnectionConfiguration.NamePattern` 同源。 */
+const CONNECTION_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
+
 function getQueryValue(value: unknown) {
   const normalized = Array.isArray(value) ? value[0] : value;
   return normalized === undefined || normalized === null || normalized === ''
@@ -68,13 +71,105 @@ export function getTenantByHost(): TenantByHostOutputDto {
   return { decision: 'undecided' };
 }
 
-/** 租户连接配置：真实后端要求 App.Tenants.Update，Mock 不做权限，仅复刻投影形状。 */
-export function getTenantConnection(tenantId: string) {
+function findTenantOrThrow(tenantId: string): MockTenant {
   const tenant = TENANTS.find((t) => t.id === tenantId);
   if (!tenant) {
     throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
   }
-  return toTenantConnection(tenant);
+  return tenant;
+}
+
+/** 连接名大小写不敏感：后端归一化为小写后存取，Mock 同样先归一化再匹配。 */
+function normalizeConnectionName(name: string): string {
+  return decodeURIComponent(name).trim().toLowerCase();
+}
+
+/**
+ * 列出该租户已登记的连接。空数组即该租户不单独分库。
+ *
+ * 真实后端要求 App.Tenants.Update，Mock 不做权限，仅复刻投影形状。
+ */
+export function getTenantConnections(tenantId: string) {
+  const tenant = findTenantOrThrow(tenantId);
+  return tenant.connections.map((connection) => toTenantConnection(tenant, connection));
+}
+
+/**
+ * 登记或更新一条连接。
+ *
+ * `expectedVersion` 必须显式给出（首次登记传 `null`）：后端把"缺这个字段"当 400 处理，
+ * 而不是按后写者胜出。这条不复刻的话，Mock 下"忘了带版本"会一路成功，换到真实后端才炸。
+ */
+export function setTenantConnection(tenantId: string, rawName: string, value: any) {
+  const tenant = findTenantOrThrow(tenantId);
+  const name = normalizeConnectionName(rawName);
+  if (!CONNECTION_NAME_PATTERN.test(name)) {
+    throw new MockException(400, {
+      code: 'Error:BadRequest',
+      message: 'Connection name must match ^[a-z0-9-]{1,64}$.',
+    });
+  }
+
+  if (!value || !('expectedVersion' in value)) {
+    throw new MockException(400, {
+      code: 'Error:BadRequest',
+      message: 'Expected version is required; pass null for the first registration.',
+    });
+  }
+
+  // 想让某个名字回到"用服务自己的库"，删掉这一条，而不是提交空连接串。
+  if (!String(value.connectionString ?? '').trim()) {
+    throw new MockException(400, {
+      code: 'Error:BadRequest',
+      message: 'Connection string is required.',
+    });
+  }
+
+  const expectedVersion = value.expectedVersion === null ? null : Number(value.expectedVersion);
+  const existing = tenant.connections.find((connection) => connection.name === name);
+
+  // 首次登记预期这一条尚不存在，改已有的那条则必须带上读到的版本；两种落空都是 409。
+  if (existing ? expectedVersion !== existing.version : expectedVersion !== null) {
+    throw new MockException(409, {
+      code: 'Error:Conflict',
+      message: 'Tenant connection version mismatch',
+    });
+  }
+
+  // 连接串不保存，只递增版本：真实后端加密存储且从不返回
+  const connection = existing ?? { name, version: 0 };
+  connection.version += 1;
+  if (!existing) {
+    tenant.connections.push(connection);
+  }
+
+  return toTenantConnection(tenant, connection);
+}
+
+/** 删除一条连接：这个名字之后回落到服务自己配置的数据库。 */
+export function removeTenantConnection(
+  tenantId: string,
+  rawName: string,
+  expectedVersion: string | undefined,
+) {
+  const tenant = findTenantOrThrow(tenantId);
+  const name = normalizeConnectionName(rawName);
+  const index = tenant.connections.findIndex((connection) => connection.name === name);
+  if (index < 0) {
+    throw new MockException(404, {
+      code: 'Error:NotFound',
+      message: 'Tenant connection not found',
+    });
+  }
+
+  if (Number(expectedVersion) !== tenant.connections[index].version) {
+    throw new MockException(409, {
+      code: 'Error:Conflict',
+      message: 'Tenant connection version mismatch',
+    });
+  }
+
+  tenant.connections.splice(index, 1);
 }
 
 export function createTenant(value: any) {
@@ -93,11 +188,9 @@ export function createTenant(value: any) {
     description: value.description?.trim() || undefined,
     isActive: true,
     creationTime: new Date().toISOString(),
-    databaseMode:
-      value.databaseMode === 'dedicatedDatabase' ? 'dedicatedDatabase' : 'sharedDatabase',
-    runtimeSecretReference: value.runtimeSecretReference || undefined,
-    migrationSecretReference: value.migrationSecretReference || undefined,
-    connectionVersion: 1,
+    // 建租户这一步不带连接：新建的租户默认不单独分库，要分库再逐条登记到连接列表里。
+    // 请求里夹带的连接字段一概不读，与后端入口 DTO 一致。
+    connections: [],
   } satisfies MockTenant;
   TENANTS.push(newTenant);
   return toTenantOutput(newTenant);
@@ -150,5 +243,13 @@ export const TENANT_API = {
   'PUT /api/v1/tenants/:id': (req: MockRequest) => updateTenant(req.params.id, req.body),
   'DELETE /api/v1/tenants/:id': (req: MockRequest) => deleteTenant(req.params.id),
   'GET /api/v1/tenant-connections/:tenantId': (req: MockRequest) =>
-    getTenantConnection(req.params.tenantId),
+    getTenantConnections(req.params.tenantId),
+  'PUT /api/v1/tenant-connections/:tenantId/:name': (req: MockRequest) =>
+    setTenantConnection(req.params.tenantId, req.params.name, req.body),
+  'DELETE /api/v1/tenant-connections/:tenantId/:name': (req: MockRequest) =>
+    removeTenantConnection(
+      req.params.tenantId,
+      req.params.name,
+      getQueryValue(req.queryParams['expectedVersion']),
+    ),
 };

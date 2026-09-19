@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Abstractions;
 using Leistd.Authorization.Abstractions;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Permissions;
@@ -65,7 +66,7 @@ public class PermissionGroupAndGrantSetTests
         public const string Thing = "Other.Thing";
 
         public void Define(IPermissionDefinitionContext context) =>
-            context.GetOrAddGroup("Other", "另一个组").AddPermission(Thing, "别的东西");
+            context.GetOrAddGroup("Other", "另一个组").AddPermission(Thing, MultiTenancySides.Both, "别的东西");
     }
 
     // GetAll 拉平整棵树：权限配置界面按它渲染，少一层就是少一批可授予项。

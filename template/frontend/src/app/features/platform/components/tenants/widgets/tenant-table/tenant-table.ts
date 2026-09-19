@@ -10,6 +10,7 @@ import {
   lucideCircleCheck,
   lucideEllipsis,
   lucideInfo,
+  lucideLogIn,
   lucidePencil,
   lucideSearchX,
   lucideTrash2,
@@ -74,6 +75,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
       lucideCircleCheck,
       lucideEllipsis,
       lucideInfo,
+      lucideLogIn,
       lucidePencil,
       lucideSearchX,
       lucideTrash2,
@@ -106,10 +108,14 @@ export class TenantTable {
   readonly canUpdate = input(true);
   readonly canDelete = input(true);
 
+  /** 模拟登录是宿主侧专属能力（App.Tenants.Impersonation 为 Host 侧别），租户上下文里恒为 false。 */
+  readonly canImpersonate = input(true);
+
   readonly paginationChange = output<PaginationState>();
   readonly details = output<TenantOutputDto>();
   readonly edit = output<TenantOutputDto>();
   readonly toggleActive = output<TenantOutputDto>();
+  readonly impersonate = output<TenantOutputDto>();
   readonly delete = output<TenantOutputDto>();
 
   private readonly tableViewport = tableViewportSignal();
@@ -216,6 +222,14 @@ export class TenantTable {
       created: 'Created at',
     } as const;
     return labels[field];
+    //#endif
+  }
+
+  impersonateLabel(): string {
+    //#if (IncludeLocalization)
+    return this.transloco.translate('tenants.impersonate');
+    //#else
+    return 'Sign in as tenant';
     //#endif
   }
 

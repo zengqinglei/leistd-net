@@ -10,7 +10,9 @@ import {
   lucideCircleCheck,
   lucideEllipsis,
   lucideKey,
+  lucideLockOpen,
   lucideShieldCheck,
+  lucideShieldOff,
   lucidePencil,
   lucideSearchX,
   lucideSortAsc,
@@ -43,7 +45,11 @@ import {
   injectAppTable,
   type AppTableFeatures,
 } from '../../../../../../shared/models/table-features';
+//#if (LocalIdentity)
+import { AppDate, formatAppDate } from '../../../../../../shared/pipes/app-date-pipe';
+//#else
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
+//#endif
 import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
@@ -85,7 +91,9 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
       lucideCircleCheck,
       lucideEllipsis,
       lucideKey,
+      lucideLockOpen,
       lucideShieldCheck,
+      lucideShieldOff,
       lucidePencil,
       lucideSearchX,
       lucideSortAsc,
@@ -138,6 +146,8 @@ export class UserTable {
   readonly toggleActive = output<UserManagementOutputDto>();
   //#if (LocalIdentity)
   readonly resetPassword = output<string>();
+  readonly unlock = output<UserManagementOutputDto>();
+  readonly resetTwoFactor = output<UserManagementOutputDto>();
   //#endif
   readonly delete = output<UserManagementOutputDto>();
   /** 角色分配是独立命令，与资料编辑分开触发。 */
@@ -331,6 +341,37 @@ export class UserTable {
     //#endif
   }
   //#if (LocalIdentity)
+  lockedLabel(): string {
+    //#if (IncludeLocalization)
+    return this.transloco.translate('users.status.locked');
+    //#else
+    return 'Locked';
+    //#endif
+  }
+
+  /** 锁定徽章的提示：临时锁定写到期时刻，管理员锁定说明要人工解除。 */
+  lockedHint(user: UserManagementOutputDto): string {
+    if (!user.lockoutEnd) {
+      //#if (IncludeLocalization)
+      return this.transloco.translate('users.status.lockedIndefinitely');
+      //#else
+      return 'Locked until an administrator unlocks it';
+      //#endif
+    }
+
+    const time = formatAppDate(
+      user.lockoutEnd,
+      'short',
+      this.displayTimeZone(),
+      this.displayLocale(),
+    );
+    //#if (IncludeLocalization)
+    return this.transloco.translate('users.status.lockedUntil', { time });
+    //#else
+    return `Locked until ${time}`;
+    //#endif
+  }
+
   emailVerifiedLabel(verified: boolean): string {
     //#if (IncludeLocalization)
     return this.transloco.translate(
@@ -343,7 +384,7 @@ export class UserTable {
   //#endif
 
   actionLabel(
-    action: 'details' | 'edit' | 'toggle' | 'reset' | 'delete',
+    action: 'details' | 'edit' | 'toggle' | 'reset' | 'unlock' | 'resetTwoFactor' | 'delete',
     user: UserManagementOutputDto,
   ): string {
     //#if (IncludeLocalization)
@@ -352,6 +393,8 @@ export class UserTable {
       edit: 'common.edit',
       toggle: user.isActive ? 'users.tooltip.disable' : 'users.tooltip.enable',
       reset: 'users.tooltip.resetPassword',
+      unlock: 'users.tooltip.unlock',
+      resetTwoFactor: 'users.tooltip.resetTwoFactor',
       delete: 'common.delete',
     } as const;
     return this.transloco.translate(keys[action]);
@@ -361,6 +404,8 @@ export class UserTable {
       edit: 'Edit',
       toggle: user.isActive ? 'Disable' : 'Enable',
       reset: 'Reset password',
+      unlock: 'Unlock',
+      resetTwoFactor: 'Reset two-factor authentication',
       delete: 'Delete',
     } as const;
     return labels[action];

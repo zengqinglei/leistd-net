@@ -31,5 +31,6 @@
 
 - [总体设计原则](./architecture/design-principles.md)
 - [三层交付与 AI 协作](./architecture/collaboration-scenarios.md)
+- [操作记录长期约束](./architecture/operation-records-principles.md)
 - [框架开发文档](./framework/README.md)
 - [模板开发文档](./template/README.md)

@@ -65,7 +65,7 @@ public class OrderHub(ICurrentUser currentUser, ICurrentTenant currentTenant) : 
 ```csharp
 options.DefaultPolicy = new AuthorizationPolicyBuilder()
     .RequireAuthenticatedUser()
-    .AddRequirements(new ActiveUserRequirement())   // 已建连接在下一次方法调用时复评
+    .AddRequirements(new AccountStillActiveRequirement())   // 宿主自定义；已建连接在下一次方法调用时复评
     .Build();
 ```
 

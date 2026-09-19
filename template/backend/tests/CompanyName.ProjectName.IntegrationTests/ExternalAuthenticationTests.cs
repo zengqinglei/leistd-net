@@ -1,7 +1,7 @@
 #if (ExternalLogin)
 using System.Net;
 using System.Net.Http.Json;
-using CompanyName.ProjectName.Application.Auth;
+using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;

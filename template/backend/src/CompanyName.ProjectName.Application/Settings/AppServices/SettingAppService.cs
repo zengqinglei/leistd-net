@@ -1,10 +1,11 @@
 using System.Globalization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.Dtos;
-using CompanyName.ProjectName.Application.Settings.Hosting;
+using CompanyName.ProjectName.Application.Settings.Events;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Application.Settings.Timing;
 using Leistd.Authorization.Abstractions;
+using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.Security.Users;
@@ -12,8 +13,12 @@ using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
 using Leistd.UnitOfWork.Attributes;
 using Leistd.Ddd.Application.AppService;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using Leistd.OperationRecords.Abstractions;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
+using Leistd.Email.Abstractions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #endif
 #if (IncludeLocalization)
@@ -42,10 +47,13 @@ public class SettingAppService(
     IPermissionChecker permissionChecker,
     ICurrentUser currentUser,
     ICurrentTenant currentTenant,
-    IEnumerable<IHostSettingApplier> hostSettingAppliers
+    IOperationRecorder operationRecorder,
+    ILocalEventBus localEventBus
 #if (LocalIdentity)
     ,
-    IOptions<VerificationCodeOptions> verificationCodeOptions
+    IOptions<VerificationCodeOptions> verificationCodeOptions,
+    IEmailSender emailSender,
+    ILogger<SettingAppService> logger
 #endif
 #if (IncludeLocalization)
     ,
@@ -76,23 +84,38 @@ public class SettingAppService(
             // 进程级设置在租户上下文里既改不了也不适用于该租户，索性不下发：
             // 下发一个只能看、改了还会被拒的项，比看不到更让人困惑。
             .Where(definition => isHost || !definition.Scopes.HasFlag(SettingScopes.Host))
-            .Select(definition => new SettingOutputDto(
-                definition.Name,
-                Localize(definition.Name, definition.DisplayName),
-                GroupOf(definition.Group),
-                LocalizeGroup(GroupOf(definition.Group)),
-                definition.Scopes.HasFlag(SettingScopes.User) ? userValues.GetValueOrDefault(definition.Name) : null,
-                // 进程级设置也存在这一层（宿主行），只按 Tenant 标记取值会让它永远显示成"未覆盖"：
-                // 存下去了、读不回来，界面上就是"改了没生效"。
-                definition.Scopes.HasFlag(SettingScopes.Tenant) || definition.Scopes.HasFlag(SettingScopes.Host)
-                    ? tenantValues.GetValueOrDefault(definition.Name)
-                    : null,
-                definition.DefaultValue,
-                definition.Scopes.HasFlag(SettingScopes.Tenant),
-                definition.Scopes.HasFlag(SettingScopes.User),
-                definition.Scopes.HasFlag(SettingScopes.Host),
-                RangeOf(definition.Name)?.Minimum,
-                RangeOf(definition.Name)?.Maximum))];
+            .Select(definition => ToOutput(definition, userValues, tenantValues))];
+    }
+
+    private SettingOutputDto ToOutput(
+        ISettingDefinition definition,
+        IReadOnlyDictionary<string, string> userValues,
+        IReadOnlyDictionary<string, string> tenantValues)
+    {
+        var userValue = definition.Scopes.HasFlag(SettingScopes.User) ? userValues.GetValueOrDefault(definition.Name) : null;
+        // 进程级设置也存在这一层（宿主行），只按 Tenant 标记取值会让它永远显示成"未覆盖"：
+        // 存下去了、读不回来，界面上就是"改了没生效"。
+        var tenantValue = definition.Scopes.HasFlag(SettingScopes.Tenant) || definition.Scopes.HasFlag(SettingScopes.Host)
+            ? tenantValues.GetValueOrDefault(definition.Name)
+            : null;
+
+        return new SettingOutputDto(
+            definition.Name,
+            Localize(definition.Name, definition.DisplayName),
+            GroupOf(definition.Group),
+            LocalizeGroup(GroupOf(definition.Group)),
+            // 机密设置一个值都不下发，连密文也不给：只告诉界面"设过了"
+            definition.IsEncrypted ? null : userValue,
+            definition.IsEncrypted ? null : tenantValue,
+            definition.IsEncrypted ? null : definition.DefaultValue,
+            definition.Scopes.HasFlag(SettingScopes.Tenant),
+            definition.Scopes.HasFlag(SettingScopes.User),
+            definition.Scopes.HasFlag(SettingScopes.Host),
+            RangeOf(definition.Name)?.Minimum,
+            RangeOf(definition.Name)?.Maximum,
+            SettingConstant.BooleanSettings.Contains(definition.Name),
+            definition.IsEncrypted,
+            definition.IsEncrypted && (tenantValue ?? userValue) is not null);
     }
 
     /// <inheritdoc />
@@ -132,16 +155,58 @@ public class SettingAppService(
 
         await settingManager.SetAsync(input.Name, input.Value, scope, cancellationToken: cancellationToken);
 
-        // 写完立刻对本进程生效；其它实例在下一次刷新周期跟上。
+        // 事务提交后对本进程生效（见 HostSettingChangedEventHandler）；其它实例在下一次刷新周期跟上。
         if (scope == SettingScopes.Host)
         {
-            foreach (var applier in hostSettingAppliers)
-            {
-                await applier.ApplyAsync(cancellationToken);
-            }
+            await localEventBus.PublishAsync(new HostSettingChangedEvent(input.Name), cancellationToken);
+        }
+
+        // 目标标识带出作用域：同一个设置名在宿主与租户两层各有一行，
+        // 只记名字会让两层的变更在审计里长得一模一样，分不出改的是哪一层。
+        // 用户级设置（SetForCurrentUserAsync）刻意不记：个人偏好不改变能力边界也不改变共享数据，
+        // 却是高频写入——审计表的价值来自密度。
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.SettingChanged,
+            OperationTarget.For($"{scope}/{input.Name}", input.Name),
+            PermissionConstant.Settings.Default,
+            cancellationToken);
+    }
+
+#if (LocalIdentity)
+    /// <inheritdoc />
+    public async Task SendTestEmailAsync(SendTestEmailInputDto input, CancellationToken cancellationToken = default)
+    {
+        if (!await permissionChecker.IsGrantedAsync(PermissionConstant.Settings.Default, cancellationToken))
+            throw new ForbiddenException("Sending a test email requires the settings management permission.");
+
+        // 发信参数是进程级的，只有宿主能改，也只有宿主来试
+        if (currentTenant.Id is not null)
+            throw new ForbiddenException("The email settings can only be tested on the host.");
+
+        try
+        {
+            await emailSender.SendAsync(
+                new EmailMessage
+                {
+                    To = input.To,
+                    Subject = "Test email",
+                    Body = "<p>This is a test email. If you can read it, the email settings work.</p>"
+                },
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 失败原因原样回给管理员：连不上、认证失败、发件地址被拒，都要靠这句话来改参数
+            logger.LogWarning(ex, "Test email to {To} failed", input.To);
+            throw new BadRequestException($"The test email could not be sent: {ex.Message}")
+#if (IncludeLocalization)
+                .WithCode("Setting:TestEmailFailed").WithData("Reason", ex.Message)
+#endif
+                ;
         }
     }
 
+#endif
     // 值域在服务端把关，不能只靠界面的候选项：脚本、旧版客户端和迁移进来的数据都绕得过界面，
     // 一个非法值留在库里，之后每个消费方都得自己防御。控件长什么样是界面的事，值合不合法是这里的事。
     private void EnsureValueIsValid(string name, string? value)
@@ -190,15 +255,14 @@ public class SettingAppService(
                     .WithData("Valid", string.Join(", ", SettingConstant.Logging.Levels))
 #endif
                     ;
-#if (LocalIdentity)
 
-            case SettingConstant.Registration.EnableEmailVerification
-                when value is not ("true" or "false"):
+            case var _ when SettingConstant.BooleanSettings.Contains(name) && value is not ("true" or "false"):
                 throw new BadRequestException($"'{value}' is not a boolean; use 'true' or 'false'.")
 #if (IncludeLocalization)
                     .WithCode("Setting:BooleanRequired").WithData("Value", value)
 #endif
                     ;
+#if (LocalIdentity)
 
             // 开启前必须确认部署已经给了可用的摘要密钥。
             //
@@ -221,12 +285,21 @@ public class SettingAppService(
 #endif
                     ;
 
-            // 区间读 SettingConstant.Registration.Ranges 那一份，与下发给界面的
+            // 只收裸地址：带显示名的写法（"Acme <a@b.c>"）在这里放行，发信时才因为解析不出而失败
+            case SettingConstant.Email.DefaultFromAddress
+                when !System.Net.Mail.MailAddress.TryCreate(value, out var address) || address.Address != value:
+                throw new BadRequestException($"'{value}' is not a valid email address.")
+#if (IncludeLocalization)
+                    .WithCode("Setting:EmailAddressInvalid").WithData("Value", value)
+#endif
+                    ;
+#endif
+
+            // 区间读 SettingConstant.NumericRanges 那一份，与下发给界面的
             // minimum/maximum 同源：分开写两份时，界面让填的和服务端收的会各走一边。
-            case var _ when SettingConstant.Registration.Ranges.TryGetValue(name, out var range):
+            case var _ when SettingConstant.NumericRanges.TryGetValue(name, out var range):
                 EnsureInRange(name, value, range.Minimum, range.Maximum);
                 break;
-#endif
         }
     }
 
@@ -245,12 +318,7 @@ public class SettingAppService(
     // 界面的约束管不住脚本与历史数据，这里只是让界面别把明知非法的值放进来。
     private static (int Minimum, int Maximum)? RangeOf(string name)
     {
-#if (LocalIdentity)
-        return SettingConstant.Registration.Ranges.TryGetValue(name, out var range) ? range : null;
-#else
-        _ = name;
-        return null;
-#endif
+        return SettingConstant.NumericRanges.TryGetValue(name, out var range) ? range : null;
     }
 
     // 未分组的设置归入固定的"其他"，而不是让它落在界面之外：新增设置忘了写分组时，
@@ -258,7 +326,6 @@ public class SettingAppService(
     private static string GroupOf(string? group)
         => string.IsNullOrWhiteSpace(group) ? SettingConstant.Groups.Other : group;
 
-#if (LocalIdentity)
     private static void EnsureInRange(string name, string value, int min, int max)
     {
         if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
@@ -275,7 +342,6 @@ public class SettingAppService(
         }
     }
 
-#endif
     // 分组名与设置名同一套办法：词条键按 SettingGroup:{group} 推导，查不到就用标识本身。
     private string LocalizeGroup(string group)
     {

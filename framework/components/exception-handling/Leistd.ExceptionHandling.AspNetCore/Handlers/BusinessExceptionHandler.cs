@@ -88,7 +88,7 @@ public sealed class BusinessExceptionHandler(
             }
         }
 
-        return GetProblemTitle(ex.StatusCode);
+        return ProblemTitles.Default(ex.StatusCode);
     }
 
     // 每个字段错误同时携带本地化消息、字段名和可选机器码。
@@ -125,23 +125,6 @@ public sealed class BusinessExceptionHandler(
         return text;
     }
 
-    // 按状态码本地化标题；未启用本地化 / 出错 / 未命中时回退到英文默认标题。
-    private string LocalizeTitle(int statusCode)
-    {
-        var fallback = GetProblemTitle(statusCode);
-        if (_localizer is null)
-            return fallback;
-
-        try
-        {
-            var localized = _localizer["Title:" + statusCode];
-            return localized.ResourceNotFound ? fallback : localized.Value;
-        }
-        catch
-        {
-            return fallback;
-        }
-    }
 
     /// <inheritdoc />
     public async ValueTask<bool> TryHandleAsync(
@@ -266,7 +249,7 @@ public sealed class BusinessExceptionHandler(
         var statusCode = bizException.StatusCode;
 
         var message = Localize(bizException, options);
-        var title = LocalizeTitle(statusCode);
+        var title = ProblemTitles.Localize(_localizer, statusCode);
 
         // 验证错误使用可携带机器码的 Leistd errors 扩展，并共享稳定的类型 URI。
         if (bizException is UnprocessableEntityException unprocessableEntity)
@@ -332,22 +315,4 @@ public sealed class BusinessExceptionHandler(
     // Activity.TraceId 标识整条链路；无 Activity 时回退到中间件同步的请求标识。
     private static string ResolveTraceId(HttpContext httpContext)
         => Activity.Current?.TraceId.ToHexString() ?? httpContext.TraceIdentifier;
-
-    private static string GetProblemTitle(int statusCode)
-    {
-        return statusCode switch
-        {
-            400 => "Bad Request",
-            401 => "Unauthorized",
-            403 => "Forbidden",
-            404 => "Not Found",
-            409 => "Conflict",
-            415 => "Unsupported Media Type",
-            422 => "Unprocessable Entity",
-            500 => "Internal Server Error",
-            502 => "Bad Gateway",
-            503 => "Service Unavailable",
-            _ => "Error"
-        };
-    }
 }

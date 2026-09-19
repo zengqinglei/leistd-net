@@ -1,7 +1,9 @@
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.AppServices;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -51,6 +53,8 @@ public sealed class RoleController(IRoleAppService roleAppService) : BaseControl
     /// </summary>
     [HttpPost]
     [Authorize(Policy = PermissionConstant.Roles.Create)]
+    // 创建类端点还没有目标标识，省略路由键，被拒记录的目标记为 "-"
+    [OperationRecordAction(OperationRecordActions.RoleCreated)]
     public async Task<RoleOutputDto> CreateAsync(
         [FromBody] CreateRoleInputDto input,
         CancellationToken cancellationToken)
@@ -76,6 +80,8 @@ public sealed class RoleController(IRoleAppService roleAppService) : BaseControl
     /// </summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = PermissionConstant.Roles.Delete)]
+    // 目标标识取路由上的 id，与成功路径写下的值逐字一致，按目标检索才查得全
+    [OperationRecordAction(OperationRecordActions.RoleDeleted, "id")]
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         await roleAppService.DeleteAsync(id, cancellationToken);

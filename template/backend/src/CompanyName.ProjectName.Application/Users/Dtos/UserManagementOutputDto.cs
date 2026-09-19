@@ -24,5 +24,14 @@ public record UserManagementOutputDto
     public DateTime CreationTime { get; init; }
 #if (LocalIdentity)
     public DateTime? LastLoginTime { get; init; }
+
+    /// <summary>登录锁定正在生效（登录失败触发的临时锁定，或管理员锁定）。</summary>
+    public bool IsLockedOut { get; init; }
+
+    /// <summary>锁定截止时间；未锁定或无期限（管理员锁定）时为 null。</summary>
+    public DateTime? LockoutEnd { get; init; }
+
+    /// <summary>是否已启用两步验证。</summary>
+    public bool IsTwoFactorEnabled { get; init; }
 #endif
 }

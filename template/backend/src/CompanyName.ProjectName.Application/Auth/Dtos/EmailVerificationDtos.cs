@@ -21,7 +21,8 @@ public sealed record EmailVerificationInputDto
 {
     public required Guid ChallengeId { get; init; }
 
-    [Required]
+    [Display(Name = "Email verification code")]
+    [Required(ErrorMessage = "{0} is required.")]
     [RegularExpression(@"^\d{6}$", ErrorMessage = "The email verification code must contain exactly 6 digits.")]
     public required string Code { get; init; }
 }

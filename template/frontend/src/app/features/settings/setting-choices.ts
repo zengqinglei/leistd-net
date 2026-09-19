@@ -35,34 +35,33 @@ const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
 ];
 
 /**
- * 真值只有两种的设置：用开关而不是两项下拉。
- *
- * 存的仍是 `'true'` / `'false'` 字符串——设置值在契约上一律是字符串，
- * 控件形态是界面的事，不改契约。
- */
-//#if (LocalIdentity)
-export const BOOLEAN_SETTINGS: ReadonlySet<string> = new Set<string>([
-  SETTINGS.registration.enableEmailVerification,
-]);
-//#else
-// 没有本地身份的形态下不存在注册策略，也就没有布尔型设置。
-export const BOOLEAN_SETTINGS: ReadonlySet<string> = new Set<string>();
-//#endif
-
-/**
  * 日志级别的说明文案。
  *
  * 选完在下面显示对应说明：级别名本身（Verbose / Debug / …）说不出"选了它会多打多少日志"，
- * 而那恰恰是做这个选择时唯一想知道的事。
+ * 而那恰恰是做这个选择时唯一想知道的事。级别名不翻译（见上），说明要翻译——它是给人读的句子。
  */
+//#if (IncludeLocalization)
+// 值是词条键（settings.logLevelHints.*），由设置页按当前语言翻译。
+// 先前直接写中文，英文界面下照样显示中文。
 export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
-  Verbose: '记录一切，含逐条 SQL 与请求细节。仅短时排障用，长期开会迅速吃满磁盘。',
-  Debug: '记录调试细节。排查问题时开，日常不建议。',
-  Information: '记录正常业务流程。默认级别。',
-  Warning: '只记录警告与错误，正常流程不落盘。',
-  Error: '只记录错误。会漏掉"没报错但不对"的线索。',
-  Fatal: '只记录导致进程终止的故障。几乎等于关掉日志。',
+  Verbose: 'settings.logLevelHints.Verbose',
+  Debug: 'settings.logLevelHints.Debug',
+  Information: 'settings.logLevelHints.Information',
+  Warning: 'settings.logLevelHints.Warning',
+  Error: 'settings.logLevelHints.Error',
+  Fatal: 'settings.logLevelHints.Fatal',
 };
+//#else
+export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  Verbose:
+    'Logs everything, including every SQL statement and request detail. For short troubleshooting only; left on, it fills the disk quickly.',
+  Debug: 'Logs debugging details. Turn it on while investigating; not recommended day to day.',
+  Information: 'Logs the normal business flow. The default level.',
+  Warning: 'Logs only warnings and errors; the normal flow is not written.',
+  Error: 'Logs only errors. You may miss clues that are wrong without raising an error.',
+  Fatal: 'Logs only failures that stop the process. Almost the same as turning logging off.',
+};
+//#endif
 
 export const SETTING_CHOICES: Readonly<Record<string, readonly SettingChoice[]>> = {
   //#if (IncludeLocalization)

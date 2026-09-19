@@ -13,10 +13,13 @@ namespace Leistd.Email.Smtp;
 /// 经 SMTP 发信的 <see cref="IEmailSender"/>。
 /// </summary>
 /// <remarks>
-/// 每次调用建立独立连接，连接、认证与投递异常原样传播，不自动重试。
+/// <para>每次调用建立独立连接，连接、认证与投递异常原样传播，不自动重试。</para>
+/// <para>参数每封信取一次 <see cref="IOptionsMonitor{TOptions}.CurrentValue"/>：配置源重载后（文件改动，
+/// 或宿主注册的可重载配置源）下一封信即用新值。重算出的参数同样经注册的 <see cref="IValidateOptions{TOptions}"/> 校验，
+/// 不合规时抛 <see cref="OptionsValidationException"/>，不会带着残缺参数去连服务器。</para>
 /// </remarks>
 public sealed class SmtpEmailSender(
-    IOptions<SmtpOptions> options,
+    IOptionsMonitor<SmtpOptions> options,
     ILogger<SmtpEmailSender> logger) : IEmailSender
 {
     /// <inheritdoc />
@@ -24,7 +27,7 @@ public sealed class SmtpEmailSender(
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var current = options.Value;
+        var current = options.CurrentValue;
         var mime = BuildMessage(message, current);
 
         using var client = new SmtpClient();

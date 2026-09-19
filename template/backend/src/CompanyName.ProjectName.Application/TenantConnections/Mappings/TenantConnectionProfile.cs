@@ -1,27 +1,38 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.TenantConnections.Dtos;
+using CompanyName.ProjectName.Domain.Tenants.Connections;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.ObjectMapping.Mapster;
 using Leistd.ObjectMapping.Mapster.Mapping;
+using Mapster;
 
 namespace CompanyName.ProjectName.Application.TenantConnections.Mappings;
 
 /// <summary>
-/// 租户连接配置映射配置
+/// 租户连接映射配置
 /// </summary>
 /// <remarks>
-/// 三个输出 DTO 都是 <see cref="TenantConnectionConfiguration"/> 的同名字段投影，差别只在
-/// 各自暴露哪个 Secret 引用——运行面只回 <c>RuntimeSecretReference</c>，迁移面只回
-/// <c>MigrationSecretReference</c>。<b>这个差异是安全边界</b>，由 DTO 的字段集表达：
-/// 少写一个字段就等于少暴露一个引用，不必在应用服务里逐个手工挑字段。
+/// 管理面只回名字与版本、内部下发才带明文连接串：这条边界由各输出 DTO 的字段集表达，映射本身都是同名投影。
 /// </remarks>
 public class TenantConnectionProfile : MapsterProfile
 {
+    /// <summary>MapContext 参数名：连接所属的租户（目录条目本身不带租户）。</summary>
+    public const string TenantIdKey = "TenantId";
+
     protected override void ConfigureMappings()
     {
+        CreateMap<TenantConnectionEntry, TenantConnectionOutputDto>()
+            .Map(dest => dest.TenantId, src => ResolveTenantId());
         CreateMap<TenantConnectionConfiguration, TenantConnectionOutputDto>();
-        CreateMap<TenantConnectionConfiguration, TenantRuntimeConnectionOutputDto>();
-        CreateMap<TenantConnectionConfiguration, TenantMigrationConnectionOutputDto>();
+        CreateMap<TenantConnectionConfiguration, TenantConnectionDetailOutputDto>();
+        CreateMap<TenantConnectionLookupResult, TenantRuntimeConnectionOutputDto>();
+        CreateMap<TenantMigrationConnection, TenantMigrationConnectionOutputDto>();
     }
+
+    // 目录条目只在"某个租户的连接列表"里出现，调用方必须给出租户；漏给是调用错误，不是一个空租户
+    private static Guid ResolveTenantId() =>
+        MapContext.Current?.Parameters.TryGetValue(TenantIdKey, out var value) == true && value is Guid tenantId
+            ? tenantId
+            : throw new InvalidOperationException($"Mapping a tenant connection entry requires the '{TenantIdKey}' context parameter.");
 }
 #endif

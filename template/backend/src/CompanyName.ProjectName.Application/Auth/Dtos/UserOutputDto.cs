@@ -6,9 +6,21 @@ public record UserOutputDto
     public required string Username { get; init; }
     public required string Email { get; init; }
     public string? DisplayName { get; init; }
+    /// <summary>头像地址：外部地址原样给出，上传的图片给带版本号的站内地址（见 AvatarUrls）。</summary>
     public string? Avatar { get; init; }
     public string? PhoneNumber { get; init; }
     public bool IsActive { get; init; }
+    /// <summary>当前邮箱是否已验证；改过邮箱后回到未验证。</summary>
+    public bool IsEmailVerified { get; init; }
+
+    /// <summary>是否已启用两步验证。</summary>
+    public bool IsTwoFactorEnabled { get; init; }
+
+    /// <summary>
+    /// 当前是受限会话：所在租户要求两步验证而本人尚未启用，必须先完成设置。
+    /// </summary>
+    /// <remarks>来自会话声明而不是账号字段，只在"获取当前用户"时有值。</remarks>
+    public bool TwoFactorSetupRequired { get; init; }
     public bool IsSuperAdmin { get; init; }
     public DateTime CreationTime { get; init; }
     /// <summary>已分配角色名，仅用于展示；权限判断一律走 /api/v1/permissions/current。</summary>

@@ -23,8 +23,8 @@ import { ThemeService } from './core/services/theme-service';
   imports: [RouterOutlet, HlmToaster, HlmSpinner, HlmButton, NgIcon, ...HlmCardImports],
   providers: [provideIcons({ lucideRefreshCw })],
   template: `
-    <!-- 全局 toast 宿主 -->
-    <hlm-toaster />
+    <!-- 全局 toast 宿主。标题保留换行：多个字段的校验错误各占一行（见 ApplicationHttpError）。 -->
+    <hlm-toaster [toastOptions]="{ classes: { title: 'whitespace-pre-line' } }" />
 
     @switch (startupService.status()) {
       @case ('success') {

@@ -15,27 +15,31 @@ import { LayoutService } from '../../services/layout-service';
 // 改一句中文不该让这组用例变红。
 const WORK = 'layout.sidebar.groupWork';
 const BUSINESS = 'layout.sidebar.groupBusiness';
-const SYSTEM = 'layout.sidebar.groupSystem';
+const PERSONAL = 'layout.sidebar.groupPersonal';
+const IDENTITY = 'layout.sidebar.groupIdentity';
 //#if (OpenIddictServer)
 const DEVELOPER = 'layout.sidebar.groupDeveloper';
 //#endif
-const OPERATIONS = 'layout.sidebar.groupOperations';
+const AUDIT = 'layout.sidebar.groupAudit';
+const SYSTEM = 'layout.sidebar.groupSystem';
 //#else
 const WORK = 'Work';
 const BUSINESS = 'Business';
-const SYSTEM = 'System';
+const PERSONAL = 'Personal';
+const IDENTITY = 'Identity & access';
 //#if (OpenIddictServer)
 const DEVELOPER = 'Developer';
 //#endif
-const OPERATIONS = 'Operations';
+const AUDIT = 'Audit';
+const SYSTEM = 'System';
 //#endif
 
 /**
  * 侧栏菜单的信息架构。
  *
  * 分组改错了既不报错、也不影响任何功能，只是让人找不到入口——没有断言就等于没有约束。
- * 这里钉住两个区各自的分组骨架，以及三条判据里能自动验的部分：不留兜底组、
- * 个人偏好不进主导航、权限不足的组整组消失。
+ * 这里钉住两个区各自的分组骨架，以及判据里能自动验的部分：不留兜底组、
+ * 个人设置只在工作空间（管理平台不另放一份）、权限不足的组整组消失。
  */
 describe('DefaultSidebar 菜单分组', () => {
   /**
@@ -78,24 +82,32 @@ describe('DefaultSidebar 菜单分组', () => {
   const routesOf = (sidebar: DefaultSidebar) =>
     sidebar.menuGroups().flatMap((group) => group.items.map((item) => item.route));
 
-  it('工作空间侧：工作 → 业务，不含兜底组', () => {
+  it('工作空间侧：工作 → 业务 → 个人，不含兜底组', () => {
     const sidebar = build({ platform: false });
 
-    expect(groupsOf(sidebar)).toEqual([WORK, BUSINESS]);
-    expect(routesOf(sidebar)).toEqual(['/workspace/dashboard', '/workspace/placeholder']);
+    expect(groupsOf(sidebar)).toEqual([WORK, BUSINESS, PERSONAL]);
+    expect(routesOf(sidebar)).toEqual([
+      '/workspace/dashboard',
+      '/workspace/placeholder',
+      '/workspace/settings',
+    ]);
   });
 
-  // 个人偏好在头像菜单里（个人资料 / 偏好设置 / 修改密码 一簇），不占主导航。
-  // 它一旦回到侧栏，就又需要一个「其它」之类的兜底组来收它。
-  it('工作空间侧不放个人偏好入口', () => {
-    expect(routesOf(build({ platform: false }))).not.toContain('/workspace/settings');
+  // 个人设置每个用户都有，只放工作空间一处；管理人员也是用户，从头像菜单进同一处。
+  // 管理平台再放一份，就会出现两个入口、两份状态。
+  it('管理平台侧不放个人设置入口', () => {
+    const everything = Object.values(PERMISSIONS).map((group) => group.default);
+    expect(routesOf(build({ platform: true, permissions: everything }))).not.toContain(
+      '/workspace/settings',
+    );
   });
 
-  it('平台侧：工作 → 系统 → 开发者 → 运维', () => {
+  it('平台侧：工作 → 身份与访问 → 开发者 → 审计 → 系统', () => {
     const permissions = [
       PERMISSIONS.users.default,
       PERMISSIONS.roles.default,
       PERMISSIONS.settings.default,
+      PERMISSIONS.operationRecords.default,
       //#if (LocalIdentity)
       PERMISSIONS.tenants.default,
       //#endif
@@ -103,11 +115,11 @@ describe('DefaultSidebar 菜单分组', () => {
       PERMISSIONS.openApplications.default,
       //#endif
     ];
-    const expected = [WORK, SYSTEM];
+    const expected = [WORK, IDENTITY];
     //#if (OpenIddictServer)
     expected.push(DEVELOPER);
     //#endif
-    expected.push(OPERATIONS);
+    expected.push(AUDIT, SYSTEM);
 
     const sidebar = build({ platform: true, permissions });
 

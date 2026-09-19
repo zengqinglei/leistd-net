@@ -23,6 +23,11 @@ namespace CompanyName.ProjectName.Application.Settings.Dtos;
 /// <param name="AllowsUserScope">是否允许用户覆盖为个人偏好。</param>
 /// <param name="Minimum">数值型设置的下界；非数值型为 <see langword="null"/>。</param>
 /// <param name="Maximum">数值型设置的上界；非数值型为 <see langword="null"/>。</param>
+/// <param name="IsBoolean">布尔型设置：值只能是 <c>true</c> / <c>false</c>，界面渲染成开关。</param>
+/// <param name="IsSecret">
+/// 机密设置（加密落库）：各层的值与默认值一律不下发，界面渲染成只写的输入框。
+/// </param>
+/// <param name="HasSecretValue">机密设置在可写的那一层是否已经设过值；非机密设置恒为 <see langword="false"/>。</param>
 /// <param name="AllowsHostScope">
 /// 是否是进程级设置（只有宿主那一份，租户与用户都不能覆盖）。
 /// 为 <see langword="true"/> 时另两个层级标记都是 <see langword="false"/>，
@@ -40,7 +45,10 @@ public record SettingOutputDto(
     bool AllowsUserScope,
     bool AllowsHostScope,
     int? Minimum = null,
-    int? Maximum = null);
+    int? Maximum = null,
+    bool IsBoolean = false,
+    bool IsSecret = false,
+    bool HasSecretValue = false);
 
 /// <summary>
 /// 写入一项设置。
@@ -48,3 +56,18 @@ public record SettingOutputDto(
 /// <param name="Name">设置名称。</param>
 /// <param name="Value">设置值；<see langword="null"/> 表示清除该层级的值，回落到下一层。</param>
 public record SetSettingInputDto(string Name, string? Value);
+#if (LocalIdentity)
+
+/// <summary>
+/// 发一封测试邮件。
+/// </summary>
+public record SendTestEmailInputDto
+{
+    /// <summary>收件地址。</summary>
+    [System.ComponentModel.DataAnnotations.Display(Name = "Recipient")]
+    [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "{0} is required.")]
+    [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "{0} is not a valid email address.")]
+    [System.ComponentModel.DataAnnotations.StringLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
+    public required string To { get; init; }
+}
+#endif

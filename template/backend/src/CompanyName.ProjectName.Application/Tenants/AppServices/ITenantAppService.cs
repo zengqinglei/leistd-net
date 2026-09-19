@@ -16,6 +16,10 @@ public interface ITenantAppService : IAppService
     Task<TenantOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>创建租户并在租内种子初始角色、权限与管理员</summary>
+    /// <remarks>
+    /// 分库与否由 <see cref="CreateTenantInputDto.ConnectionString"/> 在<b>这一步</b>定案：
+    /// 它在播种之前登记，种子因此直接落进专属库。建好之后再改分库属于数据搬迁，不是这个接口的事。
+    /// </remarks>
     Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default);
 
     /// <summary>更新租户名称与显示名</summary>

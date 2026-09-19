@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -13,6 +14,7 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling;
 using Leistd.Timing;
 using Leistd.Lock;
@@ -32,9 +34,14 @@ public class EmailVerificationAppService(
     IClock clock,
     IRepository<User, Guid> userRepository
     , ICurrentTenant currentTenant
+    , IOptions<VerificationCodeOptions> verificationCodeOptions
     ) : BaseAppService, IEmailVerificationAppService
 {
     private const string RegistrationPurpose = "registration-email";
+
+    // 已登录用户验证自己当前的邮箱。与注册分开成两种用途：挑战绑定用途，
+    // 注册时发出的验证码不能拿来验证已有账号的邮箱，反之亦然。
+    private const string AccountEmailPurpose = "account-email";
     private const string CacheKeyPrefix = "MyProject:email-verification";
 
     public async Task<EmailVerificationChallengeOutputDto> SendEmailCodeAsync(
@@ -80,6 +87,39 @@ public class EmailVerificationAppService(
                 ;
         }
 
+        return await IssueChallengeAsync(normalizedEmail, RegistrationPurpose, policy, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<EmailVerificationChallengeOutputDto> SendAccountEmailCodeAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        // 不看"注册要求邮箱验证"开关：那管的是注册流程，验证自己已有的邮箱与它无关。
+        // 验证码的有效期、发送间隔与尝试次数沿用同一组设置——它们描述的是验证码本身。
+        // 不要求图形验证码：调用方已登录，发送频率仍受同一套按邮箱的限流约束。
+        var policy = await registrationPolicy.GetAsync(cancellationToken);
+        return await IssueChallengeAsync(NormalizeEmail(email), AccountEmailPurpose, policy, cancellationToken);
+    }
+
+    private async Task<EmailVerificationChallengeOutputDto> IssueChallengeAsync(
+        string normalizedEmail,
+        string purpose,
+        UserRegistrationPolicy policy,
+        CancellationToken cancellationToken)
+    {
+        // 缺摘要密钥时先说清楚：不查的话要一路走到摘要计算处才以 500 失败，
+        // 用户只看到"系统异常"，运维也看不出是少了一项部署配置。
+        if (!verificationCodeOptions.Value.IsKeyUsable)
+        {
+            throw new BadRequestException(
+                "Email verification is unavailable: this deployment has no usable verification code key.")
+#if (IncludeLocalization)
+                .WithCode("Auth:EmailVerificationUnavailable")
+#endif
+                ;
+        }
+
         var scope = GetScope();
         var emailDigest = GetEmailDigest(normalizedEmail);
         var rateKey = GetRateCacheKey(scope, emailDigest);
@@ -103,7 +143,7 @@ public class EmailVerificationAppService(
         var challenge = new EmailVerificationChallengeState
         {
             Scope = scope,
-            Purpose = RegistrationPurpose,
+            Purpose = purpose,
             EmailDigest = emailDigest,
             CodeHash = codeDigest.Compute(code),
             ExpiresAt = clock.Now.Add(expiresIn),
@@ -127,8 +167,10 @@ public class EmailVerificationAppService(
                 new EmailMessage
                 {
                     To = normalizedEmail,
-                    Subject = "Account Registration Verification Code",
-                    Body = BuildEmailBody(code, policy.EmailCodeExpiryMinutes),
+                    Subject = purpose == AccountEmailPurpose
+                        ? "Email Address Verification Code"
+                        : "Account Registration Verification Code",
+                    Body = BuildEmailBody(code, policy.EmailCodeExpiryMinutes, purpose),
                 },
                 operationToken);
         }
@@ -159,10 +201,24 @@ public class EmailVerificationAppService(
         };
     }
 
-    public async Task<bool> ValidateEmailChallengeAsync(
+    public Task<bool> ValidateEmailChallengeAsync(
         string email,
         EmailVerificationInputDto verification,
         CancellationToken cancellationToken = default)
+        => ValidateChallengeAsync(email, verification, RegistrationPurpose, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<bool> ValidateAccountEmailChallengeAsync(
+        string email,
+        EmailVerificationInputDto verification,
+        CancellationToken cancellationToken = default)
+        => ValidateChallengeAsync(email, verification, AccountEmailPurpose, cancellationToken);
+
+    private async Task<bool> ValidateChallengeAsync(
+        string email,
+        EmailVerificationInputDto verification,
+        string purpose,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(email) ||
             verification.ChallengeId == Guid.Empty ||
@@ -205,7 +261,7 @@ public class EmailVerificationAppService(
 
         var emailDigest = GetEmailDigest(NormalizeEmail(email));
         if (!string.Equals(challenge.Scope, GetScope(), StringComparison.Ordinal) ||
-            !string.Equals(challenge.Purpose, RegistrationPurpose, StringComparison.Ordinal) ||
+            !string.Equals(challenge.Purpose, purpose, StringComparison.Ordinal) ||
             !FixedTimeEquals(challenge.EmailDigest, emailDigest))
         {
             // A request from another tenant/email must not be able to consume or exhaust this challenge.
@@ -251,14 +307,19 @@ public class EmailVerificationAppService(
         return false;
     }
 
-    private static string BuildEmailBody(string code, int expiryMinutes) => $@"
+    private static string BuildEmailBody(string code, int expiryMinutes, string purpose)
+    {
+        var (heading, intro) = purpose == AccountEmailPurpose
+            ? ("Email Address Verification Code", "You are verifying the email address of your account. Your verification code is:")
+            : ("Account Registration Verification Code", "You are registering an account. Your verification code is:");
+        return $@"
 <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;'>
     <div style='background-color: #0f172a; padding: 20px; text-align: center; color: white;'>
-        <h2 style='margin: 0;'>Account Registration Verification Code</h2>
+        <h2 style='margin: 0;'>{heading}</h2>
     </div>
     <div style='padding: 30px; background-color: #f8fafc; color: #334155;'>
         <p>Hello,</p>
-        <p>You are registering an account. Your verification code is:</p>
+        <p>{intro}</p>
         <div style='margin: 20px 0; text-align: center;'>
             <span style='font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #2563eb;'>{code}</span>
         </div>
@@ -266,6 +327,7 @@ public class EmailVerificationAppService(
         <p style='font-size: 14px; color: #64748b; margin-top: 30px;'>If you did not request this, please ignore this email.</p>
     </div>
 </div>";
+    }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 

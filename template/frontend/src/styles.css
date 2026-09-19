@@ -28,77 +28,89 @@ body {
  * - warning（amber）   : 需注意但非错误（一次性密钥提示、重置告警）
  * - success（绿）      : 正态 / 成功（启用、已验证、成功 toast）
  * - secondary / muted  : 次要 / 中性（普通分类、禁用态、辅助文字）
- * 字号沿用 Tailwind type scale（text-xs 起，勿用 text-[10px] 等 off-scale）；字重仅 medium/semibold，font-bold 留给展示型大数字。
+ * 字号、字重、圆角与当前项样式的规则见 docs/standards/coding-frontend.md §4.8。
  */
 
-/* Spartan UI 主题变量（ng g @spartan-ng/cli:ui-theme, neutral）。业务项目按品牌改这些 CSS 变量。 */
+/*
+ * Spartan UI 主题变量。业务项目按品牌改这些 CSS 变量即可换掉整套配色，不必改组件。
+ *
+ * - 品牌色：色相 250 的蓝。亮色 L=0.52 保证白字可读，暗色提到 L=0.72 保证深底上够亮——
+ *   两套同一色相，只调明度与彩度，换品牌时也按这个办法成对改。
+ * - 中性色：带一点跟随品牌色相的彩度（C≈0.004–0.01），纯灰与品牌色并置会显得脏。
+ * - warning / success 在页面里只当文字色（text-*）和淡色底（bg-*\/10~25）用，
+ *   所以按"作为文字压在底色上 ≥ 4.5:1"定值，亮暗必须分开：同一个亮琥珀在白底上只有约 2:1。
+ * - 暗色不用纯黑：近黑底配纯白字对比过高会产生光晕。表面分五层逐级提亮
+ *   （sidebar < background < card < popover < muted），暗色下"浮起"只能靠更亮来表达。
+ */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.995 0.001 250);
+  --foreground: oklch(0.18 0.01 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.18 0.01 255);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.18 0.01 255);
+  --primary: oklch(0.52 0.16 250);
+  --primary-foreground: oklch(0.99 0.002 250);
+  --secondary: oklch(0.965 0.005 250);
+  --secondary-foreground: oklch(0.24 0.02 255);
+  --muted: oklch(0.968 0.004 250);
+  --muted-foreground: oklch(0.505 0.015 255);
+  --accent: oklch(0.955 0.018 250);
+  --accent-foreground: oklch(0.24 0.02 255);
   --destructive: oklch(0.577 0.245 27.325);
-  --warning: oklch(0.769 0.188 70.08);
-  --warning-foreground: oklch(0.208 0.042 265.755);
-  --success: oklch(0.627 0.194 149.214);
-  --success-foreground: oklch(0.208 0.042 265.755);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --warning: oklch(0.52 0.12 70);
+  --warning-foreground: oklch(0.99 0.01 80);
+  --success: oklch(0.52 0.13 155);
+  --success-foreground: oklch(0.99 0.01 155);
+  --border: oklch(0.912 0.006 250);
+  --input: oklch(0.912 0.006 250);
+  --ring: oklch(0.52 0.16 250);
+  --sidebar: oklch(0.972 0.004 250);
+  --sidebar-foreground: oklch(0.18 0.01 255);
+  --sidebar-primary: oklch(0.52 0.16 250);
+  --sidebar-primary-foreground: oklch(0.99 0.002 250);
+  --sidebar-accent: oklch(0.94 0.012 250);
+  --sidebar-accent-foreground: oklch(0.18 0.01 255);
+  --sidebar-border: oklch(0.912 0.006 250);
+  --sidebar-ring: oklch(0.52 0.16 250);
 
   color-scheme: light;
 }
 
 :root.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.205 0.009 255);
+  --foreground: oklch(0.94 0.003 255);
+  --card: oklch(0.245 0.009 255);
+  --card-foreground: oklch(0.94 0.003 255);
+  --popover: oklch(0.285 0.009 255);
+  --popover-foreground: oklch(0.94 0.003 255);
+  --primary: oklch(0.72 0.14 262);
+  --primary-foreground: oklch(0.18 0.02 255);
+  --secondary: oklch(0.305 0.01 255);
+  --secondary-foreground: oklch(0.94 0.003 255);
+  --muted: oklch(0.325 0.009 255);
+  --muted-foreground: oklch(0.72 0.012 250);
+  --accent: oklch(0.3 0.035 258);
+  --accent-foreground: oklch(0.94 0.003 255);
   --destructive: oklch(0.704 0.191 22.216);
-  --warning: oklch(0.769 0.188 70.08);
-  --warning-foreground: oklch(0.208 0.042 265.755);
-  --success: oklch(0.627 0.194 149.214);
-  --success-foreground: oklch(0.208 0.042 265.755);
+  --warning: oklch(0.8 0.14 75);
+  --warning-foreground: oklch(0.2 0.03 70);
+  --success: oklch(0.76 0.15 155);
+  --success-foreground: oklch(0.2 0.03 155);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.985 0 0);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+
+  /* 交互控件的边界单独提亮：装饰分隔线可以淡，输入框与描边按钮的边界必须看得清 */
+  --input: oklch(1 0 0 / 22%);
+  --ring: oklch(0.72 0.14 262);
+  --sidebar: oklch(0.175 0.009 255);
+  --sidebar-foreground: oklch(0.94 0.003 255);
+  --sidebar-primary: oklch(0.72 0.14 262);
+  --sidebar-primary-foreground: oklch(0.18 0.02 255);
+  --sidebar-accent: oklch(0.26 0.012 255);
+  --sidebar-accent-foreground: oklch(0.94 0.003 255);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.439 0 0);
+  --sidebar-ring: oklch(0.72 0.14 262);
 
   color-scheme: dark;
 }

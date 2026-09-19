@@ -59,7 +59,7 @@ public class UserContextForwardingTests
     }
 
     [Fact]
-    public async Task 认证用户_注入用户Id与URL编码的用户名()
+    public async Task Authenticated_user_adds_the_user_id_and_encoded_user_name()
     {
         var user = new FakeCurrentUser(id: UserId, username: "张三");
 
@@ -72,7 +72,7 @@ public class UserContextForwardingTests
     }
 
     [Fact]
-    public async Task 请求已有同名头_不覆盖()
+    public async Task Existing_header_is_not_overwritten()
     {
         var user = new FakeCurrentUser(id: UserId, username: "someone");
         var request = new HttpRequestMessage(HttpMethod.Get, "http://demo/api");
@@ -84,7 +84,7 @@ public class UserContextForwardingTests
     }
 
     [Fact]
-    public async Task 未认证用户_不注入任何头()
+    public async Task Anonymous_user_adds_no_headers()
     {
         var sent = await SendAsync(new FakeCurrentUser(), new UserContextForwardingOptions());
 
@@ -93,7 +93,7 @@ public class UserContextForwardingTests
     }
 
     [Fact]
-    public async Task 关闭转发_不注入任何头()
+    public async Task Disabled_forwarding_adds_no_headers()
     {
         var user = new FakeCurrentUser(id: UserId, username: "someone");
 
@@ -103,7 +103,7 @@ public class UserContextForwardingTests
     }
 
     [Fact]
-    public async Task 关闭用户名转发_只注入用户Id()
+    public async Task Disabled_user_name_forwarding_adds_only_the_user_id()
     {
         var user = new FakeCurrentUser(id: UserId, username: "someone");
 
@@ -114,7 +114,7 @@ public class UserContextForwardingTests
     }
 
     [Fact]
-    public async Task 自定义Claim映射_按配置注入并编码()
+    public async Task Custom_claim_mapping_is_applied_and_encoded()
     {
         var user = new FakeCurrentUser(
             id: UserId,

@@ -1,7 +1,8 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.SignIn;
 using Leistd.ExceptionHandling;
 using System.Security.Claims;
-using CompanyName.ProjectName.Application.Auth;
+using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Security.Claims;
@@ -27,10 +28,11 @@ namespace CompanyName.ProjectName.Api.Controllers;
 ///
 /// 端点只做协议映射：主体装配与用户解析在 <see cref="IAuthPrincipalFactory"/>，
 /// 这里只把"装配不出来"翻译成对应的协议响应。<b>签发点</b>的账号状态检查在那个工厂里；
-/// 运行期的持续撤权在授权管道的 <c>ActiveUserRequirement</c>，与本控制器无关。
+/// 运行期的撤权靠停用、删除账号时撤销令牌，由令牌记录校验在认证阶段拒绝，与本控制器无关。
 /// </remarks>
 public sealed class ConnectController(
     IAuthPrincipalFactory principalFactory,
+    IUserSessionAppService sessionAppService,
     IOptions<OAuthOptions> oauthOptions) : Controller
 {
     [HttpGet("~/connect/authorize")]
@@ -73,8 +75,9 @@ public sealed class ConnectController(
     [HttpGet("~/connect/logout")]
     [HttpPost("~/connect/logout")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> LogoutAsync()
+    public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken)
     {
+        await sessionAppService.EndCurrentSessionAsync(cancellationToken);
         await HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
         return SignOut(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }

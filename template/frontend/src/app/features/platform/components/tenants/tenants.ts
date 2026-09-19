@@ -43,6 +43,7 @@ import { ConfirmService } from '../../../../core/feedback/confirm-service';
 import { refreshOnLanguageChange, translationReady } from '../../../../core/i18n/translation-ready';
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+import { ImpersonationService } from '../../../../core/services/impersonation-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import {
   CreateTenantInputDto,
@@ -83,6 +84,7 @@ export class Tenants {
   private readonly tenantService = inject(TenantService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmService = inject(ConfirmService);
+  private readonly impersonationService = inject(ImpersonationService);
   private readonly authorizationService = inject(AuthorizationService);
   private readonly layoutService = inject(LayoutService);
   private readonly route = inject(ActivatedRoute);
@@ -120,6 +122,9 @@ export class Tenants {
   readonly canCreate = computed(() => this.authorizationService.has(PERMISSIONS.tenants.create));
   readonly canUpdate = computed(() => this.authorizationService.has(PERMISSIONS.tenants.update));
   readonly canDelete = computed(() => this.authorizationService.has(PERMISSIONS.tenants.delete));
+  readonly canImpersonate = computed(() =>
+    this.authorizationService.has(PERMISSIONS.tenants.impersonation),
+  );
 
   constructor() {
     this.searchSubject
@@ -238,6 +243,49 @@ export class Tenants {
         },
         error: (error) => toast.error(applicationErrorMessage(error)),
       });
+  }
+
+  /**
+   * 以该租户管理员身份登录。
+   *
+   * 成功后整页跳转（由 ImpersonationService 负责）：会话 Cookie 被整体换掉，
+   * 权限、菜单、已加载的列表数据全部作废，留在本页逐个刷新必然漏掉某处。
+   */
+  async onImpersonate(tenant: TenantOutputDto): Promise<void> {
+    const confirmed = await this.confirmService.open({
+      header: this.impersonateTitle(),
+      message: this.impersonateDescription(tenant),
+      confirmText: this.impersonateTitle(),
+      variant: 'default',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await this.impersonationService.start(tenant.id);
+    } catch (error) {
+      toast.error(applicationErrorMessage(error));
+    }
+  }
+
+  private impersonateTitle(): string {
+    //#if (IncludeLocalization)
+    return this.transloco.translate('tenants.impersonate');
+    //#else
+    return 'Sign in as tenant';
+    //#endif
+  }
+
+  private impersonateDescription(tenant: TenantOutputDto): string {
+    //#if (IncludeLocalization)
+    return this.transloco.translate('tenants.impersonateConfirm', {
+      name: tenant.displayName || tenant.name,
+    });
+    //#else
+    return `Sign in as the administrator of "${tenant.displayName || tenant.name}"? You will leave the host context until you exit.`;
+    //#endif
   }
 
   async onDelete(tenant: TenantOutputDto): Promise<void> {

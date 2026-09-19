@@ -3,8 +3,9 @@ using Leistd.ExceptionHandling;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using Microsoft.Extensions.Configuration;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 
@@ -13,7 +14,7 @@ namespace CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 /// </summary>
 public class GoogleOAuthProvider(
     IHttpClientFactory httpClientFactory,
-    IConfiguration configuration,
+    IOptions<ExternalAuthOptions> options,
     ILogger<GoogleOAuthProvider> logger) : IOAuthProvider
 {
     private const string AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -24,7 +25,7 @@ public class GoogleOAuthProvider(
 
     public string GetAuthorizationUrl(string redirectUri, string state)
     {
-        var clientId = configuration["ExternalAuth:Google:ClientId"]
+        var clientId = options.Value.Google?.ClientId
             ?? throw new NotFoundException("Client ID for external identity provider Google is not configured.")
 #if (IncludeLocalization)
                 .WithCode("ExternalAuth:ClientIdNotConfigured")
@@ -40,14 +41,14 @@ public class GoogleOAuthProvider(
         string redirectUri,
         CancellationToken cancellationToken = default)
     {
-        var clientId = configuration["ExternalAuth:Google:ClientId"]
+        var clientId = options.Value.Google?.ClientId
             ?? throw new NotFoundException("Client ID for external identity provider Google is not configured.")
 #if (IncludeLocalization)
                 .WithCode("ExternalAuth:ClientIdNotConfigured")
                 .WithData("Provider", "Google")
 #endif
             ;
-        var clientSecret = configuration["ExternalAuth:Google:ClientSecret"]
+        var clientSecret = options.Value.Google?.ClientSecret
             ?? throw new NotFoundException("Client secret for external identity provider Google is not configured.")
 #if (IncludeLocalization)
                 .WithCode("ExternalAuth:ClientSecretNotConfigured")

@@ -675,8 +675,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
 
         // 注意这条测试锁住的是"新连接建不起来"。SignalR 只在握手阶段授权，
-        // 已经建立的连接不会因为账号被禁用而断开——那条边界写在 ActiveUserRequirement 的说明里，
-        // 需要它也失效的项目得自己做连接注册表加跨节点终止通道。
+        // 已经建立的连接不会因为账号被禁用而断开，需要它也失效的项目得自己做连接注册表加跨节点终止通道。
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             (await session.Client.PostAsync(Negotiate, null)).StatusCode);
@@ -684,13 +683,35 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
 #endif
     [Fact]
-    public async Task Locking_a_user_revokes_their_existing_session()
+    public async Task Deleting_a_user_revokes_their_existing_session()
     {
         using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var user = await CreateUserAsync(superAdmin.Client);
         using var session = await Factory.LoginAsync(user.Username, TestPassword);
         Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+
+        Assert.True((await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).IsSuccessStatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
+    /// 绕过应用直接改库锁定（无截止时间）的账号，已有会话在下一次会话校验时被拒。
+    /// </summary>
+    /// <remarks>
+    /// 经应用停用、删除账号会当场撤销会话；直接改库不经过那条路，靠会话校验在缓存未命中时确认账号仍可用。
+    /// 登录后先改库、再发第一个带 Cookie 的请求，校验必然落在缓存之外。
+    /// </remarks>
+    [Fact]
+    public async Task Out_of_band_permanent_lock_rejects_the_session_at_its_next_check()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+
+        var user = await CreateUserAsync(superAdmin.Client);
+        using var session = await Factory.LoginAsync(user.Username, TestPassword);
 
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
@@ -700,8 +721,6 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             await dbContext.SaveChangesAsync();
         }
 
-        // 锁定与禁用是同一句判定的两个分支，失效语义必须一致——只测其中一个，
-        // 另一个分支写错了没人会发现。
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);

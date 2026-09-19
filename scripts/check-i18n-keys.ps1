@@ -127,6 +127,60 @@ function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex[]]$Pa
     }
 }
 
+# 接口入参 DTO 上的校验特性必须显式写 ErrorMessage：不写时用的是 .NET 内置英文消息
+# （"The Name field is required."），它不是资源键，本地化查不到，中文界面上照样是英文。
+function Test-ValidationMessagesExplicit([string]$Label, [string]$SourceRoot) {
+    $attribute = [regex]'\[(Required|StringLength|MaxLength|MinLength|Range|RegularExpression|EmailAddress|Phone|Url|Compare|Length)\b(\([^\]]*\))?\]'
+    $bare = New-Object System.Collections.Generic.List[string]
+    Get-ChildItem -Path (Join-Path $RepoRoot $SourceRoot) -Recurse -File -Filter '*.cs' -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match '[\\/]Dtos[\\/]' } |
+        ForEach-Object {
+            $lines = Get-Content -LiteralPath $_.FullName
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i].TrimStart().StartsWith('//')) { continue }
+                foreach ($m in $attribute.Matches($lines[$i])) {
+                    if ($m.Value -notmatch 'ErrorMessage\s*=') {
+                        $bare.Add("$([IO.Path]::GetRelativePath($RepoRoot, $_.FullName)):$($i + 1) $($m.Value)")
+                    }
+                }
+            }
+        }
+    if ($bare.Count -gt 0) {
+        $script:problems.Add("$Label：$($bare.Count) 个校验特性未写 ErrorMessage（会落成 .NET 内置英文）：$([string]::Join('; ', $bare))")
+    }
+    else {
+        Write-Host "  OK  $Label：入参 DTO 的校验特性均显式给出消息模板。" -ForegroundColor Green
+    }
+}
+
+# 代码里不许写死中文展示文案：它绕过本地化，英文界面照样显示中文，关掉本地化的模板变体里也是中文。
+# 注释与单测不算；语言切换菜单里的语言本地名（"中文"）是刻意的，登记在白名单里。
+function Test-NoHardcodedCjk([string]$Label, [string]$SourceRoot, [string[]]$Extensions, [string[]]$AllowedFiles) {
+    $cjk = [regex]'[\u4e00-\u9fff]'
+    $found = New-Object System.Collections.Generic.List[string]
+    Get-ChildItem -Path (Join-Path $RepoRoot $SourceRoot) -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $Extensions -contains $_.Extension -and $_.Name -notlike '*.spec.ts' -and $_.FullName -notmatch '[\\/](bin|obj|node_modules)[\\/]' } |
+        ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($RepoRoot, $_.FullName).Replace('\', '/')
+            if ($AllowedFiles -contains $relative) { return }
+            $text = Get-Content -LiteralPath $_.FullName -Raw
+            if ([string]::IsNullOrEmpty($text)) { return }
+            # 块注释按原行数替换成空行，行号才对得上
+            $text = [regex]::Replace($text, '/\*[\s\S]*?\*/|<!--[\s\S]*?-->', { param($m) "`n" * ($m.Value.Split("`n").Count - 1) })
+            $lines = $text -split "`n"
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                $code = [regex]::Replace($lines[$i], '(^|\s)//.*$', '')
+                if ($cjk.IsMatch($code)) { $found.Add("${relative}:$($i + 1) $($code.Trim())") }
+            }
+        }
+    if ($found.Count -gt 0) {
+        $script:problems.Add("$Label：$($found.Count) 处写死的中文（应进语言资源）：$([string]::Join('; ', $found))")
+    }
+    else {
+        Write-Host "  OK  $Label：源码里没有写死的中文展示文案。" -ForegroundColor Green
+    }
+}
+
 # 前端 Transloco 插值必须用双大括号 {{name}}；单大括号 {name} 是常见误用（Transloco 不会替换）。
 function Test-TranslocoInterpolation([string]$EnPath) {
     if (-not (Test-Path $EnPath)) { return }
@@ -195,6 +249,16 @@ Test-KeyReferences "后端 WithCode" `
     @("template/backend/src") `
     ([regex]'WithCode\("([^"]+)"') `
     (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") { param($r) $r.texts }
+# 后端 DataAnnotations：字段显示名与消息模板都是资源键（DataAnnotationLocalizerProvider 按原文查词条）。
+# 缺一条，中文界面上就出现"Role name只能包含字母、数字和下划线"这种半截英文。
+Test-KeyReferences "后端 DataAnnotations" `
+    @("template/backend/src") `
+    @(
+        [regex]'Display\(Name\s*=\s*"([^"]+)"',
+        [regex]'ErrorMessage\s*=\s*"([^"]+)"'
+    ) `
+    (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") { param($r) $r.texts }
+Test-ValidationMessagesExplicit "后端入参 DTO" "template/backend/src"
 # 框架自身的 WithCode（异常归一化用的 Error:* 通用键），对照框架资源
 Test-KeyReferences "框架 WithCode" `
     @("framework/components") `
@@ -209,6 +273,14 @@ Test-KeyReferences "前端 translate/pipe" `
         [regex]"'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'\s*\|\s*transloco"
     ) `
     (Join-Path $RepoRoot "template/frontend/public/i18n/en.json") { param($r) $r }
+
+Write-Host ""
+Write-Host "-- 写死的中文展示文案 --" -ForegroundColor Cyan
+Test-NoHardcodedCjk "前端源码" "template/frontend/src" @('.ts', '.html') @(
+    # 语言切换菜单：每种语言用它自己的文字显示，不随界面语言变化
+    'template/frontend/src/app/core/services/language-service.ts'
+)
+Test-NoHardcodedCjk "后端源码" "template/backend/src" @('.cs') @()
 
 Write-Host ""
 Write-Host "-- Transloco 插值大括号 --" -ForegroundColor Cyan

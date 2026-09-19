@@ -28,4 +28,11 @@ export class SettingService {
   setForCurrentTenant(data: SetSettingInputDto): Observable<void> {
     return this.http.put<void>(`${this.baseUrl}/current-tenant`, data);
   }
+  //#if (LocalIdentity)
+
+  /** 用当前生效的发信参数发一封测试邮件（宿主）。 */
+  sendTestEmail(to: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/email/test`, { to });
+  }
+  //#endif
 }

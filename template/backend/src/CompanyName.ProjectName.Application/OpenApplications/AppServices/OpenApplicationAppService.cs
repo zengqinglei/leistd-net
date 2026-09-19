@@ -5,6 +5,7 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Application.TenantConnections;
+using CompanyName.ProjectName.Application.TenantConnections.Constants;
 using Leistd.Ddd.Application.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Microsoft.Extensions.Logging;
@@ -60,7 +61,7 @@ public class OpenApplicationAppService(
     /// 内部控制面 scope：只能发给服务间调用的机器客户端
     /// </summary>
     /// <remarks>
-    /// 它们背后的端点直接暴露租户连接配置（数据落在哪个库、运行时/迁移 Secret 引用），
+    /// 它们背后的端点直接暴露租户连接配置（数据落在哪个库、解密后的连接串），
     /// 资源端策略已限定为机器主体（见 <c>AddApiAuthorization</c>）。这里是<b>配置入口</b>侧的
     /// 第二道：授出去就没有回收窗口，创建时挡住比事后审计便宜。两层都要有——
     /// 只靠配置入口挡不住已存在的客户端，只靠资源端则允许留下一堆"配得上、用不了"的客户端。

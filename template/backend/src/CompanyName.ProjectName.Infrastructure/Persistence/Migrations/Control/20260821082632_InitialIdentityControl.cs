@@ -46,9 +46,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Control
                 columns: table => new
                 {
                     TenantId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DatabaseMode = table.Column<int>(type: "integer", nullable: false),
-                    RuntimeSecretReference = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
-                    MigrationSecretReference = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    Name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    ProtectedConnectionString = table.Column<string>(type: "character varying(4096)", maxLength: 4096, nullable: false),
                     Version = table.Column<long>(type: "bigint", nullable: false),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
@@ -57,8 +56,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Control
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_TenantConnectionRecord", x => x.TenantId);
-                    table.CheckConstraint("CK_TenantConnectionRecord_ModeSecrets", "(\"DatabaseMode\" = 0 AND \"RuntimeSecretReference\" IS NULL AND \"MigrationSecretReference\" IS NULL) OR (\"DatabaseMode\" = 1 AND \"RuntimeSecretReference\" IS NOT NULL AND \"MigrationSecretReference\" IS NOT NULL)");
+                    table.PrimaryKey("PK_TenantConnectionRecord", x => new { x.TenantId, x.Name });
                     table.ForeignKey(
                         name: "FK_TenantConnectionRecord_TenantRecord_TenantId",
                         column: x => x.TenantId,

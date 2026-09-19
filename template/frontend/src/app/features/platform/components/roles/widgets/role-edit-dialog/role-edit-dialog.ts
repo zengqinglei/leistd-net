@@ -12,7 +12,15 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { FormField, disabled, form, required } from '@angular/forms/signals';
+import {
+  FormField,
+  disabled,
+  form,
+  maxLength,
+  minLength,
+  pattern,
+  required,
+} from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -34,6 +42,9 @@ interface RoleEditFormModel {
   sort: number;
   isDefault: boolean;
 }
+
+/** 与服务端 CreateRoleInputDto.Name 的 [RegularExpression] 一致。 */
+const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 
 /**
  * 角色新建 / 编辑对话框。
@@ -75,12 +86,36 @@ export class RoleEditDialog {
   readonly roleForm = form(this.formModel, (path) => {
     // 角色名是稳定业务标识，创建后不可修改。
     disabled(path.name, () => this.isEdit());
+    // 与 CreateRoleInputDto 的规则逐条对应（长度 2~64、字母数字下划线；显示名 128；描述 512）。
+    // 只校验"必填"时，格式不对要等提交后由服务端拒绝，用户才第一次知道规则。
     //#if (IncludeLocalization)
     required(path.name, { message: this.transloco.translate('common.validation.required') });
+    minLength(path.name, 2, {
+      message: this.transloco.translate('common.validation.roleNamePattern'),
+    });
+    maxLength(path.name, 64, {
+      message: this.transloco.translate('common.validation.roleNamePattern'),
+    });
+    pattern(path.name, ROLE_NAME_PATTERN, {
+      message: this.transloco.translate('common.validation.roleNamePattern'),
+    });
     required(path.displayName, { message: this.transloco.translate('common.validation.required') });
+    maxLength(path.displayName, 128, {
+      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
+    });
+    maxLength(path.description, 512, {
+      message: this.transloco.translate('common.validation.maxLength', { max: 512 }),
+    });
     //#else
     required(path.name, { message: 'This field is required.' });
+    minLength(path.name, 2, { message: 'Must be 2–64 letters, digits, or underscores.' });
+    maxLength(path.name, 64, { message: 'Must be 2–64 letters, digits, or underscores.' });
+    pattern(path.name, ROLE_NAME_PATTERN, {
+      message: 'Must be 2–64 letters, digits, or underscores.',
+    });
     required(path.displayName, { message: 'This field is required.' });
+    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
+    maxLength(path.description, 512, { message: 'Must not exceed 512 characters.' });
     //#endif
   });
 

@@ -59,11 +59,14 @@ public static class PermissionConstant
 
 #if (OpenIddictServer)
     /// <summary>
-    /// 开放应用（OAuth2 客户端）管理权限
+    /// 开放应用（OAuth2 客户端）管理权限（宿主侧专属）
     /// </summary>
     /// <remarks>
     /// 开放应用持有 ClientId/ClientSecret，能代表本系统对外颁发令牌，
     /// 因此与用户、角色同级独立成权限族，而不是复用用户管理权限。
+    /// <para>定义时声明 Host 侧别：OpenIddict 的表没有 TenantId，不是 <c>IMultiTenant</c>，
+    /// 全局租户过滤器对它们不生效，因此这是一组<b>宿主全局</b>资源。落到默认的 Both 会让
+    /// 租户管理员拿到它，进而读写全系统的 OAuth 客户端。</para>
     /// </remarks>
     public static class OpenApplications
     {
@@ -91,6 +94,15 @@ public static class PermissionConstant
         public const string Create = Default + ".Create";
         public const string Update = Default + ".Update";
         public const string Delete = Default + ".Delete";
+
+        /// <summary>
+        /// 以租户管理员身份登录该租户（模拟登录）。
+        /// </summary>
+        /// <remarks>
+        /// 与 <see cref="Update"/> 分开授权：改租户的注册信息和"进到租户里面去操作"
+        /// 是两种不同量级的能力，后者能看到并改动该租户的全部业务数据。
+        /// </remarks>
+        public const string Impersonation = Default + ".Impersonation";
     }
 #endif
     /// <summary>
@@ -104,6 +116,30 @@ public static class PermissionConstant
     {
         /// <summary>修改当前租户的设置默认值。</summary>
         public const string Default = Prefix + ".Settings";
+    }
+
+    /// <summary>
+    /// 操作记录查看权限
+    /// </summary>
+    /// <remarks>
+    /// 只约束"看"，因此是一个扁平权限而非"资源 + 动作"：记录写下就不再修改或删除，
+    /// 没有别的动作可授。侧别为 <c>Both</c>——记录带 <c>TenantId</c> 且受全局查询过滤器分区，
+    /// 宿主看宿主的、租户看自己的，不需要靠侧别再分一次。
+    /// </remarks>
+    public static class OperationRecords
+    {
+        /// <summary>查看操作记录。</summary>
+        public const string Default = Prefix + ".OperationRecords";
+
+        /// <summary>
+        /// 导出操作记录。
+        /// </summary>
+        /// <remarks>
+        /// <b>与查看分开授权</b>：导出把审计数据整批带离系统，之后既不受本系统的可见性分层约束，
+        /// 也不再有访问记录——影响面与在线翻页查看不是一个量级。GitHub、Salesforce 等
+        /// 同样把导出单列一项权限。导出动作本身也会被审计（<c>operation-records.exported</c>）。
+        /// </remarks>
+        public const string Export = Default + ".Export";
     }
 
     /// <summary>

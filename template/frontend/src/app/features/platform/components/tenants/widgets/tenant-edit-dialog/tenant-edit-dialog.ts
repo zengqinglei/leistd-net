@@ -27,15 +27,14 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
-import { HlmToggleGroupImports } from '@spartan-ng/helm/toggle-group';
 
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
+import { TENANT_CONNECTION_STRING_MAX_LENGTH } from '../../../../../../shared/dtos/tenant-connection.dto';
 import {
   CreateTenantInputDto,
-  TenantDatabaseMode,
   TenantOutputDto,
   UpdateTenantInputDto,
 } from '../../../../../../shared/dtos/tenant.dto';
@@ -46,9 +45,7 @@ interface TenantEditFormModel {
   description: string;
   adminEmail: string;
   adminPassword: string;
-  databaseMode: TenantDatabaseMode;
-  runtimeSecretReference: string;
-  migrationSecretReference: string;
+  connectionString: string;
 }
 
 /**
@@ -56,20 +53,29 @@ interface TenantEditFormModel {
  *
  * 新建时同时提供租户初始管理员的邮箱与密码（由后端在该租户内创建管理员账号）；
  * 编辑只涉及名称与显示名，管理员账号变更走租户内的用户管理。
+ *
+ * **分库只在新建时定案**，所以连接串是新建表单上的一个可选字段：填了就登记到默认名下，
+ * 后端在播种之前完成登记，种子（含租户管理员）因此直接落进那个库；留空即不分库。
+ * 建好之后再想分库，后端会以 409 拒绝——那时数据已经在回落库里，登记连接不会把它们搬过去，
+ * 只能走停用 → 迁移数据 → 登记 → 重新启用。详情里的连接列表管的是另一件事：
+ * 给**已经分库**的租户按服务补登一条或换连接串。
  */
 @Component({
   selector: 'app-tenant-edit-dialog',
+  // 两支各写一遍而不是在数组里插条件项：剔掉 TranslocoModule 之后这一行只有 84 字符，
+  // prettier 会要求压成一行，而带上它就超过 100 必须换行——同一份写法满足不了两种取值
+  //#if (IncludeLocalization)
   imports: [
     FormField,
     HlmButton,
     HlmInput,
     ...HlmDialogImports,
     ...HlmFieldImports,
-    ...HlmToggleGroupImports,
-    //#if (IncludeLocalization)
     TranslocoModule,
-    //#endif
   ],
+  //#else
+  imports: [FormField, HlmButton, HlmInput, ...HlmDialogImports, ...HlmFieldImports],
+  //#endif
   templateUrl: './tenant-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -83,9 +89,6 @@ export class TenantEditDialog {
   //#endif
 
   readonly isEdit = computed(() => this.tenant() !== null);
-  readonly isDedicatedDatabase = computed(
-    () => this.formModel().databaseMode === 'dedicatedDatabase',
-  );
 
   protected readonly formModel = signal<TenantEditFormModel>({
     name: '',
@@ -93,9 +96,7 @@ export class TenantEditDialog {
     description: '',
     adminEmail: '',
     adminPassword: '',
-    databaseMode: 'sharedDatabase',
-    runtimeSecretReference: '',
-    migrationSecretReference: '',
+    connectionString: '',
   });
 
   readonly tenantForm = form(this.formModel, (path) => {
@@ -127,13 +128,12 @@ export class TenantEditDialog {
       message: this.transloco.translate('common.validation.passwordRule'),
       when: () => !this.isEdit(),
     });
-    required(path.runtimeSecretReference, {
-      message: this.transloco.translate('common.validation.required'),
-      when: () => !this.isEdit() && this.isDedicatedDatabase(),
-    });
-    required(path.migrationSecretReference, {
-      message: this.transloco.translate('common.validation.required'),
-      when: () => !this.isEdit() && this.isDedicatedDatabase(),
+    // 连接串可选，只钉长度上限（常量与详情页的连接编辑器同源）
+    maxLength(path.connectionString, TENANT_CONNECTION_STRING_MAX_LENGTH, {
+      message: this.transloco.translate('common.validation.maxLength', {
+        max: TENANT_CONNECTION_STRING_MAX_LENGTH,
+      }),
+      when: () => !this.isEdit(),
     });
     //#else
     required(path.name, { message: 'This field is required.' });
@@ -158,13 +158,10 @@ export class TenantEditDialog {
         'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
       when: () => !this.isEdit(),
     });
-    required(path.runtimeSecretReference, {
-      message: 'This field is required.',
-      when: () => !this.isEdit() && this.isDedicatedDatabase(),
-    });
-    required(path.migrationSecretReference, {
-      message: 'This field is required.',
-      when: () => !this.isEdit() && this.isDedicatedDatabase(),
+    // 连接串可选，只钉长度上限（常量与详情页的连接编辑器同源）
+    maxLength(path.connectionString, TENANT_CONNECTION_STRING_MAX_LENGTH, {
+      message: `Must not exceed ${TENANT_CONNECTION_STRING_MAX_LENGTH} characters.`,
+      when: () => !this.isEdit(),
     });
     //#endif
   });
@@ -183,9 +180,8 @@ export class TenantEditDialog {
         description: tenant?.description ?? '',
         adminEmail: '',
         adminPassword: '',
-        databaseMode: 'sharedDatabase',
-        runtimeSecretReference: '',
-        migrationSecretReference: '',
+        // 连接串不留在内存里等下一次打开：它和口令同级
+        connectionString: '',
       });
     });
   }
@@ -217,30 +213,9 @@ export class TenantEditDialog {
       description: description || undefined,
       adminEmail: model.adminEmail.trim(),
       adminPassword: model.adminPassword,
-      databaseMode: model.databaseMode,
-      runtimeSecretReference: this.isDedicatedDatabase()
-        ? model.runtimeSecretReference.trim()
-        : undefined,
-      migrationSecretReference: this.isDedicatedDatabase()
-        ? model.migrationSecretReference.trim()
-        : undefined,
+      // 留空即不分库：传 undefined 而不是空串，后端按"没提供"处理
+      connectionString: model.connectionString.trim() || undefined,
     } satisfies CreateTenantInputDto);
-  }
-
-  setDatabaseMode(value: TenantDatabaseMode | TenantDatabaseMode[] | null | undefined): void {
-    const databaseMode = Array.isArray(value) ? value[0] : value;
-    if (databaseMode !== 'sharedDatabase' && databaseMode !== 'dedicatedDatabase') {
-      return;
-    }
-
-    this.formModel.update((current) => ({
-      ...current,
-      databaseMode,
-      runtimeSecretReference:
-        databaseMode === 'sharedDatabase' ? '' : current.runtimeSecretReference,
-      migrationSecretReference:
-        databaseMode === 'sharedDatabase' ? '' : current.migrationSecretReference,
-    }));
   }
 
   //#if (IncludeLocalization)
@@ -252,16 +227,11 @@ export class TenantEditDialog {
   readonly description = () => this.transloco.translate('tenants.editDescription');
   readonly cancelLabel = () => this.transloco.translate('common.cancel');
   readonly saveLabel = () => this.transloco.translate('common.save');
+  readonly connectionHint = () => this.transloco.translate('tenants.createConnectionHint');
 
   fieldLabel(
     field:
-      | 'name'
-      | 'displayName'
-      | 'description'
-      | 'adminEmail'
-      | 'adminPassword'
-      | 'runtimeSecretReference'
-      | 'migrationSecretReference',
+      'name' | 'displayName' | 'description' | 'adminEmail' | 'adminPassword' | 'connectionString',
   ): string {
     const keys = {
       name: 'tenants.fieldName',
@@ -269,21 +239,14 @@ export class TenantEditDialog {
       description: 'tenants.fieldDescription',
       adminEmail: 'tenants.fieldAdminEmail',
       adminPassword: 'tenants.fieldAdminPassword',
-      runtimeSecretReference: 'tenants.fieldRuntimeSecretReference',
-      migrationSecretReference: 'tenants.fieldMigrationSecretReference',
+      connectionString: 'tenants.fieldConnectionString',
     } as const;
     return this.transloco.translate(keys[field]);
   }
   //#else
   fieldLabel(
     field:
-      | 'name'
-      | 'displayName'
-      | 'description'
-      | 'adminEmail'
-      | 'adminPassword'
-      | 'runtimeSecretReference'
-      | 'migrationSecretReference',
+      'name' | 'displayName' | 'description' | 'adminEmail' | 'adminPassword' | 'connectionString',
   ): string {
     const labels = {
       name: 'Name',
@@ -291,8 +254,7 @@ export class TenantEditDialog {
       description: 'Description',
       adminEmail: 'Admin email',
       adminPassword: 'Admin password',
-      runtimeSecretReference: 'Runtime Secret reference',
-      migrationSecretReference: 'Migration Secret reference',
+      connectionString: 'Connection string',
     } as const;
     return labels[field];
   }
@@ -303,5 +265,8 @@ export class TenantEditDialog {
     'Name identifies the tenant at sign-in; users enter it to select their tenant.';
   readonly cancelLabel = () => 'Cancel';
   readonly saveLabel = () => 'Save';
+  readonly connectionHint = () =>
+    'Optional. Leave empty to keep this tenant in the database each service is already configured with. ' +
+    'Sharding can only be decided here: the database must already exist and be migrated, and it cannot be changed afterwards without migrating the data.';
   //#endif
 }

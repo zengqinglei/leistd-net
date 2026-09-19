@@ -19,7 +19,7 @@ import { firstValueFrom } from 'rxjs';
 import { SignalRService } from './signalr-service';
 //#endif
 //#if (LocalIdentity)
-import { LoginInputDto, UserOutputDto } from '../../shared/dtos/auth.dto';
+import { LoginInputDto, SessionLoginOutputDto, UserOutputDto } from '../../shared/dtos/auth.dto';
 //#endif
 //#if (!LocalIdentity)
 import { TenantContextService } from './tenant-context-service';
@@ -44,8 +44,9 @@ export class AuthService {
     return this._currentUser() !== null;
   }
 
-  login(credentials: LoginInputDto): Observable<void> {
-    return this.http.post<void>('/api/v1/auth/session-login', credentials);
+  /** 账号密码登录；已启用两步验证时不下发会话，返回第二步凭据。 */
+  login(credentials: LoginInputDto): Observable<SessionLoginOutputDto> {
+    return this.http.post<SessionLoginOutputDto>('/api/v1/auth/session-login', credentials);
   }
 
   // 错误按原样抛出：401（未登录）与服务故障（503/断网）由 StartupService 分别处理，

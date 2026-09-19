@@ -1,0 +1,398 @@
+<form
+  novalidate
+  class="flex w-full max-w-3xl flex-col gap-6"
+  (submit)="$event.preventDefault(); onSubmit()"
+>
+  <div class="flex flex-col gap-6">
+    <!-- Avatar 上传（原生 file input + 自绘头像 UI） -->
+    <div class="flex items-center gap-4 border-b border-border pb-5">
+      <!-- 头像上传：无图时常驻居中图标；有图时 hover / 键盘 focus-visible 显示、触屏（pointer-coarse）常驻。 -->
+      <!-- 选完即上传：头像有自己的接口，不随下面的表单保存，也不被「撤销修改」撤回 -->
+      <label
+        class="group relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full border border-border bg-muted transition-colors hover:border-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/30"
+        [class.pointer-events-none]="avatarBusy()"
+        data-testid="profile-avatar"
+      >
+        @if (hasAvatarImage()) {
+          <img [src]="avatarPreview()" alt="avatar" class="h-full w-full object-cover" />
+        } @else {
+          <!-- 无图占位：常驻居中上传图标即完整语义，不再叠加首字母。 -->
+          <span class="block h-full w-full bg-primary/10"></span>
+        }
+
+        <!--#if (IncludeLocalization)-->
+        <input
+          type="file"
+          class="sr-only"
+          accept="image/png,image/jpeg,image/webp"
+          [disabled]="avatarBusy()"
+          [attr.aria-label]="'common.uploadAvatar' | transloco"
+          (change)="onAvatarSelect($event)"
+        />
+        <!--#else-->
+        <input
+          type="file"
+          class="sr-only"
+          accept="image/png,image/jpeg,image/webp"
+          [disabled]="avatarBusy()"
+          aria-label="Upload avatar"
+          (change)="onAvatarSelect($event)"
+        />
+        <!--#endif-->
+
+        <span
+          class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 text-white transition-opacity duration-200 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 pointer-coarse:opacity-100"
+          [class.opacity-0]="hasAvatarImage()"
+          aria-hidden="true"
+        >
+          <ng-icon name="lucideImagePlus" class="text-xl drop-shadow-sm" />
+        </span>
+        @if (avatarBusy()) {
+          <span class="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+            <hlm-spinner class="text-base" />
+          </span>
+        }
+      </label>
+
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <h3 class="m-0 truncate text-base font-semibold">{{ displayName() }}</h3>
+          @if (user()?.isSuperAdmin) {
+            <!--#if (IncludeLocalization)-->
+            <span hlmBadge variant="default">{{
+              'account.profile.superAdminTag' | transloco
+            }}</span>
+            <!--#else-->
+            <span hlmBadge variant="default">Super Admin</span>
+            <!--#endif-->
+          } @else if (roleLabels().length > 0) {
+            @for (role of roleLabels(); track role) {
+              <span hlmBadge variant="secondary">{{ role }}</span>
+            }
+          }
+        </div>
+        <p class="mt-1 mb-0 truncate text-sm text-muted-foreground">
+          {{ formModel().email || user()?.email }}
+        </p>
+        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <!--#if (IncludeLocalization)-->
+          <p class="m-0 text-xs text-muted-foreground">
+            {{ 'account.profile.avatarHint' | transloco }}
+          </p>
+          @if (hasAvatarImage() && !avatarBusy()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="link"
+              size="sm"
+              class="h-auto p-0 text-xs"
+              data-testid="profile-avatar-remove"
+              (click)="removeAvatar()"
+            >
+              {{ 'account.profile.removeAvatar' | transloco }}
+            </button>
+          }
+          <!--#else-->
+          <p class="m-0 text-xs text-muted-foreground">PNG, JPG or WebP; cropped to a square</p>
+          @if (hasAvatarImage() && !avatarBusy()) {
+            <button
+              hlmBtn
+              type="button"
+              variant="link"
+              size="sm"
+              class="h-auto p-0 text-xs"
+              data-testid="profile-avatar-remove"
+              (click)="removeAvatar()"
+            >
+              Remove avatar
+            </button>
+          }
+          <!--#endif-->
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <!-- Username -->
+      <div hlmField>
+        <!--#if (IncludeLocalization)-->
+        <label hlmFieldLabel for="profile-username">{{
+          'account.profile.username' | transloco
+        }}</label>
+        <input
+          hlmInput
+          id="profile-username"
+          class="w-full"
+          [formField]="profileForm.username"
+          [placeholder]="'account.profile.usernamePlaceholder' | transloco"
+        />
+        <!--#else-->
+        <label hlmFieldLabel for="profile-username">Username</label>
+        <input
+          hlmInput
+          id="profile-username"
+          class="w-full"
+          [formField]="profileForm.username"
+          placeholder="Please enter a username"
+        />
+        <!--#endif-->
+        @for (error of profileForm.username().errors(); track error.kind) {
+          @if (error.message) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+
+      <!-- Email -->
+      <div hlmField>
+        <!--#if (IncludeLocalization)-->
+        <label hlmFieldLabel for="profile-email">{{ 'account.profile.email' | transloco }}</label>
+        <input
+          hlmInput
+          id="profile-email"
+          class="w-full"
+          [formField]="profileForm.email"
+          [placeholder]="'account.profile.emailPlaceholder' | transloco"
+        />
+        <!--#else-->
+        <label hlmFieldLabel for="profile-email">Email</label>
+        <input
+          hlmInput
+          id="profile-email"
+          class="w-full"
+          [formField]="profileForm.email"
+          placeholder="Please enter an email"
+        />
+        <!--#endif-->
+        @for (error of profileForm.email().errors(); track error.kind) {
+          @if (error.message) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+        <!-- 验证状态针对的是**已保存**的邮箱：表单里改了还没保存时，先提示保存后再验证 -->
+        <!--#if (IncludeLocalization)-->
+        @if (emailEdited()) {
+          <p class="text-muted-foreground text-xs" data-testid="email-change-hint">
+            {{ 'account.profile.emailChangeHint' | transloco }}
+          </p>
+        } @else if (user()?.isEmailVerified) {
+          <p class="text-success flex items-center gap-1 text-xs" data-testid="email-verified">
+            <ng-icon name="lucideCircleCheck" />
+            {{ 'account.profile.emailVerified' | transloco }}
+          </p>
+        } @else {
+          <div class="flex flex-col gap-2" data-testid="email-verification">
+            <p class="text-warning flex items-center gap-1 text-xs">
+              <ng-icon name="lucideCircleAlert" />
+              {{ 'account.profile.emailUnverified' | transloco }}
+            </p>
+            @if (!emailVerificationAvailable()) {
+              <p class="text-muted-foreground text-xs" data-testid="email-verification-unavailable">
+                {{ 'account.profile.emailVerificationUnavailable' | transloco }}
+              </p>
+            } @else {
+              @if (emailChallenge()) {
+                <div class="flex gap-2">
+                  <input
+                    hlmInput
+                    id="profile-email-code"
+                    class="w-40"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    maxlength="6"
+                    [attr.aria-label]="'account.profile.codeLabel' | transloco"
+                    [placeholder]="'account.profile.codePlaceholder' | transloco"
+                    [value]="emailCode()"
+                    (input)="onEmailCodeInput($event)"
+                    (keydown.enter)="$event.preventDefault(); confirmEmailCode()"
+                  />
+                  <button
+                    hlmBtn
+                    type="button"
+                    size="sm"
+                    [disabled]="confirmingCode() || emailCode().trim().length === 0"
+                    (click)="confirmEmailCode()"
+                  >
+                    {{ 'account.profile.confirmCode' | transloco }}
+                  </button>
+                </div>
+              }
+              <button
+                hlmBtn
+                type="button"
+                variant="outline"
+                size="sm"
+                class="self-start"
+                data-testid="email-send-code"
+                [disabled]="sendingCode() || resendSeconds() > 0"
+                (click)="sendEmailCode()"
+              >
+                @if (resendSeconds() > 0) {
+                  {{ 'account.profile.resendIn' | transloco: { seconds: resendSeconds() } }}
+                } @else if (emailChallenge()) {
+                  {{ 'account.profile.resendCode' | transloco }}
+                } @else {
+                  {{ 'account.profile.sendCode' | transloco }}
+                }
+              </button>
+            }
+          </div>
+        }
+        <!--#else-->
+        @if (emailEdited()) {
+          <p class="text-muted-foreground text-xs" data-testid="email-change-hint">
+            Save first, then verify the new email address.
+          </p>
+        } @else if (user()?.isEmailVerified) {
+          <p class="text-success flex items-center gap-1 text-xs" data-testid="email-verified">
+            <ng-icon name="lucideCircleCheck" />
+            Verified
+          </p>
+        } @else {
+          <div class="flex flex-col gap-2" data-testid="email-verification">
+            <p class="text-warning flex items-center gap-1 text-xs">
+              <ng-icon name="lucideCircleAlert" />
+              Not verified
+            </p>
+            @if (!emailVerificationAvailable()) {
+              <p class="text-muted-foreground text-xs" data-testid="email-verification-unavailable">
+                Email verification is not set up on this deployment yet.
+              </p>
+            } @else {
+              @if (emailChallenge()) {
+                <div class="flex gap-2">
+                  <input
+                    hlmInput
+                    id="profile-email-code"
+                    class="w-40"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    maxlength="6"
+                    aria-label="Verification code"
+                    placeholder="6-digit code from the email"
+                    [value]="emailCode()"
+                    (input)="onEmailCodeInput($event)"
+                    (keydown.enter)="$event.preventDefault(); confirmEmailCode()"
+                  />
+                  <button
+                    hlmBtn
+                    type="button"
+                    size="sm"
+                    [disabled]="confirmingCode() || emailCode().trim().length === 0"
+                    (click)="confirmEmailCode()"
+                  >
+                    Verify
+                  </button>
+                </div>
+              }
+              <button
+                hlmBtn
+                type="button"
+                variant="outline"
+                size="sm"
+                class="self-start"
+                data-testid="email-send-code"
+                [disabled]="sendingCode() || resendSeconds() > 0"
+                (click)="sendEmailCode()"
+              >
+                @if (resendSeconds() > 0) {
+                  Resend in {{ resendSeconds() }}s
+                } @else if (emailChallenge()) {
+                  Resend code
+                } @else {
+                  Send verification code
+                }
+              </button>
+            }
+          </div>
+        }
+        <!--#endif-->
+      </div>
+
+      <!-- DisplayName -->
+      <div hlmField>
+        <!--#if (IncludeLocalization)-->
+        <label hlmFieldLabel for="profile-display-name">{{
+          'account.profile.displayName' | transloco
+        }}</label>
+        <input
+          hlmInput
+          id="profile-display-name"
+          class="w-full"
+          [formField]="profileForm.displayName"
+          [placeholder]="'account.profile.displayNamePlaceholder' | transloco"
+        />
+        <!--#else-->
+        <label hlmFieldLabel for="profile-display-name">Display name</label>
+        <input
+          hlmInput
+          id="profile-display-name"
+          class="w-full"
+          [formField]="profileForm.displayName"
+          placeholder="Enter a display name"
+        />
+        <!--#endif-->
+        @for (error of profileForm.displayName().errors(); track error.kind) {
+          @if (error.message) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+
+      <!-- Phone Number -->
+      <div hlmField>
+        <!--#if (IncludeLocalization)-->
+        <label hlmFieldLabel for="profile-phone-number">{{
+          'account.profile.phoneNumber' | transloco
+        }}</label>
+        <input
+          hlmInput
+          id="profile-phone-number"
+          class="w-full"
+          [formField]="profileForm.phoneNumber"
+          [placeholder]="'account.profile.phoneNumberPlaceholder' | transloco"
+        />
+        <!--#else-->
+        <label hlmFieldLabel for="profile-phone-number">Phone Number</label>
+        <input
+          hlmInput
+          id="profile-phone-number"
+          class="w-full"
+          [formField]="profileForm.phoneNumber"
+          placeholder="Please enter a phone number"
+        />
+        <!--#endif-->
+        @for (error of profileForm.phoneNumber().errors(); track error.kind) {
+          @if (error.message) {
+            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+          }
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- 页面内的表单：保存在下，撤销回到当前已保存的资料 -->
+  <div class="flex justify-end gap-2">
+    <!--#if (IncludeLocalization)-->
+    <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="reset()">
+      {{ 'account.profile.discardChanges' | transloco }}
+    </button>
+    <button hlmBtn type="submit" [disabled]="saving()">
+      @if (saving()) {
+        <hlm-spinner class="text-base" data-icon="inline-start" />
+      }
+      {{ 'common.save' | transloco }}
+    </button>
+    <!--#else-->
+    <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="reset()">
+      Discard changes
+    </button>
+    <button hlmBtn type="submit" [disabled]="saving()">
+      @if (saving()) {
+        <hlm-spinner class="text-base" data-icon="inline-start" />
+      }
+      Save
+    </button>
+    <!--#endif-->
+  </div>
+</form>

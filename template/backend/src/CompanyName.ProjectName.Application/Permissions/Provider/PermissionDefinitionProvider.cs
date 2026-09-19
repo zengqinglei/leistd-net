@@ -30,6 +30,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
 
         var usersPermission = identityGroup.AddPermission(
             PermissionConstant.Users.Default,
+            MultiTenancySides.Both,
             displayName: "Permission:App.Users"
         );
         usersPermission.AddChild(PermissionConstant.Users.Create, displayName: "Permission:App.Users.Create");
@@ -39,6 +40,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
 
         var rolesPermission = identityGroup.AddPermission(
             PermissionConstant.Roles.Default,
+            MultiTenancySides.Both,
             displayName: "Permission:App.Roles"
         );
         rolesPermission.AddChild(PermissionConstant.Roles.Create, displayName: "Permission:App.Roles.Create");
@@ -47,8 +49,13 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         rolesPermission.AddChild(PermissionConstant.Roles.ManagePermissions, displayName: "Permission:App.Roles.ManagePermissions");
 
 #if (OpenIddictServer)
+        // 开放应用是宿主全局资源：OpenIddict 的四张表都没有 TenantId，也就不是 IMultiTenant，
+        // 全局租户过滤器对它们不生效；OpenIddictDbContext 还固定连宿主控制库、不跟随租户路由。
+        // 因此侧别必须是 Host——省略它会落到默认的 Both，租户管理员将拿到这组权限，
+        // 进而读写全系统的 OAuth 客户端（重置密钥即可让该客户端对所有租户失效）。
         var openApplicationsPermission = identityGroup.AddPermission(
             PermissionConstant.OpenApplications.Default,
+            MultiTenancySides.Host,
             displayName: "Permission:App.OpenApplications"
         );
         openApplicationsPermission.AddChild(PermissionConstant.OpenApplications.Create, displayName: "Permission:App.OpenApplications.Create");
@@ -64,23 +71,37 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
         );
         systemGroup.AddPermission(
             PermissionConstant.Permissions.Default,
+            MultiTenancySides.Both,
             displayName: "Permission:App.Permissions"
         );
         systemGroup.AddPermission(
             PermissionConstant.Settings.Default,
+            MultiTenancySides.Both,
             displayName: "Permission:App.Settings"
+        );
+        // 记录带 TenantId 并受全局查询过滤器分区，宿主与租户各看各的，因此侧别是 Both
+        var operationRecordsPermission = systemGroup.AddPermission(
+            PermissionConstant.OperationRecords.Default,
+            MultiTenancySides.Both,
+            displayName: "Permission:App.OperationRecords"
+        );
+        // 导出与查看分开：导出把审计数据整批带离系统，之后不再受可见性分层约束、也不再有访问记录。
+        operationRecordsPermission.AddChild(
+            PermissionConstant.OperationRecords.Export,
+            displayName: "Permission:App.OperationRecords.Export"
         );
 
 #if (LocalIdentity)
         // 宿主侧专属：租户上下文内不可见、不可授予（子权限继承父级侧别）
         var tenantsPermission = systemGroup.AddPermission(
             PermissionConstant.Tenants.Default,
-            displayName: "Permission:App.Tenants",
-            side: MultiTenancySides.Host
+            MultiTenancySides.Host,
+            displayName: "Permission:App.Tenants"
         );
         tenantsPermission.AddChild(PermissionConstant.Tenants.Create, displayName: "Permission:App.Tenants.Create");
         tenantsPermission.AddChild(PermissionConstant.Tenants.Update, displayName: "Permission:App.Tenants.Update");
         tenantsPermission.AddChild(PermissionConstant.Tenants.Delete, displayName: "Permission:App.Tenants.Delete");
+        tenantsPermission.AddChild(PermissionConstant.Tenants.Impersonation, displayName: "Permission:App.Tenants.Impersonation");
 #endif
     }
 }

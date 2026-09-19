@@ -1,4 +1,4 @@
-<hlm-sidebar collapsible="icon" [mobileTitle]="navLabel()">
+<hlm-sidebar collapsible="icon" [mobileTitle]="navLabel()" [mobileDescription]="navDescription()">
   <div hlmSidebarHeader>
     <ul hlmSidebarMenu>
       <li hlmSidebarMenuItem>
@@ -6,10 +6,16 @@
              同时是**区域切换器**：副标题显示当前区域（原来写死 "Admin Platform"，在工作空间区是错的），
              点开可切到另一区。切换入口也在头像菜单里，但那里不易发现，而区域标识本就该在这。 -->
         @if (areaOptions().length > 1) {
+          <!-- 弹出方向照官方 nav-user：桌面从侧栏右侧弹出、与顶部对齐；手机上侧栏是抽屉，改为向下。
+               按钮默认点击即关掉手机端抽屉，这里点开的是菜单，抽屉必须留着（同头像菜单）。 -->
           <button
             hlmSidebarMenuButton
             size="lg"
+            class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            [closeMobileSidebarOnClick]="false"
             [hlmDropdownMenuTrigger]="areaMenu"
+            [side]="areaMenuSide()"
+            align="start"
             [attr.aria-label]="switchAreaLabel()"
             data-testid="area-switcher"
           >
@@ -23,23 +29,33 @@
               class="ml-auto text-base group-data-[collapsible=icon]:hidden"
             />
           </button>
+          <!-- 版式照 shadcn 侧栏的 team switcher：小标题 + 带边框的图标方块 + 名称。
+               不放快捷键（没有实现对应的键位），当前区域在快捷键的位置打勾。 -->
           <ng-template #areaMenu>
-            <hlm-dropdown-menu>
-              <hlm-dropdown-menu-label>{{ switchAreaLabel() }}</hlm-dropdown-menu-label>
-              <hlm-dropdown-menu-separator />
-              @for (area of areaOptions(); track area.route) {
-                <button
-                  hlmDropdownMenuItem
-                  [attr.data-testid]="'area-option-' + area.route"
-                  (click)="goToArea(area.route)"
-                >
-                  <ng-icon [name]="area.icon" />
-                  {{ area.label }}
-                  @if (area.current) {
-                    <ng-icon name="lucideCheck" class="ml-auto text-base" />
-                  }
-                </button>
-              }
+            <hlm-dropdown-menu class="min-w-56 rounded-lg">
+              <hlm-dropdown-menu-label class="text-muted-foreground text-xs">
+                {{ switchAreaLabel() }}
+              </hlm-dropdown-menu-label>
+              <hlm-dropdown-menu-group>
+                @for (area of areaOptions(); track area.route) {
+                  <button
+                    hlmDropdownMenuItem
+                    class="gap-2 p-2"
+                    [attr.data-testid]="'area-option-' + area.route"
+                    (click)="goToArea(area.route)"
+                  >
+                    <span
+                      class="flex size-6 shrink-0 items-center justify-center rounded-md border"
+                    >
+                      <ng-icon [name]="area.icon" class="text-[length:--spacing(3.5)]" />
+                    </span>
+                    {{ area.label }}
+                    @if (area.current) {
+                      <ng-icon name="lucideCheck" class="ml-auto" />
+                    }
+                  </button>
+                }
+              </hlm-dropdown-menu-group>
             </hlm-dropdown-menu>
           </ng-template>
         } @else {

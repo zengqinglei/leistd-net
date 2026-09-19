@@ -40,6 +40,11 @@
 
 - 扩展类在按层次分的包中放 `Extensions/`；按内容分的包中与被扩展类型同目录。
 
+- 以 `Filter` 结尾的类型（契约与实现）统一放 `Filters/` 内容目录，即使所在包按层次分也不拆进
+  `Abstractions/` / `Services/`（如 `Leistd.Response.AspNetCore.Filters`、`Leistd.Notifications.Filters`）。
+- 事件类型（以 `Event` 结尾）放 `Events/`，事件处理器（以 `EventHandler` 结尾）放 `EventHandlers/`，
+  与 `Leistd.EventBus.Events`、`Leistd.EventBus.EventHandlers` 同一写法。
+
 - `DependencyInjection.cs` 始终留在包根。
 
 - **不要让命名空间与其中的类型同名**（FDG 明确禁止）。家族名与核心类型同名时，
@@ -217,6 +222,8 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 默认值必须可读、可用，并与 Options 验证和运行时行为一致。
 - 共享映射与常量放在所有消费者可引用的最低层，派生值不得维护第二份。
 - 公共接口优先保持最小；仅一个实现且没有替换需求时，不为形式一致额外抽象。
+- 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
+- 需要可还原的加密时直接用宿主的 Data Protection：注入 `IDataProtectionProvider`（只引用 `Microsoft.AspNetCore.DataProtection.Abstractions`），在构造函数里 `CreateProtector` 一次并复用；用途字符串固定、带命名空间与版本号，改它等于让已存密文全部不可解；要按名称隔离时由同一个保护器 `CreateProtector(名称)` 派生子用途；解密只捕获 `CryptographicException`。不另立加密接口或静态包装——换密钥设施在 Data Protection 这一层换（密钥存储与密钥加密都可替换）。
 
 ### 6.2 变更
 
@@ -249,6 +256,7 @@ framework/tests/
 - **家族没有独立测试项目时目录不存在**，并在 `check-test-layout.py` 的 `WAIVERS` 里写明理由。
   这道闸门补的是覆盖率阈值的盲区：程序集从未被任何测试加载时根本不出现在覆盖率报告里，
   任何百分比门槛都对它无效。
+- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。
 - **csproj 只写自己的东西**：`FrameworkReference`、特有 `PackageReference`、`ProjectReference`。
   共享属性和测试包已在 `tests/Directory.Build.props` 注入，重复声明会被闸门拦下。
 

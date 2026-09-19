@@ -29,12 +29,12 @@ public class MultiTenancyMiddleware(RequestDelegate next, ILogger<MultiTenancyMi
         var resolver = context.RequestServices.GetRequiredService<ITenantResolver>();
         var result = await resolver.ResolveAsync();
 
-        // 记录实际解析链，便于定位由哪个来源确定了租户。
+        // 记录是哪个来源确定了租户：排查"租户怎么来的"只需要这一个名字。
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug(
-                "Tenant resolve chain applied [{AppliedResolvers}] and produced {TenantIdOrName}",
-                string.Join(" -> ", result.AppliedResolvers),
+                "Tenant resolved by {AppliedResolver} and produced {TenantIdOrName}",
+                result.AppliedResolver ?? "<none>",
                 result.TenantIdOrName ?? "<host>");
         }
 

@@ -1,6 +1,8 @@
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Domain.Users.Policies;
 using Leistd.MultiTenancy.Abstractions;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
@@ -89,6 +91,27 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     /// 最后登录 IP
     /// </summary>
     public string? LastLoginIp { get; private set; }
+
+    /// <summary>
+    /// 是否已启用两步验证
+    /// </summary>
+    public bool TwoFactorEnabled { get; private set; }
+
+    /// <summary>
+    /// 两步验证密钥（经 <c>TwoFactorDomainService</c> 用 Data Protection 加密）
+    /// </summary>
+    public string? TwoFactorSecret { get; private set; }
+
+    /// <summary>
+    /// 尚未使用的恢复码摘要，以 <c>;</c> 分隔
+    /// </summary>
+    /// <remarks>一个用户至多十个、用过即删，不值得为它单开一张表。</remarks>
+    public string? TwoFactorRecoveryCodes { get; private set; }
+
+    /// <summary>
+    /// 最近一次校验通过的验证码所在步序号；不大于它的步一律拒绝，防止同一个码被重放
+    /// </summary>
+    public long? TwoFactorLastUsedStep { get; private set; }
 #endif
 
     private User()
@@ -140,15 +163,31 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
 #endif
     }
 
-    public void UpdateProfile(string username, string email, string? displayName, string? phoneNumber, string? avatar)
+    /// <summary>
+    /// 本人修改资料。头像另有入口（<see cref="SetAvatar"/>），不随资料表单一起提交。
+    /// </summary>
+    /// <remarks>换了邮箱即回到"未验证"：验证过的是旧地址，新地址是否属于本人还不知道。</remarks>
+    public void UpdateProfile(string username, string email, string? displayName, string? phoneNumber)
     {
+#if (LocalIdentity)
+        if (!string.Equals(Email, email, StringComparison.OrdinalIgnoreCase))
+        {
+            EmailConfirmed = false;
+        }
+
+#endif
         Username = username;
         Email = email;
         DisplayName = displayName;
 #if (LocalIdentity)
         PhoneNumber = phoneNumber;
 #endif
-        Avatar = avatar;
+    }
+
+    /// <summary>设置或清除头像；取值须先经 <c>AvatarPolicy.EnsureValid</c> 校验。</summary>
+    public void SetAvatar(string? avatar)
+    {
+        Avatar = string.IsNullOrEmpty(avatar) ? null : avatar;
     }
 
     public void MarkAsSuperAdmin()
@@ -210,10 +249,54 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         AccessFailedCount = 0;
     }
 
-    public void RecordAccessFailed()
+    /// <summary>
+    /// 记一次密码错误；累计达到 <paramref name="policy"/> 的阈值时锁定一段时间，返回 true。
+    /// </summary>
+    /// <remarks>
+    /// 锁定时计数清零：锁定到期后重新给满一轮尝试次数。上一轮失败锁定已到期的，先解除再计数，
+    /// 否则过期锁定留下的 <c>IsLocked</c> 会让界面一直显示"已锁定"。
+    /// 管理员锁定（无截止时间）不经这里解除。
+    /// </remarks>
+    public bool RecordAccessFailed(DateTime now, LoginLockoutPolicy policy)
     {
+        if (IsLocked && LockoutEnd is { } end && end <= now)
+        {
+            Unlock();
+        }
+
         AccessFailedCount++;
+        if (!policy.IsEnabled || AccessFailedCount < policy.MaxFailedAttempts)
+        {
+            return false;
+        }
+
+        Lock(now + policy.Duration);
+        AccessFailedCount = 0;
+        return true;
     }
+
+    /// <summary>
+    /// 处于因登录失败而起的临时锁定中（有截止时间且未到）。
+    /// </summary>
+    /// <remarks>
+    /// 与管理员锁定（无截止时间）分开判：临时锁定可以由别人反复输错触发，
+    /// 它只挡新的登录，不能拿来把已经登录的本人踢下线。
+    /// </remarks>
+    public bool IsTemporarilyLockedOut(DateTime now) => IsLocked && LockoutEnd is { } end && end > now;
+
+    /// <summary>
+    /// 已建立的会话与已签发的令牌还能否继续使用：账号被禁用、或被锁定且没有截止时间时不能。
+    /// </summary>
+    /// <remarks>
+    /// 登录失败触发的临时锁定只挡新的登录：它可以由别人反复输错触发，若也作用于已在线的会话，
+    /// 知道用户名就能把本人踢下线。
+    /// </remarks>
+    public bool AllowsExistingSessions(DateTime now) => GetAccessStatus(now) switch
+    {
+        UserAccessStatus.Allowed => true,
+        UserAccessStatus.LockedOut => IsTemporarilyLockedOut(now),
+        _ => false,
+    };
 
     public void RecordLoginSuccess(DateTime now, string? ip = null)
     {
@@ -221,6 +304,58 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         LastLoginIp = ip;
         AccessFailedCount = 0;
     }
+
+    /// <summary>剩余可用的恢复码个数。</summary>
+    public int RecoveryCodesLeft => SplitRecoveryCodes().Count;
+
+    /// <summary>
+    /// 启用两步验证。
+    /// </summary>
+    /// <param name="protectedSecret">已加密的密钥。</param>
+    /// <param name="recoveryCodeHashes">恢复码摘要。</param>
+    /// <param name="usedStep">启用时校验通过的那一步，随即记为已用：同一个码不能紧接着再拿去登录。</param>
+    public void EnableTwoFactor(string protectedSecret, IEnumerable<string> recoveryCodeHashes, long usedStep)
+    {
+        TwoFactorEnabled = true;
+        TwoFactorSecret = protectedSecret;
+        TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
+        TwoFactorLastUsedStep = usedStep;
+    }
+
+    /// <summary>停用两步验证，并清掉密钥与恢复码。</summary>
+    public void DisableTwoFactor()
+    {
+        TwoFactorEnabled = false;
+        TwoFactorSecret = null;
+        TwoFactorRecoveryCodes = null;
+        TwoFactorLastUsedStep = null;
+    }
+
+    /// <summary>换一组恢复码，旧的全部作废。</summary>
+    public void ReplaceRecoveryCodes(IEnumerable<string> recoveryCodeHashes)
+    {
+        TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
+    }
+
+    /// <summary>记下校验通过的步序号。</summary>
+    public void RecordTwoFactorStep(long step)
+    {
+        TwoFactorLastUsedStep = step;
+    }
+
+    /// <summary>用掉一个恢复码；摘要不在剩余列表里时返回 false。</summary>
+    public bool TryConsumeRecoveryCode(string hash)
+    {
+        var codes = SplitRecoveryCodes();
+        if (!codes.Remove(hash))
+            return false;
+
+        TwoFactorRecoveryCodes = codes.Count == 0 ? null : string.Join(';', codes);
+        return true;
+    }
+
+    private List<string> SplitRecoveryCodes() =>
+        [.. (TwoFactorRecoveryCodes ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries)];
 
 #endif
 

@@ -203,6 +203,17 @@ export function resetPassword(id: string, value: any) {
   user.password = value.password;
 }
 
+export function unlockUser(id: string) {
+  const user = USERS.find((w) => w.id === id);
+  if (!user) {
+    throw new MockException(404, {
+      code: 'Error:NotFound',
+      message: 'User does not exist or has been deleted',
+    });
+  }
+  delete user.lockoutEnd;
+}
+
 //#endif
 export function deleteUser(id: string) {
   const index = USERS.findIndex((w) => w.id === id);
@@ -231,6 +242,7 @@ export const USER_API = {
   //#if (LocalIdentity)
   'POST /api/v1/users/:id/reset-password': (req: MockRequest) =>
     resetPassword(req.params.id, req.body),
+  'POST /api/v1/users/:id/unlock': (req: MockRequest) => unlockUser(req.params.id),
   //#endif
   'DELETE /api/v1/users/:id': (req: MockRequest) => deleteUser(req.params.id),
 };

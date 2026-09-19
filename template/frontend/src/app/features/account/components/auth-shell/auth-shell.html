@@ -1,0 +1,35 @@
+<div
+  class="bg-background relative flex min-h-svh flex-col items-center justify-center gap-6 px-4 py-10"
+>
+  <div class="absolute end-4 top-4 flex gap-2">
+    <app-theme-mode-toggle />
+    <!--#if (IncludeLocalization)-->
+    @if (showLanguageSwitcher()) {
+      <app-language-switcher />
+    }
+    <!--#endif-->
+  </div>
+
+  <a routerLink="/" class="flex items-center gap-2 text-base font-semibold">
+    <app-logo />
+    <!--#if (IncludeLocalization)-->
+    {{ 'account.brand.title' | transloco }}
+    <!--#else-->
+    Template Project
+    <!--#endif-->
+  </a>
+
+  <div
+    class="flex w-full flex-col gap-4"
+    [class.max-w-md]="width() === 'default'"
+    [class.max-w-xl]="width() === 'wide'"
+  >
+    <!-- 卡片内边距用组件自己的 --card-spacing 放大，不另写外观类 -->
+    <section hlmCard class="[--card-spacing:--spacing(6)]">
+      <div hlmCardContent class="flex flex-col gap-6">
+        <ng-content />
+      </div>
+    </section>
+    <ng-content select="[authShellFooter]" />
+  </div>
+</div>

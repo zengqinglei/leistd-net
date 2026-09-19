@@ -31,6 +31,9 @@ CompanyName.ProjectName/
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
 - 通知持久化、未读状态、通知 Hub 和业务实时 Hub。
+<!--#if (LocalIdentity)-->
+- 安全提醒（新设备登录、密码与两步验证变更、账号锁定）：站内通知始终送达，邮件只发已验证邮箱；用户在个人设置「通知」面板按类别与渠道选择接收方式。
+<!--#endif-->
 <!--#endif-->
 
 ## 本地运行
@@ -55,7 +58,7 @@ dotnet run
 docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit   # 收件箱在 http://localhost:8025
 ```
 
-邮箱验证默认关闭（`UserRegistration:EnableEmailVerification`）。开启后没有可达的 SMTP 会**发信失败并向调用方报错**，不会静默跳过——注册流程据此撤回已占用的限流槽位。生产环境须覆盖 `Host`/`Port`/`EnableSsl`/`DefaultFromAddress`，`Username`/`Password` 属于凭据，用环境变量或 user-secrets 注入。
+邮箱验证默认关闭（`UserRegistration:EnableEmailVerification`）。开启后没有可达的 SMTP 会**发信失败并向调用方报错**，不会静默跳过——注册流程据此撤回已占用的限流槽位。生产环境须覆盖 `Host`/`Port`/`EnableSsl`/`DefaultFromAddress`，`Username`/`Password` 属于凭据，用环境变量或 user-secrets 注入。配置文件是部署基线：宿主管理员可以在「系统设置 → 邮件发送」里在运行期覆盖这些参数（口令加密落库、界面只写不读），并在同一面板发送测试邮件；清除覆盖值即回到配置文件里的值。
 <!--#endif-->
 
 如需 PostgreSQL，在被 Git 忽略的 `backend/src/CompanyName.ProjectName.Api/appsettings.Development.json` 中配置：

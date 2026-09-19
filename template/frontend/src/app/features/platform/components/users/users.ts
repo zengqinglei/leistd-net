@@ -525,6 +525,77 @@ export class Users {
       });
   }
   //#if (LocalIdentity)
+  async handleUnlock(user: UserManagementOutputDto) {
+    const confirmed = await this.confirmService.open({
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('users.confirm.unlockMessage', { name: user.username }),
+      header: this.transloco.translate('users.confirm.unlockHeader'),
+      confirmText: this.transloco.translate('common.ok'),
+      cancelText: this.transloco.translate('common.cancel'),
+      //#else
+      message: `Unlock user ${user.username}? The failed sign-in count will also be reset.`,
+      header: 'Confirm unlock',
+      //#endif
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.service
+      .unlockUser(user.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('users.toast.unlocked'),
+          });
+          //#else
+          toast.success('Success', { description: 'User unlocked' });
+          //#endif
+          this.reloadList();
+        },
+        error: (error) => this.showRequestError(error),
+      });
+  }
+
+  async handleResetTwoFactor(user: UserManagementOutputDto) {
+    const confirmed = await this.confirmService.open({
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('users.confirm.resetTwoFactorMessage', {
+        name: user.username,
+      }),
+      header: this.transloco.translate('users.confirm.resetTwoFactorHeader'),
+      confirmText: this.transloco.translate('common.ok'),
+      cancelText: this.transloco.translate('common.cancel'),
+      //#else
+      message: `Reset two-factor authentication for ${user.username}? They will be signed out everywhere and can sign in with just their password.`,
+      header: 'Confirm reset',
+      //#endif
+      variant: 'destructive',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.service
+      .resetTwoFactor(user.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('users.toast.twoFactorReset'),
+          });
+          //#else
+          toast.success('Success', { description: 'Two-factor authentication reset' });
+          //#endif
+          this.reloadList();
+        },
+        error: (error) => this.showRequestError(error),
+      });
+  }
+
   openResetPasswordDialog(id: string) {
     this.resettingUserId.set(id);
     this.resetPasswordDialogVisible.set(true);

@@ -15,9 +15,4 @@ export const SETTINGS = {
     minimumLevel: 'Logging.MinimumLevel',
     requestLevel: 'Logging.RequestLevel',
   },
-  //#if (LocalIdentity)
-  registration: {
-    enableEmailVerification: 'Registration.EnableEmailVerification',
-  },
-  //#endif
 } as const;

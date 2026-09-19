@@ -72,7 +72,7 @@ public class OrderNotifier(INotificationPublisher notificationPublisher)
         {
             Title = "订单已通过审批",
             Content = $"订单 {orderNo} 已通过审批",
-            Type = NotificationTypes.Workflow,
+            Type = "Approval", // 类别由业务项目自己定义
             Link = $"/orders/{orderNo}",
             RelatedEntityId = orderNo,
             RelatedEntityType = "Order",
@@ -102,22 +102,25 @@ public class MessageCenter(INotificationStore notificationStore)
 | `INotificationPublisher` | 通知发布器，业务层唯一入口，不感知底层传输 |
 | `INotificationPublisher.PublishToUserAsync(userId, notification, ct)` | 推送给指定用户；`userId` 为 `string`，`notification` 为 `NotificationInputDto` |
 | `INotificationChannel` | 通知外发渠道，只负责把已定案的通知送出去，由具体介质实现（如 SignalR）。**不是业务入口**——业务代码用 `INotificationPublisher` |
+| `INotificationChannel.Name` | 渠道名，投递过滤按它区分；站内实时推送用 `INotificationChannel.InAppName` |
 | `INotificationChannel.DeliverAsync(userId, notification, ct)` | 投递给指定用户；`notification` 已由发布器补齐 `Id`/`CreationTime` |
+| `INotificationDeliveryFilter.ShouldDeliverAsync(userId, notification, channel, ct)` | 这条通知是否经该渠道投给该用户；默认一律投递，宿主按用户偏好替换 |
+| `INotificationChannel.InAppName` | 站内渠道名（`"InApp"`）：通知历史与实时推送共用这一个开关；这是框架自己的渠道，业务渠道名由业务项目在各自的渠道实现上定义 |
 | `INotificationStore` | 通知持久化接口；**必需且只能有一个**实现 |
 | `INotificationStore.SaveAsync(notification, userId, ct)` | 保存通知 |
 | `INotificationStore.GetByUserAsync(userId, maxCount = 50, ct)` | 按创建时间**倒序**获取用户通知列表，默认最多 50 条 |
 | `INotificationStore.MarkAsReadAsync(notificationId, userId, ct)` | 标记单条通知为已读 |
 | `INotificationStore.MarkAllAsReadAsync(userId, ct)` | 标记用户所有通知为已读 |
 | `INotificationStore.GetUnreadCountAsync(userId, ct)` | 获取用户未读通知数量 |
-| `NotificationInputDto` | 发布输入：`Title`（必填）、`Content?`、`Type`（默认 `NotificationTypes.System`）、`Link?`、`Icon?`、`RelatedEntityId?`、`RelatedEntityType?`、`Metadata?`。**不含身份**——`Id`/`CreationTime`/`IsRead` 由发布器按收件人定案 |
+| `NotificationInputDto` | 发布输入：`Title`（必填）、`Content?`、`Type`（业务自定义字符串，默认 `NotificationInputDto.DefaultType`，即 `"System"`）、`Link?`、`Icon?`、`RelatedEntityId?`、`RelatedEntityType?`、`Metadata?`。**不含身份**——`Id`/`CreationTime`/`IsRead` 由发布器按收件人定案 |
 | `NotificationOutputDto` | 读取与实时传输输出：在 `NotificationInputDto` 的字段上加 `Id`、`IsRead`、`CreationTime`。`Id` 恒为**该用户的那条记录**，标记已读用的就是它 |
-| `NotificationTypes` | 通知类型字符串常量：`System`="System"、`DataChange`="DataChange"、`Workflow`="Workflow"；业务可自定义任意字符串，不限于这三个 |
 
 ## 实现行为
 
 ### Leistd.Notifications.Core（`NotificationPublisher` 默认发布器）
 
 - `PublishToUserAsync` 先写入 Store，再依次调用所有渠道（`INotificationChannel`）。Store 是必需依赖；先落库再推送——推送失败只是这一次没送到，历史还在，反过来则是历史丢了。
+- 投不投由 `INotificationDeliveryFilter` 决定：先问站内（`INotificationChannel.InAppName`），不投则既不写 Store、也不调用站内渠道；其余渠道逐个按 `Name` 问。默认过滤器一律投递；要按用户偏好过滤时，在 `AddNotifications` 之前注册自己的实现（或之后用 `Replace`）。过滤器抛出的异常会让本次发布失败，而不是替收件人猜一个投或不投。
 - 创建时刻只来自 `IClock.Now`，发布输入不能指定。
 - 通知按用户寻址并保留历史；realtime 按客户端订阅的资源寻址。两个组件使用各自的 Hub，可独立安装。
 - 业务代码只注入 `INotificationPublisher`；直接调用 `INotificationChannel` 会绕过历史写入。
@@ -152,6 +155,7 @@ public class MessageCenter(INotificationStore notificationStore)
 - SignalR 投递失败只记日志、不抛异常：调用 `PublishToUserAsync` 成功返回不代表用户端一定收到实时推送（例如客户端未连接、连接已断开），需要"送达确认"的场景仍应依赖持久化历史 + 客户端主动拉取未读数兜底。
 - `NotificationHub` 端点默认要求登录（`RequireAuthorization`），未登录客户端无法建立 SignalR 连接、也就收不到任何推送。
 - **Hub 调用的上下文与有效性由 SignalR 基座保证**。`AddNotificationsSignalR()` 内部走 `Leistd.AspNetCore.SignalR` 的 `AddSignalRAmbientContext()`：每次 Hub 调用前按连接主体建立 `ICurrentUser` / `ICurrentTenant` / `ICorrelationIdProvider`。**但 `NotificationHub` 没有可供客户端调用的方法**，因此连接建立后不会再触发复评——授权只在握手时执行一次，账号之后被禁用不会主动关闭既有连接。需要立即断连的项目自建终止通道。
+- **发布方负责建立租户上下文。** `NotificationRecord` 实现 `IMultiTenant`，`TenantId` 由基座在 `SaveChanges` 时按**当前租户上下文**落值——`NotificationPublisher` 与 `EfCoreNotificationStore` 自身都不带租户，也无从推断：收件人只有 `userId`，由它反查租户需要用户表，而 Resource 形态根本没有。因此后台作业、消息消费者这类不经 HTTP 的入口必须先 `ICurrentTenant.Change(tenantId)`（或 `IAmbientContext.Begin`）再发布，否则通知落成宿主行（`TenantId` 为 `null`），租户侧被全局查询过滤器滤掉。**症状具有迷惑性**：实时推送按 `userId` 直达、不受过滤器约束，于是「推送收到了、未读数却是 0」——失败只出现在查询这一侧。
 - **多副本部署必须配置 SignalR 背板**，否则推送只到达连在本节点的客户端。通知已落库，用户刷新后仍能看到，因此降级较软——但实时性会静默失效。配置方式见 [SignalR 基座](./aspnetcore-signalr.md#多实例部署)。
 - **令牌过期本身不会自动断开连接**：Hub 没有配置 `CloseOnAuthenticationExpiration`，SignalR 默认不因令牌到期关闭既有连接。确需到期即断的项目要显式开启该配置，并用真实 SignalR Client 验证。
 - **用 Bearer 认证时，浏览器客户端的令牌到不了 Hub**。浏览器的 WebSocket 与 SSE 接口设不了自定义请求头，令牌只能拼进 query；若宿主只接受 `Authorization: Bearer`，握手会失败。处理方式（按 Hub 路径定向搬运，含完整示例）见[实时通信组件文档](./realtime.md#bearer-认证下的-hub-令牌传递)——两个 Hub 面对的是同一个问题，配方不在此重复；照抄时把路径换成本组件实际映射的 `MapNotificationHub` 路径（默认 `/hubs/notifications`）。用 Cookie 会话时不涉及本条。

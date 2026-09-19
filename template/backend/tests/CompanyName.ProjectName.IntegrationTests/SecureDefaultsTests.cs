@@ -1,6 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Options;
-using CompanyName.ProjectName.Domain.Users.Passwords;
+using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

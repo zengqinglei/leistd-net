@@ -5,8 +5,8 @@ using Leistd.Notifications.Dtos;
 using System.Net;
 using System.Net.Http.Json;
 #if (!LocalIdentity)
-using CompanyName.ProjectName.Api.Extensions;
 using Microsoft.AspNetCore.Http;
+using Leistd.MultiTenancy.Abstractions;
 #endif
 using CompanyName.ProjectName.Api.RealTime;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -63,7 +63,8 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var userId = await GetSuperAdminIdAsync(factory);
 #else
         var userId = Guid.CreateVersion7();
-        using var admin = factory.CreateResourceSession(userId, Guid.CreateVersion7());
+        var tenantId = Guid.CreateVersion7();
+        using var admin = factory.CreateResourceSession(userId, tenantId);
 #endif
         await using var connection = CreateHubConnection(factory, "/hubs/notifications", admin);
         var received = new TaskCompletionSource<NotificationOutputDto>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -78,7 +79,19 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
+#if (LocalIdentity)
             await publisher.PublishToUserAsync(userId.ToString(), notification);
+#else
+            // NotificationRecord 实现 IMultiTenant：TenantId 由基座在 SaveChanges 时按**当前租户
+            // 上下文**落值，发布器与存储自身都不带租户。这里是独立 scope，没有 HTTP 请求，不切租户
+            // 就会落成宿主行；而下面用租户会话查询时会被全局过滤器滤掉，表现为"推送收到了、未读数
+            // 却是 0"——推送按 userId 直达，不受过滤器约束，所以只有查询这一侧会露馅。
+            // 因此发布方负责建立租户上下文。本用例连同这条契约一起钉住，而不只是让断言变绿。
+            using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+            {
+                await publisher.PublishToUserAsync(userId.ToString(), notification);
+            }
+#endif
         }
 
         var pushed = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));

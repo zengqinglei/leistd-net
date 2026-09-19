@@ -3,6 +3,7 @@ using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections;
+using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 #endif
 using CompanyName.ProjectName.Domain.Users.Constants;

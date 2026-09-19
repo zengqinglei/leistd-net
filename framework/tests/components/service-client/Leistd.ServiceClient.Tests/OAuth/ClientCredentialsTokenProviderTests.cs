@@ -60,7 +60,7 @@ public class ClientCredentialsTokenProviderTests
     // 缓存过期判定与"提前 ExpirationBuffer 刷新"都走注入的时间源。推进到缓冲区内必须换新令牌
     // ——否则这条逻辑只能靠真的等到过期才能验证，本轮加的时间接缝也就只是摆设。
     [Fact]
-    public async Task 令牌_在过期缓冲区内被重新获取()
+    public async Task Token_is_refetched_within_the_expiry_buffer()
     {
         var time = new FakeTimeProvider();
         var (provider, endpoint) = Create(
@@ -87,7 +87,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task 获取令牌_按标准client_credentials形态请求默认端点()
+    public async Task Token_request_uses_the_standard_client_credentials_form()
     {
         var (provider, endpoint) = Create();
 
@@ -104,7 +104,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task 缓存有效期内_重复获取不再请求端点()
+    public async Task Cached_token_is_reused_while_valid()
     {
         var (provider, endpoint) = Create();
 
@@ -116,7 +116,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task 剩余有效期低于缓冲_视为过期并重新获取()
+    public async Task Token_below_the_remaining_lifetime_buffer_is_refetched()
     {
         var (provider, endpoint) = Create(options =>
         {
@@ -137,7 +137,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task 并发获取_单飞只请求一次端点()
+    public async Task Concurrent_requests_hit_the_endpoint_once()
     {
         var gate = new TaskCompletionSource();
         var (provider, endpoint) = Create(responder: _ =>
@@ -160,7 +160,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task Invalidate后_重新获取新令牌()
+    public async Task Invalidate_forces_a_new_token()
     {
         var (provider, endpoint) = Create();
 
@@ -173,7 +173,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task 端点返回错误_抛ServiceClientException()
+    public async Task Endpoint_error_throws_ServiceClientException()
     {
         var (provider, _) = Create(responder: _ => new HttpResponseMessage(HttpStatusCode.BadRequest)
         {
@@ -187,7 +187,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task 未配置ClientId_抛ServiceClientException()
+    public async Task Missing_client_id_throws_ServiceClientException()
     {
         var (provider, _) = Create(options => options.Authority = "http://identity");
 
@@ -195,7 +195,7 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task 未配置端点_抛ServiceClientException()
+    public async Task Missing_endpoint_throws_ServiceClientException()
     {
         var (provider, _) = Create(options => options.ClientId = "svc-a");
 

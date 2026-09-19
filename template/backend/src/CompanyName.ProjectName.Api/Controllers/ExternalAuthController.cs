@@ -1,12 +1,11 @@
 #if (ExternalLogin)
 using Leistd.ExceptionHandling;
 using Leistd.Lock;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using CompanyName.ProjectName.Application.Auth;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Distributed;
@@ -48,16 +47,76 @@ public sealed class ExternalAuthController(
         string provider,
         CancellationToken cancellationToken)
     {
+        return await IssueAuthorizationUrlAsync(provider, LoginStateValue(provider), cancellationToken);
+    }
+
+    /// <summary>
+    /// 获取"绑定外部账号"的授权 URL（已登录用户把一个外部账号绑到自己名下）
+    /// </summary>
+    /// <remarks>
+    /// state 记下"这是绑定、由谁发起"：回来时只有同一个用户、走绑定端点才认，
+    /// 登录回调拿到这个 state 会按无效拒绝——不能借一次绑定授权完成登录，反之亦然。
+    /// </remarks>
+    [Authorize]
+    [HttpGet("{provider}/link-url")]
+    public async Task<ExternalLoginUrlOutputDto> GetLinkUrlAsync(
+        string provider,
+        CancellationToken cancellationToken)
+    {
+        return await IssueAuthorizationUrlAsync(provider, LinkStateValue(provider), cancellationToken);
+    }
+
+    /// <summary>
+    /// 本人的外部账号绑定情况
+    /// </summary>
+    [Authorize]
+    [HttpGet("links")]
+    public Task<ExternalLoginsOutputDto> GetLinksAsync(CancellationToken cancellationToken)
+        => externalAuthAppService.GetCurrentUserExternalLoginsAsync(cancellationToken);
+
+    /// <summary>
+    /// 完成绑定：外部授权回来后提交 code 与 state
+    /// </summary>
+    [Authorize]
+    [HttpPost("{provider}/link")]
+    public async Task LinkAsync(
+        string provider,
+        [FromBody] ExternalLoginCallbackInputDto request,
+        CancellationToken cancellationToken)
+    {
+        await ConsumeStateAsync(LinkStateValue(provider), request.State, cancellationToken);
+        await externalAuthAppService.LinkCurrentUserAsync(provider, request, cancellationToken);
+    }
+
+    /// <summary>
+    /// 解绑一个外部账号（必须还剩一种登录方式）
+    /// </summary>
+    [Authorize]
+    [HttpDelete("links/{id:guid}")]
+    public Task UnlinkAsync(Guid id, CancellationToken cancellationToken)
+        => externalAuthAppService.UnlinkCurrentUserAsync(id, cancellationToken);
+
+    private async Task<ExternalLoginUrlOutputDto> IssueAuthorizationUrlAsync(
+        string provider,
+        string stateValue,
+        CancellationToken cancellationToken)
+    {
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var output = externalAuthAppService.GetLoginUrl(provider, state);
         await distributedCache.SetStringAsync(
             GetStateCacheKey(state),
-            provider.ToLowerInvariant(),
+            stateValue,
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = StateLifetime },
             cancellationToken);
         Response.Cookies.Append(StateCookieName, state, CreateStateCookieOptions());
         return output;
     }
+
+    // state 缓存里存的是"这个 state 允许用来做什么"：登录只记提供商，绑定再带上发起人
+    private static string LoginStateValue(string provider) => provider.ToLowerInvariant();
+
+    private string LinkStateValue(string provider) =>
+        $"link:{provider.ToLowerInvariant()}:{User.FindFirstValue(ClaimTypes.NameIdentifier)}";
 
     /// <summary>
     /// 处理外部登录回调
@@ -65,23 +124,23 @@ public sealed class ExternalAuthController(
     [AllowAnonymous]
     [HttpPost("{provider}/callback")]
     [IgnoreAntiforgeryToken]
-    public async Task CallbackAsync(
+    public async Task<SessionLoginOutputDto> CallbackAsync(
         string provider,
         [FromBody] ExternalLoginCallbackInputDto request,
         CancellationToken cancellationToken)
     {
-        await ConsumeStateAsync(provider, request.State, cancellationToken);
-        var principal = await externalAuthAppService.AuthenticateExternalUserAsync(
+        await ConsumeStateAsync(LoginStateValue(provider), request.State, cancellationToken);
+        var result = await externalAuthAppService.AuthenticateExternalUserAsync(
             provider,
             request,
             cancellationToken);
 
-        await HttpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, principal,
-            new AuthenticationProperties { IsPersistent = true });
+        // 已启用两步验证的账号经外部登录同样要过第二步
+        return await AuthController.CompleteSessionLoginAsync(HttpContext, result);
     }
 
     private async Task ConsumeStateAsync(
-        string provider,
+        string expectedValue,
         string state,
         CancellationToken cancellationToken)
     {
@@ -105,9 +164,9 @@ public sealed class ExternalAuthController(
         }
 
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, handle.LockLost);
-        var expectedProvider = await distributedCache.GetStringAsync(cacheKey, operation.Token);
+        var storedValue = await distributedCache.GetStringAsync(cacheKey, operation.Token);
         await distributedCache.RemoveAsync(cacheKey, operation.Token);
-        if (!string.Equals(expectedProvider, provider, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(storedValue, expectedValue, StringComparison.Ordinal))
         {
             throw InvalidState();
         }

@@ -22,10 +22,15 @@
     <PackageReference Include="Leistd.Security.Core" />
     <PackageReference Include="Leistd.Authorization.Core" />
     <PackageReference Include="Leistd.Settings.Core" />
+    <PackageReference Include="Leistd.OperationRecords.Core" />
     <PackageReference Include="Leistd.MultiTenancy.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
 <!--#if (LocalIdentity)-->
     <PackageReference Include="Leistd.Email.Core" />
+<!--#endif-->
+<!--#if (IncludeNotifications)-->
+    <!-- 通知类别与偏好设置名要用框架的默认类型与站内渠道名 -->
+    <PackageReference Include="Leistd.Notifications.Core" />
 <!--#endif-->
     <PackageReference Include="Leistd.Ddd.Domain" />
     <PackageReference Include="Leistd.Ddd.Application" />

@@ -1,10 +1,14 @@
+using System.Security.Cryptography;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.AppServices;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -42,6 +46,8 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpPost]
     [Authorize(Policy = PermissionConstant.Users.Create)]
+    // 创建类端点还没有目标标识，省略路由键，被拒记录的目标记为 "-"
+    [OperationRecordAction(OperationRecordActions.UserCreated)]
     public async Task<UserManagementOutputDto> CreateAsync(
         [FromBody] CreateUserInputDto input,
         CancellationToken cancellationToken)
@@ -54,6 +60,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpPut("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserUpdated, "id")]
     public async Task<UserManagementOutputDto> UpdateAsync(
         Guid id,
         [FromBody] UpdateUserInputDto input,
@@ -95,6 +102,28 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     {
         await userAppService.ResetPasswordAsync(id, input, cancellationToken);
     }
+
+    /// <summary>
+    /// 解除用户的登录锁定（需要用户更新权限）
+    /// </summary>
+    [HttpPost("{id}/unlock")]
+    [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserUnlocked, "id")]
+    public async Task UnlockAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await userAppService.UnlockAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    /// 重置用户的两步验证（需要用户更新权限）
+    /// </summary>
+    [HttpPost("{id}/reset-two-factor")]
+    [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserTwoFactorReset, "id")]
+    public async Task ResetTwoFactorAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await userAppService.ResetTwoFactorAsync(id, cancellationToken);
+    }
 #endif
 
     /// <summary>
@@ -102,9 +131,34 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpDelete("{id}")]
     [Authorize(Policy = PermissionConstant.Users.Delete)]
+    // 目标标识取路由上的 id，与成功路径写下的值逐字一致，按目标检索才查得全
+    [OperationRecordAction(OperationRecordActions.UserDeleted, "id")]
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.DeleteAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    /// 取用户上传的头像图片（已登录即可）
+    /// </summary>
+    /// <remarks>
+    /// <para>DTO 里的头像地址指向这里（带内容摘要作版本号，见 <c>AvatarUrls</c>），图片本身不进 DTO。
+    /// 地址随内容变化，所以按不可变资源长期缓存；ETag 让地址没带版本号的请求也能走 304。</para>
+    /// <para>不要求用户管理权限：头像随用户名出现在各处，查询仍受租户过滤器约束。
+    /// 外部地址的头像不经过这里，DTO 直接给出原地址。</para>
+    /// </remarks>
+    [HttpGet("{id}/avatar")]
+    public async Task<IActionResult> GetAvatarAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var avatar = await userAppService.GetAvatarAsync(id, cancellationToken);
+        if (avatar is null)
+        {
+            return NotFound();
+        }
+
+        var entityTag = new EntityTagHeaderValue($"\"{Convert.ToHexString(SHA256.HashData(avatar.Content))[..16]}\"");
+        Response.Headers.CacheControl = "private, max-age=31536000, immutable";
+        return File(avatar.Content, avatar.ContentType, lastModified: null, entityTag: entityTag);
     }
 
     /// <summary>
@@ -126,6 +180,8 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </remarks>
     [HttpPut("{id}/roles")]
     [Authorize(Policy = PermissionConstant.Users.ManageRoles)]
+    // 目标标识取路由上的 id，与成功路径写下的值逐字一致，按目标检索才查得全
+    [OperationRecordAction(OperationRecordActions.UserRolesReplaced, "id")]
     public async Task<IReadOnlyList<RoleBriefDto>> ReplaceRolesAsync(
         Guid id,
         [FromBody] UpdateUserRolesInputDto input,

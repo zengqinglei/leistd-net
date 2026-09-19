@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using CompanyName.ProjectName.Domain.Users.Passwords;
+using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.Application.Auth.Dtos;
 
@@ -27,7 +27,7 @@ public record RegisterInputDto
         ErrorMessage = "{0} must be between {2} and {1} characters.")]
     public required string Password { get; init; }
 
-    [Display(Name = "DisplayName")]
+    [Display(Name = "Display name")]
     [StringLength(128, ErrorMessage = "{0} cannot exceed {1} characters.")]
     public string? DisplayName { get; init; }
 

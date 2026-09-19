@@ -1,14 +1,25 @@
-using CompanyName.ProjectName.Api.Extensions;
+using CompanyName.ProjectName.Api.Hosting;
+#if (RemoteTokenAuth)
+using CompanyName.ProjectName.Api.HealthChecks;
+#endif
+#if (LocalIdentity)
+using CompanyName.ProjectName.Api.Auth;
+#endif
 using CompanyName.ProjectName.Api.Middlewares;
 using Leistd.MultiTenancy.AspNetCore;
+using CompanyName.ProjectName.Api.HostedServices.BackgroundJobs;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
+using CompanyName.ProjectName.Api.HostedServices.Workers;
+using CompanyName.ProjectName.Api.Options;
+using CompanyName.ProjectName.Api.Configuration;
 
 using CompanyName.ProjectName.Application;
+using CompanyName.ProjectName.Application.Settings.Hosting;
 using CompanyName.ProjectName.Domain;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Options;
-using CompanyName.ProjectName.Domain.Users.Passwords;
+using CompanyName.ProjectName.Domain.Users.Policies;
 #endif
 using CompanyName.ProjectName.Domain.Shared.Json;
 using CompanyName.ProjectName.Infrastructure;
@@ -27,6 +38,14 @@ using Leistd.Authorization.AspNetCore;
 using Leistd.MultiTenancy;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
+using Leistd.Notifications.Abstractions;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Api.Notifications;
+using CompanyName.ProjectName.Api.Filters;
+using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
+using Leistd.Notifications.Filters;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+#endif
 using Leistd.RealTime.Abstractions;
 using Leistd.RealTime.AspNetCore.SignalR;
 using CompanyName.ProjectName.Api.RealTime;
@@ -44,7 +63,6 @@ using OpenIddict.Abstractions;
 using Leistd.ServiceClient.AspNetCore;
 #endif
 #if (!LocalIdentity)
-using CompanyName.ProjectName.Api.Options;
 using OpenIddict.Validation.AspNetCore;
 #endif
 using System.Net;
@@ -54,13 +72,16 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Microsoft.AspNetCore.Authorization;
 #if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth;
+using CompanyName.ProjectName.Application.Auth.AppServices;
+using CompanyName.ProjectName.Application.Auth.Sessions;
+using CompanyName.ProjectName.Application.Auth.Abstractions;
+using CompanyName.ProjectName.Application.Auth.Constants;
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Application.TenantConnections;
+using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 #endif
-using CompanyName.ProjectName.Api.Logging;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Options;
 using Leistd.DependencyInjection.DynamicProxy.Registration;
 
 Log.Logger = new LoggerConfiguration()
@@ -79,8 +100,22 @@ try
             ValidateOnBuild = builder.Environment.IsDevelopment()
         }));
 
-    builder.AddMyProjectInfrastructure();
-    builder.Services.AddMyProjectWebServer();
+    // 宿主级设置作为优先级最高的配置源（日志级别、发信参数、操作记录保留期等，见 HostSettingBindings）：
+    // 设置里有值的项覆盖部署配置，消费方照常注入 IOptionsMonitor<T>。写入后本进程立即应用，其它实例周期跟上。
+    // 配置源本身在 Build 之后才加入（见 AddHostSettings）；这些设置的代码默认值是部署配置里的基线
+    // （见 HostSettingDefaults），取值时跳过宿主设置配置源本身
+    var hostSettings = new HostSettingsConfigurationProvider();
+    builder.Services.AddSingleton(hostSettings);
+    builder.Services.AddSingleton(services =>
+        HostSettingBindings.CaptureDefaults((IConfigurationRoot)services.GetRequiredService<IConfiguration>()));
+    builder.Services.AddScoped<IHostSettingApplier, HostSettingsConfigurationApplier>();
+    // 开始接收请求之前推入一次，之后周期刷新，让别的实例也跟上
+    builder.Services.AddOptions<HostSettingRefreshOptions>()
+        .Bind(builder.Configuration.GetSection(HostSettingRefreshOptions.SectionName));
+    builder.Services.AddHostedService<HostSettingRefreshJob>();
+
+    // 请求体沿用 Kestrel 默认上限（约 30 MB）：需要更大上传的端点用 [RequestSizeLimit] / [RequestFormLimits] 单独放宽
+    builder.AddMyProjectLogging();
 
     builder.Services.AddDomainServices();
     builder.Services.AddInfrastructureServices(builder.Configuration);
@@ -211,6 +246,10 @@ try
         {
             options.UseLocalServer();
 
+            // 每个请求按令牌记录确认令牌未被撤销：停用、删除账号时撤销的令牌立即失效，
+            // 在认证阶段就以 invalid_token 拒绝。API 与授权服务器同库部署，这次查库替代了逐请求查用户
+            options.EnableTokenEntryValidation();
+
             // 普通 API 只接受 Bearer 头，避免令牌进入 URL 和访问日志。
             // SignalR 若需 query 令牌，应只在 Hub 路径定向转换。
             options.UseAspNetCore()
@@ -249,7 +288,22 @@ try
         });
 #endif
 
-    builder.Services.AddHostedService<ApplicationBootstrapper>();
+    builder.Services.AddHostedService<ApplicationInitializer>();
+
+    // 进程内后台任务队列。**一个实例、三处注册**：单例本体、以队列接口解析到它、
+    // 以托管服务解析到它。三者若各自 new 一个，生产者写进 A 的队列，
+    // 而被主机启动消费的是 B——工作项永远不会执行，且没有任何报错。
+    builder.Services.AddSingleton<BackgroundTaskWorker>();
+    builder.Services.AddSingleton<IBackgroundTaskQueue>(sp => sp.GetRequiredService<BackgroundTaskWorker>());
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<BackgroundTaskWorker>());
+
+    // 操作记录到期归档。默认关闭：审计表只增不减是安全的默认值，
+    // 要启用就得有人显式打开（配置或系统设置的「审计」面板），那一刻他也为保留期负了责。
+    builder.Services.AddOptions<OperationRecordRetentionOptions>()
+        .Bind(builder.Configuration.GetSection(OperationRecordRetentionOptions.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+    builder.Services.AddHostedService<OperationRecordArchiveJob>();
 
     builder.Services.AddGlobalExceptionHandler(builder.Configuration);
 #if (IncludeLocalization)
@@ -270,10 +324,10 @@ try
             tags: ["live"]);
 #if (RemoteTokenAuth)
     // readiness 在启动时确认 Identity 元数据可达，并锁存结果。
-    builder.Services.AddSingleton<RemoteIdentityReadinessGate>();
+    builder.Services.AddSingleton<RemoteIdentityReadinessHealthCheck>();
     builder.Services.AddHttpClient(nameof(RemoteIdentityReadinessInitializer));
     builder.Services.AddHostedService<RemoteIdentityReadinessInitializer>();
-    healthChecks.AddCheck<RemoteIdentityReadinessCheck>("remote-identity", tags: ["ready"]);
+    healthChecks.AddCheck<RemoteIdentityReadinessHealthCheck>("remote-identity", tags: ["ready"]);
 #else
     healthChecks.AddCheck("ready-self",
         () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
@@ -382,6 +436,14 @@ try
     // 通知与业务事件使用不同的 SignalR 传输，必须分别注册。
     builder.Services.AddRealTimeSignalR();
     builder.Services.AddNotificationsSignalR();
+#if (LocalIdentity)
+
+    // 通知偏好（用户设置）决定哪类通知经哪个渠道收；邮件渠道只发已验证的邮箱，经后台队列发送
+    builder.Services.Replace(ServiceDescriptor.Scoped<INotificationDeliveryFilter, SettingsNotificationDeliveryFilter>());
+    builder.Services.AddScoped<INotificationChannel, EmailNotificationChannel>();
+    // 安全提醒（新设备登录、密码与两步验证变更、账号锁定）经通知组件发给本人
+    builder.Services.Replace(ServiceDescriptor.Transient<ISecurityAlertPublisher, NotificationSecurityAlertPublisher>());
+#endif
 
     // 订阅授权必须由宿主明确选择：Subscribe 无条件走授权器，框架不给默认实现。
     // 组名不含租户段，Subscribe 收的是客户端给的任意字符串，所以默认只放行显式公共的
@@ -389,9 +451,20 @@ try
     builder.Services.AddSingleton<IRealTimeSubscriptionAuthorizer, PublicResourceSubscriptionAuthorizer>();
 #endif
 
-    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
+    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
 
 #if (LocalIdentity)
+    // 会话 Cookie 的滑动过期与服务端会话的空闲时限是同一个值，只在这里定一次
+#if (OpenIddictServer)
+    var oauthConfig = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
+    var sessionLifetime = TimeSpan.FromDays(oauthConfig.CookieExpireDays);
+#else
+    var sessionLifetime = TimeSpan.FromDays(7);
+#endif
+    builder.Services.Configure<UserSessionOptions>(options => options.IdleTimeout = sessionLifetime);
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<IRequestClientInfo, HttpRequestClientInfo>();
+
     builder.Services.AddAuthentication(options =>
     {
 #if (OpenIddictServer)
@@ -425,13 +498,21 @@ try
         options.Cookie.SecurePolicy = isDevelopmentEnvironment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         options.Cookie.IsEssential = true;
 
-#if (OpenIddictServer)
-        var oauthConfig = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
-        options.ExpireTimeSpan = TimeSpan.FromDays(oauthConfig.CookieExpireDays);
-#else
-        options.ExpireTimeSpan = TimeSpan.FromDays(7);
-#endif
+        options.ExpireTimeSpan = sessionLifetime;
         options.SlidingExpiration = true;
+
+        // 会话 Cookie 是自包含的，签出去就撤不回；每个请求都回服务端确认它登记的会话还在，
+        // 撤销（退出其他设备、改密码）才能对已发出的 Cookie 生效。结果带短缓存，见 IUserSessionValidator
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            var validator = context.HttpContext.RequestServices.GetRequiredService<IUserSessionValidator>();
+            if (context.Principal is null ||
+                !await validator.ValidateAsync(context.Principal, context.HttpContext.RequestAborted))
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(AuthenticationSchemeNames.SessionCookie);
+            }
+        };
 
         // API 拒绝必须返回 401/403，不能被 Cookie 重定向和 SPA 回退转换为 HTML 200。
         options.Events.OnRedirectToLogin = context => WriteStatus(context, StatusCodes.Status401Unauthorized);
@@ -459,6 +540,7 @@ try
     builder.Services.AddPermissionAuthorization();
 
     var app = builder.Build();
+    builder.Configuration.AddHostSettings(hostSettings);
 
     app.UseForwardedHeaders();
 #if (IncludeLocalization)
@@ -470,14 +552,14 @@ try
     Directory.CreateDirectory(uploadsRoot);
 
     app.UseDefaultFiles();
-    app.UseStaticFiles();
+    app.UseStaticFiles(SpaExtensions.CreateSpaStaticFileOptions());
     app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = new PhysicalFileProvider(uploadsRoot),
         RequestPath = "/uploads"
     });
 
-    var loggingSettings = app.Services.GetRequiredService<LoggingSettingState>();
+    var requestLogging = app.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
     app.UseSerilogRequestLogging(options =>
     {
         options.GetLevel = (httpContext, elapsed, ex) =>
@@ -494,7 +576,7 @@ try
             // 正常完成的请求记成哪一级由设置决定：调到 Verbose 就等于关掉请求日志
             // （全局最小级别通常是 Information，Verbose 不会落盘）。
             // 失败与 5xx 不受它影响——那是排障必需的，不该被一个运维开关关掉。
-            return loggingSettings.RequestLevel;
+            return requestLogging.CurrentValue.Level;
         };
     });
     app.UseGlobalExceptionHandler();
@@ -525,6 +607,10 @@ try
 #endif
     // 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
     app.UseMultiTenancy();
+#if (LocalIdentity)
+    // 受限会话（租户要求两步验证而本人未启用）只放行完成设置所需的接口
+    app.UseMiddleware<TwoFactorSetupEnforcementMiddleware>();
+#endif
     app.UseAuthorization();
 
     app.MapControllers();
