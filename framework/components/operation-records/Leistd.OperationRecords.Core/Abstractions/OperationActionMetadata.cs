@@ -49,32 +49,3 @@ public enum OperationVisibility
     /// <remarks>自助改密、绑定 MFA 这类"只关乎本人"的动作用它。</remarks>
     Actor
 }
-
-/// <summary>
-/// 操作动作的类别，驱动界面的分类筛选。
-/// </summary>
-/// <remarks>
-/// <b>刻意是字符串常量而不是枚举。</b>类别要随业务生长（下游会有"订单""结算"），
-/// 枚举一旦定死，下游要么塞不进自己的类别、要么被迫改框架。
-/// 这里只给框架自己会用到的几个，业务可以自定义任意值。
-/// </remarks>
-public static class OperationCategories
-{
-    /// <summary>登录、登出、改密、MFA、外部登录绑定、令牌签发。</summary>
-    public const string Authentication = "authentication";
-
-    /// <summary>用户与角色本身的增删改。</summary>
-    public const string Account = "account";
-
-    /// <summary>权限授予与角色分配——改变"谁能做什么"。</summary>
-    public const string Authorization = "authorization";
-
-    /// <summary>租户的创建、启停与连接配置。</summary>
-    public const string Tenant = "tenant";
-
-    /// <summary>设置变更。</summary>
-    public const string Configuration = "configuration";
-
-    /// <summary>业务数据的变更。</summary>
-    public const string Data = "data";
-}
