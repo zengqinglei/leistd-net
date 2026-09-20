@@ -35,8 +35,6 @@ public static class MultiTenancyErrorCodes
     /// <summary>专属库拒绝了连接串里的凭据（400）。</summary>
     public const string DedicatedDatabaseRejected = "Tenant:DedicatedDatabaseRejected";
 
-    /// <summary>专属库报告了其它错误（400）。占位：<c>SqlState</c>。</summary>
-    public const string DedicatedDatabaseFailed = "Tenant:DedicatedDatabaseFailed";
 
     /// <summary>连接名不合法（400）。占位：<c>Name</c>、<c>Pattern</c>。</summary>
     public const string ConnectionNameInvalid = "TenantConnection:NameInvalid";

@@ -13,7 +13,7 @@ using Leistd.UnitOfWork;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Leistd.MultiTenancy.EntityFrameworkCore.Services;
+namespace Leistd.MultiTenancy.Services;
 
 internal sealed class TenantManagementService(
     ITenantManager tenantManager,

@@ -40,6 +40,9 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging();
+        // 错误翻译是宿主的技术适配（码表随数据库而异）：组件默认不翻译，这里登记一个假的，
+        // 验的是"开通失败时编排会把驱动异常交给描述器、并把它的结果抛出去"这条接缝
+        services.AddSingleton<ITenantDatabaseErrorDescriber>(new FakeErrorDescriber());
         services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connection));
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
@@ -290,6 +293,24 @@ public sealed class TenantManagementTests : IAsyncLifetime
     private sealed class FakeDbException(string sqlState) : DbException("database failure")
     {
         public override string SqlState => sqlState;
+    }
+
+    // 只认一种码，其余返回 null——与真实宿主实现同形：认不出来的错误不翻译
+    private sealed class FakeErrorDescriber : ITenantDatabaseErrorDescriber
+    {
+        public BusinessException? Describe(Exception error)
+        {
+            for (var current = error; current is not null; current = current.InnerException)
+            {
+                if (current is DbException { SqlState: "3D000" })
+                {
+                    return new BadRequestException("The database does not exist.")
+                        .WithCode(MultiTenancyErrorCodes.DedicatedDatabaseMissing);
+                }
+            }
+
+            return null;
+        }
     }
 
     private sealed class RecordingEventBus : ILocalEventBus

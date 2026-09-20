@@ -149,6 +149,8 @@
             "backend/src/CompanyName.ProjectName.Domain/Users/Options/UserRegistrationOptions.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/PostgresTenantDatabaseErrorDescriber.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/**",
             "backend/src/CompanyName.ProjectName.Client/Dtos/WhoAmIDto.cs",
             "frontend/src/app/shared/dtos/auth.dto.ts",
             "frontend/src/app/features/account/**",

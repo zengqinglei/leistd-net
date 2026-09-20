@@ -129,7 +129,7 @@ public class OrderController(IOrderService service) : ControllerBase
 - 其余 `IResult` 一律原样放行：`Created`、`Accepted`、文件与流、重定向、`NoContent` 与非 2xx。它们各自带着响应头（`Location`）、内容类型或序列化选项，重建成 JSON 会丢掉这些，而状态码看上去还是对的。
 - 要让这类端点也走信封，由端点自己把信封放进结果：`TypedResults.Created(location, Result<T>.Ok(dto))`——`Location` 与信封都在。
 - 已是 `Result` 的值、带 `NoWrapAttribute` 元数据的端点同样原样放行。
-- 包装改的是运行时响应体，不改端点的 OpenAPI 元数据：端点若用 `Produces<T>()` 声明过形状，要改成 `Produces<Result<T>>()`，否则文档与实际响应不一致。
+- `WithResultWrapper()` 同时把 **200** 响应的类型元数据改写成 `Result<T>`（在 `Finally` 约定里改，那时 Minimal API 推断出的元数据已经挂上），因此生成的 OpenAPI 与实际响应一致；组件经 `Map*` 提供的端点宿主拿不到处理器，只能由这里改。其余状态码（201、文件、非 2xx）连同元数据一并保持原样，标了 `[NoWrap]` 的端点不改。
 
 ## 注意事项
 

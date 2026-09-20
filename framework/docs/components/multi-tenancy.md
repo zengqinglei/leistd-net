@@ -198,7 +198,7 @@ app.MapGroup("/api/v1/tenants").MapTenantManagement<CreateTenantWithAdminInputDt
 });
 ```
 
-`ITenantManagementService.CreateAsync` 的顺序是硬的：先校验连接串语法，再以停用态登记租户并在**同一控制面工作单元**里把连接串登记到默认名下（分库在开通之前定案），然后在新租户上下文与新工作单元里调用 `ITenantProvisioner.ProvisionAsync`，最后启用。任一步失败按"`PurgeAsync` → 删连接登记 → 删租户"补偿（删连接必须在删租户之前），每步独立作用域、独立令牌、各自记录失败；数据库原因经 `ITenantDatabaseErrorDescriber` 翻成带码的 400（默认按 PostgreSQL 的 SQLSTATE：不可达、库不存在、未迁移、凭据被拒），不回显连接串。开通需要更多信息（如管理员邮箱）时派生 `CreateTenantInputDto`，端点按派生类型绑定请求体，开通器从 `TenantProvisioningContext.Input` 取回。成功的创建、更新、启停、删除发布 `TenantChangedEvent`（带显示名快照），宿主据此记审计。
+`ITenantManagementService.CreateAsync` 的顺序是硬的：先校验连接串语法，再以停用态登记租户并在**同一控制面工作单元**里把连接串登记到默认名下（分库在开通之前定案），然后在新租户上下文与新工作单元里调用 `ITenantProvisioner.ProvisionAsync`，最后启用。任一步失败按"`PurgeAsync` → 删连接登记 → 删租户"补偿（删连接必须在删租户之前），每步独立作用域、独立令牌、各自记录失败；数据库原因经 `ITenantDatabaseErrorDescriber` 翻成带码的 400，不回显连接串；**默认实现不翻译**（错误码表是各数据库的方言），宿主注册自己的实现把本引擎的码映射到 `MultiTenancyErrorCodes` 的四个码（不可达、库不存在、未迁移、凭据被拒）。认不出来的错误返回 `null` 走统一 5xx——库重启、连接数耗尽、序列化失败不是调用方改连接串能解决的，报成 400 会让客户端既不重试也不告警。开通需要更多信息（如管理员邮箱）时派生 `CreateTenantInputDto`，端点按派生类型绑定请求体，开通器从 `TenantProvisioningContext.Input` 取回。成功的创建、更新、启停、删除发布 `TenantChangedEvent`（带显示名快照），宿主据此记审计。
 
 租户名在未删除行内唯一；名称冲突抛 `DuplicateTenantNameException`。租户修改与连接配置共享 `TenantRecord.Version`，并发冲突抛 `TenantConcurrencyConflictException`。
 
@@ -338,7 +338,7 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantManagementService` | 租户管理用例：`GetPagedAsync`、`GetAsync`、`CreateAsync`（登记→开通→启用与补偿）、`UpdateAsync`、`SetActivationAsync`、`DeleteAsync`、`FindByNameAsync`；EF 包注册 |
 | `ITenantProvisioner` | 宿主实现：`ProvisionAsync(context, ct)` 在新租户里写初始数据，`PurgeAsync(context, ct)` 幂等清除；未注册时不开通 |
 | `ITenantActivationGuard` | 宿主实现：手动启用前的前置条件，不满足时抛带码异常 |
-| `ITenantDatabaseErrorDescriber` | 把开通时的数据库错误翻成带码的 400；默认按 PostgreSQL SQLSTATE，可替换 |
+| `ITenantDatabaseErrorDescriber` | 把开通时的数据库错误翻成带码的 400；默认不翻译，宿主按自己的数据库实现并在组件注册前登记 |
 | `TenantChangedEvent` | 管理用例成功后发布：`TenantId`、`DisplayName`、`Change`（`Created`/`Updated`/`ActivationChanged`/`Deleted`） |
 | `ITenantConnectionManagementService` | 连接管理用例：`GetListAsync`、`GetRuntimeAsync`、`GetMigrationListAsync`、`SetAsync`、`RemoveAsync`；EF 包注册 |
 | `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |

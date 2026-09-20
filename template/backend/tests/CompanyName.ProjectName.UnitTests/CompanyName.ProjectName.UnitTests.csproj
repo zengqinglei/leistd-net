@@ -29,6 +29,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Application\CompanyName.ProjectName.Application.csproj" />
+    <!-- 基础设施里的纯映射（数据库错误翻译）按单测验证：不建宿主、不连库 -->
+    <ProjectReference Include="..\..\src\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\CompanyName.ProjectName.Domain\CompanyName.ProjectName.Domain.csproj" />
   </ItemGroup>
 

@@ -13,6 +13,8 @@
          在集成测试里根本不被执行；要钉住"缓存按租户分区"和"一个调用方取消不牵连搭车者"
          这两条，只能按生产注册方式单独装配后测试。 -->
     <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
+    <!-- 数据库错误翻译是纯映射，不需要宿主：按 SQLSTATE 逐条钉住，尤其是"认不出来就不翻译" -->
+    <InternalsVisibleTo Include="CompanyName.ProjectName.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>

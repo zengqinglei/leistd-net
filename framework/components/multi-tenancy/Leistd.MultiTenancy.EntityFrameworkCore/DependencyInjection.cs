@@ -12,7 +12,6 @@ using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Abstractions;
-using Leistd.MultiTenancy.EntityFrameworkCore.Services;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
@@ -63,9 +62,8 @@ public static class DependencyInjection
         services.TryAddTransient<ITenantConnectionConfigurationManager,
             EfCoreTenantConnectionConfigurationManager<TDbContext>>();
         services.TryAddTransient<ITenantConnectionDirectory, EfCoreTenantConnectionDirectory<TDbContext>>();
-        // 管理用例：租户开通经宿主注册的 ITenantProvisioner（可选），启用前置条件经 ITenantActivationGuard
-        services.TryAddTransient<ITenantConnectionManagementService, TenantConnectionManagementService>();
-        services.TryAddTransient<ITenantManagementService, TenantManagementService>();
+        // 管理用例在 Core（只依赖契约与工作单元）：这里注册完存储后接上
+        services.AddTenantManagement();
         return services;
     }
 

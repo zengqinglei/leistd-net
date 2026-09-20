@@ -204,7 +204,6 @@
     "Super administrator": "超级管理员",
     "Tenant name": "租户名称",
     "Tenant:ActivateWithoutUsers": "该租户还没有任何用户，启用后谁也进不去。请先完成初始化。",
-    "Tenant:DedicatedDatabaseFailed": "租户专属库报错（SqlState {SqlState}）。租户已回滚，未留下半截数据。",
     "Tenant:DedicatedDatabaseMissing": "连接串里指定的数据库不存在。请先建库，再用 ConnectionStrings:MigrationTarget 迁移它，然后再创建租户。",
     "Tenant:DedicatedDatabaseNotMigrated": "该库存在但尚未迁移，业务表还没建起来。请先用 ConnectionStrings:MigrationTarget 对它运行 DbMigrator --apply。",
     "Tenant:DedicatedDatabaseRejected": "数据库拒绝了连接串里的凭据。",

@@ -4,7 +4,6 @@
     "Tenant:ActivationRejected": "This tenant cannot be activated yet.",
     "Tenant:AmbiguousClaim": "The sign-in carries more than one tenant. Sign in again.",
     "Tenant:ConcurrencyConflict": "The tenant was changed by someone else. Reload and try again.",
-    "Tenant:DedicatedDatabaseFailed": "The tenant's dedicated database reported error {SqlState}. The tenant was rolled back; no partial data remains.",
     "Tenant:DedicatedDatabaseMissing": "The database named in the connection string does not exist. Create and migrate it, then create the tenant.",
     "Tenant:DedicatedDatabaseNotMigrated": "The database exists but has not been migrated; its tables are missing. Migrate it first.",
     "Tenant:DedicatedDatabaseRejected": "The database rejected the credentials in the connection string.",

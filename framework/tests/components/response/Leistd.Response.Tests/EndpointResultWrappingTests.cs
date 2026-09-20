@@ -7,6 +7,8 @@ using Leistd.Response.Wrappers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -132,6 +134,54 @@ public sealed class EndpointResultWrappingTests : IAsyncLifetime
 
         Assert.Equal("x", body.GetProperty("data").GetString());
     }
+
+    /// <summary>
+    /// 200 的响应类型元数据同步改写成 <c>Result&lt;T&gt;</c>。
+    /// </summary>
+    /// <remarks>
+    /// Minimal API 从处理器返回类型推断响应形状，包装后实际发出的是信封；元数据不跟着改，
+    /// 生成的 OpenAPI 描述的就是另一种形状，而调用方是照着文档写代码的。
+    /// </remarks>
+    [Fact]
+    public void The_success_response_metadata_is_rewritten_to_the_envelope()
+    {
+        var endpoints = _host.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+
+        var plain = Single(endpoints, "/api/plain");
+        var produces = plain.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Single(metadata => metadata.StatusCode == StatusCodes.Status200OK);
+        Assert.True(produces.Type?.IsGenericType);
+        Assert.Equal(typeof(Result<>), produces.Type!.GetGenericTypeDefinition());
+    }
+
+    /// <summary>原样放行的结果，元数据也保持原样——否则文档会说 201 返回信封，实际不是。</summary>
+    [Fact]
+    public void Pass_through_results_keep_their_metadata()
+    {
+        var endpoints = _host.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+
+        var created = Single(endpoints, "/api/created");
+        Assert.All(
+            created.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+                .Where(metadata => metadata.Type is { } type && type != typeof(void)),
+            metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.IsGenericType ? metadata.Type.GetGenericTypeDefinition() : null));
+    }
+
+    /// <summary>标了 NoWrap 的端点既不包装响应，也不改元数据。</summary>
+    [Fact]
+    public void NoWrap_keeps_the_declared_metadata()
+    {
+        var endpoints = _host.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+
+        var raw = Single(endpoints, "/api/raw");
+        Assert.All(
+            raw.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+                .Where(metadata => metadata.Type is { IsGenericType: true }),
+            metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
+    }
+
+    private static RouteEndpoint Single(IReadOnlyList<Endpoint> endpoints, string pattern)
+        => endpoints.OfType<RouteEndpoint>().Single(endpoint => endpoint.RoutePattern.RawText == pattern);
 
     [Fact]
     public async Task NoWrap_metadata_opts_an_endpoint_out()

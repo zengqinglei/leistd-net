@@ -4,7 +4,6 @@
     "Tenant:ActivationRejected": "该租户暂时不能启用。",
     "Tenant:AmbiguousClaim": "登录凭据中含有多个租户，请重新登录。",
     "Tenant:ConcurrencyConflict": "租户已被他人修改，请刷新后重试。",
-    "Tenant:DedicatedDatabaseFailed": "租户专属库报告错误 {SqlState}。租户已回滚，没有残留数据。",
     "Tenant:DedicatedDatabaseMissing": "连接串指向的数据库不存在。请先建库并迁移，再创建租户。",
     "Tenant:DedicatedDatabaseNotMigrated": "数据库存在但尚未迁移，缺少业务表。请先完成迁移。",
     "Tenant:DedicatedDatabaseRejected": "数据库拒绝了连接串中的凭据。",

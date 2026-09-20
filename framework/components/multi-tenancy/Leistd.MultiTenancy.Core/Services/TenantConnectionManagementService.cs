@@ -3,7 +3,7 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Dtos;
 using Leistd.MultiTenancy.Exceptions;
 
-namespace Leistd.MultiTenancy.EntityFrameworkCore.Services;
+namespace Leistd.MultiTenancy.Services;
 
 internal sealed class TenantConnectionManagementService(
     ITenantConnectionDirectory directory,

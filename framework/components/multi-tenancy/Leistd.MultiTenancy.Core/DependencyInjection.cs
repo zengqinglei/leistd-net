@@ -48,9 +48,36 @@ public static class DependencyInjection
         // 逐库作业的清单：注册了租户连接解析就列出独立库，没有就只有宿主库，宿主不必按模式分支注册
         services.TryAddTransient<ITenantDatabaseEnumerator, TenantDatabaseEnumerator>();
         services.TryAddTransient<ITenantDatabaseRunner, TenantDatabaseRunner>();
-        // 开通失败的数据库错误翻译；默认按 PostgreSQL 的 SQLSTATE，换数据库时先注册自己的实现
-        services.TryAddSingleton<ITenantDatabaseErrorDescriber, SqlStateTenantDatabaseErrorDescriber>();
+        // 开通失败的数据库错误翻译：默认不翻译（错误码表随数据库而异），宿主注册自己的实现即可替换
+        services.TryAddSingleton<ITenantDatabaseErrorDescriber, NullTenantDatabaseErrorDescriber>();
         services.AddJsonLocalizationResources(typeof(MultiTenancyErrorCodes).Assembly);
+        return services;
+    }
+
+    /// <summary>
+    /// 注册租户管理与连接管理两个用例。
+    /// </summary>
+    /// <param name="services">服务集合</param>
+    /// <remarks>
+    /// <para>用例只依赖契约（<see cref="ITenantManager"/>、<see cref="ITenantStore"/>、
+    /// <see cref="ITenantConnectionConfigurationManager"/>、<see cref="ITenantConnectionDirectory"/>）与工作单元，
+    /// 因此换存储实现时这套开通编排、失败补偿与 DTO 投影照旧可用。存储由调用方先注册；
+    /// EF 存储的 <c>AddMultiTenancyEfCore</c> 已经代为调用本方法。</para>
+    /// <para>开通编排的顺序与补偿见 <see cref="ITenantProvisioner"/>。</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // 自定义存储的宿主：先注册自己的实现，再注册用例
+    /// builder.Services.AddSingleton&lt;ITenantStore, DapperTenantStore&gt;();
+    /// builder.Services.AddTenantManagement();
+    /// </code>
+    /// </example>
+    public static IServiceCollection AddTenantManagement(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddTransient<ITenantConnectionManagementService, TenantConnectionManagementService>();
+        services.TryAddTransient<ITenantManagementService, TenantManagementService>();
         return services;
     }
 
