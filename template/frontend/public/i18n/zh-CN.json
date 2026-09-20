@@ -895,7 +895,8 @@
     "fieldConnectionVersion": "版本",
     "impersonate": "以租户身份登录",
     "impersonateConfirm": "以「{{name}}」的管理员身份登录？退出前你将离开宿主上下文。",
-    "impersonateFailed": "无法以该租户身份登录。"
+    "impersonateFailed": "无法以该租户身份登录。",
+    "impersonateInactiveHint": "已停用的租户不能登录"
   },
   "impersonation": {
     "banner": "正以租户 {{tenant}} 的身份操作 · 由 {{impersonator}} 发起",

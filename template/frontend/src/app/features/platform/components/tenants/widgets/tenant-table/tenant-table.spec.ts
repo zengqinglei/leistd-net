@@ -124,6 +124,45 @@ describe('TenantTable', () => {
     expect(triggers.length).toBe(2);
   });
 
+  // 后端对停用租户直接拒绝模拟登录，留一个点得动的入口就是「能看见但调不通」。
+  // 这条钉的是禁用本身：改成隐藏或恢复可点都会红。
+  it('停用的租户不能模拟登录，入口保留但禁用', async () => {
+    const inactive = { ...tenant('2', 'globex'), isActive: false } as TenantOutputDto;
+    fixture.componentRef.setInput('tenants', [tenant('1', 'acme'), inactive]);
+    fixture.componentRef.setInput('canImpersonate', true);
+    fixture.detectChanges();
+
+    const [tableBlock] = await fixture.getDeferBlocks();
+    await tableBlock.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const triggers = host.querySelectorAll<HTMLElement>('tbody ng-icon[name="lucideEllipsis"]');
+
+    async function impersonateItem(index: number): Promise<HTMLButtonElement> {
+      triggers[index].closest('button')!.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      // 菜单挂在 document 上的浮层里，不在组件宿主内
+      return document
+        .querySelector('[data-slot="dropdown-menu"] ng-icon[name="lucideLogIn"]')!
+        .closest('button') as HTMLButtonElement;
+    }
+
+    // 关菜单用 Esc：删掉浮层容器会让 CDK 拿着已脱离文档的引用，之后再也打不开
+    async function closeMenu(): Promise<void> {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+
+    expect((await impersonateItem(1)).disabled).toBeTrue();
+    await closeMenu();
+
+    expect((await impersonateItem(0)).disabled).toBeFalse();
+    await closeMenu();
+  });
+
   it('窄视口下标记存在被折叠的列，桌面端不标记', () => {
     expect(component.hasCollapsedColumns()).toBeFalse();
 
