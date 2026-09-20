@@ -98,8 +98,9 @@ public static class EndpointConventionBuilderExtensions
             returned = returned.GetGenericArguments()[0];
         }
 
-        // 裸值：过滤器走 default 分支包装。object 也算——声明成 object 却在运行期混着返回 IResult
-        // 属于形状不明的 API，那种端点该自己把形状声明清楚，框架不猜
+        // 裸值：过滤器走 default 分支包装。object 也算——它在运行期发出的裸值确实会被包装。
+        // 但 object 藏着异构 IResult 时救不回来：这里会把该端点的每条 200 都改写（含手工 Produces），
+        // 而运行期非 Ok<T> 的结果原样放行。文档因此要求这种端点改用具体类型 / Results<…> / IResult
         if (!typeof(IResult).IsAssignableFrom(returned))
         {
             return (returned != typeof(void), []);

@@ -205,13 +205,17 @@ describe('租户 Mock', () => {
     });
 
     // 名字归一化为小写，与后端一致
-    expect(getTenantConnections(created.id).map((connection) => connection.name).sort()).toEqual([
-      'crm',
-      'default',
-    ]);
-    // 连接串本身不回显
+    expect(
+      getTenantConnections(created.id)
+        .map((connection) => connection.name)
+        .sort(),
+    ).toEqual(['crm', 'default']);
+    // 连接串既不回显，也不落进 Mock 的内部数据——存了迟早有人把它读出来
     expect(JSON.stringify(getTenantConnections(created.id))).not.toContain('probe-secret');
     expect(JSON.stringify(created)).not.toContain('probe-secret');
+    expect(JSON.stringify(TENANTS.find((tenant) => tenant.id === created.id))).not.toContain(
+      'probe-secret',
+    );
   });
 
   it('创建租户时同名连接给两条直接 400', () => {

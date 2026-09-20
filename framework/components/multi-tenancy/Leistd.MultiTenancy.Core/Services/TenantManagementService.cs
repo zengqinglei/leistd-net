@@ -182,6 +182,12 @@ internal sealed class TenantManagementService(
 
         foreach (var connection in connections)
         {
+            // 数组里的 null 元素：DataAnnotations 不递归进集合，不挡住就在下一行变成 NRE→500
+            if (connection is null)
+            {
+                throw new UnprocessableEntityException("connections", "Connection entries must not be null.");
+            }
+
             var name = TenantConnectionNames.NormalizeInput(connection.Name);
             if (!seen.Add(name))
             {

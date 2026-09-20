@@ -4,6 +4,7 @@ import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
 import {
   MockTenant,
+  MockTenantConnection,
   TENANTS,
   toTenantConnection,
   toTenantLookup,
@@ -197,8 +198,9 @@ export function createTenant(value: any) {
 }
 
 // 复刻后端创建时对连接数组的整批校验：名字归一化后按模式校验、连接串非空、名字不得重复。
-function normalizeCreateConnections(raw: unknown) {
-  const connections: { name: string; connectionString: string; version: number }[] = [];
+// 连接串只在校验时用一下就丢掉：Mock 不保存它（见 MockTenantConnection），存了迟早有人读出来回显。
+function normalizeCreateConnections(raw: unknown): MockTenantConnection[] {
+  const connections: MockTenantConnection[] = [];
   for (const entry of Array.isArray(raw) ? raw : []) {
     const name = normalizeConnectionName(String((entry as any)?.name ?? ''));
     if (!CONNECTION_NAME_PATTERN.test(name)) {
@@ -220,7 +222,7 @@ function normalizeCreateConnections(raw: unknown) {
         message: 'Connection string is required.',
       });
     }
-    connections.push({ name, connectionString, version: 1 });
+    connections.push({ name, version: 1 });
   }
   return connections;
 }

@@ -116,6 +116,34 @@ public sealed class TenantManagementTests : IAsyncLifetime
         Assert.Equal(["crm", "default"], (await Connections().GetListAsync(tenant.Id)).Select(c => c.Name).Order());
     }
 
+    /// <summary>
+    /// 请求体显式传 <c>connections: null</c> 按"不分库"处理，不是 500。
+    /// </summary>
+    /// <remarks>集合属性的默认值挡不住显式 null：反序列化会把它写进去，而下游按非空用它。</remarks>
+    [Fact]
+    public async Task An_explicit_null_connection_list_is_treated_as_no_dedicated_database()
+    {
+        var tenant = await _service.CreateAsync(new CreateTenantInputDto { Name = "acme", Connections = null! });
+
+        Assert.Empty(await Connections().GetListAsync(tenant.Id));
+    }
+
+    /// <summary>数组里的 null 元素返回 422，而不是解引用成 500——DataAnnotations 不递归进集合。</summary>
+    [Fact]
+    public async Task A_null_connection_entry_is_rejected_as_a_validation_error()
+    {
+        var input = new CreateTenantInputDto
+        {
+            Name = "acme",
+            Connections = [null!]
+        };
+
+        var error = await Assert.ThrowsAsync<UnprocessableEntityException>(() => _service.CreateAsync(input));
+
+        Assert.Equal("connections", Assert.Single(error.ValidationErrors).Field);
+        Assert.Null(await _service.FindByNameAsync("acme"));
+    }
+
     /// <summary>重名在写库前拒绝：否则第二条会以"改已有登记"的语义覆盖第一条。</summary>
     [Fact]
     public async Task A_duplicated_connection_name_is_rejected_before_anything_is_written()

@@ -104,7 +104,14 @@ public record CreateTenantInputDto
     /// <para>多服务部署可以一次登记多条（如 <c>default</c>、<c>crm</c>）：租户与全部连接在同一个控制面工作单元里落库，
     /// 不会出现"租户已建、某条连接还没登记"的中间状态，开通钩子第一次执行时看到的就是完整的连接集合。</para>
     /// </remarks>
-    public IReadOnlyList<CreateTenantConnectionInputDto> Connections { get; init; } = [];
+    /// <remarks>请求体显式传 <c>null</c> 时按"没给"处理：默认值挡不住显式 null，而下游按非空用它。</remarks>
+    public IReadOnlyList<CreateTenantConnectionInputDto> Connections
+    {
+        get => _connections;
+        init => _connections = value ?? [];
+    }
+
+    private readonly IReadOnlyList<CreateTenantConnectionInputDto> _connections = [];
 
     /// <summary>不输出连接串。</summary>
     public override string ToString() =>

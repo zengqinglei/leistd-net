@@ -133,7 +133,7 @@ public class OrderController(IOrderService service) : ControllerBase
   - 裸值（含 `Task<T>`、`ValueTask<T>`，以及声明成 `object` 的）→ 该端点的每条 200 元数据都改写；
   - `Ok<T>` 与 `Results<Ok<A>, Ok<B>, …>` → 只改写落在这些 `Ok<T>` 上的 200 元数据，同为 200 的 `Json<T>` 分支不动；
   - `JsonHttpResult<T>`、文件、流、重定向、裸 `IResult`，以及拿不到处理器 `MethodInfo` 的自定义端点源 → 一律不改。
-- 处理器声明成 `object` 却在运行期混着返回 `IResult`，属于形状不明的 API：该端点自己用 `.Produces<...>()` 把形状说清楚，框架不猜。
+- **不要用 `object` 藏异构的 `IResult`**：返回类型是 `object` 时，框架按"裸值"处理并改写该端点的每条 200 元数据——包括手工加的 `.Produces<T>()`，所以手工声明救不回来；而运行期那些非 `Ok<T>` 的 `IResult` 又原样放行，两边必然对不上。写成具体类型、`Results<...>` 或 `IResult`：前两者框架能按分支精确改写，`IResult` 则一律不改。整个端点不该被包装时标 `[NoWrap]`。
 - 标了 `[NoWrap]` 的端点既不包装响应也不改元数据。
 
 ## 注意事项
