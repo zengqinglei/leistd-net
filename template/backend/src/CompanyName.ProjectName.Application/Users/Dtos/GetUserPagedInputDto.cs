@@ -1,12 +1,13 @@
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.Users.Dtos;
 
 /// <summary>
 /// 获取用户分页列表输入 DTO
 /// </summary>
-public record GetUserPagedInputDto : PagedRequestDto
+public record GetUserPagedInputDto : PageRequest
 {
     /// <summary>
     /// 搜索关键字（用户名、邮箱、显示名称）

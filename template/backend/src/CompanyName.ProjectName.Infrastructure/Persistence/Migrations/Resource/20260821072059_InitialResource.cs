@@ -61,6 +61,19 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 #endif
 
             migrationBuilder.CreateTable(
+                name: "RecurringJobStates",
+                schema: "companyname-projectname",
+                columns: table => new
+                {
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    LastCompletedSlot = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RecurringJobStates", x => x.Name);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "OperationRecordArchives",
                 schema: "companyname-projectname",
                 columns: table => new
@@ -380,6 +393,10 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 name: "NotificationRecord",
                 schema: "companyname-projectname");
 #endif
+
+            migrationBuilder.DropTable(
+                name: "RecurringJobStates",
+                schema: "companyname-projectname");
 
             migrationBuilder.DropTable(
                 name: "OperationRecordArchives",

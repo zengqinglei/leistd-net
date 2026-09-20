@@ -1,4 +1,5 @@
 using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.Exceptions;
 
@@ -8,13 +9,20 @@ namespace Leistd.MultiTenancy.Exceptions;
 /// <remarks>
 /// 启用、停用、改名与连接配置共用租户版本，防止并发改路由导致同一租户同时写入不同数据库。
 /// </remarks>
-/// <param name="tenantId">目标租户</param>
-public class TenantConcurrencyConflictException(Guid tenantId)
-    : ConflictException(
-        $"Tenant '{tenantId}' was modified concurrently. Activation, deactivation, renaming and " +
-        "connection-configuration changes all contend for the same tenant version. Re-read the " +
-        "tenant state and decide whether to retry.")
+public class TenantConcurrencyConflictException : ConflictException
 {
+    /// <summary>构造异常。</summary>
+    /// <param name="tenantId">目标租户</param>
+    public TenantConcurrencyConflictException(Guid tenantId)
+        : base(
+            $"Tenant '{tenantId}' was modified concurrently. Activation, deactivation, renaming and " +
+            "connection-configuration changes all contend for the same tenant version. Re-read the " +
+            "tenant state and decide whether to retry.")
+    {
+        TenantId = tenantId;
+        WithCode(MultiTenancyErrorCodes.ConcurrencyConflict);
+    }
+
     /// <summary>获取目标租户标识。</summary>
-    public Guid TenantId { get; } = tenantId;
+    public Guid TenantId { get; }
 }

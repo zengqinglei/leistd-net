@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Microsoft.EntityFrameworkCore;
 using Leistd.Timing;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
@@ -29,17 +30,31 @@ public class EfCoreNotificationStore<TDbContext>(
         await dbContext.SaveChangesAsync(ct);
     }
 
-    /// <inheritdoc/>
-    public async Task<IReadOnlyList<NotificationOutputDto>> GetByUserAsync(string userId, int maxCount = 50, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<PagedResult<NotificationOutputDto>> GetByUserAsync(
+        string userId,
+        PageRequest page,
+        bool unreadOnly = false,
+        CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(page);
+
         var dbContext = await dbContextProvider.GetDbContextAsync(ct);
-        var records = await dbContext.Set<NotificationRecord>()
-            .Where(x => x.UserId == userId)
+        var query = dbContext.Set<NotificationRecord>().AsNoTracking().Where(x => x.UserId == userId);
+        if (unreadOnly)
+        {
+            query = query.Where(x => !x.IsRead);
+        }
+
+        var totalCount = await query.LongCountAsync(ct);
+        var records = await query
             .OrderByDescending(x => x.CreationTime)
-            .Take(maxCount)
+            .ThenByDescending(x => x.Id)
+            .Skip(page.Offset)
+            .Take(page.Limit)
             .ToListAsync(ct);
 
-        return records.Select(r => r.ToDto()).ToList();
+        return new PagedResult<NotificationOutputDto>(totalCount, records.Select(r => r.ToDto()));
     }
 
     /// <inheritdoc/>
@@ -87,5 +102,41 @@ public class EfCoreNotificationStore<TDbContext>(
         var dbContext = await dbContextProvider.GetDbContextAsync(ct);
         return await dbContext.Set<NotificationRecord>()
             .CountAsync(x => x.UserId == userId && !x.IsRead, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteAsync(string notificationId, string userId, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(notificationId, out var id))
+        {
+            return false;
+        }
+
+        var dbContext = await dbContextProvider.GetDbContextAsync(ct);
+        var record = await dbContext.Set<NotificationRecord>().FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+        if (record is null)
+        {
+            return false;
+        }
+
+        dbContext.Set<NotificationRecord>().Remove(record);
+        await dbContext.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>采用加载后 <c>RemoveRange</c> 而非批量删除：兼容所有 EF 提供程序（含内存库），并复用上下文上的拦截器。</remarks>
+    public async Task<int> DeleteAllAsync(string userId, CancellationToken ct = default)
+    {
+        var dbContext = await dbContextProvider.GetDbContextAsync(ct);
+        var records = await dbContext.Set<NotificationRecord>().Where(x => x.UserId == userId).ToListAsync(ct);
+        if (records.Count == 0)
+        {
+            return 0;
+        }
+
+        dbContext.Set<NotificationRecord>().RemoveRange(records);
+        await dbContext.SaveChangesAsync(ct);
+        return records.Count;
     }
 }

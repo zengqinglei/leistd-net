@@ -7,6 +7,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 令牌中间件要在真实路由管线里验证：Hub 端点靠路由匹配后的元数据识别 -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\aspnetcore-signalr\Leistd.AspNetCore.SignalR\Leistd.AspNetCore.SignalR.csproj" />
     <ProjectReference Include="..\..\..\..\components\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />

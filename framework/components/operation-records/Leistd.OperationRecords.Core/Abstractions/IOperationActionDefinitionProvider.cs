@@ -49,12 +49,18 @@ public interface IOperationActionDefinitionContext
     /// 判据是这条记录描述的操作属于谁的边界。
     /// </param>
     /// <param name="severity">严重度，默认 <see cref="OperationSeverity.Info"/>。</param>
+    /// <param name="targetIsActor">
+    /// 目标即操作人：主体在动作完成那一刻才被证实的自证类动作（登录成功、注册、改密），
+    /// 记录里没有操作人，由目标承载"什么人"。只标经过凭据验证的动作——调用方提交、未经验证的标识
+    /// （如失败登录的用户名）不能标，否则操作人列成了一个无需凭据即可写入任意文本的面。
+    /// </param>
     /// <returns>登记后的定义。</returns>
     IOperationActionDefinition Add(
         string code,
         string category,
         OperationVisibility visibility,
-        OperationSeverity severity = OperationSeverity.Info);
+        OperationSeverity severity = OperationSeverity.Info,
+        bool targetIsActor = false);
 
     /// <summary>按动作码查找定义；不存在时返回 <see langword="null"/>。</summary>
     IOperationActionDefinition? GetOrNull(string code);
@@ -76,6 +82,9 @@ public interface IOperationActionDefinition
 
     /// <summary>严重度。</summary>
     OperationSeverity Severity { get; }
+
+    /// <summary>目标即操作人（自证类动作）。</summary>
+    bool TargetIsActor { get; }
 }
 
 /// <summary>

@@ -1,3 +1,8 @@
+using Microsoft.Extensions.Options;
+using Leistd.Notifications.EntityFrameworkCore.Retention;
+using Leistd.Notifications.EntityFrameworkCore.Options;
+using Leistd.BackgroundJobs.Recurring;
+using Leistd.BackgroundJobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.DependencyInjection.Extensions;
@@ -42,6 +47,46 @@ public static class DependencyInjection
             "Notifications have a single authoritative store; map NotificationRecord in one DbContext.");
 
         services.TryAddTransient<INotificationStore, EfCoreNotificationStore<TDbContext>>();
+        return services;
+    }
+
+    /// <summary>
+    /// 启用通知保留期：到期通知每天按物理库逐个删除，作为集群周期任务执行。
+    /// </summary>
+    /// <remarks>
+    /// <para>选项绑定 <c>Leistd:Notifications:Retention</c> 并在启动期校验；默认开启，已读保留 90 天、未读保留 365 天，
+    /// 均按创建时间计。开关与天数每轮取当前值，执行时刻只在排期时取一次。</para>
+    /// <para>需要后台作业调度器（如 <c>AddInProcessBackgroundJobs()</c>）与分布式锁。</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddNotificationsEfCore&lt;AppDbContext&gt;();
+    /// builder.Services.AddNotificationRetention&lt;AppDbContext&gt;();
+    /// </code>
+    /// </example>
+    /// <typeparam name="TDbContext">承载通知表的 DbContext。</typeparam>
+    /// <param name="services">服务集合。</param>
+    /// <param name="configure">在配置节之后应用的选项配置。</param>
+    public static IServiceCollection AddNotificationRetention<TDbContext>(
+        this IServiceCollection services,
+        Action<NotificationRetentionOptions>? configure = null)
+        where TDbContext : DbContext
+    {
+        services.AddOptions<NotificationRetentionOptions>()
+            .BindConfiguration(NotificationRetentionOptions.SectionName)
+            .ValidateOnStart();
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<NotificationRetentionOptions>, NotificationRetentionOptionsValidator>());
+        services.AddRecurringJob<NotificationRetentionJob<TDbContext>>(
+            NotificationRetentionJob<TDbContext>.Name,
+            sp => RecurringJobSchedule.DailyAt(new TimeOnly(
+                sp.GetRequiredService<IOptions<NotificationRetentionOptions>>().Value.DailyRunHourUtc, 0)),
+            RecurringJobScope.Cluster);
         return services;
     }
 

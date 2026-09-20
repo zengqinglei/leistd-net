@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Leistd.TestBase.Doubles;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
@@ -463,15 +464,15 @@ public class TenantStoreManagerTests : IAsyncLifetime
         var deleted = await _manager.CreateAsync("Acme-Old", null, isActive: true);
         await _manager.DeleteAsync(deleted.Id);
 
-        var all = await _manager.GetPagedAsync(null, 0, 10);
+        var all = await _manager.GetPagedAsync(null, new PageRequest { Offset = 0, Limit = 10 });
         Assert.Equal(2, all.TotalCount);
 
         // 关键字大小写不敏感（按归一化名称匹配），软删行不计入
-        var filtered = await _manager.GetPagedAsync("acme", 0, 10);
+        var filtered = await _manager.GetPagedAsync("acme", new PageRequest { Offset = 0, Limit = 10 });
         Assert.Equal(1, filtered.TotalCount);
         Assert.Equal("Acme", filtered.Items.Single().Name);
 
-        var paged = await _manager.GetPagedAsync(null, 1, 1);
+        var paged = await _manager.GetPagedAsync(null, new PageRequest { Offset = 1, Limit = 1 });
         Assert.Equal(2, paged.TotalCount);
         Assert.Single(paged.Items);
     }

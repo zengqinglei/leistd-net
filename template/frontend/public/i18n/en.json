@@ -895,7 +895,8 @@
     "fieldConnectionVersion": "Version",
     "impersonate": "Sign in as tenant",
     "impersonateConfirm": "Sign in as the administrator of “{{name}}”? You will leave the host context until you exit.",
-    "impersonateFailed": "Could not sign in as this tenant."
+    "impersonateFailed": "Could not sign in as this tenant.",
+    "impersonateInactiveHint": "Deactivated tenants cannot be signed in to"
   },
   "impersonation": {
     "banner": "Acting as tenant {{tenant}} · started by {{impersonator}}",

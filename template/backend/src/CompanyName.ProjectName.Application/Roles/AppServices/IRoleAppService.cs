@@ -1,6 +1,7 @@
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
 
@@ -12,7 +13,7 @@ public interface IRoleAppService : IAppService
     /// <summary>
     /// 获取角色列表（分页）
     /// </summary>
-    Task<PagedResultDto<RoleOutputDto>> GetPagedListAsync(
+    Task<PagedResult<RoleOutputDto>> GetPagedListAsync(
         GetRolePagedInputDto input,
         CancellationToken cancellationToken = default);
 

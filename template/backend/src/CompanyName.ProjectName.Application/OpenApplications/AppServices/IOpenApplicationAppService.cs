@@ -2,12 +2,13 @@
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.AppServices;
 
 public interface IOpenApplicationAppService : IAppService
 {
-    Task<PagedResultDto<OpenApplicationOutputDto>> GetPagedListAsync(
+    Task<PagedResult<OpenApplicationOutputDto>> GetPagedListAsync(
         GetOpenApplicationPagedInputDto input,
         CancellationToken cancellationToken = default);
 

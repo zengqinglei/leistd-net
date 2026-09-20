@@ -1,14 +1,15 @@
-using CompanyName.ProjectName.Api.Configuration;
-using CompanyName.ProjectName.Api.Options;
-using CompanyName.ProjectName.Application.Settings.Hosting;
 using CompanyName.ProjectName.Application.Settings.Provider;
-using CompanyName.ProjectName.Infrastructure.OperationRecords;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.EventBus.Abstractions;
+using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
+using Leistd.OperationRecords.EntityFrameworkCore.Options;
+using Leistd.OperationRecords.EntityFrameworkCore.Retention;
 using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
+using Leistd.Settings.Events;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -107,28 +108,27 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
     }
 
     /// <summary>
-    /// 是否归档、保留几天可由宿主级设置覆盖配置：设置经配置源流进 <c>IOptionsMonitor</c>，清除设置回落配置（默认关闭、365 天）；
-    /// 让 Options 校验不过的值整组不生效，沿用上一组合规值。
+    /// 是否归档、保留几天可由宿主级设置覆盖配置：写入提交后本进程立即应用，设置经配置源流进 <c>IOptionsMonitor</c>，
+    /// 清除设置回落配置（默认关闭、365 天）；让 Options 校验不过的值整组不生效，沿用上一组合规值。
     /// </summary>
     [Fact]
     public async Task Retention_follows_host_settings_and_keeps_the_last_valid_values()
     {
         var monitor = factory.Services.GetRequiredService<IOptionsMonitor<OperationRecordRetentionOptions>>();
-        await ApplyHostSettingsAsync();
         Assert.Equal((false, 365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
 
         try
         {
             await SetHostAsync(SettingConstant.Audit.RetentionEnabled, "true");
             await SetHostAsync(SettingConstant.Audit.RetentionDays, "90");
-            await ApplyHostSettingsAsync();
             Assert.Equal((true, 90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
 
-            // 绕过接口写进库的过小值：应用不报错（值已落库，保存与刷新不该因此失败），
-            // 按 Options 的区间校验被拒、整组不生效——归档照旧按上一组合规值运行，不会把最近的记录搬走，
-            // 也不会在有人改正之前每次取值都抛异常
-            await SetHostAsync(SettingConstant.Audit.RetentionDays, "5");
-            await ApplyHostSettingsAsync();
+            // 写入端按定义上的区间拒绝过小值
+            await Assert.ThrowsAsync<BadRequestException>(() => SetHostAsync(SettingConstant.Audit.RetentionDays, "5"));
+
+            // 绕过写入端直接落库的过小值（脚本、迁移数据）：应用不报错，按 Options 的区间校验被拒、整组不生效——
+            // 归档照旧按上一组合规值运行，不会把最近的记录搬走，也不会在有人改正之前每次取值都抛异常
+            await WriteRawHostValueAsync(SettingConstant.Audit.RetentionDays, "5");
             Assert.Equal((true, 90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
         }
         finally
@@ -137,7 +137,6 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
             await SetHostAsync(SettingConstant.Audit.RetentionDays, null);
         }
 
-        await ApplyHostSettingsAsync();
         Assert.Equal((false, 365), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
     }
 
@@ -152,9 +151,9 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
     {
         var archiveColumns = typeof(OperationRecordArchive).GetProperties().Select(property => property.Name).ToHashSet();
 
-        Assert.Empty(typeof(OperationRecord).GetProperties()
-            .Select(property => property.Name)
-            .Where(name => !archiveColumns.Contains(name)));
+        var missing = typeof(OperationRecord).GetProperties().Select(property => property.Name).Except(archiveColumns);
+
+        Assert.Equal([], missing);
     }
 
     private async Task SetHostAsync(string name, string? value)
@@ -166,17 +165,18 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
         await unitOfWork.CompleteAsync();
     }
 
-    // 与周期刷新同样在宿主上下文里跑应用器
-    private async Task ApplyHostSettingsAsync()
+    // 绕过写入端直接写存储，再发一次变更事件让本进程重新应用（与周期刷新读到这一行是同一件事）
+    private async Task WriteRawHostValueAsync(string name, string value)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(null))
+        var services = scope.ServiceProvider;
+        using (var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true))
         {
-            await scope.ServiceProvider.GetServices<IHostSettingApplier>()
-                .OfType<HostSettingsConfigurationApplier>()
-                .Single()
-                .ApplyAsync();
+            await services.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.Host, userId: null);
+            await unitOfWork.CompleteAsync();
         }
+
+        await services.GetRequiredService<ILocalEventBus>().PublishAsync(new SettingChangedEvent(name, SettingScopes.Host, null));
     }
 
     private static OperationRecord NewRecord(string action, DateTime creationTime) => new()

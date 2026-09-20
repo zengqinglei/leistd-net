@@ -53,7 +53,26 @@ public sealed class DefaultSettingProvider(
 
         await LoadAsync(cancellationToken);
 
-        return Resolve(definition);
+        return Resolve(definition, _userValues!);
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> GetOrNullForUserAsync(
+        string name,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        var definition = definitionManager.GetOrNull(name) ?? throw new UndefinedSettingException(name);
+
+        await LoadAsync(cancellationToken);
+
+        // 当前用户就是目标用户时复用已加载的那份；否则只为这次读取查一次，不进记忆化
+        var userValues = userId == currentUser.Id?.ToString() || !definition.Scopes.HasFlag(SettingScopes.User)
+            ? _userValues!
+            : await store.GetAllAsync(SettingScopes.User, userId, cancellationToken);
+
+        return Resolve(definition, userValues);
     }
 
     /// <inheritdoc />
@@ -74,12 +93,12 @@ public sealed class DefaultSettingProvider(
             // 机密设置永不下发客户端，可见标记只表示界面上有这一项可写
             .Where(definition => !visibleToClientsOnly || (definition.IsVisibleToClients && !definition.IsEncrypted))
             .Where(definition => _hostValues is not null || !definition.Scopes.HasFlag(SettingScopes.Host))
-            .ToDictionary(definition => definition.Name, Resolve, StringComparer.Ordinal);
+            .ToDictionary(definition => definition.Name, definition => Resolve(definition, _userValues!), StringComparer.Ordinal);
     }
 
-    private string? Resolve(ISettingDefinition definition)
+    private string? Resolve(ISettingDefinition definition, IReadOnlyDictionary<string, string> userValues)
     {
-        var (value, stored) = ResolveRaw(definition);
+        var (value, stored) = ResolveRaw(definition, userValues);
         if (!definition.IsEncrypted || !stored || value is null)
         {
             return value;
@@ -116,7 +135,7 @@ public sealed class DefaultSettingProvider(
     }
 
     // 返回解析出的原始值，以及它是否来自存储（而不是代码默认值）
-    private (string? Value, bool Stored) ResolveRaw(ISettingDefinition definition)
+    private (string? Value, bool Stored) ResolveRaw(ISettingDefinition definition, IReadOnlyDictionary<string, string> userValues)
     {
         // 进程级设置不与其它层级组合（定义阶段就拒绝了组合），所以它是一条独立分支，
         // 不接在用户级→租户级的回落链上。
@@ -133,7 +152,7 @@ public sealed class DefaultSettingProvider(
         }
 
         if (definition.Scopes.HasFlag(SettingScopes.User)
-            && _userValues!.TryGetValue(definition.Name, out var userValue))
+            && userValues.TryGetValue(definition.Name, out var userValue))
         {
             return (userValue, true);
         }

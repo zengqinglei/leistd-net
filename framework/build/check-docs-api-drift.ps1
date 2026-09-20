@@ -107,6 +107,8 @@ $allow = @(
     'IQueryable','Func','Action','Nullable','Exception','ArgumentNullException','InvalidOperationException',
     'OperationCanceledException','TimeoutException','HttpRequestException','ValidationException','String','Boolean','Int32',
     'Assembly','Type','ClaimsPrincipal','ClaimTypes','IServiceProvider','IServiceCollection','IServiceScopeFactory',
+    'AddValidation',   # ASP.NET Core Minimal API 内置校验：分页契约的文档要求宿主启用它
+    'JsonHttpResult',   # ASP.NET Core 的结果类型：响应包装文档要说明它不被改写
     # EF Core
     'DbContext','DbContextOptions','DbContextOptionsBuilder','DbSet','ModelBuilder','EntityEntry','ChangeTracker',
     'EntityState','SaveChangesInterceptor','IEntityTypeConfiguration','IServiceProviderFactory',

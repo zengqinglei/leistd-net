@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- 端点包装要在真实 Minimal API 管线里验证：结果类型的判定依赖框架实际产出的 IResult -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
   </ItemGroup>
 
   <ItemGroup>

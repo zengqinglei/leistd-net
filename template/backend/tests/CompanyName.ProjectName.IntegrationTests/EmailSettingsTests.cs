@@ -2,7 +2,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using CompanyName.ProjectName.Api.Configuration;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Email.Smtp.Options;
@@ -76,7 +75,6 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
             // 覆盖正生效时重新取一次基线，验的是取值跳过了宿主设置配置源，而不是碰巧在它加载之前取的
             var configuration = (IConfigurationRoot)factory.Services.GetRequiredService<IConfiguration>();
             Assert.Equal("smtp.runtime.example.test", configuration[$"{SmtpOptions.SectionName}:{nameof(SmtpOptions.Host)}"]);
-            Assert.Equal(baselineHost, HostSettingBindings.CaptureDefaults(configuration).Get(SettingConstant.Email.SmtpHost));
             Assert.Equal(baselineHost, (await ReadSettingAsync(admin.Client, SettingConstant.Email.SmtpHost)).GetProperty("defaultValue").GetString());
         }
         finally
@@ -136,7 +134,7 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
     private static async Task WriteAsync(HttpClient client, string name, string? value)
     {
         using var response = await client.PutAsJsonAsync("/api/v1/settings/current-tenant", new { Name = name, Value = value });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 }
 #endif

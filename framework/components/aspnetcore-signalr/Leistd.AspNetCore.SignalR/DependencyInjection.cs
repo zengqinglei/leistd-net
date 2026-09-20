@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Builder;
+using Leistd.AspNetCore.SignalR.Middlewares;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -77,4 +79,24 @@ public static class DependencyInjection
 
     // 独立标记区分"本方法已注册过"与宿主自行添加的同类过滤器。
     private sealed class HubAmbientContextMarker;
+
+    /// <summary>
+    /// 在 Hub 端点上把查询串里的 <c>access_token</c> 转成 Bearer 请求头，供 JWT 等基于请求头的认证方案读取。
+    /// </summary>
+    /// <remarks>
+    /// <para>浏览器的 WebSocket 与 SSE 连接不能带自定义头，SignalR 客户端只能把令牌放进查询串。
+    /// 只作用于 Hub 端点（按端点元数据识别，与 Hub 映射的路径无关），并把令牌从查询串移除，
+    /// 其它端点仍然拒绝查询串令牌——否则令牌会出现在访问日志与 Referer 里。</para>
+    /// <para>必须在路由之后、认证之前调用；已带 <c>Authorization</c> 头的请求原样放行。Cookie 认证的宿主不需要它。</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// app.UseRouting();
+    /// app.UseHubAccessToken();
+    /// app.UseAuthentication();
+    /// </code>
+    /// </example>
+    /// <param name="app">应用管道。</param>
+    public static IApplicationBuilder UseHubAccessToken(this IApplicationBuilder app)
+        => app.UseMiddleware<HubAccessTokenMiddleware>();
 }

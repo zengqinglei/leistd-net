@@ -70,18 +70,57 @@ public class TenantAmbientContextTests
         }
     }
 
+    /// <summary>
+    /// 捕获的是当前租户上下文本身：在 <c>Change</c> 作用域里入队、主体又不带租户声明的任务，
+    /// 还原后回到同一个租户
+    /// </summary>
+    /// <remarks>
+    /// 后台队列靠它把入队时的上下文带进任务。只按主体声明重建的话，宿主为某个租户代办、
+    /// 切了租户再入队的任务会落回宿主分区，读写都去了宿主库。
+    /// </remarks>
+    [Fact]
+    public void A_captured_tenant_is_restored_even_without_a_tenant_claim()
+    {
+        var tenantId = Guid.NewGuid();
+        var sp = BuildProvider();
+        var ambient = sp.GetRequiredService<IAmbientContext>();
+        var currentTenant = sp.GetRequiredService<ICurrentTenant>();
+        var principalAccessor = sp.GetRequiredService<ICurrentPrincipalAccessor>();
+
+        AmbientContextSnapshot snapshot;
+        using (principalAccessor.Change(Authenticated()))
+        using (currentTenant.Change(tenantId, "acme"))
+        {
+            snapshot = ambient.Capture();
+        }
+
+        Assert.Null(currentTenant.Id);
+        using (ambient.Restore(snapshot))
+        {
+            Assert.Equal(tenantId, currentTenant.Id);
+            Assert.Equal("acme", currentTenant.Name);
+            Assert.True(principalAccessor.Principal?.Identity?.IsAuthenticated);
+        }
+
+        Assert.Null(currentTenant.Id);
+    }
+
     private static ClaimsPrincipal Authenticated(params (string Type, string Value)[] claims) =>
         new(new ClaimsIdentity(claims.Select(c => new Claim(c.Type, c.Value)), "Test"));
 
     private static (IAmbientContext Ambient, ICurrentTenant CurrentTenant) Build()
     {
-        var sp = new ServiceCollection()
+        var sp = BuildProvider();
+        return (sp.GetRequiredService<IAmbientContext>(), sp.GetRequiredService<ICurrentTenant>());
+    }
+
+    private static ServiceProvider BuildProvider()
+    {
+        return new ServiceCollection()
             .AddLogging()
             .AddAmbientContext()
             // 声明即定案，不查注册表——正是本贡献者服务的形态。
             .AddMultiTenancy(o => o.ValidateResolvedTenant = false)
             .BuildServiceProvider();
-
-        return (sp.GetRequiredService<IAmbientContext>(), sp.GetRequiredService<ICurrentTenant>());
     }
 }

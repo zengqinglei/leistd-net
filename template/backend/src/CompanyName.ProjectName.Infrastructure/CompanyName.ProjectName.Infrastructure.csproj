@@ -13,6 +13,8 @@
          在集成测试里根本不被执行；要钉住"缓存按租户分区"和"一个调用方取消不牵连搭车者"
          这两条，只能按生产注册方式单独装配后测试。 -->
     <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
+    <!-- 数据库错误翻译是纯映射，不需要宿主：按 SQLSTATE 逐条钉住，尤其是"认不出来就不翻译" -->
+    <InternalsVisibleTo Include="CompanyName.ProjectName.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,6 +60,8 @@
     <PackageReference Include="Leistd.Authorization.EntityFrameworkCore" />
     <PackageReference Include="Leistd.Settings.EntityFrameworkCore" />
     <PackageReference Include="Leistd.OperationRecords.EntityFrameworkCore" />
+    <!-- 集群周期任务的完成水位（多副本同一时段只跑一次） -->
+    <PackageReference Include="Leistd.BackgroundJobs.EntityFrameworkCore" />
 <!--#if (LocalIdentity)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
     <PackageReference Include="Leistd.Email.Smtp" />
@@ -69,7 +73,8 @@
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />
 <!--#if (!LocalIdentity)-->
-    <PackageReference Include="Leistd.ServiceClient.Refit" />
+    <!-- 向 Identity 回源租户连接：远端存储由框架提供，鉴权用 client credentials -->
+    <PackageReference Include="Leistd.MultiTenancy.ServiceClient" />
     <PackageReference Include="Leistd.ServiceClient.OAuth" />
 <!--#endif-->
   </ItemGroup>

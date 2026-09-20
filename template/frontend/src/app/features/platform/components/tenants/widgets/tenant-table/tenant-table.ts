@@ -233,6 +233,15 @@ export class TenantTable {
     //#endif
   }
 
+  /** 停用租户不能模拟登录时，按钮显示的原因。 */
+  impersonateInactiveHint(): string {
+    //#if (IncludeLocalization)
+    return this.transloco.translate('tenants.impersonateInactiveHint');
+    //#else
+    return 'Deactivated tenants cannot be signed in to';
+    //#endif
+  }
+
   actionLabel(action: 'details' | 'edit' | 'delete'): string {
     //#if (IncludeLocalization)
     const keys = {

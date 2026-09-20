@@ -40,6 +40,7 @@ public static class DependencyInjection
         // 幂等：EF 包的注册入口会调到这里，宿主自己也可能显式调一次。
         // 不幂等会让 IOperationRecorder 出现两条，按 IEnumerable 解析时重复记录。
         services.TryAddTransient<IOperationRecorder, OperationRecorder>();
+        services.TryAddTransient<IOperationRecordQueryService, OperationRecordQueryService>();
 
         // 动作定义索引是启动期事实，单例即可；宿主用
         // AddSingleton<IOperationActionDefinitionProvider, XxxProvider>() 登记自己的动作。

@@ -32,13 +32,23 @@ export interface CreateTenantInputDto {
   adminEmail: string;
   adminPassword: string;
   /**
-   * 该租户专属库的连接串；留空即不分库，各服务使用自己配置的数据库。
+   * 该租户的专属库连接，按名字登记；留空数组即不分库，各服务使用自己配置的数据库。
    *
-   * **分库只能在建租户时定案。**登记先于播种，种子（含租户管理员）因此直接落进这个库。
+   * **分库只能在建租户时定案。**登记先于播种，种子（含租户管理员）因此直接落进这些库。
    * 建好之后再想分库，后端会以 409 拒绝——那时数据已经在回落库里，登记连接不会把它们搬过去。
    * 库须事先建好并迁移过；这里只登记，不建库也不迁移。
+   *
+   * 多服务部署可以一次给多条（如 `default`、`crm`）：租户与全部连接在同一个事务里落库，
+   * 不会出现"租户已建、某条连接还没登记"的中间状态。
    */
-  connectionString?: string;
+  connections?: CreateTenantConnectionInputDto[];
+}
+
+/** 创建租户时登记的一条命名连接。 */
+export interface CreateTenantConnectionInputDto {
+  /** 连接名，对应使用方服务的连接名；不区分大小写，后端归一化为小写。 */
+  name: string;
+  connectionString: string;
 }
 
 /**

@@ -1,5 +1,5 @@
+using Leistd.Settings.Validation;
 using CompanyName.ProjectName.Application;
-using CompanyName.ProjectName.Application.Settings.AppServices;
 using CompanyName.ProjectName.Domain;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using Leistd.ObjectMapping.Abstractions;
@@ -42,18 +42,17 @@ public class ServiceRegistrationTests
         Assert.Equal(afterFirst, services.Count);
     }
 
-    // 设置的 Controller 与前端页面在所有服务形态下都保留，注册却曾被裹进只在
-    // 本地身份形态下生效的条件块：Resource 形态下一访问 /api/v1/settings 就因解析不到
-    // 构造参数返回 500。健康探针不覆盖这条路径，只有在注册面上断言才拦得住。
+    // 设置页在所有服务形态下都保留：值域之外的业务校验（时区等）必须在每种形态下都登记，
+    // 漏了不会报错，只会让非法值静默落库，之后每个消费方都得自己防御。
     [Fact]
-    public void The_setting_app_service_is_registered_in_every_service_role()
+    public void Setting_value_validators_are_registered_in_every_service_role()
     {
         var services = new ServiceCollection();
         services.AddLogging();
 
         services.AddApplicationServices();
 
-        Assert.Contains(services, d => d.ServiceType == typeof(ISettingAppService));
+        Assert.Contains(services, d => d.ServiceType == typeof(ISettingValueValidator));
     }
 
     [Fact]

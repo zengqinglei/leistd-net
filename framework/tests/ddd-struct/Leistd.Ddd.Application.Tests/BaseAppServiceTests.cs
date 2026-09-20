@@ -5,6 +5,7 @@ using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Application.Extensions;
 using Leistd.ObjectMapping.Abstractions;
 using Xunit;
+using Leistd.Data.Paging;
 
 namespace Leistd.Ddd.Application.Tests;
 
@@ -67,7 +68,7 @@ public class BaseAppServiceTests
     [Fact]
     public void Mapping_a_paged_result_preserves_the_total_count()
     {
-        var source = new PagedResultDto<OrderEntity>(
+        var source = new PagedResult<OrderEntity>(
             999,
             [new OrderEntity(Guid.CreateVersion7(), "A-1"), new OrderEntity(Guid.CreateVersion7(), "A-2")]);
 
@@ -82,7 +83,7 @@ public class BaseAppServiceTests
     {
         var mapper = new PassThroughMapper();
 
-        var mapped = mapper.MapPagedResult<OrderEntity, OrderDto>(new PagedResultDto<OrderEntity>(0, []));
+        var mapped = mapper.MapPagedResult<OrderEntity, OrderDto>(new PagedResult<OrderEntity>(0, []));
 
         Assert.Equal(0, mapper.Calls);
         Assert.Empty(mapped.Items);
@@ -97,6 +98,6 @@ public class BaseAppServiceTests
         Assert.Throws<ArgumentNullException>(() =>
             mapper.MapPagedResult<OrderEntity, OrderDto>(null!));
         Assert.Throws<ArgumentNullException>(() =>
-            ((IObjectMapper)null!).MapPagedResult<OrderEntity, OrderDto>(new PagedResultDto<OrderEntity>(0, [])));
+            ((IObjectMapper)null!).MapPagedResult<OrderEntity, OrderDto>(new PagedResult<OrderEntity>(0, [])));
     }
 }

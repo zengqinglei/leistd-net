@@ -40,7 +40,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # 有可覆盖代码、但刻意不建独立测试目录的家族。值是理由，会原样出现在失败信息里。
 WAIVERS = {
     "aop": "仅 BaseAsyncInterceptor，1 行可覆盖代码，由 dependency-injection 的拦截器编织用例连带覆盖",
-    "data": "仅接口、特性与常量，3 行可覆盖代码，由 multi-tenancy 的连接串解析用例连带覆盖",
 }
 
 BRANCHES = ("components", "ddd-struct", "shared")
@@ -246,8 +245,8 @@ CASES: list[tuple[str, list[str], str, bool, str | None]] = [
      ["lock/Leistd.Lock.Core"],
      "shared/Leistd.TestBase/Leistd.TestBase.csproj", True, "有可覆盖代码但没有"),
     ("反例：已建测试目录却仍留着豁免",
-     ["data/Leistd.Data"],
-     "components/data/Leistd.Data.Tests/Leistd.Data.Tests.csproj", True, "仍在 WAIVERS 里"),
+     ["aop/Leistd.DynamicProxy"],
+     "components/aop/Leistd.DynamicProxy.Tests/Leistd.DynamicProxy.Tests.csproj", True, "仍在 WAIVERS 里"),
 ]
 
 

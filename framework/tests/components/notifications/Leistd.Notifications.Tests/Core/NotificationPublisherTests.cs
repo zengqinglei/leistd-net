@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Leistd.Notifications.Abstractions;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Filters;
@@ -263,8 +264,13 @@ public class NotificationPublisherTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<NotificationOutputDto>> GetByUserAsync(string userId, int maxCount = 50, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<NotificationOutputDto>>([]);
+        public Task<PagedResult<NotificationOutputDto>> GetByUserAsync(
+            string userId, PageRequest page, bool unreadOnly = false, CancellationToken ct = default)
+            => Task.FromResult(PagedResult<NotificationOutputDto>.Empty);
+
+        public Task<bool> DeleteAsync(string notificationId, string userId, CancellationToken ct = default) => Task.FromResult(false);
+
+        public Task<int> DeleteAllAsync(string userId, CancellationToken ct = default) => Task.FromResult(0);
 
         public Task MarkAsReadAsync(string notificationId, string userId, CancellationToken ct = default) => Task.CompletedTask;
 
@@ -281,8 +287,13 @@ public class NotificationPublisherTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<NotificationOutputDto>> GetByUserAsync(string userId, int maxCount = 50, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<NotificationOutputDto>>([]);
+        public Task<PagedResult<NotificationOutputDto>> GetByUserAsync(
+            string userId, PageRequest page, bool unreadOnly = false, CancellationToken ct = default)
+            => Task.FromResult(PagedResult<NotificationOutputDto>.Empty);
+
+        public Task<bool> DeleteAsync(string notificationId, string userId, CancellationToken ct = default) => Task.FromResult(false);
+
+        public Task<int> DeleteAllAsync(string userId, CancellationToken ct = default) => Task.FromResult(0);
 
         public Task MarkAsReadAsync(string notificationId, string userId, CancellationToken ct = default) => Task.CompletedTask;
 

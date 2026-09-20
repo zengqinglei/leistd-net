@@ -26,4 +26,29 @@ public interface IAmbientContext
     /// <param name="principal">本次调用的主体。</param>
     /// <param name="correlationId">指定链路标识；省略时由追踪维度决定。</param>
     IDisposable Begin(ClaimsPrincipal principal, string? correlationId = null);
+
+    /// <summary>
+    /// 捕获当前执行流的环境上下文（主体与各维度），供稍后在别的执行流里还原。
+    /// </summary>
+    /// <remarks>
+    /// 用于后台队列：入队时捕获，执行时 <see cref="Restore"/>。只捕获登记过的维度，
+    /// 不捕获工作单元、<c>HttpContext</c> 这类随请求释放的对象——整体流转 <c>ExecutionContext</c>
+    /// 会把它们一并带过去，后台任务可能加入一个已释放或属于别的作用域的工作单元。
+    /// </remarks>
+    AmbientContextSnapshot Capture();
+
+    /// <summary>
+    /// 还原 <see cref="Capture"/> 得到的上下文；释放返回值即回到还原前的状态。
+    /// </summary>
+    /// <param name="snapshot">捕获的上下文。</param>
+    IDisposable Restore(AmbientContextSnapshot snapshot);
 }
+
+/// <summary>
+/// 某一时刻的环境上下文快照，由 <see cref="IAmbientContext.Capture"/> 产生、<see cref="IAmbientContext.Restore"/> 消费。
+/// </summary>
+/// <param name="Principal">捕获时的主体；匿名或未建立时为 <see langword="null"/>。</param>
+/// <param name="States">各维度捕获的值，按维度的实现类型索引；内容只由对应维度解读。</param>
+public sealed record AmbientContextSnapshot(
+    ClaimsPrincipal? Principal,
+    IReadOnlyDictionary<Type, object?> States);

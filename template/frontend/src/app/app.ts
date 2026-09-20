@@ -23,8 +23,21 @@ import { ThemeService } from './core/services/theme-service';
   imports: [RouterOutlet, HlmToaster, HlmSpinner, HlmButton, NgIcon, ...HlmCardImports],
   providers: [provideIcons({ lucideRefreshCw })],
   template: `
-    <!-- 全局 toast 宿主。标题保留换行：多个字段的校验错误各占一行（见 ApplicationHttpError）。 -->
-    <hlm-toaster [toastOptions]="{ classes: { title: 'whitespace-pre-line' } }" />
+    <!-- 全局 toast 宿主。标题保留换行：多个字段的校验错误各占一行（见 ApplicationHttpError）。
+         按类型只给图标上色（底色保持中性）：颜色用语义令牌，暗色自动跟随；
+         不用 sonner 的 richColors——那会连底色一起换成它自带的调色板，且暗色一档只在
+         data-theme="dark" 下生效，与本项目的令牌体系两张皮。 -->
+    <hlm-toaster
+      [toastOptions]="{
+        classes: {
+          title: 'whitespace-pre-line',
+          success: '[&_[data-icon]]:text-success',
+          warning: '[&_[data-icon]]:text-warning',
+          error: '[&_[data-icon]]:text-destructive',
+          info: '[&_[data-icon]]:text-primary',
+        },
+      }"
+    />
 
     @switch (startupService.status()) {
       @case ('success') {

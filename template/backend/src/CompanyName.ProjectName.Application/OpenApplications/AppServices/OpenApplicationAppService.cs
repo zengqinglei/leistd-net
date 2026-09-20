@@ -13,6 +13,7 @@ using CompanyName.ProjectName.Application.OpenApplications.Mappings;
 using Leistd.ObjectMapping.Abstractions;
 using OpenIddict.Abstractions;
 using Leistd.Timing;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.AppServices;
 
@@ -98,7 +99,7 @@ public class OpenApplicationAppService(
         OpenIddictConstants.ConsentTypes.Systematic
     };
 
-    public async Task<PagedResultDto<OpenApplicationOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<OpenApplicationOutputDto>> GetPagedListAsync(
         GetOpenApplicationPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
@@ -150,7 +151,7 @@ public class OpenApplicationAppService(
             outputItems.Add(await MapToOutputAsync(item.Application, cancellationToken));
         }
 
-        return new PagedResultDto<OpenApplicationOutputDto>(totalCount, outputItems);
+        return new PagedResult<OpenApplicationOutputDto>(totalCount, outputItems);
     }
 
     public async Task<OpenApplicationOutputDto> GetAsync(string id, CancellationToken cancellationToken = default)

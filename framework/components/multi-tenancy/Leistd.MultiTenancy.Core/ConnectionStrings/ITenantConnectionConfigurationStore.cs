@@ -7,9 +7,10 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// <para>同一个契约表达两种宿主形态，按注册方式二选一：</para>
 /// <list type="bullet">
 /// <item>自己持有控制库的服务用 EF 实现（<c>AddMultiTenancyEfCore</c>），直接读库并解密连接串；</item>
-/// <item>资源服务由宿主实现 HTTP 版本，向控制面回源。框架不认识任何具体服务的 HTTP 接口：
-/// 路由、鉴权方式与响应形态归控制面服务所有，宿主用自己的客户端（如 Refit 接口）实现本契约。
-/// 控制面经已认证的内部接口下发<b>已解密</b>的连接串，本服务不持有控制面的密钥环。</item>
+/// <item>资源服务用远端实现（<c>Leistd.MultiTenancy.ServiceClient</c> 的 <c>AddRemoteTenantConnectionStore</c>），
+/// 回源控制面经 <c>MapTenantConnections</c> 暴露的机器端点。端点与客户端共用 Core 里的线上 DTO，
+/// 鉴权方式与弹性策略由宿主在返回的 <c>IHttpClientBuilder</c> 上决定。
+/// 控制面下发<b>已解密</b>的连接串，本服务不持有控制面的密钥环。</item>
 /// </list>
 /// <para><b>接口按名字问、按名字答，一次只出一条</b>：远端形态下，把整租户的连接列表交给某一个资源服务，
 /// 等于把别的服务的库口令也发过去了。"精确名 → 默认名"的回落由实现完成。</para>

@@ -168,7 +168,7 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
-| `BaseAddress` | `null` | 下游服务基础地址，结尾自动补 `/` |
+| `BaseAddress` | `null` | 下游服务基础地址，结尾自动补 `/`；留空不报错——宿主可在返回的 `IHttpClientBuilder` 上自行设置，两处都没设时调用在发请求时失败 |
 | `Timeout` | 30s | 单次调用超时 |
 | `LogPayloads` | `false` | 是否记录脱敏且截断的载荷 |
 | `MaxPayloadLength` | 4096 | 载荷最大记录长度 |

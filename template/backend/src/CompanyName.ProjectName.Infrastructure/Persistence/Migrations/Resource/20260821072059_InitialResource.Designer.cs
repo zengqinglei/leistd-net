@@ -206,92 +206,6 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.ToTable("UserRoles", "companyname-projectname");
                 });
 
-            modelBuilder.Entity("CompanyName.ProjectName.Infrastructure.OperationRecords.OperationRecordArchive", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("ActorId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("ActorName")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<Guid?>("ActorTenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ArchivedTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("AuthorizationBasis")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("CorrelationId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime>("CreationTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("FailureCode")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("FailureData")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FailureDetail")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<string>("ImpersonatorId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("ImpersonatorName")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("Outcome")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("TargetId")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<string>("TargetName")
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Visibility")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "CreationTime")
-                        .IsDescending(false, true);
-
-                    b.ToTable("OperationRecordArchives", "companyname-projectname");
-                });
-
             modelBuilder.Entity("Leistd.Authorization.EntityFrameworkCore.Entities.AuthorizationVersionRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -379,6 +293,20 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .HasFilter("\"TenantId\" IS NOT NULL");
 
                     b.ToTable("PermissionGrantRecords", "companyname-projectname");
+                });
+
+            modelBuilder.Entity("Leistd.BackgroundJobs.EntityFrameworkCore.Entities.RecurringJobState", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("LastCompletedSlot")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("RecurringJobStates", "companyname-projectname");
                 });
 
 #if (IncludeNotifications)
@@ -536,6 +464,92 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .IsDescending(false, false, true);
 
                     b.ToTable("OperationRecords", "companyname-projectname");
+                });
+
+            modelBuilder.Entity("Leistd.OperationRecords.EntityFrameworkCore.Entities.OperationRecordArchive", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ActorId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ActorName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("ActorTenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ArchivedTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AuthorizationBasis")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("FailureData")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FailureDetail")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("ImpersonatorId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ImpersonatorName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TargetId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("TargetName")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreationTime")
+                        .IsDescending(false, true);
+
+                    b.ToTable("OperationRecordArchives", "companyname-projectname");
                 });
 
             modelBuilder.Entity("Leistd.Settings.EntityFrameworkCore.Entities.SettingRecord", b =>

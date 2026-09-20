@@ -283,7 +283,8 @@
                           }}</span>
                         }
                         @case ('actions') {
-                          <!-- 操作列（3 项 ≤ 3）：桌面端全部平铺；<sm 收进 … 菜单省列宽。 -->
+                          <!-- 操作列（3 项 ≤ 3）：桌面端全部平铺；<sm 收进 … 菜单省列宽。
+                               规则见 docs/standards/coding-frontend.md「表格操作列」。 -->
                           <div class="flex items-center justify-end gap-1">
                             @if (canUpdate()) {
                               <button

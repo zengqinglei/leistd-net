@@ -143,7 +143,7 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
     {
         using var response = await client.PutAsJsonAsync(
             "/api/v1/settings/current-tenant", new { Name = name, Value = value });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 }
 #endif

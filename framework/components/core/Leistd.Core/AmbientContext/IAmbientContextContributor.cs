@@ -15,6 +15,21 @@ public interface IAmbientContextContributor
     /// 建立本维度，返回退出作用域时的还原句柄；本维度不适用时返回 <see langword="null"/>。
     /// </summary>
     IDisposable? Enter(AmbientContextEnterContext context);
+
+    /// <summary>
+    /// 捕获本维度的当前值，供稍后在另一个执行流里还原；本维度不参与捕获时返回 <see langword="null"/>。
+    /// </summary>
+    /// <remarks>
+    /// 用于把入队时的上下文带进后台任务。返回值只由本维度自己的 <see cref="Restore"/> 解读，
+    /// 必须是不可变快照，不能是会随原执行流变化的引用。默认不参与。
+    /// </remarks>
+    object? Capture() => null;
+
+    /// <summary>
+    /// 还原 <see cref="Capture"/> 得到的值，返回退出作用域时的还原句柄；无需还原时返回 <see langword="null"/>。
+    /// </summary>
+    /// <param name="state"><see cref="Capture"/> 的返回值。</param>
+    IDisposable? Restore(object? state) => null;
 }
 
 /// <summary>

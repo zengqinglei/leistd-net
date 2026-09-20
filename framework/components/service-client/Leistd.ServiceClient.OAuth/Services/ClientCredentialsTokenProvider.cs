@@ -70,11 +70,6 @@ public class ClientCredentialsTokenProvider(
     private async Task<CachedToken> RequestTokenAsync(
         string clientName, ClientCredentialsOptions options, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(options.ClientId))
-        {
-            throw new ServiceClientException($"Service client {clientName} has no ClientId configured; cannot obtain an access token.");
-        }
-
         string tokenEndpoint;
         try
         {

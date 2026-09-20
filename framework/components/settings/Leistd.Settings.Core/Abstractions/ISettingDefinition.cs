@@ -60,4 +60,24 @@ public interface ISettingDefinition
     /// <para>代码默认值不加密：机密设置的默认值应当为空，由宿主在未设置时自行回落（例如回落到配置文件）。</para>
     /// </remarks>
     bool IsEncrypted { get; set; }
+
+    /// <summary>值的类型，写入时据此校验。</summary>
+    /// <remarks>
+    /// 默认 <see cref="SettingValueType.Text"/>。值域在写入端把关而不是只靠界面：
+    /// 脚本、旧版客户端与迁移数据都绕得过界面，非法值一旦落库，之后每个消费方都得自己防御。
+    /// 界面也读它渲染控件（开关、带上下界的数字框、下拉框），两边同源不会各走一边。
+    /// </remarks>
+    SettingValueType ValueType { get; set; }
+
+    /// <summary>整数设置的下界（含）；<see langword="null"/> 表示不限。</summary>
+    int? Minimum { get; set; }
+
+    /// <summary>整数设置的上界（含）；<see langword="null"/> 表示不限。</summary>
+    int? Maximum { get; set; }
+
+    /// <summary>
+    /// 允许的取值（按序号比较）；<see langword="null"/> 表示不限。
+    /// </summary>
+    /// <remarks>写入端据此拒绝候选之外的值，界面据此渲染下拉框。</remarks>
+    IReadOnlyList<string>? AllowedValues { get; set; }
 }

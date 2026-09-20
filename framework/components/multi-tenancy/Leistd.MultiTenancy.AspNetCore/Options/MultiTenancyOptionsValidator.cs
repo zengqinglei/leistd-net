@@ -43,8 +43,8 @@ internal sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenan
 
         return failures.Count == 0
             ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(
-                $"MultiTenancyOptions.DomainFormat is invalid ('{format}'): {string.Join(" ", failures)}");
+            : ValidateOptionsResult.Fail(failures.Select(failure
+                => $"{MultiTenancyOptions.SectionName}:DomainFormat is invalid ('{format}'): {failure}"));
     }
 
     // 按浏览器实际发送的 ASCII/punycode Host 形态校验。

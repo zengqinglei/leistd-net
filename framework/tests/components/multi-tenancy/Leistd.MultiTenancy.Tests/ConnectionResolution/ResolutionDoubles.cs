@@ -113,7 +113,7 @@ public sealed class RemoteHost : IDisposable
     public async Task<string> ResolveAsync(string name = "Default", CancellationToken cancellationToken = default)
     {
         await using var scope = Provider.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<Leistd.Data.Abstractions.IConnectionStringResolver>()
+        return await scope.ServiceProvider.GetRequiredService<Leistd.Data.Connections.IConnectionStringResolver>()
             .ResolveAsync(name, cancellationToken);
     }
 

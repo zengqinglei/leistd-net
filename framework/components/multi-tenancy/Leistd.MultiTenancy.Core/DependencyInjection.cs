@@ -6,8 +6,10 @@ using Leistd.Data;
 using Leistd.MultiTenancy.Resolution;
 using Leistd.MultiTenancy.Services;
 using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.Provisioning;
+using Leistd.Localization;
 
 namespace Leistd.MultiTenancy;
 
@@ -45,6 +47,44 @@ public static class DependencyInjection
         services.TryAddScoped<ITenantResolver, TenantResolver>();
         // 逐库作业的清单：注册了租户连接解析就列出独立库，没有就只有宿主库，宿主不必按模式分支注册
         services.TryAddTransient<ITenantDatabaseEnumerator, TenantDatabaseEnumerator>();
+        services.TryAddTransient<ITenantDatabaseRunner, TenantDatabaseRunner>();
+        // 开通失败的数据库错误翻译：默认不翻译（错误码表随数据库而异），宿主注册自己的实现即可替换
+        services.TryAddSingleton<ITenantDatabaseErrorDescriber, NullTenantDatabaseErrorDescriber>();
+        services.AddJsonLocalizationResources(typeof(MultiTenancyErrorCodes).Assembly);
+        return services;
+    }
+
+    /// <summary>
+    /// 注册租户管理与连接管理两个用例。
+    /// </summary>
+    /// <param name="services">服务集合</param>
+    /// <remarks>
+    /// <para>用例只依赖契约（<see cref="ITenantManager"/>、<see cref="ITenantStore"/>、
+    /// <see cref="ITenantConnectionConfigurationManager"/>、<see cref="ITenantConnectionDirectory"/>）与工作单元，
+    /// 因此换存储实现时这套开通编排、失败补偿与 DTO 投影照旧可用。<b>五个存储契约与
+    /// <c>AddUnitOfWork()</c> 都要由调用方先就位</b>，漏了哪个在首次解析用例时才会暴露；
+    /// EF 存储的 <c>AddMultiTenancyEfCore</c> 已经代为注册并调用本方法。</para>
+    /// <para>开通编排的顺序与补偿见 <see cref="ITenantProvisioner"/>。</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // 自定义存储的宿主：五个存储契约与工作单元都要先就位，再注册用例
+    /// builder.Services.AddUnitOfWork();
+    /// builder.Services.AddMultiTenancyCore();
+    /// builder.Services.AddScoped&lt;ITenantStore, DapperTenantStore&gt;();
+    /// builder.Services.AddScoped&lt;ITenantManager, DapperTenantManager&gt;();
+    /// builder.Services.AddScoped&lt;ITenantConnectionConfigurationStore, DapperTenantConnectionStore&gt;();
+    /// builder.Services.AddScoped&lt;ITenantConnectionConfigurationManager, DapperTenantConnectionManager&gt;();
+    /// builder.Services.AddScoped&lt;ITenantConnectionDirectory, DapperTenantConnectionDirectory&gt;();
+    /// builder.Services.AddTenantManagement();
+    /// </code>
+    /// </example>
+    public static IServiceCollection AddTenantManagement(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddTransient<ITenantConnectionManagementService, TenantConnectionManagementService>();
+        services.TryAddTransient<ITenantManagementService, TenantManagementService>();
         return services;
     }
 
@@ -55,7 +95,7 @@ public static class DependencyInjection
     /// <remarks>
     /// <para><c>TenantRouting:CacheLifetime</c> 必须配置（大于 0、不超过 1 小时），否则启动失败；
     /// 也可以再用 <c>services.Configure&lt;TenantRouteCacheOptions&gt;</c> 覆盖。</para>
-    /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的 HTTP 实现：控制面经已认证的内部接口下发
+    /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现（<c>Leistd.MultiTenancy.ServiceClient</c> 包）：控制面经已认证的内部接口下发
     /// 已解密的连接串，本服务不需要控制面的密钥环。
     /// 同时注册 <see cref="ITenantMigrationTargetProvider"/> 与内存缓存。均以 <c>TryAdd</c> 注册，宿主可替换。</para>
     /// <para>宿主自己持有控制库时改用 EF 包的 <c>AddLocalTenantConnectionResolution</c>，两者二选一。</para>
@@ -63,7 +103,7 @@ public static class DependencyInjection
     /// <example>
     /// <code>
     /// builder.Services.AddRemoteTenantConnectionResolution();
-    /// builder.Services.AddScoped&lt;ITenantConnectionConfigurationStore, IdentityTenantConnectionStore&gt;();
+    /// builder.Services.AddRemoteTenantConnectionStore("identity", builder.Configuration); // Leistd.MultiTenancy.ServiceClient
     /// </code>
     /// </example>
     public static IServiceCollection AddRemoteTenantConnectionResolution(this IServiceCollection services)

@@ -9,6 +9,7 @@ using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -24,7 +25,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpGet]
     [Authorize(Policy = PermissionConstant.Users.Default)]
-    public async Task<PagedResultDto<UserManagementOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<UserManagementOutputDto>> GetPagedListAsync(
         [FromQuery] GetUserPagedInputDto input,
         CancellationToken cancellationToken)
     {

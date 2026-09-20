@@ -5,16 +5,16 @@ using CompanyName.ProjectName.Api.HealthChecks;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Api.Auth;
 #endif
+#if (LocalIdentity)
 using CompanyName.ProjectName.Api.Middlewares;
+#endif
 using Leistd.MultiTenancy.AspNetCore;
-using CompanyName.ProjectName.Api.HostedServices.BackgroundJobs;
+using Leistd.MultiTenancy.AspNetCore.Options;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
-using CompanyName.ProjectName.Api.HostedServices.Workers;
 using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Api.Configuration;
 
 using CompanyName.ProjectName.Application;
-using CompanyName.ProjectName.Application.Settings.Hosting;
 using CompanyName.ProjectName.Domain;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -27,10 +27,13 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.ExceptionHandling.AspNetCore;
 using CompanyName.ProjectName.Api;
 #if (IncludeLocalization)
-using CompanyName.ProjectName.Application.Permissions.AppServices;
-using CompanyName.ProjectName.Application.Settings.AppServices;
+using CompanyName.ProjectName.Application.Settings.Provider;
+using Leistd.Authorization.Options;
 using Leistd.Localization.AspNetCore;
+using Leistd.Settings.Options;
 #endif
+using Leistd.BackgroundJobs.InProcess;
+using Leistd.Settings.Hosting;
 using Leistd.Security.AspNetCore;
 using Leistd.Security.Claims;
 using Leistd.Tracing.AspNetCore;
@@ -38,17 +41,22 @@ using Leistd.Authorization.AspNetCore;
 using Leistd.MultiTenancy;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
-using Leistd.Notifications.Abstractions;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Api.Notifications;
-using CompanyName.ProjectName.Api.Filters;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
-using Leistd.Notifications.Filters;
+using CompanyName.ProjectName.Application.Notifications;
+using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Email;
+using Leistd.Notifications.Email.Abstractions;
+using Leistd.Notifications.Settings;
+using Leistd.Notifications.Settings.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 #endif
-using Leistd.RealTime.Abstractions;
+using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
-using CompanyName.ProjectName.Api.RealTime;
+#if (!LocalIdentity)
+using Leistd.AspNetCore.SignalR;
+#endif
 #endif
 #if (LocalIdentity)
 using Microsoft.AspNetCore.Authentication;
@@ -100,19 +108,10 @@ try
             ValidateOnBuild = builder.Environment.IsDevelopment()
         }));
 
-    // 宿主级设置作为优先级最高的配置源（日志级别、发信参数、操作记录保留期等，见 HostSettingBindings）：
-    // 设置里有值的项覆盖部署配置，消费方照常注入 IOptionsMonitor<T>。写入后本进程立即应用，其它实例周期跟上。
-    // 配置源本身在 Build 之后才加入（见 AddHostSettings）；这些设置的代码默认值是部署配置里的基线
-    // （见 HostSettingDefaults），取值时跳过宿主设置配置源本身
-    var hostSettings = new HostSettingsConfigurationProvider();
-    builder.Services.AddSingleton(hostSettings);
-    builder.Services.AddSingleton(services =>
-        HostSettingBindings.CaptureDefaults((IConfigurationRoot)services.GetRequiredService<IConfiguration>()));
-    builder.Services.AddScoped<IHostSettingApplier, HostSettingsConfigurationApplier>();
-    // 开始接收请求之前推入一次，之后周期刷新，让别的实例也跟上
-    builder.Services.AddOptions<HostSettingRefreshOptions>()
-        .Bind(builder.Configuration.GetSection(HostSettingRefreshOptions.SectionName));
-    builder.Services.AddHostedService<HostSettingRefreshJob>();
+    // 宿主级设置作为优先级最高的配置源（日志级别、发信参数、操作记录保留期，见 HostSettingBindings）：
+    // 设置里有值的项覆盖部署配置，消费方照常注入 IOptionsMonitor<T>。写入后本进程立即应用，
+    // 其它实例由周期任务跟上（Leistd:Settings:Hosting:RefreshInterval）。配置源在 Build 之后挂上（UseHostSettings）
+    builder.Services.AddMyProjectHostSettings();
 
     // 请求体沿用 Kestrel 默认上限（约 30 MB）：需要更大上传的端点用 [RequestSizeLimit] / [RequestFormLimits] 单独放宽
     builder.AddMyProjectLogging();
@@ -263,11 +262,10 @@ try
         "Resource services require Authentication:Issuer (an absolute http(s) URI) and Authentication:Audience.";
 
     builder.Services.AddOptions<RemoteIdentityOptions>()
-        .Bind(builder.Configuration.GetSection(RemoteIdentityOptions.SectionName))
-        .Validate(options => options.IsUsable, RemoteIdentityConfigurationError)
-        .ValidateOnStart();
+        .Bind(builder.Configuration.GetSection(RemoteIdentityOptions.SectionName));
 
-    // OpenIddict 组合期需要已验证的 issuer。
+    // 校验放在这里而不是 ValidateOnStart：OpenIddict 在**组合期**就要用 issuer，
+    // 比启动期校验早一步。两处都写等于同一条件维护两份，出错时还分不清是哪一处报的。
     var remoteIdentity = builder.Configuration
         .GetSection(RemoteIdentityOptions.SectionName)
         .Get<RemoteIdentityOptions>() ?? new RemoteIdentityOptions();
@@ -290,33 +288,23 @@ try
 
     builder.Services.AddHostedService<ApplicationInitializer>();
 
-    // 进程内后台任务队列。**一个实例、三处注册**：单例本体、以队列接口解析到它、
-    // 以托管服务解析到它。三者若各自 new 一个，生产者写进 A 的队列，
-    // 而被主机启动消费的是 B——工作项永远不会执行，且没有任何报错。
-    builder.Services.AddSingleton<BackgroundTaskWorker>();
-    builder.Services.AddSingleton<IBackgroundTaskQueue>(sp => sp.GetRequiredService<BackgroundTaskWorker>());
-    builder.Services.AddHostedService(sp => sp.GetRequiredService<BackgroundTaskWorker>());
-
-    // 操作记录到期归档。默认关闭：审计表只增不减是安全的默认值，
-    // 要启用就得有人显式打开（配置或系统设置的「审计」面板），那一刻他也为保留期负了责。
-    builder.Services.AddOptions<OperationRecordRetentionOptions>()
-        .Bind(builder.Configuration.GetSection(OperationRecordRetentionOptions.SectionName))
-        .ValidateDataAnnotations()
-        .ValidateOnStart();
-    builder.Services.AddHostedService<OperationRecordArchiveJob>();
+    // 周期任务调度与进程内队列：组件登记的维护任务（操作记录归档、通知保留期、宿主级设置刷新）由它执行。
+    // 集群任务经分布式锁 + 完成水位保证多副本同一时段只跑一次（多副本部署须配置 Redis）
+    builder.Services.AddInProcessBackgroundJobs();
 
     builder.Services.AddGlobalExceptionHandler(builder.Configuration);
 #if (IncludeLocalization)
     builder.Services.AddJsonLocalization(
-        supportedCultures: ["en", "zh-CN"],
+        supportedCultures: [.. SettingConstant.Display.SupportedLanguages],
         configure: options =>
         {
             options.ResourceAssemblies.Add(typeof(Program).Assembly);
             // 只有显式登记的强类型资源才路由到 JSON。
             options.JsonResourceTypes.Add(typeof(ApiResource));
-            options.JsonResourceTypes.Add(typeof(PermissionAppService));
-            options.JsonResourceTypes.Add(typeof(SettingAppService));
         });
+    // 设置页与权限树的显示名按 Setting:{名称}、SettingGroup:{分组} 与权限定义的显示名键查 ApiResource
+    builder.Services.Configure<SettingManagementOptions>(options => options.LocalizationResource = typeof(ApiResource));
+    builder.Services.Configure<PermissionManagementOptions>(options => options.LocalizationResource = typeof(ApiResource));
 #endif
     // liveness 只表示本进程存活，不依赖外部服务。
     var healthChecks = builder.Services.AddHealthChecks()
@@ -393,7 +381,7 @@ try
 #if (LocalIdentity)
 
             // 跨域前端需要读取租户失效响应头以触发会话恢复。
-            policy.WithExposedHeaders(TenantSessionRecoveryMiddleware.TenantInvalidHeader);
+            policy.WithExposedHeaders(TenantSessionRecoveryOptions.DefaultTenantInvalidHeader);
 #endif
 
             if (allowAnyLocalhost)
@@ -438,17 +426,20 @@ try
     builder.Services.AddNotificationsSignalR();
 #if (LocalIdentity)
 
-    // 通知偏好（用户设置）决定哪类通知经哪个渠道收；邮件渠道只发已验证的邮箱，经后台队列发送
-    builder.Services.Replace(ServiceDescriptor.Scoped<INotificationDeliveryFilter, SettingsNotificationDeliveryFilter>());
-    builder.Services.AddScoped<INotificationChannel, EmailNotificationChannel>();
+    // 通知偏好（收件人自己的用户级设置）决定哪类通知经哪个渠道收；安全提醒的站内通知必达，不受偏好影响
+    builder.Services.AddNotificationPreferences(options =>
+        options.MandatoryDeliveries.Add(new NotificationDelivery(AppNotificationTypes.Security, AppNotificationChannels.InApp)));
+    // 邮件渠道只发已验证的邮箱，经后台队列发送
+    builder.Services.AddEmailNotifications();
+    builder.Services.AddScoped<INotificationRecipientResolver, UserEmailRecipientResolver>();
     // 安全提醒（新设备登录、密码与两步验证变更、账号锁定）经通知组件发给本人
     builder.Services.Replace(ServiceDescriptor.Transient<ISecurityAlertPublisher, NotificationSecurityAlertPublisher>());
 #endif
 
     // 订阅授权必须由宿主明确选择：Subscribe 无条件走授权器，框架不给默认实现。
-    // 组名不含租户段，Subscribe 收的是客户端给的任意字符串，所以默认只放行显式公共的
-    // public: 命名空间；订阅租户内资源时在 PublicResourceSubscriptionAuthorizer 里加判定。
-    builder.Services.AddSingleton<IRealTimeSubscriptionAuthorizer, PublicResourceSubscriptionAuthorizer>();
+    // 组名不含租户段，Subscribe 收的是客户端给的任意字符串，所以只放行显式公共的 public: 命名空间；
+    // 订阅租户内资源时换成自己的授权器。
+    builder.Services.AddPrefixRealTimeSubscriptions("public:");
 #endif
 
     builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
@@ -540,7 +531,8 @@ try
     builder.Services.AddPermissionAuthorization();
 
     var app = builder.Build();
-    builder.Configuration.AddHostSettings(hostSettings);
+    // 宿主级设置配置源要在构建之后挂上：构建期间追加的配置源（如测试宿主的覆盖）不能排在它后面
+    app.UseHostSettings();
 
     app.UseForwardedHeaders();
 #if (IncludeLocalization)
@@ -603,7 +595,7 @@ try
 #endif
 #if (LocalIdentity)
     // 租户失效时注销 Cookie，避免会话困在不可用租户中。
-    app.UseTenantSessionRecovery(AuthenticationSchemeNames.SessionCookie);
+    app.UseTenantSessionRecovery(options => options.SignOutScheme = AuthenticationSchemeNames.SessionCookie);
 #endif
     // 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
     app.UseMultiTenancy();
@@ -614,6 +606,8 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
+    // 组件自带的端点（设置、权限、操作记录、通知、租户与租户连接），路由与原控制器一致
+    app.MapComponentEndpoints();
 
 #if (IncludeNotifications)
     // 通知与业务事件 Hub 必须分别映射。

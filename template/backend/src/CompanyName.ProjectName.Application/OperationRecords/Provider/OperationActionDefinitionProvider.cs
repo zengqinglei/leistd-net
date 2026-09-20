@@ -95,10 +95,13 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
 #if (LocalIdentity)
 
         // 认证事件。OWASP 明列为必需内容，此前本项目完全没有留痕。
+        // 登录成功、改密码、注册是自证类动作：主体在动作完成那一刻才被证实，目标就是本人（targetIsActor）。
+        // 登录失败刻意不标——它的目标是调用方提交的用户名，未经验证，标了就成了匿名可写的"操作人"。
         context.Add(
             OperationRecordActions.AuthLoginSucceeded,
             OperationRecordCategories.Authentication,
-            OperationVisibility.Actor);
+            OperationVisibility.Actor,
+            targetIsActor: true);
         context.Add(
             OperationRecordActions.AuthLoginFailed,
             OperationRecordCategories.Authentication,
@@ -127,7 +130,8 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordActions.AuthPasswordChanged,
             OperationRecordCategories.Authentication,
             OperationVisibility.Actor,
-            OperationSeverity.Notice);
+            OperationSeverity.Notice,
+            targetIsActor: true);
         // 本人资料上的两件事，只本人（与上层）可见，与改密码同一口径。
         context.Add(
             OperationRecordActions.AuthAvatarChanged,
@@ -183,7 +187,8 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         context.Add(
             OperationRecordActions.AuthRegistered,
             OperationRecordCategories.Authentication,
-            OperationVisibility.Tenant);
+            OperationVisibility.Tenant,
+            targetIsActor: true);
 
         // 模拟登录：Tenant 可见是刻意的，见常量上的说明。Critical——它改变的是"谁在操作"。
         context.Add(

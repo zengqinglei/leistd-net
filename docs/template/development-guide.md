@@ -120,23 +120,20 @@ export const next = 1;
 
 `ForbiddenTokens` **不得为了让场景通过而放宽**——它抓到的每一次都是真残留。若某个词在注释里合法出现，改注释措辞，不改断言。
 
-### 3.6 跨 `ServiceRole` 的 HTTP 契约没有编译期保护
+### 3.6 跨 `ServiceRole` 的 HTTP 契约由框架统一
 
-租户连接端点的路径在模板源码里有**三份副本**，分属不同 `ServiceRole` 的产物，任何一次生成都只包含其中一部分，因此彼此**无法编译期互检**：
+租户连接的机器端点（`runtime/{tenantId}`、`migration`）与资源服务回源用的远端存储都由多租户组件提供：
+Identity 形态用 `MapTenantConnections` 映射端点，Resource 形态用 `Leistd.MultiTenancy.ServiceClient` 的 `AddRemoteTenantConnectionStore` 回源，
+两边共用 `Leistd.MultiTenancy.Core` 里的线上 DTO。模板只决定前缀：Identity 在 `ComponentEndpoints` 里的路由组前缀与 Resource 的
+`Leistd:ServiceClients:Identity:RoutePrefix`（默认 `/api/v1/tenant-connections`）必须一致。改前缀时两处一起改，并在 Identity 与 Resource 的 HTTP 组合验证中确认。
+模板不再手写这组端点的控制器、Refit 接口或 `IMyProjectClient` 方法。
 
-| 位置 | 出现在哪种形态 |
-| --- | --- |
-| `Api/Controllers/TenantConnectionController.cs`（`[Route("api/v1/tenant-connections")]`） | `LocalIdentity` |
-| `Client/IMyProjectClient.cs` 的租户连接方法 | `LocalIdentity`（Resource 生成物里被裁掉） |
-| `Infrastructure/TenantConnections/IdentityTenantConnectionClient.cs` | `!LocalIdentity` |
-
-现有场景按角色分别生成，无法编译期互检这些副本。改动任一处路由时必须同步另外两处，并在 Identity 与 Resource 的 HTTP 组合验证中确认路径一致。
-
-> 这些是 leistd-net 的维护事实，**不要写进 `template/` 源码注释**（见 `developing-leistd-template` skill 的「对外分发边界」）：生成项目里既没有另外两份副本，也没有模板矩阵与仓库 E2E，业务开发者无从按此核对。模板注释只写生成项目自身运行与持续开发需要的知识。
+> 这些是 leistd-net 的维护事实，**不要写进 `template/` 源码注释**（见 `developing-leistd-template` skill 的「对外分发边界」）。模板注释只写生成项目自身运行与持续开发需要的知识。
 
 ### 3.7 错误码随本地化裁剪，界面分支用的码除外
 
-细分错误码同时是本地化词条键，模板里的 `WithCode(...)` 通常包在 `#if (IncludeLocalization)` 内，不含本地化的形态下响应里是状态码通用码。**前端据以分支的错误码例外，必须无条件下发**（如 `Auth:TwoFactorSetupRequired` 驱动拦截器跳设置页、`Auth:TwoFactorCodeInvalid` 区分重输与退回）——裁掉它不会编译失败，只会让不含本地化的形态静默丢行为。
+细分错误码同时是本地化词条键，模板里的 `WithCode(...)` 通常包在 `#if (IncludeLocalization)` 内，不含本地化的形态下响应里是状态码通用码。
+框架组件抛出的码不受这条约束：组件无条件带码并随包分发默认译文，模板资源里的同名词条只是覆盖文案。**前端据以分支的错误码例外，必须无条件下发**（如 `Auth:TwoFactorSetupRequired` 驱动拦截器跳设置页、`Auth:TwoFactorCodeInvalid` 区分重输与退回）——裁掉它不会编译失败，只会让不含本地化的形态静默丢行为。
 
 集成测试断言错误码时用 `ExpectedErrorCode.Of(细分码, 通用码)` 按形态取值；要守的行为本身（被拒、跳转、可重试）不依赖错误码，在所有形态下照样断言。只跑全功能场景发现不了这类问题，须经 `identity`、`resource` 等不含本地化的场景验证。
 
@@ -210,7 +207,7 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser Chrome
 **只有一种情形需要服务内再校验：权限必须保持 `Both`，而它管辖的内容里有一部分是宿主专属的。**
 `App.Settings` 就是这一种——两侧都要能改自己的设置，所以侧别不能收成 `Host`；
 但 `SettingScopes.Host` 那几项（日志级别这类进程级配置）只有宿主能写，
-这一层租户过滤器和权限侧别都表达不了，只能由 `SettingAppService` 自己在读取时隐藏、在写入时拒绝。
+这一层租户过滤器和权限侧别都表达不了，由设置组件的设置页用例在读取时隐藏、在写入时拒绝（`Setting:HostOnly`）。
 
 判断口径：**先问侧别能不能表达。能，就只写侧别；不能，才在服务里补。**
 

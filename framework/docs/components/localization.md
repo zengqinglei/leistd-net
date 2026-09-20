@@ -75,6 +75,12 @@ app.UseJsonRequestLocalization();
 
 ## 使用
 
+发出错误码的组件在自己的 `Add*` 里登记默认译文，宿主不必知道组件有哪些词条：
+
+```csharp
+services.AddJsonLocalizationResources(typeof(OrderService).Assembly);
+```
+
 注入 `IStringLocalizer` 按键取文案：
 
 ```csharp
@@ -97,6 +103,7 @@ public class OrderNotifier(IStringLocalizer localizer)
 | `JsonLocalizationOptions.ResourcesPath` | 嵌入资源逻辑目录，默认 `Resources` |
 | `JsonLocalizationOptions.DefaultCulture` | 默认/回落语言，默认 `en` |
 
+| `AddJsonLocalizationResources(assembly)` | Core 包：把组件程序集嵌入的 `Resources/{culture}.json` 登记为资源，恒插在最前，宿主资源总能覆盖；幂等 |
 | `AddJsonLocalization(supportedCultures?, configure?)` | 注册 JSON localizer 栈并配置支持语言（首个为默认/回落语言，默认 `["en","zh-CN"]`） |
 | `UseJsonRequestLocalization()` | 接入请求 culture 解析中间件（查询参数、Cookie、Accept-Language 请求头） |
 

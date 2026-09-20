@@ -27,7 +27,7 @@ public class DefaultPermissionChecker(
         currentTenant?.IsAvailable == true ? MultiTenancySides.Tenant : MultiTenancySides.Host;
 
     private bool MatchesCurrentSide(string name) =>
-        permissionDefinitionManager.GetOrNull(name)?.Side.HasFlag(CurrentSide) == true;
+        permissionDefinitionManager.IsAvailableOn(name, CurrentSide);
 
     /// <inheritdoc />
     public async Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)

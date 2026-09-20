@@ -31,6 +31,9 @@ export interface UpsertTenantConnectionInputDto {
 /** 连接名的合法形态，与后端 `TenantConnectionConfiguration.NamePattern` 同源。 */
 export const TENANT_CONNECTION_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
 
+/** 默认连接名：没有按名字分流的服务都解析到它。 */
+export const TENANT_DEFAULT_CONNECTION_NAME = 'default';
+
 /** 连接串长度上限，与后端入口 DTO 一致。 */
 export const TENANT_CONNECTION_STRING_MAX_LENGTH = 2048;
 

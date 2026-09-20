@@ -9,6 +9,10 @@ public class ServiceClientOptions
     /// <summary>
     /// 下游服务基础地址（如 <c>http://order-service</c>）。结尾自动补 <c>/</c>。
     /// </summary>
+    /// <remarks>
+    /// 有意可选、也有意不做启动期校验：基地址可以由宿主在返回的 <c>IHttpClientBuilder</c> 上
+    /// 自行设置（服务发现、测试替身）。这里留空且别处也没设时，调用在发出请求时失败。
+    /// </remarks>
     public string? BaseAddress { get; set; }
 
     /// <summary>

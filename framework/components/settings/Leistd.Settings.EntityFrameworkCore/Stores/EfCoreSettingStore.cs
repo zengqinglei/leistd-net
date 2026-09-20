@@ -99,7 +99,15 @@ public class EfCoreSettingStore<TDbContext>(
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         // 按当前租户删：查询过滤器已把范围限定在当前租户，不需要也不应该带 ScopeKey 条件——
         // 要清的是该租户下所有层级，含各用户在该租户内的偏好。
-        await dbContext.Set<SettingRecord>().ExecuteDeleteAsync(cancellationToken);
+        // 加载后 RemoveRange 而非批量删除：兼容所有 EF 提供程序（含内存库），在工作单元里与其它清理一起提交。
+        var records = await dbContext.Set<SettingRecord>().ToListAsync(cancellationToken);
+        if (records.Count == 0)
+        {
+            return;
+        }
+
+        dbContext.Set<SettingRecord>().RemoveRange(records);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     // 用独立层级段区分租户与用户设置，避免用户标识与租户级保留值冲突。

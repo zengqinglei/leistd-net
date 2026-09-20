@@ -1,4 +1,4 @@
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.OperationRecords.Abstractions;

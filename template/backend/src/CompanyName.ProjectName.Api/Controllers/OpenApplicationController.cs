@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Application.Permissions.Provider;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -20,7 +21,7 @@ public sealed class OpenApplicationController(IOpenApplicationAppService openApp
     /// </summary>
     [HttpGet]
     [Authorize(Policy = PermissionConstant.OpenApplications.Default)]
-    public async Task<PagedResultDto<OpenApplicationOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<OpenApplicationOutputDto>> GetPagedListAsync(
         [FromQuery] GetOpenApplicationPagedInputDto input,
         CancellationToken cancellationToken)
     {

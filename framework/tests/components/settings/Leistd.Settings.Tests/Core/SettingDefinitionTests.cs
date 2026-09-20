@@ -79,11 +79,47 @@ public class SettingDefinitionTests
         Assert.Null(manager.GetOrNull("Nope"));
     }
 
+    // 提供者没有注册顺序约定：调整别人声明的定义只能放在 PostDefine，排在它前面注册也要生效
+    [Fact]
+    public void PostDefine_runs_after_every_provider_has_defined()
+    {
+        var manager = Build(
+            new PostProvider(c => c.GetOrNull("Logging.MinimumLevel")!.DefaultValue = "Warning"),
+            new DelegateProvider(c => c.Add("Logging.MinimumLevel", "Information", SettingScopes.Host)));
+
+        Assert.Equal("Warning", manager.GetOrNull("Logging.MinimumLevel")!.DefaultValue);
+    }
+
+    [Fact]
+    public void Value_metadata_is_declared_fluently()
+    {
+        var manager = Build(new DelegateProvider(c =>
+        {
+            c.Add("Security.RequireTwoFactor", "false").AsBoolean();
+            c.Add("Security.LockoutDurationMinutes", "15").AsInteger(1, 1440);
+            c.Add("Logging.MinimumLevel", "Information", SettingScopes.Host).WithAllowedValues("Debug", "Information");
+        }));
+
+        Assert.Equal(SettingValueType.Boolean, manager.GetOrNull("Security.RequireTwoFactor")!.ValueType);
+        var duration = manager.GetOrNull("Security.LockoutDurationMinutes")!;
+        Assert.Equal((SettingValueType.Integer, 1, 1440), (duration.ValueType, duration.Minimum!.Value, duration.Maximum!.Value));
+        Assert.Equal(["Debug", "Information"], manager.GetOrNull("Logging.MinimumLevel")!.AllowedValues!);
+    }
+
     private static ISettingDefinitionManager Build(params ISettingDefinitionProvider[] providers)
         => new SettingDefinitionManager(providers);
 
     private sealed class DelegateProvider(Action<ISettingDefinitionContext> define) : ISettingDefinitionProvider
     {
         public void Define(ISettingDefinitionContext context) => define(context);
+    }
+
+    private sealed class PostProvider(Action<ISettingDefinitionContext> postDefine) : ISettingDefinitionProvider
+    {
+        public void Define(ISettingDefinitionContext context)
+        {
+        }
+
+        public void PostDefine(ISettingDefinitionContext context) => postDefine(context);
     }
 }

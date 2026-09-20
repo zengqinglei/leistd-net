@@ -126,11 +126,11 @@ public class OrderManager(IRepository<Order, Guid> repository)
 ### 分页映射
 
 ```csharp
-var source = new PagedResultDto<Order>(total, orders);
+var source = new PagedResult<Order>(total, orders);
 return mapper.MapPagedResult<Order, OrderDto>(source);
 ```
 
-`PagedRequestDto` 默认 `Offset = 0`、`Limit = 10`，上限为 1000。`Sorting` 的可用字段应由具体应用服务校验。
+`PageRequest` 默认 `Offset = 0`、`Limit = 10`，上限为 1000。`Sorting` 的可用字段应由具体应用服务校验。
 
 ### 临时关闭数据过滤器
 
@@ -172,7 +172,7 @@ public class AppDbContext(
 | 包 | 关键类型 |
 | --- | --- |
 | `Leistd.Ddd.Domain` | `Entity<TKey>`、审计实体基类、`IRepository<TEntity, TKey>`、`IDataFilter` |
-| `Leistd.Ddd.Application.Contracts` | `IAppService`、`EntityDto<TKey>`、`PagedRequestDto`、`PagedResultDto<T>` |
+| `Leistd.Ddd.Application.Contracts` | `IAppService`、`EntityDto<TKey>`、`PageRequest`、`PagedResult<T>` |
 | `Leistd.Ddd.Application` | `BaseAppService`、`MapPagedResult<TSource, TDestination>` |
 | `Leistd.Ddd.Infrastructure` | `AddDddInfrastructure`、`BaseDbContext`、`EfCoreRepository`、`AddDddInterceptors` |
 
@@ -239,7 +239,7 @@ public class Document : Entity<Guid>, IHasConcurrencyStamp
 - 业务 DbContext 必须显式调用 `AddDddInterceptors(sp)`；漏挂会使修改/删除审计、软删除转换、本地事件或并发标记静默失效。
 - 实现 `ISoftDelete` 的实体在删除时转为逻辑删除，查询默认不可见；临时读取使用 `IDataFilter.Disable<ISoftDelete>()`。
 - `AddLocalEvent` 只由实体内部调用；`GetLocalEvents()` 与 `ClearLocalEvents()` 仅供基础设施使用。
-- `PagedResultDto<T>` 将 `null` items 视为空集合；`MapPagedResult` 对空 mapper 或 source 抛 `ArgumentNullException`。
+- `PagedResult<T>` 将 `null` items 视为空集合；`MapPagedResult` 对空 mapper 或 source 抛 `ArgumentNullException`。
 - Entity 默认使用引用相等；需要按主键值相等时由业务类型明确实现。
 
 ## 相关

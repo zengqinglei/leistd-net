@@ -39,9 +39,11 @@
 HTTP/1.1 200 OK
 ```
 
+框架组件自带的端点（设置、权限、操作记录、通知、租户与租户连接，映射在 `Api/Hosting/ComponentEndpoints.cs`）按 Minimal API 惯例，无返回对象的写操作返回 **HTTP 204**。客户端把 200 空响应与 204 一样当作成功处理，不按状态码分支。
+
 ### 2.3 分页响应
 
-分页查询返回 `PagedResultDto<T>`，HTTP 200。固定字段 `totalCount` + `items`。
+分页查询返回 `PagedResult<T>`，HTTP 200。固定字段 `totalCount` + `items`。
 
 ```json
 {
@@ -231,7 +233,7 @@ throw new BadRequestException("Insufficient balance.").WithCode("Wallet:Insuffic
 
 ### 6.1 请求参数
 
-分页查询使用 `offset/limit` 偏移分页（与 `PagedRequestDto` 一致），不使用 `page/pageSize`。
+分页查询使用 `offset/limit` 偏移分页（与 `PageRequest` 一致），不使用 `page/pageSize`。
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -242,8 +244,8 @@ throw new BadRequestException("Insufficient balance.").WithCode("Wallet:Insuffic
 
 ### 6.2 后端 DTO 命名
 
-- 分页查询输入：`Get{Entity}PagedInputDto`，继承 `PagedRequestDto`。
-- 分页返回：`PagedResultDto<{Entity}OutputDto>`，字段为 `totalCount` + `items`。
+- 分页查询输入：`Get{Entity}PagedInputDto`，继承 `PageRequest`。
+- 分页返回：`PagedResult<{Entity}OutputDto>`，字段为 `totalCount` + `items`。
 
 ## 7. HTTP 方法与路由规范
 

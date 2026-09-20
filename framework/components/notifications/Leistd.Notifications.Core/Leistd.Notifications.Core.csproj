@@ -11,6 +11,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
+    <!-- 分页契约；"当前身份不能操作通知"的错误码与默认译文随包分发 -->
+    <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
+    <ProjectReference Include="..\..\localization\Leistd.Localization.Core\Leistd.Localization.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 组件错误码的默认中英文案，经 AddJsonLocalizationResources 登记，宿主资源可覆盖 -->
+    <EmbeddedResource Include="Resources\*.json" />
   </ItemGroup>
 
 </Project>

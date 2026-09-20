@@ -1,3 +1,4 @@
+using Leistd.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Notifications.Services;
@@ -37,6 +38,7 @@ public static class DependencyInjection
         services.TryAddTransient<INotificationPublisher, NotificationPublisher>();
         // 默认一律投递；宿主有通知偏好时先注册自己的过滤器（或之后 Replace）
         services.TryAddSingleton<INotificationDeliveryFilter, DeliverAllNotificationFilter>();
+        services.AddJsonLocalizationResources(typeof(NotificationErrorCodes).Assembly);
         return services;
     }
 }

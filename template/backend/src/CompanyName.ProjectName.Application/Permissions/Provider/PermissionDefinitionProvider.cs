@@ -20,7 +20,7 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
     public void Define(IPermissionDefinitionContext context)
     {
         // displayName 存的是本地化键：权限定义在启动时一次性加载并缓存，无法感知每个请求的
-        // culture；真正的翻译在 PermissionAppService 下发定义时按请求 culture 完成。
+        // culture；真正的翻译在权限管理用例下发定义时按请求 culture 完成（资源类型见 Program 的 PermissionManagementOptions）。
 
         // 身份与访问：人（用户、角色）与代表第三方进来的开放应用，都是"谁能进来"这件事。
         var identityGroup = context.GetOrAddGroup(

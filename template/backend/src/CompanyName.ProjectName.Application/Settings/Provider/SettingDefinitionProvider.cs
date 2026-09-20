@@ -1,5 +1,4 @@
 using System.Globalization;
-using CompanyName.ProjectName.Application.Settings.Hosting;
 using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
 #if (LocalIdentity)
@@ -23,21 +22,18 @@ namespace CompanyName.ProjectName.Application.Settings.Provider;
 /// 本地化项目按 <c>Setting:{name}</c> 查词条翻译，查不到才回落到这里的文案——
 /// 键由名称推导，不必在定义里再抄一遍。</para>
 /// </remarks>
-/// <param name="hostDefaults">
-/// 覆盖部署配置的宿主级设置（日志级别、审计、发信参数）的部署基线，这些设置的代码默认值取自它
-/// （见 <see cref="HostSettingDefaults"/>）：清除覆盖值即回落到部署配置，而不是回落到一个写死的值。
-/// </param>
+/// <para>值域（布尔、整数区间、候选值）声明在定义上：设置组件在写入端据此校验，设置页据此渲染控件。
+/// 覆盖部署配置的宿主级设置（日志级别、审计、发信参数）不写默认值——设置组件按绑定取部署基线
+/// （见 Api 的 <c>HostSettingBindings</c>），清除覆盖值即回落到部署配置，而不是回落到一个写死的值。</para>
 #if (LocalIdentity)
 /// <param name="registrationOptions">
 /// 注册策略的部署基线：注册类设置的代码默认值取自它，因此 <c>appsettings</c> 仍是
 /// 部署期唯一的真相，设置表只承载租户级覆盖。
 /// </param>
-public class SettingDefinitionProvider(
-    HostSettingDefaults hostDefaults,
-    IOptions<UserRegistrationOptions> registrationOptions) : ISettingDefinitionProvider
+public class SettingDefinitionProvider(IOptions<UserRegistrationOptions> registrationOptions) : ISettingDefinitionProvider
 {
 #else
-public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISettingDefinitionProvider
+public class SettingDefinitionProvider : ISettingDefinitionProvider
 {
 #endif
     /// <inheritdoc />
@@ -57,7 +53,9 @@ public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISett
             defaultValue: null,
             scopes: SettingScopes.User,
             displayName: "Language",
-            group: SettingConstant.Groups.Display).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Display)
+            .WithAllowedValues(SettingConstant.Display.SupportedLanguages)
+            .IsVisibleToClients = true;
 
 #endif
         // 时区同理：`Intl.DateTimeFormat().resolvedOptions().timeZone` 直接给出这台机器的
@@ -78,35 +76,40 @@ public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISett
         // Warning 也会被顶掉，而清除覆盖值同样回不到部署基线。
         context.Add(
             SettingConstant.Logging.MinimumLevel,
-            defaultValue: hostDefaults.Get(SettingConstant.Logging.MinimumLevel),
             scopes: SettingScopes.Host,
             displayName: "Minimum log level",
-            group: SettingConstant.Groups.Operations).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Operations)
+            .WithAllowedValues(SettingConstant.Logging.Levels)
+            .IsVisibleToClients = true;
 
         // 正常完成的请求记成哪一级。调到 Verbose 就等于关掉请求日志——
         // 全局最小级别通常是 Information，Verbose 的记录不会落盘。
         context.Add(
             SettingConstant.Logging.RequestLevel,
-            defaultValue: hostDefaults.Get(SettingConstant.Logging.RequestLevel),
             scopes: SettingScopes.Host,
             displayName: "Request log level",
-            group: SettingConstant.Groups.Operations).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Operations)
+            .WithAllowedValues(SettingConstant.Logging.Levels)
+            .IsVisibleToClients = true;
 
         // 操作记录保留期同样是进程级：归档任务跨租户统一执行。默认值取部署基线，
         // 部署没打开时这里也是关——一个默认就会动审计数据的开关不该由代码替部署决定。
         context.Add(
             SettingConstant.Audit.RetentionEnabled,
-            defaultValue: hostDefaults.Get(SettingConstant.Audit.RetentionEnabled),
             scopes: SettingScopes.Host,
             displayName: "Archive expired operation records",
-            group: SettingConstant.Groups.Audit).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Audit)
+            .AsBoolean()
+            .IsVisibleToClients = true;
 
+        // 区间与操作记录组件保留期选项上的校验一致：设置值经配置源进入该选项，越界会让整组设置不生效
         context.Add(
             SettingConstant.Audit.RetentionDays,
-            defaultValue: hostDefaults.Get(SettingConstant.Audit.RetentionDays),
             scopes: SettingScopes.Host,
             displayName: "Operation record retention (days)",
-            group: SettingConstant.Groups.Audit).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Audit)
+            .AsInteger(30, 3650)
+            .IsVisibleToClients = true;
 #if (LocalIdentity)
 
         // 注册策略按租户：同一套部署下，不同租户可以有不同的注册门槛。
@@ -118,35 +121,45 @@ public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISett
             defaultValue: registration.EnableEmailVerification ? "true" : "false",
             scopes: SettingScopes.Tenant,
             displayName: "Require email verification",
-            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Registration)
+            .AsBoolean()
+            .IsVisibleToClients = true;
 
         context.Add(
             SettingConstant.Registration.CaptchaExpiryMinutes,
             defaultValue: registration.CaptchaExpiryMinutes.ToString(CultureInfo.InvariantCulture),
             scopes: SettingScopes.Tenant,
             displayName: "Captcha lifetime (minutes)",
-            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Registration)
+            .AsInteger(1, 60)
+            .IsVisibleToClients = true;
 
         context.Add(
             SettingConstant.Registration.EmailCodeExpiryMinutes,
             defaultValue: registration.EmailCodeExpiryMinutes.ToString(CultureInfo.InvariantCulture),
             scopes: SettingScopes.Tenant,
             displayName: "Email code lifetime (minutes)",
-            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Registration)
+            .AsInteger(1, 60)
+            .IsVisibleToClients = true;
 
         context.Add(
             SettingConstant.Registration.EmailCodeSendIntervalSeconds,
             defaultValue: registration.EmailCodeSendIntervalSeconds.ToString(CultureInfo.InvariantCulture),
             scopes: SettingScopes.Tenant,
             displayName: "Email code send interval (seconds)",
-            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Registration)
+            .AsInteger(1, 3600)
+            .IsVisibleToClients = true;
 
         context.Add(
             SettingConstant.Registration.EmailCodeMaxAttempts,
             defaultValue: registration.EmailCodeMaxAttempts.ToString(CultureInfo.InvariantCulture),
             scopes: SettingScopes.Tenant,
             displayName: "Email code max attempts",
-            group: SettingConstant.Groups.Registration).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Registration)
+            .AsInteger(1, 20)
+            .IsVisibleToClients = true;
 
         // 登录失败锁定按租户：对外开放注册的租户与只有内部员工的租户，能接受的门槛不同。
         context.Add(
@@ -154,14 +167,18 @@ public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISett
             defaultValue: SettingConstant.Security.DefaultLockoutMaxFailedAttempts.ToString(CultureInfo.InvariantCulture),
             scopes: SettingScopes.Tenant,
             displayName: "Lock the account after this many failed sign-ins (0 = never)",
-            group: SettingConstant.Groups.Security).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Security)
+            .AsInteger(0, 100)
+            .IsVisibleToClients = true;
 
         context.Add(
             SettingConstant.Security.LockoutDurationMinutes,
             defaultValue: SettingConstant.Security.DefaultLockoutDurationMinutes.ToString(CultureInfo.InvariantCulture),
             scopes: SettingScopes.Tenant,
             displayName: "Lockout duration (minutes)",
-            group: SettingConstant.Groups.Security).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Security)
+            .AsInteger(1, 1440)
+            .IsVisibleToClients = true;
 
         // 开启后，没启用两步验证的人登录只拿到受限会话，必须先完成设置才能做别的事。
         // 默认关闭：打开它会让所有尚未设置的人下次登录时被拦下，这得是管理员有意的决定
@@ -170,12 +187,14 @@ public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISett
             defaultValue: "false",
             scopes: SettingScopes.Tenant,
             displayName: "Require two-factor authentication for everyone",
-            group: SettingConstant.Groups.Security).IsVisibleToClients = true;
+            group: SettingConstant.Groups.Security)
+            .AsBoolean()
+            .IsVisibleToClients = true;
 
         // 发信参数是进程级的：整个部署共用一个发信通道。默认值取部署基线，与日志级别同一口径
         AddEmail(context, SettingConstant.Email.SmtpHost, "SMTP host");
-        AddEmail(context, SettingConstant.Email.SmtpPort, "SMTP port");
-        AddEmail(context, SettingConstant.Email.SmtpEnableSsl, "Use TLS");
+        AddEmail(context, SettingConstant.Email.SmtpPort, "SMTP port").AsInteger(1, 65535);
+        AddEmail(context, SettingConstant.Email.SmtpEnableSsl, "Use TLS").AsBoolean();
         AddEmail(context, SettingConstant.Email.SmtpUsername, "SMTP username");
         // 口令是机密设置：加密落库，界面只写不读；没有默认值，未设置时发信端用配置里的口令
         AddEmail(context, SettingConstant.Email.SmtpPassword, "SMTP password").IsEncrypted = true;
@@ -204,15 +223,17 @@ public class SettingDefinitionProvider(HostSettingDefaults hostDefaults) : ISett
             defaultValue ? "true" : "false",
             SettingScopes.User,
             displayName,
-            SettingConstant.Groups.Notifications).IsVisibleToClients = true;
+            SettingConstant.Groups.Notifications)
+            .AsBoolean()
+            .IsVisibleToClients = true;
     }
 
 #endif
-    private ISettingDefinition AddEmail(ISettingDefinitionContext context, string name, string displayName)
+    private static ISettingDefinition AddEmail(ISettingDefinitionContext context, string name, string displayName)
     {
         var definition = context.Add(
             name,
-            hostDefaults.Get(name),
+            defaultValue: null,
             SettingScopes.Host,
             displayName,
             SettingConstant.Groups.Email);

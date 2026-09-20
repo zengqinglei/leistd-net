@@ -20,7 +20,7 @@ public static class DependencyInjection
     /// <summary>
     /// 获取默认配置节名称 <c>Leistd:MultiTenancy</c>。
     /// </summary>
-    public const string ConfigurationSection = "Leistd:MultiTenancy";
+    public const string ConfigurationSection = MultiTenancyOptions.SectionName;
 
     /// <summary>
     /// 从默认配置节注册多租户 Web 集成。
@@ -112,4 +112,30 @@ public static class DependencyInjection
         return app.UseMiddleware<MultiTenancyMiddleware>();
     }
 
+    /// <summary>
+    /// 挂载租户会话自恢复：已认证的租户会话命中"租户不存在或已停用"时注销会话，页面导航重定向回原地址、
+    /// 接口请求返回 401，并带上恢复标记头。
+    /// </summary>
+    /// <remarks>
+    /// 置于 <c>UseAuthentication()</c> 之后、<see cref="UseMultiTenancy"/> 之前：它要接住多租户中间件抛出的租户异常。
+    /// 不挂的话，被停用租户的用户连登录页与注销端点都访问不了，只能手动清 Cookie。
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// app.UseAuthentication();
+    /// app.UseTenantSessionRecovery(options =&gt; options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme);
+    /// app.UseMultiTenancy();
+    /// </code>
+    /// </example>
+    /// <param name="app">应用管道。</param>
+    /// <param name="configure">要注销的认证方案与标记头。</param>
+    public static IApplicationBuilder UseTenantSessionRecovery(
+        this IApplicationBuilder app,
+        Action<TenantSessionRecoveryOptions>? configure = null)
+    {
+        var options = new TenantSessionRecoveryOptions();
+        configure?.Invoke(options);
+        options.Validate();
+        return app.UseMiddleware<TenantSessionRecoveryMiddleware>(options);
+    }
 }

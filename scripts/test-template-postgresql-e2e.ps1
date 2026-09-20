@@ -365,13 +365,15 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
         -ContentType "application/json" -Body $sharedBody -WebSession $apiSession
     $sharedTenant = $sharedResponse.Content | ConvertFrom-Json
 
-    # 分库在建租户时定案：带上连接串，登记先于播种，种子因此直接落进专属库。
-    # 只登记默认名这一条，所有服务都回落到它——一租户一库、各服务不同 schema。
+    # 分库在建租户时定案：连接与租户在同一个事务里登记，登记先于播种，种子因此直接落进专属库。
+    # 这里只给默认名一条，所有服务都回落到它——一租户一库、各服务不同 schema；
+    # 契约本身收的是命名连接数组，多服务部署可以一次给多条。
     # 运行与迁移共用这一条，因此要 DDL 权限：用 admin 连接。它只写不读，由 API 加密后落库。
     $dedicatedBody = @{
         name = "dedicated-e2e"; displayName = "Dedicated E2E"; adminEmail = "dedicated@example.test"
-        adminPassword = "E2ETenant!Adm1n"; connectionString = $adminDedicated
-    } | ConvertTo-Json
+        adminPassword = "E2ETenant!Adm1n"
+        connections = @(@{ name = "default"; connectionString = $adminDedicated })
+    } | ConvertTo-Json -Depth 5
     $dedicatedResponse = Invoke-WebRequest -Uri "$baseUrl/api/v1/tenants" -Method Post `
         -ContentType "application/json" -Body $dedicatedBody -WebSession $apiSession
     $dedicatedTenant = $dedicatedResponse.Content | ConvertFrom-Json

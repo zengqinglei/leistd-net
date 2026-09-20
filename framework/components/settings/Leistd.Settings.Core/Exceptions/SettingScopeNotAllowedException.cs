@@ -1,4 +1,5 @@
 using Leistd.ExceptionHandling;
+using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
 
 namespace Leistd.Settings.Exceptions;
@@ -7,20 +8,29 @@ namespace Leistd.Settings.Exceptions;
 /// 表示把设置写入了它的定义未允许的层级。
 /// </summary>
 /// <remarks>
-/// 由写入方校验设置定义允许的层级。
+/// 由写入方校验设置定义允许的层级。错误码为 <see cref="SettingErrorCodes.ScopeNotAllowed"/>。
 /// </remarks>
-/// <param name="settingName">设置名。</param>
-/// <param name="scope">被拒绝的层级。</param>
-/// <param name="allowed">定义允许的层级。</param>
-public class SettingScopeNotAllowedException(string settingName, SettingScopes scope, SettingScopes allowed)
-    : BadRequestException($"Setting '{settingName}' cannot be written at scope '{scope}'; it allows '{allowed}'.")
+public class SettingScopeNotAllowedException : BadRequestException
 {
+    /// <summary>以设置名与层级构造。</summary>
+    /// <param name="settingName">设置名。</param>
+    /// <param name="scope">被拒绝的层级。</param>
+    /// <param name="allowed">定义允许的层级。</param>
+    public SettingScopeNotAllowedException(string settingName, SettingScopes scope, SettingScopes allowed)
+        : base($"Setting '{settingName}' cannot be written at scope '{scope}'; it allows '{allowed}'.")
+    {
+        SettingName = settingName;
+        Scope = scope;
+        Allowed = allowed;
+        WithCode(SettingErrorCodes.ScopeNotAllowed).WithData("Name", settingName);
+    }
+
     /// <summary>设置名。</summary>
-    public string SettingName { get; } = settingName;
+    public string SettingName { get; }
 
     /// <summary>被拒绝的层级。</summary>
-    public SettingScopes Scope { get; } = scope;
+    public SettingScopes Scope { get; }
 
     /// <summary>定义允许的层级。</summary>
-    public SettingScopes Allowed { get; } = allowed;
+    public SettingScopes Allowed { get; }
 }

@@ -299,7 +299,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
     {
         using var response = await client.PutAsJsonAsync(
             "/api/v1/settings/current-tenant", new { Name = name, Value = value });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
     /// <summary>手动推进的时钟：每推一次跨过一个验证码步长。</summary>

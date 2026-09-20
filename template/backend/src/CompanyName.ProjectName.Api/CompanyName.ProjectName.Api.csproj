@@ -57,6 +57,11 @@
     <PackageReference Include="Leistd.Security.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.AspNetCore" />
     <PackageReference Include="Leistd.Tracing.HttpClient" />
+    <!-- 周期任务调度与进程内队列；组件自带的维护任务（归档、通知保留期、宿主级设置刷新）靠它跑 -->
+    <PackageReference Include="Leistd.BackgroundJobs.InProcess" />
+    <PackageReference Include="Leistd.Settings.AspNetCore" />
+    <!-- 宿主级设置经配置源覆盖部署配置（日志级别、发信参数、审计保留期） -->
+    <PackageReference Include="Leistd.Settings.Hosting" />
 <!--#if (ServiceUserContextEnabled)-->
     <!-- 服务间用户/租户上下文的受信恢复是**消费侧**能力：Identity 与 Resource 都要，
          Standalone 没有机器令牌这回事。条件必须与 Program.cs 的 using 和调用点一致 -->
@@ -64,8 +69,14 @@
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.Core" />
+    <PackageReference Include="Leistd.Notifications.AspNetCore" />
     <PackageReference Include="Leistd.Notifications.AspNetCore.SignalR" />
     <PackageReference Include="Leistd.RealTime.AspNetCore.SignalR" />
+<!--#if (LocalIdentity)-->
+    <!-- 通知偏好（按收件人的用户级设置投递）与邮件渠道：只有持有本地用户的形态才有 -->
+    <PackageReference Include="Leistd.Notifications.Settings" />
+    <PackageReference Include="Leistd.Notifications.Email" />
+<!--#endif-->
 <!--#endif-->
   </ItemGroup>
 

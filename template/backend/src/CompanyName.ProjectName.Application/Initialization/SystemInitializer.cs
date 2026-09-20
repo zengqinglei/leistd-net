@@ -2,7 +2,6 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Application.TenantConnections;
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
 #endif
@@ -19,6 +18,7 @@ using Leistd.Authorization.Constants;
 using Leistd.Authorization.Abstractions;
 using Leistd.Lock;
 using Leistd.Lock.Abstractions;
+using Leistd.MultiTenancy.Abstractions;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -38,9 +38,7 @@ public class SystemInitializer(
 #if (LocalIdentity)
     UserDomainService userDomainService,
 #endif
-    IPermissionDefinitionManager permissionDefinitionManager,
-    IPermissionGrantStore permissionGrantStore,
-    IPermissionGrantManager permissionGrantManager,
+    IPermissionGrantSeeder permissionGrantSeeder,
 #if (OpenIddictServer)
     IOpenIddictScopeManager scopeManager,
 #endif
@@ -176,7 +174,7 @@ public class SystemInitializer(
     }
 
     /// <summary>
-    /// 在 Admin 角色尚未有过任何授予写入时，把当前全部权限定义播种给它。
+    /// 在 Admin 角色尚未有过任何授予写入时，把宿主侧可用的全部权限授予它。
     /// </summary>
     /// <remarks>
     /// 授权版本为 0 表示从未写入授予，可覆盖角色已创建但播种中断的状态。
@@ -185,34 +183,19 @@ public class SystemInitializer(
     /// </remarks>
     private async Task SeedAdminRolePermissionsAsync(Role adminRole, CancellationToken cancellationToken)
     {
-        var providerKey = adminRole.Id.ToString();
-        var existing = await permissionGrantStore.GetGrantsAsync(
+        var granted = await permissionGrantSeeder.SeedAllAsync(
             PermissionGrantProviderNames.Role,
-            providerKey,
+            adminRole.Id.ToString(),
+            MultiTenancySides.Host,
             cancellationToken);
 
-        if (existing.Version != 0)
+        if (granted is { } count)
         {
-            return;
+            logger.LogInformation(
+                "Seeded permission grants for role {RoleName}: {Count} item(s) (the role can be edited and revoked afterwards; grants are not auto-replenished)",
+                adminRole.Name,
+                count);
         }
-
-        var definitions = permissionDefinitionManager
-            .GetAll()
-            .Where(definition => permissionDefinitionManager.IsEffectivelyEnabled(definition.Name))
-            .Select(definition => definition.Name)
-            .ToList();
-
-        await permissionGrantManager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            providerKey,
-            definitions,
-            expectedVersion: existing.Version,
-            cancellationToken);
-
-        logger.LogInformation(
-            "Seeded permission grants for role {RoleName}: {Count} item(s) (the role can be edited and revoked afterwards; grants are not auto-replenished)",
-            adminRole.Name,
-            definitions.Count);
     }
 
 #if (OpenIddictServer)

@@ -472,10 +472,14 @@ $scenarioMap = [ordered]@{
         Absent = @(
             "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
-            "backend/src/{name}.Api/Controllers/NotificationController.cs"
+            "backend/src/{name}.Api/Notifications"
         )
         ReadmeContains = @()
         ReadmeExcludes = @()
+        # Identity 侧自己是租户连接的来源，映射机器端点而不是消费远端存储
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapTenantManagement<", "MapTenantConnections(")
+        }
         # 外部登录关闭：Mock 路由、客户端方法与 DTO 都不得留下。
         # 这类残留编译、lint、单测全都放得过——Mock 会对一个后端返回 404 的端点回成功。
         ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto")
@@ -483,7 +487,6 @@ $scenarioMap = [ordered]@{
     "resource" = @{
         Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
         Present = @(
-            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
             "backend/src/{name}.DbMigrator"
         )
@@ -493,10 +496,16 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
             "frontend/src/app/features/account",
-            "frontend/src/app/shared/dtos/auth.dto.ts"
+            "frontend/src/app/shared/dtos/auth.dto.ts",
+            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs"
         )
         ReadmeContains = @()
         ReadmeExcludes = @()
+        # 租户连接由框架的远端存储包回源 Identity，模板不再手写客户端
+        RequiredTokens = @{
+            "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.MultiTenancy.ServiceClient")
+            "backend/src/{name}.Infrastructure/DependencyInjection.cs" = @("AddRemoteTenantConnectionStore(")
+        }
         # 哈希路由与 OIDC 回调不能共存：回调地址是无 fragment 的普通路径，
         # 而哈希路由只从 fragment 读路由，回调组件不会被渲染。这个组合运行期不成立，
         # 因此不是"默认关掉的开关"，而是根本不生成——留着开关等于留一个开了就坏的东西。
@@ -531,17 +540,29 @@ $scenarioMap = [ordered]@{
     }
     "identity-notifications" = @{
         Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/NotificationController.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
+        Present = @(
+            "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
+            "frontend/src/app/layout/components/notifications/notification-service.ts"
+        )
         Absent = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
         ReadmeContains = @()
         ReadmeExcludes = @()
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapNotifications(")
+        }
     }
     "resource-notifications" = @{
         Arguments = @("--service-role","Resource","--include-notifications"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/NotificationController.cs", "frontend/src/app/layout/components/notifications/notification-service.ts")
+        Present = @(
+            "backend/src/{name}.Application/Notifications/AppNotificationTypes.cs",
+            "frontend/src/app/layout/components/notifications/notification-service.ts"
+        )
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
         ReadmeContains = @()
         ReadmeExcludes = @()
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapNotifications(")
+        }
         # 同 resource：哈希路由与 OIDC 回调不可共存；本地登录契约也不属于这种形态
         ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
@@ -566,7 +587,7 @@ $scenarioMap = [ordered]@{
         Arguments = @("--include-notifications","--include-external-login","--include-localization")
         Frontend = $true; Lint = $true
         Present = @(
-            "backend/src/{name}.Api/Controllers/NotificationController.cs",
+            "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
             "backend/src/{name}.Api/Controllers/ExternalAuthController.cs",
             "backend/src/{name}.Api/Resources/en.json",
             "frontend/public/i18n/en.json",

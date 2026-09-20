@@ -7,6 +7,9 @@ namespace Leistd.MultiTenancy.AspNetCore.Options;
 /// </summary>
 public class MultiTenancyOptions
 {
+    /// <summary>获取配置节名称 <c>Leistd:MultiTenancy</c>。</summary>
+    public const string SectionName = "Leistd:MultiTenancy";
+
     /// <summary>
     /// 获取或设置承载租户线索的请求头名称。
     /// </summary>

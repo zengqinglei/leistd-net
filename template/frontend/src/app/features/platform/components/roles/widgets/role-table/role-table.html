@@ -140,7 +140,8 @@
                           }}</span>
                         }
                         @case ('actions') {
-                          <!-- 操作列（3 项）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。 -->
+                          <!-- 操作列（3 项 ≤ 3）：桌面端全部平铺；<sm 收进 … 菜单省列宽。
+                               规则见 docs/standards/coding-frontend.md「表格操作列」。 -->
                           <div class="flex items-center justify-end gap-1">
                             @if (canManagePermissions()) {
                               <button
@@ -172,12 +173,35 @@
                                 <ng-icon name="lucidePencil" />
                               </button>
                             }
+                            @if (canDelete()) {
+                              <button
+                                hlmBtn
+                                variant="ghost"
+                                size="icon"
+                                class="hidden text-destructive hover:text-destructive sm:inline-flex"
+                                [disabled]="row.original.isStatic"
+                                [hlmTooltip]="
+                                  row.original.isStatic
+                                    ? actionLabel('staticHint')
+                                    : actionLabel('delete')
+                                "
+                                [attr.aria-label]="
+                                  row.original.isStatic
+                                    ? actionLabel('staticHint')
+                                    : actionLabel('delete') + ' - ' + row.original.displayName
+                                "
+                                (click)="delete.emit(row.original)"
+                              >
+                                <ng-icon name="lucideTrash2" />
+                              </button>
+                            }
                             @if (hasRowActions()) {
                               <button
                                 hlmBtn
                                 variant="ghost"
                                 size="icon"
                                 align="end"
+                                class="sm:hidden"
                                 [attr.aria-label]="actionsLabel()"
                                 [hlmDropdownMenuTrigger]="rowMenu"
                               >
@@ -190,7 +214,6 @@
                                   @if (canManagePermissions()) {
                                     <button
                                       hlmDropdownMenuItem
-                                      class="sm:hidden"
                                       (click)="managePermissions.emit(row.original)"
                                     >
                                       <ng-icon name="lucideKeyRound" />
@@ -198,11 +221,7 @@
                                     </button>
                                   }
                                   @if (canUpdate()) {
-                                    <button
-                                      hlmDropdownMenuItem
-                                      class="sm:hidden"
-                                      (click)="edit.emit(row.original)"
-                                    >
+                                    <button hlmDropdownMenuItem (click)="edit.emit(row.original)">
                                       <ng-icon name="lucidePencil" />
                                       {{ actionLabel('edit') }}
                                     </button>

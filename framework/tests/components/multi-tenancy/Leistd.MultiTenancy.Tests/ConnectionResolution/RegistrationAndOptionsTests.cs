@@ -1,7 +1,7 @@
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.TestBase.Assertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

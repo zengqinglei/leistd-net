@@ -420,10 +420,6 @@ export class UserTable {
     return user.isSuperAdmin && user.id !== this.authService.currentUser()?.id;
   }
 
-  isSelfSuperAdmin(user: UserManagementOutputDto): boolean {
-    return user.isSuperAdmin && user.id === this.authService.currentUser()?.id;
-  }
-
   /**
    * 角色徽章样式。
    *

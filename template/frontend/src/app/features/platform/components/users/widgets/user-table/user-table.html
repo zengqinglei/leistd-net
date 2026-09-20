@@ -260,7 +260,8 @@
                           }}</span>
                         }
                         @case ('actions') {
-                          <!-- 操作列（4 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。 -->
+                          <!-- 操作列（7 项 > 3）：桌面端显示 2 个高频操作 + … 溢出菜单；<sm 全部收进菜单省列宽。
+                               规则见 docs/standards/coding-frontend.md「表格操作列」。 -->
                           <div class="flex items-center justify-end gap-1">
                             @if (canUpdate()) {
                               <button
@@ -291,23 +292,6 @@
                                 <ng-icon name="lucideShieldCheck" />
                               </button>
                             }
-                            <!--#if (LocalIdentity)-->
-                            <!-- 重置密码走 Users.Update 策略，入口与编辑同权限裁剪，避免制造必然 403 的按钮。 -->
-                            @if (canUpdate()) {
-                              <button
-                                hlmBtn
-                                variant="ghost"
-                                size="icon"
-                                class="hidden sm:inline-flex"
-                                [disabled]="isOtherSuperAdmin(row.original)"
-                                [hlmTooltip]="actionLabel('reset', row.original)"
-                                [attr.aria-label]="actionLabel('reset', row.original)"
-                                (click)="resetPassword.emit(row.original.id)"
-                              >
-                                <ng-icon name="lucideKey" />
-                              </button>
-                            }
-                            <!--#endif-->
                             @if (hasRowActions()) {
                               <button
                                 hlmBtn
@@ -334,11 +318,22 @@
                                       {{ actionLabel('edit', row.original) }}
                                     </button>
                                   }
-                                  <!--#if (LocalIdentity)-->
-                                  @if (canUpdate()) {
+                                  @if (canManageRoles()) {
                                     <button
                                       hlmDropdownMenuItem
                                       class="sm:hidden"
+                                      [disabled]="isOtherSuperAdmin(row.original)"
+                                      (click)="manageRoles.emit(row.original)"
+                                    >
+                                      <ng-icon name="lucideShieldCheck" />
+                                      {{ rolesActionLabel() }}
+                                    </button>
+                                  }
+                                  <!--#if (LocalIdentity)-->
+                                  <!-- 重置密码走 Users.Update 策略，与编辑同权限裁剪，避免制造必然 403 的入口。 -->
+                                  @if (canUpdate()) {
+                                    <button
+                                      hlmDropdownMenuItem
                                       [disabled]="isOtherSuperAdmin(row.original)"
                                       (click)="resetPassword.emit(row.original.id)"
                                     >

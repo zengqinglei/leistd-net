@@ -29,6 +29,18 @@ public interface ISettingDefinitionProvider
     /// <summary>定义设置。</summary>
     /// <param name="context">设置定义上下文。</param>
     void Define(ISettingDefinitionContext context);
+
+    /// <summary>
+    /// 在全部提供者的 <see cref="Define"/> 之后调用，用于补充或调整别处声明的定义。
+    /// </summary>
+    /// <remarks>
+    /// 提供者之间没有注册顺序约定，要改动别人声明的定义（例如按部署配置补默认值）就放在这里，
+    /// 而不是在 <see cref="Define"/> 里赌对方已经执行过。
+    /// </remarks>
+    /// <param name="context">设置定义上下文。</param>
+    void PostDefine(ISettingDefinitionContext context)
+    {
+    }
 }
 
 /// <summary>

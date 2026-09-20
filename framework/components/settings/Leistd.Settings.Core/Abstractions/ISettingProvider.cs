@@ -24,6 +24,20 @@ public interface ISettingProvider
     /// </exception>
     Task<string?> GetOrNullAsync(string name, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 读取<b>指定用户</b>在当前租户下的生效值：该用户的覆盖 → 租户级 → 代码默认值。
+    /// </summary>
+    /// <remarks>
+    /// 给"替别人判断"的场景用，例如按收件人的偏好决定是否投递：发布方往往是另一个用户或后台任务，
+    /// 当前用户的回落结果与收件人无关。进程级设置与 <see cref="GetOrNullAsync"/> 相同。
+    /// </remarks>
+    /// <param name="name">设置名称。</param>
+    /// <param name="userId">目标用户标识。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <exception cref="Exceptions.UndefinedSettingException">名称未定义。</exception>
+    /// <exception cref="Exceptions.HostScopeUnavailableException">进程级设置在当前上下文不可达。</exception>
+    Task<string?> GetOrNullForUserAsync(string name, string userId, CancellationToken cancellationToken = default);
+
     /// <summary>读取设置并转换为 <typeparamref name="T"/>；值为空时返回 <c>default</c>。</summary>
     /// <typeparam name="T">目标类型，支持基元类型、枚举与带 <c>TypeConverter</c> 的类型。</typeparam>
     /// <param name="name">设置名称。</param>

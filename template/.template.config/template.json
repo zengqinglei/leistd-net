@@ -149,6 +149,8 @@
             "backend/src/CompanyName.ProjectName.Domain/Users/Options/UserRegistrationOptions.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/PostgresTenantDatabaseErrorDescriber.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/**",
             "backend/src/CompanyName.ProjectName.Client/Dtos/WhoAmIDto.cs",
             "frontend/src/app/shared/dtos/auth.dto.ts",
             "frontend/src/app/features/account/**",
@@ -159,7 +161,6 @@
             "backend/src/CompanyName.ProjectName.Application/Tenants/**",
             "backend/src/CompanyName.ProjectName.Application/TenantConnections/**",
             "backend/src/CompanyName.ProjectName.Api/Controllers/TenantController.cs",
-            "backend/src/CompanyName.ProjectName.Api/Controllers/TenantConnectionController.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/TenancyTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SettingsContractTests.cs",
             "frontend/src/app/features/platform/components/tenants/**",
@@ -177,11 +178,8 @@
         {
           "condition": "!IncludeNotifications",
           "exclude": [
-            "backend/src/CompanyName.ProjectName.Api/Controllers/NotificationController.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/Notifications/**",
             "backend/src/CompanyName.ProjectName.Api/Notifications/**",
             "backend/src/CompanyName.ProjectName.Application/Notifications/**",
-            "backend/src/CompanyName.ProjectName.Api/Filters/SettingsNotificationDeliveryFilter.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationsAndRealTimeTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/NotificationPreferencesTests.cs",
             "frontend/src/app/core/services/signalr-service.ts",
@@ -215,10 +213,6 @@
           "condition": "LocalIdentity",
           "exclude": [
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/Migrations/Resource/**",
-            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionClient.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionClientOptions.cs",
-            "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
-            "backend/tests/CompanyName.ProjectName.IntegrationTests/TenantConnectionResolutionTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceReadinessGateTests.cs"
           ]
         },

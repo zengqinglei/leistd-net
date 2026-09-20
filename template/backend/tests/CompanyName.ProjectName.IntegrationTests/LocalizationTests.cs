@@ -90,7 +90,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         Assert.DoesNotContain("请求无效", message);
         // 非法取值与可选值都要出现在文案里，否则改不动
         Assert.Contains("Chatty", message);
-        Assert.Contains("日志级别", message);
+        Assert.Contains("Information", message);
     }
 
     private static async Task<string> PostInvalidRegisterAndReadErrorsAsync(HttpClient client)

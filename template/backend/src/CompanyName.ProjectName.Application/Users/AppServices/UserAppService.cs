@@ -27,8 +27,12 @@ using Leistd.ObjectMapping;
 using Leistd.Authorization.Abstractions;
 using Leistd.ObjectMapping.Abstractions;
 using Leistd.OperationRecords.Abstractions;
+using Leistd.Data.Paging;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
+#endif
+#if (IncludeNotifications)
+using Leistd.Notifications.Abstractions;
 #endif
 
 namespace CompanyName.ProjectName.Application.Users.AppServices;
@@ -51,6 +55,9 @@ public class UserAppService(
     IOpenIddictTokenManager tokenManager,
 #endif
     ICurrentUser currentUser,
+#if (IncludeNotifications)
+    INotificationStore notificationStore,
+#endif
     ILogger<UserAppService> logger,
 #if (LocalIdentity)
     IClock clock,
@@ -64,7 +71,7 @@ public class UserAppService(
     /// <summary>
     /// 获取用户列表（分页）
     /// </summary>
-    public async Task<PagedResultDto<UserManagementOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<UserManagementOutputDto>> GetPagedListAsync(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
@@ -111,7 +118,7 @@ public class UserAppService(
                 var roleIds = matchedRoles.Select(r => r.Id).ToList();
                 if (roleIds.Count == 0)
                 {
-                    return new PagedResultDto<UserManagementOutputDto>(0, []);
+                    return new PagedResult<UserManagementOutputDto>(0, []);
                 }
 
                 var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
@@ -125,7 +132,7 @@ public class UserAppService(
             cancellationToken);
 
         var userDtos = await MapToOutputsAsync(users, cancellationToken);
-        return new PagedResultDto<UserManagementOutputDto>(totalCount, userDtos);
+        return new PagedResult<UserManagementOutputDto>(totalCount, userDtos);
     }
 
     /// <summary>
@@ -415,6 +422,7 @@ public class UserAppService(
     /// 删了权限再恢复，得到的是一个"存在但什么都不能做"的账号，没人会预期这个结果。
     /// 主体被永久删除时才调用 <c>IPermissionGrantManager.RemoveProviderAsync</c> 清理，
     /// 例如角色删除（<c>RoleAppService.DeleteAsync</c>）。
+    /// <para>站内通知一并删掉：它们只对本人有意义，留下来就是没人能读、也没人能删的孤儿行。</para>
     /// </remarks>
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -434,6 +442,9 @@ public class UserAppService(
         await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
 #endif
         await userRepository.DeleteAsync(user, cancellationToken);
+#if (IncludeNotifications)
+        await notificationStore.DeleteAllAsync(id.ToString(), cancellationToken);
+#endif
         logger.LogInformation("User deleted (ID: {Id})", id);
 
         // 名字在删除前就握在手里（user 变量即是）：删完再查什么都查不到，

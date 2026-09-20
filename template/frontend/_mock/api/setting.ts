@@ -28,7 +28,7 @@ function requireSubjectId(): string {
   return subjectId;
 }
 
-// 顺序与后端 SettingAppService 一致：先确认设置存在且可见，再校验值域。
+// 顺序与后端设置组件的写入端一致：先确认设置存在且可见，再校验值域。
 // 反过来的话，写一个不存在的设置名会先撞值域校验，返回 400 而不是 404。
 function requireDefinition(name: string) {
   const definition = SETTING_DEFINITIONS.find((s) => s.name === name);
@@ -94,7 +94,7 @@ function write(map: Map<string, string>, key: string, value: string | null): nul
   return null;
 }
 
-/** 设置中心 Mock API（对应 SettingController）。 */
+/** 设置中心 Mock API（对应设置组件映射的 /api/v1/settings 端点）。 */
 export const SETTING_API = {
   'GET /api/v1/settings': () => {
     const subjectId = requireSubjectId();
