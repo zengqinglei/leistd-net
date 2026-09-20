@@ -1,5 +1,5 @@
 import { TenantConnectionDto } from '../../src/app/shared/dtos/tenant-connection.dto';
-import { TenantLookupOutputDto, TenantOutputDto } from '../../src/app/shared/dtos/tenant.dto';
+import { TenantOutputDto } from '../../src/app/shared/dtos/tenant.dto';
 
 /**
  * 一条连接登记。
@@ -72,14 +72,5 @@ export function toTenantConnection(
     tenantId: tenant.id,
     name: connection.name,
     version: connection.version,
-  };
-}
-
-export function toTenantLookup(tenant: MockTenant): TenantLookupOutputDto {
-  return {
-    id: tenant.id,
-    name: tenant.name,
-    displayName: tenant.displayName,
-    isActive: tenant.isActive,
   };
 }

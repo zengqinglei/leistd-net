@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
@@ -62,6 +63,23 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     /// <summary>宿主管理员建租户，返回租户 Id。</summary>
+    private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response)
+    {
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
+    }
+
+    private static async Task AssertTenantAbsentAsync(WebApplicationFactory<Program> host, string name)
+    {
+        using var scope = host.Services.CreateScope();
+        var control = scope.ServiceProvider.GetRequiredService<IdentityControlDbContext>();
+        var normalized = scope.ServiceProvider.GetRequiredService<ITenantNormalizer>().NormalizeName(name)!;
+
+        Assert.False(await control.Set<TenantRecord>()
+            .IgnoreQueryFilters()
+            .AnyAsync(record => record.NormalizedName == normalized && !record.IsDeleted));
+    }
+
     private async Task<Guid> CreateTenantAsync(AuthenticatedSession hostAdmin, string name)
     {
         var response = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
@@ -222,8 +240,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var hostAdmin = await LoginHostAdminAsync();
         var tenantId = await CreateTenantAsync(hostAdmin, "acme");
 
-        using var anonymous = _factory.CreateProjectClient();
-        var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/ACME");
+        // 按名字查租户的匿名端点已被移除（它是租户存在性 oracle）；这里用已认证的按 id 查询
+        var lookup = await hostAdmin.Client.GetAsync($"/api/v1/tenants/{tenantId}");
         Assert.Equal(HttpStatusCode.OK, lookup.StatusCode);
 
         var tenantClient = await LoginTenantAdminAsync(tenantId);
@@ -356,7 +374,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var loginResponse = await relogin.PostAsJsonAsync(
             "/api/v1/auth/session-login",
             new { UsernameOrEmail = "admin", Password = "Tenant@123456" });
-        Assert.Equal(HttpStatusCode.Forbidden, loginResponse.StatusCode);
+        // 匿名带一个已停用的租户，与带未知租户是同一种失败：不暴露它是否存在
+        Assert.Equal(HttpStatusCode.NotFound, loginResponse.StatusCode);
     }
 
     /// <summary>
@@ -511,7 +530,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        // 转发头被采信即落到已停用的 trusted-b；匿名下停用与不存在是同一种失败
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     /// <summary>
@@ -595,17 +615,67 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    /// <summary>
+    /// 匿名请求下，"租户不存在"与"租户已停用"必须给出同一种失败。
+    /// </summary>
+    /// <remarks>
+    /// 两者不同就等于把"某个租户被停用了"这条业务情报告诉任何人。按名字查租户的匿名端点也因此被移除。
+    /// </remarks>
     [Fact]
-    public async Task Unknown_tenant_returns_404_and_names_are_case_insensitive()
+    public async Task An_anonymous_request_cannot_tell_an_unknown_tenant_from_an_inactive_one()
     {
-        using var anonymous = _factory.CreateProjectClient();
+        var hostAdmin = await LoginHostAdminAsync();
+        var inactiveId = await CreateTenantAsync(hostAdmin, "dormant");
+        using (var deactivate = await hostAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/tenants/{inactiveId}/activation", new { IsActive = false }))
+        {
+            Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+        }
 
-        var unknownLookup = await anonymous.GetAsync($"/api/v1/tenants/by-name/{Guid.NewGuid():N}");
-        Assert.Equal(HttpStatusCode.NotFound, unknownLookup.StatusCode);
+        using var unknownClient = _factory.CreateProjectClient();
+        unknownClient.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.NewGuid().ToString());
+        using var inactiveClient = _factory.CreateProjectClient();
+        inactiveClient.DefaultRequestHeaders.Add("X-Tenant-Id", inactiveId.ToString());
 
-        anonymous.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.NewGuid().ToString());
-        var unknownTenantRequest = await anonymous.GetAsync("/api/v1/auth/security-config");
-        Assert.Equal(HttpStatusCode.NotFound, unknownTenantRequest.StatusCode);
+        var unknown = await unknownClient.GetAsync("/api/v1/auth/security-config");
+        var inactive = await inactiveClient.GetAsync("/api/v1/auth/security-config");
+
+        Assert.Equal(unknown.StatusCode, inactive.StatusCode);
+        // 逐字比响应体会把每次请求都不同的 traceId 也比进去；错误码才是契约
+        Assert.Equal(await ErrorCodeAsync(unknown), await ErrorCodeAsync(inactive));
+    }
+
+    /// <summary>
+    /// 匿名请求**能**区分"租户存在"与"租户不存在"——这是有意接受的残留，不是缺陷。
+    /// </summary>
+    /// <remarks>
+    /// <para>存在且启用的租户会走到业务逻辑（错误凭据 401），不存在的在中间件就被挡成 404。
+    /// 一次请求即可判定，不需要爆破。</para>
+    /// <para>把这条钉成用例，是因为它很容易被误当成 bug 去"修"：要抹平差别，得给不存在的租户
+    /// 编造注册策略与验证码，登录页会照着虚构的策略渲染，比泄露存在性更糟。
+    /// 真正敏感的启用状态与租户属性（id、展示名）匿名侧一概拿不到，由上一条用例保证。</para>
+    /// <para>这条失败时不要改断言，先去看组件文档 multi-tenancy.md 的那一节还成不成立。</para>
+    /// </remarks>
+    [Fact]
+    public async Task An_anonymous_request_can_still_tell_an_existing_tenant_from_an_unknown_one()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        await CreateTenantAsync(hostAdmin, "present");
+
+        using var existingClient = _factory.CreateProjectClient();
+        existingClient.DefaultRequestHeaders.Add("X-Tenant-Id", "present");
+        using var unknownClient = _factory.CreateProjectClient();
+        unknownClient.DefaultRequestHeaders.Add("X-Tenant-Id", "no-such-tenant");
+
+        var existing = await existingClient.PostAsJsonAsync(
+            "/api/v1/auth/session-login",
+            new { UsernameOrEmail = "nobody@example.com", Password = "WrongPassword!1" });
+        var unknown = await unknownClient.PostAsJsonAsync(
+            "/api/v1/auth/session-login",
+            new { UsernameOrEmail = "nobody@example.com", Password = "WrongPassword!1" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, existing.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
     }
 
     /// <summary>
@@ -627,8 +697,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(probingHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var tenantId = await CreateTenantAsync(hostAdmin, "provisioning");
 
-        // 探测发生在种子中途（角色、管理员都还没写完）：中间件必须拒绝这个尚未启用的租户
-        Assert.Equal(HttpStatusCode.Forbidden, ProbingTenantSeeder.ProbedStatus);
+        // 探测发生在种子中途（角色、管理员都还没写完）：中间件必须拒绝这个尚未启用的租户，
+        // 且与"租户不存在"给出同一种失败——匿名下不暴露租户处于哪种状态
+        Assert.Equal(HttpStatusCode.NotFound, ProbingTenantSeeder.ProbedStatus);
 
         // 种子成功之后才激活：此刻租户正常可用，管理员能登录且只见自己的种子用户
         using var tenantClient = await LoginTenantAdminAsync(probingHost, tenantId);
@@ -711,9 +782,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // 补偿覆盖了一次完整成功的播种：角色、授予、管理员全部清掉
         await AssertNoVisibleTenantDataAsync(brokenActivationHost, tenantId.Value);
 
-        using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(brokenActivationHost);
-        var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/halfway");
-        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+        // 补偿后注册表里不该留下这个租户（按名字查的匿名端点已移除，直接查控制库更直接）
+        await AssertTenantAbsentAsync(brokenActivationHost, "halfway");
     }
 
     /// <summary>
@@ -746,9 +816,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.True(FailingPurgeTenantSeeder.PurgeAttempted, "补偿没有尝试清种子，本用例没覆盖目标路径");
 
         // 清种子抛错且留下脏跟踪器，注册表删除仍然成功：租户不可达
-        using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(brokenPurgeHost);
-        var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/purge-broken");
-        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+        // 补偿后注册表里不该留下这个租户（按名字查的匿名端点已移除，直接查控制库更直接）
+        await AssertTenantAbsentAsync(brokenPurgeHost, "purge-broken");
 
         // 脏跟踪器里的实体没有被删注册表那一步顺手写进库
         using var scope = brokenPurgeHost.Services.CreateScope();
@@ -813,9 +882,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 .ToListAsync());
         }
 
-        using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(brokenHost);
-        var lookup = await anonymous.GetAsync("/api/v1/tenants/by-name/compensated");
-        Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+        // 补偿后注册表里不该留下这个租户（按名字查的匿名端点已移除，直接查控制库更直接）
+        await AssertTenantAbsentAsync(brokenHost, "compensated");
 
         // 派生宿主与工厂共享数据库，用健康宿主验证同一注册表可直接重试。
         var hostAdmin2 = await LoginHostAdminAsync();
@@ -985,7 +1053,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.BadRequest, activate.StatusCode);
 
         Assert.Equal(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.NotFound,
             await ProbeAnonymousRegistrationAsync(blockingHost, tenantId));
 
         BlockingTenantSeeder.Release();
@@ -1165,6 +1233,18 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             return inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
         }
 
+        public Task<TenantConfiguration> CreateAsync(
+            string name,
+            string? displayName,
+            bool isActive,
+            Guid id,
+            string? description = null,
+            CancellationToken cancellationToken = default)
+        {
+            probe.Record("control", unitOfWorkManager);
+            return inner.CreateAsync(name, displayName, isActive, id, description, cancellationToken);
+        }
+
         public Task<TenantConfiguration> SetActiveAsync(
             Guid id,
             bool isActive,
@@ -1242,6 +1322,19 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             CancellationToken cancellationToken = default)
         {
             var created = await inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
+            LastCreatedId = created.Id;
+            return created;
+        }
+
+        public async Task<TenantConfiguration> CreateAsync(
+            string name,
+            string? displayName,
+            bool isActive,
+            Guid id,
+            string? description = null,
+            CancellationToken cancellationToken = default)
+        {
+            var created = await inner.CreateAsync(name, displayName, isActive, id, description, cancellationToken);
             LastCreatedId = created.Id;
             return created;
         }

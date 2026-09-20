@@ -211,12 +211,9 @@
                         @case ('status') {
                           <div class="flex items-center gap-1.5 whitespace-nowrap">
                             @if (row.original.isActive) {
-                              <span
-                                hlmBadge
-                                variant="outline"
-                                class="border-success/30 bg-success/10 text-success"
-                                >{{ statusLabel(row.original.isActive) }}</span
-                              >
+                              <span hlmBadge variant="success">{{
+                                statusLabel(row.original.isActive)
+                              }}</span>
                             } @else {
                               <span hlmBadge variant="secondary">{{
                                 statusLabel(row.original.isActive)

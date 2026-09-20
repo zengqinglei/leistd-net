@@ -48,10 +48,13 @@
             <a hlmBreadcrumbLink [link]="layoutService.homeRoute()">{{ homeLabel() }}</a>
             <!--#endif-->
           </li>
-          <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
-          <li hlmBreadcrumbItem class="min-w-0">
-            <span hlmBreadcrumbPage class="truncate">{{ layoutService.title() }}</span>
-          </li>
+          <!-- 标题未设置时整个末级不渲染：只留分隔符会是一条断裂的面包屑 -->
+          @if (layoutService.title(); as pageTitle) {
+            <li hlmBreadcrumbSeparator class="hidden sm:inline-flex"></li>
+            <li hlmBreadcrumbItem class="min-w-0">
+              <span hlmBreadcrumbPage class="truncate">{{ pageTitle }}</span>
+            </li>
+          }
         </ol>
       </nav>
     }

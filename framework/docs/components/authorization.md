@@ -190,7 +190,7 @@ await grantSeeder.SeedAllAsync(PermissionGrantProviderNames.Role, adminRoleId, M
 - 用户与角色授予的读取为常数数量的数据库往返，不按角色或权限逐条查询。
 - `SubjectPermissionGrants.VersionToken` 组合用户版本与按 key 排序的角色版本，可用于判断客户端权限缓存是否过期。
 - **管理用例与检查器同一判据**：定义树、授予状态与当前有效权限都只含当前侧别上可用（已定义、自身与祖先启用、侧别匹配）的权限；子节点同样过滤，整组都不可用时不下发空分组。超级管理员的当前权限是全部可用权限，版本标记固定为 `super-admin`。
-- 管理用例不查权限（交给端点策略）；主体不存在返回 404（`Permission:SubjectNotFound`），当前身份不是权限主体返回 401（`Permission:SubjectUnavailable`），单次替换超过 500 项返回 422。显示名以定义里的 `DisplayName` 为词条键查 `LocalizationResource`，查不到回落到权限名。
+- 管理用例不查权限（交给端点策略）；主体不存在返回 404（`Permission:SubjectNotFound`），单次替换超过 500 项返回 422。**读自己的权限（`GET current`）时，当前身份不是权限主体不算错误，返回空集合**——端点挂着授权策略，走到用例的调用方必然已认证，回 401 是在说假话，客户端会据此重新登录、再问、再拿到 401。双 realm 部署（一套身份走 RBAC、另一套不走）按设计就会出现这种调用方。空集合意味着任何权限判定都不通过，拒绝效果与报错一致。显示名以定义里的 `DisplayName` 为词条键查 `LocalizationResource`，查不到回落到权限名。
 - 首次授予带期望版本 0 写入，并发的第二次视为已播种。
 
 ## 注意事项

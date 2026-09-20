@@ -20,7 +20,7 @@ public class UndefinedPermissionException : BadRequestException
             $"{string.Join(", ", permissionNames)}.")
     {
         PermissionNames = permissionNames;
-        WithCode(PermissionErrorCodes.UndefinedPermission).WithData("Name", string.Join(", ", permissionNames));
+        WithCode(PermissionErrorCodes.UndefinedPermission).WithData("Names", string.Join(", ", permissionNames));
     }
 
     /// <summary>未定义或已禁用的权限名。</summary>

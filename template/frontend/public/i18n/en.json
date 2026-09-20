@@ -106,7 +106,8 @@
       "groupIdentity": "Identity & access",
       "groupAudit": "Audit",
       "groupPersonal": "Personal",
-      "settings": "Settings"
+      "settings": "Settings",
+      "toggle": "Toggle sidebar"
     },
     "topbar": {
       "openNavigation": "Open navigation"
@@ -393,8 +394,6 @@
       "tenantPlaceholder": "Tenant name, leave empty for host",
       "tenantConfirm": "Confirm",
       "tenantClear": "Clear tenant",
-      "tenantNotFound": "Tenant does not exist",
-      "tenantInactive": "Tenant is deactivated",
       "tenantFromDomain": "Determined by the site address.",
       "tenantResolving": "Identifying tenant from the site address…",
       "tenantUnavailable": "The tenant this address points to is unavailable. Contact your administrator.",
@@ -599,6 +598,7 @@
       "tenant.updated": "Updated tenant {{target}}",
       "tenant.activation-changed": "Changed activation of tenant {{target}}",
       "tenant.deleted": "Deleted tenant {{target}}",
+      "tenant.connection-changed": "Changed the database connection of tenant {{target}}",
       "setting.changed": "Changed setting {{target}}",
       "operation-records.exported": "Exported operation records",
       "auth.login.succeeded": "Signed in",
@@ -620,7 +620,9 @@
       "impersonation.ended": "Ended impersonation",
       "tenant.impersonation-started": "Signed in as the administrator of tenant {{target}}",
       "tenant.impersonation-ended": "Ended impersonation of tenant {{target}}",
-      "auth.token.issued": "Issued an access token"
+      "auth.token.issued": "Issued an access token",
+      "tenant.connection-registered": "Registered a database connection for tenant {{target}}",
+      "tenant.connection-removed": "Removed the database connection of tenant {{target}}"
     },
     "actionsNoTarget": {
       "user.created": "Created a user",

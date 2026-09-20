@@ -11,7 +11,8 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// </remarks>
 /// <example>
 /// <code>
-/// var result = await runner.ForEachDatabaseAsync(ConnectionStringNames.Default, async (database, ct) =&gt;
+/// // activeOnly: false —— 保留期作业要连停用租户的库一起处理，合规义务不随停用消失
+/// var result = await runner.ForEachDatabaseAsync(ConnectionStringNames.Default, activeOnly: false, async (database, ct) =&gt;
 /// {
 ///     using var uow = await unitOfWorkManager.BeginAsync(requiresNew: true);
 ///     var dbContext = await dbContextProvider.GetDbContextAsync(ct);
@@ -23,12 +24,14 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 public interface ITenantDatabaseRunner
 {
     /// <summary>对指定连接名下的每个物理库执行 <paramref name="action"/>。</summary>
+    /// <param name="activeOnly">只处理启用租户的库；必须显式给出，理由见 <see cref="ITenantDatabaseEnumerator"/>。</param>
     /// <param name="connectionStringName">连接名，通常是业务 DbContext 的 <c>[ConnectionStringName]</c>。</param>
     /// <param name="action">在某个库的租户上下文里执行的逻辑。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>处理的库数与失败的库。</returns>
+    /// <returns>处理的库数、失败的库，以及本轮解析不出连接、被跳过的租户。</returns>
     Task<TenantDatabaseRunResult> ForEachDatabaseAsync(
         string connectionStringName,
+        bool activeOnly,
         Func<TenantDatabase, CancellationToken, Task> action,
         CancellationToken cancellationToken = default);
 }
@@ -37,5 +40,9 @@ public interface ITenantDatabaseRunner
 /// 一次逐库执行的结果。
 /// </summary>
 /// <param name="Databases">处理的物理库数（含宿主库）。</param>
+/// <param name="UnresolvedTenants">解析不出连接、本轮被跳过的租户。</param>
 /// <param name="FailedDatabases">执行失败的库；错误已记日志。</param>
-public sealed record TenantDatabaseRunResult(int Databases, IReadOnlyList<TenantDatabase> FailedDatabases);
+public sealed record TenantDatabaseRunResult(
+    int Databases,
+    IReadOnlyList<TenantDatabase> FailedDatabases,
+    IReadOnlyList<TenantDatabaseFailure> UnresolvedTenants);

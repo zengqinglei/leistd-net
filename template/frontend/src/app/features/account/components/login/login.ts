@@ -22,7 +22,6 @@ import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
-  ApplicationHttpError,
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
@@ -263,7 +262,6 @@ export class Login {
 
   // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
   readonly tenantName = signal('');
-  protected readonly tenantChecking = signal(false);
   readonly tenantError = signal<string | null>(null);
 
   /**
@@ -327,8 +325,8 @@ export class Login {
         case 'tenant':
           // 租户不存在或已停用时 tenant 为空：清掉记住的那个，并保持锁定，
           // 让界面提示这个域名不可用，而不是让人换一个反正会被覆盖的租户。
-          if (result.tenant?.isActive) {
-            this.tenantContext.set(result.tenant);
+          if (result.tenant) {
+            this.tenantContext.set(result.tenant.name);
           } else {
             this.tenantContext.clear();
             this.tenantError.set(this.tenantUnavailableMessage());
@@ -373,30 +371,17 @@ export class Login {
   async onConfirmTenant(): Promise<void> {
     const name = this.tenantName().trim();
     // 探测未回来 / 域名已定案时不接受手选：前者会被随后的探测结果覆盖，后者本就不该能改。
-    if (!name || this.tenantChecking() || this.tenantSelectionBlocked()) {
+    if (!name || this.tenantSelectionBlocked()) {
       return;
     }
 
-    this.tenantChecking.set(true);
     this.tenantError.set(null);
 
-    try {
-      const tenant = await lastValueFrom(this.tenantService.getByName(name));
-      if (!tenant.isActive) {
-        this.tenantError.set(this.tenantInactiveMessage());
-        return;
-      }
-      this.tenantContext.set(tenant);
-      this.tenantName.set('');
-    } catch (error) {
-      if (error instanceof ApplicationHttpError && error.status === 404) {
-        this.tenantError.set(this.tenantNotFoundMessage());
-      } else {
-        this.tenantError.set(applicationErrorMessage(error));
-      }
-    } finally {
-      this.tenantChecking.set(false);
-    }
+    // 不向服务端确认这个租户是否存在：那会让任何人靠这个接口枚举租户。
+    // 名字直接记进上下文；租户不存在或已停用时，请求会被中间件按统一的 404 挡住
+    // （两种情形不区分，停用状态本身也是情报），不是由登录接口判凭据。
+    this.tenantContext.set(name);
+    this.tenantName.set('');
   }
 
   clearTenant(): void {
@@ -410,15 +395,11 @@ export class Login {
   }
 
   //#if (IncludeLocalization)
-  private tenantNotFoundMessage = () => this.transloco.translate('account.login.tenantNotFound');
-  private tenantInactiveMessage = () => this.transloco.translate('account.login.tenantInactive');
   private tenantUnavailableMessage = () =>
     this.transloco.translate('account.login.tenantUnavailable');
   private tenantProbeFailedMessage = () =>
     this.transloco.translate('account.login.tenantProbeFailed');
   //#else
-  private tenantNotFoundMessage = () => 'Tenant does not exist';
-  private tenantInactiveMessage = () => 'Tenant is deactivated';
   private tenantUnavailableMessage = () =>
     'The tenant this address points to is unavailable. Contact your administrator.';
   private tenantProbeFailedMessage = () =>

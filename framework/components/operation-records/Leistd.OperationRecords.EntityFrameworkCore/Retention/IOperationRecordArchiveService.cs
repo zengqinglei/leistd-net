@@ -12,7 +12,8 @@ public interface IOperationRecordArchiveService
     /// <summary>
     /// 在宿主库与每个独立库里，把创建时间早于 <paramref name="cutoffUtc"/> 的记录分批搬入归档表。
     /// </summary>
-    /// <remarks>每批一个事务，"写归档 + 删原表"同生共死；某个库失败只记日志并计入结果，其余库照常执行。</remarks>
+    /// <remarks>每批一个事务，"写归档 + 删原表"同生共死；某个库失败只记日志并计入结果，其余库照常执行。
+    /// 解析不出连接的租户同样只被跳过并计入结果——它们有自己的库，这一轮没有被归档。</remarks>
     /// <param name="cutoffUtc">截止时刻（UTC，不含）。</param>
     /// <param name="batchSize">单批条数。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -28,4 +29,10 @@ public interface IOperationRecordArchiveService
 /// <param name="Archived">搬走的总条数。</param>
 /// <param name="Databases">处理的物理库数（含宿主库）。</param>
 /// <param name="FailedDatabases">失败的库数；对应的错误日志里有库的指纹。</param>
-public sealed record OperationRecordArchiveResult(int Archived, int Databases, int FailedDatabases);
+/// <param name="UnresolvedTenants">
+/// 解析不出连接、本轮没被归档的租户数。
+/// 与 <paramref name="FailedDatabases"/> 分开计：前者是"库进不去"，这一项是"库都没找着"，
+/// 运维要看的下一步不一样。合并成一个数就分不出来了。
+/// </param>
+public sealed record OperationRecordArchiveResult(
+    int Archived, int Databases, int FailedDatabases, int UnresolvedTenants = 0);

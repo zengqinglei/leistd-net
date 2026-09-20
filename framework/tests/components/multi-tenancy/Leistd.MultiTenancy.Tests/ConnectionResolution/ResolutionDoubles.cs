@@ -9,8 +9,29 @@ public sealed class SettableCurrentTenant : ICurrentTenant
 {
     public Guid? Id { get; set; }
     public bool IsAvailable => Id.HasValue;
-    public string? Name => null;
-    public IDisposable Change(Guid? id, string? name = null) => throw new NotSupportedException();
+    public string? Name { get; private set; }
+
+    /// <summary>Change 期间被观察到的租户，用于断言"是在宿主视角下解析的"。</summary>
+    public List<Guid?> Observed { get; } = [];
+
+    public IDisposable Change(Guid? id, string? name = null)
+    {
+        var previousId = Id;
+        var previousName = Name;
+        Id = id;
+        Name = name;
+        Observed.Add(id);
+        return new Restore(() =>
+        {
+            Id = previousId;
+            Name = previousName;
+        });
+    }
+
+    private sealed class Restore(Action restore) : IDisposable
+    {
+        public void Dispose() => restore();
+    }
 }
 
 /// <summary>

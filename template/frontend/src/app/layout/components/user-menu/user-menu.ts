@@ -288,7 +288,8 @@ export class UserMenu {
     //#endif
     const tenant = this.tenantContext.current();
     if (tenant) {
-      return tenant.displayName || tenant.name;
+      // 匿名接口不再回显租户的展示名（那会泄露租户是否存在），这里只有解析用的 key
+      return tenant.key;
     }
     //#if (IncludeLocalization)
     return this.transloco.translate('menu.hostTenant');

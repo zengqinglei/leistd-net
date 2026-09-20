@@ -50,7 +50,20 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 }
 ```
 
-**前置**：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`——存储经 `IDbContextProvider<TDbContext>` 取上下文，失败记录经 `IUnitOfWorkManager` 独立提交。
+**前置**（全部必填，漏一个在首次解析 `IOperationRecorder` 时才暴露）。组件不替你注册别的组件——
+每条记录都要回答"谁、在哪个租户、哪条请求链路、什么时间"，这四样各来自一个独立组件：
+
+```csharp
+builder.Services.AddUnitOfWork();
+builder.Services.AddUnitOfWorkEfCore();            // 存储经 IDbContextProvider 取上下文，失败记录独立提交
+builder.Services.AddSingleton<IClock, UtcClockProvider>();   // Leistd.Core 不提供 DI 扩展；DDD 基础设施包已代为注册
+builder.Services.AddMultiTenancyCore();            // ICurrentTenant：记录写进哪一层
+builder.Services.AddAmbientContext();              // ICurrentUser：谁做的
+builder.Services.AddCorrelationIdCore(builder.Configuration);   // ICorrelationIdProvider：哪条请求链路
+```
+
+保留期归档另外还要逐库遍历（`ITenantDatabaseRunner`），同样由 `AddMultiTenancyCore()` 提供；
+不分库时它给出的清单只有宿主库，行为与单库一致。
 
 映射查询端点；授权口径全部必填，漏配在映射时抛出：
 
@@ -236,7 +249,7 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 - **超长字段就地截断，并在截断前记 `Warning`。** 审计写入不能因为一个字段超长，把一次已经成功的业务操作变成 500。
 - **可见性与记录所在的层。** `Tenant` 与 `Actor` 的记录写进操作发生时的租户层。`Host` 的记录属于宿主层：在宿主上下文里照常写；租户上下文里的**失败**记录（典型是租户用户调用宿主接口被拒）改写进宿主层，来源租户记在 `ActorTenantId`——留在租户层的话，租户读者按可见性看不到、宿主按租户维度也查不到。租户上下文里的**成功**记录则直接抛错：它既不能留在租户层，也不能脱离租户库里的业务事务挪去宿主层；这类动作要么登记为 `Tenant`，要么在切到宿主上下文之后再记。
 - **读取隔离靠全局查询过滤器，写入的 `TenantId` 由记录器显式盖章。** 实体是 `IMultiTenant`，存储查询不带租户条件；而写入不依赖宿主 DbContext 是否为 `BaseDbContext`——理由与时间戳相同，漏配是静默的，得到的会是一批归属为空的记录。
-- **两个索引：`(TenantId, CreationTime DESC)` 与 `(TenantId, Visibility, CreationTime DESC)`**。这张表写多读少，查询形态是"某租户的最近若干条"；而可见性过滤在**每一次**查询里都出现（宿主之外的读者读不到 `Host` 层记录），不进索引会让这个必然出现的谓词退化成对时间区间结果集的逐行筛。关键字检索走时间裁剪之后的过滤，**不**单独建索引——每加一个索引的代价都摊在每一次写入上。
+- **三个索引：`(TenantId, CreationTime DESC)`、`(TenantId, Visibility, CreationTime DESC)` 与单列 `CreationTime`**。这张表写多读少，读的形态是"某租户的最近若干条"；而可见性过滤在**每一次**查询里都出现（宿主之外的读者读不到 `Host` 层记录），不进索引会让这个必然出现的谓词退化成对时间区间结果集的逐行筛。第三条服务的是另一条访问路径——**保留期归档整库按时间扫、不带 `TenantId`**（`IgnoreQueryFilters()` 覆盖同库的全部租户），前两条都以 `TenantId` 打头，用不上。关键字检索走时间裁剪之后的过滤，**不**单独建索引——每加一个索引的代价都摊在每一次写入上。归档表只写不扫，因此没有这条。
 - **分页按 `CreationTime` 再按 `Id` 倒序**。同一毫秒内的多条记录时间相同，只按时间排序会让分页出现重复或遗漏，次级键消除这种不确定。它保证的是**顺序确定**，不是"同一时刻内更新的在前"——后者取决于 Provider 怎么比较 Guid（PostgreSQL 的 `uuid` 按网络字节序，UUIDv7 的时间序成立；SQLite 把 Guid 存成 BLOB、按 .NET 字节布局比较，前三段是小端，时间序不成立）。分页需要的是前者。
 - **`Outcome` 以字符串落库**。审计表会被人直接查，序号要对着枚举定义翻译；枚举重排之后历史行的含义还会静默改变。
 - 表名沿用 EF Core 默认约定，不加框架前缀污染宿主库。

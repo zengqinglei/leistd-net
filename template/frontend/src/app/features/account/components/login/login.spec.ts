@@ -279,12 +279,8 @@ describe('Login', () => {
    * 界面显示的和实际生效的不是同一个租户上下文，登录会落在用户没选的那一侧。
    */
   describe('按主机名定案租户', () => {
-    const domainTenant = {
-      id: '019ff8ed-221b-7673-9ba8-6b6dd5a638ab',
-      name: 'acme',
-      displayName: 'Acme Inc.',
-      isActive: true,
-    };
+    // 匿名 by-host 只回租户名：回 id / 展示名 / 启用状态都会泄露"这个租户存在"
+    const domainTenant = { name: 'acme' };
 
     /**
      * 造出"上次记住的租户"。
@@ -293,21 +289,14 @@ describe('Login', () => {
      * 得让上下文在服务初始化那一刻就已经有值，否则测不到"探测把它清掉"这件事。
      */
     function rememberTenant(): void {
-      localStorage.setItem(
-        'app.tenant',
-        JSON.stringify({
-          id: '019ff8ed-3333-7673-9ba8-6b6dd5a638ab',
-          name: 'remembered',
-          displayName: 'Remembered Inc.',
-        }),
-      );
+      localStorage.setItem('app.tenant', JSON.stringify({ key: 'remembered' }));
     }
 
     it('域名指向租户：定住该租户且不再允许手选', async () => {
       byHost = of({ decision: 'tenant' as const, tenant: domainTenant });
       await setUp();
 
-      expect(TestBed.inject(TenantContextService).current()?.name).toBe('acme');
+      expect(TestBed.inject(TenantContextService).current()?.key).toBe('acme');
       expect(component.tenantLocked()).toBeTrue();
       expect(component.tenantSelectionBlocked()).toBeTrue();
     });
@@ -326,7 +315,7 @@ describe('Login', () => {
       rememberTenant();
       await setUp();
 
-      expect(TestBed.inject(TenantContextService).current()?.name).toBe('remembered');
+      expect(TestBed.inject(TenantContextService).current()?.key).toBe('remembered');
       expect(component.tenantLocked()).toBeFalse();
       expect(component.tenantSelectionBlocked()).toBeFalse();
     });
@@ -360,9 +349,9 @@ describe('Login', () => {
 
       // 清除也算一次手动改租户：同样不放行，否则用户能在"不知道域名会怎么解析"时
       // 把上下文改成宿主，然后带着它去登录。
-      TestBed.inject(TenantContextService).set(domainTenant);
+      TestBed.inject(TenantContextService).set(domainTenant.name);
       component.clearTenant();
-      expect(TestBed.inject(TenantContextService).current()?.name).toBe('acme');
+      expect(TestBed.inject(TenantContextService).current()?.key).toBe('acme');
 
       await component.onSubmit();
 

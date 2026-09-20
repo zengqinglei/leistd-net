@@ -26,6 +26,7 @@ public sealed class OperationRecordQueryTests
 {
     private static readonly Guid TenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
+
     private static readonly Dictionary<string, OperationVisibility> Definitions = new(StringComparer.Ordinal)
     {
         ["user.created"] = OperationVisibility.Tenant,

@@ -1,7 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
 //#if (LocalIdentity)
-import { TenantLookupOutputDto } from '../../shared/dtos/tenant.dto';
 const TENANT_STORAGE_KEY = 'app.tenant';
 
 //#endif
@@ -11,9 +10,8 @@ const TENANT_STORAGE_KEY = 'app.tenant';
 /** 认证后的租户上下文（来源是已验证 Access Token 中的 tenant_id）。 */
 //#endif
 export interface TenantContext {
-  id: string;
-  name: string;
-  displayName?: string;
+  /** 放进 X-Tenant-Id 头的值：本地身份形态是租户名，资源服务形态是令牌里的租户 id。 */
+  key: string;
 }
 
 //#if (LocalIdentity)
@@ -42,12 +40,8 @@ export class TenantContextService {
   public readonly current = this._current.asReadonly();
 
   //#if (LocalIdentity)
-  set(tenant: TenantLookupOutputDto): void {
-    const context: TenantContext = {
-      id: tenant.id,
-      name: tenant.name,
-      displayName: tenant.displayName,
-    };
+  set(tenantName: string): void {
+    const context: TenantContext = { key: tenantName };
     this._current.set(context);
     try {
       localStorage.setItem(TENANT_STORAGE_KEY, JSON.stringify(context));
@@ -58,7 +52,7 @@ export class TenantContextService {
   //#else
   /** Resource 只接受 OIDC 库已验证 Access Token 中的 tenant_id。 */
   setAuthenticatedTenant(tenantId: string): void {
-    this._current.set({ id: tenantId, name: tenantId });
+    this._current.set({ key: tenantId });
   }
   //#endif
 
@@ -79,12 +73,10 @@ function readFromStorage(): TenantContext | null {
     const raw = localStorage.getItem(TENANT_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<TenantContext>;
-    if (typeof parsed.id !== 'string' || typeof parsed.name !== 'string') return null;
-    return {
-      id: parsed.id,
-      name: parsed.name,
-      displayName: parsed.displayName,
-    };
+    // 旧版本存过 {id,name,displayName}：那形态没有 key，会在这里被判为无效而清掉，
+    // 用户回到登录页重选一次租户即可，不需要迁移代码
+    if (typeof parsed.key !== 'string' || parsed.key.length === 0) return null;
+    return { key: parsed.key };
   } catch {
     return null;
   }

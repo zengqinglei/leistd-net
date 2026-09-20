@@ -62,6 +62,7 @@ public sealed record OperationRecordOutputDto
 
     /// <summary>操作发生时的租户；仅宿主可见，宿主上下文里的操作为空。</summary>
     public Guid? ActorTenantId { get; init; }
+
 }
 
 /// <summary>

@@ -52,6 +52,19 @@ public static class OperationRecordActions
     /// <summary>租户删除。</summary>
     public const string TenantDeleted = "tenant.deleted";
 
+    /// <summary>为租户登记了一条新的数据库连接。</summary>
+    /// <remarks>
+    /// 登记、改写、删除各自一个码：三者的安全含义不同——新增是多了一个落点，
+    /// 改写意味着换库或轮换凭据，删除是把租户退回宿主库。合成一个码之后事后分不出是哪种。
+    /// </remarks>
+    public const string TenantConnectionRegistered = "tenant.connection-registered";
+
+    /// <summary>改写了租户已有的数据库连接（换库或轮换凭据）。</summary>
+    public const string TenantConnectionChanged = "tenant.connection-changed";
+
+    /// <summary>删除了租户的数据库连接登记，该租户退回宿主库。</summary>
+    public const string TenantConnectionRemoved = "tenant.connection-removed";
+
     /// <summary>设置变更。作用域（宿主／租户／用户）随目标标识带出。</summary>
     public const string SettingChanged = "setting.changed";
 

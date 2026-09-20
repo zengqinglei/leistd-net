@@ -43,15 +43,20 @@ internal sealed class NotificationRetentionJob<TDbContext>(
         var unreadCutoff = now.AddDays(-current.UnreadRetentionDays);
         var deleted = 0;
 
-        var result = await databaseRunner.ForEachDatabaseAsync(ConnectionStringName, async (_, ct) =>
+        // 停用租户的库照样要清理：旧通知不会因为租户停用就不占空间
+        var result = await databaseRunner.ForEachDatabaseAsync(ConnectionStringName, activeOnly: false, async (_, ct) =>
         {
             deleted += await DeleteCurrentDatabaseAsync(readCutoff, unreadCutoff, current.BatchSize, ct);
         }, cancellationToken);
 
-        if (result.FailedDatabases.Count > 0)
+        // 解析不出连接的租户与失败的库一样要让本轮失败：它们的通知一条都没清，
+        // 把这一轮报成成功就没人知道有一批库被跳过了。抛出后调度器不记水位，
+        // 本时段仍可被其他副本重试；积压由下一轮按截止时间扫描一并清掉
+        if (result.FailedDatabases.Count > 0 || result.UnresolvedTenants.Count > 0)
         {
             throw new InvalidOperationException(
-                $"Deleted {deleted} expired notification(s); {result.FailedDatabases.Count} of {result.Databases} database(s) failed.");
+                $"Deleted {deleted} expired notification(s); {result.FailedDatabases.Count} of {result.Databases} database(s) failed, " +
+                $"{result.UnresolvedTenants.Count} tenant(s) could not be resolved to a database.");
         }
 
         logger.LogInformation("Deleted {Count} expired notification(s) across {Databases} database(s).", deleted, result.Databases);

@@ -62,6 +62,11 @@ public static class DependencyInjection
         services.TryAddTransient<ITenantConnectionConfigurationManager,
             EfCoreTenantConnectionConfigurationManager<TDbContext>>();
         services.TryAddTransient<ITenantConnectionDirectory, EfCoreTenantConnectionDirectory<TDbContext>>();
+        // 逐库作业的库目录：同样只读控制库、只回指纹与租户归属。它是控制库的存储之一，
+        // 因此跟着这里走，而不是跟着"宿主是否也用本地连接解析"走——只承担控制面的服务
+        // （自己不分库、却要对外提供库清单端点）不会调用 AddLocalTenantConnectionResolution，
+        // 目录缺席时那个端点曾静默返回空清单，逐库作业于是只处理宿主库。
+        services.TryAddTransient<ITenantDatabaseDirectory, EfCoreTenantDatabaseDirectory<TDbContext>>();
         // 管理用例在 Core（只依赖契约与工作单元）：这里注册完存储后接上
         services.AddTenantManagement();
         return services;
@@ -81,6 +86,8 @@ public static class DependencyInjection
     /// 迁移目标需要的 <see cref="AddMultiTenancyEfCore{TDbContext}"/>；
     /// 与写入方共享密钥环的 <c>AddDataProtection()</c>——连接串在这里解密，解不开即拒绝，不静默回落。</para>
     /// <para>同时注册 <see cref="ITenantMigrationTargetProvider"/>（读控制库）。均以 <c>TryAdd</c> 注册，宿主可替换。
+    /// 逐库作业的库目录 <c>ITenantDatabaseDirectory</c> <b>不在这里</b>：它是控制库的存储，由
+    /// <see cref="AddMultiTenancyEfCore{TDbContext}"/> 注册。
     /// 连接配置在另一个服务时改用 Core 包的 <c>AddRemoteTenantConnectionResolution</c>，两者二选一。</para>
     /// </remarks>
     /// <example>
@@ -105,6 +112,8 @@ public static class DependencyInjection
             ServiceDescriptor.Singleton<IValidateOptions<LocalTenantConnectionOptions>, LocalTenantConnectionOptionsValidator>());
         services.AddOptions<LocalTenantConnectionOptions>().ValidateOnStart();
 
+        // 逐库枚举据此判"有独立库可列"，不从解析器或目录的在场与否推断
+        services.TryAddSingleton(TenantConnectionRouting.Instance);
         services.TryAddScoped<IConnectionStringResolver, LocalConnectionStringResolver<TControlDbContext>>();
         services.TryAddTransient<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
 

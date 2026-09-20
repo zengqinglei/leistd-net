@@ -50,5 +50,11 @@ public class NotificationRecordConfiguration : IEntityTypeConfiguration<Notifica
 
         // 按用户 + 已读状态查询（未读数）。
         builder.HasIndex(x => new { x.UserId, x.IsRead });
+
+        // 保留期清理的访问路径：整库按时间扫、最旧的先删（IgnoreQueryFilters，不带 UserId）。
+        // 上面两条都以 UserId 打头，用不上。清理的谓词是
+        // "CreationTime < 未读截止 OR (已读 AND CreationTime < 已读截止)"，两个分支都被
+        // 较宽的那个上界包住，所以单列时间索引就够，不为它再拆一条按已读状态的组合索引。
+        builder.HasIndex(x => x.CreationTime);
     }
 }

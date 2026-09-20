@@ -37,11 +37,14 @@ $problems = New-Object System.Collections.Generic.List[string]
 # 变更日志与历史设计记录必须能提到被删掉的东西，否则就没法记录"删了什么"。
 $historicalPaths = @(
     "docs/framework/versioning.md",
+    # 升级清单的职责就是说"这个东西以前叫什么、现在改成什么"，不提旧名就没法用。
+    # 按前缀豁免，覆盖 upgrade-0.13.0.md 及后续各版本。
+    "docs/framework/upgrade-",
     "docs/plans/",
     "docs/assessments/"
 )
 
-# 与 docs/framework/versioning.md 里"已移除"清单保持一致：那份清单列了什么，这里就该拦什么。
+# 与 docs/framework/ 下的升级清单保持一致：那些清单列了什么被删除，这里就该拦什么。
 #
 # 用正则而不是子串：好几个被删掉的名字是现存名字的前缀或后缀，直接按子串拦会误伤。
 #   \bPermissionGrant\b   —— PermissionGrantSet/Store/Record/Manager 都还活着，必须靠单词边界排除；

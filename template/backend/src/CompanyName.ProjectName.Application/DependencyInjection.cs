@@ -117,6 +117,7 @@ public static class DependencyInjection
         services.AddTransient<ITenantProvisioner, TenantSeeder>();
         services.AddTransient<ITenantActivationGuard, TenantHasUsersActivationGuard>();
         services.AddTransient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>();
+        services.AddTransient<IEventHandler<TenantConnectionChangedEvent>, TenantConnectionChangedAuditHandler>();
         services.AddTransient<ITenantImpersonationAppService, TenantImpersonationAppService>();
 #endif
 

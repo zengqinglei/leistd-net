@@ -1,0 +1,101 @@
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
+using Leistd.MultiTenancy.EntityFrameworkCore.Extensions;
+using Leistd.UnitOfWork.EntityFrameworkCore.Database;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
+
+namespace Leistd.MultiTenancy.EntityFrameworkCore.Stores;
+
+// 宿主自己持有控制库时的库目录：直接读注册表与连接登记，不经任何 HTTP。
+//
+// 指纹按解密后的连接串算，与迁移目标同一算法，两边的"是不是同一个库"判定才一致。
+// 连接串只在本进程内用于算指纹，不出这个类。
+internal sealed class EfCoreTenantDatabaseDirectory<TDbContext>(
+    IDbContextProvider<TDbContext> dbContextProvider,
+    IDataProtectionProvider dataProtectionProvider) : ITenantDatabaseDirectory
+    where TDbContext : DbContext
+{
+    private readonly TenantConnectionStringProtector _protector = new(dataProtectionProvider);
+
+    public async Task<TenantDatabaseListResult> GetDatabasesAsync(
+        string name,
+        bool activeOnly,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = TenantConnectionNames.Normalize(name);
+        var defaultName = TenantConnectionNames.Default;
+        var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
+
+        var tenants = await dbContext.UndeletedTenants()
+            .AsNoTracking()
+            .Where(tenant => !activeOnly || tenant.IsActive)
+            .Select(tenant => tenant.Id)
+            .ToListAsync(cancellationToken);
+        if (tenants.Count == 0)
+        {
+            return TenantDatabaseListResult.Empty;
+        }
+
+        var candidates = await dbContext.ConnectionsOfUndeletedTenants()
+            .AsNoTracking()
+            .Where(record => (record.Name == normalized || record.Name == defaultName) && tenants.Contains(record.TenantId))
+            .ToListAsync(cancellationToken);
+
+        // 登记过**任意**连接的租户：没有这一份就分不清"住在宿主库里"和"有独立库、
+        // 但这个连接名解析不出来"。后者是失败——运行时解析对同一情形也是失败关闭，
+        // 把它当成宿主库就会让作业在错误的库上跑
+        var registered = await dbContext.ConnectionsOfUndeletedTenants()
+            .AsNoTracking()
+            .Where(record => tenants.Contains(record.TenantId))
+            .Select(record => record.TenantId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var (resolved, unresolved) = TenantConnectionNameResolution.Resolve(candidates, registered, normalized);
+
+        var byFingerprint = new SortedDictionary<string, List<Guid>>(StringComparer.Ordinal);
+        var failures = new List<TenantDatabaseFailure>();
+
+        // 解析不出连接名只隔离该租户，不像迁移那样整体停下：一个坏租户不该让整轮逐库作业不执行
+        failures.AddRange(unresolved.Select(tenantId =>
+            new TenantDatabaseFailure(tenantId, TenantConnectionNameResolution.DescribeUnresolved(tenantId, normalized))));
+
+        foreach (var tenantId in tenants.Order())
+        {
+            // 一条连接都没登记 = 这个租户住在宿主库里，不是失败也不是独立库。
+            // 不收集它们：那份清单等于共享库的租户数，可能上万且要跨 HTTP 边界，
+            // 而逐库作业进宿主库用的是宿主配置，不需要某个租户
+            if (!resolved.TryGetValue(tenantId, out var record))
+            {
+                continue;
+            }
+
+            // 解密失败（密钥环换了、密文损坏）只跳过这一个租户：
+            // 一个坏租户不该让整轮逐库作业不执行
+            string connectionString;
+            try
+            {
+                connectionString = _protector.Unprotect(tenantId, record.Name, record.ProtectedConnectionString);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(new TenantDatabaseFailure(tenantId, exception.Message));
+                continue;
+            }
+
+            var fingerprint = TenantDatabaseFingerprint.Of(connectionString);
+            if (!byFingerprint.TryGetValue(fingerprint, out var members))
+            {
+                members = [];
+                byFingerprint[fingerprint] = members;
+            }
+
+            members.Add(tenantId);
+        }
+
+        return new TenantDatabaseListResult(
+            [.. byFingerprint.Select(pair => new TenantDatabaseEntry(pair.Key, [.. pair.Value.Order()]))],
+            failures);
+    }
+}

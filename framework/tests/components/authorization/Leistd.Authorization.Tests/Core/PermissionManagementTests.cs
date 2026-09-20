@@ -74,12 +74,21 @@ public sealed class PermissionManagementTests
         Assert.True(current.IsSuperAdmin);
     }
 
+    /// <summary>不是权限主体的调用方读自己的权限，拿到空集合，不是 401。</summary>
+    /// <remarks>
+    /// 端点挂着 RequireAuthorization，走到这里的调用方必然已认证，回 401 是在说假话；
+    /// 客户端据此重新登录、再问、再 401，就是死循环。双 realm 部署（员工走 RBAC、
+    /// 客户走另一套身份）会稳定踩中，因为客户令牌按设计就不在员工的主体空间里。
+    /// 空集合意味着任何权限判定都不通过，拒绝效果与抛异常一致。
+    /// </remarks>
     [Fact]
-    public async Task A_caller_that_is_not_a_subject_is_unauthorized()
+    public async Task A_caller_that_is_not_a_subject_reads_an_empty_permission_set()
     {
-        var error = await Assert.ThrowsAsync<UnauthorizedException>(() => Build(subject: null).GetCurrentAsync());
+        var current = await Build(subject: null).GetCurrentAsync();
 
-        Assert.Equal(PermissionErrorCodes.SubjectUnavailable, error.Code);
+        Assert.Empty(current.Permissions);
+        Assert.False(current.IsSuperAdmin);
+        Assert.False(string.IsNullOrWhiteSpace(current.VersionToken));
     }
 
     [Fact]
@@ -156,7 +165,7 @@ public sealed class PermissionManagementTests
         var error = new UndefinedPermissionException(["App.A", "App.B"]);
 
         Assert.Equal(PermissionErrorCodes.UndefinedPermission, error.Code);
-        Assert.Equal("App.A, App.B", error.LocalizationData["Name"]);
+        Assert.Equal("App.A, App.B", error.LocalizationData["Names"]);
     }
 
     private IPermissionManagementService Build(Guid? tenantId = null, PermissionSubject? subject = null)

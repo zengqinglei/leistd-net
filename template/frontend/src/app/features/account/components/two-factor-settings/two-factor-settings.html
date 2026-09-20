@@ -7,13 +7,9 @@
       <div class="flex flex-wrap items-center gap-2">
         <h3 class="text-sm leading-none font-semibold">{{ t('account.twoFactor.header') }}</h3>
         @if (status()?.enabled) {
-          <span
-            hlmBadge
-            variant="outline"
-            class="border-success/30 bg-success/10 text-success"
-            data-testid="two-factor-on"
-            >{{ t('account.twoFactor.on') }}</span
-          >
+          <span hlmBadge variant="success" data-testid="two-factor-on">{{
+            t('account.twoFactor.on')
+          }}</span>
         }
       </div>
       <p class="text-muted-foreground text-sm">

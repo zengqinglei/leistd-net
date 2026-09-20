@@ -14,7 +14,8 @@ namespace Leistd.MultiTenancy.ServiceClient.Stores;
 // 吞成 null 会让"控制面不可达"表现成"这个租户不存在"。
 internal sealed class RemoteTenantConnectionStore(
     HttpClient httpClient,
-    IOptions<RemoteTenantConnectionClientOptions> options) : ITenantConnectionConfigurationStore
+    IOptions<RemoteTenantConnectionClientOptions> options)
+    : ITenantConnectionConfigurationStore, ITenantDatabaseDirectory
 {
     public async Task<TenantConnectionLookupResult?> FindAsync(
         Guid tenantId,
@@ -62,6 +63,26 @@ internal sealed class RemoteTenantConnectionStore(
         using var response = await httpClient.GetAsync($"{Prefix}/migration?name={Uri.EscapeDataString(name)}", cancellationToken);
         var remote = await response.ReadContentAsync<List<TenantMigrationConnectionOutputDto>>(cancellationToken: cancellationToken) ?? [];
         return [.. remote.Select(x => new TenantMigrationConnection(x.TenantId, x.Name, x.ConnectionString))];
+    }
+
+    public async Task<TenantDatabaseListResult> GetDatabasesAsync(
+        string name,
+        bool activeOnly,
+        CancellationToken cancellationToken = default)
+    {
+        // 只要"读路由"这一档权限：响应里没有连接串，逐库作业拿到租户后自己走解析链
+        using var response = await httpClient.GetAsync(
+            $"{Prefix}/databases?name={Uri.EscapeDataString(name)}&activeOnly={(activeOnly ? "true" : "false")}",
+            cancellationToken);
+        var remote = await response.ReadContentAsync<TenantDatabaseListOutputDto>(cancellationToken: cancellationToken);
+        if (remote is null)
+        {
+            return TenantDatabaseListResult.Empty;
+        }
+
+        return new TenantDatabaseListResult(
+            [.. remote.Databases.Select(x => new TenantDatabaseEntry(x.Fingerprint, x.TenantIds))],
+            [.. remote.FailedTenants.Select(x => new TenantDatabaseFailure(x.TenantId, x.Reason))]);
     }
 
     private string Prefix => "/" + options.Value.RoutePrefix.Trim('/');

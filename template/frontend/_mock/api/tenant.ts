@@ -7,7 +7,6 @@ import {
   MockTenantConnection,
   TENANTS,
   toTenantConnection,
-  toTenantLookup,
   toTenantOutput,
 } from '../data/tenant';
 
@@ -49,16 +48,6 @@ export function getTenantById(id: string) {
     throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
   }
   return toTenantOutput(tenant);
-}
-
-/** 匿名按名称解析（登录页租户选择）：404 = 不存在；停用租户照常返回，由前端提示。 */
-export function getTenantByName(name: string) {
-  const normalized = decodeURIComponent(name).toLowerCase();
-  const tenant = TENANTS.find((t) => t.name.toLowerCase() === normalized);
-  if (!tenant) {
-    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
-  }
-  return toTenantLookup(tenant);
 }
 
 /**
@@ -264,9 +253,9 @@ export function deleteTenant(id: string) {
 
 export const TENANT_API = {
   'GET /api/v1/tenants': (req: MockRequest) => getTenants(req.queryParams),
-  // by-host / by-name 必须排在 :id 之前，否则会被当成一个 id 走到按 id 查询那条上
+  // by-host 必须排在 :id 之前，否则会被当成一个 id 走到按 id 查询那条上。
+  // 按名字查租户的匿名端点已被移除：它是一个租户存在性 oracle
   'GET /api/v1/tenants/by-host': () => getTenantByHost(),
-  'GET /api/v1/tenants/by-name/:name': (req: MockRequest) => getTenantByName(req.params.name),
   'GET /api/v1/tenants/:id': (req: MockRequest) => getTenantById(req.params.id),
   'POST /api/v1/tenants': (req: MockRequest) => createTenant(req.body),
   'PUT /api/v1/tenants/:id/activation': (req: MockRequest) =>

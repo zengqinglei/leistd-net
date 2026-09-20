@@ -117,7 +117,6 @@
     "Permission:Group.Identity": "Identity and access",
     "Permission:Group.System": "System",
     "Permission:SubjectNotFound": "The subject was not found.",
-    "Permission:UndefinedPermission": "Permission '{Name}' is not defined or is disabled.",
     "Permissions": "Permissions",
     "Phone number": "Phone number",
     "Recipient": "Recipient",

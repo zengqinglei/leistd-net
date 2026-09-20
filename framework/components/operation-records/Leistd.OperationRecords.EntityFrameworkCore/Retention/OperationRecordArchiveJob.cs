@@ -28,12 +28,16 @@ internal sealed class OperationRecordArchiveJob(
         var cutoff = clock.Now.AddDays(-current.RetentionDays);
         var result = await archiveService.ArchiveOlderThanAsync(cutoff, current.BatchSize, cancellationToken);
 
-        if (result.FailedDatabases > 0)
+        // 解析不出连接的租户与失败的库一样要让本轮失败：它们的记录一条都没搬走，
+        // 把这一轮报成成功就没人知道有一批库被跳过了
+        if (result.FailedDatabases > 0 || result.UnresolvedTenants > 0)
         {
-            // 抛出让调度器不记水位：失败的库最迟在下一个调度时段重做（按截止时间扫描，积压会一并搬走）
+            // 抛出让调度器不记水位：本时段仍可被其他副本重试，最迟在下一个调度时段重做
+            // （按截止时间扫描，积压会一并搬走）
             throw new InvalidOperationException(
                 $"Archived {result.Archived} operation record(s) created before {cutoff:o}; " +
-                $"{result.FailedDatabases} of {result.Databases} database(s) failed.");
+                $"{result.FailedDatabases} of {result.Databases} database(s) failed, " +
+                $"{result.UnresolvedTenants} tenant(s) could not be resolved to a database.");
         }
 
         logger.LogInformation(

@@ -51,6 +51,31 @@ public class RegistrationAndOptionsTests
         services.AssertImplementedBy<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
     }
 
+    /// <summary>两个租户路由入口都要放下路由标记，逐库枚举只认它。</summary>
+    /// <remarks>
+    /// 没有这条，标记就成了"我以为注册了"——而漏放的后果是逐库作业按单库走，
+    /// 每一个独立库被永久跳过还报成功。只装 <c>AddMultiTenancyCore()</c>（不分库）时必须没有它。
+    /// </remarks>
+    [Theory]
+    [InlineData("local", true)]
+    [InlineData("remote", true)]
+    [InlineData("core-only", false)]
+    public void Only_the_tenant_routing_entry_points_register_the_routing_marker(string registration, bool expected)
+    {
+        var services = new ServiceCollection().AddMultiTenancyCore();
+        switch (registration)
+        {
+            case "local":
+                services.AddLocalTenantConnectionResolution<ControlDbContext>(o => o.ControlPlaneConnectionStringName = "Control");
+                break;
+            case "remote":
+                services.AddRemoteTenantConnectionResolution();
+                break;
+        }
+
+        Assert.Equal(expected, services.Any(service => service.ServiceType == typeof(TenantConnectionRouting)));
+    }
+
     // 远端宿主不持有控制面的密钥环：远端解析的注册面里不能冒出任何 Data Protection 依赖
     [Fact]
     public void Remote_resolution_does_not_require_a_data_protection_key_ring()

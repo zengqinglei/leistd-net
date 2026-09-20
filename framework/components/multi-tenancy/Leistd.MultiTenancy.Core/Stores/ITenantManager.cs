@@ -34,6 +34,30 @@ public interface ITenantManager
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 以指定标识创建租户，用于播种与夹具。
+    /// </summary>
+    /// <remarks>
+    /// 单独一个重载而不是给上面那个加可选参数：加在 <c>CancellationToken</c> 之后读起来是倒的，
+    /// 而且给已有方法追加参数会改掉 CLR 签名，按旧签名编译的调用方要重新编译。
+    /// </remarks>
+    /// <param name="name">租户名称</param>
+    /// <param name="displayName">可选的展示名，可为 <c>null</c></param>
+    /// <param name="isActive">创建后是否处于启用状态</param>
+    /// <param name="id">指定租户标识；不接受 <see cref="Guid.Empty"/></param>
+    /// <param name="description">可选的简短描述，可为 <c>null</c></param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>创建出的租户配置</returns>
+    /// <exception cref="ArgumentException"><paramref name="name"/> 为空或全空白，或 <paramref name="id"/> 为空标识</exception>
+    /// <exception cref="DuplicateTenantNameException">名称已被未删除的租户占用（含并发落败）</exception>
+    Task<TenantConfiguration> CreateAsync(
+        string name,
+        string? displayName,
+        bool isActive,
+        Guid id,
+        string? description = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 更新租户名称、显示名称与描述。
     /// </summary>
     /// <remarks>

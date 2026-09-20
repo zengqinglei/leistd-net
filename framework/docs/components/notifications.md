@@ -40,10 +40,19 @@ dotnet add package Leistd.Notifications.Email
 在 `Program.cs` / DI 配置中按需注册：
 
 ```csharp
+// 前置：发布器要给每条通知盖创建时刻，IClock 由宿主注册
+// （Leistd.Core 不提供 DI 扩展；DDD 基础设施包已代为注册）
+builder.Services.AddSingleton<IClock, UtcClockProvider>();
+
+// EF 包同时接上 Core 的发布器：只要历史、不要实时推送时装它一个就成立
 services.AddNotificationsEfCore<MyProjectDbContext>();
 
+// 实时推送是可选关注点，另外装
 builder.Services.AddNotificationsSignalR();
 ```
+
+保留期清理另外还要逐库遍历（`ITenantDatabaseRunner`），由 `AddMultiTenancyCore()` 提供；
+不分库时它给出的清单只有宿主库，行为与单库一致。组件不替你注册——跨组件的前置由宿主显式组合。
 
 在 `OnModelCreating` 中应用通知实体的 EF Core 配置：
 
@@ -74,6 +83,7 @@ app.MapGroup("/api/v1/notifications").MapNotifications(options => options.Access
 启用保留期清理（需要后台作业调度器与分布式锁，见[后台作业](./background-jobs.md)）：
 
 ```csharp
+builder.Services.AddMultiTenancyCore();            // 提供逐库遍历；不分库时清单只有宿主库
 builder.Services.AddNotificationRetention<MyProjectDbContext>();
 ```
 
@@ -184,7 +194,7 @@ public class MessageCenter(INotificationStore notificationStore)
 - 邮件渠道把正文按纯文本 HTML 编码后发送；队列满时丢弃这一封并记警告，站内通知不受影响。
 - `MarkAsReadAsync` **幂等**：`notificationId` 无法解析为 `Guid` 时直接返回；查不到记录，或记录已是 `IsRead: true` 时也直接返回、不产生额外的 `SaveChanges`；仅在确实从未读变为已读时才更新 `IsRead` 与 `ReadAt` 并保存。
 - `MarkAllAsReadAsync` 只查询 `IsRead == false` 的记录批量标记；无未读记录时直接返回，不调用 `SaveChangesAsync`。
-- 索引：`(UserId, CreationTime)` 支撑"拉取用户通知列表"，`(UserId, IsRead)` 支撑"未读数"查询；表名沿用 EF Core 默认约定（`NotificationRecord`），不额外加框架前缀。
+- 索引三条：`(UserId, CreationTime)` 支撑"拉取用户通知列表"，`(UserId, IsRead)` 支撑"未读数"查询，单列 `CreationTime` 支撑**保留期清理**——清理整库按时间扫、不带 `UserId`（`IgnoreQueryFilters()` 覆盖同库的全部租户），前两条都以 `UserId` 打头，那条路径一条都用不上。表名沿用 EF Core 默认约定（`NotificationRecord`），不额外加框架前缀。
 
 ## 注意事项
 

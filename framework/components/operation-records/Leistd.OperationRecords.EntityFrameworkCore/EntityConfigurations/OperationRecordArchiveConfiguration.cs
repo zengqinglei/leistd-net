@@ -25,7 +25,16 @@ public class OperationRecordArchiveConfiguration : IEntityTypeConfiguration<Oper
 
         // 与原表同样存字符串：归档表是最可能被人直接查的表，序号要对着枚举翻译，且枚举重排后历史含义会静默改变
         builder.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(32).IsRequired();
-        builder.Property(x => x.Visibility).HasConversion<string>().HasMaxLength(32).IsRequired();
+        // 给存量表加这一列时，没有库默认值的行会落空串，读取时枚举转换失败——升级后才炸
+        builder.Property(x => x.Visibility)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasDefaultValue(OperationVisibility.Host)
+            // 必须配 ValueGeneratedNever：HasDefaultValue 会让 EF 在属性等于 CLR 默认值时省略该列，
+            // 而 OperationVisibility.Tenant 正好是 0——租户可见的记录会被库默认值静默写成宿主可见。
+            // 库默认值只为"给存量表加列"的回填服务，不参与 EF 的插入
+            .ValueGeneratedNever()
+            .IsRequired();
 
         builder.Property(x => x.ActorId).HasMaxLength(OperationRecordInfo.MaxActorIdLength);
         builder.Property(x => x.ActorName).HasMaxLength(OperationRecordInfo.MaxActorNameLength);

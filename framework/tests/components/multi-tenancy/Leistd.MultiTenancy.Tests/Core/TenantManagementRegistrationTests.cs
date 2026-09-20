@@ -73,6 +73,7 @@ public sealed class TenantManagementRegistrationTests
         services.AddSingleton<ITenantConnectionConfigurationStore>(new FakeConnectionStore());
         services.AddSingleton<ITenantConnectionConfigurationManager>(new FakeConnectionManager());
         services.AddSingleton<ITenantConnectionDirectory>(new FakeConnectionDirectory());
+        services.AddSingleton<ITenantDatabaseDirectory>(new FakeDatabaseDirectory());
         services.AddTenantManagement();
         return services;
     }
@@ -90,6 +91,9 @@ public sealed class TenantManagementRegistrationTests
     private sealed class FakeTenantManager : ITenantManager
     {
         public Task<TenantConfiguration> CreateAsync(string name, string? displayName, bool isActive, string? description = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TenantConfiguration> CreateAsync(string name, string? displayName, bool isActive, Guid id, string? description = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<TenantConfiguration> UpdateAsync(Guid id, string name, string? displayName, string? description = null, CancellationToken cancellationToken = default)
@@ -132,6 +136,12 @@ public sealed class TenantManagementRegistrationTests
             => throw new NotSupportedException();
     }
 
+    private sealed class FakeDatabaseDirectory : ITenantDatabaseDirectory
+    {
+        public Task<TenantDatabaseListResult> GetDatabasesAsync(string name, bool activeOnly, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
     private sealed class FakeTenantManagementService : ITenantManagementService
     {
         public Task<PagedResult<TenantOutputDto>> GetPagedAsync(GetTenantPagedInputDto input, CancellationToken cancellationToken = default)
@@ -140,10 +150,10 @@ public sealed class TenantManagementRegistrationTests
         public Task<TenantOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<TenantLookupOutputDto?> FindByNameAsync(string name, CancellationToken cancellationToken = default)
+        public Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
+        public Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, Guid id, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<TenantOutputDto> UpdateAsync(Guid id, UpdateTenantInputDto input, CancellationToken cancellationToken = default)

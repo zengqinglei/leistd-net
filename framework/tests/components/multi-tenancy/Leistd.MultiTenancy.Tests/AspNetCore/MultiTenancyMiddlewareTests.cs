@@ -130,20 +130,45 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
         Assert.Equal(ActiveTenantId.ToString(), body);
     }
 
+    /// <summary>
+    /// 已认证请求的未知/停用租户照常失败：只能探到自己的租户，明确报错对运维有价值。
+    /// </summary>
+    /// <remarks>
+    /// 未配置全局异常处理器的 TestServer 会把异常原样抛给调用方；真实宿主由 Leistd.ExceptionHandling 映射。
+    /// </remarks>
     [Fact]
-    public async Task Unknown_tenant_throws_not_found()
+    public async Task An_authenticated_request_still_fails_on_an_unknown_tenant()
     {
-        // 未配置全局异常处理器的 TestServer 会把异常原样抛给调用方；
-        // 真实宿主由 Leistd.ExceptionHandling 映射为 404
+        // 已认证主体不采信请求头（防止改写宿主身份），租户只能来自 claim
         await Assert.ThrowsAsync<TenantNotFoundException>(
-            () => GetAsync("/", ("X-Tenant-Id", Guid.NewGuid().ToString())));
+            () => GetAsync("/", ("X-Test-Auth", "u1"), ("X-Test-Tenant-Claim", Guid.NewGuid().ToString())));
     }
 
     [Fact]
-    public async Task Inactive_tenant_throws_not_active()
+    public async Task An_authenticated_request_still_fails_on_an_inactive_tenant()
     {
         await Assert.ThrowsAsync<TenantNotActiveException>(
+            () => GetAsync("/", ("X-Test-Auth", "u1"), ("X-Test-Tenant-Claim", InactiveTenantId.ToString())));
+    }
+
+    /// <summary>
+    /// 未认证请求下，"不存在"与"已停用"必须给出同一种失败。
+    /// </summary>
+    /// <remarks>
+    /// <para>两者不同就等于把租户的存在与启用状态告诉任何人：带上租户头打任意匿名端点，看状态码即可枚举。</para>
+    /// <para>也不能放行继续走——那样请求会落到宿主上下文，租户用户输错租户名时凭据会拿去和宿主用户比对。</para>
+    /// </remarks>
+    [Fact]
+    public async Task An_anonymous_request_cannot_tell_unknown_from_inactive()
+    {
+        var unknown = await Assert.ThrowsAsync<TenantNotFoundException>(
+            () => GetAsync("/", ("X-Tenant-Id", Guid.NewGuid().ToString())));
+        var inactive = await Assert.ThrowsAsync<TenantNotFoundException>(
             () => GetAsync("/", ("X-Tenant-Id", InactiveTenantId.ToString())));
+
+        Assert.Equal(unknown.GetType(), inactive.GetType());
+        Assert.Equal(unknown.Code, inactive.Code);
+        Assert.Equal(unknown.StatusCode, inactive.StatusCode);
     }
 
     [Fact]

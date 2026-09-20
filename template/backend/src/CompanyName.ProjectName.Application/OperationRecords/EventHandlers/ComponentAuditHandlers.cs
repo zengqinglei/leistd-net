@@ -72,4 +72,41 @@ internal sealed class TenantChangedAuditHandler(IOperationRecorder recorder) : I
         return recorder.RecordSucceededAsync(action, OperationTarget.For(@event.TenantId, @event.DisplayName), basis, cancellationToken);
     }
 }
+
+/// <summary>
+/// 租户连接登记的变化记成操作记录。
+/// </summary>
+/// <remarks>
+/// <para>连接决定租户数据落在哪个库，改动必须留痕。事件里没有连接串（它是凭据），
+/// 记录只写租户与连接名；变化类型体现在动作码上，登记、改写、删除各一个。
+/// 事件带的版本号没有记——操作记录没有放它的位置，而目前也没有按版本检索的需求，
+/// 不为存一个版本号去扩展通用的成功记录模型。</para>
+/// <para>目标标识是 <c>{租户标识}/{连接名}</c>，与设置、权限两个处理器的拼法一致：
+/// 同一个租户的每个连接名各是一个可被改动的对象，只写租户标识会让它们在审计里混成一行。
+/// 目标名是<b>租户显示名</b>而不是连接名——界面按目标名展示，写连接名会显示成
+/// "为租户 default 登记了数据库连接"。</para>
+/// </remarks>
+internal sealed class TenantConnectionChangedAuditHandler(IOperationRecorder recorder)
+    : IEventHandler<TenantConnectionChangedEvent>
+{
+    /// <inheritdoc />
+    public Task HandleAsync(TenantConnectionChangedEvent @event, CancellationToken cancellationToken = default)
+        => recorder.RecordSucceededAsync(
+            ActionFor(@event.Change),
+            OperationTarget.For($"{@event.TenantId}/{@event.Name}", @event.TenantDisplayName),
+            PermissionConstant.Tenants.Update,
+            cancellationToken);
+
+    // 事件带着变化类型，记录也要带：合成一个码之后，事后分不出是新增落点、换库还是退回宿主库。
+    // 三个分支都显式列出，不用 _ 兜底：组件将来给枚举加值时，兜底会把它静默归成"改写"，
+    // 审计表里多出一批张冠李戴的记录，而且不报错。宁可在这里炸，逼人补一个动作码。
+    private static string ActionFor(TenantConnectionChangeKind change) => change switch
+    {
+        TenantConnectionChangeKind.Registered => OperationRecordActions.TenantConnectionRegistered,
+        TenantConnectionChangeKind.Changed => OperationRecordActions.TenantConnectionChanged,
+        TenantConnectionChangeKind.Removed => OperationRecordActions.TenantConnectionRemoved,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(change), change, "This connection change kind has no operation action code yet.")
+    };
+}
 #endif

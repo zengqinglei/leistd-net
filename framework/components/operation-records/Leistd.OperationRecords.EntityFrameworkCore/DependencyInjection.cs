@@ -23,11 +23,21 @@ public static class DependencyInjection
     /// 注册 EF Core 操作记录存储（基于指定 DbContext）。
     /// </summary>
     /// <remarks>
-    /// 宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>；
-    /// 本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文。
+    /// <para>本存储通过 <c>IDbContextProvider&lt;TDbContext&gt;</c> 获取绑定连接的上下文，
+    /// 因此宿主须注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>。</para>
+    /// <para><b>记录器还要四样跨组件前置</b>，缺一个在首次解析 <c>IOperationRecorder</c> 时才暴露：
+    /// <c>IClock</c>（宿主自行 <c>AddSingleton&lt;IClock, UtcClockProvider&gt;()</c>，
+    /// <c>Leistd.Core</c> 刻意不提供 DI 扩展）、<c>ICurrentTenant</c>（<c>AddMultiTenancyCore()</c>）、
+    /// <c>ICurrentUser</c>（<c>AddAmbientContext()</c>）、<c>ICorrelationIdProvider</c>
+    /// （<c>AddCorrelationIdCore(configuration)</c>）。每条记录都要回答"谁、在哪个租户、哪条链路、什么时间"，
+    /// 四样各来自一个独立组件；本组件<b>不</b>替调用方注册——组件由宿主显式组合。</para>
     /// </remarks>
     /// <example>
     /// <code>
+    /// builder.Services.AddSingleton&lt;IClock, UtcClockProvider&gt;();
+    /// builder.Services.AddMultiTenancyCore();
+    /// builder.Services.AddAmbientContext();
+    /// builder.Services.AddCorrelationIdCore(builder.Configuration);
     /// builder.Services.AddOperationRecordsEfCore&lt;AppDbContext&gt;();
     ///
     /// // DbContext 里映射操作记录表
@@ -63,10 +73,12 @@ public static class DependencyInjection
     /// 任务照常排期、到点跳过，打开开关下一轮即生效。</para>
     /// <para>需要后台作业调度器（如 <c>AddInProcessBackgroundJobs()</c>）与分布式锁；
     /// 归档按物理库逐个执行，独立库租户的记录在各自的库里归档。</para>
+    /// <para>逐库遍历（<c>ITenantDatabaseRunner</c>）由 <c>AddMultiTenancyCore()</c> 提供——
+    /// 基础注册本来就要它。不分库时它给出的清单只有宿主库，行为与单库一致。</para>
     /// </remarks>
     /// <example>
     /// <code>
-    /// builder.Services.AddOperationRecordsEfCore&lt;AppDbContext&gt;();
+    /// builder.Services.AddOperationRecordsEfCore&lt;AppDbContext&gt;();   // 连同上面那四样前置
     /// builder.Services.AddOperationRecordRetention&lt;AppDbContext&gt;();
     /// </code>
     /// </example>

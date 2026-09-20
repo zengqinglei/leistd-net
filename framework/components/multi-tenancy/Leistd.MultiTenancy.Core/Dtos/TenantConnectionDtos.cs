@@ -97,3 +97,42 @@ public sealed record UpsertTenantConnectionInputDto
     public override string ToString() =>
         $"{nameof(UpsertTenantConnectionInputDto)} {{ ExpectedVersion = {ExpectedVersion} }}";
 }
+
+/// <summary>
+/// 一个独立库，以及住在里面的租户。
+/// </summary>
+/// <remarks>
+/// 逐库作业用的线上形状：<b>不含连接串</b>。真正的连接由各租户的正常解析链取得，
+/// 因此这个端点只要"读路由"这一档权限，不需要迁移用的 DDL 身份。
+/// </remarks>
+public sealed record TenantDatabaseOutputDto
+{
+    /// <summary>连接串指纹，用于判定"是不是同一个库"；不可逆推连接串。</summary>
+    public required string Fingerprint { get; init; }
+
+    /// <summary>住在这个库里的租户。</summary>
+    public required IReadOnlyList<Guid> TenantIds { get; init; }
+}
+
+/// <summary>
+/// 一个解析不出连接的租户。
+/// </summary>
+/// <remarks>坏掉一个租户不该让整轮逐库作业不执行，因此它们与清单一起下发，由调用方记日志。</remarks>
+public sealed record TenantDatabaseFailureOutputDto
+{
+    /// <summary>租户标识。</summary>
+    public required Guid TenantId { get; init; }
+
+    /// <summary>诊断消息；不含连接串。</summary>
+    public required string Reason { get; init; }
+}
+
+/// <summary>逐库作业的库清单。</summary>
+public sealed record TenantDatabaseListOutputDto
+{
+    /// <summary>独立库。</summary>
+    public required IReadOnlyList<TenantDatabaseOutputDto> Databases { get; init; }
+
+    /// <summary>解析不出连接、本轮被跳过的租户。</summary>
+    public required IReadOnlyList<TenantDatabaseFailureOutputDto> FailedTenants { get; init; }
+}

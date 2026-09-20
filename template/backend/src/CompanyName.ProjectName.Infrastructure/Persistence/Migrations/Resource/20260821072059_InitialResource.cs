@@ -93,7 +93,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     ImpersonatorName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
                     CorrelationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     TargetName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
-                    Visibility = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Visibility = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, defaultValue: "Host"),
                     FailureCode = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
                     FailureData = table.Column<string>(type: "text", nullable: true),
                     FailureDetail = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true)
@@ -122,7 +122,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     ImpersonatorName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
                     CorrelationId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     TargetName = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
-                    Visibility = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    Visibility = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, defaultValue: "Host"),
                     FailureCode = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
                     FailureData = table.Column<string>(type: "text", nullable: true),
                     FailureDetail = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true)
@@ -274,6 +274,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
 #if (IncludeNotifications)
             migrationBuilder.CreateIndex(
+                name: "IX_NotificationRecord_CreationTime",
+                schema: "companyname-projectname",
+                table: "NotificationRecord",
+                column: "CreationTime");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_NotificationRecord_UserId_CreationTime",
                 schema: "companyname-projectname",
                 table: "NotificationRecord",
@@ -292,6 +298,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                 table: "OperationRecordArchives",
                 columns: new[] { "TenantId", "CreationTime" },
                 descending: new[] { false, true });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OperationRecords_CreationTime",
+                schema: "companyname-projectname",
+                table: "OperationRecords",
+                column: "CreationTime");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OperationRecords_TenantId_CreationTime",

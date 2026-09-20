@@ -29,12 +29,14 @@ internal sealed class OperationRecordArchiveService<TDbContext>(
         ArgumentOutOfRangeException.ThrowIfLessThan(batchSize, 1);
 
         var archived = 0;
-        var result = await databaseRunner.ForEachDatabaseAsync(ConnectionStringName, async (_, ct) =>
+        // 停用租户的库照样要归档：保留期是合规义务，不随租户停用消失
+        var result = await databaseRunner.ForEachDatabaseAsync(ConnectionStringName, activeOnly: false, async (_, ct) =>
         {
             archived += await ArchiveCurrentDatabaseAsync(cutoffUtc, batchSize, ct);
         }, cancellationToken);
 
-        return new OperationRecordArchiveResult(archived, result.Databases, result.FailedDatabases.Count);
+        return new OperationRecordArchiveResult(
+            archived, result.Databases, result.FailedDatabases.Count, result.UnresolvedTenants.Count);
     }
 
     private async Task<int> ArchiveCurrentDatabaseAsync(DateTime cutoffUtc, int batchSize, CancellationToken cancellationToken)

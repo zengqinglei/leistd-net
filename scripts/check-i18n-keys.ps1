@@ -223,12 +223,23 @@ Compare-KeySets `
     -ZhPath (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/zh-CN.json") `
     -Selector { param($r) $r.texts }
 
-# 框架默认资源：通用键（Error:* / Title:*）
-Compare-KeySets `
-    -Label "框架(Localization.Core)" `
-    -EnPath (Join-Path $RepoRoot "framework/components/localization/Leistd.Localization.Core/Resources/en.json") `
-    -ZhPath (Join-Path $RepoRoot "framework/components/localization/Leistd.Localization.Core/Resources/zh-CN.json") `
-    -Selector { param($r) $r.texts }
+# 框架组件的随包译文：自动枚举，不手工列举。
+# 这些键是公共契约——宿主按键覆盖组件译文，错误码按键找句子，抛异常那侧按占位符名传参。
+# 手工列举时只有 Localization.Core 在内，另外四个组件（多租户、权限、设置、通知）
+# 一直没被比对过；新增带资源的组件也不会自动进来。
+$frameworkResources = Get-ChildItem -Path (Join-Path $RepoRoot "framework/components") -Recurse -Directory -Filter "Resources" |
+    Where-Object { (Test-Path (Join-Path $_.FullName "en.json")) -and (Test-Path (Join-Path $_.FullName "zh-CN.json")) } |
+    Sort-Object FullName
+if ($frameworkResources.Count -eq 0) {
+    $problems.Add("框架组件：一个随包译文目录都没找到，枚举条件多半写错了")
+}
+foreach ($dir in $frameworkResources) {
+    Compare-KeySets `
+        -Label "框架($($dir.Parent.Name))" `
+        -EnPath (Join-Path $dir.FullName "en.json") `
+        -ZhPath (Join-Path $dir.FullName "zh-CN.json") `
+        -Selector { param($r) $r.texts }
+}
 
 Write-Host ""
 Write-Host "-- 占位符一致性 --" -ForegroundColor Cyan
@@ -238,9 +249,11 @@ Compare-Placeholders "后端(Api/Resources)" `
 Compare-Placeholders "前端(public/i18n)" `
     (Join-Path $RepoRoot "template/frontend/public/i18n/en.json") `
     (Join-Path $RepoRoot "template/frontend/public/i18n/zh-CN.json") { param($r) $r }
-Compare-Placeholders "框架(Localization.Core)" `
-    (Join-Path $RepoRoot "framework/components/localization/Leistd.Localization.Core/Resources/en.json") `
-    (Join-Path $RepoRoot "framework/components/localization/Leistd.Localization.Core/Resources/zh-CN.json") { param($r) $r.texts }
+foreach ($dir in $frameworkResources) {
+    Compare-Placeholders "框架($($dir.Parent.Name))" `
+        (Join-Path $dir.FullName "en.json") `
+        (Join-Path $dir.FullName "zh-CN.json") { param($r) $r.texts }
+}
 
 Write-Host ""
 Write-Host "-- 代码引用键存在性（静态可发现部分）--" -ForegroundColor Cyan

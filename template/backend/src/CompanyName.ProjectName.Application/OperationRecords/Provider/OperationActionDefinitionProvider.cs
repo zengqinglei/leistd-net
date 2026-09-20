@@ -76,6 +76,21 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordCategories.Tenant,
             OperationVisibility.Host,
             OperationSeverity.Critical);
+        // 连接决定租户数据落在哪个库：改错它等于把数据写进别的库，与启停同级。
+        // 三种变化分别成码，事后才分得出是新增落点、换库还是退回宿主库
+        foreach (var connectionAction in new[]
+                 {
+                     OperationRecordActions.TenantConnectionRegistered,
+                     OperationRecordActions.TenantConnectionChanged,
+                     OperationRecordActions.TenantConnectionRemoved
+                 })
+        {
+            context.Add(
+                connectionAction,
+                OperationRecordCategories.Tenant,
+                OperationVisibility.Host,
+                OperationSeverity.Critical);
+        }
 
         // 设置变更：作用域随目标标识带出，可见性取租户级——租户设置的变更租户要看得见。
         // 宿主级设置的记录由写入时的租户上下文（null）自然落到宿主侧。
