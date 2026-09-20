@@ -1,6 +1,5 @@
 #if (IncludeNotifications)
 using Leistd.Notifications;
-using CompanyName.ProjectName.Api.Middlewares;
 using Leistd.Notifications.Dtos;
 using System.Net;
 using System.Net.Http.Json;
@@ -8,7 +7,6 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Http;
 using Leistd.MultiTenancy.Abstractions;
 #endif
-using CompanyName.ProjectName.Api.RealTime;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http.Connections;
@@ -24,37 +22,6 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
-#if (!LocalIdentity)
-    [Fact]
-    public async Task SignalR_query_token_is_promoted_only_on_known_hub_paths()
-    {
-        var hub = new DefaultHttpContext();
-        hub.Request.Path = "/hubs/notifications";
-        hub.Request.QueryString = new QueryString("?access_token=secret&transport=WebSockets");
-        var middleware = new HubAccessTokenMiddleware(context =>
-        {
-            Assert.Equal("Bearer secret", context.Request.Headers.Authorization);
-            Assert.False(context.Request.Query.ContainsKey("access_token"));
-            Assert.Equal("WebSockets", context.Request.Query["transport"]);
-            return Task.CompletedTask;
-        });
-
-        await middleware.InvokeAsync(hub);
-
-        var api = new DefaultHttpContext();
-        api.Request.Path = "/api/v1/notifications";
-        api.Request.QueryString = new QueryString("?access_token=secret");
-        middleware = new HubAccessTokenMiddleware(context =>
-        {
-            Assert.False(context.Request.Headers.ContainsKey("Authorization"));
-            Assert.Equal("secret", context.Request.Query["access_token"]);
-            return Task.CompletedTask;
-        });
-
-        await middleware.InvokeAsync(api);
-    }
-#endif
-
     [Fact]
     public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
     {
@@ -107,19 +74,19 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var notificationId = stored.Id;
 
         var markRead = await admin.Client.PutAsync($"/api/v1/notifications/{notificationId}/read", null);
-        Assert.Equal(HttpStatusCode.OK, markRead.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, markRead.StatusCode);
         Assert.Equal(0, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
 
         // 删除单条：持久删除指定通知
         var clearOne = await admin.Client.DeleteAsync($"/api/v1/notifications/{notificationId}");
-        Assert.Equal(HttpStatusCode.OK, clearOne.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, clearOne.StatusCode);
 
         var afterClearOne = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
         Assert.DoesNotContain(afterClearOne!, item => item.Id == notificationId);
 
         // 清空全部：持久删除当前用户的通知记录
         var clearAll = await admin.Client.DeleteAsync("/api/v1/notifications");
-        Assert.Equal(HttpStatusCode.OK, clearAll.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, clearAll.StatusCode);
 
         var afterClear = await admin.Client.GetFromJsonAsync<List<NotificationOutputDto>>("/api/v1/notifications");
         Assert.Empty(afterClear!);
@@ -136,10 +103,7 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
 #else
         using var admin = factory.CreateResourceSession(Guid.CreateVersion7(), Guid.CreateVersion7());
 #endif
-        // 开关已移除：订阅授权无条件生效，模板默认只放行 public: 命名空间。
-        Assert.IsType<PublicResourceSubscriptionAuthorizer>(
-            factory.Services.GetRequiredService<IRealTimeSubscriptionAuthorizer>());
-
+        // 订阅授权无条件生效，模板只放行 public: 命名空间（实时组件的前缀授权器）
         await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
         var received = new TaskCompletionSource<BusinessEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var subscription = connection.On<BusinessEvent>("BusinessEvent", message => received.TrySetResult(message));

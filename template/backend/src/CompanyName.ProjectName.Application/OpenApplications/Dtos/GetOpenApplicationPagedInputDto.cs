@@ -1,13 +1,14 @@
 #if (LocalIdentity)
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.OpenApplications.Dtos;
 
 /// <summary>
 /// 获取开放应用分页列表输入 DTO
 /// </summary>
-public record GetOpenApplicationPagedInputDto : PagedRequestDto
+public record GetOpenApplicationPagedInputDto : PageRequest
 {
     /// <summary>
     /// 搜索关键字

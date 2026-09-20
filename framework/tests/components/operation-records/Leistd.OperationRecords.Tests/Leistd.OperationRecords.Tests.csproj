@@ -6,6 +6,8 @@
       转换与倒序索引只有真正建库时才产生 DDL，InMemory 全内存求值会让配置整块静默通过。
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- 端点在真实 Minimal API 管线里验证：参数绑定与授权元数据只在那里成立 -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <!-- 失败路径"只记 Error 不抛"唯一可断言的对象是日志；用官方 FakeLogger -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <!-- 时间接缝用官方 FakeTimeProvider 驱动真实的 UtcClockProvider，不手写时间替身 -->

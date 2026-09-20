@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.DependencyInjection.Extensions;
 using Leistd.Timing;
 using Leistd.MultiTenancy.ConnectionStrings;
@@ -11,6 +11,8 @@ using Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 using Leistd.MultiTenancy.Stores;
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.EntityFrameworkCore.Services;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
@@ -26,6 +28,8 @@ public static class DependencyInjection
     /// <para>不注册租户落值组件；DDD 基座在实体进入跟踪时写入 <c>TenantId</c>。</para>
     /// <para>连接按 <c>(租户, 连接名)</c> 逐行登记：一个租户可以在 identity、foundation、crm 各有一条，
     /// 一条都没有即该租户不单独分库。</para>
+    /// <para>同时注册租户管理与连接管理两个用例（<c>ITenantManagementService</c>、<c>ITenantConnectionManagementService</c>），
+    /// 它们需要宿主注册工作单元；开通新租户的数据经宿主实现的 <c>ITenantProvisioner</c>。</para>
     /// <para>连接的存储与写入口依赖 <c>IDataProtectionProvider</c>：连接串写入时加密、读取时解密。
     /// 宿主须自行 <c>AddDataProtection()</c> 并配置持久化、可共享的密钥环（本组件不管理密钥）；
     /// 读写同一控制库的所有进程（API、迁移作业）必须使用同一密钥环与应用名。</para>
@@ -58,6 +62,10 @@ public static class DependencyInjection
             EfCoreTenantConnectionConfigurationStore<TDbContext>>();
         services.TryAddTransient<ITenantConnectionConfigurationManager,
             EfCoreTenantConnectionConfigurationManager<TDbContext>>();
+        services.TryAddTransient<ITenantConnectionDirectory, EfCoreTenantConnectionDirectory<TDbContext>>();
+        // 管理用例：租户开通经宿主注册的 ITenantProvisioner（可选），启用前置条件经 ITenantActivationGuard
+        services.TryAddTransient<ITenantConnectionManagementService, TenantConnectionManagementService>();
+        services.TryAddTransient<ITenantManagementService, TenantManagementService>();
         return services;
     }
 

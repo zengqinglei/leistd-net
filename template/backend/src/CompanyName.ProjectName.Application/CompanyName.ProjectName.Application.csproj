@@ -31,6 +31,10 @@
 <!--#if (IncludeNotifications)-->
     <!-- 通知类别与偏好设置名要用框架的默认类型与站内渠道名 -->
     <PackageReference Include="Leistd.Notifications.Core" />
+<!--#if (LocalIdentity)-->
+    <!-- 偏好设置名的前缀与通知偏好组件同源 -->
+    <PackageReference Include="Leistd.Notifications.Settings" />
+<!--#endif-->
 <!--#endif-->
     <PackageReference Include="Leistd.Ddd.Domain" />
     <PackageReference Include="Leistd.Ddd.Application" />

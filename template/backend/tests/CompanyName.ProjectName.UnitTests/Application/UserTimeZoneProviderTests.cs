@@ -92,6 +92,9 @@ public class UserTimeZoneProviderTests
         public Task<string?> GetOrNullAsync(string name, CancellationToken cancellationToken = default)
             => Task.FromResult(name == SettingConstant.Display.TimeZone ? timeZoneId : null);
 
+        public Task<string?> GetOrNullForUserAsync(string name, string userId, CancellationToken cancellationToken = default)
+            => GetOrNullAsync(name, cancellationToken);
+
         public Task<T?> GetAsync<T>(string name, CancellationToken cancellationToken = default)
             => Task.FromResult<T?>(default);
 

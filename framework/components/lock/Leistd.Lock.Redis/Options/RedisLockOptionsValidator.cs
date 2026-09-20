@@ -13,7 +13,7 @@ internal sealed class RedisLockOptionsValidator : IValidateOptions<RedisLockOpti
         if (options.Expiry <= TimeSpan.Zero)
         {
             failures.Add(
-                $"Expiry must be greater than zero (was {options.Expiry}). It is the lock lease; " +
+                $"{RedisLockOptions.SectionName}:Expiry must be greater than zero (was {options.Expiry}). It is the lock lease; " +
                 "a non-positive value makes the lock expire immediately or be rejected by Redis, " +
                 "so mutual exclusion silently stops holding.");
         }
@@ -21,12 +21,10 @@ internal sealed class RedisLockOptionsValidator : IValidateOptions<RedisLockOpti
         if (options.RetryInterval <= TimeSpan.Zero)
         {
             failures.Add(
-                $"RetryInterval must be greater than zero (was {options.RetryInterval}). " +
+                $"{RedisLockOptions.SectionName}:RetryInterval must be greater than zero (was {options.RetryInterval}). " +
                 "A non-positive value turns lock acquisition into a busy loop against Redis.");
         }
 
-        return failures.Count == 0
-            ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail($"{RedisLockOptions.SectionName}: {string.Join(" ", failures)}");
+        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 }

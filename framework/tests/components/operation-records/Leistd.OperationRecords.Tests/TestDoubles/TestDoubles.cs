@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.EntityFrameworkCore;
@@ -21,12 +22,14 @@ internal sealed class FakeOperationActionDefinition(
     string code,
     OperationVisibility visibility,
     string category = "test",
-    OperationSeverity severity = OperationSeverity.Info) : IOperationActionDefinition
+    OperationSeverity severity = OperationSeverity.Info,
+    bool targetIsActor = false) : IOperationActionDefinition
 {
     public string Code { get; } = code;
     public string Category { get; } = category;
     public OperationVisibility Visibility { get; } = visibility;
     public OperationSeverity Severity { get; } = severity;
+    public bool TargetIsActor { get; } = targetIsActor;
 }
 
 /// <summary>
@@ -67,19 +70,24 @@ internal sealed class RecordingOperationRecordStore : IOperationRecordStore
 {
     public List<OperationRecordInfo> Written { get; } = [];
 
+    /// <summary>最近一次查询收到的筛选条件与分页。</summary>
+    public (OperationRecordFilter Filter, PageRequest Page)? LastQuery { get; private set; }
+
     public Task InsertAsync(OperationRecordInfo record, CancellationToken cancellationToken = default)
     {
         Written.Add(record);
         return Task.CompletedTask;
     }
 
-    public Task<OperationRecordPage> GetPagedListAsync(
-        string? keyword, DateTime? startTime, DateTime? endTime,
-        int skip, int take, OperationRecordVisibilityScope scope,
-        IReadOnlyCollection<string>? actions = null,
-        OperationRecordOutcome? outcome = null,
+    // 不做筛选：查询用例的断言关心"交给存储的条件"与"拿回来之后怎么裁剪"，筛选语义由存储自己的用例钉住
+    public Task<PagedResult<OperationRecordInfo>> GetPagedListAsync(
+        OperationRecordFilter filter,
+        PageRequest page,
         CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
+    {
+        LastQuery = (filter, page);
+        return Task.FromResult(new PagedResult<OperationRecordInfo>(Written.Count, Written.Skip(page.Offset).Take(page.Limit)));
+    }
 }
 
 /// <summary>写入必定失败的存储，用于区分"吞掉"与"上抛"两条策略。</summary>
@@ -88,11 +96,9 @@ internal sealed class ThrowingOperationRecordStore(Exception failure) : IOperati
     public Task InsertAsync(OperationRecordInfo record, CancellationToken cancellationToken = default)
         => throw failure;
 
-    public Task<OperationRecordPage> GetPagedListAsync(
-        string? keyword, DateTime? startTime, DateTime? endTime,
-        int skip, int take, OperationRecordVisibilityScope scope,
-        IReadOnlyCollection<string>? actions = null,
-        OperationRecordOutcome? outcome = null,
+    public Task<PagedResult<OperationRecordInfo>> GetPagedListAsync(
+        OperationRecordFilter filter,
+        PageRequest page,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 }

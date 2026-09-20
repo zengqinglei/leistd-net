@@ -10,9 +10,11 @@
 | Resource 服务只信任已验证 token 中的租户 claim | `Core` + `AspNetCore`，关闭本地租户校验 |
 | 后台任务需在指定租户下执行 | `ICurrentTenant.Change()`；带主体时用 `IAmbientContext.Begin()` 一次建立各维度（贡献者在 `AspNetCore` 包） |
 | 服务间需传递租户 | 使用 `Leistd.ServiceClient`；本家族恢复并解析上下文 |
+| 租户管理界面（查询、创建开通与补偿、启停、删除、连接登记） | `MapTenantManagement()`、`MapTenantConnections()`，宿主实现 `ITenantProvisioner` |
+| 资源服务回源控制面取租户连接 | `Leistd.MultiTenancy.ServiceClient` 的 `AddRemoteTenantConnectionStore()` |
 | 非多租户项目 | 不引用、不注册 |
 
-`Core` 供 Domain/Application 引用，`AspNetCore` 供 Web 宿主引用，`EntityFrameworkCore` 供 Infrastructure 引用。
+`Core` 供 Domain/Application 引用，`AspNetCore` 供 Web 宿主引用，`EntityFrameworkCore` 供 Infrastructure 引用，`ServiceClient` 供回源控制面的资源服务引用。
 
 ## 安装
 
@@ -20,6 +22,7 @@
 dotnet add package Leistd.MultiTenancy.Core
 dotnet add package Leistd.MultiTenancy.AspNetCore
 dotnet add package Leistd.MultiTenancy.EntityFrameworkCore
+dotnet add package Leistd.MultiTenancy.ServiceClient   # 资源服务回源控制面
 ```
 
 ## 注册
@@ -180,6 +183,23 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 
 `isActive` 没有默认值。需要初始化角色、管理员或业务数据时，先以停用状态创建，初始化完成后再启用。
 
+管理界面直接用组件的用例与端点，宿主只实现开通与启用前置条件：
+
+```csharp
+builder.Services.AddScoped<ITenantProvisioner, TenantSeeder>();          // 在新租户里写初始数据，失败时清掉
+builder.Services.AddScoped<ITenantActivationGuard, TenantHasUsersGuard>(); // 可选，可注册多个
+
+app.MapGroup("/api/v1/tenants").MapTenantManagement<CreateTenantWithAdminInputDto>(options =>
+{
+    options.ReadPolicy = "App.Tenants";
+    options.CreatePolicy = "App.Tenants.Create";
+    options.UpdatePolicy = "App.Tenants.Update";
+    options.DeletePolicy = "App.Tenants.Delete";
+});
+```
+
+`ITenantManagementService.CreateAsync` 的顺序是硬的：先校验连接串语法，再以停用态登记租户并在**同一控制面工作单元**里把连接串登记到默认名下（分库在开通之前定案），然后在新租户上下文与新工作单元里调用 `ITenantProvisioner.ProvisionAsync`，最后启用。任一步失败按"`PurgeAsync` → 删连接登记 → 删租户"补偿（删连接必须在删租户之前），每步独立作用域、独立令牌、各自记录失败；数据库原因经 `ITenantDatabaseErrorDescriber` 翻成带码的 400（默认按 PostgreSQL 的 SQLSTATE：不可达、库不存在、未迁移、凭据被拒），不回显连接串。开通需要更多信息（如管理员邮箱）时派生 `CreateTenantInputDto`，端点按派生类型绑定请求体，开通器从 `TenantProvisioningContext.Input` 取回。成功的创建、更新、启停、删除发布 `TenantChangedEvent`（带显示名快照），宿主据此记审计。
+
 租户名在未删除行内唯一；名称冲突抛 `DuplicateTenantNameException`。租户修改与连接配置共享 `TenantRecord.Version`，并发冲突抛 `TenantConcurrencyConflictException`。
 
 `displayName`（≤128）与 `description`（≤256）都是可选的展示字段，只供管理界面呈现，不参与解析与唯一性判定。两者按传入值覆盖——传 `null` 即清空，因此调用方要区分"不改"与"清空"时必须自己先读一次当前值。
@@ -234,57 +254,41 @@ await connectionManager.RemoveAsync(tenantId, "crm", expectedVersion);
 
 修改已有连接（包括轮换数据库密码）前必须停用租户，否则抛 `TenantConnectionChangeRequiresInactiveTenantException`。宿主还需在变更前排空仍使用旧路由的请求。
 
+名字与连接串通常来自管理员输入：不合法时抛带码的 `BadRequestException`（`TenantConnection:NameInvalid`、`TenantConnection:ConnectionStringInvalid`，后者覆盖空、超长与"不是 键=值; 语法"），不以 500 出去，也不回显连接串。
+
+管理面与机器端点：
+
+```csharp
+app.MapGroup("/api/v1/tenant-connections").MapTenantConnections(options =>
+{
+    options.ManagePolicy = "App.Tenants.Update";
+    // 只在签发机器令牌的部署里配置：为空则不映射对应的机器端点
+    options.RuntimeReadPolicy = "TenantConnection.RuntimeRead";
+    options.MigrationReadPolicy = "TenantConnection.MigrationRead";
+});
+```
+
+管理面（`GET /{tenantId}`、`PUT /{tenantId}/{name}`、`DELETE /{tenantId}/{name}?expectedVersion=`）只回名字与版本，列表经 `ITenantConnectionDirectory` 读控制库、不取密文。机器端点 `GET /runtime/{tenantId}?name=` 与 `GET /migration?name=` 按名字下发解密后的连接串，只能对机器主体开放。
+
 ### 解析租户连接
 
-最终连接由 `Leistd.Data.Abstractions.IConnectionStringResolver` 决定。本家族按宿主形态提供两种实现，二选一注册：
+最终连接由 `Leistd.Data.Connections.IConnectionStringResolver` 决定。本家族按宿主形态提供两种实现，二选一注册：
 
 | 宿主形态 | 注册 | 宿主提供 |
 | --- | --- | --- |
 | 自己持有控制库（租户注册表与连接配置就在本服务） | `AddLocalTenantConnectionResolution<TControlDbContext>(o => o.ControlPlaneConnectionStringName = "IdentityControl")`（EF 包） | 持久化的 Data Protection 密钥环 |
-| 连接配置在另一个服务的控制库里 | `AddRemoteTenantConnectionResolution()`（Core 包） | `ITenantConnectionConfigurationStore` 的 HTTP 实现、`TenantRouting:CacheLifetime` |
+| 连接配置在另一个服务的控制库里 | `AddRemoteTenantConnectionResolution()`（Core 包）+ `AddRemoteTenantConnectionStore(serviceName, configuration)`（ServiceClient 包） | 机器身份（如 client credentials）、`TenantRouting:CacheLifetime` |
 
-远端来源由宿主用自己的客户端实现，框架不认识控制面服务的 HTTP 接口。控制面经已认证的内部接口下发**解密后**的连接串，远端服务不持有控制面的密钥环；这条接口只能对机器主体开放：
+远端存储回源控制面经 `MapTenantConnections` 映射的机器端点，与端点共用 Core 里的线上 DTO；路由前缀默认 `/api/v1/tenant-connections`，经 `Leistd:ServiceClients:{serviceName}:RoutePrefix` 改。控制面下发**解密后**的连接串，远端服务不持有控制面的密钥环。鉴权与弹性策略加在返回的构建器上：
 
 ```csharp
-public sealed class IdentityTenantConnectionStore(IIdentityTenantConnectionClient client)
-    : ITenantConnectionConfigurationStore
-{
-    public async Task<TenantConnectionLookupResult?> FindAsync(
-        Guid tenantId, string name, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            // 按名字问、按名字答：Identity 只回被问到的那一条，不会把该租户在别的服务的连接串也发过来
-            var remote = await client.GetRuntimeAsync(tenantId, name, cancellationToken);
-            return new TenantConnectionLookupResult
-            {
-                TenantId = remote.TenantId,
-                HasAnyConnection = remote.HasAnyConnection,
-                Connection = remote.Connection is { } connection
-                    ? new TenantConnectionConfiguration
-                    {
-                        TenantId = remote.TenantId,
-                        Name = connection.Name,
-                        ConnectionString = connection.ConnectionString,
-                        Version = connection.Version
-                    }
-                    : null
-            };
-        }
-        catch (ApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
-        {
-            // 契约规定"租户不存在或已删除返回 null"，由解析器统一失败关闭；其余错误原样上抛，
-            // 否则"控制面不可达"会表现成"这个租户不存在"
-            return null;
-        }
-    }
-
-    public async Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(
-        string name, CancellationToken cancellationToken = default)
-        => [.. (await client.GetMigrationListAsync(name, cancellationToken))
-            .Select(remote => new TenantMigrationConnection(remote.TenantId, remote.Name, remote.ConnectionString))];
-}
+builder.Services.AddRemoteTenantConnectionResolution();
+builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuration)
+    .AddClientCredentials(builder.Configuration)
+    .AddStandardResilienceHandler();
 ```
+
+只有 404 且错误码为 `Tenant:NotFound` 的响应翻成"租户不存在"（`null`，由解析器失败关闭）；路由配错之类的其它 404 与一切其它错误原样抛出——吞成 `null` 会让"控制面不可达"表现成"这个租户不存在"。
 
 两种解析的路由判定一致：
 
@@ -298,14 +302,14 @@ public sealed class IdentityTenantConnectionStore(IIdentityTenantConnectionClien
 | 登记过连接、却缺这个名字且无默认名 | 抛 `InternalServerException`，**不回落本服务的库** |
 | 租户不存在或已删除 | 抛 `NotFoundException` |
 | 本地解析时解密失败 | 抛 `InternalServerException`，不回落 |
-| 连接名不合法（不匹配 `NamePattern`） | 抛 `ArgumentException` |
+| 连接名不合法（不匹配 `NamePattern`，来自 `[ConnectionStringName]` 的编程错误） | 抛 `ArgumentException` |
 
 失败关闭只有一处：倒数第四行。租户明明登记过连接（说明它是分库租户），却偏偏缺了这个服务的、也没有默认名可回落——这时静默连到本服务的公共库是事故，那个库里没有它的数据，它的写入会落进别人的库。宿主连接的 `?? ConnectionStrings:Default` 回落则是有意的：业务项目把上下文改名为 `Crm` 之后，部署里仍然只配 `ConnectionStrings__Default`，不用改部署。
 
 - **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `NotFoundException`。控制库上下文直接注入、不经 `IDbContextProvider`——Provider 创建任何上下文前都会调用解析器，经 Provider 取控制库会形成递归。
 - **远端解析**：结果按 `TenantRouting:CacheLifetime`（必填，0 到 1 小时，缺省即启动失败）缓存；同租户并发请求合并为一次回源，调用方取消只取消自己的等待；回源在独立服务作用域里执行；响应的 `TenantId` 与请求不一致时抛 `InternalServerException`，校验在使用连接串和写缓存之前。
 - **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按迁移作业所属服务的连接名枚举。结果按物理库去重（同一连接串只出现一次，代表租户取标识最小者），与运行时逐库作业是同一份清单；一条连接都没登记的租户不出现（它们跟着宿主自己的库迁移）；登记过却解析不出这个名字的租户会让作业整体停下（`InvalidOperationException`），不跳过——跳过的库会停在旧结构上，下一次发版才炸。本地迁移作业同样要解密，必须与 API 共享密钥环。
-- **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是与迁移目标同一份的独立库清单，停用租户照常列出，结果里没有连接串。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `BeginAsync(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余。写法不同的同一个库、或登记成宿主库的连接会多列一次，逐库逻辑须能重复执行。
+- **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是与迁移目标同一份的独立库清单，停用租户照常列出，结果里没有连接串。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `BeginAsync(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余——`ITenantDatabaseRunner.ForEachDatabaseAsync` 封装了切租户与逐库隔离，回调里按需开工作单元。写法不同的同一个库、或登记成宿主库的连接会多列一次，逐库逻辑须能重复执行。
 
 ```json
 {
@@ -330,15 +334,27 @@ public sealed class IdentityControlDbContext : DbContext;
 | `Leistd.MultiTenancy.Abstractions.ICurrentTenant` | 读取或临时切换租户上下文 |
 | `CurrentTenantKeyExtensions.ScopeKey(currentTenant, key)` | 把缓存键、锁键等租户外部标识限定到当前租户；`this ICurrentTenant` 扩展 |
 | `Leistd.MultiTenancy.Stores.ITenantStore` | 按 Id 或归一化名称查找租户 |
-| `Leistd.MultiTenancy.Stores.ITenantManager` | 创建、修改、启停、软删除和分页查询租户 |
+| `Leistd.MultiTenancy.Stores.ITenantManager` | 创建、修改、启停、软删除和分页查询租户；`GetPagedAsync(keyword, PageRequest, ct)` 返回 `PagedResult<TenantConfiguration>` |
+| `ITenantManagementService` | 租户管理用例：`GetPagedAsync`、`GetAsync`、`CreateAsync`（登记→开通→启用与补偿）、`UpdateAsync`、`SetActivationAsync`、`DeleteAsync`、`FindByNameAsync`；EF 包注册 |
+| `ITenantProvisioner` | 宿主实现：`ProvisionAsync(context, ct)` 在新租户里写初始数据，`PurgeAsync(context, ct)` 幂等清除；未注册时不开通 |
+| `ITenantActivationGuard` | 宿主实现：手动启用前的前置条件，不满足时抛带码异常 |
+| `ITenantDatabaseErrorDescriber` | 把开通时的数据库错误翻成带码的 400；默认按 PostgreSQL SQLSTATE，可替换 |
+| `TenantChangedEvent` | 管理用例成功后发布：`TenantId`、`DisplayName`、`Change`（`Created`/`Updated`/`ActivationChanged`/`Deleted`） |
+| `ITenantConnectionManagementService` | 连接管理用例：`GetListAsync`、`GetRuntimeAsync`、`GetMigrationListAsync`、`SetAsync`、`RemoveAsync`；EF 包注册 |
+| `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |
+| `MultiTenancyErrorCodes` | 组件错误码，默认中英译文随包分发 |
+| `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；`by-name`、`by-host` 匿名 |
+| `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
+| `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一 |
 | `ITenantConnectionConfigurationManager` | `SetAsync(tenantId, name, connectionString, expectedVersion, ct)` 登记或更新一条；`RemoveAsync(tenantId, name, expectedVersion, ct)` 删除一条（该名字随即回落到服务自己的配置）。**会改变数据落点的写入要求租户已停用**，判据见上文表格 |
 | `AddLocalTenantConnectionResolution<TControlDbContext>(configure)` | EF 包：注册本地连接解析与本地迁移目标；`LocalTenantConnectionOptions.ControlPlaneConnectionStringName` 必填且不能是 `Default` |
 | `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、单飞协调器、内存缓存与远端迁移目标；绑定 `TenantRouting` 配置节 |
-| `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举。EF 包提供控制库实现；资源服务由宿主实现 HTTP 版本，**按名字问、按名字答，一次只出一条** |
+| `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举。EF 包提供控制库实现，ServiceClient 包提供远端实现，**按名字问、按名字答，一次只出一条** |
 | `TenantConnectionLookupResult` | `HasAnyConnection` 区分"不分库"与"缺这个名字"；`Connection` 是命中的那一条 |
 | `TenantRouteCacheOptions` | `CacheLifetime`（必填，不超过 `MaximumCacheLifetime` 1 小时） |
 | `ITenantMigrationTargetProvider` | `GetDedicatedTargetsAsync(name, ct)` 按连接名枚举独立物理库 `TenantMigrationTarget(TenantId, ConnectionString)`，每个库一条，`Fingerprint` 为连接串的 SHA-256 |
 | `ITenantDatabaseEnumerator` | `GetDatabasesAsync(name, ct)` 列出运行时要逐库处理的物理库 `TenantDatabase(TenantId, Fingerprint)`；`TenantId` 为 `null` 即宿主库（`TenantDatabase.Host`） |
+| `ITenantDatabaseRunner` | `ForEachDatabaseAsync(name, action, ct)` 在每个物理库的代表租户上下文里执行回调，逐库隔离失败，返回 `TenantDatabaseRunResult(Databases, FailedDatabases)`；不替回调开工作单元 |
 | `Leistd.MultiTenancy.Abstractions.MultiTenancySides` | 表示权限属于 `Tenant`、`Host` 或 `Both` |
 
 `ITenantStore` 只有 EF 一种实现，由 `AddMultiTenancyEfCore<TDbContext>()` 注册。资源服务不注册它：把 `ValidateResolvedTenant` 置为 `false` 后解析链只信已验证主体的租户声明，中间件不查注册表。
@@ -364,7 +380,8 @@ public sealed class IdentityControlDbContext : DbContext;
 
 ## 注意事项
 
-- 中间件顺序必须是 `UseAuthentication()` → `UseMultiTenancy()` → `UseAuthorization()`。
+- 中间件顺序必须是 `UseAuthentication()` →（`UseTenantSessionRecovery()`）→ `UseMultiTenancy()` → `UseAuthorization()`。不挂会话自恢复时，被停用租户的用户连登录页与注销端点都访问不了；跨域部署要把恢复标记头加进 CORS 暴露头。
+- **租户管理与连接的机器端点只对机器主体开放**，下发的是解密后的连接串；不签发机器令牌的部署不要配置 `RuntimeReadPolicy` / `MigrationReadPolicy`。
 - 认证端必须向租户用户签发单一、有效的 `tenant_id` claim；漏写会将 Resource 请求当作宿主上下文。
 - `IgnoreQueryFilters()` 与 raw SQL 会绕过租户隔离。合法的跨租户操作使用 `IDataFilter.Disable<IMultiTenant>()` 显式表达。
 - 租户实体的唯一索引需分别覆盖 `TenantId IS NULL` 的宿主行和 `TenantId IS NOT NULL` 的租户行；单一 `(TenantId, X)` 索引无法限制多个 NULL。

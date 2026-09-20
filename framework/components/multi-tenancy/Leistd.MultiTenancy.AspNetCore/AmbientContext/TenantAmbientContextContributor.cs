@@ -46,4 +46,12 @@ internal sealed class TenantAmbientContextContributor(
 
         return currentTenant.Change(tenantId);
     }
+
+    // 捕获的是当前租户上下文本身，而不是主体的声明：在 Change 作用域里入队的任务要回到同一个租户。
+    public object? Capture() => new CapturedTenant(currentTenant.Id, currentTenant.Name);
+
+    public IDisposable? Restore(object? state)
+        => state is CapturedTenant captured ? currentTenant.Change(captured.Id, captured.Name) : null;
+
+    private sealed record CapturedTenant(Guid? Id, string? Name);
 }

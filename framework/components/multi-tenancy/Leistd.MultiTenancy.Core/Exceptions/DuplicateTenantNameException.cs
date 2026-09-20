@@ -1,16 +1,24 @@
 using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.Exceptions;
 
 /// <summary>
 /// 表示租户名称已被占用。
 /// </summary>
-/// <param name="normalizedName">冲突的归一化名称</param>
-public class DuplicateTenantNameException(string normalizedName)
-    : ConflictException($"Tenant name already exists: {normalizedName}")
+public class DuplicateTenantNameException : ConflictException
 {
+    /// <summary>构造异常。</summary>
+    /// <param name="normalizedName">冲突的归一化名称</param>
+    public DuplicateTenantNameException(string normalizedName)
+        : base($"Tenant name already exists: {normalizedName}")
+    {
+        NormalizedName = normalizedName;
+        WithCode(MultiTenancyErrorCodes.DuplicateName).WithData("Name", normalizedName);
+    }
+
     /// <summary>
     /// 获取冲突的归一化名称。
     /// </summary>
-    public string NormalizedName { get; } = normalizedName;
+    public string NormalizedName { get; }
 }

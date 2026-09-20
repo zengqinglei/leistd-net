@@ -51,7 +51,7 @@ internal sealed class UserSessionValidator(
         if (tenantId is { } id)
         {
             var tenant = await tenantStore.FindAsync(id, cancellationToken);
-            // 租户已不存在或已停用：不在这里判会话无效，交给 TenantSessionRecoveryMiddleware。
+            // 租户已不存在或已停用：不在这里判会话无效，交给租户会话自恢复中间件（UseTenantSessionRecovery）。
             // 它注销的同时带上 X-Tenant-Invalid，前端据此清掉本地的租户选择；在这里拒绝只会得到一个普通 401，
             // 下次登录仍落到那个不可用的租户上。
             if (tenant is null || !tenant.IsActive)

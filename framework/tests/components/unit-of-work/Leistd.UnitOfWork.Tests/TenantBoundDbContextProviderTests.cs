@@ -8,8 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Data;
-using Leistd.Data.Attributes;
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.UnitOfWork.Tests;

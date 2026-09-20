@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
 /// <summary>
@@ -22,17 +20,4 @@ public sealed class TenantRouteCacheOptions
 
     /// <summary>路由缓存生存期；<see langword="null"/> 表示未配置，启动期校验失败。</summary>
     public TimeSpan? CacheLifetime { get; set; }
-}
-
-internal sealed class TenantRouteCacheOptionsValidator : IValidateOptions<TenantRouteCacheOptions>
-{
-    public ValidateOptionsResult Validate(string? name, TenantRouteCacheOptions options) =>
-        options.CacheLifetime is { } lifetime && lifetime > TimeSpan.Zero
-                                              && lifetime <= TenantRouteCacheOptions.MaximumCacheLifetime
-            ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(
-                $"{TenantRouteCacheOptions.SectionName}:CacheLifetime is required and must be greater than zero and " +
-                $"at most {TenantRouteCacheOptions.MaximumCacheLifetime} (was '{options.CacheLifetime}'). " +
-                "It determines how long a changed tenant route may still be served by warm instances, and therefore " +
-                "how long the deactivate-and-drain step must wait before the route can be changed.");
 }

@@ -1,3 +1,5 @@
+using Leistd.MultiTenancy.Abstractions;
+using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
@@ -58,8 +60,9 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(
+        var error = await Assert.ThrowsAsync<BadRequestException>(
             () => _manager.SetAsync(tenant.Id, Name, connectionString, expectedVersion: null));
+        Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
     }
 
     [Fact]
@@ -67,11 +70,25 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => _manager.SetAsync(
+        var error = await Assert.ThrowsAsync<BadRequestException>(() => _manager.SetAsync(
             tenant.Id,
             Name,
             new string('x', TenantConnectionConfiguration.MaxConnectionStringLength + 1),
             expectedVersion: null));
+        Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
+    }
+
+    // 语法都不对的连接串在登记时就拒绝：放进去要到开通阶段才由驱动抛出，用户看到的是系统级故障
+    [Fact]
+    public async Task Malformed_connection_strings_are_rejected_without_echoing_them()
+    {
+        var tenant = await CreateTenantAsync();
+
+        var error = await Assert.ThrowsAsync<BadRequestException>(
+            () => _manager.SetAsync(tenant.Id, Name, "Host=a;=secret-value", expectedVersion: null));
+
+        Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
+        Assert.DoesNotContain("secret-value", error.ToString());
     }
 
     [Fact]
@@ -109,8 +126,10 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(
+        // 名字来自管理员输入：400 而不是 500
+        var error = await Assert.ThrowsAsync<BadRequestException>(
             () => _manager.SetAsync(tenant.Id, name, "Host=tenant", expectedVersion: null));
+        Assert.Equal(MultiTenancyErrorCodes.ConnectionNameInvalid, error.Code);
     }
 
     // 同一租户的不同名字是各自独立的行，各有各的版本

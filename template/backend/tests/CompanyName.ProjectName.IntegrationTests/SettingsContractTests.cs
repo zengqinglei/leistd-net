@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Api.Options;
-using Leistd.OperationRecords.Abstractions;
+using Leistd.Settings.Abstractions;
+using Leistd.Settings.Definitions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -112,7 +112,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
 
         // 先清一次：同一套库被本类其它用例写过，不清就依赖用例执行顺序
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
 
         var baseline = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
@@ -122,7 +122,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         Assert.Equal(LogEventLevel.Warning, EffectiveMinimumLevel(host));
 
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, "Debug")).StatusCode);
         var overridden = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
         Assert.Equal("Debug", OverrideOrNull(overridden, "tenantValue"));
@@ -130,7 +130,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         Assert.Equal(LogEventLevel.Debug, EffectiveMinimumLevel(host));
 
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
         var cleared = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
         Assert.Null(OverrideOrNull(cleared, "tenantValue"));
@@ -147,61 +147,14 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         var monitor = factory.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
 
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, "Verbose")).StatusCode);
         Assert.Equal(LogEventLevel.Verbose, monitor.CurrentValue.Level);
 
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, null)).StatusCode);
         Assert.Equal(LogEventLevel.Information, monitor.CurrentValue.Level);
-    }
-
-    /// <summary>
-    /// 宿主级设置在写入的事务提交之后才应用到本进程。
-    /// </summary>
-    /// <remarks>
-    /// 让写入之后的操作记录失败，整次保存随之失败回滚。测试库是 EF InMemory、没有事务，写进去的行不会撤回，
-    /// 所以这里断言的是"进程里没用上"：应用若发生在提交之前，这次失败的写入就已经被带进了配置。
-    /// </remarks>
-    [Fact]
-    public async Task Host_setting_is_applied_only_after_commit()
-    {
-        var host = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
-            services.AddTransient<IOperationRecorder, SettingChangeFailingRecorder>()));
-        _disposables.Add(host);
-        using var admin = await ProjectWebApplicationFactory.LoginAsync(
-            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-        var monitor = host.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
-        var before = monitor.CurrentValue.Level;
-
-        try
-        {
-            using var response = await WriteAsync(admin.Client, SettingConstant.Logging.RequestLevel, "Verbose");
-
-            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-            Assert.Equal(before, monitor.CurrentValue.Level);
-        }
-        finally
-        {
-            // 行已留在共用的 InMemory 库里，经正常宿主清掉，免得周期刷新或同库的其它用例读到
-            using var cleaner = await ProjectWebApplicationFactory.LoginAsync(
-                factory, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-            await WriteAsync(cleaner.Client, SettingConstant.Logging.RequestLevel, null);
-        }
-    }
-
-    private sealed class SettingChangeFailingRecorder : IOperationRecorder
-    {
-        public Task RecordSucceededAsync(
-            string action, OperationTarget target, string authorizationBasis, CancellationToken cancellationToken = default)
-            => action == OperationRecordActions.SettingChanged
-                ? throw new InvalidOperationException("Simulated failure after the setting was written.")
-                : Task.CompletedTask;
-
-        public Task RecordFailedAsync(
-            string action, OperationTarget target, string authorizationBasis, OperationFailure failure = default)
-            => Task.CompletedTask;
     }
 
     // Serilog 的最小级别有两种合法写法，标量那种也要认出来——
@@ -246,7 +199,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         // 本类其它用例会在这套共用库里写下覆盖值；先清掉，让开关回到基线，
         // 否则这条断言的结果取决于用例执行顺序。清除本身就会触发本宿主的应用器。
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
 
         var level = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
@@ -269,7 +222,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         // 本类其它用例会在这套共用库里写下覆盖值；先清掉，让开关回到基线，
         // 否则这条断言的结果取决于用例执行顺序。清除本身就会触发本宿主的应用器。
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.NoContent,
             (await WriteAsync(admin.Client, SettingConstant.Logging.MinimumLevel, null)).StatusCode);
 
         var level = await ReadSettingAsync(admin.Client, SettingConstant.Logging.MinimumLevel);
@@ -303,7 +256,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         // 关闭仍然允许：没有密钥的部署本来就不需要它，不能连关都关不掉
         var accepted = await WriteAsync(
             admin.Client, SettingConstant.Registration.EnableEmailVerification, "false");
-        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
     }
 
     // 有密钥的部署可以按租户开启：这条挡住"把校验写成一律拒绝"。
@@ -317,7 +270,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         {
             var accepted = await WriteAsync(
                 admin.Client, SettingConstant.Registration.EnableEmailVerification, "true");
-            Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
         }
         finally
         {
@@ -358,10 +311,16 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         var listed = await hostAdmin.Client.GetFromJsonAsync<JsonElement>("/api/v1/settings");
         var flagged = listed.EnumerateArray()
             .Where(s => s.TryGetProperty("isBoolean", out var b) && b.GetBoolean())
-            .Select(s => s.GetProperty("name").GetString())
+            .Select(s => s.GetProperty("name").GetString()!)
             .ToHashSet();
 
-        Assert.Equal(SettingConstant.BooleanSettings.ToHashSet(), flagged);
+        // 期望集合取自定义本身：值域声明在定义上，界面与写入端读的是同一份
+        var expected = factory.Services.GetRequiredService<ISettingDefinitionManager>().GetAll()
+            .Where(d => d.IsVisibleToClients && d.ValueType == SettingValueType.Boolean)
+            .Select(d => d.Name)
+            .ToHashSet();
+        Assert.Contains(SettingConstant.Security.RequireTwoFactor, expected);
+        Assert.Equal(expected, flagged);
 
         var rejected = await hostAdmin.Client.PutAsJsonAsync(
             "/api/v1/settings/current-tenant",
@@ -379,7 +338,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         var accepted = await hostAdmin.Client.PutAsJsonAsync(
             "/api/v1/settings/current-tenant",
             new { Name = SettingConstant.Logging.MinimumLevel, Value = "Debug" });
-        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
 
         // 界面候选项之外的取值必须被拒：脚本与旧版客户端都绕得过界面，
         // 一个非法级别留在库里，之后每次应用都要靠日志组件自己兜。

@@ -4,6 +4,7 @@ using Leistd.ServiceClient.OAuth.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Leistd.ServiceClient.OAuth.Abstractions;
 
 namespace Leistd.ServiceClient.OAuth;
@@ -70,6 +71,11 @@ public static class DependencyInjection
 
     private static IHttpClientBuilder AddClientCredentialsCore(IHttpClientBuilder builder)
     {
+        // 凭据在启动期校验：漏配不该等到第一次跨服务调用才暴露。
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<ClientCredentialsOptions>, ClientCredentialsOptionsValidator>());
+        builder.Services.AddOptions<ClientCredentialsOptions>(builder.Name).ValidateOnStart();
+
         // 令牌请求必须使用独立管道，避免认证处理器递归调用自身。
         builder.Services.AddHttpClient(ClientCredentialsTokenProvider.TokenHttpClientName);
         builder.Services.TryAddSingleton<IServiceTokenProvider, ClientCredentialsTokenProvider>();

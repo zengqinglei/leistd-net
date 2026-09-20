@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.Roles.Dtos;
 
@@ -49,7 +50,7 @@ public record RoleBriefDto
 /// <summary>
 /// 获取角色分页列表输入 DTO
 /// </summary>
-public record GetRolePagedInputDto : PagedRequestDto
+public record GetRolePagedInputDto : PageRequest
 {
     /// <summary>
     /// 搜索关键字（名称、显示名称）

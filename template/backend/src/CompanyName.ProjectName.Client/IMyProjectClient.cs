@@ -24,23 +24,5 @@ public interface IMyProjectClient
     /// <param name="cancellationToken">取消令牌</param>
     [Get("/api/v1/service-info/whoami")]
     Task<WhoAmIDto> WhoAmIAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 按连接名查询指定租户的连接（机器端点）。
-    /// </summary>
-    /// <remarks>
-    /// 连接名就是调用方 DbContext 的 <c>[ConnectionStringName]</c>；一次只回被问到的那一条。
-    /// </remarks>
-    [Get("/api/v1/tenant-connections/runtime/{tenantId}")]
-    Task<TenantConnectionLookupDto> GetTenantConnectionAsync(
-        Guid tenantId,
-        [Query] string name,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>按连接名枚举全部登记了连接的租户，供迁移作业使用。</summary>
-    [Get("/api/v1/tenant-connections/migration")]
-    Task<IReadOnlyList<TenantMigrationConnectionDto>> GetTenantMigrationConnectionsAsync(
-        [Query] string name,
-        CancellationToken cancellationToken = default);
 #endif
 }

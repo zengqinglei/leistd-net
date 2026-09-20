@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Stores;
@@ -39,6 +40,28 @@ public sealed class OperationRecordStoreTests : IDisposable
             _services.GetRequiredService<IUnitOfWorkManager>(),
             new FakeCurrentTenant(null));
     }
+
+    // 用例按"筛选维度"表达意图；组装成存储的筛选条件与分页请求集中在这一处
+    private Task<PagedResult<OperationRecordInfo>> QueryAsync(
+        string? keyword = null,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        int skip = 0,
+        int take = 10,
+        OperationRecordVisibilityScope scope = null!,
+        IReadOnlyCollection<string>? actions = null,
+        OperationRecordOutcome? outcome = null)
+        => _store.GetPagedListAsync(
+            new OperationRecordFilter
+            {
+                Scope = scope,
+                Keyword = keyword,
+                StartTime = startTime,
+                EndTime = endTime,
+                Actions = actions,
+                Outcome = outcome
+            },
+            new PageRequest { Offset = skip, Limit = take });
 
     public void Dispose()
     {
@@ -99,7 +122,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         var info = Info();
 
         await _store.InsertAsync(info);
-        var page = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
+        var page = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         var read = Assert.Single(page.Items);
         Assert.Equal(1, page.TotalCount);
@@ -130,15 +153,15 @@ public sealed class OperationRecordStoreTests : IDisposable
             await _store.InsertAsync(Info(id: id, creationTime: sameInstant));
         }
 
-        var firstPass = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
-        var secondPass = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
+        var firstPass = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
+        var secondPass = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         // 同一批数据两次查询顺序一致；且逐页取与整批取给出同一个序列——翻页因此不重不漏
         Assert.Equal(firstPass.Items.Select(x => x.Id), secondPass.Items.Select(x => x.Id));
         Assert.Equal(ids.Order(), firstPass.Items.Select(x => x.Id).Order());
 
-        var pageOne = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 2, scope: OperationRecordVisibilityScope.Unrestricted);
-        var pageTwo = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 2, take: 2, scope: OperationRecordVisibilityScope.Unrestricted);
+        var pageOne = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 2, scope: OperationRecordVisibilityScope.Unrestricted);
+        var pageTwo = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 2, take: 2, scope: OperationRecordVisibilityScope.Unrestricted);
         Assert.Equal(
             firstPass.Items.Select(x => x.Id),
             pageOne.Items.Concat(pageTwo.Items).Select(x => x.Id));
@@ -153,7 +176,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "old", creationTime: older));
         await _store.InsertAsync(Info(action: "new", creationTime: newer));
 
-        var page = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
+        var page = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         Assert.Equal(["new", "old"], page.Items.Select(x => x.Action));
     }
@@ -168,7 +191,7 @@ public sealed class OperationRecordStoreTests : IDisposable
     {
         await _store.InsertAsync(Info());
 
-        var page = await _store.GetPagedListAsync(keyword, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
+        var page = await QueryAsync(keyword, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         Assert.Equal(expected, page.Items.Count);
         Assert.Equal(expected, page.TotalCount);
@@ -190,7 +213,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "at-end", creationTime: end));
         await _store.InsertAsync(Info(action: "after", creationTime: end.AddSeconds(1)));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: start, endTime: end, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         // 倒序：靠后的在前
@@ -212,7 +235,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "middle", creationTime: middle));
         await _store.InsertAsync(Info(action: "late", creationTime: middle.AddDays(1)));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null,
             startTime: withStart ? middle : null,
             endTime: withEnd ? middle : null,
@@ -232,7 +255,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "user.created", creationTime: inRange.AddDays(10)));
         await _store.InsertAsync(Info(action: "role.created", creationTime: inRange));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: "user.created",
             startTime: inRange.AddDays(-1),
             endTime: inRange.AddDays(1),
@@ -256,7 +279,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "tenant.visible", visibility: OperationVisibility.Tenant));
         await _store.InsertAsync(Info(action: "actor.only", visibility: OperationVisibility.Actor));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         Assert.Equal(3, page.TotalCount);
@@ -279,7 +302,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(
             Info(action: "actor.someone-else", visibility: OperationVisibility.Actor, actorId: "other"));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10,
             scope: OperationRecordVisibilityScope.ForTenantReader("me"));
 
@@ -307,7 +330,7 @@ public sealed class OperationRecordStoreTests : IDisposable
             Info(action: "actor.someone-else", visibility: OperationVisibility.Actor, actorId: "other"));
         await _store.InsertAsync(Info(action: "actor.anonymous", visibility: OperationVisibility.Actor));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10,
             scope: OperationRecordVisibilityScope.Host);
 
@@ -328,7 +351,7 @@ public sealed class OperationRecordStoreTests : IDisposable
             Info(action: "actor.mine", visibility: OperationVisibility.Actor, actorId: "me"));
         await _store.InsertAsync(Info(action: "tenant.visible", visibility: OperationVisibility.Tenant));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10,
             scope: OperationRecordVisibilityScope.ForTenantReader(actorId: null));
 
@@ -343,7 +366,7 @@ public sealed class OperationRecordStoreTests : IDisposable
     [Fact]
     public async Task A_missing_scope_is_rejected()
     {
-        await Assert.ThrowsAsync<ArgumentNullException>(() => _store.GetPagedListAsync(
+        await Assert.ThrowsAsync<ArgumentNullException>(() => QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: null!));
     }
 
@@ -359,7 +382,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "user.created"));
         await _store.InsertAsync(Info(action: "role.deleted", outcome: OperationRecordOutcome.Failed));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         Assert.Equal(2, page.TotalCount);
@@ -377,7 +400,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "role.deleted"));
         await _store.InsertAsync(Info(action: "tenant.created"));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted,
             actions: ["user.created", "tenant.created"]);
 
@@ -395,7 +418,7 @@ public sealed class OperationRecordStoreTests : IDisposable
     {
         await _store.InsertAsync(Info(action: "user.created"));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted,
             actions: []);
 
@@ -415,7 +438,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(Info(action: "b", outcome: OperationRecordOutcome.Failed));
         await _store.InsertAsync(Info(action: "c", outcome: OperationRecordOutcome.Failed));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted,
             outcome: OperationRecordOutcome.Failed);
 
@@ -438,7 +461,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         await _store.InsertAsync(
             Info(action: "user.created", outcome: OperationRecordOutcome.Failed, creationTime: inRange.AddDays(30)));
 
-        var page = await _store.GetPagedListAsync(
+        var page = await QueryAsync(
             keyword: null,
             startTime: inRange.AddDays(-1),
             endTime: inRange.AddDays(1),
@@ -459,7 +482,7 @@ public sealed class OperationRecordStoreTests : IDisposable
             await _store.InsertAsync(Info(targetId: $"u-{i}"));
         }
 
-        var page = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 2, scope: OperationRecordVisibilityScope.Unrestricted);
+        var page = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 2, scope: OperationRecordVisibilityScope.Unrestricted);
 
         Assert.Equal(2, page.Items.Count);
         Assert.Equal(5, page.TotalCount);
@@ -471,7 +494,7 @@ public sealed class OperationRecordStoreTests : IDisposable
     {
         await _store.InsertAsync(Info(action: new string('x', OperationRecordInfo.MaxActionLength + 50)));
 
-        var page = await _store.GetPagedListAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
+        var page = await QueryAsync(keyword: null, startTime: null, endTime: null, skip: 0, take: 10, scope: OperationRecordVisibilityScope.Unrestricted);
 
         Assert.Equal(OperationRecordInfo.MaxActionLength, Assert.Single(page.Items).Action.Length);
     }

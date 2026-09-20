@@ -15,6 +15,7 @@ using Leistd.ObjectMapping;
 using Leistd.Authorization.Abstractions;
 using Leistd.ObjectMapping.Abstractions;
 using Leistd.OperationRecords.Abstractions;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.Roles.AppServices;
 
@@ -31,7 +32,7 @@ public class RoleAppService(
     ILogger<RoleAppService> logger,
     IQueryableAsyncExecuter asyncExecuter) : BaseAppService, IRoleAppService
 {
-    public async Task<PagedResultDto<RoleOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<RoleOutputDto>> GetPagedListAsync(
         GetRolePagedInputDto input,
         CancellationToken cancellationToken = default)
     {
@@ -50,7 +51,7 @@ public class RoleAppService(
             cancellationToken);
 
         var result = await MapToOutputsAsync(roles, cancellationToken);
-        return new PagedResultDto<RoleOutputDto>(totalCount, result);
+        return new PagedResult<RoleOutputDto>(totalCount, result);
     }
 
     /// <summary>

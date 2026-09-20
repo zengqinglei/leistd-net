@@ -1,6 +1,3 @@
-using Leistd.Data.Constants;
-using Microsoft.Extensions.Options;
-
 namespace Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 
 /// <summary>
@@ -16,16 +13,4 @@ public sealed class LocalTenantConnectionOptions
     /// 该名称解析为 <c>ConnectionStrings:{名称}</c>，未配置时回落 <c>ConnectionStrings:Default</c>。
     /// </remarks>
     public string? ControlPlaneConnectionStringName { get; set; }
-}
-
-internal sealed class LocalTenantConnectionOptionsValidator : IValidateOptions<LocalTenantConnectionOptions>
-{
-    public ValidateOptionsResult Validate(string? name, LocalTenantConnectionOptions options) =>
-        !string.IsNullOrWhiteSpace(options.ControlPlaneConnectionStringName)
-        && !string.Equals(options.ControlPlaneConnectionStringName, ConnectionStringNames.Default, StringComparison.Ordinal)
-            ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(
-                "LocalTenantConnectionOptions.ControlPlaneConnectionStringName is required and must not be " +
-                $"'{ConnectionStringNames.Default}' (was '{options.ControlPlaneConnectionStringName}'). " +
-                "The control-plane context must be pinned to its own connection name so it is never tenant-routed.");
 }

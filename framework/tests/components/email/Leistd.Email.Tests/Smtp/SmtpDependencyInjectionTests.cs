@@ -96,7 +96,9 @@ public sealed class SmtpDependencyInjectionTests
         var startupValidators = provider.GetServices<IStartupValidator>().ToList();
         Assert.NotEmpty(startupValidators);
         var failure = Assert.Throws<OptionsValidationException>(() => startupValidators[0].Validate());
-        Assert.Contains(SmtpOptions.SectionName, Assert.Single(failure.Failures), StringComparison.Ordinal);
+        // 每条失败单独一项、各自带配置键：三项都配错时运维一次就能看全，而不是只看到第一条
+        Assert.NotEmpty(failure.Failures);
+        Assert.All(failure.Failures, message => Assert.StartsWith(SmtpOptions.SectionName, message, StringComparison.Ordinal));
     }
 
     [Fact]

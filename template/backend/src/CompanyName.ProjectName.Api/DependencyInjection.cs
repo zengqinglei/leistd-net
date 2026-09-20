@@ -48,10 +48,13 @@ public static class DependencyInjection
         {
 #if (!LocalIdentity)
             // 资源服务只认签发方的 Bearer：这里没有用户表，账号是否可用由签发方在发令牌时判定
-            options.DefaultPolicy = new AuthorizationPolicyBuilder(
+            var currentUser = new AuthorizationPolicyBuilder(
                     OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()
                 .Build();
+            options.DefaultPolicy = currentUser;
+            // 组件的自用端点按名字要这条策略，见 ApiPolicies.CurrentUser
+            options.AddPolicy(ApiPolicies.CurrentUser, currentUser);
 #else
             // 自然人主体可以来自两种方案：Bearer（签发形态）与会话 Cookie
             var humanSchemes = new[]
@@ -66,11 +69,15 @@ public static class DependencyInjection
             // （sub 形如 client:<client_id>，代表工作负载）不满足，答 403。不开角色时管理控制器只剩 [Authorize]，
             // 放行等于任何机器令牌都能列用户和 OAuth 客户端；面向工作负载的端点单独声明自己的策略。
             // 账号停用、删除后的撤权不在这里：会话与令牌在那一刻被撤销，认证阶段就不再通过
-            options.DefaultPolicy = new AuthorizationPolicyBuilder()
+            var currentUser = new AuthorizationPolicyBuilder()
                 .AddAuthenticationSchemes(humanSchemes)
                 .RequireAuthenticatedUser()
                 .RequireAssertion(context => IsNaturalPerson(context.User))
                 .Build();
+            options.DefaultPolicy = currentUser;
+            // 组件的自用端点（读设置、读自己的权限、通知中心）按名字要这条策略：
+            // 组件不套宿主默认策略，要求什么必须写在映射处，见 ApiPolicies.CurrentUser
+            options.AddPolicy(ApiPolicies.CurrentUser, currentUser);
 
 #if (OpenIddictServer)
             AddMachineScopePolicy(options, TenantConnectionPolicies.RuntimeRead, TenantConnectionScopes.RuntimeRead);

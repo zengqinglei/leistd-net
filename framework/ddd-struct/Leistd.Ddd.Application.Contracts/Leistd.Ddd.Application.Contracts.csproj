@@ -4,4 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- 分页请求与结果是数据访问共享契约，组件与 DDD 基座共用同一份 -->
+    <ProjectReference Include="..\..\components\data\Leistd.Data\Leistd.Data.csproj" />
+  </ItemGroup>
+
 </Project>

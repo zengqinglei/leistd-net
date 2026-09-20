@@ -10,6 +10,10 @@
 | 需要通知到达即时弹出/刷新，无需等待用户刷新页面 | 引入 `Leistd.Notifications.AspNetCore.SignalR`，它注册一个 `INotificationChannel` |
 | 同时需要历史记录 + 实时推送（最常见） | 两个实现包都引入，业务只注入 `INotificationPublisher` |
 | 仅编写业务代码（发布通知），不关心底层持久化/传输 | 只引用 `Leistd.Notifications.Core` 中的接口 |
+| 前端的通知中心（列表、未读数、标记已读、清空） | 引入 `Leistd.Notifications.AspNetCore`，路由组上调 `MapNotifications(configure)` |
+| 旧通知要定期清理 | `AddNotificationRetention<TDbContext>()`，默认开启：已读保留 90 天、未读保留 365 天 |
+| 用户可以按类型、渠道关闭通知 | 引入 `Leistd.Notifications.Settings`，`AddNotificationPreferences(...)` |
+| 通知同时发邮件 | 引入 `Leistd.Notifications.Email`，`AddEmailNotifications()` 并实现收件人地址解析 |
 
 ## 安装
 
@@ -22,6 +26,13 @@ dotnet add package Leistd.Notifications.EntityFrameworkCore
 
 # 实时推送（基于 SignalR）
 dotnet add package Leistd.Notifications.AspNetCore.SignalR
+
+# 通知中心 HTTP 端点
+dotnet add package Leistd.Notifications.AspNetCore
+
+# 桥接包：按用户设置决定投递、邮件渠道
+dotnet add package Leistd.Notifications.Settings
+dotnet add package Leistd.Notifications.Email
 ```
 
 ## 注册
@@ -52,6 +63,30 @@ app.MapNotificationHub();
 `AddNotificationsSignalR()` 会同时注册 Core 发布器与 SignalR 传输，但不注册持久化，也不映射业务实时 Hub。`MapNotificationHub()` 默认映射到 `/hubs/notifications` 并要求登录。
 
 `INotificationChannel` 可注册多个；`INotificationStore` 必须且只能注册一个。只要瞬态推送而不要历史时使用[实时通信](./realtime.md)。
+
+映射通知中心端点（只作用于当前用户）：
+
+```csharp
+// 策略名必填：组件不内置默认策略，也不在路由组上套宿主默认策略
+app.MapGroup("/api/v1/notifications").MapNotifications(options => options.AccessPolicy = "App.CurrentUser");
+```
+
+启用保留期清理（需要后台作业调度器与分布式锁，见[后台作业](./background-jobs.md)）：
+
+```csharp
+builder.Services.AddNotificationRetention<MyProjectDbContext>();
+```
+
+按用户偏好过滤投递、增加邮件渠道：
+
+```csharp
+builder.Services.AddNotificationPreferences(options =>
+    options.MandatoryDeliveries.Add(new NotificationDelivery("Security", INotificationChannel.InAppName)));
+builder.Services.AddEmailNotifications();
+builder.Services.AddScoped<INotificationRecipientResolver, UserEmailRecipientResolver>();
+```
+
+偏好是宿主定义的用户级布尔设置，名为 `{前缀}.{通知类型}.{渠道名}`（前缀默认 `Notifications`，邮件渠道名为 `EmailNotificationChannel.ChannelName`）；没有定义的组合一律投递。
 
 > **前置**：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`。本家族的 EF 存储与管理器经
 > `IDbContextProvider<TDbContext>` 取上下文——只有它会设置 `DbContextCreationContext.Current`，
@@ -86,10 +121,10 @@ public class OrderNotifier(INotificationPublisher notificationPublisher)
 ```csharp
 public class MessageCenter(INotificationStore notificationStore)
 {
-    public Task<IReadOnlyList<NotificationOutputDto>> GetListAsync(
+    public async Task<IReadOnlyList<NotificationOutputDto>> GetLatestAsync(
         string userId,
         CancellationToken ct = default)
-        => notificationStore.GetByUserAsync(userId, 50, ct);
+        => (await notificationStore.GetByUserAsync(userId, new PageRequest { Limit = 50 }, ct: ct)).Items;
 }
 ```
 
@@ -108,7 +143,12 @@ public class MessageCenter(INotificationStore notificationStore)
 | `INotificationChannel.InAppName` | 站内渠道名（`"InApp"`）：通知历史与实时推送共用这一个开关；这是框架自己的渠道，业务渠道名由业务项目在各自的渠道实现上定义 |
 | `INotificationStore` | 通知持久化接口；**必需且只能有一个**实现 |
 | `INotificationStore.SaveAsync(notification, userId, ct)` | 保存通知 |
-| `INotificationStore.GetByUserAsync(userId, maxCount = 50, ct)` | 按创建时间**倒序**获取用户通知列表，默认最多 50 条 |
+| `INotificationStore.GetByUserAsync(userId, page, unreadOnly, ct)` | 按创建时间**倒序**分页获取用户通知，`unreadOnly` 只取未读；返回 `PagedResult<NotificationOutputDto>` |
+| `INotificationStore.DeleteAsync(notificationId, userId, ct)` / `DeleteAllAsync(userId, ct)` | 删除用户自己的一条 / 全部通知；删除账号时调用后者清理孤儿行 |
+| `MapNotifications(configure)` | AspNetCore 包：`AccessPolicy` 必填；`GET /`（`maxCount` 收敛到 1–`NotificationEndpoints.MaximumListCount`，可加 `unreadOnly`）、`GET /unread-count`、`PUT /{id}/read`、`PUT /read-all`、`DELETE /`、`DELETE /{id}`；非用户身份写入返回带 `NotificationErrorCodes.IdentityCannotOperate` 码的 403 |
+| `AddNotificationRetention<TDbContext>(configure?)` | EF 包：绑定 `Leistd:Notifications:Retention` 并启动期校验，登记集群周期任务 `notifications.retention` |
+| `AddNotificationPreferences(configure?)` | Settings 桥接包：以 `NotificationPreferenceOptions`（前缀、必达组合）替换默认投递过滤器 |
+| `AddEmailNotifications()` / `INotificationRecipientResolver` | Email 桥接包：登记 `EmailNotificationChannel`，收件人地址由宿主解析，只发已验证地址，经后台队列异步发送 |
 | `INotificationStore.MarkAsReadAsync(notificationId, userId, ct)` | 标记单条通知为已读 |
 | `INotificationStore.MarkAllAsReadAsync(userId, ct)` | 标记用户所有通知为已读 |
 | `INotificationStore.GetUnreadCountAsync(userId, ct)` | 获取用户未读通知数量 |
@@ -139,7 +179,9 @@ public class MessageCenter(INotificationStore notificationStore)
 
 - `EfCoreNotificationStore<TDbContext>` 为**泛型**实现，绑定到调用方指定的 `TDbContext`（`where TDbContext : DbContext`），通过 `dbContext.Set<NotificationRecord>()` 操作，宿主 DbContext 需自行包含该实体（由 `ConfigureNotifications()` 提供配置）。
 - `NotificationRecord` 实现 `ICreationAuditedObject`。`CreationTime` 由发布器定好、`FromDto` 带入：留空转而依赖审计拦截器，等于把落库时间挂在「宿主是否给这个 DbContext 挂了审计拦截器」上——没挂就是 `default(DateTime)`，而通知列表按它排序。`CreatorId` 仍由审计拦截器填充。
-- `GetByUserAsync` 按 `CreationTime` **倒序**排序、`Take(maxCount)` 截断（默认 50）。
+- `GetByUserAsync` 按 `CreationTime` **倒序**、同刻按 `Id` 倒序排序；`PageRequest.Sorting` 不生效。
+- 保留期清理按物理库逐个执行，每批一个事务；已读与未读都按创建时间计，未读的保留天数不得短于已读。
+- 邮件渠道把正文按纯文本 HTML 编码后发送；队列满时丢弃这一封并记警告，站内通知不受影响。
 - `MarkAsReadAsync` **幂等**：`notificationId` 无法解析为 `Guid` 时直接返回；查不到记录，或记录已是 `IsRead: true` 时也直接返回、不产生额外的 `SaveChanges`；仅在确实从未读变为已读时才更新 `IsRead` 与 `ReadAt` 并保存。
 - `MarkAllAsReadAsync` 只查询 `IsRead == false` 的记录批量标记；无未读记录时直接返回，不调用 `SaveChangesAsync`。
 - 索引：`(UserId, CreationTime)` 支撑"拉取用户通知列表"，`(UserId, IsRead)` 支撑"未读数"查询；表名沿用 EF Core 默认约定（`NotificationRecord`），不额外加框架前缀。

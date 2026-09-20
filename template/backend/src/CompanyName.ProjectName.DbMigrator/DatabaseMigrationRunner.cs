@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using Leistd.Data.Constants;
+using Leistd.Data.Connections;
 #if (OpenIddictServer)
 using OpenIddict.EntityFrameworkCore;
 #endif

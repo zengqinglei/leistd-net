@@ -1,4 +1,9 @@
+using Leistd.BackgroundJobs;
+using Leistd.BackgroundJobs.Recurring;
 using Leistd.DependencyInjection.Extensions;
+using Leistd.OperationRecords.EntityFrameworkCore.Options;
+using Leistd.OperationRecords.EntityFrameworkCore.Retention;
+using Microsoft.Extensions.Options;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.EntityFrameworkCore.EntityConfigurations;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
@@ -51,12 +56,56 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 将 <see cref="OperationRecord"/> 实体配置应用到 DbContext。在 OnModelCreating 中调用。
+    /// 启用保留期归档：到期记录按天搬入归档表，作为集群周期任务执行。
     /// </summary>
+    /// <remarks>
+    /// <para>选项绑定 <c>Leistd:OperationRecords:Retention</c> 并在启动期校验；默认 <c>Enabled = false</c>，
+    /// 任务照常排期、到点跳过，打开开关下一轮即生效。</para>
+    /// <para>需要后台作业调度器（如 <c>AddInProcessBackgroundJobs()</c>）与分布式锁；
+    /// 归档按物理库逐个执行，独立库租户的记录在各自的库里归档。</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddOperationRecordsEfCore&lt;AppDbContext&gt;();
+    /// builder.Services.AddOperationRecordRetention&lt;AppDbContext&gt;();
+    /// </code>
+    /// </example>
+    /// <typeparam name="TDbContext">承载操作记录与归档表的 DbContext。</typeparam>
+    /// <param name="services">服务集合。</param>
+    /// <param name="configure">在配置节之后应用的选项配置。</param>
+    public static IServiceCollection AddOperationRecordRetention<TDbContext>(
+        this IServiceCollection services,
+        Action<OperationRecordRetentionOptions>? configure = null)
+        where TDbContext : DbContext
+    {
+        services.AddOptions<OperationRecordRetentionOptions>()
+            .BindConfiguration(OperationRecordRetentionOptions.SectionName)
+            .ValidateOnStart();
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<OperationRecordRetentionOptions>, OperationRecordRetentionOptionsValidator>());
+        services.TryAddTransient<IOperationRecordArchiveService, OperationRecordArchiveService<TDbContext>>();
+        services.AddRecurringJob<OperationRecordArchiveJob>(
+            OperationRecordArchiveJob.Name,
+            sp => RecurringJobSchedule.DailyAt(new TimeOnly(
+                sp.GetRequiredService<IOptions<OperationRecordRetentionOptions>>().Value.DailyRunHourUtc, 0)),
+            RecurringJobScope.Cluster);
+        return services;
+    }
+
+    /// <summary>
+    /// 将 <see cref="OperationRecord"/> 与 <see cref="OperationRecordArchive"/> 的实体配置应用到 DbContext。在 OnModelCreating 中调用。
+    /// </summary>
+    /// <remarks>归档表随原表一起映射：启用保留期不需要改模型，也不会出现"开了归档却没有归档表"。</remarks>
     /// <param name="modelBuilder">模型构建器。</param>
     public static ModelBuilder ConfigureOperationRecords(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new OperationRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new OperationRecordArchiveConfiguration());
         return modelBuilder;
     }
 }

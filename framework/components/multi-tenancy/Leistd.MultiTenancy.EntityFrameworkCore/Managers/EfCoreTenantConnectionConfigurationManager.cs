@@ -48,8 +48,8 @@ public class EfCoreTenantConnectionConfigurationManager<TDbContext> : ITenantCon
         long? expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        var normalizedName = TenantConnectionNames.Normalize(name);
-        var normalizedConnectionString = ValidateConnectionString(connectionString);
+        var normalizedName = TenantConnectionNames.NormalizeInput(name);
+        var normalizedConnectionString = TenantConnectionStrings.NormalizeInput(connectionString);
         var dbContext = await _dbContextProvider.GetDbContextAsync(cancellationToken);
 
         var tenant = await LoadTenantAsync(dbContext, tenantId, cancellationToken);
@@ -111,7 +111,7 @@ public class EfCoreTenantConnectionConfigurationManager<TDbContext> : ITenantCon
         long expectedVersion,
         CancellationToken cancellationToken = default)
     {
-        var normalizedName = TenantConnectionNames.Normalize(name);
+        var normalizedName = TenantConnectionNames.NormalizeInput(name);
         var dbContext = await _dbContextProvider.GetDbContextAsync(cancellationToken);
 
         var tenant = await LoadTenantAsync(dbContext, tenantId, cancellationToken);
@@ -256,27 +256,5 @@ public class EfCoreTenantConnectionConfigurationManager<TDbContext> : ITenantCon
                 entry.Entity is TenantConnectionRecord candidate
                 && candidate.TenantId == tenantId
                 && candidate.Name == normalizedName);
-    }
-
-    // 异常消息只描述规则，不回显连接串
-    private static string ValidateConnectionString(string connectionString)
-    {
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            throw new ArgumentException(
-                "A tenant connection requires a non-empty connection string. " +
-                "To stop routing this name, remove the registration instead.",
-                nameof(connectionString));
-        }
-
-        var normalized = connectionString.Trim();
-        if (normalized.Length > TenantConnectionConfiguration.MaxConnectionStringLength)
-        {
-            throw new ArgumentException(
-                $"The connection string exceeds {TenantConnectionConfiguration.MaxConnectionStringLength} characters.",
-                nameof(connectionString));
-        }
-
-        return normalized;
     }
 }

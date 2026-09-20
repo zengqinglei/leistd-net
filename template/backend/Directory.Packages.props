@@ -32,14 +32,23 @@
     <PackageVersion Include="Leistd.MultiTenancy.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.MultiTenancy.ServiceClient" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.UnitOfWork.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Settings.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Settings.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Settings.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Settings.Hosting" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.BackgroundJobs.Core" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.BackgroundJobs.InProcess" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.BackgroundJobs.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Notifications.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Notifications.AspNetCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Notifications.Settings" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.Notifications.Email" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.OperationRecords.AspNetCore" Version="$(LeistdFrameworkVersion)" />

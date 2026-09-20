@@ -190,7 +190,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
             .CreateAsync($"tenant-{Guid.NewGuid():N}", null, isActive: false);
         var overlong = ConnectionString + new string('x', TenantConnectionConfiguration.MaxConnectionStringLength);
 
-        var tooLong = await Assert.ThrowsAsync<ArgumentException>(
+        var tooLong = await Assert.ThrowsAsync<BadRequestException>(
             () => Manager.SetAsync(tenant.Id, Name, overlong, expectedVersion: null));
 
         Assert.DoesNotContain(Secret, tooLong.ToString());

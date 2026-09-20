@@ -39,4 +39,30 @@ public static class DependencyInjection
         services.TryAddSingleton<IRealTimeSubscriptionAuthorizer, AllowAllRealTimeSubscriptionAuthorizer>();
         return services;
     }
+
+    /// <summary>
+    /// 注册"只允许订阅指定前缀资源"的授权器，如公共看板统一挂在 <c>public:</c> 下。
+    /// </summary>
+    /// <remarks>
+    /// 前缀按序数比较；需要按用户或租户判定的资源不要用它，实现自己的 <see cref="IRealTimeSubscriptionAuthorizer"/>。
+    /// 与 <see cref="AddAllowAllRealTimeSubscriptions"/> 二选一，先注册者生效。
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.Services.AddPrefixRealTimeSubscriptions("public:");
+    /// </code>
+    /// </example>
+    /// <param name="services">服务集合。</param>
+    /// <param name="prefixes">允许订阅的资源键前缀，至少一个且不得为空白。</param>
+    public static IServiceCollection AddPrefixRealTimeSubscriptions(this IServiceCollection services, params string[] prefixes)
+    {
+        ArgumentNullException.ThrowIfNull(prefixes);
+        if (prefixes.Length == 0 || prefixes.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("At least one non-empty resource key prefix is required.", nameof(prefixes));
+        }
+
+        services.TryAddSingleton<IRealTimeSubscriptionAuthorizer>(new PrefixRealTimeSubscriptionAuthorizer([.. prefixes]));
+        return services;
+    }
 }

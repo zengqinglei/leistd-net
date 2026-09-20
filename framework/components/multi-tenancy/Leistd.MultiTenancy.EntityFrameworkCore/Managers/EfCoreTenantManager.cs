@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -121,8 +122,12 @@ public class EfCoreTenantManager<TDbContext>(
     }
 
     /// <inheritdoc />
-    public async Task<TenantPage> GetPagedAsync(string? keyword, int offset, int limit, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<TenantConfiguration>> GetPagedAsync(
+        string? keyword,
+        PageRequest page,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(page);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         var query = dbContext.UndeletedTenants().AsNoTracking();
 
@@ -137,11 +142,11 @@ public class EfCoreTenantManager<TDbContext>(
         var total = await query.LongCountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(t => t.CreationTime)
-            .Skip(offset)
-            .Take(limit)
+            .Skip(page.Offset)
+            .Take(page.Limit)
             .ToListAsync(cancellationToken);
 
-        return new TenantPage(total, items.Select(EfCoreTenantStore<TDbContext>.ToConfiguration).ToList());
+        return new PagedResult<TenantConfiguration>(total, items.Select(EfCoreTenantStore<TDbContext>.ToConfiguration));
     }
 
     // 先映射更具体的版本冲突，再确认名称唯一性冲突；其他数据库异常原样上抛。

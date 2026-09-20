@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
@@ -67,31 +68,29 @@ public class EfCoreOperationRecordStore<TDbContext>(
     }
 
     /// <inheritdoc />
-    public async Task<OperationRecordPage> GetPagedListAsync(
-        string? keyword,
-        DateTime? startTime,
-        DateTime? endTime,
-        int skip,
-        int take,
-        OperationRecordVisibilityScope scope,
-        IReadOnlyCollection<string>? actions = null,
-        OperationRecordOutcome? outcome = null,
+    public async Task<PagedResult<OperationRecordInfo>> GetPagedListAsync(
+        OperationRecordFilter filter,
+        PageRequest page,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentNullException.ThrowIfNull(filter.Scope);
+        ArgumentNullException.ThrowIfNull(page);
+
+        var scope = filter.Scope;
 
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
         var query = dbContext.Set<OperationRecord>().AsNoTracking();
 
         // 动作码集合先物化成数组：EF 把它翻成 IN (...)，而传 IReadOnlyCollection 进表达式树
         // 在部分 Provider 上会退化成客户端求值——那会把整表拉进内存，且总数算错。
-        if (actions is { Count: > 0 })
+        if (filter.Actions is { Count: > 0 } actions)
         {
             var actionCodes = actions.ToArray();
             query = query.Where(x => actionCodes.Contains(x.Action));
         }
 
-        if (outcome is { } requiredOutcome)
+        if (filter.Outcome is { } requiredOutcome)
         {
             query = query.Where(x => x.Outcome == requiredOutcome);
         }
@@ -121,9 +120,9 @@ public class EfCoreOperationRecordStore<TDbContext>(
                     && (includesHostRecords || (actorId != null && x.ActorId == actorId))));
         }
 
-        if (!string.IsNullOrWhiteSpace(keyword))
+        if (!string.IsNullOrWhiteSpace(filter.Keyword))
         {
-            var trimmed = keyword.Trim();
+            var trimmed = filter.Keyword.Trim();
             query = query.Where(x =>
                 x.Action.Contains(trimmed)
                 || x.TargetId.Contains(trimmed)
@@ -132,14 +131,14 @@ public class EfCoreOperationRecordStore<TDbContext>(
 
         // 两端都是闭区间：调用方给的是"从这一刻到那一刻"，而不是半开区间。
         // 界面上选到某一天时，调用方应把上界取到那天的 23:59:59.999，否则当天的记录会整天看不见。
-        if (startTime.HasValue)
+        if (filter.StartTime is { } startTime)
         {
-            query = query.Where(x => x.CreationTime >= startTime.Value);
+            query = query.Where(x => x.CreationTime >= startTime);
         }
 
-        if (endTime.HasValue)
+        if (filter.EndTime is { } endTime)
         {
-            query = query.Where(x => x.CreationTime <= endTime.Value);
+            query = query.Where(x => x.CreationTime <= endTime);
         }
 
         var totalCount = await query.LongCountAsync(cancellationToken);
@@ -151,10 +150,10 @@ public class EfCoreOperationRecordStore<TDbContext>(
         var items = await query
             .OrderByDescending(x => x.CreationTime)
             .ThenByDescending(x => x.Id)
-            .Skip(skip)
-            .Take(take)
+            .Skip(page.Offset)
+            .Take(page.Limit)
             .ToListAsync(cancellationToken);
 
-        return new OperationRecordPage(totalCount, [.. items.Select(x => x.ToInfo())]);
+        return new PagedResult<OperationRecordInfo>(totalCount, [.. items.Select(x => x.ToInfo())]);
     }
 }

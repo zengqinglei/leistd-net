@@ -14,10 +14,14 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 ## 生产边界
 
 - 密钥和生产凭据由环境变量或密钥管理系统提供，不写入仓库。
-- 操作记录默认**只增不减**。需要保留期时打开 `OperationRecordRetention:Enabled`（或由宿主管理员在系统设置的「审计」面板打开），
+- 操作记录默认**只增不减**。需要保留期时打开 `Leistd:OperationRecords:Retention:Enabled`（或由宿主管理员在系统设置的「审计」面板打开），
   到期记录会被搬进 `OperationRecordArchives` 表而不是删除；归档表不参与日常查询，但数据仍在库里，容量规划要把它算进去。
   配置里的开关与保留天数是基线，界面上的设置优先，归档任务每轮读取；执行时刻与批大小只在配置里。
-  归档逐个进入宿主库与每个独立库，某个库失败只记错误、下一轮重试；多副本部署经分布式锁每轮只跑一份，要求配置 Redis，否则每个副本各跑一遍。
+  归档逐个进入宿主库与每个独立库，某个库失败只记错误、最迟在下一个调度时段重做（按截止时间扫描，积压会一并搬走）；
+  多副本部署经分布式锁每轮只跑一份，要求配置 Redis，否则每个副本各跑一遍。
+- **多个服务共用一个 Redis 时，每个服务的 `Leistd:Lock:Redis:KeyPrefix` 必须互不相同**（配置文件里给的是应用名，环境部分由部署侧追加）。
+  周期任务的锁键是固定的作业名（`operation-records.archive`、`notifications.retention`），前缀相同的两个服务会互相抢同一把锁——
+  抢不到的那个当轮直接跳过自己的库，而两边日志各自都正常。
 - 「只增不减」由应用契约保证。需要数据库层也保证时，把 Runtime Secret 对 `OperationRecords` 表的权限收敛到 INSERT／SELECT；
   代价是归档要从原表删除，**收敛权限与启用保留期不能同时成立**，二选一并在部署记录里写明。
 - 操作记录表增长到按时间范围查询变慢时，再按时间分区（数据库层 DDL，由 `DbMigrator` 的 DDL 身份执行），不预先做。

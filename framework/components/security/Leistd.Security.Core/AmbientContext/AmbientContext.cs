@@ -38,6 +38,48 @@ internal sealed class AmbientContext(
         return new AmbientContextScope(entered);
     }
 
+    public AmbientContextSnapshot Capture()
+    {
+        var states = new Dictionary<Type, object?>();
+        foreach (var contributor in contributors)
+        {
+            states[contributor.GetType()] = contributor.Capture();
+        }
+
+        return new AmbientContextSnapshot(principalAccessor.Principal, states);
+    }
+
+    public IDisposable Restore(AmbientContextSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        // 与 Begin 同序：主体先还原，其它维度可能读它。匿名捕获也要显式还原成空主体，
+        // 否则执行流会继承线程上残留的别的主体。
+        var entered = new List<IDisposable>
+        {
+            principalAccessor.Change(snapshot.Principal ?? new ClaimsPrincipal(new ClaimsIdentity()))
+        };
+
+        try
+        {
+            foreach (var contributor in contributors)
+            {
+                snapshot.States.TryGetValue(contributor.GetType(), out var state);
+                if (contributor.Restore(state) is { } scope)
+                {
+                    entered.Add(scope);
+                }
+            }
+        }
+        catch
+        {
+            DisposeAll(entered);
+            throw;
+        }
+
+        return new AmbientContextScope(entered);
+    }
+
     // 逆序释放：还原动作往往是写回父值，与建立顺序相反才能层层退回。
     private static void DisposeAll(List<IDisposable> entered)
     {

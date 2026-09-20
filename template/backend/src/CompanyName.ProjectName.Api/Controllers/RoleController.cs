@@ -6,6 +6,7 @@ using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Api.Controllers;
 
@@ -21,7 +22,7 @@ public sealed class RoleController(IRoleAppService roleAppService) : BaseControl
     /// </summary>
     [HttpGet]
     [Authorize(Policy = PermissionConstant.Roles.Default)]
-    public async Task<PagedResultDto<RoleOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<RoleOutputDto>> GetPagedListAsync(
         [FromQuery] GetRolePagedInputDto input,
         CancellationToken cancellationToken)
     {

@@ -1,5 +1,4 @@
 using System.Reflection;
-using CompanyName.ProjectName.Application.OperationRecords.Mappings;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -23,7 +22,7 @@ public sealed class DbContextAccessTests
         [
             typeof(Program).Assembly,
             typeof(MyProjectDbContext).Assembly,
-            typeof(OperationRecordProfile).Assembly
+            typeof(CompanyName.ProjectName.Application.DependencyInjection).Assembly
         ];
 
         var offenders = assemblies

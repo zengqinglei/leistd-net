@@ -1,7 +1,9 @@
+using Leistd.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Authorization.Services;
 using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Options;
 
 namespace Leistd.Authorization;
 
@@ -11,22 +13,39 @@ namespace Leistd.Authorization;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册权限定义管理器与默认权限检查器。
+    /// 注册权限定义管理器、默认权限检查器、管理用例与首次授予。
     /// </summary>
     /// <remarks>
-    /// <see cref="IPermissionDefinitionManager"/> 为 Singleton，<see cref="IPermissionChecker"/> 为 Scoped——
-    /// 一次请求内的多次权限检查共享同一份主体与授予快照。
+    /// <para><see cref="IPermissionDefinitionManager"/> 为 Singleton，<see cref="IPermissionChecker"/> 为 Scoped——
+    /// 一次请求内的多次权限检查共享同一份主体与授予快照。</para>
+    /// <para>管理用例与首次授予还需要授予存储与管理器（如 <c>AddPermissionAuthorizationEfCore&lt;TDbContext&gt;()</c>）；
+    /// 管理用例另需宿主实现 <see cref="IPermissionSubjectDirectory"/>，缺失时解析它直接失败。
+    /// 可重复调用：服务只注册一次，<paramref name="configure"/> 每次都叠加。</para>
     /// </remarks>
     /// <example>
     /// <code>
-    /// builder.Services.AddPermissionAuthorizationCore();
+    /// builder.Services.AddPermissionAuthorizationCore(options => options.LocalizationResource = typeof(AppResource));
     /// builder.Services.AddSingleton&lt;IPermissionDefinitionProvider, OrderPermissionDefinitionProvider&gt;();
+    /// builder.Services.AddScoped&lt;IPermissionSubjectDirectory, RoleSubjectDirectory&gt;();
     /// </code>
     /// </example>
-    public static IServiceCollection AddPermissionAuthorizationCore(this IServiceCollection services)
+    /// <param name="services">服务集合。</param>
+    /// <param name="configure">管理用例的展示约定。</param>
+    public static IServiceCollection AddPermissionAuthorizationCore(
+        this IServiceCollection services,
+        Action<PermissionManagementOptions>? configure = null)
     {
         services.TryAddSingleton<IPermissionDefinitionManager, PermissionDefinitionManager>();
         services.TryAddScoped<IPermissionChecker, DefaultPermissionChecker>();
+        services.TryAddTransient<IPermissionManagementService, PermissionManagementService>();
+        services.TryAddTransient<IPermissionGrantSeeder, PermissionGrantSeeder>();
+        services.AddOptions<PermissionManagementOptions>();
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+
+        services.AddJsonLocalizationResources(typeof(PermissionErrorCodes).Assembly);
         return services;
     }
 }

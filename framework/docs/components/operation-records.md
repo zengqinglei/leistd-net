@@ -9,6 +9,8 @@
 | 事后要能回答"这条数据是谁改的、凭什么改" | 在用例里调 `IOperationRecorder.RecordSucceededAsync` |
 | 业务规则拒绝了一次操作 | 调 `RecordFailedAsync`；独立提交，业务随后回滚也留得住；写不进去只记日志，不会把 403 变成 500 |
 | 权限不足在**授权阶段**就被拒（请求到不了应用服务） | 端点打 `[OperationRecordAction]`，在授权结果处理器里调一行扩展方法 |
+| 管理界面要列表、筛选、导出操作记录 | 路由组上调 `MapOperationRecords(...)`；自定义路由或 DTO 时直接用 `IOperationRecordQueryService` |
+| 记录要有保留期（到期搬入归档表） | `AddOperationRecordRetention<TDbContext>()`，默认关闭 |
 | 想知道某次请求的完整细节（入参、堆栈、耗时） | **不要往这里加字段**，按 `CorrelationId` 去请求日志里查 |
 | 想追踪实体逐字段的变更前后值 | 本组件不做，用 EF 的变更追踪另行实现 |
 
@@ -49,6 +51,23 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 ```
 
 **前置**：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`——存储经 `IDbContextProvider<TDbContext>` 取上下文，失败记录经 `IUnitOfWorkManager` 独立提交。
+
+映射查询端点；授权口径全部必填，漏配在映射时抛出：
+
+```csharp
+app.MapGroup("/api/v1/operation-records").MapOperationRecords(options =>
+{
+    options.ReadPolicy = "App.OperationRecords";
+    options.ExportPolicy = "App.OperationRecords.Export";
+    options.ExportAction = "operation-records.exported";   // 须已登记
+});
+```
+
+启用保留期归档（需要后台作业调度器与分布式锁，见[后台作业](./background-jobs.md)）：
+
+```csharp
+builder.Services.AddOperationRecordRetention<AppDbContext>();
+```
 
 ## 使用
 
@@ -191,11 +210,16 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 | `IOperationActionDefinitionManager` | 动作定义的只读索引；`GetOrNull` 返回 `null` 即未登记。写入时记录器据此抛错；读取历史记录时调用方据此降级（原样显示裸码） |
 | `OperationRecordOptions` | `ImpersonatorIdClaimType` / `ImpersonatorNameClaimType`，默认值取自 `CustomClaimTypes` |
 | `IOperationRecordStore.InsertAsync(record, ct)` | 写入；成功记录跟随调用方的事务，失败记录在 `record.TenantId` 所指的层里独立提交 |
-| `IOperationRecordStore.GetPagedListAsync(keyword, startTime, endTime, skip, take, scope, actions, outcome, ct)` | 按创建时间倒序分页；关键字匹配动作码、目标标识与操作人名；时间两端都是**闭区间**且按 UTC 比较。`scope` **必填**；`actions`／`outcome` 可选，**取消令牌务必具名传**——它前面有两个可选参数，按位置传时一旦再插入新参数，令牌会静默落到别的参数位上 |
+| `IOperationRecordStore.GetPagedListAsync(filter, page, ct)` | 按创建时间倒序分页，返回 `PagedResult<OperationRecordInfo>`；`OperationRecordFilter` 的 `Scope` 必填，关键字匹配动作码、目标标识与操作人名，时间两端都是**闭区间**且按 UTC 比较；`PageRequest.Sorting` 不生效 |
+| `IOperationRecordQueryService` | 查询、筛选项与导出用例：无租户上下文即宿主读者；租户读者看不到 `Host` 层、`Actor` 层只看本人；仅宿主字段（`FailureDetail`、`CorrelationId`、`ActorTenantId`）只下发给宿主读者；类别与动作维度间取交集，展开为空返回空页。**不做权限判定**，由端点策略把守 |
+| `MapOperationRecords(configure)` | AspNetCore 包：`GET /`、`GET /filter-options`、`GET /export`；`ReadPolicy`、`ExportPolicy`、`ExportAction` 必填；返回路由组，端点名前缀见 `OperationRecordEndpoints.NamePrefix` |
+| `AddOperationRecordRetention<TDbContext>(configure?)` | EF 包：绑定 `Leistd:OperationRecords:Retention` 并启动期校验，登记集群周期任务 `operation-records.archive`（每日 `DailyRunHourUtc` 执行） |
+| `IOperationRecordArchiveService` | EF 包：逐库、分批把到期记录搬入 `OperationRecordArchive`，每批一个事务；返回搬运条数与失败库数 |
 | `OperationRecordVisibilityScope` | 可见范围，**由调用方算好**，只能从三个入口取得：`Host` 见全部，`ForTenantReader(actorId)` 见租户层加本人的 `Actor` 层，`Unrestricted` 不过滤（仅供不代表读者的内部任务）。没有默认值——可见性是安全边界，漏传即越权。**存储不判定"谁是宿主"**——那需要它不该有的上下文依赖 |
 | `AddOperationRecords(services)` | 注册记录器 |
 | `AddOperationRecordsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddOperationRecords()` |
-| `ConfigureOperationRecords(modelBuilder)` | 映射 `OperationRecord` 实体 |
+| `ConfigureOperationRecords(modelBuilder)` | 映射 `OperationRecord` 与归档表 `OperationRecordArchive` |
+| `IOperationActionDefinitionContext.Add(..., targetIsActor)` | 标记自证类动作：成功且没有操作人时，查询输出的 `ActorIsTarget` 为真，界面把目标显示在操作人列 |
 | `[OperationRecordAction(action, params targetRouteKeys)]` | 声明写端点的动作码；`TargetIdPrefix` 可对齐成功路径的目标标识写法 |
 | `HttpContext.RecordDeniedOperationAsync()` | 在授权结果处理器里补记一条失败；端点有注解才记，匿名请求一律不记；授权依据取实际未通过的具名策略 |
 
@@ -221,7 +245,9 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 
 - **框架只定义它自己会读的字符串，且连这些也让宿主能改。** 动作码与授权依据框架都只存不读，一律由业务定义——框架穷举不了业务词汇，硬定一套只会逼着业务去凑。模拟登录的 claim 名框架要读，但它属于"宿主签发主体时的技术细节"，因此经 `OperationRecordOptions` 注入、默认值指向 `CustomClaimTypes`，而不是写死在组件里。
 - **动作码一旦发布就不要改。** 它是历史记录的含义本身，改了等于篡改过去。
-- **没有更新与删除。** 留了入口，"清理误记录"迟早变成"清理不想被看到的记录"，那时这张表已经不能作为证据了。保留策略用数据库分区或归档作业处理。
+- **存储没有更新与删除。** 留了入口，"清理误记录"迟早变成"清理不想被看到的记录"，那时这张表已经不能作为证据了。保留期由 `AddOperationRecordRetention` 把到期记录**搬入**归档表，数据仍在库里；归档表不实现 `IMultiTenant`，将来为它开查询时须自行按租户过滤。
+- **保留期默认关闭。** 保留天数受法律与合同约束，组件无从知道；启用时 `RetentionDays` 取 30–3650。
+- **Minimal API 端点的查询参数不要改成 `[AsParameters]` 绑定。** 它把没有默认值的非空属性当必填，省略 `offset` 的请求会直接 400。
 - **不要加请求维度字段**（IP、UA、URL）。那属于请求日志；混进来就回到了"用路由代替业务语义"。
 - **不要加变更明细。** 那是实体变更追踪的量级（另一张明细表 + 追踪拦截器），加进来会得到半个审计日志却没有它的能力。
 - **`IOperationRecordStore` 只能有一个实现。** 为第二个 DbContext 注册时在注册期直接拒绝：一半的审计写进宿主没预期的库，比没有审计更危险。

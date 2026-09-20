@@ -1,3 +1,4 @@
+using Leistd.Authorization.Abstractions;
 using Leistd.ExceptionHandling;
 
 namespace Leistd.Authorization.Exceptions;
@@ -6,7 +7,7 @@ namespace Leistd.Authorization.Exceptions;
 /// 表示权限授予发生乐观并发冲突。
 /// </summary>
 /// <remarks>
-/// 映射为 409；宿主可捕获后用 <c>WithCode</c> 指定错误码与展示文案。
+/// 映射为 409，错误码为 <see cref="PermissionErrorCodes.ConcurrencyConflict"/>。
 /// </remarks>
 public class PermissionGrantConcurrencyException : ConflictException
 {
@@ -29,6 +30,7 @@ public class PermissionGrantConcurrencyException : ConflictException
         ProviderKey = providerKey;
         ExpectedVersion = expectedVersion;
         ActualVersion = actualVersion;
+        WithCode(PermissionErrorCodes.ConcurrencyConflict);
     }
 
     /// <summary>授予对象类型。</summary>

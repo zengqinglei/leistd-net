@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -29,7 +30,7 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    /// <summary>上限存在且生效：越过 <see cref="PagedRequestDto.MaximumLimit"/> 即 400</summary>
+    /// <summary>上限存在且生效：越过 <see cref="PageRequest.MaximumLimit"/> 即 400</summary>
     /// <remarks>
     /// 上限本身不是业务分页大小，只是把"一个拥有列表权限的调用方单次能要走多少"封顶。
     /// 因此用例断言的是边界两侧，而不是某个具体数字。
@@ -42,12 +43,12 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
         Assert.Equal(
             HttpStatusCode.OK,
             (await superAdmin.Client.GetAsync(
-                $"/api/v1/users?offset=0&limit={PagedRequestDto.MaximumLimit}")).StatusCode);
+                $"/api/v1/users?offset=0&limit={PageRequest.MaximumLimit}")).StatusCode);
 
         Assert.Equal(
             HttpStatusCode.BadRequest,
             (await superAdmin.Client.GetAsync(
-                $"/api/v1/users?offset=0&limit={PagedRequestDto.MaximumLimit + 1}")).StatusCode);
+                $"/api/v1/users?offset=0&limit={PageRequest.MaximumLimit + 1}")).StatusCode);
     }
 
     /// <summary>只有白名单内的字段可排序，其余一律 400</summary>
@@ -95,7 +96,7 @@ public sealed class PagedQueryContractTests(ProjectWebApplicationFactory factory
     }
 
     /// <remarks>
-    /// 走 <see cref="JsonDocument"/> 而不是反序列化成 <c>PagedResultDto&lt;T&gt;</c>：
+    /// 走 <see cref="JsonDocument"/> 而不是反序列化成 <c>PagedResult&lt;T&gt;</c>：
     /// 那个记录有两个构造函数，System.Text.Json 认不出该用哪个（与仓库里其余读列表的用例同解）。
     /// </remarks>
     /// <summary>省略 sorting 与显式传默认排序，结果必须完全一致</summary>

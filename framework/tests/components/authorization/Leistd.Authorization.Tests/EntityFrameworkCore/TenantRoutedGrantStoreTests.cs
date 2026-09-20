@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Authorization.Abstractions;
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.TestBase.Doubles;
 using Leistd.Authorization.Tests.TestDoubles;

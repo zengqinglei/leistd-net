@@ -261,7 +261,7 @@ public class UserAppService(
     UserDomainService userDomainService,
     IObjectMapper objectMapper) : IAppService
 {
-    public async Task<PagedResultDto<UserOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<UserOutputDto>> GetPagedListAsync(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default)
     {
@@ -286,12 +286,15 @@ public class UserAppService(
         // 映射
         var result = objectMapper.Map<List<User>, List<UserOutputDto>>(users);
 
-        return new PagedResultDto<UserOutputDto>(totalCount, result);
+        return new PagedResult<UserOutputDto>(totalCount, result);
     }
 }
 ```
 
 ### 3.6 Controller 规范
+
+框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不再写 Controller：在 `Api/Hosting/ComponentEndpoints.cs` 里用组件的 `Map*` 给前缀与授权策略，
+个别端点要追加元数据（两步验证放行、授权被拒留痕）按组件公开的端点名定位；组件不认识的业务动作（发信测试、模拟登录）才写 Controller，路由与组件端点不重叠。
 
 **命名**: `*Controller`
 **基类**: 继承 `BaseController`
@@ -310,7 +313,7 @@ namespace {ProjectName}.Api.Controllers;
 public class UserController(IUserAppService userAppService) : BaseController
 {
     [HttpGet]
-    public async Task<PagedResultDto<UserOutputDto>> GetPagedListAsync(
+    public async Task<PagedResult<UserOutputDto>> GetPagedListAsync(
         [FromQuery] GetUserPagedInputDto input,
         CancellationToken cancellationToken)
     {
@@ -355,15 +358,14 @@ builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
 
 | 层级 | 做法 |
 | --- | --- |
-| 租户级、用户级 | 消费方经应用层的策略提供方读 `ISettingProvider`；不做成 Options——`IConfiguration` 整个进程一份，没有租户维度 |
-| 宿主级 | 在 `Api/Configuration/HostSettingBindings.All` 加一行"设置名 → 配置键"，消费方注入 `IOptionsMonitor<T>` / `IOptionsSnapshot<T>`（不要 `IOptions<T>`，它启动后不再读新值）；本身订阅配置重载的库（如 Serilog 的 `MinimumLevel`）直接映射到它读的键 |
-| 宿主级，但消费方既不读 Options 也不订阅配置 | 才实现 `IHostSettingApplier`，把值推到消费方上 |
+| 租户级、用户级 | 消费方经应用层的策略提供方读 `ISettingProvider`；不做成 Options——`IConfiguration` 整个进程一份，没有租户维度。替别人判断（如按收件人偏好）用 `GetOrNullForUserAsync` |
+| 宿主级 | 在 `Api/Configuration/HostSettingBindings` 加一行绑定（`Bind` / `BindOption<T>`），消费方注入 `IOptionsMonitor<T>` / `IOptionsSnapshot<T>`（不要 `IOptions<T>`，它启动后不再读新值）；本身订阅配置重载的库（如 Serilog 的 `MinimumLevel`）直接绑定到它读的键 |
 
-- 宿主级设置经优先级最高的配置源覆盖部署配置：宿主开始接收请求之前先推入一次，写入的事务提交后本进程随即生效，其它实例由周期刷新跟上；没设的项自然回落到配置文件与环境变量。
+- 宿主级设置由设置组件经优先级最高的配置源覆盖部署配置：宿主开始接收请求之前先推入一次，写入提交后本进程随即生效，其它实例由周期任务跟上（`Leistd:Settings:Hosting:RefreshInterval`）；没设的项自然回落到配置文件与环境变量。
 - 逐项合规、组合起来让 Options 校验不过的一组（如只设了发信账号、还没设口令）整组不生效，沿用上一组并记错误日志，消费方不会在改正之前每次取值都抛异常。
-- 这类设置的代码默认值取部署基线（`HostSettingDefaults`），不要从 `IConfiguration` 现取——设置加载后读到的是覆盖后的值，「重置」就回不到基线。
+- 绑定了配置键的宿主级设置不写代码默认值：组件取部署基线作默认值，清除覆盖值即回到部署配置，「重置」不会回到一个写死的值。
+- 值域声明在设置定义上（`AsBoolean()`、`AsInteger(min, max)`、`WithAllowedValues(...)`），写入端据此校验、设置页据此渲染控件；定义表达不了的规则（时区、发件地址、开启前提）写成 `Application/Settings/Validators` 下的 `ISettingValueValidator`。
 - 部署期就定死的配置（凭据、连接、协议参数）照常用 `IOptions<T>`，也不要在服务里直接读 `IConfiguration["键"]`——已有 Options 类型就用它。
-- 覆盖后的值同样经过 Options 的校验；写入端仍要按区间与格式校验，别让不合规的值进库。
 
 ---
 
@@ -379,7 +381,7 @@ builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
 | 输出 | `{Entity}OutputDto` | `UserOutputDto` |
 | SDK 单形态响应 | `{Concept}Dto` | `ServiceInfoDto`、`WhoAmIDto` |
 
-> 分页输入 DTO 继承 `PagedRequestDto`、字段约定见 [API 规范](./api.md) §6。
+> 分页输入 DTO 继承 `PageRequest`、字段约定见 [API 规范](./api.md) §6。
 >
 > `Client` SDK（`{ProjectName}.Client`）里没有请求/响应成对关系的单形态响应用 `{Concept}Dto`，不强套 `OutputDto`——Input/Output 后缀的作用是区分成对的请求与响应类型。
 
@@ -390,7 +392,7 @@ namespace {ProjectName}.Application.Users.Dtos;
 /// <summary>
 /// 获取用户分页列表输入 DTO
 /// </summary>
-public record GetUserPagedInputDto : PagedRequestDto
+public record GetUserPagedInputDto : PageRequest
 {
     [Display(Name = "Search keyword")]
     [MaxLength(256, ErrorMessage = "{0} cannot exceed {1} characters.")]
@@ -433,7 +435,7 @@ public record GetUserPagedInputDto : PagedRequestDto
   分库租户下读写会落到宿主库（框架在同一作用域再按租户取上下文时会拒绝，表现为 500）。控制库上下文固定在宿主连接、不参与租户路由，可以直接注入
 - ✅ DTO 映射使用 Mapster（继承 `MapsterProfile` 声明映射，注册结构参考现有 Profile）：实体、存储模型或框架模型到 DTO 的**投影**一律走模块 `Mappings/` 下的 Profile，
   调用方才知道的值（当前时刻、当前会话、读者身份）经 MapContext 传入；由多个来源**拼装**、带计算或本地化的结果 DTO 直接构造。不在 DTO 上写 `FromXxx` 之类的映射静态方法
-- ✅ 请求外的异步活（发邮件等）交给表现层的 `IBackgroundTaskQueue`（`HostedServices/Workers`），并发互斥用 `IDistributedLock`，不另起线程或自造锁
+- ✅ 请求外的异步活（发邮件等）交给 `IBackgroundTaskQueue`（后台作业组件，入队时的租户、主体与链路随工作项带到执行时），并发互斥用 `IDistributedLock`，不另起线程或自造锁；定期的维护活登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`）
 - ✅ 可还原的加密直接用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串固定带版本，解密只捕获 `CryptographicException`；不另立加密接口
 
 ### 5.2 仓储常用方法

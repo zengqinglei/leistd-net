@@ -1,4 +1,4 @@
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Abstractions;
 using Microsoft.Extensions.Caching.Memory;

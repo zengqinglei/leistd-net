@@ -22,6 +22,11 @@
     <Project Path="components/authorization-resource/Leistd.Authorization.Resource.Core/Leistd.Authorization.Resource.Core.csproj" />
     <Project Path="components/authorization-resource/Leistd.Authorization.Resource.EntityFrameworkCore/Leistd.Authorization.Resource.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/components/background-jobs/">
+    <Project Path="components/background-jobs/Leistd.BackgroundJobs.Core/Leistd.BackgroundJobs.Core.csproj" />
+    <Project Path="components/background-jobs/Leistd.BackgroundJobs.EntityFrameworkCore/Leistd.BackgroundJobs.EntityFrameworkCore.csproj" />
+    <Project Path="components/background-jobs/Leistd.BackgroundJobs.InProcess/Leistd.BackgroundJobs.InProcess.csproj" />
+  </Folder>
   <Folder Name="/components/core/">
     <Project Path="components/core/Leistd.Core/Leistd.Core.csproj" />
   </Folder>
@@ -57,11 +62,15 @@
     <Project Path="components/multi-tenancy/Leistd.MultiTenancy.AspNetCore/Leistd.MultiTenancy.AspNetCore.csproj" />
     <Project Path="components/multi-tenancy/Leistd.MultiTenancy.Core/Leistd.MultiTenancy.Core.csproj" />
     <Project Path="components/multi-tenancy/Leistd.MultiTenancy.EntityFrameworkCore/Leistd.MultiTenancy.EntityFrameworkCore.csproj" />
+    <Project Path="components/multi-tenancy/Leistd.MultiTenancy.ServiceClient/Leistd.MultiTenancy.ServiceClient.csproj" />
   </Folder>
   <Folder Name="/components/notifications/">
+    <Project Path="components/notifications/Leistd.Notifications.AspNetCore/Leistd.Notifications.AspNetCore.csproj" />
     <Project Path="components/notifications/Leistd.Notifications.Core/Leistd.Notifications.Core.csproj" />
+    <Project Path="components/notifications/Leistd.Notifications.Email/Leistd.Notifications.Email.csproj" />
     <Project Path="components/notifications/Leistd.Notifications.EntityFrameworkCore/Leistd.Notifications.EntityFrameworkCore.csproj" />
     <Project Path="components/notifications/Leistd.Notifications.AspNetCore.SignalR/Leistd.Notifications.AspNetCore.SignalR.csproj" />
+    <Project Path="components/notifications/Leistd.Notifications.Settings/Leistd.Notifications.Settings.csproj" />
   </Folder>
   <Folder Name="/components/object-mapping/">
     <Project Path="components/object-mapping/Leistd.ObjectMapping.Core/Leistd.ObjectMapping.Core.csproj" />
@@ -81,8 +90,10 @@
     <Project Path="components/response/Leistd.Response.Core/Leistd.Response.Core.csproj" />
   </Folder>
   <Folder Name="/components/settings/">
+    <Project Path="components/settings/Leistd.Settings.AspNetCore/Leistd.Settings.AspNetCore.csproj" />
     <Project Path="components/settings/Leistd.Settings.Core/Leistd.Settings.Core.csproj" />
     <Project Path="components/settings/Leistd.Settings.EntityFrameworkCore/Leistd.Settings.EntityFrameworkCore.csproj" />
+    <Project Path="components/settings/Leistd.Settings.Hosting/Leistd.Settings.Hosting.csproj" />
   </Folder>
   <Folder Name="/components/security/">
     <Project Path="components/security/Leistd.Security.AspNetCore/Leistd.Security.AspNetCore.csproj" />
@@ -109,6 +120,8 @@
     <Project Path="ddd-struct/Leistd.Ddd.Domain/Leistd.Ddd.Domain.csproj" />
     <Project Path="ddd-struct/Leistd.Ddd.Infrastructure/Leistd.Ddd.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/components/" />
   <Folder Name="/tests/components/aspnetcore-signalr/">
     <Project Path="tests/components/aspnetcore-signalr/Leistd.AspNetCore.SignalR.Tests/Leistd.AspNetCore.SignalR.Tests.csproj" />
   </Folder>
@@ -124,8 +137,14 @@
   <Folder Name="/tests/components/authorization/">
     <Project Path="tests/components/authorization/Leistd.Authorization.Tests/Leistd.Authorization.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/components/background-jobs/">
+    <Project Path="tests/components/background-jobs/Leistd.BackgroundJobs.Tests/Leistd.BackgroundJobs.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/components/core/">
     <Project Path="tests/components/core/Leistd.Core.Tests/Leistd.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/components/data/">
+    <Project Path="tests/components/data/Leistd.Data.Tests/Leistd.Data.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/components/dependency-injection/">
     <Project Path="tests/components/dependency-injection/Leistd.DependencyInjection.Tests/Leistd.DependencyInjection.Tests.csproj" />

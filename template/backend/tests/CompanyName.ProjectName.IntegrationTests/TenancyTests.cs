@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.Tenants;
-using CompanyName.ProjectName.Application.Tenants.AppServices;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
@@ -26,6 +25,8 @@ using Leistd.Notifications.EntityFrameworkCore.Entities;
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.Provisioning;
+using Leistd.Data.Paging;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
 using CompanyName.ProjectName.Domain.Auth.Entities;
@@ -617,7 +618,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             builder.ConfigureServices(services =>
             {
                 services.AddTransient<TenantSeeder>();
-                services.AddTransient<ITenantSeeder, ProbingTenantSeeder>();
+                services.AddTransient<ITenantProvisioner, ProbingTenantSeeder>();
             }));
 
         ProbingTenantSeeder.Reset();
@@ -644,7 +645,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 services.AddTransient<EfCoreTenantManager<IdentityControlDbContext>>();
                 services.AddTransient<ITenantManager, RecordingTenantManager>();
                 services.AddTransient<TenantSeeder>();
-                services.AddTransient<ITenantSeeder, RecordingTenantSeeder>();
+                services.AddTransient<ITenantProvisioner, RecordingTenantSeeder>();
             }));
 
         using var scope = host.Services.CreateScope();
@@ -652,8 +653,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         using var outerUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
 
         var name = $"outer-{Guid.NewGuid():N}";
-        var tenant = await scope.ServiceProvider.GetRequiredService<ITenantAppService>().CreateAsync(
-            new CreateTenantInputDto
+        var tenant = await scope.ServiceProvider.GetRequiredService<ITenantManagementService>().CreateAsync(
+            new CreateTenantWithAdminInputDto
             {
                 Name = name,
                 DisplayName = $"{name} Inc.",
@@ -728,7 +729,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     {
         using var brokenPurgeHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
-                services.AddTransient<ITenantSeeder, FailingPurgeTenantSeeder>()));
+                services.AddTransient<ITenantProvisioner, FailingPurgeTenantSeeder>()));
 
         FailingPurgeTenantSeeder.Reset();
 
@@ -770,9 +771,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             builder.ConfigureServices(services =>
             {
                 // 桩把 Purge 委托给真实实现，因此按具体类型注册它——
-                // 若桩注入 ITenantSeeder 会解析到自己，形成循环依赖
+                // 若桩注入 ITenantProvisioner 会解析到自己，形成循环依赖
                 services.AddTransient<TenantSeeder>();
-                services.AddTransient<ITenantSeeder, FailAfterRolesTenantSeeder>();
+                services.AddTransient<ITenantProvisioner, FailAfterRolesTenantSeeder>();
             }));
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(brokenHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -918,7 +919,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             builder.ConfigureServices(services =>
             {
                 services.AddTransient<TenantSeeder>();
-                services.AddTransient<ITenantSeeder, BlockingTenantSeeder>();
+                services.AddTransient<ITenantProvisioner, BlockingTenantSeeder>();
             }));
 
         BlockingTenantSeeder.Reset();
@@ -937,7 +938,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantId = await BlockingTenantSeeder.WaitUntilSeedingAsync();
 
         var delete = await racer.Client.DeleteAsync($"/api/v1/tenants/{tenantId}");
-        Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
 
         BlockingTenantSeeder.Release();
         var created = await createTask;
@@ -961,7 +962,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             builder.ConfigureServices(services =>
             {
                 services.AddTransient<TenantSeeder>();
-                services.AddTransient<ITenantSeeder, BlockingTenantSeeder>();
+                services.AddTransient<ITenantProvisioner, BlockingTenantSeeder>();
             }));
 
         BlockingTenantSeeder.Reset();
@@ -1000,7 +1001,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// </summary>
     private sealed class BlockingTenantSeeder(
         ICurrentTenant currentTenant,
-        TenantSeeder inner) : ITenantSeeder
+        TenantSeeder inner) : ITenantProvisioner
     {
         private static TaskCompletionSource<Guid> _seeding = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private static TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1017,18 +1018,18 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         /// <summary>放行种子继续执行。</summary>
         internal static void Release() => _release.TrySetResult();
 
-        public async Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        public async Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
         {
             var tenantId = currentTenant.Id ?? throw new InvalidOperationException("种子必须在租户上下文内执行");
 
             _seeding.TrySetResult(tenantId);
             await _release.Task;
 
-            await inner.SeedAsync(adminEmail, adminPassword, cancellationToken);
+            await inner.ProvisionAsync(context, cancellationToken);
         }
 
-        public Task PurgeAsync(CancellationToken cancellationToken = default)
-            => inner.PurgeAsync(cancellationToken);
+        public Task PurgeAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
+            => inner.PurgeAsync(context, cancellationToken);
     }
 
     /// <summary>
@@ -1055,7 +1056,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     private sealed class FailAfterRolesTenantSeeder(
         ICurrentTenant currentTenant,
         MyProjectDbContext dbContext,
-        TenantSeeder inner) : ITenantSeeder
+        TenantSeeder inner) : ITenantProvisioner
     {
         /// <summary>失败瞬间留在跟踪器里、绝不应被补偿写入数据库的实体名。</summary>
         internal const string GhostRoleName = "GhostRoleFromDirtyTracker";
@@ -1063,13 +1064,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         /// <summary>最近一次失败的租户 Id，供测试断言其数据已被清除。</summary>
         internal static Guid? LastTenantId { get; private set; }
 
-        public async Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        public async Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
         {
             LastTenantId = currentTenant.Id;
 
             // 走完真实播种后在业务 UoW 提交前失败，同时覆盖
             // 角色、授权、管理员和关联数据的回滚/补偿。
-            await inner.SeedAsync(adminEmail, adminPassword, cancellationToken);
+            await inner.ProvisionAsync(context, cancellationToken);
 
             // 制造"脏跟踪器"：EF 在 SaveChanges 失败后会保留 Added/Modified 实体，
             // 这里用一个未保存的 Add 等价模拟——对补偿的影响完全相同。
@@ -1079,8 +1080,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             throw new InvalidOperationException("injected seed failure before business unit-of-work commit");
         }
 
-        public Task PurgeAsync(CancellationToken cancellationToken = default)
-            => inner.PurgeAsync(cancellationToken);
+        public Task PurgeAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
+            => inner.PurgeAsync(context, cancellationToken);
     }
 
     /// <summary>
@@ -1088,7 +1089,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// </summary>
     private sealed class ProbingTenantSeeder(
         ICurrentTenant currentTenant,
-        TenantSeeder inner) : ITenantSeeder
+        TenantSeeder inner) : ITenantProvisioner
     {
         /// <summary>由测试注入的探测动作（需要测试宿主的 HttpClient，桩自己造不出来）。</summary>
         internal static Func<Guid, Task<HttpStatusCode>>? Probe { get; set; }
@@ -1102,7 +1103,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             ProbedStatus = null;
         }
 
-        public async Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        public async Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
         {
             var tenantId = currentTenant.Id ?? throw new InvalidOperationException("种子必须在租户上下文内执行");
 
@@ -1112,11 +1113,11 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                 ProbedStatus = await Probe(tenantId);
             }
 
-            await inner.SeedAsync(adminEmail, adminPassword, cancellationToken);
+            await inner.ProvisionAsync(context, cancellationToken);
         }
 
-        public Task PurgeAsync(CancellationToken cancellationToken = default)
-            => inner.PurgeAsync(cancellationToken);
+        public Task PurgeAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
+            => inner.PurgeAsync(context, cancellationToken);
     }
 
     private sealed class TenantCreationUnitOfWorkProbe
@@ -1136,16 +1137,16 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     private sealed class RecordingTenantSeeder(
         TenantSeeder inner,
         IUnitOfWorkManager unitOfWorkManager,
-        TenantCreationUnitOfWorkProbe probe) : ITenantSeeder
+        TenantCreationUnitOfWorkProbe probe) : ITenantProvisioner
     {
-        public Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        public Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
         {
             probe.Record("business", unitOfWorkManager);
-            return inner.SeedAsync(adminEmail, adminPassword, cancellationToken);
+            return inner.ProvisionAsync(context, cancellationToken);
         }
 
-        public Task PurgeAsync(CancellationToken cancellationToken = default)
-            => inner.PurgeAsync(cancellationToken);
+        public Task PurgeAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
+            => inner.PurgeAsync(context, cancellationToken);
     }
 
     private sealed class RecordingTenantManager(
@@ -1191,18 +1192,17 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         public Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default)
             => inner.FindAsync(id, cancellationToken);
 
-        public Task<TenantPage> GetPagedAsync(
+        public Task<PagedResult<TenantConfiguration>> GetPagedAsync(
             string? keyword,
-            int offset,
-            int limit,
+            PageRequest page,
             CancellationToken cancellationToken = default)
-            => inner.GetPagedAsync(keyword, offset, limit, cancellationToken);
+            => inner.GetPagedAsync(keyword, page, cancellationToken);
     }
 
     /// <summary>
     /// 种子失败、且清种子也失败并在自己的作用域里留下脏跟踪器。
     /// </summary>
-    private sealed class FailingPurgeTenantSeeder(MyProjectDbContext dbContext) : ITenantSeeder
+    private sealed class FailingPurgeTenantSeeder(MyProjectDbContext dbContext) : ITenantProvisioner
     {
         /// <summary>清种子失败瞬间留在跟踪器里、绝不应被删注册表那一步写入的实体名。</summary>
         internal const string GhostRoleName = "GhostRoleFromFailedPurge";
@@ -1211,10 +1211,10 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         internal static void Reset() => PurgeAttempted = false;
 
-        public Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+        public Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("injected seed failure");
 
-        public Task PurgeAsync(CancellationToken cancellationToken = default)
+        public Task PurgeAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
         {
             PurgeAttempted = true;
 
@@ -1265,8 +1265,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         public Task<TenantConfiguration?> FindAsync(Guid id, CancellationToken cancellationToken = default)
             => inner.FindAsync(id, cancellationToken);
 
-        public Task<TenantPage> GetPagedAsync(string? keyword, int offset, int limit, CancellationToken cancellationToken = default)
-            => inner.GetPagedAsync(keyword, offset, limit, cancellationToken);
+        public Task<PagedResult<TenantConfiguration>> GetPagedAsync(string? keyword, PageRequest page, CancellationToken cancellationToken = default)
+            => inner.GetPagedAsync(keyword, page, cancellationToken);
     }
 
 #if (ExternalLogin)
@@ -1337,7 +1337,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantId = await CreateTenantAsync(hostAdmin, "recycled");
 
         var delete = await hostAdmin.Client.DeleteAsync($"/api/v1/tenants/{tenantId}");
-        Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
 
         using var stale = _factory.CreateProjectClient();
         stale.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());

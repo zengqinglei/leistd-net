@@ -1,3 +1,4 @@
+using Leistd.Data.Paging;
 using Leistd.MultiTenancy.Exceptions;
 
 namespace Leistd.MultiTenancy.Stores;
@@ -76,12 +77,11 @@ public interface ITenantManager
     /// <summary>
     /// 按名称关键字分页查询租户，并按创建时间倒序返回。
     /// </summary>
-    Task<TenantPage> GetPagedAsync(string? keyword, int offset, int limit, CancellationToken cancellationToken = default);
+    /// <param name="keyword">名称或显示名关键字；为空不过滤</param>
+    /// <param name="page">分页；排序固定为创建时间倒序</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task<PagedResult<TenantConfiguration>> GetPagedAsync(
+        string? keyword,
+        PageRequest page,
+        CancellationToken cancellationToken = default);
 }
-
-/// <summary>
-/// 表示租户分页结果。
-/// </summary>
-/// <param name="TotalCount">符合条件的总数</param>
-/// <param name="Items">当前页租户</param>
-public sealed record TenantPage(long TotalCount, IReadOnlyList<TenantConfiguration> Items);

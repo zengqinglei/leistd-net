@@ -24,6 +24,33 @@ public class ClientCredentialsBindingTests
             .Get(clientName);
     }
 
+    /// <summary>凭据漏配在启动期就失败，而不是拖到第一次跨服务调用。</summary>
+    [Theory]
+    [InlineData("Leistd:ServiceAuth:ClientId")]
+    [InlineData("Leistd:ServiceAuth:ClientSecret")]
+    [InlineData("Leistd:ServiceAuth:Authority")]
+    public void Missing_credentials_fail_the_host_at_startup(string missingKey)
+    {
+        var configValues = new Dictionary<string, string?>
+        {
+            ["Leistd:ServiceAuth:Authority"] = "http://identity-service",
+            ["Leistd:ServiceAuth:ClientId"] = "b-service",
+            ["Leistd:ServiceAuth:ClientSecret"] = "s3cret",
+        };
+        configValues.Remove(missingKey);
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configValues).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHttpClient("OrderService").AddClientCredentials(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var startupValidator = provider.GetServices<IStartupValidator>().Single();
+        var failure = Assert.Throws<OptionsValidationException>(startupValidator.Validate);
+        Assert.Contains(failure.Failures, message => message.StartsWith(missingKey, StringComparison.Ordinal)
+            || message.StartsWith("Leistd:ServiceAuth:Authority or TokenEndpoint", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Global_identity_is_shared_and_scopes_differ_per_client()
     {
@@ -66,7 +93,9 @@ public class ClientCredentialsBindingTests
     {
         var configValues = new Dictionary<string, string?>
         {
+            ["Leistd:ServiceAuth:Authority"] = "http://identity-service",
             ["Leistd:ServiceAuth:ClientId"] = "b-service",
+            ["Leistd:ServiceAuth:ClientSecret"] = "s3cret",
             ["Leistd:ServiceAuth:Scope"] = "default-scope",
             ["Leistd:ServiceClients:OrderService:Scope"] = "order-api",
         };
@@ -81,7 +110,9 @@ public class ClientCredentialsBindingTests
     {
         var configValues = new Dictionary<string, string?>
         {
+            ["Leistd:ServiceAuth:Authority"] = "http://identity-service",
             ["Leistd:ServiceAuth:ClientId"] = "b-service",
+            ["Leistd:ServiceAuth:ClientSecret"] = "s3cret",
         };
 
         var options = Resolve("OrderService", configValues);

@@ -187,14 +187,6 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task Missing_client_id_throws_ServiceClientException()
-    {
-        var (provider, _) = Create(options => options.Authority = "http://identity");
-
-        await Assert.ThrowsAsync<ServiceClientException>(() => provider.GetAccessTokenAsync(ClientName));
-    }
-
-    [Fact]
     public async Task Missing_endpoint_throws_ServiceClientException()
     {
         var (provider, _) = Create(options => options.ClientId = "svc-a");

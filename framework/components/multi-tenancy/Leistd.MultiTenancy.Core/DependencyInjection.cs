@@ -6,8 +6,10 @@ using Leistd.Data;
 using Leistd.MultiTenancy.Resolution;
 using Leistd.MultiTenancy.Services;
 using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.Provisioning;
+using Leistd.Localization;
 
 namespace Leistd.MultiTenancy;
 
@@ -45,6 +47,10 @@ public static class DependencyInjection
         services.TryAddScoped<ITenantResolver, TenantResolver>();
         // 逐库作业的清单：注册了租户连接解析就列出独立库，没有就只有宿主库，宿主不必按模式分支注册
         services.TryAddTransient<ITenantDatabaseEnumerator, TenantDatabaseEnumerator>();
+        services.TryAddTransient<ITenantDatabaseRunner, TenantDatabaseRunner>();
+        // 开通失败的数据库错误翻译；默认按 PostgreSQL 的 SQLSTATE，换数据库时先注册自己的实现
+        services.TryAddSingleton<ITenantDatabaseErrorDescriber, SqlStateTenantDatabaseErrorDescriber>();
+        services.AddJsonLocalizationResources(typeof(MultiTenancyErrorCodes).Assembly);
         return services;
     }
 
@@ -55,7 +61,7 @@ public static class DependencyInjection
     /// <remarks>
     /// <para><c>TenantRouting:CacheLifetime</c> 必须配置（大于 0、不超过 1 小时），否则启动失败；
     /// 也可以再用 <c>services.Configure&lt;TenantRouteCacheOptions&gt;</c> 覆盖。</para>
-    /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的 HTTP 实现：控制面经已认证的内部接口下发
+    /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现（<c>Leistd.MultiTenancy.ServiceClient</c> 包）：控制面经已认证的内部接口下发
     /// 已解密的连接串，本服务不需要控制面的密钥环。
     /// 同时注册 <see cref="ITenantMigrationTargetProvider"/> 与内存缓存。均以 <c>TryAdd</c> 注册，宿主可替换。</para>
     /// <para>宿主自己持有控制库时改用 EF 包的 <c>AddLocalTenantConnectionResolution</c>，两者二选一。</para>
@@ -63,7 +69,7 @@ public static class DependencyInjection
     /// <example>
     /// <code>
     /// builder.Services.AddRemoteTenantConnectionResolution();
-    /// builder.Services.AddScoped&lt;ITenantConnectionConfigurationStore, IdentityTenantConnectionStore&gt;();
+    /// builder.Services.AddRemoteTenantConnectionStore("identity", builder.Configuration); // Leistd.MultiTenancy.ServiceClient
     /// </code>
     /// </example>
     public static IServiceCollection AddRemoteTenantConnectionResolution(this IServiceCollection services)

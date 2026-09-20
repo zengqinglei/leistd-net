@@ -8,6 +8,7 @@
 | --- | --- |
 | 需要把"某资源发生了变更"实时推给正在关注它的客户端（按 `resourceKey` 订阅） | 引入 `Leistd.RealTime.AspNetCore.SignalR`，注入 `IBusinessEventPublisher` |
 | 需要限制客户端只能订阅有权限的资源 | 实现并注册自定义 `IRealTimeSubscriptionAuthorizer`（无条件生效，没有开关） |
+| 公共资源集中在固定前缀下（如 `public:`） | `AddPrefixRealTimeSubscriptions("public:")` |
 | 仅编写业务代码（发布事件），不关心底层传输 | 只引用 `Leistd.RealTime.Core` 中的接口 |
 
 实时事件不持久化。需要标题、内容、已读状态和历史记录时，使用 [通知组件](./notifications.md)。
@@ -72,6 +73,7 @@ public class ProductProfileService(IBusinessEventPublisher eventPublisher)
 | `IBusinessEventPublisher.PublishToResourceAsync<TEvent>(resourceKey, eventName, @event, ct)` | 推送事件给订阅了指定资源的客户端；`TEvent : class` |
 | `IRealTimeSubscriptionAuthorizer` | 实时资源订阅授权器 |
 | `IRealTimeSubscriptionAuthorizer.AuthorizeAsync(context, ct)` | 判断当前用户是否允许订阅指定资源，返回 `bool` |
+| `AddPrefixRealTimeSubscriptions(prefixes)` | 注册只放行指定前缀资源键的授权器（按序数比较）；与 `AddAllowAllRealTimeSubscriptions` 二选一，先注册者生效 |
 | `RealTimeSubscriptionContext` | 订阅的 `ResourceKey` 和当前 `UserId`；租户等其它维度直接注入 `ICurrentTenant` 读取，Hub 调用内已由基座建立 |
 | `AllowAllRealTimeSubscriptionAuthorizer : IRealTimeSubscriptionAuthorizer` | 始终返回 `true`；**不是默认注册**，经 `AddAllowAllRealTimeSubscriptions()` 显式选用 |
 | `RealTimeHub : Hub` | 业务事件 Hub；提供 `Subscribe(resourceKey)` / `Unsubscribe(resourceKey)` 两个客户端可调用方法 |

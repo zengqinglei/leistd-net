@@ -2,7 +2,7 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
-using Leistd.Data.Constants;
+using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.DesignTime;
 

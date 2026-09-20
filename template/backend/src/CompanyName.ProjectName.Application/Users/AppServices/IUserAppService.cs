@@ -2,6 +2,7 @@ using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using Leistd.Ddd.Application.Contracts.AppService;
 using Leistd.Ddd.Application.Contracts.Dtos;
+using Leistd.Data.Paging;
 
 namespace CompanyName.ProjectName.Application.Users.AppServices;
 
@@ -13,7 +14,7 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 获取用户列表（分页）
     /// </summary>
-    Task<PagedResultDto<UserManagementOutputDto>> GetPagedListAsync(
+    Task<PagedResult<UserManagementOutputDto>> GetPagedListAsync(
         GetUserPagedInputDto input,
         CancellationToken cancellationToken = default);
 

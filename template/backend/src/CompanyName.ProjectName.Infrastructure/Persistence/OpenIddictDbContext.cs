@@ -1,4 +1,4 @@
-using Leistd.Data.Attributes;
+using Leistd.Data.Connections;
 #if (OpenIddictServer)
 using Microsoft.EntityFrameworkCore;
 

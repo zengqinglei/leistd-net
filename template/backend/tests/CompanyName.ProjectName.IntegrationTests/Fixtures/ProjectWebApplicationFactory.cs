@@ -12,6 +12,7 @@ using Microsoft.Extensions.Hosting;
 #if (!LocalIdentity)
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using CompanyName.ProjectName.Api.Auth;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -103,9 +104,13 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                     _ => { });
             services.AddAuthorization(options =>
             {
-                options.DefaultPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
+                var testPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
                     .RequireAuthenticatedUser()
                     .Build();
+                options.DefaultPolicy = testPolicy;
+                // 组件端点按名字要这条策略（不套默认策略），替身方案必须把它一起换掉，
+                // 否则通知中心、读设置这些自用端点仍然要求生产 Bearer，测试里一律 401
+                options.AddPolicy(ApiPolicies.CurrentUser, testPolicy);
             });
 #endif
             services.Configure<HostOptions>(options =>

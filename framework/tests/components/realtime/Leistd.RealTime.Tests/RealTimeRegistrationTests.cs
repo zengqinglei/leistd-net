@@ -115,4 +115,19 @@ public class RealTimeRegistrationTests
         builder.Services.AddAuthorization();
         return builder.Build();
     }
+
+    /// <summary>只放行指定前缀的资源键；前缀按序数比较，大小写不同不算命中。</summary>
+    [Theory]
+    [InlineData("public:board", true)]
+    [InlineData("PUBLIC:board", false)]
+    [InlineData("order:42", false)]
+    public async Task The_prefix_authorizer_only_allows_listed_prefixes(string resourceKey, bool expected)
+    {
+        using var provider = new ServiceCollection().AddPrefixRealTimeSubscriptions("public:").BuildServiceProvider();
+        var authorizer = provider.GetRequiredService<IRealTimeSubscriptionAuthorizer>();
+
+        var allowed = await authorizer.AuthorizeAsync(new RealTimeSubscriptionContext(resourceKey, "u1"));
+
+        Assert.Equal(expected, allowed);
+    }
 }

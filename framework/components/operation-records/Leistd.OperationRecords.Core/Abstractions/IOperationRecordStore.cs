@@ -1,3 +1,5 @@
+using Leistd.Data.Paging;
+
 namespace Leistd.OperationRecords.Abstractions;
 
 /// <summary>
@@ -30,47 +32,48 @@ public interface IOperationRecordStore
 
     /// <summary>按创建时间倒序分页查询当前租户的记录。</summary>
     /// <remarks>
-    /// <paramref name="startTime"/> 与 <paramref name="endTime"/> <b>按 UTC 比较</b>：
-    /// 写入时记录的是 <c>IClock.Normalize</c> 归一后的 UTC 时刻，调用方传本地时刻会让整段区间偏移时区，
-    /// 且偏移量随部署地而变——那种错查不出来，只会表现为"某些记录莫名不在范围里"。
-    /// 界面上按展示时区选的日期，应由调用方换算成 UTC 再传入。
+    /// 筛选条件的语义见 <see cref="OperationRecordFilter"/>；分页只作用于取条目，总数按同一组筛选条件计算。
+    /// <see cref="PageRequest.Sorting"/> 不生效：记录只有一种有意义的读法——按时间倒序看最近发生了什么。
     /// </remarks>
-    /// <param name="keyword">在动作码、目标标识与操作人名上做包含匹配；为空则不过滤。</param>
-    /// <param name="startTime">起始时刻（含），UTC；为空则不设下界。</param>
-    /// <param name="endTime">结束时刻（含），UTC；为空则不设上界。</param>
-    /// <param name="skip">跳过条数。</param>
-    /// <param name="take">取回条数。</param>
-    /// <param name="scope">
-    /// 可见范围，由调用方算好；必填，不过滤须显式传 <see cref="OperationRecordVisibilityScope.Unrestricted"/>。
-    /// <b>本存储不判定"谁是宿主"</b>——那需要它不该有的上下文依赖，见
-    /// <see cref="OperationRecordVisibilityScope"/>。
-    /// </param>
-    /// <param name="actions">
-    /// 按动作码过滤，命中任一即匹配；<see langword="null"/> 或空集合表示不过滤。
-    /// <para><b>没有"按类别过滤"的参数，这是刻意的。</b>类别定义在
-    /// <see cref="IOperationActionDefinition"/> 上，而记录里只有动作码——
-    /// 让存储去查定义管理器，等于给它加一个它不该有的依赖（本存储只注入 DbContext 提供器，
-    /// 连当前用户都不认识）。<b>调用方把类别展开成动作码集合再传进来</b>，
-    /// 与 <paramref name="scope"/> 的"调用方算好、存储只照做"是同一条边界。</para>
-    /// </param>
-    /// <param name="outcome">按结果过滤；<see langword="null"/> 表示不过滤。</param>
+    /// <param name="filter">筛选条件。</param>
+    /// <param name="page">分页。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>总条数与当页记录。</returns>
-    Task<OperationRecordPage> GetPagedListAsync(
-        string? keyword,
-        DateTime? startTime,
-        DateTime? endTime,
-        int skip,
-        int take,
-        OperationRecordVisibilityScope scope,
-        IReadOnlyCollection<string>? actions = null,
-        OperationRecordOutcome? outcome = null,
+    Task<PagedResult<OperationRecordInfo>> GetPagedListAsync(
+        OperationRecordFilter filter,
+        PageRequest page,
         CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// 一页操作记录。
+/// 操作记录的存储层筛选条件。
 /// </summary>
-/// <param name="TotalCount">满足条件的总条数。</param>
-/// <param name="Items">当页记录，按创建时间倒序。</param>
-public sealed record OperationRecordPage(long TotalCount, IReadOnlyList<OperationRecordInfo> Items);
+/// <remarks>
+/// <para><b>时间按 UTC 比较</b>，两端都是闭区间：写入时记录的是 <c>IClock.Normalize</c> 归一后的 UTC 时刻，
+/// 调用方传本地时刻会让整段区间偏移时区，且偏移量随部署地而变。界面上按展示时区选的日期，由调用方换算成 UTC。</para>
+/// <para><b>没有"按类别过滤"。</b>类别定义在 <see cref="IOperationActionDefinition"/> 上，而记录里只有动作码；
+/// 调用方把类别展开成动作码集合再传进来，与 <see cref="Scope"/> 的"调用方算好、存储只照做"是同一条边界。</para>
+/// </remarks>
+public sealed record OperationRecordFilter
+{
+    /// <summary>
+    /// 可见范围，由调用方算好；必填，不过滤须显式传 <see cref="OperationRecordVisibilityScope.Unrestricted"/>。
+    /// 本存储不判定"谁是宿主"——那需要它不该有的上下文依赖。
+    /// </summary>
+    public required OperationRecordVisibilityScope Scope { get; init; }
+
+    /// <summary>在动作码、目标标识与操作人名上做包含匹配；为空不过滤。</summary>
+    public string? Keyword { get; init; }
+
+    /// <summary>起始时刻（含），UTC；为空不设下界。</summary>
+    public DateTime? StartTime { get; init; }
+
+    /// <summary>结束时刻（含），UTC；为空不设上界。</summary>
+    public DateTime? EndTime { get; init; }
+
+    /// <summary>按动作码过滤，命中任一即匹配；<see langword="null"/> 或空集合表示不过滤。</summary>
+    public IReadOnlyCollection<string>? Actions { get; init; }
+
+    /// <summary>按结果过滤；<see langword="null"/> 表示不过滤。</summary>
+    public OperationRecordOutcome? Outcome { get; init; }
+}

@@ -38,6 +38,14 @@ internal sealed class SettingDefinition : ISettingDefinition
     public bool IsVisibleToClients { get; set; }
 
     public bool IsEncrypted { get; set; }
+
+    public SettingValueType ValueType { get; set; }
+
+    public int? Minimum { get; set; }
+
+    public int? Maximum { get; set; }
+
+    public IReadOnlyList<string>? AllowedValues { get; set; }
 }
 
 // 设置定义上下文：名称全局唯一，重复注册在首次访问定义时失败。

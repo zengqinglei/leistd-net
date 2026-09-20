@@ -4,8 +4,8 @@ using Leistd.OperationRecords.EntityFrameworkCore;
 using Leistd.Settings.EntityFrameworkCore;
 #if (LocalIdentity)
 using Leistd.MultiTenancy.EntityFrameworkCore;
-using CompanyName.ProjectName.Domain.Tenants.Connections;
 #endif
+using Leistd.BackgroundJobs.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Leistd.Ddd.Infrastructure.EventBus;
@@ -19,19 +19,16 @@ using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using CompanyName.ProjectName.Infrastructure.OperationRecords;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.MultiTenancy;
 #if (!LocalIdentity)
-using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.ServiceClient;
 using Leistd.ServiceClient.OAuth;
-using Leistd.ServiceClient.Refit;
 using static Leistd.ServiceClient.OAuth.DependencyInjection;
 #endif
 using CompanyName.ProjectName.Infrastructure.TenantConnections;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
-using CompanyName.ProjectName.Infrastructure.Notifications;
 #endif
 
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
@@ -51,7 +48,7 @@ using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 using StackExchange.Redis;
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
 using Leistd.Data;
-using Leistd.Data.Constants;
+using Leistd.Data.Connections;
 
 namespace CompanyName.ProjectName.Infrastructure;
 
@@ -98,19 +95,16 @@ public static class DependencyInjection
                 .ValidateOnStart();
 
 #if (!LocalIdentity)
-            var identityClient = services.AddRefitServiceClient<
-                IIdentityTenantConnectionClient,
-                IdentityTenantConnectionClientOptions>("Identity", configuration);
+            // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（必须显式配置，
+            // 它决定租户改路由前的排空等待）；同租户并发回源合并为一次。
+            // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
+            services.AddRemoteTenantConnectionResolution();
+            var identityClient = services.AddRemoteTenantConnectionStore("Identity", configuration);
             if (configuration.GetSection(ServiceAuthSectionName).Exists())
             {
                 identityClient.AddClientCredentials(configuration);
             }
             identityClient.AddStandardResilienceHandler();
-
-            // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（必须显式配置，
-            // 它决定租户改路由前的排空等待）；同租户并发回源合并为一次。本服务只适配 Identity 的端点。
-            services.AddRemoteTenantConnectionResolution();
-            services.AddScoped<ITenantConnectionConfigurationStore, IdentityTenantConnectionStore>();
 #else
             // 本地解析：直接读本服务的控制库；控制库固定在宿主连接上，不参与租户路由。
             services.AddLocalTenantConnectionResolution<IdentityControlDbContext>(
@@ -199,19 +193,20 @@ public static class DependencyInjection
 
 #if (IncludeNotifications)
         services.AddNotificationsEfCore<MyProjectDbContext>();
-        // 框架存储不提供批量删除，模板以专用服务实现通知清理。
-        services.AddScoped<INotificationCleanupService, NotificationCleanupService>();
+        // 旧通知的保留期清理（默认开启：已读 90 天、未读 365 天，配置节 Leistd:Notifications:Retention）
+        services.AddNotificationRetention<MyProjectDbContext>();
 #endif
         services.AddAuthorizationEfCore<MyProjectDbContext>();
         services.AddSettingsEfCore<MyProjectDbContext>();
         services.AddOperationRecordsEfCore<MyProjectDbContext>();
-        // 框架的记录存储刻意没有删除入口（保留策略属于运维范畴），归档因此由模板自己实现。
-        services.AddScoped<IOperationRecordArchiveService, OperationRecordArchiveService>();
+        // 到期记录搬入归档表。默认关闭：审计表只增不减是安全的默认值，
+        // 要启用就得有人显式打开（配置 Leistd:OperationRecords:Retention 或系统设置的「审计」面板）
+        services.AddOperationRecordRetention<MyProjectDbContext>();
+        // 集群周期任务的完成水位与业务表同库：多副本同一时段只跑一次
+        services.AddBackgroundJobsEfCore<MyProjectDbContext>();
 #if (LocalIdentity)
+        // 租户注册表、连接登记与两个管理用例（租户管理、连接管理）都读写控制库
         services.AddMultiTenancyEfCore<IdentityControlDbContext>();
-        // 管理面要列出某租户的全部连接登记，而框架的连接存储只按名字问答（远端形态下一次只出一条）。
-        // 这个窄口定义在应用层、实现落在这里：读控制库要 EF，而应用层不引用 EF。
-        services.AddTransient<ITenantConnectionDirectory, TenantConnectionDirectory>();
 #endif
 
         services.AddDddInfrastructure();

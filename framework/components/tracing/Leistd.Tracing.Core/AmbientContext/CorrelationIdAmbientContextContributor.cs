@@ -20,4 +20,10 @@ internal sealed class CorrelationIdAmbientContextContributor(
 
         return correlationIdProvider.Change(correlationId);
     }
+
+    // 后台任务沿用入队请求的链路标识，日志里两者才能按同一个标识串起来。
+    public object? Capture() => correlationIdProvider.Get();
+
+    public IDisposable? Restore(object? state)
+        => state is string correlationId ? correlationIdProvider.Change(correlationId) : null;
 }

@@ -1,3 +1,4 @@
+using Leistd.Authorization.Abstractions;
 using Leistd.ExceptionHandling;
 
 namespace Leistd.Authorization.Exceptions;
@@ -7,14 +8,21 @@ namespace Leistd.Authorization.Exceptions;
 /// </summary>
 /// <remarks>
 /// 由写入方抛出，是"未定义权限不落库"的唯一执行点——
-/// 应用服务、种子数据与后台任务都不必重复这条判断。
+/// 应用服务、种子数据与后台任务都不必重复这条判断。错误码为 <see cref="PermissionErrorCodes.UndefinedPermission"/>。
 /// </remarks>
-/// <param name="permissionNames">未定义或已禁用的权限名。</param>
-public class UndefinedPermissionException(IReadOnlyList<string> permissionNames)
-    : BadRequestException(
-        $"The following permissions are undefined or disabled and cannot be granted: " +
-        $"{string.Join(", ", permissionNames)}.")
+public class UndefinedPermissionException : BadRequestException
 {
+    /// <summary>以未定义或已禁用的权限名构造。</summary>
+    /// <param name="permissionNames">未定义或已禁用的权限名。</param>
+    public UndefinedPermissionException(IReadOnlyList<string> permissionNames)
+        : base(
+            $"The following permissions are undefined or disabled and cannot be granted: " +
+            $"{string.Join(", ", permissionNames)}.")
+    {
+        PermissionNames = permissionNames;
+        WithCode(PermissionErrorCodes.UndefinedPermission).WithData("Name", string.Join(", ", permissionNames));
+    }
+
     /// <summary>未定义或已禁用的权限名。</summary>
-    public IReadOnlyList<string> PermissionNames { get; } = permissionNames;
+    public IReadOnlyList<string> PermissionNames { get; }
 }

@@ -17,6 +17,15 @@
     <ProjectReference Include="..\\..\\core\\Leistd.Core\\Leistd.Core.csproj" />
     <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
     <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
+    <!-- 租户管理用例成功后发布 TenantChangedEvent；只依赖契约，未注册总线时不发布 -->
+    <ProjectReference Include="..\..\event-bus\Leistd.EventBus.Core\Leistd.EventBus.Core.csproj" />
+    <!-- 错误码的默认译文随包分发 -->
+    <ProjectReference Include="..\..\localization\Leistd.Localization.Core\Leistd.Localization.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 组件错误码的默认中英文案，经 AddJsonLocalizationResources 登记，宿主资源可覆盖 -->
+    <EmbeddedResource Include="Resources\*.json" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,5 @@
 #if (LocalIdentity)
-using Leistd.Data.Constants;
+using Leistd.Data.Connections;
 using Microsoft.Extensions.Configuration;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence;

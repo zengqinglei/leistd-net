@@ -7,12 +7,14 @@ internal sealed class OperationActionDefinition(
     string code,
     string category,
     OperationVisibility visibility,
-    OperationSeverity severity) : IOperationActionDefinition
+    OperationSeverity severity,
+    bool targetIsActor) : IOperationActionDefinition
 {
     public string Code { get; } = code;
     public string Category { get; } = category;
     public OperationVisibility Visibility { get; } = visibility;
     public OperationSeverity Severity { get; } = severity;
+    public bool TargetIsActor { get; } = targetIsActor;
 }
 
 // 动作码到定义的全局注册表，保证动作码唯一并提供 O(1) 查找。
@@ -52,9 +54,10 @@ internal sealed class OperationActionDefinitionContext : IOperationActionDefinit
         string code,
         string category,
         OperationVisibility visibility,
-        OperationSeverity severity = OperationSeverity.Info)
+        OperationSeverity severity = OperationSeverity.Info,
+        bool targetIsActor = false)
     {
-        var action = new OperationActionDefinition(code, category, visibility, severity);
+        var action = new OperationActionDefinition(code, category, visibility, severity, targetIsActor);
         _registry.Register(action);
         return action;
     }

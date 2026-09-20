@@ -202,7 +202,7 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 依赖方向不仅约束代码，**也约束文档示例**——组件文档（`framework/docs/components/<家族>.md`）的示例代码，只能使用**该组件自身的公共 API + 原生 .NET / EF Core 类型**，**不得**引用它并不依赖的其它组件或 `ddd-struct` 的类型。
 
-- 具体地，组件示例里**禁止出现** `ddd-struct` 专属类型：`IRepository<>`、`BaseAppService`、`IAppService`、`Entity<>`、`FullAuditedEntity<>`、`PagedRequestDto`/`PagedResultDto`、`GetQueryableAsync()` 等。因为 `components` 不依赖 `ddd-struct`（见上），示例若用了这些类型，就等于让上游组件的文档倒挂到下游，破坏组件独立闭环。
+- 具体地，组件示例里**禁止出现** `ddd-struct` 专属类型：`IRepository<>`、`BaseAppService`、`IAppService`、`Entity<>`、`FullAuditedEntity<>`、`GetQueryableAsync()` 等。分页请求与结果（`PageRequest` / `PagedResult<T>`）属于 `Leistd.Data`，组件依赖它时示例里可以使用。因为 `components` 不依赖 `ddd-struct`（见上），示例若用了这些类型，就等于让上游组件的文档倒挂到下游，破坏组件独立闭环。
 - **EF Core 集成组件**（`auditing`、`unit-of-work` 等）示例中出现原生 `DbContext` / `DbSet<T>` / `SaveChangesAsync` 是**合理且必要**的——它们本就围绕 EF Core 工作，这是自包含用法，不是违规。
 - **与持久化/分层无关的组件**（`event-bus`、`object-mapping`、`exception`、`authorization` 等）示例用**中性普通类**演示（如 `OrderNotifier`、`OrderMapping`、`OrderService`），**不要**取名 `OrderAppService` 或强套 `: BaseAppService, IAppService`——那是在“蹭”DDD 概念却又不真正遵守其分层，反而误导读者。
 - 需要指引消费者“在 DDD 项目里的正确做法”时，用**一句叙述性 cross-link** 指向 `ddd-struct.md`（例：“在采用 DDD 四层基座的项目里，实体通常继承 `FullAuditedEntity<TKey>`、经仓储读写”），**只作文字说明、不在示例代码里引入该类型**。
@@ -223,15 +223,52 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 共享映射与常量放在所有消费者可引用的最低层，派生值不得维护第二份。
 - 公共接口优先保持最小；仅一个实现且没有替换需求时，不为形式一致额外抽象。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
+- **组件发出的错误码自带默认译文**：业务异常无条件 `WithCode`（界面按码分支，不能只在含本地化的宿主里才有码）；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
 - 需要可还原的加密时直接用宿主的 Data Protection：注入 `IDataProtectionProvider`（只引用 `Microsoft.AspNetCore.DataProtection.Abstractions`），在构造函数里 `CreateProtector` 一次并复用；用途字符串固定、带命名空间与版本号，改它等于让已存密文全部不可解；要按名称隔离时由同一个保护器 `CreateProtector(名称)` 派生子用途；解密只捕获 `CryptographicException`。不另立加密接口或静态包装——换密钥设施在 Data Protection 这一层换（密钥存储与密钥加密都可替换）。
 
-### 6.2 变更
+### 6.2 参数与配置校验
+
+判据来自 FDG（参数不合法抛 `ArgumentException` 系并设 `ParamName`，**对象状态**不对才抛 `InvalidOperationException`）与 ASP.NET Core 自身的选项类（`Validate()` + `ArgumentException.ThrowIfNullOrEmpty`）。四条：
+
+1. **方法参数用 BCL 守卫**：`ArgumentNullException.ThrowIfNull`、`ArgumentException.ThrowIfNullOrWhiteSpace`、`ArgumentOutOfRangeException.ThrowIf*`。不手写 `if + throw` 重复它们已有的判断，**也不自建 `Check` 一类的守卫工具类**——那是 BCL 提供这些方法之前的写法，再包一层只会让参数名要手写。枚举这类没有对应守卫的，手写 `throw new ArgumentOutOfRangeException(nameof(x), x, "…")`。
+2. **`Map*` / `Add*` / `Use*` 的选项对象，校验写在选项类自己的 `internal void Validate()` 里**，入口只调 `options.Validate()`。缺必填项抛 `ArgumentException`（`ThrowIfNullOrWhiteSpace` 借 `CallerArgumentExpression` 把 `ParamName` 填成属性名）。**不要每个类再写一个私有的"为空就抛"辅助方法**：同一段逻辑复制到每个组件后，消息格式会各走各的。
+3. **走配置绑定的 Options 用 `IValidateOptions<T>` + `ValidateOnStart()`**，验证器单独成文件、与选项类同目录。失败一律 `ValidateOptionsResult.Fail(IEnumerable<string>)`（一条失败一项，运维一次能看全），每条消息以**配置键**开头（`Leistd:Email:Smtp:Host is required.`）；由宿主在代码里配置、没有配置节的选项，改以**类型名.属性名**开头。
+4. **异常类型按原因分**：值不合法 → `ArgumentException` 系；宿主没注册、重复注册、组合非法 → `InvalidOperationException`；运行期依赖缺失 → 组件自己的业务异常。同一个条件只在一处校验：启动期已经拒绝的，运行期不再写一遍。
+
+配置缺失**不静默兜底**：不 clamp（`Math.Max(1, capacity)` 会把配错的 0 变成 1，日志上看不出来）、不静默跳过。确有"可以不配"的项，在 XML 注释和组件文档里写明它可以不配、以及都不配时在哪里失败。唯一的例外是运行期热更新：新值校验不过时记错误日志并保留上一组有效值，不让一次错误配置把正在跑的实例打挂。
+
+---
+
+### 6.3 变更
 
 - 首个公开版本前直接收敛到最终 API，不保留旧成员、桥接包、双配置键或迁移说明。
 - 原子更新源码、测试、模板消费者、XML、组件文档和依赖 API 字面量的校验脚本。
 - 同时检查签名变化、语义变化，以及删除成员后是否会静默绑定到基类同名成员。
 - 公共 API 必须有真实消费者验证；Template 未消费时，使用隔离包消费项目或最小宿主覆盖主路径。
 - 示例按契约维护：必须能编译，并与默认值、异常和生命周期语义一致。
+
+### 6.4 带持久化组件的纵向切片
+
+带持久化的组件拥有完整纵向切片，宿主只做组合、覆写与业务词汇。分包同微软 HealthChecks（抽象 / 实现 / `MapHealthChecks`）与 Identity（`Extensions.Identity.Core` / `MapIdentityApi`）：
+
+| 包 | 内容 |
+| --- | --- |
+| `*.Core` | 契约、用例服务（`I*ManagementService` 一类，实现 `internal`）、DTO、错误码与嵌入的默认译文 |
+| `*.EntityFrameworkCore` | 存储实现与数据维护（保留期、归档等周期任务） |
+| `*.AspNetCore` | Minimal API 的 `Map*` 扩展，端点只做绑定并调用 Core 用例 |
+
+端点形态：
+
+- `Map*` 扩展挂在宿主给的 `IEndpointRouteBuilder` 上并返回 `RouteGroupBuilder`；路由前缀由宿主 `MapGroup` 决定，组件不写死。
+- **授权策略名必填**，由 `Map*` 的选项给出，漏配时映射阶段即抛出。组件不内置默认策略，也**不在路由组上加无参 `RequireAuthorization()`**：那等于把宿主的默认策略叠到每个端点上——机器端点因此被要求自然人身份，而带具名策略的端点会多出一条宿主没在映射处要求过的条件，两者都只在运行期显形。
+- "只要求是当前登录用户"的端点（读自己的设置、自己的权限、通知中心）同样要一个具名策略（`AccessPolicy` / `CurrentPolicy`），由宿主把它对"默认主体"的定义显式命名后传进来。
+- 端点名带组件前缀，前缀以 `NamePrefix` 常量公开（`Leistd.<家族>.`），宿主据此按名称追加元数据；不使用 .NET 10 已弃用的 `WithOpenApi`。
+- 用例有结果（新建或改后的对象）时直接返回 DTO，没有结果的写操作返回 204；分页用 `Leistd.Data` 的 `PageRequest` / `PagedResult<T>`；是否包装 `{code, message, data}` 由宿主在路由组上 `WithResultWrapper()` 决定。
+- 组件内的 DTO 投影手写，不引入对象映射依赖。
+
+业务接缝只开**窄钩子**：组件确实依赖宿主模型的地方（主体目录、租户开通与启用前置、设置值校验、收件人解析）声明一个小接口，由宿主实现，组件不引用宿主实体。组件状态变化需要让宿主留痕或联动时，经可选的 `ILocalEventBus` 发本地事件（如 `SettingChangedEvent`、`PermissionGrantsReplacedEvent`、`TenantChangedEvent`），在工作单元内推迟到提交后分发，不为审计另开钩子。
+
+周期任务注册时必填 `RecurringJobScope`，不提供通用的 AOP 锁特性：锁只保效率，正确性靠作业幂等与水位（Kleppmann）。保留期默认值按数据性质定：审计类默认关闭、启用时天数必填（期限受法律合同约束，类库无从知道）；运营类默认开启。
 
 ---
 

@@ -11,12 +11,18 @@
       复合索引只有真正建库时才会生效，InMemory 全内存求值会让配置整块静默通过。
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\notifications\Leistd.Notifications.Core\Leistd.Notifications.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\notifications\Leistd.Notifications.EntityFrameworkCore\Leistd.Notifications.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\components\notifications\Leistd.Notifications.AspNetCore.SignalR\Leistd.Notifications.AspNetCore.SignalR.csproj" />
+    <ProjectReference Include="..\..\..\..\components\notifications\Leistd.Notifications.AspNetCore\Leistd.Notifications.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\notifications\Leistd.Notifications.Settings\Leistd.Notifications.Settings.csproj" />
+    <ProjectReference Include="..\..\..\..\components\notifications\Leistd.Notifications.Email\Leistd.Notifications.Email.csproj" />
+    <ProjectReference Include="..\..\..\..\components\security\Leistd.Security.AspNetCore\Leistd.Security.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 

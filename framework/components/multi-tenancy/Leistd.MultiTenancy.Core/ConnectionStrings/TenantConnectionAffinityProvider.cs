@@ -1,5 +1,5 @@
 using Leistd.Data;
-using Leistd.Data.Abstractions;
+using Leistd.Data.Connections;
 using Leistd.MultiTenancy.Abstractions;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;

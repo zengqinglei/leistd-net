@@ -12,17 +12,20 @@ using Leistd.Authorization.Abstractions;
 using Leistd.Settings.Abstractions;
 using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.Provisioning;
+using CompanyName.ProjectName.Application.Tenants.Dtos;
 
 namespace CompanyName.ProjectName.Application.Tenants;
 
 /// <summary>
-/// 租户初始化种子实现
+/// 租户开通：在新租户里建初始角色、权限授予与租户管理员；创建失败时清掉写过的东西。
 /// </summary>
 /// <remarks>
-/// 与宿主侧 <c>SystemInitializer</c> 的判据一致：角色"先查后建"，权限播种以授权版本为 0
-/// 为准（精确表示"从未写过授予"，涵盖首建与上次中断，不会把人工撤权补回来）。
-/// 所有仓储与授予读写都在调用方建立的租户上下文内自动分区。
-/// 互斥锁按租户隔离（锁 key 含 tenantId），不同租户的种子互不排队。
+/// <para>多租户组件的租户管理用例在目标租户上下文与新工作单元里调用它（见 <see cref="ITenantProvisioner"/>），
+/// 所有仓储与授予读写都自动分区到该租户；分库租户的写入直接落进它的专属库。</para>
+/// <para>与宿主侧 <c>SystemInitializer</c> 的判据一致：角色"先查后建"，权限经首次授予写入
+/// （从未写过才写，涵盖首建与上次中断，不会把人工撤权补回来）。
+/// 互斥锁按租户隔离（锁 key 含 tenantId），不同租户的开通互不排队。</para>
 /// </remarks>
 public class TenantSeeder(
     ICurrentTenant currentTenant,
@@ -30,18 +33,22 @@ public class TenantSeeder(
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
     UserDomainService userDomainService,
-    IPermissionDefinitionManager permissionDefinitionManager,
-    IPermissionGrantStore permissionGrantStore,
+    IPermissionGrantSeeder permissionGrantSeeder,
     IPermissionGrantManager permissionGrantManager,
     IDistributedLock distributedLock,
     ISettingStore settingStore,
-    ILogger<TenantSeeder> logger) : ITenantSeeder
+    ILogger<TenantSeeder> logger) : ITenantProvisioner
 {
     private const string MemberRoleName = "Member";
 
     /// <inheritdoc />
-    public async Task SeedAsync(string adminEmail, string adminPassword, CancellationToken cancellationToken = default)
+    public async Task ProvisionAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
     {
+        // 端点按 CreateTenantWithAdminInputDto 绑定请求体；拿到基类说明宿主把端点映射错了类型
+        var input = context.Input as CreateTenantWithAdminInputDto
+            ?? throw new InvalidOperationException(
+                $"Tenant provisioning needs a {nameof(CreateTenantWithAdminInputDto)}; map the tenant endpoints with that request type.");
+
         if (currentTenant.Id is not { } tenantId)
         {
             throw new InvalidOperationException("Tenant seeding must run inside a tenant context: call ICurrentTenant.Change(tenantId) first.");
@@ -56,14 +63,14 @@ public class TenantSeeder(
 
         var adminRole = await EnsureRolesAsync(cancellationToken);
         await SeedAdminRolePermissionsAsync(adminRole, cancellationToken);
-        var adminUser = await EnsureTenantAdminAsync(adminEmail, adminPassword, cancellationToken);
+        var adminUser = await EnsureTenantAdminAsync(input.AdminEmail, input.AdminPassword, cancellationToken);
         await AssignAdminRoleAsync(adminUser, adminRole, cancellationToken);
 
         logger.LogInformation("Tenant {TenantId} initialized", tenantId);
     }
 
     /// <inheritdoc />
-    public async Task PurgeAsync(CancellationToken cancellationToken = default)
+    public async Task PurgeAsync(TenantProvisioningContext context, CancellationToken cancellationToken = default)
     {
         if (currentTenant.Id is not { } tenantId)
         {
@@ -144,35 +151,19 @@ public class TenantSeeder(
         return adminRole;
     }
 
+    // 只授予租户侧可用的权限；从未写过授予才写，之后按普通角色管理
     private async Task SeedAdminRolePermissionsAsync(Role adminRole, CancellationToken cancellationToken)
     {
-        var providerKey = adminRole.Id.ToString();
-        var existing = await permissionGrantStore.GetGrantsAsync(
+        var granted = await permissionGrantSeeder.SeedAllAsync(
             PermissionGrantProviderNames.Role,
-            providerKey,
+            adminRole.Id.ToString(),
+            MultiTenancySides.Tenant,
             cancellationToken);
 
-        if (existing.Version != 0)
+        if (granted is { } count)
         {
-            return;
+            logger.LogInformation("Seeded permission grants for tenant role {RoleName}: {Count} item(s)", adminRole.Name, count);
         }
-
-        // 只播种租户侧可见的权限定义。
-        var definitions = permissionDefinitionManager
-            .GetAll()
-            .Where(definition => definition.Side.HasFlag(MultiTenancySides.Tenant))
-            .Where(definition => permissionDefinitionManager.IsEffectivelyEnabled(definition.Name))
-            .Select(definition => definition.Name)
-            .ToList();
-
-        await permissionGrantManager.ReplaceGrantsAsync(
-            PermissionGrantProviderNames.Role,
-            providerKey,
-            definitions,
-            expectedVersion: existing.Version,
-            cancellationToken);
-
-        logger.LogInformation("Seeded permission grants for tenant role {RoleName}: {Count} item(s)", adminRole.Name, definitions.Count);
     }
 
     /// <summary>

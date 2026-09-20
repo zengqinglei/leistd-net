@@ -11,11 +11,15 @@
       只有真正建库时才生效，InMemory 全内存求值会让配置整块静默通过。
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\settings\Leistd.Settings.Core\Leistd.Settings.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\settings\Leistd.Settings.EntityFrameworkCore\Leistd.Settings.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\settings\Leistd.Settings.AspNetCore\Leistd.Settings.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\settings\Leistd.Settings.Hosting\Leistd.Settings.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\..\components\security\Leistd.Security.AspNetCore\Leistd.Security.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>
 

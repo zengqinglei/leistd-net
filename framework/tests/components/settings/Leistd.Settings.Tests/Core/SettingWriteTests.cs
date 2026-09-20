@@ -106,7 +106,8 @@ public class SettingWriteTests
         var manager = new DefaultSettingManager(
             definitions,
             store,
-            new DefaultSettingProvider(definitions, store, new FakeCurrentUser(Guid.NewGuid())));
+            new DefaultSettingProvider(definitions, store, new FakeCurrentUser(Guid.NewGuid())),
+            []);
         return (manager, store);
     }
 

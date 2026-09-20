@@ -73,7 +73,7 @@ public sealed class NotificationPreferencesTests(ProjectWebApplicationFactory fa
                    "/api/v1/settings/current-user",
                    new { Name = SettingConstant.Notifications.SystemInApp, Value = "false" }))
         {
-            Assert.Equal(HttpStatusCode.OK, off.StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, off.StatusCode);
         }
 
         var userId = (await session.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me")).GetProperty("id").GetString()!;

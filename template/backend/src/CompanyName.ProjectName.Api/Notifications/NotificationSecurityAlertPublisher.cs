@@ -6,7 +6,6 @@ using CompanyName.ProjectName.Application.Notifications;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Settings.Provider;
 using Leistd.Settings.Abstractions;
-using Leistd.Settings.Definitions;
 using Microsoft.Extensions.Localization;
 #endif
 using Leistd.Notifications.Abstractions;
@@ -15,7 +14,7 @@ using Leistd.Notifications.Dtos;
 namespace CompanyName.ProjectName.Api.Notifications;
 
 /// <summary>
-/// 经通知组件发出安全提醒：站内通知总会送达，邮件按本人偏好（见 <see cref="SettingsNotificationDeliveryFilter"/>）。
+/// 经通知组件发出安全提醒：站内通知总会送达（必达组合），邮件按本人偏好（通知偏好组件读收件人的设置）。
 /// </summary>
 /// <remarks>
 /// 文案按<b>收件人</b>的界面语言渲染：本人设过语言就用它，没设过用本次请求的语言——
@@ -24,7 +23,7 @@ namespace CompanyName.ProjectName.Api.Notifications;
 public sealed class NotificationSecurityAlertPublisher(
     INotificationPublisher publisher,
 #if (IncludeLocalization)
-    ISettingStore settingStore,
+    ISettingProvider settingProvider,
     IStringLocalizerFactory localizerFactory,
 #endif
     ILogger<NotificationSecurityAlertPublisher> logger) : ISecurityAlertPublisher
@@ -58,8 +57,7 @@ public sealed class NotificationSecurityAlertPublisher(
 #if (IncludeLocalization)
     private async Task<(string Title, string? Content)> RenderAsync(Guid userId, SecurityAlert alert, CancellationToken cancellationToken)
     {
-        var language = (await settingStore.GetAllAsync(SettingScopes.User, userId.ToString(), cancellationToken))
-            .GetValueOrDefault(SettingConstant.Display.Language);
+        var language = await settingProvider.GetOrNullForUserAsync(SettingConstant.Display.Language, userId.ToString(), cancellationToken);
 
         var previous = CultureInfo.CurrentUICulture;
         try

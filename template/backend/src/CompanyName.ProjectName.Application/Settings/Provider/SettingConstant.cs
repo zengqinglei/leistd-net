@@ -1,6 +1,7 @@
 #if (LocalIdentity)
 #if (IncludeNotifications)
 using CompanyName.ProjectName.Application.Notifications;
+using Leistd.Notifications.Settings.Options;
 
 #endif
 #endif
@@ -59,6 +60,10 @@ public static class SettingConstant
         /// <summary>界面语言（culture 名，如 <c>zh-CN</c>）。</summary>
         public const string Language = "Display.Language";
 
+        /// <summary>支持的界面语言，即 <see cref="Language"/> 的候选值。</summary>
+        /// <remarks>与前端 <c>SUPPORTED_LANGS</c> 和 Program 里的 <c>AddJsonLocalization</c> 读同一份：任一漂移都会让某个语言只在一半链路上可用。</remarks>
+        public static readonly IReadOnlyList<string> SupportedLanguages = ["en", "zh-CN"];
+
 #endif
         /// <summary>展示时区（IANA 名，如 <c>Asia/Shanghai</c>）。时间一律以 UTC 存储，仅展示时换算。</summary>
         public const string TimeZone = "Display.TimeZone";
@@ -70,7 +75,7 @@ public static class SettingConstant
     /// <remarks>
     /// 都是<b>进程级</b>（<c>SettingScopes.Host</c>）：一个进程只有一个 logger，
     /// 按租户各存一份根本无从生效。改完立即对本进程生效，其它实例在下一次刷新周期跟上
-    /// （见 <c>LoggingSettingRefresher</c>）。
+    /// （设置组件的宿主级设置刷新，见 <c>Leistd:Settings:Hosting:RefreshInterval</c>）。
     /// </remarks>
     public static class Logging
     {
@@ -96,7 +101,7 @@ public static class SettingConstant
     /// </summary>
     /// <remarks>
     /// <b>进程级</b>：归档由一个后台任务跨租户统一执行，按租户各存一份无从生效。
-    /// 设置值经宿主级设置配置源覆盖 <c>appsettings</c> 的 <c>OperationRecordRetention</c> 段，代码默认值就是该段的部署基线；
+    /// 设置值经宿主级设置配置源覆盖 <c>appsettings</c> 的 <c>Leistd:OperationRecords:Retention</c> 节，代码默认值就是该节的部署基线；
     /// 归档任务每轮取 Options 的当前值，下一轮即生效。执行时刻与批大小是部署调优参数，仍只在配置里。
     /// </remarks>
     public static class Audit
@@ -107,12 +112,6 @@ public static class SettingConstant
         /// <summary>保留天数：早于"当前时刻减去该天数"的记录会被搬入归档表。</summary>
         public const string RetentionDays = "Audit.RetentionDays";
 
-        /// <summary>数值型审计设置的取值区间，与 <c>OperationRecordRetentionOptions</c> 上的 <c>[Range]</c> 一致——设置值经配置源进入该 Options，超出区间会让它校验失败。</summary>
-        public static readonly IReadOnlyDictionary<string, (int Minimum, int Maximum)> Ranges =
-            new Dictionary<string, (int, int)>(StringComparer.Ordinal)
-            {
-                [RetentionDays] = (30, 3650)
-            };
     }
 
 #if (LocalIdentity)
@@ -141,22 +140,6 @@ public static class SettingConstant
         /// <summary>单个验证挑战允许的最大错误次数。</summary>
         public const string EmailCodeMaxAttempts = "Registration.EmailCodeMaxAttempts";
 
-        /// <summary>
-        /// 数值型注册设置的取值区间。
-        /// </summary>
-        /// <remarks>
-        /// 写入校验与下发给界面的 <c>minimum</c>/<c>maximum</c> 读同一份：分开写两份时，
-        /// 界面允许的和服务端允许的会各走一边，表现成"输入框让填、保存被拒"。
-        /// 区间本身与 <c>UserRegistrationOptions</c> 上的 <c>[Range]</c> 一致。
-        /// </remarks>
-        public static readonly IReadOnlyDictionary<string, (int Minimum, int Maximum)> Ranges =
-            new Dictionary<string, (int, int)>(StringComparer.Ordinal)
-            {
-                [CaptchaExpiryMinutes] = (1, 60),
-                [EmailCodeExpiryMinutes] = (1, 60),
-                [EmailCodeSendIntervalSeconds] = (1, 3600),
-                [EmailCodeMaxAttempts] = (1, 20)
-            };
     }
 
     /// <summary>
@@ -180,13 +163,6 @@ public static class SettingConstant
         /// <summary>锁定时长的默认值（分钟）。</summary>
         public const int DefaultLockoutDurationMinutes = 15;
 
-        /// <summary>数值型登录安全设置的取值区间，写入校验与界面上下界同源。</summary>
-        public static readonly IReadOnlyDictionary<string, (int Minimum, int Maximum)> Ranges =
-            new Dictionary<string, (int, int)>(StringComparer.Ordinal)
-            {
-                [LockoutMaxFailedAttempts] = (0, 100),
-                [LockoutDurationMinutes] = (1, 1440)
-            };
     }
 
     /// <summary>
@@ -220,13 +196,6 @@ public static class SettingConstant
 
         /// <summary>默认发件显示名。</summary>
         public const string DefaultFromName = "Email.DefaultFromName";
-
-        /// <summary>数值型发信设置的取值区间。</summary>
-        public static readonly IReadOnlyDictionary<string, (int Minimum, int Maximum)> Ranges =
-            new Dictionary<string, (int, int)>(StringComparer.Ordinal)
-            {
-                [SmtpPort] = (1, 65535)
-            };
     }
 
 #if (IncludeNotifications)
@@ -234,13 +203,13 @@ public static class SettingConstant
     /// 通知偏好（用户级），命名为 <c>Notifications.{通知类别}.{渠道}</c>。
     /// </summary>
     /// <remarks>
-    /// 类别即通知的 <c>Type</c>，渠道即 <c>INotificationChannel.Name</c>：投递过滤器按这两者拼出设置名去查，
-    /// 没有对应设置的组合一律投递——新加一个类别不会因为忘了定义偏好而收不到。
-    /// 安全提醒的站内通知不可关闭，因此没有 <c>Notifications.Security.InApp</c>。
+    /// 类别即通知的 <c>Type</c>，渠道即 <c>INotificationChannel.Name</c>：通知偏好组件按这两者拼出设置名，
+    /// 读<b>收件人</b>的生效值；没有对应设置的组合一律投递——新加一个类别不会因为忘了定义偏好而收不到。
+    /// 安全提醒的站内通知是必达组合（见 Program 里的 <c>AddNotificationPreferences</c>），因此没有 <c>Notifications.Security.InApp</c>。
     /// </remarks>
     public static class Notifications
     {
-        private const string Prefix = "Notifications";
+        private const string Prefix = NotificationPreferenceOptions.DefaultSettingNamePrefix;
 
         /// <summary>安全提醒是否也发邮件（只发到已验证的邮箱）。</summary>
         public const string SecurityEmail = $"{Prefix}.{AppNotificationTypes.Security}.{AppNotificationChannels.Email}";
@@ -256,38 +225,5 @@ public static class SettingConstant
     }
 
 #endif
-#endif
-    /// <summary>
-    /// 布尔型设置（值只能是 <c>true</c> / <c>false</c>），写入校验与界面控件都读它。
-    /// </summary>
-    /// <remarks>
-    /// 界面不另列清单、按下发的标志渲染开关：前端各记一份的话，漏登记的布尔设置会渲染成文本框，
-    /// 管理员得手打 <c>true</c>。
-    /// </remarks>
-    public static readonly IReadOnlySet<string> BooleanSettings = new HashSet<string>(StringComparer.Ordinal)
-    {
-        Audit.RetentionEnabled,
-#if (LocalIdentity)
-        Registration.EnableEmailVerification,
-        Security.RequireTwoFactor,
-        Email.SmtpEnableSsl,
-#if (IncludeNotifications)
-        Notifications.SecurityEmail,
-        Notifications.SystemInApp,
-        Notifications.SystemEmail,
-#endif
-#endif
-    };
-
-    /// <summary>
-    /// 全部数值型设置的取值区间，写入校验与下发给界面的上下界都读它。
-    /// </summary>
-    /// <remarks>各组的区间仍写在各自组里，这里只做汇总，新增一组时在这里并进来。</remarks>
-    public static readonly IReadOnlyDictionary<string, (int Minimum, int Maximum)> NumericRanges =
-#if (LocalIdentity)
-        Audit.Ranges.Concat(Registration.Ranges).Concat(Security.Ranges).Concat(Email.Ranges)
-            .ToDictionary(StringComparer.Ordinal);
-#else
-        Audit.Ranges.ToDictionary(StringComparer.Ordinal);
 #endif
 }

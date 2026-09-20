@@ -8,6 +8,7 @@
 | --- | --- |
 | 只需要统一响应的数据模型（如在应用层/领域层构造返回结构、跨项目共享契约） | 只引用 `Leistd.Response.Core` |
 | ASP.NET Core Web API 需要自动包装控制器返回值 | 引用 `Leistd.Response.AspNetCore` 并注册过滤器 |
+| Minimal API 端点（含组件经 `Map*` 提供的端点）也要包装 | 在路由组上调 `WithResultWrapper()` |
 | 个别接口（如文件下载、第三方回调、健康检查）不希望被包装 | 在 action 或 controller 上标注 `[NoWrap]` |
 | 想显式构造成功/失败响应而非依赖自动包装 | 使用 `OkResult` / `FailResult` 等 Controller 扩展方法 |
 
@@ -38,6 +39,14 @@ builder.Services.AddControllers()
 `AddResponseWrapper` 把 `ResultWrapperFilter`（一个 `IAsyncResultFilter`）加入 MVC 过滤器管线。注册后，控制器返回的普通对象会被自动包装为 `Result<object?>`。
 
 > 它是 `IMvcBuilder` 扩展而不是 `IServiceCollection` 扩展：MVC 由宿主组装，组件不替宿主调 `AddControllers()`。
+
+Minimal API 端点不经过 MVC 过滤器，在路由组上挂端点过滤器：
+
+```csharp
+app.MapGroup("/api/v1")
+    .WithResultWrapper()
+    .MapGet("/orders/{id}", (long id, OrderService service) => service.GetAsync(id));
+```
 
 ## 使用
 
@@ -97,6 +106,7 @@ public class OrderController(IOrderService service) : ControllerBase
 | 成员 | 说明 |
 | --- | --- |
 | `AddResponseWrapper(mvcBuilder)` | 把 `ResultWrapperFilter` 挂到宿主的 MVC 链（`IMvcBuilder` 扩展方法） |
+| `WithResultWrapper(builder)` | 给端点或路由组挂 `ResultWrapperEndpointFilter`（`IEndpointConventionBuilder` 扩展方法） |
 | `NoWrapAttribute`（`[NoWrap]`） | 标注在 action 或 controller 上跳过自动包装；`AttributeUsage = Method \| Class` |
 | `ControllerExtensions.OkResult<T>(data, message?)` | 返回 HTTP 200 的 `Result<T>` 成功响应 |
 | `ControllerExtensions.OkResult(message?)` | 返回 HTTP 200 的无数据 `Result` 成功响应 |
@@ -112,6 +122,14 @@ public class OrderController(IOrderService service) : ControllerBase
 - `ResultWrapperFilter` 仅包装满足以下全部条件的结果：结果为 `ObjectResult`、其 `Value` **不是** `Result`（避免重复包装）、且 HTTP 状态码为 `null` 或落在 **200–299** 区间（即只包装成功响应）。
 - 命中包装时，原值被包成 `Result<object?>.Ok(value)`，状态码保留原值（无则取 200）；包装时输出一条 `Debug` 级日志。
 - 标注了 `[NoWrap]`（通过 `EndpointMetadata` 检测）的接口直接放行，不做包装。
+
+### Leistd.Response.AspNetCore（端点包装过滤器）
+
+- `ResultWrapperEndpointFilter` 只包装两种形态：处理器直接返回的对象，以及 `TypedResults.Ok(value)`。这两种都只表达"200 加这个值"，换成信封不丢 HTTP 语义。
+- 其余 `IResult` 一律原样放行：`Created`、`Accepted`、文件与流、重定向、`NoContent` 与非 2xx。它们各自带着响应头（`Location`）、内容类型或序列化选项，重建成 JSON 会丢掉这些，而状态码看上去还是对的。
+- 要让这类端点也走信封，由端点自己把信封放进结果：`TypedResults.Created(location, Result<T>.Ok(dto))`——`Location` 与信封都在。
+- 已是 `Result` 的值、带 `NoWrapAttribute` 元数据的端点同样原样放行。
+- 包装改的是运行时响应体，不改端点的 OpenAPI 元数据：端点若用 `Produces<T>()` 声明过形状，要改成 `Produces<Result<T>>()`，否则文档与实际响应不一致。
 
 ## 注意事项
 

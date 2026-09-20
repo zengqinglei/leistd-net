@@ -16,10 +16,17 @@ public sealed class SettingDefinitionManager(IEnumerable<ISettingDefinitionProvi
     private readonly Lazy<SettingDefinitionContext> _context = new(() =>
     {
         var context = new SettingDefinitionContext();
-        foreach (var provider in providers)
+        var all = providers.ToList();
+        foreach (var provider in all)
         {
             provider.Define(context);
         }
+
+        foreach (var provider in all)
+        {
+            provider.PostDefine(context);
+        }
+
         return context;
     }, LazyThreadSafetyMode.ExecutionAndPublication);
 
