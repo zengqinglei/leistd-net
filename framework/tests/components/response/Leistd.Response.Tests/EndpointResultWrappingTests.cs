@@ -7,6 +7,7 @@ using Leistd.Response.Wrappers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
@@ -46,6 +47,14 @@ public sealed class EndpointResultWrappingTests : IAsyncLifetime
                         group.MapPost("/created-envelope", ()
                             => TypedResults.Created("/api/plain", Result<object>.Ok(new { Name = "order" })));
                         group.MapGet("/file", () => TypedResults.File("x"u8.ToArray(), "text/plain", "x.txt"));
+                        // 宿主自建的 JSON 结果：运行时原样放行（不是 Ok<T>），元数据也不该被改
+                        group.MapGet("/json", () => TypedResults.Json(new Payload("order"))).Produces<Payload>();
+                        // 多分支返回：只有 Ok<T> 那一支会被包装，NotFound 一支照旧
+                        group.MapGet("/either/{found:bool}", Results<Ok<Payload>, NotFound> (bool found)
+                            => found ? TypedResults.Ok(new Payload("order")) : TypedResults.NotFound());
+                        // 文件端点显式声明 200：同理
+                        group.MapGet("/declared-file", () => TypedResults.File("x"u8.ToArray(), "text/plain"))
+                            .Produces<byte[]>(contentType: "text/plain");
                         group.MapDelete("/empty", () => TypedResults.NoContent());
                         group.MapGet("/missing", () => TypedResults.NotFound(new { Name = "order" }));
                         group.MapGet("/already", () => Result<string>.Ok("x"));
@@ -179,6 +188,59 @@ public sealed class EndpointResultWrappingTests : IAsyncLifetime
                 .Where(metadata => metadata.Type is { IsGenericType: true }),
             metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
     }
+
+    /// <summary>
+    /// 运行时不包装的结果，元数据也不能被改成信封。
+    /// </summary>
+    /// <remarks>
+    /// 改写的判据必须与过滤器的包装判据同源（看处理器返回类型），只按"状态码是 200"改，
+    /// 就会让 <c>Json(...)</c>、文件这类原样放行的端点在文档里被声明成 <c>Result&lt;T&gt;</c>，
+    /// 而客户端代码生成器是照着文档生成模型的。
+    /// </remarks>
+    [Theory]
+    [InlineData("/api/json")]
+    [InlineData("/api/declared-file")]
+    public void Endpoints_whose_results_pass_through_keep_their_declared_metadata(string pattern)
+    {
+        var endpoints = _host.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+
+        var endpoint = Single(endpoints, pattern);
+        Assert.All(
+            endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+                .Where(metadata => metadata.Type is { IsGenericType: true }),
+            metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
+    }
+
+    /// <summary>多分支返回里只有 Ok&lt;T&gt; 那一支被包装，200 的元数据也只改这一支。</summary>
+    [Fact]
+    public async Task Only_the_ok_branch_of_a_multi_result_endpoint_is_wrapped()
+    {
+        var found = await _client.GetFromJsonAsync<JsonElement>("/api/either/true");
+        Assert.Equal("order", found.GetProperty("data").GetProperty("name").GetString());
+
+        using var missing = await _client.GetAsync("/api/either/false");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        var endpoint = Single(_host.Services.GetRequiredService<EndpointDataSource>().Endpoints, "/api/either/{found:bool}");
+        var ok = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Single(metadata => metadata.StatusCode == StatusCodes.Status200OK);
+        Assert.Equal(typeof(Result<>), ok.Type!.GetGenericTypeDefinition());
+        Assert.All(
+            endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+                .Where(metadata => metadata.StatusCode != StatusCodes.Status200OK && metadata.Type is { IsGenericType: true }),
+            metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
+    }
+
+    /// <summary>与上一条配对：运行时确实没有被包装。</summary>
+    [Fact]
+    public async Task A_self_built_json_result_is_not_wrapped()
+    {
+        var body = await _client.GetFromJsonAsync<JsonElement>("/api/json");
+
+        Assert.Equal("order", body.GetProperty("name").GetString());
+    }
+
+    private sealed record Payload(string Name);
 
     private static RouteEndpoint Single(IReadOnlyList<Endpoint> endpoints, string pattern)
         => endpoints.OfType<RouteEndpoint>().Single(endpoint => endpoint.RoutePattern.RawText == pattern);

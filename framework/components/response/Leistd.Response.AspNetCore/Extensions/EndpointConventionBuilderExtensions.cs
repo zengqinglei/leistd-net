@@ -1,8 +1,10 @@
+using System.Reflection;
 using Leistd.Response.AspNetCore.Attributes;
 using Leistd.Response.AspNetCore.Filters;
 using Leistd.Response.Wrappers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Http.Metadata;
 
 namespace Leistd.Response.AspNetCore.Extensions;
@@ -42,10 +44,18 @@ public static class EndpointConventionBuilderExtensions
         return builder;
     }
 
-    // 只改 200：其余状态码的结果原样放行（Created、文件、非 2xx），元数据也该保持原样
+    // 判据必须与过滤器同源：过滤器只包装"裸值"和 Ok<T>，所以这里也只改这两种处理器的 200 元数据。
+    // 只按状态码改，会把 Json(...)、文件这类原样放行的端点在文档里声明成信封。
     private static void RewriteSuccessResponseType(EndpointBuilder endpoint)
     {
         if (endpoint.Metadata.Any(metadata => metadata is NoWrapAttribute))
+        {
+            return;
+        }
+
+        // 处理器的 MethodInfo 由 Minimal API 放进元数据；拿不到（自定义端点源）就不改
+        if (endpoint.Metadata.OfType<MethodInfo>().LastOrDefault() is not { } handler
+            || !TryGetWrappedValueType(handler.ReturnType, out var valueType))
         {
             return;
         }
@@ -54,17 +64,66 @@ public static class EndpointConventionBuilderExtensions
         {
             if (endpoint.Metadata[index] is not IProducesResponseTypeMetadata produces
                 || produces.StatusCode != StatusCodes.Status200OK
-                || produces.Type is not { } type
-                || type == typeof(void)
-                || typeof(Result).IsAssignableFrom(type))
+                || produces.Type != valueType
+                || typeof(Result).IsAssignableFrom(valueType))
             {
                 continue;
             }
 
             endpoint.Metadata[index] = new ProducesResponseTypeMetadata(
                 produces.StatusCode,
-                typeof(Result<>).MakeGenericType(type),
+                typeof(Result<>).MakeGenericType(valueType),
                 [.. produces.ContentTypes]);
         }
+    }
+
+    // 返回类型 → 过滤器会包装的那个值的类型；不会被包装时返回 false
+    private static bool TryGetWrappedValueType(Type returnType, out Type valueType)
+    {
+        valueType = null!;
+
+        var returned = returnType;
+        if (returned.IsGenericType
+            && (returned.GetGenericTypeDefinition() == typeof(Task<>)
+                || returned.GetGenericTypeDefinition() == typeof(ValueTask<>)))
+        {
+            returned = returned.GetGenericArguments()[0];
+        }
+
+        // 裸值：过滤器走 default 分支包装
+        if (!typeof(IResult).IsAssignableFrom(returned))
+        {
+            valueType = returned;
+            return returned != typeof(void) && returned != typeof(object);
+        }
+
+        if (!returned.IsGenericType)
+        {
+            // IResult、NoContent 这类：运行时形状未知或无值，不改
+            return false;
+        }
+
+        var definition = returned.GetGenericTypeDefinition();
+        if (definition == typeof(Ok<>))
+        {
+            valueType = returned.GetGenericArguments()[0];
+            return true;
+        }
+
+        // Results<Ok<T>, NotFound, ...>：只有其中的 Ok<T> 会被包装，其余分支各有自己的状态码
+        if (definition.Namespace == typeof(Ok<>).Namespace
+            && definition.Name.StartsWith("Results`", StringComparison.Ordinal))
+        {
+            foreach (var alternative in returned.GetGenericArguments())
+            {
+                if (alternative.IsGenericType && alternative.GetGenericTypeDefinition() == typeof(Ok<>))
+                {
+                    valueType = alternative.GetGenericArguments()[0];
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

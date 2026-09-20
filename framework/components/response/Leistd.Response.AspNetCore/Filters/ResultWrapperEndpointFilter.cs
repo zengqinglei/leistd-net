@@ -56,10 +56,12 @@ public sealed class ResultWrapperEndpointFilter(ILogger<ResultWrapperEndpointFil
     // 重建成 JSON 会丢掉它们的响应头
     private static bool TryGetPlainOkValue(IResult result, out object? value)
     {
-        var type = result.GetType();
+        // Results<Ok<T>, NotFound, …> 先解一层：实际走到哪一支要看运行时的这个值
+        var actual = result is INestedHttpResult nested ? nested.Result : result;
+        var type = actual.GetType();
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Ok<>))
         {
-            value = ((IValueHttpResult)result).Value;
+            value = ((IValueHttpResult)actual).Value;
             return true;
         }
 
