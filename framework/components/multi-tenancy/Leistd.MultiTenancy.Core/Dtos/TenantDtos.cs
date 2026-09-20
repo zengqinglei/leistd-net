@@ -97,17 +97,38 @@ public record CreateTenantInputDto
     public string? Description { get; init; }
 
     /// <summary>
-    /// 专属库的连接串，登记到默认连接名下；留空即不分库。
+    /// 该租户的专属库连接，按名字登记；留空即不分库，各服务用自己配置的库。
     /// </summary>
     /// <remarks>
-    /// 分库只能在创建时定案：开通紧随登记之后，解析到的已经是这个库。库要先建好并迁移过，这里只登记。
+    /// <para>分库只能在创建时定案：开通紧随登记之后，解析到的已经是这些库。库要先建好并迁移过，这里只登记。</para>
+    /// <para>多服务部署可以一次登记多条（如 <c>default</c>、<c>crm</c>）：租户与全部连接在同一个控制面工作单元里落库，
+    /// 不会出现"租户已建、某条连接还没登记"的中间状态，开通钩子第一次执行时看到的就是完整的连接集合。</para>
     /// </remarks>
-    [MaxLength(TenantConnectionConfiguration.MaxConnectionStringLength)]
-    public string? ConnectionString { get; init; }
+    public IReadOnlyList<CreateTenantConnectionInputDto> Connections { get; init; } = [];
 
     /// <summary>不输出连接串。</summary>
     public override string ToString() =>
-        $"{nameof(CreateTenantInputDto)} {{ Name = {Name}, DisplayName = {DisplayName} }}";
+        $"{nameof(CreateTenantInputDto)} {{ Name = {Name}, DisplayName = {DisplayName}, Connections = {Connections.Count} }}";
+}
+
+/// <summary>
+/// 创建租户时登记的一条命名连接。
+/// </summary>
+/// <remarks>名字与连接串在任何库操作之前统一校验：名字按 <c>^[a-z0-9-]{1,64}$</c> 归一化，重名与语法错误都在写库前拒绝。</remarks>
+public record CreateTenantConnectionInputDto
+{
+    /// <summary>连接名，对应使用方 DbContext 的 <c>[ConnectionStringName]</c>；不区分大小写。</summary>
+    [Required]
+    [MaxLength(TenantConnectionConfiguration.MaxNameLength)]
+    public required string Name { get; init; }
+
+    /// <summary>连接串。</summary>
+    [Required]
+    [MaxLength(TenantConnectionConfiguration.MaxConnectionStringLength)]
+    public required string ConnectionString { get; init; }
+
+    /// <summary>不输出连接串。</summary>
+    public override string ToString() => $"{nameof(CreateTenantConnectionInputDto)} {{ Name = {Name} }}";
 }
 
 /// <summary>更新租户入参；三个字段都按传入值覆盖。</summary>

@@ -192,19 +192,41 @@ describe('租户 Mock', () => {
     expect(JSON.stringify(stored)).not.toContain('probe-secret');
   });
 
-  // 建租户这一步不带连接：请求里夹带的连接字段一概不读，与后端入口 DTO 一致。
-  it('创建租户时夹带的连接串既不落地也不变成一条连接', () => {
+  // 分库在建租户这一步定案：连接与租户一起落库，之后不能再补。
+  it('创建租户时给的多条命名连接一次全部登记', () => {
     const created = createTenant({
       name: `probe-${Math.random().toString(36).slice(2, 8)}`,
       adminEmail: 'probe@example.test',
       adminPassword: 'MockTenant!Adm1n',
-      connectionString: 'Host=db;Database=probe;Password=probe-secret',
+      connections: [
+        { name: 'default', connectionString: 'Host=db;Database=probe;Password=probe-secret' },
+        { name: 'CRM', connectionString: 'Host=db;Database=probe-crm;Password=probe-secret' },
+      ],
     });
 
-    expect(getTenantConnections(created.id)).toEqual([]);
-    expect(JSON.stringify(TENANTS.find((tenant) => tenant.id === created.id))).not.toContain(
-      'probe-secret',
-    );
+    // 名字归一化为小写，与后端一致
+    expect(getTenantConnections(created.id).map((connection) => connection.name).sort()).toEqual([
+      'crm',
+      'default',
+    ]);
+    // 连接串本身不回显
+    expect(JSON.stringify(getTenantConnections(created.id))).not.toContain('probe-secret');
     expect(JSON.stringify(created)).not.toContain('probe-secret');
+  });
+
+  it('创建租户时同名连接给两条直接 400', () => {
+    expectStatus(
+      () =>
+        createTenant({
+          name: `probe-${Math.random().toString(36).slice(2, 8)}`,
+          adminEmail: 'probe@example.test',
+          adminPassword: 'MockTenant!Adm1n',
+          connections: [
+            { name: 'crm', connectionString: 'Host=a' },
+            { name: 'CRM', connectionString: 'Host=b' },
+          ],
+        }),
+      400,
+    );
   });
 });

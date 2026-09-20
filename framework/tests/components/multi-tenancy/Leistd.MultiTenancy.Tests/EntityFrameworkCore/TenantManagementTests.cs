@@ -87,11 +87,44 @@ public sealed class TenantManagementTests : IAsyncLifetime
             _provisioner.ConnectionsSeenDuringProvisioning =
                 await services.GetRequiredService<ITenantConnectionDirectory>().ListAsync(tenant.Id);
 
-        var tenant = await _service.CreateAsync(new CreateTenantInputDto { Name = "acme", ConnectionString = "Host=acme;Database=acme" });
+        var tenant = await _service.CreateAsync(Create("acme", ("default", "Host=acme;Database=acme")));
 
         var registered = Assert.Single(_provisioner.ConnectionsSeenDuringProvisioning!);
         Assert.Equal("default", registered.Name);
         Assert.Equal("default", Assert.Single((await Connections().GetListAsync(tenant.Id))).Name);
+    }
+
+    /// <summary>
+    /// 多服务部署一次登记多条：开通钩子第一次执行时看到的就是完整集合。
+    /// </summary>
+    /// <remarks>
+    /// 建完租户再逐条调连接管理接口会留下"租户已启用、某条连接还没登记"的中间状态，
+    /// 那一刻用该连接名的服务解析到的是回落库，数据会落错地方。
+    /// </remarks>
+    [Fact]
+    public async Task All_named_connections_are_registered_in_one_unit_of_work_before_provisioning()
+    {
+        _provisioner.OnProvision = async (services, tenant) =>
+            _provisioner.ConnectionsSeenDuringProvisioning =
+                await services.GetRequiredService<ITenantConnectionDirectory>().ListAsync(tenant.Id);
+
+        var tenant = await _service.CreateAsync(
+            Create("acme", ("default", "Host=acme;Database=acme"), ("CRM", "Host=crm;Database=acme-crm")));
+
+        // 名字大小写不敏感：登记与解析都用归一化后的小写
+        Assert.Equal(["crm", "default"], _provisioner.ConnectionsSeenDuringProvisioning!.Select(c => c.Name).Order());
+        Assert.Equal(["crm", "default"], (await Connections().GetListAsync(tenant.Id)).Select(c => c.Name).Order());
+    }
+
+    /// <summary>重名在写库前拒绝：否则第二条会以"改已有登记"的语义覆盖第一条。</summary>
+    [Fact]
+    public async Task A_duplicated_connection_name_is_rejected_before_anything_is_written()
+    {
+        var error = await Assert.ThrowsAsync<BadRequestException>(
+            () => _service.CreateAsync(Create("acme", ("crm", "Host=a"), ("CRM", "Host=b"))));
+
+        Assert.Equal(MultiTenancyErrorCodes.ConnectionNameDuplicated, error.Code);
+        Assert.Null(await _service.FindByNameAsync("acme"));
     }
 
     [Fact]
@@ -100,7 +133,8 @@ public sealed class TenantManagementTests : IAsyncLifetime
         _provisioner.OnProvision = (_, _) => throw new FakeDbException("3D000");
 
         var error = await Assert.ThrowsAsync<BadRequestException>(
-            () => _service.CreateAsync(new CreateTenantInputDto { Name = "acme", ConnectionString = "Host=acme;Database=missing" }));
+            () => _service.CreateAsync(
+                Create("acme", ("default", "Host=acme;Database=missing"), ("crm", "Host=crm;Database=missing"))));
 
         Assert.Equal(MultiTenancyErrorCodes.DedicatedDatabaseMissing, error.Code);
         Assert.NotNull(_provisioner.PurgedTenant);
@@ -109,7 +143,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         // 名字可复用、没有指向已删租户的孤儿连接行
         _provisioner.OnProvision = null;
-        var retried = await _service.CreateAsync(new CreateTenantInputDto { Name = "acme" });
+        var retried = await _service.CreateAsync(Create("acme"));
         Assert.Empty(await Connections().GetListAsync(retried.Id));
         await using var scope = _provider.CreateAsyncScope();
         Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<TestDbContext>()
@@ -132,7 +166,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     public async Task A_malformed_connection_string_is_rejected_before_anything_is_written()
     {
         var error = await Assert.ThrowsAsync<BadRequestException>(
-            () => _service.CreateAsync(new CreateTenantInputDto { Name = "acme", ConnectionString = "Host=a;=b" }));
+            () => _service.CreateAsync(Create("acme", ("default", "Host=a;=b"))));
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
         Assert.Null(_provisioner.ProvisionedInTenant);
@@ -289,6 +323,17 @@ public sealed class TenantManagementTests : IAsyncLifetime
                 : Task.CompletedTask;
         }
     }
+
+    private static CreateTenantInputDto Create(string name, params (string Name, string ConnectionString)[] connections)
+        => new()
+        {
+            Name = name,
+            Connections = [.. connections.Select(c => new CreateTenantConnectionInputDto
+            {
+                Name = c.Name,
+                ConnectionString = c.ConnectionString
+            })]
+        };
 
     private sealed class FakeDbException(string sqlState) : DbException("database failure")
     {

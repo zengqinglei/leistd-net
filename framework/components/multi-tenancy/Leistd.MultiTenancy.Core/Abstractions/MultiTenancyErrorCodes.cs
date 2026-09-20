@@ -39,6 +39,9 @@ public static class MultiTenancyErrorCodes
     /// <summary>连接名不合法（400）。占位：<c>Name</c>、<c>Pattern</c>。</summary>
     public const string ConnectionNameInvalid = "TenantConnection:NameInvalid";
 
+    /// <summary>创建租户时同一个连接名给了多条（400）。占位：<c>Name</c>。</summary>
+    public const string ConnectionNameDuplicated = "TenantConnection:NameDuplicated";
+
     /// <summary>连接串为空、超长或不是键值对语法（400）；消息不回显连接串。</summary>
     public const string ConnectionStringInvalid = "TenantConnection:ConnectionStringInvalid";
 

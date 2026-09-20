@@ -141,19 +141,20 @@ describe('TenantEditDialog', () => {
     expect(Object.keys(host.saved[0]).sort()).toEqual([
       'adminEmail',
       'adminPassword',
-      'connectionString',
+      'connections',
       'description',
       'displayName',
       'name',
     ]);
-    expect((host.saved[0] as CreateTenantInputDto).connectionString).toBe(
-      'Host=acme;Database=acme',
-    );
+    // 界面只收默认库一条，契约本身是命名连接数组
+    expect((host.saved[0] as CreateTenantInputDto).connections).toEqual([
+      { name: 'default', connectionString: 'Host=acme;Database=acme' },
+    ]);
   });
 
-  // 留空必须是 undefined 而不是空串：后端对"提供了连接串但它是空的"按 400 拒绝，
+  // 留空必须是空数组而不是一条空连接串：后端对"给了连接但连接串是空的"按 400 拒绝，
   // 而这里表达的是"不分库"，两者不能长成同一个请求。
-  it('连接串留空即不分库，传 undefined 而不是空串', async () => {
+  it('连接串留空即不分库，传空数组而不是空连接条目', async () => {
     dialog().tenantForm.name().value.set('acme');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');
     dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
@@ -161,7 +162,7 @@ describe('TenantEditDialog', () => {
 
     dialog().onSubmit();
 
-    expect((host.saved[0] as CreateTenantInputDto).connectionString).toBeUndefined();
+    expect((host.saved[0] as CreateTenantInputDto).connections).toEqual([]);
   });
 
   it('编辑提交只带标识字段，不夹带管理员字段', async () => {

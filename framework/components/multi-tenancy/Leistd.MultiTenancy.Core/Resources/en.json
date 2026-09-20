@@ -13,6 +13,7 @@
     "Tenant:NotFound": "The tenant does not exist.",
     "TenantConnection:ChangeRequiresInactiveTenant": "Deactivate the tenant before changing where its data lives.",
     "TenantConnection:ConnectionStringInvalid": "The connection string is empty, too long or malformed. It must be semicolon-separated key=value pairs; the value is not echoed back because it carries credentials.",
+    "TenantConnection:NameDuplicated": "The same connection name '{Name}' was given more than once. Each name may be registered only once per tenant.",
     "TenantConnection:NameInvalid": "Connection name '{Name}' is invalid. After lowercasing it must match {Pattern}.",
     "TenantConnection:VersionConflict": "The connection was changed by someone else. Reload and try again."
   }

@@ -188,12 +188,41 @@ export function createTenant(value: any) {
     description: value.description?.trim() || undefined,
     isActive: true,
     creationTime: new Date().toISOString(),
-    // 建租户这一步不带连接：新建的租户默认不单独分库，要分库再逐条登记到连接列表里。
-    // 请求里夹带的连接字段一概不读，与后端入口 DTO 一致。
-    connections: [],
+    // 分库在建租户这一步定案：连接与租户一起落库（后端是同一个事务），之后不能再补。
+    // 名字与重名的校验复刻后端，否则 Mock 下能过、换真实后端才 400。
+    connections: normalizeCreateConnections(value.connections),
   } satisfies MockTenant;
   TENANTS.push(newTenant);
   return toTenantOutput(newTenant);
+}
+
+// 复刻后端创建时对连接数组的整批校验：名字归一化后按模式校验、连接串非空、名字不得重复。
+function normalizeCreateConnections(raw: unknown) {
+  const connections: { name: string; connectionString: string; version: number }[] = [];
+  for (const entry of Array.isArray(raw) ? raw : []) {
+    const name = normalizeConnectionName(String((entry as any)?.name ?? ''));
+    if (!CONNECTION_NAME_PATTERN.test(name)) {
+      throw new MockException(400, {
+        code: 'TenantConnection:NameInvalid',
+        message: 'Connection name must match ^[a-z0-9-]{1,64}$.',
+      });
+    }
+    if (connections.some((connection) => connection.name === name)) {
+      throw new MockException(400, {
+        code: 'TenantConnection:NameDuplicated',
+        message: `The connection name '${name}' was given more than once.`,
+      });
+    }
+    const connectionString = String((entry as any)?.connectionString ?? '').trim();
+    if (!connectionString) {
+      throw new MockException(400, {
+        code: 'TenantConnection:ConnectionStringInvalid',
+        message: 'Connection string is required.',
+      });
+    }
+    connections.push({ name, connectionString, version: 1 });
+  }
+  return connections;
 }
 
 export function updateTenant(id: string, value: any) {

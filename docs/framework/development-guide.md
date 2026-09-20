@@ -223,7 +223,9 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 共享映射与常量放在所有消费者可引用的最低层，派生值不得维护第二份。
 - 公共接口优先保持最小；仅一个实现且没有替换需求时，不为形式一致额外抽象。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
-- **组件发出的错误码自带默认译文**：业务异常无条件 `WithCode`（界面按码分支，不能只在含本地化的宿主里才有码）；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
+- **组件发出的错误码自带默认译文**：业务异常无条件 `WithCode`（界面按码分支，不能只在含本地化的宿主里才有码）；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件（组件登记恒插在最前）。
+  - **例外：通用 HTTP 兜底错误（`Error:*`）的译文放 `Leistd.Localization.Core`**，而不是定义这些码的 `Leistd.ExceptionHandling.Core`。异常组件不依赖本地化，这个方向是对的；为 23 条兜底文案让它反向依赖、或另立桥接包都不划算。这是闭集，新增组件不得援引本条把自己的错误码文案外移。
+  - 宿主**不要**复制组件的译文：一字不差的副本会在组件改文案时把旧文案静默钉死。只写确实要改的那几条。
 - 需要可还原的加密时直接用宿主的 Data Protection：注入 `IDataProtectionProvider`（只引用 `Microsoft.AspNetCore.DataProtection.Abstractions`），在构造函数里 `CreateProtector` 一次并复用；用途字符串固定、带命名空间与版本号，改它等于让已存密文全部不可解；要按名称隔离时由同一个保护器 `CreateProtector(名称)` 派生子用途；解密只捕获 `CryptographicException`。不另立加密接口或静态包装——换密钥设施在 Data Protection 这一层换（密钥存储与密钥加密都可替换）。
 
 ### 6.2 参数与配置校验

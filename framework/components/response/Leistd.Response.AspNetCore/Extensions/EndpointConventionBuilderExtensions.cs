@@ -44,8 +44,9 @@ public static class EndpointConventionBuilderExtensions
         return builder;
     }
 
-    // 判据必须与过滤器同源：过滤器只包装"裸值"和 Ok<T>，所以这里也只改这两种处理器的 200 元数据。
-    // 只按状态码改，会把 Json(...)、文件这类原样放行的端点在文档里声明成信封。
+    // 判据必须与过滤器同源：过滤器只包装"裸值"和 Ok<T>（含 Results<…> 里走到 Ok<T> 的分支），
+    // 所以这里也只改这些处理器的 200 元数据。只按状态码改，会把 Json(...)、文件这类原样放行的端点
+    // 在文档里声明成信封。
     private static void RewriteSuccessResponseType(EndpointBuilder endpoint)
     {
         if (endpoint.Metadata.Any(metadata => metadata is NoWrapAttribute))
@@ -54,8 +55,13 @@ public static class EndpointConventionBuilderExtensions
         }
 
         // 处理器的 MethodInfo 由 Minimal API 放进元数据；拿不到（自定义端点源）就不改
-        if (endpoint.Metadata.OfType<MethodInfo>().LastOrDefault() is not { } handler
-            || !TryGetWrappedValueType(handler.ReturnType, out var valueType))
+        if (endpoint.Metadata.OfType<MethodInfo>().LastOrDefault() is not { } handler)
+        {
+            return;
+        }
+
+        var (wrapsEveryValue, okValueTypes) = Classify(handler.ReturnType);
+        if (!wrapsEveryValue && okValueTypes.Count == 0)
         {
             return;
         }
@@ -64,24 +70,26 @@ public static class EndpointConventionBuilderExtensions
         {
             if (endpoint.Metadata[index] is not IProducesResponseTypeMetadata produces
                 || produces.StatusCode != StatusCodes.Status200OK
-                || produces.Type != valueType
-                || typeof(Result).IsAssignableFrom(valueType))
+                || produces.Type is not { } type
+                || type == typeof(void)
+                || typeof(Result).IsAssignableFrom(type)
+                // 裸值处理器：这一条 200 不管声明成什么，运行时发出的都是信封。
+                // IResult 处理器：只有落在 Ok<T> 上的那些分支会被包装，同为 200 的 Json<T> 分支不会
+                || (!wrapsEveryValue && !okValueTypes.Contains(type)))
             {
                 continue;
             }
 
             endpoint.Metadata[index] = new ProducesResponseTypeMetadata(
                 produces.StatusCode,
-                typeof(Result<>).MakeGenericType(valueType),
+                typeof(Result<>).MakeGenericType(type),
                 [.. produces.ContentTypes]);
         }
     }
 
-    // 返回类型 → 过滤器会包装的那个值的类型；不会被包装时返回 false
-    private static bool TryGetWrappedValueType(Type returnType, out Type valueType)
+    // 返回类型 → (是不是"发出的每个值都会被包装"的裸值处理器, 会被包装的 Ok<T> 值类型集合)
+    private static (bool WrapsEveryValue, HashSet<Type> OkValueTypes) Classify(Type returnType)
     {
-        valueType = null!;
-
         var returned = returnType;
         if (returned.IsGenericType
             && (returned.GetGenericTypeDefinition() == typeof(Task<>)
@@ -90,40 +98,38 @@ public static class EndpointConventionBuilderExtensions
             returned = returned.GetGenericArguments()[0];
         }
 
-        // 裸值：过滤器走 default 分支包装
+        // 裸值：过滤器走 default 分支包装。object 也算——声明成 object 却在运行期混着返回 IResult
+        // 属于形状不明的 API，那种端点该自己把形状声明清楚，框架不猜
         if (!typeof(IResult).IsAssignableFrom(returned))
         {
-            valueType = returned;
-            return returned != typeof(void) && returned != typeof(object);
+            return (returned != typeof(void), []);
         }
 
         if (!returned.IsGenericType)
         {
             // IResult、NoContent 这类：运行时形状未知或无值，不改
-            return false;
+            return (false, []);
         }
 
         var definition = returned.GetGenericTypeDefinition();
         if (definition == typeof(Ok<>))
         {
-            valueType = returned.GetGenericArguments()[0];
-            return true;
+            return (false, [returned.GetGenericArguments()[0]]);
         }
 
-        // Results<Ok<T>, NotFound, ...>：只有其中的 Ok<T> 会被包装，其余分支各有自己的状态码
+        // Results<Ok<A>, Ok<B>, NotFound, …>：收集全部 Ok<T>，其余分支各有自己的状态码或自己的形状
         if (definition.Namespace == typeof(Ok<>).Namespace
             && definition.Name.StartsWith("Results`", StringComparison.Ordinal))
         {
-            foreach (var alternative in returned.GetGenericArguments())
-            {
-                if (alternative.IsGenericType && alternative.GetGenericTypeDefinition() == typeof(Ok<>))
-                {
-                    valueType = alternative.GetGenericArguments()[0];
-                    return true;
-                }
-            }
+            return (false,
+            [
+                .. returned.GetGenericArguments()
+                    .Where(alternative => alternative.IsGenericType
+                        && alternative.GetGenericTypeDefinition() == typeof(Ok<>))
+                    .Select(alternative => alternative.GetGenericArguments()[0])
+            ]);
         }
 
-        return false;
+        return (false, []);
     }
 }

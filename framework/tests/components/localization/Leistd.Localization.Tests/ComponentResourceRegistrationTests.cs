@@ -1,6 +1,7 @@
 using System.Reflection;
 using Leistd.Localization;
 using Leistd.Localization.AspNetCore;
+using Leistd.Localization.Json;
 using Leistd.Localization.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -17,8 +18,43 @@ namespace Leistd.Localization.Tests;
 /// </remarks>
 public class ComponentResourceRegistrationTests
 {
+    // 真实组件包：内嵌 Resources/en.json，带 Error:* 兜底文案
+    private static readonly Assembly ComponentPackage = typeof(DependencyInjection).Assembly;
     private static readonly Assembly Component = typeof(object).Assembly;
     private static readonly Assembly Host = typeof(ComponentResourceRegistrationTests).Assembly;
+
+    /// <summary>
+    /// 同名键最终取到的是宿主那一份，不只是程序集顺序对。
+    /// </summary>
+    /// <remarks>
+    /// 只断言 <c>ResourceAssemblies</c> 的下标不够：合并是在读取器里做的，真正要钉住的是"读出来的那句话"。
+    /// 组件默认译文盖掉宿主定制时，表现是"改了词条不生效"，而登记顺序看上去完全正常。
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_host_text_is_what_gets_resolved(bool componentFirst)
+    {
+        var services = new ServiceCollection();
+        if (componentFirst)
+        {
+            services.AddJsonLocalizationResources(ComponentPackage);
+        }
+
+        services.AddJsonLocalization(configure: options => options.ResourceAssemblies.Add(Host));
+
+        if (!componentFirst)
+        {
+            services.AddJsonLocalizationResources(ComponentPackage);
+        }
+
+        using var provider = services.BuildServiceProvider();
+        var texts = provider.GetRequiredService<JsonLocalizationResourceReader>().GetTexts("en");
+
+        Assert.Equal("Host wording wins.", texts["Error:BadRequest"]);
+        // 宿主没覆盖的键仍然来自组件
+        Assert.Equal("The requested resource was not found.", texts["Error:NotFound"]);
+    }
 
     [Theory]
     [InlineData(true)]

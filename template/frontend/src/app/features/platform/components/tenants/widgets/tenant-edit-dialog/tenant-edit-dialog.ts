@@ -32,7 +32,7 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
-import { TENANT_CONNECTION_STRING_MAX_LENGTH } from '../../../../../../shared/dtos/tenant-connection.dto';
+import { TENANT_CONNECTION_STRING_MAX_LENGTH, TENANT_DEFAULT_CONNECTION_NAME } from '../../../../../../shared/dtos/tenant-connection.dto';
 import {
   CreateTenantInputDto,
   TenantOutputDto,
@@ -213,8 +213,11 @@ export class TenantEditDialog {
       description: description || undefined,
       adminEmail: model.adminEmail.trim(),
       adminPassword: model.adminPassword,
-      // 留空即不分库：传 undefined 而不是空串，后端按"没提供"处理
-      connectionString: model.connectionString.trim() || undefined,
+      // 留空即不分库：传空数组而不是空串条目。界面只收默认库一条，
+      // 契约本身支持多条命名连接（多服务部署时一次登记 default、crm……）
+      connections: model.connectionString.trim()
+        ? [{ name: TENANT_DEFAULT_CONNECTION_NAME, connectionString: model.connectionString.trim() }]
+        : [],
     } satisfies CreateTenantInputDto);
   }
 

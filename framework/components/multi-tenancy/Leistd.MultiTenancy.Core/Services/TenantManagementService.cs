@@ -48,28 +48,28 @@ internal sealed class TenantManagementService(
         ArgumentNullException.ThrowIfNull(input);
         UnprocessableEntityException.ThrowIfInvalid(input);
 
-        // 连接串填错是这条路径上最常见的错误，校验排在任何库操作之前，没道理先建租户再靠补偿擦掉
-        var connectionString = string.IsNullOrWhiteSpace(input.ConnectionString)
-            ? null
-            : TenantConnectionStrings.NormalizeInput(input.ConnectionString);
+        // 名字与连接串填错是这条路径上最常见的错误，整批校验排在任何库操作之前，
+        // 没道理先建租户、再靠补偿把半批登记擦掉
+        var connections = NormalizeConnections(input.Connections);
 
-        // 登记连接的版本仅用于补偿时删除它；返回值必须接住，删除是带版本的乐观并发接口
-        long? connectionVersion = null;
+        // 登记版本仅用于补偿时删除；返回值必须接住，删除是带版本的乐观并发接口
+        List<(string Name, long Version)> registered = [];
         TenantConfiguration tenant;
         using (var controlUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
         {
             tenant = await tenantManager.CreateAsync(input.Name, input.DisplayName, isActive: false, input.Description, cancellationToken);
 
-            // 分库在开通之前定案，且与登记租户同一个工作单元：不会留下"有租户没连接"或反过来的半截状态
-            if (connectionString is not null)
+            // 分库在开通之前定案，且与登记租户同一个工作单元：不会留下"有租户没连接"或只登记了一半的状态，
+            // 开通钩子第一次执行时看到的就是完整的连接集合
+            foreach (var (name, connectionString) in connections)
             {
                 var connection = await connectionManager.SetAsync(
                     tenant.Id,
-                    ConnectionStringNames.Default,
+                    name,
                     connectionString,
                     expectedVersion: null,
                     cancellationToken);
-                connectionVersion = connection.Version;
+                registered.Add((name, connection.Version));
             }
 
             await controlUnitOfWork.CompleteAsync(cancellationToken);
@@ -96,7 +96,7 @@ internal sealed class TenantManagementService(
         catch (Exception exception)
         {
             logger.LogError(exception, "Tenant {TenantId} initialization failed; rolling back the tenant and its provisioned data", tenant.Id);
-            await CompensateAsync(context, connectionVersion);
+            await CompensateAsync(context, registered);
 
             if (databaseErrorDescriber.Describe(exception) is { } described)
             {
@@ -172,10 +172,34 @@ internal sealed class TenantManagementService(
             : new TenantLookupOutputDto { Id = tenant.Id, Name = tenant.Name, DisplayName = tenant.DisplayName, IsActive = tenant.IsActive };
     }
 
+    // 整批归一化：名字按 ^[a-z0-9-]{1,64}$ 归一（大小写不敏感），连接串按键值对语法校验，
+    // 重名在写库前拒绝——否则第二条会以"改已有登记"的语义覆盖第一条，而调用方以为登记了两个库
+    private static List<(string Name, string ConnectionString)> NormalizeConnections(
+        IReadOnlyList<CreateTenantConnectionInputDto> connections)
+    {
+        List<(string Name, string ConnectionString)> normalized = [];
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var connection in connections)
+        {
+            var name = TenantConnectionNames.NormalizeInput(connection.Name);
+            if (!seen.Add(name))
+            {
+                throw new BadRequestException($"The connection name '{name}' was given more than once.")
+                    .WithCode(MultiTenancyErrorCodes.ConnectionNameDuplicated)
+                    .WithData("Name", name);
+            }
+
+            normalized.Add((name, TenantConnectionStrings.NormalizeInput(connection.ConnectionString)));
+        }
+
+        return normalized;
+    }
+
     // 回滚一次失败的创建：清开通数据 → 删连接登记 → 删租户。
     // 每步用干净的作用域（不复用失败 DbContext 的跟踪状态）、独立捕获并记录，前一步失败仍继续后一步，
     // 且用独立令牌，不随调用方取消而中止。删连接必须排在删租户之前：已删租户的连接行再也删不掉。
-    private async Task CompensateAsync(TenantProvisioningContext context, long? connectionVersion)
+    private async Task CompensateAsync(TenantProvisioningContext context, IReadOnlyList<(string Name, long Version)> registered)
     {
         var tenant = context.Tenant;
         if (provisioner is not null)
@@ -197,7 +221,8 @@ internal sealed class TenantManagementService(
             }
         }
 
-        if (connectionVersion is { } version)
+        // 逐条删，且每条独立捕获：一条删不掉不能让后面几条连同删租户一起放弃
+        foreach (var (name, version) in registered)
         {
             try
             {
@@ -205,14 +230,15 @@ internal sealed class TenantManagementService(
                 var services = scope.ServiceProvider;
                 using var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
                 await services.GetRequiredService<ITenantConnectionConfigurationManager>()
-                    .RemoveAsync(tenant.Id, ConnectionStringNames.Default, version, CancellationToken.None);
+                    .RemoveAsync(tenant.Id, name, version, CancellationToken.None);
                 await unitOfWork.CompleteAsync(CancellationToken.None);
             }
             catch (Exception removeError)
             {
                 logger.LogError(
                     removeError,
-                    "Failed to remove the connection registration for tenant {TenantId}; an orphan row now points at a deleted tenant",
+                    "Failed to remove the '{ConnectionName}' connection registration for tenant {TenantId}; an orphan row now points at a deleted tenant",
+                    name,
                     tenant.Id);
             }
         }

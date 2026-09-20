@@ -129,7 +129,12 @@ public class OrderController(IOrderService service) : ControllerBase
 - 其余 `IResult` 一律原样放行：`Created`、`Accepted`、文件与流、重定向、`NoContent` 与非 2xx。它们各自带着响应头（`Location`）、内容类型或序列化选项，重建成 JSON 会丢掉这些，而状态码看上去还是对的。
 - 要让这类端点也走信封，由端点自己把信封放进结果：`TypedResults.Created(location, Result<T>.Ok(dto))`——`Location` 与信封都在。
 - 已是 `Result` 的值、带 `NoWrapAttribute` 元数据的端点同样原样放行。
-- `WithResultWrapper()` 同时把 **200** 响应的类型元数据改写成 `Result<T>`（在 `Finally` 约定里改，那时 Minimal API 推断出的元数据已经挂上），因此生成的 OpenAPI 与实际响应一致；组件经 `Map*` 提供的端点宿主拿不到处理器，只能由这里改。其余状态码（201、文件、非 2xx）连同元数据一并保持原样，标了 `[NoWrap]` 的端点不改。
+- `WithResultWrapper()` 同时改写 **200** 响应的类型元数据（在 `Finally` 约定里改，那时 Minimal API 推断出的元数据已经挂上），因此生成的 OpenAPI 与实际响应一致；组件经 `Map*` 提供的端点宿主拿不到处理器，只能由这里改。改写判据与运行时同源，**按处理器的返回类型**决定：
+  - 裸值（含 `Task<T>`、`ValueTask<T>`，以及声明成 `object` 的）→ 该端点的每条 200 元数据都改写；
+  - `Ok<T>` 与 `Results<Ok<A>, Ok<B>, …>` → 只改写落在这些 `Ok<T>` 上的 200 元数据，同为 200 的 `Json<T>` 分支不动；
+  - `JsonHttpResult<T>`、文件、流、重定向、裸 `IResult`，以及拿不到处理器 `MethodInfo` 的自定义端点源 → 一律不改。
+- 处理器声明成 `object` 却在运行期混着返回 `IResult`，属于形状不明的 API：该端点自己用 `.Produces<...>()` 把形状说清楚，框架不猜。
+- 标了 `[NoWrap]` 的端点既不包装响应也不改元数据。
 
 ## 注意事项
 

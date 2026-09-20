@@ -52,6 +52,11 @@ public sealed class EndpointResultWrappingTests : IAsyncLifetime
                         // 多分支返回：只有 Ok<T> 那一支会被包装，NotFound 一支照旧
                         group.MapGet("/either/{found:bool}", Results<Ok<Payload>, NotFound> (bool found)
                             => found ? TypedResults.Ok(new Payload("order")) : TypedResults.NotFound());
+                        // 声明成 object 的处理器返回裸值：运行时会被包装，元数据也要跟着改
+                        group.MapGet("/object", object () => new Payload("order")).Produces<Payload>();
+                        // 两个 200 分支：两条元数据都要改
+                        group.MapGet("/two-ok/{first:bool}", Results<Ok<Payload>, Ok<string>> (bool first)
+                            => first ? TypedResults.Ok(new Payload("order")) : TypedResults.Ok("plain"));
                         // 文件端点显式声明 200：同理
                         group.MapGet("/declared-file", () => TypedResults.File("x"u8.ToArray(), "text/plain"))
                             .Produces<byte[]>(contentType: "text/plain");
@@ -229,6 +234,43 @@ public sealed class EndpointResultWrappingTests : IAsyncLifetime
             endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
                 .Where(metadata => metadata.StatusCode != StatusCodes.Status200OK && metadata.Type is { IsGenericType: true }),
             metadata => Assert.NotEqual(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
+    }
+
+    /// <summary>
+    /// 声明成 <c>object</c> 的处理器：运行时按裸值包装，元数据也必须改写。
+    /// </summary>
+    /// <remarks>把 object 排除在外，就会出现"响应里有信封、文档里没有"的不一致。</remarks>
+    [Fact]
+    public async Task An_object_returning_handler_is_wrapped_and_its_metadata_rewritten()
+    {
+        var body = await _client.GetFromJsonAsync<JsonElement>("/api/object");
+        Assert.Equal("order", body.GetProperty("data").GetProperty("name").GetString());
+
+        // 推断出的 object 与显式声明的 Payload 两条 200 都要改：运行时两者描述的都是同一个信封响应
+        var produces = Single(_host.Services.GetRequiredService<EndpointDataSource>().Endpoints, "/api/object")
+            .Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Where(metadata => metadata.StatusCode == StatusCodes.Status200OK)
+            .ToList();
+        Assert.NotEmpty(produces);
+        Assert.All(produces, metadata => Assert.Equal(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
+    }
+
+    /// <summary>两个 Ok&lt;T&gt; 分支：两条 200 元数据都要改，只认第一条会漏掉另一支。</summary>
+    [Fact]
+    public async Task Every_ok_branch_gets_its_metadata_rewritten()
+    {
+        var first = await _client.GetFromJsonAsync<JsonElement>("/api/two-ok/true");
+        Assert.Equal("order", first.GetProperty("data").GetProperty("name").GetString());
+        var second = await _client.GetFromJsonAsync<JsonElement>("/api/two-ok/false");
+        Assert.Equal("plain", second.GetProperty("data").GetString());
+
+        var produces = Single(_host.Services.GetRequiredService<EndpointDataSource>().Endpoints, "/api/two-ok/{first:bool}")
+            .Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Where(metadata => metadata.StatusCode == StatusCodes.Status200OK)
+            .ToList();
+
+        Assert.Equal(2, produces.Count);
+        Assert.All(produces, metadata => Assert.Equal(typeof(Result<>), metadata.Type!.GetGenericTypeDefinition()));
     }
 
     /// <summary>与上一条配对：运行时确实没有被包装。</summary>
