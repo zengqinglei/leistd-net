@@ -1,10 +1,17 @@
 using Leistd.MultiTenancy;
 using Xunit;
-using Leistd.Authorization.Permissions;
-using Leistd.Authorization.Services;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Subjects;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Management;
 using Leistd.Authorization.Constants;
-using Leistd.Authorization.Abstractions;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.Authorization.Errors;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.Core;

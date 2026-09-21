@@ -5,10 +5,17 @@ using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Notifications;
 #if (IncludeLocalization)
 using CompanyName.ProjectName.Application.Settings.Provider;
-using Leistd.Settings.Abstractions;
+using Leistd.Settings.Definitions;
+using Leistd.Settings.Errors;
+using Leistd.Settings.Management;
+using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
 using Microsoft.Extensions.Localization;
 #endif
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 using Leistd.Notifications.Dtos;
 
 namespace CompanyName.ProjectName.Api.Notifications;

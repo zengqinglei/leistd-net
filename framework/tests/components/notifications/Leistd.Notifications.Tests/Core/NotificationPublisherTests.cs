@@ -1,8 +1,10 @@
 using Leistd.Data.Paging;
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Filters;
-using Leistd.Notifications.Services;
 using Leistd.TestBase.Doubles;
 using Leistd.Timing;
 using Microsoft.Extensions.DependencyInjection;

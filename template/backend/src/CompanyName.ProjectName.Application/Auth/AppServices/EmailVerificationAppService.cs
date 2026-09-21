@@ -9,7 +9,7 @@ using CompanyName.ProjectName.Application.Auth.Policies;
 using Leistd.Email.Abstractions;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Ddd.Application.AppService;
+using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
 using Microsoft.Extensions.Caching.Distributed;
@@ -19,7 +19,11 @@ using Leistd.ExceptionHandling;
 using Leistd.Timing;
 using Leistd.Lock;
 using Leistd.Lock.Abstractions;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 

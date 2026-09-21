@@ -1,7 +1,11 @@
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Filters;
 using Leistd.Notifications.Settings.Options;
-using Leistd.Settings.Abstractions;
+using Leistd.Settings.Definitions;
+using Leistd.Settings.Errors;
+using Leistd.Settings.Management;
+using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
 using Microsoft.Extensions.Options;
 
 namespace Leistd.Notifications.Settings.Filters;

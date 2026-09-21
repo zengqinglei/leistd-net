@@ -4,10 +4,12 @@ using Microsoft.Extensions.Options;
 using Leistd.MultiTenancy.Stores;
 using Leistd.Data;
 using Leistd.MultiTenancy.Resolution;
-using Leistd.MultiTenancy.Services;
 using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Management;
 using Leistd.Data.Connections;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Provisioning;
 using Leistd.Localization;
 

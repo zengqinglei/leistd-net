@@ -45,6 +45,8 @@ using Leistd.Email.Smtp;
 #if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
+using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
+using Microsoft.Extensions.Options;
 #endif
 using StackExchange.Redis;
 using Leistd.Auditing.EntityFrameworkCore.Interceptors;
@@ -259,6 +261,15 @@ public static class DependencyInjection
 #endif
 
 #if (ExternalLogin)
+        services.AddSingleton<IValidateOptions<ExternalAuthOptions>, ExternalAuthOptionsValidator>();
+        services.AddOptions<ExternalAuthOptions>()
+            .Configure<IConfiguration>((options, config) =>
+            {
+                var section = config.GetSection(ExternalAuthOptions.SectionName);
+                BindProvider(options.Github, section.GetSection("Github"));
+                BindProvider(options.Google, section.GetSection("Google"));
+            })
+            .ValidateOnStart();
         services.AddHttpClient();
         services.AddScoped<IOAuthProvider, GitHubOAuthProvider>();
         services.AddScoped<IOAuthProvider, GoogleOAuthProvider>();
@@ -266,4 +277,15 @@ public static class DependencyInjection
 
         return services;
     }
+
+#if (ExternalLogin)
+    private static void BindProvider(
+        ExternalAuthOptions.ProviderOptions options,
+        IConfiguration configuration)
+    {
+        options.ClientId = configuration[nameof(options.ClientId)];
+        options.ClientSecret = configuration[nameof(options.ClientSecret)];
+        options.RedirectUri = configuration[nameof(options.RedirectUri)];
+    }
+#endif
 }

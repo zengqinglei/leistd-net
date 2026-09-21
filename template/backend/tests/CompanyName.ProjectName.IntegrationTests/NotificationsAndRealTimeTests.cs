@@ -5,7 +5,11 @@ using System.Net;
 using System.Net.Http.Json;
 #if (!LocalIdentity)
 using Microsoft.AspNetCore.Http;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
@@ -14,8 +18,12 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.Notifications.Abstractions;
-using Leistd.RealTime.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
+using Leistd.RealTime.Publishing;
+using Leistd.RealTime.Subscriptions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

@@ -108,7 +108,9 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 
-外部登录凭据通过 `ExternalAuth` 配置或密钥系统提供，不写入仓库。
+外部登录凭据通过 `ExternalAuth` 配置或密钥系统提供，不写入仓库。每个提供商（`Github` / `Google`）保持
+`ClientId`、`ClientSecret`、`RedirectUri` 三个原有配置键：三项全空表示不启用，启用时必须全部填写，且回调地址必须是绝对 HTTP(S) URI。
+配置不完整会在启动期被拒绝；这些适配器细节由 Infrastructure 绑定与校验，Application 只通过 `IOAuthProvider` 使用已配置的提供商。
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
 

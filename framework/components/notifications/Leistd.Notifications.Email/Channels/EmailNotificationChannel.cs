@@ -1,9 +1,12 @@
 using System.Net;
 using Leistd.BackgroundJobs.Queues;
 using Leistd.Email.Abstractions;
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 using Leistd.Notifications.Dtos;
-using Leistd.Notifications.Email.Abstractions;
+using Leistd.Notifications.Email.Recipients;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

@@ -45,9 +45,12 @@ using Leistd.Notifications.AspNetCore.SignalR;
 using CompanyName.ProjectName.Api.Notifications;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Notifications;
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 using Leistd.Notifications.Email;
-using Leistd.Notifications.Email.Abstractions;
+using Leistd.Notifications.Email.Recipients;
 using Leistd.Notifications.Settings;
 using Leistd.Notifications.Settings.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -149,10 +152,6 @@ try
 #if (OpenIddictServer)
     builder.Services.AddOptions<OAuthOptions>()
         .Bind(builder.Configuration.GetSection(OAuthOptions.SectionName));
-#endif
-#if (ExternalLogin)
-    builder.Services.AddOptions<ExternalAuthOptions>()
-        .Bind(builder.Configuration.GetSection(ExternalAuthOptions.SectionName));
 #endif
     builder.Services.AddOptions<UserRegistrationOptions>()
         .Bind(builder.Configuration.GetSection(UserRegistrationOptions.SectionName))

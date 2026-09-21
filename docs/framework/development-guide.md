@@ -33,10 +33,11 @@
 
   | 家族形态 | 组织方式 | 例 |
   | --- | --- | --- |
-  | 有并列子话题 | **按内容分**：契约与实现同处一个内容目录 | `Leistd.Security.Core` 的 `Users/`（`ICurrentUser` + `CurrentUser`）、`Claims/`、`Clients/`；`Leistd.Core` 的 `Timing/`；`Leistd.UnitOfWork.Core` 的包根 / `Database/` / `Options/` |
-  | 只有单一中心概念 | **按层次分**：`Abstractions/` 放契约、`Services/` 放实现 | `lock`、`event-bus`、`object-mapping`、`notifications`、`multi-tenancy` 等 14 个家族 |
+  | 有并列子话题 | **按内容分**：契约与实现同处一个内容目录 | `Leistd.Authorization.Core` 的 `Checking/`、`Definitions/`、`Grants/`；`Leistd.MultiTenancy.Core` 的 `Context/`、`ConnectionStrings/`、`Management/`；`Leistd.Security.Core` 的 `Users/`、`Claims/`、`Clients/` |
+  | 只有单一中心概念 | **按层次分**：`Abstractions/` 放契约、`Services/` 放实现 | `lock`、`event-bus`、`object-mapping` 等小型家族 |
 
-- `Services/` 只放实现；契约归 `Abstractions/` 或内容目录。
+- `Services/` 只放实现；契约归 `Abstractions/` 或内容目录。它们只适用于真正的单概念小包，
+  不是新类的默认投放点；一旦同时出现定义、授权、管理、存储等并列语义，就改为内容目录。
 
 - 扩展类在按层次分的包中放 `Extensions/`；按内容分的包中与被扩展类型同目录。
 

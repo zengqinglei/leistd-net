@@ -26,34 +26,74 @@
 
 ## 2. 命名空间搬迁（改 `using`）
 
-契约与实现分离后，各家族的公共契约统一落在 `<家族>.Abstractions`；实现类按职责分到
-`Services` / `Stores` / `Interceptors` 等子命名空间。包名里的 `.Core` 不再出现在命名空间里。
+包名里的 `.Core` 不再出现在命名空间里。只有单一中心概念的小包保留
+`Abstractions` / `Services`；Authorization、MultiTenancy、Settings、OperationRecords、Notifications 与
+RealTime 按定义、授权、上下文、查询、发布等内容归类，契约与实现同处对应概念命名空间。
 
 按类型数排列的主要映射：
 
 | 0.12.0 命名空间 | 0.13.0 命名空间 | 类型数 |
 | --- | --- | --- |
-| `Leistd.Authorization` | `Leistd.Authorization.Abstractions` | 10 |
+| `Leistd.Authorization` | `Leistd.Authorization.Checking` / `Constants` / `Definitions` / `Grants` / `Subjects` | 14 |
 | `Leistd.Auditing` | `Leistd.Auditing.Abstractions` | 9 |
 | `Leistd.Exception.Core` | `Leistd.ExceptionHandling` | 9 |
 | `Leistd.UnitOfWork.Core.Database` | `Leistd.UnitOfWork.Database` | 6 |
 | `Leistd.UnitOfWork.Core.Events` | `Leistd.UnitOfWork.Events` | 5 |
 | `Leistd.UnitOfWork.Core.Uow` | `Leistd.UnitOfWork` | 5 |
+| `Leistd.DependencyInjection` | `Leistd.DependencyInjection.Abstractions` / `Extensions` / `Registration` | 5 |
 | `Leistd.EventBus.Core.Event` | `Leistd.EventBus.Events` | 4 |
 | `Leistd.Lock.Core` | `Leistd.Lock.Abstractions` | 4 |
 | `Leistd.UnitOfWork.EfCore.Database` | `Leistd.UnitOfWork.EntityFrameworkCore.Database` | 4 |
+| `Leistd.Notifications` | `Leistd.Notifications.Dtos` / `Publishing` / `Stores` | 4 |
 | `Leistd.Authorization.AspNetCore` | `Leistd.Authorization.AspNetCore.Permissions` | 3 |
-| `Leistd.DependencyInjection` | `Leistd.DependencyInjection.Registration` | 3 |
+| `Leistd.Response.Core.Wrapper` | `Leistd.Response.Wrappers` | 3 |
 | `Leistd.EventBus.Core.EventBus` | `Leistd.EventBus.Abstractions` | 2 |
-| `Leistd.Notifications` | `Leistd.Notifications.Abstractions` | 2 |
-| `Leistd.Response.Core.Wrapper` | `Leistd.Response.Wrappers` | 2 |
 | `Leistd.UnitOfWork.Core.Interceptor` | `Leistd.UnitOfWork.Interceptors` | 2 |
 | `Leistd.UnitOfWork.Core.Options` | `Leistd.UnitOfWork.Options` | 2 |
-| `Leistd.Authorization` | `Leistd.Authorization.Services` | 2 |
+| `Leistd.Ddd.Application.AppService` | `Leistd.Ddd.Application.AppServices` | 1 |
+| `Leistd.Ddd.Application.Contracts.AppService` | `Leistd.Ddd.Application.Contracts.AppServices` | 1 |
+
+其中 `Leistd.Authorization` 是一对多拆分，不能只按原 `using` 批量替换；按类型选择最终命名空间：
+
+| 最终命名空间 | 0.12.0 类型 |
+| --- | --- |
+| `Leistd.Authorization.Checking` | `IPermissionChecker`、`MultiplePermissionGrantResult`、`DefaultPermissionChecker` |
+| `Leistd.Authorization.Constants` | `PermissionGrantProviderNames` |
+| `Leistd.Authorization.Definitions` | `IPermissionDefinition`、`IPermissionDefinitionContext`、`IPermissionDefinitionManager`、`IPermissionDefinitionProvider`、`IPermissionGroupDefinition`、`PermissionDefinitionManager` |
+| `Leistd.Authorization.Grants` | `IPermissionGrantManager`、`IPermissionGrantStore` |
+| `Leistd.Authorization.Subjects` | `IPermissionSubjectProvider`、`PermissionSubject` |
+
+`Leistd.DependencyInjection` 同样是一对多拆分：
+
+| 最终命名空间 | 0.12.0 类型 |
+| --- | --- |
+| `Leistd.DependencyInjection.Abstractions` | `IOnServiceRegisteredContext` |
+| `Leistd.DependencyInjection.Extensions` | `ServiceCollectionRegistrationExtensions` |
+| `Leistd.DependencyInjection.Registration` | `OnServiceRegisteredContext`、`ServiceRegistrationActionList`、`ServiceRegistrationCallbackFactory` |
+
+`Leistd.Notifications` 的 4 个迁移类型中，`NotificationOutputDto` 进入 `Dtos`，
+`INotificationPublisher` 与 `NotificationPublisher` 进入 `Publishing`，`INotificationStore` 进入 `Stores`。
+`INotificationSender` 与 `NotificationTypes` 已删除，不计入迁移数量；`Channels` 与 `Errors`
+中的公开类型是 0.13.0 新增 API。
 
 余下 30 余条是每个命名空间 1 个类型的同类搬迁（`Leistd.Notifications.EntityFrameworkCore`
 拆成 `Stores` / `Entities` / `EntityConfigurations`，`Leistd.ObjectMapping.Mapster` 拆成
-`Services` / `Options` / `Mapping`，等等）。逐条对照见[公共表面逐条对比](upgrade-0.13.0-api-diff.md)。
+`Services` / `Options` / `Mapping`，等等）。
+
+0.13.0 预发布快照中曾出现过的六个核心家族以及 Notifications 卫星包的通用命名空间不作为兼容层保留；如果代码已经跟随过这些快照，按下表再迁一次：
+
+| 预发布命名空间 | 最终命名空间 |
+| --- | --- |
+| `Leistd.Authorization.Abstractions` / `.Services` / `.Permissions` | `.Checking` / `.Definitions` / `.Grants` / `.Management` / `.Subjects` / `.Errors` |
+| `Leistd.MultiTenancy.Abstractions` / `.Services` | `.Context` / `.Tenancy` / `.ConnectionStrings` / `.Management` / `.Errors` |
+| `Leistd.Settings.Abstractions` / `.Services` | `.Definitions` / `.Management` / `.Resolution` / `.Stores` / `.Errors` |
+| `Leistd.OperationRecords.Abstractions` / `.Services` | `.Definitions` / `.Queries` / `.Stores` / `.Recording` / `.Models` |
+| `Leistd.Notifications.Abstractions` / `.Services` | `.Channels` / `.Publishing` / `.Stores` / `.Errors` |
+| `Leistd.Notifications.Email.Abstractions` | `Leistd.Notifications.Email.Recipients` |
+| `Leistd.Notifications.AspNetCore.SignalR.Services` | `Leistd.Notifications.AspNetCore.SignalR.Channels` |
+| `Leistd.RealTime.Abstractions` / `.Services` | `.Publishing` / `.Subscriptions` |
+
+逐条对照见[公共表面逐条对比](upgrade-0.13.0-api-diff.md)。
 
 编译器会把这些全部报成 CS0246 / CS0234，删掉旧 `using` 按提示补新的即可，没有静默失败的风险。
 
@@ -97,7 +137,7 @@
 `GetGrantedPermissionsForRoleAsync` 共 7 个方法，全部由 3 个取代：
 
 ```csharp
-// Leistd.Authorization.Abstractions.IPermissionGrantStore
+// Leistd.Authorization.Grants.IPermissionGrantStore
 Task<PermissionGrantSet> GetGrantsAsync(string providerName, string providerKey, CancellationToken ct = default);
 Task<IReadOnlyList<PermissionGrantSet>> GetGrantsAsync(string providerName, IReadOnlyCollection<string> providerKeys, CancellationToken ct = default);
 // 第三个不是"按类型取"：它按权限检查的主体取——用户直授加其所属角色的授予，一次往返

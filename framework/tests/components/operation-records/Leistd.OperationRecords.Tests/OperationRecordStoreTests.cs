@@ -1,5 +1,9 @@
 using Leistd.Data.Paging;
-using Leistd.OperationRecords.Abstractions;
+using Leistd.OperationRecords.Definitions;
+using Leistd.OperationRecords.Models;
+using Leistd.OperationRecords.Queries;
+using Leistd.OperationRecords.Recording;
+using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Stores;
 using Leistd.OperationRecords.Tests.TestDoubles;

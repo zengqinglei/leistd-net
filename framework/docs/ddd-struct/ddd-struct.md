@@ -42,7 +42,9 @@ DbContext"的唯一拦截点。装了 `DynamicProxyServiceRegistrationCallbackFa
 
 ### 应用服务基类
 
-`BaseAppService` 当前只实现 `IAppService` 标记，不参与注册或织入；服务仍需显式注册，横切行为由特性和拦截器提供。派生服务的依赖应保留在构造函数中，不通过 `IServiceProvider` 隐藏。
+`BaseAppService`（`Leistd.Ddd.Application.AppServices`）当前只实现
+`IAppService`（`Leistd.Ddd.Application.Contracts.AppServices`）标记，不参与注册或织入；服务仍需显式注册，
+横切行为由特性和拦截器提供。派生服务的依赖应保留在构造函数中，不通过 `IServiceProvider` 隐藏。
 
 ## 安装
 
@@ -172,8 +174,8 @@ public class AppDbContext(
 | 包 | 关键类型 |
 | --- | --- |
 | `Leistd.Ddd.Domain` | `Entity<TKey>`、审计实体基类、`IRepository<TEntity, TKey>`、`IDataFilter` |
-| `Leistd.Ddd.Application.Contracts` | `IAppService`、`EntityDto<TKey>`、`PageRequest`、`PagedResult<T>` |
-| `Leistd.Ddd.Application` | `BaseAppService`、`MapPagedResult<TSource, TDestination>` |
+| `Leistd.Ddd.Application.Contracts` | `AppServices.IAppService`、`EntityDto<TKey>`、`PageRequest`、`PagedResult<T>` |
+| `Leistd.Ddd.Application` | `AppServices.BaseAppService`、`MapPagedResult<TSource, TDestination>` |
 | `Leistd.Ddd.Infrastructure` | `AddDddInfrastructure`、`BaseDbContext`、`EfCoreRepository`、`AddDddInterceptors` |
 
 `IRepository<TEntity>` 提供查询、计数、存在性与批量写入；带主键的接口另提供按 Id 读取和删除。`IQueryableAsyncExecuter` 使 Domain 可异步执行 `IQueryable`，而不直接依赖 EF Core。

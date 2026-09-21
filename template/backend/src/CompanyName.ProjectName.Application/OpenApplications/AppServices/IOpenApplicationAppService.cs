@@ -1,6 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
-using Leistd.Ddd.Application.Contracts.AppService;
+using Leistd.Ddd.Application.Contracts.AppServices;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Data.Paging;
 

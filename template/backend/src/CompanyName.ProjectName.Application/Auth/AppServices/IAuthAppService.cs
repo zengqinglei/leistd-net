@@ -1,5 +1,5 @@
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using Leistd.Ddd.Application.Contracts.AppService;
+using Leistd.Ddd.Application.Contracts.AppServices;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 

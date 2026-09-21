@@ -1,11 +1,20 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.Dtos;
-using Leistd.Authorization.Abstractions;
-using Leistd.Ddd.Application.AppService;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Management;
+using Leistd.Authorization.Subjects;
+using Leistd.Ddd.Application.AppServices;
 using Leistd.Email.Abstractions;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.Application.Settings.AppServices;

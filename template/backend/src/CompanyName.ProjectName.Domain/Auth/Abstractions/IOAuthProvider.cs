@@ -11,16 +11,21 @@ public interface IOAuthProvider
     string Name { get; }
 
     /// <summary>
-    /// 获取授权 URL
+    /// 是否已完整配置并可对外提供服务。
     /// </summary>
-    string GetAuthorizationUrl(string redirectUri, string state);
+    bool IsAvailable { get; }
+
+    /// <summary>
+    /// 获取授权 URL。
+    /// </summary>
+    /// <remarks>客户端标识与回调地址由提供商实现从部署配置中读取。</remarks>
+    string GetAuthorizationUrl(string state);
 
     /// <summary>
     /// 使用 Authorization Code 换取 Token
     /// </summary>
     Task<OAuthTokenInfo> ExchangeCodeForTokenAsync(
         string code,
-        string redirectUri,
         CancellationToken cancellationToken = default);
 
     /// <summary>

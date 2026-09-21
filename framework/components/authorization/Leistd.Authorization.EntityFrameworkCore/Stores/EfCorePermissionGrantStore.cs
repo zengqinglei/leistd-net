@@ -1,10 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
-using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.Authorization.Exceptions;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Management;
 
 namespace Leistd.Authorization.EntityFrameworkCore.Stores;
 

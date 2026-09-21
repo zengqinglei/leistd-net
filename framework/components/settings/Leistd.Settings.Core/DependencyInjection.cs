@@ -1,9 +1,12 @@
 using Leistd.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Leistd.Settings.Abstractions;
+using Leistd.Settings.Definitions;
+using Leistd.Settings.Errors;
+using Leistd.Settings.Management;
+using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
 using Leistd.Settings.Options;
-using Leistd.Settings.Services;
 
 namespace Leistd.Settings;
 

@@ -226,12 +226,13 @@ public sealed class ExternalAuthenticationTests
     {
         public string Name => "github";
 
-        public string GetAuthorizationUrl(string redirectUri, string state) =>
+        public bool IsAvailable => true;
+
+        public string GetAuthorizationUrl(string state) =>
             $"https://provider.example.test/authorize?state={Uri.EscapeDataString(state)}";
 
         public Task<OAuthTokenInfo> ExchangeCodeForTokenAsync(
             string code,
-            string redirectUri,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new OAuthTokenInfo { AccessToken = "integration-test-token" });
 

@@ -1,5 +1,9 @@
 using CompanyName.ProjectName.Application.Settings.Provider;
-using Leistd.Settings.Abstractions;
+using Leistd.Settings.Definitions;
+using Leistd.Settings.Errors;
+using Leistd.Settings.Management;
+using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
 
 namespace CompanyName.ProjectName.Application.Settings.Timing;
 

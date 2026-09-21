@@ -1,5 +1,8 @@
 #if (IncludeNotifications)
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 
 namespace CompanyName.ProjectName.Application.Notifications;
 

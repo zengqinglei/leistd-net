@@ -2,7 +2,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Authorization.Resource.Services;
 using Leistd.Authorization.Resource.Grants;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Management;
+using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Resource;

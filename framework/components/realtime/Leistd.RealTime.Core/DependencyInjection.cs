@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Leistd.RealTime.Abstractions;
-using Leistd.RealTime.Services;
+using Leistd.RealTime.Publishing;
+using Leistd.RealTime.Subscriptions;
 
 namespace Leistd.RealTime;
 

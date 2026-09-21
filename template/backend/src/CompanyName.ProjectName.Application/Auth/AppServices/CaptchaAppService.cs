@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
-using Leistd.Ddd.Application.AppService;
+using Leistd.Ddd.Application.AppServices;
 using Leistd.Lock.Abstractions;
 using Microsoft.Extensions.Caching.Distributed;
 

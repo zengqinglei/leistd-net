@@ -25,7 +25,11 @@ using Leistd.Notifications.EntityFrameworkCore.Entities;
 #endif
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.Stores;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Provisioning;
 using Leistd.Data.Paging;
 using Leistd.Timing;

@@ -1,5 +1,5 @@
 using CompanyName.ProjectName.Application.Auth.Dtos;
-using Leistd.Ddd.Application.Contracts.AppService;
+using Leistd.Ddd.Application.Contracts.AppServices;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 

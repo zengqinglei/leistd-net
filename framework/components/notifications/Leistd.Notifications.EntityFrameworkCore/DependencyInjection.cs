@@ -9,7 +9,10 @@ using Leistd.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Notifications.EntityFrameworkCore.EntityConfigurations;
 using Leistd.Notifications.EntityFrameworkCore.Stores;
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 
 namespace Leistd.Notifications.EntityFrameworkCore;
 
