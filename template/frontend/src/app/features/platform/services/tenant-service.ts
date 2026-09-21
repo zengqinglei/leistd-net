@@ -6,7 +6,6 @@ import {
   CreateTenantInputDto,
   GetTenantsInputDto,
   TenantByHostOutputDto,
-  TenantLookupOutputDto,
   TenantOutputDto,
   UpdateTenantInputDto,
 } from '../../../shared/dtos/tenant.dto';
@@ -37,13 +36,6 @@ export class TenantService {
    */
   getByHost(): Observable<TenantByHostOutputDto> {
     return this.http.get<TenantByHostOutputDto>(`${this.baseUrl}/by-host`);
-  }
-
-  /** 匿名按名称解析租户（登录页租户选择用），404 表示不存在。 */
-  getByName(name: string): Observable<TenantLookupOutputDto> {
-    return this.http.get<TenantLookupOutputDto>(
-      `${this.baseUrl}/by-name/${encodeURIComponent(name)}`,
-    );
   }
 
   createTenant(data: CreateTenantInputDto): Observable<TenantOutputDto> {

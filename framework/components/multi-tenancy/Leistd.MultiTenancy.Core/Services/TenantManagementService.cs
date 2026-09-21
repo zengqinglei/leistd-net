@@ -17,8 +17,6 @@ namespace Leistd.MultiTenancy.Services;
 
 internal sealed class TenantManagementService(
     ITenantManager tenantManager,
-    ITenantStore tenantStore,
-    ITenantNormalizer tenantNormalizer,
     ITenantConnectionConfigurationManager connectionManager,
     ICurrentTenant currentTenant,
     IUnitOfWorkManager unitOfWorkManager,
@@ -43,7 +41,29 @@ internal sealed class TenantManagementService(
     public async Task<TenantOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default)
         => ToOutput(await tenantManager.FindAsync(id, cancellationToken) ?? throw new TenantNotFoundException(id.ToString()));
 
-    public async Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
+    public Task<TenantOutputDto> CreateAsync(
+        CreateTenantInputDto input,
+        CancellationToken cancellationToken = default)
+        => CreateCoreAsync(input, id: null, cancellationToken);
+
+    public Task<TenantOutputDto> CreateAsync(
+        CreateTenantInputDto input,
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        // 空标识多半是调用方漏传了变量，落库后是一条永远查不到的记录
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException("The tenant id must not be empty.", nameof(id));
+        }
+
+        return CreateCoreAsync(input, id, cancellationToken);
+    }
+
+    private async Task<TenantOutputDto> CreateCoreAsync(
+        CreateTenantInputDto input,
+        Guid? id,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
         UnprocessableEntityException.ThrowIfInvalid(input);
@@ -57,7 +77,11 @@ internal sealed class TenantManagementService(
         TenantConfiguration tenant;
         using (var controlUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
         {
-            tenant = await tenantManager.CreateAsync(input.Name, input.DisplayName, isActive: false, input.Description, cancellationToken);
+            tenant = id is { } seeded
+                ? await tenantManager.CreateAsync(
+                    input.Name, input.DisplayName, isActive: false, seeded, input.Description, cancellationToken)
+                : await tenantManager.CreateAsync(
+                    input.Name, input.DisplayName, isActive: false, input.Description, cancellationToken);
 
             // 分库在开通之前定案，且与登记租户同一个工作单元：不会留下"有租户没连接"或只登记了一半的状态，
             // 开通钩子第一次执行时看到的就是完整的连接集合
@@ -157,19 +181,6 @@ internal sealed class TenantManagementService(
                 new TenantChangedEvent(id, doomed is null ? null : doomed.DisplayName ?? doomed.Name, TenantChangeKind.Deleted),
                 cancellationToken);
         }
-    }
-
-    public async Task<TenantLookupOutputDto?> FindByNameAsync(string name, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return null;
-        }
-
-        var tenant = await tenantStore.FindByNameAsync(tenantNormalizer.NormalizeName(name)!, cancellationToken);
-        return tenant is null
-            ? null
-            : new TenantLookupOutputDto { Id = tenant.Id, Name = tenant.Name, DisplayName = tenant.DisplayName, IsActive = tenant.IsActive };
     }
 
     // 整批归一化：名字按 ^[a-z0-9-]{1,64}$ 归一（大小写不敏感），连接串按键值对语法校验，

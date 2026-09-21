@@ -98,12 +98,9 @@
                         @case ('outcome') {
                           <div class="flex items-center gap-1.5 whitespace-nowrap">
                             @if (isSucceeded(row.original)) {
-                              <span
-                                hlmBadge
-                                variant="outline"
-                                class="border-success/30 bg-success/10 text-success"
-                                >{{ outcomeLabel(row.original) }}</span
-                              >
+                              <span hlmBadge variant="success">{{
+                                outcomeLabel(row.original)
+                              }}</span>
                             } @else {
                               <!-- 被拒绝的操作是这张表最该被一眼看到的行：destructive 变体让它在整列里跳出来。
                                    与用户/租户列表的状态徽章一样只用文字与配色，不嵌图标。 -->

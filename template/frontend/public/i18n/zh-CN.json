@@ -106,7 +106,8 @@
       "groupIdentity": "身份与访问",
       "groupAudit": "审计",
       "groupPersonal": "个人",
-      "settings": "设置"
+      "settings": "设置",
+      "toggle": "折叠/展开侧边栏"
     },
     "topbar": {
       "openNavigation": "打开导航"
@@ -393,8 +394,6 @@
       "tenantPlaceholder": "租户名称，留空为宿主",
       "tenantConfirm": "确认",
       "tenantClear": "清除租户",
-      "tenantNotFound": "租户不存在",
-      "tenantInactive": "租户已停用",
       "tenantFromDomain": "由站点地址自动识别。",
       "tenantResolving": "正在按站点地址识别租户…",
       "tenantUnavailable": "该地址指向的租户当前不可用，请联系管理员。",
@@ -599,6 +598,7 @@
       "tenant.updated": "更新了租户 {{target}}",
       "tenant.activation-changed": "变更了租户 {{target}} 的启用状态",
       "tenant.deleted": "删除了租户 {{target}}",
+      "tenant.connection-changed": "改动了租户 {{target}} 的数据库连接",
       "setting.changed": "修改了设置 {{target}}",
       "operation-records.exported": "导出了操作记录",
       "auth.login.succeeded": "登录了系统",
@@ -620,7 +620,9 @@
       "impersonation.ended": "结束了模拟操作",
       "tenant.impersonation-started": "以租户 {{target}} 的管理员身份登录",
       "tenant.impersonation-ended": "结束了对租户 {{target}} 的模拟",
-      "auth.token.issued": "签发了访问令牌"
+      "auth.token.issued": "签发了访问令牌",
+      "tenant.connection-registered": "为租户 {{target}} 登记了数据库连接",
+      "tenant.connection-removed": "删除了租户 {{target}} 的数据库连接登记"
     },
     "actionsNoTarget": {
       "user.created": "创建用户",

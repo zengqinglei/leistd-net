@@ -84,7 +84,8 @@ describe('租户 Mock', () => {
     ).toBeUndefined();
   });
 
-  // 路由顺序：by-host / by-name 必须排在 :id 之前，否则会被当成一个 id 走错分支。
+  // 路由顺序：by-host 必须排在 :id 之前，否则会被当成一个 id 走错分支。
+  // 按名字查租户的匿名端点已被移除：它是租户存在性 oracle
   it('注册了按主机名探测与连接增删查三条路由，且探测排在按 id 查询之前', () => {
     const routes = Object.keys(TENANT_API);
 

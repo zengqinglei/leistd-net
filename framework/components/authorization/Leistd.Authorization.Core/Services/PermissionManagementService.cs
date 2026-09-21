@@ -22,14 +22,35 @@ internal sealed class PermissionManagementService(
     ILocalEventBus? eventBus = null,
     IStringLocalizerFactory? localizerFactory = null) : IPermissionManagementService
 {
+    // 当前身份不是权限主体时的版本标记
+    private const string NoSubjectVersionToken = "no-subject";
+
     private MultiTenancySides CurrentSide =>
         currentTenant?.IsAvailable == true ? MultiTenancySides.Tenant : MultiTenancySides.Host;
 
     public async Task<CurrentPermissionsOutputDto> GetCurrentAsync(CancellationToken cancellationToken = default)
     {
-        var subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken)
-            ?? throw new UnauthorizedException("The current identity is not a permission subject.")
-                .WithCode(PermissionErrorCodes.SubjectUnavailable);
+        var subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
+
+        // 问"我有哪些权限"而当前身份不在本权限主体空间里时，正确答案是"一个都没有"，不是"你没登录"。
+        //
+        // 端点挂着 RequireAuthorization，能走到这里的调用方**必然已认证**，回 401 是在说假话；
+        // 客户端据此去重新登录，登录成功后再问一次、再拿到 401，就是死循环。双 realm 部署
+        // （员工走 RBAC、客户走另一套身份）会稳定踩中：客户令牌按设计就不落在员工的主体空间里。
+        //
+        // 这不是放松校验：空集合意味着任何权限判定都不通过，与抛异常的拒绝效果一致。
+        // 需要区分"没有主体"与"有主体但没授权"的调用方看 IsSuperAdmin 之外的业务标识，
+        // 不要把状态码当作那个信号。
+        if (subject is null)
+        {
+            return new CurrentPermissionsOutputDto
+            {
+                Permissions = [],
+                IsSuperAdmin = false,
+                // 没有主体就没有可失效的授权，版本恒定；与真实主体的版本不会撞上
+                VersionToken = NoSubjectVersionToken
+            };
+        }
 
         var side = CurrentSide;
         if (subject.IsSuperAdmin)

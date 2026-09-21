@@ -201,7 +201,7 @@ internal sealed class OperationRecordQueryService(
     };
 
     // CSV：带 UTF-8 BOM（否则 Excel 按本地代码页解释，中文全是乱码）；动作码存原样不渲染句子
-    // （句子落进文件，这份文件的语言就锁死了）；仅宿主两列只在宿主导出时成列，而不是有列但为空。
+    // （句子落进文件，这份文件的语言就锁死了）；仅宿主那几列只在宿主导出时成列，而不是有列但为空。
     private static byte[] BuildCsv(IReadOnlyList<OperationRecordOutputDto> rows, bool includeHostOnlyColumns)
     {
         var builder = new StringBuilder();

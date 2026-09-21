@@ -124,7 +124,7 @@ describe('Resource AuthService', () => {
     await service.initializeAuth();
 
     expect(service.isAuthenticated()).toBeTrue();
-    expect(tenantContext.current()?.id).toBe(tenantId);
+    expect(tenantContext.current()?.key).toBe(tenantId);
   });
 
   it('rejects an authenticated token with multiple tenant claims', async () => {

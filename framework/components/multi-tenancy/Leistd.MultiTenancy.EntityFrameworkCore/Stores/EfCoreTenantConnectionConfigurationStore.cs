@@ -88,12 +88,6 @@ public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConne
             .Where(x => x.Name == normalized || x.Name == defaultName)
             .ToListAsync(cancellationToken);
 
-        var resolved = candidates
-            .GroupBy(x => x.TenantId)
-            .ToDictionary(
-                group => group.Key,
-                group => group.FirstOrDefault(x => x.Name == normalized) ?? group.First(x => x.Name == defaultName));
-
         // 登记过连接的租户全集：解析不出这个名字的必须让作业整体停下，而不是被静默跳过——
         // 跳过的库会停在旧结构上，下一次发版才炸
         var tenantIds = await dbContext.ConnectionsOfUndeletedTenants()
@@ -103,16 +97,18 @@ public class EfCoreTenantConnectionConfigurationStore<TDbContext> : ITenantConne
             .OrderBy(x => x)
             .ToListAsync(cancellationToken);
 
+        var (resolved, unresolved) = TenantConnectionNameResolution.Resolve(candidates, tenantIds, normalized);
+        if (unresolved.Count > 0)
+        {
+            throw new InvalidOperationException(
+                TenantConnectionNameResolution.DescribeUnresolved(unresolved[0], normalized)
+                + " Fix its connection registrations before running the migrator.");
+        }
+
         var connections = new List<TenantMigrationConnection>(tenantIds.Count);
         foreach (var tenantId in tenantIds)
         {
-            if (!resolved.TryGetValue(tenantId, out var record))
-            {
-                throw new InvalidOperationException(
-                    $"Tenant '{tenantId}' has tenant-specific connections registered but none for " +
-                    $"'{normalized}', and no default-named connection to fall back to. " +
-                    "Fix its connection registrations before running the migrator.");
-            }
+            var record = resolved[tenantId];
 
             connections.Add(new TenantMigrationConnection(
                 tenantId,

@@ -32,12 +32,7 @@
           <!-- 已选中态复用与未选中态、与用户名输入框同一个 hlm-input-group 原语：
              手写 div 会在高度、圆角与边框 token 上各偏一点，同一张表单里三种控件三个尺寸 -->
           <hlm-input-group>
-            <input
-              hlmInputGroupInput
-              id="tenantName"
-              readonly
-              [value]="tenant.displayName || tenant.name"
-            />
+            <input hlmInputGroupInput id="tenantName" readonly [value]="tenant.key" />
             <!--#if (IncludeLocalization)-->
             @if (!tenantSelectionBlocked()) {
               <button
@@ -90,7 +85,7 @@
               hlmInputGroupButton
               type="button"
               align="inline-end"
-              [disabled]="tenantChecking() || tenantSelectionBlocked()"
+              [disabled]="tenantSelectionBlocked()"
               (click)="onConfirmTenant()"
             >
               {{ 'account.login.tenantConfirm' | transloco }}
@@ -110,7 +105,7 @@
               hlmInputGroupButton
               type="button"
               align="inline-end"
-              [disabled]="tenantChecking() || tenantSelectionBlocked()"
+              [disabled]="tenantSelectionBlocked()"
               (click)="onConfirmTenant()"
             >
               Confirm

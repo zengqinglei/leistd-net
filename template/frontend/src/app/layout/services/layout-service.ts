@@ -15,10 +15,11 @@ export class LayoutService {
   private readonly router = inject(Router);
 
   /**
-   * 页面标题
+   * 页面标题（面包屑末级）。各页在 ngOnInit/effect 里设置本页标题。
    */
-  // 初始占位值（各页在 ngOnInit/effect 里会立即覆盖为本页标题）
-  title = signal<string>('Overview');
+  // 初值为空，不给字面量：占位文案在任何语言下都不正确，多语言变体下会先闪一下英文。
+  // 空标题时 default-header 整个末级（含分隔符）不渲染，因此不会留下断裂的面包屑。
+  title = signal<string>('');
 
   /** 当前路由（跟随导航结束刷新）。Header/Sidebar/UserMenu 共享，避免各自重复接线。 */
   readonly currentUrl = toSignal(

@@ -33,22 +33,6 @@ public record TenantOutputDto
     public required DateTime CreationTime { get; init; }
 }
 
-/// <summary>登录前租户探测输出（匿名端点，只暴露选择租户所需的最小信息）。</summary>
-public record TenantLookupOutputDto
-{
-    /// <summary>租户标识。</summary>
-    public required Guid Id { get; init; }
-
-    /// <summary>名称。</summary>
-    public required string Name { get; init; }
-
-    /// <summary>显示名。</summary>
-    public string? DisplayName { get; init; }
-
-    /// <summary>是否启用。</summary>
-    public required bool IsActive { get; init; }
-}
-
 /// <summary>
 /// 域名对租户的定案结果。
 /// </summary>
@@ -75,7 +59,22 @@ public record TenantByHostOutputDto
     public required HostTenantDecision Decision { get; init; }
 
     /// <summary>定案到的租户，只有 <see cref="HostTenantDecision.Tenant"/> 时才可能有值。</summary>
-    public TenantLookupOutputDto? Tenant { get; init; }
+    public AnonymousTenantOutputDto? Tenant { get; init; }
+}
+
+/// <summary>
+/// 匿名响应里的租户：只有名字。
+/// </summary>
+/// <remarks>
+/// <b>刻意不含标识与启用状态。</b>未认证者不该从响应里读出租户主键，也不该分辨出某个租户是否启用。
+/// <b>存在性仍可被匿名判定</b>（租户存在时请求走到业务逻辑，不存在时被中间件挡成 404），
+/// 那是权衡后有意接受的残留，理由与边界见组件文档与 <c>MultiTenancyMiddleware</c>，别当缺陷"修"掉。
+/// 客户端把名字随后续请求发出即可——租户头按名字同样能解析（<c>MultiTenancyMiddleware</c>）。
+/// </remarks>
+public sealed record AnonymousTenantOutputDto
+{
+    /// <summary>租户名。</summary>
+    public required string Name { get; init; }
 }
 
 /// <summary>

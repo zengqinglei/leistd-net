@@ -37,10 +37,16 @@ body {
  * - 品牌色：色相 250 的蓝。亮色 L=0.52 保证白字可读，暗色提到 L=0.72 保证深底上够亮——
  *   两套同一色相，只调明度与彩度，换品牌时也按这个办法成对改。
  * - 中性色：带一点跟随品牌色相的彩度（C≈0.004–0.01），纯灰与品牌色并置会显得脏。
- * - warning / success 在页面里只当文字色（text-*）和淡色底（bg-*\/10~25）用，
- *   所以按"作为文字压在底色上 ≥ 4.5:1"定值，亮暗必须分开：同一个亮琥珀在白底上只有约 2:1。
+ * - destructive / warning / success 在页面里既当文字色（text-*）又当淡色底（bg-*\/10~25），
+ *   两者同源，所以判据是"该色作为文字压在它自己的淡色底上 ≥ 4.5:1"，亮暗必须分开定值：
+ *   同一个亮琥珀在白底上只有约 2:1。alpha 越大底色越接近文字色，对比必然下降，
+ *   因此**淡色底的 alpha 上限是 0.25**；再高就得换成与文字色不同源的底色标记。
+ *   改这三个值或新增更高的 alpha 用法后，重新核算这个判据，别凭观感定。
  * - 暗色不用纯黑：近黑底配纯白字对比过高会产生光晕。表面分五层逐级提亮
  *   （sidebar < background < card < popover < muted），暗色下"浮起"只能靠更亮来表达。
+ * - 品牌色相跨主题恒定（oklch 第三位 250）：亮暗只调明度与彩度。色相一变，
+ *   切主题时品牌色会肉眼可见地偏蓝/偏紫，而这四个标记
+ *   （--primary / --ring / --sidebar-primary / --sidebar-ring）必须始终是同一个颜色。
  */
 :root {
   --radius: 0.625rem;
@@ -58,10 +64,10 @@ body {
   --muted-foreground: oklch(0.505 0.015 255);
   --accent: oklch(0.955 0.018 250);
   --accent-foreground: oklch(0.24 0.02 255);
-  --destructive: oklch(0.577 0.245 27.325);
-  --warning: oklch(0.52 0.12 70);
+  --destructive: oklch(0.457 0.245 27.325);
+  --warning: oklch(0.47 0.12 70);
   --warning-foreground: oklch(0.99 0.01 80);
-  --success: oklch(0.52 0.13 155);
+  --success: oklch(0.51 0.13 155);
   --success-foreground: oklch(0.99 0.01 155);
   --border: oklch(0.912 0.006 250);
   --input: oklch(0.912 0.006 250);
@@ -85,7 +91,7 @@ body {
   --card-foreground: oklch(0.94 0.003 255);
   --popover: oklch(0.285 0.009 255);
   --popover-foreground: oklch(0.94 0.003 255);
-  --primary: oklch(0.72 0.14 262);
+  --primary: oklch(0.72 0.14 250);
   --primary-foreground: oklch(0.18 0.02 255);
   --secondary: oklch(0.305 0.01 255);
   --secondary-foreground: oklch(0.94 0.003 255);
@@ -93,7 +99,7 @@ body {
   --muted-foreground: oklch(0.72 0.012 250);
   --accent: oklch(0.3 0.035 258);
   --accent-foreground: oklch(0.94 0.003 255);
-  --destructive: oklch(0.704 0.191 22.216);
+  --destructive: oklch(0.759 0.191 22.216);
   --warning: oklch(0.8 0.14 75);
   --warning-foreground: oklch(0.2 0.03 70);
   --success: oklch(0.76 0.15 155);
@@ -102,15 +108,15 @@ body {
 
   /* 交互控件的边界单独提亮：装饰分隔线可以淡，输入框与描边按钮的边界必须看得清 */
   --input: oklch(1 0 0 / 22%);
-  --ring: oklch(0.72 0.14 262);
+  --ring: oklch(0.72 0.14 250);
   --sidebar: oklch(0.175 0.009 255);
   --sidebar-foreground: oklch(0.94 0.003 255);
-  --sidebar-primary: oklch(0.72 0.14 262);
+  --sidebar-primary: oklch(0.72 0.14 250);
   --sidebar-primary-foreground: oklch(0.18 0.02 255);
   --sidebar-accent: oklch(0.26 0.012 255);
   --sidebar-accent-foreground: oklch(0.94 0.003 255);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.72 0.14 262);
+  --sidebar-ring: oklch(0.72 0.14 250);
 
   color-scheme: dark;
 }

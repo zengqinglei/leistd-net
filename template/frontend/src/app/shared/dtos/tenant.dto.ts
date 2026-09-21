@@ -12,14 +12,6 @@ export interface TenantOutputDto {
   creationTime: string;
 }
 
-/** 匿名按名称解析租户的返回体（登录页租户选择用）。 */
-export interface TenantLookupOutputDto {
-  id: string;
-  name: string;
-  displayName?: string;
-  isActive: boolean;
-}
-
 export interface GetTenantsInputDto extends PagedRequestDto {
   keyword?: string;
 }
@@ -62,6 +54,16 @@ export interface CreateTenantConnectionInputDto {
 export type HostTenantDecision = 'undecided' | 'host' | 'tenant';
 
 /** 按当前主机名解析租户的结果。 */
+/**
+ * 匿名响应里的租户：只有名字。
+ *
+ * 刻意不含标识与启用状态——未认证者不该读出租户主键，也不该分辨出某个租户是否存在、是否启用。
+ * 名字放进 `X-Tenant-Id` 头即可，服务端按名字同样能解析。
+ */
+export interface AnonymousTenantOutputDto {
+  name: string;
+}
+
 export interface TenantByHostOutputDto {
   decision: HostTenantDecision;
   /**
@@ -71,7 +73,7 @@ export interface TenantByHostOutputDto {
    * 租户解析阶段就被拒了，探测本身拿到的是 404，走的是探测失败那条分支。
    * 真的取不到时 `decision` 仍是 `tenant`：域名已经定了案，界面不该退回让用户自己挑一个。
    */
-  tenant?: TenantLookupOutputDto;
+  tenant?: AnonymousTenantOutputDto;
 }
 
 export interface UpdateTenantInputDto {

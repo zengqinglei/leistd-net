@@ -39,9 +39,10 @@ public sealed class TenantEndpointMappingTests
         });
 
         var routes = endpoints.Routes();
-        Assert.Equal(8, routes.Count);
-        Assert.All(routes.Where(r => r.Pattern.StartsWith("/by-", StringComparison.Ordinal)), r => Assert.True(r.Anonymous));
-        Assert.All(routes.Where(r => !r.Pattern.StartsWith("/by-", StringComparison.Ordinal)), r => Assert.False(r.Anonymous));
+        // 按名字查租户的匿名端点已移除（租户存在性 oracle），只剩按主机名探测这一个匿名端点
+        Assert.Equal(7, routes.Count);
+        Assert.Equal("/by-host", Assert.Single(routes, r => r.Anonymous).Pattern);
+        Assert.All(routes.Where(r => r.Pattern != "/by-host"), r => Assert.False(r.Anonymous));
     }
 
     // 管理端点同理：组上一句无参 RequireAuthorization 会把宿主默认策略叠上去，

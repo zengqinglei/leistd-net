@@ -10,15 +10,26 @@ internal sealed class TenantDatabaseRunner(
 {
     public async Task<TenantDatabaseRunResult> ForEachDatabaseAsync(
         string connectionStringName,
+        bool activeOnly,
         Func<TenantDatabase, CancellationToken, Task> action,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        var databases = await databaseEnumerator.GetDatabasesAsync(connectionStringName, cancellationToken);
+        var set = await databaseEnumerator.GetDatabasesAsync(connectionStringName, activeOnly, cancellationToken);
         var failed = new List<TenantDatabase>();
 
-        foreach (var database in databases)
+        // 解析不出连接的租户只记不抛：坏掉一个租户不该让整轮作业不执行
+        foreach (var unresolved in set.FailedTenants)
+        {
+            logger.LogError(
+                "Tenant {TenantId} was skipped: its '{ConnectionName}' connection could not be resolved. {Reason}",
+                unresolved.TenantId,
+                connectionStringName,
+                unresolved.Reason);
+        }
+
+        foreach (var database in set.Databases)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
@@ -36,6 +47,6 @@ internal sealed class TenantDatabaseRunner(
             }
         }
 
-        return new TenantDatabaseRunResult(databases.Count, failed);
+        return new TenantDatabaseRunResult(set.Databases.Count, failed, set.FailedTenants);
     }
 }

@@ -24,12 +24,12 @@ public class TenantDatabaseRunnerTests
             .AddLogging()
             .AddMultiTenancyCore()
             .AddSingleton<ITenantDatabaseEnumerator>(new FixedEnumerator(
-                TenantDatabase.Host, new TenantDatabase(First, "a"), new TenantDatabase(Second, "b")))
+                TenantDatabase.ForHost("host"), new TenantDatabase(First, "a", []), new TenantDatabase(Second, "b", [])))
             .BuildServiceProvider();
         var currentTenant = provider.GetRequiredService<ICurrentTenant>();
         var seen = new List<Guid?>();
 
-        var result = await provider.GetRequiredService<ITenantDatabaseRunner>().ForEachDatabaseAsync("Default", (database, _) =>
+        var result = await provider.GetRequiredService<ITenantDatabaseRunner>().ForEachDatabaseAsync("Default", activeOnly: false, (database, _) =>
         {
             seen.Add(currentTenant.Id);
             return database.TenantId == First ? throw new InvalidOperationException("unreachable") : Task.CompletedTask;
@@ -43,7 +43,7 @@ public class TenantDatabaseRunnerTests
 
     private sealed class FixedEnumerator(params TenantDatabase[] databases) : ITenantDatabaseEnumerator
     {
-        public Task<IReadOnlyList<TenantDatabase>> GetDatabasesAsync(string name, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<TenantDatabase>>(databases);
+        public Task<TenantDatabaseSet> GetDatabasesAsync(string name, bool activeOnly, CancellationToken cancellationToken = default)
+            => Task.FromResult(new TenantDatabaseSet(databases, []));
     }
 }

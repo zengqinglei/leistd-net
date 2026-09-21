@@ -228,7 +228,26 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser Chrome
 
 **收紧侧别不会撤销已经授出去的记录。** `SeedAdminRolePermissionsAsync` 只在授权版本为 0 时播种，既不自动补齐也不自动撤销——因此把某条权限从 `Both` 改成 `Host` 时，必须同时给既有部署一条撤销 SQL，否则已建租户仍持有该权限。
 
-## 9. 验证
+## 9. 集成测试夹具只用内存库（为什么不做双库夹具）
+
+模板的 `ProjectWebApplicationFactory` 只有一个内存库，租户专属库的路由不在它的覆盖范围内。
+这是有意的划分，被反复提出过，结论记在这里，不写进模板载荷：
+
+1. **覆盖已经在了，而且更真。** `scripts/test-template-postgresql-e2e.ps1` 在真实 PostgreSQL 上
+   逐条断言共享租户的数据落在默认库、专属租户落在自己的库、两边互不泄漏，外加连接登记、
+   事后分库被拒 409、连接串静态加密。再加一份内存版是重复，不是补缺。
+2. **做了就得在生产组合根里开一个只服务于测试的口子。** `Infrastructure/DependencyInjection.cs`
+   按"有没有连接串"二选一：有就 `UseNpgsql`，没有就内存库——全项目只有 Npgsql 一个真实提供程序。
+   要让测试选别的，得往那里加分支，或引入一层提供程序选择抽象，而那层抽象唯一的消费者是测试夹具。
+3. **绿灯会给假信心。** 模板声明了默认 schema，迁移历史表是 schema 限定的；SQLite 没有 schema，
+   夹具只能走 `EnsureCreated`，物理形态与生产不同，而租户路由的正确性恰恰依赖这些。
+
+下游仓库各自维护多连接测试宿主这件事，**解法不在模板**：模板是 `dotnet new` 的一次性脚手架，
+已生成的项目不跟随模板更新，往这里加夹具只对将来新建的项目有效。若那份重复确实成立，
+载体应是框架侧的测试支撑包（随版本升级下发）——当前 `framework/tests` 全部 `IsPackable=false`，
+那会是一个新的交付面，动手前先看各处宿主真正共用的是什么，不要先建包再找用途。
+
+## 10. 验证
 
 ```powershell
 pwsh scripts/check-all.ps1                                 # 全部静态闸门（~40s，-List 看清单）

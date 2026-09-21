@@ -60,15 +60,16 @@ public static class DependencyInjection
     /// <param name="services">服务集合</param>
     /// <remarks>
     /// <para>用例只依赖契约（<see cref="ITenantManager"/>、<see cref="ITenantStore"/>、
-    /// <see cref="ITenantConnectionConfigurationManager"/>、<see cref="ITenantConnectionDirectory"/>）与工作单元，
-    /// 因此换存储实现时这套开通编排、失败补偿与 DTO 投影照旧可用。<b>五个存储契约与
+    /// <see cref="ITenantConnectionConfigurationManager"/>、<see cref="ITenantConnectionDirectory"/>、
+    /// <c>ITenantDatabaseDirectory</c>）与工作单元，
+    /// 因此换存储实现时这套开通编排、失败补偿与 DTO 投影照旧可用。<b>六个存储契约与
     /// <c>AddUnitOfWork()</c> 都要由调用方先就位</b>，漏了哪个在首次解析用例时才会暴露；
     /// EF 存储的 <c>AddMultiTenancyEfCore</c> 已经代为注册并调用本方法。</para>
     /// <para>开通编排的顺序与补偿见 <see cref="ITenantProvisioner"/>。</para>
     /// </remarks>
     /// <example>
     /// <code>
-    /// // 自定义存储的宿主：五个存储契约与工作单元都要先就位，再注册用例
+    /// // 自定义存储的宿主：六个存储契约与工作单元都要先就位，再注册用例
     /// builder.Services.AddUnitOfWork();
     /// builder.Services.AddMultiTenancyCore();
     /// builder.Services.AddScoped&lt;ITenantStore, DapperTenantStore&gt;();
@@ -76,6 +77,7 @@ public static class DependencyInjection
     /// builder.Services.AddScoped&lt;ITenantConnectionConfigurationStore, DapperTenantConnectionStore&gt;();
     /// builder.Services.AddScoped&lt;ITenantConnectionConfigurationManager, DapperTenantConnectionManager&gt;();
     /// builder.Services.AddScoped&lt;ITenantConnectionDirectory, DapperTenantConnectionDirectory&gt;();
+    /// builder.Services.AddScoped&lt;ITenantDatabaseDirectory, DapperTenantDatabaseDirectory&gt;();
     /// builder.Services.AddTenantManagement();
     /// </code>
     /// </example>
@@ -119,6 +121,8 @@ public static class DependencyInjection
 
         // 宿主级单例：跨请求合并同租户回源，且隔离同进程中的不同宿主
         services.TryAddSingleton<TenantRouteResolutionCoordinator>();
+        // 逐库枚举据此判"有独立库可列"，不从解析器或目录的在场与否推断
+        services.TryAddSingleton(TenantConnectionRouting.Instance);
         services.TryAddScoped<IConnectionStringResolver, RemoteConnectionStringResolver>();
         services.TryAddTransient<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
 

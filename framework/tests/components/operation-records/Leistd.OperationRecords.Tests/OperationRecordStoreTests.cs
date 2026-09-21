@@ -499,14 +499,17 @@ public sealed class OperationRecordStoreTests : IDisposable
         Assert.Equal(OperationRecordInfo.MaxActionLength, Assert.Single(page.Items).Action.Length);
     }
 
-    /// <summary>按 (租户, 时间) 建索引：唯一的查询形态就是"某租户的最近若干条"。</summary>
+    /// <summary>读与归档两条访问路径各有索引。</summary>
     /// <remarks>
-    /// 只断言列组合，与 <c>NotificationRecordSchemaTests</c> 同口径——排序方向不进运行期模型
+    /// <para>读是"某租户的最近若干条"，按 (租户, 时间)；归档是整库按时间扫最旧的
+    /// （<c>IgnoreQueryFilters</c>，不带租户），只能靠单列时间索引。后者不补，归档每一批
+    /// 都要全表扫加排序，而这张表只涨不消。</para>
+    /// <para>只断言列组合，与 <c>NotificationRecordSchemaTests</c> 同口径——排序方向不进运行期模型
     /// （读它会抛 <c>The requested configuration is not stored in the read-optimized model</c>），
-    /// 要验证降序得比对迁移产出的 DDL，那属于宿主项目的迁移测试。
+    /// 要验证降序得比对迁移产出的 DDL，那属于宿主项目的迁移测试。</para>
     /// </remarks>
     [Fact]
-    public void The_tenant_and_time_index_reaches_the_database()
+    public void Both_the_read_and_the_archive_paths_have_an_index()
     {
         var indexes = _db.Model.FindEntityType(typeof(OperationRecord))!
             .GetIndexes()
@@ -516,5 +519,6 @@ public sealed class OperationRecordStoreTests : IDisposable
         Assert.Contains(
             $"{nameof(OperationRecord.TenantId)},{nameof(OperationRecord.CreationTime)}",
             indexes);
+        Assert.Contains(nameof(OperationRecord.CreationTime), indexes);
     }
 }

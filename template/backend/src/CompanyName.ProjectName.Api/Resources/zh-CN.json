@@ -117,7 +117,6 @@
     "Permission:Group.Identity": "身份与访问",
     "Permission:Group.System": "系统",
     "Permission:SubjectNotFound": "未找到该主体。",
-    "Permission:UndefinedPermission": "权限“{Name}”未定义或已禁用。",
     "Permissions": "权限",
     "Phone number": "手机号",
     "Recipient": "收件地址",

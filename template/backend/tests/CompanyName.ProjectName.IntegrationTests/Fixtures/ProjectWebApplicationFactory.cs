@@ -23,6 +23,17 @@ using CompanyName.ProjectName.Domain.Users.Policies;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
+/// <summary>
+/// 集成测试宿主：单一内存库。
+/// </summary>
+/// <remarks>
+/// <para>本夹具覆盖不分库形态下的业务逻辑。<b>它不覆盖租户专属数据库的路由</b>——
+/// <c>Infrastructure/DependencyInjection.cs</c> 按"有没有连接串"二选一：有就 <c>UseNpgsql</c>，
+/// 没有就内存库。因此在这里给租户登记连接会走到 <c>UseNpgsql</c> 去连一个不存在的库，
+/// 不要那样写用例。</para>
+/// <para>租户分库的路由与隔离要用真实 PostgreSQL 的集成测试覆盖：
+/// 断言共享租户的数据落在默认库、专属租户的数据落在自己的库，且两边互不泄漏。</para>
+/// </remarks>
 public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program>
 {
     /// <summary>

@@ -3,6 +3,7 @@ using Leistd.Data.Connections;
 using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.Abstractions;
 using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.Notifications.Abstractions;
 using Leistd.Notifications.EntityFrameworkCore;
 using Leistd.Notifications.EntityFrameworkCore.Entities;
 using Leistd.Notifications.EntityFrameworkCore.Options;
@@ -30,6 +31,8 @@ public sealed class NotificationRetentionTests : IAsyncLifetime
 
     private readonly string _host = $"Data Source=notify-host-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
     private readonly string _tenant = $"Data Source=notify-tenant-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+    private readonly FixedDatabases _databases = new(
+        TenantDatabase.ForHost("host"), new TenantDatabase(DedicatedTenant, "dedicated", []));
     private SqliteConnection _hostAnchor = default!;
     private SqliteConnection _tenantAnchor = default!;
     private ServiceProvider _services = default!;
@@ -46,7 +49,7 @@ public sealed class NotificationRetentionTests : IAsyncLifetime
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddMultiTenancyCore();
         services.AddSingleton<IConnectionStringResolver>(sp => new RoutingResolver(sp.GetRequiredService<ICurrentTenantAccessor>(), _host, _tenant));
-        services.AddSingleton<ITenantDatabaseEnumerator>(new FixedDatabases(TenantDatabase.Host, new TenantDatabase(DedicatedTenant, "dedicated")));
+        services.AddSingleton<ITenantDatabaseEnumerator>(_databases);
         services.AddSingleton<IClock>(new FakeClock(Now));
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
@@ -97,6 +100,54 @@ public sealed class NotificationRetentionTests : IAsyncLifetime
         Assert.Equal(RecurringJobScope.Cluster, definition.Scope);
     }
 
+    /// <summary>
+    /// 有租户解析不出库时本轮失败，不记水位。
+    /// </summary>
+    /// <remarks>
+    /// 解析失败被逐库执行器隔离掉了（一个坏租户不该让整轮不执行），但"隔离"不等于"没事"：
+    /// 那个租户的通知一条都没清。之前任务只看失败的库，于是把这一轮报成成功，
+    /// 一批库长期进不去也不会有任何告警。
+    /// </remarks>
+    [Fact]
+    public async Task An_unresolved_tenant_fails_the_run()
+    {
+        _databases.Unresolved.Add(new TenantDatabaseFailure(Guid.NewGuid(), "ring rotated"));
+        var definition = _services.GetServices<RecurringJobDefinition>().Single(d => d.Name == "notifications.retention");
+
+        await using var scope = _services.CreateAsyncScope();
+        var job = (IRecurringJob)scope.ServiceProvider.GetRequiredService(definition.JobType);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => job.ExecuteAsync(new RecurringJobContext(definition.Name, Now), CancellationToken.None));
+    }
+
+    /// <summary>按文档注册后能解析出周期任务本身。</summary>
+    /// <remarks>
+    /// 清理任务另外依赖逐库遍历（<see cref="ITenantDatabaseRunner"/>），由
+    /// <c>AddMultiTenancyCore()</c> 提供；本组件不替调用方注册跨组件依赖。
+    /// 基础注册面的解析见 <c>NotificationStoreRegistrationTests</c>。
+    /// </remarks>
+    [Fact]
+    public void The_documented_registration_resolves_the_recurring_job()
+    {
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddUnitOfWork()
+            .AddUnitOfWorkEfCore()
+            .AddSingleton<IClock, UtcClockProvider>()
+            .AddMultiTenancyCore()
+            .AddNotificationsEfCore<RetentionDbContext>()
+            .AddNotificationRetention<RetentionDbContext>();
+        services.AddDbContext<RetentionDbContext>(options => options.UseSqlite("DataSource=:memory:"));
+        using var provider = services.BuildServiceProvider();
+
+        var definition = provider.GetServices<RecurringJobDefinition>().Single(d => d.Name == "notifications.retention");
+
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService(definition.JobType));
+    }
+
     /// <summary>未读比已读先删就本末倒置：用户还没看到的通知反而先消失。</summary>
     [Fact]
     public void An_unread_retention_shorter_than_read_is_rejected()
@@ -136,8 +187,11 @@ public sealed class NotificationRetentionTests : IAsyncLifetime
 
     private sealed class FixedDatabases(params TenantDatabase[] databases) : ITenantDatabaseEnumerator
     {
-        public Task<IReadOnlyList<TenantDatabase>> GetDatabasesAsync(string name, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<TenantDatabase>>(databases);
+        /// <summary>本轮解析不出连接的租户，用例按需填入。</summary>
+        public List<TenantDatabaseFailure> Unresolved { get; } = [];
+
+        public Task<TenantDatabaseSet> GetDatabasesAsync(string name, bool activeOnly, CancellationToken cancellationToken = default)
+            => Task.FromResult(new TenantDatabaseSet(databases, [.. Unresolved]));
     }
 
     private sealed class RoutingResolver(ICurrentTenantAccessor accessor, string host, string tenant) : IConnectionStringResolver

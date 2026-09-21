@@ -4,6 +4,7 @@ using Leistd.MultiTenancy.ServiceClient.Stores;
 using Leistd.ServiceClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.MultiTenancy.ServiceClient;
 
@@ -46,8 +47,14 @@ public static class DependencyInjection
                 "database (AddMultiTenancyEfCore) or a remote control plane (AddRemoteTenantConnectionStore), never both.");
         }
 
-        return services.AddServiceClient<ITenantConnectionConfigurationStore, RemoteTenantConnectionStore, RemoteTenantConnectionClientOptions>(
+        var builder = services.AddServiceClient<ITenantConnectionConfigurationStore, RemoteTenantConnectionStore, RemoteTenantConnectionClientOptions>(
             serviceName,
             configuration);
+
+        // 同一个客户端也服务逐库作业的库目录：解析出的实现就是上面那一个，不另建 HttpClient
+        services.TryAddTransient<ITenantDatabaseDirectory>(provider =>
+            (ITenantDatabaseDirectory)provider.GetRequiredService<ITenantConnectionConfigurationStore>());
+
+        return builder;
     }
 }

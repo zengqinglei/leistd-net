@@ -7,6 +7,9 @@ import {
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
 } from '@angular/core';
+//#if (IncludeLocalization)
+import { toSignal } from '@angular/core/rxjs-interop';
+//#endif
 import {
   provideRouter,
   RouterFeatures,
@@ -21,7 +24,11 @@ import {
 import { provideTransloco, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
+//#if (IncludeLocalization)
+import { provideHlmA11yLabels, provideSpartanHlm } from '@spartan-ng/helm/utils';
+//#else
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
+//#endif
 //#if (!LocalIdentity)
 import { authInterceptor, LogLevel, provideAuth } from 'angular-auth-oidc-client';
 //#endif
@@ -100,6 +107,20 @@ export const appConfig: ApplicationConfig = {
         prodMode: environment.production,
       },
       loader: TranslocoHttpLoader,
+    }),
+    // libs/ui 的组件把关闭按钮等无障碍文案渲染在自己的模板里，页面无处传入。
+    // 这里一次性接上译文；不接的话整页中文里只有这些文案被读成英文。
+    // 用 toSignal 包住 langChanges$ 让它随语言切换重算——静态字符串会固定在启动时的语言上。
+    provideHlmA11yLabels(() => {
+      const transloco = inject(TranslocoService);
+      return {
+        close: toSignal(transloco.selectTranslate<string>('common.close'), {
+          initialValue: 'Close',
+        }),
+        toggleSidebar: toSignal(transloco.selectTranslate<string>('layout.sidebar.toggle'), {
+          initialValue: 'Toggle Sidebar',
+        }),
+      };
     }),
     //#endif
     provideHttpClient(

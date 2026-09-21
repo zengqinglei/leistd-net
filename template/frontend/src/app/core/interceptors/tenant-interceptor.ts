@@ -4,7 +4,7 @@ import { inject } from '@angular/core';
 
 import { TenantContextService } from '../services/tenant-context-service';
 
-const TENANT_PROBE_PATHS = ['/api/v1/tenants/by-name/', '/api/v1/tenants/by-host'] as const;
+const TENANT_PROBE_PATHS = ['/api/v1/tenants/by-host'] as const;
 
 /**
  * 已选租户时为所有 /api/ 请求附加 X-Tenant-Id 头。
@@ -32,6 +32,6 @@ export const tenantInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  return next(req.clone({ setHeaders: { 'X-Tenant-Id': tenant.id } }));
+  return next(req.clone({ setHeaders: { 'X-Tenant-Id': tenant.key } }));
 };
 //#endif

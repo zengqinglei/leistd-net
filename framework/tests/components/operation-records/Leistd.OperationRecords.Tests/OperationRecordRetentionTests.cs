@@ -9,6 +9,10 @@ using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Options;
 using Leistd.OperationRecords.EntityFrameworkCore.Retention;
 using Leistd.OperationRecords.Tests.TestDoubles;
+using Leistd.Security;
+using Leistd.Security.Users;
+using Leistd.Tracing;
+using Leistd.Tracing.Abstractions;
 using Leistd.TestBase.Doubles;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
@@ -59,7 +63,7 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
         services.AddSingleton<IConnectionStringResolver>(sp => new RoutingResolver(
             sp.GetRequiredService<ICurrentTenantAccessor>(), _host, _tenant));
         services.AddSingleton<ITenantDatabaseEnumerator>(new FixedDatabases(
-            TenantDatabase.Host, new TenantDatabase(DedicatedTenant, "dedicated")));
+            TenantDatabase.ForHost("host"), new TenantDatabase(DedicatedTenant, "dedicated", [])));
         services.AddSingleton<IClock>(new UtcClockProvider(new FakeTimeProvider(new DateTimeOffset(Now))));
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
@@ -95,7 +99,7 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
         var result = await _services.GetRequiredService<IOperationRecordArchiveService>()
             .ArchiveOlderThanAsync(Now.AddDays(-365), batchSize: 1);
 
-        Assert.Equal(new OperationRecordArchiveResult(Archived: 3, Databases: 2, FailedDatabases: 0), result);
+        Assert.Equal(new OperationRecordArchiveResult(Archived: 3, Databases: 2, FailedDatabases: 0, UnresolvedTenants: 0), result);
         Assert.Equal((1, 2), await CountAsync(_host));
         Assert.Equal((1, 1), await CountAsync(_tenant));
     }
@@ -145,14 +149,53 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
         Assert.Equal(0, archive.Calls);
     }
 
-    /// <summary>有库失败时抛出，让调度器不记水位；失败的库最迟在下一个调度时段重做。</summary>
-    [Fact]
-    public async Task A_failed_database_fails_the_run()
+    /// <summary>
+    /// 有库失败、或有租户解析不出库时抛出，让调度器不记水位。
+    /// </summary>
+    /// <remarks>
+    /// 解析不出连接的租户同样一条都没搬走。之前这一档被漏掉，本轮就报成功——积压虽然会被
+    /// 下一轮按截止时间扫到，但"有一批库进不去"这件事没有任何人知道，直到它一直进不去。
+    /// </remarks>
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(0, 1)]
+    public async Task A_failed_database_or_an_unresolved_tenant_fails_the_run(int failedDatabases, int unresolvedTenants)
     {
-        var archive = new CountingArchive(new OperationRecordArchiveResult(3, 2, 1));
+        var archive = new CountingArchive(new OperationRecordArchiveResult(3, 2, failedDatabases, unresolvedTenants));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             Job(enabled: true, archive).ExecuteAsync(new RecurringJobContext("operation-records.archive", DateTimeOffset.UtcNow), CancellationToken.None));
+    }
+
+    /// <summary>按文档注册后能解析出周期任务本身。</summary>
+    /// <remarks>
+    /// 归档任务另外依赖逐库遍历（<see cref="ITenantDatabaseRunner"/>），由
+    /// <c>AddMultiTenancyCore()</c> 提供；本组件不替调用方注册跨组件依赖。
+    /// 基础注册面的解析见 <c>OperationRecordRegistrationTests</c>。
+    /// </remarks>
+    [Fact]
+    public void The_documented_registration_resolves_the_recurring_job()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        using var provider = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddUnitOfWork()
+            .AddUnitOfWorkEfCore()
+            .AddDbContext<TestDbContext>(options => options.UseSqlite("DataSource=:memory:"))
+            .AddSingleton<IClock, UtcClockProvider>()
+            .AddMultiTenancyCore()
+            .AddAmbientContext()
+            .AddCorrelationIdCore(configuration)
+            .AddOperationRecordsEfCore<TestDbContext>()
+            .AddOperationRecordRetention<TestDbContext>()
+            .BuildServiceProvider();
+
+        var definition = provider.GetServices<RecurringJobDefinition>().Single(d => d.Name == "operation-records.archive");
+
+        using var scope = provider.CreateScope();
+        Assert.IsType<OperationRecordArchiveJob>(scope.ServiceProvider.GetRequiredService(definition.JobType));
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOperationRecordArchiveService>());
     }
 
     private static OperationRecordArchiveJob Job(bool enabled, IOperationRecordArchiveService archive) => new(
@@ -199,8 +242,8 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
 
     private sealed class FixedDatabases(params TenantDatabase[] databases) : ITenantDatabaseEnumerator
     {
-        public Task<IReadOnlyList<TenantDatabase>> GetDatabasesAsync(string name, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<TenantDatabase>>(databases);
+        public Task<TenantDatabaseSet> GetDatabasesAsync(string name, bool activeOnly, CancellationToken cancellationToken = default)
+            => Task.FromResult(new TenantDatabaseSet(databases, []));
     }
 
     private sealed class RoutingResolver(ICurrentTenantAccessor accessor, string host, string tenant) : IConnectionStringResolver

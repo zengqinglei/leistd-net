@@ -1,3 +1,4 @@
+using Leistd.ExceptionHandling.Constants;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.AspNetCore.Attributes;
 using Microsoft.AspNetCore.Authorization;
@@ -42,7 +43,16 @@ public static class OperationRecordHttpContextExtensions
     /// <para>调用方应在确认授权结果为 Forbidden 之后调用本方法。</para>
     /// </remarks>
     /// <param name="context">当前请求上下文。</param>
-    public static async Task RecordDeniedOperationAsync(this HttpContext context)
+    public static Task RecordDeniedOperationAsync(this HttpContext context)
+        => context.RecordDeniedOperationAsync(OperationFailure.None);
+
+    /// <inheritdoc cref="RecordDeniedOperationAsync(HttpContext)"/>
+    /// <param name="context">当前请求上下文。</param>
+    /// <param name="failure">
+    /// 失败原因。<see cref="OperationFailure.None"/> 时记通用的被拒码；
+    /// 只给了 <c>Detail</c>（<c>OperationFailure.FromDetail</c>）也算调用方给过原因，原样保留。
+    /// </param>
+    public static async Task RecordDeniedOperationAsync(this HttpContext context, OperationFailure failure)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -64,10 +74,17 @@ public static class OperationRecordHttpContextExtensions
         // 目标只带标识、不带名字：此刻调用方正因为**无权访问该目标**而被拒。
         // 框架若为了凑一句好看的话去查名字回填，等于把他无权查看的名字写进了他能读到的记录里。
         // 这是安全属性，不是将就——后来者请不要把它当缺陷"修复"。
+        // 默认带上通用的被拒码：没有原因码的失败记录事后无法按原因聚合。
+        // 宿主要附业务参数时自己传 OperationFailure.FromCode(code, dataJson)
         await recorder.RecordFailedAsync(
             declared.Action,
             OperationTarget.For(ResolveTargetId(context, declared)),
-            authorizationBasis);
+            authorizationBasis,
+            // 判据是 IsEmpty 而不是 Code is null：FromDetail 给出的原因本来就没有码，
+            // 按 Code 判会把调用方显式传入的 Detail 静默换成通用 Forbidden
+            failure.IsEmpty
+                ? OperationFailure.FromCode(GenericErrorCodes.ForStatus(StatusCodes.Status403Forbidden))
+                : failure);
     }
 
     // 实际未通过的具名策略。按书写顺序取最后一个会在叠加策略时记错：权限策略之后再叠

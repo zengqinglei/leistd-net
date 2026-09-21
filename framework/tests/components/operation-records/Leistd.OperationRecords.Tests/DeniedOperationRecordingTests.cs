@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Leistd.ExceptionHandling.Constants;
 using Leistd.OperationRecords.Abstractions;
 using Leistd.OperationRecords.AspNetCore.Attributes;
 using Leistd.OperationRecords.AspNetCore.Extensions;
@@ -103,6 +104,61 @@ public sealed class DeniedOperationRecordingTests
         Assert.Equal("r-1", written.TargetId);
         Assert.Equal("App.Roles.Update", written.AuthorizationBasis);
         Assert.Equal(OperationRecordOutcome.Failed, written.Outcome);
+    }
+
+    /// <summary>不传失败原因时记通用的被拒码：没有码的失败记录事后无法按原因聚合。</summary>
+    [Fact]
+    public async Task Without_a_failure_the_generic_forbidden_code_is_recorded()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new AuthorizeAttribute { Policy = "App.Roles.Update" },
+            new OperationRecordActionAttribute("identity.role.updated", "id")
+        ]);
+
+        await context.RecordDeniedOperationAsync();
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(GenericErrorCodes.ForStatus(StatusCodes.Status403Forbidden), written.FailureCode);
+        Assert.Null(written.FailureDetail);
+    }
+
+    /// <summary>调用方给了码就用它，不覆盖。</summary>
+    [Fact]
+    public async Task A_caller_supplied_code_is_kept()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new AuthorizeAttribute { Policy = "App.Roles.Update" },
+            new OperationRecordActionAttribute("identity.role.updated", "id")
+        ]);
+
+        await context.RecordDeniedOperationAsync(OperationFailure.FromCode("Role:Protected", """{"name":"admin"}"""));
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal("Role:Protected", written.FailureCode);
+        Assert.Equal("""{"name":"admin"}""", written.FailureData);
+    }
+
+    /// <summary>只给了 Detail 同样算给过原因，不能被换成通用 Forbidden。</summary>
+    /// <remarks>
+    /// 回归点：判据曾写成 <c>failure.Code is null</c>，而 <c>FromDetail</c> 给出的原因本来就没有码，
+    /// 于是调用方显式传入的 Detail 被静默丢弃。
+    /// </remarks>
+    [Fact]
+    public async Task A_caller_supplied_detail_without_a_code_is_kept()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new AuthorizeAttribute { Policy = "App.Roles.Update" },
+            new OperationRecordActionAttribute("identity.role.updated", "id")
+        ]);
+
+        await context.RecordDeniedOperationAsync(OperationFailure.FromDetail("scope mismatch"));
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal("scope mismatch", written.FailureDetail);
+        Assert.Null(written.FailureCode);
     }
 
     /// <summary>没有注解就不记：注解是唯一的开关。</summary>

@@ -4,7 +4,7 @@ using Leistd.MultiTenancy.Dtos;
 namespace Leistd.MultiTenancy.Abstractions;
 
 /// <summary>
-/// 租户管理用例（宿主侧）：查询、创建编排与补偿、更新、启停、删除，以及登录前按名称探测。
+/// 租户管理用例（宿主侧）：查询、创建编排与补偿、更新、启停、删除。
 /// </summary>
 /// <remarks>
 /// <para><b>创建的顺序是硬的</b>：先以停用态登记租户，同一控制面工作单元里登记连接（分库在开通之前定案）；
@@ -29,7 +29,22 @@ public interface ITenantManagementService
     /// <summary>创建租户并开通，完成后启用。</summary>
     /// <param name="input">创建入参；宿主可传派生类型携带开通所需的更多信息。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default);
+    Task<TenantOutputDto> CreateAsync(
+        CreateTenantInputDto input,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>以指定标识创建租户并开通，用于播种与夹具。</summary>
+    /// <remarks>
+    /// EF Core 的 <c>HasData</c> 同样要求显式主键。端点不暴露这个重载：
+    /// 让 HTTP 调用方挑主键会带来撞号与可枚举。
+    /// </remarks>
+    /// <param name="input">创建入参；宿主可传派生类型携带开通所需的更多信息。</param>
+    /// <param name="id">指定租户标识；不接受 <see cref="Guid.Empty"/>。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task<TenantOutputDto> CreateAsync(
+        CreateTenantInputDto input,
+        Guid id,
+        CancellationToken cancellationToken = default);
 
     /// <summary>更新名称、显示名与描述。</summary>
     /// <param name="id">租户标识。</param>
@@ -48,8 +63,4 @@ public interface ITenantManagementService
     /// <param name="cancellationToken">取消令牌。</param>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>登录前按名称探测租户；不存在返回 <see langword="null"/>。</summary>
-    /// <param name="name">租户名称，大小写不敏感。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    Task<TenantLookupOutputDto?> FindByNameAsync(string name, CancellationToken cancellationToken = default);
 }

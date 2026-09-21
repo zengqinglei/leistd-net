@@ -11,8 +11,9 @@ internal sealed class TenantMigrationTargetProvider(ITenantConnectionConfigurati
     {
         var connections = await connectionStore.GetListAsync(name, cancellationToken);
 
-        // 存储已经按名字解析并排除了"一条连接都没有"的租户；这里按物理库合并，
-        // 迁移与运行时逐库作业都从这里取清单，去重规则只此一处
+        // 存储已经按名字解析并排除了"一条连接都没有"的租户；这里按物理库合并。
+        // 运行时逐库作业不走这条路——它经 ITenantDatabaseDirectory 取指纹与租户归属，
+        // 因为这里的每一条都带明文连接串，常驻服务不该拿到
         return
         [
             .. connections

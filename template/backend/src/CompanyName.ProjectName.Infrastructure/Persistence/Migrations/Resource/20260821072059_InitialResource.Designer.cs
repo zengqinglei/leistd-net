@@ -372,6 +372,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreationTime");
+
                     b.HasIndex("UserId", "CreationTime");
 
                     b.HasIndex("UserId", "IsRead");
@@ -453,9 +455,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.Property<string>("Visibility")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("Host");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreationTime");
 
                     b.HasIndex("TenantId", "CreationTime")
                         .IsDescending(false, true);
@@ -542,7 +547,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     b.Property<string>("Visibility")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("Host");
 
                     b.HasKey("Id");
 

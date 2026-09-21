@@ -141,7 +141,37 @@ public sealed class TenantManagementTests : IAsyncLifetime
         var error = await Assert.ThrowsAsync<UnprocessableEntityException>(() => _service.CreateAsync(input));
 
         Assert.Equal("connections", Assert.Single(error.ValidationErrors).Field);
-        Assert.Null(await _service.FindByNameAsync("acme"));
+        Assert.Empty(await NamedAsync("acme"));
+    }
+
+    /// <summary>
+    /// 播种可以指定租户标识：夹具要预先知道它。
+    /// </summary>
+    /// <remarks>
+    /// 标识是编排参数、不是请求体字段——端点调的是不带它的形态，HTTP 调用方挑不了主键。
+    /// EF Core 自己的 HasData 同样要求显式主键，确定性标识是播种的常规需求。
+    /// </remarks>
+    [Fact]
+    public async Task Seeding_can_pin_the_tenant_id()
+    {
+        var pinned = Guid.Parse("01a0be99-0000-7000-8000-000000000001");
+
+        var tenant = await _service.CreateAsync(Create("seeded"), pinned);
+
+        Assert.Equal(pinned, tenant.Id);
+        Assert.Equal(pinned, (await _service.GetAsync(pinned)).Id);
+    }
+
+    /// <summary>播种重载拒绝空标识：多半是调用方漏传了变量。</summary>
+    /// <remarks>放过去就是一条主键为 <c>Guid.Empty</c> 的记录，此后谁也查不到它。</remarks>
+    [Fact]
+    public async Task Seeding_rejects_an_empty_id()
+    {
+        var error = await Assert.ThrowsAsync<ArgumentException>(
+            () => _service.CreateAsync(Create("empty-id"), Guid.Empty));
+
+        Assert.Equal("id", error.ParamName);
+        Assert.Empty(await NamedAsync("empty-id"));
     }
 
     /// <summary>重名在写库前拒绝：否则第二条会以"改已有登记"的语义覆盖第一条。</summary>
@@ -152,7 +182,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
             () => _service.CreateAsync(Create("acme", ("crm", "Host=a"), ("CRM", "Host=b"))));
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionNameDuplicated, error.Code);
-        Assert.Null(await _service.FindByNameAsync("acme"));
+        Assert.Empty(await NamedAsync("acme"));
     }
 
     [Fact]
@@ -166,7 +196,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         Assert.Equal(MultiTenancyErrorCodes.DedicatedDatabaseMissing, error.Code);
         Assert.NotNull(_provisioner.PurgedTenant);
-        Assert.Null(await _service.FindByNameAsync("acme"));
+        Assert.Empty(await NamedAsync("acme"));
         Assert.Empty(_events.Published);
 
         // 名字可复用、没有指向已删租户的孤儿连接行
@@ -186,7 +216,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(new CreateTenantInputDto { Name = "acme" }));
 
         Assert.Equal("seed bug", error.Message);
-        Assert.Null(await _service.FindByNameAsync("acme"));
+        Assert.Empty(await NamedAsync("acme"));
     }
 
     // 连接串填错是最常见的错误：先校验，不建租户再靠补偿擦掉
@@ -198,7 +228,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
         Assert.Null(_provisioner.ProvisionedInTenant);
-        Assert.Null(await _service.FindByNameAsync("acme"));
+        Assert.Empty(await NamedAsync("acme"));
     }
 
     [Fact]
@@ -247,16 +277,14 @@ public sealed class TenantManagementTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Paging_and_lookup_by_name_use_the_registry()
+    public async Task Paging_uses_the_registry()
     {
         await _service.CreateAsync(new CreateTenantInputDto { Name = "acme" });
         await _service.CreateAsync(new CreateTenantInputDto { Name = "contoso" });
 
         var page = await _service.GetPagedAsync(new GetTenantPagedInputDto { Keyword = "ACME", Limit = 5 });
-        var lookup = await _service.FindByNameAsync("Acme");
 
         Assert.Equal("acme", Assert.Single(page.Items).Name);
-        Assert.Equal("acme", lookup!.Name);
     }
 
     [Fact]
@@ -268,13 +296,26 @@ public sealed class TenantManagementTests : IAsyncLifetime
         await Assert.ThrowsAsync<TenantNotFoundException>(() => Connections().GetListAsync(Guid.NewGuid()));
     }
 
-    // 连接名来自 URL：不合法是 400，不以 500 出去
-    [Fact]
-    public async Task An_invalid_connection_name_in_a_machine_lookup_is_a_coded_bad_request()
+    /// <summary>连接名来自 URL：不合法是 400，不以 500 出去——每个按名字查的入口都算。</summary>
+    /// <remarks>
+    /// 逐条列出来是因为它们各自调用一次归一化，漏一个不会有任何编译或运行期提示：
+    /// 库清单那个入口就曾把原始入参直接交给目录，目录用的是代码级归一化
+    /// （非法即 <see cref="ArgumentException"/>），于是同一个错输入在这个路由上变成 500。
+    /// </remarks>
+    [Theory]
+    [InlineData("runtime")]
+    [InlineData("databases")]
+    [InlineData("migration")]
+    public async Task An_invalid_connection_name_in_a_machine_lookup_is_a_coded_bad_request(string entry)
     {
         var tenant = await _service.CreateAsync(new CreateTenantInputDto { Name = "acme" });
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(() => Connections().GetRuntimeAsync(tenant.Id, "crm_db"));
+        var error = await Assert.ThrowsAsync<BadRequestException>(() => entry switch
+        {
+            "runtime" => Connections().GetRuntimeAsync(tenant.Id, "crm_db"),
+            "databases" => Connections().GetDatabaseListAsync("crm_db", activeOnly: true),
+            _ => Connections().GetMigrationListAsync("crm_db")
+        });
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionNameInvalid, error.Code);
     }
@@ -351,6 +392,11 @@ public sealed class TenantManagementTests : IAsyncLifetime
                 : Task.CompletedTask;
         }
     }
+
+    // 接口上不再有按名称查租户：那是 A2b 移除的匿名探测语义。
+    // 测试要确认"建没建出来"时走管理侧的分页查询
+    private async Task<IReadOnlyList<TenantOutputDto>> NamedAsync(string name)
+        => (await _service.GetPagedAsync(new GetTenantPagedInputDto { Keyword = name, Limit = 5 })).Items;
 
     private static CreateTenantInputDto Create(string name, params (string Name, string ConnectionString)[] connections)
         => new()

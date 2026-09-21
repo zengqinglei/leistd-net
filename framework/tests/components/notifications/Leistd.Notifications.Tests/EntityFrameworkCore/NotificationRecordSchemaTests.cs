@@ -98,9 +98,11 @@ public class NotificationRecordSchemaTests(NotificationSchemaFixture fixture)
         Assert.Equal([nameof(NotificationRecord.MetadataJson)], unbounded);
     }
 
-    // 两条复合索引对应两个最频繁的查询：拉列表与数未读。少一条就是全表扫描。
+    // 三条索引对应三个访问路径：拉列表、数未读、保留期整库清理。少一条就是全表扫描。
+    // 清理那条尤其容易被漏：它不带 UserId（IgnoreQueryFilters 整库扫），前两条都以 UserId
+    // 打头，用不上——而清理是唯一会随表增长越跑越慢的那个。
     [Fact]
-    public void Query_indexes_cover_listing_and_unread_count()
+    public void Query_indexes_cover_listing_unread_count_and_retention()
     {
         var indexes = _db.Model.FindEntityType(typeof(NotificationRecord))!
             .GetIndexes()
@@ -109,6 +111,7 @@ public class NotificationRecordSchemaTests(NotificationSchemaFixture fixture)
 
         Assert.Contains($"{nameof(NotificationRecord.UserId)},{nameof(NotificationRecord.CreationTime)}", indexes);
         Assert.Contains($"{nameof(NotificationRecord.UserId)},{nameof(NotificationRecord.IsRead)}", indexes);
+        Assert.Contains(nameof(NotificationRecord.CreationTime), indexes);
     }
 
     [Fact]
