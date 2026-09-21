@@ -1,4 +1,6 @@
-using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Subjects;
 
 namespace Leistd.Authorization.Resource.Abstractions;
 

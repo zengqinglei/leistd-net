@@ -1,4 +1,7 @@
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 using Leistd.Notifications.Email.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

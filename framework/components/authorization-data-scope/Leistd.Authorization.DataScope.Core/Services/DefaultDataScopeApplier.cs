@@ -1,6 +1,11 @@
 using System.Linq.Expressions;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Management;
+using Leistd.Authorization.Subjects;
 using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.DataScope.Services;

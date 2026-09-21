@@ -6,8 +6,9 @@ using Microsoft.Extensions.Options;
 using Leistd.AspNetCore.SignalR;
 using Leistd.RealTime.Options;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
-using Leistd.RealTime.AspNetCore.SignalR.Services;
-using Leistd.RealTime.Abstractions;
+using Leistd.RealTime.AspNetCore.SignalR.Publishing;
+using Leistd.RealTime.Publishing;
+using Leistd.RealTime.Subscriptions;
 
 namespace Leistd.RealTime.AspNetCore.SignalR;
 

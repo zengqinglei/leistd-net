@@ -3,7 +3,11 @@ using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Leistd.Auditing.Abstractions;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Authorization.Resource.EntityFrameworkCore.Entities;
 

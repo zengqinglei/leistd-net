@@ -16,7 +16,7 @@ using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
-using Leistd.Ddd.Application.AppService;
+using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Domain.Repositories;
 using Microsoft.Extensions.Logging;
@@ -24,15 +24,27 @@ using Microsoft.Extensions.Logging;
 using Leistd.Security.Users;
 using Leistd.ExceptionHandling;
 using Leistd.ObjectMapping;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Management;
+using Leistd.Authorization.Subjects;
 using Leistd.ObjectMapping.Abstractions;
-using Leistd.OperationRecords.Abstractions;
+using Leistd.OperationRecords.Definitions;
+using Leistd.OperationRecords.Models;
+using Leistd.OperationRecords.Queries;
+using Leistd.OperationRecords.Recording;
+using Leistd.OperationRecords.Stores;
 using Leistd.Data.Paging;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif
 #if (IncludeNotifications)
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 #endif
 
 namespace CompanyName.ProjectName.Application.Users.AppServices;

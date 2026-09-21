@@ -200,11 +200,11 @@
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginLinkDtos.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/DomainServices/ExternalAuthDomainService.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Entities/ExternalLoginConnection.cs",
-            "backend/src/CompanyName.ProjectName.Domain/Auth/Options/ExternalAuthOptions.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Abstractions/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ExternalAuthenticationTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ExternalLoginLinkTests.cs",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/ExternalAuthOptionsValidatorTests.cs",
             "frontend/src/app/features/account/components/external-auth-callback/**",
             "frontend/src/app/features/account/components/external-logins/**"
           ]

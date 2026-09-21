@@ -1,7 +1,14 @@
 using Microsoft.EntityFrameworkCore;
-using Leistd.MultiTenancy.Abstractions;
-using Leistd.Settings.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 using Leistd.Settings.Definitions;
+using Leistd.Settings.Errors;
+using Leistd.Settings.Management;
+using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 using Leistd.Settings.Exceptions;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;

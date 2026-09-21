@@ -1,5 +1,6 @@
 using Leistd.EventBus.Events;
 using Leistd.Settings.Definitions;
+using Leistd.Settings.Management;
 
 namespace Leistd.Settings.Events;
 
@@ -7,7 +8,7 @@ namespace Leistd.Settings.Events;
 /// 某一层级的设置值被写入或清除。
 /// </summary>
 /// <remarks>
-/// 由 <see cref="Abstractions.ISettingManager"/> 在写入后发布；在工作单元内发布时推迟到提交后分发，
+/// 由 <see cref="ISettingManager"/> 在写入后发布；在工作单元内发布时推迟到提交后分发，
 /// 处理器看到的总是已经落库的值。事件不带值本身：机密设置的明文不该进事件，处理器需要时自己读。
 /// </remarks>
 /// <param name="name">设置名。</param>

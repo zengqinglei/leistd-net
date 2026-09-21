@@ -1,7 +1,11 @@
 #if (LocalIdentity)
 using System.Data.Common;
 using CompanyName.ProjectName.Infrastructure.TenantConnections;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 

@@ -5,7 +5,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Leistd.Authorization.Resource.Grants;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Management;
+using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Abstractions;
 using Leistd.Authorization.DataScope.Abstractions;
 

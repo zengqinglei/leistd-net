@@ -2,7 +2,7 @@
 #if (IncludeNotifications)
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
-using Leistd.Notifications.Email.Abstractions;
+using Leistd.Notifications.Email.Recipients;
 
 namespace CompanyName.ProjectName.Api.Notifications;
 

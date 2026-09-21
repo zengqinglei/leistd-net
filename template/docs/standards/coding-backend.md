@@ -52,8 +52,8 @@
 - **职责**: 核心业务逻辑（领域对象行为、领域服务、业务规则）
 - **包含**: Entities、ValueObjects、DomainServices、Events、Specifications
 - **目录归类**: 实体发出的事件放模块的 `Events/`（如 `Auth/Events`），处理器在应用层；以 `Policy` 结尾的规则类型放模块的 `Policies/`（如 `Users/Policies`）；
-  认得实体、按实体做判定的无状态服务是领域服务，归 `DomainServices/` 并以 `DomainService` 结尾；不认识任何实体的通用算法（编码、一次性口令等）按能力放 `Shared/`（如 `Shared/Text`、`Shared/Security/OneTimeCodes`），
-  子目录名别与常用类型重名（`Shared/Encoding` 会遮住 `System.Text.Encoding`）；`Entities` 只放实体和聚合；`ValueObjects` 放领域内部的不可变值类型（包括有限状态枚举）；`Options` 只放配置绑定类型。端口的输入/输出模型按所属接口放在 `Abstractions`，不因为使用 `record` 就归为值对象。
+  认得实体、按实体做判定的无状态服务是领域服务，归 `DomainServices/` 并以 `DomainService` 结尾；不认识任何实体的领域共享能力按语义放 `Shared/`（如 `Shared/Text`、`Shared/Security/OneTimeCodes`），
+  `Shared` 是领域层共享内核而非无法归类代码的兜底目录；子目录名不得与常用 BCL 类型同名（例如 `Shared/Encoding` 会遮住 `System.Text.Encoding`）。`Entities` 只放实体和聚合；`ValueObjects` 放领域内部的不可变值类型（包括有限状态枚举）；只有在多个领域模块共用且没有明确所有者的枚举才放 `Shared/Enums`。`Options` 只放内层本身消费的配置绑定类型；第三方适配器的客户端标识、密钥和回调地址归 Infrastructure。端口的输入/输出模型按所属接口放在 `Abstractions`，不因为使用 `record` 就归为值对象。
 - **接口定义**: 第三方服务接口、持久化接口（IRepository）
 - **严格禁止**:
   - 引用 `Microsoft.EntityFrameworkCore`
@@ -64,7 +64,8 @@
 
 #### Infrastructure Layer（{ProjectName}.Infrastructure）
 - **职责**: 数据持久化、第三方服务对接实现
-- **包含**: EF Core Configurations、Repositories、ExternalServices、Caching
+- **包含**: EF Core Configurations、Repositories、ExternalServices、Caching，以及外部适配器专属的 Options
+- **配置边界**: 外部适配器自己绑定和校验配置，Application 只依赖内层端口暴露的能力与可用状态，不直接读取 ClientId、ClientSecret、RedirectUri 等适配器细节
 
 ---
 

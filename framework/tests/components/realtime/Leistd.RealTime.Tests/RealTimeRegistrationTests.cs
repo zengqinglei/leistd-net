@@ -1,6 +1,7 @@
-using Leistd.RealTime.Abstractions;
+using Leistd.RealTime.Publishing;
+using Leistd.RealTime.Subscriptions;
 using Leistd.RealTime.AspNetCore.SignalR;
-using Leistd.RealTime.AspNetCore.SignalR.Services;
+using Leistd.RealTime.AspNetCore.SignalR.Publishing;
 using Leistd.RealTime.Options;
 using Leistd.Security.Claims;
 using Leistd.TestBase.Assertions;

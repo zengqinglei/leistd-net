@@ -10,9 +10,18 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Management;
+using Leistd.Authorization.Subjects;
 using Leistd.Data.Connections;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 using Leistd.TestBase.Doubles;
 using Leistd.Authorization.Tests.TestDoubles;
 
@@ -219,7 +228,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         {
             // 直接读静态访问器：ICurrentTenant 只是它的薄壳，测试里不必再走一遍 DI，
             // 也避免解析器与容器之间的构造期循环
-            var tenantId = Leistd.MultiTenancy.Services.AsyncLocalCurrentTenantAccessor
+            var tenantId = Leistd.MultiTenancy.Context.AsyncLocalCurrentTenantAccessor
                 .Instance.Current?.TenantId;
 
             return Task.FromResult(tenantId is null ? hostConnectionString : tenantConnectionString);

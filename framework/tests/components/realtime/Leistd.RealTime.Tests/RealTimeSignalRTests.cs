@@ -6,10 +6,10 @@ using Microsoft.Extensions.Options;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Xunit;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
-using Leistd.RealTime.AspNetCore.SignalR.Services;
+using Leistd.RealTime.AspNetCore.SignalR.Publishing;
 using Leistd.RealTime.Options;
-using Leistd.RealTime.Services;
-using Leistd.RealTime.Abstractions;
+using Leistd.RealTime.Subscriptions;
+using Leistd.RealTime.Publishing;
 using Leistd.TestBase.Doubles;
 
 namespace Leistd.RealTime.Tests;

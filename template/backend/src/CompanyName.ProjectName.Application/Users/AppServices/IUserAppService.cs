@@ -1,6 +1,6 @@
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Dtos;
-using Leistd.Ddd.Application.Contracts.AppService;
+using Leistd.Ddd.Application.Contracts.AppServices;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Data.Paging;
 

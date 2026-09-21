@@ -1,7 +1,7 @@
 #if (LocalIdentity)
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
-using Leistd.Ddd.Application.Contracts.AppService;
+using Leistd.Ddd.Application.Contracts.AppServices;
 
 namespace CompanyName.ProjectName.Application.Tenants.AppServices;
 

@@ -3,9 +3,13 @@ using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Users;
-using Leistd.Authorization.Permissions;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Subjects;
 using Leistd.Timing;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Management;
 
 namespace CompanyName.ProjectName.Application.Permissions.Provider;
 

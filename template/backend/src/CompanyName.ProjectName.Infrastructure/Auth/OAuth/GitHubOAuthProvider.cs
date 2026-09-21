@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Web;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -13,7 +13,7 @@ namespace CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 /// <summary>
 /// GitHub OAuth 服务实现
 /// </summary>
-public class GitHubOAuthProvider(
+internal sealed class GitHubOAuthProvider(
     IHttpClientFactory httpClientFactory,
     IOptions<ExternalAuthOptions> options,
     ILogger<GitHubOAuthProvider> logger) : IOAuthProvider
@@ -24,47 +24,28 @@ public class GitHubOAuthProvider(
 
     public string Name => "github";
 
-    public string GetAuthorizationUrl(string redirectUri, string state)
-    {
-        var clientId = options.Value.Github?.ClientId
-            ?? throw new NotFoundException("Client ID for external identity provider GitHub is not configured.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ClientIdNotConfigured")
-                .WithData("Provider", "GitHub")
-#endif
-            ;
+    public bool IsAvailable => options.Value.Github.IsAvailable;
 
-        return $"{AuthorizationEndpoint}?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&state={state}&scope=user:email";
+    public string GetAuthorizationUrl(string state)
+    {
+        var provider = GetRequiredOptions();
+
+        return $"{AuthorizationEndpoint}?client_id={provider.ClientId}&redirect_uri={Uri.EscapeDataString(provider.RedirectUri!)}&state={state}&scope=user:email";
     }
 
     public async Task<OAuthTokenInfo> ExchangeCodeForTokenAsync(
         string code,
-        string redirectUri,
         CancellationToken cancellationToken = default)
     {
-        var clientId = options.Value.Github?.ClientId
-            ?? throw new NotFoundException("Client ID for external identity provider GitHub is not configured.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ClientIdNotConfigured")
-                .WithData("Provider", "GitHub")
-#endif
-            ;
-        var clientSecret = options.Value.Github?.ClientSecret
-            ?? throw new NotFoundException("Client secret for external identity provider GitHub is not configured.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ClientSecretNotConfigured")
-                .WithData("Provider", "GitHub")
-#endif
-            ;
-
+        var provider = GetRequiredOptions();
         var httpClient = httpClientFactory.CreateClient();
 
         var requestData = new Dictionary<string, string>
         {
-            ["client_id"] = clientId,
-            ["client_secret"] = clientSecret,
+            ["client_id"] = provider.ClientId!,
+            ["client_secret"] = provider.ClientSecret!,
             ["code"] = code,
-            ["redirect_uri"] = redirectUri
+            ["redirect_uri"] = provider.RedirectUri!
         };
 
         var response = await httpClient.PostAsync(TokenEndpoint, new FormUrlEncodedContent(requestData), cancellationToken);
@@ -119,6 +100,20 @@ public class GitHubOAuthProvider(
             DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("avatar_url", out var avatar) ? avatar.GetString() : null
         };
+    }
+
+    private ExternalAuthOptions.ProviderOptions GetRequiredOptions()
+    {
+        var provider = options.Value.Github;
+        if (provider.IsAvailable)
+            return provider;
+
+        throw new NotFoundException("External identity provider GitHub is not configured.")
+#if (IncludeLocalization)
+            .WithCode("ExternalAuth:ProviderNotConfigured")
+            .WithData("Provider", "GitHub")
+#endif
+            ;
     }
 }
 #endif

@@ -2,8 +2,11 @@ using System.Data.Common;
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.Events;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.Abstractions;
 using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Dtos;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.Events;
@@ -370,7 +373,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     // 直接读环境上下文里的当前租户，证明开通与清理都发生在目标租户上下文
     private sealed class CurrentTenantProbe : ICurrentTenant
     {
-        private readonly ICurrentTenantAccessor _accessor = Leistd.MultiTenancy.Services.AsyncLocalCurrentTenantAccessor.Instance;
+        private readonly ICurrentTenantAccessor _accessor = Leistd.MultiTenancy.Context.AsyncLocalCurrentTenantAccessor.Instance;
 
         public bool IsAvailable => Id.HasValue;
         public Guid? Id => _accessor.Current?.TenantId;

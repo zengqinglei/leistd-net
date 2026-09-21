@@ -1,8 +1,11 @@
 using Xunit;
-using Leistd.Authorization.Permissions;
-using Leistd.Authorization.Services;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Subjects;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Management;
 using Leistd.Authorization.Constants;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Errors;
 using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.Core;

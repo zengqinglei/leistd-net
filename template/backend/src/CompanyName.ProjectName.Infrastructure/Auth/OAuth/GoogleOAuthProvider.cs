@@ -3,7 +3,7 @@ using Leistd.ExceptionHandling;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,7 +12,7 @@ namespace CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 /// <summary>
 /// Google OAuth 服务实现
 /// </summary>
-public class GoogleOAuthProvider(
+internal sealed class GoogleOAuthProvider(
     IHttpClientFactory httpClientFactory,
     IOptions<ExternalAuthOptions> options,
     ILogger<GoogleOAuthProvider> logger) : IOAuthProvider
@@ -23,47 +23,28 @@ public class GoogleOAuthProvider(
 
     public string Name => "google";
 
-    public string GetAuthorizationUrl(string redirectUri, string state)
-    {
-        var clientId = options.Value.Google?.ClientId
-            ?? throw new NotFoundException("Client ID for external identity provider Google is not configured.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ClientIdNotConfigured")
-                .WithData("Provider", "Google")
-#endif
-            ;
+    public bool IsAvailable => options.Value.Google.IsAvailable;
 
-        return $"{AuthorizationEndpoint}?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&response_type=code&scope=openid%20email%20profile&state={state}";
+    public string GetAuthorizationUrl(string state)
+    {
+        var provider = GetRequiredOptions();
+
+        return $"{AuthorizationEndpoint}?client_id={provider.ClientId}&redirect_uri={Uri.EscapeDataString(provider.RedirectUri!)}&response_type=code&scope=openid%20email%20profile&state={state}";
     }
 
     public async Task<OAuthTokenInfo> ExchangeCodeForTokenAsync(
         string code,
-        string redirectUri,
         CancellationToken cancellationToken = default)
     {
-        var clientId = options.Value.Google?.ClientId
-            ?? throw new NotFoundException("Client ID for external identity provider Google is not configured.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ClientIdNotConfigured")
-                .WithData("Provider", "Google")
-#endif
-            ;
-        var clientSecret = options.Value.Google?.ClientSecret
-            ?? throw new NotFoundException("Client secret for external identity provider Google is not configured.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ClientSecretNotConfigured")
-                .WithData("Provider", "Google")
-#endif
-            ;
-
+        var provider = GetRequiredOptions();
         var httpClient = httpClientFactory.CreateClient();
 
         var requestData = new Dictionary<string, string>
         {
-            ["client_id"] = clientId,
-            ["client_secret"] = clientSecret,
+            ["client_id"] = provider.ClientId!,
+            ["client_secret"] = provider.ClientSecret!,
             ["code"] = code,
-            ["redirect_uri"] = redirectUri,
+            ["redirect_uri"] = provider.RedirectUri!,
             ["grant_type"] = "authorization_code"
         };
 
@@ -151,6 +132,20 @@ public class GoogleOAuthProvider(
             DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("picture", out var picture) ? picture.GetString() : null
         };
+    }
+
+    private ExternalAuthOptions.ProviderOptions GetRequiredOptions()
+    {
+        var provider = options.Value.Google;
+        if (provider.IsAvailable)
+            return provider;
+
+        throw new NotFoundException("External identity provider Google is not configured.")
+#if (IncludeLocalization)
+            .WithCode("ExternalAuth:ProviderNotConfigured")
+            .WithData("Provider", "Google")
+#endif
+            ;
     }
 }
 #endif

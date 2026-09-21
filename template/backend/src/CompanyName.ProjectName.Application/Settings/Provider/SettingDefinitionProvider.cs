@@ -1,6 +1,9 @@
 using System.Globalization;
-using Leistd.Settings.Abstractions;
 using Leistd.Settings.Definitions;
+using Leistd.Settings.Errors;
+using Leistd.Settings.Management;
+using Leistd.Settings.Resolution;
+using Leistd.Settings.Stores;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Options;
 using Microsoft.Extensions.Options;

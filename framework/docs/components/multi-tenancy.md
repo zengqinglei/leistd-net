@@ -350,8 +350,8 @@ public sealed class IdentityControlDbContext : DbContext;
 
 | 类型 | 用途 |
 | --- | --- |
-| `Leistd.MultiTenancy.Abstractions.IMultiTenant` | 通过 `Guid? TenantId` 声明数据归属；`null` 表示宿主 |
-| `Leistd.MultiTenancy.Abstractions.ICurrentTenant` | 读取或临时切换租户上下文 |
+| `Leistd.MultiTenancy.Tenancy.IMultiTenant` | 通过 `Guid? TenantId` 声明数据归属；`null` 表示宿主 |
+| `Leistd.MultiTenancy.Context.ICurrentTenant` | 读取或临时切换租户上下文 |
 | `CurrentTenantKeyExtensions.ScopeKey(currentTenant, key)` | 把缓存键、锁键等租户外部标识限定到当前租户；`this ICurrentTenant` 扩展 |
 | `Leistd.MultiTenancy.Stores.ITenantStore` | 按 Id 或归一化名称查找租户 |
 | `Leistd.MultiTenancy.Stores.ITenantManager` | 创建、修改、启停、软删除和分页查询租户；`GetPagedAsync(keyword, PageRequest, ct)` 返回 `PagedResult<TenantConfiguration>` |
@@ -376,7 +376,7 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantDatabaseDirectory` | 控制库侧的库目录：按连接名回 `TenantDatabaseListResult(Databases, FailedTenants)`，不含连接串。EF 实现随 `AddMultiTenancyEfCore` 注册（它读的就是控制库），ServiceClient 的远端存储同时实现它；自定义存储的宿主要自己注册，`AddTenantManagement` 少了它解析不出连接管理用例 |
 | `ITenantDatabaseEnumerator` | `GetDatabasesAsync(name, activeOnly, ct)` 列出运行时要逐库处理的物理库 `TenantDatabase(TenantId, Fingerprint, TenantIds)`；`TenantId` 为 `null` 即宿主库，宿主项的 `TenantIds` 为空（那份清单等于共享库的租户数，且要跨 HTTP 边界；进宿主库用宿主配置，不需要某个租户）。宿主库与独立库用同一套指纹算法，与宿主同配置的登记会被合并掉，不会让同一个物理库出现两次 |
 | `ITenantDatabaseRunner` | `ForEachDatabaseAsync(name, activeOnly, action, ct)` 在每个物理库的代表租户上下文里执行回调，逐库隔离失败，返回 `TenantDatabaseRunResult(Databases, FailedDatabases, UnresolvedTenants)`（最后一项是本轮解析不出连接、被跳过的租户）；不替回调开工作单元。**两份清单都要看**：解析不出连接的租户有自己的库、这一轮一条数据都没处理，只看 `FailedDatabases` 会把这一轮报成成功 |
-| `Leistd.MultiTenancy.Abstractions.MultiTenancySides` | 表示权限属于 `Tenant`、`Host` 或 `Both` |
+| `Leistd.MultiTenancy.Tenancy.MultiTenancySides` | 表示权限属于 `Tenant`、`Host` 或 `Both` |
 
 `ITenantStore` 只有 EF 一种实现，由 `AddMultiTenancyEfCore<TDbContext>()` 注册。资源服务不注册它：把 `ValidateResolvedTenant` 置为 `false` 后解析链只信已验证主体的租户声明，中间件不查注册表。
 

@@ -4,8 +4,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.AspNetCore.SignalR;
 using Leistd.Notifications.AspNetCore.SignalR.Hubs;
-using Leistd.Notifications.AspNetCore.SignalR.Services;
-using Leistd.Notifications.Abstractions;
+using Leistd.Notifications.AspNetCore.SignalR.Channels;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 
 namespace Leistd.Notifications.AspNetCore.SignalR;
 

@@ -1,8 +1,12 @@
 using Leistd.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Leistd.Authorization.Services;
-using Leistd.Authorization.Abstractions;
+using Leistd.Authorization.Checking;
+using Leistd.Authorization.Definitions;
+using Leistd.Authorization.Grants;
+using Leistd.Authorization.Management;
+using Leistd.Authorization.Errors;
+using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Options;
 
 namespace Leistd.Authorization;

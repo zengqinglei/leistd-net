@@ -1,7 +1,11 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Provisioning;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;

@@ -1,9 +1,15 @@
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.Data.Connections;
 using Leistd.MultiTenancy;
-using Leistd.MultiTenancy.Abstractions;
 using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.Notifications.Abstractions;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
+using Leistd.Notifications.Channels;
+using Leistd.Notifications.Errors;
+using Leistd.Notifications.Publishing;
+using Leistd.Notifications.Stores;
 using Leistd.Notifications.EntityFrameworkCore;
 using Leistd.Notifications.EntityFrameworkCore.Entities;
 using Leistd.Notifications.EntityFrameworkCore.Options;

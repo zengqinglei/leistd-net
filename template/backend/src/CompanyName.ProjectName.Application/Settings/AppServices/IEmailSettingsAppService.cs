@@ -1,6 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Settings.Dtos;
-using Leistd.Ddd.Application.Contracts.AppService;
+using Leistd.Ddd.Application.Contracts.AppServices;
 
 namespace CompanyName.ProjectName.Application.Settings.AppServices;
 

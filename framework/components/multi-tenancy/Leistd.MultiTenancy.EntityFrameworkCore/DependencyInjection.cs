@@ -11,7 +11,10 @@ using Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 using Leistd.MultiTenancy.Stores;
-using Leistd.MultiTenancy.Abstractions;
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
