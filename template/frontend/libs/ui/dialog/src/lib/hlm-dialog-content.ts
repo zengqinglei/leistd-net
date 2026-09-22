@@ -14,13 +14,14 @@ import { lucideX } from '@ng-icons/lucide';
 import { BrnDialogRef, injectBrnDialogContext } from '@spartan-ng/brain/dialog';
 import { HlmButton } from '@spartan-ng/helm/button';
 
-import { classes, injectHlmA11yLabels } from '@spartan-ng/helm/utils';
+import { classes } from '@spartan-ng/helm/utils';
 import { HlmDialogClose } from './hlm-dialog-close';
 
 type HlmDialogContentContext = {
   $component?: ComponentType<unknown>;
   $dynamicComponentClass?: string;
   $showCloseButton?: boolean;
+  $closeLabel?: string;
 };
 
 @Component({
@@ -41,15 +42,13 @@ type HlmDialogContentContext = {
 
     @if (showCloseButton()) {
       <button hlmBtn variant="ghost" size="icon-sm" class="absolute end-2 top-2" hlmDialogClose>
-        <span class="sr-only">{{ a11y.close() }}</span>
+        <span class="sr-only">{{ closeLabel() }}</span>
         <ng-icon name="lucideX" />
       </button>
     }
   `,
 })
 export class HlmDialogContent {
-  protected readonly a11y = injectHlmA11yLabels();
-
   private readonly _dialogRef = inject(BrnDialogRef);
   private readonly _dialogContext = injectBrnDialogContext<HlmDialogContentContext | null>({
     optional: true,
@@ -61,6 +60,7 @@ export class HlmDialogContent {
       transform: booleanAttribute,
     },
   );
+  public readonly closeLabel = input<string>(this._dialogContext?.$closeLabel ?? 'Close');
 
   public readonly state = computed(() => this._dialogRef?.state() ?? 'closed');
 

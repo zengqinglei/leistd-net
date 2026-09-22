@@ -135,9 +135,10 @@ frontend/
   | `input`、`input-group` | 加 `pointer-coarse:h-11` | 与按钮同高，表单里并排时对齐 |
   | `select`（trigger） | `data-[size=default]` 下加 `pointer-coarse:h-11` | 同上 |
   | `dropdown-menu`（`hlm-dropdown-menu-trigger.ts`） | 改 `menuPosition` 后调用 CDK 触发器的 `ngOnChanges`，让已建好的 overlay 更新定位策略 | 上游直接赋值，不经过 `ngOnChanges`，菜单打开过一次后再改 `side` / `align` 不生效；侧栏内容在桌面与手机抽屉间复用同一实例，用户菜单与区域切换器的方向随断点变化，会被摆错。由 `dropdown-side-switch.spec.ts` 钉住，上游修复后删除 |
-  | `sidebar`（`hlm-sidebar.ts`） | 手机端抽屉加视觉隐藏的 `hlmSheetHeader`（标题 + 说明），新增 `mobileTitle` / `mobileDescription` 输入 | 抽屉是对话框，读屏器需要名称与说明；上游 shadcn 有这一段，spartan 移植时缺了（[spartan-ng/spartan#1758](https://github.com/spartan-ng/spartan/issues/1758)），上游补上后删除 |
 
   用 `pointer-coarse` 而不是屏幕宽度判断：平板横屏很宽，但仍是手指操作。
+
+  手机端侧栏抽屉的读屏名称曾是本项目定制，spartan 1.5.0 起由上游提供（[#1758](https://github.com/spartan-ng/spartan/issues/1758)），定制已删除；文案经 `hlm-sidebar` 的 `srOnlySheetTitle` / `srOnlySheetDescription` 传入。
 
   升级步骤：升级 brain / CLI 后跑 `healthcheck`；未定制的组件用 `ng g @spartan-ng/cli:migrate-helm-libraries --libraries=<name>` 同步到新版本（传 `--libraries` 即非交互）；表中组件同样先同步，再对照上表把定制补回（`git diff` 可看出被覆盖的那几行）。helm 与 CLI 版本脱节时，新参数与无障碍改进不会自动到位——升级 CLI 不等于 helm 已更新。
 
