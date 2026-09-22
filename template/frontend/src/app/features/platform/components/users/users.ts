@@ -61,13 +61,20 @@ import {
   toApiSorting,
 } from '../../../../shared/utils/table-query-state';
 import { RoleBriefDto } from '../../models/role.dto';
+// 裁掉这几个 DTO 之后剩余项能并成一行，而 prettier 会要求那样写；
+// 条件块不能随形态换折行方式，因此在这里固定住
+// prettier-ignore
 import {
+  //#if (LocalIdentity)
   CreateUserInputDto,
+  //#endif
   GetUsersInputDto,
   //#if (LocalIdentity)
   ResetUserPasswordInputDto,
   //#endif
+  //#if (LocalIdentity)
   UpdateUserInputDto,
+  //#endif
   UserManagementOutputDto,
 } from '../../models/user-management.dto';
 import { RoleService } from '../../services/role-service';
@@ -75,7 +82,9 @@ import { UserManagementService } from '../../services/user-management-service';
 //#if (LocalIdentity)
 import { ResetUserPasswordDialog } from './widgets/reset-user-password-dialog/reset-user-password-dialog';
 //#endif
+//#if (LocalIdentity)
 import { UserEditDialog } from './widgets/user-edit-dialog/user-edit-dialog';
+//#endif
 import { UserRolesDialog } from './widgets/user-roles-dialog/user-roles-dialog';
 import { UserTable } from './widgets/user-table/user-table';
 
@@ -101,7 +110,9 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
     //#endif
     UserTable,
     UserRolesDialog,
+    //#if (LocalIdentity)
     UserEditDialog,
+    //#endif
     //#if (LocalIdentity)
     ResetUserPasswordDialog,
     //#endif
@@ -378,11 +389,14 @@ export class Users {
     this.refreshRequests.next();
   }
 
+  //#if (LocalIdentity)
   openAddDialog() {
     this.selectedUser.set(null);
     this.editDialogVisible.set(true);
   }
 
+  //#endif
+  //#if (LocalIdentity)
   openEditDialog(id: string) {
     this.selectedUser.set(null);
     this.editDialogVisible.set(true);
@@ -400,6 +414,8 @@ export class Users {
       });
   }
 
+  //#endif
+  //#if (LocalIdentity)
   handleSave(data: CreateUserInputDto | UpdateUserInputDto) {
     this.editDialogSaving.set(true);
     const selected = this.selectedUser();
@@ -432,6 +448,7 @@ export class Users {
       });
   }
 
+  //#endif
   async handleToggleActive(user: UserManagementOutputDto) {
     const confirmed = await this.confirmService.open({
       //#if (IncludeLocalization)
@@ -477,6 +494,7 @@ export class Users {
     });
   }
 
+  //#if (LocalIdentity)
   async handleDelete(user: UserManagementOutputDto) {
     if (user.isSuperAdmin) {
       //#if (IncludeLocalization)
@@ -524,6 +542,7 @@ export class Users {
         error: (error) => this.showRequestError(error),
       });
   }
+  //#endif
   //#if (LocalIdentity)
   async handleUnlock(user: UserManagementOutputDto) {
     const confirmed = await this.confirmService.open({
@@ -629,8 +648,8 @@ export class Users {
         error: (error) => this.showRequestError(error),
       });
   }
-  //#endif
 
+  //#endif
   private queryFromParams(params: ParamMap): GetUsersInputDto {
     const pagination = paginationFromQuery(params);
     const roles = params.getAll('roles');

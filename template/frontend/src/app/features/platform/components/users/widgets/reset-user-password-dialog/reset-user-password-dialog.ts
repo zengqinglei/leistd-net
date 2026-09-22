@@ -9,7 +9,7 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { form, required, pattern, FormField } from '@angular/forms/signals';
+import { form, maxLength, minLength, required, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 //#endif
@@ -26,7 +26,10 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
-import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '../../../../../../core/validation/password-rule';
 import { ResetUserPasswordInputDto } from '../../../../models/user-management.dto';
 
 @Component({
@@ -64,6 +67,15 @@ export class ResetUserPasswordDialog {
   // 密码可见性
   protected readonly showPassword = signal(false);
 
+  // 读屏用户听到的是"显示密码/隐藏密码"，而不是一个没有名字的按钮；名称随当前状态变
+  //#if (IncludeLocalization)
+  protected readonly passwordToggleLabel = (shown: boolean) =>
+    this.transloco.translate(shown ? 'common.hidePassword' : 'common.showPassword');
+  //#else
+  protected readonly passwordToggleLabel = (shown: boolean) =>
+    shown ? 'Hide password' : 'Show password';
+  //#endif
+
   // 表单模型（Signal Forms）
   private readonly formModel = signal({ password: '' });
 
@@ -72,16 +84,25 @@ export class ResetUserPasswordDialog {
     required(path.password, {
       message: this.transloco.translate('common.validation.required'),
     });
-    pattern(path.password, PASSWORD_RULE, {
-      message: this.transloco.translate('common.validation.passwordRule'),
+    minLength(path.password, PASSWORD_MIN_LENGTH, {
+      message: this.transloco.translate('common.validation.passwordTooShort', {
+        min: PASSWORD_MIN_LENGTH,
+      }),
+    });
+    maxLength(path.password, PASSWORD_MAX_LENGTH, {
+      message: this.transloco.translate('common.validation.passwordTooLong', {
+        max: PASSWORD_MAX_LENGTH,
+      }),
     });
   });
   //#else
   readonly resetForm = form(this.formModel, (path) => {
     required(path.password, { message: 'This field is required.' });
-    pattern(path.password, PASSWORD_RULE, {
-      message:
-        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
+    minLength(path.password, PASSWORD_MIN_LENGTH, {
+      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
+    });
+    maxLength(path.password, PASSWORD_MAX_LENGTH, {
+      message: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
     });
   });
   //#endif

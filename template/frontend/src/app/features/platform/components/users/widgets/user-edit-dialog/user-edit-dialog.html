@@ -90,25 +90,6 @@
           </div>
 
           <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <!--#if (!LocalIdentity)-->
-            @if (!isEditMode()) {
-              <div hlmField class="md:col-span-2">
-                <label hlmFieldLabel for="user-subject-id">Identity subject Id</label>
-                <input
-                  hlmInput
-                  id="user-subject-id"
-                  class="w-full font-mono"
-                  [formField]="userForm.subjectId"
-                  placeholder="00000000-0000-0000-0000-000000000000"
-                />
-                @for (error of userForm.subjectId().errors(); track error.kind) {
-                  @if (error.message) {
-                    <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-                  }
-                }
-              </div>
-            }
-            <!--#endif-->
             <!-- Username -->
             <div hlmField>
               <!--#if (IncludeLocalization)-->
@@ -234,6 +215,7 @@
                     type="button"
                     size="icon-sm"
                     align="inline-end"
+                    [attr.aria-label]="passwordToggleLabel(showPassword())"
                     (click)="showPassword.set(!showPassword())"
                   >
                     <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />

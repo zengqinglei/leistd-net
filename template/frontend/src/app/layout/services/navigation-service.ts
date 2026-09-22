@@ -144,15 +144,6 @@ export class NavigationService {
         },
       ],
     },
-    // 关于"我自己"的：个人资料、账户安全、偏好、通知。每个登录用户都有，所以放在工作空间；
-    // 管理人员也是用户，从头像菜单进同一处，管理平台不另放一份。
-    {
-      label: 'layout.sidebar.groupPersonal',
-      placement: 'end',
-      items: [
-        { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
-      ],
-    },
   ];
 
   // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
@@ -239,12 +230,6 @@ export class NavigationService {
       // 分组本身与判据留着，新入口就不必再重新想一遍该摆哪。
       label: 'Business',
       items: [{ label: 'Example module', icon: 'lucideLayers', route: '/workspace/placeholder' }],
-    },
-    // 关于"我自己"的：个人资料、账户安全、偏好、通知。管理人员也从头像菜单进同一处。
-    {
-      label: 'Personal',
-      placement: 'end',
-      items: [{ label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' }],
     },
   ];
   //#endif

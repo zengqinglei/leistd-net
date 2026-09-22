@@ -15,7 +15,6 @@ import { LayoutService } from '../../services/layout-service';
 // 改一句中文不该让这组用例变红。
 const WORK = 'layout.sidebar.groupWork';
 const BUSINESS = 'layout.sidebar.groupBusiness';
-const PERSONAL = 'layout.sidebar.groupPersonal';
 const IDENTITY = 'layout.sidebar.groupIdentity';
 //#if (OpenIddictServer)
 const DEVELOPER = 'layout.sidebar.groupDeveloper';
@@ -25,7 +24,6 @@ const SYSTEM = 'layout.sidebar.groupSystem';
 //#else
 const WORK = 'Work';
 const BUSINESS = 'Business';
-const PERSONAL = 'Personal';
 const IDENTITY = 'Identity & access';
 //#if (OpenIddictServer)
 const DEVELOPER = 'Developer';
@@ -82,21 +80,19 @@ describe('DefaultSidebar 菜单分组', () => {
   const routesOf = (sidebar: DefaultSidebar) =>
     sidebar.menuGroups().flatMap((group) => group.items.map((item) => item.route));
 
-  it('工作空间侧：工作 → 业务 → 个人，不含兜底组', () => {
+  it('工作空间侧：工作 → 业务，不含兜底组', () => {
     const sidebar = build({ platform: false });
 
-    expect(groupsOf(sidebar)).toEqual([WORK, BUSINESS, PERSONAL]);
-    expect(routesOf(sidebar)).toEqual([
-      '/workspace/dashboard',
-      '/workspace/placeholder',
-      '/workspace/settings',
-    ]);
+    expect(groupsOf(sidebar)).toEqual([WORK, BUSINESS]);
+    expect(routesOf(sidebar)).toEqual(['/workspace/dashboard', '/workspace/placeholder']);
   });
 
-  // 个人设置每个用户都有，只放工作空间一处；管理人员也是用户，从头像菜单进同一处。
-  // 管理平台再放一份，就会出现两个入口、两份状态。
-  it('管理平台侧不放个人设置入口', () => {
+  // 个人设置只有一个入口：头像菜单。菜单树里再放一份，顶栏会多出一个齿轮、侧栏会多出一组，
+  // 而它们和头像菜单里的那一项去的是同一个地址。
+  // 工作空间侧由上一条的精确 toEqual 覆盖；这里只查权限开满的平台侧。
+  it('菜单树里不出现个人设置入口', () => {
     const everything = Object.values(PERMISSIONS).map((group) => group.default);
+
     expect(routesOf(build({ platform: true, permissions: everything }))).not.toContain(
       '/workspace/settings',
     );

@@ -69,8 +69,10 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'auth.two-factor.disabled': () => 'Turned off two-factor authentication',
   'auth.two-factor.recovery-codes-regenerated': () => 'Regenerated recovery codes',
   'auth.two-factor.recovery-code-used': (t) => `Account ${t} signed in with a recovery code`,
+  //#if (ExternalLogin)
   'auth.external-login.linked': (t) => `Linked external account ${t}`,
   'auth.external-login.unlinked': (t) => `Unlinked external account ${t}`,
+  //#endif
   'auth.registered': (t) => `Registered account ${t}`,
   'impersonation.started': (t) => `Started acting as ${t}`,
   'impersonation.ended': () => 'Ended impersonation',

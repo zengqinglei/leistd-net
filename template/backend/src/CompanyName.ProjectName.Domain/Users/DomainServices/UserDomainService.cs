@@ -32,6 +32,73 @@ public class UserDomainService(
 #endif
     ILogger<UserDomainService> logger)
 {
+#if (!LocalIdentity)
+    /// <summary>
+    /// 把签发方的主体投影成本地用户行：不存在就建，存在就按令牌刷新资料字段。
+    /// </summary>
+    /// <remarks>
+    /// <para>本形态下用户行的主键<b>就是</b>签发方的 <c>sub</c>（见 <see cref="User"/> 的构造函数），
+    /// 所以这条投影不可能"对错人"——而让人手填主体标识就可能，且抄错时不报错。</para>
+    /// <para><b>资料字段每次刷新，不做本地编辑。</b>用户名、邮箱、显示名归签发方所有；
+    /// 本服务没有回写通道，允许本地改只会积累与签发方的漂移。</para>
+    /// <para><b>角色与启停不碰。</b>那两样是本服务自己的授权决定，刷新资料时必须原样保留，
+    /// 否则每次请求都会把管理员刚做的授权冲掉。</para>
+    /// <para>首次访问的并发由主键兜底：插入撞键就重读那一行——那是一次正常的竞争，不是错误。</para>
+    /// </remarks>
+    /// <param name="subjectId">签发方主体标识，取自令牌的 <c>sub</c>。</param>
+    /// <param name="username">令牌里的用户名；缺失时回落为主体标识，保证非空且可检索。</param>
+    /// <param name="email">令牌里的邮箱；缺失时留空串。</param>
+    /// <param name="displayName">令牌里的展示名。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public async Task<User> EnsureProjectedAsync(
+        Guid subjectId,
+        string? username,
+        string? email,
+        string? displayName,
+        CancellationToken cancellationToken = default)
+    {
+        var name = string.IsNullOrWhiteSpace(username) ? subjectId.ToString() : username.Trim();
+        var mail = email?.Trim() ?? string.Empty;
+        var display = displayName?.Trim();
+
+        var existing = await userRepository.GetByIdAsync(subjectId, cancellationToken);
+        if (existing is not null)
+        {
+            // 没变就不写：这条路径在每个已认证请求上都会走到
+            if (existing.Username == name && existing.Email == mail && existing.DisplayName == display)
+            {
+                return existing;
+            }
+
+            existing.ProjectFromIssuer(name, mail, display);
+            await userRepository.UpdateAsync(existing, cancellationToken);
+            return existing;
+        }
+
+        var user = new User(subjectId, name, mail, displayName: display);
+        try
+        {
+            await userRepository.InsertAsync(user, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // 同一主体的两个首次请求撞在一起：谁先谁后都对，读回胜出的那一行即可。
+            // 重读为空说明失败另有原因（约束、连接），原样抛出，不吞。
+            var raced = await userRepository.GetByIdAsync(subjectId, cancellationToken);
+            if (raced is null)
+            {
+                throw;
+            }
+
+            logger.LogDebug(exception, "Concurrent first-touch projection for subject {SubjectId}; reusing the winning row.", subjectId);
+            return raced;
+        }
+
+        logger.LogInformation("Projected issuer subject {SubjectId} into a local user row.", subjectId);
+        return user;
+    }
+
+#endif
     /// <summary>
     /// 检查用户名是否可用
     /// </summary>
@@ -122,26 +189,24 @@ public class UserDomainService(
         user.UpdatePasswordHash(HashWithPolicy(newPassword));
 #endif
 
+#if (LocalIdentity)
     /// <summary>
     /// 创建用户
     /// </summary>
+    /// <remarks>
+    /// 资源服务形态没有这个方法：那一侧的用户行由 <see cref="EnsureProjectedAsync"/> 按令牌投影，
+    /// 不存在"由本服务决定一个新主体的标识"这回事。
+    /// </remarks>
     /// <param name="passwordSubject">
     /// 口令策略错误消息里的主体描述。内部调用（种子、租户初始化）应传入可辨识的值，
     /// 否则失败消息只会说"Password"，看不出是哪一处的口令不合规
     /// </param>
     public async Task<User> CreateUserAsync(
-#if (!LocalIdentity)
-        Guid subjectId,
-#endif
         string username,
         string email,
-#if (LocalIdentity)
         string password,
-#endif
         string? displayName,
-#if (LocalIdentity)
         string passwordSubject = "Password",
-#endif
         CancellationToken cancellationToken = default)
     {
         // 检查用户名唯一性
@@ -167,16 +232,14 @@ public class UserDomainService(
         }
 
         // 创建用户
-#if (LocalIdentity)
         var user = new User(username, email, HashWithPolicy(password, passwordSubject), displayName);
-#else
-        var user = new User(subjectId, username, email, displayName: displayName);
-#endif
         await userRepository.InsertAsync(user, cancellationToken);
 
         logger.LogInformation("User created: {Username} (ID: {UserId})", user.Username, user.Id);
         return user;
     }
+
+#endif
 
     /// <summary>
     /// 更新个人信息

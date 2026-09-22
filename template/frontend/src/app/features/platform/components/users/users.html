@@ -64,12 +64,14 @@
           <ng-icon name="lucideRefreshCw" data-icon="inline-start" />
           {{ refreshLabel() }}
         </button>
+        <!--#if (LocalIdentity)-->
         @if (canCreateUser()) {
           <button hlmBtn variant="default" class="flex-1 sm:flex-none" (click)="openAddDialog()">
             <ng-icon name="lucidePlus" data-icon="inline-start" />
             {{ newUserLabel() }}
           </button>
         }
+        <!--#endif-->
       </div>
     </div>
 
@@ -80,23 +82,33 @@
       [sorting]="sorting()"
       [loading]="loading()"
       [filtered]="hasActiveFilters()"
+      <!--#if (LocalIdentity)-->
       [canUpdate]="canUpdateUser()"
       [canDelete]="canDeleteUser()"
+      <!--#else-->
+      [canUpdate]="false"
+      [canDelete]="false"
+      <!--#endif-->
       (paginationChange)="onPaginationChange($event)"
       (sortingChange)="onSortingChange($event)"
+      <!--#if (LocalIdentity)-->
       (edit)="openEditDialog($event)"
+      <!--#endif-->
       (toggleActive)="handleToggleActive($event)"
       <!--#if (LocalIdentity)-->
       (resetPassword)="openResetPasswordDialog($event)"
       (unlock)="handleUnlock($event)"
       (resetTwoFactor)="handleResetTwoFactor($event)"
       <!--#endif-->
+      <!--#if (LocalIdentity)-->
       (delete)="handleDelete($event)"
+      <!--#endif-->
       [canManageRoles]="canManageUserRoles()"
       (manageRoles)="openRolesDialog($event)"
     />
   </div>
 </div>
+<!--#if (LocalIdentity)-->
 <app-user-edit-dialog
   [(visible)]="editDialogVisible"
   [loading]="editDialogLoading()"
@@ -106,6 +118,7 @@
   [canAssignRoles]="canManageUserRoles()"
   (saved)="handleSave($event)"
 />
+<!--#endif-->
 <app-user-roles-dialog
   [(open)]="rolesDialogVisible"
   [user]="rolesDialogUser()"

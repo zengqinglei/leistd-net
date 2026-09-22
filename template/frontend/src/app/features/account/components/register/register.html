@@ -185,6 +185,7 @@
             type="button"
             size="icon-sm"
             align="inline-end"
+            [attr.aria-label]="passwordToggleLabel(showPassword())"
             (click)="showPassword.set(!showPassword())"
           >
             <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
@@ -205,6 +206,7 @@
             type="button"
             size="icon-sm"
             align="inline-end"
+            [attr.aria-label]="passwordToggleLabel(showPassword())"
             (click)="showPassword.set(!showPassword())"
           >
             <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
@@ -237,6 +239,7 @@
             type="button"
             size="icon-sm"
             align="inline-end"
+            [attr.aria-label]="passwordToggleLabel(showConfirmPassword())"
             (click)="showConfirmPassword.set(!showConfirmPassword())"
           >
             <ng-icon [name]="showConfirmPassword() ? 'lucideEyeOff' : 'lucideEye'" />
@@ -257,6 +260,7 @@
             type="button"
             size="icon-sm"
             align="inline-end"
+            [attr.aria-label]="passwordToggleLabel(showConfirmPassword())"
             (click)="showConfirmPassword.set(!showConfirmPassword())"
           >
             <ng-icon [name]="showConfirmPassword() ? 'lucideEyeOff' : 'lucideEye'" />

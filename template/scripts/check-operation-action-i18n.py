@@ -11,31 +11,48 @@
      同文件里的 `OperationRecordAuthorizations` 不在射程内——那是授权依据，不进句子模板。
   2. 每个动作码在 `en.json` 与 `zh-CN.json` 的 `operationRecords.actions` 下都必须有非空词条。
 
-**刻意只做单向校验，不报"多余词条"。** 本仓接受"某些场景下有用不到的词条"：
-`tenants`（50 键）、`openApp`（22 键）、`impersonation`（4 键）对应的组件目录会在相应场景
-被整个排除，而词条照样留在 JSON 里——前端 i18n 是 JSON，不支持 `//#if`，`template.json`
-也只有整目录排除、没有键级裁剪。反向校验会把这 76 个既有键一并判红。
+**刻意只做单向校验，不报"多余词条"。** 词条文件里允许存在本项目暂时用不到的键：
+前端词条是 JSON，没有条件编译，某个功能没启用时它对应的组件不在了、键却还留着。
+反向校验会把这些既有键一并判红，而它们并不是缺陷。
 
 自测：`python3 scripts/check-operation-action-i18n.py --self-test`
 """
+import glob
 import json
 import os
 import re
 import sys
 
+# 脚本所在目录的上一级就是被检查的根：
+#   - 随模板分发时位于 <生成项目>/scripts/，根即生成项目；
+#   - 本仓直接跑 template/scripts/ 这一份，根即 template/。
+# 一份实现同时服务两边，不留会漂移的第二份拷贝。
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
 
-ACTIONS_SOURCE = os.path.join(
-    ROOT, 'template', 'backend', 'src', 'CompanyName.ProjectName.Application',
-    'OperationRecords', 'Provider', 'OperationRecordActions.cs')
-I18N_DIR = os.path.join(ROOT, 'template', 'frontend', 'public', 'i18n')
+# 项目名在生成时被替换，因此按 glob 定位而不是写死程序集名。
+# 命中多个说明仓库结构已变，宁可报错也不猜。
+def _single(pattern, what):
+    matches = sorted(glob.glob(os.path.join(ROOT, pattern)))
+    if len(matches) == 1:
+        return matches[0]
+    return None if not matches else f'__AMBIGUOUS__{what}:{len(matches)}'
+
+
+# 模板源码里条件尚未求值，两档句子来源同时存在，都要校；
+# 生成项目里按本项目的实际形态判：有词条文件就不需要内联表。
+IS_TEMPLATE_SOURCE = os.path.isdir(os.path.join(ROOT, '.template.config'))
+
+ACTIONS_SOURCE = _single(
+    os.path.join('backend', 'src', '*.Application', 'OperationRecords', 'Provider',
+                 'OperationRecordActions.cs'), '动作码定义')
+I18N_DIR = os.path.join(ROOT, 'frontend', 'public', 'i18n')
 LOCALES = ('en', 'zh-CN')
 
 # 不启用多语言的场景没有词条文件（template.json 在 !IncludeLocalization 时整个排除
 # public/i18n/**），句子只能内联在组件里。于是同一批英文句子有了**两个事实源**，
 # 而注释拦不住漂移——这道校验就是拦它的。
 TABLE_SOURCE = os.path.join(
-    ROOT, 'template', 'frontend', 'src', 'app', 'features', 'platform', 'components',
+    ROOT, 'frontend', 'src', 'app', 'features', 'platform', 'components',
     'operation-records', 'widgets', 'operation-record-table', 'operation-record-table.ts')
 INLINE_TABLE_NAME = 'ACTION_SENTENCES'
 
@@ -80,11 +97,15 @@ def extract_inline_sentence_keys(text):
     return [m.group('key') for m in INLINE_KEY_RE.finditer(match.group('body'))]
 
 
-def check(actions_source, i18n_dir, locales, table_source=None):
+def check(actions_source, i18n_dir, locales, table_source=None, require_inline=True):
     problems = []
 
-    if not os.path.exists(actions_source):
-        return [f'找不到动作码定义：{actions_source}']
+    if isinstance(actions_source, str) and actions_source.startswith('__AMBIGUOUS__'):
+        return [f'定位动作码定义时命中了多个 *.Application 项目（{actions_source.split(":")[-1]} 个）；'
+                '仓库结构已变，闸门不猜，请更新本脚本的定位方式。']
+    if not actions_source or not os.path.exists(actions_source):
+        return ['找不到动作码定义（backend/src/*.Application/OperationRecords/Provider/'
+                'OperationRecordActions.cs）。']
 
     with open(actions_source, encoding='utf-8') as handle:
         codes = extract_action_codes(handle.read())
@@ -94,7 +115,11 @@ def check(actions_source, i18n_dir, locales, table_source=None):
     if not codes:
         return ['OperationRecordActions 类中没有解析到任何动作码；正则可能已与源码漂移。']
 
-    for locale in locales:
+    # 不启用多语言的项目没有 public/i18n（整个目录在生成时被排除），
+    # 句子只内联在组件里——那一档由下面的内联表校验兜住，不是缺陷。
+    localized = os.path.isdir(i18n_dir)
+
+    for locale in locales if localized else ():
         path = os.path.join(i18n_dir, f'{locale}.json')
         if not os.path.exists(path):
             problems.append(f'{locale}：缺少词条文件 {path}')
@@ -112,7 +137,15 @@ def check(actions_source, i18n_dir, locales, table_source=None):
             elif not str(value).strip():
                 problems.append(f'{locale}：动作码 `{code}` 的句子模板是空串')
 
-    if table_source is not None:
+    # 内联英文句子表与词条文件是**互补**的两档，不是都要有：
+    #   - 启用多语言：句子在词条文件里，组件里那张内联表被条件裁掉——不存在是正常的；
+    #   - 不启用多语言：没有词条文件，句子只剩内联表，那时它必须在、且必须全覆盖。
+    # 模板源码里两者同时存在（条件尚未求值），因此两档都会被校到。
+    # 内联表在不启用多语言的形态里是唯一的句子来源，必须在、必须全覆盖；
+    # 启用多语言的生成项目里它被整块裁掉，不存在是设计如此。
+    # require_inline 由调用方定案，不靠"找不到就当被裁掉了"去猜——
+    # 那种猜法会让真正的正则漂移也被静默放行，闸门失效之后还一直报绿。
+    if table_source is not None and require_inline:
         problems.extend(check_inline_table(table_source, codes))
 
     return problems
@@ -258,20 +291,26 @@ def main():
     if '--self-test' in sys.argv:
         return self_test()
 
-    problems = check(ACTIONS_SOURCE, I18N_DIR, LOCALES, TABLE_SOURCE)
+    require_inline = IS_TEMPLATE_SOURCE or not os.path.isdir(I18N_DIR)
+    problems = check(ACTIONS_SOURCE, I18N_DIR, LOCALES, TABLE_SOURCE, require_inline)
     if problems:
         print(f'❌ 动作码句子模板检查失败（共 {len(problems)} 项）：')
         for problem in sorted(problems):
             print(f'  - {problem}')
         print('\n漏配不会报错，只会让那一行显示成裸动作码。词条补 '
-              'template/frontend/public/i18n/*.json 的 operationRecords.actions；'
+              'frontend/public/i18n/*.json 的 operationRecords.actions；'
               f'英文句子补 operation-record-table.ts 的 {INLINE_TABLE_NAME}（两者必须同步）。')
         return 1
 
     with open(ACTIONS_SOURCE, encoding='utf-8') as handle:
         codes = extract_action_codes(handle.read())
-    print(f'✅ 动作码句子模板检查通过（{len(codes)} 个动作码 × {len(LOCALES)} 种语言，'
-          f'并与内联英文句子表一一对应）。')
+    if not os.path.isdir(I18N_DIR):
+        scope = '仅内联英文句子表：本项目未启用多语言'
+    elif require_inline:
+        scope = f'{len(LOCALES)} 种语言，并与内联英文句子表一一对应'
+    else:
+        scope = f'{len(LOCALES)} 种语言'
+    print(f'✅ 动作码句子模板检查通过（{len(codes)} 个动作码 × {scope}）。')
     return 0
 
 

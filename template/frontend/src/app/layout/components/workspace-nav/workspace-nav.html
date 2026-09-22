@@ -30,6 +30,14 @@
     <!--#endif-->
     <hlm-sheet-content *hlmSheetPortal="let ctx">
       <h2 hlmSheetTitle class="px-4 pt-4 text-base font-semibold">{{ appTitle() }}</h2>
+      <!-- 抽屉必须有描述：组件会无条件指一个 aria-describedby，缺了它就是悬空引用 -->
+      <!--#if (IncludeLocalization)-->
+      <p hlmSheetDescription class="sr-only">
+        {{ 'layout.topbar.navigationDescription' | transloco }}
+      </p>
+      <!--#else-->
+      <p hlmSheetDescription class="sr-only">Choose a page to open</p>
+      <!--#endif-->
       <nav class="flex flex-col gap-4 p-4" [attr.aria-label]="ariaLabel()">
         @for (group of groups(); track group.label) {
           <div class="flex flex-col gap-1">
@@ -82,8 +90,10 @@
       }
     </ul>
   </nav>
-} @else {
-  <!-- 右侧与主题、通知、语言同一排：用同款图标按钮，名称放进提示与可访问名 -->
+} @else if (items().length) {
+  <!-- 右侧与主题、通知、语言同一排：用同款图标按钮，名称放进提示与可访问名。
+       没有 placement:'end' 的分组时整个 nav 不渲染——空的导航地标对读屏用户是噪音。
+       分组机制保留：宿主给自己的菜单标 placement:'end' 就会出现在这里。 -->
   <nav class="hidden items-center gap-2 md:flex" [attr.aria-label]="ariaLabel()">
     @for (item of items(); track item.route) {
       <a

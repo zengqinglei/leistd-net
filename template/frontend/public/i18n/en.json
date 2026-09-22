@@ -44,10 +44,11 @@
       "maxLength": "Must not exceed {{max}} characters.",
       "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
       "roleNamePattern": "Must be 2–64 letters, digits, or underscores.",
-      "passwordRule": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
       "passwordMismatch": "The two passwords do not match.",
       "passwordSameAsCurrent": "The new password must differ from the current one.",
-      "phonePattern": "Only digits, spaces, and + - ( ) are allowed."
+      "phonePattern": "Only digits, spaces, and + - ( ) are allowed.",
+      "passwordTooShort": "Password must be at least {{min}} characters.",
+      "passwordTooLong": "Password must not exceed {{max}} characters."
     },
     "noData": "No data",
     "paginator": {
@@ -58,13 +59,14 @@
       "previous": "Previous page",
       "next": "Next page",
       "last": "Last page"
-    }
+    },
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "menu": {
     "workspace": "Workspace",
     "platform": "Admin platform",
     "logout": "Sign out",
-    "hostTenant": "Host",
     "personalSettings": "Personal settings"
   },
   "language": {
@@ -105,12 +107,11 @@
       "operationRecords": "Operation records",
       "groupIdentity": "Identity & access",
       "groupAudit": "Audit",
-      "groupPersonal": "Personal",
-      "settings": "Settings",
       "toggle": "Toggle sidebar"
     },
     "topbar": {
-      "openNavigation": "Open navigation"
+      "openNavigation": "Open navigation",
+      "navigationDescription": "Choose a page to open"
     },
     "notifications": {
       "title": "Notifications",

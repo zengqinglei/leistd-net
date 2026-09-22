@@ -44,10 +44,11 @@
       "maxLength": "不能超过 {{max}} 个字符",
       "usernamePattern": "只能为 3~64 位字母、数字或下划线",
       "roleNamePattern": "只能为 2~64 位字母、数字或下划线",
-      "passwordRule": "密码至少 12 位，最长 256 位。更长的口令短语比短而复杂的密码更安全。",
       "passwordMismatch": "两次输入的密码不一致",
       "passwordSameAsCurrent": "新密码不能与当前密码相同",
-      "phonePattern": "只能包含数字、空格及 + - ( ) 符号"
+      "phonePattern": "只能包含数字、空格及 + - ( ) 符号",
+      "passwordTooShort": "密码至少需要 {{min}} 位。",
+      "passwordTooLong": "密码不能超过 {{max}} 位。"
     },
     "noData": "暂无数据",
     "paginator": {
@@ -58,13 +59,14 @@
       "previous": "上一页",
       "next": "下一页",
       "last": "末页"
-    }
+    },
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
   },
   "menu": {
     "workspace": "工作空间",
     "platform": "管理平台",
     "logout": "退出登录",
-    "hostTenant": "宿主",
     "personalSettings": "个人设置"
   },
   "language": {
@@ -105,12 +107,11 @@
       "operationRecords": "操作记录",
       "groupIdentity": "身份与访问",
       "groupAudit": "审计",
-      "groupPersonal": "个人",
-      "settings": "设置",
       "toggle": "折叠/展开侧边栏"
     },
     "topbar": {
-      "openNavigation": "打开导航"
+      "openNavigation": "打开导航",
+      "navigationDescription": "选择要前往的页面"
     },
     "notifications": {
       "title": "通知",

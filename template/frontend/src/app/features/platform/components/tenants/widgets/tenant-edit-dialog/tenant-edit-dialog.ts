@@ -14,10 +14,10 @@ import {
 } from '@angular/core';
 import {
   FormField,
+  minLength,
   email as emailValidator,
   form,
   maxLength,
-  pattern,
   required,
 } from '@angular/forms/signals';
 //#if (IncludeLocalization)
@@ -31,7 +31,10 @@ import { HlmInput } from '@spartan-ng/helm/input';
 //#if (IncludeLocalization)
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
-import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '../../../../../../core/validation/password-rule';
 import {
   TENANT_CONNECTION_STRING_MAX_LENGTH,
   TENANT_DEFAULT_CONNECTION_NAME,
@@ -127,8 +130,16 @@ export class TenantEditDialog {
       message: this.transloco.translate('common.validation.required'),
       when: () => !this.isEdit(),
     });
-    pattern(path.adminPassword, PASSWORD_RULE, {
-      message: this.transloco.translate('common.validation.passwordRule'),
+    minLength(path.adminPassword, PASSWORD_MIN_LENGTH, {
+      message: this.transloco.translate('common.validation.passwordTooShort', {
+        min: PASSWORD_MIN_LENGTH,
+      }),
+      when: () => !this.isEdit(),
+    });
+    maxLength(path.adminPassword, PASSWORD_MAX_LENGTH, {
+      message: this.transloco.translate('common.validation.passwordTooLong', {
+        max: PASSWORD_MAX_LENGTH,
+      }),
       when: () => !this.isEdit(),
     });
     // 连接串可选，只钉长度上限（常量与详情页的连接编辑器同源）
@@ -156,9 +167,12 @@ export class TenantEditDialog {
       message: 'This field is required.',
       when: () => !this.isEdit(),
     });
-    pattern(path.adminPassword, PASSWORD_RULE, {
-      message:
-        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
+    minLength(path.adminPassword, PASSWORD_MIN_LENGTH, {
+      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
+      when: () => !this.isEdit(),
+    });
+    maxLength(path.adminPassword, PASSWORD_MAX_LENGTH, {
+      message: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
       when: () => !this.isEdit(),
     });
     // 连接串可选，只钉长度上限（常量与详情页的连接编辑器同源）

@@ -92,6 +92,15 @@ export class Login {
   // 密码可见性
   protected readonly showPassword = signal(false);
 
+  // 读屏用户听到的是"显示密码/隐藏密码"，而不是一个没有名字的按钮；名称随当前状态变
+  //#if (IncludeLocalization)
+  protected readonly passwordToggleLabel = (shown: boolean) =>
+    this.transloco.translate(shown ? 'common.hidePassword' : 'common.showPassword');
+  //#else
+  protected readonly passwordToggleLabel = (shown: boolean) =>
+    shown ? 'Hide password' : 'Show password';
+  //#endif
+
   // Mock状态：useMock 支持布尔与对象两种形态（与 MockInterceptor 的解析一致）。
   public readonly isMockEnabled = signal(
     environment.useMock === true ||

@@ -53,7 +53,10 @@ import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { translationReady } from '../../../../../../core/i18n/translation-ready';
 //#endif
 //#if (LocalIdentity)
-import { PASSWORD_RULE } from '../../../../../../core/validation/password-rule';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '../../../../../../core/validation/password-rule';
 //#endif
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
 import {
@@ -144,9 +147,6 @@ export class UserEditDialog {
 
   // 表单模型（Signal Forms）
   protected readonly formModel = signal({
-    //#if (!LocalIdentity)
-    subjectId: '',
-    //#endif
     username: '',
     email: '',
     displayName: '',
@@ -191,25 +191,22 @@ export class UserEditDialog {
     maxLength(path.displayName, 128, {
       message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
     });
-    //#if (!LocalIdentity)
-    required(path.subjectId, { message: this.transloco.translate('common.validation.required') });
-    pattern(
-      path.subjectId,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-      {
-        message: 'Enter a valid Identity subject GUID.',
-        when: () => !this.isEditMode(),
-      },
-    );
-    //#endif
     //#if (LocalIdentity)
     // 初始密码仅在新建模式校验（编辑模式无密码字段）。
     required(path.password, {
       message: this.transloco.translate('common.validation.required'),
       when: () => !this.isEditMode(),
     });
-    pattern(path.password, PASSWORD_RULE, {
-      message: this.transloco.translate('common.validation.passwordRule'),
+    minLength(path.password, PASSWORD_MIN_LENGTH, {
+      message: this.transloco.translate('common.validation.passwordTooShort', {
+        min: PASSWORD_MIN_LENGTH,
+      }),
+      when: () => !this.isEditMode(),
+    });
+    maxLength(path.password, PASSWORD_MAX_LENGTH, {
+      message: this.transloco.translate('common.validation.passwordTooLong', {
+        max: PASSWORD_MAX_LENGTH,
+      }),
       when: () => !this.isEditMode(),
     });
     //#endif
@@ -232,26 +229,18 @@ export class UserEditDialog {
     emailValidator(path.email, { message: 'Please enter a valid email address.' });
     maxLength(path.email, 256, { message: '' });
     maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
-    //#if (!LocalIdentity)
-    required(path.subjectId, { message: 'This field is required.' });
-    pattern(
-      path.subjectId,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-      {
-        message: 'Enter a valid Identity subject GUID.',
-        when: () => !this.isEditMode(),
-      },
-    );
-    //#endif
     //#if (LocalIdentity)
     // 初始密码仅在新建模式校验（编辑模式无密码字段）。
     required(path.password, {
       message: 'This field is required.',
       when: () => !this.isEditMode(),
     });
-    pattern(path.password, PASSWORD_RULE, {
-      message:
-        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
+    minLength(path.password, PASSWORD_MIN_LENGTH, {
+      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
+      when: () => !this.isEditMode(),
+    });
+    maxLength(path.password, PASSWORD_MAX_LENGTH, {
+      message: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
       when: () => !this.isEditMode(),
     });
     //#endif
@@ -285,9 +274,6 @@ export class UserEditDialog {
       }
       const avatar = user?.avatar ?? '';
       this.formModel.set({
-        //#if (!LocalIdentity)
-        subjectId: user?.id ?? '',
-        //#endif
         username: user?.username ?? '',
         email: user?.email ?? '',
         displayName: user?.displayName ?? '',
@@ -383,9 +369,6 @@ export class UserEditDialog {
     }
 
     this.saved.emit({
-      //#if (!LocalIdentity)
-      subjectId: model.subjectId,
-      //#endif
       username: model.username.trim(),
       email: model.email.trim(),
       displayName: model.displayName.trim() || undefined,
@@ -402,5 +385,14 @@ export class UserEditDialog {
   }
   //#if (LocalIdentity)
   protected readonly showPassword = signal(false);
+
+  // 读屏用户听到的是"显示密码/隐藏密码"，而不是一个没有名字的按钮；名称随当前状态变
+  //#if (IncludeLocalization)
+  protected readonly passwordToggleLabel = (shown: boolean) =>
+    this.transloco.translate(shown ? 'common.hidePassword' : 'common.showPassword');
+  //#else
+  protected readonly passwordToggleLabel = (shown: boolean) =>
+    shown ? 'Hide password' : 'Show password';
+  //#endif
   //#endif
 }

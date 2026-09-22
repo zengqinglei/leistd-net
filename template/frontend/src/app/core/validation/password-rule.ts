@@ -6,13 +6,13 @@
  * 内部调用（种子、租户初始化、bootstrap）连表单都不经过。因此本规则必须与服务端保持一致：
  * 比服务端松会让用户提交后才被拒，比服务端严会拒绝服务端本来接受的合法口令。
  *
- * 所有表单均 import 本常量，不各自内联正则，避免静默的规则分叉。
+ * 所有表单均 import 这两个常量，不各自内联数字，避免静默的规则分叉。
+ *
+ * **上下限分成两个校验器，不合成一条正则。** 合起来只能给出一句"至少 12 位、最长 256 位"，
+ * 那既没告诉用户这次错在哪一头，又和字段说明逐字重复——同一句话在同一个字段下出现两遍。
  *
  * 规则本身选长度而不选复杂度：复杂度要求把人推向 `Passw0rd!` 这类可预测形态却挡不住它。
  */
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 256;
-
-/** 与服务端 `PasswordPolicy` 对齐：足够长、允许长口令、不强制字符类别 */
-export const PASSWORD_RULE = new RegExp(`^.{${PASSWORD_MIN_LENGTH},${PASSWORD_MAX_LENGTH}}$`);
 //#endif

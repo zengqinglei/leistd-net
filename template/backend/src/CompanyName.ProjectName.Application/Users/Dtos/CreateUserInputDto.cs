@@ -10,11 +10,6 @@ namespace CompanyName.ProjectName.Application.Users.Dtos;
 /// </summary>
 public record CreateUserInputDto
 {
-#if (!LocalIdentity)
-    /// <summary>Identity 签发的稳定 sub，也是本服务 Membership 主键。</summary>
-    public required Guid SubjectId { get; init; }
-
-#endif
     [Display(Name = "Username")]
     [Required(ErrorMessage = "{0} is required.")]
     [StringLength(64, MinimumLength = 3, ErrorMessage = "{0} must be between {2} and {1} characters.")]

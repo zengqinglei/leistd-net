@@ -164,6 +164,63 @@ public class UserService(IOperationRecorder recorder, ...)
 }
 ```
 
+### 失败原因要带参数
+
+上面那条只有一个码。**真正有用的拒绝记录还要带上"为什么是这一条"的那几个值**——
+运维看到 `Order:CreditLimitExceeded` 只知道类别，看到额度与差额才知道该找谁批。
+参数走 `FromCode` 的第二个入参（JSON 对象字符串），与本地化词条的占位一一对应：
+
+```csharp
+// 应用服务：业务规则拒绝，不是授权拒绝——授权那一档由端点上的
+// [OperationRecordAction] 自动补记，这里是走到了业务逻辑之后才判定的
+public async Task<OrderDto> PlaceAsync(PlaceOrderInput input, CancellationToken ct)
+{
+    var customer = await customers.GetAsync(input.CustomerId, ct);
+    if (customer.Available < input.Amount)
+    {
+        // 独立提交：紧随其后的抛出让业务回滚，这条记录照样留下
+        await recorder.RecordFailedAsync(
+            OperationRecordActions.OrderPlaced,
+            OperationTarget.For(customer.Id, customer.Name),
+            PermissionConstant.Orders.Create,
+            OperationFailure.FromCode(
+                "Order:CreditLimitExceeded",
+                JsonSerializer.Serialize(new
+                {
+                    Limit = customer.CreditLimit,
+                    Available = customer.Available,
+                    Requested = input.Amount
+                })),
+            ct);
+
+        throw new BadRequestException("信用额度不足。")
+            .WithCode("Order:CreditLimitExceeded")
+            .WithData("Available", customer.Available)
+            .WithData("Requested", input.Amount);
+    }
+    ...
+}
+```
+
+对应的词条用同名占位：
+
+```json
+"operationRecords": {
+  "failures": {
+    "Order:CreditLimitExceeded": "可用额度 {{Available}}，本次需要 {{Requested}}"
+  }
+}
+```
+
+三件事容易漏：
+
+- **异常与记录用同一个码。** 前端按异常的码分支，运维按记录的码检索；两边不一致时，
+  "用户看到的错误"和"审计里的那一行"对不上，排查要靠时间戳猜。
+- **参数不要塞进 `FromDetail`。** 那一路是给技术说明用的，不过本地化，
+  界面只能原样显示英文串。
+- **只在真的拒绝时记。** 校验没通过就返回、并不构成一次"被拒的操作"时不要记——
+  审计表的价值来自密度。
+
 用户自助操作没有权限名可填，传业务自己的授权依据标记：
 
 ```csharp

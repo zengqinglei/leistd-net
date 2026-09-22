@@ -22,7 +22,6 @@ import { AuthorizationService } from '../../../core/services/authorization-servi
 //#if (IncludeLocalization)
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
-import { TenantContextService } from '../../../core/services/tenant-context-service';
 import { LayoutService } from '../../services/layout-service';
 
 /** 用户菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
@@ -153,10 +152,6 @@ interface UserMenuItem {
               <div class="grid flex-1 text-left text-sm leading-tight">
                 <span class="truncate font-medium">{{ user.displayName || user.username }}</span>
                 <span class="truncate text-xs text-muted-foreground">{{ user.email }}</span>
-                <!-- 当前租户；未选租户即宿主（未启用多租户时恒为空串，不渲染）。 -->
-                @if (tenantLabel(); as label) {
-                  <span class="truncate text-xs text-muted-foreground">{{ label }}</span>
-                }
               </div>
             </div>
           </hlm-dropdown-menu-label>
@@ -191,7 +186,6 @@ export class UserMenu {
   private readonly languageService = inject(LanguageService);
   private readonly transloco = inject(TranslocoService);
   //#endif
-  private readonly tenantContext = inject(TenantContextService);
   private readonly sidebarService = inject(HlmSidebarService);
 
   /** 侧栏形态的弹出方向，同官方 nav-user；顶栏形态沿用默认（向下）。 */
@@ -281,22 +275,19 @@ export class UserMenu {
       .filter((group) => group.length > 0),
   );
 
-  /** 当前租户显示名；未选租户即宿主。 */
-  readonly tenantLabel = computed(() => {
-    //#if (IncludeLocalization)
-    this.languageService.activeLang();
-    //#endif
-    const tenant = this.tenantContext.current();
-    if (tenant) {
-      // 匿名接口不再回显租户的展示名（那会泄露租户是否存在），这里只有解析用的 key
-      return tenant.key;
-    }
-    //#if (IncludeLocalization)
-    return this.transloco.translate('menu.hostTenant');
-    //#else
-    return 'Host';
-    //#endif
-  });
+  // 这里**刻意没有**"当前租户"一行。
+  //
+  // 产品上它不解决任何问题：租户数据本就隔离，用户只可能看到自己租户的数据；
+  // 会话内也换不了租户（见下面菜单项的注释），所以这个值既不会变、也不用来做决定。
+  // 用子域名区分租户的部署里，地址栏已经是答案。
+  //
+  // 实现上更不能照着 TenantContextService 显示：那份上下文是**登录入口的路由提示**
+  // （用户在登录页填的名字，存在 localStorage），不是会话事实。实测过：保持宿主超管登录态不变，
+  // 只往 localStorage 写一个名字，这一行就会显示那个并不存在的租户——它报的是本地字符串，
+  // 不是"这个会话属于谁"。
+  //
+  // 将来真要显示，唯一可接受的来源是**会话自己**（给 WhoAmI 加租户字段，用展示名而不是路由 key），
+  // 并且只在确实处于租户时渲染。别再从 TenantContextService 取。
 
   handleLogout(): void {
     this.authService.logout();

@@ -181,6 +181,7 @@ public class UserAppService(
         return await MapToOutputAsync(user, cancellationToken);
     }
 
+#if (LocalIdentity)
     /// <summary>
     /// 创建用户
     /// </summary>
@@ -200,14 +201,9 @@ public class UserAppService(
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
             : await GetDefaultRolesAsync(cancellationToken);
         AvatarPolicy.EnsureValid(input.Avatar?.Trim());
-#if (LocalIdentity)
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
-#else
-        var user = await userDomainService.CreateUserAsync(input.SubjectId, username, email, displayName, cancellationToken);
-        user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, false);
-#endif
         await userRepository.UpdateAsync(user, cancellationToken);
         var userRoles = await AssignRolesAsync(user.Id, roles, cancellationToken);
 
@@ -226,6 +222,10 @@ public class UserAppService(
     /// <summary>
     /// 更新用户
     /// </summary>
+    /// <remarks>
+    /// 资源服务形态下没有这个入口：用户名、邮箱、显示名归签发方所有，本地改了没有回写通道，
+    /// 只会与签发方漂移。那一侧的资料由 <c>ResourceUserProvisioningMiddleware</c> 每次访问按令牌刷新。
+    /// </remarks>
     public async Task<UserManagementOutputDto> UpdateAsync(Guid id, UpdateUserInputDto input, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Updating user {Id}", id);
@@ -256,16 +256,12 @@ public class UserAppService(
         AvatarPolicy.EnsureValid(avatar);
 
         // 启用状态原样带过：它只由 Enable/Disable 两个命令写入，那里才有"超管不得禁用自己"的保护。
-#if (LocalIdentity)
         user.UpdateManagement(
             email,
             input.DisplayName?.Trim(),
             avatar,
             user.IsActive,
             input.IsEmailVerified);
-#else
-        user.UpdateManagement(email, input.DisplayName?.Trim(), avatar, user.IsActive, false);
-#endif
         // 角色不在此处变更：普通资料更新与角色分配是两个命令、两个权限。
         await userRepository.UpdateAsync(user, cancellationToken);
 
@@ -283,9 +279,11 @@ public class UserAppService(
         return await MapToOutputAsync(user, cancellationToken);
     }
 
+#endif
     /// <summary>
     /// 启用用户
     /// </summary>
+    /// <remarks>两种形态都保留：即使身份由签发方发放，本服务仍要能就地停掉一个人的访问。</remarks>
     public async Task EnableAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
@@ -426,6 +424,7 @@ public class UserAppService(
     }
 #endif
 
+#if (LocalIdentity)
     /// <summary>
     /// 删除用户（软删除）
     /// </summary>
@@ -450,9 +449,7 @@ public class UserAppService(
                 ;
         }
 
-#if (LocalIdentity)
         await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
-#endif
         await userRepository.DeleteAsync(user, cancellationToken);
 #if (IncludeNotifications)
         await notificationStore.DeleteAllAsync(id.ToString(), cancellationToken);
@@ -468,6 +465,7 @@ public class UserAppService(
             cancellationToken);
     }
 
+#endif
     private async Task<User> GetUserOrThrowAsync(Guid id, CancellationToken cancellationToken)
     {
         var user = await userRepository.GetByIdAsync(id, cancellationToken);

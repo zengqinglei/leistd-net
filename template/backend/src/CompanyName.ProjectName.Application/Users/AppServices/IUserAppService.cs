@@ -23,6 +23,7 @@ public interface IUserAppService : IAppService
     /// </summary>
     Task<UserManagementOutputDto> GetAsync(Guid id, CancellationToken cancellationToken = default);
 
+#if (LocalIdentity)
     /// <summary>
     /// 创建用户
     /// </summary>
@@ -33,10 +34,16 @@ public interface IUserAppService : IAppService
     /// <summary>
     /// 更新用户
     /// </summary>
+    /// <remarks>
+    /// 资源服务形态没有这两个入口：用户行由令牌投影而来（见 <c>UserDomainService.EnsureProjectedAsync</c>），
+    /// 资料字段归签发方所有，本地既不新建也不改。那一侧本服务自己拥有的是角色授予与启停。
+    /// </remarks>
     Task<UserManagementOutputDto> UpdateAsync(
         Guid id,
         UpdateUserInputDto input,
         CancellationToken cancellationToken = default);
+
+#endif
 
     /// <summary>
     /// 启用用户
@@ -65,10 +72,14 @@ public interface IUserAppService : IAppService
     Task ResetTwoFactorAsync(Guid id, CancellationToken cancellationToken = default);
 #endif
 
+#if (LocalIdentity)
     /// <summary>
     /// 删除用户（软删除）
     /// </summary>
+    /// <remarks>资源服务形态没有这个入口：删掉了下次持令牌访问又会被投影回来，是个会骗人的按钮。</remarks>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+#endif
 
     /// <summary>
     /// 查询用户当前角色

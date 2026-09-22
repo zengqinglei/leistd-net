@@ -27,16 +27,6 @@
       (submit)="$event.preventDefault(); onSubmit()"
     >
       <div class="flex flex-col gap-4">
-        <div
-          class="rounded-lg border border-border bg-muted px-4 py-3 text-xs text-muted-foreground"
-        >
-          <!--#if (IncludeLocalization)-->
-          {{ 'account.changePassword.rules' | transloco }}
-          <!--#else-->
-          Password rules: at least 12 characters. Longer passphrases are encouraged.
-          <!--#endif-->
-        </div>
-
         <!-- Current Password -->
         <div hlmField>
           <!--#if (IncludeLocalization)-->
@@ -58,6 +48,7 @@
               type="button"
               size="icon-sm"
               align="inline-end"
+              [attr.aria-label]="passwordToggleLabel(showCurrentPassword())"
               (click)="showCurrentPassword.set(!showCurrentPassword())"
             >
               <ng-icon [name]="showCurrentPassword() ? 'lucideEyeOff' : 'lucideEye'" />
@@ -91,11 +82,22 @@
               type="button"
               size="icon-sm"
               align="inline-end"
+              [attr.aria-label]="passwordToggleLabel(showNewPassword())"
               (click)="showNewPassword.set(!showNewPassword())"
             >
               <ng-icon [name]="showNewPassword() ? 'lucideEyeOff' : 'lucideEye'" />
             </button>
           </hlm-input-group>
+          <!--#if (IncludeLocalization)-->
+          <hlm-field-description>{{
+            'account.changePassword.rules' | transloco
+          }}</hlm-field-description>
+          <!--#else-->
+          <hlm-field-description>
+            Password must be at least 12 characters (up to 256). A longer passphrase is stronger
+            than a short complex one.
+          </hlm-field-description>
+          <!--#endif-->
           @for (error of changeForm.newPassword().errors(); track error.kind) {
             @if (error.message) {
               <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
@@ -124,6 +126,7 @@
               type="button"
               size="icon-sm"
               align="inline-end"
+              [attr.aria-label]="passwordToggleLabel(showConfirmPassword())"
               (click)="showConfirmPassword.set(!showConfirmPassword())"
             >
               <ng-icon [name]="showConfirmPassword() ? 'lucideEyeOff' : 'lucideEye'" />

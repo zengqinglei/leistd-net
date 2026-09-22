@@ -5,9 +5,7 @@ using CompanyName.ProjectName.Api.HealthChecks;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Api.Auth;
 #endif
-#if (LocalIdentity)
 using CompanyName.ProjectName.Api.Middlewares;
-#endif
 using Leistd.MultiTenancy.AspNetCore;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using CompanyName.ProjectName.Api.HostedServices.Initializer;
@@ -598,6 +596,10 @@ try
 #endif
     // 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
     app.UseMultiTenancy();
+#if (!LocalIdentity)
+    // 必须在 UseMultiTenancy() 之后：用户行是 IMultiTenant，租户没解析出来会落成宿主行。
+    app.UseMiddleware<ResourceUserProvisioningMiddleware>();
+#endif
 #if (LocalIdentity)
     // 受限会话（租户要求两步验证而本人未启用）只放行完成设置所需的接口
     app.UseMiddleware<TwoFactorSetupEnforcementMiddleware>();

@@ -156,6 +156,21 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         Avatar = avatar;
     }
 
+#if (!LocalIdentity)
+    /// <summary>按签发方令牌刷新资料字段。</summary>
+    /// <remarks>
+    /// 资源服务形态下这三个字段归签发方所有，本地没有编辑入口，只有这一条刷新通道。
+    /// <b>刻意不碰 <see cref="IsActive"/> 与角色</b>：那是本服务自己的授权决定，
+    /// 跟着刷新走会把管理员刚做的启停与授权冲掉，而且每个请求冲一次。
+    /// </remarks>
+    public void ProjectFromIssuer(string username, string email, string? displayName)
+    {
+        Username = username;
+        Email = email;
+        DisplayName = displayName;
+    }
+
+#endif
     public void UpdateManagement(string email, string? displayName, string? avatar, bool isActive, bool emailConfirmed)
     {
         Email = email;
