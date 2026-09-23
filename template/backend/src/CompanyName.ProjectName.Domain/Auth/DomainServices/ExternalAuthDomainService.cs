@@ -1,4 +1,6 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using Leistd.Timing;
 using Leistd.ExceptionHandling;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
@@ -54,12 +56,8 @@ public class ExternalAuthDomainService(
             var existingUser = await userRepository.GetByIdAsync(connection.UserId, cancellationToken);
             if (existingUser == null)
             {
-                throw new NotFoundException($"User {connection.UserId} not found.")
-#if (IncludeLocalization)
-                    .WithCode("User:NotFound")
-                    .WithData("Id", connection.UserId)
-#endif
-                    ;
+                throw new BusinessException(UserErrorCodes.NotFound, $"User {connection.UserId} not found.")
+                    .WithData("Id", connection.UserId);
             }
 
             logger.LogInformation("User {Username} signed in via {Provider}", existingUser.Username, provider);
@@ -134,12 +132,8 @@ public class ExternalAuthDomainService(
             cancellationToken);
         if (existing is not null && existing.UserId != user.Id)
         {
-            throw new BadRequestException($"This {provider} account is already linked to another user.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:AlreadyLinked")
-                .WithData("Provider", provider)
-#endif
-                ;
+            throw new BusinessException(ExternalAuthErrorCodes.AlreadyLinked, $"This {provider} account is already linked to another user.")
+                .WithData("Provider", provider);
         }
 
         if (existing is not null)
@@ -151,12 +145,8 @@ public class ExternalAuthDomainService(
 
         if (await externalLoginRepository.AnyAsync(c => c.UserId == user.Id && c.Provider == provider, cancellationToken))
         {
-            throw new BadRequestException($"A {provider} account is already linked. Unlink it first.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ProviderAlreadyLinked")
-                .WithData("Provider", provider)
-#endif
-                ;
+            throw new BusinessException(ExternalAuthErrorCodes.ProviderAlreadyLinked, $"A {provider} account is already linked. Unlink it first.")
+                .WithData("Provider", provider);
         }
 
         var connection = new ExternalLoginConnection(
@@ -194,10 +184,7 @@ public class ExternalAuthDomainService(
             cancellationToken);
         if (user.PasswordHash is null && otherLinks == 0)
         {
-            throw new BadRequestException("This is your only way to sign in. Set a password or link another account first.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:LastSignInMethod")
-#endif
+            throw new BusinessException(ExternalAuthErrorCodes.LastSignInMethod, "This is your only way to sign in. Set a password or link another account first.")
                 ;
         }
 

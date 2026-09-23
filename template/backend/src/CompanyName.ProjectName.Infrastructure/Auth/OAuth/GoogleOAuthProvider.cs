@@ -1,5 +1,4 @@
 #if (LocalIdentity)
-using Leistd.ExceptionHandling;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
@@ -54,12 +53,10 @@ internal sealed class GoogleOAuthProvider(
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             logger.LogError("Google token exchange failed: {StatusCode} {Content}", response.StatusCode, errorContent);
-            throw new BadRequestException($"Failed to obtain access token: {response.StatusCode}")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:AccessTokenExchangeFailed")
-                .WithData("StatusCode", response.StatusCode)
-#endif
-            ;
+            throw new HttpRequestException(
+                "Google access-token exchange failed.",
+                inner: null,
+                response.StatusCode);
         }
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -68,21 +65,13 @@ internal sealed class GoogleOAuthProvider(
         if (tokenResponse == null || !tokenResponse.TryGetValue("access_token", out var accessTokenElement))
         {
             logger.LogError("Failed to parse Google access token: {Response}", responseContent);
-            throw new BadRequestException("Failed to parse the access token.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:AccessTokenParseFailed")
-#endif
-            ;
+            throw new InvalidOperationException("The Google token response did not contain an access token.");
         }
 
         var accessToken = accessTokenElement.GetString();
         if (accessToken is null)
         {
-            throw new BadRequestException("Access token is empty.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:AccessTokenEmpty")
-#endif
-            ;
+            throw new InvalidOperationException("The Google token response contained an empty access token.");
         }
 
         return new OAuthTokenInfo
@@ -106,21 +95,13 @@ internal sealed class GoogleOAuthProvider(
         var userInfo = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>(cancellationToken);
         if (userInfo == null)
         {
-            throw new BadRequestException("Failed to obtain external user information.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:UserInfoFetchFailed")
-#endif
-            ;
+            throw new InvalidOperationException("The Google user-info response was empty.");
         }
 
         var providerId = userInfo["id"].GetString();
         if (providerId is null)
         {
-            throw new BadRequestException("The external user ID is missing.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:UserIdMissing")
-#endif
-            ;
+            throw new InvalidOperationException("The Google user-info response did not contain a user ID.");
         }
 
         return new ExternalUserInfo
@@ -140,12 +121,7 @@ internal sealed class GoogleOAuthProvider(
         if (provider.IsAvailable)
             return provider;
 
-        throw new NotFoundException("External identity provider Google is not configured.")
-#if (IncludeLocalization)
-            .WithCode("ExternalAuth:ProviderNotConfigured")
-            .WithData("Provider", "Google")
-#endif
-            ;
+        throw new InvalidOperationException("External identity provider Google is not configured.");
     }
 }
 #endif

@@ -173,10 +173,10 @@ public sealed class OperationRecordQueryTests
     {
         var (service, _) = Create(hostReader: true);
 
-        var error = await Assert.ThrowsAsync<UnprocessableEntityException>(() => service.GetPagedListAsync(
+        var error = await Assert.ThrowsAsync<System.ComponentModel.DataAnnotations.ValidationException>(() => service.GetPagedListAsync(
             new GetOperationRecordPagedInputDto { StartTime = DateTime.UtcNow, EndTime = DateTime.UtcNow.AddDays(-1) }));
 
-        Assert.Equal(["startTime", "endTime"], error.ValidationErrors.Select(e => e.Field));
+        Assert.Equal(["StartTime", "EndTime"], error.ValidationResult?.MemberNames);
     }
 
     /// <summary>

@@ -12,7 +12,7 @@ namespace Leistd.Settings.Validation;
 /// <remarks>
 /// <para>在 <see cref="ISettingManager"/> 写入前、通过类型、区间与候选校验之后依次调用，
 /// 清除（值为 <see langword="null"/>）不经过它。每个校验器自己按设置名判断是否适用。</para>
-/// <para>不合法时抛带码的业务异常（通常是 <c>BadRequestException(...).WithCode(...)</c>），写入随之中止。</para>
+/// <para>不合法时抛带码的 <c>BusinessException</c>，写入随之中止。</para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -22,7 +22,7 @@ namespace Leistd.Settings.Validation;
 ///     {
 ///         if (context.Definition.Name == "Display.TimeZone"
 ///             &amp;&amp; !(TimeZoneInfo.TryFindSystemTimeZoneById(context.Value, out var zone) &amp;&amp; zone.HasIanaId))
-///             throw new BadRequestException($"'{context.Value}' is not an IANA time zone id.").WithCode("Setting:TimeZoneInvalid");
+///             throw new BusinessException("AppSetting:TimeZoneInvalid", $"'{context.Value}' is not an IANA time zone id.");
 ///         return Task.CompletedTask;
 ///     }
 /// }

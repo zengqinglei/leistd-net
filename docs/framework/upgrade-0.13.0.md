@@ -223,17 +223,74 @@ Task<SubjectPermissionGrants> GetGrantsForSubjectAsync(string userId, IReadOnlyC
 宿主按键覆盖组件译文，因此键与占位符也是公共契约：键改了而覆盖没跟着改，表现为译文静默
 回落到组件默认值，不报错。
 
-本版有两条这样的变化：
+本版有三条这样的变化：
 
 - 权限未定义的译文占位符由 `{Name}` 改成 `{Names}`（一次可以报多个权限名）。
   覆盖过 `Permission:UndefinedPermission` 的宿主，句子里的变量要跟着改。
 - `Permission:SubjectUnavailable` 整条移除（读自己的权限时空主体改为返回空集合，不再报错）。
+- 权限与权限分组的显示名改为按约定键查找：权限为 `Permission:{权限名}`，分组为 `PermissionGroup:{组名}`，
+  与设置组件的 `Setting:{名称}` / `SettingGroup:{分组}` 同一模式。定义里的 `displayName` 从"词条键"改为
+  "默认文案"：查不到词条时直接展示它，而不是回落到技术名。原先把 `displayName` 写成词条键的宿主，
+  改为写可读的默认文案（通常是英文），并把资源里的分组键改成 `PermissionGroup:{组名}`；权限键若本来就是
+  `Permission:{权限名}` 则无需改名。
 
 > `scripts/check-i18n-keys.ps1` 保证各语言的键集与占位符一致，但**不比对版本之间的增删**——
-> 跨版本的键变化只能靠升级清单，所以上面这两条是人工列的。
+> 跨版本的键变化只能靠升级清单，所以上面这三条是人工列的。
 
 ## 8. 取包时的版本陷阱
 
 nuget.org 上存在 `1.0.0-beta.22` 与 10 个 `1.0.0-preview.*`，SemVer 排序高于 `0.13.0-*`。
 在它们被 unlist 之前，**预发布依赖必须写全称**（如 `0.13.0-beta.170`），不要用 `--prerelease`。
 成因见 `versioning.md` 的「nuget.org 上存在版本号虚高的历史预发布包」。
+
+## 9. 异常与失败响应收口
+
+异常类不再携带 HTTP 语义。`BadRequestException`、`NotFoundException`、
+`ConflictException`、`UnauthorizedException`、`ForbiddenException`、
+`UnprocessableEntityException`、`UnsupportedMediaTypeException`、`InternalServerException`与
+`ServiceUnavailableException` 已移除；`Leistd.Core.CommonException`、`GenericErrorCodes` 与旧的
+`ValidationError` 也已移除。
+
+迁移原则：
+
+- 参数、对象状态、基础设施或传输失败优先改用 .NET 内置异常，如
+  `ArgumentException`、`InvalidOperationException`、`HttpRequestException`。这些异常默认对外只产生通用 500，
+  不会泄露内部消息。
+- DTO 输入校验使用 DataAnnotations 与 `[ApiController]`；显式调用 `Validator`
+  产生的 `System.ComponentModel.DataAnnotations.ValidationException` 也映射为 400。
+- 可预期业务规则失败统一使用
+  `new BusinessException("Order:NotFound", "The order was not found.")`。第二个参数必须是
+  可安全展示的回退文案；需要本地化占位符时继续调用 `WithData`。
+- `BusinessException` 未命中宿主映射时返回 400。422 只在宿主需要表达更精确的内容处理语义时按错误码显式映射。原来的
+  `new NotFoundException(message).WithCode(code)` 改为 `new BusinessException(code, message)`，
+  并在宿主注册时用 `options.MapCode(code, 404)` 映射传输状态；400、401、403 与 409 同理。
+  `StatusCode`、`Details`、`WithCode`、`WithDetails` 不再是异常 API。
+
+组件拥有的非默认 HTTP 语义由对应 ASP.NET Core 包的 `*ExceptionMappings.Configure(options)` 提供；
+宿主在 API 组合根显式调用，再登记项目自己的映射或覆盖组件默认值。组件 `Add*` 不会隐式改变全局异常处理配置，
+回退到 400 的错误码也无需登记。业务项目将错误码常量放在实际拥有它的 Domain/Application 模块，而不是统一堆入 Shared。
+
+默认失败响应改为 RFC 9457 Problem Details，其中稳定业务码在字符串 `code`
+扩展字段。如宿主显式调用 `AddResponseWrapper()`，成功与失败都使用可选数字信封：
+数字 HTTP/业务状态放在 `code`，稳定业务错误码放在 `errorCode`。
+`BusinessMessageExposure` 已移除：业务异常的安全文案始终可展示，未预期异常始终回退为通用系统错误。
+异常响应的 `traceId` 与日志、响应头共享请求入口选定的关联标识；`UseCorrelationId()` 应在异常处理和日志中间件之前运行。
+`X-Correlation-Id` 保持原有的不透明标识契约（最多 128 字符，只含 ASCII 字母、数字、`-`、`_`）；显式 `Change()` 仍优先于当前 `Activity`。W3C 追踪上下文使用 `traceparent`。
+
+定制宿主对精确类型调用 `MapException<TException>()`（委托可按异常属性分支），需要完全接管某类异常时按 ASP.NET Core 方式再注册一个 `IExceptionHandler`；如要替换整个失败响应的序列化形状，注册 ASP.NET Core 的 `IProblemDetailsWriter`。
+`ServiceClientException` 现在直接继承 `Exception`，`RemoteServiceException` 继承前者；HTTP 宿主需要组件默认的安全 500/502/503/504 分类时，引用 `Leistd.ServiceClient.AspNetCore` 并显式调用 `ServiceClientExceptionMappings.Configure(options)`。本地观测的无效响应、传输不可用、等待超时分别映射为 502、503、504；远端明确返回失败状态默认 502，不依据远端 408/429/503 等状态推断本地响应。宿主可针对已知上游契约覆盖默认映射。
+组件 Web 适配层用 `MapDefaultCode` / `MapDefaultException` 登记可复用的默认状态，
+宿主 `MapCode` / `MapException` 始终可覆盖，调用顺序无关；HTTP 状态映射只在代码里声明，不提供配置文件入口。资源授权新增独立的
+`Leistd.Authorization.Resource.AspNetCore` 包，需 HTTP 默认 ACL 冲突 409 时显式调用其映射入口。
+可选数字信封统一使用 `Result`；若代码直接引用了 `ExceptionResult`，改为构造 `Result` 并填充
+`Code`、`Message`、`TraceId`、`ErrorCode` 与可选 `Errors`。
+
+框架判定的请求错误 `BadHttpRequestException`（Minimal API 请求体解析失败、请求体过大等）按异常自带的状态码返回，不再报 500。框架只写状态码、不写响应体的失败（生产环境的请求体解析失败、415、未匹配路由、认证质询、限流）默认没有响应体；需要标准响应体时，在 `UseGlobalExceptionHandler()` 之后用 `UseWhen` 把 ASP.NET Core 的 `UseStatusCodePages()` 限定到 API 路径。这类协议层失败只带状态码、本地化标题与 `traceId`，不合成业务错误码。
+
+所有失败响应统一经 ASP.NET Core `IProblemDetailsService` 写出，定制只走 `ProblemDetailsOptions.CustomizeProblemDetails`：
+
+- 只有 `BusinessException` 带 `code` 扩展与 `detail`；输入校验、未预期异常和上游故障不再返回 `Error:*` 码，依据 HTTP 状态分支。`Error:*` 词条与 `ProblemTypes.SystemError` 已删除。
+- `message` 扩展字段已删除，改读标准字段 `detail`（数字信封的 `message` 不变）。
+- 启用 `AddResponseWrapper()` 时，MVC 的 `NotFound()`、`Problem()` 等错误结果与状态码页同样输出信封。
+- `ServiceClientOptions.Timeout`（配置键 `Leistd:ServiceClients:<名称>:Timeout`）已删除，组件不再设置 `HttpClient.Timeout`，它回到 .NET 默认的 100 秒作外层兜底。超时改由宿主在客户端上叠加弹性管道（如 `AddStandardResilienceHandler()`），其超时归类为 `ServiceClientFailureKind.Timeout` 并在 API 边界返回 504；确需改兜底时长时用 `ConfigureHttpClient`，并保持它大于管道的总超时。
+- `GlobalExceptionOptions.ExcludePatterns`（配置键 `Leistd:GlobalException:ExcludePatterns`）已删除：命中路径只会丢掉业务映射、仍返回同一种问题详情，健康检查也不需要它（检查项异常由健康检查服务自行捕获）。个别路径需要其他错误格式时，在 `AddGlobalExceptionHandler` 之前注册自己的 `IExceptionHandler`，按路径判断后返回 `true`。

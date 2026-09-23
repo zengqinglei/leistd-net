@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
-using Leistd.ExceptionHandling;
 
 namespace CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 
@@ -29,12 +28,7 @@ public class PasswordHasher : IPasswordHasher
 
     public string HashPassword(string password)
     {
-        if (string.IsNullOrEmpty(password))
-            throw new BadRequestException("Password cannot be empty.")
-#if (IncludeLocalization)
-                .WithCode("Security:PasswordRequired")
-#endif
-                ;
+        ArgumentException.ThrowIfNullOrEmpty(password);
 
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
         var hash = Derive(password, salt, Iterations);
@@ -50,18 +44,8 @@ public class PasswordHasher : IPasswordHasher
 
     public bool VerifyPassword(string hashedPassword, string providedPassword)
     {
-        if (string.IsNullOrEmpty(hashedPassword))
-            throw new BadRequestException("Hashed password cannot be empty.")
-#if (IncludeLocalization)
-                .WithCode("Security:HashedPasswordRequired")
-#endif
-                ;
-        if (string.IsNullOrEmpty(providedPassword))
-            throw new BadRequestException("Password to verify cannot be empty.")
-#if (IncludeLocalization)
-                .WithCode("Security:PasswordToVerifyRequired")
-#endif
-                ;
+        ArgumentException.ThrowIfNullOrEmpty(hashedPassword);
+        ArgumentException.ThrowIfNullOrEmpty(providedPassword);
 
         // 格式损坏一律按"不匹配"处理，不上抛：这条路径直接面向登录请求，
         // 抛异常会把"这条哈希坏了"变成 500，还能被用来区分账号是否存在

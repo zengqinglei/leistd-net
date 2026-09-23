@@ -63,7 +63,8 @@ public sealed class ServiceClientLoggingHandler(
             }
 
             throw new ServiceClientException(
-                $"{request.Method} {request.RequestUri} invocation failed: {ex.Message}", ex);
+                $"{request.Method} {request.RequestUri} invocation failed: {ex.Message}", ex,
+                ServiceClientFailureClassifier.Classify(ex));
         }
 
         var elapsed = Stopwatch.GetElapsedTime(startTimestamp);
@@ -75,7 +76,27 @@ public sealed class ServiceClientLoggingHandler(
 
         if (logPayloads && logger.IsEnabled(LogLevel.Debug) && response.Content is not null)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            string responseBody;
+            try
+            {
+                responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // 响应尚未交给调用方，失败时由本处理器负责释放。
+                response.Dispose();
+                if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                    throw;
+
+                logger.LogError(ex,
+                    "{Service} {Method} {Uri} response body read failed after {ElapsedMs}ms",
+                    serviceName, request.Method, request.RequestUri,
+                    (long)Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+                throw new ServiceClientException(
+                    $"{request.Method} {request.RequestUri} response body read failed: {ex.Message}", ex,
+                    ServiceClientFailureClassifier.Classify(ex));
+            }
             logger.LogDebug(
                 "{Service} {Method} {Uri} response body {Body}",
                 serviceName, request.Method, request.RequestUri, Truncate(responseBody));

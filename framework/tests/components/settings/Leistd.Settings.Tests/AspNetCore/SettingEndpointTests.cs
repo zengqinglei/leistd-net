@@ -16,6 +16,7 @@ using Leistd.Settings.Tests.Core;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,7 +71,7 @@ public sealed class SettingEndpointTests : IAsyncLifetime
                         }
                         catch (BusinessException exception)
                         {
-                            context.Response.StatusCode = exception.StatusCode;
+                            context.Response.StatusCode = StatusCodes.Status400BadRequest;
                             context.Response.Headers["X-Error-Code"] = exception.Code;
                         }
                     });

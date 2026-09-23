@@ -4,7 +4,7 @@ namespace Leistd.Tracing.Abstractions;
 /// 当前链路标识的读取与临时切换入口。
 /// </summary>
 /// <remarks>
-/// 有 <see cref="System.Diagnostics.Activity"/> 时以它的 TraceId 为准；无 Activity 时生成 W3C 形态的标识。
+/// 显式切换值优先；没有显式值时复用 <see cref="System.Diagnostics.Activity"/> 的 TraceId。
 /// </remarks>
 public interface ICorrelationIdProvider
 {

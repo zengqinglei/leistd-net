@@ -11,7 +11,7 @@ public static class JsonOptions
     /// <summary>
     /// Web API 序列化策略（枚举字符串化 + 驼峰命名 + 忽略空值）的<b>唯一数据源</b>：应用到给定 options 实例，
     /// 供 MVC（<c>AddJsonOptions</c>）与 HTTP 管道（<c>ConfigureHttpJsonOptions</c>，ProblemDetails /
-    /// <c>IProblemDetailsService</c> 走此配置）共用，确保业务响应、400、422 的命名策略一致；宿主改此处即全部跟随。
+    /// <c>IProblemDetailsService</c> 走此配置）共用，确保业务响应与各类失败响应的命名策略一致；宿主改此处即全部跟随。
     /// </summary>
     public static void ConfigureWebApi(JsonSerializerOptions options)
     {

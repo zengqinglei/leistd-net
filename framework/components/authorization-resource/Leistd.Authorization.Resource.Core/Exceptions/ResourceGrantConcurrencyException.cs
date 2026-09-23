@@ -1,18 +1,20 @@
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Resource.Grants;
 using Leistd.ExceptionHandling;
+using Leistd.Authorization.Resource.Errors;
 
 namespace Leistd.Authorization.Resource.Exceptions;
 
 /// <summary>
-/// 资源 ACL 版本冲突。调用方应重新加载后再保存，宿主通常映射为 HTTP 409。
+/// 资源 ACL 版本冲突。调用方应重新加载后再保存。
 /// </summary>
 public sealed class ResourceGrantConcurrencyException(
     string resourceName,
     string resourceKey,
     long expectedVersion,
     long actualVersion)
-    : ConflictException(
+    : BusinessException(
+        ResourceAuthorizationErrorCodes.ConcurrencyConflict,
         $"Resource ACL of '{resourceName}/{resourceKey}' was modified by someone else " +
         $"(expected version {expectedVersion}, actual {actualVersion}).")
 {

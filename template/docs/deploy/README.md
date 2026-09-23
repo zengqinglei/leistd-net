@@ -2,14 +2,45 @@
 
 项目根 `Dockerfile` 和 `deploy/` 是当前容器部署配置的事实来源。部署前先核对实际镜像、环境变量、数据库迁移、健康检查和回滚能力，不使用文档中的假定值替代配置。
 
+## 配置与机密的分层
+
+各环境共用同一套键，只换值的来源；同一个镜像从测试环境晋升到生产，不按环境重新构建。
+
+| 环境 | `ASPNETCORE_ENVIRONMENT` | 非机密配置 | 机密 |
+| --- | --- | --- | --- |
+| 本机开发 | `Development` | `appsettings.Development.json`（随仓库提交，全队共用） | `dotnet user-secrets`（每人一份，见根 README「本地运行」） |
+| 集成测试 | `Testing` | 测试夹具显式给出 | 测试夹具给出确定性的假值 |
+| 测试 / 预发 | `Staging` | 环境变量，需要时加 `appsettings.Staging.json` | CI/CD 的 secret 注入为环境变量 |
+| 生产 | `Production` | 环境变量与 `appsettings.Production.json` | 密钥管理系统，经环境变量或挂载文件注入 |
+
+开发环境以外，只在单机上成立的回落一律缺配即启动失败：
+
+- Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
+<!--#if (OpenIddictServer)-->
+- 令牌签名与加密证书必须显式提供（`OAuth:SigningCertificatePath`、`OAuth:EncryptionCertificatePath`），与 HTTPS 证书分开；开发证书只用于本机开发。
+- TLS 在网关或 ingress 终结时，配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 让应用还原原始协议，不要打开 `OAuth:DisableHttpsRequirement`——OpenIddict 明确要求生产环境即使在反向代理后也不关闭传输安全检查。
+<!--#endif-->
+
 ## 本地验证
 
+本机开发时，依赖服务用 `deploy/docker-compose.dev.yml` 起在本机（只绑定 127.0.0.1），应用用 `dotnet run` / `npm start` 跑。完整容器形态用生产 compose 验证：
+
 ```bash
+cp deploy/.env.example deploy/.env    # 逐项填写，deploy/.env 已被 Git 忽略
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml up --build
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.yml down
 ```
 
 命令和文件存在性应以当前项目为准。
+
+## 部署形态
+
+- **Docker Compose 单机**：机密写在 `deploy/.env` 或由流水线导出为环境变量，清单见 `deploy/.env.example`；必填项在 compose 里以 `${VAR:?}` 引用，漏填时带着变量名失败。
+<!--#if (OpenIddictServer)-->
+  令牌证书以 compose `secrets` 挂载到 `/run/secrets`，只有口令走环境变量。
+<!--#endif-->
+- **Kubernetes**：非机密配置放 ConfigMap，机密放 Secret，以环境变量（`Section__Key`）注入，证书类文件（如身份服务的令牌证书）以卷挂载。`DbMigrator` 作为发布前的一次性 Job（带 `--apply`），成功后再滚动发布 API；就绪与存活探针分别指向 `/api/health/ready` 与 `/api/health/live`。多副本必须配置 Redis，Data Protection 密钥与分布式锁都依赖它。
+- **云平台（容器服务、应用服务）**：配置写应用设置，机密放托管密钥库并以托管身份读取（如 Key Vault 引用）。这类接入与平台绑定，确定平台后再加，不预置在模板里。
 
 ## 生产边界
 

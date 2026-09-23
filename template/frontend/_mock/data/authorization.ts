@@ -54,7 +54,6 @@ export const ALL_PERMISSIONS: string[] = [
   PERMISSIONS.openApplications.delete,
   PERMISSIONS.openApplications.resetSecret,
   //#endif
-  PERMISSIONS.permissions.default,
   PERMISSIONS.settings.default,
 ];
 
@@ -69,12 +68,12 @@ export const ALL_PERMISSIONS: string[] = [
  */
 export const PERMISSION_DEFINITIONS = [
   {
-    name: 'Group.Identity',
-    displayName: 'Identity and access',
+    name: 'Identity',
+    displayName: 'Identity & access',
     permissions: [
       {
         name: PERMISSIONS.users.default,
-        displayName: 'User management',
+        displayName: 'User Management',
         parentName: undefined,
         children: [
           leaf(PERMISSIONS.users.create, 'Create', PERMISSIONS.users.default),
@@ -85,7 +84,7 @@ export const PERMISSION_DEFINITIONS = [
       },
       {
         name: PERMISSIONS.roles.default,
-        displayName: 'Role management',
+        displayName: 'Role Management',
         parentName: undefined,
         children: [
           leaf(PERMISSIONS.roles.create, 'Create', PERMISSIONS.roles.default),
@@ -98,10 +97,29 @@ export const PERMISSION_DEFINITIONS = [
           ),
         ],
       },
-      //#if (OpenIddictServer)
+      //#if (LocalIdentity)
+      {
+        name: PERMISSIONS.tenants.default,
+        displayName: 'Tenant Management',
+        parentName: undefined,
+        children: [
+          leaf(PERMISSIONS.tenants.create, 'Create', PERMISSIONS.tenants.default),
+          leaf(PERMISSIONS.tenants.update, 'Edit', PERMISSIONS.tenants.default),
+          leaf(PERMISSIONS.tenants.delete, 'Delete', PERMISSIONS.tenants.default),
+          leaf(PERMISSIONS.tenants.impersonation, 'Sign in as tenant', PERMISSIONS.tenants.default),
+        ],
+      },
+      //#endif
+    ],
+  },
+  //#if (OpenIddictServer)
+  {
+    name: 'Developer',
+    displayName: 'Developer',
+    permissions: [
       {
         name: PERMISSIONS.openApplications.default,
-        displayName: 'Developer applications',
+        displayName: 'Open Applications',
         parentName: undefined,
         children: [
           leaf(PERMISSIONS.openApplications.create, 'Create', PERMISSIONS.openApplications.default),
@@ -114,22 +132,30 @@ export const PERMISSION_DEFINITIONS = [
           ),
         ],
       },
-      //#endif
+    ],
+  },
+  //#endif
+  {
+    name: 'Audit',
+    displayName: 'Audit',
+    permissions: [
+      {
+        name: PERMISSIONS.operationRecords.default,
+        displayName: 'Operation records',
+        parentName: undefined,
+        children: [
+          leaf(PERMISSIONS.operationRecords.export, 'Export', PERMISSIONS.operationRecords.default),
+        ],
+      },
     ],
   },
   {
-    name: 'Group.System',
+    name: 'System',
     displayName: 'System',
     permissions: [
       {
-        name: PERMISSIONS.permissions.default,
-        displayName: 'Permission catalog',
-        parentName: undefined,
-        children: [],
-      },
-      {
         name: PERMISSIONS.settings.default,
-        displayName: 'Settings',
+        displayName: 'System settings',
         parentName: undefined,
         children: [],
       },

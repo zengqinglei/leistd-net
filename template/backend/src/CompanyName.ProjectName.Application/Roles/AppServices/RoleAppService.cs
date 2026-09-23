@@ -1,4 +1,5 @@
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Roles.Mappings;
@@ -114,12 +115,8 @@ public class RoleAppService(
 
         if (await roleRepository.AnyAsync(r => r.Name == name, cancellationToken))
         {
-            throw new BadRequestException($"Role '{name}' already exists.")
-#if (IncludeLocalization)
-                .WithCode("Role:NameAlreadyUsed")
-                .WithData("Name", name)
-#endif
-                ;
+            throw new BusinessException(RoleErrorCodes.NameAlreadyUsed, $"Role '{name}' already exists.")
+                .WithData("Name", name);
         }
 
         var role = new Role(
@@ -187,25 +184,17 @@ public class RoleAppService(
 
         if (!role.CanBeDeleted())
         {
-            throw new BadRequestException($"Built-in role '{role.Name}' cannot be deleted.")
-#if (IncludeLocalization)
-                .WithCode("Role:StaticRoleCannotBeDeleted")
-                .WithData("Name", role.Name)
-#endif
-                ;
+            throw new BusinessException(RoleErrorCodes.StaticRoleCannotBeDeleted, $"Built-in role '{role.Name}' cannot be deleted.")
+                .WithData("Name", role.Name);
         }
 
         var userCount = await userRoleRepository.CountAsync(ur => ur.RoleId == id, cancellationToken);
         if (userCount > 0)
         {
-            throw new BadRequestException(
+            throw new BusinessException(RoleErrorCodes.RoleStillAssigned,
                     $"Role '{role.Name}' still has {userCount} assigned user(s). Reassign them before deleting.")
-#if (IncludeLocalization)
-                .WithCode("Role:RoleStillAssigned")
                 .WithData("Name", role.Name)
-                .WithData("UserCount", userCount.ToString())
-#endif
-                ;
+                .WithData("UserCount", userCount);
         }
 
         // 角色删除与授权清理独立提交；先删角色，使清理失败时的残留授予不可达。
@@ -238,12 +227,8 @@ public class RoleAppService(
         var role = await roleRepository.GetByIdAsync(id, cancellationToken);
         if (role == null)
         {
-            throw new NotFoundException($"Role '{id}' was not found.")
-#if (IncludeLocalization)
-                .WithCode("Role:NotFound")
-                .WithData("Id", id.ToString())
-#endif
-                ;
+            throw new BusinessException(RoleErrorCodes.NotFound, $"Role '{id}' was not found.")
+                .WithData("Id", id);
         }
 
         return role;

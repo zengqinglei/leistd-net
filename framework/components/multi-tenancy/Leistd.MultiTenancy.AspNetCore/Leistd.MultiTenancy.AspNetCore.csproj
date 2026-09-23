@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
+    <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.AspNetCore\Leistd.ExceptionHandling.AspNetCore.csproj" />
     <ProjectReference Include="..\..\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
   </ItemGroup>
 

@@ -60,6 +60,31 @@ public class NonHttpEntryPointTests
         }
     }
 
+    [Fact]
+    public void Captured_correlation_id_is_restored_even_when_worker_has_an_activity()
+    {
+        using var provider = Build();
+        var ambient = provider.GetRequiredService<IAmbientContext>();
+        var correlation = provider.GetRequiredService<ICorrelationIdProvider>();
+        AmbientContextSnapshot snapshot;
+
+        using (correlation.Change("queued-job_123"))
+        {
+            snapshot = ambient.Capture();
+        }
+
+        using var listener = ListenToEverything();
+        using var activity = new ActivitySource(nameof(NonHttpEntryPointTests)).StartActivity("worker");
+        Assert.NotNull(activity);
+
+        using (ambient.Restore(snapshot))
+        {
+            Assert.Equal("queued-job_123", correlation.Get());
+        }
+
+        Assert.Equal(activity.TraceId.ToHexString(), correlation.Get());
+    }
+
     // 有 Activity 时以它的 TraceId 为准，优先于调用方指定值——反过来会让同一次调用
     // 在 APM 与日志里出现两个标识，排障时对不上。
     [Fact]

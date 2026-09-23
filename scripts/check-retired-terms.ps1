@@ -68,12 +68,13 @@ $retiredSymbols = @(
     "PermissionRequirement\.PermissionName",
     "PermissionGrantRecord\.ForUser",
     "PermissionGrantRecord\.ForRole",
-    # 异常消息的可见性从"抛出点自己声明"改成了宿主的 MessageExposure 统一策略。
-    # 这两个名字会复发：62 处抛出点是围绕旧模型写的，而"给这条异常加个 AsUserFacing"
-    # 是照训练记忆最容易写出的那一行——它现在编译不过，但文档与注释不会。
+    # 业务异常的 Message 必须安全可展示，技术异常始终回落通用 500；
+    # 不再保留抛出点或宿主可见性开关，避免同一错误随配置泄露内部消息。
     "\bAsUserFacing\b",
     "\bIsUserFacingMessage\b",
-    "\bFallbackToExceptionMessage\b"
+    "\bFallbackToExceptionMessage\b",
+    "\bBusinessMessageExposure\b",
+    "\.MessageExposure\b"
 )
 
 # 外部参考框架的痕迹。设计时参考过别的框架是正常的，但**交付面里不该留下指向它的引用**：
@@ -155,7 +156,7 @@ if ($SelfTest) {
         @{ Rule = "symbol"; Text = "ResourceGrantEffect.Granted";                     ShouldMatch = $false }
         @{ Rule = "symbol"; Text = ".AsUserFacing()";                                ShouldMatch = $true }
         @{ Rule = "symbol"; Text = "FallbackToExceptionMessage = true";              ShouldMatch = $true }
-        @{ Rule = "symbol"; Text = "options.MessageExposure = All";                  ShouldMatch = $false }
+        @{ Rule = "symbol"; Text = "options.MessageExposure = All";                  ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "任一来源三态组合后取并集";                        ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "亮/暗/跟随系统三态";                              ShouldMatch = $false }
         @{ Rule = "foreign"; Text = "参考 ABP 的多租户实现";                          ShouldMatch = $true }

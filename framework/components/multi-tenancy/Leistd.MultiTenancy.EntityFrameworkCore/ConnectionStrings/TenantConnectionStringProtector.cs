@@ -24,7 +24,7 @@ internal sealed class TenantConnectionStringProtector(IDataProtectionProvider pr
         catch (CryptographicException exception)
         {
             // 密钥丢失、密钥环未共享或密文被篡改；拒绝而不是回退到宿主自己的库。消息只带租户与连接名
-            throw new InternalServerException(
+            throw new InvalidOperationException(
                 $"The '{name}' connection string of tenant '{tenantId}' could not be decrypted with the current " +
                 "Data Protection key ring. Check that this process shares the key ring and application name " +
                 "of the process that wrote it.",

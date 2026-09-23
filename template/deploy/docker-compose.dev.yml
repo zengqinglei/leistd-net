@@ -1,0 +1,37 @@
+# 本机开发用的外部依赖：只起数据库、Redis 与邮件捕获器，应用本身用 dotnet run / npm start 在本机跑。
+#   docker compose -f deploy/docker-compose.dev.yml up -d
+# 端口只绑定 127.0.0.1，口令是仅供本机的开发值；不要把这份文件用于任何共享环境。
+# 应用侧的连接串写进 user-secrets（见 README「本地运行」），不写进 appsettings。
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: companyname-projectname
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - dev-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+#if (LocalIdentity)
+
+  # 收件箱在 http://localhost:8025；appsettings.json 的 Leistd:Email:Smtp 默认就指向 localhost:1025
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+#endif
+
+volumes:
+  dev-pgdata:

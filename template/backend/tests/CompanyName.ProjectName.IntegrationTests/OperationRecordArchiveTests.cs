@@ -135,7 +135,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
             Assert.Equal((true, 90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
 
             // 写入端按定义上的区间拒绝过小值
-            await Assert.ThrowsAsync<BadRequestException>(() => SetHostAsync(SettingConstant.Audit.RetentionDays, "5"));
+            await Assert.ThrowsAsync<BusinessException>(() => SetHostAsync(SettingConstant.Audit.RetentionDays, "5"));
 
             // 绕过写入端直接落库的过小值（脚本、迁移数据）：应用不报错，按 Options 的区间校验被拒、整组不生效——
             // 归档照旧按上一组合规值运行，不会把最近的记录搬走，也不会在有人改正之前每次取值都抛异常

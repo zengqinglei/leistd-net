@@ -66,7 +66,9 @@ public sealed class NotificationEndpointTests : IAsyncLifetime
                         }
                         catch (BusinessException exception)
                         {
-                            context.Response.StatusCode = exception.StatusCode;
+                            context.Response.StatusCode = exception.Code == NotificationErrorCodes.IdentityCannotOperate
+                                ? StatusCodes.Status403Forbidden
+                                : StatusCodes.Status400BadRequest;
                             context.Response.Headers["X-Error-Code"] = exception.Code;
                         }
                     });

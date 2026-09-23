@@ -71,6 +71,15 @@ app.UseAuthorization();
 
 Bearer token 验证不属于本家族，宿主需自行配置 OpenIddict Validation 或等价 JWT 验证。
 
+HTTP 宿主如需把未处理的服务调用故障分类为安全的 500/502/503/504，在全局异常处理选项中显式组合本组件映射；仅注册客户端或用户上下文不会修改异常响应：
+
+```csharp
+builder.Services.AddGlobalExceptionHandler(options =>
+    ServiceClientExceptionMappings.Configure(options));
+```
+
+映射由 `Leistd.ServiceClient.AspNetCore` 提供。宿主可用 `MapException<ServiceClientException>` 覆盖，按业务需要决定自己的网关契约。
+
 ## 使用
 
 ### 请求与响应
@@ -102,11 +111,14 @@ var order = await response.ReadContentAsync<OrderDto>();
 | --- | --- |
 | 2xx 且 `code = 0` | 返回 `data` |
 | 2xx 且 `code != 0` | 抛 `RemoteServiceException` |
-| 非 2xx ProblemDetails | 还原 `code`、`message`、`traceId` 和 `errors` |
+| 非 2xx ProblemDetails | 还原 `code`、`detail`、`traceId` 和 `errors` |
+| 非 2xx 数字信封 | 从 `errorCode` 还原稳定业务码；兼容旧信封的数字 `code` |
 | 非 2xx 非 JSON | 保留最多 4096 字符的 `ResponseBody` |
 | 网络、超时或反序列化失败 | 抛 `ServiceClientException`；调用方主动取消原样上抛 |
 
-不要将远程状态直接当作本地业务结果。需要转换时，捕获 `RemoteServiceException` 并使用 `RemoteStatusCode`、`ErrorCode` 和 `RemoteTraceId`。未处理的远程 5xx/408/429 对外映射为 503，其它 4xx 映射为 502。
+不要将远程状态直接当作本地业务结果。需要转换时，捕获 `RemoteServiceException` 并使用 `RemoteStatusCode`、`ErrorCode` 和 `RemoteTraceId` 做显式决策。未处理的远端拒绝及无效或提前中断的响应默认返回安全的 502，不透传上游状态或消息；本地配置及未分类故障返回 500，连接不可达返回 503，等待超时返回 504。宿主知道某个上游的稳定契约时，可用 `MapException<RemoteServiceException>` 显式分类。502 是未处理依赖失败的通用 API 边界策略，不表示远端每个 HTTP 错误都是协议格式错误。
+
+超时由宿主在返回的 `IHttpClientBuilder` 上叠加的弹性管道负责（如 `AddStandardResilienceHandler()`，按官方建议只加一个）。管道的超时在委托处理器之内生效，抛出的 `TimeoutRejectedException` 被包装为 `FailureKind = Timeout` 的 `ServiceClientException`，API 边界返回 504。组件不设置 `HttpClient.Timeout`，它保持 .NET 默认的 100 秒作外层兜底；它在全部处理器之外生效，到期时按 .NET 原生契约抛出 `TaskCanceledException`（`InnerException` 为 `TimeoutException`），组件不包装、也不在 API 边界认领。需要调整兜底时长时用 `ConfigureHttpClient`，并保持它大于弹性管道的总超时。
 
 ### 调用管道
 
@@ -146,9 +158,11 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 
 日志类别为 `Leistd.ServiceClient.<服务名>`。每次调用记录方法、URI、状态码与耗时；非 2xx 为 Warning，传输异常为 Error。
 
-`LogPayloads = true` 时以 Debug 级别记录截断后的请求/响应体。`Authorization`、`Cookie` 和 `X-User-*` 头始终脱敏。
+`LogPayloads = true` 时以 Debug 级别记录截断后的请求/响应体。读取响应体时发现上游响应无效或提前中断，会记录故障并抛出 `ServiceClientException(InvalidResponse)`；尚未交给调用方的响应由处理器释放。`Authorization`、`Cookie` 和 `X-User-*` 头始终脱敏。
 
 ## 接口参考
+
+`ServiceClientException.FailureKind` 区分本地配置错误、传输不可达、等待超时、响应无效和明确的远端 HTTP 失败；`RemoteServiceException` 还保留远端状态、错误码与追踪标识供诊断。OAuth token 端点返回非成功状态也保留为 `RemoteServiceException`。异常消息可能包含 URL、响应片段等技术信息，不应直接返回给 API 调用方。`ServiceClientExceptionMappings.Configure` 给出组件拥有的安全默认响应：配置及未分类故障返回 500；响应无效、提前中断或远端明确失败返回 502；传输不可达返回 503；等待超时返回 504。远端返回的 408、429、503 等不自动转译为本地状态；HTTP 状态也不意味着自动重试，是否重试仍由操作幂等性与调用策略决定。
 
 | 类型或入口 | 用途 |
 | --- | --- |
@@ -161,6 +175,7 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 | `EnsureRemoteSuccessAsync` | 将原始非 2xx 响应还原为远程异常 |
 | `ServiceClientException` | 网络、超时或反序列化等客户端故障 |
 | `RemoteServiceException` | 远程错误及其状态码、业务码和 TraceId |
+| `ServiceClientExceptionMappings.Configure(options)` | AspNetCore 包：宿主显式启用服务调用故障的安全默认状态与文案 |
 
 ## 配置项
 
@@ -169,7 +184,6 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
 | `BaseAddress` | `null` | 下游服务基础地址，结尾自动补 `/`；留空不报错——宿主可在返回的 `IHttpClientBuilder` 上自行设置，两处都没设时调用在发请求时失败 |
-| `Timeout` | 30s | 单次调用超时 |
 | `LogPayloads` | `false` | 是否记录脱敏且截断的载荷 |
 | `MaxPayloadLength` | 4096 | 载荷最大记录长度 |
 | `UserContext.Enabled` | `true` | 用户头转发开关 |

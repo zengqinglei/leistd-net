@@ -5,12 +5,15 @@ namespace Leistd.Authorization.Errors;
 /// </summary>
 public static class PermissionErrorCodes
 {
-    /// <summary>授予主体不存在（404）。占位：<c>Provider</c>、<c>Key</c>。</summary>
+    /// <summary>授予主体不存在。占位：<c>Provider</c>、<c>Key</c>。</summary>
     public const string SubjectNotFound = "Permission:SubjectNotFound";
 
-    /// <summary>乐观并发冲突，需重新加载（409）。</summary>
+    /// <summary>乐观并发冲突，需重新加载。</summary>
     public const string ConcurrencyConflict = "Permission:ConcurrencyConflict";
 
-    /// <summary>授予未定义或已禁用的权限（400）。占位：<c>Names</c>（逗号分隔，一次可以报多个）。</summary>
+    /// <summary>授予未定义或已禁用的权限。占位：<c>Names</c>（逗号分隔，一次可以报多个）。</summary>
     public const string UndefinedPermission = "Permission:UndefinedPermission";
+
+    /// <summary>读取授权快照时反复遇到并发修改，调用方可稍后重试。</summary>
+    public const string SnapshotUnavailable = "Permission:SnapshotUnavailable";
 }

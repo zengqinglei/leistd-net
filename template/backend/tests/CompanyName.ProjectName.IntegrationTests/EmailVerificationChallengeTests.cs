@@ -135,7 +135,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         var email = $"rate-{Guid.NewGuid():N}@example.test";
 
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(hostClient, email)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await SendChallengeResponseAsync(hostClient, email)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await SendChallengeResponseAsync(hostClient, email)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientA, email)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientB, email)).StatusCode);
     }
@@ -167,7 +167,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
 
         // 已验证时不再发码
         using var alreadyVerified = await user.Client.PostAsync("/api/v1/auth/me/email-verification", null);
-        Assert.Equal(HttpStatusCode.BadRequest, alreadyVerified.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, alreadyVerified.StatusCode);
 
         var newEmail = $"new-{username}@example.test";
         using var change = await user.Client.PutAsJsonAsync("/api/v1/auth/me", new { Username = username, Email = newEmail });

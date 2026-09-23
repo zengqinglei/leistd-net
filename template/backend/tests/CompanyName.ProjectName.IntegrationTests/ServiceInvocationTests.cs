@@ -187,9 +187,8 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(
             () => caller.GetRequiredService<IMyProjectClient>().WhoAmIAsync());
 
-        // RemoteStatusCode 是远端那次请求的状态码；继承来的 StatusCode 是本服务对外的 502
+        // 只保留远端那次请求的状态码供日志与排查；客户端异常不预设本服务对外的 HTTP 状态。
         Assert.Equal((int)HttpStatusCode.Forbidden, exception.RemoteStatusCode);
-        Assert.Equal((int)HttpStatusCode.BadGateway, exception.StatusCode);
     }
 
     /// <summary>

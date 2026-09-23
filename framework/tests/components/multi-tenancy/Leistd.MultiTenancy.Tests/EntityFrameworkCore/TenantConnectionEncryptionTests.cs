@@ -151,7 +151,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
             _provider.GetRequiredService<IDbContextProvider<TestDbContext>>(),
             new EphemeralDataProtectionProvider());
 
-        var error = await Assert.ThrowsAsync<InternalServerException>(() => otherKeyRing.FindAsync(tenantId, Name));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => otherKeyRing.FindAsync(tenantId, Name));
 
         Assert.Contains(tenantId.ToString(), error.Message);
         Assert.Contains(Name, error.Message);
@@ -168,7 +168,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
 
-        await Assert.ThrowsAsync<InternalServerException>(() => Store.FindAsync(tenantId, Name));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Store.FindAsync(tenantId, Name));
     }
 
     // 开着 EF 敏感数据日志，写入与读取的日志里也只能出现密文
@@ -190,7 +190,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
             .CreateAsync($"tenant-{Guid.NewGuid():N}", null, isActive: false);
         var overlong = ConnectionString + new string('x', TenantConnectionConfiguration.MaxConnectionStringLength);
 
-        var tooLong = await Assert.ThrowsAsync<BadRequestException>(
+        var tooLong = await Assert.ThrowsAsync<BusinessException>(
             () => Manager.SetAsync(tenant.Id, Name, overlong, expectedVersion: null));
 
         Assert.DoesNotContain(Secret, tooLong.ToString());

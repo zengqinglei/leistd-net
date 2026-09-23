@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Settings.Dtos;
 using Leistd.Authorization.Checking;
@@ -30,18 +31,12 @@ public class EmailSettingsAppService(
     public async Task SendTestEmailAsync(SendTestEmailInputDto input, CancellationToken cancellationToken = default)
     {
         if (!await permissionChecker.IsGrantedAsync(PermissionConstant.Settings.Default, cancellationToken))
-            throw new ForbiddenException("Sending a test email requires the settings management permission.")
-#if (IncludeLocalization)
-                .WithCode("Setting:ManagePermissionRequired")
-#endif
+            throw new BusinessException(AppSettingErrorCodes.ManagePermissionRequired, "Sending a test email requires the settings management permission.")
                 ;
 
         // 发信参数是进程级的，只有宿主能改，也只有宿主来试
         if (currentTenant.Id is not null)
-            throw new ForbiddenException("The email settings can only be tested on the host.")
-#if (IncludeLocalization)
-                .WithCode("Setting:TestEmailHostOnly")
-#endif
+            throw new BusinessException(AppSettingErrorCodes.TestEmailHostOnly, "The email settings can only be tested on the host.")
                 ;
 
         try
@@ -57,14 +52,8 @@ public class EmailSettingsAppService(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // 失败原因原样回给管理员：连不上、认证失败、发件地址被拒，都要靠这句话来改参数
             logger.LogWarning(ex, "Test email to {To} failed", input.To);
-            throw new BadRequestException($"The test email could not be sent: {ex.Message}")
-#if (IncludeLocalization)
-                .WithCode("Setting:TestEmailFailed")
-                .WithData("Reason", ex.Message)
-#endif
-                ;
+            throw new BusinessException(AppSettingErrorCodes.TestEmailFailed, "The test email could not be sent. Check the email settings and server logs.", ex);
         }
     }
 }

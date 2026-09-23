@@ -87,8 +87,8 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
         return throwError(
           () =>
             new HttpErrorResponse({
-              error: error.error,
-              headers: req.headers.set('Content-Type', 'application/json'),
+              error: toProblemDetails(error, getUrlPath(url)),
+              headers: req.headers.set('Content-Type', 'application/problem+json'),
               status: error.status,
               statusText: 'Mock Error',
               url: req.url,
@@ -135,6 +135,47 @@ function findMatchingRule(
   }
 
   return null;
+}
+
+// 后端失败统一是 RFC 9457 Problem Details（见 docs/standards/api.md §2.4）。Mock 里按 { code, message, errors }
+// 书写，这里换成同一形状，前端走与真实后端相同的解析路径：message 进 detail，业务码进 code 扩展。
+const STATUS_TITLES: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Not Found',
+  409: 'Conflict',
+  422: 'Unprocessable Entity',
+  429: 'Too Many Requests',
+  500: 'Internal Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+  504: 'Gateway Timeout',
+};
+
+function toProblemDetails(exception: MockException, instance: string): Record<string, unknown> {
+  const payload: Record<string, unknown> =
+    typeof exception.error === 'object' && exception.error !== null
+      ? (exception.error as Record<string, unknown>)
+      : { message: exception.error };
+  const { message, code, errors, ...rest } = payload;
+  const hasErrors = Array.isArray(errors) && errors.length > 0;
+
+  return {
+    type: hasErrors
+      ? 'urn:leistd:problem:validation-error'
+      : code
+        ? 'urn:leistd:problem:business-error'
+        : undefined,
+    title: STATUS_TITLES[exception.status] ?? 'Error',
+    status: exception.status,
+    detail: typeof message === 'string' ? message : undefined,
+    instance,
+    ...(code ? { code } : {}),
+    ...(hasErrors ? { errors } : {}),
+    ...rest,
+    traceId: `mock-${Date.now().toString(16)}`,
+  };
 }
 
 function getUrlPath(url: string): string {

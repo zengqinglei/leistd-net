@@ -79,8 +79,6 @@ _ReSharper*/
 *.ldf
 
 # ---------- App secrets / runtime ----------
-appsettings.Development.json
-appsettings.*.local.json
 DataProtection-Keys/
 certs/*.crt
 certs/*.pem

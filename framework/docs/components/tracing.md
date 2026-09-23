@@ -1,6 +1,6 @@
 # 链路追踪
 
-链路追踪复用 `Activity.TraceId`，没有 Activity 时生成 W3C TraceId，并在上下文、日志与下游 HTTP 调用间传递。
+链路追踪在没有显式关联标识时复用 `Activity.TraceId`，否则沿用显式值，并在上下文、日志与下游 HTTP 调用间传递。
 
 ## 何时使用
 
@@ -92,7 +92,7 @@ public class ReportJob
 | `ICorrelationIdProvider` | 链路追踪核心抽象（`Leistd.Tracing.Services`） |
 | `ICorrelationIdProvider.Get()` | 返回当前上下文的 TraceId；上下文未初始化时返回 `null` |
 | `ICorrelationIdProvider.Create()` | 有 Activity 时复用其 TraceId，否则用 `ActivityTraceId.CreateRandom()` 生成 W3C TraceId |
-| `ICorrelationIdProvider.Change(correlationId)` | 切换当前上下文 TraceId，返回 `IDisposable`；`Dispose` 时恢复为切换前的值 |
+| `ICorrelationIdProvider.Change(correlationId)` | 临时切换当前关联标识，返回 `IDisposable`；释放时恢复原值，显式值优先于当前 Activity |
 | `CorrelationIdProvider` | 默认实现，基于 `AsyncLocal<string?>` 保存上下文（Singleton） |
 | `[CorrelationId]` | 标注在方法或类上（`Leistd.Tracing.Attributes`），触发 AOP 自动开启 TraceId 作用域 |
 | `CorrelationIdConstants.TraceIdLogKey` | 日志 Scope 中的 TraceId 键名，常量值 `leistd.correlationId.traceId` |
@@ -108,7 +108,7 @@ public class ReportJob
 
 - `CorrelationIdProvider` 用 `AsyncLocal` 保存显式切换值；`Change` 可嵌套，释放时恢复上一层值。
 - `CorrelationIdInterceptor` 的 `Order` 为 `-1000`，在其他拦截器之前建立 TraceId 和日志作用域；已有 TraceId 时不覆盖。
-- 入站中间件按 `HeaderNames` 顺序取首个有效值，缺失时生成，并按配置回写响应头。
+- 入站中间件按 `HeaderNames` 顺序取首个合法关联标识，缺失时生成，并按配置回写响应头。
 - 出站处理器只在请求尚无目标头时转发当前 TraceId。
 - 入站与出站每次操作都读取 `IOptionsMonitor<CorrelationIdOptions>.CurrentValue`，配置重载对后续请求生效。
 
@@ -122,22 +122,23 @@ public class ReportJob
 
 ## 与 W3C Trace Context 的关系
 
-链路标识以 `System.Diagnostics.Activity` 为准，本组件不维护与之平行的第二套标识：
+`Activity.TraceId` 是 W3C 分布式追踪标识；`X-Correlation-Id` 是可自定义的应用关联标识。两者同时存在时：
 
-- 存在 `Activity` 时以其 TraceId 为权威标识；调用方应通过 `traceparent` 传递 W3C 上下文。
+- HTTP 入口存在 `Activity` 时，中间件以其 TraceId 选定本次请求标识；调用方应通过 `traceparent` 传递 W3C 上下文。
 - 入站头与 `Activity` 不同时，原值仅记录到 `leistd.correlationId.inboundTraceId`。
 - 没有 `Activity`（未接入 OpenTelemetry）时才采信入站头；缺失或形态非法则生成新的。
 - `Get()` 的优先级为显式 `Change()`、当前 `Activity.TraceId`、无；`Create()` 优先复用 `Activity.TraceId`。
 - 中间件同步更新 `HttpContext.TraceIdentifier`，使异常响应、日志和响应头使用同一标识。
 
-入站头最长 128 个字符，只接受 ASCII 字母、数字、连字符和下划线。非法值会被丢弃并生成新标识，防止日志或响应头注入。
+入站 `X-Correlation-Id` 是不透明的关联标识，最长 128 个字符，只接受 ASCII 字母、数字、连字符和下划线；它不要求是 W3C TraceId，也不会被改写大小写。非法值会被丢弃并生成新标识，防止日志或响应头注入。W3C 分布式追踪上下文通过 `traceparent` 传递。
+异常响应中的 `traceId` 沿用本次选定的应用关联标识；没有请求 Activity 而选用自定义 ID 时，它不一定能直接用于 OpenTelemetry 查询。分布式链路检索应使用 `Activity.TraceId`，或先通过应用日志把关联 ID 与实际链路对应起来。
 
 ## 注意事项
 
 - `Get()` 在上下文尚未初始化时返回 `null`，业务代码读取后需判空。
 - `Change()` 返回的 `IDisposable` 必须 `using`/释放，否则上下文不会恢复，可能污染同一异步流后续逻辑。
 - `[CorrelationId]` 走动态代理 AOP，被拦截方法需 `virtual` 且经容器解析；直接 `new` 出来的实例不会被拦截。
-- TraceId 作用域具有「就近优先」语义：若链路上层已有 TraceId，中间件/拦截器都不会覆盖，保证一次请求只用一个 ID。
+- 显式 `Change()` 的作用域值优先于当前 Activity；跨后台作业恢复关联标识时，即使执行线程已有 Activity 也应沿用恢复值。
 - 日志键名 `leistd.correlationId.traceId` 是跨语言约定键，不要按本服务的习惯改写；要在日志里看到它，需日志库（如 Serilog）启用 Scope 富化。
 
 ## 相关

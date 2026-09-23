@@ -1,4 +1,7 @@
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
+#endif
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -187,19 +190,12 @@ internal sealed class SessionSignInService(
         if (user.IsTemporarilyLockedOut(now))
         {
             var minutes = (int)Math.Ceiling((user.LockoutEnd!.Value - now).TotalMinutes);
-            return new UnauthorizedException(
-                $"Too many failed sign-in attempts. Try again in {minutes} minute(s).")
-#if (IncludeLocalization)
-                .WithCode("Auth:UserTemporarilyLockedOut")
-                .WithData("Minutes", minutes)
-#endif
-                ;
+            return new BusinessException(AuthErrorCodes.UserTemporarilyLockedOut,
+                    $"Too many failed sign-in attempts. Try again in {minutes} minute(s).")
+                .WithData("Minutes", minutes);
         }
 
-        return new UnauthorizedException("This account is locked. Contact your administrator.")
-#if (IncludeLocalization)
-            .WithCode("Auth:UserLockedOut")
-#endif
+        return new BusinessException(AuthErrorCodes.UserLockedOut, "This account is locked. Contact your administrator.")
             ;
     }
 
@@ -211,12 +207,7 @@ internal sealed class SessionSignInService(
             case UserAccessStatus.Allowed:
                 return;
             case UserAccessStatus.Disabled:
-                throw new UnauthorizedException($"Login failed: user is disabled - user: {user.Username}")
-#if (IncludeLocalization)
-                    .WithCode("Auth:UserDisabled")
-                    .WithData("Username", user.Username)
-#endif
-                    ;
+                throw new BusinessException(AuthErrorCodes.UserDisabled, "This account is disabled. Contact your administrator.");
             case UserAccessStatus.LockedOut:
                 throw LockedOut(user, now);
             default:

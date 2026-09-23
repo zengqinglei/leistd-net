@@ -47,9 +47,14 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 
     private readonly string databaseName = $"ProjectTests-{Guid.NewGuid():N}";
 
+    // 每个宿主一份密钥目录：开发环境以外 Data Protection 要求显式的持久位置，测试给临时目录
+    private readonly string dataProtectionKeysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-{Guid.NewGuid():N}");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        // 专用环境而不是 Development：开发环境会自动加载开发者本机的 user-secrets 与 appsettings.Development.json，
+        // 测试结果就随机器变化。测试需要的配置全部在下面显式给出
+        builder.UseEnvironment("Testing");
 
         // 注册阶段就被读取的键（选数据库分支、选锁实现）必须经 UseSetting 注入：
         // 下面 ConfigureAppConfiguration 加的配置在 Program 注册服务时还不可见，
@@ -58,6 +63,10 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         builder.UseSetting("ConnectionStrings:Default", "");
         builder.UseSetting("ConnectionStrings:Redis", "");
         builder.UseSetting("Database:InMemoryName", databaseName);
+        builder.UseSetting("DataProtection:KeysPath", dataProtectionKeysPath);
+#if (OpenIddictServer)
+        builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
+#endif
 
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
@@ -130,6 +139,15 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 options.ServicesStopConcurrently = false;
             });
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing && Directory.Exists(dataProtectionKeysPath))
+        {
+            Directory.Delete(dataProtectionKeysPath, recursive: true);
+        }
     }
 
     public HttpClient CreateProjectClient() => CreateProjectClient(this);

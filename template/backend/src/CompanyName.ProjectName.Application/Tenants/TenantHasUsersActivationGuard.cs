@@ -1,4 +1,7 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Tenants.Errors;
+#endif
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
@@ -38,11 +41,8 @@ internal sealed class TenantHasUsersActivationGuard(
 
         if (userCount == 0)
         {
-            throw new BadRequestException(
+            throw new BusinessException(TenantErrorCodes.ActivateWithoutUsers,
                     "This tenant has no users yet; activating it would let nobody in. Finish provisioning first.")
-#if (IncludeLocalization)
-                .WithCode("Tenant:ActivateWithoutUsers")
-#endif
                 ;
         }
     }

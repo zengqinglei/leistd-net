@@ -35,7 +35,7 @@ public static class OperationRecordEndpoints
     /// <para>前缀由宿主的路由组决定；返回的路由组可继续追加约定（限流、OpenAPI 标签、响应包装）。
     /// 授权策略全部必填，漏配在映射时抛出。</para>
     /// <para>查询参数与控制器形态一致：<c>offset</c>、<c>limit</c>、<c>keyword</c>、<c>startTime</c>、<c>endTime</c>、
-    /// 可重复的 <c>categories</c> 与 <c>actions</c>、<c>outcome</c>；入参校验失败返回带字段错误的 422。</para>
+    /// 可重复的 <c>categories</c> 与 <c>actions</c>、<c>outcome</c>；入参校验失败返回带字段错误的 400。</para>
     /// <para>不要改写成 <c>[AsParameters]</c> 绑定分页类型：它会把没有默认值的非空属性当成必填参数。</para>
     /// </remarks>
     /// <example>

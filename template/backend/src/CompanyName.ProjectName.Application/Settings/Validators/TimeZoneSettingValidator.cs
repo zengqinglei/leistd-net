@@ -1,4 +1,5 @@
 using CompanyName.ProjectName.Application.Settings.Provider;
+using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Timing;
 using Leistd.ExceptionHandling;
 using Leistd.Settings.Validation;
@@ -14,12 +15,8 @@ internal sealed class TimeZoneSettingValidator(IUserTimeZoneProvider userTimeZon
     {
         if (context.Definition.Name == SettingConstant.Display.TimeZone && !userTimeZoneProvider.IsValidId(context.Value))
         {
-            throw new BadRequestException($"'{context.Value}' is not a valid IANA time zone id.")
-#if (IncludeLocalization)
-                .WithCode("Setting:TimeZoneInvalid")
-                .WithData("Value", context.Value)
-#endif
-                ;
+            throw new BusinessException(AppSettingErrorCodes.TimeZoneInvalid, $"'{context.Value}' is not a valid IANA time zone id.")
+                .WithData("Value", context.Value);
         }
 
         return Task.CompletedTask;

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Leistd.Data.Connections;
 using Leistd.Data.Paging;
 using Leistd.EventBus.Abstractions;
@@ -35,7 +36,7 @@ internal sealed class TenantManagementService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        UnprocessableEntityException.ThrowIfInvalid(input);
+        Validator.ValidateObject(input, new ValidationContext(input), validateAllProperties: true);
 
         var page = await tenantManager.GetPagedAsync(input.Keyword, input, cancellationToken);
         return new PagedResult<TenantOutputDto>(page.TotalCount, page.Items.Select(ToOutput));
@@ -69,7 +70,7 @@ internal sealed class TenantManagementService(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
-        UnprocessableEntityException.ThrowIfInvalid(input);
+        Validator.ValidateObject(input, new ValidationContext(input), validateAllProperties: true);
 
         // 名字与连接串填错是这条路径上最常见的错误，整批校验排在任何库操作之前，
         // 没道理先建租户、再靠补偿把半批登记擦掉
@@ -141,7 +142,7 @@ internal sealed class TenantManagementService(
     public async Task<TenantOutputDto> UpdateAsync(Guid id, UpdateTenantInputDto input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        UnprocessableEntityException.ThrowIfInvalid(input);
+        Validator.ValidateObject(input, new ValidationContext(input), validateAllProperties: true);
 
         var tenant = await tenantManager.UpdateAsync(id, input.Name, input.DisplayName, input.Description, cancellationToken);
         await PublishAsync(tenant, TenantChangeKind.Updated, cancellationToken);
@@ -199,14 +200,16 @@ internal sealed class TenantManagementService(
             // 数组里的 null 元素：DataAnnotations 不递归进集合，不挡住就在下一行变成 NRE→500
             if (connection is null)
             {
-                throw new UnprocessableEntityException("connections", "Connection entries must not be null.");
+                throw new ValidationException(
+                    new ValidationResult("Connection entries must not be null.", [nameof(connections)]),
+                    validatingAttribute: null,
+                    value: connections);
             }
 
             var name = TenantConnectionNames.NormalizeInput(connection.Name);
             if (!seen.Add(name))
             {
-                throw new BadRequestException($"The connection name '{name}' was given more than once.")
-                    .WithCode(MultiTenancyErrorCodes.ConnectionNameDuplicated)
+                throw new BusinessException(MultiTenancyErrorCodes.ConnectionNameDuplicated, $"The connection name '{name}' was given more than once.")
                     .WithData("Name", name);
             }
 

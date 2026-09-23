@@ -1,4 +1,3 @@
-using Leistd.ExceptionHandling.Constants;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Queries;
@@ -87,7 +86,7 @@ public static class OperationRecordHttpContextExtensions
             // 判据是 IsEmpty 而不是 Code is null：FromDetail 给出的原因本来就没有码，
             // 按 Code 判会把调用方显式传入的 Detail 静默换成通用 Forbidden
             failure.IsEmpty
-                ? OperationFailure.FromCode(GenericErrorCodes.ForStatus(StatusCodes.Status403Forbidden))
+                ? OperationFailure.FromCode("Error:Forbidden")
                 : failure);
     }
 

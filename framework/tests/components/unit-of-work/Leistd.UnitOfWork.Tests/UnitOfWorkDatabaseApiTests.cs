@@ -146,8 +146,7 @@ public class UnitOfWorkDatabaseApiTests
     /// <remarks>
     /// 已提交的事务无法回滚，运维需要知道该核对哪一部分。不为它单列异常类型——
     /// 与普通提交失败的处置方式相同（都是 500、都需要人工核对），信息全部由消息承载；
-    /// 但必须是<b>显式</b> <c>InternalServerException</c>，否则消息会被兜底处理器
-    /// 替换成通用的"系统错误"，而这条消息恰恰是运维唯一的线索。
+    /// 使用 <see cref="InvalidOperationException"/> 表达框架状态已违反原子性；详细消息仅写日志，不对 API 调用方暴露。
     /// </remarks>
     [Fact]
     public async Task Failure_after_a_successful_commit_names_the_committed_and_failed_keys()
@@ -158,7 +157,7 @@ public class UnitOfWorkDatabaseApiTests
         unitOfWork.AddTransactionApi("first", new TrackingTransactionApi());
         unitOfWork.AddTransactionApi("second", new ThrowingTransactionApi());
 
-        var error = await Assert.ThrowsAsync<InternalServerException>(() => unitOfWork.CompleteAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => unitOfWork.CompleteAsync());
 
         Assert.Contains("partially committed", error.Message, StringComparison.Ordinal);
         Assert.Contains("first", error.Message, StringComparison.Ordinal);

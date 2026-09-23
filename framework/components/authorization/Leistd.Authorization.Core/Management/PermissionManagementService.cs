@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Errors;
@@ -92,7 +93,7 @@ internal sealed class PermissionManagementService(
             .Select(group => new PermissionDefinitionGroupOutputDto
             {
                 Name = group.Name,
-                DisplayName = Localize(localizer, group.DisplayName, group.Name),
+                DisplayName = DisplayName(localizer, GroupKeyPrefix + group.Name, group.DisplayName, group.Name),
                 Permissions = [.. group.Permissions
                     .Where(permission => definitionManager.IsAvailableOn(permission.Name, side))
                     .Select(permission => ToTree(permission, side, localizer))]
@@ -121,9 +122,12 @@ internal sealed class PermissionManagementService(
         ArgumentNullException.ThrowIfNull(input);
         if (input.PermissionNames.Count > ReplacePermissionGrantsInputDto.MaximumPermissionCount)
         {
-            throw new UnprocessableEntityException(
-                "permissionNames",
-                $"At most {ReplacePermissionGrantsInputDto.MaximumPermissionCount} permissions can be replaced at once.");
+            throw new ValidationException(
+                new ValidationResult(
+                    $"At most {ReplacePermissionGrantsInputDto.MaximumPermissionCount} permissions can be replaced at once.",
+                    [nameof(input.PermissionNames)]),
+                validatingAttribute: null,
+                value: input.PermissionNames);
         }
 
         var subject = await FindSubjectAsync(providerName, providerKey, cancellationToken);
@@ -151,8 +155,7 @@ internal sealed class PermissionManagementService(
         string providerKey,
         CancellationToken cancellationToken)
         => await subjectDirectory.FindAsync(providerName, providerKey, cancellationToken)
-           ?? throw new NotFoundException($"Subject '{providerName}/{providerKey}' was not found.")
-               .WithCode(PermissionErrorCodes.SubjectNotFound)
+           ?? throw new BusinessException(PermissionErrorCodes.SubjectNotFound, $"Subject '{providerName}/{providerKey}' was not found.")
                .WithData("Provider", providerName)
                .WithData("Key", providerKey);
 
@@ -178,7 +181,7 @@ internal sealed class PermissionManagementService(
         => new()
         {
             Name = definition.Name,
-            DisplayName = Localize(localizer, definition.DisplayName, definition.Name),
+            DisplayName = DisplayName(localizer, PermissionKeyPrefix + definition.Name, definition.DisplayName, definition.Name),
             ParentName = definition.Parent?.Name,
             Children = [.. definition.Children
                 .Where(child => definitionManager.IsAvailableOn(child.Name, side))
@@ -188,15 +191,24 @@ internal sealed class PermissionManagementService(
     private IStringLocalizer? Localizer()
         => options.Value.LocalizationResource is { } resource ? localizerFactory?.Create(resource) : null;
 
+    // 词条键按约定由名称拼出，与设置组件的 Setting:{名称} / SettingGroup:{分组} 同一模式：
+    // 定义里的 DisplayName 是默认文案（未启用本地化或缺词条时直接显示），不再兼作词条键——
+    // 否则不含本地化的宿主只能看到 App.Users.Create 这类技术名。
+    internal const string PermissionKeyPrefix = "Permission:";
+    internal const string GroupKeyPrefix = "PermissionGroup:";
+
     // 定义是 Singleton、启动时加载，翻译必须发生在响应阶段，否则先到的那个请求的语言会被固化给所有人
-    private static string Localize(IStringLocalizer? localizer, string? key, string fallback)
+    private static string DisplayName(IStringLocalizer? localizer, string key, string? defaultText, string name)
     {
-        if (localizer is null || string.IsNullOrWhiteSpace(key))
+        if (localizer is not null)
         {
-            return fallback;
+            var localized = localizer[key];
+            if (!localized.ResourceNotFound)
+            {
+                return localized.Value;
+            }
         }
 
-        var localized = localizer[key];
-        return localized.ResourceNotFound ? fallback : localized.Value;
+        return string.IsNullOrWhiteSpace(defaultText) ? name : defaultText;
     }
 }

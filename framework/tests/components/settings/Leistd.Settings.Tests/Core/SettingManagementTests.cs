@@ -40,7 +40,7 @@ public class SettingManagementTests
         var service = Build(new FakeSettingStore());
 
         Assert.DoesNotContain(await service.GetAsync(), s => s.Name == "Export.MaxRowsPerFile");
-        var error = await Assert.ThrowsAsync<NotFoundException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => service.SetForCurrentTenantAsync(new SetSettingInputDto("Export.MaxRowsPerFile", "10")));
         Assert.Equal(SettingErrorCodes.NotAvailable, error.Code);
     }
@@ -65,7 +65,7 @@ public class SettingManagementTests
         var service = Build(new FakeSettingStore { CanAccessHostScope = false });
 
         Assert.DoesNotContain(await service.GetAsync(), s => s.Name == "Logging.MinimumLevel");
-        var error = await Assert.ThrowsAsync<ForbiddenException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => service.SetForCurrentTenantAsync(new SetSettingInputDto("Logging.MinimumLevel", "Debug")));
         Assert.Equal(SettingErrorCodes.HostOnly, error.Code);
     }
@@ -85,7 +85,7 @@ public class SettingManagementTests
     {
         var service = Build(new FakeSettingStore(), new FakeCurrentUser());
 
-        var error = await Assert.ThrowsAsync<ForbiddenException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => service.SetForCurrentUserAsync(new SetSettingInputDto("Display.TimeZone", "Asia/Tokyo")));
 
         Assert.Equal(SettingErrorCodes.IdentityCannotOperate, error.Code);
@@ -139,6 +139,50 @@ public class SettingManagementTests
         // 没有词条：用定义里的文案；没写分组：归入默认分组
         var twoFactor = Single(settings, "Security.RequireTwoFactor");
         Assert.Equal(("Require 2FA", "Other", "Other"), (twoFactor.DisplayName, twoFactor.Group, twoFactor.GroupDisplayName));
+    }
+
+    // 提示显示在字段旁、也会进 toast：给用户看的必须是界面上的字段名，而不是技术键
+    [Fact]
+    public async Task Validation_errors_name_the_setting_as_the_user_sees_it()
+    {
+        var service = Build(new FakeSettingStore(), localized: new Dictionary<string, string>
+        {
+            ["Setting:Security.LockoutDurationMinutes"] = "锁定时长（分钟）",
+        });
+
+        var error = await Assert.ThrowsAsync<BusinessException>(() => service.SetForCurrentTenantAsync(
+            new SetSettingInputDto("Security.LockoutDurationMinutes", "0")));
+
+        Assert.Equal(SettingErrorCodes.ValueOutOfRange, error.Code);
+        Assert.Equal("锁定时长（分钟）", error.LocalizationData["Name"]);
+    }
+
+    // 未启用本地化时，兜底文案与占位参数都用定义上的显示名
+    [Fact]
+    public async Task Validation_errors_fall_back_to_the_definition_display_name()
+    {
+        var error = await Assert.ThrowsAsync<BusinessException>(() => Build(new FakeSettingStore())
+            .SetForCurrentTenantAsync(new SetSettingInputDto("Security.LockoutDurationMinutes", "abc")));
+
+        Assert.Equal(SettingErrorCodes.IntegerRequired, error.Code);
+        Assert.Equal("Lockout duration (minutes)", error.LocalizationData["Name"]);
+        Assert.Contains("Lockout duration (minutes)", error.Message);
+        Assert.DoesNotContain("Security.LockoutDurationMinutes", error.Message);
+    }
+
+    [Fact]
+    public async Task Host_only_rejection_uses_the_display_name()
+    {
+        var service = Build(new FakeSettingStore { CanAccessHostScope = false }, localized: new Dictionary<string, string>
+        {
+            ["Setting:Logging.MinimumLevel"] = "最小日志级别",
+        });
+
+        var error = await Assert.ThrowsAsync<BusinessException>(
+            () => service.SetForCurrentTenantAsync(new SetSettingInputDto("Logging.MinimumLevel", "Debug")));
+
+        Assert.Equal(SettingErrorCodes.HostOnly, error.Code);
+        Assert.Equal("最小日志级别", error.LocalizationData["Name"]);
     }
 
     // 替别人判断（按收件人偏好投递）时读的是目标用户的覆盖值，不是当前请求者的
@@ -195,7 +239,9 @@ public class SettingManagementTests
             context.Add("Email.SmtpPassword", scopes: SettingScopes.Host).IsVisibleToClients = true;
             context.GetOrNull("Email.SmtpPassword")!.IsEncrypted = true;
             context.Add("Security.RequireTwoFactor", "false", displayName: "Require 2FA").AsBoolean().IsVisibleToClients = true;
-            context.Add("Security.LockoutDurationMinutes", "15").AsInteger(1, 1440).IsVisibleToClients = true;
+            context.Add("Security.LockoutDurationMinutes", "15", displayName: "Lockout duration (minutes)")
+                .AsInteger(1, 1440)
+                .IsVisibleToClients = true;
         }
     }
 

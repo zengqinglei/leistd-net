@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.Http;
+using Leistd.ServiceClient.Tests.TestDoubles;
 using Xunit;
 
 namespace Leistd.ServiceClient.Tests.Core;
@@ -93,6 +94,19 @@ public class ResultUnwrapTests
     }
 
     [Fact]
+    public async Task Optional_numeric_envelope_restores_errorCode_instead_of_status_code()
+    {
+        using var response = Response(HttpStatusCode.Conflict,
+            """{"code":409,"errorCode":"Order:Conflict","message":"订单状态冲突","traceId":"t-3"}""");
+
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
+
+        Assert.Equal(409, exception.RemoteStatusCode);
+        Assert.Equal("Order:Conflict", exception.ErrorCode);
+        Assert.Equal("t-3", exception.RemoteTraceId);
+    }
+
+    [Fact]
     public async Task Non_json_error_response_keeps_a_body_excerpt()
     {
         using var response = Response(HttpStatusCode.BadGateway, "<html>gateway error</html>", "text/html");
@@ -112,6 +126,7 @@ public class ResultUnwrapTests
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadResultAsync<OrderDto>());
 
         Assert.Contains("response body is empty", exception.Message);
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
     }
 
     [Fact]
@@ -122,6 +137,22 @@ public class ResultUnwrapTests
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadResultAsync<OrderDto>());
 
         Assert.Contains("deserialization failed", exception.Message);
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.InvalidResponse)]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    public async Task Interrupted_response_body_is_classified_as_invalid_response(HttpRequestError error)
+    {
+        using var response = Response(HttpStatusCode.OK, null);
+        response.Content = new ThrowingHttpContent(new HttpIOException(error, "response body ended"));
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadContentAsync<OrderDto>());
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+        var transportException = Assert.IsType<HttpRequestException>(exception.InnerException);
+        Assert.IsType<HttpIOException>(transportException.InnerException);
     }
 
     [Fact]

@@ -41,8 +41,8 @@ public sealed class ExternalAuthenticationTests
         // 断言"与会话 Cookie 同策略"，不是断言某个字面值。
         // 生产用 SameSite=None（模板支持前后端分离部署），状态 Cookie 若固定为 Lax，
         // 那种部署下 login-url 是跨站 XHR，浏览器根本不会保存它，回调必然失败。
-        // 测试宿主跑在 Development（Lax），写死字面值既测不到生产形态，
-        // 又会把两者分叉这件事钉成契约
+        // 会话 Cookie 的 SameSite 随环境变化（开发环境 Lax，其余 None），写死字面值会把
+        // "两者按环境分叉"这件事钉成契约
         var sessionSameSite = host.Services
             .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(AuthenticationSchemeNames.SessionCookie).Cookie.SameSite;

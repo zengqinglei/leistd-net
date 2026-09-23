@@ -38,6 +38,15 @@ public static class SpaExtensions
         // 的重试管道：只重试网络层异常（HttpRequestException/IOException/SocketException），
         // 不依赖业务幂等（dev 资源转发均为可重放的 GET）。生产关闭 SpaProxy，不受影响。
         services.AddHttpClient(HttpClientName)
+            // 与 YARP 转发器的默认处理器一致：原样转发到本机 dev server。不走系统代理——开发机常设
+            // HTTP_PROXY，本机请求被交给代理后连不回 localhost，整页 502；不自动跟随重定向、不接管 Cookie，
+            // 这两者都应原样交还浏览器。
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                UseProxy = false,
+                AllowAutoRedirect = false,
+                UseCookies = false
+            })
             .AddResilienceHandler("spa-proxy", builder =>
             {
                 builder.AddRetry(new HttpRetryStrategyOptions

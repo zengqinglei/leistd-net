@@ -26,8 +26,7 @@ public interface ISettingManagementService
     /// <summary>写入当前用户自己的偏好；值为 <see langword="null"/> 时恢复为上一层。</summary>
     /// <param name="input">要写入的设置。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="ExceptionHandling.ForbiddenException">当前身份不是用户。</exception>
-    /// <exception cref="ExceptionHandling.NotFoundException">设置不存在或不对客户端开放。</exception>
+    /// <exception cref="ExceptionHandling.BusinessException">当前身份不是用户，或设置不存在、不对客户端开放。</exception>
     Task SetForCurrentUserAsync(SetSettingInputDto input, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -35,7 +34,6 @@ public interface ISettingManagementService
     /// </summary>
     /// <param name="input">要写入的设置。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="ExceptionHandling.ForbiddenException">在租户上下文写进程级设置。</exception>
-    /// <exception cref="ExceptionHandling.NotFoundException">设置不存在或不对客户端开放。</exception>
+    /// <exception cref="ExceptionHandling.BusinessException">在租户上下文写进程级设置，或设置不存在、不对客户端开放。</exception>
     Task SetForCurrentTenantAsync(SetSettingInputDto input, CancellationToken cancellationToken = default);
 }

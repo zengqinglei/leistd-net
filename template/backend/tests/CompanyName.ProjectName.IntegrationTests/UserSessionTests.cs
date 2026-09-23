@@ -54,7 +54,7 @@ public sealed class UserSessionTests(ProjectWebApplicationFactory factory) : ICl
 
         using var revoke = await mine.Client.DeleteAsync($"/api/v1/auth/me/sessions/{currentId}");
 
-        Assert.Equal(HttpStatusCode.BadRequest, revoke.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, revoke.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await mine.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 

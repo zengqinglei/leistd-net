@@ -1,6 +1,7 @@
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Resource.Grants;
 using Leistd.ExceptionHandling;
+using Leistd.Authorization.Resource.Errors;
 
 namespace Leistd.Authorization.Resource.Exceptions;
 
@@ -14,7 +15,9 @@ namespace Leistd.Authorization.Resource.Exceptions;
 /// <param name="resourceKey">资源实例 Key。</param>
 /// <param name="reason">具体原因，进入异常消息。</param>
 public sealed class InvalidResourceGrantException(string resourceName, string resourceKey, string reason)
-    : BadRequestException($"Resource grant on '{resourceName}/{resourceKey}' is invalid: {reason}")
+    : BusinessException(
+        ResourceAuthorizationErrorCodes.InvalidGrant,
+        $"Resource grant on '{resourceName}/{resourceKey}' is invalid: {reason}")
 {
     /// <summary>资源类型名。</summary>
     public string ResourceName { get; } = resourceName;

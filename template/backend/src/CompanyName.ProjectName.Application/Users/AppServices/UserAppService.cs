@@ -1,4 +1,6 @@
 using Leistd.UnitOfWork.Attributes;
+using CompanyName.ProjectName.Application.Roles.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Sessions;
@@ -117,12 +119,9 @@ public class UserAppService(
                 .ToList();
             if (roleNames.Exists(r => r.Length > RoleNameMaxLength))
             {
-                throw new BadRequestException(
+                throw new BusinessException(RoleErrorCodes.NameTooLong,
                     $"Role name cannot exceed {RoleNameMaxLength} characters.")
-#if (IncludeLocalization)
-                    .WithCode("Role:NameTooLong").WithData("MaximumLength", RoleNameMaxLength)
-#endif
-                    ;
+                    .WithData("MaximumLength", RoleNameMaxLength);
             }
             if (roleNames.Count > 0)
             {
@@ -233,22 +232,15 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be updated by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminUpdateForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
                 ;
         }
 
         var email = input.Email.Trim();
         if (!await userDomainService.IsEmailAvailableAsync(id, email, cancellationToken))
         {
-            throw new BadRequestException($"Email '{email}' is already in use.")
-#if (IncludeLocalization)
-                .WithCode("User:EmailAlreadyUsed")
-                .WithData("Email", email)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.EmailAlreadyUsed, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         // 编辑表单会把读到的头像地址原样送回，那表示"没改"，换回存储的原值再校验。
@@ -289,10 +281,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be operated on by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminOperationForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
                 ;
         }
 
@@ -308,18 +297,12 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be disabled by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminDisableForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableForbidden, "The built-in super administrator cannot be disabled by other administrators.")
                 ;
         }
         if (!user.CanBeDisabled())
         {
-            throw new BadRequestException("The built-in super administrator cannot disable itself.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminDisableSelfForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableSelfForbidden, "The built-in super administrator cannot disable itself.")
                 ;
         }
 
@@ -341,10 +324,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator's password cannot be reset by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminResetPasswordForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminResetPasswordForbidden, "The built-in super administrator's password cannot be reset by other administrators.")
                 ;
         }
 
@@ -396,10 +376,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be operated on by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminOperationForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
                 ;
         }
 
@@ -442,10 +419,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeDeleted())
         {
-            throw new BadRequestException("The built-in super administrator cannot be deleted.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminDeleteForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminDeleteForbidden, "The built-in super administrator cannot be deleted.")
                 ;
         }
 
@@ -471,12 +445,8 @@ public class UserAppService(
         var user = await userRepository.GetByIdAsync(id, cancellationToken);
         if (user is null)
         {
-            throw new NotFoundException($"User {id} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", id)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {id} not found.")
+                .WithData("Id", id);
         }
 
         return user;
@@ -524,10 +494,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be updated by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminUpdateForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
                 ;
         }
 
@@ -556,10 +523,7 @@ public class UserAppService(
     {
         if (!await permissionChecker.IsGrantedAsync(PermissionConstant.Users.ManageRoles, cancellationToken))
         {
-            throw new ForbiddenException("Assigning roles requires the user role management permission.")
-#if (IncludeLocalization)
-                .WithCode("User:ManageRolesRequired")
-#endif
+            throw new BusinessException(UserErrorCodes.ManageRolesRequired, "Assigning roles requires the user role management permission.")
                 ;
         }
 
@@ -581,12 +545,8 @@ public class UserAppService(
         var missing = normalized.Except(roles.Select(r => r.Id)).ToList();
         if (missing.Count != 0)
         {
-            throw new BadRequestException($"Roles not found: {string.Join(", ", missing)}")
-#if (IncludeLocalization)
-                .WithCode("User:RolesNotFound")
-                .WithData("Roles", string.Join(", ", missing))
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.RolesNotFound, $"Roles not found: {string.Join(", ", missing)}")
+                .WithData("Roles", string.Join(", ", missing));
         }
 
         return roles;

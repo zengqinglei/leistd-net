@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Mappings;
 using CompanyName.ProjectName.Application.Auth.Sessions;
@@ -60,10 +61,7 @@ internal sealed class UserSessionAppService(
     {
         if (sessionId == currentUser.GetSessionId())
         {
-            throw new BadRequestException("Use sign-out to end the current session.")
-#if (IncludeLocalization)
-                .WithCode("Auth:CannotRevokeCurrentSession")
-#endif
+            throw new BusinessException(AuthErrorCodes.CannotRevokeCurrentSession, "Use sign-out to end the current session.")
                 ;
         }
 

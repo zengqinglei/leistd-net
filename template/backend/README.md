@@ -22,26 +22,30 @@ src/
 
 ## 开发配置
 
-启动配置使用 `ASPNETCORE_ENVIRONMENT=Development`。本地私有配置写入被 Git 忽略的：
+启动配置使用 `ASPNETCORE_ENVIRONMENT=Development`（`DbMigrator` 为 `DOTNET_ENVIRONMENT=Development`）。配置按下表分层，后者覆盖前者：
 
-```text
-src/CompanyName.ProjectName.Api/appsettings.Development.json
+| 层 | 放什么 | 是否进仓库 |
+| --- | --- | --- |
+| `appsettings.json` | 与环境无关的基线；凭据位置留空 | 是 |
+| `appsettings.Development.json` | 非机密的开发配置：内存库名、开发证书开关 | 是 |
+| `dotnet user-secrets` | 机密与只属于本机的覆盖：管理员口令、本机连接串、SPA 代理开关 | 否，只在开发环境加载 |
+| 环境变量 / 密钥系统 | 部署环境的全部机密与差异 | 否 |
+
+Api 与 `DbMigrator` 共用同一个 `UserSecretsId`。配了 `ConnectionStrings:Default` 就走真实数据库，否则用 `Database:InMemoryName` 指定的内存库：
+
+```bash
+dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=companyname-projectname;Username=postgres;Password=postgres" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets list --project src/CompanyName.ProjectName.Api
 ```
 
-最小 PostgreSQL 配置：
+不要把密码、证书或生产连接字符串写进任何 `appsettings*.json`。集成测试宿主跑在 `Testing` 环境，不加载 user-secrets 与 `appsettings.Development.json`，所需配置由测试夹具显式给出。
 
-```json
-{
-  "ConnectionStrings": {
-    "Default": "Host=localhost;Port=5432;Database=companyname-projectname;Username=postgres;Password=postgres"
-  },
-  "Cors": {
-    "AllowAnyLocalhost": true
-  }
-}
-```
+开发环境以外，下列只在单机上成立的回落不再生效，缺配即启动失败：
 
-连接字符串为空时使用内存数据库。不要提交密码、证书或生产连接字符串。
+- Data Protection 密钥必须持久化到共享位置：`ConnectionStrings:Redis`，或 `DataProtection:KeysPath` 指向 API 与 `DbMigrator` 共用的持久目录。存储位置应只允许本服务访问；需要对密钥做静态加密时，在 `AddMyProjectDataProtection` 里按官方 `ProtectKeysWith*` 追加。
+<!--#if (OpenIddictServer)-->
+- 令牌签名与加密证书默认必须显式提供：`OAuth:SigningCertificatePath`、`OAuth:EncryptionCertificatePath`（两张独立的 RSA 证书，口令由部署注入）。`OAuth:UseDevelopmentCertificates` 只用于本机开发，由 `appsettings.Development.json` 打开。
+<!--#endif-->
 
 ## 启动与验证
 
@@ -120,15 +124,11 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 
 ## 前后端联调
 
-同源开发时，在 `appsettings.Development.json` 启用 SPA 代理：
+同源开发时启用 SPA 代理（本机偏好，放 user-secrets）：
 
-```json
-{
-  "SpaProxy": {
-    "Enabled": true,
-    "Target": "http://localhost:4200"
-  }
-}
+```bash
+dotnet user-secrets set "SpaProxy:Enabled" "true" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "SpaProxy:Target" "http://localhost:4200" --project src/CompanyName.ProjectName.Api
 ```
 
-也可以让前端直接访问后端，并在仅限开发环境的配置中设置 `Cors:AllowAnyLocalhost=true`。
+也可以让前端直接访问后端，并同样在 user-secrets 里设置 `Cors:AllowAnyLocalhost=true`。

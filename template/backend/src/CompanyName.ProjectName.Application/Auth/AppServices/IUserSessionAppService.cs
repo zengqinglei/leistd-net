@@ -15,7 +15,7 @@ public interface IUserSessionAppService
     /// 撤销自己的某个会话（该设备随即需要重新登录）。
     /// </summary>
     /// <remarks>会话已不存在时静默成功：撤销是幂等的，也不借此透露别人的会话 Id 是否存在。</remarks>
-    /// <exception cref="Leistd.ExceptionHandling.BadRequestException">撤销的是当前会话——那应当走退出登录。</exception>
+    /// <exception cref="Leistd.ExceptionHandling.BusinessException">撤销的是当前会话——那应当走退出登录。</exception>
     Task RevokeCurrentUserSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>撤销除当前会话以外的全部会话，返回撤销的个数。</summary>

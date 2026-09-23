@@ -54,7 +54,7 @@ HTTP/1.1 200 OK
 
 ### 2.4 错误响应
 
-失败统一返回 RFC 9457 `ProblemDetails`，`Content-Type: application/problem+json`，由 `Leistd.ExceptionHandling.AspNetCore` 的全局异常处理（`BusinessExceptionHandler`）产出。除 RFC 标准字段外，固定附带 `code`、`message`、`traceId` 三个扩展字段。
+失败统一返回 RFC 9457 `ProblemDetails`，`Content-Type: application/problem+json`，由 `Leistd.ExceptionHandling.AspNetCore` 的全局异常处理（`BusinessExceptionHandler`）产出。除 RFC 标准字段外，所有失败都带 `traceId` 扩展字段；业务错误另带稳定错误码 `code`，公开文案在标准字段 `detail`。输入校验、未预期异常、上游故障等协议层失败的契约就是 HTTP 状态码（RFC 9457 §4），只带本地化 `title` 与 `traceId`（校验另带 `errors`），不带 `code` 与 `detail`。
 
 ```json
 {
@@ -64,7 +64,6 @@ HTTP/1.1 200 OK
   "detail": "用户名 'admin' 已存在",
   "instance": "/api/v1/users",
   "code": "User:UsernameTaken",
-  "message": "用户名 'admin' 已存在",
   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
 }
 ```
@@ -73,30 +72,26 @@ HTTP/1.1 200 OK
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| type | string | 稳定问题类型 URI；校验错误为 `urn:leistd:problem:validation-error`，其他业务错误为 `urn:leistd:problem:business-error` |
-| title | string | 错误标题（英文短语，与 status 对应，如 `Bad Request`、`Not Found`） |
+| type | string | 稳定问题类型 URI；校验与业务错误分别为 `validation-error`、`business-error`，其余按状态码使用 ASP.NET Core 默认值 |
+| title | string | 与 status 对应的错误标题，按当前语言本地化（如 `请求无效`、`Not Found`） |
 | status | number | HTTP 状态码 |
-| detail | string | 面向用户的错误说明；与 `message` 相同，按错误码本地化或回落为安全文案 |
+| detail | string | 业务错误面向用户的说明，按错误码本地化或回落为安全文案；协议层失败不带 |
 | instance | string | 出错的请求路径 |
-| code | string | **业务错误码扩展字段**：`BusinessException.Code`，形如 `User:UsernameTaken`。既是稳定机器契约（前端可据此分支），也是本地化词条键。未显式 `WithCode` 时为状态码通用码（`Error:BadRequest` 等），因此**恒有值** |
-| message | string | 错误消息扩展字段，与 `detail` 同值，便于前端统一读取 |
-| traceId | string | 链路追踪 ID；优先取 `Activity.Current?.TraceId` 的 32 位小写十六进制值，无 `Activity` 时回落 `HttpContext.TraceIdentifier` |
+| code | string | **稳定错误码**：只出现在业务错误上，`BusinessException` 在构造时必填，形如 `User:UsernameTaken`；也是本地化词条键 |
+| traceId | string | 请求入口确定的应用关联 ID；有请求 Activity 时通常为 32 位小写十六进制，无 Activity 时也可为合规的自定义入站 ID；异常、校验和手工失败响应共用同一值。自定义 ID 不保证可直接检索 OpenTelemetry 链路，应先查服务日志 |
 
-> `GlobalExceptionOptions.IncludeExceptionDetails` 默认为 `false`；关闭时不输出 `details` 或 `stackTrace`。开启后，`WithDetails` 设置的业务诊断信息以 `details` 返回，实际捕获异常的堆栈以 `stackTrace` 返回；不得在业务诊断信息中放入密钥、Token 或连接串。
+> `GlobalExceptionOptions.IncludeExceptionDetails` 默认为 `false`；开启后仅额外输出 `stackTrace`，只用于本地调试，生产环境不开启。
 
 ### 2.5 验证错误响应
 
-业务或应用层抛出 `UnprocessableEntityException` 时返回 HTTP **422**（默认 `code` = `Error:UnprocessableEntity`）；`System.ComponentModel.DataAnnotations.ValidationException` 也会被转换为该 422 响应。`[ApiController]` 自动模型校验返回 HTTP **400**。两条路径都使用 `urn:leistd:problem:validation-error` 问题类型，并将字段错误写入 Leistd 自定义的 `errors` 对象数组，而不是 `ValidationProblemDetails` 字典。
+`[ApiController]` 自动模型校验和内部调用抛出的 `System.ComponentModel.DataAnnotations.ValidationException` 都返回 HTTP **400**，使用 `urn:leistd:problem:validation-error` 与 Leistd `errors` 对象数组。跨字段或用例规则失败抛 `BusinessException`，未配置状态时同样默认为 400。
 
 ```json
 {
   "type": "urn:leistd:problem:validation-error",
-  "title": "Unprocessable Entity",
-  "status": 422,
-  "detail": "输入的信息有误",
+  "title": "Bad Request",
+  "status": 400,
   "instance": "/api/v1/products",
-  "code": "Error:UnprocessableEntity",
-  "message": "输入的信息有误",
   "errors": [
     {
       "detail": "名称不能为空",
@@ -118,43 +113,39 @@ HTTP/1.1 200 OK
 | --- | --- |
 | 200 | 查询或操作成功 |
 | 201 | 创建成功 |
-| 400 | 参数格式错误或业务规则校验失败 |
+| 400 | 服务端认为是客户端导致的请求错误；包括结构、字段、协议参数和默认业务拒绝 |
 | 401 | 未认证 |
 | 403 | 无权限 |
 | 404 | 资源不存在 |
 | 409 | 状态冲突或幂等冲突 |
 | 415 | 请求媒体类型不受支持 |
-| 422 | 实体字段校验失败（按字段聚合 `errors`） |
+| 422 | 可选：内容语法成立，但无法按其指令处理；只在客户端需区分时按错误码显式映射 |
+| 429 | 请求触发明确的频率限制 |
 | 500 | 服务端异常 |
-| 503 | 上游服务超时 / 连接失败 |
+| 502 | 未处理的上游拒绝、无效或提前中断的响应；不透传远端状态 |
+| 503 | 本服务连接上游失败，或明确知道所依赖能力暂时不可用 |
+| 504 | 本服务等待上游响应超时 |
 
-> **业务规则校验**（如「用户名已存在」）用 400（`BadRequestException`）；**结构化字段校验**用 422（`UnprocessableEntityException`）和 `errors` 数组。
+> **请求结构/字段校验**用 400 + `errors`；**业务规则失败**用 `BusinessException`，默认 400。仅对特殊状态在 API 组合根按错误码显式映射，不重复登记 400。
 
-## 4. 异常类型映射
+## 4. 异常与 HTTP 映射
 
-后端使用 `Leistd.ExceptionHandling.Core` 提供的异常类型（均继承 `BusinessException`），由 `Leistd.ExceptionHandling.AspNetCore` 的全局异常处理转换为对应 HTTP 状态码的 `ProblemDetails`。每个异常声明对外 HTTP 状态码，并自带一个默认错误码。
+后端只保留一个业务异常 `BusinessException(code, safeMessage, innerException?)`。错误码是必填且不可变的机器契约；各 API 业务模块及组件 Web 适配层定义非默认 HTTP 映射，组合根显式汇总：
 
-| 异常类型 | HTTP | 默认 `code` | 使用场景 |
-| --- | --- | --- | --- |
-| `BadRequestException` | 400 | `Error:BadRequest` | 参数/请求结构错误、业务规则验证失败 |
-| `UnauthorizedException` | 401 | `Error:Unauthorized` | 未登录、Token 无效 |
-| `ForbiddenException` | 403 | `Error:Forbidden` | 已登录但权限不足 |
-| `NotFoundException` | 404 | `Error:NotFound` | 资源不存在 |
-| `ConflictException` | 409 | `Error:Conflict` | 状态冲突、重复提交 |
-| `UnsupportedMediaTypeException` | 415 | `Error:UnsupportedMediaType` | 请求媒体类型不受支持 |
-| `UnprocessableEntityException` | 422 | `Error:UnprocessableEntity` | 实体字段校验失败（按字段聚合 `errors`） |
-| `InternalServerException` | 500 | `Error:InternalServer` | 未预期异常，`detail` 不暴露内部细节 |
-| `ServiceUnavailableException` | 503 | `Error:ServiceUnavailable` | 上游服务超时 / 连接失败 |
+| 来源 | 默认 HTTP | 说明 |
+| --- | --- | --- |
+| `BusinessException` 命中错误码映射 | 400 / 401 / 403 / 404 / 409 等 | 宿主按稳定业务语义精确决定 |
+| 未命中的 `BusinessException` | 400 | 广义的客户端请求错误；防止新错误码意外变成稀有状态 |
+| DataAnnotations 自动校验 / `ValidationException` | 400 | 请求字段或结构不合法，返回 `errors` |
+| 未捕获的 BCL/技术异常 | 500 | 只返回通用安全文案，细节记日志 |
+| 框架判定的请求错误（请求体无法解析、请求体过大、内容类型不符、路由不存在、未认证、限流） | 400 / 413 / 415 / 404 / 401 / 429 | `/api` 下统一返回 Problem Details，只有状态码、本地化标题与 `traceId`，不带业务错误码；开发与生产环境一致。前端按状态码处理这类失败 |
+| `ServiceClientException` | 组合 `Leistd.ServiceClient.AspNetCore` 的默认映射后，按本地观测的失败来源返回 500/502/503/504 | 本地配置或未分类故障默认 500，远端明确失败、响应无效或提前中断默认 502；不从远端状态推断本地状态。原始 URL、响应片段只留服务端诊断，已知上游契约可由宿主覆盖 |
 
-框架还会**自动转换**下列常见异常，无需手动 catch：`System.ComponentModel.DataAnnotations.ValidationException` → 422；`OperationCanceledException` / `TimeoutException` / `HttpRequestException` → 400 或 503；其余未捕获异常 → 500。
+`ArgumentException`、`InvalidOperationException`、`HttpRequestException` 等优先按 .NET 语义抛出，框架不根据类型猜测为 400/503。认证和授权拒绝优先交给 ASP.NET Core 管道，不用业务异常模拟。
 
-`BusinessException` 支持链式细化：
+`WithData("Name", value)` 为本地化文案的 `{Name}` 占位符传值，无论是否启用多语言都可保留。不提供 `WithCode` 或 `WithDetails`：错误码必须在构造时完整，技术详情只进入 `InnerException` 和日志。
 
-- `WithCode("User:UsernameTaken")`：指定错误码，它同时是本地化词条键。不调用则为状态码通用码。
-- `WithDetails("...")`：补充可对外返回的业务详情；该内容不受开发环境限制，不得包含敏感或内部诊断信息。
-- `WithData("Name", value)`：为本地化文案的具名占位符 `{Name}` 提供值（仅启用多语言时用）。
-
-前端要据以分支的错误码（据此跳转、切换界面状态，而不只是显示消息）是机器契约：无论是否启用多语言都要 `WithCode`，改名按破坏性变更处理，并有集成测试断言它。
+公开文案只写用户能采取的下一步。非敏感且确有帮助的输入可以保留，例如已登录管理员操作中的订单号；密码、令牌、连接串以及登录/找回密码等匿名场景中可用于枚举账号的用户名、邮箱不回显。未预期 5xx 只展示通用文案与 `traceId`。
 
 <!--#if (IncludeLocalization)-->
 ### 4.1 异常本地化
@@ -163,44 +154,39 @@ HTTP/1.1 200 OK
 
 | 职责 | 载体 | 说明 |
 | --- | --- | --- |
-| 日志/诊断 | `Message`（构造参数） | 永远是可读**英文**，进日志便于跨语言检索，**默认不给终端用户看** |
-| 身份 + 展示 | `Code`（`WithCode`） | 既是稳定机器契约（前端可据此分支），也是本地化词条键。未设置时为状态码通用码 |
+| 安全回落 | `Message`（构造参数） | 可读英文，资源未命中或未启用多语言时会直接给用户，不得含内部细节 |
+| 身份 + 展示 | `Code`（构造参数） | 必填的稳定机器契约，也是本地化词条键 |
 
 - **throw 处写法**：
   ```csharp
-  throw new BadRequestException("Username already exists")          // Message：英文诊断，只进日志
-      .WithCode("User:UsernameTaken")                              // Code：对外契约 + 词条键
-      .WithData("Username", username);                             // 具名占位 {Username}
+  throw new BusinessException(
+          "User:UsernameTaken",
+          $"Username '{username}' already exists.")
+      .WithData("Username", username);
   ```
   资源 `Resources/{en,zh-CN}.json` 的 `texts` 段按错误码给出各语言文案（`en` 为默认/回落）：`"User:UsernameTaken": "Username '{Username}' already exists."`。
 - **`Code` 一经对外即为契约**，重命名它是破坏性变更。这是"一个标识符同时承担机器身份与词条键"的代价，换来的是不必为每个错误维护两个必须同步的字符串。
-- 全局处理器解析顺序：**`Code` 词条 → 直出 `Message`（默认只放 4xx）→ 状态码通用码词条（`Error:NotFound` 等）→ 状态短语**，绝不把裸键漏给用户；查询全程 `try/catch` 隔离，本地化失败不覆盖原始 `code`。**响应结构不变**，仅 `message`/`detail`/`title` 随语言变，`code`/`traceId` 不变。
-- **"能不能给用户看"是宿主的统一策略，不是抛出点的决定。** 由 `Leistd:GlobalException:MessageExposure`（`None` / `ClientErrors`（默认）/ `All`）按状态码类别一次定死，经 `IOptionsMonitor` 热加载。抛出点只负责把原因说清楚。
-- **未启用多语言（off-mode）时**：没有 `IStringLocalizer`，没有词条可查，按上面的策略直出 `Message`——所以 off-mode 下的 `Message` 也是用户会看到的句子，别往里塞内部标识。
-- **直出 `Message` 不能替代 `WithCode`。** 直出的是构造时的英文诊断串：中文界面上会冒出一句英文，而且收紧到 `None` 的部署里连它都没有。要让原因既说得清、又随语言走，只有一条路：带码 + 配词条。
-- 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等）。前端**直接显示后端 `message`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §9.2）。
-- **400 / 409 / 422 必须带码。** 这三类的状态本身说不清原因（"你的输入有问题"，但哪条规则没过只有消息知道），不带码就没有词条可查，中文界面上只会冒出构造时那句英文诊断串；而收紧到 `MessageExposure = None` 的部署里连它都没有，只剩"请求无效。"。两种结果都不该出现在产品里，而这既不报错也不影响任何测试，所以有静态闸门 `scripts/check-error-codes.py` 守着。401 / 403 / 404 不在此列：状态本身即原因；500 / 503 更不在此列：那些消息是内部诊断，默认就不外露。
+- 全局处理器按 **`Code` 词条 → 安全 `Message`** 解析，本地化失败不改写 `code` 或 HTTP 语义。
+- **未启用多语言时**会直接返回 `Message`，因此必须从抛出点就是安全、可展示的文案；原始技术异常放在 `InnerException` 中。
+- 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等），前缀由一个模块独占，常量成员名与语义后缀一致；码定义在所属模块的 `Errors/`，而非集中到 `Domain/Shared/Errors`。前端**直接显示后端 `detail`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §9.2）。
+- **所有 `BusinessException` 都必须带码**，并由构造函数强制；不需要根据是否启用多语言加条件编译。
 - **DataAnnotations 校验消息**也随 culture 本地化：DTO 的 `ErrorMessage`/`Display` 用英文句子作键（`"{0} is required."`），`zh-CN.json` 按同一句子映射中文；`Program.cs` 已接线 `AddDataAnnotationsLocalization(...DataAnnotationLocalizerProvider...)`。这样参数校验与业务异常在同一请求下**同语言**。
 
-**示例（`Message` 恒为英文诊断，`Code` 给出身份）**：
+**示例（`Message` 是安全英文回落，`Code` 给出稳定身份）**：
 
 ```csharp
-// 业务规则验证失败（400，未设 Code 时为 Error:BadRequest）
+// 业务规则验证失败；该码在 API 组合根映射为 409
 if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-    throw new BadRequestException($"Username '{username}' already exists.")
-        .WithCode("User:UsernameTaken")
+    throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
         .WithData("Username", username);
 
-// 资源不存在（404，未设 Code 时为 Error:NotFound）
+// 资源不存在；该码在 API 组合根映射为 404
 var user = await userRepository.GetAsync(id, cancellationToken);
 if (user is null)
-    throw new NotFoundException($"User {id} not found.");
+    throw new BusinessException("User:NotFound", $"User {id} not found.")
+        .WithData("Id", id);
 
-// 实体字段校验（422，按字段聚合）
-throw new UnprocessableEntityException("email", "Invalid email format.");
-
-// 前端需按具体错误分支时，给出错误码；它同时是词条键
-throw new BadRequestException("Insufficient balance.").WithCode("Wallet:InsufficientBalance");
+// 请求字段校验由 DTO DataAnnotations 与 [ApiController] 统一产生 400 + errors
 ```
 <!--#endif-->
 

@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using Leistd.ExceptionHandling;
 using System.Security.Claims;
@@ -41,7 +42,7 @@ public sealed class ConnectController(
     public async Task<IActionResult> AuthorizeAsync(CancellationToken cancellationToken)
     {
         var request = HttpContext.GetOpenIddictServerRequest()
-            ?? throw new InternalServerException(
+            ?? throw new InvalidOperationException(
                 "The OpenID Connect authorization request is unavailable. "
                 + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
@@ -88,7 +89,7 @@ public sealed class ConnectController(
     public async Task<IActionResult> ExchangeAsync(CancellationToken cancellationToken)
     {
         var request = HttpContext.GetOpenIddictServerRequest()
-            ?? throw new InternalServerException(
+            ?? throw new InvalidOperationException(
                 "The OpenID Connect token request is unavailable. "
                 + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
@@ -135,12 +136,8 @@ public sealed class ConnectController(
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        throw new BadRequestException($"Unsupported grant type: {request.GrantType}")
-#if (IncludeLocalization)
-            .WithCode("Auth:UnsupportedGrantType")
-            .WithData("GrantType", request.GrantType)
-#endif
-            ;
+        throw new BusinessException(AuthErrorCodes.UnsupportedGrantType, $"Unsupported grant type: {request.GrantType}")
+            .WithData("GrantType", request.GrantType);
     }
 
     [Authorize(AuthenticationSchemes = OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)]

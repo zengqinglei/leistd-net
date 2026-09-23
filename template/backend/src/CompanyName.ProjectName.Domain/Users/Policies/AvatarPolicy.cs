@@ -1,4 +1,5 @@
 using Leistd.ExceptionHandling;
+using CompanyName.ProjectName.Domain.Users.Errors;
 
 namespace CompanyName.ProjectName.Domain.Users.Policies;
 
@@ -70,7 +71,7 @@ public static class AvatarPolicy
     /// <summary>
     /// 校验一个待写入的头像值：空（清除）、外部地址或合法的上传图片。
     /// </summary>
-    /// <exception cref="BadRequestException">不合规时抛出，并说明是格式不对还是体积超限。</exception>
+    /// <exception cref="BusinessException">不合规时抛出，并说明是格式不对还是体积超限。</exception>
     public static void EnsureValid(string? value)
     {
         if (string.IsNullOrEmpty(value) || IsExternalUrl(value) || TryReadImage(value, out _))
@@ -78,19 +79,11 @@ public static class AvatarPolicy
 
         if (value.StartsWith(DataUrlPrefix, StringComparison.Ordinal) && value.Length / 4 * 3 > MaxImageBytes + 3)
         {
-            throw new BadRequestException($"The avatar image cannot exceed {MaxImageBytes / 1024} KB.")
-#if (IncludeLocalization)
-                .WithCode("User:AvatarTooLarge")
-                .WithData("MaxKilobytes", MaxImageBytes / 1024)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.AvatarTooLarge, $"The avatar image cannot exceed {MaxImageBytes / 1024} KB.")
+                .WithData("MaxKilobytes", MaxImageBytes / 1024);
         }
 
-        throw new BadRequestException("The avatar must be a PNG, JPEG or WebP image.")
-#if (IncludeLocalization)
-            .WithCode("User:AvatarInvalid")
-#endif
-            ;
+        throw new BusinessException(UserErrorCodes.AvatarInvalid, "The avatar must be a PNG, JPEG or WebP image.");
     }
 
     // 按文件头判断真实类型，不信任 data URL 里声明的类型。

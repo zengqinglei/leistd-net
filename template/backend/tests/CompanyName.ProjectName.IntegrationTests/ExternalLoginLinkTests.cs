@@ -91,8 +91,8 @@ public sealed class ExternalLoginLinkTests
 
         using var second = await ProjectWebApplicationFactory.LoginAsync(host, await CreateUserAsync(host, "link_second"), Password);
         using var taken = await LinkAsync(host, second);
-        Assert.Equal(HttpStatusCode.BadRequest, taken.StatusCode);
-        Assert.Equal(ExpectedErrorCode.Of("ExternalAuth:AlreadyLinked", "Error:BadRequest"), await ErrorCodeAsync(taken));
+        Assert.Equal(HttpStatusCode.Conflict, taken.StatusCode);
+        Assert.Equal("ExternalAuth:AlreadyLinked", await ErrorCodeAsync(taken));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class ExternalLoginLinkTests
         var linkId = LinkIdOf(links);
         using (var rejected = await externalOnly.DeleteAsync($"/api/v1/external-auth/links/{linkId}"))
         {
-            Assert.Equal(ExpectedErrorCode.Of("ExternalAuth:LastSignInMethod", "Error:BadRequest"), await ErrorCodeAsync(rejected));
+            Assert.Equal("ExternalAuth:LastSignInMethod", await ErrorCodeAsync(rejected));
         }
 
         // 设有密码的用户随时可以解绑

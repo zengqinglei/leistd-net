@@ -77,7 +77,8 @@ public class ClientCredentialsTokenProvider(
         }
         catch (InvalidOperationException ex)
         {
-            throw new ServiceClientException($"Service client {clientName} has invalid authentication configuration: {ex.Message}", ex);
+            throw new ServiceClientException($"Service client {clientName} has invalid authentication configuration: {ex.Message}", ex,
+                ServiceClientFailureKind.Configuration);
         }
 
         var form = new Dictionary<string, string>
@@ -102,10 +103,11 @@ public class ClientCredentialsTokenProvider(
         {
             response = await httpClient.SendAsync(request, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             throw new ServiceClientException(
-                $"Service client {clientName} failed to obtain an access token ({tokenEndpoint} unreachable): {ex.Message}", ex);
+                $"Service client {clientName} failed to obtain an access token ({tokenEndpoint}): {ex.Message}", ex,
+                ServiceClientFailureClassifier.Classify(ex));
         }
 
         using (response)
@@ -113,8 +115,10 @@ public class ClientCredentialsTokenProvider(
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                throw new ServiceClientException(
-                    $"Service client {clientName} failed to obtain an access token: {(int)response.StatusCode} {tokenEndpoint} {Truncate(body)}");
+                throw new RemoteServiceException(
+                    $"Service client {clientName} failed to obtain an access token: {(int)response.StatusCode} {tokenEndpoint} {Truncate(body)}",
+                    (int)response.StatusCode,
+                    responseBody: Truncate(body));
             }
 
             return ParseToken(clientName, body);
@@ -144,12 +148,14 @@ public class ClientCredentialsTokenProvider(
         catch (JsonException ex)
         {
             throw new ServiceClientException(
-                $"Token response for service client {clientName} is not valid JSON: {ex.Message}", ex);
+                $"Token response for service client {clientName} is not valid JSON: {ex.Message}", ex,
+                ServiceClientFailureKind.InvalidResponse);
         }
 
         if (string.IsNullOrEmpty(accessToken))
         {
-            throw new ServiceClientException($"Token response for service client {clientName} is missing access_token.");
+            throw new ServiceClientException($"Token response for service client {clientName} is missing access_token.",
+                failureKind: ServiceClientFailureKind.InvalidResponse);
         }
 
         logger.LogDebug("Service client {ClientName} obtained an access token; expires in {ExpiresIn}s", clientName, expiresIn);

@@ -402,7 +402,7 @@ public class DefaultUnitOfWork : IUnitOfWork
     /// 依次提交本工作单元登记的事务。
     /// </summary>
     /// <remarks>
-    /// 不提供跨事务原子性；后续提交失败时抛出包含已提交项的 <see cref="InternalServerException"/>。
+    /// 不提供跨事务原子性；后续提交失败时抛出包含已提交项的 <see cref="InvalidOperationException"/>。
     /// </remarks>
     protected virtual async Task CommitTransactionsAsync()
     {
@@ -416,7 +416,7 @@ public class DefaultUnitOfWork : IUnitOfWork
             }
             catch (Exception exception) when (committed.Count > 0)
             {
-                throw new InternalServerException(
+                throw new InvalidOperationException(
                     $"The unit of work partially committed: {committed.Count} transaction(s) " +
                     $"[{string.Join(", ", committed)}] were already committed when '{key}' failed. " +
                     "Those commits cannot be rolled back; the data requires manual reconciliation.",

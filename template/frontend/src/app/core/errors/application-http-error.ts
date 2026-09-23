@@ -9,11 +9,13 @@ export interface ApiErrorItem {
 }
 
 interface ApiProblemDetails {
-  code?: string;
+  code?: string | number;
   detail?: string;
+  errorCode?: string;
   errors?: ApiErrorItem[];
   message?: string;
   title?: string;
+  traceId?: string;
 }
 
 const DEFAULT_NETWORK_ERROR_MESSAGE =
@@ -23,9 +25,15 @@ export class ApplicationHttpError extends Error {
   readonly code?: string;
   readonly details: readonly ApiErrorItem[];
   readonly status: number;
+  readonly traceId?: string;
+  readonly traceIdLabel: string;
   readonly url: string | null;
 
-  private constructor(response: HttpErrorResponse, problem: ApiProblemDetails) {
+  private constructor(
+    response: HttpErrorResponse,
+    problem: ApiProblemDetails,
+    traceIdLabel: string,
+  ) {
     const details = Array.isArray(problem.errors) ? problem.errors : [];
     // 有字段错误时由它们组成消息，而不是 detail / title：校验失败时那两项只是概括
     // （"One or more validation errors occurred." / "提交的信息有误。"），说不出哪条规则没过，
@@ -43,8 +51,13 @@ export class ApplicationHttpError extends Error {
     super(message, { cause: response });
     this.name = 'ApplicationHttpError';
     this.status = response.status;
+    this.traceId = problem.traceId;
+    this.traceIdLabel = traceIdLabel;
     this.url = response.url;
-    this.code = problem.code || details.find((item) => item.code)?.code;
+    this.code =
+      problem.errorCode ||
+      (typeof problem.code === 'string' ? problem.code : undefined) ||
+      details.find((item) => item.code)?.code;
     this.details = details;
   }
 
@@ -53,17 +66,28 @@ export class ApplicationHttpError extends Error {
    *   这时 `error` 是浏览器的异常对象，它的 message（"Failed to fetch"）是给开发者看的英文，
    *   而且不同浏览器措辞不同；原始异常仍经 `cause` 保留。
    */
-  static from(response: HttpErrorResponse, networkErrorMessage?: string): ApplicationHttpError {
+  static from(
+    response: HttpErrorResponse,
+    networkErrorMessage?: string,
+    traceIdLabel = 'Trace ID',
+  ): ApplicationHttpError {
     if (response.status === 0) {
-      return new ApplicationHttpError(response, {
-        detail: networkErrorMessage ?? DEFAULT_NETWORK_ERROR_MESSAGE,
-      });
+      return new ApplicationHttpError(
+        response,
+        {
+          detail: networkErrorMessage ?? DEFAULT_NETWORK_ERROR_MESSAGE,
+        },
+        traceIdLabel,
+      );
     }
-    return new ApplicationHttpError(response, readProblemDetails(response.error));
+    return new ApplicationHttpError(response, readProblemDetails(response.error), traceIdLabel);
   }
 }
 
 export function applicationErrorMessage(error: unknown): string {
+  if (error instanceof ApplicationHttpError && error.status >= 500 && error.traceId) {
+    return `${error.message} (${error.traceIdLabel}: ${error.traceId})`;
+  }
   return error instanceof Error ? error.message : 'An unexpected error occurred.';
 }
 
@@ -96,4 +120,10 @@ function readProblemDetails(value: unknown): ApiProblemDetails {
   }
 
   return value as ApiProblemDetails;
+}
+
+/** 从 Problem Details 或可选的数字信封中读取稳定业务错误码。 */
+export function apiErrorCode(value: unknown): string | undefined {
+  const problem = readProblemDetails(value);
+  return problem.errorCode || (typeof problem.code === 'string' ? problem.code : undefined);
 }

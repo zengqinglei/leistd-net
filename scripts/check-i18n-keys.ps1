@@ -8,7 +8,7 @@
       2. 后端 en.json ⇄ zh-CN.json 键集合完全一致（Api/Resources 的 texts 段）。
       3. 两侧文件均为合法 JSON、且后端声明的 culture 与文件名一致。
 
-    仅校验"资源自洽"；键是否被代码引用不在此闸门范围（另由构建/lint 保障）。
+    同时校验错误码定义的格式、唯一性与资源键，防止模块增长后发生前缀冲突或漏译。
     退出码非 0 表示存在不一致，供 CI 阻断。
 #>
 [CmdletBinding()]
@@ -95,7 +95,7 @@ function Compare-Placeholders([string]$Label, [string]$EnPath, [string]$ZhPath, 
 }
 
 # 校验代码里静态引用的 key 都存在于资源（避免运行时裸键）
-function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex[]]$Patterns, [string]$EnPath, [scriptblock]$Selector) {
+function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex[]]$Patterns, [string]$EnPath, [scriptblock]$Selector, [string]$FileNameFilter = '*') {
     if (-not (Test-Path $EnPath)) { return }
     $keySet = [System.Collections.Generic.HashSet[string]]::new()
     $flat = New-Object System.Collections.Generic.List[string]
@@ -106,11 +106,11 @@ function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex[]]$Pa
     foreach ($glob in $SourceGlobs) {
         Get-ChildItem -Path (Join-Path $RepoRoot $glob) -Recurse -File -Include '*.ts', '*.html', '*.cs' -ErrorAction SilentlyContinue | Where-Object {
             # 排除单测文件：describe('a.b') 等点号字符串不是 translate 引用，避免误报。
-            $_.Name -notlike '*.spec.ts'
+            $_.Name -notlike '*.spec.ts' -and $_.Name -like $FileNameFilter
         } | ForEach-Object {
             $content = Get-Content -LiteralPath $_.FullName -Raw
             if ([string]::IsNullOrEmpty($content)) { return }
-            # 去掉 C# XML 文档注释行：示例代码里的键（如 <c>WithCode("User:EmailAlreadyUsed")</c>）
+            # 去掉 C# XML 文档注释行：示例代码里的键不是真实引用。
             # 是说明用法，不是真实引用，不该要求资源里存在
             $content = ($content -split "`n" | Where-Object { $_.TrimStart() -notlike '///*' }) -join "`n"
             foreach ($pattern in $Patterns) {
@@ -125,6 +125,51 @@ function Test-KeyReferences([string]$Label, [string[]]$SourceGlobs, [regex[]]$Pa
     else {
         Write-Host "  OK  $Label：$($referenced.Count) 个静态引用键均存在。" -ForegroundColor Green
     }
+}
+
+function Test-TemplateErrorCodeDefinitions([string[]]$SourceRoots) {
+    $values = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($root in $SourceRoots) {
+        Get-ChildItem -Path (Join-Path $RepoRoot $root) -Recurse -File -Filter '*ErrorCodes.cs' |
+            Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' } |
+            ForEach-Object {
+                $file = $_
+                $owner = $file.BaseName -replace 'ErrorCodes$', ''
+                $content = Get-Content -LiteralPath $file.FullName -Raw
+                foreach ($declaration in [regex]::Matches($content, 'public\s+const\s+string\s+([A-Za-z][A-Za-z0-9]*)\s*=\s*"([^"]+)"')) {
+                    $member = $declaration.Groups[1].Value
+                    $code = $declaration.Groups[2].Value
+                    if ($code -cne "${owner}:$member") {
+                        $script:problems.Add("错误码格式或所有者不一致：$($file.FullName) $member = $code，应为 ${owner}:$member")
+                    }
+                    if (-not $values.Add($code) -or -not $script:allErrorCodes.Add($code)) {
+                        $script:problems.Add("重复业务错误码：$code ($($file.FullName))")
+                    }
+                }
+            }
+    }
+    Write-Host "  模板业务错误码定义已检查：$($values.Count) 个。" -ForegroundColor Green
+}
+
+function Test-FrameworkErrorCodeDefinitions([string]$SourceRoot) {
+    $count = 0
+    Get-ChildItem -Path (Join-Path $RepoRoot $SourceRoot) -Recurse -File -Filter '*ErrorCodes.cs' |
+        Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' } |
+        ForEach-Object {
+            $file = $_
+            $content = Get-Content -LiteralPath $file.FullName -Raw
+            foreach ($declaration in [regex]::Matches($content, 'public\s+const\s+string\s+[A-Za-z][A-Za-z0-9]*\s*=\s*"([^"]+)"')) {
+                $code = $declaration.Groups[1].Value
+                $count++
+                if ($code -cnotmatch '^[A-Z][A-Za-z0-9]*:[A-Z][A-Za-z0-9]*$') {
+                    $script:problems.Add("框架错误码格式不合规：$code ($($file.FullName))")
+                }
+                if (-not $script:allErrorCodes.Add($code)) {
+                    $script:problems.Add("重复业务错误码：$code ($($file.FullName))")
+                }
+            }
+        }
+    Write-Host "  框架组件错误码定义已检查：$count 个。" -ForegroundColor Green
 }
 
 # 接口入参 DTO 上的校验特性必须显式写 ErrorMessage：不写时用的是 .NET 内置英文消息
@@ -257,11 +302,33 @@ foreach ($dir in $frameworkResources) {
 
 Write-Host ""
 Write-Host "-- 代码引用键存在性（静态可发现部分）--" -ForegroundColor Cyan
-# 后端 WithCode("模块:键")——错误码同时是展示词条键，见 exception 组件文档
-Test-KeyReferences "后端 WithCode" `
-    @("template/backend/src") `
-    ([regex]'WithCode\("([^"]+)"') `
-    (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") { param($r) $r.texts }
+$script:allErrorCodes = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+Test-FrameworkErrorCodeDefinitions "framework/components"
+# 模板业务码已常量化；从常量定义反查资源，避免把全部抛出点改为常量后误报“0 个引用”。
+# 组件自己的码由组件资源负责，不在模板这里重复维护。
+Test-TemplateErrorCodeDefinitions @(
+    "template/backend/src/CompanyName.ProjectName.Domain",
+    "template/backend/src/CompanyName.ProjectName.Application"
+)
+Test-KeyReferences "后端业务错误码常量" `
+    @("template/backend/src/CompanyName.ProjectName.Domain", "template/backend/src/CompanyName.ProjectName.Application") `
+    ([regex]'public\s+const\s+string\s+\w+\s*=\s*"([^"]+)"') `
+    (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") { param($r) $r.texts } '*ErrorCodes.cs'
+foreach ($dir in $frameworkResources) {
+    $relativeRoot = [IO.Path]::GetRelativePath($RepoRoot, $dir.Parent.FullName)
+    if (@(Get-ChildItem -LiteralPath $dir.Parent.FullName -Recurse -File -Filter '*ErrorCodes.cs').Count -eq 0) { continue }
+    Test-KeyReferences "框架错误码($($dir.Parent.Name))" `
+        @($relativeRoot) `
+        ([regex]'public\s+const\s+string\s+\w+\s*=\s*"([^"]+)"') `
+        (Join-Path $dir.FullName "en.json") { param($r) $r.texts } '*ErrorCodes.cs'
+}
+$literalBusinessCodes = @(Get-ChildItem -Path (Join-Path $RepoRoot "template/backend/src") -Recurse -File -Filter "*.cs" |
+    Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' } |
+    Where-Object { [regex]::IsMatch((Get-Content -LiteralPath $_.FullName -Raw), 'new\s+BusinessException\(\s*"[^"]+"') } |
+    ForEach-Object { [IO.Path]::GetRelativePath($RepoRoot, $_.FullName) })
+if ($literalBusinessCodes.Count -gt 0) {
+    $problems.Add("模板 BusinessException 必须引用所属模块的错误码常量：$($literalBusinessCodes -join ', ')")
+}
 # 后端 DataAnnotations：字段显示名与消息模板都是资源键（DataAnnotationLocalizerProvider 按原文查词条）。
 # 缺一条，中文界面上就出现"Role name只能包含字母、数字和下划线"这种半截英文。
 Test-KeyReferences "后端 DataAnnotations" `
@@ -272,11 +339,6 @@ Test-KeyReferences "后端 DataAnnotations" `
     ) `
     (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") { param($r) $r.texts }
 Test-ValidationMessagesExplicit "后端入参 DTO" "template/backend/src"
-# 框架自身的 WithCode（异常归一化用的 Error:* 通用键），对照框架资源
-Test-KeyReferences "框架 WithCode" `
-    @("framework/components") `
-    ([regex]'WithCode\("([^"]+)"') `
-    (Join-Path $RepoRoot "framework/components/localization/Leistd.Localization.Core/Resources/en.json") { param($r) $r.texts }
 # 前端 transloco.translate('key') 与 'key' | transloco（点号分段键，排除动态拼接）。
 # 必须锚定在 transloco 上下文里：仅凭「带点号的字符串字面量」判定会把权限名等常量表误判成翻译键。
 Test-KeyReferences "前端 translate/pipe" `
@@ -298,6 +360,28 @@ Test-NoHardcodedCjk "后端源码" "template/backend/src" @('.cs') @()
 Write-Host ""
 Write-Host "-- Transloco 插值大括号 --" -ForegroundColor Cyan
 Test-TranslocoInterpolation (Join-Path $RepoRoot "template/frontend/public/i18n/en.json")
+
+# 宿主资源不复制组件译文：同名键会覆盖组件自带的句子，组件改文案时旧句子被静默钉死
+# （docs/framework/development-guide.md「宿主不要复制组件的译文」）。确要改写组件文案的键登记在白名单里并写明原因。
+Write-Host ""
+Write-Host "-- 宿主不复制组件译文 --" -ForegroundColor Cyan
+$hostOverrideAllowed = @(
+    # 补充模板自带的迁移入口（ConnectionStrings:MigrationTarget、DbMigrator --apply）：组件不知道宿主用什么迁移工具
+    'Tenant:DedicatedDatabaseMissing'
+    'Tenant:DedicatedDatabaseNotMigrated'
+    'Tenant:DedicatedDatabaseUnreachable'
+)
+$hostKeys = (Get-Content -Raw -Encoding UTF8 (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") |
+    ConvertFrom-Json).texts.PSObject.Properties.Name
+$copies = 0
+foreach ($dir in $frameworkResources) {
+    $componentKeys = (Get-Content -Raw -Encoding UTF8 (Join-Path $dir.FullName "en.json") | ConvertFrom-Json).texts.PSObject.Properties.Name
+    foreach ($key in ($componentKeys | Where-Object { $hostKeys -ccontains $_ -and $hostOverrideAllowed -cnotcontains $_ })) {
+        $problems.Add("宿主资源重复了 $($dir.Parent.Name) 自带的键 ${key}：删除宿主那条，或登记进 hostOverrideAllowed 并写明原因")
+        $copies++
+    }
+}
+if ($copies -eq 0) { Write-Host "  OK  宿主资源没有复制组件自带的译文。" -ForegroundColor Green }
 
 if ($problems.Count -gt 0) {
     Write-Host ""

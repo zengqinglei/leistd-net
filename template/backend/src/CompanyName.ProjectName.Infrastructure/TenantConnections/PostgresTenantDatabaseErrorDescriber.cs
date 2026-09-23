@@ -68,6 +68,6 @@ internal sealed class PostgresTenantDatabaseErrorDescriber : ITenantDatabaseErro
     }
 
     private static BusinessException Describe(string message, string code)
-        => new BadRequestException(message).WithCode(code);
+        => new BusinessException(code, message);
 }
 #endif

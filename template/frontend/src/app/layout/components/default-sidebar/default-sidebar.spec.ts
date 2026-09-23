@@ -7,7 +7,7 @@ import { DefaultSidebar } from './default-sidebar';
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthorizationService } from '../../../core/services/authorization-service';
-import { PERMISSIONS } from '../../../shared/models/permission';
+import { PERMISSIONS, PLATFORM_ENTRY_PERMISSIONS } from '../../../shared/models/permission';
 import { LayoutService } from '../../services/layout-service';
 
 //#if (IncludeLocalization)
@@ -121,6 +121,24 @@ describe('DefaultSidebar 菜单分组', () => {
 
     expect(groupsOf(sidebar)).toEqual(expected);
     expect(routesOf(sidebar)).toContain('/platform/settings');
+  });
+
+  // 能看到任一平台菜单项的账号都必须进得了 /platform，反之入口权限也不能放进一个看不到任何菜单的空平台：
+  // 少一项，那个岗位的账号菜单为空、还会被重定向走；多一项，进来只看到工作组。
+  it('平台入口权限与平台菜单项一一对应', () => {
+    const everything = Object.values(PERMISSIONS).map((group) => group.default);
+    const allRoutes = routesOf(build({ platform: true, permissions: everything }));
+    TestBed.resetTestingModule();
+
+    expect(routesOf(build({ platform: true, permissions: PLATFORM_ENTRY_PERMISSIONS }))).toEqual(
+      allRoutes,
+    );
+    for (const permission of PLATFORM_ENTRY_PERMISSIONS) {
+      TestBed.resetTestingModule();
+      expect(routesOf(build({ platform: true, permissions: [permission] })).length)
+        .withContext(permission)
+        .toBeGreaterThan(1);
+    }
   });
 
   // 权限不足时整组消失，不留一个空标题——空标题看起来像加载失败。

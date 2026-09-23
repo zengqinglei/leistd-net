@@ -5,7 +5,7 @@ using Xunit;
 namespace Leistd.Tracing.Tests.Core;
 
 /// <summary>
-/// 链路标识以 <see cref="Activity"/> 为唯一身份；显式切换优先。
+/// 链路标识优先使用显式作用域；否则复用当前 <see cref="Activity"/>。
 /// </summary>
 /// <remarks>
 /// 回归点：此前本组件自造一套 AsyncLocal 标识，与 .NET 原生 W3C Trace Context 平行存在，

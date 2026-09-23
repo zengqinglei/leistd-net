@@ -40,12 +40,32 @@ CompanyName.ProjectName/
 
 ### 后端
 
-未配置 `ConnectionStrings:Default` 时使用内存数据库，可直接启动：
+配置分三层：`appsettings.json` 是与环境无关的基线；随仓库提交的 `appsettings.Development.json` 只放非机密的开发配置（内存库名等）；机密与只属于本机的覆盖放 `dotnet user-secrets`，开发环境自动加载、不进仓库。Api 与 `DbMigrator` 共用同一份 user-secrets，设置一次两边都能读。
+
+<!--#if (LocalIdentity)-->
+首次启动前设置超级管理员口令（没有默认值，缺失即启动失败）：
 
 ```bash
-cd backend/src/CompanyName.ProjectName.Api
-dotnet run
+cd backend
+dotnet user-secrets set "DefaultAdmin:Password" "<至少 12 个字符的口令>" --project src/CompanyName.ProjectName.Api
 ```
+
+<!--#endif-->
+不配置连接串时使用内存库，直接启动：
+
+```bash
+cd backend
+dotnet run --project src/CompanyName.ProjectName.Api
+```
+<!--#if (OpenIddictServer)-->
+
+默认配置只监听 HTTP（`http://localhost:5240`），前端的会话登录够用。OIDC 端点（开放应用的授权码流程、资源服务回源）要求 HTTPS，需要时信任本机开发证书并改用 `https` 配置（`https://localhost:7240`）：
+
+```bash
+dotnet dev-certs https --trust
+dotnet run --project src/CompanyName.ProjectName.Api --launch-profile https
+```
+<!--#endif-->
 
 存活与就绪检查地址分别为 `http://localhost:5240/api/health/live` 和 `http://localhost:5240/api/health/ready`。
 
@@ -61,15 +81,17 @@ docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit   # 收件箱在 http://
 邮箱验证默认关闭（`UserRegistration:EnableEmailVerification`）。开启后没有可达的 SMTP 会**发信失败并向调用方报错**，不会静默跳过——注册流程据此撤回已占用的限流槽位。生产环境须覆盖 `Host`/`Port`/`EnableSsl`/`DefaultFromAddress`，`Username`/`Password` 属于凭据，用环境变量或 user-secrets 注入。配置文件是部署基线：宿主管理员可以在「系统设置 → 邮件发送」里在运行期覆盖这些参数（口令加密落库、界面只写不读），并在同一面板发送测试邮件；清除覆盖值即回到配置文件里的值。
 <!--#endif-->
 
-如需 PostgreSQL，在被 Git 忽略的 `backend/src/CompanyName.ProjectName.Api/appsettings.Development.json` 中配置：
+如需 PostgreSQL 与 Redis，用 `deploy/docker-compose.dev.yml` 在本机起依赖（只绑定 127.0.0.1），再把连接串写进 user-secrets；配了连接串就自动改用真实数据库：
 
-```json
-{
-  "ConnectionStrings": {
-    "Default": "Host=localhost;Port=5432;Database=companyname-projectname;Username=postgres;Password=postgres"
-  }
-}
+```bash
+docker compose -f deploy/docker-compose.dev.yml up -d
+cd backend
+dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=companyname-projectname;Username=postgres;Password=postgres" --project src/CompanyName.ProjectName.Api
 ```
+<!--#if (LocalIdentity)-->
+
+API 与 `DbMigrator` 必须共用 Data Protection 密钥环（租户独立库连接串加密存放在控制库里）。本机两边的内容根不同，需要时把密钥目录指向同一处：`dotnet user-secrets set "DataProtection:KeysPath" "<本机目录>" --project src/CompanyName.ProjectName.Api`。
+<!--#endif-->
 
 模板预置基线迁移和独立 `DbMigrator`。API 启动时不自动修改 schema；本地和发布环境都先运行迁移入口，再启动 API。
 
@@ -115,7 +137,7 @@ npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "companyname-projectname"
 开发环境首次启动会创建管理员账号：
 
 - 用户名：`admin`
-- 密码：由部署注入 `DefaultAdmin__Password`（环境变量或 `dotnet user-secrets`）。
+- 密码：本机用 `dotnet user-secrets` 设置（见上文），部署环境注入 `DefaultAdmin__Password`。
   **基础配置里没有可用的默认密码**——缺失、空值或不满足密码策略（至少 12 个字符）都会导致启动失败。
   这是刻意的：开源模板里的默认管理员密码等于公开凭据，而漏配的部署会照常启动、照常能登录。
 

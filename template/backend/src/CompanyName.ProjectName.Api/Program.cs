@@ -102,11 +102,14 @@ try
     Log.Information("Starting web application ...");
     var builder = WebApplication.CreateBuilder(args);
 
+    // 生产以外都校验作用域与构建期依赖：开发、集成测试宿主（Testing）、预发在启动时就暴露注册错误，
+    // 只有生产为启动耗时省掉这一步
+    var validateServiceProvider = !builder.Environment.IsProduction();
     builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory(
         new ServiceProviderOptions
         {
-            ValidateScopes = builder.Environment.IsDevelopment(),
-            ValidateOnBuild = builder.Environment.IsDevelopment()
+            ValidateScopes = validateServiceProvider,
+            ValidateOnBuild = validateServiceProvider
         }));
 
     // 宿主级设置作为优先级最高的配置源（日志级别、发信参数、操作记录保留期，见 HostSettingBindings）：
@@ -158,6 +161,20 @@ try
 #endif
 
 #if (OpenIddictServer)
+    // 组合期读取并校验：下面 AddServer 的回调要到首次解析 OpenIddict 选项时才执行，那时才报错已经晚了。
+    // 默认必须显式提供证书：开发证书生成在运行用户的证书存储里、每台机器各一份，多副本互不认，
+    // 重建容器后已签发的令牌全部失效，只适合本机开发（由 appsettings.Development.json 打开）。
+    var oauthOpts = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
+    if (!oauthOpts.UseDevelopmentCertificates
+        && (string.IsNullOrWhiteSpace(oauthOpts.SigningCertificatePath)
+            || string.IsNullOrWhiteSpace(oauthOpts.EncryptionCertificatePath)))
+    {
+        throw new InvalidOperationException(
+            "OAuth:SigningCertificatePath and OAuth:EncryptionCertificatePath are required " +
+            "(two RSA certificates distinct from the HTTPS certificate: one for signing, one for encryption). " +
+            "OAuth:UseDevelopmentCertificates is intended for local development only.");
+    }
+
     builder.Services.AddOpenIddict()
         .AddCore(options =>
         {
@@ -172,7 +189,6 @@ try
                 .SetEndSessionEndpointUris("/connect/logout");
             options.SetAccessTokenLifetime(TimeSpan.FromMinutes(10));
 
-            var oauthOpts = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
             if (!string.IsNullOrWhiteSpace(oauthOpts.Issuer))
             {
                 options.SetIssuer(new Uri(oauthOpts.Issuer));
@@ -204,20 +220,14 @@ try
             }
             else
             {
-                if (!string.IsNullOrEmpty(oauthOpts.EncryptionCertificatePath))
-                {
-                    options.AddEncryptionCertificate(
-                        X509CertificateLoader.LoadPkcs12FromFile(
-                            oauthOpts.EncryptionCertificatePath,
-                            oauthOpts.EncryptionCertificatePassword));
-                }
-                if (!string.IsNullOrEmpty(oauthOpts.SigningCertificatePath))
-                {
-                    options.AddSigningCertificate(
-                        X509CertificateLoader.LoadPkcs12FromFile(
-                            oauthOpts.SigningCertificatePath,
-                            oauthOpts.SigningCertificatePassword));
-                }
+                options.AddEncryptionCertificate(
+                    X509CertificateLoader.LoadPkcs12FromFile(
+                        oauthOpts.EncryptionCertificatePath!,
+                        oauthOpts.EncryptionCertificatePassword));
+                options.AddSigningCertificate(
+                    X509CertificateLoader.LoadPkcs12FromFile(
+                        oauthOpts.SigningCertificatePath!,
+                        oauthOpts.SigningCertificatePassword));
             }
 
             if (oauthOpts.DisableHttpsRequirement)
@@ -289,7 +299,7 @@ try
     // 集群任务经分布式锁 + 完成水位保证多副本同一时段只跑一次（多副本部署须配置 Redis）
     builder.Services.AddInProcessBackgroundJobs();
 
-    builder.Services.AddGlobalExceptionHandler(builder.Configuration);
+    builder.Services.AddGlobalExceptionHandler(builder.Configuration, ApiExceptionMappings.Configure);
 #if (IncludeLocalization)
     builder.Services.AddJsonLocalization(
         supportedCultures: [.. SettingConstant.Display.SupportedLanguages],
@@ -439,13 +449,12 @@ try
     builder.Services.AddPrefixRealTimeSubscriptions("public:");
 #endif
 
-    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
+    builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
 
 #if (LocalIdentity)
     // 会话 Cookie 的滑动过期与服务端会话的空闲时限是同一个值，只在这里定一次
 #if (OpenIddictServer)
-    var oauthConfig = builder.Configuration.GetSection(OAuthOptions.SectionName).Get<OAuthOptions>() ?? new OAuthOptions();
-    var sessionLifetime = TimeSpan.FromDays(oauthConfig.CookieExpireDays);
+    var sessionLifetime = TimeSpan.FromDays(oauthOpts.CookieExpireDays);
 #else
     var sessionLifetime = TimeSpan.FromDays(7);
 #endif
@@ -549,6 +558,7 @@ try
     });
 
     var requestLogging = app.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
+    app.UseCorrelationId();
     app.UseSerilogRequestLogging(options =>
     {
         options.GetLevel = (httpContext, elapsed, ex) =>
@@ -569,7 +579,11 @@ try
         };
     });
     app.UseGlobalExceptionHandler();
-    app.UseCorrelationId();
+    // 框架只写状态码、不写响应体的失败（生产环境的请求体解析失败、415、未匹配路由、认证质询、限流）
+    // 经问题详情管道补上标准响应体与 traceId。只作用于 API：SPA 页面与静态资源的 404 不改写成 JSON。
+    app.UseWhen(
+        context => context.Request.Path.StartsWithSegments("/api"),
+        api => api.UseStatusCodePages());
     app.MapHealthChecks("/api/health/live", new HealthCheckOptions
     {
         Predicate = registration => registration.Tags.Contains("live")

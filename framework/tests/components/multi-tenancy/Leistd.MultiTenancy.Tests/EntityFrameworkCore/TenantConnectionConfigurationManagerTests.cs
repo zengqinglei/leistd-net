@@ -63,7 +63,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _manager.SetAsync(tenant.Id, Name, connectionString, expectedVersion: null));
         Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
     }
@@ -73,7 +73,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(() => _manager.SetAsync(
+        var error = await Assert.ThrowsAsync<BusinessException>(() => _manager.SetAsync(
             tenant.Id,
             Name,
             new string('x', TenantConnectionConfiguration.MaxConnectionStringLength + 1),
@@ -87,7 +87,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _manager.SetAsync(tenant.Id, Name, "Host=a;=secret-value", expectedVersion: null));
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
@@ -130,7 +130,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         var tenant = await CreateTenantAsync();
 
         // 名字来自管理员输入：400 而不是 500
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _manager.SetAsync(tenant.Id, name, "Host=tenant", expectedVersion: null));
         Assert.Equal(MultiTenancyErrorCodes.ConnectionNameInvalid, error.Code);
     }

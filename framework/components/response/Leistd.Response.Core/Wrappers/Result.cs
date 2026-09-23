@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Leistd.Response.Wrappers;
 
 /// <summary>
@@ -14,6 +16,18 @@ public record Result
 
     /// <summary>面向调用方的消息；成功时通常为 <see langword="null"/>。</summary>
     public string? Message { get; init; }
+
+    /// <summary>失败响应的请求跟踪标识；非 HTTP 场景可为空。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TraceId { get; init; }
+
+    /// <summary>失败响应的稳定字符串业务码；数字 <see cref="Code"/> 仍为信封协议码。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ErrorCode { get; init; }
+
+    /// <summary>可选字段级错误。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Leistd.ExceptionHandling.ErrorItem>? Errors { get; init; }
 
     /// <summary>构造一个成功结果（<c>Code = 0</c>）。</summary>
     /// <param name="message">可选消息。</param>

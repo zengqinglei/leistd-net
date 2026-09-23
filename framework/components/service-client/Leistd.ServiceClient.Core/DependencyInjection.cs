@@ -129,7 +129,8 @@ public static class DependencyInjection
                 client.BaseAddress = new Uri(baseAddress);
             }
 
-            client.Timeout = options.Timeout;
+            // 超时不在这里设：可归类的超时来自宿主叠加的弹性管道（管道内生效），HttpClient.Timeout 保持
+            // .NET 默认值作外层兜底。两者设成同一时长会竞争，外层先到时抛出的是无法归类的取消异常。
         });
 
         // 日志必须位于最外层，才能覆盖认证重试在内的完整调用。

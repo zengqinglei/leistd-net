@@ -223,7 +223,8 @@ public class UserDomainService(
     {
         // 唯一性校验
         if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-            throw new BadRequestException($"用户名 '{username}' 已存在");
+            throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
+                .WithData("Username", username);
 
         // 密码哈希
         var passwordHash = passwordHasher.HashPassword(password);
@@ -352,6 +353,20 @@ builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
 
 - 授权策略名、权限名等**跨处引用的标识符用常量**，禁裸魔法串在多处各写——否则单侧改动漂移会致授权静默失配，且无编译报错。
 - 参见 [API 规范](./api.md) 的权限命名约定。
+
+#### 3.8.1 权限定义与界面一一对应
+
+管理员在权限配置里看到的结构，应与用户在界面上看到的结构一致。这是前后端各自遵守的命名约定，不是代码依赖：两端独立演进、各自测试，不互相读取源码。
+
+| 权限定义 | 对应界面 | 显示名 |
+| --- | --- | --- |
+| 分组（`PermissionConstant.Groups`） | 管理平台的菜单分组 | 与菜单分组标题一致 |
+| 根权限（`App.{模块}`） | 菜单项与页面 | 与菜单项标题一致 |
+| 子权限（`App.{模块}.{动作}`） | 页面上的操作按钮 | 常规动作统一为 Create / Edit / Delete（新建 / 编辑 / 删除），其余与按钮文案一致 |
+
+- 定义里的 `displayName` 写**英文默认文案**，不写词条键：不启用多语言时界面直接展示它。译文按约定键 `Permission:{权限名}`、`PermissionGroup:{分组名}` 写在资源里；英文资源保留同名键（各语言键集合一致），其值必须等于默认文案。
+- 权限是授权定义，可以没有菜单入口（只经接口使用）。但一个权限若只是另一个权限的前提（例如权限树只为授予而读，由「配置权限」守着即可），不单独定义。
+- 后端的 `PermissionCatalogContractTests` 只核对后端自己：默认显示名可读、常规动作措辞统一、词条齐全且英文与默认文案一致。新增模块时权限定义、资源与前端菜单按本表各自改齐。
 
 ### 3.9 运行期可改的配置：设置与 Options 的分工
 
@@ -487,24 +502,19 @@ var apiKeys = await query
 
 ### 6.1 异常类型
 
-使用 `Leistd.ExceptionHandling.Core` 提供的异常类型。**异常类型 → HTTP 状态码的完整映射以 [API 规范](./api.md) §4「异常类型映射」为单一权威来源**（含 `ConflictException`/409 等），此处不重复维护，避免不一致。
+优先使用 .NET 内置异常；仅可预期、用户可恢复的业务规则失败使用 `BusinessException`。HTTP 映射以 [API 规范](./api.md) §4 为单一权威来源。
 
-#### 用哪一族：看代码在不在请求路径上
+#### 用哪一类：看失败语义，不看是否位于请求路径
 
 | 位置 | 用什么 | 为什么 |
 | --- | --- | --- |
-| **请求路径**（Controller、AppService、Domain、Infrastructure 里被请求触发的代码，含 DbContext 解析器一类每请求都会走的组件） | **必须**用 `Leistd.ExceptionHandling.Core` 家族 | 全局处理器只认这一族。其余异常一律被兜底转成 500 + "系统错误"，**原始消息被丢弃**，同时产出 Error 级日志加堆栈 |
+| **Domain / Application 业务规则** | `BusinessException(code, safeMessage)` | 错误码是机器契约和本地化键；默认 400，API 组合根可按码映射 |
+| **Infrastructure 传输/配置/解析失败** | BCL 或专用技术异常 | 未显式映射时对外安全兜底为 500，细节进日志 |
 | **启动期 / 组合期**（`Program.cs`、`Add*Services`、`IValidateOptions`） | BCL 异常（`InvalidOperationException` 等） | 没有 HTTP 响应也没有终端用户，进程就该起不来 |
 | **参数与编程契约**（`ArgumentException`、重复 key、不该发生的状态） | BCL 异常 | 是缺陷不是业务失败，不该被翻译成状态码 |
 | **一次性作业**（DbMigrator 之类控制台入口） | BCL 异常 | 同启动期；同一能力若同时有请求入口，由请求入口转换为 `Leistd.ExceptionHandling.Core` 异常 |
 
-在请求路径上用 BCL 异常的三个副作用（都不会立刻暴露，所以容易漏）：
-
-1. **信息丢失**：客户端拿到的永远是"系统错误"，"这个租户没配连接"与"数据库连不上"无法区分。
-2. **日志级别错位**：兜底走 Error + 堆栈。运营数据缺失这类问题会持续刷 Error，久了告警就没人看。
-3. **重试语义错误**：500 对调用方意味着"可重试"。而配置缺失重试一万次也一样，会让服务间调用的重试策略空转。
-
-选型对照：配置/数据缺失 → `NotFoundException`(404)；状态冲突 → `ConflictException`(409)；上游或 Secret 后端暂时不可达 → `ServiceUnavailableException`(503，语义上可重试)；确属服务端故障 → **显式** `InternalServerException`(500)，别让兜底处理器替你决定。
+不要为 BCL 异常增加 `WithCode`：如果失败确实是业务契约，直接构造 `BusinessException`；如果是技术故障，保留原类型和异常链。
 
 #### 配置错误在启动期失败，不要留到运行期
 
@@ -516,12 +526,14 @@ var apiKeys = await query
 ```csharp
 // 业务规则验证失败
 if (await userRepository.AnyAsync(u => u.Username == username))
-    throw new BadRequestException($"用户名 '{username}' 已存在");
+    throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
+        .WithData("Username", username);
 
 // 资源不存在
 var user = await userRepository.GetByIdAsync(id);
 if (user == null)
-    throw new NotFoundException($"用户 {id} 不存在");
+    throw new BusinessException("User:NotFound", $"User {id} not found.")
+        .WithData("Id", id);
 ```
 
 ### 6.2 日志记录

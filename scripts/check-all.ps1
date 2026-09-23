@@ -55,8 +55,6 @@ $gates = @(
     # 实现只有一处，生成项目拿到的与这里跑的是同一个判据，不会各自漂移。
     @{ Name = "动作码词条规则自检";        Cmd = $pythonCmd; Args = @("template/scripts/check-operation-action-i18n.py", "--self-test") }
     @{ Name = "动作码有句子模板";          Cmd = $pythonCmd; Args = @("template/scripts/check-operation-action-i18n.py") }
-    @{ Name = "错误码闸门规则自检";        Cmd = $pythonCmd; Args = @("scripts/check-error-codes.py", "--self-test") }
-    @{ Name = "业务异常带错误码";          Cmd = $pythonCmd; Args = @("scripts/check-error-codes.py") }
     @{ Name = "模板条件符号";              Cmd = "pwsh"; Args = @("scripts/check-template-symbols.ps1") }
     @{ Name = "条件块规则自检";            Cmd = $pythonCmd; Args = @("scripts/check-template-conditional-blocks.py", "--self-test") }
     @{ Name = "模板条件块结构";            Cmd = $pythonCmd; Args = @("scripts/check-template-conditional-blocks.py") }

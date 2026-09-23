@@ -18,7 +18,7 @@ namespace Leistd.Localization.Tests;
 /// </remarks>
 public class ComponentResourceRegistrationTests
 {
-    // 真实组件包：内嵌 Resources/en.json，带 Error:* 兜底文案
+    // 真实组件包：内嵌 Resources/en.json，带 Title:* 标题词条
     private static readonly Assembly ComponentPackage = typeof(DependencyInjection).Assembly;
     private static readonly Assembly Component = typeof(object).Assembly;
     private static readonly Assembly Host = typeof(ComponentResourceRegistrationTests).Assembly;
@@ -51,9 +51,9 @@ public class ComponentResourceRegistrationTests
         using var provider = services.BuildServiceProvider();
         var texts = provider.GetRequiredService<JsonLocalizationResourceReader>().GetTexts("en");
 
-        Assert.Equal("Host wording wins.", texts["Error:BadRequest"]);
+        Assert.Equal("Host wording wins.", texts["Title:400"]);
         // 宿主没覆盖的键仍然来自组件
-        Assert.Equal("The requested resource was not found.", texts["Error:NotFound"]);
+        Assert.Equal("Internal Server Error", texts["Title:500"]);
     }
 
     [Theory]

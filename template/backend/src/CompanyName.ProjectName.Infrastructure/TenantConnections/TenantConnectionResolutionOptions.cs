@@ -16,7 +16,7 @@ internal sealed class TenantConnectionResolutionOptions
     /// <summary>配置键 <c>ConnectionStrings:Default</c></summary>
     public string? DefaultConnectionString { get; set; }
 
-    /// <summary>配置键 <c>Database:InMemoryName</c>。非空表示刻意使用内存库</summary>
+    /// <summary>配置键 <c>Database:InMemoryName</c>。非空且未配置连接串时使用内存库</summary>
     public string? InMemoryName { get; set; }
 
     /// <summary>是否满足"有一个可用的数据库目标"</summary>

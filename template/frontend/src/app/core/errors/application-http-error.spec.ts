@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
-import { ApplicationHttpError } from './application-http-error';
+import { applicationErrorMessage, ApplicationHttpError } from './application-http-error';
 
 function errorOf(body: unknown, status = 400): ApplicationHttpError {
   return ApplicationHttpError.from(
@@ -19,7 +19,7 @@ describe('ApplicationHttpError', () => {
     expect(error.message).toBe('角色名称只能包含字母、数字和下划线');
   });
 
-  it('业务 422 的 detail 也是概括，同样让位给字段错误', () => {
+  it('显式 422 的 detail 也是概括，同样让位给字段错误', () => {
     const error = errorOf(
       {
         title: '无法处理的实体',
@@ -67,5 +67,40 @@ describe('ApplicationHttpError', () => {
 
     expect(error.message).toBe('角色名称已存在');
     expect(error.code).toBe('Role:NameExists');
+  });
+
+  // 协议层失败只有状态码语义：没有 detail 与业务码，文案取本地化标题
+  it('5xx 保留 traceId 并生成可报告的错误文案', () => {
+    const error = errorOf(
+      {
+        title: '服务器内部错误',
+        status: 500,
+        traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+      },
+      500,
+    );
+
+    expect(error.code).toBeUndefined();
+    expect(error.traceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736');
+    expect(applicationErrorMessage(error)).toBe(
+      '服务器内部错误 (Trace ID: 4bf92f3577b34da6a3ce929d0e0e4736)',
+    );
+  });
+
+  it('可选数字信封中把 errorCode 视为业务错误码', () => {
+    const error = errorOf(
+      {
+        code: 409,
+        errorCode: 'Role:NameExists',
+        message: '角色名称已存在',
+        traceId: 'trace-1',
+      },
+      409,
+    );
+
+    expect(error.status).toBe(409);
+    expect(error.message).toBe('角色名称已存在');
+    expect(error.code).toBe('Role:NameExists');
+    expect(error.traceId).toBe('trace-1');
   });
 });

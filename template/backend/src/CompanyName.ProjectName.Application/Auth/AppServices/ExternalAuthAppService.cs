@@ -1,4 +1,6 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Domain.Auth.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using Leistd.UnitOfWork.Attributes;
 using Leistd.ExceptionHandling;
@@ -141,12 +143,8 @@ internal sealed class ExternalAuthAppService(
     {
         var userId = currentUser.Id!.Value;
         return await userRepository.GetByIdAsync(userId, cancellationToken)
-            ?? throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            ?? throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
     }
 
     private IOAuthProvider GetProvider(string provider)
@@ -154,22 +152,14 @@ internal sealed class ExternalAuthAppService(
         var oauthProvider = oauthProviders.FirstOrDefault(candidate =>
             string.Equals(candidate.Name, provider, StringComparison.OrdinalIgnoreCase));
         if (oauthProvider is null)
-            throw new BadRequestException($"Unsupported external identity provider: {provider}")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:ProviderNotSupported")
-                .WithData("Provider", provider)
-#endif
-                ;
+            throw new BusinessException(ExternalAuthErrorCodes.ProviderNotSupported, $"Unsupported external identity provider: {provider}")
+                .WithData("Provider", provider);
 
         if (oauthProvider.IsAvailable)
             return oauthProvider;
 
-        throw new NotFoundException($"External identity provider {provider} is not configured.")
-#if (IncludeLocalization)
-            .WithCode("ExternalAuth:ProviderNotConfigured")
-            .WithData("Provider", provider)
-#endif
-            ;
+        throw new BusinessException(ExternalAuthErrorCodes.ProviderNotConfigured, $"External identity provider {provider} is not configured.")
+            .WithData("Provider", provider);
     }
 }
 #endif

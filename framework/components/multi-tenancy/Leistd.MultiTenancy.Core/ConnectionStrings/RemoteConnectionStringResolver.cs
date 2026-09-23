@@ -1,8 +1,8 @@
 using Leistd.Data.Connections;
-using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.Exceptions;
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Microsoft.Extensions.Caching.Memory;
@@ -55,7 +55,7 @@ internal sealed class RemoteConnectionStringResolver(
     }
 
     // 单飞的共享解析，不接受任何调用方的取消令牌：发起者取消会连带取消所有搭车者。
-    // 远端调用自身的超时由宿主客户端（HttpClient.Timeout 等）兜住。
+    // 远端调用自身的超时由宿主在客户端上叠加的弹性管道负责，HttpClient.Timeout 只作外层兜底。
     // 写缓存与摘除 inflight 都在这里而不在调用方的 finally：放在调用方侧时，一个调用方取消就会把
     // 仍在飞的条目摘掉，下一个调用方于是重新回源——单飞语义就没了。
     private async Task<string> ResolveSharedAsync(
@@ -86,12 +86,12 @@ internal sealed class RemoteConnectionStringResolver(
         var store = scopedServices.GetRequiredService<ITenantConnectionConfigurationStore>();
         var lookup = await store.FindAsync(tenantId, normalizedName, CancellationToken.None)
             // 租户不存在或已删除。不可通过重试恢复，因此是 404 而不是 503；与本地解析同一判据
-            ?? throw new NotFoundException($"Tenant '{tenantId}' was not found.");
+            ?? throw new TenantNotFoundException(tenantId.ToString());
 
         // 在使用与写缓存之前校验响应租户：错误的响应不能造成跨租户数据访问
         if (lookup.TenantId != tenantId)
         {
-            throw new InternalServerException(
+            throw new InvalidOperationException(
                 $"Tenant connection lookup for '{tenantId}' returned a result for " +
                 $"'{lookup.TenantId}'. Refusing to route a tenant to another tenant's database.");
         }

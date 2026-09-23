@@ -21,7 +21,7 @@ namespace Leistd.ExceptionHandling.Tests;
 
 /// <summary>
 /// 真实 ASP.NET 管道回归：自动 400（[ApiController] 模型校验 → <see cref="DependencyInjection.ConfigureApiValidation"/>
-/// 的 InvalidModelStateResponseFactory，经 MVC AddJsonOptions 序列化）与业务 422（<see cref="BusinessExceptionHandler"/>
+/// 的 InvalidModelStateResponseFactory，经 MVC AddJsonOptions 序列化）与显式验证异常（<see cref="BusinessExceptionHandler"/>
 /// → IProblemDetailsService，经 ConfigureHttpJsonOptions 序列化）走的是**两套独立 JSON 配置**。本用例给两者施加**同一条
 /// 会改名所有属性的自定义命名策略（全大写）**，断言两条响应中 errors 数组内 <see cref="ErrorItem"/> 的属性名一致地变为
 /// FIELD/DETAIL——守卫「两套配置必须统一」这一关键修复不被后续无意拆开，并证明 ErrorItem 未固定 [JsonPropertyName]。
@@ -54,9 +54,7 @@ public class ValidationErrorNamingPipelineTests
                     .ConfigureServices(services =>
                     {
                         services.AddRouting();
-                        services.AddProblemDetails();
-                        services.AddExceptionHandler<BusinessExceptionHandler>();
-                        services.Configure<GlobalExceptionOptions>(o => o.Enabled = true);
+                        services.AddGlobalExceptionHandler(_ => { });
                         if (localizer is not null)
                         {
                             services.AddSingleton(localizer);
@@ -73,11 +71,14 @@ public class ValidationErrorNamingPipelineTests
                     {
                         app.Use(async (context, next) =>
                         {
+                            // 未安装关联 ID 中间件时，自动校验响应仍以 ASP.NET Core 的请求 ID 为准。
+                            context.Response.Headers["X-Test-Request-Id"] = context.TraceIdentifier;
                             if (context.Request.Headers.ContainsKey("X-Test-Activity"))
                             {
                                 using var activity = new Activity("validation-request")
                                     .SetIdFormat(ActivityIdFormat.W3C)
                                     .Start();
+                                context.Response.Headers["X-Test-Activity-Trace-Id"] = activity.TraceId.ToHexString();
                                 await next();
                                 return;
                             }
@@ -93,7 +94,7 @@ public class ValidationErrorNamingPipelineTests
     }
 
     [Fact]
-    public async Task Auto400_and_manual422_use_same_host_naming_policy_and_validation_type()
+    public async Task Automatic_and_explicit_validation_use_same_host_naming_policy_and_validation_type()
     {
         using var host = await StartHostAsync();
         using var client = host.GetTestClient();
@@ -103,17 +104,18 @@ public class ValidationErrorNamingPipelineTests
         Assert.Equal(HttpStatusCode.BadRequest, r400.StatusCode);
         var body400 = await r400.Content.ReadAsStringAsync();
 
-        // 业务 422。
-        var r422 = await client.PostAsync("/probe/manual", content: null);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, r422.StatusCode);
-        var body422 = await r422.Content.ReadAsStringAsync();
+        // 应用边界显式验证失败。
+        var explicitValidation = await client.PostAsync("/probe/manual", content: null);
+        Assert.Equal(HttpStatusCode.BadRequest, explicitValidation.StatusCode);
+        var explicitBody = await explicitValidation.Content.ReadAsStringAsync();
 
         // 关键断言在 errors 数组内每个 ErrorItem 的**属性名**上：两条响应都必须把 Field/Detail 序列化为大写
         // FIELD/DETAIL（跟随宿主命名策略），而不出现小写 field/detail 项键。
         // （注：errors 本身是 ProblemDetails.Extensions 的字典键，按字典键原样写出——不受命名策略影响；顶层
         // type/title/status/detail/instance 由内置 ProblemDetailsJsonConverter 以固定小写写出，同样不受策略影响。
-        // 命名策略只作用于扩展项的**值对象**，这正是这里要证明 400/422 一致、且 ErrorItem 无 [JsonPropertyName] 的点。）
-        foreach (var body in new[] { body400, body422 })
+        // 命名策略只作用于扩展项的**值对象**，这正是这里要证明两条验证路径一致、
+        // 且 ErrorItem 无 [JsonPropertyName] 的点。）
+        foreach (var body in new[] { body400, explicitBody })
         {
             Assert.Contains("\"FIELD\":", body);
             Assert.Contains("\"DETAIL\":", body);
@@ -121,13 +123,16 @@ public class ValidationErrorNamingPipelineTests
             Assert.DoesNotContain("\"field\":", body);
         }
 
-        // 校验 wire contract：400 与 422 必须携带同一个稳定校验 problem type（两条校验路径统一的第二重证据）。
+        // 校验 wire contract：两条验证路径必须携带同一个稳定 problem type。
         Assert.Equal(ProblemTypes.ValidationError, ReadType(body400));
-        Assert.Equal(ProblemTypes.ValidationError, ReadType(body422));
+        Assert.Equal(ProblemTypes.ValidationError, ReadType(explicitBody));
+        using var automatic = JsonDocument.Parse(body400);
+        // 输入校验是协议层失败：字段错误落在 errors 里，不合成业务码
+        Assert.False(automatic.RootElement.TryGetProperty("code", out _));
     }
 
     // 字段名要与请求体的 JSON 契约同名，前端才能把错误落回对应的输入框。
-    // 自动 400 原本写出 C# 属性名（Name），而业务 422 的约定与 JSON 契约都是 camelCase（name）——
+    // 自动 400 原本写出 C# 属性名（Name），而显式验证的约定与 JSON 契约都是 camelCase（name）——
     // 同一个字段在两条路径上叫法不同，调用方只能靠大小写不敏感去猜。
     // 用全大写策略断言：跟随的是宿主策略，而不是写死了某一种命名。
     [Fact]
@@ -139,7 +144,28 @@ public class ValidationErrorNamingPipelineTests
         Assert.Equal(["DISPLAYNAME"], await ReadFieldsAsync(client, "/probe/auto-properties"));
     }
 
-    // 两条校验路径的标题同一取法：业务 422 按 Title:{状态码} 本地化，自动 400 原本写死英文。
+    // 读不成 JSON 的请求体只报"哪个字段读不成"，不回显解析器的异常消息（行号、字节位置）
+    [Fact]
+    public async Task Auto400_for_malformed_json_does_not_echo_parser_details()
+    {
+        using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+
+        var response = await client.PostAsync(
+            "/probe/auto",
+            new StringContent("""{"displayName":""", System.Text.Encoding.UTF8, "application/json"));
+        var raw = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(raw);
+        // 每条字段错误都有可展示的文案，读不成 JSON 的那条回落到通用句而不是空串
+        Assert.All(document.RootElement.GetProperty("errors").EnumerateArray(), error =>
+            Assert.False(string.IsNullOrWhiteSpace(error.GetProperty("DETAIL").GetString())));
+        Assert.DoesNotContain("BytePositionInLine", raw, StringComparison.Ordinal);
+        Assert.DoesNotContain("LineNumber", raw, StringComparison.Ordinal);
+    }
+
+    // 两条校验路径的标题同一取法：显式验证按 Title:{状态码} 本地化，自动 400 原本写死英文。
     [Fact]
     public async Task Auto400_title_is_localized_the_same_way_as_business_errors()
     {
@@ -189,7 +215,7 @@ public class ValidationErrorNamingPipelineTests
     }
 
     [Fact]
-    public async Task Auto400_emits_the_w3c_trace_id_without_span_metadata()
+    public async Task Auto400_uses_the_request_id_without_correlation_middleware_even_with_an_activity()
     {
         using var host = await StartHostAsync();
         using var client = host.GetTestClient();
@@ -199,9 +225,9 @@ public class ValidationErrorNamingPipelineTests
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var traceId = document.RootElement.GetProperty("traceId").GetString();
 
-        Assert.NotNull(traceId);
-        Assert.Equal(32, traceId.Length);
-        Assert.DoesNotContain('-', traceId);
+        Assert.False(string.IsNullOrWhiteSpace(traceId));
+        Assert.Equal(response.Headers.GetValues("X-Test-Request-Id").Single(), traceId);
+        Assert.NotEqual(response.Headers.GetValues("X-Test-Activity-Trace-Id").Single(), traceId);
     }
 
     private static string? ReadType(string body)
@@ -225,9 +251,10 @@ public sealed class ProbeController : ControllerBase
     [HttpPost("auto-properties")]
     public IActionResult AutoProperties([FromBody] ProbePropertyInput input) => Ok();
 
-    // 业务 422：抛 UnprocessableEntityException → 全局 BusinessExceptionHandler 产出 errors。
+    // 显式验证：标准 ValidationException 由全局处理器产出 errors。
     [HttpPost("manual")]
-    public IActionResult Manual() => throw new UnprocessableEntityException("phone", "invalid phone");
+    public IActionResult Manual() => throw new ValidationException(
+        new ValidationResult("invalid phone", ["phone"]), null, null);
 }
 
 public sealed record ProbeInput([Required] string Name);

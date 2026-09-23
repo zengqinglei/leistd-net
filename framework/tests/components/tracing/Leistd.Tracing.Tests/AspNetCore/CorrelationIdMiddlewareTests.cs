@@ -102,6 +102,16 @@ public class CorrelationIdMiddlewareTests : IAsyncLifetime
         Assert.Equal("0af7651916cd43dd8448eb211c80319c", correlation);
     }
 
+    [Fact]
+    public async Task A_custom_inbound_id_is_preserved()
+    {
+        var (correlation, traceIdentifier, _) =
+            await CallAsync("request-ABC_123");
+
+        Assert.Equal("request-ABC_123", correlation);
+        Assert.Equal(correlation, traceIdentifier);
+    }
+
     [Theory]
     [InlineData("has space")]
     [InlineData("has\nnewline")]          // 日志注入
@@ -130,9 +140,8 @@ public class CorrelationIdMiddlewareTests : IAsyncLifetime
     [Fact]
     public async Task The_resolved_id_is_written_back_to_TraceIdentifier()
     {
-        // 全局异常处理器按 Activity.TraceId ?? TraceIdentifier 取 traceId，
-        // 未接入 OpenTelemetry 时靠这条对齐让两边给出同一个值
-        var (correlation, traceIdentifier, _) = await CallAsync("0af7651916cd43dd8448eb211c80319c");
+        // 异常响应优先读取中间件选定的 TraceIdentifier，不要求它是 W3C 格式。
+        var (correlation, traceIdentifier, _) = await CallAsync("request-ABC_123");
 
         Assert.Equal(correlation, traceIdentifier);
     }

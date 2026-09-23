@@ -13,19 +13,25 @@ namespace Leistd.Settings.Exceptions;
 /// <remarks>
 /// 由写入方校验设置定义允许的层级。错误码为 <see cref="SettingErrorCodes.ScopeNotAllowed"/>。
 /// </remarks>
-public class SettingScopeNotAllowedException : BadRequestException
+public class SettingScopeNotAllowedException : BusinessException
 {
     /// <summary>以设置名与层级构造。</summary>
     /// <param name="settingName">设置名。</param>
     /// <param name="scope">被拒绝的层级。</param>
     /// <param name="allowed">定义允许的层级。</param>
-    public SettingScopeNotAllowedException(string settingName, SettingScopes scope, SettingScopes allowed)
-        : base($"Setting '{settingName}' cannot be written at scope '{scope}'; it allows '{allowed}'.")
+    /// <param name="displayName">给用户看的设置显示名，填入提示的 <c>{Name}</c>；缺省时用设置名。</param>
+    public SettingScopeNotAllowedException(
+        string settingName,
+        SettingScopes scope,
+        SettingScopes allowed,
+        string? displayName = null)
+        : base(SettingErrorCodes.ScopeNotAllowed,
+            $"Setting '{displayName ?? settingName}' cannot be written at scope '{scope}'; it allows '{allowed}'.")
     {
         SettingName = settingName;
         Scope = scope;
         Allowed = allowed;
-        WithCode(SettingErrorCodes.ScopeNotAllowed).WithData("Name", settingName);
+        WithData("Name", displayName ?? settingName);
     }
 
     /// <summary>设置名。</summary>

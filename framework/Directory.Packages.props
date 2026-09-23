@@ -60,6 +60,7 @@
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
     <!-- 官方时间替身：FakeTimeProvider 覆盖 Advance / 时区 / 夏令时，取代各测试项目手写的 ManualTimeProvider -->
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
     <!-- 官方日志替身：FakeLogger 让"日志被写出"成为可断言行为（静默降级路径需要它） -->
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.Testing" Version="10.9.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />

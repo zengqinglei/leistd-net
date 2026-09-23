@@ -9,6 +9,8 @@ using Leistd.Authorization.Grants;
 using Leistd.Authorization.Management;
 using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Abstractions;
+using Leistd.Authorization.Resource.Errors;
+using Leistd.Localization;
 
 namespace Leistd.Authorization.Resource;
 
@@ -34,6 +36,7 @@ public static class DependencyInjection
     public static IServiceCollection AddResourceAuthorizationCore(this IServiceCollection services)
     {
         services.TryAddScoped<IResourceAuthorizationService, DefaultResourceAuthorizationService>();
+        services.AddJsonLocalizationResources(typeof(ResourceAuthorizationErrorCodes).Assembly);
         return services;
     }
 

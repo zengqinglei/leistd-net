@@ -99,9 +99,9 @@ public sealed class EmailSettingsTests(ProjectWebApplicationFactory factory) : I
         {
             using var response = await admin.Client.PostAsJsonAsync("/api/v1/settings/email/test", new { To = "someone@example.test" });
 
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            Assert.Equal(ExpectedErrorCode.Of("Setting:TestEmailFailed", "Error:BadRequest"), body.RootElement.GetProperty("code").GetString());
+            Assert.Equal("AppSetting:TestEmailFailed", body.RootElement.GetProperty("code").GetString());
         }
         finally
         {

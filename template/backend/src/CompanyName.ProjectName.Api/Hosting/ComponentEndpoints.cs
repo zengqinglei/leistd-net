@@ -52,8 +52,8 @@ public static class ComponentEndpoints
             .MapPermissionManagement(options =>
             {
                 options.CurrentPolicy = ApiPolicies.CurrentUser;
-                // 「任一满足」：能配置角色权限必然蕴含能读权限目录，否则会有"有配置权限却打不开界面"的状态
-                options.DefinitionsPolicy = PermissionConstant.Permissions.ReadPolicy;
+                // 权限树只为授予而读，能配置角色权限的人才需要它；不另设「查看权限目录」权限
+                options.DefinitionsPolicy = PermissionConstant.Roles.ManagePermissions;
                 options.GrantPolicies[PermissionGrantProviderNames.Role] = PermissionConstant.Roles.ManagePermissions;
             })
 #if (LocalIdentity)

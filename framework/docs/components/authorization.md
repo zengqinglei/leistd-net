@@ -37,6 +37,13 @@ builder.Services.AddScoped<IPermissionSubjectProvider, CurrentPermissionSubjectP
 
 `AddPermissionAuthorizationCore()` 注册定义管理器、检查器、管理用例与首次授予（`configure` 给显示名翻译资源）。`AddPermissionAuthorization()` 在此基础上接入 ASP.NET Core 策略管道。`AddAuthorizationEfCore<TDbContext>()` 注册授予 Store 与 Manager。
 
+使用全局异常处理的 HTTP 宿主，还需在其选项回调中显式组合本组件的非默认状态；只安装或注册授权服务不会修改异常映射：
+
+```csharp
+builder.Services.AddGlobalExceptionHandler(options =>
+    AuthorizationExceptionMappings.Configure(options));
+```
+
 EF Core 宿主还需映射表：
 
 ```csharp
@@ -57,7 +64,8 @@ app.MapGroup("/api/v1/permissions").MapPermissionManagement(options =>
 {
     // 读自己已获授权
     options.CurrentPolicy = "App.CurrentUser";
-    options.DefinitionsPolicy = "Orders.Permissions|Orders.Roles.ManagePermissions";
+    // 权限树只为授予而读：能配置角色权限的人才需要它，不另设「查看权限目录」权限
+    options.DefinitionsPolicy = "Orders.Roles.ManagePermissions";
     options.GrantPolicies[PermissionGrantProviderNames.Role] = "Orders.Roles.ManagePermissions";
 });
 ```
@@ -175,9 +183,12 @@ await grantSeeder.SeedAllAsync(PermissionGrantProviderNames.Role, adminRoleId, M
 | `IPermissionGrantSeeder.SeedAllAsync(providerName, providerKey, side, ct)` | 从未写过授予时授予某侧别上的全部可用权限 |
 | `PermissionGrantsReplacedEvent` | 管理用例整体替换授予后发布 |
 | `PermissionErrorCodes` | 组件错误码，默认中英译文随包分发 |
+| `AuthorizationExceptionMappings.Configure(options)` | AspNetCore 包：由宿主显式登记主体不存在 404、授予冲突 409、快照不可用 503；宿主随后可覆盖 |
 | `MapPermissionManagement(configure)` | AspNetCore 包：`GET /current`、`GET /definitions`、按主体类型的 `GET/PUT /grants/{roles\|users}/{providerKey}`；`CurrentPolicy`、`DefinitionsPolicy` 必填（组件不套宿主默认策略），`GrantPolicies` 决定开放哪些主体类型 |
 
-| 异常 | HTTP | 含义 |
+下表由 ASP.NET Core 适配包的显式映射方法登记；Core 异常不直接决定 HTTP，未显式映射的业务异常默认 400。读取快照失败的稳定码为 `PermissionErrorCodes.SnapshotUnavailable`。
+
+| 异常 | 默认适配 HTTP | 含义 |
 | --- | --- | --- |
 | `UndefinedPermissionException` | 400 | 尝试授予未定义或未启用的权限（`Permission:UndefinedPermission`） |
 | `PermissionGrantConcurrencyException` | 409 | 保存基于过期版本（`Permission:ConcurrencyConflict`） |
@@ -190,7 +201,7 @@ await grantSeeder.SeedAllAsync(PermissionGrantProviderNames.Role, adminRoleId, M
 - 用户与角色授予的读取为常数数量的数据库往返，不按角色或权限逐条查询。
 - `SubjectPermissionGrants.VersionToken` 组合用户版本与按 key 排序的角色版本，可用于判断客户端权限缓存是否过期。
 - **管理用例与检查器同一判据**：定义树、授予状态与当前有效权限都只含当前侧别上可用（已定义、自身与祖先启用、侧别匹配）的权限；子节点同样过滤，整组都不可用时不下发空分组。超级管理员的当前权限是全部可用权限，版本标记固定为 `super-admin`。
-- 管理用例不查权限（交给端点策略）；主体不存在返回 404（`Permission:SubjectNotFound`），单次替换超过 500 项返回 422。**读自己的权限（`GET current`）时，当前身份不是权限主体不算错误，返回空集合**——端点挂着授权策略，走到用例的调用方必然已认证，回 401 是在说假话，客户端会据此重新登录、再问、再拿到 401。双 realm 部署（一套身份走 RBAC、另一套不走）按设计就会出现这种调用方。空集合意味着任何权限判定都不通过，拒绝效果与报错一致。显示名以定义里的 `DisplayName` 为词条键查 `LocalizationResource`，查不到回落到权限名。
+- 管理用例不查权限（交给端点策略）；主体不存在返回 404（`Permission:SubjectNotFound`），单次替换超过 500 项按输入校验返回 400。**读自己的权限（`GET current`）时，当前身份不是权限主体不算错误，返回空集合**——端点挂着授权策略，走到用例的调用方必然已认证，回 401 是在说假话，客户端会据此重新登录、再问、再拿到 401。双 realm 部署（一套身份走 RBAC、另一套不走）按设计就会出现这种调用方。空集合意味着任何权限判定都不通过，拒绝效果与报错一致。显示名按约定键查 `LocalizationResource`：权限为 `Permission:{权限名}`，分组为 `PermissionGroup:{组名}`；查不到用定义里的 `DisplayName` 作为默认文案，再没有才用名称。因此定义里写可读的英文默认文案，不写词条键——不启用本地化的宿主看到的就是它。
 - 首次授予带期望版本 0 写入，并发的第二次视为已播种。
 
 ## 注意事项

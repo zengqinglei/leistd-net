@@ -2,6 +2,8 @@
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 #endif
+using CompanyName.ProjectName.Domain.Shared.Security.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
@@ -212,23 +214,15 @@ public class UserDomainService(
         // 检查用户名唯一性
         if (!await IsUsernameAvailableAsync(username, cancellationToken))
         {
-            throw new BadRequestException($"Username '{username}' already exists.")
-#if (IncludeLocalization)
-                .WithCode("User:UsernameTaken")
-                .WithData("Username", username)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.UsernameTaken, $"Username '{username}' already exists.")
+                .WithData("Username", username);
         }
 
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(email, cancellationToken))
         {
-            throw new BadRequestException($"Email '{email}' is already in use.")
-#if (IncludeLocalization)
-                .WithCode("User:EmailTaken")
-                .WithData("Email", email)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         // 创建用户
@@ -255,23 +249,15 @@ public class UserDomainService(
         // 检查用户名唯一性
         if (!await IsUsernameAvailableAsync(user.Id, username, cancellationToken))
         {
-            throw new BadRequestException($"Username '{username}' already exists.")
-#if (IncludeLocalization)
-                .WithCode("User:UsernameTaken")
-                .WithData("Username", username)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.UsernameTaken, $"Username '{username}' already exists.")
+                .WithData("Username", username);
         }
 
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(user.Id, email, cancellationToken))
         {
-            throw new BadRequestException($"Email '{email}' is already in use.")
-#if (IncludeLocalization)
-                .WithCode("User:EmailTaken")
-                .WithData("Email", email)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         user.UpdateProfile(username, email, displayName, phoneNumber);
@@ -289,19 +275,13 @@ public class UserDomainService(
     {
         if (user.PasswordHash == null)
         {
-            throw new BadRequestException("The current account has no local password set and cannot change the password.")
-#if (IncludeLocalization)
-                .WithCode("Security:LocalPasswordNotSet")
-#endif
+            throw new BusinessException(SecurityErrorCodes.LocalPasswordNotSet, "The current account has no local password set and cannot change the password.")
                 ;
         }
 
         if (!passwordHasher.VerifyPassword(user.PasswordHash, currentPassword))
         {
-            throw new BadRequestException("The current password is incorrect.")
-#if (IncludeLocalization)
-                .WithCode("Security:CurrentPasswordIncorrect")
-#endif
+            throw new BusinessException(SecurityErrorCodes.CurrentPasswordIncorrect, "The current password is incorrect.")
                 ;
         }
 

@@ -1054,7 +1054,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // 抢先启用：租户内还没有任何用户，被业务规则挡住
         var activate = await racer.Client.PutAsJsonAsync(
             $"/api/v1/tenants/{tenantId}/activation", new { IsActive = true });
-        Assert.Equal(HttpStatusCode.BadRequest, activate.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, activate.StatusCode);
 
         Assert.Equal(
             HttpStatusCode.NotFound,

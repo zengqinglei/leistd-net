@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 开发环境的机密（管理员密码、本机数据库口令）存 user-secrets；与 DbMigrator 共用同一份，设置一次两边都能读 -->
+    <UserSecretsId>7f3c2a1e-4b5d-4e6f-9a8b-0c1d2e3f4a5b</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -46,6 +48,7 @@
   <ItemGroup>
     <PackageReference Include="Leistd.Data" />
     <PackageReference Include="Leistd.ExceptionHandling.AspNetCore" />
+    <PackageReference Include="Leistd.ServiceClient.Core" />
 <!--#if (IncludeLocalization)-->
     <PackageReference Include="Leistd.Localization.AspNetCore" />
 <!--#endif-->

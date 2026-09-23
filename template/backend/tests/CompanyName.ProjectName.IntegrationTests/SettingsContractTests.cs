@@ -254,7 +254,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
 
         var rejected = await WriteAsync(
             admin.Client, SettingConstant.Registration.EnableEmailVerification, "true");
-        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
 
         // 关闭仍然允许：没有密钥的部署本来就不需要它，不能连关都关不掉
         var accepted = await WriteAsync(

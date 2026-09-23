@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Errors;
@@ -17,6 +18,7 @@ using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -104,8 +106,8 @@ public sealed class PermissionManagementTests
     {
         var service = Build();
 
-        var read = await Assert.ThrowsAsync<NotFoundException>(() => service.GetGrantsAsync(PermissionGrantProviderNames.Role, "ghost"));
-        var write = await Assert.ThrowsAsync<NotFoundException>(() => service.ReplaceGrantsAsync(
+        var read = await Assert.ThrowsAsync<BusinessException>(() => service.GetGrantsAsync(PermissionGrantProviderNames.Role, "ghost"));
+        var write = await Assert.ThrowsAsync<BusinessException>(() => service.ReplaceGrantsAsync(
             PermissionGrantProviderNames.Role, "ghost", new ReplacePermissionGrantsInputDto { PermissionNames = [BothSides] }));
 
         Assert.Equal(PermissionErrorCodes.SubjectNotFound, read.Code);
@@ -148,10 +150,10 @@ public sealed class PermissionManagementTests
             PermissionNames = [.. Enumerable.Range(0, ReplacePermissionGrantsInputDto.MaximumPermissionCount + 1).Select(i => $"P{i}")]
         };
 
-        var error = await Assert.ThrowsAsync<UnprocessableEntityException>(
+        var error = await Assert.ThrowsAsync<ValidationException>(
             () => Build().ReplaceGrantsAsync(PermissionGrantProviderNames.Role, RoleKey, input));
 
-        Assert.Equal("permissionNames", Assert.Single(error.ValidationErrors).Field);
+        Assert.Contains(nameof(input.PermissionNames), error.ValidationResult.MemberNames);
     }
 
     [Fact]
@@ -176,14 +178,53 @@ public sealed class PermissionManagementTests
         Assert.Equal("App.A, App.B", error.LocalizationData["Names"]);
     }
 
-    private IPermissionManagementService Build(Guid? tenantId = null, PermissionSubject? subject = null)
-        => Services(tenantId, subject).GetRequiredService<IPermissionManagementService>();
+    // 显示名按约定键查词条：权限 Permission:{名}、分组 PermissionGroup:{名}；定义里的 DisplayName 是默认文案
+    [Fact]
+    public async Task Display_names_are_translated_by_convention()
+    {
+        var service = Build(localized: new Dictionary<string, string>
+        {
+            ["PermissionGroup:App"] = "应用",
+            ["Permission:App.Orders"] = "订单管理",
+        });
 
-    private IServiceProvider Services(Guid? tenantId = null, PermissionSubject? subject = null)
+        var group = Assert.Single(await service.GetDefinitionsAsync(), g => g.Name == "App");
+
+        Assert.Equal("应用", group.DisplayName);
+        var orders = Assert.Single(group.Permissions);
+        Assert.Equal("订单管理", orders.DisplayName);
+        // 缺词条：用定义里的默认文案，而不是把默认文案当键去查、查不到再露出技术名
+        Assert.Equal("Read orders", Assert.Single(orders.Children).DisplayName);
+    }
+
+    // 不启用本地化的宿主看到的是默认文案；没写默认文案才回落到名称
+    [Fact]
+    public async Task Without_localization_the_default_text_is_shown()
+    {
+        var definitions = await Build().GetDefinitionsAsync();
+
+        var group = Assert.Single(definitions, g => g.Name == "App");
+        Assert.Equal("Application", group.DisplayName);
+        Assert.Equal(BothSides, Assert.Single(group.Permissions).DisplayName);
+        Assert.Equal("Read orders", Assert.Single(group.Permissions).Children.Single().DisplayName);
+    }
+
+    private IPermissionManagementService Build(
+        Guid? tenantId = null,
+        PermissionSubject? subject = null,
+        Dictionary<string, string>? localized = null)
+        => Services(tenantId, subject, localized).GetRequiredService<IPermissionManagementService>();
+
+    private IServiceProvider Services(
+        Guid? tenantId = null,
+        PermissionSubject? subject = null,
+        Dictionary<string, string>? localized = null)
         => new ServiceCollection()
             .AddSingleton<ILoggerFactory, NullLoggerFactory>()
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
-            .AddPermissionAuthorizationCore()
+            .AddPermissionAuthorizationCore(options =>
+                options.LocalizationResource = localized is null ? null : typeof(PermissionManagementTests))
+            .AddSingleton<IStringLocalizerFactory>(new DictionaryLocalizerFactory(localized ?? []))
             .AddSingleton<IPermissionDefinitionProvider, Definitions>()
             .AddSingleton<IPermissionGrantStore>(_grants)
             .AddSingleton<IPermissionGrantManager>(_grants)
@@ -198,8 +239,8 @@ public sealed class PermissionManagementTests
         public void Define(IPermissionDefinitionContext context)
         {
             context.GetOrAddGroup("System").AddPermission(HostOnly, MultiTenancySides.Host);
-            var app = context.GetOrAddGroup("App");
-            app.AddPermission(BothSides, MultiTenancySides.Both).AddChild(BothSidesChild);
+            var app = context.GetOrAddGroup("App", "Application");
+            app.AddPermission(BothSides, MultiTenancySides.Both).AddChild(BothSidesChild, "Read orders");
             app.AddPermission(Disabled, MultiTenancySides.Both).IsEnabled = false;
         }
     }
@@ -279,5 +320,22 @@ public sealed class PermissionManagementTests
             Published.Add(@event);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class DictionaryLocalizerFactory(Dictionary<string, string> texts) : IStringLocalizerFactory
+    {
+        public IStringLocalizer Create(Type resourceSource) => new DictionaryLocalizer(texts);
+
+        public IStringLocalizer Create(string baseName, string location) => new DictionaryLocalizer(texts);
+    }
+
+    private sealed class DictionaryLocalizer(Dictionary<string, string> texts) : IStringLocalizer
+    {
+        public LocalizedString this[string name]
+            => texts.TryGetValue(name, out var value) ? new(name, value) : new(name, name, resourceNotFound: true);
+
+        public LocalizedString this[string name, params object[] arguments] => this[name];
+
+        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) => [];
     }
 }

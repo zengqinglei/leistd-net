@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Leistd.ExceptionHandling.Constants;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Queries;
@@ -123,7 +122,7 @@ public sealed class DeniedOperationRecordingTests
         await context.RecordDeniedOperationAsync();
 
         var written = Assert.Single(store.Written);
-        Assert.Equal(GenericErrorCodes.ForStatus(StatusCodes.Status403Forbidden), written.FailureCode);
+        Assert.Equal("Error:Forbidden", written.FailureCode);
         Assert.Null(written.FailureDetail);
     }
 

@@ -23,7 +23,7 @@ const SUPPORTED_LANGUAGES = ['en', 'zh-CN'];
 function requireSubjectId(): string {
   const subjectId = getCurrentUser() && getMockSessionSubjectId();
   if (!subjectId) {
-    throw new MockException(401, { code: 'Error:Unauthorized', message: 'Not authenticated' });
+    throw new MockException(401, { message: 'Not authenticated' });
   }
   return subjectId;
 }
@@ -34,7 +34,7 @@ function requireDefinition(name: string) {
   const definition = SETTING_DEFINITIONS.find((s) => s.name === name);
   if (!definition) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
+      code: 'Setting:NotAvailable',
       message: `Setting '${name}' is not available.`,
     });
   }
@@ -49,7 +49,7 @@ function assertValidValue(name: string, value: string | null): void {
 
   if (value.length === 0) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
+      code: 'Setting:EmptyValueRejected',
       message: `An empty value is not accepted for '${name}'. Send null to clear the override.`,
     });
   }
@@ -57,7 +57,7 @@ function assertValidValue(name: string, value: string | null): void {
   //#if (IncludeLocalization)
   if (name === 'Display.Language' && !SUPPORTED_LANGUAGES.includes(value)) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
+      code: 'Setting:ValueNotAllowed',
       message: `'${value}' is not a supported language.`,
     });
   }
@@ -69,7 +69,7 @@ function assertValidValue(name: string, value: string | null): void {
       new Intl.DateTimeFormat('en-CA', { timeZone: value });
     } catch {
       throw new MockException(400, {
-        code: 'Error:BadRequest',
+        code: 'AppSetting:TimeZoneInvalid',
         message: `'${value}' is not a valid IANA time zone id.`,
       });
     }
@@ -79,7 +79,7 @@ function assertValidValue(name: string, value: string | null): void {
 function readBody(req: MockRequest): { name: string; value: string | null } {
   const { name, value } = (req.body ?? {}) as { name?: string; value?: string | null };
   if (typeof name !== 'string') {
-    throw new MockException(400, { code: 'Error:BadRequest', message: 'name is required.' });
+    throw new MockException(400, { message: 'name is required.' });
   }
   return { name, value: value ?? null };
 }

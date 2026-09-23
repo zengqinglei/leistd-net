@@ -1,4 +1,5 @@
 using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.Exceptions;
 using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.ConnectionResolution;
@@ -56,7 +57,7 @@ public sealed class RemoteResolutionTests : IDisposable
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Lookup = (id, _) => ScriptedRemoteSource.RegisteredButMissing(id);
 
-        var error = await Assert.ThrowsAsync<InternalServerException>(() => _host.ResolveAsync("Crm"));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _host.ResolveAsync("Crm"));
 
         Assert.Contains("Crm", error.Message, StringComparison.Ordinal);
     }
@@ -68,7 +69,7 @@ public sealed class RemoteResolutionTests : IDisposable
         _host.Tenant.Id = Guid.NewGuid();
         _host.Source.Lookup = (_, _) => null;
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _host.ResolveAsync());
+        await Assert.ThrowsAsync<TenantNotFoundException>(() => _host.ResolveAsync());
     }
 
     // 错误的响应不能造成跨租户数据访问：校验在使用与写缓存之前；拒绝消息不带出对方的连接串
@@ -79,8 +80,8 @@ public sealed class RemoteResolutionTests : IDisposable
         var other = Guid.NewGuid();
         _host.Source.Lookup = (_, name) => ScriptedRemoteSource.Hit(other, name, "Data Source=other;Password=other-secret");
 
-        var error = await Assert.ThrowsAsync<InternalServerException>(() => _host.ResolveAsync());
-        await Assert.ThrowsAsync<InternalServerException>(() => _host.ResolveAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _host.ResolveAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _host.ResolveAsync());
 
         Assert.Equal(2, _host.Source.RuntimeCalls);
         Assert.DoesNotContain("other-secret", error.ToString());

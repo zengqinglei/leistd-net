@@ -26,9 +26,9 @@ public sealed class CorrelationIdOptionsTests
         var middleware = CreateMiddleware(monitor);
         var provider = new CorrelationIdProvider();
 
-        var first = ContextWithHeader("first-id");
+        var first = ContextWithHeader("11111111111111111111111111111111");
         await middleware.InvokeAsync(first, provider);
-        Assert.Equal("first-id", first.TraceIdentifier);
+        Assert.Equal("11111111111111111111111111111111", first.TraceIdentifier);
 
         monitor.Set(new CorrelationIdOptions { Enabled = false });
         var second = ContextWithHeader("second-id");
@@ -37,9 +37,9 @@ public sealed class CorrelationIdOptionsTests
         Assert.Equal("unchanged", second.TraceIdentifier);
 
         monitor.Set(new CorrelationIdOptions { Enabled = true });
-        var third = ContextWithHeader("third-id");
+        var third = ContextWithHeader("33333333333333333333333333333333");
         await middleware.InvokeAsync(third, provider);
-        Assert.Equal("third-id", third.TraceIdentifier);
+        Assert.Equal("33333333333333333333333333333333", third.TraceIdentifier);
     }
 
     [Fact]
@@ -119,9 +119,9 @@ public sealed class CorrelationIdOptionsTests
         using var client = host.GetTestClient();
 
         using var firstRequest = new HttpRequestMessage(HttpMethod.Get, "/");
-        firstRequest.Headers.Add("X-Correlation-Id", "first-id");
+        firstRequest.Headers.Add("X-Correlation-Id", "11111111111111111111111111111111");
         using var first = await client.SendAsync(firstRequest);
-        Assert.Equal("first-id", first.Headers.GetValues("X-Correlation-Id").Single());
+        Assert.Equal("11111111111111111111111111111111", first.Headers.GetValues("X-Correlation-Id").Single());
 
         monitor.Set(new CorrelationIdOptions { IncludeInResponseHeaders = false });
         using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/");

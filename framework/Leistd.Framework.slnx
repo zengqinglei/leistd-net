@@ -19,6 +19,7 @@
     <Project Path="components/authorization-data-scope/Leistd.Authorization.DataScope.Core/Leistd.Authorization.DataScope.Core.csproj" />
   </Folder>
   <Folder Name="/components/authorization-resource/">
+    <Project Path="components/authorization-resource/Leistd.Authorization.Resource.AspNetCore/Leistd.Authorization.Resource.AspNetCore.csproj" />
     <Project Path="components/authorization-resource/Leistd.Authorization.Resource.Core/Leistd.Authorization.Resource.Core.csproj" />
     <Project Path="components/authorization-resource/Leistd.Authorization.Resource.EntityFrameworkCore/Leistd.Authorization.Resource.EntityFrameworkCore.csproj" />
   </Folder>

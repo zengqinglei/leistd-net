@@ -80,7 +80,7 @@ public record ReplacePermissionGrantsInputDto
     /// <summary>单次替换的权限数上限。</summary>
     public const int MaximumPermissionCount = 500;
 
-    /// <summary>期望的当前版本；与服务端不一致时返回 409，避免两个管理员同时保存时后写覆盖前写。</summary>
+    /// <summary>期望的当前版本；与存储版本不一致时拒绝保存，避免两个管理员同时操作时后写覆盖前写。</summary>
     public long ExpectedVersion { get; init; }
 
     /// <summary>目标权限名集合，未出现的权限视为撤销。</summary>

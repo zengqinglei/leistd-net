@@ -1,4 +1,7 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
+using CompanyName.ProjectName.Domain.Shared.Security.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
@@ -99,10 +102,7 @@ internal sealed class TwoFactorAppService(
         EnsureDisabled(user);
 
         var protectedSecret = await cache.GetStringAsync(SetupKey(user.Id), cancellationToken)
-            ?? throw new BadRequestException("The setup has expired. Start again.")
-#if (IncludeLocalization)
-                .WithCode("Auth:TwoFactorSetupExpired")
-#endif
+            ?? throw new BusinessException(AuthErrorCodes.TwoFactorSetupExpired, "The setup has expired. Start again.")
                 ;
 
         if (twoFactorDomainService.VerifySetupCode(protectedSecret, input.Code, clock.Now) is not { } step)
@@ -137,19 +137,13 @@ internal sealed class TwoFactorAppService(
 
         if ((await loginSecurityPolicy.GetAsync(cancellationToken)).RequireTwoFactor)
         {
-            throw new BadRequestException("Two-factor authentication is required here and cannot be turned off.")
-#if (IncludeLocalization)
-                .WithCode("Auth:TwoFactorRequiredByPolicy")
-#endif
+            throw new BusinessException(AuthErrorCodes.TwoFactorRequiredByPolicy, "Two-factor authentication is required here and cannot be turned off.")
                 ;
         }
 
         if (user.PasswordHash is null || !passwordHasher.VerifyPassword(user.PasswordHash, input.Password))
         {
-            throw new BadRequestException("The current password is incorrect.")
-#if (IncludeLocalization)
-                .WithCode("Security:CurrentPasswordIncorrect")
-#endif
+            throw new BusinessException(SecurityErrorCodes.CurrentPasswordIncorrect, "The current password is incorrect.")
                 ;
         }
 
@@ -178,10 +172,7 @@ internal sealed class TwoFactorAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         if (!user.TwoFactorEnabled)
         {
-            throw new BadRequestException("Two-factor authentication is not turned on.")
-#if (IncludeLocalization)
-                .WithCode("Auth:TwoFactorNotEnabled")
-#endif
+            throw new BusinessException(AuthErrorCodes.TwoFactorNotEnabled, "Two-factor authentication is not turned on.")
                 ;
         }
 
@@ -207,18 +198,13 @@ internal sealed class TwoFactorAppService(
     {
         if (user.TwoFactorEnabled)
         {
-            throw new BadRequestException("Two-factor authentication is already turned on.")
-#if (IncludeLocalization)
-                .WithCode("Auth:TwoFactorAlreadyEnabled")
-#endif
+            throw new BusinessException(AuthErrorCodes.TwoFactorAlreadyEnabled, "Two-factor authentication is already turned on.")
                 ;
         }
     }
 
     private static BusinessException CodeInvalid() =>
-        new BadRequestException("The verification code is incorrect.")
-            // 错误码在不含本地化的形态下也要带：界面按它区分"重输"与"回到密码那一步"
-            .WithCode("Auth:TwoFactorCodeInvalid");
+        new("Auth:TwoFactorCodeInvalid", "The verification code is incorrect.");
 
     private static string SetupKey(Guid userId) => SetupKeyPrefix + userId.ToString("N");
 
@@ -226,12 +212,8 @@ internal sealed class TwoFactorAppService(
     {
         var userId = currentUser.Id!.Value;
         return await userRepository.GetByIdAsync(userId, cancellationToken)
-            ?? throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            ?? throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
     }
 }
 #endif

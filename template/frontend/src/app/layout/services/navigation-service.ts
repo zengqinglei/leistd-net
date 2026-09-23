@@ -186,7 +186,7 @@ export class NavigationService {
       label: 'Developer',
       items: [
         {
-          label: 'Developer Apps',
+          label: 'Open Applications',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
           permissions: [PERMISSIONS.openApplications.default],

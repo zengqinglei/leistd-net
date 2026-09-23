@@ -79,10 +79,13 @@ public static class DependencyInjection
         services.AddLocalEventBus();
 
         services.AddMemoryCache();
-        var useExplicitInMemoryDatabase =
-            !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"]);
+        // 连接串优先：配了 ConnectionStrings:Default 就走真实数据库，Database:InMemoryName 只在没有连接串时生效。
+        // 与下面各 DbContext 的选择口径一致；开发配置里的内存库名因此不会挡住本机用 user-secrets 配的数据库。
+        var useInMemoryDatabase =
+            string.IsNullOrWhiteSpace(configuration.GetConnectionString(ConnectionStringNames.Default))
+            && !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"]);
 
-        if (!useExplicitInMemoryDatabase)
+        if (!useInMemoryDatabase)
         {
             // 真实数据库模式必须有共享库目标；在最终配置合并后执行启动校验。
             services.AddOptions<TenantConnectionResolutionOptions>()

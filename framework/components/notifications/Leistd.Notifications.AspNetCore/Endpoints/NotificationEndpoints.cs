@@ -109,6 +109,5 @@ public static class NotificationEndpoints
 
     private static string RequireUser(ICurrentUser currentUser)
         => currentUser.Id?.ToString()
-           ?? throw new ForbiddenException("The current identity cannot operate on user notifications.")
-               .WithCode(NotificationErrorCodes.IdentityCannotOperate);
+           ?? throw new BusinessException(NotificationErrorCodes.IdentityCannotOperate, "The current identity cannot operate on user notifications.");
 }

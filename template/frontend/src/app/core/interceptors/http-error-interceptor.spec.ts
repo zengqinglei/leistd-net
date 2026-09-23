@@ -13,7 +13,7 @@ import { Observable, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
 import { httpErrorInterceptor } from './http-error-interceptor';
-import { ApplicationHttpError } from '../errors/application-http-error';
+import { applicationErrorMessage, ApplicationHttpError } from '../errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
@@ -123,6 +123,32 @@ describe('httpErrorInterceptor', () => {
     expect(applicationError.code).toBe('name_required');
     expect(applicationError.message).toBe('Name is required.');
     expect(applicationError.details.length).toBe(1);
+  });
+
+  it('parses the optional numeric response envelope without losing its business error code', () => {
+    const caught = runInterceptor(
+      httpError(409, {
+        code: 409,
+        errorCode: 'Role:NameExists',
+        message: 'Role name already exists.',
+        traceId: 'trace-1',
+      }),
+    );
+    const applicationError = caught as ApplicationHttpError;
+    expect(applicationError).toBeInstanceOf(ApplicationHttpError);
+    expect(applicationError.status).toBe(409);
+    expect(applicationError.code).toBe('Role:NameExists');
+    expect(applicationError.message).toBe('Role name already exists.');
+    expect(applicationError.traceId).toBe('trace-1');
+  });
+
+  it('uses the active localization label for a reportable trace ID', () => {
+    const caught = runInterceptor(httpError(503, { message: 'Unavailable', traceId: 'trace-5' }));
+    //#if (IncludeLocalization)
+    expect(applicationErrorMessage(caught)).toBe('Unavailable (common.traceId: trace-5)');
+    //#else
+    expect(applicationErrorMessage(caught)).toBe('Unavailable (Trace ID: trace-5)');
+    //#endif
   });
 
   it('lets a non-HTTP error pass through unchanged toward the GlobalErrorHandler', () => {

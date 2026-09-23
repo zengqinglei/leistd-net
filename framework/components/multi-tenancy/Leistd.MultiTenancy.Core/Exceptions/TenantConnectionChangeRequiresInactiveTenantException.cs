@@ -18,21 +18,15 @@ namespace Leistd.MultiTenancy.Exceptions;
 /// <para><b>已是分库租户、补一个此前没有的名字不在此列</b>：那个服务此前就是失败关闭的，
 /// 没有数据可搁浅，补登是修复动作，启用态下照常放行。</para>
 /// </remarks>
-public class TenantConnectionChangeRequiresInactiveTenantException : ConflictException
+public class TenantConnectionChangeRequiresInactiveTenantException : BusinessException
 {
     /// <summary>构造异常。</summary>
     /// <param name="tenantId">目标租户</param>
     public TenantConnectionChangeRequiresInactiveTenantException(Guid tenantId)
-        : base(
-            $"Tenant '{tenantId}' must be deactivated before a connection change that moves where its data lives. " +
-            "Changing an existing route while the tenant is serving lets cached and cold instances write to " +
-            "different physical databases at the same time; registering its very first connection strands the " +
-            "data it already has, its administrator included, in the database it has been using until now. " +
-            "Deactivate the tenant, wait for both the access token lifetime and the route cache TTL to elapse, " +
-            "migrate the data, then change the route.")
+        : base(MultiTenancyErrorCodes.ConnectionChangeRequiresInactiveTenant,
+            $"Deactivate tenant '{tenantId}' before changing its database connection.")
     {
         TenantId = tenantId;
-        WithCode(MultiTenancyErrorCodes.ConnectionChangeRequiresInactiveTenant);
     }
 
     /// <summary>获取目标租户标识。</summary>

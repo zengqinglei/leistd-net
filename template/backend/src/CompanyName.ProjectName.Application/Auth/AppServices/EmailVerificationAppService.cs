@@ -1,4 +1,7 @@
 using CompanyName.ProjectName.Domain.Auth.Options;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
+#endif
 using CompanyName.ProjectName.Domain.Auth.VerificationCodes;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -58,11 +61,7 @@ public class EmailVerificationAppService(
         var policy = await registrationPolicy.GetAsync(cancellationToken);
         if (!policy.EnableEmailVerification)
         {
-            throw new BadRequestException("Email verification is not enabled.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailVerificationDisabled")
-#endif
-                ;
+            throw new BusinessException(AuthErrorCodes.EmailVerificationDisabled, "Email verification is not enabled.");
         }
 
         var normalizedEmail = NormalizeEmail(input.Email);
@@ -72,11 +71,7 @@ public class EmailVerificationAppService(
             cancellationToken);
         if (!isValidCaptcha)
         {
-            throw new BadRequestException("The image captcha is incorrect or has expired.")
-#if (IncludeLocalization)
-                .WithCode("Auth:CaptchaInvalid")
-#endif
-                ;
+            throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.");
         }
 
         var existingUser = await userRepository.GetFirstAsync(
@@ -84,11 +79,7 @@ public class EmailVerificationAppService(
             cancellationToken: cancellationToken);
         if (existingUser != null)
         {
-            throw new BadRequestException("This email address is already in use.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailAlreadyUsed")
-#endif
-                ;
+            throw new BusinessException(AuthErrorCodes.EmailAlreadyUsed, "This email address is already in use.");
         }
 
         return await IssueChallengeAsync(normalizedEmail, RegistrationPurpose, policy, cancellationToken);
@@ -112,16 +103,14 @@ public class EmailVerificationAppService(
         UserRegistrationPolicy policy,
         CancellationToken cancellationToken)
     {
-        // 缺摘要密钥时先说清楚：不查的话要一路走到摘要计算处才以 500 失败，
-        // 用户只看到"系统异常"，运维也看不出是少了一项部署配置。
+        // 缺摘要密钥时返回安全的暂不可用提示；具体部署原因由错误码与服务端日志定位。
         if (!verificationCodeOptions.Value.IsKeyUsable)
         {
-            throw new BadRequestException(
-                "Email verification is unavailable: this deployment has no usable verification code key.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailVerificationUnavailable")
-#endif
-                ;
+            logger.LogError(
+                "Email verification is unavailable: {Section}:Key is missing or shorter than {MinimumKeyBytes} bytes.",
+                VerificationCodeOptions.SectionName, VerificationCodeOptions.MinimumKeyBytes);
+            throw new BusinessException(AuthErrorCodes.EmailVerificationUnavailable,
+                "Email verification is temporarily unavailable. Please contact your administrator.");
         }
 
         var scope = GetScope();
@@ -134,11 +123,7 @@ public class EmailVerificationAppService(
         var isLimited = await distributedCache.GetStringAsync(rateKey, operationToken);
         if (!string.IsNullOrEmpty(isLimited))
         {
-            throw new BadRequestException("Verification codes are being sent too frequently. Please try again later.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailCodeSendTooFrequent")
-#endif
-                ;
+            throw new BusinessException(AuthErrorCodes.EmailCodeSendTooFrequent, "Verification codes are being sent too frequently. Please try again later.");
         }
 
         var challengeId = Guid.NewGuid();

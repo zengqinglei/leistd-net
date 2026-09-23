@@ -16,11 +16,6 @@ public class ServiceClientOptions
     public string? BaseAddress { get; set; }
 
     /// <summary>
-    /// 单次调用超时。默认 30 秒。
-    /// </summary>
-    public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
-
-    /// <summary>
     /// 是否在 Debug 级别记录请求/响应载荷（含脱敏后的头）。默认 <c>false</c>。
     /// 开启后响应体会被完整缓冲，勿用于文件流等大响应客户端。
     /// </summary>

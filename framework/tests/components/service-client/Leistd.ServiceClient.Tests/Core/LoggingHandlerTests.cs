@@ -49,14 +49,107 @@ public class LoggingHandlerTests
     [Fact]
     public async Task Transport_failure_is_wrapped_and_logged_as_error()
     {
-        var (invoker, logger) = Create(new ThrowingHttpMessageHandler(_ => new HttpRequestException("connection refused")));
+        var (invoker, logger) = Create(new ThrowingHttpMessageHandler(_ =>
+            new HttpRequestException(HttpRequestError.ConnectionError, "connection refused")));
 
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
             invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None));
 
         Assert.Contains("connection refused", exception.Message);
         Assert.IsType<HttpRequestException>(exception.InnerException);
+        Assert.Equal(ServiceClientFailureKind.Unavailable, exception.FailureKind);
         Assert.Single(logger.Entries, e => e.Level == LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task Unexpected_handler_failure_is_not_reported_as_upstream_unavailability()
+    {
+        var (invoker, _) = Create(new ThrowingHttpMessageHandler(_ => new InvalidOperationException("handler defect")));
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+            invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None));
+
+        Assert.Equal(ServiceClientFailureKind.Unknown, exception.FailureKind);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.SecureConnectionError)]
+    [InlineData(HttpRequestError.Unknown)]
+    public async Task Non_connection_http_failure_is_not_reported_as_temporary_unavailability(HttpRequestError error)
+    {
+        var (invoker, _) = Create(new ThrowingHttpMessageHandler(_ =>
+            new HttpRequestException(error, "request failed")));
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+            invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None));
+
+        Assert.Equal(ServiceClientFailureKind.Unknown, exception.FailureKind);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.InvalidResponse)]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    public async Task Malformed_or_incomplete_upstream_response_is_classified_as_invalid_response(HttpRequestError error)
+    {
+        foreach (var transportException in new Exception[]
+                 {
+                     new HttpRequestException(error, "upstream response failed"),
+                     new HttpIOException(error, "upstream response failed")
+                 })
+        {
+            var (invoker, _) = Create(new ThrowingHttpMessageHandler(_ => transportException));
+
+            var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+                invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None));
+
+            Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+            Assert.Same(transportException, exception.InnerException);
+        }
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.InvalidResponse)]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    public async Task Debug_response_body_failure_is_classified_logged_and_disposes_the_response(HttpRequestError error)
+    {
+        var content = new ThrowingHttpContent(new HttpIOException(error, "response body ended"));
+        var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        var (invoker, logger) = Create(new CapturingHttpMessageHandler
+        {
+            Responder = _ => response,
+        }, logPayloads: true);
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+            invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), CancellationToken.None));
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+        Assert.IsType<HttpRequestException>(exception.InnerException);
+        Assert.True(content.IsDisposed);
+        Assert.Single(logger.Entries, entry =>
+            entry.Level == LogLevel.Error && entry.Message.Contains("response body read failed"));
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_during_debug_response_body_read_is_not_logged_as_a_failure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var content = new ThrowingHttpContent(new OperationCanceledException(cancellation.Token));
+        var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        var (invoker, logger) = Create(new CapturingHttpMessageHandler
+        {
+            Responder = _ =>
+            {
+                cancellation.Cancel();
+                return response;
+            },
+        }, logPayloads: true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://demo/api"), cancellation.Token));
+
+        Assert.True(content.IsDisposed);
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level == LogLevel.Error);
     }
 
     [Fact]

@@ -2,26 +2,23 @@ using Leistd.ExceptionHandling;
 namespace Leistd.ServiceClient.Exceptions;
 
 /// <summary>
-/// 表示远端服务返回的业务错误。
+/// 表示远端服务明确返回的失败响应。
 /// </summary>
 /// <remarks>
-/// 不自动映射为本地业务异常。远端 5xx、408 和 429 对外映射为 503，其余错误映射为 502。
+/// 不自动映射为本地业务异常；宿主可在 API 边界按自身契约处理。
 /// </remarks>
 public class RemoteServiceException : ServiceClientException
 {
     /// <summary>
     /// 远端响应的 HTTP 状态码。
     /// </summary>
-    /// <remarks>
-    /// 与继承来的 <see cref="BusinessException.StatusCode"/>（本服务<b>对外</b>的状态码，502/503）是两回事：
-    /// 这里是"我们发给远端那次请求"得到的状态码，只用于日志与排查，不透传给调用方。
-    /// </remarks>
+    /// <remarks>这是"我们发给远端那次请求"得到的状态码；通用异常映射不会据此决定本地状态码，宿主可按已知远端契约显式处理。</remarks>
     public int RemoteStatusCode { get; }
 
     /// <summary>
-    /// 远端业务错误码（ProblemDetails 的 <c>code</c> 或统一响应的 <c>code</c>），无法解析时为 <c>null</c>。
+    /// 远端业务错误码（ProblemDetails 的 <c>code</c> 或数字信封的 <c>errorCode</c>），无法解析时为 <c>null</c>。
     /// </summary>
-    /// <remarks>统一响应信封的 <c>code</c> 是数字，取到时按不变文化转成字符串，与 ProblemDetails 的字符串码同一字段承载。</remarks>
+    /// <remarks>仍兼容旧信封中仅有数字 <c>code</c> 的形状，取到时按不变文化转成字符串。</remarks>
     public string? ErrorCode { get; }
 
     /// <summary>
@@ -50,7 +47,7 @@ public class RemoteServiceException : ServiceClientException
         IReadOnlyList<ErrorItem>? errors = null,
         string? responseBody = null,
         Exception? innerException = null)
-        : base(ResolveStatusCode(statusCode), message, innerException)
+        : base(message, innerException, ServiceClientFailureKind.RemoteFailure)
     {
         RemoteStatusCode = statusCode;
         ErrorCode = errorCode;
@@ -58,7 +55,4 @@ public class RemoteServiceException : ServiceClientException
         Errors = errors ?? [];
         ResponseBody = responseBody;
     }
-
-    private static int ResolveStatusCode(int remoteStatusCode) =>
-        remoteStatusCode is 408 or 429 or >= 500 ? 503 : 502;
 }

@@ -157,10 +157,20 @@ public static class HttpResponseMessageExtensions
         JsonSerializerOptions? jsonOptions,
         CancellationToken cancellationToken)
     {
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        string body;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            throw new ServiceClientException($"{Describe(response)} response body could not be read: {ex.Message}", ex,
+                ServiceClientFailureClassifier.Classify(ex));
+        }
         if (string.IsNullOrWhiteSpace(body))
         {
-            throw new ServiceClientException($"{Describe(response)} response body is empty");
+            throw new ServiceClientException($"{Describe(response)} response body is empty",
+                failureKind: ServiceClientFailureKind.InvalidResponse);
         }
 
         T? value;
@@ -170,10 +180,12 @@ public static class HttpResponseMessageExtensions
         }
         catch (JsonException ex)
         {
-            throw new ServiceClientException($"{Describe(response)} response deserialization failed: {ex.Message}", ex);
+            throw new ServiceClientException($"{Describe(response)} response deserialization failed: {ex.Message}", ex,
+                ServiceClientFailureKind.InvalidResponse);
         }
 
-        return value ?? throw new ServiceClientException($"{Describe(response)} response body is empty");
+        return value ?? throw new ServiceClientException($"{Describe(response)} response body is empty",
+            failureKind: ServiceClientFailureKind.InvalidResponse);
     }
 
     private static void EnsureEnvelopeSuccess<T>(HttpResponseMessage response, ResultEnvelope<T> envelope)
@@ -212,10 +224,16 @@ public static class HttpResponseMessageExtensions
     private static string Truncate(string value) =>
         value.Length <= MaxBodySnippetLength ? value : value[..MaxBodySnippetLength];
 
-    // 错误码两种形态都要认：Problem Details 里是字符串词条键（Error:NotFound），
-    // 统一响应信封里是数字。丢掉任一种，调用方就分支不了。
+    // Problem Details 把业务码放在字符串 code；新数字信封用 errorCode，
+    // 而旧信封只有数字 code。三种形状都要能还原。
     private static string? TryGetErrorCode(JsonElement root)
     {
+        if (root.TryGetProperty("errorCode", out var envelopeCode) &&
+            envelopeCode.ValueKind == JsonValueKind.String)
+        {
+            return envelopeCode.GetString();
+        }
+
         if (!root.TryGetProperty("code", out var code))
         {
             return null;

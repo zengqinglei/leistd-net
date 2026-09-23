@@ -23,7 +23,7 @@ const REJECTED_PASSWORDS = [
 export function ensureAcceptablePassword(password: unknown, subject: string): void {
   const problem = describePassword(typeof password === 'string' ? password : undefined);
   if (problem) {
-    throw new MockException(400, { code: 'Error:BadRequest', message: `${subject} ${problem}` });
+    throw new MockException(400, { message: `${subject} ${problem}` });
   }
 }
 

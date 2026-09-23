@@ -5,8 +5,4 @@
     <RootNamespace>Leistd.ExceptionHandling</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
-  </ItemGroup>
-
 </Project>

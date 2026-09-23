@@ -13,7 +13,11 @@ import { TranslocoService } from '@jsverse/transloco';
 import { catchError, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
+//#if (LocalIdentity)
+import { apiErrorCode, ApplicationHttpError } from '../errors/application-http-error';
+//#else
 import { ApplicationHttpError } from '../errors/application-http-error';
+//#endif
 import { entryRouteUrl, isOnAuthRoute } from '../routing/entry-route';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
@@ -84,7 +88,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
       // 路由守卫已经挡住了页面导航，这里兜住的是页面之外发出的请求（例如会话中途被改成受限）。
       if (
         error.status === 403 &&
-        (error.error as { code?: string } | null)?.code === 'Auth:TwoFactorSetupRequired' &&
+        apiErrorCode(error.error) === 'Auth:TwoFactorSetupRequired' &&
         !isOnAuthRoute()
       ) {
         void router.navigateByUrl('/auth/two-factor-setup');
@@ -96,7 +100,13 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         error.status === 0
           ? injector.get(TranslocoService).translate('common.networkError')
           : undefined;
-      return throwError(() => ApplicationHttpError.from(error, networkErrorMessage));
+      return throwError(() =>
+        ApplicationHttpError.from(
+          error,
+          networkErrorMessage,
+          injector.get(TranslocoService).translate('common.traceId'),
+        ),
+      );
       //#else
       return throwError(() => ApplicationHttpError.from(error));
       //#endif

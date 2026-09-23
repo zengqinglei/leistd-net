@@ -17,7 +17,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return body.RootElement.TryGetProperty("message", out var m) ? m.GetString() : null;
+        return body.RootElement.TryGetProperty("detail", out var m) ? m.GetString() : null;
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
         // 不带 Accept-Language → 默认语言英语
         var message = await PostBadLoginAndReadMessageAsync(client);
         Assert.NotNull(message);
-        Assert.Contains("Login failed", message);
+        Assert.Equal("The username or password is incorrect.", message);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
 
         var message = await PostBadLoginAndReadMessageAsync(client);
         Assert.NotNull(message);
-        Assert.Contains("登录失败", message);
+        Assert.Equal("用户名或密码不正确。", message);
     }
 
     [Fact]
@@ -62,12 +62,11 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
     /// 业务校验的<b>具体原因</b>要传到客户端，不能被通用文案盖掉。
     /// </summary>
     /// <remarks>
-    /// 异常处理器按错误码查词条；抛出点不带码时没有词条可查，中文界面上就只会出现构造时
-    /// 那句英文诊断串（部署方把 <c>MessageExposure</c> 收紧到 <c>None</c> 时更只剩
-    /// "请求无效。"）。这里用"给日志级别写一个非法取值"这条真实场景钉住：400、
+    /// 异常处理器按错误码查词条，未命中时回落到抛出点的安全英文文案。
+    /// 这里用"给日志级别写一个非法取值"这条真实场景钉住：400，
     /// 且中文消息里说的是这个取值本身的问题。
     /// <para>
-    /// 400 一律要带码，有静态闸门守着（<c>scripts/check-error-codes.py</c>）；这条用例守的是
+    /// 业务失败的错误码由 <c>BusinessException</c> 构造函数强制；这条用例守的是
     /// 另一半——码到词条这条链真的接上了。
     /// </para>
     /// </remarks>
@@ -84,7 +83,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var message = body.RootElement.GetProperty("message").GetString();
+        var message = body.RootElement.GetProperty("detail").GetString();
 
         Assert.NotNull(message);
         Assert.DoesNotContain("请求无效", message);
@@ -96,7 +95,7 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
     private static async Task<string> PostInvalidRegisterAndReadErrorsAsync(HttpClient client)
     {
         // 空用户名 + 非法邮箱 → 触发 [ApiController] 自动 400 校验；经 ConfigureApiValidation
-        // 产出与业务 422 一致的 errors 数组（每项 detail/field），校验消息在 detail 里。
+        // 产出与显式业务验证一致的 errors 数组（每项 detail/field），校验消息在 detail 里。
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/register",
             new { Username = "", Email = "not-an-email", Password = "" });
@@ -138,6 +137,6 @@ public sealed class LocalizationTests(ProjectWebApplicationFactory factory) : IC
 
         Assert.Contains("不能为空", validationErrors); // DataAnnotations 中文
         Assert.NotNull(businessMessage);
-        Assert.Contains("登录失败", businessMessage);   // 业务异常中文
+        Assert.Equal("用户名或密码不正确。", businessMessage); // 业务异常中文
     }
 }

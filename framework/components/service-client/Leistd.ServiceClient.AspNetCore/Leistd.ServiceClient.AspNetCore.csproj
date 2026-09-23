@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Leistd.ServiceClient.Core\Leistd.ServiceClient.Core.csproj" />
+    <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.AspNetCore\Leistd.ExceptionHandling.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

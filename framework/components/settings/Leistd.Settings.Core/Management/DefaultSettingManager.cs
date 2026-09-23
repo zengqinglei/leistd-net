@@ -9,7 +9,10 @@ using Leistd.Settings.Stores;
 using Leistd.Settings.Events;
 using Leistd.Settings.Exceptions;
 using Leistd.Settings.Validation;
+using Leistd.Settings.Options;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.Settings.Management;
 
@@ -32,13 +35,17 @@ namespace Leistd.Settings.Management;
 /// 机密设置（<see cref="ISettingDefinition.IsEncrypted"/>）的加密用宿主的 Data Protection；
 /// 没注册时只有写入机密设置会失败。
 /// </param>
+/// <param name="localizerFactory">校验失败时按请求语言取设置显示名；未启用本地化时用定义上的显示名。</param>
+/// <param name="managementOptions">提供显示名词条所在的资源类型。</param>
 public sealed class DefaultSettingManager(
     ISettingDefinitionManager definitionManager,
     ISettingStore store,
     ISettingProvider settingProvider,
     IEnumerable<ISettingValueValidator> validators,
     ILocalEventBus? eventBus = null,
-    IDataProtectionProvider? dataProtectionProvider = null) : ISettingManager
+    IDataProtectionProvider? dataProtectionProvider = null,
+    IStringLocalizerFactory? localizerFactory = null,
+    IOptions<SettingManagementOptions>? managementOptions = null) : ISettingManager
 {
     // 与读取器同一用途，写入的密文它才解得开
     private readonly IDataProtector? _protector =
@@ -58,7 +65,7 @@ public sealed class DefaultSettingManager(
         if (scope is not (SettingScopes.Tenant or SettingScopes.User or SettingScopes.Host)
             || !definition.Scopes.HasFlag(scope))
         {
-            throw new SettingScopeNotAllowedException(name, scope, definition.Scopes);
+            throw new SettingScopeNotAllowedException(name, scope, definition.Scopes, DisplayName(definition));
         }
 
         if (scope == SettingScopes.User)
@@ -95,40 +102,45 @@ public sealed class DefaultSettingManager(
         }
     }
 
+    // 报错里给用户看的是界面上的字段名，不是技术键；只在失败路径上解析，按当前请求语言取词条
+    private string DisplayName(ISettingDefinition definition)
+        => SettingDisplayNames.Resolve(
+            definition,
+            SettingDisplayNames.CreateLocalizer(localizerFactory, managementOptions?.Value));
+
     // 只有 null 表示清除。空串若放行，会作为真实值落库：既挡住向下一层的回落，
     // 又被消费方当成"未设置"——一个值同时是两种意思。
-    private static void EnsureWellFormed(ISettingDefinition definition, string value)
+    private void EnsureWellFormed(ISettingDefinition definition, string value)
     {
         if (value.Length == 0)
         {
-            throw new BadRequestException(
-                    $"An empty value is not accepted for '{definition.Name}'. Send null to clear the override.")
-                .WithCode(SettingErrorCodes.EmptyValueRejected)
-                .WithData("Name", definition.Name);
+            var displayName = DisplayName(definition);
+            throw new BusinessException(SettingErrorCodes.EmptyValueRejected,
+                    $"An empty value is not accepted for '{displayName}'. Send null to clear the override.")
+                .WithData("Name", displayName);
         }
 
         switch (definition.ValueType)
         {
             case SettingValueType.Boolean when value is not ("true" or "false"):
-                throw new BadRequestException($"'{value}' is not a boolean; use 'true' or 'false'.")
-                    .WithCode(SettingErrorCodes.BooleanRequired)
+                throw new BusinessException(SettingErrorCodes.BooleanRequired, $"'{value}' is not a boolean; use 'true' or 'false'.")
                     .WithData("Value", value);
 
             case SettingValueType.Integer:
                 if (!int.TryParse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number))
                 {
-                    throw new BadRequestException($"'{definition.Name}' must be an integer.")
-                        .WithCode(SettingErrorCodes.IntegerRequired)
-                        .WithData("Name", definition.Name);
+                    var displayName = DisplayName(definition);
+                    throw new BusinessException(SettingErrorCodes.IntegerRequired, $"'{displayName}' must be an integer.")
+                        .WithData("Name", displayName);
                 }
 
                 if (number < (definition.Minimum ?? int.MinValue) || number > (definition.Maximum ?? int.MaxValue))
                 {
                     var minimum = definition.Minimum ?? int.MinValue;
                     var maximum = definition.Maximum ?? int.MaxValue;
-                    throw new BadRequestException($"'{definition.Name}' must be an integer between {minimum} and {maximum}.")
-                        .WithCode(SettingErrorCodes.ValueOutOfRange)
-                        .WithData("Name", definition.Name)
+                    var displayName = DisplayName(definition);
+                    throw new BusinessException(SettingErrorCodes.ValueOutOfRange, $"'{displayName}' must be an integer between {minimum} and {maximum}.")
+                        .WithData("Name", displayName)
                         .WithData("Minimum", minimum)
                         .WithData("Maximum", maximum);
                 }
@@ -139,8 +151,7 @@ public sealed class DefaultSettingManager(
         if (definition.AllowedValues is { } allowed && !allowed.Contains(value, StringComparer.Ordinal))
         {
             var candidates = string.Join(", ", allowed);
-            throw new BadRequestException($"'{value}' is not an allowed value. Allowed: {candidates}.")
-                .WithCode(SettingErrorCodes.ValueNotAllowed)
+            throw new BusinessException(SettingErrorCodes.ValueNotAllowed, $"'{value}' is not an allowed value. Allowed: {candidates}.")
                 .WithData("Value", value)
                 .WithData("Allowed", candidates);
         }

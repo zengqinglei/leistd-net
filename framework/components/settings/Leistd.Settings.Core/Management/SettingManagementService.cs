@@ -41,7 +41,7 @@ internal sealed class SettingManagementService(
             ? new Dictionary<string, string>()
             : await settingStore.GetAllAsync(SettingScopes.User, userId, cancellationToken);
 
-        var localizer = options.Value.LocalizationResource is { } resource ? localizerFactory?.Create(resource) : null;
+        var localizer = SettingDisplayNames.CreateLocalizer(localizerFactory, options.Value);
         return [.. definitions.Select(definition => ToOutput(definition, userValues, tenantValues, hostValues, localizer))];
     }
 
@@ -49,8 +49,7 @@ internal sealed class SettingManagementService(
     {
         ArgumentNullException.ThrowIfNull(input);
         var userId = currentUser.Id?.ToString()
-            ?? throw new ForbiddenException("Only a user can change personal settings.")
-                .WithCode(SettingErrorCodes.IdentityCannotOperate);
+            ?? throw new BusinessException(SettingErrorCodes.IdentityCannotOperate, "Only a user can change personal settings.");
 
         _ = EnsureVisibleToClients(input.Name);
 
@@ -67,9 +66,10 @@ internal sealed class SettingManagementService(
         var scope = definition.Scopes.HasFlag(SettingScopes.Host) ? SettingScopes.Host : SettingScopes.Tenant;
         if (scope == SettingScopes.Host && !settingStore.CanAccessHostScope)
         {
-            throw new ForbiddenException($"Setting '{input.Name}' is process-wide and can only be changed on the host.")
-                .WithCode(SettingErrorCodes.HostOnly)
-                .WithData("Name", input.Name);
+            var displayName = SettingDisplayNames.Resolve(
+                definition, SettingDisplayNames.CreateLocalizer(localizerFactory, options.Value));
+            throw new BusinessException(SettingErrorCodes.HostOnly, $"Setting '{displayName}' is process-wide and can only be changed on the host.")
+                .WithData("Name", displayName);
         }
 
         await settingManager.SetAsync(input.Name, input.Value, scope, cancellationToken: cancellationToken);
@@ -92,10 +92,9 @@ internal sealed class SettingManagementService(
 
         return new SettingOutputDto(
             definition.Name,
-            Localize(localizer, $"Setting:{definition.Name}")
-                ?? (string.IsNullOrWhiteSpace(definition.DisplayName) ? definition.Name : definition.DisplayName),
+            SettingDisplayNames.Resolve(definition, localizer),
             group,
-            Localize(localizer, $"SettingGroup:{group}") ?? group,
+            SettingDisplayNames.Localize(localizer, $"SettingGroup:{group}") ?? group,
             secret ? null : userValue,
             secret ? null : tenantValue,
             secret ? null : definition.DefaultValue,
@@ -110,25 +109,12 @@ internal sealed class SettingManagementService(
             definition.AllowedValues);
     }
 
-    // 定义是 Singleton、启动时加载，翻译必须发生在响应阶段，否则先到的那个请求的语言会被固化给所有人
-    private static string? Localize(IStringLocalizer? localizer, string key)
-    {
-        if (localizer is null)
-        {
-            return null;
-        }
-
-        var localized = localizer[key];
-        return localized.ResourceNotFound ? null : localized.Value;
-    }
-
     private ISettingDefinition EnsureVisibleToClients(string name)
     {
         var definition = definitionManager.GetOrNull(name);
         if (definition is null || !definition.IsVisibleToClients)
         {
-            throw new NotFoundException($"Setting '{name}' is not available.")
-                .WithCode(SettingErrorCodes.NotAvailable)
+            throw new BusinessException(SettingErrorCodes.NotAvailable, $"Setting '{name}' is not available.")
                 .WithData("Name", name);
         }
 

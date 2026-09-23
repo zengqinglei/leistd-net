@@ -71,6 +71,13 @@ app.MapNotificationHub();
 
 `AddNotificationsSignalR()` 会同时注册 Core 发布器与 SignalR 传输，但不注册持久化，也不映射业务实时 Hub。`MapNotificationHub()` 默认映射到 `/hubs/notifications` 并要求登录。
 
+使用全局异常处理的 HTTP 宿主，须显式组合本组件的非默认状态；仅注册通知服务不会登记异常映射：
+
+```csharp
+builder.Services.AddGlobalExceptionHandler(options =>
+    NotificationExceptionMappings.Configure(options));
+```
+
 `INotificationChannel` 可注册多个；`INotificationStore` 必须且只能注册一个。只要瞬态推送而不要历史时使用[实时通信](./realtime.md)。
 
 映射通知中心端点（只作用于当前用户）：
@@ -155,7 +162,8 @@ public class MessageCenter(INotificationStore notificationStore)
 | `INotificationStore.SaveAsync(notification, userId, ct)` | 保存通知 |
 | `INotificationStore.GetByUserAsync(userId, page, unreadOnly, ct)` | 按创建时间**倒序**分页获取用户通知，`unreadOnly` 只取未读；返回 `PagedResult<NotificationOutputDto>` |
 | `INotificationStore.DeleteAsync(notificationId, userId, ct)` / `DeleteAllAsync(userId, ct)` | 删除用户自己的一条 / 全部通知；删除账号时调用后者清理孤儿行 |
-| `MapNotifications(configure)` | AspNetCore 包：`AccessPolicy` 必填；`GET /`（`maxCount` 收敛到 1–`NotificationEndpoints.MaximumListCount`，可加 `unreadOnly`）、`GET /unread-count`、`PUT /{id}/read`、`PUT /read-all`、`DELETE /`、`DELETE /{id}`；非用户身份写入返回带 `NotificationErrorCodes.IdentityCannotOperate` 码的 403 |
+| `MapNotifications(configure)` | AspNetCore 包：`AccessPolicy` 必填；`GET /`（`maxCount` 收敛到 1–`NotificationEndpoints.MaximumListCount`，可加 `unreadOnly`）、`GET /unread-count`、`PUT /{id}/read`、`PUT /read-all`、`DELETE /`、`DELETE /{id}` |
+| `NotificationExceptionMappings.Configure(options)` | AspNetCore 包：由宿主显式将非用户身份错误 `NotificationErrorCodes.IdentityCannotOperate` 映射为 403；宿主随后可覆盖 |
 | `AddNotificationRetention<TDbContext>(configure?)` | EF 包：绑定 `Leistd:Notifications:Retention` 并启动期校验，登记集群周期任务 `notifications.retention` |
 | `AddNotificationPreferences(configure?)` | Settings 桥接包：以 `NotificationPreferenceOptions`（前缀、必达组合）替换默认投递过滤器 |
 | `AddEmailNotifications()` / `INotificationRecipientResolver` | Email 桥接包：登记 `EmailNotificationChannel`，收件人地址由宿主解析，只发已验证地址，经后台队列异步发送 |

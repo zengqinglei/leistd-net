@@ -141,7 +141,7 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 
 首次获取 DbContext 时，工作单元绑定连接归属与物理目标。生命周期内任一值改变都立即失败，以防止一个原子边界跨库或跨租户。不在工作单元内时不建立这两道绑定，但也不静默改道：此时 DbContext 由当前 DI 作用域持有（`AddDbContext` 默认 Scoped），同一作用域内首次创建后即被复用、宿主回调不再执行。若本次解析出的连接与该实例的实际连接不一致——典型场景是 `ICurrentTenant.Change` 切到分库租户——立即抛出 `InvalidOperationException`，而不是在原来的库上继续读写。需要访问另一个租户的库时，在该租户上下文内以 `BeginAsync(requiresNew: true)` 开工作单元；它自带作用域，DbContext 会按解析出的连接重新创建。
 
-本组件不提供跨物理事务原子性。多个事务按顺序提交时，后续失败可能已造成部分提交；此时抛出带已提交与失败 key 的 `InternalServerException`。
+本组件不提供跨物理事务原子性。多个事务按顺序提交时，后续失败可能已造成部分提交；此时抛出带已提交与失败 key 的 `InvalidOperationException`，详细信息只进日志。
 
 ### 取消边界
 

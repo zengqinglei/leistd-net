@@ -35,7 +35,7 @@ builder.Services.AddDomainServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 #if (LocalIdentity)
 // 独立库连接串在控制库里加密存储：必须与 API 共享同一密钥环，否则解不开、迁移作业整体停下
-builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment.ContentRootPath);
+builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
 #endif
 builder.Services.AddScoped<DatabaseMigrationRunner>();
 

@@ -13,7 +13,7 @@ namespace Leistd.OperationRecords.Queries;
 /// 分页与导出共用同一份判定——两条路径各写一份，迟早出现"界面看不到的记录能被导出来"。</para>
 /// <para><b>不做权限判定。</b>是否允许查看、导出由端点的授权策略把守（<c>MapOperationRecords</c> 要求显式给出策略名）；
 /// 在别的入口直接调用本服务时，由调用方负责授权。</para>
-/// <para>入参按 DataAnnotations 校验，失败抛带字段错误的 <c>UnprocessableEntityException</c>。</para>
+/// <para>入参按 DataAnnotations 校验，失败抛 <see cref="System.ComponentModel.DataAnnotations.ValidationException"/>。</para>
 /// </remarks>
 public interface IOperationRecordQueryService
 {

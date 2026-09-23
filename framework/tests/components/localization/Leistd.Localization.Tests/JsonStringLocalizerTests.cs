@@ -38,9 +38,9 @@ public class JsonStringLocalizerTests
         var localizer = CreateLocalizer();
         WithCulture("en", () =>
         {
-            var value = localizer["Error:NotFound"];
+            var value = localizer["Title:500"];
             Assert.False(value.ResourceNotFound);
-            Assert.Equal("The requested resource was not found.", value.Value);
+            Assert.Equal("Internal Server Error", value.Value);
         });
     }
 
@@ -50,9 +50,9 @@ public class JsonStringLocalizerTests
         var localizer = CreateLocalizer();
         WithCulture("zh-CN", () =>
         {
-            var value = localizer["Error:NotFound"];
+            var value = localizer["Title:500"];
             Assert.False(value.ResourceNotFound);
-            Assert.Equal("请求的资源不存在。", value.Value);
+            Assert.Equal("服务器内部错误", value.Value);
         });
     }
 
@@ -63,8 +63,8 @@ public class JsonStringLocalizerTests
         // fr 无资源 → 回落到默认 en
         WithCulture("fr-FR", () =>
         {
-            var value = localizer["Error:NotFound"];
-            Assert.Equal("The requested resource was not found.", value.Value);
+            var value = localizer["Title:500"];
+            Assert.Equal("Internal Server Error", value.Value);
         });
     }
 
@@ -76,9 +76,9 @@ public class JsonStringLocalizerTests
         // 故用 zh-CN 的子文化验证父链回落到 en 默认（zh-Hans 无资源）。
         WithCulture("zh-Hans", () =>
         {
-            var value = localizer["Error:NotFound"];
+            var value = localizer["Title:500"];
             // zh-Hans / zh 均无资源 → 回落默认 en
-            Assert.Equal("The requested resource was not found.", value.Value);
+            Assert.Equal("Internal Server Error", value.Value);
         });
     }
 
@@ -101,7 +101,7 @@ public class JsonStringLocalizerTests
         WithCulture("en", () =>
         {
             var all = localizer.GetAllStrings(includeParentCultures: true).ToList();
-            Assert.Contains(all, s => s.Name == "Error:InternalServer");
+            Assert.Contains(all, s => s.Name == "Title:500");
             Assert.Contains(all, s => s.Name == "Title:404");
         });
     }

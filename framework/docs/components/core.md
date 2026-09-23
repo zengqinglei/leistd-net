@@ -1,6 +1,6 @@
-# 核心原语：时钟与通用异常
+# 核心原语：时钟
 
-`Leistd.Core` 是最底层的基础包，只放跨组件复用的原语：时钟抽象 `IClock` 让「现在」可注入、可测试，异常基类 `CommonException` 供上层统一识别。
+`Leistd.Core` 是最底层的基础包，只放跨组件复用的原语。时钟抽象 `IClock` 让「现在」可注入、可测试。
 
 ## 何时使用
 
@@ -9,7 +9,6 @@
 | 需要获取当前时间且希望单元测试可控（mock 时间） | 注入 `IClock`，不要直接用 `DateTime.UtcNow` |
 | 按"自然日"做统计，需消除时区漂移 | `IClock` + `ClockExtensions.GetMidnightInUtc(timeZone)`（时区显式传入） |
 | 标准化外部传入的 `DateTime`（统一为 UTC） | `IClock.Normalize(dateTime)` |
-| 定义框架/业务异常的根基类型 | 派生自 `CommonException`（如异常处理组件的 `BusinessException`） |
 
 > `Leistd.Core` 是被依赖项，通常无需直接添加——你引用的上层组件（异常处理、DDD 等）已传递引用它。
 
@@ -29,7 +28,7 @@ dotnet add package Leistd.Core
 services.AddSingleton<IClock, UtcClockProvider>();
 ```
 
-若你的项目未引用 DDD 分组而需要单独使用 `IClock`，按上面这行手动注册即可。`CommonException` 无需注册，按需 `throw` 或派生使用。
+若你的项目未引用 DDD 分组而需要单独使用 `IClock`，按上面这行手动注册即可。
 
 ## 使用
 
@@ -53,13 +52,6 @@ public class DailyReportService(IClock clock)
 }
 ```
 
-定义框架/业务异常时派生自 `CommonException`，上层异常处理组件可据此统一识别：
-
-```csharp
-public class InsufficientStockException(string sku)
-    : CommonException($"库存不足: {sku}");
-```
-
 ## 接口参考
 
 `Leistd.Timing` 命名空间：
@@ -72,12 +64,6 @@ public class InsufficientStockException(string sku)
 | `UtcClockProvider : IClock` | 默认实现，取值委托给 `TimeProvider`（默认 `TimeProvider.System`） |
 | `ClockExtensions.GetMidnightInUtc(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**今日零点对应的 UTC 时刻，按天统计的基准锚点 |
 | `ClockExtensions.GetUtcOffsetHours(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**当前相对 UTC 的偏移小时数（`double`，已计入夏令时） |
-
-`Leistd.Exceptions` 命名空间：
-
-| 成员 | 说明 |
-| --- | --- |
-| `CommonException(message, innerException?)` | 框架通用异常基类，继承 `System.Exception`；上层异常体系（如 `BusinessException`）由它派生 |
 
 ## 实现行为
 
@@ -94,7 +80,7 @@ public class InsufficientStockException(string sku)
 
 - 默认实现始终基于 UTC。日边界扩展必须显式传入业务时区，不能用宿主的 `TimeZoneInfo.Local` 代替租户或用户时区。
 - `Leistd.Core` 本身不注册任何服务；`IClock` 的注册由 `Leistd.Ddd.Infrastructure` 完成。脱离 DDD 分组单独使用时务必手动 `AddSingleton<IClock, UtcClockProvider>()`，否则注入会失败。
-- `CommonException` 是一个轻量基类（仅 `message` + 可选 `innerException`），不携带错误码等元数据；语义化的业务异常请使用[异常处理](./exception-handling.md)组件的 `BusinessException` 体系。
+- 底层 Core 不定义框架通用异常基类。优先使用 .NET 内置异常；可预期业务失败使用[异常处理](./exception-handling.md)组件的 `BusinessException`。
 
 ## 相关
 

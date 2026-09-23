@@ -84,7 +84,10 @@ function getOpenApplication(req: MockRequest) {
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
-    throw new MockException(404, 'Open application not found');
+    throw new MockException(404, {
+      code: 'OpenApp:NotFound',
+      message: 'Open application not found',
+    });
   }
   return toOutput(application);
 }
@@ -96,12 +99,18 @@ function validateApplication(
   if ('clientId' in input) {
     const clientId = input.clientId.trim();
     if (!clientId) {
-      throw new MockException(400, { message: 'Client ID is required' });
+      throw new MockException(400, {
+        code: 'OpenApp:ClientIdRequired',
+        message: 'Client ID is required',
+      });
     }
     if (
       applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)
     ) {
-      throw new MockException(400, { message: `Client ID already exists: ${clientId}` });
+      throw new MockException(409, {
+        code: 'OpenApp:ClientIdTaken',
+        message: `Client ID already exists: ${clientId}`,
+      });
     }
   }
 
@@ -113,7 +122,10 @@ function validateApplication(
     (input.applicationType === 'native' || input.clientType === 'public') &&
     !input.requirements.includes('ft:pkce')
   ) {
-    throw new MockException(400, { message: 'Native/Public clients must enable PKCE' });
+    throw new MockException(400, {
+      code: 'OpenApp:PkceRequired',
+      message: 'Native/Public clients must enable PKCE',
+    });
   }
 }
 
@@ -152,7 +164,10 @@ function updateOpenApplication(req: MockRequest) {
   const body = req.body as UpdateOpenApplicationInputDto;
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
   if (index === -1) {
-    throw new MockException(404, 'Open application not found');
+    throw new MockException(404, {
+      code: 'OpenApp:NotFound',
+      message: 'Open application not found',
+    });
   }
 
   validateApplication(body, id);
@@ -189,10 +204,16 @@ function resetOpenApplicationSecret(req: MockRequest) {
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
-    throw new MockException(404, 'Open application not found');
+    throw new MockException(404, {
+      code: 'OpenApp:NotFound',
+      message: 'Open application not found',
+    });
   }
   if (application.clientType !== 'confidential') {
-    throw new MockException(400, { message: 'Only confidential clients can reset their secret' });
+    throw new MockException(409, {
+      code: 'OpenApp:SecretResetConfidentialOnly',
+      message: 'Only confidential clients can reset their secret',
+    });
   }
 
   const clientSecret = `mock_secret_${Math.random().toString(36).slice(2, 14)}`;

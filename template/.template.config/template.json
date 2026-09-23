@@ -17,6 +17,26 @@
     "type": "project"
   },
   "sourceName": "CompanyName.ProjectName",
+  "guids": [
+    "7f3c2a1e-4b5d-4e6f-9a8b-0c1d2e3f4a5b"
+  ],
+  "SpecialCustomOperations": {
+    "**/.env.example": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if": [ "#if" ],
+            "else": [ "#else" ],
+            "elseif": [ "#elseif" ],
+            "endif": [ "#endif" ],
+            "trim": "true",
+            "wholeLine": "true"
+          }
+        }
+      ]
+    }
+  },
   "preferNameDirectory": true,
   "forms": {
     "LastSegment": {
@@ -199,6 +219,7 @@
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginUrlOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginLinkDtos.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/DomainServices/ExternalAuthDomainService.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/Errors/ExternalAuthErrorCodes.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Entities/ExternalLoginConnection.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Abstractions/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",

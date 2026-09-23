@@ -6,7 +6,7 @@ namespace Leistd.Authorization.Checking;
 /// <example>
 /// <code>
 /// if (!await permissionChecker.IsGrantedAsync("Orders.Update", ct))
-///     throw new ForbiddenException();
+///     throw new UnauthorizedAccessException();
 ///
 /// // 批量检查：一次读取，其后都是内存查找
 /// var result = await permissionChecker.IsGrantedAsync(["Orders.Read", "Orders.Update"], ct);

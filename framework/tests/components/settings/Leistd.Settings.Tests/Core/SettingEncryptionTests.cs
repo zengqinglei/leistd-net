@@ -56,7 +56,7 @@ public class SettingEncryptionTests
         await Manager(store, _dataProtection).SetAsync("Email.Password", "s3cret", SettingScopes.Host);
         store.Tenant["Api.Token"] = Assert.Single(store.Writes).Value!;
 
-        await Assert.ThrowsAsync<InternalServerException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => Provider(store, _dataProtection).GetOrNullAsync("Api.Token"));
     }
 

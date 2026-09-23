@@ -7,7 +7,7 @@ namespace Leistd.MultiTenancy.ConnectionStrings;
 /// </summary>
 /// <remarks>
 /// <para>管理面只回名字与版本；明文连接串只经已认证的机器端点，按名字下发给需要连库的服务。</para>
-/// <para>连接名来自 URL，是外部输入：不合法返回带码的 400（<c>TenantConnection:NameInvalid</c>），不以 500 出去。</para>
+/// <para>连接名可来自外部输入；不合法时抛出带 <c>TenantConnection:NameInvalid</c> 错误码的业务异常。</para>
 /// </remarks>
 public interface ITenantConnectionManagementService
 {

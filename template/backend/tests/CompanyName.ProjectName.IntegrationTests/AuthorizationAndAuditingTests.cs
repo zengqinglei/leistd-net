@@ -229,7 +229,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             HttpStatusCode.Forbidden,
             (await session.Client.GetAsync("/api/v1/permissions/definitions")).StatusCode);
 
-        // 只授予「配置角色权限」，不授予 App.Permissions：定义树是配置权限的前置条件，
+        // 只授予「配置角色权限」：权限树只为授予而读，不另设「查看权限目录」权限——
         // 要求额外记得授一个根权限只会制造「有权限却打不开界面」的无用状态。
         await GrantAsync(
             PermissionGrantProviderNames.User,
@@ -572,13 +572,13 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         var adminRoleId = await GetRoleIdAsync(AdminConstant.RoleName);
         var staticDelete = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{adminRoleId}");
-        Assert.Equal(HttpStatusCode.BadRequest, staticDelete.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, staticDelete.StatusCode);
 
         var role = await CreateRoleAsync(superAdmin.Client);
         await CreateUserAsync(superAdmin.Client, [role.Id]);
 
         var assignedDelete = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}");
-        Assert.Equal(HttpStatusCode.BadRequest, assignedDelete.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, assignedDelete.StatusCode);
     }
 
     [Fact]

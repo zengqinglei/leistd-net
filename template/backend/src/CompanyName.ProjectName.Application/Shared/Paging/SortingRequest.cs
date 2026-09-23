@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using CompanyName.ProjectName.Application.Shared.Paging.Errors;
 using Leistd.ExceptionHandling;
 
 namespace CompanyName.ProjectName.Application.Shared.Paging;
@@ -54,23 +55,13 @@ internal static class SortingRequest
     /// 字段不在白名单内：400 并点名该字段
     /// </summary>
     /// <remarks>
-    /// 返回类型是基类 <see cref="BusinessException"/> 而非 <see cref="BadRequestException"/>：
-    /// <c>WithCode</c> 返回基类，写成派生类时只有不带链式调用的形态编译得过。
-    /// 状态码由实际构造的类型决定，不受声明类型影响。
+    /// 返回带稳定业务错误码的 <see cref="BusinessException"/>；HTTP 状态由 API 边界的错误码映射决定。
     /// </remarks>
     internal static BusinessException UnknownField(string field) =>
-        new BadRequestException($"Unsupported sorting field: {field}")
-#if (IncludeLocalization)
-            .WithCode("Paging:SortingFieldUnsupported")
-            .WithData("Field", field)
-#endif
-            ;
+        new BusinessException(PagingErrorCodes.SortingFieldUnsupported, $"Unsupported sorting field: {field}")
+            .WithData("Field", field);
 
     private static BusinessException Invalid(string sorting) =>
-        new BadRequestException($"Invalid sorting expression: {sorting}")
-#if (IncludeLocalization)
-            .WithCode("Paging:SortingInvalid")
-            .WithData("Sorting", sorting)
-#endif
-            ;
+        new BusinessException(PagingErrorCodes.SortingInvalid, $"Invalid sorting expression: {sorting}")
+            .WithData("Sorting", sorting);
 }

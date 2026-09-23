@@ -13,7 +13,7 @@ namespace Leistd.MultiTenancy.Exceptions;
 /// <remarks>
 /// 写入必须携带预期版本；冲突时由调用方重新读取并决定如何合并。
 /// </remarks>
-public class TenantConnectionVersionConflictException : ConflictException
+public class TenantConnectionVersionConflictException : BusinessException
 {
     /// <summary>构造异常。</summary>
     /// <param name="tenantId">目标租户</param>
@@ -28,7 +28,7 @@ public class TenantConnectionVersionConflictException : ConflictException
         long? expectedVersion,
         long? actualVersion,
         Exception? innerException = null)
-        : base(
+        : base(MultiTenancyErrorCodes.ConnectionVersionConflict,
             $"Tenant '{tenantId}' connection configuration version mismatch: " +
             $"expected {Describe(expectedVersion)} but found {Describe(actualVersion)}. " +
             "Re-read the configuration and retry.",
@@ -37,7 +37,6 @@ public class TenantConnectionVersionConflictException : ConflictException
         TenantId = tenantId;
         ExpectedVersion = expectedVersion;
         ActualVersion = actualVersion;
-        WithCode(MultiTenancyErrorCodes.ConnectionVersionConflict);
     }
 
     /// <summary>获取目标租户标识。</summary>

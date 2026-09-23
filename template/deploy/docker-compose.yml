@@ -23,9 +23,18 @@ services:
       # 迁移身份只授予迁移元数据 scope，不给运行时路由
       - Leistd__ServiceClients__Identity__Scope=tenant-migration.read
 #endif
+#if (LocalIdentity)
+      # 独立库连接串在控制库里加密存储：迁移作业必须与 backend 共用同一个 Data Protection 密钥环（Redis），
+      # 否则解不开；开发环境以外没有可用的密钥位置时它会在启动期失败
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false
+#endif
     depends_on:
       db:
         condition: service_healthy
+#if (LocalIdentity)
+      redis:
+        condition: service_healthy
+#endif
     restart: "no"
     networks:
       - companyname-projectname-network
@@ -79,6 +88,15 @@ services:
       - DefaultAdmin__Email=admin@companyname-projectname.com # optional
       - DefaultAdmin__DisplayName=System Administrator # optional
 #endif
+#if (OpenIddictServer)
+
+      # 令牌签名与加密证书（PKCS#12）。文件以 Docker secrets 挂载到 /run/secrets，口令由部署注入；
+      # 开发证书只用于本机，这里没有、也不应打开 OAuth__UseDevelopmentCertificates
+      - OAuth__SigningCertificatePath=/run/secrets/oauth-signing-certificate
+      - OAuth__SigningCertificatePassword=${OAUTH_SIGNING_CERTIFICATE_PASSWORD:?OAUTH_SIGNING_CERTIFICATE_PASSWORD is required}
+      - OAuth__EncryptionCertificatePath=/run/secrets/oauth-encryption-certificate
+      - OAuth__EncryptionCertificatePassword=${OAUTH_ENCRYPTION_CERTIFICATE_PASSWORD:?OAUTH_ENCRYPTION_CERTIFICATE_PASSWORD is required}
+#endif
 
       # CORS Configuration (optional)
       - Cors__AllowAnyLocalhost=false
@@ -100,6 +118,12 @@ services:
 
     volumes:
       - feedback-uploads:/app/wwwroot/uploads
+#if (OpenIddictServer)
+
+    secrets:
+      - oauth-signing-certificate
+      - oauth-encryption-certificate
+#endif
 
     depends_on:
       db:
@@ -191,3 +215,11 @@ volumes:
 networks:
   companyname-projectname-network:
     driver: bridge
+#if (OpenIddictServer)
+
+secrets:
+  oauth-signing-certificate:
+    file: ${OAUTH_SIGNING_CERTIFICATE_FILE:?OAUTH_SIGNING_CERTIFICATE_FILE is required (path to the signing .pfx)}
+  oauth-encryption-certificate:
+    file: ${OAUTH_ENCRYPTION_CERTIFICATE_FILE:?OAUTH_ENCRYPTION_CERTIFICATE_FILE is required (path to the encryption .pfx)}
+#endif

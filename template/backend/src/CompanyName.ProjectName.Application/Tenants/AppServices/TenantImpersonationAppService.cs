@@ -1,4 +1,6 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Tenants.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
@@ -58,18 +60,18 @@ internal sealed class TenantImpersonationAppService(
         // 嵌套后"结束模拟"只能回退一层，顶栏模拟提示里的发起人会与实际回退目标不符。
         if (currentUser.FindClaim(ImpersonationClaimTypes.ImpersonatorUserId) is not null)
         {
-            throw new ForbiddenException("Already impersonating; end the current impersonation first.");
+            throw new BusinessException(TenantErrorCodes.AlreadyImpersonating, "Already impersonating; end the current impersonation first.");
         }
 
         var impersonatorId = currentUser.Id
-            ?? throw new ForbiddenException("Only an authenticated user can start impersonation.");
+            ?? throw new BusinessException(TenantErrorCodes.ImpersonationRequiresAuthentication, "Only an authenticated user can start impersonation.");
 
         var tenant = await tenantStore.FindAsync(tenantId, cancellationToken)
-                     ?? throw new NotFoundException($"Tenant '{tenantId}' not found.");
+                     ?? throw new BusinessException(MultiTenancyErrorCodes.NotFound, $"Tenant '{tenantId}' not found.");
 
         if (!tenant.IsActive)
         {
-            throw new ForbiddenException($"Tenant '{tenant.Name}' is deactivated.");
+            throw new BusinessException(MultiTenancyErrorCodes.NotActive, $"Tenant '{tenant.Name}' is deactivated.");
         }
 
         ClaimsPrincipal principal;
@@ -87,7 +89,7 @@ internal sealed class TenantImpersonationAppService(
                 u => u.Username == AdminConstant.TenantAdminUsername,
                 q => q.OrderBy(u => u.Id),
                 cancellationToken)
-                ?? throw new NotFoundException(
+                ?? throw new BusinessException(TenantErrorCodes.AdministratorNotFound,
                     $"Tenant '{tenant.Name}' has no '{AdminConstant.TenantAdminUsername}' user to impersonate.");
 
             var claims = new List<Claim>
@@ -156,7 +158,7 @@ internal sealed class TenantImpersonationAppService(
     public async Task<ClaimsPrincipal> EndImpersonationAsync(CancellationToken cancellationToken = default)
     {
         var impersonatorId = ReadImpersonatorId()
-            ?? throw new ForbiddenException("The current session is not impersonating.");
+            ?? throw new BusinessException(TenantErrorCodes.NotImpersonating, "The current session is not impersonating.");
 
         var impersonatorTenantId = ReadImpersonatorTenantId();
 
@@ -191,7 +193,7 @@ internal sealed class TenantImpersonationAppService(
                 u => u.Id == impersonatorId,
                 q => q.OrderBy(u => u.Id),
                 cancellationToken)
-                ?? throw new NotFoundException("The impersonating user no longer exists.");
+                ?? throw new BusinessException(UserErrorCodes.NotFound, "The impersonating user no longer exists.");
 
             principal = await sessionSignInService.SignInAsync(
                 impersonator, cancellationToken: cancellationToken);

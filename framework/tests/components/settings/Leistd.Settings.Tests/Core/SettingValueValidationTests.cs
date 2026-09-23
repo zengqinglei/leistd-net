@@ -31,7 +31,7 @@ public class SettingValueValidationTests
     {
         var (manager, store, _) = Build();
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(() => manager.SetAsync(name, value, Scope(name)));
+        var error = await Assert.ThrowsAsync<BusinessException>(() => manager.SetAsync(name, value, Scope(name)));
 
         Assert.Equal(code, error.Code);
         Assert.Empty(store.Writes);
@@ -57,10 +57,10 @@ public class SettingValueValidationTests
         var validator = new RejectingValidator("Display.TimeZone", "Mars/Olympus");
         var (manager, store, _) = Build(validator);
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => manager.SetAsync("Display.TimeZone", "Mars/Olympus", SettingScopes.User, "u1"));
 
-        Assert.Equal("Setting:TimeZoneInvalid", error.Code);
+        Assert.Equal("AppSetting:TimeZoneInvalid", error.Code);
         Assert.Equal(SettingScopes.User, validator.Seen!.Scope);
         Assert.Equal("u1", validator.Seen.UserId);
         Assert.Empty(store.Writes);
@@ -98,7 +98,7 @@ public class SettingValueValidationTests
     {
         var (manager, _, events) = Build();
 
-        await Assert.ThrowsAsync<BadRequestException>(() => manager.SetAsync("Security.RequireTwoFactor", "yes", SettingScopes.Tenant));
+        await Assert.ThrowsAsync<BusinessException>(() => manager.SetAsync("Security.RequireTwoFactor", "yes", SettingScopes.Tenant));
 
         Assert.Empty(events.Published);
     }
@@ -144,7 +144,7 @@ public class SettingValueValidationTests
             Seen = context;
             if (context.Definition.Name == name && context.Value == value)
             {
-                throw new BadRequestException($"'{value}' is not valid.").WithCode("Setting:TimeZoneInvalid");
+                throw new BusinessException("AppSetting:TimeZoneInvalid", $"'{value}' is not valid.");
             }
 
             return Task.CompletedTask;

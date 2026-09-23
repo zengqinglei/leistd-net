@@ -1,7 +1,7 @@
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Text;
 using Leistd.Data.Paging;
-using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
@@ -36,7 +36,7 @@ internal sealed class OperationRecordQueryService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
-        UnprocessableEntityException.ThrowIfInvalid(input);
+        Validator.ValidateObject(input, new ValidationContext(input), validateAllProperties: true);
 
         var reader = ResolveReader();
 
@@ -84,7 +84,7 @@ internal sealed class OperationRecordQueryService(
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(audit);
-        UnprocessableEntityException.ThrowIfInvalid(input);
+        Validator.ValidateObject(input, new ValidationContext(input), validateAllProperties: true);
 
         var reader = ResolveReader();
         var actions = ResolveRequestedActions(input.Categories, input.Actions, reader.IsHost);

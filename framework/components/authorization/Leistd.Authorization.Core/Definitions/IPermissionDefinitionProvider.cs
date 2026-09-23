@@ -45,7 +45,7 @@ public interface IPermissionDefinitionContext
     /// 获取或创建权限组。
     /// </summary>
     /// <param name="name">组名称</param>
-    /// <param name="displayName">显示名称</param>
+    /// <param name="displayName">默认显示名（通常是英文），未启用本地化或缺词条时直接展示；词条键按约定由名称拼出。</param>
     /// <returns>权限组</returns>
     /// <remarks>组不带侧别：侧别由每个权限在 <c>AddPermission</c> 处显式声明，见那里的说明。</remarks>
     IPermissionGroupDefinition GetOrAddGroup(string name, string? displayName = null);
@@ -69,8 +69,9 @@ public interface IPermissionGroupDefinition
     string Name { get; }
 
     /// <summary>
-    /// 获取或设置显示名称。
+    /// 获取或设置默认显示名，未启用本地化或缺词条时直接展示。
     /// </summary>
+    /// <remarks>本地化词条键按约定为 <c>PermissionGroup:{组名}</c>，不写在这里。</remarks>
     string? DisplayName { get; set; }
 
     /// <summary>
@@ -87,7 +88,7 @@ public interface IPermissionGroupDefinition
     /// 而宿主全局资源落成 <c>Both</c> 就是跨租户越权，且只在真的建了租户之后才暴露。
     /// 判据是这条权限背后的数据带不带租户维度。
     /// </param>
-    /// <param name="displayName">显示名称</param>
+    /// <param name="displayName">默认显示名（通常是英文），未启用本地化或缺词条时直接展示；词条键按约定由名称拼出。</param>
     /// <returns>权限定义</returns>
     IPermissionDefinition AddPermission(string name, MultiTenancySides side, string? displayName = null);
 
@@ -110,8 +111,9 @@ public interface IPermissionDefinition
     string Name { get; }
 
     /// <summary>
-    /// 获取或设置显示名称。
+    /// 获取或设置默认显示名，未启用本地化或缺词条时直接展示。
     /// </summary>
+    /// <remarks>本地化词条键按约定为 <c>Permission:{权限名}</c>，不写在这里。</remarks>
     string? DisplayName { get; set; }
 
     /// <summary>
@@ -138,7 +140,7 @@ public interface IPermissionDefinition
     /// 添加子权限。
     /// </summary>
     /// <param name="name">权限名称</param>
-    /// <param name="displayName">显示名称</param>
+    /// <param name="displayName">默认显示名（通常是英文），未启用本地化或缺词条时直接展示；词条键按约定由名称拼出。</param>
     /// <param name="side">多租户侧别；不指定时继承父权限的侧别</param>
     /// <returns>子权限定义</returns>
     IPermissionDefinition AddChild(string name, string? displayName = null, MultiTenancySides? side = null);

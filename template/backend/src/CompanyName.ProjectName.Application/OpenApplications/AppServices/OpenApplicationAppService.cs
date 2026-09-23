@@ -1,4 +1,7 @@
 #if (LocalIdentity)
+#if (OpenIddictServer)
+using CompanyName.ProjectName.Application.OpenApplications.Errors;
+#endif
 using Leistd.ExceptionHandling;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -167,21 +170,14 @@ public class OpenApplicationAppService(
         var clientId = input.ClientId.Trim();
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            throw new BadRequestException("Client ID is required.")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:ClientIdRequired")
-#endif
+            throw new BusinessException(OpenAppErrorCodes.ClientIdRequired, "Client ID is required.")
                 ;
         }
 
         if (await applicationManager.FindByClientIdAsync(clientId, cancellationToken) != null)
         {
-            throw new BadRequestException($"Client ID already exists: {clientId}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:ClientIdTaken")
-                .WithData("ClientId", clientId)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.ClientIdTaken, $"Client ID already exists: {clientId}")
+                .WithData("ClientId", clientId);
         }
 
         ValidateApplication(input.ApplicationType, input.ClientType, input.ConsentType, input.RedirectUris, input.PostLogoutRedirectUris, input.Requirements, input.Permissions);
@@ -229,12 +225,7 @@ public class OpenApplicationAppService(
         catch (OpenIddict.Abstractions.OpenIddictExceptions.ValidationException ex)
         {
             logger.LogWarning(ex, "OpenIddict validation failed (ClientId: {ClientId})", clientId);
-            throw new BadRequestException($"Failed to create client: {ex.Message}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:CreateFailed")
-                .WithData("Reason", ex.Message)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.CreateFailed, "The open application could not be created.", ex);
         }
     }
 
@@ -283,10 +274,7 @@ public class OpenApplicationAppService(
         var clientType = await applicationManager.GetClientTypeAsync(application, cancellationToken);
         if (clientType != OpenIddictConstants.ClientTypes.Confidential)
         {
-            throw new BadRequestException("Only confidential clients can reset their secret.")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:SecretResetConfidentialOnly")
-#endif
+            throw new BusinessException(OpenAppErrorCodes.SecretResetConfidentialOnly, "Only confidential clients can reset their secret.")
                 ;
         }
 
@@ -301,12 +289,8 @@ public class OpenApplicationAppService(
         var application = await applicationManager.FindByIdAsync(id, cancellationToken);
         if (application == null)
         {
-            throw new NotFoundException($"Open application not found: {id}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:NotFound")
-                .WithData("Id", id)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.NotFound, $"Open application not found: {id}")
+                .WithData("Id", id);
         }
 
         return application;
@@ -335,32 +319,20 @@ public class OpenApplicationAppService(
     {
         if (!ApplicationTypes.Contains(applicationType))
         {
-            throw new BadRequestException($"Unsupported application type: {applicationType}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:ApplicationTypeUnsupported")
-                .WithData("ApplicationType", applicationType)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.ApplicationTypeUnsupported, $"Unsupported application type: {applicationType}")
+                .WithData("ApplicationType", applicationType);
         }
 
         if (!ClientTypes.Contains(clientType))
         {
-            throw new BadRequestException($"Unsupported client type: {clientType}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:ClientTypeUnsupported")
-                .WithData("ClientType", clientType)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.ClientTypeUnsupported, $"Unsupported client type: {clientType}")
+                .WithData("ClientType", clientType);
         }
 
         if (!ConsentTypes.Contains(consentType))
         {
-            throw new BadRequestException($"Unsupported consent type: {consentType}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:ConsentTypeUnsupported")
-                .WithData("ConsentType", consentType)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.ConsentTypeUnsupported, $"Unsupported consent type: {consentType}")
+                .WithData("ConsentType", consentType);
         }
 
         // Secret 由后端自动生成，不从前端传入，无需校验
@@ -368,10 +340,7 @@ public class OpenApplicationAppService(
         if ((applicationType == OpenIddictConstants.ApplicationTypes.Native || clientType == OpenIddictConstants.ClientTypes.Public) &&
             !requirements.Contains(PkceRequirement))
         {
-            throw new BadRequestException("PKCE must be enabled for native/public clients.")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:PkceRequired")
-#endif
+            throw new BusinessException(OpenAppErrorCodes.PkceRequired, "PKCE must be enabled for native/public clients.")
                 ;
         }
 
@@ -381,12 +350,8 @@ public class OpenApplicationAppService(
             if (RegisteredScopePermissions.Contains(permission))
                 continue;
 
-            throw new BadRequestException($"Unsupported scope permission: {permission}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:ScopeUnsupported")
-                .WithData("Scope", permission)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.ScopeUnsupported, $"Unsupported scope permission: {permission}")
+                .WithData("Scope", permission);
         }
 
         ValidateMachineOnlyScopes(clientType, permissions);
@@ -444,49 +409,33 @@ public class OpenApplicationAppService(
 
         if (clientType != OpenIddictConstants.ClientTypes.Confidential)
         {
-            throw new BadRequestException(
-                $"Internal control-plane scopes ({scopeList}) require a confidential client.")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:MachineScopeRequiresConfidential")
-                .WithData("Scopes", scopeList)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.MachineScopeRequiresConfidential,
+                    $"Internal control-plane scopes ({scopeList}) require a confidential client.")
+                .WithData("Scopes", scopeList);
         }
 
         if (!permissions.Contains(OpenIddictConstants.Permissions.GrantTypes.ClientCredentials))
         {
-            throw new BadRequestException(
-                $"Internal control-plane scopes ({scopeList}) require the client_credentials grant type.")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:MachineScopeRequiresClientCredentials")
-                .WithData("Scopes", scopeList)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.MachineScopeRequiresClientCredentials,
+                    $"Internal control-plane scopes ({scopeList}) require the client_credentials grant type.")
+                .WithData("Scopes", scopeList);
         }
 
         if (!permissions.Contains(OpenIddictConstants.Permissions.Endpoints.Token))
         {
-            throw new BadRequestException(
-                $"Internal control-plane scopes ({scopeList}) require the token endpoint permission.")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:MachineScopeRequiresTokenEndpoint")
-                .WithData("Scopes", scopeList)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.MachineScopeRequiresTokenEndpoint,
+                    $"Internal control-plane scopes ({scopeList}) require the token endpoint permission.")
+                .WithData("Scopes", scopeList);
         }
 
         var humanGrants = permissions.Where(HumanGrantPermissions.Contains).ToList();
         if (humanGrants.Count > 0)
         {
-            throw new BadRequestException(
+            throw new BusinessException(OpenAppErrorCodes.MachineScopeRejectsUserGrants,
                 $"Internal control-plane scopes ({scopeList}) cannot be combined with user-facing grant " +
                 $"types ({string.Join(", ", humanGrants)}).")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:MachineScopeRejectsUserGrants")
                 .WithData("Scopes", scopeList)
-                .WithData("Grants", string.Join(", ", humanGrants))
-#endif
-                ;
+                .WithData("Grants", string.Join(", ", humanGrants));
         }
     }
 
@@ -495,12 +444,8 @@ public class OpenApplicationAppService(
         if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsWhiteSpace) ||
             !Uri.TryCreate(value, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.Fragment))
         {
-            throw new BadRequestException($"Invalid URI: {value}")
-#if (IncludeLocalization)
-                .WithCode("OpenApp:InvalidUri")
-                .WithData("Uri", value)
-#endif
-                ;
+            throw new BusinessException(OpenAppErrorCodes.InvalidUri, $"Invalid URI: {value}")
+                .WithData("Uri", value);
         }
     }
 

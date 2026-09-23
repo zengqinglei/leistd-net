@@ -13,9 +13,8 @@
     <!-- CorrelationId 让记录可以保持窄：细节留在日志里，按同一个链路标识回查 -->
     <ProjectReference Include="..\..\tracing\Leistd.Tracing.Core\Leistd.Tracing.Core.csproj" />
     <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
-    <!-- 查询用例：分页契约与带字段错误的校验异常 -->
+    <!-- 查询用例：分页契约 -->
     <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
-    <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
   </ItemGroup>
 
   <!--

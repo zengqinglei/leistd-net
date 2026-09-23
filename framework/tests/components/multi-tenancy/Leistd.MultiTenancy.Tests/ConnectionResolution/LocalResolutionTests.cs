@@ -3,6 +3,7 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
+using Leistd.MultiTenancy.Exceptions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -152,7 +153,7 @@ public sealed class LocalResolutionTests : IDisposable
         _tenant.Id = await SeedTenantAsync();
         await RegisterAsync(_tenant.Id!.Value, "foundation", AcmeConnection);
 
-        var error = await Assert.ThrowsAsync<InternalServerException>(
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => Resolver(crmConnection: CrmHostConnection).ResolveAsync("Crm"));
 
         Assert.DoesNotContain("acme-secret", error.ToString());
@@ -178,7 +179,7 @@ public sealed class LocalResolutionTests : IDisposable
         _tenant.Id = await SeedTenantAsync();
         await RegisterAsync(_tenant.Id!.Value, "default", AcmeConnection);
 
-        var error = await Assert.ThrowsAsync<InternalServerException>(
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
             () => Resolver(keyRing: new EphemeralDataProtectionProvider()).ResolveAsync("Default"));
 
         Assert.DoesNotContain("acme-secret", error.ToString());
@@ -191,7 +192,7 @@ public sealed class LocalResolutionTests : IDisposable
         _tenant.Id = await SeedTenantAsync(deleted: true);
         await RegisterAsync(_tenant.Id!.Value, "default", AcmeConnection);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => Resolver().ResolveAsync("Default"));
+        await Assert.ThrowsAsync<TenantNotFoundException>(() => Resolver().ResolveAsync("Default"));
     }
 
     [Fact]
@@ -199,7 +200,7 @@ public sealed class LocalResolutionTests : IDisposable
     {
         _tenant.Id = Guid.NewGuid();
 
-        await Assert.ThrowsAsync<NotFoundException>(() => Resolver().ResolveAsync("Default"));
+        await Assert.ThrowsAsync<TenantNotFoundException>(() => Resolver().ResolveAsync("Default"));
     }
 
     [Fact]

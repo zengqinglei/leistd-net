@@ -106,7 +106,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             last = await SecondStepErrorAsync(host, new { Token = token, Code = "000000" });
         }
 
-        Assert.Equal(ExpectedErrorCode.Of("Auth:UserTemporarilyLockedOut", "Error:Unauthorized"), last);
+        Assert.Equal("Auth:UserTemporarilyLockedOut", last);
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             clock.Advance();
             using var disable = await reissued.PostAsJsonAsync("/api/v1/auth/me/two-factor/disable",
                 new { Password, Code = Code(secret, clock) });
-            Assert.Equal(ExpectedErrorCode.Of("Auth:TwoFactorRequiredByPolicy", "Error:BadRequest"), await ErrorCodeAsync(disable));
+            Assert.Equal("Auth:TwoFactorRequiredByPolicy", await ErrorCodeAsync(disable));
         }
         finally
         {

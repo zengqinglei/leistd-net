@@ -117,7 +117,7 @@ public sealed class DefaultSettingProvider(
         catch (CryptographicException exception)
         {
             // 密钥丢失、密钥环未共享或密文被篡改；拒绝而不是回退到默认值。消息只带设置名，不回显密文
-            throw new InternalServerException(
+            throw new InvalidOperationException(
                 $"Setting '{definition.Name}' could not be decrypted with the current Data Protection key ring. " +
                 "Check that this process shares the key ring and application name of the process that wrote it.",
                 exception);

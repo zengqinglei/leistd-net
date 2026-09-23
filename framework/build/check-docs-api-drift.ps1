@@ -122,6 +122,8 @@ $allow = @(
     # 第三方基类（Castle / Mapster / AutoMapper）
     'AsyncInterceptorBase','IMapperConfigurationExpression','TypeAdapterConfig','Profile','IInterceptor',
     'AddProfile','CreateMap',
+    # Polly（service-client 文档说明宿主弹性管道的超时异常如何被归类）
+    'TimeoutRejectedException',
     # Refit（service-client 文档引用的第三方类型/特性；AttachmentName 为已废弃特性，文档明确禁用）
     'StreamPart','ByteArrayPart','FileInfoPart','ApiResponse','ApiException','RefitSettings',
     'BodySerializationMethod','AttachmentName',

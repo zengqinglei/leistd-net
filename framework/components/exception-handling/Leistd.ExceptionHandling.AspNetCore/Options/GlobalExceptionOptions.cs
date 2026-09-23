@@ -1,5 +1,7 @@
 namespace Leistd.ExceptionHandling.AspNetCore.Options;
 
+using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+
 /// <summary>
 /// 配置全局异常响应。
 /// </summary>
@@ -14,28 +16,58 @@ public class GlobalExceptionOptions
     /// </remarks>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>
-    /// 排除的URI模式（如：/api/health/**）
-    /// </summary>
-    public HashSet<string> ExcludePatterns { get; set; } = [];
-
-    /// <summary>
-    /// 是否在错误响应中包含业务诊断详情和异常堆栈。默认 <see langword="false"/>。
-    /// </summary>
+    /// <summary>是否在错误响应中包含异常堆栈。默认 <see langword="false"/>。</summary>
     public bool IncludeExceptionDetails { get; set; }
 
-    /// <summary>
-    /// 词条未命中时，业务异常的 <c>Message</c> 呈现给终端用户的范围。默认 <see cref="BusinessMessageExposure.ClientErrors"/>。
-    /// </summary>
+    private readonly Dictionary<string, int> _codeStatusMappings = new(StringComparer.Ordinal);
+
+    /// <summary>当前生效的业务错误码到 HTTP 状态码映射。未命中的业务异常默认映射为 400。</summary>
     /// <remarks>
-    /// <b>默认就把原因说出来</b>：4xx 的消息直出，5xx 的不直出。错误原因是产品行为的一部分，
-    /// 不该因为"某个抛出点忘了声明"而变成一句无信息量的通用话；而真正需要藏起来的是 5xx 的
-    /// 内部诊断，那按状态码类别一刀切就够了，不必让每个调用点各自判断。
-    /// <para>
-    /// 有词条时仍以词条优先（见处理器的解析顺序），本项只管"没有词条可用"的那一档。
-    /// 诊断详情与堆栈由 <see cref="IncludeExceptionDetails"/> 独立控制，二者互不影响。
-    /// </para>
-    /// <para>本项经 <c>IOptionsMonitor</c> 读取，改配置即时生效，不必重启。</para>
+    /// 只读：写入只经 <see cref="MapCode"/> 与 <see cref="MapDefaultCode"/>，宿主映射优先于组件默认值才与调用顺序无关。
+    /// HTTP 状态属于 API 契约，在组合根代码里声明，不从配置文件读取。
     /// </remarks>
-    public BusinessMessageExposure MessageExposure { get; set; } = BusinessMessageExposure.ClientErrors;
+    public IReadOnlyDictionary<string, int> CodeStatusMappings => _codeStatusMappings;
+
+    internal Dictionary<Type, Func<Exception, ExceptionDescriptor>> ExceptionMappings { get; } = [];
+
+    /// <summary>将业务错误码映射为指定 HTTP 状态码。</summary>
+    public void MapCode(string code, int statusCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        ValidateStatusCode(statusCode);
+        _codeStatusMappings[code] = statusCode;
+    }
+
+    /// <summary>登记组件拥有的默认状态；宿主的 <see cref="MapCode"/> 始终优先，与调用顺序无关。</summary>
+    public void MapDefaultCode(string code, int statusCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        ValidateStatusCode(statusCode);
+        _codeStatusMappings.TryAdd(code, statusCode);
+    }
+
+    /// <summary>为指定异常类型注册精确的响应描述映射。</summary>
+    public void MapException<TException>(Func<TException, ExceptionDescriptor> mapping)
+        where TException : Exception
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        ExceptionMappings[typeof(TException)] = exception => mapping((TException)exception);
+    }
+
+    /// <summary>登记组件拥有的默认异常类型映射；宿主对同一类型的 <see cref="MapException{TException}"/> 始终优先。</summary>
+    public void MapDefaultException<TException>(Func<TException, ExceptionDescriptor> mapping)
+        where TException : Exception
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        ExceptionMappings.TryAdd(typeof(TException), exception => mapping((TException)exception));
+    }
+
+    internal bool TryGetStatusCode(string code, out int statusCode)
+        => _codeStatusMappings.TryGetValue(code, out statusCode);
+
+    private static void ValidateStatusCode(int statusCode)
+    {
+        if (statusCode is < 400 or > 599)
+            throw new ArgumentOutOfRangeException(nameof(statusCode), statusCode, "Exception status codes must be between 400 and 599.");
+    }
 }

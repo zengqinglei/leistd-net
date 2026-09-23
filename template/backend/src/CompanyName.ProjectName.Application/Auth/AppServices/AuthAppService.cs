@@ -1,4 +1,8 @@
 using CompanyName.ProjectName.Application.Auth.SignIn;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
+#endif
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Application.Auth.Constants;
@@ -108,12 +112,7 @@ internal sealed class AuthAppService(
                         $$"""{"attempts":{{attempts}},"windowMinutes":{{FailedLoginWindowMinutes}}}"""));
             }
 
-            throw new UnauthorizedException($"Login failed: user not found or incorrect password - {input.UsernameOrEmail}")
-#if (IncludeLocalization)
-                .WithCode("Auth:InvalidCredentials")
-                .WithData("UsernameOrEmail", input.UsernameOrEmail)
-#endif
-                ;
+            throw new BusinessException(AuthErrorCodes.InvalidCredentials, "The username or password is incorrect.");
         }
 
         var user = result.User!;
@@ -182,10 +181,7 @@ internal sealed class AuthAppService(
         }
         else
         {
-            throw new BadRequestException("Enter the verification code or a recovery code.")
-#if (IncludeLocalization)
-                .WithCode("Auth:TwoFactorCodeRequired")
-#endif
+            throw new BusinessException(AuthErrorCodes.TwoFactorCodeRequired, "Enter the verification code or a recovery code.")
                 ;
         }
 
@@ -207,9 +203,7 @@ internal sealed class AuthAppService(
                 throw TwoFactorChallengeExpired();
             }
 
-            throw new UnauthorizedException("The verification code is incorrect.")
-                // 错误码在不含本地化的形态下也要带：界面按它区分"重输"与"回到密码那一步"
-                .WithCode("Auth:TwoFactorCodeInvalid");
+            throw new BusinessException(AuthErrorCodes.TwoFactorCodeInvalid, "The verification code is incorrect.");
         }
 
         await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
@@ -266,10 +260,7 @@ internal sealed class AuthAppService(
     }
 
     private static BusinessException TwoFactorChallengeExpired() =>
-        new UnauthorizedException("The sign-in attempt has expired. Sign in again.")
-#if (IncludeLocalization)
-            .WithCode("Auth:TwoFactorChallengeExpired")
-#endif
+        new BusinessException(AuthErrorCodes.TwoFactorChallengeExpired, "The sign-in attempt has expired. Sign in again.")
         ;
 
     /// <summary>失败登录的计数窗口（分钟）。</summary>
@@ -338,10 +329,7 @@ internal sealed class AuthAppService(
         {
             if (input.EmailVerification is null || input.EmailVerification.ChallengeId == Guid.Empty)
             {
-                throw new BadRequestException("Please enter the email verification code.")
-#if (IncludeLocalization)
-                    .WithCode("Auth:EmailCodeRequired")
-#endif
+                throw new BusinessException(AuthErrorCodes.EmailCodeRequired, "Please enter the email verification code.")
                     ;
             }
 
@@ -351,10 +339,7 @@ internal sealed class AuthAppService(
                 cancellationToken);
             if (!isValidEmailCode)
             {
-                throw new BadRequestException("The email verification code is incorrect or has expired.")
-#if (IncludeLocalization)
-                    .WithCode("Auth:EmailCodeInvalid")
-#endif
+                throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
                     ;
             }
         }
@@ -363,10 +348,7 @@ internal sealed class AuthAppService(
             var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
             if (!isValidCaptcha)
             {
-                throw new BadRequestException("The image captcha is incorrect or has expired.")
-#if (IncludeLocalization)
-                    .WithCode("Auth:CaptchaInvalid")
-#endif
+                throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.")
                     ;
             }
         }
@@ -408,12 +390,8 @@ internal sealed class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
         }
 
         logger.LogInformation("Updating current user profile (ID: {UserId})", user.Id);
@@ -441,12 +419,8 @@ internal sealed class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
         }
 
         logger.LogInformation("Changing current user password (ID: {UserId})", user.Id);
@@ -482,10 +456,7 @@ internal sealed class AuthAppService(
         {
             AvatarPolicy.EnsureValid(input.Avatar);
             // 外部地址本身合法，但不是本人上传的入口能写的东西
-            throw new BadRequestException("The avatar must be a PNG, JPEG or WebP image.")
-#if (IncludeLocalization)
-                .WithCode("User:AvatarInvalid")
-#endif
+            throw new BusinessException(UserErrorCodes.AvatarInvalid, "The avatar must be a PNG, JPEG or WebP image.")
                 ;
         }
 
@@ -509,10 +480,7 @@ internal sealed class AuthAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         if (user.EmailConfirmed)
         {
-            throw new BadRequestException("This email address has already been verified.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailAlreadyVerified")
-#endif
+            throw new BusinessException(AuthErrorCodes.EmailAlreadyVerified, "This email address has already been verified.")
                 ;
         }
 
@@ -531,10 +499,7 @@ internal sealed class AuthAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         if (!await emailVerificationAppService.ValidateAccountEmailChallengeAsync(user.Email, input, cancellationToken))
         {
-            throw new BadRequestException("The email verification code is incorrect or has expired.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailCodeInvalid")
-#endif
+            throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
                 ;
         }
 
@@ -554,12 +519,8 @@ internal sealed class AuthAppService(
     {
         var userId = currentUser.Id!.Value;
         return await userRepository.GetByIdAsync(userId, cancellationToken)
-            ?? throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            ?? throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
     }
 
     private async Task<UserOutputDto> GetCurrentUserOutputAsync(Guid userId, CancellationToken cancellationToken)
@@ -567,12 +528,8 @@ internal sealed class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
         }
 
         var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);

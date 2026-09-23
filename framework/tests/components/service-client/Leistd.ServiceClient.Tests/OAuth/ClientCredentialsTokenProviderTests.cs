@@ -2,6 +2,7 @@ using System.Net;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.OAuth.Options;
 using Leistd.ServiceClient.OAuth.Services;
+using Leistd.ServiceClient.Tests.TestDoubles;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.ServiceClient.OAuth.Abstractions;
@@ -173,17 +174,81 @@ public class ClientCredentialsTokenProviderTests
     }
 
     [Fact]
-    public async Task Endpoint_error_throws_ServiceClientException()
+    public async Task Endpoint_error_preserves_remote_status_without_classifying_local_failure()
     {
         var (provider, _) = Create(responder: _ => new HttpResponseMessage(HttpStatusCode.BadRequest)
         {
             Content = new StringContent("""{"error":"invalid_client"}"""),
         });
 
-        var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() =>
             provider.GetAccessTokenAsync(ClientName));
 
         Assert.Contains("invalid_client", exception.Message);
+        Assert.Equal(400, exception.RemoteStatusCode);
+        Assert.Equal(ServiceClientFailureKind.RemoteFailure, exception.FailureKind);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.RequestTimeout)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task Token_endpoint_status_does_not_become_a_local_transport_failure(HttpStatusCode remoteStatus)
+    {
+        var (provider, _) = Create(responder: _ => new HttpResponseMessage(remoteStatus)
+        {
+            Content = new StringContent("remote diagnostic"),
+        });
+
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() =>
+            provider.GetAccessTokenAsync(ClientName));
+
+        Assert.Equal((int)remoteStatus, exception.RemoteStatusCode);
+        Assert.Equal(ServiceClientFailureKind.RemoteFailure, exception.FailureKind);
+    }
+
+    [Fact]
+    public async Task Token_request_timeout_without_caller_cancellation_is_classified_as_timeout()
+    {
+        var (provider, _) = Create(responder: _ => throw new OperationCanceledException("token endpoint timed out"));
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+            provider.GetAccessTokenAsync(ClientName));
+
+        Assert.Equal(ServiceClientFailureKind.Timeout, exception.FailureKind);
+        Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.InvalidResponse)]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    public async Task Malformed_or_incomplete_token_response_is_classified_as_invalid_response(HttpRequestError error)
+    {
+        var (provider, _) = Create(responder: _ => throw new HttpIOException(error, "token response ended"));
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+            provider.GetAccessTokenAsync(ClientName));
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+        Assert.IsType<HttpIOException>(exception.InnerException);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.InvalidResponse)]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    public async Task Token_response_body_failure_is_classified_while_send_async_buffers_the_response(HttpRequestError error)
+    {
+        var (provider, _) = Create(responder: _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingHttpContent(new HttpIOException(error, "token response body ended")),
+        });
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() =>
+            provider.GetAccessTokenAsync(ClientName));
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+        var transportException = Assert.IsType<HttpRequestException>(exception.InnerException);
+        Assert.IsType<HttpIOException>(transportException.InnerException);
     }
 
     [Fact]

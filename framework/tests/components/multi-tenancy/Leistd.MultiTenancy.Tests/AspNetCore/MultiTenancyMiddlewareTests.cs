@@ -172,7 +172,6 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
 
         Assert.Equal(unknown.GetType(), inactive.GetType());
         Assert.Equal(unknown.Code, inactive.Code);
-        Assert.Equal(unknown.StatusCode, inactive.StatusCode);
     }
 
     [Fact]

@@ -1,5 +1,4 @@
 #if (LocalIdentity)
-using Leistd.ExceptionHandling;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Web;
@@ -58,11 +57,7 @@ internal sealed class GitHubOAuthProvider(
         if (string.IsNullOrEmpty(accessToken))
         {
             logger.LogError("Failed to obtain GitHub access token: {Response}", responseContent);
-            throw new BadRequestException("Failed to obtain GitHub access token.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:GitHubTokenFailed")
-#endif
-            ;
+            throw new InvalidOperationException("The GitHub token response did not contain an access token.");
         }
 
         return new OAuthTokenInfo
@@ -85,11 +80,7 @@ internal sealed class GitHubOAuthProvider(
         var userInfo = await response.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>(cancellationToken);
         if (userInfo == null)
         {
-            throw new BadRequestException("Failed to obtain GitHub user information.")
-#if (IncludeLocalization)
-                .WithCode("ExternalAuth:GitHubUserInfoFailed")
-#endif
-            ;
+            throw new InvalidOperationException("The GitHub user-info response was empty.");
         }
 
         return new ExternalUserInfo
@@ -108,12 +99,7 @@ internal sealed class GitHubOAuthProvider(
         if (provider.IsAvailable)
             return provider;
 
-        throw new NotFoundException("External identity provider GitHub is not configured.")
-#if (IncludeLocalization)
-            .WithCode("ExternalAuth:ProviderNotConfigured")
-            .WithData("Provider", "GitHub")
-#endif
-            ;
+        throw new InvalidOperationException("External identity provider GitHub is not configured.");
     }
 }
 #endif

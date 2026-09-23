@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
@@ -16,7 +18,7 @@ using Xunit;
 namespace Leistd.ExceptionHandling.Tests;
 
 /// <summary>
-/// 全局异常处理接入真实管道后的行为：注册面、排除模式与诊断抑制。
+/// 全局异常处理接入真实管道后的行为：注册面、映射优先级与诊断抑制。
 /// </summary>
 /// <remarks>
 /// <c>AddGlobalExceptionHandler</c> / <c>UseGlobalExceptionHandler</c> 是这个家族唯一的接入方式，
@@ -43,9 +45,11 @@ public class GlobalExceptionPipelineTests
                     {
                         var path = context.Request.Path.Value ?? "";
                         if (path.StartsWith("/api/orders/", StringComparison.Ordinal))
-                            throw new NotFoundException($"Order {path[12..]} not found.");
-                        if (path is "/api/health/live" or "/internal/metrics")
-                            throw new InvalidOperationException("probe blew up");
+                            throw new BusinessException("OrderNotFound", $"Order {path[12..]} not found.");
+                        if (path == "/api/custom")
+                            throw new CustomApiException("custom failure");
+                        if (path == "/api/programmer-error")
+                            throw new ArgumentNullException("input", "developer-only detail");
 
                         context.Response.ContentType = "application/json";
                         await context.Response.WriteAsync("""{"ok":true}""");
@@ -57,7 +61,11 @@ public class GlobalExceptionPipelineTests
     }
 
     private static Action<IServiceCollection> WithOptions(Action<GlobalExceptionOptions>? configure = null) =>
-        services => services.AddGlobalExceptionHandler(o => configure?.Invoke(o));
+        services => services.AddGlobalExceptionHandler(o =>
+        {
+            o.MapCode("OrderNotFound", StatusCodes.Status404NotFound);
+            configure?.Invoke(o);
+        });
 
     [Fact]
     public async Task Business_exception_becomes_problem_details_with_its_own_status()
@@ -72,64 +80,107 @@ public class GlobalExceptionPipelineTests
         Assert.True(problem.TryGetProperty("traceId", out _));
     }
 
-    // 配置绑定重载与委托重载必须给出同一结果，否则宿主换一种配法行为就变了。
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Host_problem_details_customization_survives_trace_id_registration(bool hostFirst)
+    {
+        using var server = await StartAsync(services =>
+        {
+            void ConfigureHost() => services.AddProblemDetails(options =>
+                options.CustomizeProblemDetails = context =>
+                    context.ProblemDetails.Extensions["hostMarker"] = "retained");
+
+            if (hostFirst)
+                ConfigureHost();
+            services.AddGlobalExceptionHandler(_ => { });
+            if (!hostFirst)
+                ConfigureHost();
+        });
+
+        var response = await server.CreateClient().GetAsync("/api/programmer-error");
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("retained", problem.GetProperty("hostMarker").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("traceId").GetString()));
+    }
+
     [Fact]
-    public async Task Configuration_bound_overload_behaves_like_the_delegate_overload()
+    public async Task Bcl_programming_exception_is_a_safe_internal_server_error()
+    {
+        using var server = await StartAsync(WithOptions());
+
+        var response = await server.CreateClient().GetAsync("/api/programmer-error");
+        var content = await response.Content.ReadAsStringAsync();
+        using var problem = JsonDocument.Parse(content);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        // 未预期异常只有状态码语义：本地化标题 + traceId，不合成业务码、不回显异常消息
+        Assert.False(problem.RootElement.TryGetProperty("code", out _));
+        Assert.False(problem.RootElement.TryGetProperty("detail", out _));
+        Assert.True(problem.RootElement.TryGetProperty("traceId", out _));
+        Assert.DoesNotContain("developer-only detail", content);
+    }
+
+    // 配置绑定重载读取 Leistd:GlobalException 配置节（Enabled、IncludeExceptionDetails）。
+    [Fact]
+    public async Task Configuration_bound_overload_binds_the_section()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Leistd:GlobalException:ExcludePatterns:0"] = "/api/health/**",
+                ["Leistd:GlobalException:Enabled"] = "false",
             })
             .Build();
 
         using var server = await StartAsync(services => services.AddGlobalExceptionHandler(configuration));
 
-        // 命中排除模式：异常不被转成 ProblemDetails，原样冒泡成 500
-        var excluded = await server.CreateClient().GetAsync("/api/health/live");
-        Assert.Equal(HttpStatusCode.InternalServerError, excluded.StatusCode);
-
-        // 未命中：照常处理
-        var handled = await server.CreateClient().GetAsync("/api/orders/7");
-        Assert.Equal(HttpStatusCode.NotFound, handled.StatusCode);
+        // 配置关闭后处理器放行，业务异常交回框架默认处理
+        var response = await server.CreateClient().GetAsync("/api/orders/7");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
-    /// <summary>排除模式的三条分支：<c>/**</c> 前缀、<c>*</c> 单段通配、精确匹配。</summary>
-    /// <remarks>
-    /// 观察点是<b>状态码</b>而不是 Content-Type：被排除时处理器直接放行，
-    /// 交回框架默认处理——默认处理器同样输出 problem+json，但拿不到业务异常的状态码，
-    /// 于是 <c>NotFoundException</c> 从 404 退化成 500。按 Content-Type 断言分辨不出这件事。
-    /// </remarks>
-    [Theory]
-    [InlineData("/api/orders/**", true)]
-    [InlineData("/api/health/**", false)]
-    [InlineData("/api/orders/*", true)]
-    [InlineData("/internal/*", false)]
-    [InlineData("/api/orders/1001", true)]
-    [InlineData("/API/ORDERS/1001", true)]      // 路径比较不区分大小写
-    [InlineData("/api/orders/100", false)]      // 精确匹配不做前缀
-    public async Task Exclude_patterns_cover_prefix_wildcard_and_exact_forms(string pattern, bool excluded)
-    {
-        using var server = await StartAsync(WithOptions(o => o.ExcludePatterns = [pattern]));
-
-        var response = await server.CreateClient().GetAsync("/api/orders/1001");
-
-        Assert.Equal(
-            excluded ? HttpStatusCode.InternalServerError : HttpStatusCode.NotFound,
-            response.StatusCode);
-    }
-
+    // HTTP 状态属于 API 契约，只在组合根代码里声明：配置文件里写映射不生效
     [Fact]
-    public async Task No_exclude_patterns_means_nothing_is_excluded()
+    public void Code_status_mappings_are_not_a_configuration_entry()
     {
-        using var server = await StartAsync(WithOptions());
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Leistd:GlobalException:CodeStatusMappings:OrderNotFound"] = "409",
+                ["Leistd:GlobalException:CodeMappings:0:Code"] = "OrderNotFound",
+                ["Leistd:GlobalException:CodeMappings:0:StatusCode"] = "409",
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddGlobalExceptionHandler(configuration);
 
-        var response = await server.CreateClient().GetAsync("/api/orders/1001");
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<GlobalExceptionOptions>>().Value;
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(options.CodeStatusMappings);
     }
 
-    // Enabled=false 与"命中排除模式"走同一条放行路径，宿主排查中间件顺序时会用到。
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Host_code_mapping_overrides_component_default_in_either_order(bool hostFirst)
+    {
+        using var server = await StartAsync(services => services.AddGlobalExceptionHandler(options =>
+        {
+            if (hostFirst)
+                options.MapCode("OrderNotFound", StatusCodes.Status409Conflict);
+            options.MapDefaultCode("OrderNotFound", StatusCodes.Status404NotFound);
+            if (!hostFirst)
+                options.MapCode("OrderNotFound", StatusCodes.Status409Conflict);
+        }));
+
+        var response = await server.CreateClient().GetAsync("/api/orders/7");
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    // Enabled=false 时处理器放行，交回框架默认处理，宿主排查中间件顺序时会用到。
     [Fact]
     public async Task Disabling_the_handler_hands_the_exception_back_to_the_framework()
     {
@@ -162,4 +213,43 @@ public class GlobalExceptionPipelineTests
         Assert.Contains(services, d => d.ServiceType == typeof(IExceptionHandler));
         Assert.Contains(services, d => d.ServiceType == typeof(IProblemDetailsService));
     }
+
+    [Fact]
+    public async Task Host_can_map_a_custom_exception_without_changing_the_handler()
+    {
+        using var server = await StartAsync(WithOptions(options =>
+            options.MapException<CustomApiException>(exception => new ExceptionDescriptor(
+                StatusCodes.Status409Conflict,
+                "Custom:Conflict",
+                exception.Message))));
+
+        var response = await server.CreateClient().GetAsync("/api/custom");
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Custom:Conflict", problem.GetProperty("code").GetString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Host_type_mapping_overrides_component_default_in_either_order(bool hostFirst)
+    {
+        using var server = await StartAsync(services => services.AddGlobalExceptionHandler(options =>
+        {
+            if (hostFirst)
+                options.MapException<CustomApiException>(_ => new ExceptionDescriptor(409, "Host:Conflict", "Host"));
+            options.MapDefaultException<CustomApiException>(_ => new ExceptionDescriptor(503, "Component:Unavailable", "Component"));
+            if (!hostFirst)
+                options.MapException<CustomApiException>(_ => new ExceptionDescriptor(409, "Host:Conflict", "Host"));
+        }));
+
+        var response = await server.CreateClient().GetAsync("/api/custom");
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Host:Conflict", problem.GetProperty("code").GetString());
+    }
+
+    private sealed class CustomApiException(string message) : Exception(message);
 }

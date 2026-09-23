@@ -193,8 +193,7 @@ public async Task<OrderDto> PlaceAsync(PlaceOrderInput input, CancellationToken 
                 })),
             ct);
 
-        throw new BadRequestException("信用额度不足。")
-            .WithCode("Order:CreditLimitExceeded")
+        throw new BusinessException("Order:CreditLimitExceeded", "Insufficient credit limit.")
             .WithData("Available", customer.Available)
             .WithData("Requested", input.Amount);
     }

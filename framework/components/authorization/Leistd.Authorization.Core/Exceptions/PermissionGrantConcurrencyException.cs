@@ -11,10 +11,8 @@ namespace Leistd.Authorization.Exceptions;
 /// <summary>
 /// 表示权限授予发生乐观并发冲突。
 /// </summary>
-/// <remarks>
-/// 映射为 409，错误码为 <see cref="PermissionErrorCodes.ConcurrencyConflict"/>。
-/// </remarks>
-public class PermissionGrantConcurrencyException : ConflictException
+/// <remarks>错误码为 <see cref="PermissionErrorCodes.ConcurrencyConflict"/>，运输层可按乐观并发语义映射。</remarks>
+public class PermissionGrantConcurrencyException : BusinessException
 {
     /// <summary>
     /// 初始化异常。
@@ -28,14 +26,14 @@ public class PermissionGrantConcurrencyException : ConflictException
         string providerKey,
         long expectedVersion,
         long actualVersion)
-        : base($"Permission grant version conflict for {providerName}/{providerKey}: " +
+        : base(PermissionErrorCodes.ConcurrencyConflict,
+               $"Permission grant version conflict for {providerName}/{providerKey}: " +
                $"expected {expectedVersion} but found {actualVersion}. Reload and try again.")
     {
         ProviderName = providerName;
         ProviderKey = providerKey;
         ExpectedVersion = expectedVersion;
         ActualVersion = actualVersion;
-        WithCode(PermissionErrorCodes.ConcurrencyConflict);
     }
 
     /// <summary>授予对象类型。</summary>

@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- 与 Api 共用同一份 user-secrets：本机迁移读到的连接串就是 API 用的那一条 -->
+    <UserSecretsId>7f3c2a1e-4b5d-4e6f-9a8b-0c1d2e3f4a5b</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
