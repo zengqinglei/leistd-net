@@ -16,7 +16,7 @@
 5. **无仅含空行的条件块**：裁剪后留下的空块会被 prettier/lint 判为格式问题。
 
 判定在**全部符号取值组合**上求值，而不是靠人工维护蕴含关系表；因此比只编译
-8 个场景的矩阵更严，能覆盖矩阵没排到的组合。
+9 个场景的矩阵更严，能覆盖矩阵没排到的组合。
 """
 import io, os, re, sys, json, fnmatch, itertools, collections
 from xml.etree import ElementTree

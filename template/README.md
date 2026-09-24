@@ -164,7 +164,7 @@ npm --prefix frontend run build
 
 ## AI 协作
 
-项目级 Skill 位于 [`.agents/skills/leistd-project-workflow/`](.agents/skills/leistd-project-workflow/SKILL.md)，统一覆盖规划、实现、审查、测试、协调和部署，并按场景加载必要 reference。它以 [项目文档入口](docs/README.md)、源码、配置和测试为事实，不依赖特定 AI 工具的入口文件。
+项目级 [协作 Skill](.agents/skills/leistd-project-workflow/SKILL.md) 按任务加载开发、验证或环境交付 reference。[项目文档入口](docs/README.md)、源码、配置和测试提供工程事实。
 
 [Codex](https://developers.openai.com/codex/skills) 等原生发现 `.agents/skills/` 的 AI CLI 无需安装。使用只识别其他项目目录的 CLI 时，按需生成本地适配；例如项目 Skill 位于 `.claude/skills/` 的 [Claude Code](https://code.claude.com/docs/en/skills#where-skills-live) 执行：
 

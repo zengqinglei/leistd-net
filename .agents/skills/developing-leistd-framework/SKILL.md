@@ -7,12 +7,16 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 
 ## 事实与边界
 
-先读取：
+从目标文件和直接依赖建立事实；证据不足或涉及公共边界时再扩大范围。同类实现和测试提供写法，公共契约、安全或版本结论以权威规范及实际验证为准。
 
-1. `docs/architecture/design-principles.md` 和 `docs/framework/development-guide.md`。
-2. 目标家族全部 `.csproj`、公共类型、DI 入口、Options、实现和测试。
-3. `framework/docs/` 中目标文档及一至两篇最新同类组件文档。
-4. 公共 API、包依赖或运行时语义变化时读取 `docs/framework/versioning.md`。
+| 场景 | 补充事实与规范 | 验证重点 |
+| --- | --- | --- |
+| 组件内部实现 | 目标实现、测试、调用方；开发指南相关章节 | 相关单测，外部语义用真实依赖 |
+| DI、Options、生命周期 | 注册入口、宿主、组件文档 | 真实容器或最小宿主、默认值消费者 |
+| DDD 分层或组合 | 各层项目引用、组合根；`docs/architecture/design-principles.md` | 层依赖、组合宿主、受影响模板场景 |
+| 公共 API、包依赖 | 目标家族公共类型、`.csproj`、消费者；`docs/framework/versioning.md`、目标 `framework/docs/` | 构建和包内容；依赖或集成契约变化时隔离消费，影响模板时验证生成场景 |
+| 随包文档 | 目标 `framework/docs/` 和相关源码 | 检查引用、示例与打包内容；不因纯文档改动运行隔离消费 |
+| 审查或排障 | 当前行为、复现、相关规范 | 证据与未检查范围，不自动实施 |
 
 源码和项目引用定义实际 API 与行为；文档冲突时修正权威文档，不为兼容旧说明保留错误实现。
 
@@ -45,6 +49,8 @@ description: 在 leistd-net 仓库中为 framework/components、framework/ddd-st
 6. 随包内容或公共契约变化时打包到 `.tmp/local-feed`，检查 XML、文档及依赖；包依赖或集成契约变化时验证隔离消费。
 7. 影响 Template 消费方式时使用 `developing-leistd-template` 验证相关生成场景；其他运行时语义由组件测试或最小宿主验证。
 
+用户要求提交时只暂存本任务文件，核对验证结果；提交格式按 `docs/framework/versioning.md` 的相关章节执行。实际发布由 `maintaining-leistd-repository` 按版本规范负责；开发完成本身不触发发版。
+
 组件契约归 `framework/docs/components/{family}.md`，DDD 组合归 `framework/docs/ddd-struct/`，维护规则归 `docs/framework/`。缺少必要文档时创建最小权威说明并更新索引，不复制精确签名或维护过程。
 
 ## 验证入口
@@ -57,4 +63,4 @@ pwsh framework/build/pack-local-feed.ps1
 pwsh framework/build/test-package-consumption.ps1
 ```
 
-本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包，CI 检查全部包。根据变更选择最小充分集合；未执行项和原因必须如实说明。
+本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包，CI 检查全部包。根据变更选择最小充分集合；只读任务不运行无关测试。未执行项和原因必须如实说明。

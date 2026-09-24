@@ -13,7 +13,7 @@
       - dotnet build / test                             框架源码
       - framework/build/pack-local-feed.ps1
         + framework/build/test-package-consumption.ps1  NuGet 隔离消费
-      - scripts/test-template-matrix.ps1                8 场景生成 + 构建 + 前后端测试
+      - scripts/test-template-matrix.ps1                9 场景生成 + 构建 + 前后端测试
       - scripts/test-template-postgresql-e2e.ps1        真实 PostgreSQL 端到端
 
     模板那三道（symbols / using-guards / async-boundaries）test-template-matrix.ps1 内部也会跑一遍：

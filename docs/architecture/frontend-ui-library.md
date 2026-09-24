@@ -28,6 +28,7 @@
 - Angular 与 Spartan 版本必须位于双方支持范围内。
 - helm 组件升级走官方 `ng g @spartan-ng/cli:healthcheck`；**改动过的组件禁用 `migrate-helm-libraries`（会覆盖自定义）**，需对照上游手动合入。
 - 修改组件约定时同步 `template/docs/standards/` 与生成项目 Skill。
+- 仓库根与模板各带一份 Spartan Skill；当前本地调整为先核对锁定版本和已复制 Helm 代码、按需运行 CLI info、避免交互式生成。同步上游 Skill 时核对这些差异并保持两份一致。
 
 ## 备选（未采纳）
 

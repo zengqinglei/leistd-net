@@ -8,7 +8,7 @@
 
 这一条必须明确，因为两种读法都讲得通，而选错会拿到不存在的包：
 
-- `VERSION` 的内容 **等于最近一次 stable 发布的版本号**，由 `release.yml` 在发版成功后回写；
+- `VERSION` 的内容 **等于最近一次 stable 已上传的版本号**，由 `release.yml` 在包上传后推送回写；包源索引和 Release 验收可能稍后完成；
 - **下一版由流水线按提交算出**（见下一节），`VERSION` 里不会提前出现；
 - 因此在 `main` 上读到 `0.12.0`，含义是"nuget.org 上最新的正式版是 0.12.0"，
   而不是"正在做 0.12.0"。
@@ -44,7 +44,7 @@
 
 ## 提交规范决定版本递增（Conventional Commits）
 
-发版时流水线（`release.yml`）分析"自上个 `v*` tag 以来"的提交信息，算出下一个版本（默认"优先最小版本"）：
+发版时流水线（`release.yml`）分析自上个稳定版 `vX.Y.Z` tag 以来的提交信息，算出下一个版本（默认优先最小版本）：
 
 | 提交 | 递增 | 例 |
 | --- | --- | --- |
@@ -91,27 +91,31 @@ BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/error
 | --- | --- | --- | --- |
 | push `main` | `x.y.z`（正式，自动递增） | nuget.org | `release.yml`（stable 通道） |
 | push `develop` | `x.y.z-beta.<N>` | nuget.org（预发布） | `release.yml`（beta 通道） |
-| 每工作日定时（develop） | `x.y.z-preview.<yyyyMMdd>` | GitHub Packages（内部） | `release.yml`（nightly 通道） |
+| 每工作日定时（develop） | `x.y.z-preview.<yyyyMMdd>.<run_number>` | GitHub Packages（内部） | `release.yml`（nightly 通道） |
 
 > 三个通道由**单个** `release.yml` 内部按 `github.ref` / `github.event_name` 自动判定。
 
-> 预发布后缀用**点分数字**（`-beta.12`、`-preview.20260623`），保证 NuGet 数值排序正确。
+> 预发布后缀用**点分数字**（`-beta.12`、`-preview.20260623.123`），保证 NuGet 数值排序正确。
 
 ## 正式版发布（全自动）
 
 **push 到 `main` 即自动发布**，无需手动打 tag：
 
-1. 按提交推算新正式版本；
-2. 回写 `VERSION` + 同步模板，提交 `chore: 发布 vX.Y.Z [skip ci]`；
-3. 打 tag `vX.Y.Z`；
-4. 打包 → 经 Trusted Publishing 推 nuget.org；
-5. 创建 GitHub Release（自动生成 release notes）。
+1. 对同一候选提交复用 CI 的静态、Framework、Template 矩阵和真实 PostgreSQL 验证；全部通过后按提交推算新正式版本；
+2. 在本地回写 `VERSION`、同步模板，创建 `chore: 发布 vX.Y.Z [skip ci]` 提交和 tag；
+3. 打包并隔离消费最终版本，随后经 Trusted Publishing 推 nuget.org；
+4. 包源写入后立即推送 tag 和版本提交，记录已发布产物；
+5. 等待目标包源可还原精确版本和全部包，验证通过后创建 GitHub Release（自动生成 release notes）。
 
 机制要点：
 - 触发发版的变更：`VERSION`、**`framework/` 源码**（框架内非 docs 的 `.md` 除外）、或 **`framework/docs/` 组件文档**（文档随包分发，故文档更新也发一版送达）。
 - **不**触发 stable 正式版：`docs/framework/`、`template/` 与仓库根的 `*.md`（内部开发规范、模板文档、仓库元文档），避免非交付内容改动误发。develop 分支仍按 beta 通道策略执行。
 - 回写提交带 `[skip ci]` 且过滤 `github-actions[bot]`，避免死循环。
 - ⚠️ NuGet 包不可删（只能 unlist）。框架源码每次有效变更都会产出一个正式版，请把控合入 main 的节奏。
+
+### 部分发布恢复
+
+失败时先核对目标包源中已发布和缺失的包、tag 指向、`VERSION` 回写提交及 GitHub Release。tag 记录已发布版本，不能因消费验证失败而删除后复用版本号。只从原候选产物补齐缺失包；候选或产物改变时使用新版本并说明旧版本状态。恢复后从目标包源还原全部精确版本，并补齐缺失的 Release。不要用 `--skip-duplicate` 掩盖不同产物。
 
 ## 破坏性变更怎么让下游知道
 
@@ -194,5 +198,5 @@ pwsh framework/build/pack-local-feed.ps1
 ## 注意
 
 - CPM 下第三方包版本集中在 `framework/Directory.Packages.props`；升级第三方依赖按提交规范评估影响。
-- monorepo 统一版本：所有可发布框架包共享同一版本，要么全发要么全不发；`--skip-duplicate` 保证重跑幂等。
+- monorepo 统一版本：所有可发布框架包共享同一版本。推包途中失败可能留下部分已发布的包；同版本不可覆盖，恢复前须核对实际包集合和 tag，不用 `--skip-duplicate` 掩盖不同候选产物。
 - 整个机制零外部版本工具（纯 git + PowerShell + MSBuild 读文件），与团队其它项目（如 ai-relay）的 VERSION 文件范式一致。

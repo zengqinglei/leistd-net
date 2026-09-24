@@ -85,7 +85,7 @@ frontend/
 
 ### 4.1 组件库优先
 
-- **必须** 首先在 [Spartan UI 官方文档](https://spartan.ng/) 中寻找现成组件（也可查仓库内 `spartan` skill 或本地 `libs/ui` 源码）
+- **必须** 先检查本地 `libs/ui` 是否有现成组件及其锁定版本；需要新增组件或核对 API 时，再查项目内 `spartan` Skill 与匹配版本的 [Spartan UI 官方文档](https://spartan.ng/)
 - 组件通过 `ng g @spartan-ng/cli:ui --name=<comp>` 添加，会把 helm 样式层复制进 `libs/ui/`；helm 层是本项目自有代码，可按需修改
 - 尽量沿用 Spartan 的默认组件与风格（`hlm*` 指令 / `hlm-*` 组件）
 - 仅在无法满足需求时才可创建自定义组件

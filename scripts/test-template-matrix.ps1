@@ -7,13 +7,17 @@ param(
     [ValidateSet("ChromeHeadless", "Chrome")]
     [string]$FrontendBrowser = "ChromeHeadless",
     [switch]$SkipPack,
+    [string]$LocalFeedPath,
     [switch]$SkipFrontend,
-    [switch]$SkipRuntime
+    [switch]$SkipRuntime,
+    # 只为选中的场景构建并运行容器入口；Dockerfile/Compose 变化时使用，不随每个普通代码修改运行。
+    [string[]]$ContainerSmokeScenarios = @()
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tempRoot = Join-Path $repoRoot ".tmp"
+$tempPrefix = [IO.Path]::GetFullPath($tempRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 
 # 每次运行独立的工作根：generated/hive/feed 都放在唯一 run 目录下，使上一轮残留的被锁目录
 # （MSBuild 复用节点仍持有 *.Tasks.dll 句柄等）永不阻断本轮，也让多个 AI/终端可并行执行——
@@ -34,7 +38,13 @@ $packagesRoot = Join-Path $runRoot "nuget-cache"
 #  - 正常模式（本轮 pack）：per-run 独立目录，两个并行 run 各 pack 各的，杜绝共享目录重置竞争（发现#1）。
 #  - -SkipPack：消费预先 pack 到共享 .tmp/local-feed 的包（CI 先 `pack-local-feed.ps1` 再 -SkipPack），
 #    只读复用、并发安全。
-$sharedFeedRoot = Join-Path $tempRoot "local-feed"
+$sharedFeedRoot = if ($LocalFeedPath) { [IO.Path]::GetFullPath($LocalFeedPath, $repoRoot) } else { Join-Path $tempRoot "local-feed" }
+if ($LocalFeedPath -and -not $SkipPack) { throw "-LocalFeedPath requires -SkipPack." }
+if ($LocalFeedPath) {
+    if (-not $sharedFeedRoot.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "-LocalFeedPath must remain inside .tmp: $sharedFeedRoot"
+    }
+}
 $feedRoot = if ($SkipPack) { $sharedFeedRoot } else { Join-Path $runRoot "local-feed" }
 $generatedRoot = Join-Path $runRoot "generated-template"
 $hiveRoot = Join-Path $runRoot "template-hive"
@@ -163,9 +173,9 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     $requiredFiles = @(
         ".agents/skills/leistd-project-workflow/SKILL.md",
         ".agents/skills/leistd-project-workflow/references/bootstrap.md",
+        ".agents/skills/leistd-project-workflow/references/delivery.md",
         ".agents/skills/leistd-project-workflow/references/development.md",
         ".agents/skills/leistd-project-workflow/references/quality.md",
-        ".agents/skills/leistd-project-workflow/references/delivery.md",
         ".agents/skills/leistd-project-workflow/references/documentation.md",
         ".agents/skills/spartan/SKILL.md",
         "docs/README.md",
@@ -189,10 +199,10 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
 
     $skillRoot = Join-Path $ProjectRoot ".agents/skills"
     $skillNames = @(Get-ChildItem -LiteralPath $skillRoot -Directory | ForEach-Object Name)
-    # 生成项目预期携带 leistd-project-workflow（项目协作）与 spartan（前端 UI 库 CLI 用法）。
+    # 生成项目携带项目协作和前端 UI 两个独立入口。
     $allowedSkills = @("leistd-project-workflow", "spartan")
-    if (-not ($skillNames -contains "leistd-project-workflow")) {
-        throw "Generated project must contain leistd-project-workflow in $skillRoot"
+    if (@($allowedSkills | Where-Object { $skillNames -notcontains $_ }).Count -gt 0) {
+        throw "Generated project is missing a required skill in $skillRoot"
     }
     $unexpectedSkills = @($skillNames | Where-Object { $allowedSkills -notcontains $_ })
     if ($unexpectedSkills.Count -gt 0) {
@@ -638,6 +648,11 @@ foreach ($scenario in $Scenarios) {
         throw "Unknown scenario '$scenario'. Valid scenarios: $($AllScenarios -join ', ')"
     }
 }
+foreach ($scenario in $ContainerSmokeScenarios) {
+    if ($scenario -notin $Scenarios) {
+        throw "Container smoke scenario '$scenario' must also be selected with -Scenarios."
+    }
+}
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 [IO.File]::WriteAllText($lockFile, ("pid={0} started={1}" -f $PID, (Get-Date -Format "o")), [Text.UTF8Encoding]::new($false))
@@ -708,7 +723,7 @@ if (-not $SkipPack) {
     Invoke-External "dotnet" @("pack", "framework/Leistd.Framework.slnx", "-c", $Configuration, "-o", $feedRoot)
 }
 elseif (-not (Test-Path -LiteralPath $feedRoot)) {
-    throw "-SkipPack requires an existing shared feed at '$feedRoot'（先 `pwsh framework/build/pack-local-feed.ps1`，或省略 -SkipPack 以重新 pack）."
+    throw "-SkipPack requires an existing feed at '$feedRoot'（先 `pwsh framework/build/pack-local-feed.ps1`，或省略 -SkipPack 以重新 pack）."
 }
 
 # 生成前先校验符号一致性：悬空引用、注释里的指令字面形式、恒真嵌套这三类问题，
@@ -790,6 +805,43 @@ foreach ($scenario in $Scenarios) {
         $testValidated = $true
     }
 
+    $containerValidated = $false
+    if ($scenario -in $ContainerSmokeScenarios) {
+        # 候选 Framework 包可能尚未发布。只在本轮生成目录注入本地包和 NuGet.Config，
+        # 让镜像验证消费的仍是同一候选源码；交付模板不包含这个临时包源。
+        $containerFeed = Join-Path $projectRoot "backend/.local-feed"
+        New-Item -ItemType Directory -Path $containerFeed -Force | Out-Null
+        Copy-Item -Path (Join-Path $feedRoot "*.nupkg") -Destination $containerFeed
+        $containerNuGetConfig = @'
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="candidate" value="/src/backend/.local-feed" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="candidate"><package pattern="Leistd.*" /></packageSource>
+    <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+  </packageSourceMapping>
+</configuration>
+'@
+        [IO.File]::WriteAllText((Join-Path $projectRoot "backend/NuGet.Config"), $containerNuGetConfig)
+        $apiImage = "leistd-template-smoke-api:$runId"
+        $migratorImage = "leistd-template-smoke-migrator:$runId"
+        try {
+            Invoke-External "docker" @("build", "--target", "api", "-t", $apiImage, $projectRoot)
+            Invoke-External "docker" @("build", "--target", "migrator", "-t", $migratorImage, $projectRoot)
+            Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $apiImage, "--info")
+            Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $migratorImage, "--info")
+            $containerValidated = $true
+        }
+        finally {
+            & docker image rm $apiImage $migratorImage 2>$null | Out-Null
+            $global:LASTEXITCODE = 0
+        }
+    }
+
     $results.Add([PSCustomObject]@{
         Scenario = $scenario
         Backend = "pass"
@@ -797,6 +849,7 @@ foreach ($scenario in $Scenarios) {
         Lint = if ($lintValidated) { "pass" } else { "skipped" }
         Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
         Test = if ($testValidated) { "pass" } else { "skipped" }
+        Container = if ($containerValidated) { "pass" } else { "skipped" }
         Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
     })
 }

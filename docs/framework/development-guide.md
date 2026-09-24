@@ -388,6 +388,8 @@ dotnet test framework/Leistd.Framework.slnx -c Release \
 
 ## 8. 提交前自检
 
+以下是各类验证入口，按变更范围选择；文档、XML、行为与包契约变更分别执行相关检查，无需每次全部运行。
+
 ```bash
 dotnet build framework/Leistd.Framework.slnx -c Release                         # 0 错误
 dotnet test  framework/Leistd.Framework.slnx -c Release                         # 全绿

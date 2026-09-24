@@ -1,6 +1,6 @@
 name: CI
 
-# PR 与非发布推送的质量闸门（与 release.yml 分离，不发包）：
+# PR 的质量闸门；release.yml 对发布候选提交复用同一组作业：
 #   - docs-sync：组件文档、Skill 与引用一致性
 #   - template-matrix：打包当前框架并验证全部条件场景的生成、运行与前后端构建
 #   - test：框架单元测试（含真实 Redis 的分布式锁契约）
@@ -8,14 +8,16 @@ name: CI
 on:
   pull_request:
     branches: [main, develop]
-  push:
-    branches: [develop]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
 
-# 同一分支的新推送作废旧 run：8 分钟的矩阵跑三遍没有意义，且会堵住队列
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   docs-sync:
@@ -24,6 +26,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
       - name: 安装 Python
         uses: actions/setup-python@v5
         with:
@@ -43,6 +47,9 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+          fetch-depth: 0
       - name: 安装 .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -59,9 +66,30 @@ jobs:
       - name: 校验 NuGet 包内容与隔离消费
         shell: pwsh
         run: pwsh framework/build/test-package-consumption.ps1
+      - name: 判断是否需要容器验证
+        id: container_scope
+        shell: pwsh
+        run: |
+          $before = '${{ github.event_name == 'push' && github.event.before || '' }}'
+          if ($before -notmatch '^[0-9a-f]{40}$' -or $before -match '^0+$') { $before = 'HEAD^' }
+          git cat-file -e "$before^{commit}" 2>$null
+          $hasBase = $LASTEXITCODE -eq 0
+          $global:LASTEXITCODE = 0
+          $changed = if ($hasBase) { @(git diff --name-only $before HEAD) } else { @('template/Dockerfile') }
+          if ($LASTEXITCODE -ne 0) { throw '无法确定容器验证的变更范围' }
+          $needed = @($changed | Where-Object {
+            $_ -match '^template/(Dockerfile|\.dockerignore)$' -or
+            $_ -match '^template/deploy/' -or
+            $_ -eq 'template/.template.config/template.json' -or
+            $_ -match '^template/frontend/(package(-lock)?\.json|angular\.json)$'
+          }).Count -gt 0
+          "needed=$($needed ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
       - name: 生成并验证全部模板场景
         shell: pwsh
-        run: pwsh scripts/test-template-matrix.ps1 -SkipPack
+        run: |
+          $containerArgs = if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { @('-ContainerSmokeScenarios', 'standalone') } else { @() }
+          pwsh scripts/test-template-matrix.ps1 -SkipPack @containerArgs
+          if ($LASTEXITCODE -ne 0) { throw '模板矩阵失败' }
 
   test:
     name: 框架单元测试
@@ -81,6 +109,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
       - name: 安装 .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -109,6 +139,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
       - name: 安装 .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
