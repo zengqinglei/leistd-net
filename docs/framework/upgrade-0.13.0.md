@@ -280,6 +280,25 @@ nuget.org 上存在 `1.0.0-beta.22` 与 10 个 `1.0.0-preview.*`，SemVer 排序
 > 与 `.Descriptors`，只需改 `using`；各组件的映射类此前在各自的 `*.AspNetCore` 包，
 > 删掉宿主里逐个调用组件 `*ExceptionMappings.Configure` 的那几行即可（它们已不再公开）。
 
+`GlobalExceptionOptions.Enabled` 已删除。调用 `AddGlobalExceptionHandler()` 本身就是启用意图，
+留一个默认为 `true` 的开关只是给"注册了却不生效"留了一条无声的路。临时关掉全局异常处理时不注册它即可。
+
+`OperationFailure.FromCode(string code, string dataJson)` 与 `Create(string, string, string)` 的
+第二个入参由 JSON 字符串改为 `IReadOnlyDictionary<string, object?>`，**JSON 由组件序列化**：
+
+```csharp
+// 0.13.0 早期形态
+OperationFailure.FromCode(code, JsonSerializer.Serialize(new { Limit = limit }));
+// 现在
+OperationFailure.FromCode(code, new Dictionary<string, object?> { ["Limit"] = limit });
+// 已有 BusinessException 时，两个组件经 BCL 字典对接，不必互相引用
+OperationFailure.FromCode(exception.Code, exception.LocalizationData);
+```
+
+手拼 JSON 串没有转义，值里出现引号就产出坏 JSON、展示端整行原因渲染不出来。值只能是标量
+（字符串、布尔、数值、日期、`Guid`）；传对象不会被摊开，只会写下类型名——这一列租户管理员
+直接可读、还会进导出。漏改是编译错误，不会静默。
+
 默认失败响应改为 RFC 9457 Problem Details，其中稳定业务码在字符串 `code`
 扩展字段。如宿主显式调用 `AddResponseWrapper()`，成功与失败都使用可选数字信封：
 数字 HTTP/业务状态放在 `code`，稳定业务错误码放在 `errorCode`。

@@ -202,6 +202,32 @@ describe('httpErrorInterceptor', () => {
     expect((caught as ApplicationHttpError).status).toBe(401);
   });
 
+  //#if (LocalIdentity)
+  // 401 有两种含义，恰好共用一个状态码。再认证（改口令、停用两步验证、重发恢复码）连续失败
+  // 触发的临时锁定是"这次操作被拒"，服务端并不踢会话——把人清掉再送去登录页，
+  // 而登录页在锁定期内恰恰进不去，用户就卡死了。服务端那半由 ReauthenticationLockoutTests 守，
+  // 这一条守的是前端不要把仍然有效的会话扔掉。
+  it('keeps the session on a 401 that only means this attempt was refused', () => {
+    const caught = runInterceptor(
+      httpError(401, { code: 'Auth:UserTemporarilyLockedOut', detail: 'Too many attempts.' }),
+    );
+
+    expect(sessionContext.clear).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    // 错误照常抛给页面，由它就地显示后端给的原因
+    expect(caught).toBeInstanceOf(ApplicationHttpError);
+    expect((caught as ApplicationHttpError).message).toBe('Too many attempts.');
+  });
+
+  // 只豁免临时锁定一个码：管理员锁定没有截止时间，那种会话本就该结束（User.AllowsExistingSessions）。
+  it('still signs out on an administrator lockout', () => {
+    runInterceptor(httpError(401, { code: 'Auth:UserLockedOut', detail: 'Account locked.' }));
+
+    expect(sessionContext.clear).toHaveBeenCalled();
+    expectReauthentication(entryRouteUrl());
+  });
+
+  //#endif
   // 直接打开深链时，启动流跑在初始导航之前——那时 Router.url 是 '/'，
   // 用它记落地地址会把用户重新登录后送去首页，而不是他点开的那一页。
   it('records the deep link that has not been navigated to yet', () => {

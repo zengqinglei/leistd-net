@@ -14,6 +14,7 @@ import { catchError, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
 //#if (LocalIdentity)
+import { API_ERROR_CODES } from '../errors/api-error-codes';
 import { apiErrorCode, ApplicationHttpError } from '../errors/application-http-error';
 //#else
 import { ApplicationHttpError } from '../errors/application-http-error';
@@ -55,7 +56,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           tenantContext.clear();
         }
 
-        // 会话清理与重新认证是另一件事，它有三个前提：
+        // 会话清理与重新认证是另一件事，它有四个前提：
         //
         // 1) 不在认证路由上。那条流程正在建立主体，插手会把刚建立的主体清掉，而清掉之后
         //    启动流照常判成功、回调页照常跳进受保护路由、Guard 发现没有主体又发起一次
@@ -68,7 +69,25 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         //    落地地址覆盖掉，也不会让 OIDC 客户端并发跑两遍授权。后者是真会坏事的：
         //    authorize() 先异步读配置与发现文档才拼出授权地址，而每条流程都会重新生成
         //    并覆盖 PKCE codeVerifier，两条交叉后回调换 token 会失败。
-        if (!isOnAuthRoute() && !req.context.get(SILENT_AUTH) && authService.isAuthenticated()) {
+        // 4) 这个 401 说的是"会话没了"，而不是"这次操作被拒"。两种含义恰好共用一个状态码：
+        //    再认证（改口令、停用两步验证、重发恢复码）连续失败触发的临时锁定属于后者，
+        //    服务端明确不踢已有会话（见 User.AllowsExistingSessions）。清掉就与那条设计相反，
+        //    而且会把人送到登录页——登录页在锁定期内恰恰进不去。只看状态码分不开这两者。
+        //    只豁免临时锁定：管理员锁定（Auth:UserLockedOut，无截止时间）下会话本就该结束。
+        //#if (LocalIdentity)
+        const lockedOutButStillSignedIn =
+          apiErrorCode(error.error) === API_ERROR_CODES.userTemporarilyLockedOut;
+        //#else
+        // 资源服务形态没有再认证入口（认证在签发方），401 只有"会话没了"一种含义
+        const lockedOutButStillSignedIn = false;
+        //#endif
+
+        if (
+          !lockedOutButStillSignedIn &&
+          !isOnAuthRoute() &&
+          !req.context.get(SILENT_AUTH) &&
+          authService.isAuthenticated()
+        ) {
           // 主体离开要清干净：只清认证数据会把权限和设置留给下一个登录的人，
           // 表现是新用户看到上一个人的显示偏好。
           sessionContext.clear();
@@ -88,7 +107,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
       // 路由守卫已经挡住了页面导航，这里兜住的是页面之外发出的请求（例如会话中途被改成受限）。
       if (
         error.status === 403 &&
-        apiErrorCode(error.error) === 'Auth:TwoFactorSetupRequired' &&
+        apiErrorCode(error.error) === API_ERROR_CODES.twoFactorSetupRequired &&
         !isOnAuthRoute()
       ) {
         void router.navigateByUrl('/auth/two-factor-setup');

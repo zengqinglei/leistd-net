@@ -18,6 +18,7 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
+import { API_ERROR_CODES } from '../../../../core/errors/api-error-codes';
 import {
   ApplicationHttpError,
   applicationErrorMessage,
@@ -104,7 +105,7 @@ export class TwoFactorChallenge {
       });
       // 凭据过期、次数用完或账号被锁：这一步已经无法继续，回到密码那一步
       const code = error instanceof ApplicationHttpError ? error.code : undefined;
-      if (code !== 'Auth:TwoFactorCodeInvalid') {
+      if (code !== API_ERROR_CODES.twoFactorCodeInvalid) {
         this.cancelled.emit();
       } else {
         this.value.set('');
