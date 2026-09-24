@@ -93,9 +93,13 @@
     "PermissionGroup:Audit": "Audit",
     "PermissionGroup:System": "System",
     "Permission:App.Users": "User Management",
+//#if (LocalIdentity)
     "Permission:App.Users.Create": "Create",
     "Permission:App.Users.Update": "Edit",
     "Permission:App.Users.Delete": "Delete",
+//#else
+    "Permission:App.Users.Update": "Enable or disable",
+//#endif
     "Permission:App.Users.ManageRoles": "Assign roles",
     "Permission:App.Roles": "Role Management",
     "Permission:App.Roles.Create": "Create",

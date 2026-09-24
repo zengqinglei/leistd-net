@@ -93,9 +93,13 @@
     "PermissionGroup:Audit": "审计",
     "PermissionGroup:System": "系统",
     "Permission:App.Users": "用户管理",
+//#if (LocalIdentity)
     "Permission:App.Users.Create": "新建",
     "Permission:App.Users.Update": "编辑",
     "Permission:App.Users.Delete": "删除",
+//#else
+    "Permission:App.Users.Update": "启停",
+//#endif
     "Permission:App.Users.ManageRoles": "分配角色",
     "Permission:App.Roles": "角色管理",
     "Permission:App.Roles.Create": "新建",

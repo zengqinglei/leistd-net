@@ -1,8 +1,9 @@
+using Leistd.ServiceClient.Options;
 using Leistd.ExceptionHandling.AspNetCore;
-using Leistd.ExceptionHandling.AspNetCore.Descriptors;
-using Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.Descriptors;
+using Leistd.ExceptionHandling.Options;
 using Leistd.ServiceClient.AspNetCore;
-using Leistd.ServiceClient.AspNetCore.ExceptionMappings;
+using Leistd.ServiceClient.ExceptionMappings;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.Tracing.AspNetCore;
 using Microsoft.AspNetCore.Builder;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
-namespace Leistd.ServiceClient.Tests.AspNetCore;
+namespace Leistd.ServiceClient.Tests;
 
 public sealed class ServiceClientExceptionMappingsTests
 {
@@ -170,5 +171,31 @@ public sealed class ServiceClientExceptionMappingsTests
 
         using var response = await host.GetTestClient().GetAsync("/");
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    // N9 的回归守卫：这条映射曾经要宿主在自己的 ExceptionMappings 里手写一行，
+    // 漏了不会有编译或启动错误，只会让 502/503/504 静默变成 500。现在注册客户端即登记，
+    // 所以这里**故意不传** ServiceClientExceptionMappings.Configure。
+    [Fact]
+    public async Task Client_registration_applies_the_defaults_without_host_wiring()
+    {
+        using var host = await new HostBuilder()
+            .ConfigureWebHost(web => web.UseTestServer()
+                .ConfigureServices(services =>
+                {
+                    services.AddHttpClient("upstream").AddServiceClientPipeline<ServiceClientOptions>("upstream");
+                    services.AddGlobalExceptionHandler(_ => { });
+                })
+                .Configure(app =>
+                {
+                    app.UseGlobalExceptionHandler();
+                    app.Run(_ => throw new ServiceClientException("private upstream URL",
+                        failureKind: ServiceClientFailureKind.Timeout));
+                }))
+            .StartAsync();
+
+        using var response = await host.GetTestClient().GetAsync("/");
+
+        Assert.Equal(StatusCodes.Status504GatewayTimeout, (int)response.StatusCode);
     }
 }

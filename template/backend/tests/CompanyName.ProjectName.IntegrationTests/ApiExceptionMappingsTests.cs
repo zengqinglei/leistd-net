@@ -1,4 +1,3 @@
-using CompanyName.ProjectName.Api.Hosting;
 using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Shared.Paging.Errors;
@@ -15,29 +14,42 @@ using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Application.OpenApplications.Errors;
 #endif
 using Leistd.Authorization.Errors;
-using Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.Options;
 using Leistd.MultiTenancy.Errors;
 using Leistd.Settings.Errors;
 #if (IncludeNotifications)
 using Leistd.Notifications.Errors;
 #endif
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 #if (ServiceUserContextEnabled)
+using CompanyName.ProjectName.Api.Hosting;
 using Leistd.ExceptionHandling.AspNetCore;
+using Leistd.ServiceClient;
 using Leistd.ServiceClient.Exceptions;
+using Leistd.ServiceClient.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 #endif
 using Xunit;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>Locks the host's business-code-to-HTTP contract without starting a web host.</summary>
-public sealed class ApiExceptionMappingsTests
+/// <summary>钉住业务错误码到 HTTP 状态的契约。</summary>
+/// <remarks>
+/// 读的是<b>组合之后</b>的选项，不是单独调用 <c>ApiExceptionMappings.Configure</c> 的结果：
+/// 框架组件的默认状态由各组件在自己的 <c>AddXxx</c> 里登记，只测本项目那一份会漏掉它们，
+/// 而漏掉的后果恰恰是静默的——未命中的业务码回落成 400。
+/// </remarks>
+public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory factory)
+    : IClassFixture<ProjectWebApplicationFactory>
 {
+    private GlobalExceptionOptions ComposedOptions()
+        => factory.Services.GetRequiredService<IOptions<GlobalExceptionOptions>>().Value;
+
     [Theory]
 #if (LocalIdentity)
     [InlineData(AuthErrorCodes.InvalidCredentials, StatusCodes.Status401Unauthorized)]
@@ -63,18 +75,13 @@ public sealed class ApiExceptionMappingsTests
     [InlineData(AppSettingErrorCodes.TestEmailFailed, StatusCodes.Status503ServiceUnavailable)]
     public void Stable_error_codes_keep_their_declared_http_semantics(string code, int expectedStatusCode)
     {
-        var options = new GlobalExceptionOptions();
-
-        ApiExceptionMappings.Configure(options);
-
-        Assert.Equal(expectedStatusCode, options.CodeStatusMappings[code]);
+        Assert.Equal(expectedStatusCode, ComposedOptions().CodeStatusMappings[code]);
     }
 
     [Fact]
     public void Explicit_mappings_only_cover_real_codes_with_non_default_statuses()
     {
-        var options = new GlobalExceptionOptions();
-        ApiExceptionMappings.Configure(options);
+        var options = ComposedOptions();
 
         var codeTypes = new[]
         {
@@ -120,7 +127,13 @@ public sealed class ApiExceptionMappingsTests
     {
         using var host = await new HostBuilder()
             .ConfigureWebHost(web => web.UseTestServer()
-                .ConfigureServices(services => services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure))
+                .ConfigureServices(services =>
+                {
+                    // 上游故障的安全默认状态由组件在注册客户端时登记，所以这里要真的注册一个客户端；
+                    // 只调 ApiExceptionMappings.Configure 测到的是本项目那一份，不是应用实际组合出来的
+                    services.AddHttpClient("upstream").AddServiceClientPipeline<ServiceClientOptions>("upstream");
+                    services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure);
+                })
                 .Configure(app =>
                 {
                     app.UseGlobalExceptionHandler();
@@ -148,7 +161,13 @@ public sealed class ApiExceptionMappingsTests
     {
         using var host = await new HostBuilder()
             .ConfigureWebHost(web => web.UseTestServer()
-                .ConfigureServices(services => services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure))
+                .ConfigureServices(services =>
+                {
+                    // 上游故障的安全默认状态由组件在注册客户端时登记，所以这里要真的注册一个客户端；
+                    // 只调 ApiExceptionMappings.Configure 测到的是本项目那一份，不是应用实际组合出来的
+                    services.AddHttpClient("upstream").AddServiceClientPipeline<ServiceClientOptions>("upstream");
+                    services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure);
+                })
                 .Configure(app =>
                 {
                     app.UseGlobalExceptionHandler();

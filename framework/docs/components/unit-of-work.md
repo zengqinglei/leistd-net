@@ -112,6 +112,24 @@ dbContext.OrderLines.AddRange(CreateLines(order.Id));
 
 `SaveChangesAsync()` 只冲刷挂起变更，不提交事务；后续回滚仍会撤销这些写入。
 
+**要就地捕获数据库约束冲突，也必须先冲刷。** 唯一索引、外键与检查约束的冲突由数据库在收到语句时才报出，
+而工作单元内的仓储写入在冲刷前根本没发到数据库——把 `try { InsertAsync } catch` 写在工作单元内，
+那个 `catch` 永不触发，异常最终在 `CompleteAsync` 抛出，已经离开了你想处理它的位置：
+
+```csharp
+// 错：catch 永不触发，写法却"看起来在处理并发首次写入"
+try { await repository.InsertAsync(entity, ct); }
+catch (DbUpdateException) { /* 死代码 */ }
+
+// 对：先冲刷，冲刷才是抛出点
+repository.InsertAsync(entity, ct);
+try { await unitOfWorkManager.Current!.SaveChangesAsync(ct); }
+catch (DbUpdateException) { /* 这里才捕获得到 */ }
+```
+
+这条与上面四种"要回填值"的理由不同：漏了那四种会立刻拿到空的 Id、报错醒目；漏了这一条**完全无声**，
+代码编译通过、读起来也对，只在真的并发时才暴露。不确定要不要捕获时，优先让异常传播到工作单元边界。
+
 ### 事件阶段
 
 `CompleteAsync` 循环执行 `SaveChangesAsync` 和 `BeforeCommit` 事件，直到无新事件；然后提交事务并发布 `AfterCommit` 事件。
@@ -201,6 +219,7 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 
 - 直接 `new` 的对象不会被拦截；工厂委托隐藏实现类型时也无法织入特性。
 - 工作单元内不回查刚写入的行。优先使用现有实体；只有需要数据库回填值时手动冲刷。
+- 约束冲突在冲刷时抛出，不在 `InsertAsync` 抛出；工作单元内的 `try { InsertAsync } catch` 是死代码。
 - 嵌套调用只由最外层提交；不要依赖子工作单元的 `CompleteAsync()` 立即落库。
 - `BeforeCommit` 仅承载必须影响事务的逻辑。发通知、刷缓存与远程调用放在 `AfterCommit` 或 Outbox。
 - 非事务工作单元不承诺整体回滚，也不提供跨多个物理事务的原子性。

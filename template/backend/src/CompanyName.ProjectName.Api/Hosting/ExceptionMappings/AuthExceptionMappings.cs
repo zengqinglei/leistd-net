@@ -3,7 +3,7 @@ using CompanyName.ProjectName.Application.Auth.Errors;
 #if (ExternalLogin)
 using CompanyName.ProjectName.Domain.Auth.Errors;
 #endif
-using Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.Options;
 using Microsoft.AspNetCore.Http;
 
 namespace CompanyName.ProjectName.Api.Hosting.ExceptionMappings;

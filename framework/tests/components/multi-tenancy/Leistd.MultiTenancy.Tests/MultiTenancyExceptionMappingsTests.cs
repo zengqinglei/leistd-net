@@ -1,10 +1,12 @@
-using Leistd.ExceptionHandling.AspNetCore.Options;
-using Leistd.MultiTenancy.AspNetCore.ExceptionMappings;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Leistd.ExceptionHandling.Options;
+using Leistd.MultiTenancy.ExceptionMappings;
 using Leistd.MultiTenancy.Errors;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 
-namespace Leistd.MultiTenancy.Tests.AspNetCore;
+namespace Leistd.MultiTenancy.Tests;
 
 public sealed class MultiTenancyExceptionMappingsTests
 {
@@ -20,5 +22,19 @@ public sealed class MultiTenancyExceptionMappingsTests
         Assert.Equal(StatusCodes.Status409Conflict, options.CodeStatusMappings[MultiTenancyErrorCodes.DuplicateName]);
         Assert.Equal(StatusCodes.Status409Conflict, options.CodeStatusMappings[MultiTenancyErrorCodes.ConnectionChangeRequiresInactiveTenant]);
         Assert.Equal(StatusCodes.Status409Conflict, options.CodeStatusMappings[MultiTenancyErrorCodes.ConnectionVersionConflict]);
+    }
+
+    // N9 的回归守卫：这条映射曾经要宿主在自己的 ExceptionMappings 里手写一行，
+    // 漏了不会有编译或启动错误，只会静默回落成 400。现在由组件注册时自己登记。
+    [Fact]
+    public void Component_registration_applies_the_defaults_without_host_wiring()
+    {
+        var services = new ServiceCollection();
+        services.AddMultiTenancyCore();
+
+        var options = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<GlobalExceptionOptions>>().Value;
+
+        Assert.Equal(StatusCodes.Status404NotFound, options.CodeStatusMappings[MultiTenancyErrorCodes.NotFound]);
     }
 }

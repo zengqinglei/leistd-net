@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace Leistd.ExceptionHandling.AspNetCore.Descriptors;
+namespace Leistd.ExceptionHandling.Descriptors;
 
 /// <summary>表示与具体响应序列化形式无关的公开异常描述。</summary>
 /// <remarks>

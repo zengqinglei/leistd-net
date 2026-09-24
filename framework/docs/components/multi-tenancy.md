@@ -51,12 +51,7 @@ builder.Services.AddMultiTenancy(options =>
 
 `ValidateResolvedTenant = false` 会同时停止查询 `ITenantStore` 并将解析链强制收窄为主体 claim。这防止未经校验的请求头、查询串或域名选择租户。两种角色的中间件顺序相同。
 
-使用全局异常处理的 HTTP 宿主，须显式组合本组件的非默认状态；仅调用 `AddMultiTenancy` 不会登记异常映射：
-
-```csharp
-builder.Services.AddGlobalExceptionHandler(options =>
-    MultiTenancyExceptionMappings.Configure(options));
-```
+`AddMultiTenancyCore()` 已登记本组件错误码的非默认 HTTP 状态（具体映射见[接口参考](#接口参考)），宿主不需要另行组合。
 
 控制面 DbContext 映射租户表：
 
@@ -370,7 +365,7 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionManagementService` | 连接管理用例：`GetListAsync`、`GetRuntimeAsync`、`GetMigrationListAsync`、`SetAsync`、`RemoveAsync`；EF 包注册 |
 | `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |
 | `MultiTenancyErrorCodes` | 组件错误码，默认中英译文随包分发 |
-| `MultiTenancyExceptionMappings.Configure(options)` | AspNetCore 包：由宿主显式登记租户停用 403、不存在 404、版本及命名冲突 409；宿主随后可覆盖 |
+| 默认 HTTP 状态 | 组件默认状态：租户停用 → 403，不存在 → 404，版本与命名冲突 → 409。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名 |
 | `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
 | `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一 |

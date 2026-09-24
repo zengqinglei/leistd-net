@@ -492,7 +492,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "Users",
                 column: "Email",
                 unique: true,
-                filter: "\"TenantId\" IS NULL");
+                filter: "\"TenantId\" IS NULL AND \"Email\" <> ''");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_TenantId_Email",
@@ -500,7 +500,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "Users",
                 columns: new[] { "TenantId", "Email" },
                 unique: true,
-                filter: "\"TenantId\" IS NOT NULL");
+                filter: "\"TenantId\" IS NOT NULL AND \"Email\" <> ''");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_TenantId_Username",

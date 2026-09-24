@@ -125,6 +125,10 @@ public class OrderManager(IRepository<Order, Guid> repository)
 
 仓储写入在工作单元内延迟到统一提交，在工作单元外立即调用 `SaveChangesAsync`。`GetByIdAsync` 使用过滤查询而非 `FindAsync`，不会绕过软删除或租户隔离。
 
+延迟提交有一个后果值得单列：**唯一索引等约束冲突在冲刷时才抛出，不在 `InsertAsync` 抛出**。
+所以工作单元内的 `try { InsertAsync } catch` 是永不触发的死代码，要就地处理并发首次写入
+必须先 `IUnitOfWork.SaveChangesAsync`（见[工作单元](../components/unit-of-work.md#在事务内提前冲刷)）。
+
 ### 分页映射
 
 ```csharp

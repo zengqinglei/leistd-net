@@ -1,21 +1,12 @@
-namespace Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.Descriptors;
 
-using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+namespace Leistd.ExceptionHandling.Options;
 
 /// <summary>
 /// 配置全局异常响应。
 /// </summary>
 public class GlobalExceptionOptions
 {
-    /// <summary>
-    /// 获取或设置是否启用全局异常处理。
-    /// </summary>
-    /// <remarks>
-    /// 调用 <c>AddGlobalExceptionHandler()</c> 本身就是启用意图，因此默认为真；
-    /// 需要临时关闭（例如排查中间件顺序）时显式配 <see langword="false"/>。
-    /// </remarks>
-    public bool Enabled { get; set; } = true;
-
     /// <summary>是否在错误响应中包含异常堆栈。默认 <see langword="false"/>。</summary>
     public bool IncludeExceptionDetails { get; set; }
 

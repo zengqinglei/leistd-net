@@ -54,6 +54,23 @@
 
 > **提交信息务必遵循 [Conventional Commits](https://www.conventionalcommits.org/)** —— 它直接决定版本如何递增。
 
+### 标了 `!` 就必须有 `BREAKING CHANGE:` 脚注
+
+`!` 只让流水线知道"这是破坏性的"，它不告诉适配方**破坏了什么**。而适配方是**按脚注检索**的：
+`git log --grep='BREAKING CHANGE'` 是他们确认"这一版要改哪些地方"的入口，
+标题里的 `!` 不在这个结果里。少一条脚注，对应的那次改动就会在适配时被整体漏掉。
+
+因此带 `!` 的提交必须带脚注，且脚注与升级清单一致：
+
+```
+refactor!: 异常响应统一走 Problem Details 管道
+
+BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/errors，
+组件异常映射由各组件的 AddXxx 自行登记。详见 docs/framework/upgrade-0.13.0.md §9。
+```
+
+脚注不必复述全部细节——**指向升级清单的具体小节**即可，但那一句指路不能省。
+
 ### 0.x 期间的破坏性变更按 Minor 递增
 
 依据 [SemVer 第 4 条](https://semver.org/lang/zh-CN/#spec-item-4)：`0.y.z` 是初始开发期，

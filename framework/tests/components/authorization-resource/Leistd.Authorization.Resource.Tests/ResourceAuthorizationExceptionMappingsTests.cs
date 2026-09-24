@@ -1,6 +1,8 @@
-using Leistd.Authorization.Resource.AspNetCore.ExceptionMappings;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Leistd.Authorization.Resource.ExceptionMappings;
 using Leistd.Authorization.Resource.Errors;
-using Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.Options;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 
@@ -27,5 +29,19 @@ public sealed class ResourceAuthorizationExceptionMappingsTests
         ResourceAuthorizationExceptionMappings.Configure(hostFirst);
         Assert.Equal(StatusCodes.Status412PreconditionFailed,
             hostFirst.CodeStatusMappings[ResourceAuthorizationErrorCodes.ConcurrencyConflict]);
+    }
+
+    // N9 的回归守卫：这条映射曾经要宿主在自己的 ExceptionMappings 里手写一行，
+    // 漏了不会有编译或启动错误，只会静默回落成 400。现在由组件注册时自己登记。
+    [Fact]
+    public void Component_registration_applies_the_defaults_without_host_wiring()
+    {
+        var services = new ServiceCollection();
+        services.AddResourceAuthorizationCore();
+
+        var options = services.BuildServiceProvider()
+            .GetRequiredService<IOptions<GlobalExceptionOptions>>().Value;
+
+        Assert.Equal(StatusCodes.Status409Conflict, options.CodeStatusMappings[ResourceAuthorizationErrorCodes.ConcurrencyConflict]);
     }
 }

@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
-using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+using Leistd.ExceptionHandling.Descriptors;
 using Leistd.ExceptionHandling.AspNetCore.Diagnostics;
-using Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.Options;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,9 +35,6 @@ public sealed class BusinessExceptionHandler(
         CancellationToken cancellationToken)
     {
         var options = optionsMonitor.CurrentValue;
-        if (!options.Enabled)
-            return false;
-
         if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
             return false;
 

@@ -25,4 +25,9 @@
     <EmbeddedResource Include="Resources\*.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 默认 HTTP 状态映射是内部实现（由 AddXxx 自动登记），用例要直接调用它核对登记内容 -->
+    <InternalsVisibleTo Include="Leistd.Authorization.Tests" />
+  </ItemGroup>
+
 </Project>

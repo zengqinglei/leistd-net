@@ -1,4 +1,5 @@
 using Leistd.OperationRecords.Definitions;
+using Leistd.OperationRecords.Errors;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
@@ -78,7 +79,7 @@ public static class OperationRecordHttpContextExtensions
         // 框架若为了凑一句好看的话去查名字回填，等于把他无权查看的名字写进了他能读到的记录里。
         // 这是安全属性，不是将就——后来者请不要把它当缺陷"修复"。
         // 默认带上通用的被拒码：没有原因码的失败记录事后无法按原因聚合。
-        // 宿主要附业务参数时自己传 OperationFailure.FromCode(code, dataJson)
+        // 宿主要附业务参数时自己传 OperationFailure.FromCode(code, data)
         await recorder.RecordFailedAsync(
             declared.Action,
             OperationTarget.For(ResolveTargetId(context, declared)),
@@ -86,7 +87,7 @@ public static class OperationRecordHttpContextExtensions
             // 判据是 IsEmpty 而不是 Code is null：FromDetail 给出的原因本来就没有码，
             // 按 Code 判会把调用方显式传入的 Detail 静默换成通用 Forbidden
             failure.IsEmpty
-                ? OperationFailure.FromCode("Error:Forbidden")
+                ? OperationFailure.FromCode(OperationFailureCodes.Forbidden)
                 : failure);
     }
 

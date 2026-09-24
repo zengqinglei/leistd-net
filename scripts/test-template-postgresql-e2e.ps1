@@ -8,6 +8,11 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $runId = "{0}-{1}" -f $PID, (Get-Date -Format "yyyyMMddHHmmssfff")
 $runRoot = Join-Path $repoRoot ".tmp/postgresql-e2e/$runId"
+# 开发环境以外（迁移作业默认即是）Data Protection 要求显式的持久密钥位置；API 与各 DbMigrator 也必须共用
+# 同一密钥环，否则一方加密的租户连接串另一方解不开。子进程继承这个变量；结束时在 finally 里恢复原值，
+# 同一 PowerShell 进程内用 & 调用本脚本时不影响后续命令。
+$previousDataProtectionKeysPath = [Environment]::GetEnvironmentVariable("DataProtection__KeysPath")
+$env:DataProtection__KeysPath = Join-Path $runRoot "data-protection-keys"
 $feedRoot = if ($SkipPack) { Join-Path $repoRoot ".tmp/local-feed" } else { Join-Path $runRoot "local-feed" }
 $hiveRoot = Join-Path $runRoot "template-hive"
 $generatedRoot = Join-Path $runRoot "generated"
@@ -497,4 +502,5 @@ finally {
         $apiProcess.Dispose()
     }
     & docker rm --force $containerName *> $null
+    [Environment]::SetEnvironmentVariable("DataProtection__KeysPath", $previousDataProtectionKeysPath)
 }

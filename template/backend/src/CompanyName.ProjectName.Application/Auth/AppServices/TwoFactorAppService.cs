@@ -45,6 +45,7 @@ internal sealed class TwoFactorAppService(
     IPasswordHasher passwordHasher,
     UserSessionDomainService userSessionDomainService,
     ILoginSecurityPolicyProvider loginSecurityPolicy,
+    IReauthenticationGuard reauthenticationGuard,
     IOperationRecorder operationRecorder,
     ISecurityAlertPublisher securityAlerts,
     IDistributedCache cache,
@@ -141,15 +142,28 @@ internal sealed class TwoFactorAppService(
                 ;
         }
 
+        // 停用两步验证要口令与验证码各过一关，两关都是再认证：锁定期内不给试，失败按登录的同一套计数。
+        // 少了这一道，持有被盗会话的人能在这个接口上无限次猜——猜到了就把这个账号的第二道防线拆了。
+        await reauthenticationGuard.EnsureAllowedAsync(user, cancellationToken);
+
         if (user.PasswordHash is null || !passwordHasher.VerifyPassword(user.PasswordHash, input.Password))
         {
-            throw new BusinessException(SecurityErrorCodes.CurrentPasswordIncorrect, "The current password is incorrect.")
-                ;
+            throw await reauthenticationGuard.RejectAsync(
+                user,
+                OperationRecordActions.AuthTwoFactorDisabled,
+                SecurityErrorCodes.CurrentPasswordIncorrect,
+                "The current password is incorrect.",
+                cancellationToken);
         }
 
         if (!twoFactorDomainService.VerifyCode(user, input.Code, clock.Now))
         {
-            throw CodeInvalid();
+            throw await reauthenticationGuard.RejectAsync(
+                user,
+                OperationRecordActions.AuthTwoFactorDisabled,
+                AuthErrorCodes.TwoFactorCodeInvalid,
+                CodeInvalidMessage,
+                cancellationToken);
         }
 
         user.DisableTwoFactor();
@@ -176,9 +190,17 @@ internal sealed class TwoFactorAppService(
                 ;
         }
 
+        // 重发恢复码同样是再认证：拿到恢复码等于拿到一组可绕过两步验证的凭据
+        await reauthenticationGuard.EnsureAllowedAsync(user, cancellationToken);
+
         if (!twoFactorDomainService.VerifyCode(user, input.Code, clock.Now))
         {
-            throw CodeInvalid();
+            throw await reauthenticationGuard.RejectAsync(
+                user,
+                OperationRecordActions.AuthTwoFactorRecoveryCodesRegenerated,
+                AuthErrorCodes.TwoFactorCodeInvalid,
+                CodeInvalidMessage,
+                cancellationToken);
         }
 
         var codes = RecoveryCodes.Generate();
@@ -203,8 +225,10 @@ internal sealed class TwoFactorAppService(
         }
     }
 
+    private const string CodeInvalidMessage = "The verification code is incorrect.";
+
     private static BusinessException CodeInvalid() =>
-        new("Auth:TwoFactorCodeInvalid", "The verification code is incorrect.");
+        new(AuthErrorCodes.TwoFactorCodeInvalid, CodeInvalidMessage);
 
     private static string SetupKey(Guid userId) => SetupKeyPrefix + userId.ToString("N");
 

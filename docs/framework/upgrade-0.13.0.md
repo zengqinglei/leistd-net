@@ -266,22 +266,33 @@ nuget.org 上存在 `1.0.0-beta.22` 与 10 个 `1.0.0-preview.*`，SemVer 排序
   并在宿主注册时用 `options.MapCode(code, 404)` 映射传输状态；400、401、403 与 409 同理。
   `StatusCode`、`Details`、`WithCode`、`WithDetails` 不再是异常 API。
 
-组件拥有的非默认 HTTP 语义由对应 ASP.NET Core 包的 `*ExceptionMappings.Configure(options)` 提供；
-宿主在 API 组合根显式调用，再登记项目自己的映射或覆盖组件默认值。组件 `Add*` 不会隐式改变全局异常处理配置，
-回退到 400 的错误码也无需登记。业务项目将错误码常量放在实际拥有它的 Domain/Application 模块，而不是统一堆入 Shared。
+组件拥有的非默认 HTTP 语义由组件在自己的 `AddXxx` 里登记，**宿主不需要逐个调用**；
+宿主的 `ApiExceptionMappings` 只列项目自己的错误码，以及需要覆盖组件默认值的那几条。
+回退到 400 的错误码无需登记。业务项目将错误码常量放在实际拥有它的 Domain/Application 模块，而不是统一堆入 Shared。
+
+`GlobalExceptionOptions` 在 `Leistd.ExceptionHandling.Options`，`ExceptionDescriptor` 在
+`Leistd.ExceptionHandling.Descriptors`，两者都由 `Leistd.ExceptionHandling.Core` 提供——
+它们只有状态码、错误码、文案与日志级别，与响应序列化形式无关，放在 Core 才能让组件
+在自己的 Core 包里声明默认状态。各组件的默认映射随之成为 Core 包的内部实现，不再是公开类型，
+`Leistd.Authorization.Resource.AspNetCore` 因此不再存在——它此前只装着那一个映射类，引用它的地方直接删掉。
+
+> 已经按 0.13.0 的早期形态适配过的项目：这两个类型此前在 `Leistd.ExceptionHandling.AspNetCore.Options`
+> 与 `.Descriptors`，只需改 `using`；各组件的映射类此前在各自的 `*.AspNetCore` 包，
+> 删掉宿主里逐个调用组件 `*ExceptionMappings.Configure` 的那几行即可（它们已不再公开）。
 
 默认失败响应改为 RFC 9457 Problem Details，其中稳定业务码在字符串 `code`
 扩展字段。如宿主显式调用 `AddResponseWrapper()`，成功与失败都使用可选数字信封：
 数字 HTTP/业务状态放在 `code`，稳定业务错误码放在 `errorCode`。
 `BusinessMessageExposure` 已移除：业务异常的安全文案始终可展示，未预期异常始终回退为通用系统错误。
+
+**启用开关已删除，行为有变化。** 0.12 的 `Leistd:GlobalException:Enable` 默认为 `false`：注册了处理器却没打开它时，处理器不接管异常。0.13 删掉了这个开关，只要注册 `AddGlobalExceptionHandler` 并挂上 `UseGlobalExceptionHandler` 就会接管——0.12 里注册了但没打开 `Enable` 的宿主，升级后异常响应会变成 Problem Details。旧的 `Enable` 配置键不再被读取，应从配置中删除；需要排查时不挂 `UseGlobalExceptionHandler` 即可。
 异常响应的 `traceId` 与日志、响应头共享请求入口选定的关联标识；`UseCorrelationId()` 应在异常处理和日志中间件之前运行。
 `X-Correlation-Id` 保持原有的不透明标识契约（最多 128 字符，只含 ASCII 字母、数字、`-`、`_`）；显式 `Change()` 仍优先于当前 `Activity`。W3C 追踪上下文使用 `traceparent`。
 
 定制宿主对精确类型调用 `MapException<TException>()`（委托可按异常属性分支），需要完全接管某类异常时按 ASP.NET Core 方式再注册一个 `IExceptionHandler`；如要替换整个失败响应的序列化形状，注册 ASP.NET Core 的 `IProblemDetailsWriter`。
-`ServiceClientException` 现在直接继承 `Exception`，`RemoteServiceException` 继承前者；HTTP 宿主需要组件默认的安全 500/502/503/504 分类时，引用 `Leistd.ServiceClient.AspNetCore` 并显式调用 `ServiceClientExceptionMappings.Configure(options)`。本地观测的无效响应、传输不可用、等待超时分别映射为 502、503、504；远端明确返回失败状态默认 502，不依据远端 408/429/503 等状态推断本地响应。宿主可针对已知上游契约覆盖默认映射。
-组件 Web 适配层用 `MapDefaultCode` / `MapDefaultException` 登记可复用的默认状态，
-宿主 `MapCode` / `MapException` 始终可覆盖，调用顺序无关；HTTP 状态映射只在代码里声明，不提供配置文件入口。资源授权新增独立的
-`Leistd.Authorization.Resource.AspNetCore` 包，需 HTTP 默认 ACL 冲突 409 时显式调用其映射入口。
+`ServiceClientException` 现在直接继承 `Exception`，`RemoteServiceException` 继承前者；注册任一服务客户端即登记安全的 500/502/503/504 分类。本地观测的无效响应、传输不可用、等待超时分别映射为 502、503、504；远端明确返回失败状态默认 502，不依据远端 408/429/503 等状态推断本地响应。宿主可针对已知上游契约覆盖默认映射。
+组件用 `MapDefaultCode` / `MapDefaultException` 登记默认状态，
+宿主 `MapCode` / `MapException` 始终可覆盖，调用顺序无关；HTTP 状态映射只在代码里声明，不提供配置文件入口。
 可选数字信封统一使用 `Result`；若代码直接引用了 `ExceptionResult`，改为构造 `Result` 并填充
 `Code`、`Message`、`TraceId`、`ErrorCode` 与可选 `Errors`。
 
@@ -290,7 +301,27 @@ nuget.org 上存在 `1.0.0-beta.22` 与 10 个 `1.0.0-preview.*`，SemVer 排序
 所有失败响应统一经 ASP.NET Core `IProblemDetailsService` 写出，定制只走 `ProblemDetailsOptions.CustomizeProblemDetails`：
 
 - 只有 `BusinessException` 带 `code` 扩展与 `detail`；输入校验、未预期异常和上游故障不再返回 `Error:*` 码，依据 HTTP 状态分支。`Error:*` 词条与 `ProblemTypes.SystemError` 已删除。
-- `message` 扩展字段已删除，改读标准字段 `detail`（数字信封的 `message` 不变）。
 - 启用 `AddResponseWrapper()` 时，MVC 的 `NotFound()`、`Problem()` 等错误结果与状态码页同样输出信封。
 - `ServiceClientOptions.Timeout`（配置键 `Leistd:ServiceClients:<名称>:Timeout`）已删除，组件不再设置 `HttpClient.Timeout`，它回到 .NET 默认的 100 秒作外层兜底。超时改由宿主在客户端上叠加弹性管道（如 `AddStandardResilienceHandler()`），其超时归类为 `ServiceClientFailureKind.Timeout` 并在 API 边界返回 504；确需改兜底时长时用 `ConfigureHttpClient`，并保持它大于管道的总超时。
 - `GlobalExceptionOptions.ExcludePatterns`（配置键 `Leistd:GlobalException:ExcludePatterns`）已删除：命中路径只会丢掉业务映射、仍返回同一种问题详情，健康检查也不需要它（检查项异常由健康检查服务自行捕获）。个别路径需要其他错误格式时，在 `AddGlobalExceptionHandler` 之前注册自己的 `IExceptionHandler`，按路径判断后返回 `true`。
+
+### 失败响应的字段变化（前端要改的地方）
+
+失败响应的形状变了，字段名不是重命名那么简单：`message`/`details` 是本框架自定的扩展字段，
+`detail`/`errors` 是 RFC 9457 的标准字段。前端按旧名读会拿到 `undefined`，
+而 `undefined` 在界面上通常表现为"错误提示是空的"，不是报错——**这条漏改是静默的**。
+
+| 旧（自定信封） | 新（Problem Details） | 说明 |
+| --- | --- | --- |
+| `message` | `detail` | 可展示的错误文案。只有 `BusinessException` 有；协议层失败为空，改读 `title` |
+| `details` | `errors` | 字段级错误数组，元素形状不变（`detail` / `field` / `code`） |
+| `code` | `code`（扩展字段） | **不变**，仍是稳定业务错误码。前端的分支逻辑不用动 |
+| — | `title` | 新增：按状态码本地化的标题。没有 `detail` 时用它做兜底文案 |
+| — | `status` / `type` / `instance` | 新增：RFC 9457 标准字段 |
+| `traceId` | `traceId`（扩展字段） | 不变 |
+
+**启用了 `AddResponseWrapper()` 的宿主不受影响**：数字信封的 `message` 保持原样，
+它的 `errorCode` 承载业务码。这一节只针对默认（不套信封）的 Problem Details 形态。
+
+前端的改法是一处收口，不要散在各个请求里：解析错误响应的那一个函数按
+`detail ?? title` 取文案、按 `errors` 取字段错误、按 `code` 分支。

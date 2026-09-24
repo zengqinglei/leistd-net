@@ -123,6 +123,8 @@ public static class DependencyInjection
         // 注册策略按租户从设置里解析；appsettings 仍是部署基线（设置定义的默认值取自它）。
         services.AddTransient<IUserRegistrationPolicyProvider, UserRegistrationPolicyProvider>();
         services.AddTransient<ILoginSecurityPolicyProvider, LoginSecurityPolicyProvider>();
+        // 再认证（改口令、停用两步验证、重发恢复码）的失败走登录的同一套计数与锁定
+        services.AddTransient<IReauthenticationGuard, ReauthenticationGuard>();
 #endif
 
 #if (LocalIdentity)

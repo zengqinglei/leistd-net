@@ -1,5 +1,5 @@
 using Leistd.ExceptionHandling.AspNetCore;
-using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+using Leistd.ExceptionHandling.Descriptors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

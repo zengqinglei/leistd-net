@@ -31,6 +31,9 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
     internal const string CreateText = "Create";
     internal const string EditText = "Edit";
     internal const string DeleteText = "Delete";
+#if (!LocalIdentity)
+    internal const string ToggleActivationText = "Enable or disable";
+#endif
 
     public void Define(IPermissionDefinitionContext context)
     {
@@ -46,9 +49,16 @@ public class PermissionDefinitionProvider : IPermissionDefinitionProvider
             MultiTenancySides.Both,
             displayName: "User Management"
         );
+#if (LocalIdentity)
         usersPermission.AddChild(PermissionConstant.Users.Create, displayName: CreateText);
         usersPermission.AddChild(PermissionConstant.Users.Update, displayName: EditText);
         usersPermission.AddChild(PermissionConstant.Users.Delete, displayName: DeleteText);
+#else
+        // 资源服务形态下用户由签发方的令牌投影而来：本服务没有新建与删除的端点，
+        // 定义了也只是给出一项勾了不起作用的权限。剩下的写操作只有启停，显示名照实说——
+        // 叫"编辑"会让管理员以为能改资料，而资料归签发方所有。
+        usersPermission.AddChild(PermissionConstant.Users.Update, displayName: ToggleActivationText);
+#endif
         usersPermission.AddChild(PermissionConstant.Users.ManageRoles, displayName: "Assign roles");
 
         var rolesPermission = identityGroup.AddPermission(

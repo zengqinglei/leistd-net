@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.Application.Permissions.Provider;
 using Leistd.Authorization.Definitions;
 using Microsoft.Extensions.DependencyInjection;
 #if (IncludeLocalization)
@@ -55,10 +56,19 @@ public sealed class PermissionCatalogContractTests(ProjectWebApplicationFactory 
         }
     }
 
+    // 资源服务形态下 App.Users.Update 只管启停（没有编辑端点，资料归签发方），
+    // 显示名照实说，因此不套用 .Update 的共同措辞
+    private static bool OptsOutOfSharedWording(string name)
+#if (LocalIdentity)
+        => false;
+#else
+        => name == PermissionConstant.Users.Update;
+#endif
+
     [Fact]
     public void Common_actions_use_the_shared_wording()
     {
-        foreach (var permission in AllPermissions())
+        foreach (var permission in AllPermissions().Where(p => !OptsOutOfSharedWording(p.Name)))
         {
             var action = CommonActions.Keys.FirstOrDefault(suffix => permission.Name.EndsWith(suffix, StringComparison.Ordinal));
             if (action is not null)
@@ -102,8 +112,23 @@ public sealed class PermissionCatalogContractTests(ProjectWebApplicationFactory 
 
             if (culture == "zh-CN")
             {
-                var chinese = new Dictionary<string, string> { [".Create"] = "新建", [".Update"] = "编辑", [".Delete"] = "删除" };
+                // 缺中文词条时本地化回落到英文，所以"中文能查到"永远成立——删一条词条这个用例照样绿。
+                // 判据必须是"中文取值不等于英文默认文案"：这样删任何一条都会红，而不只是下面那三个后缀。
                 foreach (var permission in AllPermissions())
+                {
+                    var key = "Permission:" + permission.Name;
+                    Assert.NotEqual(permission.DisplayName, Text(key));
+                }
+
+                foreach (var group in Groups())
+                {
+                    var key = "PermissionGroup:" + group.Name;
+                    Assert.NotEqual(group.DisplayName, Text(key));
+                }
+
+                // 中文侧的共同措辞也要统一，与英文侧的 Common_actions_use_the_shared_wording 对应
+                var chinese = new Dictionary<string, string> { [".Create"] = "新建", [".Update"] = "编辑", [".Delete"] = "删除" };
+                foreach (var permission in AllPermissions().Where(p => !OptsOutOfSharedWording(p.Name)))
                 {
                     var action = chinese.Keys.FirstOrDefault(suffix => permission.Name.EndsWith(suffix, StringComparison.Ordinal));
                     if (action is not null)

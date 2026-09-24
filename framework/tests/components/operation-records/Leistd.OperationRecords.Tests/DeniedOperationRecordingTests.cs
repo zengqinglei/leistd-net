@@ -136,7 +136,9 @@ public sealed class DeniedOperationRecordingTests
             new OperationRecordActionAttribute("identity.role.updated", "id")
         ]);
 
-        await context.RecordDeniedOperationAsync(OperationFailure.FromCode("Role:Protected", """{"name":"admin"}"""));
+        await context.RecordDeniedOperationAsync(OperationFailure.FromCode(
+            "Role:Protected",
+            new Dictionary<string, object?> { ["name"] = "admin" }));
 
         var written = Assert.Single(store.Written);
         Assert.Equal("Role:Protected", written.FailureCode);

@@ -631,8 +631,11 @@
       "role.created": "Created a role"
     },
     "failures": {
-      "Auth_InvalidCredentials": "Incorrect username or password",
-      "Auth_UserTemporarilyLockedOut": "Too many failed sign-in attempts"
+      "Auth_InvalidCredentials": "Incorrect username or password ({{attempts}} failed attempts within {{windowMinutes}} minutes)",
+      "Auth_UserTemporarilyLockedOut": "Locked out for {{minutes}} minutes after {{maxFailedAttempts}} failed sign-in attempts",
+      "Error_Forbidden": "Not allowed to perform this action",
+      "Security_CurrentPasswordIncorrect": "The current password is incorrect",
+      "Auth_TwoFactorCodeInvalid": "The verification code is incorrect"
     },
     "table": {
       "currentPageReport": "{{total}} in total",

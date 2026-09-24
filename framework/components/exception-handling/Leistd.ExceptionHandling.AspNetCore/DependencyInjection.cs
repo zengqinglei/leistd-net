@@ -10,9 +10,9 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling.AspNetCore.Handlers;
 using Leistd.ExceptionHandling.AspNetCore.Diagnostics;
-using Leistd.ExceptionHandling.AspNetCore.Options;
+using Leistd.ExceptionHandling.Options;
 using Leistd.ExceptionHandling.AspNetCore.Constants;
-using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+using Leistd.ExceptionHandling.Descriptors;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

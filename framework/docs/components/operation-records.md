@@ -168,7 +168,8 @@ public class UserService(IOperationRecorder recorder, ...)
 
 上面那条只有一个码。**真正有用的拒绝记录还要带上"为什么是这一条"的那几个值**——
 运维看到 `Order:CreditLimitExceeded` 只知道类别，看到额度与差额才知道该找谁批。
-参数走 `FromCode` 的第二个入参（JSON 对象字符串），与本地化词条的占位一一对应：
+参数走 `FromCode` 的第二个入参（键即词条占位名），与本地化词条一一对应。
+`BusinessException.LocalizationData` 正是这个类型，所以异常与记录可以用同一份参数：
 
 ```csharp
 // 应用服务：业务规则拒绝，不是授权拒绝——授权那一档由端点上的
@@ -183,17 +184,16 @@ public async Task<OrderDto> PlaceAsync(PlaceOrderInput input, CancellationToken 
             OperationRecordActions.OrderPlaced,
             OperationTarget.For(customer.Id, customer.Name),
             PermissionConstant.Orders.Create,
-            OperationFailure.FromCode(
-                "Order:CreditLimitExceeded",
-                JsonSerializer.Serialize(new
-                {
-                    Limit = customer.CreditLimit,
-                    Available = customer.Available,
-                    Requested = input.Amount
-                })),
-            ct);
+            OperationFailure.FromCode(OrderErrorCodes.CreditLimitExceeded, new Dictionary<string, object?>
+            {
+                ["Limit"] = customer.CreditLimit,
+                ["Available"] = customer.Available,
+                ["Requested"] = input.Amount
+            }));
+        // 失败记录不接收取消令牌：请求被客户端中断，不能让这条审计作废（见 RecordFailedAsync 的 XML）。
+        // 成功路径的 RecordSucceededAsync 反过来要传 ct——两者刻意不同。
 
-        throw new BusinessException("Order:CreditLimitExceeded", "Insufficient credit limit.")
+        throw new BusinessException(OrderErrorCodes.CreditLimitExceeded, "Insufficient credit limit.")
             .WithData("Available", customer.Available)
             .WithData("Requested", input.Amount);
     }
@@ -206,15 +206,24 @@ public async Task<OrderDto> PlaceAsync(PlaceOrderInput input, CancellationToken 
 ```json
 "operationRecords": {
   "failures": {
-    "Order:CreditLimitExceeded": "可用额度 {{Available}}，本次需要 {{Requested}}"
+    "Order_CreditLimitExceeded": "可用额度 {{Available}}，本次需要 {{Requested}}"
   }
 }
 ```
 
+**词条键把错误码里的 `:` 写成 `_`**：冒号在词条键里没有先例，展示端查词条前统一换一次
+（`Order:CreditLimitExceeded` → `operationRecords.failures.Order_CreditLimitExceeded`）。
+写成带冒号的键查不到，展示端回退显示裸码——不报错，所以漏配是静默的。
+
 三件事容易漏：
 
 - **异常与记录用同一个码。** 前端按异常的码分支，运维按记录的码检索；两边不一致时，
-  "用户看到的错误"和"审计里的那一行"对不上，排查要靠时间戳猜。
+  "用户看到的错误"和"审计里的那一行"对不上，排查要靠时间戳猜。已经有 `BusinessException`
+  在手时直接 `OperationFailure.FromCode(exception.Code, exception.LocalizationData)`——
+  两个组件经 BCL 字典对接，不必互相引用。**但要先剔除不该给租户看的键**：
+  `FailureData` 对租户读者可见、还会进导出，而异常的参数里可能带着用户提交的原值。
+- **参数只能是标量。** 字符串、布尔、数值、日期、`Guid`。传进对象不会被摊开，只会写下类型名——
+  这既是防泄露（这一列租户直接可读），也因为词条占位符 `{{X}}` 渲染不了对象。
 - **参数不要塞进 `FromDetail`。** 那一路是给技术说明用的，不过本地化，
   界面只能原样显示英文串。
 - **只在真的拒绝时记。** 校验没通过就返回、并不构成一次"被拒的操作"时不要记——
@@ -263,6 +272,10 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 }
 ```
 
+不传原因时补上 `OperationFailureCodes.Forbidden`（`Error:Forbidden`）——没有原因码的失败记录
+事后无法按原因聚合。**这是本组件唯一自产的失败码，展示端要为它备一条词条**
+（键 `Error_Forbidden`，冒号换下划线）；漏了只会显示裸码，不报错。
+
 ## 接口参考
 
 | 成员 | 说明 |
@@ -270,7 +283,8 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 | `IOperationRecorder.RecordSucceededAsync(action, target, authorizationBasis, ct)` | 记录一次成功；落在调用方的事务边界里，写入失败照常上抛。`Host` 可见的动作在租户上下文里调用即抛 `InvalidOperationException` |
 | `IOperationRecorder.RecordFailedAsync(action, target, authorizationBasis, failure)` | 记录一次被拒或失败；独立提交、不可取消，写失败只记日志不抛。成功路径**没有** `failure` 参数——成功不存在"为什么没成"；失败路径**没有**取消令牌——被审计的一方断开连接不能让审计作废 |
 | `OperationTarget` | 目标的标识与名字快照捆绑传递；`For(id, name)` / `None`。名字是快照，理由同 `ActorName` |
-| `OperationFailure` | 失败原因；`FromCode(code, dataJson)` 走本地化码，`FromDetail(detail)` 走技术说明。**刻意不提供接受任意 `Exception` 的重载** |
+| `OperationFailure` | 失败原因；`FromCode(code, data)` 走本地化码（`data` 是标量字典，本组件负责写 JSON），`FromDetail(detail)` 走技术说明。**刻意不提供接受 `Exception` 的工厂**，`BusinessException` 也不例外 |
+| `OperationFailureCodes` | 本组件自己会产生的失败码，目前只有 `Error:Forbidden`（授权被拒的默认原因）。这些码没有随包译文、也不在服务端渲染，展示端必须自备词条（键为 `Error_Forbidden`），否则显示裸码 |
 | `OperationRecordInfo` | 一条记录的传输形态；各列长度上限以 `Max*Length` 常量给出。除操作人与目标标识外还带 `TargetName`（目标名快照）、`Visibility`（必填）、`ActorTenantId`（操作发生时的租户上下文；与 `TenantId` 不同的行即从租户上下文写进宿主层的失败记录），以及失败三件套 `FailureCode`（本地化码）／`FailureData`（占位参数 JSON，**刻意不设长度上限**）／`FailureDetail`（技术说明，含内部拓扑，宿主应在下发前裁剪） |
 | `OperationRecordOutcome` | `Succeeded`、`Failed`；只有两档 |
 | `OperationVisibility` | `Tenant` / `Host` / `Actor`；写入时由动作定义盖章。`Host` 表示记录属于宿主层，见「可见性与记录所在的层」 |

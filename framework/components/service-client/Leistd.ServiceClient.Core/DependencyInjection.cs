@@ -1,3 +1,5 @@
+using Leistd.ExceptionHandling.Options;
+using Leistd.ServiceClient.ExceptionMappings;
 using Leistd.MultiTenancy;
 using Leistd.Security.Users;
 using Leistd.ServiceClient.Handlers;
@@ -117,6 +119,12 @@ public static class DependencyInjection
         where TOptions : ServiceClientOptions, new()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+
+        // 上游故障的状态语义属于本组件的默认值，在这里登记而不是交给宿主逐个 Configure：
+        // 漏一个不会有编译或启动错误，只会让 502/503/504 静默变成 500。
+        // 幂等：MapDefaultException 按类型 TryAdd，多个客户端各调一次也只登记一次；
+        // 宿主的 MapException<ServiceClientException> 覆盖它，与调用顺序无关。
+        builder.Services.Configure<GlobalExceptionOptions>(ServiceClientExceptionMappings.Configure);
 
         builder.ConfigureHttpClient((provider, client) =>
         {

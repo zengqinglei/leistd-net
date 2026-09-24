@@ -2,8 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Leistd.ExceptionHandling.AspNetCore;
-using Leistd.ExceptionHandling.AspNetCore.Options;
-using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+using Leistd.ExceptionHandling.Options;
+using Leistd.ExceptionHandling.Descriptors;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
@@ -122,22 +122,24 @@ public class GlobalExceptionPipelineTests
         Assert.DoesNotContain("developer-only detail", content);
     }
 
-    // 配置绑定重载读取 Leistd:GlobalException 配置节（Enabled、IncludeExceptionDetails）。
+    // 配置绑定重载读取 Leistd:GlobalException 配置节（IncludeExceptionDetails）。
     [Fact]
     public async Task Configuration_bound_overload_binds_the_section()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Leistd:GlobalException:Enabled"] = "false",
+                ["Leistd:GlobalException:IncludeExceptionDetails"] = "true",
             })
             .Build();
 
         using var server = await StartAsync(services => services.AddGlobalExceptionHandler(configuration));
 
-        // 配置关闭后处理器放行，业务异常交回框架默认处理
-        var response = await server.CreateClient().GetAsync("/api/orders/7");
+        var response = await server.CreateClient().GetAsync("/api/programmer-error");
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.True(problem.RootElement.TryGetProperty("stackTrace", out _));
     }
 
     // HTTP 状态属于 API 契约，只在组合根代码里声明：配置文件里写映射不生效
@@ -178,17 +180,6 @@ public class GlobalExceptionPipelineTests
 
         var response = await server.CreateClient().GetAsync("/api/orders/7");
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-    }
-
-    // Enabled=false 时处理器放行，交回框架默认处理，宿主排查中间件顺序时会用到。
-    [Fact]
-    public async Task Disabling_the_handler_hands_the_exception_back_to_the_framework()
-    {
-        using var server = await StartAsync(WithOptions(o => o.Enabled = false));
-
-        var response = await server.CreateClient().GetAsync("/api/orders/1001");
-
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
     // 正常响应不得被异常中间件改写——接入位置靠前，很容易误伤成功路径。

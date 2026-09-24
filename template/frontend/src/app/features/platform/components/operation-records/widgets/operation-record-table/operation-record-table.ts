@@ -87,10 +87,20 @@ const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
   'role.created': 'Created a role',
 };
 
-/** 失败原因的英文文案，与 `en.json` 的 `operationRecords.failures` 同步。 */
+/**
+ * 失败原因的英文文案，与 `en.json` 的 `operationRecords.failures` 同步。
+ *
+ * 不启用多语言时没有插值引擎，占位参数无处可去，所以这里只写不带参数的句子——
+ * 参数仍然存进了 `failureData`，详情区能看到原始 JSON。
+ */
 const FAILURE_REASONS: Record<string, string> = {
   Auth_InvalidCredentials: 'Incorrect username or password',
   Auth_UserTemporarilyLockedOut: 'Too many failed sign-in attempts',
+  // 框架唯一自产的失败码（RecordDeniedOperationAsync 的默认原因），没有这条会显示裸码
+  Error_Forbidden: 'Not allowed to perform this action',
+  // 再认证失败：改口令、停用两步验证、重发恢复码这三处
+  Security_CurrentPasswordIncorrect: 'The current password is incorrect',
+  Auth_TwoFactorCodeInvalid: 'The verification code is incorrect',
 };
 //#endif
 

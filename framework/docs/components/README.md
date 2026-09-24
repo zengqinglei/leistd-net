@@ -1,6 +1,6 @@
 # Leistd 组件总览
 
-本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、63 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
+本页是 Leistd 框架按功能分组的组件索引。当前 `framework/components/` 共有 **26 个能力分组、62 个 NuGet 包**；DDD 四层基座的 4 个包另见 [DDD 四层基座](../ddd-struct/ddd-struct.md)。
 
 ## 组件清单
 
@@ -11,7 +11,7 @@
 | 后台作业 | 周期任务按对齐 UTC 的时段执行，登记时显式选择全集群一份（锁 + 水位）或每副本一份；进程内队列把请求外的工作挪到后台并带上入队时的上下文 | `Leistd.BackgroundJobs.Core`、`Leistd.BackgroundJobs.InProcess`、`Leistd.BackgroundJobs.EntityFrameworkCore` | [`background-jobs`](./background-jobs.md) |
 | 审计 | 通过标记接口声明实体的创建/修改/删除审计能力；创建审计在实体进入变更跟踪时落定，修改和删除审计在保存时处理 | `Leistd.Auditing.Core`、`Leistd.Auditing.EntityFrameworkCore` | [`auditing`](./auditing.md) |
 | 权限授权 | 基于具名权限的细粒度授权：`IPermissionChecker` 统一检查入口，声明式定义权限并接入 ASP.NET Core 策略管道；自带权限管理端点与首次授予 | `Leistd.Authorization.Core`、`Leistd.Authorization.AspNetCore`、`Leistd.Authorization.EntityFrameworkCore` | [`authorization`](./authorization.md) |
-| 资源实例授权 | 对**已加载的**单个资源实例裁决：领域规则 Handler 与资源 ACL 合并，拒绝优先、默认拒绝；并提供把 ACL 合并进集合查询的入口 | `Leistd.Authorization.Resource.Core`、`Leistd.Authorization.Resource.EntityFrameworkCore`、`Leistd.Authorization.Resource.AspNetCore` | [`authorization-resource`](./authorization-resource.md) |
+| 资源实例授权 | 对**已加载的**单个资源实例裁决：领域规则 Handler 与资源 ACL 合并，拒绝优先、默认拒绝；并提供把 ACL 合并进集合查询的入口 | `Leistd.Authorization.Resource.Core`、`Leistd.Authorization.Resource.EntityFrameworkCore` | [`authorization-resource`](./authorization-resource.md) |
 | 数据范围 | 把"能看到哪些候选数据"翻译成可由数据库执行的查询谓词，多个范围取并集；不内置组织模型 | `Leistd.Authorization.DataScope.Core` | [`authorization-data-scope`](./authorization-data-scope.md) |
 | 核心原语：时钟 | 提供时钟抽象（IClock/UtcClockProvider），供其他组件复用 | `Leistd.Core` | [`core`](./core.md) |
 | 数据访问共享契约 | 零依赖叶子包：连接解析与归属（IConnectionStringResolver / [ConnectionStringName] / IConnectionAffinityProvider），以及存储、用例与端点共用的分页请求与结果（PageRequest / PagedResult） | `Leistd.Data` | [`data`](./data.md) |

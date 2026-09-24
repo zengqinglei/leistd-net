@@ -175,6 +175,7 @@
             "frontend/src/app/shared/dtos/auth.dto.ts",
             "frontend/src/app/features/account/**",
             "frontend/src/app/features/platform/components/users/widgets/reset-user-password-dialog/**",
+            "frontend/src/app/features/platform/components/users/widgets/user-edit-dialog/**",
             "frontend/src/app/core/guards/super-admin-guard.ts",
             "frontend/_mock/api/auth.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",

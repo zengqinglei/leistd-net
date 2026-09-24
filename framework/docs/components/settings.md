@@ -49,12 +49,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 
 **前置**：宿主须已注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`——存储经 `IDbContextProvider<TDbContext>` 取上下文。
 
-使用全局异常处理的 HTTP 宿主，须显式组合本组件的非默认状态；仅注册设置服务不会登记异常映射：
-
-```csharp
-builder.Services.AddGlobalExceptionHandler(options =>
-    SettingsExceptionMappings.Configure(options));
-```
+`AddSettingsCore()` 已登记本组件错误码的非默认 HTTP 状态（具体映射见[接口参考](#接口参考)），宿主不需要另行组合。
 
 设置页端点与显示名翻译：
 
@@ -210,7 +205,7 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 | `ISettingManagementService` | 设置页用例：`GetAsync`、`SetForCurrentUserAsync`、`SetForCurrentTenantAsync` |
 | `SettingOutputDto` / `SetSettingInputDto` | 设置页的读写形状 |
 | `SettingErrorCodes` | 组件抛出的错误码，默认中英译文随包分发 |
-| `SettingsExceptionMappings.Configure(options)` | AspNetCore 包：由宿主显式登记宿主限定/身份拒绝 403、不可见设置 404；宿主随后可覆盖 |
+| 默认 HTTP 状态 | 组件默认状态：宿主限定与身份拒绝 → 403，不可见设置 → 404。由 `AddSettingsCore()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `AddSettingsCore(services, configure?)` | 注册定义管理器、解析器、写入入口与设置页用例；`SettingManagementOptions` 给翻译资源与默认分组 |
 | `AddSettingsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddSettingsCore()` |
 | `ConfigureSettings(modelBuilder)` | 映射 `SettingRecord` 实体 |

@@ -61,6 +61,14 @@ public interface IRepository<TEntity> : IRepository where TEntity : class, IEnti
     Task<bool> AnyAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default);
 
     /// <summary>新增一个实体，返回登记后的实例（数据库生成的值在提交后才可用）。</summary>
+    /// <remarks>
+    /// <b>工作单元内，本方法不访问数据库</b>：它只把实体登记到变更跟踪器。因此
+    /// <b>唯一索引、外键、检查约束的冲突不在这里抛出</b>，而在冲刷时才抛
+    /// （<c>IUnitOfWork.SaveChangesAsync</c>，或提交时的 <c>CompleteAsync</c>）。
+    /// 想就地捕获约束冲突，必须先显式冲刷；把 <c>try { InsertAsync } catch</c> 写在工作单元内
+    /// 是<b>永不触发的死代码</b>，而且编译和阅读都看不出问题——它会一直"看起来在处理并发"。
+    /// 工作单元外没有这个问题：此时实现会自行调用 <c>SaveChangesAsync</c>。
+    /// </remarks>
     Task<TEntity> InsertAsync(TEntity entity, CancellationToken cancellationToken = default);
 
     /// <summary>批量新增。</summary>

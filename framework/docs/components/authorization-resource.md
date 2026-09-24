@@ -9,7 +9,6 @@
 | 按所有者、状态等领域属性判定 | `Leistd.Authorization.Resource.Core` + 规则处理器 |
 | 支持“将这份文档分享给某人” | 追加 `Leistd.Authorization.Resource.EntityFrameworkCore` |
 | ACL 需合并进列表查询 | `QueryGrantedResourceKeysAsync` / `QueryDeniedResourceKeysAsync` |
-| Web API 需要组件自带的 ACL 冲突状态 | 追加 `Leistd.Authorization.Resource.AspNetCore` 并调用映射入口 |
 
 “本人的全部订单”或“本部门及下级部门”属于[数据范围](./authorization-data-scope.md)，不应展开成逐条 ACL。只检查操作类型时使用[功能权限](./authorization.md)。
 
@@ -18,10 +17,9 @@
 ```bash
 dotnet add package Leistd.Authorization.Resource.Core
 dotnet add package Leistd.Authorization.Resource.EntityFrameworkCore
-dotnet add package Leistd.Authorization.Resource.AspNetCore
 ```
 
-仅使用领域规则时可不安装 EF Core 包；非 HTTP 宿主可不安装 AspNetCore 包。实例判定必须在资源加载后执行，无法由加载前的 `[Authorize]` 策略取代。
+仅使用领域规则时可不安装 EF Core 包。实例判定必须在资源加载后执行，无法由加载前的 `[Authorize]` 策略取代。
 
 ## 注册
 
@@ -44,12 +42,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 
 ACL Store/Manager 依赖 `IDbContextProvider<TDbContext>`，因此需先注册 `AddUnitOfWork()` 与 `AddUnitOfWorkEfCore()`。业务项目也必须提供 `IPermissionSubjectProvider`。
 
-需要 ACL 写入冲突的默认 HTTP 409 时，在全局异常处理选项中显式组合；仅注册资源授权服务不会登记异常映射：
-
-```csharp
-builder.Services.AddGlobalExceptionHandler(options =>
-    ResourceAuthorizationExceptionMappings.Configure(options));
-```
+`AddResourceAuthorizationCore()` 已把 ACL 写入的版本冲突登记为 409，宿主不需要另行组合；宿主 `MapCode` 可覆盖。
 
 ## 使用
 
@@ -109,7 +102,7 @@ if (!await authorization.IsGrantedAsync(
 
 功能权限应在控制器上先行检查，实例授权在加载后检查。宿主在 API 组合根将上述错误码分别映射为 404/403；存在性敏感的 API 可按威胁模型统一映射为 404。
 
-本组件抛出的 `ResourceAuthorizationErrorCodes.InvalidGrant` 默认按业务异常返回 400。采用 ACL 写入的 HTTP 宿主在 `AddGlobalExceptionHandler` 的选项回调中调用 `ResourceAuthorizationExceptionMappings.Configure(options)`，即可把组件的 `ConcurrencyConflict` 默认映射为 409；宿主 `MapCode` 可覆盖。Core 包自带两种码的默认中英文案，宿主资源可覆盖；Core 本身不依赖 HTTP。业务项目自己的 `Order:*` 错误码仍由宿主映射。
+本组件抛出的 `ResourceAuthorizationErrorCodes.InvalidGrant` 默认按业务异常返回 400；`ConcurrencyConflict` 由 `AddResourceAuthorizationCore()` 登记为 409，宿主 `MapCode` 可覆盖。Core 包自带两种码的默认中英文案，宿主资源可覆盖。业务项目自己的 `Order:*` 错误码仍由宿主映射。
 
 ### 将 ACL 合并进列表
 
@@ -189,7 +182,7 @@ await grantManager.RemoveProviderAsync(
 | `IResourceGrantManager` | 替换 ACL，清理资源或主体的 ACL |
 | `ResourceGrant` / `ResourceGrantSet` | 单条 ACL 与某实例的完整 ACL 快照 |
 
-下表状态码由 API 宿主选择适配入口后生效；Core 异常不直接决定 HTTP。资源授权适配层提供 ACL 冲突的默认 409，`UnstableGrantSnapshotException` 的默认 503 由功能授权的 AspNetCore 适配层提供。
+下表状态码是组件登记的默认值，宿主可用 `MapCode` / `MapException` 覆盖；Core 异常本身不决定 HTTP。ACL 冲突的默认 409 由 `AddResourceAuthorizationCore()` 登记，`UnstableGrantSnapshotException` 的默认 503 由功能授权组件的 `AddPermissionAuthorizationCore()` 登记。
 
 | 异常 | 建议 HTTP | 含义 |
 | --- | --- | --- |

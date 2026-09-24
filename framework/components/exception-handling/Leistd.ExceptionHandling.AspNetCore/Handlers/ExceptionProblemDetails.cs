@@ -1,5 +1,5 @@
 using Leistd.ExceptionHandling.AspNetCore.Constants;
-using Leistd.ExceptionHandling.AspNetCore.Descriptors;
+using Leistd.ExceptionHandling.Descriptors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Localization;

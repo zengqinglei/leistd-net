@@ -631,8 +631,11 @@
       "role.created": "创建角色"
     },
     "failures": {
-      "Auth_InvalidCredentials": "用户名或密码不正确",
-      "Auth_UserTemporarilyLockedOut": "连续登录失败次数达到上限"
+      "Auth_InvalidCredentials": "用户名或密码不正确（{{windowMinutes}} 分钟内已失败 {{attempts}} 次）",
+      "Auth_UserTemporarilyLockedOut": "连续登录失败 {{maxFailedAttempts}} 次，账号已锁定 {{minutes}} 分钟",
+      "Error_Forbidden": "没有执行该操作的权限",
+      "Security_CurrentPasswordIncorrect": "当前口令不正确",
+      "Auth_TwoFactorCodeInvalid": "验证码不正确"
     },
     "table": {
       "currentPageReport": "共 {{total}} 条",

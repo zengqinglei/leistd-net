@@ -20,6 +20,7 @@ using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
@@ -60,6 +61,7 @@ internal sealed class AuthAppService(
     IObjectMapper objectMapper,
     IUserRegistrationPolicyProvider registrationPolicy,
     ILoginSecurityPolicyProvider loginSecurityPolicy,
+    IReauthenticationGuard reauthenticationGuard,
     ISecurityAlertPublisher securityAlerts,
     ICurrentTenant currentTenant,
     IClock clock,
@@ -107,9 +109,11 @@ internal sealed class AuthAppService(
                     OperationRecordActions.AuthLoginFailed,
                     OperationTarget.For(input.UsernameOrEmail),
                     OperationRecordAuthorizations.CredentialsPresented,
-                    OperationFailure.FromCode(
-                        "Auth:InvalidCredentials",
-                        $$"""{"attempts":{{attempts}},"windowMinutes":{{FailedLoginWindowMinutes}}}"""));
+                    OperationFailure.FromCode(AuthErrorCodes.InvalidCredentials, new Dictionary<string, object?>
+                    {
+                        ["attempts"] = attempts,
+                        ["windowMinutes"] = FailedLoginWindowMinutes
+                    }));
             }
 
             throw new BusinessException(AuthErrorCodes.InvalidCredentials, "The username or password is incorrect.");
@@ -254,9 +258,11 @@ internal sealed class AuthAppService(
             OperationRecordActions.AuthLockedOut,
             OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
             OperationRecordAuthorizations.CredentialsPresented,
-            OperationFailure.FromCode(
-                "Auth:UserTemporarilyLockedOut",
-                $$"""{"maxFailedAttempts":{{policy.Lockout.MaxFailedAttempts}},"minutes":{{(int)policy.Lockout.Duration.TotalMinutes}}}"""));
+            OperationFailure.FromCode(AuthErrorCodes.UserTemporarilyLockedOut, new Dictionary<string, object?>
+            {
+                ["maxFailedAttempts"] = policy.Lockout.MaxFailedAttempts,
+                ["minutes"] = (int)policy.Lockout.Duration.TotalMinutes
+            }));
     }
 
     private static BusinessException TwoFactorChallengeExpired() =>
@@ -425,7 +431,28 @@ internal sealed class AuthAppService(
 
         logger.LogInformation("Changing current user password (ID: {UserId})", user.Id);
 
-        await userDomainService.ChangePasswordAsync(user, input.CurrentPassword, input.NewPassword, cancellationToken);
+        // 改口令要再证明一次自己知道当前口令，这就是一次再认证：锁定期内不给试，失败按登录的同一套计数。
+        // 少了这一道，持有被盗会话的人能在这个接口上无限次猜当前口令，把登录页的锁定整个绕过去。
+        await reauthenticationGuard.EnsureAllowedAsync(user, cancellationToken);
+
+        switch (userDomainService.ChangePassword(user, input.CurrentPassword, input.NewPassword))
+        {
+            case ChangePasswordStatus.NoLocalPassword:
+                // 没有本地口令就没什么可猜的，不计入失败次数
+                throw new BusinessException(
+                    SecurityErrorCodes.LocalPasswordNotSet,
+                    "The current account has no local password set and cannot change the password.");
+
+            case ChangePasswordStatus.CurrentPasswordIncorrect:
+                // 这一次恰好把次数用完时，守卫返回的是"已锁定"而不是"口令不正确"
+                throw await reauthenticationGuard.RejectAsync(
+                    user,
+                    OperationRecordActions.AuthPasswordChanged,
+                    SecurityErrorCodes.CurrentPasswordIncorrect,
+                    "The current password is incorrect.",
+                    cancellationToken);
+        }
+
         await userRepository.UpdateAsync(user, cancellationToken);
 
         // 凭据换了，以旧密码建立的其他会话随之失效；发起修改的这台保留，免得改完密码自己也被踢出去

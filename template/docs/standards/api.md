@@ -130,7 +130,7 @@ HTTP/1.1 200 OK
 
 ## 4. 异常与 HTTP 映射
 
-后端只保留一个业务异常 `BusinessException(code, safeMessage, innerException?)`。错误码是必填且不可变的机器契约；各 API 业务模块及组件 Web 适配层定义非默认 HTTP 映射，组合根显式汇总：
+后端只保留一个业务异常 `BusinessException(code, safeMessage, innerException?)`。错误码是必填且不可变的机器契约；各 API 业务模块只登记自己的非默认 HTTP 状态，由组合根汇总；框架组件的默认状态由组件在自己的 `AddXxx` 里登记，需要改时在组合根用 `MapCode` / `MapException` 覆盖：
 
 | 来源 | 默认 HTTP | 说明 |
 | --- | --- | --- |
@@ -139,7 +139,7 @@ HTTP/1.1 200 OK
 | DataAnnotations 自动校验 / `ValidationException` | 400 | 请求字段或结构不合法，返回 `errors` |
 | 未捕获的 BCL/技术异常 | 500 | 只返回通用安全文案，细节记日志 |
 | 框架判定的请求错误（请求体无法解析、请求体过大、内容类型不符、路由不存在、未认证、限流） | 400 / 413 / 415 / 404 / 401 / 429 | `/api` 下统一返回 Problem Details，只有状态码、本地化标题与 `traceId`，不带业务错误码；开发与生产环境一致。前端按状态码处理这类失败 |
-| `ServiceClientException` | 组合 `Leistd.ServiceClient.AspNetCore` 的默认映射后，按本地观测的失败来源返回 500/502/503/504 | 本地配置或未分类故障默认 500，远端明确失败、响应无效或提前中断默认 502；不从远端状态推断本地状态。原始 URL、响应片段只留服务端诊断，已知上游契约可由宿主覆盖 |
+| `ServiceClientException` | 按本地观测的失败来源返回 500/502/503/504（注册客户端时自动登记） | 本地配置或未分类故障默认 500，远端明确失败、响应无效或提前中断默认 502；不从远端状态推断本地状态。原始 URL、响应片段只留服务端诊断，已知上游契约可由宿主覆盖 |
 
 `ArgumentException`、`InvalidOperationException`、`HttpRequestException` 等优先按 .NET 语义抛出，框架不根据类型猜测为 400/503。认证和授权拒绝优先交给 ASP.NET Core 管道，不用业务异常模拟。
 

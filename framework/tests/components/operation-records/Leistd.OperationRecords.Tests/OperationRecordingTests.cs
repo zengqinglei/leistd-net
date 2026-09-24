@@ -299,7 +299,10 @@ public sealed class OperationRecordingTests
             "order.deleted",
             OperationTarget.For("o-1", "A001"),
             "App.Orders.Delete",
-            OperationFailure.Create("Order:AlreadyShipped", """{"No":"A001"}""", "payment gateway timed out"));
+            OperationFailure.Create(
+                "Order:AlreadyShipped",
+                new Dictionary<string, object?> { ["No"] = "A001" },
+                "payment gateway timed out"));
 
         var written = Assert.Single(store.Written);
         Assert.Equal("Order:AlreadyShipped", written.FailureCode);

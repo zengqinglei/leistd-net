@@ -45,7 +45,8 @@ public class UserDomainService(
     /// 本服务没有回写通道，允许本地改只会积累与签发方的漂移。</para>
     /// <para><b>角色与启停不碰。</b>那两样是本服务自己的授权决定，刷新资料时必须原样保留，
     /// 否则每次请求都会把管理员刚做的授权冲掉。</para>
-    /// <para>首次访问的并发由主键兜底：插入撞键就重读那一行——那是一次正常的竞争，不是错误。</para>
+    /// <para>首次访问的并发不在这里处理：撞主键要到冲刷时才抛，本方法内接不到。
+    /// 由持有事务边界的调用方重试一次，见 <c>ResourceUserProvisioningMiddleware</c>。</para>
     /// </remarks>
     /// <param name="subjectId">签发方主体标识，取自令牌的 <c>sub</c>。</param>
     /// <param name="username">令牌里的用户名；缺失时回落为主体标识，保证非空且可检索。</param>
@@ -77,24 +78,11 @@ public class UserDomainService(
             return existing;
         }
 
+        // 这里不包 try/catch：工作单元内 InsertAsync 只登记实体、不访问数据库，
+        // 撞主键要到冲刷时才抛，catch 在这里是永不触发的死代码（见工作单元文档）。
+        // 并发首访由调用方重试一次收口——它持有事务边界，也只有它能重开一个干净的工作单元。
         var user = new User(subjectId, name, mail, displayName: display);
-        try
-        {
-            await userRepository.InsertAsync(user, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            // 同一主体的两个首次请求撞在一起：谁先谁后都对，读回胜出的那一行即可。
-            // 重读为空说明失败另有原因（约束、连接），原样抛出，不吞。
-            var raced = await userRepository.GetByIdAsync(subjectId, cancellationToken);
-            if (raced is null)
-            {
-                throw;
-            }
-
-            logger.LogDebug(exception, "Concurrent first-touch projection for subject {SubjectId}; reusing the winning row.", subjectId);
-            return raced;
-        }
+        await userRepository.InsertAsync(user, cancellationToken);
 
         logger.LogInformation("Projected issuer subject {SubjectId} into a local user row.", subjectId);
         return user;
@@ -265,28 +253,32 @@ public class UserDomainService(
 
 #if (LocalIdentity)
     /// <summary>
-    /// 修改密码
+    /// 本人修改口令：校验当前口令，通过则写入新口令的哈希。
     /// </summary>
-    public Task ChangePasswordAsync(
-        User user,
-        string currentPassword,
-        string newPassword,
-        CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// <b>失败返回状态而不是抛异常</b>，与 <see cref="ValidateCredentialsAsync"/> 同型：
+    /// 当前口令不对是一次<b>再认证失败</b>，应用层要先计入失败次数、留下审计，然后才抛。
+    /// 这里直接抛的话，应用层拿不到那个时机（见 <c>IReauthenticationGuard</c>）。
+    /// 新口令的强度校验仍在这里，失败照常抛——那是输入不合格，不是认证失败。
+    /// </remarks>
+    /// <param name="user">当前用户。</param>
+    /// <param name="currentPassword">待校验的当前口令。</param>
+    /// <param name="newPassword">新口令。</param>
+    public ChangePasswordStatus ChangePassword(User user, string currentPassword, string newPassword)
     {
+        ArgumentNullException.ThrowIfNull(user);
         if (user.PasswordHash == null)
         {
-            throw new BusinessException(SecurityErrorCodes.LocalPasswordNotSet, "The current account has no local password set and cannot change the password.")
-                ;
+            return ChangePasswordStatus.NoLocalPassword;
         }
 
         if (!passwordHasher.VerifyPassword(user.PasswordHash, currentPassword))
         {
-            throw new BusinessException(SecurityErrorCodes.CurrentPasswordIncorrect, "The current password is incorrect.")
-                ;
+            return ChangePasswordStatus.CurrentPasswordIncorrect;
         }
 
         user.UpdatePasswordHash(HashWithPolicy(newPassword, "New password"));
-        return Task.CompletedTask;
+        return ChangePasswordStatus.Succeeded;
     }
 
     public async Task<User> CreateUserWithRolesAsync(

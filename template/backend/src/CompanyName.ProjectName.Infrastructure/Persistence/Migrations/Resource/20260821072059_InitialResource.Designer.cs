@@ -141,7 +141,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.HasIndex("Email")
                         .IsUnique()
-                        .HasFilter("\"TenantId\" IS NULL");
+                        .HasFilter("\"TenantId\" IS NULL AND \"Email\" <> ''");
 
                     b.HasIndex("Username")
                         .IsUnique()
@@ -149,7 +149,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
 
                     b.HasIndex("TenantId", "Email")
                         .IsUnique()
-                        .HasFilter("\"TenantId\" IS NOT NULL");
+                        .HasFilter("\"TenantId\" IS NOT NULL AND \"Email\" <> ''");
 
                     b.HasIndex("TenantId", "Username")
                         .IsUnique()

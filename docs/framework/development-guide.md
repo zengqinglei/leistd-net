@@ -225,8 +225,8 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 公共接口优先保持最小；仅一个实现且没有替换需求时，不为形式一致额外抽象。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
 - **组件发出的错误码自带默认译文**：业务异常在 `new BusinessException(code, safeMessage)` 时无条件给码；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
-  - Core 层错误码和异常只描述语义，XML 注释不写固定 HTTP 状态；具备 ASP.NET Core 适配包的组件在该包内提供可显式调用的非默认映射方法，使用 `MapDefaultCode` / `MapDefaultException` 登记。宿主在组合根选择，并通过 `MapCode` / `MapException` 覆盖；覆盖与调用顺序无关。`Add*` 不隐式注册异常处理。
-  - 新增错误码时只为非默认 HTTP 语义补组件 Web 适配层或宿主映射及针对性测试；未映射的 `BusinessException` 故意回落 400，不登记冗余的 400 映射。422 只在协议确有区分价值时显式使用。
+  - Core 层错误码和异常只描述语义，XML 注释不写固定 HTTP 状态。组件拥有的非默认 HTTP 语义在组件 Core 包里用 `MapDefaultCode` / `MapDefaultException` 声明，并在组件自己的 `AddXxx` 里经 `services.Configure<GlobalExceptionOptions>(...)` 自动登记——交给宿主逐个调用的话，漏一个不会有编译或启动错误，只会静默回落成 400。登记映射的类型保持 `internal`，默认状态写进组件文档。宿主通过 `MapCode` / `MapException` 覆盖，与调用顺序无关。Core 里的状态码写成 `(int)HttpStatusCode.X`，不为 `StatusCodes` 常量引入 Web 依赖。代价是组件 Core 要依赖 `ExceptionHandling.Core`——多数组件本就为 `BusinessException` 引用它；HTTP 默认状态以 int 表达，Core 仍不依赖 ASP.NET Core 程序集。
+  - 新增错误码时只为非默认 HTTP 语义在组件 Core 里登记默认映射（或在宿主映射）并补针对性测试；未映射的 `BusinessException` 故意回落 400，不登记冗余的 400 映射。422 只在协议确有区分价值时显式使用。
   - **协议层失败不发错误码**：输入校验、未预期异常、上游故障等只有状态码语义的失败只返回状态码、本地化标题（`Title:{status}`，译文在 `Leistd.Localization.Core`）与 `traceId`，不合成 `Error:*` 这类与状态码一一对应的码（RFC 9457 §4）。错误码只用于调用方需要据以分支的业务语义。
   - **占位符的名字与基数属于公共契约**：`{Name}` 改成 `{Names}`、或由单值改为多值拼接，都要按破坏性变更处理并写进脚注——宿主的译文是照着占位符写的，改了它等于让宿主的句子渲染错乱（`权限"A, B, C"未定义`）。
   - 宿主**不要**复制组件的译文：一字不差的副本会在组件改文案时把旧文案静默钉死。只写确实要改的那几条。

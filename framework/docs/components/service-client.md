@@ -71,14 +71,7 @@ app.UseAuthorization();
 
 Bearer token 验证不属于本家族，宿主需自行配置 OpenIddict Validation 或等价 JWT 验证。
 
-HTTP 宿主如需把未处理的服务调用故障分类为安全的 500/502/503/504，在全局异常处理选项中显式组合本组件映射；仅注册客户端或用户上下文不会修改异常响应：
-
-```csharp
-builder.Services.AddGlobalExceptionHandler(options =>
-    ServiceClientExceptionMappings.Configure(options));
-```
-
-映射由 `Leistd.ServiceClient.AspNetCore` 提供。宿主可用 `MapException<ServiceClientException>` 覆盖，按业务需要决定自己的网关契约。
+注册任一服务客户端（`AddServiceClient` 或 `AddServiceClientPipeline`）即登记服务调用故障的安全默认状态：本地观测到的无效响应、传输不可达、等待超时分别为 502、503、504，其余为 500。宿主可用 `MapException<ServiceClientException>` 覆盖，按业务需要决定自己的网关契约。
 
 ## 使用
 
@@ -162,7 +155,7 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 
 ## 接口参考
 
-`ServiceClientException.FailureKind` 区分本地配置错误、传输不可达、等待超时、响应无效和明确的远端 HTTP 失败；`RemoteServiceException` 还保留远端状态、错误码与追踪标识供诊断。OAuth token 端点返回非成功状态也保留为 `RemoteServiceException`。异常消息可能包含 URL、响应片段等技术信息，不应直接返回给 API 调用方。`ServiceClientExceptionMappings.Configure` 给出组件拥有的安全默认响应：配置及未分类故障返回 500；响应无效、提前中断或远端明确失败返回 502；传输不可达返回 503；等待超时返回 504。远端返回的 408、429、503 等不自动转译为本地状态；HTTP 状态也不意味着自动重试，是否重试仍由操作幂等性与调用策略决定。
+`ServiceClientException.FailureKind` 区分本地配置错误、传输不可达、等待超时、响应无效和明确的远端 HTTP 失败；`RemoteServiceException` 还保留远端状态、错误码与追踪标识供诊断。OAuth token 端点返回非成功状态也保留为 `RemoteServiceException`。异常消息可能包含 URL、响应片段等技术信息，不应直接返回给 API 调用方。组件在注册客户端时自动登记安全默认响应：配置及未分类故障返回 500；响应无效、提前中断或远端明确失败返回 502；传输不可达返回 503；等待超时返回 504。远端返回的 408、429、503 等不自动转译为本地状态；HTTP 状态也不意味着自动重试，是否重试仍由操作幂等性与调用策略决定。
 
 | 类型或入口 | 用途 |
 | --- | --- |
@@ -175,7 +168,7 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 | `EnsureRemoteSuccessAsync` | 将原始非 2xx 响应还原为远程异常 |
 | `ServiceClientException` | 网络、超时或反序列化等客户端故障 |
 | `RemoteServiceException` | 远程错误及其状态码、业务码和 TraceId |
-| `ServiceClientExceptionMappings.Configure(options)` | AspNetCore 包：宿主显式启用服务调用故障的安全默认状态与文案 |
+| 默认 HTTP 状态 | 组件默认状态：无效响应与远端失败 → 502，不可达 → 503，超时 → 504，其余 → 500。由注册客户端时自动登记；宿主 `MapException<ServiceClientException>` 可覆盖 |
 
 ## 配置项
 
