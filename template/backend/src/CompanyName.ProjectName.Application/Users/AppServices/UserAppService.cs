@@ -5,6 +5,7 @@ using CompanyName.ProjectName.Application.OperationRecords.Provider;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Users.Mappings;
 using Leistd.Timing;
@@ -14,7 +15,6 @@ using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Avatars;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Policies;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
@@ -59,9 +59,11 @@ public class UserAppService(
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
     IPermissionChecker permissionChecker,
-    UserDomainService userDomainService,
     IOperationRecorder operationRecorder,
 #if (LocalIdentity)
+    // 资源服务形态下用户由令牌投影而来：没有新建、改邮箱、重置口令这些入口，
+    // 这个依赖的三处用法全在本形态内，那边留着只会是一个未读参数
+    UserDomainService userDomainService,
     UserSessionDomainService userSessionDomainService,
     ISecurityAlertPublisher securityAlerts,
 #endif

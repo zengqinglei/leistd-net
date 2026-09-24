@@ -353,18 +353,20 @@ public class UserDomainService(
     }
 
     /// <summary>
-    /// 校验用户名密码，并按 <paramref name="lockout"/> 累计失败、触发锁定。
+    /// 校验用户名密码，只给判定。
     /// </summary>
     /// <remarks>
+    /// <para><b>失败返回状态而不是抛异常，也不在这里累计失败</b>：累计要落在独立的工作单元里，
+    /// 那是事务编排、属于应用层（见 <c>IAccessFailureCounter</c>）。领域只回答"口令对不对"。</para>
     /// <para>锁定中的账号<b>不校验密码</b>，直接返回 <see cref="CredentialValidationStatus.LockedOut"/>：
     /// 锁定期间若仍按密码对错给出不同结果，攻击者照样能一个个试，锁定就只是换了一种报错。</para>
-    /// <para>没有密码的账号（只经外部登录）输错不计数：那里没有可猜的密码，
-    /// 计数只会让别人能把它锁住，连外部登录一起挡在外面。</para>
+    /// <para>没有密码的账号（只经外部登录）按凭据无效处理且<b>不应计数</b>：那里没有可猜的密码，
+    /// 计数只会让别人能把它锁住，连外部登录一起挡在外面。调用方据
+    /// <see cref="CredentialValidationResult.Countable"/> 判断。</para>
     /// </remarks>
     public async Task<CredentialValidationResult> ValidateCredentialsAsync(
         string usernameOrEmail,
         string password,
-        LoginLockoutPolicy lockout,
         DateTime now,
         CancellationToken cancellationToken = default)
     {
@@ -388,12 +390,7 @@ public class UserDomainService(
             return new CredentialValidationResult(CredentialValidationStatus.Succeeded, user);
         }
 
-        var lockedOut = user.RecordAccessFailed(now, lockout);
-        await userRepository.UpdateAsync(user, cancellationToken);
-
-        return lockedOut
-            ? new CredentialValidationResult(CredentialValidationStatus.LockedOut, user, LockoutTriggered: true)
-            : new CredentialValidationResult(CredentialValidationStatus.InvalidCredentials, user);
+        return new CredentialValidationResult(CredentialValidationStatus.InvalidCredentials, user, Countable: true);
     }
 #endif
 }

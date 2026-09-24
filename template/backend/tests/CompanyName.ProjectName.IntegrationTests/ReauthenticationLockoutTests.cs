@@ -2,7 +2,16 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.Auth.Policies;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
+using CompanyName.ProjectName.Domain.Shared.Security.Errors;
+using CompanyName.ProjectName.Domain.Users.Entities;
+using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.UnitOfWork;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -127,6 +136,61 @@ public sealed class ReauthenticationLockoutTests(ProjectWebApplicationFactory fa
 
         using var signedIn = await ProjectWebApplicationFactory.LoginAsync(factory, username, NewPassword);
         Assert.Equal(HttpStatusCode.OK, (await signedIn.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>守卫经计数器累计，因而计数不随调用方的事务回滚。</summary>
+    /// <remarks>
+    /// <para>回归点：计数曾经只是"碰巧"落库——调用方都不在工作单元内，写入即时生效。
+    /// 谁给再认证入口加一个 <c>[UnitOfWork]</c>，计数就会跟着紧接着的抛出一并回滚，
+    /// 而接口返回一模一样、界面毫无异常，只有真被爆破时才发现锁定从未生效。</para>
+    /// <para>所以这里<b>故意</b>在自己的工作单元里调用守卫，且不 <c>CompleteAsync</c> 直接释放：
+    /// 调用方这一侧整体回滚，计数仍须在库里。</para>
+    /// <para>与 <c>AccessFailureCounterTests</c> 的分工：那一条钉住计数器自身的提交独立性，
+    /// <b>这一条钉住守卫确实经它累计</b>——守卫若改回就地计数，这条会红而那条不会。
+    /// 登录与两步验证两条路径没有对应判据：从 HTTP 端点做不到"自己开一个工作单元再丢弃"。</para>
+    /// </remarks>
+    [Fact]
+    public async Task The_guard_counts_through_the_shared_counter()
+    {
+        var username = await CreateUserAsync("reauth_uow");
+        var userId = await FindUserIdAsync(username);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+            var guard = scope.ServiceProvider.GetRequiredService<IReauthenticationGuard>();
+            var users = scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>();
+
+            using var unitOfWork = await unitOfWorkManager.BeginAsync();
+            var user = await users.GetByIdAsync(userId);
+            Assert.NotNull(user);
+
+            await guard.RejectAsync(
+                user,
+                OperationRecordActions.AuthPasswordChanged,
+                SecurityErrorCodes.CurrentPasswordIncorrect,
+                "The current password is incorrect.");
+
+            // 不 CompleteAsync：调用方这一侧的写入在这里全部丢弃
+        }
+
+        Assert.Equal(1, await AccessFailedCountAsync(userId));
+    }
+
+    private async Task<Guid> FindUserIdAsync(string username)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        return (await db.Set<User>().IgnoreQueryFilters()
+            .SingleAsync(user => user.Username == username)).Id;
+    }
+
+    private async Task<int> AccessFailedCountAsync(Guid userId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        return (await db.Set<User>().IgnoreQueryFilters()
+            .SingleAsync(user => user.Id == userId)).AccessFailedCount;
     }
 
     private static async Task<string?> ChangePasswordErrorAsync(HttpClient client, string currentPassword)

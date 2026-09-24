@@ -60,8 +60,8 @@ internal sealed class AuthAppService(
     IDistributedCache distributedCache,
     IObjectMapper objectMapper,
     IUserRegistrationPolicyProvider registrationPolicy,
-    ILoginSecurityPolicyProvider loginSecurityPolicy,
     IReauthenticationGuard reauthenticationGuard,
+    IAccessFailureCounter accessFailureCounter,
     ISecurityAlertPublisher securityAlerts,
     ICurrentTenant currentTenant,
     IClock clock,
@@ -72,25 +72,28 @@ internal sealed class AuthAppService(
         LoginInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
         var now = clock.Now;
         var result = await userDomainService.ValidateCredentialsAsync(
             input.UsernameOrEmail,
             input.Password,
-            policy.Lockout,
             now,
             cancellationToken);
 
         if (result.Status == CredentialValidationStatus.LockedOut)
         {
-            var lockedUser = result.User!;
-            // 锁定期间的每次尝试都记一条的话，又是一个匿名刷表的面
-            if (result.LockoutTriggered)
-            {
-                await RecordLockedOutAsync(lockedUser, policy, cancellationToken);
-            }
+            // 已在锁定中：不计数也不再记一条，否则锁定期内的每次尝试都是一个匿名刷表的面
+            throw SessionSignInService.LockedOut(result.User!, now);
+        }
 
-            throw SessionSignInService.LockedOut(lockedUser, now);
+        if (result.Countable)
+        {
+            // 计数走与再认证同一份实现：独立工作单元提交，不随下面的抛出回滚
+            var counted = await accessFailureCounter.CountAsync(result.User!.Id, cancellationToken);
+            if (counted is { LockoutTriggered: true, User: { } lockedUser })
+            {
+                await RecordLockedOutAsync(lockedUser, cancellationToken);
+                throw SessionSignInService.LockedOut(lockedUser, now);
+            }
         }
 
         if (result.Status == CredentialValidationStatus.InvalidCredentials)
@@ -191,15 +194,13 @@ internal sealed class AuthAppService(
 
         if (!verified)
         {
-            var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
-            var lockedOut = user.RecordAccessFailed(now, policy.Lockout);
-            await userRepository.UpdateAsync(user, cancellationToken);
-
-            if (lockedOut)
+            // 与口令登录、再认证同一份计数实现：独立工作单元提交，不随下面的抛出回滚
+            var counted = await accessFailureCounter.CountAsync(user.Id, cancellationToken);
+            if (counted is { LockoutTriggered: true, User: { } lockedUser })
             {
                 await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
-                await RecordLockedOutAsync(user, policy, cancellationToken);
-                throw SessionSignInService.LockedOut(user, now);
+                await RecordLockedOutAsync(lockedUser, cancellationToken);
+                throw SessionSignInService.LockedOut(lockedUser, now);
             }
 
             if (!await twoFactorChallengeStore.RecordFailureAsync(input.Token, challenge, cancellationToken))
@@ -247,23 +248,11 @@ internal sealed class AuthAppService(
             OperationRecordAuthorizations.CredentialsPresented,
             cancellationToken);
 
-    // 只在"这一次恰好触发锁定"时记：一个锁定期内至多一条，写入量有界。本人同时收到一条安全提醒
-    private async Task RecordLockedOutAsync(User user, LoginSecurityPolicy policy, CancellationToken cancellationToken)
-    {
-        await securityAlerts.PublishAsync(
-            user.Id,
-            new SecurityAlert(SecurityAlertKind.LockedOut, Until: user.LockoutEnd),
-            cancellationToken);
-        await operationRecorder.RecordFailedAsync(
-            OperationRecordActions.AuthLockedOut,
-            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
-            OperationRecordAuthorizations.CredentialsPresented,
-            OperationFailure.FromCode(AuthErrorCodes.UserTemporarilyLockedOut, new Dictionary<string, object?>
-            {
-                ["maxFailedAttempts"] = policy.Lockout.MaxFailedAttempts,
-                ["minutes"] = (int)policy.Lockout.Duration.TotalMinutes
-            }));
-    }
+    // 登录侧的授权依据是"出示了凭据"：此刻还没有主体，与再认证侧的"本人"不同。
+    // 提醒与审计的其余部分两侧一致，收在 IAccessFailureCounter 里。
+    private Task RecordLockedOutAsync(User user, CancellationToken cancellationToken)
+        => accessFailureCounter.RecordLockoutAsync(
+            user, OperationRecordAuthorizations.CredentialsPresented, cancellationToken);
 
     private static BusinessException TwoFactorChallengeExpired() =>
         new BusinessException(AuthErrorCodes.TwoFactorChallengeExpired, "The sign-in attempt has expired. Sign in again.")
