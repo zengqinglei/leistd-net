@@ -60,6 +60,22 @@ foreach ($modifier in $config.sources[0].modifiers) {
     }
 }
 
+# 仓库根 Directory.Build.targets 为仓库内构建模板源码定义的符号：符号改名后这里曾残留旧名，
+# 使仓库内编译出的是一个不存在的条件组合（#if (X) 全灭、#if (!X) 全开），且没有任何报错
+$buildTargetsPath = Join-Path $TemplateRoot ".." "Directory.Build.targets"
+if (Test-Path -LiteralPath $buildTargetsPath) {
+    $buildTargets = Get-Content -LiteralPath $buildTargetsPath -Raw -Encoding UTF8
+    foreach ($match in [regex]::Matches($buildTargets, '<DefineConstants>([^<]*)</DefineConstants>')) {
+        foreach ($name in $match.Groups[1].Value -split ';') {
+            $name = $name.Trim()
+            if (-not $name -or $name.StartsWith('$(')) { continue }
+            if ($defined -notcontains $name) {
+                $failures += "Directory.Build.targets 定义了模板中不存在的符号 '$name'"
+            }
+        }
+    }
+}
+
 # 4 & 5 & 6：逐文件扫描
 $skipDirectories = @('node_modules', 'obj', 'bin', 'dist', '.git')
 $files = Get-ChildItem -LiteralPath $TemplateRoot -Recurse -File |

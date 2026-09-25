@@ -98,6 +98,8 @@ dotnet ef migrations add <MigrationName> \
   --output-dir Persistence/Migrations/Identity
 ```
 
+漏生成迁移时，单元测试 `MigrationSnapshotTests` 会失败：它不连库，按关系型模型与已提交的迁移快照比对。新增 DbContext 时在其中补一条对应断言。
+
 生产数据库身份必须分离：API 使用 Runtime Secret 且不得执行 DDL，`DbMigrator` 使用 Migration Secret。任一目标迁移失败时进程以非零码退出并阻断发布，具体边界见 [部署说明](../docs/deploy/README.md)。
 
 <!--#if (LocalIdentity)-->
