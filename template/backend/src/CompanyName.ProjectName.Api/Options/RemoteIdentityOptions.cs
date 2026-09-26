@@ -9,9 +9,6 @@ namespace CompanyName.ProjectName.Api.Options;
 /// <c>Program.cs</c> 组合期要拿 issuer 去配 OpenIddict 校验器，
 /// <c>RemoteIdentityReadinessInitializer</c> 运行期要拿它探发现文档。
 /// 两处各自读一遍原始配置键、各自判一次空的话，规则就有两个版本。</para>
-/// <para>校验同时挂 <c>ValidateOnStart</c>：组合期读到的配置还不是最终值
-/// （集成测试通过 <c>WebApplicationFactory</c> 追加的覆盖此刻尚未合入），
-/// 而配置定案后、接流量之前必须再确认一次。</para>
 /// </remarks>
 internal sealed class RemoteIdentityOptions
 {

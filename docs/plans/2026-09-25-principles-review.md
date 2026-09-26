@@ -130,6 +130,10 @@
    - 经 Claude 与 Codex 代码审查：补测试前提说明与注释措辞；"闸门精确校验符号组合"与"隔离测试环境变量"两条不采纳（前者需在脚本里求值模板表达式，后者经核实不影响模型）。
    - 第二轮审查：统一 OpenIddict 排除理由为运行时注释的说法；README 补"新增 DbContext 时补断言"（不做工厂自动发现：真实库 `Migrate` 会因待定模型变更抛错，漏检不是静默的）；检查保留为项目内测试，不由框架出包。
 2. **P0**：A2、A3、A5、A7、A8、A10、T3、T4、T8。验收：相关测试；前端生产构建产物无 Mock；有头浏览器实测 Cookie 登录与外部登录。
+   - A3：标记由 `DynamicProxyServiceRegistrationCallbackFactory.CreateBuilder` 登记（基类 `CreateBuilder` 改为 virtual）；检查实现 `IHostedLifecycleService.StartingAsync`，先于任何托管服务的 `StartAsync`；报错同时给出 `UseServiceProviderFactory` 与 `ConfigureContainer` 两种写法。框架里两处测试宿主原本未接工厂，已补。模板 DbMigrator 不启动宿主、托管服务不执行，未改。不拆分"手动工作单元"注册入口：未织入时手动工作单元内的事件处理器同样两个阶段各执行一次。
+   - A10：同类的 `Leistd:ServiceClients:Identity:BaseAddress` 占位一并改空；其必填校验由框架 `AddRemoteTenantConnectionStore` 对自身客户端选项 `Validate + ValidateOnStart`（报出键名，非模板项目同样受保护，ServiceClient 通用选项仍可留空）；内存库模式不注册远端存储，无需该地址。README 补 Resource 首次启动与改用真实库时的配置。
+   - T8：配置键为 `SessionCookie:SameSite`（`SessionCookieOptions`，仅 LocalIdentity）；会话 Cookie 经 `AddOptions<CookieAuthenticationOptions>(scheme).Configure<IOptions<SessionCookieOptions>>` 与状态 Cookie 读同一管道；未配置时会话 Cookie 沿用框架默认 `Lax`，状态 Cookie 显式 `Lax`；部署文档补 `None` 的适用情形（跨站 POST 到 `/connect/*`、`form_post` 回调直落 API）。
+   - 审查后延后：dev/test/uat 构建配置的 Mock 替换并入阶段 4 的 ENV；登录页演示账号提示与 `login.ts` 中 `isMockEnabled` 另行解析 `useMock`（与 `shouldProvideMock` 口径不一致）留待后续阶段。
 3. **框架结构**：先定 A4、A6、E1 的接口与组合规则，再实施 A1、A3 余项、A4、A6/B1/B2、B3、B4、TR、A9、D1、D3、D6、D10、E1、F3。验收：构建、测试、打包到 `.tmp/local-feed`、核对包内签名、隔离消费，覆盖只装单个组件的普通宿主路径。
 4. **身份口径**：roleType + C10 → F2 → C11。验收：权限、通知推送、操作记录端到端；C11 在同一作用域按"当前主体 → 其他主体 → 当前主体"及跨租户主体验证不串人。
 5. **模板**：T1、ENV + C8、H、T7（redis）。验收：9 个生成场景；克隆后用 InMemory 直接运行且默认管理员可登录；T1 覆盖新内存库、已有管理员缺口令键、真实库首次建管理员缺键三种启动；实测本地与外部登录、SignalR 只投递一次；compose 一键启动。

@@ -5,6 +5,10 @@
 ## 配置与机密的分层
 
 各环境共用同一套配置键，只换值的来源。默认同源部署可将同一镜像从测试环境晋升到生产。前后端分离时，当前 `Dockerfile` 的 `API_GATEWAY` 是构建参数；若各环境地址不同，镜像也会不同，必须分别记录、验证和发布对应产物。需要此部署形态也支持同镜像晋升时，应作为独立产品需求设计运行期配置。
+<!--#if (LocalIdentity)-->
+
+会话 Cookie 默认 `SameSite=Lax`，同源部署与同站的前后端分离（如 `app.example.com` 调 `api.example.com`）都可用；站点按公共后缀判定，托管公共后缀域（如 `*.azurewebsites.net`）下的两个子域属于跨站。需要在跨站请求上携带会话 Cookie 时才设 `SessionCookie__SameSite=None`（跨站部署，以及下文列出的跨站 POST 情形），此时须自行接入防伪令牌：模板未启用 antiforgery，Angular 内置的 XSRF 只对同源相对地址生效。`Lax` 下跨站的顶层 GET 导航仍会带上 Cookie，因此 GET 接口不得有副作用。另有两种情形同样需要 `None`：第三方站点以 POST 跳转到 `/connect/authorize` 或 `/connect/logout`，以及接入以 `form_post` 回调且回调地址直接落在 API 上的外部登录提供方。
+<!--#endif-->
 
 部署时记录 API 和 DbMigrator 的固定版本或 digest，不用 `latest` 充当发布身份。模板 Compose 中的 `:latest` 是示例值，实际发布需要由项目流水线明确替换。
 

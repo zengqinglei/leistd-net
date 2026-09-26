@@ -102,17 +102,14 @@ public class AuditPropertySetter(
     }
 
     /// <summary>
-    /// 设置最后修改者标识。
+    /// 设置最后修改者标识；没有当前用户时置空，与同时刷新的修改时间保持同一次修改。
     /// </summary>
     protected virtual void SetLastModifierId(EntityEntry entry)
     {
-        if (currentUser?.Id is null)
-            return;
-
         if (entry.Entity is not IModificationAuditedObject)
             return;
 
-        entry.Property(nameof(IModificationAuditedObject.LastModifierId)).CurrentValue = currentUser!.Id!.Value.ToString();
+        entry.Property(nameof(IModificationAuditedObject.LastModifierId)).CurrentValue = currentUser?.Id?.ToString();
     }
 
     /// <summary>

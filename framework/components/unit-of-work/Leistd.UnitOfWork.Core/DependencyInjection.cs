@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork.Attributes;
 using Leistd.DependencyInjection;
@@ -85,6 +86,8 @@ public static class DependencyInjection
 
         // 无法织入的声明必须在宿主启动时失败。
         services.AddRegistrationValidator(UnitOfWorkRegistrationValidator.Validate);
+        // 注册校验只在代理工厂里执行；工厂本身漏接时由启动检查兜住。
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, UnitOfWorkWeavingCheck>());
 
         services.OnServiceRegistered(context =>
         {

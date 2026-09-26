@@ -67,6 +67,10 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #if (OpenIddictServer)
         builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
 #endif
+#if (RemoteTokenAuth)
+        // 组合期即校验的签发方地址：基线配置刻意留空，缺失即启动失败
+        builder.UseSetting("Authentication:Issuer", "https://identity.test/");
+#endif
 
         builder.ConfigureAppConfiguration((_, configuration) =>
         {

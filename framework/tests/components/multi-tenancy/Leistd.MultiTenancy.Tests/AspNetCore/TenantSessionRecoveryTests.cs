@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using Leistd.MultiTenancy.AspNetCore;
+using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.Exceptions;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
@@ -45,6 +46,17 @@ public sealed class TenantSessionRecoveryTests
         Assert.Equal("/tenants?page=2", response.Headers.Location!.OriginalString);
     }
 
+    // 判定"是不是租户会话"必须与解析链读同一个声明类型，否则改了 TenantClaimType 的宿主永远恢复不了
+    [Fact]
+    public async Task A_custom_tenant_claim_type_is_recognized_as_a_tenant_session()
+    {
+        using var host = await StartAsync(tenantClaim: true, failure: new TenantNotActiveException("acme"), tenantClaimType: "org_id");
+
+        var response = await host.GetTestClient().GetAsync("/api/data");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     // 宿主会话没有租户可失效：原始错误照常抛出，不注销宿主管理员
     [Fact]
     public async Task A_host_session_keeps_the_original_error()
@@ -54,11 +66,12 @@ public sealed class TenantSessionRecoveryTests
         await Assert.ThrowsAsync<TenantNotFoundException>(() => host.GetTestClient().GetAsync("/api/data"));
     }
 
-    private static async Task<IHost> StartAsync(bool tenantClaim, Exception failure)
+    private static async Task<IHost> StartAsync(bool tenantClaim, Exception failure, string tenantClaimType = CustomClaimTypes.TenantId)
         => await new HostBuilder()
             .ConfigureWebHost(web => web
                 .UseTestServer()
                 .ConfigureServices(services => services
+                    .Configure<MultiTenancyOptions>(options => options.TenantClaimType = tenantClaimType)
                     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                     .AddCookie(options => options.Cookie.Name = "session"))
                 .Configure(app =>
@@ -69,7 +82,7 @@ public sealed class TenantSessionRecoveryTests
                         List<Claim> claims = [new(CustomClaimTypes.Subject, "u1")];
                         if (tenantClaim)
                         {
-                            claims.Add(new Claim(CustomClaimTypes.TenantId, Guid.NewGuid().ToString()));
+                            claims.Add(new Claim(tenantClaimType, Guid.NewGuid().ToString()));
                         }
 
                         context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));

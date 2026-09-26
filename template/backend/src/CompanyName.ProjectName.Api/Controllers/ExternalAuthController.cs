@@ -4,11 +4,13 @@ using Leistd.Lock;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 using Leistd.Lock.Abstractions;
 
 namespace CompanyName.ProjectName.Api.Controllers;
@@ -21,7 +23,7 @@ public sealed class ExternalAuthController(
     IExternalAuthAppService externalAuthAppService,
     IDistributedCache distributedCache,
     IDistributedLock distributedLock,
-    IHostEnvironment environment) : BaseController
+    IOptions<SessionCookieOptions> sessionCookieOptions) : BaseController
 {
     private const string StateCookieName = "__Host-CompanyName.ProjectName.ExternalAuth.State";
     private const string StateCacheKeyPrefix = "CompanyName.ProjectName:ExternalAuthState:";
@@ -176,10 +178,10 @@ public sealed class ExternalAuthController(
     /// 状态 Cookie 的属性。<b>SameSite 必须与会话 Cookie 同策略</b>
     /// </summary>
     /// <remarks>
-    /// <para>会话 Cookie 在生产用 <c>SameSite=None</c>，因为本模板支持前后端分离部署
-    /// （SPA 与 API 不同源）。状态 Cookie 若固定为 <c>Lax</c>，那种部署下
-    /// <c>GET login-url</c> 是跨站 XHR，浏览器<b>根本不会保存</b>它，
-    /// 回调因此必然失败——而集成测试是手工把 Cookie 塞进请求头的，抓不到这一类问题。</para>
+    /// <para>跨站部署把会话 Cookie 设为 <c>None</c> 时（见 <see cref="SessionCookieOptions"/>），
+    /// 状态 Cookie 若仍是 <c>Lax</c>，<c>GET login-url</c> 是跨站请求，浏览器不会保存它，回调因此必然失败——
+    /// 而集成测试是手工把 Cookie 塞进请求头的，抓不到这一类问题。手工构造的 <c>CookieOptions</c>
+    /// 默认是 <c>Unspecified</c>，各浏览器处理不一，因此未配置时显式写 <c>Lax</c>。</para>
     /// <para><c>Secure</c> 不随环境放宽：<c>SameSite=None</c> 与 <c>__Host-</c> 前缀都强制要求它。
     /// 开发环境因此需要跑在 https 或 <c>localhost</c> 上（浏览器对 <c>http://localhost</c>
     /// 放行 Secure Cookie）——OAuth 提供商本来也只接受这两种回调地址。</para>
@@ -188,7 +190,7 @@ public sealed class ExternalAuthController(
     {
         HttpOnly = true,
         Secure = true,
-        SameSite = environment.IsDevelopment() ? SameSiteMode.Lax : SameSiteMode.None,
+        SameSite = sessionCookieOptions.Value.SameSite ?? SameSiteMode.Lax,
         IsEssential = true,
         Path = "/",
         MaxAge = StateLifetime

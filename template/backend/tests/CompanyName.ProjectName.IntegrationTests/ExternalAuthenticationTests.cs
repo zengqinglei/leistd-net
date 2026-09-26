@@ -38,19 +38,6 @@ public sealed class ExternalAuthenticationTests
         Assert.Contains("HttpOnly", challenge.SetCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secure", challenge.SetCookie, StringComparison.OrdinalIgnoreCase);
 
-        // 断言"与会话 Cookie 同策略"，不是断言某个字面值。
-        // 生产用 SameSite=None（模板支持前后端分离部署），状态 Cookie 若固定为 Lax，
-        // 那种部署下 login-url 是跨站 XHR，浏览器根本不会保存它，回调必然失败。
-        // 会话 Cookie 的 SameSite 随环境变化（开发环境 Lax，其余 None），写死字面值会把
-        // "两者按环境分叉"这件事钉成契约
-        var sessionSameSite = host.Services
-            .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
-            .Get(AuthenticationSchemeNames.SessionCookie).Cookie.SameSite;
-        Assert.Contains(
-            $"samesite={sessionSameSite}",
-            challenge.SetCookie,
-            StringComparison.OrdinalIgnoreCase);
-
         client.DefaultRequestHeaders.Add("Cookie", challenge.Cookie);
         var callback = await client.PostAsJsonAsync(
             "/api/v1/external-auth/github/callback",
@@ -182,12 +169,47 @@ public sealed class ExternalAuthenticationTests
         Assert.Equal(HttpStatusCode.Unauthorized, callback.StatusCode);
     }
 
+    /// <summary>状态 Cookie 与会话 Cookie 同一站点策略：默认 Lax，跨站部署显式配置 None 时两者一起变。</summary>
+    /// <remarks>
+    /// 跨站部署下状态 Cookie 若仍是 Lax，login-url 是跨站请求，浏览器不会保存它，回调必然失败。
+    /// 默认值断言成 Lax 而不是"随会话 Cookie"：手工构造的 CookieOptions 默认是 Unspecified，只比较两者会放过它。
+    /// </remarks>
+    [Theory]
+    [InlineData(null, "lax")]
+    [InlineData("None", "none")]
+    public async Task State_cookie_follows_the_session_cookie_site_policy(string? configured, string expected)
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var host = CreateExternalAuthHost(factory, new ExternalUserInfo
+        {
+            ProviderId = "samesite-user",
+            Username = "samesite-user",
+            Email = "samesite-user@example.com"
+        }, configured);
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+
+        var challenge = await StartExternalLoginAsync(client);
+
+        var sessionSameSite = host.Services
+            .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(AuthenticationSchemeNames.SessionCookie).Cookie.SameSite;
+        Assert.Equal(expected, sessionSameSite.ToString(), ignoreCase: true);
+        Assert.Contains($"samesite={expected}", challenge.SetCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static WebApplicationFactory<Program> CreateExternalAuthHost(
         ProjectWebApplicationFactory factory,
-        ExternalUserInfo externalUser)
+        ExternalUserInfo externalUser,
+        string? sessionCookieSameSite = null)
     {
         return factory.WithWebHostBuilder(builder =>
         {
+            // 会话 Cookie 在组合期读取站点策略，须经 UseSetting 注入
+            if (sessionCookieSameSite is not null)
+            {
+                builder.UseSetting("SessionCookie:SameSite", sessionCookieSameSite);
+            }
+
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>

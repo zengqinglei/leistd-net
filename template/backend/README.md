@@ -73,9 +73,11 @@ dotnet test CompanyName.ProjectName.sln
 模板携带可审查的基线迁移。API 启动时不自动迁移，也不使用 `EnsureCreatedAsync`；发布流水线必须先以 DDL 身份运行独立 `DbMigrator`，成功后再启动仅持有 DML 权限的 API：
 
 ```bash
-dotnet run --project src/CompanyName.ProjectName.DbMigrator
+dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --apply
 dotnet run --project src/CompanyName.ProjectName.Api
 ```
+
+`DbMigrator` 不带 `--apply` 时只读预演（列出待执行迁移与 SQL，不改库）。
 
 `DbMigrator` 先迁移服务默认目标，再从 Identity 获取 DedicatedDatabase 覆盖并按物理连接去重。每个服务使用自己的固定 schema 和迁移历史表。Identity 还会先迁移固定宿主库的 Control DbContext（租户、连接配置、OpenIddict），再迁移可按租户路由的业务 DbContext。
 
@@ -83,7 +85,7 @@ dotnet run --project src/CompanyName.ProjectName.Api
 
 ```bash
 ConnectionStrings__MigrationTarget='<migration connection string>' \
-  dotnet run --project src/CompanyName.ProjectName.DbMigrator
+  dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --apply
 ```
 
 `MigrationTarget` 模式只迁移该服务的业务 schema，不迁移 Identity Control schema，也不枚举已登记租户。它用于打破“先登记租户才能枚举目标、但租户初始化前又必须先有表”的首次建库循环；日常发布仍使用不带该配置的全目标模式。
@@ -95,7 +97,11 @@ dotnet ef migrations add <MigrationName> \
   --context MyProjectDbContext \
   --project src/CompanyName.ProjectName.Infrastructure \
   --startup-project src/CompanyName.ProjectName.Api \
+<!--#if (LocalIdentity)-->
   --output-dir Persistence/Migrations/Identity
+<!--#else-->
+  --output-dir Persistence/Migrations/Resource
+<!--#endif-->
 ```
 
 漏生成迁移时，单元测试 `MigrationSnapshotTests` 会失败：它不连库，按关系型模型与已提交的迁移快照比对。新增 DbContext 时在其中补一条对应断言。

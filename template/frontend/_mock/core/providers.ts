@@ -1,6 +1,7 @@
+import { HttpInterceptorFn } from '@angular/common/http';
 import { Provider } from '@angular/core';
 
-import { MOCK_APIS } from './interceptor';
+import { MOCK_APIS, mockInterceptor } from './interceptor';
 import { MockConfig } from './models';
 import * as allApis from '../index';
 
@@ -21,6 +22,13 @@ export function provideMock(config: boolean | MockConfig): Provider[] {
     .reduce((acc, current) => ({ ...acc, ...current }), {});
 
   return [{ provide: MOCK_APIS, useValue: apis }];
+}
+
+/**
+ * 按配置返回 Mock 拦截器，供 app.config.ts 的 withInterceptors 展开。
+ */
+export function mockInterceptors(config: boolean | MockConfig): HttpInterceptorFn[] {
+  return shouldProvideMock(config) ? [mockInterceptor] : [];
 }
 
 export function shouldProvideMock(config: boolean | MockConfig): boolean {

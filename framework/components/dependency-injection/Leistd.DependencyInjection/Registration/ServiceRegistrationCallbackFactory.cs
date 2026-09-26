@@ -23,7 +23,7 @@ public class ServiceRegistrationCallbackFactory : IServiceProviderFactory<IServi
     /// <summary>
     /// 返回待处理的服务集合。
     /// </summary>
-    public IServiceCollection CreateBuilder(IServiceCollection services)
+    public virtual IServiceCollection CreateBuilder(IServiceCollection services)
     {
         return services;
     }

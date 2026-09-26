@@ -41,7 +41,7 @@ builder.Services.AddUnitOfWorkEfCore();
 
 `AddUnitOfWork` 注册环境工作单元、管理器、默认实现、两个动态代理拦截器与本地事件延迟器。`AddUnitOfWorkEfCore` 将 `IDbContextProvider<>` 注册为 Scoped。
 
-`[UnitOfWork]` 和 `[UnitOfWorkEventHandler]` 依赖 Leistd DI/AOP 管道。宿主必须通过框架的服务提供器工厂启用动态代理；否则特性不生效。
+`[UnitOfWork]` 和 `[UnitOfWorkEventHandler]` 依赖 Leistd DI/AOP 管道，宿主必须通过 `DynamicProxyServiceRegistrationCallbackFactory` 启用动态代理。漏接时 `AddUnitOfWork` 注册的托管服务在宿主启动时抛出异常；不经 Host、直接 `BuildServiceProvider` 的场景不做此检查。
 
 ## 使用
 

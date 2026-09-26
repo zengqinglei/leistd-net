@@ -51,6 +51,17 @@ dotnet user-secrets set "DefaultAdmin:Password" "<至少 12 个字符的口令>"
 ```
 
 <!--#endif-->
+<!--#if (RemoteTokenAuth)-->
+首次启动前指向签发令牌的 Identity 服务（没有默认值，缺失即启动失败）：
+
+```bash
+cd backend
+dotnet user-secrets set "Authentication:Issuer" "<Identity 服务的 https 地址>/" --project src/CompanyName.ProjectName.Api
+```
+
+改用真实数据库后，租户路由要回源 Identity，还需设置 `Leistd:ServiceClients:Identity:BaseAddress`（同样没有默认值）。
+
+<!--#endif-->
 不配置连接串时使用内存库，直接启动：
 
 ```bash

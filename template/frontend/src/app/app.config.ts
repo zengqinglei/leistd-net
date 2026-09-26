@@ -46,8 +46,7 @@ import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor
 import { LanguageService } from './core/services/language-service';
 //#endif
 import { StartupService } from './core/services/startup-service';
-import { mockInterceptor } from '../../_mock/core/interceptor';
-import { provideMock, shouldProvideMock } from '../../_mock/core/providers';
+import { mockInterceptors, provideMock } from '../../_mock/core/providers';
 
 // 定义路由特性，用于增强应用功能和用户体验
 const routerFeatures: RouterFeatures[] = [
@@ -117,7 +116,7 @@ export const appConfig: ApplicationConfig = {
         //#endif
         urlFormatInterceptor,
         httpErrorInterceptor, // 捕获所有 HTTP 错误并显示用户提示
-        ...(shouldProvideMock(environment.useMock) ? [mockInterceptor] : []),
+        ...mockInterceptors(environment.useMock),
       ]),
     ),
     //#if (IncludeLocalization)

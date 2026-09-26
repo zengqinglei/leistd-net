@@ -459,6 +459,17 @@ try
     var sessionLifetime = TimeSpan.FromDays(7);
 #endif
     builder.Services.Configure<UserSessionOptions>(options => options.IdleTimeout = sessionLifetime);
+    // 会话 Cookie 与外部登录的状态 Cookie 经同一个 Options 管道取站点策略，两者不会分叉
+    builder.Services.AddOptions<SessionCookieOptions>().BindConfiguration(SessionCookieOptions.SectionName);
+    builder.Services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.SessionCookie)
+        .Configure<IOptions<SessionCookieOptions>>((cookie, sessionCookie) =>
+        {
+            // 默认 Lax；跨站部署经 SessionCookie:SameSite 显式改为 None，见 SessionCookieOptions
+            if (sessionCookie.Value.SameSite is { } sameSite)
+            {
+                cookie.Cookie.SameSite = sameSite;
+            }
+        });
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<IRequestClientInfo, HttpRequestClientInfo>();
 
@@ -491,7 +502,6 @@ try
         options.LoginPath = "/auth/login";
         options.Cookie.Name = "CompanyName.ProjectName.Auth";
         options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = isDevelopmentEnvironment ? SameSiteMode.Lax : SameSiteMode.None;
         options.Cookie.SecurePolicy = isDevelopmentEnvironment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         options.Cookie.IsEssential = true;
 

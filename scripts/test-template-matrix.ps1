@@ -404,6 +404,9 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
     # 不用模板曾发布过的示例值：那些会被校验拒绝，正是要验证的行为
     $startInfo.Environment['DefaultAdmin__Password'] = 'MatrixRuntime!Adm1n'
     $startInfo.Environment['VerificationCodes__Key'] = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
+    # Resource 形态的签发方在基线配置里刻意留空、组合期必填；其余形态不读这一项。
+    # 冒烟只探存活，不回源，给一个不可达的地址即可
+    $startInfo.Environment['Authentication__Issuer'] = 'https://identity.matrix.test/'
 
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo

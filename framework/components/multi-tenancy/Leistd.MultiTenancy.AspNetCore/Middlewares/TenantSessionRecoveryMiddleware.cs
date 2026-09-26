@@ -1,10 +1,10 @@
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.Exceptions;
-using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 
@@ -13,8 +13,12 @@ namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 internal sealed class TenantSessionRecoveryMiddleware(
     RequestDelegate next,
     TenantSessionRecoveryOptions options,
+    IOptions<MultiTenancyOptions> multiTenancyOptions,
     ILogger<TenantSessionRecoveryMiddleware> logger)
 {
+    // 与解析链读同一个声明类型；这里只判"有没有"，不读值，重复声明也不在此抛出
+    private readonly string _tenantClaimType = multiTenancyOptions.Value.TenantClaimType;
+
     public async Task InvokeAsync(HttpContext context)
     {
         try
@@ -24,7 +28,7 @@ internal sealed class TenantSessionRecoveryMiddleware(
         catch (Exception exception) when (
             exception is TenantNotFoundException or TenantNotActiveException &&
             context.User.Identity?.IsAuthenticated == true &&
-            context.User.FindFirst(CustomClaimTypes.TenantId) is not null &&
+            context.User.FindFirst(_tenantClaimType) is not null &&
             !context.Response.HasStarted)
         {
             if (options.SignOutScheme is { } scheme)

@@ -170,11 +170,11 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
         }
     }
 
+    // 与清空同一范围：只改了子实体或只登记事件的聚合根保存时是 Unchanged，按状态过滤会清掉却不发布
     private static List<ILocalEvent> CollectLocalEvents(DbContext context)
     {
         return context.ChangeTracker
             .Entries<Entity>()
-            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
             .SelectMany(e => e.Entity.GetLocalEvents())
             .ToList();
     }

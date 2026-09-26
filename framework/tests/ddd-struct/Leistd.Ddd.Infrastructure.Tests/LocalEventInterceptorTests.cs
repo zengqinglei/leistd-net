@@ -35,6 +35,9 @@ public class LocalEventInterceptorTests
             Name = name;
             AddLocalEvent(new TestCreatedEvent(Name));
         }
+
+        // 只登记事件、不改任何属性：保存时实体保持 Unchanged
+        public void Announce() => AddLocalEvent(new TestCreatedEvent(Name));
     }
 
     private sealed class TestCreatedEvent(string name) : LocalEvent
@@ -42,7 +45,7 @@ public class LocalEventInterceptorTests
         public string Name { get; } = name;
     }
 
-    private sealed class TestDbContext(DbContextOptions options) : BaseDbContext(options)
+    private sealed class TestDbContext(DbContextOptions options) : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<TestEntity> Items => Set<TestEntity>();
         protected override void ConfigureModel(ModelBuilder modelBuilder)
@@ -113,6 +116,45 @@ public class LocalEventInterceptorTests
         db.SaveChanges();
 
         Assert.Equal(1, TestHandler.Invoked);
+    }
+
+    /// <summary>实体本身未变更时，它登记的事件也要发布。</summary>
+    /// <remarks>
+    /// 聚合根只改了子实体或只登记了事件时，根实体在保存时是 Unchanged。
+    /// 收集若只看 Added/Modified/Deleted，而清空覆盖全部实体，这些事件会被清掉却不发布，且没有任何报错。
+    /// </remarks>
+    [Fact]
+    public async Task Events_raised_by_an_unchanged_entity_are_published()
+    {
+        var (db, sp) = Build();
+        using var _ = sp;
+        var root = new TestEntity("root");
+        db.Items.Add(root);
+        await db.SaveChangesAsync();
+
+        root.Announce();
+        db.Items.Add(new TestEntity("child"));
+        await db.SaveChangesAsync();
+
+        Assert.Equal("Unchanged", db.Entry(root).State.ToString());
+        Assert.Equal(3, TestHandler.Invoked);
+    }
+
+    // 聚合根只登记事件、上下文没有任何数据变更（影响 0 行）时，EF 仍经过保存拦截器，事件同样要发布
+    [Fact]
+    public async Task Events_raised_without_any_data_change_are_published()
+    {
+        var (db, sp) = Build();
+        using var _ = sp;
+        var root = new TestEntity("root");
+        db.Items.Add(root);
+        await db.SaveChangesAsync();
+
+        root.Announce();
+        var affected = await db.SaveChangesAsync();
+
+        Assert.Equal(0, affected);
+        Assert.Equal(2, TestHandler.Invoked);
     }
 
     /// <summary>保存失败时已收集的领域事件必须丢弃。</summary>

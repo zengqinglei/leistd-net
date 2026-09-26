@@ -116,7 +116,8 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 | `IOnServiceRegisteredContext` | 公开 `ServiceType`、可空 `ImplementationType` 和扩展数据 |
 | `ServiceRegistrationCallbackFactory` | 只执行回调，不做 AOP 织入 |
 | `ServiceRegistrationCallbackFactory.OnRegistrationProcessed(...)` | 每个服务回调处理后的扩展点 |
-| `DynamicProxyServiceRegistrationCallbackFactory` | 执行回调，并把 `AddInterceptor()` 收集到的拦截器织入服务代理 |
+| `DynamicProxyServiceRegistrationCallbackFactory` | 执行回调，并把 `AddInterceptor()` 收集到的拦截器织入服务代理；`CreateBuilder` 时登记 `DynamicProxyWeavingMarker` |
+| `DynamicProxyWeavingMarker` | 表示宿主已接入代理工厂；依赖织入的组件在启动时解析它，缺失即失败 |
 | `DynamicProxyRegistrationExtensions.AddInterceptor(context, type)` | 为当前服务追加拦截器类型；通常写作 `context.AddInterceptor(type)` |
 | `DynamicProxyRegistrationExtensions.GetInterceptorTypes(context)` | 获取当前服务收集到的拦截器类型；通常写作 `context.GetInterceptorTypes()` |
 | `IServiceCollection.EnsureSingleAuthoritative<TService, TImplementation>(expectedLifetime, reason)` | 注册期断言：`TService` 上不得已有别的实现、也不得是同一实现的不同生命周期，违反则抛 `InvalidOperationException`（`reason` 是给宿主看的一句话）。只用于「多个实现说不通」的**存储**类服务；业务编排型服务用 `TryAdd*` 表达「默认实现可被宿主替换」即可。边界见下节 |

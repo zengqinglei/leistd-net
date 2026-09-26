@@ -1,5 +1,6 @@
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork;
+using Leistd.DependencyInjection.DynamicProxy.Registration;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Leistd.Authorization.AspNetCore;
@@ -58,6 +59,7 @@ public sealed class PipelineHost : IAsyncDisposable
         await connection.OpenAsync();
 
         var builder = WebApplication.CreateSlimBuilder();
+        builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
         builder.Logging.ClearProviders();
         builder.WebHost.UseTestServer();
 

@@ -15,7 +15,7 @@ services:
 #if (RemoteTokenAuth)
       # Resource 的迁移目标清单存在 Identity 的控制库里，必须回源查询。
       # 这些值没有可用默认值：`:?` 让缺配在 compose 阶段就带着变量名失败，
-      # 而不是让 DbMigrator 打到 identity.example.com 再收 401
+      # 而不是等 DbMigrator 回源时才失败
       - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}
       - Leistd__ServiceAuth__Authority=${IDENTITY_AUTHORITY:?IDENTITY_AUTHORITY is required for a Resource service}
       - Leistd__ServiceAuth__ClientId=${MIGRATOR_CLIENT_ID:?MIGRATOR_CLIENT_ID is required for a Resource service}
@@ -57,8 +57,7 @@ services:
       - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=${APP_DB_USER:?APP_DB_USER is required};Password=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required};GSS Encryption Mode=Disable
 #if (RemoteTokenAuth)
       # Resource 校验远端签发的令牌，并回源 Identity 解析租户路由。
-      # 全部无默认值：漏配时 compose 立刻带变量名失败，
-      # 而不是静默落到 appsettings 里的 identity.example.com 占位值
+      # 全部无默认值：漏配时 compose 立刻带变量名失败，不必等到容器启动才由 API 报缺键
       - Authentication__Issuer=${IDENTITY_ISSUER:?IDENTITY_ISSUER is required for a Resource service}
       - Authentication__Audience=${RESOURCE_AUDIENCE:?RESOURCE_AUDIENCE is required for a Resource service}
       - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}

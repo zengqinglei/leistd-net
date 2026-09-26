@@ -113,7 +113,7 @@ public class DomainPrimitiveTests
     }
 
     private sealed class PrimitiveDbContext(DbContextOptions<PrimitiveDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<Document> Documents => Set<Document>();
 
@@ -227,7 +227,7 @@ public class DomainPrimitiveTests
     }
 
     private sealed class UnstampedDbContext(DbContextOptions<UnstampedDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<Unstamped> Items => Set<Unstamped>();
 

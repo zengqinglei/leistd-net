@@ -197,6 +197,7 @@ docker build --build-arg API_GATEWAY=https://api.example.com -t company-name-pro
 - `API_GATEWAY` 为后端 API 网关地址
 - 构建时会替换 `environment.prod.ts` 中的占位符
 - 如果不传入该参数，默认使用空字符串（相对路径）
+- 前后端跨站时会话 Cookie 的配置见 [部署说明](../docs/deploy/README.md)
 
 ---
 
