@@ -235,6 +235,7 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 - **被绑定设置的代码默认值是部署基线**：在 `PostDefine` 阶段逐个配置提供程序查绑定的键（跳过宿主设置配置源本身，后加入的源优先），按定义的值元数据归一（候选值取定义里的写法、布尔小写），认不出时用兜底值；机密设置没有默认值。被绑定的设置必须已定义且是进程级，否则首次访问定义时抛出。
 - `Group` 只承载**分组标识**，不承载分组文案，理由与 `DisplayName` 相同：定义一次性加载并缓存，拿不到请求 culture。分组是信息架构而非控件元数据——设置多起来之后界面要按关注点分类摆放，而"哪些设置属于同一件事"只有定义方知道；放到客户端另抄一份，新增设置忘了登记就会落在界面之外，既不报错也查不出来。未分组返回 `null`，由宿主决定归处。
 - **机密设置**（`IsEncrypted`）：`ISettingManager` 写入前加密，`ISettingProvider` 读出落库值时解密，用的是宿主的 Data Protection。宿主须配置持久化、可共享的密钥环并纳入备份。未注册 Data Protection 或密文无法解密时抛 `InvalidOperationException`，API 边界安全兜底为 500，不回落默认值也不泄露密文。
+  `Leistd.Settings.Core` 因此引用 `Microsoft.AspNetCore.DataProtection.Abstractions`。它**名字里带 `AspNetCore` 但是纯抽象包**（只有 `IDataProtectionProvider` 与 `IDataProtector` 两个接口，不含 Web 运行时），非 Web 宿主同样可用，微软自己在控制台与后台服务里也这样用。业务项目若在架构门禁里限制应用层/领域层可引用的包，这一项按"允许 `*.Abstractions`"放行，不必逐包登记白名单——框架侧的 Core 包一律只依赖抽象，见 `docs/architecture/design-principles.md` §1.1。
 - 匿名调用只回落到租户级，不查用户级。
 - `ISettingProvider` 为 Scoped，一次请求内每个层级只查一次库并复用结果；`ISettingDefinitionManager` 为 Singleton。
 - 设置名重复在首次访问定义时失败。读写未定义名称抛 `UndefinedSettingException`；写入未允许层级抛 `SettingScopeNotAllowedException`。

@@ -36,7 +36,22 @@ export class TenantContextService {
   //#else
   private readonly _current = signal<TenantContext | null>(null);
   //#endif
-  /** 当前已选租户；null 表示宿主（未选租户）。 */
+  //#if (LocalIdentity)
+  /**
+   * 登录入口选定的租户。
+   *
+   * **不能用它判断已认证会话在哪一侧。** 它只是登录页写下的路由提示（localStorage，同站点各标签页
+   * 共享），已登录用户的租户由服务端 cookie claim 定案；两者可以不一致——宿主超管在另一个标签页的
+   * 登录页确认过一个租户名，这里就有值了，而他的会话仍然是宿主。反过来从子域名入口登录的租户用户，
+   * 这里可能是空的。
+   *
+   * 需要按侧别分支时：**按能力判**（服务端下发的权限列表已按侧别过滤，例如宿主专属的
+   * `App.Tenants` 不会出现在租户用户的列表里），或由拥有那个页面的业务端点下发结论
+   * （"你能选哪些库"、"这个租户叫什么"）。见 docs/standards/coding-frontend.md §8。
+   */
+  //#else
+  /** 当前租户；null 表示宿主。来源是已验证 Access Token 中的 tenant_id。 */
+  //#endif
   public readonly current = this._current.asReadonly();
 
   //#if (LocalIdentity)

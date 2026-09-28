@@ -9,6 +9,12 @@
 
 - `framework/components/` 提供与业务无关的通用能力；`framework/ddd-struct/` 提供可选的 DDD 分层基座。
 - `components` 不依赖 `ddd-struct`；Core/Domain 不依赖 Web、EF Core、SignalR 等具体实现。
+- **Core 包只依赖抽象**：`PackageReference` 限于 `Microsoft.Extensions.*` 与 `*.Abstractions`，
+  不得引用 `.AspNetCore` / `.EntityFrameworkCore` 等宿主与基础设施包。这条不是洁癖——
+  业务项目在架构门禁里限制"应用层/领域层能引用什么"，而 Core 的依赖会顺着传递引用进它们的闭包；
+  渗进去一个实现，它们就只能往白名单里加一行。跨家族的 Core → Core 引用不禁止
+  （禁了就等于禁掉"错误码译文随包分发"这类能力），被引用方受同一条约束，因此传递进去的仍然只有抽象。
+  由 `scripts/check-csproj-conventions.py` 守住。
 - 每个组件家族职责单一，通过宿主显式调用 `Add*`、`Map*` 和 Options 进行组合，不替其他组件隐式注册基础设施。
 - 公共 API、注册方式和运行时语义以源码为准，面向使用者的说明位于 `framework/docs/` 并随 NuGet 包分发。
 - 组件文档示例只使用该组件真实依赖和原生 .NET API；DDD 组合示例由 `framework/docs/ddd-struct/` 承载。

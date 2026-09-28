@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""framework/ 下 csproj 的两条约定闸门。
+"""framework/ 下 csproj 的三条约定闸门。
 
-两条都曾自然漂移过，且都无法靠编译发现：
+三条都曾自然漂移过，且都无法靠编译发现：
 
 1. **不重复声明 common.props 已注入的共享属性。**`LangVersion` / `ImplicitUsings` /
    `Nullable` 由 `framework/common.props` 统一给定。各 csproj 再写一遍时，改共享值
@@ -13,6 +13,15 @@
    `.Core` 是打包边界（哪个程序集），不是类型的归属。此前两套并存：一半剥掉、
    一半保留，两套都自洽，但没有任何机制阻止第三套出现——而根命名空间不像
    "目录即命名空间"那样能由 IDE0130 机械判定，只能靠这里。
+
+3. **`.Core` 包只依赖抽象。**业务项目在架构门禁里限制"应用层/领域层能引用什么"，
+   而 Core 包的依赖会顺着传递引用进它们的闭包。宿主或基础设施实现渗进去时，
+   业务项目只能往白名单里加一行，而框架侧没有任何机制阻止第四例、第五例——
+   `Leistd.Authorization.Resource.Core` 引用本地化组件就是这样悄悄多出来的。
+   两条子规则：Core 不得引用 `.AspNetCore` / `.EntityFrameworkCore` 等宿主与基础设施包；
+   `PackageReference` 只允许 `Microsoft.Extensions.*` 与 `*.Abstractions`。
+   跨家族的 Core → Core 引用**不禁止**（禁了就等于禁掉"译文随包分发"这类能力），
+   但被引用方受同一条约束，所以闭包里传递进来的仍然只有抽象。
 
 退出码非 0 表示存在违规，供 CI 阻断。
 """
@@ -32,6 +41,56 @@ INHERITED = {
     "Nullable": "enable",
     "GenerateDocumentationFile": "true",
 }
+
+# Core 包允许的 PackageReference：只有抽象。`Microsoft.Extensions.*` 整族都是抽象或极轻的
+# 默认实现（Options、Logging.Abstractions 之类），其余一律要求以 `.Abstractions` 结尾。
+#
+# 今天全仓只有一个非 Extensions 的例外：Leistd.Settings.Core 的
+# Microsoft.AspNetCore.DataProtection.Abstractions。它名字里带 AspNetCore 但是纯抽象包
+# （IDataProtectionProvider / IDataProtector 两个接口，不含 Web 运行时），机密设置的加解密
+# 真的需要它，微软自己在非 Web 场景也这么用——所以它由"以 .Abstractions 结尾"这条正常放行，
+# 不需要豁免名单。要是哪天真需要豁免，加在这里并写明理由，而不是放宽规则。
+ABSTRACTION_PACKAGE_PREFIXES = ("Microsoft.Extensions.",)
+ABSTRACTION_PACKAGE_SUFFIX = ".Abstractions"
+
+# 宿主与基础设施实现：Core 引用它们就是把 Web/EF 拖进业务项目的领域层闭包。
+# 判的是包名后缀而不是内容——框架自己的分层命名已经把这件事表达清楚了。
+INFRASTRUCTURE_SUFFIXES = (".AspNetCore", ".EntityFrameworkCore")
+
+
+def core_dependency_problems(relative: str, assembly_name: str, text: str) -> list[str]:
+    """Core 包只依赖抽象：见模块文档串第 3 条。"""
+    if not assembly_name.endswith(".Core"):
+        return []
+
+    problems: list[str] = []
+
+    # InternalsVisibleTo 不是依赖方向，只是可见性，不参与判定
+    for kind in ("PackageReference", "ProjectReference"):
+        for match in re.finditer(rf'<{kind}\s+Include="([^"]+)"', text):
+            include = match.group(1)
+            # ProjectReference 写的是路径，取文件名作为包名
+            name = include.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".csproj")
+
+            if any(name.endswith(suffix) for suffix in INFRASTRUCTURE_SUFFIXES):
+                problems.append(
+                    f"{relative}: Core 包引用了宿主/基础设施包 {name}——"
+                    f"它会顺着传递引用进业务项目的领域层闭包；把这段实现挪到对应的 .AspNetCore "
+                    f"或 .EntityFrameworkCore 包里"
+                )
+                continue
+
+            if kind == "PackageReference" and not (
+                name.startswith(ABSTRACTION_PACKAGE_PREFIXES)
+                or name.endswith(ABSTRACTION_PACKAGE_SUFFIX)
+            ):
+                problems.append(
+                    f"{relative}: Core 包的 PackageReference 只允许抽象包，{name} 不是"
+                    f"（要求 Microsoft.Extensions.* 或以 .Abstractions 结尾）"
+                )
+
+    return problems
+
 
 # `.Core` 是打包边界，不是类型归属：命名空间一律剥掉它。
 # 这条对根原语包同样成立（Leistd.Core → Leistd），与 Volo.Abp.Core → Volo.Abp 一致。
@@ -129,6 +188,8 @@ def main() -> int:
             namespace_segment_problems(csproj, assembly_name, expected or assembly_name)
         )
 
+        problems.extend(core_dependency_problems(relative, assembly_name, text))
+
         if csproj.read_bytes().startswith(b"\xef\xbb\xbf"):
             problems.append(f"{relative}: 带 UTF-8 BOM，与其余 csproj 不一致")
 
@@ -138,7 +199,7 @@ def main() -> int:
             print(f"  {problem}")
         return 1
 
-    print(f"✅ csproj 约定检查通过（{checked} 个项目：无重复共享属性、根命名空间统一、无自重复/缩写目录、Services/ 只含实现、无 BOM）。")
+    print(f"✅ csproj 约定检查通过（{checked} 个项目：无重复共享属性、根命名空间统一、无自重复/缩写目录、Services/ 只含实现、Core 只依赖抽象、无 BOM）。")
     return 0
 
 
