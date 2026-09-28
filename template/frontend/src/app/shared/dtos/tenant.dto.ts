@@ -58,7 +58,7 @@ export type HostTenantDecision = 'undecided' | 'host' | 'tenant';
  * 匿名响应里的租户：只有名字。
  *
  * 刻意不含标识与启用状态——未认证者不该读出租户主键，也不该分辨出某个租户是否存在、是否启用。
- * 名字放进 `X-Tenant-Id` 头即可，服务端按名字同样能解析。
+ * 名字放进租户提示头（`TENANT_HEADER`）即可，服务端按名字同样能解析。
  */
 export interface AnonymousTenantOutputDto {
   name: string;

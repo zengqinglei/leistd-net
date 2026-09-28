@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Exceptions;
 using System.Security.Claims;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,10 +55,10 @@ public class TenantAmbientContextTests
     {
         var (ambient, currentTenant) = Build();
 
-        var error = Assert.Throws<InvalidOperationException>(
+        var error = Assert.Throws<InvalidTenantClaimException>(
             () => ambient.Begin(Authenticated((CustomClaimTypes.TenantId, "not-a-guid"))));
 
-        Assert.Contains("not a GUID", error.Message);
+        Assert.Equal(CustomClaimTypes.TenantId, error.ClaimType);
         Assert.Null(currentTenant.Id);
     }
 
@@ -113,16 +114,32 @@ public class TenantAmbientContextTests
     private static ClaimsPrincipal Authenticated(params (string Type, string Value)[] claims) =>
         new(new ClaimsIdentity(claims.Select(c => new Claim(c.Type, c.Value)), "Test"));
 
+    // 宿主改了租户 claim 名：非 HTTP 入口按新名建立租户，旧名不再被当作租户
+    [Fact]
+    public void A_configured_tenant_claim_name_is_honoured()
+    {
+        var tenantId = Guid.NewGuid();
+        var sp = BuildProvider(tenantClaimType: "tid");
+        var ambient = sp.GetRequiredService<IAmbientContext>();
+        var currentTenant = sp.GetRequiredService<ICurrentTenant>();
+
+        using (ambient.Begin(Authenticated(("tid", tenantId.ToString()), (CustomClaimTypes.TenantId, "stale"))))
+        {
+            Assert.Equal(tenantId, currentTenant.Id);
+        }
+    }
+
     private static (IAmbientContext Ambient, ICurrentTenant CurrentTenant) Build()
     {
         var sp = BuildProvider();
         return (sp.GetRequiredService<IAmbientContext>(), sp.GetRequiredService<ICurrentTenant>());
     }
 
-    private static ServiceProvider BuildProvider()
+    private static ServiceProvider BuildProvider(string? tenantClaimType = null)
     {
         return new ServiceCollection()
             .AddLogging()
+            .Configure<ClaimTypeOptions>(options => options.TenantId = tenantClaimType ?? options.TenantId)
             // 真实宿主总有 IConfiguration：AddMultiTenancy 绑定 Leistd:MultiTenancy
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddAmbientContext()

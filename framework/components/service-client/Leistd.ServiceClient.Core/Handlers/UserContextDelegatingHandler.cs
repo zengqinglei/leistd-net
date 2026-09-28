@@ -30,12 +30,12 @@ public sealed class UserContextDelegatingHandler<TOptions>(
 
         if (currentUser.Id is { } userId)
         {
-            AddHeaderIfAbsent(request, ServiceClientHeaders.UserId, userId.ToString());
+            AddHeaderIfAbsent(request, options.UserIdHeader, userId.ToString());
         }
 
         if (options.ForwardUsername && !string.IsNullOrEmpty(currentUser.Username))
         {
-            AddHeaderIfAbsent(request, ServiceClientHeaders.Username, Uri.EscapeDataString(currentUser.Username));
+            AddHeaderIfAbsent(request, options.UsernameHeader, Uri.EscapeDataString(currentUser.Username));
         }
 
         foreach (var (claimType, headerName) in options.ClaimHeaderMap)

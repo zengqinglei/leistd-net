@@ -34,6 +34,7 @@ internal sealed class UserSessionValidator(
     IDistributedCache distributedCache,
     IRequestClientInfo clientInfo,
     IOptions<UserSessionOptions> options,
+    IOptions<ClaimTypeOptions> claimTypes,
     IClock clock) : IUserSessionValidator
 {
     private const string CacheKeyPrefix = "auth:session:";
@@ -43,14 +44,19 @@ internal sealed class UserSessionValidator(
     {
         // 没有会话声明的主体一律无效：不留"旧 Cookie 免检"的口子，否则撤销对它们不起作用
         if (ReadGuid(principal.FindFirst(CustomClaimTypes.SessionId)?.Value) is not { } sessionId ||
-            ReadGuid(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value) is not { } userId)
+            ReadGuid(claimTypes.Value.FindUserId(principal)) is not { } userId)
             return false;
 
         var cacheKey = CacheKey(sessionId);
         if (await distributedCache.GetStringAsync(cacheKey, cancellationToken) is not null)
             return true;
 
-        var tenantId = ReadGuid(principal.FindFirst(CustomClaimTypes.TenantId)?.Value);
+        // 租户声明非法的会话一律无效：按宿主处理等于让租户会话进到宿主库
+        var tenantClaim = claimTypes.Value.ReadTenant(principal);
+        if (!tenantClaim.IsValid)
+            return false;
+
+        var tenantId = tenantClaim.TenantId;
         string? tenantName = null;
         if (tenantId is { } id)
         {

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Xunit;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Grants;
@@ -148,6 +149,12 @@ public class DefaultPermissionCheckerTests
         public int CallCount { get; private set; }
 
         public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(subject);
+        }
+
+        public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
         {
             CallCount++;
             return Task.FromResult(subject);

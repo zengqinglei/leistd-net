@@ -1,4 +1,7 @@
 #if (ExternalLogin)
+using Leistd.MultiTenancy.Extensions;
+using Leistd.MultiTenancy.Context;
+using Leistd.Security.Claims;
 using Leistd.ExceptionHandling;
 using Leistd.Lock;
 using System.Security.Claims;
@@ -23,7 +26,9 @@ public sealed class ExternalAuthController(
     IExternalAuthAppService externalAuthAppService,
     IDistributedCache distributedCache,
     IDistributedLock distributedLock,
-    IOptions<SessionCookieOptions> sessionCookieOptions) : BaseController
+    IOptions<SessionCookieOptions> sessionCookieOptions,
+    IOptions<ClaimTypeOptions> claimTypes,
+    ICurrentTenant currentTenant) : BaseController
 {
     private const string StateCookieName = "__Host-CompanyName.ProjectName.ExternalAuth.State";
     private const string StateCacheKeyPrefix = "CompanyName.ProjectName:ExternalAuthState:";
@@ -114,11 +119,12 @@ public sealed class ExternalAuthController(
         return output;
     }
 
-    // state 缓存里存的是"这个 state 允许用来做什么"：登录只记提供商，绑定再带上发起人
-    private static string LoginStateValue(string provider) => provider.ToLowerInvariant();
+    // state 缓存里存的是"这个 state 允许用来做什么"：登录只记提供商，绑定再带上发起人；两者都绑定发起时的租户，
+    // 回调时的租户（另一个标签页可能改了登录入口的租户选择）对不上就拒绝，不在别的租户里完成登录或绑定
+    private string LoginStateValue(string provider) => currentTenant.ScopeKey(provider.ToLowerInvariant());
 
     private string LinkStateValue(string provider) =>
-        $"link:{provider.ToLowerInvariant()}:{User.FindFirstValue(ClaimTypes.NameIdentifier)}";
+        currentTenant.ScopeKey($"link:{provider.ToLowerInvariant()}:{claimTypes.Value.FindUserId(User)}");
 
     /// <summary>
     /// 处理外部登录回调

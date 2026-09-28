@@ -37,6 +37,7 @@ using Leistd.Security.Claims;
 using Leistd.Tracing.AspNetCore;
 using Leistd.Authorization.AspNetCore;
 using Leistd.MultiTenancy;
+using Leistd.MultiTenancy.Context;
 #if (IncludeNotifications)
 using Leistd.Notifications.AspNetCore.SignalR;
 #if (LocalIdentity)
@@ -616,6 +617,13 @@ try
 #endif
     // 租户在认证后、授权前解析；未解析到租户表示宿主上下文。
     app.UseMultiTenancy();
+    // 请求完成日志在租户作用域之外写出：经 Serilog 诊断上下文补上租户，键与 ICurrentTenant.Change 打开的日志作用域一致
+    app.Use((context, next) =>
+    {
+        context.RequestServices.GetRequiredService<IDiagnosticContext>()
+            .Set(TenantLogKeys.TenantId, context.RequestServices.GetRequiredService<ICurrentTenant>().Id);
+        return next(context);
+    });
 #if (!LocalIdentity)
     // 必须在 UseMultiTenancy() 之后：用户行是 IMultiTenant，租户没解析出来会落成宿主行。
     app.UseMiddleware<ResourceUserProvisioningMiddleware>();

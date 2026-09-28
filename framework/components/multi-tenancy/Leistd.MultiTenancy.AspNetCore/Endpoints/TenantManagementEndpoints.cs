@@ -30,7 +30,7 @@ public static class TenantManagementEndpoints
     /// <remarks>
     /// <para>创建请求体按 <typeparamref name="TCreateInput"/> 绑定：宿主派生 <see cref="CreateTenantInputDto"/>
     /// 携带开通需要的更多信息，开通器从上下文里取回。</para>
-    /// <para>匿名探测只回选择租户所需的最小信息；<c>by-host</c> 只按请求主机名解析，不接受账号一类入参——
+    /// <para>匿名探测只回选择租户所需的最小信息；<c>by-host</c> 回答"这个请求会落在哪个租户"，跑的是宿主配置的解析链，不接受账号一类入参——
     /// 那会需要一个匿名的"这个账号属于哪些租户"查询，一份邮箱字典就能刷出租户拓扑。</para>
     /// </remarks>
     /// <example>
@@ -109,27 +109,28 @@ public static class TenantManagementEndpoints
             .WithName(NamePrefix + "DeleteTenant")
             .RequireAuthorization(options.DeletePolicy);
 
-        group.MapGet("by-host", async (HttpContext context, ITenantManagementService service, CancellationToken cancellationToken) =>
+        group.MapGet("by-host", async (ITenantResolver resolver, ICurrentTenant currentTenant) =>
             {
-                // 复用解析链的域名贡献者，而不是在这里另写一份主机名匹配：两处各写，受管域判定迟早不一致
-                var resolve = new TenantResolveContext(context.RequestServices);
-                await new DomainTenantResolveContributor().ResolveAsync(resolve);
+                // 跑宿主配置的解析链，而不是在这里另起一个域名贡献者：宿主替换或定制了解析方式时，
+                // 探测与真实请求必须给出同一个答案。登录页在未登录、未选租户时调用它，此时起作用的通常是按主机名解析的那一环；
+                // 请求若已带会话或租户提示，答案也随之与真实请求一致
+                var resolved = await resolver.ResolveAsync();
 
-                if (resolve.TenantIdOrName is { Length: > 0 } tenantName)
+                if (resolved.TenantIdOrName is { Length: > 0 } tenantIdOrName)
                 {
-                    // 只回名字：主机名本就公开，但租户标识与启用状态不该在匿名响应里出现。
-                    // 客户端把名字随请求发出即可——租户头按名字也能解析
+                    // 走到这里中间件已按同一条链解析并校验过该租户（不存在或已停用在那里就被拒）。
+                    // 只回名字：主机名本就公开，但租户标识与启用状态不该在匿名响应里出现；客户端把名字随请求发出即可
                     return new TenantByHostOutputDto
                     {
                         Decision = HostTenantDecision.Tenant,
-                        Tenant = new AnonymousTenantOutputDto { Name = tenantName }
+                        Tenant = new AnonymousTenantOutputDto { Name = currentTenant.Name ?? tenantIdOrName }
                     };
                 }
 
-                // Handled 是"受管域内但不指向租户"，必须与"根本不是受管域"分开回传
+                // 有贡献者定案却没有租户，是"受管域内但不指向租户"，必须与"没有谁表态"分开回传
                 return new TenantByHostOutputDto
                 {
-                    Decision = resolve.Handled ? HostTenantDecision.Host : HostTenantDecision.Undecided
+                    Decision = resolved.AppliedResolver is null ? HostTenantDecision.Undecided : HostTenantDecision.Host
                 };
             })
             .WithName(NamePrefix + "FindTenantByHost")

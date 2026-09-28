@@ -1,7 +1,10 @@
+using Microsoft.Extensions.Options;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Authorization;
 using Leistd.Ddd.Domain.Repositories;
+using System.Security.Claims;
+using Leistd.Security.Claims;
 using Leistd.Security.Users;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Grants;
@@ -20,11 +23,18 @@ public class PermissionSubjectProvider(
     ICurrentUser currentUser,
     IRepository<User, Guid> userRepository,
     IRepository<UserRole, Guid> userRoleRepository,
+    IOptions<ClaimTypeOptions> claimTypes,
     IClock clock) : IPermissionSubjectProvider
 {
-    public async Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+    public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+        => GetSubjectAsync(currentUser.Id, cancellationToken);
+
+    // 与 ICurrentUser.Id 同一口径：共享规则读出的主体标识是 GUID 才是用户
+    public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
+        => GetSubjectAsync(Guid.TryParse(claimTypes.Value.FindUserId(principal), out var userId) ? userId : null, cancellationToken);
+
+    private async Task<PermissionSubject?> GetSubjectAsync(Guid? userId, CancellationToken cancellationToken)
     {
-        var userId = currentUser.Id;
         if (!userId.HasValue)
             return null;
 

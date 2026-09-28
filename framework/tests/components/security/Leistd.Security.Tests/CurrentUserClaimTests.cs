@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Leistd.Security.Claims;
 using Leistd.Security.Clients;
 using Leistd.Security.Users;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.Security.Tests;
@@ -10,7 +11,7 @@ namespace Leistd.Security.Tests;
 /// 主体到强类型身份的解析：缺失、格式错误、多值与优先级。
 /// </summary>
 /// <remarks>
-/// 这些分支不是理论风险——多租户家族专门有 <c>AmbiguousTenantClaimException</c>，
+/// 这些分支不是理论风险——多租户家族专门有 <c>InvalidTenantClaimException</c>，
 /// 说明"同一个 claim type 出现多个值"在生产里确实发生过。
 /// </remarks>
 public class CurrentUserClaimTests
@@ -21,11 +22,13 @@ public class CurrentUserClaimTests
         public IDisposable Change(ClaimsPrincipal principal) => throw new NotSupportedException();
     }
 
+    private static readonly IOptions<ClaimTypeOptions> DefaultClaimTypes = Options.Create(new ClaimTypeOptions());
+
     private static ICurrentUser User(params Claim[] claims) =>
         new CurrentUser(new FixedPrincipalAccessor(
-            new ClaimsPrincipal(new ClaimsIdentity(claims, authenticationType: "Test"))));
+            new ClaimsPrincipal(new ClaimsIdentity(claims, authenticationType: "Test"))), DefaultClaimTypes);
 
-    private static ICurrentUser Anonymous() => new CurrentUser(new FixedPrincipalAccessor(null));
+    private static ICurrentUser Anonymous() => new CurrentUser(new FixedPrincipalAccessor(null), DefaultClaimTypes);
 
     [Fact]
     public void No_principal_yields_an_empty_identity_rather_than_throwing()
@@ -38,12 +41,7 @@ public class CurrentUserClaimTests
         Assert.Null(user.Username);
         Assert.Null(user.Name);
         Assert.Null(user.Email);
-        Assert.Null(user.PhoneNumber);
-        Assert.Empty(user.GetRoles());
-        Assert.Empty(user.GetAllClaims());
         Assert.Null(user.FindClaim("sub"));
-        Assert.Empty(user.FindClaims("sub"));
-        Assert.False(user.IsInRole("admin"));
     }
 
     // 未认证的主体（无 authenticationType）不得报告已认证——授权判定直接依赖这个属性。
@@ -51,7 +49,7 @@ public class CurrentUserClaimTests
     public void Unauthenticated_identity_is_reported_as_such()
     {
         var user = new CurrentUser(new FixedPrincipalAccessor(
-            new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", Guid.NewGuid().ToString())]))));
+            new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", Guid.NewGuid().ToString())]))), DefaultClaimTypes);
 
         Assert.False(user.IsAuthenticated);
         Assert.NotNull(user.Id);   // 身份仍可读，只是不算已认证
@@ -101,7 +99,6 @@ public class CurrentUserClaimTests
             new Claim("sub", Guid.CreateVersion7().ToString()));
 
         Assert.Equal(first, user.Id);
-        Assert.Equal(2, user.FindClaims("sub").Length);
     }
 
     [Theory]
@@ -131,46 +128,28 @@ public class CurrentUserClaimTests
     }
 
     [Fact]
-    public void Tenant_id_requires_a_parseable_guid()
+    public void Tenant_id_reads_a_single_guid_claim_and_none_means_host()
     {
-        Assert.Null(User(new Claim(CustomClaimTypes.TenantId, "host")).TenantId);
+        Assert.Null(User(new Claim("sub", Guid.NewGuid().ToString())).TenantId);
 
         var tenant = Guid.CreateVersion7();
         Assert.Equal(tenant, User(new Claim(CustomClaimTypes.TenantId, tenant.ToString())).TenantId);
     }
 
-    // role 与 ClaimTypes.Role 两套并存时合并去重；大小写不敏感，与框架的角色约定一致。
+    // 非法租户 claim 失败关闭：当成宿主等于让租户主体看到宿主数据
     [Fact]
-    public void Roles_merge_both_claim_types_and_deduplicate_case_insensitively()
+    public void An_invalid_tenant_claim_is_rejected_rather_than_read_as_host()
     {
-        var user = User(
-            new Claim("role", "Admin"),
-            new Claim("role", "editor"),
-            new Claim(ClaimTypes.Role, "ADMIN"),
-            new Claim(ClaimTypes.Role, "viewer"));
-
-        Assert.Equal(["Admin", "editor", "viewer"], user.GetRoles().Order(StringComparer.OrdinalIgnoreCase));
-    }
-
-    [Theory]
-    [InlineData("admin", true)]
-    [InlineData("ADMIN", true)]
-    [InlineData("aDmIn", true)]
-    [InlineData("administrator", false)]
-    public void Role_check_is_case_insensitive_and_exact(string probe, bool expected)
-    {
-        Assert.Equal(expected, User(new Claim("role", "Admin")).IsInRole(probe));
+        Assert.Throws<InvalidOperationException>(() => User(new Claim(CustomClaimTypes.TenantId, "host")).TenantId);
+        Assert.Throws<InvalidOperationException>(() => User(
+            new Claim(CustomClaimTypes.TenantId, Guid.CreateVersion7().ToString()),
+            new Claim(CustomClaimTypes.TenantId, Guid.CreateVersion7().ToString())).TenantId);
     }
 
     [Fact]
-    public void Email_and_phone_read_their_own_claim_types()
+    public void Email_reads_its_own_claim_type()
     {
-        var user = User(
-            new Claim("email", "a@example.test"),
-            new Claim(ClaimTypes.MobilePhone, "13800000000"));
-
-        Assert.Equal("a@example.test", user.Email);
-        Assert.Equal("13800000000", user.PhoneNumber);
+        Assert.Equal("a@example.test", User(new Claim("email", "a@example.test")).Email);
     }
 
     // 机器主体的 sub 带前缀，解析成用户 Id 必须失败——否则可自定义的 client_id
@@ -185,7 +164,7 @@ public class CurrentUserClaimTests
             ],
             authenticationType: "Test")));
 
-        Assert.Null(new CurrentUser(accessor).Id);
+        Assert.Null(new CurrentUser(accessor, DefaultClaimTypes).Id);
 
         var client = new CurrentClient(accessor);
         Assert.True(client.IsAuthenticated);

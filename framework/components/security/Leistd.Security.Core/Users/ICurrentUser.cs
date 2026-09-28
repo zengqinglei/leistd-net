@@ -5,12 +5,25 @@ namespace Leistd.Security.Users;
 /// <summary>
 /// 提供当前认证用户的信息。
 /// </summary>
+/// <remarks>
+/// 角色判断用官方 <see cref="ClaimsPrincipal.IsInRole"/> 或授权策略 <c>RequireRole</c>，按身份的 <c>RoleClaimType</c> 精确匹配；
+/// 其他 claim 经 <see cref="FindClaim"/> 或直接读 <see cref="ClaimsPrincipal"/>。
+/// </remarks>
 public interface ICurrentUser
 {
     /// <summary>
     /// 获取当前用户是否已认证。
     /// </summary>
     bool IsAuthenticated { get; }
+
+    /// <summary>
+    /// 获取主体标识的原始值，按 <c>ClaimTypeOptions.UserIds</c> 的顺序读取。
+    /// </summary>
+    /// <remarks>
+    /// 任何主体都有：自然人是 GUID 用户 Id，机器主体是 <c>client:&lt;client_id&gt;</c>，后台作业是宿主约定的标识。
+    /// 审计这类"任何主体都要留得下标识"的场景读它；要自然人用户读 <see cref="Id"/>。
+    /// </remarks>
+    string? SubjectId { get; }
 
     /// <summary>
     /// 获取用户标识符。
@@ -22,17 +35,22 @@ public interface ICurrentUser
     Guid? Id { get; }
 
     /// <summary>
-    /// 所属租户 Id（来自 tenant_id claim；宿主用户为 null）
+    /// 所属租户 Id（按 <c>ClaimTypeOptions.TenantId</c> 读取；宿主用户为 null）
     /// </summary>
     /// <remarks>
     /// 这是主体 claim 的直读值，仅反映"签发 token 时用户属于哪个租户"；
     /// 运行时权威的租户上下文是 <c>Leistd.MultiTenancy</c> 的 <c>ICurrentTenant</c>。
+    /// 租户 claim 非法（规则见 <c>ClaimTypeOptions.ReadTenant</c>）时抛 <see cref="InvalidOperationException"/>，不当作宿主。
     /// </remarks>
     Guid? TenantId { get; }
 
     /// <summary>
     /// 获取用户名。
     /// </summary>
+    /// <remarks>
+    /// 用户名、显示名称与邮箱都取自主体身份（<c>ClaimTypeOptions.FindSubjectIdentity</c>），与 <see cref="SubjectId"/>、
+    /// <see cref="TenantId"/> 同源：服务间还原时不会取到调用方机器令牌上的名字。
+    /// </remarks>
     string? Username { get; }
 
     /// <summary>
@@ -46,40 +64,10 @@ public interface ICurrentUser
     string? Email { get; }
 
     /// <summary>
-    /// 获取电话号码。
-    /// </summary>
-    string? PhoneNumber { get; }
-
-    /// <summary>
-    /// 获取当前用户的所有角色。
-    /// </summary>
-    /// <returns>角色名称数组</returns>
-    string[] GetRoles();
-
-    /// <summary>
-    /// 检查当前用户是否属于指定角色。
-    /// </summary>
-    /// <param name="roleName">角色名称（不区分大小写）</param>
-    /// <returns>如果用户在该角色中则返回 true</returns>
-    bool IsInRole(string roleName);
-
-    /// <summary>
     /// 查找指定类型的第一个声明。
     /// </summary>
+    /// <remarks>按官方 <see cref="ClaimsPrincipal.FindFirst(string)"/> 跨全部身份查找；要限定在主体身份上，经 <c>ClaimTypeOptions.FindSubjectIdentity</c> 取得身份后读取。</remarks>
     /// <param name="claimType">Claim 类型</param>
     /// <returns>找到的 Claim，如果不存在则返回 null</returns>
     Claim? FindClaim(string claimType);
-
-    /// <summary>
-    /// 查找指定类型的所有声明。
-    /// </summary>
-    /// <param name="claimType">Claim 类型</param>
-    /// <returns>找到的 Claims 数组</returns>
-    Claim[] FindClaims(string claimType);
-
-    /// <summary>
-    /// 获取当前用户的所有声明。
-    /// </summary>
-    /// <returns>所有 Claims 数组</returns>
-    Claim[] GetAllClaims();
 }

@@ -95,9 +95,8 @@ public class MultiTenancyMiddleware(RequestDelegate next, ILogger<MultiTenancyMi
 
         var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
 
-        // 租户上下文必须覆盖整个下游管道。
+        // 租户上下文必须覆盖整个下游管道；日志作用域随 Change 一起打开。
         using (currentTenant.Change(tenantId, tenantName))
-        using (logger.BeginScope(new Dictionary<string, object> { ["leistd.tenantId"] = tenantId }))
         {
             await next(context);
         }

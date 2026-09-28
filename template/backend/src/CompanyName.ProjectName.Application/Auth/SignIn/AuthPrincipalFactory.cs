@@ -8,6 +8,9 @@ using CompanyName.ProjectName.Domain.Users.ValueObjects;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Security.Claims;
 using Leistd.Timing;
+using Leistd.UnitOfWork;
+using Leistd.MultiTenancy.Stores;
+using Leistd.MultiTenancy.Context;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
@@ -19,8 +22,30 @@ public class AuthPrincipalFactory(
     IRepository<User, Guid> userRepository,
     UserDomainService userDomainService,
     IClock clock,
-    IOptions<OAuthOptions> oauthOptions) : IAuthPrincipalFactory
+    IOptions<OAuthOptions> oauthOptions,
+    IOptions<ClaimTypeOptions> claimTypes,
+    ICurrentTenant currentTenant,
+    ITenantStore tenantStore,
+    IUnitOfWorkManager unitOfWorkManager) : IAuthPrincipalFactory
 {
+    /// <inheritdoc />
+    public async Task<ClaimsPrincipal?> CreateFromTokenAsync(
+        ClaimsPrincipal tokenPrincipal,
+        IEnumerable<string>? scopes = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(claimTypes.Value.FindUserId(tokenPrincipal), out var userId) ||
+            await ResolveTokenTenantAsync(tokenPrincipal, cancellationToken) is not { } tenant)
+            return null;
+
+        // 租户切换与工作单元在这里建立而不是放进辅助方法：AsyncLocal 在被 await 的方法里改，回不到调用方
+        using (currentTenant.Change(tenant.Id, tenant.Name))
+        using (await unitOfWorkManager.BeginAsync(requiresNew: true))
+        {
+            return await CreateAsync(userId, scopes, cancellationToken);
+        }
+    }
+
     /// <inheritdoc />
     public async Task<ClaimsPrincipal?> CreateAsync(
         Guid userId,
@@ -38,7 +63,7 @@ public class AuthPrincipalFactory(
         var roleNames = await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken);
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
 
-        identity.SetClaim(Claims.Subject, user.Id.ToString());
+        SubjectClaims.Set(identity, claimTypes.Value, user.Id.ToString());
         identity.SetClaim(Claims.Name, user.DisplayName ?? user.Username);
         identity.SetClaim(Claims.PreferredUsername, user.Username);
         identity.SetClaim(Claims.Email, user.Email);
@@ -53,7 +78,7 @@ public class AuthPrincipalFactory(
         // 租户 claim：多租户解析链以它定案已登录用户的租户
         if (user.TenantId is { } tenantId)
         {
-            identity.SetClaim(CustomClaimTypes.TenantId, tenantId.ToString());
+            identity.SetClaim(claimTypes.Value.TenantId, tenantId.ToString());
         }
 
         var principal = new ClaimsPrincipal(identity);
@@ -67,10 +92,16 @@ public class AuthPrincipalFactory(
 
     /// <inheritdoc />
     public async Task<IDictionary<string, object>?> CreateUserInfoAsync(
-        Guid userId,
         ClaimsPrincipal tokenPrincipal,
         CancellationToken cancellationToken = default)
     {
+        if (!Guid.TryParse(claimTypes.Value.FindUserId(tokenPrincipal), out var userId) ||
+            await ResolveTokenTenantAsync(tokenPrincipal, cancellationToken) is not { } tenant)
+            return null;
+
+        using var tenantChange = currentTenant.Change(tenant.Id, tenant.Name);
+        using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
@@ -112,17 +143,34 @@ public class AuthPrincipalFactory(
         return claims;
     }
 
+    // 令牌主体所属租户：租户声明非法、租户已不存在或已停用时返回 null，不签发、不投影。
+    // 请求本身解析出的是宿主，调用方据此切换租户并新开工作单元，读取才落到该租户的库与过滤器上
+    private async Task<TokenTenant?> ResolveTokenTenantAsync(ClaimsPrincipal tokenPrincipal, CancellationToken cancellationToken)
+    {
+        var tenantClaim = claimTypes.Value.ReadTenant(tokenPrincipal);
+        if (!tenantClaim.IsValid)
+            return null;
+
+        if (tenantClaim.TenantId is not { } tenantId)
+            return new TokenTenant(null, null);
+
+        var tenant = await tenantStore.FindAsync(tenantId, cancellationToken);
+        return tenant is { IsActive: true } ? new TokenTenant(tenantId, tenant.Name) : null;
+    }
+
+    private sealed record TokenTenant(Guid? Id, string? Name);
+
     private static bool IsHttpUrl(string? value)
     {
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    private static IEnumerable<string> GetDestinations(Claim claim)
+    private IEnumerable<string> GetDestinations(Claim claim)
     {
         return claim.Type switch
         {
-            Claims.Subject =>
+            var type when type == Claims.Subject || SubjectClaims.IsMirror(claimTypes.Value, type) =>
             [
                 Destinations.AccessToken,
                 Destinations.IdentityToken
@@ -147,7 +195,7 @@ public class AuthPrincipalFactory(
             [
                 Destinations.AccessToken
             ],
-            CustomClaimTypes.TenantId =>
+            var type when type == claimTypes.Value.TenantId =>
             [
                 Destinations.AccessToken
             ],

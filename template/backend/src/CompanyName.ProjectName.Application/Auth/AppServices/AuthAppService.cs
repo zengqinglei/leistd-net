@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Errors;
@@ -305,11 +306,12 @@ internal sealed class AuthAppService(
         return attempts;
     }
 
-    private static string FailedLoginCacheKey(string identifier)
+    // 按租户隔离：登录名只在租户内唯一，共用一个计数会让一个租户里的爆破把另一个租户的同名用户挡在门外
+    private string FailedLoginCacheKey(string identifier)
     {
         var normalized = identifier.Trim().ToLowerInvariant();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-        return $"auth:login-failures:{Convert.ToHexString(hash)}";
+        return currentTenant.ScopeKey($"auth:login-failures:{Convert.ToHexString(hash)}");
     }
 
     /// <remarks>建用户与分配默认角色必须同生共死：拆开后注册失败会留下没有任何角色的用户。</remarks>

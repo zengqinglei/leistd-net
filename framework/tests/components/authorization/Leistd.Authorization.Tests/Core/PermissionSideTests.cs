@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Leistd.MultiTenancy;
 using Xunit;
 using Leistd.Authorization.Definitions;
@@ -52,6 +53,9 @@ public class PermissionSideTests
     private sealed class FixedSubjectProvider(PermissionSubject? subject) : IPermissionSubjectProvider
     {
         public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(subject);
+
+        public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
             => Task.FromResult(subject);
     }
 

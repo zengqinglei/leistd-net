@@ -21,11 +21,12 @@ public static class ServiceClientHeaders
     public const string Username = "X-Username";
 
     /// <summary>
-    /// 当前租户 Id（租户 Guid 值）。
+    /// 当前租户 Id（租户 Guid 值）。服务间委托通道，只对受信调用方生效。
     /// </summary>
     /// <remarks>
     /// 值来自环境上下文 <c>ICurrentTenant</c> 而非用户 claim，因此后台任务经 <c>ICurrentTenant.Change()</c> 设定租户后也能正确传递。
-    /// 被调方仅对受信服务调用把它恢复为 <c>tenant_id</c> claim；不受信来源无需剥离。
+    /// 被调方仅对受信服务调用把它恢复为 <c>ClaimTypeOptions.TenantId</c> 指定的租户 claim；不受信来源无需剥离。
+    /// 与多租户组件匿名请求的租户提示头（默认 <c>X-Tenant</c>，可带名称）刻意不同名。
     /// </remarks>
     public const string TenantId = "X-Tenant-Id";
 }

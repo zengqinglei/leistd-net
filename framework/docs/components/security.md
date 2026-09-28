@@ -46,8 +46,18 @@ services.AddAmbientContext();
 并注册 `IHttpContextAccessor`；两者的调用顺序无关。本组件没有中间件。
 
 `Begin(...)` 建立哪些维度取决于已注册的贡献者：租户维度随 `Leistd.MultiTenancy.AspNetCore`
-分发（claim 类型配在它的 `MultiTenancyOptions` 上），链路标识随 `Leistd.Tracing.Core`。
-没装的维度就是没有，不会给猜测值。
+分发，链路标识随 `Leistd.Tracing.Core`。没装的维度就是没有，不会给猜测值。
+
+主体标识与租户的 claim 类型只在 `ClaimTypeOptions` 一处配置，框架里读写这两类 claim 的每一处都从这里取
+（当前用户、租户解析、权限判定、SignalR 寻址、操作记录、服务间还原）。签发主体的宿主改了 claim 名时：
+
+```csharp
+builder.Services.Configure<ClaimTypeOptions>(options =>
+{
+    options.TenantId = "tid";                  // 默认 tenant_id
+    options.UserIds = ["oid", "sub"];          // 默认 sub，其次 NameIdentifier
+});
+```
 
 ## 使用
 
@@ -63,10 +73,6 @@ public class OrderService(ICurrentUser currentUser)
 
         Guid? userId = currentUser.Id;
         string? username = currentUser.Username;
-
-        if (currentUser.IsInRole("admin"))
-        {
-        }
         return Task.CompletedTask;
     }
 }
@@ -112,17 +118,15 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 | 成员 | 说明 |
 | --- | --- |
 | `IsAuthenticated` | 当前主体是否已认证（`Principal.Identity.IsAuthenticated`），无主体时为 `false` |
-| `Id` | 用户唯一标识，取 `sub` 或 `NameIdentifier` claim 并解析为 `Guid`，解析失败/缺失返回 `null` |
-| `TenantId` | 所属租户，取 `tenant_id` claim 并解析为 `Guid`；宿主用户返回 `null`。这是主体 claim 的直读值，运行时权威租户上下文是 [多租户组件](./multi-tenancy.md) 的 `ICurrentTenant` |
+| `SubjectId` | 主体标识原始值，按 `ClaimTypeOptions.UserIds` 读取；机器主体是 `client:<client_id>`。审计等"任何主体都要留得下标识"的场景用它 |
+| `Id` | 在 `SubjectId` 之上只接受 `Guid` 的自然人用户 Id；机器主体等非 GUID 标识为 `null` |
+| `TenantId` | 所属租户，按 `ClaimTypeOptions.ReadTenant` 读取；宿主用户返回 `null`，租户 claim 非法时抛 `InvalidOperationException`（不当作宿主）。这是主体 claim 的直读值，运行时权威租户上下文是 [多租户组件](./multi-tenancy.md) 的 `ICurrentTenant` |
 | `Username` | 依次取 `preferred_username` / `name` / `Name` claim，均无返回 `null` |
 | `Name` | 标准身份名称，依次取 `name` / `Name` claim，不回退 `given_name` |
 | `Email` | 邮箱，依次取 `email` / `Email` claim |
-| `PhoneNumber` | 取 `MobilePhone` claim |
-| `GetRoles()` | 返回 `role` 与 `Role` claim 合并去重（不区分大小写）的角色名数组；无主体返回空数组 |
-| `IsInRole(roleName)` | 角色是否存在，不区分大小写 |
-| `FindClaim(claimType)` | 指定类型的第一个 `Claim`，不存在返回 `null` |
-| `FindClaims(claimType)` | 指定类型的全部 `Claim` 数组，无则返回空数组 |
-| `GetAllClaims()` | 当前主体的全部 `Claim` 数组，无主体返回空数组 |
+| `FindClaim(claimType)` | 指定类型的第一个 `Claim`，跨全部身份查找（官方 `ClaimsPrincipal.FindFirst`），不存在返回 `null` |
+
+`Username`、`Name`、`Email` 只在主体身份（`ClaimTypeOptions.FindSubjectIdentity`）上读取，与 `SubjectId`、`TenantId` 同源：服务间还原出的被代表用户没带 `name` 时，不会取到调用方机器令牌上的名字。主体上没有带用户标识的身份时按整个主体读取。
 
 ### `Leistd.Security.Clients.ICurrentClient`
 
@@ -146,7 +150,7 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 | `SessionId` | `sid` | 会话标识符（OIDC 标准） |
 | `IdentityProvider` | `idp` | 身份提供者（如 github / google / microsoft） |
 | `IsSuperAdmin` | `is_super_admin` | 是否超级管理员（权限授权的超管判定约定来源） |
-| `TenantId` | `tenant_id` | 所属租户 Id（宿主用户无此 claim）。认证端签发主体时写入；多租户解析链以它为最高优先来源，已登录用户的租户由此定案 |
+| `TenantId` | `tenant_id` | `ClaimTypeOptions.TenantId` 的默认值。读写租户 claim 一律经 `ClaimTypeOptions`，不直接用这个常量 |
 
 标准字段直接使用 `System.Security.Claims.ClaimTypes`。
 
@@ -168,10 +172,27 @@ if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受
 
 > 服务间调用的用户上下文恢复直接依赖该契约，见[服务间调用客户端](./service-client.md)的信任边界。
 
+### `Leistd.Security.Claims.ClaimTypeOptions`（claim 类型与读取规则）
+
+| 成员 | 说明 |
+| --- | --- |
+| `UserIds` | 主体标识的读取顺序，默认 `sub`，其次 `ClaimTypes.NameIdentifier` |
+| `TenantId` | 租户 claim 类型，默认 `tenant_id`；值必须是租户 GUID，没有即宿主 |
+| `FindSubjectIdentity(principal)` | 主体身份：按顺序第一个带用户标识（按 `UserIds`）的身份；没有时为 `null`。标识、租户与名字、邮箱这类描述"这个人"的 claim 都取自它 |
+| `FindUserId(principal)` | 在主体身份上按 `UserIds` 取第一个非空白的原始值 |
+| `ReadTenant(principal)` | 返回 `TenantClaim`：用户标识与租户取自同一个身份——按顺序第一个带用户标识的身份（主体身份）；同一身份内多条（即使值相同）或非 GUID 为非法；其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）为非法，这样同一请求携带的两份用户凭据拼不出"甲的标识 + 乙的租户"；不带用户标识的身份（服务间调用只委托租户时还原出的身份）只在主体身份没有租户时提供租户；带用户标识而无租户 claim 的其他身份（如服务间调用方的机器身份）不参与判定。同一主体被多个认证方案认证、各身份带同一租户是合法的 |
+
+只共享读取规则，不合并语义：`ICurrentUser.Id` 在原始值之上只接受 GUID；审计、SignalR 寻址等场景读原始值。
+同一主体被多个认证方案认证时（策略评估会合并各方案的身份），各身份各带一条相同的租户 claim 是合法的。
+
+```csharp
+bool isNaturalPerson = Guid.TryParse(claimTypes.Value.FindUserId(principal), out _);
+```
+
 ## 注意事项
 
 - 各属性在缺失对应 claim 时返回 `null`（`Id` 在 claim 无法解析为 `Guid` 时同样返回 `null`），调用方需做空值处理。
-- `ICurrentUser.GetRoles()` / `IsInRole()` 同时识别 `role` 与标准 `ClaimTypes.Role` 两种 claim，且角色比较不区分大小写。
+- 角色判断用官方 `ClaimsPrincipal.IsInRole` 或授权策略 `RequireRole`：它们只认身份的 `RoleClaimType`、角色名区分大小写。自行构造 `ClaimsIdentity` 时，`roleType` 要与写入角色 claim 的类型一致（如 OIDC 的 `role`），否则判定静默为 `false`。
 - `Change(...)` 基于 `AsyncLocal` 支持异步传播和嵌套，但返回的 `IDisposable` 必须释放。
 - `HttpContextCurrentPrincipalAccessor` 依赖 `IHttpContextAccessor`，在没有 HTTP 上下文的后台任务里 `Principal` 为 `null`；此类场景用 `IAmbientContext.Begin(...)` 显式建立系统主体。
 - 领域层/应用层应只引用 `Leistd.Security.Core`，避免把 ASP.NET Core 依赖泄漏进核心层。

@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Leistd.AspNetCore.SignalR.Options;
 using Leistd.AspNetCore.SignalR.Services;
+using Leistd.Security.Claims;
 using Xunit;
 using MsOptions = Microsoft.Extensions.Options.Options;
 
@@ -15,9 +16,9 @@ public class ClaimsSignalRUserIdProviderTests
     [Fact]
     public void Uses_configured_claim_order_and_skips_empty_values()
     {
-        var provider = new ClaimsSignalRUserIdProvider(MsOptions.Create(new HubIdentityOptions
+        var provider = new ClaimsSignalRUserIdProvider(MsOptions.Create(new ClaimTypeOptions
         {
-            UserIdClaimTypes = ["tenant_user", "sub"]
+            UserIds = ["tenant_user", "sub"]
         }));
 
         var connection = CreateConnection(new ClaimsPrincipal(new ClaimsIdentity([
@@ -31,7 +32,7 @@ public class ClaimsSignalRUserIdProviderTests
     [Fact]
     public void Falls_back_to_sub_then_name_identifier_by_default()
     {
-        var provider = new ClaimsSignalRUserIdProvider(MsOptions.Create(new HubIdentityOptions()));
+        var provider = new ClaimsSignalRUserIdProvider(MsOptions.Create(new ClaimTypeOptions()));
 
         var connection = CreateConnection(new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.NameIdentifier, "nameid-9")], "Test")));
@@ -40,7 +41,7 @@ public class ClaimsSignalRUserIdProviderTests
     }
 
     // AddSignalR() 内部也 TryAdd 一个 DefaultUserIdProvider（只认 ClaimTypes.NameIdentifier）。
-    // 无论它先注册还是后注册，最终都必须被换掉，否则 UserIdClaimTypes 永不生效。
+    // 无论它先注册还是后注册，最终都必须被换掉，否则 ClaimTypeOptions.UserIds 永不生效。
     [Fact]
     public void The_framework_provider_wins_over_the_SignalR_default()
     {

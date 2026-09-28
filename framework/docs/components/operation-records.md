@@ -285,20 +285,20 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 | `OperationTarget` | 目标的标识与名字快照捆绑传递；`For(id, name)` / `None`。名字是快照，理由同 `ActorName` |
 | `OperationFailure` | 失败原因；`FromCode(code, data)` 走本地化码（`data` 是标量字典，本组件负责写 JSON），`FromDetail(detail)` 走技术说明。**刻意不提供接受 `Exception` 的工厂**，`BusinessException` 也不例外 |
 | `OperationFailureCodes` | 本组件自己会产生的失败码，目前只有 `Error:Forbidden`（授权被拒的默认原因）。这些码没有随包译文、也不在服务端渲染，展示端必须自备词条（键为 `Error_Forbidden`），否则显示裸码 |
-| `OperationRecordInfo` | 一条记录的传输形态；各列长度上限以 `Max*Length` 常量给出。除操作人与目标标识外还带 `TargetName`（目标名快照）、`Visibility`（必填）、`ActorTenantId`（操作发生时的租户上下文；与 `TenantId` 不同的行即从租户上下文写进宿主层的失败记录），以及失败三件套 `FailureCode`（本地化码）／`FailureData`（占位参数 JSON，**刻意不设长度上限**）／`FailureDetail`（技术说明，含内部拓扑，宿主应在下发前裁剪） |
+| `OperationRecordInfo` | 一条记录的传输形态；各列长度上限以 `Max*Length` 常量给出。除操作人与目标标识外还带 `TargetName`（目标名快照）、`Visibility`（必填）、`ActorTenantId`（操作人自己所属的租户，取自主体的租户 claim；宿主管理员进入租户操作时它仍是宿主；匿名请求没有主体，取请求所在的租户上下文。与 `TenantId` 不同的行即跨层写入的记录），以及失败三件套 `FailureCode`（本地化码）／`FailureData`（占位参数 JSON，**刻意不设长度上限**）／`FailureDetail`（技术说明，含内部拓扑，宿主应在下发前裁剪） |
 | `OperationRecordOutcome` | `Succeeded`、`Failed`；只有两档 |
 | `OperationVisibility` | `Tenant` / `Host` / `Actor`；写入时由动作定义盖章。`Host` 表示记录属于宿主层，见「可见性与记录所在的层」 |
 | `OperationSeverity` | `Info` / `Notice` / `Critical`；描述动作本身有多要紧，与结果好坏无关 |
 | `IOperationActionDefinitionProvider` | 登记本模块的动作定义；宿主用 `AddSingleton<IOperationActionDefinitionProvider, ...>()` 注册。类别是业务定义的字符串，框架不预置清单 |
 | `IOperationActionDefinitionManager` | 动作定义的只读索引；`GetOrNull` 返回 `null` 即未登记。写入时记录器据此抛错；读取历史记录时调用方据此降级（原样显示裸码） |
-| `OperationRecordOptions` | `ImpersonatorIdClaimType` / `ImpersonatorNameClaimType`，默认值取自 `CustomClaimTypes` |
+| `OperationRecordOptions` | `ImpersonatorIdClaimType` / `ImpersonatorNameClaimType` 默认值取自 `CustomClaimTypes`；操作人标识按 `ClaimTypeOptions.UserIds` 读取（`ICurrentUser.SubjectId`），不在这里另配 |
 | `IOperationRecordStore.InsertAsync(record, ct)` | 写入；成功记录跟随调用方的事务，失败记录在 `record.TenantId` 所指的层里独立提交 |
 | `IOperationRecordStore.GetPagedListAsync(filter, page, ct)` | 按创建时间倒序分页，返回 `PagedResult<OperationRecordInfo>`；`OperationRecordFilter` 的 `Scope` 必填，关键字匹配动作码、目标标识与操作人名，时间两端都是**闭区间**且按 UTC 比较；`PageRequest.Sorting` 不生效 |
-| `IOperationRecordQueryService` | 查询、筛选项与导出用例：无租户上下文即宿主读者；租户读者看不到 `Host` 层、`Actor` 层只看本人；仅宿主字段（`FailureDetail`、`CorrelationId`、`ActorTenantId`）只下发给宿主读者；类别与动作维度间取交集，展开为空返回空页。**不做权限判定**，由端点策略把守 |
+| `IOperationRecordQueryService` | 查询、筛选项与导出用例：无租户上下文即宿主读者；租户读者看不到 `Host` 层、`Actor` 层只看本人（`ActorId` 与 `ActorTenantId` 都与读者相同）；仅宿主字段（`FailureDetail`、`CorrelationId`、`ActorTenantId`）只下发给宿主读者；类别与动作维度间取交集，展开为空返回空页。**不做权限判定**，由端点策略把守 |
 | `MapOperationRecords(configure)` | AspNetCore 包：`GET /`、`GET /filter-options`、`GET /export`；`ReadPolicy`、`ExportPolicy`、`ExportAction` 必填；返回路由组，端点名前缀见 `OperationRecordEndpoints.NamePrefix` |
 | `AddOperationRecordRetention<TDbContext>(configure?)` | EF 包：绑定 `Leistd:OperationRecords:Retention` 并启动期校验，登记集群周期任务 `operation-records.archive`（每日 `DailyRunHourUtc` 执行） |
 | `IOperationRecordArchiveService` | EF 包：逐库、分批把到期记录搬入 `OperationRecordArchive`，每批一个事务；返回搬运条数与失败库数 |
-| `OperationRecordVisibilityScope` | 可见范围，**由调用方算好**，只能从三个入口取得：`Host` 见全部，`ForTenantReader(actorId)` 见租户层加本人的 `Actor` 层，`Unrestricted` 不过滤（仅供不代表读者的内部任务）。没有默认值——可见性是安全边界，漏传即越权。**存储不判定"谁是宿主"**——那需要它不该有的上下文依赖 |
+| `OperationRecordVisibilityScope` | 可见范围，**由调用方算好**，只能从三个入口取得：`Host` 见全部，`ForTenantReader(actorId, actorTenantId)` 见租户层加本人的 `Actor` 层（标识与所属租户都相同才算本人：主体标识只在签发它的那一层内唯一），`Unrestricted` 不过滤（仅供不代表读者的内部任务）。没有默认值——可见性是安全边界，漏传即越权。**存储不判定"谁是宿主"**——那需要它不该有的上下文依赖 |
 | `AddOperationRecords(services)` | 注册记录器 |
 | `AddOperationRecordsEfCore<TDbContext>(services)` | 注册 EF Core 存储；内部调用 `AddOperationRecords()` |
 | `ConfigureOperationRecords(modelBuilder)` | 映射 `OperationRecord` 与归档表 `OperationRecordArchive` |
@@ -310,14 +310,14 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 
 - **时间由记录器填充，不依赖审计拦截器。** 审计属性的自动填充要宿主把 `AuditSaveChangesInterceptor` 挂到目标 DbContext，漏挂是静默的——得到的会是一张时间全为零的审计表，而"什么时间"塌掉整张表就没用了。实体因此也**不实现** `ICreationAuditedObject`。
 - **操作人名存快照。** 用户改名或销号之后，靠标识反查到的要么是新名字、要么什么都没有，而审计要回答的是"当时是谁"。
-- **操作人标识读 claim 原始值，不读 `ICurrentUser.Id`。** 后者只在 `sub` 能解析成 GUID 时有值，而机器主体（`client:<client_id>`）与后台作业主体都不是 GUID；只认 `Id` 会把这两类操作全部记成无主的，而它们恰恰是最需要事后追查的那批。claim 名由 `OperationRecordOptions.ActorIdClaimType` 给出，默认 `CustomClaimTypes.Subject`。
+- **操作人标识读 claim 原始值，不读 `ICurrentUser.Id`。** 后者只在 `sub` 能解析成 GUID 时有值，而机器主体（`client:<client_id>`）与后台作业主体都不是 GUID；只认 `Id` 会把这两类操作全部记成无主的，而它们恰恰是最需要事后追查的那批。读的是 `ICurrentUser.SubjectId`：按 `ClaimTypeOptions.UserIds`（默认 `sub`，其次 `NameIdentifier`）取原始值，与 `ICurrentUser.Id`、SignalR 寻址同一处配置。自证类动作（定义为 `targetIsActor`，如登录、注册）在匿名请求里完成，操作人取目标——否则这类 `Actor` 层记录没有操作人，本人永远看不到。
 - **后台作业、消息消费者、Hub 调用先建立环境上下文。** 这些入口不经 ASP.NET Core 中间件，主体、租户与链路标识在其中都不成立，记录器会拿到一片空白。用 `IAmbientContext.Begin(principal)` 一次性建立全部已注册维度（只切主体的 `ICurrentPrincipalAccessor.Change` 不够——租户与链路不会跟着走）。主体的 `sub` 由宿主自定前缀（如 `job:nightly-cleanup`），`name` claim 决定记录里显示的操作人名。
 - **模拟登录留两个人。** 主体上的用户是被模拟者，真实操作人按 `OperationRecordOptions` 指定的 claim 读出，另存 `ImpersonatorId` / `ImpersonatorName`。只记前者等于把真正按下按钮的人从审计里抹掉。
 - **事务边界按结果区分。** 成功记录落在调用方所处的边界里，与它描述的变更同生共死，否则会留下"记了但没发生"的假账。失败记录在新开的工作单元里独立写入并提交：业务在工作单元内记完失败紧接着抛出、整体回滚是被拒路径最常见的形态，而"谁在反复做他不被允许的事"正是审计最要留住的。第二个事务只向本表插入一行、不读不改业务表，常规场景不与外层冲突；**只允许单个写事务的数据库（如 SQLite）是例外**：外层已有未提交的写入时，这次写入等锁直至超时，结果是一条 `Error` 日志、记录丢失。
 - **失败路径写不进去只记 `Error`，不抛。** 被拒的请求本来就要以 403/400 结束，不能因为这一条审计没记下来变成 500，把真正的拒绝原因盖掉。写入不可取消：客户端中断请求不能让这条审计作废。
 - **动作码与授权依据必填且不得为空白**（`ArgumentException`），**动作码必须已登记**（`InvalidOperationException`）。两项校验都在失败路径的 `try` 之外：那个 `catch` 吞的是"写库没成功"这类运行期故障，而这两类是确定性的编码错误，必须当场响。空串落库之后，"这次操作不需要授权依据"与"调用方漏传了"就再也分不开；未登记的码没有可见性可盖，默认给租户看是泄露，默认只给宿主看又会让租户上下文里写下的记录谁都看不见。
 - **超长字段就地截断，并在截断前记 `Warning`。** 审计写入不能因为一个字段超长，把一次已经成功的业务操作变成 500。
-- **可见性与记录所在的层。** `Tenant` 与 `Actor` 的记录写进操作发生时的租户层。`Host` 的记录属于宿主层：在宿主上下文里照常写；租户上下文里的**失败**记录（典型是租户用户调用宿主接口被拒）改写进宿主层，来源租户记在 `ActorTenantId`——留在租户层的话，租户读者按可见性看不到、宿主按租户维度也查不到。租户上下文里的**成功**记录则直接抛错：它既不能留在租户层，也不能脱离租户库里的业务事务挪去宿主层；这类动作要么登记为 `Tenant`，要么在切到宿主上下文之后再记。
+- **可见性与记录所在的层。** `Tenant` 与 `Actor` 的记录写进操作发生时的租户层。`Host` 的记录属于宿主层：在宿主上下文里照常写；租户上下文里的**失败**记录（典型是租户用户调用宿主接口被拒）改写进宿主层，操作人所属租户记在 `ActorTenantId`——留在租户层的话，租户读者按可见性看不到、宿主按租户维度也查不到。租户上下文里的**成功**记录则直接抛错：它既不能留在租户层，也不能脱离租户库里的业务事务挪去宿主层；这类动作要么登记为 `Tenant`，要么在切到宿主上下文之后再记。
 - **读取隔离靠全局查询过滤器，写入的 `TenantId` 由记录器显式盖章。** 实体是 `IMultiTenant`，存储查询不带租户条件；而写入不依赖宿主 DbContext 是否为 `BaseDbContext`——理由与时间戳相同，漏配是静默的，得到的会是一批归属为空的记录。
 - **三个索引：`(TenantId, CreationTime DESC)`、`(TenantId, Visibility, CreationTime DESC)` 与单列 `CreationTime`**。这张表写多读少，读的形态是"某租户的最近若干条"；而可见性过滤在**每一次**查询里都出现（宿主之外的读者读不到 `Host` 层记录），不进索引会让这个必然出现的谓词退化成对时间区间结果集的逐行筛。第三条服务的是另一条访问路径——**保留期归档整库按时间扫、不带 `TenantId`**（`IgnoreQueryFilters()` 覆盖同库的全部租户），前两条都以 `TenantId` 打头，用不上。关键字检索走时间裁剪之后的过滤，**不**单独建索引——每加一个索引的代价都摊在每一次写入上。归档表只写不扫，因此没有这条。
 - **分页按 `CreationTime` 再按 `Id` 倒序**。同一毫秒内的多条记录时间相同，只按时间排序会让分页出现重复或遗漏，次级键消除这种不确定。它保证的是**顺序确定**，不是"同一时刻内更新的在前"——后者取决于 Provider 怎么比较 Guid（PostgreSQL 的 `uuid` 按网络字节序，UUIDv7 的时间序成立；SQLite 把 Guid 存成 BLOB、按 .NET 字节布局比较，前三段是小端，时间序不成立）。分页需要的是前者。

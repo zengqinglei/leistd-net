@@ -65,7 +65,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
     {
         var body = await GetAsync(
             "http://acme.example.com/",
-            ("X-Tenant-Id", GlobexId.ToString()));
+            ("X-Tenant", GlobexId.ToString()));
 
         Assert.Equal(AcmeId.ToString(), body);
     }
@@ -76,7 +76,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
     /// <remarks>
     /// 只在成功提取到租户名时才写 <c>TenantIdOrName</c>、从不设 <c>Handled</c> 的话，
     /// 基础域与多级子域都会继续走到 Header 贡献者——匿名请求在 example.com 上带个
-    /// X-Tenant-Id 就能挑任意租户，"域名是权威来源"这条契约当场失效。
+    /// 租户提示头就能挑任意租户，"域名是权威来源"这条契约当场失效。
     /// </remarks>
     [Theory]
     [InlineData("example.com")]             // 基础域：文档定义的宿主入口
@@ -86,7 +86,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "http://example.com/");
         request.Headers.TryAddWithoutValidation("Host", hostHeader);
-        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+        request.Headers.TryAddWithoutValidation("X-Tenant", GlobexId.ToString());
 
         var response = await _client.SendAsync(request);
 
@@ -128,7 +128,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
         using var client = host.GetTestClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "http://example.com/");
         request.Headers.TryAddWithoutValidation("Host", "other.example.com");
-        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+        request.Headers.TryAddWithoutValidation("X-Tenant", GlobexId.ToString());
 
         var response = await client.SendAsync(request);
         Assert.Equal("host", await response.Content.ReadAsStringAsync());
@@ -175,7 +175,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
         using var client = host.GetTestClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "http://example.com/");
         request.Headers.TryAddWithoutValidation("Host", hostHeader);
-        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+        request.Headers.TryAddWithoutValidation("X-Tenant", GlobexId.ToString());
 
         var response = await client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
@@ -187,14 +187,14 @@ public class DomainTenantResolveTests : IAsyncLifetime
 
     /// <summary>
     /// 受管域**之外**的请求仍走请求头：服务间调用打的是集群内部主机名，
-    /// 租户靠 X-Tenant-Id 传递，一刀切会把它打断。
+    /// 租户靠提示头传递，一刀切会把它打断。
     /// </summary>
     [Fact]
     public async Task Requests_outside_the_managed_domain_still_use_the_header()
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "http://acme.other.com/");
         request.Headers.TryAddWithoutValidation("Host", "svc.internal.cluster.local");
-        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+        request.Headers.TryAddWithoutValidation("X-Tenant", GlobexId.ToString());
 
         var response = await _client.SendAsync(request);
 
@@ -207,7 +207,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
     /// <remarks>
     /// <c>acme.example.com.</c> 与 <c>acme.example.com</c> 在 DNS 中是同一个名字，
     /// 而 <c>HostString.Host</c> 会原样保留那个点。字面比较匹配不上就会退回请求头，
-    /// 于是匿名请求只要在 Host 末尾多打一个点，就能用 X-Tenant-Id 挑任意租户。
+    /// 于是匿名请求只要在 Host 末尾多打一个点，就能用租户提示头挑任意租户。
     /// 配置侧要求不带根点（唯一 canonical 形态），请求侧则必须规范化后再匹配。
     /// </remarks>
     [Theory]
@@ -223,7 +223,7 @@ public class DomainTenantResolveTests : IAsyncLifetime
         // 不走校验的 setter：攻击者是在报文里直接写这个头的，
         // HttpRequestHeaders.Host 的校验只是客户端的礼貌，不是服务端的保证
         request.Headers.TryAddWithoutValidation("Host", hostHeader);
-        request.Headers.TryAddWithoutValidation("X-Tenant-Id", GlobexId.ToString());
+        request.Headers.TryAddWithoutValidation("X-Tenant", GlobexId.ToString());
 
         var response = await _client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();

@@ -130,12 +130,15 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 
 调用方可传递：
 
-| 头 | 来源 | 默认 |
+| 头（`UserContextForwardingOptions` 中的名称选项） | 来源 | 默认 |
 | --- | --- | --- |
-| `X-User-Id` | `ICurrentUser.Id` | 开启 |
-| `X-Username` | `ICurrentUser.Username` | 开启，UTF-8 URL 编码 |
-| `X-Tenant-Id` | `ICurrentTenant.Id` | 开启，独立于用户头开关 |
+| `X-User-Id`（`UserIdHeader`） | `ICurrentUser.Id` | 开启 |
+| `X-Username`（`UsernameHeader`） | `ICurrentUser.Username` | 开启，UTF-8 URL 编码 |
+| `X-Tenant-Id`（`TenantIdHeader`） | `ICurrentTenant.Id`，只带 GUID | 开启（`ForwardTenantId`），独立于用户头开关 |
 | 自定义 | `ClaimHeaderMap` | 关闭 |
+
+头名的默认值与被调方 `ServiceUserContextOptions` 同源于 `ServiceClientHeaders`，改名时两侧一起改。
+租户委托头与多租户组件的匿名租户提示头（默认 `X-Tenant`）刻意不同名：前者只对受信调用方生效。
 
 角色与权限不通过请求头传递。被调方应根据调用方 scope 授权，或按用户 Id 在本地判定。
 
@@ -145,7 +148,7 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 2. `sub` 等于 `ClientSubject.Format(clientId)`，即 `client:<client_id>`。
 3. token 持有 `RequiredScope`，默认 `svc.delegate`。
 
-恢复后用户身份作为主身份，原调用方身份仍保留，`ICurrentUser` 与 `ICurrentClient` 可同时使用。不可信调用默认移除用户头；租户头继续由多租户组件约束。
+恢复后用户身份作为主身份，原调用方身份仍保留，`ICurrentUser` 与 `ICurrentClient` 可同时使用。调用方凭据自带租户 claim、代表的却是宿主用户（未转发租户头）时，主体的租户判为非法、请求被拒：用户标识与租户须取自同一个身份，见安全组件的 `ClaimTypeOptions.ReadTenant`。不可信调用默认移除用户头；租户头继续由多租户组件约束。
 
 ### 调用日志
 
@@ -200,7 +203,7 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 | --- | --- | --- |
 | `Enabled` | `true` | 恢复与头移除总开关 |
 | `UserIdHeader` / `UsernameHeader` | `X-User-Id` / `X-Username` | 用户标识头 |
-| `TenantIdHeader` | `X-Tenant-Id` | 租户头；空字符串关闭恢复 |
+| `TenantIdHeader` | `X-Tenant-Id` | 租户头；受信调用时还原为 `ClaimTypeOptions.TenantId` 指定的租户 claim，并取代调用方身份上已有的租户 claim；空字符串关闭恢复 |
 | `HeaderClaimMap` | 空 | 额外请求头到 claim 的映射 |
 | `RemoveUntrustedHeaders` | `true` | 是否移除不可信用户头 |
 | `RequiredScope` | `svc.delegate` | 委托 scope；置空会允许任意机器令牌代表用户 |

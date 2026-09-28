@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Leistd.MultiTenancy;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Grants;
@@ -10,6 +11,8 @@ using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
+using Leistd.Security.Claims;
+using Microsoft.Extensions.Options;
 
 namespace Leistd.Authorization.Checking;
 
@@ -17,48 +20,71 @@ namespace Leistd.Authorization.Checking;
 /// 默认权限检查器。
 /// </summary>
 /// <remarks>
-/// 以 Scoped 注册：主体解析与授予读取每个作用域各发生一次，其后的检查都是内存查找。
-/// 完整判定顺序见 authorization 组件文档。
+/// <para>以 Scoped 注册：当前主体的解析与授予读取在作用域内缓存，其后的检查都是内存查找；
+/// 当前主体或租户在作用域内被切换时按新的主体与租户重新加载。
+/// 显式传入的其他主体每次单独解析、不进缓存，避免同一作用域里先后判两个主体时串用授予。</para>
+/// <para>完整判定顺序见 authorization 组件文档。</para>
 /// </remarks>
 public class DefaultPermissionChecker(
     IPermissionSubjectProvider subjectProvider,
     IPermissionDefinitionManager permissionDefinitionManager,
     IPermissionGrantStore permissionGrantStore,
-    ICurrentTenant? currentTenant = null) : IPermissionChecker, IDisposable
+    ICurrentTenant? currentTenant = null,
+    ICurrentPrincipalAccessor? principalAccessor = null,
+    IOptions<ClaimTypeOptions>? claimTypes = null) : IPermissionChecker, IDisposable
 {
+    private readonly ClaimTypeOptions _claimTypes = claimTypes?.Value ?? new ClaimTypeOptions();
+
     private readonly SemaphoreSlim _loadLock = new(1, 1);
-    private PermissionSubject? _subject;
-    private IReadOnlySet<string>? _granted;
-    private bool _loaded;
+    private SubjectGrants? _current;
 
     private MultiTenancySides CurrentSide =>
         currentTenant?.IsAvailable == true ? MultiTenancySides.Tenant : MultiTenancySides.Host;
 
-    private bool MatchesCurrentSide(string name) =>
+    // 未启用、或侧别不符：先于授予与超管旁路——宿主侧权限在租户上下文内对任何主体都不可用
+    private bool IsCheckable(string name) =>
+        permissionDefinitionManager.IsEffectivelyEnabled(name) &&
         permissionDefinitionManager.IsAvailableOn(name, CurrentSide);
 
     /// <inheritdoc />
     public async Task<bool> IsGrantedAsync(string name, CancellationToken cancellationToken = default)
+        => IsCheckable(name) && (await LoadCurrentAsync(cancellationToken)).Has(name);
+
+    /// <inheritdoc />
+    public Task<MultiplePermissionGrantResult> IsGrantedAsync(
+        string[] names,
+        CancellationToken cancellationToken = default)
+        => EvaluateAsync(names, LoadCurrentAsync, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<bool> IsGrantedAsync(
+        ClaimsPrincipal principal,
+        string name,
+        CancellationToken cancellationToken = default)
     {
-        if (!permissionDefinitionManager.IsEffectivelyEnabled(name))
-            return false;
-
-        // 侧别硬边界：先于授予与超管旁路——宿主侧权限在租户上下文内对任何主体都不可用
-        if (!MatchesCurrentSide(name))
-            return false;
-
-        await EnsureLoadedAsync(cancellationToken);
-
-        if (_subject == null)
-            return false;
-
-        return _subject.IsSuperAdmin || IsGrantedCore(name);
+        ArgumentNullException.ThrowIfNull(principal);
+        return IsCheckable(name) && (await LoadAsync(principal, cancellationToken)).Has(name);
     }
 
     /// <inheritdoc />
-    public async Task<MultiplePermissionGrantResult> IsGrantedAsync(
+    public Task<MultiplePermissionGrantResult> IsGrantedAsync(
+        ClaimsPrincipal principal,
         string[] names,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+        return EvaluateAsync(names, ct => LoadAsync(principal, ct), cancellationToken);
+    }
+
+    /// <summary>
+    /// 释放加载闸门。
+    /// </summary>
+    public void Dispose() => _loadLock.Dispose();
+
+    private async Task<MultiplePermissionGrantResult> EvaluateAsync(
+        string[] names,
+        Func<CancellationToken, Task<SubjectGrants>> load,
+        CancellationToken cancellationToken)
     {
         if (names == null || names.Length == 0)
             return new MultiplePermissionGrantResult(new Dictionary<string, bool>());
@@ -71,62 +97,97 @@ public class DefaultPermissionChecker(
         if (results.Count == 0)
             return new MultiplePermissionGrantResult(results);
 
-        await EnsureLoadedAsync(cancellationToken);
-
-        if (_subject == null)
-            return new MultiplePermissionGrantResult(results);
+        var grants = await load(cancellationToken);
 
         foreach (var name in results.Keys.ToArray())
         {
-            if (!permissionDefinitionManager.IsEffectivelyEnabled(name))
-                continue;
-
-            // 侧别硬边界与单项检查一致：不匹配即保持 false
-            if (!MatchesCurrentSide(name))
-                continue;
-
-            results[name] = _subject.IsSuperAdmin || IsGrantedCore(name);
+            results[name] = IsCheckable(name) && grants.Has(name);
         }
 
         return new MultiplePermissionGrantResult(results);
     }
 
-    private bool IsGrantedCore(string name) => _granted?.Contains(name) == true;
+    // 就是当前主体（同一引用）时走作用域缓存；授权处理器评估的 context.User 通常即是它
+    private Task<SubjectGrants> LoadAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+        => principalAccessor?.Principal is { } current && ReferenceEquals(current, principal)
+            ? LoadCurrentAsync(cancellationToken)
+            : LoadExplicitAsync(principal, cancellationToken);
 
-    /// <summary>
-        /// 释放加载闸门。
-    /// </summary>
-    public void Dispose() => _loadLock.Dispose();
-
-    private async Task EnsureLoadedAsync(CancellationToken cancellationToken)
+    // 快照记下为哪个主体、哪个租户加载：同一作用域里当前主体被换掉（Change / Begin，
+    // 或官方策略按认证方案重设 HttpContext.User）或切换了租户时重新加载，不串用前一份授予
+    private async Task<SubjectGrants> LoadCurrentAsync(CancellationToken cancellationToken)
     {
-        if (_loaded)
-            return;
+        var principal = principalAccessor?.Principal;
+        var tenantId = currentTenant?.Id;
+        if (_current is { } loaded && loaded.IsFor(principal, tenantId))
+            return loaded;
 
         await _loadLock.WaitAsync(cancellationToken);
         try
         {
-            if (_loaded)
-                return;
+            if (_current is { } reloaded && reloaded.IsFor(principal, tenantId))
+                return reloaded;
 
-            _subject = await subjectProvider.GetCurrentSubjectAsync(cancellationToken);
-
-            // 超级管理员旁路功能权限，无需读取授予记录。
-            if (_subject is { IsSuperAdmin: false })
-            {
-                var grants = await permissionGrantStore.GetGrantsForSubjectAsync(
-                    _subject.UserId,
-                    _subject.RoleIds,
+            // 主体的租户声明非法（如两份用户凭据被合并成一个主体）时失败关闭：提供器按主体身份取标识，
+            // 那份标识不能拿到当前租户里去查授予。只校验合法性，不要求等于当前租户——宿主主体显式切入租户是正当用法
+            var grants = principal is not null && !_claimTypes.ReadTenant(principal).IsValid
+                ? SubjectGrants.None
+                : await ReadGrantsAsync(
+                    await subjectProvider.GetCurrentSubjectAsync(cancellationToken),
                     cancellationToken);
-
-                _granted = grants.GetGrantedNames();
-            }
-
-            _loaded = true;
+            return _current = grants with { LoadedFor = principal, TenantId = tenantId };
         }
         finally
         {
             _loadLock.Release();
         }
+    }
+
+    private async Task<SubjectGrants> LoadExplicitAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+    {
+        // 授予按当前租户读取：别的租户（或宿主）的主体在这里没有可判的授予
+        if (!BelongsToCurrentTenant(principal))
+            return SubjectGrants.None;
+
+        return await ReadGrantsAsync(
+            await subjectProvider.GetSubjectAsync(principal, cancellationToken),
+            cancellationToken);
+    }
+
+    // 租户声明按 ClaimTypeOptions 读取，与租户解析、ICurrentUser.TenantId 同一规则；非法声明失败关闭，
+    // 与当前主体路径一致。未接多租户时没有可比的作用域，只校验合法性
+    private bool BelongsToCurrentTenant(ClaimsPrincipal principal)
+    {
+        var tenant = _claimTypes.ReadTenant(principal);
+        return tenant.IsValid && (currentTenant is null || tenant.TenantId == currentTenant.Id);
+    }
+
+    // 超级管理员旁路功能权限，无需读取授予记录
+    private async Task<SubjectGrants> ReadGrantsAsync(PermissionSubject? subject, CancellationToken cancellationToken)
+    {
+        if (subject is not { IsSuperAdmin: false })
+            return new SubjectGrants(subject, null);
+
+        var grants = await permissionGrantStore.GetGrantsForSubjectAsync(
+            subject.UserId,
+            subject.RoleIds,
+            cancellationToken);
+
+        return new SubjectGrants(subject, grants.GetGrantedNames());
+    }
+
+    private sealed record SubjectGrants(PermissionSubject? Subject, IReadOnlySet<string>? Granted)
+    {
+        public static SubjectGrants None { get; } = new(null, null);
+
+        public ClaimsPrincipal? LoadedFor { get; init; }
+
+        public Guid? TenantId { get; init; }
+
+        public bool IsFor(ClaimsPrincipal? principal, Guid? tenantId) =>
+            ReferenceEquals(LoadedFor, principal) && TenantId == tenantId;
+
+        public bool Has(string name) =>
+            Subject is { } subject && (subject.IsSuperAdmin || Granted?.Contains(name) == true);
     }
 }

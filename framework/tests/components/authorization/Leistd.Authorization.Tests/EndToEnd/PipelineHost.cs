@@ -206,15 +206,19 @@ public sealed class TestAuthenticationHandler(
 public sealed class TestPermissionSubjectProvider(IHttpContextAccessor accessor) : IPermissionSubjectProvider
 {
     public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+        => accessor.HttpContext?.User is { } user
+            ? GetSubjectAsync(user, cancellationToken)
+            : Task.FromResult<PermissionSubject?>(null);
+
+    public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal user, CancellationToken cancellationToken = default)
     {
-        var user = accessor.HttpContext?.User;
-        var userId = user?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Task.FromResult<PermissionSubject?>(null);
         }
 
-        var roleIds = user!.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
+        var roleIds = user.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
         var isSuperAdmin = user.HasClaim(PipelineFixtures.SuperAdminClaim, "true");
 
         return Task.FromResult<PermissionSubject?>(new PermissionSubject(userId, roleIds, isSuperAdmin));

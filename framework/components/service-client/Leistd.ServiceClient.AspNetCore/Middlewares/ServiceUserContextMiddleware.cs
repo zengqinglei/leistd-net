@@ -1,3 +1,4 @@
+using Leistd.Security.Claims;
 using Leistd.ServiceClient.AspNetCore.Claims;
 using Leistd.ServiceClient.AspNetCore.Options;
 using Microsoft.AspNetCore.Http;
@@ -17,10 +18,12 @@ namespace Leistd.ServiceClient.AspNetCore.Middlewares;
 /// </remarks>
 /// <param name="next">下一个中间件</param>
 /// <param name="optionsMonitor">恢复配置监视器</param>
+/// <param name="claimTypes">恢复身份时写入的用户标识与租户 claim 类型</param>
 /// <param name="logger">日志</param>
 public class ServiceUserContextMiddleware(
     RequestDelegate next,
     IOptionsMonitor<ServiceUserContextOptions> optionsMonitor,
+    IOptions<ClaimTypeOptions> claimTypes,
     ILogger<ServiceUserContextMiddleware> logger)
 {
     /// <summary>
@@ -43,15 +46,15 @@ public class ServiceUserContextMiddleware(
             return;
         }
 
-        if (ServiceUserContext.IsTrustedServiceCall(context.User, opts))
+        if (ServiceUserContext.IsTrustedServiceCall(context.User, opts, claimTypes.Value))
         {
-            var restored = ServiceUserContext.TryRestore(context.User, context.Request.Headers, opts);
+            var restored = ServiceUserContext.TryRestore(context.User, context.Request.Headers, opts, claimTypes.Value);
             if (restored is not null)
             {
                 context.User = restored;
                 logger.LogDebug(
                     "Restored user context from service invocation headers: {UserId}",
-                    restored.FindFirst(ServiceUserContext.SubjectClaimType)?.Value);
+                    claimTypes.Value.FindUserId(restored));
             }
         }
         else if (opts.RemoveUntrustedHeaders)

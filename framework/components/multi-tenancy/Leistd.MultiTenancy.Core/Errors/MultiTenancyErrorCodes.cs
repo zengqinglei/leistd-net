@@ -17,8 +17,8 @@ public static class MultiTenancyErrorCodes
     /// <summary>租户被并发修改。</summary>
     public const string ConcurrencyConflict = "Tenant:ConcurrencyConflict";
 
-    /// <summary>主体带了多条租户声明。</summary>
-    public const string AmbiguousTenantClaim = "Tenant:AmbiguousClaim";
+    /// <summary>主体的租户声明非法（多于一条或不是租户 GUID）。</summary>
+    public const string InvalidTenantClaim = "Tenant:InvalidClaim";
 
     /// <summary>启用前置条件不满足，由 <c>ITenantActivationGuard</c> 的实现给出更具体的码时以它为准。</summary>
     public const string ActivationRejected = "Tenant:ActivationRejected";

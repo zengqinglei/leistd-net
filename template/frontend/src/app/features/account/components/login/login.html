@@ -21,7 +21,7 @@
     </div>
 
     <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
-      <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id -->
+      <!-- Tenant Selection: 不选即宿主登录；确认后写入本地上下文，登录请求由拦截器附租户提示头 -->
       <div hlmField>
         <!--#if (IncludeLocalization)-->
         <label hlmFieldLabel for="tenantName">{{ 'account.login.tenant' | transloco }}</label>

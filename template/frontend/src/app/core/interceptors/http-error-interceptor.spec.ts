@@ -21,6 +21,7 @@ import { entryRouteUrl } from '../routing/entry-route';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
+import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
 
 /**
  * 直接以 runInInjectionContext 驱动拦截器：next 用 throwError 同步发射错误，
@@ -299,7 +300,7 @@ describe('httpErrorInterceptor', () => {
   // 「租户没了」与「要不要重新认证」是两件正交的事。这条把它们钉开：认证路由上、
   // 静默请求、外加这个头——租户必须清，而会话与认证一动都不能动。
   // 登录页的启动探测正是最容易撞上它的地方（旧 Cookie 带着已停用租户的 tenant_id），
-  // 不清的话后续登录请求继续携带失效的 X-Tenant-Id，用户一直登不进来。
+  // 不清的话后续登录请求继续携带失效的租户提示头，用户一直登不进来。
   it('clears an invalid tenant even on an auth route, without touching the session', () => {
     history.replaceState(null, '', '/auth/login');
     const tenantContext = TestBed.inject(TenantContextService);
@@ -307,7 +308,7 @@ describe('httpErrorInterceptor', () => {
     const context = new HttpContext().set(SILENT_AUTH, true);
 
     try {
-      runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }), { context });
+      runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });
 
       expect(clearTenantSpy).toHaveBeenCalled();
       expect(sessionContext.clear).not.toHaveBeenCalled();
@@ -321,7 +322,7 @@ describe('httpErrorInterceptor', () => {
     const tenantContext = TestBed.inject(TenantContextService);
     const clearTenantSpy = spyOn(tenantContext, 'clear');
 
-    runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }));
+    runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }));
 
     // 不清的话，重新认证后会带着这个已失效的租户再次被拒——用户换个地方卡住
     expect(clearTenantSpy).toHaveBeenCalled();
@@ -345,7 +346,7 @@ describe('httpErrorInterceptor', () => {
     const clearTenantSpy = spyOn(tenantContext, 'clear');
     const context = new HttpContext().set(SILENT_AUTH, true);
 
-    runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }), { context });
+    runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });
 
     // 静默只表达"别为后台请求打断用户"，与"这个租户已经没了"是两件事：
     // /auth/me 与 /permissions/current 同样会撞上失效租户，不清就留到重新认证后再次被拒

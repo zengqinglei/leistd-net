@@ -1,4 +1,5 @@
 //#if (!LocalIdentity)
+import { TENANT_CLAIM } from '../../src/app/core/services/tenant-protocol';
 import { MockRequest } from '../core/models';
 //#endif
 import { MockUser, USERS } from '../data/user';
@@ -37,7 +38,7 @@ export function getMockSessionSubjectId(): string | null {
  *
  * 真实后端的租户解析链首位是「已认证主体的租户声明」，且主体一经处理就终止解析——
  * 请求头改不了已登录用户的租户（见 CurrentPrincipalTenantResolveContributor）。
- * 所以 X-Tenant-Id 只在匿名阶段（登录、注册、验证码）起作用，认证后的接口一律读会话。
+ * 所以租户提示头只在匿名阶段（登录、注册、验证码）起作用，认证后的接口一律读会话。
  * Mock 若继续每次从请求头取租户，锁定的就是生产环境不存在的行为。
  */
 export function setMockSessionTenantKey(tenantKey: string | null) {
@@ -112,7 +113,7 @@ export function syncMockSubjectFromBearer(req: MockRequest): void {
   const persona = USERS.find((item) => item.id === sub) ?? USERS[0];
   setMockSessionSubject(sub, persona.id);
 
-  const tenantId = claims?.['tenant_id'];
+  const tenantId = claims?.[TENANT_CLAIM];
   setMockSessionTenantKey(typeof tenantId === 'string' && tenantId ? tenantId : null);
 }
 

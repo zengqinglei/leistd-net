@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
 using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
@@ -256,6 +257,8 @@ public sealed class PermissionManagementTests
     private sealed class FixedSubject(PermissionSubject? subject) : IPermissionSubjectProvider
     {
         public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default) => Task.FromResult(subject);
+
+        public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default) => Task.FromResult(subject);
     }
 
     private sealed class FixedTenant(Guid? id) : ICurrentTenant

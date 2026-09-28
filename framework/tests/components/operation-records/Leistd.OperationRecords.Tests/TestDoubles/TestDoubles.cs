@@ -49,14 +49,15 @@ internal sealed class FakeOperationActionDefinition(
 /// </remarks>
 internal sealed class FakeOperationActionDefinitionManager(
     IReadOnlyDictionary<string, OperationVisibility>? registered = null,
-    OperationVisibility? otherCodes = OperationVisibility.Tenant) : IOperationActionDefinitionManager
+    OperationVisibility? otherCodes = OperationVisibility.Tenant,
+    IReadOnlySet<string>? selfProvingCodes = null) : IOperationActionDefinitionManager
 {
     private readonly IReadOnlyDictionary<string, OperationVisibility> _registered =
         registered ?? new Dictionary<string, OperationVisibility>(StringComparer.Ordinal);
 
     public IOperationActionDefinition? GetOrNull(string code)
         => _registered.TryGetValue(code, out var visibility)
-            ? new FakeOperationActionDefinition(code, visibility)
+            ? new FakeOperationActionDefinition(code, visibility, targetIsActor: selfProvingCodes?.Contains(code) == true)
             : otherCodes is { } fallback ? new FakeOperationActionDefinition(code, fallback) : null;
 
     public IReadOnlyList<IOperationActionDefinition> GetAll()

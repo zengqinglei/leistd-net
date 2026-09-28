@@ -14,7 +14,7 @@ public sealed class CurrentUserTests
             new Claim("name", "Ada Lovelace"),
             new Claim(ClaimTypes.GivenName, "Ada"));
 
-        var currentUser = new CurrentUser(new StubPrincipalAccessor(principal));
+        var currentUser = new CurrentUser(new StubPrincipalAccessor(principal), Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()));
 
         Assert.Equal("Ada Lovelace", currentUser.Name);
     }
@@ -23,7 +23,7 @@ public sealed class CurrentUserTests
     public void Name_does_not_treat_given_name_as_a_full_name()
     {
         var currentUser = new CurrentUser(new StubPrincipalAccessor(
-            Principal(new Claim(ClaimTypes.GivenName, "Ada"))));
+            Principal(new Claim(ClaimTypes.GivenName, "Ada"))), Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()));
 
         Assert.Null(currentUser.Name);
     }
@@ -35,7 +35,7 @@ public sealed class CurrentUserTests
             Principal(
                 new Claim("preferred_username", "ada"),
                 new Claim("name", "Ada Lovelace"),
-                new Claim(ClaimTypes.Name, "legacy-ada"))));
+                new Claim(ClaimTypes.Name, "legacy-ada"))), Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()));
 
         Assert.Equal("ada", currentUser.Username);
     }
@@ -46,7 +46,7 @@ public sealed class CurrentUserTests
         var currentUser = new CurrentUser(new StubPrincipalAccessor(
             Principal(
                 new Claim("name", "Ada Lovelace"),
-                new Claim(ClaimTypes.Name, "legacy-ada"))));
+                new Claim(ClaimTypes.Name, "legacy-ada"))), Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()));
 
         Assert.Equal("Ada Lovelace", currentUser.Username);
     }
@@ -55,7 +55,7 @@ public sealed class CurrentUserTests
     public void Username_falls_back_to_dotnet_name_claim()
     {
         var currentUser = new CurrentUser(new StubPrincipalAccessor(
-            Principal(new Claim(ClaimTypes.Name, "legacy-ada"))));
+            Principal(new Claim(ClaimTypes.Name, "legacy-ada"))), Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()));
 
         Assert.Equal("legacy-ada", currentUser.Username);
     }

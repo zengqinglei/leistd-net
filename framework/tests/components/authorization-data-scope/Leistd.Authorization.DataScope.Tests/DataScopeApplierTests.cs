@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Linq.Expressions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -205,6 +206,9 @@ public class DataScopeApplierTests : IAsyncLifetime
     private sealed class FakeSubjectProvider(PermissionSubject? subject) : IPermissionSubjectProvider
     {
         public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(subject);
+
+        public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
             => Task.FromResult(subject);
     }
 

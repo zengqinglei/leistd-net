@@ -109,7 +109,7 @@ export const appConfig: ApplicationConfig = {
         acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
         //#endif
         //#if (LocalIdentity)
-        tenantInterceptor, // 已选租户时为 /api/ 请求附加 X-Tenant-Id
+        tenantInterceptor, // 已选租户时为 /api/ 请求附加租户提示头
         //#endif
         //#if (!LocalIdentity)
         authInterceptor(),

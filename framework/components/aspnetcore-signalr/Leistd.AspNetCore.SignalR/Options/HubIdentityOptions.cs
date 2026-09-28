@@ -1,4 +1,3 @@
-using System.Security.Claims;
 
 namespace Leistd.AspNetCore.SignalR.Options;
 
@@ -26,12 +25,4 @@ public sealed class HubIdentityOptions
     /// 高频 Hub（如光标同步）再按实测放宽。
     /// </remarks>
     public TimeSpan? RevalidationInterval { get; set; }
-
-    /// <summary>
-    /// 按顺序解析 SignalR <c>UserIdentifier</c> 的声明类型，取第一个非空值。
-    /// </summary>
-    /// <remarks>
-    /// 显式设为空集合即表示不解析用户标识，此时按用户寻址的推送（<c>Clients.User</c>）全部落空。
-    /// </remarks>
-    public IReadOnlyList<string> UserIdClaimTypes { get; set; } = ["sub", ClaimTypes.NameIdentifier];
 }

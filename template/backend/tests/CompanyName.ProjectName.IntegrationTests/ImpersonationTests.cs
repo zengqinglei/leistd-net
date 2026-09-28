@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -64,7 +65,7 @@ public sealed class ImpersonationTests(ProjectWebApplicationFactory factory)
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(factory);
         _disposables.Add(client);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
 
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/session-login",

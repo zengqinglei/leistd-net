@@ -10,7 +10,7 @@ const TENANT_STORAGE_KEY = 'app.tenant';
 /** 认证后的租户上下文（来源是已验证 Access Token 中的 tenant_id）。 */
 //#endif
 export interface TenantContext {
-  /** 放进 X-Tenant-Id 头的值：本地身份形态是租户名，资源服务形态是令牌里的租户 id。 */
+  /** 租户键：本地身份形态是登录入口选定的租户名（放进租户提示头），资源服务形态是令牌里的租户 id。 */
   key: string;
 }
 
@@ -18,7 +18,7 @@ export interface TenantContext {
 /**
  * 前端租户上下文：signal + localStorage 双写。
  *
- * 仅影响匿名请求（登录等）的 X-Tenant-Id 头；已登录用户的租户
+ * 仅影响匿名请求（登录等）的租户提示头；已登录用户的租户
  * 由服务端 cookie claim 定案，前端上下文只是登录入口的路由提示。
  */
 //#else
@@ -65,9 +65,9 @@ export class TenantContextService {
     }
   }
   //#else
-  /** Resource 只接受 OIDC 库已验证 Access Token 中的 tenant_id。 */
-  setAuthenticatedTenant(tenantId: string): void {
-    this._current.set({ key: tenantId });
+  /** Resource 只接受 OIDC 库已验证 Access Token 中的租户声明；null 表示宿主用户。 */
+  setAuthenticatedTenant(tenantId: string | null): void {
+    this._current.set(tenantId ? { key: tenantId } : null);
   }
   //#endif
 

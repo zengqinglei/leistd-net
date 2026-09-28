@@ -18,7 +18,8 @@ public class ServiceUserContextClaimsTransformationTests
         ClaimsPrincipal principal,
         Action<IHeaderDictionary>? configureHeaders = null,
         Action<ServiceUserContextOptions>? configureOptions = null,
-        bool withHttpContext = true)
+        bool withHttpContext = true,
+        ClaimTypeOptions? claimTypes = null)
     {
         var options = new ServiceUserContextOptions();
         configureOptions?.Invoke(options);
@@ -34,8 +35,38 @@ public class ServiceUserContextClaimsTransformationTests
         var transformation = new ServiceUserContextClaimsTransformation(
             accessor,
             new MutableOptionsMonitor<ServiceUserContextOptions>(options),
+            Microsoft.Extensions.Options.Options.Create(claimTypes ?? new ClaimTypeOptions()),
             NullLogger<ServiceUserContextClaimsTransformation>.Instance);
         return await transformation.TransformAsync(principal);
+    }
+
+    // 还原写入的租户 claim 与读取方同一类型：宿主改了名，被调方按新名写，解析与判权按新名读
+    [Fact]
+    public async Task The_restored_tenant_uses_the_configured_claim_type()
+    {
+        var tenantId = Guid.NewGuid();
+        var restored = await TransformAsync(
+            ServiceClientPrincipal(),
+            headers => headers[ServiceClientHeaders.TenantId] = tenantId.ToString(),
+            claimTypes: new ClaimTypeOptions { TenantId = "tid" });
+
+        var claimTypes = new ClaimTypeOptions { TenantId = "tid" };
+        Assert.Equal(new TenantClaim(true, tenantId), claimTypes.ReadTenant(restored));
+        Assert.Null(restored.FindFirst(CustomClaimTypes.TenantId));
+    }
+
+    // 调用方身份自带租户声明时，代表的租户取代它，而不是两条并存（并存即非法，整个请求被拒）
+    [Fact]
+    public async Task The_restored_tenant_replaces_the_callers_own_tenant_claim()
+    {
+        var delegated = Guid.NewGuid();
+        var caller = ServiceClientPrincipal();
+        ((ClaimsIdentity)caller.Identity!).AddClaim(new Claim(CustomClaimTypes.TenantId, Guid.NewGuid().ToString()));
+
+        var restored = await TransformAsync(caller, headers => headers[ServiceClientHeaders.TenantId] = delegated.ToString());
+
+        Assert.Equal(new TenantClaim(true, delegated), new ClaimTypeOptions().ReadTenant(restored));
+        Assert.NotNull(restored.FindFirst(CustomClaimTypes.ClientId));
     }
 
     [Fact]
@@ -47,6 +78,7 @@ public class ServiceUserContextClaimsTransformationTests
         var transformation = new ServiceUserContextClaimsTransformation(
             new HttpContextAccessor { HttpContext = context },
             monitor,
+            Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()),
             NullLogger<ServiceUserContextClaimsTransformation>.Instance);
 
         var first = await transformation.TransformAsync(ServiceClientPrincipal());

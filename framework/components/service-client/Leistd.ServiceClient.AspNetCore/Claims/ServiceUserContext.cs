@@ -8,7 +8,6 @@ namespace Leistd.ServiceClient.AspNetCore.Claims;
 // 供 ClaimsTransformation 与中间件共用的信任判定和主体恢复逻辑。
 internal static class ServiceUserContext
 {
-    internal const string SubjectClaimType = "sub";
     internal const string PreferredUsernameClaimType = "preferred_username";
     private const string ScopeClaimType = "scope";
     private const string OpenIddictScopeClaimType = "oi_scp";
@@ -18,7 +17,7 @@ internal static class ServiceUserContext
             string.Equals(identity.AuthenticationType, options.AuthenticationType, StringComparison.Ordinal));
 
     // 受信调用方必须经过认证，且 client_id、机器主体 sub 和可选 scope 一致。
-    internal static bool IsTrustedServiceCall(ClaimsPrincipal user, ServiceUserContextOptions options)
+    internal static bool IsTrustedServiceCall(ClaimsPrincipal user, ServiceUserContextOptions options, ClaimTypeOptions claimTypes)
     {
         if (user.Identity?.IsAuthenticated != true)
         {
@@ -31,9 +30,7 @@ internal static class ServiceUserContext
             return false;
         }
 
-        var subject = user.FindFirst(SubjectClaimType)?.Value
-                      ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!ClientSubject.Matches(subject, clientId))
+        if (!ClientSubject.Matches(claimTypes.FindUserId(user), clientId))
         {
             return false;
         }
@@ -44,14 +41,14 @@ internal static class ServiceUserContext
     // 恢复身份置于首位供 ICurrentUser 解析，并保留原 client 身份供 ICurrentClient 使用。
     // 租户可独立于用户恢复；没有任何转发上下文时返回 null。
     internal static ClaimsPrincipal? TryRestore(
-        ClaimsPrincipal principal, IHeaderDictionary headers, ServiceUserContextOptions options)
+        ClaimsPrincipal principal, IHeaderDictionary headers, ServiceUserContextOptions options, ClaimTypeOptions claimTypes)
     {
         var claims = new List<Claim>();
 
         var userId = headers[options.UserIdHeader].FirstOrDefault();
         if (!string.IsNullOrEmpty(userId))
         {
-            claims.Add(new Claim(SubjectClaimType, userId));
+            claims.Add(new Claim(claimTypes.UserIds[0], userId));
 
             var userName = headers[options.UsernameHeader].FirstOrDefault();
             if (!string.IsNullOrEmpty(userName))
@@ -70,13 +67,15 @@ internal static class ServiceUserContext
             }
         }
 
-        // 租户独立恢复，使数据过滤落在正确分区。
+        // 租户独立恢复，使数据过滤落在正确分区。写入与读取同一个 claim 类型（ClaimTypeOptions.TenantId）。
+        var restoresTenant = false;
         if (!string.IsNullOrEmpty(options.TenantIdHeader))
         {
             var tenantId = headers[options.TenantIdHeader].FirstOrDefault();
             if (!string.IsNullOrEmpty(tenantId))
             {
-                claims.Add(new Claim(CustomClaimTypes.TenantId, tenantId));
+                claims.Add(new Claim(claimTypes.TenantId, tenantId));
+                restoresTenant = true;
             }
         }
 
@@ -87,8 +86,27 @@ internal static class ServiceUserContext
 
         var userIdentity = new ClaimsIdentity(claims, options.AuthenticationType);
         var restored = new ClaimsPrincipal(userIdentity);
-        restored.AddIdentities(principal.Identities);
+        // 代表的租户取代调用方身份上的租户声明：两条并存时主体的租户非法，请求被整体拒绝
+        restored.AddIdentities(restoresTenant
+            ? principal.Identities.Select(identity => WithoutClaims(identity, claimTypes.TenantId))
+            : principal.Identities);
         return restored;
+    }
+
+    private static ClaimsIdentity WithoutClaims(ClaimsIdentity identity, string claimType)
+    {
+        if (!identity.HasClaim(claim => claim.Type == claimType))
+        {
+            return identity;
+        }
+
+        var copy = identity.Clone();
+        foreach (var claim in copy.FindAll(claimType).ToList())
+        {
+            copy.RemoveClaim(claim);
+        }
+
+        return copy;
     }
 
     private static bool HasScope(ClaimsPrincipal user, string requiredScope)

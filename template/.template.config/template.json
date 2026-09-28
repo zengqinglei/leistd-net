@@ -263,6 +263,7 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/AuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/IAuthPrincipalFactory.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/SubjectClaims.cs",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptions.cs",
             "frontend/src/app/features/platform/components/open-applications/**",

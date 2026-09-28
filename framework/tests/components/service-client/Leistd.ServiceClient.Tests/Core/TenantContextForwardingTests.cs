@@ -19,7 +19,7 @@ using Leistd.TestBase.Doubles;
 namespace Leistd.ServiceClient.Tests.Core;
 
 /// <summary>
-/// 租户上下文的跨服务传递：出站 X-Tenant-Id 注入与被调方受信恢复。
+/// 租户上下文的跨服务传递：出站租户头注入与被调方受信恢复。
 /// </summary>
 public class TenantContextForwardingTests
 {
@@ -33,10 +33,11 @@ public class TenantContextForwardingTests
         public IDisposable Change(Guid? id, string? name = null) => throw new NotSupportedException();
     }
 
-    private static async Task<HttpRequestMessage> SendAsync(Guid? tenantId, Action<HttpRequestMessage>? configure = null)
+    private static async Task<HttpRequestMessage> SendAsync(
+        Guid? tenantId, Action<HttpRequestMessage>? configure = null, TestServiceClientOptions? options = null)
     {
         var capturing = new CapturingHttpMessageHandler();
-        var monitor = new MutableOptionsMonitor<TestServiceClientOptions>(new());
+        var monitor = new MutableOptionsMonitor<TestServiceClientOptions>(options ?? new());
         var handler = new TenantContextDelegatingHandler<TestServiceClientOptions>(
             new FakeCurrentTenant(tenantId), monitor)
         {
@@ -48,6 +49,20 @@ public class TenantContextForwardingTests
         configure?.Invoke(request);
         await invoker.SendAsync(request, CancellationToken.None);
         return capturing.Requests.Single();
+    }
+
+    // 调用方与被调方的头名都可配、同源于一个默认常量：只改被调方而调用方写死，转发会静默落空
+    [Fact]
+    public async Task The_forwarded_tenant_header_name_is_configurable()
+    {
+        var tenantId = Guid.NewGuid();
+        var options = new TestServiceClientOptions();
+        options.UserContext.TenantIdHeader = "X-Org-Id";
+
+        var request = await SendAsync(tenantId, options: options);
+
+        Assert.Equal(tenantId.ToString(), request.Headers.GetValues("X-Org-Id").Single());
+        Assert.False(request.Headers.Contains(ServiceClientHeaders.TenantId));
     }
 
     [Fact]
@@ -110,6 +125,7 @@ public class TenantContextForwardingTests
         var middleware = new ServiceUserContextMiddleware(
             _ => Task.CompletedTask,
             new MutableOptionsMonitor<ServiceUserContextOptions>(new()),
+            Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()),
             NullLogger<ServiceUserContextMiddleware>.Instance);
 
         var context = new DefaultHttpContext { User = user };

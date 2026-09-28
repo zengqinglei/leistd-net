@@ -40,7 +40,8 @@ public sealed class OperationRecordQueryTests
 
     private static (OperationRecordQueryService Service, RecordingOperationRecordStore Store) Create(
         bool hostReader,
-        string? subject = "reader-1")
+        string? subject = "reader-1",
+        Guid? readerTenantId = null)
     {
         var store = new RecordingOperationRecordStore();
         var definitions = new CategorizedDefinitions();
@@ -48,13 +49,14 @@ public sealed class OperationRecordQueryTests
         var currentTenant = new FakeCurrentTenant(hostReader ? null : TenantId);
         var currentUser = new FakeCurrentUser(
             id: null,
+            tenantId: readerTenantId,
             claims: subject is null ? [] : [new Claim(CustomClaimTypes.Subject, subject)]);
         var options = Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions());
         var recorder = new OperationRecorder(
             store, definitions, currentTenant, currentUser, new FakeCorrelationIdProvider(null), clock, options,
             new FakeLogger<OperationRecorder>(new FakeLogCollector()));
 
-        return (new OperationRecordQueryService(store, definitions, recorder, currentTenant, currentUser, clock, options), store);
+        return (new OperationRecordQueryService(store, definitions, recorder, currentTenant, currentUser, clock), store);
     }
 
     private static OperationRecordInfo Record(
@@ -91,17 +93,19 @@ public sealed class OperationRecordQueryTests
     /// <summary>
     /// 租户读者：范围按本人收窄，仅宿主字段裁掉
     /// </summary>
-    /// <remarks>读者标识与记录器取操作人同一口径（claim 原始值），机器主体因此也读得到自己的 Actor 层记录。</remarks>
+    /// <remarks>读者标识与所属租户和记录器取操作人同一口径（claim 原始值与主体的租户 claim），机器主体因此也读得到自己的 Actor 层记录。</remarks>
     [Fact]
     public async Task A_tenant_reader_is_scoped_to_itself_and_host_only_fields_are_trimmed()
     {
-        var (service, store) = Create(hostReader: false, subject: "client:reporting");
+        var (service, store) = Create(hostReader: false, subject: "client:reporting", readerTenantId: TenantId);
         store.Written.Add(Record());
 
         var page = await service.GetPagedListAsync(new GetOperationRecordPagedInputDto());
 
         var scope = store.LastQuery!.Value.Filter.Scope;
-        Assert.Equal((true, false, "client:reporting"), (scope.IsRestricted, scope.IncludesHostRecords, scope.ActorId));
+        Assert.Equal(
+            (true, false, "client:reporting", TenantId),
+            (scope.IsRestricted, scope.IncludesHostRecords, scope.ActorId, scope.ActorTenantId));
         var row = Assert.Single(page.Items);
         Assert.Equal((null, null, null), (row.FailureDetail, row.CorrelationId, (Guid?)row.ActorTenantId));
     }
@@ -151,9 +155,10 @@ public sealed class OperationRecordQueryTests
         Assert.Contains(hostOptions.Actions, a => a.Code == "tenant.created");
     }
 
-    /// <summary>自证类动作成功、记录里没有操作人时，目标承载"什么人"；失败的或有操作人的不算。</summary>
+    /// <summary>自证类动作成功、操作人就是目标时，目标承载"什么人"；失败的、没有操作人的或操作人另有其人的不算。</summary>
     [Theory]
-    [InlineData("auth.login.succeeded", null, OperationRecordOutcome.Succeeded, true)]
+    [InlineData("auth.login.succeeded", null, OperationRecordOutcome.Succeeded, false)]
+    [InlineData("auth.login.succeeded", "t-1", OperationRecordOutcome.Succeeded, true)]
     [InlineData("auth.login.succeeded", null, OperationRecordOutcome.Failed, false)]
     [InlineData("auth.login.succeeded", "someone", OperationRecordOutcome.Succeeded, false)]
     [InlineData("user.created", null, OperationRecordOutcome.Succeeded, false)]

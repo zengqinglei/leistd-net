@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -99,7 +100,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         return body.RootElement.GetProperty("id").GetGuid();
     }
 
-    /// <summary>租户管理员登录：登录请求与后续请求都携带 X-Tenant-Id。</summary>
+    /// <summary>租户管理员登录：登录请求与后续请求都携带租户提示头。</summary>
     private Task<HttpClient> LoginTenantAdminAsync(Guid tenantId, string password = "Tenant@123456")
         => LoginTenantAdminAsync(_factory, tenantId, password);
 
@@ -109,7 +110,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         _disposables.Add(client);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
 
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/session-login",
@@ -127,13 +128,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// </summary>
     /// <remarks>
     /// 注册是匿名端点，正是"半成品租户"最现实的入侵面：租户一旦启用，
-    /// 任何人带上它的 X-Tenant-Id 就能在还没有管理员的租户里注册出第一个用户。
+    /// 任何人带上它的租户提示头 就能在还没有管理员的租户里注册出第一个用户。
     /// </remarks>
     private static async Task<HttpStatusCode> ProbeAnonymousRegistrationAsync(
         WebApplicationFactory<Program> host, Guid tenantId)
     {
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
 
         var response = await client.PostAsJsonAsync("/api/v1/auth/register", new
         {
@@ -269,7 +270,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // 已认证会话携带伪造租户头：claim 定案为宿主，头无法把会话挪进租户
         using var forged = _factory.CreateProjectClient();
         forged.DefaultRequestHeaders.Add("Cookie", hostAdmin.Cookie);
-        forged.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        forged.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         var forgedUsernames = await GetUsernamesAsync(forged);
         Assert.Equal(hostUsernames.Order(), forgedUsernames.Order());
     }
@@ -374,7 +375,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.Redirect, navResponse.StatusCode);
 
         using var relogin = _factory.CreateProjectClient();
-        relogin.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        relogin.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         var loginResponse = await relogin.PostAsJsonAsync(
             "/api/v1/auth/session-login",
             new { UsernameOrEmail = "admin", Password = "Tenant@123456" });
@@ -637,9 +638,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         }
 
         using var unknownClient = _factory.CreateProjectClient();
-        unknownClient.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.NewGuid().ToString());
+        unknownClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, Guid.NewGuid().ToString());
         using var inactiveClient = _factory.CreateProjectClient();
-        inactiveClient.DefaultRequestHeaders.Add("X-Tenant-Id", inactiveId.ToString());
+        inactiveClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, inactiveId.ToString());
 
         var unknown = await unknownClient.GetAsync("/api/v1/auth/security-config");
         var inactive = await inactiveClient.GetAsync("/api/v1/auth/security-config");
@@ -667,9 +668,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         await CreateTenantAsync(hostAdmin, "present");
 
         using var existingClient = _factory.CreateProjectClient();
-        existingClient.DefaultRequestHeaders.Add("X-Tenant-Id", "present");
+        existingClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, "present");
         using var unknownClient = _factory.CreateProjectClient();
-        unknownClient.DefaultRequestHeaders.Add("X-Tenant-Id", "no-such-tenant");
+        unknownClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, "no-such-tenant");
 
         var existing = await existingClient.PostAsJsonAsync(
             "/api/v1/auth/session-login",
@@ -1181,7 +1182,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
             if (Probe is not null)
             {
-                // 探测请求走另一个 HttpClient，与本请求的租户上下文无关——它只带 X-Tenant-Id
+                // 探测请求走另一个 HttpClient，与本请求的租户上下文无关——它只带租户提示头
                 ProbedStatus = await Probe(tenantId);
             }
 
@@ -1412,7 +1413,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
 
         using var stale = _factory.CreateProjectClient();
-        stale.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        stale.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         var staleRequest = await stale.GetAsync("/api/v1/auth/security-config");
         Assert.Equal(HttpStatusCode.NotFound, staleRequest.StatusCode);
 

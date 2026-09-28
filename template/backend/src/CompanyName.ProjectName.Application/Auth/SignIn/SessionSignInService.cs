@@ -31,11 +31,15 @@ internal sealed class SessionSignInService(
     ILoginSecurityPolicyProvider loginSecurityPolicy,
     ISecurityAlertPublisher securityAlerts,
     IRequestClientInfo clientInfo,
+    IOptions<ClaimTypeOptions> claimTypes,
     IClock clock)
 {
     // OIDC 标准声明名，ICurrentUser 按它们分别读用户名与显示名。
     private const string PreferredUsernameClaimType = "preferred_username";
     private const string DisplayNameClaimType = "name";
+    // OIDC 标准角色声明名。身份的 RoleClaimType 必须随之设为它，
+    // 否则官方 IsInRole / RequireRole 按默认的 ClaimTypes.Role 去找，静默判为不在角色中。
+    private const string RoleClaimType = "role";
 
     /// <summary>
     /// 登录第一步（密码或外部登录）通过之后决定去向。
@@ -118,8 +122,8 @@ internal sealed class SessionSignInService(
                 cancellationToken);
         }
 
-        var identity = new ClaimsIdentity(AuthenticationSchemeNames.SessionCookie);
-        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+        var identity = new ClaimsIdentity(AuthenticationSchemeNames.SessionCookie, ClaimTypes.Name, RoleClaimType);
+        identity.AddClaim(new Claim(claimTypes.Value.UserIds[0], user.Id.ToString()));
         identity.AddClaim(new Claim(CustomClaimTypes.SessionId, session.Id.ToString()));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
         // ICurrentUser 的约定：Username 取 preferred_username，Name 是显示名、取 name。
@@ -135,13 +139,13 @@ internal sealed class SessionSignInService(
 
         if (user.TenantId is { } tenantId)
         {
-            identity.AddClaim(new Claim(CustomClaimTypes.TenantId, tenantId.ToString()));
+            identity.AddClaim(new Claim(claimTypes.Value.TenantId, tenantId.ToString()));
         }
 
         foreach (var roleName in roleNames
             ?? await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
         {
-            identity.AddClaim(new Claim("role", roleName));
+            identity.AddClaim(new Claim(RoleClaimType, roleName));
         }
 
         foreach (var claim in extraClaims)

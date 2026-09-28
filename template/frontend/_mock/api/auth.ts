@@ -1,3 +1,4 @@
+import { TENANT_HEADER } from '../../src/app/core/services/tenant-protocol';
 import {
   ChangePasswordInputDto,
   UpdateCurrentUserInputDto,
@@ -63,9 +64,9 @@ function ensureEmailAvailable(email: string, currentUserId: string): void {
   }
 }
 
-/** 复刻后端行为：X-Tenant-Id 指向已停用租户时登录被 403 拒绝。 */
+/** 复刻后端行为：租户提示头指向已停用租户时登录被 403 拒绝。 */
 function ensureTenantActive(req: MockRequest): void {
-  const tenantId = req.headers.get('X-Tenant-Id');
+  const tenantId = req.headers.get(TENANT_HEADER);
   if (!tenantId) {
     return;
   }
@@ -81,7 +82,7 @@ function sessionLogin(usernameOrEmail: string, password: string, tenantKey: stri
   if (user && user.password === password) {
     setMockSessionUserId(user.id);
     // 租户在登录这一刻定案，之后由会话（真实环境是 cookie 里的租户声明）说话；
-    // 认证后的接口不再看 X-Tenant-Id，与后端的解析链一致。
+    // 认证后的接口不再看租户提示头，与后端的解析链一致。
     setMockSessionTenantKey(tenantKey);
     return 'ok';
   }
@@ -520,7 +521,7 @@ function invalidEmailChallenge(): MockException {
 }
 
 function getRequestScope(req: MockRequest): string {
-  return req.headers.get('X-Tenant-Id') ?? 'host';
+  return req.headers.get(TENANT_HEADER) ?? 'host';
 }
 
 function normalizeEmail(email: string): string {
@@ -600,11 +601,11 @@ export const AUTH_API = {
   'POST /api/v1/auth/logout': () => logout(),
   'POST /api/v1/auth/session-login': (req: MockRequest) => {
     ensureTenantActive(req);
-    // 登录是匿名阶段，此时 X-Tenant-Id 决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
+    // 登录是匿名阶段，此时租户提示头决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
     return sessionLogin(
       req.body.usernameOrEmail,
       req.body.password,
-      req.headers.get('X-Tenant-Id') ?? 'host',
+      req.headers.get(TENANT_HEADER) ?? 'host',
     );
   },
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),

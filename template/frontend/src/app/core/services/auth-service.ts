@@ -23,6 +23,7 @@ import { LoginInputDto, SessionLoginOutputDto, UserOutputDto } from '../../share
 //#endif
 //#if (!LocalIdentity)
 import { TenantContextService } from './tenant-context-service';
+import { TENANT_CLAIM } from './tenant-protocol';
 //#endif
 import { User } from '../../shared/models/user.model';
 //#if (LocalIdentity)
@@ -116,7 +117,7 @@ export class AuthService {
     }
 
     const claims = decodeJwtPayload(result.accessToken);
-    const tenantId = requireSingleTenantId(claims['tenant_id']);
+    const tenantId = readTenantId(claims[TENANT_CLAIM]);
     this.tenantContext.setAuthenticatedTenant(tenantId);
     this._currentUser.set(
       new User({
@@ -174,9 +175,11 @@ function decodeJwtPayload(accessToken: string): Record<string, unknown> {
   return JSON.parse(atob(padded)) as Record<string, unknown>;
 }
 
-function requireSingleTenantId(value: unknown): string {
+// 与服务端同一规则：没有租户声明即宿主；有则必须恰为一个 GUID，否则拒绝而不是当成宿主
+function readTenantId(value: unknown): string | null {
+  if (value === undefined) return null;
   if (Array.isArray(value) || typeof value !== 'string' || !isGuid(value)) {
-    throw new Error('The validated access token must contain exactly one tenant_id claim.');
+    throw new Error(`The validated access token carries an invalid ${TENANT_CLAIM} claim.`);
   }
   return value;
 }

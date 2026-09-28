@@ -28,8 +28,7 @@ internal sealed class OperationRecordQueryService(
     IOperationRecorder recorder,
     ICurrentTenant currentTenant,
     ICurrentUser currentUser,
-    IClock clock,
-    IOptions<OperationRecordOptions> options) : IOperationRecordQueryService
+    IClock clock) : IOperationRecordQueryService
 {
     public async Task<PagedResult<OperationRecordOutputDto>> GetPagedListAsync(
         GetOperationRecordPagedInputDto input,
@@ -118,10 +117,9 @@ internal sealed class OperationRecordQueryService(
             return (OperationRecordVisibilityScope.Host, true);
         }
 
-        // 读者标识与记录器取操作人的口径一致（claim 原始值）：只认 ICurrentUser.Id 的话，
-        // 机器主体读不到自己写下的 Actor 层记录
-        var actorId = currentUser.FindClaim(options.Value.ActorIdClaimType)?.Value ?? currentUser.Id?.ToString();
-        return (OperationRecordVisibilityScope.ForTenantReader(actorId), false);
+        // 读者标识与所属租户和记录器取操作人的口径一致（claim 原始值与主体的租户 claim）：
+        // 只认 ICurrentUser.Id 的话，机器主体读不到自己写下的 Actor 层记录
+        return (OperationRecordVisibilityScope.ForTenantReader(currentUser.SubjectId, currentUser.TenantId), false);
     }
 
     private static OperationRecordFilter Filter(
@@ -196,8 +194,8 @@ internal sealed class OperationRecordQueryService(
         CreationTime = record.CreationTime,
         ActorId = record.ActorId,
         ActorName = record.ActorName,
-        // 自证类动作成功时主体刚刚被证实、请求里还没有操作人，目标承载的就是"什么人"
-        ActorIsTarget = record.ActorId is null
+        // 自证类动作成功时主体刚刚被证实，目标承载的就是"什么人"
+        ActorIsTarget = record.ActorId == record.TargetId
                         && record.Outcome == OperationRecordOutcome.Succeeded
                         && actionDefinitions.GetOrNull(record.Action)?.TargetIsActor == true,
         ImpersonatorName = record.ImpersonatorName,

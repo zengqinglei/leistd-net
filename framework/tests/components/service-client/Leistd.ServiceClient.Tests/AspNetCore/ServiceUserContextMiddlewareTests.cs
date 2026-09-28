@@ -25,6 +25,7 @@ public class ServiceUserContextMiddlewareTests
         var middleware = new ServiceUserContextMiddleware(
             _ => Task.CompletedTask,
             new MutableOptionsMonitor<ServiceUserContextOptions>(options),
+            Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()),
             NullLogger<ServiceUserContextMiddleware>.Instance);
 
         var context = new DefaultHttpContext { User = user };
@@ -40,6 +41,7 @@ public class ServiceUserContextMiddlewareTests
         var middleware = new ServiceUserContextMiddleware(
             _ => Task.CompletedTask,
             monitor,
+            Microsoft.Extensions.Options.Options.Create(new Leistd.Security.Claims.ClaimTypeOptions()),
             NullLogger<ServiceUserContextMiddleware>.Instance);
 
         var first = new DefaultHttpContext { User = ServiceClientPrincipal() };

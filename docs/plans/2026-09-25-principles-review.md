@@ -68,8 +68,36 @@
 | 编号 | 做法 |
 |---|---|
 | roleType + C10 | 模板 Cookie 身份按 `"role"` 构造 RoleClaimType，同一提交删 `GetRoles`/`IsInRole` 等成员，做 Cookie 路径角色授权组合验证；删除说明注明原比较方式与官方 `IsInRole` 的差异 |
-| F2 | Security.Core 提供默认"用户标识 claim 顺序"与读取原始值的共用方法；`CurrentUser`（解析 GUID）、Hub、OperationRecords、模板 `IsNaturalPerson` 默认使用；`OperationRecordOptions.ActorIdClaimType` 默认改为 `null`（null = 共享顺序，非空 = 宿主指定单 claim），记录器与查询服务同步；`HubIdentityOptions.UserIdClaimTypes`、官方 `IUserIdProvider`、模拟登录 claim 保留 |
+| F2 | ~~原方案保留 `ActorIdClaimType`、`UserIdClaimTypes` 独立选项~~，已被下节 T-A 取代：主体标识与租户的 claim 类型统一收归 `ClaimTypeOptions`，各组件的独立选项删除 |
 | C11 | `PermissionAuthorizationHandler` 评估 `context.User`：`IPermissionSubjectProvider` 增加按主体解析（读标识用 F2 的共用方法）；显式传入的非当前主体不走作用域缓存；主体租户与当前作用域不一致时拒绝 |
+
+### 身份口径：租户链路（阶段 4 扩展，用户已确认终局方案）
+
+盘点结论：租户经过身份 claim、匿名请求提示、服务间委托、令牌端点、非 HTTP 入口、日志审计、键与状态七条通道，三种信任性质不同的通道混用名字、同一值多处定义，不闭环。终局做法：
+
+| 编号 | 做法 |
+|---|---|
+| T-A | Security.Core 新增 `ClaimTypeOptions`（Options 模式，对应 ASP.NET Core Identity 的 `ClaimsIdentityOptions`）为 claim 类型唯一来源：`UserIds`（默认 `sub` → `NameIdentifier`）、`TenantId`（默认 `tenant_id`），并提供唯一读取规则（用户标识取第一个非空白原始值；租户 claim 三态：无 = 宿主、恰一条 GUID = 租户、多条或非 GUID = 非法）。删除 `MultiTenancyOptions.TenantClaimType`、`HubIdentityOptions.UserIdClaimTypes`、`OperationRecordOptions.ActorIdClaimType` 与 F2 的静态 `UserIdClaims`；`ICurrentUser` 新增主体标识原始值 `SubjectId`。所有读写方（框架与模板）改读该选项；非法租户 claim 一律失败关闭，含 `ICurrentUser.TenantId` |
+| T-B | 三种通道分开命名、各有唯一定义点：匿名提示头默认改 `X-Tenant`（可带 id 或名称，`MultiTenancyOptions` 管头名与 query 键）；服务间委托保留 `X-Tenant-Id`（仅 GUID），调用方转发与被调方还原同源于一个常量且两侧可配；服务客户端可按客户端关闭租户转发，租户路由客户端默认不转发；前端集中常量；CORS 暴露头取配置值 |
+| T-C | 令牌端点换码与刷新时按令牌主体的租户切换上下文再加载用户（修复租户用户走不通 OIDC 换码/刷新） |
+| T-D | 租户日志属性名统一常量，HTTP、环境上下文与按租户库执行都写入，请求完成日志带租户；操作记录 `ActorTenantId` 取操作人自己的租户 |
+| T-E | 带租户的键统一经 `CurrentTenantKeyExtensions`；登录失败计数与外部登录 state 按租户隔离，外部登录 state 绑定发起时租户并在回调核对 |
+| T-F | 前端 Resource 形态接受宿主用户；`by-host` 探测走已配置解析器；服务间还原不产生重复租户 claim |
+
+验收：租户用户完整 OIDC（授权、换码、刷新）；自定义租户 claim 名下签发、解析、判权、服务间转发全链路一致；非 HTTP 入口日志带租户。实施前逐项复核盘点所述前提。
+
+实施记录（已实施，待审查）：
+- T-A：`ClaimTypeOptions` 取代 F2 的静态 `UserIdClaims`（F2 的"各组件保留替换点"随之收敛为这一处：Hub 与操作记录的专属选项删除，定制寻址仍可替换官方 `IUserIdProvider`）。租户规则按身份判定：官方 `PolicyEvaluator` 会合并多个认证方案的身份，同一主体各身份各带一条相同租户 claim 是合法的（实测 userinfo 端点即此形态）；同一身份内多条仍拒绝。服务间还原以委托租户取代调用方身份上的租户 claim。
+- T-B：调用方转发选项补三个头名；租户路由客户端 `PostConfigure` 固定不转发。前端常量集中于 `core/services/tenant-protocol.ts`。恢复头在模板里两处都引用同一默认常量，未改。
+- T-C：令牌端点与 userinfo 都有此缺陷（userinfo 经 `[Authorize(服务端方案)]` 认证，发生在多租户中间件之后）。租户切换不能放进 async 辅助方法（AsyncLocal 回不到调用方），与 `UserSessionValidator` 同写法内联。
+- T-D：日志作用域收在 `CurrentTenant.Change`（日志作用域按异步流环境生效），所有切换入口自动带租户；请求完成日志经 Serilog `IDiagnosticContext`。
+- T-E：设置宿主键 `h:` → `host:` 属落库数据变更，升级说明给出迁移 SQL。
+- 有头浏览器实测（租户登录，确认登录请求带 `X-Tenant`）暴露既有缺陷：自证类动作（登录、注册）在匿名请求里记录，`ActorId` 为空，`Actor` 层只对本人放行，租户用户看不到自己的登录记录（宿主整层可见故被掩盖）；且 T-D 改操作人租户后，匿名记录会被记成宿主。修为：匿名时 `targetIsActor` 的动作以目标为操作人、名快照取目标名，操作人租户取请求上下文；查询的 `ActorIsTarget` 改为"操作人即目标"。
+- 阶段四复审后处理：`Actor` 层"本人"改为标识与所属租户同时相同（`ForTenantReader(actorId, actorTenantId)`），堵住宿主主体在租户里留下的记录被租户同标识主体认领；删去 `ActorIsTarget` 对历史空值的兼容分支，历史数据改由升级说明中的一次性 UPDATE 补齐；模板签发令牌（用户与机器）在 `sub` 之外按 `ClaimTypeOptions.UserIds[0]` 同值写一条，机器 scope 策略改按 `ClaimTypeOptions` 读主体，补自定义 `UserIds` 全流程集成测试；`ReadTenant` 维持"不带租户 claim 的身份不参与判定"（服务间还原即"机器身份 + 被代表用户"，按冲突处理会误伤），改正注释并补用例；设置键迁移写明须先于新版本执行并给出 EF 迁移写法。
+- 阶段四第二轮复审后处理：Codex 构造出"两份合法用户凭据合并后，标识取宿主 42 号、租户取租户 T 的 7 号"的拼接（标识只在租户内唯一的项目会越权）。`ClaimTypeOptions` 改为用户标识与租户取自同一个身份：第一个带用户标识的身份为主体身份；其他带标识的身份若带不同租户（含主体为宿主）判非法；只带租户的身份（服务间只委托租户）仅在主体无租户时补位；带标识无租户的其他身份（调用方机器身份）不参与。`SubjectClaims` 按 Claude 建议改为 `UserIds` 不含 `sub` 时才写副本；其 `#if (LocalIdentity)` 守卫与同目录 `AuthPrincipalFactory` 一致，保留。
+- 阶段四第三轮复审后处理：`DefaultPermissionChecker` 当前主体路径补租户 claim 合法性检查（非法即无授予，不要求等于当前租户）；补无参与显式当前主体两个入口的拒绝用例及宿主切入租户的放行用例；`ClaimTypeOptionsTests` 同源用例改用不同标识使按类型取值的旧实现变红。两处均变异证伪。
+- 阶段四第四轮复审后处理（按用户要求本轮修完，不留后续项）：`ClaimTypeOptions` 公开 `FindSubjectIdentity`，`CurrentUser` 的 `Username`、`Name`、`Email` 只在主体身份上读取；显式主体路径在未接多租户时也先校验租户声明合法性，与当前主体路径一致；`TenantSessionRecoveryMiddleware` 改按 `ReadTenant` 判定租户会话。三处均补用例并变异证伪。
+- T-F：`by-host` 改跑 `ITenantResolver`；前端 Resource 形态接受宿主用户。前端登录页 `decision=tenant` 且 `tenant=null` 的分支后端不会返回（不存在的租户在中间件即 404），未动。
 
 ### 模板
 
@@ -141,7 +169,11 @@
    - 终审后采纳：E1 内存兜底只看非 keyed 注册（具名锁曾阻止默认兜底）；Smtp、Redis 锁、多租户（域名格式与租户存储两个）的校验器按实际 `configSectionPath` 报键名；并发标记必填的理由改正（更新条件含主键，不存在"匹配所有 null 行"）；`AddDbContextFactory` 限定为默认单例生命周期；补 TTL 可选、Response 失败信封 `code`/`errorCode` 语义、自研调度器登记标记的文档；Realtime 用例断言追加的授权策略确实附着；A4 补"先登记后 `AddDbContext`"顺序用例。
    - E1：模板 Redis 分支只注册 `AddRedisDistributedLock`，没有 `ILocalLock`；模板目前无进程内锁用法，不补。
    - F3 后续：模板安全提醒的 `Link` 是相对路径 `/workspace/settings/security`，邮件不附；要在邮件里带链接需要"站点对外地址"配置，另行评估。
-4. **身份口径**：roleType + C10 → F2 → C11。验收：权限、通知推送、操作记录端到端；C11 在同一作用域按"当前主体 → 其他主体 → 当前主体"及跨租户主体验证不串人。
+4. **身份口径**：roleType + C10 → F2 → C11。验收：权限、通知推送、操作记录端到端；C11 在同一作用域按"当前主体 → 其他主体 → 当前主体"及跨租户主体验证不串人。（已实施，待审查）
+   - roleType + C10：只有会话 Cookie 路径错（令牌路径已按 `Claims.Role` 构造）；Cookie 票据序列化保留 RoleClaimType，修构造处即可。模板集成用例经真实登录→按会话方案认证→官方 `IsInRole` + `RequireRole` 判定，并断言无此角色时判否；撤回修复即红。五个成员框架与模板均无调用方。
+   - F2：`UserIdClaims`（Security.Core）提供 `DefaultTypes` 与 `FindUserId`（`ClaimsPrincipal` 与 `ICurrentUser` 两个入口，共用"跳过空白"规则）。取名避开 `HubIdentityOptions.UserIdClaimTypes` 属性同名。操作记录读取口径收进 `OperationRecordOptions` 的内部方法供记录器与查询服务共用；非空 `ActorIdClaimType` 不再回落。`FakeCurrentUser` 只给 Id 时补 `sub`，与真实实现同源（原测试靠旧回落才通过）。
+   - C11：不用 `IAmbientContext.Begin` 切换主体（其契约规定 HTTP 请求不使用）；接口按已确认方案直接新增 `GetSubjectAsync`，不加默认实现。"当前主体"按与 `ICurrentPrincipalAccessor.Principal` 引用相等判定（Hub 复评在 `Begin(principal)` 内，同样命中）。租户比对读 `CustomClaimTypes.TenantId`（与 `ICurrentUser.TenantId` 同源，授权 Core 看不到 AspNetCore 的 `TenantClaimType` 选项），仅对非当前主体；授权 Core 因此新增对 Security.Core 的引用。
+   - 审查（Claude、Codex）后采纳：检查器快照记下加载时的主体引用与租户，作用域内当前主体或租户被切换时重新加载（此前 `Change` 后按引用相等会拿到前一个主体的授予，无参重载原本也有此粘滞）；升级说明改正"操作人标识结果一致"的说法。分歧：固定读 `tenant_id` 与 `TenantClaimType` 不跟随——Codex 要求提供替换点，Claude 认为补文档即可；采纳后者，文档写明边界。后续：若要支持自定义租户 claim，把 `TenantClaimType` 下沉到 Core 层供 `ICurrentUser.TenantId` 与检查器共用，而不是再立一个需同步的选项。
 5. **模板**：T1、ENV + C8、H、T7（redis）。验收：9 个生成场景；克隆后用 InMemory 直接运行且默认管理员可登录；T1 覆盖新内存库、已有管理员缺口令键、真实库首次建管理员缺键三种启动；实测本地与外部登录、SignalR 只投递一次；compose 一键启动。
 6. **P2**：按组件分批，C1 最后。验收：各组件测试、打包、9 个生成场景、前端构建；C4 旁路用例、D2 双形状用例；C9 落地后复验默认管理员登录。
 7. **V**（独立）：Vitest 迁移。验收：62 个 spec 全过，覆盖率不降。

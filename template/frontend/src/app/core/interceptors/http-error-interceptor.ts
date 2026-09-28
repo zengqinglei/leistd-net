@@ -23,6 +23,7 @@ import { entryRouteUrl, isOnAuthRoute } from '../routing/entry-route';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
+import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
 
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
@@ -47,12 +48,12 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         // 要不要重新认证全都无关——它是一条独立的事实，清掉本地那个已失效的租户选择
         // 是唯一正确的反应。尤其不能因为"人在登录页"就跳过：登录页的启动探测正是最容易
         // 撞上它的地方（旧 Cookie 里带着已停用租户的 tenant_id），不清的话后续登录请求
-        // 继续携带失效的 X-Tenant-Id，用户会一直登不进来。服务端那侧见多租户组件的
+        // 继续携带失效的租户提示头，用户会一直登不进来。服务端那侧见多租户组件的
         // 租户会话自恢复中间件（Program 里的 UseTenantSessionRecovery）。
         //
         // 反过来普通 401 不带这个头，租户去向由 AuthService.clearAuthData() 按身份形态
         // 决定——本地身份保留登录入口的选择，OIDC 形态的租户来自令牌声明，跟着主体一起清。
-        if (error.headers.get('X-Tenant-Invalid')) {
+        if (error.headers.get(TENANT_INVALID_HEADER)) {
           tenantContext.clear();
         }
 

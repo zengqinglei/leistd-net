@@ -38,7 +38,7 @@ describe('TenantContextService', () => {
   });
 
   // 旧版本存的是 {id,name,displayName}，没有 key。这种存档必须判为无效并清掉，
-  // 否则拦截器会把 undefined 塞进 X-Tenant-Id
+  // 否则拦截器会把 undefined 塞进租户提示头
   it('旧形态的历史存档被判为无效', () => {
     localStorage.setItem(
       'app.tenant',

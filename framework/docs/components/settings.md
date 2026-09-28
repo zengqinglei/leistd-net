@@ -223,7 +223,7 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 
 - 回落顺序为 **用户级 → 租户级 → 代码默认值**。宿主视角走租户级那一层（`TenantId` 为 `null` 的行），不额外引入「全局」层。
 - 定义未允许的层级即使库里有值也不参与回落——改一次 `Scopes` 不会让历史遗留行悄悄重新生效。
-- `SettingScopes.Host` 是**进程级**：整个进程只有一份值，且**不与其它层级组合**——`Host | User` 这类组合在定义阶段就被拒绝（`ArgumentException`），因为它没有一致的读取解释。给的是日志级别这类一个进程只有一个实例的东西：按租户各存一份无从生效，写进去只会让界面显示一个不起作用的值。它与宿主的租户级共用同一行（`ScopeKey` 为 `h:t`，宿主视角本就走租户层），读写都只允许发生在宿主上下文：租户上下文下查询过滤器会滤掉宿主行（专属库形态连的还是租户自己的库），因此存储实现就地抛异常，而不是静默读到空或写成租户行。
+- `SettingScopes.Host` 是**进程级**：整个进程只有一份值，且**不与其它层级组合**——`Host | User` 这类组合在定义阶段就被拒绝（`ArgumentException`），因为它没有一致的读取解释。给的是日志级别这类一个进程只有一个实例的东西：按租户各存一份无从生效，写进去只会让界面显示一个不起作用的值。它与宿主的租户级共用同一行（`ScopeKey` 为 `host:t`，宿主视角本就走租户层），读写都只允许发生在宿主上下文：租户上下文下查询过滤器会滤掉宿主行（专属库形态连的还是租户自己的库），因此存储实现就地抛异常，而不是静默读到空或写成租户行。
 - 进程级设置**不接在回落链上**：`ISettingProvider` 在宿主上下文直接读宿主那一行，没有值才用代码默认值；租户上下文下它读不到——`GetOrNullAsync` 抛 `HostScopeUnavailableException`，`GetAllAsync` 干脆不包含它。刻意不返回代码默认值：那个值看着有效，调用方分不出「这就是当前生效的级别」和「这一层在当前上下文根本读不到」。存储侧由 `ISettingStore.CanAccessHostScope` 回答可达性，解析端据此决定要不要去读，而不是靠捕获异常判断上下文。
 - **同一作用域先写后读读到新值**：`ISettingProvider` 按作用域记忆化，经 `ISettingManager` 写入后，同一作用域的记忆化结果即作废，下次读取重新查存储。
 - **写入校验按固定顺序**：空串（`Setting:EmptyValueRejected`，清除只用 `null`）→ 值类型与区间（`BooleanRequired`、`IntegerRequired`、`ValueOutOfRange`）→ 候选值（`ValueNotAllowed`，按序号比较）→ 宿主注册的 `ISettingValueValidator`。任何一步不过都不落库、不发事件。清除只校验名称与层级，不会被一个已经不合法的历史值卡住。错误提示的 `{Name}` 与设置页同一取法——按 `Setting:{设置名}` 查 `LocalizationResource`，查不到用定义上的 `DisplayName`，再没有才用设置名；只有 `Setting:Undefined`、`Setting:NotAvailable` 回显调用方传入的名字，因为这两种情况没有可对外展示的定义。

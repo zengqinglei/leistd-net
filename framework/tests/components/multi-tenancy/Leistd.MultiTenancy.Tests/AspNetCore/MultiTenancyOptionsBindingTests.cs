@@ -19,7 +19,7 @@ public class MultiTenancyOptionsBindingTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Leistd:MultiTenancy:TenantClaimType"] = "org_id",
+                ["Leistd:MultiTenancy:HeaderName"] = "X-Org",
                 ["Leistd:MultiTenancy:ValidateResolvedTenant"] = "true"
             })
             .Build();
@@ -31,7 +31,7 @@ public class MultiTenancyOptionsBindingTests
 
         var options = provider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value;
 
-        Assert.Equal("org_id", options.TenantClaimType);
+        Assert.Equal("X-Org", options.HeaderName);
         Assert.False(options.ValidateResolvedTenant);
     }
 }

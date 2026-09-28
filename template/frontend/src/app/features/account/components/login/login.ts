@@ -269,7 +269,7 @@ export class Login {
     );
   }
 
-  // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
+  // 租户选择：确认后写入本地上下文，登录请求由拦截器附租户提示头；不选即宿主登录。
   readonly tenantName = signal('');
   readonly tenantError = signal<string | null>(null);
 

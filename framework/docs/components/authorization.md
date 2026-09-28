@@ -101,10 +101,20 @@ var granted = await permissionChecker.IsGrantedAsync(
 
 1. 权限必须已定义，且自身与所有祖先均启用。
 2. 权限的 `MultiTenancySides` 必须与当前上下文匹配。
-3. `IPermissionSubjectProvider` 必须返回当前主体。
+3. `IPermissionSubjectProvider` 必须返回主体。
 4. 超级管理员直接允许；其余主体以用户授予与角色授予的并集判定。
 
-未定义、未启用、侧别不匹配或无主体时都默认拒绝。同一 Scoped 作用域内的主体与授予快照只加载一次。批量检查的空集合 `AllGranted` 为 `false`。
+未定义、未启用、侧别不匹配或无主体时都默认拒绝。同一 Scoped 作用域内，当前主体与当前租户不变期间授予快照只加载一次；主体或租户切换后重新加载。主体的租户 claim 非法（规则见安全组件的 `ClaimTypeOptions.ReadTenant`）时一律拒绝；显式传入的非当前主体还须属于当前租户，当前主体则不作此要求（宿主主体显式切入租户是正当用法）。批量检查的空集合 `AllGranted` 为 `false`。
+
+为指定主体判权用带 `ClaimsPrincipal` 的重载，ASP.NET Core 策略管道即按它评估被授权的主体（`AuthorizationHandlerContext.User`）：
+
+```csharp
+var granted = await permissionChecker.IsGrantedAsync(principal, "Orders.Read", cancellationToken);
+```
+
+- 传入的就是当前主体（同一引用）时与无主体重载共用作用域快照；其他主体经 `IPermissionSubjectProvider.GetSubjectAsync` 单独解析，不进快照，同一作用域先后判不同主体不会串用授予。
+- 其他主体的租户 claim 按 `ClaimTypeOptions.ReadTenant` 读取（与租户解析、`ICurrentUser.TenantId` 同一规则与同一处配置），须与当前租户一致：宿主主体在租户上下文、别的租户、非法租户 claim 一律拒绝。未接多租户时不比对。
+- 当前主体或当前租户在作用域内被切换（`ICurrentPrincipalAccessor.Change`、`IAmbientContext.Begin`、策略按认证方案重设 `HttpContext.User`、`ICurrentTenant.Change`）时，快照按新的主体与租户重新加载。
 
 ### 使用 ASP.NET Core 策略
 
@@ -166,8 +176,8 @@ await grantSeeder.SeedAllAsync(PermissionGrantProviderNames.Role, adminRoleId, M
 | --- | --- |
 | `IPermissionDefinitionProvider` | 定义权限组与权限树 |
 | `IPermissionDefinitionManager` | 查询定义、祖先、子孙与有效状态；`IsAvailableOn(name, side)` 为检查器与管理界面共用的侧别判据 |
-| `IPermissionSubjectProvider` | 提供当前用户、角色与超级管理员状态 |
-| `IPermissionChecker` | 单个或批量检查权限 |
+| `IPermissionSubjectProvider` | 把当前主体（`GetCurrentSubjectAsync`）或指定主体（`GetSubjectAsync(principal)`）映射为用户、角色与超级管理员状态；两者须同一口径 |
+| `IPermissionChecker` | 为当前主体或指定 `ClaimsPrincipal` 单个或批量检查权限 |
 | `IPermissionGrantStore` | 读取主体授予、有效权限与版本 |
 | `IPermissionGrantManager` | 授予、撤销、全量替换和永久删除主体的授予清理 |
 | `PermissionSubject` | 当前用户 Id、角色 Id 和超级管理员标记 |
@@ -201,7 +211,7 @@ await grantSeeder.SeedAllAsync(PermissionGrantProviderNames.Role, adminRoleId, M
 
 ## 注意事项
 
-- `IPermissionSubjectProvider` 没有默认实现，未注册时 DI 解析直接失败。业务实现必须提供角色 Id、从可信来源判定 `IsSuperAdmin`，并在请求期反映账号禁用或锁定状态。
+- `IPermissionSubjectProvider` 没有默认实现，未注册时 DI 解析直接失败。`GetSubjectAsync` 只按传入主体的声明解析（读标识用 `ClaimTypeOptions.FindUserId`），不读 `ICurrentUser` 等环境态。业务实现必须提供角色 Id、从可信来源判定 `IsSuperAdmin`，并在请求期反映账号禁用或锁定状态。
 - `IsSuperAdmin` 的来源必须可信；它会在定义、启用状态与多租户侧别校验通过后跳过 Store。
 - 所有授予写入都经 `IPermissionGrantManager`，不直接写 DbContext，否则会绕过定义校验、祖先补齐与版本。
 - 主体永久删除时调用 `RemoveProviderAsync`；软删除不清理授予。

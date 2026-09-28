@@ -116,14 +116,14 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
     [Fact]
     public async Task Header_resolves_active_tenant_and_change_covers_pipeline()
     {
-        var body = await GetAsync("/", ("X-Tenant-Id", ActiveTenantId.ToString()));
+        var body = await GetAsync("/", ("X-Tenant", ActiveTenantId.ToString()));
         Assert.Equal(ActiveTenantId.ToString(), body);
     }
 
     [Fact]
     public async Task Header_resolves_by_name_case_insensitively()
     {
-        var body = await GetAsync("/", ("X-Tenant-Id", "AcMe"));
+        var body = await GetAsync("/", ("X-Tenant", "AcMe"));
         Assert.Equal(ActiveTenantId.ToString(), body);
     }
 
@@ -166,9 +166,9 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
     public async Task An_anonymous_request_cannot_tell_unknown_from_inactive()
     {
         var unknown = await Assert.ThrowsAsync<TenantNotFoundException>(
-            () => GetAsync("/", ("X-Tenant-Id", Guid.NewGuid().ToString())));
+            () => GetAsync("/", ("X-Tenant", Guid.NewGuid().ToString())));
         var inactive = await Assert.ThrowsAsync<TenantNotFoundException>(
-            () => GetAsync("/", ("X-Tenant-Id", InactiveTenantId.ToString())));
+            () => GetAsync("/", ("X-Tenant", InactiveTenantId.ToString())));
 
         Assert.Equal(unknown.GetType(), inactive.GetType());
         Assert.Equal(unknown.Code, inactive.Code);
@@ -181,7 +181,7 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
         var body = await GetAsync("/",
             ("X-Test-Auth", "u1"),
             ("X-Test-Tenant-Claim", ClaimTenantId.ToString()),
-            ("X-Tenant-Id", Guid.NewGuid().ToString()));
+            ("X-Tenant", Guid.NewGuid().ToString()));
 
         Assert.Equal(ClaimTenantId.ToString(), body);
     }
@@ -192,7 +192,7 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
         // 宿主用户（无 tenant_id claim）同样有定论：头不能把宿主会话改写成租户
         var body = await GetAsync("/",
             ("X-Test-Auth", "host-admin"),
-            ("X-Tenant-Id", ActiveTenantId.ToString()));
+            ("X-Tenant", ActiveTenantId.ToString()));
 
         Assert.Equal("host", body);
     }

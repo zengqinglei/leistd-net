@@ -15,8 +15,8 @@ namespace Leistd.ServiceClient.Handlers;
 /// </summary>
 /// <remarks>
 /// 读取 <see cref="ICurrentTenant"/>（环境上下文）而非用户 claim——
-/// 后台任务 <c>Change(tenantId)</c> 后无主体也能传递；用户 token 场景租户已随
-/// <c>tenant_id</c> claim 在 token 内传递，本头服务于 client credentials 通道。
+/// 后台任务 <c>Change(tenantId)</c> 后无主体也能传递；用户 token 场景租户已随租户 claim 在 token 内传递，
+/// 本头服务于 client credentials 通道。头名见 <see cref="UserContextForwardingOptions.TenantIdHeader"/>。
 /// 请求已有同名头时不覆盖。
 /// </remarks>
 public class TenantContextDelegatingHandler<TOptions>(
@@ -32,9 +32,9 @@ public class TenantContextDelegatingHandler<TOptions>(
         var options = optionsMonitor.CurrentValue.UserContext;
         if (options.ForwardTenantId &&
             currentTenant.Id is { } tenantId &&
-            !request.Headers.Contains(ServiceClientHeaders.TenantId))
+            !request.Headers.Contains(options.TenantIdHeader))
         {
-            request.Headers.TryAddWithoutValidation(ServiceClientHeaders.TenantId, tenantId.ToString());
+            request.Headers.TryAddWithoutValidation(options.TenantIdHeader, tenantId.ToString());
         }
 
         return base.SendAsync(request, cancellationToken);

@@ -1,3 +1,4 @@
+using Leistd.Security.Claims;
 using System.Security.Claims;
 using Leistd.ServiceClient.AspNetCore.Options;
 using Microsoft.AspNetCore.Authentication;
@@ -18,10 +19,12 @@ namespace Leistd.ServiceClient.AspNetCore.Claims;
 /// </remarks>
 /// <param name="httpContextAccessor">HTTP 上下文访问器（读取请求头）</param>
 /// <param name="optionsMonitor">恢复配置监视器</param>
+/// <param name="claimTypes">恢复身份时写入的用户标识与租户 claim 类型</param>
 /// <param name="logger">日志</param>
 public sealed class ServiceUserContextClaimsTransformation(
     IHttpContextAccessor httpContextAccessor,
     IOptionsMonitor<ServiceUserContextOptions> optionsMonitor,
+    IOptions<ClaimTypeOptions> claimTypes,
     ILogger<ServiceUserContextClaimsTransformation> logger) : IClaimsTransformation
 {
     /// <inheritdoc />
@@ -30,7 +33,7 @@ public sealed class ServiceUserContextClaimsTransformation(
         var opts = optionsMonitor.CurrentValue;
         if (!opts.Enabled ||
             ServiceUserContext.IsEnriched(principal, opts) ||
-            !ServiceUserContext.IsTrustedServiceCall(principal, opts))
+            !ServiceUserContext.IsTrustedServiceCall(principal, opts, claimTypes.Value))
         {
             return Task.FromResult(principal);
         }
@@ -41,7 +44,7 @@ public sealed class ServiceUserContextClaimsTransformation(
             return Task.FromResult(principal);
         }
 
-        var restored = ServiceUserContext.TryRestore(principal, headers, opts);
+        var restored = ServiceUserContext.TryRestore(principal, headers, opts, claimTypes.Value);
         if (restored is null)
         {
             return Task.FromResult(principal);
@@ -49,7 +52,7 @@ public sealed class ServiceUserContextClaimsTransformation(
 
         logger.LogDebug(
             "Restored user context from service invocation headers: {UserId}",
-            restored.FindFirst(ServiceUserContext.SubjectClaimType)?.Value);
+            claimTypes.Value.FindUserId(restored));
         return Task.FromResult(restored);
     }
 }

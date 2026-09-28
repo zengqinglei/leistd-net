@@ -21,13 +21,25 @@ public interface IAuthPrincipalFactory
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 装配 userinfo 端点的 claim 集合；用户不存在时返回 <see langword="null"/>。
+    /// 按授权码或刷新令牌的主体重新装配签发用的主体；主体、租户或用户无效时返回 <see langword="null"/>。
     /// </summary>
-    /// <param name="userId">令牌 <c>sub</c> 中的用户 ID。</param>
-    /// <param name="tokenPrincipal">本次请求的令牌主体，决定按哪些 scope 投影、角色取自哪里。</param>
+    /// <remarks>
+    /// 令牌端点的请求不带用户身份，解析链只能得出宿主；用户与租户都取自令牌主体，在其租户内加载用户。
+    /// </remarks>
+    /// <param name="tokenPrincipal">授权码或刷新令牌的主体。</param>
+    /// <param name="scopes">本次签发的 scope。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    Task<ClaimsPrincipal?> CreateFromTokenAsync(
+        ClaimsPrincipal tokenPrincipal,
+        IEnumerable<string>? scopes = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 装配 userinfo 端点的 claim 集合；主体、租户或用户无效时返回 <see langword="null"/>。
+    /// </summary>
+    /// <param name="tokenPrincipal">本次请求的令牌主体：用户与租户取自它，也决定按哪些 scope 投影、角色取自哪里。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     Task<IDictionary<string, object>?> CreateUserInfoAsync(
-        Guid userId,
         ClaimsPrincipal tokenPrincipal,
         CancellationToken cancellationToken = default);
 }

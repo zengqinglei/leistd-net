@@ -142,12 +142,22 @@ var cacheKey = currentTenant.ScopeKey($"catalog:category:{id:N}");
 
 | 顺序 | 来源 | 契约 |
 | --- | --- | --- |
-| 1 | 已认证主体 | `tenant_id` claim 定案；无 claim 也定案为宿主 |
+| 1 | 已认证主体 | 租户 claim（`ClaimTypeOptions.TenantId`，默认 `tenant_id`）定案；无 claim 也定案为宿主 |
 | 2 | 子域名 | 仅配置 `DomainFormat` 时启用；受管域内定案 |
-| 3 | 请求头 | 默认 `X-Tenant-Id` |
+| 3 | 请求头 | 默认 `X-Tenant`，值可为租户 Id 或名称 |
 | 4 | 查询串 | 默认 `tenant` |
 
-主体排在首位，因此请求头与查询串无法改写已登录用户的租户。租户 claim 必须是单个非空 Guid；多个 claim 即使值相同也抛 `AmbiguousTenantClaimException`。非法 claim 失败关闭，不回退到宿主。
+主体排在首位，因此请求头与查询串无法改写已登录用户的租户。租户 claim 按 `ClaimTypeOptions.ReadTenant` 解析：值必须是租户 GUID（租户名只经请求头、查询串这类匿名提示传递，不进身份），租户与用户标识取自同一个身份，规则见 [安全组件](./security.md) 的 `ReadTenant`；非法一律抛 `InvalidTenantClaimException`，失败关闭，不回退到宿主。
+
+三种租户通道刻意分开命名，信任性质各不相同：
+
+| 通道 | 键 | 可信性 |
+| --- | --- | --- |
+| 身份 claim | `ClaimTypeOptions.TenantId`（默认 `tenant_id`） | 已认证，定案 |
+| 匿名请求提示 | `MultiTenancyOptions.HeaderName`（默认 `X-Tenant`）、`QueryStringParameterName`（默认 `tenant`） | 不可信，只对匿名请求生效，启用校验时须指向存在且启用的租户 |
+| 服务间委托 | 服务客户端 `UserContextForwardingOptions.TenantIdHeader` / 被调方 `ServiceUserContextOptions.TenantIdHeader`（默认 `X-Tenant-Id`，只带 GUID） | 只对受信调用方还原为租户 claim |
+
+`ICurrentTenant.Change` 在切换租户的同时打开日志作用域，键为 `TenantLogKeys.TenantId`（`leistd.tenantId`），切回宿主时值为 `null`：HTTP 解析、Hub 与后台任务的环境上下文、逐库作业等所有切换入口的日志都能按同一个键过滤。
 
 未解析出租户表示宿主上下文。启用校验时的响应按请求是否已认证分两档：
 
@@ -363,9 +373,9 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |
 | `MultiTenancyErrorCodes` | 组件错误码，默认中英译文随包分发 |
 | 默认 HTTP 状态 | 组件默认状态：租户停用 → 403，不存在 → 404，版本与命名冲突 → 409。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
-| `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名 |
-| `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；按 `TenantClaimType` 判定租户会话；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
-| `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一；`BaseAddress` 缺失或不是绝对地址时启动失败并报出键名 |
+| `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名，它跑宿主配置的解析链，与真实请求给出同一个答案 |
+| `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；按 `ClaimTypeOptions.ReadTenant` 判定租户会话（主体属于某个租户；声明非法时保留原始错误）；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
+| `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一；`BaseAddress` 缺失或不是绝对地址时启动失败并报出键名；该客户端不转发用户与租户上下文（控制面查询，租户 Id 在路径里） |
 | `ITenantConnectionConfigurationManager` | `SetAsync(tenantId, name, connectionString, expectedVersion, ct)` 登记或更新一条；`RemoveAsync(tenantId, name, expectedVersion, ct)` 删除一条（该名字随即回落到服务自己的配置）。**会改变数据落点的写入要求租户已停用**，判据见上文表格 |
 | `AddLocalTenantConnectionResolution<TControlDbContext>(configure)` | EF 包：注册本地连接解析与本地迁移目标；`LocalTenantConnectionOptions.ControlPlaneConnectionStringName` 必填且不能是 `Default` |
 | `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、单飞协调器、内存缓存与远端迁移目标；绑定 `TenantRouting` 配置节 |
@@ -393,9 +403,8 @@ public sealed class IdentityControlDbContext : DbContext;
 
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
-| `HeaderName` | `X-Tenant-Id` | 租户请求头名 |
-| `QueryStringParameterName` | `tenant` | 租户查询参数名 |
-| `TenantClaimType` | `tenant_id` | 主体租户 claim 类型 |
+| `HeaderName` | `X-Tenant`（`DefaultHeaderName`） | 匿名请求的租户提示头名 |
+| `QueryStringParameterName` | `tenant` | 匿名请求的租户提示查询参数名 |
 | `ValidateResolvedTenant` | `true` | 是否查租户注册表校验存在且启用 |
 | `DomainFormat` | `null` | 子域名解析格式，如 `{0}.example.com` |
 
@@ -403,7 +412,7 @@ public sealed class IdentityControlDbContext : DbContext;
 
 - 中间件顺序必须是 `UseAuthentication()` →（`UseTenantSessionRecovery()`）→ `UseMultiTenancy()` → `UseAuthorization()`。不挂会话自恢复时，被停用租户的用户连登录页与注销端点都访问不了；跨域部署要把恢复标记头加进 CORS 暴露头。
 - **连接的机器端点只对机器主体开放，但三条的敏感度不同**：`GET /migration?name=` 下发**全部租户**的明文连接串，只给一次性迁移作业的 DDL 身份；`GET /runtime/{tenantId}?name=` 下发**被问到的那一条**明文；`GET /databases?name=` **不下发连接串**，只回指纹与租户归属，因此它与 `/runtime` 同属 `RuntimeReadPolicy`，常驻服务的逐库作业走它即可，不必申请迁移权限。不签发机器令牌的部署不要配置 `RuntimeReadPolicy` / `MigrationReadPolicy`。
-- 认证端必须向租户用户签发单一、有效的 `tenant_id` claim；漏写会将 Resource 请求当作宿主上下文。
+- 认证端必须向租户用户签发单一、有效的租户 claim（类型见 `ClaimTypeOptions.TenantId`，签发与读取两端同一配置）；漏写会将 Resource 请求当作宿主上下文。
 - `IgnoreQueryFilters()` 与 raw SQL 会绕过租户隔离。合法的跨租户操作使用 `IDataFilter.Disable<IMultiTenant>()` 显式表达。
 - 租户实体的唯一索引需分别覆盖 `TenantId IS NULL` 的宿主行和 `TenantId IS NOT NULL` 的租户行；单一 `(TenantId, X)` 索引无法限制多个 NULL。
 - **承载租户业务数据**的外部标识（缓存 key、锁 key 等）必须带 tenant/host 作用域，用 `ScopeKey` 产出；**控制面标识**（租户注册表、租户连接配置这类「用来判断你是哪个租户」的数据）保持全局——加作用域反而会按调用时机分裂成多份。

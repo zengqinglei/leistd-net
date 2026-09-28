@@ -123,7 +123,7 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// <para>这是"跳过注册表校验"与"收窄解析链"必须成对的原因。两者脱钩时，
-    /// 一个未认证的调用方只要带上 <c>X-Tenant-Id</c>（或 <c>?tenant=</c>、或访问租户子域名），
+    /// 一个未认证的调用方只要带上 <c>X-Tenant</c>（或 <c>?tenant=</c>、或访问租户子域名），
     /// 就能拿到该租户的上下文，而资源服务不查注册表、没有任何一道会拦下它。
     /// 匿名端点（登录、找回密码、邮箱验证）就此在攻击者指定的租户上下文里执行。</para>
     /// <para><b>必须用匿名请求测</b>：已认证请求会在
@@ -132,7 +132,7 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
     /// </remarks>
     [Theory]
     [InlineData("http://localhost/orders?tenant=11111111-1111-1111-1111-111111111111", null)]
-    [InlineData("http://localhost/orders", "X-Tenant-Id")]
+    [InlineData("http://localhost/orders", "X-Tenant")]
     [InlineData("http://acme.example.com/orders", null)]
     public async Task Unverified_tenant_hints_from_anonymous_requests_are_ignored(
         string url,
@@ -163,7 +163,7 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
         var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/orders");
         request.Headers.Add("X-Test-Auth", "alice");
         request.Headers.Add("X-Test-Tenant-Claim", claimTenant.ToString());
-        request.Headers.Add("X-Tenant-Id", Guid.NewGuid().ToString());
+        request.Headers.Add("X-Tenant", Guid.NewGuid().ToString());
 
         var response = await _client.SendAsync(request);
 
@@ -177,13 +177,19 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
     /// 令牌里带着一个解析不出的 <c>tenant_id</c> 是签发方或令牌被篡改的信号。
     /// 退回宿主意味着一个本应受租户约束的请求悄悄获得了宿主视角——按失败关闭处理。
     /// </remarks>
-    [Theory]
-    [InlineData("not-a-guid")]
-    [InlineData("00000000-0000-0000-0000-000000000000")]
-    public async Task Malformed_tenant_claim_is_rejected(string claimValue)
+    [Fact]
+    public async Task Malformed_tenant_claim_is_rejected()
+    {
+        await Assert.ThrowsAsync<InvalidTenantClaimException>(
+            () => SendAsync("/orders", subject: "alice", tenantClaims: ["not-a-guid"]));
+    }
+
+    // 形状合法、租户却不存在：由注册表校验拒绝
+    [Fact]
+    public async Task A_well_formed_claim_of_an_unknown_tenant_is_rejected()
     {
         await Assert.ThrowsAsync<TenantNotFoundException>(
-            () => SendAsync("/orders", subject: "alice", tenantClaims: [claimValue]));
+            () => SendAsync("/orders", subject: "alice", tenantClaims: ["00000000-0000-0000-0000-000000000000"]));
     }
 
     /// <summary>
@@ -202,10 +208,9 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
         var first = Guid.NewGuid().ToString();
         var second = Guid.NewGuid().ToString();
 
-        var rejected = await Assert.ThrowsAsync<AmbiguousTenantClaimException>(
+        var rejected = await Assert.ThrowsAsync<InvalidTenantClaimException>(
             () => SendAsync("/orders", subject: "alice", tenantClaims: [first, second]));
 
-        Assert.Equal(2, rejected.Count);
         Assert.Equal(CustomClaimTypes.TenantId, rejected.ClaimType);
     }
 
@@ -214,10 +219,10 @@ public class ResourceServiceTenantContextTests : IAsyncLifetime
     {
         var tenantId = Guid.NewGuid().ToString();
 
-        var rejected = await Assert.ThrowsAsync<AmbiguousTenantClaimException>(
+        var rejected = await Assert.ThrowsAsync<InvalidTenantClaimException>(
             () => SendAsync("/orders", subject: "alice", tenantClaims: [tenantId, tenantId]));
 
-        Assert.Equal(2, rejected.Count);
+        Assert.Equal(CustomClaimTypes.TenantId, rejected.ClaimType);
     }
 
     private async Task<string> SendAsync(string path, string? subject, string[] tenantClaims)

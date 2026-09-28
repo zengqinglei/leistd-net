@@ -34,7 +34,8 @@ namespace CompanyName.ProjectName.Api.Controllers;
 public sealed class ConnectController(
     IAuthPrincipalFactory principalFactory,
     IUserSessionAppService sessionAppService,
-    IOptions<OAuthOptions> oauthOptions) : Controller
+    IOptions<OAuthOptions> oauthOptions,
+    IOptions<ClaimTypeOptions> claimTypes) : Controller
 {
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]
@@ -57,8 +58,7 @@ public sealed class ConnectController(
             return Redirect($"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
         }
 
-        var subject = result.Principal.GetClaim(Claims.Subject) ??
-                      result.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var subject = claimTypes.Value.FindUserId(result.Principal);
         if (!Guid.TryParse(subject, out var userId))
         {
             return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
@@ -96,16 +96,16 @@ public sealed class ConnectController(
         if (request.IsAuthorizationCodeGrantType() || request.IsRefreshTokenGrantType())
         {
             var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-            var subject = result.Principal?.GetClaim(Claims.Subject);
-            if (!result.Succeeded || !Guid.TryParse(subject, out var userId))
+            if (!result.Succeeded || result.Principal is null)
             {
                 return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 
             var scopes = request.GetScopes().Any()
                 ? request.GetScopes()
-                : result.Principal?.GetScopes() ?? [];
-            var principal = await principalFactory.CreateAsync(userId, scopes, cancellationToken);
+                : result.Principal.GetScopes();
+            // 用户与租户都取自授权码/刷新令牌的主体：本请求没有用户身份，解析链只能得出宿主
+            var principal = await principalFactory.CreateFromTokenAsync(result.Principal, scopes, cancellationToken);
             if (principal == null)
             {
                 return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
@@ -124,7 +124,7 @@ public sealed class ConnectController(
 
             // 机器主体的 sub 契约由框架 ClientSubject 定义（client:<client_id>），签发端与
             // 消费端（服务间调用的用户上下文恢复）共用同一处定义，理由见该类型的注释。
-            identity.AddClaim(new Claim(Claims.Subject, ClientSubject.Format(request.ClientId!)));
+            SubjectClaims.Set(identity, claimTypes.Value, ClientSubject.Format(request.ClientId!));
             identity.AddClaim(new Claim(Claims.Name, request.ClientId!));
 
             var principal = new ClaimsPrincipal(identity);
@@ -146,13 +146,7 @@ public sealed class ConnectController(
     [Produces("application/json")]
     public async Task<IActionResult> UserInfoAsync(CancellationToken cancellationToken)
     {
-        var subject = User.FindFirst(Claims.Subject)?.Value;
-        if (!Guid.TryParse(subject, out var userId))
-        {
-            return Challenge(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-        }
-
-        var claims = await principalFactory.CreateUserInfoAsync(userId, User, cancellationToken);
+        var claims = await principalFactory.CreateUserInfoAsync(User, cancellationToken);
         if (claims == null)
         {
             return Challenge(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);

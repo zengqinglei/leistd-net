@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Domain.Auth.Options;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Errors;
@@ -323,10 +324,8 @@ public class EmailVerificationAppService(
     private static string GetEmailDigest(string normalizedEmail)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedEmail)));
 
-    private string GetScope()
-    {
-        return currentTenant.Id is { } tenantId ? $"tenant:{tenantId:N}" : "host";
-    }
+    // 与其他按租户隔离的键同一写法（宿主 host:、租户 {Id:N}:），挑战据此拒绝跨租户消费
+    private string GetScope() => currentTenant.ScopeKey(CacheKeyPrefix);
 
     private static bool FixedTimeEquals(string left, string right)
     {
@@ -343,10 +342,10 @@ public class EmailVerificationAppService(
         => $"{CacheKeyPrefix}:lock:challenge:{challengeId:N}";
 
     private static string GetRateCacheKey(string scope, string emailDigest)
-        => $"{CacheKeyPrefix}:rate:{scope}:{emailDigest}";
+        => $"{scope}:rate:{emailDigest}";
 
     private static string GetRateLockKey(string scope, string emailDigest)
-        => $"{CacheKeyPrefix}:lock:rate:{scope}:{emailDigest}";
+        => $"{scope}:lock:rate:{emailDigest}";
 
     private sealed record EmailVerificationChallengeState
     {

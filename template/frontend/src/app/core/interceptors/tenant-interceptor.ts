@@ -3,11 +3,12 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 
 import { TenantContextService } from '../services/tenant-context-service';
+import { TENANT_HEADER } from '../services/tenant-protocol';
 
 const TENANT_PROBE_PATHS = ['/api/v1/tenants/by-host'] as const;
 
 /**
- * 已选租户时为所有 /api/ 请求附加 X-Tenant-Id 头。
+ * 已选租户时为所有 /api/ 请求附加租户提示头（TENANT_HEADER）。
  *
  * 已登录用户的租户由服务端 cookie claim 定案，此头只影响匿名请求
  * （典型是登录：决定凭据在哪个租户内校验）。
@@ -32,6 +33,6 @@ export const tenantInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  return next(req.clone({ setHeaders: { 'X-Tenant-Id': tenant.key } }));
+  return next(req.clone({ setHeaders: { [TENANT_HEADER]: tenant.key } }));
 };
 //#endif

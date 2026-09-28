@@ -46,7 +46,7 @@ public sealed class TenantSessionRecoveryTests
         Assert.Equal("/tenants?page=2", response.Headers.Location!.OriginalString);
     }
 
-    // 判定"是不是租户会话"必须与解析链读同一个声明类型，否则改了 TenantClaimType 的宿主永远恢复不了
+    // 判定"是不是租户会话"必须与解析链读同一个声明类型，否则改了租户 claim 名（ClaimTypeOptions.TenantId）的宿主永远恢复不了
     [Fact]
     public async Task A_custom_tenant_claim_type_is_recognized_as_a_tenant_session()
     {
@@ -66,12 +66,25 @@ public sealed class TenantSessionRecoveryTests
         await Assert.ThrowsAsync<TenantNotFoundException>(() => host.GetTestClient().GetAsync("/api/data"));
     }
 
-    private static async Task<IHost> StartAsync(bool tenantClaim, Exception failure, string tenantClaimType = CustomClaimTypes.TenantId)
+    // 租户声明非法时不是"某个租户的会话"：与解析链同一规则判定，保留原始错误，不替它注销
+    [Fact]
+    public async Task A_session_with_an_invalid_tenant_claim_keeps_the_original_error()
+    {
+        using var host = await StartAsync(tenantClaim: true, failure: new TenantNotFoundException("acme"), tenantClaimValue: "acme");
+
+        await Assert.ThrowsAsync<TenantNotFoundException>(() => host.GetTestClient().GetAsync("/api/data"));
+    }
+
+    private static async Task<IHost> StartAsync(
+        bool tenantClaim,
+        Exception failure,
+        string tenantClaimType = CustomClaimTypes.TenantId,
+        string? tenantClaimValue = null)
         => await new HostBuilder()
             .ConfigureWebHost(web => web
                 .UseTestServer()
                 .ConfigureServices(services => services
-                    .Configure<MultiTenancyOptions>(options => options.TenantClaimType = tenantClaimType)
+                    .Configure<ClaimTypeOptions>(options => options.TenantId = tenantClaimType)
                     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                     .AddCookie(options => options.Cookie.Name = "session"))
                 .Configure(app =>
@@ -82,7 +95,7 @@ public sealed class TenantSessionRecoveryTests
                         List<Claim> claims = [new(CustomClaimTypes.Subject, "u1")];
                         if (tenantClaim)
                         {
-                            claims.Add(new Claim(tenantClaimType, Guid.NewGuid().ToString()));
+                            claims.Add(new Claim(tenantClaimType, tenantClaimValue ?? Guid.NewGuid().ToString()));
                         }
 
                         context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));

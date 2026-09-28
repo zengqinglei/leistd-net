@@ -206,7 +206,7 @@ public class MessageCenter(INotificationStore notificationStore)
 - 本家族无独立 Options。心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；`UserIdentifier` 的 claim 解析顺序在 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions`。本组件不依赖实时通信组件。
 - 全员公告要进历史时是扇出：受众由业务决定，逐个调用 `PublishToUserAsync`。框架不提供「发给一个组」的入口——那会让受众解析与历史归属两件事混在一处。
 - **身份在收件人边界产生**：`PublishToUserAsync` 为每次发布生成 `Id`（`Guid.CreateVersion7().ToString("N")`）与 `CreationTime`（`IClock.Now`），并把同一个对象先交给 Store、再交给所有渠道——因此库里的 ID 与实时推送里的 ID 必然一致，客户端拿推送里的 ID 标记已读一定命中自己那条。同一份 `NotificationInputDto` 扇出给多个用户得到多条独立记录。`NotificationRecord.FromDto` 不再替上游发明 ID：`Id` 解析不出 Guid 直接抛 `ArgumentException`。
-- **传给 `PublishToUserAsync` 的 `userId` 必须等于该客户端的 SignalR `UserIdentifier`**，否则推送静默落空。`UserIdentifier` 由 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions.UserIdClaimTypes` 按顺序从 claim 解析（默认 `sub`、`ClaimTypes.NameIdentifier`），只有这一处定义。
+- **传给 `PublishToUserAsync` 的 `userId` 必须等于该客户端的 SignalR `UserIdentifier`**，否则推送静默落空。`UserIdentifier` 由 [SignalR 基座](./aspnetcore-signalr.md)按 `ClaimTypeOptions.UserIds` 从 claim 解析（默认 `sub`，其次 `ClaimTypes.NameIdentifier`），只有这一处可配置。
 - SignalR 投递失败只记日志、不抛异常：调用 `PublishToUserAsync` 成功返回不代表用户端一定收到实时推送（例如客户端未连接、连接已断开），需要"送达确认"的场景仍应依赖持久化历史 + 客户端主动拉取未读数兜底。
 - `NotificationHub` 端点默认要求登录（`RequireAuthorization`），未登录客户端无法建立 SignalR 连接、也就收不到任何推送。
 - **Hub 调用的上下文与有效性由 SignalR 基座保证**。`AddNotificationsSignalR()` 内部走 `Leistd.AspNetCore.SignalR` 的 `AddSignalRAmbientContext()`：每次 Hub 调用前按连接主体建立 `ICurrentUser` / `ICurrentTenant` / `ICorrelationIdProvider`。**但 `NotificationHub` 没有可供客户端调用的方法**，因此连接建立后不会再触发复评——授权只在握手时执行一次，账号之后被禁用不会主动关闭既有连接。需要立即断连的项目自建终止通道。

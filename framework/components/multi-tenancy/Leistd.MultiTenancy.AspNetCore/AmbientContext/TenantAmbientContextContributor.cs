@@ -7,6 +7,7 @@ using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.AspNetCore.Resolution;
 using Leistd.AmbientContext;
+using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.AmbientContext;
 
@@ -18,7 +19,7 @@ namespace Leistd.MultiTenancy.AspNetCore.AmbientContext;
 // 连接建立之后的失效判定统一走宿主授权策略。
 internal sealed class TenantAmbientContextContributor(
     ICurrentTenant currentTenant,
-    IOptions<MultiTenancyOptions> options) : IAmbientContextContributor
+    IOptions<ClaimTypeOptions> claimTypes) : IAmbientContextContributor
 {
     /// <inheritdoc />
     public IDisposable? Enter(AmbientContextEnterContext context)
@@ -29,26 +30,9 @@ internal sealed class TenantAmbientContextContributor(
             return null;
         }
 
-        var claimValue = TenantClaimReader.Read(context.Principal, options.Value.TenantClaimType);
-
-        if (claimValue is null)
-        {
-            // 无声明即宿主。仍要显式 Change(null)：入口可能继承了外层的租户上下文，
-            // 不置位会让宿主主体读到别人的租户分区。
-            return currentTenant.Change(null);
-        }
-
-        // 非法租户 claim 属于契约错误，不能回退到宿主分区。
-        if (!Guid.TryParse(claimValue, out var tenantId))
-        {
-            throw new InvalidOperationException(
-                $"The tenant claim '{options.Value.TenantClaimType}' is not a GUID. " +
-                "The framework treats the tenant claim as the authoritative tenant id for " +
-                "non-HTTP entry points; falling back to the host view would silently place a " +
-                "tenant user in the host partition.");
-        }
-
-        return currentTenant.Change(tenantId);
+        // 无声明即宿主，仍要显式 Change(null)：入口可能继承了外层的租户上下文，
+        // 不置位会让宿主主体读到别人的租户分区。非法声明失败关闭，不回退到宿主分区。
+        return currentTenant.Change(TenantClaimReader.Read(context.Principal, claimTypes.Value));
     }
 
     // 捕获的是当前租户上下文本身，而不是主体的声明：在 Change 作用域里入队的任务要回到同一个租户。

@@ -1,4 +1,5 @@
 #if (ExternalLogin)
+using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Net;
 using System.Net.Http.Json;
 using CompanyName.ProjectName.Application.Auth.Constants;
@@ -109,7 +110,7 @@ public sealed class ExternalAuthenticationTests
         Assert.NotNull(tenant);
 
         using var externalClient = ProjectWebApplicationFactory.CreateProjectClient(host);
-        externalClient.DefaultRequestHeaders.Add("X-Tenant-Id", tenant.Id.ToString());
+        externalClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenant.Id.ToString());
         var challenge = await StartExternalLoginAsync(externalClient);
         externalClient.DefaultRequestHeaders.Add("Cookie", challenge.Cookie);
         var callback = await externalClient.PostAsJsonAsync(

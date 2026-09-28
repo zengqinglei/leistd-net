@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Leistd.Authorization.Definitions;
@@ -58,5 +59,8 @@ public class TestOrderDbContext(DbContextOptions<TestOrderDbContext> options) : 
 internal sealed class FakeSubjectProvider(PermissionSubject? subject) : IPermissionSubjectProvider
 {
     public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(subject);
+
+    public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
         => Task.FromResult(subject);
 }

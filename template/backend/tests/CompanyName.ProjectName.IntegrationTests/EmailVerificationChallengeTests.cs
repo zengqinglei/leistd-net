@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
@@ -298,7 +299,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
     private static HttpClient CreateTenantClient(WebApplicationFactory<Program> host, Guid tenantId)
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(host);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         return client;
     }
 
