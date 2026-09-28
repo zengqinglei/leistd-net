@@ -1,4 +1,5 @@
 using Leistd.UnitOfWork.Attributes;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.DependencyInjection.DynamicProxy.Registration;
@@ -12,6 +13,7 @@ public sealed class UnitOfWorkDynamicProxyTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddTransient<IExampleService, ExampleService>();
 
@@ -42,6 +44,7 @@ public sealed class UnitOfWorkDynamicProxyTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddTransient<IExampleService, ExampleService>();
 

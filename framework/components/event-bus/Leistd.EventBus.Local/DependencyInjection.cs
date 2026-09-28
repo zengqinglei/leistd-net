@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.EventBus.Abstractions;
 
 namespace Leistd.EventBus.Local;
@@ -19,13 +20,15 @@ public static class DependencyInjection
     /// builder.Services.AddScoped&lt;IEventHandler&lt;OrderPlaced&gt;, OrderPlacedNotifier&gt;();
     /// </code>
     /// </example>
+    /// <remarks>可重复调用：DDD 基座等组件会替宿主调用一次，宿主再调用不会重复注册。</remarks>
     public static IServiceCollection AddLocalEventBus(this IServiceCollection services)
     {
-        services.AddSingleton<LocalEventBus>();
-        services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<LocalEventBus>());
-        services.AddSingleton<ILocalEventBus>(sp => sp.GetRequiredService<LocalEventBus>());
+        services.TryAddSingleton<LocalEventBus>();
+        services.TryAddSingleton<ILocalEventBus>(sp => sp.GetRequiredService<LocalEventBus>());
+        // 转发到最终的 ILocalEventBus：宿主替换本地总线时，经 IEventBus 发布的事件走同一条管道
+        services.TryAddSingleton<IEventBus>(sp => sp.GetRequiredService<ILocalEventBus>());
         // 调度器必须复用同一实例，才能排空该实例上的待发布事件。
-        services.AddSingleton<ILocalEventDispatcher>(sp => sp.GetRequiredService<LocalEventBus>());
+        services.TryAddSingleton<ILocalEventDispatcher>(sp => sp.GetRequiredService<LocalEventBus>());
         return services;
     }
 }

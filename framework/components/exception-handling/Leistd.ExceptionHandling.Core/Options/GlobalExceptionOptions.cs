@@ -7,6 +7,9 @@ namespace Leistd.ExceptionHandling.Options;
 /// </summary>
 public class GlobalExceptionOptions
 {
+    /// <summary>配置节名 <c>Leistd:GlobalException</c>。</summary>
+    public const string SectionName = "Leistd:GlobalException";
+
     /// <summary>是否在错误响应中包含异常堆栈。默认 <see langword="false"/>。</summary>
     public bool IncludeExceptionDetails { get; set; }
 

@@ -1,5 +1,8 @@
 using Leistd.Lock.Memory.HostedServices;
+using Leistd.Lock.Registration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Leistd.Lock.Abstractions;
 
@@ -11,12 +14,14 @@ namespace Leistd.Lock.Memory;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册进程内锁和清理服务，并将其作为单机分布式锁实现。
+    /// 注册进程内锁和清理服务；尚无分布式锁实现时，同时用它兜底 <see cref="IDistributedLock"/>。
     /// </summary>
     /// <remarks>
-    /// 单副本部署用本方法，多副本部署换成 <c>AddRedisDistributedLock(...)</c>——业务代码统一依赖 <see cref="IDistributedLock"/>，不因部署形态改写。
-    /// <b>代价是一条静默降级路径</b>：扩到多副本后互斥当场失效而没有任何报错，
-    /// 因此 <see cref="IDistributedLock"/> 首次被解析时打一条 Warning，启动日志里有据可查。
+    /// 单副本部署用本方法即可；多副本部署另外注册 <c>AddRedisDistributedLock(...)</c>，它会替换这里的兜底、
+    /// 与调用顺序无关，<see cref="ILocalLock"/> 继续可用于只需进程内互斥的场景（如各实例各自预热缓存）。
+    /// 宿主已自行注册 <see cref="IDistributedLock"/> 时不兜底、不覆盖。
+    /// <b>兜底是一条静默降级路径</b>：扩到多副本后互斥当场失效而没有任何报错，
+    /// 因此兜底的 <see cref="IDistributedLock"/> 首次被解析时打一条 Warning，启动日志里有据可查。
     /// </remarks>
     /// <example>
     /// <code>
@@ -25,21 +30,26 @@ public static class DependencyInjection
     /// </example>
     public static IServiceCollection AddMemoryLocalLock(this IServiceCollection services)
     {
-        services.AddSingleton<MemoryLocalLock>();
-        services.AddSingleton<ILocalLock>(sp => sp.GetRequiredService<MemoryLocalLock>());
-        services.AddSingleton<ILock>(sp => sp.GetRequiredService<MemoryLocalLock>());
+        services.TryAddSingleton<MemoryLocalLock>();
+        services.TryAddSingleton<ILocalLock>(sp => sp.GetRequiredService<MemoryLocalLock>());
 
-        services.AddSingleton<IDistributedLock>(sp =>
+        // 只看非 keyed 注册：宿主的具名锁不提供默认 IDistributedLock，与 TryAdd 同一判定
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IDistributedLock) && !descriptor.IsKeyedService))
         {
-            sp.GetRequiredService<ILogger<MemoryLocalLock>>().LogWarning(
-                "IDistributedLock is served by the in-process memory lock. Mutual exclusion holds " +
-                "within this process only; it does NOT hold across replicas. Register " +
-                "AddRedisDistributedLock(...) before scaling beyond a single instance.");
+            var fallback = ServiceDescriptor.Singleton<IDistributedLock>(sp =>
+            {
+                sp.GetRequiredService<ILogger<MemoryLocalLock>>().LogWarning(
+                    "IDistributedLock is served by the in-process memory lock. Mutual exclusion holds " +
+                    "within this process only; it does NOT hold across replicas. Register " +
+                    "AddRedisDistributedLock(...) before scaling beyond a single instance.");
 
-            return sp.GetRequiredService<MemoryLocalLock>();
-        });
+                return sp.GetRequiredService<MemoryLocalLock>();
+            });
+            services.Add(fallback);
+            services.AddSingleton(new InProcessDistributedLockMarker(fallback));
+        }
 
-        services.AddHostedService<MemoryLockCleanupHostedService>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, MemoryLockCleanupHostedService>());
         return services;
     }
 }

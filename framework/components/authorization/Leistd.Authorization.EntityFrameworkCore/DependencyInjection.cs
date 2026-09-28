@@ -31,13 +31,13 @@ public static class DependencyInjection
     /// </remarks>
     /// <example>
     /// <code>
-    /// builder.Services.AddAuthorizationEfCore&lt;AppDbContext&gt;();
+    /// builder.Services.AddPermissionAuthorizationEfCore&lt;AppDbContext&gt;();
     ///
     /// // 写入统一经管理器：自动补齐祖先、级联清理子孙
     /// await grantManager.GrantAsync("Orders.Update", PermissionGrantProviderNames.Role, "admin", ct);
     /// </code>
     /// </example>
-    public static IServiceCollection AddAuthorizationEfCore<TDbContext>(this IServiceCollection services)
+    public static IServiceCollection AddPermissionAuthorizationEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
         // 权限授予只有一个权威存储：两个上下文各注册一次时会静默取一条，授予写进/读自
@@ -61,7 +61,7 @@ public static class DependencyInjection
     /// 同时映射 <see cref="PermissionGrantRecord"/> 与 <see cref="AuthorizationVersionRecord"/>；
     /// 两者缺一不可，版本表缺失会导致批量替换无法做乐观并发校验。
     /// </remarks>
-    public static ModelBuilder ConfigureAuthorization(this ModelBuilder modelBuilder)
+    public static ModelBuilder ConfigurePermissionAuthorization(this ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new PermissionGrantRecordConfiguration());
         modelBuilder.ApplyConfiguration(new AuthorizationVersionRecordConfiguration());

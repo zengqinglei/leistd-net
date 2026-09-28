@@ -35,9 +35,6 @@ public sealed class BusinessExceptionHandler(
         CancellationToken cancellationToken)
     {
         var options = optionsMonitor.CurrentValue;
-        if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
-            return false;
-
         // 框架判定的请求错误（Minimal API 请求体解析失败、请求体过大等）自带状态码。放行后由
         // ExceptionHandlerMiddleware 按 UseGlobalExceptionHandler 登记的 StatusCodeSelector 取该状态码，
         // 经 IProblemDetailsService 写出标准问题详情，与生产环境由状态码页写出的响应同形。

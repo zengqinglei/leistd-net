@@ -1,4 +1,5 @@
 using Leistd.UnitOfWork.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,6 +12,7 @@ public class UnitOfWorkOptionsLifecycleTests
 {
     private static IServiceProvider Build(Action<UnitOfWorkOptions>? configure = null)
         => new ServiceCollection()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddUnitOfWork(configure)
             .AddLogging()
             .BuildServiceProvider();

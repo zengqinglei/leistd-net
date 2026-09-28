@@ -53,7 +53,7 @@ public class PipelineDbContext(DbContextOptions<PipelineDbContext> options) : Db
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ConfigureAuthorization();
+        modelBuilder.ConfigurePermissionAuthorization();
         modelBuilder.ConfigureResourceAuthorization();
 
         modelBuilder.Entity<Order>(entity =>

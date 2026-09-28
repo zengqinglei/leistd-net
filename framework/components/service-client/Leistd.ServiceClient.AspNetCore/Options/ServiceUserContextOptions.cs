@@ -8,6 +8,11 @@ namespace Leistd.ServiceClient.AspNetCore.Options;
 public class ServiceUserContextOptions
 {
     /// <summary>
+    /// 默认配置节路径。
+    /// </summary>
+    public const string SectionName = "Leistd:ServiceUserContext";
+
+    /// <summary>
     /// 是否启用。默认 <c>true</c>；<c>false</c> 时中间件直接放行（也不剥离头）。
     /// </summary>
     public bool Enabled { get; set; } = true;

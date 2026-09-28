@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.AmbientContext;
 using Leistd.MultiTenancy.ConnectionStrings;
@@ -122,6 +123,8 @@ public class TenantAmbientContextTests
     {
         return new ServiceCollection()
             .AddLogging()
+            // 真实宿主总有 IConfiguration：AddMultiTenancy 绑定 Leistd:MultiTenancy
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddAmbientContext()
             // 声明即定案，不查注册表——正是本贡献者服务的形态。
             .AddMultiTenancy(o => o.ValidateResolvedTenant = false)

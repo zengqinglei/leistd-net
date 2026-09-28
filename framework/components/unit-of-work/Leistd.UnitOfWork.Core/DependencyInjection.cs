@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -22,13 +21,11 @@ namespace Leistd.UnitOfWork;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 获取配置节名称 <c>Leistd:UnitOfWork</c>。
+    /// 注册工作单元核心服务：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。
     /// </summary>
-    public const string ConfigurationSection = "Leistd:UnitOfWork";
-
-    /// <summary>
-    /// 注册工作单元核心服务并绑定默认配置节。
-    /// </summary>
+    /// <param name="services">服务集合。</param>
+    /// <param name="configure">编程式配置，在配置节绑定之后应用。</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:UnitOfWork</c>。</param>
     /// <example>
     /// <code>
     /// builder.Services.AddUnitOfWork(options =&gt;
@@ -44,27 +41,13 @@ public static class DependencyInjection
     /// </example>
     public static IServiceCollection AddUnitOfWork(
         this IServiceCollection services,
-        IConfiguration configuration)
+        Action<UnitOfWorkOptions>? configure = null,
+        string configSectionPath = UnitOfWorkOptions.SectionName)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
-        services.Configure<UnitOfWorkOptions>(configuration.GetSection(ConfigurationSection));
-        return services.AddUnitOfWorkCore();
-    }
-
-    /// <summary>
-    /// 注册工作单元核心服务并使用委托配置选项。
-    /// </summary>
-    /// <remarks>
-    /// 选项走 <see cref="Microsoft.Extensions.Options.IOptions{TOptions}"/>，
-    /// 因此可配置绑定、可挂 <c>IValidateOptions</c> 与 <c>ValidateOnStart</c>。
-    /// </remarks>
-    public static IServiceCollection AddUnitOfWork(
-        this IServiceCollection services,
-        Action<UnitOfWorkOptions>? configureOptions = null)
-    {
-        if (configureOptions is not null)
+        var options = services.AddOptions<UnitOfWorkOptions>().BindConfiguration(configSectionPath);
+        if (configure is not null)
         {
-            services.Configure(configureOptions);
+            options.Configure(configure);
         }
 
         return services.AddUnitOfWorkCore();
@@ -72,9 +55,6 @@ public static class DependencyInjection
 
     private static IServiceCollection AddUnitOfWorkCore(this IServiceCollection services)
     {
-        services.AddOptions<UnitOfWorkOptions>();
-
-
         services.TryAddSingleton<IAmbientUnitOfWork, AmbientUnitOfWork>();
         services.TryAddSingleton<IUnitOfWorkManager, UnitOfWorkManager>();
         services.TryAddTransient<IUnitOfWork, DefaultUnitOfWork>();

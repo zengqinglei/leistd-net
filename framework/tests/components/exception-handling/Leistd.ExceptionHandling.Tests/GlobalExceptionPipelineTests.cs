@@ -122,9 +122,9 @@ public class GlobalExceptionPipelineTests
         Assert.DoesNotContain("developer-only detail", content);
     }
 
-    // 配置绑定重载读取 Leistd:GlobalException 配置节（IncludeExceptionDetails）。
+    // 注册即绑定 Leistd:GlobalException 配置节（IncludeExceptionDetails），不必把配置传进来
     [Fact]
-    public async Task Configuration_bound_overload_binds_the_section()
+    public async Task The_configuration_section_is_bound()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -133,7 +133,9 @@ public class GlobalExceptionPipelineTests
             })
             .Build();
 
-        using var server = await StartAsync(services => services.AddGlobalExceptionHandler(configuration));
+        using var server = await StartAsync(services => services
+            .AddSingleton<IConfiguration>(configuration)
+            .AddGlobalExceptionHandler());
 
         var response = await server.CreateClient().GetAsync("/api/programmer-error");
         using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -156,7 +158,8 @@ public class GlobalExceptionPipelineTests
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddGlobalExceptionHandler(configuration);
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddGlobalExceptionHandler();
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<GlobalExceptionOptions>>().Value;

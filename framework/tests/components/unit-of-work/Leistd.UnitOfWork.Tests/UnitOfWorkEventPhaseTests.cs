@@ -4,6 +4,7 @@ using Leistd.EventBus.EventHandlers;
 using Leistd.EventBus.Events;
 using Leistd.EventBus.Local;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -187,6 +188,7 @@ public sealed class UnitOfWorkEventPhaseTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddLocalEventBus();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddSingleton<PhaseRecorder>();
         services.AddTransient<IEventHandler<ProbeEvent>, UnannotatedHandler>();

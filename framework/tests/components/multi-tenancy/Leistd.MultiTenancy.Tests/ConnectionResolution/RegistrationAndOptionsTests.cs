@@ -86,12 +86,21 @@ public class RegistrationAndOptionsTests
             .ServiceProvider.GetRequiredService<IConnectionStringResolver>());
     }
 
-    // TTL 必须显式写在配置里：藏在代码默认值里，执行排空流程的人就无从知道该等多久
+    // 未配置时取默认值：远端解析不应为了一个有默认意义的 TTL 多一个必填项
+    [Fact]
+    public void An_unset_cache_lifetime_falls_back_to_the_default()
+    {
+        using var host = new RemoteHost(cacheLifetime: null);
+
+        Assert.Equal(TenantRouteCacheOptions.DefaultCacheLifetime,
+            host.Provider.GetRequiredService<IOptions<TenantRouteCacheOptions>>().Value.CacheLifetime);
+    }
+
+    // 越界值启动即失败：它决定改路由前的排空等待
     [Theory]
-    [InlineData(null)]
     [InlineData("00:00:00")]
     [InlineData("01:00:01")]
-    public void An_unset_or_unusable_cache_lifetime_fails_validation(string? lifetime)
+    public void An_unusable_cache_lifetime_fails_validation(string? lifetime)
     {
         using var host = new RemoteHost(cacheLifetime: lifetime);
 

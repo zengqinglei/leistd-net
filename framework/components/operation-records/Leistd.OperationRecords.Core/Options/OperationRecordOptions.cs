@@ -3,7 +3,7 @@ using Leistd.Security.Claims;
 namespace Leistd.OperationRecords.Options;
 
 /// <summary>
-/// 操作记录配置。配置节 <c>Leistd:OperationRecords</c>。
+/// 操作记录配置，经 <c>AddOperationRecords(options =&gt; ...)</c> 设置，不绑定配置节。
 /// </summary>
 /// <remarks>
 /// claim 类型由宿主注入而非写死在组件里：签发主体的是宿主，它用什么名字只有它知道。

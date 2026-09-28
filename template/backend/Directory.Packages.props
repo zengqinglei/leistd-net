@@ -55,7 +55,6 @@
     <PackageVersion Include="Leistd.RealTime.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.RealTime.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ObjectMapping.Mapster" Version="$(LeistdFrameworkVersion)" />
-    <PackageVersion Include="Leistd.EventBus.Local" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.HttpClient" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ServiceClient.Core" Version="$(LeistdFrameworkVersion)" />

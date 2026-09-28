@@ -10,6 +10,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -27,6 +28,7 @@ public class TenantConnectionConfigurationStoreTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connection));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());

@@ -10,7 +10,7 @@
 | ASP.NET Core Web API 需要自动包装控制器返回值 | 引用 `Leistd.Response.AspNetCore` 并注册过滤器 |
 | Minimal API 端点（含组件经 `Map*` 提供的端点）也要包装 | 在路由组上调 `WithResultWrapper()` |
 | 个别接口（如文件下载、第三方回调、健康检查）不希望被包装 | 在 action 或 controller 上标注 `[NoWrap]` |
-| 想显式构造成功/失败响应而非依赖自动包装 | 使用 `OkResult` / `FailResult` 等 Controller 扩展方法 |
+| 想显式构造成功响应而非依赖自动包装 | 使用 `OkResult` Controller 扩展方法；失败一律 `throw` 业务异常，由异常处理管道写出 |
 
 本组件是可选的数字信封协议，适用于 Java/旧系统对接等明确要求 `{ code, message, data }` 的项目。默认项目优先使用[异常处理组件](./exception-handling.md)的 RFC 9457 Problem Details。一旦启用 `AddResponseWrapper()`，它会同时替换异常和自动模型校验的写出形状，保证同一宿主只有一套失败协议。
 
@@ -67,7 +67,8 @@ public class UserController(IUserService userService) : ControllerBase
 }
 ```
 
-也可以用 Controller 扩展方法显式构造响应，尤其是返回失败时：
+也可以用 Controller 扩展方法显式构造成功响应。失败不在控制器里手工构造：抛出业务异常，由异常处理管道写出，
+启用包装时同样得到带 `traceId` 与 `errorCode` 的信封：
 
 ```csharp
 public class OrderController(IOrderService service) : ControllerBase
@@ -75,9 +76,6 @@ public class OrderController(IOrderService service) : ControllerBase
     [HttpPost]
     public IActionResult Create(CreateOrderInput input)
     {
-        if (!ModelState.IsValid)
-            return this.FailResult(400, 40001, "参数不合法");
-
         var order = service.Create(input);
         return this.OkResult(order, "下单成功");
     }
@@ -96,8 +94,6 @@ public class OrderController(IOrderService service) : ControllerBase
 | `Result<T>` | 带数据负载的响应，继承 `Result`，新增 `Data`（失败时为 `null`） |
 | `Result<T>.Ok(data, message?)` | 构造带数据的成功响应，`Code = 0` |
 | `Result<T>.Fail(code, message?)` | 构造带数据类型但无数据的失败响应（`new` 隐藏基类同名方法） |
-| `ErrorResult` | 带字段级错误明细的失败响应工厂，继承 `Result`，复用其 `Errors` 字段 |
-| `ErrorResult.Fail(code, message, errors)` | 构造含 `Errors`（`IReadOnlyList<ErrorItem>`）的失败响应 |
 | `Result` 的失败形态 | 异常/校验信封：数字 `Code`、`Message`、`TraceId`、可选 `Errors` 与稳定字符串 `ErrorCode`；可选字段为空时不输出 |
 
 `ErrorItem` 由 `Leistd.ExceptionHandling.Core` 定义（`Leistd.Response.Core` 已传递引用），是框架内唯一的字段错误形状：Problem Details 的 `errors`、本信封的 `errors`、服务客户端的 `RemoteServiceException.Errors` 用的都是它。
@@ -111,8 +107,6 @@ public class OrderController(IOrderService service) : ControllerBase
 | `NoWrapAttribute`（`[NoWrap]`） | 标注在 action 或 controller 上跳过自动包装；`AttributeUsage = Method \| Class` |
 | `ControllerExtensions.OkResult<T>(data, message?)` | 返回 HTTP 200 的 `Result<T>` 成功响应 |
 | `ControllerExtensions.OkResult(message?)` | 返回 HTTP 200 的无数据 `Result` 成功响应 |
-| `ControllerExtensions.FailResult(statusCode, code, message, errorCode?)` | 返回失败响应，HTTP 状态码显式给出，并填充请求 `TraceId` |
-| `ControllerExtensions.FailResultWithErrors(statusCode, code, message, errors, errorCode?)` | 返回带字段错误与请求 `TraceId` 的失败响应 |
 
 > Controller 扩展方法均为 `this ControllerBase` 扩展，调用时写作 `this.OkResult(...)`。
 
@@ -142,7 +136,7 @@ public class OrderController(IOrderService service) : ControllerBase
 
 - MVC 过滤器只自动包装成功（2xx）的 `ObjectResult`；抛出的异常由异常处理组件解析后写成 `Result`。业务代码仍应抛 `BusinessException`，不要为了信封在每个 Controller 手写 `try/catch`。
 - 信封只是可选的传输格式，用于需要固定 `{ code, message, data }` 的 Java/旧系统对接；异常分类、错误码、HTTP 状态和本地化仍由异常处理组件的同一份 `ExceptionDescriptor` 决定，不形成第二套失败协议。
-- 异常与自动模型校验信封包含 `traceId` 和稳定 `errorCode`；Controller 的 `FailResult*` 也填充 `traceId`，需要客户端按码分支时传入可选 `errorCode`。直接在 Core 构造 `Result.Fail` 不存在 HTTP 上下文，`traceId` 需由调用方补充。
-- HTTP 状态码由调用方显式传入，框架不从业务码推导，业务错误码怎么编由宿主自己定。
-- `Result.Code = 0` 约定表示成功；失败时由调用方指定非 0 业务码。
-- 返回值本身已是 `Result`（如自行调用 `OkResult` / `FailResult`）时不会被二次包装，可放心混用自动包装与显式构造。
+- 异常与自动模型校验信封包含 `traceId` 和稳定 `errorCode`。直接在 Core 构造 `Result.Fail` 不存在 HTTP 上下文，`traceId` 需由调用方补充。
+- 异常管道写出的失败信封中，`code` 是 HTTP 状态码，稳定业务码在 `errorCode`；二者都来自异常处理组件的 `ExceptionDescriptor`。
+- `Result.Code = 0` 约定表示成功。直接在 Core 构造 `Result.Fail(code, message)` 时 `code` 由调用方给出，仅用于不经异常管道的场景（如非 HTTP 的消息体）。
+- 返回值本身已是 `Result`（如自行调用 `OkResult`）时不会被二次包装，可放心混用自动包装与显式构造。

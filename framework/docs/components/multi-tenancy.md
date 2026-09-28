@@ -30,7 +30,7 @@ dotnet add package Leistd.MultiTenancy.ServiceClient   # 资源服务回源控�
 Identity 持有租户注册表，解析匿名请求并校验租户状态：
 
 ```csharp
-builder.Services.AddMultiTenancy(builder.Configuration);
+builder.Services.AddMultiTenancy();   // 绑定 Leistd:MultiTenancy
 builder.Services.AddMultiTenancyEfCore<IdentityControlDbContext>();
 
 var app = builder.Build();
@@ -42,11 +42,8 @@ app.UseAuthorization();
 Resource 不复制租户注册表，只从已验证主体恢复租户：
 
 ```csharp
-builder.Services.AddMultiTenancy(options =>
-{
-    builder.Configuration.GetSection("Leistd:MultiTenancy").Bind(options);
-    options.ValidateResolvedTenant = false;
-});
+// 先绑定 Leistd:MultiTenancy，再应用这里的覆盖
+builder.Services.AddMultiTenancy(options => options.ValidateResolvedTenant = false);
 ```
 
 `ValidateResolvedTenant = false` 会同时停止查询 `ITenantStore` 并将解析链强制收窄为主体 claim。这防止未经校验的请求头、查询串或域名选择租户。两种角色的中间件顺序相同。
@@ -299,7 +296,7 @@ app.MapGroup("/api/v1/tenant-connections").MapTenantConnections(options =>
 | 宿主形态 | 注册 | 宿主提供 |
 | --- | --- | --- |
 | 自己持有控制库（租户注册表与连接配置就在本服务） | `AddLocalTenantConnectionResolution<TControlDbContext>(o => o.ControlPlaneConnectionStringName = "IdentityControl")`（EF 包） | 持久化的 Data Protection 密钥环 |
-| 连接配置在另一个服务的控制库里 | `AddRemoteTenantConnectionResolution()`（Core 包）+ `AddRemoteTenantConnectionStore(serviceName, configuration)`（ServiceClient 包） | 控制面地址 `Leistd:ServiceClients:{serviceName}:BaseAddress`、机器身份（如 client credentials）、`TenantRouting:CacheLifetime` |
+| 连接配置在另一个服务的控制库里 | `AddRemoteTenantConnectionResolution()`（Core 包）+ `AddRemoteTenantConnectionStore(serviceName, configuration)`（ServiceClient 包） | 控制面地址 `Leistd:ServiceClients:{serviceName}:BaseAddress`、机器身份（如 client credentials）；`TenantRouting:CacheLifetime` 可选（默认 10 分钟） |
 
 远端存储回源控制面经 `MapTenantConnections` 映射的机器端点，与端点共用 Core 里的线上 DTO；路由前缀默认 `/api/v1/tenant-connections`，经 `Leistd:ServiceClients:{serviceName}:RoutePrefix` 改。控制面下发**解密后**的连接串，远端服务不持有控制面的密钥环。鉴权与弹性策略加在返回的构建器上：
 
@@ -339,7 +336,7 @@ builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuratio
 }
 ```
 
-`CacheLifetime` 同时决定改租户路由前的排空等待：`max(Access Token 有效期, CacheLifetime)`。
+`CacheLifetime` 默认 10 分钟，同时决定改租户路由前的排空等待：`max(Access Token 有效期, CacheLifetime)`。
 
 固定在控制库的 DbContext 声明专属连接名，与 `ControlPlaneConnectionStringName` 一致：
 
@@ -374,7 +371,7 @@ public sealed class IdentityControlDbContext : DbContext;
 | `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、单飞协调器、内存缓存与远端迁移目标；绑定 `TenantRouting` 配置节 |
 | `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举。EF 包提供控制库实现，ServiceClient 包提供远端实现，**按名字问、按名字答，一次只出一条** |
 | `TenantConnectionLookupResult` | `HasAnyConnection` 区分"不分库"与"缺这个名字"；`Connection` 是命中的那一条 |
-| `TenantRouteCacheOptions` | `CacheLifetime`（必填，不超过 `MaximumCacheLifetime` 1 小时） |
+| `TenantRouteCacheOptions` | `CacheLifetime`（默认 10 分钟，不超过 `MaximumCacheLifetime` 1 小时） |
 | `ITenantMigrationTargetProvider` | `GetDedicatedTargetsAsync(name, ct)` 按连接名枚举独立物理库 `TenantMigrationTarget(TenantId, ConnectionString)`，每个库一条，`Fingerprint` 为连接串的 SHA-256 |
 | `ITenantDatabaseDirectory` | 控制库侧的库目录：按连接名回 `TenantDatabaseListResult(Databases, FailedTenants)`，不含连接串。EF 实现随 `AddMultiTenancyEfCore` 注册（它读的就是控制库），ServiceClient 的远端存储同时实现它；自定义存储的宿主要自己注册，`AddTenantManagement` 少了它解析不出连接管理用例 |
 | `ITenantDatabaseEnumerator` | `GetDatabasesAsync(name, activeOnly, ct)` 列出运行时要逐库处理的物理库 `TenantDatabase(TenantId, Fingerprint, TenantIds)`；`TenantId` 为 `null` 即宿主库，宿主项的 `TenantIds` 为空（那份清单等于共享库的租户数，且要跨 HTTP 边界；进宿主库用宿主配置，不需要某个租户）。宿主库与独立库用同一套指纹算法，与宿主同配置的登记会被合并掉，不会让同一个物理库出现两次 |

@@ -69,7 +69,6 @@
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.EntityFrameworkCore" />
 <!--#endif-->
-    <PackageReference Include="Leistd.EventBus.Local" />
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />
 <!--#if (!LocalIdentity)-->

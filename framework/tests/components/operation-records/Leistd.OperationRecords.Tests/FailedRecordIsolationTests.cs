@@ -18,6 +18,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -53,6 +54,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
         services.AddMultiTenancyCore();
         services.AddSingleton<IConnectionStringResolver>(provider => new TenantRoutingResolver(
             provider.GetRequiredService<ICurrentTenantAccessor>(), _hostConnectionString, _tenantConnectionString));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<TestDbContext>((_, options) =>

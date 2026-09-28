@@ -27,7 +27,7 @@ dotnet add package Leistd.Authorization.EntityFrameworkCore
 ```csharp
 builder.Services.AddAuthorization();
 builder.Services.AddPermissionAuthorization();
-builder.Services.AddAuthorizationEfCore<AppDbContext>();
+builder.Services.AddPermissionAuthorizationEfCore<AppDbContext>();
 
 builder.Services.AddSingleton<
     IPermissionDefinitionProvider,
@@ -35,7 +35,7 @@ builder.Services.AddSingleton<
 builder.Services.AddScoped<IPermissionSubjectProvider, CurrentPermissionSubjectProvider>();
 ```
 
-`AddPermissionAuthorizationCore()` 注册定义管理器、检查器、管理用例与首次授予（`configure` 给显示名翻译资源）。`AddPermissionAuthorization()` 在此基础上接入 ASP.NET Core 策略管道。`AddAuthorizationEfCore<TDbContext>()` 注册授予 Store 与 Manager。
+`AddPermissionAuthorizationCore()` 注册定义管理器、检查器、管理用例与首次授予（`configure` 给显示名翻译资源）。`AddPermissionAuthorization()` 在此基础上接入 ASP.NET Core 策略管道。`AddPermissionAuthorizationEfCore<TDbContext>()` 注册授予 Store 与 Manager。
 
 `AddPermissionAuthorizationCore()` 已登记本组件错误码与异常类型的非默认 HTTP 状态（具体映射见[接口参考](#接口参考)），宿主不需要另行组合。
 
@@ -44,7 +44,7 @@ EF Core 宿主还需映射表：
 ```csharp
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
-    modelBuilder.ConfigureAuthorization();
+    modelBuilder.ConfigurePermissionAuthorization();
 }
 ```
 

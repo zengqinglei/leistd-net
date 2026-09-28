@@ -54,7 +54,7 @@ public class ResultUnwrapTests
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Equal("50001", exception.ErrorCode);   // 信封的 code 是数字，按不变文化转字符串
+        Assert.Equal("50001", exception.ErrorCode);   // 2xx 信封的非零 code 是业务码，按不变文化转字符串
         Assert.Contains("库存不足", exception.Message);
     }
 
@@ -79,16 +79,16 @@ public class ResultUnwrapTests
     }
 
     [Fact]
-    public async Task Numeric_remote_error_code_is_kept_as_is()
+    public async Task Numeric_code_is_not_taken_as_a_business_error_code()
     {
-        // 互操作：Problem Details 的错误码是字符串词条键，统一响应信封的是数字。
-        // 两种都要认——丢掉任一种，调用方就无法按错误码分支。
+        // 信封模式下协议层失败只有数字 code（即 HTTP 状态）、没有 errorCode；
+        // 把它当业务码会让调用方按 "404" 这种字符串分支
         using var response = Response(HttpStatusCode.NotFound,
-            """{"status":404,"code":404001,"message":"不存在","traceId":"t-2"}""");
+            """{"status":404,"code":404,"message":"不存在","traceId":"t-2"}""");
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Equal("404001", exception.ErrorCode);
+        Assert.Null(exception.ErrorCode);
         Assert.Equal("t-2", exception.RemoteTraceId);
         Assert.Contains("不存在", exception.Message);
     }

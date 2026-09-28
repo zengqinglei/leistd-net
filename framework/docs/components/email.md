@@ -32,11 +32,11 @@ if (builder.Environment.IsDevelopment())
 }
 else
 {
-    builder.Services.AddSmtpEmailSender(builder.Configuration);
+    builder.Services.AddSmtpEmailSender();
 }
 ```
 
-两者都绑定 `IEmailSender`。`AddSmtpEmailSender` 另有委托重载，并把配置校验挂到 `ValidateOnStart`——配置非法时宿主起不来，而不是等到第一次发信。实现类型只注册一次，接口是别名转发，重复调用不会产生两个实例。
+两者都绑定 `IEmailSender`。`AddSmtpEmailSender` 绑定 `Leistd:Email:Smtp` 配置节，可选的委托在绑定之后应用（代码覆盖配置），另可传入自定义配置节路径；它还把配置校验挂到 `ValidateOnStart`——配置非法时宿主起不来，而不是等到第一次发信。实现类型只注册一次，接口是别名转发，重复调用不会产生两个实例。
 
 ## 使用
 

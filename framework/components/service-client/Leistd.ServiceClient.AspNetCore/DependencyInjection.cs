@@ -3,7 +3,6 @@ using Leistd.ServiceClient.AspNetCore.Middlewares;
 using Leistd.ServiceClient.AspNetCore.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -15,13 +14,14 @@ namespace Leistd.ServiceClient.AspNetCore;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 从 <c>Leistd:ServiceUserContext</c> 绑定选项并注册服务用户上下文恢复。
+    /// 注册服务用户上下文恢复：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。
     /// </summary>
     /// <param name="services">服务集合</param>
-    /// <param name="configuration">应用配置</param>
+    /// <param name="configure">编程式配置，在配置节绑定之后应用</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:ServiceUserContext</c></param>
     /// <example>
     /// <code>
-    /// builder.Services.AddServiceUserContext(builder.Configuration);
+    /// builder.Services.AddServiceUserContext();
     ///
     /// app.UseAuthentication();
     /// app.UseServiceUserContext();
@@ -30,22 +30,15 @@ public static class DependencyInjection
     /// </example>
     public static IServiceCollection AddServiceUserContext(
         this IServiceCollection services,
-        IConfiguration configuration)
+        Action<ServiceUserContextOptions>? configure = null,
+        string configSectionPath = ServiceUserContextOptions.SectionName)
     {
-        services.Configure<ServiceUserContextOptions>(configuration.GetSection("Leistd:ServiceUserContext"));
-        return AddServiceUserContextCore(services);
-    }
+        var options = services.AddOptions<ServiceUserContextOptions>().BindConfiguration(configSectionPath);
+        if (configure is not null)
+        {
+            options.Configure(configure);
+        }
 
-    /// <summary>
-    /// 注册服务用户上下文恢复（委托配置版，省略委托时使用默认配置）。
-    /// </summary>
-    /// <param name="services">服务集合</param>
-    /// <param name="configureOptions">配置委托</param>
-    public static IServiceCollection AddServiceUserContext(
-        this IServiceCollection services,
-        Action<ServiceUserContextOptions>? configureOptions = null)
-    {
-        services.Configure(configureOptions ?? (_ => { }));
         return AddServiceUserContextCore(services);
     }
 

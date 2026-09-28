@@ -2,23 +2,22 @@ using Leistd.Auditing;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.Ddd.Infrastructure.Persistence;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Leistd.EventBus.EventHandlers;
-using Leistd.EventBus.Local;
 using Leistd.EventBus.Events;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
 
 /// <summary>
-/// <c>AddDddInterceptors</c> 一次挂齐保存时刻的三项能力，且经宿主真实接线生效。
+/// <c>AddDddDbContext</c> 一次挂齐保存时刻的三项能力，且经宿主真实接线生效。
 /// </summary>
 /// <remarks>
 /// <para>本测试刻意<b>不手工 new 拦截器</b>，而是走
-/// <c>AddDddInfrastructure()</c> → <c>AddDbContext&lt;T&gt;((sp, options) =&gt; options.AddDddInterceptors(sp))</c>
+/// <c>AddDddInfrastructure()</c> → <c>AddDbContext&lt;T&gt;(...)</c> → <c>AddDddDbContext&lt;T&gt;()</c>
 /// 这条宿主真实路径。上一轮的并发标记测试手工构造拦截器，因此
 /// <b>证明不了模板那样的宿主接线是否真的挂上了它</b>——而事实是当时没挂：
 /// 框架把类型注册为可解析服务，模板却只挂了审计与领域事件两个，
@@ -37,19 +36,18 @@ public sealed class DddInterceptorWiringTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging();
-        // 与模板同序：领域事件总线是 LocalEventSaveChangesInterceptor 的前置。
-        // 缺它时容器解析拦截器即抛（大声失败），不会静默丢事件
-        services.AddLocalEventBus();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        // 最小组合：不单独注册事件总线。领域事件总线随 AddDddInfrastructure 注册，
+        // 此前缺它时解析 DbContext 即抛，宿主必须记得另调 AddLocalEventBus
         services.AddDddInfrastructure();
         // 一个实现只注册一次，接口做别名转发。分两条 AddSingleton 会得到两个实例，
         // 处理器加的计数与断言读的计数就不是同一个对象——与 Redis 锁那处重复注册同一类错误
         services.AddSingleton<RenameRecorder>();
         services.AddSingleton<IEventHandler<DocumentRenamed>>(sp => sp.GetRequiredService<RenameRecorder>());
 
-        // 宿主形态：单一入口挂齐三个拦截器
-        services.AddDbContext<WiringDbContext>((sp, options) => options
-            .UseSqlite(_connection)
-            .AddDddInterceptors(sp));
+        // 宿主形态：AddDbContext 只管连接，登记上下文时挂齐三个拦截器
+        services.AddDbContext<WiringDbContext>(options => options.UseSqlite(_connection));
+        services.AddDddDbContext<WiringDbContext>();
 
         _services = services.BuildServiceProvider();
 
@@ -192,7 +190,6 @@ public sealed class DddInterceptorWiringTests : IAsyncLifetime
             => modelBuilder.Entity<Document>(b =>
             {
                 b.HasKey(x => x.Id);
-                b.ConfigureByConvention();
             });
     }
 }

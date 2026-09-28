@@ -1,9 +1,12 @@
+using Leistd.EventBus.Local;
 using System.Reflection;
 using Leistd.Auditing.EntityFrameworkCore;
+using Leistd.Auditing.EntityFrameworkCore.Interceptors;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.Ddd.Infrastructure.EventBus;
+using Leistd.Ddd.Infrastructure.Persistence;
 using Leistd.Ddd.Infrastructure.Persistence.Interceptors;
 using Leistd.Ddd.Infrastructure.HostedServices;
 using Leistd.UnitOfWork;
@@ -26,7 +29,7 @@ namespace Leistd.Ddd.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册工作单元、数据过滤和 DbContext 仓储等 DDD 基础设施。
+    /// 注册工作单元、本地事件总线、数据过滤和 DbContext 仓储等 DDD 基础设施。
     /// </summary>
     /// <example>
     /// <code>
@@ -34,14 +37,14 @@ public static class DependencyInjection
     /// builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
     ///
     /// builder.Services.AddDddInfrastructure();
-    /// builder.Services.AddDddDbContext&lt;AppDbContext&gt;(o =&gt; o.AddDefaultRepositories());
+    /// builder.Services.AddDbContext&lt;AppDbContext&gt;(options =&gt; options.UseNpgsql(connectionString));
     ///
-    /// // 修改/删除审计与领域事件需要显式挂载拦截器。
-    /// builder.Services.AddDbContext&lt;AppDbContext&gt;((sp, options) =&gt; options
-    ///     .UseNpgsql(connectionString)
-    ///     .AddDddInterceptors(sp));
+    /// // 登记上下文、挂载保存拦截器并注册仓储
+    /// builder.Services.AddDddDbContext&lt;AppDbContext&gt;(o =&gt; o.AddDefaultRepositories());
     /// </code>
     /// </example>
+    /// <param name="services">服务集合。</param>
+    /// <param name="configureUnitOfWork">工作单元的编程式配置，在 <c>Leistd:UnitOfWork</c> 配置节绑定之后应用。</param>
     public static IServiceCollection AddDddInfrastructure(
         this IServiceCollection services,
         Action<UnitOfWorkOptions>? configureUnitOfWork = null)
@@ -53,6 +56,8 @@ public static class DependencyInjection
 
         services.AddAuditingEfCore();
 
+        // 领域事件由保存拦截器收集后发布，事件总线是基座的组成部分，不留给宿主记得注册
+        services.AddLocalEventBus();
         services.AddScoped<LocalEventSaveChangesInterceptor>();
 
         services.TryAddSingleton<ConcurrencyStampSaveChangesInterceptor>();
@@ -76,12 +81,17 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// 把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，并按选项注册仓储。
+    /// 把一个 DbContext 接入 DDD 基础设施：登记进租户过滤器闸门，挂载保存拦截器，并按选项注册仓储。
     /// </summary>
     /// <remarks>
-    /// 每个已注册 DbContext 都须登记，包括不需要仓储的上下文。
+    /// <para>派生自 <see cref="BaseDbContext"/> 的上下文经 <c>ConfigureDbContext&lt;TDbContext&gt;</c> 挂载三个保存拦截器：
+    /// 修改/删除审计（含软删除转换）、领域事件收集与发布、并发标记换发；与 <c>AddDbContext</c> 的先后无关。
+    /// 其他上下文不挂载，需要审计时在 <c>AddDbContext</c> 中自行添加 <c>AuditSaveChangesInterceptor</c>。
+    /// 拦截器按作用域解析，因此不支持 DbContext 池与默认（单例）生命周期的 <c>AddDbContextFactory</c>：
+    /// 其选项为单例，解析拦截器与 <see cref="BaseDbContext"/> 所用的都是根容器。</para>
+    /// <para>每个已注册 DbContext 都须登记，包括不需要仓储的上下文。
     /// 宿主必须使用 Leistd 服务提供器工厂，才能在构建容器时检测漏登记。
-    /// 省略选项时仅登记上下文，不注册仓储。
+    /// 省略选项时仅登记上下文，不注册仓储。</para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -103,7 +113,18 @@ public static class DependencyInjection
         var options = new DddDbContextOptions();
         configure?.Invoke(options);
 
-        GetOrCreateTrackedDbContextTypes(services).Add(typeof(TDbContext));
+        var firstRegistration = GetOrCreateTrackedDbContextTypes(services).Add(typeof(TDbContext));
+
+        // 保存拦截器只挂基座上下文：控制面等普通上下文不带租户与领域事件语义，按需自行挂审计。
+        // 同一上下文重复登记时不再挂一遍，否则每次保存会审计、发布两次。
+        if (firstRegistration && typeof(BaseDbContext).IsAssignableFrom(typeof(TDbContext)))
+        {
+            services.ConfigureDbContext<TDbContext>((sp, dbContextOptions) => dbContextOptions.AddInterceptors(
+                sp.GetRequiredService<AuditSaveChangesInterceptor>(),
+                sp.GetRequiredService<LocalEventSaveChangesInterceptor>(),
+                sp.GetRequiredService<ConcurrencyStampSaveChangesInterceptor>()));
+        }
+
         RegisterRepositories(services, typeof(TDbContext), options);
 
         return services;

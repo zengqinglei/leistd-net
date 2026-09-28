@@ -1,8 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
 using Leistd.RealTime.Publishing;
 using Leistd.RealTime.Subscriptions;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Leistd.RealTime.AspNetCore.SignalR.Publishing;
-using Leistd.RealTime.Options;
 using Leistd.Security.Claims;
 using Leistd.TestBase.Assertions;
 using Microsoft.AspNetCore.Builder;
@@ -57,25 +57,6 @@ public class RealTimeRegistrationTests
         });
     }
 
-    [Fact]
-    public void Options_delegate_is_applied()
-    {
-        using var provider = Base()
-            .AddRealTimeSignalR(o => o.RealTimeHubPath = "/custom/hub")
-            .BuildServiceProvider();
-
-        Assert.Equal("/custom/hub", provider.GetRequiredService<IOptions<RealTimeOptions>>().Value.RealTimeHubPath);
-    }
-
-    [Fact]
-    public void Options_have_a_default_hub_path_without_a_delegate()
-    {
-        using var provider = Base().AddRealTimeSignalR().BuildServiceProvider();
-
-        Assert.False(string.IsNullOrWhiteSpace(
-            provider.GetRequiredService<IOptions<RealTimeOptions>>().Value.RealTimeHubPath));
-    }
-
     // 授权器缺失必须在映射端点时就失败关闭，并指出该注册什么。
     // 拖到首次订阅才失败太晚，且错误信息离现场很远。
     [Fact]
@@ -98,7 +79,33 @@ public class RealTimeRegistrationTests
             services.AddSingleton<IRealTimeSubscriptionAuthorizer, AllowAllAuthorizer>();
         });
 
-        Assert.Same(app, app.MapRealTimeHub());
+        app.MapRealTimeHub();
+
+        AssertHubMappedAt(app, "/hubs/realtime");
+    }
+
+    // 路径由映射处给出，返回官方约定构建器，宿主可以继续链式追加端点约定
+    [Fact]
+    public void The_hub_maps_at_the_given_pattern_and_accepts_further_conventions()
+    {
+        var app = BuildApp(services =>
+        {
+            services.AddRealTimeSignalR();
+            services.AddSingleton<IRealTimeSubscriptionAuthorizer, AllowAllAuthorizer>();
+        });
+
+        app.MapRealTimeHub("/custom/hub").RequireAuthorization("HubPolicy");
+
+        AssertHubMappedAt(app, "/custom/hub");
+        var hub = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
+            .First(endpoint => endpoint.RoutePattern.RawText == "/custom/hub");
+        Assert.Contains(hub.Metadata.GetOrderedMetadata<IAuthorizeData>(), data => data.Policy == "HubPolicy");
+    }
+
+    private static void AssertHubMappedAt(IEndpointRouteBuilder app, string pattern)
+    {
+        var endpoints = app.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>();
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == pattern);
     }
 
     private sealed class AllowAllAuthorizer : IRealTimeSubscriptionAuthorizer

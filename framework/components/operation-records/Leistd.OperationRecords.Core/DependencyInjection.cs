@@ -37,7 +37,7 @@ public static class DependencyInjection
     /// <param name="services">服务集合。</param>
     public static IServiceCollection AddOperationRecords(this IServiceCollection services)
     {
-        // 显式建立选项，宿主不调配置重载时 IOptions<OperationRecordOptions> 也解析得出默认值。
+        // 显式建立选项，宿主不传配置委托时 IOptions<OperationRecordOptions> 也解析得出默认值。
         services.AddOptions<OperationRecordOptions>();
 
         // 幂等：EF 包的注册入口会调到这里，宿主自己也可能显式调一次。

@@ -19,6 +19,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -48,6 +49,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         // 验的是"开通失败时编排会把驱动异常交给描述器、并把它的结果抛出去"这条接缝
         services.AddSingleton<ITenantDatabaseErrorDescriber>(new FakeErrorDescriber());
         services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connection));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
@@ -146,36 +148,6 @@ public sealed class TenantManagementTests : IAsyncLifetime
 
         Assert.Contains("connections", error.ValidationResult.MemberNames);
         Assert.Empty(await NamedAsync("acme"));
-    }
-
-    /// <summary>
-    /// 播种可以指定租户标识：夹具要预先知道它。
-    /// </summary>
-    /// <remarks>
-    /// 标识是编排参数、不是请求体字段——端点调的是不带它的形态，HTTP 调用方挑不了主键。
-    /// EF Core 自己的 HasData 同样要求显式主键，确定性标识是播种的常规需求。
-    /// </remarks>
-    [Fact]
-    public async Task Seeding_can_pin_the_tenant_id()
-    {
-        var pinned = Guid.Parse("01a0be99-0000-7000-8000-000000000001");
-
-        var tenant = await _service.CreateAsync(Create("seeded"), pinned);
-
-        Assert.Equal(pinned, tenant.Id);
-        Assert.Equal(pinned, (await _service.GetAsync(pinned)).Id);
-    }
-
-    /// <summary>播种重载拒绝空标识：多半是调用方漏传了变量。</summary>
-    /// <remarks>放过去就是一条主键为 <c>Guid.Empty</c> 的记录，此后谁也查不到它。</remarks>
-    [Fact]
-    public async Task Seeding_rejects_an_empty_id()
-    {
-        var error = await Assert.ThrowsAsync<ArgumentException>(
-            () => _service.CreateAsync(Create("empty-id"), Guid.Empty));
-
-        Assert.Equal("id", error.ParamName);
-        Assert.Empty(await NamedAsync("empty-id"));
     }
 
     /// <summary>重名在写库前拒绝：否则第二条会以"改已有登记"的语义覆盖第一条。</summary>

@@ -54,14 +54,15 @@ public class EnvelopeContractTests
         await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync());
     }
 
-    // ErrorResult 的字段明细必须还原成 RemoteServiceException.Errors——
+    // 信封失败形态的字段明细必须还原成 RemoteServiceException.Errors——
     // 与 Problem Details 走的是同一个 ErrorItem，调用方不该因为被调方选了信封而拿不到。
     [Fact]
-    public async Task ReadResultAsync_restores_the_field_errors_of_an_ErrorResult()
+    public async Task ReadResultAsync_restores_the_field_errors_of_an_envelope_failure()
     {
-        var response = Json(ErrorResult.Fail(42201, "校验失败", [
-            new ErrorItem("必须填写", "name", "Error:Required")
-        ]));
+        var response = Json(Result.Fail(42201, "校验失败") with
+        {
+            Errors = [new ErrorItem("必须填写", "name", "Error:Required")]
+        });
 
         var error = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync());
 
@@ -71,18 +72,20 @@ public class EnvelopeContractTests
         Assert.Equal("Error:Required", item.Code);
     }
 
-    // 非 2xx 的信封走的是错误还原路径，那里读的是原始 JSON：
-    // 信封的 code 是数字，Problem Details 的是字符串，两种都必须认。
+    // 非 2xx 的信封走错误还原路径：信封写入器的失败形态里数字 code 是 HTTP 状态，
+    // 业务码只在 errorCode 里，还原时不得把状态当业务码。
     [Fact]
-    public async Task Remote_error_keeps_a_numeric_envelope_code()
+    public async Task Remote_error_restores_the_envelope_errorCode_rather_than_its_status()
     {
-        var response = Json(ErrorResult.Fail(40001, "参数不合法", [
-            new ErrorItem("必须填写", "name", null)
-        ]), HttpStatusCode.BadRequest);
+        var response = Json(Result.Fail(400, "参数不合法") with
+        {
+            ErrorCode = "Order:Invalid",
+            Errors = [new ErrorItem("必须填写", "name", null)]
+        }, HttpStatusCode.BadRequest);
 
         var error = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync());
 
-        Assert.Equal("40001", error.ErrorCode);
+        Assert.Equal("Order:Invalid", error.ErrorCode);
         Assert.Equal("name", Assert.Single(error.Errors).Field);
     }
 

@@ -22,7 +22,8 @@ dotnet add package Leistd.ExceptionHandling.AspNetCore
 ## 注册
 
 ```csharp
-builder.Services.AddGlobalExceptionHandler(builder.Configuration, options =>
+// 绑定 Leistd:GlobalException，再应用这里的错误码映射
+builder.Services.AddGlobalExceptionHandler(options =>
 {
     options.MapCode("Order:NotFound", StatusCodes.Status404NotFound);
     options.MapCode("Order:VersionConflict", StatusCodes.Status409Conflict);
@@ -77,7 +78,7 @@ if (order.Status == OrderStatus.Shipped)
 | `BusinessException` | 错误码映射命中时使用配置状态，否则 400；返回本地化文案或安全 `Message` |
 | `System.ComponentModel.DataAnnotations.ValidationException` | 400，类型 `validation-error` + `errors`；不带业务码 |
 | `BadHttpRequestException`（Minimal API 绑定失败、请求体过大等框架判定的请求错误） | 处理器放行，由异常中间件按异常自带的状态码（400、413 等）写出标准问题详情；原始消息只进日志 |
-| 请求被客户端取消 | 处理器放行，不伪造失败响应 |
+| 请求被客户端取消 | 官方 `ExceptionHandlerMiddleware` 在调用处理器之前直接返回 499，不经本组件 |
 | 其它异常 | 500，只有本地化标题与 `traceId`，不回显异常消息；原异常记 Error 日志 |
 
 `BadHttpRequestException` 由 ASP.NET Core 自己判定并携带状态码；`UseGlobalExceptionHandler` 通过 `ExceptionHandlerOptions.StatusCodeSelector` 让异常中间件沿用它，而不是 .NET 10 默认的 500。处理器不猜测 `HttpRequestException` 就是 503、`ArgumentException` 就是 400。这些异常往往代表本地缺陷或基础设施失败，未经宿主显式决策时应安全地返回 500。

@@ -163,12 +163,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     IsStatic = table.Column<bool>(type: "boolean", nullable: false),
                     IsDefault = table.Column<bool>(type: "boolean", nullable: false),
                     Sort = table.Column<int>(type: "integer", nullable: false),
-                    CreatorId = table.Column<string>(type: "text", nullable: true),
+                    CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    LastModifierId = table.Column<string>(type: "text", nullable: true),
+                    LastModifierId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    DeleterId = table.Column<string>(type: "text", nullable: true),
+                    DeleterId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
@@ -229,12 +229,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     RoleId = table.Column<Guid>(type: "uuid", nullable: false),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatorId = table.Column<string>(type: "text", nullable: true),
+                    CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    LastModifierId = table.Column<string>(type: "text", nullable: true),
+                    LastModifierId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     LastModificationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    DeleterId = table.Column<string>(type: "text", nullable: true),
+                    DeleterId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     DeletionTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>

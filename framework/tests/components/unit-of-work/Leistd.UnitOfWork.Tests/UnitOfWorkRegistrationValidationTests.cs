@@ -4,6 +4,7 @@ using Leistd.EventBus.EventHandlers;
 using Leistd.EventBus.Events;
 using Leistd.EventBus.Local;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -105,6 +106,7 @@ public sealed class UnitOfWorkRegistrationValidationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();   // 刻意不装本地事件总线
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
@@ -127,6 +129,7 @@ public sealed class UnitOfWorkRegistrationValidationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddLocalEventBus();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         return services;
     }

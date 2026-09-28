@@ -18,17 +18,12 @@ namespace Leistd.MultiTenancy.AspNetCore;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 获取默认配置节名称 <c>Leistd:MultiTenancy</c>。
-    /// </summary>
-    public const string ConfigurationSection = MultiTenancyOptions.SectionName;
-
-    /// <summary>
-    /// 从默认配置节注册多租户 Web 集成。
+    /// 注册多租户 Web 集成：绑定配置节，再应用代码里的配置（代码覆盖配置文件）。
     /// </summary>
     /// <example>
     /// <code>
-    /// // 宿主服务：持有租户注册表，解析后校验
-    /// builder.Services.AddMultiTenancy(options =&gt; options.DomainFormat = "{0}.example.com");
+    /// // 宿主服务：持有租户注册表，解析后校验；选项全部来自 Leistd:MultiTenancy
+    /// builder.Services.AddMultiTenancy();
     ///
     /// // 资源服务：只消费已验证令牌的 claim，无注册表
     /// builder.Services.AddMultiTenancy(options =&gt; options.ValidateResolvedTenant = false);
@@ -37,26 +32,24 @@ public static class DependencyInjection
     /// app.UseMultiTenancy();
     /// </code>
     /// </example>
-    public static IServiceCollection AddMultiTenancy(this IServiceCollection services, IConfiguration configuration)
+    /// <param name="services">服务集合。</param>
+    /// <param name="configure">代码里的配置，在配置节绑定之后应用。</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:MultiTenancy</c>。</param>
+    public static IServiceCollection AddMultiTenancy(
+        this IServiceCollection services,
+        Action<MultiTenancyOptions>? configure = null,
+        string configSectionPath = MultiTenancyOptions.SectionName)
     {
-        services.Configure<MultiTenancyOptions>(configuration.GetSection(ConfigurationSection));
-        return services.AddMultiTenancyInternal();
-    }
-
-    /// <summary>
-    /// 使用委托配置注册多租户 Web 集成。
-    /// </summary>
-    public static IServiceCollection AddMultiTenancy(this IServiceCollection services, Action<MultiTenancyOptions>? configure = null)
-    {
+        var options = services.AddOptions<MultiTenancyOptions>().BindConfiguration(configSectionPath);
         if (configure is not null)
         {
-            services.Configure(configure);
+            options.Configure(configure);
         }
 
-        return services.AddMultiTenancyInternal();
+        return services.AddMultiTenancyInternal(configSectionPath);
     }
 
-    private static IServiceCollection AddMultiTenancyInternal(this IServiceCollection services)
+    private static IServiceCollection AddMultiTenancyInternal(this IServiceCollection services, string configSectionPath)
     {
         services.AddMultiTenancyCore();
         services.AddHttpContextAccessor();
@@ -68,10 +61,11 @@ public static class DependencyInjection
 
         // 域名是匿名请求的权威来源，格式错误必须在启动时失败。
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, MultiTenancyOptionsValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>>(new MultiTenancyOptionsValidator(configSectionPath)));
 
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantStoreRegistrationValidator>());
+            ServiceDescriptor.Singleton<IValidateOptions<MultiTenancyOptions>, TenantStoreRegistrationValidator>(
+                provider => new TenantStoreRegistrationValidator(provider, configSectionPath)));
 
         services.AddOptions<MultiTenancyOptions>().ValidateOnStart();
 

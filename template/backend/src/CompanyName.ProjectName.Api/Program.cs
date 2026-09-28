@@ -299,7 +299,7 @@ try
     // 集群任务经分布式锁 + 完成水位保证多副本同一时段只跑一次（多副本部署须配置 Redis）
     builder.Services.AddInProcessBackgroundJobs();
 
-    builder.Services.AddGlobalExceptionHandler(builder.Configuration, ApiExceptionMappings.Configure);
+    builder.Services.AddGlobalExceptionHandler(ApiExceptionMappings.Configure);
 #if (IncludeLocalization)
     builder.Services.AddJsonLocalization(
         supportedCultures: [.. SettingConstant.Display.SupportedLanguages],
@@ -406,19 +406,15 @@ try
 
 #if (LocalIdentity)
     // Identity 持有租户注册表，因此校验解析结果。
-    builder.Services.AddMultiTenancy(builder.Configuration);
+    builder.Services.AddMultiTenancy();
 #else
     // Resource 不持有注册表，只信已验证令牌的 tenant_id claim。
-    builder.Services.AddMultiTenancy(options =>
-    {
-        builder.Configuration.GetSection("Leistd:MultiTenancy").Bind(options);
-        options.ValidateResolvedTenant = false;
-    });
+    builder.Services.AddMultiTenancy(options => options.ValidateResolvedTenant = false);
 #endif
 
 #if (ServiceUserContextEnabled)
     // 仅为已认证的 client credentials 调用恢复转发用户上下文。
-    builder.Services.AddServiceUserContext(builder.Configuration);
+    builder.Services.AddServiceUserContext();
 #endif
 
 #if (IncludeNotifications)

@@ -63,6 +63,7 @@ public static class DependencyInjection
 
         services.AddSingleton<RecurringJobRunner>();
         services.AddHostedService<RecurringJobScheduler>();
+        services.TryAddSingleton<RecurringJobSchedulerMarker>();
 
         // 队列与消费者必须是同一个通道：两处各注册一个实例，生产者写进一个、消费者读另一个，工作项永不执行
         services.AddSingleton<BackgroundTaskQueue>();

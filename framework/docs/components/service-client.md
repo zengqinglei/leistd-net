@@ -60,7 +60,7 @@ builder.Services.AddServiceClient<
 被调方在认证与授权之间恢复上下文：
 
 ```csharp
-builder.Services.AddServiceUserContext(builder.Configuration);
+builder.Services.AddServiceUserContext(); // 绑定 Leistd:ServiceUserContext，可选委托在绑定后应用
 
 var app = builder.Build();
 app.UseAuthentication();
@@ -105,7 +105,7 @@ var order = await response.ReadContentAsync<OrderDto>();
 | 2xx 且 `code = 0` | 返回 `data` |
 | 2xx 且 `code != 0` | 抛 `RemoteServiceException` |
 | 非 2xx ProblemDetails | 还原 `code`、`detail`、`traceId` 和 `errors` |
-| 非 2xx 数字信封 | 从 `errorCode` 还原稳定业务码；兼容旧信封的数字 `code` |
+| 非 2xx 数字信封 | 从 `errorCode` 还原稳定业务码；数字 `code` 是 HTTP 状态，不作为业务码 |
 | 非 2xx 非 JSON | 保留最多 4096 字符的 `ResponseBody` |
 | 网络、超时或反序列化失败 | 抛 `ServiceClientException`；调用方主动取消原样上抛 |
 

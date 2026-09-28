@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -81,12 +80,13 @@ public static class DependencyInjection
         return builder;
     }
 
-    /// <summary>注册全局异常处理器，选项绑定自配置节。</summary>
+    /// <summary>注册全局异常处理器：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。</summary>
     /// <param name="services">服务集合。</param>
-    /// <param name="configuration">承载 <c>GlobalExceptionOptions</c> 配置节的配置根。</param>
+    /// <param name="configure">编程式配置（如错误码映射），在配置节绑定之后应用。</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:GlobalException</c>。</param>
     /// <example>
     /// <code>
-    /// builder.Services.AddGlobalExceptionHandler(builder.Configuration);
+    /// builder.Services.AddGlobalExceptionHandler(options =&gt; options.MapCode("Order:NotFound", 404));
     /// builder.Services.AddControllers().ConfigureApiValidation();
     ///
     /// app.UseGlobalExceptionHandler();   // 置于管道靠前位置
@@ -97,42 +97,18 @@ public static class DependencyInjection
     /// </example>
     public static IServiceCollection AddGlobalExceptionHandler(
         this IServiceCollection services,
-        IConfiguration configuration)
+        Action<GlobalExceptionOptions>? configure = null,
+        string configSectionPath = GlobalExceptionOptions.SectionName)
     {
         services.AddProblemDetails();
         RegisterProblemDetailsConventions(services);
 
-        services.Configure<GlobalExceptionOptions>(
-            configuration.GetSection("Leistd:GlobalException"));
+        var options = services.AddOptions<GlobalExceptionOptions>().BindConfiguration(configSectionPath);
+        if (configure is not null)
+        {
+            options.Configure(configure);
+        }
 
-        services.AddExceptionHandler<BusinessExceptionHandler>();
-
-        return services;
-    }
-
-    /// <summary>注册全局异常处理器，先绑定配置节，再应用宿主的编程式扩展。</summary>
-    public static IServiceCollection AddGlobalExceptionHandler(
-        this IServiceCollection services,
-        IConfiguration configuration,
-        Action<GlobalExceptionOptions> configureOptions)
-    {
-        ArgumentNullException.ThrowIfNull(configureOptions);
-        services.AddGlobalExceptionHandler(configuration);
-        services.Configure(configureOptions);
-        return services;
-    }
-
-    /// <summary>注册全局异常处理器，选项以委托配置。</summary>
-    /// <param name="services">服务集合。</param>
-    /// <param name="configureOptions">选项配置委托。</param>
-    public static IServiceCollection AddGlobalExceptionHandler(
-        this IServiceCollection services,
-        Action<GlobalExceptionOptions> configureOptions)
-    {
-        services.AddProblemDetails();
-        RegisterProblemDetailsConventions(services);
-
-        services.Configure(configureOptions);
         services.AddExceptionHandler<BusinessExceptionHandler>();
 
         return services;
@@ -152,10 +128,10 @@ public static class DependencyInjection
             StatusCodeSelector = exception => exception is BadHttpRequestException badRequest
                 ? badRequest.StatusCode
                 : StatusCodes.Status500InternalServerError,
-            // 客户端主动断开和预期业务异常不应产生框架错误诊断。
+            // 预期业务异常不应产生框架错误诊断。客户端主动断开由官方中间件在调用处理器与本回调之前
+            // 直接以 499 返回（.NET 8+），这里无需再判。
             SuppressDiagnosticsCallback = ctx =>
-                (ctx.Exception is OperationCanceledException && ctx.HttpContext.RequestAborted.IsCancellationRequested)
-                || ctx.Exception is BusinessException
+                ctx.Exception is BusinessException
                 // 框架判定的请求错误是客户端问题，框架自己已记 Debug 日志
                 || ctx.Exception is BadHttpRequestException
         });

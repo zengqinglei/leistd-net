@@ -118,9 +118,13 @@ public sealed class RemoteHost : IDisposable
     {
         var settings = new Dictionary<string, string?>
         {
-            ["ConnectionStrings:Default"] = defaultConnection,
-            ["TenantRouting:CacheLifetime"] = cacheLifetime
+            ["ConnectionStrings:Default"] = defaultConnection
         };
+        // null 表示未配置：不写这个键，而不是写一个空值（空值会绑定成 00:00:00）
+        if (cacheLifetime is not null)
+        {
+            settings["TenantRouting:CacheLifetime"] = cacheLifetime;
+        }
         if (namedConnection is not null)
         {
             settings[$"ConnectionStrings:{namedConnectionName}"] = namedConnection;

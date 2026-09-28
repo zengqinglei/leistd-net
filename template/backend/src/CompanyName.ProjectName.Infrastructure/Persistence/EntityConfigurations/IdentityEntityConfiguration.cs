@@ -1,7 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
@@ -36,8 +35,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<Role>(b =>
         {
-            b.ConfigureByConvention();
-
             b.Property(e => e.Name).IsRequired().HasMaxLength(64);
             b.Property(e => e.DisplayName).IsRequired().HasMaxLength(128);
             b.Property(e => e.Description).HasMaxLength(512);
@@ -58,8 +55,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<UserSession>(b =>
         {
-            b.ConfigureByConvention();
-
             b.Property(e => e.IpAddress).HasMaxLength(UserSession.IpAddressMaxLength);
             b.Property(e => e.UserAgent).HasMaxLength(UserSession.UserAgentMaxLength);
             b.Property(e => e.ImpersonatorName).HasMaxLength(UserSession.ImpersonatorNameMaxLength);
@@ -76,8 +71,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<ExternalLoginConnection>(b =>
         {
-            b.ConfigureByConvention();
-
             b.Property(e => e.Provider).IsRequired().HasMaxLength(50);
             b.Property(e => e.ProviderUserId).IsRequired().HasMaxLength(256);
             b.Property(e => e.ProviderUsername).HasMaxLength(256);
@@ -108,8 +101,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<UserRole>(b =>
         {
-            b.ConfigureByConvention();
-
             b.HasIndex(e => new { e.UserId, e.RoleId, e.DeletionTime }).IsUnique();
             b.HasIndex(e => e.RoleId);
 

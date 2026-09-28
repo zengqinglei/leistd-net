@@ -1,5 +1,6 @@
 using Leistd.Lock.Redis;
 using Leistd.Lock.Redis.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -114,6 +115,7 @@ public class RedisLockContractTests
 
     private static IServiceProvider BuildHost(Action<RedisLockOptions> configure)
         => new ServiceCollection()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddRedisDistributedLock("localhost:6379", configure)
             .BuildServiceProvider();
 

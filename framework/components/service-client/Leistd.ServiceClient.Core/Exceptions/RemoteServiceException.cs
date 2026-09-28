@@ -18,7 +18,6 @@ public class RemoteServiceException : ServiceClientException
     /// <summary>
     /// 远端业务错误码（ProblemDetails 的 <c>code</c> 或数字信封的 <c>errorCode</c>），无法解析时为 <c>null</c>。
     /// </summary>
-    /// <remarks>仍兼容旧信封中仅有数字 <c>code</c> 的形状，取到时按不变文化转成字符串。</remarks>
     public string? ErrorCode { get; }
 
     /// <summary>

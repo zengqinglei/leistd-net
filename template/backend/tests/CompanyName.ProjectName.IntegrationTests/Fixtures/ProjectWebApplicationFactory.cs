@@ -85,10 +85,6 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 ["VerificationCodes:Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
 #endif
                 ["UserRegistration:EnableEmailVerification"] = "false",
-#if (RemoteTokenAuth)
-                // 启动期校验要求它存在（它决定改路由前的排空等待），测试宿主给个确定值
-                ["TenantRouting:CacheLifetime"] = "00:10:00",
-#endif
             });
         });
 

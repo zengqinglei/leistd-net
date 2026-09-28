@@ -11,6 +11,7 @@ using Leistd.TestBase.Doubles;
 using Leistd.UnitOfWork;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -38,7 +39,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         _db.Database.EnsureCreated();
         // 本组只关心表结构与查询：上下文固定成同一个，失败记录的独立工作单元因此落回同一张表。
         // 事务边界与跨层写入由 FailedRecordIsolationTests 在真实路由下验证。
-        _services = new ServiceCollection().AddLogging().AddUnitOfWork().BuildServiceProvider();
+        _services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(new ConfigurationBuilder().Build()).AddUnitOfWork().BuildServiceProvider();
         _store = new EfCoreOperationRecordStore<TestDbContext>(
             new FixedDbContextProvider<TestDbContext>(_db),
             _services.GetRequiredService<IUnitOfWorkManager>(),

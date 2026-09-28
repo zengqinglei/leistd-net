@@ -91,7 +91,8 @@ public sealed class SmtpEmailSenderTests
             .Build();
         using var provider = new ServiceCollection()
             .AddLogging()
-            .AddSmtpEmailSender(configuration)
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSmtpEmailSender()
             .BuildServiceProvider();
         var sender = provider.GetRequiredService<IEmailSender>();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

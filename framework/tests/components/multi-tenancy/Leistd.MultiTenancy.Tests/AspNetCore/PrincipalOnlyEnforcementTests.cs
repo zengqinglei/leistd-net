@@ -1,5 +1,7 @@
 using Leistd.MultiTenancy.AspNetCore.Resolution;
 using Leistd.MultiTenancy.AspNetCore;
+using Leistd.MultiTenancy.AspNetCore.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -108,10 +110,23 @@ public class PrincipalOnlyEnforcementTests
         Assert.Contains("no ITenantStore is registered", error.Message, StringComparison.Ordinal);
     }
 
+    // 改了配置节路径，报错里的键名也得跟着走：照着默认节名去改开关，实际读取的配置不会变
+    [Fact]
+    public void The_missing_store_failure_names_the_configured_section()
+    {
+        var error = Assert.Throws<OptionsValidationException>(
+            () => ResolveChain(services => services.AddMultiTenancy(configSectionPath: "Web:Tenants")));
+
+        Assert.Contains("Web:Tenants:ValidateResolvedTenant", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(MultiTenancyOptions.SectionName, error.Message, StringComparison.Ordinal);
+    }
+
     private static IList<ITenantResolveContributor> ResolveChain(Action<IServiceCollection> configure)
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        // 真实宿主总有 IConfiguration：AddMultiTenancy 绑定 Leistd:MultiTenancy
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         configure(services);
         using var provider = services.BuildServiceProvider();
         return provider.GetRequiredService<IOptions<TenantResolveOptions>>().Value.Contributors;

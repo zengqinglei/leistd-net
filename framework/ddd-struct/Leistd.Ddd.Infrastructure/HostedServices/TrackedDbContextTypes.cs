@@ -7,5 +7,5 @@ internal sealed class TrackedDbContextTypes
 
     public IReadOnlyCollection<Type> Types => _types;
 
-    public void Add(Type dbContextType) => _types.Add(dbContextType);
+    public bool Add(Type dbContextType) => _types.Add(dbContextType);
 }

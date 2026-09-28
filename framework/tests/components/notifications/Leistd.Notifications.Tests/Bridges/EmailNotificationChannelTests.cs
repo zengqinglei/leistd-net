@@ -14,7 +14,7 @@ using Xunit;
 namespace Leistd.Notifications.Tests.Bridges;
 
 /// <summary>
-/// 邮件渠道：只发到已验证地址、正文按纯文本编码、经后台队列异步发送。
+/// 邮件渠道：只发到已验证地址、正文按纯文本发送并附上链接、经后台队列异步发送。
 /// </summary>
 public sealed class EmailNotificationChannelTests
 {
@@ -42,9 +42,9 @@ public sealed class EmailNotificationChannelTests
         }
     }
 
-    /// <summary>通知内容可能夹带用户可控文本：原样当 HTML 发出等于让邮件承载注入。</summary>
+    /// <summary>通知内容可能夹带用户可控文本：按纯文本发出，不当 HTML 解释。</summary>
     [Fact]
-    public async Task A_notification_is_mailed_as_encoded_text_through_the_queue()
+    public async Task A_notification_is_mailed_as_plain_text_through_the_queue()
     {
         var (provider, sender) = Build("ada@example.com");
         using var scope = provider.CreateScope();
@@ -59,7 +59,46 @@ public sealed class EmailNotificationChannelTests
         await DrainAsync(provider);
 
         var message = Assert.Single(sender.Sent);
-        Assert.Equal(("ada@example.com", "Alert", "&lt;script&gt;x&lt;/script&gt;"), (message.To, message.Subject, message.Body));
+        Assert.Equal(("ada@example.com", "Alert", "<script>x</script>", false),
+            (message.To, message.Subject, message.Body, message.IsBodyHtml));
+    }
+
+    /// <summary>通知带跳转链接时，收件人在邮件里也要能打开它。</summary>
+    [Fact]
+    public async Task The_notification_link_is_appended_to_the_mail_body()
+    {
+        var (provider, sender) = Build("ada@example.com");
+        using var scope = provider.CreateScope();
+        var channel = scope.ServiceProvider.GetServices<INotificationChannel>().Single(c => c.Name == EmailNotificationChannel.ChannelName);
+
+        await channel.DeliverAsync("u1", new NotificationOutputDto
+        {
+            Id = "n1", Title = "New sign-in", Content = "A new device signed in.", Link = "https://app.test/settings/security",
+            CreationTime = DateTime.UtcNow
+        });
+        await DrainAsync(provider);
+
+        var message = Assert.Single(sender.Sent);
+        Assert.StartsWith("A new device signed in.", message.Body);
+        Assert.EndsWith("https://app.test/settings/security", message.Body);
+    }
+
+    /// <summary>相对链接是站内导航，邮件里打不开，不附。</summary>
+    [Fact]
+    public async Task A_relative_link_is_not_appended()
+    {
+        var (provider, sender) = Build("ada@example.com");
+        using var scope = provider.CreateScope();
+        var channel = scope.ServiceProvider.GetServices<INotificationChannel>().Single(c => c.Name == EmailNotificationChannel.ChannelName);
+
+        await channel.DeliverAsync("u1", new NotificationOutputDto
+        {
+            Id = "n1", Title = "New sign-in", Content = "A new device signed in.", Link = "/settings/security",
+            CreationTime = DateTime.UtcNow
+        });
+        await DrainAsync(provider);
+
+        Assert.Equal("A new device signed in.", Assert.Single(sender.Sent).Body);
     }
 
     [Fact]

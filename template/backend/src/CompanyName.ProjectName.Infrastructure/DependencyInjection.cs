@@ -8,9 +8,7 @@ using Leistd.MultiTenancy.Provisioning;
 #endif
 using Leistd.BackgroundJobs.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Leistd.Ddd.Infrastructure.EventBus;
-using Leistd.EventBus.Local;
 using Leistd.Lock.Redis;
 using Leistd.Lock.Memory;
 using Microsoft.EntityFrameworkCore;
@@ -76,8 +74,6 @@ public static class DependencyInjection
             options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
         }
 
-        services.AddLocalEventBus();
-
         services.AddMemoryCache();
         // 连接串优先：配了 ConnectionStrings:Default 就走真实数据库，Database:InMemoryName 只在没有连接串时生效。
         // 与下面各 DbContext 的选择口径一致；开发配置里的内存库名因此不会挡住本机用 user-secrets 配的数据库。
@@ -101,8 +97,8 @@ public static class DependencyInjection
                 .ValidateOnStart();
 
 #if (!LocalIdentity)
-            // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（必须显式配置，
-            // 它决定租户改路由前的排空等待）；同租户并发回源合并为一次。
+            // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（默认 10 分钟，
+            // 它决定租户改路由前的排空等待，可按环境覆盖）；同租户并发回源合并为一次。
             // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
             services.AddRemoteTenantConnectionResolution();
             var identityClient = services.AddRemoteTenantConnectionStore("Identity", configuration);
@@ -161,7 +157,7 @@ public static class DependencyInjection
         });
 #endif
 
-        services.AddDbContext<MyProjectDbContext>((sp, options) =>
+        services.AddDbContext<MyProjectDbContext>(options =>
         {
             var creationContext = DbContextCreationContext.Current;
             var connectionString = creationContext?.ConnectionString ?? configuration.GetConnectionString(ConnectionStringNames.Default);
@@ -191,10 +187,6 @@ public static class DependencyInjection
             // SplitQuery 已处理多集合查询；模型与迁移不一致仍必须失败。
             options.ConfigureWarnings(w => w
                 .Ignore(RelationalEventId.MultipleCollectionIncludeWarning));
-
-            // 保存拦截器处理修改/删除审计、领域事件和并发标记。
-            // 新增实体的环境值在进入 BaseDbContext 跟踪时落定。
-            options.AddDddInterceptors(sp);
         });
 
 #if (IncludeNotifications)
@@ -202,7 +194,7 @@ public static class DependencyInjection
         // 旧通知的保留期清理（默认开启：已读 90 天、未读 365 天，配置节 Leistd:Notifications:Retention）
         services.AddNotificationRetention<MyProjectDbContext>();
 #endif
-        services.AddAuthorizationEfCore<MyProjectDbContext>();
+        services.AddPermissionAuthorizationEfCore<MyProjectDbContext>();
         services.AddSettingsEfCore<MyProjectDbContext>();
         services.AddOperationRecordsEfCore<MyProjectDbContext>();
         // 到期记录搬入归档表。默认关闭：审计表只增不减是安全的默认值，
@@ -222,6 +214,7 @@ public static class DependencyInjection
 
         // 每个注册过的 DbContext 都必须显式接入：漏掉的上下文会逃出租户过滤器闸门，
         // 构建容器时会直接失败。不传选项即"只登记、不注册仓储"。
+        // 业务上下文继承 BaseDbContext，登记时同时挂上审计、领域事件与并发标记三个保存拦截器。
         services.AddDddDbContext<MyProjectDbContext>(options => options.AddDefaultRepositories());
 #if (LocalIdentity)
         // 控制面上下文的租户注册表经自己的 Store 访问，不需要仓储。
@@ -245,7 +238,7 @@ public static class DependencyInjection
                 options.InstanceName = "MyProject:";
             });
 
-            services.AddRedisDistributedLock(redisConnStr, configuration);
+            services.AddRedisDistributedLock(redisConnStr);
         }
         else
         {
@@ -260,7 +253,7 @@ public static class DependencyInjection
 #endif
 
 #if (LocalIdentity)
-        services.AddSmtpEmailSender(configuration);
+        services.AddSmtpEmailSender();
 #endif
 
 #if (ExternalLogin)

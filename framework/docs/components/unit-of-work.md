@@ -207,7 +207,7 @@ public class ValidateOrderHandler : IEventHandler<OrderCreatedEvent>
 
 ## 配置项
 
-`AddUnitOfWork(IConfiguration)` 绑定 `Leistd:UnitOfWork`；委托重载配置同一组选项。
+`AddUnitOfWork` 绑定 `Leistd:UnitOfWork` 配置节（可用 `configSectionPath` 改路径），传入的委托在绑定之后应用；选项从容器里的 `IConfiguration` 读取，无主机的 `ServiceCollection` 需自行注册一个。
 
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |

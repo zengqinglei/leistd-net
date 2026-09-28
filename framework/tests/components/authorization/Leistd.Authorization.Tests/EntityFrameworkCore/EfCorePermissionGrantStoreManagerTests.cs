@@ -709,7 +709,7 @@ public class EfCorePermissionGrantStoreManagerTests : IAsyncLifetime
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.ConfigureAuthorization();
+            modelBuilder.ConfigurePermissionAuthorization();
 
             modelBuilder.Entity<BusinessRecord>(builder =>
             {

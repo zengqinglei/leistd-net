@@ -5,6 +5,7 @@ using Leistd.EventBus.Local;
 using Leistd.UnitOfWork.Attributes;
 using Leistd.UnitOfWork.Database;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -245,6 +246,7 @@ public sealed class UnitOfWorkLifecycleTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddLocalEventBus();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddSingleton(probes);
         services.AddSingleton<CallLog>();

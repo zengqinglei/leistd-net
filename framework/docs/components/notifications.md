@@ -194,7 +194,7 @@ public class MessageCenter(INotificationStore notificationStore)
 - `NotificationRecord` 实现 `ICreationAuditedObject`。`CreationTime` 由发布器定好、`FromDto` 带入：留空转而依赖审计拦截器，等于把落库时间挂在「宿主是否给这个 DbContext 挂了审计拦截器」上——没挂就是 `default(DateTime)`，而通知列表按它排序。`CreatorId` 仍由审计拦截器填充。
 - `GetByUserAsync` 按 `CreationTime` **倒序**、同刻按 `Id` 倒序排序；`PageRequest.Sorting` 不生效。
 - 保留期清理按物理库逐个执行，每批一个事务；已读与未读都按创建时间计，未读的保留天数不得短于已读。
-- 邮件渠道把正文按纯文本 HTML 编码后发送；队列满时丢弃这一封并记警告，站内通知不受影响。
+- 邮件渠道按纯文本发送正文，`Link` 为绝对 http(s) 地址时另起一段附上（相对链接是站内导航，不附）；需要定制邮件版式时实现自己的 `INotificationChannel`。队列满时丢弃这一封并记警告，站内通知不受影响。
 - `MarkAsReadAsync` **幂等**：`notificationId` 无法解析为 `Guid` 时直接返回；查不到记录，或记录已是 `IsRead: true` 时也直接返回、不产生额外的 `SaveChanges`；仅在确实从未读变为已读时才更新 `IsRead` 与 `ReadAt` 并保存。
 - `MarkAllAsReadAsync` 只查询 `IsRead == false` 的记录批量标记；无未读记录时直接返回，不调用 `SaveChangesAsync`。
 - 索引三条：`(UserId, CreationTime)` 支撑"拉取用户通知列表"，`(UserId, IsRead)` 支撑"未读数"查询，单列 `CreationTime` 支撑**保留期清理**——清理整库按时间扫、不带 `UserId`（`IgnoreQueryFilters()` 覆盖同库的全部租户），前两条都以 `UserId` 打头，那条路径一条都用不上。表名沿用 EF Core 默认约定（`NotificationRecord`），不额外加框架前缀。

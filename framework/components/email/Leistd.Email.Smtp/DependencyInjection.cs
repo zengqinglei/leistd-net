@@ -1,6 +1,5 @@
 using Leistd.Email.Abstractions;
 using Leistd.Email.Smtp.Options;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -13,47 +12,30 @@ namespace Leistd.Email.Smtp;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册 SMTP 邮件发送器并绑定 <c>Leistd:Email:Smtp</c> 配置节。
+    /// 注册 SMTP 邮件发送器：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。
     /// </summary>
     /// <param name="services">服务集合</param>
-    /// <param name="configuration">应用配置</param>
+    /// <param name="configure">编程式配置，在配置节绑定之后应用</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:Email:Smtp</c></param>
     /// <example>
     /// <code>
-    /// builder.Services.AddSmtpEmailSender(builder.Configuration);
+    /// builder.Services.AddSmtpEmailSender();
     /// </code>
     /// </example>
     public static IServiceCollection AddSmtpEmailSender(
         this IServiceCollection services,
-        IConfiguration configuration)
+        Action<SmtpOptions>? configure = null,
+        string configSectionPath = SmtpOptions.SectionName)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
-        return services.AddSmtpEmailSenderCore();
-    }
-
-    /// <summary>
-    /// 使用委托配置注册 SMTP 邮件发送器。
-    /// </summary>
-    /// <param name="services">服务集合</param>
-    /// <param name="configure">选项配置委托</param>
-    public static IServiceCollection AddSmtpEmailSender(
-        this IServiceCollection services,
-        Action<SmtpOptions>? configure = null)
-    {
+        var options = services.AddOptions<SmtpOptions>().BindConfiguration(configSectionPath);
         if (configure is not null)
         {
-            services.Configure(configure);
+            options.Configure(configure);
         }
 
-        return services.AddSmtpEmailSenderCore();
-    }
-
-    private static IServiceCollection AddSmtpEmailSenderCore(this IServiceCollection services)
-    {
         services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<SmtpOptions>, SmtpOptionsValidator>());
-        services.AddOptions<SmtpOptions>().ValidateOnStart();
+            ServiceDescriptor.Singleton<IValidateOptions<SmtpOptions>>(new SmtpOptionsValidator(configSectionPath)));
+        options.ValidateOnStart();
 
         // 接口与实现类型共享同一实例。
         services.TryAddSingleton<SmtpEmailSender>();

@@ -7,6 +7,7 @@ using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Dtos;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -69,6 +70,7 @@ public sealed class TenantManagementRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddMultiTenancyCore();
         services.AddSingleton<ITenantStore>(new FakeTenantStore());
@@ -94,9 +96,6 @@ public sealed class TenantManagementRegistrationTests
     private sealed class FakeTenantManager : ITenantManager
     {
         public Task<TenantConfiguration> CreateAsync(string name, string? displayName, bool isActive, string? description = null, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<TenantConfiguration> CreateAsync(string name, string? displayName, bool isActive, Guid id, string? description = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<TenantConfiguration> UpdateAsync(Guid id, string name, string? displayName, string? description = null, CancellationToken cancellationToken = default)
@@ -154,9 +153,6 @@ public sealed class TenantManagementRegistrationTests
             => throw new NotSupportedException();
 
         public Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, Guid id, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<TenantOutputDto> UpdateAsync(Guid id, UpdateTenantInputDto input, CancellationToken cancellationToken = default)

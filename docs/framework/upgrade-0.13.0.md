@@ -179,7 +179,7 @@ Task<SubjectPermissionGrants> GetGrantsForSubjectAsync(string userId, IReadOnlyC
 
 新增表 `AuthorizationVersionRecord`（`Id`、`TenantId`、`ProviderName`、`ProviderKey`、
 `Version` 并发令牌、`LastModificationTime`、`LastModifierId`），两条过滤唯一索引同上。
-它由 `ConfigureAuthorization()` 一并映射，**不是可选项**：权限授予的乐观并发靠它收口。
+它由 `ConfigurePermissionAuthorization()` 一并映射，**不是可选项**：权限授予的乐观并发靠它收口。
 
 ### `Leistd.Notifications.EntityFrameworkCore`
 
@@ -211,7 +211,7 @@ Task<SubjectPermissionGrants> GetGrantsForSubjectAsync(string userId, IReadOnlyC
 | 0.12.0 | 0.13.0 |
 | --- | --- |
 | `AddAuditingCore()` | 已删除且 Core 包内无替代，改用 `Leistd.Auditing.EntityFrameworkCore` 的 `AddAuditingEfCore()` |
-| `AddAuthorizationEfCore<T>()` / `ConfigureAuthorization()` | 名字未变，但现在多映射一张 `AuthorizationVersionRecord` 表（见上节） |
+| `AddAuthorizationEfCore<T>()` / `ConfigureAuthorization()` | 改名为 `AddPermissionAuthorizationEfCore<T>()` / `ConfigurePermissionAuthorization()`（避免与 ASP.NET Core 的 `AddAuthorization` 混淆），并多映射一张 `AuthorizationVersionRecord` 表（见上节） |
 | `AddNotificationsEfCore<T>()` / `ConfigureNotifications()` | 名字未变 |
 
 `Leistd.Authorization.EntityFrameworkCore` 的包依赖变了：新增 `Leistd.MultiTenancy.Core`、
@@ -344,3 +344,33 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 
 前端的改法是一处收口，不要散在各个请求里：解析错误响应的那一个函数按
 `detail ?? title` 取文案、按 `errors` 取字段错误、按 `code` 分支。
+
+## 10. 默认配置下静默出错的收口
+
+以下改动把"配置不当也照常运行、结果却是错的"改成启动失败或行为纠正。
+
+| 变化 | 影响与改法 |
+| --- | --- |
+| `BaseDbContext(DbContextOptions)` 单参构造已删除 | 派生上下文改用 `(options, IServiceProvider? serviceProvider)`；运行时必须传作用域容器，只有设计时工厂传 `null`。单参构造曾让租户过滤退化为宿主视角、审计与运行时开关失效 |
+| 本地事件收集不再按实体状态过滤 | 聚合根保存时为 `Unchanged`（只改了子实体或只登记了事件）时，它登记的事件现在会发布；此前被静默清掉 |
+| 工作单元要求代理工厂 | `AddUnitOfWork()` 注册启动检查：宿主未接 `DynamicProxyServiceRegistrationCallbackFactory` 时启动失败。`WebApplicationBuilder` 用 `builder.Host.UseServiceProviderFactory(...)`，`HostApplicationBuilder` 用 `builder.ConfigureContainer(...)`。此前漏接时 `[UnitOfWork]` 不生效、事件处理器在提交前后各执行一次 |
+| `ServiceRegistrationCallbackFactory.CreateBuilder` 改为 `virtual` | 派生工厂可覆写；`DynamicProxyServiceRegistrationCallbackFactory` 在此登记 `DynamicProxyWeavingMarker` |
+| `AddRemoteTenantConnectionStore` 启动时校验控制面地址 | `Leistd:ServiceClients:{serviceName}:BaseAddress` 缺失或不是绝对地址时启动失败并报出键名 |
+| 租户会话自恢复按 `MultiTenancyOptions.TenantClaimType` 判定 | 改过租户声明类型的宿主，自恢复现在才会生效 |
+| 无当前用户时 `LastModifierId` 置空 | 后台作业、机器主体的修改不再沿用上一次的修改人 |
+| `AddAuthorizationEfCore` / `ConfigureAuthorization` 改名 | 见第 6 节 |
+| `ITenantManager` / `ITenantManagementService` 的 `CreateAsync(..., Guid id)` 重载已删除 | 创建租户一律由组件生成标识；自定义 `ITenantManager` 实现删掉该重载即可 |
+| `ControllerExtensions.FailResult` / `FailResultWithErrors` 与 `ErrorResult` 已删除 | 失败一律抛业务异常，由异常处理管道写出；启用 `AddResponseWrapper()` 时同样得到带 `traceId` 与 `errorCode` 的信封。仍需在代码里构造信封时用 `Result.Fail(code, message) with { Errors = … }` |
+| 服务客户端不再把非 2xx 信封的数字 `code` 当作业务码 | 那是 HTTP 状态；业务码从 `errorCode`（或 Problem Details 的字符串 `code`）还原。旧式"非 2xx + 数字业务码"的远端不再得到 `ErrorCode`。2xx 信封的非零 `code` 仍按业务码处理 |
+| `AddDddInfrastructure()` 注册本地事件总线 | 宿主不必再单独调用 `AddLocalEventBus()`（重复调用无害，注册已幂等）。`LocalEventSaveChangesInterceptor` 的两个构造参数改为必需；此前缺事件总线时解析 DbContext 抛异常 |
+| `AddInterceptor` 按类型去重 | 组件的 `AddXxx` 被调用两次时，同一拦截器不再被织入两层 |
+| `ILock` 不再注册为服务；内存锁与 Redis 锁可共存 | 注入 `ILock` 的代码改注入 `IDistributedLock` 或 `ILocalLock`。`AddRedisDistributedLock` 现在替换 `AddMemoryLocalLock` 的 `IDistributedLock` 兜底（与顺序无关），此前两者同时注册时总是内存锁生效；宿主自行注册的 `IDistributedLock` 不被覆盖 |
+| 登记了周期任务却没有调度器时启动告警 | `AddRecurringJob` 注册启动检查；调度器实现登记 `RecurringJobSchedulerMarker`（`AddInProcessBackgroundJobs()` 已登记）。自研调度器需同样登记该标记，否则会收到这条 Warning |
+| `MapRealTimeHub` / `MapNotificationHub` 返回 `HubEndpointConventionBuilder` | 可继续链式追加授权策略、CORS 等约定；此前返回 `IEndpointRouteBuilder`。`MapRealTimeHub(pattern = "/hubs/realtime")` 接收路径参数 |
+| `RealTimeOptions` 与 `AddRealTimeSignalR(configure)` 的参数已删除 | 业务事件 Hub 路径改在 `MapRealTimeHub(pattern)` 给出 |
+| 邮件通知改为纯文本并附链接 | `IsBodyHtml = false`，正文不再做 HTML 编码；`Link` 为绝对 http(s) 地址时附在正文末尾 |
+| 宿主级组件的注册入口统一为 `AddX(configure?, configSectionPath?)` | `AddUnitOfWork`、`AddMultiTenancy`、`AddGlobalExceptionHandler`、`AddSmtpEmailSender`、`AddServiceUserContext`、`AddRedisDistributedLock(connectionString, …)` 的 `IConfiguration` 重载已删除：统一从容器里的 `IConfiguration` 绑定默认配置节，委托在绑定之后应用（代码覆盖配置）。调用处去掉 `builder.Configuration` 实参即可；配置节不在默认路径时传 `configSectionPath`。此前委托重载不绑定配置节，写在 appsettings 里的值静默不生效。多租户与工作单元注册类上的 `ConfigurationSection` 常量已删除，改用 `MultiTenancyOptions.SectionName`、`UnitOfWorkOptions.SectionName`；`AddDddInfrastructure(configure)` 经此同样绑定 `Leistd:UnitOfWork`；无主机的 `ServiceCollection` 需自行注册 `IConfiguration` |
+| `AddDddInterceptors` 已删除，由 `AddDddDbContext<T>()` 挂载保存拦截器 | 删掉 `AddDbContext` 回调里的 `options.AddDddInterceptors(sp)`；派生自 `BaseDbContext` 的上下文登记时自动挂上审计、领域事件与并发标记三个拦截器，与注册先后无关。其他上下文不挂载。此前漏挂时这三项静默失效 |
+| `ConfigureByConvention()` 已删除，改为 EF Core 约定 `DddEntityConvention` | 删掉实体配置里的 `b.ConfigureByConvention()`：`BaseDbContext` 自动注册该约定，对所有实现审计或并发标记契约的实体生效（此前只作用于调用了它的实体），显式 Fluent 配置优先。`BaseDbContext.ConfigureConventions` 已封闭，原覆写改为 `ConfigureModelConventions`（无需调 `base`）。不继承基类的上下文如需同一约定，自行 `configurationBuilder.Conventions.Add(_ => new DddEntityConvention())`。**会改变模型**：此前未调用 `ConfigureByConvention` 的审计实体列长变为 64，升级后按 ddd-struct 文档"迁移快照检查"一节确认并生成迁移 |
+| `TenantRouting:CacheLifetime` 不再必填 | `TenantRouteCacheOptions.CacheLifetime` 改为非空 `TimeSpan`，默认 10 分钟；仍校验大于 0 且不超过 1 小时 |
+| 客户端取消的判断移出异常组件 | 官方 `ExceptionHandlerMiddleware`（.NET 8+）在调用处理器之前直接返回 499，行为不变 |

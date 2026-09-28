@@ -3,7 +3,8 @@ using Microsoft.Extensions.Options;
 namespace Leistd.Lock.Redis.Options;
 
 // 启动期校验锁有效期与重试间隔为正，避免锁立即失效或忙轮询；键前缀不作格式限制。
-internal sealed class RedisLockOptionsValidator : IValidateOptions<RedisLockOptions>
+// 报错里的键名按实际绑定的配置节给出，宿主改了节路径时照提示去改才对得上
+internal sealed class RedisLockOptionsValidator(string sectionPath = RedisLockOptions.SectionName) : IValidateOptions<RedisLockOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, RedisLockOptions options)
@@ -13,7 +14,7 @@ internal sealed class RedisLockOptionsValidator : IValidateOptions<RedisLockOpti
         if (options.Expiry <= TimeSpan.Zero)
         {
             failures.Add(
-                $"{RedisLockOptions.SectionName}:Expiry must be greater than zero (was {options.Expiry}). It is the lock lease; " +
+                $"{sectionPath}:Expiry must be greater than zero (was {options.Expiry}). It is the lock lease; " +
                 "a non-positive value makes the lock expire immediately or be rejected by Redis, " +
                 "so mutual exclusion silently stops holding.");
         }
@@ -21,7 +22,7 @@ internal sealed class RedisLockOptionsValidator : IValidateOptions<RedisLockOpti
         if (options.RetryInterval <= TimeSpan.Zero)
         {
             failures.Add(
-                $"{RedisLockOptions.SectionName}:RetryInterval must be greater than zero (was {options.RetryInterval}). " +
+                $"{sectionPath}:RetryInterval must be greater than zero (was {options.RetryInterval}). " +
                 "A non-positive value turns lock acquisition into a busy loop against Redis.");
         }
 

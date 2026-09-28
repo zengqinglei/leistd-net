@@ -2,9 +2,11 @@ using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Ddd.Infrastructure.Persistence;
 using Leistd.EventBus;
+using Leistd.UnitOfWork;
 using Leistd.EventBus.Local;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -75,14 +77,18 @@ public class LocalEventInterceptorTests
         TestHandler.Invoked = 0;
         TestHandler.LastName = null;
 
+        // 不开工作单元：管理器的 Current 为空，事件在保存成功后立即发布
         var sp = new ServiceCollection()
+            .AddLogging()
             .AddLocalEventBus()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddUnitOfWork()
             .AddScoped<IEventHandler<TestCreatedEvent>, TestHandler>()
             .BuildServiceProvider();
 
         var interceptor = new LocalEventSaveChangesInterceptor(
             sp.GetRequiredService<ILocalEventBus>(),
-            unitOfWorkManager: null,
+            sp.GetRequiredService<IUnitOfWorkManager>(),
             NullLogger<LocalEventSaveChangesInterceptor>.Instance);
 
         var options = new DbContextOptionsBuilder()
@@ -227,14 +233,18 @@ public class LocalEventInterceptorTests
         TestHandler.Invoked = 0;
         TestHandler.LastName = null;
 
+        // 不开工作单元：管理器的 Current 为空，事件在保存成功后立即发布
         var sp = new ServiceCollection()
+            .AddLogging()
             .AddLocalEventBus()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddUnitOfWork()
             .AddScoped<IEventHandler<TestCreatedEvent>, TestHandler>()
             .BuildServiceProvider();
 
         var interceptor = new LocalEventSaveChangesInterceptor(
             sp.GetRequiredService<ILocalEventBus>(),
-            unitOfWorkManager: null,
+            sp.GetRequiredService<IUnitOfWorkManager>(),
             NullLogger<LocalEventSaveChangesInterceptor>.Instance);
 
         var db = new TestDbContext(new DbContextOptionsBuilder()

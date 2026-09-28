@@ -8,6 +8,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Authorization.Checking;
@@ -66,9 +67,10 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMultiTenancyCore();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
-        services.AddAuthorizationEfCore<RoutedDbContext>();
+        services.AddPermissionAuthorizationEfCore<RoutedDbContext>();
         services.AddSingleton<IPermissionDefinitionProvider, TestPermissionDefinitionProvider>();
 
         // 租户感知解析器：有租户上下文就给租户库，否则宿主库
@@ -185,9 +187,10 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMultiTenancyCore();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
-        services.AddAuthorizationEfCore<RoutedDbContext>();
+        services.AddPermissionAuthorizationEfCore<RoutedDbContext>();
         services.AddSingleton<IPermissionDefinitionProvider, TestPermissionDefinitionProvider>();
         services.AddSingleton<IConnectionStringResolver>(
             new TenantAwareResolver(_hostConnectionString, _tenantConnectionString));
@@ -249,7 +252,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            modelBuilder.ConfigureAuthorization();
+            modelBuilder.ConfigurePermissionAuthorization();
         }
     }
 }

@@ -1,4 +1,3 @@
-using System.Net;
 using Leistd.BackgroundJobs.Queues;
 using Leistd.Email.Abstractions;
 using Leistd.Notifications.Channels;
@@ -16,7 +15,8 @@ namespace Leistd.Notifications.Email.Channels;
 /// 通知的邮件渠道：收件人有已验证地址时，经后台队列异步发送。
 /// </summary>
 /// <remarks>
-/// <para>正文按纯文本 HTML 编码后发送：通知内容可能夹带用户可控文本，原样当 HTML 发出等于让邮件承载注入。</para>
+/// <para>正文按纯文本发送（内容，链接为绝对 http(s) 地址时另起一段附上）：通知内容可能夹带用户可控文本，按 HTML 发出等于让邮件承载注入。
+/// 需要定制邮件版式时实现自己的 <see cref="INotificationChannel"/>。</para>
 /// <para>队列满时丢弃本封并记警告，不阻塞发布方——邮件是尽力而为的附加渠道，站内通知已经落库。</para>
 /// </remarks>
 /// <param name="recipients">收件人地址解析。</param>
@@ -41,12 +41,20 @@ public sealed class EmailNotificationChannel(
             return;
         }
 
+        var body = notification.Content ?? notification.Title;
+        // 相对链接是站内导航，放进邮件打不开；只附绝对地址
+        if (Uri.TryCreate(notification.Link, UriKind.Absolute, out var link) &&
+            (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp))
+        {
+            body = $"{body}{Environment.NewLine}{Environment.NewLine}{notification.Link}";
+        }
+
         var message = new EmailMessage
         {
             To = email,
             Subject = notification.Title,
-            Body = WebUtility.HtmlEncode(notification.Content ?? notification.Title),
-            IsBodyHtml = true
+            Body = body,
+            IsBodyHtml = false
         };
 
         if (!queue.TryQueue((services, token) => new ValueTask(services.GetRequiredService<IEmailSender>().SendAsync(message, token))))

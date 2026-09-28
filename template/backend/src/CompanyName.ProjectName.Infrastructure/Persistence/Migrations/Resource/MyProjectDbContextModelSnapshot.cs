@@ -33,10 +33,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatorId")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("DeleterId")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone");
@@ -61,7 +63,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LastModifierId")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -168,10 +171,12 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("CreatorId")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("DeleterId")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone");
@@ -183,7 +188,8 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Resource
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LastModifierId")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");

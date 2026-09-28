@@ -8,7 +8,7 @@
 | --- | --- |
 | 定期清理、归档、扫描共享数据，多副本只该跑一份 | `AddRecurringJob<TJob>(name, schedule, RecurringJobScope.Cluster)` |
 | 定期刷新本进程内状态（缓存、配置），每个副本都要跑 | `RecurringJobScope.EveryInstance` |
-| 组件自带维护任务 | 组件在自己的 `Add*` 里登记，宿主只注册调度器 |
+| 组件自带维护任务 | 组件在自己的 `Add*` 里登记，宿主只注册调度器；登记了任务而没有调度器时，宿主启动记一条 Warning |
 | 请求里触发、丢了也只是少做一次的工作（非关键通知、缓存预热） | 注入 `IBackgroundTaskQueue` 入队 |
 | 必须完成、失败要重试的作业 | 不用本组件的队列：与业务同事务写库，或引入持久化作业调度器 |
 
@@ -83,6 +83,7 @@ if (!queue.TryQueue((services, ct) => services.GetRequiredService<WelcomeMailer>
 | `IRecurringJobStateStore` | 集群任务的完成水位 |
 | `IBackgroundTaskQueue.QueueAsync` / `TryQueue` | 入队；满时等待或返回 `false` |
 | `AddInProcessBackgroundJobs(configure?)` | InProcess 包：注册调度器、队列与进程内水位；幂等 |
+| `RecurringJobSchedulerMarker` | Core 包：调度器实现登记的标记（`TryAddSingleton<RecurringJobSchedulerMarker>()`）；自研调度器不登记时，启动检查会误报"没有调度器" |
 | `AddBackgroundJobsEfCore<TDbContext>()` / `ConfigureBackgroundJobs(modelBuilder)` | EF 包：共享水位存储，与注册顺序无关地替换进程内实现 |
 
 ## 配置项（Leistd:BackgroundJobs）

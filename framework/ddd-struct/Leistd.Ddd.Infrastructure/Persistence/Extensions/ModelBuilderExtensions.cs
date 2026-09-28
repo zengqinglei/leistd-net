@@ -1,53 +1,14 @@
 using System.Linq.Expressions;
-using Leistd.Auditing;
-using Leistd.Ddd.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Query;
-using Leistd.Auditing.Abstractions;
 
 namespace Leistd.Ddd.Infrastructure.Persistence.Extensions;
 
 /// <summary>
-/// 提供领域实体模型约定和全局过滤器扩展。
+/// 提供全局查询过滤器扩展。
 /// </summary>
 public static class ModelBuilderExtensions
 {
-    /// <summary>
-    /// 配置实体基类属性和审计字段长度约束。
-    /// </summary>
-    public static void ConfigureByConvention<TEntity>(this EntityTypeBuilder<TEntity> b)
-        where TEntity : class
-    {
-        var type = typeof(TEntity);
-
-        if (typeof(ICreationAuditedObject).IsAssignableFrom(type))
-        {
-            b.Property(nameof(ICreationAuditedObject.CreatorId)).HasMaxLength(64);
-        }
-
-        if (typeof(IModificationAuditedObject).IsAssignableFrom(type))
-        {
-            b.Property(nameof(IModificationAuditedObject.LastModifierId)).HasMaxLength(64);
-        }
-
-        if (typeof(IDeletionAuditedObject).IsAssignableFrom(type))
-        {
-            b.Property(nameof(IDeletionAuditedObject.DeleterId)).HasMaxLength(64);
-        }
-
-        if (typeof(IHasConcurrencyStamp).IsAssignableFrom(type))
-        {
-            // IsRequired 不能省：列可空时 EF 对 null 原值生成 WHERE ConcurrencyStamp IS NULL，
-            // 会匹配所有 null 行并使并发校验失效。
-            b.Property(nameof(IHasConcurrencyStamp.ConcurrencyStamp))
-                .HasMaxLength(40)
-                .IsRequired()
-                .IsConcurrencyToken();
-        }
-    }
-
-
     /// <summary>
     /// 为满足指定契约的所有根实体应用命名全局查询过滤器。
     /// </summary>

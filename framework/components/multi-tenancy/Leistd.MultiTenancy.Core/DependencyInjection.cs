@@ -103,7 +103,7 @@ public static class DependencyInjection
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <remarks>
-    /// <para><c>TenantRouting:CacheLifetime</c> 必须配置（大于 0、不超过 1 小时），否则启动失败；
+    /// <para><c>TenantRouting:CacheLifetime</c> 默认 10 分钟，可配置（大于 0、不超过 1 小时，越界启动失败）；
     /// 也可以再用 <c>services.Configure&lt;TenantRouteCacheOptions&gt;</c> 覆盖。</para>
     /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现（<c>Leistd.MultiTenancy.ServiceClient</c> 包）：控制面经已认证的内部接口下发
     /// 已解密的连接串，本服务不需要控制面的密钥环。

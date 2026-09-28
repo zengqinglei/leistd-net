@@ -5,6 +5,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Data;
@@ -36,6 +37,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         services.AddLogging();
         services.AddMultiTenancyCore();
         services.AddSingleton<IConnectionStringResolver>(_resolver);
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<FirstDbContext>((_, options) => ConfigureSqlite(options, connectionString));
@@ -86,6 +88,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<FirstDbContext>((_, options) => ConfigureSqlite(options, connectionString));
@@ -196,6 +199,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<InMemoryDbContext>(options =>
@@ -232,6 +236,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<FirstDbContext>((_, o) => ConfigureSqlite(o, connA));

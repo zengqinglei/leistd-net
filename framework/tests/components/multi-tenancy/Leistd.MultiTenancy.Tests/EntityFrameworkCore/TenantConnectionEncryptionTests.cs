@@ -11,6 +11,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -43,6 +44,7 @@ public sealed class TenantConnectionEncryptionTests : IAsyncLifetime
             .UseSqlite(_connection)
             .EnableSensitiveDataLogging()
             .LogTo(_efLog.Enqueue, LogLevel.Debug));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());

@@ -33,19 +33,6 @@ public interface ITenantManagementService
         CreateTenantInputDto input,
         CancellationToken cancellationToken = default);
 
-    /// <summary>以指定标识创建租户并开通，用于播种与夹具。</summary>
-    /// <remarks>
-    /// EF Core 的 <c>HasData</c> 同样要求显式主键。端点不暴露这个重载：
-    /// 让 HTTP 调用方挑主键会带来撞号与可枚举。
-    /// </remarks>
-    /// <param name="input">创建入参；宿主可传派生类型携带开通所需的更多信息。</param>
-    /// <param name="id">指定租户标识；不接受 <see cref="Guid.Empty"/>。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    Task<TenantOutputDto> CreateAsync(
-        CreateTenantInputDto input,
-        Guid id,
-        CancellationToken cancellationToken = default);
-
     /// <summary>更新名称、显示名与描述。</summary>
     /// <param name="id">租户标识。</param>
     /// <param name="input">新值；全部覆盖。</param>

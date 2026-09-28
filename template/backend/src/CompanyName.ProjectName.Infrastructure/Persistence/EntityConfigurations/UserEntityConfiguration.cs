@@ -1,5 +1,4 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
@@ -30,8 +29,6 @@ internal static class BaseEntityConfiguration
     {
         builder.Entity<User>(b =>
         {
-            b.ConfigureByConvention();
-
             b.Property(e => e.Username).IsRequired().HasMaxLength(64);
             b.Property(e => e.Email).IsRequired().HasMaxLength(256);
             b.Property(e => e.Avatar).HasColumnType("text");

@@ -2,6 +2,7 @@ using Leistd.EventBus.Events;
 using Leistd.UnitOfWork.Database;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -95,6 +96,7 @@ public sealed class CustomUnitOfWorkLifecycleTests
         services.AddSingleton(failure ?? new InitializationFailureSwitch());
         // 先注册自定义实现：AddUnitOfWork 内部是 TryAdd，因此默认实现不会覆盖它
         services.AddTransient<IUnitOfWork, MinimalUnitOfWork>();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddSingleton(probes);
         services.AddScoped<ScopeProbe>();

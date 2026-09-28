@@ -1237,18 +1237,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             return inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
         }
 
-        public Task<TenantConfiguration> CreateAsync(
-            string name,
-            string? displayName,
-            bool isActive,
-            Guid id,
-            string? description = null,
-            CancellationToken cancellationToken = default)
-        {
-            probe.Record("control", unitOfWorkManager);
-            return inner.CreateAsync(name, displayName, isActive, id, description, cancellationToken);
-        }
-
         public Task<TenantConfiguration> SetActiveAsync(
             Guid id,
             bool isActive,
@@ -1326,19 +1314,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             CancellationToken cancellationToken = default)
         {
             var created = await inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
-            LastCreatedId = created.Id;
-            return created;
-        }
-
-        public async Task<TenantConfiguration> CreateAsync(
-            string name,
-            string? displayName,
-            bool isActive,
-            Guid id,
-            string? description = null,
-            CancellationToken cancellationToken = default)
-        {
-            var created = await inner.CreateAsync(name, displayName, isActive, id, description, cancellationToken);
             LastCreatedId = created.Id;
             return created;
         }

@@ -25,7 +25,7 @@ internal sealed class RemoteConnectionStringResolver(
     TenantRouteResolutionCoordinator coordinator) : IConnectionStringResolver
 {
     // 期限同时定义租户改路由前的排空等待时间；启动期已校验非空
-    private TimeSpan CacheLifetime => routeCacheOptions.Value.CacheLifetime!.Value;
+    private TimeSpan CacheLifetime => routeCacheOptions.Value.CacheLifetime;
 
     public async Task<string> ResolveAsync(string connectionStringName, CancellationToken cancellationToken = default)
     {

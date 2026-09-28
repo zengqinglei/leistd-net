@@ -89,7 +89,7 @@ public sealed class PipelineHost : IAsyncDisposable
 
         // 第一层：功能权限。AddPermissionAuthorization 让 [Authorize(Policy = "权限名")] 生效。
         builder.Services.AddPermissionAuthorization();
-        builder.Services.AddAuthorizationEfCore<PipelineDbContext>();
+        builder.Services.AddPermissionAuthorizationEfCore<PipelineDbContext>();
         builder.Services.AddSingleton<IPermissionDefinitionProvider, OrderPermissionDefinitionProvider>();
         builder.Services.AddScoped<IPermissionSubjectProvider, TestPermissionSubjectProvider>();
 

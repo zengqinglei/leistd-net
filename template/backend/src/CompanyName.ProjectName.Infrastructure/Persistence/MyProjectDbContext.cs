@@ -44,9 +44,8 @@ public class MyProjectDbContext(
     // 集群周期任务的完成水位：多副本同一时段只跑一次
     public DbSet<RecurringJobState> RecurringJobStates { get; set; } = null!;
 
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    protected override void ConfigureModelConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        base.ConfigureConventions(configurationBuilder);
         configurationBuilder.Properties<Enum>().HaveConversion<string>().HaveMaxLength(64);
     }
 
@@ -66,7 +65,7 @@ public class MyProjectDbContext(
         modelBuilder.ConfigureIdentity();
 #endif
         // 权限授予实体配置
-        modelBuilder.ConfigureAuthorization();
+        modelBuilder.ConfigurePermissionAuthorization();
         // 设置值实体配置
         modelBuilder.ConfigureSettings();
         // 操作记录与归档表

@@ -34,7 +34,7 @@
 | 编号 | 问题 | 做法 |
 |---|---|---|
 | A2 | `LocalEventSaveChangesInterceptor` 只从 Added/Modified/Deleted 收集事件，却清空全部实体；聚合根 Unchanged 时事件丢失 | 去掉状态过滤，收集与清空同一范围（与 eShop、ABP 一致） |
-| A3 | 漏装 DynamicProxy 服务提供程序工厂时 `[UnitOfWork]`、阶段过滤、注册校验全部静默失效，事件处理器两趟都执行 | 工厂登记标记服务；`AddUnitOfWork` 注册的 `IHostedService` 检查标记，缺失即抛并写明 `UseServiceProviderFactory(...)`（`MvcMarkerService` 先例）。直接 `BuildServiceProvider` 不经 Host 的场景写进文档 |
+| A3 | 漏装 DynamicProxy 服务提供程序工厂时 `[UnitOfWork]`、阶段过滤、注册校验全部静默失效，事件处理器两趟都执行 | 工厂登记标记服务；`AddUnitOfWork` 注册的 `IHostedLifecycleService` 在 `StartingAsync` 检查标记，缺失即抛并写明 `UseServiceProviderFactory(...)`（`MvcMarkerService` 先例）。直接 `BuildServiceProvider` 不经 Host 的场景写进文档 |
 | A5 | `BaseDbContext(options)` 单参构造令租户过滤、审计与开关退化 | 删除，只留 `(options, IServiceProvider?)`；检查传 `null`（设计时）路径 |
 | A7 | `TenantSessionRecoveryMiddleware` 写死 `CustomClaimTypes.TenantId` | 改读 `MultiTenancyOptions.TenantClaimType` |
 | A8 | 无当前用户时 `LastModifierId` 保留上一人 | 置为 null |
@@ -51,7 +51,7 @@
 |---|---|
 | A1 | `AddDddInfrastructure` 内部调用 `AddLocalEventBus()`；删拦截器"可选依赖、只收集不发布"分支与注释；修 `ddd-struct.md` 最小示例 |
 | A4 | `AddDddDbContext<T>` 内经 `ConfigureDbContext<T>` 自动挂 DDD 拦截器，**仅当 `T : BaseDbContext`**；拦截器保持 Scoped；删公开 `AddDddInterceptors`。模型约定做成独立 EF convention（`IModelFinalizingConvention`，显式 Fluent 配置优先）：`BaseDbContext` 自动注册（密封 `ConfigureConventions`，另开 virtual 钩子），控制库上下文显式注册同一约定；控制库改完后删 `ConfigureByConvention`；更新模板基线迁移，核对两类快照与设计时建模；框架文档（ddd-struct）补"迁移快照检查"一节（`Database.HasPendingModelChanges()` 用法与 `dotnet ef migrations has-pending-model-changes`），注明升级会改模型的框架版本后必跑，升级说明引用该节 |
-| A6/B1/B2 | 由 Host 提供配置的组件默认 `AddOptions<T>().BindConfiguration(configSectionPath)` 再 `Configure(configure)`，有校验链 `ValidateOnStart`；UoW 等支持纯 `ServiceCollection` 的入口保持委托可用，另给明确的绑定入口；`IConfiguration` 重载无调用方即删。修掉"只传委托却未绑定"的缺陷（如 `AddMultiTenancy(Action)`、`Leistd:UnitOfWork`） |
+| A6/B1/B2 | 由 Host 提供配置的组件默认 `AddOptions<T>().BindConfiguration(configSectionPath)` 再 `Configure(configure)`，有校验链 `ValidateOnStart`；`AddUnitOfWork` 同样统一（纯 `ServiceCollection` 自行注册 `IConfiguration`），删 `IConfiguration` 重载；校验报错按实际配置节给出键名。修掉"只传委托却未绑定"的缺陷（如 `AddMultiTenancy(Action)`、`Leistd:UnitOfWork`） |
 | B3 | `AddInterceptor` 按类型去重；必要时用标记服务防回调与校验器重复登记 |
 | B4 | `AddAuthorizationEfCore`/`ConfigureAuthorization` → `AddPermissionAuthorizationEfCore`/`ConfigurePermissionAuthorization`，修 XML 错误引用（官方要求 `Add{Service}` 不与官方包重名）。不做全局改名 |
 | TR | `TenantRouteCacheOptions` 给默认时长，保留上限校验 |
@@ -134,7 +134,13 @@
    - A10：同类的 `Leistd:ServiceClients:Identity:BaseAddress` 占位一并改空；其必填校验由框架 `AddRemoteTenantConnectionStore` 对自身客户端选项 `Validate + ValidateOnStart`（报出键名，非模板项目同样受保护，ServiceClient 通用选项仍可留空）；内存库模式不注册远端存储，无需该地址。README 补 Resource 首次启动与改用真实库时的配置。
    - T8：配置键为 `SessionCookie:SameSite`（`SessionCookieOptions`，仅 LocalIdentity）；会话 Cookie 经 `AddOptions<CookieAuthenticationOptions>(scheme).Configure<IOptions<SessionCookieOptions>>` 与状态 Cookie 读同一管道；未配置时会话 Cookie 沿用框架默认 `Lax`，状态 Cookie 显式 `Lax`；部署文档补 `None` 的适用情形（跨站 POST 到 `/connect/*`、`form_post` 回调直落 API）。
    - 审查后延后：dev/test/uat 构建配置的 Mock 替换并入阶段 4 的 ENV；登录页演示账号提示与 `login.ts` 中 `isMockEnabled` 另行解析 `useMock`（与 `shouldProvideMock` 口径不一致）留待后续阶段。
-3. **框架结构**：先定 A4、A6、E1 的接口与组合规则，再实施 A1、A3 余项、A4、A6/B1/B2、B3、B4、TR、A9、D1、D3、D6、D10、E1、F3。验收：构建、测试、打包到 `.tmp/local-feed`、核对包内签名、隔离消费，覆盖只装单个组件的普通宿主路径。
+3. **框架结构**：先定 A4、A6、E1 的接口与组合规则，再实施 A1、A3 余项、A4、A6/B1/B2、B3、B4、TR、A9、D1、D3、D6、D10、E1、F3。验收：构建、测试、打包到 `.tmp/local-feed`、核对包内签名、隔离消费，覆盖只装单个组件的普通宿主路径。（已实施，经三轮审查）
+   - A4：`AddDddDbContext<T>` 在首次登记且 `T : BaseDbContext` 时经 `ConfigureDbContext<T>` 挂三个拦截器（重复登记不挂第二层，测试按拦截器数量断言——重复执行多数碰巧幂等，只看行为抓不到）。约定类命名 `DddEntityConvention`（`IModelFinalizingConvention`，约定来源写入；并发标记三项分别写入，一项被显式覆盖不影响其余）；`BaseDbContext` 封闭 `ConfigureConventions`，钩子为 `ConfigureModelConventions`。模板控制库 `IdentityControlDbContext` 显式注册该约定（其实体已显式配置，模型不变）。模型影响只在 Resource 形态：`Roles`/`UserRoles` 审计列此前未走约定（`text`），改为 64，已改 Resource 基线三份文件；Identity 形态无差异。
+   - A6：`AddUnitOfWork`、`AddMultiTenancy`、`AddGlobalExceptionHandler`、`AddSmtpEmailSender`、`AddServiceUserContext`、`AddRedisDistributedLock` 合并为单一入口 `(configure?, configSectionPath = T.SectionName)`，删 `IConfiguration` 重载；`ServiceUserContextOptions`、`UnitOfWorkOptions` 补 `SectionName`。`OperationRecordOptions` 注释改为不绑定配置节（claim 名属宿主签发细节，只走委托）。tracing 留给 P2 删除；ServiceClient 按服务名传 `IConfiguration` 保留。
+   - 审查（Claude、Codex）后采纳：E1 标记改为携带兜底描述符，Redis 只移除那一条（此前"内存兜底 → 宿主 `Add` → Redis"会删掉宿主实现）；A1 默认 `IEventBus` 转发到最终的 `ILocalEventBus`（改 `TryAdd` 后宿主预替换总线会留下第二条发布路径）；A4 约定改用 `FindProperty`（派生实体实现契约、属性声明在已映射基实体上时会漏）；A6 `AddUnitOfWork` 也统一为单一入口、删 `IConfiguration` 重载（"纯 ServiceCollection"只关系测试，生产中只传委托的宿主同样丢配置；两边意见分歧，采纳 Claude，避免之后再破坏一次），`AddDddInfrastructure` 经它绑定；文档补"不支持 `AddDbContextFactory`"；A9 标记改 `TryAdd`。E1、A1、A4 继承属性、UoW 绑定四个新用例经变异证伪。
+   - 终审后采纳：E1 内存兜底只看非 keyed 注册（具名锁曾阻止默认兜底）；Smtp、Redis 锁、多租户（域名格式与租户存储两个）的校验器按实际 `configSectionPath` 报键名；并发标记必填的理由改正（更新条件含主键，不存在"匹配所有 null 行"）；`AddDbContextFactory` 限定为默认单例生命周期；补 TTL 可选、Response 失败信封 `code`/`errorCode` 语义、自研调度器登记标记的文档；Realtime 用例断言追加的授权策略确实附着；A4 补"先登记后 `AddDbContext`"顺序用例。
+   - E1：模板 Redis 分支只注册 `AddRedisDistributedLock`，没有 `ILocalLock`；模板目前无进程内锁用法，不补。
+   - F3 后续：模板安全提醒的 `Link` 是相对路径 `/workspace/settings/security`，邮件不附；要在邮件里带链接需要"站点对外地址"配置，另行评估。
 4. **身份口径**：roleType + C10 → F2 → C11。验收：权限、通知推送、操作记录端到端；C11 在同一作用域按"当前主体 → 其他主体 → 当前主体"及跨租户主体验证不串人。
 5. **模板**：T1、ENV + C8、H、T7（redis）。验收：9 个生成场景；克隆后用 InMemory 直接运行且默认管理员可登录；T1 覆盖新内存库、已有管理员缺口令键、真实库首次建管理员缺键三种启动；实测本地与外部登录、SignalR 只投递一次；compose 一键启动。
 6. **P2**：按组件分批，C1 最后。验收：各组件测试、打包、9 个生成场景、前端构建；C4 旁路用例、D2 双形状用例；C9 落地后复验默认管理员登录。

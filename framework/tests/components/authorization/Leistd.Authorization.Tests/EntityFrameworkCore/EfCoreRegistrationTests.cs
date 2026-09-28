@@ -15,7 +15,7 @@ using Xunit;
 namespace Leistd.Authorization.Tests.EntityFrameworkCore;
 
 /// <summary>
-/// <c>AddAuthorizationEfCore</c> 的注册面。
+/// <c>AddPermissionAuthorizationEfCore</c> 的注册面。
 ///
 /// 宿主组合根拆开之后重复调用 <c>AddXxx()</c> 是常态，而这里的失效是静默的：
 /// 存储与管理器各多出一条描述符，按 <c>IEnumerable</c> 解析时出现重复项。
@@ -35,7 +35,7 @@ public class EfCoreRegistrationTests
     {
         var services = new ServiceCollection();
 
-        services.AddAuthorizationEfCore<FirstDbContext>();
+        services.AddPermissionAuthorizationEfCore<FirstDbContext>();
 
         services.AssertImplementedBy<IPermissionGrantStore, EfCorePermissionGrantStore<FirstDbContext>>();
         services.AssertImplementedBy<IPermissionGrantManager, EfCorePermissionGrantManager<FirstDbContext>>();
@@ -52,9 +52,9 @@ public class EfCoreRegistrationTests
     public void A_second_context_is_rejected_instead_of_silently_ignored()
     {
         var services = new ServiceCollection();
-        services.AddAuthorizationEfCore<FirstDbContext>();
+        services.AddPermissionAuthorizationEfCore<FirstDbContext>();
 
-        var exception = Record.Exception(() => services.AddAuthorizationEfCore<SecondDbContext>());
+        var exception = Record.Exception(() => services.AddPermissionAuthorizationEfCore<SecondDbContext>());
 
         Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("single authoritative store", exception!.Message);
@@ -69,7 +69,7 @@ public class EfCoreRegistrationTests
         // 不能被框架的默认实现悄悄挤掉或忽略。
         services.AddTransient<IPermissionGrantStore>(_ => throw new NotSupportedException());
 
-        var exception = Record.Exception(() => services.AddAuthorizationEfCore<FirstDbContext>());
+        var exception = Record.Exception(() => services.AddPermissionAuthorizationEfCore<FirstDbContext>());
 
         Assert.IsType<InvalidOperationException>(exception);
     }
@@ -84,7 +84,7 @@ public class EfCoreRegistrationTests
         // 工厂注册即可代表"宿主自己接的实现"，不必为验证"没被覆盖"手写整个接口。
         services.AddTransient<IPermissionGrantManager>(_ => throw new NotSupportedException());
 
-        services.AddAuthorizationEfCore<FirstDbContext>();
+        services.AddPermissionAuthorizationEfCore<FirstDbContext>();
 
         var descriptor = services.AssertSingle<IPermissionGrantManager>(ServiceLifetime.Transient);
         Assert.NotNull(descriptor.ImplementationFactory);
@@ -98,7 +98,7 @@ public class EfCoreRegistrationTests
         services.AddSingleton<IPermissionGrantStore, EfCorePermissionGrantStore<FirstDbContext>>();
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => services.AddAuthorizationEfCore<FirstDbContext>());
+            () => services.AddPermissionAuthorizationEfCore<FirstDbContext>());
 
         Assert.Contains("Singleton", exception.Message);
     }
@@ -107,6 +107,6 @@ public class EfCoreRegistrationTests
     public void Repeated_registration_adds_nothing()
     {
         ServiceCollectionAssertions.AssertIdempotent(services =>
-            services.AddAuthorizationEfCore<FirstDbContext>());
+            services.AddPermissionAuthorizationEfCore<FirstDbContext>());
     }
 }

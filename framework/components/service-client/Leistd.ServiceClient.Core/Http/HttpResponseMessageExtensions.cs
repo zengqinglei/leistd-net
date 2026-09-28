@@ -211,7 +211,7 @@ public static class HttpResponseMessageExtensions
 
         public T? Data { get; init; }
 
-        // 信封的失败形态（ErrorResult）带字段级明细，形状与 Problem Details 的 errors 一致。
+        // 信封的失败形态带字段级明细，形状与 Problem Details 的 errors 一致。
         public List<ErrorItem>? Errors { get; init; }
     }
 
@@ -224,8 +224,8 @@ public static class HttpResponseMessageExtensions
     private static string Truncate(string value) =>
         value.Length <= MaxBodySnippetLength ? value : value[..MaxBodySnippetLength];
 
-    // Problem Details 把业务码放在字符串 code；新数字信封用 errorCode，
-    // 而旧信封只有数字 code。三种形状都要能还原。
+    // Problem Details 把业务码放在字符串 code，数字信封放在 errorCode。
+    // 信封里的数字 code 是 HTTP 状态，不是业务码，不参与还原。
     private static string? TryGetErrorCode(JsonElement root)
     {
         if (root.TryGetProperty("errorCode", out var envelopeCode) &&
@@ -234,17 +234,9 @@ public static class HttpResponseMessageExtensions
             return envelopeCode.GetString();
         }
 
-        if (!root.TryGetProperty("code", out var code))
-        {
-            return null;
-        }
-
-        return code.ValueKind switch
-        {
-            JsonValueKind.String => code.GetString(),
-            JsonValueKind.Number => code.GetRawText(),
-            _ => null
-        };
+        return root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
+            ? code.GetString()
+            : null;
     }
 
     private static string? TryGetString(JsonElement element, string propertyName) =>

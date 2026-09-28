@@ -28,7 +28,7 @@ dotnet add package Leistd.EventBus.Local
 builder.Services.AddLocalEventBus();
 ```
 
-`AddLocalEventBus` 以 **Singleton** 注册 `LocalEventBus`，并将同一实例同时绑定到 `IEventBus` 与 `ILocalEventBus`，注入任一接口都可发布事件。
+`AddLocalEventBus` 以 **Singleton** 注册 `LocalEventBus`，并将同一实例同时绑定到 `IEventBus` 与 `ILocalEventBus`，注入任一接口都可发布事件。可重复调用，不会重复注册。
 
 事件处理器需**自行注册**（总线不做程序集扫描）。处理器在每次发布时通过独立 Scope 解析，因此 Scoped 注册可正常工作：
 
@@ -109,10 +109,10 @@ public class OrderPlacedHandler : IEventHandler<OrderPlacedEvent>
 
 `ILocalEventDispatcher` 绕过推迟，避免工作单元排空事件时重新入队；处理器内新发布的事件仍会进入下一轮排空。
 
-> **替换默认本地总线时**：自定义实现必须同时提供语义一致的 `ILocalEventDispatcher`。只替换 `ILocalEventBus` 会形成两条分发管道——业务发布走自定义总线，而工作单元排空走默认 dispatcher。工作单元在有待发事件却取不到 `ILocalEventDispatcher` 时会直接抛出，不会静默丢弃事件。
+> **替换默认本地总线时**：在 `AddLocalEventBus()` 之前注册自定义 `ILocalEventBus`，`IEventBus` 随之指向它；自定义实现必须同时提供语义一致的 `ILocalEventDispatcher`。只替换 `ILocalEventBus` 会形成两条分发管道——业务发布走自定义总线，而工作单元排空走默认 dispatcher。工作单元在有待发事件却取不到 `ILocalEventDispatcher` 时会直接抛出，不会静默丢弃事件。
 
 ## 注意事项
 
 - 处理器**不会自动注册**，必须显式 `AddScoped`/`AddTransient`/`AddSingleton` 注册 `IEventHandler<TEvent>`，否则发布时找不到处理器（静默返回，不报错）。
 - 本地总线为**同步语义**：处理器耗时直接计入发布方的调用时长；长耗时副作用应在处理器内部自行转为后台任务。**例外**是活动工作单元内的发布——那只是入队并立即返回，处理器在工作单元完成时执行，见[与工作单元的关系](#与工作单元的关系)。
-- 仅进程内有效，无跨进程/持久化能力；`ILocalEventBus` 与 `IEventBus` 当前指向同一 `LocalEventBus` 实例，进程重启不保留未处理事件。
+- 仅进程内有效，无跨进程/持久化能力；`IEventBus` 始终指向当前的 `ILocalEventBus`（默认即 `LocalEventBus` 实例），进程重启不保留未处理事件。

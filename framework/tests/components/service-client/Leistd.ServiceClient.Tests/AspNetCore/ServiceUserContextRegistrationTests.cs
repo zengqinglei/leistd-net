@@ -5,6 +5,7 @@ using Leistd.ServiceClient.AspNetCore.Claims;
 using Leistd.ServiceClient.Constants;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -79,6 +80,7 @@ public class ServiceUserContextRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddSingleton(counter ?? new CallCounter());
         services.AddScoped<RequestScopedTenantSource>();
         return services;

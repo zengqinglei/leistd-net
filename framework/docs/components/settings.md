@@ -227,7 +227,7 @@ public sealed class SettingChangeLogger(ILogger<SettingChangeLogger> logger) : I
 - 进程级设置**不接在回落链上**：`ISettingProvider` 在宿主上下文直接读宿主那一行，没有值才用代码默认值；租户上下文下它读不到——`GetOrNullAsync` 抛 `HostScopeUnavailableException`，`GetAllAsync` 干脆不包含它。刻意不返回代码默认值：那个值看着有效，调用方分不出「这就是当前生效的级别」和「这一层在当前上下文根本读不到」。存储侧由 `ISettingStore.CanAccessHostScope` 回答可达性，解析端据此决定要不要去读，而不是靠捕获异常判断上下文。
 - **同一作用域先写后读读到新值**：`ISettingProvider` 按作用域记忆化，经 `ISettingManager` 写入后，同一作用域的记忆化结果即作废，下次读取重新查存储。
 - **写入校验按固定顺序**：空串（`Setting:EmptyValueRejected`，清除只用 `null`）→ 值类型与区间（`BooleanRequired`、`IntegerRequired`、`ValueOutOfRange`）→ 候选值（`ValueNotAllowed`，按序号比较）→ 宿主注册的 `ISettingValueValidator`。任何一步不过都不落库、不发事件。清除只校验名称与层级，不会被一个已经不合法的历史值卡住。错误提示的 `{Name}` 与设置页同一取法——按 `Setting:{设置名}` 查 `LocalizationResource`，查不到用定义上的 `DisplayName`，再没有才用设置名；只有 `Setting:Undefined`、`Setting:NotAvailable` 回显调用方传入的名字，因为这两种情况没有可对外展示的定义。
-- **写入后发布 `SettingChangedEvent`**（注册了本地事件总线时）。事件不带值——机密设置的明文不进事件。
+- **写入后发布 `SettingChangedEvent`**（注册了本地事件总线时）。事件不带值——机密设置的明文不进事件。没有事件总线时，宿主级设置写入后不会在本进程立即生效，要等下一轮周期刷新。
 - **设置页用例读原始覆盖值**：各层分别给出，不给回落后的生效值，否则租户页会显示当前用户的个人偏好、一保存就写成租户默认值。只处理 `IsVisibleToClients` 的设置（不可见的读不到、写入 404）；租户上下文不下发进程级设置，写入它返回 403（`Setting:HostOnly`）；进程级设置的值放在 `TenantValue`；机密设置不下发任何值，只给 `HasSecretValue`。显示名按 `Setting:{设置名}`、分组按 `SettingGroup:{分组}` 查 `LocalizationResource`，查不到回落到定义文案；未分组归入 `DefaultGroup`。用例不查权限，改租户值的授权由端点策略决定。
 - **宿主级设置经配置源进入 Options（Hosting 包）**：设过的宿主级设置作为优先级最高的配置源覆盖绑定的配置键，没设的不出现、自然回落到部署配置；机密设置在进程内解密后进配置，库里仍是密文。三处推进：宿主开始接收请求之前一次（失败只记告警，库还没迁移时不拦启动）、写入宿主级设置的事务提交后本进程立即一次、每个副本上的 `EveryInstance` 周期任务 `settings.host-refresh`。
 - **整组原子生效**：推进后按 `BindOption<TOptions>` 涉及的选项类型逐个新建并校验，任何一个不合规就整组退回上一组（只记错误），成对的项（发信账号与口令）设齐之前停在上一组。与当前一组或上次被拒的一组相同时什么都不做。

@@ -2,6 +2,7 @@ using Leistd.EventBus.Events;
 using Leistd.UnitOfWork.Database;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -21,6 +22,7 @@ public sealed class ChildUnitOfWorkTests
     private static ServiceProvider Build() =>
         new ServiceCollection()
             .AddLogging()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddUnitOfWork()
             .BuildServiceProvider();
 

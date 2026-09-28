@@ -3,7 +3,8 @@ using Microsoft.Extensions.Options;
 namespace Leistd.MultiTenancy.AspNetCore.Options;
 
 // 子域名格式错误会静默回退到其他解析来源，因此必须在启动期拒绝。
-internal sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenancyOptions>
+// 报错里的键名按实际绑定的配置节给出，宿主改了节路径时照提示去改才对得上
+internal sealed class MultiTenancyOptionsValidator(string sectionPath = MultiTenancyOptions.SectionName) : IValidateOptions<MultiTenancyOptions>
 {
     private const string TenantPlaceholder = "{0}";
 
@@ -44,7 +45,7 @@ internal sealed class MultiTenancyOptionsValidator : IValidateOptions<MultiTenan
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures.Select(failure
-                => $"{MultiTenancyOptions.SectionName}:DomainFormat is invalid ('{format}'): {failure}"));
+                => $"{sectionPath}:DomainFormat is invalid ('{format}'): {failure}"));
     }
 
     // 按浏览器实际发送的 ASCII/punycode Host 形态校验。
