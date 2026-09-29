@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using Leistd.ExceptionHandling;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;

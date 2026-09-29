@@ -1,3 +1,4 @@
+using Leistd.Tracing.Constants;
 using Leistd.OperationRecords.Definitions;
 
 namespace Leistd.OperationRecords.Models;
@@ -30,7 +31,7 @@ public sealed class OperationRecordInfo
     public const int MaxActorIdLength = 128;
 
     /// <summary>链路标识长度上限。</summary>
-    public const int MaxCorrelationIdLength = 64;
+    public const int MaxCorrelationIdLength = CorrelationIdConstants.MaxLength;
 
     /// <summary>目标名快照长度上限：与操作人名同量级，两者都是显示名。</summary>
     public const int MaxTargetNameLength = 160;

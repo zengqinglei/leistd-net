@@ -3,7 +3,6 @@ using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 using Leistd.Data.Connections;
 using Leistd.TestBase.Assertions;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,13 +14,13 @@ namespace Leistd.MultiTenancy.Tests.ConnectionResolution;
 public class RegistrationAndOptionsTests
 {
     [Fact]
-    public void Remote_resolution_registers_a_scoped_resolver_and_a_host_singleton_coordinator()
+    public void Remote_resolution_registers_a_scoped_resolver_and_a_hybrid_cache()
     {
         var services = new ServiceCollection().AddRemoteTenantConnectionResolution();
 
         services.AssertSingle<IConnectionStringResolver>(ServiceLifetime.Scoped);
         services.AssertImplementedBy<IConnectionStringResolver, RemoteConnectionStringResolver>();
-        services.AssertSingle<TenantRouteResolutionCoordinator>(ServiceLifetime.Singleton);
+        services.AssertSingle<Microsoft.Extensions.Caching.Hybrid.HybridCache>(ServiceLifetime.Singleton);
         services.AssertImplementedBy<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
     }
 

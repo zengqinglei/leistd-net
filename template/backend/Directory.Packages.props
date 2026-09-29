@@ -32,6 +32,7 @@
     <PackageVersion Include="Leistd.MultiTenancy.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.MultiTenancy.Management" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.ServiceClient" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.UnitOfWork.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
@@ -71,6 +72,7 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />

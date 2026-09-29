@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Builder;
 using Leistd.AspNetCore.SignalR.Middlewares;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.AspNetCore.SignalR.Filters;
 using Leistd.AspNetCore.SignalR.Options;
 using Leistd.AspNetCore.SignalR.Services;

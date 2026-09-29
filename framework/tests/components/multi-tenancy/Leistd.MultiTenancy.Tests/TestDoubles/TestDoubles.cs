@@ -1,18 +1,11 @@
-using Leistd.TestBase.Doubles;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Entities.Auditing;
-using Leistd.Ddd.Domain.Repositories;
 using Leistd.Ddd.Infrastructure.Persistence;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork;
-using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.MultiTenancy.Tests.TestDoubles;

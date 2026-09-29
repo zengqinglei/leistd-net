@@ -87,11 +87,11 @@ if (order.Status == OrderStatus.Shipped)
 
 400 是客户端请求错误的广义默认；422 只在宿主明确要表达“请求内容语法成立，但无法按其指令处理”且客户端确实需要区分时，才通过 `MapCode` 显式使用。
 
-日志以 `TraceId` 关联请求。异常、自动校验及可选响应信封共用请求入口选定的 `HttpContext.TraceIdentifier`；关联 ID 中间件会把本次选定的标识写入该属性，且不要求其具有 W3C 格式。未安装中间件时使用 ASP.NET Core 的原生请求 ID；请求标识为空时才回落到当前 Activity 的 TraceId。响应字段 `traceId` 因此是应用关联标识，不保证等于 OpenTelemetry 的 `Activity.TraceId`：未安装中间件或选用了非 W3C 自定义关联 ID 时，不能仅凭响应值直接检索分布式链路，应先查服务日志。预期的 4xx 记 Warning，记录已经确认安全的公开消息，不记录未经审查的原始异常对象；5xx 记 Error 并保留异常链与堆栈。客户端可将 5xx 响应中的 `traceId` 告知支持人员快速定位。
+日志以 `TraceId` 关联请求。响应字段 `traceId` 是官方口径的链路标识（当前 `Activity.Id`，W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，取第二段检索；没有 Activity 时回落为 `HttpContext.TraceIdentifier`），不被关联标识覆盖；异常日志里记下同一个值，按响应里的 `traceId` 就能搜到。业务层面的关联标识见[关联标识](./tracing.md)，它在响应头 `X-Correlation-Id` 与日志作用域里，与 `traceId` 分开。预期的 4xx 记 Warning，记录已经确认安全的公开消息，不记录未经审查的原始异常对象；5xx 记 Error 并保留异常链与堆栈。客户端可将 5xx 响应中的 `traceId` 告知支持人员快速定位。
 
 ## 无响应体的错误状态码
 
-所有失败响应只走一条管道：ASP.NET Core 的 `IProblemDetailsService`。异常处理器、自动模型校验、状态码页、`Results.Problem()` 与框架各中间件都经它写出；本组件在它唯一的自定义钩子（`ProblemDetailsOptions.CustomizeProblemDetails`）上统一补 `traceId`、按 `Title:{状态码}` 本地化框架给的默认标题，不另造写出路径。
+所有失败响应只走一条管道：ASP.NET Core 的 `IProblemDetailsService`。异常处理器、自动模型校验、状态码页、`Results.Problem()` 与框架各中间件都经它写出；本组件在它唯一的自定义钩子（`ProblemDetailsOptions.CustomizeProblemDetails`）上统一补 `traceId`（与官方默认写入器同一取值，MVC 自动校验等不经默认写入器的路径也一致）、按 `Title:{状态码}` 本地化框架给的默认标题，不另造写出路径。
 
 有些失败框架只写状态码、不写响应体：生产环境的 Minimal API 请求体解析失败（400）、内容类型不符（415）、未匹配路由（404）、认证质询（401）、限流（429）等。其中请求体解析失败还与环境有关——`RouteHandlerOptions.ThrowOnBadRequest` 默认只在开发环境开启，开发环境抛 `BadHttpRequestException`，由异常中间件按其自带状态码写出；生产环境直接写 400。为这类响应补上响应体用 ASP.NET Core 标准的状态码页，只作用于 API 路径（页面与静态资源的 404 不该变成 JSON）：
 
@@ -115,11 +115,11 @@ app.UseWhen(
   "status": 404,
   "detail": "订单不存在",
   "code": "Order:NotFound",
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 
-注册 `IStringLocalizer` 时，处理器按 `Code` 查资源并用 `LocalizationData` 替换 `{Name}` 占位符；未命中或未启用本地化时回落到安全 `Message`。不增加 WithCode 扩展：BCL 异常不应被临时贴上业务身份。
+容器里有**非泛型** `IStringLocalizer` 时（本地化组件的 `AddJsonLocalization` 会注册；只注册泛型 `IStringLocalizer<T>` 不算），处理器按 `Code` 查资源并用 `LocalizationData` 替换 `{Name}` 占位符；未命中或未启用本地化时回落到安全 `Message`。不增加 WithCode 扩展：BCL 异常不应被临时贴上业务身份。
 
 `IncludeExceptionDetails` 仅用于调试时输出 `stackTrace`，生产环境保持 `false`。
 

@@ -4,7 +4,7 @@ using Leistd.Authorization.Constants;
 using Leistd.Authorization.Events;
 using Leistd.EventBus.EventHandlers;
 #if (LocalIdentity)
-using Leistd.MultiTenancy.Events;
+using Leistd.MultiTenancy.Management.Events;
 #endif
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;

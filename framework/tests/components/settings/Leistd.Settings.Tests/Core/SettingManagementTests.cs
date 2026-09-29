@@ -6,7 +6,6 @@ using Leistd.Settings.Management;
 using Leistd.Settings.Resolution;
 using Leistd.Settings.Stores;
 using Leistd.Settings.Dtos;
-using Leistd.Settings.Options;
 using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;

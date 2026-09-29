@@ -1,4 +1,3 @@
-using Leistd.EventBus;
 using Leistd.UnitOfWork.Events;
 using Leistd.UnitOfWork.Database;
 using Leistd.UnitOfWork.Options;
@@ -6,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.EventBus.Events;
-using Leistd.ExceptionHandling;
 using Leistd.EventBus.Abstractions;
 
 namespace Leistd.UnitOfWork;

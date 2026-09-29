@@ -10,7 +10,7 @@ import {
 //#if (LocalIdentity)
 import { Observable, lastValueFrom, tap } from 'rxjs';
 //#endif
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { firstValueFrom } from 'rxjs';
 //#endif
@@ -21,7 +21,7 @@ import { SignalRService } from './signalr-service';
 //#if (LocalIdentity)
 import { LoginInputDto, SessionLoginOutputDto, UserOutputDto } from '../../shared/dtos/auth.dto';
 //#endif
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { TenantContextService } from './tenant-context-service';
 import { TENANT_CLAIM } from './tenant-protocol';
 //#endif

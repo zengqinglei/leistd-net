@@ -10,12 +10,8 @@ using Leistd.Authorization.EntityFrameworkCore.Managers;
 using Leistd.Authorization.EntityFrameworkCore.Stores;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Subjects;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.Authorization.Exceptions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.EntityFrameworkCore;

@@ -5,7 +5,6 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.Data;
 using Leistd.Data.Connections;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;

@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Leistd.Auditing;
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Infrastructure.Persistence;

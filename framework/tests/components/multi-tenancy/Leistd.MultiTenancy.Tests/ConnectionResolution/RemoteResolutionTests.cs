@@ -1,4 +1,3 @@
-using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Exceptions;
 using Xunit;
 

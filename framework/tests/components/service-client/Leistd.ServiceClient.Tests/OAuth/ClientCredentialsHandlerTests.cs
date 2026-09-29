@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Leistd.ServiceClient.OAuth.Handlers;
-using Leistd.ServiceClient.OAuth.Services;
 using Xunit;
 using Leistd.ServiceClient.OAuth.Abstractions;
 using Leistd.TestBase.Doubles;

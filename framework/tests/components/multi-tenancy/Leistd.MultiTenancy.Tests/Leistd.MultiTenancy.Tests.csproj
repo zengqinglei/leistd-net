@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\..\..\components\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\multi-tenancy\Leistd.MultiTenancy.AspNetCore\Leistd.MultiTenancy.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\components\multi-tenancy\Leistd.MultiTenancy.EntityFrameworkCore\Leistd.MultiTenancy.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\multi-tenancy\Leistd.MultiTenancy.Management\Leistd.MultiTenancy.Management.csproj" />
     <ProjectReference Include="..\..\..\..\components\multi-tenancy\Leistd.MultiTenancy.ServiceClient\Leistd.MultiTenancy.ServiceClient.csproj" />
     <ProjectReference Include="..\..\..\..\components\unit-of-work\Leistd.UnitOfWork.Core\Leistd.UnitOfWork.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\unit-of-work\Leistd.UnitOfWork.EntityFrameworkCore\Leistd.UnitOfWork.EntityFrameworkCore.csproj" />

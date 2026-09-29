@@ -5,12 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Authorization.DataScope.Services;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.DataScope.Tests;

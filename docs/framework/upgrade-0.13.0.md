@@ -421,3 +421,31 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 模板（Resource）：`Authentication:Audience` 默认改为 `companyname-projectname-api` | 与前端申请的 scope 同名，须在身份服务的 `OAuth:ApiResources` 登记；compose 不再要求 `RESOURCE_AUDIENCE` |
 | 模板：会话时长改为 `SessionCookie:ExpireDays` | 取代 `OAuth:CookieExpireDays`；不带授权服务器的形态此前写死 7 天，现在同样可配。`OAuth` 节只在带授权服务器的形态生成，`Authentication` 节只在 Resource 形态生成 |
 | 模板：迁移作业只注册持久化 | Infrastructure 拆出 `AddPersistenceServices`（数据库上下文、租户连接解析、多租户控制库），`AddInfrastructureServices` 在它之上加运行期组件与外部适配器；DbMigrator 只调用前者。此前迁移作业注册了全部运行期组件，它们依赖只在 API 注册的当前用户与权限主体，开发环境下迁移在容器构建期失败 |
+
+## 13. 官方机制替换与清理
+
+| 变化 | 影响与改法 |
+| --- | --- |
+| 新包 `Leistd.MultiTenancy.Management`：租户管理用例移出 Core | `ITenantManagementService`、`ITenantConnectionManagementService`、`AddTenantManagement()`、管理用 DTO（命名空间 `Leistd.MultiTenancy.Management.Dtos`）、开通契约 `ITenantProvisioner` / `ITenantActivationGuard` / `ITenantDatabaseErrorDescriber`（`…Management.Provisioning`）、事件 `TenantChangedEvent` / `TenantConnectionChangedEvent`（`…Management.Events`）移入新包。资源服务回源用的线上 DTO（运行时连接、迁移连接、库清单）留在 Core。`MultiTenancy.Core` 不再依赖工作单元与事件总线 |
+| `AddMultiTenancyEfCore<T>()` 不再注册管理用例 | 只注册存储。提供租户管理界面的宿主另行 `AddTenantManagement()`（引用 Management 包）；只读控制库的宿主（租户连接解析、迁移作业）不需要 |
+| 关联标识：`[CorrelationId]` 特性与拦截器删除 | 没有使用方；非 HTTP 入口用 `IAmbientContext.Begin(principal, correlationId)` 建立作用域，进程内后台队列自动捕获还原。`Leistd.Tracing.Core` 不再依赖动态代理 |
+| `ICorrelationIdProvider.Create()` 删除 | 需要新值时用 `ActivityTraceId.CreateRandom().ToHexString()` 再 `Change(...)` |
+| `AddCorrelationIdCore` / `AddCorrelationId` 改为 `(configure?, configSectionPath?)` | 与其他宿主级组件一致：先绑定 `Leistd:CorrelationId` 再应用委托；无主机的 `ServiceCollection` 需注册 `IConfiguration`。原 `AddCorrelationId(builder.Configuration)` 改为 `AddCorrelationId()` |
+| `CorrelationIdOptions`：`HeaderNames` → `HeaderName`，`IncludeInResponseHeaders` → `SetResponseHeader` | 单个请求头名；空白时启动失败并报 `Leistd:CorrelationId:HeaderName`。`Enabled` 保留，全局关闭 HTTP 传播（用于不采信外部请求头的边缘服务）；只是不想向某个第三方转发，不给那个客户端挂转发处理器即可 |
+| 入站关联标识优先于 Activity | 合法的入站 `X-Correlation-Id`（不超过 64 字符，只含字母、数字、`-`、`_`）优先；没有时取 `Activity.TraceId`，再没有则新建。此前有 Activity 时入站值被丢弃，出站转发到下游后关联断开。超过 64 的值此前接受、落库截断，现在丢弃 |
+| 日志键改为 `leistd.correlationId` | `CorrelationIdConstants.TraceIdLogKey`（`leistd.correlationId.traceId`）与 `InboundTraceIdLogKey` 删除，改 `LogKey`。日志检索按新键；TraceId 由日志库按 Activity 另行记录 |
+| 错误响应的 `traceId` 改为官方链路标识 | 中间件不再改写 `HttpContext.TraceIdentifier`，`RequestTraceId` 删除。问题详情的 `traceId` 为当前 `Activity.Id`（W3C `00-<TraceId>-<SpanId>-<flags>`，取第二段检索），没有 Activity 时为请求标识；异常日志记同一值。关联标识在响应头 `X-Correlation-Id`。前端只展示该值的无需改动 |
+| 后台队列工作项接上入队时的链路与关联标识 | 工作项在自己的 `Activity` 与还原后的环境上下文中执行，失败日志也在其中（此前在上下文释放后才记，带不上入队时的主体与关联标识）；父链路为入队时的 Activity，没有则为新的根链路。非 HTTP 入口还原关联标识时同时打开日志作用域 `leistd.correlationId`。OpenTelemetry 订阅 `ActivitySource` `Leistd.BackgroundJobs` 即可导出 |
+| 远端路由缓存改用 `HybridCache` | `TenantRouteResolutionCoordinator` 删除；`AddRemoteTenantConnectionResolution()` 调用 `AddHybridCache()`，只用进程内一级（连接串不进分布式缓存）。取消语义随官方：单个等待者取消只影响自己，全部取消时回源取消；失败不缓存 |
+| 服务客户端不再写调用日志 | `ServiceClientLoggingHandler` 改为内部的传输异常统一处理器，`ServiceClientOptions.LogPayloads` / `MaxPayloadLength` 与 `LoggerCategoryPrefix` 删除。调用摘要看 `System.Net.Http.HttpClient.<客户端名>` 的官方日志；要记正文用 `AddExtendedHttpClientLogging`（`Microsoft.Extensions.Http.Diagnostics`，需 `AddRedaction()`），示例见服务客户端文档 |
+| 服务客户端识别官方字典形 `errors` | `RemoteServiceException.Errors` 同时还原 Leistd 数组与 `HttpValidationProblemDetails` 字典（键为属性名，每条消息一项，`Code` 为空）。此前字典形被忽略 |
+| `MapsterProfile` 与 `AddProfiles` 删除，映射配置改用 Mapster 官方 `IRegister` | `class XxxProfile : MapsterProfile` → `class XxxMappings : IRegister`，`ConfigureMappings()` → `Register(TypeAdapterConfig config)`，`CreateMap<A, B>()` → `config.NewConfig<A, B>()`；注册处 `options.AddProfiles(asm)` → `options.Configurators.Add(config => config.Scan(asm))`。配置里的嵌套映射不要调用无参 `Adapt<T>()`（它用全局配置，登记的规则静默失效），直接映射源对象或集合 |
+| 资源实例授权改走官方授权管线；新包 `Leistd.Authorization.Resource.AspNetCore` | 删除 `IResourceAuthorizationHandler<T>`、`ResourceAuthorizationContext<T>`、`ResourceAuthorizationDecision`、`DefaultResourceAuthorizationService`、`AddResourceAuthorizationHandler`。规则改写为 `AuthorizationHandler<OperationAuthorizationRequirement, TResource>`（`context.Allow()` → `Succeed(requirement)`，`Deny()` → `Fail()`，操作名 `requirement.Name`，主体取 `context.User`），注册为 `IAuthorizationHandler`。宿主增加 `AddResourceAuthorization()`（新包；EF 入口不再注册判定服务），Web 宿主需 `AddSecurity()` 提供当前主体。同名包曾因只装一个映射类被删除，这次内容完全不同 |
+| `IResourceAuthorizationService.IsGrantedAsync` 删除 `CancellationToken` 参数 | 官方授权管线不接收取消令牌，保留参数也传不下去；调用处去掉最后一个实参。没有经过认证的当前主体一律拒绝（任一身份已认证即算，与官方一致）。ACL 处理器执行与功能权限相同的主体租户规则：租户声明非法、或显式判定的主体不属于当前租户时失败关闭 |
+| `IEventBus` 不再注册为服务 | 接口保留为本地与将来分布式总线的共同基接口；注入 `IEventBus` 的发布方改注入 `ILocalEventBus`。与 `ILock` 同一处理：避免接入分布式总线后注入方静默换成另一种投递语义 |
+| `ICurrentUser` 恢复 `IsInRole(role)`、新增 `FindClaims(claimType)` | 修订第 11 节的删除：`IsInRole` 只看主体身份、按其 `RoleClaimType` 精确匹配（服务间调用时机器身份上的角色不算，与官方整个主体的语义不同，差异写在 XML 注释）；`FindClaims` 跨全部身份读多值 claim。`GetRoles`、`GetAllClaims`、`PhoneNumber` 维持删除：经 `ICurrentPrincipalAccessor.Principal.Claims` / `Identities` 读取。自定义 `ICurrentUser` 实现需补这两个成员 |
+| 模板前端：错误解析认官方字典形 `errors`，不再兼容响应信封 | `ApplicationHttpError` 把 `{字段: [消息…]}` 展开为逐条 `ApiErrorItem`；删除对信封 `errorCode`、数字 `code`、`message` 与条目 `message` 的读取（成功一侧从未解包，只兼容失败一侧会误导）。开启 `AddResponseWrapper()` 的项目要同时改拦截器的成功解包与失败读取，见前端编码规范 |
+| 模板：OIDC 客户端与远端令牌的条件改用 `RemoteTokenAuth` | 前端全部与后端令牌验证相关的 `!LocalIdentity` 改为 `RemoteTokenAuth`；`!LocalIdentity` 只表示没有本地用户表。当前两者取值相同，生成结果不变 |
+| 模板前端：`environment.api` 只保留 `gateway` | `authService`、`appService`、`envService` 没有读取方，删除；按服务名经网关分流用 `GATEWAY_SERVICE_NAME` 请求上下文（前端 README）。`format.utils.ts` 删除 |
+| 模板镜像以非 root 运行 | API 与迁移镜像 `USER $APP_UID`（UID 1654）。compose 文件型 secret 保留宿主机权限，证书须对 UID 1654 可读（`chown 1654` 或属组可读）；用文件目录存 Data Protection 密钥时目录须可写。部署文档已写明 |
+| 模板上手项 | `.http` 改为健康检查与 OpenAPI 端点；新增官方 OpenAPI（`AddOpenApi()`，Development 下 `MapOpenApi()`，`/openapi/v1.json`）；compose 镜像名改为 `${BACKEND_IMAGE:-companyname-projectname:latest}` / `${MIGRATOR_IMAGE:-…}`，不再写死个人仓库；`TZ` 默认 `UTC`（进程本地时区，可经 `.env` 覆盖） |

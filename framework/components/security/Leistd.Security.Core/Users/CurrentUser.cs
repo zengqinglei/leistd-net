@@ -58,6 +58,24 @@ public class CurrentUser(ICurrentPrincipalAccessor principalAccessor, IOptions<C
     public Claim? FindClaim(string claimType) =>
         Principal?.FindFirst(claimType);
 
+    /// <inheritdoc />
+    public IReadOnlyList<Claim> FindClaims(string claimType) =>
+        Principal?.FindAll(claimType).ToList() ?? [];
+
+    /// <inheritdoc />
+    public bool IsInRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+
+        var principal = Principal;
+        if (principal == null)
+            return false;
+
+        return claimTypes.Value.FindSubjectIdentity(principal) is { } subject
+            ? subject.HasClaim(subject.RoleClaimType, role)
+            : principal.IsInRole(role);
+    }
+
     // 描述"这个人"的 claim 取自主体身份，与标识、租户同源：跨身份按类型各取第一个的话，
     // 服务间还原时名字可能来自调用方的机器令牌。没有带标识的身份时不存在拼接，按整个主体读
     private string? FindFirstValue(params string[] types)

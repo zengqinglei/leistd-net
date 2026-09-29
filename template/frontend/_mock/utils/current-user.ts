@@ -1,4 +1,4 @@
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { TENANT_CLAIM } from '../../src/app/core/services/tenant-protocol';
 import { MockRequest } from '../core/models';
 //#endif
@@ -63,7 +63,7 @@ export function getCurrentUser(): MockUser | null {
   const userId = MOCK_SESSION_USER_ID ?? readMockSessionUserId();
   return userId ? (USERS.find((item) => item.id === userId) ?? null) : null;
 }
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 
 /**
  * 按当前请求的 Bearer 令牌重建 Mock 主体。

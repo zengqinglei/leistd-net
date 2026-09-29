@@ -6,8 +6,9 @@ namespace Leistd.Security.Users;
 /// 提供当前认证用户的信息。
 /// </summary>
 /// <remarks>
-/// 角色判断用官方 <see cref="ClaimsPrincipal.IsInRole"/> 或授权策略 <c>RequireRole</c>，按身份的 <c>RoleClaimType</c> 精确匹配；
-/// 其他 claim 经 <see cref="FindClaim"/> 或直接读 <see cref="ClaimsPrincipal"/>。
+/// 标识、租户、展示属性与角色都取自主体身份（<c>ClaimTypeOptions.FindSubjectIdentity</c>）：服务间还原的主体同时带着
+/// 被代表的用户与调用方的机器身份，跨身份读会把调用方的属性拼到用户身上。任意 claim 经 <see cref="FindClaim"/> /
+/// <see cref="FindClaims"/> 跨全部身份读取；需要整个主体的官方语义时直接读 <see cref="ClaimsPrincipal"/>。
 /// </remarks>
 public interface ICurrentUser
 {
@@ -70,4 +71,23 @@ public interface ICurrentUser
     /// <param name="claimType">Claim 类型</param>
     /// <returns>找到的 Claim，如果不存在则返回 null</returns>
     Claim? FindClaim(string claimType);
+
+    /// <summary>
+    /// 查找指定类型的全部声明，如多值的角色、scope、amr。
+    /// </summary>
+    /// <remarks>与 <see cref="FindClaim"/> 同一范围：按官方 <see cref="ClaimsPrincipal.FindAll(string)"/> 跨全部身份查找。</remarks>
+    /// <param name="claimType">Claim 类型</param>
+    /// <returns>找到的全部 Claim；没有当前主体时为空</returns>
+    IReadOnlyList<Claim> FindClaims(string claimType);
+
+    /// <summary>
+    /// 判断当前用户是否属于指定角色。
+    /// </summary>
+    /// <remarks>
+    /// 只看主体身份，按该身份的 <see cref="ClaimsIdentity.RoleClaimType"/> 精确匹配——与官方
+    /// <see cref="ClaimsPrincipal.IsInRole"/> 的差别在于不看其他身份：服务间调用时调用方机器身份上的角色不算用户的角色。
+    /// 没有带用户标识的身份时按整个主体判断。授权策略里的 <c>RequireRole</c> 仍是官方的整个主体语义。
+    /// </remarks>
+    /// <param name="role">角色名</param>
+    bool IsInRole(string role);
 }

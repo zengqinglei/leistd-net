@@ -115,14 +115,20 @@ export const environment: Environment = {
   production: false,
   useMock: false, // true 开启全部 Mock；也可按模块传对象
   api: {
-    ...environmentBase.api, // authService、envService 等其余必填项沿用基础配置
-    gateway: '', // 网关地址；留空表示各服务地址即完整地址
-    appService: { url: 'http://localhost:5240' },
+    ...environmentBase.api,
+    gateway: '', // 网关地址；留空时请求保持相对路径，由同源部署或开发代理转发
   },
 };
 ```
 
-> `api` 是必填对象，直接重写会漏掉其中的其他必填项——展开 `...environmentBase.api` 再覆盖要改的那几个。
+经网关访问、且网关按服务名分流时，给请求带上服务名（`GATEWAY_SERVICE_NAME` 由 `src/app/core/interceptors/url-format-interceptor.ts` 导出），拦截器会把它插在网关地址与路径之间：
+
+```typescript
+http.get('/api/v1/orders', {
+  context: new HttpContext().set(GATEWAY_SERVICE_NAME, 'order-service'),
+});
+// → {gateway}/order-service/api/v1/orders
+```
 <!--#if (LocalIdentity)-->
 
 哈希路由用 `useHash: true`（部署在无法配置回退规则的静态宿主时用得上）。

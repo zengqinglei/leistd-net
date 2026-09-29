@@ -45,4 +45,11 @@ public sealed class FakeCurrentUser : ICurrentUser
 
     public Claim? FindClaim(string claimType) =>
         _claims.FirstOrDefault(c => c.Type == claimType);
+
+    public IReadOnlyList<Claim> FindClaims(string claimType) =>
+        [.. _claims.Where(c => c.Type == claimType)];
+
+    // 角色按官方默认的 ClaimTypes.Role
+    public bool IsInRole(string role) =>
+        _claims.Any(c => c.Type == ClaimTypes.Role && c.Value == role);
 }

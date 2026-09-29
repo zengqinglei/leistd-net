@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using Leistd.ServiceClient.OAuth.Services;
 using Leistd.ServiceClient.OAuth.Abstractions;
 
 namespace Leistd.ServiceClient.OAuth.Handlers;

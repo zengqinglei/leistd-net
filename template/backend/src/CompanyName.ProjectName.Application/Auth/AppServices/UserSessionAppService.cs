@@ -46,7 +46,7 @@ internal sealed class UserSessionAppService(
 
         var context = new Dictionary<string, object>();
         if (currentSessionId is { } current)
-            context[AuthProfile.CurrentSessionIdKey] = current;
+            context[AuthMappings.CurrentSessionIdKey] = current;
 
         return sessions
             .Select(s => objectMapper.Map<UserSession, UserSessionOutputDto>(s, context))

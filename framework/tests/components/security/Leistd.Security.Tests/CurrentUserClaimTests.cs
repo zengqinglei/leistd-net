@@ -202,4 +202,55 @@ public class CurrentUserClaimTests
     {
         Assert.Equal(expected, ClientSubject.Matches(subject, clientId));
     }
+
+    private static ICurrentUser UserOf(params ClaimsIdentity[] identities) =>
+        new CurrentUser(new FixedPrincipalAccessor(new ClaimsPrincipal(identities)), DefaultClaimTypes);
+
+    /// <summary>角色按主体身份自己的 <c>RoleClaimType</c> 精确匹配（模板会话用 <c>role</c>）。</summary>
+    [Fact]
+    public void Is_in_role_uses_the_subject_identity_role_claim_type()
+    {
+        var user = UserOf(new ClaimsIdentity(
+            [new Claim("sub", Guid.NewGuid().ToString()), new Claim("role", "admin"), new Claim(ClaimTypes.Role, "other")],
+            authenticationType: "Test", nameType: "name", roleType: "role"));
+
+        Assert.True(user.IsInRole("admin"));
+        Assert.False(user.IsInRole("other"));
+        Assert.False(user.IsInRole("Admin"));
+    }
+
+    /// <summary>
+    /// 服务间还原的主体带着被代表的用户与调用方的机器身份：机器身份上的角色不是用户的角色。
+    /// 官方 <c>ClaimsPrincipal.IsInRole</c> 会看全部身份，这里不能照搬。
+    /// </summary>
+    [Fact]
+    public void A_role_on_the_callers_machine_identity_is_not_the_users_role()
+    {
+        var user = UserOf(
+            new ClaimsIdentity([new Claim("sub", Guid.NewGuid().ToString())], "User", "name", "role"),
+            new ClaimsIdentity([new Claim("client_id", "orders"), new Claim("role", "admin")], "Client", "name", "role"));
+
+        Assert.False(user.IsInRole("admin"));
+        // FindClaims 与 FindClaim 同一范围：跨全部身份
+        Assert.Equal(["admin"], user.FindClaims("role").Select(claim => claim.Value));
+    }
+
+    [Fact]
+    public void Without_a_user_identity_roles_are_read_from_the_whole_principal()
+    {
+        var user = UserOf(new ClaimsIdentity(
+            [new Claim("client_id", "orders"), new Claim("role", "admin")], "Client", "name", "role"));
+
+        Assert.True(user.IsInRole("admin"));
+    }
+
+    [Fact]
+    public void Find_claims_returns_every_value_of_a_multi_valued_claim()
+    {
+        var user = User(new Claim("scope", "a"), new Claim("scope", "b"), new Claim("sub", Guid.NewGuid().ToString()));
+
+        Assert.Equal(["a", "b"], user.FindClaims("scope").Select(claim => claim.Value));
+        Assert.Empty(Anonymous().FindClaims("scope"));
+        Assert.False(Anonymous().IsInRole("admin"));
+    }
 }

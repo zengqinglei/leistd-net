@@ -26,7 +26,7 @@ public class RemoteServiceException : ServiceClientException
     public string? RemoteTraceId { get; }
 
     /// <summary>
-    /// 远端字段级错误列表（Problem Details 的 <c>errors</c>，或统一响应信封的 <c>errors</c>），无则为空数组。
+    /// 远端字段级错误列表（Problem Details 的 <c>errors</c>，数组形或官方字典形；或统一响应信封的 <c>errors</c>），无则为空数组。
     /// </summary>
     public IReadOnlyList<ErrorItem> Errors { get; }
 

@@ -3,7 +3,6 @@ using Leistd.Response.AspNetCore.Writers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.Response.AspNetCore;
 

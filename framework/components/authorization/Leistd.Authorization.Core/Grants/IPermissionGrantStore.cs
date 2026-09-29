@@ -1,6 +1,3 @@
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Constants;
 
 namespace Leistd.Authorization.Grants;

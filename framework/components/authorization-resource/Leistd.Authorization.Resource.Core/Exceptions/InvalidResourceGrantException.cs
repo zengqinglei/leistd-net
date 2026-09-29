@@ -1,5 +1,3 @@
-using Leistd.Authorization.Constants;
-using Leistd.Authorization.Resource.Grants;
 using Leistd.ExceptionHandling;
 using Leistd.Authorization.Resource.Errors;
 

@@ -1,7 +1,6 @@
 using Leistd.Localization.Json;
 using MsOptions = Microsoft.Extensions.Options.Options;
 using Leistd.Localization.Options;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.Localization.Tests;

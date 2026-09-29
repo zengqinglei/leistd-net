@@ -3,14 +3,12 @@ using Leistd.RealTime.Publishing;
 using Leistd.RealTime.Subscriptions;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Leistd.RealTime.AspNetCore.SignalR.Publishing;
-using Leistd.Security.Claims;
 using Leistd.TestBase.Assertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.RealTime.Tests;

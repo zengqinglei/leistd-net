@@ -7,12 +7,8 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Dtos;
 using Leistd.MultiTenancy.EntityFrameworkCore;
-using Leistd.MultiTenancy.Events;
 using Leistd.MultiTenancy.Exceptions;
-using Leistd.MultiTenancy.Provisioning;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore;
@@ -22,6 +18,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.MultiTenancy.Management.Dtos;
+using Leistd.MultiTenancy.Management.Events;
+using Leistd.MultiTenancy.Management.Provisioning;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
@@ -54,6 +53,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
         services.AddMultiTenancyEfCore<TestDbContext>();
+        services.AddTenantManagement();
         services.AddSingleton<ITenantProvisioner>(_provisioner);
         services.AddSingleton<ITenantActivationGuard>(_guard);
         services.AddSingleton<ILocalEventBus>(_events);

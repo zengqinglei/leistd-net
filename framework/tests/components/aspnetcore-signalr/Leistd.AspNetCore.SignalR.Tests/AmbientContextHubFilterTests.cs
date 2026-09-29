@@ -1,10 +1,8 @@
-using System.Reflection;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Leistd.AmbientContext;
 using Leistd.AspNetCore.SignalR.Filters;
 using Leistd.AspNetCore.SignalR.Options;

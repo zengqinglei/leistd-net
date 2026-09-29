@@ -5,7 +5,7 @@ using Leistd.EventBus.Abstractions;
 namespace Leistd.EventBus.Local;
 
 /// <summary>
-/// 进程内事件总线的注册入口：注册 <c>IEventBus</c> / <c>ILocalEventBus</c> 与按约定发现的 <c>IEventHandler</c>。
+/// 进程内事件总线的注册入口：注册 <c>ILocalEventBus</c> 与按约定发现的 <c>IEventHandler</c>。
 /// </summary>
 public static class DependencyInjection
 {
@@ -25,8 +25,9 @@ public static class DependencyInjection
     {
         services.TryAddSingleton<LocalEventBus>();
         services.TryAddSingleton<ILocalEventBus>(sp => sp.GetRequiredService<LocalEventBus>());
-        // 转发到最终的 ILocalEventBus：宿主替换本地总线时，经 IEventBus 发布的事件走同一条管道
-        services.TryAddSingleton<IEventBus>(sp => sp.GetRequiredService<ILocalEventBus>());
+        // IEventBus 只作各类总线的共同基接口，不注册为服务：同一接口由多种总线注册时，
+        // 注入 IEventBus 的发布方会静默换成另一种投递语义（不再等到提交后、需要序列化与 Outbox），编译与测试都发现不了。
+        // 与 ILock 同一处理。发布方注入 ILocalEventBus。
         // 调度器必须复用同一实例，才能排空该实例上的待发布事件。
         services.TryAddSingleton<ILocalEventDispatcher>(sp => sp.GetRequiredService<LocalEventBus>());
         return services;

@@ -1,14 +1,11 @@
 using System.Net;
 using System.Security.Claims;
 using Leistd.MultiTenancy.AspNetCore;
-using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.Exceptions;
 using Leistd.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

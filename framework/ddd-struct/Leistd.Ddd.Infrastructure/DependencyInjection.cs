@@ -19,7 +19,6 @@ using Microsoft.Extensions.Hosting;
 using Leistd.Ddd.Infrastructure.Persistence.Repositories;
 using Leistd.Timing;
 using Leistd.DependencyInjection.Extensions;
-using Leistd.DependencyInjection.DynamicProxy.Extensions;
 
 namespace Leistd.Ddd.Infrastructure;
 

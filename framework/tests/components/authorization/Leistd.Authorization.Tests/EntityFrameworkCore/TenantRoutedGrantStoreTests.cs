@@ -1,7 +1,6 @@
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
-using Leistd.Data;
 using Leistd.MultiTenancy;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore;
@@ -11,19 +10,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.Data.Connections;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.TestBase.Doubles;
 using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.EntityFrameworkCore;

@@ -282,8 +282,8 @@ public class RoleAppService(
 
         return new Dictionary<string, object>
         {
-            [RoleProfile.UserCountsKey] = (IReadOnlyDictionary<Guid, int>)userCounts,
-            [RoleProfile.PermissionCountsKey] = (IReadOnlyDictionary<Guid, int>)permissionCounts
+            [RoleMappings.UserCountsKey] = (IReadOnlyDictionary<Guid, int>)userCounts,
+            [RoleMappings.PermissionCountsKey] = (IReadOnlyDictionary<Guid, int>)permissionCounts
         };
     }
 }

@@ -1,6 +1,4 @@
 using System.Linq.Expressions;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
 
 namespace Leistd.Authorization.DataScope.Abstractions;

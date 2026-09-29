@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.ExceptionHandling.AspNetCore.Handlers;
-using Leistd.ExceptionHandling.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -214,8 +213,9 @@ public class ValidationErrorNamingPipelineTests
             map.Select(kv => new LocalizedString(kv.Key, kv.Value, resourceNotFound: false));
     }
 
+    /// <summary>自动 400 的 <c>traceId</c> 由官方写出：有 Activity 时是它的 W3C 标识，第二段即 TraceId。</summary>
     [Fact]
-    public async Task Auto400_uses_the_request_id_without_correlation_middleware_even_with_an_activity()
+    public async Task Auto400_uses_the_official_activity_id()
     {
         using var host = await StartHostAsync();
         using var client = host.GetTestClient();
@@ -226,8 +226,7 @@ public class ValidationErrorNamingPipelineTests
         var traceId = document.RootElement.GetProperty("traceId").GetString();
 
         Assert.False(string.IsNullOrWhiteSpace(traceId));
-        Assert.Equal(response.Headers.GetValues("X-Test-Request-Id").Single(), traceId);
-        Assert.NotEqual(response.Headers.GetValues("X-Test-Activity-Trace-Id").Single(), traceId);
+        Assert.Equal(response.Headers.GetValues("X-Test-Activity-Trace-Id").Single(), traceId!.Split('-')[1]);
     }
 
     private static string? ReadType(string body)

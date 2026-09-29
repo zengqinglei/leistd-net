@@ -214,7 +214,8 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCorrelationIdCore(_ => { });
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddCorrelationIdCore();
         services.AddSingleton<ICurrentPrincipalAccessor, CurrentPrincipalAccessor>();
         services.AddTransient<ICurrentUser, CurrentUser>();
 

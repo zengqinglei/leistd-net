@@ -1,5 +1,3 @@
-using Leistd.Settings.Definitions;
-
 namespace Leistd.Settings.Definitions;
 
 /// <summary>

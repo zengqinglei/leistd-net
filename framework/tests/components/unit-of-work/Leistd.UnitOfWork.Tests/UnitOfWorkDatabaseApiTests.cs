@@ -3,7 +3,6 @@ using Leistd.UnitOfWork.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using CoreUnitOfWork = Leistd.UnitOfWork.DefaultUnitOfWork;
-using Leistd.ExceptionHandling;
 
 namespace Leistd.UnitOfWork.Tests;
 

@@ -1,12 +1,8 @@
 using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
-using Leistd.Notifications.Stores;
 using Leistd.Notifications.AspNetCore.SignalR;
 using Leistd.Notifications.AspNetCore.SignalR.Hubs;
 using Leistd.Notifications.AspNetCore.SignalR.Channels;
 using Leistd.Notifications.Dtos;
-using Leistd.Security.Claims;
 using Leistd.TestBase.Assertions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -14,7 +10,6 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Leistd.Notifications.Tests.SignalR;

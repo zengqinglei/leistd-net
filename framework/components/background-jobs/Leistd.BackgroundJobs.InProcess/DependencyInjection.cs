@@ -7,7 +7,6 @@ using Leistd.BackgroundJobs.Recurring;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Hosting;
 
 namespace Leistd.BackgroundJobs.InProcess;
 

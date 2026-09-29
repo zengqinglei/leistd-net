@@ -1,10 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.EntityFrameworkCore;
 using Leistd.Settings.EntityFrameworkCore.Entities;

@@ -17,13 +17,14 @@ namespace Leistd.Tracing.Tests.HttpClient;
 /// </remarks>
 public class CorrelationIdForwardingRegistrationTests
 {
-    /// <summary>选项默认头名，与 <c>CorrelationIdOptions.HeaderNames</c> 的默认值一致。</summary>
+    /// <summary>选项默认头名，与 <c>CorrelationIdOptions.HeaderName</c> 的默认值一致。</summary>
     private const string HeaderName = "X-Correlation-Id";
 
     private static IServiceCollection Base() =>
         new ServiceCollection()
             .AddLogging()
-            .AddCorrelationIdCore(new ConfigurationBuilder().Build());
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddCorrelationIdCore();
 
     [Fact]
     public void Handler_is_registered_for_resolution()

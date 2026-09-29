@@ -27,18 +27,8 @@ export interface Environment {
   };
   //#endif
   api: {
-    gateway: string; // 网关地址, 为空则不使用（服务地址为完整地址）
-    authService: {
-      url: string;
-      refreshTokenEnabled?: boolean;
-      refreshTokenType?: string;
-    };
-    appService: {
-      url: string;
-    };
-    envService: {
-      url: string;
-    };
+    /** 网关地址；为空时请求保持相对路径（同源部署或开发代理）。 */
+    gateway: string;
   };
 }
 
@@ -57,17 +47,6 @@ export const environmentBase: Environment = {
   },
   //#endif
   api: {
-    gateway: 'https://example.com', // 本地开发的网关地址
-    authService: {
-      url: '/auth-service',
-      refreshTokenEnabled: true,
-      refreshTokenType: 'auth-refresh',
-    },
-    appService: {
-      url: '/app-service',
-    },
-    envService: {
-      url: '/env-service',
-    },
+    gateway: 'https://example.com',
   },
 };

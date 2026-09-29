@@ -16,17 +16,6 @@ public class ServiceClientOptions
     public string? BaseAddress { get; set; }
 
     /// <summary>
-    /// 是否在 Debug 级别记录请求/响应载荷（含脱敏后的头）。默认 <c>false</c>。
-    /// 开启后响应体会被完整缓冲，勿用于文件流等大响应客户端。
-    /// </summary>
-    public bool LogPayloads { get; set; }
-
-    /// <summary>
-    /// 载荷日志的最大长度（字符），超出截断。默认 4096。
-    /// </summary>
-    public int MaxPayloadLength { get; set; } = 4096;
-
-    /// <summary>
     /// 用户上下文出站转发配置。
     /// </summary>
     public UserContextForwardingOptions UserContext { get; set; } = new();

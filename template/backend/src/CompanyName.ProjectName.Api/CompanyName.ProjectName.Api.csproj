@@ -27,9 +27,10 @@
 <!--#if (ServiceUserContextEnabled)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
 <!--#endif-->
-<!--#if (!LocalIdentity)-->
+<!--#if (RemoteTokenAuth)-->
     <PackageReference Include="OpenIddict.Validation.SystemNetHttp" />
 <!--#endif-->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

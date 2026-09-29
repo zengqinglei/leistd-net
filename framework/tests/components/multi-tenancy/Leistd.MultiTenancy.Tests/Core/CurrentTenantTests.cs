@@ -2,11 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 

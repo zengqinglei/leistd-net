@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Leistd.AspNetCore.SignalR.Options;
 using Leistd.AspNetCore.SignalR.Services;
 using Leistd.Security.Claims;
 using Xunit;

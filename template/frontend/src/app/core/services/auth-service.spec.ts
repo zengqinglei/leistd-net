@@ -41,7 +41,7 @@ describe('AuthService', () => {
   });
 });
 //#endif
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { TestBed } from '@angular/core/testing';
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { of } from 'rxjs';

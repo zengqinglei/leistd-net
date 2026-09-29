@@ -9,8 +9,8 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
-    <!-- 远端连接解析：路由缓存与 TenantRouting 配置节绑定 -->
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <!-- 远端连接解析：路由缓存（HybridCache 只用进程内一级，带并发回源合并）与 TenantRouting 配置节绑定 -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
 
@@ -18,10 +18,6 @@
     <ProjectReference Include="..\\..\\core\\Leistd.Core\\Leistd.Core.csproj" />
     <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
     <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
-    <!-- 租户管理用例成功后发布 TenantChangedEvent；只依赖契约，未注册总线时不发布 -->
-    <ProjectReference Include="..\..\event-bus\Leistd.EventBus.Core\Leistd.EventBus.Core.csproj" />
-    <!-- 租户开通编排跨三个工作单元（控制面、开通、启用），失败按逆序补偿；只依赖工作单元契约，不依赖任何存储实现 -->
-    <ProjectReference Include="..\..\unit-of-work\Leistd.UnitOfWork.Core\Leistd.UnitOfWork.Core.csproj" />
     <!-- 错误码的默认译文随包分发 -->
     <ProjectReference Include="..\..\localization\Leistd.Localization.Core\Leistd.Localization.Core.csproj" />
   </ItemGroup>
@@ -35,6 +31,8 @@
     <!-- 本地解析在 EF 包里，与远端解析共用同一套路由判定（连接名白名单、按放置方式选目标、失败关闭）；
          单飞、跨租户校验等安全关键路径的用例要直接构造 internal 类型 -->
     <InternalsVisibleTo Include="Leistd.MultiTenancy.EntityFrameworkCore" />
+    <!-- 管理用例与运行时解析共用连接名白名单与路由目标判定 -->
+    <InternalsVisibleTo Include="Leistd.MultiTenancy.Management" />
     <InternalsVisibleTo Include="Leistd.MultiTenancy.Tests" />
   </ItemGroup>
 

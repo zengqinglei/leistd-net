@@ -1,7 +1,6 @@
 using Leistd.Data.Paging;
 using Leistd.TestBase.Doubles;
 using Leistd.MultiTenancy.EntityFrameworkCore;
-using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;

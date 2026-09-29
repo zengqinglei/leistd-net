@@ -1,5 +1,3 @@
-using Leistd.UnitOfWork;
-
 namespace Leistd.UnitOfWork.Events;
 
 /// <summary>

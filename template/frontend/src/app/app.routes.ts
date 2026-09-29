@@ -19,7 +19,7 @@ export const routes: Routes = [
     loadChildren: () => import('./features/account/account.routes').then((r) => r.AUTH_ROUTES),
   },
   //#endif
-  //#if (!LocalIdentity)
+  //#if (RemoteTokenAuth)
   {
     path: 'auth/callback',
     loadComponent: () =>

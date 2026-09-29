@@ -1,7 +1,6 @@
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Infrastructure.EventBus;
 using Leistd.Ddd.Infrastructure.Persistence;
-using Leistd.EventBus;
 using Leistd.UnitOfWork;
 using Leistd.EventBus.Local;
 using Microsoft.Data.Sqlite;

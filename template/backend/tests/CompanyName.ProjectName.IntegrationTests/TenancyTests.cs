@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.Settings.EntityFrameworkCore.Entities;
+using Leistd.MultiTenancy.Management.Provisioning;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore.Entities;
 #endif
@@ -31,7 +32,6 @@ using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Provisioning;
 using Leistd.Data.Paging;
 using Leistd.Timing;
 using Leistd.UnitOfWork;

@@ -87,20 +87,35 @@ describe('ApplicationHttpError', () => {
     );
   });
 
-  it('可选数字信封中把 errorCode 视为业务错误码', () => {
+  it('官方字典形 errors 每条消息各成一项，按字段取第一条组成消息', () => {
     const error = errorOf(
       {
-        code: 409,
-        errorCode: 'Role:NameExists',
-        message: '角色名称已存在',
-        traceId: 'trace-1',
+        title: 'One or more validation errors occurred.',
+        errors: {
+          Name: ['The Name field is required.', 'Name is too short.'],
+          Quantity: ['Must be positive.'],
+        },
+        traceId: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
       },
+      400,
+    );
+
+    expect(error.details.map((item) => [item.field, item.detail])).toEqual([
+      ['Name', 'The Name field is required.'],
+      ['Name', 'Name is too short.'],
+      ['Quantity', 'Must be positive.'],
+    ]);
+    expect(error.message).toBe('The Name field is required.\nMust be positive.');
+    expect(error.code).toBeUndefined();
+  });
+
+  it('不再读取响应信封的 errorCode 与 message', () => {
+    const error = errorOf(
+      { code: 409, errorCode: 'Role:NameExists', message: '角色名称已存在' },
       409,
     );
 
-    expect(error.status).toBe(409);
-    expect(error.message).toBe('角色名称已存在');
-    expect(error.code).toBe('Role:NameExists');
-    expect(error.traceId).toBe('trace-1');
+    expect(error.code).toBeUndefined();
+    expect(error.message).not.toBe('角色名称已存在');
   });
 });

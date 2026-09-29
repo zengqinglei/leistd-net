@@ -27,7 +27,6 @@ using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;

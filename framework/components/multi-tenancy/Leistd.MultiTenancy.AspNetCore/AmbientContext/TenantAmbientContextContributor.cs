@@ -1,10 +1,5 @@
 using Microsoft.Extensions.Options;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.AspNetCore.Resolution;
 using Leistd.AmbientContext;
 using Leistd.Security.Claims;

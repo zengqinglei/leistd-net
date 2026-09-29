@@ -1,5 +1,4 @@
 using Leistd.Data.Connections;
-using Leistd.ExceptionHandling;
 using Microsoft.Extensions.Configuration;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;

@@ -1,4 +1,5 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
+using Leistd.MultiTenancy.Management.Provisioning;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Tenants.Errors;
 #endif
@@ -7,9 +8,7 @@ using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Provisioning;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 

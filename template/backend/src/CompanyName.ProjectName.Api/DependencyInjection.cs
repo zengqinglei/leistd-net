@@ -16,7 +16,7 @@ using OpenIddict.Abstractions;
 #if (LocalIdentity)
 using System.Security.Claims;
 #endif
-#if (OpenIddictServer || !LocalIdentity)
+#if (OpenIddictServer || RemoteTokenAuth)
 using OpenIddict.Validation.AspNetCore;
 #endif
 
@@ -52,7 +52,7 @@ public static class DependencyInjection
 #if (LocalIdentity)
             var claimTypes = claimTypeOptions.Value;
 #endif
-#if (!LocalIdentity)
+#if (RemoteTokenAuth)
             // 资源服务只认签发方的 Bearer：这里没有用户表，账号是否可用由签发方在发令牌时判定
             var currentUser = new AuthorizationPolicyBuilder(
                     OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)

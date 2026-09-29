@@ -1,19 +1,11 @@
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Leistd.MultiTenancy.Tenancy;
 using System.Linq.Expressions;
-using Leistd.Authorization.DataScope;
 using Leistd.Authorization.EntityFrameworkCore;
-using Leistd.Authorization.Resource;
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Abstractions;
 using Leistd.Authorization.DataScope.Abstractions;
@@ -138,34 +130,36 @@ public sealed class OrganizationOrderScopeProvider : IDataScopeProvider<Order>
     }
 }
 
-/// <summary>所有者可以操作自己的订单。</summary>
-public sealed class OrderOwnerHandler : IResourceAuthorizationHandler<Order>
+/// <summary>所有者可以操作自己的订单。官方资源型处理器，主体取被授权的 <c>context.User</c>。</summary>
+public sealed class OrderOwnerHandler(IPermissionSubjectProvider subjects)
+    : AuthorizationHandler<OperationAuthorizationRequirement, Order>
 {
-    public ValueTask HandleAsync(
-        ResourceAuthorizationContext<Order> context,
-        CancellationToken cancellationToken = default)
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        OperationAuthorizationRequirement requirement,
+        Order resource)
     {
-        if (context.Resource.OwnerId == context.Subject.UserId)
+        var subject = await subjects.GetSubjectAsync(context.User);
+        if (subject is not null && resource.OwnerId == subject.UserId)
         {
-            context.Allow();
+            context.Succeed(requirement);
         }
-
-        return ValueTask.CompletedTask;
     }
 }
 
-/// <summary>已归档的订单一律不可修改——领域规则的拒绝优先于任何 ACL 允许。</summary>
-public sealed class ArchivedOrderHandler : IResourceAuthorizationHandler<Order>
+/// <summary>已归档的订单一律不可修改——领域规则的拒绝优先于任何 ACL 允许，超级管理员也不例外。</summary>
+public sealed class ArchivedOrderHandler : AuthorizationHandler<OperationAuthorizationRequirement, Order>
 {
-    public ValueTask HandleAsync(
-        ResourceAuthorizationContext<Order> context,
-        CancellationToken cancellationToken = default)
+    protected override Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        OperationAuthorizationRequirement requirement,
+        Order resource)
     {
-        if (context.Operation == ResourceOperations.Update && context.Resource.IsArchived)
+        if (requirement.Name == ResourceOperations.Update && resource.IsArchived)
         {
-            context.Deny();
+            context.Fail();
         }
 
-        return ValueTask.CompletedTask;
+        return Task.CompletedTask;
     }
 }

@@ -64,6 +64,8 @@
     <PackageReference Include="Leistd.BackgroundJobs.EntityFrameworkCore" />
 <!--#if (LocalIdentity)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
+    <!-- 开通失败的数据库错误翻译契约（ITenantDatabaseErrorDescriber）在租户管理用例包 -->
+    <PackageReference Include="Leistd.MultiTenancy.Management" />
     <PackageReference Include="Leistd.Email.Smtp" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->

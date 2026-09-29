@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Leistd.Security.AspNetCore;
@@ -15,10 +14,8 @@ using Leistd.ServiceClient.Options;
 using Leistd.TestBase.Doubles;
 using Leistd.Tracing.AspNetCore;
 using Leistd.Tracing;
-using Leistd.Tracing.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -253,7 +250,8 @@ public sealed class EndToEndInvocationTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCorrelationIdCore(_ => { });
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddCorrelationIdCore();
         if (currentUser is not null)
         {
             services.AddSingleton(currentUser);

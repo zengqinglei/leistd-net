@@ -109,6 +109,7 @@ $allow = @(
     'Assembly','Type','ClaimsPrincipal','ClaimTypes','IServiceProvider','IServiceCollection','IServiceScopeFactory',
     'AddValidation',   # ASP.NET Core Minimal API 内置校验：分页契约的文档要求宿主启用它
     'JsonHttpResult',   # ASP.NET Core 的结果类型：响应包装文档要说明它不被改写
+    'LoggingOptions',   # Microsoft.Extensions.Http.Diagnostics：服务客户端文档给出官方正文日志的入口
     # EF Core
     'DbContext','DbContextOptions','DbContextOptionsBuilder','DbSet','ModelBuilder','EntityEntry','ChangeTracker',
     'EntityState','SaveChangesInterceptor','IEntityTypeConfiguration','IServiceProviderFactory',

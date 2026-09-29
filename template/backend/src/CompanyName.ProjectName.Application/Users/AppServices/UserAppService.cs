@@ -639,7 +639,7 @@ public class UserAppService(
             ["UserRoles"] = userRoles,
             ["Roles"] = roles,
 #if (LocalIdentity)
-            [UserProfile.NowKey] = clock.Now,
+            [UserMappings.NowKey] = clock.Now,
 #endif
         };
     }

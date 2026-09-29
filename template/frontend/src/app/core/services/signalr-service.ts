@@ -3,7 +3,7 @@ import {
   Injectable,
   signal,
   computed,
-  //#if (!LocalIdentity)
+  //#if (RemoteTokenAuth)
   inject,
   //#endif
 } from '@angular/core';
@@ -14,7 +14,7 @@ import {
   LogLevel,
   HttpTransportType,
 } from '@microsoft/signalr';
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { firstValueFrom } from 'rxjs';
 //#endif
@@ -61,7 +61,7 @@ export class SignalRService {
   /** 通知推送到客户端时调用的方法名（后端 NotificationClientMethods.Received）。 */
   static readonly notificationReceived = 'Notifications.Received';
 
-  //#if (!LocalIdentity)
+  //#if (RemoteTokenAuth)
   private readonly oidc = inject(OidcSecurityService);
   //#endif
   private connection: HubConnection | null = null;
@@ -284,7 +284,7 @@ export class SignalRService {
     const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl(SignalRService.hubPath), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-        //#if (!LocalIdentity)
+        //#if (RemoteTokenAuth)
         accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
         //#endif
       })

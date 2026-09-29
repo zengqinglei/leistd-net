@@ -78,6 +78,27 @@ public class ResultUnwrapTests
         Assert.Equal(("name", "必填", "Required"), (error.Field, error.Detail, error.Code));
     }
 
+    /// <summary>
+    /// 官方 <c>HttpValidationProblemDetails</c> 的字典形 <c>errors</c>：每条消息各成一项，字段名与全部消息都保留。
+    /// </summary>
+    [Fact]
+    public async Task Dictionary_shaped_errors_keep_every_message_per_field()
+    {
+        using var response = Response(HttpStatusCode.BadRequest,
+            """
+            {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.",
+             "status":400,"traceId":"00-abc-def-01",
+             "errors":{"Name":["The Name field is required.","Name is too short."],"Quantity":["Must be positive."]}}
+            """);
+
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
+
+        Assert.Equal(
+            [("Name", "The Name field is required."), ("Name", "Name is too short."), ("Quantity", "Must be positive.")],
+            exception.Errors.Select(error => (error.Field, error.Detail)));
+        Assert.All(exception.Errors, error => Assert.Null(error.Code));
+    }
+
     [Fact]
     public async Task Numeric_code_is_not_taken_as_a_business_error_code()
     {

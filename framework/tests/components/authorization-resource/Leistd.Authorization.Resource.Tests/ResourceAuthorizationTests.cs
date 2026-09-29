@@ -1,19 +1,23 @@
+using Leistd.MultiTenancy.Context;
+using Leistd.MultiTenancy;
 using static Leistd.TestBase.Doubles.DbContextProviderFor;
 using System.Data.Common;
-using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Authorization.Constants;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.EntityFrameworkCore.Managers;
 using Leistd.Authorization.Resource.EntityFrameworkCore.Stores;
 using Leistd.Authorization.Resource.Grants;
-using Leistd.Authorization.Resource.Services;
+using System.Security.Claims;
+using Leistd.Authorization.Resource.AspNetCore;
+using Leistd.Authorization.Resource.AspNetCore.Operations;
+using Leistd.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Leistd.Authorization.Exceptions;
 using Leistd.Authorization.Resource.EntityFrameworkCore.Entities;
 using Leistd.Authorization.Resource.Exceptions;
@@ -69,6 +73,11 @@ public class ResourceAuthorizationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        foreach (var provider in _providers)
+        {
+            await provider.DisposeAsync();
+        }
+
         await _db.DisposeAsync();
         await _connection.DisposeAsync();
     }
@@ -333,10 +342,7 @@ public class ResourceAuthorizationTests : IAsyncLifetime
     [Fact]
     public async Task A_corrupted_effect_from_the_store_denies_instead_of_allowing()
     {
-        var service = new DefaultResourceAuthorizationService(
-            new FakeSubjectProvider(Subject(OtherUserId)),
-            new ServiceCollection().BuildServiceProvider(),
-            new CorruptedEffectStore());
+        var service = CreateService(Subject(OtherUserId), store: new CorruptedEffectStore());
 
         Assert.False(await service.IsGrantedAsync(
             _otherOrder, TestOrder.Resource, _otherOrder.ResourceKey, ResourceOperations.Read));
@@ -590,59 +596,240 @@ public class ResourceAuthorizationTests : IAsyncLifetime
     private static PermissionSubject Subject(string userId, params string[] roleIds)
         => new(userId, roleIds, IsSuperAdmin: false);
 
-    private DefaultResourceAuthorizationService CreateService(
+    private readonly List<ServiceProvider> _providers = [];
+
+    /// <summary>
+    /// 按宿主的真实组合建服务：<c>AddResourceAuthorization()</c> 加官方方式注册的规则处理器。
+    /// </summary>
+    private IResourceAuthorizationService CreateService(
         PermissionSubject? subject,
         bool withOwnerHandler = false,
-        bool withArchivedDenyHandler = false)
+        bool withArchivedDenyHandler = false,
+        IResourceGrantStore? store = null,
+        bool denyHandlerFirst = false)
+    {
+        var provider = BuildProvider(new FakeSubjectProvider(subject), subject, services =>
+        {
+            if (withArchivedDenyHandler && denyHandlerFirst)
+            {
+                services.AddSingleton<IAuthorizationHandler, NoDeleteHandler>();
+            }
+
+            if (withOwnerHandler)
+            {
+                services.AddSingleton<IAuthorizationHandler, OwnerHandler>();
+            }
+
+            if (withArchivedDenyHandler && !denyHandlerFirst)
+            {
+                services.AddSingleton<IAuthorizationHandler, NoDeleteHandler>();
+            }
+        }, store);
+        return provider.CreateScope().ServiceProvider.GetRequiredService<IResourceAuthorizationService>();
+    }
+
+    private ServiceProvider BuildProvider(
+        IPermissionSubjectProvider subjectProvider,
+        PermissionSubject? current,
+        Action<IServiceCollection>? configure = null,
+        IResourceGrantStore? store = null)
     {
         var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(subjectProvider);
+        services.AddSingleton<ICurrentPrincipalAccessor>(new FixedPrincipalAccessor(current is null ? null : Principal(current.UserId)));
+        services.AddSingleton(store ?? _store);
+        services.AddResourceAuthorization();
+        configure?.Invoke(services);
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+        return provider;
+    }
 
+    private static ClaimsPrincipal Principal(string userId) =>
+        new(new ClaimsIdentity([new Claim("sub", userId)], authenticationType: "test"));
+
+    private sealed class OwnerHandler : AuthorizationHandler<OperationAuthorizationRequirement, TestOrder>
+    {
+        protected override Task HandleRequirementAsync(
+            AuthorizationHandlerContext context,
+            OperationAuthorizationRequirement requirement,
+            TestOrder resource)
+        {
+            if (resource.OwnerId == context.User.FindFirst("sub")?.Value)
+            {
+                context.Succeed(requirement);
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NoDeleteHandler : AuthorizationHandler<OperationAuthorizationRequirement, TestOrder>
+    {
+        protected override Task HandleRequirementAsync(
+            AuthorizationHandlerContext context,
+            OperationAuthorizationRequirement requirement,
+            TestOrder resource)
+        {
+            if (requirement.Name == ResourceOperations.Delete)
+            {
+                context.Fail();
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// ACL 按被授权的主体判定（官方 <c>context.User</c>），不回落到环境里的当前用户：
+    /// 经 <c>IAuthorizationService</c> 为别的主体判权时两者不同。
+    /// </summary>
+    [Fact]
+    public async Task The_acl_is_evaluated_for_the_authorized_principal_not_the_current_user()
+    {
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _otherOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+        var provider = BuildProvider(new ClaimSubjectProvider(), current: Subject(OwnerUserId));
+        using var scope = provider.CreateScope();
+        var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
+        var requirement = new ResourceOperationRequirement(
+            TestOrder.Resource, _otherOrder.ResourceKey, ResourceOperations.Read);
+
+        Assert.True((await authorization.AuthorizeAsync(Principal(OtherUserId), _otherOrder, requirement)).Succeeded);
+        Assert.False((await authorization.AuthorizeAsync(Principal(OwnerUserId), _otherOrder, requirement)).Succeeded);
+        Assert.False(await scope.ServiceProvider.GetRequiredService<IResourceAuthorizationService>()
+            .IsGrantedAsync(_otherOrder, ResourceOperations.Read));
+    }
+
+    private static readonly Guid TenantA = Guid.Parse("0a000000-0000-0000-0000-000000000001");
+    private static readonly Guid TenantB = Guid.Parse("0b000000-0000-0000-0000-000000000002");
+
+    private static ClaimsIdentity UserIdentity(string userId, Guid? tenantId) =>
+        new(tenantId is { } tenant
+                ? [new Claim("sub", userId), new Claim("tenant_id", tenant.ToString())]
+                : [new Claim("sub", userId)],
+            authenticationType: "test");
+
+    private ServiceProvider BuildTenantProvider(ClaimsPrincipal current, bool withOwnerHandler = false)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMultiTenancyCore();
+        services.AddSingleton<IPermissionSubjectProvider>(new ClaimSubjectProvider());
+        services.AddSingleton<ICurrentPrincipalAccessor>(new FixedPrincipalAccessor(current));
+        services.AddSingleton<IResourceGrantStore>(_store);
+        services.AddResourceAuthorization();
         if (withOwnerHandler)
         {
-            services.AddSingleton<IResourceAuthorizationHandler<TestOrder>, OwnerHandler>();
+            services.AddSingleton<IAuthorizationHandler, OwnerHandler>();
         }
 
-        if (withArchivedDenyHandler)
-        {
-            services.AddSingleton<IResourceAuthorizationHandler<TestOrder>, NoDeleteHandler>();
-        }
-
-        return new DefaultResourceAuthorizationService(
-            new FakeSubjectProvider(subject),
-            services.BuildServiceProvider(),
-            _store);
+        var provider = services.BuildServiceProvider();
+        _providers.Add(provider);
+        return provider;
     }
 
-    private sealed class OwnerHandler : IResourceAuthorizationHandler<TestOrder>
+    /// <summary>
+    /// 两份用户凭据拼成的主体（租户声明非法）失败关闭：即使业务规则给了允许，也不能按它去当前租户的 ACL 判定。
+    /// </summary>
+    [Fact]
+    public async Task A_principal_with_an_illegal_tenant_claim_is_denied_even_when_a_rule_allows()
     {
-        public ValueTask HandleAsync(
-            ResourceAuthorizationContext<TestOrder> context,
-            CancellationToken cancellationToken = default)
-        {
-            if (context.Resource.OwnerId == context.Subject.UserId)
-            {
-                context.Allow();
-            }
+        var stitched = new ClaimsPrincipal(
+        [
+            UserIdentity(OwnerUserId, TenantA),
+            UserIdentity("u-intruder", TenantB)
+        ]);
+        using var scope = BuildTenantProvider(stitched, withOwnerHandler: true).CreateScope();
 
-            return ValueTask.CompletedTask;
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(TenantA))
+        {
+            Assert.False(await scope.ServiceProvider.GetRequiredService<IResourceAuthorizationService>()
+                .IsGrantedAsync(_ownOrder, ResourceOperations.Read));
         }
     }
 
-    private sealed class NoDeleteHandler : IResourceAuthorizationHandler<TestOrder>
+    /// <summary>
+    /// 显式传入的其他主体须属于当前租户：别的租户里同一标识的用户，不能拿到当前租户的 ACL 里判定。
+    /// </summary>
+    [Fact]
+    public async Task An_explicit_principal_from_another_tenant_is_denied()
     {
-        public ValueTask HandleAsync(
-            ResourceAuthorizationContext<TestOrder> context,
-            CancellationToken cancellationToken = default)
-        {
-            if (context.Operation == ResourceOperations.Delete)
-            {
-                context.Deny();
-            }
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _otherOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OtherUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+        var current = new ClaimsPrincipal(UserIdentity(OwnerUserId, TenantA));
+        using var scope = BuildTenantProvider(current).CreateScope();
+        var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
+        var requirement = new ResourceOperationRequirement(
+            TestOrder.Resource, _otherOrder.ResourceKey, ResourceOperations.Read);
 
-            return ValueTask.CompletedTask;
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(TenantA))
+        {
+            var sameTenant = new ClaimsPrincipal(UserIdentity(OtherUserId, TenantA));
+            var otherTenant = new ClaimsPrincipal(UserIdentity(OtherUserId, TenantB));
+
+            Assert.True((await authorization.AuthorizeAsync(sameTenant, _otherOrder, requirement)).Succeeded);
+            Assert.False((await authorization.AuthorizeAsync(otherTenant, _otherOrder, requirement)).Succeeded);
         }
     }
 
+    /// <summary>当前的宿主主体显式切入租户是正当用法：只校验声明合法，不要求等于当前租户。</summary>
+    [Fact]
+    public async Task The_current_host_principal_switched_into_a_tenant_is_evaluated()
+    {
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _otherOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Read, PermissionGrantProviderNames.User, OwnerUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+        using var scope = BuildTenantProvider(new ClaimsPrincipal(UserIdentity(OwnerUserId, tenantId: null))).CreateScope();
+
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(TenantA))
+        {
+            Assert.True(await scope.ServiceProvider.GetRequiredService<IResourceAuthorizationService>()
+                .IsGrantedAsync(_otherOrder, ResourceOperations.Read));
+        }
+    }
+
+    /// <summary>认证判据与官方一致：第一个身份未认证、后面的已认证，仍算已认证。</summary>
+    [Fact]
+    public async Task Any_authenticated_identity_counts_as_authenticated()
+    {
+        var principal = new ClaimsPrincipal(
+        [
+            new ClaimsIdentity(),
+            UserIdentity(OwnerUserId, tenantId: null)
+        ]);
+        using var scope = BuildTenantProvider(principal, withOwnerHandler: true).CreateScope();
+
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IResourceAuthorizationService>()
+            .IsGrantedAsync(_ownOrder, ResourceOperations.Read));
+    }
+
+    /// <summary>规则拒绝不因处理器注册顺序而被 ACL 授予或规则允许推翻。</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_rule_deny_wins_regardless_of_handler_order(bool denyHandlerFirst)
+    {
+        await _manager.ReplaceGrantsAsync(TestOrder.Resource, _ownOrder.ResourceKey,
+        [
+            new ResourceGrant(ResourceOperations.Delete, PermissionGrantProviderNames.User, OwnerUserId,
+                ResourceGrantEffect.Granted)
+        ]);
+
+        var service = CreateService(Subject(OwnerUserId),
+            withOwnerHandler: true, withArchivedDenyHandler: true, denyHandlerFirst: denyHandlerFirst);
+
+        Assert.False(await service.IsGrantedAsync(_ownOrder, ResourceOperations.Delete));
+    }
 
     [Fact]
     public async Task Removing_a_provider_clears_its_acl_across_every_resource()

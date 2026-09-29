@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\authorization-resource\Leistd.Authorization.Resource.Core\Leistd.Authorization.Resource.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\components\authorization-resource\Leistd.Authorization.Resource.AspNetCore\Leistd.Authorization.Resource.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\components\authorization-resource\Leistd.Authorization.Resource.EntityFrameworkCore\Leistd.Authorization.Resource.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\shared\Leistd.TestBase\Leistd.TestBase.csproj" />
   </ItemGroup>

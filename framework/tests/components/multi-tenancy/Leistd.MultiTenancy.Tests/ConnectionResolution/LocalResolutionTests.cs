@@ -1,5 +1,3 @@
-using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;

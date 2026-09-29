@@ -1,9 +1,7 @@
 using System.Diagnostics;
 using Leistd.AmbientContext;
-using Leistd.DependencyInjection.DynamicProxy.Registration;
 using Leistd.Security;
 using Leistd.Tracing.Abstractions;
-using Leistd.Tracing.Attributes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -11,7 +9,7 @@ using Xunit;
 namespace Leistd.Tracing.Tests.Core;
 
 /// <summary>
-/// 没有入站请求时的链路标识：环境上下文贡献者与 <c>[CorrelationId]</c> 拦截器。
+/// 没有入站请求时的关联标识：环境上下文贡献者（Hub 调用、后台作业、消息消费）。
 /// </summary>
 /// <remarks>
 /// 链路追踪的价值恰恰在后台作业、消息消费者、Hub 调用里能续上标识。
@@ -24,7 +22,8 @@ public class NonHttpEntryPointTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAmbientContext();
-        services.AddCorrelationIdCore(new ConfigurationBuilder().Build());
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCorrelationIdCore();
         extra?.Invoke(services);
         return services.BuildServiceProvider();
     }
@@ -85,10 +84,10 @@ public class NonHttpEntryPointTests
         Assert.Equal(activity.TraceId.ToHexString(), correlation.Get());
     }
 
-    // 有 Activity 时以它的 TraceId 为准，优先于调用方指定值——反过来会让同一次调用
-    // 在 APM 与日志里出现两个标识，排障时对不上。
+    // 调用方指定的值优先于 Activity：它是跨链路的业务关联（消息、重试、补偿），
+    // 被当前链路的 TraceId 覆盖就在这一跳断开。
     [Fact]
-    public void Activity_trace_id_wins_over_the_caller_supplied_value()
+    public void The_caller_supplied_value_wins_over_the_activity()
     {
         using var provider = Build();
         var correlation = provider.GetRequiredService<ICorrelationIdProvider>();
@@ -98,94 +97,27 @@ public class NonHttpEntryPointTests
         Assert.NotNull(activity);
 
         using (provider.GetRequiredService<IAmbientContext>().Begin(
-                   new System.Security.Claims.ClaimsPrincipal(), correlationId: "ffffffffffffffffffffffffffffffff"))
+                   new System.Security.Claims.ClaimsPrincipal(), correlationId: "order-7d1c"))
+        {
+            Assert.Equal("order-7d1c", correlation.Get());
+        }
+    }
+
+    // 没有指定值时沿用当前 Activity，不另造一个：日志与 APM 用同一个标识。
+    [Fact]
+    public void Without_a_caller_value_the_activity_trace_id_is_used()
+    {
+        using var provider = Build();
+        var correlation = provider.GetRequiredService<ICorrelationIdProvider>();
+
+        using var listener = ListenToEverything();
+        using var activity = new ActivitySource(nameof(NonHttpEntryPointTests)).StartActivity("job");
+        Assert.NotNull(activity);
+
+        using (provider.GetRequiredService<IAmbientContext>().Begin(new System.Security.Claims.ClaimsPrincipal()))
         {
             Assert.Equal(activity.TraceId.ToHexString(), correlation.Get());
         }
-    }
-
-    public interface IJob
-    {
-        Task<string?> RunAsync();
-        Task RunVoidAsync();
-        string? Observed { get; }
-    }
-
-    // 特性打在实现类上：注册回调按实现类型判定是否织入。
-    [CorrelationId]
-    public sealed class Job(ICorrelationIdProvider correlation) : IJob
-    {
-        public Task<string?> RunAsync() => Task.FromResult(correlation.Get());
-
-        public Task RunVoidAsync()
-        {
-            Observed = correlation.Get();
-            return Task.CompletedTask;
-        }
-
-        public string? Observed { get; private set; }
-    }
-
-    /// <remarks>织入经 <c>DynamicProxyServiceRegistrationCallbackFactory</c> 建容器，与工作单元的用例同口径。</remarks>
-    private static ServiceProvider BuildWithJob()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddAmbientContext();
-        services.AddCorrelationIdCore(new ConfigurationBuilder().Build());
-        services.AddSingleton<IJob, Job>();
-
-        return (ServiceProvider)new DynamicProxyServiceRegistrationCallbackFactory().CreateServiceProvider(services);
-    }
-
-    // 拦截器为没有入站请求的调用建立标识：作业方法内部必须能读到值。
-    [Fact]
-    public async Task Attribute_creates_a_correlation_id_for_a_background_call()
-    {
-        using var provider = BuildWithJob();
-
-        var observed = await provider.GetRequiredService<IJob>().RunAsync();
-
-        Assert.False(string.IsNullOrEmpty(observed));
-        Assert.Equal(32, observed!.Length);
-    }
-
-    // 无返回值的重载走另一条代码路径，必须分别覆盖。
-    [Fact]
-    public async Task Attribute_also_covers_methods_without_a_result()
-    {
-        using var provider = BuildWithJob();
-        var job = provider.GetRequiredService<IJob>();
-
-        await job.RunVoidAsync();
-
-        Assert.False(string.IsNullOrEmpty(job.Observed));
-    }
-
-    // 已经有标识时不得换发：换发会把一次调用在日志里劈成两段链路。
-    [Fact]
-    public async Task Existing_correlation_id_is_kept_rather_than_replaced()
-    {
-        using var provider = BuildWithJob();
-        var correlation = provider.GetRequiredService<ICorrelationIdProvider>();
-        const string Existing = "0af7651916cd43dd8448eb211c80319c";
-
-        using (correlation.Change(Existing))
-        {
-            Assert.Equal(Existing, await provider.GetRequiredService<IJob>().RunAsync());
-        }
-    }
-
-    // 作用域退出后必须还原，否则同一个宿主里的下一次调用会沿用上一次的标识。
-    [Fact]
-    public async Task Correlation_id_does_not_outlive_the_call()
-    {
-        using var provider = BuildWithJob();
-        var correlation = provider.GetRequiredService<ICorrelationIdProvider>();
-
-        await provider.GetRequiredService<IJob>().RunAsync();
-
-        Assert.Null(correlation.Get());
     }
 
     private static ActivityListener ListenToEverything()

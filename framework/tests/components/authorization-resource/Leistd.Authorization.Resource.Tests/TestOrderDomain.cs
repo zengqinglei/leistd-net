@@ -1,12 +1,7 @@
 using System.Security.Claims;
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Resource.Tests;
@@ -63,4 +58,23 @@ internal sealed class FakeSubjectProvider(PermissionSubject? subject) : IPermiss
 
     public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
         => Task.FromResult(subject);
+}
+
+/// <summary>按主体的 <c>sub</c> 给出主体：用于验证判定针对被授权的主体而不是当前用户。</summary>
+internal sealed class ClaimSubjectProvider : IPermissionSubjectProvider
+{
+    public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<PermissionSubject?>(null);
+
+    public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
+        => Task.FromResult(principal.FindFirst("sub")?.Value is { } userId
+            ? new PermissionSubject(userId, [], IsSuperAdmin: false)
+            : null);
+}
+
+internal sealed class FixedPrincipalAccessor(ClaimsPrincipal? principal) : Leistd.Security.Claims.ICurrentPrincipalAccessor
+{
+    public ClaimsPrincipal? Principal { get; } = principal;
+
+    public IDisposable Change(ClaimsPrincipal principal) => throw new NotSupportedException();
 }

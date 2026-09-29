@@ -64,7 +64,7 @@ HTTP/1.1 200 OK
   "detail": "用户名 'admin' 已存在",
   "instance": "/api/v1/users",
   "code": "User:UsernameTaken",
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 
@@ -78,7 +78,7 @@ HTTP/1.1 200 OK
 | detail | string | 业务错误面向用户的说明，按错误码本地化或回落为安全文案；协议层失败不带 |
 | instance | string | 出错的请求路径 |
 | code | string | **稳定错误码**：只出现在业务错误上，`BusinessException` 在构造时必填，形如 `User:UsernameTaken`；也是本地化词条键 |
-| traceId | string | 请求入口确定的应用关联 ID；有请求 Activity 时通常为 32 位小写十六进制，无 Activity 时也可为合规的自定义入站 ID；异常、校验和手工失败响应共用同一值。自定义 ID 不保证可直接检索 OpenTelemetry 链路，应先查服务日志 |
+| traceId | string | ASP.NET Core 写出的链路标识（当前 `Activity.Id`），W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，第二段是 TraceId，用它检索日志与链路；没有 Activity 时为请求标识。业务关联标识另在响应头 `X-Correlation-Id` |
 
 > `GlobalExceptionOptions.IncludeExceptionDetails` 默认为 `false`；开启后仅额外输出 `stackTrace`，只用于本地调试，生产环境不开启。
 
@@ -103,7 +103,7 @@ HTTP/1.1 200 OK
       "field": "price"
     }
   ],
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 

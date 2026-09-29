@@ -35,7 +35,7 @@ export interface GetUsersInputDto extends PagedRequestDto {
 }
 
 export interface CreateUserInputDto {
-  //#if (!LocalIdentity)
+  //#if (RemoteTokenAuth)
   subjectId: string;
   //#endif
   username: string;

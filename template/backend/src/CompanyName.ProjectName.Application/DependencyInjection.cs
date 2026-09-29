@@ -43,8 +43,9 @@ using CompanyName.ProjectName.Application.Roles.AppServices;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
-using Leistd.MultiTenancy.Events;
-using Leistd.MultiTenancy.Provisioning;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Management.Events;
+using Leistd.MultiTenancy.Management.Provisioning;
 #endif
 using Leistd.EventBus.EventHandlers;
 using Microsoft.Extensions.DependencyInjection;
@@ -64,7 +65,8 @@ public static class DependencyInjection
     {
         services.AddMapsterObjectMapper(options =>
         {
-            options.AddProfiles(typeof(DependencyInjection).Assembly);
+            // 各模块 Mappings/ 下实现 IRegister 的映射配置，登记到组件自己的 TypeAdapterConfig
+            options.Configurators.Add(config => config.Scan(typeof(DependencyInjection).Assembly));
         });
 
         services.AddTransient<ISystemInitializer, SystemInitializer>();
@@ -129,7 +131,9 @@ public static class DependencyInjection
 #endif
 
 #if (LocalIdentity)
-        // 租户管理的编排与补偿在多租户组件里；本项目只负责开通内容与启用前置条件
+        // 租户管理的编排与补偿在多租户组件里（存储由 Infrastructure 的 AddMultiTenancyEfCore 提供）；
+        // 本项目只负责开通内容与启用前置条件
+        services.AddTenantManagement();
         services.AddTransient<ITenantProvisioner, TenantSeeder>();
         services.AddTransient<ITenantActivationGuard, TenantHasUsersActivationGuard>();
         services.AddTransient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>();

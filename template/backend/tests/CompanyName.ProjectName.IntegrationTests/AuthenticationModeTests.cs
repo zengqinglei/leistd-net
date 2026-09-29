@@ -128,7 +128,7 @@ public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory
     }
 }
 #endif
-#if (!LocalIdentity)
+#if (RemoteTokenAuth)
 
 namespace CompanyName.ProjectName.IntegrationTests;
 

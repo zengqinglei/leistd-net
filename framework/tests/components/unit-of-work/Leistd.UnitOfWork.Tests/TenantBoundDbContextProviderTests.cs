@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Leistd.MultiTenancy;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork.EntityFrameworkCore;
@@ -8,13 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Leistd.Data;
 using Leistd.Data.Connections;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.UnitOfWork.Tests;
 

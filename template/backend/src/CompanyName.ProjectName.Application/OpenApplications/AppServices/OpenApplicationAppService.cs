@@ -97,7 +97,7 @@ public class OpenApplicationAppService(
                 ApplicationType = await applicationManager.GetApplicationTypeAsync(app, cancellationToken),
                 ClientType = await applicationManager.GetClientTypeAsync(app, cancellationToken),
                 ConsentType = await applicationManager.GetConsentTypeAsync(app, cancellationToken),
-                CreationTime = OpenApplicationProfile.ReadCreationTime(
+                CreationTime = OpenApplicationMappings.ReadCreationTime(
                     await applicationManager.GetPropertiesAsync(app, cancellationToken))
             });
         }
@@ -185,7 +185,7 @@ public class OpenApplicationAppService(
             input.PostLogoutRedirectUris,
             input.Permissions,
             input.Requirements);
-        descriptor.Properties[OpenApplicationProfile.CreationTimePropertyName] = JsonSerializer.SerializeToElement(clock.Now);
+        descriptor.Properties[OpenApplicationMappings.CreationTimePropertyName] = JsonSerializer.SerializeToElement(clock.Now);
 
         try
         {
@@ -285,7 +285,7 @@ public class OpenApplicationAppService(
 
         return objectMapper.Map<OpenIddictApplicationDescriptor, OpenApplicationOutputDto>(
             descriptor,
-            new Dictionary<string, object> { [OpenApplicationProfile.IdKey] = id ?? string.Empty });
+            new Dictionary<string, object> { [OpenApplicationMappings.IdKey] = id ?? string.Empty });
     }
 
     /// <inheritdoc />

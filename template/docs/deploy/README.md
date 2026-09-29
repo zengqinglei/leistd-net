@@ -43,8 +43,9 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 
 - **Docker Compose 单机**：机密写在 `deploy/.env` 或由流水线导出为环境变量，清单见 `deploy/.env.example`；必填项在 compose 里以 `${VAR:?}` 引用，漏填时带着变量名失败。
 <!--#if (OpenIddictServer)-->
-  令牌证书以 compose `secrets` 挂载到 `/run/secrets`，只有口令走环境变量。
+  令牌证书以 compose `secrets` 挂载到 `/run/secrets`，只有口令走环境变量。单机 compose 的文件型 secret 是按宿主机文件权限的绑定挂载，`mode`、`uid` 不生效：证书文件必须对容器用户（UID 1654）可读，例如 `chown 1654 certs/*.pfx && chmod 400 certs/*.pfx`，或 `chmod 640` 并把属组设为 1654。宿主机上 `600` 且属主 root 的证书会让 API 启动失败。
 <!--#endif-->
+- **容器用户**：API 与迁移镜像以镜像自带的非 root 用户（UID 1654）运行。挂进容器的文件要对它可读；Data Protection 密钥改用文件目录（`DataProtection:KeysPath`）而不是 Redis 时，挂载的目录要对它可写。
 - **Kubernetes**：非机密配置放 ConfigMap，机密放 Secret，以环境变量（`Section__Key`）注入，证书类文件（如身份服务的令牌证书）以卷挂载。`DbMigrator` 作为发布前的一次性 Job（带 `--apply`），成功后再滚动发布 API；就绪与存活探针分别指向 `/api/health/ready` 与 `/api/health/live`。多副本必须配置 Redis，Data Protection 密钥与分布式锁都依赖它。
 - **云平台（容器服务、应用服务）**：配置写应用设置，机密放托管密钥库并以托管身份读取（如 Key Vault 引用）。这类接入与平台绑定，确定平台后再加，不预置在模板里。
 

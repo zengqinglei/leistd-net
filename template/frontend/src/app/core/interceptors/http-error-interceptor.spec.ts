@@ -126,12 +126,11 @@ describe('httpErrorInterceptor', () => {
     expect(applicationError.details.length).toBe(1);
   });
 
-  it('parses the optional numeric response envelope without losing its business error code', () => {
+  it('reads the business error code from problem details', () => {
     const caught = runInterceptor(
       httpError(409, {
-        code: 409,
-        errorCode: 'Role:NameExists',
-        message: 'Role name already exists.',
+        code: 'Role:NameExists',
+        detail: 'Role name already exists.',
         traceId: 'trace-1',
       }),
     );
@@ -144,7 +143,7 @@ describe('httpErrorInterceptor', () => {
   });
 
   it('uses the active localization label for a reportable trace ID', () => {
-    const caught = runInterceptor(httpError(503, { message: 'Unavailable', traceId: 'trace-5' }));
+    const caught = runInterceptor(httpError(503, { detail: 'Unavailable', traceId: 'trace-5' }));
     //#if (IncludeLocalization)
     expect(applicationErrorMessage(caught)).toBe('Unavailable (common.traceId: trace-5)');
     //#else

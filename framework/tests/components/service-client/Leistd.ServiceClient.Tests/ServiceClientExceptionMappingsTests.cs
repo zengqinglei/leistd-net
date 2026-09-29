@@ -125,13 +125,13 @@ public sealed class ServiceClientExceptionMappingsTests
     }
 
     [Fact]
-    public async Task Error_response_and_header_share_the_selected_custom_correlation_id()
+    public async Task The_correlation_header_is_echoed_while_the_error_traceId_stays_official()
     {
         using var host = await new HostBuilder()
             .ConfigureWebHost(web => web.UseTestServer()
                 .ConfigureServices(services =>
                 {
-                    services.AddCorrelationId(_ => { });
+                    services.AddCorrelationId();
                     services.AddGlobalExceptionHandler(ServiceClientExceptionMappings.Configure);
                 })
                 .Configure(app =>
@@ -148,8 +148,10 @@ public sealed class ServiceClientExceptionMappingsTests
         using var response = await host.GetTestClient().SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
 
+        // 关联标识在响应头；问题详情的 traceId 是官方链路标识，不被关联标识覆盖
         Assert.Equal("caller-ABC_123", response.Headers.GetValues("X-Correlation-Id").Single());
-        Assert.Contains("\"traceId\":\"caller-ABC_123\"", body);
+        Assert.Contains("\"traceId\":", body);
+        Assert.DoesNotContain("caller-ABC_123", body);
     }
 
     private static async Task<(int Status, string Body)> HandleAsync(

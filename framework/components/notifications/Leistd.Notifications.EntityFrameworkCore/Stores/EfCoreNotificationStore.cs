@@ -4,9 +4,6 @@ using Leistd.Timing;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.EntityFrameworkCore.Entities;
-using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
 
 namespace Leistd.Notifications.EntityFrameworkCore.Stores;

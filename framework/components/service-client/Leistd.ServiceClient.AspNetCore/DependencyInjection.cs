@@ -4,7 +4,6 @@ using Leistd.ServiceClient.AspNetCore.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Leistd.ServiceClient.AspNetCore;
 

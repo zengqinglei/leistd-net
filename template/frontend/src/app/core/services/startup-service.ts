@@ -46,7 +46,7 @@ export class StartupService {
     // includes——查询串或锚点里出现 `/auth/callback` 不代表人在回调页，误判会让普通
     // 会话过期走进回调专用的处置分支。
     const route = entryRoutePath();
-    //#if (!LocalIdentity)
+    //#if (RemoteTokenAuth)
     const isOidcCallback = route === '/auth/callback';
     //#endif
 
@@ -65,7 +65,7 @@ export class StartupService {
     }
 
     //#endif
-    //#if (!LocalIdentity)
+    //#if (RemoteTokenAuth)
     if (!this.isProtectedRoute() && !isOidcCallback) {
     //#else
     if (!this.isProtectedRoute()) {
@@ -86,7 +86,7 @@ export class StartupService {
       this._status.set('success');
     } catch (err: unknown) {
       if (err instanceof ApplicationHttpError && err.status === 401) {
-        //#if (!LocalIdentity)
+        //#if (RemoteTokenAuth)
         // 回调页上的 401 不能当作「未登录」：这一刻刚从授权服务器换到令牌，是 API 拒了它。
         // 按未登录继续走下去，会跳进受保护路由，Guard 发现没有主体又发起一次授权，而
         // 授权服务器那边会话还在、立刻带着新 code 回到回调页，同样被拒——绕成死循环，

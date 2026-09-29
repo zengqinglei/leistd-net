@@ -6,11 +6,7 @@ using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Exceptions;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.Resolution;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 

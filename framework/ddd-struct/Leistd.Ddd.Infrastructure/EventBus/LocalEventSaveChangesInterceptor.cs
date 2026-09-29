@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using Leistd.Ddd.Domain.Entities;
-using Leistd.EventBus;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;

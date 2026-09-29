@@ -1,6 +1,4 @@
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore;
@@ -130,7 +128,7 @@ public sealed class OperationRecordRegistrationTests
     /// <summary>记录器解析得出来，要宿主先组合四个独立组件。</summary>
     /// <remarks>
     /// <see cref="IOperationRecorder"/> 要回答"谁、在哪个租户、哪条链路、什么时间"，四样分别来自
-    /// <c>AddAmbientContext()</c>、<c>AddMultiTenancyCore()</c>、<c>AddCorrelationIdCore(configuration)</c>
+    /// <c>AddAmbientContext()</c>、<c>AddMultiTenancyCore()</c>、<c>AddCorrelationIdCore()</c>
     /// 与宿主注册的 <see cref="IClock"/>。本组件一个都不替调用方注册，因此"注册面齐不齐"
     /// 编译期看不出来，只在首次解析时失败。
     /// </remarks>
@@ -147,7 +145,7 @@ public sealed class OperationRecordRegistrationTests
             .AddSingleton<IClock, UtcClockProvider>()
             .AddMultiTenancyCore()
             .AddAmbientContext()
-            .AddCorrelationIdCore(configuration)
+            .AddCorrelationIdCore()
             .AddOperationRecordsEfCore<TestDbContext>()
             .BuildServiceProvider();
 

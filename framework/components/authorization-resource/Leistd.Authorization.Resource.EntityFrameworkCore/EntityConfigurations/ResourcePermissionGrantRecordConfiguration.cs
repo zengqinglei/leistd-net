@@ -1,5 +1,3 @@
-using Leistd.Auditing;
-using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Leistd.Authorization.Resource.EntityFrameworkCore.Entities;

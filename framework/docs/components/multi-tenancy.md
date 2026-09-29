@@ -22,6 +22,7 @@
 dotnet add package Leistd.MultiTenancy.Core
 dotnet add package Leistd.MultiTenancy.AspNetCore
 dotnet add package Leistd.MultiTenancy.EntityFrameworkCore
+dotnet add package Leistd.MultiTenancy.Management    # 租户管理用例（管理界面、开通编排）
 dotnet add package Leistd.MultiTenancy.ServiceClient   # 资源服务回源控制面
 ```
 
@@ -60,7 +61,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 }
 ```
 
-`AddMultiTenancyEfCore<TDbContext>()` 注册租户与连接配置的 Store/Manager，均可通过 `TryAdd` 替换。它不注册业务实体的租户落值拦截器；该行为属于 DDD 基座的 `BaseDbContext`。
+`AddMultiTenancyEfCore<TDbContext>()` 只注册租户与连接配置的 Store/Manager，均可通过 `TryAdd` 替换；只读控制库的宿主（租户连接解析、迁移作业）到此为止。租户管理与连接管理用例在 `Leistd.MultiTenancy.Management` 包，由提供管理界面的宿主另行 `AddTenantManagement()`（需要工作单元）。它不注册业务实体的租户落值拦截器；该行为属于 DDD 基座的 `BaseDbContext`。
 
 普通 `DbContext` 若需为 `TenantConnectionRecord` 记录创建审计，应显式启用创建审计：
 
@@ -211,6 +212,7 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 管理界面直接用组件的用例与端点，宿主只实现开通与启用前置条件：
 
 ```csharp
+builder.Services.AddTenantManagement();                                  // Leistd.MultiTenancy.Management
 builder.Services.AddScoped<ITenantProvisioner, TenantSeeder>();          // 在新租户里写初始数据，失败时清掉
 builder.Services.AddScoped<ITenantActivationGuard, TenantHasUsersGuard>(); // 可选，可注册多个
 
@@ -377,8 +379,9 @@ public sealed class IdentityControlDbContext : DbContext;
 | `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；按 `ClaimTypeOptions.ReadTenant` 判定租户会话（主体属于某个租户；声明非法时保留原始错误）；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
 | `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一；`BaseAddress` 缺失或不是绝对地址时启动失败并报出键名；该客户端不转发用户与租户上下文（控制面查询，租户 Id 在路径里） |
 | `ITenantConnectionConfigurationManager` | `SetAsync(tenantId, name, connectionString, expectedVersion, ct)` 登记或更新一条；`RemoveAsync(tenantId, name, expectedVersion, ct)` 删除一条（该名字随即回落到服务自己的配置）。**会改变数据落点的写入要求租户已停用**，判据见上文表格 |
+| `AddTenantManagement()` | Management 包：注册 `ITenantManagementService`、`ITenantConnectionManagementService` 与开通错误翻译的默认实现（不翻译），并调用 `AddMultiTenancyCore()`；存储契约与工作单元由调用方先就位 |
 | `AddLocalTenantConnectionResolution<TControlDbContext>(configure)` | EF 包：注册本地连接解析与本地迁移目标，并调用 `AddMultiTenancyCore()`；`LocalTenantConnectionOptions.ControlPlaneConnectionStringName` 必填且不能是 `Default` |
-| `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、单飞协调器、内存缓存与远端迁移目标，并调用 `AddMultiTenancyCore()`；绑定 `TenantRouting` 配置节 |
+| `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、`HybridCache`（只用进程内一级，并发回源合并为一次，连接串不进分布式缓存）与远端迁移目标，并调用 `AddMultiTenancyCore()`；绑定 `TenantRouting` 配置节 |
 | `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举。EF 包提供控制库实现，ServiceClient 包提供远端实现，**按名字问、按名字答，一次只出一条** |
 | `TenantConnectionLookupResult` | `HasAnyConnection` 区分"不分库"与"缺这个名字"；`Connection` 是命中的那一条 |
 | `TenantRouteCacheOptions` | `CacheLifetime`（默认 10 分钟，不超过 `MaximumCacheLifetime` 1 小时） |

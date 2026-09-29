@@ -6,7 +6,7 @@ import { catchError, delay, mergeMap, tap } from 'rxjs/operators';
 import { getUrlPath, isMockedUrl } from './matching';
 import { MockConfig, MockException, MockRequest, MockResponse } from './models';
 import { environment } from '../../src/environments/environment';
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { syncMockSubjectFromBearer } from '../utils/current-user';
 //#endif
 
@@ -27,8 +27,10 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
         () =>
           new HttpErrorResponse({
             error: {
+              title: 'Mock Route Not Found',
+              status: 501,
               code: 'MOCK_ROUTE_NOT_FOUND',
-              message: `Mock API is not defined: ${method.toUpperCase()} ${getUrlPath(url)}`,
+              detail: `Mock API is not defined: ${method.toUpperCase()} ${getUrlPath(url)}`,
             },
             headers: headers.set('Content-Type', 'application/json'),
             status: 501,
@@ -54,7 +56,7 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
     params: matchingRule.urlParams,
   };
 
-  //#if (!LocalIdentity)
+  //#if (RemoteTokenAuth)
   // 没有本地身份的形态没有任何 Mock 请求会建立会话（登录走远端 OIDC，不经 HttpClient）。
   // 在分发前从浏览器已持有的令牌把主体补进会话，各 Mock 照原样按会话取主体即可。
   syncMockSubjectFromBearer(mockRequest);

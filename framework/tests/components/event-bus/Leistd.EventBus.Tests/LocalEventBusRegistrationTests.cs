@@ -23,16 +23,24 @@ public class LocalEventBusRegistrationTests
         Assert.Same(provider.GetRequiredService<ILocalEventBus>(), provider.GetRequiredService<ILocalEventDispatcher>());
     }
 
-    // 替换只注册 ILocalEventBus（与 dispatcher）即可：IEventBus 跟随它，不会留下一条走默认总线的发布路径
+    // IEventBus 只作共同基接口、不注册为服务：将来分布式总线也注册它时，注入它的发布方会静默换成另一种投递语义
     [Fact]
-    public void A_replaced_local_bus_also_serves_IEventBus()
+    public void IEventBus_is_not_registered_as_a_service()
+    {
+        var services = new ServiceCollection().AddLocalEventBus();
+
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IEventBus));
+    }
+
+    [Fact]
+    public void A_replaced_local_bus_is_kept()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILocalEventBus, HostBus>();
         services.AddLocalEventBus();
 
         using var provider = services.BuildServiceProvider();
-        Assert.IsType<HostBus>(provider.GetRequiredService<IEventBus>());
+        Assert.IsType<HostBus>(provider.GetRequiredService<ILocalEventBus>());
     }
 
     private sealed class HostBus : ILocalEventBus

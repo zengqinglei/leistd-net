@@ -37,7 +37,6 @@ using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.Timing;
 using Leistd.Lock.Abstractions;
@@ -557,12 +556,12 @@ internal sealed class AuthAppService(
 
     /// <remarks>
     /// 角色名由调用方给出：写路径刚分配完角色、关联行尚未落库，映射配置里的实体连接查不到。
-    /// 经 <see cref="UserProfile.RoleNamesKey"/> 传入，仍走已注册的 <c>User → UserOutputDto</c> 映射。
+    /// 经 <see cref="UserMappings.RoleNamesKey"/> 传入，仍走已注册的 <c>User → UserOutputDto</c> 映射。
     /// </remarks>
     private UserOutputDto ToOutput(User user, List<string> roleNames)
     {
         return objectMapper.Map<User, UserOutputDto>(
             user,
-            new Dictionary<string, object> { [UserProfile.RoleNamesKey] = roleNames });
+            new Dictionary<string, object> { [UserMappings.RoleNamesKey] = roleNames });
     }
 }

@@ -1,5 +1,4 @@
 using System.Reflection;
-using Leistd.Localization;
 using Leistd.Localization.AspNetCore;
 using Leistd.Localization.Json;
 using Leistd.Localization.Options;

@@ -4,7 +4,7 @@ using Leistd.OperationRecords.EntityFrameworkCore;
 using Leistd.Settings.EntityFrameworkCore;
 #if (LocalIdentity)
 using Leistd.MultiTenancy.EntityFrameworkCore;
-using Leistd.MultiTenancy.Provisioning;
+using Leistd.MultiTenancy.Management.Provisioning;
 #endif
 using Leistd.BackgroundJobs.EntityFrameworkCore;
 using Leistd.Ddd.Infrastructure;
@@ -66,6 +66,12 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddPersistenceServices(configuration);
+
+#if (LocalIdentity)
+        // 开通失败的数据库错误翻译：SQLSTATE 表是 PostgreSQL 方言，属本项目的技术适配。
+        // 组件按 TryAdd 挂"不翻译"的默认实现，这里直接登记，与注册先后无关
+        services.AddSingleton<ITenantDatabaseErrorDescriber, PostgresTenantDatabaseErrorDescriber>();
+#endif
 
 #if (IncludeNotifications)
         services.AddNotificationsEfCore<MyProjectDbContext>();
@@ -266,10 +272,7 @@ public static class DependencyInjection
         });
 
 #if (LocalIdentity)
-        // 开通失败的数据库错误翻译：SQLSTATE 表是 PostgreSQL 方言，属本项目的技术适配。
-        // 必须在组件注册之前登记——组件按 TryAdd 挂的是“不翻译”的默认实现
-        services.AddSingleton<ITenantDatabaseErrorDescriber, PostgresTenantDatabaseErrorDescriber>();
-        // 租户注册表、连接登记与两个管理用例（租户管理、连接管理）都读写控制库
+        // 租户注册表与连接登记的存储；管理用例只在 API 里注册（AddApplicationServices）
         services.AddMultiTenancyEfCore<IdentityControlDbContext>();
 #endif
 

@@ -1,14 +1,11 @@
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.Events;
 using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Dtos;
-using Leistd.MultiTenancy.Events;
 using Leistd.MultiTenancy.Stores;
 using Xunit;
+using Leistd.MultiTenancy.Management.Dtos;
+using Leistd.MultiTenancy.Management.Events;
 
 namespace Leistd.MultiTenancy.Tests.ConnectionResolution;
 

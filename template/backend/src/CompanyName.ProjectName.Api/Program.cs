@@ -56,7 +56,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
-#if (!LocalIdentity)
+#if (RemoteTokenAuth)
 using Leistd.AspNetCore.SignalR;
 #endif
 #endif
@@ -71,7 +71,7 @@ using CompanyName.ProjectName.Application.Auth.OAuth;
 #if (ServiceUserContextEnabled)
 using Leistd.ServiceClient.AspNetCore;
 #endif
-#if (!LocalIdentity)
+#if (RemoteTokenAuth)
 using OpenIddict.Validation.AspNetCore;
 #endif
 using System.Net;
@@ -254,7 +254,7 @@ try
                    .DisableAccessTokenExtractionFromBodyForm();
         });
 #endif
-#if (!LocalIdentity)
+#if (RemoteTokenAuth)
     // Resource 只验证 Identity 签发的 Bearer token。
     const string RemoteIdentityConfigurationError =
         "Resource services require Authentication:Issuer (an absolute http(s) URI) and Authentication:Audience.";
@@ -329,6 +329,8 @@ try
             options.DataAnnotationLocalizerProvider = (_, factory) => factory.Create(typeof(ApiResource)))
 #endif
         .ConfigureApiValidation();
+    // 官方 OpenAPI 文档：控制器与组件端点都经 ApiExplorer 收录，只在 Development 映射（见下方 MapOpenApi）
+    builder.Services.AddOpenApi();
 
     // X-Forwarded-Host 影响租户解析和绝对 URL，因此只信任显式配置的代理。
     // 在 Options 回调内读取 Build 阶段已合并的最终配置。
@@ -575,7 +577,7 @@ try
 
     app.UseCors();
 
-#if (!LocalIdentity && IncludeNotifications)
+#if (RemoteTokenAuth && IncludeNotifications)
     // 仅 Hub 允许 SignalR 浏览器客户端的 access_token query；普通 API 仍只接受 Bearer header。
     app.UseHubAccessToken();
 #endif
@@ -610,6 +612,11 @@ try
     app.MapControllers();
     // 组件自带的端点（设置、权限、操作记录、通知、租户与租户连接），路由与原控制器一致
     app.MapComponentEndpoints();
+    if (app.Environment.IsDevelopment())
+    {
+        // 本机查看接口：/openapi/v1.json。其他环境不暴露接口清单
+        app.MapOpenApi().AllowAnonymous();
+    }
 
 #if (IncludeNotifications)
     // 通知经实时 Hub 推送，只映射这一个

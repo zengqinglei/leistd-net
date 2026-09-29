@@ -1,4 +1,3 @@
-using Leistd.Auditing;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.Ddd.Infrastructure.Persistence;

@@ -5,7 +5,6 @@ using Leistd.Security.Claims;
 using Leistd.ServiceClient.Constants;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Xunit;
 using Leistd.TestBase.Doubles;
 

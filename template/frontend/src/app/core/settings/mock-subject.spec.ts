@@ -1,4 +1,4 @@
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import {
   HttpHeaders,
   HttpInterceptorFn,

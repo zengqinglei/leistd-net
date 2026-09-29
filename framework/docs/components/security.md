@@ -125,6 +125,8 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 | `Name` | 标准身份名称，依次取 `name` / `Name` claim，不回退 `given_name` |
 | `Email` | 邮箱，依次取 `email` / `Email` claim |
 | `FindClaim(claimType)` | 指定类型的第一个 `Claim`，跨全部身份查找（官方 `ClaimsPrincipal.FindFirst`），不存在返回 `null` |
+| `FindClaims(claimType)` | 指定类型的全部 `Claim`（多值的角色、scope、amr），与 `FindClaim` 同一范围；没有主体时为空 |
+| `IsInRole(role)` | 当前用户是否属于该角色：**只看主体身份**，按其 `RoleClaimType` 精确匹配；服务间调用时调用方机器身份上的角色不算。没有带用户标识的身份时按整个主体判断 |
 
 `Username`、`Name`、`Email` 只在主体身份（`ClaimTypeOptions.FindSubjectIdentity`）上读取，与 `SubjectId`、`TenantId` 同源：服务间还原出的被代表用户没带 `name` 时，不会取到调用方机器令牌上的名字。主体上没有带用户标识的身份时按整个主体读取。
 
@@ -192,7 +194,7 @@ bool isNaturalPerson = Guid.TryParse(claimTypes.Value.FindUserId(principal), out
 ## 注意事项
 
 - 各属性在缺失对应 claim 时返回 `null`（`Id` 在 claim 无法解析为 `Guid` 时同样返回 `null`），调用方需做空值处理。
-- 角色判断用官方 `ClaimsPrincipal.IsInRole` 或授权策略 `RequireRole`：它们只认身份的 `RoleClaimType`、角色名区分大小写。自行构造 `ClaimsIdentity` 时，`roleType` 要与写入角色 claim 的类型一致（如 OIDC 的 `role`），否则判定静默为 `false`。
+- 业务代码判断当前用户的角色用 `ICurrentUser.IsInRole`（只看主体身份）；授权策略 `RequireRole` 与官方 `ClaimsPrincipal.IsInRole` 看整个主体。两者都只认身份的 `RoleClaimType`、角色名区分大小写。自行构造 `ClaimsIdentity` 时，`roleType` 要与写入角色 claim 的类型一致（如 OIDC 的 `role`），否则判定静默为 `false`。
 - `Change(...)` 基于 `AsyncLocal` 支持异步传播和嵌套，但返回的 `IDisposable` 必须释放。
 - `HttpContextCurrentPrincipalAccessor` 依赖 `IHttpContextAccessor`，在没有 HTTP 上下文的后台任务里 `Principal` 为 `null`；此类场景用 `IAmbientContext.Begin(...)` 显式建立系统主体。
 - 领域层/应用层应只引用 `Leistd.Security.Core`，避免把 ASP.NET Core 依赖泄漏进核心层。

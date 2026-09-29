@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork.Attributes;
-using Leistd.DependencyInjection;
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.EventHandlers;
 using Leistd.UnitOfWork.Events;

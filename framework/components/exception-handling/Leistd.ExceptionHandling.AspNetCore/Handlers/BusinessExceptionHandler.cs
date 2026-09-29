@@ -1,7 +1,7 @@
+using System.Diagnostics;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Leistd.ExceptionHandling.Descriptors;
-using Leistd.ExceptionHandling.AspNetCore.Diagnostics;
 using Leistd.ExceptionHandling.Options;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
@@ -132,7 +132,8 @@ public sealed class BusinessExceptionHandler(
 
     private void Log(HttpContext httpContext, Exception exception, ExceptionDescriptor descriptor)
     {
-        var traceId = RequestTraceId.Get(httpContext);
+        // 与问题详情里官方写出的 traceId 同值（W3C 格式，第二段是链路 TraceId），按响应里的值就能搜到这条日志
+        var traceId = Activity.Current?.Id ?? httpContext.TraceIdentifier;
         if (descriptor.LogLevel >= LogLevel.Error)
         {
             logger.Log(

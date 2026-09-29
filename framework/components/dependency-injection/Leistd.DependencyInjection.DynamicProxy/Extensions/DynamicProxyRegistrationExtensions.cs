@@ -1,4 +1,3 @@
-using Castle.DynamicProxy;
 using Leistd.DependencyInjection.Abstractions;
 
 namespace Leistd.DependencyInjection.DynamicProxy.Extensions;

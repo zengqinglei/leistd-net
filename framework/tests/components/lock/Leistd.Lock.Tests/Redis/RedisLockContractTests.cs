@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Leistd.Lock.Memory;
 using Xunit;
 using Leistd.Lock.Abstractions;
-using Leistd.Lock.Tests.Memory;
 
 namespace Leistd.Lock.Tests.Redis;
 

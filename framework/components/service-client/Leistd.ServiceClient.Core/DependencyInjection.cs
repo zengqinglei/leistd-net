@@ -1,21 +1,15 @@
 using Leistd.ExceptionHandling.Options;
 using Leistd.ServiceClient.ExceptionMappings;
-using Leistd.MultiTenancy;
 using Leistd.Security.Users;
 using Leistd.ServiceClient.Handlers;
 using Leistd.ServiceClient.Options;
 using Leistd.Tracing.Options;
-using Leistd.Tracing.Services;
 using Leistd.Tracing.HttpClient.Handlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.Tracing.Abstractions;
 
 namespace Leistd.ServiceClient;
@@ -29,11 +23,6 @@ public static class DependencyInjection
     /// 服务客户端配置节前缀：每个下游服务绑定 <c>Leistd:ServiceClients:&lt;服务名&gt;</c>。
     /// </summary>
     public const string ConfigurationSectionPrefix = "Leistd:ServiceClients";
-
-    /// <summary>
-    /// 日志类别前缀：每个客户端的日志类别为 <c>Leistd.ServiceClient.&lt;服务名&gt;</c>。
-    /// </summary>
-    public const string LoggerCategoryPrefix = "Leistd.ServiceClient";
 
     /// <summary>
     /// 注册强类型服务客户端并装配标准调用管道。
@@ -141,14 +130,8 @@ public static class DependencyInjection
             // .NET 默认值作外层兜底。两者设成同一时长会竞争，外层先到时抛出的是无法归类的取消异常。
         });
 
-        // 日志必须位于最外层，才能覆盖认证重试在内的完整调用。
-        builder.AddHttpMessageHandler(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<TOptions>>().Value;
-            var logger = provider.GetRequiredService<ILoggerFactory>()
-                .CreateLogger($"{LoggerCategoryPrefix}.{serviceName}");
-            return new ServiceClientLoggingHandler(logger, serviceName, options.LogPayloads, options.MaxPayloadLength);
-        });
+        // 传输异常统一放在最外层，才能覆盖认证重试在内的完整调用。
+        builder.AddHttpMessageHandler(() => new TransportFailureHandler());
 
         // 可选组件未注册时使用直通处理器，保持宿主显式组合。
         builder.AddHttpMessageHandler(provider =>

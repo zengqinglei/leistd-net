@@ -1,11 +1,9 @@
 using System.Security.Claims;
 using System.Text;
-using Leistd.ExceptionHandling;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.Dtos;
 using Leistd.OperationRecords.Options;
 using Leistd.OperationRecords.Tests.TestDoubles;

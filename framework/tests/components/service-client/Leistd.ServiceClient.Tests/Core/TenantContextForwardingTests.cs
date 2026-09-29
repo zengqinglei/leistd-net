@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Leistd.MultiTenancy;
 using Leistd.Security.Claims;
 using Leistd.ServiceClient.AspNetCore.Middlewares;
 using Leistd.ServiceClient.AspNetCore.Options;
@@ -7,13 +6,8 @@ using Leistd.ServiceClient.Constants;
 using Leistd.ServiceClient.Handlers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Xunit;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.TestBase.Doubles;
 
 namespace Leistd.ServiceClient.Tests.Core;

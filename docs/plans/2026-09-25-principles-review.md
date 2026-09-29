@@ -5,7 +5,7 @@
 ## 评审原则
 
 1. 最佳实践终局：不留中间态和兼容层；未发布 API 直接改到位，破坏性变更写进升级说明。
-2. 优先官方机制：先查 ASP.NET Core / .NET / ABP，不自建平行抽象。
+2. 优先官方机制：先查 ASP.NET Core / .NET / ABP，不自建平行抽象。替换的是平行实现；有官方没有的语义或替换点的抽象保留，默认实现取官方值（框架规范 §6.5）。
 3. 不过度设计：新类、选项、扩展点须有两个以上真实调用点或明确替换场景；单调用点辅助类并回；说不出场景的配置项删除。
 4. 不过度考虑安全：只修"默认就会出错"（静默危险默认值、缺配照常启动），不为显式选择和低概率场景加门槛。
 5. 权衡复杂度：写清代价；一行文档能说明的不写成代码。
@@ -188,7 +188,29 @@
      - 实施评审（Claude、Codex）后采纳：scope 目录收缩时删除 scope 表中不再登记的 scope；邮件 `PublicBaseUrl` 接入模板配置与 compose（`PUBLIC_BASE_URL`）；部署文档补前端独立部署时的跨域配置；Mock 判定补单元用例（两份提供器、include/exclude 优先级）；README 条件块裁剪后的双空行逐组合修正；通知渠道去掉未使用的 `HubType`。评审前提不成立的：本机跨域被拦（Vite 对 localhost 源已回 CORS）、`signalr-service` 的 `computed` 未用（`unreadCount` 在用）。
      - 真实 PostgreSQL 复验暴露：DbMigrator 在 Development 下因构建期依赖校验失败（注册了全部运行期组件，依赖只在 API 注册的当前用户与权限主体）。Infrastructure 拆出 `AddPersistenceServices`，迁移作业只注册它；随之发现框架 `AddRemoteTenantConnectionResolution` / `AddLocalTenantConnectionResolution` 未登记解析器依赖的 `ICurrentTenant`，改为自身调用 `AddMultiTenancyCore()`（组件自闭环）。模板新增迁移作业注册面的构建期校验用例，框架新增两个入口单独使用的校验用例（撤回修复即红）。
      - 修复复核（第二轮）后采纳：迁移作业的服务组合提为 DbMigrator 的 `AddMigratorServices`，宿主与注册面测试共用，测试解析到 `DatabaseMigrationRunner` 本身（此前手抄注册、漏了它）；升级说明写明 scope 对账会删除目录之外的全部 scope、自定义 scope 须纳入目录、删除不撤销已签发令牌。真实库补验"已有管理员、撤掉口令后重启，原口令仍可登录"。外部登录与真实提供方的往返缺提供方凭据，用户确认列为验收例外。
-6. **P2**：按组件分批，C1 最后。验收：各组件测试、打包、9 个生成场景、前端构建；C4 旁路用例、D2 双形状用例；C9 落地后复验默认管理员登录。
+6. **P2**：不分批，一次实施、一次评审、一次提交。C9、E5、launchUrl 已在阶段 5 完成；V 为阶段 7。验收：各组件测试、打包、包消费、9 个生成场景、compose 实测；C4 旁路用例、D2 双形状用例。
+   - 定稿（两轮评审，用户确认；依据框架规范 §6.5"替换与删除"）。顺序：F1 → C2 → C6/C7/D2 → C4 → C1 → E2 → ICurrentUser → 模板项 → IDE0005。
+     - F1：管理用例、DTO、开通契约、`ITenantDatabaseErrorDescriber` 移入 `Leistd.MultiTenancy.Management`，Core 不反向依赖；EF 入口拆为控制库存储与管理用例两个，模板 `AddPersistenceServices` 只调前者。
+     - C2（修订，不删抽象）：保留 `ICorrelationIdProvider`（`Get`/`Change`，默认取 `Activity.TraceId`）、入站/出站头传播、后台捕获恢复、操作记录 `CorrelationId`（不改名、不改迁移）、`Enabled`。改：合法入站值（≤64，字母数字与 `-_`）优先于 TraceId；日志键改关联 Id 专用名；后台同时恢复 Activity 父链路（覆盖失败日志，无父上下文建根链路）；不再以关联 Id 覆盖错误响应 `traceId`（删 `TraceIdentifier` 改写与 `RequestTraceId`，错误响应用官方 `Activity.Id`，文档写"W3C 第二段"）。删：`[CorrelationId]` 与拦截器（Castle 例外只剩 UoW.Core）、`Create()`、多请求头数组（改单个 `HeaderName` + `SetResponseHeader`）。
+     - C6：`HybridCache`，组件自调 `AddHybridCache()`，`DisableDistributedCache`，接受官方取消语义；记录型 `IDistributedCache` 证明不落分布式缓存。
+     - C7：删载荷日志与两个选项，处理器改名，主动取消不算传输故障；文档给官方 `AddExtendedHttpClientLogging` 示例。
+     - D2：服务客户端识别数组与字典两种 `errors`，保留每字段全部消息，键名以实测为准。
+     - C4：删 `MapsterProfile`/`AddProfiles`，改官方 `IRegister`；修无参 `Adapt<>` 旁路，嵌套非默认配置证伪。
+     - C1：业务入口 `IResourceAuthorizationService` 两个重载保留在 Core（删 `CancellationToken`），实现与官方 handler 放新包 `Leistd.Authorization.Resource.AspNetCore`；删自建 handler 管线。无 ACL 不抢先拒绝，ACL 拒绝 `Fail()`，超管 `Succeed`，主体取 `context.User`，无当前主体一律拒绝。
+     - E2（修订）：保留 `IEventBus` 为基接口，删转发注册（比照 `ILock`）。E3 取消（稳定组合入口）。
+     - ICurrentUser：恢复 `IsInRole`（只看主体身份）与 `FindClaims`（整个主体，与 `FindClaim` 一致）。
+     - D4（修订）：前端删除信封兼容（成功侧从未解包，半套兼容），新增字典 `errors`；文档写开启信封需改的两处。
+     - D7 核对措辞；E4、E6、E7 照原方案；T7 `USER $APP_UID` + compose 非 root 实测（`600 root` 证书先复现失败）；上手项：`.http` 真实端点、`BACKEND_IMAGE`/`MIGRATOR_IMAGE` 默认本地标签、`TZ=UTC`（进程本地时区）、Development 下 OpenAPI 且含控制器；IDE0005 框架构建期强制并实测诊断。
+   - 实施记录：
+     - F1 拆出 `Leistd.MultiTenancy.Management`（命名空间 `…Management`/`.Dtos`/`.Provisioning`/`.Events`），Core 去掉工作单元与事件总线依赖；资源服务回源用的线上 DTO 留在 Core。借机清掉全仓库残留的 `using Leistd.MultiTenancy.Management;`（旧命名空间曾在 Core 里）。
+     - C2 实测：MVC 自动校验等路径不经官方默认写入器，`traceId` 仍需在 `CustomizeProblemDetails` 里补，取值改为官方口径（`Activity.Id ?? TraceIdentifier`）。
+     - C6 实测：`HybridCache` 构造时会读一次自己的标签失效标记（不是本组件的键），不写、不读连接路由键；用例只统计路由键。
+     - D2 实测：官方 `AddValidation()` 的字典键是属性名（`Name`，PascalCase），与数组形按 JSON 命名策略写出的 `name` 不同；前端只按字段分组展示，不据此定位控件。
+     - C1 新包 `Leistd.Authorization.Resource.AspNetCore`：业务入口的实现与 ACL 处理器，入口自带 `AddAmbientContext()`（与 SignalR 组件同一做法），Web 宿主另加 `AddSecurity()`。
+     - IDE0005：`framework/.editorconfig` 设 warning（Release 转 error），`tests/` 关闭（测试项目不生成 XML 文档）；`dotnet format` 一次性清理；在组件里加一行无用 using 实测 Release 构建报错。
+     - 模板 HttpClient 日志级别复核：保持 `System.Net.Http.HttpClient` 为 Warning，失败经 `RemoteServiceException` 进异常管道记录。
+     - 静态闸门发现：稳定规范不得点名外部框架（`check-retired-terms.ps1`），§6.5 改为"同类成熟框架"。
+     - 实施评审（Claude、Codex）后采纳：C1 的 ACL 处理器补上与功能权限相同的主体租户规则（声明非法或显式主体不属于当前租户即 `Fail`，先于超管旁路；当前主体只校验合法性），业务入口的认证判据改为任一身份已认证；后台工作项的失败日志移入还原后的环境上下文，非 HTTP 入口还原关联标识时同时打开日志作用域；HttpClient 转发的注释改为关联标识。`Enabled` 维持保留（Codex 第二轮指出 ServiceClient 注册了关联标识即自动转发，没有别的整体关闭入口），理由改为"不采信外部请求头的边缘服务"，按客户端不转发的场景改写为"不挂转发处理器"。新包沿用框架约定的 `FrameworkReference`，文档写明需要 ASP.NET Core 共享框架。均有变异证伪。
 7. **V**（独立）：Vitest 迁移。验收：62 个 spec 全过，覆盖率不降。
 
 ## 横切

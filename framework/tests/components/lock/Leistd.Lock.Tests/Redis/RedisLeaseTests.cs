@@ -1,4 +1,3 @@
-using Leistd.Lock.Redis.Options;
 using StackExchange.Redis;
 using Xunit;
 

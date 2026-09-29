@@ -16,7 +16,7 @@
 - **数据表格**: TanStack Table（`@tanstack/angular-table` headless 引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页/筛选展示复用 `shared/components/table-paginator`、`faceted-filter`，列按优先级响应式裁剪
 - **表格操作列**: 按钮按「常用优先、破坏性置后」排序；操作 ≤3 项桌面端全部平铺（icon 按钮 + tooltip），>3 项显示 2 个高频操作 + `…` 溢出菜单；`<sm` 一律收进 `…` 菜单省列宽，破坏性操作在菜单内用 `variant="destructive"` 且分隔线隔开
 - **列表查询状态**: 分页/排序/筛选以 **URL query params 为唯一来源**（`queryParamMap` 派生 + `router.navigate({queryParams})` 回写），刷新/分享/前进后退可恢复、非法参数回退默认；不用 localStorage 存查询状态
-- **HTTP 错误**: 拦截器只做 401 跳转 + 归一化为类型化 `ApplicationHttpError`（默认 RFC 9457/7807 Problem Details，也兼容可选数字信封的 `errorCode`），不发全局 Toast；反馈由发起操作的 feature 决定，全局 Toast 直接用 `@spartan-ng/brain/sonner`
+- **HTTP 错误**: 拦截器只做 401 跳转 + 归一化为类型化 `ApplicationHttpError`（RFC 9457 Problem Details；`errors` 认本框架的数组与官方 `HttpValidationProblemDetails` 的字典两种形状），不发全局 Toast；反馈由发起操作的 feature 决定，全局 Toast 直接用 `@spartan-ng/brain/sonner`
 
 ---
 
@@ -213,7 +213,7 @@ frontend/
 
 - **必须** 实现一个全局错误处理机制 (`ErrorHandler`)
 - 业务代码中**可以**通过 `catchError` 优先处理特定异常，但**严禁**"吞噬"异常
-- HTTP 层统一将 Problem Details 和可选数字信封解析为 `ApplicationHttpError`；页面不自己猜测后端响应形状。
+- HTTP 层统一将 Problem Details 解析为 `ApplicationHttpError`；页面不自己猜测后端响应形状。前端不兼容框架可选的响应信封（`AddResponseWrapper()`）：开启它要同时改两处——成功响应在拦截器里解开 `data`，失败响应从信封的 `errorCode` / `message` 读错误码与消息。
 - 表单校验错误的 `errors` 优先回填到字段；已被局部流程明确处理的错误不再重复 toast，其余可展示的 4xx 按 `detail`、`title` 的顺序取安全文案统一 toast。
 - 5xx 不展示后端技术细节；使用通用文案，并在响应含 `traceId` 时附上按当前语言本地化的追踪 ID 标签供支持人员排查。
 - 不以单个 HTTP 状态码代替业务分支；需要特定交互时使用稳定 `code`。

@@ -3,7 +3,6 @@ using Leistd.EventBus.Abstractions;
 using Leistd.ExceptionHandling;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Errors;
-using Leistd.Settings.Management;
 using Leistd.Settings.Resolution;
 using Leistd.Settings.Stores;
 using Leistd.Settings.Events;

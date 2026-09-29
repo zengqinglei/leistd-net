@@ -264,3 +264,10 @@ pwsh scripts/test-template-matrix.ps1 -Scenarios standalone -ContainerSmokeScena
 每次运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），其下含 `generated-template/`、`local-feed/`、`template-hive/`、`nuget-cache/` 与一次性 NuGet 配置——生成物、包源和 `globalPackagesFolder` 都不跨 run 写入，因此**多个 AI/终端可并行执行**。不得共享解包目录后再“定点清理 Leistd.*”：本地包会在版本号不变时重新 pack，清理会在另一个并发 build 期间抽走 DLL。NuGet 自身的 HTTP 缓存仍会避免重复下载。启动时只清理超过 2 小时未活动且非当前 run 的旧目录（据 `.run.lock` 判活），绝不删正在运行的 run。CI 发布目录仍使用 `framework/artifacts`。
 
 重复调试同一份已 pack 的本地包时可用 `-SkipPack`（读取共享的 `.tmp/local-feed`）；Framework 包内容变化后必须重新 pack，不得让旧的同版本包掩盖源码改动。
+
+## 11. 删除与精简
+
+模板里的删除遵循框架规范 §6.5 的三问，另加两条模板特有的判断：
+
+- **兼容要么完整，要么不留。** 模板只兼容它明确支持的来源和配置组合，并且要完整覆盖该来源产生的全部形状（如响应信封的成功与失败两侧）。只兼容一半的按删除处理，在文档写明启用该来源时要做的适配——半套兼容会让人误以为它被支持。
+- **没有读取方的配置键和字段直接删。** 它们承诺了不存在的能力，比缺一个扩展点更误导人。示范性质的通用代码（工具函数、样例端点）若与项目无关或已有官方等价物（Angular 管道、`Intl`），也删；与业务开发者常用能力相关的，保留并至少有一处真实调用。

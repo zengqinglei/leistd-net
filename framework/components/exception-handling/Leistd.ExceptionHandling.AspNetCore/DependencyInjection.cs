@@ -2,15 +2,12 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Leistd.ExceptionHandling.AspNetCore.Handlers;
-using Leistd.ExceptionHandling.AspNetCore.Diagnostics;
 using Leistd.ExceptionHandling.Options;
-using Leistd.ExceptionHandling.AspNetCore.Constants;
 using Leistd.ExceptionHandling.Descriptors;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -157,10 +154,9 @@ public static class DependencyInjection
             {
                 customize?.Invoke(context);
                 var problem = context.ProblemDetails;
-                // 默认写入器会用 Activity.Id 无条件重写 traceId；恢复请求入口选定的标识，
-                // 避免失败响应与关联 ID 响应头、日志分叉。
-                problem.Extensions["traceId"] = RequestTraceId.Get(context.HttpContext);
-
+                // 与官方默认写入器同一取值（当前 Activity.Id，没有时为请求标识）：MVC 自动校验等路径不经默认写入器，
+                // 这里统一补上，所有失败响应的 traceId 口径一致
+                problem.Extensions["traceId"] = Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
                 // 框架只给了状态码的问题详情，标题是英文默认值：按 Title:{状态码} 本地化。
                 // 调用方自己写的标题不动。
                 var status = problem.Status ?? context.HttpContext.Response.StatusCode;

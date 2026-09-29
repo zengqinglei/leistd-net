@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Http;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 #endif
 using CompanyName.ProjectName.Domain.Users.Entities;

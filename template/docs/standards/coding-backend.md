@@ -449,7 +449,7 @@ public record GetUserPagedInputDto : PageRequest
 - ✅ 实体基类使用 `Entity<TKey>`、`FullAuditedEntity<TKey>` 等
 - ✅ 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 取，**不直接构造注入**：直接注入的实例在对象激活时就按宿主库创建，
   分库租户下读写会落到宿主库（框架在同一作用域再按租户取上下文时会拒绝，表现为 500）。控制库上下文固定在宿主连接、不参与租户路由，可以直接注入
-- ✅ DTO 映射使用 Mapster（继承 `MapsterProfile` 声明映射，注册结构参考现有 Profile）：实体、存储模型或框架模型到 DTO 的**投影**一律走模块 `Mappings/` 下的 Profile，
+- ✅ DTO 映射使用 Mapster 官方的 `IRegister`（结构参考现有 `*Mappings`）：实体、存储模型或框架模型到 DTO 的**投影**一律走模块 `Mappings/` 下的注册类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；配置里的嵌套映射直接映射源对象或集合，由 Mapster 按同一份配置完成，**不调用无参 `Adapt<T>()`**（它用全局配置，本项目登记的规则在那里静默失效），
   调用方才知道的值（当前时刻、当前会话、读者身份）经 MapContext 传入；由多个来源**拼装**、带计算或本地化的结果 DTO 直接构造。不在 DTO 上写 `FromXxx` 之类的映射静态方法
 - ✅ 请求外的异步活（发邮件等）交给 `IBackgroundTaskQueue`（后台作业组件，入队时的租户、主体与链路随工作项带到执行时），并发互斥用 `IDistributedLock`，不另起线程或自造锁；定期的维护活登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`）
 - ✅ 可还原的加密直接用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串固定带版本，解密只捕获 `CryptographicException`；不另立加密接口

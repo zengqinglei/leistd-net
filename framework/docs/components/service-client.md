@@ -104,7 +104,7 @@ var order = await response.ReadContentAsync<OrderDto>();
 | --- | --- |
 | 2xx 且 `code = 0` | 返回 `data` |
 | 2xx 且 `code != 0` | 抛 `RemoteServiceException` |
-| 非 2xx ProblemDetails | 还原 `code`、`detail`、`traceId` 和 `errors` |
+| 非 2xx ProblemDetails | 还原 `code`、`detail`、`traceId` 和 `errors`。`errors` 认两种形状：Leistd 的数组 `[{field, detail, code}]`，与官方 `HttpValidationProblemDetails` 的字典 `{字段: [消息…]}`（`AddValidation()`、MVC 默认校验，键为属性名）；字典的每条消息各成一项 `ErrorItem`，`Code` 为空 |
 | 非 2xx 数字信封 | 从 `errorCode` 还原稳定业务码；数字 `code` 是 HTTP 状态，不作为业务码 |
 | 非 2xx 非 JSON | 保留最多 4096 字符的 `ResponseBody` |
 | 网络、超时或反序列化失败 | 抛 `ServiceClientException`；调用方主动取消原样上抛 |
@@ -152,9 +152,26 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 
 ### 调用日志
 
-日志类别为 `Leistd.ServiceClient.<服务名>`。每次调用记录方法、URI、状态码与耗时；非 2xx 为 Warning，传输异常为 Error。
+组件不写调用日志：`IHttpClientFactory` 已按客户端名记录每次调用的方法、URI、状态码与耗时（日志类别 `System.Net.Http.HttpClient.<客户端名>.*`），默认遮蔽全部请求头值。组件只把传输层异常统一为带故障类别的 `ServiceClientException`，由调用方的异常管道记录一次并映射状态码；调用方主动取消原样抛出。
 
-`LogPayloads = true` 时以 Debug 级别记录截断后的请求/响应体。读取响应体时发现上游响应无效或提前中断，会记录故障并抛出 `ServiceClientException(InvalidResponse)`；尚未交给调用方的响应由处理器释放。`Authorization`、`Cookie` 和 `X-User-*` 头始终脱敏。
+需要记录请求体、响应体时用官方的扩展日志（`Microsoft.Extensions.Http.Diagnostics` 与 `Microsoft.Extensions.Compliance.Redaction` 包），挂在返回的 `IHttpClientBuilder` 上：
+
+```csharp
+builder.Services.AddRedaction();   // 扩展日志要求注册脱敏提供器
+
+builder.Services.AddServiceClient<
+        IOrderServiceClient,
+        OrderServiceClient,
+        OrderServiceClientOptions>("OrderService", builder.Configuration)
+    .AddExtendedHttpClientLogging(options =>
+    {
+        options.LogBody = true;
+        options.RequestBodyContentTypes.Add("application/json");
+        options.ResponseBodyContentTypes.Add("application/json");
+    });
+```
+
+正文会被缓冲，不要在文件下载等大响应客户端上开启；大小上限、按数据分类脱敏等见官方 `LoggingOptions`。
 
 ## 接口参考
 
@@ -180,8 +197,6 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
 | `BaseAddress` | `null` | 下游服务基础地址，结尾自动补 `/`；留空不报错——宿主可在返回的 `IHttpClientBuilder` 上自行设置，两处都没设时调用在发请求时失败 |
-| `LogPayloads` | `false` | 是否记录脱敏且截断的载荷 |
-| `MaxPayloadLength` | 4096 | 载荷最大记录长度 |
 | `UserContext.Enabled` | `true` | 用户头转发开关 |
 | `UserContext.ForwardUsername` | `true` | 是否转发用户名 |
 | `UserContext.ForwardTenantId` | `true` | 是否转发租户 Id，独立于 `Enabled` |
@@ -215,7 +230,6 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 - 认证服务必须用 `ClientSubject.Format(clientId)` 生成机器主体，并显式授予 `svc.delegate`。
 - `ClientSecret` 从环境变量或密钥管理注入，不进入源码或提交的配置。
 - 401 自愈只重试一次；第二次 401 作为远程错误返回。
-- `LogPayloads` 会缓冲响应体，不应在文件下载等大响应客户端上启用。
 - 追踪、当前用户与当前租户都是宿主显式组合的可选能力；未注册时相应 handler 直通。
 
 ## 相关

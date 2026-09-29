@@ -19,27 +19,32 @@ namespace Leistd.Tracing.Tests.Core;
 
 public sealed class CorrelationIdOptionsTests
 {
+    /// <summary>关闭后中间件不读请求头、不切换；进程内的 Get() 回落到 Activity（这里没有，于是为空）。</summary>
     [Fact]
     public async Task Middleware_reads_the_enabled_switch_for_each_request()
     {
         var monitor = new MutableOptionsMonitor<CorrelationIdOptions>(new());
-        var middleware = CreateMiddleware(monitor);
         var provider = new CorrelationIdProvider();
+        string? observed = null;
+        var middleware = new CorrelationIdMiddleware(
+            _ =>
+            {
+                observed = provider.Get();
+                return Task.CompletedTask;
+            },
+            NullLogger<CorrelationIdMiddleware>.Instance,
+            monitor);
 
-        var first = ContextWithHeader("11111111111111111111111111111111");
-        await middleware.InvokeAsync(first, provider);
-        Assert.Equal("11111111111111111111111111111111", first.TraceIdentifier);
+        await middleware.InvokeAsync(ContextWithHeader("first-id"), provider);
+        Assert.Equal("first-id", observed);
 
         monitor.Set(new CorrelationIdOptions { Enabled = false });
-        var second = ContextWithHeader("second-id");
-        second.TraceIdentifier = "unchanged";
-        await middleware.InvokeAsync(second, provider);
-        Assert.Equal("unchanged", second.TraceIdentifier);
+        await middleware.InvokeAsync(ContextWithHeader("second-id"), provider);
+        Assert.Null(observed);
 
         monitor.Set(new CorrelationIdOptions { Enabled = true });
-        var third = ContextWithHeader("33333333333333333333333333333333");
-        await middleware.InvokeAsync(third, provider);
-        Assert.Equal("33333333333333333333333333333333", third.TraceIdentifier);
+        await middleware.InvokeAsync(ContextWithHeader("third-id"), provider);
+        Assert.Equal("third-id", observed);
     }
 
     [Fact]
@@ -66,35 +71,42 @@ public sealed class CorrelationIdOptionsTests
     }
 
     [Fact]
-    public void Header_names_bind_as_a_collection_and_are_normalized()
+    public void The_header_name_binds_from_the_configuration_section()
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Leistd:CorrelationId:HeaderNames:0"] = " X-Correlation-Id ",
-                ["Leistd:CorrelationId:HeaderNames:1"] = "",
-                ["Leistd:CorrelationId:HeaderNames:2"] = "x-correlation-id",
-                ["Leistd:CorrelationId:HeaderNames:3"] = "X-Request-Id"
-            })
-            .Build();
-        using var serviceProvider = new ServiceCollection()
-            .AddCorrelationIdCore(configuration)
-            .BuildServiceProvider();
+        using var serviceProvider = BuildOptions(new Dictionary<string, string?>
+        {
+            ["Leistd:CorrelationId:HeaderName"] = "X-Request-Id"
+        });
 
         var options = serviceProvider.GetRequiredService<IOptions<CorrelationIdOptions>>().Value;
 
-        Assert.Equal(["X-Correlation-Id", "X-Request-Id"], options.HeaderNames);
+        Assert.Equal("X-Request-Id", options.HeaderName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void A_blank_header_name_fails_with_its_configuration_key(string headerName)
+    {
+        using var serviceProvider = BuildOptions(new Dictionary<string, string?>
+        {
+            ["Leistd:CorrelationId:HeaderName"] = headerName
+        });
+
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            serviceProvider.GetRequiredService<IOptions<CorrelationIdOptions>>().Value);
+        Assert.Contains("Leistd:CorrelationId:HeaderName", exception.Message);
     }
 
     [Fact]
-    public void Empty_header_names_are_rejected()
+    public void The_header_name_follows_a_custom_section_path()
     {
-        using var serviceProvider = new ServiceCollection()
-            .AddCorrelationIdCore(options => options.HeaderNames = ["", " "])
-            .BuildServiceProvider();
+        using var serviceProvider = BuildOptions(
+            new Dictionary<string, string?> { ["Tracing:HeaderName"] = "X-Trace-Ref" },
+            configSectionPath: "Tracing");
 
-        Assert.Throws<OptionsValidationException>(() =>
-            serviceProvider.GetRequiredService<IOptions<CorrelationIdOptions>>().Value);
+        Assert.Equal("X-Trace-Ref",
+            serviceProvider.GetRequiredService<IOptions<CorrelationIdOptions>>().Value.HeaderName);
     }
 
     [Fact]
@@ -123,16 +135,20 @@ public sealed class CorrelationIdOptionsTests
         using var first = await client.SendAsync(firstRequest);
         Assert.Equal("11111111111111111111111111111111", first.Headers.GetValues("X-Correlation-Id").Single());
 
-        monitor.Set(new CorrelationIdOptions { IncludeInResponseHeaders = false });
+        monitor.Set(new CorrelationIdOptions { SetResponseHeader = false });
         using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/");
         secondRequest.Headers.Add("X-Correlation-Id", "second-id");
         using var second = await client.SendAsync(secondRequest);
         Assert.False(second.Headers.Contains("X-Correlation-Id"));
     }
 
-    private static CorrelationIdMiddleware CreateMiddleware(
-        IOptionsMonitor<CorrelationIdOptions> monitor) =>
-        new(_ => Task.CompletedTask, NullLogger<CorrelationIdMiddleware>.Instance, monitor);
+    private static ServiceProvider BuildOptions(
+        Dictionary<string, string?> settings,
+        string configSectionPath = CorrelationIdOptions.SectionName) =>
+        new ServiceCollection()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(settings).Build())
+            .AddCorrelationIdCore(configSectionPath: configSectionPath)
+            .BuildServiceProvider();
 
     private static DefaultHttpContext ContextWithHeader(string value)
     {

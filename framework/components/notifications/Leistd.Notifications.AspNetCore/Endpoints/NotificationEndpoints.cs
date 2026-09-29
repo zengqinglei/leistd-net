@@ -1,8 +1,6 @@
 using Leistd.Data.Paging;
 using Leistd.ExceptionHandling;
-using Leistd.Notifications.Channels;
 using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
 using Leistd.Notifications.Dtos;
 using Leistd.Security.Users;

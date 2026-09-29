@@ -1,4 +1,4 @@
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 

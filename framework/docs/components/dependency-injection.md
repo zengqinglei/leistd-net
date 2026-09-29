@@ -147,7 +147,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 ## 注意事项
 
-- 使用 `[UnitOfWork]`、`[CorrelationId]` 等基于 AOP 的能力时，宿主必须使用 `DynamicProxyServiceRegistrationCallbackFactory`。
+- 使用 `[UnitOfWork]` 等基于 AOP 的能力时，宿主必须使用 `DynamicProxyServiceRegistrationCallbackFactory`。
 - 拦截器类型必须能被容器解析，否则代理创建时会抛异常。
 - **`ValidateOnBuild` 覆盖被织入的服务**：描述符改写成工厂型后 Microsoft DI 看不到它的
   构造函数图，因此工厂在改写前用未改写的副本额外校验一次，把这块覆盖面补回来。

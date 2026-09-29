@@ -4,9 +4,7 @@ using Leistd.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.Notifications.Publishing;
-using Leistd.Notifications.Channels;
 using Leistd.Notifications.Errors;
-using Leistd.Notifications.Stores;
 using Leistd.Notifications.Filters;
 
 namespace Leistd.Notifications;

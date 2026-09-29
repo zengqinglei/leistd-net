@@ -5,7 +5,6 @@ using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.Tracing.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,47 +14,38 @@ namespace Leistd.ExceptionHandling.Tests;
 
 public sealed class CorrelationIdExceptionPipelineTests
 {
+    /// <summary>
+    /// 关联标识与链路标识分开：响应头回显调用方的关联标识，问题详情的 <c>traceId</c> 是官方写出的
+    /// 当前 Activity 标识，与异常日志里记下的同值。此前 <c>traceId</c> 被改写成关联标识，
+    /// 按它去链路追踪系统里查不到。
+    /// </summary>
     [Fact]
-    public async Task Selected_inbound_id_stays_in_the_error_response_after_a_downstream_activity_starts()
+    public async Task The_error_traceId_is_the_official_activity_id_and_the_header_carries_the_correlation_id()
     {
-        string? requestIdBeforeException = null;
-        string? downstreamActivityTraceId = null;
+        string? activityIdAtThrow = null;
+        string? traceIdentifierAtThrow = null;
         using var host = await new HostBuilder()
             .ConfigureWebHost(web => web.UseTestServer()
                 .ConfigureServices(services =>
                 {
-                    services.AddCorrelationId(_ => { });
-                    services.AddGlobalExceptionHandler(_ => { });
+                    services.AddCorrelationId();
+                    services.AddGlobalExceptionHandler();
                 })
                 .Configure(app =>
                 {
-                    // 让关联 ID 中间件在没有请求 Activity 时采信自定义入站值。
-                    app.Use(async (_, next) =>
-                    {
-                        var parent = Activity.Current;
-                        Activity.Current = null;
-                        try
-                        {
-                            await next();
-                        }
-                        finally
-                        {
-                            Activity.Current = parent;
-                        }
-                    });
                     app.UseCorrelationId();
                     app.Use(async (_, next) =>
                     {
-                        using var activity = new Activity("downstream")
+                        using var activity = new Activity("request")
                             .SetIdFormat(ActivityIdFormat.W3C)
                             .Start();
-                        downstreamActivityTraceId = activity.TraceId.ToHexString();
                         await next();
                     });
                     app.UseGlobalExceptionHandler();
                     app.Run(context =>
                     {
-                        requestIdBeforeException = context.TraceIdentifier;
+                        activityIdAtThrow = Activity.Current?.Id;
+                        traceIdentifierAtThrow = context.TraceIdentifier;
                         throw new InvalidOperationException("private diagnostic");
                     });
                 }))
@@ -67,10 +57,9 @@ public sealed class CorrelationIdExceptionPipelineTests
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("caller-ABC_123", requestIdBeforeException);
         Assert.Equal("caller-ABC_123", response.Headers.GetValues("X-Correlation-Id").Single());
-        Assert.Equal("caller-ABC_123", body.RootElement.GetProperty("traceId").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(downstreamActivityTraceId));
-        Assert.NotEqual("caller-ABC_123", downstreamActivityTraceId);
+        Assert.NotEqual("caller-ABC_123", traceIdentifierAtThrow);
+        Assert.False(string.IsNullOrWhiteSpace(activityIdAtThrow));
+        Assert.Equal(activityIdAtThrow, body.RootElement.GetProperty("traceId").GetString());
     }
 }

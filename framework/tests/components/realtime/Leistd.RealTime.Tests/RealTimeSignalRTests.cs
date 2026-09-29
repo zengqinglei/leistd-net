@@ -1,12 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Xunit;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
-using Leistd.RealTime.AspNetCore.SignalR.Publishing;
 using Leistd.RealTime.Subscriptions;
 using Leistd.RealTime.Publishing;
 using Leistd.TestBase.Doubles;

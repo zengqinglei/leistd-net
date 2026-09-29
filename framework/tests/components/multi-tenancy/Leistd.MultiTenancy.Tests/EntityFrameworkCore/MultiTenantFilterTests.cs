@@ -1,15 +1,11 @@
 using Leistd.TestBase.Doubles;
-using Leistd.Auditing;
 using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Infrastructure.Persistence.Repositories;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.Auditing.Abstractions;
 using Leistd.MultiTenancy.Tests.TestDoubles;

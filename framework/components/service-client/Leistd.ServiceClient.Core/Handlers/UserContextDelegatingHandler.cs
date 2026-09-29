@@ -1,5 +1,4 @@
 using Leistd.Security.Users;
-using Leistd.ServiceClient.Constants;
 using Leistd.ServiceClient.Options;
 using Microsoft.Extensions.Options;
 

@@ -120,7 +120,7 @@ describe('StartupService', () => {
       expect(service.status()).toBe('success');
     });
   });
-  //#if (!LocalIdentity)
+  //#if (RemoteTokenAuth)
 
   /**
    * OIDC 回调页上的 401。

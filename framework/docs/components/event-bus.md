@@ -28,7 +28,7 @@ dotnet add package Leistd.EventBus.Local
 builder.Services.AddLocalEventBus();
 ```
 
-`AddLocalEventBus` 以 **Singleton** 注册 `LocalEventBus`，并将同一实例同时绑定到 `IEventBus` 与 `ILocalEventBus`，注入任一接口都可发布事件。可重复调用，不会重复注册。
+`AddLocalEventBus` 以 **Singleton** 注册 `LocalEventBus` 并绑定到 `ILocalEventBus`，发布方注入它。`IEventBus` 是各类总线的共同基接口，不注册为服务：同一接口一旦由多种总线注册，注入它的代码会静默换成另一种投递语义（不再等到提交后、需要序列化），编译与测试都发现不了。可重复调用，不会重复注册。
 
 事件处理器需**自行注册**（总线不做程序集扫描）。处理器在每次发布时通过独立 Scope 解析，因此 Scoped 注册可正常工作：
 
@@ -38,10 +38,10 @@ builder.Services.AddScoped<IEventHandler<OrderPlacedEvent>, OrderPlacedHandler>(
 
 ## 使用
 
-发布方注入 `IEventBus`，发布一个事件对象：
+发布方注入 `ILocalEventBus`，发布一个事件对象：
 
 ```csharp
-public class OrderNotifier(IEventBus eventBus)
+public class OrderNotifier(ILocalEventBus eventBus)
 {
     public async Task NotifyPlacedAsync(string orderNo, CancellationToken ct = default)
     {
@@ -77,10 +77,10 @@ public class OrderPlacedHandler : IEventHandler<OrderPlacedEvent>
 
 | 成员 | 说明 |
 | --- | --- |
-| `IEventBus` | 事件总线统一接口，发布事件的定义方 |
+| `IEventBus` | 各类总线的共同基接口（发布方法的定义方）；不注册为服务，发布方注入具体的 `ILocalEventBus` |
 | `IEventBus.PublishAsync<TEvent>(@event, ct)` | 泛型发布；按运行时类型解析处理器 |
 | `IEventBus.PublishAsync(IEvent @event, ct)` | 非泛型发布，按事件运行时实际类型解析处理器 |
-| `ILocalEventBus : IEventBus` | 本地事件总线标记接口，表达"进程内事件"的依赖意图，无新增成员 |
+| `ILocalEventBus : IEventBus` | 进程内事件总线：提交后分发、不序列化；发布方注入它 |
 | `IEventHandler<in TEvent>` | 事件处理器接口（`TEvent : IEvent`），实现 `HandleAsync` 订阅事件 |
 | `IEvent` | 事件接口，含 `EventId`（Guid，用于幂等/追踪）与 `OccurredOn`（事件发生时间） |
 | `ILocalEvent : IEvent` | 本地事件标记接口 |
@@ -109,10 +109,10 @@ public class OrderPlacedHandler : IEventHandler<OrderPlacedEvent>
 
 `ILocalEventDispatcher` 绕过推迟，避免工作单元排空事件时重新入队；处理器内新发布的事件仍会进入下一轮排空。
 
-> **替换默认本地总线时**：在 `AddLocalEventBus()` 之前注册自定义 `ILocalEventBus`，`IEventBus` 随之指向它；自定义实现必须同时提供语义一致的 `ILocalEventDispatcher`。只替换 `ILocalEventBus` 会形成两条分发管道——业务发布走自定义总线，而工作单元排空走默认 dispatcher。工作单元在有待发事件却取不到 `ILocalEventDispatcher` 时会直接抛出，不会静默丢弃事件。
+> **替换默认本地总线时**：在 `AddLocalEventBus()` 之前注册自定义 `ILocalEventBus`；自定义实现必须同时提供语义一致的 `ILocalEventDispatcher`。只替换 `ILocalEventBus` 会形成两条分发管道——业务发布走自定义总线，而工作单元排空走默认 dispatcher。工作单元在有待发事件却取不到 `ILocalEventDispatcher` 时会直接抛出，不会静默丢弃事件。
 
 ## 注意事项
 
 - 处理器**不会自动注册**，必须显式 `AddScoped`/`AddTransient`/`AddSingleton` 注册 `IEventHandler<TEvent>`，否则发布时找不到处理器（静默返回，不报错）。
 - 本地总线为**同步语义**：处理器耗时直接计入发布方的调用时长；长耗时副作用应在处理器内部自行转为后台任务。**例外**是活动工作单元内的发布——那只是入队并立即返回，处理器在工作单元完成时执行，见[与工作单元的关系](#与工作单元的关系)。
-- 仅进程内有效，无跨进程/持久化能力；`IEventBus` 始终指向当前的 `ILocalEventBus`（默认即 `LocalEventBus` 实例），进程重启不保留未处理事件。
+- 仅进程内有效，无跨进程/持久化能力；进程重启不保留未处理事件。

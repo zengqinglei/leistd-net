@@ -2,7 +2,6 @@ using System.Globalization;
 using MsOptions = Microsoft.Extensions.Options.Options;
 using Leistd.Localization.Json;
 using Leistd.Localization.Options;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.Localization.Tests;

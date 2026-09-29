@@ -22,7 +22,7 @@ import { provideTransloco, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
-//#if (!LocalIdentity)
+//#if (RemoteTokenAuth)
 import { authInterceptor, LogLevel, provideAuth } from 'angular-auth-oidc-client';
 //#endif
 //#if (IncludeLocalization)
@@ -74,7 +74,7 @@ export const appConfig: ApplicationConfig = {
     // 注册全局错误处理器，替换 Angular 默认的 ErrorHandler
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideRouter(routes, ...routerFeatures),
-    //#if (!LocalIdentity)
+    //#if (RemoteTokenAuth)
     provideAuth({
       config: {
         authority: environment.oidc.authority,
@@ -113,7 +113,7 @@ export const appConfig: ApplicationConfig = {
         //#if (LocalIdentity)
         tenantInterceptor, // 已选租户时为 /api/ 请求附加租户提示头
         //#endif
-        //#if (!LocalIdentity)
+        //#if (RemoteTokenAuth)
         authInterceptor(),
         //#endif
         urlFormatInterceptor,

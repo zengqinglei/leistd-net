@@ -1,7 +1,5 @@
-using Leistd.Auditing.Abstractions;
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.TestBase.Assertions;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Leistd.Auditing.Tests;

@@ -1,3 +1,5 @@
+using Leistd.Security.AspNetCore;
+using Leistd.Authorization.Resource.AspNetCore;
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork;
 using Leistd.DependencyInjection.DynamicProxy.Registration;
@@ -6,12 +8,10 @@ using System.Text.Encodings.Web;
 using Leistd.Authorization.AspNetCore;
 using Leistd.Authorization.DataScope;
 using Leistd.Authorization.EntityFrameworkCore;
-using Leistd.Authorization.Resource;
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
@@ -23,9 +23,6 @@ using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Grants;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.Tests.EndToEnd;
@@ -101,8 +98,10 @@ public sealed class PipelineHost : IAsyncDisposable
 
         // 第三层：资源实例授权。
         builder.Services.AddResourceAuthorizationEfCore<PipelineDbContext>();
-        builder.Services.AddResourceAuthorizationHandler<Order, OrderOwnerHandler>();
-        builder.Services.AddResourceAuthorizationHandler<Order, ArchivedOrderHandler>();
+        builder.Services.AddSecurity();
+        builder.Services.AddResourceAuthorization();
+        builder.Services.AddScoped<IAuthorizationHandler, OrderOwnerHandler>();
+        builder.Services.AddScoped<IAuthorizationHandler, ArchivedOrderHandler>();
 
         builder.Services.AddScoped<OrderAppService>();
 

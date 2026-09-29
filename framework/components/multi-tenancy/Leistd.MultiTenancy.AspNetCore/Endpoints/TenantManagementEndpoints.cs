@@ -1,15 +1,11 @@
 using Leistd.Data.Paging;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.AspNetCore.Resolution;
-using Leistd.MultiTenancy.Dtos;
 using Leistd.MultiTenancy.Resolution;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Leistd.MultiTenancy.Management.Dtos;
 
 namespace Leistd.MultiTenancy.AspNetCore.Endpoints;
 

@@ -7,8 +7,6 @@ using Leistd.Security.AspNetCore;
 using Leistd.Security.Claims;
 using Leistd.Settings.Definitions;
 using Leistd.Settings.Errors;
-using Leistd.Settings.Management;
-using Leistd.Settings.Resolution;
 using Leistd.Settings.Stores;
 using Leistd.Settings.AspNetCore.Endpoints;
 using Leistd.Settings.Dtos;

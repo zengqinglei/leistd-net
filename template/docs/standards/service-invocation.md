@@ -1,6 +1,6 @@
 # 服务间调用
 
-本项目基于 `Leistd.ServiceClient.*` 组件与其他服务互调：调用日志、TraceId 透传、用户上下文传递与 OAuth2 client credentials 认证由标准管道承担，业务代码只面向强类型客户端。组件完整用法见随包文档（任一 `Leistd.ServiceClient.*` 包内 `docs/service-client.md`）。
+本项目基于 `Leistd.ServiceClient.*` 组件与其他服务互调：调用日志、关联标识透传（链路由官方 `traceparent` 传播）、用户上下文传递与 OAuth2 client credentials 认证由标准管道承担，业务代码只面向强类型客户端。组件完整用法见随包文档（任一 `Leistd.ServiceClient.*` 包内 `docs/service-client.md`）。
 
 ## 调用其他服务
 

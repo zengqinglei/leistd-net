@@ -1,6 +1,5 @@
 using Leistd.Security.AspNetCore.Claims;
 using Leistd.Security.Claims;
-using Leistd.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

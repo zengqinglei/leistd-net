@@ -244,15 +244,28 @@ public static class HttpResponseMessageExtensions
             ? property.GetString()
             : null;
 
+    // 两种形状都认：Leistd 的数组 [{field, detail, code}]（逐字段带错误码），
+    // 与官方 HttpValidationProblemDetails 的字典 {字段: [消息…]}（AddValidation、MVC 默认校验产出）。
+    // 字典的每条消息各成一项，保留字段名与全部消息，不在解析时取舍。
     private static List<ErrorItem>? TryGetErrors(JsonElement root)
     {
-        if (!root.TryGetProperty("errors", out var errorsElement) || errorsElement.ValueKind != JsonValueKind.Array)
+        if (!root.TryGetProperty("errors", out var errorsElement))
         {
             return null;
         }
 
+        return errorsElement.ValueKind switch
+        {
+            JsonValueKind.Array => ReadArray(errorsElement),
+            JsonValueKind.Object => ReadDictionary(errorsElement),
+            _ => null
+        };
+    }
+
+    private static List<ErrorItem> ReadArray(JsonElement errors)
+    {
         var items = new List<ErrorItem>();
-        foreach (var item in errorsElement.EnumerateArray())
+        foreach (var item in errors.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object)
             {
@@ -265,6 +278,30 @@ public static class HttpResponseMessageExtensions
                 TryGetString(item, "detail") ?? string.Empty,
                 TryGetString(item, "field") ?? string.Empty,
                 TryGetString(item, "code")));
+        }
+
+        return items;
+    }
+
+    private static List<ErrorItem> ReadDictionary(JsonElement errors)
+    {
+        var items = new List<ErrorItem>();
+        foreach (var field in errors.EnumerateObject())
+        {
+            if (field.Value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var message in field.Value.EnumerateArray())
+                {
+                    if (message.ValueKind == JsonValueKind.String)
+                    {
+                        items.Add(new ErrorItem(message.GetString() ?? string.Empty, field.Name, null));
+                    }
+                }
+            }
+            else if (field.Value.ValueKind == JsonValueKind.String)
+            {
+                items.Add(new ErrorItem(field.Value.GetString() ?? string.Empty, field.Name, null));
+            }
         }
 
         return items;

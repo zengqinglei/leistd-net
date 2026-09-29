@@ -1,6 +1,7 @@
 services:
   db-migrator:
-    image: ghcr.io/zengqinglei/companyname-projectname-migrator:latest
+    # 默认本地标签，`up --build` 即可；发布时经 MIGRATOR_IMAGE 传入仓库地址与版本
+    image: ${MIGRATOR_IMAGE:-companyname-projectname-migrator:latest}
     build:
       context: ..
       dockerfile: Dockerfile
@@ -40,7 +41,8 @@ services:
       - companyname-projectname-network
 
   backend:
-    image: ghcr.io/zengqinglei/companyname-projectname:latest
+    # 默认本地标签，`up --build` 即可；发布时经 BACKEND_IMAGE 传入仓库地址与版本
+    image: ${BACKEND_IMAGE:-companyname-projectname:latest}
     container_name: companyname-projectname
     build:
       context: ..
@@ -50,7 +52,8 @@ services:
       - "80:8080"
     environment:
       # Environment
-      - TZ=Asia/Shanghai
+      # 进程本地时区，只影响未显式指定时区的本地时间换算与日志时间戳；业务时间按 UTC 存储
+      - TZ=${TZ:-UTC}
       - ASPNETCORE_ENVIRONMENT=Production
 
       # Database Configuration (PostgreSQL)
@@ -158,7 +161,7 @@ services:
     image: postgres:15-alpine
     container_name: companyname-projectname-db
     environment:
-      TZ: Asia/Shanghai
+      TZ: ${TZ:-UTC}
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required}
       POSTGRES_DB: MyProject
@@ -186,7 +189,7 @@ services:
     image: redis:7-alpine
     container_name: companyname-projectname-redis
     environment:
-      TZ: Asia/Shanghai
+      TZ: ${TZ:-UTC}
     command: redis-server --appendonly yes
 
     volumes:
