@@ -50,6 +50,8 @@ ServiceUserContextEnabled = (ServiceRole != "Standalone")
 
 条件代码只引用这四个能力名。这样新增一个 `ServiceRole` 取值时改的是这四行，而不是散在几百个文件里的比较表达式。
 
+按条件的**含义**选能力名，不按当前取值相同就混用：凡指"验证远端令牌、作为 OIDC 客户端"的条件用 `RemoteTokenAuth`；`!LocalIdentity` 只表示"没有本地用户表"。两者现在取值相同，将来新增形态时（例如有本地用户、同时信任外部令牌）就会分开，写错的那一侧会静默生成错的组合。
+
 ### 3.2 前置依赖靠枚举消解，不要用 `isEnabled`
 
 `isEnabled` 不能引用 computed 符号，而本模板的前置条件均为能力名。

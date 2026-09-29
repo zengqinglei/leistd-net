@@ -223,6 +223,12 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 默认值必须可读、可用，并与 Options 验证和运行时行为一致。
 - 共享映射与常量放在所有消费者可引用的最低层，派生值不得维护第二份。
 - 公共接口优先保持最小；仅一个实现且没有替换需求时，不为形式一致额外抽象。
+- **组件不改写官方类型。** 官方类型的形状与语义属于普通宿主的标准行为，组件不认领、不改写（如不把 `HttpValidationProblemDetails` 改成自己的数组形、不覆盖 `HttpContext.TraceIdentifier`）。组件自己产出的类型可以有自己的形状；需要同时消费两者的一方（服务客户端、模板前端）两种都识别。
+- **行为差异按类型契约区分，不加选项开关。** 能从类型判断的就按类型判断：`AddDddDbContext<T>()` 只在 `T : BaseDbContext` 时挂 DDD 拦截器，控制库这类普通上下文自然不挂，不需要 `EnableDddInterceptors` 之类的选项。也不要拿"某个服务注册了没有"推断模式——那是代理变量，换个依赖就会推错；确需模式标记时由注册方显式登记标记服务（如锁组件的"本地锁充当分布式锁"标记）。
+- **由宿主配置的组件，注册入口只有一种形态：** `AddXxx(Action<TOptions>? configure = null, string configSectionPath = TOptions.SectionName)`。内部先 `AddOptions<TOptions>().BindConfiguration(configSectionPath)`，再应用 `configure`，并挂上 `ValidateOnStart()`；校验消息按实际传入的配置节报键名（§6.2）。
+  - 不另设 `IConfiguration` 重载：只传委托的宿主也要拿到配置文件里的值，两个入口并存时总有一个会漏绑定。
+  - 没有主机的纯 `ServiceCollection`（测试、工具）由调用方注册 `IConfiguration`。
+  - 不适合放进配置文件的选项（如签发方决定的 claim 名）不绑定配置节，只走委托，并在选项类注释里写明。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
 - **组件发出的错误码自带默认译文**：业务异常在 `new BusinessException(code, safeMessage)` 时无条件给码；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
   - Core 层错误码和异常只描述语义，XML 注释不写固定 HTTP 状态。组件拥有的非默认 HTTP 语义在组件 Core 包里用 `MapDefaultCode` / `MapDefaultException` 声明，并在组件自己的 `AddXxx` 里经 `services.Configure<GlobalExceptionOptions>(...)` 自动登记——交给宿主逐个调用的话，漏一个不会有编译或启动错误，只会静默回落成 400。登记映射的类型保持 `internal`，默认状态写进组件文档。宿主通过 `MapCode` / `MapException` 覆盖，与调用顺序无关。Core 里的状态码写成 `(int)HttpStatusCode.X`，不为 `StatusCodes` 常量引入 Web 依赖。代价是组件 Core 要依赖 `ExceptionHandling.Core`——多数组件本就为 `BusinessException` 引用它；HTTP 默认状态以 int 表达，Core 仍不依赖 ASP.NET Core 程序集。
