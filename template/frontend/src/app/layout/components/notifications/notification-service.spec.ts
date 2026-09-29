@@ -9,6 +9,8 @@ import { of } from 'rxjs';
 import { NotificationService } from './notification-service';
 import { NotificationOutputDto, SignalRService } from '../../../core/services/signalr-service';
 
+import type { Mock } from 'vitest';
+
 /**
  * 通知的连接闭环：init() 是 SignalR 连接的实际调用方，铃铛组件每次初始化都会走到这里。
  */
@@ -25,28 +27,28 @@ describe('NotificationService', () => {
     TestBed.configureTestingModule({
       // prettier-ignore
       providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        //#if (RemoteTokenAuth)
-        {
-          provide: OidcSecurityService,
-          useValue: { getAccessToken: () => of('resource-access-token') },
-        },
-        //#endif
-      ],
+                provideHttpClient(),
+                provideHttpClientTesting(),
+                //#if (RemoteTokenAuth)
+                {
+                    provide: OidcSecurityService,
+                    useValue: { getAccessToken: () => of('resource-access-token') },
+                },
+                //#endif
+            ],
     });
 
     service = TestBed.inject(NotificationService);
     signalR = TestBed.inject(SignalRService);
     httpMock = TestBed.inject(HttpTestingController);
 
-    spyOn(console, 'error');
-    spyOn(signalR, 'connect').and.resolveTo();
+    vi.spyOn(console, 'error').mockReturnValue(undefined);
+    vi.spyOn(signalR, 'connect').mockResolvedValue();
   });
 
   afterEach(() => httpMock.verify());
 
-  it('重复初始化不会重复建立连接', async () => {
+  it('does not open a second connection when initialized twice', async () => {
     const first = service.init();
     httpMock.expectOne((req) => req.url === '/api/v1/notifications').flush([]);
     await first;
@@ -61,7 +63,7 @@ describe('NotificationService', () => {
     expect(signalR.connect).toHaveBeenCalledWith();
   });
 
-  it('历史通知与已推送的通知合并后按时间倒序，且不重复', async () => {
+  it('merges history with pushed notifications, newest first and without duplicates', async () => {
     // 先有一条实时推送进来，随后才拉到历史列表。
     signalR.notifications.set([notification('pushed', '2026-01-02T00:00:00Z')]);
 
@@ -78,8 +80,8 @@ describe('NotificationService', () => {
     expect(service.notifications().map((item) => item.id)).toEqual(['pushed', 'old']);
   });
 
-  it('请求在途时切换认证主体，旧响应不写回新主体的列表', async () => {
-    spyOn(signalR, 'disconnect').and.resolveTo();
+  it('keeps a stale response out of the new auth subject list on mid-request switch', async () => {
+    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
 
     const init = service.init();
     const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
@@ -94,9 +96,9 @@ describe('NotificationService', () => {
     expect(service.notifications()).toEqual([]);
   });
 
-  it('请求在途时切换主体，旧 init 不再建立连接', async () => {
-    spyOn(signalR, 'disconnect').and.resolveTo();
-    (signalR.connect as jasmine.Spy).calls.reset();
+  it('skips the connection from a stale init after a mid-request subject switch', async () => {
+    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
+    (signalR.connect as Mock).mockClear();
 
     const init = service.init();
     const request = httpMock.expectOne((req) => req.url === '/api/v1/notifications');
@@ -110,8 +112,8 @@ describe('NotificationService', () => {
     expect(signalR.connect).not.toHaveBeenCalled();
   });
 
-  it('写请求在途时切换主体，旧响应不修改新主体的列表', async () => {
-    spyOn(signalR, 'disconnect').and.resolveTo();
+  it('keeps a stale write response off the new subject list on a mid-request switch', async () => {
+    vi.spyOn(signalR, 'disconnect').mockResolvedValue();
     signalR.notifications.set([notification('b-1', '2026-02-01T00:00:00Z')]);
 
     const cleared = service.clearAll();
@@ -127,7 +129,7 @@ describe('NotificationService', () => {
     expect(service.notifications().map((item) => item.id)).toEqual(['b-1']);
   });
 
-  it('加载失败时保留已推送的通知，并复位 loading', async () => {
+  it('keeps pushed notifications and resets loading when the load fails', async () => {
     signalR.notifications.set([notification('pushed', '2026-01-02T00:00:00Z')]);
 
     const init = service.init();
@@ -136,7 +138,7 @@ describe('NotificationService', () => {
       .flush('boom', { status: 500, statusText: 'Server Error' });
     await init;
 
-    expect(service.loading()).toBeFalse();
+    expect(service.loading()).toBe(false);
     expect(service.notifications().map((item) => item.id)).toEqual(['pushed']);
   });
 });

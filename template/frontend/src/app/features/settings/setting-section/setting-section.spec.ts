@@ -141,7 +141,7 @@ describe('SettingSection', () => {
     await typeAndSave('UTC');
 
     const host = fixture.nativeElement as HTMLElement;
-    expect(input().disabled).toBeFalse();
+    expect(input().disabled).toBe(false);
     expect(host.querySelector('hlm-spinner')).toBeTruthy();
 
     await flushSave();
@@ -169,13 +169,13 @@ describe('SettingSection', () => {
       ) as HTMLButtonElement;
 
     await typeAndSave('UTC');
-    expect(resetButton().disabled).toBeTrue();
+    expect(resetButton().disabled).toBe(true);
 
     await flushSave();
     http.expectOne('/api/v1/settings').flush([row({ userValue: 'UTC' })]);
     await settleSave();
 
-    expect(resetButton().disabled).toBeFalse();
+    expect(resetButton().disabled).toBe(false);
   });
 
   // 原来靠禁用控件挡住的那件事：按回车提交后光标还在输入框里，用户接着改，
@@ -214,7 +214,7 @@ describe('SettingSection', () => {
 
     // 草稿没清掉的话这里会是带空格的原始输入
     expect(input().value).toBe('UTC');
-    expect(input().disabled).toBeFalse();
+    expect(input().disabled).toBe(false);
   });
 
   // 失败就地报在那一行上，不弹 toast：反馈要落在用户刚碰的那个控件下面。
@@ -243,7 +243,7 @@ describe('SettingSection', () => {
 
     expect(input().value).toBe('UTC');
     // 写入链路已结束，控件重新可用
-    expect(input().disabled).toBeFalse();
+    expect(input().disabled).toBe(false);
   });
 });
 
@@ -327,17 +327,17 @@ describe('SettingSection scope', () => {
 
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
-  it('账户作用域只列允许用户覆盖的设置', async () => {
+  it('lists only settings that allow a user override at account scope', async () => {
     const fixture = await render(scoped, { scope: 'account' });
 
     expect(panel(fixture).dataset['scope']).toBe('account');
-    expect(hasRow(panel(fixture), 'Account.Only')).toBeTrue();
-    expect(hasRow(panel(fixture), 'System.Only')).toBeFalse();
+    expect(hasRow(panel(fixture), 'Account.Only')).toBe(true);
+    expect(hasRow(panel(fixture), 'System.Only')).toBe(false);
   });
 
   // 进程级设置（日志级别之类）两个层级标记都是 false：只按 allowsTenantScope 过滤
   // 会把它们全漏掉，界面上一项运维设置都看不到，而后端明明下发了。
-  it('系统作用域也列出进程级设置', async () => {
+  it('lists process-level settings at system scope as well', async () => {
     const fixture = await render(
       [
         row({
@@ -350,19 +350,19 @@ describe('SettingSection scope', () => {
       { scope: 'system' },
     );
 
-    expect(hasRow(fixture.nativeElement as HTMLElement, 'Logging.MinimumLevel')).toBeTrue();
+    expect(hasRow(fixture.nativeElement as HTMLElement, 'Logging.MinimumLevel')).toBe(true);
   });
 
-  it('系统作用域只列允许给默认值的设置', async () => {
+  it('lists only settings that allow a default value at system scope', async () => {
     const fixture = await render(scoped, { scope: 'system' });
 
     expect(panel(fixture).dataset['scope']).toBe('system');
-    expect(hasRow(panel(fixture), 'System.Only')).toBeTrue();
-    expect(hasRow(panel(fixture), 'Account.Only')).toBeFalse();
+    expect(hasRow(panel(fixture), 'System.Only')).toBe(true);
+    expect(hasRow(panel(fixture), 'Account.Only')).toBe(false);
   });
 
   // 路由没写 scope 时按账户处理：宁可让人看到自己的偏好，也不要默认打开写全租户的那一页。
-  it('没声明作用域时按账户处理', async () => {
+  it('falls back to account scope when no scope is declared', async () => {
     const fixture = await render(scoped);
 
     expect(panel(fixture).dataset['scope']).toBe('account');
@@ -406,7 +406,7 @@ describe('SettingSection groups', () => {
 
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
-  it('不指定分组时按后端顺序渲染全部分组，多组时各带分组标题', async () => {
+  it('renders all groups in backend order with headings when no group is given', async () => {
     const host = await render({});
 
     expect(sectionsOf(host)).toEqual(['Display', 'Operations', 'NotificationPreferences']);
@@ -418,7 +418,7 @@ describe('SettingSection groups', () => {
   });
 
   // 系统设置的每个面板就是一个分组：URL 里是短横线写法，单组时不重复出分组标题（面板标题已经有了）
-  it('指定分组时只渲染那一组，且不出分组标题', async () => {
+  it('renders only the specified group without a group heading', async () => {
     const host = await render({ group: 'notification-preferences' });
 
     expect(sectionsOf(host)).toEqual(['NotificationPreferences']);
@@ -426,7 +426,7 @@ describe('SettingSection groups', () => {
   });
 
   // 有专属面板的分组从通用面板里排除，免得同一项设置出现在两个面板上
-  it('被排除的分组不渲染', async () => {
+  it('skips excluded groups', async () => {
     const host = await render({ exclude: ['NotificationPreferences'] });
 
     expect(sectionsOf(host)).toEqual(['Display', 'Operations']);
@@ -471,7 +471,7 @@ describe('SettingSection switches', () => {
     );
   }
 
-  it('账户层未覆盖时显示系统默认值或代码默认值', async () => {
+  it('shows the inherited system or code default when the account has no override', async () => {
     expect(await checkedOf('account')).toEqual({
       'Probe.DefaultOn': 'true',
       'Probe.TenantOff': 'false',
@@ -479,7 +479,7 @@ describe('SettingSection switches', () => {
     });
   });
 
-  it('系统层只继承代码默认值', async () => {
+  it('inherits only the code default at system scope', async () => {
     expect(await checkedOf('system')).toEqual({
       'Probe.DefaultOn': 'true',
       'Probe.TenantOff': 'false',

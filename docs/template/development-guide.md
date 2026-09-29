@@ -76,6 +76,7 @@ ServiceUserContextEnabled = (ServiceRole != "Standalone")
 | `scripts/check-template-symbols.ps1` | 悬空符号（`isEnabled`、computed `value`、modifier `condition`、代码 `#if` 四处）、注释里的指令字面形式、恒真嵌套、与 `#if` 同义的 `#elif` |
 | `scripts/check-using-guards.py` | 五项：C# using 守卫（双向）、前端 TS import 守卫、`InternalsVisibleTo` 无条件、csproj XML 良构、无仅含空行的条件块。详见该文件头 |
 | `scripts/check-async-boundaries.py` | 动态连接路径（UoW、多租户、`Leistd.Data`、模板 `TenantConnections`）里的 `.Result` / `.Wait()` / `GetAwaiter().GetResult()` |
+| `scripts/check-test-names.py` | 前端 `describe` / `it` / `test` 标题、后端 `[Fact]` / `[Theory]` 方法名与 `DisplayName` 含中日韩字符；只查名字，注释与测试数据不在内 |
 
 `check-using-guards.py` 验证全部符号取值组合；场景矩阵只编译 `$Scenarios` 中列出的组合。
 
@@ -156,10 +157,10 @@ pwsh framework/build/pack-local-feed.ps1
 pwsh scripts/test-template-matrix.ps1 -SkipPack
 ```
 
-需要人工观看前端测试运行时，改用有头 Chrome（CI 仍默认 `ChromeHeadless`）：
+需要人工观看前端测试运行时，改用有头 Chromium（CI 仍默认无头的 `chromiumHeadless`）：
 
 ```powershell
-pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser Chrome
+pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser chromium
 ```
 
 不在仓库 `NuGet.Config` 或生成项目中固化本地源。
@@ -271,3 +272,4 @@ pwsh scripts/test-template-matrix.ps1 -Scenarios standalone -ContainerSmokeScena
 
 - **兼容要么完整，要么不留。** 模板只兼容它明确支持的来源和配置组合，并且要完整覆盖该来源产生的全部形状（如响应信封的成功与失败两侧）。只兼容一半的按删除处理，在文档写明启用该来源时要做的适配——半套兼容会让人误以为它被支持。
 - **没有读取方的配置键和字段直接删。** 它们承诺了不存在的能力，比缺一个扩展点更误导人。示范性质的通用代码（工具函数、样例端点）若与项目无关或已有官方等价物（Angular 管道、`Intl`），也删；与业务开发者常用能力相关的，保留并至少有一处真实调用。
+- **不留待办。** 模板载荷是生成项目的起点，留下的 `TODO` 会原样复制进每个派生项目，且没有人负责清掉。迁移工具（如 Angular 的 `refactor-jasmine-vitest`）标出的待办，在同一阶段按终局做法改完；只有按上游原样维护的第三方生成代码（`frontend/libs/ui`）例外。闸门见设计原则 §4。

@@ -42,7 +42,7 @@ function definitions() {
 /** 手风琴组标题的展开按钮。 */
 function groupTrigger(): HTMLElement {
   const trigger = document.querySelector<HTMLElement>('hlm-accordion-trigger button');
-  expect(trigger).withContext('group trigger should be rendered').not.toBeNull();
+  expect(trigger, 'group trigger should be rendered').not.toBeNull();
   return trigger!;
 }
 
@@ -73,13 +73,13 @@ describe('PermissionGrantDialog', () => {
       imports: [HostComponent],
       // prettier-ignore
       providers: [
-        provideZonelessChangeDetection(),
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        //#if (IncludeLocalization)
-        { provide: TranslocoService, useValue: transloco },
-        //#endif
-      ],
+                provideZonelessChangeDetection(),
+                provideHttpClient(),
+                provideHttpClientTesting(),
+                //#if (IncludeLocalization)
+                { provide: TranslocoService, useValue: transloco },
+                //#endif
+            ],
     });
     fixture = TestBed.createComponent(HostComponent);
     httpTesting = TestBed.inject(HttpTestingController);
@@ -100,12 +100,12 @@ describe('PermissionGrantDialog', () => {
     await fixture.whenStable();
 
     // 切换主体后上一次的授予请求被取消，新主体重新走完整加载。
-    expect(first.cancelled).toBeTrue();
+    expect(first.cancelled).toBe(true);
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-b').flush(grants('role-b', true));
     await fixture.whenStable();
 
-    expect(dialog().isGranted('App.Users')).toBeTrue();
+    expect(dialog().isGranted('App.Users')).toBe(true);
     expect(dialog().version()).toBe(7);
   });
 
@@ -117,7 +117,7 @@ describe('PermissionGrantDialog', () => {
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-b', false));
     await fixture.whenStable();
 
-    expect(dialog().isGranted('App.Users')).toBeFalse();
+    expect(dialog().isGranted('App.Users')).toBe(false);
     expect(dialog().version()).toBe(0);
   });
 
@@ -126,7 +126,7 @@ describe('PermissionGrantDialog', () => {
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
     await fixture.whenStable();
-    expect(dialog().isGranted('App.Users')).toBeTrue();
+    expect(dialog().isGranted('App.Users')).toBe(true);
 
     fixture.componentInstance.roleId.set('role-b');
     await fixture.whenStable();
@@ -138,9 +138,9 @@ describe('PermissionGrantDialog', () => {
 
     // 加载失败后界面不得留着 A 的状态与版本，否则保存会把 A 的授予写给 B；
     // 两边版本恰好相同时乐观并发也拦不住。
-    expect(dialog().isGranted('App.Users')).toBeFalse();
+    expect(dialog().isGranted('App.Users')).toBe(false);
     expect(dialog().version()).toBe(0);
-    expect(dialog().canSave()).toBeFalse();
+    expect(dialog().canSave()).toBe(false);
   });
 
   it('blocks saving until the current subject has loaded successfully', async () => {
@@ -151,7 +151,7 @@ describe('PermissionGrantDialog', () => {
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-b', true));
     await fixture.whenStable();
 
-    expect(dialog().canSave()).toBeFalse();
+    expect(dialog().canSave()).toBe(false);
     dialog().onSave();
     httpTesting.expectNone('/api/v1/permissions/grants/roles/role-a');
   });
@@ -175,7 +175,7 @@ describe('PermissionGrantDialog', () => {
       .flush(grants('role-a', false));
     await fixture.whenStable();
 
-    expect(dialog().isGranted('App.Users')).toBeFalse();
+    expect(dialog().isGranted('App.Users')).toBe(false);
   });
 
   it('keeps the spinner up until the next subject has loaded', async () => {
@@ -188,13 +188,13 @@ describe('PermissionGrantDialog', () => {
 
     // switchMap 退订上一轮时它的 finalize 照样会跑。若 loading 在 switchMap 之前置位，
     // 这一下就把它打回 false —— B 还在飞，界面已经显示成加载完成。
-    expect(dialog().loading()).toBeTrue();
+    expect(dialog().loading()).toBe(true);
 
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-b').flush(grants('role-b', true));
     await fixture.whenStable();
 
-    expect(dialog().loading()).toBeFalse();
+    expect(dialog().loading()).toBe(false);
   });
 
   it('writes the model when a rendered checkbox is clicked', async () => {
@@ -206,12 +206,12 @@ describe('PermissionGrantDialog', () => {
     // 走真实 DOM 点击而不是调组件方法：复选框的输出名写错时组件方法照样能过，
     // 界面却只改了控件自身的内部状态，重新加载就"复原"——只有点击才暴露得出来。
     const checkbox = document.getElementById('App.Users');
-    expect(checkbox).withContext('permission checkbox should be rendered').not.toBeNull();
+    expect(checkbox, 'permission checkbox should be rendered').not.toBeNull();
 
     checkbox?.click();
     await fixture.whenStable();
 
-    expect(dialog().isGranted('App.Users')).toBeFalse();
+    expect(dialog().isGranted('App.Users')).toBe(false);
   });
 
   it('keeps the group expanded after its last grant is cleared', async () => {
@@ -219,15 +219,15 @@ describe('PermissionGrantDialog', () => {
     httpTesting.expectOne(DEFINITIONS_URL).flush(definitions());
     httpTesting.expectOne('/api/v1/permissions/grants/roles/role-a').flush(grants('role-a', true));
     await fixture.whenStable();
-    expect(dialog().isExpanded('App')).toBeTrue();
+    expect(dialog().isExpanded('App')).toBe(true);
 
     // 展开状态一旦由"本组已有授予"算出来，取消最后一个勾就会顺手把整组折叠掉，
     // 用户只是想改一个勾，界面却塌了。
     document.getElementById('App.Users')?.click();
     await fixture.whenStable();
 
-    expect(dialog().isGranted('App.Users')).toBeFalse();
-    expect(dialog().isExpanded('App')).toBeTrue();
+    expect(dialog().isGranted('App.Users')).toBe(false);
+    expect(dialog().isExpanded('App')).toBe(true);
   });
 
   it('reopens a manually collapsed group when the search matches it', async () => {
@@ -257,7 +257,7 @@ describe('PermissionGrantDialog', () => {
     fixture.destroy();
 
     // 销毁即退订：请求被取消，晚到的响应没有任何落地路径。
-    expect(pending.cancelled).toBeTrue();
+    expect(pending.cancelled).toBe(true);
     expect(() => pending.flush(grants('role-a', true))).toThrowError(
       /Cannot flush a cancelled request/,
     );

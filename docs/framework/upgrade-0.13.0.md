@@ -449,3 +449,13 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 模板前端：`environment.api` 只保留 `gateway` | `authService`、`appService`、`envService` 没有读取方，删除；按服务名经网关分流用 `GATEWAY_SERVICE_NAME` 请求上下文（前端 README）。`format.utils.ts` 删除 |
 | 模板镜像以非 root 运行 | API 与迁移镜像 `USER $APP_UID`（UID 1654）。compose 文件型 secret 保留宿主机权限，证书须对 UID 1654 可读（`chown 1654` 或属组可读）；用文件目录存 Data Protection 密钥时目录须可写。部署文档已写明 |
 | 模板上手项 | `.http` 改为健康检查与 OpenAPI 端点；新增官方 OpenAPI（`AddOpenApi()`，Development 下 `MapOpenApi()`，`/openapi/v1.json`）；compose 镜像名改为 `${BACKEND_IMAGE:-companyname-projectname:latest}` / `${MIGRATOR_IMAGE:-…}`，不再写死个人仓库；`TZ` 默认 `UTC`（进程本地时区，可经 `.env` 覆盖） |
+
+## 14. 模板前端单测迁到 Vitest
+
+| 变化 | 影响与改法 |
+| --- | --- |
+| `ng test` 改由 `@angular/build:unit-test` 驱动 Vitest，在 Playwright 的无头 Chromium 里运行 | Karma、Jasmine 及其配置删除（`karma.conf.js`、`@types/jasmine`、`istanbul-lib-instrument` 等）。新机器首次运行前执行 `npx playwright install chromium`；CI 同样需要安装（`--with-deps`）。有头运行：`npm test -- --browsers=chromium` |
+| spec 写法改为 Vitest | `jasmine.createSpyObj` → 由 `vi.fn()` 组成的对象，类型用 `Pick<MockedObject<T>, …>`；`spyOn` → `vi.spyOn`（**默认调用原实现**，要桩掉副作用须显式 `mockReturnValue` / `mockResolvedValue`）；`.and.returnValue` → `.mockReturnValue`；`toBeTrue()` → `toBe(true)`；`done` 回调改为 `async` + `firstValueFrom`。已有项目可先跑官方 `ng g @schematics/angular:refactor-jasmine-vitest`，再按上述差异核对 |
+| 单测专用构建配置 `unit-test` | 不做开发构建的 Mock 提供器替换，`_mock/core/providers.ts` 保持部署形态。自定义了 `development` 配置的项目，单测不再跟着它变 |
+| `vitest-base.config.ts` 开启 `restoreMocks`、`unstubGlobals`；`isolate: true` | 每条用例开始前自动还原 `vi.spyOn` 替身与 `vi.stubGlobal` 的全局值（其他直接修改与假计时器仍需自己还原）；每个 spec 文件在独立页面运行，并发执行的文件之间不共享全局对象上的桩 |
+| 测试名统一英文 | 前端 `describe` / `it` 标题与后端测试方法名、`DisplayName` 用英文句子；中文只在注释与测试数据里 |

@@ -51,7 +51,7 @@ describe('translationReady', () => {
     injector = TestBed.inject(Injector);
   });
 
-  it('首个 JSON 资源到达后，依赖它的 computed 重新求值（不再残留裸键）', () => {
+  it('re-evaluates dependent computeds on the first JSON resource, leaving no bare keys', () => {
     transloco.setActiveLang('en');
 
     const label = runInInjectionContext(injector, () => {

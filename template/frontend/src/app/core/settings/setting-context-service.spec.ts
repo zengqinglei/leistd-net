@@ -93,7 +93,7 @@ describe('SettingContextService', () => {
     const failing = service.load();
     http.expectOne('/api/v1/settings').flush('boom', { status: 500, statusText: 'Server Error' });
 
-    await expectAsync(failing).toBeRejected();
+    await expect(failing).rejects.toThrow();
     expect(service.timeZone()).toBe('Asia/Tokyo');
   });
 
@@ -105,7 +105,7 @@ describe('SettingContextService', () => {
    * 从快照去推导，就会出现"文案已经换了、日期还按旧地区写"——切语言时要等快照回来，
    * 写入失败时更是一直分叉，访客在登录页切的语言则根本推不出来。
    */
-  it('日期 locale 跟随活动语言，与设置快照无关', async () => {
+  it('derives the date locale from the active language, not the settings snapshot', async () => {
     const language = TestBed.inject(LanguageService);
     expect(service.displayLocale()).toBe('en');
 

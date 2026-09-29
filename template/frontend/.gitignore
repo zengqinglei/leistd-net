@@ -33,6 +33,8 @@ yarn-error.log
 .sass-cache/
 /connect.lock
 /coverage
+# Vitest 浏览器模式在用例失败时截的图
+__screenshots__/
 /libpeerconnection.log
 testem.log
 /typings

@@ -15,14 +15,14 @@ describe('AppDate', () => {
   const pipe = new AppDate();
   const utc = '2026-09-04T10:16:30Z';
 
-  describe('时区决定"哪一刻"', () => {
-    it('按 IANA 名换算，同一时刻在不同时区渲染成不同时间', () => {
+  describe('time zone decides the instant', () => {
+    it('converts by IANA name, rendering the same instant differently per time zone', () => {
       expect(pipe.transform(utc, 'full', 'Asia/Shanghai', 'zh-CN')).toBe('2026-09-04 18:16:30');
       expect(pipe.transform(utc, 'full', 'UTC', 'zh-CN')).toBe('2026-09-04 10:16:30');
       expect(pipe.transform(utc, 'full', 'America/New_York', 'zh-CN')).toBe('2026-09-04 06:16:30');
     });
 
-    it('夏令时按当时的规则算，不是一个固定偏移', () => {
+    it('applies the daylight saving rules in effect at that time rather than a fixed offset', () => {
       // 纽约冬季 UTC-5、夏季 UTC-4：固定偏移表达不了这件事
       expect(pipe.transform('2026-01-15T12:00:00Z', 'full', 'America/New_York', 'zh-CN')).toBe(
         '2026-01-15 07:00:00',
@@ -32,7 +32,7 @@ describe('AppDate', () => {
       );
     });
 
-    it('时区无法识别时回落到浏览器时区，而不是把整列渲染成空', () => {
+    it('falls back to the browser time zone for an unrecognized time zone instead of rendering the column empty', () => {
       const browserRendered = pipe.transform(utc, 'full', undefined, 'zh-CN');
 
       expect(pipe.transform(utc, 'full', 'Mars/Olympus', 'zh-CN')).toBe(browserRendered);
@@ -40,14 +40,15 @@ describe('AppDate', () => {
     });
   });
 
-  describe('locale 决定"怎么写"', () => {
-    it('中文按 GB/T 7408 用短横线与 24 小时制', () => {
+  describe('locale decides the format', () => {
+    it('uses hyphens and the 24-hour clock for Chinese per GB/T 7408', () => {
       // CLDR 给 zh 的数字写法是 2026/09/04（斜杠），这里是一处刻意例外
       expect(pipe.transform(utc, 'full', 'Asia/Shanghai', 'zh-CN')).toBe('2026-09-04 18:16:30');
       expect(pipe.transform(utc, 'full', 'Asia/Shanghai', 'zh-TW')).toBe('2026-09-04 18:16:30');
     });
 
-    it('其余语言用月份名，消掉数字月日的歧义', () => {
+    // 用月份名是为了消掉数字月日的歧义。
+    it('uses month names for other languages', () => {
       const us = pipe.transform(utc, 'full', 'Asia/Shanghai', 'en-US');
       const gb = pipe.transform(utc, 'full', 'Asia/Shanghai', 'en-GB');
 
@@ -60,12 +61,12 @@ describe('AppDate', () => {
       expect(us).not.toBe(gb);
     });
 
-    it('12/24 小时制交给 locale', () => {
+    it('leaves the 12/24-hour clock to the locale', () => {
       expect(pipe.transform(utc, 'full', 'Asia/Shanghai', 'en-US')).toContain('PM');
       expect(pipe.transform(utc, 'full', 'Asia/Shanghai', 'en-GB')).toContain('18:');
     });
 
-    it('拿不到 locale 时回落到固定的 ISO 写法，不随环境漂移', () => {
+    it('falls back to a fixed ISO format without a locale, independent of the environment', () => {
       const fallback = '2026-09-04 18:16:30';
 
       expect(pipe.transform(utc, 'full', 'Asia/Shanghai')).toBe(fallback);
@@ -75,32 +76,32 @@ describe('AppDate', () => {
     });
   });
 
-  describe('槽位决定"多细"', () => {
-    it('full 到秒，short 到分', () => {
+  describe('slot decides the precision', () => {
+    it('full shows seconds, short shows minutes', () => {
       expect(pipe.transform(utc, 'full', 'Asia/Shanghai', 'zh-CN')).toBe('2026-09-04 18:16:30');
       expect(pipe.transform(utc, 'short', 'Asia/Shanghai', 'zh-CN')).toBe('2026-09-04 18:16');
     });
 
-    it('date 只有日期，time 只有时刻', () => {
+    it('date shows only the date, time shows only the time of day', () => {
       expect(pipe.transform(utc, 'date', 'Asia/Shanghai', 'zh-CN')).toBe('2026-09-04');
       expect(pipe.transform(utc, 'time', 'Asia/Shanghai', 'zh-CN')).toBe('18:16');
     });
 
     // 通知列表这类窄位置：不带年份，也不带秒
-    it('monthDayTime 省掉年与秒', () => {
+    it('monthDayTime omits the year and seconds', () => {
       expect(pipe.transform(utc, 'monthDayTime', 'Asia/Shanghai', 'zh-CN')).toBe('09-04 18:16');
     });
 
-    it('精度只由槽位决定，同一槽位在不同 locale 下细到同一级', () => {
+    it('precision depends only on the slot and is the same across locales', () => {
       for (const locale of ['zh-CN', 'en-US', 'en-GB', 'ja-JP']) {
         // 秒只出现在 full 上
-        expect(/\d{1,2}:\d{2}:\d{2}/.test(pipe.transform(utc, 'full', 'UTC', locale))).toBeTrue();
-        expect(/\d{1,2}:\d{2}:\d{2}/.test(pipe.transform(utc, 'short', 'UTC', locale))).toBeFalse();
+        expect(/\d{1,2}:\d{2}:\d{2}/.test(pipe.transform(utc, 'full', 'UTC', locale))).toBe(true);
+        expect(/\d{1,2}:\d{2}:\d{2}/.test(pipe.transform(utc, 'short', 'UTC', locale))).toBe(false);
       }
     });
   });
 
-  it('空值与非法值渲染成空串，不是 Invalid Date', () => {
+  it('renders empty and invalid values as an empty string, not Invalid Date', () => {
     expect(pipe.transform(null, 'full', 'Asia/Shanghai')).toBe('');
     expect(pipe.transform(undefined, 'full', 'Asia/Shanghai')).toBe('');
     expect(pipe.transform('', 'full', 'Asia/Shanghai')).toBe('');
@@ -121,31 +122,31 @@ describe('parseAppCalendarDate', () => {
     new Date(2026, 11, 31),
   ];
 
-  it('各语言下显示出来的日期都能原样认回', () => {
+  it('parses back the displayed date in every language', () => {
     for (const locale of ['zh-CN', 'en', 'en-GB', 'de', 'fr', 'ja']) {
       for (const day of days) {
         const shown = formatAppDate(day, 'date', undefined, locale);
-        expect(parseAppCalendarDate(shown, locale)?.getTime())
-          .withContext(`${locale}: ${shown}`)
-          .toBe(day.getTime());
+        expect(parseAppCalendarDate(shown, locale)?.getTime(), `${locale}: ${shown}`).toBe(
+          day.getTime(),
+        );
       }
     }
   });
 
-  it('手输时不必逐字照抄标点与大小写', () => {
+  it('tolerates punctuation and case differences in typed input', () => {
     const day = new Date(2026, 8, 17);
     const relaxed = formatAppDate(day, 'date', undefined, 'en').toLowerCase().replace(/,/g, '');
 
     expect(parseAppCalendarDate(relaxed, 'en')?.getTime()).toBe(day.getTime());
   });
 
-  it('YYYY-MM-DD 在任何语言下都认', () => {
+  it('accepts YYYY-MM-DD in any language', () => {
     expect(parseAppCalendarDate('2026-09-17', 'en')?.getTime()).toBe(
       new Date(2026, 8, 17).getTime(),
     );
   });
 
-  it('不存在的日期与认不出的文本返回 null，而不是滚到别的日子', () => {
+  it('returns null for nonexistent dates and unrecognized text instead of rolling over to another day', () => {
     expect(parseAppCalendarDate('2026-02-31', 'zh-CN')).toBeNull();
     expect(parseAppCalendarDate('2026-02-31', 'en')).toBeNull();
     expect(parseAppCalendarDate('hello', 'en')).toBeNull();

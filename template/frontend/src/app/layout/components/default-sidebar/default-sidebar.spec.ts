@@ -39,7 +39,7 @@ const SYSTEM = 'System';
  * 这里钉住两个区各自的分组骨架，以及判据里能自动验的部分：不留兜底组、
  * 个人设置只在工作空间（管理平台不另放一份）、权限不足的组整组消失。
  */
-describe('DefaultSidebar 菜单分组', () => {
+describe('DefaultSidebar menu groups', () => {
   /**
    * 只构造类，不渲染模板。
    *
@@ -80,7 +80,7 @@ describe('DefaultSidebar 菜单分组', () => {
   const routesOf = (sidebar: DefaultSidebar) =>
     sidebar.menuGroups().flatMap((group) => group.items.map((item) => item.route));
 
-  it('工作空间侧：工作 → 业务，不含兜底组', () => {
+  it('orders workspace groups as work → business with no fallback group', () => {
     const sidebar = build({ platform: false });
 
     expect(groupsOf(sidebar)).toEqual([WORK, BUSINESS]);
@@ -90,7 +90,7 @@ describe('DefaultSidebar 菜单分组', () => {
   // 个人设置只有一个入口：头像菜单。菜单树里再放一份，顶栏会多出一个齿轮、侧栏会多出一组，
   // 而它们和头像菜单里的那一项去的是同一个地址。
   // 工作空间侧由上一条的精确 toEqual 覆盖；这里只查权限开满的平台侧。
-  it('菜单树里不出现个人设置入口', () => {
+  it('leaves the personal settings entry out of the menu tree', () => {
     const everything = Object.values(PERMISSIONS).map((group) => group.default);
 
     expect(routesOf(build({ platform: true, permissions: everything }))).not.toContain(
@@ -98,7 +98,7 @@ describe('DefaultSidebar 菜单分组', () => {
     );
   });
 
-  it('平台侧：工作 → 身份与访问 → 开发者 → 审计 → 系统', () => {
+  it('orders platform groups work → identity & access → developer → audit → system', () => {
     const permissions = [
       PERMISSIONS.users.default,
       PERMISSIONS.roles.default,
@@ -125,7 +125,7 @@ describe('DefaultSidebar 菜单分组', () => {
 
   // 能看到任一平台菜单项的账号都必须进得了 /platform，反之入口权限也不能放进一个看不到任何菜单的空平台：
   // 少一项，那个岗位的账号菜单为空、还会被重定向走；多一项，进来只看到工作组。
-  it('平台入口权限与平台菜单项一一对应', () => {
+  it('matches platform entry permissions one-to-one with platform menu items', () => {
     const everything = Object.values(PERMISSIONS).map((group) => group.default);
     const allRoutes = routesOf(build({ platform: true, permissions: everything }));
     TestBed.resetTestingModule();
@@ -135,14 +135,15 @@ describe('DefaultSidebar 菜单分组', () => {
     );
     for (const permission of PLATFORM_ENTRY_PERMISSIONS) {
       TestBed.resetTestingModule();
-      expect(routesOf(build({ platform: true, permissions: [permission] })).length)
-        .withContext(permission)
-        .toBeGreaterThan(1);
+      expect(
+        routesOf(build({ platform: true, permissions: [permission] })).length,
+        permission,
+      ).toBeGreaterThan(1);
     }
   });
 
   // 权限不足时整组消失，不留一个空标题——空标题看起来像加载失败。
-  it('平台侧无管理权限时只剩工作组', () => {
+  it('shows only the work group on the platform without admin permissions', () => {
     const sidebar = build({ platform: true });
 
     expect(groupsOf(sidebar)).toEqual([WORK]);

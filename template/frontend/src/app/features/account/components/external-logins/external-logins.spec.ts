@@ -11,9 +11,14 @@ import { SettingContextService } from '../../../../core/settings/setting-context
 import { ExternalLoginsOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 
+import type { MockedObject } from 'vitest';
+
 describe('ExternalLogins', () => {
   let fixture: ComponentFixture<ExternalLogins>;
-  let account: jasmine.SpyObj<AccountService>;
+  let account: Pick<
+    MockedObject<AccountService>,
+    'getExternalLogins' | 'unlinkExternalLogin' | 'getExternalLinkUrl'
+  >;
 
   const github = {
     provider: 'github',
@@ -21,7 +26,7 @@ describe('ExternalLogins', () => {
   };
 
   async function render(data: ExternalLoginsOutputDto): Promise<HTMLElement> {
-    account.getExternalLogins.and.returnValue(of(data));
+    account.getExternalLogins.mockReturnValue(of(data));
     fixture = TestBed.createComponent(ExternalLogins);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -30,11 +35,11 @@ describe('ExternalLogins', () => {
   }
 
   beforeEach(() => {
-    account = jasmine.createSpyObj<AccountService>('AccountService', [
-      'getExternalLogins',
-      'unlinkExternalLogin',
-      'getExternalLinkUrl',
-    ]);
+    account = {
+      getExternalLogins: vi.fn().mockName('AccountService.getExternalLogins'),
+      unlinkExternalLogin: vi.fn().mockName('AccountService.unlinkExternalLogin'),
+      getExternalLinkUrl: vi.fn().mockName('AccountService.getExternalLinkUrl'),
+    };
     TestBed.configureTestingModule({
       imports: [ExternalLogins],
       providers: [
@@ -51,7 +56,7 @@ describe('ExternalLogins', () => {
     });
   });
 
-  it('未绑定的提供商给绑定入口，已绑定的给解绑入口', async () => {
+  it('offers link for unlinked providers and unlink for linked ones', async () => {
     const host = await render({
       hasPassword: true,
       providers: [github, { provider: 'google', link: null }],
@@ -62,7 +67,7 @@ describe('ExternalLogins', () => {
     expect(rows[1].querySelector('[data-testid="external-login-link"]')).not.toBeNull();
   });
 
-  it('没有密码时最后一个绑定不给解绑入口', async () => {
+  it('offers no unlink for the last linked provider when there is no password', async () => {
     const host = await render({
       hasPassword: false,
       providers: [github, { provider: 'google', link: null }],

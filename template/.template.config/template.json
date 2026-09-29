@@ -208,6 +208,10 @@
             "frontend/_mock/api/tenant.spec.ts",
             "frontend/_mock/data/tenant.ts",
             "frontend/src/app/features/platform/components/tenants/tenants.spec.ts",
+            "frontend/src/app/core/interceptors/tenant-interceptor.spec.ts",
+            "frontend/src/app/core/services/impersonation-service.spec.ts",
+            "frontend/src/app/core/services/tenant-context-service.spec.ts",
+            "frontend/src/app/core/settings/auth-mock-subject.spec.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SecureDefaultsTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/VerificationCodeDigestTests.cs"
           ]
@@ -224,6 +228,13 @@
             "frontend/src/app/layout/components/notifications/**",
             "frontend/_mock/api/notification.ts",
             "frontend/_mock/data/notifications.ts"
+          ]
+        },
+        {
+          "condition": "!RemoteTokenAuth",
+          "exclude": [
+            "frontend/src/app/core/components/oidc-callback/oidc-callback.spec.ts",
+            "frontend/src/app/core/settings/mock-subject.spec.ts"
           ]
         },
         {

@@ -7,18 +7,20 @@ import { of } from 'rxjs';
 
 import { SignalRService } from './signalr-service';
 
+import type { Mock } from 'vitest';
+
 /**
  * 连接生命周期：通知与业务事件共用一条连接，主体切换、失败与重连时不泄漏、不串人。
  *
  * 这里只替换 HubConnectionBuilder，不去 mock 网络：要锁住的是本服务对"部分失败"
  * 与"重复调用"的处理，而不是 SignalR 客户端自身的行为。
  */
-describe('SignalRService 连接生命周期', () => {
+describe('SignalRService connection lifecycle', () => {
   let service: SignalRService;
   let built: FakeConnection[];
   let failing: Set<string>;
   let deferStart = false;
-  let withUrl: jasmine.Spy;
+  let withUrl: Mock;
 
   class FakeConnection {
     startCount = 0;
@@ -99,7 +101,10 @@ describe('SignalRService 连接生命周期', () => {
 
     // 订阅走 invoke：缺了它，subscribeResource 会直接抛错进 catch，
     // 相关用例在改坏实现时也照样绿——那种"通过"什么都证明不了。
-    readonly invocations: { method: string; args: unknown[] }[] = [];
+    readonly invocations: {
+      method: string;
+      args: unknown[];
+    }[] = [];
 
     /** 置为 true 时 invoke() 挂起，直到 releaseInvoke() 被调用。 */
     gateInvoke = false;
@@ -126,7 +131,7 @@ describe('SignalRService 连接生命周期', () => {
 
   afterEach(() => {
     // 兜底：正常路径由各用例的 finally 释放。afterEach 只在测试体提前抛出时生效——
-    // 断言失败后若还有 await 卡在未释放的 gate 上，失败会退化成 Jasmine 超时。
+    // 断言失败后若还有 await 卡在未释放的 gate 上，失败会退化成用例超时。
     built.forEach((connection) => {
       connection.completeStart();
       connection.releaseInvoke();
@@ -138,14 +143,17 @@ describe('SignalRService 连接生命周期', () => {
     failing = new Set<string>();
     deferStart = false;
 
-    spyOn(console, 'error');
+    vi.spyOn(console, 'error').mockReturnValue(undefined);
 
     // 只替换 build，让真正的 builder 负责链式调用；URL 从 withUrl 的调用记录里取。
     // 不去 spy 类导出本身：那要求 fake 与构造签名兼容，类型上通不过，
     // 而且会把"构造 builder"这件事也一并接管，测试就开始验证 SignalR 客户端而不是本服务。
-    withUrl = spyOn(signalR.HubConnectionBuilder.prototype, 'withUrl').and.callThrough();
-    spyOn(signalR.HubConnectionBuilder.prototype, 'build').and.callFake(() => {
-      const url = withUrl.calls.mostRecent().args[0];
+    withUrl = vi.spyOn(signalR.HubConnectionBuilder.prototype, 'withUrl');
+    vi.spyOn(signalR.HubConnectionBuilder.prototype, 'build').mockImplementation(() => {
+      const url = vi.mocked(withUrl).mock.lastCall?.[0];
+      if (!url) {
+        throw new Error('withUrl must be called before build');
+      }
       const connection = new FakeConnection(url);
       built.push(connection);
 
@@ -167,38 +175,38 @@ describe('SignalRService 连接生命周期', () => {
     service = TestBed.inject(SignalRService);
   });
 
-  it('连上实时 Hub 后进入已连接状态', async () => {
+  it('enters the connected state after connecting to the real-time hub', async () => {
     await service.connect();
 
     expect(built.length).toBe(1);
     expect(built[0].url).toContain(SignalRService.hubPath);
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
   });
 
   //#if (RemoteTokenAuth)
-  it('Resource Hub 从 OIDC 会话获取 access token', async () => {
+  it('Resource Hub obtains the access token from the OIDC session', async () => {
     await service.connect();
 
-    const options = withUrl.calls.first().args[1] as signalR.IHttpConnectionOptions;
+    const options = vi.mocked(withUrl).mock.calls[0][1] as signalR.IHttpConnectionOptions;
     expect(await options.accessTokenFactory?.()).toBe('resource-access-token');
   });
   //#endif
-  it('连接失败时不留活连接', async () => {
+  it('leaves no live connection when connecting fails', async () => {
     failing.add(SignalRService.hubPath);
 
     await service.connect();
 
-    expect(service.isConnected()).toBeFalse();
+    expect(service.isConnected()).toBe(false);
     expect(built[0].stopCount).toBe(1);
   });
 
-  it('并发调用复用同一次连接过程，不会各建一条', async () => {
+  it('concurrent calls share one connection attempt instead of each creating a connection', async () => {
     await Promise.all([service.connect(), service.connect(), service.connect()]);
 
     expect(built.length).toBe(1);
   });
 
-  it('已经连上之后再次调用直接返回，不重建也不泄漏', async () => {
+  it('returns immediately when already connected, without rebuilding or leaking', async () => {
     await service.connect();
     await service.connect();
 
@@ -206,10 +214,10 @@ describe('SignalRService 连接生命周期', () => {
     // 旧连接连同 handler 继续往同一个 signal 里推。通知组件重挂载就会走到这里。
     expect(built.length).toBe(1);
     expect(built[0].stopCount).toBe(0);
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
   });
 
-  it('手上的连接已经彻底断开时，再次调用会重建', async () => {
+  it('rebuilds when the held connection is fully disconnected', async () => {
     await service.connect();
     built[0].state = signalR.HubConnectionState.Disconnected;
 
@@ -217,33 +225,33 @@ describe('SignalRService 连接生命周期', () => {
 
     // 自动重连耗尽后一味早退，会把应用永久留在断线状态。
     expect(built.length).toBe(2);
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
   });
 
-  it('失败之后可以重试，且不与上一轮的连接叠加', async () => {
+  it('can retry after a failure without stacking on the previous connection', async () => {
     failing.add(SignalRService.hubPath);
     await service.connect();
-    expect(service.isConnected()).toBeFalse();
+    expect(service.isConnected()).toBe(false);
 
     failing.clear();
     await service.connect();
 
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
     expect(built.filter((connection) => connection.stopCount === 0).length).toBe(1);
-    expect(built.every((connection) => connection.startCount === 1)).toBeTrue();
+    expect(built.every((connection) => connection.startCount === 1)).toBe(true);
   });
 
-  it('掉线期间不报告已连接，恢复后重新报告', async () => {
+  it('does not report connected while dropped and reports it again after recovery', async () => {
     await service.connect();
 
     built[0].drop();
-    expect(service.isConnected()).toBeFalse();
+    expect(service.isConnected()).toBe(false);
 
     built[0].dropAndRecover();
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
   });
 
-  it('通知与业务事件在同一条连接上各自只触发自己的处理', async () => {
+  it('notifications and resource events on one connection each trigger only their own handler', async () => {
     service.registerResourceEvent('OrderChanged');
     await service.connect();
     const connection = built[0];
@@ -266,7 +274,7 @@ describe('SignalRService 连接生命周期', () => {
     });
   });
 
-  it('重连后在这条连接上重新订阅已订阅的资源', async () => {
+  it('resubscribes subscribed resources on the same connection after reconnecting', async () => {
     await service.connect();
     await service.subscribeResource('order-1');
     const connection = built[0];
@@ -277,20 +285,20 @@ describe('SignalRService 连接生命周期', () => {
     expect(connection.invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
   });
 
-  it('断开后可以重新连接', async () => {
+  it('can connect again after disconnecting', async () => {
     await service.connect();
     await service.disconnect();
 
-    expect(service.isConnected()).toBeFalse();
-    expect(built.every((connection) => connection.stopCount === 1)).toBeTrue();
+    expect(service.isConnected()).toBe(false);
+    expect(built.every((connection) => connection.stopCount === 1)).toBe(true);
 
     await service.connect();
 
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
     expect(built.length).toBe(2);
   });
 
-  it('主体切换后不复用上一个人的连接，也不残留他的通知', async () => {
+  it('does not reuse the connection or keep the notifications of the previous principal after a principal switch', async () => {
     await service.connect();
     service.notifications.set([
       { id: 'n1', title: 'A 的通知', type: 'info', isRead: false, creationTime: '2026-01-01' },
@@ -301,10 +309,10 @@ describe('SignalRService 连接生命周期', () => {
 
     // SignalR 的 principal 在握手时定死：不断开就换人登录，下一个用户会复用
     // 上一个人的活连接，以对方的身份继续收消息。
-    expect(built.every((connection) => connection.stopCount === 1)).toBeTrue();
+    expect(built.every((connection) => connection.stopCount === 1)).toBe(true);
     expect(service.notifications()).toEqual([]);
     expect(service.lastResourceEvent()).toBeNull();
-    expect(service.isConnected()).toBeFalse();
+    expect(service.isConnected()).toBe(false);
 
     await service.connect();
 
@@ -313,17 +321,17 @@ describe('SignalRService 连接生命周期', () => {
     expect(built[1].stopCount).toBe(0);
   });
 
-  it('连接进行中发生主体切换时，那对连接不会留给下一个人', async () => {
+  it('does not hand an in-progress connection to the next principal after a switch', async () => {
     const connecting = service.connect();
     await service.reset();
     await connecting;
 
     // await 回来的连接握的是上一个身份；写进字段就成了没人再管、却仍在收推送的孤儿。
-    expect(service.isConnected()).toBeFalse();
-    expect(built.every((connection) => connection.stopCount >= 1)).toBeTrue();
+    expect(service.isConnected()).toBe(false);
+    expect(built.every((connection) => connection.stopCount >= 1)).toBe(true);
   });
 
-  it('reset 窗口内到达的旧 Hub 推送不写进新主体的列表', async () => {
+  it('does not write stale hub pushes arriving during reset into the list of the new principal', async () => {
     await service.connect();
     const push = built[0].handlers.get(SignalRService.notificationReceived)!;
 
@@ -335,7 +343,7 @@ describe('SignalRService 连接生命周期', () => {
     expect(service.notifications()).toEqual([]);
   });
 
-  it('reset 之后完成的订阅调用不会在下一个主体的连接上重新订阅', async () => {
+  it('does not resubscribe a subscribe call completing after reset on the connection of the next principal', async () => {
     await service.connect();
 
     const pending = service.subscribeResource('order-1');
@@ -352,7 +360,7 @@ describe('SignalRService 连接生命周期', () => {
     expect(business.invocations).toEqual([]);
   });
 
-  it('旧主体的连接过程未收尾时，新主体的 connect 仍会为自己建立连接', async () => {
+  it('connects for a new principal even while the attempt of the old one is unfinished', async () => {
     const stale = service.connect();
     await service.reset();
 
@@ -361,10 +369,10 @@ describe('SignalRService 连接生命周期', () => {
 
     // 直接复用上一个主体的 Promise，会让本主体拿到"正常返回但什么都没连上"，
     // 在组件重挂载前一直没有实时通知。
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
   });
 
-  it('reset 之后恢复执行的旧连接请求不再建连', async () => {
+  it('does not connect when a stale connect request resumes after reset', async () => {
     deferStart = true;
 
     // 旧请求在 await 处让出执行权，恢复时已经不是当前主体。
@@ -383,10 +391,10 @@ describe('SignalRService 连接生命周期', () => {
     }
 
     await stale;
-    expect(service.isConnected()).toBeFalse();
+    expect(service.isConnected()).toBe(false);
   });
 
-  it('start 尚未完成时发生主体切换，旧连接的推送与事件都不写状态', async () => {
+  it('ignores pushes and events from the old connection when the principal switches before start completes', async () => {
     deferStart = true;
 
     // 这一轮 connect 发起时仍是当前主体，因此连接会被建出来并写进字段；
@@ -397,7 +405,7 @@ describe('SignalRService 连接生命周期', () => {
       await Promise.resolve();
 
       const connection = built[0];
-      expect(connection).withContext('连接应当已经建出并写入字段').toBeDefined();
+      expect(connection, '连接应当已经建出并写入字段').toBeDefined();
 
       service.registerResourceEvent('OrderChanged');
       await service.reset();
@@ -418,10 +426,10 @@ describe('SignalRService 连接生命周期', () => {
     }
 
     await pending;
-    expect(service.isConnected()).toBeFalse();
+    expect(service.isConnected()).toBe(false);
   });
 
-  it('重连重订阅卡在某一轮时切换主体，不会继续订阅下一个人的资源', async () => {
+  it('does not subscribe resources of the next principal when switching while reconnect resubscription is stuck', async () => {
     await service.connect();
     await service.subscribeResource('a-order');
 
@@ -433,9 +441,7 @@ describe('SignalRService 连接生命周期', () => {
     const reconnected = staleBusiness.triggerReconnected();
     try {
       await Promise.resolve();
-      expect(staleBusiness.invocations.length)
-        .withContext('重连回调应当已经发出第一次 Subscribe')
-        .toBe(1);
+      expect(staleBusiness.invocations.length, '重连回调应当已经发出第一次 Subscribe').toBe(1);
 
       // 就在这一轮未完成时切换主体，并让新主体订阅自己的资源。
       await service.reset();
@@ -456,10 +462,11 @@ describe('SignalRService 连接生命周期', () => {
     expect(staleBusiness.invocations.map((call) => call.args[0])).not.toContain('b-order');
   });
 
-  it('stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面', async () => {
+  // stop 抛错也要清空引用，否则下一次连接会把泄漏的连接留在后面。
+  it('clears the reference even when stop throws', async () => {
     await service.connect();
     built.forEach((connection) => {
-      spyOn(connection, 'stop').and.rejectWith(new Error('stop failed'));
+      vi.spyOn(connection, 'stop').mockRejectedValue(new Error('stop failed'));
     });
 
     await service.disconnect();
@@ -467,6 +474,6 @@ describe('SignalRService 连接生命周期', () => {
 
     // 引用已清空，新一轮正常建立一条。
     expect(built.length).toBe(2);
-    expect(service.isConnected()).toBeTrue();
+    expect(service.isConnected()).toBe(true);
   });
 });

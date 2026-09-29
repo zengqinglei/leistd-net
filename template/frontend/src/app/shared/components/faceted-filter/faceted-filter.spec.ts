@@ -52,10 +52,10 @@ describe('FacetedFilter', () => {
     expect(search()?.getAttribute('aria-autocomplete')).toBe('list');
     // 触发器打开的是 popover（dialog）：先确认元素存在，再精确断言语义与其受控元素一致。
     const trigger = document.querySelector<HTMLElement>('button[hlmpopovertrigger]');
-    expect(trigger).withContext('popover trigger must render').not.toBeNull();
+    expect(trigger, 'popover trigger must render').not.toBeNull();
     expect(trigger!.getAttribute('aria-haspopup')).toBe('dialog');
     const controlledId = trigger!.getAttribute('aria-controls');
-    expect(controlledId).withContext('trigger must reference the overlay').toBeTruthy();
+    expect(controlledId, 'trigger must reference the overlay').toBeTruthy();
     expect(document.getElementById(controlledId!)?.getAttribute('role')).toBe('dialog');
 
     fixture.componentRef.setInput('multiple', false);
@@ -68,14 +68,14 @@ describe('FacetedFilter', () => {
 
     // Brain 把 role="dialog" 设在 CDK overlay pane 上（不是内容元素），共享指令负责为其命名。
     const pane = document.querySelector('.cdk-overlay-pane[role="dialog"]');
-    expect(pane).withContext('popover should render into a dialog overlay pane').not.toBeNull();
+    expect(pane, 'popover should render into a dialog overlay pane').not.toBeNull();
     expect(pane!.getAttribute('aria-label')).toBe('Role');
 
     fixture.componentRef.setInput('label', 'Status');
     fixture.detectChanges();
-    expect(pane!.getAttribute('aria-label'))
-      .withContext('label changes must propagate to the pane')
-      .toBe('Status');
+    expect(pane!.getAttribute('aria-label'), 'label changes must propagate to the pane').toBe(
+      'Status',
+    );
   });
 
   it('reports business selection through aria-selected in both modes', () => {
@@ -149,8 +149,8 @@ describe('FacetedFilter', () => {
     const empty = Array.from(document.querySelectorAll('.cdk-overlay-container div')).find(
       (el) => el.textContent?.trim() === 'No results',
     );
-    expect(empty).withContext('empty state should still render').toBeDefined();
-    expect(listbox()?.contains(empty!)).toBeFalse();
+    expect(empty, 'empty state should still render').toBeDefined();
+    expect(listbox()?.contains(empty!)).toBe(false);
   });
 
   it('emits the single-select value on click and closes the panel', () => {
@@ -187,18 +187,19 @@ describe('FacetedFilter', () => {
     const clear = Array.from(document.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('Clear filter'),
     );
-    expect(clear).withContext('clear button should render when a selection exists').toBeDefined();
+    expect(clear, 'clear button should render when a selection exists').toBeDefined();
     expect(clear?.getAttribute('role')).toBeNull();
-    expect(listbox()?.contains(clear!)).toBeFalse();
+    expect(listbox()?.contains(clear!)).toBe(false);
   });
 
   it('renders options without nested interactive elements', () => {
     createFilter({ multiple: true, values: ['admin'] });
 
     for (const option of optionEls()) {
-      expect(option.querySelector('button, input, [tabindex], [role="checkbox"]'))
-        .withContext(`option "${option.textContent?.trim()}" must not nest interactive elements`)
-        .toBeNull();
+      expect(
+        option.querySelector('button, input, [tabindex], [role="checkbox"]'),
+        `option "${option.textContent?.trim()}" must not nest interactive elements`,
+      ).toBeNull();
     }
   });
 

@@ -18,17 +18,19 @@ import { PERMISSIONS } from '../../../../shared/models/permission';
 import { GetOpenApplicationsInputDto } from '../../models/open-application.dto';
 import { OpenApplicationService } from '../../services/open-application-service';
 
+import type { MockedObject } from 'vitest';
+
 /** 开放应用页面的查询闭环。 */
-describe('OpenApplications 页面查询闭环', () => {
+describe('OpenApplications page query round trip', () => {
   let fixture: ComponentFixture<OpenApplications>;
   let component: OpenApplications;
   let router: Router;
-  let service: jasmine.SpyObj<OpenApplicationService>;
+  let service: Pick<MockedObject<OpenApplicationService>, 'getOpenApplications' | 'getScopes'>;
 
   /** 最近一次列表请求的参数。 */
   function lastQuery(): GetOpenApplicationsInputDto {
-    const calls = service.getOpenApplications.calls.all();
-    const query = calls[calls.length - 1]?.args[0];
+    const calls = vi.mocked(service.getOpenApplications).mock.calls;
+    const query = calls.at(-1)?.[0];
     if (!query) {
       throw new Error('列表请求从未发出');
     }
@@ -43,12 +45,12 @@ describe('OpenApplications 页面查询闭环', () => {
   }
 
   beforeEach(async () => {
-    service = jasmine.createSpyObj<OpenApplicationService>('OpenApplicationService', [
-      'getOpenApplications',
-      'getScopes',
-    ]);
-    service.getOpenApplications.and.returnValue(of({ items: [], totalCount: 0 }) as never);
-    service.getScopes.and.returnValue(of([]));
+    service = {
+      getOpenApplications: vi.fn().mockName('OpenApplicationService.getOpenApplications'),
+      getScopes: vi.fn().mockName('OpenApplicationService.getScopes'),
+    };
+    service.getOpenApplications.mockReturnValue(of({ items: [], totalCount: 0 }) as never);
+    service.getScopes.mockReturnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [OpenApplications],
@@ -78,7 +80,7 @@ describe('OpenApplications 页面查询闭环', () => {
     fixture.detectChanges();
   });
 
-  it('翻页写进 URL，并按新页码重新请求', async () => {
+  it('writes the page to the URL and refetches for the new page', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -88,7 +90,7 @@ describe('OpenApplications 页面查询闭环', () => {
     expect(lastQuery().limit).toBe(20);
   });
 
-  it('改每页条数回到第一页，请求的 offset 随之归零', async () => {
+  it('resets to the first page and offset 0 when the page size changes', async () => {
     table().paginationChange.emit({ pageIndex: 3, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -99,7 +101,7 @@ describe('OpenApplications 页面查询闭环', () => {
     expect(lastQuery().limit).toBe(50);
   });
 
-  it('排序写进 URL 并回到第一页，转成接口排序参数', async () => {
+  it('writes sorting to the URL, resets to page 1 and maps it to the API param', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -112,7 +114,7 @@ describe('OpenApplications 页面查询闭环', () => {
     expect(lastQuery().sorting).toBeTruthy();
   });
 
-  it('Secret 弹窗关闭后不再持有上一次的 secret', () => {
+  it('drops the previous secret after the secret dialog closes', () => {
     // 关闭弹窗只更新 visible 时，secret 与标题会留在组件状态里，
     // 下一次误打开弹窗会显示上一次生成的 secret。
     component.secretValue.set('generated-secret');
@@ -121,31 +123,29 @@ describe('OpenApplications 页面查询闭环', () => {
 
     component.onSecretDialogVisibleChange(false);
 
-    expect(component.secretDialogVisible()).toBeFalse();
+    expect(component.secretDialogVisible()).toBe(false);
     expect(component.secretValue()).toBe('');
     expect(component.secretHeader()).toBe('');
   });
 
-  it('Secret 弹窗打开时不清空 secret', () => {
+  it('keeps the secret while the secret dialog opens', () => {
     component.secretValue.set('generated-secret');
     component.secretHeader.set('Client created');
 
     component.onSecretDialogVisibleChange(true);
 
-    expect(component.secretDialogVisible()).toBeTrue();
+    expect(component.secretDialogVisible()).toBe(true);
     expect(component.secretValue()).toBe('generated-secret');
   });
 
-  it('URL 状态回填组件：刷新与前进后退可复原', async () => {
+  it('restores component state from the URL on reload and back/forward navigation', async () => {
     await router.navigate(['/platform/open-applications'], {
       queryParams: { page: 2, pageSize: 50, keyword: 'probe' },
     });
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(component.pagination()).toEqual(
-      jasmine.objectContaining({ pageIndex: 1, pageSize: 50 }),
-    );
+    expect(component.pagination()).toEqual(expect.objectContaining({ pageIndex: 1, pageSize: 50 }));
     expect(lastQuery().keyword).toBe('probe');
   });
 });

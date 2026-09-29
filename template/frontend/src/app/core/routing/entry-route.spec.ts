@@ -60,19 +60,19 @@ describe('isOnAuthRoute', () => {
     history.replaceState(null, '', '/auth/callback?code=abc&state=xyz');
 
     // 启动阶段 Router.url 就是 '/'：只看它的话，回调页上的 401 会清掉刚建立的主体。
-    expect(isOnAuthRoute()).toBeTrue();
+    expect(isOnAuthRoute()).toBe(true);
   });
 
   it('sees the OIDC callback under hash routing', () => {
     history.replaceState(null, '', '/#/auth/callback?code=abc');
 
-    expect(isOnAuthRoute()).toBeTrue();
+    expect(isOnAuthRoute()).toBe(true);
   });
 
   it('reports an ordinary route as not authenticating', () => {
     history.replaceState(null, '', '/platform/users');
 
-    expect(isOnAuthRoute()).toBeFalse();
+    expect(isOnAuthRoute()).toBe(false);
   });
 
   // 查询串或锚点里出现认证路径，人并不在那条路由上。按整条 URL 做 includes 会误判，
@@ -80,12 +80,12 @@ describe('isOnAuthRoute', () => {
   it('does not mistake an auth path inside the query string for an auth route', () => {
     history.replaceState(null, '', '/#/workspace?returnUrl=/auth/callback');
 
-    expect(isOnAuthRoute()).toBeFalse();
+    expect(isOnAuthRoute()).toBe(false);
   });
 
   it('does not mistake an auth path inside a plain anchor for an auth route', () => {
     history.replaceState(null, '', '/#section/auth/callback');
 
-    expect(isOnAuthRoute()).toBeFalse();
+    expect(isOnAuthRoute()).toBe(false);
   });
 });

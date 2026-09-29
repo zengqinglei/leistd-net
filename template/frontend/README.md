@@ -231,10 +231,21 @@ npm run format:fix     # 自动格式化代码
   npm test
   ```
 
-  > 单元测试跑在 Karma + Jasmine 4.6 上，`@types/jasmine` 与之保持同一主版本——这是
-  > `karma-jasmine@5.1.0` 的依赖范围（`jasmine-core: ^4.1.0`）之内的组合。调整测试依赖时，
-  > 要核对浏览器里实际加载的版本，以及通过 / 失败 / 跳过三种报告语义；只看根依赖的版本号
-  > 判断不出实际运行的是哪一份。
+  > 单元测试由 Angular 的 `@angular/build:unit-test` 构建器驱动 Vitest，在 Playwright 的无头
+  > Chromium 里运行（浏览器模式，不是 jsdom 模拟）。新机器首次运行前安装一次浏览器：
+  > `npx playwright install chromium`。
+  >
+  > - 单次运行：`npm test -- --watch=false`；覆盖率：`npm test -- --watch=false --coverage`
+  > - 观看有头浏览器：`npm test -- --browsers=chromium`
+  > - 单测使用专用构建配置 `unit-test`（`angular.json`），不做开发构建的 Mock 替换，
+  >   `_mock/core/providers.ts` 保持部署形态，Mock 相关用例才测得到两种构建的差别
+  > - `vitest-base.config.ts` 开启 `restoreMocks` 与 `unstubGlobals`：每条用例开始前还原
+  >   `vi.spyOn` 创建的替身与 `vi.stubGlobal` 替换的全局值，这两种不必手写清理；
+  >   `Object.defineProperty` 等直接修改与假计时器仍由用例自己还原
+  > - 每个 spec 文件在独立的页面里运行（`isolate: true`，构建器默认为了贴近 Karma 而共用一页）。
+  >   共用一页时多个文件并发执行，一个文件在途用例对全局对象打的桩（如 `Storage.prototype`）
+  >   会作用到另一个文件的模块初始化上，表现为偶发的"整个文件导入失败"
+  > - 用例失败时 Vitest 在 spec 旁生成 `__screenshots__/`，已被 `.gitignore` 忽略
 
 - **端到端 (E2E) 测试**：
   ```bash

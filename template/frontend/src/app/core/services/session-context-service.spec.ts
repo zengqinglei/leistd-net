@@ -14,6 +14,8 @@ import { provideTranslocoTesting } from '../i18n/transloco.testing';
 import { SettingContextService } from '../settings/setting-context-service';
 import { SettingOutputDto } from '../settings/setting.dto';
 
+import type { MockedObject } from 'vitest';
+
 function timeZoneSetting(userValue: string | null): SettingOutputDto {
   return {
     name: 'Display.TimeZone',
@@ -60,7 +62,7 @@ function languageSetting(userValue: string | null): SettingOutputDto {
 describe('SessionContextService', () => {
   let service: SessionContextService;
   let settingContext: SettingContextService;
-  let authService: jasmine.SpyObj<AuthService>;
+  let authService: Pick<MockedObject<AuthService>, 'clearAuthData'>;
   let http: HttpTestingController;
 
   beforeEach(() => {
@@ -70,7 +72,9 @@ describe('SessionContextService', () => {
     // 在系统语言为中文的机器上就红了——那不是被测行为变了，是用例依赖了环境。
     localStorage.setItem(LanguageService.STORAGE_KEY, 'en');
     //#endif
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['clearAuthData']);
+    authService = {
+      clearAuthData: vi.fn().mockName('AuthService.clearAuthData'),
+    };
     TestBed.configureTestingModule({
       //#if (IncludeLocalization)
       providers: [
@@ -129,7 +133,7 @@ describe('SessionContextService', () => {
     await flushEstablish([timeZoneSetting('Asia/Tokyo')]);
     await establish;
 
-    expect(TestBed.inject(AuthorizationService).loaded()).toBeTrue();
+    expect(TestBed.inject(AuthorizationService).loaded()).toBe(true);
     expect(settingContext.timeZone()).toBe('Asia/Tokyo');
   });
 
@@ -254,7 +258,7 @@ describe('SessionContextService', () => {
 
     // 三样都要清掉。只断言权限和设置的话，从统一清理里删掉认证那一步不会失败。
     expect(authService.clearAuthData).toHaveBeenCalled();
-    expect(TestBed.inject(AuthorizationService).loaded()).toBeFalse();
+    expect(TestBed.inject(AuthorizationService).loaded()).toBe(false);
     expect(settingContext.timeZone()).toBeUndefined();
   });
 });

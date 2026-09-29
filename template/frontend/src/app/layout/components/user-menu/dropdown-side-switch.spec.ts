@@ -35,12 +35,12 @@ class SideSwitchHost {
  * ngOnChanges，overlay 建好后新方向就被忽略，菜单仍按旧方向摆、再被推回视口——
  * 不报错，只是摆错。libs/ui 的触发器为此做了定制（见 coding-frontend.md §4.7），这里钉住。
  */
-describe('下拉菜单触发器：打开过后改方向', () => {
+describe('dropdown trigger side change after opening', () => {
   afterEach(() => {
     document.querySelectorAll('.cdk-overlay-container').forEach((el) => el.remove());
   });
 
-  it('按新方向定位', async () => {
+  it('positions the menu on the new side', async () => {
     const fixture = TestBed.createComponent(SideSwitchHost);
     fixture.detectChanges();
     const trigger = fixture.debugElement

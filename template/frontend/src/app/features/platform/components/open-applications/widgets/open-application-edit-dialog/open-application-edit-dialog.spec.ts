@@ -30,11 +30,11 @@ describe('OpenApplicationEditDialog', () => {
       imports: [HostComponent],
       // prettier-ignore
       providers: [
-        provideZonelessChangeDetection(),
-        //#if (IncludeLocalization)
-        ...provideTranslocoTesting(['en']),
-        //#endif
-      ],
+                provideZonelessChangeDetection(),
+                //#if (IncludeLocalization)
+                ...provideTranslocoTesting(['en']),
+                //#endif
+            ],
     });
 
     fixture = TestBed.createComponent(HostComponent);
@@ -48,13 +48,13 @@ describe('OpenApplicationEditDialog', () => {
     triggerText: string;
   }> {
     const trigger = document.getElementById(triggerId);
-    expect(trigger).withContext(`${triggerId} should be rendered`).not.toBeNull();
+    expect(trigger, `${triggerId} should be rendered`).not.toBeNull();
 
     trigger!.click();
     await fixture.whenStable();
 
     const options = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
-    expect(options.length).withContext(`${triggerId} should offer options`).toBeGreaterThan(1);
+    expect(options.length, `${triggerId} should offer options`).toBeGreaterThan(1);
 
     const option =
       options.find((item) => item.getAttribute('aria-selected') !== 'true') ?? options[0];

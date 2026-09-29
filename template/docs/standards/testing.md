@@ -67,6 +67,9 @@ npm run lint
 npm run build
 ```
 
+单测由 Vitest 在 Playwright 驱动的真实 Chromium 里运行（无头）。新机器首次运行前安装一次浏览器：`npx playwright install chromium`。
+
+- 用例名（`describe` / `it`）用英文句子，小写开头，写出行为与期望（如 `keeps the dialog open when saving fails`）；中文只出现在注释与测试数据里。名字装不下的前因后果写进上方注释。
 - service、pipe、复杂状态和共享组件覆盖输入、输出、空态与错误态。
 - HTTP 调用使用 mock，除非当前任务明确执行前后端集成验证。
 - 表单覆盖校验、提交、防重复操作和失败反馈。

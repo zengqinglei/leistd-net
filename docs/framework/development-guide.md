@@ -319,7 +319,7 @@ framework/tests/
 - **家族没有独立测试项目时目录不存在**，并在 `check-test-layout.py` 的 `WAIVERS` 里写明理由。
   这道闸门补的是覆盖率阈值的盲区：程序集从未被任何测试加载时根本不出现在覆盖率报告里，
   任何百分比门槛都对它无效。
-- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。
+- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。`DisplayName` 同样用英文。由 `scripts/check-test-names.py` 机械保证（同时覆盖模板前后端测试名）。
 - **csproj 只写自己的东西**：`FrameworkReference`、特有 `PackageReference`、`ProjectReference`。
   共享属性和测试包已在 `tests/Directory.Build.props` 注入，重复声明会被闸门拦下。
 
@@ -421,6 +421,8 @@ pwsh framework/build/test-package-consumption.ps1                               
 `check-all.ps1` 是**闸门清单的唯一权威来源**（文档/API 漂移、Skill、退役符号、i18n、XML 注释形态、组件文档骨架、模板三道），
 CI 也只调它一处；新增闸门加进那个脚本即可，本文件与 `ci.yml` 都不必跟着改。
 需要构建产物或跑起来才能验的不在它里面——矩阵、PostgreSQL E2E、包消费各有自己的入口。
+
+提交前代码里不留待办标记（`TODO` / `FIXME` / `HACK`），工具生成的也一样：在当期按终局做法改完，推迟的事写进计划（见[设计原则](../architecture/design-principles.md) §4）。
 
 本地 NuGet 包统一输出到仓库根 `.tmp/local-feed`，不要临时发明其它产物目录；CI 发布产物仍使用 `framework/artifacts`。包消费检查会验证 DLL、XML、随包文档和依赖闭包，并在 `.tmp/package-consumer/` 使用隔离 NuGet 配置构建最小消费项目；本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包。新增第三方包时确认已在 `framework/Directory.Packages.props` 登记；新增包发布前确认 `PackageId` 唯一。
 

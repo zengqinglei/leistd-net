@@ -28,20 +28,24 @@ describe('ExternalAuthCallback', () => {
   beforeEach(async () => {
     calls = [];
 
-    const accountService = jasmine.createSpyObj<AccountService>('AccountService', [
-      'externalLoginCallback',
-    ]);
-    accountService.externalLoginCallback.and.returnValue(of(undefined) as never);
+    const accountService = {
+      externalLoginCallback: vi.fn().mockName('AccountService.externalLoginCallback'),
+    };
+    accountService.externalLoginCallback.mockReturnValue(of(undefined) as never);
 
-    const authService = jasmine.createSpyObj<AuthService>('AuthService', ['loadUser'], {
+    const authService = {
+      loadUser: vi.fn().mockName('AuthService.loadUser'),
       currentUser: signal(null) as never,
-    });
-    authService.loadUser.and.returnValue(of(undefined) as never);
+    };
+    authService.loadUser.mockReturnValue(of(undefined) as never);
 
     const sessionContext = {
-      establish: jasmine.createSpy('establish').and.callFake(async () => {
-        calls.push('establish');
-      }),
+      establish: vi
+        .fn()
+        .mockName('establish')
+        .mockImplementation(async () => {
+          calls.push('establish');
+        }),
     };
 
     await TestBed.configureTestingModule({
@@ -68,7 +72,7 @@ describe('ExternalAuthCallback', () => {
       ],
     }).compileComponents();
 
-    spyOn(TestBed.inject(Router), 'navigate').and.callFake(async () => {
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockImplementation(async () => {
       calls.push('navigate');
       return true;
     });

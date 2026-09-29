@@ -29,6 +29,8 @@ import { TenantService } from '../../../platform/services/tenant-service';
 import { AccountService } from '../../services/account-service';
 //#endif
 
+import type { Mock, MockedObject } from 'vitest';
+
 /**
  * 登录提交路径。
  *
@@ -40,8 +42,13 @@ describe('Login', () => {
   let fixture: ComponentFixture<Login>;
   let component: Login;
   let router: Router;
-  let authService: jasmine.SpyObj<AuthService>;
-  let currentUser: WritableSignal<{ twoFactorSetupRequired?: boolean } | null>;
+  let authService: Pick<
+    MockedObject<AuthService>,
+    'login' | 'loadUser' | 'clearAuthData' | 'currentUser'
+  >;
+  let currentUser: WritableSignal<{
+    twoFactorSetupRequired?: boolean;
+  } | null>;
   let authorization: AuthorizationService;
   let queryParams: Record<string, string>;
   //#if (LocalIdentity)
@@ -50,15 +57,18 @@ describe('Login', () => {
   //#endif
 
   async function setUp(): Promise<void> {
-    currentUser = signal<{ twoFactorSetupRequired?: boolean } | null>(null);
-    authService = jasmine.createSpyObj<AuthService>(
-      'AuthService',
-      ['login', 'loadUser', 'clearAuthData'],
-      { currentUser: currentUser as never },
-    );
+    currentUser = signal<{
+      twoFactorSetupRequired?: boolean;
+    } | null>(null);
+    authService = {
+      login: vi.fn().mockName('AuthService.login'),
+      loadUser: vi.fn().mockName('AuthService.loadUser'),
+      clearAuthData: vi.fn().mockName('AuthService.clearAuthData'),
+      currentUser: currentUser as never,
+    };
     // 具体载荷与本用例无关：登录流程只关心"成功/失败"和随后的跳转。
-    authService.login.and.returnValue(of(undefined) as never);
-    authService.loadUser.and.returnValue(of(undefined) as never);
+    authService.login.mockReturnValue(of(undefined) as never);
+    authService.loadUser.mockReturnValue(of(undefined) as never);
 
     await TestBed.configureTestingModule({
       imports: [Login],
@@ -87,14 +97,14 @@ describe('Login', () => {
     // 登录成功后会建立会话上下文（拉权限 + 拉设置）来决定落地页；不打桩的话这些真实请求
     // 永远等不到响应，用例会以超时失败，而不是报出真正的断言。
     authorization = TestBed.inject(AuthorizationService);
-    spyOn(TestBed.inject(SessionContextService), 'establish').and.resolveTo();
+    vi.spyOn(TestBed.inject(SessionContextService), 'establish').mockResolvedValue();
 
     fixture = TestBed.createComponent(Login);
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
 
-    spyOn(router, 'navigateByUrl').and.resolveTo(true);
-    spyOn(router, 'navigate').and.resolveTo(true);
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     fixture.detectChanges();
   }
@@ -115,18 +125,18 @@ describe('Login', () => {
   afterEach(() => localStorage.clear());
   //#endif
 
-  it('表单非法时不发起登录请求', async () => {
+  it('does not send a login request when the form is invalid', async () => {
     await setUp();
 
     // 空表单直接提交：应停在原地并标记为已触碰，让校验信息显示出来。
     await component.onSubmit();
 
     expect(authService.login).not.toHaveBeenCalled();
-    expect(component.loginForm().touched()).toBeTrue();
-    expect(component.isLoading()).toBeFalse();
+    expect(component.loginForm().touched()).toBe(true);
+    expect(component.isLoading()).toBe(false);
   });
 
-  it('登录成功后跳转到安全的本地 returnUrl', async () => {
+  it('navigates to a safe local returnUrl after a successful login', async () => {
     queryParams = { returnUrl: '/platform/users' };
     await setUp();
     fillValidCredentials();
@@ -137,9 +147,9 @@ describe('Login', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/platform/users');
   });
 
-  it('已启用两步验证时换成验证码那一步，不取当前用户也不跳转', async () => {
+  it('switches to the verification code step when two-factor is enabled, without loading the current user or navigating', async () => {
     await setUp();
-    authService.login.and.returnValue(
+    authService.login.mockReturnValue(
       of({ requiresTwoFactor: true, twoFactorToken: 'challenge-token' }) as never,
     );
     fillValidCredentials();
@@ -154,9 +164,9 @@ describe('Login', () => {
     ).not.toBeNull();
   });
 
-  it('受限会话（组织要求两步验证）直接去设置页，不建立会话上下文', async () => {
+  it('sends a restricted session (organization requires two-factor) straight to the setup page without establishing session context', async () => {
     await setUp();
-    authService.loadUser.and.callFake(() => {
+    authService.loadUser.mockImplementation(() => {
       currentUser.set({ twoFactorSetupRequired: true });
       return of(undefined) as never;
     });
@@ -169,7 +179,7 @@ describe('Login', () => {
   });
 
   for (const hostile of ['//evil.example.com', 'https://evil.example.com', 'javascript://evil']) {
-    it(`丢弃指向站外的 returnUrl：${hostile}`, async () => {
+    it(`discards an off-site returnUrl: ${hostile}`, async () => {
       queryParams = { returnUrl: hostile };
       await setUp();
       fillValidCredentials();
@@ -182,15 +192,15 @@ describe('Login', () => {
     });
   }
 
-  it('会话建立失败时只弹失败提示，不弹成功提示', async () => {
+  it('shows only the failure toast, not the success toast, when establishing the session fails', async () => {
     await setUp();
     fillValidCredentials();
-    (TestBed.inject(SessionContextService).establish as jasmine.Spy).and.rejectWith(
+    (TestBed.inject(SessionContextService).establish as Mock).mockRejectedValue(
       new Error('settings unavailable'),
     );
     // toast 是模块级单例对象，组件与此处引用同一个，改它的方法组件立刻看得见。
-    const success = spyOn(toast, 'success');
-    const error = spyOn(toast, 'error');
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     await component.onSubmit();
 
@@ -202,10 +212,10 @@ describe('Login', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
-  it('登录失败时不跳转，并复位加载状态', async () => {
+  it('does not navigate and resets the loading state when login fails', async () => {
     await setUp();
     fillValidCredentials();
-    authService.login.and.returnValue(throwError(() => new Error('bad credentials')));
+    authService.login.mockReturnValue(throwError(() => new Error('bad credentials')));
 
     await component.onSubmit();
 
@@ -213,10 +223,10 @@ describe('Login', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
 
     // 加载状态卡住的话，按钮会一直转，用户只能刷新页面。
-    expect(component.isLoading()).toBeFalse();
+    expect(component.isLoading()).toBe(false);
   });
 
-  it('登录到受保护的 returnUrl 时，权限先加载完再导航', async () => {
+  it('loads permissions before navigating when logging in to a protected returnUrl', async () => {
     queryParams = { returnUrl: '/protected' };
     await setUp();
     fillValidCredentials();
@@ -225,8 +235,8 @@ describe('Login', () => {
     // spy 掉 Router 只能验到"调用了 navigateByUrl"，验不到导航之后 guard 怎么判。
     // 进登录页时会话上下文已被清空；若在建立它之前就跳转，
     // guard 会在空权限下判定并把人踢到 403——从深链登录本该落到那个页面。
-    (router.navigateByUrl as jasmine.Spy).and.callThrough();
-    (TestBed.inject(SessionContextService).establish as jasmine.Spy).and.callFake(async () => {
+    vi.mocked(router.navigateByUrl).mockRestore();
+    (TestBed.inject(SessionContextService).establish as Mock).mockImplementation(async () => {
       authorization.setPermissions({
         permissions: [PERMISSIONS.users.default],
         isSuperAdmin: false,
@@ -249,7 +259,7 @@ describe('Login', () => {
     expect(router.url).toBe('/protected');
   });
 
-  it('按权限决定落地页，而不是按角色名或超管标志', async () => {
+  it('chooses the landing page by permissions rather than by role name or super-admin flag', async () => {
     await setUp();
     fillValidCredentials();
 
@@ -260,7 +270,7 @@ describe('Login', () => {
     await component.onSubmit();
     expect(router.navigate).toHaveBeenCalledWith(['/workspace']);
 
-    (router.navigate as jasmine.Spy).calls.reset();
+    (router.navigate as Mock).mockClear();
     authorization.setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: false,
@@ -278,7 +288,7 @@ describe('Login', () => {
    * 宿主域上会残留上次记住的租户，而服务端已按宿主处理请求——
    * 界面显示的和实际生效的不是同一个租户上下文，登录会落在用户没选的那一侧。
    */
-  describe('按主机名定案租户', () => {
+  describe('tenant resolution by host name', () => {
     // 匿名 by-host 只回租户名：回 id / 展示名 / 启用状态都会泄露"这个租户存在"
     const domainTenant = { name: 'acme' };
 
@@ -292,42 +302,42 @@ describe('Login', () => {
       localStorage.setItem('app.tenant', JSON.stringify({ key: 'remembered' }));
     }
 
-    it('域名指向租户：定住该租户且不再允许手选', async () => {
+    it('host name points to a tenant: pins that tenant and disallows manual selection', async () => {
       byHost = of({ decision: 'tenant' as const, tenant: domainTenant });
       await setUp();
 
       expect(TestBed.inject(TenantContextService).current()?.key).toBe('acme');
-      expect(component.tenantLocked()).toBeTrue();
-      expect(component.tenantSelectionBlocked()).toBeTrue();
+      expect(component.tenantLocked()).toBe(true);
+      expect(component.tenantSelectionBlocked()).toBe(true);
     });
 
-    it('域名定案为宿主：清掉记住的租户，也不允许再选', async () => {
+    it('host name resolves to the host: clears the remembered tenant and disallows selection', async () => {
       byHost = of({ decision: 'host' as const });
       rememberTenant();
       await setUp();
 
       expect(TestBed.inject(TenantContextService).current()).toBeNull();
-      expect(component.tenantLocked()).toBeTrue();
+      expect(component.tenantLocked()).toBe(true);
     });
 
-    it('域名不表态：保留记住的租户，仍可手选', async () => {
+    it('host name is undecided: keeps the remembered tenant and still allows manual selection', async () => {
       byHost = of({ decision: 'undecided' as const });
       rememberTenant();
       await setUp();
 
       expect(TestBed.inject(TenantContextService).current()?.key).toBe('remembered');
-      expect(component.tenantLocked()).toBeFalse();
-      expect(component.tenantSelectionBlocked()).toBeFalse();
+      expect(component.tenantLocked()).toBe(false);
+      expect(component.tenantSelectionBlocked()).toBe(false);
     });
 
     // 域名指向的租户不在库里（或已停用）：这个部署当前用不了。
     // 不能退回"让用户自己挑一个"——挑了也会被域名覆盖。
-    it('域名指向的租户不可用：清空、保持锁定并给出提示', async () => {
+    it('tenant from the host name is unavailable: clears it, stays locked, and shows a message', async () => {
       byHost = of({ decision: 'tenant' as const });
       await setUp();
 
       expect(TestBed.inject(TenantContextService).current()).toBeNull();
-      expect(component.tenantLocked()).toBeTrue();
+      expect(component.tenantLocked()).toBe(true);
       expect(component.tenantError()).toBeTruthy();
     });
 
@@ -338,13 +348,13 @@ describe('Login', () => {
      * "域名指向的租户解析不了"（租户解析中间件直接 404）或后端不可达。把它折进 undecided，
      * 就是在不知道域名会怎么解析的情况下让人手选一个注定被覆盖的租户，然后带着它去登录。
      */
-    it('探测失败不当作域名不表态：不开放手选、不放行登录，并给出原因', async () => {
+    it('probe failure is not treated as undecided: blocks manual selection and login and explains why', async () => {
       byHost = throwError(() => new Error('offline'));
       await setUp();
       fillValidCredentials();
 
       expect(component.hostProbe()).toBe('failed');
-      expect(component.tenantSelectionBlocked()).toBeTrue();
+      expect(component.tenantSelectionBlocked()).toBe(true);
       expect(component.tenantError()).toBeTruthy();
 
       // 清除也算一次手动改租户：同样不放行，否则用户能在"不知道域名会怎么解析"时
@@ -359,18 +369,18 @@ describe('Login', () => {
     });
 
     // 挡住之后必须给一条出路：瞬时故障不该让人只剩"刷新整页"，尤其表单可能已经填好。
-    it('探测失败后可以重试，重试拿到定案即恢复', async () => {
+    it('can retry after a probe failure and recovers once the retry gets a decision', async () => {
       byHost = throwError(() => new Error('offline'));
       await setUp();
-      expect(component.authBlocked()).toBeTrue();
+      expect(component.authBlocked()).toBe(true);
 
       byHost = of({ decision: 'undecided' as const });
       await component.retryHostProbe();
 
       expect(component.hostProbe()).toBe('undecided');
-      expect(component.authBlocked()).toBeFalse();
+      expect(component.authBlocked()).toBe(false);
       expect(component.tenantError()).toBeNull();
-      expect(component.tenantSelectionBlocked()).toBeFalse();
+      expect(component.tenantSelectionBlocked()).toBe(false);
     });
 
     /**
@@ -379,12 +389,12 @@ describe('Login', () => {
      * 服务端按主机名解析租户且不接受请求头改写：此时提交，界面上显示着上次记住的租户，
      * 请求却落到域名对应的那个上下文里，而探测响应随后又会把前端状态改掉。
      */
-    it('探测未回来时不发认证请求', async () => {
+    it('does not send an authentication request while the probe is pending', async () => {
       byHost = new Observable<TenantByHostOutputDto>(() => undefined);
       await setUp();
       fillValidCredentials();
 
-      expect(component.authBlocked()).toBeTrue();
+      expect(component.authBlocked()).toBe(true);
 
       await component.onSubmit();
 
@@ -393,13 +403,13 @@ describe('Login', () => {
 
     // 反向的一条：域名已定案时禁止**选择**，但恰恰应该放行登录。
     // 把两件事共用一个条件，就会把子域名部署的登录整个挡死。
-    it('域名已定案时禁止选择、但照常放行登录', async () => {
+    it('blocks selection but still allows login when the host name is decided', async () => {
       byHost = of({ decision: 'tenant' as const, tenant: domainTenant });
       await setUp();
       fillValidCredentials();
 
-      expect(component.tenantSelectionBlocked()).toBeTrue();
-      expect(component.authBlocked()).toBeFalse();
+      expect(component.tenantSelectionBlocked()).toBe(true);
+      expect(component.authBlocked()).toBe(false);
 
       await component.onSubmit();
 
@@ -408,10 +418,12 @@ describe('Login', () => {
     //#if (ExternalLogin)
 
     // 第三方登录走的是同一条约束：回调最终也落在按主机名解析出的那个上下文里。
-    it('探测未回来时第三方登录也不发起', async () => {
+    it('does not start external login while the probe is pending', async () => {
       byHost = new Observable<TenantByHostOutputDto>(() => undefined);
       await setUp();
-      const externalLogin = spyOn(TestBed.inject(AccountService), 'getExternalLoginUrl');
+      const externalLogin = vi
+        .spyOn(TestBed.inject(AccountService), 'getExternalLoginUrl')
+        .mockReturnValue(of());
 
       component.loginWithGitHub();
 
@@ -420,11 +432,11 @@ describe('Login', () => {
     //#endif
 
     // 探测未回来时不接受手选：它一回来就会覆盖上下文，此时选的会被无声换掉。
-    it('探测未回来时租户区不可操作，且手选被忽略', async () => {
+    it('disables the tenant area and ignores manual selection while the probe is pending', async () => {
       byHost = new Observable<TenantByHostOutputDto>(() => undefined);
       await setUp();
 
-      expect(component.tenantSelectionBlocked()).toBeTrue();
+      expect(component.tenantSelectionBlocked()).toBe(true);
 
       component.tenantName.set('acme');
       await component.onConfirmTenant();

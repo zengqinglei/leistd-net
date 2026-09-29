@@ -58,34 +58,34 @@ describe('permissionGuard', () => {
     });
   });
 
-  it('未声明权限的路由只要求已认证', async () => {
-    await expectAsync(runGuard({})).toBeResolvedTo(true);
+  it('requires only authentication for routes without declared permissions', async () => {
+    await expect(runGuard({})).resolves.toEqual(true);
   });
 
-  it('单个 permission 满足时放行', async () => {
-    await expectAsync(runGuard({ permission: PERMISSIONS.users.default })).toBeResolvedTo(true);
+  it('allows access when the single permission is granted', async () => {
+    await expect(runGuard({ permission: PERMISSIONS.users.default })).resolves.toEqual(true);
   });
 
-  it('permissions 是"任一满足"而不是"全部满足"', async () => {
-    await expectAsync(
+  it('treats permissions as any-of rather than all-of', async () => {
+    await expect(
       runGuard({ permissions: [PERMISSIONS.roles.default, PERMISSIONS.users.default] }),
-    ).toBeResolvedTo(true);
+    ).resolves.toEqual(true);
   });
 
-  it('permission 与 permissions 并存时合并判定', async () => {
-    await expectAsync(
+  it('combines permission and permissions when both are declared', async () => {
+    await expect(
       runGuard({ permission: PERMISSIONS.users.default, permissions: [PERMISSIONS.roles.default] }),
-    ).toBeResolvedTo(true);
+    ).resolves.toEqual(true);
   });
 
-  it('都不满足时跳 403 而不是登录页', async () => {
+  it('redirects to 403 instead of the login page when nothing is granted', async () => {
     const result = await runGuard({ permission: PERMISSIONS.roles.default });
 
-    expect(result instanceof UrlTree).toBeTrue();
+    expect(result instanceof UrlTree).toBe(true);
     expect(router.serializeUrl(result as UrlTree)).toBe('/403-forbidden');
   });
 
-  it('不继承父路由的宽松声明', async () => {
+  it('does not inherit the looser declaration of the parent route', async () => {
     // 复刻真实路由的形状：父路由用 permissions 数组（"拥有任一平台权限即可进平台区"），
     // 子路由用单个 permission。两个键不同名，合并后会同时保留——这才是能触发
     // any-of 错误放行的组合。若两边用同一个键，子会覆盖父，无论守卫读
@@ -98,10 +98,10 @@ describe('permissionGuard', () => {
       { permissions: [PERMISSIONS.users.default] },
     );
 
-    expect(result instanceof UrlTree).toBeTrue();
+    expect(result instanceof UrlTree).toBe(true);
   });
 
-  it('等到启动流结束后再判定，不在 loading 阶段抢答', async () => {
+  it('waits for startup to finish instead of deciding during loading', async () => {
     status.set('loading');
 
     let settled = false;
@@ -111,10 +111,10 @@ describe('permissionGuard', () => {
     });
 
     await Promise.resolve();
-    expect(settled).toBeFalse();
+    expect(settled).toBe(false);
 
     // 权限只在启动流结束后可信；在此之前既不能放行受保护页面，也不能拒绝刷新。
     status.set('success');
-    await expectAsync(pending).toBeResolvedTo(true);
+    await expect(pending).resolves.toEqual(true);
   });
 });

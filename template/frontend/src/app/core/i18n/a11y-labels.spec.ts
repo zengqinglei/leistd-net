@@ -37,7 +37,7 @@ class SidebarTriggerHost {}
 })
 class DialogContentHost {}
 
-describe('libs/ui 的读屏文案', () => {
+describe('libs/ui screen reader labels', () => {
   function configure(): void {
     TestBed.configureTestingModule({
       providers: [
@@ -53,11 +53,11 @@ describe('libs/ui 的读屏文案', () => {
     const fixture = TestBed.createComponent(host);
     fixture.detectChanges();
     const label = fixture.nativeElement.querySelector('.sr-only') as HTMLElement | null;
-    expect(label).withContext('没有渲染出 sr-only 读屏文案').not.toBeNull();
+    expect(label, '没有渲染出 sr-only 读屏文案').not.toBeNull();
     return label!.textContent!.trim();
   }
 
-  it('侧栏折叠开关读出当前语言的名字，而不是写死的英文', async () => {
+  it('labels the sidebar toggle in the active language, not hardcoded English', async () => {
     configure();
     const transloco = TestBed.inject(TranslocoService);
     // 先把词条装好再切语言：令牌工厂在组件创建时才跑，那时 selectTranslate 必须能立刻给出值，
@@ -71,7 +71,7 @@ describe('libs/ui 的读屏文案', () => {
     expect(text).not.toBe('Toggle Sidebar');
   });
 
-  it('对话框关闭按钮读出当前语言的名字，而不是写死的英文', async () => {
+  it('labels the dialog close button in the active language, not hardcoded English', async () => {
     configure();
     const transloco = TestBed.inject(TranslocoService);
     // 先把词条装好再切语言：令牌工厂在组件创建时才跑，那时 selectTranslate 必须能立刻给出值，

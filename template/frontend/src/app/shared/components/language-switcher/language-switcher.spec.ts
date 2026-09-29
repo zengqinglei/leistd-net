@@ -13,6 +13,8 @@ import { LanguageService } from '../../../core/services/language-service';
 import { SettingContextService } from '../../../core/settings/setting-context-service';
 import { SettingService } from '../../../core/settings/setting-service';
 
+import type { MockedObject } from 'vitest';
+
 /**
  * 语言选择的归属：切换器是唯一决定「这次选择算谁的」的地方。
  *
@@ -22,14 +24,18 @@ import { SettingService } from '../../../core/settings/setting-service';
  */
 describe('LanguageSwitcher', () => {
   let component: LanguageSwitcher;
-  let authService: jasmine.SpyObj<AuthService>;
-  let settingService: jasmine.SpyObj<SettingService>;
+  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated'>;
+  let settingService: Pick<MockedObject<SettingService>, 'setForCurrentUser'>;
 
   function setUp(authenticated: boolean): void {
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['isAuthenticated']);
-    authService.isAuthenticated.and.returnValue(authenticated);
-    settingService = jasmine.createSpyObj<SettingService>('SettingService', ['setForCurrentUser']);
-    settingService.setForCurrentUser.and.returnValue(of(undefined));
+    authService = {
+      isAuthenticated: vi.fn().mockName('AuthService.isAuthenticated'),
+    };
+    authService.isAuthenticated.mockReturnValue(authenticated);
+    settingService = {
+      setForCurrentUser: vi.fn().mockName('SettingService.setForCurrentUser'),
+    };
+    settingService.setForCurrentUser.mockReturnValue(of(undefined));
 
     TestBed.configureTestingModule({
       imports: [LanguageSwitcher],
@@ -70,7 +76,7 @@ describe('LanguageSwitcher', () => {
    * 与切换器改的是同一个东西，所以不存在"等服务端确认后才跟上"的中间态；
    * 若哪天又改回从设置快照推导，这条就会红。
    */
-  it('切语言后日期的书写方式立刻跟着变，不必等设置写回', () => {
+  it('switches the date format with the language without waiting for the setting write', () => {
     setUp(true);
     const settingContext = TestBed.inject(SettingContextService);
     expect(settingContext.displayLocale()).toBe('en');
@@ -82,10 +88,10 @@ describe('LanguageSwitcher', () => {
 
   // 写回失败同理：界面已经切了，日期不能留在旧语言上——那会是永久性的分叉，
   // 而不是一瞬间的不同步。
-  it('账户写回失败也不让文案与日期分叉', () => {
+  it('keeps text and dates in sync even when the account write fails', () => {
     setUp(true);
-    settingService.setForCurrentUser.and.returnValue(throwError(() => new Error('network down')));
-    spyOn(toast, 'error');
+    settingService.setForCurrentUser.mockReturnValue(throwError(() => new Error('network down')));
+    vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     component.select('zh-CN');
 
@@ -95,8 +101,8 @@ describe('LanguageSwitcher', () => {
 
   it('says so when the account write fails, instead of swallowing it', () => {
     setUp(true);
-    settingService.setForCurrentUser.and.returnValue(throwError(() => new Error('network down')));
-    const error = spyOn(toast, 'error');
+    settingService.setForCurrentUser.mockReturnValue(throwError(() => new Error('network down')));
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     component.select('zh-CN');
 

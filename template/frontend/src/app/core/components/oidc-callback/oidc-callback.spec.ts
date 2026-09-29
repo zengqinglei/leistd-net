@@ -5,6 +5,8 @@ import { Router, provideRouter } from '@angular/router';
 import { OidcCallback } from './oidc-callback';
 import { AuthService } from '../../services/auth-service';
 
+import type { Mock } from 'vitest';
+
 /**
  * OIDC 回调的落地导航。
  *
@@ -16,11 +18,11 @@ import { AuthService } from '../../services/auth-service';
  */
 describe('OidcCallback', () => {
   let navigated: string[];
-  let takeReturnUrl: jasmine.Spy<() => string>;
+  let takeReturnUrl: Mock;
 
   beforeEach(() => {
     navigated = [];
-    takeReturnUrl = jasmine.createSpy('takeReturnUrl');
+    takeReturnUrl = vi.fn().mockName('takeReturnUrl');
 
     TestBed.configureTestingModule({
       providers: [
@@ -29,14 +31,14 @@ describe('OidcCallback', () => {
         { provide: AuthService, useValue: { takeReturnUrl } },
       ],
     });
-    spyOn(TestBed.inject(Router), 'navigateByUrl').and.callFake(async (url) => {
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockImplementation(async (url) => {
       navigated.push(String(url));
       return true;
     });
   });
 
   function createWith(returnUrl: string): void {
-    takeReturnUrl.and.returnValue(returnUrl);
+    takeReturnUrl.mockReturnValue(returnUrl);
     TestBed.createComponent(OidcCallback);
   }
 

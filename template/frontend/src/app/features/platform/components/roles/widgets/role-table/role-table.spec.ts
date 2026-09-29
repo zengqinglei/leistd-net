@@ -71,7 +71,7 @@ describe('RoleTable', () => {
     fixture.detectChanges();
   });
 
-  it('当前页与总页数按父级传入的分页状态派生', () => {
+  it("derives the current page and page count from the parent's paging state", () => {
     expect(component.currentPage()).toBe(1);
     expect(component.totalPages()).toBe(3); // 25 条 / 每页 10
 
@@ -81,7 +81,7 @@ describe('RoleTable', () => {
     expect(component.currentPage()).toBe(2);
   });
 
-  it('改每页条数时回到第一页', () => {
+  it('returns to the first page when rows per page changes', () => {
     fixture.componentRef.setInput('pagination', { pageIndex: 2, pageSize: 10 } as PaginationState);
     fixture.detectChanges();
 
@@ -93,7 +93,7 @@ describe('RoleTable', () => {
     expect(emitted).toEqual([{ pageIndex: 0, pageSize: 100 }]);
   });
 
-  it('点击排序在升序与降序之间切换，并回传排序意图', () => {
+  it('toggles between ascending and descending on sort click and emits the sort intent', () => {
     const emitted: SortingState[] = [];
     component.sortingChange.subscribe((value) => emitted.push(value));
 
@@ -107,32 +107,32 @@ describe('RoleTable', () => {
     expect(emitted[1]).toEqual([{ id: 'displayName', desc: true }]);
   });
 
-  it('一个可用操作都没有时不渲染溢出菜单', () => {
+  it('does not render the overflow menu when no action is available', () => {
     fixture.componentRef.setInput('canUpdate', false);
     fixture.componentRef.setInput('canDelete', false);
     fixture.componentRef.setInput('canManagePermissions', false);
     fixture.detectChanges();
 
-    expect(component.hasRowActions()).toBeFalse();
+    expect(component.hasRowActions()).toBe(false);
 
     fixture.componentRef.setInput('canManagePermissions', true);
     fixture.detectChanges();
-    expect(component.hasRowActions()).toBeTrue();
+    expect(component.hasRowActions()).toBe(true);
   });
 
-  it('窄视口下标记存在被折叠的列', () => {
-    expect(component.hasCollapsedColumns()).toBeFalse();
+  it('flags collapsed columns on a narrow viewport', () => {
+    expect(component.hasCollapsedColumns()).toBe(false);
 
     viewport.next(desktop(false));
     fixture.detectChanges();
 
-    expect(component.hasCollapsedColumns()).toBeTrue();
+    expect(component.hasCollapsedColumns()).toBe(true);
   });
 
-  it('行展开状态按行独立记录', () => {
+  it('tracks the expanded state per row', () => {
     component.toggleRow('1');
 
-    expect(component.isRowExpanded('1')).toBeTrue();
-    expect(component.isRowExpanded('2')).toBeFalse();
+    expect(component.isRowExpanded('1')).toBe(true);
+    expect(component.isRowExpanded('2')).toBe(false);
   });
 });

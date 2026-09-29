@@ -24,10 +24,10 @@ describe('AuthService', () => {
     const initialization = service.initializeAuth();
     const request = httpTesting.expectOne('/api/v1/auth/me');
 
-    expect(request.request.context.get(SILENT_AUTH)).toBeTrue();
+    expect(request.request.context.get(SILENT_AUTH)).toBe(true);
     request.flush(null, { status: 401, statusText: 'Unauthorized' });
 
-    await expectAsync(initialization).toBeRejected();
+    await expect(initialization).rejects.toThrow();
   });
 
   it('propagates startup probe failures so callers can distinguish outages from 401', async () => {
@@ -36,8 +36,8 @@ describe('AuthService', () => {
       .expectOne('/api/v1/auth/me')
       .flush({ detail: 'Gateway unavailable' }, { status: 503, statusText: 'Unavailable' });
 
-    await expectAsync(initialization).toBeRejected();
-    expect(service.isAuthenticated()).toBeFalse();
+    await expect(initialization).rejects.toThrow();
+    expect(service.isAuthenticated()).toBe(false);
   });
 });
 //#endif
@@ -49,18 +49,20 @@ import { of } from 'rxjs';
 import { AuthService } from './auth-service';
 import { TenantContextService } from './tenant-context-service';
 
+import type { MockedObject } from 'vitest';
+
 describe('Resource AuthService', () => {
-  let oidc: jasmine.SpyObj<OidcSecurityService>;
+  let oidc: Pick<MockedObject<OidcSecurityService>, 'checkAuth' | 'authorize' | 'logoff'>;
   let service: AuthService;
   let tenantContext: TenantContextService;
 
   beforeEach(() => {
-    oidc = jasmine.createSpyObj<OidcSecurityService>('OidcSecurityService', [
-      'checkAuth',
-      'authorize',
-      'logoff',
-    ]);
-    oidc.logoff.and.returnValue(of(undefined));
+    oidc = {
+      checkAuth: vi.fn().mockName('OidcSecurityService.checkAuth'),
+      authorize: vi.fn().mockName('OidcSecurityService.authorize'),
+      logoff: vi.fn().mockName('OidcSecurityService.logoff'),
+    };
+    oidc.logoff.mockReturnValue(of(undefined));
     TestBed.configureTestingModule({
       providers: [
         AuthService,
@@ -77,7 +79,7 @@ describe('Resource AuthService', () => {
   // 时形成死等。所以认证只确立主体，落地地址留给回调组件取。
   it('establishes the subject without consuming the return url', async () => {
     sessionStorage.setItem('app.auth.returnUrl', '/platform/users');
-    oidc.checkAuth.and.returnValue(
+    oidc.checkAuth.mockReturnValue(
       of({
         isAuthenticated: true,
         accessToken: jwt({ sub: crypto.randomUUID(), tenant_id: crypto.randomUUID() }),
@@ -89,7 +91,7 @@ describe('Resource AuthService', () => {
     try {
       await service.initializeAuth();
 
-      expect(service.isAuthenticated()).toBeTrue();
+      expect(service.isAuthenticated()).toBe(true);
       // 落地地址还在：导航不在这一步做
       expect(sessionStorage.getItem('app.auth.returnUrl')).toBe('/platform/users');
     } finally {
@@ -112,7 +114,7 @@ describe('Resource AuthService', () => {
 
   it('establishes tenant context only from the validated access token', async () => {
     const tenantId = '019ff8ed-221b-7673-9ba8-6b6dd5a638ab';
-    oidc.checkAuth.and.returnValue(
+    oidc.checkAuth.mockReturnValue(
       of({
         isAuthenticated: true,
         accessToken: jwt({ sub: crypto.randomUUID(), tenant_id: tenantId, email: 'user@test.dev' }),
@@ -123,12 +125,12 @@ describe('Resource AuthService', () => {
 
     await service.initializeAuth();
 
-    expect(service.isAuthenticated()).toBeTrue();
+    expect(service.isAuthenticated()).toBe(true);
     expect(tenantContext.current()?.key).toBe(tenantId);
   });
 
   it('rejects an authenticated token with multiple tenant claims', async () => {
-    oidc.checkAuth.and.returnValue(
+    oidc.checkAuth.mockReturnValue(
       of({
         isAuthenticated: true,
         accessToken: jwt({ tenant_id: [crypto.randomUUID(), crypto.randomUUID()] }),
@@ -137,7 +139,7 @@ describe('Resource AuthService', () => {
       }),
     );
 
-    await expectAsync(service.initializeAuth()).toBeRejected();
+    await expect(service.initializeAuth()).rejects.toThrow();
     expect(tenantContext.current()).toBeNull();
   });
 });

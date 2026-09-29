@@ -4,8 +4,8 @@ param(
     [string[]]$Scenarios = @(),
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
-    [ValidateSet("ChromeHeadless", "Chrome")]
-    [string]$FrontendBrowser = "ChromeHeadless",
+    [ValidateSet("chromiumHeadless", "chromium")]
+    [string]$FrontendBrowser = "chromiumHeadless",
     [switch]$SkipPack,
     [string]$LocalFeedPath,
     [switch]$SkipFrontend,
@@ -800,7 +800,7 @@ foreach ($scenario in $Scenarios) {
         Invoke-External "npm" @("run", "build") $frontendRoot
         $frontendValidated = $true
 
-        # 前端单测（单次）：CI 默认 ChromeHeadless，人工验收可传 -FrontendBrowser Chrome 观看有头浏览器。
+        # 前端单测（单次）：CI 默认 chromiumHeadless，人工验收可传 -FrontendBrowser chromium 观看有头浏览器。
         # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含 translationReady 首帧回归测试。
         Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
         $testValidated = $true

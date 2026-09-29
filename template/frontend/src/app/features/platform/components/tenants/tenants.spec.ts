@@ -24,16 +24,21 @@ import {
 import { PERMISSIONS } from '../../../../shared/models/permission';
 import { TenantService } from '../../services/tenant-service';
 
+import type { MockedObject } from 'vitest';
+
 /**
  * 租户页面的查询与写操作闭环。与用户/角色页各写一份：三个页面各自实现这一层，
  * 其中一个接线写错，另外两个的用例不会有任何反应。
  */
-describe('Tenants 页面闭环', () => {
+describe('Tenants page query and write flow', () => {
   let fixture: ComponentFixture<Tenants>;
   let component: Tenants;
   let router: Router;
-  let service: jasmine.SpyObj<TenantService>;
-  let confirm: jasmine.SpyObj<ConfirmService>;
+  let service: Pick<
+    MockedObject<TenantService>,
+    'getTenants' | 'createTenant' | 'updateTenant' | 'setActivation' | 'deleteTenant'
+  >;
+  let confirm: Pick<MockedObject<ConfirmService>, 'open'>;
 
   const tenant: TenantOutputDto = {
     id: '019ff8ed-221b-7673-9ba8-6b6dd5a638ab',
@@ -45,8 +50,8 @@ describe('Tenants 页面闭环', () => {
 
   /** 最近一次列表请求的参数。 */
   function lastQuery(): GetTenantsInputDto {
-    const calls = service.getTenants.calls.all();
-    const query = calls[calls.length - 1]?.args[0];
+    const calls = vi.mocked(service.getTenants).mock.calls;
+    const query = calls.at(-1)?.[0];
     if (!query) {
       throw new Error('列表请求从未发出');
     }
@@ -73,21 +78,23 @@ describe('Tenants 页面闭环', () => {
   };
 
   beforeEach(async () => {
-    service = jasmine.createSpyObj<TenantService>('TenantService', [
-      'getTenants',
-      'createTenant',
-      'updateTenant',
-      'setActivation',
-      'deleteTenant',
-    ]);
-    service.getTenants.and.returnValue(of({ items: [tenant], totalCount: 1 }) as never);
-    service.createTenant.and.returnValue(of(tenant) as never);
-    service.updateTenant.and.returnValue(of(tenant) as never);
-    service.setActivation.and.returnValue(of(tenant) as never);
-    service.deleteTenant.and.returnValue(of(undefined) as never);
+    service = {
+      getTenants: vi.fn().mockName('TenantService.getTenants'),
+      createTenant: vi.fn().mockName('TenantService.createTenant'),
+      updateTenant: vi.fn().mockName('TenantService.updateTenant'),
+      setActivation: vi.fn().mockName('TenantService.setActivation'),
+      deleteTenant: vi.fn().mockName('TenantService.deleteTenant'),
+    };
+    service.getTenants.mockReturnValue(of({ items: [tenant], totalCount: 1 }) as never);
+    service.createTenant.mockReturnValue(of(tenant) as never);
+    service.updateTenant.mockReturnValue(of(tenant) as never);
+    service.setActivation.mockReturnValue(of(tenant) as never);
+    service.deleteTenant.mockReturnValue(of(undefined) as never);
 
-    confirm = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['open']);
-    confirm.open.and.resolveTo(true);
+    confirm = {
+      open: vi.fn().mockName('ConfirmService.open'),
+    };
+    confirm.open.mockResolvedValue(true);
 
     await TestBed.configureTestingModule({
       imports: [Tenants],
@@ -122,7 +129,7 @@ describe('Tenants 页面闭环', () => {
     fixture.detectChanges();
   });
 
-  it('翻页写进 URL，并按新页码重新请求', async () => {
+  it('writes paging to the URL and refetches with the new page', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -132,20 +139,18 @@ describe('Tenants 页面闭环', () => {
     expect(lastQuery().limit).toBe(20);
   });
 
-  it('URL 状态回填组件：刷新与前进后退可复原', async () => {
+  it('restores component state from the URL on reload and back/forward navigation', async () => {
     await router.navigate(['/platform/tenants'], {
       queryParams: { page: 2, pageSize: 50, keyword: 'acme' },
     });
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(component.pagination()).toEqual(
-      jasmine.objectContaining({ pageIndex: 1, pageSize: 50 }),
-    );
+    expect(component.pagination()).toEqual(expect.objectContaining({ pageIndex: 1, pageSize: 50 }));
     expect(lastQuery().keyword).toBe('acme');
   });
 
-  it('搜索经防抖写进 URL 并回到第一页', async () => {
+  it('writes the debounced search to the URL and returns to the first page', async () => {
     table().paginationChange.emit({ pageIndex: 3, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -158,19 +163,19 @@ describe('Tenants 页面闭环', () => {
     expect(lastQuery().offset).toBe(0);
   });
 
-  it('启停经确认后调用接口并刷新列表', async () => {
-    const before = service.getTenants.calls.count();
+  it('toggles activation via the API after confirmation and refreshes the list', async () => {
+    const before = vi.mocked(service.getTenants).mock.calls.length;
 
     table().toggleActive.emit(tenant);
     await fixture.whenStable();
 
     expect(confirm.open).toHaveBeenCalled();
     expect(service.setActivation).toHaveBeenCalledWith(tenant.id, false);
-    expect(service.getTenants.calls.count()).toBeGreaterThan(before);
+    expect(vi.mocked(service.getTenants).mock.calls.length).toBeGreaterThan(before);
   });
 
-  it('新建保存走创建接口，成功后关闭对话框并刷新列表', async () => {
-    const before = service.getTenants.calls.count();
+  it('saves a new tenant via the create API, then closes the dialog and refreshes the list', async () => {
+    const before = vi.mocked(service.getTenants).mock.calls.length;
 
     component.openCreate();
     fixture.detectChanges();
@@ -182,11 +187,11 @@ describe('Tenants 页面闭环', () => {
     expect(service.createTenant).toHaveBeenCalledWith(newTenantPayload);
     expect(service.updateTenant).not.toHaveBeenCalled();
 
-    expect(component.editDialogOpen()).toBeFalse();
-    expect(service.getTenants.calls.count()).toBeGreaterThan(before);
+    expect(component.editDialogOpen()).toBe(false);
+    expect(vi.mocked(service.getTenants).mock.calls.length).toBeGreaterThan(before);
   });
 
-  it('编辑保存带上被编辑租户的 Id 走更新接口', async () => {
+  it('saves an edit via the update API with the Id of the edited tenant', async () => {
     component.openEdit(tenant);
     fixture.detectChanges();
 
@@ -196,11 +201,11 @@ describe('Tenants 页面闭环', () => {
 
     expect(service.updateTenant).toHaveBeenCalledWith(tenant.id, payload);
     expect(service.createTenant).not.toHaveBeenCalled();
-    expect(component.editDialogOpen()).toBeFalse();
+    expect(component.editDialogOpen()).toBe(false);
   });
 
-  it('保存失败时对话框保持打开，不丢用户已填内容', async () => {
-    service.createTenant.and.returnValue(throwError(() => new Error('boom')) as never);
+  it('keeps the dialog open without losing user input when saving fails', async () => {
+    service.createTenant.mockReturnValue(throwError(() => new Error('boom')) as never);
 
     component.openCreate();
     fixture.detectChanges();
@@ -209,21 +214,21 @@ describe('Tenants 页面闭环', () => {
     await fixture.whenStable();
 
     // 关掉对话框等于连同用户填的表单一起丢掉，只能报错并留在原地
-    expect(component.editDialogOpen()).toBeTrue();
+    expect(component.editDialogOpen()).toBe(true);
   });
 
-  it('确认删除后调用接口并刷新列表', async () => {
-    const before = service.getTenants.calls.count();
+  it('deletes via the API after confirmation and refreshes the list', async () => {
+    const before = vi.mocked(service.getTenants).mock.calls.length;
 
     table().delete.emit(tenant);
     await fixture.whenStable();
 
     expect(service.deleteTenant).toHaveBeenCalledWith(tenant.id);
-    expect(service.getTenants.calls.count()).toBeGreaterThan(before);
+    expect(vi.mocked(service.getTenants).mock.calls.length).toBeGreaterThan(before);
   });
 
-  it('取消删除确认时不调用接口', async () => {
-    confirm.open.and.resolveTo(false);
+  it('does not call the API when the delete confirmation is cancelled', async () => {
+    confirm.open.mockResolvedValue(false);
 
     table().delete.emit(tenant);
     await fixture.whenStable();

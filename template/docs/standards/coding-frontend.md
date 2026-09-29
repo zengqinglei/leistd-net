@@ -228,10 +228,11 @@ frontend/
 
 - `service`、`pipe` 和包含复杂业务逻辑的函数 **必须** 有单元测试覆盖
 - 核心的共享组件和业务流程 **应** 编写组件测试或端到端测试
-- **单测不得触发真实的下载、打印或页面跳转。** Karma 跑在真实的 ChromeHeadless 里，
+- 用例名规则见 `docs/standards/testing.md` §3：英文句子，中文只出现在注释与测试数据里。
+- **单测不得触发真实的下载、打印或页面跳转。** 单测跑在真实的 Chromium 里，
   这些动作会作用到跑测试的那台机器上：调一次真实下载路径就往开发者的下载目录落一个文件，
   一天下来能攒出上百个。这类失败不会让用例变红，所以只能靠约定。
-  对副作用的那一步打桩（`saveBlob`、或 `spyOn(HTMLAnchorElement.prototype, 'click')`），
+  对副作用的那一步打桩（`saveBlob`、或 `vi.spyOn(HTMLAnchorElement.prototype, 'click').mockReturnValue(undefined)`——`vi.spyOn` 默认仍会调用原实现，必须显式替换），
   断言"发起了什么"而不是"文件存下来了"——见 `shared/utils/download-file.spec.ts`。
 
 ### 5.7 跨层字段同步

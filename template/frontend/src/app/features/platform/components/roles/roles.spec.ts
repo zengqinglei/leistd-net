@@ -18,20 +18,22 @@ import { PERMISSIONS } from '../../../../shared/models/permission';
 import { GetRolesInputDto } from '../../models/role.dto';
 import { RoleService } from '../../services/role-service';
 
+import type { MockedObject } from 'vitest';
+
 /**
  * 角色页面的查询闭环。与用户页各写一份：两个页面各自实现这一层，
  * 其中一个接线写错，另一个的用例不会有任何反应。
  */
-describe('Roles 页面查询闭环', () => {
+describe('Roles page query round trip', () => {
   let fixture: ComponentFixture<Roles>;
   let component: Roles;
   let router: Router;
-  let service: jasmine.SpyObj<RoleService>;
+  let service: Pick<MockedObject<RoleService>, 'getRoles'>;
 
   /** 最近一次列表请求的参数。 */
   function lastQuery(): GetRolesInputDto {
-    const calls = service.getRoles.calls.all();
-    const query = calls[calls.length - 1]?.args[0];
+    const calls = vi.mocked(service.getRoles).mock.calls;
+    const query = calls.at(-1)?.[0];
     if (!query) {
       throw new Error('列表请求从未发出');
     }
@@ -45,8 +47,10 @@ describe('Roles 页面查询闭环', () => {
   }
 
   beforeEach(async () => {
-    service = jasmine.createSpyObj<RoleService>('RoleService', ['getRoles']);
-    service.getRoles.and.returnValue(of({ items: [], totalCount: 0 }) as never);
+    service = {
+      getRoles: vi.fn().mockName('RoleService.getRoles'),
+    };
+    service.getRoles.mockReturnValue(of({ items: [], totalCount: 0 }) as never);
 
     await TestBed.configureTestingModule({
       imports: [Roles],
@@ -76,7 +80,7 @@ describe('Roles 页面查询闭环', () => {
     fixture.detectChanges();
   });
 
-  it('翻页写进 URL，并按新页码重新请求', async () => {
+  it('writes paging to the URL and refetches the new page', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -86,7 +90,7 @@ describe('Roles 页面查询闭环', () => {
     expect(lastQuery().limit).toBe(20);
   });
 
-  it('改每页条数回到第一页，请求的 offset 随之归零', async () => {
+  it('resets to the first page and offset 0 when rows per page changes', async () => {
     table().paginationChange.emit({ pageIndex: 3, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -97,7 +101,7 @@ describe('Roles 页面查询闭环', () => {
     expect(lastQuery().limit).toBe(50);
   });
 
-  it('排序写进 URL 并回到第一页，转成接口排序参数', async () => {
+  it('writes sorting to the URL, resets to page one and maps it to the API sort', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -110,16 +114,14 @@ describe('Roles 页面查询闭环', () => {
     expect(lastQuery().sorting).toBeTruthy();
   });
 
-  it('URL 状态回填组件：刷新与前进后退可复原', async () => {
+  it('restores component state from the URL on reload and back/forward navigation', async () => {
     await router.navigate(['/platform/roles'], {
       queryParams: { page: 2, pageSize: 50, keyword: 'admin' },
     });
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(component.pagination()).toEqual(
-      jasmine.objectContaining({ pageIndex: 1, pageSize: 50 }),
-    );
+    expect(component.pagination()).toEqual(expect.objectContaining({ pageIndex: 1, pageSize: 50 }));
     expect(lastQuery().keyword).toBe('admin');
   });
 });

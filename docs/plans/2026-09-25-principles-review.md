@@ -131,7 +131,7 @@
 | T7 余项 | api、migrator 阶段 `USER $APP_UID`；验证 compose 文件型 secrets 对 UID 1654 可读 |
 | 模板上手 | launchUrl 改 `api/health/live`（已并入阶段 5）；`.http` 换真实端点；镜像名改 `${IMAGE_REGISTRY:?}/companyname-projectname:${IMAGE_TAG:-latest}`；`TZ` 默认 `UTC` 并写明它决定服务端文本的默认时区；`AddOpenApi()` + 默认仅 Development `MapOpenApi()` |
 | C1 | 最后决定是否实施：判定改 `AuthorizationHandler<OperationAuthorizationRequirement, IAuthorizableResource>` + `IAuthorizationService`，ACL 拒绝用 `context.Fail()`、超管在 handler 内跳过；保留 ACL 存储、`IAuthorizableResource` 与操作常量；Resource.Core 只引独立包 `Microsoft.AspNetCore.Authorization` |
-| V | 迁 Vitest：先迁配置，再 `ng g @schematics/angular:refactor-jasmine-vitest`；装 jsdom 不装 happy-dom；暂不开 browser 模式；删 karma 系列、`jasmine-core`、`@types/jasmine`、`karma.conf.js`、`istanbul-lib-instrument`（`debug` 先 `npm ls`） |
+| V | 迁 Vitest，并把测试名统一为英文：浏览器模式 + Chromium、单测专用构建配置、官方 schematic 改写；详见阶段 7 定稿 |
 
 ## 四、明确不改
 
@@ -211,7 +211,24 @@
      - 模板 HttpClient 日志级别复核：保持 `System.Net.Http.HttpClient` 为 Warning，失败经 `RemoteServiceException` 进异常管道记录。
      - 静态闸门发现：稳定规范不得点名外部框架（`check-retired-terms.ps1`），§6.5 改为"同类成熟框架"。
      - 实施评审（Claude、Codex）后采纳：C1 的 ACL 处理器补上与功能权限相同的主体租户规则（声明非法或显式主体不属于当前租户即 `Fail`，先于超管旁路；当前主体只校验合法性），业务入口的认证判据改为任一身份已认证；后台工作项的失败日志移入还原后的环境上下文，非 HTTP 入口还原关联标识时同时打开日志作用域；HttpClient 转发的注释改为关联标识。`Enabled` 维持保留（Codex 第二轮指出 ServiceClient 注册了关联标识即自动转发，没有别的整体关闭入口），理由改为"不采信外部请求头的边缘服务"，按客户端不转发的场景改写为"不挂转发处理器"。新包沿用框架约定的 `FrameworkReference`，文档写明需要 ASP.NET Core 共享框架。均有变异证伪。
-7. **V**（独立）：Vitest 迁移。验收：62 个 spec 全过，覆盖率不降。
+7. **V**（独立）：Vitest 迁移，并把测试名统一为英文。不分批。
+   - 定稿（两轮评审，用户确认）：
+     - 运行：官方 `@angular/build:unit-test`，runner 为 Vitest，**Browser Mode + Chromium**（Playwright provider），不用 jsdom——布局坐标、Canvas 编解码、计算样式等判据需要真实浏览器，jsdom 下会假绿或要大量打桩；不补 polyfill。
+     - 构建：新增不替换 Mock 提供器的测试构建配置，单测行为与迁移前一致（官方默认 `development` 会换成 Mock 提供器，且让单测随本机 `useMock` 变化）。
+     - 改写：官方 `refactor-jasmine-vitest` schematic 后人工修正；spy 与全局状态恢复用官方 `restoreMocks` 等配置；`done` 回调改 Promise；假计时器按 `await` 顺序推进。改写与标题翻译分两份 diff 供评审。
+     - 依赖：两份 `package.json` 删 Karma 系列、`jasmine-core`、`@types/jasmine`、`istanbul-lib-instrument`、`debug` 的直接声明，加 Vitest、Playwright provider、`@vitest/coverage-v8`；干净 `npm ci` 验证。
+     - 测试名：前端 `describe/it` 标题改英文；新增静态闸门（只查测试声明的首参数与 `[Fact]/[Theory]` 方法名、`DisplayName`，含全角标点，带规则自测）；规范写明命名要求。
+     - 同步：矩阵脚本、CI、前端 README、前端编码规范、`docs/template/development-guide.md`。
+   - 验收：同一场景内迁移前后用例数一致、跳过为 0；按文件核对用例对应（含条件块包住的语句）；布局、图片、提供器判据变异证伪；`--coverage` 可出报告，不设门槛；9 场景矩阵与静态闸门通过。
+   - 实施记录：
+     - schematic 的遗漏与误改逐项修掉：已有 spy 上的 `.and.callThrough()` 被丢掉（改为 `mockRestore()`）、文件末尾的 `//#endif` 被删、`vitest` 类型导入被放到文件级 `#if` 之上、`toHaveBeenCalledOnceWith` 拆成两条断言时把注释复制了一份；它标出的 6 处待办（`done` 回调、异常断言）当场改完，并据此新增"不留待办"原则与闸门（设计原则 §4）。
+     - 整个文件都在条件块里的 spec，裁剪后成了空文件，Vitest 按"没有测试套件"报失败；改为在 `template.json` 按条件排除这些文件。
+     - `MockedObject<T>` 要求桩出全部成员，改为 `Pick<MockedObject<T>, …>` 只声明用到的；`vi.spyOn` 默认调用原实现（Jasmine 默认不调用），有副作用的桩（toast、导航、`console`、`URL.revokeObjectURL`）显式给返回值。
+     - 视口：默认视口太窄，下拉定位用例失败，`browserViewport` 定为 `1280x800`。
+     - 隔离：构建器默认 `isolate: false`（贴近 Karma，共用一页），共用一页时多个文件并发执行（详细报告里不同文件的用例交错完成）——一个文件在途用例对 `Storage.prototype` 打的桩作用到了另一个文件的模块初始化上，偶发整文件导入失败（快速矩阵里 standalone 少 6 条、全开场景少 2 条；同一项目各跑 6 次，关闭隔离失败 1 次）。改为 `isolate: true`，每个文件有自己的页面与全局对象。
+     - 变异证伪：下拉触发器去掉 CDK 变更通知、`unit-test` 配置加上 Mock 提供器替换，对应用例变红；头像居中裁切原用例只断言尺寸，裁切偏移改为 0 仍绿，补了按颜色取样的判据后变红。
+     - 测试名：283 个中文标题改英文，标题里的"为什么"移到上方注释；闸门 `scripts/check-test-names.py` 登记进 `check-all.ps1`，前端 492 个调用点、后端 1630 个测试特性与朴素匹配逐一对上。
+     - 实施评审（Claude、Codex）后采纳：测试名闸门改为扫描时记录字面量原文，补上正则字面量、嵌套模板字符串、C# 原始与逐字字符串的边界（HEAD 原稿 283 个中文标题全部检出）；待办闸门只认注释与 Markdown 行首的标记，字符串数据里的 `'TODO'` 放行，诊断信息经命名捕获报出命中的标记；规范示例的 `vi.spyOn` 补上显式替换；`restoreMocks` / `unstubGlobals` 的还原时机更正为"每条用例开始前"并写明只管这两种；P2 表 V 行指向定稿。
 
 ## 横切
 

@@ -9,7 +9,7 @@ function errorOf(body: unknown, status = 400): ApplicationHttpError {
 }
 
 describe('ApplicationHttpError', () => {
-  it('校验失败时用字段错误组成消息，而不是概括性的 title', () => {
+  it('builds the message from field errors, not the generic title, on validation failure', () => {
     const error = errorOf({
       type: 'urn:leistd:problem:validation-error',
       title: 'One or more validation errors occurred.',
@@ -19,7 +19,8 @@ describe('ApplicationHttpError', () => {
     expect(error.message).toBe('角色名称只能包含字母、数字和下划线');
   });
 
-  it('显式 422 的 detail 也是概括，同样让位给字段错误', () => {
+  // 显式 422 的 detail 同样只是概括
+  it('prefers field errors over the detail of an explicit 422', () => {
     const error = errorOf(
       {
         title: '无法处理的实体',
@@ -32,7 +33,7 @@ describe('ApplicationHttpError', () => {
     expect(error.message).toBe('号码已被占用');
   });
 
-  it('每个字段只取第一条，多个字段各占一行', () => {
+  it('takes the first error per field and puts each field on its own line', () => {
     const error = errorOf({
       title: '错误请求',
       errors: [
@@ -46,7 +47,7 @@ describe('ApplicationHttpError', () => {
     expect(error.details.map((item) => item.field)).toEqual(['name', 'name', 'displayName']);
   });
 
-  it('没有收到响应时不展示浏览器的原始异常文本', () => {
+  it('hides the raw browser exception text when no response was received', () => {
     const response = new HttpErrorResponse({
       error: new TypeError('Failed to fetch'),
       status: 0,
@@ -59,7 +60,7 @@ describe('ApplicationHttpError', () => {
     expect(ApplicationHttpError.from(response).message).not.toContain('Failed to fetch');
   });
 
-  it('没有字段错误时沿用 detail', () => {
+  it('falls back to detail when there are no field errors', () => {
     const error = errorOf(
       { title: '冲突', detail: '角色名称已存在', code: 'Role:NameExists' },
       409,
@@ -70,7 +71,7 @@ describe('ApplicationHttpError', () => {
   });
 
   // 协议层失败只有状态码语义：没有 detail 与业务码，文案取本地化标题
-  it('5xx 保留 traceId 并生成可报告的错误文案', () => {
+  it('keeps the traceId on 5xx and builds a reportable message', () => {
     const error = errorOf(
       {
         title: '服务器内部错误',
@@ -87,7 +88,7 @@ describe('ApplicationHttpError', () => {
     );
   });
 
-  it('官方字典形 errors 每条消息各成一项，按字段取第一条组成消息', () => {
+  it('splits dictionary-shaped errors per message and uses the first per field', () => {
     const error = errorOf(
       {
         title: 'One or more validation errors occurred.',
@@ -109,7 +110,7 @@ describe('ApplicationHttpError', () => {
     expect(error.code).toBeUndefined();
   });
 
-  it('不再读取响应信封的 errorCode 与 message', () => {
+  it('ignores errorCode and message from the response envelope', () => {
     const error = errorOf(
       { code: 409, errorCode: 'Role:NameExists', message: '角色名称已存在' },
       409,

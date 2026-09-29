@@ -58,6 +58,11 @@
                 }
               ]
             },
+            "unit-test": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            },
             "dev": {
               "fileReplacements": [
                 {
@@ -113,18 +118,16 @@
           "builder": "@angular/build:extract-i18n"
         },
         "test": {
-          "builder": "@angular/build:karma",
+          "builder": "@angular/build:unit-test",
           "options": {
-            "polyfills": [],
+            "buildTarget": "::unit-test",
             "tsConfig": "tsconfig.spec.json",
-            "assets": [
-              {
-                "glob": "**/*",
-                "input": "public"
-              }
-            ],
-            "styles": ["src/styles.css"],
-            "karmaConfig": "karma.conf.js"
+            "runner": "vitest",
+            "runnerConfig": "vitest-base.config.ts",
+            "browsers": ["chromiumHeadless"],
+            "browserViewport": "1280x800",
+            "isolate": true,
+            "include": ["src/**/*.spec.ts", "_mock/**/*.spec.ts"]
           }
         }
       }

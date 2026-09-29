@@ -50,35 +50,35 @@ describe('TablePaginator', () => {
     fixture.detectChanges();
   });
 
-  it('首页时禁用首页与上一页，保留下一页与末页', () => {
-    expect(buttonFor('首页').disabled).toBeTrue();
-    expect(buttonFor('上一页').disabled).toBeTrue();
-    expect(buttonFor('下一页').disabled).toBeFalse();
-    expect(buttonFor('末页').disabled).toBeFalse();
+  it('disables first and previous on the first page but keeps next and last enabled', () => {
+    expect(buttonFor('首页').disabled).toBe(true);
+    expect(buttonFor('上一页').disabled).toBe(true);
+    expect(buttonFor('下一页').disabled).toBe(false);
+    expect(buttonFor('末页').disabled).toBe(false);
   });
 
-  it('末页时禁用下一页与末页', () => {
+  it('disables next and last on the last page', () => {
     fixture.componentRef.setInput('canPrev', true);
     fixture.componentRef.setInput('canNext', false);
     fixture.detectChanges();
 
-    expect(buttonFor('首页').disabled).toBeFalse();
-    expect(buttonFor('上一页').disabled).toBeFalse();
-    expect(buttonFor('下一页').disabled).toBeTrue();
-    expect(buttonFor('末页').disabled).toBeTrue();
+    expect(buttonFor('首页').disabled).toBe(false);
+    expect(buttonFor('上一页').disabled).toBe(false);
+    expect(buttonFor('下一页').disabled).toBe(true);
+    expect(buttonFor('末页').disabled).toBe(true);
   });
 
-  it('只有一页时四个按钮全部禁用', () => {
+  it('disables all four buttons when there is only one page', () => {
     fixture.componentRef.setInput('canPrev', false);
     fixture.componentRef.setInput('canNext', false);
     fixture.detectChanges();
 
     for (const label of ['首页', '上一页', '下一页', '末页']) {
-      expect(buttonFor(label).disabled).withContext(label).toBeTrue();
+      expect(buttonFor(label).disabled, label).toBe(true);
     }
   });
 
-  it('点击可用的导航按钮回传对应意图', () => {
+  it('emits the matching intent when an enabled navigation button is clicked', () => {
     fixture.componentRef.setInput('canPrev', true);
     fixture.componentRef.setInput('canNext', true);
     fixture.detectChanges();
@@ -97,7 +97,7 @@ describe('TablePaginator', () => {
     expect(emitted).toEqual(['first', 'prev', 'next', 'last']);
   });
 
-  it('渲染父级传入的当前页信息，不自行推算', () => {
+  it('renders the page info passed in by the parent instead of computing its own', () => {
     const report = fixture.nativeElement.textContent as string;
 
     // 分页状态由父表格持有，本组件只渲染；自己算一份必然与父级的口径分叉。
@@ -105,7 +105,8 @@ describe('TablePaginator', () => {
     expect(report).toContain('第 1 / 5 页');
   });
 
-  it('每页条数为空值时不回传，避免把 null 当成合法页大小', () => {
+  // 避免把 null 当成合法页大小。
+  it('does not emit when the rows-per-page value is empty', () => {
     const emitted: (number | null)[] = [];
     component.rowsChange.subscribe((value) => emitted.push(value));
 

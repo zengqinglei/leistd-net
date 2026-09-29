@@ -17,11 +17,11 @@ describe('TenantContextService', () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => localStorage.clear());
 
-  it('初始无租户上下文（宿主）', () => {
+  it('starts with no tenant context (host)', () => {
     expect(create().current()).toBeNull();
   });
 
-  it('set 后 signal 与 localStorage 双写', () => {
+  it('writes both the signal and localStorage on set', () => {
     const service = create();
     service.set(tenantName);
 
@@ -31,7 +31,7 @@ describe('TenantContextService', () => {
 
   // 上下文里刻意**不存**"来自域名还是手填"：那是每次打开登录页现探的结论，不是租户的属性。
   // 存下来的话，换到一个域名不表态的地址后，界面仍会把租户锁成不可改。
-  it('恢复上下文时忽略历史记录里多出来的字段', () => {
+  it('ignores extra fields in the stored record when restoring the context', () => {
     localStorage.setItem('app.tenant', JSON.stringify({ key: tenantName, source: 'domain' }));
 
     expect(create().current()).toEqual({ key: tenantName });
@@ -39,7 +39,7 @@ describe('TenantContextService', () => {
 
   // 旧版本存的是 {id,name,displayName}，没有 key。这种存档必须判为无效并清掉，
   // 否则拦截器会把 undefined 塞进租户提示头
-  it('旧形态的历史存档被判为无效', () => {
+  it('treats a stored record in the legacy shape as invalid', () => {
     localStorage.setItem(
       'app.tenant',
       JSON.stringify({ id: '019ff8ed-221b-7673-9ba8-6b6dd5a638ab', name: tenantName }),
@@ -48,14 +48,14 @@ describe('TenantContextService', () => {
     expect(create().current()).toBeNull();
   });
 
-  it('新实例从 localStorage 恢复上下文', () => {
+  it('restores the context from localStorage in a new instance', () => {
     create().set(tenantName);
 
     // 模拟刷新页面：新实例读回持久化的租户
     expect(create().current()?.key).toBe(tenantName);
   });
 
-  it('clear 同时清空 signal 与 localStorage', () => {
+  it('clears both the signal and localStorage on clear', () => {
     const service = create();
     service.set(tenantName);
     service.clear();
@@ -64,7 +64,7 @@ describe('TenantContextService', () => {
     expect(localStorage.getItem('app.tenant')).toBeNull();
   });
 
-  it('损坏的存储数据被当作无上下文，不抛异常', () => {
+  it('treats corrupted stored data as no context without throwing', () => {
     localStorage.setItem('app.tenant', '{"id":42}');
 
     expect(create().current()).toBeNull();

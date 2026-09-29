@@ -23,6 +23,12 @@ import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
 import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
 
+//#if (LocalIdentity)
+import type { Mock, MockedObject } from 'vitest';
+//#else
+import type { MockedObject } from 'vitest';
+//#endif
+
 /**
  * 直接以 runInInjectionContext 驱动拦截器：next 用 throwError 同步发射错误，
  * catchError 同步映射，因此错误在订阅时同步落到 error 回调（zoneless 无需 fakeAsync）。
@@ -31,44 +37,60 @@ describe('httpErrorInterceptor', () => {
   let injector: Injector;
   let router: Router;
   //#if (LocalIdentity)
-  let navigate: jasmine.Spy;
+  let navigate: Mock;
   //#endif
-  let sessionContext: jasmine.SpyObj<SessionContextService>;
-  let authService: jasmine.SpyObj<AuthService>;
+  let sessionContext: Pick<MockedObject<SessionContextService>, 'clear'>;
+  //#if (LocalIdentity)
+  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated'>;
+  //#else
+  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated' | 'login'>;
+  //#endif
 
   beforeEach(() => {
     // 拦截器的契约就是「调统一清理入口」，真实实例只会连带拉起整条会话依赖链。
-    sessionContext = jasmine.createSpyObj<SessionContextService>('SessionContextService', [
-      'clear',
-    ]);
+    sessionContext = {
+      clear: vi.fn().mockName('SessionContextService.clear'),
+    };
     //#if (LocalIdentity)
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['isAuthenticated']);
+    authService = {
+      isAuthenticated: vi.fn().mockName('AuthService.isAuthenticated'),
+    };
     //#else
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['isAuthenticated', 'login']);
+    authService = {
+      isAuthenticated: vi.fn().mockName('AuthService.isAuthenticated'),
+      login: vi.fn().mockName('AuthService.login'),
+    };
     //#endif
-    authService.isAuthenticated.and.returnValue(true);
+    authService.isAuthenticated.mockReturnValue(true);
     // 清理是同步的，清完就没有主体了——并发 401 的收敛全靠这一点，替身必须照实模拟。
-    sessionContext.clear.and.callFake(() => authService.isAuthenticated.and.returnValue(false));
+    sessionContext.clear.mockImplementation(() =>
+      authService.isAuthenticated.mockReturnValue(false),
+    );
     TestBed.configureTestingModule({
       // prettier-ignore
       providers: [
-        provideZonelessChangeDetection(),
-        provideRouter([]),
-        { provide: SessionContextService, useValue: sessionContext },
-        { provide: AuthService, useValue: authService },
-        //#if (IncludeLocalization)
-        ...provideTranslocoTesting(),
-        //#endif
-      ],
+                provideZonelessChangeDetection(),
+                provideRouter([]),
+                { provide: SessionContextService, useValue: sessionContext },
+                { provide: AuthService, useValue: authService },
+                //#if (IncludeLocalization)
+                ...provideTranslocoTesting(),
+                //#endif
+            ],
     });
     injector = TestBed.inject(Injector);
     router = TestBed.inject(Router);
     //#if (LocalIdentity)
-    navigate = spyOn(router, 'navigate');
+    navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     //#endif
   });
 
-  function runInterceptor(error: unknown, options?: { context?: HttpContext }): unknown {
+  function runInterceptor(
+    error: unknown,
+    options?: {
+      context?: HttpContext;
+    },
+  ): unknown {
     const req = new HttpRequest('GET', '/api/test', { context: options?.context });
     const next: HttpHandlerFn = () => throwError(() => error) as Observable<HttpEvent<unknown>>;
 
@@ -173,9 +195,11 @@ describe('httpErrorInterceptor', () => {
   /** 恢复只能发生一次，且带着最初那个落地地址。 */
   function expectSingleReauthentication(returnUrl: string): void {
     //#if (LocalIdentity)
-    expect(navigate.calls.allArgs()).toEqual([[['/auth/login'], { queryParams: { returnUrl } }]]);
+    expect(vi.mocked(navigate).mock.calls).toEqual([
+      [['/auth/login'], { queryParams: { returnUrl } }],
+    ]);
     //#else
-    expect(authService.login.calls.allArgs()).toEqual([[returnUrl]]);
+    expect(vi.mocked(authService.login).mock.calls).toEqual([[returnUrl]]);
     //#endif
   }
 
@@ -287,7 +311,7 @@ describe('httpErrorInterceptor', () => {
 
   // 本来就没有主体时，这里没有东西要清，重新认证也该由 Guard 或启动流按自己的时机发起。
   it('does nothing but normalize when there is no subject to drop', () => {
-    authService.isAuthenticated.and.returnValue(false);
+    authService.isAuthenticated.mockReturnValue(false);
 
     const caught = runInterceptor(httpError(401));
 
@@ -303,7 +327,7 @@ describe('httpErrorInterceptor', () => {
   it('clears an invalid tenant even on an auth route, without touching the session', () => {
     history.replaceState(null, '', '/auth/login');
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
     const context = new HttpContext().set(SILENT_AUTH, true);
 
     try {
@@ -319,7 +343,7 @@ describe('httpErrorInterceptor', () => {
 
   it('clears the selected tenant on a 401 marked X-Tenant-Invalid', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
 
     runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }));
 
@@ -329,7 +353,7 @@ describe('httpErrorInterceptor', () => {
 
   it('does not treat an ordinary 401 as an invalid tenant', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
 
     runInterceptor(httpError(401));
 
@@ -342,7 +366,7 @@ describe('httpErrorInterceptor', () => {
 
   it('clears the tenant on a silent 401 marked X-Tenant-Invalid, without touching auth or routing', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
     const context = new HttpContext().set(SILENT_AUTH, true);
 
     runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });

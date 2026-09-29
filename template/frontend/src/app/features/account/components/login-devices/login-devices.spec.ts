@@ -11,6 +11,8 @@ import { SettingContextService } from '../../../../core/settings/setting-context
 import { UserSessionOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 
+import type { MockedObject } from 'vitest';
+
 function session(overrides: Partial<UserSessionOutputDto>): UserSessionOutputDto {
   return {
     id: 'current',
@@ -26,11 +28,14 @@ function session(overrides: Partial<UserSessionOutputDto>): UserSessionOutputDto
 
 describe('LoginDevices', () => {
   let fixture: ComponentFixture<LoginDevices>;
-  let account: jasmine.SpyObj<AccountService>;
+  let account: Pick<
+    MockedObject<AccountService>,
+    'getSessions' | 'revokeSession' | 'revokeOtherSessions'
+  >;
   let confirmed: boolean;
 
   async function render(sessions: UserSessionOutputDto[]): Promise<HTMLElement> {
-    account.getSessions.and.returnValue(of(sessions));
+    account.getSessions.mockReturnValue(of(sessions));
     fixture = TestBed.createComponent(LoginDevices);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -39,11 +44,11 @@ describe('LoginDevices', () => {
   }
 
   beforeEach(() => {
-    account = jasmine.createSpyObj<AccountService>('AccountService', [
-      'getSessions',
-      'revokeSession',
-      'revokeOtherSessions',
-    ]);
+    account = {
+      getSessions: vi.fn().mockName('AccountService.getSessions'),
+      revokeSession: vi.fn().mockName('AccountService.revokeSession'),
+      revokeOtherSessions: vi.fn().mockName('AccountService.revokeOtherSessions'),
+    };
     confirmed = true;
 
     TestBed.configureTestingModule({
@@ -62,7 +67,7 @@ describe('LoginDevices', () => {
     });
   });
 
-  it('当前设备带标记且没有退出按钮，其他设备可以退出', async () => {
+  it('marks the current device with no sign-out button; other devices can sign out', async () => {
     const host = await render([
       session({}),
       session({
@@ -82,14 +87,14 @@ describe('LoginDevices', () => {
     expect(rows[1].textContent).toContain('Safari 17 · iOS');
   });
 
-  it('只有当前设备时不显示"退出其他所有设备"', async () => {
+  it('hides "sign out all other devices" when only the current device remains', async () => {
     const host = await render([session({})]);
 
     expect(host.querySelector('[data-testid="revoke-other-sessions"]')).toBeNull();
   });
 
-  it('确认后撤销该设备并从列表移除；取消则不发请求', async () => {
-    account.revokeSession.and.returnValue(of(undefined));
+  it('revokes and removes a device on confirm, and sends nothing on cancel', async () => {
+    account.revokeSession.mockReturnValue(of(undefined));
     const host = await render([session({}), session({ id: 'phone', isCurrent: false })]);
 
     confirmed = false;
@@ -102,12 +107,14 @@ describe('LoginDevices', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(account.revokeSession).toHaveBeenCalledOnceWith('phone');
+    expect(account.revokeSession).toHaveBeenCalledTimes(1);
+
+    expect(account.revokeSession).toHaveBeenCalledWith('phone');
     expect(host.querySelectorAll('[data-testid="session-row"]').length).toBe(1);
   });
 
-  it('退出其他所有设备后只剩当前设备', async () => {
-    account.revokeOtherSessions.and.returnValue(of(2));
+  it('leaves only the current device after signing out all others', async () => {
+    account.revokeOtherSessions.mockReturnValue(of(2));
     const host = await render([
       session({}),
       session({ id: 'a', isCurrent: false }),

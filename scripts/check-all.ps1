@@ -68,6 +68,9 @@ $gates = @(
     # 覆盖率报告发现不了"程序集从未被任何测试加载"——那种包根本不出现在报告里
     @{ Name = "测试布局规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-test-layout.py", "--self-test") }
     @{ Name = "测试布局与家族对应";        Cmd = $pythonCmd; Args = @("scripts/check-test-layout.py") }
+    # 测试报告、CI 日志与 IDE 测试树里的名字统一用英文；中文只在注释与测试数据里
+    @{ Name = "测试名规则自检";            Cmd = $pythonCmd; Args = @("scripts/check-test-names.py", "--self-test") }
+    @{ Name = "测试名用英文";              Cmd = $pythonCmd; Args = @("scripts/check-test-names.py") }
     @{ Name = "XML 注释形态规则自检";      Cmd = $pythonCmd; Args = @("scripts/check-doc-comment-shape.py", "--self-test") }
     @{ Name = "XML 注释形态";              Cmd = $pythonCmd; Args = @("scripts/check-doc-comment-shape.py") }
     @{ Name = "组件文档骨架规则自检";      Cmd = $pythonCmd; Args = @("scripts/check-docs-skeleton.py", "--self-test") }

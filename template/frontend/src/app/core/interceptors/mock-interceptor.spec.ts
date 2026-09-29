@@ -1,6 +1,7 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { firstValueFrom } from 'rxjs';
 
 //#if (OpenIddictServer)
 import { OPEN_APPLICATION_API } from '../../../../_mock/api/open-application';
@@ -40,14 +41,16 @@ describe('mockInterceptor', () => {
           provide: MOCK_APIS,
           // prettier-ignore
           useValue: {
-            //#if (OpenIddictServer)
-            ...OPEN_APPLICATION_API,
-            //#endif
-            'GET /api/items': [{ id: 'all' }],
-            'GET /api/items/:id': (request: { params: Record<string, string> }) => ({
-              id: request.params['id'],
-            }),
-          },
+                        //#if (OpenIddictServer)
+                        ...OPEN_APPLICATION_API,
+                        //#endif
+                        'GET /api/items': [{ id: 'all' }],
+                        'GET /api/items/:id': (request: {
+                            params: Record<string, string>;
+                        }) => ({
+                            id: request.params['id'],
+                        }),
+                    },
         },
       ],
     });
@@ -60,44 +63,32 @@ describe('mockInterceptor', () => {
     //#endif
   });
 
-  it('resolves an exact route to its mocked payload', (done) => {
-    TestBed.inject(HttpClient)
-      .get<{ id: string }[]>('/api/items')
-      .subscribe({
-        next: (response) => {
-          expect(response).toEqual([{ id: 'all' }]);
-          done();
-        },
-        error: done.fail,
-      });
+  it('resolves an exact route to its mocked payload', async () => {
+    const response = await firstValueFrom(
+      TestBed.inject(HttpClient).get<{ id: string }[]>('/api/items'),
+    );
+
+    expect(response).toEqual([{ id: 'all' }]);
   });
 
-  it('matches a parameterized route and decodes the path parameter', (done) => {
-    TestBed.inject(HttpClient)
-      .get<{ id: string }>('/api/items/item-42')
-      .subscribe({
-        next: (response) => {
-          expect(response).toEqual({ id: 'item-42' });
-          done();
-        },
-        error: done.fail,
-      });
+  it('matches a parameterized route and decodes the path parameter', async () => {
+    const response = await firstValueFrom(
+      TestBed.inject(HttpClient).get<{ id: string }>('/api/items/item-42'),
+    );
+
+    expect(response).toEqual({ id: 'item-42' });
   });
 
-  it('fails with 501 when no mock route matches an /api request', (done) => {
-    TestBed.inject(HttpClient)
-      .get('/api/unknown')
-      .subscribe({
-        next: () => done.fail('expected the request to error'),
-        error: (error: { status: number }) => {
-          expect(error.status).toBe(501);
-          done();
-        },
-      });
+  it('fails with 501 when no mock route matches an /api request', async () => {
+    await expect(
+      firstValueFrom(TestBed.inject(HttpClient).get('/api/unknown')),
+    ).rejects.toMatchObject({
+      status: 501,
+    });
   });
   //#if (OpenIddictServer)
 
-  it('returns a confidential client secret only in the create response', (done) => {
+  it('returns a confidential client secret only in the create response', async () => {
     const clientId = `spec-confidential-${crypto.randomUUID()}`;
     const input: CreateOpenApplicationInputDto = {
       clientId,
@@ -112,21 +103,16 @@ describe('mockInterceptor', () => {
     };
     const http = TestBed.inject(HttpClient);
 
-    http.post<OpenApplicationOutputDto>('/api/v1/open-applications', input).subscribe({
-      next: (created) => {
-        expect(created.clientSecret).toContain('mock-secret-');
-        expect(created.hasClientSecret).toBeTrue();
+    const created = await firstValueFrom(
+      http.post<OpenApplicationOutputDto>('/api/v1/open-applications', input),
+    );
+    expect(created.clientSecret).toContain('mock-secret-');
+    expect(created.hasClientSecret).toBe(true);
 
-        http.get<OpenApplicationOutputDto>(`/api/v1/open-applications/${clientId}`).subscribe({
-          next: (stored) => {
-            expect(stored.clientSecret).toBeUndefined();
-            done();
-          },
-          error: done.fail,
-        });
-      },
-      error: done.fail,
-    });
+    const stored = await firstValueFrom(
+      http.get<OpenApplicationOutputDto>(`/api/v1/open-applications/${clientId}`),
+    );
+    expect(stored.clientSecret).toBeUndefined();
   });
   //#endif
 });

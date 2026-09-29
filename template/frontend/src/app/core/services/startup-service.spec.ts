@@ -6,24 +6,28 @@ import { SessionContextService } from './session-context-service';
 import { StartupService } from './startup-service';
 import { ApplicationHttpError } from '../errors/application-http-error';
 
+import type { Mock, MockedObject } from 'vitest';
+
 describe('StartupService', () => {
-  let authService: jasmine.SpyObj<AuthService>;
+  let authService: Pick<MockedObject<AuthService>, 'initializeAuth'>;
   // 会话上下文（当前用户、权限、设置）整个桩掉：它自己有独立单测，本组用例只关心
   // 状态机的分支。用真实实现的话，这里就要连它内部那些依赖一起打桩——启动状态机的
-  // 测试没有理由知道那些，而漏掉一个就会向 Karma 发真实请求，
+  // 测试没有理由知道那些，而漏掉一个就会向测试服务器发真实请求，
   // 靠 404 被降级逻辑吞掉后照样变绿。
-  let sessionContext: jasmine.SpyObj<SessionContextService>;
+  let sessionContext: Pick<MockedObject<SessionContextService>, 'establish' | 'clear'>;
   let service: StartupService;
-  let isProtectedRoute: jasmine.Spy<() => boolean>;
+  let isProtectedRoute: Mock;
 
   beforeEach(() => {
     // 认证数据的清理由会话上下文统一负责（它有独立单测），这里只需要认证探测本身。
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['initializeAuth']);
-    sessionContext = jasmine.createSpyObj<SessionContextService>('SessionContextService', [
-      'establish',
-      'clear',
-    ]);
-    sessionContext.establish.and.resolveTo();
+    authService = {
+      initializeAuth: vi.fn().mockName('AuthService.initializeAuth'),
+    };
+    sessionContext = {
+      establish: vi.fn().mockName('SessionContextService.establish'),
+      clear: vi.fn().mockName('SessionContextService.clear'),
+    };
+    sessionContext.establish.mockResolvedValue();
     TestBed.configureTestingModule({
       providers: [
         StartupService,
@@ -33,11 +37,15 @@ describe('StartupService', () => {
     });
     service = TestBed.inject(StartupService);
     // 固定为受保护路由，覆盖认证探测的全部状态转换分支；判据本身由末尾两条用例
-    // 用真实实现验证（callThrough + replaceState）。
-    isProtectedRoute = spyOn(
-      service as unknown as { isProtectedRoute(): boolean },
-      'isProtectedRoute',
-    ).and.returnValue(true);
+    // 用真实实现验证（mockRestore 还原真实实现 + replaceState）。
+    isProtectedRoute = vi
+      .spyOn(
+        service as unknown as {
+          isProtectedRoute(): boolean;
+        },
+        'isProtectedRoute',
+      )
+      .mockReturnValue(true);
   });
 
   function httpError(status: number): ApplicationHttpError {
@@ -47,7 +55,7 @@ describe('StartupService', () => {
   }
 
   it('treats 401 as signed-out and still reaches success', async () => {
-    authService.initializeAuth.and.rejectWith(httpError(401));
+    authService.initializeAuth.mockRejectedValue(httpError(401));
 
     await service.load();
 
@@ -59,7 +67,7 @@ describe('StartupService', () => {
 
   it('marks startup as failed when the auth service is unavailable (503)', async () => {
     const error = httpError(503);
-    authService.initializeAuth.and.rejectWith(error);
+    authService.initializeAuth.mockRejectedValue(error);
 
     await service.load();
 
@@ -70,7 +78,7 @@ describe('StartupService', () => {
   });
 
   it('marks startup as failed on network errors (status 0)', async () => {
-    authService.initializeAuth.and.rejectWith(httpError(0));
+    authService.initializeAuth.mockRejectedValue(httpError(0));
 
     await service.load();
 
@@ -78,7 +86,7 @@ describe('StartupService', () => {
   });
 
   it('reaches success when the session probe resolves', async () => {
-    authService.initializeAuth.and.resolveTo();
+    authService.initializeAuth.mockResolvedValue();
 
     await service.load();
 
@@ -99,8 +107,8 @@ describe('StartupService', () => {
     afterEach(() => history.replaceState(null, '', '/context.html'));
 
     it('establishes the subject on a protected route', async () => {
-      isProtectedRoute.and.callThrough();
-      authService.initializeAuth.and.resolveTo();
+      isProtectedRoute.mockRestore();
+      authService.initializeAuth.mockResolvedValue();
       history.replaceState(null, '', '/platform/users');
 
       await service.load();
@@ -110,8 +118,8 @@ describe('StartupService', () => {
     });
 
     it('does not probe the session on a public route', async () => {
-      isProtectedRoute.and.callThrough();
-      authService.initializeAuth.and.resolveTo();
+      isProtectedRoute.mockRestore();
+      authService.initializeAuth.mockResolvedValue();
       history.replaceState(null, '', '/');
 
       await service.load();
@@ -134,10 +142,10 @@ describe('StartupService', () => {
     afterEach(() => history.replaceState(null, '', '/context.html'));
 
     it('fails startup instead of letting the callback navigate on', async () => {
-      isProtectedRoute.and.callThrough();
+      isProtectedRoute.mockRestore();
       history.replaceState(null, '', '/auth/callback?code=abc&state=xyz');
-      authService.initializeAuth.and.resolveTo();
-      sessionContext.establish.and.rejectWith(httpError(401));
+      authService.initializeAuth.mockResolvedValue();
+      sessionContext.establish.mockRejectedValue(httpError(401));
 
       await service.load();
 
@@ -149,10 +157,10 @@ describe('StartupService', () => {
     // 误判的代价是普通会话过期被当成"刚换到的令牌被 API 拒了"，直接进故障页，
     // 而正确行为是按已登出处理、让 Guard 把人送去登录。
     it('does not mistake an auth path inside the query string for the callback', async () => {
-      isProtectedRoute.and.callThrough();
+      isProtectedRoute.mockRestore();
       history.replaceState(null, '', '/#/workspace?returnUrl=/auth/callback');
-      authService.initializeAuth.and.resolveTo();
-      sessionContext.establish.and.rejectWith(httpError(401));
+      authService.initializeAuth.mockResolvedValue();
+      sessionContext.establish.mockRejectedValue(httpError(401));
 
       await service.load();
 
@@ -161,10 +169,10 @@ describe('StartupService', () => {
     });
 
     it('still treats a 401 outside the callback as signed out', async () => {
-      isProtectedRoute.and.callThrough();
+      isProtectedRoute.mockRestore();
       history.replaceState(null, '', '/platform/users');
-      authService.initializeAuth.and.resolveTo();
-      sessionContext.establish.and.rejectWith(httpError(401));
+      authService.initializeAuth.mockResolvedValue();
+      sessionContext.establish.mockRejectedValue(httpError(401));
 
       await service.load();
 

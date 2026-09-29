@@ -42,7 +42,7 @@ jobs:
   template-matrix:
     name: 模板全场景矩阵
     runs-on: ubuntu-latest
-    # 本地实测 8 分钟；矩阵里 Angular healthcheck 的交互提示与 Karma 的 Chrome 都有挂死先例，
+    # 本地实测 8 分钟；矩阵里 Angular healthcheck 的交互提示与单测浏览器都有挂死先例，
     # 没有上限时一次卡死按默认 360 分钟计费并堵住队列
     timeout-minutes: 40
     steps:
@@ -60,6 +60,13 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: template/frontend/package-lock.json
+      # 前端单测跑在 Playwright 的 Chromium 里；版本取模板锁文件，与生成项目实际安装的一致
+      - name: 安装单测用的 Chromium
+        shell: pwsh
+        run: |
+          $version = (Get-Content template/frontend/package-lock.json -Raw | ConvertFrom-Json).packages.'node_modules/playwright'.version
+          if (-not $version) { throw '模板锁文件里没有 playwright' }
+          npx --yes "playwright@$version" install --with-deps chromium
       - name: 打包当前 Framework
         shell: pwsh
         run: pwsh framework/build/pack-local-feed.ps1

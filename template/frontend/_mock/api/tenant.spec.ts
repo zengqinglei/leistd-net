@@ -18,7 +18,7 @@ import { MockTenant, TENANTS } from '../data/tenant';
  * 替代不了它：契约加了字段而 Mock 没跟上时，Mock 模式下的表现是"填了保存、值没了"，
  * 而所有针对真实后端的测试全绿。
  */
-describe('租户 Mock', () => {
+describe('tenant mock', () => {
   let snapshot: MockTenant[];
 
   beforeEach(() => {
@@ -47,19 +47,25 @@ describe('租户 Mock', () => {
 
   /** 断言抛出的是带指定状态码的 MockException——状态码就是契约的一部分。 */
   function expectStatus(action: () => unknown, status: number): void {
-    expect(action).toThrowMatching(
-      (error: unknown) => error instanceof MockException && error.status === status,
-    );
+    let thrown: unknown;
+    try {
+      action();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(MockException);
+    expect((thrown as MockException).status).toBe(status);
   }
 
-  it('创建时带上的描述会落地并在读取时回显', () => {
+  it('persists the description given on create and returns it on read', () => {
     const created = create('华东区自营资金账户');
 
     expect(created.description).toBe('华东区自营资金账户');
     expect(getTenantById(created.id).description).toBe('华东区自营资金账户');
   });
 
-  it('更新可以改描述', () => {
+  it('can change the description on update', () => {
     const created = create('原始描述');
 
     const updated = updateTenant(created.id, { name: created.name, description: '改过的描述' });
@@ -69,14 +75,14 @@ describe('租户 Mock', () => {
 
   // 与后端一致：PUT 是整体覆盖，省略描述等于清空，没有"不传即保留原值"这一档。
   // 两者不一致时，Mock 模式下会看到"清空没生效"，真实后端下却生效。
-  it('更新时省略描述等于清空', () => {
+  it('clears the description when it is omitted on update', () => {
     const created = create('原始描述');
 
     expect(updateTenant(created.id, { name: created.name }).description).toBeUndefined();
     expect(getTenantById(created.id).description).toBeUndefined();
   });
 
-  it('空白描述按清空处理', () => {
+  it('treats a blank description as cleared', () => {
     const created = create('原始描述');
 
     expect(
@@ -86,7 +92,7 @@ describe('租户 Mock', () => {
 
   // 路由顺序：by-host 必须排在 :id 之前，否则会被当成一个 id 走错分支。
   // 按名字查租户的匿名端点已被移除：它是租户存在性 oracle
-  it('注册了按主机名探测与连接增删查三条路由，且探测排在按 id 查询之前', () => {
+  it('registers the by-host probe and the three connection routes, with the probe before the by-id lookup', () => {
     const routes = Object.keys(TENANT_API);
 
     expect(routes).toContain('GET /api/v1/tenants/by-host');
@@ -100,16 +106,16 @@ describe('租户 Mock', () => {
 
   // 本机开发不是任何受管域，真实后端在同一条件下也回"域名不表态"——
   // 登录页据此保留记住的租户并允许手选。
-  it('按主机名探测回"域名不表态"', () => {
+  it('returns undecided from the by-host probe', () => {
     expect(getTenantByHost()).toEqual({ decision: 'undecided' });
   });
 
   // 新建的租户一条登记都没有，这一档就是"不单独分库，各服务用自己配置的库"。
-  it('新建的租户连接列表为空', () => {
+  it('returns an empty connection list for a new tenant', () => {
     expect(getTenantConnections(create().id)).toEqual([]);
   });
 
-  it('登记一条后出现在列表里，版本从 1 开始', () => {
+  it('lists a registered connection, starting at version 1', () => {
     const created = create();
 
     const connection = setTenantConnection(created.id, 'crm', {
@@ -124,7 +130,7 @@ describe('租户 Mock', () => {
   });
 
   // 名字归一化为小写：填 Crm 与 crm 命中同一条，不会变成看着两条、写进去一条。
-  it('连接名按小写归一化', () => {
+  it('normalizes connection names to lowercase', () => {
     const created = create();
 
     expect(
@@ -145,7 +151,7 @@ describe('租户 Mock', () => {
     );
   });
 
-  it('版本不匹配时拒绝更新', () => {
+  it('rejects an update on a version mismatch', () => {
     const created = create();
     setTenantConnection(created.id, 'crm', {
       expectedVersion: null,
@@ -163,7 +169,7 @@ describe('租户 Mock', () => {
     expect(getTenantConnections(created.id)[0].version).toBe(1);
   });
 
-  it('删除后列表变空，版本不匹配时不删', () => {
+  it('empties the list after deletion and does not delete on a version mismatch', () => {
     const created = create();
     const connection = setTenantConnection(created.id, 'crm', {
       expectedVersion: null,
@@ -179,7 +185,7 @@ describe('租户 Mock', () => {
   });
 
   // 连接串只写：Mock 不保存它，登记返回、列表与库里的数据都不能出现它
-  it('连接串不落进 Mock 数据，也不出现在任何返回里', () => {
+  it('keeps connection strings out of the mock data and every response', () => {
     const created = create();
 
     const connection = setTenantConnection(created.id, 'crm', {
@@ -194,7 +200,7 @@ describe('租户 Mock', () => {
   });
 
   // 分库在建租户这一步定案：连接与租户一起落库，之后不能再补。
-  it('创建租户时给的多条命名连接一次全部登记', () => {
+  it('registers all named connections given on tenant creation at once', () => {
     const created = createTenant({
       name: `probe-${Math.random().toString(36).slice(2, 8)}`,
       adminEmail: 'probe@example.test',
@@ -219,7 +225,7 @@ describe('租户 Mock', () => {
     );
   });
 
-  it('创建租户时同名连接给两条直接 400', () => {
+  it('returns 400 for two connections with the same name on tenant creation', () => {
     expectStatus(
       () =>
         createTenant({

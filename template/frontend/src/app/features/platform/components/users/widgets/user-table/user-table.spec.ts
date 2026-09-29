@@ -81,7 +81,7 @@ describe('UserTable', () => {
   });
 
   //#if (LocalIdentity)
-  it('锁定中的用户带锁定标记，其余用户没有', async () => {
+  it('shows a locked badge only on locked-out users', async () => {
     fixture.componentRef.setInput('users', [
       { ...user('1', 'alice'), isLockedOut: true, lockoutEnd: '2026-01-01T00:15:00Z' },
       user('2', 'bob'),
@@ -98,7 +98,7 @@ describe('UserTable', () => {
   });
 
   //#endif
-  it('当前页与总页数按父级传入的分页状态派生', () => {
+  it('derives the current page and total pages from the parent pagination state', () => {
     expect(component.currentPage()).toBe(1);
     expect(component.totalPages()).toBe(3); // 42 条 / 每页 20
 
@@ -108,7 +108,8 @@ describe('UserTable', () => {
     expect(component.currentPage()).toBe(3);
   });
 
-  it('没有数据时总页数仍为 1，不出现"第 1 / 0 页"', () => {
+  // 不出现"第 1 / 0 页"
+  it('keeps total pages at 1 when there is no data', () => {
     fixture.componentRef.setInput('users', []);
     fixture.componentRef.setInput('totalCount', 0);
     fixture.detectChanges();
@@ -116,7 +117,7 @@ describe('UserTable', () => {
     expect(component.totalPages()).toBe(1);
   });
 
-  it('改每页条数时回到第一页', () => {
+  it('returns to the first page when the page size changes', () => {
     fixture.componentRef.setInput('pagination', { pageIndex: 3, pageSize: 20 } as PaginationState);
     fixture.detectChanges();
 
@@ -129,7 +130,7 @@ describe('UserTable', () => {
     expect(emitted).toEqual([{ pageIndex: 0, pageSize: 50 }]);
   });
 
-  it('点击排序在升序与降序之间切换，并回传排序意图', () => {
+  it('toggles between ascending and descending on sort and emits the sorting intent', () => {
     const emitted: SortingState[] = [];
     component.sortingChange.subscribe((value) => emitted.push(value));
 
@@ -144,7 +145,7 @@ describe('UserTable', () => {
     expect(emitted[1]).toEqual([{ id: 'username', desc: true }]);
   });
 
-  it('排序图标与 aria 状态跟随当前排序', () => {
+  it('updates the sort icon and aria state with the current sorting', () => {
     expect(component.sortIcon('username')).toBe('lucideArrowUpDown');
     expect(component.sortAria('username')).toBe('none');
 
@@ -159,38 +160,38 @@ describe('UserTable', () => {
     expect(component.sortAria('username')).toBe('descending');
   });
 
-  it('一个可用操作都没有时不渲染溢出菜单', () => {
+  it('hides the overflow menu when no row action is available', () => {
     fixture.componentRef.setInput('canUpdate', false);
     fixture.componentRef.setInput('canDelete', false);
     fixture.componentRef.setInput('canManageRoles', false);
     fixture.detectChanges();
 
     // 点开即空的按钮比没有按钮更糟：它承诺了一个并不存在的能力。
-    expect(component.hasRowActions()).toBeFalse();
+    expect(component.hasRowActions()).toBe(false);
 
     fixture.componentRef.setInput('canDelete', true);
     fixture.detectChanges();
-    expect(component.hasRowActions()).toBeTrue();
+    expect(component.hasRowActions()).toBe(true);
   });
 
-  it('窄视口下标记存在被折叠的列，桌面端不标记', () => {
-    expect(component.hasCollapsedColumns()).toBeFalse();
+  it('flags collapsed columns on narrow viewports but not on desktop', () => {
+    expect(component.hasCollapsedColumns()).toBe(false);
 
     viewport.next(desktop(false));
     fixture.detectChanges();
 
     // 列被藏起来却不给展开入口，那些字段就等于从界面上消失了。
-    expect(component.hasCollapsedColumns()).toBeTrue();
+    expect(component.hasCollapsedColumns()).toBe(true);
   });
 
-  it('行展开状态按行独立记录', () => {
-    expect(component.isRowExpanded('1')).toBeFalse();
+  it('tracks the expanded state per row', () => {
+    expect(component.isRowExpanded('1')).toBe(false);
 
     component.toggleRow('1');
-    expect(component.isRowExpanded('1')).toBeTrue();
-    expect(component.isRowExpanded('2')).toBeFalse();
+    expect(component.isRowExpanded('1')).toBe(true);
+    expect(component.isRowExpanded('2')).toBe(false);
 
     component.toggleRow('1');
-    expect(component.isRowExpanded('1')).toBeFalse();
+    expect(component.isRowExpanded('1')).toBe(false);
   });
 });
