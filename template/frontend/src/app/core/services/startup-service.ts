@@ -59,7 +59,7 @@ export class StartupService {
 
     //#endif
     //#if (LocalIdentity)
-    if (route === '/auth/callback' || route === '/auth/external-callback') {
+    if (route === '/auth/callback' || route.startsWith('/auth/external-callback/')) {
       this._status.set('success');
       return;
     }

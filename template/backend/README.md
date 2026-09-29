@@ -128,6 +128,7 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 
 外部登录凭据通过 `ExternalAuth` 配置或密钥系统提供，不写入仓库。每个提供商（`Github` / `Google`）保持
 `ClientId`、`ClientSecret`、`RedirectUri` 三个原有配置键：三项全空表示不启用，启用时必须全部填写，且回调地址必须是绝对 HTTP(S) URI。
+回调地址指向前端页面 `/auth/external-callback/{provider}`（如本机 `http://localhost:4200/auth/external-callback/github`），由它把授权码提交给 API；提供商后台登记的回调要与 `RedirectUri` 逐字一致，GitHub 连查询串一起比对。
 配置不完整会在启动期被拒绝；这些适配器细节由 Infrastructure 绑定与校验，Application 只通过 `IOAuthProvider` 使用已配置的提供商。
 <!--#endif-->
 <!--#if (IncludeNotifications)-->

@@ -18,5 +18,13 @@ internal static class OperationRecordQueries
                 item.GetProperty("authorizationBasis").GetString()))
             .ToList();
     }
+
+    public static async Task<int> CountSucceededAsync(HttpClient client, string action, string targetId)
+    {
+        using var body = JsonDocument.Parse(await client.GetStringAsync(
+            $"/api/v1/operation-records?offset=0&limit=50&actions={action}&outcome=Succeeded"));
+        return body.RootElement.GetProperty("items").EnumerateArray()
+            .Count(item => item.GetProperty("targetId").GetString() == targetId);
+    }
 }
 #endif

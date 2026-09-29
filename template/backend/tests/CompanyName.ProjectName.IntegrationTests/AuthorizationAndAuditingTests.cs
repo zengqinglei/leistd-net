@@ -4,8 +4,11 @@ using Leistd.Authorization.Constants;
 using Leistd.Authorization.Dtos;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.Lock;
+using Leistd.OperationRecords.Models;
+using Leistd.OperationRecords.Recording;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Application.Initialization;
@@ -638,6 +641,99 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         var assignedDelete = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}");
         Assert.Equal(HttpStatusCode.Conflict, assignedDelete.StatusCode);
+    }
+
+    /// <summary>
+    /// 删除用户是软删除、关联行保留；只分配给已删除用户的角色不能因此永久删不掉，删除时连带清掉这些关联。
+    /// </summary>
+    [Fact]
+    public async Task A_role_assigned_only_to_deleted_users_counts_no_users_and_can_be_deleted()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var role = await CreateRoleAsync(superAdmin.Client);
+        var user = await CreateUserAsync(superAdmin.Client, [role.Id]);
+        Assert.Equal(1, (await ReadRoleAsync(superAdmin.Client, role.Id)).GetProperty("userCount").GetInt32());
+
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).StatusCode);
+        Assert.Equal(0, (await ReadRoleAsync(superAdmin.Client, role.Id)).GetProperty("userCount").GetInt32());
+
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}")).StatusCode);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        Assert.False(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+    }
+
+    /// <summary>
+    /// 删角色、清关联、清授权与成功记录同在一个工作单元：最后一步失败时整体回滚，不留"接口报错但角色已删"的半成品。
+    /// </summary>
+    [Fact]
+    public async Task A_failed_role_deletion_rolls_back_the_role_and_its_assignments()
+    {
+        using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            var inner = services.Last(descriptor => descriptor.ServiceType == typeof(IOperationRecorder));
+            services.Remove(inner);
+            services.Add(ServiceDescriptor.Describe(
+                typeof(IOperationRecorder),
+                provider => new RoleDeletionRecordFails((IOperationRecorder)(inner.ImplementationFactory?.Invoke(provider)
+                    ?? ActivatorUtilities.CreateInstance(provider, inner.ImplementationType!))),
+                inner.Lifetime));
+        }));
+        using var superAdmin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        // 本用例刻意不创建角色授予：存在授予时，授予清理会在工作单元内自行 SaveChanges，
+        // EF InMemory 没有事务，那一步会把删除一并落盘、回滚不了；授予行的回滚只在关系型库的事务里成立
+        var role = await CreateRoleAsync(superAdmin.Client);
+        var user = await CreateUserAsync(superAdmin.Client, [role.Id]);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, (await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}")).StatusCode);
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        Assert.True(await db.Roles.AnyAsync(existing => existing.Id == role.Id));
+        Assert.True(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+    }
+
+    private sealed class RoleDeletionRecordFails(IOperationRecorder inner) : IOperationRecorder
+    {
+        public Task RecordSucceededAsync(
+            string action, OperationTarget target, string authorizationBasis, CancellationToken cancellationToken = default) =>
+            action == OperationRecordActions.RoleDeleted
+                ? throw new InvalidOperationException("Injected failure after the role was deleted.")
+                : inner.RecordSucceededAsync(action, target, authorizationBasis, cancellationToken);
+
+        public Task RecordFailedAsync(
+            string action, OperationTarget target, string authorizationBasis, OperationFailure failure = default) =>
+            inner.RecordFailedAsync(action, target, authorizationBasis, failure);
+    }
+
+    /// <summary>
+    /// 管理员启停账号与重置密码改变的是"这个人能不能进来"，与其他账号管理操作一样留痕；
+    /// 状态没变的重复操作不留记录。
+    /// </summary>
+    [Fact]
+    public async Task Enabling_disabling_and_resetting_a_password_leave_operation_records()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var user = await CreateUserAsync(superAdmin.Client);
+        var targetId = user.Id.ToString();
+
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/enable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/enable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PostAsJsonAsync(
+            $"/api/v1/users/{user.Id}/reset-password", new { Password = "IntegrationTests!Reset1" })).StatusCode);
+
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserDisabled, targetId));
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserEnabled, targetId));
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserPasswordReset, targetId));
+    }
+
+    private static async Task<JsonElement> ReadRoleAsync(HttpClient client, Guid roleId)
+    {
+        using var body = JsonDocument.Parse(await client.GetStringAsync($"/api/v1/roles/{roleId}"));
+        return body.RootElement.Clone();
     }
 
     /// <summary>

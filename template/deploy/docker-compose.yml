@@ -111,10 +111,11 @@ services:
       # External OAuth (Optional - uncomment and configure if needed)
       # - ExternalAuth__GitHub__ClientId=your-github-client-id
       # - ExternalAuth__GitHub__ClientSecret=your-github-client-secret
-      # - ExternalAuth__GitHub__RedirectUri=https://your-domain.com/api/external-auth/github/callback
+      # 回调地址是前端页面（它再把授权码提交给 API），与提供商后台登记的回调逐字一致
+      # - ExternalAuth__GitHub__RedirectUri=https://your-domain.com/auth/external-callback/github
       # - ExternalAuth__Google__ClientId=your-google-client-id
       # - ExternalAuth__Google__ClientSecret=your-google-client-secret
-      # - ExternalAuth__Google__RedirectUri=https://your-domain.com/api/external-auth/google/callback
+      # - ExternalAuth__Google__RedirectUri=https://your-domain.com/auth/external-callback/google
 
       # Logging (optional)
       - Serilog__MinimumLevel__Default=Information

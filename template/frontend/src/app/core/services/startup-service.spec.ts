@@ -128,6 +128,26 @@ describe('StartupService', () => {
       expect(service.status()).toBe('success');
     });
   });
+  //#if (ExternalLogin)
+
+  /**
+   * 外部登录回调页：提供商带着 code 跳回来，这一刻还没有会话，回调组件自己去换。
+   * 启动流程若没认出它，就会先探一次会话（受保护判据打桩成 true 时即可观察到），
+   * 把回调当普通页面处理，外部登录断在这一步且不报错。
+   */
+  it('lets the external sign-in callback run without probing the session', async () => {
+    history.replaceState(null, '', '/auth/external-callback/github?code=abc&state=xyz');
+
+    try {
+      await service.load();
+    } finally {
+      history.replaceState(null, '', '/context.html');
+    }
+
+    expect(authService.initializeAuth).not.toHaveBeenCalled();
+    expect(service.status()).toBe('success');
+  });
+  //#endif
   //#if (RemoteTokenAuth)
 
   /**

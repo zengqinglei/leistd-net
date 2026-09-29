@@ -563,7 +563,9 @@ function unlinkExternalLogin(req: MockRequest): 'ok' {
 
 function getExternalLoginUrl(provider: string): { loginUrl: string } {
   const state = Math.random().toString(36).substring(7);
-  const redirectUri = encodeURIComponent(`${window.location.origin}/#/auth/external-callback`);
+  const redirectUri = encodeURIComponent(
+    `${window.location.origin}/auth/external-callback/${provider}`,
+  );
 
   const urls: Record<string, string> = {
     github: `https://github.com/login/oauth/authorize?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&scope=user:email`,

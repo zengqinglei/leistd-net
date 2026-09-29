@@ -21,7 +21,7 @@ import { EXTERNAL_LINK_PENDING_KEY } from '../external-logins/external-logins';
  * 外部登录回调组件
  *
  * 处理 GitHub/Google 等第三方登录重定向回来后的流程:
- * 1. 从 URL query params 中获取 code、state、provider
+ * 1. 从路由参数取 provider（回调地址 /auth/external-callback/{provider}），从查询串取 code、state
  * 2. 将 code+state 发送到后端换取 Cookie session
  * 3. 加载用户信息并根据角色跳转
  */
@@ -79,7 +79,7 @@ export class ExternalAuthCallback implements OnInit {
     const params = this.route.snapshot.queryParamMap;
     const code = params.get('code');
     const state = params.get('state');
-    const provider = params.get('provider') ?? this.route.snapshot.paramMap.get('provider');
+    const provider = this.route.snapshot.paramMap.get('provider');
 
     if (!code || !provider) {
       //#if (IncludeLocalization)

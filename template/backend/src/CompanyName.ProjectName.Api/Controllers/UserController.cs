@@ -77,6 +77,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpPatch("{id}/enable")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserEnabled, "id")]
     public async Task EnableAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.EnableAsync(id, cancellationToken);
@@ -87,6 +88,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpPatch("{id}/disable")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserDisabled, "id")]
     public async Task DisableAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.DisableAsync(id, cancellationToken);
@@ -98,6 +100,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
 #if (LocalIdentity)
     [HttpPost("{id}/reset-password")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserPasswordReset, "id")]
     public async Task ResetPasswordAsync(
         Guid id,
         [FromBody] ResetUserPasswordInputDto input,

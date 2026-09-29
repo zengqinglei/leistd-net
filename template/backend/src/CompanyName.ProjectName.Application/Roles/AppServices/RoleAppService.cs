@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Leistd.Authorization.Constants;
 using Leistd.ExceptionHandling;
 using Leistd.ObjectMapping;
+using Leistd.UnitOfWork.Attributes;
 using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Errors;
@@ -35,6 +36,7 @@ namespace CompanyName.ProjectName.Application.Roles.AppServices;
 public class RoleAppService(
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
+    IRepository<User, Guid> userRepository,
     IPermissionGrantStore permissionGrantStore,
     IPermissionGrantManager permissionGrantManager,
     IOperationRecorder operationRecorder,
@@ -166,10 +168,11 @@ public class RoleAppService(
     }
 
     /// <remarks>
-    /// 幂等：角色已不存在时也继续按 provider key 清理授权并返回成功。
-    /// 删角色与清授权是两次提交，第二步失败会留下孤儿授予行；若此时还对重试报 404，
-    /// "重试即可收敛"就没有任何入口，孤儿只能永久留着。
+    /// 删角色、清关联、清授权与成功记录在同一个工作单元里提交（授权存储与业务表同一个上下文）：
+    /// 任何一步失败整体回滚，不会出现"接口报错但角色已删"的半成品。
+    /// 角色已不存在时仍按 provider key 清理授权并返回成功，兜住升级前分两次提交留下的孤儿授予行。
     /// </remarks>
+    [UnitOfWork]
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var role = await roleRepository.GetByIdAsync(id, cancellationToken);
@@ -188,7 +191,11 @@ public class RoleAppService(
                 .WithData("Name", role.Name);
         }
 
-        var userCount = await userRoleRepository.CountAsync(ur => ur.RoleId == id, cancellationToken);
+        // 只数还在的用户：删除用户是软删除，关联行随用户保留（恢复时一并回来），
+        // 数进去的话角色就被一个界面上看不到、也无法改派的人永久卡住
+        var userCount = await asyncExecuter.CountAsync(
+            (await AssignmentsOfExistingUsersAsync(cancellationToken)).Where(ur => ur.RoleId == id),
+            cancellationToken);
         if (userCount > 0)
         {
             throw new BusinessException(RoleErrorCodes.RoleStillAssigned,
@@ -197,9 +204,11 @@ public class RoleAppService(
                 .WithData("UserCount", userCount);
         }
 
-        // 角色删除与授权清理独立提交；先删角色，使清理失败时的残留授予不可达。
-        // 角色 Id 不复用且 RemoveProviderAsync 幂等，因此可安全重试清理。
         await roleRepository.DeleteAsync(role, cancellationToken);
+        // 剩下的关联都属于已删除的用户，随角色一并删除，不留指向已删角色的孤儿行
+        await userRoleRepository.DeleteManyAsync(
+            await userRoleRepository.GetListAsync(ur => ur.RoleId == id, cancellationToken),
+            cancellationToken);
 
         // 角色被永久删除，授予与授权版本一并清理。
         // 不能用"替换为空集合"：那是撤销语义，会保留并递增版本（给"还有人在编辑"用），
@@ -262,9 +271,8 @@ public class RoleAppService(
     {
         var roleIds = roles.Select(role => role.Id).ToList();
 
-        var userRoleQuery = await userRoleRepository.GetQueryableAsync(cancellationToken);
         var userRoles = await asyncExecuter.ToListAsync(
-            userRoleQuery.Where(ur => roleIds.Contains(ur.RoleId)),
+            (await AssignmentsOfExistingUsersAsync(cancellationToken)).Where(ur => roleIds.Contains(ur.RoleId)),
             cancellationToken);
 
         var userCounts = userRoles
@@ -285,5 +293,13 @@ public class RoleAppService(
             [RoleMappings.UserCountsKey] = (IReadOnlyDictionary<Guid, int>)userCounts,
             [RoleMappings.PermissionCountsKey] = (IReadOnlyDictionary<Guid, int>)permissionCounts
         };
+    }
+
+    /// <summary>未删除用户的角色关联：已删除用户的关联行保留着，但不算"已分配"。</summary>
+    private async Task<IQueryable<UserRole>> AssignmentsOfExistingUsersAsync(CancellationToken cancellationToken)
+    {
+        var users = await userRepository.GetQueryableAsync(cancellationToken);
+        var userRoles = await userRoleRepository.GetQueryableAsync(cancellationToken);
+        return userRoles.Where(ur => users.Any(u => u.Id == ur.UserId));
     }
 }

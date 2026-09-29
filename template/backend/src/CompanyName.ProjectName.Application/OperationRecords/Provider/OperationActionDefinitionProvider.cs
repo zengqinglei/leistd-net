@@ -36,6 +36,17 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
             OperationRecordCategories.Account,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
+        // 启停直接决定"这个人还能不能进来"，与租户启停同理，要能单独筛出来
+        context.Add(
+            OperationRecordActions.UserEnabled,
+            OperationRecordCategories.Account,
+            OperationVisibility.Tenant,
+            OperationSeverity.Notice);
+        context.Add(
+            OperationRecordActions.UserDisabled,
+            OperationRecordCategories.Account,
+            OperationVisibility.Tenant,
+            OperationSeverity.Notice);
         context.Add(
             OperationRecordActions.RoleCreated,
             OperationRecordCategories.Account,
@@ -130,6 +141,11 @@ public class OperationActionDefinitionProvider : IOperationActionDefinitionProvi
         context.Add(
             OperationRecordActions.AuthLockedOut,
             OperationRecordCategories.Authentication,
+            OperationVisibility.Tenant,
+            OperationSeverity.Notice);
+        context.Add(
+            OperationRecordActions.UserPasswordReset,
+            OperationRecordCategories.Account,
             OperationVisibility.Tenant,
             OperationSeverity.Notice);
         context.Add(

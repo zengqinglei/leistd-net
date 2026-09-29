@@ -287,8 +287,20 @@ public class UserAppService(
                 ;
         }
 
+        // 已启用时静默成功、不留记录（同解锁）：重复点击不该留下一串没发生过的事
+        if (user.IsActive)
+        {
+            return;
+        }
+
         user.Enable();
         await userRepository.UpdateAsync(user, cancellationToken);
+
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserEnabled,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
     }
 
     /// <summary>
@@ -308,6 +320,7 @@ public class UserAppService(
                 ;
         }
 
+        var wasActive = user.IsActive;
         user.Disable();
         await userRepository.UpdateAsync(user, cancellationToken);
 #if (LocalIdentity)
@@ -315,6 +328,16 @@ public class UserAppService(
         // 已在线的会话与已签发的令牌随之作废：登录时的启用检查挡不住它们
         await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
 #endif
+
+        // 撤销照做（兜住此前遗留的会话），记录只在状态真正变化时写
+        if (wasActive)
+        {
+            await operationRecorder.RecordSucceededAsync(
+                OperationRecordActions.UserDisabled,
+                OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+                PermissionConstant.Users.Update,
+                cancellationToken);
+        }
     }
 
 #if (LocalIdentity)
@@ -340,6 +363,11 @@ public class UserAppService(
             user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
             cancellationToken);
         await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordReset), cancellationToken);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserPasswordReset,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
     }
 
     /// <summary>

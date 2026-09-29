@@ -26,7 +26,8 @@ export const AUTH_ROUTES: Routes = [
   },
   //#if (ExternalLogin)
   {
-    path: 'external-callback',
+    // 提供商在路径里：回调地址是一条不带查询串的固定路径，提供商后台按原样登记即可
+    path: 'external-callback/:provider',
     loadComponent: () =>
       import('./components/external-auth-callback/external-auth-callback').then(
         (m) => m.ExternalAuthCallback,

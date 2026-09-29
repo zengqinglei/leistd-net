@@ -132,6 +132,11 @@ http.get('/api/v1/orders', {
 <!--#if (LocalIdentity)-->
 
 哈希路由用 `useHash: true`（部署在无法配置回退规则的静态宿主时用得上）。
+<!--#if (ExternalLogin)-->
+
+**外部登录要求普通路径路由**：回调地址是无 fragment 的 `/auth/external-callback/{provider}`（OAuth 不允许回调地址带 fragment），
+反向代理或静态宿主要把它与其余 SPA 深链一并回退到 `index.html`。启用 `useHash: true` 时外部登录不可用。
+<!--#endif-->
 <!--#else-->
 
 OIDC 授权服务器地址、客户端 ID 与 scope 在 `oidc` 下配置。
