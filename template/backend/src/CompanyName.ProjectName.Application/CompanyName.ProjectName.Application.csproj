@@ -9,6 +9,7 @@
   <ItemGroup>
 <!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.Abstractions" />
+    <PackageReference Include="Leistd.ServiceClient.Core" />
 <!--#endif-->
 <!--#if (IncludeLocalization)-->
     <!-- 权限定义的显示名按请求 culture 在响应阶段翻译，需要本地化抽象。 -->

@@ -27,8 +27,8 @@ src/
 | 层 | 放什么 | 是否进仓库 |
 | --- | --- | --- |
 | `appsettings.json` | 与环境无关的基线；凭据位置留空 | 是 |
-| `appsettings.Development.json` | 非机密的开发配置：内存库名、开发证书开关 | 是 |
-| `dotnet user-secrets` | 机密与只属于本机的覆盖：管理员口令、本机连接串、SPA 代理开关 | 否，只在开发环境加载 |
+| `appsettings.Development.json` | 所有开发者共用的开发配置：内存库名、开发证书开关、公开的演示管理员口令 | 是 |
+| `dotnet user-secrets` | 机密与只属于本机的覆盖：本机连接串、连接共享库时的管理员口令 | 否，只在开发环境加载 |
 | 环境变量 / 密钥系统 | 部署环境的全部机密与差异 | 否 |
 
 Api 与 `DbMigrator` 共用同一个 `UserSecretsId`。配了 `ConnectionStrings:Default` 就走真实数据库，否则用 `Database:InMemoryName` 指定的内存库：
@@ -107,16 +107,22 @@ dotnet ef migrations add <MigrationName> \
 漏生成迁移时，单元测试 `MigrationSnapshotTests` 会失败：它不连库，按关系型模型与已提交的迁移快照比对。新增 DbContext 时在其中补一条对应断言。
 
 生产数据库身份必须分离：API 使用 Runtime Secret 且不得执行 DDL，`DbMigrator` 使用 Migration Secret。任一目标迁移失败时进程以非零码退出并阻断发布，具体边界见 [部署说明](../docs/deploy/README.md)。
-
 <!--#if (LocalIdentity)-->
+
 ## 认证配置
 
-首次启动会按 `DefaultAdmin` 创建管理员。**`DefaultAdmin:Password` 没有默认值**，必须由部署注入（环境变量或 `dotnet user-secrets`）——缺失、空值或不满足密码策略（至少 12 个字符）都会在启动期被拒绝。另需持久化 Data Protection 密钥。
+库里还没有超级管理员时，启动会按 `DefaultAdmin` 创建一个。`DefaultAdmin:Password` 在基础配置里没有默认值，只在创建那一刻校验：缺失或不满足密码策略（至少 12 个字符）即启动失败并报出键名；已有管理员的部署不必再提供。开发环境由 `appsettings.Development.json` 提供公开的演示口令，连接共享库前用 user-secrets 覆盖；部署经环境变量注入。另需持久化 Data Protection 密钥。
 
 角色、权限和超级管理员属于不同授权维度；业务接口应同时覆盖允许、拒绝和超级管理员旁路场景。
 <!--#if (OpenIddictServer)-->
 
 OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证书不得用于生产。
+
+访问令牌的受众由授予的 scope 推出，能签发哪些 scope 只由 `Application/Auth/OAuth/OAuthScopes.cs` 定义（服务端登记、scope 表、开放应用的权限校验都读它）：
+
+- `OAuth:Resource` 是本服务 API 的标识，同名登记为 scope。调用本服务 API 的客户端要被授予并申请它，本服务只接受受众是它的令牌；
+- `OAuth:ApiResources` 列出由本服务签发令牌的下游 API，各登记为同名 scope，下游服务把自己的 `Authentication:Audience` 设为同一个值；
+- 租户路由的两个 scope 与委托 scope `svc.delegate` 只能授予机器客户端；代表用户调用下游时，同时申请目标 API 的 scope 与 `svc.delegate`。
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 
@@ -126,17 +132,11 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
 
-通知 Hub 与业务实时 Hub 分别注册和映射。修改通知、订阅或资源鉴权时，应验证通知持久化、未读状态、通用订阅和越权拒绝。
+通知与业务实时事件共用实时 Hub（`AddNotificationsSignalR<RealTimeHub>()`，只映射 `MapRealTimeHub()`），前端只建一条连接。修改通知、订阅或资源鉴权时，应验证通知持久化、未读状态、通用订阅和越权拒绝。
 <!--#endif-->
 <!--#endif-->
 
 ## 前后端联调
 
-同源开发时启用 SPA 代理（本机偏好，放 user-secrets）：
-
-```bash
-dotnet user-secrets set "SpaProxy:Enabled" "true" --project src/CompanyName.ProjectName.Api
-dotnet user-secrets set "SpaProxy:Target" "http://localhost:4200" --project src/CompanyName.ProjectName.Api
-```
-
-也可以让前端直接访问后端，并同样在 user-secrets 里设置 `Cors:AllowAnyLocalhost=true`。
+本机开发时浏览器访问前端开发服务器（`http://localhost:4200`），由它把 API 与 Hub 请求转发到本服务，见[前端说明](../frontend/README.md)。
+本服务不托管开发中的前端；部署时前端构建产物放在 `wwwroot`，由本服务同源托管。

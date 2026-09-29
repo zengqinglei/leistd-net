@@ -26,5 +26,8 @@ public interface IOpenApplicationAppService : IAppService
     Task DeleteAsync(string id, CancellationToken cancellationToken = default);
 
     Task<ResetOpenApplicationSecretOutputDto> ResetSecretAsync(string id, CancellationToken cancellationToken = default);
+
+    /// <summary>可授予开放应用的 scope（本服务能签发的全部 scope，含配置的下游 API）。</summary>
+    IReadOnlyList<OpenApplicationScopeOutputDto> GetScopes();
 }
 #endif

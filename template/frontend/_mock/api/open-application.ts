@@ -8,7 +8,11 @@ import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
 import { parseMockSorting } from '../core/sorting';
-import { MockOpenApplication, OPEN_APPLICATIONS } from '../data/open-applications';
+import {
+  MockOpenApplication,
+  OPEN_APPLICATION_SCOPES,
+  OPEN_APPLICATIONS,
+} from '../data/open-applications';
 
 const applications = OPEN_APPLICATIONS;
 
@@ -224,6 +228,7 @@ function resetOpenApplicationSecret(req: MockRequest) {
 
 export const OPEN_APPLICATION_API = {
   'GET /api/v1/open-applications': (req: MockRequest) => getOpenApplications(req),
+  'GET /api/v1/open-applications/scopes': () => OPEN_APPLICATION_SCOPES,
   'GET /api/v1/open-applications/:id': (req: MockRequest) => getOpenApplication(req),
   'POST /api/v1/open-applications': (req: MockRequest) => createOpenApplication(req),
   'PUT /api/v1/open-applications/:id': (req: MockRequest) => updateOpenApplication(req),

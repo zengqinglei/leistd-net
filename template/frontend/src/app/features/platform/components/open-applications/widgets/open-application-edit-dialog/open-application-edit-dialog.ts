@@ -37,6 +37,7 @@ import {
   OpenApplicationClientType,
   OpenApplicationConsentType,
   OpenApplicationOutputDto,
+  OpenApplicationScopeOutputDto,
   OpenApplicationType,
   UpdateOpenApplicationInputDto,
 } from '../../../../models/open-application.dto';
@@ -148,7 +149,18 @@ export class OpenApplicationEditDialog {
   readonly loading = input(false);
   readonly saving = input(false);
   readonly application = input<OpenApplicationOutputDto | null>(null);
+  /** 可授予的 scope，由父页面从服务端取得：服务端能签发哪些 scope（含配置的下游 API）只有它知道。 */
+  readonly scopes = input<OpenApplicationScopeOutputDto[]>([]);
   readonly saved = output<CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto>();
+
+  // 标准 scope 用本地译名，其余（本服务与下游 API、机器 scope）用服务端给的展示名
+  private readonly scopeOptions = computed(() =>
+    this.scopes().map((scope) => ({
+      label: this.permissionLabels()[`scp:${scope.name}`] ?? scope.displayName,
+      value: `scp:${scope.name}`,
+      group: 'Scopes',
+    })),
+  );
 
   protected readonly formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
   selectedTemplate = signal<OpenApplicationTemplate | null>(null);
@@ -301,11 +313,7 @@ export class OpenApplicationEditDialog {
         value: 'rst:code',
         group: 'Response Types',
       },
-      { label: 'openid', value: 'scp:openid', group: 'Scopes' },
-      { label: 'profile', value: 'scp:profile', group: 'Scopes' },
-      { label: 'email', value: 'scp:email', group: 'Scopes' },
-      { label: 'roles', value: 'scp:roles', group: 'Scopes' },
-      { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
+      ...this.scopeOptions(),
     ];
   });
 
@@ -391,11 +399,7 @@ export class OpenApplicationEditDialog {
     { label: 'Refresh token', value: 'gt:refresh_token', group: 'Grant Types' },
     { label: 'Client credentials', value: 'gt:client_credentials', group: 'Grant Types' },
     { label: 'Code response', value: 'rst:code', group: 'Response Types' },
-    { label: 'openid', value: 'scp:openid', group: 'Scopes' },
-    { label: 'profile', value: 'scp:profile', group: 'Scopes' },
-    { label: 'email', value: 'scp:email', group: 'Scopes' },
-    { label: 'roles', value: 'scp:roles', group: 'Scopes' },
-    { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
+    ...this.scopeOptions(),
   ]);
 
   readonly requirementOptions = computed(() => [{ label: 'Force PKCE', value: 'ft:pkce' }]);

@@ -1,6 +1,4 @@
 using CompanyName.ProjectName.DbMigrator;
-using CompanyName.ProjectName.Domain;
-using CompanyName.ProjectName.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -30,14 +28,7 @@ foreach (var argument in args)
 // 刻意不把 args 交给宿主：命令行配置提供程序会把 `--apply`（无值开关）当配置键解析。
 // 本作业的配置来自环境变量与 appsettings——K8s Job 的标准做法，不需要命令行覆盖。
 var builder = Host.CreateApplicationBuilder();
-builder.Services.AddDomainServices();
-// 迁移目标枚举（ITenantMigrationTargetProvider）随租户连接解析一起注册
-builder.Services.AddInfrastructureServices(builder.Configuration);
-#if (LocalIdentity)
-// 独立库连接串在控制库里加密存储：必须与 API 共享同一密钥环，否则解不开、迁移作业整体停下
-builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
-#endif
-builder.Services.AddScoped<DatabaseMigrationRunner>();
+builder.Services.AddMigratorServices(builder.Configuration, builder.Environment);
 
 try
 {

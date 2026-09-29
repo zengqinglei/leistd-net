@@ -8,10 +8,12 @@ using System.Text.Json;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Application.TenantConnections;
-using CompanyName.ProjectName.Application.TenantConnections.Constants;
+using CompanyName.ProjectName.Application.Auth.OAuth;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Application.Contracts.Dtos;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using CompanyName.ProjectName.Application.OpenApplications.Mappings;
 using Leistd.ObjectMapping.Abstractions;
 using OpenIddict.Abstractions;
@@ -22,6 +24,7 @@ namespace CompanyName.ProjectName.Application.OpenApplications.AppServices;
 
 public class OpenApplicationAppService(
     IOpenIddictApplicationManager applicationManager,
+    IOptions<OAuthOptions> oauthOptions,
     IObjectMapper objectMapper,
     IClock clock,
     ILogger<OpenApplicationAppService> logger) : BaseAppService, IOpenApplicationAppService
@@ -42,39 +45,16 @@ public class OpenApplicationAppService(
     };
 
     /// <summary>
-    /// 本项目实际注册的 OIDC scope（见 <c>Program.cs</c> 的 <c>RegisterScopes</c>）。
+    /// 本服务能签发的 scope 与其中仅限机器的那些，都取自 scope 目录（见 <see cref="OAuthScopes"/>）。
     /// </summary>
     /// <remarks>
-    /// 只校验 <c>scp:</c> 前缀这一类：客户端可以请求一个服务端根本没注册的 scope，
+    /// <para>只校验 <c>scp:</c> 前缀这一类：客户端可以请求一个服务端根本没登记的 scope，
     /// 存得下但发令牌时必然被拒——写入时报错比留一个"配置得上、用不了"的客户端好排查。
-    /// 裁掉角色能力的项目里 <c>roles</c> 不存在，界面已不展示，接口也不该收。
-    /// 其余前缀（ept:/gt:/rst:/ft:）不在此校验：为它们维护一份完整词汇表的成本远大于收益。
+    /// 其余前缀（ept:/gt:/rst:/ft:）不在此校验：为它们维护一份完整词汇表的成本远大于收益。</para>
+    /// <para>仅限机器的 scope（内部控制面、代表用户调用下游）只能发给服务间调用的机器客户端：
+    /// 授出去就没有回收窗口，创建时挡住比事后审计便宜；资源端策略另有一道。</para>
     /// </remarks>
-    private static readonly HashSet<string> RegisteredScopePermissions = new(StringComparer.Ordinal)
-    {
-        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
-        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Profile,
-        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Email,
-        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.Roles,
-        OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OfflineAccess,
-        OpenIddictConstants.Permissions.Prefixes.Scope + TenantConnectionScopes.RuntimeRead,
-        OpenIddictConstants.Permissions.Prefixes.Scope + TenantConnectionScopes.MigrationRead
-    };
-
-    /// <summary>
-    /// 内部控制面 scope：只能发给服务间调用的机器客户端
-    /// </summary>
-    /// <remarks>
-    /// 它们背后的端点直接暴露租户连接配置（数据落在哪个库、解密后的连接串），
-    /// 资源端策略已限定为机器主体（见 <c>AddApiAuthorization</c>）。这里是<b>配置入口</b>侧的
-    /// 第二道：授出去就没有回收窗口，创建时挡住比事后审计便宜。两层都要有——
-    /// 只靠配置入口挡不住已存在的客户端，只靠资源端则允许留下一堆"配得上、用不了"的客户端。
-    /// </remarks>
-    private static readonly HashSet<string> MachineOnlyScopePermissions = new(StringComparer.Ordinal)
-    {
-        OpenIddictConstants.Permissions.Prefixes.Scope + TenantConnectionScopes.RuntimeRead,
-        OpenIddictConstants.Permissions.Prefixes.Scope + TenantConnectionScopes.MigrationRead
-    };
+    private IReadOnlyList<OAuthScope> ScopeCatalog => OAuthScopes.All(oauthOptions.Value);
 
     /// <summary>
     /// 代表自然人的授权流：与内部控制面 scope 互斥
@@ -308,7 +288,18 @@ public class OpenApplicationAppService(
             new Dictionary<string, object> { [OpenApplicationProfile.IdKey] = id ?? string.Empty });
     }
 
-    private static void ValidateApplication(
+    /// <inheritdoc />
+    public IReadOnlyList<OpenApplicationScopeOutputDto> GetScopes() =>
+        ScopeCatalog
+            .Select(scope => new OpenApplicationScopeOutputDto
+            {
+                Name = scope.Name,
+                DisplayName = scope.DisplayName,
+                MachineOnly = scope.MachineOnly
+            })
+            .ToList();
+
+    private void ValidateApplication(
         string applicationType,
         string clientType,
         string consentType,
@@ -347,7 +338,8 @@ public class OpenApplicationAppService(
         foreach (var permission in permissions.Where(x =>
                      x.StartsWith(OpenIddictConstants.Permissions.Prefixes.Scope, StringComparison.Ordinal)))
         {
-            if (RegisteredScopePermissions.Contains(permission))
+            var scopeName = permission[OpenIddictConstants.Permissions.Prefixes.Scope.Length..];
+            if (ScopeCatalog.Any(scope => scope.Name == scopeName))
                 continue;
 
             throw new BusinessException(OpenAppErrorCodes.ScopeUnsupported, $"Unsupported scope permission: {permission}")
@@ -395,11 +387,15 @@ public class OpenApplicationAppService(
     /// 同一客户端不得启用用户授权流，避免混合机器与自然人的信任边界。
     /// <c>applicationType=service</c> 仅为分类信息，不作为安全断言。
     /// </remarks>
-    private static void ValidateMachineOnlyScopes(
+    private void ValidateMachineOnlyScopes(
         string clientType,
         IReadOnlyCollection<string> permissions)
     {
-        var machineScopes = permissions.Where(MachineOnlyScopePermissions.Contains).ToList();
+        var machineScopes = ScopeCatalog
+            .Where(scope => scope.MachineOnly)
+            .Select(scope => OpenIddictConstants.Permissions.Prefixes.Scope + scope.Name)
+            .Where(permissions.Contains)
+            .ToList();
         if (machineScopes.Count == 0)
         {
             return;
@@ -410,21 +406,21 @@ public class OpenApplicationAppService(
         if (clientType != OpenIddictConstants.ClientTypes.Confidential)
         {
             throw new BusinessException(OpenAppErrorCodes.MachineScopeRequiresConfidential,
-                    $"Internal control-plane scopes ({scopeList}) require a confidential client.")
+                    $"Machine-only scopes ({scopeList}) require a confidential client.")
                 .WithData("Scopes", scopeList);
         }
 
         if (!permissions.Contains(OpenIddictConstants.Permissions.GrantTypes.ClientCredentials))
         {
             throw new BusinessException(OpenAppErrorCodes.MachineScopeRequiresClientCredentials,
-                    $"Internal control-plane scopes ({scopeList}) require the client_credentials grant type.")
+                    $"Machine-only scopes ({scopeList}) require the client_credentials grant type.")
                 .WithData("Scopes", scopeList);
         }
 
         if (!permissions.Contains(OpenIddictConstants.Permissions.Endpoints.Token))
         {
             throw new BusinessException(OpenAppErrorCodes.MachineScopeRequiresTokenEndpoint,
-                    $"Internal control-plane scopes ({scopeList}) require the token endpoint permission.")
+                    $"Machine-only scopes ({scopeList}) require the token endpoint permission.")
                 .WithData("Scopes", scopeList);
         }
 
@@ -432,7 +428,7 @@ public class OpenApplicationAppService(
         if (humanGrants.Count > 0)
         {
             throw new BusinessException(OpenAppErrorCodes.MachineScopeRejectsUserGrants,
-                $"Internal control-plane scopes ({scopeList}) cannot be combined with user-facing grant " +
+                $"Machine-only scopes ({scopeList}) cannot be combined with user-facing grant " +
                 $"types ({string.Join(", ", humanGrants)}).")
                 .WithData("Scopes", scopeList)
                 .WithData("Grants", string.Join(", ", humanGrants));

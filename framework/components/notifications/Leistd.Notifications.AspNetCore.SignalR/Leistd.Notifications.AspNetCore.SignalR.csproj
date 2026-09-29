@@ -13,4 +13,8 @@
     <ProjectReference Include="..\Leistd.Notifications.Core\Leistd.Notifications.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Leistd.Notifications.Tests" />
+  </ItemGroup>
+
 </Project>

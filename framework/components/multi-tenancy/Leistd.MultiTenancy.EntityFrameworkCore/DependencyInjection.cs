@@ -88,7 +88,7 @@ public static class DependencyInjection
     /// <para>宿主须注册：控制库上下文（<c>AddDbContext</c>，直接注入、不经工作单元）；
     /// 迁移目标需要的 <see cref="AddMultiTenancyEfCore{TDbContext}"/>；
     /// 与写入方共享密钥环的 <c>AddDataProtection()</c>——连接串在这里解密，解不开即拒绝，不静默回落。</para>
-    /// <para>同时注册 <see cref="ITenantMigrationTargetProvider"/>（读控制库）。均以 <c>TryAdd</c> 注册，宿主可替换。
+    /// <para>同时注册多租户核心服务（<c>AddMultiTenancyCore()</c>）与 <see cref="ITenantMigrationTargetProvider"/>（读控制库）。均以 <c>TryAdd</c> 注册，宿主可替换。
     /// 逐库作业的库目录 <c>ITenantDatabaseDirectory</c> <b>不在这里</b>：它是控制库的存储，由
     /// <see cref="AddMultiTenancyEfCore{TDbContext}"/> 注册。
     /// 连接配置在另一个服务时改用 Core 包的 <c>AddRemoteTenantConnectionResolution</c>，两者二选一。</para>
@@ -110,6 +110,8 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);
 
+        // 解析器按当前租户取连接；只做迁移等不经 Web 集成的宿主也要能单独使用本入口
+        services.AddMultiTenancyCore();
         services.Configure(configure);
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<LocalTenantConnectionOptions>, LocalTenantConnectionOptionsValidator>());

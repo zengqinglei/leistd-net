@@ -33,6 +33,9 @@ import { SILENT_AUTH } from '../interceptors/http-context-tokens';
 //#if (LocalIdentity)
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  /** 账号密码登录接口。 */
+  static readonly loginUrl = '/api/v1/auth/session-login';
+
   private readonly http = inject(HttpClient);
   //#if (IncludeNotifications)
   private readonly signalR = inject(SignalRService);
@@ -47,7 +50,7 @@ export class AuthService {
 
   /** 账号密码登录；已启用两步验证时不下发会话，返回第二步凭据。 */
   login(credentials: LoginInputDto): Observable<SessionLoginOutputDto> {
-    return this.http.post<SessionLoginOutputDto>('/api/v1/auth/session-login', credentials);
+    return this.http.post<SessionLoginOutputDto>(AuthService.loginUrl, credentials);
   }
 
   // 错误按原样抛出：401（未登录）与服务故障（503/断网）由 StartupService 分别处理，

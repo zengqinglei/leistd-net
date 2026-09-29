@@ -8,7 +8,10 @@ using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Email;
 using Leistd.Notifications.Email.Recipients;
 using Leistd.Notifications.Email.Channels;
+using Leistd.Notifications.Email.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.Notifications.Tests.Bridges;
@@ -18,11 +21,17 @@ namespace Leistd.Notifications.Tests.Bridges;
 /// </summary>
 public sealed class EmailNotificationChannelTests
 {
-    private static (ServiceProvider Provider, CapturingSender Sender) Build(string? verifiedEmail)
+    private static (ServiceProvider Provider, CapturingSender Sender) Build(string? verifiedEmail, string? publicBaseUrl = null)
     {
         var sender = new CapturingSender();
         var provider = new ServiceCollection()
             .AddLogging()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{EmailNotificationOptions.SectionName}:PublicBaseUrl"] = publicBaseUrl
+                })
+                .Build())
             .AddSingleton<DeferredQueue>()
             .AddSingleton<IBackgroundTaskQueue>(sp => sp.GetRequiredService<DeferredQueue>())
             .AddEmailNotifications()
@@ -83,9 +92,9 @@ public sealed class EmailNotificationChannelTests
         Assert.EndsWith("https://app.test/settings/security", message.Body);
     }
 
-    /// <summary>相对链接是站内导航，邮件里打不开，不附。</summary>
+    /// <summary>没有配置站点地址时，相对链接是站内导航，邮件里打不开，不附。</summary>
     [Fact]
-    public async Task A_relative_link_is_not_appended()
+    public async Task A_relative_link_is_not_appended_without_a_public_base_url()
     {
         var (provider, sender) = Build("ada@example.com");
         using var scope = provider.CreateScope();
@@ -99,6 +108,56 @@ public sealed class EmailNotificationChannelTests
         await DrainAsync(provider);
 
         Assert.Equal("A new device signed in.", Assert.Single(sender.Sent).Body);
+    }
+
+    /// <summary>配置了站点地址时，站内链接拼成绝对地址附上；带路径前缀与哈希路由的站点照写即可。</summary>
+    [Theory]
+    [InlineData("https://app.test", "/settings/security", "https://app.test/settings/security")]
+    [InlineData("https://app.test/portal/", "/settings/security", "https://app.test/portal/settings/security")]
+    [InlineData("https://app.test/#", "/settings/security", "https://app.test/#/settings/security")]
+    [InlineData("https://app.test", "https://other.test/x", "https://other.test/x")]
+    public async Task A_relative_link_is_resolved_against_the_public_base_url(string baseUrl, string link, string expected)
+    {
+        Assert.EndsWith(expected, (await MailBodyAsync(baseUrl, link))!);
+    }
+
+    /// <summary>站点地址只用来补全以 / 开头的站内链接：协议相对地址与其他写法不附。</summary>
+    [Theory]
+    [InlineData("//evil.test/phish")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("settings/security")]
+    public async Task Links_that_are_not_site_paths_are_not_appended(string link)
+    {
+        Assert.Equal("A new device signed in.", await MailBodyAsync("https://app.test", link));
+    }
+
+    [Theory]
+    [InlineData("app.test")]
+    [InlineData("ftp://app.test")]
+    public void A_public_base_url_that_is_not_an_http_url_fails_at_startup(string baseUrl)
+    {
+        var (provider, _) = Build("ada@example.com", baseUrl);
+
+        var exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<EmailNotificationOptions>>().Value);
+
+        Assert.Contains($"{EmailNotificationOptions.SectionName}:PublicBaseUrl", exception.Message);
+    }
+
+    private static async Task<string?> MailBodyAsync(string publicBaseUrl, string link)
+    {
+        var (provider, sender) = Build("ada@example.com", publicBaseUrl);
+        using var scope = provider.CreateScope();
+        var channel = scope.ServiceProvider.GetServices<INotificationChannel>().Single(c => c.Name == EmailNotificationChannel.ChannelName);
+
+        await channel.DeliverAsync("u1", new NotificationOutputDto
+        {
+            Id = "n1", Title = "New sign-in", Content = "A new device signed in.", Link = link,
+            CreationTime = DateTime.UtcNow
+        });
+        await DrainAsync(provider);
+
+        return Assert.Single(sender.Sent).Body;
     }
 
     [Fact]

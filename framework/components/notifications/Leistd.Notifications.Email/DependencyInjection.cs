@@ -5,6 +5,8 @@ using Leistd.Notifications.Stores;
 using Leistd.Notifications.Email.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using Leistd.Notifications.Email.Options;
 
 namespace Leistd.Notifications.Email;
 
@@ -14,7 +16,7 @@ namespace Leistd.Notifications.Email;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 登记邮件渠道 <see cref="EmailNotificationChannel"/>。
+    /// 登记邮件渠道 <see cref="EmailNotificationChannel"/>：绑定配置节，再应用宿主的编程式配置（代码覆盖配置文件）。
     /// </summary>
     /// <remarks>
     /// 宿主还需注册 <c>INotificationRecipientResolver</c>（从自己的用户模型取已验证地址）、一个 <c>IEmailSender</c>
@@ -27,8 +29,23 @@ public static class DependencyInjection
     /// </code>
     /// </example>
     /// <param name="services">服务集合。</param>
-    public static IServiceCollection AddEmailNotifications(this IServiceCollection services)
+    /// <param name="configure">编程式配置，在配置节绑定之后应用。</param>
+    /// <param name="configSectionPath">配置节路径，默认 <c>Leistd:Notifications:Email</c>。</param>
+    public static IServiceCollection AddEmailNotifications(
+        this IServiceCollection services,
+        Action<EmailNotificationOptions>? configure = null,
+        string configSectionPath = EmailNotificationOptions.SectionName)
     {
+        var options = services.AddOptions<EmailNotificationOptions>().BindConfiguration(configSectionPath);
+        if (configure is not null)
+        {
+            options.Configure(configure);
+        }
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<EmailNotificationOptions>>(
+            new EmailNotificationOptionsValidator(configSectionPath)));
+        options.ValidateOnStart();
+
         services.TryAddEnumerable(ServiceDescriptor.Scoped<INotificationChannel, EmailNotificationChannel>());
         return services;
     }

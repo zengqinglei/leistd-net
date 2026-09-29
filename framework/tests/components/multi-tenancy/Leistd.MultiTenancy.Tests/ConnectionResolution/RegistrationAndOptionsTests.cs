@@ -3,7 +3,9 @@ using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 using Leistd.Data.Connections;
 using Leistd.TestBase.Assertions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -74,6 +76,38 @@ public class RegistrationAndOptionsTests
         }
 
         Assert.Equal(expected, services.Any(service => service.ServiceType == typeof(TenantConnectionRouting)));
+    }
+
+    /// <summary>两个解析入口单独使用即自闭环：解析器依赖的当前租户由入口自己登记。</summary>
+    /// <remarks>
+    /// 迁移作业只注册持久化、不经 Web 集成；开发环境的宿主在构建期校验依赖，缺 <c>ICurrentTenant</c> 就起不来。
+    /// 这里只补宿主本就要给的前提：配置、日志、连接配置存储，本地解析另加控制库与密钥环。
+    /// </remarks>
+    [Theory]
+    [InlineData("local")]
+    [InlineData("remote")]
+    public void Each_resolution_entry_point_is_self_contained(string registration)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<ITenantConnectionConfigurationStore>(new ScriptedRemoteSource());
+        if (registration == "local")
+        {
+            services.AddDbContext<ControlDbContext>(options => options.UseSqlite("DataSource=:memory:"));
+            services.AddDataProtection();
+            services.AddLocalTenantConnectionResolution<ControlDbContext>(o => o.ControlPlaneConnectionStringName = "Control");
+        }
+        else
+        {
+            services.AddRemoteTenantConnectionResolution();
+        }
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
     }
 
     // 远端宿主不持有控制面的密钥环：远端解析的注册面里不能冒出任何 Data Protection 依赖

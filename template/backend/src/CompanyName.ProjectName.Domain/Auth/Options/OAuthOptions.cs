@@ -5,13 +5,6 @@ public class OAuthOptions
 {
     public const string SectionName = "OAuth";
 
-
-
-    /// <summary>
-    /// Cookie 会话过期天数（默认7天）
-    /// </summary>
-    public int CookieExpireDays { get; set; } = 7;
-
     /// <summary>
     /// 是否使用 OpenIddict 的开发证书签名与加密令牌。默认关闭，只在开发配置里打开。
     /// </summary>
@@ -45,8 +38,14 @@ public class OAuthOptions
     public string? Issuer { get; set; }
 
     /// <summary>
-    /// OpenIddict 资源标识符（API audience）
+    /// 本服务 API 的资源标识（访问令牌的受众）。同名登记为 scope：客户端申请它，签发的令牌才能调用本服务的 API。
     /// </summary>
     public string Resource { get; set; } = "companyname-projectname-api";
+
+    /// <summary>
+    /// 由本服务签发令牌的下游 API 的资源标识。每个都登记为同名 scope，申请它签发的访问令牌受众即该标识。
+    /// </summary>
+    /// <remarks>下游服务把自己的 <c>Authentication:Audience</c> 设为同一个值。不能为空、不能重复，也不能与内置 scope 同名。</remarks>
+    public string[] ApiResources { get; set; } = [];
 }
 #endif

@@ -398,3 +398,26 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 模板：令牌端点与 userinfo 在令牌主体的租户内加载用户 | `IAuthPrincipalFactory` 新增 `CreateFromTokenAsync(tokenPrincipal, scopes)`，`CreateUserInfoAsync` 改为只收令牌主体。此前这两个端点的请求解析出的是宿主，**租户用户走不通授权码换令牌、刷新与 userinfo**；已派生项目按模板同步 |
 | 模板：租户相关的缓存与状态键按租户隔离 | 登录失败计数、邮箱验证码限流与挑战、外部登录 state 统一经 `ScopeKey`；外部登录 state 绑定发起时的租户，回调时租户不一致即拒绝 |
 | 模板前端：租户键集中到 `tenant-protocol.ts` | `TENANT_HEADER`（`X-Tenant`）、`TENANT_INVALID_HEADER`、`TENANT_CLAIM` 三个常量取代散落的字面量；Resource 形态接受没有租户 claim 的宿主用户 |
+
+## 12. 通知推送与本机开发
+
+| 变化 | 影响与改法 |
+| --- | --- |
+| 通知客户端方法名改为 `Notifications.Received` | 公开常量 `NotificationClientMethods.Received`；此前为 `NotificationReceived`。前端 `connection.on(...)` 同步改名，旧名不再推送 |
+| 新增 `AddNotificationsSignalR<THub>()` | 通知可经宿主指定的 Hub 推送，与业务实时事件共用一条连接（如 `AddNotificationsSignalR<RealTimeHub>()` + 只映射 `MapRealTimeHub()`）。无泛型版本等价于 `<NotificationHub>`；同一 Hub 重复注册幂等，已选定一个 Hub 后再指定另一个在注册时抛 `InvalidOperationException` |
+| `AddRemoteTenantConnectionResolution()` / `AddLocalTenantConnectionResolution<T>()` 自带多租户核心服务 | 两者调用 `AddMultiTenancyCore()`（TryAdd，宿主先注册的替换实现照旧保留）。此前单独使用（如只注册持久化的迁移作业）缺 `ICurrentTenant`，开发环境在容器构建期失败；宿主已显式调用 `AddMultiTenancyCore()` 的无需改动 |
+| `SignalRNotificationChannel` 改为 internal | 宿主经 `INotificationChannel` 使用；需要定制推送时实现自己的渠道 |
+| `AddEmailNotifications(configure?, configSectionPath?)` 绑定 `Leistd:Notifications:Email` | 新增可选 `PublicBaseUrl`：配置后，以 `/` 开头的站内链接拼成绝对地址附进邮件（此前相对链接一律不附）；配置值不是绝对 http(s) 地址时启动失败。无主机的 `ServiceCollection` 需自行注册 `IConfiguration` |
+| 模板：默认管理员口令只在首次创建时校验 | 删除 `DefaultAdmin:Password` 的启动期校验与 `DefaultAdminOptions.IsPasswordUsable`；库里没有超级管理员、需要创建时才校验并报出键名。`appsettings.Development.json` 带公开的本机演示口令；compose 不再以 `:?` 强制 `DEFAULT_ADMIN_PASSWORD` |
+| 模板前端：本机开发配置 | `npm start` 即 `ng serve`（构建配置 `debug` 改名 `development`）；`environment.ts` 即本机配置，不再需要复制 `environment.debug.ts`。Mock 提供器默认空实现，只有 `development` 构建替换为 `providers.mock.ts`，其他构建不含 Mock；Mock 判定统一为 `_mock/core/matching.ts` |
+| 模板：开发代理改为 Angular `proxyConfig` | 删除后端 `SpaProxy` 选项与实现；前端 `proxy.conf.mjs` 转发 `/api`、`/hubs`（WebSocket）以及身份服务的 `/connect`、`/.well-known`，浏览器访问 `http://localhost:4200`。后端不在默认端口时设置 `API_PROXY_TARGET` |
+| 模板：删除 `/uploads` 静态目录 | 没有写入方；compose 的 `feedback-uploads` 卷一并删除 |
+| 模板：删除 `Cors:AllowAnyLocalhost` | 它只服务于本机跨域联调，已被开发代理取代；前端部署在另一个源时仍用 `Cors:AllowedOrigins` |
+| 模板：通知与业务事件共用实时 Hub | `AddNotificationsSignalR<RealTimeHub>()`，只映射 `MapRealTimeHub()`；前端只建一条 `/hubs/realtime` 连接 |
+| 模板前端：绝对地址的请求不再带凭据 | URL 格式化拦截器只给本服务的相对地址加网关前缀并带 Cookie；本来就是绝对地址的请求（OIDC 签发方的发现文档、JWKS、令牌端点）原样放行。此前一律 `withCredentials`，签发方在另一个源时带凭据的跨源请求被浏览器拦下，Resource 前端无法发起登录 |
+| 模板前端（身份服务）：登录后回到授权端点用整页跳转 | 未登录的授权请求被送到登录页，`returnUrl` 以 `/connect/` 开头时登录后整页跳转；此前按前端路由处理，落到首页、授权流程中断 |
+| 模板前端（Resource）：OIDC 回调后的导航归回调组件 | `provideAuth` 打开 `triggerAuthorizationResultEvent`；此前库在回调后自行跳到 `postLoginRoute`（默认 `/`），与回到登录前地址的导航竞争。首页的登录入口改为进入工作台由守卫发起登录，不再链到本形态不存在的 `/auth/login`、`/auth/register` |
+| 模板（身份服务）：为下游 API 签发令牌 | 新增 `OAuth:ApiResources`：列出由本服务签发令牌的下游 API，各登记为同名 scope。scope 目录 `OAuthScopes` 成为服务端登记、scope 表、开放应用权限校验与令牌受众的唯一来源；访问令牌的受众由授予的 scope 推出（此前一律是本服务的 `OAuth:Resource`），本服务 API 只接受受众是自己的令牌。**已有客户端要调用本服务 API，须补授 `scp:<OAuth:Resource>` 并在取令牌时申请它**；服务间调用方的 `Leistd:ServiceClients:<服务>:Scope` 同时写目标 API 的 scope 与 `svc.delegate`（空格分隔），委托 scope 改为仅限机器客户端。开放应用新增 `GET /api/v1/open-applications/scopes`，编辑界面的 scope 选项取自它。**启动时按目录对账 scope 表：新建、更新，并删除目录之外的全部 scope**（不只是曾由 `ApiResources` 登记的）；派生项目在库里单独登记过的自定义 scope，升级前须改由目录提供（`OAuth:ApiResources` 或 `OAuthScopes`）。删除登记不撤销已签发的访问令牌，它们照常用到过期 |
+| 模板（Resource）：`Authentication:Audience` 默认改为 `companyname-projectname-api` | 与前端申请的 scope 同名，须在身份服务的 `OAuth:ApiResources` 登记；compose 不再要求 `RESOURCE_AUDIENCE` |
+| 模板：会话时长改为 `SessionCookie:ExpireDays` | 取代 `OAuth:CookieExpireDays`；不带授权服务器的形态此前写死 7 天，现在同样可配。`OAuth` 节只在带授权服务器的形态生成，`Authentication` 节只在 Resource 形态生成 |
+| 模板：迁移作业只注册持久化 | Infrastructure 拆出 `AddPersistenceServices`（数据库上下文、租户连接解析、多租户控制库），`AddInfrastructureServices` 在它之上加运行期组件与外部适配器；DbMigrator 只调用前者。此前迁移作业注册了全部运行期组件，它们依赖只在 API 注册的当前用户与权限主体，开发环境下迁移在容器构建期失败 |

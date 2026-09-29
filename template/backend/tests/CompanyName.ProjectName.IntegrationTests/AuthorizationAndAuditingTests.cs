@@ -672,7 +672,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         // 打 negotiate 而不是引 SignalR.Client：Hub 端点的授权就发生在这一步，
         // 走的是同一条 RequireAuthorization() → 默认策略的路径，不必为一条测试加包依赖。
-        const string Negotiate = "/hubs/notifications/negotiate?negotiateVersion=1";
+        const string Negotiate = "/hubs/realtime/negotiate?negotiateVersion=1";
         Assert.Equal(HttpStatusCode.OK, (await session.Client.PostAsync(Negotiate, null)).StatusCode);
 
         Assert.Equal(

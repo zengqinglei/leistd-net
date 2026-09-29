@@ -32,7 +32,7 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { combineLatest, EMPTY, Subject } from 'rxjs';
+import { combineLatest, EMPTY, of, Subject } from 'rxjs';
 import {
   catchError,
   debounceTime,
@@ -152,6 +152,10 @@ export class OpenApplications {
   editDialogLoading = signal(false);
   editDialogSaving = signal(false);
   selectedApplication = signal<OpenApplicationOutputDto | null>(null);
+  // 可授予的 scope：取不到时编辑框里只是没有 scope 选项，列表照常可用
+  readonly scopes = toSignal(this.service.getScopes().pipe(catchError(() => of([]))), {
+    initialValue: [],
+  });
 
   // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
   secretDialogVisible = signal(false);

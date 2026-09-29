@@ -59,7 +59,6 @@ services:
       # Resource 校验远端签发的令牌，并回源 Identity 解析租户路由。
       # 全部无默认值：漏配时 compose 立刻带变量名失败，不必等到容器启动才由 API 报缺键
       - Authentication__Issuer=${IDENTITY_ISSUER:?IDENTITY_ISSUER is required for a Resource service}
-      - Authentication__Audience=${RESOURCE_AUDIENCE:?RESOURCE_AUDIENCE is required for a Resource service}
       - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}
       - Leistd__ServiceAuth__Authority=${IDENTITY_AUTHORITY:?IDENTITY_AUTHORITY is required for a Resource service}
       - Leistd__ServiceAuth__ClientId=${RESOURCE_CLIENT_ID:?RESOURCE_CLIENT_ID is required for a Resource service}
@@ -81,11 +80,15 @@ services:
 #if (LocalIdentity)
       # 首次启动创建的超级管理员。Resource 不持有本地用户，因此这一段只在本地身份形态生成
       - DefaultAdmin__Username=admin # optional
-      # 必须由部署环境提供（.env 或 CI secret）。`:?` 让缺失时 compose 直接报错而不是
-      # 用一个能登录的已知密码把服务拉起来
-      - DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:?set DEFAULT_ADMIN_PASSWORD before deploying}
+      # 由部署环境提供（.env 或 CI secret），只在库里还没有超级管理员时用于创建：
+      # 首次部署缺失即启动失败并报出键名；已有管理员的部署可以不再提供
+      - DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:-}
       - DefaultAdmin__Email=admin@companyname-projectname.com # optional
       - DefaultAdmin__DisplayName=System Administrator # optional
+#endif
+#if (IncludeNotifications && LocalIdentity)
+      # 可选：站点对外地址，通知邮件据此把站内链接拼成绝对地址；不配则邮件不附站内链接
+      - Leistd__Notifications__Email__PublicBaseUrl=${PUBLIC_BASE_URL:-}
 #endif
 #if (OpenIddictServer)
 
@@ -95,10 +98,11 @@ services:
       - OAuth__SigningCertificatePassword=${OAUTH_SIGNING_CERTIFICATE_PASSWORD:?OAUTH_SIGNING_CERTIFICATE_PASSWORD is required}
       - OAuth__EncryptionCertificatePath=/run/secrets/oauth-encryption-certificate
       - OAuth__EncryptionCertificatePassword=${OAUTH_ENCRYPTION_CERTIFICATE_PASSWORD:?OAUTH_ENCRYPTION_CERTIFICATE_PASSWORD is required}
+      # 由本服务签发令牌的下游 API（每项登记为同名 scope；下游服务的 Authentication:Audience 取同一个值）
+      # - OAuth__ApiResources__0=orders-api
 #endif
 
       # CORS Configuration (optional)
-      - Cors__AllowAnyLocalhost=false
       # - Cors__AllowedOrigins__0=https://your-domain.com
 
       # External OAuth (Optional - uncomment and configure if needed)
@@ -115,10 +119,7 @@ services:
       - Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Warning
       - Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore=Warning
 
-    volumes:
-      - feedback-uploads:/app/wwwroot/uploads
 #if (OpenIddictServer)
-
     secrets:
       - oauth-signing-certificate
       - oauth-encryption-certificate
@@ -130,7 +131,7 @@ services:
       db-migrator:
         condition: service_completed_successfully
       redis:
-        condition: service_started
+        condition: service_healthy
 
     healthcheck:
       # aspnet:10.0 不包含 wget/curl，使用 Bash /dev/tcp 请求就绪端点。
@@ -207,8 +208,6 @@ volumes:
   pgdata:
     driver: local
   redis-data:
-    driver: local
-  feedback-uploads:
     driver: local
 
 networks:

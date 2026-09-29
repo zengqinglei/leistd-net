@@ -3,6 +3,7 @@ import { InjectionToken, inject } from '@angular/core';
 import { from, of, throwError } from 'rxjs';
 import { catchError, delay, mergeMap, tap } from 'rxjs/operators';
 
+import { getUrlPath, isMockedUrl } from './matching';
 import { MockConfig, MockException, MockRequest, MockResponse } from './models';
 import { environment } from '../../src/environments/environment';
 //#if (!LocalIdentity)
@@ -21,7 +22,7 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
   const matchingRule = findMatchingRule(method, url, apis);
 
   if (!matchingRule) {
-    if (shouldMock(url, mockConfig) && getUrlPath(url).startsWith('/api/')) {
+    if (isMockedUrl(environment.useMock, url) && getUrlPath(url).startsWith('/api/')) {
       return throwError(
         () =>
           new HttpErrorResponse({
@@ -40,7 +41,7 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  if (!shouldMock(url, mockConfig)) {
+  if (!isMockedUrl(environment.useMock, url)) {
     return next(req);
   }
 
@@ -176,31 +177,6 @@ function toProblemDetails(exception: MockException, instance: string): Record<st
     ...rest,
     traceId: `mock-${Date.now().toString(16)}`,
   };
-}
-
-function getUrlPath(url: string): string {
-  const urlWithoutQuery = url.split('?')[0];
-
-  try {
-    return new URL(urlWithoutQuery).pathname;
-  } catch {
-    return urlWithoutQuery;
-  }
-}
-
-function shouldMock(url: string, mockConfig: Partial<MockConfig>): boolean {
-  const urlPath = getUrlPath(url);
-  const includeMatched = mockConfig.include
-    ? matchesPatterns(urlPath, mockConfig.include)
-    : Boolean(mockConfig.enable);
-  const excludeMatched = mockConfig.exclude ? matchesPatterns(urlPath, mockConfig.exclude) : false;
-
-  return includeMatched && !excludeMatched;
-}
-
-function matchesPatterns(urlPath: string, patterns: string | string[]): boolean {
-  const normalizedPatterns = Array.isArray(patterns) ? patterns : [patterns];
-  return normalizedPatterns.some((pattern) => new RegExp(pattern).test(urlPath));
 }
 
 function getMockConfig(): Partial<MockConfig> {

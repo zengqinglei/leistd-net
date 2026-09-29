@@ -29,6 +29,13 @@ public sealed class OpenApplicationController(IOpenApplicationAppService openApp
     }
 
     /// <summary>
+    /// 可授予开放应用的 scope
+    /// </summary>
+    [HttpGet("scopes")]
+    [Authorize(Policy = PermissionConstant.OpenApplications.Default)]
+    public IReadOnlyList<OpenApplicationScopeOutputDto> GetScopes() => openApplicationAppService.GetScopes();
+
+    /// <summary>
     /// 获取开放应用详情
     /// </summary>
     [HttpGet("{id}")]

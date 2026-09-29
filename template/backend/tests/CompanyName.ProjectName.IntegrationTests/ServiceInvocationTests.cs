@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Client;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Security.Claims;
@@ -34,6 +35,9 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
     /// <summary>未获委托 scope 的客户端：只能以自身身份调用，不能代表用户。</summary>
     private const string PlainClientId = "svc-plain";
     private const string PlainClientSecret = "SvcPlain@123456";
+
+    // 调用本服务 API 必须申请它的 scope：委托 scope 只表示"可以代表用户"，不决定令牌能调用哪个 API
+    private static readonly string ApiScope = new OAuthOptions().Resource;
 
     /// <summary>client_id 取用户 Id 形态的客户端，用于主体命名空间碰撞回归。</summary>
     private const string ImpersonatingClientSecret = "SvcImpersonate@123456";
@@ -131,7 +135,7 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
     {
         await EnsureCallerRegisteredAsync();
         using var client = CreateHttpsClient();
-        var token = await GetMachineTokenAsync(client, PlainClientId, PlainClientSecret, scope: null);
+        var token = await GetMachineTokenAsync(client, PlainClientId, PlainClientSecret, delegation: false);
 
         // 未获委托 scope：即使知道管理员的用户 Id，X-User-* 头也会被剥离，
         // 主体仍是机器身份，因而不满足「可用的自然人」默认策略。
@@ -203,9 +207,9 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
             ["Leistd:ServiceAuth:TokenEndpoint"] = "https://localhost/connect/token",
             ["Leistd:ServiceAuth:ClientId"] = CallerClientId,
             ["Leistd:ServiceAuth:ClientSecret"] = CallerClientSecret,
-            // 目标服务：地址 + 委托 scope（代表用户调用所必需）
+            // 目标服务：地址 + 它的 API scope 与委托 scope（代表用户调用所必需），空格分隔
             ["Leistd:ServiceClients:MyProject:BaseAddress"] = "https://localhost",
-            ["Leistd:ServiceClients:MyProject:Scope"] = ServiceClientScopes.Delegation,
+            ["Leistd:ServiceClients:MyProject:Scope"] = $"{ApiScope} {ServiceClientScopes.Delegation}",
         }).Build();
 
         var services = new ServiceCollection();
@@ -240,18 +244,15 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
         HttpClient client,
         string clientId = CallerClientId,
         string clientSecret = CallerClientSecret,
-        string? scope = ServiceClientScopes.Delegation)
+        bool delegation = true)
     {
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "client_credentials",
             ["client_id"] = clientId,
             ["client_secret"] = clientSecret,
+            ["scope"] = delegation ? $"{ApiScope} {ServiceClientScopes.Delegation}" : ApiScope,
         };
-        if (!string.IsNullOrEmpty(scope))
-        {
-            form["scope"] = scope;
-        }
 
         var response = await client.PostAsync("/connect/token", new FormUrlEncodedContent(form));
 
@@ -287,6 +288,7 @@ public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
             {
                 OpenIddictConstants.Permissions.Endpoints.Token,
                 OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
+                OpenIddictConstants.Permissions.Prefixes.Scope + ApiScope,
             },
         };
         if (withDelegationScope)

@@ -46,20 +46,25 @@ export interface NotificationOutputDto {
 }
 
 /**
- * SignalR 全局服务：管理通知 Hub 与实时业务事件 Hub。
+ * SignalR 全局服务：通知与实时业务事件共用一条连接（后端的实时 Hub）。
  *
  * 地址：Hub 经 resolveHubUrl 拼接 environment.api.gateway，与 HTTP 请求走同一后端（HubConnectionBuilder 不经过 HTTP 拦截器）。
  * 认证：Identity 使用 Cookie 会话；Resource 从 OIDC 会话提供短寿命 access token。
  * 浏览器 WebSocket/SSE 无法设置 Authorization 头，SignalR 会在 Hub 连接上使用 access_token query，
- * 后端只对两个 Hub 路径定向接受并立即从 QueryString 移除。
+ * 后端只对 Hub 端点定向接受并立即从 QueryString 移除。
  */
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
+  /** 实时 Hub 的路径：通知与业务事件都经它推送。 */
+  static readonly hubPath = '/hubs/realtime';
+
+  /** 通知推送到客户端时调用的方法名（后端 NotificationClientMethods.Received）。 */
+  static readonly notificationReceived = 'Notifications.Received';
+
   //#if (!LocalIdentity)
   private readonly oidc = inject(OidcSecurityService);
   //#endif
-  private notificationConnection: HubConnection | null = null;
-  private businessConnection: HubConnection | null = null;
+  private connection: HubConnection | null = null;
 
   // ── 通知状态 ──
   readonly notifications = signal<NotificationOutputDto[]>([]);
@@ -69,17 +74,10 @@ export class SignalRService {
   readonly lastResourceEvent = signal<{ eventName: string; payload: unknown } | null>(null);
 
   // ── 连接状态 ──
-  private readonly notificationConnected = signal(false);
-  private readonly businessConnected = signal(false);
+  private readonly connected = signal(false);
 
-  /**
-   * 两个 Hub 是否都可用。
-   *
-   * 必须是两者的合取：各自会独立断线重连，只跟踪其中一个的话，
-   * 业务 Hub 单独掉线时这里仍是 true，而通知 Hub 一恢复又会把它拉成 true——
-   * 界面据此显示"实时已连接"，实际有一半没回来。
-   */
-  readonly isConnected = computed(() => this.notificationConnected() && this.businessConnected());
+  /** 实时连接是否可用。 */
+  readonly isConnected = this.connected.asReadonly();
 
   // ── 已订阅资源（重连后重新订阅） ──
   private readonly subscribedResources = new Set<string>();
@@ -94,8 +92,8 @@ export class SignalRService {
   /**
    * 认证主体代际。每次 reset() 递增。
    *
-   * 连接过程中途发生登出时，await 回来的那对连接属于上一个主体，必须就地关掉——
-   * 否则它们会被写进字段，成为一对没人再管、却仍在以旧身份接收推送的孤儿。
+   * 连接过程中途发生登出时，await 回来的那条连接属于上一个主体，必须就地关掉——
+   * 否则它会被写进字段，成为一条没人再管、却仍在以旧身份接收推送的孤儿。
    */
   private generation = 0;
 
@@ -122,8 +120,6 @@ export class SignalRService {
    * 连接成功后再次调用也不能新建连接，否则被覆盖字段引用无法触达的连接及其处理器
    * 会继续向同一个 signal 推送，造成连接泄漏和重复通知。
    * 通知组件每次初始化都会走到这里，重挂载就会触发。
-   *
-   * 全成功或全回滚：任一 Hub 启动失败时停掉本轮已经起来的连接并清空引用。
    */
   connect(): Promise<void> {
     if (this.connecting && this.connectingGeneration === this.generation) {
@@ -139,7 +135,7 @@ export class SignalRService {
     this.connectingGeneration = generation;
     this.connecting = (async () => {
       await previous?.catch(() => undefined);
-      await this.connectAllAsync(generation);
+      await this.connectAsync(generation);
     })().finally(() => {
       if (this.connectingGeneration === generation) {
         this.connecting = null;
@@ -156,12 +152,12 @@ export class SignalRService {
    * 那时读到的已经是 reset() 递增过的值，代际校验永远相等、防护形同虚设。
    * 代际属于"这次 connect 请求"，不属于"这段代码碰巧执行的时刻"。
    */
-  private async connectAllAsync(generation: number): Promise<void> {
-    if (this.hasLiveConnections()) {
+  private async connectAsync(generation: number): Promise<void> {
+    if (isLive(this.connection)) {
       return;
     }
 
-    // 手上的连接已经死了（自动重连耗尽）或只剩一半：先清干净再重建。
+    // 手上的连接已经死了（自动重连耗尽）：先清干净再重建。
     // 少了这一步，早退会把应用永久留在断线状态，不早退又会泄漏。
     await this.disconnect();
 
@@ -169,23 +165,21 @@ export class SignalRService {
     // 连接一旦写进字段，下面那些 isCurrent() 的身份比对就一律为真——
     // 身份判据能排除"已退休的旧连接"，排除不了"旧请求在 reset 之后新建的连接"。
     //
-    // 约束：本行到两个 Hub 建连方法里的字段赋值之间**不得插入 await**。
+    // 约束：本行到建连方法里的字段赋值之间**不得插入 await**。
     // 一旦插入，reset 可以在核对之后、赋值之前发生，这道防护就静默失效了。
     if (generation !== this.generation) {
       return;
     }
 
     try {
-      await Promise.all([this.connectNotificationHub(), this.connectBusinessHub()]);
+      await this.startConnection();
 
       if (generation !== this.generation) {
-        // 连接期间发生了主体切换：这对连接握的是上一个身份，不能留给下一个用户。
+        // 连接期间发生了主体切换：这条连接握的是上一个身份，不能留给下一个用户。
         await this.disconnect();
       }
     } catch (err) {
       console.error('[SignalR] Connection failed:', err);
-
-      // 回滚本轮的全部连接：Promise.all 只在第一个失败时拒绝，另一条可能已经连上了。
       await this.disconnect();
     }
   }
@@ -209,28 +203,20 @@ export class SignalRService {
     await this.disconnect();
   }
 
-  private hasLiveConnections(): boolean {
-    return isLive(this.notificationConnection) && isLive(this.businessConnection);
-  }
-
-  /** 断开所有连接。无论 stop 是否抛错，引用一律清空——留着就等于泄漏。 */
+  /** 断开连接。无论 stop 是否抛错，引用一律清空——留着就等于泄漏。 */
   async disconnect(): Promise<void> {
-    const connections = [this.notificationConnection, this.businessConnection];
-    this.notificationConnection = null;
-    this.businessConnection = null;
-    this.notificationConnected.set(false);
-    this.businessConnected.set(false);
+    const connection = this.connection;
+    this.connection = null;
+    this.connected.set(false);
 
-    for (const connection of connections) {
-      if (!connection) {
-        continue;
-      }
+    if (!connection) {
+      return;
+    }
 
-      try {
-        await connection.stop();
-      } catch (err) {
-        console.error('[SignalR] stop failed:', err);
-      }
+    try {
+      await connection.stop();
+    } catch (err) {
+      console.error('[SignalR] stop failed:', err);
     }
   }
 
@@ -239,10 +225,10 @@ export class SignalRService {
     if (this.resourceEventNames.has(eventName)) return;
     this.resourceEventNames.add(eventName);
 
-    const connection = this.businessConnection;
+    const connection = this.connection;
     connection?.on(eventName, (payload: unknown) => {
       // 动态注册的监听同样要判身份：注册时那条连接可能在主体切换后才收到事件。
-      if (this.businessConnection !== connection) {
+      if (this.connection !== connection) {
         return;
       }
 
@@ -252,7 +238,7 @@ export class SignalRService {
 
   /** 订阅资源变更。 */
   async subscribeResource(resourceKey: string): Promise<void> {
-    const conn = this.businessConnection;
+    const conn = this.connection;
     if (!conn) return;
 
     const generation = this.generation;
@@ -274,8 +260,8 @@ export class SignalRService {
   /** 取消订阅资源变更。 */
   async unsubscribeResource(resourceKey: string): Promise<void> {
     this.subscribedResources.delete(resourceKey);
-    if (this.businessConnection?.state === 'Connected') {
-      await this.businessConnection.invoke('Unsubscribe', resourceKey);
+    if (this.connection?.state === 'Connected') {
+      await this.connection.invoke('Unsubscribe', resourceKey);
     }
   }
 
@@ -286,7 +272,7 @@ export class SignalRService {
    *
    * SignalR 的 HubConnectionBuilder 不经过 Angular HTTP 拦截器，
    * 因此需在此手动拼接 `environment.api.gateway` 前缀（与 urlFormatInterceptor 一致）。
-   * 网关为空时返回相对路径，由浏览器按当前源解析（同源托管场景）。
+   * 网关为空时返回相对路径，由浏览器按当前源解析（同源托管与本机开发代理）。
    */
   private resolveHubUrl(path: string): string {
     const gateway = environment.api.gateway || '';
@@ -294,9 +280,9 @@ export class SignalRService {
     return gatewayPart ? `${gatewayPart}${path}` : path;
   }
 
-  private async connectNotificationHub(): Promise<void> {
+  private async startConnection(): Promise<void> {
     const connection = new HubConnectionBuilder()
-      .withUrl(this.resolveHubUrl('/hubs/notifications'), {
+      .withUrl(this.resolveHubUrl(SignalRService.hubPath), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
         //#if (!LocalIdentity)
         accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
@@ -310,9 +296,9 @@ export class SignalRService {
     // stop() 是异步的，旧连接的推送与状态回调可能晚于主体切换才到达，
     // 而 disconnect() 已经把字段置空，身份比对天然为假。
     // 身份判据与它保护的对象绑在一起，不会出现"又漏了一处没加检查"。
-    const isCurrent = () => this.notificationConnection === connection;
+    const isCurrent = () => this.connection === connection;
 
-    connection.on('NotificationReceived', (notification: NotificationOutputDto) => {
+    connection.on(SignalRService.notificationReceived, (notification: NotificationOutputDto) => {
       if (!isCurrent()) {
         return;
       }
@@ -320,33 +306,7 @@ export class SignalRService {
       this.notifications.update((list) => [notification, ...list]);
     });
 
-    connection.onreconnecting(() => isCurrent() && this.notificationConnected.set(false));
-    connection.onreconnected(() => isCurrent() && this.notificationConnected.set(true));
-    connection.onclose(() => isCurrent() && this.notificationConnected.set(false));
-
-    this.notificationConnection = connection;
-    await connection.start();
-
-    if (isCurrent()) {
-      this.notificationConnected.set(true);
-    }
-  }
-
-  private async connectBusinessHub(): Promise<void> {
-    const connection = new HubConnectionBuilder()
-      .withUrl(this.resolveHubUrl('/hubs/realtime'), {
-        transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-        //#if (!LocalIdentity)
-        accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
-        //#endif
-      })
-      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-      .configureLogging(LogLevel.Information)
-      .build();
-
-    const isCurrent = () => this.businessConnection === connection;
-
-    // 重新挂载已注册的事件监听。判据同样是身份，理由见通知 Hub。
+    // 重新挂载已注册的业务事件监听
     for (const eventName of this.resourceEventNames) {
       connection.on(eventName, (payload: unknown) => {
         if (!isCurrent()) {
@@ -357,16 +317,16 @@ export class SignalRService {
       });
     }
 
-    // 业务 Hub 同样要维护自身状态：只有通知 Hub 上报时，它单独掉线不会被察觉。
-    connection.onreconnecting(() => isCurrent() && this.businessConnected.set(false));
-    connection.onclose(() => isCurrent() && this.businessConnected.set(false));
+    connection.onreconnecting(() => isCurrent() && this.connected.set(false));
+    connection.onclose(() => isCurrent() && this.connected.set(false));
     connection.onreconnected(async () => {
       if (!isCurrent()) {
         return;
       }
 
-      this.businessConnected.set(true);
+      this.connected.set(true);
 
+      // 重连后是一条新的服务端连接，分组订阅要重新建立。
       // 先取快照再迭代：集合会被 reset 清空、被下一个主体重新填充，
       // 跨 await 直接迭代活集合，旧回调会读到新主体的 key。
       for (const resourceKey of [...this.subscribedResources]) {
@@ -386,11 +346,11 @@ export class SignalRService {
       }
     });
 
-    this.businessConnection = connection;
+    this.connection = connection;
     await connection.start();
 
     if (isCurrent()) {
-      this.businessConnected.set(true);
+      this.connected.set(true);
     }
   }
 }

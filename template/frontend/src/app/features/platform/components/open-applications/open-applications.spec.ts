@@ -45,8 +45,10 @@ describe('OpenApplications 页面查询闭环', () => {
   beforeEach(async () => {
     service = jasmine.createSpyObj<OpenApplicationService>('OpenApplicationService', [
       'getOpenApplications',
+      'getScopes',
     ]);
     service.getOpenApplications.and.returnValue(of({ items: [], totalCount: 0 }) as never);
+    service.getScopes.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [OpenApplications],

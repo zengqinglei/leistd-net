@@ -30,7 +30,7 @@ CompanyName.ProjectName/
 - 远程 OIDC 令牌验证、本服务 Membership/角色/权限与租户数据隔离。
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
-- 通知持久化、未读状态、通知 Hub 和业务实时 Hub。
+- 通知持久化、未读状态，通知与业务实时事件共用的实时 Hub。
 <!--#if (LocalIdentity)-->
 - 安全提醒（新设备登录、密码与两步验证变更、账号锁定）：站内通知始终送达，邮件只发已验证邮箱；用户在个人设置「通知」面板按类别与渠道选择接收方式。
 <!--#endif-->
@@ -40,26 +40,22 @@ CompanyName.ProjectName/
 
 ### 后端
 
-配置分三层：`appsettings.json` 是与环境无关的基线；随仓库提交的 `appsettings.Development.json` 只放非机密的开发配置（内存库名等）；机密与只属于本机的覆盖放 `dotnet user-secrets`，开发环境自动加载、不进仓库。Api 与 `DbMigrator` 共用同一份 user-secrets，设置一次两边都能读。
+配置分三层：`appsettings.json` 是与环境无关的基线；随仓库提交的 `appsettings.Development.json` 放所有开发者共用的开发配置（内存库名、本机演示管理员口令等）；机密与只属于本机的覆盖放 `dotnet user-secrets`，开发环境自动加载、不进仓库。Api 与 `DbMigrator` 共用同一份 user-secrets，设置一次两边都能读。
 
 <!--#if (LocalIdentity)-->
-首次启动前设置超级管理员口令（没有默认值，缺失即启动失败）：
-
-```bash
-cd backend
-dotnet user-secrets set "DefaultAdmin:Password" "<至少 12 个字符的口令>" --project src/CompanyName.ProjectName.Api
-```
+克隆后可直接运行：未配置连接串时使用内存库，首次启动按 `appsettings.Development.json` 里的演示口令创建管理员。
 
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
-首次启动前指向签发令牌的 Identity 服务（没有默认值，缺失即启动失败）：
+签发令牌的 Identity 服务：开发环境默认指向本机 Identity 的前端开发服务器 `http://localhost:4200/`（`appsettings.Development.json` 的 `Authentication:Issuer`），联调步骤见 [前端说明](frontend/README.md)；
+联调别处的 Identity 时用 user-secrets 覆盖。部署环境没有默认值，缺失即启动失败：
 
 ```bash
 cd backend
-dotnet user-secrets set "Authentication:Issuer" "<Identity 服务的 https 地址>/" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "Authentication:Issuer" "<Identity 服务的地址>/" --project src/CompanyName.ProjectName.Api
 ```
 
-改用真实数据库后，租户路由要回源 Identity，还需设置 `Leistd:ServiceClients:Identity:BaseAddress`（同样没有默认值）。
+改用真实数据库后，租户路由要回源 Identity，还需设置 `Leistd:ServiceClients:Identity:BaseAddress`（没有默认值）。
 
 <!--#endif-->
 不配置连接串时使用内存库，直接启动：
@@ -70,17 +66,12 @@ dotnet run --project src/CompanyName.ProjectName.Api
 ```
 <!--#if (OpenIddictServer)-->
 
-默认配置只监听 HTTP（`http://localhost:5240`），前端的会话登录够用。OIDC 端点（开放应用的授权码流程、资源服务回源）要求 HTTPS，需要时信任本机开发证书并改用 `https` 配置（`https://localhost:7240`）：
-
-```bash
-dotnet dev-certs https --trust
-dotnet run --project src/CompanyName.ProjectName.Api --launch-profile https
-```
+默认配置只监听 HTTP（`http://localhost:5240`）。本机的 OIDC 流程（开放应用的授权码流程、资源服务联调）经前端开发服务器 `http://localhost:4200` 访问授权端点，签发方地址即为它；`appsettings.Development.json` 因此关闭了授权端点的 HTTPS 要求，只作用于开发环境。
 <!--#endif-->
 
 存活与就绪检查地址分别为 `http://localhost:5240/api/health/live` 和 `http://localhost:5240/api/health/ready`。
-
 <!--#if (LocalIdentity)-->
+
 ### 邮件
 
 `Leistd:Email:Smtp` 默认指向本机邮件捕获器，本地起一个即可看到真实投出去的信：
@@ -143,16 +134,21 @@ npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "companyname-projectname"
 
 同一个数据库里若有多个 DbContext（如 Identity 的控制库与业务库），**历史表名也要区分**，
 模板已按 `__EFMigrationsHistory_Control` / `__EFMigrationsHistory` 分开。
-
 <!--#if (LocalIdentity)-->
-开发环境首次启动会创建管理员账号：
+
+库里还没有超级管理员时，启动会按 `DefaultAdmin` 创建一个：
 
 - 用户名：`admin`
-- 密码：本机用 `dotnet user-secrets` 设置（见上文），部署环境注入 `DefaultAdmin__Password`。
-  **基础配置里没有可用的默认密码**——缺失、空值或不满足密码策略（至少 12 个字符）都会导致启动失败。
-  这是刻意的：开源模板里的默认管理员密码等于公开凭据，而漏配的部署会照常启动、照常能登录。
+- 密码：开发环境取 `appsettings.Development.json` 里的演示口令 `Admin!Local2026`。它随仓库公开，
+  用它建出的账号会一直保留这个口令直到被修改；**连接共享的真实开发库之前**，先用 user-secrets 覆盖：
 
-部署前必须通过安全配置注入 `DefaultAdmin__Password`（不存在可覆盖的默认值，缺失即启动失败）。
+  ```bash
+  cd backend
+  dotnet user-secrets set "DefaultAdmin:Password" "<至少 12 个字符的口令>" --project src/CompanyName.ProjectName.Api
+  ```
+
+- 部署环境注入 `DefaultAdmin__Password`。基础配置里没有可用的默认口令：只在创建管理员那一刻校验，
+  缺失或不满足密码策略（至少 12 个字符）即启动失败并报出键名；已有管理员的部署不必再提供。
 <!--#endif-->
 
 ### 前端
@@ -163,7 +159,7 @@ npm ci
 npm start
 ```
 
-默认开发服务器地址为 `http://localhost:4200`。Mock、同源代理和跨域联调方式见 [前端说明](frontend/README.md)。
+浏览器打开 `http://localhost:4200`：开发服务器把 API 与 Hub 请求转发给本机后端，前后端同源。Mock 与后端端口的调整见 [前端说明](frontend/README.md)。
 
 ## 验证
 

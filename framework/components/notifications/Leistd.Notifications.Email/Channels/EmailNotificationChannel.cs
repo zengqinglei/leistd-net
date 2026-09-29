@@ -8,6 +8,8 @@ using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Email.Recipients;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Leistd.Notifications.Email.Options;
 
 namespace Leistd.Notifications.Email.Channels;
 
@@ -15,16 +17,19 @@ namespace Leistd.Notifications.Email.Channels;
 /// 通知的邮件渠道：收件人有已验证地址时，经后台队列异步发送。
 /// </summary>
 /// <remarks>
-/// <para>正文按纯文本发送（内容，链接为绝对 http(s) 地址时另起一段附上）：通知内容可能夹带用户可控文本，按 HTML 发出等于让邮件承载注入。
+/// <para>正文按纯文本发送（内容，链接另起一段附上）：通知内容可能夹带用户可控文本，按 HTML 发出等于让邮件承载注入。
 /// 需要定制邮件版式时实现自己的 <see cref="INotificationChannel"/>。</para>
+/// <para>链接：绝对 http(s) 地址原样附上；以 <c>/</c> 开头的站内链接在配置了 <see cref="EmailNotificationOptions.PublicBaseUrl"/> 时转成绝对地址附上，未配置时不附。</para>
 /// <para>队列满时丢弃本封并记警告，不阻塞发布方——邮件是尽力而为的附加渠道，站内通知已经落库。</para>
 /// </remarks>
 /// <param name="recipients">收件人地址解析。</param>
 /// <param name="queue">后台任务队列。</param>
+/// <param name="options">渠道选项。</param>
 /// <param name="logger">日志。</param>
 public sealed class EmailNotificationChannel(
     INotificationRecipientResolver recipients,
     IBackgroundTaskQueue queue,
+    IOptions<EmailNotificationOptions> options,
     ILogger<EmailNotificationChannel> logger) : INotificationChannel
 {
     /// <summary>渠道名，也是通知偏好设置名里的渠道段。</summary>
@@ -42,11 +47,10 @@ public sealed class EmailNotificationChannel(
         }
 
         var body = notification.Content ?? notification.Title;
-        // 相对链接是站内导航，放进邮件打不开；只附绝对地址
-        if (Uri.TryCreate(notification.Link, UriKind.Absolute, out var link) &&
-            (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp))
+        // 站内相对链接放进邮件打不开：配置了站点地址才转成绝对地址，否则不附
+        if (EmailNotificationLinks.Resolve(notification.Link, options.Value.PublicBaseUrl) is { } link)
         {
-            body = $"{body}{Environment.NewLine}{Environment.NewLine}{notification.Link}";
+            body = $"{body}{Environment.NewLine}{Environment.NewLine}{link}";
         }
 
         var message = new EmailMessage

@@ -2,7 +2,7 @@
 namespace CompanyName.ProjectName.Api.Options;
 
 /// <summary>
-/// 会话 Cookie 的站点策略（配置节 <c>SessionCookie</c>）
+/// 会话 Cookie 的站点策略与时长（配置节 <c>SessionCookie</c>）
 /// </summary>
 /// <remarks>
 /// <para>默认不设置，沿用 Cookie 认证的 <c>Lax</c>：同源部署以及同站的前后端分离
@@ -19,5 +19,8 @@ public sealed class SessionCookieOptions
 
     /// <summary>站点策略；<see langword="null"/> 表示使用 Cookie 认证默认值 <c>Lax</c></summary>
     public SameSiteMode? SameSite { get; set; }
+
+    /// <summary>会话时长（天）：会话 Cookie 的滑动过期与服务端会话的空闲时限取同一个值，至少 1 天</summary>
+    public int ExpireDays { get; set; } = 7;
 }
 #endif

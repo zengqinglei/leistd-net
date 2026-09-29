@@ -5,6 +5,7 @@ using Leistd.ExceptionHandling;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Application.Auth.AppServices;
+using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore;
@@ -129,9 +130,7 @@ public sealed class ConnectController(
 
             var principal = new ClaimsPrincipal(identity);
             principal.SetScopes(request.GetScopes());
-
-            var resources = new[] { oauthOptions.Value.Resource };
-            principal.SetResources(resources);
+            principal.SetResources(OAuthScopes.ResourcesOf(oauthOptions.Value, principal.GetScopes()));
 
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }

@@ -22,6 +22,7 @@ using Leistd.Notifications.Channels;
 using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
+using Leistd.Notifications.AspNetCore.SignalR;
 using Leistd.RealTime.Publishing;
 using Leistd.RealTime.Subscriptions;
 
@@ -41,9 +42,15 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
         var tenantId = Guid.CreateVersion7();
         using var admin = factory.CreateResourceSession(userId, tenantId);
 #endif
-        await using var connection = CreateHubConnection(factory, "/hubs/notifications", admin);
+        // 通知与业务事件共用实时 Hub：同一条连接上收到通知，且只收到一次
+        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
         var received = new TaskCompletionSource<NotificationOutputDto>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var subscription = connection.On<NotificationOutputDto>("NotificationReceived", notification => received.TrySetResult(notification));
+        var deliveries = 0;
+        using var subscription = connection.On<NotificationOutputDto>(NotificationClientMethods.Received, notification =>
+        {
+            Interlocked.Increment(ref deliveries);
+            received.TrySetResult(notification);
+        });
         await connection.StartAsync();
 
         var notification = new NotificationInputDto
@@ -71,6 +78,7 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
 
         var pushed = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(1, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
+        Assert.Equal(1, Volatile.Read(ref deliveries));
 
         // 身份由发布器在收件人边界定案，调用方并不知道它——因此这里断言的是那条保证本身：
         // 推送里的 ID 必须就是落库那条的 ID，否则客户端拿推送的 ID 去标记已读会命不中。

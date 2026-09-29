@@ -107,7 +107,7 @@ public static class DependencyInjection
     /// 也可以再用 <c>services.Configure&lt;TenantRouteCacheOptions&gt;</c> 覆盖。</para>
     /// <para>宿主须注册 <see cref="ITenantConnectionConfigurationStore"/> 的远端实现（<c>Leistd.MultiTenancy.ServiceClient</c> 包）：控制面经已认证的内部接口下发
     /// 已解密的连接串，本服务不需要控制面的密钥环。
-    /// 同时注册 <see cref="ITenantMigrationTargetProvider"/> 与内存缓存。均以 <c>TryAdd</c> 注册，宿主可替换。</para>
+    /// 同时注册多租户核心服务（<see cref="AddMultiTenancyCore"/>）、<see cref="ITenantMigrationTargetProvider"/> 与内存缓存。均以 <c>TryAdd</c> 注册，宿主可替换。</para>
     /// <para>宿主自己持有控制库时改用 EF 包的 <c>AddLocalTenantConnectionResolution</c>，两者二选一。</para>
     /// </remarks>
     /// <example>
@@ -120,6 +120,8 @@ public static class DependencyInjection
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        // 解析器按当前租户取连接；只做迁移等不经 Web 集成的宿主也要能单独使用本入口
+        services.AddMultiTenancyCore();
         services.AddMemoryCache();
         services.AddOptions<TenantRouteCacheOptions>()
             .BindConfiguration(TenantRouteCacheOptions.SectionName)

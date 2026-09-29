@@ -8,7 +8,7 @@ import { of } from 'rxjs';
 import { SignalRService } from './signalr-service';
 
 /**
- * 连接生命周期：两个 Hub 要么都连上，要么一条都不留。
+ * 连接生命周期：通知与业务事件共用一条连接，主体切换、失败与重连时不泄漏、不串人。
  *
  * 这里只替换 HubConnectionBuilder，不去 mock 网络：要锁住的是本服务对"部分失败"
  * 与"重复调用"的处理，而不是 SignalR 客户端自身的行为。
@@ -124,10 +124,6 @@ describe('SignalRService 连接生命周期', () => {
     }
   }
 
-  function connectionsFor(fragment: string): FakeConnection[] {
-    return built.filter((connection) => connection.url.includes(fragment));
-  }
-
   afterEach(() => {
     // 兜底：正常路径由各用例的 finally 释放。afterEach 只在测试体提前抛出时生效——
     // 断言失败后若还有 await 卡在未释放的 gate 上，失败会退化成 Jasmine 超时。
@@ -171,10 +167,11 @@ describe('SignalRService 连接生命周期', () => {
     service = TestBed.inject(SignalRService);
   });
 
-  it('两个 Hub 都连上时进入已连接状态', async () => {
+  it('连上实时 Hub 后进入已连接状态', async () => {
     await service.connect();
 
-    expect(built.length).toBe(2);
+    expect(built.length).toBe(1);
+    expect(built[0].url).toContain(SignalRService.hubPath);
     expect(service.isConnected()).toBeTrue();
   });
 
@@ -186,51 +183,45 @@ describe('SignalRService 连接生命周期', () => {
     expect(await options.accessTokenFactory?.()).toBe('resource-access-token');
   });
   //#endif
-  it('一个 Hub 失败时停掉本轮已连上的另一个，不留活连接', async () => {
-    failing.add('/hubs/realtime');
+  it('连接失败时不留活连接', async () => {
+    failing.add(SignalRService.hubPath);
 
     await service.connect();
 
     expect(service.isConnected()).toBeFalse();
-
-    // 通知 Hub 已经 start 成功，必须被回滚掉——留着它就会继续往同一个 signal 里推。
-    const notification = connectionsFor('/hubs/notifications')[0];
-    expect(notification.startCount).toBe(1);
-    expect(notification.stopCount).toBe(1);
+    expect(built[0].stopCount).toBe(1);
   });
 
-  it('并发调用复用同一次连接过程，不会各建一套', async () => {
+  it('并发调用复用同一次连接过程，不会各建一条', async () => {
     await Promise.all([service.connect(), service.connect(), service.connect()]);
 
-    expect(built.length).toBe(2);
+    expect(built.length).toBe(1);
   });
 
   it('已经连上之后再次调用直接返回，不重建也不泄漏', async () => {
     await service.connect();
     await service.connect();
 
-    // 只去重"进行中"的调用是不够的：串行第二次会新建一对并覆盖字段引用，
-    // 旧的两条连同 handler 继续往同一个 signal 里推。通知组件重挂载就会走到这里。
-    expect(built.length).toBe(2);
-    expect(built.every((connection) => connection.stopCount === 0)).toBeTrue();
+    // 只去重"进行中"的调用是不够的：串行第二次会新建一条并覆盖字段引用，
+    // 旧连接连同 handler 继续往同一个 signal 里推。通知组件重挂载就会走到这里。
+    expect(built.length).toBe(1);
+    expect(built[0].stopCount).toBe(0);
     expect(service.isConnected()).toBeTrue();
   });
 
   it('手上的连接已经彻底断开时，再次调用会重建', async () => {
     await service.connect();
-    built.forEach((connection) => {
-      connection.state = signalR.HubConnectionState.Disconnected;
-    });
+    built[0].state = signalR.HubConnectionState.Disconnected;
 
     await service.connect();
 
     // 自动重连耗尽后一味早退，会把应用永久留在断线状态。
-    expect(built.length).toBe(4);
+    expect(built.length).toBe(2);
     expect(service.isConnected()).toBeTrue();
   });
 
   it('失败之后可以重试，且不与上一轮的连接叠加', async () => {
-    failing.add('/hubs/realtime');
+    failing.add(SignalRService.hubPath);
     await service.connect();
     expect(service.isConnected()).toBeFalse();
 
@@ -238,40 +229,52 @@ describe('SignalRService 连接生命周期', () => {
     await service.connect();
 
     expect(service.isConnected()).toBeTrue();
-
-    // 上一轮的两条都已停掉，本轮的两条各自只 start 一次。
-    expect(built.filter((connection) => connection.stopCount === 0).length).toBe(2);
+    expect(built.filter((connection) => connection.stopCount === 0).length).toBe(1);
     expect(built.every((connection) => connection.startCount === 1)).toBeTrue();
   });
 
-  it('业务 Hub 单独掉线时不再报告已连接', async () => {
+  it('掉线期间不报告已连接，恢复后重新报告', async () => {
     await service.connect();
-    expect(service.isConnected()).toBeTrue();
 
-    // 只跟踪通知 Hub 的话，这里会一直是 true——界面显示"实时已连接"，实际一半没了。
-    connectionsFor('/hubs/realtime')[0].drop();
+    built[0].drop();
     expect(service.isConnected()).toBeFalse();
 
-    connectionsFor('/hubs/realtime')[0].dropAndRecover();
+    built[0].dropAndRecover();
     expect(service.isConnected()).toBeTrue();
   });
 
-  it('两个 Hub 交错恢复时，要等最后一个回来才算已连接', async () => {
+  it('通知与业务事件在同一条连接上各自只触发自己的处理', async () => {
+    service.registerResourceEvent('OrderChanged');
     await service.connect();
+    const connection = built[0];
 
-    const notification = connectionsFor('/hubs/notifications')[0];
-    const business = connectionsFor('/hubs/realtime')[0];
+    connection.handlers.get(SignalRService.notificationReceived)!({
+      id: 'n1',
+      title: '通知',
+      type: 'info',
+      isRead: false,
+      creationTime: '2026-01-01',
+    });
+    expect(service.notifications().length).toBe(1);
+    expect(service.lastResourceEvent()).toBeNull();
 
-    notification.drop();
-    business.drop();
-    expect(service.isConnected()).toBeFalse();
+    connection.handlers.get('OrderChanged')!({ id: 'order-1' });
+    expect(service.notifications().length).toBe(1);
+    expect(service.lastResourceEvent()).toEqual({
+      eventName: 'OrderChanged',
+      payload: { id: 'order-1' },
+    });
+  });
 
-    // 通知 Hub 先恢复：此时业务 Hub 还没回来，不能因为它上报成功就整体置真。
-    notification.dropAndRecover();
-    expect(service.isConnected()).toBeFalse();
+  it('重连后在这条连接上重新订阅已订阅的资源', async () => {
+    await service.connect();
+    await service.subscribeResource('order-1');
+    const connection = built[0];
+    connection.invocations.length = 0;
 
-    business.dropAndRecover();
-    expect(service.isConnected()).toBeTrue();
+    await connection.triggerReconnected();
+
+    expect(connection.invocations).toEqual([{ method: 'Subscribe', args: ['order-1'] }]);
   });
 
   it('断开后可以重新连接', async () => {
@@ -284,7 +287,7 @@ describe('SignalRService 连接生命周期', () => {
     await service.connect();
 
     expect(service.isConnected()).toBeTrue();
-    expect(built.length).toBe(4);
+    expect(built.length).toBe(2);
   });
 
   it('主体切换后不复用上一个人的连接，也不残留他的通知', async () => {
@@ -305,9 +308,9 @@ describe('SignalRService 连接生命周期', () => {
 
     await service.connect();
 
-    // 新主体拿到的是新建的两条，不是上一个人的。
-    expect(built.length).toBe(4);
-    expect(built.slice(2).every((connection) => connection.stopCount === 0)).toBeTrue();
+    // 新主体拿到的是新建的连接，不是上一个人的。
+    expect(built.length).toBe(2);
+    expect(built[1].stopCount).toBe(0);
   });
 
   it('连接进行中发生主体切换时，那对连接不会留给下一个人', async () => {
@@ -322,8 +325,7 @@ describe('SignalRService 连接生命周期', () => {
 
   it('reset 窗口内到达的旧 Hub 推送不写进新主体的列表', async () => {
     await service.connect();
-    const notificationHub = connectionsFor('/hubs/notifications')[0];
-    const push = notificationHub.handlers.get('NotificationReceived')!;
+    const push = built[0].handlers.get(SignalRService.notificationReceived)!;
 
     await service.reset();
 
@@ -341,7 +343,7 @@ describe('SignalRService 连接生命周期', () => {
     await pending;
 
     await service.connect();
-    const business = connectionsFor('/hubs/realtime')[1];
+    const business = built[1];
     business.dropAndRecover();
     await Promise.resolve();
 
@@ -394,21 +396,20 @@ describe('SignalRService 连接生命周期', () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      const notificationHub = connectionsFor('/hubs/notifications')[0];
-      const businessHub = connectionsFor('/hubs/realtime')[0];
-      expect(notificationHub).withContext('连接应当已经建出并写入字段').toBeDefined();
+      const connection = built[0];
+      expect(connection).withContext('连接应当已经建出并写入字段').toBeDefined();
 
       service.registerResourceEvent('OrderChanged');
       await service.reset();
 
-      notificationHub.handlers.get('NotificationReceived')?.({
+      connection.handlers.get(SignalRService.notificationReceived)?.({
         id: 'a-1',
         title: 'A 的推送',
         type: 'info',
         isRead: false,
         creationTime: '2026-01-01',
       });
-      businessHub.handlers.get('OrderChanged')?.({ id: 'order-1' });
+      connection.handlers.get('OrderChanged')?.({ id: 'order-1' });
 
       expect(service.notifications()).toEqual([]);
       expect(service.lastResourceEvent()).toBeNull();
@@ -424,7 +425,7 @@ describe('SignalRService 连接生命周期', () => {
     await service.connect();
     await service.subscribeResource('a-order');
 
-    const staleBusiness = connectionsFor('/hubs/realtime')[0];
+    const staleBusiness = built[0];
     staleBusiness.invocations.length = 0;
     staleBusiness.gateInvoke = true;
 
@@ -464,8 +465,8 @@ describe('SignalRService 连接生命周期', () => {
     await service.disconnect();
     await service.connect();
 
-    // 引用已清空，新一轮正常建立两条。
-    expect(built.length).toBe(4);
+    // 引用已清空，新一轮正常建立一条。
+    expect(built.length).toBe(2);
     expect(service.isConnected()).toBeTrue();
   });
 });

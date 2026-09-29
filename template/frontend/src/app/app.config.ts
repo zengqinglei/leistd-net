@@ -86,6 +86,8 @@ export const appConfig: ApplicationConfig = {
         silentRenew: false,
         useRefreshToken: false,
         secureRoutes: [`${window.location.origin}/api`, '/api'],
+        // 回调后的导航归 OidcCallback（回到登录前的地址）；不打开时库会自行跳到 postLoginRoute（默认 /），两处导航互相竞争
+        triggerAuthorizationResultEvent: true,
         logLevel: environment.production ? LogLevel.Error : LogLevel.Warn,
       },
     }),

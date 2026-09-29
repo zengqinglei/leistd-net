@@ -76,7 +76,6 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["SpaProxy:Enabled"] = "false",
                 ["OAuth:DisableHttpsRequirement"] = "true",
                 ["DefaultAdmin:Username"] = "admin",
                 ["DefaultAdmin:Password"] = TestAdminPassword,

@@ -103,14 +103,14 @@ public class NotificationsSignalRTests
     public async Task Notifications_are_addressed_by_user_identifier_not_by_group()
     {
         var clients = new RecordingHubClients();
-        var channel = new SignalRNotificationChannel(new StubHubContext(clients));
+        var channel = new SignalRNotificationChannel(new NotificationHubClients<NotificationHub>(new StubHubContext<NotificationHub>(clients)));
         var notification = Notification();
 
         await channel.DeliverAsync("user-1", notification);
 
         var (userId, method, payload) = Assert.Single(clients.Sent);
         Assert.Equal("user-1", userId);
-        Assert.Equal("NotificationReceived", method);
+        Assert.Equal(NotificationClientMethods.Received, method);
         Assert.Same(notification, payload);
         Assert.Empty(clients.GroupSends);
     }
@@ -121,11 +121,73 @@ public class NotificationsSignalRTests
     public async Task A_transport_failure_propagates_to_the_publisher()
     {
         var clients = new RecordingHubClients { Throw = new InvalidOperationException("hub down") };
-        var channel = new SignalRNotificationChannel(new StubHubContext(clients));
+        var channel = new SignalRNotificationChannel(new NotificationHubClients<NotificationHub>(new StubHubContext<NotificationHub>(clients)));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.DeliverAsync("user-1", Notification()));
     }
+
+    // 通知与业务实时事件共用一个 Hub：推送必须落在宿主选定的 Hub 上，而不是通知自己的 Hub
+    [Fact]
+    public async Task A_selected_hub_carries_the_notifications()
+    {
+        var shared = new RecordingHubClients();
+        var own = new RecordingHubClients();
+        var services = new ServiceCollection().AddLogging();
+        services.AddNotificationsSignalR<SharedHub>();
+        services.AddSingleton<IHubContext<SharedHub>>(new StubHubContext<SharedHub>(shared));
+        services.AddSingleton<IHubContext<NotificationHub>>(new StubHubContext<NotificationHub>(own));
+
+        using var provider = services.BuildServiceProvider();
+        await Assert.Single(provider.GetServices<INotificationChannel>()).DeliverAsync("user-1", Notification());
+
+        Assert.Equal("user-1", Assert.Single(shared.Sent).UserId);
+        Assert.Empty(own.Sent);
+    }
+
+    [Fact]
+    public void Selecting_the_same_hub_twice_is_idempotent()
+    {
+        ServiceCollectionAssertions.AssertIdempotent(services =>
+        {
+            services.AddLogging();
+            services.AddNotificationsSignalR<SharedHub>();
+        });
+    }
+
+    // 一条通知只经一个 Hub 推送：冲突的选择在注册时报错，不静默取其一，也不会变成两个渠道各推一次
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Selecting_a_second_hub_fails_at_registration(bool defaultFirst)
+    {
+        var services = new ServiceCollection().AddLogging();
+        if (defaultFirst)
+        {
+            services.AddNotificationsSignalR();
+        }
+        else
+        {
+            services.AddNotificationsSignalR<SharedHub>();
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            if (defaultFirst)
+            {
+                services.AddNotificationsSignalR<SharedHub>();
+            }
+            else
+            {
+                services.AddNotificationsSignalR();
+            }
+        });
+
+        Assert.Contains(nameof(SharedHub), exception.Message);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(INotificationChannel));
+    }
+
+    private sealed class SharedHub : Hub;
 
     /// <summary>Hub 端点必须要求登录。</summary>
     /// <remarks>
@@ -159,7 +221,8 @@ public class NotificationsSignalRTests
             Leistd.Notifications.AspNetCore.SignalR.DependencyInjection.DefaultNotificationHubPath);
     }
 
-    private sealed class StubHubContext(IHubClients clients) : IHubContext<NotificationHub>
+    private sealed class StubHubContext<THub>(IHubClients clients) : IHubContext<THub>
+        where THub : Hub
     {
         public IHubClients Clients { get; } = clients;
         public IGroupManager Groups => throw new NotSupportedException();

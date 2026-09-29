@@ -1,6 +1,7 @@
 #if (LocalIdentity)
 using System.Collections.Immutable;
 using System.Security.Claims;
+using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -84,7 +85,8 @@ public class AuthPrincipalFactory(
         var principal = new ClaimsPrincipal(identity);
         principal.SetScopes(scopes?.Where(scope => !string.IsNullOrWhiteSpace(scope)) ??
                             [Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.Roles]);
-        principal.SetResources(oauthOptions.Value.Resource);
+        // 受众由授予的 scope 推出：申请了哪个 API 的 scope，令牌就只能调用那个 API
+        principal.SetResources(OAuthScopes.ResourcesOf(oauthOptions.Value, principal.GetScopes()));
         principal.SetDestinations(GetDestinations);
 
         return principal;

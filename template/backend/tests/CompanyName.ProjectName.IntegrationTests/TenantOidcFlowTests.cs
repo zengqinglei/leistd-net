@@ -8,11 +8,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using OpenIddict.Abstractions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -27,6 +29,96 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
     private const string TenantAdminPassword = "Tenant@123456";
+
+    // 调用本服务 API 的令牌必须申请它的 scope：受众由授予的 scope 推出，API 只接受受众是自己的令牌
+    private static readonly string ApiScope = new OAuthOptions().Resource;
+
+    private const string DownstreamApi = "orders-api";
+
+    /// <summary>
+    /// 为下游 API 签发令牌：配置里登记的下游 API 可以授予给客户端，申请它得到的令牌受众就是它，
+    /// 而本服务自己的 API 不接受这样的令牌。
+    /// </summary>
+    /// <remarks>受众写死成本服务时，下游拿不到属于自己的令牌；不校验受众时，签给下游的令牌又能调用本服务。</remarks>
+    [Fact]
+    public async Task A_downstream_api_scope_yields_a_token_for_that_api_only()
+    {
+        using var host = Factory.WithWebHostBuilder(builder =>
+            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", DownstreamApi));
+
+        using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
+            host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var scopes = await hostAdmin.Client.GetFromJsonAsync<OpenApplicationScopeOutputDto[]>("/api/v1/open-applications/scopes");
+        Assert.Contains(scopes!, scope => scope.Name == DownstreamApi && !scope.MachineOnly);
+        Assert.Contains(scopes!, scope => scope.Name == ApiScope && !scope.MachineOnly);
+
+        var (clientId, clientSecret) = await CreateClientAsync(hostAdmin.Client, DownstreamApi);
+        var tokens = await AuthorizeAndExchangeAsync(host, hostAdmin, clientId, clientSecret, DownstreamApi);
+
+        Assert.Equal([DownstreamApi], ReadAudiences(tokens.AccessToken));
+
+        using var api = CreateHttpsClient(host);
+        api.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await api.GetAsync("/api/v1/auth/me")).StatusCode);
+        // userinfo 属于授权服务器本身，不看受众
+        Assert.Equal(HttpStatusCode.OK, (await api.GetAsync("/connect/userinfo")).StatusCode);
+    }
+
+    // 目录是唯一来源：从 OAuth:ApiResources 移除的下游 API，重启后它的 scope 从表里删掉，不能再被申请到
+    [Fact]
+    public async Task A_removed_api_resource_disappears_from_the_scope_table()
+    {
+        using (var configured = Factory.WithWebHostBuilder(builder =>
+                   builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", DownstreamApi)))
+        {
+            Assert.True(await ScopeExistsAsync(configured, DownstreamApi));
+        }
+
+        using var removed = Factory.WithWebHostBuilder(builder =>
+            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", "other-api"));
+
+        Assert.False(await ScopeExistsAsync(removed, DownstreamApi));
+        Assert.True(await ScopeExistsAsync(removed, "other-api"));
+    }
+
+    private static async Task<bool> ScopeExistsAsync(WebApplicationFactory<Program> host, string name)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        var scopes = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
+        return await scopes.FindByNameAsync(name) is not null;
+    }
+
+    // 下游 API 的标识会登记为同名 scope：为空、重复或撞上内置 scope 时启动失败，报出键名
+    [Theory]
+    [InlineData("openid", null)]
+    [InlineData(DownstreamApi, DownstreamApi)]
+    [InlineData(" ", null)]
+    public void Conflicting_api_resources_fail_startup(string first, string? second)
+    {
+        using var host = Factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", first);
+            if (second is not null)
+            {
+                builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:1", second);
+            }
+        });
+
+        var exception = Assert.ThrowsAny<Exception>(() => host.Services);
+
+        Assert.Contains("OAuth:ApiResources", exception.ToString());
+    }
+
+    private static string[] ReadAudiences(string accessToken)
+    {
+        var payload = accessToken.Split('.')[1];
+        using var json = JsonDocument.Parse(Base64Url.DecodeFromChars(payload));
+        return json.RootElement.GetProperty("aud") switch
+        {
+            { ValueKind: JsonValueKind.String } single => [single.GetString()!],
+            var many => many.EnumerateArray().Select(item => item.GetString()!).ToArray()
+        };
+    }
 
     [Fact]
     public Task A_tenant_user_can_exchange_a_code_read_userinfo_and_refresh() => RunTenantFlowAsync(Factory);
@@ -56,10 +148,10 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var tenantId = await CreateTenantAsync(hostAdmin.Client, $"oidc{Guid.CreateVersion7():N}"[..16]);
-        var (clientId, clientSecret) = await CreateClientAsync(hostAdmin.Client);
+        var (clientId, clientSecret) = await CreateClientAsync(hostAdmin.Client, ApiScope);
         using var tenantSession = await LoginTenantAdminAsync(host, tenantId);
 
-        var tokens = await AuthorizeAndExchangeAsync(host, tenantSession, clientId, clientSecret);
+        var tokens = await AuthorizeAndExchangeAsync(host, tenantSession, clientId, clientSecret, ApiScope);
 
         using var api = CreateHttpsClient(host);
         api.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
@@ -113,7 +205,8 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
         return new AuthenticatedSession(client, cookie);
     }
 
-    private static async Task<(string ClientId, string ClientSecret)> CreateClientAsync(HttpClient hostAdmin)
+    private static async Task<(string ClientId, string ClientSecret)> CreateClientAsync(
+        HttpClient hostAdmin, params string[] extraScopes)
     {
         var clientId = $"client-{Guid.CreateVersion7():N}";
         var created = await hostAdmin.PostAsJsonAsync("/api/v1/open-applications", new
@@ -123,11 +216,11 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             applicationType = "web",
             clientType = "confidential",
             consentType = "explicit",
-            permissions = new[]
-            {
+            permissions = (string[])
+            [
                 "ept:authorization", "ept:token", "gt:authorization_code", "gt:refresh_token", "rst:code",
-                "scp:openid", "scp:offline_access"
-            },
+                "scp:openid", "scp:offline_access", .. extraScopes.Select(scope => $"scp:{scope}")
+            ],
             requirements = Array.Empty<string>(),
             redirectUris = new[] { RedirectUri },
             postLogoutRedirectUris = Array.Empty<string>()
@@ -145,7 +238,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
 
     // 授权端点凭会话 Cookie 直接签发授权码（无同意页）；PKCE 必须是真的 S256
     private static async Task<TokenResponse> AuthorizeAndExchangeAsync(
-        WebApplicationFactory<Program> host, AuthenticatedSession session, string clientId, string clientSecret)
+        WebApplicationFactory<Program> host, AuthenticatedSession session, string clientId, string clientSecret, string apiScope)
     {
         var verifier = Guid.CreateVersion7().ToString("N") + Guid.CreateVersion7().ToString("N");
         var challenge = Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
@@ -156,7 +249,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             "/connect/authorize" +
             $"?client_id={Uri.EscapeDataString(clientId)}" +
             $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}" +
-            "&response_type=code&scope=openid%20offline_access" +
+            $"&response_type=code&scope=openid%20offline_access%20{Uri.EscapeDataString(apiScope)}" +
             $"&code_challenge={challenge}&code_challenge_method=S256");
         Assert.Equal(HttpStatusCode.Found, authorize.StatusCode);
 

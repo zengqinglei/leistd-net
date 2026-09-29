@@ -17,7 +17,6 @@ using CompanyName.ProjectName.Domain;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Domain.Users.Options;
-using CompanyName.ProjectName.Domain.Users.Policies;
 #endif
 using CompanyName.ProjectName.Domain.Shared.Json;
 using CompanyName.ProjectName.Infrastructure;
@@ -56,6 +55,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 #endif
 using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
+using Leistd.RealTime.AspNetCore.SignalR.Hubs;
 #if (!LocalIdentity)
 using Leistd.AspNetCore.SignalR;
 #endif
@@ -65,8 +65,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 #if (OpenIddictServer)
 using System.Security.Cryptography.X509Certificates;
-using Leistd.ServiceClient.Constants;
-using OpenIddict.Abstractions;
+using CompanyName.ProjectName.Application.Auth.OAuth;
 #endif
 #endif
 #if (ServiceUserContextEnabled)
@@ -86,11 +85,7 @@ using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Auth.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Constants;
-#if (OpenIddictServer)
-using CompanyName.ProjectName.Application.TenantConnections.Constants;
 #endif
-#endif
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using Leistd.DependencyInjection.DynamicProxy.Registration;
 
@@ -126,7 +121,8 @@ try
     builder.Services.AddApplicationServices();
 
 #if (LocalIdentity)
-    var defaultAdminOptions = builder.Services.AddOptions<DefaultAdminOptions>()
+    // 口令不在启动期校验：只有真的要创建管理员时才需要，由初始化器在那一刻按口令策略校验并报出键名
+    builder.Services.AddOptions<DefaultAdminOptions>()
         .Bind(builder.Configuration.GetSection(DefaultAdminOptions.SectionName));
 
     // 邮箱验证开启时，HMAC 密钥必须跨实例和重启稳定。
@@ -139,15 +135,6 @@ try
             $"{VerificationCodeOptions.SectionName}:Key is required when " +
             "UserRegistration:EnableEmailVerification is true, and must be at least " +
             $"{VerificationCodeOptions.MinimumKeyBytes} base64-encoded bytes.")
-        .ValidateOnStart();
-
-    // 拒绝缺失或已公开的超级管理员密码。
-    defaultAdminOptions
-        .Validate(
-            options => options.IsPasswordUsable,
-            $"{DefaultAdminOptions.SectionName}:Password is required and must satisfy the password " +
-            $"policy (at least {PasswordPolicy.MinimumLength} characters). Inject it from the " +
-            "deployment (environment variable or user-secrets); there is deliberately no default.")
         .ValidateOnStart();
 #endif
 #if (LocalIdentity)
@@ -174,6 +161,16 @@ try
             "OAuth:SigningCertificatePath and OAuth:EncryptionCertificatePath are required " +
             "(two RSA certificates distinct from the HTTPS certificate: one for signing, one for encryption). " +
             "OAuth:UseDevelopmentCertificates is intended for local development only.");
+    }
+
+    var oauthScopes = OAuthScopes.All(oauthOpts);
+    var conflictingScope = oauthScopes.GroupBy(scope => scope.Name, StringComparer.Ordinal)
+        .FirstOrDefault(group => group.Count() > 1)?.Key;
+    if (oauthOpts.ApiResources.Any(string.IsNullOrWhiteSpace) || conflictingScope is not null)
+    {
+        throw new InvalidOperationException(
+            "OAuth:ApiResources entries must be non-empty and distinct from each other, from OAuth:Resource " +
+            $"and from the built-in scopes (conflict: '{conflictingScope}').");
     }
 
     builder.Services.AddOpenIddict()
@@ -203,16 +200,7 @@ try
             // 资源服务需要直接验证 access token。
             options.DisableAccessTokenEncryption();
 
-            options.RegisterScopes(
-                OpenIddictConstants.Scopes.OpenId,
-                OpenIddictConstants.Scopes.Profile,
-                OpenIddictConstants.Scopes.Email,
-                OpenIddictConstants.Scopes.Roles,
-                OpenIddictConstants.Scopes.OfflineAccess,
-                // 机器令牌只在显式拥有 delegation scope 时才能代表用户。
-                ServiceClientScopes.Delegation,
-                TenantConnectionScopes.RuntimeRead,
-                TenantConnectionScopes.MigrationRead);
+            options.RegisterScopes(oauthScopes.Select(scope => scope.Name).ToArray());
 
             if (oauthOpts.UseDevelopmentCertificates)
             {
@@ -252,6 +240,8 @@ try
         .AddValidation(options =>
         {
             options.UseLocalServer();
+            // 只接受签给本服务 API 的令牌：签给下游 API 的令牌（受众是那个 API）不能用来调用这里
+            options.AddAudiences(oauthOpts.Resource);
 
             // 每个请求按令牌记录确认令牌未被撤销：停用、删除账号时撤销的令牌立即失效，
             // 在认证阶段就以 invalid_token 拒绝。API 与授权服务器同库部署，这次查库替代了逐请求查用户
@@ -329,7 +319,6 @@ try
         () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
         tags: ["ready"]);
 #endif
-    builder.Services.AddMyProjectSpaProxy();
     // HTTP 与 MVC 共用同一 JSON 配置，统一业务响应和 ProblemDetails。
     builder.Services.ConfigureHttpJsonOptions(options => JsonOptions.ConfigureWebApi(options.SerializerOptions));
     builder.Services.AddControllers()
@@ -377,9 +366,8 @@ try
 
     builder.Services.AddCors(options =>
     {
-        var corsConfig = builder.Configuration.GetSection("Cors");
-        var allowAnyLocalhost = corsConfig.GetValue<bool>("AllowAnyLocalhost");
-        var allowedOrigins = corsConfig.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+        // 只用于前端部署在另一个源的形态；本机开发经前端开发服务器转发，同源，不需要跨域
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 
         options.AddDefaultPolicy(policy =>
         {
@@ -392,11 +380,7 @@ try
             policy.WithExposedHeaders(TenantSessionRecoveryOptions.DefaultTenantInvalidHeader);
 #endif
 
-            if (allowAnyLocalhost)
-            {
-                policy.SetIsOriginAllowed(origin => new Uri(origin).Host == "localhost");
-            }
-            else if (allowedOrigins.Length > 0)
+            if (allowedOrigins.Length > 0)
             {
                 policy.WithOrigins(allowedOrigins);
             }
@@ -425,9 +409,9 @@ try
         options.EnableDetailedErrors = builder.Environment.IsDevelopment();
     });
 
-    // 通知与业务事件使用不同的 SignalR 传输，必须分别注册。
+    // 通知与业务事件共用实时 Hub：客户端只建一条连接，通知的接收授权即该 Hub 的授权要求
     builder.Services.AddRealTimeSignalR();
-    builder.Services.AddNotificationsSignalR();
+    builder.Services.AddNotificationsSignalR<RealTimeHub>();
 #if (LocalIdentity)
 
     // 通知偏好（收件人自己的用户级设置）决定哪类通知经哪个渠道收；安全提醒的站内通知必达，不受偏好影响
@@ -450,11 +434,15 @@ try
 
 #if (LocalIdentity)
     // 会话 Cookie 的滑动过期与服务端会话的空闲时限是同一个值，只在这里定一次
-#if (OpenIddictServer)
-    var sessionLifetime = TimeSpan.FromDays(oauthOpts.CookieExpireDays);
-#else
-    var sessionLifetime = TimeSpan.FromDays(7);
-#endif
+    var sessionCookie = builder.Configuration.GetSection(SessionCookieOptions.SectionName).Get<SessionCookieOptions>()
+        ?? new SessionCookieOptions();
+    if (sessionCookie.ExpireDays < 1)
+    {
+        throw new InvalidOperationException(
+            $"{SessionCookieOptions.SectionName}:ExpireDays must be at least 1 (was {sessionCookie.ExpireDays}).");
+    }
+
+    var sessionLifetime = TimeSpan.FromDays(sessionCookie.ExpireDays);
     builder.Services.Configure<UserSessionOptions>(options => options.IdleTimeout = sessionLifetime);
     // 会话 Cookie 与外部登录的状态 Cookie 经同一个 Options 管道取站点策略，两者不会分叉
     builder.Services.AddOptions<SessionCookieOptions>().BindConfiguration(SessionCookieOptions.SectionName);
@@ -552,17 +540,8 @@ try
     // 在所有读取当前区域性的中间件之前解析请求区域性。
     app.UseJsonRequestLocalization();
 #endif
-    var webRootPath = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
-    var uploadsRoot = Path.Combine(webRootPath, "uploads");
-    Directory.CreateDirectory(uploadsRoot);
-
     app.UseDefaultFiles();
     app.UseStaticFiles(SpaExtensions.CreateSpaStaticFileOptions());
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new PhysicalFileProvider(uploadsRoot),
-        RequestPath = "/uploads"
-    });
 
     var requestLogging = app.Services.GetRequiredService<IOptionsMonitor<RequestLoggingOptions>>();
     app.UseCorrelationId();
@@ -572,12 +551,6 @@ try
         {
             if (ex != null || httpContext.Response.StatusCode >= 500)
                 return Serilog.Events.LogEventLevel.Error;
-
-            var endpoint = httpContext.GetEndpoint();
-            if (endpoint != null && string.Equals(endpoint.DisplayName, "SpaProxyFallback", StringComparison.OrdinalIgnoreCase))
-            {
-                return Serilog.Events.LogEventLevel.Verbose;
-            }
 
             // 正常完成的请求记成哪一级由设置决定：调到 Verbose 就等于关掉请求日志
             // （全局最小级别通常是 Information，Verbose 不会落盘）。
@@ -639,8 +612,7 @@ try
     app.MapComponentEndpoints();
 
 #if (IncludeNotifications)
-    // 通知与业务事件 Hub 必须分别映射。
-    app.MapNotificationHub();
+    // 通知经实时 Hub 推送，只映射这一个
     app.MapRealTimeHub();
 #endif
 

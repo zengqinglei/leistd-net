@@ -19,6 +19,7 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
+import { isMockedUrl } from '../../../../../../_mock/core/providers';
 import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
@@ -101,11 +102,8 @@ export class Login {
     shown ? 'Hide password' : 'Show password';
   //#endif
 
-  // Mock状态：useMock 支持布尔与对象两种形态（与 MockInterceptor 的解析一致）。
-  public readonly isMockEnabled = signal(
-    environment.useMock === true ||
-      (typeof environment.useMock === 'object' && environment.useMock.enable === true),
-  );
+  // 登录接口由 Mock 应答时才提示演示账号：只 Mock 了别的模块时，演示账号登不进真实后端
+  public readonly isMockEnabled = signal(isMockedUrl(environment.useMock, AuthService.loginUrl));
 
   // 登录表单模型（Signal Forms）
   private readonly model = signal({
@@ -248,6 +246,13 @@ export class Login {
     //#endif
 
     if (this.isSafeLocalReturnUrl(returnUrl)) {
+      //#if (OpenIddictServer)
+      // 授权端点把未登录的授权请求送来这里；登录后整页回到服务端的授权端点继续签发，它不是前端路由
+      if (returnUrl.startsWith('/connect/')) {
+        window.location.href = returnUrl;
+        return;
+      }
+      //#endif
       await this.router.navigateByUrl(returnUrl);
       return;
     }

@@ -357,7 +357,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
     $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/components/notifications/notification-service.ts"
     if (Test-Path -LiteralPath $notificationServicePath) {
         $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
-        foreach ($marker in @("environment.useMock", "useMock.enable", "await this.signalR.connect()")) {
+        foreach ($marker in @("environment.useMock", "isMockedUrl(", "await this.signalR.connect()")) {
             if (-not $notificationService.Contains($marker)) {
                 throw "Scenario '$($Definition.Name)' notification service is missing Mock isolation marker: $marker"
             }
@@ -398,11 +398,9 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
     $startInfo.Environment['ASPNETCORE_URLS'] = $baseUrl
     $startInfo.Environment['ConnectionStrings__Default'] = ''
     $startInfo.Environment['Database__InMemoryName'] = "MatrixRuntime-$([Guid]::NewGuid().ToString('N'))"
-    $startInfo.Environment['SpaProxy__Enabled'] = 'false'
     $startInfo.Environment['OAuth__DisableHttpsRequirement'] = 'true'
-    # 超级管理员密码现在是启动期必填（基础配置里刻意不放可用密码）。
-    # 不用模板曾发布过的示例值：那些会被校验拒绝，正是要验证的行为
-    $startInfo.Environment['DefaultAdmin__Password'] = 'MatrixRuntime!Adm1n'
+    # 不注入管理员口令：新内存库首次启动要建管理员，口令取自生成项目的 appsettings.Development.json，
+    # 这正是克隆后直接运行的路径
     $startInfo.Environment['VerificationCodes__Key'] = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
     # Resource 形态的签发方在基线配置里刻意留空、组合期必填；其余形态不读这一项。
     # 冒烟只探存活，不回源，给一个不可达的地址即可

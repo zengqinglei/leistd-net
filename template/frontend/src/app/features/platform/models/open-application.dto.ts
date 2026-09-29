@@ -45,6 +45,14 @@ export interface UpdateOpenApplicationInputDto {
   requirements: string[];
 }
 
+/** 可授予开放应用的 scope；授予时的权限值为 `scp:` 加上 name。 */
+export interface OpenApplicationScopeOutputDto {
+  name: string;
+  displayName: string;
+  /** 只能授予 client_credentials 的机器客户端 */
+  machineOnly: boolean;
+}
+
 export interface ResetOpenApplicationSecretOutputDto {
   clientSecret: string;
 }

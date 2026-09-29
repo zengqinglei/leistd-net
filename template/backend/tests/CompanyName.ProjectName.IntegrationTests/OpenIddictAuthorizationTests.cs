@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -31,6 +32,9 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory factory)
     : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
+    // 调用本服务 API 的令牌必须申请它的 scope：受众由授予的 scope 推出，API 只接受受众是自己的令牌
+    private static readonly string ApiScope = new OAuthOptions().Resource;
+
     [Fact]
     public async Task Creating_an_application_rejects_scopes_this_server_does_not_register()
     {
@@ -358,7 +362,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 applicationType = "service",
                 clientType = "confidential",
                 consentType = "explicit",
-                permissions = new[] { "ept:token", "gt:client_credentials" },
+                permissions = new[] { "ept:token", "gt:client_credentials", $"scp:{ApiScope}" },
                 requirements = Array.Empty<string>(),
                 redirectUris = Array.Empty<string>(),
                 postLogoutRedirectUris = Array.Empty<string>()
@@ -380,7 +384,9 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
         [
             new KeyValuePair<string, string>("grant_type", "client_credentials"),
             new KeyValuePair<string, string>("client_id", clientId),
-            new KeyValuePair<string, string>("client_secret", secret.ClientSecret)
+            new KeyValuePair<string, string>("client_secret", secret.ClientSecret),
+            // 申请本服务 API 的 scope：令牌的受众是本服务，才轮得到后面的授权策略判定
+            new KeyValuePair<string, string>("scope", ApiScope)
         ]));
         Assert.Equal(HttpStatusCode.OK, token.StatusCode);
 
@@ -407,7 +413,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 consentType = "explicit",
                 permissions = new[]
                 {
-                    "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid"
+                    "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{ApiScope}"
                 },
                 requirements = Array.Empty<string>(),
                 redirectUris = new[] { RedirectUri },
@@ -450,7 +456,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             "/connect/authorize" +
             $"?client_id={Uri.EscapeDataString(clientId)}" +
             $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}" +
-            "&response_type=code&scope=openid" +
+            $"&response_type=code&scope=openid%20{ApiScope}" +
             $"&code_challenge={challenge}&code_challenge_method=S256");
 
         Assert.Equal(HttpStatusCode.Found, authorize.StatusCode);

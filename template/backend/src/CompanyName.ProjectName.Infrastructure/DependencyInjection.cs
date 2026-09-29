@@ -59,13 +59,89 @@ namespace CompanyName.ProjectName.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册基础设施层服务。
+    /// 注册基础设施层服务：持久化（见 <see cref="AddPersistenceServices"/>）加上运行期组件、缓存与锁、外部适配器。
     /// </summary>
     public static IServiceCollection AddInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddPersistenceServices(configuration);
+
+#if (IncludeNotifications)
+        services.AddNotificationsEfCore<MyProjectDbContext>();
+        // 旧通知的保留期清理（默认开启：已读 90 天、未读 365 天，配置节 Leistd:Notifications:Retention）
+        services.AddNotificationRetention<MyProjectDbContext>();
+#endif
+        services.AddPermissionAuthorizationEfCore<MyProjectDbContext>();
+        services.AddSettingsEfCore<MyProjectDbContext>();
+        services.AddOperationRecordsEfCore<MyProjectDbContext>();
+        // 到期记录搬入归档表。默认关闭：审计表只增不减是安全的默认值，
+        // 要启用就得有人显式打开（配置 Leistd:OperationRecords:Retention 或系统设置的「审计」面板）
+        services.AddOperationRecordRetention<MyProjectDbContext>();
+        // 集群周期任务的完成水位与业务表同库：多副本同一时段只跑一次
+        services.AddBackgroundJobsEfCore<MyProjectDbContext>();
+        // 连接串使用 StackExchange.Redis 原生格式（host:port,password=...,ssl=true），原样交给官方解析器。
+        var redisConnStr = configuration.GetConnectionString("Redis");
+
+        if (!string.IsNullOrEmpty(redisConnStr))
+        {
+            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
+
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnStr;
+                options.InstanceName = "MyProject:";
+            });
+
+            services.AddRedisDistributedLock(redisConnStr);
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+            services.AddMemoryLocalLock();
+        }
+
+        services.AddTransient<IPasswordHasher, PasswordHasher>();
+#if (LocalIdentity)
+        // 验证码摘要与口令哈希具有不同的密钥和成本契约。
+        services.AddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
+#endif
+
+#if (LocalIdentity)
+        services.AddSmtpEmailSender();
+#endif
+
+#if (ExternalLogin)
+        services.AddSingleton<IValidateOptions<ExternalAuthOptions>, ExternalAuthOptionsValidator>();
+        services.AddOptions<ExternalAuthOptions>()
+            .Configure<IConfiguration>((options, config) =>
+            {
+                var section = config.GetSection(ExternalAuthOptions.SectionName);
+                BindProvider(options.Github, section.GetSection("Github"));
+                BindProvider(options.Google, section.GetSection("Google"));
+            })
+            .ValidateOnStart();
+        services.AddHttpClient();
+        services.AddScoped<IOAuthProvider, GitHubOAuthProvider>();
+        services.AddScoped<IOAuthProvider, GoogleOAuthProvider>();
+#endif
+
+        return services;
+    }
+
+    /// <summary>
+    /// 注册持久化：数据库上下文、租户连接解析与多租户控制库。
+    /// </summary>
+    /// <remarks>
+    /// 迁移作业（DbMigrator）只用这一部分：运行期组件（设置、权限、操作记录等）依赖只在 API 里注册的当前用户与权限主体，
+    /// 迁移进程注册它们既用不上、也会让开发环境的容器构建期校验失败。
+    /// </remarks>
+    public static IServiceCollection AddPersistenceServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
         // 所有上下文共用内存库命名和事务警告策略。
+
         void UseInMemoryFallback(DbContextOptionsBuilder options, string? suffix)
         {
             var databaseName = configuration["Database:InMemoryName"];
@@ -189,19 +265,6 @@ public static class DependencyInjection
                 .Ignore(RelationalEventId.MultipleCollectionIncludeWarning));
         });
 
-#if (IncludeNotifications)
-        services.AddNotificationsEfCore<MyProjectDbContext>();
-        // 旧通知的保留期清理（默认开启：已读 90 天、未读 365 天，配置节 Leistd:Notifications:Retention）
-        services.AddNotificationRetention<MyProjectDbContext>();
-#endif
-        services.AddPermissionAuthorizationEfCore<MyProjectDbContext>();
-        services.AddSettingsEfCore<MyProjectDbContext>();
-        services.AddOperationRecordsEfCore<MyProjectDbContext>();
-        // 到期记录搬入归档表。默认关闭：审计表只增不减是安全的默认值，
-        // 要启用就得有人显式打开（配置 Leistd:OperationRecords:Retention 或系统设置的「审计」面板）
-        services.AddOperationRecordRetention<MyProjectDbContext>();
-        // 集群周期任务的完成水位与业务表同库：多副本同一时段只跑一次
-        services.AddBackgroundJobsEfCore<MyProjectDbContext>();
 #if (LocalIdentity)
         // 开通失败的数据库错误翻译：SQLSTATE 表是 PostgreSQL 方言，属本项目的技术适配。
         // 必须在组件注册之前登记——组件按 TryAdd 挂的是“不翻译”的默认实现
@@ -223,52 +286,6 @@ public static class DependencyInjection
 #if (OpenIddictServer)
         // OpenIddict 自有实体不是 Leistd 实体，只登记。
         services.AddDddDbContext<OpenIddictDbContext>();
-#endif
-
-        // 连接串使用 StackExchange.Redis 原生格式（host:port,password=...,ssl=true），原样交给官方解析器。
-        var redisConnStr = configuration.GetConnectionString("Redis");
-
-        if (!string.IsNullOrEmpty(redisConnStr))
-        {
-            services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnStr));
-
-            services.AddStackExchangeRedisCache(options =>
-            {
-                options.Configuration = redisConnStr;
-                options.InstanceName = "MyProject:";
-            });
-
-            services.AddRedisDistributedLock(redisConnStr);
-        }
-        else
-        {
-            services.AddDistributedMemoryCache();
-            services.AddMemoryLocalLock();
-        }
-
-        services.AddTransient<IPasswordHasher, PasswordHasher>();
-#if (LocalIdentity)
-        // 验证码摘要与口令哈希具有不同的密钥和成本契约。
-        services.AddSingleton<IVerificationCodeDigest, HmacVerificationCodeDigest>();
-#endif
-
-#if (LocalIdentity)
-        services.AddSmtpEmailSender();
-#endif
-
-#if (ExternalLogin)
-        services.AddSingleton<IValidateOptions<ExternalAuthOptions>, ExternalAuthOptionsValidator>();
-        services.AddOptions<ExternalAuthOptions>()
-            .Configure<IConfiguration>((options, config) =>
-            {
-                var section = config.GetSection(ExternalAuthOptions.SectionName);
-                BindProvider(options.Github, section.GetSection("Github"));
-                BindProvider(options.Google, section.GetSection("Google"));
-            })
-            .ValidateOnStart();
-        services.AddHttpClient();
-        services.AddScoped<IOAuthProvider, GitHubOAuthProvider>();
-        services.AddScoped<IOAuthProvider, GoogleOAuthProvider>();
 #endif
 
         return services;

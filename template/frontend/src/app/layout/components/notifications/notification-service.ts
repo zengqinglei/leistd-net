@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { lastValueFrom } from 'rxjs';
 
+import { isMockedUrl } from '../../../../../_mock/core/providers';
 import { environment } from '../../../../environments/environment';
 import { SignalRService, NotificationOutputDto } from '../../../core/services/signalr-service';
 export type { NotificationOutputDto } from '../../../core/services/signalr-service';
@@ -41,8 +42,8 @@ export class NotificationService {
 
     await this.loadNotifications();
 
-    const useMock = environment.useMock;
-    if (typeof useMock === 'boolean' ? useMock : useMock.enable) {
+    // 实时连接本身由 Mock 应答时不建连：Mock 不模拟 SignalR，连不上的后端只会反复重试
+    if (isMockedUrl(environment.useMock, SignalRService.hubPath)) {
       return;
     }
 

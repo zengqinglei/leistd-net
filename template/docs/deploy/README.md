@@ -51,6 +51,13 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 ## 生产边界
 
 - 密钥和生产凭据由环境变量或密钥管理系统提供，不写入仓库。
+<!--#if (OpenIddictServer)-->
+- 前端不与本服务同源时（如独立部署的资源服务前端经本服务登录），把它的源加入本服务的 `Cors:AllowedOrigins`：发现文档、JWKS、令牌与 userinfo 都是跨源请求。本机开发不需要，前端开发服务器已为 localhost 来源放行。
+- 下游资源服务的 API 标识登记在 `OAuth:ApiResources`，与该服务的 `Authentication:Audience` 取同一个值。
+<!--#endif-->
+<!--#if (IncludeNotifications && LocalIdentity)-->
+- 通知邮件要附可点开的站内链接时配置 `Leistd:Notifications:Email:PublicBaseUrl`（站点对外地址；哈希路由以 `/#` 结尾），不配则不附。
+<!--#endif-->
 - 操作记录默认**只增不减**。需要保留期时打开 `Leistd:OperationRecords:Retention:Enabled`（或由宿主管理员在系统设置的「审计」面板打开），
   到期记录会被搬进 `OperationRecordArchives` 表而不是删除；归档表不参与日常查询，但数据仍在库里，容量规划要把它算进去。
   配置里的开关与保留天数是基线，界面上的设置优先，归档任务每轮读取；执行时刻与批大小只在配置里。

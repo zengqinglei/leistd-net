@@ -22,6 +22,7 @@
     <!--#endif-->
 
     <div class="flex items-center justify-center gap-4">
+      <!--#if (LocalIdentity)-->
       <!--#if (IncludeLocalization)-->
       <a hlmBtn routerLink="/auth/login">{{ 'landing.hero.login' | transloco }}</a>
       <a hlmBtn variant="outline" routerLink="/auth/register">{{
@@ -30,6 +31,14 @@
       <!--#else-->
       <a hlmBtn routerLink="/auth/login">Sign In</a>
       <a hlmBtn variant="outline" routerLink="/auth/register">Sign Up</a>
+      <!--#endif-->
+      <!--#else-->
+      <!-- 登录与注册都在签发令牌的身份服务上：进入工作台时由守卫发起 OIDC 登录 -->
+      <!--#if (IncludeLocalization)-->
+      <a hlmBtn routerLink="/workspace">{{ 'landing.hero.login' | transloco }}</a>
+      <!--#else-->
+      <a hlmBtn routerLink="/workspace">Sign In</a>
+      <!--#endif-->
       <!--#endif-->
     </div>
 

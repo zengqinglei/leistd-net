@@ -46,18 +46,11 @@ pnpm-debug.log*
 .env.*
 !.env.example
 !.env.template
-# 本机调试配置不进版本库：每个开发者的后端地址、联调模式各不相同，跟踪它只会让
-# 大家互相覆盖。首次克隆后从 environment.dev.ts 复制一份（见 frontend/README.md）。
-frontend/src/environments/environment.debug.ts
-frontend/src/environments/environment.local.ts
 
 # Logs
 *.log
 logs/
 Logs/
-
-# Runtime uploads
-backend/src/CompanyName.ProjectName.Api/wwwroot/uploads/
 
 # Temporary
 *.tmp

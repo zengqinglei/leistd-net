@@ -411,13 +411,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     [Fact]
     public async Task Cors_response_exposes_the_tenant_invalid_header()
     {
-        // 复刻"模式二：CORS 分离访问"的配置：默认 AllowAnyLocalhost=false 时不放行任何来源，
+        // 前端部署在另一个源、经 Cors:AllowedOrigins 放行的形态：默认不放行任何来源时，
         // CORS 中间件不会写任何响应头，这条断言也就无从谈起
         using var corsHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureAppConfiguration((_, configuration) =>
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Cors:AllowAnyLocalhost"] = "true"
+                    ["Cors:AllowedOrigins:0"] = "http://localhost:4200"
                 })));
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(corsHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);

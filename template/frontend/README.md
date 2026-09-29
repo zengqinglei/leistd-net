@@ -32,82 +32,66 @@ ng version
 npm install
 ```
 
-### 2. 创建本机调试配置
+### 2. 启动开发服务器
 
-`npm start`（`ng serve -c debug`）加载 `src/environments/environment.debug.ts`。这个文件**不在版本库里**——每个人的后端地址和联调模式都不一样，跟踪它只会让大家互相覆盖。首次克隆后从 `environment.dev.ts` 复制一份：
+先按根目录 README 启动本机后端（默认 `http://localhost:5240`），再启动前端：
 
 ```bash
-cp src/environments/environment.dev.ts src/environments/environment.debug.ts
+npm start
 ```
 
-之后随便改，改动不会被提交。**没有这个文件 `npm start` 会直接失败**，这一步不能跳过。
+浏览器打开 `http://localhost:4200`。`npm start` 即 `ng serve`，使用 `development` 构建配置与 `src/environments/environment.ts`，
+不需要复制或创建任何环境文件。
 
-### 3. 填写 api.gateway 并选择联调模式
+<!--#if (OpenIddictServer)-->
+开发服务器按 `proxy.conf.mjs` 把 `/api`、`/hubs`（SignalR，含 WebSocket）以及授权服务的 `/connect`、`/.well-known` 转发给本机后端：
+<!--#else-->
+开发服务器按 `proxy.conf.mjs` 把 `/api`、`/hubs`（SignalR，含 WebSocket）转发给本机后端：
+<!--#endif-->
 
-**关键是 `api.gateway` 怎么填，取决于你用哪种前后端联调模式**：
+浏览器只和 4200 打交道，前后端同源，Cookie 与回调地址都按 4200 生成，不需要跨域配置；热更新照常可用。
+后端不在默认端口时，启动前设置 `API_PROXY_TARGET`：
 
-#### 模式一：SPA 同源访问（推荐）
-
-后端开启内置 SPA 代理（`SpaProxy`），浏览器**只访问后端地址**，前端请求由后端代理转发到 Angular dev server。前后端同源，**没有跨域、cookie 正常**。
-
-```typescript
-export const environment = {
-  ...environmentBase,
-  useMock: {
-    enable: false,
-    delay: 500,
-    exclude: '',
-    include: '',
-  },
-  api: {
-    ...environmentBase.api,
-    gateway: '', // 留空 = 同源相对路径，请求经后端 SPA 代理
-  },
-};
+```bash
+API_PROXY_TARGET=http://localhost:5300 npm start
 ```
 
-> 配套：后端需开启 `SpaProxy.Enabled=true`、`SpaProxy.Target=http://localhost:4200`，详见 [后端 README · 前后端联调](../backend/README.md)。
-> 访问方式：浏览器打开**后端地址**（如 `http://localhost:5240/`），不是 4200。
->
-> 代价：**热更新（HMR）在这个模式下不可用**。dev server 的 live-reload 走 WebSocket 升级，而 SPA 代理基于 `HttpClient`，转发不了 upgrade（浏览器控制台会反复出现 `WebSocket connection to 'ws://<后端地址>/?token=...' failed`）。改代码后手动刷新即可；需要热更新时临时切模式二。应用自身的 SignalR 不受影响——它直连后端，不经这个代理。
+PowerShell：
 
-#### 模式二：CORS 分离访问
+```powershell
+$env:API_PROXY_TARGET = "http://localhost:5300"; npm start
+```
+<!--#if (RemoteTokenAuth)-->
 
-浏览器直接访问前端 dev server（4200），API 跨域打到后端。需后端开启 CORS 放行本地端口。
+### 3. 联调本机 Identity 服务
 
-```typescript
-export const environment = {
-  ...environmentBase,
-  useMock: { enable: false, delay: 500, exclude: '', include: '' },
-  api: {
-    ...environmentBase.api,
-    gateway: 'http://localhost:5240', // 后端完整地址，跨域访问
-  },
-};
+本服务的登录在 Identity 服务上完成。本机联调时先按 Identity 服务自己的说明启动它（默认后端 5240、前端开发服务器 4200），
+本服务改用其他端口：
+
+```bash
+# 后端（在 backend 目录）
+dotnet run --project src/CompanyName.ProjectName.Api --urls http://localhost:5250
+# 前端（在 frontend 目录；PowerShell 写 $env:API_PROXY_TARGET = "http://localhost:5250"; npm start -- --port 4201）
+API_PROXY_TARGET=http://localhost:5250 npm start -- --port 4201
 ```
 
-> 配套：后端需设 `Cors.AllowAnyLocalhost=true`（开发用）。访问方式：浏览器打开 `http://localhost:4200/`。
-> 注意：跨域携带 cookie 对 SameSite/Secure 要求更严，若登录后 cookie 不生效，优先改用模式一。
+`environment.ts` 的 `oidc.authority` 与后端 `appsettings.Development.json` 的 `Authentication:Issuer` 默认都指向
+`http://localhost:4200`，即 Identity 的前端开发服务器：浏览器在那里登录，令牌的签发方也是这个地址。
+在 Identity 那边还需要：
 
-### 4. 启动开发服务器
+- 把本服务后端的 `Authentication:Audience` 登记进 Identity 的 `OAuth:ApiResources`（如 Identity 目录下
+  `dotnet user-secrets set "OAuth:ApiResources:0" "<本服务的 Audience>" --project src/<Identity 的 Api 项目>`），
+  它会成为同名 scope，前端申请它得到的访问令牌受众就是本服务；
+- 本机不需要为 4201 配置跨域：浏览器从 4201 请求 Identity 的前端开发服务器，开发服务器为 localhost 来源放行；
+  部署时 Identity 的 `Cors:AllowedOrigins` 要加入本服务前端的源；
+- 在「开放应用」里登记本服务的前端客户端（客户端 ID 见 `environment.base.ts` 的 `oidc.clientId`）：公共客户端、强制 PKCE，
+  授予 `openid`、`profile`、`email`、`roles` 与上面那个 scope，回调地址 `http://localhost:4201/auth/callback`，登出回调 `http://localhost:4201`。
+<!--#endif-->
 
-本项目已预置了多套环境配置，您可以根据需要启动对应的开发服务器。
+### Mock
 
-- **启动本地调试环境**（默认使用 `environment.debug.ts` 配置）：
-
-  ```bash
-  npm start
-  ```
-
-- **启动其他环境**：
-  ```bash
-  ng serve -c dev     # 开发环境
-  ng serve -c test    # 测试环境
-  ng serve -c uat     # UAT 环境
-  ng serve -c production  # 生产环境
-  ```
-
-服务器启动后：**模式一**（SPA 同源）在浏览器打开后端地址 `http://localhost:5240/`；**模式二**（CORS 分离）打开 `http://localhost:4200/`。应用支持热重载，任何对源文件的修改都会自动刷新页面。
+`environment.ts` 的 `useMock` 控制 Mock：`true` 全部由 Mock 应答；对象形态按接口开关，`include` 列出的接口走 Mock（列了 `include` 时以它为准），
+命中 `exclude` 的一律走真实后端。只有 `development` 构建会把 Mock 编进包里，其他构建里 `useMock` 不起作用。
 
 ---
 
@@ -115,7 +99,7 @@ export const environment = {
 
 项目使用 Angular 的环境配置系统。配置文件位于 `src/environments/`：
 
-- `environment.debug.ts` - 本地调试（`npm start` 默认使用）
+- `environment.ts` - 本机开发（`npm start` 使用，Mock 只在这个配置下可用）
 - `environment.dev.ts` - 开发环境
 - `environment.test.ts` - 测试环境
 - `environment.uat.ts` - UAT 环境

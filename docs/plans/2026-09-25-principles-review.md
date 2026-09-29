@@ -123,13 +123,13 @@
 | E2 | 删 `IEventBus`，成员并入 `ILocalEventBus`，注册改幂等；未来分布式总线自定 `IDistributedEventBus` |
 | E3 | 删空方法 `AddRealTime()` |
 | E4 | 保留 `RemoteTokenAuth`：凡指"验证远端令牌或 OIDC 客户端"的条件统一用它，`!LocalIdentity` 只表示无本地用户表 |
-| E5 | 删 `/uploads` 静态目录、compose 卷、`.gitignore` 条目 |
+| E5 | 删 `/uploads` 静态目录、compose 卷、`.gitignore` 条目（已并入阶段 5） |
 | E6 | 删 `environment.api` 除 `gateway` 外的死字段，修前端 README；`GATEWAY_SERVICE_NAME` 补文档；保留 Dockerfile 用的 `__API_GATEWAY__` 占位 |
 | E7 | 删 `format.utils.ts` 及 spec |
 | F1 | 新建 `Leistd.MultiTenancy.Management` 用例包（引用 Core、UoW.Core、EventBus.Core），移入租户管理用例、DTO 与开通契约；`ICurrentTenant` 等中性契约留 Core；搬包时同步清理受影响的无用 using |
 | IDE0005 | framework 组件启用构建期强制（warning，Release 转 error）；模板不强制 |
 | T7 余项 | api、migrator 阶段 `USER $APP_UID`；验证 compose 文件型 secrets 对 UID 1654 可读 |
-| 模板上手 | launchUrl 改 `api/health/live`；`.http` 换真实端点；镜像名改 `${IMAGE_REGISTRY:?}/companyname-projectname:${IMAGE_TAG:-latest}`；`TZ` 默认 `UTC` 并写明它决定服务端文本的默认时区；`AddOpenApi()` + 默认仅 Development `MapOpenApi()` |
+| 模板上手 | launchUrl 改 `api/health/live`（已并入阶段 5）；`.http` 换真实端点；镜像名改 `${IMAGE_REGISTRY:?}/companyname-projectname:${IMAGE_TAG:-latest}`；`TZ` 默认 `UTC` 并写明它决定服务端文本的默认时区；`AddOpenApi()` + 默认仅 Development `MapOpenApi()` |
 | C1 | 最后决定是否实施：判定改 `AuthorizationHandler<OperationAuthorizationRequirement, IAuthorizableResource>` + `IAuthorizationService`，ACL 拒绝用 `context.Fail()`、超管在 handler 内跳过；保留 ACL 存储、`IAuthorizableResource` 与操作常量；Resource.Core 只引独立包 `Microsoft.AspNetCore.Authorization` |
 | V | 迁 Vitest：先迁配置，再 `ng g @schematics/angular:refactor-jasmine-vitest`；装 jsdom 不装 happy-dom；暂不开 browser 模式；删 karma 系列、`jasmine-core`、`@types/jasmine`、`karma.conf.js`、`istanbul-lib-instrument`（`debug` 先 `npm ls`） |
 
@@ -168,13 +168,26 @@
    - 审查（Claude、Codex）后采纳：E1 标记改为携带兜底描述符，Redis 只移除那一条（此前"内存兜底 → 宿主 `Add` → Redis"会删掉宿主实现）；A1 默认 `IEventBus` 转发到最终的 `ILocalEventBus`（改 `TryAdd` 后宿主预替换总线会留下第二条发布路径）；A4 约定改用 `FindProperty`（派生实体实现契约、属性声明在已映射基实体上时会漏）；A6 `AddUnitOfWork` 也统一为单一入口、删 `IConfiguration` 重载（"纯 ServiceCollection"只关系测试，生产中只传委托的宿主同样丢配置；两边意见分歧，采纳 Claude，避免之后再破坏一次），`AddDddInfrastructure` 经它绑定；文档补"不支持 `AddDbContextFactory`"；A9 标记改 `TryAdd`。E1、A1、A4 继承属性、UoW 绑定四个新用例经变异证伪。
    - 终审后采纳：E1 内存兜底只看非 keyed 注册（具名锁曾阻止默认兜底）；Smtp、Redis 锁、多租户（域名格式与租户存储两个）的校验器按实际 `configSectionPath` 报键名；并发标记必填的理由改正（更新条件含主键，不存在"匹配所有 null 行"）；`AddDbContextFactory` 限定为默认单例生命周期；补 TTL 可选、Response 失败信封 `code`/`errorCode` 语义、自研调度器登记标记的文档；Realtime 用例断言追加的授权策略确实附着；A4 补"先登记后 `AddDbContext`"顺序用例。
    - E1：模板 Redis 分支只注册 `AddRedisDistributedLock`，没有 `ILocalLock`；模板目前无进程内锁用法，不补。
-   - F3 后续：模板安全提醒的 `Link` 是相对路径 `/workspace/settings/security`，邮件不附；要在邮件里带链接需要"站点对外地址"配置，另行评估。
+   - ~~F3 后续：模板安全提醒的 `Link` 是相对路径，邮件不附……另行评估。~~ 已并入阶段 5（邮件渠道 `PublicBaseUrl`）。
 4. **身份口径**：roleType + C10 → F2 → C11。验收：权限、通知推送、操作记录端到端；C11 在同一作用域按"当前主体 → 其他主体 → 当前主体"及跨租户主体验证不串人。（已实施，待审查）
    - roleType + C10：只有会话 Cookie 路径错（令牌路径已按 `Claims.Role` 构造）；Cookie 票据序列化保留 RoleClaimType，修构造处即可。模板集成用例经真实登录→按会话方案认证→官方 `IsInRole` + `RequireRole` 判定，并断言无此角色时判否；撤回修复即红。五个成员框架与模板均无调用方。
    - F2：`UserIdClaims`（Security.Core）提供 `DefaultTypes` 与 `FindUserId`（`ClaimsPrincipal` 与 `ICurrentUser` 两个入口，共用"跳过空白"规则）。取名避开 `HubIdentityOptions.UserIdClaimTypes` 属性同名。操作记录读取口径收进 `OperationRecordOptions` 的内部方法供记录器与查询服务共用；非空 `ActorIdClaimType` 不再回落。`FakeCurrentUser` 只给 Id 时补 `sub`，与真实实现同源（原测试靠旧回落才通过）。
    - C11：不用 `IAmbientContext.Begin` 切换主体（其契约规定 HTTP 请求不使用）；接口按已确认方案直接新增 `GetSubjectAsync`，不加默认实现。"当前主体"按与 `ICurrentPrincipalAccessor.Principal` 引用相等判定（Hub 复评在 `Begin(principal)` 内，同样命中）。租户比对读 `CustomClaimTypes.TenantId`（与 `ICurrentUser.TenantId` 同源，授权 Core 看不到 AspNetCore 的 `TenantClaimType` 选项），仅对非当前主体；授权 Core 因此新增对 Security.Core 的引用。
-   - 审查（Claude、Codex）后采纳：检查器快照记下加载时的主体引用与租户，作用域内当前主体或租户被切换时重新加载（此前 `Change` 后按引用相等会拿到前一个主体的授予，无参重载原本也有此粘滞）；升级说明改正"操作人标识结果一致"的说法。分歧：固定读 `tenant_id` 与 `TenantClaimType` 不跟随——Codex 要求提供替换点，Claude 认为补文档即可；采纳后者，文档写明边界。后续：若要支持自定义租户 claim，把 `TenantClaimType` 下沉到 Core 层供 `ICurrentUser.TenantId` 与检查器共用，而不是再立一个需同步的选项。
-5. **模板**：T1、ENV + C8、H、T7（redis）。验收：9 个生成场景；克隆后用 InMemory 直接运行且默认管理员可登录；T1 覆盖新内存库、已有管理员缺口令键、真实库首次建管理员缺键三种启动；实测本地与外部登录、SignalR 只投递一次；compose 一键启动。
+   - 审查（Claude、Codex）后采纳：检查器快照记下加载时的主体引用与租户，作用域内当前主体或租户被切换时重新加载（此前 `Change` 后按引用相等会拿到前一个主体的授予，无参重载原本也有此粘滞）；升级说明改正"操作人标识结果一致"的说法。分歧：固定读 `tenant_id` 与 `TenantClaimType` 不跟随——Codex 要求提供替换点，Claude 认为补文档即可；采纳后者，文档写明边界。~~后续：若要支持自定义租户 claim……~~ 已由阶段 4 T-A（`ClaimTypeOptions`）实现。
+5. **模板**：T1、ENV + C8、H、T7（redis）。验收：9 个生成场景；克隆后用 InMemory 直接运行且默认管理员可登录；T1 覆盖新内存库、已有管理员缺口令键、真实库首次建管理员缺键三种启动；实测本地与外部登录、SignalR 只投递一次；compose 一键启动。（已实施，已评审；外部登录与真实提供方的往返缺凭据，用户确认按验收例外处理，只验证发起跳转与回调地址）
+   - 定稿（方案经 Claude、Codex 评审，用户确认）：
+     - T1：删启动期校验与 `IsPasswordUsable`，只在首次创建管理员时经 `PasswordPolicy.Ensure` 报键名并提示提供方式；Development 配置入库本机口令；compose 去掉 `:?` 门槛；测试覆盖三种启动与"同名普通用户缺口令"。
+     - ENV：不新增环境文件，`environment.ts` 即本机配置（网关空）；`debug` 构建配置改名 `development`（两份 `package.json`、`serve` 引用同步），删 `environment.debug.ts` 机制；`providers.ts` 默认空实现，仅 `development` 替换为真实 Mock（新环境默认安全）；Mock 判定抽共享模块，区分"是否安装"与"某请求是否 Mock"，登录页演示账号、通知连接、URL 拦截器共用，不反向引用 Mock 数据。
+     - C8：选 Angular `proxyConfig`，转发 `/api/**`、`/hubs/**`（`ws`）、`OpenIddictServer` 下的 `/connect/**` 与 `/.well-known/**`；不代理前端回调页；删 SpaProxy 选项、实现与矩阵脚本注入；先实测 Resource 前端经 Identity dev server 完成授权码登录，走不通退回 YARP。
+     - H：`AddNotificationsSignalR<THub>()`，渠道保持非泛型、经内部访问器取 `IHubContext<THub>`，同 Hub 幂等、异 Hub 注册期报错；客户端方法名改为带命名空间的公开常量；模板只映射实时 Hub，前端单连接并保留两类重连处理。
+     - F3（并入）：邮件渠道可选 `PublicBaseUrl`，发送时把相对链接解析为绝对地址，站内仍用相对链接；不配则不附链接。
+     - E5（并入）：删 `/uploads` 静态目录、compose 卷与 `.gitignore` 条目（无写入方）。
+     - 模板上手之 `launchUrl` 并入：改 `api/health/live`。
+   - 实施记录：C8 实测先行（Resource 前端经 Identity 前端开发服务器 4200 完成授权码登录、Resource 后端验签），走通后落地；本机经 4200 访问授权端点无 TLS，Identity 开发配置关闭 HTTPS 要求，Resource 开发配置的签发方与前端 `oidc.authority` 默认指向 4200。`Cors:AllowAnyLocalhost` 随跨域联调模式一并删除。实测暴露三处既有前端缺陷并修复：URL 拦截器给绝对地址也带凭据（OIDC 发现文档跨源失败）、登录页把 `/connect/authorize` 的 returnUrl 当前端路由、OIDC 库回调后自行跳 `/` 与回调组件竞争；Resource 首页登录入口链到不存在的本地登录页。矩阵脚本的通知服务文本标记改为新的 Mock 判定。
+     - 并入（用户确认，按终局做）：Identity 为下游 API 签发令牌。scope 目录 `OAuthScopes`（由 `OAuthOptions` 推出：OIDC 标准 scope、本服务 API `OAuth:Resource`、租户路由与委托两类仅限机器 scope、`OAuth:ApiResources` 列出的下游 API）成为 `RegisterScopes`、scope 表、开放应用权限校验与令牌受众的唯一来源（此前三处各自维护且已漂移：委托 scope 只在 `RegisterScopes` 里）；访问令牌受众由授予的 scope 推出，Identity 校验受众为自己；Resource 的 `Authentication:Audience` 默认对齐 `-api`；开放应用新增可选 scope 接口，编辑界面按它生成 scope 选项；会话时长移到 `SessionCookie:ExpireDays`（standalone 此前写死 7 天），`OAuth`、`Authentication` 两节各自只在用得到的形态生成。
+     - 实施评审（Claude、Codex）后采纳：scope 目录收缩时删除 scope 表中不再登记的 scope；邮件 `PublicBaseUrl` 接入模板配置与 compose（`PUBLIC_BASE_URL`）；部署文档补前端独立部署时的跨域配置；Mock 判定补单元用例（两份提供器、include/exclude 优先级）；README 条件块裁剪后的双空行逐组合修正；通知渠道去掉未使用的 `HubType`。评审前提不成立的：本机跨域被拦（Vite 对 localhost 源已回 CORS）、`signalr-service` 的 `computed` 未用（`unreadCount` 在用）。
+     - 真实 PostgreSQL 复验暴露：DbMigrator 在 Development 下因构建期依赖校验失败（注册了全部运行期组件，依赖只在 API 注册的当前用户与权限主体）。Infrastructure 拆出 `AddPersistenceServices`，迁移作业只注册它；随之发现框架 `AddRemoteTenantConnectionResolution` / `AddLocalTenantConnectionResolution` 未登记解析器依赖的 `ICurrentTenant`，改为自身调用 `AddMultiTenancyCore()`（组件自闭环）。模板新增迁移作业注册面的构建期校验用例，框架新增两个入口单独使用的校验用例（撤回修复即红）。
+     - 修复复核（第二轮）后采纳：迁移作业的服务组合提为 DbMigrator 的 `AddMigratorServices`，宿主与注册面测试共用，测试解析到 `DatabaseMigrationRunner` 本身（此前手抄注册、漏了它）；升级说明写明 scope 对账会删除目录之外的全部 scope、自定义 scope 须纳入目录、删除不撤销已签发令牌。真实库补验"已有管理员、撤掉口令后重启，原口令仍可登录"。外部登录与真实提供方的往返缺提供方凭据，用户确认列为验收例外。
 6. **P2**：按组件分批，C1 最后。验收：各组件测试、打包、9 个生成场景、前端构建；C4 旁路用例、D2 双形状用例；C9 落地后复验默认管理员登录。
 7. **V**（独立）：Vitest 迁移。验收：62 个 spec 全过，覆盖率不降。
 

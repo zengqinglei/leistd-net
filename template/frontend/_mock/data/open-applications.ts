@@ -1,4 +1,7 @@
-import { OpenApplicationOutputDto } from '../../src/app/features/platform/models/open-application.dto';
+import {
+  OpenApplicationOutputDto,
+  OpenApplicationScopeOutputDto,
+} from '../../src/app/features/platform/models/open-application.dto';
 
 export interface MockOpenApplication extends OpenApplicationOutputDto {
   clientSecret?: string;
@@ -78,4 +81,25 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     creationTime: '2026-05-03T14:15:00Z',
     clientSecret: 'mock-service-secret',
   },
+];
+
+/** 服务端 scope 目录：OIDC 标准 scope、本服务 API、仅限机器的内部 scope。 */
+export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
+  { name: 'openid', displayName: 'OpenID', machineOnly: false },
+  { name: 'profile', displayName: 'Profile', machineOnly: false },
+  { name: 'email', displayName: 'Email', machineOnly: false },
+  { name: 'roles', displayName: 'Roles', machineOnly: false },
+  { name: 'offline_access', displayName: 'Offline access', machineOnly: false },
+  { name: 'companyname-projectname-api', displayName: 'API', machineOnly: false },
+  {
+    name: 'tenant-routing.read',
+    displayName: 'Read tenant connection routing metadata',
+    machineOnly: true,
+  },
+  {
+    name: 'tenant-migration.read',
+    displayName: 'Read tenant connection migration metadata',
+    machineOnly: true,
+  },
+  { name: 'svc.delegate', displayName: 'Act on behalf of users', machineOnly: true },
 ];

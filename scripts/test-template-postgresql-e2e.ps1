@@ -332,7 +332,6 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
     $startInfo.Environment["ASPNETCORE_URLS"] = $baseUrl
     $startInfo.Environment["ConnectionStrings__Default"] = $identityRuntimeShared
     $startInfo.Environment["ConnectionStrings__Redis"] = ""
-    $startInfo.Environment["SpaProxy__Enabled"] = "false"
     $startInfo.Environment["OAuth__Issuer"] = "$baseUrl/"
     $startInfo.Environment["OAuth__DisableHttpsRequirement"] = "true"
     $startInfo.Environment["DefaultAdmin__Username"] = "admin"
