@@ -426,7 +426,7 @@ public sealed class IdentityControlDbContext : DbContext;
 - 租户实体的唯一索引需分别覆盖 `TenantId IS NULL` 的宿主行和 `TenantId IS NOT NULL` 的租户行；单一 `(TenantId, X)` 索引无法限制多个 NULL。
 - **承载租户业务数据**的外部标识（缓存 key、锁 key 等）必须带 tenant/host 作用域，用 `ScopeKey` 产出；**控制面标识**（租户注册表、租户连接配置这类「用来判断你是哪个租户」的数据）保持全局——加作用域反而会按调用时机分裂成多份。
 - 超级管理员只可旁路功能权限，不可旁路租户数据隔离。
-- 多服务系统的租户注册表应归 Identity 所有。Resource 在 token 有效期内信任经验证的 claim，不复制租户状态。
+- 多服务系统的租户注册表应归 Identity 所有。Resource 在 token 有效期内信任经验证的 claim，不复制租户状态。因此租户停用或删除在 Identity 立即生效，在 Resource 要等已签发的 Access Token 过期：传播窗口就是 Access Token 有效期。要缩短，调短有效期。要即时生效需要两步，框架都不内置：停用时撤销该租户已签发的令牌，并让 Resource 对令牌做内省（每个请求回 Identity 校验，多一次往返）。只开内省不够，内省只认令牌是否被撤销，不查租户状态。
 - `EfCoreTenantStore` 默认不缓存，使启停和删除在提交后立即生效。自行加缓存时必须显式承担撤销延迟。
 
 ## 相关

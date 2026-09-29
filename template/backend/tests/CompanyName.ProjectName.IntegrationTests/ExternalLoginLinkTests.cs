@@ -138,6 +138,122 @@ public sealed class ExternalLoginLinkTests
         Assert.NotEqual(stampBefore, await ReadSecurityStampAsync(host, username));
     }
 
+    /// <summary>
+    /// 外部登录按邮箱关联已有账号，要求提供商确认邮箱已验证、且本地账号邮箱也已确认；
+    /// 任一边没验证而邮箱已被占用时拒绝，不建新号、不留绑定，提示先登录再绑定。
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task External_sign_in_links_by_email_only_when_both_sides_are_verified(bool providerVerified, bool localConfirmed)
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        var provider = new SwitchableOAuthProvider();
+        using var host = CreateHost(factory, provider);
+        var username = await CreateUserAsync(host, "link_email");
+        if (localConfirmed)
+        {
+            using var scope = host.Services.CreateScope();
+            using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var users = scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>();
+            var user = await users.GetOneAsync(u => u.Username == username);
+            user!.ConfirmEmail();
+            await users.UpdateAsync(user);
+            await unitOfWork.CompleteAsync();
+        }
+
+        provider.User = External("gh-by-email") with
+        {
+            Email = $"{username}@example.test",
+            EmailVerified = providerVerified
+        };
+        using var external = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var (state, cookie) = await StartAsync(external, "/api/v1/external-auth/github/login-url");
+        external.DefaultRequestHeaders.Add("Cookie", cookie);
+        using var callback = await external.PostAsJsonAsync("/api/v1/external-auth/github/callback", new { Code = "code", State = state });
+
+        using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+        var link = GithubLink(await ReadLinksAsync(session.Client));
+        if (providerVerified && localConfirmed)
+        {
+            Assert.Equal(HttpStatusCode.OK, callback.StatusCode);
+            Assert.Equal("gh-by-email", link.GetProperty("providerUsername").GetString());
+            return;
+        }
+
+        Assert.Equal(HttpStatusCode.Conflict, callback.StatusCode);
+        Assert.Equal("ExternalAuth:AccountExistsSignInToLink", await ErrorCodeAsync(callback));
+        Assert.Equal(JsonValueKind.Undefined, link.ValueKind);
+    }
+
+    /// <summary>
+    /// 未验证的外部邮箱不写进新账号：否则就占用了别人的地址，本人随后注册会被挡、找回时接手的是对方建的号。
+    /// </summary>
+    [Fact]
+    public async Task Unverified_external_email_is_not_taken_by_a_new_account()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        var provider = new SwitchableOAuthProvider();
+        using var host = CreateHost(factory, provider);
+        const string victimEmail = "victim@example.test";
+
+        provider.User = External("gh-squatter") with { Email = victimEmail, EmailVerified = false };
+        using var callback = await SignInExternallyAsync(host);
+        Assert.Equal(HttpStatusCode.OK, callback.StatusCode);
+        using var signedIn = ProjectWebApplicationFactory.CreateProjectClient(host);
+        signedIn.DefaultRequestHeaders.Add("Cookie", CookieOf(callback));
+        var me = await signedIn.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.NotEqual(victimEmail, me.GetProperty("email").GetString());
+
+        // 地址的主人仍能用它建号
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var create = await admin.Client.PostAsJsonAsync("/api/v1/users", new
+        {
+            Username = "victim_owner",
+            Email = victimEmail,
+            Password,
+            IsActive = true
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+    }
+
+    /// <summary>
+    /// 以已验证邮箱新建的账号记为已确认：本人再用另一个外部账号（同一已验证邮箱）登录，关联回同一个用户，而不是被拒。
+    /// </summary>
+    [Fact]
+    public async Task Account_created_from_a_verified_email_links_the_next_verified_sign_in()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        var provider = new SwitchableOAuthProvider();
+        using var host = CreateHost(factory, provider);
+        const string email = "owner@example.test";
+
+        provider.User = External("gh-first") with { Email = email, EmailVerified = true };
+        using var first = await SignInExternallyAsync(host);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        using var firstClient = ProjectWebApplicationFactory.CreateProjectClient(host);
+        firstClient.DefaultRequestHeaders.Add("Cookie", CookieOf(first));
+        var firstMe = await firstClient.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal(email, firstMe.GetProperty("email").GetString());
+
+        provider.User = External("gh-second") with { Email = email, EmailVerified = true };
+        using var second = await SignInExternallyAsync(host);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        using var secondClient = ProjectWebApplicationFactory.CreateProjectClient(host);
+        secondClient.DefaultRequestHeaders.Add("Cookie", CookieOf(second));
+        var secondMe = await secondClient.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal(firstMe.GetProperty("id").GetGuid(), secondMe.GetProperty("id").GetGuid());
+    }
+
+    private static async Task<HttpResponseMessage> SignInExternallyAsync(WebApplicationFactory<Program> host)
+    {
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var (state, cookie) = await StartAsync(client, "/api/v1/external-auth/github/login-url");
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        return await client.PostAsJsonAsync("/api/v1/external-auth/github/callback", new { Code = "code", State = state });
+    }
+
     private static async Task<string> ReadSecurityStampAsync(WebApplicationFactory<Program> host, string username)
     {
         using var scope = host.Services.CreateScope();

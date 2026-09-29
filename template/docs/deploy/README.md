@@ -55,6 +55,15 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 <!--#if (OpenIddictServer)-->
 - 前端不与本服务同源时（如独立部署的资源服务前端经本服务登录），把它的源加入本服务的 `Cors:AllowedOrigins`：发现文档、JWKS、令牌与 userinfo 都是跨源请求。本机开发不需要，前端开发服务器已为 localhost 来源放行。
 - 下游资源服务的 API 标识登记在 `OAuth:ApiResources`，与该服务的 `Authentication:Audience` 取同一个值。
+- 各类撤销在下游资源服务上生效的时间不同。资源服务只验签，不回本服务查状态；Access Token 有效期在 `Program.cs` 里设为 10 分钟。
+  - **停用或删除账号**：同时撤销该用户已签发的令牌，本服务立即拒绝；资源服务要等 Access Token 过期，之后也刷新不到新令牌。
+  - **停用或删除租户**：本服务每个请求都查注册表，立即拒绝，刷新令牌也换不到新令牌；资源服务同样要等 Access Token 过期。
+  - **撤销会话（含"退出其他设备"）**：只作废本服务的登录会话，不撤销该设备经授权拿到的令牌。客户端持有刷新令牌时，它对下游资源服务的访问不受影响：刷新令牌默认 14 天有效且滑动续期，持续刷新的客户端可以一直访问下去，调短 Access Token 有效期也改变不了这一点。需要一并撤销时，要把令牌与会话关联起来，模板未内置。
+
+  停用或删除账号、租户之后无法再刷新，所以这两类的窗口可以靠调短 Access Token 有效期来缩短。资源服务改用令牌内省（`UseIntrospection()`）能让**已撤销的令牌**即时失效，所以对停用或删除账号有效；租户停用还要先在停用时撤销该租户的令牌才行。
+<!--#endif-->
+<!--#if (RemoteTokenAuth)-->
+- 本服务只验证身份服务签发的令牌，不回去查账号与租户状态。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
 <!--#endif-->
 <!--#if (IncludeNotifications && LocalIdentity)-->
 - 通知邮件要附可点开的站内链接时配置 `Leistd:Notifications:Email:PublicBaseUrl`（站点对外地址；哈希路由以 `/#` 结尾），不配则不附。

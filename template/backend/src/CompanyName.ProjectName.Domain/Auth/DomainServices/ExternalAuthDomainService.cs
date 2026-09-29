@@ -39,13 +39,19 @@ public class ExternalAuthDomainService(
     /// 其余情况返回 <see langword="null"/>，调用方按自己既有的回落取角色
     /// （<c>SessionSignInService</c> 已按 <c>roleNames ?? 回查</c> 处理）：读取不属于领域服务，
     /// 在这里回查等于把同一条回落规则在两层各写一份。
+    /// <para>
+    /// 按邮箱关联已有用户要求两边都已验证：提供商确认邮箱属于这个外部账号，且本地账号的邮箱也已确认。
+    /// 否则任何人在提供商那里填上别人的邮箱（或抢先用别人的邮箱在本地注册）就能接管对方账号。
+    /// 不满足时邮箱已被占用则拒绝，由用户先登录原账号、再在账号设置里绑定。
+    /// 新建账号只采用已验证的邮箱（并记为已确认），未验证的换成占位地址。
+    /// </para>
     /// </remarks>
     public async Task<(User User, List<string>? AssignedRoleNames)> FindOrCreateUserAsync(
         string provider,
         ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default)
     {
-        // 先按外部连接查找，再用邮箱关联已有用户。
+        // 先按外部连接查找，再用邮箱关联已有用户（两边都已验证才关联）。
         var connection = await externalLoginRepository.GetFirstAsync(
             c => c.Provider == provider && c.ProviderUserId == externalUserInfo.ProviderId,
             q => q.OrderBy(c => c.Id),
@@ -72,16 +78,31 @@ public class ExternalAuthDomainService(
                 u => u.Email == externalUserInfo.Email,
                 q => q.OrderBy(u => u.Id),
                 cancellationToken);
+            if (user != null && !(externalUserInfo.EmailVerified && user.EmailConfirmed))
+            {
+                throw new BusinessException(
+                        ExternalAuthErrorCodes.AccountExistsSignInToLink,
+                        $"An account with this email already exists. Sign in to it and link {provider} from account settings.")
+                    .WithData("Provider", provider);
+            }
         }
 
         if (user == null)
         {
+            // 未验证的邮箱不写进账号：写进去就占用了别人的地址，本人随后注册、登录都会被挡，
+            // 找回时接手的还是挂着对方外部绑定的账号。原始邮箱只留在外部连接上
+            var emailVerified = externalUserInfo.EmailVerified && !string.IsNullOrEmpty(externalUserInfo.Email);
             user = new User(
                 username: externalUserInfo.Username,
-                email: externalUserInfo.Email ?? $"{externalUserInfo.Username}@{provider.ToLower()}.local",
+                email: emailVerified ? externalUserInfo.Email! : $"{externalUserInfo.Username}@{provider.ToLower()}.local",
                 passwordHash: null,
                 displayName: externalUserInfo.DisplayName ?? externalUserInfo.Username
             );
+            if (emailVerified)
+            {
+                // 提供商已确认：本人再用别的提供商（同一已验证邮箱）登录时能关联回来
+                user.ConfirmEmail();
+            }
 
             if (!string.IsNullOrEmpty(externalUserInfo.AvatarUrl))
             {

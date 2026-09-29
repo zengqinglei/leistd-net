@@ -108,6 +108,7 @@ internal sealed class GoogleOAuthProvider(
         {
             ProviderId = providerId,
             Email = userInfo.TryGetValue("email", out var email) ? email.GetString() : null,
+            EmailVerified = userInfo.TryGetValue("verified_email", out var verified) && verified.ValueKind == JsonValueKind.True,
             Username = (userInfo.TryGetValue("email", out var uEmail) ? uEmail.GetString()?.Split('@')[0] : null)
                        ?? providerId,
             DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,

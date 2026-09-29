@@ -3,6 +3,7 @@ namespace CompanyName.ProjectName.Domain.Auth.Errors;
 /// <summary>ExternalAuth 业务错误码。</summary>
 public static class ExternalAuthErrorCodes
 {
+    public const string AccountExistsSignInToLink = "ExternalAuth:AccountExistsSignInToLink";
     public const string AlreadyLinked = "ExternalAuth:AlreadyLinked";
     public const string LastSignInMethod = "ExternalAuth:LastSignInMethod";
     public const string ProviderAlreadyLinked = "ExternalAuth:ProviderAlreadyLinked";

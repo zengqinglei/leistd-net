@@ -7,7 +7,10 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import {
+  ApplicationHttpError,
+  applicationErrorMessage,
+} from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
@@ -124,6 +127,12 @@ export class ExternalAuthCallback implements OnInit {
       }
     } catch (err) {
       console.error('External login callback processing failed', err);
+      // 业务拒绝（如"该邮箱已有账号，请先登录再绑定"）要让用户知道下一步怎么做，展示服务端下发的原因；
+      // 其余失败只给通用提示
+      if (err instanceof ApplicationHttpError && err.status >= 400 && err.status < 500) {
+        this.error.set(err.message);
+        return;
+      }
       //#if (IncludeLocalization)
       this.error.set(this.transloco.translate('account.externalCallback.failed'));
       //#else

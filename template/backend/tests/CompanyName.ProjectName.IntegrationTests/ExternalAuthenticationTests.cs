@@ -6,6 +6,9 @@ using CompanyName.ProjectName.Application.Auth.Constants;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.MultiTenancy.Context;
+using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -91,7 +94,8 @@ public sealed class ExternalAuthenticationTests
         {
             ProviderId = "tenant-admin",
             Username = "tenant-admin",
-            Email = tenantEmail
+            Email = tenantEmail,
+            EmailVerified = true
         });
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
             host,
@@ -108,6 +112,18 @@ public sealed class ExternalAuthenticationTests
         Assert.Equal(HttpStatusCode.OK, createTenant.StatusCode);
         var tenant = await createTenant.Content.ReadFromJsonAsync<TenantIdResponse>();
         Assert.NotNull(tenant);
+
+        // 两边邮箱都已验证才按邮箱关联到租户管理员
+        await using (var scope = host.Services.CreateAsyncScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenant.Id))
+        {
+            using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var userRepository = scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>();
+            var admin = await userRepository.GetOneAsync(user => user.Email == tenantEmail);
+            admin!.ConfirmEmail();
+            await userRepository.UpdateAsync(admin);
+            await unitOfWork.CompleteAsync();
+        }
 
         using var externalClient = ProjectWebApplicationFactory.CreateProjectClient(host);
         externalClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenant.Id.ToString());
@@ -141,13 +157,16 @@ public sealed class ExternalAuthenticationTests
         {
             ProviderId = locked ? "locked-admin" : "disabled-admin",
             Username = "admin",
-            Email = adminEmail
+            Email = adminEmail,
+            EmailVerified = true
         });
 
         await using (var scope = host.Services.CreateAsyncScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
             var admin = await dbContext.Set<User>().SingleAsync(user => user.Email == adminEmail);
+            // 两边邮箱都已验证才按邮箱关联到这个账号；否则被拒的原因是"邮箱已被占用"，不是停用或锁定
+            admin.ConfirmEmail();
             if (locked)
             {
                 admin.Lock();

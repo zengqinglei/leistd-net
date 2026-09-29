@@ -52,6 +52,7 @@
     "ExternalAuth:AccessTokenEmpty": "Access Token 为空。",
     "ExternalAuth:AccessTokenExchangeFailed": "获取 Access Token 失败：{StatusCode}",
     "ExternalAuth:AccessTokenParseFailed": "解析 Access Token 失败。",
+    "ExternalAuth:AccountExistsSignInToLink": "该邮箱已有账号。请先登录该账号，再在账号设置中绑定 {Provider}。",
     "ExternalAuth:AlreadyLinked": "这个 {Provider} 账号已绑定到其他用户。",
     "ExternalAuth:GitHubTokenFailed": "获取 GitHub Access Token 失败。",
     "ExternalAuth:GitHubUserInfoFailed": "获取 GitHub 用户信息失败。",

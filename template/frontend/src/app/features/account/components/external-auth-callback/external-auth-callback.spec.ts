@@ -1,12 +1,13 @@
 //#if (ExternalLogin)
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { ExternalAuthCallback } from './external-auth-callback';
+import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
 //#endif
@@ -17,18 +18,21 @@ import { AccountService } from '../../services/account-service';
 /**
  * 外部登录回调的接线。
  *
- * 这里只锁一件事：会话上下文必须在导航之前建立。删掉那一行，其它任何用例都不会变红，
+ * 会话上下文必须在导航之前建立。删掉那一行，其它任何用例都不会变红，
  * 而表现是保存过的显示偏好在外部登录后不生效（SPA 内跳转不会重跑应用初始化器），
  * 以及落地页在权限未就位时按无权限渲染。
+ *
+ * 业务拒绝展示服务端下发的原因：该邮箱已有账号时用户要据此先登录、再绑定。
  */
 describe('ExternalAuthCallback', () => {
   let fixture: ComponentFixture<ExternalAuthCallback>;
   let calls: string[];
+  let accountService: { externalLoginCallback: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     calls = [];
 
-    const accountService = {
+    accountService = {
       externalLoginCallback: vi.fn().mockName('AccountService.externalLoginCallback'),
     };
     accountService.externalLoginCallback.mockReturnValue(of(undefined) as never);
@@ -87,6 +91,44 @@ describe('ExternalAuthCallback', () => {
     expect(calls).toContain('navigate');
     expect(calls.indexOf('establish')).toBeGreaterThanOrEqual(0);
     expect(calls.indexOf('establish')).toBeLessThan(calls.indexOf('navigate'));
+  });
+
+  it('shows the server reason when the sign-in is rejected', async () => {
+    vi.spyOn(console, 'error').mockReturnValue(undefined);
+    const reason = 'An account with this email already exists.';
+    accountService.externalLoginCallback.mockReturnValue(
+      throwError(() =>
+        ApplicationHttpError.from(
+          new HttpErrorResponse({
+            status: 409,
+            error: { code: 'ExternalAuth:AccountExistsSignInToLink', detail: reason },
+          }),
+        ),
+      ),
+    );
+
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain(reason);
+    expect(calls).not.toContain('navigate');
+  });
+
+  it('shows a generic message when the server fails', async () => {
+    vi.spyOn(console, 'error').mockReturnValue(undefined);
+    const detail = 'Internal failure detail';
+    accountService.externalLoginCallback.mockReturnValue(
+      throwError(() =>
+        ApplicationHttpError.from(new HttpErrorResponse({ status: 500, error: { detail } })),
+      ),
+    );
+
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain(detail);
   });
 });
 //#endif

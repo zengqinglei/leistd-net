@@ -31,6 +31,7 @@ internal static class AuthExceptionMappings
         options.MapCode(AuthErrorCodes.EmailCodeSendTooFrequent, StatusCodes.Status429TooManyRequests);
 #if (ExternalLogin)
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
+            ExternalAuthErrorCodes.AccountExistsSignInToLink,
             ExternalAuthErrorCodes.AlreadyLinked,
             ExternalAuthErrorCodes.LastSignInMethod,
             ExternalAuthErrorCodes.ProviderAlreadyLinked);

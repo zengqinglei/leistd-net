@@ -52,6 +52,7 @@
     "ExternalAuth:AccessTokenEmpty": "Access token is empty.",
     "ExternalAuth:AccessTokenExchangeFailed": "Failed to obtain access token: {StatusCode}",
     "ExternalAuth:AccessTokenParseFailed": "Failed to parse the access token.",
+    "ExternalAuth:AccountExistsSignInToLink": "An account with this email already exists. Sign in to it, then link {Provider} in account settings.",
     "ExternalAuth:AlreadyLinked": "This {Provider} account is already linked to another user.",
     "ExternalAuth:GitHubTokenFailed": "Failed to obtain GitHub access token.",
     "ExternalAuth:GitHubUserInfoFailed": "Failed to obtain GitHub user information.",

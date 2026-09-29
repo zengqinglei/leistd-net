@@ -20,6 +20,7 @@ internal sealed class GitHubOAuthProvider(
     private const string AuthorizationEndpoint = "https://github.com/login/oauth/authorize";
     private const string TokenEndpoint = "https://github.com/login/oauth/access_token";
     private const string UserInfoEndpoint = "https://api.github.com/user";
+    private const string UserEmailsEndpoint = "https://api.github.com/user/emails";
 
     public string Name => "github";
 
@@ -83,15 +84,50 @@ internal sealed class GitHubOAuthProvider(
             throw new InvalidOperationException("The GitHub user-info response was empty.");
         }
 
+        // /user 的 email 是用户自选公开的地址，不说明是否验证过；验证状态只在 /user/emails 里
+        var (primaryEmail, emailVerified) = await GetPrimaryEmailAsync(httpClient, cancellationToken);
+
         return new ExternalUserInfo
         {
             ProviderId = userInfo["id"].GetInt64().ToString(),
-            Email = userInfo.TryGetValue("email", out var email) ? email.GetString() : null,
+            Email = primaryEmail ?? (userInfo.TryGetValue("email", out var email) ? email.GetString() : null),
+            EmailVerified = emailVerified,
             Username = userInfo["login"].GetString()!,
             DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("avatar_url", out var avatar) ? avatar.GetString() : null
         };
     }
+
+    /// <summary>
+    /// 读取主邮箱及其验证状态。取不到（非成功状态、网络失败、超时、响应无法解析）时按未验证处理，
+    /// 不中断登录：已有绑定的用户照常登录，只是不会按邮箱关联已有用户。调用方取消照常传播。
+    /// </summary>
+    private async Task<(string? Email, bool Verified)> GetPrimaryEmailAsync(
+        HttpClient httpClient,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await httpClient.GetAsync(UserEmailsEndpoint, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Failed to read GitHub user emails: {StatusCode}", response.StatusCode);
+                return (null, false);
+            }
+
+            var emails = await response.Content.ReadFromJsonAsync<List<GitHubEmail>>(cancellationToken);
+            var primary = emails?.FirstOrDefault(e => e.Primary);
+            return primary is null ? (null, false) : (primary.Email, primary.Verified);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException
+                                   || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            logger.LogWarning(ex, "Failed to read GitHub user emails");
+            return (null, false);
+        }
+    }
+
+    private sealed record GitHubEmail(string Email, bool Primary, bool Verified);
 
     private ExternalAuthOptions.ProviderOptions GetRequiredOptions()
     {
