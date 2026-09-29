@@ -206,6 +206,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     PasswordHash = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     PhoneNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
                     PhoneNumberConfirmed = table.Column<bool>(type: "boolean", nullable: false),
+                    SecurityStamp = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     Avatar = table.Column<string>(type: "text", nullable: true),
                     DisplayName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),

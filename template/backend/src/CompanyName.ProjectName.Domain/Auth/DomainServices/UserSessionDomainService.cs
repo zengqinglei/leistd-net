@@ -23,7 +23,7 @@ public class UserSessionDomainService(
     /// <summary>
     /// 为一次登录登记会话，返回的会话 Id 写进 <c>sid</c> 声明。
     /// </summary>
-    /// <remarks>顺手删掉此人已过期的会话：表里只留有效会话，不必另起清理作业。</remarks>
+    /// <remarks>顺手删掉此人已过期的会话。不再登录的用户没有这个时机，由每日的过期会话清理作业兜底。</remarks>
     public async Task<UserSession> StartAsync(
         Guid userId,
         string? ipAddress,
@@ -52,8 +52,12 @@ public class UserSessionDomainService(
         return session;
     }
 
-    /// <summary>撤销某用户的全部会话（可保留一个），返回撤销的个数。</summary>
-    /// <remarks>改密码、管理员重置密码、两步验证变更时调用：凭据变了，此前建立的会话不应继续有效。</remarks>
+    /// <summary>撤销某用户的全部会话（可保留一个），返回被退出的<b>有效</b>设备数。</summary>
+    /// <remarks>
+    /// <para>改密码、管理员重置密码、两步验证变更时调用：凭据变了，此前建立的会话不应继续有效。</para>
+    /// <para>已过期的会话一并删除（顺手清理，无害），但不计入返回值：返回值是给用户看的"退出了几台设备"，
+    /// 与设备列表同一条规则（最近活动在空闲超时之内），否则提示与操作记录会把早已失效的会话也算进去。</para>
+    /// </remarks>
     public async Task<int> RevokeAllAsync(Guid userId, Guid? exceptSessionId, CancellationToken cancellationToken = default)
     {
         var sessions = (await sessionRepository.GetListAsync(
@@ -63,13 +67,14 @@ public class UserSessionDomainService(
             return 0;
 
         var now = clock.Now;
+        var active = sessions.Count(session => !session.IsExpired(now, options.Value.IdleTimeout));
         foreach (var session in sessions)
         {
             session.Revoke(now);
         }
 
         await sessionRepository.DeleteManyAsync(sessions, cancellationToken);
-        return sessions.Count;
+        return active;
     }
 }
 #endif

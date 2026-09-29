@@ -303,6 +303,11 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
 

@@ -22,12 +22,15 @@ using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Settings.Timing;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.AppServices;
+using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.EventHandlers;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 using CompanyName.ProjectName.Domain.Auth.Events;
+using Leistd.BackgroundJobs;
+using Leistd.BackgroundJobs.Recurring;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 #endif
@@ -82,6 +85,11 @@ public static class DependencyInjection
         // 安全提醒默认不发；启用通知时宿主换成经通知组件发布的实现
         services.TryAddTransient<ISecurityAlertPublisher, NullSecurityAlertPublisher>();
         services.AddTransient<TwoFactorChallengeStore>();
+        // 不再登录的用户没有"登录时顺手清理"的时机，过期会话与其中的原始 IP 由这个作业每天清掉
+        services.AddRecurringJob<ExpiredUserSessionCleanupJob>(
+            ExpiredUserSessionCleanupJob.Name,
+            RecurringJobSchedule.DailyAt(new TimeOnly(3, 0)),
+            RecurringJobScope.Cluster);
         services.AddTransient<ITwoFactorAppService, TwoFactorAppService>();
         services.AddTransient<IAuthAppService, AuthAppService>();
 

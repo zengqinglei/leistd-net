@@ -105,7 +105,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
 
         using (currentTenant.Change(_tenantId))
         {
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
 
             // 在工作单元内解析：管理器必须拿到工作单元绑定的那个上下文
             await scope.ServiceProvider
@@ -131,7 +131,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
 
         using (currentTenant.Change(_tenantId))
         {
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
 
             await scope.ServiceProvider
                 .GetRequiredService<IPermissionGrantManager>()
@@ -153,7 +153,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         await using var scope = _services.CreateAsyncScope();
         var manager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var unitOfWork = await manager.BeginAsync();
+        using var unitOfWork = manager.Begin();
 
         await scope.ServiceProvider
             .GetRequiredService<IPermissionGrantManager>()
@@ -198,7 +198,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
 
         using (currentTenant.Change(_tenantId))
         {
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
             await scope.ServiceProvider
                 .GetRequiredService<IPermissionGrantManager>()
                 .GrantAsync(TestPermissionDefinitionProvider.OrdersRead,

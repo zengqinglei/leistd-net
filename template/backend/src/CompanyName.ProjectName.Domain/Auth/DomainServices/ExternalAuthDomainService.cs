@@ -189,6 +189,8 @@ public class ExternalAuthDomainService(
         }
 
         await externalLoginRepository.DeleteAsync(connection, cancellationToken);
+        // 凭据变了：此前用这个外部账号完成第一步、尚待第二步的登录挑战随之作废
+        user.RotateSecurityStamp();
         logger.LogInformation("User {Username} unlinked a {Provider} login connection", user.Username, connection.Provider);
         return connection;
     }

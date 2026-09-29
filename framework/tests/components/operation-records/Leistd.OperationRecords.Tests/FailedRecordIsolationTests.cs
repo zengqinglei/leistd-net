@@ -81,7 +81,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
     public async Task A_failed_record_survives_the_callers_rollback()
     {
         using (_services.GetRequiredService<ICurrentTenant>().Change(TenantId))
-        using (await _services.GetRequiredService<IUnitOfWorkManager>().BeginAsync())
+        using (_services.GetRequiredService<IUnitOfWorkManager>().Begin())
         {
             await Store.InsertAsync(Record(OperationRecordOutcome.Failed, TenantId));
             // 不 Complete：离开作用域即回滚
@@ -95,7 +95,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
     public async Task A_succeeded_record_rolls_back_with_the_caller()
     {
         using (_services.GetRequiredService<ICurrentTenant>().Change(TenantId))
-        using (await _services.GetRequiredService<IUnitOfWorkManager>().BeginAsync())
+        using (_services.GetRequiredService<IUnitOfWorkManager>().Begin())
         {
             await Store.InsertAsync(Record(OperationRecordOutcome.Succeeded, TenantId));
         }
@@ -111,7 +111,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
     public async Task A_host_layer_failed_record_lands_in_the_host_database_from_a_tenant_context()
     {
         using (_services.GetRequiredService<ICurrentTenant>().Change(TenantId))
-        using (await _services.GetRequiredService<IUnitOfWorkManager>().BeginAsync())
+        using (_services.GetRequiredService<IUnitOfWorkManager>().Begin())
         {
             await Store.InsertAsync(Record(OperationRecordOutcome.Failed, tenantId: null));
         }

@@ -41,7 +41,7 @@ public class AuthPrincipalFactory(
 
         // 租户切换与工作单元在这里建立而不是放进辅助方法：AsyncLocal 在被 await 的方法里改，回不到调用方
         using (currentTenant.Change(tenant.Id, tenant.Name))
-        using (await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (unitOfWorkManager.Begin(requiresNew: true))
         {
             return await CreateAsync(userId, scopes, cancellationToken);
         }
@@ -102,7 +102,7 @@ public class AuthPrincipalFactory(
             return null;
 
         using var tenantChange = currentTenant.Change(tenant.Id, tenant.Name);
-        using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
 
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)

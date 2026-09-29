@@ -59,7 +59,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         var secondProvider = _services.GetRequiredService<IDbContextProvider<SecondDbContext>>();
 
         using (currentTenant.Change(_tenantId))
-        using (var unitOfWork = await manager.BeginAsync())
+        using (var unitOfWork = manager.Begin())
         {
             (await firstProvider.GetDbContextAsync()).FirstRows.Add(new FirstRow());
             (await secondProvider.GetDbContextAsync()).SecondRows.Add(new SecondRow());
@@ -96,7 +96,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         }
 
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using (var unitOfWork = await manager.BeginAsync())
+        using (var unitOfWork = manager.Begin())
         {
             var unitOfWorkProvider = ((Leistd.UnitOfWork.DefaultUnitOfWork)unitOfWork).ServiceProvider;
             var firstProvider = unitOfWorkProvider.GetRequiredService<IDbContextProvider<FirstDbContext>>();
@@ -120,7 +120,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         var secondProvider = _services.GetRequiredService<IDbContextProvider<SecondDbContext>>();
 
         using (currentTenant.Change(_tenantId))
-        using (var unitOfWork = await manager.BeginAsync())
+        using (var unitOfWork = manager.Begin())
         {
             await firstProvider.GetDbContextAsync();
 
@@ -147,7 +147,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         var firstProvider = _services.GetRequiredService<IDbContextProvider<FirstDbContext>>();
 
         using (currentTenant.Change(_tenantId))
-        using (var unitOfWork = await manager.BeginAsync())
+        using (var unitOfWork = manager.Begin())
         {
             await firstProvider.GetDbContextAsync();
 
@@ -168,7 +168,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         var secondProvider = _services.GetRequiredService<IDbContextProvider<SecondDbContext>>();
 
         using (currentTenant.Change(_tenantId))
-        using (var unitOfWork = await manager.BeginAsync())
+        using (var unitOfWork = manager.Begin())
         {
             await firstProvider.GetDbContextAsync();
             _resolver.ConnectionString = "Data Source=another-target;Mode=Memory;Cache=Shared";
@@ -201,7 +201,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var unitOfWork = await manager.BeginAsync(new UnitOfWorkOptions { IsTransactional = false });
+        using var unitOfWork = manager.Begin(new UnitOfWorkOptions { IsTransactional = false });
         var scopedProvider = ((Leistd.UnitOfWork.DefaultUnitOfWork)unitOfWork).ServiceProvider
             .GetRequiredService<IDbContextProvider<InMemoryDbContext>>();
         (await scopedProvider.GetDbContextAsync()).Rows.Add(new FirstRow());
@@ -244,7 +244,7 @@ public class TenantBoundDbContextProviderTests : IAsyncLifetime
         }
 
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var unitOfWork = await manager.BeginAsync();
+        using var unitOfWork = manager.Begin();
         var sp = ((Leistd.UnitOfWork.DefaultUnitOfWork)unitOfWork).ServiceProvider;
         (await sp.GetRequiredService<IDbContextProvider<FirstDbContext>>().GetDbContextAsync())
             .FirstRows.Add(new FirstRow());

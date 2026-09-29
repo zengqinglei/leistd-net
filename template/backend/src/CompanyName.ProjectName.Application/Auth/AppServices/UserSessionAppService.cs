@@ -107,7 +107,7 @@ internal sealed class UserSessionAppService(
         if (currentUser.Id is not { } userId || currentUser.GetSessionId() is not { } sessionId)
             return;
 
-        using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
         await userSessionDomainService.RevokeAsync(userId, sessionId, cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
     }

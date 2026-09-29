@@ -54,7 +54,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
 
         // 同层时不切：切换会丢掉当前上下文里的租户名
         using (record.TenantId == currentTenant.Id ? null : currentTenant.Change(record.TenantId))
-        using (var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             await AddAsync(record, cancellationToken);
             await unitOfWork.CompleteAsync(cancellationToken);

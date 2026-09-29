@@ -27,7 +27,7 @@ public sealed class CustomUnitOfWorkLifecycleTests
         var probes = new ProbeRegistry();
         await using var provider = Build(probes);
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync();
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin();
         Assert.Single(probes.Created);
         Assert.False(probes.Created[0].IsDisposed);
 
@@ -43,8 +43,8 @@ public sealed class CustomUnitOfWorkLifecycleTests
         await using var provider = Build(probes);
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        var outer = await manager.BeginAsync();
-        var inner = await manager.BeginAsync(requiresNew: true);
+        var outer = manager.Begin();
+        var inner = manager.Begin(requiresNew: true);
         Assert.Same(inner, manager.Current);
 
         inner.Dispose();
@@ -59,7 +59,7 @@ public sealed class CustomUnitOfWorkLifecycleTests
         var probes = new ProbeRegistry();
         await using var provider = Build(probes);
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync();
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin();
         uow.Dispose();
         uow.Dispose();
 
@@ -77,10 +77,10 @@ public sealed class CustomUnitOfWorkLifecycleTests
         await using var provider = Build(probes, failure);
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        var outer = await manager.BeginAsync();
+        var outer = manager.Begin();
         failure.FailNext = true;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => manager.BeginAsync(requiresNew: true));
+        Assert.Throws<InvalidOperationException>(() => manager.Begin(requiresNew: true));
 
         // 外层仍是当前工作单元，且失败那次的作用域已经回收
         Assert.Same(outer, manager.Current);

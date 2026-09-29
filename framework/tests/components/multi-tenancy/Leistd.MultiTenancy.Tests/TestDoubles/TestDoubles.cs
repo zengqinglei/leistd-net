@@ -70,7 +70,7 @@ internal sealed class NullUnitOfWorkManager : IUnitOfWorkManager
 {
     public IUnitOfWork? Current => null;
 
-    public Task<IUnitOfWork> BeginAsync(UnitOfWorkOptions? options = null, bool requiresNew = false)
+    public IUnitOfWork Begin(UnitOfWorkOptions? options = null, bool requiresNew = false)
         => throw new NotSupportedException("测试不使用工作单元。");
 }
 

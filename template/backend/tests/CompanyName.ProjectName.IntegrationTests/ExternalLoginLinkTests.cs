@@ -3,6 +3,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
+using CompanyName.ProjectName.Domain.Users.Entities;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
@@ -120,15 +123,27 @@ public sealed class ExternalLoginLinkTests
 
         // 设有密码的用户随时可以解绑
         provider.User = External("gh-with-password");
-        using var withPassword = await ProjectWebApplicationFactory.LoginAsync(host, await CreateUserAsync(host, "link_unlink"), Password);
+        var username = await CreateUserAsync(host, "link_unlink");
+        using var withPassword = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
         using (var link = await LinkAsync(host, withPassword))
         {
             Assert.Equal(HttpStatusCode.OK, link.StatusCode);
         }
 
+        var stampBefore = await ReadSecurityStampAsync(host, username);
         using var unlink = await withPassword.Client.DeleteAsync($"/api/v1/external-auth/links/{LinkIdOf(await ReadLinksAsync(withPassword.Client))}");
         Assert.Equal(HttpStatusCode.OK, unlink.StatusCode);
         Assert.Equal(JsonValueKind.Undefined, GithubLink(await ReadLinksAsync(withPassword.Client)).ValueKind);
+        // 解绑是凭据变化：安全版本随之轮换并落库，凭这个外部账号完成第一步、尚未完成的登录挑战随之作废
+        Assert.NotEqual(stampBefore, await ReadSecurityStampAsync(host, username));
+    }
+
+    private static async Task<string> ReadSecurityStampAsync(WebApplicationFactory<Program> host, string username)
+    {
+        using var scope = host.Services.CreateScope();
+        using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+        var user = await scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>().GetOneAsync(u => u.Username == username);
+        return user!.SecurityStamp;
     }
 
     private static WebApplicationFactory<Program> CreateHost(ProjectWebApplicationFactory factory, SwitchableOAuthProvider provider) =>

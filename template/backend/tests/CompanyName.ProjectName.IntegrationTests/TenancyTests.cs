@@ -3,6 +3,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using Microsoft.Extensions.Options;
+using Leistd.BackgroundJobs.Recurring;
+using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Constants;
@@ -272,6 +276,48 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(PermissionErrorCodes.ConcurrencyConflict, Assert.Single(inTenant).FailureCode);
         Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
             hostAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, target));
+    }
+
+    /// <summary>
+    /// 过期会话清理作业也删掉共享库里租户用户的过期会话
+    /// </summary>
+    /// <remarks>
+    /// 作业按物理库逐个执行，同一个库里有多个租户；删除时不关租户过滤，宿主上下文里只看得到宿主的会话，
+    /// 共享库租户的过期会话会永远留下。
+    /// </remarks>
+    [Fact]
+    public async Task The_session_cleanup_job_reaches_tenant_users_in_the_shared_database()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "sesscleanup");
+        var tenantClient = await LoginTenantAdminAsync(tenantId);
+        using var me = JsonDocument.Parse(await tenantClient.GetStringAsync("/api/v1/auth/me"));
+        var userId = me.RootElement.GetProperty("id").GetGuid();
+
+        Guid expiredId;
+        using (var scope = _factory.Services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        {
+            var idleTimeout = scope.ServiceProvider.GetRequiredService<IOptions<UserSessionOptions>>().Value.IdleTimeout;
+            using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var session = await scope.ServiceProvider.GetRequiredService<IRepository<UserSession, Guid>>().InsertAsync(
+                new UserSession(userId, DateTime.UtcNow - idleTimeout - TimeSpan.FromDays(1), "203.0.113.9", "stale device"));
+            await unitOfWork.CompleteAsync();
+            expiredId = session.Id;
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ExpiredUserSessionCleanupJob>().ExecuteAsync(
+                new RecurringJobContext(ExpiredUserSessionCleanupJob.Name, DateTimeOffset.UtcNow), CancellationToken.None);
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        {
+            using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            Assert.Null(await scope.ServiceProvider.GetRequiredService<IRepository<UserSession, Guid>>().GetByIdAsync(expiredId));
+        }
     }
 
     [Fact]
@@ -761,7 +807,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         using var scope = host.Services.CreateScope();
         var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-        using var outerUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+        using var outerUnitOfWork = unitOfWorkManager.Begin(requiresNew: true);
 
         var name = $"outer-{Guid.NewGuid():N}";
         var tenant = await scope.ServiceProvider.GetRequiredService<ITenantManagementService>().CreateAsync(

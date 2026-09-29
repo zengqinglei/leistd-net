@@ -67,7 +67,7 @@ internal sealed class AccessFailureCounter(
         var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
         var now = clock.Now;
 
-        using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
 
         // 在这个边界内重读：计数要落在这一行的最新状态上，调用方手里那个实例可能已被改过。
         var counted = await userRepository.GetByIdAsync(userId, cancellationToken);

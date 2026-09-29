@@ -337,10 +337,16 @@ builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuratio
 
 失败关闭只有一处：倒数第四行。租户明明登记过连接（说明它是分库租户），却偏偏缺了这个服务的、也没有默认名可回落——这时静默连到本服务的公共库是事故，那个库里没有它的数据，它的写入会落进别人的库。宿主连接的 `?? ConnectionStrings:Default` 回落则是有意的：业务项目把上下文改名为 `Crm` 之后，部署里仍然只配 `ConnectionStrings__Default`，不用改部署。
 
+**根本没注册租户连接解析时，上表都不适用**：`DbContext` 一律沿用宿主自己配置的连接。共享库的多租户本该如此；有独立库租户的系统漏装了路由，独立库租户的数据就会静默写进共享库，既不报错也没有日志。框架推断不出"有没有独立库租户"（那是控制库里的运行期数据），所以这是组合规范：
+
+- 有独立库租户的系统，**每个**访问租户数据的宿主（Web、迁移作业、后台服务）都要注册路由（本地或远端二选一）。
+- 多个宿主时，把路由注册放进它们共用的组合方法，不要在各宿主入口里各写一份——新加的宿主只复制一半组合代码，是这类事故的典型来源。
+- 业务项目需要硬保证时，在自己的 `DbContext` 里加守卫：它知道自己分库，框架不知道。
+
 - **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `TenantNotFoundException`。控制库上下文直接注入、不经 `IDbContextProvider`。
 - **远端解析**：结果按 `TenantRouting:CacheLifetime` 缓存；同租户并发请求合并为一次回源；响应的 `TenantId` 与请求不一致时抛 `InvalidOperationException`，校验在使用连接串和写缓存之前。
 - **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按迁移作业所属服务的连接名枚举。结果按物理库去重（同一连接串只出现一次，代表租户取标识最小者）。**它与运行时逐库作业不是同一份清单，也不是同一档权限**：迁移目标带明文连接串、要 DDL 身份（`MigrationReadPolicy`），运行时清单只回指纹与租户归属（`RuntimeReadPolicy`），见下一条；一条连接都没登记的租户不出现（它们跟着宿主自己的库迁移）；登记过却解析不出这个名字的租户会让作业整体停下（`InvalidOperationException`），不跳过——跳过的库会停在旧结构上，下一次发版才炸。本地迁移作业同样要解密，必须与 API 共享密钥环。
-- **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是独立库，结果里没有连接串。**停用租户的库算不算由调用方用 `activeOnly` 显式决定**，框架不替它选：保留期作业要连停用租户一起处理（合规义务不随停用消失），刷新进程内状态一类作业则不该去连可能已下线的库。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `BeginAsync(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余——`ITenantDatabaseRunner.ForEachDatabaseAsync` 封装了切租户与逐库隔离，回调里按需开工作单元。登记成与宿主完全相同的连接串时，该项会并进宿主库，不会让同一个物理库出现两次。但指纹判的是**连接配置相同**而非物理库相同：同一个库用不同凭据连、或键值对顺序不同，仍会被当成两个库，因此逐库逻辑仍须能重复执行。
+- **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是独立库，结果里没有连接串。**停用租户的库算不算由调用方用 `activeOnly` 显式决定**，框架不替它选：保留期作业要连停用租户一起处理（合规义务不随停用消失），刷新进程内状态一类作业则不该去连可能已下线的库。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `Begin(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余——`ITenantDatabaseRunner.ForEachDatabaseAsync` 封装了切租户与逐库隔离，回调里按需开工作单元。登记成与宿主完全相同的连接串时，该项会并进宿主库，不会让同一个物理库出现两次。但指纹判的是**连接配置相同**而非物理库相同：同一个库用不同凭据连、或键值对顺序不同，仍会被当成两个库，因此逐库逻辑仍须能重复执行。
 
 ```json
 {

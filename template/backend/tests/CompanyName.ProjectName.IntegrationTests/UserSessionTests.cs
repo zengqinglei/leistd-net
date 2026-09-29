@@ -2,6 +2,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
+using CompanyName.ProjectName.Domain.Auth.Entities;
+using CompanyName.ProjectName.Domain.Auth.Options;
+using Leistd.BackgroundJobs.Recurring;
+using Leistd.Ddd.Domain.Repositories;
+using Leistd.UnitOfWork;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -138,6 +146,66 @@ public sealed class UserSessionTests(ProjectWebApplicationFactory factory) : ICl
 
         Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await copy.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    /// <summary>
+    /// "退出其他设备"只把仍然有效的设备算进返回值，已过期的会话一并清掉但不计数
+    /// </summary>
+    /// <remarks>回归点：计数曾包含早已过期的会话，提示"退出了几台设备"与操作记录都会虚高。</remarks>
+    [Fact]
+    public async Task Signing_out_other_devices_counts_only_active_devices()
+    {
+        var username = await CreateUserAsync("sess_count");
+        using var other = await ProjectWebApplicationFactory.LoginAsync(factory, username, Password);
+        using var mine = await ProjectWebApplicationFactory.LoginAsync(factory, username, Password);
+        var userId = await ReadUserIdAsync(mine.Client);
+        var expiredId = await InsertExpiredSessionAsync(userId);
+
+        using var revoke = await mine.Client.PostAsync("/api/v1/auth/me/sessions/revoke-others", null);
+
+        Assert.Equal(HttpStatusCode.OK, revoke.StatusCode);
+        Assert.Equal(1, await revoke.Content.ReadFromJsonAsync<int>());
+        Assert.False(await SessionExistsAsync(expiredId));
+    }
+
+    /// <summary>
+    /// 不再登录的用户，过期会话（连同原始 IP）由每日清理作业删掉，有效会话不受影响
+    /// </summary>
+    /// <remarks>登录时只清本人的过期会话；此前不再登录的人的会话行会无限期留在表里。</remarks>
+    [Fact]
+    public async Task The_cleanup_job_deletes_expired_sessions_of_users_who_never_sign_in_again()
+    {
+        var username = await CreateUserAsync("sess_cleanup");
+        using var active = await ProjectWebApplicationFactory.LoginAsync(factory, username, Password);
+        var expiredId = await InsertExpiredSessionAsync(await ReadUserIdAsync(active.Client));
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ExpiredUserSessionCleanupJob>().ExecuteAsync(
+                new RecurringJobContext(ExpiredUserSessionCleanupJob.Name, DateTimeOffset.UtcNow), CancellationToken.None);
+        }
+
+        Assert.False(await SessionExistsAsync(expiredId));
+        Assert.Equal(HttpStatusCode.OK, (await active.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+    }
+
+    // 最近活动在空闲超时之前的会话：登录流程不会造出这样的行，直接写库
+    private async Task<Guid> InsertExpiredSessionAsync(Guid userId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var idleTimeout = scope.ServiceProvider.GetRequiredService<IOptions<UserSessionOptions>>().Value.IdleTimeout;
+        using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+        var session = await scope.ServiceProvider.GetRequiredService<IRepository<UserSession, Guid>>().InsertAsync(
+            new UserSession(userId, DateTime.UtcNow - idleTimeout - TimeSpan.FromDays(1), "203.0.113.9", "stale device"));
+        await unitOfWork.CompleteAsync();
+        return session.Id;
+    }
+
+    private async Task<bool> SessionExistsAsync(Guid sessionId)
+    {
+        using var scope = factory.Services.CreateScope();
+        using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+        return await scope.ServiceProvider.GetRequiredService<IRepository<UserSession, Guid>>().GetByIdAsync(sessionId) is not null;
     }
 
     private async Task<string> CreateUserAsync(string prefix)

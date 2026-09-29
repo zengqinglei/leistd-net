@@ -41,7 +41,7 @@ public sealed class UnitOfWorkRegistrationValidationTests
         await using var provider = (ServiceProvider)new DynamicProxyServiceRegistrationCallbackFactory()
             .CreateServiceProvider(services);
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
         uow.AddPendingEvents([new ProbeEvent()]);
         await uow.CompleteAsync();
         uow.Dispose();
@@ -112,12 +112,12 @@ public sealed class UnitOfWorkRegistrationValidationTests
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
         // 没有事件时照常完成
-        using (var quiet = await manager.BeginAsync(requiresNew: true))
+        using (var quiet = manager.Begin(requiresNew: true))
         {
             await quiet.CompleteAsync();
         }
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
         uow.AddPendingEvents([new ProbeEvent()]);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => uow.CompleteAsync());

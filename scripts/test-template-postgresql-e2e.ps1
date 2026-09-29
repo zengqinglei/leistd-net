@@ -210,9 +210,18 @@ try {
     }
 
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__Default = $adminShared } -Apply
-    Invoke-Migrator $resourceMigrator @{ ConnectionStrings__MigrationTarget = $adminShared } -Apply
+    # 资源服务的部署配置里总有控制面地址（远端租户连接存储启动时校验它）；显式目标模式不回源，
+    # 这里给一个不会被访问的地址，与真实部署的配置形态一致
+    $resourceControlPlane = "http://identity.invalid"
+    Invoke-Migrator $resourceMigrator @{
+        ConnectionStrings__MigrationTarget = $adminShared
+        Leistd__ServiceClients__Identity__BaseAddress = $resourceControlPlane
+    } -Apply
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__MigrationTarget = $adminDedicated } -Apply
-    Invoke-Migrator $resourceMigrator @{ ConnectionStrings__MigrationTarget = $adminDedicated } -Apply
+    Invoke-Migrator $resourceMigrator @{
+        ConnectionStrings__MigrationTarget = $adminDedicated
+        Leistd__ServiceClients__Identity__BaseAddress = $resourceControlPlane
+    } -Apply
     # A second pass proves that both initial and explicit-target modes are idempotent.
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__Default = $adminShared } -Apply
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__MigrationTarget = $adminDedicated } -Apply

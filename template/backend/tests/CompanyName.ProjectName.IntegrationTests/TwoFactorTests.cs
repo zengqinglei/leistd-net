@@ -71,6 +71,63 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             await SecondStepErrorAsync(host, new { Token = replayToken, Code = code }));
     }
 
+    /// <summary>
+    /// 第一步通过之后凭据变了，未完成的挑战随之作废
+    /// </summary>
+    /// <remarks>
+    /// 回归点：挑战不绑定账号安全版本时，管理员在这段窗口里重置了口令，凭旧口令换来的第一步
+    /// 仍能配合有效验证码完成登录。撤销会话挡不住它——挑战不是会话。
+    /// </remarks>
+    [Fact]
+    public async Task A_password_reset_after_the_first_step_voids_the_pending_challenge()
+    {
+        var (host, clock) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_stamp");
+        var secret = await EnableForAsync(host, username, clock);
+
+        clock.Advance();
+        var (_, token) = await PasswordStepAsync(host, username);
+
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var users = await admin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/users?offset=0&limit=10&keyword={username}");
+        var userId = users.GetProperty("items").EnumerateArray()
+            .Single(u => u.GetProperty("username").GetString() == username).GetProperty("id").GetGuid();
+        using var reset = await admin.Client.PostAsJsonAsync($"/api/v1/users/{userId}/reset-password", new { Password = Password + "2" });
+        Assert.True(reset.IsSuccessStatusCode);
+
+        Assert.Equal("Auth:TwoFactorChallengeExpired",
+            await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
+    }
+
+    /// <summary>
+    /// 输错不延长挑战的有效期
+    /// </summary>
+    /// <remarks>
+    /// 回归点：每次输错都把有效期重新算满，最多 5 次尝试把 5 分钟的挑战拉长到约 25 分钟。
+    /// 这里在第 4 分钟输错一次，第 6 分钟的正确验证码必须按原时刻过期。
+    /// </remarks>
+    [Fact]
+    public async Task A_wrong_code_does_not_extend_the_challenge()
+    {
+        var (host, clock) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_expiry");
+        var secret = await EnableForAsync(host, username, clock);
+
+        clock.Advance();
+        var (_, token) = await PasswordStepAsync(host, username);
+
+        for (var i = 0; i < 8; i++) clock.Advance();   // 4 分钟
+        var valid = Code(secret, clock);
+        var wrong = valid[..^1] + (valid[^1] == '0' ? '1' : '0');
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = token, Code = wrong }));
+
+        for (var i = 0; i < 4; i++) clock.Advance();   // 再过 2 分钟：签发后第 6 分钟
+        Assert.Equal("Auth:TwoFactorChallengeExpired",
+            await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
+    }
+
     [Fact]
     public async Task Recovery_code_replaces_a_code_only_once()
     {

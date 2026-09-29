@@ -125,6 +125,8 @@ internal sealed class ExternalAuthAppService(
     /// 解绑当前用户的一个外部账号
     /// </summary>
     /// <remarks>不存在或不属于本人时静默成功：解绑是幂等的，也不借此透露别人的绑定 Id 是否存在。</remarks>
+    // 删除绑定、轮换安全版本与成功记录同生共死：只删了绑定而版本没轮换，此前的登录挑战仍能完成
+    [UnitOfWork]
     public async Task UnlinkCurrentUserAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);

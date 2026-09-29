@@ -165,6 +165,14 @@ internal sealed class AuthAppService(
             throw TwoFactorChallengeExpired();
         }
 
+        // 第一步之后凭据变了（改口令、管理员重置、启用或停用两步验证、解绑外部登录）：
+        // 这个挑战凭的是旧凭据，作废。撤销会话挡不住它——挑战不是会话
+        if (!string.Equals(user.SecurityStamp, challenge.SecurityStamp, StringComparison.Ordinal))
+        {
+            await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+            throw TwoFactorChallengeExpired();
+        }
+
         var now = clock.Now;
         try
         {

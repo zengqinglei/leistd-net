@@ -26,7 +26,7 @@ public sealed class PermissionSubjectResolutionTests(ProjectWebApplicationFactor
         using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         var provider = services.GetRequiredService<IPermissionSubjectProvider>();
-        using var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync();
+        using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin();
 
         PermissionSubject? current;
         using (services.GetRequiredService<ICurrentPrincipalAccessor>().Change(principal))

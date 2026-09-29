@@ -28,6 +28,8 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.TwoFactorSecret).HasMaxLength(512);
             // 十个 SHA-256 十六进制摘要加分隔符
             b.Property(e => e.TwoFactorRecoveryCodes).HasMaxLength(1024);
+            // Guid 的 32 位十六进制
+            b.Property(e => e.SecurityStamp).IsRequired().HasMaxLength(32);
         });
     }
 

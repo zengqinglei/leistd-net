@@ -65,7 +65,7 @@ public class UnitOfWorkInterceptor : BaseAsyncInterceptor
 
         _logger?.LogDebug("Intercepting method {Method}; starting a unit of work", method.Name);
 
-        var uow = await _unitOfWorkManager.BeginAsync(unitOfWorkOptions, requiresNew: false);
+        var uow = _unitOfWorkManager.Begin(unitOfWorkOptions, requiresNew: false);
 
         try
         {

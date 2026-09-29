@@ -161,7 +161,7 @@ public sealed class ReauthenticationLockoutTests(ProjectWebApplicationFactory fa
             var guard = scope.ServiceProvider.GetRequiredService<IReauthenticationGuard>();
             var users = scope.ServiceProvider.GetRequiredService<IRepository<User, Guid>>();
 
-            using var unitOfWork = await unitOfWorkManager.BeginAsync();
+            using var unitOfWork = unitOfWorkManager.Begin();
             var user = await users.GetByIdAsync(userId);
             Assert.NotNull(user);
 

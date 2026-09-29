@@ -66,7 +66,7 @@ internal sealed class SessionSignInService(
         if (user.TwoFactorEnabled)
         {
             return SessionLoginResult.TwoFactorRequired(
-                await twoFactorChallengeStore.CreateAsync(user.Id, user.TenantId, cancellationToken));
+                await twoFactorChallengeStore.CreateAsync(user.Id, user.TenantId, user.SecurityStamp, cancellationToken));
         }
 
         var policy = await loginSecurityPolicy.GetAsync(cancellationToken);

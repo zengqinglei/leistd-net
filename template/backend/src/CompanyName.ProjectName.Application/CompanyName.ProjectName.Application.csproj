@@ -27,6 +27,7 @@
     <PackageReference Include="Leistd.MultiTenancy.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
 <!--#if (LocalIdentity)-->
+    <PackageReference Include="Leistd.BackgroundJobs.Core" />
     <PackageReference Include="Leistd.MultiTenancy.Management" />
     <PackageReference Include="Leistd.Email.Core" />
 <!--#endif-->

@@ -170,7 +170,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        using var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
+        using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
         await services.GetRequiredService<ISettingManager>().SetAsync(name, value, SettingScopes.Host);
         await unitOfWork.CompleteAsync();
     }
@@ -180,7 +180,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        using (var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true))
+        using (var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
         {
             await services.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.Host, userId: null);
             await unitOfWork.CompleteAsync();

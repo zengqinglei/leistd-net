@@ -70,7 +70,7 @@ internal sealed class UserSessionValidator(
 
         // 认证发生在多租户中间件之前，环境租户还没设：按主体的租户进到它的库里查
         using (currentTenant.Change(tenantId, tenantName))
-        using (var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             var now = clock.Now;
             var session = await sessionRepository.GetByIdAsync(sessionId, cancellationToken);

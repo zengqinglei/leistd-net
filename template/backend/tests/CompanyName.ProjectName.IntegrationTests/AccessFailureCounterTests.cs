@@ -38,7 +38,7 @@ public sealed class AccessFailureCounterTests(ProjectWebApplicationFactory facto
             var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
             var counter = scope.ServiceProvider.GetRequiredService<IAccessFailureCounter>();
 
-            using var unitOfWork = await unitOfWorkManager.BeginAsync();
+            using var unitOfWork = unitOfWorkManager.Begin();
             var outcome = await counter.CountAsync(userId);
             Assert.NotNull(outcome.User);
 

@@ -467,3 +467,15 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 新增 `HttpContext.RecordFailedOperationAsync(failure)`（`Leistd.OperationRecords.AspNetCore`） | 与 `RecordDeniedOperationAsync` 对称：授权通过之后被业务规则拒绝时，按端点上的 `[OperationRecordAction]` 补一条失败记录。在宿主**紧接 `UseAuthorization()`** 的中间件里捕获、调用、原样重抛；不要放进 `IExceptionHandler`（租户作用域已退出，租户内的失败会写进宿主层）。只新增，不影响现有调用 |
 | "是否匿名"统一为任一身份已认证；新增 `ClaimsPrincipal.HasAuthenticatedIdentity()`（`Leistd.Security.Core`） | 此前各处只看第一个身份，首身份未认证、后续身份已认证的主体被当成匿名，而授权管线放行了它：租户可被请求头改写、失效租户会话不被收回、环境上下文不建立租户、Hub 不复评、操作记录不记或操作人为空。现统一为官方 `DenyAnonymousAuthorizationRequirement` 的口径，作用于 `ICurrentUser.IsAuthenticated`、租户解析与多租户中间件、租户会话恢复、租户环境上下文、SignalR 复评、`RecordDeniedOperationAsync` / `RecordFailedOperationAsync`。标识、名字、租户仍只取自带标识的主体身份；服务间调用的机器身份判定仍只看第一个身份（有意）。自定义 `ICurrentUser` 实现按同一口径调整 |
 | 模板新增 `Api/Middlewares/OperationFailureRecordingMiddleware` | 组件映射的端点（如权限整体替换）被业务规则拒绝（并发冲突、权限未定义、主体不存在）时留下失败记录，此前只有授权阶段被拒才记。派生项目照模板加这个中间件，放在 `UseAuthorization()` 之后。只记 `BusinessException`，参数校验失败不记；挂了注解的端点，应用服务不要在同一次拒绝上再调 `RecordFailedAsync` |
+
+## 16. 工作单元与账号安全（CRM 拆分反馈）
+
+| 变化 | 影响与改法 |
+| --- | --- |
+| `IUnitOfWorkManager.BeginAsync` 改为同步的 `Begin`，返回 `IUnitOfWork` | `using var uow = await manager.BeginAsync(...)` → `using var uow = manager.Begin(...)`；自定义实现改签名。原方法本就没有异步操作。**工作单元由使用它的那个方法自己开启**：当前工作单元存放在 `AsyncLocal` 里，在 `async` 辅助方法里开启后返回，调用方拿到的不是它的当前工作单元，写入会各自提交，且没有任何报错 |
+| 工作单元日志分级 | 调用方主动取消（取消异常且令牌已取消）且发生在提交开始之前：事务型改记 Debug（什么都没提交），非事务型记 Warning（已保存的部分不会回滚）；提交开始之后的失败、令牌未取消的取消异常（如数据库超时）与其余提交失败仍记 Error。回滚日志由 Warning 改为 Debug：每次业务拒绝都会回滚，原因已由异常处理记下。依赖这两条日志做告警的，改为按提交失败的 Error 告警 |
+| 多租户：有独立库租户的系统，每个宿主都要注册租户连接路由 | 不注册路由时 `DbContext` 一律沿用宿主连接，独立库租户的数据会静默写进共享库。多宿主时把路由注册放进共用的组合方法，见多租户组件文档"解析租户连接" |
+| 模板：用户新增 `SecurityStamp`（基线迁移已含该列） | 登录第二步的挑战记下签发时的值，第一步之后改口令、管理员重置、启用或停用两步验证、解绑外部登录，挑战即作废（此前仍能完成登录）。**已部署的派生项目**要新增一条迁移加这一列（`character varying(32)`，非空）；存量行可填任意值（如 `md5(random()::text)` 截取 32 位），下次凭据变更时自动轮换 |
+| 模板：两步验证挑战的有效期不再被输错延长 | 此前每次输错都把 5 分钟重新算满，最长约 25 分钟；现从签发起算，到期以注入的时钟为准 |
+| 模板："退出其他设备"的返回值只计有效设备 | 已过期的会话照旧一并删除，但不计入提示数与操作记录 |
+| 模板：新增每日过期会话清理作业 `auth.sessions.cleanup` | 不再登录的用户的过期会话（连同原始 IP）此前会无限期保留。作业逐库执行、含停用租户的库，删除时关闭租户过滤。多副本部署需 Redis（集群锁），锁键前缀规则同其他周期任务 |

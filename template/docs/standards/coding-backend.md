@@ -45,7 +45,7 @@
 - **职责**: 协调业务逻辑（调用领域对象行为、领域服务、发布/订阅事件）
 - **包含**: AppServices、Dtos、Mappings、Events、EventHandlers，以及按需的 Constants（名字常量）、Abstractions（由宿主实现的端口）、
   Provider（框架扩展点的实现，如定义提供程序、权限主体提供程序，与它们用到的名字常量）、Policies（策略及其提供程序）
-- **目录归类**: 按类型分的目录都是功能模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`、`Settings/Hosting`）只放不属于这些类型的协作类型。类名以 `Event` 结尾的放模块的 `Events/`（这里只放由应用层发布、不来自实体的事件），以 `EventHandler` 结尾的放 `EventHandlers/`（如 `Settings/Events`、`Settings/EventHandlers`、`Auth/EventHandlers`）。
+- **目录归类**: 按类型分的目录都是功能模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`、`Settings/Hosting`）只放不属于这些类型的协作类型。类名以 `Event` 结尾的放模块的 `Events/`（这里只放由应用层发布、不来自实体的事件），以 `EventHandler` 结尾的放 `EventHandlers/`（如 `Settings/Events`、`Settings/EventHandlers`、`Auth/EventHandlers`）。后台任务同理按运行形态归类，与表现层（§7.2）同名：周期任务（`IRecurringJob`，类名 `*Job`）放模块的 `BackgroundJobs/`（如 `Auth/BackgroundJobs`），常驻消费者（类名 `*Worker`）放 `Workers/`；不建跨模块的顶层 `Jobs/`，任务跟着它清理或处理的那个模块走。
 - **可以**: 使用 EF Core 的 `Include`、`GetQueryIncludingAsync` 进行数据查询和聚合
 
 #### Domain Layer（{ProjectName}.Domain）

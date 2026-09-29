@@ -83,7 +83,7 @@ public sealed class ResourceUserProvisioningMiddleware(
     {
         // 独立工作单元：投影是请求的前置动作，不该被后续业务失败连带回滚——
         // 回滚了下一次请求还要再建一次，而这一行的存在与业务是否成功无关。
-        using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
         await userDomainService.EnsureProjectedAsync(
             subjectId,
             currentUser.Username,

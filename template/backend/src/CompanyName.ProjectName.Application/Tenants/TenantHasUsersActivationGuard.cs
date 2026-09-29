@@ -32,7 +32,7 @@ internal sealed class TenantHasUsersActivationGuard(
     {
         long userCount;
         using (currentTenant.Change(tenant.Id, tenant.Name))
-        using (var tenantUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var tenantUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             userCount = await userRepository.CountAsync(cancellationToken: cancellationToken);
             await tenantUnitOfWork.CompleteAsync(cancellationToken);

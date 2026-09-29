@@ -56,7 +56,7 @@ internal sealed class TenantManagementService(
         // 登记版本仅用于补偿时删除；返回值必须接住，删除是带版本的乐观并发接口
         List<(string Name, long Version)> registered = [];
         TenantConfiguration tenant;
-        using (var controlUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var controlUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             tenant = await tenantManager.CreateAsync(
                 input.Name, input.DisplayName, isActive: false, input.Description, cancellationToken);
@@ -84,14 +84,14 @@ internal sealed class TenantManagementService(
             if (provisioner is not null)
             {
                 using (currentTenant.Change(tenant.Id, tenant.Name))
-                using (var tenantUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+                using (var tenantUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
                 {
                     await provisioner.ProvisionAsync(context, cancellationToken);
                     await tenantUnitOfWork.CompleteAsync(cancellationToken);
                 }
             }
 
-            using var activationUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+            using var activationUnitOfWork = unitOfWorkManager.Begin(requiresNew: true);
             activated = await tenantManager.SetActiveAsync(tenant.Id, true, cancellationToken);
             await activationUnitOfWork.CompleteAsync(cancellationToken);
         }
@@ -206,7 +206,7 @@ internal sealed class TenantManagementService(
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var services = scope.ServiceProvider;
                 using (services.GetRequiredService<ICurrentTenant>().Change(tenant.Id, tenant.Name))
-                using (var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true))
+                using (var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
                 {
                     await services.GetRequiredService<ITenantProvisioner>().PurgeAsync(context, CancellationToken.None);
                     await unitOfWork.CompleteAsync(CancellationToken.None);
@@ -225,7 +225,7 @@ internal sealed class TenantManagementService(
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var services = scope.ServiceProvider;
-                using var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
+                using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
                 await services.GetRequiredService<ITenantConnectionConfigurationManager>()
                     .RemoveAsync(tenant.Id, name, version, CancellationToken.None);
                 await unitOfWork.CompleteAsync(CancellationToken.None);
@@ -244,7 +244,7 @@ internal sealed class TenantManagementService(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var services = scope.ServiceProvider;
-            using var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
+            using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
             await services.GetRequiredService<ITenantManager>().DeleteAsync(tenant.Id, CancellationToken.None);
             await unitOfWork.CompleteAsync(CancellationToken.None);
         }
