@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 using CompanyName.ProjectName.Domain.Shared.Text;
@@ -175,6 +176,40 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             using var disable = await reissued.PostAsJsonAsync("/api/v1/auth/me/two-factor/disable",
                 new { Password, Code = Code(secret, clock) });
             Assert.Equal("Auth:TwoFactorRequiredByPolicy", await ErrorCodeAsync(disable));
+        }
+        finally
+        {
+            await WriteSettingAsync(admin.Client, SettingConstant.Security.RequireTwoFactor, null);
+        }
+    }
+
+    /// <summary>
+    /// 两步验证限制在授权之前拒绝，不能被记成"授权通过之后的业务拒绝"
+    /// </summary>
+    /// <remarks>
+    /// 限制中间件在 <c>UseAuthorization()</c> 之前抛业务异常。补记业务拒绝的中间件紧接授权之后，
+    /// 这类请求到不了它；若改放到全局异常处理器里，会把端点的权限策略当成已通过的依据写进记录。
+    /// </remarks>
+    [Fact]
+    public async Task A_restricted_session_rejected_before_authorization_leaves_no_business_failure_record()
+    {
+        var (host, _) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_noaudit");
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        await WriteSettingAsync(admin.Client, SettingConstant.Security.RequireTwoFactor, "true");
+        try
+        {
+            using var restricted = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+            var roleId = Guid.NewGuid();
+
+            using var blocked = await restricted.Client.PutAsJsonAsync(
+                $"/api/v1/permissions/grants/roles/{roleId}",
+                new { expectedVersion = 0, permissionNames = Array.Empty<string>() });
+            Assert.Equal("Auth:TwoFactorSetupRequired", await ErrorCodeAsync(blocked));
+
+            Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
+                admin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{roleId}"));
         }
         finally
         {

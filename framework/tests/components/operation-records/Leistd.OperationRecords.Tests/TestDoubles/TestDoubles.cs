@@ -2,6 +2,7 @@ using Leistd.Data.Paging;
 using Leistd.MultiTenancy.Context;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
+using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
@@ -121,4 +122,29 @@ internal sealed class SecondDbContext(DbContextOptions<SecondDbContext> options)
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)
         => modelBuilder.ConfigureOperationRecords();
+}
+
+/// <summary>把失败调用原样转成一条记录，避免 HttpContext 扩展的用例依赖记录器的上下文补齐逻辑。</summary>
+internal sealed class PassThroughRecorder(IOperationRecordStore store) : IOperationRecorder
+{
+    public Task RecordSucceededAsync(string action, OperationTarget target, string basis, CancellationToken ct = default)
+        => throw new NotSupportedException();
+
+    public Task RecordFailedAsync(
+        string action,
+        OperationTarget target,
+        string basis,
+        OperationFailure failure = default)
+        => store.InsertAsync(new OperationRecordInfo
+        {
+            Action = action,
+            TargetId = target.Id,
+            TargetName = target.Name,
+            AuthorizationBasis = basis,
+            Outcome = OperationRecordOutcome.Failed,
+            Visibility = OperationVisibility.Tenant,
+            FailureCode = failure.Code,
+            FailureData = failure.Data,
+            FailureDetail = failure.Detail
+        });
 }

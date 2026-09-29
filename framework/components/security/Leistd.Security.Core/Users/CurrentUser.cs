@@ -18,8 +18,7 @@ public class CurrentUser(ICurrentPrincipalAccessor principalAccessor, IOptions<C
     private ClaimsPrincipal? Principal => principalAccessor.Principal;
 
     /// <inheritdoc />
-    public bool IsAuthenticated =>
-        Principal?.Identity?.IsAuthenticated ?? false;
+    public bool IsAuthenticated => Principal.HasAuthenticatedIdentity();
 
     /// <inheritdoc />
     public string? SubjectId => claimTypes.Value.FindUserId(Principal);

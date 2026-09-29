@@ -30,6 +30,17 @@ public sealed class TenantSessionRecoveryTests
         Assert.Contains(response.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith("session=;", StringComparison.Ordinal));
     }
 
+    /// <summary>只有后续身份已认证的会话同样按已认证处理：失效的租户会话被收回，而不是原样报错。</summary>
+    [Fact]
+    public async Task A_session_authenticated_only_by_a_later_identity_is_still_signed_out()
+    {
+        using var host = await StartAsync(tenantClaim: true, failure: new TenantNotActiveException("acme"), anonymousFirst: true);
+
+        var response = await host.GetTestClient().GetAsync("/api/data");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task A_page_navigation_is_redirected_back_to_where_it_was()
     {
@@ -76,7 +87,8 @@ public sealed class TenantSessionRecoveryTests
         bool tenantClaim,
         Exception failure,
         string tenantClaimType = CustomClaimTypes.TenantId,
-        string? tenantClaimValue = null)
+        string? tenantClaimValue = null,
+        bool anonymousFirst = false)
         => await new HostBuilder()
             .ConfigureWebHost(web => web
                 .UseTestServer()
@@ -95,7 +107,10 @@ public sealed class TenantSessionRecoveryTests
                             claims.Add(new Claim(tenantClaimType, tenantClaimValue ?? Guid.NewGuid().ToString()));
                         }
 
-                        context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
+                        var authenticated = new ClaimsIdentity(claims, "Test");
+                        context.User = anonymousFirst
+                            ? new ClaimsPrincipal([new ClaimsIdentity(), authenticated])
+                            : new ClaimsPrincipal(authenticated);
                         return next(context);
                     });
                     app.UseTenantSessionRecovery(options => options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme);

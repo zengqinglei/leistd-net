@@ -1,10 +1,13 @@
 #if (LocalIdentity)
 using Leistd.Authorization;
 using Leistd.Authorization.Constants;
+using Leistd.Authorization.Dtos;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.Lock;
 using System.Net;
 using System.Net.Http.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
@@ -544,6 +547,62 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.False(current.Grants.Single(x => x.Name == PermissionConstant.Roles.Default).Granted);
     }
 
+    /// <summary>
+    /// 组件端点在授权之后被业务规则拒绝，也留下一条失败记录
+    /// </summary>
+    /// <remarks>
+    /// 权限管理端点由组件映射，拒绝发生在组件内部，由紧接授权之后、租户作用域之内的中间件补记。
+    /// 目标标识与授权依据要与成功路径写下的逐字一致，按目标、按依据检索才查得全。
+    /// </remarks>
+    [Fact]
+    public async Task A_rejected_permission_save_leaves_a_failure_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var role = await CreateRoleAsync(superAdmin.Client);
+
+        await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 0, permissionNames = new[] { PermissionConstant.Users.Default } });
+        var stale = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 0, permissionNames = new[] { PermissionConstant.Roles.Default } });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+        var undefined = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 1, permissionNames = new[] { "App.NotDefined" } });
+        Assert.Equal(HttpStatusCode.BadRequest, undefined.StatusCode);
+
+        var failures = await OperationRecordQueries.GetFailuresAsync(
+            superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}");
+        Assert.Equal(
+            [PermissionErrorCodes.UndefinedPermission, PermissionErrorCodes.ConcurrencyConflict],
+            failures.Select(item => item.FailureCode));
+        Assert.All(failures, item => Assert.Equal(PermissionConstant.Roles.ManagePermissions, item.AuthorizationBasis));
+    }
+
+    /// <summary>参数校验失败没有业务码，无从按原因聚合，不进操作记录。</summary>
+    [Fact]
+    public async Task A_permission_save_rejected_by_input_validation_leaves_no_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var role = await CreateRoleAsync(superAdmin.Client);
+
+        var tooMany = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new
+            {
+                expectedVersion = 0,
+                permissionNames = Enumerable.Range(0, ReplacePermissionGrantsInputDto.MaximumPermissionCount + 1)
+                    .Select(index => $"App.Permission{index}")
+                    .ToArray()
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
+
+        Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
+            superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}"));
+    }
+
     [Fact]
     public async Task Current_permissions_reflect_grants_and_change_version()
     {
@@ -579,6 +638,24 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         var assignedDelete = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}");
         Assert.Equal(HttpStatusCode.Conflict, assignedDelete.StatusCode);
+    }
+
+    /// <summary>
+    /// 控制器端点的业务拒绝走同一个中间件，与组件的 Minimal API 端点一致
+    /// </summary>
+    /// <remarks>删除内置角色被规则拒绝：目标取路由上的 id，依据取控制器动作上的删除策略。</remarks>
+    [Fact]
+    public async Task A_rejected_role_deletion_leaves_a_failure_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var adminRoleId = await GetRoleIdAsync(AdminConstant.RoleName);
+
+        var rejected = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{adminRoleId}");
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+
+        var failures = await OperationRecordQueries.GetFailuresAsync(
+            superAdmin.Client, OperationRecordActions.RoleDeleted, adminRoleId.ToString());
+        Assert.Contains((RoleErrorCodes.StaticRoleCannotBeDeleted, PermissionConstant.Roles.Delete), failures);
     }
 
     [Fact]

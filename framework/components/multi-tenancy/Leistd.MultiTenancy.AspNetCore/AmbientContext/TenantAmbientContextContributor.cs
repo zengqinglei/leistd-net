@@ -19,7 +19,7 @@ internal sealed class TenantAmbientContextContributor(
     /// <inheritdoc />
     public IDisposable? Enter(AmbientContextEnterContext context)
     {
-        if (context.Principal.Identity?.IsAuthenticated != true)
+        if (!context.Principal.HasAuthenticatedIdentity())
         {
             // 未认证：没有可信的租户来源，不猜，保持进入前的状态。
             return null;

@@ -15,6 +15,7 @@ public interface ICurrentUser
     /// <summary>
     /// 获取当前用户是否已认证。
     /// </summary>
+    /// <remarks>主体的任一身份已认证即为真，与官方授权管线判定"已认证用户"的口径一致。</remarks>
     bool IsAuthenticated { get; }
 
     /// <summary>

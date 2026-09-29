@@ -608,6 +608,8 @@ try
     app.UseMiddleware<TwoFactorSetupEnforcementMiddleware>();
 #endif
     app.UseAuthorization();
+    // 授权之后、租户作用域之内：组件端点被业务规则拒绝时补一条操作记录（见中间件注释）
+    app.UseMiddleware<OperationFailureRecordingMiddleware>();
 
     app.MapControllers();
     // 组件自带的端点（设置、权限、操作记录、通知、租户与租户连接），路由与原控制器一致

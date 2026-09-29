@@ -32,7 +32,7 @@ internal sealed class ResourceAuthorizationService(
 
         var principal = principalAccessor.Principal;
         // 与官方 DenyAnonymousAuthorizationRequirement 同一判据：任一身份已认证即可
-        if (principal is null || !principal.Identities.Any(identity => identity.IsAuthenticated))
+        if (!principal.HasAuthenticatedIdentity())
         {
             return false;
         }

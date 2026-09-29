@@ -30,6 +30,24 @@ public class TenantAmbientContextTests
         Assert.Null(currentTenant.Id);
     }
 
+    /// <summary>只有后续身份已认证的主体同样建立它声明的租户，不被当成匿名跳过。</summary>
+    [Fact]
+    public void A_later_authenticated_identity_establishes_its_tenant()
+    {
+        var tenantId = Guid.NewGuid();
+        var (ambient, currentTenant) = Build();
+        var principal = new ClaimsPrincipal(
+        [
+            new ClaimsIdentity(),
+            new ClaimsIdentity([new Claim(CustomClaimTypes.TenantId, tenantId.ToString())], "Test")
+        ]);
+
+        using (ambient.Begin(principal))
+        {
+            Assert.Equal(tenantId, currentTenant.Id);
+        }
+    }
+
     // 无声明即宿主，但必须显式置位：入口可能继承了外层租户上下文。
     [Fact]
     public void Absent_tenant_claim_switches_to_the_host_view()

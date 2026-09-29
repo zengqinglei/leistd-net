@@ -117,7 +117,7 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 
 | 成员 | 说明 |
 | --- | --- |
-| `IsAuthenticated` | 当前主体是否已认证（`Principal.Identity.IsAuthenticated`），无主体时为 `false` |
+| `IsAuthenticated` | 当前主体是否已认证：任一身份已认证即为 `true`（与官方授权管线判定"已认证用户"一致），无主体时为 `false`。标识、名字、租户仍只取自带标识的主体身份 |
 | `SubjectId` | 主体标识原始值，按 `ClaimTypeOptions.UserIds` 读取；机器主体是 `client:<client_id>`。审计等"任何主体都要留得下标识"的场景用它 |
 | `Id` | 在 `SubjectId` 之上只接受 `Guid` 的自然人用户 Id；机器主体等非 GUID 标识为 `null` |
 | `TenantId` | 所属租户，按 `ClaimTypeOptions.ReadTenant` 读取；宿主用户返回 `null`，租户 claim 非法时抛 `InvalidOperationException`（不当作宿主）。这是主体 claim 的直读值，运行时权威租户上下文是 [多租户组件](./multi-tenancy.md) 的 `ICurrentTenant` |
@@ -173,6 +173,12 @@ if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受
 ```
 
 > 服务间调用的用户上下文恢复直接依赖该契约，见[服务间调用客户端](./service-client.md)的信任边界。
+
+### `Leistd.Security.Claims.ClaimsPrincipalExtensions`（是否匿名）
+
+| 成员 | 说明 |
+| --- | --- |
+| `HasAuthenticatedIdentity()` | 主体的任一身份已认证即为 `true`，`null` 为 `false`；与官方授权管线判定"已认证用户"一致。框架里判断"这个请求是否匿名"的每一处（当前用户、租户解析、会话恢复、环境上下文、Hub 复评、操作记录）都用它。不要用 `ClaimsPrincipal.Identity.IsAuthenticated`：它只是第一个身份。服务间调用判定"调用方是否受信的机器身份"是例外，那里有意只看第一个身份 |
 
 ### `Leistd.Security.Claims.ClaimTypeOptions`（claim 类型与读取规则）
 

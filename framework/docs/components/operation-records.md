@@ -9,6 +9,7 @@
 | 事后要能回答"这条数据是谁改的、凭什么改" | 在用例里调 `IOperationRecorder.RecordSucceededAsync` |
 | 业务规则拒绝了一次操作 | 调 `RecordFailedAsync`；独立提交，业务随后回滚也留得住；写不进去只记日志，不会把 403 变成 500 |
 | 权限不足在**授权阶段**就被拒（请求到不了应用服务） | 端点打 `[OperationRecordAction]`，在授权结果处理器里调一行扩展方法 |
+| **组件映射的端点**在授权之后被业务规则拒绝（宿主在那里没有代码可写） | 同一个注解，在宿主紧接授权之后的中间件里调一行扩展方法 |
 | 管理界面要列表、筛选、导出操作记录 | 路由组上调 `MapOperationRecords(...)`；自定义路由或 DTO 时直接用 `IOperationRecordQueryService` |
 | 记录要有保留期（到期搬入归档表） | `AddOperationRecordRetention<TDbContext>()`，默认关闭 |
 | 想知道某次请求的完整细节（入参、堆栈、耗时） | **不要往这里加字段**，按 `CorrelationId` 去请求日志里查 |
@@ -25,7 +26,7 @@ dotnet add package Leistd.OperationRecords.Core
 # EF Core 持久化
 dotnet add package Leistd.OperationRecords.EntityFrameworkCore
 
-# 授权阶段拒绝的补记（注解 + HttpContext 扩展）
+# 被拒与业务拒绝的补记（注解 + HttpContext 扩展）
 dotnet add package Leistd.OperationRecords.AspNetCore
 ```
 
@@ -276,6 +277,44 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 事后无法按原因聚合。**这是本组件唯一自产的失败码，展示端要为它备一条词条**
 （键 `Error_Forbidden`，冒号换下划线）；漏了只会显示裸码，不报错。
 
+授权通过之后的业务拒绝：组件映射的端点（如权限管理的整体替换）在并发冲突、目标不存在时抛出业务异常，
+宿主在那里没有代码可写。在宿主**紧接 `UseAuthorization()`** 的中间件里捕获、补记、原样重抛，
+**判据与被拒路径相同**——端点有注解才记，匿名请求一律不记：
+
+```csharp
+public sealed class OperationFailureRecordingMiddleware(RequestDelegate next)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await next(context);
+        }
+        catch (OrderRuleException exception)
+        {
+            // 只带错误码：异常的占位参数可能含用户提交的原值，要带进记录须逐项挑出可公开的键
+            await context.RecordFailedOperationAsync(OperationFailure.FromCode(exception.Code));
+            throw; // 响应仍由外层的异常处理写出
+        }
+    }
+}
+
+app.UseAuthorization();
+app.UseMiddleware<OperationFailureRecordingMiddleware>();
+```
+
+使用 Leistd 异常处理组件时，捕获的是它的 `BusinessException`。
+
+- **位置决定两件事，必须紧接 `UseAuthorization()`。** 授权没通过的请求到不了这里，"授权已通过"才成立——
+  授权之前的中间件（如两步验证限制）抛出的业务异常不会被记成授权之后的拒绝；请求还在租户作用域里，
+  记录才写进操作发生的那一层。
+- **不要放进 `IExceptionHandler`。** 它在管道最外层执行，租户中间件的作用域已随异常退出，租户内的失败会被写进宿主层；
+  授权之前抛出的业务异常也会流到那里。官方的 `IExceptionHandlerFeature` 保留了端点与路由值，但保留不了应用自己的租户作用域。
+- **授权依据取端点最后声明的具名策略，不重新评估**：走到这里所有策略都已通过，最后声明的是最具体的一层
+  （端点级晚于路由组级与类级），同一级叠加多个时记后声明者；没有具名策略时记 `-`。这与被拒路径不同，那里取实际未通过的那个。
+- **只记业务拒绝。** 参数校验失败（`ValidationException`）没有业务码，无从按原因聚合，属于请求日志；技术异常同理。
+- **带注解端点的业务拒绝由这里统一记。** 应用服务在同一次拒绝上不要再调 `RecordFailedAsync`，否则一次失败两条记录。
+
 ## 接口参考
 
 | 成员 | 说明 |
@@ -304,7 +343,8 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 | `ConfigureOperationRecords(modelBuilder)` | 映射 `OperationRecord` 与归档表 `OperationRecordArchive` |
 | `IOperationActionDefinitionContext.Add(..., targetIsActor)` | 标记自证类动作：成功且没有操作人时，查询输出的 `ActorIsTarget` 为真，界面把目标显示在操作人列 |
 | `[OperationRecordAction(action, params targetRouteKeys)]` | 声明写端点的动作码；`TargetIdPrefix` 可对齐成功路径的目标标识写法 |
-| `HttpContext.RecordDeniedOperationAsync()` | 在授权结果处理器里补记一条失败；端点有注解才记，匿名请求一律不记；授权依据取实际未通过的具名策略 |
+| `HttpContext.RecordDeniedOperationAsync()` | 在授权结果处理器里补记一条失败；端点有注解才记，匿名请求（没有任何已认证身份）一律不记；授权依据取实际未通过的具名策略 |
+| `HttpContext.RecordFailedOperationAsync(failure)` | 在紧接 `UseAuthorization()` 的中间件里补记授权通过之后的业务拒绝；判据同上，授权依据取最后声明的具名策略；`failure` 为空抛 `ArgumentException` |
 
 ## 实现行为
 
@@ -334,7 +374,7 @@ public sealed class AuthorizationResultHandler : IAuthorizationMiddlewareResultH
 - **不要加请求维度字段**（IP、UA、URL）。那属于请求日志；混进来就回到了"用路由代替业务语义"。
 - **不要加变更明细。** 那是实体变更追踪的量级（另一张明细表 + 追踪拦截器），加进来会得到半个审计日志却没有它的能力。
 - **`IOperationRecordStore` 只能有一个实现。** 为第二个 DbContext 注册时在注册期直接拒绝：一半的审计写进宿主没预期的库，比没有审计更危险。
-- **框架不接管 `IAuthorizationMiddlewareResultHandler`。** 宿主只能注册一个，那里通常还承载着应用专有的处置；框架占住它，宿主唯一的授权处置入口就没了。
+- **框架不接管 `IAuthorizationMiddlewareResultHandler`。** 宿主只能注册一个，那里通常还承载着应用专有的处置；框架占住它，宿主唯一的授权处置入口就没了。同理也不替宿主挂业务拒绝的中间件：记哪些异常是宿主的策略，框架只给 `RecordFailedOperationAsync` 这个零件。
 - **不要改用"发布领域事件、由处理器统一订阅"来取代记录器。** 这个方案覆盖不了三条记录路径里的两条：授权阶段的拒绝根本没进领域层，没有聚合能发事件；业务在工作单元内拒绝并抛出时，事件会随回滚一起丢——`ILocalEventBus.PublishAsync` 先问 `ILocalEventDeferrer`，只要有活动工作单元就推迟到提交后发布，因此**主动发布与实体收集两条路径殊途同归**。改用事件仍须保留直接写入器去覆盖那两条，最终是两套机制并存。此外"凭什么被允许"只有调用点知道，事件里没有这个信息。成功路径上业务当然可以自己用事件驱动，但那是宿主的选择，不是组件的机制。
 - **被拒记录的唯一闸门是注解，唯一的例外是匿名请求。** 匿名不记不是偏好而是安全属性——那种请求没有操作人，记下来等于把审计表变成一个不需要凭据的写入面。除此之外框架不替调用方做取舍。
 

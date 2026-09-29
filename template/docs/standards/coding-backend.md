@@ -298,6 +298,8 @@ public class UserAppService(
 框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不再写 Controller：在 `Api/Hosting/ComponentEndpoints.cs` 里用组件的 `Map*` 给前缀与授权策略，
 个别端点要追加元数据（两步验证放行、授权被拒留痕）按组件公开的端点名定位；组件不认识的业务动作（发信测试、模拟登录）才写 Controller，路由与组件端点不重叠。
 
+组件端点要留痕时挂 `[OperationRecordAction]`：授权阶段被拒由 `Api/Auth/ApiAuthorizationResultHandler` 补记，授权之后的业务拒绝（`BusinessException`）由紧接 `UseAuthorization()` 的 `Api/Middlewares/OperationFailureRecordingMiddleware` 补记，参数校验失败不记。挂了注解的端点，其业务拒绝不要再在应用服务里调 `RecordFailedAsync`，否则一次失败两条记录。
+
 **命名**: `*Controller`
 **基类**: 继承 `BaseController`
 **返回值**:

@@ -19,6 +19,8 @@ internal static class ServiceUserContext
     // 受信调用方必须经过认证，且 client_id、机器主体 sub 和可选 scope 一致。
     internal static bool IsTrustedServiceCall(ClaimsPrincipal user, ServiceUserContextOptions options, ClaimTypeOptions claimTypes)
     {
+        // 有意只看第一个身份，不用 HasAuthenticatedIdentity：这里判定的是"调用方是不是受信的机器身份"，
+        // 发生在还原被代表用户之前，机器令牌就是那个身份。按任一身份判定会让别的身份替机器身份过关，从严才是失败关闭
         if (user.Identity?.IsAuthenticated != true)
         {
             return false;

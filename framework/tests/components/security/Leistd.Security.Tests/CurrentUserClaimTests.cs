@@ -55,6 +55,22 @@ public class CurrentUserClaimTests
         Assert.NotNull(user.Id);   // 身份仍可读，只是不算已认证
     }
 
+    /// <summary>任一身份已认证即已认证，与官方授权管线一致；标识仍取自带标识的主体身份。</summary>
+    /// <remarks>回归点：曾只看第一个身份，授权管线放行的请求在这里被当成匿名，记录下的操作人随之为空。</remarks>
+    [Fact]
+    public void A_principal_authenticated_only_by_a_later_identity_is_authenticated()
+    {
+        var subject = Guid.NewGuid();
+        var user = new CurrentUser(new FixedPrincipalAccessor(new ClaimsPrincipal(
+        [
+            new ClaimsIdentity(),
+            new ClaimsIdentity([new Claim("sub", subject.ToString())], authenticationType: "Test")
+        ])), DefaultClaimTypes);
+
+        Assert.True(user.IsAuthenticated);
+        Assert.Equal(subject, user.Id);
+    }
+
     // sub 不是 GUID 时必须返回 null，不能抛也不能给个零 Guid——
     // 零 Guid 会被下游当成一个真实用户，静默把数据归给"用户 00000000-...".
     [Theory]

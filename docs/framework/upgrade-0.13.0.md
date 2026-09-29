@@ -459,3 +459,11 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 单测专用构建配置 `unit-test` | 不做开发构建的 Mock 提供器替换，`_mock/core/providers.ts` 保持部署形态。自定义了 `development` 配置的项目，单测不再跟着它变 |
 | `vitest-base.config.ts` 开启 `restoreMocks`、`unstubGlobals`；`isolate: true` | 每条用例开始前自动还原 `vi.spyOn` 替身与 `vi.stubGlobal` 的全局值（其他直接修改与假计时器仍需自己还原）；每个 spec 文件在独立页面运行，并发执行的文件之间不共享全局对象上的桩 |
 | 测试名统一英文 | 前端 `describe` / `it` 标题与后端测试方法名、`DisplayName` 用英文句子；中文只在注释与测试数据里 |
+
+## 15. 组件端点的业务拒绝留痕
+
+| 变化 | 影响与改法 |
+| --- | --- |
+| 新增 `HttpContext.RecordFailedOperationAsync(failure)`（`Leistd.OperationRecords.AspNetCore`） | 与 `RecordDeniedOperationAsync` 对称：授权通过之后被业务规则拒绝时，按端点上的 `[OperationRecordAction]` 补一条失败记录。在宿主**紧接 `UseAuthorization()`** 的中间件里捕获、调用、原样重抛；不要放进 `IExceptionHandler`（租户作用域已退出，租户内的失败会写进宿主层）。只新增，不影响现有调用 |
+| "是否匿名"统一为任一身份已认证；新增 `ClaimsPrincipal.HasAuthenticatedIdentity()`（`Leistd.Security.Core`） | 此前各处只看第一个身份，首身份未认证、后续身份已认证的主体被当成匿名，而授权管线放行了它：租户可被请求头改写、失效租户会话不被收回、环境上下文不建立租户、Hub 不复评、操作记录不记或操作人为空。现统一为官方 `DenyAnonymousAuthorizationRequirement` 的口径，作用于 `ICurrentUser.IsAuthenticated`、租户解析与多租户中间件、租户会话恢复、租户环境上下文、SignalR 复评、`RecordDeniedOperationAsync` / `RecordFailedOperationAsync`。标识、名字、租户仍只取自带标识的主体身份；服务间调用的机器身份判定仍只看第一个身份（有意）。自定义 `ICurrentUser` 实现按同一口径调整 |
+| 模板新增 `Api/Middlewares/OperationFailureRecordingMiddleware` | 组件映射的端点（如权限整体替换）被业务规则拒绝（并发冲突、权限未定义、主体不存在）时留下失败记录，此前只有授权阶段被拒才记。派生项目照模板加这个中间件，放在 `UseAuthorization()` 之后。只记 `BusinessException`，参数校验失败不记；挂了注解的端点，应用服务不要在同一次拒绝上再调 `RecordFailedAsync` |

@@ -23,7 +23,7 @@ public class CurrentPrincipalTenantResolveContributor : ITenantResolveContributo
         var httpContext = context.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext;
         var user = httpContext?.User;
 
-        if (user?.Identity?.IsAuthenticated == true)
+        if (user.HasAuthenticatedIdentity())
         {
             var claimTypes = context.ServiceProvider.GetRequiredService<IOptions<ClaimTypeOptions>>().Value;
 

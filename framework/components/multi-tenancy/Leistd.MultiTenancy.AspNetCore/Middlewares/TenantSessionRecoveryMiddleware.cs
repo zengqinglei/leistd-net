@@ -28,7 +28,7 @@ internal sealed class TenantSessionRecoveryMiddleware(
         }
         catch (Exception exception) when (
             exception is TenantNotFoundException or TenantNotActiveException &&
-            context.User.Identity?.IsAuthenticated == true &&
+            context.User.HasAuthenticatedIdentity() &&
             _claimTypes.ReadTenant(context.User).TenantId is not null &&
             !context.Response.HasStarted)
         {

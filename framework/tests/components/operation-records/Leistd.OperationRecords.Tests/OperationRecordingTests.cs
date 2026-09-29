@@ -4,6 +4,7 @@ using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Options;
 using Leistd.OperationRecords.Tests.TestDoubles;
 using Leistd.Security.Claims;
+using Leistd.Security.Users;
 using Leistd.Timing;
 using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Logging;
@@ -168,6 +169,49 @@ public sealed class OperationRecordingTests
         var written = Assert.Single(store.Written);
         Assert.Equal(subject, written.ActorId);
         Assert.Equal("Nightly cleanup", written.ActorName);
+    }
+
+    /// <summary>
+    /// 只有后续身份已认证的主体，按真实的当前用户补齐出完整的操作人
+    /// </summary>
+    /// <remarks>
+    /// 回归点：HttpContext 扩展按"任一身份已认证"放行，而当前用户曾只看第一个身份，
+    /// 于是记录写下了、操作人标识与名字却为空，所属租户退回请求租户。
+    /// </remarks>
+    [Fact]
+    public async Task A_principal_authenticated_only_by_a_later_identity_yields_the_full_actor()
+    {
+        var store = new RecordingOperationRecordStore();
+        var principals = new CurrentPrincipalAccessor();
+        var actorTenantId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var recorder = new OperationRecorder(
+            store,
+            new FakeOperationActionDefinitionManager(),
+            new FakeCurrentTenant(TenantId),
+            new CurrentUser(principals, Microsoft.Extensions.Options.Options.Create(new ClaimTypeOptions())),
+            new FakeCorrelationIdProvider(null),
+            new UtcClockProvider(new FakeTimeProvider(FixedNow)),
+            Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+
+        using (principals.Change(new ClaimsPrincipal(
+        [
+            new ClaimsIdentity(),
+            new ClaimsIdentity(
+            [
+                new Claim(CustomClaimTypes.Subject, UserId.ToString()),
+                new Claim("name", "Grace Hopper"),
+                new Claim(CustomClaimTypes.TenantId, actorTenantId.ToString())
+            ], authenticationType: "Test")
+        ])))
+        {
+            await recorder.RecordFailedAsync("a", OperationTarget.For("t"), "b", OperationFailure.FromCode("X:Y"));
+        }
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(UserId.ToString(), written.ActorId);
+        Assert.Equal("Grace Hopper", written.ActorName);
+        Assert.Equal(actorTenantId, written.ActorTenantId);
     }
 
     // 操作人标识按 ClaimTypeOptions 的共享顺序读：没有 sub 的主体回落到 NameIdentifier

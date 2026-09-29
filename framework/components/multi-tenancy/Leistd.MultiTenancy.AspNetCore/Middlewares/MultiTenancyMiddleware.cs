@@ -7,6 +7,7 @@ using Leistd.MultiTenancy.Exceptions;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.Resolution;
 using Leistd.MultiTenancy.Context;
+using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 
@@ -66,7 +67,7 @@ public class MultiTenancyMiddleware(RequestDelegate next, ILogger<MultiTenancyMi
             // 比泄露存在性更糟。这是有意接受的残留，理由与边界写在组件文档里，别当缺陷"修"掉。
             if (tenant is null || !tenant.IsActive)
             {
-                if (context.User.Identity?.IsAuthenticated != true)
+                if (!context.User.HasAuthenticatedIdentity())
                 {
                     throw new TenantNotFoundException(result.TenantIdOrName);
                 }

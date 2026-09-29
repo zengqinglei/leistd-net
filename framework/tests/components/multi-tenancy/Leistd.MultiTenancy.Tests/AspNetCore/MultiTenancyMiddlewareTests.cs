@@ -65,7 +65,11 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
                                 claims.Add(new Claim(CustomClaimTypes.TenantId, tenantClaim.ToString()));
                             }
 
-                            context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
+                            var authenticated = new ClaimsIdentity(claims, "Test");
+                            // X-Test-Anonymous-First：已认证身份前面还有一个未认证的空身份
+                            context.User = context.Request.Headers.ContainsKey("X-Test-Anonymous-First")
+                                ? new ClaimsPrincipal([new ClaimsIdentity(), authenticated])
+                                : new ClaimsPrincipal(authenticated);
                         }
 
                         await next(context);
@@ -191,5 +195,34 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
             ("X-Tenant", ActiveTenantId.ToString()));
 
         Assert.Equal("host", body);
+    }
+
+    /// <summary>
+    /// 只有后续身份已认证的主体同样由 claim 定案租户，请求头改写不了
+    /// </summary>
+    /// <remarks>
+    /// 回归点：租户解析曾只看第一个身份，这样的主体被当成匿名，解析继续交给请求头——
+    /// 而授权管线与当前用户都认为它已认证，于是它在一个由请求头选中的租户里被判权、被留痕。
+    /// </remarks>
+    [Fact]
+    public async Task A_later_authenticated_identity_still_pins_the_tenant_to_its_claim()
+    {
+        var body = await GetAsync("/",
+            ("X-Test-Auth", "u1"),
+            ("X-Test-Anonymous-First", "1"),
+            ("X-Test-Tenant-Claim", ClaimTenantId.ToString()),
+            ("X-Tenant", Guid.NewGuid().ToString()));
+
+        Assert.Equal(ClaimTenantId.ToString(), body);
+    }
+
+    /// <summary>这样的主体按已认证处理：停用的租户报"已停用"，而不是给匿名者的"不存在"。</summary>
+    [Fact]
+    public async Task A_later_authenticated_identity_is_told_the_tenant_is_inactive()
+    {
+        await Assert.ThrowsAsync<TenantNotActiveException>(() => GetAsync("/",
+            ("X-Test-Auth", "u1"),
+            ("X-Test-Anonymous-First", "1"),
+            ("X-Test-Tenant-Claim", InactiveTenantId.ToString())));
     }
 }

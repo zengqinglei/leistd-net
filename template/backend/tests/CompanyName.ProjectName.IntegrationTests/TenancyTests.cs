@@ -2,11 +2,14 @@ using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
+using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
 using Leistd.Authorization;
+using Leistd.Authorization.Errors;
 using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
@@ -237,6 +240,38 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
             Assert.Contains(tenantId.ToString(), error.Message, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// 租户内被业务规则拒绝的写操作，失败记录留在该租户
+    /// </summary>
+    /// <remarks>
+    /// 回归点：留痕若放在全局异常处理器里，租户中间件的作用域已随异常退出，记录会写进宿主层——
+    /// 租户读者看不到自己租户里发生的失败，宿主反倒多出一条归属错误的记录。
+    /// </remarks>
+    [Fact]
+    public async Task A_rejected_permission_save_inside_a_tenant_is_recorded_in_that_tenant()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "failaudit");
+        var tenantClient = await LoginTenantAdminAsync(tenantId);
+
+        using var roles = JsonDocument.Parse(await tenantClient.GetStringAsync("/api/v1/roles?offset=0&limit=50"));
+        var roleId = roles.RootElement.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == AdminConstant.RoleName)
+            .GetProperty("id").GetGuid();
+
+        var stale = await tenantClient.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{roleId}",
+            new { expectedVersion = 999, permissionNames = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+        var target = $"Role/{roleId}";
+        var inTenant = await OperationRecordQueries.GetFailuresAsync(
+            tenantClient, OperationRecordActions.PermissionGrantsReplaced, target);
+        Assert.Equal(PermissionErrorCodes.ConcurrencyConflict, Assert.Single(inTenant).FailureCode);
+        Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
+            hostAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, target));
     }
 
     [Fact]
