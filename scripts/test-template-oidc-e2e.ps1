@@ -72,7 +72,8 @@ function New-RandomValue([string]$Prefix) {
 
 function New-ProcessInfo([string]$Command, [string[]]$Arguments, [string]$WorkingDirectory, [hashtable]$Variables) {
     $info = [Diagnostics.ProcessStartInfo]::new()
-    $info.FileName = (Get-Command $Command -CommandType Application -ErrorAction Stop).Source
+    # PATH 上可能有同名的多个可执行文件（GitHub 的 Ubuntu 上 /usr/bin 与 /bin 都有 docker），只取第一个
+    $info.FileName = (Get-Command $Command -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     $info.WorkingDirectory = $WorkingDirectory
     $info.UseShellExecute = $false
     $info.RedirectStandardOutput = $true
