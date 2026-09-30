@@ -15,6 +15,7 @@ using CompanyName.ProjectName.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Notifications.Channels;
@@ -33,16 +34,25 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
     [Fact]
     public async Task Notification_should_be_persisted_pushed_marked_as_read_and_cleared()
     {
+        // 发布器隔离渠道故障、只记日志，推送没到时失败信息里要带上服务端日志，否则无从判断是没发还是没收到
+        var logs = new WarningLogCapture();
+        using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(logs.Install));
 #if (LocalIdentity)
-        using var admin = await factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
-        var userId = await GetSuperAdminIdAsync(factory);
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var userId = await GetSuperAdminIdAsync(host);
 #else
         var userId = Guid.CreateVersion7();
         var tenantId = Guid.CreateVersion7();
-        using var admin = factory.CreateResourceSession(userId, tenantId);
+        using var admin = ProjectWebApplicationFactory.CreateResourceSession(host, userId, tenantId);
 #endif
         // 通知与业务事件共用实时 Hub：同一条连接上收到通知，且只收到一次
-        await using var connection = CreateHubConnection(factory, "/hubs/realtime", admin);
+        await using var connection = CreateHubConnection(host, "/hubs/realtime", admin);
+        Exception? closedError = null;
+        connection.Closed += error =>
+        {
+            closedError = error;
+            return Task.CompletedTask;
+        };
         var received = new TaskCompletionSource<NotificationOutputDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         var deliveries = 0;
         using var subscription = connection.On<NotificationOutputDto>(NotificationClientMethods.Received, notification =>
@@ -57,7 +67,7 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
             Title = "Integration notification",
             Content = "Notification persistence and SignalR delivery"
         };
-        await using (var scope = factory.Services.CreateAsyncScope())
+        await using (var scope = host.Services.CreateAsyncScope())
         {
             var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
 #if (LocalIdentity)
@@ -75,7 +85,19 @@ public sealed class NotificationsAndRealTimeTests(ProjectWebApplicationFactory f
 #endif
         }
 
-        var pushed = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        NotificationOutputDto pushed;
+        try
+        {
+            pushed = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        catch (TimeoutException exception)
+        {
+            var unread = await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count");
+            throw new TimeoutException(
+                $"No notification push within 10s. Connection={connection.State}, Closed={closedError?.Message ?? "none"}, " +
+                $"Deliveries={Volatile.Read(ref deliveries)}, Unread={unread}.{Environment.NewLine}Server log:{Environment.NewLine}{logs}",
+                exception);
+        }
         Assert.Equal(1, await admin.Client.GetFromJsonAsync<int>("/api/v1/notifications/unread-count"));
         Assert.Equal(1, Volatile.Read(ref deliveries));
 

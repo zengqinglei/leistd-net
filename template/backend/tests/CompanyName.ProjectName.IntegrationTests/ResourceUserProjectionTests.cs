@@ -2,14 +2,11 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Api.Middlewares;
 using CompanyName.ProjectName.Infrastructure.Persistence;
-using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -80,14 +77,12 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
         var subjectId = Guid.CreateVersion7();
         var tenantId = Guid.CreateVersion7();
         var race = new FirstInsertRace(subjectId, participants: 2);
-        var warnings = new WarningCapture();
+        var warnings = new WarningLogCapture();
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.ConfigureDbContext<MyProjectDbContext>(options => options.AddInterceptors(race));
-            // 宿主用 AddSerilog 接管了日志工厂，自带的 ILoggerProvider 收不到任何日志——
-            // 不换回标准工厂，"没有记下警告"就恒成立、证伪不了。只影响这个测试宿主
-            services.RemoveAll<ILoggerFactory>();
-            services.AddLogging(logging => logging.AddProvider(warnings));
+            // 不换回标准日志工厂，"没有记下警告"就恒成立、证伪不了
+            warnings.Install(services);
         }));
         using var first = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
         using var second = ProjectWebApplicationFactory.CreateResourceSession(host, subjectId, tenantId);
@@ -130,30 +125,6 @@ public sealed class ResourceUserProjectionTests(ProjectWebApplicationFactory fac
             }
 
             return result;
-        }
-    }
-
-    private sealed class WarningCapture : ILoggerProvider
-    {
-        public ConcurrentQueue<(string Category, string Message)> Entries { get; } = new();
-
-        public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
-
-        public void Dispose()
-        {
-        }
-
-        private sealed class Logger(WarningCapture owner, string category) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
-
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            {
-                if (IsEnabled(logLevel))
-                    owner.Entries.Enqueue((category, formatter(state, exception)));
-            }
         }
     }
 
