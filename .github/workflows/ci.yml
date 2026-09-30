@@ -5,6 +5,7 @@ name: CI
 #   - template-matrix：打包当前框架并验证全部条件场景的生成、运行与前后端构建
 #   - test：框架单元测试（含真实 Redis 的分布式锁契约）
 #   - postgresql-e2e：模板在真实 PostgreSQL 上的迁移与租户隔离
+#   - oidc-e2e：四服务真实 OIDC、委托边界与远端令牌校验
 on:
   pull_request:
     branches: [main, develop]
@@ -159,3 +160,33 @@ jobs:
       - name: 打包 + 生成 + 迁移 + 真实库隔离验证
         shell: pwsh
         run: pwsh scripts/test-template-postgresql-e2e.ps1
+
+  oidc-e2e:
+    name: 模板 OIDC 跨服务端到端
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - name: 安装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      # 脚本自包含包源、四个真实 API、PostgreSQL 与 finally 清理。
+      # S7 默认只验即时撤销与到期前窗口，不在 PR 等待十分钟；完整边界用 -IncludeExpiryWait。
+      - name: 打包 + 生成 + OIDC HTTP S2–S8 与 S10
+        shell: pwsh
+        run: pwsh scripts/test-template-oidc-e2e.ps1
+      - name: 保留 OIDC 诊断证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oidc-e2e-logs
+          # 只上传日志和脱敏断言，生成项目、密钥与 NuGet 缓存不上传。
+          path: |
+            .tmp/oidc-e2e/**/*.log
+            .tmp/oidc-e2e/**/assertions.jsonl
+            .tmp/oidc-e2e/**/results.json
+            .tmp/oidc-e2e/**/topology.json
+            .tmp/oidc-e2e/**/cleanup.json

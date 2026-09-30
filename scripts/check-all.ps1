@@ -15,6 +15,7 @@
         + framework/build/test-package-consumption.ps1  NuGet 隔离消费
       - scripts/test-template-matrix.ps1                9 场景生成 + 构建 + 前后端测试
       - scripts/test-template-postgresql-e2e.ps1        真实 PostgreSQL 端到端
+      - scripts/test-template-oidc-e2e.ps1              真实 OIDC 跨服务 HTTP 端到端
 
     模板那三道（symbols / using-guards / async-boundaries）test-template-matrix.ps1 内部也会跑一遍：
     它必须在生成之前先验模板源码，那里是生成流程的一环，不是重复配置。

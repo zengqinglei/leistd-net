@@ -38,10 +38,75 @@ ClientSecret 用环境变量注入：`Leistd__ServiceAuth__ClientSecret`。
 ## 被其他服务调用
 
 - `Program.cs` 已注册 `AddServiceUserContext` + `UseServiceUserContext`（OpenIddict 场景）。采信 `X-User-*` 头并恢复用户主体需**同时**满足：调用方以 client credentials 令牌通过认证、其 `sub` 为机器主体契约形态（`client:<client_id>`）、且令牌持有委托 scope `svc.delegate`；任一不满足都会剥离这些头。**网关/Ingress 必须同步剥离外部来源的 `X-User-*` 头**。
-- 调用方凭据在本服务的「开放应用」中注册（confidential 客户端 + `client_credentials` 授权），凭据仅创建时返回一次。
+- 调用方凭据在 Identity 服务的「开放应用」中注册（confidential 客户端 + `client_credentials` 授权），凭据仅创建时返回一次。
 - **代表用户调用需额外授予 `svc.delegate`**（开放应用的权限项 `scp:svc.delegate`）：拿到机器令牌只代表调用方是已认证的工作负载，不等于有权代表用户——不授予该 scope 的客户端即使知道用户 Id 也无法冒充。调用方侧在 `Leistd:ServiceClients:<服务名>:Scope` 同时写目标 API 的 scope 与该 scope（空格分隔，如 `order-api svc.delegate`）：委托 scope 只表示"可以代表用户"，令牌能调用哪个 API 由目标 API 的 scope 决定。
+- `svc.delegate` 客户端的 Secret 一旦泄露，攻击者就能以任意用户和租户的身份调用所有接受该令牌受众的服务。
+  该 scope 只授予完全受信的工作负载，并按目标 API 分别授权；委托头没有权威成员关系证明。
 - 默认授权策略要求可用的自然人用户：服务间调用需携带受信 `X-User-Id`；确需面向纯工作负载的端点，单独声明策略，不放宽默认策略。
 - 调用诊断：`GET /api/v1/service-info`（匿名探活）、`GET /api/v1/service-info/whoami`（回显恢复出的用户与调用方 client）。
+
+## Identity 与资源服务对接
+
+Identity 的 `OAuth:ApiResources` 登记每个下游 API 的受众（例如 `orders-api`、`billing-api`），
+各自同时成为同名 scope。资源服务的 `Authentication:Audience` 使用对应值；
+`Authentication:Issuer` 使用 Identity 的 `OAuth:Issuer`，包括路径与尾斜杠。
+令牌受众由授予的 scope 推出，申请 `orders-api` 的令牌不能调用 `billing-api`。
+
+在 Identity 的「开放应用」创建两类客户端：
+
+- SPA：`web`、`public`、authorization code、强制 PKCE；授予 `openid profile email roles` 与本 API 的 scope，
+  登记完整回调 `/auth/callback` 和登出回调源地址。前端 `oidc.authority` 与签发方一致，
+  `oidc.clientId` 与登记的 Client ID 一致。普通路径路由必须能回退到 SPA，回调地址不带 fragment。
+- 服务调用方：`service`、`confidential`、client credentials；只授予要访问的 API scope。
+  代表用户时追加 `svc.delegate`，资源服务回源读取租户连接时追加 `tenant-routing.read`。
+  机器 scope 不得与用户授权流混用，`tenant-migration.read` 只给一次性迁移身份。
+
+Identity 的 `Cors:AllowedOrigins` 需允许资源服务前端的源，以供发现、JWKS、token 和 userinfo 请求。
+本机 Angular 前端开发服务器已允许 localhost 来源，开发代理转发 API 请求；生产 API 仍只认
+`Cors:AllowedOrigins`（默认为空）。浏览器登录使用 Identity 前端地址，
+因此签发方也应使用该地址；API 内部调用地址可以另配。
+
+调用方配置示例（凭据由环境变量或密钥管理提供）：
+
+```json
+{
+  "Authentication": {
+    "Issuer": "https://login.example.com/",
+    "Audience": "orders-api"
+  },
+  "Leistd": {
+    "ServiceAuth": {
+      "Authority": "https://login.example.com/",
+      "ClientId": "orders-machine"
+    },
+    "ServiceClients": {
+      "Identity": {
+        "BaseAddress": "https://login.example.com/",
+        "Scope": "tenant-routing.read"
+      },
+      "Billing": {
+        "BaseAddress": "https://billing.example.com/",
+        "Scope": "billing-api svc.delegate"
+      }
+    }
+  }
+}
+```
+
+`Leistd__ServiceAuth__ClientSecret` 注入创建机密客户端时只返回一次的 Secret。
+`Billing` 的强类型客户端需经 `AddRefitServiceClient(...).AddClientCredentials(...)` 注册；
+配置节名称与注册名一致。租户回源由已注册的 `Identity` 客户端承担，默认路由前缀
+`/api/v1/tenant-connections`，若改名，两边同步配置。
+
+独立库先用各服务的 DbMigrator 预迁移，再在 Identity 创建租户时登记命名连接；
+只登记 `default` 时，各服务在同一租户库中使用自己的 schema。
+回源结果与机器令牌都有缓存，撤销 scope 不会清空热实例缓存；冷实例请求被撤销的 scope 时取令牌失败，
+未处理的依赖拒绝返回 502，日志保留远端 400、`invalid_request` 与 scope 权限诊断（OpenIddict `ID2051`）。
+
+委托头证明的是调用工作负载有权声明用户上下文。资源服务不向 Identity 校验
+`X-User-Id` 与 `X-Tenant-Id` 是否为真实成员关系；受信调用方必须从当前用户和租户上下文生成它们，
+不可直接转发外部输入。需要身份服务逐次确认委托关系时，应另行设计 Token Exchange 或成员校验契约。
+用户标识和租户 claim 必须属于同一个身份，混合身份的非法声明会被拒绝。
 
 ## 发布本服务的 Client 包
 

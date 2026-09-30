@@ -422,6 +422,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 设置存储宿主键 `h:` 改为 `host:` | `EfCoreSettingStore` 的 `ScopeKey` 与其他按租户隔离的键统一经 `CurrentTenantKeyExtensions.ScopeKey`：宿主行 `h:t` → `host:t`，租户行不变。**已有数据须迁移，且必须在新版本开始服务之前执行**：新版本读不到旧键时不报错，宿主级设置静默回落为定义里的默认值。语句为 `UPDATE <schema>."SettingRecords" SET "ScopeKey" = 'host' \|\| substr("ScopeKey", 2) WHERE "ScopeKey" LIKE 'h:%';`（按实际表名与数据库方言调整）；随 EF 迁移发布时新建一个空迁移，在 `Up` 里 `migrationBuilder.Sql(...)` 执行它，`Down` 反向执行 `'h' \|\| substr("ScopeKey", 5) WHERE "ScopeKey" LIKE 'host:%'`，由部署时的迁移步骤保证先于新版本生效 |
 | `by-host` 探测跑宿主配置的解析链 | 此前固定 new 一个 `DomainTenantResolveContributor`，宿主替换或定制域名解析时探测与真实请求答案不一致。**注意答案不再只由主机名决定**：跑的是完整解析链，所以请求若带着会话或租户提示（Cookie、`X-Tenant-Id` 等），答案会随之变化——这与真实请求一致，是有意的；但把它当成『纯按域名查租户』的接口去用会得到意外结果，它的设计场景是登录页在未登录、未选租户时调用 |
 | 模板：令牌端点与 userinfo 在令牌主体的租户内加载用户 | `IAuthPrincipalFactory` 新增 `CreateFromTokenAsync(tokenPrincipal, scopes)`，`CreateUserInfoAsync` 改为只收令牌主体。此前这两个端点的请求解析出的是宿主，**租户用户走不通授权码换令牌、刷新与 userinfo**；已派生项目按模板同步 |
+| 模板：Resource 形态默认授权策略要求自然人 | 派生项目用纯机器令牌调用默认策略端点时，响应从 200 变为 403；给纯机器端点显式声明机器策略，不放宽默认自然人策略 |
 | 模板：租户相关的缓存与状态键按租户隔离 | 登录失败计数、邮箱验证码限流与挑战、外部登录 state 统一经 `ScopeKey`；外部登录 state 绑定发起时的租户，回调时租户不一致即拒绝 |
 | 模板前端：租户键集中到 `tenant-protocol.ts` | `TENANT_HEADER`（`X-Tenant`）、`TENANT_INVALID_HEADER`、`TENANT_CLAIM` 三个常量取代散落的字面量；Resource 形态接受没有租户 claim 的宿主用户 |
 

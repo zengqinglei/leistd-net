@@ -13,9 +13,7 @@ using Microsoft.Extensions.Options;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif
-#if (LocalIdentity)
 using System.Security.Claims;
-#endif
 #if (OpenIddictServer || RemoteTokenAuth)
 using OpenIddict.Validation.AspNetCore;
 #endif
@@ -49,14 +47,13 @@ public static class DependencyInjection
         // 默认策略要按宿主配置的主体标识 claim 判定自然人，因此经 Options 管道取 ClaimTypeOptions
         services.AddOptions<AuthorizationOptions>().Configure<IOptions<ClaimTypeOptions>>((options, claimTypeOptions) =>
         {
-#if (LocalIdentity)
             var claimTypes = claimTypeOptions.Value;
-#endif
 #if (RemoteTokenAuth)
-            // 资源服务只认签发方的 Bearer：这里没有用户表，账号是否可用由签发方在发令牌时判定
+            // 资源服务只认签发方的 Bearer，默认策略要求自然人；机器端点另设策略。
             var currentUser = new AuthorizationPolicyBuilder(
                     OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()
+                .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
                 .Build();
             options.DefaultPolicy = currentUser;
             // 组件的自用端点按名字要这条策略，见 ApiPolicies.CurrentUser
@@ -95,12 +92,10 @@ public static class DependencyInjection
         return services;
     }
 
-#if (LocalIdentity)
     // 与 ICurrentUser.Id 同一口径：主体标识（按 ClaimTypeOptions.UserIds 读取）是用户 Id 才是自然人
     private static bool IsNaturalPerson(ClaimsPrincipal user, ClaimTypeOptions claimTypes) =>
         Guid.TryParse(claimTypes.FindUserId(user), out _);
 
-#endif
 #if (OpenIddictServer)
     /// <summary>
     /// 注册一条只对<b>机器主体</b>开放的内部控制面策略

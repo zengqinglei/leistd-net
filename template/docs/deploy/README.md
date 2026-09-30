@@ -59,7 +59,9 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 
 - 密钥和生产凭据由环境变量或密钥管理系统提供，不写入仓库。
 <!--#if (OpenIddictServer)-->
-- 前端不与本服务同源时（如独立部署的资源服务前端经本服务登录），把它的源加入本服务的 `Cors:AllowedOrigins`：发现文档、JWKS、令牌与 userinfo 都是跨源请求。本机开发不需要，前端开发服务器已为 localhost 来源放行。
+- 前端不与本服务同源时（如独立部署的资源服务前端经本服务登录），把它的源加入本服务的 `Cors:AllowedOrigins`：发现文档、JWKS、令牌与 userinfo 都是跨源请求。
+  生产 API 只认 `Cors:AllowedOrigins`，默认为空。本机 Angular 前端开发服务器允许 localhost 来源，
+  开发代理将请求转到 API；这不是 API 的 CORS 放行规则，绕过代理的跨源请求仍须配置允许的源。
 - 下游资源服务的 API 标识登记在 `OAuth:ApiResources`，与该服务的 `Authentication:Audience` 取同一个值。
 - 各类撤销在下游资源服务上生效的时间不同。资源服务只验签，不回本服务查状态；Access Token 有效期在 `Program.cs` 里设为 10 分钟。
   - **停用或删除账号**：同时撤销该用户已签发的令牌，本服务立即拒绝；资源服务要等 Access Token 过期，之后也刷新不到新令牌。
@@ -69,6 +71,18 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
   停用或删除账号、租户之后无法再刷新，所以这两类的窗口可以靠调短 Access Token 有效期来缩短。资源服务改用令牌内省（`UseIntrospection()`）能让**已撤销的令牌**即时失效，所以对停用或删除账号有效；租户停用还要先在停用时撤销该租户的令牌才行。
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
+- 跨服务客户端、Issuer、Audience 与机器身份配置见 [服务间调用](../standards/service-invocation.md#identity-与资源服务对接)。
+- readiness 是启动门禁：首次成功解析发现文档、精确比对 issuer 并取得非空 JWKS 后锁存成功。
+  冷实例在 Identity 不可达时 `/api/health/ready` 返回 503，`/api/health/live` 仍为 200；
+  日志指出发现文档或签名密钥依赖，Identity 恢复后自动重试并进入就绪。
+  热实例保持就绪；只有 OpenIddict 验证器已缓存所需密钥时，才能在 Identity 停机期间继续本地验签。
+  该探针不表示 Identity 持续可达，也不检查租户路由。
+  采用 [ASP.NET Core 分离 readiness/liveness 的启动任务示例](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0#separate-readiness-and-liveness-probes)的门禁语义，
+  不周期探测共享 Identity，避免其短暂故障使所有资源实例同时摘流。
+  代价是就绪不保证新密钥获取、新令牌获取或租户回源成功，这些依赖失败在对应请求上暴露。
+- SPA 关闭 `silentRenew` 与 `useRefreshToken`，不申请 `offline_access`。
+  访问令牌到期后，下次受保护 API 返回 401 时清理本地会话上下文并重新走授权码流程；
+  Identity 会话仍有效时可自动完成往返，否则显示 Identity 登录页。没有后台刷新令牌来延长访问窗口。
 - 本服务只验证身份服务签发的令牌，不回去查账号与租户状态。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
 <!--#endif-->
 <!--#if (IncludeNotifications && LocalIdentity)-->

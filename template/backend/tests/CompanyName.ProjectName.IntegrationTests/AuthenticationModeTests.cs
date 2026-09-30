@@ -5,6 +5,14 @@ using Leistd.Authorization.Grants;
 using Leistd.Authorization.Management;
 using Leistd.Authorization.Subjects;
 using Microsoft.Extensions.DependencyInjection;
+#if (RemoteTokenAuth)
+using CompanyName.ProjectName.Api;
+using CompanyName.ProjectName.Api.Auth;
+using Leistd.Security.AspNetCore;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
+#endif
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections;
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
@@ -135,6 +143,27 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class AuthenticationModeTests(ProjectWebApplicationFactory factory)
     : IClassFixture<ProjectWebApplicationFactory>
 {
+    [Theory]
+    [InlineData("8f14e45f-ea6a-4c4b-9b2b-7c1f0a2d3e4f", true)]
+    [InlineData("client:orders", false)]
+    [InlineData("orders", false)]
+    [InlineData(null, false)]
+    public async Task Resource_default_and_current_user_policies_require_a_natural_person(string? subject, bool expected)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSecurity();
+        services.AddApiAuthorization();
+        await using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
+        var authorization = provider.GetRequiredService<IAuthorizationService>();
+        var claims = subject is null ? Array.Empty<Claim>() : [new Claim("sub", subject)];
+        var user = new ClaimsPrincipal(new ClaimsIdentity(claims, "verified-token"));
+
+        Assert.Equal(expected, (await authorization.AuthorizeAsync(user, null, options.DefaultPolicy)).Succeeded);
+        Assert.Equal(expected, (await authorization.AuthorizeAsync(user, null, options.GetPolicy(ApiPolicies.CurrentUser)!)).Succeeded);
+    }
+
     [Fact]
     public void Resource_does_not_publish_identity_tenant_control_permissions()
     {
