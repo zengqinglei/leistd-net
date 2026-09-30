@@ -528,3 +528,9 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 变化 | 影响与改法 |
 | --- | --- |
 | `signalr-service.ts` 的 `configureLogging` 默认值从 `Information` 改为 `Warning` | WebSocket 传输带不了请求头，令牌只能拼进 URL 查询串（`access_token=`），而 `@microsoft/signalr` 连接成功那条日志以 `Information` 打印**整个 URL**——令牌原文进浏览器控制台。只有资源服务形态（配了 `accessTokenFactory`）真会带令牌，但默认值不按形态分叉。排障可临时调高，调高之后日志里可能带出凭据。**日志等级管不到浏览器自己打的那条**：握手失败时浏览器会输出 `WebSocket connection to 'wss://…?access_token=…' failed`，它不经过该库的日志管道，调等级与过滤器都拦不住；要彻底避免只能让访问令牌本身从一开始就不进入浏览器发起的连接 URL——改变客户端认证方式，例如协商阶段换一张短时效的一次性连接票据（票据自身仍在 URL 里，泄露面从长期令牌缩小到一次性票据）；**在反向代理层改写没有用**，浏览器已经用带令牌的 URL 发起了连接。本模板未实现票据这一层。代价是失去常规连接信息，`Warning` / `Error` 仍在 |
+
+## 19. 模板前端 lint 结果缓存
+
+默认与本地化前端的 `lint:ts`、`lint:style`、`format` 从无条件重跑改为对应工具的官方 content cache，检查范围和规则不变；没有双入口或迁移开关。派生项目同步这三个 scripts、依赖安装时删除 `.cache/lint/` 的 `postinstall`，并在 Git/格式检查中忽略该目录。现有 `prepare: husky` 保留。缓存不随模板生成分发，不加入依赖包或公共 API。
+
+插件更新可能不进入格式检查器的缓存键，因此不能只同步 `--cache` 而遗漏安装清理；显式忽略 npm 生命周期脚本安装后，先删除 `.cache/lint/` 再检查。框架运行时与测试用例未删除。维护与验收口径见[模板质量验证](../template/quality-assurance.md)。

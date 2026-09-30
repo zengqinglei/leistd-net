@@ -116,6 +116,7 @@ export const next = 1;
 | `identity-external-login` | `IncludeExternalLogin=true` | Identity 外部登录适配 |
 | `identity-localization` | `IncludeLocalization=true` | Identity 本地化切片 |
 | `resource-localization` | Resource + 同上 | Resource 本地化切片 |
+| `identity-all-features` | 通知 + 外部登录 + 本地化 | 可选切片的组合交互 |
 
 `standalone` 专门检验条件独立性：`identity` 与 `resource` 里 `LocalIdentity` 和 `OpenIddictServer` 恰好同真同假，只有 `standalone` 把两者分开。新增能力时不得只验证 `identity` 和 `resource`。
 
@@ -252,10 +253,12 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser chromium
 
 ## 10. 验证
 
+测试分层、内存库可信度与 lint 缓存口径见[模板质量验证](./quality-assurance.md)。检查删除/替换必须逐项完成接替与变异验收。
+
 以下按改动选择，不要求每次全部运行；矩阵和 PostgreSQL 示例默认各自打包当前 Framework 源码。
 
 ```powershell
-pwsh scripts/check-all.ps1                                 # 全部静态闸门（~40s，-List 看清单）
+pwsh scripts/check-all.ps1                                 # 全部静态闸门（-List 看清单）
 pwsh scripts/test-template-matrix.ps1
 pwsh scripts/test-template-postgresql-e2e.ps1
 pwsh scripts/test-template-matrix.ps1 -Scenarios standalone -ContainerSmokeScenarios standalone
