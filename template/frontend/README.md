@@ -210,8 +210,8 @@ docker build --build-arg API_GATEWAY=https://api.example.com -t company-name-pro
 
 ---
 <!--#endif-->
-
 <!--#if (IncludeNotifications)-->
+
 ## 实时连接（SignalR）
 
 `core/services/signalr-service.ts` 建立到 `/hubs` 的连接，默认日志等级是 **`Warning`**，不是官方示例里的 `Information`。
