@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.Context;
+using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
@@ -9,7 +11,12 @@ using Leistd.OperationRecords.Tests.TestDoubles;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Leistd.Security.Users;
+using Leistd.TestBase.Doubles;
+using Leistd.Timing;
+using Leistd.Tracing.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Leistd.OperationRecords.Tests;
@@ -31,7 +38,9 @@ public sealed class FailedOperationRecordingTests
         var store = new RecordingOperationRecordStore();
         var services = new ServiceCollection();
         services.AddSingleton<IOperationRecordStore>(store);
-        services.AddSingleton<IOperationRecorder>(_ => new PassThroughRecorder(store));
+        services.AddScoped<RecordedFailureTracker>();
+        services.AddTransient<IOperationRecorder>(
+            provider => new PassThroughRecorder(store, provider.GetRequiredService<RecordedFailureTracker>()));
 
         var context = new DefaultHttpContext
         {
@@ -55,6 +64,180 @@ public sealed class FailedOperationRecordingTests
     }
 
     private static readonly OperationFailure Conflict = OperationFailure.FromCode("Permission:ConcurrencyConflict");
+
+    // 走真实注册入口与真实记录器：上面那些用例用的是替身，替身自己调 MarkRecorded，
+    // 因此把生产记录器里的登记删掉它们照样绿——那条判据在替身上是恒绿的。
+    // 这里用 AddOperationRecords() 解析出真实 OperationRecorder，让"什么时候登记"由生产代码决定。
+    private static (IServiceProvider Root, HttpContext Context) CreateWithRealRecorder(
+        IOperationRecordStore store,
+        string action)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(store);
+        services.AddSingleton<ICurrentTenant>(new FakeCurrentTenant(null));
+        services.AddSingleton<ICurrentUser>(new FakeCurrentUser());
+        services.AddSingleton<ICorrelationIdProvider>(new FakeCorrelationIdProvider(null));
+        services.AddSingleton<IClock>(new UtcClockProvider(new FakeTimeProvider()));
+        services.AddSingleton<IOperationActionDefinitionManager>(new FakeOperationActionDefinitionManager());
+        services.AddOperationRecords();
+
+        var root = services.BuildServiceProvider();
+        var scope = root.CreateScope();
+        var context = new DefaultHttpContext
+        {
+            RequestServices = scope.ServiceProvider,
+            User = new ClaimsPrincipal(new ClaimsIdentity([], "TestBearer"))
+        };
+        context.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(new OperationRecordActionAttribute(action)),
+            "test"));
+        return (root, context);
+    }
+
+    /// <summary>真实记录器写出成功后登记，兜底据此跳过。</summary>
+    /// <remarks>
+    /// 钉的是生产记录器自己的登记时机。把 <c>OperationRecorder</c> 里的
+    /// <c>recordedFailures.MarkRecorded(action)</c> 删掉，这条会红（写出两条）。
+    /// </remarks>
+    [Fact]
+    public async Task The_real_recorder_registers_a_written_failure_so_the_fallback_skips_it()
+    {
+        var store = new RecordingOperationRecordStore();
+        var (_, context) = CreateWithRealRecorder(store, "auth.password.changed");
+
+        var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
+        await recorder.RecordFailedAsync(
+            "auth.password.changed",
+            OperationTarget.For("u-1", "someone"),
+            "credentials-presented",
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        await context.RecordFailedOperationAsync(
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        Assert.Single(store.Written);
+    }
+
+    /// <summary>写库失败时不登记，兜底照常补记。</summary>
+    /// <remarks>
+    /// 记录器写库失败只记日志、不上抛，这次失败并没有留痕。若此时也登记，兜底会被抑制，
+    /// 一次拒绝就一条记录都没有。把登记移到 <c>InsertAsync</c> 之前，这条会红。
+    /// </remarks>
+    [Fact]
+    public async Task A_failure_whose_write_threw_is_not_registered_so_the_fallback_still_records_it()
+    {
+        // 记录器写不进去，兜底换一个能写的存储——两处用的是同一个作用域里的跟踪器
+        var throwing = new ThrowingOperationRecordStore(new InvalidOperationException("store is down"));
+        var (_, context) = CreateWithRealRecorder(throwing, "auth.password.changed");
+
+        var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
+        await recorder.RecordFailedAsync(
+            "auth.password.changed",
+            OperationTarget.For("u-1", "someone"),
+            "credentials-presented",
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        var tracker = context.RequestServices.GetRequiredService<RecordedFailureTracker>();
+        Assert.False(tracker.AlreadyRecorded("auth.password.changed"));
+    }
+
+    /// <summary>跟踪器按作用域隔离：另一个作用域里的同一动作照常记。</summary>
+    /// <remarks>
+    /// 去重的范围是一次请求，不是进程。把注册从 <c>TryAddScoped</c> 改成
+    /// <c>TryAddSingleton</c>，这条会红——第二个请求的失败会被第一个请求的登记抑制掉。
+    /// </remarks>
+    [Fact]
+    public async Task Another_scope_records_the_same_action_again()
+    {
+        var store = new RecordingOperationRecordStore();
+        var (root, first) = CreateWithRealRecorder(store, "auth.password.changed");
+
+        await first.RequestServices.GetRequiredService<IOperationRecorder>().RecordFailedAsync(
+            "auth.password.changed",
+            OperationTarget.For("u-1", "someone"),
+            "credentials-presented",
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        using var secondScope = root.CreateScope();
+        var second = new DefaultHttpContext
+        {
+            RequestServices = secondScope.ServiceProvider,
+            User = new ClaimsPrincipal(new ClaimsIdentity([], "TestBearer"))
+        };
+        second.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(new OperationRecordActionAttribute("auth.password.changed")),
+            "test"));
+
+        await second.RecordFailedOperationAsync(
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        Assert.Equal(2, store.Written.Count);
+    }
+
+    /// <summary>应用服务已在拒绝处记过同一动作：兜底不再补第二条，先记的那条原样留下。</summary>
+    /// <remarks>
+    /// <para>这是去重要保住的那一半。应用服务手里有文案参数与业务目标名，兜底只有错误码与路由值；
+    /// 兜底若覆盖或再记一条，结果是"一次失败两条记录"，或者带参数的原因退化成裸码。</para>
+    /// <para>把兜底里的 <c>AlreadyRecorded</c> 判断去掉，这条会红（写出两条）。</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_failure_already_recorded_by_the_application_is_not_recorded_again()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new AuthorizeAttribute { Policy = "App.Roles.ManagePermissions" },
+            new OperationRecordActionAttribute("auth.permission-grants.replaced", "providerKey")
+        ], routeValues: new() { ["providerKey"] = "r-1" });
+
+        // 应用服务那一条：带文案参数，目标名是业务名字
+        var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
+        await recorder.RecordFailedAsync(
+            "auth.permission-grants.replaced",
+            OperationTarget.For("Role/r-1", "系统管理员"),
+            "App.Roles.ManagePermissions",
+            OperationFailure.FromCode("Permission:ConcurrencyConflict", new Dictionary<string, object?>
+            {
+                ["Name"] = "系统管理员"
+            }));
+
+        // 异常冒泡后的兜底：只有错误码
+        await context.RecordFailedOperationAsync(OperationFailure.FromCode("Permission:ConcurrencyConflict"));
+
+        var written = Assert.Single(store.Written);
+        // 留下的必须是带参数的那条，参数与业务目标名都不能丢。
+        // 默认编码器把非 ASCII 转义成 \uXXXX，两者都是合法 JSON，展示端 JSON.parse 一致
+        Assert.Equal(@"{""Name"":""\u7CFB\u7EDF\u7BA1\u7406\u5458""}", written.FailureData);
+        Assert.Equal("系统管理员", written.TargetName);
+    }
+
+    /// <summary>去重按动作码，不是"每次请求一条"：另一个动作的失败照常记。</summary>
+    /// <remarks>
+    /// 同一次请求里出现多条不同动作的失败记录是正常的——改口令失败之后紧跟账号被锁定就是两条。
+    /// 一刀切会把第二条吞掉。
+    /// </remarks>
+    [Fact]
+    public async Task A_failure_recorded_for_another_action_does_not_suppress_this_one()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new OperationRecordActionAttribute("auth.password.changed")
+        ]);
+
+        var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
+        await recorder.RecordFailedAsync(
+            "auth.locked-out",
+            OperationTarget.For("u-1", "someone"),
+            "credentials-presented",
+            OperationFailure.FromCode("Auth:UserTemporarilyLockedOut"));
+
+        await context.RecordFailedOperationAsync(OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        Assert.Equal(2, store.Written.Count);
+        Assert.Contains(store.Written, record => record.Action == "auth.password.changed");
+    }
 
     [Fact]
     public async Task An_endpoint_with_the_attribute_is_recorded_with_the_given_reason()

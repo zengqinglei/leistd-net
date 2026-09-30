@@ -127,7 +127,7 @@
             "browsers": ["chromiumHeadless"],
             "browserViewport": "1280x800",
             "isolate": true,
-            "include": ["src/**/*.spec.ts", "_mock/**/*.spec.ts"]
+            "include": ["src/**/*.spec.ts", "../_mock/**/*.spec.ts"]
           }
         }
       }

@@ -55,7 +55,8 @@ public sealed class OperationRecordQueryTests
         var options = Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions());
         var recorder = new OperationRecorder(
             store, definitions, currentTenant, currentUser, new FakeCorrelationIdProvider(null), clock, options,
-            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()),
+            new RecordedFailureTracker());
 
         return (new OperationRecordQueryService(store, definitions, recorder, currentTenant, currentUser, clock, localizer), store);
     }

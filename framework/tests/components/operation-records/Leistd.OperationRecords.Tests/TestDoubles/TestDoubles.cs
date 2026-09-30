@@ -125,17 +125,22 @@ internal sealed class SecondDbContext(DbContextOptions<SecondDbContext> options)
 }
 
 /// <summary>把失败调用原样转成一条记录，避免 HttpContext 扩展的用例依赖记录器的上下文补齐逻辑。</summary>
-internal sealed class PassThroughRecorder(IOperationRecordStore store) : IOperationRecorder
+// 写出之后登记去重标记，与真实 OperationRecorder 同构。
+// 真实记录器自己的登记时机由 FailedOperationRecordingTests 里走真实 DI 的用例钉住，
+// 这个替身只服务于"扩展拿到已登记状态之后怎么做"。
+internal sealed class PassThroughRecorder(IOperationRecordStore store, RecordedFailureTracker recordedFailures)
+    : IOperationRecorder
 {
     public Task RecordSucceededAsync(string action, OperationTarget target, string basis, CancellationToken ct = default)
         => throw new NotSupportedException();
 
-    public Task RecordFailedAsync(
+    public async Task RecordFailedAsync(
         string action,
         OperationTarget target,
         string basis,
         OperationFailure failure = default)
-        => store.InsertAsync(new OperationRecordInfo
+    {
+        await store.InsertAsync(new OperationRecordInfo
         {
             Action = action,
             TargetId = target.Id,
@@ -147,4 +152,7 @@ internal sealed class PassThroughRecorder(IOperationRecordStore store) : IOperat
             FailureData = failure.Data,
             FailureDetail = failure.Detail
         });
+
+        recordedFailures.MarkRecorded(action);
+    }
 }

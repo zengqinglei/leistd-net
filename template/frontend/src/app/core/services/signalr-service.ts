@@ -289,7 +289,10 @@ export class SignalRService {
         //#endif
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-      .configureLogging(LogLevel.Information)
+      // Warning 而不是 Information：WebSocket 传输把访问令牌拼进 URL（查询串 access_token），
+      // 而连接成功那条日志以 Information 打印整个 URL——令牌原文就进了控制台，会被截图、
+      // 被前端错误上报采集、被扩展读到。本地排障可以临时调高，代价是日志里可能带出凭据。
+      .configureLogging(LogLevel.Warning)
       .build();
 
     // 每个回调都先确认自己仍是当前那条连接。判据用身份而不是代际：

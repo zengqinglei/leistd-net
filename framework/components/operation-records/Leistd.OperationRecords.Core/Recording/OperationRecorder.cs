@@ -29,7 +29,8 @@ internal sealed class OperationRecorder(
     ICorrelationIdProvider correlationIdProvider,
     IClock clock,
     IOptions<OperationRecordOptions> options,
-    ILogger<OperationRecorder> logger) : IOperationRecorder
+    ILogger<OperationRecorder> logger,
+    RecordedFailureTracker recordedFailures) : IOperationRecorder
 {
     public Task RecordSucceededAsync(
         string action,
@@ -77,6 +78,10 @@ internal sealed class OperationRecorder(
                 Create(action, target, authorizationBasis, definition, tenantId,
                     OperationRecordOutcome.Failed, failure),
                 CancellationToken.None);
+
+            // 登记在写出之后：写库失败时下面只记日志、不抛，这条失败并没有留痕，
+            // 端点兜底应当照常补记。
+            recordedFailures.MarkRecorded(action);
         }
         catch (Exception exception)
         {

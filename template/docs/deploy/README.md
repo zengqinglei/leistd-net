@@ -8,6 +8,12 @@
 <!--#if (LocalIdentity)-->
 
 会话 Cookie 默认 `SameSite=Lax`，同源部署与同站的前后端分离（如 `app.example.com` 调 `api.example.com`）都可用；站点按公共后缀判定，托管公共后缀域（如 `*.azurewebsites.net`）下的两个子域属于跨站。需要在跨站请求上携带会话 Cookie 时才设 `SessionCookie__SameSite=None`（跨站部署，以及下文列出的跨站 POST 情形），此时须自行接入防伪令牌：模板未启用 antiforgery，Angular 内置的 XSRF 只对同源相对地址生效。`Lax` 下跨站的顶层 GET 导航仍会带上 Cookie，因此 GET 接口不得有副作用。另有两种情形同样需要 `None`：第三方站点以 POST 跳转到 `/connect/authorize` 或 `/connect/logout`，以及接入以 `form_post` 回调且回调地址直接落在 API 上的外部登录提供方。
+
+**`SameSite=None` 只是服务端允许跨站携带，不等于浏览器一定会带上。** 跨站的 fetch/XHR 带的是第三方 Cookie，受浏览器策略约束：Firefox 默认按站点隔离 Cookie 存储（Total Cookie Protection），Safari 的跟踪防护默认拦截，Chrome 保留用户选择。所以 **跨站的 fetch/XHR 会话探测不能只靠 `SameSite=None` 保证可靠性**——它会在一部分浏览器上悄悄失效，表现为"有的人一处退出没有处处退出"，而且不报错、难排查。
+
+上面那两种情形不同：它们是**顶层 POST 导航**，不属于第三方子资源请求，通常不受这类拦截影响（但也不宜承诺在所有浏览器策略下绝对可用）。
+
+要做多系统"一处退出、处处退出"，用不依赖 Cookie 的方案：按访问令牌里的 `sid` 向身份服务查询会话状态（需要先验签令牌，再查服务端会话），或由身份服务按 OIDC back-channel logout 通知各客户端（身份服务与客户端两边都要实现该协议）。**两条都需要自己实现：本模板没有现成的会话查询端点，也没有接 back-channel logout。**
 <!--#endif-->
 
 部署时记录 API 和 DbMigrator 的固定版本或 digest，不用 `latest` 充当发布身份。模板 Compose 中的 `:latest` 是示例值，实际发布需要由项目流水线明确替换。

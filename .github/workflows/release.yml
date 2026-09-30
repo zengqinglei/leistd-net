@@ -122,8 +122,58 @@ jobs:
           $lastStableTag = if ($stableTags.Count -gt 0) { $stableTags[-1] } else { '' }
           $range = if ([string]::IsNullOrWhiteSpace($lastStableTag)) { 'HEAD' } else { "$lastStableTag..HEAD" }
           $commitCount = [int](git rev-list --count $range)
-          $log = git log $range --pretty=format:'%s%n%b' --no-merges
-          $logText = ($log -join "`n")
+
+          # 逐条解析，而不是把所有提交拼成一个文本 blob：
+          # 「这一版有没有破坏性变更」可以看整体，但「每条带 ! 的提交有没有脚注」必须按条判。
+          # 记录用 \x1e 分隔、字段用 \x00 分隔，正文里出现换行不会打乱切分。
+          $raw = (git log $range --no-merges --pretty=format:'%H%x00%s%x00%b%x1e') -join "`n"
+          $commits = @(
+            $raw -split "`u{001e}" | Where-Object { $_.Trim() } | ForEach-Object {
+              $parts = $_.TrimStart("`n") -split "`u{0000}"
+              [pscustomobject]@{ Sha = $parts[0]; Subject = $parts[1]; Body = if ($parts.Count -gt 2) { $parts[2] } else { '' } }
+            }
+          )
+
+          # 破坏性变更的两个判据，全流程共用这一处——升版与下面的脚注闸门用同一把尺，
+          # 否则会出现「升版算成 major、闸门却说没有破坏性变更」这种自相矛盾。
+          #
+          # 脚注必须是 Conventional Commits 的真脚注（行首 BREAKING CHANGE: / BREAKING-CHANGE:），
+          # 不是正文里任意位置出现这串字样。此前用的 (?im)(BREAKING CHANGE) 没有锚点：
+          # 一条只在正文里提到「这次不算 BREAKING CHANGE」的 docs 提交也会被判成 major。
+          #
+          # 空脚注不算：`BREAKING CHANGE:` 后面什么都没有，适配方检索到了也读不出改了什么。
+          # 两种写法（空格与连字符）等价，三处识别必须一致——闸门、升版、发布说明各用一次，
+          # 只在一处接受连字符会出现"过了闸门却不进发布说明"。
+          function Test-BreakingMark([string]$Subject) { $Subject -match '^[a-z]+(\([^)]*\))?!:' }
+          function Test-BreakingFooter([string]$Body) { $Body -match '(?ms)^BREAKING[ -]CHANGE:\s*\S' }
+
+          # 带 ! 的提交必须有脚注：适配方是靠 git log --grep='BREAKING CHANGE' 检索改动的，
+          # 只有 ! 的提交不在那个结果里，对应的改动会被整体漏掉（versioning.md 第 57 节起）。
+          #
+          # 只查这个提交之后的历史。闸门落地时，上一个稳定 tag 到 HEAD 之间已经有 20 条带 ! 缺脚注的旧提交，
+          # 不加起点的话第一次发布就会被自己拦下；而历史不能改写，那批的破坏性内容由 docs/framework/upgrade-*.md 承载。
+          # 这是写死的一次性切换点，不是可开可关的开关，也不会随时间扩大豁免范围——之后的每一条提交都要守这条规则。
+          # 升版推算仍然用完整范围（$commits），只有脚注检查用这个起点。
+          $footnoteAnchor = '802b4dca012bda2e6d64f4a7939860bf950cd302'
+          git merge-base --is-ancestor $footnoteAnchor HEAD 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            throw ("脚注闸门的起点 $footnoteAnchor 不在当前历史里。若这是有意的分支重构，" +
+              "请把 `$footnoteAnchor 更新成新历史里「闸门开始生效」的那个提交，并在 docs/framework/versioning.md 写明原因。")
+          }
+          $footnoteScope = [System.Collections.Generic.HashSet[string]]::new(
+            [string[]]@(git rev-list "$footnoteAnchor..HEAD"), [StringComparer]::Ordinal)
+
+          $missingFooter = @($commits | Where-Object {
+            $footnoteScope.Contains($_.Sha) -and (Test-BreakingMark $_.Subject) -and -not (Test-BreakingFooter $_.Body)
+          })
+          if ($missingFooter.Count -gt 0) {
+            $listed = ($missingFooter | ForEach-Object { "  $($_.Sha.Substring(0,8)) $($_.Subject)" }) -join "`n"
+            throw ("这些提交标了 ! 但没有 BREAKING CHANGE: 脚注，适配方按脚注检索时会漏掉：`n$listed`n" +
+              "脚注不必复述细节，指向升级说明的具体小节即可（见 docs/framework/versioning.md）。")
+          }
+
+          $hasBreaking = @($commits | Where-Object { (Test-BreakingMark $_.Subject) -or (Test-BreakingFooter $_.Body) }).Count -gt 0
+          $hasFeat = @($commits | Where-Object { $_.Subject -match '^feat(\([^)]*\))?:' }).Count -gt 0
 
           $p = $base.Split('.')
           [int]$maj = $p[0]
@@ -131,8 +181,8 @@ jobs:
           [int]$pat = $p[2]
 
           $bump = 'patch'
-          if ($logText -match '(?im)(BREAKING CHANGE)|(^[a-z]+(\([^)]*\))?!:)') { $bump = 'major' }
-          elseif ($logText -match '(?im)^feat(\([^)]*\))?:') { $bump = 'minor' }
+          if ($hasBreaking) { $bump = 'major' }
+          elseif ($hasFeat) { $bump = 'minor' }
 
           # SemVer 第 4 条：0.y.z 是初始开发期，公共 API 不承诺稳定，
           # 因此该期间的破坏性变更按 minor 递增，不进 1.0.0。
@@ -207,7 +257,9 @@ jobs:
             $body = $commit.Body
             if ([string]::IsNullOrWhiteSpace($subject)) { continue }
             if ($subject -match '(?i)bump version|发布 v|chore:.*version') { continue }
-            $breakingDetail = if ($body -match '(?ms)^BREAKING CHANGE:[ \t]*(.+?)(?=\r?\n\r?\n|\z)') {
+            # 连字符写法与空格写法等价，与上一步的 Test-BreakingFooter 保持同一口径：
+            # 只认其中一种，会出现"过了脚注闸门却不进发布说明"。
+            $breakingDetail = if ($body -match '(?ms)^BREAKING[ -]CHANGE:[ \t]*(.+?)(?=\r?\n\r?\n|\z)') {
               ($Matches[1].Trim() -replace '\s*\r?\n\s*', ' ')
             } else { '' }
 

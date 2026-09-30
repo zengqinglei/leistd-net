@@ -49,7 +49,8 @@ public sealed class OperationRecordingTests
             // 而不是某个手写时钟替身自己的行为。
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(options ?? new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(collector));
+            new FakeLogger<OperationRecorder>(collector),
+            new RecordedFailureTracker());
 
         return (recorder, store, collector);
     }
@@ -162,7 +163,8 @@ public sealed class OperationRecordingTests
             new FakeCorrelationIdProvider(null),
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()),
+            new RecordedFailureTracker());
 
         await recorder.RecordSucceededAsync("a", OperationTarget.For("t"), "b");
 
@@ -192,7 +194,8 @@ public sealed class OperationRecordingTests
             new FakeCorrelationIdProvider(null),
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()),
+            new RecordedFailureTracker());
 
         using (principals.Change(new ClaimsPrincipal(
         [
@@ -256,7 +259,8 @@ public sealed class OperationRecordingTests
             new FakeCorrelationIdProvider(null),
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(collector));
+            new FakeLogger<OperationRecorder>(collector),
+            new RecordedFailureTracker());
 
         await recorder.RecordFailedAsync("a", OperationTarget.For("t"), "b");
 
@@ -283,7 +287,8 @@ public sealed class OperationRecordingTests
             new FakeCorrelationIdProvider(null),
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()),
+            new RecordedFailureTracker());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => recorder.RecordSucceededAsync("a", OperationTarget.For("t"), "b"));

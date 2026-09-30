@@ -24,6 +24,32 @@
 `Leistd.AspNetCore.SignalR`；`Leistd.Security.Core` 与 `Leistd.Ddd.Domain` 各有一个通用
 原语（`IDisposable` 辅助类型）下沉到 `Leistd.Core`。
 
+### 包依赖的变化怎么核对
+
+本版有若干包新增了直接依赖（例如远端租户连接解析为路由缓存引入了
+`Microsoft.Extensions.Caching.Hybrid`）。**这里不列清单**：人工抄的清单会错，也会漏。
+请按打出来的 `nuspec` 逐包对比——那才是真正进入消费者依赖图的东西：
+
+```bash
+# 两个版本各解开一份，比较 <dependencies> 节
+unzip -p Leistd.MultiTenancy.Core.0.12.0.nupkg '*.nuspec' > old.nuspec
+unzip -p Leistd.MultiTenancy.Core.0.13.0.nupkg '*.nuspec' > new.nuspec
+
+# ① 直接依赖的包名增删
+diff <(grep -o 'id="[^"]*"' old.nuspec) <(grep -o 'id="[^"]*"' new.nuspec)
+
+# ② 版本约束与目标框架分组也变了的话，比整节
+diff <(sed -n '/<dependencies>/,/<\/dependencies>/p' old.nuspec) \
+     <(sed -n '/<dependencies>/,/<\/dependencies>/p' new.nuspec)
+```
+
+① 只看**直接依赖的包名增删**，版本约束升降与 `targetFramework` 分组变化它看不出来，那些要用 ②。
+
+内部的项目引用变动不必逐条关心——只有出现在 `nuspec` 里的才会传递给消费者。
+在架构门禁里限制"应用层/领域层能引用什么"的项目，按这份对比结果更新白名单；
+框架侧的 Core 包一律只依赖抽象（`Microsoft.Extensions.*` 与 `*.Abstractions`），
+见 `docs/architecture/design-principles.md` §1.1。
+
 ## 2. 命名空间搬迁（改 `using`）
 
 包名里的 `.Core` 不再出现在命名空间里。只有单一中心概念的小包保留
@@ -371,7 +397,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 邮件通知改为纯文本并附链接 | `IsBodyHtml = false`，正文不再做 HTML 编码；`Link` 为绝对 http(s) 地址时附在正文末尾 |
 | 宿主级组件的注册入口统一为 `AddX(configure?, configSectionPath?)` | `AddUnitOfWork`、`AddMultiTenancy`、`AddGlobalExceptionHandler`、`AddSmtpEmailSender`、`AddServiceUserContext`、`AddRedisDistributedLock(connectionString, …)` 的 `IConfiguration` 重载已删除：统一从容器里的 `IConfiguration` 绑定默认配置节，委托在绑定之后应用（代码覆盖配置）。调用处去掉 `builder.Configuration` 实参即可；配置节不在默认路径时传 `configSectionPath`。此前委托重载不绑定配置节，写在 appsettings 里的值静默不生效。多租户与工作单元注册类上的 `ConfigurationSection` 常量已删除，改用 `MultiTenancyOptions.SectionName`、`UnitOfWorkOptions.SectionName`；`AddDddInfrastructure(configure)` 经此同样绑定 `Leistd:UnitOfWork`；无主机的 `ServiceCollection` 需自行注册 `IConfiguration` |
 | `AddDddInterceptors` 已删除，由 `AddDddDbContext<T>()` 挂载保存拦截器 | 删掉 `AddDbContext` 回调里的 `options.AddDddInterceptors(sp)`；派生自 `BaseDbContext` 的上下文登记时自动挂上审计、领域事件与并发标记三个拦截器，与注册先后无关。其他上下文不挂载。此前漏挂时这三项静默失效 |
-| `ConfigureByConvention()` 已删除，改为 EF Core 约定 `DddEntityConvention` | 删掉实体配置里的 `b.ConfigureByConvention()`：`BaseDbContext` 自动注册该约定，对所有实现审计或并发标记契约的实体生效（此前只作用于调用了它的实体），显式 Fluent 配置优先。`BaseDbContext.ConfigureConventions` 已封闭，原覆写改为 `ConfigureModelConventions`（无需调 `base`）。不继承基类的上下文如需同一约定，自行 `configurationBuilder.Conventions.Add(_ => new DddEntityConvention())`。**会改变模型**：此前未调用 `ConfigureByConvention` 的审计实体列长变为 64，升级后按 ddd-struct 文档"迁移快照检查"一节确认并生成迁移 |
+| `ConfigureByConvention()` 已删除，改为 EF Core 约定 `DddEntityConvention` | 删掉实体配置里的 `b.ConfigureByConvention()`：`BaseDbContext` 自动注册该约定，对所有实现审计或并发标记契约的实体生效（此前只作用于调用了它的实体），显式 Fluent 配置优先。`BaseDbContext.ConfigureConventions` 已封闭，原覆写改为 `ConfigureModelConventions`（无需调 `base`）。不继承基类的上下文如需同一约定，自行 `configurationBuilder.Conventions.Add(_ => new DddEntityConvention())`。**会改变模型，两处**：① 此前未调用 `ConfigureByConvention` 的审计实体，审计人列（`CreatorId` / `LastModifierId` / `DeleterId`）列长变为 64；② **`ConcurrencyStamp` 变为限长 40、必填、并作为并发令牌**——这一项此前未写，未 opt-in 的实体都需要迁移。升级后按 ddd-struct 文档"迁移快照检查"一节确认并生成迁移；**接入该检查后它会报出这处模型差异**——没接入的项目仍要自己核对。旧库里若有该列为空或超过 40 字符的行（来自绕过保存拦截器的写入——手写 SQL、批量导入，或 EF 自己的 `ExecuteUpdate`/`ExecuteDelete`；走 `SaveChanges` 的拦截器一直写 32 位值），迁移会失败：先把这些行补齐或截断，再执行。表现是会报错的迁移失败，不是数据错误 |
 | `TenantRouting:CacheLifetime` 不再必填 | `TenantRouteCacheOptions.CacheLifetime` 改为非空 `TimeSpan`，默认 10 分钟；仍校验大于 0 且不超过 1 小时 |
 | 客户端取消的判断移出异常组件 | 官方 `ExceptionHandlerMiddleware`（.NET 8+）在调用处理器之前直接返回 499，行为不变 |
 
@@ -383,18 +409,18 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | --- | --- |
 | `ICurrentUser` 删除 `GetRoles()`、`IsInRole()`、`FindClaims()`、`GetAllClaims()`、`PhoneNumber` | 角色判断改用官方 `ClaimsPrincipal.IsInRole` 或授权策略 `RequireRole`；其他 claim 用 `FindClaim` 或直接读 `ClaimsPrincipal`。**比较方式不同**：原 `IsInRole` 同时认 `role` 与 `ClaimTypes.Role`、角色名不区分大小写；官方只认身份的 `RoleClaimType`、区分大小写。删除后若调用落到 `ClaimsPrincipal.IsInRole`，编译照样通过而结果可能变化，逐处核对角色名大小写与 claim 类型 |
 | 模板会话 Cookie 的身份按 `role` 设 RoleClaimType | 已派生项目在 `SessionSignInService` 构造身份处改为 `new ClaimsIdentity(scheme, ClaimTypes.Name, "role")`。此前默认 RoleClaimType 是 `ClaimTypes.Role` 而角色写成 `role`，官方 `IsInRole` / `RequireRole` 静默判否；旧 Cookie 在重新登录后生效 |
-| 主体标识与租户的 claim 类型收归 `ClaimTypeOptions`（Security.Core） | 唯一配置处：`UserIds`（默认 `sub` → `NameIdentifier`）与 `TenantId`（默认 `tenant_id`），经 `services.Configure<ClaimTypeOptions>(...)` 设置；读取规则 `FindUserId` / `ReadTenant` 也在这里。**删除**：`MultiTenancyOptions.TenantClaimType`、`HubIdentityOptions.UserIdClaimTypes`、`OperationRecordOptions.ActorIdClaimType`（配置节里的对应键一并删掉，改到 `ClaimTypeOptions`）。`ICurrentUser` 新增 `SubjectId`（主体标识原始值）；`CurrentUser` 构造函数新增 `IOptions<ClaimTypeOptions>` 参数。自行签发主体的代码（登录、令牌、服务间还原）写 claim 时用同一选项的类型。模板签发令牌时始终写协议要求的 `sub`，`UserIds` 不含 `sub` 时按 `UserIds[0]` 同值再写一条（`SubjectClaims.Set`），机器令牌同理；改了 `TenantId` 的项目同步改前端 `tenant-protocol.ts` 的 `TENANT_CLAIM`，否则前端读不到租户、把租户用户当成宿主 |
+| 主体标识与租户的 claim 类型收归 `ClaimTypeOptions`（Security.Core） | 唯一配置处：`UserIds`（默认 `sub` → `NameIdentifier`）与 `TenantId`（默认 `tenant_id`），经 `services.Configure<ClaimTypeOptions>(...)` 设置；读取规则 `FindUserId` / `ReadTenant` 也在这里。**带 `ValidateOnStart`**：选项配错（如某项配成空集合）会在启动时失败，而不是等到第一次读 claim；默认配置总是通过。**删除**：`MultiTenancyOptions.TenantClaimType`、`HubIdentityOptions.UserIdClaimTypes`、`OperationRecordOptions.ActorIdClaimType`（配置节里的对应键一并删掉，改到 `ClaimTypeOptions`）。`ICurrentUser` 新增 `SubjectId`（主体标识原始值）；`CurrentUser` 构造函数新增 `IOptions<ClaimTypeOptions>` 参数。自行签发主体的代码（登录、令牌、服务间还原）写 claim 时用同一选项的类型。模板签发令牌时始终写协议要求的 `sub`，`UserIds` 不含 `sub` 时按 `UserIds[0]` 同值再写一条（`SubjectClaims.Set`），机器令牌同理；改了 `TenantId` 的项目同步改前端 `tenant-protocol.ts` 的 `TENANT_CLAIM`，否则前端读不到租户、把租户用户当成宿主 |
 | 操作人标识改读 `ICurrentUser.SubjectId` | 此前默认读 `sub`、缺失时回落 `ICurrentUser.Id?.ToString()`；现在一律记按 `ClaimTypeOptions.UserIds` 读到的原始值。差别：只有非 GUID 的 `NameIdentifier` 时此前记 `null`、现在记原值；GUID 若非标准 `D` 格式此前被规范化、现在保持原样；只实现 `Id` 而不提供对应 claim 的自定义 `ICurrentUser` 不再有回落。"本人可见"按操作人标识判定，有历史数据时核对新旧标识格式 |
 | `IPermissionSubjectProvider` 新增 `GetSubjectAsync(ClaimsPrincipal, CancellationToken)` | 自定义实现须补上：只按传入主体的声明解析，与 `GetCurrentSubjectAsync` 同一口径（后者可直接转调前者或共用私有方法）。模板实现见 `PermissionSubjectProvider` |
 | 权限策略按被授权的主体判定 | `PermissionAuthorizationHandler` 改为评估 `AuthorizationHandlerContext.User`，此前总是判当前用户——经 `IAuthorizationService` 为别的主体判权时得到的是当前用户的结果。`IPermissionChecker` 新增带 `ClaimsPrincipal` 的两个重载：非当前主体不走作用域快照，其租户 claim 与当前租户不一致时拒绝；当前主体的租户 claim 非法（`ClaimTypeOptions.ReadTenant`，如两份用户凭据被合并成一个主体）时同样拒绝，但不要求等于当前租户，宿主主体显式切入租户照常判定；未接多租户时两条路径都只校验合法性。自定义 `IPermissionChecker` 实现须补这两个重载 |
-| 租户 claim 非法一律失败关闭；用户标识与租户取自同一个身份 | 规则：用户标识与租户取自同一个身份——按顺序第一个带用户标识的身份（主体身份）；同一身份内多条（即使值相同）或非 GUID 为非法；其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）为非法，这样同一请求携带的两份用户凭据拼不出"甲的标识 + 乙的租户"；不带用户标识的身份（服务间调用只委托租户时还原出的身份）只在主体身份没有租户时提供租户；带用户标识而无租户 claim 的其他身份（如服务间调用方的机器身份）不参与判定。`FindUserId` 随之改为在主体身份上取值，此前按 claim 类型跨全部身份取第一个；新增 `FindSubjectIdentity` 公开主体身份。`ICurrentUser` 的 `Username`、`Name`、`Email` 同样改为只在主体身份上读取（没有带标识的身份时仍按整个主体），此前服务间还原时可能取到调用方机器令牌上的名字，操作记录的操作人名快照随之取错；`FindClaim` 仍跨全部身份。`UseTenantSessionRecovery` 改按 `ReadTenant` 判定租户会话，租户声明非法时保留原始错误、不再注销。`AmbiguousTenantClaimException` 改名 `InvalidTenantClaimException`（错误码 `Tenant:AmbiguousClaim` → `Tenant:InvalidClaim`，宿主覆盖过译文的同步改键），此前开启注册表校验时非 GUID 的 claim 会被当成租户名去查。`ICurrentUser.TenantId` 遇非法 claim 抛 `InvalidOperationException`，此前静默当作宿主 |
+| 租户 claim 非法一律失败关闭；用户标识与租户取自同一个身份 | 规则：用户标识与租户取自同一个身份——按顺序第一个带用户标识的身份（主体身份）；同一身份内多条（即使值相同）或非 GUID 为非法；其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）为非法，这样同一请求携带的两份用户凭据拼不出"甲的标识 + 乙的租户"；不带用户标识的身份（服务间调用只委托租户时还原出的身份）只在主体身份没有租户时提供租户；带用户标识而无租户 claim 的其他身份（如服务间调用方的机器身份）不参与判定。`FindUserId` 随之改为在主体身份上取值，此前按 claim 类型跨全部身份取第一个；新增 `FindSubjectIdentity` 公开主体身份。`ICurrentUser` 的 `Username`、`Name`、`Email` 同样改为只在主体身份上读取（没有带标识的身份时仍按整个主体），此前服务间还原时可能取到调用方机器令牌上的名字，操作记录的操作人名快照随之取错；`FindClaim` 仍跨全部身份。`UseTenantSessionRecovery` 改按 `ReadTenant` 判定租户会话，租户声明非法时保留原始错误、不再注销。`AmbiguousTenantClaimException` 改名 `InvalidTenantClaimException`（错误码 `Tenant:AmbiguousClaim` → `Tenant:InvalidClaim`，宿主覆盖过译文的同步改键），此前开启注册表校验时非 GUID 的 claim 会被当成租户名去查。`ICurrentUser.TenantId` 遇非法 claim 抛 `InvalidOperationException`，此前静默当作宿主。**异常类型也变了**：`InvalidTenantClaimException` 继承 `BusinessException`（错误码 `Tenant:InvalidClaim`），而 Hub 与后台作业里此前抛的是 `InvalidOperationException`——按前者类型捕获的代码要改，把非法租户声明当基础设施故障处理的重试/告警逻辑也要跟着调 |
 | 匿名租户提示头默认改名 `X-Tenant` | `MultiTenancyOptions.HeaderName` 默认 `X-Tenant`（`DefaultHeaderName`），值可为租户 Id 或名称；与服务间委托头 `X-Tenant-Id`（只带 GUID、须受信调用方）分开。前端或网关按旧名发租户头的同步改名，或把 `HeaderName` 配回旧值 |
 | 服务客户端转发头名可配置 | `UserContextForwardingOptions` 新增 `UserIdHeader`、`UsernameHeader`、`TenantIdHeader`，默认值与被调方 `ServiceUserContextOptions` 同源；此前调用方写死常量，只改被调方会静默丢失转发。`AddRemoteTenantConnectionStore` 的客户端固定不转发用户与租户上下文 |
 | 服务间还原写入配置的 claim 类型，并取代调用方的租户 claim | 被调方还原用户标识写 `ClaimTypeOptions.UserIds[0]`、租户写 `ClaimTypeOptions.TenantId`；调用方身份若自带租户 claim，还原时以委托的租户为准（此前两条并存） |
 | 租户切换自动写入日志作用域 | `ICurrentTenant.Change` 同时打开日志作用域 `TenantLogKeys.TenantId`（`leistd.tenantId`，宿主为 `null`）；多租户中间件不再单独开作用域。模板在 `UseMultiTenancy()` 之后把租户写入 Serilog 诊断上下文，请求完成日志也带租户 |
 | 操作记录的 `ActorTenantId` 改为操作人所属租户；匿名自证动作记下操作人；"本人"按标识与所属租户认定 | `ActorTenantId` 取自主体的租户 claim（匿名请求取请求所在的租户上下文），此前是操作发生时的上下文租户：宿主管理员进入租户操作（模拟登录、代管）时此前记成该租户。定义为 `targetIsActor` 的动作在匿名请求里记录时，`ActorId` 取目标：此前为空，租户用户看不到自己的登录、注册记录（`Actor` 层只对本人放行）。`OperationRecordVisibilityScope.ForTenantReader` 新增 `actorTenantId` 参数，`Actor` 层要求 `ActorId` 与 `ActorTenantId` 都相同：主体标识只在签发它的那一层内唯一，宿主主体在租户里留下的记录不再被租户里同标识的主体认领。`ActorIsTarget` 只在 `ActorId == TargetId` 时成立。**已有数据须迁移**，否则此前的自证记录仍不属于任何人：`UPDATE <schema>."OperationRecords" SET "ActorId" = "TargetId" WHERE "ActorId" IS NULL AND "Outcome" = 'Succeeded' AND "Action" IN (<各 targetIsActor 动作码>);`（模板为 `'auth.login.succeeded'`、`'auth.password.changed'`、`'auth.registered'`；归档表同样处理）。此前宿主主体在租户里留下的记录 `ActorTenantId` 已记成该租户，无从还原 |
 | 设置存储宿主键 `h:` 改为 `host:` | `EfCoreSettingStore` 的 `ScopeKey` 与其他按租户隔离的键统一经 `CurrentTenantKeyExtensions.ScopeKey`：宿主行 `h:t` → `host:t`，租户行不变。**已有数据须迁移，且必须在新版本开始服务之前执行**：新版本读不到旧键时不报错，宿主级设置静默回落为定义里的默认值。语句为 `UPDATE <schema>."SettingRecords" SET "ScopeKey" = 'host' \|\| substr("ScopeKey", 2) WHERE "ScopeKey" LIKE 'h:%';`（按实际表名与数据库方言调整）；随 EF 迁移发布时新建一个空迁移，在 `Up` 里 `migrationBuilder.Sql(...)` 执行它，`Down` 反向执行 `'h' \|\| substr("ScopeKey", 5) WHERE "ScopeKey" LIKE 'host:%'`，由部署时的迁移步骤保证先于新版本生效 |
-| `by-host` 探测跑宿主配置的解析链 | 此前固定 new 一个 `DomainTenantResolveContributor`，宿主替换或定制域名解析时探测与真实请求答案不一致 |
+| `by-host` 探测跑宿主配置的解析链 | 此前固定 new 一个 `DomainTenantResolveContributor`，宿主替换或定制域名解析时探测与真实请求答案不一致。**注意答案不再只由主机名决定**：跑的是完整解析链，所以请求若带着会话或租户提示（Cookie、`X-Tenant-Id` 等），答案会随之变化——这与真实请求一致，是有意的；但把它当成『纯按域名查租户』的接口去用会得到意外结果，它的设计场景是登录页在未登录、未选租户时调用 |
 | 模板：令牌端点与 userinfo 在令牌主体的租户内加载用户 | `IAuthPrincipalFactory` 新增 `CreateFromTokenAsync(tokenPrincipal, scopes)`，`CreateUserInfoAsync` 改为只收令牌主体。此前这两个端点的请求解析出的是宿主，**租户用户走不通授权码换令牌、刷新与 userinfo**；已派生项目按模板同步 |
 | 模板：租户相关的缓存与状态键按租户隔离 | 登录失败计数、邮箱验证码限流与挑战、外部登录 state 统一经 `ScopeKey`；外部登录 state 绑定发起时的租户，回调时租户不一致即拒绝 |
 | 模板前端：租户键集中到 `tenant-protocol.ts` | `TENANT_HEADER`（`X-Tenant`）、`TENANT_INVALID_HEADER`、`TENANT_CLAIM` 三个常量取代散落的字面量；Resource 形态接受没有租户 claim 的宿主用户 |
@@ -459,6 +485,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 单测专用构建配置 `unit-test` | 不做开发构建的 Mock 提供器替换，`_mock/core/providers.ts` 保持部署形态。自定义了 `development` 配置的项目，单测不再跟着它变 |
 | `vitest-base.config.ts` 开启 `restoreMocks`、`unstubGlobals`；`isolate: true` | 每条用例开始前自动还原 `vi.spyOn` 替身与 `vi.stubGlobal` 的全局值（其他直接修改与假计时器仍需自己还原）；每个 spec 文件在独立页面运行，并发执行的文件之间不共享全局对象上的桩 |
 | 测试名统一英文 | 前端 `describe` / `it` 标题与后端测试方法名、`DisplayName` 用英文句子；中文只在注释与测试数据里 |
+| **官方 schematic 的转换要逐文件核对** | `refactor-jasmine-vitest` 是实验性的，官方也要求检查转换结果。已复现会**静默改变测试语义**的形态：<br>① **分离的策略调用**——`const spy = spyOn(x, 'm');` 之后另起一行 `spy.and.callThrough();`，会转成 `vi.spyOn(x, 'm').mockReturnValue(undefined)` 加一句悬空的 `spy;`，测试从"测真实实现"变成"测桩值"。紧跟写法 `spyOn(x, 'm').and.callThrough()` 转成 `vi.spyOn(x, 'm')`，行为等价（`vi.spyOn` 默认调用原实现），**不要一律当成错误转换**。<br>② 已有桩值之后再 `callThrough()` 同样丢失切回真实实现。<br>③ `// prettier-ignore` 块被重排、文件末尾注释被丢。<br>④ Vitest 的 `toContain` 不接受 `objectContaining`。<br>⑤ 未处理的 Promise 拒绝会让整轮失败。<br>⑥ 被其他 spec 导入的"测试辅助 spec"会被重复登记用例。<br>**核对方法**：在**迁移前的代码与迁移 diff 上**搜 `callThrough`（迁移后它已被删掉，事后搜不到）；`expect(` 计数只能作辅助——上述①②发生时断言数完全可以不变；关键处核对真实副作用或返回值，并用"撤回修复"的变异确认判据真的会红 |
 
 ## 15. 组件端点的业务拒绝留痕
 
@@ -467,7 +494,8 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 新增 `HttpContext.RecordFailedOperationAsync(failure)`（`Leistd.OperationRecords.AspNetCore`） | 与 `RecordDeniedOperationAsync` 对称：授权通过之后被业务规则拒绝时，按端点上的 `[OperationRecordAction]` 补一条失败记录。在宿主**紧接 `UseAuthorization()`** 的中间件里捕获、调用、原样重抛；不要放进 `IExceptionHandler`（租户作用域已退出，租户内的失败会写进宿主层）。只新增，不影响现有调用 |
 | 业务拒绝留痕记录消息参数 | 模板中间件改为 `RecordFailedOperationAsync(OperationFailure.FromCode(exception.Code, exception.LocalizationData))`，查询时渲染出与接口报错同一句带具体值的原因——此前只记码，带占位符的码显示成 `Email '{Email}' is already in use.`。**审计与导出会出现这些值（如邮箱、用户名）**：异常作者只把可公开展示的值放进 `LocalizationData`（`WithData`），排查用的内部信息放日志；基类 `Exception.Data` 与异常文本不要带进记录。参数值按 `OperationFailure.FromCode` 的规则序列化，只记标量 |
 | "是否匿名"统一为任一身份已认证；新增 `ClaimsPrincipal.HasAuthenticatedIdentity()`（`Leistd.Security.Core`） | 此前各处只看第一个身份，首身份未认证、后续身份已认证的主体被当成匿名，而授权管线放行了它：租户可被请求头改写、失效租户会话不被收回、环境上下文不建立租户、Hub 不复评、操作记录不记或操作人为空。现统一为官方 `DenyAnonymousAuthorizationRequirement` 的口径，作用于 `ICurrentUser.IsAuthenticated`、租户解析与多租户中间件、租户会话恢复、租户环境上下文、SignalR 复评、`RecordDeniedOperationAsync` / `RecordFailedOperationAsync`。标识、名字、租户仍只取自带标识的主体身份；服务间调用的机器身份判定仍只看第一个身份（有意）。自定义 `ICurrentUser` 实现按同一口径调整 |
-| 模板新增 `Api/Middlewares/OperationFailureRecordingMiddleware` | 组件映射的端点（如权限整体替换）被业务规则拒绝（并发冲突、权限未定义、主体不存在）时留下失败记录，此前只有授权阶段被拒才记。派生项目照模板加这个中间件，放在 `UseAuthorization()` 之后，调用 `RecordFailedOperationAsync(OperationFailure.FromCode(exception.Code, exception.LocalizationData))` 连同消息参数一起记。只记 `BusinessException`，参数校验失败不记；挂了注解的端点，应用服务不要在同一次拒绝上再调 `RecordFailedAsync` |
+| 模板新增 `Api/Middlewares/OperationFailureRecordingMiddleware` | 组件映射的端点（如权限整体替换）被业务规则拒绝（并发冲突、权限未定义、主体不存在）时留下失败记录，此前只有授权阶段被拒才记。派生项目照模板加这个中间件，放在 `UseAuthorization()` 之后，调用 `RecordFailedOperationAsync(OperationFailure.FromCode(exception.Code, exception.LocalizationData))` 连同消息参数一起记。只记 `BusinessException`，参数校验失败不记 |
+| 失败记录按动作码去重，兜底不再与应用服务冲突 | **推荐写法：应用服务照常在拒绝处调 `IOperationRecorder.RecordFailedAsync`，中间件只作兜底。**它手里有文案参数与业务目标名，而兜底只拿得到错误码与路由值。同一动作码在本次请求里已经记过时，`RecordFailedOperationAsync` 会跳过，**保留先记的那条，不覆盖也不替换**——此前那条『挂了注解的端点，应用服务不要再调 `RecordFailedAsync`』的约定随之作废，它逼人二选一（要参数就没有兜底，要兜底就丢参数）。<br>去重按**动作码**、作用域级：同一请求里多条不同动作的失败记录照常都记（例如『改口令失败』之后紧跟『账号被锁定』）。写库失败时不登记，兜底仍会补记，不会出现一次拒绝一条记录都没有。<br>**因此也不需要按端点类型把控制器排除在中间件之外**：那会让同一个动作从控制器搬到 Minimal API 就改变审计行为。已经这么绕过的项目可以撤掉，回到照模板全量挂中间件 |
 
 ## 16. 工作单元与账号安全（CRM 拆分反馈）
 

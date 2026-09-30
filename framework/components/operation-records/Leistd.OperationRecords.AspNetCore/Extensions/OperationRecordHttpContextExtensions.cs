@@ -109,8 +109,12 @@ public static class OperationRecordHttpContextExtensions
     /// <para><b>授权依据取端点最后声明的具名策略，不重新评估。</b>走到这里所有策略都已通过，
     /// 最后声明的是最具体的一层（端点级晚于路由组级与类级）；同一级叠加多个具名策略时记后声明者。
     /// 这与被拒路径不同，那里要重新评估、取实际未通过的那个。没有具名策略时记 <c>-</c>。</para>
-    /// <para><b>带注解端点的业务拒绝由这里统一记</b>，应用服务不要在同一次拒绝上再调
-    /// <see cref="IOperationRecorder.RecordFailedAsync"/>，否则一次失败两条记录。</para>
+    /// <para><b>这是兜底，不是唯一入口。</b>应用服务在拒绝处自己调
+    /// <see cref="IOperationRecorder.RecordFailedAsync"/> 照常有效，它手里有文案参数与业务目标名，
+    /// 而这里只拿得到错误码与路由值。<b>同一动作码在本次请求里已经记过，这里就跳过</b>，
+    /// 保留先记的那条，不覆盖也不替换。</para>
+    /// <para>判据是<b>动作码</b>，不是"每次请求一条"：一次请求里两个不同动作各自失败是正常的。
+    /// 登记口径与自定义记录器的义务见组件文档。</para>
     /// </remarks>
     /// <param name="context">当前请求上下文。</param>
     /// <param name="failure">
@@ -135,6 +139,14 @@ public static class OperationRecordHttpContextExtensions
         var endpoint = context.GetEndpoint();
         var declared = endpoint?.Metadata.GetMetadata<OperationRecordActionAttribute>();
         if (endpoint is null || declared is null)
+        {
+            return;
+        }
+
+        // 应用服务已在拒绝处记过同一个动作，这里不再补第二条。判据取自作用域状态，
+        // 与端点是控制器还是 Minimal API 无关。
+        var recordedFailures = context.RequestServices.GetRequiredService<RecordedFailureTracker>();
+        if (recordedFailures.AlreadyRecorded(declared.Action))
         {
             return;
         }

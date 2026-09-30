@@ -116,6 +116,23 @@ function Invoke-ExternalWithClosedInput([string]$Command, [string[]]$Arguments, 
     }
 }
 
+# 与 Invoke-External 同形，但把标准输出交回调用方（用于要读取命令结果的自检）。
+function Invoke-ExternalCapture([string]$Command, [string[]]$Arguments, [string]$WorkingDirectory = $repoRoot) {
+    Write-Host "> $Command $($Arguments -join ' ')" -ForegroundColor DarkGray
+    Push-Location $WorkingDirectory
+    try {
+        $output = & $Command @Arguments 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw ("Command failed with exit code ${LASTEXITCODE}: $Command $($Arguments -join ' ')`n" +
+                ($output -join "`n"))
+        }
+        return ($output | ForEach-Object { [string]$_ })
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Get-ScenarioProjectName([string]$Scenario) {
     $suffix = (($Scenario -split '-') | ForEach-Object {
         if ($_.Length -eq 0) { return }
@@ -283,6 +300,82 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
 
     Assert-MarkdownLinks $ProjectRoot
 }
+
+# 本地化产物与生成源码一一对应，递归核对 scope 文件都已由 postbuild 展平。
+
+function Assert-OptimizedTranslations([string]$FrontendRoot) {
+    $source = Join-Path $FrontendRoot "public/i18n"
+    if (-not (Test-Path $source)) { return }
+    $package = Get-Content -LiteralPath (Join-Path $FrontendRoot "package.json") -Raw | ConvertFrom-Json
+    $output = Join-Path $FrontendRoot "dist/$($package.name)/browser/i18n"
+    $sourceFiles = @(Get-ChildItem -LiteralPath $source -Recurse -File -Filter '*.json')
+    $outputFiles = @(Get-ChildItem -LiteralPath $output -Recurse -File -Filter '*.json')
+    if ($sourceFiles.Count -ne $outputFiles.Count) { throw "Translation file count changed during production build." }
+    function Get-TranslationKeys($Node, [string]$Prefix = '') {
+        foreach ($property in $Node.PSObject.Properties) {
+            $key = if ($Prefix) { "$Prefix.$($property.Name)" } else { $property.Name }
+            if ($property.Value -is [pscustomobject]) { Get-TranslationKeys $property.Value $key }
+            else { $key }
+        }
+    }
+    foreach ($file in $sourceFiles) {
+        $relative = [IO.Path]::GetRelativePath($source, $file.FullName)
+        $built = Get-Content -LiteralPath (Join-Path $output $relative) -Raw | ConvertFrom-Json
+        if (@($built.PSObject.Properties | Where-Object { $_.Value -isnot [string] }).Count -gt 0) {
+            throw "Translation file was not flattened: $relative"
+        }
+        $original = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+        $expected = @(Get-TranslationKeys $original | Sort-Object)
+        $actual = @($built.PSObject.Properties.Name | Sort-Object)
+        if (Compare-Object $expected $actual -CaseSensitive) { throw "Translation keys changed during optimization: $relative" }
+    }
+    Write-Host "Validated $($sourceFiles.Count) flattened global/scope translation files."
+}
+
+# 磁盘上的每个 spec 文件都必须被测试发现。
+#
+# 这一条防的是"恒绿"：`_mock/**/*.spec.ts` 从加进模板那天起就没被执行过
+# （builder 的 findTests 以 sourceRoot 为 glob 工作目录，`_mock/**` 被解析成不存在的 `src/_mock/**`），
+# 而测试照样全绿——比一条失败的用例更坏，因为它让人以为那一层有覆盖。Karma 时代同样如此，
+# 不是 Vitest 迁移引入的。
+#
+# 用 builder 自己的 --list-tests：判据与真实运行共用同一套发现逻辑，不另写一份 glob 去猜。
+# 判据是**路径集合**而不是文件数：数量相等而集合不同是可能的（同时改名与挪目录）。
+# 只报缺失项——报告里出现磁盘上没有的文件属于工具问题，不是模板要守的约定。
+function Assert-EveryFrontendSpecDiscovered([string]$FrontendRoot) {
+    $onDisk = @(
+        Get-ChildItem -LiteralPath $FrontendRoot -Recurse -File -Filter "*.spec.ts" |
+            Where-Object { $_.FullName -notmatch "[\\/]node_modules[\\/]" } |
+            ForEach-Object { [IO.Path]::GetRelativePath($FrontendRoot, $_.FullName).Replace('\', '/') }
+    )
+    if ($onDisk.Count -eq 0) {
+        throw "No *.spec.ts found under $FrontendRoot; the self-check would pass vacuously."
+    }
+
+    $listed = Invoke-ExternalCapture "npm" @("test", "--", "--list-tests") $FrontendRoot
+    $discovered = @(
+        $listed | ForEach-Object { $_.Trim() } | Where-Object { $_ -like "*.spec.ts" } |
+            ForEach-Object {
+                $path = $_
+                if ([IO.Path]::IsPathRooted($path)) {
+                    [IO.Path]::GetRelativePath($FrontendRoot, $path).Replace('\', '/')
+                } else {
+                    $path.Replace('\', '/')
+                }
+            }
+    )
+
+    $discoveredSet = [System.Collections.Generic.HashSet[string]]::new([string[]]$discovered, [StringComparer]::Ordinal)
+    $missing = @($onDisk | Where-Object { -not $discoveredSet.Contains($_) })
+    if ($missing.Count -gt 0) {
+        throw ("These spec files exist on disk but are not discovered by the test builder. The `include` " +
+            "patterns in angular.json resolve relative to sourceRoot, so paths outside it need `../`:`n  " +
+            ($missing -join "`n  "))
+    }
+
+    Write-Host ("  每个 spec 都会被发现（{0} 个）。" -f $onDisk.Count)
+}
+
 
 function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hashtable]$Definition) {
     foreach ($relativePath in $Definition.Present) {
@@ -798,10 +891,14 @@ foreach ($scenario in $Scenarios) {
             $lintValidated = $true
         }
         Invoke-External "npm" @("run", "build") $frontendRoot
+        Assert-OptimizedTranslations $frontendRoot
         $frontendValidated = $true
 
         # 前端单测（单次）：CI 默认 chromiumHeadless，人工验收可传 -FrontendBrowser chromium 观看有头浏览器。
         # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含语言切换「先加载再激活」与首帧词条的回归测试。
+        # 先核对"磁盘上的每个 spec 都会被发现"，再真的跑。放在前面是因为它更快（--list-tests 不构建也不执行），
+        # 而且这条不通过时后面那轮绿灯是假的。
+        Assert-EveryFrontendSpecDiscovered $frontendRoot
         Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
         $testValidated = $true
     }
