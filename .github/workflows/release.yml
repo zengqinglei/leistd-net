@@ -141,11 +141,17 @@ jobs:
           # 不是正文里任意位置出现这串字样。此前用的 (?im)(BREAKING CHANGE) 没有锚点：
           # 一条只在正文里提到「这次不算 BREAKING CHANGE」的 docs 提交也会被判成 major。
           #
-          # 空脚注不算：`BREAKING CHANGE:` 后面什么都没有，适配方检索到了也读不出改了什么。
-          # 两种写法（空格与连字符）等价，三处识别必须一致——闸门、升版、发布说明各用一次，
+          # 脚注要求：行首、大写、冒号后同一行就有内容。三处识别（闸门、升版、发布说明）必须一致，
           # 只在一处接受连字符会出现"过了闸门却不进发布说明"。
+          #
+          # (?-i) 是必须的：PowerShell 的 -match 默认不区分大小写，不关掉的话正文里一行
+          # `breaking change: none` 就会把这一版判成 major。规范规定脚注是大写。
+          # [ \t]* 而不是 \s*：\s 本身就包含换行（与 s 模式无关，s 管的是点号），所以 \s* 会跨行——
+          # `BREAKING CHANGE:` 独占一行、空行之后随便一段正文也会被算成"脚注非空"，
+          # 那等于没有非空检查。
+          # 标题里的 type 仍不区分大小写：`FEAT!:` 也要求脚注，宽进严出，漏判才是问题。
           function Test-BreakingMark([string]$Subject) { $Subject -match '^[a-z]+(\([^)]*\))?!:' }
-          function Test-BreakingFooter([string]$Body) { $Body -match '(?ms)^BREAKING[ -]CHANGE:\s*\S' }
+          function Test-BreakingFooter([string]$Body) { $Body -match '(?m-i)^BREAKING[ -]CHANGE:[ \t]*\S' }
 
           # 带 ! 的提交必须有脚注：适配方是靠 git log --grep='BREAKING CHANGE' 检索改动的，
           # 只有 ! 的提交不在那个结果里，对应的改动会被整体漏掉（versioning.md 第 57 节起）。
@@ -243,8 +249,11 @@ jobs:
           $range = if ([string]::IsNullOrWhiteSpace($lastStableTag)) { 'HEAD' } else { "$lastStableTag..HEAD" }
           $raw = (git log $range --format='%s%x1f%b%x1e' --no-merges) -join "`n"
           $commits = @($raw -split [string][char]0x1e | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object {
+            # 分类用的标题与正文保持原样，不 Trim：上一步的脚注闸门判的是未经处理的正文，
+            # 这里先去掉缩进的话，`  BREAKING CHANGE: x` 会被闸门判成缺脚注、却在这里成为脚注。
+            # 展示时再整理（见下面的 .Trim()）。
             $parts = $_.Trim() -split [string][char]0x1f, 2
-            [pscustomobject]@{ Subject = $parts[0].Trim(); Body = if ($parts.Count -gt 1) { $parts[1].Trim() } else { '' } }
+            [pscustomobject]@{ Subject = $parts[0]; Body = if ($parts.Count -gt 1) { $parts[1] } else { '' } }
           })
 
           $breaking = New-Object System.Collections.Generic.List[string]
@@ -257,14 +266,23 @@ jobs:
             $body = $commit.Body
             if ([string]::IsNullOrWhiteSpace($subject)) { continue }
             if ($subject -match '(?i)bump version|发布 v|chore:.*version') { continue }
-            # 连字符写法与空格写法等价，与上一步的 Test-BreakingFooter 保持同一口径：
-            # 只认其中一种，会出现"过了脚注闸门却不进发布说明"。
-            $breakingDetail = if ($body -match '(?ms)^BREAKING[ -]CHANGE:[ \t]*(.+?)(?=\r?\n\r?\n|\z)') {
+            # 与上一步的 Test-BreakingFooter 同一口径：行首、大写（(?-i)）、两种写法等价。
+            # 只认其中一种或漏掉 (?-i)，会出现"过了脚注闸门却不进发布说明"或反之。
+            # (\S.*?) 而不是 (.+?)：冒号后必须同一行就有内容，否则"空脚注 + 空行 + 无关正文"
+            # 会被闸门判成无脚注、却被这里提取出正文，两处判定相反。续行仍然收得进来（s 模式）。
+            #
+            # 结束条件除了空行与正文末尾，还要算上"下一个脚注"：规范允许后一个脚注终止前一个的值，
+            # 中间不必空行。不算的话 `BREAKING CHANGE: 见升级说明` 紧跟 `Reviewed-by: X`
+            # 会把签名行一起并进破坏性说明里。脚注分隔符按规范是 ": " 或 " #"。
+            # BREAKING CHANGE 要单列：规范只给它开了带空格的例外，按 [A-Za-z-]+ 匹配 token
+            # 会漏掉它，于是紧邻的第二条 BREAKING CHANGE 被并进第一条。
+            $breakingDetail = if ($body -match '(?ms-i)^BREAKING[ -]CHANGE:[ \t]*(\S.*?)(?=\r?\n\r?\n|\r?\nBREAKING[ -]CHANGE:|\r?\n[A-Za-z][A-Za-z-]*(?:: | #)|\z)') {
               ($Matches[1].Trim() -replace '\s*\r?\n\s*', ' ')
             } else { '' }
 
+            $display = $subject.Trim()
             if ($breakingDetail -or $subject -match '^[a-z]+(\([^)]*\))?!:') {
-              $breaking.Add("- $subject" + $(if ($breakingDetail) { " — $breakingDetail" } else { '' }))
+              $breaking.Add("- $display" + $(if ($breakingDetail) { " — $breakingDetail" } else { '' }))
             } elseif ($subject -match '^feat(\([^)]*\))?:\s*(.+)$') {
               $features.Add("- $($Matches[2])")
             } elseif ($subject -match '^fix(\([^)]*\))?:\s*(.+)$') {

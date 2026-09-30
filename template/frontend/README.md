@@ -211,6 +211,29 @@ docker build --build-arg API_GATEWAY=https://api.example.com -t company-name-pro
 ---
 <!--#endif-->
 
+<!--#if (IncludeNotifications)-->
+## 实时连接（SignalR）
+
+`core/services/signalr-service.ts` 建立到 `/hubs` 的连接，默认日志等级是 **`Warning`**，不是官方示例里的 `Information`。
+
+原因是**访问令牌会进浏览器控制台**：WebSocket 传输没法带请求头，令牌只能拼在 URL 查询串里（`access_token=`），而 `@microsoft/signalr` 连接成功那条日志以 `Information` 打印**整个 URL**。控制台里的东西会被截图、被前端错误上报采集、被浏览器扩展读到，所以默认不打。
+
+排障要看协商与重连细节时，可以临时把这一行调成 `Information` 或 `Debug`，**但要知道调高之后日志里可能带出凭据**。
+
+<!--#if (RemoteTokenAuth)-->
+> ⚠️ **日志等级管不到浏览器自己打的那条。** 连接握手失败时，浏览器会以它自己的格式输出
+> `WebSocket connection to 'wss://…?access_token=…' failed`，这条不经过 `@microsoft/signalr` 的日志管道，
+> 调等级、装过滤器都拦不住。也就是说**连接失败场景下令牌仍可能出现在控制台里**。
+> 要彻底避免，只能让**访问令牌本身从一开始就不进入浏览器发起的连接 URL**——也就是改变客户端的认证方式，
+> 例如在协商阶段换一张短时效的一次性连接票据，用它代替访问令牌。
+> 注意票据自身仍会出现在 URL 里，这么做只是把泄露面从长期令牌缩小到一次性票据。
+> 在反向代理层改写**没有用**：浏览器已经用带令牌的 URL 发起了连接，改写上游请求改不掉浏览器自己看到的那个地址。
+> 本模板没有实现票据这一层，按你的威胁模型决定是否需要。
+
+<!--#endif-->
+---
+<!--#endif-->
+
 ## 代码质量
 
 ### 代码检查

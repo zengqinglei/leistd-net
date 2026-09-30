@@ -153,6 +153,6 @@ internal sealed class PassThroughRecorder(IOperationRecordStore store, RecordedF
             FailureDetail = failure.Detail
         });
 
-        recordedFailures.MarkRecorded(action);
+        recordedFailures.MarkRecorded(action, target.Id);
     }
 }

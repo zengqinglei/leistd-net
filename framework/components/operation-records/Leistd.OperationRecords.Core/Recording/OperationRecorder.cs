@@ -81,7 +81,7 @@ internal sealed class OperationRecorder(
 
             // 登记在写出之后：写库失败时下面只记日志、不抛，这条失败并没有留痕，
             // 端点兜底应当照常补记。
-            recordedFailures.MarkRecorded(action);
+            recordedFailures.MarkRecorded(action, target.Id);
         }
         catch (Exception exception)
         {

@@ -113,8 +113,9 @@ public static class OperationRecordHttpContextExtensions
     /// <see cref="IOperationRecorder.RecordFailedAsync"/> 照常有效，它手里有文案参数与业务目标名，
     /// 而这里只拿得到错误码与路由值。<b>同一动作码在本次请求里已经记过，这里就跳过</b>，
     /// 保留先记的那条，不覆盖也不替换。</para>
-    /// <para>判据是<b>动作码</b>，不是"每次请求一条"：一次请求里两个不同动作各自失败是正常的。
-    /// 登记口径与自定义记录器的义务见组件文档。</para>
+    /// <para>判据是<b>动作码加目标</b>：同一动作对不同目标的失败都会留下。
+    /// 这里推不出目标时（端点没声明目标路由键，或某一段缺失）退回只按动作码判。
+    /// 因此注解声明的目标要与应用服务记录的目标逐字一致；登记口径与自定义记录器的义务见组件文档。</para>
     /// </remarks>
     /// <param name="context">当前请求上下文。</param>
     /// <param name="failure">
@@ -143,10 +144,16 @@ public static class OperationRecordHttpContextExtensions
             return;
         }
 
-        // 应用服务已在拒绝处记过同一个动作，这里不再补第二条。判据取自作用域状态，
+        // 应用服务已在拒绝处记过同一个动作与目标，这里不再补第二条。判据取自作用域状态，
         // 与端点是控制器还是 Minimal API 无关。
+        //
+        // 推不出目标时传 null：此刻无从分辨是哪一个目标，退回只按动作码判。
+        // 按 '-' 去比会让"应用服务记了真实目标、这里记 '-'"永远不相等，一次失败又变两条。
+        var targetId = ResolveTargetId(context.Request.RouteValues, declared);
         var recordedFailures = context.RequestServices.GetRequiredService<RecordedFailureTracker>();
-        if (recordedFailures.AlreadyRecorded(declared.Action))
+        if (recordedFailures.AlreadyRecorded(
+                declared.Action,
+                targetId == NoTargetId ? null : targetId))
         {
             return;
         }
@@ -154,7 +161,7 @@ public static class OperationRecordHttpContextExtensions
         var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
         await recorder.RecordFailedAsync(
             declared.Action,
-            OperationTarget.For(ResolveTargetId(context.Request.RouteValues, declared)),
+            OperationTarget.For(targetId),
             ResolveDeclaredPolicy(endpoint) ?? UnknownAuthorizationBasis,
             failure);
     }

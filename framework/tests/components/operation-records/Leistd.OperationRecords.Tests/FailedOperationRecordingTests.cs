@@ -70,7 +70,9 @@ public sealed class FailedOperationRecordingTests
     // 这里用 AddOperationRecords() 解析出真实 OperationRecorder，让"什么时候登记"由生产代码决定。
     private static (IServiceProvider Root, HttpContext Context) CreateWithRealRecorder(
         IOperationRecordStore store,
-        string action)
+        string action,
+        string? targetRouteKey = null,
+        string? targetRouteValue = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -89,17 +91,25 @@ public sealed class FailedOperationRecordingTests
             RequestServices = scope.ServiceProvider,
             User = new ClaimsPrincipal(new ClaimsIdentity([], "TestBearer"))
         };
+        var declared = targetRouteKey is null
+            ? new OperationRecordActionAttribute(action)
+            : new OperationRecordActionAttribute(action, targetRouteKey);
         context.SetEndpoint(new Endpoint(
             _ => Task.CompletedTask,
-            new EndpointMetadataCollection(new OperationRecordActionAttribute(action)),
+            new EndpointMetadataCollection(declared),
             "test"));
+        if (targetRouteKey is not null)
+        {
+            context.Request.RouteValues[targetRouteKey] = targetRouteValue;
+        }
+
         return (root, context);
     }
 
     /// <summary>真实记录器写出成功后登记，兜底据此跳过。</summary>
     /// <remarks>
     /// 钉的是生产记录器自己的登记时机。把 <c>OperationRecorder</c> 里的
-    /// <c>recordedFailures.MarkRecorded(action)</c> 删掉，这条会红（写出两条）。
+    /// <c>recordedFailures.MarkRecorded(action, target.Id)</c> 删掉，这条会红（写出两条）。
     /// </remarks>
     [Fact]
     public async Task The_real_recorder_registers_a_written_failure_so_the_fallback_skips_it()
@@ -140,7 +150,7 @@ public sealed class FailedOperationRecordingTests
             OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
 
         var tracker = context.RequestServices.GetRequiredService<RecordedFailureTracker>();
-        Assert.False(tracker.AlreadyRecorded("auth.password.changed"));
+        Assert.False(tracker.AlreadyRecorded("auth.password.changed", targetId: null));
     }
 
     /// <summary>跟踪器按作用域隔离：另一个作用域里的同一动作照常记。</summary>
@@ -177,6 +187,88 @@ public sealed class FailedOperationRecordingTests
         Assert.Equal(2, store.Written.Count);
     }
 
+    /// <summary>同一动作、不同目标的失败各留一条。</summary>
+    /// <remarks>
+    /// 判据是动作码加目标：同一动作对不同目标的失败是不同的事实。批量操作里应用服务已为一个目标
+    /// 记过失败，同一请求里另一个目标的失败冒泡到兜底时照常补记——一起吞掉会丢审计记录，
+    /// 而丢掉的审计记录找不回来。把判据退回只按动作码，这条会红（只写出一条）。
+    /// </remarks>
+    [Fact]
+    public async Task A_failure_on_another_target_of_the_same_action_is_still_recorded()
+    {
+        var store = new RecordingOperationRecordStore();
+        var (_, context) = CreateWithRealRecorder(store, "auth.roles.deleted", "id", "r-2");
+
+        var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
+        await recorder.RecordFailedAsync(
+            "auth.roles.deleted",
+            OperationTarget.For("r-1", "系统管理员"),
+            "App.Roles.Delete",
+            OperationFailure.FromCode("Permission:ConcurrencyConflict"));
+
+        await context.RecordFailedOperationAsync(
+            OperationFailure.FromCode("Identity:RoleNotFound"));
+
+        Assert.Equal(2, store.Written.Count);
+        Assert.Contains(store.Written, record => record.TargetId == "r-2");
+    }
+
+    /// <summary>兜底推不出目标时，退回只按动作码判。</summary>
+    /// <remarks>
+    /// 端点没声明目标路由键时（自助类端点常见）兜底只能记 <c>-</c>。拿 <c>-</c> 去和应用服务
+    /// 记下的真实目标比永远不相等，一次失败又会变两条；此刻无从分辨是哪一个目标，宁可少补一条。
+    /// 把兜底里那个 null 换成 <c>"-"</c>，这条会红。
+    /// </remarks>
+    [Fact]
+    public async Task A_fallback_without_a_resolvable_target_falls_back_to_the_action_alone()
+    {
+        var store = new RecordingOperationRecordStore();
+        var (_, context) = CreateWithRealRecorder(store, "auth.password.changed");
+
+        var recorder = context.RequestServices.GetRequiredService<IOperationRecorder>();
+        await recorder.RecordFailedAsync(
+            "auth.password.changed",
+            OperationTarget.For("u-1", "someone"),
+            "credentials-presented",
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        await context.RecordFailedOperationAsync(
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal("u-1", written.TargetId);
+    }
+
+    /// <summary>从工作单元自建的 DI 作用域解析记录器时，去重不生效。</summary>
+    /// <remarks>
+    /// <para><c>IUnitOfWorkManager.Begin</c> 为每个非子工作单元新建一个 DI 作用域，本地事件分发
+    /// （<c>EventHandlerWrapper</c>）每次分发同样新建；从那些作用域解析出的记录器登记在另一份跟踪器上，
+    /// 而兜底读的是请求作用域那份，于是同一失败留两条。</para>
+    /// <para>这是跟踪器按作用域注册的直接后果，不是缺陷：退化方向是多记一条，不会丢记录。
+    /// 推荐写法是按构造注入拿记录器（解析自请求作用域）。这里钉住当前行为，
+    /// 让日后改成跨作用域共享是一次自觉的选择。</para>
+    /// </remarks>
+    [Fact]
+    public async Task Resolving_the_recorder_from_another_scope_bypasses_the_dedup()
+    {
+        var store = new RecordingOperationRecordStore();
+        var (root, context) = CreateWithRealRecorder(store, "auth.password.changed");
+
+        // 用 CreateScope 表达"工作单元/事件分发自建的那个作用域"：断言对象是跨作用域本身，
+        // 不依赖那两个组件的实现细节
+        using var otherScope = root.CreateScope();
+        await otherScope.ServiceProvider.GetRequiredService<IOperationRecorder>().RecordFailedAsync(
+            "auth.password.changed",
+            OperationTarget.For("u-1", "someone"),
+            "credentials-presented",
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        await context.RecordFailedOperationAsync(
+            OperationFailure.FromCode("Security:CurrentPasswordIncorrect"));
+
+        Assert.Equal(2, store.Written.Count);
+    }
+
     /// <summary>应用服务已在拒绝处记过同一动作：兜底不再补第二条，先记的那条原样留下。</summary>
     /// <remarks>
     /// <para>这是去重要保住的那一半。应用服务手里有文案参数与业务目标名，兜底只有错误码与路由值；
@@ -189,7 +281,12 @@ public sealed class FailedOperationRecordingTests
         var (context, store) = Create(metadata:
         [
             new AuthorizeAttribute { Policy = "App.Roles.ManagePermissions" },
+            // 前缀与应用服务记录的目标逐字一致：这本来就是按目标检索能查全的前提
+            // （模板给这个端点配的正是 "Role/"，见 ComponentEndpoints）
             new OperationRecordActionAttribute("auth.permission-grants.replaced", "providerKey")
+            {
+                TargetIdPrefix = "Role/"
+            }
         ], routeValues: new() { ["providerKey"] = "r-1" });
 
         // 应用服务那一条：带文案参数，目标名是业务名字
