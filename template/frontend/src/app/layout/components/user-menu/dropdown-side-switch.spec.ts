@@ -56,11 +56,19 @@ describe('dropdown trigger side change after opening', () => {
       await fixture.whenStable();
       // 浮层挂在 document 上，不在组件宿主里；等进场动画（缩放、平移）结束再量
       const menu = document.querySelector<HTMLElement>('[data-slot="dropdown-menu"]')!;
-      // 动画可能被取消后重播（finished 以 AbortError 拒绝），所以等到没有在跑的为止
-      for (let round = 0; round < 10; round++) {
+      // 动画可能被取消后重播（finished 以 AbortError 拒绝），方向属性也可能晚一帧才更新并重启进场动画，
+      // 所以要等到没有在跑的动画、且位置连续两帧不变才量；只等一轮在慢机器上会量到动画中途
+      let previous = '';
+      for (let round = 0; round < 30; round++) {
         const running = menu.getAnimations().filter((a) => a.playState === 'running');
-        if (running.length === 0) break;
-        await Promise.allSettled(running.map((a) => a.finished));
+        if (running.length > 0) {
+          await Promise.allSettled(running.map((a) => a.finished));
+          continue;
+        }
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const current = JSON.stringify(menu.getBoundingClientRect());
+        if (current === previous) break;
+        previous = current;
       }
       return menu.getBoundingClientRect();
     }
