@@ -38,7 +38,7 @@ export class Dashboard {
   readonly authService = inject(AuthService);
 
   constructor() {
-    const title = translateSignal('platform.dashboard.title');
+    const title = translateSignal('platform.dashboard.title', {}, { scope: 'platform' });
     effect(() => this.layoutService.title.set(title()));
   }
 }

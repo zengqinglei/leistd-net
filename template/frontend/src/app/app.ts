@@ -21,6 +21,9 @@ import {
   ApplicationHttpError,
   applicationErrorMessage,
 } from './core/errors/application-http-error';
+//#if (IncludeLocalization)
+import { TranslationScopeRecovery } from './core/i18n/translation-scopes';
+//#endif
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
 import { LayoutService } from './layout/services/layout-service';
@@ -50,7 +53,7 @@ const APP_NAME = 'Template Project';
       }"
     />
 
-    @switch (startupService.status()) {
+    @switch (status()) {
       @case ('success') {
         <router-outlet></router-outlet>
       }
@@ -61,7 +64,7 @@ const APP_NAME = 'Template Project';
       }
       @case ('failed') {
         <div class="h-screen w-full flex items-center justify-center bg-background">
-          @if (startupService.error()) {
+          @if (hasFailure()) {
             <section hlmCard class="w-[360px] text-center">
               <div hlmCardHeader>
                 <h3 hlmCardTitle>{{ failedHeader() }}</h3>
@@ -92,6 +95,7 @@ export class App {
   protected readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  private readonly scopeRecovery = inject(TranslationScopeRecovery);
   // 根组件不用 *transloco 结构指令，也不用 translateSignal：前者要等词条到位才渲染内容，
   // 后者在词条加载失败时读取即抛错，而启动失败页恰恰要在词条缺失时照样显示出来。
   protected readonly loadingLabel = this.startupText({
@@ -104,7 +108,14 @@ export class App {
   });
   protected readonly retryLabel = this.startupText({ key: 'common.retry', english: 'Retry' });
   private readonly appName = this.startupText({ key: 'app.name', english: APP_NAME });
-  private readonly errorText = computed(() => startupErrorText(this.startupService.error()));
+  private readonly errorText = computed(() =>
+    this.scopeRecovery.failedUrl()
+      ? {
+          key: 'app.startup.unknownError',
+          english: 'An unknown error occurred. Please try again later.',
+        }
+      : startupErrorText(this.startupService.error()),
+  );
   protected readonly errorMessage = toSignal(
     toObservable(this.errorText).pipe(switchMap((text) => this.selectStartupText(text))),
     { initialValue: '' },
@@ -118,6 +129,23 @@ export class App {
     () => startupErrorText(this.startupService.error()).english,
   );
   //#endif
+
+  protected readonly status = computed(() => {
+    //#if (IncludeLocalization)
+    if (this.startupService.status() === 'success' && this.scopeRecovery.failedUrl()) {
+      return 'failed';
+    }
+    //#endif
+    return this.startupService.status();
+  });
+  protected readonly hasFailure = computed(() => {
+    //#if (IncludeLocalization)
+    if (this.scopeRecovery.failedUrl()) {
+      return true;
+    }
+    //#endif
+    return !!this.startupService.error();
+  });
 
   private _isRetrying = signal(false);
   public readonly isRetrying = this._isRetrying.asReadonly();
@@ -135,8 +163,19 @@ export class App {
 
   async onRetryClick(): Promise<void> {
     this._isRetrying.set(true);
-    await this.startupService.retry();
-    this._isRetrying.set(false);
+    try {
+      //#if (IncludeLocalization)
+      if (this.scopeRecovery.failedUrl()) {
+        await this.scopeRecovery.retry();
+      } else {
+        await this.startupService.retry();
+      }
+      //#else
+      await this.startupService.retry();
+      //#endif
+    } finally {
+      this._isRetrying.set(false);
+    }
   }
   //#if (IncludeLocalization)
 

@@ -234,9 +234,21 @@ export class OperationRecords {
 
   //#if (IncludeLocalization)
   /** 类别、动作、结果的词条整段取成对象：词条到达与语言切换时，读它们的下拉项随之重算。 */
-  private readonly categoryTexts = translateObjectSignal('operationRecords.categories');
-  private readonly actionTexts = translateObjectSignal('operationRecords.actions');
-  private readonly outcomeTexts = translateObjectSignal('operationRecords.outcome');
+  private readonly categoryTexts = translateObjectSignal(
+    'operationRecords.categories',
+    {},
+    { scope: 'operationRecords' },
+  );
+  private readonly actionTexts = translateObjectSignal(
+    'operationRecords.actions',
+    {},
+    { scope: 'operationRecords' },
+  );
+  private readonly outcomeTexts = translateObjectSignal(
+    'operationRecords.outcome',
+    {},
+    { scope: 'operationRecords' },
+  );
 
   /** 类别的展示名；没有词条就退回原始类别标识。 */
   private categoryText(category: string): string {
@@ -361,7 +373,7 @@ export class OperationRecords {
       this.refreshRequests.next();
     });
 
-    const title = translateSignal('operationRecords.page.title');
+    const title = translateSignal('operationRecords.page.title', {}, { scope: 'operationRecords' });
     effect(() => this.layoutService.title.set(title()));
     //#else
 

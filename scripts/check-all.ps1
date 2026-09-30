@@ -50,6 +50,7 @@ $gates = @(
     # 自检先跑：退役符号规则本身失效时，紧随其后的那次"通过"没有意义
     @{ Name = "退役符号规则自检";          Cmd = "pwsh"; Args = @("scripts/check-retired-terms.ps1", "-SelfTest") }
     @{ Name = "无已删除符号/旧表述残留";   Cmd = "pwsh"; Args = @("scripts/check-retired-terms.ps1") }
+    @{ Name = "i18n scope 规则自检";        Cmd = "pwsh"; Args = @("scripts/check-i18n-keys.ps1", "-SelfTest") }
     @{ Name = "i18n 词条键一致";           Cmd = "pwsh"; Args = @("scripts/check-i18n-keys.ps1") }
     # 这道闸门随模板分发（template/scripts/），本仓直接跑那一份：
     # 实现只有一处，生成项目拿到的与这里跑的是同一个判据，不会各自漂移。

@@ -1,0 +1,93 @@
+{
+  "page": {
+    "title": "操作记录"
+  },
+  "filter": {
+    "searchPlaceholder": "搜索动作 / 目标 / 操作人...",
+    "dateRange": "时间范围",
+    "category": "类别",
+    "action": "动作",
+    "outcome": "结果",
+    "export": "导出",
+    "exportFailed": "导出失败"
+  },
+  "categories": {
+    "authentication": "认证",
+    "account": "账号",
+    "authorization": "授权",
+    "tenant": "租户",
+    "configuration": "配置",
+    "data": "数据"
+  },
+  "outcome": {
+    "succeeded": "成功",
+    "failed": "被拒绝"
+  },
+  "actions": {
+    "user.created": "创建了用户 {{target}}",
+    "user.updated": "更新了用户 {{target}}",
+    "user.deleted": "删除了用户 {{target}}",
+    "user.enabled": "启用了用户 {{target}}",
+    "user.disabled": "停用了用户 {{target}}",
+    "user.password-reset": "重置了用户 {{target}} 的密码",
+    "user.unlocked": "解除了用户 {{target}} 的登录锁定",
+    "user.two-factor-reset": "重置了用户 {{target}} 的两步验证",
+    "user.roles-replaced": "调整了用户 {{target}} 的角色",
+    "role.created": "创建了角色 {{target}}",
+    "role.deleted": "删除了角色 {{target}}",
+    "permission-grants.replaced": "调整了 {{target}} 的权限",
+    "tenant.created": "创建了租户 {{target}}",
+    "tenant.updated": "更新了租户 {{target}}",
+    "tenant.activation-changed": "变更了租户 {{target}} 的启用状态",
+    "tenant.deleted": "删除了租户 {{target}}",
+    "tenant.connection-changed": "改动了租户 {{target}} 的数据库连接",
+    "setting.changed": "修改了设置 {{target}}",
+    "operation-records.exported": "导出了操作记录",
+    "auth.login.succeeded": "登录了系统",
+    "auth.login.failed": "登录失败（{{target}}）",
+    "auth.locked-out": "账号 {{target}} 因连续登录失败被锁定",
+    "auth.password.changed": "修改了自己的密码",
+    "auth.avatar.changed": "更换了头像",
+    "auth.email.verified": "验证了邮箱",
+    "auth.session.revoked": "退出了一台登录设备（{{target}}）",
+    "auth.sessions.others-revoked": "退出了其他所有登录设备",
+    "auth.two-factor.enabled": "启用了两步验证",
+    "auth.two-factor.disabled": "停用了两步验证",
+    "auth.two-factor.recovery-codes-regenerated": "重新生成了恢复码",
+    "auth.two-factor.recovery-code-used": "账号 {{target}} 用恢复码完成了登录",
+    "auth.external-login.linked": "绑定了外部账号 {{target}}",
+    "auth.external-login.unlinked": "解绑了外部账号 {{target}}",
+    "auth.registered": "注册了账号 {{target}}",
+    "impersonation.started": "开始以 {{target}} 的身份操作",
+    "impersonation.ended": "结束了模拟操作",
+    "tenant.impersonation-started": "以租户 {{target}} 的管理员身份登录",
+    "tenant.impersonation-ended": "结束了对租户 {{target}} 的模拟",
+    "auth.token.issued": "签发了访问令牌",
+    "tenant.connection-registered": "为租户 {{target}} 登记了数据库连接",
+    "tenant.connection-removed": "删除了租户 {{target}} 的数据库连接登记"
+  },
+  "actionsNoTarget": {
+    "operation-records.exported": "导出了操作记录",
+    "user.created": "创建用户",
+    "role.created": "创建角色"
+  },
+  "table": {
+    "currentPageReport": "共 {{total}} 条",
+    "colAction": "动作",
+    "colOutcome": "结果",
+    "colActor": "操作人",
+    "colTarget": "目标",
+    "colTime": "时间",
+    "colBasis": "授权依据",
+    "colCorrelationId": "链路标识",
+    "colActorTenantId": "操作人所属租户",
+    "colFailure": "原因",
+    "colFailureDetail": "技术详情",
+    "impersonatedBy": "由 {{name}} 模拟操作",
+    "unknownActor": "匿名",
+    "emptyTitle": "暂无操作记录",
+    "emptyHint": "有受审计的操作发生后即会出现在这里",
+    "emptyFilteredTitle": "没有匹配的记录",
+    "emptyFilteredHint": "调整搜索条件试试"
+  }
+}

@@ -1,7 +1,13 @@
 import { Routes } from '@angular/router';
+//#if (IncludeLocalization)
+import { provideTranslocoScope } from '@jsverse/transloco';
+//#endif
 
 import { authGuard } from './core/guards/auth-guard';
 import { permissionGuard } from './core/guards/permission-guard';
+//#if (IncludeLocalization)
+import { resolveTranslationScopes } from './core/i18n/translation-scopes';
+//#endif
 // 布局组件导入
 import { DefaultLayout } from './layout/default/default-layout';
 //#if (LocalIdentity)
@@ -15,6 +21,10 @@ export const routes: Routes = [
   // Empty Layout - 认证相关页面（登录、注册等）
   {
     path: 'auth',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('account')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     component: EmptyLayout,
     loadChildren: () => import('./features/account/account.routes').then((r) => r.AUTH_ROUTES),
   },
@@ -37,6 +47,10 @@ export const routes: Routes = [
   // 已登录但无权限：与 401 的登录跳转区分开，避免"登录成功又被弹回登录页"的循环。
   {
     path: '403-forbidden',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('forbidden')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () =>
       import('./features/public/components/forbidden/forbidden').then((m) => m.Forbidden),
   },

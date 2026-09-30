@@ -1,6 +1,12 @@
 import { Routes } from '@angular/router';
+//#if (IncludeLocalization)
+import { provideTranslocoScope } from '@jsverse/transloco';
+//#endif
 
 import { permissionGuard } from '../../core/guards/permission-guard';
+//#if (IncludeLocalization)
+import { resolveTranslationScopes } from '../../core/i18n/translation-scopes';
+//#endif
 import { PERMISSIONS } from '../../shared/models/permission';
 
 /**
@@ -10,16 +16,28 @@ import { PERMISSIONS } from '../../shared/models/permission';
 export const PLATFORM_ROUTES: Routes = [
   {
     path: '',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('platform')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () => import('./components/dashboard/dashboard').then((m) => m.Dashboard),
   },
   {
     path: 'users',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('users')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () => import('./components/users/users').then((m) => m.Users),
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.users.default },
   },
   {
     path: 'roles',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('roles', 'permissions')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () => import('./components/roles/roles').then((m) => m.Roles),
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.roles.default },
@@ -29,6 +47,10 @@ export const PLATFORM_ROUTES: Routes = [
     // 一个后端设置分组就是一个面板（:group 是分组标识的短横线写法），面板清单由后端决定；
     // 空路径由外壳在设置取回后导向第一个面板，见 SystemSettings。
     path: 'settings',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('settings')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () =>
       import('../settings/system-settings/system-settings').then((m) => m.SystemSettings),
     canActivate: [permissionGuard],
@@ -46,6 +68,10 @@ export const PLATFORM_ROUTES: Routes = [
   {
     // 审计：谁在什么时候做了什么。只读，无写端点。
     path: 'operation-records',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('operationRecords')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () =>
       import('./components/operation-records/operation-records').then((m) => m.OperationRecords),
     canActivate: [permissionGuard],
@@ -54,6 +80,10 @@ export const PLATFORM_ROUTES: Routes = [
   //#if (LocalIdentity)
   {
     path: 'tenants',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('tenants')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () => import('./components/tenants/tenants').then((m) => m.Tenants),
     canActivate: [permissionGuard],
     data: { permission: PERMISSIONS.tenants.default },
@@ -62,6 +92,10 @@ export const PLATFORM_ROUTES: Routes = [
   //#if (OpenIddictServer)
   {
     path: 'open-applications',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('openApp')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () =>
       import('./components/open-applications/open-applications').then((m) => m.OpenApplications),
     canActivate: [permissionGuard],

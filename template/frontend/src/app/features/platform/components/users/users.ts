@@ -197,8 +197,8 @@ export class Users {
   });
   //#if (IncludeLocalization)
   private readonly activeOptionsTexts = {
-    active: translateSignal('users.status.active'),
-    inactive: translateSignal('users.status.inactive'),
+    active: translateSignal('users.status.active', {}, { scope: 'users' }),
+    inactive: translateSignal('users.status.inactive', {}, { scope: 'users' }),
   };
   readonly activeOptions = computed(() => [
     {
@@ -211,8 +211,8 @@ export class Users {
 
   //#if (LocalIdentity)
   private readonly emailVerifiedOptionsTexts = {
-    emailVerified: translateSignal('users.status.emailVerified'),
-    emailUnverified: translateSignal('users.status.emailUnverified'),
+    emailVerified: translateSignal('users.status.emailVerified', {}, { scope: 'users' }),
+    emailUnverified: translateSignal('users.status.emailUnverified', {}, { scope: 'users' }),
   };
   readonly emailVerifiedOptions = computed(() => [
     {
@@ -311,7 +311,7 @@ export class Users {
       });
     //#if (IncludeLocalization)
 
-    const title = translateSignal('users.page.title');
+    const title = translateSignal('users.page.title', {}, { scope: 'users' });
     effect(() => this.layoutService.title.set(title()));
     //#else
 

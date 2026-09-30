@@ -1,0 +1,16 @@
+{
+  "hero": {
+    "title": "Template Project",
+    "subtitle": "A full-stack application development template based on Angular + Spartan UI + .NET 10 DDD architecture",
+    "login": "Sign In",
+    "register": "Sign Up"
+  },
+  "feature": {
+    "authTitle": "Authentication",
+    "authDesc": "Cookie-based authentication with role and permission management",
+    "usersTitle": "User Management",
+    "usersDesc": "Full CRUD operations with permission control",
+    "themeTitle": "Theme System",
+    "themeDesc": "Dark mode + Tailwind CSS + Spartan UI"
+  }
+}

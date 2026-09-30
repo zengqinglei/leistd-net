@@ -44,6 +44,7 @@ export function provideTranslocoTesting(
         fallbackLang: langs[0],
         // 与应用配置一致：关掉时结构指令只取第一次的语言，切换语言的用例就测不出任何东西
         reRenderOnLangChange: true,
+        scopes: { autoPrefixKeys: false },
         missingHandler: { logMissingKey: false },
       },
     }),

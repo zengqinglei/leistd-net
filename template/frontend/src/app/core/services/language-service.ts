@@ -9,13 +9,16 @@ import {
   provideAppInitializer,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
+  LoadOptions,
+  ProviderScope,
   provideTranslocoFallbackStrategy,
+  Translation,
+  TranslationLoadError,
   TranslocoFallbackStrategy,
   TranslocoService,
 } from '@jsverse/transloco';
-import { filter, take } from 'rxjs';
+import { take } from 'rxjs';
 
 export const SUPPORTED_LANGS = ['en', 'zh-CN'] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
@@ -48,13 +51,12 @@ export const LANG_OPTIONS: LangMeta[] = [
  * 账户语言不落盘也不会有「先英文闪一下再变中文」：外壳只在启动流成功后渲染，
  * 而启动流会等账户语言的词条到达并激活（见 {@link applyAccountLang} 的返回值）。
  *
- * **切换先加载词条、成功后才激活。** 结构指令与翻译信号不依赖这一点，但一次性文案（请求回调里的提示、
+ * **切换先加载全局与已访问功能的词条、成功后才激活。** 结构指令与翻译信号不依赖这一点，但一次性文案（请求回调里的提示、
  * 确认框）用同步 `translate()`，它要求活动语言的词条已加载：若先激活，切换途中返回的请求会取到裸键，
  * 且不会再更新。加载期间界面停在原语言，失败时保持原语言并上报；连续切换只让最后一次生效。
  *
  * **Transloco 的活动语言只由本服务决定。** 它自带两处会自行激活语言的逻辑，都绕过上面的约束：
- * 加载失败时转去加载回落语言并激活——由 {@link provideLanguageFallbackStrategy} 关掉；
- * 有过失败之后，下一次任何语言加载成功都会被它设为活动语言，哪怕那次加载已被取代——由构造函数里的订阅改回。
+ * 加载失败时自动回落，以及失败后的下一次成功自行激活，都由 {@link provideLanguageFallbackStrategy} 阻止。
  * 否则本服务、Transloco、`<html lang>` 会各执一词，同步 `translate()` 取到裸键。
  */
 @Injectable({ providedIn: 'root' })
@@ -73,6 +75,13 @@ export class LanguageService {
   /** 每次发起切换加一；加载完成时编号已变，说明被后发起的切换取代，不再激活。 */
   private generation = 0;
 
+  /** 已成功进入的功能：切换语言时连同这些词条一起预加载，覆盖仍打开的弹窗。 */
+  private readonly loadedScopes = new Map<string, ProviderScope>();
+  /** Transloco 缓存加载管道会保留同一个 options 对象，失败后重试需复用并清理它的计数。 */
+  private readonly loadOptions = new Map<string, LoadOptions>();
+  /** 内联资源只复用在途与成功的 Promise；拒绝后移除，显式重试会重新执行加载函数。 */
+  private readonly inlineLoads = new Map<string, Promise<Translation>>();
+
   readonly activeLang = this.activeLangState.asReadonly();
   readonly options = LANG_OPTIONS;
   readonly currentMeta = computed(
@@ -83,18 +92,6 @@ export class LanguageService {
   readonly initialized: Promise<void>;
 
   constructor() {
-    // Transloco 的这次自行激活发生在加载管道里、先于本订阅（它在自己的构造函数里订阅），同一次事件里就改回
-    this.transloco.events$
-      .pipe(
-        filter((event) => event.type === 'translationLoadSuccess' && event.wasFailure),
-        takeUntilDestroyed(),
-      )
-      .subscribe(() => {
-        if (this.transloco.getActiveLang() !== this.activeLang()) {
-          this.transloco.setActiveLang(this.activeLang());
-        }
-      });
-
     // 初始语言没有「原语言」可停留，先激活；首帧由初始化器挡到词条落定，取不到时退回默认语言（见 switchTo）。
     const initial = this.activeLang();
     this.applyLang(initial);
@@ -146,39 +143,137 @@ export class LanguageService {
    */
   private switchTo(lang: Lang): Promise<void> {
     const generation = ++this.generation;
-    const done = this.load(lang).then((loaded) => {
+    const done = (async () => {
+      let loaded = await this.load(lang);
+      const ready = new Set<string>();
+      // 等待过程中新增的 scope 也要加载；最终检查与激活在同一个微任务内，避免导航插入空隙。
+      while (loaded && generation === this.generation) {
+        const scopes = [...this.loadedScopes.values()].filter((scope) => !ready.has(scope.scope));
+        const results = await Promise.all(scopes.map((scope) => this.loadScope(scope, lang)));
+        loaded = results.every((success) => success);
+        scopes.forEach((scope) => ready.add(scope.scope));
+        if ([...this.loadedScopes.keys()].every((scope) => ready.has(scope))) {
+          break;
+        }
+      }
       if (generation !== this.generation) {
-        return undefined;
+        return;
       }
       this.pending = undefined;
       if (loaded) {
         this.activeLangState.set(lang);
         this.applyLang(lang);
-        return undefined;
+        return;
       }
-      return lang === this.activeLang() && lang !== DEFAULT_LANG
-        ? this.setActive(DEFAULT_LANG)
-        : undefined;
-    });
+      if (lang === this.activeLang() && lang !== DEFAULT_LANG) {
+        await this.setActive(DEFAULT_LANG);
+      }
+    })();
     this.pending = { lang, done };
     return done;
+  }
+
+  /** 路由在创建功能组件前等待词条；等待期间切换语言时重新加载最终活动语言。 */
+  async loadScopes(provided: readonly (string | ProviderScope)[]): Promise<boolean> {
+    await this.initialized;
+    const scopes = provided.map((scope) => (typeof scope === 'string' ? { scope } : scope));
+    while (true) {
+      const lang = this.activeLang();
+      const results = await Promise.all(scopes.map((scope) => this.loadScope(scope, lang)));
+      if (results.some((loaded) => !loaded)) {
+        return false;
+      }
+      scopes.forEach((scope) => this.loadedScopes.set(scope.scope, scope));
+      if (lang === this.activeLang()) {
+        return true;
+      }
+    }
+  }
+
+  /** 在合并词条前应用官方 alias 映射；内联资源成功后才交给官方 load API 缓存。 */
+  private async loadScope(scope: ProviderScope, lang: Lang): Promise<boolean> {
+    if (scope.alias) {
+      this.transloco.config.scopeMapping ??= {};
+      this.transloco.config.scopeMapping[scope.scope] = scope.alias;
+    }
+    const inlineLoader = scope.loader
+      ? Object.fromEntries(
+          Object.entries(scope.loader).map(([language, loader]) => [
+            `${scope.scope}/${language}`,
+            () => this.loadInline(`${scope.scope}/${language}`, loader),
+          ]),
+        )
+      : undefined;
+    const path = `${scope.scope}/${lang}`;
+    if (inlineLoader) {
+      // 8.4 创建管道时就调用 inline loader，重订阅会复用拒绝的 Promise。
+      // 先等待目标资源和缺词回落资源，避免把失败的 Promise 放入库缓存；不访问私有 cache。
+      const { fallbackLang, missingHandler } = this.transloco.config;
+      const fallback = Array.isArray(fallbackLang) ? fallbackLang[0] : fallbackLang;
+      const languages =
+        missingHandler.useFallbackTranslation && fallback && fallback !== lang
+          ? [lang, fallback]
+          : [lang];
+      try {
+        await Promise.all(
+          languages.map((language) => {
+            const resource = `${scope.scope}/${language}`;
+            const loader = inlineLoader[resource];
+            if (!loader) {
+              throw new Error(`Missing inline loader for ${resource}`);
+            }
+            return loader();
+          }),
+        );
+      } catch (cause) {
+        const error = new TranslationLoadError(path, [], true);
+        error.cause = cause;
+        this.errorHandler.handleError(error);
+        return false;
+      }
+    }
+    return this.load(path, inlineLoader);
+  }
+
+  private loadInline(path: string, loader: () => Promise<Translation>): Promise<Translation> {
+    const cached = this.inlineLoads.get(path);
+    if (cached) {
+      return cached;
+    }
+    // 微任务内执行也接住同步抛错；并发请求共用本次加载，失败后下一次调用重新执行。
+    const loading = Promise.resolve()
+      .then(loader)
+      .catch((error: unknown) => {
+        this.inlineLoads.delete(path);
+        throw error;
+      });
+    this.inlineLoads.set(path, loading);
+    return loading;
   }
 
   /**
    * 加载 `lang` 的词条，返回是否成功；失败交给全局错误处理，从不 reject。
    *
-   * 失败的加载留在 Transloco 缓存里，但再次订阅会重新请求（它的共享加载在出错后重置），
-   * 所以之后再切到同一语言会重新加载，而不是直接拿到上次的失败。
+   * HTTP/冷 Observable 的失败管道再次订阅会重新请求；inline Promise 不具备这个性质，
+   * 由 loadScope 在交给此处前预加载，失败时不创建库管道，成功后复用资源与官方缓存。
    */
-  private load(lang: Lang): Promise<boolean> {
+  private load(lang: string, inlineLoader?: LoadOptions['inlineLoader']): Promise<boolean> {
+    const options = this.loadOptions.get(lang) ?? {};
+    if (inlineLoader) {
+      options.inlineLoader = inlineLoader;
+    }
+    this.loadOptions.set(lang, options);
     return new Promise((resolve) => {
       let loaded = false;
       this.transloco
-        .load(lang)
+        .load(lang, options)
         .pipe(take(1))
         .subscribe({
           next: () => (loaded = true),
           error: (error: unknown) => {
+            // 8.4 在调用回落策略前写入计数；策略抛错后留下半初始化状态，第二次失败会读到空回落列表。
+            // 清理原加载管道持有的对象，确保每次失败都经过策略并保留 TranslationLoadError。
+            delete options.failedCounter;
             this.errorHandler.handleError(error);
             resolve(false);
           },
@@ -189,13 +284,12 @@ export class LanguageService {
   }
 
   private applyLang(lang: Lang): void {
-    // 已是该语言就不再设置：Transloco 的语言流对同值也会再发一次，结构指令会白白重建一轮上下文
+    // 同步订阅 Transloco 语言事件的读者也必须看到一致的 <html lang>。
+    this.document.documentElement.lang = lang;
+    // 已是该语言就不再设置：Transloco 的语言流对同值也会再发一次，结构指令会白白重建一轮上下文。
     if (this.transloco.getActiveLang() !== lang) {
       this.transloco.setActiveLang(lang);
     }
-
-    // <html lang> 同步：利于可访问性、SEO 与浏览器（拼写检查/字体回退）。
-    this.document.documentElement.lang = lang;
   }
 
   /**
@@ -237,8 +331,10 @@ export function provideLanguageInitializer(): EnvironmentProviders {
 }
 
 class NoAutomaticFallback implements TranslocoFallbackStrategy {
-  getNextLangs(): string[] {
-    return [];
+  getNextLangs(lang: string): string[] {
+    // 8.4 在策略返回后记录 failedLangs，之后任意 scope 成功都会自行激活语言。
+    // 在官方扩展点直接终止加载，既不自动回落，也不进入这段恢复状态。
+    throw new TranslationLoadError(lang, [], lang.includes('/'));
   }
 }
 

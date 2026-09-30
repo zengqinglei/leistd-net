@@ -1,0 +1,8 @@
+{
+  "dashboard": {
+    "welcome": "Welcome to the Admin Console",
+    "currentUser": "Currently signed in as: {{name}}",
+    "intro": "This is a starter template project. You can manage users under \"User Management\" and extend more feature modules from the left-hand menu.",
+    "title": "Dashboard"
+  }
+}

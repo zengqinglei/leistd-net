@@ -157,7 +157,7 @@ export class Tenants {
 
     // 面包屑末级文案由页面自行设置，与其他平台页保持同一约定。
     //#if (IncludeLocalization)
-    const title = translateSignal('tenants.title');
+    const title = translateSignal('tenants.title', {}, { scope: 'tenants' });
     effect(() => this.layoutService.title.set(title()));
     //#else
     this.layoutService.title.set('Tenant Management');

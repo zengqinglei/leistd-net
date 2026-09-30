@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     校验模板里前后端本地化资源的键集合一致，避免"某语言漏配/多配"导致运行时漏译或裸键：
-      1. 前端 en.json ⇄ zh-CN.json 键集合完全一致（public/i18n）。
+      1. 前端全局与各 scope 的 en.json ⇄ zh-CN.json 键集合完全一致（public/i18n）。
       2. 后端 en.json ⇄ zh-CN.json 键集合完全一致（Api/Resources 的 texts 段）。
       3. 两侧文件均为合法 JSON、且后端声明的 culture 与文件名一致。
       4. 前端表单用到的错误类型在 validation 段都有句子，不含本地化形态的校验提示英文表与之一致。
@@ -14,10 +14,20 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+    [switch]$SelfTest
 )
 
 $ErrorActionPreference = "Stop"
+$python = (Get-Command python3 -ErrorAction SilentlyContinue).Source
+if (-not $python) { $python = (Get-Command python -ErrorAction SilentlyContinue).Source }
+if (-not $python -or (& $python --version 2>&1) -notmatch '^Python 3\.') {
+    throw "未找到 Python 3 解释器（python3/python）。"
+}
+if ($SelfTest) {
+    & $python (Join-Path $PSScriptRoot "check-i18n-scopes.py") --self-test
+    exit $LASTEXITCODE
+}
 $problems = New-Object System.Collections.Generic.List[string]
 
 function Get-JsonFlatKeys([object]$Node, [string]$Prefix, [System.Collections.Generic.List[string]]$Acc) {
@@ -227,145 +237,11 @@ function Test-NoHardcodedCjk([string]$Label, [string]$SourceRoot, [string[]]$Ext
     }
 }
 
-# 前端 Transloco 插值必须用双大括号 {{name}}；单大括号 {name} 是常见误用（Transloco 不会替换）。
-function Test-TranslocoInterpolation([string]$EnPath) {
-    if (-not (Test-Path $EnPath)) { return }
-    $flat = New-Object System.Collections.Generic.List[string]
-    $root = Get-Content -LiteralPath $EnPath -Raw | ConvertFrom-Json
-    Get-JsonFlatKeys $root '' $flat
-    $bad = New-Object System.Collections.Generic.List[string]
-    foreach ($k in $flat) {
-        $v = $root; $ok = $true
-        foreach ($seg in $k.Split('.')) { if ($v.PSObject.Properties[$seg]) { $v = $v.$seg } else { $ok = $false; break } }
-        if (-not $ok -or $v -isnot [string]) { continue }
-        # 先移除所有 {{...}}（合法），再看是否还剩单括号 {name}
-        $stripped = [regex]::Replace($v, '\{\{[^}]+\}\}', '')
-        foreach ($m in [regex]::Matches($stripped, '\{([a-zA-Z][a-zA-Z0-9_]*)\}')) {
-            $name = $m.Groups[1].Value
-            $bad.Add("$k → 单括号 '{$name}'（Transloco 应用 '{{$name}}'）")
-        }
-    }
-    if ($bad.Count -gt 0) {
-        $script:problems.Add("前端 Transloco 插值误用（$($bad.Count) 处）：$([string]::Join('; ', $bad))")
-    }
-    else {
-        Write-Host "  OK  前端 Transloco 插值全部使用双大括号规范。" -ForegroundColor Green
-    }
-}
-
-# 不含本地化的形态里，组件模板的 t('key') 解析到组件自带的英文表（ENGLISH）。
-# 表漏一个键，界面就显示裸键名；值与 en.json 不一致，两种形态的英文界面就各说各话——两者都不会编译失败。
-function Test-EnglishTables([string]$SourceRoot, [string]$EnPath) {
-    if (-not (Test-Path $EnPath)) { return }
-    $root = Get-Content -LiteralPath $EnPath -Raw | ConvertFrom-Json
-    $flat = New-Object System.Collections.Generic.List[string]
-    Get-JsonFlatKeys $root '' $flat
-    $en = @{}
-    foreach ($k in $flat) {
-        $v = $root
-        foreach ($seg in $k.Split('.')) { $v = $v.$seg }
-        $en[$k] = [string]$v
-    }
-    # ENGLISH 是组件自带的表；ENGLISH_VALIDATION 是 english-text.ts 并入每张表的校验提示
-    $tablePattern = [regex]'(?s)const ENGLISH(_VALIDATION)?: Record<string, string> = \{(.*?)\n\};'
-    $entryPattern = [regex]"'([\w.]+)':\s*('(?:[^'\\]|\\.)*'|""(?:[^""\\]|\\.)*"")\s*,"
-    $refPattern = [regex]"\bt\(\s*'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'"
-    $bad = New-Object System.Collections.Generic.List[string]
-    $tables = 0
-    $validationTableFound = $false
-    Get-ChildItem -Path (Join-Path $RepoRoot $SourceRoot) -Recurse -File -Filter '*.ts' |
-        Where-Object { $_.Name -notlike '*.spec.ts' } |
-        ForEach-Object {
-            $text = Get-Content -LiteralPath $_.FullName -Raw
-            $match = $tablePattern.Match($text)
-            if (-not $match.Success) { return }
-            $tables++
-            $relative = [IO.Path]::GetRelativePath($RepoRoot, $_.FullName).Replace('\', '/')
-            $table = @{}
-            foreach ($entry in $entryPattern.Matches($match.Groups[2].Value)) {
-                $literal = $entry.Groups[2].Value
-                $value = [regex]::Replace($literal.Substring(1, $literal.Length - 2), '\\(.)', '$1')
-                $key = $entry.Groups[1].Value
-                $table[$key] = $value
-                if (-not $en.ContainsKey($key)) { $bad.Add("${relative}：英文表的键 '$key' 不在 en.json 里") }
-                elseif ($en[$key] -cne $value) { $bad.Add("${relative}：英文表 '$key' 与 en.json 不一致") }
-            }
-            # 校验提示在模板里按错误类型拼键（t('validation.' + error.kind)），静态引用查不到漏项：
-            # 这张表必须覆盖 en.json 的整个 validation 段
-            if ($match.Groups[1].Success) {
-                $validationTableFound = $true
-                foreach ($key in ($en.Keys | Where-Object { $_ -like 'validation.*' } | Sort-Object)) {
-                    if (-not $table.ContainsKey($key)) { $bad.Add("${relative}：校验提示表缺 en.json 的 '$key'") }
-                }
-            }
-            $html = [IO.Path]::ChangeExtension($_.FullName, '.html')
-            $usage = $text.Remove($match.Index, $match.Length)
-            if (Test-Path -LiteralPath $html) { $usage += Get-Content -LiteralPath $html -Raw }
-            foreach ($ref in $refPattern.Matches($usage)) {
-                $key = $ref.Groups[1].Value
-                if (-not $table.ContainsKey($key)) { $bad.Add("${relative}：t('$key') 不在英文表里") }
-            }
-        }
-    if (-not $validationTableFound) { $bad.Add("没找到校验提示英文表 ENGLISH_VALIDATION（shared/utils/english-text.ts）") }
-    if ($bad.Count -gt 0) {
-        $script:problems.Add("组件英文表（$($bad.Count) 处）：$([string]::Join('; ', ($bad | Sort-Object -Unique)))")
-    }
-    else {
-        Write-Host "  OK  组件英文表：$tables 张表覆盖各自模板的 t() 引用，值与 en.json 一致。" -ForegroundColor Green
-    }
-}
-
-# 校验提示按错误类型取词条（模板里 t('validation.' + error.kind)），键是拼出来的，静态引用查不到。
-# 表单里出现的错误类型——自定义的 kind 字面量与所用的内置校验器——都必须在 en.json 的 validation 段有句子。
-function Test-ValidationKinds([string]$SourceRoot, [string]$EnPath) {
-    if (-not (Test-Path $EnPath)) { return }
-    $validation = (Get-Content -LiteralPath $EnPath -Raw | ConvertFrom-Json).validation
-    $known = if ($validation) { @($validation.PSObject.Properties.Name) } else { @() }
-    $builtIns = @{ required = 'required'; minLength = 'minLength'; maxLength = 'maxLength'; email = 'email'; min = 'min'; max = 'max' }
-    $bad = New-Object System.Collections.Generic.List[string]
-    $kinds = [System.Collections.Generic.SortedSet[string]]::new()
-    Get-ChildItem -Path (Join-Path $RepoRoot $SourceRoot) -Recurse -File -Filter '*.ts' |
-        Where-Object { $_.Name -notlike '*.spec.ts' } |
-        ForEach-Object {
-            $text = Get-Content -LiteralPath $_.FullName -Raw
-            $import = [regex]::Match($text, "import \{([^}]*)\} from '@angular/forms/signals'")
-            if (-not $import.Success) { return }
-            $relative = [IO.Path]::GetRelativePath($RepoRoot, $_.FullName).Replace('\', '/')
-            foreach ($m in [regex]::Matches($text, "\bkind:\s*'(\w+)'")) {
-                [void]$kinds.Add($m.Groups[1].Value)
-                if ($known -cnotcontains $m.Groups[1].Value) { $bad.Add("${relative}：错误类型 '$($m.Groups[1].Value)' 在 en.json 的 validation 段没有句子") }
-            }
-            # pattern 的默认错误类型只说"格式不对"，各处都给了字段自己的类型（error 选项）；漏给的才要 validation.pattern
-            foreach ($call in [regex]::Matches($text, '(?s)\bpattern\((.*?)\);')) {
-                if ($call.Groups[1].Value -notmatch '\berror:') {
-                    [void]$kinds.Add('pattern')
-                    if ($known -cnotcontains 'pattern') { $bad.Add("${relative}：pattern 校验器没给 error 选项，错误类型 'pattern' 在 en.json 的 validation 段没有句子") }
-                }
-            }
-            foreach ($name in ($import.Groups[1].Value -split ',')) {
-                $imported = ($name.Trim() -split '\s+as\s+')[0].Trim()
-                if ($builtIns.ContainsKey($imported)) {
-                    [void]$kinds.Add($builtIns[$imported])
-                    if ($known -cnotcontains $builtIns[$imported]) { $bad.Add("${relative}：内置校验器 $imported 的错误类型在 en.json 的 validation 段没有句子") }
-                }
-            }
-        }
-    if ($bad.Count -gt 0) {
-        $script:problems.Add("校验提示（$($bad.Count) 处）：$([string]::Join('; ', ($bad | Sort-Object -Unique)))")
-    }
-    else {
-        Write-Host "  OK  校验提示：表单用到的 $($kinds.Count) 种错误类型都有词条。" -ForegroundColor Green
-    }
-}
-
 Write-Host "== i18n 词条一致性闸门 ==" -ForegroundColor Cyan
 
-# 前端：整个对象即键树
-Compare-KeySets `
-    -Label "前端(public/i18n)" `
-    -EnPath (Join-Path $RepoRoot "template/frontend/public/i18n/en.json") `
-    -ZhPath (Join-Path $RepoRoot "template/frontend/public/i18n/zh-CN.json") `
-    -Selector { param($r) $r }
+# 前端独立判据解析 scope 与结构指令前缀，后端错误码保持原判据。
+& $python (Join-Path $PSScriptRoot "check-i18n-scopes.py") --repo-root $RepoRoot
+if ($LASTEXITCODE -ne 0) { $problems.Add("前端 scope 词条校验失败（见上方诊断）") }
 
 # 后端：顶层 culture + texts 两段结构，键在 texts 段下
 Compare-KeySets `
@@ -397,9 +273,6 @@ Write-Host "-- 占位符一致性 --" -ForegroundColor Cyan
 Compare-Placeholders "后端(Api/Resources)" `
     (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") `
     (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/zh-CN.json") { param($r) $r.texts }
-Compare-Placeholders "前端(public/i18n)" `
-    (Join-Path $RepoRoot "template/frontend/public/i18n/en.json") `
-    (Join-Path $RepoRoot "template/frontend/public/i18n/zh-CN.json") { param($r) $r }
 foreach ($dir in $frameworkResources) {
     Compare-Placeholders "框架($($dir.Parent.Name))" `
         (Join-Path $dir.FullName "en.json") `
@@ -445,33 +318,6 @@ Test-KeyReferences "后端 DataAnnotations" `
     ) `
     (Join-Path $RepoRoot "template/backend/src/CompanyName.ProjectName.Api/Resources/en.json") { param($r) $r.texts }
 Test-ValidationMessagesExplicit "后端入参 DTO" "template/backend/src"
-# 前端 transloco.translate('key')、模板结构指令给出的 t('key')、translateSignal('key') 与 'key' | transloco（点号分段键，排除动态拼接）。
-# 必须锚定在 transloco 上下文里：仅凭「带点号的字符串字面量」判定会把权限名等常量表误判成翻译键。
-Test-KeyReferences "前端 translate/t/pipe" `
-    @("template/frontend/src") `
-    @(
-        [regex]"transloco\.translate\(\s*'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'",
-        [regex]"\bt\(\s*'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'",
-        [regex]"\btranslateSignal\(\s*'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'",
-        [regex]"'([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)'\s*\|\s*transloco"
-    ) `
-    (Join-Path $RepoRoot "template/frontend/public/i18n/en.json") { param($r) $r }
-
-# translateObjectSignal('前缀') 取的是一整段词条：前缀下一个键都没有时它恒为空对象，界面只剩空白或回落值。
-$frontendFlat = New-Object System.Collections.Generic.List[string]
-Get-JsonFlatKeys (Get-Content -LiteralPath (Join-Path $RepoRoot "template/frontend/public/i18n/en.json") -Raw | ConvertFrom-Json) "" $frontendFlat
-$objectPrefixes = [System.Collections.Generic.SortedSet[string]]::new()
-Get-ChildItem -Path (Join-Path $RepoRoot "template/frontend/src") -Recurse -File -Filter '*.ts' | Where-Object { $_.Name -notlike '*.spec.ts' } | ForEach-Object {
-    foreach ($m in [regex]::Matches((Get-Content -LiteralPath $_.FullName -Raw), "\btranslateObjectSignal\(\s*'([a-zA-Z][\w.]*)'")) { [void]$objectPrefixes.Add($m.Groups[1].Value) }
-}
-$emptyPrefixes = @($objectPrefixes | Where-Object { $prefix = "$_."; -not ($frontendFlat | Where-Object { $_.StartsWith($prefix) } | Select-Object -First 1) })
-if ($emptyPrefixes.Count -gt 0) {
-    $problems.Add("前端 translateObjectSignal：$($emptyPrefixes.Count) 个前缀下没有词条：$([string]::Join(', ', $emptyPrefixes))")
-}
-else {
-    Write-Host "  OK  前端 translateObjectSignal：$($objectPrefixes.Count) 个前缀下都有词条。" -ForegroundColor Green
-}
-
 Write-Host ""
 Write-Host "-- 写死的中文展示文案 --" -ForegroundColor Cyan
 Test-NoHardcodedCjk "前端源码" "template/frontend/src" @('.ts', '.html') @(
@@ -479,18 +325,6 @@ Test-NoHardcodedCjk "前端源码" "template/frontend/src" @('.ts', '.html') @(
     'template/frontend/src/app/core/services/language-service.ts'
 )
 Test-NoHardcodedCjk "后端源码" "template/backend/src" @('.cs') @()
-
-Write-Host ""
-Write-Host "-- 不含本地化形态的组件英文表 --" -ForegroundColor Cyan
-Test-EnglishTables "template/frontend/src" (Join-Path $RepoRoot "template/frontend/public/i18n/en.json")
-
-Write-Host ""
-Write-Host "-- 表单校验提示 --" -ForegroundColor Cyan
-Test-ValidationKinds "template/frontend/src" (Join-Path $RepoRoot "template/frontend/public/i18n/en.json")
-
-Write-Host ""
-Write-Host "-- Transloco 插值大括号 --" -ForegroundColor Cyan
-Test-TranslocoInterpolation (Join-Path $RepoRoot "template/frontend/public/i18n/en.json")
 
 # 宿主资源不复制组件译文：同名键会覆盖组件自带的句子，组件改文案时旧句子被静默钉死
 # （docs/framework/development-guide.md「宿主不要复制组件的译文」）。确要改写组件文案的键登记在白名单里并写明原因。

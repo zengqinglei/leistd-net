@@ -1,4 +1,11 @@
 import { Routes } from '@angular/router';
+//#if (IncludeLocalization)
+import { provideTranslocoScope } from '@jsverse/transloco';
+//#endif
+//#if (IncludeLocalization)
+
+import { resolveTranslationScopes } from '../../core/i18n/translation-scopes';
+//#endif
 
 export const WORKSPACE_ROUTES: Routes = [
   {
@@ -8,6 +15,10 @@ export const WORKSPACE_ROUTES: Routes = [
   },
   {
     path: 'dashboard',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('workspace')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () =>
       import('./components/dashboard/workspace-dashboard').then((m) => m.WorkspaceDashboard),
   },
@@ -17,6 +28,10 @@ export const WORKSPACE_ROUTES: Routes = [
     // 个人数据，只要求认证即可。系统默认值与策略是另一件事，在 /platform/settings。
     // 面板是子路由：面板名进 URL，刷新、分享与头像菜单直达都落在同一面板。
     path: 'settings',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('settings')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () =>
       import('../settings/personal-settings/personal-settings').then((m) => m.PersonalSettings),
     children: [
@@ -24,11 +39,19 @@ export const WORKSPACE_ROUTES: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'profile' },
       {
         path: 'profile',
+        //#if (IncludeLocalization)
+        providers: [provideTranslocoScope('account')],
+        resolve: { translations: resolveTranslationScopes },
+        //#endif
         loadComponent: () =>
           import('../account/components/profile-panel/profile-panel').then((m) => m.ProfilePanel),
       },
       {
         path: 'security',
+        //#if (IncludeLocalization)
+        providers: [provideTranslocoScope('account')],
+        resolve: { translations: resolveTranslationScopes },
+        //#endif
         loadComponent: () =>
           import('../account/components/security-panel/security-panel').then(
             (m) => m.SecurityPanel,
@@ -57,6 +80,10 @@ export const WORKSPACE_ROUTES: Routes = [
   },
   {
     path: 'placeholder',
+    //#if (IncludeLocalization)
+    providers: [provideTranslocoScope('workspace')],
+    resolve: { translations: resolveTranslationScopes },
+    //#endif
     loadComponent: () =>
       import('./components/placeholder/workspace-placeholder').then((m) => m.WorkspacePlaceholder),
   },

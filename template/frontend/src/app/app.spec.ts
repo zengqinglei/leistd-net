@@ -1,6 +1,7 @@
 import { ApplicationRef, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
+import { provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoLoader, TranslocoService } from '@jsverse/transloco';
 import { of, throwError } from 'rxjs';
@@ -29,6 +30,7 @@ describe('App startup failure page', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        provideRouter([]),
         {
           provide: StartupService,
           useValue: {
@@ -103,6 +105,7 @@ describe('App document title', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        provideRouter([]),
         {
           provide: StartupService,
           useValue: {

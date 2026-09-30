@@ -155,8 +155,16 @@ export class OperationRecordTable {
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (IncludeLocalization)
   /** 动作句子模板整段取成对象，只用来判断动作码登记了没有：句子本身在模板里经 t 带参数取。 */
-  private readonly actionTexts = translateObjectSignal('operationRecords.actions');
-  private readonly actionNoTargetTexts = translateObjectSignal('operationRecords.actionsNoTarget');
+  private readonly actionTexts = translateObjectSignal(
+    'operationRecords.actions',
+    {},
+    { scope: 'operationRecords' },
+  );
+  private readonly actionNoTargetTexts = translateObjectSignal(
+    'operationRecords.actionsNoTarget',
+    {},
+    { scope: 'operationRecords' },
+  );
   //#else
   protected readonly t = englishText(ENGLISH);
   //#endif

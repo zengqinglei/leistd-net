@@ -27,7 +27,7 @@ export class WorkspacePlaceholder {
   constructor() {
     const layoutService = inject(LayoutService);
     //#if (IncludeLocalization)
-    const title = translateSignal('workspace.placeholder.title');
+    const title = translateSignal('workspace.placeholder.title', {}, { scope: 'workspace' });
     effect(() => layoutService.title.set(title()));
     //#else
     layoutService.title.set('Example module');

@@ -167,7 +167,7 @@ export class Roles {
 
     // 面包屑末级文案由页面自行设置，与其他平台页保持同一约定。
     //#if (IncludeLocalization)
-    const title = translateSignal('roles.title');
+    const title = translateSignal('roles.title', {}, { scope: 'roles' });
     effect(() => this.layoutService.title.set(title()));
     //#else
     this.layoutService.title.set('Role Management');

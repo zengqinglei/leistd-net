@@ -1,0 +1,14 @@
+{
+  "dashboard": {
+    "title": "Workbench",
+    "username": "Username",
+    "displayName": "Display name",
+    "email": "Email",
+    "roles": "Roles",
+    "noUserInfo": "No user information available"
+  },
+  "placeholder": {
+    "title": "Example module",
+    "comingSoon": "A placeholder for your own business modules — replace this page and its menu entry under \"Business\"."
+  }
+}

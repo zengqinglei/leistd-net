@@ -1,5 +1,5 @@
 <!--#if (IncludeLocalization)-->
-<ng-container *transloco="let t">
+<ng-container *transloco="let t; prefix: 'landing'">
 <!--#else-->
 <ng-container>
 <!--#endif-->
@@ -14,40 +14,40 @@
 
     <div class="flex max-w-2xl flex-col gap-8 text-center">
       <h1 class="text-3xl font-semibold tracking-tight text-balance">
-        {{ t('landing.hero.title') }}
+        {{ t('hero.title') }}
       </h1>
-      <p class="text-base text-muted-foreground">{{ t('landing.hero.subtitle') }}</p>
+      <p class="text-base text-muted-foreground">{{ t('hero.subtitle') }}</p>
 
       <div class="flex items-center justify-center gap-4">
         <!--#if (LocalIdentity)-->
-        <a hlmBtn routerLink="/auth/login">{{ t('landing.hero.login') }}</a>
-        <a hlmBtn variant="outline" routerLink="/auth/register">{{ t('landing.hero.register') }}</a>
+        <a hlmBtn routerLink="/auth/login">{{ t('hero.login') }}</a>
+        <a hlmBtn variant="outline" routerLink="/auth/register">{{ t('hero.register') }}</a>
         <!--#else-->
         <!-- 登录与注册都在签发令牌的身份服务上：进入工作台时由守卫发起 OIDC 登录 -->
-        <a hlmBtn routerLink="/workspace">{{ t('landing.hero.login') }}</a>
+        <a hlmBtn routerLink="/workspace">{{ t('hero.login') }}</a>
         <!--#endif-->
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
         <div class="p-6 rounded-xl bg-card border border-border">
           <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('landing.feature.authTitle') }}</h3>
+          <h3 class="font-semibold">{{ t('feature.authTitle') }}</h3>
           <p class="text-sm text-muted-foreground mt-2">
-            {{ t('landing.feature.authDesc') }}
+            {{ t('feature.authDesc') }}
           </p>
         </div>
         <div class="p-6 rounded-xl bg-card border border-border">
           <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('landing.feature.usersTitle') }}</h3>
+          <h3 class="font-semibold">{{ t('feature.usersTitle') }}</h3>
           <p class="text-sm text-muted-foreground mt-2">
-            {{ t('landing.feature.usersDesc') }}
+            {{ t('feature.usersDesc') }}
           </p>
         </div>
         <div class="p-6 rounded-xl bg-card border border-border">
           <ng-icon name="lucideSunMoon" class="text-3xl text-primary mb-3" />
-          <h3 class="font-semibold">{{ t('landing.feature.themeTitle') }}</h3>
+          <h3 class="font-semibold">{{ t('feature.themeTitle') }}</h3>
           <p class="text-sm text-muted-foreground mt-2">
-            {{ t('landing.feature.themeDesc') }}
+            {{ t('feature.themeDesc') }}
           </p>
         </div>
       </div>

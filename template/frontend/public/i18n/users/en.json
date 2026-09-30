@@ -1,0 +1,121 @@
+{
+  "page": {
+    "title": "User management"
+  },
+  "filter": {
+    "allStatus": "All statuses",
+    "allEmailStatus": "All email statuses",
+    "emailLabel": "Email status",
+    "allRoles": "All roles",
+    "searchPlaceholder": "Search username / email / display name..."
+  },
+  "actions": {
+    "newUser": "New user",
+    "manageRoles": "Assign roles"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Disabled",
+    "emailVerified": "Email verified",
+    "emailUnverified": "Email not verified",
+    "locked": "Locked",
+    "lockedUntil": "Locked until {{time}}",
+    "lockedIndefinitely": "Locked until an administrator unlocks it"
+  },
+  "toast": {
+    "created": "User created successfully",
+    "updated": "User updated successfully",
+    "enabled": "User enabled",
+    "disabled": "User disabled",
+    "deleted": "User deleted",
+    "passwordReset": "Password has been reset",
+    "cannotDeleteSummary": "Cannot delete",
+    "cannotDeleteSuperAdmin": "The built-in super administrator cannot be deleted",
+    "unlocked": "User unlocked",
+    "twoFactorReset": "Two-factor authentication reset"
+  },
+  "confirm": {
+    "enableMessage": "Are you sure you want to enable user {{name}}?",
+    "disableMessage": "Are you sure you want to disable user {{name}}?",
+    "enableHeader": "Confirm enable",
+    "disableHeader": "Confirm disable",
+    "deleteMessage": "Are you sure you want to delete user {{name}}? Once deleted, the user will no longer be able to sign in.",
+    "deleteHeader": "Confirm delete",
+    "unlockMessage": "Unlock user {{name}}? The failed sign-in count will also be reset.",
+    "unlockHeader": "Confirm unlock",
+    "resetTwoFactorMessage": "Reset two-factor authentication for {{name}}? They will be signed out everywhere and can sign in with just their password.",
+    "resetTwoFactorHeader": "Confirm reset"
+  },
+  "table": {
+    "currentPageReport": "{{total}} in total",
+    "colUser": "User",
+    "colEmail": "Email",
+    "colRole": "Role",
+    "colStatus": "Status",
+    "colLastLogin": "Last sign-in",
+    "colCreatedAt": "Created at",
+    "colActions": "Actions",
+    "emptyTitle": "No users yet",
+    "emptyHint": "Create a new user",
+    "emptyFilteredTitle": "No matching users",
+    "emptyFilteredHint": "Adjust the search or filters"
+  },
+  "popover": {
+    "noRoles": "No roles",
+    "rolesTitle": "Roles ({{count}})"
+  },
+  "tooltip": {
+    "superAdminNoEdit": "The built-in super administrator cannot be updated by other administrators",
+    "superAdminNoDisable": "The built-in super administrator cannot be disabled by other administrators",
+    "superAdminNoDisableSelf": "The built-in super administrator cannot disable itself",
+    "disable": "Disable",
+    "enable": "Enable",
+    "superAdminNoReset": "The built-in super administrator's password cannot be reset by other administrators",
+    "resetPassword": "Reset password",
+    "superAdminNoDelete": "The built-in super administrator cannot be deleted",
+    "unlock": "Unlock",
+    "resetTwoFactor": "Reset two-factor authentication"
+  },
+  "editDialog": {
+    "editHeader": "Edit user",
+    "createHeader": "New user",
+    "description": "Manage the account profile, roles, and status.",
+    "loading": "Loading user information...",
+    "unnamedUser": "Unnamed user",
+    "noEmail": "No email set",
+    "avatarHint": "PNG, JPG or WebP",
+    "avatarTooLargeSummary": "File too large",
+    "avatarTooLargeDetail": "The image cannot exceed 10 MB",
+    "avatarBadTypeSummary": "Unsupported format",
+    "avatarBadTypeDetail": "Please upload a PNG, JPG or WEBP image",
+    "usernameLabel": "Username",
+    "usernamePlaceholder": "Enter a username",
+    "emailLabel": "Email",
+    "emailPlaceholder": "Enter an email",
+    "displayNameLabel": "Display name",
+    "displayNamePlaceholder": "Enter a display name",
+    "passwordLabel": "Initial password",
+    "passwordPlaceholder": "At least 12 characters",
+    "passwordRequired": "Enter an initial password",
+    "rolesLabel": "Roles",
+    "rolesPlaceholder": "Select roles",
+    "activeTitle": "Enable user",
+    "activeHint": "When disabled, the user cannot sign in or call protected endpoints",
+    "emailVerifiedTitle": "Email verified",
+    "emailVerifiedHint": "Used to manage the email verification status",
+    "avatarDecodeFailed": "This image could not be read. Try another one."
+  },
+  "resetDialog": {
+    "header": "Reset user password",
+    "warning": "After the reset, the user must sign in with the new password.",
+    "ruleHint": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
+    "newPasswordLabel": "New password",
+    "newPasswordPlaceholder": "Enter a new password",
+    "confirmButton": "Confirm reset"
+  },
+  "rolesDialog": {
+    "title": "Roles · {{name}}",
+    "description": "The user inherits every permission granted to the selected roles.",
+    "saved": "Roles updated"
+  }
+}

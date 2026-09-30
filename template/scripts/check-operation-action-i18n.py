@@ -9,7 +9,7 @@
 判据：
   1. 从 `OperationRecordActions` 类中提取全部 `public const string X = "y.z";` 的**字面值**；
      同文件里的 `OperationRecordAuthorizations` 不在射程内——那是授权依据，不进句子模板。
-  2. 每个动作码在 `en.json` 与 `zh-CN.json` 的 `operationRecords.actions` 下都必须有非空词条。
+  2. 每个动作码在 `en.json` 与 `zh-CN.json` 的 `operationRecords/{lang}.json` 的 `actions` 下都必须有非空词条。
 
 **刻意只做单向校验，不报"多余词条"。** 词条文件里允许存在本项目暂时用不到的键：
 前端词条是 JSON，没有条件编译，某个功能没启用时它对应的组件不在了、键却还留着。
@@ -85,7 +85,7 @@ def extract_action_codes(text):
 def read_action_entries(path):
     with open(path, encoding='utf-8') as handle:
         data = json.load(handle)
-    node = data.get('operationRecords', {}).get('actions', {})
+    node = data.get('actions', {})
     return node if isinstance(node, dict) else {}
 
 
@@ -120,7 +120,7 @@ def check(actions_source, i18n_dir, locales, table_source=None, require_inline=T
     localized = os.path.isdir(i18n_dir)
 
     for locale in locales if localized else ():
-        path = os.path.join(i18n_dir, f'{locale}.json')
+        path = os.path.join(i18n_dir, 'operationRecords', f'{locale}.json')
         if not os.path.exists(path):
             problems.append(f'{locale}：缺少词条文件 {path}')
             continue
@@ -210,11 +210,11 @@ def self_test():
             handle.write(SELF_TEST_SOURCE)
 
         i18n = os.path.join(tmp, 'i18n')
-        os.makedirs(i18n)
+        os.makedirs(os.path.join(i18n, 'operationRecords'))
 
         def write(locale, actions):
-            with open(os.path.join(i18n, f'{locale}.json'), 'w', encoding='utf-8') as handle:
-                json.dump({'operationRecords': {'actions': actions}}, handle)
+            with open(os.path.join(i18n, 'operationRecords', f'{locale}.json'), 'w', encoding='utf-8') as handle:
+                json.dump({'actions': actions}, handle)
 
         write('en', {'user.created': 'Created user {{target}}', 'role.deleted': 'Deleted role {{target}}'})
         if check(source, i18n, ('en',)):

@@ -11,6 +11,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import {
   Translation,
+  TranslationLoadError,
   TRANSLOCO_LOADER,
   TranslocoLoader,
   TranslocoService,
@@ -183,6 +184,111 @@ describe('LanguageService', () => {
     expect(document.documentElement.lang).toBe('zh-CN');
     expect(transloco.translate('greeting')).toBe('你好');
     expect(greeting()).toBe('你好');
+  });
+
+  it('preloads every visited scope before activating a language', async () => {
+    const { service, transloco } = await startInEnglish();
+    const entered = service.loadScopes(['users', 'roles']);
+    await flushMicrotasks();
+    loader.resolve('users/en', { title: 'Users' });
+    loader.resolve('roles/en', { title: 'Roles' });
+    await entered;
+
+    const observed: string[][] = [];
+    transloco.langChanges$.subscribe((lang) => {
+      observed.push([
+        lang,
+        service.activeLang(),
+        document.documentElement.lang,
+        transloco.translate('users.title'),
+      ]);
+    });
+    observed.length = 0;
+    const switched = service.applyAccountLang('zh-CN');
+    loader.resolve('zh-CN', { greeting: '你好' });
+    await flushMicrotasks();
+    loader.resolve('users/zh-CN', { title: '用户' });
+    expect(await isSettled(switched)).toBe(false);
+    expectActive(service, transloco, 'en', 'Hello');
+    expect(transloco.translate('users.title')).toBe('Users');
+    expect(transloco.translate('roles.title')).toBe('Roles');
+
+    loader.resolve('roles/zh-CN', { title: '角色' });
+    await switched;
+    expectActive(service, transloco, 'zh-CN', '你好');
+    expect(transloco.translate('users.title')).toBe('用户');
+    expect(transloco.translate('roles.title')).toBe('角色');
+    expect(observed).toEqual([['zh-CN', 'zh-CN', 'zh-CN', '用户']]);
+  });
+
+  it('keeps all four language states consistent after a scope failure and a superseded recovery', async () => {
+    const { service, transloco } = await startInChinese();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const entered = service.loadScopes(['users']);
+    await flushMicrotasks();
+    loader.resolve('users/zh-CN', { title: '用户' });
+    await entered;
+    const changes = recordLangChanges(transloco);
+
+    const failed = service.applyAccountLang('en');
+    loader.resolve('en', { greeting: 'Hello' });
+    await flushMicrotasks();
+    loader.fail('users/en');
+    await failed;
+    expectActive(service, transloco, 'zh-CN', '你好');
+    expect(transloco.translate('users.title')).toBe('用户');
+    expect(changes).not.toContain('en');
+    expect(errorHandler.handleError).toHaveBeenCalledTimes(1);
+
+    // 同一路径连续失败仍是加载错误，不能因 Transloco 缓存了半初始化计数而变成 TypeError。
+    await service.applyAccountLang('en');
+    expectActive(service, transloco, 'zh-CN', '你好');
+    expect(errorHandler.handleError).toHaveBeenCalledTimes(2);
+    expect(
+      errorHandler.handleError.mock.calls.every(([error]) => error instanceof TranslationLoadError),
+    ).toBe(true);
+
+    loader.restore('users/en');
+    const superseded = service.applyAccountLang('en');
+    await flushMicrotasks();
+    await service.applyAccountLang('zh-CN');
+    loader.resolve('users/en', { title: 'Users' });
+    await superseded;
+    expectActive(service, transloco, 'zh-CN', '你好');
+    expect(transloco.translate('users.title')).toBe('用户');
+    expect(changes).not.toContain('en');
+  });
+
+  it('waits for a scope entered while a language switch is loading', async () => {
+    const { service, transloco } = await startInEnglish();
+    const switched = service.applyAccountLang('zh-CN');
+    const entered = service.loadScopes(['users']);
+    await flushMicrotasks();
+    loader.resolve('users/en', { title: 'Users' });
+    await entered;
+    loader.resolve('zh-CN', { greeting: '你好' });
+    await flushMicrotasks();
+    expect(await isSettled(switched)).toBe(false);
+    loader.resolve('users/zh-CN', { title: '用户' });
+    await switched;
+    expectActive(service, transloco, 'zh-CN', '你好');
+    expect(transloco.translate('users.title')).toBe('用户');
+  });
+
+  it('loads the final active language before completing a concurrent scope entry', async () => {
+    const { service, transloco } = await startInEnglish();
+    const entered = service.loadScopes(['users']);
+    await flushMicrotasks();
+    const switched = service.applyAccountLang('zh-CN');
+    loader.resolve('zh-CN', { greeting: '你好' });
+    await switched;
+    loader.resolve('users/en', { title: 'Users' });
+    await flushMicrotasks();
+    expect(await isSettled(entered)).toBe(false);
+    loader.resolve('users/zh-CN', { title: '用户' });
+    expect(await entered).toBe(true);
+    expectActive(service, transloco, 'zh-CN', '你好');
+    expect(transloco.translate('users.title')).toBe('用户');
   });
 
   it('completes a repeated request for a language still loading only when its translations arrive', async () => {

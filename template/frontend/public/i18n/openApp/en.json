@@ -1,0 +1,140 @@
+{
+  "page": {
+    "title": "Open Applications"
+  },
+  "action": {
+    "create": "New Open Application",
+    "resetSecret": "Reset secret"
+  },
+  "filter": {
+    "allAppTypes": "All application types",
+    "allClientTypes": "All client types",
+    "appTypeLabel": "Application type",
+    "clientTypeLabel": "Client type",
+    "searchPlaceholder": "Search by name / Client ID..."
+  },
+  "toast": {
+    "created": "Open application created successfully",
+    "updated": "Open application updated successfully",
+    "deleted": "Open application deleted",
+    "secretCopied": "Secret copied"
+  },
+  "confirm": {
+    "deleteHeader": "Confirm deletion",
+    "deleteMessage": "Are you sure you want to delete this open application? Clients using this Client ID will no longer be able to sign in.",
+    "resetSecretHeader": "Confirm secret reset",
+    "resetSecretMessage": "Are you sure you want to reset this open application's Client Secret? The old secret will be invalidated immediately."
+  },
+  "secret": {
+    "resetHeader": "Client Secret reset",
+    "createdHeader": "Client secret",
+    "warning": "Please copy and store it securely now; the secret will not be shown in plain text again.",
+    "copyAndClose": "Copy and close"
+  },
+  "appType": {
+    "web": "Web",
+    "native": "Desktop/Native",
+    "service": "Service"
+  },
+  "dialog": {
+    "editHeader": "Edit Open Application",
+    "createHeader": "New Open Application",
+    "description": "Configure the client's identity, type, and OAuth capabilities.",
+    "loading": "Loading open application..."
+  },
+  "field": {
+    "template": "Application template",
+    "templatePlaceholder": "Select a template to quickly fill in",
+    "displayName": "Application name",
+    "displayNamePlaceholder": "e.g. My Desktop App",
+    "clientIdPlaceholder": "e.g. my-desktop-app",
+    "applicationType": "Application type",
+    "clientType": "Client type",
+    "consentType": "Consent",
+    "clientId": "Client ID",
+    "redirectUris": "Redirect URIs",
+    "postLogoutRedirectUris": "Post Logout Redirect URIs",
+    "permissions": "Permissions",
+    "requirements": "Requirements"
+  },
+  "template": {
+    "web": "Web PKCE client",
+    "desktop": "Desktop PKCE client",
+    "service": "Service confidential client",
+    "desktopDisplayName": "My Desktop App"
+  },
+  "consentType": {
+    "implicit": "Implicit consent",
+    "explicit": "Explicit consent",
+    "external": "External consent",
+    "systematic": "Systematic consent"
+  },
+  "clientType": {
+    "publicLabel": "Public",
+    "confidentialLabel": "Confidential"
+  },
+  "permission": {
+    "authorizationEndpoint": "Authorization endpoint",
+    "tokenEndpoint": "Token endpoint",
+    "endSessionEndpoint": "End session endpoint",
+    "authorizationCode": "Authorization code",
+    "authorizationCodeFlow": "Authorization code flow",
+    "refreshToken": "Refresh token",
+    "clientCredentials": "Client credentials",
+    "codeResponse": "Code response",
+    "scopeOpenid": "Identity",
+    "scopeProfile": "Profile",
+    "scopeEmail": "Email",
+    "scopeRoles": "Roles",
+    "scopeOfflineAccess": "Offline access",
+    "notConfigured": "Not configured"
+  },
+  "requirement": {
+    "forcePkce": "Force PKCE"
+  },
+  "section": {
+    "callback": "Callback URIs",
+    "authorization": "Authorization capabilities"
+  },
+  "redirectUri": {
+    "hint": "Callback URI after sign-in completes",
+    "placeholder": "https://example.com/callback or my-desktop-app://oauth/callback",
+    "invalid": "Please enter a valid absolute URI without a fragment.",
+    "empty": "No Redirect URI configured yet"
+  },
+  "postLogoutUri": {
+    "hint": "Redirect URI after logout",
+    "empty": "No Post Logout Redirect URI configured yet"
+  },
+  "service": {
+    "autoConfigured": "Configured automatically from the template",
+    "description": "Server-side client credentials flow; no callback URIs or PKCE required."
+  },
+  "permissions": {
+    "placeholder": "Select authorization capabilities"
+  },
+  "requirements": {
+    "placeholder": "Select security requirements",
+    "offlineAccessHint": "refresh_token is allowed; consider also granting the offline_access scope."
+  },
+  "table": {
+    "currentPageReport": "{{total}} total",
+    "colApp": "Application",
+    "colType": "Type",
+    "colPermissions": "Capabilities",
+    "colSecurity": "Security",
+    "colRedirectUris": "Redirect URIs",
+    "colPostLogoutRedirectUris": "Post logout redirect URIs",
+    "colCreatedAt": "Created at",
+    "noPkce": "No PKCE",
+    "secretSet": "Secret set",
+    "noSecret": "No secret",
+    "emptyTitle": "No open applications yet",
+    "emptyHint": "Create a new open application",
+    "emptyFilteredTitle": "No matching open applications",
+    "emptyFilteredHint": "Adjust the search or filters"
+  },
+  "popover": {
+    "empty": "Nothing configured"
+  }
+}

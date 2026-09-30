@@ -92,6 +92,7 @@ export const appConfig: ApplicationConfig = {
         defaultLang: 'en',
         fallbackLang: 'en',
         reRenderOnLangChange: true,
+        scopes: { autoPrefixKeys: false },
         prodMode: environment.production,
         // 生产构建的词条已由 postbuild 的 transloco-optimize 预先展平，运行时不必再展平一遍。
         // 前提是生产构建走 npm run build（它才会触发 postbuild）；直接 ng build 出来的是未展平的原文件，词条会全部找不到

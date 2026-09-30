@@ -198,9 +198,9 @@ export class OpenApplications {
 
   //#if (IncludeLocalization)
   private readonly applicationTypeOptionsTexts = {
-    web: translateSignal('openApp.appType.web'),
-    native: translateSignal('openApp.appType.native'),
-    service: translateSignal('openApp.appType.service'),
+    web: translateSignal('openApp.appType.web', {}, { scope: 'openApp' }),
+    native: translateSignal('openApp.appType.native', {}, { scope: 'openApp' }),
+    service: translateSignal('openApp.appType.service', {}, { scope: 'openApp' }),
   };
   readonly applicationTypeOptions = computed(() => [
     {
@@ -221,8 +221,12 @@ export class OpenApplications {
   ]);
 
   private readonly clientTypeOptionsTexts = {
-    publicLabel: translateSignal('openApp.clientType.publicLabel'),
-    confidentialLabel: translateSignal('openApp.clientType.confidentialLabel'),
+    publicLabel: translateSignal('openApp.clientType.publicLabel', {}, { scope: 'openApp' }),
+    confidentialLabel: translateSignal(
+      'openApp.clientType.confidentialLabel',
+      {},
+      { scope: 'openApp' },
+    ),
   };
   readonly clientTypeOptions = computed(() => [
     {
@@ -288,7 +292,7 @@ export class OpenApplications {
       });
 
     //#if (IncludeLocalization)
-    const title = translateSignal('openApp.page.title');
+    const title = translateSignal('openApp.page.title', {}, { scope: 'openApp' });
     effect(() => this.layoutService.title.set(title()));
     //#else
     this.layoutService.title.set('Open Applications');

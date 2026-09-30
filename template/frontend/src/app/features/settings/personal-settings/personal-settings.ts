@@ -68,8 +68,8 @@ export class PersonalSettings {
   private readonly layoutService = inject(LayoutService);
   //#if (IncludeLocalization)
   /** 各面板的标题与说明：整段取成对象，词条到达与语言切换时随之重算；未到达前是空对象。 */
-  private readonly panelTexts = translateObjectSignal('settings.panels');
-  private readonly title = translateSignal('settings.personal.title');
+  private readonly panelTexts = translateObjectSignal('settings.panels', {}, { scope: 'settings' });
+  private readonly title = translateSignal('settings.personal.title', {}, { scope: 'settings' });
 
   protected readonly panels = computed<SettingsPanelLink[]>(() => {
     const texts = this.panelTexts();

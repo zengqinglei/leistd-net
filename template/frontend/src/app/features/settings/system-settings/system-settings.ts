@@ -97,7 +97,7 @@ export class SystemSettings {
 
   constructor() {
     //#if (IncludeLocalization)
-    const title = translateSignal('settings.system.title');
+    const title = translateSignal('settings.system.title', {}, { scope: 'settings' });
     effect(() => this.layoutService.title.set(title()));
     //#else
     this.layoutService.title.set(this.t('settings.system.title'));

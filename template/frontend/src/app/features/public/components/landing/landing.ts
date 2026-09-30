@@ -38,16 +38,16 @@ export class Landing {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'landing.hero.title': 'Template Project',
-  'landing.hero.subtitle':
+  'hero.title': 'Template Project',
+  'hero.subtitle':
     'A full-stack application development template based on Angular + Spartan UI + .NET 10 DDD architecture',
-  'landing.hero.login': 'Sign In',
-  'landing.hero.register': 'Sign Up',
-  'landing.feature.authTitle': 'Authentication',
-  'landing.feature.authDesc': 'Cookie-based authentication with role and permission management',
-  'landing.feature.usersTitle': 'User Management',
-  'landing.feature.usersDesc': 'Full CRUD operations with permission control',
-  'landing.feature.themeTitle': 'Theme System',
-  'landing.feature.themeDesc': 'Dark mode + Tailwind CSS + Spartan UI',
+  'hero.login': 'Sign In',
+  'hero.register': 'Sign Up',
+  'feature.authTitle': 'Authentication',
+  'feature.authDesc': 'Cookie-based authentication with role and permission management',
+  'feature.usersTitle': 'User Management',
+  'feature.usersDesc': 'Full CRUD operations with permission control',
+  'feature.themeTitle': 'Theme System',
+  'feature.themeDesc': 'Dark mode + Tailwind CSS + Spartan UI',
 };
 //#endif

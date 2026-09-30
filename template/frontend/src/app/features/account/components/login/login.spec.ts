@@ -4,7 +4,7 @@ import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { provideTranslocoScope, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, throwError } from 'rxjs';
@@ -16,6 +16,9 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 //#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
+//#if (IncludeLocalization)
+import { LanguageService } from '../../../../core/services/language-service';
+//#endif
 import { SessionContextService } from '../../../../core/services/session-context-service';
 import { StartupService } from '../../../../core/services/startup-service';
 //#if (LocalIdentity)
@@ -81,6 +84,7 @@ describe('Login', () => {
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(['en', 'zh-CN']),
+        provideTranslocoScope('account'),
         //#endif
         { provide: AuthService, useValue: authService },
         //#if (LocalIdentity)
@@ -102,7 +106,16 @@ describe('Login', () => {
     authorization = TestBed.inject(AuthorizationService);
     vi.spyOn(TestBed.inject(SessionContextService), 'establish').mockResolvedValue();
 
+    //#if (IncludeLocalization)
+    // 与应用启动和路由解析器相同：组件创建前语言与功能词条必须已就位。
+    await TestBed.inject(LanguageService).initialized;
+    await TestBed.inject(LanguageService).loadScopes(['account']);
+    //#endif
     fixture = TestBed.createComponent(Login);
+    //#if (IncludeLocalization)
+    // 登录页构造时清理旧主体，等待这次退回设备语言后再测试用户切换。
+    await TestBed.inject(LanguageService).resetToDeviceLang();
+    //#endif
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
 
@@ -168,7 +181,7 @@ describe('Login', () => {
   it('re-renders form labels and the submit button when the language changes', async () => {
     await setUp();
     const transloco = TestBed.inject(TranslocoService);
-    transloco.setTranslation({ account: { login: { password: '密码', submit: '登录' } } }, 'zh-CN');
+    transloco.setTranslation({ login: { password: '密码', submit: '登录' } }, 'account/zh-CN');
     const host = fixture.nativeElement as HTMLElement;
     const passwordLabel = () => host.querySelector('label[for="password"]')!.textContent!.trim();
     const submitText = () => host.querySelector('button[type="submit"]')!.textContent!.trim();

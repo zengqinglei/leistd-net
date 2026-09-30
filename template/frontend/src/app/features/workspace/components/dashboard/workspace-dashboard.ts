@@ -39,7 +39,7 @@ export class WorkspaceDashboard {
   readonly authService = inject(AuthService);
 
   constructor() {
-    const title = translateSignal('workspace.dashboard.title');
+    const title = translateSignal('workspace.dashboard.title', {}, { scope: 'workspace' });
     effect(() => this.layoutService.title.set(title()));
   }
 }

@@ -48,7 +48,7 @@ export class SessionContextService {
       await this.refreshSettings();
     } catch {
       // 不保留上一份快照：主体已经换人，旧快照属于上一个用户。
-      this.clearSettings();
+      await this.clearSettings();
     }
   }
 
@@ -80,7 +80,7 @@ export class SessionContextService {
   clear(): void {
     this.authService.clearAuthData();
     this.authorizationService.clear();
-    this.clearSettings();
+    void this.clearSettings();
   }
 
   /**
@@ -89,12 +89,14 @@ export class SessionContextService {
    * 收在一个方法里，是为了让「又多了一样跟主体走的派生状态」只有一处要改——
    * 分成两处迟早只改一处，而漏掉的表现是「下一个人接着用上一个人的偏好」。
    */
-  private clearSettings(): void {
+  private clearSettings(): Promise<void> {
     this.settingContext.clear();
     //#if (IncludeLocalization)
     // 语言不在快照里：它已经应用到 LanguageService 上了，清快照收不回来，
     // 于是共享机器上前一个人的语言会留给下一个人。
-    void this.languageService.resetToDeviceLang();
+    return this.languageService.resetToDeviceLang();
+    //#else
+    return Promise.resolve();
     //#endif
   }
   //#if (IncludeLocalization)

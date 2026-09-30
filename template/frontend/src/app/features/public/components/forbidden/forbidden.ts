@@ -44,10 +44,10 @@ export class Forbidden {
 
 /** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'forbidden.title': 'Access denied',
-  'forbidden.description':
+  title: 'Access denied',
+  description:
     'You are signed in, but you do not have permission to view this page. Ask an administrator to grant it.',
-  'forbidden.backToWorkspace': 'Back to workspace',
-  'forbidden.backHome': 'Go home',
+  backToWorkspace: 'Back to workspace',
+  backHome: 'Go home',
 };
 //#endif
