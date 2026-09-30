@@ -64,7 +64,8 @@ jobs:
       - name: 安装单测用的 Chromium
         shell: pwsh
         run: |
-          $version = (Get-Content template/frontend/package-lock.json -Raw | ConvertFrom-Json).packages.'node_modules/playwright'.version
+          # 锁文件根包的键是空字符串，ConvertFrom-Json 须用 -AsHashTable 才能解析
+          $version = (Get-Content template/frontend/package-lock.json -Raw | ConvertFrom-Json -AsHashTable).packages['node_modules/playwright'].version
           if (-not $version) { throw '模板锁文件里没有 playwright' }
           npx --yes "playwright@$version" install --with-deps chromium
       - name: 打包当前 Framework
