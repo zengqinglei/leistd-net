@@ -1,4 +1,5 @@
 using Leistd.Email.Abstractions;
+using Leistd.Redaction;
 using Leistd.Email.Smtp.Options;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -47,7 +48,12 @@ public sealed class SmtpEmailSender(
         await client.SendAsync(mime, cancellationToken);
         await client.DisconnectAsync(quit: true, cancellationToken);
 
-        logger.LogInformation("Email sent to {To} with subject {Subject}", message.To, message.Subject);
+        // 收件人脱敏后再记：邮箱是个人数据，日志通常被集中采集、保留更久、可见范围更大。
+        // 留下的形态（al***@example.com）既保住按域名聚合的排障能力，又不暴露到个人。
+        logger.LogInformation(
+            "Email sent to {To} with subject {Subject}",
+            TextRedactor.RedactEmail(message.To),
+            message.Subject);
     }
 
     // 465 要求连接即 TLS，其余加密端口使用 STARTTLS。

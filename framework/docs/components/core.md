@@ -1,6 +1,6 @@
-# 核心原语：时钟
+# 核心原语：时钟与脱敏
 
-`Leistd.Core` 是最底层的基础包，只放跨组件复用的原语。时钟抽象 `IClock` 让「现在」可注入、可测试。
+`Leistd.Core` 是最底层的基础包，只放跨组件复用的原语：`IClock` 让「现在」可注入可测试，`TextRedactor` 把敏感值换成可安全输出的形态（写日志与对外展示共用）。
 
 ## 何时使用
 
@@ -9,6 +9,8 @@
 | 需要获取当前时间且希望单元测试可控（mock 时间） | 注入 `IClock`，不要直接用 `DateTime.UtcNow` |
 | 按"自然日"做统计，需消除时区漂移 | `IClock` + `ClockExtensions.GetMidnightInUtc(timeZone)`（时区显式传入） |
 | 标准化外部传入的 `DateTime`（统一为 UTC） | `IClock.Normalize(dateTime)` |
+| 要把邮箱写进日志或展示给非本人 | `TextRedactor.RedactEmail(address)` → `al***@example.com` |
+| 要把手机号、卡号、证件号这类值脱敏 | `TextRedactor.RedactPartially(value, keepStart, keepEnd)` → `158***90`；位数由业务定 |
 
 > `Leistd.Core` 是被依赖项，通常无需直接添加——你引用的上层组件（异常处理、DDD 等）已传递引用它。
 
@@ -64,6 +66,8 @@ public class DailyReportService(IClock clock)
 | `UtcClockProvider : IClock` | 默认实现，取值委托给 `TimeProvider`（默认 `TimeProvider.System`） |
 | `ClockExtensions.GetMidnightInUtc(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**今日零点对应的 UTC 时刻，按天统计的基准锚点 |
 | `ClockExtensions.GetUtcOffsetHours(this IClock, TimeZoneInfo)` | 扩展方法，返回**指定时区**当前相对 UTC 的偏移小时数（`double`，已计入夏令时） |
+| `TextRedactor.RedactEmail(address)` | 保本地部开头几位 + 完整域名；拿不到域名时不回落原文 |
+| `TextRedactor.RedactPartially(value, keepStart, keepEnd)` | 保两端各若干位，中间 `***`；短到留不住两端时整体掩掉 |
 
 ## 实现行为
 
@@ -75,6 +79,22 @@ public class DailyReportService(IClock clock)
 - `Normalize` 的规则：`Unspecified` 假定为 UTC（`SpecifyKind`）；`Local` 调用 `ToUniversalTime()` 转 UTC；`Utc` 原样返回。
 - `GetMidnightInUtc(timeZone)` 按**传入时区**计算：取当前 UTC → 转该时区 → 取当日零点 → 再转回 UTC。例如时区为 `Asia/Shanghai`、当前 UTC 为 `2026-05-27T20:00:00Z` 时（该时区已是 05-28），返回 `2026-05-27T16:00:00Z`。
 - 该实现无状态，以 Singleton 注册即可。
+
+- **`TextRedactor` 只提供形态，不维护数据类型目录。** 邮箱有专门方法，是因为它的 `'@'` 语义固定、
+  而框架自己也处理邮箱（邮件组件把收件人写进投递日志）；手机号、证件号、卡号这类"保留几位"属业务判断，
+  用 `RedactPartially` 传自己的参数，不在这里各加一个方法——那会让通用组件跟着业务长。
+- **放在 `Leistd.Redaction` 而不是日志命名空间下**：写日志与对外展示是同一件事的两面，
+  页面上只让人认出"是我那个"同样要脱敏。**要不要脱敏、对谁脱敏由调用方决定**——
+  同一个字段给本人看可能要真值（他要核对自己的联系方式），给运维看只要够聚合。
+- **邮箱保留位数是可读性与暴露面的权衡**：从第一个字母或数字起**最多留 3 位，且不超过本地部的一半**。
+  只留一位常常认不出是谁（工单里一堆 `a***@`）；封顶 3 位是因为再多对识别帮助有限、暴露面却线性上升；
+  半数上限是硬的——只按固定位数留，`alice` 这类短本地部会被交出去大半，`bob` 更会变成 `bo***`。
+  实际效果：`zhangsan@` → `zha***@`，`alice@` → `al***@`，`bob@` → `b***@`，`a@` → `***@`。
+- **掩码固定三个星号，不按长度补。** 定长掩码（如 PCI 示例 `1234 56XX XXXX 1121`）会暴露原值长度。
+  卡号长度本来公开所以无妨，通用形态上不这么做；确需定长时自己写。
+- **形态写在调用点，改形态要改代码、也无法按部署切换。** 业务要对自己的多种数据类型集中管控
+  **日志**脱敏策略时，用官方 `Microsoft.Extensions.Compliance.Redaction`（在业务侧声明自己的数据分类、
+  注册脱敏器）。注意它**只作用于日志管道，不覆盖对外展示**，展示侧仍用本类。
 
 ## 注意事项
 

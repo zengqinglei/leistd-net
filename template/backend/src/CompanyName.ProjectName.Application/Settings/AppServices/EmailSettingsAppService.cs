@@ -16,6 +16,7 @@ using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Tenancy;
 using Microsoft.Extensions.Logging;
+using Leistd.Redaction;
 
 namespace CompanyName.ProjectName.Application.Settings.AppServices;
 
@@ -51,7 +52,7 @@ public class EmailSettingsAppService(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Test email to {To} failed", input.To);
+            logger.LogWarning(ex, "Test email to {To} failed", TextRedactor.RedactEmail(input.To));
             throw new BusinessException(AppSettingErrorCodes.TestEmailFailed, "The test email could not be sent. Check the email settings and server logs.", ex);
         }
     }

@@ -534,3 +534,15 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 默认与本地化前端的 `lint:ts`、`lint:style`、`format` 从无条件重跑改为对应工具的官方 content cache，检查范围和规则不变；没有双入口或迁移开关。派生项目同步这三个 scripts、依赖安装时删除 `.cache/lint/` 的 `postinstall`，并在 Git/格式检查中忽略该目录。现有 `prepare: husky` 保留。缓存不随模板生成分发，不加入依赖包或公共 API。
 
 插件更新可能不进入格式检查器的缓存键，因此不能只同步 `--cache` 而遗漏安装清理；显式忽略 npm 生命周期脚本安装后，先删除 `.cache/lint/` 再检查。框架运行时与测试用例未删除。维护与验收口径见[模板质量验证](../template/quality-assurance.md)。
+
+## 20. 日志不再出现邮箱原文
+
+| 变化 | 影响与改法 |
+| --- | --- |
+| `Leistd.Email.Smtp` 的投递日志改为只记收件**域名** | 原先 `Email sent to {To} with subject {Subject}` 把收件人邮箱原文写进 Information 级日志；邮箱是个人数据，而日志通常被集中采集、保留更久、可见范围更大。现记为 `Email sent to a {ToDomain} address with subject {Subject}`。域名保住了排障需要的那一半——按域名聚合才能看出"某个租户或某个邮件服务商整体收不到"；地址取不出域名（配错了）时记 `-`，**不回落成原文**（否则"配错的地址"会成为唯一泄露原文的路径，而那恰好是最容易被翻到的一类日志）。**按告警规则或日志管道匹配过完整收件地址的部署要改**：改为按域名匹配，或改用操作记录追查具体收件人 |
+| 模板的三处日志不再记邮箱 | `AuthAppService`（注册）、`UserAppService`（管理员建用户）、`EmailSettingsAppService`（测试发信失败）改为记脱敏后的地址（`al***@example.com`），经 `Leistd.Core` 新增的公共入口 `Leistd.Redaction.TextRedactor.RedactEmail`（纯函数，无需注册、无新依赖）。派生项目自己写的日志按同一口径核对一遍：**联系方式（邮箱、手机号）不进日志** |
+| **账号名照常记，不改** | 模板的用户名受 `^[a-zA-Z0-9_]+$` 约束、不可能是邮箱，是系统自身的账号标识而非联系方式，而且正是这些日志可读性的来源——换成 GUID 会让排障的人每条都要回库查一次。不要为此把用户名从日志里去掉 |
+| 操作记录的参数口径**不变** | 审计按设计会显示邮箱、用户名等可公开展示的值（见组件文档里 `LocalizationData` 的约定），这是审计的用途所在，不受本条影响。不要误以为审计也脱敏了 |
+| `Leistd.Email.Smtp` 新增对 `Leistd.Core` 的包依赖 | 为取 `TextRedactor`。`Leistd.Core` 只含原语、只依赖抽象，通常已在依赖闭包里；在架构门禁里限制应用层/领域层可引用包名的项目按 `nuspec` 对比结果更新白名单（方法见第 1 节） |
+| 新增公共入口 `Leistd.Redaction.TextRedactor`（`Leistd.Core`，纯静态方法、无新依赖） | `RedactEmail(address)` → `al***@example.com`（保本地部开头几位 + 完整域名：从第一个字母或数字起最多 3 位且不超过一半——`zhangsan@`→`zha***@`、`alice@`→`al***@`、`bob@`→`b***@`）；`RedactPartially(value, keepStart, keepEnd)` → `158***90`（位数由业务定：手机号常用 `(3,2)`，卡号按 PCI DSS 最多 `(6,4)`，证件号 `(0,4)`）。写日志与对外展示共用。**只提供形态，不维护数据类型目录**——不要期待框架为每种业务数据加方法 |
+| **没有引入脱敏组件** | 评估过 `Microsoft.Extensions.Compliance.Redaction`（数据分类 + `IRedactorProvider` + 日志脱敏），本次未采用：缺陷是"组件默认把个人数据写进日志"，终局修法是默认不写，而不是建一套"把个人数据安全写出去"的机制。实测结论留档在仓库的 `docs/assessments/`，其中两条对派生项目有用：**普通模板日志（`logger.LogInformation("{To}", to)`）永远不会被脱敏**，脱敏只作用于带 `[LoggerMessage]` 与数据分类标注的源生成方法；以及 **`builder.Services.AddSerilog(configure)` 与 `EnableRedaction()` 冲突，两者同时存在时日志会全部消失**（不是丢字段）。自行接入脱敏的项目注意这两点 |

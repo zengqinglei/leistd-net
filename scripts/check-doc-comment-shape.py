@@ -32,6 +32,10 @@ EXAMPLE_RE = re.compile(r'^\s*///\s*<example>')
 # 只在成对出现且中间无空白起止时判定为 Markdown 强调。
 MD_BOLD_RE = re.compile(r'\*\*(?=\S)(.+?)(?<=\S)\*\*')
 
+# 行内代码里的星号是字面量：掩码形态（`***`、`a***@example.com`）一行里出现两处时，
+# 两个 `**` 会被上面的正则配成一对，判成强调——判定前先把 <c>…</c> 抠掉。
+INLINE_CODE_RE = re.compile(r'<c>.*?</c>', re.S)
+
 
 def iter_sources():
     for label, scan_root, check_nonpublic, skip_tests in SCAN_TARGETS:
@@ -99,7 +103,7 @@ def check(rel, path, problems, check_nonpublic):
 
     # 规则 2：XML 里的 Markdown 强调
     for i, line in enumerate(lines):
-        if DOC_RE.match(line) and MD_BOLD_RE.search(line):
+        if DOC_RE.match(line) and MD_BOLD_RE.search(INLINE_CODE_RE.sub('', line)):
             problems.append(
                 f'{rel}:{i + 1} XML 注释里用了 Markdown 强调 **…**（不渲染），改用 <b>…</b>')
 
@@ -114,6 +118,10 @@ SELF_TEST_CASES = [
     ('bold', '    /// 这是 <b>强调</b> 的正确写法', False),
     ('bold', '    /// 这是 **强调** 的错误写法', True),
     ('bold', '    /// 排除的URI模式（如：/api/health/**）', False),
+    # 行内代码里的掩码星号：一行两处时旧正则会把它们配成一对强调
+    ('bold', '    /// 中间换成 <c>***</c>，例如 <c>158***90</c>', False),
+    # 抠掉行内代码之后，真正的强调仍要命中
+    ('bold', '    /// <c>***</c> 之外还有 **真强调**', True),
 ]
 
 
@@ -123,7 +131,7 @@ def self_test():
         if rule == 'nonpublic':
             hit = bool(NONPUBLIC_RE.match(text))
         else:
-            hit = bool(DOC_RE.match(text) and MD_BOLD_RE.search(text))
+            hit = bool(DOC_RE.match(text) and MD_BOLD_RE.search(INLINE_CODE_RE.sub('', text)))
         if hit != should:
             failures.append(f'  规则 {rule} 对 {text.strip()!r} 判定为 {hit}，期望 {should}')
 

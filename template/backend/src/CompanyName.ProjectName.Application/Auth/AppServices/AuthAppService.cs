@@ -1,5 +1,6 @@
 using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
+using Leistd.Redaction;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Errors;
 #endif
@@ -325,7 +326,7 @@ internal sealed class AuthAppService(
     [UnitOfWork]
     public async Task<UserOutputDto> RegisterAsync(RegisterInputDto input, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Registering user {Username} with email {Email}", input.Username, input.Email);
+        logger.LogInformation("Registering user {Username} with email {Email}", input.Username, TextRedactor.RedactEmail(input.Email));
 
         var options = await registrationPolicy.GetAsync(cancellationToken);
 
