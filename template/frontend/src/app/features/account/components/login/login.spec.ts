@@ -3,6 +3,9 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, throwError } from 'rxjs';
 
@@ -77,7 +80,7 @@ describe('Login', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        ...provideTranslocoTesting(['en']),
+        ...provideTranslocoTesting(['en', 'zh-CN']),
         //#endif
         { provide: AuthService, useValue: authService },
         //#if (LocalIdentity)
@@ -125,6 +128,72 @@ describe('Login', () => {
   afterEach(() => localStorage.clear());
   //#endif
 
+  /** 页面上显示出来的校验提示（未显示的 hlm-field-error 不渲染内容）。 */
+  function shownErrors(): string[] {
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('hlm-field-error'))
+      .map((element) => element.textContent!.trim())
+      .filter((text) => text.length > 0);
+  }
+
+  //#if (IncludeLocalization)
+  /**
+   * 校验提示按错误类型取词条（`validation.<kind>`），参数来自校验器给出的错误对象。
+   * 提示若在建表单时一次性翻译，切到另一种语言后标签都换了，错误提示还停在旧语言（全功能端到端测试发现）。
+   */
+  it('shows validation errors by kind, with their parameters, in the active language', async () => {
+    await setUp();
+    const transloco = TestBed.inject(TranslocoService);
+    transloco.setTranslation(
+      { validation: { required: 'Required', minLength: 'At least {{minLength}}' } },
+      'en',
+    );
+    transloco.setTranslation(
+      { validation: { required: '必填', minLength: '至少 {{minLength}} 位' } },
+      'zh-CN',
+    );
+    component.loginForm.usernameOrEmail().value.set('ab');
+    await component.onSubmit();
+    await fixture.whenStable();
+
+    expect(shownErrors()).toEqual(['At least 3', 'Required']);
+
+    transloco.setActiveLang('zh-CN');
+    await fixture.whenStable();
+
+    expect(shownErrors()).toEqual(['至少 3 位', '必填']);
+  });
+
+  // 标签与按钮文案经模板结构指令的 t 取得：切换语言后已渲染的表单要换成新语言。
+  // 防不住"文案改回组件里的 translate()"——那一条由 setting-section.spec 钉住。
+  it('re-renders form labels and the submit button when the language changes', async () => {
+    await setUp();
+    const transloco = TestBed.inject(TranslocoService);
+    transloco.setTranslation({ account: { login: { password: '密码', submit: '登录' } } }, 'zh-CN');
+    const host = fixture.nativeElement as HTMLElement;
+    const passwordLabel = () => host.querySelector('label[for="password"]')!.textContent!.trim();
+    const submitText = () => host.querySelector('button[type="submit"]')!.textContent!.trim();
+    expect(passwordLabel()).toBe('account.login.password');
+    expect(submitText()).toBe('account.login.submit');
+
+    transloco.setActiveLang('zh-CN');
+    await fixture.whenStable();
+
+    expect(passwordLabel()).toBe('密码');
+    expect(submitText()).toBe('登录');
+  });
+
+  //#else
+  // 不含本地化时提示来自内置英文表（english-text.ts），参数同样取自校验器给出的错误对象
+  it('shows validation errors by kind from the built-in English table', async () => {
+    await setUp();
+    component.loginForm.usernameOrEmail().value.set('ab');
+    await component.onSubmit();
+    await fixture.whenStable();
+
+    expect(shownErrors()).toEqual(['Must be at least 3 characters.', 'This field is required.']);
+  });
+
+  //#endif
   it('does not send a login request when the form is invalid', async () => {
     await setUp();
 

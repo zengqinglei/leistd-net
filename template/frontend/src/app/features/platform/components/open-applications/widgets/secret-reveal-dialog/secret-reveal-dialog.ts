@@ -9,7 +9,7 @@ import {
   model,
 } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCopy } from '@ng-icons/lucide';
@@ -20,10 +20,13 @@ import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { injectCopyToClipboard } from '../../../../../../shared/utils/clipboard';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 
 /**
  * 一次性揭示 Client Secret 的弹窗（重置 / 新建后复用同一实例）。
- * 展示安全告警 + 明文 + 复制按钮；关闭后明文不再展示。文案由组件内部按条件编译处理。
+ * 展示安全告警 + 明文 + 复制按钮；关闭后明文不再展示。
  */
 @Component({
   selector: 'app-secret-reveal-dialog',
@@ -35,7 +38,7 @@ import { injectCopyToClipboard } from '../../../../../../shared/utils/clipboard'
     ...HlmDialogImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucideCopy })],
@@ -45,6 +48,8 @@ import { injectCopyToClipboard } from '../../../../../../shared/utils/clipboard'
 export class SecretRevealDialog {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
   private readonly clipboard = injectCopyToClipboard();
   readonly visible = model(false);
@@ -75,3 +80,13 @@ export class SecretRevealDialog {
     });
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'openApp.secret.warning':
+    'Please copy and store it securely now; the secret will not be shown in plain text again.',
+  'common.copy': 'Copy',
+  'openApp.secret.copyAndClose': 'Copy and close',
+};
+//#endif

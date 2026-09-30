@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -23,14 +23,8 @@ import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 
-//#if (IncludeLocalization)
-import { refreshOnLanguageChange } from '../../../../../../core/i18n/translation-ready';
-//#endif
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
-import {
-  TablePaginator,
-  TablePaginatorLabels,
-} from '../../../../../../shared/components/table-paginator/table-paginator';
+import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
 import {
   ACTIONS_COLUMN_META,
@@ -41,7 +35,9 @@ import {
   type AppTableFeatures,
 } from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
-import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
 
@@ -64,7 +60,7 @@ import { tableViewportSignal } from '../../../../../../shared/utils/table-viewpo
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [
@@ -89,14 +85,8 @@ export class TenantTable {
   // 会让同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-
-  constructor() {
-    // 表头与分页文案走 transloco.translate()，需显式把语言变化接到变更检测上。
-    refreshOnLanguageChange(this.transloco);
-  }
-
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
   readonly tenants = input<TenantOutputDto[]>([]);
   readonly totalCount = input(0);
@@ -168,6 +158,7 @@ export class TenantTable {
   protected readonly table = injectAppTable(() => ({
     data: this.tenants(),
     columns: this.columns,
+    getRowId: (row) => row.id,
     manualPagination: true,
     rowCount: this.totalCount(),
     onPaginationChange: (updater) =>
@@ -181,18 +172,7 @@ export class TenantTable {
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
-  // 移动端/平板端「行展开」补偿：被隐藏的列不会丢数据，点行首箭头即可展开查看。
-  private readonly expandableRows = createExpandableRows();
-
   readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
-
-  isRowExpanded(id: string): boolean {
-    return this.expandableRows.isExpanded(id);
-  }
-
-  toggleRow(id: string): void {
-    this.expandableRows.toggle(id);
-  }
 
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
@@ -202,114 +182,36 @@ export class TenantTable {
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
-
-  columnLabel(field: 'name' | 'displayName' | 'description' | 'status' | 'created'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      name: 'tenants.colName',
-      displayName: 'tenants.colDisplayName',
-      description: 'tenants.colDescription',
-      status: 'tenants.colStatus',
-      created: 'tenants.colCreatedAt',
-    } as const;
-    return this.transloco.translate(keys[field]);
-    //#else
-    const labels = {
-      name: 'Name',
-      displayName: 'Display name',
-      description: 'Description',
-      status: 'Status',
-      created: 'Created at',
-    } as const;
-    return labels[field];
-    //#endif
-  }
-
-  impersonateLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('tenants.impersonate');
-    //#else
-    return 'Sign in as tenant';
-    //#endif
-  }
-
-  /** 停用租户不能模拟登录时，按钮显示的原因。 */
-  impersonateInactiveHint(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('tenants.impersonateInactiveHint');
-    //#else
-    return 'Deactivated tenants cannot be signed in to';
-    //#endif
-  }
-
-  actionLabel(action: 'details' | 'edit' | 'delete'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      details: 'common.details',
-      edit: 'common.edit',
-      delete: 'common.delete',
-    } as const;
-    return this.transloco.translate(keys[action]);
-    //#else
-    const labels = {
-      details: 'View details',
-      edit: 'Edit',
-      delete: 'Delete',
-    } as const;
-    return labels[action];
-    //#endif
-  }
-
-  toggleLabel(isActive: boolean): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate(isActive ? 'tenants.deactivate' : 'tenants.activate');
-    //#else
-    return isActive ? 'Deactivate' : 'Activate';
-    //#endif
-  }
-
-  actionsLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('common.actions');
-    //#else
-    return 'Actions';
-    //#endif
-  }
-
-  statusLabel(isActive: boolean): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate(isActive ? 'tenants.active' : 'tenants.inactive');
-    //#else
-    return isActive ? 'Active' : 'Inactive';
-    //#endif
-  }
-
-  paginatorLabels(): TablePaginatorLabels {
-    //#if (IncludeLocalization)
-    return {
-      currentPageReport: this.transloco.translate('tenants.table.currentPageReport', {
-        total: this.totalCount(),
-      }),
-      rowsPerPage: this.transloco.translate('common.rowsPerPage'),
-      page: this.transloco.translate('common.pageOf', {
-        page: this.currentPage(),
-        total: this.totalPages(),
-      }),
-      first: this.transloco.translate('common.pagination.first'),
-      previous: this.transloco.translate('common.pagination.previous'),
-      next: this.transloco.translate('common.pagination.next'),
-      last: this.transloco.translate('common.pagination.last'),
-    };
-    //#else
-    return {
-      currentPageReport: `${this.totalCount()} in total`,
-      rowsPerPage: 'Items per page',
-      page: `Page ${this.currentPage()} of ${this.totalPages()}`,
-      first: 'First page',
-      previous: 'Previous page',
-      next: 'Next page',
-      last: 'Last page',
-    };
-    //#endif
-  }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'tenants.colName': 'Name',
+  'tenants.colDisplayName': 'Display name',
+  'tenants.colDescription': 'Description',
+  'tenants.colStatus': 'Status',
+  'tenants.colCreatedAt': 'Created at',
+  'common.actions': 'Actions',
+  'common.details': 'View details',
+  'tenants.active': 'Active',
+  'tenants.inactive': 'Inactive',
+  'common.edit': 'Edit',
+  'tenants.deactivate': 'Deactivate',
+  'tenants.activate': 'Activate',
+  'tenants.impersonate': 'Sign in as tenant',
+  'tenants.impersonateInactiveHint': 'Deactivated tenants cannot be signed in to',
+  'common.delete': 'Delete',
+  'tenants.table.emptyFilteredTitle': 'No matching tenants',
+  'tenants.table.emptyFilteredHint': 'Adjust the search keyword',
+  'tenants.table.emptyTitle': 'No tenants yet',
+  'tenants.table.emptyHint': 'Create a new tenant',
+  'tenants.table.currentPageReport': '{{total}} in total',
+  'common.rowsPerPage': 'Items per page',
+  'common.pageOf': 'Page {{page}} of {{total}}',
+  'common.pagination.first': 'First page',
+  'common.pagination.previous': 'Previous page',
+  'common.pagination.next': 'Next page',
+  'common.pagination.last': 'Last page',
+};
+//#endif

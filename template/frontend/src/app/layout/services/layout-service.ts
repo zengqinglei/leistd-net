@@ -15,7 +15,10 @@ export class LayoutService {
   private readonly router = inject(Router);
 
   /**
-   * 页面标题（面包屑末级）。各页在 ngOnInit/effect 里设置本页标题。
+   * 页面标题：面包屑末级与浏览器标签页标题（见根组件）的唯一来源。各页在 ngOnInit/effect 里设置本页标题。
+   *
+   * 离开带页头（DefaultHeader）的布局时由页头销毁清空，认证页因此只显示应用名；
+   * 新增不含 DefaultHeader 的布局时，须自己在离开时清空，否则上一页的标题会残留在标签页上。
    */
   // 初值为空，不给字面量：占位文案在任何语言下都不正确，多语言变体下会先闪一下英文。
   // 空标题时 default-header 整个末级（含分隔符）不渲染，因此不会留下断裂的面包屑。

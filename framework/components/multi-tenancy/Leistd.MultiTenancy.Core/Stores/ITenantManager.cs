@@ -15,7 +15,7 @@ public interface ITenantManager
     /// <summary>
     /// 创建租户，名称在未删除租户中大小写不敏感且唯一。
     /// </summary>
-    /// <param name="name">租户名称，大小写不敏感唯一；归一化后落库</param>
+    /// <param name="name">租户名称，须匹配 <see cref="TenantConfiguration.NamePattern"/>；大小写不敏感唯一，原值落库</param>
     /// <param name="displayName">展示名，可为 <c>null</c></param>
     /// <param name="isActive">
     /// 初始是否启用。需要继续初始化角色、管理员等数据时传 <c>false</c>，
@@ -24,7 +24,9 @@ public interface ITenantManager
     /// <param name="description">可选的简短描述，可为 <c>null</c></param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>创建出的租户配置</returns>
-    /// <exception cref="ArgumentException"><paramref name="name"/> 为空或全空白</exception>
+    /// <exception cref="Leistd.ExceptionHandling.BusinessException">
+    /// <paramref name="name"/> 不匹配 <see cref="TenantConfiguration.NamePattern"/>（码 <c>Tenant:NameInvalid</c>）
+    /// </exception>
     /// <exception cref="DuplicateTenantNameException">名称已被未删除的租户占用（含并发落败）</exception>
     Task<TenantConfiguration> CreateAsync(
         string name,
@@ -42,7 +44,10 @@ public interface ITenantManager
     /// 调用方要保留原值就得把原值读出来一起传。
     /// </remarks>
     /// <returns>更新后的租户配置</returns>
-    /// <exception cref="ArgumentException"><paramref name="name"/> 为空或全空白</exception>
+    /// <exception cref="Leistd.ExceptionHandling.BusinessException">
+    /// <paramref name="name"/> 与原名不同且不匹配 <see cref="TenantConfiguration.NamePattern"/>（码 <c>Tenant:NameInvalid</c>）；
+    /// 名称没变不校验，规则之前建出的租户照常编辑其他字段
+    /// </exception>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除</exception>
     /// <exception cref="DuplicateTenantNameException">新名称已被其它未删除租户占用</exception>
     Task<TenantConfiguration> UpdateAsync(

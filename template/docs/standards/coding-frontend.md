@@ -13,7 +13,7 @@
 - **开发语言**: TypeScript，版本遵循项目依赖及 Angular 编译器的 peer 范围
 - **状态管理**: Angular Signals
 - **表单**: Angular Signal Forms（`@angular/forms/signals`，在 Angular 22 仍为 experimental）；禁止 `FormsModule`/`ReactiveFormsModule`/`ngModel`（eslint 静态拦截）
-- **数据表格**: TanStack Table（`@tanstack/angular-table` headless 引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页/筛选展示复用 `shared/components/table-paginator`、`faceted-filter`，列按优先级响应式裁剪
+- **数据表格**: TanStack Table（`@tanstack/angular-table` headless 引擎，服务端 `manualPagination`/`manualSorting`/`rowCount`）；分页/筛选展示复用 `shared/components/table-paginator`、`faceted-filter`，列按优先级响应式裁剪；被裁剪的列由行展开补偿，展开状态用 TanStack 的行展开特性（`row.getIsExpanded()` / `row.toggleExpanded()`，按 `getRowId` 给出的实体 id 记，翻页、刷新不收起），不另建展开状态
 - **表格操作列**: 按钮按「常用优先、破坏性置后」排序；操作 ≤3 项桌面端全部平铺（icon 按钮 + tooltip），>3 项显示 2 个高频操作 + `…` 溢出菜单；`<sm` 一律收进 `…` 菜单省列宽，破坏性操作在菜单内用 `variant="destructive"` 且分隔线隔开
 - **列表查询状态**: 分页/排序/筛选以 **URL query params 为唯一来源**（`queryParamMap` 派生 + `router.navigate({queryParams})` 回写），刷新/分享/前进后退可恢复、非法参数回退默认；不用 localStorage 存查询状态
 - **HTTP 错误**: 拦截器只做 401 跳转 + 归一化为类型化 `ApplicationHttpError`（RFC 9457 Problem Details；`errors` 认本框架的数组与官方 `HttpValidationProblemDetails` 的字典两种形状），不发全局 Toast；反馈由发起操作的 feature 决定，全局 Toast 直接用 `@spartan-ng/brain/sonner`
@@ -50,6 +50,7 @@ frontend/
 特性内的组件、服务与契约就近组织；跨特性契约放入 `shared/dtos`，避免 `core` 反向依赖 `features`。基础按钮、卡片、对话框优先使用 `libs/ui`，不在 `shared` 重建组件库。
 
 <!--#if (IncludeLocalization)-->
+
 多语言词条放在 `public/i18n/{lang}.json`，见 §9。
 <!--#endif-->
 
@@ -66,13 +67,13 @@ frontend/
 
 遵循 Angular v22+ 的简化风格：
 
-| 类型 | 命名规范 | 示例 |
-|------|---------|------|
-| Component | `{name}.ts` | `user-profile.ts` |
-| Service | `{name}-service.ts` | `user-service.ts` |
-| Directive | `{name}.ts` | `highlight.ts` |
-| Pipe | `{name}-pipe.ts` | `format-date-pipe.ts` |
-| Guard | `{name}-guard.ts` | `auth-guard.ts` |
+| 类型      | 命名规范            | 示例                  |
+| --------- | ------------------- | --------------------- |
+| Component | `{name}.ts`         | `user-profile.ts`     |
+| Service   | `{name}-service.ts` | `user-service.ts`     |
+| Directive | `{name}.ts`         | `highlight.ts`        |
+| Pipe      | `{name}-pipe.ts`    | `format-date-pipe.ts` |
+| Guard     | `{name}-guard.ts`   | `auth-guard.ts`       |
 
 ### 3.3 类型驱动
 
@@ -120,6 +121,20 @@ frontend/
 
 - **必须** 使用 Angular Signal Forms（`@angular/forms/signals`）：以 `form()` 构建表单模型，模板用 `[formField]` 绑定字段，不用 `[(ngModel)]` / Reactive Forms。
 - 表单 UI **必须** 走 Spartan Field 组件族：`hlm-field` 容器 + `hlmFieldLabel` 标签 + `hlm-field-error` 错误展示，配合 `hlmInput` / `hlm-select` 等输入组件。校验态由 brain 层（`BrnField`）读取，与具体表单引擎解耦。
+- **校验提示按错误类型取词条**：验证器不带 `message`，模板按 `error.kind` 取 `validation.<kind>`，错误对象整个作参数：
+
+  ```html
+  @for (error of form.email().errors(); track error.kind) {
+    <hlm-field-error [validator]="error.kind">{{ t('validation.' + error.kind, error) }}</hlm-field-error>
+  }
+  ```
+
+  内置错误的参数就是错误对象上的字段，占位符照它命名（`minLength` 错误的 `{{minLength}}`、`maxLength` 错误的 `{{maxLength}}`）。字段特有的说法给自定义类型：内置验证器用 `error` 选项（`pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } })`），跨字段规则由 `validate()` 返回 `{ kind: 'passwordMismatch' }`。同一字段只让一个验证器报同一类型——长度与字符集共用一句时合成一条正则，分开写同一句会出现几遍。
+<!--#if (IncludeLocalization)-->
+- 新的错误类型在 `public/i18n/{en,zh-CN}.json` 的 `validation` 段各加一句；键是拼出来的，静态引用查不到，由 `scripts/check-i18n-keys.ps1` 核对表单用到的类型（自定义 `kind`、所用内置验证器、没给 `error` 的 `pattern`）都有句子。服务端返回的字段错误不走这里（见 §5.4）。
+<!--#else-->
+- 新的错误类型在 `shared/utils/english-text.ts` 的校验提示表里加一句，它并入每个组件的 `t`。服务端返回的字段错误不走这里（见 §5.4）。
+<!--#endif-->
 - ⚠️ **Signal Forms 在 Angular 22 仍为 experimental**（官方明示 API 可能在小版本间 breaking）。因此**必须锁定 Angular 版本**；升级 Angular 后需手工回归所有表单，确认 `@angular/forms/signals` API 未破坏。
 
 ### 4.7 Spartan 维护约定
@@ -129,12 +144,12 @@ frontend/
 - **升级**：升级 `@spartan-ng/brain` + `@spartan-ng/cli` 后跑 `ng g @spartan-ng/cli:healthcheck` 检查兼容性；**已改过的 helm 组件禁用 `migrate-helm-libraries`**（它会用上游版本覆盖自定义改动），需对照上游变更**手动合入**。为保稳定，锁定 brain / CLI 的小版本，只走官方 `healthcheck` 流程升级。
 - **已定制的 helm 组件**（升级时逐个对照上游手动合入）：
 
-  | 组件 | 改动 | 原因 |
-  | --- | --- | --- |
-  | `button` | `default` / `lg` 加 `pointer-coarse:h-11`，`icon` / `icon-lg` 加 `pointer-coarse:size-11` | 触屏设备的点按目标不小于 44px；`xs` / `sm` 是刻意选的紧凑尺寸，不改 |
-  | `input`、`input-group` | 加 `pointer-coarse:h-11` | 与按钮同高，表单里并排时对齐 |
-  | `select`（trigger） | `data-[size=default]` 下加 `pointer-coarse:h-11` | 同上 |
-  | `dropdown-menu`（`hlm-dropdown-menu-trigger.ts`） | 改 `menuPosition` 后调用 CDK 触发器的 `ngOnChanges`，让已建好的 overlay 更新定位策略 | 上游直接赋值，不经过 `ngOnChanges`，菜单打开过一次后再改 `side` / `align` 不生效；侧栏内容在桌面与手机抽屉间复用同一实例，用户菜单与区域切换器的方向随断点变化，会被摆错。由 `dropdown-side-switch.spec.ts` 钉住，上游修复后删除 |
+  | 组件                                              | 改动                                                                                      | 原因                                                                                                                                                                                                                             |
+  | ------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `button`                                          | `default` / `lg` 加 `pointer-coarse:h-11`，`icon` / `icon-lg` 加 `pointer-coarse:size-11` | 触屏设备的点按目标不小于 44px；`xs` / `sm` 是刻意选的紧凑尺寸，不改                                                                                                                                                              |
+  | `input`、`input-group`                            | 加 `pointer-coarse:h-11`                                                                  | 与按钮同高，表单里并排时对齐                                                                                                                                                                                                     |
+  | `select`（trigger）                               | `data-[size=default]` 下加 `pointer-coarse:h-11`                                          | 同上                                                                                                                                                                                                                             |
+  | `dropdown-menu`（`hlm-dropdown-menu-trigger.ts`） | 改 `menuPosition` 后调用 CDK 触发器的 `ngOnChanges`，让已建好的 overlay 更新定位策略      | 上游直接赋值，不经过 `ngOnChanges`，菜单打开过一次后再改 `side` / `align` 不生效；侧栏内容在桌面与手机抽屉间复用同一实例，用户菜单与区域切换器的方向随断点变化，会被摆错。由 `dropdown-side-switch.spec.ts` 钉住，上游修复后删除 |
 
   用 `pointer-coarse` 而不是屏幕宽度判断：平板横屏很宽，但仍是手指操作。
 
@@ -146,14 +161,14 @@ frontend/
 
 字号按**层级**用，每一档只有一个职责，不出现档外值（`text-[10px]` 之类）。正文基准是 14px——按钮、输入框、表格、卡片描述都是这个字号，这是组件已经定下的。
 
-| 档位 | 用途 | 写法 |
-| --- | --- | --- |
-| 24px | 页面标题，每页一次 | `text-2xl font-semibold tracking-tight` |
-| 16px | 面板标题、卡片标题 | `text-base font-semibold` |
-| 14px | 分区标题 | `text-sm font-semibold` |
-| 14px | 正文、表格、按钮、输入 | `text-sm` |
-| 12px | 辅助说明、时间戳、徽章 | `text-xs` |
-| 30px | 仅仪表盘大数字 | `text-3xl` + `tabular-nums` |
+| 档位 | 用途                   | 写法                                    |
+| ---- | ---------------------- | --------------------------------------- |
+| 24px | 页面标题，每页一次     | `text-2xl font-semibold tracking-tight` |
+| 16px | 面板标题、卡片标题     | `text-base font-semibold`               |
+| 14px | 分区标题               | `text-sm font-semibold`                 |
+| 14px | 正文、表格、按钮、输入 | `text-sm`                               |
+| 12px | 辅助说明、时间戳、徽章 | `text-xs`                               |
+| 30px | 仅仪表盘大数字         | `text-3xl` + `tabular-nums`             |
 
 - 字重只用 400 / 500 / 600，不用 `font-bold` / `font-extrabold`。
 - 加在图标、`hlm-spinner` 上的 `text-*` 是图标尺寸，不受上表约束。
@@ -161,11 +176,11 @@ frontend/
 
 圆角三档，由元素的角色决定：
 
-| 档位 | 用于 |
-| --- | --- |
-| `rounded-xl` | 页面级容器：卡片、对话框、表格外框、设置面板的分区卡片 |
-| `rounded-lg` | 控件（按钮、输入框，组件已是）；嵌在卡片或对话框里的块、代码框、行项、图标块 |
-| `rounded-full` | 徽章、头像 |
+| 档位           | 用于                                                                         |
+| -------------- | ---------------------------------------------------------------------------- |
+| `rounded-xl`   | 页面级容器：卡片、对话框、表格外框、设置面板的分区卡片                       |
+| `rounded-lg`   | 控件（按钮、输入框，组件已是）；嵌在卡片或对话框里的块、代码框、行项、图标块 |
+| `rounded-full` | 徽章、头像                                                                   |
 
 嵌套的块用 `lg` 而不是 `xl`：内外同一个圆角，层次就分不出来。组件内部的小元素（菜单项、清除按钮）跟随所在组件的写法。
 
@@ -187,6 +202,8 @@ frontend/
 ### 5.2 状态管理
 
 - 对于组件内部或简单父子组件间的状态，**必须** 优先使用 Angular 内置的 **Signals**
+- 媒体查询（视口断点、系统暗色偏好）用 CDK `BreakpointObserver` 转成信号，不手写 `matchMedia` 监听
+- 启动流程、拦截器里判断「当前在哪条路由上」用 `core/routing/entry-route-service.ts`（读 Angular `Location`，路径与哈希路由通用），不读 `Router.url`：初始导航之前它恒为 `/`
 
 ### 5.3 显示偏好：设置项与切换器必须同源
 
@@ -195,11 +212,11 @@ frontend/
 
 判据只有一条，按"有没有做成 setting definition"分：
 
-| 形态 | 写入口径 | 例 |
-| --- | --- | --- |
-| 已做成 setting definition | 切换器**必须**走同一个 `setForCurrentUser`，不得旁路写 `localStorage` | 语言（`Display.Language`） |
-| 未做成 setting definition | 允许纯 `localStorage`，但**不得**同时出现在偏好页 | 主题 |
-| 跨服务只读方（本服务不拥有该偏好） | 切换器只作用于本会话；设置页不放这一行，只放去签发方的外链 | 资源服务里的账户偏好 |
+| 形态                               | 写入口径                                                              | 例                         |
+| ---------------------------------- | --------------------------------------------------------------------- | -------------------------- |
+| 已做成 setting definition          | 切换器**必须**走同一个 `setForCurrentUser`，不得旁路写 `localStorage` | 语言（`Display.Language`） |
+| 未做成 setting definition          | 允许纯 `localStorage`，但**不得**同时出现在偏好页                     | 主题                       |
+| 跨服务只读方（本服务不拥有该偏好） | 切换器只作用于本会话；设置页不放这一行，只放去签发方的外链            | 资源服务里的账户偏好       |
 
 **最容易踩的是第一行的反面**：给某个显示偏好补了 setting definition，却忘了改切换器。
 那一刻起切换器仍写本地存储，偏好页写服务端，两个值各自为政——而且不会报错，
@@ -294,15 +311,15 @@ frontend/
 
 导航菜单是**信息架构**，不是控件清单：分组摆错了既不报错也不影响功能，只是让人找不到入口。两个区各有一套菜单，都定义在 `layout/services/navigation-service.ts` 一处，管理平台的侧栏与工作空间的顶栏都从这里读，判据相同。
 
-| 分组 | 放什么 | 现有入口 |
-| --- | --- | --- |
-| 工作 | 进来先看的东西：本区落地页、待办、我的任务 | 平台「仪表盘」/ 工作空间「工作台」 |
-| 业务 | 这个系统"做业务"的地方 | 模板只放一个「示例模块」占位，下游项目在这里加自己的 |
-| 个人（仅工作空间） | 关于"我自己"的：账户、安全、偏好、通知 | 设置 |
-| 身份与访问 | 谁能用、能用什么 | 用户管理、角色管理、租户管理 |
-| 开发者 | 面向集成方的东西 | 开放应用（OAuth 客户端）|
-| 审计 | 谁在什么时候做了什么 | 操作记录（登录记录、导出记录同属这一类）|
-| 系统 | 本租户（或宿主）的默认值与策略 | 系统设置（注册验证、登录安全、邮件发送、运维、审计等面板，一个后端设置分组一个面板）|
+| 分组               | 放什么                                     | 现有入口                                                                             |
+| ------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| 工作               | 进来先看的东西：本区落地页、待办、我的任务 | 平台「仪表盘」/ 工作空间「工作台」                                                   |
+| 业务               | 这个系统"做业务"的地方                     | 模板只放一个「示例模块」占位，下游项目在这里加自己的                                 |
+| 个人（仅工作空间） | 关于"我自己"的：账户、安全、偏好、通知     | 设置                                                                                 |
+| 身份与访问         | 谁能用、能用什么                           | 用户管理、角色管理、租户管理                                                         |
+| 开发者             | 面向集成方的东西                           | 开放应用（OAuth 客户端）                                                             |
+| 审计               | 谁在什么时候做了什么                       | 操作记录（登录记录、导出记录同属这一类）                                             |
+| 系统               | 本租户（或宿主）的默认值与策略             | 系统设置（注册验证、登录安全、邮件发送、运维、审计等面板，一个后端设置分组一个面板） |
 
 - **不设「其它」这类兜底组。** 兜底组会把不相干的入口越塞越多，最后谁也说不清该往哪找。新入口必须落进上面某一类；落不进就说明该新开一类，并把判据补进这张表。
 - **按用户的目的分组，不按后端模块或表结构分组。** 用户找的是"我要做什么"，不是"这属于哪个服务"。
@@ -318,12 +335,14 @@ frontend/
   确认过一个租户名，它就有值了，而会话仍是宿主）。权限表达不了的显示决定（"这个租户叫什么"、
   "你能选哪些库"）由拥有那个页面的业务端点连同业务数据一起下发结论，不要让前端自己拼。
 - 上面这些都有用例钉住：侧栏分组骨架在 `default-sidebar.spec.ts`，头像菜单的构成（含"不放切换租户"）在 `user-menu.spec.ts`，后者按**完整序列**断言——多一项少一项都会红。改导航要同时改用例，避免"顺手挪一个入口"没人察觉。
+- **页面标题只设 `LayoutService.title`**（面包屑末级）：每个布局页在构造函数或 `effect` 里设一次，本地化形态用 `translateSignal`，语言切换随之更新。浏览器标签页标题由根组件统一合成为「页面标题 · 应用名」（`Title` 服务），页面不要自己调 `Title`；页头随布局销毁时清空页面标题，登录页、落地页等不设标题的页因此只显示应用名。应用名是 `app.ts` 的 `APP_NAME`，本地化形态取词条 `app.name`、缺词条时回落到它；改项目名时两处连同 `index.html` 的 `<title>` 一起改。
 - 设置页的面板（个人设置、系统设置各一套）走子路由，面板名进 URL：刷新、分享、头像菜单直达都落在同一面板。
 - **布局按服务对象选**：管理平台面向内部员工，条目多、会增长、需要按权限整组裁剪，用侧栏（`DefaultLayout`）；工作空间面向业务用户，内容优先，用顶栏（`WorkspaceLayout`），「个人」组（`placement: 'end'`）靠右、以图标按钮呈现（与主题、通知、语言同排，名称放在提示与可访问名里），其余靠左、用文字链接。工作空间的主导航超过 7 项，或需要分组标题与按权限整组裁剪时，把路由换回 `DefaultLayout`——菜单定义不用动。
 
 ---
 
 <!--#if (IncludeLocalization)-->
+
 ## 9. 多语言（i18n）
 
 > 本项目已启用多语言（`--include-localization true`）。默认语言英语，支持 en + zh-CN 运行时切换。
@@ -336,27 +355,35 @@ frontend/
 
 ### 9.2 文案归属
 
-| 类别 | 归属 | 用法 |
-| --- | --- | --- |
-| UI 静态文案（菜单、按钮、标签） | 前端词条（权威） | 模板 `{{ 'menu.users' \| transloco }}` / 服务 `transloco.translate('key')` |
-| 业务错误消息 | **后端资源**（权威，见 [`api.md`](./api.md)） | 前端直接显示后端已本地化的 `detail`，不在前端重复维护业务错误词条 |
+| 类别                            | 归属                                          | 用法                                                                       |
+| ------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
+| UI 静态文案（菜单、按钮、标签） | 前端词条（权威）                              | 模板结构指令 `*transloco="let t"` 内 `{{ t('menu.users') }}`；TS 见 §9.4 |
+| 业务错误消息                    | **后端资源**（权威，见 [`api.md`](./api.md)） | 前端直接显示后端已本地化的 `detail`，不在前端重复维护业务错误词条          |
 
 - 后端按 `Accept-Language` 返回本地化消息；`http-error-interceptor` 归一化错误，由发起操作的 feature 展示。仅在需要差异化 UI 行为时按业务 `code` 分支。前端词条提供网络断开、后端不可达等客户端兜底。
 
 ### 9.3 关键接线（`core/`）
 
-- `core/services/language-service.ts`：`setActiveLang(lang)` 驱动 `TranslocoService.setActiveLang`、同步 `<html lang>`；活动语言持久化到 localStorage（镜像 `theme-service` 形态：signal + `isPlatformBrowser` 守卫）。语言只驱动 Transloco，不联动任何 UI 组件库文案。
+- `core/services/language-service.ts`：切换语言的唯一入口（`setDeviceLang` / `applyAccountLang` / `resetToDeviceLang`），先加载目标语言的词条，成功后才 `TranslocoService.setActiveLang` 并同步 `<html lang>`——一次性文案用同步 `translate()`（§9.4），它要求活动语言的词条已加载，先激活的话切换途中返回的请求会取到裸键且不再更新。加载期间界面停在原语言；加载失败保持原语言并交给全局错误处理；连续切换只让最后一次生效，重复请求同一正在加载的语言复用那次加载；失败过的语言再切过去会重新请求。Transloco 的活动语言只由它决定：Transloco 自带的「加载失败转去加载回落语言并激活」由同文件的 `provideLanguageFallbackStrategy()` 关掉，「有过失败后下一次加载成功即激活」由服务在同一次事件里改回，否则服务、Transloco 与 `<html lang>` 各执一词，同步 `translate()` 取到裸键。返回的 Promise 在目标语言词条落定时完成，启动流等它，外壳首帧就是账户语言且带着词条。设备偏好持久化到 localStorage，账户语言只在内存生效。同文件的 `provideLanguageInitializer()` 在首帧前等初始语言的词条（取不到退回英语，不阻断启动）：根组件的启动页不在结构指令里，渲染即发的一次性提示用同步 `translate()`，都要词条已在。语言只驱动 Transloco，不联动任何 UI 组件库文案。
 - `core/i18n/transloco-loader.ts`：按 `{baseHref}i18n/{lang}.json` 取词条（用 `APP_BASE_HREF` 前缀而非绝对 `/i18n/`，以支持子路径部署）。
-- `core/interceptors/accept-language-interceptor.ts`：注入 `Accept-Language` 头，**置拦截器数组首位**，使后端消息按当前语言返回。
-- `app.config.ts`：`provideTransloco`（`defaultLang: 'en'`）+ `TranslocoHttpLoader`。
+- `core/interceptors/accept-language-interceptor.ts`：注入 `Accept-Language` 头，**置拦截器链首位**（链定义在 `app.interceptors.ts`，应用与启动用例共用），使后端消息按当前语言返回。
+- `app.config.ts`：`provideTransloco`（`defaultLang: 'en'`）+ `TranslocoHttpLoader` + `provideLanguageFallbackStrategy()`；单测装配 `core/i18n/transloco.testing.ts` 同样登记该策略。
 - 语言选择器用 Spartan **dropdown-menu**（`hlmDropdownMenuTrigger` + `ng-template` 模板驱动菜单项，触发按钮用 `hlmBtn`，与铃铛/主题按钮风格一致），封装在 `shared/components/language-switcher`，挂在 `layout/components/default-header` 最右图标区（后台页在铃铛右侧）。
 
 ### 9.4 新增文案
 
-- UI 文案：在 `public/i18n/{en,zh-CN}.json` 各加一条键（`模块.语义`，如 `menu.orders`），模板用 `| transloco`。**两语言必须同时加**（CI 有 `scripts/check-i18n-keys.ps1` 键一致性闸门，缺一即红）。
-- **响应式**：`.ts` 里要随语言切换更新的文案，别在字段初始化时 `translate()` 定死；改为在 `computed`/getter 里调用 `translate()` 并读一次 `transloco.langChanges$`（或 `languageService.activeLang()`）建立依赖，切换时自动重算。
+- UI 文案：在 `public/i18n/{en,zh-CN}.json` 各加一条键（`模块.语义`，如 `menu.orders`）。**两语言必须同时加**（CI 有 `scripts/check-i18n-keys.ps1` 键一致性闸门，缺一即红）。
+- **模板文案用结构指令**：组件模板最外层包 `<ng-container *transloco="let t">`（组件 `imports` 引 `TranslocoDirective`），块内一律 `t('key', params)`。这是 Transloco 官方推荐的写法：一个模板只建一个订阅，`t` 带记忆化；切换语言时指令换掉 `t`、整个模板随之重绘（`reRenderOnLangChange: true`）。传给子组件的文案（如分页器的 `labels`）也在模板里用 `t` 组装。不要给模板写"返回译文的组件方法"——那需要自己读语言信号才会重绘，漏读一次整块就停在旧语言；按状态选文案时让模板写 `cond ? t('a') : t('b')`。
+- **TS 里随语言变化的文案**（导航菜单、筛选项、页面标题等由 `computed` / `effect` 产出、不经模板翻译的）一律用信号 API：固定的键用 `translateSignal('key')`（在字段或构造函数里建，`computed` 里读）；一组键或键随数据变化（类别、动作码）用 `translateObjectSignal('前缀')` 取成对象再索引，带点号的键按 `core/i18n/translation-text.ts` 的 `textAt` 逐级取。词条未到时前者是空串、后者是空对象，到达后自行更新。**不要**在 `computed` / `effect` 里「读 `activeLang()` + 同步 `translate()`」：要自己追踪语言，漏读一处就停在旧语言；首帧前、词条未到时取到的裸键还会被缓存。参数随每行数据变化的句子（`{{target}}` 之类）在 TS 里只定键与参数，由模板 `t(key, params)` 取。
+- **事件发生时的一次性文案**（toast、确认框）直接 `transloco.translate()`：`LanguageService` 先加载词条再激活语言，活动语言的词条总已就位，切换途中返回的请求取到的是原语言的真实文案；这类文案不需要随语言重算。要留在界面上的文案（写进 signal、随后渲染的错误说明）存键，由模板 `t` 取，否则切换语言时它停在旧语言。
+- 不要直接调 `transloco.setActiveLang()` 切换语言——绕过 `LanguageService` 就没有设备偏好、`<html lang>` 与加载失败的退回。
 - 业务错误文案：改后端资源（见 `api.md` §异常本地化），**不在前端加**。
 - 货币/数字用 Angular `CurrencyPipe`/`DecimalPipe`。注意 **`LOCALE_ID` 是启动期注入、不随运行时语言切换自动改变**；如需格式也跟随切换，需自行传 locale 参数或重建相关视图，别假设它会自动联动。
+<!--#else-->
+## 9. 界面文案
+
+- 组件模板里的界面文案写成 `t('模块.语义')`，解析到组件的 `protected readonly t = englishText(ENGLISH)`：按组件文件末尾的英文表 `ENGLISH` 取值，`{{name}}` 占位按参数替换（`shared/utils/english-text.ts`）。新增文案在同一组件的表里加一条键；表里没有的键会原样显示成键名。
+- 组件 TS 里的提示文案（toast、确认框）直接写英文，或经同一个 `t` 取表里的键。
 <!--#endif-->
 
 ---

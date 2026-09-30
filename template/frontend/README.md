@@ -150,7 +150,7 @@ OIDC 授权服务器地址、客户端 ID 与 scope 在 `oidc` 下配置。
 
 ```bash
 ng serve -c <环境名称>
-ng build -c <环境名称>
+npm run build -- -c <环境名称>
 ```
 
 ---
@@ -160,11 +160,16 @@ ng build -c <环境名称>
 您可以根据目标环境构建项目。构建产物将存放在 `dist/` 目录下。
 
 ```bash
-ng build -c dev         # 开发环境
-ng build -c test        # 测试环境
-ng build -c uat         # UAT 环境
-ng build -c production  # 生产环境（已优化性能）
+npm run build -- -c dev         # 开发环境
+npm run build -- -c test        # 测试环境
+npm run build -- -c uat         # UAT 环境
+npm run build                   # 生产环境（默认配置，已优化性能）
 ```
+<!--#if (IncludeLocalization)-->
+
+构建要走 `npm run build`，不要直接 `ng build`：构建完成后 `postbuild` 会用 `transloco-optimize` 预先展平并压缩词条，
+生产配置据此开启 `flatten.aot`，运行时不再展平。直接 `ng build -c production` 产出的是未展平的原文件，界面上的词条会全部找不到。
+<!--#endif-->
 
 ### Docker 构建
 

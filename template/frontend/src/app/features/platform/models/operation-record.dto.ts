@@ -51,7 +51,7 @@ export interface OperationRecordOutputDto {
    */
   impersonatorName?: string;
   /**
-   * 失败原因的错误码，界面按它本地化；成功时为空。
+   * 失败原因的错误码；成功时为空。
    *
    * 存码而不是渲染好的句子：写入时是哪国语言，此后所有读者看到的就是哪国语言，改不回来。
    */
@@ -59,6 +59,13 @@ export interface OperationRecordOutputDto {
 
   /** 失败原因的本地化占位参数（JSON 对象字符串）。 */
   failureData?: string;
+
+  /**
+   * 后端按本次请求语言渲染的失败原因，与该码的错误响应同一条词条。
+   *
+   * 后端没有本地化或缺词条时为空，界面回落显示 `failureCode`。
+   */
+  failureMessage?: string;
 
   /**
    * 面向排查的技术说明；**仅宿主可见**，租户读者拿到的恒为空。

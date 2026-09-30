@@ -10,7 +10,12 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import {
+  TranslocoDirective,
+  TranslocoService,
+  translateObjectSignal,
+  translateSignal,
+} from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -52,7 +57,7 @@ import {
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
+import { textAt } from '../../../../core/i18n/translation-text';
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
@@ -64,6 +69,9 @@ import {
 import { PERMISSIONS } from '../../../../shared/models/permission';
 import { formatAppDate, parseAppCalendarDate } from '../../../../shared/pipes/app-date-pipe';
 import { saveBlob } from '../../../../shared/utils/download-file';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
 import {
   isoToZonedDate,
@@ -100,7 +108,7 @@ import { OperationRecordTable } from './widgets/operation-record-table/operation
     FacetedFilter,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     OperationRecordTable,
   ],
@@ -127,6 +135,8 @@ export class OperationRecords {
   private readonly authorizationService = inject(AuthorizationService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   private readonly searchSubject = new Subject<string>();
@@ -223,63 +233,37 @@ export class OperationRecords {
   );
 
   //#if (IncludeLocalization)
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
-
-  readonly searchPlaceholder = () =>
-    this.transloco.translate('operationRecords.filter.searchPlaceholder');
-  readonly refreshLabel = () => this.transloco.translate('common.refresh');
-  readonly dateRangeLabel = () => this.transloco.translate('operationRecords.filter.dateRange');
-  readonly categoryLabel = () => this.transloco.translate('operationRecords.filter.category');
-  readonly actionLabel = () => this.transloco.translate('operationRecords.filter.action');
-  readonly outcomeLabel = () => this.transloco.translate('operationRecords.filter.outcome');
-  readonly exportLabel = () => this.transloco.translate('operationRecords.filter.export');
-  // 清空 / 空结果两条复用公共词条：其它列表页的筛选器用的就是它们，
-  // 另起一份会让同一句话在不同页面里出现两种译法。
-  readonly clearFilterLabel = () => this.transloco.translate('common.clearFilter');
-  readonly filterEmptyLabel = () => this.transloco.translate('common.noResults');
+  /** 类别、动作、结果的词条整段取成对象：词条到达与语言切换时，读它们的下拉项随之重算。 */
+  private readonly categoryTexts = translateObjectSignal('operationRecords.categories');
+  private readonly actionTexts = translateObjectSignal('operationRecords.actions');
+  private readonly outcomeTexts = translateObjectSignal('operationRecords.outcome');
 
   /** 类别的展示名；没有词条就退回原始类别标识。 */
-  categoryText(category: string): string {
-    const key = `operationRecords.categories.${category}`;
-    const value = this.transloco.translate(key);
-    return value === key ? category : value;
+  private categoryText(category: string): string {
+    return textAt(this.categoryTexts(), category) ?? category;
   }
 
-  /** 动作的展示名：复用列表里的句子模板键，没有就退回裸码。 */
-  actionText(code: string): string {
-    const key = `operationRecords.actions.${code}`;
-    const value = this.transloco.translate(key, { target: '' });
-    return value === key ? code : value.trim();
+  /**
+   * 动作的展示名：复用列表里的句子模板，没有就退回裸码。
+   * 取成对象时句子里的 `{{target}}` 已被替换为空，去掉首尾空白即可。
+   */
+  private actionText(code: string): string {
+    return textAt(this.actionTexts(), code)?.trim() ?? code;
   }
 
-  outcomeText(outcome: string): string {
-    return this.transloco.translate(
-      outcome === 'Succeeded'
-        ? 'operationRecords.outcome.succeeded'
-        : 'operationRecords.outcome.failed',
-    );
+  private outcomeText(outcome: string): string {
+    return textAt(this.outcomeTexts(), outcome === 'Succeeded' ? 'succeeded' : 'failed') ?? '';
   }
   //#else
-  readonly searchPlaceholder = () => 'Search action / target / operator...';
-  readonly refreshLabel = () => 'Refresh';
-  readonly dateRangeLabel = () => 'Date range';
-  readonly categoryLabel = () => 'Category';
-  readonly actionLabel = () => 'Action';
-  readonly outcomeLabel = () => 'Outcome';
-  readonly exportLabel = () => 'Export';
-  readonly clearFilterLabel = () => 'Clear filter';
-  readonly filterEmptyLabel = () => 'No results';
-
-  categoryText(category: string): string {
+  private categoryText(category: string): string {
     return category;
   }
 
-  actionText(code: string): string {
+  private actionText(code: string): string {
     return code;
   }
 
-  outcomeText(outcome: string): string {
+  private outcomeText(outcome: string): string {
     return outcome === 'Succeeded' ? 'Succeeded' : 'Rejected';
   }
   //#endif
@@ -292,13 +276,8 @@ export class OperationRecords {
    *
    * 与其它列表页一样交给 `app-faceted-filter`：它自带搜索框、清空与选中态 Badge。
    * **动作与类别会随业务增长**，用固定下拉迟早翻不完，而搜索是这个组件本来就有的能力。
-   *
-   * 本地化分支里读一次 `translationReady()` 建立依赖：资源就绪与切换语言时重算，
-   * 否则切了语言、选项文案还停在上一种——`users.ts` 为同一理由做了同样的事。
    */
-  //#if (IncludeLocalization)
   readonly categoryFilterOptions = computed<FacetedFilterOption[]>(() => {
-    this.translationReady();
     return this.filterOptions().categories.map((category) => ({
       value: category,
       label: this.categoryText(category),
@@ -306,7 +285,6 @@ export class OperationRecords {
   });
 
   readonly actionFilterOptions = computed<FacetedFilterOption[]>(() => {
-    this.translationReady();
     return this.actionOptions().map((option) => ({
       value: option.code,
       label: this.actionText(option.code),
@@ -314,36 +292,12 @@ export class OperationRecords {
   });
 
   readonly outcomeFilterOptions = computed<FacetedFilterOption[]>(() => {
-    this.translationReady();
     return this.outcomeValues.map((outcome) => ({
       value: outcome,
       label: this.outcomeText(outcome),
       icon: outcome === 'Succeeded' ? 'lucideCircleCheck' : 'lucideBan',
     }));
   });
-  //#else
-  readonly categoryFilterOptions = computed<FacetedFilterOption[]>(() =>
-    this.filterOptions().categories.map((category) => ({
-      value: category,
-      label: this.categoryText(category),
-    })),
-  );
-
-  readonly actionFilterOptions = computed<FacetedFilterOption[]>(() =>
-    this.actionOptions().map((option) => ({
-      value: option.code,
-      label: this.actionText(option.code),
-    })),
-  );
-
-  readonly outcomeFilterOptions = computed<FacetedFilterOption[]>(() =>
-    this.outcomeValues.map((outcome) => ({
-      value: outcome,
-      label: this.outcomeText(outcome),
-      icon: outcome === 'Succeeded' ? 'lucideCircleCheck' : 'lucideBan',
-    })),
-  );
-  //#endif
 
   /**
    * 三个下拉的取名函数。
@@ -395,11 +349,20 @@ export class OperationRecords {
       });
     //#if (IncludeLocalization)
 
-    // 读 translationReady 建立依赖：资源就绪 / 语言切换时标题随之重设。
-    effect(() => {
-      this.translationReady();
-      this.layoutService.title.set(this.transloco.translate('operationRecords.page.title'));
+    // 失败原因由后端按请求语言渲染（failureMessage）：切换语言只重绘视图，手里那页仍是旧语言，
+    // 要重新取一次。langChanges$ 订阅时会先发出当前语言，比对上次见到的语言，免得进页面白发一次请求。
+    let seenLang = this.transloco.getActiveLang();
+    this.transloco.langChanges$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((lang) => {
+      if (lang === seenLang) {
+        return;
+      }
+
+      seenLang = lang;
+      this.refreshRequests.next();
     });
+
+    const title = translateSignal('operationRecords.page.title');
+    effect(() => this.layoutService.title.set(title()));
     //#else
 
     this.layoutService.title.set('Operation records');
@@ -629,3 +592,18 @@ export class OperationRecords {
     //#endif
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'operationRecords.filter.searchPlaceholder': 'Search action / target / operator...',
+  'operationRecords.filter.category': 'Category',
+  'common.clearFilter': 'Clear filter',
+  'common.noResults': 'No results',
+  'operationRecords.filter.action': 'Action',
+  'operationRecords.filter.outcome': 'Outcome',
+  'operationRecords.filter.dateRange': 'Date range',
+  'operationRecords.filter.export': 'Export',
+  'common.refresh': 'Refresh',
+};
+//#endif

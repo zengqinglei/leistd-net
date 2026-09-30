@@ -11,7 +11,7 @@ import { ImpersonationService } from './impersonation-service';
 //#endif
 import { SessionContextService } from './session-context-service';
 import { ApplicationHttpError } from '../errors/application-http-error';
-import { entryRoutePath } from '../routing/entry-route';
+import { EntryRouteService } from '../routing/entry-route-service';
 
 export type StartupStatus = 'loading' | 'success' | 'failed';
 
@@ -25,6 +25,7 @@ export const PROTECTED_ROUTE_PREFIXES = ['/workspace', '/platform'] as const;
 export class StartupService {
   private authService = inject(AuthService);
   private readonly sessionContext = inject(SessionContextService);
+  private readonly entryRoute = inject(EntryRouteService);
   //#if (LocalIdentity)
   private readonly impersonation = inject(ImpersonationService);
   //#endif
@@ -42,10 +43,10 @@ export class StartupService {
     // 不在这里校验记住的租户：匿名确认"这个租户还在不在"等于给任何人一个枚举接口。
     // 租户失效由服务端在会话恢复中间件里处置（X-Tenant-Invalid 头），前端据此清上下文。
     //#endif
-    // 入口路由只认一份读法（见 entryRoutePath）：路径按边界比对，不拿整条 URL 去
+    // 入口路由只认一份读法（见 EntryRouteService.path）：路径按边界比对，不拿整条 URL 去
     // includes——查询串或锚点里出现 `/auth/callback` 不代表人在回调页，误判会让普通
     // 会话过期走进回调专用的处置分支。
-    const route = entryRoutePath();
+    const route = this.entryRoute.path();
     //#if (RemoteTokenAuth)
     const isOidcCallback = route === '/auth/callback';
     //#endif
@@ -112,7 +113,7 @@ export class StartupService {
     await this.load();
   }
   private isProtectedRoute(): boolean {
-    const route = entryRoutePath();
+    const route = this.entryRoute.path();
     return PROTECTED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));
   }
 }

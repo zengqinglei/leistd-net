@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
@@ -19,9 +19,6 @@ import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-//#if (IncludeLocalization)
-import { LanguageService } from '../../../core/services/language-service';
-//#endif
 import { LayoutService } from '../../services/layout-service';
 
 /** 用户菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
@@ -51,16 +48,12 @@ interface UserMenuItem {
   // 基线下留出的字母下伸空间把宿主撑高约 6px，头像就比同排按钮高出一截。
   // 侧栏形态里宿主要承载占满整行的列表，保持块级。
   host: { '[class.inline-flex]': "variant() === 'topbar'" },
-  // prettier-ignore
   imports: [
     NgIcon,
     ...HlmAvatarImports,
     HlmButton,
     ...HlmDropdownMenuImports,
     ...HlmSidebarImports,
-    //#if (IncludeLocalization)
-    TranslocoModule,
-    //#endif
   ],
   // prettier-ignore
   providers: [
@@ -183,8 +176,12 @@ export class UserMenu {
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
   //#if (IncludeLocalization)
-  private readonly languageService = inject(LanguageService);
-  private readonly transloco = inject(TranslocoService);
+  private readonly texts = {
+    workspace: translateSignal('menu.workspace'),
+    platform: translateSignal('menu.platform'),
+    personalSettings: translateSignal('menu.personalSettings'),
+    logout: translateSignal('menu.logout'),
+  };
   //#endif
   private readonly sidebarService = inject(HlmSidebarService);
 
@@ -192,17 +189,12 @@ export class UserMenu {
   readonly sidebarMenuSide = computed(() => (this.sidebarService.isMobile() ? 'top' : 'right'));
 
   readonly userMenuItems = computed<UserMenuItem[]>(() => {
-    //#if (IncludeLocalization)
-    // 建立对活动语言的依赖，语言切换时重新计算菜单文案。
-    this.languageService.activeLang();
-    const t = (key: string) => this.transloco.translate(key);
-    //#endif
     const items: UserMenuItem[] = [];
 
     if (this.layoutService.isPlatform()) {
       items.push({
         //#if (IncludeLocalization)
-        label: t('menu.workspace'),
+        label: this.texts.workspace(),
         //#else
         label: 'Workspace',
         //#endif
@@ -215,7 +207,7 @@ export class UserMenu {
     ) {
       items.push({
         //#if (IncludeLocalization)
-        label: t('menu.platform'),
+        label: this.texts.platform(),
         //#else
         label: 'Admin platform',
         //#endif
@@ -234,7 +226,7 @@ export class UserMenu {
       // 不带 LocalIdentity 守卫：没有本地身份时个人设置里仍有偏好面板。
       {
         //#if (IncludeLocalization)
-        label: t('menu.personalSettings'),
+        label: this.texts.personalSettings(),
         //#else
         label: 'Personal settings',
         //#endif
@@ -247,7 +239,7 @@ export class UserMenu {
       // 换租户走登录页：退出 → 登录页按域名定案，或（域名不表态时）在那里清掉 / 换一个租户。
       {
         //#if (IncludeLocalization)
-        label: t('menu.logout'),
+        label: this.texts.logout(),
         //#else
         label: 'Sign out',
         //#endif

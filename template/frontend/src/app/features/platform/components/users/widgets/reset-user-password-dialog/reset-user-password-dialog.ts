@@ -1,17 +1,7 @@
-// prettier-ignore
-import {
-  ChangeDetectionStrategy,
-  Component,
-  //#if (IncludeLocalization)
-  inject,
-  //#endif
-  model,
-  output,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, model, output, signal } from '@angular/core';
 import { form, maxLength, minLength, required, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideEye, lucideEyeOff } from '@ng-icons/lucide';
@@ -30,6 +20,9 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '../../../../../../core/validation/password-rule';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import { ResetUserPasswordInputDto } from '../../../../models/user-management.dto';
 
 @Component({
@@ -45,7 +38,7 @@ import { ResetUserPasswordInputDto } from '../../../../models/user-management.dt
     ...HlmDialogImports,
     ...HlmFieldImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucideEye, lucideEyeOff })],
@@ -56,56 +49,21 @@ export class ResetUserPasswordDialog {
   readonly visible = model(false);
   readonly saving = model(false);
   readonly saved = output<ResetUserPasswordInputDto>();
-
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  readonly dialogHeader = () => this.transloco.translate('users.resetDialog.header');
-  //#else
-  readonly dialogHeader = () => 'Reset user password';
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   // 密码可见性
   protected readonly showPassword = signal(false);
 
-  // 读屏用户听到的是"显示密码/隐藏密码"，而不是一个没有名字的按钮；名称随当前状态变
-  //#if (IncludeLocalization)
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    this.transloco.translate(shown ? 'common.hidePassword' : 'common.showPassword');
-  //#else
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    shown ? 'Hide password' : 'Show password';
-  //#endif
-
   // 表单模型（Signal Forms）
   private readonly formModel = signal({ password: '' });
 
-  //#if (IncludeLocalization)
   readonly resetForm = form(this.formModel, (path) => {
-    required(path.password, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    minLength(path.password, PASSWORD_MIN_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooShort', {
-        min: PASSWORD_MIN_LENGTH,
-      }),
-    });
-    maxLength(path.password, PASSWORD_MAX_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooLong', {
-        max: PASSWORD_MAX_LENGTH,
-      }),
-    });
+    required(path.password);
+    minLength(path.password, PASSWORD_MIN_LENGTH);
+    maxLength(path.password, PASSWORD_MAX_LENGTH);
   });
-  //#else
-  readonly resetForm = form(this.formModel, (path) => {
-    required(path.password, { message: 'This field is required.' });
-    minLength(path.password, PASSWORD_MIN_LENGTH, {
-      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
-    });
-    maxLength(path.password, PASSWORD_MAX_LENGTH, {
-      message: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
-    });
-  });
-  //#endif
 
   /** 桥接 hlm-dialog 声明式 state 到对外 visible 契约；关闭时重置表单。 */
   onDialogStateChange(state: BrnDialogState): void {
@@ -129,3 +87,19 @@ export class ResetUserPasswordDialog {
     this.saved.emit({ password: this.formModel().password });
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'users.resetDialog.header': 'Reset user password',
+  'users.resetDialog.warning': 'After the reset, the user must sign in with the new password.',
+  'users.resetDialog.newPasswordLabel': 'New password',
+  'users.resetDialog.newPasswordPlaceholder': 'Enter a new password',
+  'common.hidePassword': 'Hide password',
+  'common.showPassword': 'Show password',
+  'users.resetDialog.ruleHint':
+    'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
+  'common.cancel': 'Cancel',
+  'users.resetDialog.confirmButton': 'Confirm reset',
+};
+//#endif

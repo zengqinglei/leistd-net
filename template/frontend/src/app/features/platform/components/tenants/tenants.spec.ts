@@ -16,6 +16,7 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 //#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
+import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import {
   CreateTenantInputDto,
   GetTenantsInputDto,
@@ -124,6 +125,9 @@ describe('Tenants page query and write flow', () => {
       versionToken: 'r1',
     });
 
+    // 应用启动时会话设置（连带语言服务）早已建好；留到首帧渲染途中才惰性创建的话，
+    // 语言服务构造时激活语言，会让模板结构指令在创建视图的半途重入
+    TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Tenants);
     component = fixture.componentInstance;
     fixture.detectChanges();

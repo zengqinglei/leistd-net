@@ -109,7 +109,7 @@ describe('SettingContextService', () => {
     const language = TestBed.inject(LanguageService);
     expect(service.displayLocale()).toBe('en');
 
-    language.applyAccountLang('zh-CN');
+    await language.applyAccountLang('zh-CN');
     expect(service.displayLocale()).toBe('zh-CN');
 
     // 快照里那一项仍是旧值也不影响：把设置应用到活动语言上是会话上下文的事，

@@ -17,7 +17,7 @@ import {
   FormField,
 } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCircleAlert, lucideCircleCheck, lucideImagePlus } from '@ng-icons/lucide';
@@ -36,6 +36,9 @@ import {
   isAvatarImageUrl,
   prepareAvatarImage,
 } from '../../../../shared/utils/avatar-image';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { AccountService } from '../../services/account-service';
 
 const PHONE_PATTERN = /^[0-9+\-()\s]{0,20}$/;
@@ -67,7 +70,7 @@ interface EmailChallenge {
     HlmBadge,
     ...HlmFieldImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucideCircleAlert, lucideCircleCheck, lucideImagePlus })],
@@ -80,12 +83,8 @@ export class ProfilePanel {
   private readonly destroyRef = inject(DestroyRef);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly t = (key: string, params?: Record<string, unknown>) =>
-    this.transloco.translate(key, params);
   //#else
-  private readonly t = (key: string, params?: Record<string, unknown>) =>
-    ENGLISH[key]?.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params?.[name] ?? '')) ??
-    key;
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly saving = signal(false);
@@ -108,12 +107,13 @@ export class ProfilePanel {
     phoneNumber: '',
   });
 
+  /** 都没有时为空串，模板里回落到"访客"文案。 */
   readonly displayName = computed(
     () =>
       this.formModel().displayName.trim() ||
       this.user()?.displayName ||
       this.user()?.username ||
-      this.t('account.profile.guestUser'),
+      '',
   );
 
   /** 表单里的邮箱与已保存的不同：验证只能对已保存的邮箱做。 */
@@ -135,47 +135,16 @@ export class ProfilePanel {
   readonly resendSeconds = signal(0);
   private resendTimer: ReturnType<typeof setInterval> | undefined;
 
-  //#if (IncludeLocalization)
   readonly profileForm = form(this.formModel, (path) => {
-    required(path.username, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
-      message: this.transloco.translate('common.validation.usernamePattern'),
-    });
-    required(path.email, { message: this.transloco.translate('common.validation.required') });
-    emailValidator(path.email, {
-      message: this.transloco.translate('common.validation.email'),
-    });
-    maxLength(path.email, 256, { message: '' });
-    maxLength(path.displayName, 128, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
-    });
-    maxLength(path.phoneNumber, 20, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 20 }),
-    });
-    pattern(path.phoneNumber, PHONE_PATTERN, {
-      message: this.transloco.translate('common.validation.phonePattern'),
-    });
+    required(path.username);
+    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
+    required(path.email);
+    emailValidator(path.email);
+    maxLength(path.email, 256);
+    maxLength(path.displayName, 128);
+    maxLength(path.phoneNumber, 20);
+    pattern(path.phoneNumber, PHONE_PATTERN, { error: { kind: 'phonePattern' } });
   });
-  //#else
-  readonly profileForm = form(this.formModel, (path) => {
-    required(path.username, { message: 'This field is required.' });
-    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, {
-      message: 'Must be 3–64 letters, digits, or underscores.',
-    });
-    required(path.email, { message: 'This field is required.' });
-    emailValidator(path.email, {
-      message: 'Please enter a valid email address.',
-    });
-    maxLength(path.email, 256, { message: '' });
-    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
-    maxLength(path.phoneNumber, 20, { message: 'Must not exceed 20 characters.' });
-    pattern(path.phoneNumber, PHONE_PATTERN, {
-      message: 'Only digits, spaces, and + - ( ) are allowed.',
-    });
-  });
-  //#endif
 
   constructor() {
     // 当前用户一变（首次取回、保存成功后写回）就按它重填；表单模型不参与追踪，
@@ -223,9 +192,15 @@ export class ProfilePanel {
       dataUrl = await prepareAvatarImage(file);
     } catch (error: unknown) {
       const reason = error instanceof AvatarImageRejected ? error.reason : 'decode';
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('account.profile.avatarRejectedSummary'), {
+        description: this.transloco.translate(`account.profile.avatarRejected.${reason}`),
+      });
+      //#else
       toast.error(this.t('account.profile.avatarRejectedSummary'), {
         description: this.t(`account.profile.avatarRejected.${reason}`),
       });
+      //#endif
       return;
     }
 
@@ -248,11 +223,14 @@ export class ProfilePanel {
         }),
       )
       .subscribe({
-        next: () => toast.success(this.t(successKey)),
-        error: (error) =>
-          toast.error(this.t('common.requestError'), {
-            description: applicationErrorMessage(error),
-          }),
+        next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate(successKey));
+          //#else
+          toast.success(this.t(successKey));
+          //#endif
+        },
+        error: (error) => this.showRequestError(error),
       });
   }
 
@@ -272,12 +250,13 @@ export class ProfilePanel {
           this.emailChallenge.set({ challengeId: challenge.challengeId, email });
           this.emailCode.set('');
           this.startResendCountdown(challenge.retryAfterSeconds);
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('account.profile.codeSent', { email }));
+          //#else
           toast.success(this.t('account.profile.codeSent', { email }));
+          //#endif
         },
-        error: (error) =>
-          toast.error(this.t('common.requestError'), {
-            description: applicationErrorMessage(error),
-          }),
+        error: (error) => this.showRequestError(error),
       });
   }
 
@@ -296,12 +275,13 @@ export class ProfilePanel {
         next: () => {
           this.emailChallenge.set(null);
           this.emailCode.set('');
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('account.profile.emailVerifiedSuccess'));
+          //#else
           toast.success(this.t('account.profile.emailVerifiedSuccess'));
+          //#endif
         },
-        error: (error) =>
-          toast.error(this.t('common.requestError'), {
-            description: applicationErrorMessage(error),
-          }),
+        error: (error) => this.showRequestError(error),
       });
   }
 
@@ -339,23 +319,37 @@ export class ProfilePanel {
       })
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
-        next: () =>
+        next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('common.success'), {
+            description: this.transloco.translate('account.profile.updateSuccess'),
+          });
+          //#else
           toast.success(this.t('common.success'), {
             description: this.t('account.profile.updateSuccess'),
-          }),
-        error: (error) =>
-          toast.error(this.t('common.requestError'), {
-            description: applicationErrorMessage(error),
-          }),
+          });
+          //#endif
+        },
+        error: (error) => this.showRequestError(error),
       });
+  }
+
+  private showRequestError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
+    toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
+    //#endif
   }
 }
 //#if (!IncludeLocalization)
 
-/** 不带本地化的模板里用的英文文案，键与语言包一致，便于两种形态共用同一套代码路径。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
   'common.success': 'Success',
-  'common.requestError': 'Request failed',
+  'common.requestError': 'Request error',
   'account.profile.guestUser': 'Guest user',
   'account.profile.updateSuccess': 'Profile updated',
   'account.profile.avatarUpdated': 'Avatar updated',
@@ -366,5 +360,30 @@ const ENGLISH: Record<string, string> = {
   'account.profile.avatarRejected.decode': 'This image could not be read. Try another one.',
   'account.profile.codeSent': 'A verification code was sent to {{email}}',
   'account.profile.emailVerifiedSuccess': 'Email address verified',
+  'common.uploadAvatar': 'Upload avatar',
+  'account.profile.superAdminTag': 'Super Admin',
+  'account.profile.avatarHint': 'PNG, JPG or WebP; cropped to a square',
+  'account.profile.removeAvatar': 'Remove avatar',
+  'account.profile.username': 'Username',
+  'account.profile.usernamePlaceholder': 'Please enter a username',
+  'account.profile.email': 'Email',
+  'account.profile.emailPlaceholder': 'Please enter an email',
+  'account.profile.emailChangeHint': 'Save first, then verify the new email address.',
+  'account.profile.emailVerified': 'Verified',
+  'account.profile.emailUnverified': 'Not verified',
+  'account.profile.emailVerificationUnavailable':
+    'Email verification is not set up on this deployment yet.',
+  'account.profile.codeLabel': 'Verification code',
+  'account.profile.codePlaceholder': '6-digit code from the email',
+  'account.profile.confirmCode': 'Verify',
+  'account.profile.resendIn': 'Resend in {{seconds}}s',
+  'account.profile.resendCode': 'Resend code',
+  'account.profile.sendCode': 'Send verification code',
+  'account.profile.displayName': 'Display name',
+  'account.profile.displayNamePlaceholder': 'Enter a display name',
+  'account.profile.phoneNumber': 'Phone Number',
+  'account.profile.phoneNumberPlaceholder': 'Please enter a phone number',
+  'account.profile.discardChanges': 'Discard changes',
+  'common.save': 'Save',
 };
 //#endif

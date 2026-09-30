@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
@@ -23,6 +23,9 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
 import { Logo } from '../../../shared/components/logo/logo';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../shared/utils/english-text';
+//#endif
 import { LayoutService } from '../../services/layout-service';
 import { MenuItem, NavigationService } from '../../services/navigation-service';
 import { UserMenu } from '../user-menu/user-menu';
@@ -39,7 +42,7 @@ import { UserMenu } from '../user-menu/user-menu';
     ...HlmSidebarImports,
     UserMenu,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   // prettier-ignore
@@ -53,6 +56,9 @@ import { UserMenu } from '../user-menu/user-menu';
 })
 export class DefaultSidebar {
   readonly layoutService = inject(LayoutService);
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
+  //#endif
   private readonly navigation = inject(NavigationService);
   private readonly sidebarService = inject(HlmSidebarService);
 
@@ -61,11 +67,7 @@ export class DefaultSidebar {
 
   readonly areaOptions = this.navigation.areaOptions;
   readonly currentAreaLabel = this.navigation.currentAreaLabel;
-  readonly appTitle = this.navigation.appTitle;
-  readonly switchAreaLabel = this.navigation.switchAreaLabel;
   readonly menuGroups = this.navigation.menuGroups;
-  readonly navLabel = this.navigation.navLabel;
-  readonly navDescription = this.navigation.navDescription;
 
   goToArea(route: string): void {
     this.navigation.goToArea(route);
@@ -75,3 +77,13 @@ export class DefaultSidebar {
     return this.navigation.isItemActive(item);
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'layout.sidebar.navigation': 'Navigation',
+  'layout.sidebar.navigationDescription': 'Browse the sections of this area.',
+  'layout.sidebar.switchArea': 'Switch area',
+  'layout.sidebar.appTitle': 'Template Project',
+};
+//#endif

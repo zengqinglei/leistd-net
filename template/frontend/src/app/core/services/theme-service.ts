@@ -1,13 +1,8 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { isPlatformBrowser } from '@angular/common';
-import {
-  DestroyRef,
-  PLATFORM_ID,
-  computed,
-  effect,
-  inject,
-  Injectable,
-  signal,
-} from '@angular/core';
+import { PLATFORM_ID, computed, effect, inject, Injectable, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
 
 export const THEME_MODES = ['system', 'light', 'dark'] as const;
 export type ThemeMode = (typeof THEME_MODES)[number];
@@ -15,6 +10,8 @@ export type ThemeMode = (typeof THEME_MODES)[number];
 export interface ThemePreferences {
   mode: ThemeMode;
 }
+
+const SYSTEM_DARK_QUERY = '(prefers-color-scheme: dark)';
 
 const DEFAULT_THEME_PREFERENCES: ThemePreferences = {
   mode: 'system',
@@ -31,8 +28,16 @@ export class ThemeService {
   static readonly STORAGE_KEY = 'theme_config';
 
   private readonly platformId = inject(PLATFORM_ID);
-  private readonly destroyRef = inject(DestroyRef);
-  private readonly systemDark = signal(false);
+  /**
+   * 系统暗色偏好。首个值同步给出（CDK 以当前匹配结果起头），之后的变化由 CDK 合并到下一轮任务里下发；
+   * 非浏览器环境下 CDK 的媒体查询恒不匹配。订阅随根注入器销毁。
+   */
+  private readonly systemDark = toSignal(
+    inject(BreakpointObserver)
+      .observe(SYSTEM_DARK_QUERY)
+      .pipe(map((state) => state.matches)),
+    { requireSync: true },
+  );
 
   private readonly preferencesState = signal<ThemePreferences>(this.loadPreferences());
 
@@ -54,8 +59,6 @@ export class ThemeService {
   });
 
   constructor() {
-    this.watchSystemTheme();
-
     effect(() => {
       const preferences = this.preferences();
       const isDark = this.isDarkTheme();
@@ -106,19 +109,5 @@ export class ThemeService {
       localStorage.removeItem(ThemeService.STORAGE_KEY);
       return DEFAULT_THEME_PREFERENCES;
     }
-  }
-
-  private watchSystemTheme(): void {
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const updateSystemTheme = (event: MediaQueryListEvent | MediaQueryList) =>
-      this.systemDark.set(event.matches);
-
-    updateSystemTheme(mediaQuery);
-    mediaQuery.addEventListener('change', updateSystemTheme);
-    this.destroyRef.onDestroy(() => mediaQuery.removeEventListener('change', updateSystemTheme));
   }
 }

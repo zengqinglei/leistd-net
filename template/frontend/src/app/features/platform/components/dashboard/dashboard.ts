@@ -11,21 +11,21 @@ import {
   //#endif
 } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, translateSignal } from '@jsverse/transloco';
 //#endif
 import { HlmCardImports } from '@spartan-ng/helm/card';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
-  imports: [...HlmCardImports, TranslocoModule],
+  imports: [...HlmCardImports, TranslocoDirective],
   //#else
   imports: [...HlmCardImports],
   //#endif
@@ -36,25 +36,30 @@ import { LayoutService } from '../../../../layout/services/layout-service';
 export class Dashboard {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
-  private readonly transloco = inject(TranslocoService);
-
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
 
   constructor() {
-    effect(() => {
-      this.translationReady();
-      this.layoutService.title.set(this.transloco.translate('platform.dashboard.title'));
-    });
+    const title = translateSignal('platform.dashboard.title');
+    effect(() => this.layoutService.title.set(title()));
   }
 }
 //#else
 export class Dashboard implements OnInit {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
+  protected readonly t = englishText(ENGLISH);
 
   ngOnInit() {
     this.layoutService.title.set('Dashboard');
   }
 }
+//#endif
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'platform.dashboard.welcome': 'Welcome to the Admin Console',
+  'platform.dashboard.currentUser': 'Currently signed in as: {{name}}',
+  'platform.dashboard.intro':
+    'This is a starter template project. You can manage users under "User Management" and extend more feature modules from the left-hand menu.',
+};
 //#endif

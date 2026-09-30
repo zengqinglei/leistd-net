@@ -14,7 +14,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormField, form, maxLength, required, validate } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
@@ -26,9 +26,6 @@ import { catchError, EMPTY, finalize, Subscription, tap } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../../../core/i18n/translation-ready';
-//#endif
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
 import {
   TENANT_CONNECTION_NAME_PATTERN,
@@ -38,6 +35,9 @@ import {
 } from '../../../../../../shared/dtos/tenant-connection.dto';
 import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
 
 /** 连接编辑器的三档：收起 / 添加一条 / 改某条的连接串。 */
@@ -78,7 +78,7 @@ interface ConnectionEditorModel {
     ...HlmDialogImports,
     ...HlmFieldImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   templateUrl: './tenant-detail-dialog.html',
@@ -107,7 +107,8 @@ export class TenantDetailDialog {
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   /** `null` = 尚未拿到列表；空数组 = 拿到了，该租户不单独分库。两者在界面上不是一回事。 */
@@ -152,31 +153,10 @@ export class TenantDetailDialog {
   });
 
   readonly connectionForm = form(this.editorModel, (path) => {
-    //#if (IncludeLocalization)
-    required(path.name, {
-      message: this.transloco.translate('common.validation.required'),
-      when: () => this.editorMode() === 'add',
-    });
+    required(path.name, { when: () => this.editorMode() === 'add' });
     validate(path.name, (ctx) => this.validateName(ctx.value()));
-    required(path.connectionString, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    maxLength(path.connectionString, TENANT_CONNECTION_STRING_MAX_LENGTH, {
-      message: this.transloco.translate('common.validation.maxLength', {
-        max: TENANT_CONNECTION_STRING_MAX_LENGTH,
-      }),
-    });
-    //#else
-    required(path.name, {
-      message: 'This field is required.',
-      when: () => this.editorMode() === 'add',
-    });
-    validate(path.name, (ctx) => this.validateName(ctx.value()));
-    required(path.connectionString, { message: 'This field is required.' });
-    maxLength(path.connectionString, TENANT_CONNECTION_STRING_MAX_LENGTH, {
-      message: `Must not exceed ${TENANT_CONNECTION_STRING_MAX_LENGTH} characters.`,
-    });
-    //#endif
+    required(path.connectionString);
+    maxLength(path.connectionString, TENANT_CONNECTION_STRING_MAX_LENGTH);
   });
 
   constructor() {
@@ -305,9 +285,17 @@ export class TenantDetailDialog {
     }
 
     const confirmed = await this.confirmService.open({
-      header: this.deleteConnectionTitle(),
-      message: this.deleteConnectionDescription(connection.name),
-      confirmText: this.label('delete'),
+      //#if (IncludeLocalization)
+      header: this.transloco.translate('tenants.deleteConnectionTitle'),
+      message: this.transloco.translate('tenants.deleteConnectionDescription', {
+        name: connection.name,
+      }),
+      confirmText: this.transloco.translate('common.delete'),
+      //#else
+      header: 'Delete connection',
+      message: `Delete connection "${connection.name}"? That service will go back to the database it is configured with.`,
+      confirmText: 'Delete',
+      //#endif
       variant: 'destructive',
     });
 
@@ -330,7 +318,7 @@ export class TenantDetailDialog {
   }
 
   /** 名字只在"添加"档校验：改连接串时名字来自已登记的那条，本就合法。 */
-  private validateName(value: string): { kind: string; message: string } | null {
+  private validateName(value: string): { kind: string } | null {
     if (this.editorMode() !== 'add') {
       return null;
     }
@@ -342,139 +330,46 @@ export class TenantDetailDialog {
     }
 
     if (!TENANT_CONNECTION_NAME_PATTERN.test(name)) {
-      return { kind: 'connectionNamePattern', message: this.label('connectionNameInvalid') };
+      return { kind: 'connectionNamePattern' };
     }
 
     // 同名再"添加"一次会被后端按版本冲突拒掉，在这里就说清楚该走"改连接串"
     if (this.connections()?.some((connection) => connection.name === name)) {
-      return { kind: 'connectionNameTaken', message: this.label('connectionNameTaken') };
+      return { kind: 'connectionNameTaken' };
     }
 
     return null;
   }
-
-  //#if (IncludeLocalization)
-  readonly title = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('tenants.detailTitle');
-  });
-
-  label(field: DetailLabel): string {
-    this.translationReady();
-    return this.transloco.translate(LABEL_KEYS[field]);
-  }
-
-  statusLabel(isActive: boolean): string {
-    this.translationReady();
-    return this.transloco.translate(isActive ? 'tenants.active' : 'tenants.inactive');
-  }
-
-  deleteConnectionTitle(): string {
-    return this.transloco.translate('tenants.deleteConnectionTitle');
-  }
-
-  deleteConnectionDescription(name: string): string {
-    return this.transloco.translate('tenants.deleteConnectionDescription', { name });
-  }
-  //#else
-  // 与本地化分支同样用 computed：两边形态一致，模板里都是 title()，
-  // 也让 computed 这个 import 在两种符号取值下都有使用点
-  readonly title = computed(() => 'Tenant detail');
-
-  label(field: DetailLabel): string {
-    return LABEL_TEXTS[field];
-  }
-
-  statusLabel(isActive: boolean): string {
-    return isActive ? 'Active' : 'Inactive';
-  }
-
-  deleteConnectionTitle(): string {
-    return 'Delete connection';
-  }
-
-  deleteConnectionDescription(name: string): string {
-    return `Delete connection "${name}"? That service will go back to the database it is configured with.`;
-  }
-  //#endif
 }
+//#if (!IncludeLocalization)
 
-type DetailLabel =
-  | 'name'
-  | 'displayName'
-  | 'description'
-  | 'status'
-  | 'created'
-  | 'sectionIdentity'
-  | 'sectionConnections'
-  | 'connectionName'
-  | 'connectionString'
-  | 'connectionNameInvalid'
-  | 'connectionNameTaken'
-  | 'connectionsEmpty'
-  | 'version'
-  | 'secretHint'
-  | 'addConnection'
-  | 'changeConnectionString'
-  | 'shardRequiresInactive'
-  | 'delete'
-  | 'edit'
-  | 'cancel'
-  | 'save'
-  | 'close';
-
-//#if (IncludeLocalization)
-const LABEL_KEYS: Record<DetailLabel, string> = {
-  name: 'tenants.fieldName',
-  displayName: 'tenants.fieldDisplayName',
-  description: 'tenants.fieldDescription',
-  status: 'tenants.colStatus',
-  created: 'tenants.colCreatedAt',
-  sectionIdentity: 'tenants.detailSectionIdentity',
-  sectionConnections: 'tenants.detailSectionConnections',
-  connectionName: 'tenants.fieldConnectionName',
-  connectionString: 'tenants.fieldConnectionString',
-  connectionNameInvalid: 'tenants.connectionNameInvalid',
-  connectionNameTaken: 'tenants.connectionNameTaken',
-  connectionsEmpty: 'tenants.connectionsEmpty',
-  version: 'tenants.fieldConnectionVersion',
-  secretHint: 'tenants.detailSecretHint',
-  addConnection: 'tenants.addConnection',
-  changeConnectionString: 'tenants.changeConnectionString',
-  shardRequiresInactive: 'tenants.shardRequiresInactive',
-  delete: 'common.delete',
-  edit: 'common.edit',
-  cancel: 'common.cancel',
-  save: 'common.save',
-  close: 'common.close',
-};
-//#else
-const LABEL_TEXTS: Record<DetailLabel, string> = {
-  name: 'Name',
-  displayName: 'Display name',
-  description: 'Description',
-  status: 'Status',
-  created: 'Created at',
-  sectionIdentity: 'Identity',
-  sectionConnections: 'Database connections',
-  connectionName: 'Connection name',
-  connectionString: 'Connection string',
-  connectionNameInvalid: 'Use lowercase letters, digits and hyphens only, 1 to 64 characters.',
-  connectionNameTaken:
-    'This connection name is already registered; change its connection string instead.',
-  connectionsEmpty:
-    'This tenant has no database of its own; every service uses the database it is configured with.',
-  version: 'Version',
-  secretHint:
-    'The connection string is stored encrypted and never returned; saving replaces it in full.',
-  addConnection: 'Add connection',
-  changeConnectionString: 'Change connection string',
-  shardRequiresInactive:
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'tenants.detailTitle': 'Tenant detail',
+  'tenants.detailSectionIdentity': 'Identity',
+  'tenants.fieldName': 'Name',
+  'tenants.fieldDisplayName': 'Display name',
+  'tenants.fieldDescription': 'Description',
+  'tenants.colStatus': 'Status',
+  'tenants.active': 'Active',
+  'tenants.inactive': 'Inactive',
+  'tenants.colCreatedAt': 'Created at',
+  'tenants.detailSectionConnections': 'Database connections',
+  'tenants.addConnection': 'Add connection',
+  'tenants.shardRequiresInactive':
     'To give this tenant a database of its own, deactivate it first: its data currently lives in the database each service is configured with, and registering a connection does not move it.',
-  delete: 'Delete',
-  edit: 'Edit',
-  cancel: 'Cancel',
-  save: 'Save',
-  close: 'Close',
+  'tenants.fieldConnectionVersion': 'Version',
+  'tenants.changeConnectionString': 'Change connection string',
+  'common.delete': 'Delete',
+  'tenants.connectionsEmpty':
+    'This tenant has no database of its own; every service uses the database it is configured with.',
+  'tenants.fieldConnectionName': 'Connection name',
+  'tenants.fieldConnectionString': 'Connection string',
+  'tenants.detailSecretHint':
+    'The connection string is stored encrypted and never returned; saving replaces it in full.',
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+  'common.edit': 'Edit',
+  'common.close': 'Close',
 };
 //#endif

@@ -11,7 +11,8 @@ namespace Leistd.OperationRecords.Models;
 /// <remarks>
 /// <para><b>失败原因分两类，区别对待。</b></para>
 /// <para><b>其一，可枚举的业务规则拒绝</b>（"订单已发货，不能删除"）：存
-/// <see cref="Code"/> + <see cref="Data"/>，展示期按当前语言渲染。这与动作码是同一套路子——
+/// <see cref="Code"/> + <see cref="Data"/>，查询时按读者的请求语言渲染（见
+/// <see cref="Dtos.OperationRecordOutputDto.FailureMessage"/>）。这与动作码是同一套路子——
 /// 存渲染好的句子会把语言永久锁死：写入时是哪国语言，此后所有读者看到的就是哪国语言，
 /// 改不回来。Django 为此把"落库前关闭翻译、读取时再翻译"写进了源码注释；
 /// Discourse 的中文译文把占位符顺序整个翻转，证明连"拼接片段"都不可行。</para>
@@ -22,9 +23,10 @@ namespace Leistd.OperationRecords.Models;
 /// 而原始异常文本会带上表名列名、内部地址、主机名，乃至连接串。若提供了自动捕获的重载，
 /// <c>catch (Exception ex) { ...FromException(ex) }</c> 会成为最顺手的写法，一次疏忽就是信息泄露。
 /// 让危险的那条路必须手写，是为了逼调用方逐次决定"哪段文字可以给租户看"。</para>
-/// <para>业务异常的码与参数请显式传入，两个组件经 BCL 类型对接，互不引用：
+/// <para>业务异常的码与参数请显式传入，经 BCL 类型对接：
 /// <code>OperationFailure.FromCode(exception.Code, exception.LocalizationData)</code>
-/// 其中的字典要先剔除不该给租户看的键——哪些键敏感只有应用自己知道。</para>
+/// 只传 <c>LocalizationData</c>：它按约定只放可公开展示的消息参数（本就随错误响应返回给调用方），
+/// 基类的 <see cref="Exception.Data"/> 与异常文本没有这个约定，不要带进来。</para>
 /// </remarks>
 public readonly record struct OperationFailure
 {
@@ -100,7 +102,7 @@ public readonly record struct OperationFailure
 
     // 不用 JsonSerializer.Serialize(data)：值是 object?，反射序列化会把传进来的复杂对象整个摊开，
     // 而这一列租户管理员直接可读、还会进导出。这里只写标量，其余只写类型名——
-    // 既让能落进去的东西有界，也与消费端一致：词条占位符 {{X}} 渲染不了嵌套对象。
+    // 既让能落进去的东西有界，也与消费端一致：词条占位符 {X} 渲染不了嵌套对象。
     private static string? SerializeData(IReadOnlyDictionary<string, object?>? data)
     {
         if (data is null || data.Count == 0)
@@ -169,7 +171,7 @@ public readonly record struct OperationFailure
                 break;
             // 其余一律只写类型名，**不写内容**。ToString() 在这里是泄露面：匿名类型与 record
             // 会把每个成员的值原样吐出来，而这一列租户管理员直接可读、还会进导出。
-            // 何况词条占位符 {{X}} 渲染不了对象，传对象进来本身就是调用方的编码错误——
+            // 何况词条占位符 {X} 渲染不了对象，传对象进来本身就是调用方的编码错误——
             // 记录里出现 [<>f__AnonymousType0`2] 是让它显形，比悄悄带出连接串好。
             default:
                 writer.WriteStringValue($"[{value.GetType().Name}]");

@@ -34,7 +34,7 @@ public class EfCoreTenantManager<TDbContext>(
         string? description = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        TenantNames.EnsureValid(name);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
         var normalizedName = normalizer.NormalizeName(name)!;
@@ -64,10 +64,16 @@ public class EfCoreTenantManager<TDbContext>(
         string? description = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
         var record = await GetAsync(dbContext, id, cancellationToken);
+        // 名称变了才按规则校验（只改大小写也算改名）：存量租户的名称可能早于这条规则，
+        // 只改显示名或描述不该被它挡住
+        if (!string.Equals(record.Name, name, StringComparison.Ordinal))
+        {
+            TenantNames.EnsureValid(name);
+        }
+
         var normalizedName = normalizer.NormalizeName(name)!;
 
         if (!string.Equals(record.NormalizedName, normalizedName, StringComparison.Ordinal))

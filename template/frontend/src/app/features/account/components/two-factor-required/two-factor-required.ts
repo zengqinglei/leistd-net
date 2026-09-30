@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideShieldCheck } from '@ng-icons/lucide';
@@ -10,12 +10,12 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { lastValueFrom } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { AuthShell } from '../auth-shell/auth-shell';
 import { RecoveryCodes } from '../recovery-codes/recovery-codes';
 import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
@@ -28,38 +28,19 @@ import { TwoFactorSetup } from '../two-factor-setup/two-factor-setup';
  */
 @Component({
   selector: 'app-two-factor-required',
-  imports: [NgIcon, HlmButton, AuthShell, RecoveryCodes, TwoFactorSetup],
+  // prettier-ignore
+  imports: [
+    NgIcon,
+    HlmButton,
+    AuthShell,
+    RecoveryCodes,
+    TwoFactorSetup,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
   providers: [provideIcons({ lucideShieldCheck })],
-  template: `
-    <app-auth-shell width="wide" [showLanguageSwitcher]="false">
-      <div class="flex flex-col gap-2" data-testid="two-factor-required">
-        <h1 class="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <ng-icon name="lucideShieldCheck" class="text-primary" />
-          {{ t('account.twoFactorRequired.title') }}
-        </h1>
-        <p class="text-muted-foreground text-sm">
-          {{ t('account.twoFactorRequired.description') }}
-        </p>
-      </div>
-
-      @if (codes(); as recoveryCodes) {
-        <app-recovery-codes [codes]="recoveryCodes" (done)="continue()" />
-      } @else {
-        <app-two-factor-setup [cancellable]="false" (enabled)="codes.set($event)" />
-      }
-
-      <button
-        hlmBtn
-        variant="link"
-        size="sm"
-        class="text-muted-foreground self-start px-0"
-        type="button"
-        (click)="logout()"
-      >
-        {{ t('account.twoFactorRequired.signOut') }}
-      </button>
-    </app-auth-shell>
-  `,
+  templateUrl: './two-factor-required.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TwoFactorRequired {
@@ -69,14 +50,8 @@ export class TwoFactorRequired {
   private readonly router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  protected readonly t = (key: string) => {
-    this.translationReady();
-    return this.transloco.translate(key);
-  };
   //#else
-  protected readonly t = (key: string) => ENGLISH[key] ?? key;
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   /** 启用成功后的恢复码；为 null 时还在设置那一步。 */
@@ -91,7 +66,13 @@ export class TwoFactorRequired {
         this.authorizationService.canAccessPlatform() ? '/platform' : '/workspace',
       ]);
     } catch (error) {
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('common.requestError'), {
+        description: applicationErrorMessage(error),
+      });
+      //#else
       toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
+      //#endif
     }
   }
 
@@ -101,9 +82,9 @@ export class TwoFactorRequired {
 }
 //#if (!IncludeLocalization)
 
-/** 不含本地化时的界面文案，与 `en.json` 的 `account.twoFactorRequired` 同步。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'common.requestError': 'Request failed',
+  'common.requestError': 'Request error',
   'account.twoFactorRequired.title': 'Turn on two-factor authentication',
   'account.twoFactorRequired.description':
     'Your organization requires two-factor authentication. Set it up to continue.',

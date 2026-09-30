@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -32,10 +32,7 @@ import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-tabl
 
 import { AuthService } from '../../../../../../core/services/auth-service';
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
-import {
-  TablePaginator,
-  TablePaginatorLabels,
-} from '../../../../../../shared/components/table-paginator/table-paginator';
+import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import {
   ACTIONS_COLUMN_META,
@@ -45,12 +42,10 @@ import {
   injectAppTable,
   type AppTableFeatures,
 } from '../../../../../../shared/models/table-features';
-//#if (LocalIdentity)
-import { AppDate, formatAppDate } from '../../../../../../shared/pipes/app-date-pipe';
-//#else
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
-import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -80,7 +75,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [
@@ -111,8 +106,8 @@ export class UserTable {
   // 会让同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly users = input<UserManagementOutputDto[]>([]);
@@ -187,53 +182,16 @@ export class UserTable {
     tableColumnVisibility(this.columns, this.tableViewport()),
   );
 
-  // 移动端/平板端「行展开」补偿：被隐藏的列不会丢数据，点行首箭头即可展开查看。
-  private readonly expandableRows = createExpandableRows();
-
   readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
-
-  isRowExpanded(id: string): boolean {
-    return this.expandableRows.isExpanded(id);
-  }
-
-  toggleRow(id: string): void {
-    this.expandableRows.toggle(id);
-  }
 
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
-  }
-  detailLabel(field: 'email' | 'roles' | 'lastLogin' | 'created'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      email: 'users.table.colEmail',
-      roles: 'users.table.colRole',
-      lastLogin: 'users.table.colLastLogin',
-      created: 'users.table.colCreatedAt',
-    } as const;
-    return this.transloco.translate(keys[field]);
-    //#else
-    const labels = {
-      email: 'Email',
-      roles: 'Role',
-      lastLogin: 'Last sign-in',
-      created: 'Created at',
-    } as const;
-    return labels[field];
-    //#endif
-  }
-
-  detailsLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('common.details');
-    //#else
-    return 'View details';
-    //#endif
   }
 
   protected readonly table = injectAppTable(() => ({
     data: this.users(),
     columns: this.columns,
+    getRowId: (row) => row.id,
     manualPagination: true,
     manualSorting: true,
     rowCount: this.totalCount(),
@@ -251,15 +209,6 @@ export class UserTable {
   // 分页派生（供 OURS 分页栏使用）。
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
-  //#if (IncludeLocalization)
-  rolesPopoverTitle(count: number): string {
-    return this.transloco.translate('users.popover.rolesTitle', { count });
-  }
-  //#else
-  rolesPopoverTitle(count: number): string {
-    return `Roles (${count})`;
-  }
-  //#endif
 
   toggleSort(columnId: string): void {
     toggleTableSort(this.table, columnId);
@@ -277,139 +226,13 @@ export class UserTable {
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
-  //#if (IncludeLocalization)
-  rolesActionLabel(): string {
-    return this.transloco.translate('users.actions.manageRoles');
-  }
 
-  //#else
-  rolesActionLabel(): string {
-    return 'Assign roles';
-  }
-
-  //#endif
   getVisibleRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(0, 2);
   }
 
   getHiddenRoles(user: UserManagementOutputDto): RoleBriefDto[] {
     return (user.roles ?? []).slice(2);
-  }
-
-  paginatorLabels(): TablePaginatorLabels {
-    //#if (IncludeLocalization)
-    return {
-      currentPageReport: this.transloco.translate('users.table.currentPageReport', {
-        total: this.totalCount(),
-      }),
-      rowsPerPage: this.transloco.translate('common.rowsPerPage'),
-      page: this.transloco.translate('common.pageOf', {
-        page: this.currentPage(),
-        total: this.totalPages(),
-      }),
-      first: this.transloco.translate('common.pagination.first'),
-      previous: this.transloco.translate('common.pagination.previous'),
-      next: this.transloco.translate('common.pagination.next'),
-      last: this.transloco.translate('common.pagination.last'),
-    };
-    //#else
-    return {
-      currentPageReport: `${this.totalCount()} in total`,
-      rowsPerPage: 'Items per page',
-      page: `Page ${this.currentPage()} of ${this.totalPages()}`,
-      first: 'First page',
-      previous: 'Previous page',
-      next: 'Next page',
-      last: 'Last page',
-    };
-    //#endif
-  }
-
-  actionsLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('common.actions');
-    //#else
-    return 'Actions';
-    //#endif
-  }
-
-  statusLabel(isActive: boolean): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate(isActive ? 'users.status.active' : 'users.status.inactive');
-    //#else
-    return isActive ? 'Active' : 'Disabled';
-    //#endif
-  }
-  //#if (LocalIdentity)
-  lockedLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('users.status.locked');
-    //#else
-    return 'Locked';
-    //#endif
-  }
-
-  /** 锁定徽章的提示：临时锁定写到期时刻，管理员锁定说明要人工解除。 */
-  lockedHint(user: UserManagementOutputDto): string {
-    if (!user.lockoutEnd) {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('users.status.lockedIndefinitely');
-      //#else
-      return 'Locked until an administrator unlocks it';
-      //#endif
-    }
-
-    const time = formatAppDate(
-      user.lockoutEnd,
-      'short',
-      this.displayTimeZone(),
-      this.displayLocale(),
-    );
-    //#if (IncludeLocalization)
-    return this.transloco.translate('users.status.lockedUntil', { time });
-    //#else
-    return `Locked until ${time}`;
-    //#endif
-  }
-
-  emailVerifiedLabel(verified: boolean): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate(
-      verified ? 'users.status.emailVerified' : 'users.status.emailUnverified',
-    );
-    //#else
-    return verified ? 'Email verified' : 'Email not verified';
-    //#endif
-  }
-  //#endif
-
-  actionLabel(
-    action: 'details' | 'edit' | 'toggle' | 'reset' | 'unlock' | 'resetTwoFactor' | 'delete',
-    user: UserManagementOutputDto,
-  ): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      details: 'common.details',
-      edit: 'common.edit',
-      toggle: user.isActive ? 'users.tooltip.disable' : 'users.tooltip.enable',
-      reset: 'users.tooltip.resetPassword',
-      unlock: 'users.tooltip.unlock',
-      resetTwoFactor: 'users.tooltip.resetTwoFactor',
-      delete: 'common.delete',
-    } as const;
-    return this.transloco.translate(keys[action]);
-    //#else
-    const labels = {
-      details: 'View details',
-      edit: 'Edit',
-      toggle: user.isActive ? 'Disable' : 'Enable',
-      reset: 'Reset password',
-      unlock: 'Unlock',
-      resetTwoFactor: 'Reset two-factor authentication',
-      delete: 'Delete',
-    } as const;
-    return labels[action];
-    //#endif
   }
 
   isSuperAdmin(user: UserManagementOutputDto): boolean {
@@ -430,3 +253,44 @@ export class UserTable {
     return 'outline';
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'users.table.colUser': 'User',
+  'users.table.colEmail': 'Email',
+  'users.table.colRole': 'Role',
+  'users.table.colStatus': 'Status',
+  'users.table.colLastLogin': 'Last sign-in',
+  'users.table.colCreatedAt': 'Created at',
+  'common.actions': 'Actions',
+  'common.details': 'View details',
+  'users.popover.rolesTitle': 'Roles ({{count}})',
+  'users.status.active': 'Active',
+  'users.status.inactive': 'Disabled',
+  'users.status.lockedUntil': 'Locked until {{time}}',
+  'users.status.lockedIndefinitely': 'Locked until an administrator unlocks it',
+  'users.status.locked': 'Locked',
+  'users.status.emailVerified': 'Email verified',
+  'users.status.emailUnverified': 'Email not verified',
+  'common.edit': 'Edit',
+  'users.actions.manageRoles': 'Assign roles',
+  'users.tooltip.resetPassword': 'Reset password',
+  'users.tooltip.unlock': 'Unlock',
+  'users.tooltip.resetTwoFactor': 'Reset two-factor authentication',
+  'users.tooltip.disable': 'Disable',
+  'users.tooltip.enable': 'Enable',
+  'common.delete': 'Delete',
+  'users.table.emptyFilteredTitle': 'No matching users',
+  'users.table.emptyFilteredHint': 'Adjust the search or filters',
+  'users.table.emptyTitle': 'No users yet',
+  'users.table.emptyHint': 'Create a new user',
+  'users.table.currentPageReport': '{{total}} in total',
+  'common.rowsPerPage': 'Items per page',
+  'common.pageOf': 'Page {{page}} of {{total}}',
+  'common.pagination.first': 'First page',
+  'common.pagination.previous': 'Previous page',
+  'common.pagination.next': 'Next page',
+  'common.pagination.last': 'Last page',
+};
+//#endif

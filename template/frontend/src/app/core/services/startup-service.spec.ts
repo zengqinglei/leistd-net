@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 
@@ -37,7 +38,7 @@ describe('StartupService', () => {
     });
     service = TestBed.inject(StartupService);
     // 固定为受保护路由，覆盖认证探测的全部状态转换分支；判据本身由末尾两条用例
-    // 用真实实现验证（mockRestore 还原真实实现 + replaceState）。
+    // 用真实实现验证（mockRestore 还原真实实现 + openAt）。
     isProtectedRoute = vi
       .spyOn(
         service as unknown as {
@@ -47,6 +48,11 @@ describe('StartupService', () => {
       )
       .mockReturnValue(true);
   });
+
+  /** 设定地址栏但不导航：启动流跑在初始导航之前，读到的只能是地址栏。 */
+  function openAt(url: string): void {
+    TestBed.inject(Location).replaceState(url);
+  }
 
   function httpError(status: number): ApplicationHttpError {
     return ApplicationHttpError.from(
@@ -104,12 +110,10 @@ describe('StartupService', () => {
    * 恒 true 时公开页也要探一次认证。两种都得钉住。
    */
   describe('entry route gate', () => {
-    afterEach(() => history.replaceState(null, '', '/context.html'));
-
     it('establishes the subject on a protected route', async () => {
       isProtectedRoute.mockRestore();
       authService.initializeAuth.mockResolvedValue();
-      history.replaceState(null, '', '/platform/users');
+      openAt('/platform/users');
 
       await service.load();
 
@@ -120,7 +124,7 @@ describe('StartupService', () => {
     it('does not probe the session on a public route', async () => {
       isProtectedRoute.mockRestore();
       authService.initializeAuth.mockResolvedValue();
-      history.replaceState(null, '', '/');
+      openAt('/');
 
       await service.load();
 
@@ -136,13 +140,9 @@ describe('StartupService', () => {
    * 把回调当普通页面处理，外部登录断在这一步且不报错。
    */
   it('lets the external sign-in callback run without probing the session', async () => {
-    history.replaceState(null, '', '/auth/external-callback/github?code=abc&state=xyz');
+    openAt('/auth/external-callback/github?code=abc&state=xyz');
 
-    try {
-      await service.load();
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    await service.load();
 
     expect(authService.initializeAuth).not.toHaveBeenCalled();
     expect(service.status()).toBe('success');
@@ -159,11 +159,9 @@ describe('StartupService', () => {
    * 一圈一圈在浏览器和 IdP 之间打转，而每一圈的结果都一样。
    */
   describe('on the OIDC callback', () => {
-    afterEach(() => history.replaceState(null, '', '/context.html'));
-
     it('fails startup instead of letting the callback navigate on', async () => {
       isProtectedRoute.mockRestore();
-      history.replaceState(null, '', '/auth/callback?code=abc&state=xyz');
+      openAt('/auth/callback?code=abc&state=xyz');
       authService.initializeAuth.mockResolvedValue();
       sessionContext.establish.mockRejectedValue(httpError(401));
 
@@ -178,7 +176,7 @@ describe('StartupService', () => {
     // 而正确行为是按已登出处理、让 Guard 把人送去登录。
     it('does not mistake an auth path inside the query string for the callback', async () => {
       isProtectedRoute.mockRestore();
-      history.replaceState(null, '', '/#/workspace?returnUrl=/auth/callback');
+      openAt('/workspace?returnUrl=/auth/callback');
       authService.initializeAuth.mockResolvedValue();
       sessionContext.establish.mockRejectedValue(httpError(401));
 
@@ -190,7 +188,7 @@ describe('StartupService', () => {
 
     it('still treats a 401 outside the callback as signed out', async () => {
       isProtectedRoute.mockRestore();
-      history.replaceState(null, '', '/platform/users');
+      openAt('/platform/users');
       authService.initializeAuth.mockResolvedValue();
       sessionContext.establish.mockRejectedValue(httpError(401));
 

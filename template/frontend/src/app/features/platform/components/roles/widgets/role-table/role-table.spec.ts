@@ -1,8 +1,11 @@
 import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
 
@@ -53,7 +56,7 @@ describe('RoleTable', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        ...provideTranslocoTesting(['en']),
+        ...provideTranslocoTesting(['en', 'zh-CN']),
         //#endif
         {
           provide: BreakpointObserver,
@@ -129,10 +132,63 @@ describe('RoleTable', () => {
     expect(component.hasCollapsedColumns()).toBe(true);
   });
 
-  it('tracks the expanded state per row', () => {
-    component.toggleRow('1');
+  // 展开状态用 TanStack 的行展开，按行 id 记：数据刷新（同一批行换了新对象、换了顺序）后
+  // 展开的仍是原来那一行。按下标记会让展开跟着位置走，数据一换就默认全部收起。
+  it('keeps a row expanded by its id across data refreshes', async () => {
+    viewport.next(desktop(false));
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
 
-    expect(component.isRowExpanded('1')).toBe(true);
-    expect(component.isRowExpanded('2')).toBe(false);
+    expandButtons()[0].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['true', 'false']);
+
+    fixture.componentRef.setInput('roles', [role('2', 'member'), role('1', 'admin')]);
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'true']);
+
+    expandButtons()[1].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'false']);
   });
+
+  function expandButtons(): HTMLButtonElement[] {
+    const host = fixture.nativeElement as HTMLElement;
+    return Array.from(host.querySelectorAll('tbody ng-icon[name="lucideChevronRight"]')).map(
+      (icon) => icon.closest('button')!,
+    );
+  }
+
+  function expandedStates(): (string | null)[] {
+    return expandButtons().map((button) => button.getAttribute('aria-expanded'));
+  }
+  //#if (IncludeLocalization)
+
+  // 表头与分页文案都经模板结构指令的 t 取得：切换语言后已渲染的表格要换成新语言，
+  // OnPush 视图不会因为别的原因被标脏，停在旧语言就说明文案没有走结构指令。
+  it('re-renders header and paginator labels when the language changes', async () => {
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
+
+    const transloco = TestBed.inject(TranslocoService);
+    transloco.setTranslation(
+      { common: { rowsPerPage: '每页条数' }, roles: { colName: '角色' } },
+      'zh-CN',
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    const headers = () =>
+      Array.from(host.querySelectorAll('th')).map((th) => th.textContent!.trim());
+    expect(headers()).toContain('roles.colName');
+    expect(host.textContent).not.toContain('每页条数');
+
+    transloco.setActiveLang('zh-CN');
+    await fixture.whenStable();
+
+    expect(headers()).toContain('角色');
+    expect(host.textContent).toContain('每页条数');
+  });
+  //#endif
 });

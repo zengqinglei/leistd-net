@@ -142,6 +142,15 @@ body {
     @apply bg-background text-foreground font-sans;
   }
 
+  /*
+   * 校验不通过时只标红输入框与错误提示，标签保持正文色。spartan 的 Field 会把整个字段容器染成
+   * destructive，标签自身不设颜色、随之继承变红；这里直接给标签定色，不改按上游维护的 libs/ui。
+   */
+  [data-slot='field'][data-matches-spartan-invalid='true']
+    :is([data-slot='label'], [data-slot='field-label']) {
+    color: var(--color-foreground);
+  }
+
   /* Tailwind v4 preflight 不再给 button 默认手型光标，这里补回（对齐参考站）。 */
   button:not([disabled]),
   [role='button']:not([disabled]) {

@@ -69,7 +69,7 @@ if (order.Status == OrderStatus.Shipped)
 }
 ```
 
-`Code` 在构造时必填且不可变，同时是机器契约和本地化资源键。`Message` 必须是安全、可在未启用本地化时直接返回的默认文案；技术细节放入 `InnerException` 和日志。能帮用户修正操作的非敏感输入可以回显；密码、令牌、连接串以及登录等匿名场景中会帮助枚举账号的标识不得回显。`WithData` 只为资源文案的具名占位符传值。
+`Code` 在构造时必填且不可变，同时是机器契约和本地化资源键。`Message` 必须是安全、可在未启用本地化时直接返回的默认文案；技术细节放入 `InnerException` 和日志。能帮用户修正操作的非敏感输入可以回显；密码、令牌、连接串以及登录等匿名场景中会帮助枚举账号的标识不得回显。`WithData` 只为资源文案的具名占位符传值，写入 `LocalizationData`；这些值会展示出去——随错误响应返回，也会被操作记录的业务拒绝留痕原样记下、进审计与导出——所以只放可公开展示的值。
 
 ## 默认映射与安全边界
 
@@ -127,6 +127,7 @@ app.UseWhen(
 
 - `GlobalExceptionOptions.MapCode(code, status)`：精确映射业务错误码。
 - `GlobalExceptionOptions.MapException<TException>(...)`：宿主将自定义异常映射为 `ExceptionDescriptor`。
+- `LocalizationPlaceholders.Fill(text, data)`（Core 包）：按 `LocalizationData` 的约定填 `{Name}` 占位符（序数、区分大小写，没有对应参数的原样保留）。处理器用它生成 `detail`；在别处按错误码展示同一句话（如操作记录的失败原因）时调用它，两处才一致。
 - `GlobalExceptionOptions.MapDefaultCode` / `MapDefaultException<TException>`：组件在自己的 `AddXxx` 里登记默认映射；宿主显式映射优先，业务项目不调用这两个。
 - 需要完全自定义某类异常的处理时，按 ASP.NET Core 的方式再注册一个 `IExceptionHandler`（`AddExceptionHandler<T>()`，按注册顺序尝试，返回 `false` 交给下一个）。只需改状态码或描述时用 `MapException`：它的委托拿得到异常实例，可以按属性分支。
 - 个别路径需要其他错误格式（如 Webhook 回调要求的固定响应体）时，在 `AddGlobalExceptionHandler` 之前注册该格式的 `IExceptionHandler`，由它按 `HttpContext.Request.Path` 判断并返回 `true`；其余请求返回 `false` 交给全局处理器。

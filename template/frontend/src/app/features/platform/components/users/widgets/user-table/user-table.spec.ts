@@ -2,11 +2,7 @@ import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-//#if (LocalIdentity)
 import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
-//#else
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-//#endif
 import { provideRouter } from '@angular/router';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
@@ -184,14 +180,36 @@ describe('UserTable', () => {
     expect(component.hasCollapsedColumns()).toBe(true);
   });
 
-  it('tracks the expanded state per row', () => {
-    expect(component.isRowExpanded('1')).toBe(false);
+  // 展开状态用 TanStack 的行展开，按行 id 记：数据刷新（同一批行换了新对象、换了顺序）后
+  // 展开的仍是原来那一行。按下标记会让展开跟着位置走，数据一换就默认全部收起。
+  it('keeps a row expanded by its id across data refreshes', async () => {
+    viewport.next(desktop(false));
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
 
-    component.toggleRow('1');
-    expect(component.isRowExpanded('1')).toBe(true);
-    expect(component.isRowExpanded('2')).toBe(false);
+    expandButtons()[0].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['true', 'false']);
 
-    component.toggleRow('1');
-    expect(component.isRowExpanded('1')).toBe(false);
+    fixture.componentRef.setInput('users', [user('2', 'bob'), user('1', 'alice')]);
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'true']);
+
+    expandButtons()[1].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'false']);
   });
+
+  function expandButtons(): HTMLButtonElement[] {
+    const host = fixture.nativeElement as HTMLElement;
+    return Array.from(host.querySelectorAll('tbody ng-icon[name="lucideChevronRight"]')).map(
+      (icon) => icon.closest('button')!,
+    );
+  }
+
+  function expandedStates(): (string | null)[] {
+    return expandButtons().map((button) => button.getAttribute('aria-expanded'));
+  }
 });

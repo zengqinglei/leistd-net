@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { form, minLength, maxLength, required, FormField } from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
@@ -31,6 +31,9 @@ import { SessionContextService } from '../../../../core/services/session-context
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
 import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { TenantService } from '../../../platform/services/tenant-service';
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
@@ -55,7 +58,7 @@ const githubIcon =
     HlmInputGroupButton,
     ...HlmFieldImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     AuthShell,
     TwoFactorChallenge,
@@ -82,6 +85,8 @@ export class Login {
   private router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
   private readonly tenantService = inject(TenantService);
   protected readonly tenantContext = inject(TenantContextService);
@@ -93,15 +98,6 @@ export class Login {
   // 密码可见性
   protected readonly showPassword = signal(false);
 
-  // 读屏用户听到的是"显示密码/隐藏密码"，而不是一个没有名字的按钮；名称随当前状态变
-  //#if (IncludeLocalization)
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    this.transloco.translate(shown ? 'common.hidePassword' : 'common.showPassword');
-  //#else
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    shown ? 'Hide password' : 'Show password';
-  //#endif
-
   // 登录接口由 Mock 应答时才提示演示账号：只 Mock 了别的模块时，演示账号登不进真实后端
   public readonly isMockEnabled = signal(isMockedUrl(environment.useMock, AuthService.loginUrl));
 
@@ -111,31 +107,14 @@ export class Login {
     password: '',
   });
 
-  //#if (IncludeLocalization)
   readonly loginForm = form(this.model, (path) => {
-    required(path.usernameOrEmail, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    minLength(path.usernameOrEmail, 3, {
-      message: this.transloco.translate('common.validation.minLength', { min: 3 }),
-    });
-    maxLength(path.usernameOrEmail, 256, { message: '' });
-    required(path.password, { message: this.transloco.translate('common.validation.required') });
-    minLength(path.password, 6, {
-      message: this.transloco.translate('common.validation.minLength', { min: 6 }),
-    });
+    required(path.usernameOrEmail);
+    minLength(path.usernameOrEmail, 3);
+    maxLength(path.usernameOrEmail, 256);
+    required(path.password);
     // 登录只设防滥用上限，不校验口令策略：策略生效前设置的旧口令也必须能登录。
-    maxLength(path.password, PASSWORD_MAX_LENGTH, { message: '' });
+    maxLength(path.password, PASSWORD_MAX_LENGTH);
   });
-  //#else
-  readonly loginForm = form(this.model, (path) => {
-    required(path.usernameOrEmail, { message: 'This field is required.' });
-    minLength(path.usernameOrEmail, 3, { message: 'Must be at least 3 characters.' });
-    maxLength(path.usernameOrEmail, 256, { message: '' });
-    required(path.password, { message: 'This field is required.' });
-    maxLength(path.password, PASSWORD_MAX_LENGTH, { message: '' });
-  });
-  //#endif
 
   /**
    * 第二步凭据：密码已通过、尚待验证码。有值时登录页换成验证码那一步。
@@ -276,6 +255,7 @@ export class Login {
 
   // 租户选择：确认后写入本地上下文，登录请求由拦截器附租户提示头；不选即宿主登录。
   readonly tenantName = signal('');
+  /** 租户区的错误说明，存词条键、由模板按当前语言取：存成文字的话切换语言时它不会跟着变。 */
   readonly tenantError = signal<string | null>(null);
 
   /**
@@ -343,7 +323,7 @@ export class Login {
             this.tenantContext.set(result.tenant.name);
           } else {
             this.tenantContext.clear();
-            this.tenantError.set(this.tenantUnavailableMessage());
+            this.tenantError.set('account.login.tenantUnavailable');
           }
           break;
 
@@ -363,7 +343,7 @@ export class Login {
       // 能走到这里的是"域名指向的租户解析不了"（中间件 404）或后端不可达，两者都不能
       // 推断成"域名不表态"，所以不开放手选、也不放行登录，只给出原因和重试。
       this.hostProbe.set('failed');
-      this.tenantError.set(this.tenantProbeFailedMessage());
+      this.tenantError.set('account.login.tenantProbeFailed');
     }
   }
 
@@ -407,18 +387,6 @@ export class Login {
     this.tenantContext.clear();
     this.tenantError.set(null);
   }
-
-  //#if (IncludeLocalization)
-  private tenantUnavailableMessage = () =>
-    this.transloco.translate('account.login.tenantUnavailable');
-  private tenantProbeFailedMessage = () =>
-    this.transloco.translate('account.login.tenantProbeFailed');
-  //#else
-  private tenantUnavailableMessage = () =>
-    'The tenant this address points to is unavailable. Contact your administrator.';
-  private tenantProbeFailedMessage = () =>
-    'Could not determine the tenant for this address. Check your connection and try again.';
-  //#endif
   //#if (ExternalLogin)
 
   loginWithGitHub() {
@@ -467,3 +435,34 @@ export class Login {
   }
   //#endif
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'account.login.title': 'Sign In',
+  'account.login.subtitle': 'Welcome back, please enter your account information',
+  'account.login.tenant': 'Tenant',
+  'account.login.tenantClear': 'Clear tenant',
+  'account.login.tenantFromDomain': 'Determined by the site address.',
+  'account.login.tenantPlaceholder': 'Tenant name, leave empty for host',
+  'account.login.tenantConfirm': 'Confirm',
+  'account.login.tenantResolving': 'Identifying tenant from the site address…',
+  'account.login.tenantProbeRetry': 'Retry',
+  'account.login.usernameOrEmail': 'Username or Email',
+  'account.login.usernameOrEmailPlaceholder': 'Please enter your username or email',
+  'account.login.password': 'Password',
+  'account.login.passwordPlaceholder': 'Please enter your password',
+  'common.hidePassword': 'Hide password',
+  'common.showPassword': 'Show password',
+  'account.login.noAccount': "Don't have an account?",
+  'account.login.registerNow': 'Sign up now',
+  'account.login.submit': 'Sign In',
+  'account.login.or': 'OR',
+  'account.login.testAccount': 'Test Account',
+  'account.login.adminRole': 'Administrator',
+  'account.login.tenantUnavailable':
+    'The tenant this address points to is unavailable. Contact your administrator.',
+  'account.login.tenantProbeFailed':
+    'Could not determine the tenant for this address. Check your connection and try again.',
+};
+//#endif

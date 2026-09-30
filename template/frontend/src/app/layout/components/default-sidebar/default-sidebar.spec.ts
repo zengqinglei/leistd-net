@@ -1,6 +1,10 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { Translation } from '@jsverse/transloco';
+import { Subject } from 'rxjs';
+//#endif
 
 import { DefaultSidebar } from './default-sidebar';
 //#if (IncludeLocalization)
@@ -150,3 +154,39 @@ describe('DefaultSidebar menu groups', () => {
     expect(routesOf(sidebar)).toEqual(['/platform']);
   });
 });
+//#if (IncludeLocalization)
+
+/**
+ * 菜单文案随词条到达更新。
+ *
+ * 语言切换不再等词条加载完才激活，首次读菜单时词条可能还在路上。文案若靠「读活动语言 + 同步 translate()」，
+ * 那一刻会把键名缓存下来，之后语言不再变化，键名就一直留在菜单上。
+ */
+describe('DefaultSidebar menu labels', () => {
+  it('shows the translated labels once translations arrive after the first read', () => {
+    const translations = new Subject<Translation>();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: LayoutService,
+          useValue: { isPlatform: signal(false), currentUrl: signal('/workspace/dashboard') },
+        },
+        {
+          provide: AuthorizationService,
+          useValue: { hasAny: () => true, canAccessPlatform: () => false },
+        },
+        ...provideTranslocoTesting(['en'], { getTranslation: () => translations }),
+      ],
+    });
+    const sidebar = TestBed.runInInjectionContext(() => new DefaultSidebar());
+    const labels = () => sidebar.menuGroups().map((group) => group.label);
+    expect(labels()).not.toContain('Work');
+
+    translations.next({ layout: { sidebar: { groupWork: 'Work', groupBusiness: 'Business' } } });
+    translations.complete();
+
+    expect(labels()).toEqual(['Work', 'Business']);
+  });
+});
+//#endif

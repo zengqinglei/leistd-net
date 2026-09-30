@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
@@ -14,6 +14,9 @@ import {
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { AccountService } from '../../services/account-service';
 import { EXTERNAL_LINK_PENDING_KEY } from '../external-logins/external-logins';
 
@@ -27,22 +30,14 @@ import { EXTERNAL_LINK_PENDING_KEY } from '../external-logins/external-logins';
  */
 @Component({
   selector: 'app-external-auth-callback',
-  imports: [HlmSpinner],
-  template: `
-    <main class="flex min-h-screen items-center justify-center bg-background px-4">
-      <section class="text-center">
-        @if (error()) {
-          <h1 class="mb-3 text-2xl font-semibold text-destructive">{{ failedTitle() }}</h1>
-          <p class="text-muted-foreground">{{ error() }}</p>
-        } @else {
-          <hlm-spinner class="text-4xl" [attr.aria-label]="processingAria()" />
-          <h1 class="mt-4 text-2xl font-semibold text-foreground">
-            {{ processingTitle() }}
-          </h1>
-        }
-      </section>
-    </main>
-  `,
+  // prettier-ignore
+  imports: [
+    HlmSpinner,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
+  templateUrl: './external-auth-callback.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ExternalAuthCallback implements OnInit {
@@ -54,22 +49,15 @@ export class ExternalAuthCallback implements OnInit {
   private router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  //#endif
-
-  protected readonly error = signal<string | null>(null);
-
-  // 内联模板里的条件文案：.ts 的模板字符串区不支持 HTML 注释式条件指令，改用 getter 承载。
-  //#if (IncludeLocalization)
-  protected readonly failedTitle = () => this.transloco.translate('account.login.loginFailed');
-  protected readonly processingAria = () =>
-    this.transloco.translate('account.externalCallback.processingAria');
-  protected readonly processingTitle = () =>
-    this.transloco.translate('account.externalCallback.processing');
   //#else
-  protected readonly failedTitle = () => 'Sign-in failed';
-  protected readonly processingAria = () => 'Completing sign-in';
-  protected readonly processingTitle = () => 'Processing third-party sign-in';
+  protected readonly t = englishText(ENGLISH);
   //#endif
+
+  /**
+   * 失败说明：本端的说法存词条键、由模板按当前语言取，服务端下发的原因原样显示。
+   * 存成已翻译的文字的话，停在这页切换语言时它不会跟着变。
+   */
+  protected readonly error = signal<{ key: string } | { text: string } | null>(null);
 
   ngOnInit(): void {
     this.processCallback();
@@ -82,11 +70,7 @@ export class ExternalAuthCallback implements OnInit {
     const provider = this.route.snapshot.paramMap.get('provider');
 
     if (!code || !provider) {
-      //#if (IncludeLocalization)
-      this.error.set(this.transloco.translate('account.externalCallback.missingParams'));
-      //#else
-      this.error.set('Missing required callback parameters');
-      //#endif
+      this.error.set({ key: 'account.externalCallback.missingParams' });
       return;
     }
 
@@ -130,14 +114,10 @@ export class ExternalAuthCallback implements OnInit {
       // 业务拒绝（如"该邮箱已有账号，请先登录再绑定"）要让用户知道下一步怎么做，展示服务端下发的原因；
       // 其余失败只给通用提示
       if (err instanceof ApplicationHttpError && err.status >= 400 && err.status < 500) {
-        this.error.set(err.message);
+        this.error.set({ text: err.message });
         return;
       }
-      //#if (IncludeLocalization)
-      this.error.set(this.transloco.translate('account.externalCallback.failed'));
-      //#else
-      this.error.set('Third-party sign-in failed. Please go back and try again.');
-      //#endif
+      this.error.set({ key: 'account.externalCallback.failed' });
     }
   }
 
@@ -173,3 +153,14 @@ export class ExternalAuthCallback implements OnInit {
     await this.router.navigate(['/workspace/settings/security']);
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'account.login.loginFailed': 'Sign-in failed',
+  'account.externalCallback.processingAria': 'Completing sign-in',
+  'account.externalCallback.processing': 'Processing third-party sign-in',
+  'account.externalCallback.missingParams': 'Missing required callback parameters',
+  'account.externalCallback.failed': 'Third-party sign-in failed. Please go back and try again.',
+};
+//#endif

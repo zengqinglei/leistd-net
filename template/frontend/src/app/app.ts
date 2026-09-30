@@ -1,4 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+//#if (IncludeLocalization)
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+//#endif
+import { Title } from '@angular/platform-browser';
 import { RouterOutlet } from '@angular/router';
 //#if (IncludeLocalization)
 import { TranslocoService } from '@jsverse/transloco';
@@ -9,6 +13,9 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmToaster } from '@spartan-ng/helm/sonner';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
+//#if (IncludeLocalization)
+import { catchError, defaultIfEmpty, map, Observable, of, switchMap } from 'rxjs';
+//#endif
 
 import {
   ApplicationHttpError,
@@ -16,6 +23,10 @@ import {
 } from './core/errors/application-http-error';
 import { StartupService } from './core/services/startup-service';
 import { ThemeService } from './core/services/theme-service';
+import { LayoutService } from './layout/services/layout-service';
+
+/** 应用名的英文原文，与 `index.html` 启动前的标题一致。 */
+const APP_NAME = 'Template Project';
 
 @Component({
   selector: 'app-root',
@@ -50,13 +61,13 @@ import { ThemeService } from './core/services/theme-service';
       }
       @case ('failed') {
         <div class="h-screen w-full flex items-center justify-center bg-background">
-          @if (startupService.error(); as error) {
+          @if (startupService.error()) {
             <section hlmCard class="w-[360px] text-center">
               <div hlmCardHeader>
                 <h3 hlmCardTitle>{{ failedHeader() }}</h3>
               </div>
               <div hlmCardContent>
-                <p>{{ formatHttpError(error) }}</p>
+                <p>{{ errorMessage() }}</p>
               </div>
               <div hlmCardFooter class="justify-center">
                 <button hlmBtn (click)="onRetryClick()" [disabled]="isRetrying()">
@@ -81,60 +92,110 @@ export class App {
   protected readonly themeService = inject(ThemeService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  protected readonly loadingLabel = () => this.transloco.translate('app.startup.loading');
-  protected readonly failedHeader = () => this.transloco.translate('app.startup.failed');
-  protected readonly retryLabel = () => this.transloco.translate('common.retry');
+  // 根组件不用 *transloco 结构指令，也不用 translateSignal：前者要等词条到位才渲染内容，
+  // 后者在词条加载失败时读取即抛错，而启动失败页恰恰要在词条缺失时照样显示出来。
+  protected readonly loadingLabel = this.startupText({
+    key: 'app.startup.loading',
+    english: 'Loading...',
+  });
+  protected readonly failedHeader = this.startupText({
+    key: 'app.startup.failed',
+    english: 'Application Failed to Load',
+  });
+  protected readonly retryLabel = this.startupText({ key: 'common.retry', english: 'Retry' });
+  private readonly appName = this.startupText({ key: 'app.name', english: APP_NAME });
+  private readonly errorText = computed(() => startupErrorText(this.startupService.error()));
+  protected readonly errorMessage = toSignal(
+    toObservable(this.errorText).pipe(switchMap((text) => this.selectStartupText(text))),
+    { initialValue: '' },
+  );
   //#else
   protected readonly loadingLabel = () => 'Loading...';
   protected readonly failedHeader = () => 'Application Failed to Load';
   protected readonly retryLabel = () => 'Retry';
+  private readonly appName = () => APP_NAME;
+  protected readonly errorMessage = computed(
+    () => startupErrorText(this.startupService.error()).english,
+  );
   //#endif
 
   private _isRetrying = signal(false);
   public readonly isRetrying = this._isRetrying.asReadonly();
+
+  constructor() {
+    // 浏览器标签页标题只在这里设：页面标题取自各页已经在设的布局标题（随语言切换已是新语言），
+    // 没有页面标题的页（登录、注册等认证页，落地页）只显示应用名
+    const layoutService = inject(LayoutService);
+    const title = inject(Title);
+    effect(() => {
+      const pageTitle = layoutService.title();
+      title.setTitle(pageTitle ? `${pageTitle} · ${this.appName()}` : this.appName());
+    });
+  }
 
   async onRetryClick(): Promise<void> {
     this._isRetrying.set(true);
     await this.startupService.retry();
     this._isRetrying.set(false);
   }
+  //#if (IncludeLocalization)
 
-  // 拦截器已把 HTTP 错误归一化为类型化 ApplicationHttpError，这里按其契约展示。
-  protected formatHttpError(error: unknown): string {
-    if (error instanceof ApplicationHttpError) {
-      if (error.code) {
-        //#if (IncludeLocalization)
-        return this.transloco.translate('app.startup.requestFailed', {
-          message: applicationErrorMessage(error),
-          code: error.code,
-        });
-        //#else
-        return `Request failed: ${applicationErrorMessage(error)} (code: ${error.code})`;
-        //#endif
-      }
-      //#if (IncludeLocalization)
-      return this.transloco.translate('app.startup.serverError', {
-        status: error.status,
-        statusText: applicationErrorMessage(error),
-      });
-      //#else
-      return `Unknown server error: ${error.status} - ${applicationErrorMessage(error)}`;
-      //#endif
-    }
-
-    // 处理非 ApplicationHttpError 的其他未知错误
-    if (error instanceof Error) {
-      //#if (IncludeLocalization)
-      return this.transloco.translate('app.startup.unknownErrorDetail', { message: error.message });
-      //#else
-      return `An unknown error occurred: ${error.message}`;
-      //#endif
-    }
-
-    //#if (IncludeLocalization)
-    return this.transloco.translate('app.startup.unknownError');
-    //#else
-    return `An unknown error occurred. Please try again later.`;
-    //#endif
+  private startupText(text: StartupText) {
+    return toSignal(this.selectStartupText(text), { initialValue: text.english });
   }
+
+  /** 随语言切换与词条到达更新；词条取不到或缺这一条时退回英文。 */
+  private selectStartupText({ key, params, english }: StartupText): Observable<string> {
+    return this.transloco.langChanges$.pipe(
+      switchMap((lang) =>
+        this.transloco.selectTranslate<string>(key, params, lang).pipe(
+          map((value) => (value === key ? english : value)),
+          // 加载失败时 Transloco 可能报错，也可能直接结束而不发射
+          defaultIfEmpty(english),
+          catchError(() => of(english)),
+        ),
+      ),
+    );
+  }
+  //#endif
+}
+
+/** 启动页的一句文案：本地化形态按 `key` 取词条，词条缺失与不含本地化时显示 `english`。 */
+interface StartupText {
+  key: string;
+  params?: Record<string, unknown>;
+  english: string;
+}
+
+/** 启动失败的说明；拦截器已把 HTTP 错误归一化为类型化 ApplicationHttpError，这里按其契约展示。 */
+function startupErrorText(error: unknown): StartupText {
+  if (error instanceof ApplicationHttpError) {
+    const message = applicationErrorMessage(error);
+    if (error.code) {
+      return {
+        key: 'app.startup.requestFailed',
+        params: { message, code: error.code },
+        english: `Request failed: ${message} (code: ${error.code})`,
+      };
+    }
+    return {
+      key: 'app.startup.serverError',
+      params: { status: error.status, statusText: message },
+      english: `Unknown server error: ${error.status} - ${message}`,
+    };
+  }
+
+  // 处理非 ApplicationHttpError 的其他未知错误
+  if (error instanceof Error) {
+    return {
+      key: 'app.startup.unknownErrorDetail',
+      params: { message: error.message },
+      english: `An unknown error occurred: ${error.message}`,
+    };
+  }
+
+  return {
+    key: 'app.startup.unknownError',
+    english: 'An unknown error occurred. Please try again later.',
+  };
 }

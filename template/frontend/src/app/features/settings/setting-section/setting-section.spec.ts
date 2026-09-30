@@ -2,6 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 
 import { SAVING_MIN_MS, SettingSection } from './setting-section';
 //#if (IncludeLocalization)
@@ -487,3 +490,42 @@ describe('SettingSection switches', () => {
     });
   });
 });
+//#if (IncludeLocalization)
+
+/**
+ * 行内文案经模板结构指令的 t 取得。这张表单没有随语言变化的校验信号，
+ * 切换语言后能换成新语言只靠结构指令重绘——文案改回组件里的 translate() 调用这里就会红。
+ */
+describe('SettingSection language', () => {
+  it('re-renders row labels when the language changes', async () => {
+    TestBed.configureTestingModule({
+      imports: [SettingSection],
+      // 需要第二种语言可切换；装在公共提供者之后，覆盖其中只有英文的那份配置
+      providers: [...pageProviders(), ...provideTranslocoTesting(['en', 'zh-CN'])],
+    });
+    const fixture = TestBed.createComponent(SettingSection);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    // 可选语言变多后，语言服务按浏览器语言激活时会让设置再取一次；这里只关心文案
+    http.match('/api/v1/settings').forEach((request) => request.flush([row()]));
+    await fixture.whenStable();
+    http.match('/api/v1/settings').forEach((request) => request.flush([row()]));
+    fixture.detectChanges();
+
+    const transloco = TestBed.inject(TranslocoService);
+    transloco.setTranslation({ settings: { reset: '恢复默认' } }, 'zh-CN');
+    const reset = () =>
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="setting-reset-Display.FreeTextProbe"]',
+      )!;
+    transloco.setActiveLang('en');
+    await fixture.whenStable();
+    expect(reset().getAttribute('aria-label')).toBe('settings.reset');
+
+    transloco.setActiveLang('zh-CN');
+    await fixture.whenStable();
+
+    expect(reset().getAttribute('aria-label')).toBe('恢复默认');
+  });
+});
+//#endif

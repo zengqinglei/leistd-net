@@ -38,19 +38,6 @@
     "toggleSidebar": "切换侧栏",
     "clearFilter": "清除筛选",
     "noResults": "无匹配结果",
-    "validation": {
-      "required": "此字段为必填项",
-      "email": "请输入有效的邮箱地址",
-      "minLength": "至少需要 {{min}} 个字符",
-      "maxLength": "不能超过 {{max}} 个字符",
-      "usernamePattern": "只能为 3~64 位字母、数字或下划线",
-      "roleNamePattern": "只能为 2~64 位字母、数字或下划线",
-      "passwordMismatch": "两次输入的密码不一致",
-      "passwordSameAsCurrent": "新密码不能与当前密码相同",
-      "phonePattern": "只能包含数字、空格及 + - ( ) 符号",
-      "passwordTooShort": "密码至少需要 {{min}} 位。",
-      "passwordTooLong": "密码不能超过 {{max}} 位。"
-    },
     "noData": "暂无数据",
     "paginator": {
       "report": "第 {{from}}-{{to}} 条，共 {{total}} 条",
@@ -63,6 +50,21 @@
     },
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码"
+  },
+  "validation": {
+    "required": "此字段为必填项",
+    "email": "请输入有效的邮箱地址",
+    "minLength": "至少需要 {{minLength}} 个字符",
+    "maxLength": "不能超过 {{maxLength}} 个字符",
+    "usernamePattern": "只能为 3~64 位字母、数字或下划线",
+    "roleNamePattern": "只能为 2~64 位字母、数字或下划线",
+    "phonePattern": "只能包含数字、空格及 + - ( ) 符号",
+    "passwordMismatch": "两次输入的密码不一致",
+    "passwordSameAsCurrent": "新密码不能与当前密码相同",
+    "tenantNamePattern": "只能使用字母、数字与连字符，不能以连字符开头或结尾，最多 63 位。",
+    "connectionNamePattern": "连接名只能是小写字母、数字与连字符，长度 1 到 64 位。",
+    "connectionNameTaken": "该连接名已登记，要换连接串请用「改连接串」。",
+    "pkceRequired": "Native/Public 客户端必须启用 PKCE。"
   },
   "menu": {
     "workspace": "工作空间",
@@ -229,6 +231,7 @@
     }
   },
   "app": {
+    "name": "模板项目",
     "startup": {
       "loading": "正在加载...",
       "failed": "应用加载失败",
@@ -630,15 +633,9 @@
       "tenant.connection-removed": "删除了租户 {{target}} 的数据库连接登记"
     },
     "actionsNoTarget": {
+      "operation-records.exported": "导出了操作记录",
       "user.created": "创建用户",
       "role.created": "创建角色"
-    },
-    "failures": {
-      "Auth_InvalidCredentials": "用户名或密码不正确（{{windowMinutes}} 分钟内已失败 {{attempts}} 次）",
-      "Auth_UserTemporarilyLockedOut": "连续登录失败 {{maxFailedAttempts}} 次，账号已锁定 {{minutes}} 分钟",
-      "Error_Forbidden": "没有执行该操作的权限",
-      "Security_CurrentPasswordIncorrect": "当前口令不正确",
-      "Auth_TwoFactorCodeInvalid": "验证码不正确"
     },
     "table": {
       "currentPageReport": "共 {{total}} 条",
@@ -777,7 +774,6 @@
     },
     "requirements": {
       "placeholder": "选择安全要求",
-      "pkceRequired": "Native/Public 客户端必须启用 PKCE。",
       "offlineAccessHint": "已允许 refresh_token，建议同时开放 offline_access scope。"
     },
     "table": {
@@ -883,8 +879,6 @@
     "addConnection": "添加连接",
     "changeConnectionString": "改连接串",
     "connectionsEmpty": "该租户不单独分库，各服务使用自己配置的数据库。",
-    "connectionNameInvalid": "连接名只能是小写字母、数字与连字符，长度 1 到 64 位。",
-    "connectionNameTaken": "该连接名已登记，要换连接串请用「改连接串」。",
     "deleteConnectionTitle": "删除连接",
     "deleteConnectionDescription": "删除连接「{{name}}」？该服务之后使用自己配置的数据库。",
     "saved": "租户已保存",

@@ -1,5 +1,15 @@
 import { PagedRequestDto } from '../models/paged-request.dto';
 
+/**
+ * 租户名的合法形态：单个 DNS 标签，与后端 `TenantConfiguration.NamePattern` 同源。
+ *
+ * 按子域名解析租户时名字就是主机名里的一段，不合规的名字建得出来却经子域名访问不到。
+ */
+export const TENANT_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
+
+/** 租户名长度上限（DNS 标签上限），与后端 `TenantConfiguration.MaxNameLength` 一致。 */
+export const TENANT_NAME_MAX_LENGTH = 63;
+
 export interface TenantOutputDto {
   id: string;
   /** 租户名称，唯一，作为稳定的业务标识（登录时按名称解析租户）。 */

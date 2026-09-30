@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-//#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
-//#endif
 import { toast } from '@spartan-ng/brain/sonner';
 
 import { SecretRevealDialog } from './secret-reveal-dialog';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
 
 import type { Mock } from 'vitest';
 
@@ -23,7 +23,7 @@ describe('SecretRevealDialog', () => {
       // prettier-ignore
       providers: [
                 //#if (IncludeLocalization)
-                { provide: TranslocoService, useValue: { translate: (key: string) => key } },
+                ...provideTranslocoTesting(['en']),
                 //#endif
             ],
     });

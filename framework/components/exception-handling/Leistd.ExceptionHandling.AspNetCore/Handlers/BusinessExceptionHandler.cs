@@ -113,21 +113,12 @@ public sealed class BusinessExceptionHandler(
         try
         {
             var localized = _localizer[code];
-            return localized.ResourceNotFound ? fallback : Fill(localized.Value, data);
+            return localized.ResourceNotFound ? fallback : LocalizationPlaceholders.Fill(localized.Value, data);
         }
         catch
         {
             return fallback;
         }
-    }
-
-    private static string Fill(string text, IReadOnlyDictionary<string, object?>? data)
-    {
-        if (data is not { Count: > 0 })
-            return text;
-        foreach (var pair in data)
-            text = text.Replace("{" + pair.Key + "}", pair.Value?.ToString() ?? string.Empty, StringComparison.Ordinal);
-        return text;
     }
 
     private void Log(HttpContext httpContext, Exception exception, ExceptionDescriptor descriptor)

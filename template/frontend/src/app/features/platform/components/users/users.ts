@@ -10,7 +10,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -47,13 +47,13 @@ import {
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/models/permission';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import {
   paginationFromQuery,
   sortingFromQuery,
@@ -106,7 +106,7 @@ const DEFAULT_USER_SORTING: SortingState = [{ id: 'username', desc: false }];
     ...HlmTooltipImports,
     FacetedFilter,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     UserTable,
     UserRolesDialog,
@@ -145,6 +145,8 @@ export class Users {
   private readonly authorizationService = inject(AuthorizationService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   private readonly searchSubject = new Subject<string>();
@@ -194,38 +196,36 @@ export class Users {
     //#endif
   });
   //#if (IncludeLocalization)
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
-
-  // 读 translationReady 建立依赖：资源就绪 / 语言切换时重算并重新翻译。
-  readonly activeOptions = computed(() => {
-    this.translationReady();
-    return [
-      {
-        label: this.transloco.translate('users.status.active'),
-        value: true,
-        icon: 'lucideCircleCheck',
-      },
-      { label: this.transloco.translate('users.status.inactive'), value: false, icon: 'lucideBan' },
-    ];
-  });
+  private readonly activeOptionsTexts = {
+    active: translateSignal('users.status.active'),
+    inactive: translateSignal('users.status.inactive'),
+  };
+  readonly activeOptions = computed(() => [
+    {
+      label: this.activeOptionsTexts.active(),
+      value: true,
+      icon: 'lucideCircleCheck',
+    },
+    { label: this.activeOptionsTexts.inactive(), value: false, icon: 'lucideBan' },
+  ]);
 
   //#if (LocalIdentity)
-  readonly emailVerifiedOptions = computed(() => {
-    this.translationReady();
-    return [
-      {
-        label: this.transloco.translate('users.status.emailVerified'),
-        value: true,
-        icon: 'lucideMailCheck',
-      },
-      {
-        label: this.transloco.translate('users.status.emailUnverified'),
-        value: false,
-        icon: 'lucideMail',
-      },
-    ];
-  });
+  private readonly emailVerifiedOptionsTexts = {
+    emailVerified: translateSignal('users.status.emailVerified'),
+    emailUnverified: translateSignal('users.status.emailUnverified'),
+  };
+  readonly emailVerifiedOptions = computed(() => [
+    {
+      label: this.emailVerifiedOptionsTexts.emailVerified(),
+      value: true,
+      icon: 'lucideMailCheck',
+    },
+    {
+      label: this.emailVerifiedOptionsTexts.emailUnverified(),
+      value: false,
+      icon: 'lucideMail',
+    },
+  ]);
   //#endif
   //#else
   readonly activeOptions = computed(() => [
@@ -273,40 +273,6 @@ export class Users {
     this.refreshRequests.next();
     this.authorizationService.reload().subscribe({ error: () => undefined });
   }
-  //#if (IncludeLocalization)
-  readonly allStatusPlaceholder = () => this.transloco.translate('users.filter.allStatus');
-  //#if (LocalIdentity)
-  readonly allEmailStatusPlaceholder = () =>
-    this.transloco.translate('users.filter.allEmailStatus');
-  //#endif
-  readonly allRolesPlaceholder = () => this.transloco.translate('users.filter.allRoles');
-  readonly searchPlaceholder = () => this.transloco.translate('users.filter.searchPlaceholder');
-  readonly refreshLabel = () => this.transloco.translate('common.refresh');
-  readonly newUserLabel = () => this.transloco.translate('users.actions.newUser');
-  readonly statusFilterLabel = () => this.transloco.translate('users.table.colStatus');
-  //#if (LocalIdentity)
-  readonly emailFilterLabel = () => this.transloco.translate('users.filter.emailLabel');
-  //#endif
-  readonly roleFilterLabel = () => this.transloco.translate('users.table.colRole');
-  readonly filterClearLabel = () => this.transloco.translate('common.clearFilter');
-  readonly filterEmptyLabel = () => this.transloco.translate('common.noResults');
-  //#else
-  readonly allStatusPlaceholder = () => 'All statuses';
-  //#if (LocalIdentity)
-  readonly allEmailStatusPlaceholder = () => 'All email statuses';
-  //#endif
-  readonly allRolesPlaceholder = () => 'All roles';
-  readonly searchPlaceholder = () => 'Search username / email / display name...';
-  readonly refreshLabel = () => 'Refresh';
-  readonly newUserLabel = () => 'New user';
-  readonly statusFilterLabel = () => 'Status';
-  //#if (LocalIdentity)
-  readonly emailFilterLabel = () => 'Email status';
-  //#endif
-  readonly roleFilterLabel = () => 'Role';
-  readonly filterClearLabel = () => 'Clear filter';
-  readonly filterEmptyLabel = () => 'No results';
-  //#endif
 
   constructor() {
     // 角色选项端点要求 ManageRoles；无该权限时不请求，避免制造必然 403 的噪声。
@@ -345,11 +311,8 @@ export class Users {
       });
     //#if (IncludeLocalization)
 
-    // 读 translationReady 建立依赖：资源就绪 / 语言切换时标题随之重设。
-    effect(() => {
-      this.translationReady();
-      this.layoutService.title.set(this.transloco.translate('users.page.title'));
-    });
+    const title = translateSignal('users.page.title');
+    effect(() => this.layoutService.title.set(title()));
     //#else
 
     this.layoutService.title.set('User management');
@@ -693,3 +656,17 @@ function readBoolean(value: string | null): boolean | null {
 function serializeBoolean(value: boolean | null | undefined): string | null {
   return value === true ? 'true' : value === false ? 'false' : null;
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'users.filter.searchPlaceholder': 'Search username / email / display name...',
+  'users.table.colStatus': 'Status',
+  'common.clearFilter': 'Clear filter',
+  'common.noResults': 'No results',
+  'users.filter.emailLabel': 'Email status',
+  'users.table.colRole': 'Role',
+  'common.refresh': 'Refresh',
+  'users.actions.newUser': 'New user',
+};
+//#endif

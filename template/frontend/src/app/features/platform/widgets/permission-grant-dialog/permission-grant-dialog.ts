@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronDown, lucideChevronRight, lucideSearch } from '@ng-icons/lucide';
@@ -30,14 +30,14 @@ import { combineLatest, defer, EMPTY, of, Subject } from 'rxjs';
 import { catchError, filter, finalize, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import {
   PermissionDefinitionGroupOutputDto,
   PermissionDefinitionOutputDto,
   PermissionGrantsOutputDto,
 } from '../../../../shared/models/permission';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { PermissionManagementService } from '../../services/permission-management-service';
 
 /** 组内的一行权限；depth 0 是资源本身，更深的是可在其上执行的动作。 */
@@ -84,7 +84,7 @@ interface PermissionGroupRender extends PermissionGroupView {
     ...HlmCheckboxImports,
     ...HlmDialogImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucideSearch, lucideChevronDown, lucideChevronRight })],
@@ -101,7 +101,8 @@ export class PermissionGrantDialog {
   private readonly permissionService = inject(PermissionManagementService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly loading = signal(false);
@@ -279,14 +280,24 @@ export class PermissionGrantDialog {
       .subscribe({
         next: () => {
           this.saving.set(false);
-          toast.success(this.savedMessage());
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('permissions.saved'));
+          //#else
+          toast.success('Permissions saved');
+          //#endif
           this.saved.emit();
         },
         error: (error) => {
           this.saving.set(false);
           // 409 说明另一位管理员抢先保存：重新加载，不静默覆盖。
           if (error?.status === 409) {
-            toast.error(this.conflictMessage());
+            //#if (IncludeLocalization)
+            toast.error(this.transloco.translate('permissions.conflict'));
+            //#else
+            toast.error(
+              'Someone else changed these permissions. The latest values have been reloaded.',
+            );
+            //#endif
             this.reloadRequests.next();
             return;
           }
@@ -376,37 +387,20 @@ export class PermissionGrantDialog {
       this.flatten(child, depth + 1, [definition.name, ...ancestorChain], rows);
     }
   }
-
-  //#if (IncludeLocalization)
-  readonly title = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('permissions.dialogTitle', { name: this.roleName() });
-  });
-  readonly description = () => this.transloco.translate('permissions.description');
-  readonly searchPlaceholder = () => this.transloco.translate('permissions.searchPlaceholder');
-  readonly noMatchLabel = () => this.transloco.translate('common.noResults');
-  readonly cancelLabel = () => this.transloco.translate('common.cancel');
-  readonly saveLabel = () => this.transloco.translate('common.save');
-  readonly grantedLabel = (count: number) =>
-    this.transloco.translate('permissions.grantedCount', { count });
-  readonly groupSummary = (granted: number, total: number) =>
-    this.transloco.translate('permissions.groupSummary', { granted, total });
-  readonly viewAccessHint = () => this.transloco.translate('permissions.viewAccessHint');
-  private savedMessage = () => this.transloco.translate('permissions.saved');
-  private conflictMessage = () => this.transloco.translate('permissions.conflict');
-  //#else
-  readonly title = computed(() => `Permissions · ${this.roleName()}`);
-  readonly description = () =>
-    'Check a permission to grant it. The top-level entry of each block is its read access; granting an action grants that read access too — creating users requires viewing the user list. To take an ability away from someone, change their roles.';
-  readonly searchPlaceholder = () => 'Search permissions';
-  readonly noMatchLabel = () => 'No results';
-  readonly cancelLabel = () => 'Cancel';
-  readonly saveLabel = () => 'Save';
-  readonly grantedLabel = (count: number) => `${count} granted`;
-  readonly groupSummary = (granted: number, total: number) => `${granted}/${total}`;
-  readonly viewAccessHint = () => 'view list';
-  private savedMessage = () => 'Permissions saved';
-  private conflictMessage = () =>
-    'Someone else changed these permissions. The latest values have been reloaded.';
-  //#endif
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'permissions.dialogTitle': 'Permissions · {{name}}',
+  'permissions.description':
+    'Check a permission to grant it. The top-level entry of each block is its read access; granting an action grants that read access too — creating users requires viewing the user list. To take an ability away from someone, change their roles.',
+  'permissions.searchPlaceholder': 'Search permissions',
+  'permissions.grantedCount': '{{count}} granted',
+  'common.noResults': 'No results',
+  'permissions.groupSummary': '{{granted}}/{{total}}',
+  'permissions.viewAccessHint': 'view list',
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+};
+//#endif

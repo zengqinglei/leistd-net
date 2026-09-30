@@ -1,6 +1,9 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 
 import { TenantEditDialog } from './tenant-edit-dialog';
 //#if (IncludeLocalization)
@@ -94,6 +97,73 @@ describe('TenantEditDialog', () => {
     expect(host.saved).toEqual([]);
   });
 
+  /** 名称字段下显示出来的校验提示；对话框渲染在 document 上的浮层里。 */
+  function shownNameErrors(): string[] {
+    const field = document.getElementById('tenant-name')!.closest('hlm-field')!;
+    return Array.from(field.querySelectorAll('hlm-field-error'))
+      .map((element) => element.textContent!.trim())
+      .filter((text) => text.length > 0);
+  }
+
+  function nameErrorKinds(): string[] {
+    return dialog()
+      .tenantForm.name()
+      .errors()
+      .map((error) => error.kind);
+  }
+
+  // 租户名按单个 DNS 标签校验：配置子域名解析时名字就是主机名的一段，不合规的名字建得出来却访问不到
+  it.each(['Invalid Name!', '-acme', 'acme-', 'acme_1', 'acme.example', '租户'])(
+    'rejects %j as a tenant name and does not submit',
+    async (name) => {
+      dialog().tenantForm.name().value.set(name);
+      dialog().tenantForm.adminEmail().value.set('admin@example.test');
+      dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
+      await fixture.whenStable();
+
+      expect(nameErrorKinds()).toEqual(['tenantNamePattern']);
+      dialog().onSubmit();
+      expect(host.saved).toEqual([]);
+    },
+  );
+
+  // 首尾空白提交前会去掉，按去掉之后的值校验；超长只报一条长度提示
+  it('accepts DNS labels, ignores surrounding blanks and reports an overlong name once', async () => {
+    for (const name of ['Acme-2', '  acme  ', 'a', 'a'.repeat(63)]) {
+      dialog().tenantForm.name().value.set(name);
+      await fixture.whenStable();
+      expect(nameErrorKinds()).toEqual([]);
+    }
+
+    dialog().tenantForm.name().value.set('a'.repeat(64));
+    await fixture.whenStable();
+    expect(nameErrorKinds()).toEqual(['maxLength']);
+  });
+
+  //#if (IncludeLocalization)
+  it('shows the tenant name rule from the validation.tenantNamePattern entry', async () => {
+    TestBed.inject(TranslocoService).setTranslation(
+      { validation: { tenantNamePattern: 'Letters, digits and hyphens only' } },
+      'en',
+    );
+    dialog().tenantForm.name().value.set('Invalid Name!');
+    dialog().tenantForm.name().markAsTouched();
+    await fixture.whenStable();
+
+    expect(shownNameErrors()).toEqual(['Letters, digits and hyphens only']);
+  });
+  //#else
+  it('shows the tenant name rule from the built-in English table', async () => {
+    dialog().tenantForm.name().value.set('Invalid Name!');
+    dialog().tenantForm.name().markAsTouched();
+    await fixture.whenStable();
+
+    expect(shownNameErrors()).toEqual([
+      'Use letters, digits and hyphens only, not starting or ending with a hyphen, up to 63 characters.',
+    ]);
+  });
+  //#endif
+
   it('hides the admin account fields in edit mode and passes with the name alone', async () => {
     expect(document.getElementById('tenant-admin-email')).not.toBeNull();
     expect(document.getElementById('tenant-admin-password')).not.toBeNull();
@@ -107,6 +177,42 @@ describe('TenantEditDialog', () => {
     expect(dialog().tenantForm().invalid()).toBe(false);
     expect(dialog().tenantForm.name().value()).toBe('acme');
     expect(dialog().tenantForm.displayName().value()).toBe('Acme Inc.');
+  });
+
+  it('lets an existing tenant with a pre-rule name be edited, but checks a changed name', async () => {
+    host.tenant.set({ ...existing, name: 'acme_corp' });
+    await fixture.whenStable();
+
+    // 存量名称不合规、没改名：只改显示名照常可保存
+    dialog().tenantForm.displayName().value.set('Acme Corp');
+    await fixture.whenStable();
+    expect(dialog().tenantForm.name().errors()).toEqual([]);
+
+    // 改成另一个不合规的名称就按规则拦下
+    dialog().tenantForm.name().value.set('acme corp');
+    await fixture.whenStable();
+    expect(
+      dialog()
+        .tenantForm.name()
+        .errors()
+        .map((error) => error.kind),
+    ).toEqual(['tenantNamePattern']);
+  });
+
+  // 规则之前的名字可能恰为 64 个字符、或带首尾空白：不改名时既不按新规则拦，也原样送回（trim 会变成改名）
+  it('keeps a pre-rule name exactly as it is when only other fields change', async () => {
+    for (const legacyName of [`${'a'.repeat(62)}_x`, ' acme_corp ']) {
+      host.saved.length = 0;
+      host.tenant.set({ ...existing, name: legacyName });
+      await fixture.whenStable();
+
+      dialog().tenantForm.displayName().value.set('Legacy Inc.');
+      await fixture.whenStable();
+      expect(dialog().tenantForm.name().errors()).toEqual([]);
+
+      dialog().onSubmit();
+      expect((host.saved[0] as UpdateTenantInputDto).name).toBe(legacyName);
+    }
   });
 
   it('sends the admin on create, trims the name and omits a blank display name', async () => {

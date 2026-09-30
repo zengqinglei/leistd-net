@@ -16,14 +16,16 @@ import {
   form,
   required,
   email as emailValidator,
+  //#if (LocalIdentity)
   minLength,
+  //#endif
   maxLength,
   pattern,
   disabled,
   FormField,
 } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 //#if (LocalIdentity)
@@ -49,9 +51,6 @@ import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../../../core/i18n/translation-ready';
-//#endif
 //#if (LocalIdentity)
 import {
   PASSWORD_MAX_LENGTH,
@@ -64,6 +63,9 @@ import {
   isAvatarImageUrl,
   prepareAvatarImage,
 } from '../../../../../../shared/utils/avatar-image';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import { RoleBriefDto } from '../../../../models/role.dto';
 import {
   CreateUserInputDto,
@@ -91,7 +93,7 @@ import {
     ...HlmFieldImports,
     ...HlmSelectImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     DialogLoading,
   ],
@@ -115,14 +117,6 @@ export class UserEditDialog {
   readonly saved = output<CreateUserInputDto | UpdateUserInputDto>();
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
-  private readonly unnamedLabel = () => this.transloco.translate('users.editDialog.unnamedUser');
-  readonly dialogHeader = () =>
-    this.transloco.translate(
-      this.isEditMode() ? 'users.editDialog.editHeader' : 'users.editDialog.createHeader',
-    );
-  readonly rolesPlaceholder = () => this.transloco.translate('users.editDialog.rolesPlaceholder');
   private readonly avatarMessages = () => ({
     sizeSummary: this.transloco.translate('users.editDialog.avatarTooLargeSummary'),
     sizeDetail: this.transloco.translate('users.editDialog.avatarTooLargeDetail'),
@@ -131,9 +125,7 @@ export class UserEditDialog {
     decodeDetail: this.transloco.translate('users.editDialog.avatarDecodeFailed'),
   });
   //#else
-  private readonly unnamedLabel = () => 'Unnamed user';
-  readonly dialogHeader = () => (this.isEditMode() ? 'Edit user' : 'New user');
-  readonly rolesPlaceholder = () => 'Select roles';
+  protected readonly t = englishText(ENGLISH);
   private readonly avatarMessages = () => ({
     sizeSummary: 'File too large',
     sizeDetail: 'The image cannot exceed 10 MB',
@@ -161,91 +153,27 @@ export class UserEditDialog {
     roleIds: [] as string[],
   });
 
+  /** 空串表示两者都没填，模板显示"未命名用户"。 */
   readonly displayName = computed(
-    () =>
-      this.formModel().displayName.trim() ||
-      this.formModel().username.trim() ||
-      this.unnamedLabel(),
+    () => this.formModel().displayName.trim() || this.formModel().username.trim(),
   );
-  //#if (IncludeLocalization)
   readonly userForm = form(this.formModel, (path) => {
-    required(path.username, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    minLength(path.username, 3, {
-      message: this.transloco.translate('common.validation.usernamePattern'),
-    });
-    maxLength(path.username, 64, {
-      message: this.transloco.translate('common.validation.usernamePattern'),
-    });
-    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: this.transloco.translate('common.validation.usernamePattern'),
-    });
+    required(path.username);
+    // 长度与字符集共用一句提示，合成一条规则：分开校验会把同一句话报出几遍
+    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
     // 编辑模式禁用用户名（不可改）。
     disabled(path.username, { when: () => this.isEditMode() });
-    required(path.email, { message: this.transloco.translate('common.validation.required') });
-    emailValidator(path.email, {
-      message: this.transloco.translate('common.validation.email'),
-    });
-    maxLength(path.email, 256, { message: '' });
-    maxLength(path.displayName, 128, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
-    });
+    required(path.email);
+    emailValidator(path.email);
+    maxLength(path.email, 256);
+    maxLength(path.displayName, 128);
     //#if (LocalIdentity)
     // 初始密码仅在新建模式校验（编辑模式无密码字段）。
-    required(path.password, {
-      message: this.transloco.translate('common.validation.required'),
-      when: () => !this.isEditMode(),
-    });
-    minLength(path.password, PASSWORD_MIN_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooShort', {
-        min: PASSWORD_MIN_LENGTH,
-      }),
-      when: () => !this.isEditMode(),
-    });
-    maxLength(path.password, PASSWORD_MAX_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooLong', {
-        max: PASSWORD_MAX_LENGTH,
-      }),
-      when: () => !this.isEditMode(),
-    });
+    required(path.password, { when: () => !this.isEditMode() });
+    minLength(path.password, PASSWORD_MIN_LENGTH, { when: () => !this.isEditMode() });
+    maxLength(path.password, PASSWORD_MAX_LENGTH, { when: () => !this.isEditMode() });
     //#endif
   });
-  //#else
-  readonly userForm = form(this.formModel, (path) => {
-    required(path.username, { message: 'This field is required.' });
-    minLength(path.username, 3, {
-      message: 'Must be 3–64 letters, digits, or underscores.',
-    });
-    maxLength(path.username, 64, {
-      message: 'Must be 3–64 letters, digits, or underscores.',
-    });
-    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: 'Must be 3–64 letters, digits, or underscores.',
-    });
-    // 编辑模式禁用用户名（不可改）。
-    disabled(path.username, { when: () => this.isEditMode() });
-    required(path.email, { message: 'This field is required.' });
-    emailValidator(path.email, { message: 'Please enter a valid email address.' });
-    maxLength(path.email, 256, { message: '' });
-    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
-    //#if (LocalIdentity)
-    // 初始密码仅在新建模式校验（编辑模式无密码字段）。
-    required(path.password, {
-      message: 'This field is required.',
-      when: () => !this.isEditMode(),
-    });
-    minLength(path.password, PASSWORD_MIN_LENGTH, {
-      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
-      when: () => !this.isEditMode(),
-    });
-    maxLength(path.password, PASSWORD_MAX_LENGTH, {
-      message: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
-      when: () => !this.isEditMode(),
-    });
-    //#endif
-  });
-  //#endif
   /**
    * 角色选项由父级从角色 API 注入，按 Id 提交、按显示名回显。
    * 仅在「新建 + 持有角色分配权限」时展示：编辑态的角色变更走独立的角色分配入口，
@@ -385,14 +313,39 @@ export class UserEditDialog {
   }
   //#if (LocalIdentity)
   protected readonly showPassword = signal(false);
-
-  // 读屏用户听到的是"显示密码/隐藏密码"，而不是一个没有名字的按钮；名称随当前状态变
-  //#if (IncludeLocalization)
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    this.transloco.translate(shown ? 'common.hidePassword' : 'common.showPassword');
-  //#else
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    shown ? 'Hide password' : 'Show password';
-  //#endif
   //#endif
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'users.editDialog.editHeader': 'Edit user',
+  'users.editDialog.createHeader': 'New user',
+  'users.editDialog.description': 'Manage the account profile, roles, and status.',
+  'users.editDialog.loading': 'Loading user information...',
+  'common.uploadAvatar': 'Upload avatar',
+  'users.editDialog.unnamedUser': 'Unnamed user',
+  'users.editDialog.noEmail': 'No email set',
+  'users.editDialog.avatarHint': 'PNG, JPG or WebP',
+  'users.editDialog.usernameLabel': 'Username',
+  'users.editDialog.usernamePlaceholder': 'Enter a username',
+  'users.editDialog.emailLabel': 'Email',
+  'users.editDialog.emailPlaceholder': 'Enter an email',
+  'users.editDialog.displayNameLabel': 'Display name',
+  'users.editDialog.displayNamePlaceholder': 'Enter a display name',
+  'users.editDialog.passwordLabel': 'Initial password',
+  'users.editDialog.passwordPlaceholder': 'At least 12 characters',
+  'common.hidePassword': 'Hide password',
+  'common.showPassword': 'Show password',
+  'users.editDialog.rolesLabel': 'Roles',
+  'users.editDialog.rolesPlaceholder': 'Select roles',
+  'users.editDialog.activeTitle': 'Enable user',
+  'users.editDialog.activeHint':
+    'When disabled, the user cannot sign in or call protected endpoints',
+  'users.editDialog.emailVerifiedTitle': 'Email verified',
+  'users.editDialog.emailVerifiedHint': 'Used to manage the email verification status',
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+  'common.create': 'Create',
+};
+//#endif

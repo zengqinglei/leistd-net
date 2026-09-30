@@ -15,6 +15,7 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
+import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 import { GetUsersInputDto } from '../../models/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
@@ -79,6 +80,10 @@ describe('Users page query round trip', () => {
       versionToken: 'r1',
     });
 
+    // 应用里设置上下文（连带语言服务）在启动流中就已创建，首帧之前语言已经激活。
+    // 这里同样先建好：否则它要到页面首次渲染途中才被子表格注入，构造时激活语言会让
+    // 页面外层的 *transloco 在视图还没建完时再建一次。
+    TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Users);
     component = fixture.componentInstance;
     fixture.detectChanges();

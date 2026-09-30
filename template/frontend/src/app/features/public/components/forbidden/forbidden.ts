@@ -1,11 +1,15 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideShieldOff } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
+//#if (!IncludeLocalization)
+
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 
 /**
  * 403 页面：已登录但缺少所需权限。
@@ -22,11 +26,28 @@ import { HlmButton } from '@spartan-ng/helm/button';
     NgIcon,
     HlmButton,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucideShieldOff })],
   templateUrl: './forbidden.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
+//#if (IncludeLocalization)
 export class Forbidden {}
+//#else
+export class Forbidden {
+  protected readonly t = englishText(ENGLISH);
+}
+//#endif
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'forbidden.title': 'Access denied',
+  'forbidden.description':
+    'You are signed in, but you do not have permission to view this page. Ask an administrator to grant it.',
+  'forbidden.backToWorkspace': 'Back to workspace',
+  'forbidden.backHome': 'Go home',
+};
+//#endif

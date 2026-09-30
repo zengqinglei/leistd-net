@@ -1,3 +1,4 @@
+using Leistd.ExceptionHandling;
 using Leistd.OperationRecords.Errors;
 using Leistd.Security.Claims;
 using Leistd.OperationRecords.Models;
@@ -113,9 +114,9 @@ public static class OperationRecordHttpContextExtensions
     /// </remarks>
     /// <param name="context">当前请求上下文。</param>
     /// <param name="failure">
-    /// 失败原因，不能为空：失败路径没有通用的默认原因可补。业务异常通常只传错误码
-    /// （<c>OperationFailure.FromCode(exception.Code)</c>）；异常的占位参数可能含用户提交的原值，
-    /// 要带进记录由调用方逐项挑出可公开的键再传。
+    /// 失败原因，不能为空：失败路径没有通用的默认原因可补。拒绝来自 <see cref="BusinessException"/> 时，
+    /// 调用方显式传 <c>OperationFailure.FromCode(exception.Code, exception.LocalizationData)</c>：
+    /// 消息参数本就随错误响应展示，查询时据此渲染出带具体值的原因；基类 <c>Exception.Data</c> 与异常文本不要带进来。
     /// </param>
     /// <exception cref="ArgumentException"><paramref name="failure"/> 为空。</exception>
     public static async Task RecordFailedOperationAsync(this HttpContext context, OperationFailure failure)

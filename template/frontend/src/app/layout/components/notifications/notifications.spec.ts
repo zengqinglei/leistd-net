@@ -7,28 +7,26 @@ import { Router, provideRouter } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
-//#if (IncludeLocalization)
-import { BehaviorSubject } from 'rxjs';
-//#endif
 
 import { NotificationOutputDto, NotificationService } from './notification-service';
 import { Notifications } from './notifications';
 import { ApplicationHttpError } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
 
 import type { Mock, MockedObject } from 'vitest';
 //#if (IncludeLocalization)
 
-const EN: Record<string, string> = {
-  'layout.notifications.title': 'Notifications',
-  'layout.notifications.unreadAria': 'Notifications ({{count}} unread)',
-};
-const ZH: Record<string, string> = {
-  'layout.notifications.title': '通知',
-  'layout.notifications.unreadAria': '通知（{{count}} 条未读）',
+const TRANSLATIONS = {
+  en: {
+    layout: {
+      notifications: { title: 'Notifications', unreadAria: 'Notifications ({{count}} unread)' },
+    },
+  },
+  'zh-CN': { layout: { notifications: { title: '通知', unreadAria: '通知（{{count}} 条未读）' } } },
 };
 //#endif
 
@@ -38,13 +36,6 @@ describe('Notifications', () => {
     'init' | 'markAsRead' | 'markAllAsRead' | 'clearAll' | 'clearOne' | 'getIcon'
   > &
     Pick<NotificationService, 'notifications' | 'unreadCount' | 'loading'>;
-  //#if (IncludeLocalization)
-  let translations: BehaviorSubject<Record<string, string>>;
-  let transloco: {
-    translate: (key: string, params?: Record<string, unknown>) => string;
-    selectTranslation: () => unknown;
-  };
-  //#endif
   let confirmService: Pick<MockedObject<ConfirmService>, 'open'>;
   let errorToast: Mock;
 
@@ -66,17 +57,6 @@ describe('Notifications', () => {
     };
     confirmService.open.mockResolvedValue(true);
     errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
-    //#if (IncludeLocalization)
-    // 最小 Transloco 桩：translationReady 依赖 selectTranslation() 在语言切换时再次发射。
-    translations = new BehaviorSubject<Record<string, string>>(EN);
-    transloco = {
-      translate: (key: string, params?: Record<string, unknown>) => {
-        const text = translations.value[key] ?? key;
-        return params ? text.replace('{{count}}', String(params['count'])) : text;
-      },
-      selectTranslation: () => translations.asObservable(),
-    };
-    //#endif
 
     TestBed.configureTestingModule({
       imports: [Notifications],
@@ -86,11 +66,10 @@ describe('Notifications', () => {
                 { provide: NotificationService, useValue: service },
                 { provide: ConfirmService, useValue: confirmService },
                 //#if (IncludeLocalization)
-                { provide: TranslocoService, useValue: transloco },
+                ...provideTranslocoTesting(['en', 'zh-CN']),
                 // 面板里的时间要一个书写 locale，它取自活动语言（见 SettingContextService）。
-                // 真实 LanguageService 会在构造时调 transloco.setActiveLang——上面那个最小桩
-                // 撑不住它，而本组用例要的是"能在测试里换翻译"，不是验语言那条链路，
-                // 所以这里给语言服务一个定值替身。
+                // 本组用例要的是"能在测试里换翻译"，不是验语言那条链路，
+                // 所以给语言服务一个定值替身，免得它按设备语言去改活动语言。
                 { provide: LanguageService, useValue: { activeLang: signal('en') } },
                 //#endif
             ],
@@ -136,21 +115,26 @@ describe('Notifications', () => {
   });
   //#if (IncludeLocalization)
 
-  it('re-evaluates ARIA labels when the language changes at runtime', () => {
+  it('re-renders ARIA labels when the language changes at runtime', async () => {
+    const transloco = TestBed.inject(TranslocoService);
+    transloco.setTranslation(TRANSLATIONS.en, 'en');
+    transloco.setTranslation(TRANSLATIONS['zh-CN'], 'zh-CN');
     (
       service.unreadCount as unknown as {
         set(v: number): void;
       }
     ).set(2);
-    const component = createComponent();
+    const fixture = TestBed.createComponent(Notifications);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('[hlmPopoverTrigger]')!;
 
-    expect(component.panelLabel()).toBe('Notifications');
-    expect(component.triggerLabel()).toBe('Notifications (2 unread)');
+    expect(trigger.getAttribute('aria-label')).toBe('Notifications (2 unread)');
 
-    translations.next(ZH);
+    transloco.setActiveLang('zh-CN');
+    await fixture.whenStable();
 
-    expect(component.panelLabel(), 'panel name must follow the language').toBe('通知');
-    expect(component.triggerLabel(), 'trigger name must follow the language').toBe(
+    expect(trigger.getAttribute('aria-label'), 'trigger name must follow the language').toBe(
       '通知（2 条未读）',
     );
   });

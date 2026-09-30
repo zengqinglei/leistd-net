@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@a
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, translateSignal } from '@jsverse/transloco';
 //#endif
 import { provideIcons } from '@ng-icons/core';
 import {
@@ -15,10 +15,10 @@ import {
 } from '@ng-icons/lucide';
 import { filter, map } from 'rxjs';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../core/i18n/translation-ready';
-//#endif
 import { LayoutService } from '../../../layout/services/layout-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../shared/utils/english-text';
+//#endif
 // prettier-ignore
 import {
   groupPath,
@@ -49,7 +49,6 @@ const GROUP_ICONS: Readonly<Record<string, string>> = {
  */
 @Component({
   selector: 'app-system-settings',
-  imports: [SettingsShell],
   providers: [
     SettingsPageState,
     provideIcons({
@@ -61,15 +60,14 @@ const GROUP_ICONS: Readonly<Record<string, string>> = {
       lucideUserPlus,
     }),
   ],
-  template: `
-    <app-settings-shell
-      [heading]="heading()"
-      [description]="description()"
-      [panels]="panels()"
-      [navLabel]="navLabel()"
-      [openNavLabel]="openNavLabel()"
-    />
-  `,
+  // prettier-ignore
+  imports: [
+    SettingsShell,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
+  templateUrl: './system-settings.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SystemSettings {
@@ -77,26 +75,8 @@ export class SystemSettings {
   private readonly pageState = inject(SettingsPageState);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  private readonly t = (key: string) => {
-    this.translationReady();
-    return this.transloco.translate(key);
-  };
-
-  protected readonly heading = computed(() => this.t('settings.system.title'));
-  protected readonly description = computed(() => this.t('settings.system.description'));
-  protected readonly navLabel = computed(() => this.t('settings.navigation'));
-  protected readonly openNavLabel = computed(() => this.t('settings.openNavigation'));
-  //#else
-  protected readonly heading = computed(() => 'System settings');
-  protected readonly description = computed(
-    () => 'Defaults and policies for everyone here; each user may override their own preferences',
-  );
-  protected readonly navLabel = computed(() => 'Settings navigation');
-  protected readonly openNavLabel = computed(() => 'Open settings navigation');
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   protected readonly panels = computed<SettingsPanelLink[]>(() =>
@@ -116,7 +96,12 @@ export class SystemSettings {
   );
 
   constructor() {
-    effect(() => this.layoutService.title.set(this.heading()));
+    //#if (IncludeLocalization)
+    const title = translateSignal('settings.system.title');
+    effect(() => this.layoutService.title.set(title()));
+    //#else
+    this.layoutService.title.set(this.t('settings.system.title'));
+    //#endif
 
     // 没带面板（直接进 /platform/settings）或带了一个不存在的面板（旧链接、换了上下文）时，
     // 落到第一个面板。面板要等设置取回才知道，所以不能写成路由表里的静态重定向。
@@ -133,3 +118,14 @@ export class SystemSettings {
     });
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'settings.system.title': 'System settings',
+  'settings.system.description':
+    'Defaults and policies for everyone here; each user may override their own preferences',
+  'settings.navigation': 'Settings navigation',
+  'settings.openNavigation': 'Open settings navigation',
+};
+//#endif

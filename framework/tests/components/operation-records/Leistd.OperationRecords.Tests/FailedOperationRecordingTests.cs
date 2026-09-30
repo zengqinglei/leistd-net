@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Leistd.ExceptionHandling;
 using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
@@ -72,6 +73,30 @@ public sealed class FailedOperationRecordingTests
         Assert.Equal("App.Roles.ManagePermissions", written.AuthorizationBasis);
         Assert.Equal(OperationRecordOutcome.Failed, written.Outcome);
         Assert.Equal("Permission:ConcurrencyConflict", written.FailureCode);
+    }
+
+    /// <summary>
+    /// 业务拒绝按文档写法（错误码 + 消息参数）记录，基类 <c>Exception.Data</c> 不进记录
+    /// </summary>
+    /// <remarks>
+    /// 消息参数是异常作者为展示提供的值，查询时据此渲染出带具体值的原因；
+    /// <c>Exception.Data</c> 没有"可公开展示"的约定，带进来就是泄露面。
+    /// </remarks>
+    [Fact]
+    public async Task A_business_exception_is_recorded_with_its_message_parameters_only()
+    {
+        var (context, store) = Create(metadata: [new OperationRecordActionAttribute("user.created")]);
+        var exception = new BusinessException("User:EmailAlreadyUsed", "Email 'a@b.com' is already in use.")
+            .WithData("Email", "a@b.com")
+            .WithData("Attempts", 3);
+        exception.Data["ConnectionString"] = "Host=db-01;Password=secret";
+
+        await context.RecordFailedOperationAsync(OperationFailure.FromCode(exception.Code, exception.LocalizationData));
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(
+            ("User:EmailAlreadyUsed", """{"Email":"a@b.com","Attempts":3}""", (string?)null),
+            (written.FailureCode, written.FailureData, written.FailureDetail));
     }
 
     /// <summary>任一身份已认证即不算匿名，与官方 <c>DenyAnonymousAuthorizationRequirement</c> 一致。</summary>

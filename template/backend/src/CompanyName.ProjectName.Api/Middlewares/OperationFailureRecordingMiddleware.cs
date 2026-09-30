@@ -17,7 +17,8 @@ namespace CompanyName.ProjectName.Api.Middlewares;
 /// 请求此时还在租户作用域里，记录才写进操作发生的那一层。不能改成全局异常处理器：
 /// 那里租户作用域已经随异常退出，租户内的失败会被写进宿主层。</para>
 /// <para><b>只记业务异常。</b>参数校验失败没有业务码，无从按原因聚合；技术异常属于日志。
-/// 只带错误码：异常的占位参数可能含用户提交的原值，进了记录就会随导出带离系统。</para>
+/// 记下错误码与消息参数（<c>LocalizationData</c>），查询时渲染出与接口报错同一句带具体值的原因；
+/// 参数随记录进审计与导出，抛异常处只放可公开展示的值。</para>
 /// </remarks>
 public sealed class OperationFailureRecordingMiddleware(RequestDelegate next)
 {
@@ -29,7 +30,8 @@ public sealed class OperationFailureRecordingMiddleware(RequestDelegate next)
         }
         catch (BusinessException exception)
         {
-            await context.RecordFailedOperationAsync(OperationFailure.FromCode(exception.Code));
+            // 只取错误码与消息参数：基类 Exception.Data 与异常文本没有"可公开展示"的约定，不进审计
+            await context.RecordFailedOperationAsync(OperationFailure.FromCode(exception.Code, exception.LocalizationData));
             throw;
         }
     }

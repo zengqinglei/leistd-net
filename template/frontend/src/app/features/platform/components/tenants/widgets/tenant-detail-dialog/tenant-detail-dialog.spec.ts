@@ -114,6 +114,12 @@ describe('TenantDetailDialog', () => {
   // 断言得看 document，否则永远拿到空串（那会让所有断言都"通过"成假的）。
   const dialogHost = () => document.querySelector('[role="dialog"]') as HTMLElement | null;
   const text = () => dialogHost()?.textContent ?? '';
+  /** 某个键在界面上的文案：用例词条为空时就是键名，不含本地化时取组件自带的英文表。 */
+  //#if (IncludeLocalization)
+  const label = (key: string) => key;
+  //#else
+  const label = (key: string) => component['t'](key);
+  //#endif
   const connectionStringField = () =>
     document.getElementById('tenant-connection-string') as HTMLInputElement | null;
 
@@ -162,7 +168,7 @@ describe('TenantDetailDialog', () => {
 
     await openWith(tenant('t-a', 'acme'), []);
 
-    expect(text()).toContain(component.label('connectionsEmpty'));
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
   });
 
   it('lists registered connections by name and version without showing connection strings', async () => {
@@ -175,8 +181,8 @@ describe('TenantDetailDialog', () => {
 
     expect(text()).toContain('default');
     expect(text()).toContain('crm');
-    expect(text()).toContain(component.label('version'));
-    expect(text()).not.toContain(component.label('connectionsEmpty'));
+    expect(text()).toContain(label('tenants.fieldConnectionVersion'));
+    expect(text()).not.toContain(label('tenants.connectionsEmpty'));
     expect(text()).not.toMatch(/Host=|Password=|User ID=/i);
   });
 
@@ -250,8 +256,8 @@ describe('TenantDetailDialog', () => {
       component.connectionForm
         .name()
         .errors()
-        .map((error) => error.message),
-    ).toContain(component.label('connectionNameInvalid'));
+        .map((error) => error.kind),
+    ).toContain('connectionNamePattern');
     component.submitEditor();
 
     expect(setConnection).not.toHaveBeenCalled();
@@ -272,8 +278,8 @@ describe('TenantDetailDialog', () => {
       component.connectionForm
         .name()
         .errors()
-        .map((error) => error.message),
-    ).toContain(component.label('connectionNameTaken'));
+        .map((error) => error.kind),
+    ).toContain('connectionNameTaken');
     component.submitEditor();
 
     expect(setConnection).not.toHaveBeenCalled();
@@ -342,11 +348,11 @@ describe('TenantDetailDialog', () => {
 
     expect(requested).toEqual([]);
     // 连接段与编辑按钮都不该出现（弹窗自带的关闭按钮不算）
-    expect(text()).not.toContain(component.label('sectionConnections'));
+    expect(text()).not.toContain(label('tenants.detailSectionConnections'));
     const labels = [...(dialogHost()?.querySelectorAll('button') ?? [])].map((button) =>
       (button.textContent ?? '').trim(),
     );
-    expect(labels).not.toContain(component.label('edit'));
-    expect(labels).toContain(component.label('close'));
+    expect(labels).not.toContain(label('common.edit'));
+    expect(labels).toContain(label('common.close'));
   });
 });

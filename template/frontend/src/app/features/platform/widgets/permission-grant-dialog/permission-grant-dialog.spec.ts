@@ -2,12 +2,11 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-//#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
-import { BehaviorSubject } from 'rxjs';
-//#endif
 
 import { PermissionGrantDialog } from './permission-grant-dialog';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
+//#endif
 
 /**
  * 权限弹窗的加载竞态回归。
@@ -60,15 +59,6 @@ describe('PermissionGrantDialog', () => {
   let httpTesting: HttpTestingController;
 
   beforeEach(() => {
-    //#if (IncludeLocalization)
-    // 最小 Transloco 桩：本组用例只关心加载竞态，不关心具体文案。
-    const translations = new BehaviorSubject<Record<string, string>>({});
-    const transloco = {
-      translate: (key: string) => key,
-      selectTranslation: () => translations.asObservable(),
-    };
-
-    //#endif
     TestBed.configureTestingModule({
       imports: [HostComponent],
       // prettier-ignore
@@ -77,7 +67,7 @@ describe('PermissionGrantDialog', () => {
                 provideHttpClient(),
                 provideHttpClientTesting(),
                 //#if (IncludeLocalization)
-                { provide: TranslocoService, useValue: transloco },
+                ...provideTranslocoTesting(),
                 //#endif
             ],
     });

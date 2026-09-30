@@ -1,14 +1,7 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  OnInit,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
@@ -30,12 +23,12 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { NotificationOutputDto, NotificationService } from './notification-service';
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../core/i18n/translation-ready';
-//#endif
 import { SettingContextService } from '../../../core/settings/setting-context-service';
 import { PopoverAria } from '../../../shared/directives/popover-aria';
 import { AppDate } from '../../../shared/pipes/app-date-pipe';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../shared/utils/english-text';
+//#endif
 
 /**
  * 通知中心：铃铛 + 未读角标 + popover 通知列表（标记已读 / 单条或全部清除）。
@@ -55,7 +48,7 @@ import { AppDate } from '../../../shared/pipes/app-date-pipe';
     ...HlmTooltipImports,
     PopoverAria,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [
@@ -81,38 +74,14 @@ export class Notifications implements OnInit {
   private readonly confirmService = inject(ConfirmService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  // 追踪「翻译就绪」：资源加载完成与语言切换时让下方 ARIA 文案 computed 重新求值。
-  private readonly translationReady = translationReady(this.transloco);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
   readonly notificationService = inject(NotificationService);
   readonly notificationCount = this.notificationService.unreadCount;
   readonly notifications = this.notificationService.notifications;
   // 通知 popover 开合状态（Spartan popover 的 state 受控绑定）。
   readonly notificationOpen = signal<'open' | 'closed'>('closed');
-
-  /** 面板（overlay dialog）的可访问名。 */
-  //#if (IncludeLocalization)
-  readonly panelLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('layout.notifications.title');
-  });
-  //#else
-  readonly panelLabel = computed(() => 'Notifications');
-  //#endif
-
-  /** 铃铛按钮的可访问名：本地化并带上未读数。 */
-  readonly triggerLabel = computed(() => {
-    const count = this.notificationCount();
-    //#if (IncludeLocalization)
-    this.translationReady();
-    const title = this.transloco.translate('layout.notifications.title');
-    return count > 0
-      ? this.transloco.translate('layout.notifications.unreadAria', { count })
-      : title;
-    //#else
-    return count > 0 ? `Notifications (${count} unread)` : 'Notifications';
-    //#endif
-  });
 
   async onNotificationClick(item: NotificationOutputDto): Promise<void> {
     if (!item.isRead) {
@@ -192,3 +161,15 @@ export class Notifications implements OnInit {
     void this.notificationService.init();
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'layout.notifications.unreadAria': 'Notifications ({{count}} unread)',
+  'layout.notifications.title': 'Notifications',
+  'layout.notifications.markAllRead': 'Mark all as read',
+  'layout.notifications.empty': 'No notifications',
+  'layout.notifications.clearOne': 'Dismiss',
+  'layout.notifications.clearAll': 'Clear all',
+};
+//#endif

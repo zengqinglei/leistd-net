@@ -1,6 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
+// prettier-ignore
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  //#if (IncludeLocalization)
+  effect,
+  //#endif
+  inject,
+} from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, translateObjectSignal, translateSignal } from '@jsverse/transloco';
 //#endif
 import { provideIcons } from '@ng-icons/core';
 // prettier-ignore
@@ -15,10 +24,10 @@ import {
   lucideSlidersHorizontal,
 } from '@ng-icons/lucide';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../core/i18n/translation-ready';
-//#endif
 import { LayoutService } from '../../../layout/services/layout-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../shared/utils/english-text';
+//#endif
 import { SettingsPageState } from '../settings-page-state';
 import { SettingsPanelLink, SettingsShell } from '../settings-shell/settings-shell';
 
@@ -31,7 +40,6 @@ import { SettingsPanelLink, SettingsShell } from '../settings-shell/settings-she
  */
 @Component({
   selector: 'app-personal-settings',
-  imports: [SettingsShell],
   // prettier-ignore
   providers: [
     SettingsPageState,
@@ -46,70 +54,46 @@ import { SettingsPanelLink, SettingsShell } from '../settings-shell/settings-she
       lucideSlidersHorizontal,
     }),
   ],
-  template: `
-    <app-settings-shell
-      [heading]="heading()"
-      [description]="description()"
-      [panels]="panels()"
-      [navLabel]="navLabel()"
-      [openNavLabel]="openNavLabel()"
-    />
-  `,
+  // prettier-ignore
+  imports: [
+    SettingsShell,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
+  templateUrl: './personal-settings.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PersonalSettings {
   private readonly layoutService = inject(LayoutService);
   //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  /** 各面板的标题与说明：整段取成对象，词条到达与语言切换时随之重算；未到达前是空对象。 */
+  private readonly panelTexts = translateObjectSignal('settings.panels');
+  private readonly title = translateSignal('settings.personal.title');
 
-  private readonly t = (key: string) => {
-    this.translationReady();
-    return this.transloco.translate(key);
-  };
-
-  protected readonly heading = computed(() => this.t('settings.personal.title'));
-  protected readonly description = computed(() => this.t('settings.personal.description'));
-  protected readonly navLabel = computed(() => this.t('settings.navigation'));
-  protected readonly openNavLabel = computed(() => this.t('settings.openNavigation'));
-
-  protected readonly panels = computed<SettingsPanelLink[]>(() => [
-    //#if (LocalIdentity)
-    {
-      path: 'profile',
-      icon: 'lucideUserRound',
-      label: this.t('settings.panels.profile.title'),
-      description: this.t('settings.panels.profile.description'),
-    },
-    {
-      path: 'security',
-      icon: 'lucideShieldCheck',
-      label: this.t('settings.panels.security.title'),
-      description: this.t('settings.panels.security.description'),
-    },
-    //#if (IncludeNotifications)
-    {
-      path: 'notifications',
-      icon: 'lucideBell',
-      label: this.t('settings.panels.notifications.title'),
-      description: this.t('settings.panels.notifications.description'),
-    },
-    //#endif
-    //#endif
-    {
-      path: 'preferences',
-      icon: 'lucideSlidersHorizontal',
-      label: this.t('settings.panels.preferences.title'),
-      description: this.t('settings.panels.preferences.description'),
-    },
-  ]);
+  protected readonly panels = computed<SettingsPanelLink[]>(() => {
+    const texts = this.panelTexts();
+    const panel = (path: string, icon: string): SettingsPanelLink => ({
+      path,
+      icon,
+      label: texts[path]?.title ?? '',
+      description: texts[path]?.description ?? '',
+    });
+    // 不含本地身份时只剩一项，prettier 会要求折成一行：固定书写形态
+    // prettier-ignore
+    return [
+      //#if (LocalIdentity)
+      panel('profile', 'lucideUserRound'),
+      panel('security', 'lucideShieldCheck'),
+      //#if (IncludeNotifications)
+      panel('notifications', 'lucideBell'),
+      //#endif
+      //#endif
+      panel('preferences', 'lucideSlidersHorizontal'),
+    ];
+  });
   //#else
-  protected readonly heading = computed(() => 'Personal settings');
-  protected readonly description = computed(
-    () => 'Manage your profile, account security and preferences',
-  );
-  protected readonly navLabel = computed(() => 'Settings navigation');
-  protected readonly openNavLabel = computed(() => 'Open settings navigation');
+  protected readonly t = englishText(ENGLISH);
 
   protected readonly panels = computed<SettingsPanelLink[]>(() => [
     //#if (LocalIdentity)
@@ -146,6 +130,20 @@ export class PersonalSettings {
 
   constructor() {
     // 面包屑末级文案由页面自行设置，与其他页保持同一约定。
-    effect(() => this.layoutService.title.set(this.heading()));
+    //#if (IncludeLocalization)
+    effect(() => this.layoutService.title.set(this.title()));
+    //#else
+    this.layoutService.title.set(this.t('settings.personal.title'));
+    //#endif
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'settings.personal.title': 'Personal settings',
+  'settings.personal.description': 'Manage your profile, account security and preferences',
+  'settings.navigation': 'Settings navigation',
+  'settings.openNavigation': 'Open settings navigation',
+};
+//#endif

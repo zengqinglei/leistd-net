@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   effect,
   inject,
   input,
@@ -10,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -19,8 +18,8 @@ import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
 import { applicationErrorMessage } from '../../../../../../core/errors/application-http-error';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../../../core/i18n/translation-ready';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
 import { RoleBriefDto } from '../../../../models/role.dto';
 import { UserManagementOutputDto } from '../../../../models/user-management.dto';
@@ -35,7 +34,16 @@ import { UserManagementService } from '../../../../services/user-management-serv
  */
 @Component({
   selector: 'app-user-roles-dialog',
-  imports: [HlmButton, HlmSpinner, ...HlmDialogImports, ...HlmCheckboxImports],
+  // prettier-ignore
+  imports: [
+    HlmButton,
+    HlmSpinner,
+    ...HlmDialogImports,
+    ...HlmCheckboxImports,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
   templateUrl: './user-roles-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -48,7 +56,8 @@ export class UserRolesDialog {
   private readonly userService = inject(UserManagementService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly saving = signal(false);
@@ -89,7 +98,11 @@ export class UserRolesDialog {
     this.userService.replaceUserRoles(user.id, { roleIds: [...this.selected()] }).subscribe({
       next: () => {
         this.saving.set(false);
-        toast.success(this.savedMessage());
+        //#if (IncludeLocalization)
+        toast.success(this.transloco.translate('users.rolesDialog.saved'));
+        //#else
+        toast.success('Roles updated');
+        //#endif
         this.saved.emit();
       },
       error: (error) => {
@@ -98,26 +111,16 @@ export class UserRolesDialog {
       },
     });
   }
-
-  //#if (IncludeLocalization)
-  readonly title = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('users.rolesDialog.title', {
-      name: this.user()?.username ?? '',
-    });
-  });
-  readonly description = () => this.transloco.translate('users.rolesDialog.description');
-  readonly emptyLabel = () => this.transloco.translate('common.noData');
-  readonly cancelLabel = () => this.transloco.translate('common.cancel');
-  readonly saveLabel = () => this.transloco.translate('common.save');
-  private savedMessage = () => this.transloco.translate('users.rolesDialog.saved');
-  //#else
-  readonly title = computed(() => `Roles · ${this.user()?.username ?? ''}`);
-
-  readonly description = () => 'The user inherits every permission granted to the selected roles.';
-  readonly emptyLabel = () => 'No roles available';
-  readonly cancelLabel = () => 'Cancel';
-  readonly saveLabel = () => 'Save';
-  private savedMessage = () => 'Roles updated';
-  //#endif
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'users.rolesDialog.title': 'Roles · {{name}}',
+  'users.rolesDialog.description':
+    'The user inherits every permission granted to the selected roles.',
+  'common.noData': 'No data',
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+};
+//#endif

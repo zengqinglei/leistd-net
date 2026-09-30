@@ -119,7 +119,15 @@ export class AuthService {
       return;
     }
 
-    const claims = decodeJwtPayload(result.accessToken);
+    // 负载取自 OIDC 客户端刚校验并保存的访问令牌（单配置，取默认配置）。令牌不是 JWT 时客户端返回空对象，
+    // 此时拒绝而不是按"无租户声明"落成宿主
+    const claims = (await firstValueFrom(this.oidc.getPayloadFromAccessToken())) as Record<
+      string,
+      unknown
+    >;
+    if (typeof claims['sub'] !== 'string') {
+      throw new Error('The validated access token carries no subject claim.');
+    }
     const tenantId = readTenantId(claims[TENANT_CLAIM]);
     this.tenantContext.setAuthenticatedTenant(tenantId);
     this._currentUser.set(
@@ -168,14 +176,6 @@ export class AuthService {
     this.clearAuthData();
     this.oidc.logoff().subscribe();
   }
-}
-
-function decodeJwtPayload(accessToken: string): Record<string, unknown> {
-  const encodedPayload = accessToken.split('.')[1];
-  if (!encodedPayload) throw new Error('The access token has no JWT payload.');
-  const normalized = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  return JSON.parse(atob(padded)) as Record<string, unknown>;
 }
 
 // 与服务端同一规则：没有租户声明即宿主；有则必须恰为一个 GUID，否则拒绝而不是当成宿主

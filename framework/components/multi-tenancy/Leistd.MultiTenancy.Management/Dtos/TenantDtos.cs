@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Leistd.Data.Paging;
 using Leistd.MultiTenancy.ConnectionStrings;
+using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.Management.Dtos;
 
@@ -82,9 +83,9 @@ public sealed record AnonymousTenantOutputDto
 /// </summary>
 public record CreateTenantInputDto
 {
-    /// <summary>租户名称。</summary>
+    /// <summary>租户名称，须匹配 <see cref="TenantConfiguration.NamePattern"/>。</summary>
     [Required]
-    [MaxLength(64)]
+    [MaxLength(TenantConfiguration.MaxNameLength)]
     public required string Name { get; init; }
 
     /// <summary>显示名。</summary>
@@ -140,9 +141,13 @@ public record CreateTenantConnectionInputDto
 /// <summary>更新租户入参；三个字段都按传入值覆盖。</summary>
 public record UpdateTenantInputDto
 {
-    /// <summary>租户名称。</summary>
+    /// <summary>
+    /// 租户名称。与原名不同时须匹配 <see cref="TenantConfiguration.NamePattern"/>（上限 63）；
+    /// 原名不变时原样接受，长度按存储容量 <see cref="TenantConfiguration.MaxStoredNameLength"/>，
+    /// 规则之前建出的租户才能照常编辑其他字段。
+    /// </summary>
     [Required]
-    [MaxLength(64)]
+    [MaxLength(TenantConfiguration.MaxStoredNameLength)]
     public required string Name { get; init; }
 
     /// <summary>显示名；传 <see langword="null"/> 即清空。</summary>

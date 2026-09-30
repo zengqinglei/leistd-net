@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Text;
 using Leistd.OperationRecords.Definitions;
@@ -10,6 +11,7 @@ using Leistd.OperationRecords.Tests.TestDoubles;
 using Leistd.Security.Claims;
 using Leistd.TestBase.Doubles;
 using Leistd.Timing;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -39,7 +41,8 @@ public sealed class OperationRecordQueryTests
     private static (OperationRecordQueryService Service, RecordingOperationRecordStore Store) Create(
         bool hostReader,
         string? subject = "reader-1",
-        Guid? readerTenantId = null)
+        Guid? readerTenantId = null,
+        IStringLocalizer? localizer = null)
     {
         var store = new RecordingOperationRecordStore();
         var definitions = new CategorizedDefinitions();
@@ -54,14 +57,16 @@ public sealed class OperationRecordQueryTests
             store, definitions, currentTenant, currentUser, new FakeCorrelationIdProvider(null), clock, options,
             new FakeLogger<OperationRecorder>(new FakeLogCollector()));
 
-        return (new OperationRecordQueryService(store, definitions, recorder, currentTenant, currentUser, clock), store);
+        return (new OperationRecordQueryService(store, definitions, recorder, currentTenant, currentUser, clock, localizer), store);
     }
 
     private static OperationRecordInfo Record(
         string action = "user.created",
         string? actorId = "someone",
         string? targetName = "Ada",
-        OperationRecordOutcome outcome = OperationRecordOutcome.Succeeded) => new()
+        OperationRecordOutcome outcome = OperationRecordOutcome.Succeeded,
+        string? failureCode = null,
+        string? failureData = null) => new()
         {
             Action = action,
             TargetId = "t-1",
@@ -70,6 +75,8 @@ public sealed class OperationRecordQueryTests
             Outcome = outcome,
             Visibility = OperationVisibility.Tenant,
             ActorId = actorId,
+            FailureCode = failureCode,
+            FailureData = failureData,
             FailureDetail = "db timeout",
             CorrelationId = "trace-1",
             ActorTenantId = TenantId
@@ -209,6 +216,230 @@ public sealed class OperationRecordQueryTests
 
         var audit = store.Written[^1];
         Assert.Equal(("operation-records.exported", "App.OperationRecords.Export"), (audit.Action, audit.AuthorizationBasis));
+    }
+
+    private static readonly CultureLocalizer EmailTakenLocalizer = new(new Dictionary<string, Dictionary<string, string>>
+    {
+        ["en"] = new() { ["User:EmailTaken"] = "Email '{Email}' is already in use ({Attempts} attempts)." },
+        ["zh-CN"] = new() { ["User:EmailTaken"] = "邮箱 '{Email}' 已被使用（{Attempts} 次）。" }
+    });
+
+    /// <summary>
+    /// 失败原因按码查文案、用参数填具名占位符；数值参数按字面量填入
+    /// </summary>
+    [Fact]
+    public async Task The_failure_message_is_the_localized_text_filled_with_the_recorded_parameters()
+    {
+        var (service, store) = Create(hostReader: true, localizer: EmailTakenLocalizer);
+        store.Written.Add(Record(
+            outcome: OperationRecordOutcome.Failed,
+            failureCode: "User:EmailTaken",
+            failureData: """{"Email":"a@b.com","Attempts":3}"""));
+
+        var row = await InCulture("en", async () => Assert.Single((await service.GetPagedListAsync(new GetOperationRecordPagedInputDto())).Items));
+
+        Assert.Equal("Email 'a@b.com' is already in use (3 attempts).", row.FailureMessage);
+    }
+
+    /// <summary>
+    /// 同一条记录按读取时的请求语言渲染，库里不存句子
+    /// </summary>
+    [Fact]
+    public async Task Readers_in_different_languages_get_the_failure_message_in_their_own_language()
+    {
+        var (service, store) = Create(hostReader: true, localizer: EmailTakenLocalizer);
+        store.Written.Add(Record(
+            outcome: OperationRecordOutcome.Failed,
+            failureCode: "User:EmailTaken",
+            failureData: """{"Email":"a@b.com","Attempts":3}"""));
+
+        var english = await InCulture("en", () => ReadFailureMessageAsync(service));
+        var chinese = await InCulture("zh-CN", () => ReadFailureMessageAsync(service));
+
+        Assert.Equal(
+            ("Email 'a@b.com' is already in use (3 attempts).", "邮箱 'a@b.com' 已被使用（3 次）。"),
+            (english, chinese));
+    }
+
+    /// <summary>
+    /// 取不到文案时为空，由调用方回落：没有本地化器、词条缺失、没有失败码
+    /// </summary>
+    [Theory]
+    [InlineData(false, "User:EmailTaken")]
+    [InlineData(true, "Order:Unknown")]
+    [InlineData(true, null)]
+    public async Task The_failure_message_is_null_when_no_text_can_be_found(bool withLocalizer, string? failureCode)
+    {
+        var (service, store) = Create(hostReader: true, localizer: withLocalizer ? EmailTakenLocalizer : null);
+        store.Written.Add(Record(outcome: OperationRecordOutcome.Failed, failureCode: failureCode));
+
+        Assert.Null(await InCulture("en", () => ReadFailureMessageAsync(service)));
+    }
+
+    /// <summary>
+    /// 参数 JSON 坏了按无参数渲染：一条坏记录不能拖垮整页，占位符原样保留
+    /// </summary>
+    [Theory]
+    [InlineData("{not json")]
+    [InlineData("""["a@b.com"]""")]
+    public async Task Unreadable_failure_data_renders_the_text_without_parameters(string failureData)
+    {
+        var (service, store) = Create(hostReader: true, localizer: EmailTakenLocalizer);
+        store.Written.Add(Record(outcome: OperationRecordOutcome.Failed, failureCode: "User:EmailTaken", failureData: failureData));
+
+        Assert.Equal(
+            "Email '{Email}' is already in use ({Attempts} attempts).",
+            await InCulture("en", () => ReadFailureMessageAsync(service)));
+    }
+
+    /// <summary>
+    /// 导出与列表同一口径：码与参数两列之外，另有按导出请求语言渲染的原因列
+    /// </summary>
+    [Fact]
+    public async Task An_export_carries_the_failure_message_in_the_exporting_language()
+    {
+        var (service, store) = Create(hostReader: false, localizer: EmailTakenLocalizer);
+        store.Written.Add(Record(
+            outcome: OperationRecordOutcome.Failed,
+            failureCode: "User:EmailTaken",
+            failureData: """{"Email":"a@b.com","Attempts":3}"""));
+
+        var file = await InCulture("zh-CN", () => service.ExportAsync(
+            new ExportOperationRecordsInputDto(),
+            new OperationRecordExportAudit("operation-records.exported", "App.OperationRecords.Export")));
+
+        var lines = Encoding.UTF8.GetString(file.Content).TrimStart('\uFEFF').Split(Environment.NewLine);
+        Assert.EndsWith("FailureCode,FailureData,FailureMessage", lines[0], StringComparison.Ordinal);
+        Assert.EndsWith("邮箱 'a@b.com' 已被使用（3 次）。", lines[1], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 审计专用的 <c>{码}:Record</c> 优先于码本身，二者都用记录的参数填占位符
+    /// </summary>
+    /// <remarks>
+    /// 登录失败这类记录带着接口报错没有的参数（次数、时长），措辞只能另备一条。
+    /// </remarks>
+    [Fact]
+    public async Task The_record_specific_text_wins_over_the_error_text()
+    {
+        var localizer = new CultureLocalizer(new Dictionary<string, Dictionary<string, string>>
+        {
+            ["en"] = new()
+            {
+                ["Auth:InvalidCredentials"] = "The username or password is incorrect.",
+                ["Auth:InvalidCredentials:Record"] = "Incorrect username or password ({attempts} failed attempts)"
+            }
+        });
+        var (service, store) = Create(hostReader: true, localizer: localizer);
+        store.Written.Add(Record(
+            outcome: OperationRecordOutcome.Failed,
+            failureCode: "Auth:InvalidCredentials",
+            failureData: """{"attempts":5}"""));
+
+        Assert.Equal(
+            "Incorrect username or password (5 failed attempts)",
+            await InCulture("en", () => ReadFailureMessageAsync(service)));
+    }
+
+    /// <summary>
+    /// 审计键按本地化器的完整回落链查：请求语言缺审计键而默认语言有，用的是默认语言的审计措辞，
+    /// 而不是请求语言的普通文案
+    /// </summary>
+    /// <remarks>
+    /// 查找只分两步（先审计键、再码本身），每一步都交给本地化器自己回落；
+    /// 替身与 JsonStringLocalizer 同样按"当前文化 → 父文化 → 默认语言"回落，用例才反映真实行为。
+    /// </remarks>
+    [Fact]
+    public async Task A_record_specific_text_anywhere_on_the_fallback_chain_wins_over_the_error_text()
+    {
+        var localizer = new CultureLocalizer(new Dictionary<string, Dictionary<string, string>>
+        {
+            ["en"] = new() { ["User:EmailTaken:Record"] = "Record text {Email}" },
+            ["zh-CN"] = new() { ["User:EmailTaken"] = "邮箱 '{Email}' 已被使用。" }
+        });
+        var (service, store) = Create(hostReader: true, localizer: localizer);
+        store.Written.Add(Record(
+            outcome: OperationRecordOutcome.Failed,
+            failureCode: "User:EmailTaken",
+            failureData: """{"Email":"a@b.com"}"""));
+
+        Assert.Equal("Record text a@b.com", await InCulture("zh-CN", () => ReadFailureMessageAsync(service)));
+    }
+
+    /// <summary>
+    /// 审计键在整条回落链上都没有，才用码本身的文案（同样按请求语言回落）
+    /// </summary>
+    [Fact]
+    public async Task Without_a_record_specific_text_on_the_fallback_chain_the_error_text_is_used()
+    {
+        var localizer = new CultureLocalizer(new Dictionary<string, Dictionary<string, string>>
+        {
+            ["en"] = new() { ["User:EmailTaken"] = "Email '{Email}' is already in use." },
+            ["zh-CN"] = new() { ["User:EmailTaken"] = "邮箱 '{Email}' 已被使用。" }
+        });
+        var (service, store) = Create(hostReader: true, localizer: localizer);
+        store.Written.Add(Record(
+            outcome: OperationRecordOutcome.Failed,
+            failureCode: "User:EmailTaken",
+            failureData: """{"Email":"a@b.com"}"""));
+
+        Assert.Equal("邮箱 'a@b.com' 已被使用。", await InCulture("zh-CN", () => ReadFailureMessageAsync(service)));
+    }
+
+    private static async Task<string?> ReadFailureMessageAsync(OperationRecordQueryService service)
+        => Assert.Single((await service.GetPagedListAsync(new GetOperationRecordPagedInputDto())).Items).FailureMessage;
+
+    // 本地化器按查表那一刻的 CurrentUICulture 取文案，与请求本地化中间件设置的口径相同
+    private static async Task<T> InCulture<T>(string culture, Func<Task<T>> action)
+    {
+        var original = CultureInfo.CurrentUICulture;
+        CultureInfo.CurrentUICulture = new CultureInfo(culture);
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = original;
+        }
+    }
+
+    // 与 JsonStringLocalizer 同一回落口径：当前 UI 文化 → 各级父文化 → 默认语言（en），都没有才算未命中
+    private sealed class CultureLocalizer(Dictionary<string, Dictionary<string, string>> texts) : IStringLocalizer
+    {
+        private const string DefaultCulture = "en";
+
+        public LocalizedString this[string name]
+        {
+            get
+            {
+                foreach (var culture in CultureChain())
+                {
+                    if (texts.TryGetValue(culture, out var entries) && entries.TryGetValue(name, out var value))
+                    {
+                        return new LocalizedString(name, value);
+                    }
+                }
+
+                return new LocalizedString(name, name, resourceNotFound: true);
+            }
+        }
+
+        public LocalizedString this[string name, params object[] arguments] => this[name];
+
+        public IEnumerable<LocalizedString> GetAllStrings(bool includeParentCultures) => [];
+
+        private static IEnumerable<string> CultureChain()
+        {
+            for (var culture = CultureInfo.CurrentUICulture;
+                 !culture.Equals(CultureInfo.InvariantCulture);
+                 culture = culture.Parent)
+            {
+                yield return culture.Name;
+            }
+
+            yield return DefaultCulture;
+        }
     }
 
     // 类别按动作码前缀划分，只为让用例能表达"按类别展开"

@@ -64,7 +64,9 @@ export class SessionContextService {
   async refreshSettings(): Promise<readonly SettingOutputDto[]> {
     const settings = await this.settingContext.load();
     //#if (IncludeLocalization)
-    this.applyLanguageSetting();
+    // 等账户语言的词条到达再返回：启动流结束外壳才渲染，这样首帧就是账户语言且带着词条——
+    // 不等的话外壳先空白一下，渲染后立即发出的一次性提示（如退出模拟）还会取到裸键。
+    await this.applyLanguageSetting();
     //#endif
     return settings;
   }
@@ -92,7 +94,7 @@ export class SessionContextService {
     //#if (IncludeLocalization)
     // 语言不在快照里：它已经应用到 LanguageService 上了，清快照收不回来，
     // 于是共享机器上前一个人的语言会留给下一个人。
-    this.languageService.resetToDeviceLang();
+    void this.languageService.resetToDeviceLang();
     //#endif
   }
   //#if (IncludeLocalization)
@@ -103,17 +105,16 @@ export class SessionContextService {
    * 登录后以账户设置为准，而不是本设备偏好：设置页改了语言必须真的生效，否则那就是个假开关。
    * 反向的一致性由语言切换器保证——已登录时它会把选择写回设置。未登录的访客用设备偏好。
    */
-  private applyLanguageSetting(): void {
+  private applyLanguageSetting(): Promise<void> {
     const value = this.settingContext.valueOf(SETTINGS.display.language);
     if (value && (SUPPORTED_LANGS as readonly string[]).includes(value)) {
-      this.languageService.applyAccountLang(value as Lang);
-      return;
+      return this.languageService.applyAccountLang(value as Lang);
     }
 
     // 取不到值、或值不是本端支持的语言（存量数据、绕过接口直写、服务端先支持了本端
     // 还没有的语言），都退回设备偏好。这一支「什么都不做」等于沿用上一个主体的语言——
     // 请求成功反而绕过了清理，是同一个泄漏换了个门进来。
-    this.languageService.resetToDeviceLang();
+    return this.languageService.resetToDeviceLang();
   }
   //#endif
 }

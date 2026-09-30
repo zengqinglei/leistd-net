@@ -11,6 +11,9 @@ public static class MultiTenancyErrorCodes
     /// <summary>租户已停用。</summary>
     public const string NotActive = "Tenant:NotActive";
 
+    /// <summary>租户名不是合法的 DNS 标签。占位：<c>Name</c>、<c>Pattern</c>。</summary>
+    public const string NameInvalid = "Tenant:NameInvalid";
+
     /// <summary>租户名已被占用。占位：<c>Name</c>。</summary>
     public const string DuplicateName = "Tenant:DuplicateName";
 

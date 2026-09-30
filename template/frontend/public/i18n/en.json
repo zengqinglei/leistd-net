@@ -38,19 +38,6 @@
     "toggleSidebar": "Toggle sidebar",
     "clearFilter": "Clear filter",
     "noResults": "No results",
-    "validation": {
-      "required": "This field is required.",
-      "email": "Please enter a valid email address.",
-      "minLength": "Must be at least {{min}} characters.",
-      "maxLength": "Must not exceed {{max}} characters.",
-      "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
-      "roleNamePattern": "Must be 2–64 letters, digits, or underscores.",
-      "passwordMismatch": "The two passwords do not match.",
-      "passwordSameAsCurrent": "The new password must differ from the current one.",
-      "phonePattern": "Only digits, spaces, and + - ( ) are allowed.",
-      "passwordTooShort": "Password must be at least {{min}} characters.",
-      "passwordTooLong": "Password must not exceed {{max}} characters."
-    },
     "noData": "No data",
     "paginator": {
       "report": "{{from}}-{{to}} of {{total}}",
@@ -63,6 +50,21 @@
     },
     "showPassword": "Show password",
     "hidePassword": "Hide password"
+  },
+  "validation": {
+    "required": "This field is required.",
+    "email": "Please enter a valid email address.",
+    "minLength": "Must be at least {{minLength}} characters.",
+    "maxLength": "Must not exceed {{maxLength}} characters.",
+    "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
+    "roleNamePattern": "Must be 2–64 letters, digits, or underscores.",
+    "phonePattern": "Only digits, spaces, and + - ( ) are allowed.",
+    "passwordMismatch": "The two passwords do not match.",
+    "passwordSameAsCurrent": "The new password must differ from the current one.",
+    "tenantNamePattern": "Use letters, digits and hyphens only, not starting or ending with a hyphen, up to 63 characters.",
+    "connectionNamePattern": "Use lowercase letters, digits and hyphens only, 1 to 64 characters.",
+    "connectionNameTaken": "This connection name is already registered; change its connection string instead.",
+    "pkceRequired": "Native/Public clients must enable PKCE."
   },
   "menu": {
     "workspace": "Workspace",
@@ -134,7 +136,7 @@
   },
   "workspace": {
     "dashboard": {
-      "title": "Workspace",
+      "title": "Workbench",
       "username": "Username",
       "displayName": "Display name",
       "email": "Email",
@@ -229,6 +231,7 @@
     }
   },
   "app": {
+    "name": "Template Project",
     "startup": {
       "loading": "Loading...",
       "failed": "Application Failed to Load",
@@ -630,15 +633,9 @@
       "tenant.connection-removed": "Removed the database connection of tenant {{target}}"
     },
     "actionsNoTarget": {
+      "operation-records.exported": "Exported operation records",
       "user.created": "Created a user",
       "role.created": "Created a role"
-    },
-    "failures": {
-      "Auth_InvalidCredentials": "Incorrect username or password ({{attempts}} failed attempts within {{windowMinutes}} minutes)",
-      "Auth_UserTemporarilyLockedOut": "Locked out for {{minutes}} minutes after {{maxFailedAttempts}} failed sign-in attempts",
-      "Error_Forbidden": "Not allowed to perform this action",
-      "Security_CurrentPasswordIncorrect": "The current password is incorrect",
-      "Auth_TwoFactorCodeInvalid": "The verification code is incorrect"
     },
     "table": {
       "currentPageReport": "{{total}} in total",
@@ -777,7 +774,6 @@
     },
     "requirements": {
       "placeholder": "Select security requirements",
-      "pkceRequired": "Native/Public clients must enable PKCE.",
       "offlineAccessHint": "refresh_token is allowed; consider also granting the offline_access scope."
     },
     "table": {
@@ -883,8 +879,6 @@
     "addConnection": "Add connection",
     "changeConnectionString": "Change connection string",
     "connectionsEmpty": "This tenant has no database of its own; every service uses the database it is configured with.",
-    "connectionNameInvalid": "Use lowercase letters, digits and hyphens only, 1 to 64 characters.",
-    "connectionNameTaken": "This connection name is already registered; change its connection string instead.",
     "deleteConnectionTitle": "Delete connection",
     "deleteConnectionDescription": "Delete connection \"{{name}}\"? That service will go back to the database it is configured with.",
     "saved": "Tenant saved",

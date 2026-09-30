@@ -187,6 +187,8 @@ builder.Services.AddMultiTenancy(options =>
 
 `DomainFormat` 必须包含一个 `{0}`、使用纯 ASCII 主机名、不含 scheme/路径/端口，且占位符之后必须有固定基础域。错误配置在启动时抛 `OptionsValidationException`。
 
+租户名就是主机名里的那一段，因此组件要求租户名是单个 DNS 标签（见"管理租户"）。规则在创建与改名时校验，不回头检查已有数据：规则引入之前建出的不合规名字（含空格、`!`、下划线等）拼不成合法主机名，经子域名访问不到，要先改成合规名字。
+
 受管域内的基础域、多级子域或不匹配前后缀的主机名定案为宿主，不再读请求头。受管域外的内部服务名继续交给后续贡献者。
 
 反向代理使用 `X-Forwarded-Host` 时，必须通过 `KnownProxies`/`KnownIPNetworks` 限定可信代理。同时需配置授权服务器 issuer、资源服务验签、出站链接与 DNS；框架只负责入站解析。
@@ -227,7 +229,9 @@ app.MapGroup("/api/v1/tenants").MapTenantManagement<CreateTenantWithAdminInputDt
 
 `ITenantManagementService.CreateAsync` 的顺序是硬的：先**整批校验** `Connections`（名字归一化后查重、连接串语法），再以停用态登记租户并在**同一控制面工作单元**里把**全部命名连接**一次登记（分库在开通之前定案，开通钩子第一次执行时看到的就是完整集合），然后在新租户上下文与新工作单元里调用 `ITenantProvisioner.ProvisionAsync`，最后启用。多服务部署一次给多条（`default`、`crm`……），不要建完租户再逐条补登记——那会留下"租户已启用、某条连接还没登记"的中间状态，那一刻用该名字的服务解析到的是回落库。`connections` 传空数组或显式 `null` 都表示不分库；数组里有 `null` 元素按输入校验返回 400，重名返回带 `TenantConnection:NameDuplicated` 的 400。任一步失败按"`PurgeAsync` → **逐条**删连接登记 → 删租户"补偿（删连接必须在删租户之前，每条独立捕获），每步独立作用域、独立令牌、各自记录失败；数据库原因经 `ITenantDatabaseErrorDescriber` 翻成带码的 400，不回显连接串；**默认实现不翻译**（错误码表是各数据库的方言），宿主注册自己的实现把本引擎的码映射到 `MultiTenancyErrorCodes` 的四个码（不可达、库不存在、未迁移、凭据被拒）。认不出来的错误返回 `null` 走统一 5xx——库重启、连接数耗尽、序列化失败不是调用方改连接串能解决的，报成 400 会让客户端既不重试也不告警。开通需要更多信息（如管理员邮箱）时派生 `CreateTenantInputDto`，端点按派生类型绑定请求体，开通器从 `TenantProvisioningContext.Input` 取回。成功的创建、更新、启停、删除发布 `TenantChangedEvent`（带显示名快照），宿主据此记审计。
 
-租户名在未删除行内唯一；名称冲突抛 `DuplicateTenantNameException`。租户修改与连接配置共享 `TenantRecord.Version`，并发冲突抛 `TenantConcurrencyConflictException`。
+租户名须是单个 DNS 标签：匹配 `TenantConfiguration.NamePattern`（`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`），即字母、数字与连字符，不以连字符开头或结尾，最长 `TenantConfiguration.MaxNameLength`（63）个字符。`ITenantManager` 在创建与改名时校验（更新时名称逐字不变不校验，存量不合规的租户照常编辑其他字段；更新入参按存储容量 `MaxStoredNameLength`（64）接受原名），不合法时抛 `BusinessException`（`Tenant:NameInvalid`，占位 `Name`、`Pattern`，默认 400），租户不落库、原名不变。规则按子域名解析的需要定：名字进不了主机名，配置 `DomainFormat` 后这个租户建得出来却永远访问不到；没配子域名也照样校验，免得日后启用子域名时才发现存量名字用不了。大小写不限，落库的是原值。
+
+租户名在未删除行内大小写不敏感唯一；名称冲突抛 `DuplicateTenantNameException`。租户修改与连接配置共享 `TenantRecord.Version`，并发冲突抛 `TenantConcurrencyConflictException`。
 
 `displayName`（≤128）与 `description`（≤256）都是可选的展示字段，只供管理界面呈现，不参与解析与唯一性判定。两者按传入值覆盖——传 `null` 即清空，因此调用方要区分"不改"与"清空"时必须自己先读一次当前值。
 
@@ -380,7 +384,8 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionManagementService` | 连接管理用例：`GetListAsync`、`GetRuntimeAsync`、`GetMigrationListAsync`、`SetAsync`、`RemoveAsync`；EF 包注册 |
 | `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |
 | `MultiTenancyErrorCodes` | 组件错误码，默认中英译文随包分发 |
-| 默认 HTTP 状态 | 组件默认状态：租户停用 → 403，不存在 → 404，版本与命名冲突 → 409。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
+| `TenantConfiguration.NamePattern` / `MaxNameLength` | 租户名规则（单个 DNS 标签，≤63）；前端表单可直接复用这个模式 |
+| 默认 HTTP 状态 | 组件默认状态：租户停用 → 403，不存在 → 404，版本与命名冲突 → 409。其余（如 `Tenant:NameInvalid`、`TenantConnection:NameInvalid`）按业务异常默认 400。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
 | `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名，它跑宿主配置的解析链，与真实请求给出同一个答案 |
 | `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；按 `ClaimTypeOptions.ReadTenant` 判定租户会话（主体属于某个租户；声明非法时保留原始错误）；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
 | `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一；`BaseAddress` 缺失或不是绝对地址时启动失败并报出键名；该客户端不转发用户与租户上下文（控制面查询，租户 Id 在路径里） |

@@ -18,35 +18,28 @@ import {
   withViewTransitions,
 } from '@angular/router';
 //#if (IncludeLocalization)
-import { provideTransloco, TranslocoService } from '@jsverse/transloco';
+import { provideTransloco } from '@jsverse/transloco';
 //#endif
 import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 //#if (RemoteTokenAuth)
-import { authInterceptor, LogLevel, provideAuth } from 'angular-auth-oidc-client';
-//#endif
-//#if (IncludeLocalization)
-import { firstValueFrom } from 'rxjs';
+import { LogLevel, provideAuth } from 'angular-auth-oidc-client';
 //#endif
 
+import { appInterceptors } from './app.interceptors';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { GlobalErrorHandler } from './core/handlers/global-error-handler';
 //#if (IncludeLocalization)
 import { provideAppA11yLabels } from './core/i18n/a11y-labels';
 import { TranslocoHttpLoader } from './core/i18n/transloco-loader';
-import { acceptLanguageInterceptor } from './core/interceptors/accept-language-interceptor';
-//#endif
-import { httpErrorInterceptor } from './core/interceptors/http-error-interceptor';
-//#if (LocalIdentity)
-import { tenantInterceptor } from './core/interceptors/tenant-interceptor';
-//#endif
-import { urlFormatInterceptor } from './core/interceptors/url-format-interceptor';
-//#if (IncludeLocalization)
-import { LanguageService } from './core/services/language-service';
+import {
+  provideLanguageFallbackStrategy,
+  provideLanguageInitializer,
+} from './core/services/language-service';
 //#endif
 import { StartupService } from './core/services/startup-service';
-import { mockInterceptors, provideMock } from '../../_mock/core/providers';
+import { provideMock } from '../../_mock/core/providers';
 
 // 定义路由特性，用于增强应用功能和用户体验
 const routerFeatures: RouterFeatures[] = [
@@ -100,35 +93,20 @@ export const appConfig: ApplicationConfig = {
         fallbackLang: 'en',
         reRenderOnLangChange: true,
         prodMode: environment.production,
+        // 生产构建的词条已由 postbuild 的 transloco-optimize 预先展平，运行时不必再展平一遍。
+        // 前提是生产构建走 npm run build（它才会触发 postbuild）；直接 ng build 出来的是未展平的原文件，词条会全部找不到
+        flatten: { aot: environment.production },
       },
       loader: TranslocoHttpLoader,
     }),
+    // 加载失败不让 Transloco 自行回落并激活，由 LanguageService 处理（理由见 provideLanguageFallbackStrategy）
+    provideLanguageFallbackStrategy(),
     provideAppA11yLabels(),
     //#endif
-    provideHttpClient(
-      withInterceptors([
-        //#if (IncludeLocalization)
-        acceptLanguageInterceptor, // 注入 Accept-Language，须在 URL 改写等之前
-        //#endif
-        //#if (LocalIdentity)
-        tenantInterceptor, // 已选租户时为 /api/ 请求附加租户提示头
-        //#endif
-        //#if (RemoteTokenAuth)
-        authInterceptor(),
-        //#endif
-        urlFormatInterceptor,
-        httpErrorInterceptor, // 捕获所有 HTTP 错误并显示用户提示
-        ...mockInterceptors(environment.useMock),
-      ]),
-    ),
+    provideHttpClient(withInterceptors(appInterceptors)),
     //#if (IncludeLocalization)
-    // 首帧前预加载活动语言词条：LanguageService 构造时从 localStorage 解析活动语言并设为 active，
-    // 随后加载对应 JSON。确保 shell 与各页首次渲染时 translate() 不命中未加载的裸键（消除首帧缺翻译告警）。
-    provideAppInitializer(() => {
-      inject(LanguageService);
-      const transloco = inject(TranslocoService);
-      return firstValueFrom(transloco.load(transloco.getActiveLang()));
-    }),
+    // 首帧前加载活动语言词条，首次渲染不出裸键（理由见 provideLanguageInitializer）。
+    provideLanguageInitializer(),
     //#endif
     // 在应用初始化时加载关键数据
     provideAppInitializer(() => inject(StartupService).load()),

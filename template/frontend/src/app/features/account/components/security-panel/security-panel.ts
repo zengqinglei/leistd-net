@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@angular/core';
 import { form, maxLength, minLength, required, validate, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideEye, lucideEyeOff, lucideLock } from '@ng-icons/lucide';
@@ -21,6 +21,9 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '../../../../core/validation/password-rule';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { AccountService } from '../../services/account-service';
 //#if (ExternalLogin)
 import { ExternalLogins } from '../external-logins/external-logins';
@@ -51,7 +54,7 @@ import { TwoFactorSettings } from '../two-factor-settings/two-factor-settings';
     HlmInputGroupButton,
     ...HlmFieldImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucideEye, lucideEyeOff, lucideLock })],
@@ -63,6 +66,7 @@ export class SecurityPanel {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   protected readonly loginDevices = viewChild(LoginDevices);
@@ -72,14 +76,6 @@ export class SecurityPanel {
   // 密码可见性
   protected readonly showCurrentPassword = signal(false);
 
-  // 读屏用户听到的是"显示密码/隐藏密码"，而不是一个没有名字的按钮；名称随当前状态变
-  //#if (IncludeLocalization)
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    this.transloco.translate(shown ? 'common.hidePassword' : 'common.showPassword');
-  //#else
-  protected readonly passwordToggleLabel = (shown: boolean) =>
-    shown ? 'Hide password' : 'Show password';
-  //#endif
   protected readonly showNewPassword = signal(false);
   protected readonly showConfirmPassword = signal(false);
 
@@ -90,82 +86,27 @@ export class SecurityPanel {
     confirmPassword: '',
   });
 
-  //#if (IncludeLocalization)
   readonly changeForm = form(this.formModel, (path) => {
-    required(path.currentPassword, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    required(path.newPassword, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    minLength(path.newPassword, PASSWORD_MIN_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooShort', {
-        min: PASSWORD_MIN_LENGTH,
-      }),
-    });
-    maxLength(path.newPassword, PASSWORD_MAX_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooLong', {
-        max: PASSWORD_MAX_LENGTH,
-      }),
-    });
+    required(path.currentPassword);
+    required(path.newPassword);
+    minLength(path.newPassword, PASSWORD_MIN_LENGTH);
+    maxLength(path.newPassword, PASSWORD_MAX_LENGTH);
     validate(path.newPassword, (ctx) => {
       const newPassword = ctx.value();
       const currentPassword = ctx.valueOf(path.currentPassword);
-      if (currentPassword && newPassword && currentPassword === newPassword) {
-        return {
-          kind: 'sameAsCurrent',
-          message: this.transloco.translate('common.validation.passwordSameAsCurrent'),
-        };
-      }
-      return null;
+      return currentPassword && newPassword && currentPassword === newPassword
+        ? { kind: 'passwordSameAsCurrent' }
+        : null;
     });
-    required(path.confirmPassword, {
-      message: this.transloco.translate('common.validation.required'),
-    });
+    required(path.confirmPassword);
     validate(path.confirmPassword, (ctx) => {
       const confirm = ctx.value();
       const newPassword = ctx.valueOf(path.newPassword);
-      if (newPassword && confirm && newPassword !== confirm) {
-        return {
-          kind: 'passwordMismatch',
-          message: this.transloco.translate('common.validation.passwordMismatch'),
-        };
-      }
-      return null;
+      return newPassword && confirm && newPassword !== confirm
+        ? { kind: 'passwordMismatch' }
+        : null;
     });
   });
-  //#else
-  readonly changeForm = form(this.formModel, (path) => {
-    required(path.currentPassword, { message: 'This field is required.' });
-    required(path.newPassword, { message: 'This field is required.' });
-    minLength(path.newPassword, PASSWORD_MIN_LENGTH, {
-      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
-    });
-    maxLength(path.newPassword, PASSWORD_MAX_LENGTH, {
-      message: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
-    });
-    validate(path.newPassword, (ctx) => {
-      const newPassword = ctx.value();
-      const currentPassword = ctx.valueOf(path.currentPassword);
-      if (currentPassword && newPassword && currentPassword === newPassword) {
-        return {
-          kind: 'sameAsCurrent',
-          message: 'The new password must differ from the current one.',
-        };
-      }
-      return null;
-    });
-    required(path.confirmPassword, { message: 'This field is required.' });
-    validate(path.confirmPassword, (ctx) => {
-      const confirm = ctx.value();
-      const newPassword = ctx.valueOf(path.newPassword);
-      if (newPassword && confirm && newPassword !== confirm) {
-        return { kind: 'passwordMismatch', message: 'The two passwords do not match.' };
-      }
-      return null;
-    });
-  });
-  //#endif
 
   /**
    * 清空表单并收起明文显示。
@@ -220,3 +161,20 @@ export class SecurityPanel {
       });
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'account.changePassword.header': 'Change Password',
+  'account.changePassword.subtitle':
+    'Enter your current password and set a new sign-in password. Other devices will be signed out.',
+  'account.changePassword.currentPassword': 'Current Password',
+  'common.hidePassword': 'Hide password',
+  'common.showPassword': 'Show password',
+  'account.changePassword.newPassword': 'New Password',
+  'account.changePassword.rules':
+    'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
+  'account.changePassword.confirmPassword': 'Confirm New Password',
+  'account.changePassword.submit': 'Update Password',
+};
+//#endif

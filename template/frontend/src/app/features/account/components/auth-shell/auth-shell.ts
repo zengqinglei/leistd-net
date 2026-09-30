@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { HlmCardImports } from '@spartan-ng/helm/card';
 
@@ -10,6 +10,9 @@ import { LanguageSwitcher } from '../../../../shared/components/language-switche
 //#endif
 import { Logo } from '../../../../shared/components/logo/logo';
 import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle/theme-mode-toggle';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 
 /**
  * 认证页（登录、注册、强制启用双因素）共用的外壳：品牌标识、居中卡片、右上角主题与语言切换。
@@ -27,13 +30,17 @@ import { ThemeModeToggle } from '../../../../shared/components/theme-mode-toggle
     ThemeModeToggle,
     //#if (IncludeLocalization)
     LanguageSwitcher,
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   templateUrl: './auth-shell.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AuthShell {
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
+
+  //#endif
   /** 卡片宽度：表单用 `default`；需要并排内容（如二维码与密钥）用 `wide`。 */
   readonly width = input<'default' | 'wide'>('default');
   /**
@@ -42,3 +49,10 @@ export class AuthShell {
    */
   readonly showLanguageSwitcher = input(true);
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'account.brand.title': 'Template Project',
+};
+//#endif

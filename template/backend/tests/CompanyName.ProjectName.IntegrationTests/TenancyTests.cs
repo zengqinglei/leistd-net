@@ -479,6 +479,62 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     /// <summary>
+    /// 租户名须是单个 DNS 标签：按子域名解析时名字就是主机名的一段，<c>Invalid Name!</c> 这类名字
+    /// 建得出来却经子域名永远访问不到。经 API 创建与改名都按带码的 400 拒绝，不落库、原名不变。
+    /// </summary>
+    [Fact]
+    public async Task A_tenant_name_that_is_not_a_dns_label_is_a_coded_bad_request()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+
+        var create = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
+        {
+            Name = "Invalid Name!",
+            AdminEmail = "admin@invalid-name.example.com",
+            AdminPassword = "Tenant@123456"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
+        Assert.Equal(MultiTenancyErrorCodes.NameInvalid, await ErrorCodeAsync(create));
+        await AssertTenantAbsentAsync(_factory, "Invalid Name!");
+
+        var tenantId = await CreateTenantAsync(hostAdmin, "dns-label");
+        var rename = await hostAdmin.Client.PutAsJsonAsync($"/api/v1/tenants/{tenantId}", new { Name = "dns-label-" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, rename.StatusCode);
+        Assert.Equal(MultiTenancyErrorCodes.NameInvalid, await ErrorCodeAsync(rename));
+        var detail = await hostAdmin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/tenants/{tenantId}");
+        Assert.Equal("dns-label", detail.GetProperty("name").GetString());
+    }
+
+    /// <summary>
+    /// 名称规则只管新名称：规则之前建出的租户（这里是 64 个字符且带下划线）不改名时照常编辑其他字段，
+    /// 端点入参按存储容量 64 接受原名，不因新规则的上限 63 被拒
+    /// </summary>
+    [Fact]
+    public async Task A_pre_rule_tenant_name_can_be_kept_while_editing_other_fields()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "legacy");
+        var legacyName = new string('a', 62) + "_x";
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var control = scope.ServiceProvider.GetRequiredService<IdentityControlDbContext>();
+            var record = await control.Set<TenantRecord>().SingleAsync(t => t.Id == tenantId);
+            record.Name = legacyName;
+            record.NormalizedName = scope.ServiceProvider.GetRequiredService<ITenantNormalizer>().NormalizeName(legacyName)!;
+            await control.SaveChangesAsync();
+        }
+
+        var edit = await hostAdmin.Client.PutAsJsonAsync($"/api/v1/tenants/{tenantId}", new { Name = legacyName, DisplayName = "Legacy Inc." });
+
+        Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        var detail = await hostAdmin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/tenants/{tenantId}");
+        Assert.Equal(legacyName, detail.GetProperty("name").GetString());
+        Assert.Equal("Legacy Inc.", detail.GetProperty("displayName").GetString());
+    }
+
+    /// <summary>
     /// 跨域响应必须把 <c>X-Tenant-Invalid</c> 列入 Access-Control-Expose-Headers。
     /// </summary>
     /// <remarks>

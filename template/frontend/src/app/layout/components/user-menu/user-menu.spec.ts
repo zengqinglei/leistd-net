@@ -8,9 +8,6 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-//#if (IncludeLocalization)
-import { LanguageService } from '../../../core/services/language-service';
-//#endif
 import { TenantContextService } from '../../../core/services/tenant-context-service';
 import { LayoutService } from '../../services/layout-service';
 
@@ -66,9 +63,6 @@ describe('UserMenu items', () => {
         { provide: TenantContextService, useValue: { current: signal(null) } },
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(),
-        // 真实 LanguageService 会读设备语言并回写 document/transloco；这里只需要"活动语言"
-        // 这一个可依赖的信号。
-        { provide: LanguageService, useValue: { activeLang: signal('en') } },
         //#endif
       ],
     });

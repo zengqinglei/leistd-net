@@ -1,4 +1,6 @@
 using Leistd.Data.Paging;
+using Leistd.ExceptionHandling;
+using Leistd.MultiTenancy.Errors;
 using Leistd.TestBase.Doubles;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
@@ -252,6 +254,99 @@ public class TenantStoreManagerTests : IAsyncLifetime
 
         Assert.NotEqual(first.Id, second.Id);
         Assert.Equal(second.Id, (await _store.FindByNameAsync("ACME"))!.Id);
+    }
+
+    /// <summary>
+    /// 租户名按单个 DNS 标签校验：按子域名解析租户时名字就是主机名的一段，不合法的名字建得出来却永远访问不到。
+    /// </summary>
+    [Theory]
+    [InlineData("a")]
+    [InlineData("Acme")]
+    [InlineData("acme-2")]
+    [InlineData("0-9")]
+    public async Task Names_that_are_dns_labels_are_accepted_on_create_and_rename(string name)
+    {
+        var created = await _manager.CreateAsync(name, null, isActive: true);
+        Assert.Equal(name, created.Name);
+
+        var other = await _manager.CreateAsync("other", null, isActive: true);
+        await _manager.DeleteAsync(created.Id);
+        var renamed = await _manager.UpdateAsync(other.Id, name, null);
+        Assert.Equal(name, renamed.Name);
+    }
+
+    [Fact]
+    public async Task A_name_of_exactly_63_characters_is_accepted()
+    {
+        var name = new string('a', TenantConfiguration.MaxNameLength);
+
+        var created = await _manager.CreateAsync(name, null, isActive: true);
+
+        Assert.Equal(63, created.Name.Length);
+    }
+
+    public static TheoryData<string?> InvalidNames => new()
+    {
+        null,
+        "",
+        " ",
+        "Invalid Name!",
+        "acme ",
+        "acme!",
+        "-acme",
+        "acme-",
+        "-",
+        "acme_1",
+        "acme.example",
+        "租户",
+        "acme\n",
+        new string('a', 64),
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidNames))]
+    public async Task Invalid_names_are_rejected_on_create_with_code_and_placeholders(string? name)
+    {
+        var error = await Assert.ThrowsAsync<BusinessException>(() => _manager.CreateAsync(name!, null, isActive: true));
+
+        Assert.Equal(MultiTenancyErrorCodes.NameInvalid, error.Code);
+        Assert.Equal(name, error.LocalizationData["Name"]);
+        Assert.Equal(TenantConfiguration.NamePattern, error.LocalizationData["Pattern"]);
+        Assert.False(await _db.Set<TenantRecord>().AnyAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidNames))]
+    public async Task Invalid_names_are_rejected_on_rename_and_the_old_name_is_kept(string? name)
+    {
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
+
+        var error = await Assert.ThrowsAsync<BusinessException>(() => _manager.UpdateAsync(record.Id, name!, "Acme Inc."));
+
+        Assert.Equal(MultiTenancyErrorCodes.NameInvalid, error.Code);
+        Assert.Equal("Acme", (await _store.FindAsync(record.Id))!.Name);
+    }
+
+    /// <summary>
+    /// 名称规则只管新写入的名称：存量租户的名称可能早于规则，不改名的编辑照常保存，改名才按规则校验
+    /// </summary>
+    [Fact]
+    public async Task A_pre_rule_name_can_be_kept_on_update_but_not_renamed_to_another_invalid_name()
+    {
+        var record = await _manager.CreateAsync("Acme", null, isActive: true);
+        await _db.Set<TenantRecord>()
+            .Where(t => t.Id == record.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.Name, "acme_corp")
+                .SetProperty(t => t.NormalizedName, "ACME_CORP"));
+        // ExecuteUpdate 绕过变更跟踪，清掉创建时跟踪的旧实体，管理器才读得到库里的存量名称
+        _db.ChangeTracker.Clear();
+
+        var updated = await _manager.UpdateAsync(record.Id, "acme_corp", "Acme Corp");
+        Assert.Equal("Acme Corp", updated.DisplayName);
+
+        var error = await Assert.ThrowsAsync<BusinessException>(() => _manager.UpdateAsync(record.Id, "acme corp", null));
+        Assert.Equal(MultiTenancyErrorCodes.NameInvalid, error.Code);
     }
 
     [Fact]

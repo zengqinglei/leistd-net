@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Leistd.Data.Paging;
+using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.Context;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
@@ -10,6 +12,7 @@ using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.Dtos;
 using Leistd.Security.Users;
 using Leistd.Timing;
+using Microsoft.Extensions.Localization;
 
 namespace Leistd.OperationRecords.Queries;
 
@@ -21,7 +24,8 @@ internal sealed class OperationRecordQueryService(
     IOperationRecorder recorder,
     ICurrentTenant currentTenant,
     ICurrentUser currentUser,
-    IClock clock) : IOperationRecordQueryService
+    IClock clock,
+    IStringLocalizer? localizer = null) : IOperationRecordQueryService
 {
     public async Task<PagedResult<OperationRecordOutputDto>> GetPagedListAsync(
         GetOperationRecordPagedInputDto input,
@@ -194,13 +198,70 @@ internal sealed class OperationRecordQueryService(
         ImpersonatorName = record.ImpersonatorName,
         FailureCode = record.FailureCode,
         FailureData = record.FailureData,
+        FailureMessage = LocalizeFailure(record.FailureCode, record.FailureData),
         FailureDetail = isHost ? record.FailureDetail : null,
         CorrelationId = isHost ? record.CorrelationId : null,
         ActorTenantId = isHost ? record.ActorTenantId : null
     };
 
-    // CSV：带 UTF-8 BOM（否则 Excel 按本地代码页解释，中文全是乱码）；动作码存原样不渲染句子
-    // （句子落进文件，这份文件的语言就锁死了）；仅宿主那几列只在宿主导出时成列，而不是有列但为空。
+    // 与错误响应同一个非泛型本地化器、同一套占位符填充：同一个码在接口报错和记录里读起来是同一句话。
+    // 审计要换措辞或用上接口报错没有的参数时，资源里备 "{码}:Record"，它优先于码本身。
+    // 两步各交给本地化器回落文化：审计键在整条回落链（含默认语言）上都未命中，才查码本身。
+    // 按读取时的请求语言渲染，库里仍只存码与参数（理由见 OperationFailure）。
+    private string? LocalizeFailure(string? code, string? data)
+    {
+        if (localizer is null || code is null)
+        {
+            return null;
+        }
+
+        var localized = localizer[code + RecordTextSuffix];
+        if (localized.ResourceNotFound)
+        {
+            localized = localizer[code];
+        }
+
+        return localized.ResourceNotFound ? null : LocalizationPlaceholders.Fill(localized.Value, ReadFailureData(data));
+    }
+
+    private const string RecordTextSuffix = ":Record";
+
+    // 参数由 OperationFailure 序列化成扁平 JSON 对象；解析不了（被改坏、旧格式）按无参数处理，
+    // 一条记录的参数坏了不能让整页查询失败
+    private static Dictionary<string, object?>? ReadFailureData(string? data)
+    {
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(data);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            return document.RootElement.EnumerateObject().ToDictionary(
+                property => property.Name,
+                property => (object?)(property.Value.ValueKind switch
+                {
+                    JsonValueKind.String => property.Value.GetString(),
+                    JsonValueKind.Null => null,
+                    _ => property.Value.GetRawText()
+                }),
+                StringComparer.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    // CSV：带 UTF-8 BOM（否则 Excel 按本地代码页解释，中文全是乱码）；动作码存原样不渲染句子。
+    // 失败原因另起一列按导出请求的语言渲染：文件离开系统后没有词条可查，只有码读者看不懂；
+    // 码与参数两列照旧保留，换语言重渲染仍有依据。仅宿主那几列只在宿主导出时成列，而不是有列但为空。
     private static byte[] BuildCsv(IReadOnlyList<OperationRecordOutputDto> rows, bool includeHostOnlyColumns)
     {
         var builder = new StringBuilder();
@@ -209,7 +270,7 @@ internal sealed class OperationRecordQueryService(
         [
             "CreationTime(UTC)", "Action", "Outcome", "ActorId", "ActorName",
             "ImpersonatorName", "TargetId", "TargetName", "AuthorizationBasis",
-            "FailureCode", "FailureData"
+            "FailureCode", "FailureData", "FailureMessage"
         ];
         if (includeHostOnlyColumns)
         {
@@ -227,7 +288,7 @@ internal sealed class OperationRecordQueryService(
                 row.CreationTime.ToString("o", CultureInfo.InvariantCulture),
                 row.Action, row.Outcome, row.ActorId, row.ActorName,
                 row.ImpersonatorName, row.TargetId, row.TargetName, row.AuthorizationBasis,
-                row.FailureCode, row.FailureData
+                row.FailureCode, row.FailureData, row.FailureMessage
             ];
             if (includeHostOnlyColumns)
             {

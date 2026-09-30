@@ -54,6 +54,18 @@ public sealed record OperationRecordOutputDto
     /// <summary>失败原因的占位参数（JSON 对象字符串）。</summary>
     public string? FailureData { get; init; }
 
+    /// <summary>
+    /// 按当前请求语言渲染的失败原因：查宿主的非泛型 <c>IStringLocalizer</c>，
+    /// 用 <see cref="FailureData"/> 填充具名占位符 <c>{Name}</c>。
+    /// </summary>
+    /// <remarks>
+    /// 先查 <c>{FailureCode}:Record</c>（审计专用措辞），取不到再查 <see cref="FailureCode"/> 本身；
+    /// 两步各走本地化器的文化回落，审计键在整条回落链（含默认语言）上都未命中才查码本身。
+    /// 未注册本地化器、没有失败码或词条缺失时为 <see langword="null"/>，由调用方回落（如显示裸码）。
+    /// 参数无法解析时按无参数渲染；没有对应参数的占位符原样保留。
+    /// </remarks>
+    public string? FailureMessage { get; init; }
+
     /// <summary>技术说明；仅宿主可见。</summary>
     public string? FailureDetail { get; init; }
 

@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideArrowLeft, lucideShieldCheck } from '@ng-icons/lucide';
@@ -23,8 +23,8 @@ import {
   ApplicationHttpError,
   applicationErrorMessage,
 } from '../../../../core/errors/application-http-error';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import { AccountService } from '../../services/account-service';
 import { OtpCodeInput } from '../otp-code-input/otp-code-input';
@@ -37,7 +37,17 @@ import { OtpCodeInput } from '../otp-code-input/otp-code-input';
  */
 @Component({
   selector: 'app-two-factor-challenge',
-  imports: [NgIcon, HlmButton, HlmInput, HlmSpinner, OtpCodeInput],
+  // prettier-ignore
+  imports: [
+    NgIcon,
+    HlmButton,
+    HlmInput,
+    HlmSpinner,
+    OtpCodeInput,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
   providers: [provideIcons({ lucideArrowLeft, lucideShieldCheck })],
   templateUrl: './two-factor-challenge.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,14 +56,8 @@ export class TwoFactorChallenge {
   private readonly accountService = inject(AccountService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  protected readonly t = (key: string) => {
-    this.translationReady();
-    return this.transloco.translate(key);
-  };
   //#else
-  protected readonly t = (key: string) => ENGLISH[key] ?? key;
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   /** 第一步返回的凭据。 */
@@ -100,9 +104,15 @@ export class TwoFactorChallenge {
       );
       this.completed.emit();
     } catch (error) {
+      //#if (IncludeLocalization)
+      toast.error(this.transloco.translate('account.login.loginFailed'), {
+        description: applicationErrorMessage(error),
+      });
+      //#else
       toast.error(this.t('account.login.loginFailed'), {
         description: applicationErrorMessage(error),
       });
+      //#endif
       // 凭据过期、次数用完或账号被锁：这一步已经无法继续，回到密码那一步
       const code = error instanceof ApplicationHttpError ? error.code : undefined;
       if (code !== API_ERROR_CODES.twoFactorCodeInvalid) {
@@ -117,9 +127,9 @@ export class TwoFactorChallenge {
 }
 //#if (!IncludeLocalization)
 
-/** 不含本地化时的界面文案，与 `en.json` 的 `account.twoFactorLogin` 同步。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'account.login.loginFailed': 'Login failed',
+  'account.login.loginFailed': 'Sign-in failed',
   'account.twoFactorLogin.title': 'Two-factor authentication',
   'account.twoFactorLogin.codeHint': 'Enter the 6-digit code from your authenticator app.',
   'account.twoFactorLogin.recoveryHint': 'Enter one of the recovery codes you saved.',

@@ -1,88 +1,56 @@
-<div class="min-h-screen flex flex-col items-center justify-center bg-background px-6 relative">
-  <!-- Theme Toggle -->
-  <div class="absolute top-4 right-4 flex gap-2 z-50">
-    <app-theme-mode-toggle />
-    <!--#if (IncludeLocalization)-->
-    <app-language-switcher />
-    <!--#endif-->
-  </div>
-
-  <div class="flex max-w-2xl flex-col gap-8 text-center">
-    <!--#if (IncludeLocalization)-->
-    <h1 class="text-3xl font-semibold tracking-tight text-balance">
-      {{ 'landing.hero.title' | transloco }}
-    </h1>
-    <p class="text-base text-muted-foreground">{{ 'landing.hero.subtitle' | transloco }}</p>
-    <!--#else-->
-    <h1 class="text-3xl font-semibold tracking-tight text-balance">Template Project</h1>
-    <p class="text-base text-muted-foreground">
-      A full-stack application development template based on Angular + Spartan UI + .NET 10 DDD
-      architecture
-    </p>
-    <!--#endif-->
-
-    <div class="flex items-center justify-center gap-4">
-      <!--#if (LocalIdentity)-->
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <div class="min-h-screen flex flex-col items-center justify-center bg-background px-6 relative">
+    <!-- Theme Toggle -->
+    <div class="absolute top-4 right-4 flex gap-2 z-50">
+      <app-theme-mode-toggle />
       <!--#if (IncludeLocalization)-->
-      <a hlmBtn routerLink="/auth/login">{{ 'landing.hero.login' | transloco }}</a>
-      <a hlmBtn variant="outline" routerLink="/auth/register">{{
-        'landing.hero.register' | transloco
-      }}</a>
-      <!--#else-->
-      <a hlmBtn routerLink="/auth/login">Sign In</a>
-      <a hlmBtn variant="outline" routerLink="/auth/register">Sign Up</a>
-      <!--#endif-->
-      <!--#else-->
-      <!-- 登录与注册都在签发令牌的身份服务上：进入工作台时由守卫发起 OIDC 登录 -->
-      <!--#if (IncludeLocalization)-->
-      <a hlmBtn routerLink="/workspace">{{ 'landing.hero.login' | transloco }}</a>
-      <!--#else-->
-      <a hlmBtn routerLink="/workspace">Sign In</a>
-      <!--#endif-->
+      <app-language-switcher />
       <!--#endif-->
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
-      <div class="p-6 rounded-xl bg-card border border-border">
-        <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
-        <!--#if (IncludeLocalization)-->
-        <h3 class="font-semibold">{{ 'landing.feature.authTitle' | transloco }}</h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          {{ 'landing.feature.authDesc' | transloco }}
-        </p>
+    <div class="flex max-w-2xl flex-col gap-8 text-center">
+      <h1 class="text-3xl font-semibold tracking-tight text-balance">
+        {{ t('landing.hero.title') }}
+      </h1>
+      <p class="text-base text-muted-foreground">{{ t('landing.hero.subtitle') }}</p>
+
+      <div class="flex items-center justify-center gap-4">
+        <!--#if (LocalIdentity)-->
+        <a hlmBtn routerLink="/auth/login">{{ t('landing.hero.login') }}</a>
+        <a hlmBtn variant="outline" routerLink="/auth/register">{{ t('landing.hero.register') }}</a>
         <!--#else-->
-        <h3 class="font-semibold">Authentication</h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          Cookie-based authentication with role and permission management
-        </p>
+        <!-- 登录与注册都在签发令牌的身份服务上：进入工作台时由守卫发起 OIDC 登录 -->
+        <a hlmBtn routerLink="/workspace">{{ t('landing.hero.login') }}</a>
         <!--#endif-->
       </div>
-      <div class="p-6 rounded-xl bg-card border border-border">
-        <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
-        <!--#if (IncludeLocalization)-->
-        <h3 class="font-semibold">{{ 'landing.feature.usersTitle' | transloco }}</h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          {{ 'landing.feature.usersDesc' | transloco }}
-        </p>
-        <!--#else-->
-        <h3 class="font-semibold">User Management</h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          Full CRUD operations with permission control
-        </p>
-        <!--#endif-->
-      </div>
-      <div class="p-6 rounded-xl bg-card border border-border">
-        <ng-icon name="lucideSunMoon" class="text-3xl text-primary mb-3" />
-        <!--#if (IncludeLocalization)-->
-        <h3 class="font-semibold">{{ 'landing.feature.themeTitle' | transloco }}</h3>
-        <p class="text-sm text-muted-foreground mt-2">
-          {{ 'landing.feature.themeDesc' | transloco }}
-        </p>
-        <!--#else-->
-        <h3 class="font-semibold">Theme System</h3>
-        <p class="text-sm text-muted-foreground mt-2">Dark mode + Tailwind CSS + Spartan UI</p>
-        <!--#endif-->
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8">
+        <div class="p-6 rounded-xl bg-card border border-border">
+          <ng-icon name="lucideShield" class="text-3xl text-primary mb-3" />
+          <h3 class="font-semibold">{{ t('landing.feature.authTitle') }}</h3>
+          <p class="text-sm text-muted-foreground mt-2">
+            {{ t('landing.feature.authDesc') }}
+          </p>
+        </div>
+        <div class="p-6 rounded-xl bg-card border border-border">
+          <ng-icon name="lucideUsers" class="text-3xl text-primary mb-3" />
+          <h3 class="font-semibold">{{ t('landing.feature.usersTitle') }}</h3>
+          <p class="text-sm text-muted-foreground mt-2">
+            {{ t('landing.feature.usersDesc') }}
+          </p>
+        </div>
+        <div class="p-6 rounded-xl bg-card border border-border">
+          <ng-icon name="lucideSunMoon" class="text-3xl text-primary mb-3" />
+          <h3 class="font-semibold">{{ t('landing.feature.themeTitle') }}</h3>
+          <p class="text-sm text-muted-foreground mt-2">
+            {{ t('landing.feature.themeDesc') }}
+          </p>
+        </div>
       </div>
     </div>
   </div>
-</div>
+</ng-container>

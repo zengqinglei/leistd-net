@@ -1,12 +1,8 @@
-// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   effect,
-  //#if (IncludeLocalization)
-  inject,
-  //#endif
   input,
   model,
   output,
@@ -19,18 +15,16 @@ import {
   form,
   maxLength,
   required,
+  validate,
 } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../../../core/i18n/translation-ready';
-//#endif
 import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -41,9 +35,14 @@ import {
 } from '../../../../../../shared/dtos/tenant-connection.dto';
 import {
   CreateTenantInputDto,
+  TENANT_NAME_MAX_LENGTH,
+  TENANT_NAME_PATTERN,
   TenantOutputDto,
   UpdateTenantInputDto,
 } from '../../../../../../shared/dtos/tenant.dto';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 
 interface TenantEditFormModel {
   name: string;
@@ -68,7 +67,7 @@ interface TenantEditFormModel {
  */
 @Component({
   selector: 'app-tenant-edit-dialog',
-  // 两支各写一遍而不是在数组里插条件项：剔掉 TranslocoModule 之后这一行只有 84 字符，
+  // 两支各写一遍而不是在数组里插条件项：剔掉 TranslocoDirective 之后这一行只有 84 字符，
   // prettier 会要求压成一行，而带上它就超过 100 必须换行——同一份写法满足不了两种取值
   //#if (IncludeLocalization)
   imports: [
@@ -77,7 +76,7 @@ interface TenantEditFormModel {
     HlmInput,
     ...HlmDialogImports,
     ...HlmFieldImports,
-    TranslocoModule,
+    TranslocoDirective,
   ],
   //#else
   imports: [FormField, HlmButton, HlmInput, ...HlmDialogImports, ...HlmFieldImports],
@@ -89,12 +88,16 @@ export class TenantEditDialog {
   readonly open = model(false);
   readonly tenant = input<TenantOutputDto | null>(null);
   readonly save = output<CreateTenantInputDto | UpdateTenantInputDto>();
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly isEdit = computed(() => this.tenant() !== null);
+
+  /** 编辑时名称与原名逐字相同（不 trim）：视为没改名。 */
+  private isUnchangedName(value: string): boolean {
+    return this.isEdit() && value === this.tenant()?.name;
+  }
 
   protected readonly formModel = signal<TenantEditFormModel>({
     name: '',
@@ -106,81 +109,34 @@ export class TenantEditDialog {
   });
 
   readonly tenantForm = form(this.formModel, (path) => {
-    //#if (IncludeLocalization)
-    required(path.name, { message: this.transloco.translate('common.validation.required') });
-    maxLength(path.name, 64, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 64 }),
+    required(path.name);
+    // 编辑时名称原样未改（按原始字符串比，不先 trim）就不按新规则校验、提交时也原样送回：
+    // 存量租户的名称可能早于这条规则（含首尾空白、64 个字符），只改显示名或描述不该被它挡住（与后端一致）
+    maxLength(path.name, TENANT_NAME_MAX_LENGTH, {
+      when: (ctx) => !this.isUnchangedName(ctx.value()),
     });
-    maxLength(path.displayName, 128, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
+    // 按提交时的值（去掉首尾空白）校验；空值归 required、超长归 maxLength，这里不重复提示。
+    validate(path.name, (ctx) => {
+      if (this.isUnchangedName(ctx.value())) {
+        return null;
+      }
+      const name = ctx.value().trim();
+      return name && name.length <= TENANT_NAME_MAX_LENGTH && !TENANT_NAME_PATTERN.test(name)
+        ? { kind: 'tenantNamePattern' }
+        : null;
     });
-    maxLength(path.description, 256, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 256 }),
-    });
+    maxLength(path.displayName, 128);
+    maxLength(path.description, 256);
     // 管理员账号仅在新建模式提供并校验（编辑模式无该字段）。
-    required(path.adminEmail, {
-      message: this.transloco.translate('common.validation.required'),
-      when: () => !this.isEdit(),
-    });
-    emailValidator(path.adminEmail, {
-      message: this.transloco.translate('common.validation.email'),
-      when: () => !this.isEdit(),
-    });
-    required(path.adminPassword, {
-      message: this.transloco.translate('common.validation.required'),
-      when: () => !this.isEdit(),
-    });
-    minLength(path.adminPassword, PASSWORD_MIN_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooShort', {
-        min: PASSWORD_MIN_LENGTH,
-      }),
-      when: () => !this.isEdit(),
-    });
-    maxLength(path.adminPassword, PASSWORD_MAX_LENGTH, {
-      message: this.transloco.translate('common.validation.passwordTooLong', {
-        max: PASSWORD_MAX_LENGTH,
-      }),
-      when: () => !this.isEdit(),
-    });
+    required(path.adminEmail, { when: () => !this.isEdit() });
+    emailValidator(path.adminEmail, { when: () => !this.isEdit() });
+    required(path.adminPassword, { when: () => !this.isEdit() });
+    minLength(path.adminPassword, PASSWORD_MIN_LENGTH, { when: () => !this.isEdit() });
+    maxLength(path.adminPassword, PASSWORD_MAX_LENGTH, { when: () => !this.isEdit() });
     // 连接串可选，只钉长度上限（常量与详情页的连接编辑器同源）
     maxLength(path.connectionString, TENANT_CONNECTION_STRING_MAX_LENGTH, {
-      message: this.transloco.translate('common.validation.maxLength', {
-        max: TENANT_CONNECTION_STRING_MAX_LENGTH,
-      }),
       when: () => !this.isEdit(),
     });
-    //#else
-    required(path.name, { message: 'This field is required.' });
-    maxLength(path.name, 64, { message: 'Must not exceed 64 characters.' });
-    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
-    maxLength(path.description, 256, { message: 'Must not exceed 256 characters.' });
-    // 管理员账号仅在新建模式提供并校验（编辑模式无该字段）。
-    required(path.adminEmail, {
-      message: 'This field is required.',
-      when: () => !this.isEdit(),
-    });
-    emailValidator(path.adminEmail, {
-      message: 'Please enter a valid email address.',
-      when: () => !this.isEdit(),
-    });
-    required(path.adminPassword, {
-      message: 'This field is required.',
-      when: () => !this.isEdit(),
-    });
-    minLength(path.adminPassword, PASSWORD_MIN_LENGTH, {
-      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
-      when: () => !this.isEdit(),
-    });
-    maxLength(path.adminPassword, PASSWORD_MAX_LENGTH, {
-      message: `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
-      when: () => !this.isEdit(),
-    });
-    // 连接串可选，只钉长度上限（常量与详情页的连接编辑器同源）
-    maxLength(path.connectionString, TENANT_CONNECTION_STRING_MAX_LENGTH, {
-      message: `Must not exceed ${TENANT_CONNECTION_STRING_MAX_LENGTH} characters.`,
-      when: () => !this.isEdit(),
-    });
-    //#endif
   });
 
   constructor() {
@@ -217,7 +173,7 @@ export class TenantEditDialog {
 
     if (this.isEdit()) {
       this.save.emit({
-        name: model.name.trim(),
+        name: this.isUnchangedName(model.name) ? model.name : model.name.trim(),
         displayName,
         description: description || null,
       } satisfies UpdateTenantInputDto);
@@ -242,56 +198,24 @@ export class TenantEditDialog {
         : [],
     } satisfies CreateTenantInputDto);
   }
-
-  //#if (IncludeLocalization)
-  readonly title = computed(() => {
-    this.translationReady();
-    return this.transloco.translate(this.isEdit() ? 'tenants.editTitle' : 'tenants.createTitle');
-  });
-
-  readonly description = () => this.transloco.translate('tenants.editDescription');
-  readonly cancelLabel = () => this.transloco.translate('common.cancel');
-  readonly saveLabel = () => this.transloco.translate('common.save');
-  readonly connectionHint = () => this.transloco.translate('tenants.createConnectionHint');
-
-  fieldLabel(
-    field:
-      'name' | 'displayName' | 'description' | 'adminEmail' | 'adminPassword' | 'connectionString',
-  ): string {
-    const keys = {
-      name: 'tenants.fieldName',
-      displayName: 'tenants.fieldDisplayName',
-      description: 'tenants.fieldDescription',
-      adminEmail: 'tenants.fieldAdminEmail',
-      adminPassword: 'tenants.fieldAdminPassword',
-      connectionString: 'tenants.fieldConnectionString',
-    } as const;
-    return this.transloco.translate(keys[field]);
-  }
-  //#else
-  fieldLabel(
-    field:
-      'name' | 'displayName' | 'description' | 'adminEmail' | 'adminPassword' | 'connectionString',
-  ): string {
-    const labels = {
-      name: 'Name',
-      displayName: 'Display name',
-      description: 'Description',
-      adminEmail: 'Admin email',
-      adminPassword: 'Admin password',
-      connectionString: 'Connection string',
-    } as const;
-    return labels[field];
-  }
-
-  readonly title = computed(() => (this.isEdit() ? 'Edit tenant' : 'New tenant'));
-
-  readonly description = () =>
-    'Name identifies the tenant at sign-in; users enter it to select their tenant.';
-  readonly cancelLabel = () => 'Cancel';
-  readonly saveLabel = () => 'Save';
-  readonly connectionHint = () =>
-    'Optional. Leave empty to keep this tenant in the database each service is already configured with. ' +
-    'Sharding can only be decided here: the database must already exist and be migrated, and it cannot be changed afterwards without migrating the data.';
-  //#endif
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'tenants.editTitle': 'Edit tenant',
+  'tenants.createTitle': 'New tenant',
+  'tenants.editDescription':
+    'Name identifies the tenant at sign-in; users enter it to select their tenant.',
+  'tenants.fieldName': 'Name',
+  'tenants.fieldDisplayName': 'Display name',
+  'tenants.fieldDescription': 'Description',
+  'tenants.fieldAdminEmail': 'Admin email',
+  'tenants.fieldAdminPassword': 'Admin password',
+  'tenants.fieldConnectionString': 'Connection string',
+  'tenants.createConnectionHint':
+    'Optional. Leave empty to keep this tenant in the database each service is already configured with. Sharding can only be decided here: the database must already exist and be migrated, and it cannot be changed afterwards without migrating the data.',
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+};
+//#endif

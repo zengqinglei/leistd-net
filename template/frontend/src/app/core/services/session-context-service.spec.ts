@@ -193,7 +193,8 @@ describe('SessionContextService', () => {
 
       service.clear();
 
-      expect(languageService.activeLang()).toBe('en');
+      // 退回设备偏好也是先加载词条再激活，不同步生效
+      await vi.waitFor(() => expect(languageService.activeLang()).toBe('en'));
     } finally {
       localStorage.removeItem(LanguageService.STORAGE_KEY);
     }

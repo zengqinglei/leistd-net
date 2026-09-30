@@ -1,9 +1,5 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
-//#if (IncludeLocalization)
 import { Injector, inject } from '@angular/core';
-//#else
-import { inject } from '@angular/core';
-//#endif
 //#if (LocalIdentity)
 import { Router } from '@angular/router';
 //#endif
@@ -19,7 +15,7 @@ import { apiErrorCode, ApplicationHttpError } from '../errors/application-http-e
 //#else
 import { ApplicationHttpError } from '../errors/application-http-error';
 //#endif
-import { entryRouteUrl, isOnAuthRoute } from '../routing/entry-route';
+import { EntryRouteService } from '../routing/entry-route-service';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
@@ -27,13 +23,12 @@ import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
 
 export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
-  const sessionContext = inject(SessionContextService);
   const tenantContext = inject(TenantContextService);
-  //#if (IncludeLocalization)
-  // 不能在这里直接注入 TranslocoService：它加载词条走 HttpClient，HttpClient 又要经过本拦截器，
-  // 构造期注入就是循环依赖。出错时再按需取——那时它早已构造完成。
+  const entryRoute = inject(EntryRouteService);
+  // TranslocoService 与 SessionContextService 不能在这里直接注入：前者加载词条走 HttpClient，
+  // 后者构造时创建 LanguageService、它立即加载初始语言的词条，这些请求都要经过本拦截器，
+  // 构造期注入就是循环依赖（NG0200，整个应用停在启动页）。出错时再按需取——那时它们早已构造完成。
   const injector = inject(Injector);
-  //#endif
   //#if (LocalIdentity)
   const router = inject(Router);
   //#endif
@@ -85,20 +80,20 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
 
         if (
           !lockedOutButStillSignedIn &&
-          !isOnAuthRoute() &&
+          !entryRoute.isOnAuthRoute() &&
           !req.context.get(SILENT_AUTH) &&
           authService.isAuthenticated()
         ) {
           // 主体离开要清干净：只清认证数据会把权限和设置留给下一个登录的人，
           // 表现是新用户看到上一个人的显示偏好。
-          sessionContext.clear();
+          injector.get(SessionContextService).clear();
           //#if (LocalIdentity)
-          void router.navigate(['/auth/login'], { queryParams: { returnUrl: entryRouteUrl() } });
+          void router.navigate(['/auth/login'], { queryParams: { returnUrl: entryRoute.url() } });
           //#else
           // 令牌到期是这种形态的常规生命周期，不是异常：没有静默续期也没有刷新令牌，
           // 而 isAuthenticated() 只看内存里的主体，它不会自己变假。这里不重新发起认证，
           // Guard 就继续放行、旧权限旧设置继续显示、请求全部 401，用户只能自己硬刷新。
-          authService.login(entryRouteUrl());
+          authService.login(entryRoute.url());
           //#endif
         }
       }
@@ -109,22 +104,25 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
       if (
         error.status === 403 &&
         apiErrorCode(error.error) === API_ERROR_CODES.twoFactorSetupRequired &&
-        !isOnAuthRoute()
+        !entryRoute.isOnAuthRoute()
       ) {
         void router.navigateByUrl('/auth/two-factor-setup');
       }
       //#endif
 
       //#if (IncludeLocalization)
-      const networkErrorMessage =
-        error.status === 0
-          ? injector.get(TranslocoService).translate('common.networkError')
-          : undefined;
+      // 错误对象带着的是现成文字，事后不会随词条更新：词条尚未到达（首帧前与初始语言词条并行的启动请求）时
+      // translate() 返回键本身，此时交给 ApplicationHttpError 用它自带的英文说法，而不是把裸键写进去。
+      const transloco = injector.get(TranslocoService);
+      const text = (key: string): string | undefined => {
+        const value = transloco.translate(key);
+        return value === key ? undefined : value;
+      };
       return throwError(() =>
         ApplicationHttpError.from(
           error,
-          networkErrorMessage,
-          injector.get(TranslocoService).translate('common.traceId'),
+          error.status === 0 ? text('common.networkError') : undefined,
+          text('common.traceId'),
         ),
       );
       //#else

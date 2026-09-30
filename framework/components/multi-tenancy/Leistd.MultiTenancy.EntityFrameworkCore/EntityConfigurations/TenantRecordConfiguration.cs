@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
+using Leistd.MultiTenancy.Stores;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
 
@@ -21,11 +22,11 @@ public class TenantRecordConfiguration : IEntityTypeConfiguration<TenantRecord>
             .IsConcurrencyToken();
 
         builder.Property(x => x.Name)
-            .HasMaxLength(64)
+            .HasMaxLength(TenantConfiguration.MaxStoredNameLength)
             .IsRequired();
 
         builder.Property(x => x.NormalizedName)
-            .HasMaxLength(64)
+            .HasMaxLength(TenantConfiguration.MaxStoredNameLength)
             .IsRequired();
 
         builder.Property(x => x.DisplayName)

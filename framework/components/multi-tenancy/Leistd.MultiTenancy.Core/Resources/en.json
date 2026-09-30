@@ -9,6 +9,7 @@
     "Tenant:DedicatedDatabaseRejected": "The database rejected the credentials in the connection string.",
     "Tenant:DedicatedDatabaseUnreachable": "The tenant's dedicated database is unreachable. Check that the host and port are reachable and the database server is running.",
     "Tenant:DuplicateName": "A tenant named '{Name}' already exists.",
+    "Tenant:NameInvalid": "Tenant name '{Name}' is invalid. Use letters, digits and hyphens only, not starting or ending with a hyphen, at most 63 characters (pattern {Pattern}).",
     "Tenant:NotActive": "This tenant is not active.",
     "Tenant:NotFound": "The tenant does not exist.",
     "TenantConnection:ChangeRequiresInactiveTenant": "Deactivate the tenant before changing where its data lives.",

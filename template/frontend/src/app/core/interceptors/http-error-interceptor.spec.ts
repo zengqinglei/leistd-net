@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import {
   HttpContext,
   HttpErrorResponse,
@@ -9,6 +10,9 @@ import {
 import { Injector, provideZonelessChangeDetection, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { Observable, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
@@ -17,7 +21,6 @@ import { applicationErrorMessage, ApplicationHttpError } from '../errors/applica
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
-import { entryRouteUrl } from '../routing/entry-route';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
@@ -85,6 +88,11 @@ describe('httpErrorInterceptor', () => {
     //#endif
   });
 
+  /** 设定地址栏但不导航：Router.url 保持 '/'，对应启动流跑在初始导航之前。 */
+  function openAt(url: string): void {
+    TestBed.inject(Location).replaceState(url);
+  }
+
   function runInterceptor(
     error: unknown,
     options?: {
@@ -124,18 +132,36 @@ describe('httpErrorInterceptor', () => {
   }
 
   it('normalizes a network failure (status 0) to an ApplicationHttpError', () => {
+    //#if (IncludeLocalization)
+    TestBed.inject(TranslocoService).setTranslation(
+      { common: { networkError: '无法连接服务器' } },
+      'en',
+    );
+    //#endif
     const caught = runInterceptor(httpError(0, new ProgressEvent('error')));
     expect(caught).toBeInstanceOf(ApplicationHttpError);
     expect((caught as ApplicationHttpError).status).toBe(0);
-    // 展示的是本地化的"连不上服务器"，不是浏览器给开发者看的原始异常文本（空词条下回落成键名）。
+    // 展示的是本地化的"连不上服务器"，不是浏览器给开发者看的原始异常文本。
     //#if (IncludeLocalization)
-    expect((caught as ApplicationHttpError).message).toBe('common.networkError');
+    expect((caught as ApplicationHttpError).message).toBe('无法连接服务器');
     //#else
     expect((caught as ApplicationHttpError).message).toBe(
       'Unable to reach the server. Check your connection and try again.',
     );
     //#endif
   });
+  //#if (IncludeLocalization)
+
+  // 错误对象带的是现成文字，事后不会随词条更新：词条未到时（首帧前的启动请求）写进去的裸键会一直留着
+  it('falls back to built-in English, not bare keys, while translations have not arrived', () => {
+    const caught = runInterceptor(httpError(0, new ProgressEvent('error')));
+
+    expect((caught as ApplicationHttpError).message).toBe(
+      'Unable to reach the server. Check your connection and try again.',
+    );
+    expect((caught as ApplicationHttpError).traceIdLabel).toBe('Trace ID');
+  });
+  //#endif
 
   it('parses an RFC 9457 errors array (code + details)', () => {
     const caught = runInterceptor(
@@ -165,9 +191,12 @@ describe('httpErrorInterceptor', () => {
   });
 
   it('uses the active localization label for a reportable trace ID', () => {
+    //#if (IncludeLocalization)
+    TestBed.inject(TranslocoService).setTranslation({ common: { traceId: '追踪号' } }, 'en');
+    //#endif
     const caught = runInterceptor(httpError(503, { detail: 'Unavailable', traceId: 'trace-5' }));
     //#if (IncludeLocalization)
-    expect(applicationErrorMessage(caught)).toBe('Unavailable (common.traceId: trace-5)');
+    expect(applicationErrorMessage(caught)).toBe('Unavailable (追踪号: trace-5)');
     //#else
     expect(applicationErrorMessage(caught)).toBe('Unavailable (Trace ID: trace-5)');
     //#endif
@@ -221,7 +250,7 @@ describe('httpErrorInterceptor', () => {
     const caught = runInterceptor(httpError(401));
 
     expect(sessionContext.clear).toHaveBeenCalled();
-    expectReauthentication(entryRouteUrl());
+    expectReauthentication('/');
     expect(caught).toBeInstanceOf(ApplicationHttpError);
     expect((caught as ApplicationHttpError).status).toBe(401);
   });
@@ -248,65 +277,53 @@ describe('httpErrorInterceptor', () => {
     runInterceptor(httpError(401, { code: 'Auth:UserLockedOut', detail: 'Account locked.' }));
 
     expect(sessionContext.clear).toHaveBeenCalled();
-    expectReauthentication(entryRouteUrl());
+    expectReauthentication('/');
   });
 
   //#endif
   // 直接打开深链时，启动流跑在初始导航之前——那时 Router.url 是 '/'，
   // 用它记落地地址会把用户重新登录后送去首页，而不是他点开的那一页。
   it('records the deep link that has not been navigated to yet', () => {
-    history.replaceState(null, '', '/platform/users?page=2');
+    openAt('/platform/users?page=2');
 
-    try {
-      runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
 
-      expect(router.url).toBe('/');
-      expectSingleReauthentication('/platform/users?page=2');
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    expect(router.url).toBe('/');
+    expectSingleReauthentication('/platform/users?page=2');
   });
 
   // 认证路由上不能再发起一次认证：OIDC 形态下那是死循环——回调页上再授权一次，
   // IdP 侧已有会话，立刻带着新 code 跳回来，而 401 的原因一点没变。
   // 只把落地地址丢掉是不够的，authorize() 本身就不能再发生。
   it('leaves the 401 entirely to the running auth flow while on an auth route', () => {
-    history.replaceState(null, '', '/auth/callback?code=abc');
+    openAt('/auth/callback?code=abc');
 
-    try {
-      const caught = runInterceptor(httpError(401));
+    const caught = runInterceptor(httpError(401));
 
-      // 会话清理都不能做：回调这一刻主体刚建立，清掉之后启动流照常判成功、
-      // 回调页照常跳进受保护路由，Guard 发现没有主体又发起一次授权——
-      // callback → 清主体 → workspace → authorize → callback，循环只是多绕一跳。
-      expect(sessionContext.clear).not.toHaveBeenCalled();
-      expectNoReauthentication();
-      // 归一化照做：调用方（这里是启动流）要靠它判断状态码。
-      expect(caught).toBeInstanceOf(ApplicationHttpError);
-      expect((caught as ApplicationHttpError).status).toBe(401);
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    // 会话清理都不能做：回调这一刻主体刚建立，清掉之后启动流照常判成功、
+    // 回调页照常跳进受保护路由，Guard 发现没有主体又发起一次授权——
+    // callback → 清主体 → workspace → authorize → callback，循环只是多绕一跳。
+    expect(sessionContext.clear).not.toHaveBeenCalled();
+    expectNoReauthentication();
+    // 归一化照做：调用方（这里是启动流）要靠它判断状态码。
+    expect(caught).toBeInstanceOf(ApplicationHttpError);
+    expect((caught as ApplicationHttpError).status).toBe(401);
   });
 
   // 令牌到期时一屏的并发请求会一起 401，这是常规场景。第一条恢复之后，
   // 后到的那些不能把最初的落地地址覆盖成认证页自己或默认页。
   it('recovers only once when a batch of 401s arrives', () => {
-    history.replaceState(null, '', '/platform/users');
+    openAt('/platform/users');
 
-    try {
-      runInterceptor(httpError(401));
-      runInterceptor(httpError(401));
-      runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
 
-      // 恢复跑两遍不是"多导航一次"这么轻：OIDC 客户端的 authorize() 是异步的，
-      // 每条流程都会重新生成并覆盖 PKCE codeVerifier，两条交叉后回调换 token 会失败。
-      // 收敛靠的是第一条已经同步清掉主体，后面的到闸门处就没有主体可清了。
-      expectSingleReauthentication('/platform/users');
-      expect(sessionContext.clear).toHaveBeenCalledTimes(1);
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    // 恢复跑两遍不是"多导航一次"这么轻：OIDC 客户端的 authorize() 是异步的，
+    // 每条流程都会重新生成并覆盖 PKCE codeVerifier，两条交叉后回调换 token 会失败。
+    // 收敛靠的是第一条已经同步清掉主体，后面的到闸门处就没有主体可清了。
+    expectSingleReauthentication('/platform/users');
+    expect(sessionContext.clear).toHaveBeenCalledTimes(1);
   });
 
   // 本来就没有主体时，这里没有东西要清，重新认证也该由 Guard 或启动流按自己的时机发起。
@@ -325,20 +342,16 @@ describe('httpErrorInterceptor', () => {
   // 登录页的启动探测正是最容易撞上它的地方（旧 Cookie 带着已停用租户的 tenant_id），
   // 不清的话后续登录请求继续携带失效的租户提示头，用户一直登不进来。
   it('clears an invalid tenant even on an auth route, without touching the session', () => {
-    history.replaceState(null, '', '/auth/login');
+    openAt('/auth/login');
     const tenantContext = TestBed.inject(TenantContextService);
     const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
     const context = new HttpContext().set(SILENT_AUTH, true);
 
-    try {
-      runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });
+    runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });
 
-      expect(clearTenantSpy).toHaveBeenCalled();
-      expect(sessionContext.clear).not.toHaveBeenCalled();
-      expectNoReauthentication();
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    expect(clearTenantSpy).toHaveBeenCalled();
+    expect(sessionContext.clear).not.toHaveBeenCalled();
+    expectNoReauthentication();
   });
 
   it('clears the selected tenant on a 401 marked X-Tenant-Invalid', () => {
