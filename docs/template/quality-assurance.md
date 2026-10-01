@@ -10,6 +10,10 @@ UnitTests 验证隔离规则和边界、注册生命周期/幂等；IntegrationT
 
 条件 using 守卫覆盖 24 个符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。 场景定义及两片归属在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致。人工验证仍用 `scripts/test-template-matrix.ps1` 全量或 `-Scenarios`；CI 使用 `-Shard 1` / `-Shard 2`，不能与 `-Scenarios` 混用。每片保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试，不用分片替换测试阶段。容器责任保留在含 Standalone 的分片；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
 
+矩阵验收读取同一次 run 的两片 artifact，使用 `scripts/check-template-matrix-results.ps1` 核对准确的场景归属、全集与 Backend/Runtime/Lint/Frontend/Test 状态；要求容器验证时显式传入 `-ContainerSmokeScenarios standalone`。还须核对日志中后端和真实浏览器测试确有用例执行，不能仅凭作业名称或退出码推定完整覆盖。Standalone 容器检查构建 API 与 Migrator 镜像，并在两种镜像内执行 `dotnet --info`；它认证镜像构建与 .NET 运行时可用，不代表 API 已按部署配置启动或已连接数据库。真实 PostgreSQL 与 OIDC 跨服务责任仍由各自独立作业承担，未执行的可选场景另行注明。
+
+分片均衡同时计入实际承担的容器阶段、生成准备和浏览器安装，不只按场景数量划分。关键片可能随实测改变，调整前先核对各场景命令区间和准备阶段；准备阶段变快、未产生 lint 热缓存或另一片提前完成，都不能当作删减测试的依据。
+
 ## 前端依赖维护
 
 默认与本地化载荷的 Angular 运行时、CDK、编译器和构建工具须按官方 peer 范围配套更新，并同时更新两套锁文件。先在隔离副本验证安装、原审计阈值、lint、构建与真实浏览器测试，再同步依赖文件；完整条件矩阵仍须执行。不得用 `--force`、`--legacy-peer-deps` 或降低审计阈值绕过依赖冲突与安全门禁。
