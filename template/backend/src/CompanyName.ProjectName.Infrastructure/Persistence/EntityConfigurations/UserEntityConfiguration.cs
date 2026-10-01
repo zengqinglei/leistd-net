@@ -1,3 +1,4 @@
+using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,7 @@ internal static class BaseEntityConfiguration
     {
         builder.Entity<User>(b =>
         {
-            b.Property(e => e.Username).IsRequired().HasMaxLength(64);
+            b.Property(e => e.Username).IsRequired().HasMaxLength(UsernameRules.MaxLength);
             b.Property(e => e.Email).IsRequired().HasMaxLength(256);
             b.Property(e => e.Avatar).HasColumnType("text");
             b.Property(e => e.DisplayName).HasMaxLength(128);

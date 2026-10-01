@@ -85,7 +85,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("ProviderUsername")
+                    b.Property<string>("ProviderAccountLabel")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 

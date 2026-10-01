@@ -57,6 +57,7 @@
     "ExternalAuth:AccessTokenParseFailed": "Failed to parse the access token.",
     "ExternalAuth:AccountExistsSignInToLink": "An account with this email already exists. Sign in to it, then link {Provider} in account settings.",
     "ExternalAuth:AlreadyLinked": "This {Provider} account is already linked to another user.",
+    "ExternalAuth:EmailOwnedByDeletedAccount": "This email belongs to a deleted account. Ask an administrator to restore it, or use another address.",
     "ExternalAuth:GitHubTokenFailed": "Failed to obtain GitHub access token.",
     "ExternalAuth:GitHubUserInfoFailed": "Failed to obtain GitHub user information.",
     "ExternalAuth:InvalidState": "The external authentication request is invalid or has expired.",

@@ -92,7 +92,9 @@ internal sealed class GitHubOAuthProvider(
             ProviderId = userInfo["id"].GetInt64().ToString(),
             Email = primaryEmail ?? (userInfo.TryGetValue("email", out var email) ? email.GetString() : null),
             EmailVerified = emailVerified,
-            Username = userInfo["login"].GetString()!,
+            // login 是 GitHub 设计上的公开句柄：既是展示标签，也可以直接当本地用户名的基底
+            ProviderAccountLabel = userInfo["login"].GetString()!,
+            SuggestedUsername = userInfo["login"].GetString()!,
             DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("avatar_url", out var avatar) ? avatar.GetString() : null
         };

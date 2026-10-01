@@ -24,7 +24,7 @@ public sealed class ExternalLoginConnectionTests
         connection.Update(updatedAt, "updated-user", "updated@example.com", "https://example.com/avatar.png");
 
         Assert.Equal(updatedAt, connection.LastSyncTime);
-        Assert.Equal("updated-user", connection.ProviderUsername);
+        Assert.Equal("updated-user", connection.ProviderAccountLabel);
     }
 
     [Fact]

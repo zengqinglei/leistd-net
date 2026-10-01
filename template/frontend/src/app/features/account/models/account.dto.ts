@@ -155,7 +155,7 @@ export interface ExternalLoginProviderOutputDto {
 
 export interface ExternalLoginLinkOutputDto {
   id: string;
-  providerUsername?: string | null;
+  providerAccountLabel?: string | null;
   providerEmail?: string | null;
   creationTime: string;
 }

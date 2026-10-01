@@ -589,3 +589,40 @@ CI 原串行“打包 → 包消费 → 九场景”改为一次 `framework-pack
 场景与分片归属只维护在 `scripts/template-matrix-scenarios.ps1`；PR 的容器范围从完整 base 到 head 判定，替代会漏掉较早提交的 `HEAD^` 差异，范围不明时执行容器验证。维护口径见[质量检查与验证分工](./quality-assurance.md)与[模板质量验证](../template/quality-assurance.md)。这是 leistd-net 仓库 CI/维护脚本调整，派生项目无需修改运行时 API。
 
 模板默认与本地化前端的 Angular 运行时、CDK、编译器和 CLI/build 统一更新到 22.2.0，两套 lock 同步；替换 22.1 系列依赖以通过既有 high 审计阈值，不修改 lint 缓存、测试隔离或发现范围。派生项目按两套依赖文件更新并重新安装。安全依据见 [Angular Router 官方公告](https://github.com/advisories/GHSA-ff3f-86qr-9cv3)（公告利用路径为 Node SSR）。
+
+## 23. 外部登录的本地用户名与账号标签
+
+`ExternalUserInfo` 原来用一个 `Username` 同时表示"绑定的是哪个外部账号"和本地用户名，现拆成两个：
+`ProviderAccountLabel`（必填，展示用）与 `SuggestedUsername`（可空，**只有真正的公开句柄**才填，由提供商显式给出）。
+GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`SuggestedUsername` 留 `null`。
+自定义 `IOAuthProvider` 实现要同步这两个属性，**不要**用邮箱本地部顶替 `SuggestedUsername`。
+
+本地用户名改由外部登录领域服务生成：基底取 `SuggestedUsername ?? DisplayName`，清洗成
+[`UsernameRules`](../../template/backend/src/CompanyName.ProjectName.Domain/Users/Constants/UsernameRules.cs)
+允许的字符集，裸基底被占用（以及清洗后不可用而回落到 `user`）时加六位随机后缀。
+原先直接采用提供商给的值有两个后果：`alice@x.com` 与 `alice@y.com` 两个不同的人会撞上 `Username` 的
+租户内唯一索引，第二个人首次登录直接失败；提供商给的值还可能含 `.` `+`，造出用户自己在账号设置里都改不回去的名字。
+邮箱未验证时填的占位地址改为 `{guid:N}@{provider}.local`，不再由用户名或提供商标识派生——
+用户名可改、外部连接可解绑，而用户行连同它的邮箱一直在（软删除也仍占着唯一索引），派生值会让下一个人算出同一个地址。
+
+实体字段 `ExternalLoginConnection.ProviderUsername` 随之改名为 `ProviderAccountLabel`，
+列名、输出 DTO 字段与前端 `providerAccountLabel` 一并改。**模板的基线迁移直接改写，没有新增迁移**：
+生成项目拿到的是已经正确的基线。**已部署的派生项目**要新增一条迁移改列名，并在新版本开始服务之前执行：
+`ALTER TABLE "<schema>"."ExternalLoginConnections" RENAME COLUMN "ProviderUsername" TO "ProviderAccountLabel";`
+（表在 `HasDefaultSchema` 指定的业务 schema 里，PostgreSQL 默认搜索路径找不到它，必须限定；
+用户与外部连接表在**共享库与每个独立租户库里各有一份**，逐库执行）。
+用 `migrations add` 让 EF 比对实体时要核对生成结果：它可能给出"删列再加列"而不是 `RenameColumn`，那会丢数据——
+改成 `RenameColumn`，或直接在空迁移里 `migrationBuilder.Sql(...)` 执行上面的语句。
+基线迁移 Id 未变，存量库不会自动应用，不补则运行时报列不存在。
+用户名与占位邮箱**不回填**：存量行保持原值，功能上不受影响（新占位地址是随机的，不会与旧值相撞）。
+
+用户名与邮箱的可用性判定（注册、建用户、改资料）改为关闭软删除过滤后查询。两者的唯一索引都没有排除
+`IsDeleted`，被删用户仍占着这两个值，而仓储默认过滤掉软删除行：判定原先答"可用"，随后落库撞唯一索引，
+用户看到 500。现在答"已被占用"并返回 `User:UsernameTaken` / `User:EmailTaken`。
+外部登录按已验证邮箱关联已有用户时同样关闭该过滤，且**被删用户不参与自动关联**：
+新增错误码 `ExternalAuth:EmailOwnedByDeletedAccount`（映射 409，中英文词条各一条），
+不复用 `User:EmailTaken`——启用本地化后词条会整条替换抛出时的消息，而那一条只说"已被使用"，
+既丢掉"账号已删除"这层信息，又带一个需要回显邮箱地址的占位符。
+前端若按错误码分支，要把这个码加进处理。
+派生项目若希望被删用户交还用户名与邮箱，要自行在唯一索引上加 `IsDeleted = false` 过滤并新增迁移，
+那会改变"删掉再建同一个人"的语义，本次不做。

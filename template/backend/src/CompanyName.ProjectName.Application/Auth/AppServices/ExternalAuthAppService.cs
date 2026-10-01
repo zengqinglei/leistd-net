@@ -116,7 +116,10 @@ internal sealed class ExternalAuthAppService(
 
         await operationRecorder.RecordSucceededAsync(
             OperationRecordActions.AuthExternalLoginLinked,
-            OperationTarget.For(link.Id, $"{oauthProvider.Name}: {externalUserInfo.Username}"),
+            // 目标名用提供商侧标签：审计要回答"绑定的是哪个外部账号"，本地用户名回答不了这个。
+            // 审计按设计显示可公开展示的值（见 operation-records 的 LocalizationData 约定），
+            // 与日志口径不同——日志里联系方式要脱敏，审计是既成事实的记录
+            OperationTarget.For(link.Id, $"{oauthProvider.Name}: {externalUserInfo.ProviderAccountLabel}"),
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
     }
@@ -136,7 +139,7 @@ internal sealed class ExternalAuthAppService(
 
         await operationRecorder.RecordSucceededAsync(
             OperationRecordActions.AuthExternalLoginUnlinked,
-            OperationTarget.For(removed.Id, $"{removed.Provider}: {removed.ProviderUsername}"),
+            OperationTarget.For(removed.Id, $"{removed.Provider}: {removed.ProviderAccountLabel}"),
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
     }

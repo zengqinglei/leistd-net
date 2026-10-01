@@ -57,6 +57,7 @@
     "ExternalAuth:AccessTokenParseFailed": "解析 Access Token 失败。",
     "ExternalAuth:AccountExistsSignInToLink": "该邮箱已有账号。请先登录该账号，再在账号设置中绑定 {Provider}。",
     "ExternalAuth:AlreadyLinked": "这个 {Provider} 账号已绑定到其他用户。",
+    "ExternalAuth:EmailOwnedByDeletedAccount": "该邮箱属于一个已删除的账号。请联系管理员恢复该账号，或改用其他地址。",
     "ExternalAuth:GitHubTokenFailed": "获取 GitHub Access Token 失败。",
     "ExternalAuth:GitHubUserInfoFailed": "获取 GitHub 用户信息失败。",
     "ExternalAuth:InvalidState": "外部认证请求无效或已过期。",

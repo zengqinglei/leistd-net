@@ -40,9 +40,13 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
     public string ProviderUserId { get; private set; }
 
     /// <summary>
-    /// 外部身份提供商的用户名
+    /// 外部账号在提供商侧的展示标签（GitHub 的句柄、Google 的邮箱）
     /// </summary>
-    public string? ProviderUsername { get; private set; }
+    /// <remarks>
+    /// 只用于在"已绑定哪些登录方式"里显示是哪个账号，不是本地用户名，也不是身份标识：
+    /// 身份按 <c>Provider</c> + <see cref="ProviderUserId"/> 认，本地用户名由外部登录领域服务生成。
+    /// </remarks>
+    public string? ProviderAccountLabel { get; private set; }
 
     /// <summary>
     /// 外部身份提供商的邮箱
@@ -90,7 +94,7 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
         string provider,
         string providerUserId,
         DateTime syncedAt,
-        string? providerUsername = null,
+        string? providerAccountLabel = null,
         string? providerEmail = null,
         string? providerAvatarUrl = null)
     {
@@ -98,7 +102,7 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
         UserId = userId;
         Provider = provider ?? throw new ArgumentNullException(nameof(provider));
         ProviderUserId = providerUserId ?? throw new ArgumentNullException(nameof(providerUserId));
-        ProviderUsername = providerUsername;
+        ProviderAccountLabel = providerAccountLabel;
         ProviderEmail = providerEmail;
         ProviderAvatarUrl = providerAvatarUrl;
         LastSyncTime = syncedAt;
@@ -106,11 +110,11 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
 
     public void Update(
         DateTime syncedAt,
-        string? providerUsername = null,
+        string? providerAccountLabel = null,
         string? providerEmail = null,
         string? providerAvatarUrl = null)
     {
-        ProviderUsername = providerUsername;
+        ProviderAccountLabel = providerAccountLabel;
         ProviderEmail = providerEmail;
         ProviderAvatarUrl = providerAvatarUrl;
         LastSyncTime = syncedAt;

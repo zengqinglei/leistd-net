@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+// Username 的校验常量无条件使用：本文件在资源服务形态下也参与编译
+using CompanyName.ProjectName.Domain.Users.Constants;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Users.Policies;
 #endif
@@ -12,8 +14,8 @@ public record CreateUserInputDto
 {
     [Display(Name = "Username")]
     [Required(ErrorMessage = "{0} is required.")]
-    [StringLength(64, MinimumLength = 3, ErrorMessage = "{0} must be between {2} and {1} characters.")]
-    [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "{0} can contain only letters, numbers, and underscores.")]
+    [StringLength(UsernameRules.MaxLength, MinimumLength = UsernameRules.MinLength, ErrorMessage = "{0} must be between {2} and {1} characters.")]
+    [RegularExpression(UsernameRules.Pattern, ErrorMessage = "{0} can contain only letters, numbers, and underscores.")]
     public required string Username { get; init; }
 
     [Display(Name = "Email")]

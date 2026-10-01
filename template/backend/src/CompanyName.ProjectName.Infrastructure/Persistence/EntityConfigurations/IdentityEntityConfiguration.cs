@@ -75,7 +75,7 @@ internal static class IdentityEntityConfiguration
         {
             b.Property(e => e.Provider).IsRequired().HasMaxLength(50);
             b.Property(e => e.ProviderUserId).IsRequired().HasMaxLength(256);
-            b.Property(e => e.ProviderUsername).HasMaxLength(256);
+            b.Property(e => e.ProviderAccountLabel).HasMaxLength(256);
             b.Property(e => e.ProviderEmail).HasMaxLength(256);
             b.Property(e => e.ProviderAvatarUrl).HasMaxLength(1024);
             b.Property(e => e.AccessToken).HasMaxLength(2048);

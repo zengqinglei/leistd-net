@@ -34,8 +34,8 @@ public sealed record ExternalLoginLinkOutputDto
     /// <summary>绑定 Id（解绑时用）。</summary>
     public required Guid Id { get; init; }
 
-    /// <summary>外部账号的用户名。</summary>
-    public string? ProviderUsername { get; init; }
+    /// <summary>外部账号在提供商侧的展示标签（GitHub 的句柄、Google 的邮箱），不是本地用户名。</summary>
+    public string? ProviderAccountLabel { get; init; }
 
     /// <summary>外部账号的邮箱。</summary>
     public string? ProviderEmail { get; init; }

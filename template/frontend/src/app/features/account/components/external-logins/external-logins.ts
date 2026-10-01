@@ -74,7 +74,7 @@ export class ExternalLogins {
       label: PROVIDER_LABELS[p.provider] ?? p.provider,
       link: p.link ?? null,
       // 文案在模板里经 t 组装，这里只给出绑定的账号名与时间
-      linkedName: p.link ? (p.link.providerUsername ?? p.link.providerEmail ?? '') : '',
+      linkedName: p.link ? (p.link.providerAccountLabel ?? p.link.providerEmail ?? '') : '',
       linkedAt: p.link
         ? formatAppDate(
             p.link.creationTime,

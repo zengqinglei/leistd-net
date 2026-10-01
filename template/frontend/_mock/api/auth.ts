@@ -533,13 +533,13 @@ function normalizeEmail(email: string): string {
 let mockExternalLinks: {
   id: string;
   provider: string;
-  providerUsername: string;
+  providerAccountLabel: string;
   creationTime: string;
 }[] = [
   {
     id: 'mock-link-github',
     provider: 'github',
-    providerUsername: 'octocat',
+    providerAccountLabel: 'octocat',
     creationTime: '2026-06-01T00:00:00Z',
   },
 ];

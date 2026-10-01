@@ -245,7 +245,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Provider = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     ProviderUserId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    ProviderUsername = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    ProviderAccountLabel = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     ProviderEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     ProviderAvatarUrl = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
                     AccessToken = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),

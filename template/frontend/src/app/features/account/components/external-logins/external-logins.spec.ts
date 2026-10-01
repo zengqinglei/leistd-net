@@ -22,7 +22,7 @@ describe('ExternalLogins', () => {
 
   const github = {
     provider: 'github',
-    link: { id: 'l1', providerUsername: 'octocat', creationTime: '2026-06-01T00:00:00Z' },
+    link: { id: 'l1', providerAccountLabel: 'octocat', creationTime: '2026-06-01T00:00:00Z' },
   };
 
   async function render(data: ExternalLoginsOutputDto): Promise<HTMLElement> {

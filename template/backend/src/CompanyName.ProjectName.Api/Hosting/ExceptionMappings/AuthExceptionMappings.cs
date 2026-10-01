@@ -33,6 +33,7 @@ internal static class AuthExceptionMappings
         ApiExceptionMappings.Map(options, StatusCodes.Status409Conflict,
             ExternalAuthErrorCodes.AccountExistsSignInToLink,
             ExternalAuthErrorCodes.AlreadyLinked,
+            ExternalAuthErrorCodes.EmailOwnedByDeletedAccount,
             ExternalAuthErrorCodes.LastSignInMethod,
             ExternalAuthErrorCodes.ProviderAlreadyLinked);
         options.MapCode(ExternalAuthErrorCodes.ProviderNotConfigured, StatusCodes.Status503ServiceUnavailable);

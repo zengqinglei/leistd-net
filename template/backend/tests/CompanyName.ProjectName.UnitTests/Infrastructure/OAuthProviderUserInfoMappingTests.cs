@@ -1,6 +1,7 @@
 #if (ExternalLogin)
 using System.Net;
 using System.Text;
+using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,9 +10,10 @@ using Microsoft.Extensions.Options;
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 
 /// <summary>
-/// 提供商给出的邮箱验证状态决定能否按邮箱关联已有账号：取值要按各自 API 的字段，取不到按未验证处理。
+/// 提供商响应到 <see cref="ExternalUserInfo"/> 的映射：取值要按各自 API 的字段，
+/// 并且只有真正的公开句柄才能进 <see cref="ExternalUserInfo.SuggestedUsername"/>。
 /// </summary>
-public sealed class OAuthProviderEmailVerificationTests
+public sealed class OAuthProviderUserInfoMappingTests
 {
     private const string GitHubUser = """{"id":42,"login":"octo","email":"public@example.test"}""";
 
@@ -87,16 +89,57 @@ public sealed class OAuthProviderEmailVerificationTests
     [InlineData("\"true\"", false)]
     public async Task Google_reads_verified_email_as_a_json_boolean(string verifiedEmail, bool expected)
     {
-        var provider = new GoogleOAuthProvider(
-            new StubHttpClientFactory(_ => Json($$"""{"id":"g-1","email":"user@example.test","verified_email":{{verifiedEmail}}}""")),
-            Options.Create(new ExternalAuthOptions()),
-            NullLogger<GoogleOAuthProvider>.Instance);
+        var provider = Google($$"""{"id":"g-1","email":"user@example.test","verified_email":{{verifiedEmail}}}""");
 
         var user = await provider.GetUserInfoAsync("token");
 
         Assert.Equal("user@example.test", user.Email);
         Assert.Equal(expected, user.EmailVerified);
     }
+
+    /// <summary>GitHub 的 login 是设计上的公开句柄，可以直接当本地用户名的基底。</summary>
+    [Fact]
+    public async Task GitHub_offers_its_public_handle_as_a_username_base()
+    {
+        var provider = GitHub(_ => Json(GitHubUser));
+
+        var user = await provider.GetUserInfoAsync("token");
+
+        Assert.Equal("octo", user.ProviderAccountLabel);
+        Assert.Equal("octo", user.SuggestedUsername);
+    }
+
+    /// <summary>
+    /// Google 没有句柄，只有邮箱和姓名。邮箱只能当展示标签，不能顺手截本地部当用户名基底——
+    /// 那会把半个邮箱变成公开标识符，而且不同域的同名用户会撞上 Username 的唯一索引。
+    /// </summary>
+    [Fact]
+    public async Task Google_offers_no_username_base_and_never_derives_one_from_the_email()
+    {
+        var provider = Google("""{"id":"g-1","email":"zhangsan@example.test","verified_email":true,"name":"Zhang San"}""");
+
+        var user = await provider.GetUserInfoAsync("token");
+
+        Assert.Equal("zhangsan@example.test", user.ProviderAccountLabel);
+        Assert.Null(user.SuggestedUsername);
+    }
+
+    /// <summary>标签要始终有值（界面上要显示"绑定了哪个账号"），没有邮箱时回落到提供商 ID。</summary>
+    [Fact]
+    public async Task Google_without_an_email_labels_the_account_with_the_provider_id()
+    {
+        var provider = Google("""{"id":"g-1","name":"Zhang San"}""");
+
+        var user = await provider.GetUserInfoAsync("token");
+
+        Assert.Equal("g-1", user.ProviderAccountLabel);
+        Assert.Null(user.SuggestedUsername);
+    }
+
+    private static GoogleOAuthProvider Google(string body) =>
+        new(new StubHttpClientFactory(_ => Json(body)),
+            Options.Create(new ExternalAuthOptions()),
+            NullLogger<GoogleOAuthProvider>.Instance);
 
     private static GitHubOAuthProvider GitHub(Func<HttpRequestMessage, HttpResponseMessage> respond) =>
         new(new StubHttpClientFactory(respond), Options.Create(new ExternalAuthOptions()), NullLogger<GitHubOAuthProvider>.Instance);

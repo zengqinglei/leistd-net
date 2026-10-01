@@ -109,8 +109,11 @@ internal sealed class GoogleOAuthProvider(
             ProviderId = providerId,
             Email = userInfo.TryGetValue("email", out var email) ? email.GetString() : null,
             EmailVerified = userInfo.TryGetValue("verified_email", out var verified) && verified.ValueKind == JsonValueKind.True,
-            Username = (userInfo.TryGetValue("email", out var uEmail) ? uEmail.GetString()?.Split('@')[0] : null)
-                       ?? providerId,
+            // Google 没有句柄，账号标签用邮箱（页面上显示"绑定了哪个 Google 账号"要靠它）。
+            // 但不给 SuggestedUsername：拿邮箱本地部当本地用户名会把半个邮箱变成公开标识符，
+            // 而且不同域的同名用户会撞上 Username 的唯一索引。本地用户名改由显示名派生。
+            ProviderAccountLabel = (userInfo.TryGetValue("email", out var uEmail) ? uEmail.GetString() : null)
+                                   ?? providerId,
             DisplayName = userInfo.TryGetValue("name", out var name) ? name.GetString() : null,
             AvatarUrl = userInfo.TryGetValue("picture", out var picture) ? picture.GetString() : null
         };

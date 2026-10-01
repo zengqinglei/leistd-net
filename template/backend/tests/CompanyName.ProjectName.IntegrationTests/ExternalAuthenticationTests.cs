@@ -32,7 +32,8 @@ public sealed class ExternalAuthenticationTests
         using var host = CreateExternalAuthHost(factory, new ExternalUserInfo
         {
             ProviderId = "state-user",
-            Username = "state-user",
+            ProviderAccountLabel = "state-user",
+            SuggestedUsername = "state-user",
             Email = "state-user@example.com"
         });
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
@@ -57,7 +58,8 @@ public sealed class ExternalAuthenticationTests
         using var host = CreateExternalAuthHost(factory, new ExternalUserInfo
         {
             ProviderId = "replay-user",
-            Username = "replay-user",
+            ProviderAccountLabel = "replay-user",
+            SuggestedUsername = "replay-user",
             Email = "replay-user@example.com"
         });
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
@@ -93,7 +95,8 @@ public sealed class ExternalAuthenticationTests
         using var host = CreateExternalAuthHost(factory, new ExternalUserInfo
         {
             ProviderId = "tenant-admin",
-            Username = "tenant-admin",
+            ProviderAccountLabel = "tenant-admin",
+            SuggestedUsername = "tenant-admin",
             Email = tenantEmail,
             EmailVerified = true
         });
@@ -156,7 +159,8 @@ public sealed class ExternalAuthenticationTests
         using var host = CreateExternalAuthHost(factory, new ExternalUserInfo
         {
             ProviderId = locked ? "locked-admin" : "disabled-admin",
-            Username = "admin",
+            ProviderAccountLabel = "admin",
+            SuggestedUsername = "admin",
             Email = adminEmail,
             EmailVerified = true
         });
@@ -203,7 +207,8 @@ public sealed class ExternalAuthenticationTests
         using var host = CreateExternalAuthHost(factory, new ExternalUserInfo
         {
             ProviderId = "samesite-user",
-            Username = "samesite-user",
+            ProviderAccountLabel = "samesite-user",
+            SuggestedUsername = "samesite-user",
             Email = "samesite-user@example.com"
         }, configured);
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
