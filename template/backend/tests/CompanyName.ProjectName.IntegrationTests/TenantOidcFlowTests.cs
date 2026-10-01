@@ -44,7 +44,7 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     public async Task A_downstream_api_scope_yields_a_token_for_that_api_only()
     {
         using var host = Factory.WithWebHostBuilder(builder =>
-            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", DownstreamApi));
+            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", DownstreamApi));
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(
             host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -69,13 +69,13 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     public async Task A_removed_api_resource_disappears_from_the_scope_table()
     {
         using (var configured = Factory.WithWebHostBuilder(builder =>
-                   builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", DownstreamApi)))
+                   builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", DownstreamApi)))
         {
             Assert.True(await ScopeExistsAsync(configured, DownstreamApi));
         }
 
         using var removed = Factory.WithWebHostBuilder(builder =>
-            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", "other-api"));
+            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", "other-api"));
 
         Assert.False(await ScopeExistsAsync(removed, DownstreamApi));
         Assert.True(await ScopeExistsAsync(removed, "other-api"));
@@ -97,16 +97,88 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
     {
         using var host = Factory.WithWebHostBuilder(builder =>
         {
-            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0", first);
+            builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:0:Name", first);
             if (second is not null)
             {
-                builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:1", second);
+                builder.UseSetting($"{OAuthOptions.SectionName}:ApiResources:1:Name", second);
             }
         });
 
         var exception = Assert.ThrowsAny<Exception>(() => host.Services);
 
         Assert.Contains("OAuth:ApiResources", exception.ToString());
+    }
+
+    [Theory]
+    [InlineData("orders-api", "orders-api")]
+    [InlineData("https://api.example.test/orders", "orders-worker")]
+    public async Task Only_the_resource_owner_can_exchange_a_token_from_another_presenter(string resource, string owner)
+    {
+        using var host = Factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("OAuth:ApiResources:0:Name", resource);
+            builder.UseSetting("OAuth:ApiResources:0:Scope", "orders.read");
+            builder.UseSetting("OAuth:ApiResources:0:OwnerClientId", owner);
+            builder.UseSetting("OAuth:ApiResources:1:Name", "https://api.example.test/inventory");
+            builder.UseSetting("OAuth:ApiResources:1:Scope", "inventory.read");
+            builder.UseSetting("OAuth:ApiResources:1:OwnerClientId", owner);
+            builder.UseSetting("OAuth:ApiResources:2:Name", "https://api.example.test/billing");
+            builder.UseSetting("OAuth:ApiResources:2:Scope", "billing.read");
+        });
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var presenter = await CreateClientAsync(admin.Client, "orders.read", "inventory.read");
+        var authorized = await CreateExchangeClientAsync(admin.Client, owner);
+        var unauthorized = await CreateExchangeClientAsync(admin.Client, "another-client-" + Guid.NewGuid().ToString("N"));
+        foreach (var sourceScope in new[] { "orders.read", "inventory.read" })
+        {
+            var source = await AuthorizeAndExchangeAsync(host, admin, presenter.ClientId, presenter.ClientSecret, sourceScope);
+            using var client = CreateHttpsClient(host);
+            async Task<HttpResponseMessage> Exchange((string Id, string Secret) caller) => await client.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
+                ["client_id"] = caller.Id, ["client_secret"] = caller.Secret,
+                ["subject_token"] = source.AccessToken,
+                ["subject_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
+                ["requested_token_type"] = "urn:ietf:params:oauth:token-type:access_token",
+                ["audience"] = "https://api.example.test/billing", ["scope"] = "billing.read"
+            }));
+            using var accepted = await Exchange(authorized);
+            Assert.True(accepted.IsSuccessStatusCode, await accepted.Content.ReadAsStringAsync());
+            var token = await accepted.Content.ReadFromJsonAsync<TokenResponse>();
+            Assert.Equal(["https://api.example.test/billing"], ReadAudiences(token!.AccessToken));
+            using var rejected = await Exchange(unauthorized);
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        }
+    }
+
+    private static async Task<(string Id, string Secret)> CreateExchangeClientAsync(HttpClient admin, string id)
+    {
+        using var created = await admin.PostAsJsonAsync("/api/v1/open-applications", new
+        {
+            clientId = id, displayName = id, applicationType = "service", clientType = "confidential",
+            permissions = new[] { "ept:token", "gt:urn:ietf:params:oauth:grant-type:token-exchange", "scp:billing.read", "aud:https://api.example.test/billing" },
+            requirements = Array.Empty<string>(), redirectUris = Array.Empty<string>(), postLogoutRedirectUris = Array.Empty<string>()
+        });
+        Assert.True(created.IsSuccessStatusCode, await created.Content.ReadAsStringAsync());
+        var app = await created.Content.ReadFromJsonAsync<OpenApplicationOutputDto>();
+        using var reset = await admin.PostAsync($"/api/v1/open-applications/{app!.Id}/reset-secret", null);
+        var secret = await reset.Content.ReadFromJsonAsync<ResetOpenApplicationSecretOutputDto>();
+        return (id, secret!.ClientSecret);
+    }
+
+    [Fact]
+    public void One_resource_cannot_have_two_owners_even_with_different_scope_names()
+    {
+        using var host = Factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("OAuth:ApiResources:0:Name", "https://api.example.test/owned");
+            builder.UseSetting("OAuth:ApiResources:0:Scope", "first.read");
+            builder.UseSetting("OAuth:ApiResources:0:OwnerClientId", "first-client");
+            builder.UseSetting("OAuth:ApiResources:1:Name", "https://api.example.test/owned");
+            builder.UseSetting("OAuth:ApiResources:1:Scope", "second.read");
+            builder.UseSetting("OAuth:ApiResources:1:OwnerClientId", "second-client");
+        });
+        Assert.Contains("OAuth:ApiResources", Assert.ThrowsAny<Exception>(() => host.Services).ToString());
     }
 
     private static string[] ReadAudiences(string accessToken)

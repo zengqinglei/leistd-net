@@ -14,7 +14,11 @@ import {
   TwoFactorSetupOutputDto,
   TwoFactorStatusOutputDto,
 } from '../../src/app/features/account/models/account.dto';
+//#if (ExternalLogin)
+import { SessionLoginOutputDto, UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
+//#else
 import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
+//#endif
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
 import { TENANTS } from '../data/tenant';
@@ -544,6 +548,12 @@ let mockExternalLinks: {
   },
 ];
 
+function externalLoginCallback(req: MockRequest): SessionLoginOutputDto {
+  setMockSessionUserId(USERS[0].id);
+  setMockSessionTenantKey(getRequestScope(req));
+  return {};
+}
+
 function getExternalLinks() {
   const user = requireCurrentMockUser();
   return {
@@ -558,39 +568,6 @@ function getExternalLinks() {
 function unlinkExternalLogin(req: MockRequest): 'ok' {
   requireCurrentMockUser();
   mockExternalLinks = mockExternalLinks.filter((l) => l.id !== String(req.params.id));
-  return 'ok';
-}
-
-function getExternalLoginUrl(provider: string): { loginUrl: string } {
-  const state = Math.random().toString(36).substring(7);
-  const redirectUri = encodeURIComponent(
-    `${window.location.origin}/auth/external-callback/${provider}`,
-  );
-
-  const urls: Record<string, string> = {
-    github: `https://github.com/login/oauth/authorize?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&scope=user:email`,
-    google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&response_type=code&scope=email%20profile`,
-  };
-
-  const loginUrl = urls[provider];
-  if (!loginUrl) {
-    throw new MockException(400, {
-      code: 'ExternalAuth:ProviderNotSupported',
-      message: `Unsupported login provider: ${provider}`,
-    });
-  }
-
-  // state 只编在 loginUrl 里，与真实后端一致：绑定靠 HttpOnly Cookie，不回传给客户端
-  return { loginUrl };
-}
-
-function externalLoginCallback(req: MockRequest): 'ok' {
-  // Mock: 直接登录为第一个测试用户。
-  // 回调仍是匿名请求，会带上登录前选定的租户头（tenantInterceptor 给所有 /api/ 请求附加），
-  // 真实后端在这一步进入该租户上下文并把租户写进认证主体——所以这里也要按头定案，
-  // 固定成宿主会让后续所有设置读写落到错误的作用域。
-  setMockSessionUserId(USERS[0].id);
-  setMockSessionTenantKey(getRequestScope(req));
   return 'ok';
 }
 //#endif
@@ -627,12 +604,8 @@ export const AUTH_API = {
   'POST /api/v1/auth/me/sessions/revoke-others': () => revokeOtherSessions(),
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
   //#if (ExternalLogin)
-  'GET /api/v1/external-auth/:provider/login-url': (req: MockRequest) =>
-    getExternalLoginUrl(req.params.provider),
-  'POST /api/v1/external-auth/:provider/callback': (req: MockRequest) => externalLoginCallback(req),
+  'POST /api/v1/external-auth/:provider/complete': (req: MockRequest) => externalLoginCallback(req),
   'GET /api/v1/external-auth/links': () => getExternalLinks(),
-  'GET /api/v1/external-auth/:provider/link-url': (req: MockRequest) =>
-    getExternalLoginUrl(req.params.provider),
   'DELETE /api/v1/external-auth/links/:id': (req: MockRequest) => unlinkExternalLogin(req),
   //#endif
 };

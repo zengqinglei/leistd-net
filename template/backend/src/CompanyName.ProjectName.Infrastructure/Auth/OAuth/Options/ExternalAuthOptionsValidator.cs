@@ -23,8 +23,7 @@ internal sealed class ExternalAuthOptionsValidator : IValidateOptions<ExternalAu
     {
         var prefix = $"{ExternalAuthOptions.SectionName}:{provider}";
         var hasAnyValue = !string.IsNullOrWhiteSpace(options.ClientId)
-            || !string.IsNullOrWhiteSpace(options.ClientSecret)
-            || !string.IsNullOrWhiteSpace(options.RedirectUri);
+            || !string.IsNullOrWhiteSpace(options.ClientSecret);
 
         if (!hasAnyValue)
             return;
@@ -35,15 +34,7 @@ internal sealed class ExternalAuthOptionsValidator : IValidateOptions<ExternalAu
         if (string.IsNullOrWhiteSpace(options.ClientSecret))
             failures.Add($"{prefix}:ClientSecret is required when the provider is configured.");
 
-        if (string.IsNullOrWhiteSpace(options.RedirectUri))
-        {
-            failures.Add($"{prefix}:RedirectUri is required when the provider is configured.");
-        }
-        else if (!Uri.TryCreate(options.RedirectUri, UriKind.Absolute, out var redirectUri)
-                 || redirectUri.Scheme is not ("http" or "https"))
-        {
-            failures.Add($"{prefix}:RedirectUri must be an absolute HTTP or HTTPS URI.");
-        }
+
     }
 }
 #endif

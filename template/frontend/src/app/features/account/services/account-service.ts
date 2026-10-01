@@ -4,6 +4,9 @@ import { Observable, map, tap } from 'rxjs';
 
 import { AuthService } from '../../../core/services/auth-service';
 //#if (ExternalLogin)
+import { TenantContextService } from '../../../core/services/tenant-context-service';
+//#endif
+//#if (ExternalLogin)
 import { SessionLoginOutputDto, UserOutputDto } from '../../../shared/dtos/auth.dto';
 //#else
 import { UserOutputDto } from '../../../shared/dtos/auth.dto';
@@ -11,9 +14,7 @@ import { UserOutputDto } from '../../../shared/dtos/auth.dto';
 import {
   ChangePasswordInputDto,
   //#if (ExternalLogin)
-  ExternalLoginCallbackInputDto,
   ExternalLoginsOutputDto,
-  ExternalLoginUrlOutputDto,
   //#endif
   RegisterInputDto,
   SetAvatarInputDto,
@@ -34,6 +35,9 @@ import {
 @Injectable({ providedIn: 'root' })
 export class AccountService {
   private http = inject(HttpClient);
+  //#if (ExternalLogin)
+  private readonly tenantContext = inject(TenantContextService);
+  //#endif
   private authService = inject(AuthService);
 
   getSecurityConfig(): Observable<SecurityConfigOutputDto> {
@@ -141,14 +145,14 @@ export class AccountService {
   }
 
   /** "绑定外部账号"的授权地址（与登录用的互不通用）。 */
-  getExternalLinkUrl(provider: string): Observable<ExternalLoginUrlOutputDto> {
-    return this.http.get<ExternalLoginUrlOutputDto>(`/api/v1/external-auth/${provider}/link-url`);
+  getExternalLinkUrl(provider: string): string {
+    return `/api/v1/external-auth/${encodeURIComponent(provider)}/link/challenge`;
   }
 
   /** 外部授权回来后完成绑定。 */
-  linkExternalLogin(provider: string, data: ExternalLoginCallbackInputDto): Observable<void> {
+  linkExternalLogin(provider: string): Observable<void> {
     return this.http
-      .post(`/api/v1/external-auth/${provider}/link`, data)
+      .post(`/api/v1/external-auth/${provider}/link/complete`, {})
       .pipe(map(() => undefined));
   }
 
@@ -156,19 +160,17 @@ export class AccountService {
     return this.http.delete(`/api/v1/external-auth/links/${id}`).pipe(map(() => undefined));
   }
 
-  getExternalLoginUrl(provider: 'github' | 'google'): Observable<ExternalLoginUrlOutputDto> {
-    return this.http.get<ExternalLoginUrlOutputDto>(`/api/v1/external-auth/${provider}/login-url`);
+  getExternalLoginUrl(provider: 'github' | 'google', returnUrl?: string | null): string {
+    const tenant = this.tenantContext.current()?.key;
+    const query = new URLSearchParams();
+    if (tenant) query.set('tenant', tenant);
+    if (returnUrl) query.set('returnUrl', returnUrl);
+    return `/api/v1/external-auth/${provider}/challenge${query.size ? `?${query}` : ''}`;
   }
 
   /** 外部登录回调；已启用两步验证时不下发会话，返回第二步凭据。 */
-  externalLoginCallback(
-    provider: string,
-    data: ExternalLoginCallbackInputDto,
-  ): Observable<SessionLoginOutputDto> {
-    return this.http.post<SessionLoginOutputDto>(
-      `/api/v1/external-auth/${provider}/callback`,
-      data,
-    );
+  externalLoginCallback(provider: string): Observable<SessionLoginOutputDto> {
+    return this.http.post<SessionLoginOutputDto>(`/api/v1/external-auth/${provider}/complete`, {});
   }
   //#endif
 }

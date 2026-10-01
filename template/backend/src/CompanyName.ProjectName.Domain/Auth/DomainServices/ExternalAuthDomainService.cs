@@ -360,7 +360,7 @@ public class ExternalAuthDomainService(
     // 更不能由业务值派生：用户名能改、外部连接能解绑，派生出来的地址会和残留的用户行撞唯一索引。
     private static string PlaceholderEmail(string provider) =>
         // 提供商只放域名部分：本地部有 64 字节上限（RFC 5321 §4.5.3.1.1），
-        // 而 IOAuthProvider.Name 是扩展点，长度不由组合根决定。
+        // 提供商名称来自业务扩展，长度不由账号规则决定。
         // 域名标签也有 63 字符上限，同样取决于提供商取的名字
         $"{Guid.NewGuid():N}@{provider.ToLowerInvariant()}.local";
 }

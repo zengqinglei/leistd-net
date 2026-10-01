@@ -1,5 +1,4 @@
 #if (LocalIdentity)
-using CompanyName.ProjectName.Domain.Auth.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using Leistd.UnitOfWork.Attributes;
@@ -27,7 +26,6 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 /// </summary>
 internal sealed class ExternalAuthAppService(
     ExternalAuthDomainService externalAuthDomainService,
-    IEnumerable<IOAuthProvider> oauthProviders,
     SessionSignInService sessionSignInService,
     IRepository<User, Guid> userRepository,
     IRepository<ExternalLoginConnection, Guid> externalLoginRepository,
@@ -35,19 +33,6 @@ internal sealed class ExternalAuthAppService(
     IOperationRecorder operationRecorder,
     IObjectMapper objectMapper) : BaseAppService(), IExternalAuthAppService
 {
-    /// <summary>
-    /// 获取外部登录 URL
-    /// </summary>
-    public ExternalLoginUrlOutputDto GetLoginUrl(string provider, string state)
-    {
-        var oauthProvider = GetProvider(provider);
-        var loginUrl = oauthProvider.GetAuthorizationUrl(state);
-
-        // state 只回传在 loginUrl 里：它由提供商原样回显到回调地址，客户端无需单独持有一份，
-        // 真正的绑定在 HttpOnly 的状态 Cookie 上
-        return new ExternalLoginUrlOutputDto { LoginUrl = loginUrl };
-    }
-
     /// <summary>
     /// 处理外部登录回调
     /// </summary>
@@ -58,14 +43,11 @@ internal sealed class ExternalAuthAppService(
     [UnitOfWork]
     public async Task<SessionLoginResult> AuthenticateExternalUserAsync(
         string provider,
-        ExternalLoginCallbackInputDto request,
+        ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default)
     {
-        var oauthProvider = GetProvider(provider);
-        var tokenInfo = await oauthProvider.ExchangeCodeForTokenAsync(request.Code, cancellationToken);
-        var externalUserInfo = await oauthProvider.GetUserInfoAsync(tokenInfo.AccessToken, cancellationToken);
         var (user, roleNames) = await externalAuthDomainService.FindOrCreateUserAsync(
-            oauthProvider.Name,
+            provider,
             externalUserInfo,
             cancellationToken);
 
@@ -75,7 +57,7 @@ internal sealed class ExternalAuthAppService(
     /// <summary>
     /// 本人的外部账号绑定：部署已配置的每个提供商，附带本人在其下的绑定
     /// </summary>
-    public async Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(CancellationToken cancellationToken = default)
+    public async Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(IEnumerable<string> availableProviders, CancellationToken cancellationToken = default)
     {
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         var links = (await externalLoginRepository.GetListAsync(c => c.UserId == user.Id, cancellationToken)).ToList();
@@ -83,14 +65,13 @@ internal sealed class ExternalAuthAppService(
         return new ExternalLoginsOutputDto
         {
             HasPassword = user.PasswordHash is not null,
-            Providers = oauthProviders
-                .Where(p => p.IsAvailable)
-                .OrderBy(p => p.Name, StringComparer.Ordinal)
+            Providers = availableProviders
+                .OrderBy(p => p, StringComparer.Ordinal)
                 .Select(p => new ExternalLoginProviderOutputDto
                 {
-                    Provider = p.Name,
+                    Provider = p,
                     Link = links
-                        .Where(l => string.Equals(l.Provider, p.Name, StringComparison.OrdinalIgnoreCase))
+                        .Where(l => string.Equals(l.Provider, p, StringComparison.OrdinalIgnoreCase))
                         .Select(l => objectMapper.Map<ExternalLoginConnection, ExternalLoginLinkOutputDto>(l))
                         .FirstOrDefault()
                 })
@@ -104,22 +85,19 @@ internal sealed class ExternalAuthAppService(
     [UnitOfWork]
     public async Task LinkCurrentUserAsync(
         string provider,
-        ExternalLoginCallbackInputDto request,
+        ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default)
     {
-        var oauthProvider = GetProvider(provider);
-        var tokenInfo = await oauthProvider.ExchangeCodeForTokenAsync(request.Code, cancellationToken);
-        var externalUserInfo = await oauthProvider.GetUserInfoAsync(tokenInfo.AccessToken, cancellationToken);
 
         var user = await GetCurrentUserEntityAsync(cancellationToken);
-        var link = await externalAuthDomainService.LinkAsync(user, oauthProvider.Name, externalUserInfo, cancellationToken);
+        var link = await externalAuthDomainService.LinkAsync(user, provider, externalUserInfo, cancellationToken);
 
         await operationRecorder.RecordSucceededAsync(
             OperationRecordActions.AuthExternalLoginLinked,
             // 目标名用提供商侧标签：审计要回答"绑定的是哪个外部账号"，本地用户名回答不了这个。
             // 审计按设计显示可公开展示的值（见 operation-records 的 LocalizationData 约定），
             // 与日志口径不同——日志里联系方式要脱敏，审计是既成事实的记录
-            OperationTarget.For(link.Id, $"{oauthProvider.Name}: {externalUserInfo.ProviderAccountLabel}"),
+            OperationTarget.For(link.Id, $"{provider}: {externalUserInfo.ProviderAccountLabel}"),
             OperationRecordAuthorizations.AuthenticatedSelf,
             cancellationToken);
     }
@@ -152,19 +130,5 @@ internal sealed class ExternalAuthAppService(
                 .WithData("Id", userId);
     }
 
-    private IOAuthProvider GetProvider(string provider)
-    {
-        var oauthProvider = oauthProviders.FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, provider, StringComparison.OrdinalIgnoreCase));
-        if (oauthProvider is null)
-            throw new BusinessException(ExternalAuthErrorCodes.ProviderNotSupported, $"Unsupported external identity provider: {provider}")
-                .WithData("Provider", provider);
-
-        if (oauthProvider.IsAvailable)
-            return oauthProvider;
-
-        throw new BusinessException(ExternalAuthErrorCodes.ProviderNotConfigured, $"External identity provider {provider} is not configured.")
-            .WithData("Provider", provider);
-    }
 }
 #endif

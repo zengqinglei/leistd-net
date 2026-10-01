@@ -2,9 +2,7 @@ using CompanyName.ProjectName.Api.Hosting;
 #if (RemoteTokenAuth)
 using CompanyName.ProjectName.Api.HealthChecks;
 #endif
-#if (LocalIdentity)
 using CompanyName.ProjectName.Api.Auth;
-#endif
 using CompanyName.ProjectName.Api.Middlewares;
 using Leistd.MultiTenancy.AspNetCore;
 using Leistd.MultiTenancy.AspNetCore.Options;
@@ -13,6 +11,7 @@ using CompanyName.ProjectName.Api.Options;
 using CompanyName.ProjectName.Api.Configuration;
 
 using CompanyName.ProjectName.Application;
+using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Domain;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -56,20 +55,18 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Leistd.RealTime;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
-#if (RemoteTokenAuth)
-using Leistd.AspNetCore.SignalR;
 #endif
-#endif
-#if (LocalIdentity)
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+#if (LocalIdentity)
 #if (OpenIddictServer)
 using System.Security.Cryptography.X509Certificates;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 #endif
 #endif
 #if (RemoteTokenAuth)
-using Leistd.ServiceClient.AspNetCore;
+using Leistd.ServiceClient.Abstractions;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 #endif
 #if (RemoteTokenAuth)
 using OpenIddict.Validation.AspNetCore;
@@ -84,7 +81,7 @@ using Microsoft.AspNetCore.Authorization;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Auth.Abstractions;
-using CompanyName.ProjectName.Application.Auth.Constants;
+
 #endif
 using Microsoft.Extensions.Options;
 using Leistd.DependencyInjection.DynamicProxy.Registration;
@@ -166,7 +163,10 @@ try
     var oauthScopes = OAuthScopes.All(oauthOpts);
     var conflictingScope = oauthScopes.GroupBy(scope => scope.Name, StringComparer.Ordinal)
         .FirstOrDefault(group => group.Count() > 1)?.Key;
-    if (oauthOpts.ApiResources.Any(string.IsNullOrWhiteSpace) || conflictingScope is not null)
+    if (oauthOpts.ApiResources.Any(api => string.IsNullOrWhiteSpace(api.Name) ||
+            string.IsNullOrWhiteSpace(api.ScopeName) || string.IsNullOrWhiteSpace(api.Owner)) ||
+        oauthOpts.ApiResources.GroupBy(api => api.Name, StringComparer.Ordinal).Any(group => group.Count() > 1) ||
+        oauthOpts.ApiResources.Any(api => api.Name == oauthOpts.Resource) || conflictingScope is not null)
     {
         throw new InvalidOperationException(
             "OAuth:ApiResources entries must be non-empty and distinct from each other, from OAuth:Resource " +
@@ -205,6 +205,10 @@ try
                 server.RequestedTokenTypes.Clear();
                 server.RequestedTokenTypes.Add(OpenIddict.Abstractions.OpenIddictConstants.TokenTypeIdentifiers.AccessToken);
             });
+            options.RemoveEventHandler(OpenIddict.Server.OpenIddictServerHandlers.Exchange.ValidateAuthorizedParty.Descriptor);
+            options.AddEventHandler<OpenIddict.Server.OpenIddictServerEvents.ValidateTokenRequestContext>(handler =>
+                handler.UseScopedHandler<CompanyName.ProjectName.Api.Auth.ResourceOwnerAuthorizedPartyHandler>()
+                    .SetOrder(OpenIddict.Server.OpenIddictServerHandlers.Exchange.ValidateAuthorizedParty.Descriptor.Order));
             options.RegisterAudiences(oauthScopes.SelectMany(scope => scope.Resources).Distinct().ToArray());
             options.AddEventHandler<OpenIddict.Server.OpenIddictServerEvents.ProcessSignInContext>(handler =>
                 handler.UseScopedHandler<CompanyName.ProjectName.Api.Auth.TokenExchangeExpirationHandler>()
@@ -261,14 +265,13 @@ try
             options.EnableTokenEntryValidation();
 
             // 普通 API 只接受 Bearer 头，避免令牌进入 URL 和访问日志。
-            // SignalR 若需 query 令牌，应只在 Hub 路径定向转换。
             options.UseAspNetCore()
                    .DisableAccessTokenExtractionFromQueryString()
                    .DisableAccessTokenExtractionFromBodyForm();
         });
 #endif
 #if (RemoteTokenAuth)
-    // Resource 只验证 Identity 签发的 Bearer token。
+    // Resource 的机器 Bearer 与服务端 OIDC 会话使用同一签发方和资源受众。
     const string RemoteIdentityConfigurationError =
         "Resource services require Authentication:Issuer (an absolute http(s) URI) and Authentication:Audience.";
 
@@ -413,7 +416,8 @@ try
 #endif
 
 #if (RemoteTokenAuth)
-    builder.Services.AddUserAccessTokenAccessor(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton<IUserAccessTokenAccessor, ResourceUserAccessTokenAccessor>();
 #endif
 
 #if (IncludeNotifications)
@@ -445,6 +449,14 @@ try
 #endif
 
     builder.Services.AddMyProjectDataProtection(builder.Configuration, builder.Environment);
+    builder.Services.AddSingleton<DistributedTicketStore>();
+    builder.Services.AddOptions<SessionCookieOptions>().BindConfiguration(SessionCookieOptions.SectionName);
+    builder.Services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.SessionCookie)
+        .Configure<DistributedTicketStore>((cookie, store) => cookie.SessionStore = store)
+        .PostConfigure(DistributedTicketStore.ConfigureCookie);
+#if (ExternalLogin)
+    builder.Services.AddExternalAuthentication(builder.Configuration);
+#endif
 
 #if (LocalIdentity)
     // 会话 Cookie 的滑动过期与服务端会话的空闲时限是同一个值，只在这里定一次
@@ -458,12 +470,11 @@ try
 
     var sessionLifetime = TimeSpan.FromDays(sessionCookie.ExpireDays);
     builder.Services.Configure<UserSessionOptions>(options => options.IdleTimeout = sessionLifetime);
-    // 会话 Cookie 与外部登录的状态 Cookie 经同一个 Options 管道取站点策略，两者不会分叉
-    builder.Services.AddOptions<SessionCookieOptions>().BindConfiguration(SessionCookieOptions.SectionName);
+    // 应用 Cookie 策略不覆盖协议 correlation/nonce Cookie。
     builder.Services.AddOptions<CookieAuthenticationOptions>(AuthenticationSchemeNames.SessionCookie)
         .Configure<IOptions<SessionCookieOptions>>((cookie, sessionCookie) =>
         {
-            // 默认 Lax；跨站部署经 SessionCookie:SameSite 显式改为 None，见 SessionCookieOptions
+            // 默认 Lax；需要顶层跨站 POST 携带会话时评估 None，见 SessionCookieOptions
             if (sessionCookie.Value.SameSite is { } sameSite)
             {
                 cookie.Cookie.SameSite = sameSite;
@@ -476,7 +487,7 @@ try
     {
 #if (OpenIddictServer)
         // 多租户解析前必须按请求恢复 Bearer 或 Cookie 主体，防止请求头改写已登录用户的租户。
-        options.DefaultAuthenticateScheme = "MyProjectSmart";
+        options.DefaultAuthenticateScheme = AuthenticationSchemeNames.Smart;
         options.DefaultChallengeScheme = OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
 #else
         // 不签发令牌时只恢复 Cookie 会话。
@@ -485,11 +496,10 @@ try
 #endif
     })
 #if (OpenIddictServer)
-    .AddPolicyScheme("MyProjectSmart", "Selects Bearer or Cookie per request", options =>
+    .AddPolicyScheme(AuthenticationSchemeNames.Smart, "Selects Bearer or Cookie per request", options =>
     {
         options.ForwardDefaultSelector = context =>
-            context.Request.Headers.Authorization.Any(value =>
-                value != null && value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            context.Request.Headers.ContainsKey("Authorization")
                 ? OpenIddict.Validation.AspNetCore.OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme
                 : AuthenticationSchemeNames.SessionCookie;
     })
@@ -507,7 +517,8 @@ try
         options.ExpireTimeSpan = sessionLifetime;
         options.SlidingExpiration = true;
 
-        // 会话 Cookie 是自包含的，签出去就撤不回；每个请求都回服务端确认它登记的会话还在，
+        // 每个请求确认业务会话仍有效，服务端票据存储另负责 Cookie 引用的撤销。
+        //
         // 撤销（退出其他设备、改密码）才能对已发出的 Cookie 生效。结果带短缓存，见 IUserSessionValidator
         options.Events.OnValidatePrincipal = async context =>
         {
@@ -532,12 +543,65 @@ try
     });
 
 #else
+    foreach (var (key, value) in new[] { ("ClientId", remoteIdentity.ClientId), ("ClientSecret", remoteIdentity.ClientSecret) })
+        if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException($"Authentication:{key} is required for the Resource OIDC confidential client.");
+    var resourceCookie = builder.Configuration.GetSection(SessionCookieOptions.SectionName).Get<SessionCookieOptions>() ?? new();
+    if (resourceCookie.ExpireDays < 1) throw new InvalidOperationException("SessionCookie:ExpireDays must be at least 1.");
+    builder.Services.AddSingleton<ResourceSessionRefresher>();
     builder.Services.AddAuthentication(options =>
     {
-        options.DefaultAuthenticateScheme =
-            OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme =
-            OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+        options.DefaultAuthenticateScheme = AuthenticationSchemeNames.Smart;
+        options.DefaultChallengeScheme = AuthenticationSchemeNames.Smart;
+    })
+    .AddPolicyScheme(AuthenticationSchemeNames.Smart, "Selects the request authentication scheme", options =>
+        options.ForwardDefaultSelector = context => context.Request.Headers.ContainsKey("Authorization")
+            ? OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme : AuthenticationSchemeNames.SessionCookie)
+    .AddCookie(AuthenticationSchemeNames.SessionCookie, options =>
+    {
+        options.Cookie.Name = "CompanyName.ProjectName.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.IsEssential = true;
+        options.Cookie.SameSite = resourceCookie.SameSite ?? SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+        options.ExpireTimeSpan = TimeSpan.FromDays(resourceCookie.ExpireDays);
+        options.SlidingExpiration = true;
+        options.Events.OnValidatePrincipal = context => context.HttpContext.RequestServices.GetRequiredService<ResourceSessionRefresher>().ValidateAsync(context);
+        options.Events.OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; };
+        options.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; };
+    })
+    .AddOpenIdConnect(AuthenticationSchemeNames.OpenIdConnect, options =>
+    {
+        options.Authority = remoteIdentity.Issuer;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        options.ClientId = remoteIdentity.ClientId;
+        options.ClientSecret = remoteIdentity.ClientSecret;
+        options.SignInScheme = AuthenticationSchemeNames.SessionCookie;
+        options.ResponseType = "code";
+        options.SaveTokens = true;
+        options.MapInboundClaims = false;
+        options.CallbackPath = "/api/v1/auth/signin";
+        options.SignedOutCallbackPath = "/api/v1/auth/signout";
+        options.Scope.Clear();
+        foreach (var scope in new[] { "openid", "profile", "email", "roles", "offline_access", remoteIdentity.Scope ?? remoteIdentity.Audience! }) options.Scope.Add(scope);
+        options.Events.OnRemoteFailure = context =>
+        {
+            context.HandleResponse();
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Task.CompletedTask;
+        };
+        options.Events.OnTokenValidated = async context =>
+        {
+            // tenant_id 等资源声明在签发方的访问令牌中，不能假定 ID token 也带这些字段。
+            context.Principal = await ResourceSessionRefresher.ValidateAccessTokenAsync(context.HttpContext,
+                context.TokenEndpointResponse!.AccessToken, context.HttpContext.RequestAborted);
+        };
+        options.Events.OnRedirectToIdentityProviderForSignOut = context =>
+        {
+            // 默认 id_token_hint 会把 ID token 放进浏览器 URL；客户端标识足以关联已登记退出回调。
+            context.ProtocolMessage.IdTokenHint = null;
+            context.ProtocolMessage.ClientId = remoteIdentity.ClientId;
+            return Task.CompletedTask;
+        };
     });
 #endif
 
@@ -589,11 +653,8 @@ try
 
     app.UseCors();
 
-#if (RemoteTokenAuth && IncludeNotifications)
-    // 仅 Hub 允许 SignalR 浏览器客户端的 access_token query；普通 API 仍只接受 Bearer header。
-    app.UseHubAccessToken();
-#endif
     app.UseAuthentication();
+    app.UseMiddleware<BrowserOriginMiddleware>();
 #if (LocalIdentity)
     // 租户失效时注销 Cookie，避免会话困在不可用租户中。
     app.UseTenantSessionRecovery(options => options.SignOutScheme = AuthenticationSchemeNames.SessionCookie);

@@ -17,9 +17,6 @@ import {
   TranslocoService,
   translateSignal,
 } from '@jsverse/transloco';
-//#if (RemoteTokenAuth)
-import { provideAuth } from 'angular-auth-oidc-client';
-//#endif
 import { defer, Subject, throwError } from 'rxjs';
 
 import { LanguageService, provideLanguageInitializer } from './language-service';
@@ -524,10 +521,6 @@ describe('LanguageService bootstrap', () => {
         provideHttpClient(withInterceptors(appInterceptors)),
         provideHttpClientTesting(),
         provideRouter([]),
-        //#if (RemoteTokenAuth)
-        // 令牌拦截器在请求时注入库的配置服务，需要 provideAuth；未 checkAuth 时它直接放行
-        provideAuth({ config: { authority: 'http://localhost', clientId: 'test' } }),
-        //#endif
         provideLanguageInitializer(),
       ],
     });

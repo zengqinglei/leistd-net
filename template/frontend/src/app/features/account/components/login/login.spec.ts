@@ -57,6 +57,7 @@ describe('Login', () => {
   } | null>;
   let authorization: AuthorizationService;
   let queryParams: Record<string, string>;
+  let navigationState: { twoFactorToken: string; returnUrl: string } | undefined;
   //#if (LocalIdentity)
   // 主机名探测的返回值。默认"域名不表态"，与本机开发一致；租户相关用例逐个覆盖它。
   let byHost: Observable<TenantByHostOutputDto>;
@@ -112,6 +113,11 @@ describe('Login', () => {
     await TestBed.inject(LanguageService).initialized;
     await TestBed.inject(LanguageService).loadScopes(['account']);
     //#endif
+    if (navigationState) {
+      vi.spyOn(TestBed.inject(Router), 'currentNavigation').mockReturnValue({
+        extras: { state: navigationState },
+      } as never);
+    }
     fixture = TestBed.createComponent(Login);
     //#if (IncludeLocalization)
     // 登录页构造时清理旧主体，等待这次退回设备语言后再测试用户切换。
@@ -133,6 +139,7 @@ describe('Login', () => {
 
   beforeEach(() => {
     queryParams = {};
+    navigationState = undefined;
     //#if (LocalIdentity)
     byHost = of({ decision: 'undecided' as const });
     localStorage.clear();
@@ -259,6 +266,16 @@ describe('Login', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/platform/users');
   });
 
+  it('continues the external return address after completing the second step', async () => {
+    navigationState = { twoFactorToken: 'challenge', returnUrl: '/workspace/settings/security' };
+    await setUp();
+    await (
+      component as unknown as { onTwoFactorCompleted(): Promise<void> }
+    ).onTwoFactorCompleted();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace/settings/security');
+    expect(TestBed.inject(SessionContextService).establish).toHaveBeenCalled();
+  });
+
   it('switches to the verification code step when two-factor is enabled, without loading the current user or navigating', async () => {
     await setUp();
     authService.login.mockReturnValue(
@@ -290,7 +307,12 @@ describe('Login', () => {
     expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
   });
 
-  for (const hostile of ['//evil.example.com', 'https://evil.example.com', 'javascript://evil']) {
+  for (const hostile of [
+    '//evil.example.com',
+    'https://evil.example.com',
+    'javascript://evil',
+    '/\\evil.example.com',
+  ]) {
     it(`discards an off-site returnUrl: ${hostile}`, async () => {
       queryParams = { returnUrl: hostile };
       await setUp();
@@ -535,13 +557,27 @@ describe('Login', () => {
     });
     //#if (ExternalLogin)
 
+    it('passes the authorization return address to external login navigation', async () => {
+      queryParams = { returnUrl: '/connect/authorize?client_id=resource&state=original' };
+      await setUp();
+      vi.spyOn(console, 'error').mockReturnValue(undefined);
+      const externalLogin = vi
+        .spyOn(TestBed.inject(AccountService), 'getExternalLoginUrl')
+        .mockImplementation(() => {
+          // 停在整页导航前，验证真实组件传给导航地址构造器的参数。
+          throw new Error('Stop before browser navigation');
+        });
+      component.loginWithGoogle();
+      expect(externalLogin).toHaveBeenCalledWith('google', queryParams['returnUrl']);
+    });
+
     // 第三方登录走的是同一条约束：回调最终也落在按主机名解析出的那个上下文里。
     it('does not start external login while the probe is pending', async () => {
       byHost = new Observable<TenantByHostOutputDto>(() => undefined);
       await setUp();
       const externalLogin = vi
         .spyOn(TestBed.inject(AccountService), 'getExternalLoginUrl')
-        .mockReturnValue(of());
+        .mockReturnValue('/api/v1/external-auth/github/challenge');
 
       component.loginWithGitHub();
 

@@ -2,6 +2,7 @@
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using Leistd.Ddd.Application.Contracts.AppServices;
 using CompanyName.ProjectName.Application.Auth.SignIn;
+using CompanyName.ProjectName.Domain.Auth.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Auth.AppServices;
 
@@ -11,29 +12,24 @@ namespace CompanyName.ProjectName.Application.Auth.AppServices;
 public interface IExternalAuthAppService : IAppService
 {
     /// <summary>
-    /// 获取外部登录 URL
-    /// </summary>
-    ExternalLoginUrlOutputDto GetLoginUrl(string provider, string state);
-
-    /// <summary>
     /// 处理外部登录回调：直接得到会话主体，或（已启用两步验证时）得到第二步凭据
     /// </summary>
     Task<SessionLoginResult> AuthenticateExternalUserAsync(
         string provider,
-        ExternalLoginCallbackInputDto request,
+        ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 本人的外部账号绑定情况
     /// </summary>
-    Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(CancellationToken cancellationToken = default);
+    Task<ExternalLoginsOutputDto> GetCurrentUserExternalLoginsAsync(IEnumerable<string> availableProviders, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 把外部身份绑定到当前用户；该外部账号已绑在别人名下时拒绝
     /// </summary>
     Task LinkCurrentUserAsync(
         string provider,
-        ExternalLoginCallbackInputDto request,
+        ExternalUserInfo externalUserInfo,
         CancellationToken cancellationToken = default);
 
     /// <summary>

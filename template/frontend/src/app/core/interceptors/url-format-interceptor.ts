@@ -20,8 +20,8 @@ export const GATEWAY_SERVICE_NAME = new HttpContextToken<string>(() => '');
  * URL格式化拦截器。
  * 为本服务的相对地址加上网关与微服务前缀，并携带凭据（Cookie 会话）。
  *
- * 调用方本来就给了绝对地址的请求（如 OIDC 签发方的发现文档、JWKS、令牌端点）原样放行、不带凭据：
- * 它们在另一个源上，也不需要 Cookie；带凭据的跨源请求还要求对方显式放行凭据，否则会被浏览器拦下。
+ * 调用方提供的绝对地址原样转发，不自动添加凭据。
+ * 浏览器认证与所属 API 同源，gateway 保持空值；其他服务可使用同源微服务路由前缀。
  */
 export const urlFormatInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,

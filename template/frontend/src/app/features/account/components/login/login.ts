@@ -121,6 +121,10 @@ export class Login {
    *
    * 外部登录回调遇到已启用两步验证的账号时，经导航状态把凭据带过来（不放进地址栏）。
    */
+  private readonly callbackReturnUrl = (
+    this.router.currentNavigation()?.extras.state as { returnUrl?: string } | undefined
+  )?.returnUrl;
+
   protected readonly twoFactorToken = signal<string | null>(
     (this.router.currentNavigation()?.extras.state as { twoFactorToken?: string } | undefined)
       ?.twoFactorToken ?? null,
@@ -183,7 +187,9 @@ export class Login {
   protected async onTwoFactorCompleted(): Promise<void> {
     this._isLoading.set(true);
     try {
-      await this.finishLogin(this.route.snapshot.queryParamMap.get('returnUrl'));
+      await this.finishLogin(
+        this.route.snapshot.queryParamMap.get('returnUrl') ?? this.callbackReturnUrl ?? null,
+      );
     } catch (error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('account.login.loginFailed'), {
@@ -251,7 +257,8 @@ export class Login {
       !!returnUrl &&
       returnUrl.startsWith('/') &&
       !returnUrl.startsWith('//') &&
-      !returnUrl.includes('://')
+      !returnUrl.includes('://') &&
+      !returnUrl.includes('\\')
     );
   }
 
@@ -402,7 +409,7 @@ export class Login {
   /**
    * 通用第三方登录
    */
-  private async loginWithExternalProvider(provider: 'github' | 'google', label: string) {
+  private loginWithExternalProvider(provider: 'github' | 'google', label: string) {
     // 与本地登录同一条约束：第三方回调最终也落在按主机名解析出的那个上下文里。
     if (this.authBlocked()) {
       return;
@@ -410,13 +417,10 @@ export class Login {
 
     this._isLoading.set(true);
     try {
-      const response = await lastValueFrom(this.accountService.getExternalLoginUrl(provider));
-
-      if (!response.loginUrl) {
-        throw new Error('No valid login URL was returned');
-      }
-
-      window.location.href = response.loginUrl;
+      window.location.href = this.accountService.getExternalLoginUrl(
+        provider,
+        this.route.snapshot.queryParamMap.get('returnUrl'),
+      );
     } catch (error) {
       console.error(`${label} login failed`, error);
       //#if (IncludeLocalization)

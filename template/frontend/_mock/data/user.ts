@@ -1,8 +1,6 @@
 import { ROLES } from './authorization';
 import { UserManagementOutputDto } from '../../src/app/features/platform/models/user-management.dto';
-//#if (LocalIdentity)
 import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
-//#endif
 
 export interface MockUser {
   id: string;
@@ -52,8 +50,6 @@ export const USERS: MockUser[] = [
     roles: ['Member'],
   },
 ];
-//#if (LocalIdentity)
-
 export function toUserOutput(user: MockUser): UserOutputDto {
   return {
     id: user.id,
@@ -62,15 +58,18 @@ export function toUserOutput(user: MockUser): UserOutputDto {
     displayName: user.displayName,
     avatar: user.avatar,
     phoneNumber: user.phoneNumber,
+    //#if (LocalIdentity)
     isActive: user.isActive,
+    //#endif
     isEmailVerified: user.isEmailVerified,
     isSuperAdmin: user.isSuperAdmin,
+    //#if (LocalIdentity)
     creationTime: user.creationTime,
+    //#endif
     // 当前用户模型只需要角色名（用于展示徽章），不需要 Id。
     roles: user.roles,
   };
 }
-//#endif
 
 export function toUserManagementOutput(user: MockUser): UserManagementOutputDto {
   return {

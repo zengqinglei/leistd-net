@@ -1,7 +1,4 @@
 import { HttpInterceptorFn } from '@angular/common/http';
-//#if (RemoteTokenAuth)
-import { authInterceptor } from 'angular-auth-oidc-client';
-//#endif
 
 import { environment } from '../environments/environment';
 //#if (IncludeLocalization)
@@ -26,9 +23,6 @@ export const appInterceptors: HttpInterceptorFn[] = [
   //#endif
   //#if (LocalIdentity)
   tenantInterceptor, // 已选租户时为 /api/ 请求附加租户提示头
-  //#endif
-  //#if (RemoteTokenAuth)
-  authInterceptor(),
   //#endif
   urlFormatInterceptor,
   httpErrorInterceptor, // 捕获所有 HTTP 错误并显示用户提示

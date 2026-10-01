@@ -68,7 +68,7 @@ describe('ExternalAuthCallback', () => {
           provide: ActivatedRoute,
           useValue: {
             snapshot: {
-              queryParamMap: convertToParamMap({ code: 'c', state: 's' }),
+              queryParamMap: convertToParamMap({ intent: 'login' }),
               paramMap: convertToParamMap({ provider: 'github' }),
             },
           },
@@ -91,6 +91,38 @@ describe('ExternalAuthCallback', () => {
     expect(calls).toContain('navigate');
     expect(calls.indexOf('establish')).toBeGreaterThanOrEqual(0);
     expect(calls.indexOf('establish')).toBeLessThan(calls.indexOf('navigate'));
+  });
+
+  it('preserves the protected return address when a second step is required', async () => {
+    accountService.externalLoginCallback.mockReturnValue(
+      of({
+        requiresTwoFactor: true,
+        twoFactorToken: 'challenge',
+        returnUrl: '/connect/authorize?state=original',
+      }),
+    );
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/auth/login'], {
+      state: { twoFactorToken: 'challenge', returnUrl: '/connect/authorize?state=original' },
+    });
+    expect(calls).not.toContain('establish');
+  });
+
+  it('uses the protected return address after establishing a session', async () => {
+    accountService.externalLoginCallback.mockReturnValue(
+      of({ returnUrl: '/workspace/settings/security' }),
+    );
+    const navigate = vi
+      .spyOn(TestBed.inject(Router), 'navigateByUrl')
+      .mockImplementation(async () => {
+        calls.push('navigate-return');
+        return true;
+      });
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(navigate).toHaveBeenCalledWith('/workspace/settings/security');
+    expect(calls.indexOf('establish')).toBeLessThan(calls.indexOf('navigate-return'));
   });
 
   it('shows the server reason when the sign-in is rejected', async () => {

@@ -422,6 +422,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantId = await CreateTenantAsync(hostAdmin, "frozen");
 
         var tenantClient = await LoginTenantAdminAsync(tenantId);
+        using var navigationSession = await LoginTenantAdminAsync(tenantId);
         Assert.Single(await GetUsernamesAsync(tenantClient));
 
         // 停用在提交那一刻生效（存储直接读库），在途会话的下一个请求就被拒
@@ -446,7 +447,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // HTML 导航：注销后重定向回原地址，下一次请求已匿名、SPA 可正常加载——用户不会死锁在错误页
         using var navRequest = new HttpRequestMessage(HttpMethod.Get, "/platform/users");
         navRequest.Headers.Accept.ParseAdd("text/html");
-        foreach (var header in tenantClient.DefaultRequestHeaders)
+        foreach (var header in navigationSession.DefaultRequestHeaders)
         {
             navRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }

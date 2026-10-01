@@ -1,5 +1,7 @@
 {
   "common": {
+    "signIn": "Sign In",
+    "continueToSignIn": "Continue to sign in",
     "workspace": "Workspace",
     "unknownError": "Unknown error",
     "appError": "Application error",

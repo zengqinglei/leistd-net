@@ -66,6 +66,8 @@
     <PackageVersion Include="Leistd.Ddd.Application" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Application.Contracts" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Infrastructure" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
   </ItemGroup>
 
   <!-- 业务第三方包 -->

@@ -123,22 +123,6 @@ export interface ChangePasswordInputDto {
 }
 //#if (ExternalLogin)
 
-/**
- * 外部登录 URL 输出 DTO
- */
-export interface ExternalLoginUrlOutputDto {
-  loginUrl: string;
-}
-
-/**
- * 外部登录回调请求 DTO
- */
-export interface ExternalLoginCallbackInputDto {
-  provider: string;
-  code: string;
-  state: string;
-}
-
 /** 本人的外部账号绑定情况。 */
 export interface ExternalLoginsOutputDto {
   /** 是否设有密码；没有时最后一个绑定不能解绑。 */

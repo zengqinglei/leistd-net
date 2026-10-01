@@ -5,7 +5,7 @@ using System.Text;
 using System.Buffers.Text;
 using System.Security.Claims;
 using System.Text.Json;
-using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.Shared;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
@@ -116,14 +116,20 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var cookieOptions = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(AuthenticationSchemeNames.SessionCookie);
         var value = cookie.Split(';')[0].Split('=', 2)[1];
-        return cookieOptions.TicketDataFormat.Unprotect(value)!;
+        var reference = cookieOptions.TicketDataFormat.Unprotect(value)!;
+        return cookieOptions.SessionStore!.RetrieveAsync(reference.Principal.FindFirst("Microsoft.AspNetCore.Authentication.Cookies-SessionId")!.Value).GetAwaiter().GetResult()!;
     }
 
     private string CookieOf(AuthenticationTicket ticket)
     {
         var cookieOptions = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(AuthenticationSchemeNames.SessionCookie);
-        return cookieOptions.Cookie.Name + "=" + cookieOptions.TicketDataFormat.Protect(ticket);
+        var key = ticket.Properties.Items["ticket.key"]!;
+        cookieOptions.SessionStore!.RenewAsync(key, ticket).GetAwaiter().GetResult();
+        var reference = new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("Microsoft.AspNetCore.Authentication.Cookies-SessionId", key)], AuthenticationSchemeNames.SessionCookie)),
+            ticket.Properties, AuthenticationSchemeNames.SessionCookie);
+        return cookieOptions.Cookie.Name + "=" + cookieOptions.TicketDataFormat.Protect(reference);
     }
 
     [Theory]

@@ -21,13 +21,15 @@ CompanyName.ProjectName/
 - 本地账号、登录、注册和 Cookie 认证。
 - 用户、角色、权限以及超级管理员授权模型。
 - 多租户：租户解析与数据硬隔离、租户管理（宿主侧）、登录页租户选择；每个租户拥有独立的用户、角色与权限授予。
+<!--#if (OpenIddictServer)-->
 - OpenIddict OAuth 2.0/OIDC Server。
+<!--#endif-->
 <!--#if (ExternalLogin)-->
 - GitHub、Google 等外部身份提供方登录。
 <!--#endif-->
 <!--#endif-->
 <!--#if (!LocalIdentity)-->
-- 远程 OIDC 令牌验证、本服务 Membership/角色/权限与租户数据隔离。
+- 后端 OIDC 机密依赖方与服务端 Cookie 票据、机器 Bearer 验证、本服务 Membership/角色/权限与租户数据隔离。
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
 - 通知持久化、未读状态，通知与业务实时事件共用的实时 Hub。
@@ -48,11 +50,13 @@ CompanyName.ProjectName/
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
 签发令牌的 Identity 服务：开发环境默认指向本机 Identity 的前端开发服务器 `http://localhost:4200/`（`appsettings.Development.json` 的 `Authentication:Issuer`），联调步骤见 [前端说明](frontend/README.md)；
-联调别处的 Identity 时用 user-secrets 覆盖。部署环境没有默认值，缺失即启动失败：
+联调别处的 Identity 时用 user-secrets 覆盖。需先在 Identity 登记机密浏览器依赖方及 `/api/v1/auth/signin`、`/api/v1/auth/signout` 回调（含本服务前端源），再配置 ClientId/ClientSecret；缺失会按键名启动失败：
 
 ```bash
 cd backend
 dotnet user-secrets set "Authentication:Issuer" "<Identity 服务的地址>/" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "Authentication:ClientId" "<已登记的机密客户端>" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "Authentication:ClientSecret" "<机密客户端密钥>" --project src/CompanyName.ProjectName.Api
 ```
 
 改用真实数据库后，租户路由要回源 Identity，还需设置 `Leistd:ServiceClients:Identity:BaseAddress`（没有默认值）。

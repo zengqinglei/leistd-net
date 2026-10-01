@@ -45,6 +45,11 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     /// </remarks>
     public const string TestAdminPassword = "IntegrationTests!Adm1n";
 
+#if (RemoteTokenAuth)
+    // 协议测试保留生产认证与自然人策略，其他业务用例使用专用主体替身。
+    internal bool UseProductionAuthentication { get; init; }
+#endif
+
     private readonly string databaseName = $"ProjectTests-{Guid.NewGuid():N}";
 
     // 每个宿主一份密钥目录：开发环境以外 Data Protection 要求显式的持久位置，测试给临时目录
@@ -70,6 +75,8 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
 #if (RemoteTokenAuth)
         // 组合期即校验的签发方地址：基线配置刻意留空，缺失即启动失败
         builder.UseSetting("Authentication:Issuer", "https://identity.test/");
+        builder.UseSetting("Authentication:ClientId", "resource-test");
+        builder.UseSetting("Authentication:ClientSecret", "resource-test-secret");
 #endif
 
         builder.ConfigureAppConfiguration((_, configuration) =>
@@ -111,26 +118,29 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             services.AddSingleton(openedGate);
 #endif
 #if (!LocalIdentity)
-            // Resource 模板不托管登录端点。集成测试以专用方案注入已验证主体，
-            // 不伪造生产 Bearer 验签，也不让 Resource 回退为本地 Cookie 登录。
-            services.AddAuthentication(options =>
-                {
-                    options.DefaultAuthenticateScheme = ResourceTestAuthenticationHandler.SchemeName;
-                    options.DefaultChallengeScheme = ResourceTestAuthenticationHandler.SchemeName;
-                })
-                .AddScheme<AuthenticationSchemeOptions, ResourceTestAuthenticationHandler>(
-                    ResourceTestAuthenticationHandler.SchemeName,
-                    _ => { });
-            services.AddAuthorization(options =>
+            if (!UseProductionAuthentication)
             {
-                var testPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
-                    .RequireAuthenticatedUser()
-                    .Build();
-                options.DefaultPolicy = testPolicy;
-                // 组件端点按名字要这条策略（不套默认策略），替身方案必须把它一起换掉，
-                // 否则通知中心、读设置这些自用端点仍然要求生产 Bearer，测试里一律 401
-                options.AddPolicy(ApiPolicies.CurrentUser, testPolicy);
-            });
+                // Resource 模板不托管登录端点。集成测试以专用方案注入已验证主体，
+                // 不伪造生产 Bearer 验签，也不让 Resource 回退为本地 Cookie 登录。
+                services.AddAuthentication(options =>
+                    {
+                        options.DefaultAuthenticateScheme = ResourceTestAuthenticationHandler.SchemeName;
+                        options.DefaultChallengeScheme = ResourceTestAuthenticationHandler.SchemeName;
+                    })
+                    .AddScheme<AuthenticationSchemeOptions, ResourceTestAuthenticationHandler>(
+                        ResourceTestAuthenticationHandler.SchemeName,
+                        _ => { });
+                services.AddAuthorization(options =>
+                {
+                    var testPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
+                        .RequireAuthenticatedUser()
+                        .Build();
+                    options.DefaultPolicy = testPolicy;
+                    // 组件端点按名字要这条策略（不套默认策略），替身方案必须把它一起换掉，
+                    // 否则通知中心、读设置这些自用端点仍然要求生产 Bearer，测试里一律 401
+                    options.AddPolicy(ApiPolicies.CurrentUser, testPolicy);
+                });
+            }
 #endif
             services.Configure<HostOptions>(options =>
             {

@@ -7,10 +7,10 @@ const TENANT_STORAGE_KEY = 'app.tenant';
 //#if (LocalIdentity)
 /** 本地持久化的租户上下文（登录页选定，拦截器读取）。 */
 //#else
-/** 认证后的租户上下文（来源是已验证 Access Token 中的 tenant_id）。 */
+/** 认证后的租户上下文（来源是后端已验证会话中的 tenant_id）。 */
 //#endif
 export interface TenantContext {
-  /** 租户键：本地身份形态是登录入口选定的租户名（放进租户提示头），资源服务形态是令牌里的租户 id。 */
+  /** 租户键：本地身份形态是登录入口选定的租户名（放进租户提示头），资源服务形态是后端会话里的租户 id。 */
   key: string;
 }
 
@@ -25,7 +25,7 @@ export interface TenantContext {
 /**
  * 前端租户上下文：仅内存 signal。
  *
- * 唯一来源是已验证 Access Token 中的 tenant_id；不做本地持久化，
+ * 唯一来源是后端已验证会话中的 tenant_id；不做本地持久化，
  * 也不接受任何本地线索改写已认证的租户。
  */
 //#endif
@@ -50,7 +50,7 @@ export class TenantContextService {
    * （"你能选哪些库"、"这个租户叫什么"）。见 docs/standards/coding-frontend.md §8。
    */
   //#else
-  /** 当前租户；null 表示宿主。来源是已验证 Access Token 中的 tenant_id。 */
+  /** 当前租户；null 表示宿主。来源是后端已验证会话中的 tenant_id。 */
   //#endif
   public readonly current = this._current.asReadonly();
 
@@ -65,7 +65,7 @@ export class TenantContextService {
     }
   }
   //#else
-  /** Resource 只接受 OIDC 库已验证 Access Token 中的租户声明；null 表示宿主用户。 */
+  /** Resource 只接受 OIDC 库后端已验证会话中的租户声明；null 表示宿主用户。 */
   setAuthenticatedTenant(tenantId: string | null): void {
     this._current.set(tenantId ? { key: tenantId } : null);
   }

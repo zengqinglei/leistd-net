@@ -19,7 +19,7 @@ public sealed record OAuthScope(string Name, string DisplayName, IReadOnlyList<s
 /// </summary>
 /// <remarks>
 /// 本服务自己的 API 以 <see cref="OAuthOptions.Resource"/> 同名登记为 scope；下游 API 由 <see cref="OAuthOptions.ApiResources"/> 列出，
-/// 各自登记为同名 scope。访问令牌的受众由授予的 scope 推出：申请哪个 API 的 scope，令牌就只能调用那个 API。
+/// 各自登记为配置的 scope（默认同名）。访问令牌的受众由授予的 scope 推出：申请哪个 API 的 scope，令牌就只能调用那个 API。
 /// </remarks>
 public static class OAuthScopes
 {
@@ -34,8 +34,14 @@ public static class OAuthScopes
         new(options.Resource, "API", [options.Resource], MachineOnly: false),
         new(TenantConnectionScopes.RuntimeRead, "Read tenant connection routing metadata", [options.Resource], MachineOnly: true),
         new(TenantConnectionScopes.MigrationRead, "Read tenant connection migration metadata", [options.Resource], MachineOnly: true),
-        .. options.ApiResources.Select(api => new OAuthScope(api, api, [api], MachineOnly: false)),
+        .. options.ApiResources.Select(api => new OAuthScope(api.ScopeName, api.ScopeName, [api.Name], MachineOnly: false)),
     ];
+
+    /// <summary>交换发起方拥有的资源；本服务自己的资源默认由同名客户端拥有。</summary>
+    public static IReadOnlyList<string> OwnedBy(OAuthOptions options, string clientId) =>
+        options.ApiResources.Where(api => api.Owner == clientId).Select(api => api.Name)
+            .Concat(options.Resource == clientId ? [options.Resource] : [])
+            .Distinct(StringComparer.Ordinal).ToArray();
 
     /// <summary>授予这些 scope 时访问令牌的受众。</summary>
     public static IReadOnlyList<string> ResourcesOf(OAuthOptions options, IEnumerable<string> scopes)

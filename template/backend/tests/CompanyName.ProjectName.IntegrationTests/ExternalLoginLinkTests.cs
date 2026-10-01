@@ -3,16 +3,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
+using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.UnitOfWork;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -21,14 +19,14 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// </summary>
 public sealed class ExternalLoginLinkTests
 {
-    private const string StateCookieName = "__Host-CompanyName.ProjectName.ExternalAuth.State";
+    private const string StateCookieName = "__Host-CompanyName.ProjectName.External";
     private const string Password = "LinkTests!Passw0rd";
 
     [Fact]
     public async Task Linked_external_account_signs_in_to_the_same_user()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
         var username = await CreateUserAsync(host, "link_ok");
         using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
@@ -36,7 +34,7 @@ public sealed class ExternalLoginLinkTests
         provider.User = External("gh-link-ok");
         using (var link = await LinkAsync(host, session))
         {
-            Assert.Equal(HttpStatusCode.OK, link.StatusCode);
+            Assert.True(link.StatusCode == HttpStatusCode.OK, await link.Content.ReadAsStringAsync());
         }
 
         var links = await ReadLinksAsync(session.Client);
@@ -45,9 +43,9 @@ public sealed class ExternalLoginLinkTests
 
         // 用这个外部账号登录，进来的是绑定它的那个用户，而不是新建一个
         using var external = ProjectWebApplicationFactory.CreateProjectClient(host);
-        var (state, cookie) = await StartAsync(external, "/api/v1/external-auth/github/login-url");
+        var (state, cookie) = await StartAsync(external, "login");
         external.DefaultRequestHeaders.Add("Cookie", cookie);
-        using var callback = await external.PostAsJsonAsync("/api/v1/external-auth/github/callback", new { Code = "code", State = state });
+        using var callback = await external.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
         Assert.Equal(HttpStatusCode.OK, callback.StatusCode);
         using var signedIn = ProjectWebApplicationFactory.CreateProjectClient(host);
         signedIn.DefaultRequestHeaders.Add("Cookie", CookieOf(callback));
@@ -59,23 +57,23 @@ public sealed class ExternalLoginLinkTests
     public async Task Sign_in_and_link_authorizations_are_not_interchangeable()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider { User = External("gh-cross") };
+        var provider = new ExternalOAuthBackchannel { User = External("gh-cross") };
         using var host = CreateHost(factory, provider);
         var username = await CreateUserAsync(host, "link_cross");
         using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
 
         // 登录 state → 绑定端点
-        var (loginState, loginCookie) = await StartAsync(session.Client, "/api/v1/external-auth/github/login-url");
+        var (loginState, loginCookie) = await StartAsync(session.Client, "login");
         using (var misuse = await PostWithCookiesAsync(host, $"{session.Cookie}; {loginCookie}",
-                   "/api/v1/external-auth/github/link", new { Code = "code", State = loginState }))
+                   "/api/v1/external-auth/github/link/complete", new { }))
         {
             Assert.Equal(HttpStatusCode.BadRequest, misuse.StatusCode);
         }
 
         // 绑定 state → 登录回调
-        var (linkState, linkCookie) = await StartAsync(session.Client, "/api/v1/external-auth/github/link-url");
+        var (linkState, linkCookie) = await StartAsync(session.Client, "link");
         using (var misuse = await PostWithCookiesAsync(host, linkCookie,
-                   "/api/v1/external-auth/github/callback", new { Code = "code", State = linkState }))
+                   "/api/v1/external-auth/github/complete", new { }))
         {
             Assert.Equal(HttpStatusCode.BadRequest, misuse.StatusCode);
         }
@@ -85,13 +83,13 @@ public sealed class ExternalLoginLinkTests
     public async Task Rejects_an_external_account_linked_to_another_user()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider { User = External("gh-taken") };
+        var provider = new ExternalOAuthBackchannel { User = External("gh-taken") };
         using var host = CreateHost(factory, provider);
 
         using var first = await ProjectWebApplicationFactory.LoginAsync(host, await CreateUserAsync(host, "link_first"), Password);
         using (var link = await LinkAsync(host, first))
         {
-            Assert.Equal(HttpStatusCode.OK, link.StatusCode);
+            Assert.True(link.StatusCode == HttpStatusCode.OK, await link.Content.ReadAsStringAsync());
         }
 
         using var second = await ProjectWebApplicationFactory.LoginAsync(host, await CreateUserAsync(host, "link_second"), Password);
@@ -104,14 +102,14 @@ public sealed class ExternalLoginLinkTests
     public async Task Last_external_login_can_be_unlinked_only_with_a_password()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider { User = External("gh-only") };
+        var provider = new ExternalOAuthBackchannel { User = External("gh-only") };
         using var host = CreateHost(factory, provider);
 
         // 经外部登录建出来的账号没有密码
         using var external = ProjectWebApplicationFactory.CreateProjectClient(host);
-        var (state, cookie) = await StartAsync(external, "/api/v1/external-auth/github/login-url");
+        var (state, cookie) = await StartAsync(external, "login");
         external.DefaultRequestHeaders.Add("Cookie", cookie);
-        using var callback = await external.PostAsJsonAsync("/api/v1/external-auth/github/callback", new { Code = "code", State = state });
+        using var callback = await external.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
         using var externalOnly = ProjectWebApplicationFactory.CreateProjectClient(host);
         externalOnly.DefaultRequestHeaders.Add("Cookie", CookieOf(callback));
 
@@ -129,7 +127,7 @@ public sealed class ExternalLoginLinkTests
         using var withPassword = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
         using (var link = await LinkAsync(host, withPassword))
         {
-            Assert.Equal(HttpStatusCode.OK, link.StatusCode);
+            Assert.True(link.StatusCode == HttpStatusCode.OK, await link.Content.ReadAsStringAsync());
         }
 
         var stampBefore = await ReadSecurityStampAsync(host, username);
@@ -151,7 +149,7 @@ public sealed class ExternalLoginLinkTests
     public async Task External_sign_in_links_by_email_only_when_both_sides_are_verified(bool providerVerified, bool localConfirmed)
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
         var username = await CreateUserAsync(host, "link_email");
         if (localConfirmed)
@@ -171,9 +169,9 @@ public sealed class ExternalLoginLinkTests
             EmailVerified = providerVerified
         };
         using var external = ProjectWebApplicationFactory.CreateProjectClient(host);
-        var (state, cookie) = await StartAsync(external, "/api/v1/external-auth/github/login-url");
+        var (state, cookie) = await StartAsync(external, "login");
         external.DefaultRequestHeaders.Add("Cookie", cookie);
-        using var callback = await external.PostAsJsonAsync("/api/v1/external-auth/github/callback", new { Code = "code", State = state });
+        using var callback = await external.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
 
         using var session = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
         var link = GithubLink(await ReadLinksAsync(session.Client));
@@ -196,7 +194,7 @@ public sealed class ExternalLoginLinkTests
     public async Task Unverified_external_email_is_not_taken_by_a_new_account()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
         const string victimEmail = "victim@example.test";
 
@@ -227,7 +225,7 @@ public sealed class ExternalLoginLinkTests
     public async Task Account_created_from_a_verified_email_links_the_next_verified_sign_in()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
         const string email = "owner@example.test";
 
@@ -259,7 +257,7 @@ public sealed class ExternalLoginLinkTests
     public async Task A_provider_without_a_handle_does_not_put_the_email_local_part_in_the_username()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         // 形如 Google：有邮箱与姓名，没有句柄
@@ -290,7 +288,7 @@ public sealed class ExternalLoginLinkTests
     public async Task A_colliding_username_base_gets_a_numeric_suffix()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         provider.User = External("gh-dup-1") with { SuggestedUsername = "alice", Email = "alice@x.test", EmailVerified = true };
@@ -318,7 +316,7 @@ public sealed class ExternalLoginLinkTests
     public async Task A_generated_username_satisfies_the_public_username_rules()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         provider.User = External("gh-odd") with
@@ -346,7 +344,7 @@ public sealed class ExternalLoginLinkTests
     public async Task A_display_name_without_usable_characters_falls_back_to_a_suffixed_username()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         provider.User = External("goog-cjk") with
@@ -375,7 +373,7 @@ public sealed class ExternalLoginLinkTests
     public async Task A_username_held_by_a_soft_deleted_user_is_not_handed_out_again()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         provider.User = External("gh-del-1") with { SuggestedUsername = "alice", Email = "alice@x.test", EmailVerified = true };
@@ -401,7 +399,7 @@ public sealed class ExternalLoginLinkTests
     public async Task A_placeholder_email_survives_a_username_change_by_the_previous_holder()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         // 甲：句柄 alice，邮箱未验证，于是邮箱是占位地址
@@ -431,7 +429,7 @@ public sealed class ExternalLoginLinkTests
     public async Task A_verified_email_owned_by_a_deleted_account_is_refused_instead_of_duplicated()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         var username = await CreateUserAsync(host, "deleted_owner");
@@ -464,7 +462,7 @@ public sealed class ExternalLoginLinkTests
     public async Task Relinking_after_an_unlink_does_not_collide_with_the_abandoned_placeholder_email()
     {
         using var factory = new ProjectWebApplicationFactory();
-        var provider = new SwitchableOAuthProvider();
+        var provider = new ExternalOAuthBackchannel();
         using var host = CreateHost(factory, provider);
 
         provider.User = External("gh-relink") with { SuggestedUsername = "alice", Email = "alice@x.test", EmailVerified = false };
@@ -485,6 +483,60 @@ public sealed class ExternalLoginLinkTests
         var rebound = await PlaceholderEmailOfAsync(host, (await UsernamesOfPlaceholdersAsync(host)).Single(u => u != "alice"));
         Assert.NotEqual(abandoned, rebound);
     }
+
+    [Fact]
+    public async Task Restricted_sessions_cannot_start_or_complete_an_external_link()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var provider = new ExternalOAuthBackchannel();
+        using var host = CreateHost(factory, provider);
+        var username = await CreateUserAsync(host, "restricted_link");
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        using var setting = await admin.Client.PutAsJsonAsync("/api/v1/settings/current-tenant",
+            new { Name = SettingConstant.Security.RequireTwoFactor, Value = "true" });
+        Assert.Equal(HttpStatusCode.NoContent, setting.StatusCode);
+        using var restricted = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+        var me = await restricted.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.True(me.GetProperty("twoFactorSetupRequired").GetBoolean());
+        using var challenge = await restricted.Client.GetAsync("/api/v1/external-auth/github/link/challenge");
+        using var complete = await restricted.Client.PostAsJsonAsync("/api/v1/external-auth/github/link/complete", new { });
+        foreach (var response in new[] { challenge, complete })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Equal("Auth:TwoFactorSetupRequired", await ErrorCodeAsync(response));
+        }
+    }
+
+#if (OpenIddictServer)
+    [Fact]
+    public async Task Machine_principals_cannot_start_or_complete_an_external_link()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var provider = new ExternalOAuthBackchannel();
+        using var host = CreateHost(factory, provider);
+        const string clientId = "link-machine";
+        const string secret = "LinkMachine!Secret123";
+        var scopeName = new CompanyName.ProjectName.Domain.Auth.Options.OAuthOptions().Resource;
+        using (var scope = host.Services.CreateScope())
+        {
+            var applications = scope.ServiceProvider.GetRequiredService<OpenIddict.Abstractions.IOpenIddictApplicationManager>();
+            var descriptor = new OpenIddict.Abstractions.OpenIddictApplicationDescriptor
+            { ClientId = clientId, ClientSecret = secret, ClientType = "confidential", ApplicationType = "service" };
+            descriptor.Permissions.UnionWith(["ept:token", "gt:client_credentials", "scp:" + scopeName]);
+            await applications.CreateAsync(descriptor);
+        }
+        using var machine = ProjectWebApplicationFactory.CreateProjectClient(host);
+        machine.BaseAddress = new Uri("https://localhost");
+        using var token = await machine.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        { ["grant_type"] = "client_credentials", ["client_id"] = clientId, ["client_secret"] = secret, ["scope"] = scopeName }));
+        Assert.True(token.IsSuccessStatusCode, await token.Content.ReadAsStringAsync());
+        machine.DefaultRequestHeaders.Authorization = new("Bearer", (await token.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("access_token").GetString());
+        using var challenge = await machine.GetAsync("/api/v1/external-auth/github/link/challenge");
+        using var complete = await machine.PostAsJsonAsync("/api/v1/external-auth/github/link/complete", new { });
+        Assert.Equal(HttpStatusCode.Forbidden, challenge.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, complete.StatusCode);
+    }
+#endif
 
     private static async Task SetPasswordAsync(WebApplicationFactory<Program> host, string username)
     {
@@ -556,9 +608,9 @@ public sealed class ExternalLoginLinkTests
     private static async Task<HttpResponseMessage> SignInExternallyAsync(WebApplicationFactory<Program> host)
     {
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
-        var (state, cookie) = await StartAsync(client, "/api/v1/external-auth/github/login-url");
+        var (state, cookie) = await StartAsync(client, "login");
         client.DefaultRequestHeaders.Add("Cookie", cookie);
-        return await client.PostAsJsonAsync("/api/v1/external-auth/github/callback", new { Code = "code", State = state });
+        return await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
     }
 
     private static async Task<string> ReadSecurityStampAsync(WebApplicationFactory<Program> host, string username)
@@ -569,43 +621,18 @@ public sealed class ExternalLoginLinkTests
         return user!.SecurityStamp;
     }
 
-    private static WebApplicationFactory<Program> CreateHost(ProjectWebApplicationFactory factory, SwitchableOAuthProvider provider) =>
-        factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureAppConfiguration((_, configuration) =>
-            {
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ExternalAuth:Github:ClientId"] = "integration-test-client",
-                    ["ExternalAuth:Github:ClientSecret"] = "integration-test-secret",
-                    ["ExternalAuth:Github:RedirectUri"] = "https://client.example.test/auth/external-callback"
-                });
-            });
-            builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<IOAuthProvider>();
-                services.AddSingleton<IOAuthProvider>(provider);
-            });
-        });
+    private static WebApplicationFactory<Program> CreateHost(ProjectWebApplicationFactory factory, ExternalOAuthBackchannel provider) =>
+        provider.CreateHost(factory, businessData: true);
 
     private static async Task<HttpResponseMessage> LinkAsync(WebApplicationFactory<Program> host, AuthenticatedSession session)
     {
-        var (state, stateCookie) = await StartAsync(session.Client, "/api/v1/external-auth/github/link-url");
+        var (state, stateCookie) = await StartAsync(session.Client, "link");
         return await PostWithCookiesAsync(host, $"{session.Cookie}; {stateCookie}",
-            "/api/v1/external-auth/github/link", new { Code = "code", State = state });
+            "/api/v1/external-auth/github/link/complete", new { });
     }
 
-    private static async Task<(string State, string Cookie)> StartAsync(HttpClient client, string url)
-    {
-        using var response = await client.GetAsync(url);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var state = QueryHelpers.ParseQuery(new Uri(body.RootElement.GetProperty("loginUrl").GetString()!).Query)["state"].ToString();
-        var cookie = response.Headers.GetValues("Set-Cookie")
-            .Single(value => value.StartsWith($"{StateCookieName}=", StringComparison.Ordinal))
-            .Split(';', 2)[0];
-        return (state, cookie);
-    }
+    private static Task<(string State, string Cookie)> StartAsync(HttpClient client, string intent) =>
+        ExternalOAuthBackchannel.StartAsync(client, intent: intent);
 
     private static async Task<HttpResponseMessage> PostWithCookiesAsync(
         WebApplicationFactory<Program> host, string cookies, string url, object body)
@@ -669,26 +696,5 @@ public sealed class ExternalLoginLinkTests
         Email = $"{id}@external.example.test"
     };
 
-    /// <summary>测试替身：每次授权"回来"的外部身份由用例指定。</summary>
-    private sealed class SwitchableOAuthProvider : IOAuthProvider
-    {
-        public ExternalUserInfo User { get; set; } = new() { ProviderId = "unset", ProviderAccountLabel = "unset" };
-
-        public string Name => "github";
-
-        public bool IsAvailable => true;
-
-        public string GetAuthorizationUrl(string state) =>
-            $"https://provider.example.test/authorize?state={Uri.EscapeDataString(state)}";
-
-        public Task<OAuthTokenInfo> ExchangeCodeForTokenAsync(
-            string code,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new OAuthTokenInfo { AccessToken = "integration-test-token" });
-
-        public Task<ExternalUserInfo> GetUserInfoAsync(
-            string accessToken,
-            CancellationToken cancellationToken = default) => Task.FromResult(User);
-    }
 }
 #endif

@@ -1,9 +1,5 @@
 import { TestBed } from '@angular/core/testing';
 import * as signalR from '@microsoft/signalr';
-//#if (RemoteTokenAuth)
-import { OidcSecurityService } from 'angular-auth-oidc-client';
-import { of } from 'rxjs';
-//#endif
 
 import { SignalRService } from './signalr-service';
 
@@ -160,18 +156,6 @@ describe('SignalRService connection lifecycle', () => {
       return connection as unknown as signalR.HubConnection;
     });
 
-    //#if (RemoteTokenAuth)
-    TestBed.configureTestingModule({
-      providers: [
-        {
-          provide: OidcSecurityService,
-          useValue: { getAccessToken: () => of('resource-access-token') },
-        },
-      ],
-    });
-    //#else
-    TestBed.configureTestingModule({});
-    //#endif
     service = TestBed.inject(SignalRService);
   });
 
@@ -183,14 +167,6 @@ describe('SignalRService connection lifecycle', () => {
     expect(service.isConnected()).toBe(true);
   });
 
-  //#if (RemoteTokenAuth)
-  it('Resource Hub obtains the access token from the OIDC session', async () => {
-    await service.connect();
-
-    const options = vi.mocked(withUrl).mock.calls[0][1] as signalR.IHttpConnectionOptions;
-    expect(await options.accessTokenFactory?.()).toBe('resource-access-token');
-  });
-  //#endif
   it('leaves no live connection when connecting fails', async () => {
     failing.add(SignalRService.hubPath);
 

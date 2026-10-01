@@ -19,13 +19,6 @@ export interface Environment {
    * - `object`: 按模块开启 Mock (特性开关)
    */
   useMock: boolean | MockConfig;
-  //#if (RemoteTokenAuth)
-  oidc: {
-    authority: string;
-    clientId: string;
-    scope: string;
-  };
-  //#endif
   api: {
     /** 网关地址；为空时请求保持相对路径（同源部署或开发代理）。 */
     gateway: string;
@@ -39,13 +32,6 @@ export const environmentBase: Environment = {
   useHash: false,
   //#endif
   useMock: false, // 默认关闭
-  //#if (RemoteTokenAuth)
-  oidc: {
-    authority: 'https://identity.example.com',
-    clientId: 'companyname-projectname-web',
-    scope: 'openid profile email roles companyname-projectname-api',
-  },
-  //#endif
   api: {
     gateway: 'https://example.com',
   },

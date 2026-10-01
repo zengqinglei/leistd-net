@@ -62,9 +62,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
         // 3) 仍然持有主体。没有主体就没有东西要清，重新认证也该由 Guard 或启动流在它们
         //    自己的时机发起。这同时是并发 401 的收敛点——令牌到期时一屏请求会一起 401，
         //    第一条同步清掉主体，同批后到的到这里已经没有主体：既不会重复导航把最初的
-        //    落地地址覆盖掉，也不会让 OIDC 客户端并发跑两遍授权。后者是真会坏事的：
-        //    authorize() 先异步读配置与发现文档才拼出授权地址，而每条流程都会重新生成
-        //    并覆盖 PKCE codeVerifier，两条交叉后回调换 token 会失败。
+        //    落地地址覆盖掉，也不会重复发起整页登录导航。
         // 4) 这个 401 说的是"会话没了"，而不是"这次操作被拒"。两种含义恰好共用一个状态码：
         //    再认证（改口令、停用两步验证、重发恢复码）连续失败触发的临时锁定属于后者，
         //    服务端明确不踢已有会话（见 User.AllowsExistingSessions）。清掉就与那条设计相反，
@@ -90,10 +88,8 @@ export const httpErrorInterceptor: HttpInterceptorFn = (req, next) => {
           //#if (LocalIdentity)
           void router.navigate(['/auth/login'], { queryParams: { returnUrl: entryRoute.url() } });
           //#else
-          // 令牌到期是这种形态的常规生命周期，不是异常：没有静默续期也没有刷新令牌，
-          // 而 isAuthenticated() 只看内存里的主体，它不会自己变假。这里不重新发起认证，
-          // Guard 就继续放行、旧权限旧设置继续显示、请求全部 401，用户只能自己硬刷新。
-          authService.login(entryRoute.url());
+          // 服务端已尝试刷新；401 表示会话无法续期或已撤销，重新发起整页认证。
+          authService.startLogin(entryRoute.url());
           //#endif
         }
       }

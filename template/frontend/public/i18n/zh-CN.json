@@ -1,5 +1,7 @@
 {
   "common": {
+    "signIn": "登录",
+    "continueToSignIn": "继续登录",
     "workspace": "工作区",
     "unknownError": "未知错误",
     "appError": "应用错误",

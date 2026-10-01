@@ -12,7 +12,7 @@ builder.Services.AddOrderServiceClient(builder.Configuration).AddClientCredentia
 builder.Services.AddBillingServiceClient(builder.Configuration).AddTokenExchange();
 ```
 
-机器调用只代表客户端，范围绑定在 Leistd:ServiceClients:{Name}:Scope。用户调用从当前 Resource 请求读取已验证的 Bearer 令牌并交换，不能通过设置 ICurrentUser、ICurrentTenant 或请求头制造用户凭据。Identity/Standalone 的 Cookie 和后台用户上下文不提供交换证明；用户委托需要已验证的用户访问令牌。
+机器调用只代表客户端，范围绑定在 Leistd:ServiceClients:{Name}:Scope。用户调用从当前 Resource 请求读取已验证的 Bearer 或服务端会话中的访问令牌并交换，不能通过设置 ICurrentUser、ICurrentTenant 或请求头制造用户凭据。Identity/Standalone 的 Cookie 和后台用户上下文不提供交换证明；用户委托需要已验证的用户访问令牌。
 
 远端失败以 RemoteServiceException 携带业务码、远端 traceId 和错误字段；协议取令牌失败为 ServiceClientException，默认 API 返回安全的 502。可预期业务失败由本服务明确翻译。
 
@@ -24,19 +24,19 @@ Token Exchange 令牌保留用户、租户与身份库的用户名/邮箱/显示
 
 ## Identity 与资源服务对接
 
-Identity 的 OAuth:ApiResources 登记 orders-api、billing-api 等 API，每项成为同名 scope。Resource 的 Authentication:Audience 使用自己的 API ID，Authentication:Issuer 与 Identity 的 OAuth:Issuer 精确一致，含路径与尾斜杠。
+Identity 的 OAuth:ApiResources 登记资源对象，例如 { "Name": "orders-api", "OwnerClientId": "orders-worker" }，Scope 可单独配置、默认资源名；同一资源仅一个归属，客户端可拥有多个资源。Resource 的 Authentication:Audience 使用自己的 API ID，Authentication:Issuer 与 Identity 的 OAuth:Issuer 精确一致，含路径与尾斜杠。
 
 开放应用仅使用 implicit consent，不提供同意类型输入和同意页。登记三类权限组合：
 
-- SPA 为 web/public、authorization code、PKCE；只授予 openid/profile/email/roles 与自己的 API scope，登记完整 /auth/callback 和登出回调源地址，不申请下游 scope。
-- 调用方为 service/confidential，client ID 与来源 API 受众一致（例如 orders-api），启用 Token Exchange grant、ept:token、aud:billing-api、scp:billing-api。subject 令牌必须面向 orders-api，但无需带 billing-api scope；目标权限取调用方应用的登记值。只接受单跳访问令牌，不支持 actor_token 和请求覆盖身份。
+- 浏览器依赖方登记为 web/confidential、authorization code、refresh token、PKCE；只授予 openid/profile/email/roles/offline_access 与自己的 API scope，登记后端 /api/v1/auth/signin、/api/v1/auth/signout 回调，不申请下游 scope。第三方 public client 仍可单独登记。
+- 调用方为 service/confidential，client ID 是来源资源的 OwnerClientId（默认资源名，例如 orders-api），启用 Token Exchange grant、ept:token、aud:billing-api、scp:billing-api。subject 令牌必须面向 orders-api，但无需带 billing-api scope；目标权限取调用方应用的登记值。只接受单跳访问令牌，不支持 actor_token 和请求覆盖身份。
 - 机器调用启用 client credentials 与目标 scope；租户回源授予 tenant-routing.read，迁移身份单独授予 tenant-migration.read。工作负载不混用用户授权流。需要机器回源的交换客户端可同时启用 client credentials。
 
 配置示例（Secret 由 Leistd__ServiceAuth__ClientSecret 注入）：
 
 ```json
 {
-  "Authentication": { "Issuer": "https://login.example.com/", "Audience": "orders-api" },
+  "Authentication": { "Issuer": "https://login.example.com/", "Audience": "orders-api", "ClientId": "orders-browser", "ClientSecret": "<from-secret-store>" },
   "Leistd": {
     "ServiceAuth": { "Authority": "https://login.example.com/", "ClientId": "orders-api" },
     "ServiceClients": {
@@ -47,7 +47,7 @@ Identity 的 OAuth:ApiResources 登记 orders-api、billing-api 等 API，每项
 }
 ```
 
-Resource 已注册用户访问令牌适配器；Billing 经 AddTokenExchange 注册，租户回源的 Identity 客户端经 AddClientCredentials 注册。工作负载身份全局注册一次，客户端配置名与注册名一致。Identity CORS 允许资源前端的源，前端 authority 与客户端登记地址一致；回调采用普通路径路由，不带 fragment。
+Resource 已注册用户访问令牌适配器；Billing 经 AddTokenExchange 注册，租户回源的 Identity 客户端经 AddClientCredentials 注册。工作负载身份全局注册一次，客户端配置名与注册名一致。OIDC authority 在 Resource 后端配置并与 Identity issuer 一致；回调登记本服务前端源的 /api/v1/auth/signin、/api/v1/auth/signout。浏览器默认调用同源 API，跨源部署单独配置 CORS。
 
 交换 JWT 有效期 120 秒且不超过 subject exp；进程内 HybridCache 按官方客户端返回的到期时间提前 10 秒失效，键含完整 subject 摘要，不把 Bearer 写入 Redis。没有真实用户令牌时拒绝委托，不回退为机器身份。401 清除缓存，重试由业务层按幂等性决定。
 

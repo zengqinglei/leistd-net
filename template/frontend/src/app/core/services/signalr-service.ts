@@ -3,9 +3,6 @@ import {
   Injectable,
   signal,
   computed,
-  //#if (RemoteTokenAuth)
-  inject,
-  //#endif
 } from '@angular/core';
 import {
   HubConnectionBuilder,
@@ -14,10 +11,6 @@ import {
   LogLevel,
   HttpTransportType,
 } from '@microsoft/signalr';
-//#if (RemoteTokenAuth)
-import { OidcSecurityService } from 'angular-auth-oidc-client';
-import { firstValueFrom } from 'rxjs';
-//#endif
 
 import { environment } from '../../../environments/environment';
 
@@ -49,9 +42,7 @@ export interface NotificationOutputDto {
  * SignalR 全局服务：通知与实时业务事件共用一条连接（后端的实时 Hub）。
  *
  * 地址：Hub 经 resolveHubUrl 拼接 environment.api.gateway，与 HTTP 请求走同一后端（HubConnectionBuilder 不经过 HTTP 拦截器）。
- * 认证：Identity 使用 Cookie 会话；Resource 从 OIDC 会话提供短寿命 access token。
- * 浏览器 WebSocket/SSE 无法设置 Authorization 头，SignalR 会在 Hub 连接上使用 access_token query，
- * 后端只对 Hub 端点定向接受并立即从 QueryString 移除。
+ * 认证：浏览器使用同源 Cookie 会话。
  */
 @Injectable({ providedIn: 'root' })
 export class SignalRService {
@@ -61,9 +52,6 @@ export class SignalRService {
   /** 通知推送到客户端时调用的方法名（后端 NotificationClientMethods.Received）。 */
   static readonly notificationReceived = 'Notifications.Received';
 
-  //#if (RemoteTokenAuth)
-  private readonly oidc = inject(OidcSecurityService);
-  //#endif
   private connection: HubConnection | null = null;
 
   // ── 通知状态 ──
@@ -284,14 +272,9 @@ export class SignalRService {
     const connection = new HubConnectionBuilder()
       .withUrl(this.resolveHubUrl(SignalRService.hubPath), {
         transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
-        //#if (RemoteTokenAuth)
-        accessTokenFactory: () => firstValueFrom(this.oidc.getAccessToken()),
-        //#endif
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-      // Warning 而不是 Information：WebSocket 传输把访问令牌拼进 URL（查询串 access_token），
-      // 而连接成功那条日志以 Information 打印整个 URL——令牌原文就进了控制台，会被截图、
-      // 被前端错误上报采集、被扩展读到。本地排障可以临时调高，代价是日志里可能带出凭据。
+      // 普通连接日志保持安静；连接与重试错误仍可排查。
       .configureLogging(LogLevel.Warning)
       .build();
 

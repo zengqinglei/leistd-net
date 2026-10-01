@@ -22,9 +22,6 @@ import { provideTransloco } from '@jsverse/transloco';
 //#endif
 import { provideHlmSidebarConfig } from '@spartan-ng/helm/sidebar';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
-//#if (RemoteTokenAuth)
-import { LogLevel, provideAuth } from 'angular-auth-oidc-client';
-//#endif
 
 import { appInterceptors } from './app.interceptors';
 import { routes } from './app.routes';
@@ -67,24 +64,6 @@ export const appConfig: ApplicationConfig = {
     // 注册全局错误处理器，替换 Angular 默认的 ErrorHandler
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideRouter(routes, ...routerFeatures),
-    //#if (RemoteTokenAuth)
-    provideAuth({
-      config: {
-        authority: environment.oidc.authority,
-        clientId: environment.oidc.clientId,
-        redirectUrl: `${window.location.origin}/auth/callback`,
-        postLogoutRedirectUri: window.location.origin,
-        responseType: 'code',
-        scope: environment.oidc.scope,
-        silentRenew: false,
-        useRefreshToken: false,
-        secureRoutes: [`${window.location.origin}/api`, '/api'],
-        // 回调后的导航归 OidcCallback（回到登录前的地址）；不打开时库会自行跳到 postLoginRoute（默认 /），两处导航互相竞争
-        triggerAuthorizationResultEvent: true,
-        logLevel: environment.production ? LogLevel.Error : LogLevel.Warn,
-      },
-    }),
-    //#endif
     //#if (IncludeLocalization)
     provideTransloco({
       config: {

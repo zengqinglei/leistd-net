@@ -31,9 +31,9 @@ export const routes: Routes = [
   //#endif
   //#if (RemoteTokenAuth)
   {
-    path: 'auth/callback',
+    path: 'auth/login',
     loadComponent: () =>
-      import('./core/components/oidc-callback/oidc-callback').then((m) => m.OidcCallback),
+      import('./core/components/resource-login/resource-login').then((m) => m.ResourceLogin),
   },
   //#endif
   // 工作空间：面向业务用户，顶栏导航。入口多了需要分组时换回 DefaultLayout（见 coding-frontend.md §8）

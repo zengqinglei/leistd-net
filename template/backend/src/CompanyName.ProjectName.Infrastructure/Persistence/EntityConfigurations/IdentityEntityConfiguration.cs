@@ -78,8 +78,6 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.ProviderAccountLabel).HasMaxLength(256);
             b.Property(e => e.ProviderEmail).HasMaxLength(256);
             b.Property(e => e.ProviderAvatarUrl).HasMaxLength(1024);
-            b.Property(e => e.AccessToken).HasMaxLength(2048);
-            b.Property(e => e.RefreshToken).HasMaxLength(2048);
 
             // 租户内唯一：同一外部身份可在不同租户各自绑定。
             // 宿主行（TenantId 为 NULL）在 PostgreSQL/SQLite 中 NULL 互不相等，

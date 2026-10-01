@@ -626,3 +626,17 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
 前端若按错误码分支，要把这个码加进处理。
 派生项目若希望被删用户交还用户名与邮箱，要自行在唯一索引上加 `IsDeleted = false` 过滤并新增迁移，
 那会改变"删掉再建同一个人"的语义，本次不做。
+
+## 浏览器认证与官方外部处理器
+
+模板自带前端停止充当 OAuth public client，移除 angular-auth-oidc-client、environment.oidc、旧 /auth/callback 组件和令牌拦截/SignalR token 注入及 Hub query 令牌转换；开发代理与同源 Angular 托管保留。第三方 public-client 授权码能力仍可单独登记。
+
+- 外部 HTTP 契约改为 GET challenge → 官方 /api/v1/external-auth/{provider}/signin → POST complete；绑定使用受保护的 GET link/challenge → POST link/complete，不再接收前端 code/state；提供商后台重新登记完整 HTTPS signin 回调。登录与绑定意图受保护，complete 保留一次消费，失败后重新 challenge；第二步凭据只走 JSON/导航状态。
+- Resource 新增 Authentication:ClientId/ClientSecret 必填后端配置（缺失时启动报出键名）；Identity 登记 web/confidential、授权码、PKCE、refresh token、offline_access 和本 API scope。登录/退出回调分别 /api/v1/auth/signin、/api/v1/auth/signout；前端 GET login、GET me、整页 POST logout。
+- SaveTokens 必须配 ITicketStore。所有会话 Cookie 只携引用及版本，完整票据加密留服务器；部署共享缓存与 Data Protection 密钥。删除票据立即拒绝旧 Cookie，显式再次登录使旧引用版本失效。应用 SessionCookie:SameSite 不覆盖官方 correlation/nonce 的 None/Secure Always。模板未启用 antiforgery；默认写请求校验 Origin；浏览器页面与所属 API 必须同源，分进程须经部署代理统一外部源，详见生成项目浏览器认证文档。
+- OAuth:ApiResources 由字符串数组改为对象，例如 `{ "Name": "https://api.example/orders", "Scope": "orders.read", "OwnerClientId": "orders-worker" }`。Scope/OwnerClientId 默认 Name，重复资源或 scope 启动失败。发起方按所有资源集合验证，允许客户端拥有多个资源；不再要求 client_id、scope、audience 字符串相等，授权码 presenter 与资源所有者可不同。
+- 删除 IOAuthProvider/OAuthTokenInfo、GetExternalLoginUrlAsync 与 code/state DTO；保留规范化 ExternalUserInfo 和业务账号政策。ExternalLoginConnection 删除 AccessToken/RefreshToken/ExpiresAt、UpdateTokens，基线迁移同步删列；派生项目已有数据库须显式删列并覆盖各业务/租户库；若已覆盖模型快照，EF 不会自动推导出删列，需保留旧快照生成迁移或自行编写 DropColumn。
+- `AuthenticationSchemeNames` 移至 `Application.Shared` 命名空间，使用方更新 using。提供商 scheme 使用 `AuthenticationSchemeNames.ExternalProviderPrefix + provider` 登记官方远程处理器，目录不接受普通 Cookie/Bearer/策略 scheme。外部登录站内 returnUrl 贯穿受保护票据与第二步验证；Resource 的 me 删除 isActive/creationTime。旧在飞请求的退出或刷新失败仅删除同一引用版本。
+- Google UserInfo 改用官方 v3 的 sub/email_verified；旧 id→sub 真实账号连续性尚未验证，已有外部账号连接迁移须先实测。绑定列表字段 providerAccountLabel 的既有改名同前节。
+
+完整当前契约见 [模板浏览器认证维护规则](../template/browser-authentication.md)。

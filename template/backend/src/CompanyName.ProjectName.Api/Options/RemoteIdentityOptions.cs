@@ -21,6 +21,11 @@ internal sealed class RemoteIdentityOptions
     /// <summary>本服务在令牌 <c>aud</c> 中的标识</summary>
     public string? Audience { get; set; }
 
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
+    /// <summary>申请本 API 的 scope，未配置时与 Audience 同名。</summary>
+    public string? Scope { get; set; }
+
     /// <summary>解析后的签发方地址；不是合法绝对 http(s) URI 时为 <see langword="null"/></summary>
     public Uri? IssuerUri =>
         Uri.TryCreate(Issuer, UriKind.Absolute, out var uri) &&

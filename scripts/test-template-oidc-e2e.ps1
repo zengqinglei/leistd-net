@@ -241,7 +241,7 @@ function Invoke-Http(
             $raw = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
             $data = try { ConvertFrom-Json -InputObject $raw -AsHashtable -ErrorAction Stop } catch { $raw }
             $location = if ($response.Headers.Location) { $response.Headers.Location.ToString() } else { $null }
-            return @{ Status = [int]$response.StatusCode; Data = $data; Location = $location }
+            return @{ Status = [int]$response.StatusCode; Data = $data; Location = $location; Cookies = @(if ($response.Headers.Contains("Set-Cookie")) { $response.Headers.GetValues("Set-Cookie") }) }
         }
         finally { $response.Dispose() }
     }
@@ -361,15 +361,21 @@ function Get-TenantToken([hashtable]$Tenant) {
     return @{ Session = $session; Token = $token }
 }
 
-function New-Application([string]$ClientId, [string[]]$Scopes, [switch]$Public, [switch]$Exchange) {
+function New-Application([string]$ClientId, [string[]]$Scopes, [switch]$Public, [switch]$Exchange, [string]$BrowserService) {
     $permissions = if ($Public) { @("ept:token", "gt:authorization_code", "ept:authorization", "ept:end_session", "rst:code") }
         else { @("ept:token", "gt:client_credentials") }
+    if ($BrowserService) { $permissions = @("ept:token", "gt:authorization_code", "gt:refresh_token", "ept:authorization", "ept:end_session", "rst:code") }
     if ($Exchange) { $permissions += @("gt:urn:ietf:params:oauth:grant-type:token-exchange", "aud:billing-api") }
     $permissions += @($Scopes | ForEach-Object { "scp:$_" })
-    $body = @{ clientId = $ClientId; applicationType = $(if ($Public) { "web" } else { "service" })
+    $body = @{ clientId = $ClientId; applicationType = $(if ($Public -or $BrowserService) { "web" } else { "service" })
         clientType = $(if ($Public) { "public" } else { "confidential" })
         redirectUris = @(); postLogoutRedirectUris = @(); permissions = $permissions; requirements = @() }
     if ($Public) { $body.redirectUris = @($redirect); $body.requirements = @("ft:pkce") }
+    if ($BrowserService) {
+        $body.redirectUris = @($urls[$BrowserService] + "/api/v1/auth/signin")
+        $body.postLogoutRedirectUris = @($urls[$BrowserService] + "/api/v1/auth/signout")
+        $body.requirements = @("ft:pkce")
+    }
     return (Assert-Http "create-client-$ClientId" 200 ($urls.idp + "/api/v1/open-applications") `
         -Method POST -Body $body -Session $admin).Data
 }
@@ -682,8 +688,8 @@ function Initialize-Environment {
             $environment.OAuth__UseDevelopmentCertificates = "false"
             $environment.OAuth__SigningCertificatePath = Join-Path $runRoot "signing.pfx"
             $environment.OAuth__EncryptionCertificatePath = Join-Path $runRoot "encryption.pfx"
-            $environment.OAuth__ApiResources__0 = "orders-api"
-            $environment.OAuth__ApiResources__1 = "billing-api"
+            $environment.OAuth__ApiResources__0__Name = "orders-api"
+            $environment.OAuth__ApiResources__1__Name = "billing-api"
         }
         if ($role -eq "Resource") {
             $environment.Authentication__Issuer = $issuer
@@ -739,6 +745,9 @@ function Initialize-Environment {
     $script:noDelegateClient = New-Application "no-delegate" @("orders-api", "billing-api")
     foreach ($name in @("orders", "billing")) {
         $environment = $services[$name].Environment
+        $browser = New-Application "$name-browser" @("openid", "profile", "email", "roles", "offline_access", "$name-api") -BrowserService $name
+        $environment.Authentication__ClientId = $browser.clientId
+        $environment.Authentication__ClientSecret = $browser.clientSecret
         $environment.Leistd__ServiceAuth__ClientId = $exchangeClient.clientId
         $environment.Leistd__ServiceAuth__ClientSecret = $exchangeClient.clientSecret
         $environment.Leistd__ServiceClients__Billing__BaseAddress = $urls.billing
@@ -820,6 +829,35 @@ function Test-Exchange([string]$Subject, [hashtable]$SourceClaims) {
     }
 }
 
+function Test-BrowserSession {
+    $challenge = Assert-Http "resource-browser-challenge" 302 ($urls.orders + "/api/v1/auth/login?returnUrl=/workspace")
+    $parameters = Read-Query $challenge.Location
+    Assert-Value "browser-code-flow" "code" $parameters.response_type
+    Assert-Value "browser-pkce" "S256" $parameters.code_challenge_method
+    $authorize = Assert-Http "browser-authorize" 200 $challenge.Location -Session $sharedSession
+    $form = @{}
+    foreach ($input in [regex]::Matches([string]$authorize.Data, '<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"')) {
+        $form[$input.Groups[1].Value] = [Net.WebUtility]::HtmlDecode($input.Groups[2].Value)
+    }
+    if (-not $form.ContainsKey("code") -or -not $form.ContainsKey("state")) { throw "OIDC form_post response contains no code/state." }
+    $correlation = ($challenge.Cookies | ForEach-Object { $_.Split(';')[0] }) -join "; "
+    $callback = Assert-Http "resource-browser-callback" 302 ($urls.orders + "/api/v1/auth/signin") -Method POST `
+        -Body (ConvertTo-Form $form) -Headers @{ Cookie = $correlation }
+    Assert-Value "browser-return-url" "/workspace" $callback.Location
+    $cookie = ($callback.Cookies | Where-Object { $_.StartsWith("E2E.Orders.Auth=") } | ForEach-Object { $_.Split(';')[0] }) -join "; "
+    if (-not $cookie) { throw "OIDC callback created no reference cookie." }
+    $me = (Assert-Http "resource-browser-me" 200 ($urls.orders + "/api/v1/auth/me") -Headers @{ Cookie = $cookie }).Data
+    $claims = Read-TokenClaims $sharedToken
+    Assert-Value "browser-session-user" $claims.sub $me.id
+    Assert-Value "browser-session-tenant" $sharedTenant.id $me.tenantId
+    Assert-Http "browser-cookie-delegation" 200 ($urls.orders + "/api/e2e/billing") -Headers @{ Cookie = $cookie } | Out-Null
+    Assert-Http "browser-no-bearer-fallback" 401 ($urls.orders + "/api/v1/auth/me") -Token "invalid" -Headers @{ Cookie = $cookie } | Out-Null
+    $logout = Assert-Http "resource-browser-logout" 302 ($urls.orders + "/api/v1/auth/logout") -Method POST -Body @{} -Headers @{ Cookie = $cookie }
+    $logoutParameters = Read-Query $logout.Location
+    Assert-Value "logout-has-no-id-token-hint" $false $logoutParameters.ContainsKey("id_token_hint")
+    Assert-Http "browser-logout-invalidates-copied-cookie" 401 ($urls.orders + "/api/v1/auth/me") -Headers @{ Cookie = $cookie } | Out-Null
+}
+
 function Test-S2 {
     $script:hostToken = Get-CodeToken $admin "openid profile email roles e2e-idp-api orders-api billing-api"
     $claims = Read-TokenClaims $hostToken
@@ -848,6 +886,7 @@ function Test-S4 {
     $tenantToken = Get-TenantToken $sharedTenant
     $script:sharedSession = $tenantToken.Session
     $script:sharedToken = $tenantToken.Token
+    Test-BrowserSession
     $claims = Read-TokenClaims $sharedToken
     $data = (Assert-Http "serviceclient-billing-delegation" 200 ($urls.orders + "/api/e2e/billing") -Token $sharedToken).Data
     Assert-Value "delegation-user" $claims.sub $data.userId
@@ -1002,7 +1041,7 @@ function Test-S8 {
             Assert-Value "readiness-restart-warning-$name" $true $diagnostic @{ stdoutOffset = $offsets.Stdout; stderrOffset = $offsets.Stderr }
         }
     }
-    finally { Start-Api "idp" }
+    finally { Start-Api "idp"; $script:admin = Login }
     foreach ($name in @("orders", "billing")) {
         Wait-Http $name "/api/health/ready"
         Assert-Http "readiness-recovered-$name" 200 ($urls[$name] + "/api/health/ready") | Out-Null

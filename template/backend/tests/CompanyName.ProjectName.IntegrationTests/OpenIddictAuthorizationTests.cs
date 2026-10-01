@@ -224,18 +224,17 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
 
 
     [Fact]
-    public async Task A_stray_bearer_header_does_not_break_a_cookie_session()
+    public async Task An_invalid_bearer_header_is_rejected_even_with_a_valid_cookie_session()
     {
         using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var user = await CreateUserAsync(superAdmin.Client);
         using var session = await Factory.LoginAsync(user.Username, TestPassword);
 
-        // Cookie 认证的请求顺带挂一个无关的 Bearer 头：默认策略同时接受两个方案，
-        // 无效的 Bearer 不能把本来有效的 Cookie 会话拖成 401。
+        // 显式 Authorization 头选择 Bearer；失败不能回退到 Cookie。
         session.Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", "not-a-real-token");
-        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
 
         Assert.Equal(
             HttpStatusCode.OK,

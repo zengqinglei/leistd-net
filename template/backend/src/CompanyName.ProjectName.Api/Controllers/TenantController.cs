@@ -1,4 +1,4 @@
-using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
 using Microsoft.AspNetCore.Authentication;

@@ -38,7 +38,6 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
             "frontend/src/app/features/account",
-            "frontend/src/app/shared/dtos/auth.dto.ts",
             "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs"
         )
         ReadmeContains = @()
@@ -48,9 +47,8 @@ $scenarioMap = [ordered]@{
             "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.MultiTenancy.ServiceClient")
             "backend/src/{name}.Infrastructure/DependencyInjection.cs" = @("AddRemoteTenantConnectionStore(")
         }
-        # 哈希路由与 OIDC 回调不能共存：回调地址是无 fragment 的普通路径，
-        # 而哈希路由只从 fragment 读路由，回调组件不会被渲染。这个组合运行期不成立，
-        # 因此不是"默认关掉的开关"，而是根本不生成——留着开关等于留一个开了就坏的东西。
+        # Resource 固定使用普通路径路由，后端完成认证后返回站内路径。
+        # 产物不携带哈希路由配置或本地口令登录契约。
         ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "standalone" = @{
@@ -108,7 +106,7 @@ $scenarioMap = [ordered]@{
         RequiredTokens = @{
             "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapNotifications(")
         }
-        # 同 resource：哈希路由与 OIDC 回调不可共存；本地登录契约也不属于这种形态
+        # 同 resource：不带本地口令登录契约。
         ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "identity-external-login" = @{
@@ -118,6 +116,18 @@ $scenarioMap = [ordered]@{
         Absent = @()
         ReadmeContains = @()
         ReadmeExcludes = @()
+    }
+    "standalone-external-login" = @{
+        Shard = 2
+        Arguments = @("--service-role", "Standalone", "--include-external-login"); Frontend = $true; Lint = $true
+        Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
+        Absent = @("backend/src/{name}.Api/Controllers/ConnectController.cs", "backend/src/{name}.Domain/Auth/Options/OAuthOptions.cs")
+        ReadmeContains = @(); ReadmeExcludes = @()
+        RequiredTokens = @{
+            "backend/src/{name}.Api/Auth/ExternalAuthenticationExtensions.cs" = @("AddGoogle", "AddOAuth", "UsePkce = true")
+            "backend/src/{name}.Api/Auth/DistributedTicketStore.cs" = @("ITicketStore")
+        }
+        ForbiddenTokens = @("OpenIddict", "IOAuthProvider", "OAuthTokenInfo", "angular-auth-oidc-client")
     }
     "identity-localization" = @{
         Shard = 2
@@ -153,7 +163,7 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
         ReadmeContains = @()
         ReadmeExcludes = @()
-        # 同 resource：哈希路由与 OIDC 回调不可共存；本地登录契约也不属于这种形态
+        # 同 resource：不带本地口令登录契约。
         ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
 }
@@ -162,7 +172,7 @@ $scenarioMap = [ordered]@{
 $AllScenarios = @(
     "identity", "resource", "standalone",
     "identity-notifications", "resource-notifications",
-    "identity-external-login",
+    "identity-external-login", "standalone-external-login",
     "identity-localization", "resource-localization",
     "identity-all-features"
 )

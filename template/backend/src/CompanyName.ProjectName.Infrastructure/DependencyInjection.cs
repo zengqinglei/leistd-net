@@ -41,8 +41,7 @@ using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 using Leistd.Email.Smtp;
 #endif
 #if (ExternalLogin)
-using CompanyName.ProjectName.Domain.Auth.Abstractions;
-using CompanyName.ProjectName.Infrastructure.Auth.OAuth;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
 using Microsoft.Extensions.Options;
 #endif
@@ -128,8 +127,6 @@ public static class DependencyInjection
             })
             .ValidateOnStart();
         services.AddHttpClient();
-        services.AddScoped<IOAuthProvider, GitHubOAuthProvider>();
-        services.AddScoped<IOAuthProvider, GoogleOAuthProvider>();
 #endif
 
         return services;
@@ -302,7 +299,6 @@ public static class DependencyInjection
     {
         options.ClientId = configuration[nameof(options.ClientId)];
         options.ClientSecret = configuration[nameof(options.ClientSecret)];
-        options.RedirectUri = configuration[nameof(options.RedirectUri)];
     }
 #endif
 }

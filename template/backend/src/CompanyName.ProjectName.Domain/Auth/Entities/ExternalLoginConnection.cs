@@ -59,21 +59,6 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
     public string? ProviderAvatarUrl { get; private set; }
 
     /// <summary>
-    /// Access Token（加密存储）
-    /// </summary>
-    public string? AccessToken { get; private set; }
-
-    /// <summary>
-    /// Refresh Token（加密存储）
-    /// </summary>
-    public string? RefreshToken { get; private set; }
-
-    /// <summary>
-    /// Token 过期时间
-    /// </summary>
-    public DateTime? ExpiresAt { get; private set; }
-
-    /// <summary>
     /// 最后同步时间
     /// </summary>
     public DateTime? LastSyncTime { get; private set; }
@@ -120,16 +105,5 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
         LastSyncTime = syncedAt;
     }
 
-    public void UpdateTokens(
-        DateTime syncedAt,
-        string? accessToken,
-        string? refreshToken = null,
-        DateTime? expiresAt = null)
-    {
-        AccessToken = accessToken;
-        RefreshToken = refreshToken;
-        ExpiresAt = expiresAt;
-        LastSyncTime = syncedAt;
-    }
 }
 #endif

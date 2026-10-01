@@ -7,13 +7,6 @@ import { environmentBase, Environment } from './environment.base';
  */
 export const environment: Environment = {
   ...environmentBase,
-  //#if (RemoteTokenAuth)
-  // 本机 Identity 服务的前端开发服务器：浏览器在那里登录，令牌的签发方也是这个地址
-  oidc: {
-    ...environmentBase.oidc,
-    authority: 'http://localhost:4200',
-  },
-  //#endif
   api: {
     ...environmentBase.api,
     gateway: '',

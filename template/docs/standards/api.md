@@ -255,3 +255,45 @@ if (user is null)
 - 新增字段默认向后兼容。
 - 删除字段、修改字段含义、修改错误码属于破坏性变更。
 - 破坏性变更必须明确迁移方案并获得相关使用者确认。
+
+## 浏览器认证
+
+浏览器与所属 API 必须同源；开发期 Angular 代理转发 `/api/**`。页面由前端渲染，认证协议由后端处理。浏览器只持有 HttpOnly 会话引用，OAuth access/refresh/id token 留在服务端 `ITicketStore`，不写 URL、前端存储、JSON 响应或 SignalR 参数。SignalR 浏览器连接使用同源 Cookie；机器令牌仅走 Authorization 头，Hub 仅接受请求头中的 Bearer。
+
+### 会话与部署
+
+`DistributedTicketStore` 使用已有分布式缓存与 Data Protection 保护完整票据。多实例必须共享缓存与 Data Protection 密钥；没有 Redis 的本地开发使用内存缓存，重启后需重新登录。缓存票据删除后，复制的旧 Cookie 失效。显式登录更换引用版本，滑动续期保留版本；旧请求不能把已撤销票据重新写回，也不能删除再次登录的新版本。
+
+`SessionCookie:SameSite` 只控制应用会话 Cookie；默认 Lax。OAuth correlation 与 OIDC nonce Cookie 保持官方 SameSite=None、Secure=Always，HTTPS 回调不可省略。开发回调在 `/api/**` 下，由开发代理转发。
+
+浏览器写 API 请求检查 Origin，接受本源及显式 `Cors:AllowedOrigins`；无 Origin 的非浏览器调用保持支持。模板没有启用 ASP.NET Core antiforgery，也不把 Angular 默认 XSRF 拦截器当成完整防护。浏览器认证不支持独立跨源 API 地址；进程分离须由部署代理将页面、认证导航、协议回调与 API 暴露在同一个外部源。`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。整页认证导航不经过 HTTP 拦截器；不要将任意源加入允许列表。OIDC form_post 回调由官方处理器消费，依靠 state、correlation 与 nonce 校验。
+
+<!--#if (LocalIdentity)-->
+### 本地账号
+
+账号密码与第二步验证走 `/api/v1/auth/session-login` 等现有会话接口。`GET /api/v1/auth/me` 读取已验证用户，退出撤销服务端会话。第二步完成前不签发最终会话，第二步凭据由 JSON 与前端导航状态传递。
+<!--#endif-->
+<!--#if (ExternalLogin)-->
+### 外部账号
+
+Google 使用官方 AddGoogle（UserInfo v3）；GitHub 使用官方 AddOAuth，显式启用 S256 PKCE。添加提供商时在组合根注册官方远程处理器：scheme 名为 `AuthenticationSchemeNames.ExternalProviderPrefix + provider`（provider 使用小写），`SignInScheme` 指向 `ExternalCookie`，`CallbackPath` 在 `/api/**` 下，并在 `OnCreatingTicket` 把规范化 `ExternalUserInfo` 序列化到 `context.Properties.Items[ExternalAuthenticationExtensions.UserInfoKey]`。目录从该专用前缀的远程 scheme 得出，Cookie/Bearer/策略 scheme 均不开放。注册时明确协议失败响应、所需 PKCE 与资料验证；账号关联、锁定、用户名生成与第二步验证仍由领域/应用层决定。
+
+1. 浏览器导航至 `GET /api/v1/external-auth/{provider}/challenge`，可带站内 `returnUrl`（外站地址返回 400）。绑定使用 `GET /api/v1/external-auth/{provider}/link/challenge`，要求通过自然人策略的非受限会话。
+2. 提供商回调至 `/api/v1/external-auth/{provider}/signin`，官方处理器完成 code/state/correlation/PKCE 与 UserInfo，签发五分钟外部票据引用，然后重定向前端 `/auth/external-callback/{provider}?intent=...`。
+3. 前端 `POST /api/v1/external-auth/{provider}/complete` 或受保护的 `POST /api/v1/external-auth/{provider}/link/complete`，请求体为空对象。后端匹配受保护的提供商、意图、绑定发起者与租户，先一次消费外部票据，再执行账号政策；登录返回最终会话结果或第二步凭据及受保护的 `returnUrl`，前端在登录或第二步成功后接续该地址；绑定返回 `{ linked: true }`。
+
+完成端点失败也不能重用票据，须重新 challenge；查询参数不能改变保护过的登录/绑定意图。提供商后台需分别登记上述完整 HTTPS signin 地址。Google v3 使用 `sub/email_verified`。邮箱接口失败或未验证邮箱不允许按邮箱关联账号。
+<!--#endif-->
+<!--#if (RemoteTokenAuth)-->
+### Resource 依赖方
+
+后端是 OIDC 机密客户端，使用 code、PKCE、SaveTokens 与服务端票据。配置 `Authentication:Issuer`、`Audience`、`ClientId`、`ClientSecret`，缺键启动失败；`Scope` 可省略，默认与 Audience 同名。密钥只放后端机密配置。
+
+Identity 登记 web/confidential 客户端，允许 authorization code、refresh token、PKCE、openid/profile/email/roles/offline_access 和本 API scope。登录回调登记完整 `/api/v1/auth/signin`，退出回调登记完整 `/api/v1/auth/signout`。
+
+前端导航至 `GET /api/v1/auth/login?returnUrl=...`，仅接受站内 returnUrl；回调后 `GET /api/v1/auth/me` 还原用户、角色与租户。`POST /api/v1/auth/logout` 用整页表单完成官方 OIDC 退出重定向；不发送 id_token_hint，删除本服务端票据后旧 Cookie 立即失效。
+
+有 Authorization 头的请求只选官方 Bearer 验证，失败不回退到 Cookie；无头时选 Cookie。角色与租户取已验证访问令牌的声明，不能假定 ID token 具有资源声明。`OnValidatePrincipal` 在过期前一分钟于服务端刷新，同一会话由分布式锁串行化，采用最新 refresh token；失败注销会话。访问令牌保存在服务器，模板自己的 `IUserAccessTokenAccessor` 为下游 Token Exchange 提供经过验证的请求令牌。
+
+退出 Resource 会话不会撤销签发方所有既有令牌；注销 Identity Cookie 与撤销 OAuth 授权/令牌也是不同边界。账号或租户停用后的本地验签窗口由访问令牌有效期决定，后续刷新失败收敛会话。
+<!--#endif-->

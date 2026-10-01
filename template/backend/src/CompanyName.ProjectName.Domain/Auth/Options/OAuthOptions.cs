@@ -43,9 +43,19 @@ public class OAuthOptions
     public string Resource { get; set; } = "companyname-projectname-api";
 
     /// <summary>
-    /// 由本服务签发令牌的下游 API 的资源标识。每个都登记为同名 scope，申请它签发的访问令牌受众即该标识。
+    /// 下游 API 的资源、scope 与拥有该资源的客户端。未指定 scope 或所有者时取资源名。
     /// </summary>
     /// <remarks>下游服务把自己的 <c>Authentication:Audience</c> 设为同一个值。不能为空、不能重复，也不能与内置 scope 同名。</remarks>
-    public string[] ApiResources { get; set; } = [];
+    public OAuthApiResource[] ApiResources { get; set; } = [];
+}
+
+/// <summary>一个 API 资源的申请范围和交换发起方归属。</summary>
+public sealed class OAuthApiResource
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Scope { get; set; }
+    public string? OwnerClientId { get; set; }
+    public string ScopeName => Scope ?? Name;
+    public string Owner => OwnerClientId ?? Name;
 }
 #endif

@@ -159,18 +159,6 @@ describe('StartupService', () => {
    * 一圈一圈在浏览器和 IdP 之间打转，而每一圈的结果都一样。
    */
   describe('on the OIDC callback', () => {
-    it('fails startup instead of letting the callback navigate on', async () => {
-      isProtectedRoute.mockRestore();
-      openAt('/auth/callback?code=abc&state=xyz');
-      authService.initializeAuth.mockResolvedValue();
-      sessionContext.establish.mockRejectedValue(httpError(401));
-
-      await service.load();
-
-      expect(service.status()).toBe('failed');
-      expect(service.error()).not.toBeNull();
-    });
-
     // 回调判据必须落在路径上。查询串里出现 `/auth/callback` 的人并不在回调页，
     // 误判的代价是普通会话过期被当成"刚换到的令牌被 API 拒了"，直接进故障页，
     // 而正确行为是按已登出处理、让 Guard 把人送去登录。

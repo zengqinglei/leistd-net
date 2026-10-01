@@ -44,6 +44,15 @@
     <ProjectReference Include="..\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+<!--#if (ExternalLogin)-->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" />
+<!--#endif-->
+<!--#if (RemoteTokenAuth)-->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+<!--#endif-->
+  </ItemGroup>
+
   <!-- Leistd 框架引用 -->
   <ItemGroup>
     <PackageReference Include="Leistd.Data" />

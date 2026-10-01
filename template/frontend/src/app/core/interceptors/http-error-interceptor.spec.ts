@@ -46,7 +46,7 @@ describe('httpErrorInterceptor', () => {
   //#if (LocalIdentity)
   let authService: Pick<MockedObject<AuthService>, 'isAuthenticated'>;
   //#else
-  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated' | 'login'>;
+  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated' | 'startLogin'>;
   //#endif
 
   beforeEach(() => {
@@ -61,7 +61,7 @@ describe('httpErrorInterceptor', () => {
     //#else
     authService = {
       isAuthenticated: vi.fn().mockName('AuthService.isAuthenticated'),
-      login: vi.fn().mockName('AuthService.login'),
+      startLogin: vi.fn().mockName('AuthService.startLogin'),
     };
     //#endif
     authService.isAuthenticated.mockReturnValue(true);
@@ -217,7 +217,7 @@ describe('httpErrorInterceptor', () => {
     //#if (LocalIdentity)
     expect(navigate).toHaveBeenCalledWith(['/auth/login'], { queryParams: { returnUrl } });
     //#else
-    expect(authService.login).toHaveBeenCalledWith(returnUrl);
+    expect(authService.startLogin).toHaveBeenCalledWith(returnUrl);
     //#endif
   }
 
@@ -228,7 +228,7 @@ describe('httpErrorInterceptor', () => {
       [['/auth/login'], { queryParams: { returnUrl } }],
     ]);
     //#else
-    expect(vi.mocked(authService.login).mock.calls).toEqual([[returnUrl]]);
+    expect(vi.mocked(authService.startLogin).mock.calls).toEqual([[returnUrl]]);
     //#endif
   }
 
@@ -236,7 +236,7 @@ describe('httpErrorInterceptor', () => {
     //#if (LocalIdentity)
     expect(navigate).not.toHaveBeenCalled();
     //#else
-    expect(authService.login).not.toHaveBeenCalled();
+    expect(authService.startLogin).not.toHaveBeenCalled();
     //#endif
   }
 

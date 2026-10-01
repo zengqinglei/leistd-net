@@ -203,8 +203,8 @@ describe('settings mock', () => {
     >;
     const acme = 'tenant_acme';
 
-    auth['POST /api/v1/external-auth/:provider/callback']({
-      body: { code: 'code', state: 'state' },
+    auth['POST /api/v1/external-auth/:provider/complete']({
+      body: {},
       headers: new HttpHeaders({ [TENANT_HEADER]: acme }),
       params: { provider: 'github' },
     });

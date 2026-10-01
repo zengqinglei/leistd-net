@@ -1,8 +1,6 @@
 // 授权结果处理器在所有服务形态下都存在（被拒的写端点要留痕），因此本 using 无条件
 using CompanyName.ProjectName.Api.Auth;
-#if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Constants;
-#endif
+using CompanyName.ProjectName.Application.Shared;
 using Leistd.Security.Claims;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
@@ -34,7 +32,7 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 两种形态都在这里定案，组合根只有一行调用：本地身份形态的主体来自 Bearer 或会话 Cookie
-    /// 并要求账号可用；资源服务形态只有 Bearer、账号状态由签发方负责。
+    /// 并要求账号可用；资源服务形态来自 Bearer 或服务端 Cookie、账号状态由签发方负责。
     /// </remarks>
     public static IServiceCollection AddApiAuthorization(this IServiceCollection services)
     {
@@ -49,9 +47,9 @@ public static class DependencyInjection
         {
             var claimTypes = claimTypeOptions.Value;
 #if (RemoteTokenAuth)
-            // 资源服务只认签发方的 Bearer，默认策略要求自然人；机器端点另设策略。
+            // 资源服务按请求选择 Bearer 或 Cookie，默认策略要求自然人；机器端点另设策略。
             var currentUser = new AuthorizationPolicyBuilder(
-                    OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+                    AuthenticationSchemeNames.Smart)
                 .RequireAuthenticatedUser()
                 .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
                 .Build();
@@ -63,9 +61,10 @@ public static class DependencyInjection
             var humanSchemes = new[]
             {
 #if (OpenIddictServer)
-                OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme,
-#endif
+                AuthenticationSchemeNames.Smart
+#else
                 AuthenticationSchemeNames.SessionCookie
+#endif
             };
 
             // 默认策略表达的是"一个自然人"，而不是"任何通过了认证的东西"：client_credentials 的令牌

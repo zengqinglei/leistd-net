@@ -18,14 +18,13 @@ import { SessionContextService } from '../../../../core/services/session-context
 import { englishText } from '../../../../shared/utils/english-text';
 //#endif
 import { AccountService } from '../../services/account-service';
-import { EXTERNAL_LINK_PENDING_KEY } from '../external-logins/external-logins';
 
 /**
  * 外部登录回调组件
  *
  * 处理 GitHub/Google 等第三方登录重定向回来后的流程:
- * 1. 从路由参数取 provider（回调地址 /auth/external-callback/{provider}），从查询串取 code、state
- * 2. 将 code+state 发送到后端换取 Cookie session
+ * 1. 从路由参数取 provider（回调地址 /auth/external-callback/{provider}），读取非敏感的完成意图
+ * 2. 由后端消费短时外部票据并完成登录
  * 3. 加载用户信息并根据角色跳转
  */
 @Component({
@@ -65,33 +64,28 @@ export class ExternalAuthCallback implements OnInit {
 
   private async processCallback(): Promise<void> {
     const params = this.route.snapshot.queryParamMap;
-    const code = params.get('code');
-    const state = params.get('state');
+    const intent = params.get('intent') ?? 'login';
     const provider = this.route.snapshot.paramMap.get('provider');
 
-    if (!code || !provider) {
+    if (!provider) {
       this.error.set({ key: 'account.externalCallback.missingParams' });
       return;
     }
 
-    // 绑定外部账号时出发前记下了提供商：这次回来是绑定，不是登录
-    const pendingLink = sessionStorage.getItem(EXTERNAL_LINK_PENDING_KEY);
-    sessionStorage.removeItem(EXTERNAL_LINK_PENDING_KEY);
-    if (pendingLink === provider) {
-      await this.completeLink(provider, code, state ?? '');
+    // 查询参数仅选择完成端点意图，必须匹配后端保护的票据。
+    if (intent === 'link') {
+      await this.completeLink(provider);
       return;
     }
 
     try {
-      // 1. 将 code+state 发送到后端建立 Cookie session
-      const result = await lastValueFrom(
-        this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }),
-      );
+      // 后端验证并消费外部票据，决定最终会话或第二步凭据。
+      const result = await lastValueFrom(this.accountService.externalLoginCallback(provider));
 
       // 已启用两步验证：会话还没下发，回登录页做第二步（凭据走导航状态，不进地址栏）
       if (result?.requiresTwoFactor && result.twoFactorToken) {
         await this.router.navigate(['/auth/login'], {
-          state: { twoFactorToken: result.twoFactorToken },
+          state: { twoFactorToken: result.twoFactorToken, returnUrl: result.returnUrl },
         });
         return;
       }
@@ -104,6 +98,16 @@ export class ExternalAuthCallback implements OnInit {
         return;
       }
       await this.sessionContext.establish();
+      if (result?.returnUrl) {
+        //#if (OpenIddictServer)
+        if (result.returnUrl.startsWith('/connect/')) {
+          window.location.href = result.returnUrl;
+          return;
+        }
+        //#endif
+        await this.router.navigateByUrl(result.returnUrl);
+        return;
+      }
       if (this.authorizationService.canAccessPlatform()) {
         this.router.navigate(['/platform']);
       } else {
@@ -122,11 +126,9 @@ export class ExternalAuthCallback implements OnInit {
   }
 
   /** 完成绑定并回到「账户与安全」面板；失败也回去，由那里的列表反映实际状态。 */
-  private async completeLink(provider: string, code: string, state: string): Promise<void> {
+  private async completeLink(provider: string): Promise<void> {
     try {
-      await lastValueFrom(
-        this.accountService.linkExternalLogin(provider, { provider, code, state }),
-      );
+      await lastValueFrom(this.accountService.linkExternalLogin(provider));
       //#if (IncludeLocalization)
       toast.success(this.transloco.translate('account.externalLogins.linked'));
       //#else

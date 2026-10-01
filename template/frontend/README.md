@@ -75,17 +75,17 @@ dotnet run --project src/CompanyName.ProjectName.Api --urls http://localhost:525
 API_PROXY_TARGET=http://localhost:5250 npm start -- --port 4201
 ```
 
-`environment.ts` 的 `oidc.authority` 与后端 `appsettings.Development.json` 的 `Authentication:Issuer` 默认都指向
-`http://localhost:4200`，即 Identity 的前端开发服务器：浏览器在那里登录，令牌的签发方也是这个地址。
+后端 `appsettings.Development.json` 的 `Authentication:Issuer` 默认指向 `http://localhost:4200/`，
+即 Identity 的前端开发服务器；浏览器在那里登录，令牌的签发方也是这个地址。
 在 Identity 那边还需要：
 
-- 把本服务后端的 `Authentication:Audience` 登记进 Identity 的 `OAuth:ApiResources`（如 Identity 目录下
-  `dotnet user-secrets set "OAuth:ApiResources:0" "<本服务的 Audience>" --project src/<Identity 的 Api 项目>`），
-  它会成为同名 scope，前端申请它得到的访问令牌受众就是本服务；
-- 本机不需要为 4201 配置跨域：浏览器从 4201 请求 Identity 的前端开发服务器，开发服务器为 localhost 来源放行；
-  部署时 Identity 的 `Cors:AllowedOrigins` 要加入本服务前端的源；
-- 在「开放应用」里登记本服务的前端客户端（客户端 ID 见 `environment.base.ts` 的 `oidc.clientId`）：公共客户端、强制 PKCE，
-  授予 `openid`、`profile`、`email`、`roles` 与上面那个 scope，回调地址 `http://localhost:4201/auth/callback`，登出回调 `http://localhost:4201`。
+- 在 `OAuth:ApiResources` 登记资源对象，例如 `{ "Name": "orders-api", "OwnerClientId": "orders-worker" }`，
+  本服务后端的 `Authentication:Audience` 对应资源 Name；Scope 默认 Name，也可独立配置。
+- 在「开放应用」登记本服务后端的 web/confidential 客户端，启用 authorization code、refresh token、PKCE，
+  授予 `openid`、`profile`、`email`、`roles`、`offline_access` 与本 API scope。
+  登录回调 `http://localhost:4201/api/v1/auth/signin`，退出回调 `http://localhost:4201/api/v1/auth/signout`。
+- 将登记的 ClientId/ClientSecret 放入本服务后端机密配置；`Authentication:Scope` 与登记的 scope 一致，可省略同名值。
+  默认浏览器只向本服务同源 API 发送 Cookie，授权通过整页跳转完成。
 <!--#endif-->
 
 ### Mock
@@ -139,11 +139,10 @@ http.get('/api/v1/orders', {
 <!--#endif-->
 <!--#else-->
 
-OIDC 授权服务器地址、客户端 ID 与 scope 在 `oidc` 下配置。
-
-**部署要求**：回调地址是无 fragment 的普通路径 `/auth/callback`，反向代理或静态宿主
-必须把它与其余 SPA 深链一并回退到 `index.html`，否则授权服务器跳回来时会命中 404。
-本形态不提供哈希路由——哈希路由只从 fragment 读路由，回调组件不会被渲染。
+前端不配置 OAuth 客户端，也不持有 access/refresh/id token。OIDC 的 Issuer、Audience、ClientId、ClientSecret 和 Scope 只在后端配置。
+登录导航至 `/api/v1/auth/login`，回调由后端 `/api/v1/auth/signin` 消费；前端通过 `/api/v1/auth/me` 读取同源 Cookie 会话。
+本形态固定使用普通路径路由，同源后端托管与开发代理仍保留；部署需为 SPA 深链回退到 `index.html`。
+详见 [浏览器认证](../docs/standards/api.md#浏览器认证)。
 <!--#endif-->
 
 使用特定环境：
@@ -183,21 +182,9 @@ npm run build                   # 生产环境（默认配置，已优化性能�
 docker build -t company-name-project-name .
 ```
 
-#### 2. 前后端分离部署
+#### 2. 分进程同源部署
 
-前端独立部署，需要指定后端 API 地址：
-
-```bash
-# 构建时传入后端 API Gateway 地址
-docker build --build-arg API_GATEWAY=https://api.example.com -t company-name-project-name .
-```
-
-**说明**：
-
-- `API_GATEWAY` 为后端 API 网关地址
-- 构建时会替换 `environment.prod.ts` 中的占位符
-- 如果不传入该参数，默认使用空字符串（相对路径）
-- 前后端跨站时会话 Cookie 的配置见 [部署说明](../docs/deploy/README.md)
+前端与后端可分进程部署，由网关或反向代理统一外部源，并将 `/api/**` 与服务端授权端点路由到后端。浏览器认证导航和回调均使用此同源地址。`API_GATEWAY` 构建参数保持空值；其他服务通过同源微服务路由前缀访问。独立跨源 API 地址不属于当前浏览器认证契约。完整 Cookie 与 TLS 转发规则见 [部署说明](../docs/deploy/README.md)。
 
 ---
 <!--#if (IncludeLocalization)-->

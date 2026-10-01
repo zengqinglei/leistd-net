@@ -4,16 +4,12 @@
 
 ## 配置与机密的分层
 
-各环境共用同一套配置键，只换值的来源。默认同源部署可将同一镜像从测试环境晋升到生产。前后端分离时，当前 `Dockerfile` 的 `API_GATEWAY` 是构建参数；若各环境地址不同，镜像也会不同，必须分别记录、验证和发布对应产物。需要此部署形态也支持同镜像晋升时，应作为独立产品需求设计运行期配置。
-<!--#if (LocalIdentity)-->
+各环境共用同一套配置键，只换值的来源。浏览器页面与所属 API 必须同源，支持同镜像托管，也支持分进程经部署代理统一外部源。认证导航、`/api/**` 协议回调与前端回跳都以该外部源为准；独立跨源 API 地址不属于模板浏览器认证的部署契约。`API_GATEWAY` 构建参数与 `environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。
 
-会话 Cookie 默认 `SameSite=Lax`，同源部署与同站的前后端分离（如 `app.example.com` 调 `api.example.com`）都可用；站点按公共后缀判定，托管公共后缀域（如 `*.azurewebsites.net`）下的两个子域属于跨站。需要在跨站请求上携带会话 Cookie 时才设 `SessionCookie__SameSite=None`（跨站部署，以及下文列出的跨站 POST 情形），此时须自行接入防伪令牌：模板未启用 antiforgery，Angular 内置的 XSRF 只对同源相对地址生效。`Lax` 下跨站的顶层 GET 导航仍会带上 Cookie，因此 GET 接口不得有副作用。另有两种情形同样需要 `None`：第三方站点以 POST 跳转到 `/connect/authorize` 或 `/connect/logout`，以及接入以 `form_post` 回调且回调地址直接落在 API 上的外部登录提供方。
+会话 Cookie 默认 `SameSite=Lax`。外部 OAuth correlation 与 OIDC nonce Cookie 保持官方 `SameSite=None`、`Secure=Always`，协议回调须 HTTPS。第三方站点以顶层 POST 进入授权或退出端点时，若需要附带已有会话，应评估 `SessionCookie__SameSite=None` 与对应请求来源防护；模板未启用 antiforgery。该设置不会补齐跨源浏览器认证导航。
+<!--#if (OpenIddictServer)-->
 
-**`SameSite=None` 只是服务端允许跨站携带，不等于浏览器一定会带上。** 跨站的 fetch/XHR 带的是第三方 Cookie，受浏览器策略约束：Firefox 默认按站点隔离 Cookie 存储（Total Cookie Protection），Safari 的跟踪防护默认拦截，Chrome 保留用户选择。所以 **跨站的 fetch/XHR 会话探测不能只靠 `SameSite=None` 保证可靠性**——它会在一部分浏览器上悄悄失效，表现为"有的人一处退出没有处处退出"，而且不报错、难排查。
-
-上面那两种情形不同：它们是**顶层 POST 导航**，不属于第三方子资源请求，通常不受这类拦截影响（但也不宜承诺在所有浏览器策略下绝对可用）。
-
-要做多系统"一处退出、处处退出"，用不依赖 Cookie 的方案：按访问令牌里的 `sid` 向身份服务查询会话状态（需要先验签令牌，再查服务端会话），或由身份服务按 OIDC back-channel logout 通知各客户端（身份服务与客户端两边都要实现该协议）。**两条都需要自己实现：本模板没有现成的会话查询端点，也没有接 back-channel logout。**
+多系统退出不会自动撤销已经签发的下游令牌。需要即时联动时须实现按已验证令牌 `sid` 查询会话或 OIDC back-channel logout，模板没有这些端点。
 <!--#endif-->
 
 部署时记录 API 和 DbMigrator 的固定版本或 digest，不用 `latest` 充当发布身份。模板 Compose 中的 `:latest` 是示例值，实际发布需要由项目流水线明确替换。
@@ -28,6 +24,7 @@
 开发环境以外，只在单机上成立的回落一律缺配即启动失败：
 
 - Data Protection 密钥必须落在 Redis 或共享持久目录（`DataProtection:KeysPath`），并随数据一同备份。存储位置应只允许本服务访问：Redis 不对外发布端口，跨主机或使用托管 Redis 时设口令并开启 TLS；目录用文件系统权限限制到运行身份。显式指定存储位置后框架不再自动加密密钥，需要静态加密时按官方 `ProtectKeysWith*` 在 `AddMyProjectDataProtection` 里追加。
+- TLS 在网关或 ingress 终结时，所有形态（含 Standalone）都须配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 还原原始协议与主机。浏览器写请求的 Origin 校验同样依赖这些转发头；来源拒绝返回 Problem Details，Warning 日志给出收到的 Origin 与计算出的本源。
 <!--#if (OpenIddictServer)-->
 - 令牌签名与加密证书必须显式提供（`OAuth:SigningCertificatePath`、`OAuth:EncryptionCertificatePath`），与 HTTPS 证书分开；开发证书只用于本机开发。
 - TLS 在网关或 ingress 终结时，配置 `ForwardedHeaders:KnownProxies` / `KnownNetworks` 让应用还原原始协议，不要打开 `OAuth:DisableHttpsRequirement`——OpenIddict 明确要求生产环境即使在反向代理后也不关闭传输安全检查。
@@ -59,10 +56,9 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
 
 - 密钥和生产凭据由环境变量或密钥管理系统提供，不写入仓库。
 <!--#if (OpenIddictServer)-->
-- 前端不与本服务同源时（如独立部署的资源服务前端经本服务登录），把它的源加入本服务的 `Cors:AllowedOrigins`：发现文档、JWKS、令牌与 userinfo 都是跨源请求。
-  生产 API 只认 `Cors:AllowedOrigins`，默认为空。本机 Angular 前端开发服务器允许 localhost 来源，
-  开发代理将请求转到 API；这不是 API 的 CORS 放行规则，绕过代理的跨源请求仍须配置允许的源。
-- 下游资源服务的 API 标识登记在 `OAuth:ApiResources`，与该服务的 `Authentication:Audience` 取同一个值。
+- 浏览器整页进入授权端点，发现文档、JWKS、令牌与 UserInfo 由 Resource 后端访问，不要求为这些服务端协议通信开放浏览器 CORS。本机 Angular 开发代理将 `/api/**` 转到 API。
+  生产 API 的 `Cors:AllowedOrigins` 默认为空；仅供显式需要的其他 API 集成使用，不负责浏览器认证导航。
+- 下游资源服务的 API 标识以对象登记在 `OAuth:ApiResources` 的 Name，与该服务的 `Authentication:Audience` 相同；Scope 与 OwnerClientId 可独立配置，默认资源名。
 - 各类撤销在下游资源服务上生效的时间不同。资源服务只验签，不回本服务查状态；Access Token 有效期在 `Program.cs` 里设为 10 分钟。
   - **停用或删除账号**：同时撤销该用户已签发的令牌，本服务立即拒绝；资源服务要等 Access Token 过期，之后也刷新不到新令牌。
   - **停用或删除租户**：本服务每个请求都查注册表，立即拒绝，刷新令牌也换不到新令牌；资源服务同样要等 Access Token 过期。
@@ -80,9 +76,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.override.ym
   采用 [ASP.NET Core 分离 readiness/liveness 的启动任务示例](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0#separate-readiness-and-liveness-probes)的门禁语义，
   不周期探测共享 Identity，避免其短暂故障使所有资源实例同时摘流。
   代价是就绪不保证新密钥获取、新令牌获取或租户回源成功，这些依赖失败在对应请求上暴露。
-- SPA 关闭 `silentRenew` 与 `useRefreshToken`，不申请 `offline_access`。
-  访问令牌到期后，下次受保护 API 返回 401 时清理本地会话上下文并重新走授权码流程；
-  Identity 会话仍有效时可自动完成往返，否则显示 Identity 登录页。没有后台刷新令牌来延长访问窗口。
+- 浏览器使用后端 OIDC 机密客户端与 Cookie 会话，服务端保存并刷新令牌；配置、回调、缓存/密钥与 CSRF 边界见 [浏览器认证](../standards/api.md#浏览器认证)。
 - 本服务只验证身份服务签发的令牌，不回去查账号与租户状态。身份服务那边停用账号、撤销会话、停用或删除租户，已签发的 Access Token 在本服务仍然有效，直到过期（有效期由身份服务决定）。各类撤销的完整边界见身份服务的部署文档。改用令牌内省（OpenIddict 验证端的 `UseIntrospection()`）只能让身份服务**已撤销的令牌**即时失效，代价是每个请求多一次往返。
 <!--#endif-->
 <!--#if (IncludeNotifications && LocalIdentity)-->

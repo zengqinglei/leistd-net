@@ -2,7 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.Shared;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;

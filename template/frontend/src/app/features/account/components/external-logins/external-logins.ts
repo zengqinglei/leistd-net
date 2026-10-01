@@ -8,7 +8,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmItemImports } from '@spartan-ng/helm/item';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { lastValueFrom } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
@@ -21,15 +20,12 @@ import { englishText } from '../../../../shared/utils/english-text';
 import { ExternalLoginsOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 
-/** 外部授权回来时据它判断这是一次"绑定"而不是登录（授权地址只能带 state，带不了别的）。 */
-export const EXTERNAL_LINK_PENDING_KEY = 'app.auth.externalLinkProvider';
-
 const PROVIDER_LABELS: Record<string, string> = { github: 'GitHub', google: 'Google' };
 
 /**
  * 「账户与安全」面板的一节：已绑定的外部账号，可以绑定或解绑。
  *
- * 绑定走一次完整的外部授权：跳到提供商、回到回调页，回调页据 {@link EXTERNAL_LINK_PENDING_KEY}
+ * 绑定走完整外部授权，后端票据保护提供商、意图、发起人与租户。
  * 走绑定端点。至少要留一种登录方式，服务端会拒绝解绑最后一个（没有密码时）。
  */
 @Component({
@@ -100,12 +96,10 @@ export class ExternalLogins {
     });
   }
 
-  protected async link(provider: string): Promise<void> {
+  protected link(provider: string): void {
     this.busy.set(provider);
     try {
-      const { loginUrl } = await lastValueFrom(this.accountService.getExternalLinkUrl(provider));
-      sessionStorage.setItem(EXTERNAL_LINK_PENDING_KEY, provider);
-      window.location.href = loginUrl;
+      window.location.href = this.accountService.getExternalLinkUrl(provider);
     } catch (error) {
       this.busy.set(null);
       this.showError(error);

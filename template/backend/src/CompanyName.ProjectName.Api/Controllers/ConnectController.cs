@@ -5,7 +5,7 @@ using Leistd.ExceptionHandling;
 using System.Security.Claims;
 using Leistd.Timing;
 using System.Text.Json.Nodes;
-using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.AppServices;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -138,14 +138,15 @@ public sealed class ConnectController(
             var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             var subject = result.Principal;
             var app = await applications.FindByClientIdAsync(request.ClientId!, cancellationToken);
-            // 官方 ValidateAuthorizedParty 之外的严格单跳策略：来源受众必须是调用方 API。
+            // 官方验证管线完成归属验证后，仍保留控制器的严格单跳约束。
             if (subject is null || app is null ||
                 !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken) ||
-                !subject.HasAudience(request.ClientId!) || subject.HasClaim(claim => claim.Type == "act") ||
+                subject.HasClaim(claim => claim.Type == "act") ||
                 request.GetAudiences().Length != 1 ||
-                request.GetScopes().Length != 1 || request.GetScopes()[0] != request.GetAudiences()[0] ||
+                request.GetScopes().Length != 1 ||
+                !OAuthScopes.ResourcesOf(oauthOptions.Value, request.GetScopes()).SequenceEqual(request.GetAudiences()) ||
                 !OAuthScopes.All(oauthOptions.Value).Any(scope => !scope.MachineOnly &&
-                    scope.Name == request.GetAudiences()[0] && scope.Resources.Count == 1) ||
+                    scope.Name == request.GetScopes()[0] && scope.Resources.Count == 1) ||
                 subject.GetExpirationDate() is not { } expiry)
                 return ProtocolError(Errors.InvalidGrant);
             var principal = await principalFactory.CreateFromTokenAsync(subject, request.GetScopes(), cancellationToken);

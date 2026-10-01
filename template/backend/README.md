@@ -121,15 +121,16 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 访问令牌的受众由授予的 scope 推出，能签发哪些 scope 只由 `Application/Auth/OAuth/OAuthScopes.cs` 定义（服务端登记、scope 表、开放应用的权限校验都读它）：
 
 - `OAuth:Resource` 是本服务 API 的标识，同名登记为 scope。调用本服务 API 的客户端要被授予并申请它，本服务只接受受众是它的令牌；
-- `OAuth:ApiResources` 列出由本服务签发令牌的下游 API，各登记为同名 scope，下游服务把自己的 `Authentication:Audience` 设为同一个值；
-- 租户路由的两个 scope 只授予机器客户端；用户调用下游使用官方 Token Exchange，调用方 client ID 与来源 API 受众一致，目标由 aud:/scp: 应用权限授予。SPA 仅申请自己的 API scope，详见服务间调用规范。
+- `OAuth:ApiResources` 列出由本服务签发令牌的下游 API，每项用 Name、Scope、OwnerClientId 表达资源与归属，Scope/OwnerClientId 默认 Name；下游服务把自己的 `Authentication:Audience` 设为资源 Name；
+- 租户路由的两个 scope 只授予机器客户端；用户调用下游使用官方 Token Exchange，调用方必须拥有来源 API 受众，目标由 aud:/scp: 应用权限授予。浏览器的机密依赖方在服务端申请 API scope，详见服务间调用规范。
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 
-外部登录凭据通过 `ExternalAuth` 配置或密钥系统提供，不写入仓库。每个提供商（`Github` / `Google`）保持
-`ClientId`、`ClientSecret`、`RedirectUri` 三个原有配置键：三项全空表示不启用，启用时必须全部填写，且回调地址必须是绝对 HTTP(S) URI。
-回调地址指向前端页面 `/auth/external-callback/{provider}`（如本机 `http://localhost:4200/auth/external-callback/github`），由它把授权码提交给 API；提供商后台登记的回调要与 `RedirectUri` 逐字一致，GitHub 连查询串一起比对。
-配置不完整会在启动期被拒绝；这些适配器细节由 Infrastructure 绑定与校验，Application 只通过 `IOAuthProvider` 使用已配置的提供商。
+外部登录凭据通过 `ExternalAuth` 配置或密钥系统提供，不写入仓库。每个提供商（`Github` / `Google`）只配置
+`ClientId`、`ClientSecret`：两项全空表示不启用，部分填写在启动期报出缺失键名。
+提供商后台登记后端 HTTPS 回调 `/api/v1/external-auth/{github,google}/signin`，由官方处理器在后端验证 code/state。
+组合根直接使用 AddGoogle/AddOAuth 与短时服务端外部票据；Application 接收规范化 ExternalUserInfo 与可用提供商名称，不读取适配器凭据。
+完整流程、Cookie 与部署规则见 [浏览器认证](../docs/standards/api.md#浏览器认证)。
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
 

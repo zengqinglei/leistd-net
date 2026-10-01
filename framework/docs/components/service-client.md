@@ -90,7 +90,7 @@ var order = await response.ReadContentAsync<OrderDto>();
 
 关联标识经追踪组件透传，未注册时直通。Core 不转发用户或租户请求头；下游从已验证 JWT 的主体读取用户与租户。
 
-机器模式只代表 client credentials 的工作负载，不恢复自然人身份。用户模式用当前请求的访问令牌作为 subject；没有证明（Cookie、后台任务）、或请求预设 Authorization 时拒绝调用，不回退为机器身份。调用方 client ID 必须与来源 API 受众一致；目标 audience/scope 由身份服务应用权限授权。来源用户令牌无需含目标 scope，下游仍按本地权限判定能执行的业务。
+机器模式只代表 client credentials 的工作负载，不恢复自然人身份。用户模式通过 `IUserAccessTokenAccessor` 获取当前请求的访问令牌作为 subject；默认 ASP.NET Core accessor 只读取已验证 Bearer 方案保存的令牌，普通 Cookie 与后台用户上下文本身不能提供证明。宿主可显式替换 accessor，例如从经官方 Cookie 处理器验证的服务端票据读取保存的访问令牌。没有令牌或请求预设 Authorization 时拒绝调用，不回退为机器身份。来源资源与交换发起方的授权关系、目标 audience/scope 均由签发方策略决定，组件不要求 client ID 等于来源 audience。来源用户令牌无需含目标 scope，下游仍按本地权限判定能执行的业务。
 
 用户交换目标通过命名客户端的 Audience、Scope 指定。输出主体、声明与令牌有效期由身份服务决定；组件提交用户访问令牌作为 subject，不从环境用户或租户构造证明。
 

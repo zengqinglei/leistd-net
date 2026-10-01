@@ -1,10 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-//#if (RemoteTokenAuth)
-import { OidcSecurityService } from 'angular-auth-oidc-client';
-import { of } from 'rxjs';
-//#endif
 
 import { NotificationService } from './notification-service';
 import { NotificationOutputDto, SignalRService } from '../../../core/services/signalr-service';
@@ -29,12 +25,6 @@ describe('NotificationService', () => {
       providers: [
                 provideHttpClient(),
                 provideHttpClientTesting(),
-                //#if (RemoteTokenAuth)
-                {
-                    provide: OidcSecurityService,
-                    useValue: { getAccessToken: () => of('resource-access-token') },
-                },
-                //#endif
             ],
     });
 
