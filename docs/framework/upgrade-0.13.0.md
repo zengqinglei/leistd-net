@@ -539,7 +539,7 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 
 | 变化 | 影响与改法 |
 | --- | --- |
-| `Leistd.Email.Smtp` 的投递日志改为只记收件**域名** | 原先 `Email sent to {To} with subject {Subject}` 把收件人邮箱原文写进 Information 级日志；邮箱是个人数据，而日志通常被集中采集、保留更久、可见范围更大。现记为 `Email sent to a {ToDomain} address with subject {Subject}`。域名保住了排障需要的那一半——按域名聚合才能看出"某个租户或某个邮件服务商整体收不到"；地址取不出域名（配错了）时记 `-`，**不回落成原文**（否则"配错的地址"会成为唯一泄露原文的路径，而那恰好是最容易被翻到的一类日志）。**按告警规则或日志管道匹配过完整收件地址的部署要改**：改为按域名匹配，或改用操作记录追查具体收件人 |
+| `Leistd.Email.Smtp` 的投递日志改为记**脱敏后的收件人** | 原先 `Email sent to {To} with subject {Subject}` 把收件人邮箱原文写进 Information 级日志；邮箱是个人数据，而日志通常被集中采集、保留更久、可见范围更大。**字段名不变**，仍是 `{To}`，值改为经 `TextRedactor.RedactEmail` 脱敏：`zhangsan@example.com` → `zha***@example.com`（本地部保开头几位 + 完整域名）。保住域名是为了能按域名聚合，看出"某个租户或某个邮件服务商整体收不到"；地址取不出域名（配错了）时记成 `not***` 这样的形态，**不回落成原文**（否则"配错的地址"会成为唯一泄露原文的路径，而那恰好是最容易被翻到的一类日志）。**按完整收件地址做过精确匹配的告警规则或日志管道要改**：改为按域名后缀匹配，或改用操作记录追查具体收件人 |
 | 模板的三处日志不再记邮箱 | `AuthAppService`（注册）、`UserAppService`（管理员建用户）、`EmailSettingsAppService`（测试发信失败）改为记脱敏后的地址（`al***@example.com`），经 `Leistd.Core` 新增的公共入口 `Leistd.Redaction.TextRedactor.RedactEmail`（纯函数，无需注册、无新依赖）。派生项目自己写的日志按同一口径核对一遍：**联系方式（邮箱、手机号）不进日志** |
 | **账号名照常记，不改** | 模板的用户名受 `^[a-zA-Z0-9_]+$` 约束、不可能是邮箱，是系统自身的账号标识而非联系方式，而且正是这些日志可读性的来源——换成 GUID 会让排障的人每条都要回库查一次。不要为此把用户名从日志里去掉 |
 | 操作记录的参数口径**不变** | 审计按设计会显示邮箱、用户名等可公开展示的值（见组件文档里 `LocalizationData` 的约定），这是审计的用途所在，不受本条影响。不要误以为审计也脱敏了 |

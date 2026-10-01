@@ -49,16 +49,19 @@ public sealed class NullEmailSenderTests
         Assert.Equal(LogLevel.Warning, record.Level);
     }
 
-    // 收件人与主题必须进日志：开发环境靠它确认"这封信本该发给谁"
+    // 收件人与主题必须进日志：开发环境靠它确认"这封信本该发给谁"。
+    // 但收件人只能是脱敏形态——本类是给"没配 SMTP"兜底的，一旦被误注册到生产，
+    // 日志里就会留下每一个收件人。把 TextRedactor 去掉，这条会红。
     [Fact]
-    public async Task The_log_carries_the_recipient_and_subject()
+    public async Task The_log_carries_a_redacted_recipient_and_the_subject()
     {
         var (sender, logs) = Create();
 
         await sender.SendAsync(Message());
 
         var message = Assert.Single(logs.GetSnapshot()).Message;
-        Assert.Contains("user@example.com", message, StringComparison.Ordinal);
+        Assert.Contains("us***@example.com", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("user@example.com", message, StringComparison.Ordinal);
         Assert.Contains("Account Registration Verification Code", message, StringComparison.Ordinal);
     }
 

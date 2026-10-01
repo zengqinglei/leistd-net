@@ -66,6 +66,9 @@ $gates = @(
     @{ Name = "时间源可替换";              Cmd = $pythonCmd; Args = @("scripts/check-clock-access.py") }
     @{ Name = "DbContext 访问口径";        Cmd = $pythonCmd; Args = @("scripts/check-dbcontext-access.py") }
     @{ Name = "csproj 约定";               Cmd = $pythonCmd; Args = @("scripts/check-csproj-conventions.py") }
+    # 日志调用点改回记原文不会让任何用例变红（调用点在要连 SMTP 的方法里），判据只能放在这里
+    @{ Name = "联系方式日志规则自检";      Cmd = $pythonCmd; Args = @("scripts/check-contact-info-logging.py", "--self-test") }
+    @{ Name = "联系方式不进日志";          Cmd = $pythonCmd; Args = @("scripts/check-contact-info-logging.py") }
     # 覆盖率报告发现不了"程序集从未被任何测试加载"——那种包根本不出现在报告里
     @{ Name = "测试布局规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-test-layout.py", "--self-test") }
     @{ Name = "测试布局与家族对应";        Cmd = $pythonCmd; Args = @("scripts/check-test-layout.py") }

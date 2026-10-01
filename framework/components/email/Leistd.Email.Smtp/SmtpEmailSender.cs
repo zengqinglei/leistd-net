@@ -50,6 +50,10 @@ public sealed class SmtpEmailSender(
 
         // 收件人脱敏后再记：邮箱是个人数据，日志通常被集中采集、保留更久、可见范围更大。
         // 留下的形态（al***@example.com）既保住按域名聚合的排障能力，又不暴露到个人。
+        //
+        // 主题不脱敏：它是宿主给的文案，脱敏了就失去"这封是什么信"的排障价值，而那正是这条日志的用途。
+        // 本框架与模板产出的主题都是固定或本地化文案，不含个人数据；宿主若把人名之类放进主题，
+        // 那是它的显式选择——组件文档已写明这条边界，不在这里替它判断。
         logger.LogInformation(
             "Email sent to {To} with subject {Subject}",
             TextRedactor.RedactEmail(message.To),

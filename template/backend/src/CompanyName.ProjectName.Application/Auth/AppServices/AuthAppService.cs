@@ -1,6 +1,5 @@
 using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
-using Leistd.Redaction;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Errors;
 #endif
@@ -326,7 +325,10 @@ internal sealed class AuthAppService(
     [UnitOfWork]
     public async Task<UserOutputDto> RegisterAsync(RegisterInputDto input, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Registering user {Username} with email {Email}", input.Username, TextRedactor.RedactEmail(input.Email));
+        // 不与用户名同行记邮箱（哪怕已脱敏）：用户名常常就是邮箱本地部
+        // （本地注册时用户自己这么取，外部登录更是按本地部生成），
+        // 同一行给出本地部与域名等于把脱敏拼回去。要查地址用操作记录或按用户查库。
+        logger.LogInformation("Registering user {Username}", input.Username);
 
         var options = await registrationPolicy.GetAsync(cancellationToken);
 

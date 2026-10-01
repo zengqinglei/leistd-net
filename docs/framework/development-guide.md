@@ -113,6 +113,12 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 
 - `GenerateDocumentationFile` 已全局开启，**公共 API 必须写 XML 文档注释**（`///`）。缺注释（CS1591）是构建错误。
 - **语言约定**：XML 与代码注释用**中文**；异常消息与日志消息面向运维，**统一用英文**。
+- **联系方式不进日志**：邮箱、手机号这类能直接触达到人的值，写进日志前先经
+  `Leistd.Redaction.TextRedactor` 脱敏（`zhangsan@example.com` → `zha***@example.com`），
+  或改记标识符。日志通常被集中采集、保留更久、可见范围更大，还会被前端错误上报之类的旁路带走。
+  **也不要与标识符同行记**：用户名常常就是邮箱本地部，同一行给出本地部与域名等于把脱敏拼回去。
+  账号名本身可以记——它不是联系方式，且是这些日志可读性的来源。
+  由 `scripts/check-contact-info-logging.py` 守住（判据是实参表达式，不是占位符名）。
 - `cref` 必须可解析（避免 CS1574）。
 - 组件用法文档位于 `framework/docs/components/` 与 `framework/docs/ddd-struct/`，骨架见 §4.3。
 

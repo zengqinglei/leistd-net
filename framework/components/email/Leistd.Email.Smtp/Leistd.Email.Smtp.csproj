@@ -6,7 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Leistd.Email.Core\Leistd.Email.Core.csproj" />
-    <!-- 取 Leistd.Logging.LogRedaction：收件人写进日志前脱敏成域名 -->
+    <!-- 取 Leistd.Redaction.TextRedactor：收件人写进日志前先脱敏 -->
     <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
   </ItemGroup>
 

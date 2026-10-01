@@ -2,7 +2,6 @@ using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
-using Leistd.Redaction;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
@@ -195,7 +194,9 @@ public class UserAppService(
         var email = input.Email.Trim();
         var displayName = input.DisplayName?.Trim();
 
-        logger.LogInformation("Creating user {Username} with email {Email}", username, TextRedactor.RedactEmail(email));
+        // 不与用户名同行记邮箱，理由同 AuthAppService：用户名常常就是邮箱本地部，
+        // 同一行给出本地部与域名等于把脱敏拼回去
+        logger.LogInformation("Creating user {Username}", username);
 
         // 创建时携带角色等同于一次角色分配，因此除创建权限外还必须持有 ManageRoles，
         // 否则只拥有创建权限的主体可以直接造出一个管理员账号。
