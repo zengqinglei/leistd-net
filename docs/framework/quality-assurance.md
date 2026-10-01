@@ -8,7 +8,7 @@
 
 自写闸门只承担它们不能表达的仓库语义：包/家族边界、条件模板的全集求值、随包文档与源码关系、词条/动作码、替换点或精确豁免。判断是否等价须同时核对输入范围、正反例、豁免、退出码和未执行分支；同名诊断或一次构建通过不算等价。官方机制放行而仓库禁止的语义须保留窄规则，不能为了减少闸门而放宽契约。
 
-闸门清单唯一入口是 `scripts/check-all.ps1`，数量不在其他文档或 workflow 另行维护。检查器的正反例自检与生产输入检查保护不同对象，不能互相替代。优化可合并同一输入的重复遍历或索引构建，但仍须执行原自检与完整扫描；不建立没有实测收益的跨 run 索引缓存。
+闸门清单唯一入口是 `scripts/check-all.ps1`，数量不在其他文档或 workflow 另行维护。检查器的正反例自检与生产输入检查保护不同对象，不能互相替代。优化可合并同一输入的重复遍历或索引构建，但仍须执行原自检与完整扫描；不建立没有实测收益的跨 run 索引缓存。 API 漂移入口在同一进程中先执行全部正反例，再以本次源码索引扫描正文；规则失效立即失败，不提供只自检后提前退出的模式。
 
 ## 删除与替换的验收
 
@@ -22,10 +22,12 @@
 
 模板分片须完整分配所有已登记场景，每场景仍执行原有阶段；验证分片集合与原全集恰好相等，漏片、取消和失败都不能通过质量聚合。按实测场景耗时均衡负载，不自动为未来规模引入动态调度器；各作业使用独立 feed/hive/缓存/端口和清理边界。是否增加分片同时评估队列、准备重复与 runner 总时间。发布继续等待同 SHA 的完整质量结果，不解除串行发布锁。
 
+当前 CI 用两片，场景定义和分片归属只维护在 `scripts/template-matrix-scenarios.ps1`，不在 workflow 重抄场景清单。`framework-pack` 打包一次并上传当前候选的不可变包 artifact；两片 `template-shards` 和独立 `package-consumption` 下载到各自私有目录。默认全量消费先核对源码项目与包集完整性，漏包失败；人工 `-PackageIds` 才可缩小消费范围。消费校验与矩阵同时开始，矩阵不等待消费；三个消费者不共写包源，不额外重复打包。原 `template-matrix` 必过检查名作为汇总入口，使用 `always()` 核对必要作业成功与两片实际结果的场景全集、阶段和容器责任；缺片、跳过、取消、重复或错片均失败。结果只在完整执行后写出，文件仅上传验证摘要，不上传生成目录、NuGet 缓存或密钥。
+
 范围裁剪必须基于 PR base/merge-base 到 head 的完整差异及实际依赖，不用单一 `HEAD^` 代替多提交 PR。无法确定范围时全量执行；随包文档、props、lock、脚本与 workflow 都是质量输入。只有接替责任和变异证据完整时才削减组合入口的重复工作。
 
 ## 效率证据
 
 使用同输入、同机器或 runner 规格、相同入口与明确的缓存条件，前后各至少三轮，报告全部值和中位数。含 build 与 `--no-build`、TRX 方法时间和入口墙钟、不同 SHA 的历史 CI、并行阶段不能混算。首轮不清缓存时不称为完全冷启动；跳过用例不称为已经执行。新调度模型与实际执行结果分开记录，实际关键路径变化后重新测量。
 
-官方依据：[SDK 分析器](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)、[ASP.NET Core 测试层级](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0)、[EF Core 测试选型](https://learn.microsoft.com/en-us/ef/core/testing/choosing-a-testing-strategy)、[xUnit 并行配置](https://xunit.net/docs/config-xunit-runner-json)。
+官方依据：[GitHub 矩阵与失败策略](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)、[作业依赖与 always](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds)、[SDK 分析器](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview)、[ASP.NET Core 测试层级](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0)、[EF Core 测试选型](https://learn.microsoft.com/en-us/ef/core/testing/choosing-a-testing-strategy)、[xUnit 并行配置](https://xunit.net/docs/config-xunit-runner-json)。

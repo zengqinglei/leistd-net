@@ -546,3 +546,13 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | `Leistd.Email.Smtp` 新增对 `Leistd.Core` 的包依赖 | 为取 `TextRedactor`。`Leistd.Core` 只含原语、只依赖抽象，通常已在依赖闭包里；在架构门禁里限制应用层/领域层可引用包名的项目按 `nuspec` 对比结果更新白名单（方法见第 1 节） |
 | 新增公共入口 `Leistd.Redaction.TextRedactor`（`Leistd.Core`，纯静态方法、无新依赖） | `RedactEmail(address)` → `al***@example.com`（保本地部开头几位 + 完整域名：从第一个字母或数字起最多 3 位且不超过一半——`zhangsan@`→`zha***@`、`alice@`→`al***@`、`bob@`→`b***@`）；`RedactPartially(value, keepStart, keepEnd)` → `158***90`（位数由业务定：手机号常用 `(3,2)`，卡号按 PCI DSS 最多 `(6,4)`，证件号 `(0,4)`）。写日志与对外展示共用。**只提供形态，不维护数据类型目录**——不要期待框架为每种业务数据加方法 |
 | **没有引入脱敏组件** | 评估过 `Microsoft.Extensions.Compliance.Redaction`（数据分类 + `IRedactorProvider` + 日志脱敏），本次未采用：缺陷是"组件默认把个人数据写进日志"，终局修法是默认不写，而不是建一套"把个人数据安全写出去"的机制。实测结论留档在仓库的 `docs/assessments/`，其中两条对派生项目有用：**普通模板日志（`logger.LogInformation("{To}", to)`）永远不会被脱敏**，脱敏只作用于带 `[LoggerMessage]` 与数据分类标注的源生成方法；以及 **`builder.Services.AddSerilog(configure)` 与 `EnableRedaction()` 冲突，两者同时存在时日志会全部消失**（不是丢字段）。自行接入脱敏的项目注意这两点 |
+
+## 22. 质量入口合并与模板 CI 分片
+
+仓库维护入口 `framework/build/check-docs-api-drift.ps1` 在一个进程中执行原 8 个正反例和完整正文扫描，共用本次源码索引；原独立 `-SelfTest` 模式及对应 `check-all.ps1` 清单行删除。原自检能抓的规则失效由合并入口的正反例接替，正文漂移仍由同一完整扫描接替；不删除单元测试。调用方移除旧 `-SelfTest` 参数，直接调用脚本。
+
+CI 原串行“打包 → 包消费 → 九场景”改为一次 `framework-pack` 产出不可变候选包，独立 `package-consumption` 和两片 `template-shards` 下载到各自目录并行验证。默认全量包消费还须与当前源码的完整包集一致，漏包失败；人工 `-PackageIds` 的缩小入口保留。原 `template-matrix` 必过检查名保留为汇总：必要作业全部成功，两份结果恰好覆盖登记全集、完整阶段与容器责任；失败、取消、跳过或缺片不能放行。原包内容/隔离消费由独立必过作业接替；每场景原测试与断言由所属分片原入口接替，没有新旧两套校验或迁移开关。OIDC 作业形态保留，发布继续等待同一候选的全部质量结果。
+
+场景与分片归属只维护在 `scripts/template-matrix-scenarios.ps1`；PR 的容器范围从完整 base 到 head 判定，替代会漏掉较早提交的 `HEAD^` 差异，范围不明时执行容器验证。维护口径见[质量检查与验证分工](./quality-assurance.md)与[模板质量验证](../template/quality-assurance.md)。这是 leistd-net 仓库 CI/维护脚本调整，派生项目无需修改运行时 API。
+
+模板默认与本地化前端的 Angular 运行时、CDK、编译器和 CLI/build 统一更新到 22.2.0，两套 lock 同步；替换 22.1 系列依赖以通过既有 high 审计阈值，不修改 lint 缓存、测试隔离或发现范围。派生项目按两套依赖文件更新并重新安装。安全依据见 [Angular Router 官方公告](https://github.com/advisories/GHSA-ff3f-86qr-9cv3)（公告利用路径为 Node SSR）。

@@ -2,7 +2,7 @@
 
 <#
 .SYNOPSIS
-    跑完本仓库的全部静态闸门（约 40 秒），并汇总结果。
+    跑完本仓库的全部静态闸门，并汇总结果。
 
 .DESCRIPTION
     **这里是闸门清单的唯一权威来源。** 新增闸门只需加进下面的 $gates，CI 与文档都不必再改——
@@ -45,8 +45,7 @@ if (-not $pythonCmd) { throw "未找到 Python 3 解释器（python3/python）�
 
 $gates = @(
     @{ Name = "组件文档与索引一致";        Cmd = "pwsh"; Args = @("framework/build/check-docs-sync.ps1") }
-    @{ Name = "文档 API 规则自检";          Cmd = "pwsh"; Args = @("framework/build/check-docs-api-drift.ps1", "-SelfTest") }
-    @{ Name = "文档 API 引用不漂移";       Cmd = "pwsh"; Args = @("framework/build/check-docs-api-drift.ps1") }
+    @{ Name = "文档 API 自检与引用不漂移";       Cmd = "pwsh"; Args = @("framework/build/check-docs-api-drift.ps1") }
     @{ Name = "Skill 与文档引用";          Cmd = "pwsh"; Args = @("scripts/validate-skills.ps1") }
     # 自检先跑：退役符号规则本身失效时，紧随其后的那次"通过"没有意义
     @{ Name = "退役符号规则自检";          Cmd = "pwsh"; Args = @("scripts/check-retired-terms.ps1", "-SelfTest") }

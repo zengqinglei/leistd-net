@@ -2,7 +2,10 @@ name: CI
 
 # PR 的质量闸门；release.yml 对发布候选提交复用同一组作业：
 #   - docs-sync：组件文档、Skill 与引用一致性
-#   - template-matrix：打包当前框架并验证全部条件场景的生成、运行与前后端构建
+#   - package-consumption：NuGet 包内容与隔离消费，独立必过
+#   - framework-pack：当前候选只打包一次，以不可变 artifact 供消费与分片下载
+#   - template-shards：九个完整场景均衡两片，消费同一候选包
+#   - template-matrix：保留必过检查名，核对两片全集、完整阶段与包消费结果
 #   - test：框架单元测试（含真实 Redis 的分布式锁契约）
 #   - postgresql-e2e：模板在真实 PostgreSQL 上的迁移与租户隔离
 #   - oidc-e2e：四服务真实 OIDC、委托边界与远端令牌校验
@@ -40,12 +43,17 @@ jobs:
         shell: pwsh
         run: pwsh scripts/check-all.ps1
 
-  template-matrix:
-    name: 模板全场景矩阵
+  template-shards:
+    name: 模板场景分片 ${{ matrix.shard }}
+    needs: framework-pack
     runs-on: ubuntu-latest
-    # 本地实测 8 分钟；矩阵里 Angular healthcheck 的交互提示与单测浏览器都有挂死先例，
-    # 没有上限时一次卡死按默认 360 分钟计费并堵住队列
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    outputs:
+      container_needed: ${{ steps.container_scope.outputs.needed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,7 +68,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: template/frontend/package-lock.json
+          cache-dependency-path: |
+            template/frontend/package-lock.json
+            template/.template.config/localization/frontend/package-lock.json
       # 前端单测跑在 Playwright 的 Chromium 里；版本取模板锁文件，与生成项目实际安装的一致
       - name: 安装单测用的 Chromium
         shell: pwsh
@@ -69,36 +79,129 @@ jobs:
           $version = (Get-Content template/frontend/package-lock.json -Raw | ConvertFrom-Json -AsHashTable).packages['node_modules/playwright'].version
           if (-not $version) { throw '模板锁文件里没有 playwright' }
           npx --yes "playwright@$version" install --with-deps chromium
-      - name: 打包当前 Framework
-        shell: pwsh
-        run: pwsh framework/build/pack-local-feed.ps1
-      - name: 校验 NuGet 包内容与隔离消费
-        shell: pwsh
-        run: pwsh framework/build/test-package-consumption.ps1
+      - name: 下载同一候选 Framework 包
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-framework-feed
+          path: .tmp/local-feed
       - name: 判断是否需要容器验证
         id: container_scope
         shell: pwsh
         run: |
-          $before = '${{ github.event_name == 'push' && github.event.before || '' }}'
-          if ($before -notmatch '^[0-9a-f]{40}$' -or $before -match '^0+$') { $before = 'HEAD^' }
-          git cat-file -e "$before^{commit}" 2>$null
-          $hasBase = $LASTEXITCODE -eq 0
+          # PR 用完整 base→head 差异；发布候选用完整 main 差异，无法确定时保守验证。
+          $base = '${{ github.event.pull_request.base.sha }}'
+          if ($base -notmatch '^[0-9a-f]{40}$') {
+            $base = git merge-base origin/main HEAD 2>$null
+          }
+          $hasBase = $base -match '^[0-9a-f]{40}$'
+          if ($hasBase -and $base -eq (git rev-parse HEAD)) { $hasBase = $false }
+          if ($hasBase) {
+            git cat-file -e "$base^{commit}" 2>$null
+            $hasBase = $LASTEXITCODE -eq 0
+          }
           $global:LASTEXITCODE = 0
-          $changed = if ($hasBase) { @(git diff --name-only $before HEAD) } else { @('template/Dockerfile') }
+          $changed = if ($hasBase) { @(git diff --name-only $base HEAD) } else { @('template/Dockerfile') }
           if ($LASTEXITCODE -ne 0) { throw '无法确定容器验证的变更范围' }
           $needed = @($changed | Where-Object {
             $_ -match '^template/(Dockerfile|\.dockerignore)$' -or
             $_ -match '^template/deploy/' -or
             $_ -eq 'template/.template.config/template.json' -or
-            $_ -match '^template/frontend/(package(-lock)?\.json|angular\.json)$'
+            $_ -match '^template/(frontend|\.template\.config/localization/frontend)/(package(-lock)?\.json|angular\.json)$'
           }).Count -gt 0
           "needed=$($needed ? 'true' : 'false')" | Out-File $env:GITHUB_OUTPUT -Append
-      - name: 生成并验证全部模板场景
+      - name: 生成并验证本片全部场景
+        id: matrix
         shell: pwsh
         run: |
-          $containerArgs = if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { @('-ContainerSmokeScenarios', 'standalone') } else { @() }
-          pwsh scripts/test-template-matrix.ps1 -SkipPack @containerArgs
+          $containerArgs = if ('${{ steps.container_scope.outputs.needed }}' -eq 'true' -and ${{ matrix.shard }} -eq 1) { @('-ContainerSmokeScenarios', 'standalone') } else { @() }
+          pwsh scripts/test-template-matrix.ps1 -SkipPack -Shard ${{ matrix.shard }} @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵失败' }
+      - name: 保留完整场景结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-matrix-${{ matrix.shard }}
+          overwrite: true
+          path: ${{ steps.matrix.outputs.results_path }}
+          if-no-files-found: error
+
+  framework-pack:
+    name: 打包候选 Framework
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: 打包当前 Framework
+        shell: pwsh
+        run: pwsh framework/build/pack-local-feed.ps1
+      - name: 保留同一候选包源
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-framework-feed
+          overwrite: true
+          path: .tmp/local-feed/*.nupkg
+          if-no-files-found: error
+
+  package-consumption:
+    name: NuGet 包内容与隔离消费
+    needs: framework-pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: 下载同一候选 Framework 包
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-framework-feed
+          path: .tmp/local-feed
+      - name: 隔离消费全部包
+        shell: pwsh
+        run: |
+          pwsh framework/build/test-package-consumption.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'NuGet 包消费失败' }
+
+  template-matrix:
+    name: 模板全场景矩阵
+    runs-on: ubuntu-latest
+    needs: [template-shards, package-consumption]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: 检查必要作业全部成功
+        shell: pwsh
+        env:
+          SHARDS_RESULT: ${{ needs.template-shards.result }}
+          PACKAGES_RESULT: ${{ needs.package-consumption.result }}
+        run: |
+          if ($env:SHARDS_RESULT -cne 'success' -or $env:PACKAGES_RESULT -cne 'success') {
+            throw '模板分片或 NuGet 消费失败、缺失、跳过或取消'
+          }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: template-matrix-*
+          path: .tmp/matrix-receipts
+          merge-multiple: true
+      - name: 核对场景全集和完整阶段
+        shell: pwsh
+        env:
+          CONTAINER_NEEDED: ${{ needs.template-shards.outputs.container_needed }}
+        run: |
+          if ($env:CONTAINER_NEEDED -notin @('true', 'false')) { throw '缺少容器范围判定结果' }
+          $containerArgs = if ($env:CONTAINER_NEEDED -eq 'true') { @('-ContainerSmokeScenarios', 'standalone') } else { @() }
+          pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts @containerArgs
+          if ($LASTEXITCODE -ne 0) { throw '模板矩阵证明不完整' }
 
   test:
     name: 框架单元测试
@@ -143,8 +246,7 @@ jobs:
   postgresql-e2e:
     name: 模板 PostgreSQL 端到端
     runs-on: ubuntu-latest
-    # 本地实测 36 秒（冷约 70–80 秒，含镜像拉取）；关键路径是 template-matrix，
-    # 因此这个作业并行跑不增加 CI 墙钟
+    # 独立真实库契约；与模板分片、包消费和 OIDC 并行，保持自包含。
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

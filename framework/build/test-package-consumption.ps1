@@ -132,6 +132,15 @@ if ($orphaned.Count -gt 0) {
         "Delete the feed directory and pack again, or pass -FeedPath pointing at a per-run feed."
 }
 
+# 全量消费必须收到当前源码的完整包集；分片下载漏包不能退回已发布旧包而假绿。
+# 人工 -PackageIds 仍可缩小消费范围，但 CI 不传该参数。
+if ($PackageIds.Count -eq 0) {
+    $missing = @($projectIds | Where-Object { $_ -notin $packages.Id })
+    if ($missing.Count -gt 0) {
+        throw "The full feed is missing source packages: $($missing -join ', ')"
+    }
+}
+
 $duplicates = @($packages | Group-Object Id | Where-Object Count -gt 1)
 if ($duplicates.Count -gt 0) {
     throw "The feed must contain one version per package id. Duplicates: $($duplicates.Name -join ', ')"

@@ -8,7 +8,11 @@ UnitTests 验证隔离规则和边界、注册生命周期/幂等；IntegrationT
 
 模板的内存库 fixture 只认证它实际覆盖的应用组合、状态与跟踪行为；唯一约束、SQL 翻译、事务、schema、migration 执行及 Shared/Dedicated 物理隔离必须有关系型或真实 PostgreSQL 证据。设计时 Npgsql 模型/快照比对不能替代实际 migration。真实库闭环已覆盖某个路由断言，不代表全部内存 fixture 断言都能删除；逐项接替仍需变异证据。不能为了测试新建只有测试调用的生产 Provider 选择抽象。
 
-条件 using 守卫覆盖 24 个符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。
+条件 using 守卫覆盖 24 个符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。 场景定义及两片归属在 `scripts/template-matrix-scenarios.ps1`，定义、全集与分片必须一致。人工验证仍用 `scripts/test-template-matrix.ps1` 全量或 `-Scenarios`；CI 使用 `-Shard 1` / `-Shard 2`，不能与 `-Scenarios` 混用。每片保留生成形态、还原/构建、运行时冒烟、后端单测/集成测试、lint、前端构建、全部 spec 发现与浏览器测试，不用分片替换测试阶段。容器责任保留在含 Standalone 的分片；PR 按完整 base→head 差异判定，范围不明时执行容器验证。
+
+## 前端依赖维护
+
+默认与本地化载荷的 Angular 运行时、CDK、编译器和构建工具须按官方 peer 范围配套更新，并同时更新两套锁文件。先在隔离副本验证安装、原审计阈值、lint、构建与真实浏览器测试，再同步依赖文件；完整条件矩阵仍须执行。不得用 `--force`、`--legacy-peer-deps` 或降低审计阈值绕过依赖冲突与安全门禁。
 
 ## lint 缓存与失效
 
