@@ -142,6 +142,7 @@ describe('OperationRecordTable failure reasons', () => {
  */
 describe('OperationRecordTable action sentences', () => {
   it('switches from the raw code to the registered sentence once translations arrive', () => {
+    vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en']);
     const translations = new Subject<Translation>();
     TestBed.configureTestingModule({
       imports: [OperationRecordTable],

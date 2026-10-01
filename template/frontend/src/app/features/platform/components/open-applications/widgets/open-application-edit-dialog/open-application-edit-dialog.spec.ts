@@ -69,11 +69,7 @@ describe('OpenApplicationEditDialog', () => {
     };
   }
 
-  for (const triggerId of [
-    'application-type',
-    'application-client-type',
-    'application-consent-type',
-  ]) {
+  for (const triggerId of ['application-type', 'application-client-type']) {
     it(`shows the picked option's own label in ${triggerId}`, async () => {
       const { optionText, triggerText } = await selectFirstOtherOption(triggerId);
 

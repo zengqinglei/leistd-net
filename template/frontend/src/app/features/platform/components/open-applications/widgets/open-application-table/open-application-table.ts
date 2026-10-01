@@ -48,7 +48,6 @@ import {
 } from '../../../../../../shared/utils/table-sorting';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
 import {
-  OpenApplicationConsentType,
   OpenApplicationOutputDto,
   OpenApplicationType,
 } from '../../../../models/open-application.dto';
@@ -57,13 +56,6 @@ const APPLICATION_TYPE_KEYS: Record<OpenApplicationType, string> = {
   web: 'openApp.appType.web',
   native: 'openApp.appType.native',
   service: 'openApp.appType.service',
-};
-
-const CONSENT_TYPE_KEYS: Record<OpenApplicationConsentType, string> = {
-  implicit: 'openApp.consentType.implicit',
-  explicit: 'openApp.consentType.explicit',
-  external: 'openApp.consentType.external',
-  systematic: 'openApp.consentType.systematic',
 };
 
 /** Badge 变体。 */
@@ -217,7 +209,6 @@ export class OpenApplicationTable {
 
   /** 应用类型与同意方式的词条键：取值是封闭联合，模板里经 t 取文案。 */
   protected readonly applicationTypeKeys = APPLICATION_TYPE_KEYS;
-  protected readonly consentTypeKeys = CONSENT_TYPE_KEYS;
 
   toggleSort(columnId: string): void {
     toggleTableSort(this.table, columnId);
@@ -294,9 +285,5 @@ const ENGLISH: Record<string, string> = {
   'openApp.appType.web': 'Web',
   'openApp.appType.native': 'Desktop/Native',
   'openApp.appType.service': 'Service',
-  'openApp.consentType.implicit': 'Implicit consent',
-  'openApp.consentType.explicit': 'Explicit consent',
-  'openApp.consentType.external': 'External consent',
-  'openApp.consentType.systematic': 'Systematic consent',
 };
 //#endif

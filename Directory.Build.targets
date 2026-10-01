@@ -10,7 +10,7 @@
     在这里未经裁剪、不是合法 JSON，集成测试以生成项目为准（scripts/test-template-matrix.ps1）。
   -->
   <PropertyGroup Condition="$(MSBuildProjectName.StartsWith('CompanyName.ProjectName')) and Exists('$(MSBuildThisFileDirectory)template\.template.config\template.json')">
-    <DefineConstants>$(DefineConstants);LocalIdentity;OpenIddictServer;ServiceUserContextEnabled;ExternalLogin;IncludeNotifications;IncludeLocalization</DefineConstants>
+    <DefineConstants>$(DefineConstants);LocalIdentity;OpenIddictServer;ExternalLogin;IncludeNotifications;IncludeLocalization</DefineConstants>
   </PropertyGroup>
 
   <!--

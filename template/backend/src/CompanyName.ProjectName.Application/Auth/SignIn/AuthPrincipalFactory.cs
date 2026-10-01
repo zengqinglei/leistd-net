@@ -43,7 +43,11 @@ public class AuthPrincipalFactory(
         using (currentTenant.Change(tenant.Id, tenant.Name))
         using (unitOfWorkManager.Begin(requiresNew: true))
         {
-            return await CreateAsync(userId, scopes, cancellationToken);
+            var principal = await CreateAsync(userId, scopes, cancellationToken);
+            if (principal is not null && tokenPrincipal.GetClaim(Claims.AuthenticationTime) is { } authenticationTime)
+                principal.SetClaim(Claims.AuthenticationTime, long.Parse(authenticationTime, System.Globalization.CultureInfo.InvariantCulture))
+                    .SetDestinations(GetDestinations);
+            return principal;
         }
     }
 
@@ -177,6 +181,7 @@ public class AuthPrincipalFactory(
                 Destinations.AccessToken,
                 Destinations.IdentityToken
             ],
+            Claims.AuthenticationTime => [Destinations.IdentityToken],
             Claims.Name or Claims.PreferredUsername or Claims.Picture
                 when claim.Subject?.HasScope(Scopes.Profile) == true =>
             [

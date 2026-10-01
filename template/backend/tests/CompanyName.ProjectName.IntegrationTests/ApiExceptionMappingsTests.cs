@@ -23,7 +23,6 @@ using Leistd.Notifications.Errors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-#if (ServiceUserContextEnabled)
 using CompanyName.ProjectName.Api.Hosting;
 using Leistd.ExceptionHandling.AspNetCore;
 using Leistd.ServiceClient;
@@ -33,7 +32,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Hosting;
-#endif
 using Xunit;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -114,7 +112,6 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
         });
     }
 
-#if (ServiceUserContextEnabled)
     [Theory]
     [InlineData(ServiceClientFailureKind.Configuration, 500)]
     [InlineData(ServiceClientFailureKind.Unknown, 500)]
@@ -186,5 +183,4 @@ public sealed class ApiExceptionMappingsTests(ProjectWebApplicationFactory facto
         Assert.DoesNotContain("Remote:Private", body);
         Assert.DoesNotContain("private payload", body);
     }
-#endif
 }

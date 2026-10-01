@@ -17,7 +17,7 @@ public class MultiTenancyOptions
     /// </summary>
     /// <remarks>
     /// 匿名请求的提示通道：值可以是租户 Id 或名称，是否采信由校验决定。
-    /// 与服务间委托的 <c>X-Tenant-Id</c>（只带 GUID、须受信调用方）刻意不同名。
+    /// 已认证请求的租户由验证后的主体声明确定，此提示不能改写它。
     /// </remarks>
     public string HeaderName { get; set; } = DefaultHeaderName;
 

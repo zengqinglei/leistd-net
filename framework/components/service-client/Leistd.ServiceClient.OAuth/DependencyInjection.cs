@@ -1,90 +1,86 @@
+using Leistd.ServiceClient.Abstractions;
 using Leistd.ServiceClient.OAuth.Handlers;
 using Leistd.ServiceClient.OAuth.Options;
-using Leistd.ServiceClient.OAuth.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Leistd.ServiceClient.OAuth.Abstractions;
+using OpenIddict.Client;
 
 namespace Leistd.ServiceClient.OAuth;
 
-/// <summary>
-/// 服务间 OAuth2 client credentials 认证注册入口。
-/// </summary>
+/// <summary>官方 OpenIddict.Client 服务认证注册入口。</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// 获取服务调用身份配置节名称 <c>Leistd:ServiceAuth</c>。
-    /// </summary>
-    public const string ServiceAuthSectionName = "Leistd:ServiceAuth";
+    internal const string RegistrationId = "Leistd.ServiceClient";
 
-    /// <summary>
-    /// 为服务客户端追加 client credentials 认证。
-    /// </summary>
-    /// <remarks>
-    /// 应在客户端注册后调用。调用身份来自 <c>Leistd:ServiceAuth</c>，目标范围可由客户端配置节覆盖。
-    /// </remarks>
-    /// <param name="builder">来自 <c>AddServiceClient</c> 的 <see cref="IHttpClientBuilder"/></param>
-    /// <param name="configuration">应用配置</param>
-    /// <example>
-    /// <code>
-    /// builder.Services
-    ///     .AddRefitServiceClient&lt;IIdentityApi, IdentityClientOptions&gt;("identity", builder.Configuration)
-    ///     .AddClientCredentials(builder.Configuration);   // token 缓存与 401 自愈
-    /// </code>
-    /// </example>
-    public static IHttpClientBuilder AddClientCredentials(
-        this IHttpClientBuilder builder,
-        IConfiguration configuration)
+    /// <summary>绑定工作负载身份，启用官方发现与客户端认证；令牌不进入官方数据库存储。</summary>
+    public static IServiceCollection AddServiceAuthentication(this IServiceCollection services,
+        Action<ServiceAuthenticationOptions>? configure = null,
+        string configSectionPath = ServiceAuthenticationOptions.SectionName)
     {
-        var clientName = builder.Name;
-
-        builder.Services.Configure<ClientCredentialsOptions>(
-            clientName, configuration.GetSection(ServiceAuthSectionName));
-
-        builder.Services.Configure<ClientCredentialsOptions>(clientName, options =>
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+        var options = services.AddOptions<ServiceAuthenticationOptions>().BindConfiguration(configSectionPath);
+        if (configure is not null) options.Configure(configure);
+        services.AddSingleton<IValidateOptions<ServiceAuthenticationOptions>>(new ServiceAuthenticationOptionsValidator(configSectionPath));
+        options.ValidateOnStart();
+        services.AddHybridCache();
+        services.AddOpenIddict().AddClient(client =>
         {
-            var scope = configuration[
-                $"{ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{clientName}:Scope"];
-            if (!string.IsNullOrWhiteSpace(scope))
-            {
-                options.Scope = scope;
-            }
+            client.AllowClientCredentialsFlow().AllowTokenExchangeFlow().DisableTokenStorage();
+            client.UseSystemNetHttp();
         });
-
-        return AddClientCredentialsCore(builder);
+        services.AddOptions<OpenIddictClientOptions>().Configure<IOptions<ServiceAuthenticationOptions>>((client, identity) =>
+        {
+            var value = identity.Value;
+            if (client.Registrations.Any(registration => registration.RegistrationId == RegistrationId)) return;
+            client.Registrations.Add(new OpenIddictClientRegistration
+            {
+                RegistrationId = RegistrationId, Issuer = new Uri(value.Authority, UriKind.Absolute),
+                ClientId = value.ClientId, ClientSecret = value.ClientSecret
+            });
+        });
+        services.TryAddSingleton<TokenCache>();
+        return services;
     }
 
-    /// <summary>
-    /// 为服务客户端追加 client credentials 认证（委托配置版）。
-    /// </summary>
-    /// <param name="builder">来自 <c>AddServiceClient</c> 的 <see cref="IHttpClientBuilder"/></param>
-    /// <param name="configureOptions">认证配置委托</param>
-    public static IHttpClientBuilder AddClientCredentials(
-        this IHttpClientBuilder builder,
-        Action<ClientCredentialsOptions> configureOptions)
+    /// <summary>为命名客户端追加机器认证；默认绑定 Leistd:ServiceClients:{Name}。</summary>
+    public static IHttpClientBuilder AddClientCredentials(this IHttpClientBuilder builder,
+        Action<ClientCredentialsOptions>? configure = null, string? configSectionPath = null)
     {
-        builder.Services.Configure(builder.Name, configureOptions);
-        return AddClientCredentialsCore(builder);
+        RegisterAuthentication(builder);
+        var path = configSectionPath ?? $"{ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{builder.Name}";
+        var options = builder.Services.AddOptions<ClientCredentialsOptions>(builder.Name).BindConfiguration(path);
+        if (configure is not null) options.Configure(configure);
+        options.ValidateOnStart();
+        return builder.AddHttpMessageHandler(provider => new ClientCredentialsDelegatingHandler(builder.Name,
+            provider.GetRequiredService<OpenIddictClientService>(), provider.GetRequiredService<TokenCache>(),
+            provider.GetRequiredService<IOptions<ServiceAuthenticationOptions>>(),
+            provider.GetRequiredService<IOptionsMonitor<ClientCredentialsOptions>>()));
     }
 
-    private static IHttpClientBuilder AddClientCredentialsCore(IHttpClientBuilder builder)
+    /// <summary>追加单跳 Token Exchange；没有已验证的用户令牌时拒绝调用，不回退为机器身份。</summary>
+    public static IHttpClientBuilder AddTokenExchange(this IHttpClientBuilder builder,
+        Action<TokenExchangeOptions>? configure = null, string? configSectionPath = null)
     {
-        // 凭据在启动期校验：漏配不该等到第一次跨服务调用才暴露。
-        builder.Services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IValidateOptions<ClientCredentialsOptions>, ClientCredentialsOptionsValidator>());
-        builder.Services.AddOptions<ClientCredentialsOptions>(builder.Name).ValidateOnStart();
-
-        // 令牌请求必须使用独立管道，避免认证处理器递归调用自身。
-        builder.Services.AddHttpClient(ClientCredentialsTokenProvider.TokenHttpClientName);
-        builder.Services.TryAddSingleton<IServiceTokenProvider, ClientCredentialsTokenProvider>();
-
-        var clientName = builder.Name;
-        builder.AddHttpMessageHandler(provider => new ClientCredentialsDelegatingHandler(
-            clientName,
-            provider.GetRequiredService<IServiceTokenProvider>()));
-
-        return builder;
+        RegisterAuthentication(builder);
+        var path = configSectionPath ?? $"{ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{builder.Name}:TokenExchange";
+        var options = builder.Services.AddOptions<TokenExchangeOptions>(builder.Name).BindConfiguration(path);
+        if (configure is not null) options.Configure(configure);
+        builder.Services.AddSingleton<IValidateOptions<TokenExchangeOptions>>(new TokenExchangeOptionsValidator(builder.Name, path));
+        options.ValidateOnStart();
+        return builder.AddHttpMessageHandler(provider => new TokenExchangeDelegatingHandler(builder.Name,
+            provider.GetRequiredService<OpenIddictClientService>(), provider.GetRequiredService<TokenCache>(),
+            provider.GetRequiredService<IOptions<ServiceAuthenticationOptions>>(),
+            provider.GetRequiredService<IOptionsMonitor<TokenExchangeOptions>>(),
+            provider.GetRequiredService<IUserAccessTokenAccessor>()));
     }
+
+    private sealed record AuthenticationMode(string Name);
+    private static void RegisterAuthentication(IHttpClientBuilder builder)
+    {
+        if (builder.Services.Any(descriptor => descriptor.ImplementationInstance is AuthenticationMode existing && existing.Name == builder.Name))
+            throw new InvalidOperationException($"Service client '{builder.Name}' already has an authentication handler.");
+        builder.Services.AddSingleton(new AuthenticationMode(builder.Name));
+    }
+
 }

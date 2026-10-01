@@ -161,7 +161,6 @@ public sealed class ServiceClientExceptionMappingsTests
             .ConfigureWebHost(web => web.UseTestServer()
                 .ConfigureServices(services =>
                 {
-                    services.AddServiceUserContext();
                     services.AddGlobalExceptionHandler(configure);
                 })
                 .Configure(app =>

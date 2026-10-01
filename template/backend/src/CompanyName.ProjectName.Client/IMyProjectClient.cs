@@ -19,7 +19,7 @@ public interface IMyProjectClient
 #if (LocalIdentity)
     /// <summary>
     /// 查询本次调用在被调方呈现的身份（用户 + 调用方客户端），用于服务间调用联调。
-    /// 需要认证：服务间调用须配置 client credentials 并携带用户上下文。
+    /// 需要自然人认证：服务间用户调用使用 Token Exchange；机器令牌不满足此端点策略。
     /// </summary>
     /// <param name="cancellationToken">取消令牌</param>
     [Get("/api/v1/service-info/whoami")]

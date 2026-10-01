@@ -50,7 +50,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Probe",
                 applicationType = "web",
                 clientType = "confidential",
-                consentType = "explicit",
                 permissions = new[] { "scp:openid", "scp:not_registered" },
                 requirements = Array.Empty<string>(),
                 redirectUris = Array.Empty<string>(),
@@ -106,7 +105,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Probe",
                 applicationType = "service",
                 clientType = "confidential",
-                consentType = "explicit",
                 // 缺 ept:token：与创建时同样必须被拒
                 permissions = new[] { "gt:client_credentials", "scp:tenant-routing.read" },
                 requirements = Array.Empty<string>(),
@@ -124,7 +122,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             displayName = "Probe",
             applicationType = "service",
             clientType,
-            consentType = "explicit",
             permissions,
             requirements = Array.Empty<string>(),
             redirectUris = Array.Empty<string>(),
@@ -327,7 +324,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Secret probe",
                 applicationType = "service",
                 clientType = "confidential",
-                consentType = "explicit",
                 permissions = new[] { "ept:token", "gt:client_credentials" },
                 requirements = Array.Empty<string>(),
                 redirectUris = Array.Empty<string>(),
@@ -361,7 +357,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Workload",
                 applicationType = "service",
                 clientType = "confidential",
-                consentType = "explicit",
                 permissions = new[] { "ept:token", "gt:client_credentials", $"scp:{ApiScope}" },
                 requirements = Array.Empty<string>(),
                 redirectUris = Array.Empty<string>(),
@@ -410,7 +405,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Bearer probe",
                 applicationType = "web",
                 clientType = "confidential",
-                consentType = "explicit",
                 permissions = new[]
                 {
                     "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{ApiScope}"

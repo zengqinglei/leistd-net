@@ -94,6 +94,8 @@ public static class DependencyInjection
         services.AddTransient<IAuthAppService, AuthAppService>();
 
 #if (OpenIddictServer)
+        services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
+            RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
         // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。
         services.AddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
         services.AddTransient<IOpenApplicationAppService, OpenApplicationAppService>();

@@ -38,13 +38,6 @@ public record CreateOpenApplicationInputDto
     public required string ClientType { get; init; }
 
     /// <summary>
-    /// 同意类型
-    /// </summary>
-    [Display(Name = "Consent type")]
-    [Required(ErrorMessage = "{0} is required.")]
-    public required string ConsentType { get; init; }
-
-    /// <summary>
     /// Redirect URIs
     /// </summary>
     public List<string> RedirectUris { get; init; } = [];

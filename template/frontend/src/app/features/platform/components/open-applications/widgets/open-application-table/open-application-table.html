@@ -126,12 +126,6 @@
                                 [variant]="getClientTypeVariant(row.original.clientType)"
                                 >{{ row.original.clientType }}</span
                               >
-                              <span
-                                hlmBadge
-                                variant="outline"
-                                class="hidden @min-[1560px]:inline-flex"
-                                >{{ t(consentTypeKeys[row.original.consentType]) }}</span
-                              >
                             </div>
                           }
                           @case ('permissions') {

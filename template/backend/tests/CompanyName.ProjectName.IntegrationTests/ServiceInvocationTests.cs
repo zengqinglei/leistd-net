@@ -1,317 +1,74 @@
-#if (LocalIdentity)
-using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Security.Claims;
-using CompanyName.ProjectName.Domain.Auth.Options;
+#if (OpenIddictServer)
 using CompanyName.ProjectName.Client;
-using CompanyName.ProjectName.Infrastructure.Persistence;
-using Leistd.Security.Claims;
-using Leistd.ServiceClient.Constants;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.ServiceClient.Exceptions;
-using Leistd.Security.Users;
-using Leistd.Tracing;
-using Microsoft.EntityFrameworkCore;
+using Leistd.ServiceClient.OAuth;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using OpenIddict.Client.SystemNetHttp;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
-/// <summary>
-/// 服务间调用闭环。分两组：
-/// <list type="bullet">
-/// <item>被调方安全：受信恢复用户上下文、纯工作负载不满足默认策略、伪造头被剥离；</item>
-/// <item>调用方消费路径：另起一个调用方宿主，经真实 Client 包（Add{ProjectName}Client →
-/// 全局 ServiceAuth 绑定 → Refit → 标准管道 → DTO 契约）完成调用。</item>
-/// </list>
-/// </summary>
-public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory)
-    : IClassFixture<ProjectWebApplicationFactory>
+public sealed class ServiceInvocationTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {
-    private const string CallerClientId = "svc-caller";
-    private const string CallerClientSecret = "SvcCaller@123456";
-
-    /// <summary>未获委托 scope 的客户端：只能以自身身份调用，不能代表用户。</summary>
-    private const string PlainClientId = "svc-plain";
-    private const string PlainClientSecret = "SvcPlain@123456";
-
-    // 调用本服务 API 必须申请它的 scope：委托 scope 只表示"可以代表用户"，不决定令牌能调用哪个 API
-    private static readonly string ApiScope = new OAuthOptions().Resource;
-
-    /// <summary>client_id 取用户 Id 形态的客户端，用于主体命名空间碰撞回归。</summary>
-    private const string ImpersonatingClientSecret = "SvcImpersonate@123456";
-
-
     [Fact]
-    public async Task Service_info_should_be_anonymous()
+    public async Task Generated_client_explicit_machine_authentication_calls_anonymous_API_and_maps_natural_user_rejection()
     {
-        using var client = factory.CreateProjectClient();
-
-        var response = await client.GetAsync("/api/v1/service-info");
-
-        response.EnsureSuccessStatusCode();
-        var info = await response.Content.ReadFromJsonAsync<ServiceInfoDto>();
-        Assert.NotNull(info);
-        Assert.False(string.IsNullOrWhiteSpace(info.Service));
-    }
-
-    [Fact]
-    public async Task Service_call_with_client_credentials_should_restore_user_context()
-    {
-        await EnsureCallerRegisteredAsync();
-        using var client = CreateHttpsClient();
-        var token = await GetMachineTokenAsync(client);
-
-        var adminId = await GetAdminIdAsync();
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/service-info/whoami");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Add("X-User-Id", adminId.ToString());
-
-        var whoAmIResponse = await client.SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.OK, whoAmIResponse.StatusCode);
-        var whoAmI = await whoAmIResponse.Content.ReadFromJsonAsync<WhoAmIDto>();
-        Assert.Equal(adminId, whoAmI!.UserId);
-        Assert.Equal(CallerClientId, whoAmI.ClientId);
-    }
-
-    [Fact]
-    public async Task Service_call_without_user_header_should_not_satisfy_default_policy()
-    {
-        await EnsureCallerRegisteredAsync();
-        using var client = CreateHttpsClient();
-        var token = await GetMachineTokenAsync(client);
-
-        // 默认策略要求可用的自然人用户：纯工作负载身份（无用户上下文）不满足
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/service-info/whoami");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        var response = await client.SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Forged_user_header_without_service_token_should_be_rejected()
-    {
-        using var client = factory.CreateProjectClient();
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/service-info/whoami");
-        request.Headers.Add("X-User-Id", Guid.NewGuid().ToString());
-
-        var response = await client.SendAsync(request);
-
-        // 匿名请求的伪造头被剥离，不产生任何身份
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Client_id_shaped_like_a_user_id_cannot_impersonate_that_user()
-    {
-        // 攻击复现：注册一个 client_id 恰好等于管理员用户 Id 的客户端（client_id 由创建者
-        // 任意指定，而用户 Id 在用户管理、审计日志、业务数据里都拿得到），并授予委托 scope，
-        // 使唯一的防线只剩主体命名空间。若 sub 直接写裸 client_id，该令牌会被解析成管理员；
-        // ClientSubject 契约把它变成 client:<guid>，Guid.TryParse 必然失败。
-        var adminId = await GetAdminIdAsync();
-        var impersonatingClientId = adminId.ToString();
-        await EnsureClientRegisteredAsync(impersonatingClientId, ImpersonatingClientSecret, withDelegationScope: true);
-
-        using var client = CreateHttpsClient();
-        var token = await GetMachineTokenAsync(client, impersonatingClientId, ImpersonatingClientSecret);
-
-        // 不携带任何用户头：主体只可能来自 token 自身的 sub
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/service-info/whoami");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        var response = await client.SendAsync(request);
-
-        // 仍被识别为工作负载而非管理员，因而不满足「可用的自然人」默认策略
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Client_without_delegation_scope_cannot_impersonate_a_user()
-    {
-        await EnsureCallerRegisteredAsync();
-        using var client = CreateHttpsClient();
-        var token = await GetMachineTokenAsync(client, PlainClientId, PlainClientSecret, delegation: false);
-
-        // 未获委托 scope：即使知道管理员的用户 Id，X-User-* 头也会被剥离，
-        // 主体仍是机器身份，因而不满足「可用的自然人」默认策略。
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/service-info/whoami");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Add("X-User-Id", (await GetAdminIdAsync()).ToString());
-
-        var response = await client.SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-
-    [Fact]
-    public async Task Client_package_should_call_anonymous_endpoint()
-    {
-        // Client 包的标准管道会在所有请求前取 client_credentials token，
-        // 即使目标端点是匿名的。每个测试独立准备客户端，不依赖 xUnit 执行顺序。
-        await EnsureCallerRegisteredAsync();
-        await using var caller = CreateCallerHost();
-
-        var info = await caller.GetRequiredService<IMyProjectClient>().GetServiceInfoAsync();
-
-        Assert.NotNull(info);
-        Assert.False(string.IsNullOrWhiteSpace(info.Service));
-    }
-
-    [Fact]
-    public async Task Client_package_should_forward_user_context_end_to_end()
-    {
-        await EnsureCallerRegisteredAsync();
-        var adminId = await GetAdminIdAsync();
-        await using var caller = CreateCallerHost();
-
-        // 调用方以某个用户的身份发起：SDK 自动注入 X-User-Id，被调方受信恢复
-        var accessor = caller.GetRequiredService<ICurrentPrincipalAccessor>();
-        using (accessor.Change(CreateUserPrincipal(adminId)))
+        var clientId = $"machine-{Guid.NewGuid():N}";
+        const string secret = "ClientPackage!Secret1";
+        using (var scope = factory.Services.CreateScope())
         {
-            var whoAmI = await caller.GetRequiredService<IMyProjectClient>().WhoAmIAsync();
-
-            Assert.Equal(adminId, whoAmI!.UserId);
-            Assert.Equal(CallerClientId, whoAmI.ClientId);
+            var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+            await manager.CreateAsync(new OpenIddictApplicationDescriptor
+            {
+                ClientId = clientId, ClientSecret = secret,
+                ClientType = OpenIddictConstants.ClientTypes.Confidential,
+                ConsentType = OpenIddictConstants.ConsentTypes.Implicit,
+                Permissions =
+                {
+                    OpenIddictConstants.Permissions.Endpoints.Token,
+                    OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
+                    OpenIddictConstants.Permissions.Prefixes.Scope + new OAuthOptions().Resource
+                }
+            });
         }
-    }
-
-    [Fact]
-    public async Task Client_package_should_surface_remote_errors_as_remote_service_exception()
-    {
-        await EnsureCallerRegisteredAsync();
-        await using var caller = CreateCallerHost();
-
-        // 无用户上下文 → 被调方默认策略拒绝；Refit 的错误经统一 ExceptionFactory 还原
-        var exception = await Assert.ThrowsAsync<RemoteServiceException>(
-            () => caller.GetRequiredService<IMyProjectClient>().WhoAmIAsync());
-
-        // 只保留远端那次请求的状态码供日志与排查；客户端异常不预设本服务对外的 HTTP 状态。
-        Assert.Equal((int)HttpStatusCode.Forbidden, exception.RemoteStatusCode);
-    }
-
-    /// <summary>
-    /// 调用方宿主：只注册 Client 包所需的服务，HTTP 走被调方 TestServer 的处理器。
-    /// 这是「另一个业务服务引用本服务 Client 包」的最小等价形态。
-    /// </summary>
-    private ServiceProvider CreateCallerHost()
-    {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            // 本服务（调用方）的调用身份，全局一次
-            ["Leistd:ServiceAuth:TokenEndpoint"] = "https://localhost/connect/token",
-            ["Leistd:ServiceAuth:ClientId"] = CallerClientId,
-            ["Leistd:ServiceAuth:ClientSecret"] = CallerClientSecret,
-            // 目标服务：地址 + 它的 API scope 与委托 scope（代表用户调用所必需），空格分隔
-            ["Leistd:ServiceClients:MyProject:BaseAddress"] = "https://localhost",
-            ["Leistd:ServiceClients:MyProject:Scope"] = $"{ApiScope} {ServiceClientScopes.Delegation}",
+            ["Leistd:ServiceAuth:Authority"] = factory.Services.GetRequiredService<IOptions<OAuthOptions>>().Value.Issuer ?? "https://localhost/",
+            ["Leistd:ServiceAuth:ClientId"] = clientId,
+            ["Leistd:ServiceAuth:ClientSecret"] = secret,
+            ["Leistd:ServiceClients:MyProject:BaseAddress"] = "https://localhost/",
+            ["Leistd:ServiceClients:MyProject:Scope"] = new OAuthOptions().Resource
         }).Build();
-
         var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IConfiguration>(configuration);
-        services.AddCorrelationIdCore();
-        services.AddSingleton<ICurrentPrincipalAccessor, CurrentPrincipalAccessor>();
-        services.AddTransient<ICurrentUser, CurrentUser>();
-
-        services.AddMyProjectClient(configuration)
+        services.AddLogging(); services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<IHttpMessageHandlerBuilderFilter>(new ProtocolTransport(factory.Server));
+        services.AddServiceAuthentication();
+        services.AddMyProjectClient(configuration).AddClientCredentials()
             .ConfigurePrimaryHttpMessageHandler(() => factory.Server.CreateHandler());
-        services.AddHttpClient(Leistd.ServiceClient.OAuth.Services.ClientCredentialsTokenProvider.TokenHttpClientName)
-            .ConfigurePrimaryHttpMessageHandler(() => factory.Server.CreateHandler());
-
-        return services.BuildServiceProvider();
+        await using var caller = services.BuildServiceProvider();
+        var client = caller.GetRequiredService<IMyProjectClient>();
+        var info = await client.GetServiceInfoAsync();
+        Assert.False(string.IsNullOrWhiteSpace(info.Service));
+        // 403 证明机器令牌已被认证，但不满足自然人策略；未认证调用会返回 401。
+        var rejection = await Assert.ThrowsAsync<RemoteServiceException>(() => client.WhoAmIAsync());
+        Assert.Equal(403, rejection.RemoteStatusCode);
+        Assert.False(string.IsNullOrWhiteSpace(rejection.RemoteTraceId));
     }
 
-    private static ClaimsPrincipal CreateUserPrincipal(Guid userId) =>
-        new(new ClaimsIdentity([new Claim("sub", userId.ToString())], "TestCaller"));
-
-    /// <summary>
-    /// OpenIddict 的令牌端点只收 HTTPS。TestServer 不做真实 TLS，改基地址即可让
-    /// <c>Request.IsHttps</c> 成立，不必为测试在服务端放宽这条要求。
-    /// </summary>
-    private HttpClient CreateHttpsClient()
+    private sealed class ProtocolTransport(TestServer server) : IHttpMessageHandlerBuilderFilter
     {
-        var client = factory.CreateProjectClient();
-        client.BaseAddress = new Uri("https://localhost");
-        return client;
-    }
-
-    private static async Task<string> GetMachineTokenAsync(
-        HttpClient client,
-        string clientId = CallerClientId,
-        string clientSecret = CallerClientSecret,
-        bool delegation = true)
-    {
-        var form = new Dictionary<string, string>
+        public Action<HttpMessageHandlerBuilder> Configure(Action<HttpMessageHandlerBuilder> next) => builder =>
         {
-            ["grant_type"] = "client_credentials",
-            ["client_id"] = clientId,
-            ["client_secret"] = clientSecret,
-            ["scope"] = delegation ? $"{ApiScope} {ServiceClientScopes.Delegation}" : ApiScope,
+            next(builder);
+            if (!builder.Name!.StartsWith(typeof(OpenIddictClientSystemNetHttpOptions).Assembly.GetName().Name!, StringComparison.Ordinal)) return;
+            builder.PrimaryHandler.Dispose();
+            builder.PrimaryHandler = server.CreateHandler();
         };
-
-        var response = await client.PostAsync("/connect/token", new FormUrlEncodedContent(form));
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var token = await response.Content.ReadFromJsonAsync<TokenDto>();
-        Assert.False(string.IsNullOrEmpty(token!.access_token));
-        return token.access_token;
     }
-
-    private async Task EnsureCallerRegisteredAsync()
-    {
-        // 委托客户端：额外授予 svc.delegate，才能代表用户调用
-        await EnsureClientRegisteredAsync(CallerClientId, CallerClientSecret, withDelegationScope: true);
-        // 普通机器客户端：只有取令牌的能力，没有委托 scope
-        await EnsureClientRegisteredAsync(PlainClientId, PlainClientSecret, withDelegationScope: false);
-    }
-
-    private async Task EnsureClientRegisteredAsync(string clientId, string clientSecret, bool withDelegationScope)
-    {
-        using var scope = factory.Services.CreateScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
-        if (await manager.FindByClientIdAsync(clientId) is not null)
-        {
-            return;
-        }
-
-        var descriptor = new OpenIddictApplicationDescriptor
-        {
-            ClientId = clientId,
-            ClientSecret = clientSecret,
-            ClientType = OpenIddictConstants.ClientTypes.Confidential,
-            Permissions =
-            {
-                OpenIddictConstants.Permissions.Endpoints.Token,
-                OpenIddictConstants.Permissions.GrantTypes.ClientCredentials,
-                OpenIddictConstants.Permissions.Prefixes.Scope + ApiScope,
-            },
-        };
-        if (withDelegationScope)
-        {
-            descriptor.Permissions.Add(
-                OpenIddictConstants.Permissions.Prefixes.Scope + ServiceClientScopes.Delegation);
-        }
-
-        await manager.CreateAsync(descriptor);
-    }
-
-    private async Task<Guid> GetAdminIdAsync()
-    {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
-        return await db.Users.Where(u => u.Username == "admin").Select(u => u.Id).SingleAsync();
-    }
-
-    private sealed record ServiceInfoDto(string Service, string Version, DateTimeOffset ServerTime);
-
-    private sealed record WhoAmIDto(Guid? UserId, string? Username, string? ClientId);
-
-    private sealed record TokenDto(string access_token);
 }
 #endif

@@ -9,7 +9,7 @@
 | SaaS 服务按租户隔离数据 | `Core` + `AspNetCore` + `EntityFrameworkCore` |
 | Resource 服务只信任已验证 token 中的租户 claim | `Core` + `AspNetCore`，关闭本地租户校验 |
 | 后台任务需在指定租户下执行 | `ICurrentTenant.Change()`；带主体时用 `IAmbientContext.Begin()` 一次建立各维度（贡献者在 `AspNetCore` 包） |
-| 服务间需传递租户 | 使用 `Leistd.ServiceClient`；本家族恢复并解析上下文 |
+| 服务间需传递租户 | 使用 ServiceClient Token Exchange；本家族从已验证令牌解析上下文 |
 | 租户管理界面（查询、创建开通与补偿、启停、删除、连接登记） | `MapTenantManagement()`、`MapTenantConnections()`，宿主实现 `ITenantProvisioner` |
 | 资源服务回源控制面取租户连接 | `Leistd.MultiTenancy.ServiceClient` 的 `AddRemoteTenantConnectionStore()` |
 | 非多租户项目 | 不引用、不注册 |
@@ -156,7 +156,7 @@ var cacheKey = currentTenant.ScopeKey($"catalog:category:{id:N}");
 | --- | --- | --- |
 | 身份 claim | `ClaimTypeOptions.TenantId`（默认 `tenant_id`） | 已认证，定案 |
 | 匿名请求提示 | `MultiTenancyOptions.HeaderName`（默认 `X-Tenant`）、`QueryStringParameterName`（默认 `tenant`） | 不可信，只对匿名请求生效，启用校验时须指向存在且启用的租户 |
-| 服务间委托 | 服务客户端 `UserContextForwardingOptions.TenantIdHeader` / 被调方 `ServiceUserContextOptions.TenantIdHeader`（默认 `X-Tenant-Id`，只带 GUID） | 只对受信调用方还原为租户 claim |
+| Token Exchange | Token Exchange JWT 的租户 claim | 身份服务确认用户所属租户，资源端从同一主体解析 |
 
 `ICurrentTenant.Change` 在切换租户的同时打开日志作用域，键为 `TenantLogKeys.TenantId`（`leistd.tenantId`），切回宿主时值为 `null`：HTTP 解析、Hub 与后台任务的环境上下文、逐库作业等所有切换入口的日志都能按同一个键过滤。
 
@@ -319,7 +319,7 @@ app.MapGroup("/api/v1/tenant-connections").MapTenantConnections(options =>
 ```csharp
 builder.Services.AddRemoteTenantConnectionResolution();
 builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuration)
-    .AddClientCredentials(builder.Configuration)
+    .AddClientCredentials()
     .AddStandardResilienceHandler();
 ```
 

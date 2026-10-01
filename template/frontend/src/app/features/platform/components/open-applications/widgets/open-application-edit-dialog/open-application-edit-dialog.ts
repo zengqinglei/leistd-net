@@ -35,7 +35,6 @@ import { englishText } from '../../../../../../shared/utils/english-text';
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationClientType,
-  OpenApplicationConsentType,
   OpenApplicationOutputDto,
   OpenApplicationScopeOutputDto,
   OpenApplicationType,
@@ -50,7 +49,6 @@ interface OpenApplicationEditFormModel {
   displayName: string;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
-  consentType: OpenApplicationConsentType;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   permissions: string[];
@@ -156,10 +154,6 @@ export class OpenApplicationEditDialog {
       {},
       { scope: 'openApp' },
     ),
-    consentImplicit: translateSignal('openApp.consentType.implicit', {}, { scope: 'openApp' }),
-    consentExplicit: translateSignal('openApp.consentType.explicit', {}, { scope: 'openApp' }),
-    consentExternal: translateSignal('openApp.consentType.external', {}, { scope: 'openApp' }),
-    consentSystematic: translateSignal('openApp.consentType.systematic', {}, { scope: 'openApp' }),
     authorizationEndpoint: translateSignal(
       'openApp.permission.authorizationEndpoint',
       {},
@@ -182,6 +176,7 @@ export class OpenApplicationEditDialog {
       { scope: 'openApp' },
     ),
     refreshToken: translateSignal('openApp.permission.refreshToken', {}, { scope: 'openApp' }),
+    tokenExchange: translateSignal('openApp.permission.tokenExchange', {}, { scope: 'openApp' }),
     clientCredentials: translateSignal(
       'openApp.permission.clientCredentials',
       {},
@@ -217,13 +212,6 @@ export class OpenApplicationEditDialog {
     { label: this.texts.clientTypeConfidential(), value: 'confidential' as const },
   ]);
 
-  readonly consentTypeOptions = computed(() => [
-    { label: this.texts.consentImplicit(), value: 'implicit' as const },
-    { label: this.texts.consentExplicit(), value: 'explicit' as const },
-    { label: this.texts.consentExternal(), value: 'external' as const },
-    { label: this.texts.consentSystematic(), value: 'systematic' as const },
-  ]);
-
   readonly permissionOptions = computed(() => [
     { label: this.texts.authorizationEndpoint(), value: 'ept:authorization', group: 'Endpoints' },
     { label: this.texts.tokenEndpoint(), value: 'ept:token', group: 'Endpoints' },
@@ -231,8 +219,20 @@ export class OpenApplicationEditDialog {
     { label: this.texts.authorizationCode(), value: 'gt:authorization_code', group: 'Grant Types' },
     { label: this.texts.refreshToken(), value: 'gt:refresh_token', group: 'Grant Types' },
     { label: this.texts.clientCredentials(), value: 'gt:client_credentials', group: 'Grant Types' },
+    {
+      label: this.texts.tokenExchange(),
+      value: 'gt:urn:ietf:params:oauth:grant-type:token-exchange',
+      group: 'Grant Types',
+    },
     { label: this.texts.codeResponse(), value: 'rst:code', group: 'Response Types' },
     ...this.scopeOptions(),
+    ...this.scopes()
+      .filter((scope) => !!scope.audience)
+      .map((scope) => ({
+        label: scope.displayName,
+        value: `aud:${scope.audience}`,
+        group: 'Audiences',
+      })),
   ]);
 
   readonly requirementOptions = computed(() => [
@@ -246,6 +246,7 @@ export class OpenApplicationEditDialog {
     'gt:authorization_code': this.texts.authorizationCodeFlow(),
     'gt:refresh_token': this.texts.refreshToken(),
     'gt:client_credentials': this.texts.clientCredentials(),
+    'gt:urn:ietf:params:oauth:grant-type:token-exchange': this.texts.tokenExchange(),
     'rst:code': this.texts.codeResponse(),
     'scp:openid': this.texts.scopeOpenid(),
     'scp:profile': this.texts.scopeProfile(),
@@ -263,13 +264,6 @@ export class OpenApplicationEditDialog {
   readonly clientTypeLabels = computed<Record<string, string>>(() => ({
     public: this.texts.clientTypePublic(),
     confidential: this.texts.clientTypeConfidential(),
-  }));
-
-  readonly consentTypeLabels = computed<Record<string, string>>(() => ({
-    implicit: this.texts.consentImplicit(),
-    explicit: this.texts.consentExplicit(),
-    external: this.texts.consentExternal(),
-    systematic: this.texts.consentSystematic(),
   }));
   //#else
   readonly templateOptions = computed(() => [
@@ -289,13 +283,6 @@ export class OpenApplicationEditDialog {
     { label: 'Confidential', value: 'confidential' as const },
   ]);
 
-  readonly consentTypeOptions = computed(() => [
-    { label: 'Implicit consent', value: 'implicit' as const },
-    { label: 'Explicit consent', value: 'explicit' as const },
-    { label: 'External consent', value: 'external' as const },
-    { label: 'Systematic consent', value: 'systematic' as const },
-  ]);
-
   readonly permissionOptions = computed(() => [
     { label: 'Authorization endpoint', value: 'ept:authorization', group: 'Endpoints' },
     { label: 'Token endpoint', value: 'ept:token', group: 'Endpoints' },
@@ -303,8 +290,20 @@ export class OpenApplicationEditDialog {
     { label: 'Authorization code', value: 'gt:authorization_code', group: 'Grant Types' },
     { label: 'Refresh token', value: 'gt:refresh_token', group: 'Grant Types' },
     { label: 'Client credentials', value: 'gt:client_credentials', group: 'Grant Types' },
+    {
+      label: 'Token Exchange',
+      value: 'gt:urn:ietf:params:oauth:grant-type:token-exchange',
+      group: 'Grant Types',
+    },
     { label: 'Code response', value: 'rst:code', group: 'Response Types' },
     ...this.scopeOptions(),
+    ...this.scopes()
+      .filter((scope) => !!scope.audience)
+      .map((scope) => ({
+        label: scope.displayName,
+        value: `aud:${scope.audience}`,
+        group: 'Audiences',
+      })),
   ]);
 
   readonly requirementOptions = computed(() => [{ label: 'Force PKCE', value: 'ft:pkce' }]);
@@ -316,6 +315,7 @@ export class OpenApplicationEditDialog {
     'gt:authorization_code': 'Authorization code flow',
     'gt:refresh_token': 'Refresh token',
     'gt:client_credentials': 'Client credentials',
+    'gt:urn:ietf:params:oauth:grant-type:token-exchange': 'Token Exchange',
     'rst:code': 'Code response',
     'scp:openid': 'Identity',
     'scp:profile': 'Profile',
@@ -334,13 +334,6 @@ export class OpenApplicationEditDialog {
     public: 'Public',
     confidential: 'Confidential',
   }));
-
-  readonly consentTypeLabels = computed<Record<string, string>>(() => ({
-    implicit: 'Implicit consent',
-    explicit: 'Explicit consent',
-    external: 'External consent',
-    systematic: 'Systematic consent',
-  }));
   //#endif
 
   /**
@@ -354,8 +347,6 @@ export class OpenApplicationEditDialog {
     this.applicationTypeLabels()[value] ?? value;
 
   readonly clientTypeToLabel = (value: string): string => this.clientTypeLabels()[value] ?? value;
-
-  readonly consentTypeToLabel = (value: string): string => this.consentTypeLabels()[value] ?? value;
 
   readonly templateToLabel = (value: string): string =>
     this.templateOptions().find((option) => option.value === value)?.label ?? value;
@@ -374,7 +365,6 @@ export class OpenApplicationEditDialog {
           displayName: application.displayName ?? '',
           applicationType: application.applicationType,
           clientType: application.clientType,
-          consentType: application.consentType,
           redirectUris: [...application.redirectUris],
           postLogoutRedirectUris: [...application.postLogoutRedirectUris],
           permissions: [...application.permissions],
@@ -392,7 +382,6 @@ export class OpenApplicationEditDialog {
       displayName: '',
       applicationType: 'web',
       clientType: 'public',
-      consentType: 'explicit',
       redirectUris: [],
       postLogoutRedirectUris: [],
       permissions: [...authorizationCodePermissions],
@@ -418,7 +407,6 @@ export class OpenApplicationEditDialog {
         //#endif
         applicationType: 'native',
         clientType: 'public',
-        consentType: 'explicit',
         redirectUris: ['my-desktop-app://oauth/callback'],
         postLogoutRedirectUris: ['my-desktop-app://oauth/logout-callback'],
         permissions: [...authorizationCodePermissions],
@@ -432,7 +420,6 @@ export class OpenApplicationEditDialog {
         ...model,
         applicationType: 'service',
         clientType: 'confidential',
-        consentType: 'systematic',
         redirectUris: [],
         postLogoutRedirectUris: [],
         permissions: ['ept:token', 'gt:client_credentials'],
@@ -445,7 +432,6 @@ export class OpenApplicationEditDialog {
       ...model,
       applicationType: 'web',
       clientType: 'public',
-      consentType: 'explicit',
       permissions: [...authorizationCodePermissions],
       requirements: ['ft:pkce'],
     }));
@@ -456,13 +442,6 @@ export class OpenApplicationEditDialog {
       return;
     }
     this.formModel.update((model) => ({ ...model, applicationType: value }));
-  }
-
-  onConsentTypeChange(value: OpenApplicationConsentType | null | undefined) {
-    if (!value) {
-      return;
-    }
-    this.formModel.update((model) => ({ ...model, consentType: value }));
   }
 
   onClientTypeSelect(clientType: OpenApplicationClientType | null | undefined) {
@@ -537,7 +516,6 @@ export class OpenApplicationEditDialog {
         displayName: model.displayName,
         applicationType: model.applicationType,
         clientType: model.clientType,
-        consentType: model.consentType,
         redirectUris: model.redirectUris,
         postLogoutRedirectUris: model.postLogoutRedirectUris,
         permissions: model.permissions,
@@ -551,7 +529,6 @@ export class OpenApplicationEditDialog {
       displayName: model.displayName,
       applicationType: model.applicationType,
       clientType: model.clientType,
-      consentType: model.consentType,
       redirectUris: model.redirectUris,
       postLogoutRedirectUris: model.postLogoutRedirectUris,
       permissions: model.permissions,
@@ -579,7 +556,6 @@ const ENGLISH: Record<string, string> = {
   'openApp.field.clientIdPlaceholder': 'e.g. my-desktop-app',
   'openApp.field.applicationType': 'Application type',
   'openApp.field.clientType': 'Client type',
-  'openApp.field.consentType': 'Consent',
   'openApp.section.callback': 'Callback URIs',
   'openApp.field.redirectUris': 'Redirect URIs',
   'openApp.redirectUri.hint': 'Callback URI after sign-in completes',

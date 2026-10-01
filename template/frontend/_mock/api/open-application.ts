@@ -118,6 +118,37 @@ function validateApplication(
     }
   }
 
+  const exchange = 'gt:urn:ietf:params:oauth:grant-type:token-exchange';
+  const userGrants = [
+    'gt:authorization_code',
+    'gt:refresh_token',
+    'gt:implicit',
+    'gt:password',
+    'gt:device_code',
+  ];
+  if (
+    input.permissions.includes(exchange) &&
+    (input.clientType !== 'confidential' ||
+      !input.permissions.includes('ept:token') ||
+      input.permissions.some((permission) => userGrants.includes(permission)))
+  ) {
+    throw new MockException(400, {
+      code: 'OpenApp:ExchangeClientInvalid',
+      message:
+        'Token Exchange requires a confidential service client with token permission and no user-facing grants.',
+    });
+  }
+  for (const permission of input.permissions.filter((permission) =>
+    permission.startsWith('aud:'),
+  )) {
+    if (!OPEN_APPLICATION_SCOPES.some((scope) => `aud:${scope.audience}` === permission)) {
+      throw new MockException(400, {
+        code: 'OpenApp:AudienceUnsupported',
+        message: 'Unsupported audience.',
+      });
+    }
+  }
+
   if (input.clientType === 'public' && 'clientSecret' in input && input.clientSecret) {
     throw new MockException(400, { message: 'Public clients cannot configure a client secret' });
   }
@@ -144,7 +175,6 @@ function createOpenApplication(req: MockRequest) {
     displayName: body.displayName,
     applicationType: body.applicationType,
     clientType: body.clientType,
-    consentType: body.consentType,
     redirectUris: body.redirectUris || [],
     postLogoutRedirectUris: body.postLogoutRedirectUris || [],
     permissions: body.permissions || [],
@@ -181,7 +211,6 @@ function updateOpenApplication(req: MockRequest) {
     displayName: body.displayName,
     applicationType: body.applicationType,
     clientType: body.clientType,
-    consentType: body.consentType,
     redirectUris: body.redirectUris || [],
     postLogoutRedirectUris: body.postLogoutRedirectUris || [],
     permissions: body.permissions || [],

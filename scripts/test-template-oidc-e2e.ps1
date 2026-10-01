@@ -61,6 +61,9 @@ $sharedConnection = $null
 $dedicatedConnection = $null
 $plainClient = $null
 $noDelegateClient = $null
+$exchangeClient = $null
+$serviceTokens = @{}
+$delegatedExpiryToken = $null
 
 function Write-JsonFile([string]$Path, $Value) {
     [IO.File]::WriteAllText($Path, (ConvertTo-Json -InputObject $Value -Depth 30), $utf8)
@@ -314,17 +317,21 @@ function Login([string]$Username = "admin", [string]$Tenant, [string]$Password =
     return $session
 }
 
-function Get-CodeToken([Net.Http.HttpClient]$Session, [string]$Scope) {
+function Get-CodeToken([Net.Http.HttpClient]$Session, [string]$Scope, [string]$ClientId = "orders-web") {
+    # 每个 SPA 只申请自己的 API；下游范围由调用方的交换权限授予。
+    $api = switch ($ClientId) { "billing-web" { "billing-api" }; "idp-web" { "e2e-idp-api" }; default { "orders-api" } }
+    $Scope = (($Scope.Split(' ') | Where-Object { $_ -notin @("orders-api", "billing-api", "e2e-idp-api") }) + $api) -join ' '
+
     $verifier = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
     $challenge = [Convert]::ToBase64String([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($verifier))).TrimEnd('=').Replace('+', '-').Replace('/', '_')
     $state = New-RandomValue "state"
-    $parameters = @{ response_type = "code"; client_id = "orders-web"; redirect_uri = $redirect; scope = $Scope
+    $parameters = @{ response_type = "code"; client_id = $ClientId; redirect_uri = $redirect; scope = $Scope
         state = $state; code_challenge = $challenge; code_challenge_method = "S256" }
     $authorizeUrl = $urls.idp + "/connect/authorize?" + (ConvertTo-Form $parameters)
     $response = Assert-Http "authorize-code-pkce" 302 $authorizeUrl -Session $Session
     $query = Read-Query $response.Location
     Assert-Value "authorize-state" $state $query.state
-    $form = @{ grant_type = "authorization_code"; client_id = "orders-web"; redirect_uri = $redirect
+    $form = @{ grant_type = "authorization_code"; client_id = $ClientId; redirect_uri = $redirect
         code = $query.code; code_verifier = (New-RandomValue "wrong") }
     Assert-Http "pkce-wrong-verifier" 400 ($urls.idp + "/connect/token") -Method POST -Body (ConvertTo-Form $form) | Out-Null
     # 错误交换可能消费授权码，成功路径重新申请，避免依赖协议实现的消费顺序。
@@ -350,16 +357,17 @@ function Get-MachineToken([hashtable]$Client, [string]$Scope) {
 function Get-TenantToken([hashtable]$Tenant) {
     $session = Login -Tenant $Tenant.name -Password $tenantPassword
     $token = Get-CodeToken $session "openid profile email roles e2e-idp-api orders-api billing-api"
-    Assert-Value "tenant-claim-$($Tenant.name)" $Tenant.id (Read-TokenClaims $token).tenant_id
+    Assert-Value "tenant-claim-$($Tenant.name)" $Tenant.id (Read-TokenClaims $token).e2e_tenant_id
     return @{ Session = $session; Token = $token }
 }
 
-function New-Application([string]$ClientId, [string[]]$Scopes, [switch]$Public) {
+function New-Application([string]$ClientId, [string[]]$Scopes, [switch]$Public, [switch]$Exchange) {
     $permissions = if ($Public) { @("ept:token", "gt:authorization_code", "ept:authorization", "ept:end_session", "rst:code") }
         else { @("ept:token", "gt:client_credentials") }
+    if ($Exchange) { $permissions += @("gt:urn:ietf:params:oauth:grant-type:token-exchange", "aud:billing-api") }
     $permissions += @($Scopes | ForEach-Object { "scp:$_" })
     $body = @{ clientId = $ClientId; applicationType = $(if ($Public) { "web" } else { "service" })
-        clientType = $(if ($Public) { "public" } else { "confidential" }); consentType = "implicit"
+        clientType = $(if ($Public) { "public" } else { "confidential" })
         redirectUris = @(); postLogoutRedirectUris = @(); permissions = $permissions; requirements = @() }
     if ($Public) { $body.redirectUris = @($redirect); $body.requirements = @("ft:pkce") }
     return (Assert-Http "create-client-$ClientId" 200 ($urls.idp + "/api/v1/open-applications") `
@@ -377,10 +385,18 @@ function Add-FixtureRegistration([string]$Name, [string]$Role, [string]$ApiDirec
     $registration = if ($Role -eq "Standalone") { "" } else {
         'services.AddAuthorization(o => o.AddPolicy("E2E.Machine", p => p.RequireAuthenticatedUser().RequireAssertion(c => c.User.FindFirst("sub")?.Value.StartsWith("client:") == true)));'
     }
+    $registration += ' services.Configure<Leistd.Security.Claims.ClaimTypeOptions>(o => { o.UserIds = ["e2e_user_id"]; o.TenantId = "e2e_tenant_id"; });'
     $extraUsings = ""
+    if ($Name -eq "idp") {
+        $extraUsings = "using Microsoft.EntityFrameworkCore;`nusing E2E.Idp.Infrastructure.Persistence;"
+        $registration += "`n" + 'services.AddScoped<PruningCommands>();'
+        $registration += "`n" + 'services.AddDbContext<OpenIddictDbContext>((provider, options) => options.AddInterceptors(provider.GetRequiredService<PruningCommands>()));'
+        [IO.File]::WriteAllText((Join-Path $ApiDirectory "PruningProbeController.cs"), $pruningSource, $utf8)
+    }
     if ($Name -eq "orders") {
         $extraUsings = "using Leistd.ServiceClient.Refit;`nusing Leistd.ServiceClient.OAuth;"
-        $registration += "`n" + 'services.AddRefitServiceClient<IBillingProbe, BillingOptions>("Billing", configuration).AddClientCredentials(configuration);'
+        $registration += "`n" + 'services.AddServiceAuthentication();
+services.AddRefitServiceClient<IBillingProbe, BillingOptions>("Billing", configuration).AddTokenExchange();'
         # 用 XML API 添加本轮探针的依赖，避免文本替换 csproj 结构。
         $projectPath = Join-Path $ApiDirectory "E2E.Orders.Api.csproj"
         $project = [xml][IO.File]::ReadAllText($projectPath)
@@ -470,14 +486,16 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Leistd.Security.Users;
+using Leistd.Security.Claims;
+using Microsoft.Extensions.Options;
 namespace E2E.Idp.Api;
 [ApiController]
 [Route("api/e2e/fixture-token")]
-public sealed class FixtureTokenController(IConfiguration config) : ControllerBase
+public sealed class FixtureTokenController(IConfiguration config, IOptions<ClaimTypeOptions> types) : ControllerBase
 {
     [Authorize]
     [HttpGet]
-    public object Get(string kind, [FromServices] ICurrentUser user)
+    public object Get(string kind, [FromServices] ICurrentUser user, string? tenant = null)
     {
         using var cert = X509CertificateLoader.LoadPkcs12FromFile(config["OAuth:SigningCertificatePath"]!, "");
         using var rsa = cert.GetRSAPrivateKey()!;
@@ -490,18 +508,114 @@ public sealed class FixtureTokenController(IConfiguration config) : ControllerBa
         {
             claims["sub"] = "client:orders-machine";
             claims["client_id"] = "orders-machine";
-            claims["scope"] = "orders-api billing-api svc.delegate";
-            claims["tenant_id"] = Guid.NewGuid().ToString();
+            claims["scope"] = "orders-api billing-api";
+            claims[types.Value.TenantId] = Guid.NewGuid().ToString();
         }
+        claims[types.Value.UserIds[0]] = claims["sub"];
+        if (tenant is not null) claims[types.Value.TenantId] = tenant;
+        if (kind == "chain") claims["act"] = new Dictionary<string, object> { ["sub"] = "client:previous-api" };
+        if (kind == "source") claims["aud"] = new[] { "billing-api" };
         var descriptor = new SecurityTokenDescriptor {
             Issuer = kind == "issuer" ? "https://wrong.example.test/" : config["OAuth:Issuer"],
             Claims = claims, TokenType = "at+jwt", IssuedAt = now.AddMinutes(-20), NotBefore = now.AddMinutes(-20),
-            Expires = kind == "expired" ? now.AddMinutes(-10) : now.AddMinutes(10),
+            Expires = kind == "expired" ? now.AddMinutes(-10) : kind == "short" ? now.AddSeconds(25) : now.AddMinutes(10),
             SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.RsaSha256) };
         return new { access_token = new JsonWebTokenHandler().CreateToken(descriptor) };
     }
 }
 '@
+
+$pruningSource = @'
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Leistd.BackgroundJobs.Recurring;
+using E2E.Idp.Infrastructure.Persistence;
+using OpenIddict.Abstractions;
+using OpenIddict.EntityFrameworkCore;
+using static OpenIddict.Abstractions.OpenIddictConstants;
+namespace E2E.Idp.Api;
+public sealed class PruningCommands : DbCommandInterceptor
+{
+    internal int TokenDeletes;
+    internal int AuthorizationDeletes;
+    public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+        CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        if (command.CommandText.TrimStart().StartsWith("DELETE FROM", StringComparison.OrdinalIgnoreCase))
+        {
+            if (command.CommandText.Contains("OpenIddictTokens", StringComparison.Ordinal)) TokenDeletes++;
+            if (command.CommandText.Contains("OpenIddictAuthorizations", StringComparison.Ordinal)) AuthorizationDeletes++;
+        }
+        return ValueTask.FromResult(result);
+    }
+}
+[ApiController]
+[Authorize]
+[Route("api/e2e/pruning")]
+public sealed class PruningProbeController(IOpenIddictTokenManager tokens, IOpenIddictAuthorizationManager authorizations,
+    OpenIddictDbContext db, IOptions<OpenIddictEntityFrameworkCoreOptions> options, PruningCommands commands,
+    IServiceProvider services) : ControllerBase
+{
+    [HttpPost]
+    public async Task<object> Run(CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        async Task<string> Token(DateTimeOffset created, DateTimeOffset expiry)
+        {
+            var token = await tokens.CreateAsync(new OpenIddictTokenDescriptor
+            { Subject = Guid.NewGuid().ToString(), Type = TokenTypeHints.AccessToken, Status = Statuses.Valid,
+              CreationDate = created, ExpirationDate = expiry }, cancellationToken);
+            return (await tokens.GetIdAsync(token, cancellationToken))!;
+        }
+        async Task<string> Authorization(DateTimeOffset created, string status, string type)
+        {
+            var authorization = await authorizations.CreateAsync(new OpenIddictAuthorizationDescriptor
+            { Subject = Guid.NewGuid().ToString(), Type = type, Status = status, CreationDate = created }, cancellationToken);
+            return (await authorizations.GetIdAsync(authorization, cancellationToken))!;
+        }
+        var seeded = new {
+            oldExpired = await Token(now.AddDays(-15), now.AddDays(-1)),
+            youngExpired = await Token(now.AddDays(-13), now.AddDays(-1)),
+            oldValid = await Token(now.AddDays(-15), now.AddDays(1)),
+            oldRevoked = await Authorization(now.AddDays(-15), Statuses.Revoked, AuthorizationTypes.Permanent),
+            youngRevoked = await Authorization(now.AddDays(-13), Statuses.Revoked, AuthorizationTypes.Permanent),
+            oldPermanent = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.Permanent),
+            oldAdHoc = await Authorization(now.AddDays(-15), Statuses.Valid, AuthorizationTypes.AdHoc)
+        };
+        var definition = services.GetServices<RecurringJobDefinition>().Single(job => job.Name == "auth.openiddict.prune");
+        var job = (IRecurringJob)services.GetRequiredService(definition.JobType);
+        await job.ExecuteAsync(new RecurringJobContext(definition.Name, now), cancellationToken);
+        return new { seeded, provider = db.Database.ProviderName, bulkDisabled = options.Value.DisableBulkOperations,
+            tokenDeletes = commands.TokenDeletes, authorizationDeletes = commands.AuthorizationDeletes };
+    }
+}
+'@
+
+function Test-PostgresqlPruning {
+    $probe = (Assert-Http "pruning-job-postgresql" 200 ($urls.idp + "/api/e2e/pruning") -Method POST -Session $admin).Data
+    Assert-Value "pruning-provider" "Npgsql.EntityFrameworkCore.PostgreSQL" $probe.provider
+    Assert-Value "pruning-bulk-enabled" $false $probe.bulkDisabled
+    Assert-Value "pruning-token-bulk-delete-command" $true ($probe.tokenDeletes -gt 0)
+    Assert-Value "pruning-authorization-bulk-delete-command" $true ($probe.authorizationDeletes -gt 0)
+    foreach ($record in @(
+        @{ Name = "oldExpired"; Table = "OpenIddictTokens"; Count = "0" },
+        @{ Name = "youngExpired"; Table = "OpenIddictTokens"; Count = "1" },
+        @{ Name = "oldValid"; Table = "OpenIddictTokens"; Count = "1" },
+        @{ Name = "oldRevoked"; Table = "OpenIddictAuthorizations"; Count = "0" },
+        @{ Name = "youngRevoked"; Table = "OpenIddictAuthorizations"; Count = "1" },
+        @{ Name = "oldPermanent"; Table = "OpenIddictAuthorizations"; Count = "1" },
+        @{ Name = "oldAdHoc"; Table = "OpenIddictAuthorizations"; Count = "0" }
+    )) {
+        $id = [string]$probe.seeded[$record.Name]
+        [Guid]::Parse($id) | Out-Null
+        $query = 'SELECT COUNT(*) FROM "e2e-idp"."' + $record.Table + '" WHERE "Id"=' + "'$id';"
+        Assert-Value "pruning-record-$($record.Name)" $record.Count (Invoke-Sql "oidc_shared" $query)
+    }
+}
 
 function Initialize-Environment {
     Write-Host "Artifacts: $runRoot"
@@ -616,16 +730,20 @@ function Initialize-Environment {
     Start-Api "idp"
     Start-Api "solo"
     $script:admin = Login
-    New-Application "orders-web" @("openid", "profile", "email", "roles", "e2e-idp-api", "orders-api", "billing-api") -Public | Out-Null
-    $script:machine = New-Application "orders-machine" @("orders-api", "billing-api", "svc.delegate", "tenant-routing.read")
+    New-Application "orders-web" @("openid", "profile", "email", "roles", "orders-api") -Public | Out-Null
+    New-Application "billing-web" @("openid", "profile", "email", "roles", "billing-api") -Public | Out-Null
+    New-Application "idp-web" @("openid", "profile", "email", "roles", "e2e-idp-api") -Public | Out-Null
+    $script:exchangeClient = New-Application "orders-api" @("billing-api", "tenant-routing.read") -Exchange
+    $script:machine = New-Application "orders-machine" @("orders-api", "billing-api", "tenant-routing.read")
     $script:plainClient = New-Application "orders-only" @("orders-api")
     $script:noDelegateClient = New-Application "no-delegate" @("orders-api", "billing-api")
     foreach ($name in @("orders", "billing")) {
         $environment = $services[$name].Environment
-        $environment.Leistd__ServiceAuth__ClientId = $machine.clientId
-        $environment.Leistd__ServiceAuth__ClientSecret = $machine.clientSecret
+        $environment.Leistd__ServiceAuth__ClientId = $exchangeClient.clientId
+        $environment.Leistd__ServiceAuth__ClientSecret = $exchangeClient.clientSecret
         $environment.Leistd__ServiceClients__Billing__BaseAddress = $urls.billing
-        $environment.Leistd__ServiceClients__Billing__Scope = "billing-api svc.delegate"
+        $environment.Leistd__ServiceClients__Billing__TokenExchange__Audience = "billing-api"
+        $environment.Leistd__ServiceClients__Billing__TokenExchange__Scope = "billing-api"
         Start-Api $name
         Wait-Http $name "/api/health/ready"
     }
@@ -637,12 +755,77 @@ function Initialize-Environment {
     }
 }
 
+function Exchange-Token([string]$Subject, [hashtable]$Overrides = @{}, [int]$Status = 200) {
+    $form = @{ grant_type = "urn:ietf:params:oauth:grant-type:token-exchange"; client_id = $exchangeClient.clientId
+        client_secret = $exchangeClient.clientSecret; subject_token = $Subject
+        subject_token_type = "urn:ietf:params:oauth:token-type:access_token"
+        requested_token_type = "urn:ietf:params:oauth:token-type:access_token"; audience = "billing-api"; scope = "billing-api" }
+    foreach ($key in $Overrides.Keys) { $form[$key] = $Overrides[$key] }
+    $response = Assert-Http "exchange-protocol-$Status" $Status ($urls.idp + "/connect/token") -Method POST -Body (ConvertTo-Form $form)
+    if ($Status -eq 200) {
+        Assert-Value "exchange-issued-type" "urn:ietf:params:oauth:token-type:access_token" $response.Data.issued_token_type
+        Assert-Value "exchange-no-refresh" $false $response.Data.ContainsKey("refresh_token")
+        return $response.Data.access_token
+    }
+    return $response.Data
+}
+
+function Get-ServiceToken([string]$Subject, [string]$Name) {
+    if ($Name -ne "billing") { return $Subject }
+    if (-not $serviceTokens.ContainsKey($Subject)) { $serviceTokens[$Subject] = Exchange-Token $Subject }
+    return $serviceTokens[$Subject]
+}
+
+function Test-Exchange([string]$Subject, [hashtable]$SourceClaims) {
+    $output = Get-ServiceToken $Subject "billing"
+    $claims = Read-TokenClaims $output
+    Assert-Value "exchange-user" $SourceClaims.sub $claims.sub
+    Assert-Value "exchange-custom-user" $SourceClaims.e2e_user_id $claims.e2e_user_id
+    Assert-Value "exchange-custom-tenant" $SourceClaims.e2e_tenant_id $claims.e2e_tenant_id
+    Assert-Value "exchange-audience-only-target" @("billing-api") @($claims.aud)
+    Assert-Value "exchange-scope-only-target" "billing-api" $claims.scope
+    Assert-Value "exchange-actor" "client:orders-api" $claims.act.sub
+    Assert-Value "exchange-lifetime-120" 120 ($claims.exp - $claims.iat)
+    Assert-Value "exchange-bounded-by-subject" $true ($claims.exp -le $SourceClaims.exp)
+    Assert-Value "exchange-no-roles" $false $claims.ContainsKey("role")
+    Assert-Value "exchange-no-super-admin" $false $claims.ContainsKey("is_super_admin")
+    foreach ($field in @("preferred_username", "email", "name")) { Assert-Value "exchange-authority-$field" $SourceClaims[$field] $claims[$field] }
+    Assert-Http "source-token-cannot-call-billing" 401 ($urls.billing + "/api/e2e/natural") -Token $Subject | Out-Null
+    Assert-Http "target-token-cannot-call-orders" 401 ($urls.orders + "/api/e2e/natural") -Token $output | Out-Null
+    foreach ($overrides in @(@{ audience = "unknown-api" }, @{ audience = "orders-api"; scope = "orders-api" },
+        @{ scope = "orders-api" }, @{ requested_token_type = "urn:ietf:params:oauth:token-type:refresh_token" },
+        @{ requested_token_type = "urn:ietf:params:oauth:token-type:id_token" }, @{ subject_token_type = "urn:ietf:params:oauth:token-type:id_token" },
+        @{ actor_token = $Subject; actor_token_type = "urn:ietf:params:oauth:token-type:access_token" },
+        @{ client_id = $plainClient.clientId; client_secret = $plainClient.clientSecret })) {
+        Exchange-Token $Subject $overrides 400 | Out-Null
+    }
+    $resourceError = Exchange-Token $Subject @{ resource = "https://billing.example.com/" } 400
+    Assert-Value "exchange-unregistered-resource" "invalid_target" $resourceError.error
+    foreach ($kind in @("source", "chain", "machine-tenant", "expired")) {
+        $fixture = (Assert-Http "exchange-negative-fixture-$kind" 200 ($urls.idp + "/api/e2e/fixture-token?kind=$kind") -Session $admin).Data.access_token
+        Exchange-Token $fixture @{} 400 | Out-Null
+    }
+    $fixture = (Assert-Http "membership-fixture" 200 ($urls.idp + "/api/e2e/fixture-token?kind=valid&tenant=" + $sharedTenant.id) -Session $admin).Data.access_token
+    Exchange-Token $fixture @{} 400 | Out-Null
+    $short = (Assert-Http "short-subject-fixture" 200 ($urls.idp + "/api/e2e/fixture-token?kind=short") -Session $admin).Data.access_token
+    $shortOutput = Exchange-Token $short
+    Assert-Value "final-jwt-subject-exp-cap" (Read-TokenClaims $short).exp (Read-TokenClaims $shortOutput).exp
+    $script:delegatedExpiryToken = $shortOutput
+    # 同一用户交替通过 Billing SPA 和交换令牌投影，权威资料保持不变。
+    $spa = Get-CodeToken $sharedSession "openid profile email billing-api" "billing-web"
+    foreach ($token in @($spa, $output, $spa, $output)) {
+        Assert-Http "alternating-profile" 200 ($urls.billing + "/api/e2e/natural") -Token $token | Out-Null
+        $query = 'SELECT "Username"||''|''||"Email"||''|''||"DisplayName" FROM "e2e-billing"."Users" WHERE "Id"=''{0}'' AND "TenantId"=''{1}'';' -f $SourceClaims.sub, $SourceClaims.e2e_tenant_id
+        Assert-Value "profile-stable-in-database" ($SourceClaims.preferred_username + "|" + $SourceClaims.email + "|" + $SourceClaims.name) (Invoke-Sql "oidc_shared" $query)
+    }
+}
+
 function Test-S2 {
     $script:hostToken = Get-CodeToken $admin "openid profile email roles e2e-idp-api orders-api billing-api"
     $claims = Read-TokenClaims $hostToken
-    Assert-Value "scope-derived-audiences" @("billing-api", "e2e-idp-api", "orders-api") @($claims.aud | Sort-Object)
+    Assert-Value "scope-derived-audiences" @("orders-api") @($claims.aud | Sort-Object)
     foreach ($name in @("orders", "billing")) {
-        $data = (Assert-Http "human-token-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token $hostToken).Data
+        $data = (Assert-Http "human-token-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $hostToken $name)).Data
         Assert-Value "human-sub-$name" $claims.sub $data.userId
     }
     $ordersToken = Get-CodeToken $admin "openid profile orders-api"
@@ -669,7 +852,7 @@ function Test-S4 {
     $data = (Assert-Http "serviceclient-billing-delegation" 200 ($urls.orders + "/api/e2e/billing") -Token $sharedToken).Data
     Assert-Value "delegation-user" $claims.sub $data.userId
     Assert-Value "delegation-tenant" $sharedTenant.id $data.tenantId
-    Assert-Value "delegation-client" "orders-machine" $data.clientId
+    Assert-Value "delegation-client" "orders-api" $data.clientId
     # 另建真实用户，使用户头覆盖和租户头覆盖两个维度都能被证伪。
     $otherUser = (Assert-Http "create-header-forgery-user" 200 ($urls.idp + "/api/v1/users") -Method POST -Session $admin `
         -Body @{ username = "header_forgery_user"; email = "header@example.test"; password = (New-RandomValue "Usr!1")
@@ -681,14 +864,14 @@ function Test-S4 {
         $endpoint = $urls[$name] + "/api/e2e/natural"
         Assert-Http "no-delegate-$name" 403 $endpoint -Token $untrusted -Headers $spoof | Out-Null
         Assert-Http "anonymous-forged-header-$name" 401 $endpoint -Headers $spoof | Out-Null
-        $data = (Assert-Http "human-forged-header-$name" 200 $endpoint -Token $sharedToken -Headers $spoof).Data
+        $data = (Assert-Http "human-forged-header-$name" 200 $endpoint -Token (Get-ServiceToken $sharedToken $name) -Headers $spoof).Data
         Assert-Value "human-header-cannot-change-user-$name" $claims.sub $data.userId
         Assert-Value "human-header-cannot-change-tenant-$name" $sharedTenant.id $data.tenantId
     }
     $fixture = (Assert-Http "signed-machine-tenant-fixture" 200 ($urls.idp + "/api/e2e/fixture-token?kind=machine-tenant") -Session $admin).Data
-    Assert-Http "different-identities-tenant-claim" 400 ($urls.billing + "/api/e2e/natural") -Token $fixture.access_token `
+    Assert-Http "machine-header-cannot-create-user" 403 ($urls.billing + "/api/e2e/natural") -Token $fixture.access_token `
         -Headers @{ "X-User-Id" = (Read-TokenClaims $hostToken).sub } | Out-Null
-    Write-Skipped "S4-membership" "随 Token Exchange 实现后启用；当前委托头契约不提供权威成员绑定。"
+    Test-Exchange $sharedToken $claims
 }
 
 function Test-S5 {
@@ -699,18 +882,18 @@ function Test-S5 {
         $tenant, $token, $database, $other = $target
         $subject = (Read-TokenClaims $token).sub
         foreach ($name in @("orders", "billing")) {
-            Assert-Http "project-$($tenant.name)-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token $token | Out-Null
+            Assert-Http "project-$($tenant.name)-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $token $name) | Out-Null
             $query = 'SELECT count(*) FROM "e2e-{0}"."Users" WHERE "Id"=''{1}'' AND "TenantId"=''{2}'';' -f $name, $subject, $tenant.id
             Assert-Value "projection-target-$($tenant.name)-$name" "1" (Invoke-Sql $database $query)
             Assert-Value "projection-no-leak-$($tenant.name)-$name" "0" (Invoke-Sql $other $query)
         }
     }
     $update = @{}
-    foreach ($key in @("displayName", "applicationType", "clientType", "consentType", "redirectUris", "postLogoutRedirectUris", "permissions", "requirements")) {
-        $update[$key] = $machine[$key]
+    foreach ($key in @("displayName", "applicationType", "clientType", "redirectUris", "postLogoutRedirectUris", "permissions", "requirements")) {
+        $update[$key] = $exchangeClient[$key]
     }
-    $update.permissions = @($machine.permissions | Where-Object { $_ -ne "scp:tenant-routing.read" })
-    Assert-Http "remove-routing-scope" 200 ($urls.idp + "/api/v1/open-applications/" + $machine.id) -Method PUT -Body $update -Session $admin | Out-Null
+    $update.permissions = @($exchangeClient.permissions | Where-Object { $_ -ne "scp:tenant-routing.read" })
+    Assert-Http "remove-routing-scope" 200 ($urls.idp + "/api/v1/open-applications/" + $exchangeClient.id) -Method PUT -Body $update -Session $admin | Out-Null
     Stop-Api "orders"
     $offsets = Get-LogOffsets "orders"
     try {
@@ -718,15 +901,15 @@ function Test-S5 {
         Assert-Http "routing-denied-cold-cache" 502 ($urls.orders + "/api/v1/users") -Token $dedicatedToken | Out-Null
         $deadline = [DateTimeOffset]::UtcNow.AddSeconds(10)
         do {
-            $diagnostic = (Read-ApiLog "orders" $offsets) -match '(?s)failed to obtain an access token: 400.*invalid_request.*ID2051'
+            $diagnostic = (Read-ApiLog "orders" $offsets) -match '(?s)invalid_request.*ID2051'
             if ($diagnostic) { break }
             Start-Sleep -Milliseconds 200
         } while ([DateTimeOffset]::UtcNow -lt $deadline)
         Assert-Value "routing-error-diagnostic" $true $diagnostic
     }
     finally {
-        $update.permissions = $machine.permissions
-        Assert-Http "restore-routing-scope" 200 ($urls.idp + "/api/v1/open-applications/" + $machine.id) -Method PUT -Body $update -Session $admin | Out-Null
+        $update.permissions = $exchangeClient.permissions
+        Assert-Http "restore-routing-scope" 200 ($urls.idp + "/api/v1/open-applications/" + $exchangeClient.id) -Method PUT -Body $update -Session $admin | Out-Null
         Stop-Api "orders"
         Start-Api "orders"
     }
@@ -757,28 +940,33 @@ function Test-S7 {
         -Body @{ username = "revocation_user"; email = "revocation@example.test"; password = $password; isActive = $true; isEmailVerified = $true }).Data
     $session = Login "revocation_user" -Password $password
     $token = Get-CodeToken $session "openid profile e2e-idp-api orders-api billing-api"
+    $idpToken = Get-CodeToken $session "openid profile e2e-idp-api" "idp-web"
+    $tenantIdpSession = Login -Tenant $sharedTenant.name -Password $tenantPassword
+    $tenantIdpToken = Get-CodeToken $tenantIdpSession "openid profile e2e-idp-api" "idp-web"
+    Get-ServiceToken $token "billing" | Out-Null
+    Get-ServiceToken $tenantToken "billing" | Out-Null
     $otherSession = Login "revocation_user" -Password $password
     Assert-Http "revoke-other-sessions" 200 ($urls.idp + "/api/v1/auth/me/sessions/revoke-others") -Method POST -Body @{} -Session $otherSession | Out-Null
     Assert-Http "revoked-cookie-immediate" 401 ($urls.idp + "/api/v1/auth/me") -Session $session | Out-Null
-    Assert-Http "session-revocation-token-idp" 200 ($urls.idp + "/api/e2e/natural") -Token $token | Out-Null
+    Assert-Http "session-revocation-token-idp" 200 ($urls.idp + "/api/e2e/natural") -Token $idpToken | Out-Null
     Assert-Http "disable-user" 200 ($urls.idp + "/api/v1/users/" + $user.id + "/disable") -Method PATCH -Session $admin | Out-Null
-    Assert-Http "disabled-user-idp-immediate" 401 ($urls.idp + "/api/e2e/natural") -Token $token | Out-Null
+    Assert-Http "disabled-user-idp-immediate" 401 ($urls.idp + "/api/e2e/natural") -Token $idpToken | Out-Null
     foreach ($name in @("orders", "billing")) {
-        Assert-Http "disabled-user-resource-window-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token $token | Out-Null
+        Assert-Http "disabled-user-resource-window-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $token $name) | Out-Null
     }
     try {
         Assert-Http "disable-shared-tenant" 200 ($urls.idp + "/api/v1/tenants/" + $sharedTenant.id + "/activation") -Method PUT -Body @{ isActive = $false } -Session $admin | Out-Null
-        Assert-Http "disabled-tenant-idp-immediate" 401 ($urls.idp + "/api/e2e/natural") -Token $tenantToken | Out-Null
+        Assert-Http "disabled-tenant-idp-immediate" 401 ($urls.idp + "/api/e2e/natural") -Token $tenantIdpToken | Out-Null
         foreach ($name in @("orders", "billing")) {
-            Assert-Http "disabled-tenant-resource-window-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token $tenantToken | Out-Null
+            Assert-Http "disabled-tenant-resource-window-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $tenantToken $name) | Out-Null
         }
         if ($IncludeExpiryWait) {
             $expiry = [Math]::Max((Read-TokenClaims $token).exp, (Read-TokenClaims $tenantToken).exp) + 2
             Write-Host "S7 等待真实 600 秒令牌到期（OpenIddict 7.7.0 ClockSkew=0）。"
             while ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt $expiry) { Start-Sleep -Seconds 3 }
             foreach ($name in @("orders", "billing")) {
-                Assert-Http "revoked-user-expired-$name" 401 ($urls[$name] + "/api/e2e/natural") -Token $token | Out-Null
-                Assert-Http "revoked-tenant-expired-$name" 401 ($urls[$name] + "/api/e2e/natural") -Token $tenantToken | Out-Null
+                Assert-Http "revoked-user-expired-$name" 401 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $token $name) | Out-Null
+                Assert-Http "revoked-tenant-expired-$name" 401 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $tenantToken $name) | Out-Null
             }
         } else { Write-Skipped "S7-expiry-wait" "默认不等待十分钟；使用 -IncludeExpiryWait 验证真实令牌到期边界。" }
     }
@@ -791,12 +979,12 @@ function Test-S8 {
     # 门禁取到元数据不等于 OpenIddict 验证器已经缓存公钥，先逐实例验一次真实令牌。
     $token = Get-CodeToken $admin "openid profile orders-api billing-api"
     foreach ($name in @("orders", "billing")) {
-        Assert-Http "warm-validator-primed-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token $token | Out-Null
+        Assert-Http "warm-validator-primed-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $token $name) | Out-Null
     }
     Stop-Api "idp"
     try {
         foreach ($name in @("orders", "billing")) {
-            Assert-Http "warm-token-during-idp-outage-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token $token | Out-Null
+            Assert-Http "warm-token-during-idp-outage-$name" 200 ($urls[$name] + "/api/e2e/natural") -Token (Get-ServiceToken $token $name) | Out-Null
             Assert-Http "warm-readiness-latched-$name" 200 ($urls[$name] + "/api/health/ready") | Out-Null
             Stop-Api $name
             $offsets = Get-LogOffsets $name
@@ -852,6 +1040,7 @@ $tenantPassword = New-RandomValue "Tnt!1"
 $http = New-HttpSession
 try {
     Initialize-Environment
+    Invoke-Scenario "postgresql-pruning" { Test-PostgresqlPruning }
     Invoke-Scenario "S2" { Test-S2 }
     Invoke-Scenario "S3" { Test-S3 }
     Invoke-Scenario "S4" { Test-S4 }
@@ -859,6 +1048,11 @@ try {
     Invoke-Scenario "S6" { Test-S6 }
     Invoke-Scenario "S8" { Test-S8 }
     Invoke-Scenario "S10" { Test-S10 }
+    Invoke-Scenario "exchange-expiry" {
+        $expires = (Read-TokenClaims $delegatedExpiryToken).exp + 1
+        while ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt $expires) { Start-Sleep -Milliseconds 500 }
+        Assert-Http "exchanged-jwt-expired" 401 ($urls.billing + "/api/e2e/natural") -Token $delegatedExpiryToken | Out-Null
+    }
     Invoke-Scenario "S7" { Test-S7 }
 }
 catch {
@@ -883,4 +1077,4 @@ finally {
 if ($cleanupErrors.Count -gt 0 -or @($results | Where-Object { $_.status -eq "fail" }).Count -gt 0) {
     throw "OIDC E2E 失败，见 $runRoot/results.json 和 cleanup.json。"
 }
-Write-Host "OIDC E2E passed: S2–S8、S10（成员关系与可选过期等待见跳过记录）。" -ForegroundColor Green
+Write-Host "OIDC E2E passed: S2–S8、S10、Token Exchange（可选十分钟过期等待见跳过记录）。" -ForegroundColor Green

@@ -137,32 +137,6 @@
                   </hlm-select>
                 }
               </div>
-              <div hlmField>
-                <label hlmFieldLabel for="application-consent-type">{{
-                  t('openApp.field.consentType')
-                }}</label>
-                @if (isTemplateLocked()) {
-                  <span hlmBadge variant="outline">{{
-                    consentTypeLabels()[formModel().consentType]
-                  }}</span>
-                } @else {
-                  <hlm-select
-                    class="w-full"
-                    [value]="formModel().consentType"
-                    [itemToString]="consentTypeToLabel"
-                    (valueChange)="onConsentTypeChange($event)"
-                  >
-                    <hlm-select-trigger buttonId="application-consent-type" class="w-full">
-                      <hlm-select-value />
-                    </hlm-select-trigger>
-                    <hlm-select-content *hlmSelectPortal>
-                      @for (opt of consentTypeOptions(); track opt.value) {
-                        <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
-                      }
-                    </hlm-select-content>
-                  </hlm-select>
-                }
-              </div>
             </section>
 
             @if (formModel().applicationType !== 'service') {

@@ -6,8 +6,8 @@ namespace Leistd.Security.Users;
 /// 提供当前认证用户的信息。
 /// </summary>
 /// <remarks>
-/// 标识、租户、展示属性与角色都取自主体身份（<c>ClaimTypeOptions.FindSubjectIdentity</c>）：服务间还原的主体同时带着
-/// 被代表的用户与调用方的机器身份，跨身份读会把调用方的属性拼到用户身上。任意 claim 经 <see cref="FindClaim"/> /
+/// 标识、租户、展示属性与角色都取自主体身份（<c>ClaimTypeOptions.FindSubjectIdentity</c>）：多个认证方案可合并不同身份，
+/// 跨身份读会把另一个身份的属性拼到主体身份上。任意 claim 经 <see cref="FindClaim"/> /
 /// <see cref="FindClaims"/> 跨全部身份读取；需要整个主体的官方语义时直接读 <see cref="ClaimsPrincipal"/>。
 /// </remarks>
 public interface ICurrentUser

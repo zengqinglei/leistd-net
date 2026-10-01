@@ -60,15 +60,7 @@ public static class DependencyInjection
                 $"The remote tenant connection store requires {baseAddressKey} (an absolute URI of the control plane).")
             .ValidateOnStart();
 
-        // 回源是宿主侧的控制面查询，租户 Id 已在路径里显式给出：不转发调用方的用户与租户上下文，
-        // 否则被调方一旦信任本客户端的委托，查询就会跑进那个租户的上下文里
-        services.PostConfigure<RemoteTenantConnectionClientOptions>(options =>
-        {
-            options.UserContext.Enabled = false;
-            options.UserContext.ForwardTenantId = false;
-        });
-
-        // 同一个客户端也服务逐库作业的库目录：解析出的实现就是上面那一个，不另建 HttpClient
+        // 同一个客户端也服务逐库作业的库目录，不另建认证与 HTTP 管道。
         services.TryAddTransient<ITenantDatabaseDirectory>(provider =>
             (ITenantDatabaseDirectory)provider.GetRequiredService<ITenantConnectionConfigurationStore>());
 

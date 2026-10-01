@@ -15,8 +15,4 @@ public class ServiceClientOptions
     /// </remarks>
     public string? BaseAddress { get; set; }
 
-    /// <summary>
-    /// 用户上下文出站转发配置。
-    /// </summary>
-    public UserContextForwardingOptions UserContext { get; set; } = new();
 }

@@ -15,7 +15,7 @@ namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 /// 解析并校验租户，然后在租户上下文中执行后续管道。
 /// </summary>
 /// <remarks>
-/// 放置顺序：<c>UseAuthentication()</c>（及 <c>UseServiceUserContext()</c>）之后、<c>UseAuthorization()</c> 之前。
+/// 放置顺序：<c>UseAuthentication()</c>之后、<c>UseAuthorization()</c> 之前。
 /// 解析出的租户不存在抛 <see cref="TenantNotFoundException"/>（404）。已停用<b>分两档</b>：
 /// 已认证主体抛 <see cref="TenantNotActiveException"/>（403，明确报错对运维有价值），
 /// <b>未认证请求一律按 404</b>——"这个租户停用了"本身就是外部可观察的业务情报。

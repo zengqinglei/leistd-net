@@ -1,6 +1,5 @@
 using Leistd.ExceptionHandling.Options;
 using Leistd.ServiceClient.ExceptionMappings;
-using Leistd.Security.Users;
 using Leistd.ServiceClient.Handlers;
 using Leistd.ServiceClient.Options;
 using Leistd.Tracing.Options;
@@ -9,7 +8,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Leistd.MultiTenancy.Context;
 using Leistd.Tracing.Abstractions;
 
 namespace Leistd.ServiceClient;
@@ -28,9 +26,8 @@ public static class DependencyInjection
     /// 注册强类型服务客户端并装配标准调用管道。
     /// </summary>
     /// <remarks>
-    /// TraceId 透传与用户上下文注入是<b>跟随宿主显式组合</b>的可选能力：
+    /// TraceId 透传是<b>跟随宿主显式组合</b>的可选能力：
     /// 宿主注册了 <c>AddCorrelationIdCore</c>（Leistd.Tracing）才透传 TraceId；
-    /// 注册了 <c>ICurrentUser</c>（如 Leistd.Security 的 <c>AddSecurity()</c>）才注入用户头。
     /// 未注册时对应环节自动直通，本方法不代为注册。
     /// </remarks>
     /// <typeparam name="TClient">客户端接口</typeparam>
@@ -45,7 +42,7 @@ public static class DependencyInjection
     /// builder.Services
     ///     .AddServiceClient&lt;IIdentityApi, IdentityApiClient, IdentityClientOptions&gt;(
     ///         "identity", builder.Configuration)
-    ///     .AddClientCredentials(builder.Configuration);
+    ///     .AddClientCredentials();
     /// </code>
     /// </example>
     public static IHttpClientBuilder AddServiceClient<TClient, TImplementation, TOptions>(
@@ -98,7 +95,7 @@ public static class DependencyInjection
     /// <summary>
     /// 在现有客户端构建器上装配服务客户端标准管道。
     /// </summary>
-    /// <remarks>依次应用日志、链路标识、用户上下文和租户上下文处理器。</remarks>
+    /// <remarks>依次应用传输异常与链路标识处理器。</remarks>
     /// <typeparam name="TOptions">客户端配置类型（须已绑定，如经 <c>services.Configure</c>）</typeparam>
     /// <param name="builder">HttpClient 构建器</param>
     /// <param name="serviceName">下游服务名（日志类别后缀）</param>
@@ -130,7 +127,7 @@ public static class DependencyInjection
             // .NET 默认值作外层兜底。两者设成同一时长会竞争，外层先到时抛出的是无法归类的取消异常。
         });
 
-        // 传输异常统一放在最外层，才能覆盖认证重试在内的完整调用。
+        // 传输异常统一放在最外层，才能覆盖取令牌与下游请求的完整调用。
         builder.AddHttpMessageHandler(() => new TransportFailureHandler());
 
         // 可选组件未注册时使用直通处理器，保持宿主显式组合。
@@ -140,25 +137,6 @@ public static class DependencyInjection
                     correlationIdProvider,
                     provider.GetRequiredService<IOptionsMonitor<CorrelationIdOptions>>())
                 : new PassthroughDelegatingHandler());
-
-        builder.AddHttpMessageHandler(provider =>
-        {
-            return provider.GetService<ICurrentUser>() is { } currentUser
-                ? new UserContextDelegatingHandler<TOptions>(
-                    currentUser,
-                    provider.GetRequiredService<IOptionsMonitor<TOptions>>())
-                : new PassthroughDelegatingHandler();
-        });
-
-        // 租户转发独立于用户转发，后台任务可能只有租户上下文。
-        builder.AddHttpMessageHandler(provider =>
-        {
-            return provider.GetService<ICurrentTenant>() is { } currentTenant
-                ? new TenantContextDelegatingHandler<TOptions>(
-                    currentTenant,
-                    provider.GetRequiredService<IOptionsMonitor<TOptions>>())
-                : new PassthroughDelegatingHandler();
-        });
 
         return builder;
     }

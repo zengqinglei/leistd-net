@@ -127,10 +127,10 @@ export class Login {
   );
 
   constructor() {
-    // 进入登录页时清理上一个主体的全部痕迹：认证数据、权限、设置。
-    // 只清认证数据不够——已登录用户在 SPA 内导航到这里不会重跑应用初始化器，
-    // 旧权限和设置会留在内存里，新用户登录后若权限加载失败就会看到上一个人的偏好。
-    this.sessionContext.clear();
+    // 普通登录清理旧主体；重新认证保留当前上下文并始终显示表单，凭据成功后再替换。
+    if (this.route.snapshot.queryParamMap.get('reauthenticate') !== 'true') {
+      this.sessionContext.clear();
+    }
 
     // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
     void this.resolveTenantFromHost();
@@ -199,6 +199,8 @@ export class Login {
 
   /** 会话已下发之后的共同收尾：取当前用户、建立会话上下文、提示并跳转。 */
   private async finishLogin(returnUrl: string | null): Promise<void> {
+    // 此时凭据（含所需 MFA）已经通过，才能清理旧主体；加载失败也不能沿用旧权限与设置。
+    this.sessionContext.clear();
     await lastValueFrom(this.authService.loadUser());
 
     // 受限会话（组织要求两步验证而本人尚未启用）：先去设置，别的页面都进不去
@@ -207,7 +209,7 @@ export class Login {
       return;
     }
 
-    // 会话上下文必须在任何跳转之前建立完成。进登录页时它已被清空，此时直接跳 returnUrl：
+    // 会话上下文必须在任何跳转之前建立完成。旧主体已被清空，此时直接跳 returnUrl：
     // permissionGuard 会在空权限下判定并把人踢到 403——从受保护页面的深链登录，
     // 本该落到那个页面，却落在拒绝页。设置也在这里就位，否则保存过的显示偏好
     // 要到下一次硬刷新才生效（SPA 内跳转不会重跑应用初始化器）。

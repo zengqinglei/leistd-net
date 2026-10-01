@@ -23,7 +23,7 @@ using Leistd.MultiTenancy;
 #if (!LocalIdentity)
 using Leistd.MultiTenancy.ServiceClient;
 using Leistd.ServiceClient.OAuth;
-using static Leistd.ServiceClient.OAuth.DependencyInjection;
+using Leistd.ServiceClient.OAuth.Options;
 #endif
 using CompanyName.ProjectName.Infrastructure.TenantConnections;
 #if (IncludeNotifications)
@@ -184,9 +184,10 @@ public static class DependencyInjection
             // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
             services.AddRemoteTenantConnectionResolution();
             var identityClient = services.AddRemoteTenantConnectionStore("Identity", configuration);
-            if (configuration.GetSection(ServiceAuthSectionName).Exists())
+            if (configuration.GetSection(ServiceAuthenticationOptions.SectionName).Exists())
             {
-                identityClient.AddClientCredentials(configuration);
+                services.AddServiceAuthentication();
+                identityClient.AddClientCredentials();
             }
             identityClient.AddStandardResilienceHandler();
 #else

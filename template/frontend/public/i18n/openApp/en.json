@@ -50,7 +50,6 @@
     "clientIdPlaceholder": "e.g. my-desktop-app",
     "applicationType": "Application type",
     "clientType": "Client type",
-    "consentType": "Consent",
     "clientId": "Client ID",
     "redirectUris": "Redirect URIs",
     "postLogoutRedirectUris": "Post Logout Redirect URIs",
@@ -62,12 +61,6 @@
     "desktop": "Desktop PKCE client",
     "service": "Service confidential client",
     "desktopDisplayName": "My Desktop App"
-  },
-  "consentType": {
-    "implicit": "Implicit consent",
-    "explicit": "Explicit consent",
-    "external": "External consent",
-    "systematic": "Systematic consent"
   },
   "clientType": {
     "publicLabel": "Public",
@@ -87,7 +80,8 @@
     "scopeEmail": "Email",
     "scopeRoles": "Roles",
     "scopeOfflineAccess": "Offline access",
-    "notConfigured": "Not configured"
+    "notConfigured": "Not configured",
+    "tokenExchange": "Token Exchange"
   },
   "requirement": {
     "forcePkce": "Force PKCE"

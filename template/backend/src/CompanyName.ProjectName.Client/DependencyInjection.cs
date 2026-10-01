@@ -1,4 +1,3 @@
-using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.Refit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,11 +10,10 @@ namespace CompanyName.ProjectName.Client;
 public static class DependencyInjection
 {
     /// <summary>
-    /// 注册本服务客户端：Refit 接口实现 + 标准调用管道（日志、TraceId 透传、用户上下文头）
+    /// 注册本服务客户端：Refit 接口实现 + 标准调用管道（传输异常、TraceId 透传）
     /// + 统一错误契约（<c>RemoteServiceException</c>），配置节
-    /// <c>Leistd:ServiceClients:MyProject</c>。调用方配置了全局调用身份
-    /// <c>Leistd:ServiceAuth</c> 时自动启用 OAuth2 client credentials 认证
-    /// （目标服务 scope 经 <c>Leistd:ServiceClients:MyProject:Scope</c> 指定，可省）。
+    /// <c>Leistd:ServiceClients:MyProject</c>。宿主注册全局调用身份，并在返回的
+    /// 构建器上明确选择机器认证或 Token Exchange，配置相应的目标范围。
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <param name="configuration">应用配置</param>
@@ -27,12 +25,6 @@ public static class DependencyInjection
         var builder = services
             .AddRefitServiceClient<IMyProjectClient, MyProjectClientOptions>(
                 MyProjectClientDefaults.ServiceName, configuration);
-
-        if (configuration.GetSection(
-                Leistd.ServiceClient.OAuth.DependencyInjection.ServiceAuthSectionName).Exists())
-        {
-            builder.AddClientCredentials(configuration);
-        }
 
         return builder;
     }

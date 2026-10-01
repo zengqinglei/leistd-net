@@ -68,7 +68,7 @@ using System.Security.Cryptography.X509Certificates;
 using CompanyName.ProjectName.Application.Auth.OAuth;
 #endif
 #endif
-#if (ServiceUserContextEnabled)
+#if (RemoteTokenAuth)
 using Leistd.ServiceClient.AspNetCore;
 #endif
 #if (RemoteTokenAuth)
@@ -196,6 +196,19 @@ try
                 .RequireProofKeyForCodeExchange();
             options.AllowRefreshTokenFlow();
             options.AllowClientCredentialsFlow();
+            options.AllowTokenExchangeFlow();
+            options.Configure(server =>
+            {
+                server.SubjectTokenTypes.Clear();
+                server.SubjectTokenTypes.Add(OpenIddict.Abstractions.OpenIddictConstants.TokenTypeIdentifiers.AccessToken);
+                server.ActorTokenTypes.Clear();
+                server.RequestedTokenTypes.Clear();
+                server.RequestedTokenTypes.Add(OpenIddict.Abstractions.OpenIddictConstants.TokenTypeIdentifiers.AccessToken);
+            });
+            options.RegisterAudiences(oauthScopes.SelectMany(scope => scope.Resources).Distinct().ToArray());
+            options.AddEventHandler<OpenIddict.Server.OpenIddictServerEvents.ProcessSignInContext>(handler =>
+                handler.UseScopedHandler<CompanyName.ProjectName.Api.Auth.TokenExchangeExpirationHandler>()
+                    .SetOrder(OpenIddict.Server.OpenIddictServerHandlers.PrepareIssuedTokenPrincipal.Descriptor.Order + 1));
 
             // 资源服务需要直接验证 access token。
             options.DisableAccessTokenEncryption();
@@ -399,9 +412,8 @@ try
     builder.Services.AddMultiTenancy(options => options.ValidateResolvedTenant = false);
 #endif
 
-#if (ServiceUserContextEnabled)
-    // 仅为已认证的 client credentials 调用恢复转发用户上下文。
-    builder.Services.AddServiceUserContext();
+#if (RemoteTokenAuth)
+    builder.Services.AddUserAccessTokenAccessor(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
 #endif
 
 #if (IncludeNotifications)
@@ -582,10 +594,6 @@ try
     app.UseHubAccessToken();
 #endif
     app.UseAuthentication();
-#if (ServiceUserContextEnabled)
-    // 转发上下文的信任判定依赖已认证的调用方主体。
-    app.UseServiceUserContext();
-#endif
 #if (LocalIdentity)
     // 租户失效时注销 Cookie，避免会话困在不可用租户中。
     app.UseTenantSessionRecovery(options => options.SignOutScheme = AuthenticationSchemeNames.SessionCookie);

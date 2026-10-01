@@ -105,6 +105,7 @@ describe('Login', () => {
     // 永远等不到响应，用例会以超时失败，而不是报出真正的断言。
     authorization = TestBed.inject(AuthorizationService);
     vi.spyOn(TestBed.inject(SessionContextService), 'establish').mockResolvedValue();
+    vi.spyOn(TestBed.inject(SessionContextService), 'clear');
 
     //#if (IncludeLocalization)
     // 与应用启动和路由解析器相同：组件创建前语言与功能词条必须已就位。
@@ -141,6 +142,34 @@ describe('Login', () => {
   afterEach(() => localStorage.clear());
   //#endif
 
+  it('keeps the existing context and displays credentials when reauthentication is required', async () => {
+    queryParams = { reauthenticate: 'true' };
+    await setUp();
+    currentUser.set({});
+    fixture.detectChanges();
+    expect(TestBed.inject(SessionContextService).clear).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('input[type="password"]'),
+    ).not.toBeNull();
+    fillValidCredentials();
+    await component.onSubmit();
+    expect(authService.login).toHaveBeenCalled();
+    expect(TestBed.inject(SessionContextService).clear).toHaveBeenCalledOnce();
+    expect(TestBed.inject(SessionContextService).establish).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the existing context when reauthentication credentials fail', async () => {
+    queryParams = { reauthenticate: 'true' };
+    await setUp();
+    currentUser.set({});
+    authService.login.mockReturnValue(throwError(() => ({ status: 401 })));
+    fillValidCredentials();
+    await component.onSubmit();
+    expect(TestBed.inject(SessionContextService).clear).not.toHaveBeenCalled();
+    expect(TestBed.inject(SessionContextService).establish).not.toHaveBeenCalled();
+    expect(currentUser()).not.toBeNull();
+  });
+
   /** 页面上显示出来的校验提示（未显示的 hlm-field-error 不渲染内容）。 */
   function shownErrors(): string[] {
     return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('hlm-field-error'))
@@ -154,6 +183,7 @@ describe('Login', () => {
    * 提示若在建表单时一次性翻译，切到另一种语言后标签都换了，错误提示还停在旧语言（全功能端到端测试发现）。
    */
   it('shows validation errors by kind, with their parameters, in the active language', async () => {
+    vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en']);
     await setUp();
     const transloco = TestBed.inject(TranslocoService);
     transloco.setTranslation(
@@ -315,7 +345,7 @@ describe('Login', () => {
 
     // 用真实 Router + 真实 permissionGuard 跑完整条路：
     // spy 掉 Router 只能验到"调用了 navigateByUrl"，验不到导航之后 guard 怎么判。
-    // 进登录页时会话上下文已被清空；若在建立它之前就跳转，
+    // 凭据通过后会话上下文先被清空；若在建立它之前就跳转，
     // guard 会在空权限下判定并把人踢到 403——从深链登录本该落到那个页面。
     vi.mocked(router.navigateByUrl).mockRestore();
     (TestBed.inject(SessionContextService).establish as Mock).mockImplementation(async () => {
@@ -347,16 +377,22 @@ describe('Login', () => {
 
     // 平台入口可见性由权限集合决定：这里通过真实的 setPermissions 造状态，
     // 而不是打桩 canAccessPlatform——打桩就绕过了"判据是权限而非角色"这件事本身。
-    authorization.setPermissions({ permissions: [], isSuperAdmin: true, versionToken: 'r1' });
+    // 权限在建立会话上下文时加载（凭据通过后旧主体先被清空），所以在 establish 里设置
+    const establish = TestBed.inject(SessionContextService).establish as Mock;
+    establish.mockImplementation(async () => {
+      authorization.setPermissions({ permissions: [], isSuperAdmin: true, versionToken: 'r1' });
+    });
 
     await component.onSubmit();
     expect(router.navigate).toHaveBeenCalledWith(['/workspace']);
 
     (router.navigate as Mock).mockClear();
-    authorization.setPermissions({
-      permissions: [PERMISSIONS.users.default],
-      isSuperAdmin: false,
-      versionToken: 'r2',
+    establish.mockImplementation(async () => {
+      authorization.setPermissions({
+        permissions: [PERMISSIONS.users.default],
+        isSuperAdmin: false,
+        versionToken: 'r2',
+      });
     });
 
     await component.onSubmit();

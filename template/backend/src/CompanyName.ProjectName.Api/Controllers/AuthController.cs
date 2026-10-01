@@ -51,6 +51,7 @@ public sealed class AuthController(
     {
         var principal = await authService.CompleteTwoFactorLoginAsync(request, cancellationToken);
 
+        await sessionAppService.EndCurrentSessionAsync(cancellationToken);
         await HttpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, principal,
             new AuthenticationProperties { IsPersistent = true });
     }
@@ -65,6 +66,8 @@ public sealed class AuthController(
             return new SessionLoginOutputDto { RequiresTwoFactor = true, TwoFactorToken = result.TwoFactorToken };
         }
 
+        await httpContext.RequestServices.GetRequiredService<IUserSessionAppService>()
+            .EndCurrentSessionAsync(httpContext.RequestAborted);
         await httpContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, result.Principal,
             new AuthenticationProperties { IsPersistent = true });
         return new SessionLoginOutputDto();

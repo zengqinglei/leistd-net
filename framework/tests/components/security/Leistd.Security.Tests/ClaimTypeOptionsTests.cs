@@ -132,28 +132,28 @@ public class ClaimTypeOptionsTests
 
     // 服务间调用：被代表的用户在前、调用方机器身份（无租户）在后，主体是被代表的用户
     [Fact]
-    public void A_delegated_user_ahead_of_the_calling_machine_is_the_subject()
+    public void The_first_identified_identity_is_the_subject_when_authentication_schemes_are_combined()
     {
         var options = new ClaimTypeOptions();
         var tenantId = Guid.CreateVersion7();
-        var delegated = new ClaimsIdentity([new Claim("sub", "7"), new Claim("tenant_id", tenantId.ToString())], "ServiceUserContext");
+        var supplemental = new ClaimsIdentity([new Claim("sub", "7"), new Claim("tenant_id", tenantId.ToString())], "SupplementalAuthentication");
         var machine = new ClaimsIdentity([new Claim("sub", "client:worker-1")], "Bearer");
-        var principal = new ClaimsPrincipal([delegated, machine]);
+        var principal = new ClaimsPrincipal([supplemental, machine]);
 
         Assert.Equal("7", options.FindUserId(principal));
         Assert.Equal(new TenantClaim(true, tenantId), options.ReadTenant(principal));
     }
 
-    // 名字、邮箱这类描述"这个人"的 claim 也取自主体身份：被代表的用户没带 name 时不能取到调用方机器令牌上的名字
+    // 名字、邮箱这类描述"这个人"的 claim 也取自主体身份：主体身份没带 name 时不能取到其他认证身份上的名字
     [Fact]
     public void The_current_users_descriptive_claims_come_from_the_subject_identity()
     {
-        var delegated = new ClaimsIdentity([new Claim("sub", "7"), new Claim("preferred_username", "alice")], "ServiceUserContext");
+        var supplemental = new ClaimsIdentity([new Claim("sub", "7"), new Claim("preferred_username", "alice")], "SupplementalAuthentication");
         var machine = new ClaimsIdentity([new Claim("sub", "client:worker-1"), new Claim("name", "Worker"), new Claim("email", "ops@example.com")], "Bearer");
-        var principal = new ClaimsPrincipal([delegated, machine]);
+        var principal = new ClaimsPrincipal([supplemental, machine]);
         var currentUser = new CurrentUser(new FixedPrincipalAccessor(principal), Options.Create(new ClaimTypeOptions()));
 
-        Assert.Same(delegated, new ClaimTypeOptions().FindSubjectIdentity(principal));
+        Assert.Same(supplemental, new ClaimTypeOptions().FindSubjectIdentity(principal));
         Assert.Equal(("alice", null, null), (currentUser.Username, currentUser.Name, currentUser.Email));
     }
 
@@ -168,30 +168,30 @@ public class ClaimTypeOptionsTests
         Assert.Equal("Guest", currentUser.Name);
     }
 
-    // 服务间调用只委托租户：还原出的身份不带用户标识，主体仍是机器，租户取委托值；委托的租户彼此须一致
+    // 补充认证身份没有主体标识时可以提供租户，各补充身份的租户须一致
     [Fact]
-    public void A_tenant_only_delegation_supplies_the_tenant_of_a_tenantless_subject()
+    public void An_identity_without_a_subject_id_supplies_the_tenant_of_a_tenantless_subject()
     {
         var options = new ClaimTypeOptions();
         var tenantId = Guid.CreateVersion7();
-        var delegated = new ClaimsIdentity([new Claim("tenant_id", tenantId.ToString())], "ServiceUserContext");
+        var supplemental = new ClaimsIdentity([new Claim("tenant_id", tenantId.ToString())], "SupplementalAuthentication");
         var machine = new ClaimsIdentity([new Claim("sub", "client:worker-1")], "Bearer");
         var other = new ClaimsIdentity([new Claim("tenant_id", Guid.CreateVersion7().ToString())], "Other");
 
-        Assert.Equal("client:worker-1", options.FindUserId(new ClaimsPrincipal([delegated, machine])));
-        Assert.Equal(new TenantClaim(true, tenantId), options.ReadTenant(new ClaimsPrincipal([delegated, machine])));
-        Assert.False(options.ReadTenant(new ClaimsPrincipal([delegated, machine, other])).IsValid);
+        Assert.Equal("client:worker-1", options.FindUserId(new ClaimsPrincipal([supplemental, machine])));
+        Assert.Equal(new TenantClaim(true, tenantId), options.ReadTenant(new ClaimsPrincipal([supplemental, machine])));
+        Assert.False(options.ReadTenant(new ClaimsPrincipal([supplemental, machine, other])).IsValid);
     }
 
-    // 主体身份自带租户时，委托的租户不能改写它
+    // 主体身份自带租户时，补充身份的租户不能改写它
     [Fact]
-    public void A_delegated_tenant_cannot_override_the_subjects_own_tenant()
+    public void A_supplemental_identity_cannot_override_the_subjects_own_tenant()
     {
         var options = new ClaimTypeOptions();
         var subject = new ClaimsIdentity([new Claim("sub", "7"), new Claim("tenant_id", Guid.CreateVersion7().ToString())], "Bearer");
-        var delegated = new ClaimsIdentity([new Claim("tenant_id", Guid.CreateVersion7().ToString())], "ServiceUserContext");
+        var supplemental = new ClaimsIdentity([new Claim("tenant_id", Guid.CreateVersion7().ToString())], "SupplementalAuthentication");
 
-        Assert.False(options.ReadTenant(new ClaimsPrincipal([subject, delegated])).IsValid);
+        Assert.False(options.ReadTenant(new ClaimsPrincipal([subject, supplemental])).IsValid);
     }
 
     // 宿主改了租户 claim 名：当前用户按新名读，旧名不再被当作租户

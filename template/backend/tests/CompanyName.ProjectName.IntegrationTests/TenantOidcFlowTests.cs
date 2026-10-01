@@ -215,7 +215,6 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             displayName = "Tenant OIDC probe",
             applicationType = "web",
             clientType = "confidential",
-            consentType = "explicit",
             permissions = (string[])
             [
                 "ept:authorization", "ept:token", "gt:authorization_code", "gt:refresh_token", "rst:code",
@@ -287,7 +286,6 @@ public sealed class TenantOidcFlowTests(ProjectWebApplicationFactory factory)
             displayName = "Workload",
             applicationType = "service",
             clientType = "confidential",
-            consentType = "explicit",
             permissions = new[] { "ept:token", "gt:client_credentials", "scp:tenant-routing.read" },
             requirements = Array.Empty<string>(),
             redirectUris = Array.Empty<string>(),

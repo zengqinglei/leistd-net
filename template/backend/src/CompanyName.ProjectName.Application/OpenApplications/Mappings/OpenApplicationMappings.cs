@@ -27,10 +27,9 @@ public class OpenApplicationMappings : IRegister
         config.NewConfig<OpenIddictApplicationDescriptor, OpenApplicationOutputDto>()
             .Map(dest => dest.Id, src => ResolveId())
             .Map(dest => dest.ClientId, src => src.ClientId ?? string.Empty)
-            // 三个类型字段在 OpenIddict 侧可空，对外契约不可空：兜到与创建时相同的默认值
+            // 类型字段在 OpenIddict 侧可空，对外契约不可空：兜到与创建时相同的默认值
             .Map(dest => dest.ApplicationType, src => src.ApplicationType ?? OpenIddictConstants.ApplicationTypes.Web)
             .Map(dest => dest.ClientType, src => src.ClientType ?? OpenIddictConstants.ClientTypes.Public)
-            .Map(dest => dest.ConsentType, src => src.ConsentType ?? OpenIddictConstants.ConsentTypes.Explicit)
             .Map(dest => dest.RedirectUris, src => ToStrings(src.RedirectUris))
             .Map(dest => dest.PostLogoutRedirectUris, src => ToStrings(src.PostLogoutRedirectUris))
             // ClientSecret 必须显式忽略：源与目标同名，Mapster 会按约定自动映射，

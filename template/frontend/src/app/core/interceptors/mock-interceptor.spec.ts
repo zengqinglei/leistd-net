@@ -95,7 +95,6 @@ describe('mockInterceptor', () => {
       displayName: 'Spec confidential client',
       applicationType: 'service',
       clientType: 'confidential',
-      consentType: 'systematic',
       redirectUris: [],
       postLogoutRedirectUris: [],
       permissions: ['ept:token', 'gt:client_credentials'],

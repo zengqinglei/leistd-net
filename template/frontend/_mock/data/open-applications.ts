@@ -14,7 +14,6 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     displayName: 'MyProject Web',
     applicationType: 'web',
     clientType: 'public',
-    consentType: 'explicit',
     redirectUris: ['http://localhost:4200/auth/callback'],
     postLogoutRedirectUris: ['http://localhost:4200/auth/logout-callback'],
     permissions: [
@@ -42,7 +41,6 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     displayName: 'MyProject Desktop',
     applicationType: 'native',
     clientType: 'public',
-    consentType: 'explicit',
     redirectUris: ['companyname-projectname-desktop://oauth/callback'],
     postLogoutRedirectUris: ['companyname-projectname-desktop://oauth/logout-callback'],
     permissions: [
@@ -70,7 +68,6 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     displayName: 'MyProject Service Client',
     applicationType: 'service',
     clientType: 'confidential',
-    consentType: 'systematic',
     redirectUris: [],
     postLogoutRedirectUris: [],
     permissions: ['ept:token', 'gt:client_credentials'],
@@ -90,7 +87,12 @@ export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
   { name: 'email', displayName: 'Email', machineOnly: false },
   { name: 'roles', displayName: 'Roles', machineOnly: false },
   { name: 'offline_access', displayName: 'Offline access', machineOnly: false },
-  { name: 'companyname-projectname-api', displayName: 'API', machineOnly: false },
+  {
+    name: 'companyname-projectname-api',
+    displayName: 'API',
+    machineOnly: false,
+    audience: 'companyname-projectname-api',
+  },
   {
     name: 'tenant-routing.read',
     displayName: 'Read tenant connection routing metadata',
@@ -101,5 +103,4 @@ export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
     displayName: 'Read tenant connection migration metadata',
     machineOnly: true,
   },
-  { name: 'svc.delegate', displayName: 'Act on behalf of users', machineOnly: true },
 ];

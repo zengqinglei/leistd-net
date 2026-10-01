@@ -50,7 +50,6 @@
     "clientIdPlaceholder": "例如 my-desktop-app",
     "applicationType": "应用类型",
     "clientType": "客户端类型",
-    "consentType": "授权确认",
     "clientId": "Client ID",
     "redirectUris": "重定向 URI",
     "postLogoutRedirectUris": "注销后重定向 URI",
@@ -62,12 +61,6 @@
     "desktop": "桌面端 PKCE 客户端",
     "service": "服务端机密客户端",
     "desktopDisplayName": "我的桌面应用"
-  },
-  "consentType": {
-    "implicit": "隐式同意",
-    "explicit": "显式同意",
-    "external": "外部同意",
-    "systematic": "系统同意"
   },
   "clientType": {
     "publicLabel": "Public（公开）",
@@ -87,7 +80,8 @@
     "scopeEmail": "邮箱",
     "scopeRoles": "角色",
     "scopeOfflineAccess": "离线访问",
-    "notConfigured": "未配置"
+    "notConfigured": "未配置",
+    "tokenExchange": "代表用户调用（Token Exchange）"
   },
   "requirement": {
     "forcePkce": "强制 PKCE"

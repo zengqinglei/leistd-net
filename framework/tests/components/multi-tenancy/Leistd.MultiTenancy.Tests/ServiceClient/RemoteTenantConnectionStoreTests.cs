@@ -129,26 +129,16 @@ public sealed class RemoteTenantConnectionStoreTests
         Assert.Equal("https://identity.test", options.BaseAddress);
     }
 
-    // 回源是宿主侧的控制面查询、租户 Id 已在路径里：即使配置里开着，也不转发用户与租户上下文
     [Fact]
-    public void The_control_plane_client_never_forwards_user_or_tenant_context()
+    public void Database_directory_resolves_the_registered_control_plane_client()
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.test",
-                ["Leistd:ServiceClients:Identity:UserContext:Enabled"] = "true",
-                ["Leistd:ServiceClients:Identity:UserContext:ForwardTenantId"] = "true",
-            })
-            .Build();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.test"
+        }).Build();
         using var provider = new ServiceCollection().AddLogging()
-            .AddRemoteTenantConnectionStore("Identity", configuration).Services
-            .BuildServiceProvider();
-
-        var options = provider.GetRequiredService<IOptions<RemoteTenantConnectionClientOptions>>().Value;
-
-        Assert.False(options.UserContext.Enabled);
-        Assert.False(options.UserContext.ForwardTenantId);
+            .AddRemoteTenantConnectionStore("Identity", configuration).Services.BuildServiceProvider();
+        Assert.IsAssignableFrom<ITenantConnectionConfigurationStore>(provider.GetRequiredService<ITenantDatabaseDirectory>());
     }
 
     private RemoteTenantConnectionStore Store(string prefix = RemoteTenantConnectionClientOptions.DefaultRoutePrefix)

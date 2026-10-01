@@ -24,7 +24,7 @@
 
 
   <ItemGroup>
-<!--#if (ServiceUserContextEnabled)-->
+<!--#if (OpenIddictServer || RemoteTokenAuth)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
@@ -65,9 +65,8 @@
     <PackageReference Include="Leistd.Settings.AspNetCore" />
     <!-- 宿主级设置经配置源覆盖部署配置（日志级别、发信参数、审计保留期） -->
     <PackageReference Include="Leistd.Settings.Hosting" />
-<!--#if (ServiceUserContextEnabled)-->
-    <!-- 服务间用户/租户上下文的受信恢复是**消费侧**能力：Identity 与 Resource 都要，
-         Standalone 没有机器令牌这回事。条件必须与 Program.cs 的 using 和调用点一致 -->
+<!--#if (RemoteTokenAuth)-->
+    <!-- 用户令牌读取只适用于已验证 Bearer 的资源服务。 -->
     <PackageReference Include="Leistd.ServiceClient.AspNetCore" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->

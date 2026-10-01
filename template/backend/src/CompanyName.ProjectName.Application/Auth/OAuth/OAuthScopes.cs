@@ -1,7 +1,6 @@
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
 using CompanyName.ProjectName.Domain.Auth.Options;
-using Leistd.ServiceClient.Constants;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.Application.Auth.OAuth;
@@ -35,8 +34,6 @@ public static class OAuthScopes
         new(options.Resource, "API", [options.Resource], MachineOnly: false),
         new(TenantConnectionScopes.RuntimeRead, "Read tenant connection routing metadata", [options.Resource], MachineOnly: true),
         new(TenantConnectionScopes.MigrationRead, "Read tenant connection migration metadata", [options.Resource], MachineOnly: true),
-        // 机器令牌只在显式拥有它时才能代表用户调用下游；调用哪个下游仍要同时申请那个 API 的 scope
-        new(ServiceClientScopes.Delegation, "Act on behalf of users", [], MachineOnly: true),
         .. options.ApiResources.Select(api => new OAuthScope(api, api, [api], MachineOnly: false)),
     ];
 

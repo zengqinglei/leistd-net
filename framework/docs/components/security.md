@@ -126,9 +126,9 @@ public class SystemJob(IAmbientContext ambientContext, ICurrentUser currentUser)
 | `Email` | 邮箱，依次取 `email` / `Email` claim |
 | `FindClaim(claimType)` | 指定类型的第一个 `Claim`，跨全部身份查找（官方 `ClaimsPrincipal.FindFirst`），不存在返回 `null` |
 | `FindClaims(claimType)` | 指定类型的全部 `Claim`（多值的角色、scope、amr），与 `FindClaim` 同一范围；没有主体时为空 |
-| `IsInRole(role)` | 当前用户是否属于该角色：**只看主体身份**，按其 `RoleClaimType` 精确匹配；服务间调用时调用方机器身份上的角色不算。没有带用户标识的身份时按整个主体判断 |
+| `IsInRole(role)` | 当前用户是否属于该角色：**只看主体身份**，按其 `RoleClaimType` 精确匹配；其他认证身份上的角色不算。没有带用户标识的身份时按整个主体判断 |
 
-`Username`、`Name`、`Email` 只在主体身份（`ClaimTypeOptions.FindSubjectIdentity`）上读取，与 `SubjectId`、`TenantId` 同源：服务间还原出的被代表用户没带 `name` 时，不会取到调用方机器令牌上的名字。主体上没有带用户标识的身份时按整个主体读取。
+`Username`、`Name`、`Email` 只在主体身份（`ClaimTypeOptions.FindSubjectIdentity`）上读取，与 `SubjectId`、`TenantId` 同源：主体身份没带 `name` 时，不会取到其他认证身份上的名字。主体上没有带用户标识的身份时按整个主体读取。
 
 ### `Leistd.Security.Clients.ICurrentClient`
 
@@ -172,7 +172,7 @@ identity.AddClaim(new Claim("sub", ClientSubject.Format(request.ClientId!)));
 if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受信的服务调用 */ }
 ```
 
-> 服务间调用的用户上下文恢复直接依赖该契约，见[服务间调用客户端](./service-client.md)的信任边界。
+> 多个认证方案合并主体时仍遵守该契约；用户访问令牌的跨服务使用见[服务间调用客户端](./service-client.md)。
 
 ### `Leistd.Security.Claims.ClaimsPrincipalExtensions`（是否匿名）
 
@@ -188,7 +188,7 @@ if (ClientSubject.Matches(principal.FindFirst("sub")?.Value, clientId)) { /* 受
 | `TenantId` | 租户 claim 类型，默认 `tenant_id`；值必须是租户 GUID，没有即宿主 |
 | `FindSubjectIdentity(principal)` | 主体身份：按顺序第一个带用户标识（按 `UserIds`）的身份；没有时为 `null`。标识、租户与名字、邮箱这类描述"这个人"的 claim 都取自它 |
 | `FindUserId(principal)` | 在主体身份上按 `UserIds` 取第一个非空白的原始值 |
-| `ReadTenant(principal)` | 返回 `TenantClaim`：用户标识与租户取自同一个身份——按顺序第一个带用户标识的身份（主体身份）；同一身份内多条（即使值相同）或非 GUID 为非法；其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）为非法，这样同一请求携带的两份用户凭据拼不出"甲的标识 + 乙的租户"；不带用户标识的身份（服务间调用只委托租户时还原出的身份）只在主体身份没有租户时提供租户；带用户标识而无租户 claim 的其他身份（如服务间调用方的机器身份）不参与判定。同一主体被多个认证方案认证、各身份带同一租户是合法的 |
+| `ReadTenant(principal)` | 返回 `TenantClaim`：用户标识与租户取自同一个身份——按顺序第一个带用户标识的身份（主体身份）；同一身份内多条（即使值相同）或非 GUID 为非法；其他带用户标识的身份带着与主体身份不同的租户（含主体身份为宿主）为非法，这样同一请求携带的两份用户凭据拼不出"甲的标识 + 乙的租户"；不带用户标识的补充身份只在主体身份没有租户时提供租户；带用户标识而无租户 claim 的其他身份（如其他认证方案的身份）不参与判定。同一主体被多个认证方案认证、各身份带同一租户是合法的 |
 
 只共享读取规则，不合并语义：`ICurrentUser.Id` 在原始值之上只接受 GUID；审计、SignalR 寻址等场景读原始值。
 同一主体被多个认证方案认证时（策略评估会合并各方案的身份），各身份各带一条相同的租户 claim 是合法的。

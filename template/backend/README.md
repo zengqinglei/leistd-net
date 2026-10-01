@@ -122,7 +122,7 @@ OpenIddict 的 issuer、证书和 HTTPS 要求通过 `OAuth` 配置；开发证�
 
 - `OAuth:Resource` 是本服务 API 的标识，同名登记为 scope。调用本服务 API 的客户端要被授予并申请它，本服务只接受受众是它的令牌；
 - `OAuth:ApiResources` 列出由本服务签发令牌的下游 API，各登记为同名 scope，下游服务把自己的 `Authentication:Audience` 设为同一个值；
-- 租户路由的两个 scope 与委托 scope `svc.delegate` 只能授予机器客户端；代表用户调用下游时，同时申请目标 API 的 scope 与 `svc.delegate`。
+- 租户路由的两个 scope 只授予机器客户端；用户调用下游使用官方 Token Exchange，调用方 client ID 与来源 API 受众一致，目标由 aud:/scp: 应用权限授予。SPA 仅申请自己的 API scope，详见服务间调用规范。
 <!--#endif-->
 <!--#if (ExternalLogin)-->
 

@@ -174,7 +174,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
             echo = await api.EchoHeadersAsync();
         }
 
-        Assert.Equal(userId.ToString(), echo.UserId);
+        Assert.Null(echo.UserId);
         Assert.Equal("trace-refit-1", echo.TraceId);
     }
 

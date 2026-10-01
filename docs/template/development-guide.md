@@ -45,7 +45,6 @@
 LocalIdentity             = (ServiceRole != "Resource")
 OpenIddictServer          = (ServiceRole == "Identity")
 RemoteTokenAuth           = (ServiceRole == "Resource")
-ServiceUserContextEnabled = (ServiceRole != "Standalone")
 ```
 
 条件代码只引用这四个能力名。这样新增一个 `ServiceRole` 取值时改的是这四行，而不是散在几百个文件里的比较表达式。

@@ -118,10 +118,6 @@
       "type": "computed",
       "value": "(ServiceRole == \"Resource\")"
     },
-    "ServiceUserContextEnabled": {
-      "type": "computed",
-      "value": "(ServiceRole != \"Standalone\")"
-    },
     "ExternalLogin": {
       "type": "computed",
       "value": "(LocalIdentity && IncludeExternalLogin)"

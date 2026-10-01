@@ -547,6 +547,39 @@ OperationFailure.FromCode(exception.Code, exception.LocalizationData);
 | 新增公共入口 `Leistd.Redaction.TextRedactor`（`Leistd.Core`，纯静态方法、无新依赖） | `RedactEmail(address)` → `al***@example.com`（保本地部开头几位 + 完整域名：从第一个字母或数字起最多 3 位且不超过一半——`zhangsan@`→`zha***@`、`alice@`→`al***@`、`bob@`→`b***@`）；`RedactPartially(value, keepStart, keepEnd)` → `158***90`（位数由业务定：手机号常用 `(3,2)`，卡号按 PCI DSS 最多 `(6,4)`，证件号 `(0,4)`）。写日志与对外展示共用。**只提供形态，不维护数据类型目录**——不要期待框架为每种业务数据加方法 |
 | **没有引入脱敏组件** | 评估过 `Microsoft.Extensions.Compliance.Redaction`（数据分类 + `IRedactorProvider` + 日志脱敏），本次未采用：缺陷是"组件默认把个人数据写进日志"，终局修法是默认不写，而不是建一套"把个人数据安全写出去"的机制。实测结论留档在仓库的 `docs/assessments/`，其中两条对派生项目有用：**普通模板日志（`logger.LogInformation("{To}", to)`）永远不会被脱敏**，脱敏只作用于带 `[LoggerMessage]` 与数据分类标注的源生成方法；以及 **`builder.Services.AddSerilog(configure)` 与 `EnableRedaction()` 冲突，两者同时存在时日志会全部消失**（不是丢字段）。自行接入脱敏的项目注意这两点 |
 
+## 21. 官方 Token Exchange 与服务客户端认证替换
+
+服务间用户委托改用 OpenIddict 7.7 的 Token Exchange；机器回源也改用 OpenIddict.Client。源码不保留旧委托头协议。只签发 access token 时创建的是令牌记录，不自动创建临时授权记录。
+
+**混合版本存在中断窗口，不能承诺无中断滚动升级。** 新 Identity 的 `SystemInitializer` 在初始化时立即删除目录中已不存在的 `svc.delegate` scope，官方 scope 注册也不再包含它。因此 Identity 首先升级后，旧调用方在冷缓存或缓存过期时申请包含该 scope 的令牌即可失败（`invalid_scope`）；已缓存的旧令牌也不能使新下游恢复用户身份，访问自然人端点返回 403。部署顺序可按 Identity → 调用方 → 下游安排，但不能将最后“清理旧权限”理解为延后删除 scope。不接受此窗口的部署须同步切换相关服务，或在部署层将流量切到版本一致的新服务组；代码不增加兼容路径。
+
+工作负载 client ID 要与来源 API 受众一致（例如 `orders-machine` → `orders-api`）。改名后机器主体变为 `client:orders-api`，按 client ID／主体写的机器策略、审计筛选与密钥配置均要更新。旧 client ID 与密钥只有在旧应用仍保留、相应 grant/scope 仍获授权且目标接受机器身份时才能继续取机器令牌；删除／改名应用后不能假定旧密钥可用于新 client ID，须为新应用配置其有效密钥。保留旧应用也无法恢复已删除的 `svc.delegate`，不保证旧用户委托链路可用。
+
+| 原调用／配置 | 影响与替代方式 |
+| --- | --- |
+| `AddClientCredentials(configuration)` 与旧凭据 Options | 先全局 `AddServiceAuthentication()`，再在命名客户端调用 `AddClientCredentials()`；`Authority/ClientId/ClientSecret` 绑定 `Leistd:ServiceAuth`，机器 `Scope` 绑定 `Leistd:ServiceClients:{Name}`；`ExpirationBuffer` 属性及配置删除，机器缓存固定提前 60 秒失效，用户交换固定提前 10 秒失效 |
+| 生成 Client 包自动安装机器认证 | 注册返回的 builder 不再自动认证。未显式组合的宿主访问受保护端点会稳定返回 401；使用 `services.AddMyProjectClient(configuration).AddClientCredentials()`，或按用户调用选择 `.AddTokenExchange()` |
+| 用户／租户委托头与恢复管道 | Resource 注册 `AddUserAccessTokenAccessor(实际 Bearer 验证方案)`，用户客户端 `AddTokenExchange()`；目标 `Audience/Scope` 绑定 `Leistd:ServiceClients:{Name}:TokenExchange`，身份与租户来自已验证 JWT |
+| 机器调用自动转发 `ICurrentTenant` | 不再转发租户；按租户执行的后台作业若仍只调用 `ICurrentTenant.Change()`，下游可能在宿主上下文执行且不报错。租户必须作为显式参数，例如租户回源使用的路由 tenant ID；下游机器端点自行验证调用权限、租户有效性并建立业务租户上下文 |
+| `Leistd:ServiceAuth:Scope/ExpirationBuffer/TokenEndpoint` 与 `ResolveTokenEndpoint` | 旧全局 scope/buffer 不再读取，scope 改为命名客户端配置，buffer 固定为机器 60 秒／交换 10 秒；手工端点删除，官方客户端按 `Authority` 发现端点并协商认证 |
+| `Leistd:ServiceClients:{Name}:UserContext` 与 `Leistd:ServiceUserContext` | 整个配置节删除；不检测旧配置，也不保留旧协议兼容路径 |
+| Cookie／后台用户上下文 | 不提供 Token Exchange 证明；默认适配器只读验证方案保存的用户访问令牌。普通后台调用选择机器认证，不能仅设置 ambient 用户来委托 |
+| 收到下游 401 后自动重放 | 仅清本地令牌缓存，下次独立调用重新取令牌；调用方按业务幂等性决定是否重试，分布式删除失败不能覆盖原 401，取消仍传播 |
+| `ConsentType` DTO、前端选项与错误码 | 删除；服务端固定 implicit。存量应用升级前将其同意类型归一为 implicit |
+
+供派生项目搜索的已删除或收敛公共契约（不要仅删配置而保留调用）：
+
+- OAuth：`IServiceTokenProvider`（含 `GetAccessTokenAsync/Invalidate`）、`ClientCredentialsTokenProvider`、`DependencyInjection.ServiceAuthSectionName`；旧 `ClientCredentialsOptions.Authority/ClientId/ClientSecret/TokenEndpoint/ResolveTokenEndpoint/ExpirationBuffer`，以及接收 `IConfiguration` 的旧 `AddClientCredentials` 重载。`ClientCredentialsDelegatingHandler` 从 public 改为 internal，不再直接构造，改用命名客户端的 `AddClientCredentials()`。
+- Core：`ServiceClientHeaders`（`UserId/Username/TenantId`，即 `X-User-Id/X-Username/X-Tenant-Id`）、`ServiceClientScopes.Delegation`（`svc.delegate`）、`UserContextForwardingOptions`、`ServiceClientOptions.UserContext`、`UserContextDelegatingHandler<TOptions>`、`TenantContextDelegatingHandler<TOptions>`。
+- AspNetCore：`ServiceUserContextOptions`、`ServiceUserContextClaimsTransformation`、`ServiceUserContextMiddleware`、`AddServiceUserContext`、`UseServiceUserContext`；内部 `ServiceUserContext` 与 `CompositeClaimsTransformation` 一并删除，相关身份恢复与转换组合不再注册。
+- 配置属性：旧 `UserContext.Enabled/ForwardUsername/UserIdHeader/UsernameHeader/ClaimHeaderMap/ForwardTenantId/TenantIdHeader`；旧 `Leistd:ServiceUserContext` 下的 `Enabled/UserIdHeader/UsernameHeader/TenantIdHeader/HeaderClaimMap/RemoveUntrustedHeaders/RequiredScope/AuthenticationType`；模板派生变量 `ServiceUserContextEnabled` 不再存在。
+
+存量同意类型数据示例：`UPDATE "<schema>"."OpenIddictApplications" SET "ConsentType"='implicit' WHERE "ConsentType" IS DISTINCT FROM 'implicit';`。没有同意页与永久授权的第三方场景不支持。
+
+模板新增每日 `auth.openiddict.prune` 集群任务，使用官方管理器，清理早于 14 天阈值创建的无效令牌与授权（并非过期后额外保留 14 天）。控制库不按租户重复执行，多副本沿用 Redis 集群锁与共享水位。Cookie `auth_time` 为真实认证时刻，续期不改变它；`prompt=none` 无会话返回 `login_required`，`prompt=login/max_age` 引导重新认证并保留原会话，凭据成功后替换会话。现存 Cookie 缺 `auth_time` 时，带 `max_age` 的请求要求重新登录。
+
+交换令牌最多 120 秒，最终 `exp` 不超过来源；角色与超管信息留给下游本地授权，用户名、邮箱、显示名由 Identity 回查权威资料。Bearer 缓存只在进程内，按官方客户端返回的到期时间提前失效，机器 60 秒、用户交换 10 秒。组件不设置宿主日志过滤；官方客户端脱敏协议中的令牌与密钥字段。`AddServiceAuthentication` 的 `DisableTokenStorage` 是官方客户端全局选项，同宿主的 OpenIddict.Client 交互式登录也受影响。需要 state 存储的宿主在所有组件注册之后调用 `services.Configure<OpenIddict.Client.OpenIddictClientOptions>(options => options.DisableTokenStorage = false)`，并按官方方案接入 Core、令牌存储、证书与交互式宿主集成；覆写须晚于 `AddServiceAuthentication`，其后再次调用组件注册会关闭存储，无需强制分开部署或增加框架开关。
+
 ## 22. 质量入口合并与模板 CI 分片
 
 仓库维护入口 `framework/build/check-docs-api-drift.ps1` 在一个进程中执行原 8 个正反例和完整正文扫描，共用本次源码索引；原独立 `-SelfTest` 模式及对应 `check-all.ps1` 清单行删除。原自检能抓的规则失效由合并入口的正反例接替，正文漂移仍由同一完整扫描接替；不删除单元测试。调用方移除旧 `-SelfTest` 参数，直接调用脚本。
