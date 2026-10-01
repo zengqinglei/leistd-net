@@ -6,6 +6,8 @@ using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using Leistd.Auditing.Abstractions;
+using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
 #if (LocalIdentity)
 using Leistd.MultiTenancy;
@@ -24,6 +26,7 @@ namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 /// </summary>
 public class UserDomainService(
     IRepository<User, Guid> userRepository,
+    IDataFilter dataFilter,
 #if (LocalIdentity)
     // 只有 CreateSuperAdminAsync 用它挡"租户上下文里造超管"，而那个方法只在本地身份形态存在
     ICurrentTenant currentTenant,
@@ -91,32 +94,47 @@ public class UserDomainService(
     /// <summary>
     /// 检查用户名是否可用
     /// </summary>
+    /// <remarks>
+    /// 查重要看见被软删除的行：用户名与邮箱的唯一索引都没有排除 <c>IsDeleted</c>，
+    /// 软删除的用户仍然占着它们，而仓储默认把这些行过滤掉。不关掉过滤，这里会答"可用"，
+    /// 随后落库撞唯一索引——用户看到的是 500，而不是"该用户名已被占用"。
+    /// <para>
+    /// 保留租户过滤：跨租户允许同名同邮箱，唯一索引也是按租户分开的。
+    /// </para>
+    /// </remarks>
     public async Task<bool> IsUsernameAvailableAsync(string username, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Username == username, cancellationToken);
     }
 
     /// <summary>
     /// 检查用户名是否可用（排除指定用户）
     /// </summary>
+    /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsUsernameAvailableAsync(Guid excludeUserId, string username, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Id != excludeUserId && u.Username == username, cancellationToken);
     }
 
     /// <summary>
     /// 检查邮箱是否可用
     /// </summary>
+    /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsEmailAvailableAsync(string email, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Email == email, cancellationToken);
     }
 
     /// <summary>
     /// 检查邮箱是否可用（排除指定用户）
     /// </summary>
+    /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsEmailAvailableAsync(Guid excludeUserId, string email, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Id != excludeUserId && u.Email == email, cancellationToken);
     }
 
