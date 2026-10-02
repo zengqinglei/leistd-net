@@ -197,6 +197,8 @@
     "processingAria": "正在完成登录",
     "processing": "正在处理第三方登录",
     "missingParams": "缺少必要的回调参数",
-    "failed": "第三方登录失败，请返回重试"
+    "failed": "第三方登录失败，请返回重试",
+    "cancelled": "已取消第三方登录。",
+    "backToLogin": "返回登录"
   }
 }

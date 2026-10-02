@@ -655,5 +655,8 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
   且失败会中断登录。主邮箱是否已验证仍由模板在 `OnCreatingTicket` 中查询；查询失败时降级为不按邮箱关联。
 - **新增匿名 `GET /api/v1/external-auth/providers`**：返回已登记的提供商标识，登录页据此渲染入口，
   未配置的提供商不再显示按钮。
+- **外部登录失败回到前端**：提供商回调的取消（`error=access_denied`，由官方 `OnAccessDenied` 处理）与协议失败
+  不再以 400 问题详情直接呈现在整页导航上，而是 302 到 `/auth/external-callback/{provider}?intent=…&error=cancelled|failed`，
+  由前端显示原因与返回入口。派生项目若自建提供商，`OnRemoteFailure`/`OnAccessDenied` 按同样方式重定向。
 - **跨源写请求更严格**：`/api` 下不带 Authorization 头的写请求如果没有 Origin，`Sec-Fetch-Site` 为
   `cross-site` 或 `same-site` 时返回 403。依赖同站其他子域无 Origin 提交的派生前端要改为同源；非浏览器调用不受影响。

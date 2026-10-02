@@ -84,6 +84,8 @@ public sealed class ExternalAuthenticationTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("ExternalAuth:AccountExistsSignInToLink", problem.GetProperty("code").GetString());
+        // 提示用官方 scheme 的显示名，而不是内部标识（github → GitHub）。
+        Assert.Contains(provider == "github" ? "GitHub" : "Google", problem.GetProperty("detail").GetString()!, StringComparison.Ordinal);
         Assert.False(response.Headers.TryGetValues("Set-Cookie", out var cookies) &&
             cookies.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal)));
 
@@ -167,8 +169,42 @@ public sealed class ExternalAuthenticationTests
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/external-auth/github/signin?code=code&state={Uri.EscapeDataString(state)}");
         if (mismatch) request.Headers.Add("Cookie", ExternalOAuthBackchannel.Cookies(challenge).Replace("=N", "=wrong", StringComparison.Ordinal));
         using var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // 浏览器整页导航：回到前端回调页并带原因码，不签发外部票据，也不交换授权码。
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("/auth/external-callback/github?intent=login&error=failed", response.Headers.Location!.OriginalString);
+        Assert.DoesNotContain(".External=", ExternalOAuthBackchannel.Cookies(response), StringComparison.Ordinal);
         Assert.Null(backchannel.CodeVerifier);
+    }
+
+    [Theory]
+    [InlineData("login")]
+    [InlineData("link")]
+    public async Task Cancelling_at_the_provider_returns_to_the_callback_page_without_a_ticket(string intent)
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var backchannel = new ExternalOAuthBackchannel();
+        using var host = backchannel.CreateHost(factory);
+        HttpClient client;
+        AuthenticatedSession? session = null;
+        if (intent == "link")
+        {
+            session = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+            client = session.Client;
+        }
+        else client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        using (session)
+        {
+            using var challenge = await client.GetAsync($"/api/v1/external-auth/github/{(intent == "link" ? "link/" : "")}challenge");
+            var state = QueryHelpers.ParseQuery(challenge.Headers.Location!.Query)["state"].ToString();
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                $"/api/v1/external-auth/github/signin?error=access_denied&state={Uri.EscapeDataString(state)}");
+            request.Headers.Add("Cookie", string.Join("; ", new[] { session?.Cookie ?? "", ExternalOAuthBackchannel.Cookies(challenge) }.Where(value => value.Length > 0)));
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+            Assert.Equal($"/auth/external-callback/github?intent={intent}&error=cancelled", response.Headers.Location!.OriginalString);
+            Assert.DoesNotContain(".External=", ExternalOAuthBackchannel.Cookies(response), StringComparison.Ordinal);
+            Assert.Null(backchannel.CodeVerifier);
+        }
     }
 
     [Fact]

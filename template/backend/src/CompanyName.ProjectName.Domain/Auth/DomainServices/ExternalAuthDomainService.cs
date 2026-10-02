@@ -104,15 +104,15 @@ public class ExternalAuthDomainService(
                 throw new BusinessException(
                         ExternalAuthErrorCodes.EmailOwnedByDeletedAccount,
                         "This email belongs to a deleted account. Ask an administrator to restore it, or use another address.")
-                    .WithData("Provider", provider);
+                    .WithData("Provider", ProviderName(provider, externalUserInfo));
             }
 
             if (user != null && !(externalUserInfo.EmailVerified && user.EmailConfirmed))
             {
                 throw new BusinessException(
                         ExternalAuthErrorCodes.AccountExistsSignInToLink,
-                        $"An account with this email already exists. Sign in to it and link {provider} from account settings.")
-                    .WithData("Provider", provider);
+                        $"An account with this email already exists. Sign in to it and link {ProviderName(provider, externalUserInfo)} from account settings.")
+                    .WithData("Provider", ProviderName(provider, externalUserInfo));
             }
         }
 
@@ -193,8 +193,8 @@ public class ExternalAuthDomainService(
             cancellationToken);
         if (existing is not null && existing.UserId != user.Id)
         {
-            throw new BusinessException(ExternalAuthErrorCodes.AlreadyLinked, $"This {provider} account is already linked to another user.")
-                .WithData("Provider", provider);
+            throw new BusinessException(ExternalAuthErrorCodes.AlreadyLinked, $"This {ProviderName(provider, externalUserInfo)} account is already linked to another user.")
+                .WithData("Provider", ProviderName(provider, externalUserInfo));
         }
 
         if (existing is not null)
@@ -206,8 +206,8 @@ public class ExternalAuthDomainService(
 
         if (await externalLoginRepository.AnyAsync(c => c.UserId == user.Id && c.Provider == provider, cancellationToken))
         {
-            throw new BusinessException(ExternalAuthErrorCodes.ProviderAlreadyLinked, $"A {provider} account is already linked. Unlink it first.")
-                .WithData("Provider", provider);
+            throw new BusinessException(ExternalAuthErrorCodes.ProviderAlreadyLinked, $"A {ProviderName(provider, externalUserInfo)} account is already linked. Unlink it first.")
+                .WithData("Provider", ProviderName(provider, externalUserInfo));
         }
 
         var connection = new ExternalLoginConnection(
@@ -363,5 +363,9 @@ public class ExternalAuthDomainService(
         // 提供商名称来自业务扩展，长度不由账号规则决定。
         // 域名标签也有 63 字符上限，同样取决于提供商取的名字
         $"{Guid.NewGuid():N}@{provider.ToLowerInvariant()}.local";
+
+    // 面向用户的提示用提供商显示名，标识只作回退。
+    private static string ProviderName(string provider, ExternalUserInfo externalUserInfo) =>
+        string.IsNullOrWhiteSpace(externalUserInfo.ProviderDisplayName) ? provider : externalUserInfo.ProviderDisplayName;
 }
 #endif

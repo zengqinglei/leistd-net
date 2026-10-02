@@ -40,6 +40,7 @@ internal static class ExternalAuthenticationExtensions
                 options.ClientSecret = providers.Google.ClientSecret!;
                 options.SignInScheme = AuthenticationSchemeNames.ExternalCookie;
                 options.Events.OnRemoteFailure = RejectRemoteFailureAsync;
+                options.Events.OnAccessDenied = ReturnAccessDeniedAsync;
                 options.CallbackPath = "/api/v1/external-auth/google/signin";
                 options.Events.OnCreatingTicket = context =>
                 {
@@ -49,7 +50,8 @@ internal static class ExternalAuthenticationExtensions
                     {
                         ProviderId = id, ProviderAccountLabel = Text(user, "email") ?? id,
                         Email = Text(user, "email"), EmailVerified = Flag(user, "email_verified"),
-                        DisplayName = Text(user, "name"), AvatarUrl = Text(user, "picture")
+                        DisplayName = Text(user, "name"), AvatarUrl = Text(user, "picture"),
+                        ProviderDisplayName = context.Scheme.DisplayName
                     });
                     return Task.CompletedTask;
                 };
@@ -61,6 +63,7 @@ internal static class ExternalAuthenticationExtensions
                 options.ClientSecret = providers.Github.ClientSecret!;
                 options.SignInScheme = AuthenticationSchemeNames.ExternalCookie;
                 options.Events.OnRemoteFailure = RejectRemoteFailureAsync;
+                options.Events.OnAccessDenied = ReturnAccessDeniedAsync;
                 options.CallbackPath = "/api/v1/external-auth/github/signin";
                 options.UsePkce = true;
                 options.Scope.Add("user:email");
@@ -70,12 +73,28 @@ internal static class ExternalAuthenticationExtensions
             });
     }
 
+    // 回调是浏览器整页导航：失败时回到前端回调页并给出原因码，不签发外部票据、不把问题详情 JSON 直接呈现给用户。
     private static Task RejectRemoteFailureAsync(RemoteFailureContext context)
     {
-        // 协议失败不签发外部票据；API 的问题详情管道补齐响应体。
         context.HandleResponse();
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        context.Response.Redirect(FailureRedirect(context.Scheme.Name, context.Properties, "failed"));
         return Task.CompletedTask;
+    }
+
+    // 用户在提供商授权页取消（error=access_denied）由官方 AccessDenied 事件接管，不再作为协议失败处理。
+    private static Task ReturnAccessDeniedAsync(AccessDeniedContext context)
+    {
+        context.HandleResponse();
+        context.Response.Redirect(FailureRedirect(context.Scheme.Name, context.Properties, "cancelled"));
+        return Task.CompletedTask;
+    }
+
+    private static string FailureRedirect(string scheme, AuthenticationProperties? properties, string reason)
+    {
+        // state 无法解开时没有受保护的意图，按登录处理；provider 取自已登记的 scheme 名而不是请求参数。
+        var intent = properties?.Items.TryGetValue("external.intent", out var value) == true && value == "link" ? "link" : "login";
+        var provider = scheme[AuthenticationSchemeNames.ExternalProviderPrefix.Length..];
+        return $"/auth/external-callback/{provider}?intent={intent}&error={reason}";
     }
 
     private static async Task CreateGitHubTicketAsync(OAuthCreatingTicketContext context)
@@ -111,7 +130,8 @@ internal static class ExternalAuthenticationExtensions
         context.Properties.Items[UserInfoKey] = JsonSerializer.Serialize(new ExternalUserInfo
         {
             ProviderId = id, ProviderAccountLabel = login, SuggestedUsername = login,
-            Email = email, EmailVerified = verified, DisplayName = Text(user, "name"), AvatarUrl = Text(user, "avatar_url")
+            Email = email, EmailVerified = verified, DisplayName = Text(user, "name"), AvatarUrl = Text(user, "avatar_url"),
+            ProviderDisplayName = context.Scheme.DisplayName
         });
     }
 

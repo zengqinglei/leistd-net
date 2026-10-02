@@ -27,17 +27,22 @@ import { AccountService } from '../../services/account-service';
 describe('ExternalAuthCallback', () => {
   let fixture: ComponentFixture<ExternalAuthCallback>;
   let calls: string[];
-  let accountService: { externalLoginCallback: ReturnType<typeof vi.fn> };
+  let accountService: {
+    externalLoginCallback: ReturnType<typeof vi.fn>;
+    linkExternalLogin: ReturnType<typeof vi.fn>;
+  };
+  let authService: { loadUser: ReturnType<typeof vi.fn>; currentUser: never };
 
   beforeEach(async () => {
     calls = [];
 
     accountService = {
       externalLoginCallback: vi.fn().mockName('AccountService.externalLoginCallback'),
+      linkExternalLogin: vi.fn().mockName('AccountService.linkExternalLogin'),
     };
     accountService.externalLoginCallback.mockReturnValue(of(undefined) as never);
 
-    const authService = {
+    authService = {
       loadUser: vi.fn().mockName('AuthService.loadUser'),
       currentUser: signal(null) as never,
     };
@@ -161,6 +166,54 @@ describe('ExternalAuthCallback', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).not.toContain(detail);
+  });
+
+  // 提供商处取消或协议失败：后端带原因码回到这里，页面不得再调用完成端点，并要给出回去的路。
+  function returnWith(params: Record<string, string>): void {
+    (
+      TestBed.inject(ActivatedRoute).snapshot as unknown as { queryParamMap: unknown }
+    ).queryParamMap = convertToParamMap(params);
+  }
+
+  it('shows the cancellation without completing and offers a way back to sign in', async () => {
+    returnWith({ intent: 'login', error: 'cancelled' });
+    authService.loadUser.mockReturnValue(
+      throwError(() => ApplicationHttpError.from(new HttpErrorResponse({ status: 401 }))),
+    );
+
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(accountService.externalLoginCallback).not.toHaveBeenCalled();
+    expect(calls).not.toContain('navigate');
+    const back = (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]');
+    expect(back).not.toBeNull();
+  });
+
+  it('returns a cancelled link to the security settings without completing it', async () => {
+    returnWith({ intent: 'link', error: 'cancelled' });
+
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+
+    expect(accountService.linkExternalLogin).not.toHaveBeenCalled();
+    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/workspace/settings/security']);
+  });
+
+  // 后退键重放旧回调：会话仍在时直接回到应用，而不是对已登录用户显示"登录失败"。
+  it('enters the application when a replayed callback fails but the session is still valid', async () => {
+    returnWith({ intent: 'login', error: 'failed' });
+
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(accountService.externalLoginCallback).not.toHaveBeenCalled();
+    expect(calls).toEqual(['establish', 'navigate']);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('a[href="/auth/login"]'),
+    ).toBeNull();
   });
 });
 //#endif

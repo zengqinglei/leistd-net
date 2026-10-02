@@ -10,6 +10,9 @@
           {{ t('account.login.loginFailed') }}
         </h1>
         <p class="text-muted-foreground">{{ 'key' in error ? t(error.key) : error.text }}</p>
+        <a hlmBtn variant="outline" class="mt-6" routerLink="/auth/login">
+          {{ t('account.externalCallback.backToLogin') }}
+        </a>
       } @else {
         <hlm-spinner
           class="text-4xl"

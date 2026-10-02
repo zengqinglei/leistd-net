@@ -33,4 +33,10 @@ public record ExternalUserInfo
 
     public string? DisplayName { get; init; }
     public string? AvatarUrl { get; init; }
+
+    /// <summary>
+    /// 提供商的显示名（官方远程 scheme 的 DisplayName，如 <c>GitHub</c>），只用于面向用户的提示；
+    /// 为空时提示退回提供商标识。
+    /// </summary>
+    public string? ProviderDisplayName { get; init; }
 }
