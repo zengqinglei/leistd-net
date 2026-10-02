@@ -2,6 +2,7 @@
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
+using AspNet.Security.OAuth.GitHub;
 using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Infrastructure.Auth.OAuth.Options;
@@ -54,18 +55,17 @@ internal static class ExternalAuthenticationExtensions
                 };
             });
         if (providers.Github.IsAvailable)
-            authentication.AddOAuth(AuthenticationSchemeNames.ExternalProviderPrefix + "github", options =>
+            authentication.AddGitHub(AuthenticationSchemeNames.ExternalProviderPrefix + "github", options =>
             {
                 options.ClientId = providers.Github.ClientId!;
                 options.ClientSecret = providers.Github.ClientSecret!;
                 options.SignInScheme = AuthenticationSchemeNames.ExternalCookie;
                 options.Events.OnRemoteFailure = RejectRemoteFailureAsync;
                 options.CallbackPath = "/api/v1/external-auth/github/signin";
-                options.AuthorizationEndpoint = "https://github.com/login/oauth/authorize";
-                options.TokenEndpoint = "https://github.com/login/oauth/access_token";
-                options.UserInformationEndpoint = "https://api.github.com/user";
                 options.UsePkce = true;
                 options.Scope.Add("user:email");
+                // 包内的邮箱补取只给地址、不给 verified，且失败即中断登录；改由 CreatingTicket 自取并降级。
+                options.UserEmailsEndpoint = string.Empty;
                 options.Events.OnCreatingTicket = CreateGitHubTicketAsync;
             });
     }
@@ -80,15 +80,13 @@ internal static class ExternalAuthenticationExtensions
 
     private static async Task CreateGitHubTicketAsync(OAuthCreatingTicketContext context)
     {
-        using var userResponse = await GetGitHubAsync(context, context.Options.UserInformationEndpoint);
-        userResponse.EnsureSuccessStatusCode();
-        using var document = JsonDocument.Parse(await userResponse.Content.ReadAsStringAsync(context.HttpContext.RequestAborted));
-        var user = document.RootElement;
+        // 资料与 NameIdentifier 已由处理器取回并映射；这里只补"主邮箱是否已验证"。
+        var user = context.User;
         string? email = Text(user, "email");
         var verified = false;
         try
         {
-            using var response = await GetGitHubAsync(context, "https://api.github.com/user/emails");
+            using var response = await GetGitHubAsync(context, GitHubAuthenticationDefaults.UserEmailsEndpoint);
             if (response.IsSuccessStatusCode)
             {
                 using var emails = JsonDocument.Parse(await response.Content.ReadAsStringAsync(context.HttpContext.RequestAborted));
@@ -107,9 +105,9 @@ internal static class ExternalAuthenticationExtensions
             context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
                 .CreateLogger("ExternalAuthentication").LogWarning(exception, "GitHub email verification is unavailable.");
         }
-        var id = user.GetProperty("id").ToString();
+        var id = context.Identity!.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? throw new InvalidOperationException("GitHub user profile contains no id.");
         var login = Text(user, "login") ?? id;
-        context.Identity!.AddClaim(new Claim(ClaimTypes.NameIdentifier, id));
         context.Properties.Items[UserInfoKey] = JsonSerializer.Serialize(new ExternalUserInfo
         {
             ProviderId = id, ProviderAccountLabel = login, SuggestedUsername = login,

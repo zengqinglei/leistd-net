@@ -533,6 +533,9 @@ function normalizeEmail(email: string): string {
 }
 //#if (ExternalLogin)
 
+/** mock 部署"已配置"的提供商：登录页入口与绑定列表读同一份。 */
+const MOCK_EXTERNAL_PROVIDERS = ['github', 'google'];
+
 /** mock 下的外部账号绑定：只演示列表与解绑；绑定要跳真实的提供商，mock 走不通。 */
 let mockExternalLinks: {
   id: string;
@@ -558,7 +561,7 @@ function getExternalLinks() {
   const user = requireCurrentMockUser();
   return {
     hasPassword: !!user.password,
-    providers: ['github', 'google'].map((provider) => ({
+    providers: MOCK_EXTERNAL_PROVIDERS.map((provider) => ({
       provider,
       link: mockExternalLinks.find((l) => l.provider === provider) ?? null,
     })),
@@ -605,6 +608,7 @@ export const AUTH_API = {
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
   //#if (ExternalLogin)
   'POST /api/v1/external-auth/:provider/complete': (req: MockRequest) => externalLoginCallback(req),
+  'GET /api/v1/external-auth/providers': () => ({ providers: MOCK_EXTERNAL_PROVIDERS }),
   'GET /api/v1/external-auth/links': () => getExternalLinks(),
   'DELETE /api/v1/external-auth/links/:id': (req: MockRequest) => unlinkExternalLogin(req),
   //#endif

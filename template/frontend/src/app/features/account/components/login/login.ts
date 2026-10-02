@@ -24,6 +24,9 @@ import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
   applicationErrorMessage,
+  //#if (ExternalLogin)
+  ApplicationHttpError,
+  //#endif
 } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -97,6 +100,14 @@ export class Login {
 
   // 密码可见性
   protected readonly showPassword = signal(false);
+  //#if (ExternalLogin)
+
+  /** 部署已配置的外部登录提供商；null 表示还在加载，此时不显示任何入口。 */
+  protected readonly externalProviders = signal<readonly string[] | null>(null);
+  protected readonly externalProvidersFailed = signal(false);
+  /** 5xx 失败时带上本地化的追踪 ID，供支持人员关联服务端日志。 */
+  protected readonly externalProvidersTrace = signal<string | null>(null);
+  //#endif
 
   // 登录接口由 Mock 应答时才提示演示账号：只 Mock 了别的模块时，演示账号登不进真实后端
   public readonly isMockEnabled = signal(isMockedUrl(environment.useMock, AuthService.loginUrl));
@@ -138,6 +149,9 @@ export class Login {
 
     // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
     void this.resolveTenantFromHost();
+    //#if (ExternalLogin)
+    this.loadExternalProviders();
+    //#endif
   }
 
   /**
@@ -398,6 +412,32 @@ export class Login {
   }
   //#if (ExternalLogin)
 
+  /** 读取已配置的提供商。失败单独提示并可重试，不当作"未配置"；本地登录不受影响。 */
+  protected loadExternalProviders(): void {
+    this.externalProvidersFailed.set(false);
+    this.externalProvidersTrace.set(null);
+    this.accountService.getExternalLoginProviders().subscribe({
+      next: (result) => this.externalProviders.set(result.providers),
+      error: (error: unknown) => {
+        this.externalProvidersTrace.set(
+          error instanceof ApplicationHttpError && error.status >= 500 && error.traceId
+            ? `${error.traceIdLabel}: ${error.traceId}`
+            : null,
+        );
+        this.externalProvidersFailed.set(true);
+      },
+    });
+  }
+
+  protected hasExternalProvider(provider: string): boolean {
+    return this.externalProviders()?.includes(provider) ?? false;
+  }
+
+  /** 页面只内置 GitHub、Google 入口；目录里只有其他提供商时不显示空的分隔区。 */
+  protected hasRenderableExternalProvider(): boolean {
+    return this.hasExternalProvider('github') || this.hasExternalProvider('google');
+  }
+
   loginWithGitHub() {
     this.loginWithExternalProvider('github', 'GitHub');
   }
@@ -470,5 +510,9 @@ const ENGLISH: Record<string, string> = {
     'The tenant this address points to is unavailable. Contact your administrator.',
   'account.login.tenantProbeFailed':
     'Could not determine the tenant for this address. Check your connection and try again.',
+  //#if (ExternalLogin)
+  'account.login.externalProvidersLoadFailed': 'Third-party sign-in options could not be loaded.',
+  'common.retry': 'Retry',
+  //#endif
 };
 //#endif

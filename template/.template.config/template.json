@@ -250,6 +250,7 @@
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/ExternalAuthAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IExternalAuthAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginLinkDtos.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginProvidersOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/DomainServices/ExternalAuthDomainService.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Errors/ExternalAuthErrorCodes.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Entities/ExternalLoginConnection.cs",

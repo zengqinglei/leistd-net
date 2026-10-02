@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
+using AspNet.Security.OAuth.GitHub;
 using CompanyName.ProjectName.Domain.Auth.Abstractions;
 using CompanyName.ProjectName.Application.Shared;
 using Microsoft.AspNetCore.Authentication.OAuth;
@@ -20,6 +21,10 @@ internal sealed class ExternalOAuthBackchannel : HttpMessageHandler
     public ExternalUserInfo User { get; set; } = new() { ProviderId = "provider-id", ProviderAccountLabel = "provider-user", SuggestedUsername = "provider-user" };
     public string? CodeVerifier { get; private set; }
     public bool EmailsUnavailable { get; set; }
+    /// <summary>GitHub 资料里不公开邮箱（返回 null），只能经 /user/emails 取得。</summary>
+    public bool PublicEmailHidden { get; set; }
+    /// <summary>GitHub 的主邮箱与公开邮箱不同时使用；为空则与 <see cref="ExternalUserInfo.Email"/> 相同。</summary>
+    public string? PrimaryEmail { get; set; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -37,14 +42,14 @@ internal sealed class ExternalOAuthBackchannel : HttpMessageHandler
         if (request.RequestUri.AbsolutePath.EndsWith("emails", StringComparison.Ordinal))
             return new HttpResponseMessage(EmailsUnavailable ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(new[] { new { email = User.Email, primary = true, verified = User.EmailVerified } })
+                Content = JsonContent.Create(new[] { new { email = PrimaryEmail ?? User.Email, primary = true, verified = User.EmailVerified } })
             };
         return new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(new
             {
                 id = User.ProviderId, login = User.SuggestedUsername ?? User.ProviderAccountLabel,
-                email = User.Email, name = User.DisplayName, avatar_url = User.AvatarUrl,
+                email = PublicEmailHidden ? null : User.Email, name = User.DisplayName, avatar_url = User.AvatarUrl,
                 sub = User.ProviderId, email_verified = User.EmailVerified, picture = User.AvatarUrl
             })
         };
@@ -60,7 +65,7 @@ internal sealed class ExternalOAuthBackchannel : HttpMessageHandler
             }
             builder.ConfigureTestServices(services =>
             {
-                services.Configure<OAuthOptions>(AuthenticationSchemeNames.ExternalProviderPrefix + "github", Configure);
+                services.Configure<GitHubAuthenticationOptions>(AuthenticationSchemeNames.ExternalProviderPrefix + "github", Configure);
                 services.Configure<GoogleOptions>(AuthenticationSchemeNames.ExternalProviderPrefix + "google", Configure);
                 void Configure(OAuthOptions options)
                 {

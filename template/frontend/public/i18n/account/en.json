@@ -149,6 +149,7 @@
     "welcomeBack": "Welcome back!",
     "loginFailed": "Sign-in failed",
     "externalLoginFailed": "Unable to connect to the {{provider}} sign-in service, please try again later",
+    "externalProvidersLoadFailed": "Third-party sign-in options could not be loaded.",
     "badgeReadyMain": "Ready",
     "badgeReadySub": "to use",
     "tenant": "Tenant",

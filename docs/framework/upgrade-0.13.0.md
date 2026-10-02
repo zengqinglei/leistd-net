@@ -640,3 +640,20 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
 - Google UserInfo 改用官方 v3 的 sub/email_verified；旧 id→sub 真实账号连续性尚未验证，已有外部账号连接迁移须先实测。绑定列表字段 providerAccountLabel 的既有改名同前节。
 
 完整当前契约见 [模板浏览器认证维护规则](../template/browser-authentication.md)。
+
+## 24. 会话 Cookie 前缀、GitHub 处理器与跨源写请求
+
+- **会话 Cookie 改名（三种形态都受影响）**：非 Development 环境的会话 Cookie 名改为 `__Host-Http-<项目名>.Auth`，
+  显式 `Path=/`、不带 Domain、Secure=Always；Development 保持 `<项目名>.Auth` 与 SameAsRequest，以便 HTTP 同源调试。
+  升级后所有已登录用户须重新登录。旧缓存票据不会因改名而撤销，旧版本实例在票据过期前仍会接受旧 Cookie，
+  因此滚动部署须一次切完，不要让新旧版本同时对外服务。部署代理若按 Cookie 名转发或剥离，要同步改名；
+  对外源必须是 HTTPS，且不能通过把站点挂在子路径下来改 Path（`__Host-` 前缀要求 `Path=/`）。
+- **GitHub 改用 aspnet-contrib 处理器**：`AddOAuth` 换成 `AspNet.Security.OAuth.GitHub` 的 `AddGitHub`，回调地址不变。
+  派生项目若用 `Configure<OAuthOptions>(…"github", …)` 定制 github scheme，要改为
+  `Configure<GitHubAuthenticationOptions>`：命名选项按类型区分，旧写法会静默不生效。
+  处理器自带的邮箱补取已关闭（`UserEmailsEndpoint = string.Empty`），它只返回地址、不返回 verified，
+  且失败会中断登录。主邮箱是否已验证仍由模板在 `OnCreatingTicket` 中查询；查询失败时降级为不按邮箱关联。
+- **新增匿名 `GET /api/v1/external-auth/providers`**：返回已登记的提供商标识，登录页据此渲染入口，
+  未配置的提供商不再显示按钮。
+- **跨源写请求更严格**：`/api` 下不带 Authorization 头的写请求如果没有 Origin，`Sec-Fetch-Site` 为
+  `cross-site` 或 `same-site` 时返回 403。依赖同站其他子域无 Origin 提交的派生前端要改为同源；非浏览器调用不受影响。

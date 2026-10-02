@@ -149,6 +149,7 @@
     "welcomeBack": "欢迎回来！",
     "loginFailed": "登录失败",
     "externalLoginFailed": "无法连接到 {{provider}} 登录服务，请稍后重试",
+    "externalProvidersLoadFailed": "第三方登录方式加载失败。",
     "badgeReadyMain": "开箱",
     "badgeReadySub": "即用",
     "tenant": "租户",

@@ -214,7 +214,7 @@ try
                 handler.UseScopedHandler<CompanyName.ProjectName.Api.Auth.TokenExchangeExpirationHandler>()
                     .SetOrder(OpenIddict.Server.OpenIddictServerHandlers.PrepareIssuedTokenPrincipal.Descriptor.Order + 1));
 
-            // 资源服务需要直接验证 access token。
+            // 跨服务用签名 JWT：资源服务经 discovery/JWKS 验签，无需分发解密密钥；claim 对持有者可读（见 api.md 认证小节）。
             options.DisableAccessTokenEncryption();
 
             options.RegisterScopes(oauthScopes.Select(scope => scope.Name).ToArray());
@@ -509,7 +509,10 @@ try
         var isDevelopmentEnvironment = builder.Environment.IsDevelopment();
 
         options.LoginPath = "/auth/login";
-        options.Cookie.Name = "CompanyName.ProjectName.Auth";
+        // 部署环境用 __Host-Http- 前缀（RFC 10017 §6.1.3.2）：浏览器只接受经 HTTPS、Path=/、不带 Domain、
+        // 由 HTTP 响应写入的这个名字。开发环境允许 HTTP 同源调试，而前缀要求 Secure，因此不带前缀。
+        options.Cookie.Name = isDevelopmentEnvironment ? "CompanyName.ProjectName.Auth" : "__Host-Http-CompanyName.ProjectName.Auth";
+        options.Cookie.Path = "/";
         options.Cookie.HttpOnly = true;
         options.Cookie.SecurePolicy = isDevelopmentEnvironment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         options.Cookie.IsEssential = true;
@@ -558,7 +561,9 @@ try
             ? OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme : AuthenticationSchemeNames.SessionCookie)
     .AddCookie(AuthenticationSchemeNames.SessionCookie, options =>
     {
-        options.Cookie.Name = "CompanyName.ProjectName.Auth";
+        // 前缀取舍同 LocalIdentity 的会话 Cookie。
+        options.Cookie.Name = builder.Environment.IsDevelopment() ? "CompanyName.ProjectName.Auth" : "__Host-Http-CompanyName.ProjectName.Auth";
+        options.Cookie.Path = "/";
         options.Cookie.HttpOnly = true;
         options.Cookie.IsEssential = true;
         options.Cookie.SameSite = resourceCookie.SameSite ?? SameSiteMode.Lax;

@@ -41,7 +41,7 @@ public sealed class ExternalAuthenticationTests
         client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
         using var complete = await client.PostAsJsonAsync($"/api/v1/external-auth/{provider}/complete", new { });
         Assert.True(complete.IsSuccessStatusCode, await complete.Content.ReadAsStringAsync());
-        var setCookie = complete.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("CompanyName.ProjectName.Auth=", StringComparison.Ordinal));
+        var setCookie = complete.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal));
         var value = Uri.UnescapeDataString(setCookie.Split(';', 2)[0].Split('=', 2)[1]);
         var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(AuthenticationSchemeNames.SessionCookie);
         var reference = options.TicketDataFormat.Unprotect(value);
@@ -85,8 +85,72 @@ public sealed class ExternalAuthenticationTests
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("ExternalAuth:AccountExistsSignInToLink", problem.GetProperty("code").GetString());
         Assert.False(response.Headers.TryGetValues("Set-Cookie", out var cookies) &&
-            cookies.Any(value => value.StartsWith("CompanyName.ProjectName.Auth=", StringComparison.Ordinal)));
+            cookies.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal)));
 
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GitHub_links_by_the_verified_primary_email_rather_than_the_public_profile_email(bool publicEmailHidden)
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var backchannel = new ExternalOAuthBackchannel
+        {
+            User = new ExternalUserInfo { ProviderId = "primary-mapping", ProviderAccountLabel = "primary", SuggestedUsername = "primary",
+                Email = "public@elsewhere.test", EmailVerified = true },
+            PrimaryEmail = "admin@companyname-projectname.com", PublicEmailHidden = publicEmailHidden
+        };
+        using var host = backchannel.CreateHost(factory);
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+            (await db.Set<User>().SingleAsync(user => user.Username == "admin")).ConfirmEmail();
+            await db.SaveChangesAsync();
+        }
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var flow = await ExternalOAuthBackchannel.StartAsync(client);
+        client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
+        using var response = await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var signedIn = ProjectWebApplicationFactory.CreateProjectClient(host);
+        signedIn.DefaultRequestHeaders.Add("Cookie", ExternalOAuthBackchannel.Cookies(response));
+        var me = await signedIn.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal("admin", me.GetProperty("username").GetString());
+    }
+
+    [Fact]
+    public async Task GitHub_sign_in_without_a_public_email_survives_an_unavailable_email_endpoint()
+    {
+        // 处理器自带的邮箱补取失败即中断登录；关掉它之后，邮箱接口故障只让本次不按邮箱关联。
+        using var factory = new ProjectWebApplicationFactory();
+        using var backchannel = new ExternalOAuthBackchannel
+        {
+            User = new ExternalUserInfo { ProviderId = "privateuser", ProviderAccountLabel = "privateuser", SuggestedUsername = "privateuser",
+                Email = "privateuser@elsewhere.test", EmailVerified = true },
+            PublicEmailHidden = true, EmailsUnavailable = true
+        };
+        using var host = backchannel.CreateHost(factory);
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var flow = await ExternalOAuthBackchannel.StartAsync(client);
+        client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
+        using var response = await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var signedIn = ProjectWebApplicationFactory.CreateProjectClient(host);
+        signedIn.DefaultRequestHeaders.Add("Cookie", ExternalOAuthBackchannel.Cookies(response));
+        var me = await signedIn.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal("privateuser", me.GetProperty("username").GetString());
+        // 邮箱接口不可用：拿不到这个不公开的地址，账号只有系统占位邮箱。
+        Assert.NotEqual("privateuser@elsewhere.test", me.TryGetProperty("email", out var email) ? email.GetString() : null);
+    }
+
+    [Fact]
+    public async Task The_provider_directory_is_public_and_empty_without_configured_providers()
+    {
+        using var factory = new ProjectWebApplicationFactory();
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(factory);
+        var directory = await client.GetFromJsonAsync<JsonElement>("/api/v1/external-auth/providers");
+        Assert.Empty(directory.GetProperty("providers").EnumerateArray());
     }
 
     [Theory]
@@ -141,7 +205,7 @@ public sealed class ExternalAuthenticationTests
         client.DefaultRequestHeaders.Add("Cookie", flow.Cookie);
         using var response = await client.PostAsJsonAsync("/api/v1/external-auth/github/complete", new { });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.False(response.Headers.TryGetValues("Set-Cookie", out var values) && values.Any(value => value.StartsWith("CompanyName.ProjectName.Auth=")));
+        Assert.False(response.Headers.TryGetValues("Set-Cookie", out var values) && values.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")));
     }
 
     [Theory]
@@ -191,8 +255,8 @@ public sealed class ExternalAuthenticationTests
         using var secondStep = await client.PostAsJsonAsync("/api/v1/auth/two-factor",
             new { Token = result.RootElement.GetProperty("twoFactorToken").GetString(), Code = code });
         Assert.True(secondStep.IsSuccessStatusCode, await secondStep.Content.ReadAsStringAsync());
-        Assert.Contains(secondStep.Headers.GetValues("Set-Cookie"), value => value.StartsWith("CompanyName.ProjectName.Auth=", StringComparison.Ordinal));
-        Assert.DoesNotContain(complete.Headers.GetValues("Set-Cookie"), value => value.StartsWith("CompanyName.ProjectName.Auth=", StringComparison.Ordinal));
+        Assert.Contains(secondStep.Headers.GetValues("Set-Cookie"), value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal));
+        Assert.DoesNotContain(complete.Headers.GetValues("Set-Cookie"), value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -247,7 +311,7 @@ public sealed class ExternalAuthenticationTests
         Assert.Equal(HttpStatusCode.OK, callback.StatusCode);
 
         var authCookie = callback.Headers.GetValues("Set-Cookie")
-            .Single(value => value.StartsWith("CompanyName.ProjectName.Auth=", StringComparison.Ordinal))
+            .Single(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=", StringComparison.Ordinal))
             .Split(';', 2)[0];
         using var sessionClient = ProjectWebApplicationFactory.CreateProjectClient(host);
         sessionClient.DefaultRequestHeaders.Add("Cookie", authCookie);
@@ -357,6 +421,10 @@ public sealed class ExternalAuthenticationTests
                         return Task.CompletedTask;
                     };
                 })));
+        using var anonymous = ProjectWebApplicationFactory.CreateProjectClient(host);
+        var directory = await anonymous.GetFromJsonAsync<JsonElement>("/api/v1/external-auth/providers");
+        Assert.Equal(new[] { "custom", "github", "google" }, directory.GetProperty("providers").EnumerateArray()
+            .Select(item => item.GetString()).ToArray());
         using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
         var links = await admin.Client.GetFromJsonAsync<JsonElement>("/api/v1/external-auth/links");
         Assert.Equal(new[] { "custom", "github", "google" }, links.GetProperty("providers").EnumerateArray()
@@ -436,9 +504,9 @@ public sealed class ExternalAuthenticationTests
             using var second = await browser.PostAsJsonAsync("/api/v1/auth/two-factor",
                 new { Token = result.GetProperty("twoFactorToken").GetString(), Code = code });
             Assert.True(second.IsSuccessStatusCode, await second.Content.ReadAsStringAsync());
-            cookie = second.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("CompanyName.ProjectName.Auth=")).Split(';')[0];
+            cookie = second.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")).Split(';')[0];
         }
-        else cookie = completed.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("CompanyName.ProjectName.Auth=")).Split(';')[0];
+        else cookie = completed.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")).Split(';')[0];
         browser.DefaultRequestHeaders.Remove("Cookie");
         browser.DefaultRequestHeaders.Add("Cookie", cookie);
         using var authorized = await browser.GetAsync(result.GetProperty("returnUrl").GetString());

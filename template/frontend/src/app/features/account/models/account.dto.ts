@@ -123,6 +123,12 @@ export interface ChangePasswordInputDto {
 }
 //#if (ExternalLogin)
 
+/** 部署已配置的外部登录提供商。 */
+export interface ExternalLoginProvidersOutputDto {
+  /** 提供商标识（`github`、`google`），按名称排序。 */
+  providers: string[];
+}
+
 /** 本人的外部账号绑定情况。 */
 export interface ExternalLoginsOutputDto {
   /** 是否设有密码；没有时最后一个绑定不能解绑。 */

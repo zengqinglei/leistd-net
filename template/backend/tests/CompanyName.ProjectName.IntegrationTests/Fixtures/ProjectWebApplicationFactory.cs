@@ -45,6 +45,28 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     /// </remarks>
     public const string TestAdminPassword = "IntegrationTests!Adm1n";
 
+    /// <summary>
+    /// 测试宿主（非 Development 环境）的会话 Cookie 名。写明期望值而不是读取实现的配置，
+    /// 前缀一旦被改掉，所有取会话 Cookie 的用例都会失败。
+    /// </summary>
+    public const string SessionCookieName = "__Host-Http-CompanyName.ProjectName.Auth";
+
+    /// <summary>
+    /// 校验签发会话 Cookie 的 Set-Cookie 满足 <c>__Host-Http-</c> 前缀的全部条件：
+    /// 浏览器对不满足的同名 Cookie 直接丢弃，只看名字测不出来。
+    /// </summary>
+    public static string AssertSessionCookieContract(HttpResponseMessage response)
+    {
+        var header = response.Headers.GetValues("Set-Cookie")
+            .Single(value => value.StartsWith(SessionCookieName + "=", StringComparison.Ordinal));
+        var attributes = header.Split(';').Skip(1).Select(part => part.Trim().ToLowerInvariant()).ToArray();
+        Assert.Contains("secure", attributes);
+        Assert.Contains("httponly", attributes);
+        Assert.Contains("path=/", attributes);
+        Assert.DoesNotContain(attributes, attribute => attribute.StartsWith("domain=", StringComparison.Ordinal));
+        return header.Split(';', 2)[0];
+    }
+
 #if (RemoteTokenAuth)
     // 协议测试保留生产认证与自然人策略，其他业务用例使用专用主体替身。
     internal bool UseProductionAuthentication { get; init; }

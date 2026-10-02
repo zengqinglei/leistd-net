@@ -46,6 +46,7 @@
 
   <ItemGroup>
 <!--#if (ExternalLogin)-->
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" />
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->

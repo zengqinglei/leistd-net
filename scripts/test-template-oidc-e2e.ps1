@@ -7,7 +7,8 @@
     运行 S2–S8、S10；生成项目、隔离包源、日志和临时凭据位于 .tmp/oidc-e2e/<run>。
     依赖 PowerShell 7、.NET 10 SDK 和 Docker，不依赖 Python、OpenSSL 或宿主 psql。
     默认不等待真实十分钟过期；-IncludeExpiryWait 执行完整撤销到期边界。
-    浏览器与变异证据保留在评审报告，不属于此 CI 入口。
+    -IncludeBrowserScenarios 追加有头浏览器 S1/S9/S11 与官方外部登录协议闭环。
+    -BrowserOnly 只运行浏览器场景，不重复 HTTP 场景；另需 Node.js、npm 与 agent-browser。
 .PARAMETER DockerContext
     显式 Docker 上下文；其次使用 DOCKER_CONTEXT。未指定时本机优先 windows/orbstack，
     Linux 使用当前上下文，并可回落 default。不切换全局上下文。
@@ -18,9 +19,12 @@ param(
     [switch]$SkipPack,
     [string]$LocalFeedPath,
     [string]$DockerContext,
-    [switch]$IncludeExpiryWait
+    [switch]$IncludeExpiryWait,
+    [switch]$IncludeBrowserScenarios,
+    [switch]$BrowserOnly
 )
 
+$IncludeBrowserScenarios = $IncludeBrowserScenarios -or $BrowserOnly
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -91,7 +95,7 @@ function New-ProcessInfo([string]$Command, [string[]]$Arguments, [string]$Workin
 function Invoke-Tool(
     [string]$Command, [string[]]$Arguments, [string]$Log,
     [string]$WorkingDirectory = $repoRoot, [hashtable]$Variables = @{},
-    [string]$StandardInput = "", [switch]$AllowFailure
+    [string]$StandardInput = "", [switch]$AllowFailure, [int]$TimeoutSeconds = 0
 ) {
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = New-ProcessInfo $Command $Arguments $WorkingDirectory $Variables
@@ -101,6 +105,9 @@ function Invoke-Tool(
         $stderrTask = $process.StandardError.ReadToEndAsync()
         if ($StandardInput) { $process.StandardInput.Write($StandardInput) }
         $process.StandardInput.Close()
+        if ($TimeoutSeconds -gt 0 -and -not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            $process.Kill($true)
+        }
         $process.WaitForExit()
         $stdout = $stdoutTask.GetAwaiter().GetResult()
         $stderr = $stderrTask.GetAwaiter().GetResult()
@@ -207,8 +214,15 @@ function Read-ApiLog([string]$Name, [hashtable]$Offsets = @{ Stdout = 0; Stderr 
     return $stdout.Substring($Offsets.Stdout) + "`n" + $stderr.Substring($Offsets.Stderr)
 }
 
+# 浏览器模式全程 HTTPS，以部署环境运行，让真实浏览器验证 __Host-Http- 会话 Cookie；
+# 纯 HTTP 模式的签发方是 http 地址，只能以 Development 运行（不要求 HTTPS 元数据、Cookie 不带前缀）。
+$serviceEnvironment = if ($IncludeBrowserScenarios) { "Production" } else { "Development" }
+function Get-SessionCookieName([string]$Title) {
+    if ($serviceEnvironment -eq "Development") { "E2E.$Title.Auth" } else { "__Host-Http-E2E.$Title.Auth" }
+}
+
 function New-HttpSession([switch]$Cookies) {
-    $handler = [Net.Http.HttpClientHandler]::new()
+    $handler = if ($IncludeBrowserScenarios) { [OidcBrowserTls]::CreateHandler($browserCertificateThumbprint) } else { [Net.Http.HttpClientHandler]::new() }
     $handler.AllowAutoRedirect = $false
     $handler.UseCookies = $Cookies.IsPresent
     $client = [Net.Http.HttpClient]::new($handler)
@@ -431,12 +445,14 @@ internal static class E2EFixtureRegistration
     [IO.File]::WriteAllText((Join-Path $ApiDirectory "E2EFixtureRegistration.cs"), $fixtureRegistration, $utf8)
     [IO.File]::WriteAllText((Join-Path $ApiDirectory "E2EProbeController.cs"), $probeSource.Replace("__NAME__", $title), $utf8)
     if ($Name -eq "idp") { [IO.File]::WriteAllText((Join-Path $ApiDirectory "FixtureTokenController.cs"), $signerSource, $utf8) }
+    if ($IncludeBrowserScenarios) { Add-BrowserFixture $Name $ApiDirectory }
     # 唯一模板文本锚点；重复或缺失都失败，不能静默漏装探针管道。
     $programPath = Join-Path $ApiDirectory "Program.cs"
     $content = [IO.File]::ReadAllText($programPath)
     $anchor = "var app = builder.Build();"
     if ([regex]::Matches($content, [regex]::Escape($anchor)).Count -ne 1) { throw "$Name 的 Program.cs 组合根锚点必须恰好出现一次。" }
-    $injection = "E2E.$title.Api.E2EFixtureRegistration.AddE2EFixtures(builder.Services, builder.Configuration);`n    $anchor"
+    $browserRegistration = if ($IncludeBrowserScenarios) { "E2E.$title.Api.BrowserFixtureRegistration.Add(builder.Services, builder.Configuration);`n    " } else { "" }
+    $injection = "E2E.$title.Api.E2EFixtureRegistration.AddE2EFixtures(builder.Services, builder.Configuration);`n    $browserRegistration$anchor"
     [IO.File]::WriteAllText($programPath, $content.Replace($anchor, $injection), $utf8)
 }
 
@@ -625,6 +641,9 @@ function Test-PostgresqlPruning {
 
 function Initialize-Environment {
     Write-Host "Artifacts: $runRoot"
+    if ($IncludeBrowserScenarios) {
+        foreach ($tool in @('npm', 'agent-browser')) { Get-Command $tool -CommandType Application -ErrorAction Stop | Select-Object -First 1 | Out-Null }
+    }
     $script:context = Select-DockerContext
     $script:hadImage = (Invoke-Docker @("image", "inspect", $image) -AllowFailure).ExitCode -eq 0
     if (-not $hadImage) { Invoke-Docker @("pull", $image) | Out-Null }
@@ -658,7 +677,8 @@ function Initialize-Environment {
     foreach ($purpose in @("signing", "encryption")) { New-TestCertificate $purpose }
     foreach ($name in @("postgres", "idp", "orders", "billing", "solo")) {
         $ports[$name] = Get-FreeTcpPort
-        $urls[$name] = "http://127.0.0.1:$($ports[$name])"
+        $scheme = if ($IncludeBrowserScenarios -and $name -ne "postgres") { "https" } else { "http" }
+        $urls[$name] = "${scheme}://127.0.0.1:$($ports[$name])"
     }
     $script:issuer = $urls.idp + "/"
     # HTTP 用例不启动前端，但公共应用仍登记真实源格式的回调。
@@ -668,8 +688,12 @@ function Initialize-Environment {
         $name, $role = $definition
         $title = [Globalization.CultureInfo]::InvariantCulture.TextInfo.ToTitleCase($name)
         $generated = Join-Path $runRoot "generated/$name"
-        $arguments = @("new", "--debug:custom-hive", $hive, "fullstack-app", "-n", "E2E.$title", "-o", $generated, "--service-role", $role, "--force")
-        if ($name -eq "idp") { $arguments += "--include-notifications" }
+        $scenario = switch ($name) {
+            "idp" { if ($IncludeBrowserScenarios) { "identity-external-login" } else { "identity-notifications" } }
+            "solo" { "standalone" }
+            default { "resource" }
+        }
+        $arguments = @("new", "--debug:custom-hive", $hive, "fullstack-app", "-n", "E2E.$title", "-o", $generated, "--force") + $scenarioMap[$scenario].Arguments
         Invoke-Tool "dotnet" $arguments "generate-$name" | Out-Null
         $apiDirectory = Join-Path $generated "backend/src/E2E.$title.Api"
         Add-FixtureRegistration $name $role $apiDirectory
@@ -677,10 +701,24 @@ function Initialize-Environment {
         Invoke-Tool "dotnet" @("restore", $solution, "--configfile", $nugetConfig, "--force") "restore-$name" | Out-Null
         Invoke-Tool "dotnet" @("build", $solution, "-c", $Configuration, "--no-restore", "-p:UseSharedCompilation=false", "-nodeReuse:false") "build-$name" | Out-Null
         $environment = @{
-            ASPNETCORE_ENVIRONMENT = "Development"; ASPNETCORE_URLS = $urls[$name]
+            ASPNETCORE_ENVIRONMENT = $serviceEnvironment; ASPNETCORE_URLS = $urls[$name]
             ConnectionStrings__Redis = ""; DataProtection__KeysPath = (Join-Path $runRoot "keys-$name")
             DefaultAdmin__Username = "admin"; DefaultAdmin__Password = $adminPassword
             VerificationCodes__Key = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+        }
+        if ($IncludeBrowserScenarios) {
+            $environment.ASPNETCORE_Kestrel__Certificates__Default__Path = Join-Path $runRoot "browser-tls.pfx"
+            $environment.E2E__CertificateThumbprint = $browserCertificateThumbprint
+            $environment.E2E__BrowserSecret = $browserFixtureSecret
+            $environment.E2E__EvidenceDirectory = $runRoot
+            if ($name -eq "idp") {
+                $environment.E2E__ProviderOrigin = $urls.idp
+                foreach ($provider in @("Google", "Github")) {
+                    $environment["ExternalAuth__${provider}__ClientId"] = "browser-fixture-$provider"
+                    $environment["ExternalAuth__${provider}__ClientSecret"] = $browserFixtureSecret
+                }
+                if ($BrowserOnly) { $environment.E2E__BrowserAccessTokenSeconds = "90" }
+            }
         }
         if ($role -eq "Identity") {
             $environment.OAuth__Issuer = $issuer
@@ -699,6 +737,7 @@ function Initialize-Environment {
             $environment.Leistd__ServiceAuth__Authority = $urls.idp
             $environment.TenantRouting__CacheLifetime = "00:00:01"
         }
+        if ($IncludeBrowserScenarios -and $name -in @("idp", "orders")) { Build-BrowserFrontend $name $generated $apiDirectory }
         $services[$name] = @{
             Root = $generated; Environment = $environment
             Api = Join-Path $apiDirectory "bin/$Configuration/net10.0/E2E.$title.Api.dll"
@@ -844,7 +883,7 @@ function Test-BrowserSession {
     $callback = Assert-Http "resource-browser-callback" 302 ($urls.orders + "/api/v1/auth/signin") -Method POST `
         -Body (ConvertTo-Form $form) -Headers @{ Cookie = $correlation }
     Assert-Value "browser-return-url" "/workspace" $callback.Location
-    $cookie = ($callback.Cookies | Where-Object { $_.StartsWith("E2E.Orders.Auth=") } | ForEach-Object { $_.Split(';')[0] }) -join "; "
+    $cookie = ($callback.Cookies | Where-Object { $_.StartsWith((Get-SessionCookieName "Orders") + "=") } | ForEach-Object { $_.Split(';')[0] }) -join "; "
     if (-not $cookie) { throw "OIDC callback created no reference cookie." }
     $me = (Assert-Http "resource-browser-me" 200 ($urls.orders + "/api/v1/auth/me") -Headers @{ Cookie = $cookie }).Data
     $claims = Read-TokenClaims $sharedToken
@@ -1073,12 +1112,17 @@ function Invoke-Scenario([string]$Name, [scriptblock]$Action) {
     Write-JsonFile (Join-Path $runRoot "results.json") $results.ToArray()
 }
 
+# 共用矩阵事实；浏览器辅助文件只被本入口加载，不另建场景生成清单。
+. (Join-Path $PSScriptRoot "template-matrix-scenarios.ps1")
+if ($IncludeBrowserScenarios) { . (Join-Path $PSScriptRoot "test-template-oidc-browser.ps1") }
 $postgresPassword = New-RandomValue "Pg!1"
 $adminPassword = New-RandomValue "Adm!1"
 $tenantPassword = New-RandomValue "Tnt!1"
+if ($IncludeBrowserScenarios) { Initialize-BrowserCertificate }
 $http = New-HttpSession
 try {
     Initialize-Environment
+    if (-not $BrowserOnly) {
     Invoke-Scenario "postgresql-pruning" { Test-PostgresqlPruning }
     Invoke-Scenario "S2" { Test-S2 }
     Invoke-Scenario "S3" { Test-S3 }
@@ -1093,12 +1137,15 @@ try {
         Assert-Http "exchanged-jwt-expired" 401 ($urls.billing + "/api/e2e/natural") -Token $delegatedExpiryToken | Out-Null
     }
     Invoke-Scenario "S7" { Test-S7 }
+    }
+    if ($IncludeBrowserScenarios) { Invoke-BrowserScenarios }
 }
 catch {
     $results.Add(@{ scenario = "setup"; status = "fail"; error = $_.Exception.Message })
     Write-Host $_.Exception.Message -ForegroundColor Red
 }
 finally {
+    if ($IncludeBrowserScenarios) { Close-BrowserFixtures }
     foreach ($name in @($processes.Keys)) {
         try { Stop-Api $name }
         catch { $cleanupErrors.Add("进程 $name 清理失败：$($_.Exception.Message)") }
@@ -1116,4 +1163,4 @@ finally {
 if ($cleanupErrors.Count -gt 0 -or @($results | Where-Object { $_.status -eq "fail" }).Count -gt 0) {
     throw "OIDC E2E 失败，见 $runRoot/results.json 和 cleanup.json。"
 }
-Write-Host "OIDC E2E passed: S2–S8、S10、Token Exchange（可选十分钟过期等待见跳过记录）。" -ForegroundColor Green
+Write-Host "OIDC E2E passed: $(@($results | ForEach-Object { $_.scenario }) -join ", ")." -ForegroundColor Green

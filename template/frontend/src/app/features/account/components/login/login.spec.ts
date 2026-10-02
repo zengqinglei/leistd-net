@@ -1,4 +1,8 @@
+//#if (ExternalLogin)
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+//#else
 import { provideHttpClient } from '@angular/common/http';
+//#endif
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -10,6 +14,9 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { Observable, of, throwError } from 'rxjs';
 
 import { Login } from './login';
+//#if (ExternalLogin)
+import { ApplicationHttpError } from '../../../../core/errors/application-http-error';
+//#endif
 import { permissionGuard } from '../../../../core/guards/permission-guard';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing';
@@ -32,6 +39,7 @@ import { PERMISSIONS } from '../../../../shared/models/permission';
 import { TenantService } from '../../../platform/services/tenant-service';
 //#endif
 //#if (ExternalLogin)
+import { ExternalLoginProvidersOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 //#endif
 
@@ -61,6 +69,10 @@ describe('Login', () => {
   //#if (LocalIdentity)
   // 主机名探测的返回值。默认"域名不表态"，与本机开发一致；租户相关用例逐个覆盖它。
   let byHost: Observable<TenantByHostOutputDto>;
+  //#endif
+  //#if (ExternalLogin)
+  // 部署已配置的提供商。每次读取时取当前值，重试用例在两次请求之间换掉它。
+  let externalProviders: Observable<ExternalLoginProvidersOutputDto>;
   //#endif
 
   async function setUp(): Promise<void> {
@@ -107,6 +119,11 @@ describe('Login', () => {
     authorization = TestBed.inject(AuthorizationService);
     vi.spyOn(TestBed.inject(SessionContextService), 'establish').mockResolvedValue();
     vi.spyOn(TestBed.inject(SessionContextService), 'clear');
+    //#if (ExternalLogin)
+    vi.spyOn(TestBed.inject(AccountService), 'getExternalLoginProviders').mockImplementation(
+      () => externalProviders,
+    );
+    //#endif
 
     //#if (IncludeLocalization)
     // 与应用启动和路由解析器相同：组件创建前语言与功能词条必须已就位。
@@ -143,6 +160,9 @@ describe('Login', () => {
     //#if (LocalIdentity)
     byHost = of({ decision: 'undecided' as const });
     localStorage.clear();
+    //#endif
+    //#if (ExternalLogin)
+    externalProviders = of({ providers: ['github', 'google'] });
     //#endif
   });
   //#if (LocalIdentity)
@@ -596,6 +616,94 @@ describe('Login', () => {
       await component.onConfirmTenant();
 
       expect(TestBed.inject(TenantContextService).current()).toBeNull();
+    });
+  });
+  //#endif
+  //#if (ExternalLogin)
+
+  // 入口按部署实际登记的提供商渲染：固定两个按钮会让未配置的那个点进 503。
+  describe('external login entries', () => {
+    function entries(): string[] {
+      return [
+        ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+          '[data-testid^="external-login-"]',
+        ),
+      ].map((element) => element.dataset['testid']!);
+    }
+
+    it('shows no entry while the provider list is still loading', async () => {
+      externalProviders = new Observable<ExternalLoginProvidersOutputDto>(() => undefined);
+      await setUp();
+
+      expect(entries()).toEqual([]);
+    });
+
+    it.each([
+      [[], []],
+      // 页面只内置两种入口；派生项目登记的其他提供商要自行补入口，此时不留空分隔区。
+      [['custom'], []],
+      [['github'], ['external-login-github']],
+      [['google'], ['external-login-google']],
+      [
+        ['github', 'google'],
+        ['external-login-github', 'external-login-google'],
+      ],
+    ])('renders exactly the configured providers %j', async (providers, expected) => {
+      externalProviders = of({ providers });
+      await setUp();
+
+      expect(entries()).toEqual(expected);
+    });
+
+    it('keeps the divider out when no built-in entry can be rendered', async () => {
+      externalProviders = of({ providers: ['custom'] });
+      await setUp();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="external-divider"]'),
+      ).toBeNull();
+    });
+
+    it('shows the trace ID of a failed provider list and clears it on retry', async () => {
+      externalProviders = throwError(() =>
+        ApplicationHttpError.from(
+          new HttpErrorResponse({
+            status: 503,
+            error: { status: 503, title: 'Service Unavailable', traceId: '00-trace-01' },
+          }),
+        ),
+      );
+      await setUp();
+
+      const trace = () =>
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="external-login-trace"]',
+        );
+      expect(trace()?.textContent?.trim()).toBe('Trace ID: 00-trace-01');
+
+      externalProviders = of({ providers: ['google'] });
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('[data-testid="external-login-retry"]')!
+        .click();
+      fixture.detectChanges();
+
+      expect(trace()).toBeNull();
+      expect(entries()).toEqual(['external-login-google']);
+    });
+
+    it('reports a failed provider list instead of treating it as unconfigured, and retries', async () => {
+      externalProviders = throwError(() => new Error('unavailable'));
+      await setUp();
+
+      expect(entries()).toEqual(['external-login-retry']);
+
+      externalProviders = of({ providers: ['github'] });
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('[data-testid="external-login-retry"]')!
+        .click();
+      fixture.detectChanges();
+
+      expect(entries()).toEqual(['external-login-github']);
     });
   });
   //#endif

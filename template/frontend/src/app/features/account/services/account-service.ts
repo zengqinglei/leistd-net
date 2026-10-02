@@ -14,6 +14,7 @@ import { UserOutputDto } from '../../../shared/dtos/auth.dto';
 import {
   ChangePasswordInputDto,
   //#if (ExternalLogin)
+  ExternalLoginProvidersOutputDto,
   ExternalLoginsOutputDto,
   //#endif
   RegisterInputDto,
@@ -138,6 +139,11 @@ export class AccountService {
     return this.http.post<number>('/api/v1/auth/me/sessions/revoke-others', {});
   }
   //#if (ExternalLogin)
+
+  /** 部署已配置的外部登录提供商；登录页据此决定显示哪些入口。 */
+  getExternalLoginProviders(): Observable<ExternalLoginProvidersOutputDto> {
+    return this.http.get<ExternalLoginProvidersOutputDto>('/api/v1/external-auth/providers');
+  }
 
   /** 本人的外部账号绑定情况。 */
   getExternalLogins(): Observable<ExternalLoginsOutputDto> {

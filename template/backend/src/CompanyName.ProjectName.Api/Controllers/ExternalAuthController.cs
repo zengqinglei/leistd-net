@@ -103,16 +103,27 @@ public sealed class ExternalAuthController(
         return Ok(session with { ReturnUrl = Read("external.returnUrl") });
     }
 
+    /// <summary>登录页据此渲染入口；与 challenge、links 读同一份已登记的提供商目录。</summary>
+    [AllowAnonymous]
+    [HttpGet("providers")]
+    public async Task<ExternalLoginProvidersOutputDto> GetProvidersAsync() =>
+        new() { Providers = await ProviderNamesAsync() };
+
     [Authorize]
     [HttpGet("links")]
     public async Task<ExternalLoginsOutputDto> GetLinksAsync(CancellationToken cancellationToken) =>
-        await externalAuthAppService.GetCurrentUserExternalLoginsAsync(
-            (await ExternalSchemesAsync()).Select(scheme => scheme.Name[AuthenticationSchemeNames.ExternalProviderPrefix.Length..]), cancellationToken);
+        await externalAuthAppService.GetCurrentUserExternalLoginsAsync(await ProviderNamesAsync(), cancellationToken);
 
     private async Task<IEnumerable<AuthenticationScheme>> ExternalSchemesAsync() =>
         (await schemes.GetAllSchemesAsync()).Where(scheme =>
             scheme.Name.StartsWith(AuthenticationSchemeNames.ExternalProviderPrefix, StringComparison.Ordinal) &&
             typeof(IAuthenticationRequestHandler).IsAssignableFrom(scheme.HandlerType));
+
+    private async Task<IReadOnlyList<string>> ProviderNamesAsync() =>
+        (await ExternalSchemesAsync())
+            .Select(scheme => scheme.Name[AuthenticationSchemeNames.ExternalProviderPrefix.Length..])
+            .Order(StringComparer.Ordinal)
+            .ToList();
 
     [Authorize]
     [HttpDelete("links/{id:guid}")]

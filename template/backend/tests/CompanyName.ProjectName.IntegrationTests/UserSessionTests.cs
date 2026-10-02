@@ -8,6 +8,7 @@ using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.BackgroundJobs.Recurring;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.UnitOfWork;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -21,6 +22,26 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// </remarks>
 public sealed class UserSessionTests(ProjectWebApplicationFactory factory) : IClassFixture<ProjectWebApplicationFactory>
 {
+    [Fact]
+    public async Task Deployed_session_cookie_carries_the_host_http_prefix_and_its_attributes()
+    {
+        using var client = ProjectWebApplicationFactory.CreateProjectClient(factory);
+        using var response = await client.PostAsJsonAsync("/api/v1/auth/session-login",
+            new { UsernameOrEmail = "admin", Password = ProjectWebApplicationFactory.TestAdminPassword });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        ProjectWebApplicationFactory.AssertSessionCookieContract(response);
+    }
+
+    [Fact]
+    public void Development_keeps_the_unprefixed_session_cookie_for_http_debugging()
+    {
+        using var host = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
+        var options = host.Services.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>()
+            .Get(CompanyName.ProjectName.Application.Shared.AuthenticationSchemeNames.SessionCookie);
+        Assert.Equal("CompanyName.ProjectName.Auth", options.Cookie.Name);
+        Assert.Equal(Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest, options.Cookie.SecurePolicy);
+    }
+
     private const string Password = "SessionTests!Passw0rd";
 
     [Fact]

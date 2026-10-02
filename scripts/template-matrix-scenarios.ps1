@@ -124,7 +124,7 @@ $scenarioMap = [ordered]@{
         Absent = @("backend/src/{name}.Api/Controllers/ConnectController.cs", "backend/src/{name}.Domain/Auth/Options/OAuthOptions.cs")
         ReadmeContains = @(); ReadmeExcludes = @()
         RequiredTokens = @{
-            "backend/src/{name}.Api/Auth/ExternalAuthenticationExtensions.cs" = @("AddGoogle", "AddOAuth", "UsePkce = true")
+            "backend/src/{name}.Api/Auth/ExternalAuthenticationExtensions.cs" = @("AddGoogle", "AddGitHub", "UsePkce = true", "UserEmailsEndpoint = string.Empty")
             "backend/src/{name}.Api/Auth/DistributedTicketStore.cs" = @("ITicketStore")
         }
         ForbiddenTokens = @("OpenIddict", "IOAuthProvider", "OAuthTokenInfo", "angular-auth-oidc-client")

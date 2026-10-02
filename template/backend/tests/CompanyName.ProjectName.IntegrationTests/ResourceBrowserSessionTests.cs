@@ -100,7 +100,7 @@ public sealed class ResourceBrowserSessionTests
         using var callback = await browser.PostAsync("/api/v1/auth/signin", new FormUrlEncodedContent(new Dictionary<string, string>
         { ["code"] = "test-code", ["state"] = query["state"].ToString() }));
         Assert.Equal(HttpStatusCode.BadRequest, callback.StatusCode);
-        Assert.False(callback.Headers.TryGetValues("Set-Cookie", out var values) && values.Any(value => value.StartsWith("CompanyName.ProjectName.Auth=")));
+        Assert.False(callback.Headers.TryGetValues("Set-Cookie", out var values) && values.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")));
         var cookie = await LoginAsync(host, issuer);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
         request.Headers.Add("Cookie", cookie);
@@ -134,7 +134,7 @@ public sealed class ResourceBrowserSessionTests
         using var response = await browser.SendAsync(request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.False(response.Headers.TryGetValues("Set-Cookie", out var issued) && issued.Any(value => value.StartsWith("CompanyName.ProjectName.Auth=")));
+        Assert.False(response.Headers.TryGetValues("Set-Cookie", out var issued) && issued.Any(value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=")));
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class ResourceBrowserSessionTests
         using var browser = Client(host, cookie);
         using var response = await browser.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Contains(response.Headers.GetValues("Set-Cookie"), value => value.StartsWith("CompanyName.ProjectName.Auth=;") && value.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(response.Headers.GetValues("Set-Cookie"), value => value.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "=;") && value.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
         if (!cleanupUnavailable) Assert.Null(await options.SessionStore.RetrieveAsync(key));
     }
 
@@ -218,7 +218,7 @@ public sealed class ResourceBrowserSessionTests
             await issuer.RefreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
         }
         await newContext.SignInAsync(AuthenticationSchemeNames.SessionCookie, newAuthentication.Principal!, newAuthentication.Properties);
-        var replacement = newContext.Response.Headers.SetCookie.Single(value => value!.StartsWith("CompanyName.ProjectName.Auth="))!.Split(';')[0];
+        var replacement = newContext.Response.Headers.SetCookie.Single(value => value!.StartsWith(ProjectWebApplicationFactory.SessionCookieName + "="))!.Split(';')[0];
         var reference = options.TicketDataFormat.Unprotect(replacement.Split('=', 2)[1])!;
         var key = reference.Principal.Claims.Single().Value;
         if (refreshFailure)
@@ -286,7 +286,7 @@ public sealed class ResourceBrowserSessionTests
         using var callback = await browser.SendAsync(request);
         Assert.True(callback.StatusCode == HttpStatusCode.Found, await callback.Content.ReadAsStringAsync());
         Assert.Equal("/workspace", callback.Headers.Location!.OriginalString);
-        return callback.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("CompanyName.ProjectName.Auth=", StringComparison.Ordinal)).Split(';')[0];
+        return ProjectWebApplicationFactory.AssertSessionCookieContract(callback);
     }
 
     private sealed class RefreshLockProbe(Leistd.Lock.Abstractions.ILocalLock inner) : Leistd.Lock.Abstractions.IDistributedLock
