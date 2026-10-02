@@ -22,8 +22,7 @@ desktop.ini
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.json
 
-# AI CLI local skill adapters
-/.claude/skills/
+# AI CLI local skill adapters（.claude/skills 是指向 .agents/skills 的链接，随仓库提交）
 /skills-lock.json
 
 # .NET

@@ -177,19 +177,13 @@ npm --prefix frontend run build
 
 项目级 [协作 Skill](.agents/skills/leistd-project-workflow/SKILL.md) 按任务加载开发、验证或环境交付 reference。[项目文档入口](docs/README.md)、源码、配置和测试提供工程事实。
 
-[Codex](https://developers.openai.com/codex/skills) 等原生发现 `.agents/skills/` 的 AI CLI 无需安装。使用只识别其他项目目录的 CLI 时，按需生成本地适配；例如项目 Skill 位于 `.claude/skills/` 的 [Claude Code](https://code.claude.com/docs/en/skills#where-skills-live) 执行：
+[Codex](https://developers.openai.com/codex/skills) 等原生发现 `.agents/skills/` 的 AI CLI 直接使用。[Claude Code](https://code.claude.com/docs/en/skills#where-skills-live) 读取 `.claude/skills/`：在项目根建一次目录链接并提交到项目仓库，此后克隆、新建工作树即可用，修改或新增 Skill 无需同步：
 
 ```bash
-npx skills add ./.agents/skills/leistd-project-workflow --agent claude-code --skill leistd-project-workflow -y
+mkdir -p .claude && ln -s ../.agents/skills .claude/skills
 ```
 
-`npx skills` 会根据平台能力选择链接或复制，并在结果中标明实际方式。需要强制复制时执行：
-
-```bash
-npx skills add ./.agents/skills/leistd-project-workflow --agent claude-code --skill leistd-project-workflow --copy -y
-```
-
-复制的适配不会自动跟随权威源更新，修改项目 Skill 后应重新执行命令。生成的 `.claude/skills/` 和 `skills-lock.json` 是本地适配产物，不提交到仓库。AI CLI 完全不支持 Skill 时，在当前会话中明确要求它先读取 `.agents/skills/leistd-project-workflow/SKILL.md`。
+Windows 需开启开发者模式并设置 `git config --global core.symlinks true`，在项目根执行 `mklink /D .claude\skills ..\.agents\skills`；未开启时检出的 `.claude/skills` 是一个文本文件，按此命令重建即可。不要用 `npx skills add ./.agents/skills --agent claude-code` 生成适配：源目录就是 `.agents/skills` 时它复制而不链接，副本不随项目 Skill 更新。AI CLI 完全不支持 Skill 时，在当前会话中明确要求它先读取 `.agents/skills/leistd-project-workflow/SKILL.md`。
 
 使用 `Leistd.*` 组件时，按 [后端说明](backend/README.md#leistd-框架-api) 定位当前 NuGet 包版本的文档和 XML，不根据模型记忆猜测 API。
 

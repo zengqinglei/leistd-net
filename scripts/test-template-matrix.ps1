@@ -236,7 +236,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     }
 
     $projectReadme = Get-Content -LiteralPath (Join-Path $ProjectRoot "README.md") -Raw -Encoding UTF8
-    foreach ($marker in @("npx skills add ./.agents/skills/leistd-project-workflow", "--agent claude-code", "--copy", "skills-lock.json")) {
+    foreach ($marker in @("ln -s ../.agents/skills .claude/skills", "mklink /D", ".agents/skills/leistd-project-workflow/SKILL.md")) {
         if (-not $projectReadme.Contains($marker)) {
             throw "Generated project README is missing AI CLI compatibility guidance: $marker"
         }
