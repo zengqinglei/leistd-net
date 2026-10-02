@@ -4,8 +4,9 @@ name: CI
 #   - docs-sync：组件文档、Skill 与引用一致性
 #   - package-consumption：NuGet 包内容与隔离消费，独立必过
 #   - framework-pack：当前候选只打包一次，以不可变 artifact 供消费与分片下载
-#   - template-shards：场景按档位均衡两片，消费同一候选包；PR 跑 pr 档子集，
-#     release 复用与手动触发默认跑 full 全集（档位归属见 scripts/template-matrix-scenarios.ps1）
+#   - template-slice-plan / template-slices：按档位读出具名分片（每片验证什么见
+#     scripts/template-matrix-scenarios.ps1 的 $MatrixSlices），每片一个作业，消费同一候选包；
+#     PR 跑 pr 档子集，release 复用与手动触发默认跑 full 全集
 #   - template-matrix：保留必过检查名，核对本档场景集合、完整阶段与包消费结果
 #   - test：框架单元测试（含真实 Redis 的分布式锁契约）
 #   - postgresql-e2e：模板在真实 PostgreSQL 上的迁移与租户隔离
@@ -58,15 +59,36 @@ jobs:
         shell: pwsh
         run: pwsh scripts/check-all.ps1
 
-  template-shards:
-    name: 模板场景分片 ${{ matrix.shard }}
-    needs: framework-pack
+  template-slice-plan:
+    name: 规划模板场景分片
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      slices: ${{ steps.plan.outputs.slices }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+          sparse-checkout: scripts
+      # 分片名与说明只维护在场景定义里，这里读出来作为 matrix，不在 workflow 重抄
+      - name: 读出本档分片
+        id: plan
+        shell: pwsh
+        run: |
+          . ./scripts/template-matrix-scenarios.ps1
+          $plannedSlices = @($MatrixSlices[$env:MATRIX_TIER].GetEnumerator() | ForEach-Object { [ordered]@{ key = $_.Key; title = $_.Value } })
+          if ($plannedSlices.Count -eq 0) { throw "档位 $env:MATRIX_TIER 没有登记分片" }
+          "slices=$(ConvertTo-Json -InputObject $plannedSlices -Compress)" | Out-File $env:GITHUB_OUTPUT -Append
+
+  template-slices:
+    name: 模板场景 · ${{ matrix.slice.title }}
+    needs: [framework-pack, template-slice-plan]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        slice: ${{ fromJSON(needs.template-slice-plan.outputs.slices) }}
     outputs:
       container_needed: ${{ steps.container_scope.outputs.needed }}
     steps:
@@ -130,12 +152,12 @@ jobs:
         run: |
           # @(...) 包住整个 if：单元素数组经 if 输出会展开成字符串，@ 展开字符串会把它拆成单个字符
           $containerArgs = @(if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { '-ContainerSmoke' })
-          pwsh scripts/test-template-matrix.ps1 -SkipPack -Tier $env:MATRIX_TIER -Shard ${{ matrix.shard }} @containerArgs
+          pwsh scripts/test-template-matrix.ps1 -SkipPack -Tier $env:MATRIX_TIER -Slice '${{ matrix.slice.key }}' @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵失败' }
       - name: 保留完整场景结果
         uses: actions/upload-artifact@v4
         with:
-          name: template-matrix-${{ matrix.shard }}
+          name: template-matrix-${{ matrix.slice.key }}
           overwrite: true
           path: ${{ steps.matrix.outputs.results_path }}
           if-no-files-found: error
@@ -188,17 +210,17 @@ jobs:
   template-matrix:
     name: 模板全场景矩阵
     runs-on: ubuntu-latest
-    needs: [template-shards, package-consumption]
+    needs: [template-slices, package-consumption]
     if: always()
     timeout-minutes: 5
     steps:
       - name: 检查必要作业全部成功
         shell: pwsh
         env:
-          SHARDS_RESULT: ${{ needs.template-shards.result }}
+          SLICES_RESULT: ${{ needs.template-slices.result }}
           PACKAGES_RESULT: ${{ needs.package-consumption.result }}
         run: |
-          if ($env:SHARDS_RESULT -cne 'success' -or $env:PACKAGES_RESULT -cne 'success') {
+          if ($env:SLICES_RESULT -cne 'success' -or $env:PACKAGES_RESULT -cne 'success') {
             throw '模板分片或 NuGet 消费失败、缺失、跳过或取消'
           }
       - uses: actions/checkout@v4
@@ -212,7 +234,7 @@ jobs:
       - name: 核对场景全集和完整阶段
         shell: pwsh
         env:
-          CONTAINER_NEEDED: ${{ needs.template-shards.outputs.container_needed }}
+          CONTAINER_NEEDED: ${{ needs.template-slices.outputs.container_needed }}
         run: |
           if ($env:CONTAINER_NEEDED -notin @('true', 'false')) { throw '缺少容器范围判定结果' }
           $containerArgs = @(if ($env:CONTAINER_NEEDED -eq 'true') { '-ContainerSmoke' })

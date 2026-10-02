@@ -6,9 +6,8 @@ param(
     # 都不给时等同 full。
     [ValidateSet("pr", "full")]
     [string]$Tier,
-    # 固定 CI 分片，须与 -Tier 同用。
-    [ValidateSet(1, 2)]
-    [int]$Shard,
+    # 该档里的一个具名分片（见 template-matrix-scenarios.ps1 的 $MatrixSlices），须与 -Tier 同用。
+    [string]$Slice,
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [ValidateSet("chromiumHeadless", "chromium")]
@@ -576,12 +575,14 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
 
 . (Join-Path $PSScriptRoot "template-matrix-scenarios.ps1")
 
-if ($PSBoundParameters.ContainsKey("Shard") -and -not $Tier) { throw "-Shard requires -Tier." }
+if ($Slice -and -not $Tier) { throw "-Slice requires -Tier." }
 if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
 if ($Tier) {
     if ($Scenarios.Count -gt 0) { throw "-Tier and -Scenarios cannot be combined." }
-    $Scenarios = Get-TierScenarios $Tier $Shard
-    if ($Scenarios.Count -eq 0) { throw "Tier $Tier shard $Shard has no scenarios." }
+    if ($Slice -and -not $MatrixSlices[$Tier].Contains($Slice)) {
+        throw "Unknown $Tier-tier slice '$Slice'. Valid slices: $($MatrixSlices[$Tier].Keys -join ', ')"
+    }
+    $Scenarios = Get-TierScenarios $Tier $Slice
     if ($ContainerSmoke -and $ContainerScenario -in $Scenarios) {
         $ContainerSmokeScenarios += $ContainerScenario
     }
@@ -810,7 +811,7 @@ $results | Format-Table -AutoSize
 Write-Host "Template matrix passed for $($results.Count) scenario(s)." -ForegroundColor Green
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
-$resultFile = Join-Path $runRoot "matrix-shard-$Shard.json"
-[PSCustomObject]@{ Tier = $Tier; Shard = $Shard; Results = @($results) } |
+$resultFile = Join-Path $runRoot "matrix-$(if ($Slice) { $Slice } else { 'local' }).json"
+[PSCustomObject]@{ Tier = $Tier; Slice = $Slice; Results = @($results) } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
 if ($env:GITHUB_OUTPUT) { "results_path=$resultFile" | Out-File $env:GITHUB_OUTPUT -Append }

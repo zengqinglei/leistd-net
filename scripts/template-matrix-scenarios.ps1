@@ -1,10 +1,11 @@
 # 模板场景与 CI 归属的唯一来源；生成入口、汇总入口与场景覆盖闸门共同使用。
-# Shards 记各档位的分片：full 为全集（合入后、夜间、发布），pr 为 PR 档子集。
+# Slices 记各档位里场景所属的分片：full 为全集（合入后、夜间、发布），pr 为 PR 档子集。
+# 分片按"验证什么"命名，含义登记在 $MatrixSlices；CI 每片一个作业，作业名取其说明。
 # check-template-scenario-coverage.py 保证每个条件行都由某个 PR 档场景生成（行覆盖）；
 # 同一产物里几处条件分支的组合交互不在 PR 档保证之内，由 full 档兜底。
 $scenarioMap = [ordered]@{
     "identity" = @{
-        Shards = @{ full = 1; pr = 1 }
+        Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @(); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Api/Controllers/AuthController.cs",
@@ -29,7 +30,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto")
     }
     "resource" = @{
-        Shards = @{ full = 1 }
+        Slices = @{ full = "resource-and-standalone-roles" }
         Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
@@ -55,7 +56,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "standalone" = @{
-        Shards = @{ full = 1 }
+        Slices = @{ full = "resource-and-standalone-roles" }
         # Cookie 会话形态：有本地用户与租户控制面，但不签发 OIDC 令牌。
         # 目的是不让内部系统带着用不到的授权服务器上线——未使用的 /connect/* 端点
         # 与 OpenIddict 存储不是"多余代码"，是需要防护、打补丁、审计的攻击面
@@ -83,7 +84,7 @@ $scenarioMap = [ordered]@{
         )
     }
     "identity-notifications" = @{
-        Shards = @{ full = 2; pr = 2 }
+        Slices = @{ full = "identity-role"; pr = "features-without-localization" }
         Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
@@ -97,7 +98,7 @@ $scenarioMap = [ordered]@{
         }
     }
     "resource-notifications" = @{
-        Shards = @{ full = 2; pr = 2 }
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-features" }
         Arguments = @("--service-role","Resource","--include-notifications"); Frontend = $true; Lint = $true
         Present = @(
             "backend/src/{name}.Application/Notifications/AppNotificationTypes.cs",
@@ -113,7 +114,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
     }
     "identity-external-login" = @{
-        Shards = @{ full = 2 }
+        Slices = @{ full = "identity-role" }
         Arguments = @("--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
         Absent = @()
@@ -121,7 +122,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "standalone-external-login" = @{
-        Shards = @{ full = 1; pr = 1 }
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "features-without-localization" }
         Arguments = @("--service-role", "Standalone", "--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
         Absent = @("backend/src/{name}.Api/Controllers/ConnectController.cs", "backend/src/{name}.Domain/Auth/Options/OAuthOptions.cs")
@@ -133,7 +134,7 @@ $scenarioMap = [ordered]@{
         ForbiddenTokens = @("OpenIddict", "IOAuthProvider", "OAuthTokenInfo", "angular-auth-oidc-client")
     }
     "identity-localization" = @{
-        Shards = @{ full = 2 }
+        Slices = @{ full = "identity-role" }
         Arguments = @("--include-localization"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @()
@@ -144,7 +145,7 @@ $scenarioMap = [ordered]@{
     # 曾漏过的实例：ExternalAuthController 的 InvalidState 工厂在「外部登录 + 本地化」
     # 同时开启时才编译失败（只开外部登录时 WithCode 那行被裁掉，只开本地化时整个文件被裁掉）。
     "identity-all-features" = @{
-        Shards = @{ full = 2; pr = 2 }
+        Slices = @{ full = "identity-role"; pr = "identity-default-and-all-features" }
         Arguments = @("--include-notifications","--include-external-login","--include-localization")
         Frontend = $true; Lint = $true
         Present = @(
@@ -160,7 +161,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "resource-localization" = @{
-        Shards = @{ full = 2; pr = 2 }
+        Slices = @{ full = "resource-and-standalone-roles"; pr = "resource-features" }
         Arguments = @("--service-role","Resource","--include-localization"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
@@ -193,30 +194,47 @@ if ($listedOnly.Count -gt 0) {
 
 $MatrixTiers = @("pr", "full")
 
+# 每档的分片及其说明。片内场景按实测耗时大致均衡；分片名描述它验证什么，不用编号。
+$MatrixSlices = [ordered]@{
+    pr = [ordered]@{
+        "identity-default-and-all-features" = "Identity 默认产物与可选特性全开"
+        "resource-features"                 = "Resource 形态的通知与本地化"
+        "features-without-localization"     = "特性开启而未本地化的组合（含 Standalone 与容器）"
+    }
+    full = [ordered]@{
+        "identity-role"                 = "Identity 形态全部组合"
+        "resource-and-standalone-roles" = "Resource 与 Standalone 形态全部组合（含容器）"
+    }
+}
+
 # 镜像与场景特性无关，每档构建一次即可：挂在两档都有的这个场景上
 $ContainerScenario = "standalone-external-login"
 
-# 每个登记场景必须归属全集的一个分片；进 PR 档的场景也须有 PR 分片。全集不得因分片静默漏跑。
+# 本文件被各入口 dot-source：变量名不得与调用方参数同名（PowerShell 变量名不分大小写，
+# 循环变量写成 $tier、$slice 会覆盖调用方的 -Tier、-Slice），故统一加 registered 前缀。
+# 每个登记场景必须归属全集的一个分片；进 PR 档的场景也须归属 PR 档的一个分片；每个分片至少一个场景。
 foreach ($registeredScenario in $AllScenarios) {
-    $registeredShards = $scenarioMap[$registeredScenario].Shards
-    if ($registeredShards.full -notin @(1, 2)) {
-        throw "Scenario '$registeredScenario' must belong to full-tier shard 1 or 2."
+    $registeredSlices = $scenarioMap[$registeredScenario].Slices
+    if (-not $MatrixSlices.full.Contains([string]$registeredSlices.full)) {
+        throw "Scenario '$registeredScenario' must belong to a full-tier slice."
     }
-    if ($registeredShards.Contains("pr") -and $registeredShards.pr -notin @(1, 2)) {
-        throw "Scenario '$registeredScenario' has an invalid PR-tier shard."
+    if ($registeredSlices.Contains("pr") -and -not $MatrixSlices.pr.Contains([string]$registeredSlices.pr)) {
+        throw "Scenario '$registeredScenario' names an unknown PR-tier slice '$($registeredSlices.pr)'."
     }
 }
-# 本文件被各入口 dot-source：变量名不得与调用方参数同名（PowerShell 变量名不分大小写，
-# 循环变量写成 $tier 会覆盖调用方的 -Tier），故统一加 registered 前缀。
 foreach ($registeredTier in $MatrixTiers) {
-    if (-not $scenarioMap[$ContainerScenario].Shards.Contains($registeredTier)) {
+    foreach ($registeredSlice in $MatrixSlices[$registeredTier].Keys) {
+        $registeredMembers = @($AllScenarios | Where-Object { $scenarioMap[$_].Slices[$registeredTier] -eq $registeredSlice })
+        if ($registeredMembers.Count -eq 0) { throw "The $registeredTier-tier slice '$registeredSlice' has no scenarios." }
+    }
+    if (-not $scenarioMap[$ContainerScenario].Slices.Contains($registeredTier)) {
         throw "Container scenario '$ContainerScenario' must belong to the $registeredTier tier."
     }
 }
 
-function Get-TierScenarios([string]$TierName, [int]$ShardNumber = 0) {
+function Get-TierScenarios([string]$TierName, [string]$SliceName = "") {
     @($AllScenarios | Where-Object {
-        $tierShards = $scenarioMap[$_].Shards
-        $tierShards.Contains($TierName) -and ($ShardNumber -eq 0 -or $tierShards[$TierName] -eq $ShardNumber)
+        $tierSlices = $scenarioMap[$_].Slices
+        $tierSlices.Contains($TierName) -and (-not $SliceName -or $tierSlices[$TierName] -eq $SliceName)
     })
 }

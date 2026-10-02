@@ -175,7 +175,7 @@ def coverage_problems(
         name: symbol_values(config, parse_cli_arguments(config, info["Arguments"]))
         for name, info in scenarios.items()
     }
-    pr_scenarios = {name for name, info in scenarios.items() if "pr" in info["Shards"]}
+    pr_scenarios = {name for name, info in scenarios.items() if "pr" in info["Slices"]}
     combinations = all_combinations(config)
 
     problems: list[str] = []
@@ -217,7 +217,7 @@ def load_scenarios() -> dict[str, dict]:
     command = (
         f". '{SCENARIOS_SCRIPT}'; "
         "$AllScenarios | ForEach-Object { [ordered]@{ Name = $_; Arguments = @($scenarioMap[$_].Arguments); "
-        "Shards = $scenarioMap[$_].Shards } } | ConvertTo-Json -Depth 4 -AsArray"
+        "Slices = $scenarioMap[$_].Slices } } | ConvertTo-Json -Depth 4 -AsArray"
     )
     completed = subprocess.run(
         ["pwsh", "-NoProfile", "-Command", command],
@@ -244,10 +244,10 @@ def self_test() -> int:
     }
     # 两个 PR 场景（全关、全开），一个只在全集的单特性场景 x-only
     scenarios = {
-        "base": {"Arguments": [], "Shards": {"full": 1, "pr": 1}},
-        "all": {"Arguments": ["--x", "--y"], "Shards": {"full": 1, "pr": 1}},
-        "x-only": {"Arguments": ["--x"], "Shards": {"full": 2}},
-        "b-role": {"Arguments": ["--role", "B"], "Shards": {"full": 2, "pr": 2}},
+        "base": {"Arguments": [], "Slices": {"full": "a", "pr": "a"}},
+        "all": {"Arguments": ["--x", "--y"], "Slices": {"full": "a", "pr": "a"}},
+        "x-only": {"Arguments": ["--x"], "Slices": {"full": "b"}},
+        "b-role": {"Arguments": ["--role", "B"], "Slices": {"full": "b", "pr": "b"}},
     }
     cases: list[tuple[str, dict[str, str], int]] = [
         ("单符号两侧都由 PR 场景生成", {"template/a.ts": "//#if (X)\nx\n//#else\nnot x\n//#endif\n"}, 0),
@@ -302,7 +302,7 @@ def main() -> int:
             print(f"  - {problem}")
         return 1
 
-    pr = [name for name, info in scenarios.items() if "pr" in info["Shards"]]
+    pr = [name for name, info in scenarios.items() if "pr" in info["Slices"]]
     print(f"✅ 模板场景覆盖检查通过（{checked} 个条件行；PR 档 {len(pr)} 个场景覆盖全部，登记场景覆盖全部可达组合）。")
     return 0
 
