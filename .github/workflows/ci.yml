@@ -4,8 +4,9 @@ name: CI
 #   - docs-sync：组件文档、Skill 与引用一致性
 #   - package-consumption：NuGet 包内容与隔离消费，独立必过
 #   - framework-pack：当前候选只打包一次，以不可变 artifact 供消费与分片下载
-#   - template-shards：九个完整场景均衡两片，消费同一候选包
-#   - template-matrix：保留必过检查名，核对两片全集、完整阶段与包消费结果
+#   - template-shards：场景按档位均衡两片，消费同一候选包；PR 跑 pr 档子集，
+#     release 复用与手动触发默认跑 full 全集（档位归属见 scripts/template-matrix-scenarios.ps1）
+#   - template-matrix：保留必过检查名，核对本档场景集合、完整阶段与包消费结果
 #   - test：框架单元测试（含真实 Redis 的分布式锁契约）
 #   - postgresql-e2e：模板在真实 PostgreSQL 上的迁移与租户隔离
 #   - oidc-e2e：四服务真实 OIDC、委托边界与远端令牌校验
@@ -13,11 +14,25 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      tier:
+        description: 模板场景档位
+        type: choice
+        options: [full, pr]
+        default: full
   workflow_call:
     inputs:
       candidate_sha:
         required: true
         type: string
+      tier:
+        type: string
+        default: full
+
+# PR 只跑 pr 档：它能否代表全集由 check-template-scenario-coverage.py 逐行判定，
+# 全集在 develop/main 推送、夜间与发布时由 release.yml 复用本工作流执行。
+env:
+  MATRIX_TIER: ${{ github.event_name == 'pull_request' && 'pr' || inputs.tier || 'full' }}
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
@@ -113,8 +128,8 @@ jobs:
         id: matrix
         shell: pwsh
         run: |
-          $containerArgs = if ('${{ steps.container_scope.outputs.needed }}' -eq 'true' -and ${{ matrix.shard }} -eq 1) { @('-ContainerSmokeScenarios', 'standalone') } else { @() }
-          pwsh scripts/test-template-matrix.ps1 -SkipPack -Shard ${{ matrix.shard }} @containerArgs
+          $containerArgs = if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { @('-ContainerSmoke') } else { @() }
+          pwsh scripts/test-template-matrix.ps1 -SkipPack -Tier $env:MATRIX_TIER -Shard ${{ matrix.shard }} @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵失败' }
       - name: 保留完整场景结果
         uses: actions/upload-artifact@v4
@@ -199,8 +214,8 @@ jobs:
           CONTAINER_NEEDED: ${{ needs.template-shards.outputs.container_needed }}
         run: |
           if ($env:CONTAINER_NEEDED -notin @('true', 'false')) { throw '缺少容器范围判定结果' }
-          $containerArgs = if ($env:CONTAINER_NEEDED -eq 'true') { @('-ContainerSmokeScenarios', 'standalone') } else { @() }
-          pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts @containerArgs
+          $containerArgs = if ($env:CONTAINER_NEEDED -eq 'true') { @('-ContainerSmoke') } else { @() }
+          pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -Tier $env:MATRIX_TIER @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵证明不完整' }
 
   test:

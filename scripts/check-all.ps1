@@ -13,7 +13,7 @@
       - dotnet build / test                             框架源码
       - framework/build/pack-local-feed.ps1
         + framework/build/test-package-consumption.ps1  NuGet 隔离消费
-      - scripts/test-template-matrix.ps1                9 场景生成 + 构建 + 前后端测试
+      - scripts/test-template-matrix.ps1                场景生成 + 构建 + 前后端测试（-Tier pr 为 PR 档子集）
       - scripts/test-template-postgresql-e2e.ps1        真实 PostgreSQL 端到端
       - scripts/test-template-oidc-e2e.ps1              真实 OIDC 跨服务 HTTP 端到端
 
@@ -59,6 +59,9 @@ $gates = @(
     @{ Name = "模板条件符号";              Cmd = "pwsh"; Args = @("scripts/check-template-symbols.ps1") }
     @{ Name = "条件块规则自检";            Cmd = $pythonCmd; Args = @("scripts/check-template-conditional-blocks.py", "--self-test") }
     @{ Name = "模板条件块结构";            Cmd = $pythonCmd; Args = @("scripts/check-template-conditional-blocks.py") }
+    # PR 档只跑场景子集；子集能否代表全集，由逐行求值判定，不靠人记
+    @{ Name = "场景覆盖规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-template-scenario-coverage.py", "--self-test") }
+    @{ Name = "PR 档场景覆盖全部条件行";   Cmd = $pythonCmd; Args = @("scripts/check-template-scenario-coverage.py") }
     @{ Name = "模板 using/import 守卫";    Cmd = $pythonCmd; Args = @("scripts/check-using-guards.py") }
     @{ Name = "动态连接路径异步边界";      Cmd = $pythonCmd; Args = @("scripts/check-async-boundaries.py") }
     # 自检先跑：豁免机制本身失效时，紧随其后的那次"通过"没有意义

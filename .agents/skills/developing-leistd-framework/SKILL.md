@@ -63,4 +63,4 @@ pwsh framework/build/pack-local-feed.ps1
 pwsh framework/build/test-package-consumption.ps1
 ```
 
-本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包，CI 检查全部包。根据变更选择最小充分集合；只读任务不运行无关测试。未执行项和原因必须如实说明。
+本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包，CI 检查全部包。编辑循环只跑受影响测试项目（`--filter` 收窄到类）；阶段完成按 `docs/framework/quality-assurance.md` 的分层表选入口。只读任务不运行无关测试。未执行项和原因必须如实说明。

@@ -12,7 +12,7 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 | 场景 | 补充事实与规范 | 验证重点 |
 | --- | --- | --- |
 | 后端或前端骨架 | 同类实现、测试与 `template/docs/standards/` 对应章节；Spartan 组件用专项 Skill | 受影响场景生成、构建、测试；交互变化做浏览器验证 |
-| 参数、条件、文件裁剪 | `template.json`、相邻条件块、`docs/template/development-guide.md` | 开关两侧；公共参数模型跑完整矩阵 |
+| 参数、条件、文件裁剪 | `template.json`、相邻条件块、`docs/template/development-guide.md` | 开关两侧；公共参数模型跑 `-Tier pr` |
 | 架构边界、权限、租户、数据库 | 调用链、Migrator、`docs/architecture/design-principles.md` 及相关后端规范 | 真实 PostgreSQL 与受影响生成场景 |
 | Dockerfile、Compose、部署入口 | 实际容器配置、`template/docs/deploy/README.md` | 镜像可构建、.NET 运行时层可用；实际启动另验 |
 | 项目 Skill 或规范 | 生成项目入口、官方 `skill-creator`、`template/docs/README.md` | Skill 校验和代表性生成结果 |
@@ -64,7 +64,8 @@ description: 在 leistd-net 仓库中为 template 的后端、前端、条件参
 
 ```powershell
 pwsh scripts/check-all.ps1                                 # 全部静态闸门（唯一清单来源）
-pwsh scripts/test-template-matrix.ps1
+pwsh -c "& ./scripts/test-template-matrix.ps1 -Scenarios @('identity-all-features','resource')"
+pwsh scripts/test-template-matrix.ps1 -Tier pr             # PR 档场景子集
 ```
 
-参数模型、公共生成逻辑或无法可靠界定影响组合的变更使用完整矩阵；其他变更验证受影响场景。条件裁剪至少覆盖相关开、关分支。容器检查可用 `-ContainerSmokeScenarios standalone`，真实数据库检查用 `scripts/test-template-postgresql-e2e.ps1`。未执行的条件场景和风险必须说明。
+按 `docs/framework/quality-assurance.md` 的分层表选入口，不在每次改动后跑全集：特性或形态改动验证含它的场景、`identity-all-features` 与关闭该特性的场景（通常是 `identity`），条件裁剪至少覆盖相关开、关分支；参数模型、条件块或公共生成逻辑跑 `-Tier pr`；全集由合入后的 CI 承担。数据库与认证改动分别加 `test-template-postgresql-e2e.ps1`、`test-template-oidc-e2e.ps1`，容器检查用 `-ContainerSmokeScenarios standalone`。未执行的场景、档位和风险必须说明。

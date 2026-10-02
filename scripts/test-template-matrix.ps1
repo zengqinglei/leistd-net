@@ -2,7 +2,11 @@ param(
     # 不给就跑全量：全量清单是 $AllScenarios（见下），不写死在这里，
     # 否则「加了场景定义却忘了加进清单」会让新场景静默不跑——下面有断言兜住
     [string[]]$Scenarios = @(),
-    # 固定 CI 分片；不传时仍为本地全量入口，不能与人工场景选择混用。
+    # 档位：full 为全集，pr 为 PR 档子集（归属见 template-matrix-scenarios.ps1）。不能与人工场景选择混用；
+    # 都不给时等同 full。
+    [ValidateSet("pr", "full")]
+    [string]$Tier,
+    # 固定 CI 分片，须与 -Tier 同用。
     [ValidateSet(1, 2)]
     [int]$Shard,
     [ValidateSet("Debug", "Release")]
@@ -14,7 +18,9 @@ param(
     [switch]$SkipFrontend,
     [switch]$SkipRuntime,
     # 只为选中的场景构建并运行容器入口；Dockerfile/Compose 变化时使用，不随每个普通代码修改运行。
-    [string[]]$ContainerSmokeScenarios = @()
+    [string[]]$ContainerSmokeScenarios = @(),
+    # 在登记的容器场景（若在本片）上执行容器检查；CI 用它，不在 workflow 重抄场景名。
+    [switch]$ContainerSmoke
 )
 
 $ErrorActionPreference = "Stop"
@@ -570,10 +576,15 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
 
 . (Join-Path $PSScriptRoot "template-matrix-scenarios.ps1")
 
-if ($PSBoundParameters.ContainsKey("Shard")) {
-    if ($Scenarios.Count -gt 0) { throw "-Shard and -Scenarios cannot be combined." }
-    $Scenarios = @($AllScenarios | Where-Object { $scenarioMap[$_].Shard -eq $Shard })
-    if ($Scenarios.Count -eq 0) { throw "CI shard $Shard has no scenarios." }
+if ($PSBoundParameters.ContainsKey("Shard") -and -not $Tier) { throw "-Shard requires -Tier." }
+if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
+if ($Tier) {
+    if ($Scenarios.Count -gt 0) { throw "-Tier and -Scenarios cannot be combined." }
+    $Scenarios = Get-TierScenarios $Tier $Shard
+    if ($Scenarios.Count -eq 0) { throw "Tier $Tier shard $Shard has no scenarios." }
+    if ($ContainerSmoke -and $ContainerScenario -in $Scenarios) {
+        $ContainerSmokeScenarios += $ContainerScenario
+    }
 }
 
 if ($Scenarios.Count -eq 0) {
@@ -800,6 +811,6 @@ Write-Host "Template matrix passed for $($results.Count) scenario(s)." -Foregrou
 
 # 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
 $resultFile = Join-Path $runRoot "matrix-shard-$Shard.json"
-[PSCustomObject]@{ Shard = $Shard; Results = @($results) } |
+[PSCustomObject]@{ Tier = $Tier; Shard = $Shard; Results = @($results) } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
 if ($env:GITHUB_OUTPUT) { "results_path=$resultFile" | Out-File $env:GITHUB_OUTPUT -Append }

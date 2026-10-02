@@ -247,25 +247,24 @@ if ($SelfTest) {
     exit 0
 }
 
-$scanRoots = @("framework", "template", "docs") |
-    ForEach-Object { Join-Path $RepoRoot $_ } |
-    Where-Object { Test-Path -LiteralPath $_ }
-
-# 也扫 .html 与 .json：页面文案和 i18n 词条同样会讲解旧模型，只扫代码与文档会漏掉它们。
-$files = Get-ChildItem -LiteralPath $scanRoots -Recurse -File -Include *.cs, *.ts, *.md, *.html, *.json -ErrorAction SilentlyContinue |
-    Where-Object {
-        $_.FullName -notmatch "[\\/](bin|obj|node_modules|dist|\.angular)[\\/]" -and
-        $_.Name -notlike "package-lock.json"
-    }
+# 清单取 Git 已跟踪与未跟踪但未忽略的文件：新建未提交的文件照样被扫，node_modules 等忽略目录不必先遍历再过滤，
+# .agents 这类隐藏目录也不会漏掉。也扫 .html 与 .json：页面文案和 i18n 词条同样会讲解旧模型。
+$listed = @(git -C $RepoRoot -c core.quotepath=off ls-files --cached --others --exclude-standard -- framework template docs)
+if ($LASTEXITCODE -ne 0) { throw "git ls-files 失败，无法确定扫描范围。" }
+$files = $listed | Where-Object {
+    $_ -match '\.(cs|ts|md|html|json)$' -and
+    $_ -notmatch '(^|/)(bin|obj|node_modules|dist|\.angular)/' -and
+    $_ -notlike '*package-lock.json' -and
+    (Test-Path -LiteralPath (Join-Path $RepoRoot $_) -PathType Leaf)
+}
 
 $scanned = 0
-foreach ($file in $files) {
-    $relative = $file.FullName.Substring($RepoRoot.Length).TrimStart('/', '\')
+foreach ($relative in $files) {
     if (Test-Historical $relative) { continue }
 
     $scanned++
     # 强制成数组：单行文件下 Get-Content 返回字符串，按下标取到的是字符而不是整行。
-    $lines = @(Get-Content -LiteralPath $file.FullName -Encoding UTF8)
+    $lines = @(Get-Content -LiteralPath (Join-Path $RepoRoot $relative) -Encoding UTF8)
 
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index]

@@ -70,7 +70,7 @@ RemoteTokenAuth           = (ServiceRole == "Resource")
 | **只查 `.cs`/`.ts` 会漏 `.csproj`** | 包引用没剪掉，产物仍带着该依赖 |
 | **`isEnabled` 引用 computed 符号** | `String 'X' was not recognized as a valid Boolean`；只接受 parameter |
 
-修改参数结构后先运行 `pwsh scripts/check-all.ps1`，再运行场景矩阵。与模板直接相关的检查如下：
+修改参数结构后先运行 `pwsh scripts/check-all.ps1`，再运行 `-Tier pr` 场景矩阵。与模板直接相关的检查如下：
 
 | 脚本 | 拦什么 |
 | --- | --- |
@@ -105,19 +105,22 @@ export const next = 1;
 
 ### 3.5 标准场景矩阵
 
-| 场景 | 参数重点 | 目的 |
-| --- | --- | --- |
-| `identity` | 默认 | OIDC Server、租户控制面、Identity 业务库与完整前端 |
-| `resource` | `ServiceRole=Resource` | 远端令牌校验、本服务授权、动态租户连接与完整前端 |
-| `standalone` | `ServiceRole=Standalone` | Cookie 会话形态：有本地身份与租户控制面，**不带授权服务器** |
-| `identity-notifications` | `IncludeNotifications=true` | Identity 可选通知切片 |
-| `resource-notifications` | Resource + 同上 | Resource 可选通知切片 |
-| `identity-external-login` | `IncludeExternalLogin=true` | Identity 外部登录适配 |
-| `identity-localization` | `IncludeLocalization=true` | Identity 本地化切片 |
-| `resource-localization` | Resource + 同上 | Resource 本地化切片 |
-| `identity-all-features` | 通知 + 外部登录 + 本地化 | 可选切片的组合交互 |
+| 场景 | 参数重点 | 目的 | PR 档 |
+| --- | --- | --- | --- |
+| `identity` | 默认 | OIDC Server、租户控制面、Identity 业务库与完整前端 | ✓ |
+| `resource` | `ServiceRole=Resource` | 远端令牌校验、本服务授权、动态租户连接与完整前端 | |
+| `standalone` | `ServiceRole=Standalone` | Cookie 会话形态：有本地身份与租户控制面，**不带授权服务器** | |
+| `identity-notifications` | `IncludeNotifications=true` | Identity 可选通知切片 | ✓ |
+| `resource-notifications` | Resource + 同上 | Resource 可选通知切片 | ✓ |
+| `identity-external-login` | `IncludeExternalLogin=true` | Identity 外部登录适配 | |
+| `standalone-external-login` | Standalone + 外部登录 | 无授权服务器时的外部登录；登记的容器检查场景 | ✓ |
+| `identity-localization` | `IncludeLocalization=true` | Identity 本地化切片 | |
+| `resource-localization` | Resource + 同上 | Resource 本地化切片 | ✓ |
+| `identity-all-features` | 通知 + 外部登录 + 本地化 | 可选切片的组合交互 | ✓ |
 
-`standalone` 专门检验条件独立性：`identity` 与 `resource` 里 `LocalIdentity` 和 `OpenIddictServer` 恰好同真同假，只有 `standalone` 把两者分开。新增能力时不得只验证 `identity` 和 `resource`。
+PR 档的取舍与覆盖闸门见[模板质量验证](./quality-assurance.md)；全部场景在合入后执行。
+
+Standalone 场景专门检验条件独立性：`identity` 与 `resource` 里 `LocalIdentity` 和 `OpenIddictServer` 恰好同真同假，只有 Standalone 形态把两者分开（PR 档由 `standalone-external-login` 承担）。新增能力时不得只验证 `identity` 和 `resource`。
 
 场景断言分两类，缺一不可：`Present`/`Absent` 与 `RequiredTokens` 证明"留下的是对的那一份"，`ForbiddenTokens` 证明"不该留的没留下"。只查缺失会漏掉"两份都在"的情形。
 
@@ -258,12 +261,12 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser chromium
 
 ```powershell
 pwsh scripts/check-all.ps1                                 # 全部静态闸门（-List 看清单）
-pwsh scripts/test-template-matrix.ps1
+pwsh scripts/test-template-matrix.ps1 -Tier pr             # PR 档场景；不带参数为全部场景
 pwsh scripts/test-template-postgresql-e2e.ps1
 pwsh scripts/test-template-matrix.ps1 -Scenarios standalone -ContainerSmokeScenarios standalone
 ```
 
-第三条在真实 PostgreSQL 上验证本地 Framework NuGet 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路；它要求本机已安装 Docker、`psql` 和 PowerShell。
+按改动选哪一档、哪些场景见[质量检查与验证分工](../framework/quality-assurance.md#分层执行与时间预算)。第三条在真实 PostgreSQL 上验证本地 Framework NuGet 包→Identity/Resource 生成→DbMigrator→API→Shared/Dedicated 隔离的整条链路；它要求本机已安装 Docker、`psql` 和 PowerShell。
 第四条验证生成项目的 API 与 Migrator 镜像可构建、.NET 运行时层可用。它不启动应用；部署配置或迁移行为变化时另做对应环境启动和健康检查。
 
 每次运行使用独立的 run 目录 `.tmp/runs/<run-id>/`（`<run-id>` = PID+时间戳），其下含 `generated-template/`、`local-feed/`、`template-hive/`、`nuget-cache/` 与一次性 NuGet 配置——生成物、包源和 `globalPackagesFolder` 都不跨 run 写入，因此**多个 AI/终端可并行执行**。不得共享解包目录后再“定点清理 Leistd.*”：本地包会在版本号不变时重新 pack，清理会在另一个并发 build 期间抽走 DLL。NuGet 自身的 HTTP 缓存仍会避免重复下载。启动时只清理超过 2 小时未活动且非当前 run 的旧目录（据 `.run.lock` 判活），绝不删正在运行的 run。CI 发布目录仍使用 `framework/artifacts`。
