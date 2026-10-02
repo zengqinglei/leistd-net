@@ -1,45 +1,45 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
+import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
-import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
+import {
+  ApplicationHttpError,
+  applicationErrorMessage,
+} from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { SessionContextService } from '../../../../core/services/session-context-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { AccountService } from '../../services/account-service';
-import { EXTERNAL_LINK_PENDING_KEY } from '../external-logins/external-logins';
 
 /**
  * 外部登录回调组件
  *
  * 处理 GitHub/Google 等第三方登录重定向回来后的流程:
- * 1. 从 URL query params 中获取 code、state、provider
- * 2. 将 code+state 发送到后端换取 Cookie session
+ * 1. 从路由参数取 provider（回调地址 /auth/external-callback/{provider}），读取非敏感的完成意图
+ * 2. 由后端消费短时外部票据并完成登录
  * 3. 加载用户信息并根据角色跳转
  */
 @Component({
   selector: 'app-external-auth-callback',
-  imports: [HlmSpinner],
-  template: `
-    <main class="flex min-h-screen items-center justify-center bg-background px-4">
-      <section class="text-center">
-        @if (error()) {
-          <h1 class="mb-3 text-2xl font-semibold text-destructive">{{ failedTitle() }}</h1>
-          <p class="text-muted-foreground">{{ error() }}</p>
-        } @else {
-          <hlm-spinner class="text-4xl" [attr.aria-label]="processingAria()" />
-          <h1 class="mt-4 text-2xl font-semibold text-foreground">
-            {{ processingTitle() }}
-          </h1>
-        }
-      </section>
-    </main>
-  `,
+  // prettier-ignore
+  imports: [
+    HlmButton,
+    HlmSpinner,
+    RouterLink,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
+  templateUrl: './external-auth-callback.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ExternalAuthCallback implements OnInit {
@@ -51,22 +51,15 @@ export class ExternalAuthCallback implements OnInit {
   private router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  //#endif
-
-  protected readonly error = signal<string | null>(null);
-
-  // 内联模板里的条件文案：.ts 的模板字符串区不支持 HTML 注释式条件指令，改用 getter 承载。
-  //#if (IncludeLocalization)
-  protected readonly failedTitle = () => this.transloco.translate('account.login.loginFailed');
-  protected readonly processingAria = () =>
-    this.transloco.translate('account.externalCallback.processingAria');
-  protected readonly processingTitle = () =>
-    this.transloco.translate('account.externalCallback.processing');
   //#else
-  protected readonly failedTitle = () => 'Sign-in failed';
-  protected readonly processingAria = () => 'Completing sign-in';
-  protected readonly processingTitle = () => 'Processing third-party sign-in';
+  protected readonly t = englishText(ENGLISH);
   //#endif
+
+  /**
+   * 失败说明：本端的说法存词条键、由模板按当前语言取，服务端下发的原因原样显示。
+   * 存成已翻译的文字的话，停在这页切换语言时它不会跟着变。
+   */
+  protected readonly error = signal<{ key: string } | { text: string } | null>(null);
 
   ngOnInit(): void {
     this.processCallback();
@@ -74,70 +67,112 @@ export class ExternalAuthCallback implements OnInit {
 
   private async processCallback(): Promise<void> {
     const params = this.route.snapshot.queryParamMap;
-    const code = params.get('code');
-    const state = params.get('state');
-    const provider = params.get('provider') ?? this.route.snapshot.paramMap.get('provider');
+    const intent = params.get('intent') ?? 'login';
+    const provider = this.route.snapshot.paramMap.get('provider');
 
-    if (!code || !provider) {
-      //#if (IncludeLocalization)
-      this.error.set(this.transloco.translate('account.externalCallback.missingParams'));
-      //#else
-      this.error.set('Missing required callback parameters');
-      //#endif
+    if (!provider) {
+      this.error.set({ key: 'account.externalCallback.missingParams' });
       return;
     }
 
-    // 绑定外部账号时出发前记下了提供商：这次回来是绑定，不是登录
-    const pendingLink = sessionStorage.getItem(EXTERNAL_LINK_PENDING_KEY);
-    sessionStorage.removeItem(EXTERNAL_LINK_PENDING_KEY);
-    if (pendingLink === provider) {
-      await this.completeLink(provider, code, state ?? '');
+    // 用户在提供商处取消或协议校验失败时，后端带原因码回到这里，不签发外部票据，也不调用完成端点。
+    const failure = params.get('error');
+    if (failure) {
+      const key =
+        failure === 'cancelled'
+          ? 'account.externalCallback.cancelled'
+          : 'account.externalCallback.failed';
+      if (intent === 'link') {
+        //#if (IncludeLocalization)
+        toast.error(this.transloco.translate(key));
+        //#else
+        toast.error(this.t(key));
+        //#endif
+        await this.returnToSecurity();
+        return;
+      }
+      // 后退重放旧回调时原会话往往仍然有效：直接回到应用，不展示"登录失败"。
+      if (await this.isSignedIn()) {
+        await this.enterApplication();
+        return;
+      }
+      this.error.set({ key });
+      return;
+    }
+
+    // 查询参数仅选择完成端点意图，必须匹配后端保护的票据。
+    if (intent === 'link') {
+      await this.completeLink(provider);
       return;
     }
 
     try {
-      // 1. 将 code+state 发送到后端建立 Cookie session
-      const result = await lastValueFrom(
-        this.accountService.externalLoginCallback(provider, { provider, code, state: state ?? '' }),
-      );
+      // 后端验证并消费外部票据，决定最终会话或第二步凭据。
+      const result = await lastValueFrom(this.accountService.externalLoginCallback(provider));
 
       // 已启用两步验证：会话还没下发，回登录页做第二步（凭据走导航状态，不进地址栏）
       if (result?.requiresTwoFactor && result.twoFactorToken) {
         await this.router.navigate(['/auth/login'], {
-          state: { twoFactorToken: result.twoFactorToken },
+          state: { twoFactorToken: result.twoFactorToken, returnUrl: result.returnUrl },
         });
         return;
       }
 
-      // 2. 建立会话上下文（权限 + 设置）并按权限跳转。
-      //    设置也必须在这里就位：SPA 内跳转不会重跑应用初始化器。
       await lastValueFrom(this.authService.loadUser());
-      if (this.authService.currentUser()?.twoFactorSetupRequired) {
-        await this.router.navigate(['/auth/two-factor-setup']);
-        return;
-      }
-      await this.sessionContext.establish();
-      if (this.authorizationService.canAccessPlatform()) {
-        this.router.navigate(['/platform']);
-      } else {
-        this.router.navigate(['/workspace']);
-      }
+      await this.enterApplication(result?.returnUrl);
     } catch (err) {
       console.error('External login callback processing failed', err);
-      //#if (IncludeLocalization)
-      this.error.set(this.transloco.translate('account.externalCallback.failed'));
-      //#else
-      this.error.set('Third-party sign-in failed. Please go back and try again.');
+      // 业务拒绝（如"该邮箱已有账号，请先登录再绑定"）要让用户知道下一步怎么做，展示服务端下发的原因；
+      // 其余失败只给通用提示
+      if (err instanceof ApplicationHttpError && err.status >= 400 && err.status < 500) {
+        this.error.set({ text: err.message });
+        return;
+      }
+      this.error.set({ key: 'account.externalCallback.failed' });
+    }
+  }
+
+  /**
+   * 建立会话上下文（权限 + 设置）并按权限跳转；调用前当前用户已加载。
+   * 设置也必须在这里就位：SPA 内跳转不会重跑应用初始化器。
+   */
+  private async enterApplication(returnUrl?: string | null): Promise<void> {
+    if (this.authService.currentUser()?.twoFactorSetupRequired) {
+      await this.router.navigate(['/auth/two-factor-setup']);
+      return;
+    }
+    await this.sessionContext.establish();
+    if (returnUrl) {
+      //#if (OpenIddictServer)
+      if (returnUrl.startsWith('/connect/')) {
+        window.location.href = returnUrl;
+        return;
+      }
       //#endif
+      await this.router.navigateByUrl(returnUrl);
+      return;
+    }
+    if (this.authorizationService.canAccessPlatform()) {
+      await this.router.navigate(['/platform']);
+    } else {
+      await this.router.navigate(['/workspace']);
+    }
+  }
+
+  /** 静默探测会话：401 不触发全局跳转，失败即视为未登录。 */
+  private async isSignedIn(): Promise<boolean> {
+    try {
+      await lastValueFrom(this.authService.loadUser());
+      return true;
+    } catch {
+      return false;
     }
   }
 
   /** 完成绑定并回到「账户与安全」面板；失败也回去，由那里的列表反映实际状态。 */
-  private async completeLink(provider: string, code: string, state: string): Promise<void> {
+  private async completeLink(provider: string): Promise<void> {
     try {
-      await lastValueFrom(
-        this.accountService.linkExternalLogin(provider, { provider, code, state }),
-      );
+      await lastValueFrom(this.accountService.linkExternalLogin(provider));
       //#if (IncludeLocalization)
       toast.success(this.transloco.translate('account.externalLogins.linked'));
       //#else
@@ -152,7 +187,10 @@ export class ExternalAuthCallback implements OnInit {
       toast.error('Request failed', { description: applicationErrorMessage(error) });
       //#endif
     }
+    await this.returnToSecurity();
+  }
 
+  private async returnToSecurity(): Promise<void> {
     // 回调页整页加载时启动流程不取当前用户（它按登录流程处理），这里补上再回设置页；
     // 取不到说明会话已不在，交给路由守卫带去登录页
     try {
@@ -164,3 +202,16 @@ export class ExternalAuthCallback implements OnInit {
     await this.router.navigate(['/workspace/settings/security']);
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'account.login.loginFailed': 'Sign-in failed',
+  'account.externalCallback.processingAria': 'Completing sign-in',
+  'account.externalCallback.processing': 'Processing third-party sign-in',
+  'account.externalCallback.missingParams': 'Missing required callback parameters',
+  'account.externalCallback.failed': 'Third-party sign-in failed. Please go back and try again.',
+  'account.externalCallback.cancelled': 'Third-party sign-in was cancelled.',
+  'account.externalCallback.backToLogin': 'Back to sign in',
+};
+//#endif

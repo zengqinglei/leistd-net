@@ -7,6 +7,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -24,6 +25,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<TestDbContext>((_, options) => options.UseSqlite(_connection));
@@ -47,7 +49,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
         await using (var scope = _services.CreateAsyncScope())
         {
             var manager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
             var tenantManager = scope.ServiceProvider.GetRequiredService<ITenantManager>();
             var connectionManager = scope.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
 
@@ -84,7 +86,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
         await using (var scope = _services.CreateAsyncScope())
         {
             var manager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
             var tenantManager = scope.ServiceProvider.GetRequiredService<ITenantManager>();
             var connectionManager = scope.ServiceProvider.GetRequiredService<ITenantConnectionConfigurationManager>();
 
@@ -121,7 +123,7 @@ public sealed class TenantControlDatabaseUnitOfWorkTests : IAsyncLifetime
         await using (var scope = _services.CreateAsyncScope())
         {
             var manager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
             var tenant = await scope.ServiceProvider.GetRequiredService<ITenantManager>()
                 .CreateAsync("plain-tenant", null, isActive: false);
             tenantId = tenant.Id;

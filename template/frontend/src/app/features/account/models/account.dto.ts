@@ -123,20 +123,10 @@ export interface ChangePasswordInputDto {
 }
 //#if (ExternalLogin)
 
-/**
- * 外部登录 URL 输出 DTO
- */
-export interface ExternalLoginUrlOutputDto {
-  loginUrl: string;
-}
-
-/**
- * 外部登录回调请求 DTO
- */
-export interface ExternalLoginCallbackInputDto {
-  provider: string;
-  code: string;
-  state: string;
+/** 部署已配置的外部登录提供商。 */
+export interface ExternalLoginProvidersOutputDto {
+  /** 提供商标识（`github`、`google`），按名称排序。 */
+  providers: string[];
 }
 
 /** 本人的外部账号绑定情况。 */
@@ -155,7 +145,7 @@ export interface ExternalLoginProviderOutputDto {
 
 export interface ExternalLoginLinkOutputDto {
   id: string;
-  providerUsername?: string | null;
+  providerAccountLabel?: string | null;
   providerEmail?: string | null;
   creationTime: string;
 }

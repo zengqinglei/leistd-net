@@ -45,7 +45,7 @@
 - **职责**: 协调业务逻辑（调用领域对象行为、领域服务、发布/订阅事件）
 - **包含**: AppServices、Dtos、Mappings、Events、EventHandlers，以及按需的 Constants（名字常量）、Abstractions（由宿主实现的端口）、
   Provider（框架扩展点的实现，如定义提供程序、权限主体提供程序，与它们用到的名字常量）、Policies（策略及其提供程序）
-- **目录归类**: 按类型分的目录都是功能模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`、`Settings/Hosting`）只放不属于这些类型的协作类型。类名以 `Event` 结尾的放模块的 `Events/`（这里只放由应用层发布、不来自实体的事件），以 `EventHandler` 结尾的放 `EventHandlers/`（如 `Settings/Events`、`Settings/EventHandlers`、`Auth/EventHandlers`）。
+- **目录归类**: 按类型分的目录都是功能模块下的一级目录（如 `Settings/AppServices`、`Settings/Dtos`），不嵌进子功能目录；子功能目录（如 `Auth/Sessions`、`Settings/Hosting`）只放不属于这些类型的协作类型。类名以 `Event` 结尾的放模块的 `Events/`（这里只放由应用层发布、不来自实体的事件），以 `EventHandler` 结尾的放 `EventHandlers/`（如 `Settings/Events`、`Settings/EventHandlers`、`Auth/EventHandlers`）。后台任务同理按运行形态归类，与表现层（§7.2）同名：周期任务（`IRecurringJob`，类名 `*Job`）放模块的 `BackgroundJobs/`（如 `Auth/BackgroundJobs`），常驻消费者（类名 `*Worker`）放 `Workers/`；不建跨模块的顶层 `Jobs/`，任务跟着它清理或处理的那个模块走。
 - **可以**: 使用 EF Core 的 `Include`、`GetQueryIncludingAsync` 进行数据查询和聚合
 
 #### Domain Layer（{ProjectName}.Domain）
@@ -223,7 +223,8 @@ public class UserDomainService(
     {
         // 唯一性校验
         if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-            throw new BadRequestException($"用户名 '{username}' 已存在");
+            throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
+                .WithData("Username", username);
 
         // 密码哈希
         var passwordHash = passwordHasher.HashPassword(password);
@@ -297,6 +298,8 @@ public class UserAppService(
 框架组件已提供端点的能力（设置、权限管理、操作记录、通知、租户与租户连接）不再写 Controller：在 `Api/Hosting/ComponentEndpoints.cs` 里用组件的 `Map*` 给前缀与授权策略，
 个别端点要追加元数据（两步验证放行、授权被拒留痕）按组件公开的端点名定位；组件不认识的业务动作（发信测试、模拟登录）才写 Controller，路由与组件端点不重叠。
 
+组件端点要留痕时挂 `[OperationRecordAction]`：授权阶段被拒由 `Api/Auth/ApiAuthorizationResultHandler` 补记，授权之后的业务拒绝（`BusinessException`）由紧接 `UseAuthorization()` 的 `Api/Middlewares/OperationFailureRecordingMiddleware` 补记，参数校验失败不记。挂了注解的端点，应用服务照常可以在拒绝处调 `RecordFailedAsync`（那条带文案参数与业务目标名，信息更全）：记录器写出后会登记动作码与目标，**兜底遇到已登记的同一动作与目标就跳过**，所以留下的是先记的那条，不会一次失败两条记录。注解里的目标（含 `TargetIdPrefix`）要与应用服务记录的目标逐字一致，否则去重失效。被跳过的只有兜底——`RecordFailedAsync` 自身不判重，同一动作连调两次仍写两条。
+
 **命名**: `*Controller`
 **基类**: 继承 `BaseController`
 **返回值**:
@@ -352,6 +355,20 @@ builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
 
 - 授权策略名、权限名等**跨处引用的标识符用常量**，禁裸魔法串在多处各写——否则单侧改动漂移会致授权静默失配，且无编译报错。
 - 参见 [API 规范](./api.md) 的权限命名约定。
+
+#### 3.8.1 权限定义与界面一一对应
+
+管理员在权限配置里看到的结构，应与用户在界面上看到的结构一致。这是前后端各自遵守的命名约定，不是代码依赖：两端独立演进、各自测试，不互相读取源码。
+
+| 权限定义 | 对应界面 | 显示名 |
+| --- | --- | --- |
+| 分组（`PermissionConstant.Groups`） | 管理平台的菜单分组 | 与菜单分组标题一致 |
+| 根权限（`App.{模块}`） | 菜单项与页面 | 与菜单项标题一致 |
+| 子权限（`App.{模块}.{动作}`） | 页面上的操作按钮 | 常规动作统一为 Create / Edit / Delete（新建 / 编辑 / 删除），其余与按钮文案一致 |
+
+- 定义里的 `displayName` 写**英文默认文案**，不写词条键：不启用多语言时界面直接展示它。译文按约定键 `Permission:{权限名}`、`PermissionGroup:{分组名}` 写在资源里；英文资源保留同名键（各语言键集合一致），其值必须等于默认文案。
+- 权限是授权定义，可以没有菜单入口（只经接口使用）。但一个权限若只是另一个权限的前提（例如权限树只为授予而读，由「配置权限」守着即可），不单独定义。
+- 后端的 `PermissionCatalogContractTests` 只核对后端自己：默认显示名可读、常规动作措辞统一、词条齐全且英文与默认文案一致。新增模块时权限定义、资源与前端菜单按本表各自改齐。
 
 ### 3.9 运行期可改的配置：设置与 Options 的分工
 
@@ -434,7 +451,7 @@ public record GetUserPagedInputDto : PageRequest
 - ✅ 实体基类使用 `Entity<TKey>`、`FullAuditedEntity<TKey>` 等
 - ✅ 业务库上下文经仓储或 `IDbContextProvider<TDbContext>` 取，**不直接构造注入**：直接注入的实例在对象激活时就按宿主库创建，
   分库租户下读写会落到宿主库（框架在同一作用域再按租户取上下文时会拒绝，表现为 500）。控制库上下文固定在宿主连接、不参与租户路由，可以直接注入
-- ✅ DTO 映射使用 Mapster（继承 `MapsterProfile` 声明映射，注册结构参考现有 Profile）：实体、存储模型或框架模型到 DTO 的**投影**一律走模块 `Mappings/` 下的 Profile，
+- ✅ DTO 映射使用 Mapster 官方的 `IRegister`（结构参考现有 `*Mappings`）：实体、存储模型或框架模型到 DTO 的**投影**一律走模块 `Mappings/` 下的注册类，业务服务只注入 `IObjectMapper`；能按名称约定映射的不写配置；配置里的嵌套映射直接映射源对象或集合，由 Mapster 按同一份配置完成，**不调用无参 `Adapt<T>()`**（它用全局配置，本项目登记的规则在那里静默失效），
   调用方才知道的值（当前时刻、当前会话、读者身份）经 MapContext 传入；由多个来源**拼装**、带计算或本地化的结果 DTO 直接构造。不在 DTO 上写 `FromXxx` 之类的映射静态方法
 - ✅ 请求外的异步活（发邮件等）交给 `IBackgroundTaskQueue`（后台作业组件，入队时的租户、主体与链路随工作项带到执行时），并发互斥用 `IDistributedLock`，不另起线程或自造锁；定期的维护活登记为周期任务（`AddRecurringJob`，显式选 `Cluster` 或 `EveryInstance`）
 - ✅ 可还原的加密直接用 `IDataProtectionProvider`：构造时 `CreateProtector` 一次并复用，用途字符串固定带版本，解密只捕获 `CryptographicException`；不另立加密接口
@@ -487,28 +504,25 @@ var apiKeys = await query
 
 ### 6.1 异常类型
 
-使用 `Leistd.ExceptionHandling.Core` 提供的异常类型。**异常类型 → HTTP 状态码的完整映射以 [API 规范](./api.md) §4「异常类型映射」为单一权威来源**（含 `ConflictException`/409 等），此处不重复维护，避免不一致。
+优先使用 .NET 内置异常；仅可预期、用户可恢复的业务规则失败使用 `BusinessException`。HTTP 映射以 [API 规范](./api.md) §4 为单一权威来源。
 
-#### 用哪一族：看代码在不在请求路径上
+#### 用哪一类：看失败语义，不看是否位于请求路径
 
 | 位置 | 用什么 | 为什么 |
 | --- | --- | --- |
-| **请求路径**（Controller、AppService、Domain、Infrastructure 里被请求触发的代码，含 DbContext 解析器一类每请求都会走的组件） | **必须**用 `Leistd.ExceptionHandling.Core` 家族 | 全局处理器只认这一族。其余异常一律被兜底转成 500 + "系统错误"，**原始消息被丢弃**，同时产出 Error 级日志加堆栈 |
+| **Domain / Application 业务规则** | `BusinessException(code, safeMessage)` | 错误码是机器契约和本地化键；默认 400，API 组合根可按码映射 |
+| **Infrastructure 传输/配置/解析失败** | BCL 或专用技术异常 | 未显式映射时对外安全兜底为 500，细节进日志 |
 | **启动期 / 组合期**（`Program.cs`、`Add*Services`、`IValidateOptions`） | BCL 异常（`InvalidOperationException` 等） | 没有 HTTP 响应也没有终端用户，进程就该起不来 |
 | **参数与编程契约**（`ArgumentException`、重复 key、不该发生的状态） | BCL 异常 | 是缺陷不是业务失败，不该被翻译成状态码 |
 | **一次性作业**（DbMigrator 之类控制台入口） | BCL 异常 | 同启动期；同一能力若同时有请求入口，由请求入口转换为 `Leistd.ExceptionHandling.Core` 异常 |
 
-在请求路径上用 BCL 异常的三个副作用（都不会立刻暴露，所以容易漏）：
-
-1. **信息丢失**：客户端拿到的永远是"系统错误"，"这个租户没配连接"与"数据库连不上"无法区分。
-2. **日志级别错位**：兜底走 Error + 堆栈。运营数据缺失这类问题会持续刷 Error，久了告警就没人看。
-3. **重试语义错误**：500 对调用方意味着"可重试"。而配置缺失重试一万次也一样，会让服务间调用的重试策略空转。
-
-选型对照：配置/数据缺失 → `NotFoundException`(404)；状态冲突 → `ConflictException`(409)；上游或 Secret 后端暂时不可达 → `ServiceUnavailableException`(503，语义上可重试)；确属服务端故障 → **显式** `InternalServerException`(500)，别让兜底处理器替你决定。
+不要为 BCL 异常增加 `WithCode`：如果失败确实是业务契约，直接构造 `BusinessException`；如果是技术故障，保留原类型和异常链。
 
 #### 配置错误在启动期失败，不要留到运行期
 
-缺连接串、格式写错的 `DomainFormat` 这类**部署配置错误**，若留到运行期，表现是每个请求失败一次、而进程"健康"地跑着。用 `AddOptions<T>().Validate(...).ValidateOnStart()`。
+格式写错的 `DomainFormat`、缺必填凭据这类**部署配置错误**，若留到运行期，表现是每个请求失败一次、而进程"健康"地跑着。用 `AddOptions<T>().Validate(...).ValidateOnStart()`。
+
+`ValidateOnStart` 在宿主启动时才执行，晚于 `app.Run()` 之前的步骤。数据库连接串属于这一类之前就要用到的配置：API 在接流量前校验迁移、DbMigrator 从不启动宿主，因此缺连接串由创建 DbContext 时直接抛出并指明键名，不另建选项类。
 
 > **组合期不能直接读配置来做判断。**`Add*Services(configuration)` 拿到的配置还不是最终值——集成测试通过 `WebApplicationFactory` 追加的覆盖此刻尚未合入，直接判断会误伤测试。要用 `.Configure<IConfiguration>((o, c) => ...)` 从 DI 取，让求值发生在配置定案之后。
 
@@ -516,12 +530,14 @@ var apiKeys = await query
 ```csharp
 // 业务规则验证失败
 if (await userRepository.AnyAsync(u => u.Username == username))
-    throw new BadRequestException($"用户名 '{username}' 已存在");
+    throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
+        .WithData("Username", username);
 
 // 资源不存在
 var user = await userRepository.GetByIdAsync(id);
 if (user == null)
-    throw new NotFoundException($"用户 {id} 不存在");
+    throw new BusinessException("User:NotFound", $"User {id} not found.")
+        .WithData("Id", id);
 ```
 
 ### 6.2 日志记录

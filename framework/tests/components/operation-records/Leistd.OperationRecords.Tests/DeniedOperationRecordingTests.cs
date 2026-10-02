@@ -1,8 +1,5 @@
 using System.Security.Claims;
-using Leistd.ExceptionHandling.Constants;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.AspNetCore.Attributes;
@@ -40,8 +37,9 @@ public sealed class DeniedOperationRecordingTests
             options.AddPolicy("Security.RecentMfa", policy => policy.RequireClaim("amr", "mfa"));
         });
         services.AddSingleton<IOperationRecordStore>(store);
-        services.AddSingleton<IOperationRecorder>(
-            _ => new PassThroughRecorder(store));
+        services.AddScoped<RecordedFailureTracker>();
+        services.AddTransient<IOperationRecorder>(
+            provider => new PassThroughRecorder(store, provider.GetRequiredService<RecordedFailureTracker>()));
 
         var context = new DefaultHttpContext
         {
@@ -65,31 +63,6 @@ public sealed class DeniedOperationRecordingTests
         }
 
         return (context, store);
-    }
-
-    /// <summary>把调用原样转成一条记录，避免本组用例依赖记录器的上下文补齐逻辑。</summary>
-    private sealed class PassThroughRecorder(IOperationRecordStore store) : IOperationRecorder
-    {
-        public Task RecordSucceededAsync(string action, OperationTarget target, string basis, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task RecordFailedAsync(
-            string action,
-            OperationTarget target,
-            string basis,
-            OperationFailure failure = default)
-            => store.InsertAsync(new OperationRecordInfo
-            {
-                Action = action,
-                TargetId = target.Id,
-                TargetName = target.Name,
-                AuthorizationBasis = basis,
-                Outcome = OperationRecordOutcome.Failed,
-                Visibility = OperationVisibility.Tenant,
-                FailureCode = failure.Code,
-                FailureData = failure.Data,
-                FailureDetail = failure.Detail
-            });
     }
 
     [Fact]
@@ -123,7 +96,7 @@ public sealed class DeniedOperationRecordingTests
         await context.RecordDeniedOperationAsync();
 
         var written = Assert.Single(store.Written);
-        Assert.Equal(GenericErrorCodes.ForStatus(StatusCodes.Status403Forbidden), written.FailureCode);
+        Assert.Equal("Error:Forbidden", written.FailureCode);
         Assert.Null(written.FailureDetail);
     }
 
@@ -137,7 +110,9 @@ public sealed class DeniedOperationRecordingTests
             new OperationRecordActionAttribute("identity.role.updated", "id")
         ]);
 
-        await context.RecordDeniedOperationAsync(OperationFailure.FromCode("Role:Protected", """{"name":"admin"}"""));
+        await context.RecordDeniedOperationAsync(OperationFailure.FromCode(
+            "Role:Protected",
+            new Dictionary<string, object?> { ["name"] = "admin" }));
 
         var written = Assert.Single(store.Written);
         Assert.Equal("Role:Protected", written.FailureCode);
@@ -218,6 +193,22 @@ public sealed class DeniedOperationRecordingTests
         await context.RecordDeniedOperationAsync();
 
         Assert.Empty(store.Written);
+    }
+
+    /// <summary>任一身份已认证即不算匿名，与官方 <c>DenyAnonymousAuthorizationRequirement</c> 一致。</summary>
+    /// <remarks>回归点：曾只看 <c>User.Identity</c>（第一个身份），首身份未认证时整条记录被当成匿名丢掉。</remarks>
+    [Fact]
+    public async Task A_principal_authenticated_only_by_a_later_identity_is_recorded()
+    {
+        var (context, store) = Create(metadata:
+        [
+            new OperationRecordActionAttribute("identity.role.updated")
+        ]);
+        context.User = new ClaimsPrincipal([new ClaimsIdentity(), new ClaimsIdentity([], "TestBearer")]);
+
+        await context.RecordDeniedOperationAsync();
+
+        Assert.Single(store.Written);
     }
 
     /// <summary>目标标识按声明顺序取多个路由值拼接。</summary>

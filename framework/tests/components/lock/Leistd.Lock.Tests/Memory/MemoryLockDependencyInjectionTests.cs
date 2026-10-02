@@ -19,8 +19,9 @@ public sealed class MemoryLockDependencyInjectionTests
         var implementation = serviceProvider.GetRequiredService<MemoryLocalLock>();
 
         Assert.Same(implementation, serviceProvider.GetRequiredService<ILocalLock>());
-        Assert.Same(implementation, serviceProvider.GetRequiredService<ILock>());
         Assert.Same(implementation, serviceProvider.GetRequiredService<IDistributedLock>());
+        // ILock 只是两者的基接口，不作为服务注册：注入它看不出拿到的是本地锁还是跨副本锁
+        Assert.Null(serviceProvider.GetService<ILock>());
     }
 
     [Fact]

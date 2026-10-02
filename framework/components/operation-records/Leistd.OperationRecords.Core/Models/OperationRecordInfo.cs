@@ -1,3 +1,4 @@
+using Leistd.Tracing.Constants;
 using Leistd.OperationRecords.Definitions;
 
 namespace Leistd.OperationRecords.Models;
@@ -30,7 +31,7 @@ public sealed class OperationRecordInfo
     public const int MaxActorIdLength = 128;
 
     /// <summary>链路标识长度上限。</summary>
-    public const int MaxCorrelationIdLength = 64;
+    public const int MaxCorrelationIdLength = CorrelationIdConstants.MaxLength;
 
     /// <summary>目标名快照长度上限：与操作人名同量级，两者都是显示名。</summary>
     public const int MaxTargetNameLength = 160;
@@ -59,10 +60,12 @@ public sealed class OperationRecordInfo
     /// </remarks>
     public Guid? TenantId { get; init; }
 
-    /// <summary>操作发生时的租户上下文；<see langword="null"/> 表示宿主。</summary>
+    /// <summary>操作人所属的租户（主体的租户声明）；<see langword="null"/> 表示宿主主体。</summary>
     /// <remarks>
-    /// 回答"什么人"的另一半：<see cref="ActorId"/> 只在它所属的租户里有意义。
-    /// 与 <see cref="TenantId"/> 不同的行，就是从租户上下文写进宿主层的那些记录。
+    /// 回答"什么人"的另一半：<see cref="ActorId"/> 只在它所属的租户里有意义。取操作人自己的租户而不是当时的上下文：
+    /// 宿主管理员进入某个租户操作（如模拟登录、代管租户）时，上下文是那个租户，操作人仍是宿主的人。
+    /// 匿名请求没有主体，取请求所在的租户上下文。
+    /// 与 <see cref="TenantId"/> 不同的行，就是跨层写入的记录。
     /// </remarks>
     public Guid? ActorTenantId { get; init; }
 

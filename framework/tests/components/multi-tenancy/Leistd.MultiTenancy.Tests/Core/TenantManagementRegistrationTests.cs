@@ -1,14 +1,13 @@
 using Leistd.Data.Paging;
 using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
+using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Dtos;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.MultiTenancy.Management.Dtos;
 
 namespace Leistd.MultiTenancy.Tests.Core;
 
@@ -17,7 +16,8 @@ namespace Leistd.MultiTenancy.Tests.Core;
 /// </summary>
 /// <remarks>
 /// 这两个用例只依赖契约与工作单元，因此换存储实现（Dapper、远端控制面）时应当照样可用——
-/// 这一条正是把它们从 EF 包移进 Core 的理由，所以按"只引用 Core + 自带存储"的形态钉住。
+/// 所以按"只引用 Management + 自带存储"的形态钉住。反过来，只读控制库的宿主（租户连接解析、迁移作业）
+/// 只调 EF 存储入口，不应被带上用例。
 /// </remarks>
 public sealed class TenantManagementRegistrationTests
 {
@@ -28,6 +28,16 @@ public sealed class TenantManagementRegistrationTests
 
         Assert.NotNull(provider.GetRequiredService<ITenantManagementService>());
         Assert.NotNull(provider.GetRequiredService<ITenantConnectionManagementService>());
+    }
+
+    /// <summary>EF 存储入口只注册存储：管理用例由宿主另行 <c>AddTenantManagement()</c>。</summary>
+    [Fact]
+    public void The_ef_store_entry_does_not_register_the_use_cases()
+    {
+        var services = new ServiceCollection().AddMultiTenancyEfCore<Microsoft.EntityFrameworkCore.DbContext>();
+
+        Assert.DoesNotContain(services, service => service.ServiceType == typeof(ITenantManagementService));
+        Assert.DoesNotContain(services, service => service.ServiceType == typeof(ITenantConnectionManagementService));
     }
 
     /// <summary>用例按请求解析：它们跨工作单元编排，单例会把上下文钉死在第一次解析的那个作用域。</summary>
@@ -69,6 +79,7 @@ public sealed class TenantManagementRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddMultiTenancyCore();
         services.AddSingleton<ITenantStore>(new FakeTenantStore());
@@ -94,9 +105,6 @@ public sealed class TenantManagementRegistrationTests
     private sealed class FakeTenantManager : ITenantManager
     {
         public Task<TenantConfiguration> CreateAsync(string name, string? displayName, bool isActive, string? description = null, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<TenantConfiguration> CreateAsync(string name, string? displayName, bool isActive, Guid id, string? description = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<TenantConfiguration> UpdateAsync(Guid id, string name, string? displayName, string? description = null, CancellationToken cancellationToken = default)
@@ -154,9 +162,6 @@ public sealed class TenantManagementRegistrationTests
             => throw new NotSupportedException();
 
         public Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<TenantOutputDto> CreateAsync(CreateTenantInputDto input, Guid id, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<TenantOutputDto> UpdateAsync(Guid id, UpdateTenantInputDto input, CancellationToken cancellationToken = default)

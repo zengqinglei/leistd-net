@@ -13,6 +13,7 @@
     <!-- 端点只作用于当前用户：收件人取自当前主体 -->
     <ProjectReference Include="..\..\security\Leistd.Security.Core\Leistd.Security.Core.csproj" />
     <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
+    <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.AspNetCore\Leistd.ExceptionHandling.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

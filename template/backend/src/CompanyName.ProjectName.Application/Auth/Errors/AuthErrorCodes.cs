@@ -1,0 +1,28 @@
+namespace CompanyName.ProjectName.Application.Auth.Errors;
+
+/// <summary>Auth 业务错误码。</summary>
+public static class AuthErrorCodes
+{
+    public const string CannotRevokeCurrentSession = "Auth:CannotRevokeCurrentSession";
+    public const string CaptchaInvalid = "Auth:CaptchaInvalid";
+    public const string EmailAlreadyUsed = "Auth:EmailAlreadyUsed";
+    public const string EmailAlreadyVerified = "Auth:EmailAlreadyVerified";
+    public const string EmailCodeInvalid = "Auth:EmailCodeInvalid";
+    public const string EmailCodeRequired = "Auth:EmailCodeRequired";
+    public const string EmailCodeSendTooFrequent = "Auth:EmailCodeSendTooFrequent";
+    public const string EmailVerificationDisabled = "Auth:EmailVerificationDisabled";
+    public const string EmailVerificationUnavailable = "Auth:EmailVerificationUnavailable";
+    public const string InvalidCredentials = "Auth:InvalidCredentials";
+    public const string TwoFactorAlreadyEnabled = "Auth:TwoFactorAlreadyEnabled";
+    public const string TwoFactorChallengeExpired = "Auth:TwoFactorChallengeExpired";
+    public const string TwoFactorCodeInvalid = "Auth:TwoFactorCodeInvalid";
+    public const string TwoFactorCodeRequired = "Auth:TwoFactorCodeRequired";
+    public const string TwoFactorNotEnabled = "Auth:TwoFactorNotEnabled";
+    public const string TwoFactorRequiredByPolicy = "Auth:TwoFactorRequiredByPolicy";
+    public const string TwoFactorSetupExpired = "Auth:TwoFactorSetupExpired";
+    public const string TwoFactorSetupRequired = "Auth:TwoFactorSetupRequired";
+    public const string UnsupportedGrantType = "Auth:UnsupportedGrantType";
+    public const string UserDisabled = "Auth:UserDisabled";
+    public const string UserLockedOut = "Auth:UserLockedOut";
+    public const string UserTemporarilyLockedOut = "Auth:UserTemporarilyLockedOut";
+}

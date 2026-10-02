@@ -1,12 +1,6 @@
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.Options;
 using Leistd.Security.Users;
@@ -35,7 +29,8 @@ internal sealed class OperationRecorder(
     ICorrelationIdProvider correlationIdProvider,
     IClock clock,
     IOptions<OperationRecordOptions> options,
-    ILogger<OperationRecorder> logger) : IOperationRecorder
+    ILogger<OperationRecorder> logger,
+    RecordedFailureTracker recordedFailures) : IOperationRecorder
 {
     public Task RecordSucceededAsync(
         string action,
@@ -57,7 +52,7 @@ internal sealed class OperationRecorder(
         // 成功路径不吞异常：这条记录与它描述的那次变更同处一个边界，
         // 审计写不进去就该让业务一起失败——"发生了但没记"和"记了但没发生"一样不可接受。
         return store.InsertAsync(
-            Create(action, target, authorizationBasis, definition.Visibility, currentTenant.Id,
+            Create(action, target, authorizationBasis, definition, currentTenant.Id,
                 OperationRecordOutcome.Succeeded, OperationFailure.None),
             cancellationToken);
     }
@@ -80,9 +75,13 @@ internal sealed class OperationRecorder(
         {
             // 不可取消：被审计的一方断开连接，不能让这条审计作废。
             await store.InsertAsync(
-                Create(action, target, authorizationBasis, definition.Visibility, tenantId,
+                Create(action, target, authorizationBasis, definition, tenantId,
                     OperationRecordOutcome.Failed, failure),
                 CancellationToken.None);
+
+            // 登记在写出之后：写库失败时下面只记日志、不抛，这条失败并没有留痕，
+            // 端点兜底应当照常补记。
+            recordedFailures.MarkRecorded(action, target.Id);
         }
         catch (Exception exception)
         {
@@ -120,20 +119,30 @@ internal sealed class OperationRecorder(
         string action,
         OperationTarget target,
         string authorizationBasis,
-        OperationVisibility visibility,
+        IOperationActionDefinition definition,
         Guid? tenantId,
         OperationRecordOutcome outcome,
         OperationFailure failure)
     {
-        var actorName = currentUser.Name ?? currentUser.Username;
         var correlationId = correlationIdProvider.Get();
         var claimTypes = options.Value;
 
         // 读 claim 原始值而不是 ICurrentUser.Id：后者只在 sub 能解析成 GUID 时有值，
         // 而机器主体（client:<client_id>）与后台作业主体都不是 GUID——只认 Id 会把这两类
-        // 操作全部记成无主的，而"什么人"正是这张表的第一问。回落到 Id 覆盖没有 sub claim 的宿主。
-        var actorId = currentUser.FindClaim(claimTypes.ActorIdClaimType)?.Value
-                      ?? currentUser.Id?.ToString();
+        // 操作全部记成无主的，而"什么人"正是这张表的第一问。
+        //
+        // 自证类动作（登录、注册）在匿名请求里完成：主体在动作完成那一刻才被证实，定义声明目标即本人，
+        // 操作人取目标、所属租户取当前上下文——否则这条记录没有操作人，Actor 层的本人永远看不到它。
+        var authenticated = currentUser.IsAuthenticated;
+        var actorId = authenticated
+            ? currentUser.SubjectId
+            : definition.TargetIsActor ? target.Id : null;
+        // 操作人所属租户取自其主体；没有主体时退回请求所在的租户上下文（匿名请求只能来自那里）
+        var actorTenantId = authenticated ? currentUser.TenantId : currentTenant.Id;
+        // 操作人名是快照：自证类动作取目标名，改名或销号之后审计仍回答"当时是谁"
+        var actorName = authenticated
+            ? currentUser.Name ?? currentUser.Username
+            : definition.TargetIsActor ? target.Name : null;
         var impersonatorId = currentUser.FindClaim(claimTypes.ImpersonatorIdClaimType)?.Value;
         var impersonatorName = currentUser.FindClaim(claimTypes.ImpersonatorNameClaimType)?.Value;
 
@@ -150,13 +159,13 @@ internal sealed class OperationRecorder(
         return new OperationRecordInfo
         {
             TenantId = tenantId,
-            ActorTenantId = currentTenant.Id,
+            ActorTenantId = actorTenantId,
             Action = action,
             TargetId = target.Id,
             TargetName = target.Name,
             AuthorizationBasis = authorizationBasis,
             Outcome = outcome,
-            Visibility = visibility,
+            Visibility = definition.Visibility,
             FailureCode = failure.Code,
             FailureData = failure.Data,
             FailureDetail = failure.Detail,

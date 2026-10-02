@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
@@ -19,10 +19,6 @@ import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-//#if (IncludeLocalization)
-import { LanguageService } from '../../../core/services/language-service';
-//#endif
-import { TenantContextService } from '../../../core/services/tenant-context-service';
 import { LayoutService } from '../../services/layout-service';
 
 /** 用户菜单项：普通项（label + lucide 图标 + 动作）或分隔线。 */
@@ -52,16 +48,12 @@ interface UserMenuItem {
   // 基线下留出的字母下伸空间把宿主撑高约 6px，头像就比同排按钮高出一截。
   // 侧栏形态里宿主要承载占满整行的列表，保持块级。
   host: { '[class.inline-flex]': "variant() === 'topbar'" },
-  // prettier-ignore
   imports: [
     NgIcon,
     ...HlmAvatarImports,
     HlmButton,
     ...HlmDropdownMenuImports,
     ...HlmSidebarImports,
-    //#if (IncludeLocalization)
-    TranslocoModule,
-    //#endif
   ],
   // prettier-ignore
   providers: [
@@ -153,10 +145,6 @@ interface UserMenuItem {
               <div class="grid flex-1 text-left text-sm leading-tight">
                 <span class="truncate font-medium">{{ user.displayName || user.username }}</span>
                 <span class="truncate text-xs text-muted-foreground">{{ user.email }}</span>
-                <!-- 当前租户；未选租户即宿主（未启用多租户时恒为空串，不渲染）。 -->
-                @if (tenantLabel(); as label) {
-                  <span class="truncate text-xs text-muted-foreground">{{ label }}</span>
-                }
               </div>
             </div>
           </hlm-dropdown-menu-label>
@@ -188,27 +176,25 @@ export class UserMenu {
   private readonly router = inject(Router);
   private readonly layoutService = inject(LayoutService);
   //#if (IncludeLocalization)
-  private readonly languageService = inject(LanguageService);
-  private readonly transloco = inject(TranslocoService);
+  private readonly texts = {
+    workspace: translateSignal('menu.workspace'),
+    platform: translateSignal('menu.platform'),
+    personalSettings: translateSignal('menu.personalSettings'),
+    logout: translateSignal('menu.logout'),
+  };
   //#endif
-  private readonly tenantContext = inject(TenantContextService);
   private readonly sidebarService = inject(HlmSidebarService);
 
   /** 侧栏形态的弹出方向，同官方 nav-user；顶栏形态沿用默认（向下）。 */
   readonly sidebarMenuSide = computed(() => (this.sidebarService.isMobile() ? 'top' : 'right'));
 
   readonly userMenuItems = computed<UserMenuItem[]>(() => {
-    //#if (IncludeLocalization)
-    // 建立对活动语言的依赖，语言切换时重新计算菜单文案。
-    this.languageService.activeLang();
-    const t = (key: string) => this.transloco.translate(key);
-    //#endif
     const items: UserMenuItem[] = [];
 
     if (this.layoutService.isPlatform()) {
       items.push({
         //#if (IncludeLocalization)
-        label: t('menu.workspace'),
+        label: this.texts.workspace(),
         //#else
         label: 'Workspace',
         //#endif
@@ -221,7 +207,7 @@ export class UserMenu {
     ) {
       items.push({
         //#if (IncludeLocalization)
-        label: t('menu.platform'),
+        label: this.texts.platform(),
         //#else
         label: 'Admin platform',
         //#endif
@@ -240,7 +226,7 @@ export class UserMenu {
       // 不带 LocalIdentity 守卫：没有本地身份时个人设置里仍有偏好面板。
       {
         //#if (IncludeLocalization)
-        label: t('menu.personalSettings'),
+        label: this.texts.personalSettings(),
         //#else
         label: 'Personal settings',
         //#endif
@@ -253,7 +239,7 @@ export class UserMenu {
       // 换租户走登录页：退出 → 登录页按域名定案，或（域名不表态时）在那里清掉 / 换一个租户。
       {
         //#if (IncludeLocalization)
-        label: t('menu.logout'),
+        label: this.texts.logout(),
         //#else
         label: 'Sign out',
         //#endif
@@ -281,22 +267,19 @@ export class UserMenu {
       .filter((group) => group.length > 0),
   );
 
-  /** 当前租户显示名；未选租户即宿主。 */
-  readonly tenantLabel = computed(() => {
-    //#if (IncludeLocalization)
-    this.languageService.activeLang();
-    //#endif
-    const tenant = this.tenantContext.current();
-    if (tenant) {
-      // 匿名接口不再回显租户的展示名（那会泄露租户是否存在），这里只有解析用的 key
-      return tenant.key;
-    }
-    //#if (IncludeLocalization)
-    return this.transloco.translate('menu.hostTenant');
-    //#else
-    return 'Host';
-    //#endif
-  });
+  // 这里**刻意没有**"当前租户"一行。
+  //
+  // 产品上它不解决任何问题：租户数据本就隔离，用户只可能看到自己租户的数据；
+  // 会话内也换不了租户（见下面菜单项的注释），所以这个值既不会变、也不用来做决定。
+  // 用子域名区分租户的部署里，地址栏已经是答案。
+  //
+  // 实现上更不能照着 TenantContextService 显示：那份上下文是**登录入口的路由提示**
+  // （用户在登录页填的名字，存在 localStorage），不是会话事实。实测过：保持宿主超管登录态不变，
+  // 只往 localStorage 写一个名字，这一行就会显示那个并不存在的租户——它报的是本地字符串，
+  // 不是"这个会话属于谁"。
+  //
+  // 将来真要显示，唯一可接受的来源是**会话自己**（给 WhoAmI 加租户字段，用展示名而不是路由 key），
+  // 并且只在确实处于租户时渲染。别再从 TenantContextService 取。
 
   handleLogout(): void {
     this.authService.logout();

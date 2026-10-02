@@ -1,6 +1,9 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 
 import { TenantEditDialog } from './tenant-edit-dialog';
 //#if (IncludeLocalization)
@@ -61,11 +64,11 @@ describe('TenantEditDialog', () => {
       imports: [HostComponent],
       // prettier-ignore
       providers: [
-        provideZonelessChangeDetection(),
-        //#if (IncludeLocalization)
-        ...provideTranslocoTesting(['en']),
-        //#endif
-      ],
+                provideZonelessChangeDetection(),
+                //#if (IncludeLocalization)
+                ...provideTranslocoTesting(['en']),
+                //#endif
+            ],
     });
 
     fixture = TestBed.createComponent(HostComponent);
@@ -75,12 +78,12 @@ describe('TenantEditDialog', () => {
 
   afterEach(() => fixture.destroy());
 
-  it('新建模式缺少管理员邮箱或初始密码时表单非法，不提交', async () => {
+  it('rejects the create form without an admin email or initial password', async () => {
     dialog().tenantForm.name().value.set('acme');
     await fixture.whenStable();
 
     // 只填名称就能提交的话，后端会收到一个没有管理员的租户——谁都进不去。
-    expect(dialog().tenantForm().invalid()).toBeTrue();
+    expect(dialog().tenantForm().invalid()).toBe(true);
     dialog().onSubmit();
     expect(host.saved).toEqual([]);
 
@@ -89,12 +92,79 @@ describe('TenantEditDialog', () => {
     dialog().tenantForm.adminPassword().value.set('weak');
     await fixture.whenStable();
 
-    expect(dialog().tenantForm().invalid()).toBeTrue();
+    expect(dialog().tenantForm().invalid()).toBe(true);
     dialog().onSubmit();
     expect(host.saved).toEqual([]);
   });
 
-  it('编辑模式不渲染管理员账号字段，且只凭名称即可放行', async () => {
+  /** 名称字段下显示出来的校验提示；对话框渲染在 document 上的浮层里。 */
+  function shownNameErrors(): string[] {
+    const field = document.getElementById('tenant-name')!.closest('hlm-field')!;
+    return Array.from(field.querySelectorAll('hlm-field-error'))
+      .map((element) => element.textContent!.trim())
+      .filter((text) => text.length > 0);
+  }
+
+  function nameErrorKinds(): string[] {
+    return dialog()
+      .tenantForm.name()
+      .errors()
+      .map((error) => error.kind);
+  }
+
+  // 租户名按单个 DNS 标签校验：配置子域名解析时名字就是主机名的一段，不合规的名字建得出来却访问不到
+  it.each(['Invalid Name!', '-acme', 'acme-', 'acme_1', 'acme.example', '租户'])(
+    'rejects %j as a tenant name and does not submit',
+    async (name) => {
+      dialog().tenantForm.name().value.set(name);
+      dialog().tenantForm.adminEmail().value.set('admin@example.test');
+      dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
+      await fixture.whenStable();
+
+      expect(nameErrorKinds()).toEqual(['tenantNamePattern']);
+      dialog().onSubmit();
+      expect(host.saved).toEqual([]);
+    },
+  );
+
+  // 首尾空白提交前会去掉，按去掉之后的值校验；超长只报一条长度提示
+  it('accepts DNS labels, ignores surrounding blanks and reports an overlong name once', async () => {
+    for (const name of ['Acme-2', '  acme  ', 'a', 'a'.repeat(63)]) {
+      dialog().tenantForm.name().value.set(name);
+      await fixture.whenStable();
+      expect(nameErrorKinds()).toEqual([]);
+    }
+
+    dialog().tenantForm.name().value.set('a'.repeat(64));
+    await fixture.whenStable();
+    expect(nameErrorKinds()).toEqual(['maxLength']);
+  });
+
+  //#if (IncludeLocalization)
+  it('shows the tenant name rule from the validation.tenantNamePattern entry', async () => {
+    TestBed.inject(TranslocoService).setTranslation(
+      { validation: { tenantNamePattern: 'Letters, digits and hyphens only' } },
+      'en',
+    );
+    dialog().tenantForm.name().value.set('Invalid Name!');
+    dialog().tenantForm.name().markAsTouched();
+    await fixture.whenStable();
+
+    expect(shownNameErrors()).toEqual(['Letters, digits and hyphens only']);
+  });
+  //#else
+  it('shows the tenant name rule from the built-in English table', async () => {
+    dialog().tenantForm.name().value.set('Invalid Name!');
+    dialog().tenantForm.name().markAsTouched();
+    await fixture.whenStable();
+
+    expect(shownNameErrors()).toEqual([
+      'Use letters, digits and hyphens only, not starting or ending with a hyphen, up to 63 characters.',
+    ]);
+  });
+  //#endif
+
+  it('hides the admin account fields in edit mode and passes with the name alone', async () => {
     expect(document.getElementById('tenant-admin-email')).not.toBeNull();
     expect(document.getElementById('tenant-admin-password')).not.toBeNull();
 
@@ -103,13 +173,49 @@ describe('TenantEditDialog', () => {
     // 字段不渲染却仍参与校验，保存按钮会被两个看不见的空字段永久禁用。
     expect(document.getElementById('tenant-admin-email')).toBeNull();
     expect(document.getElementById('tenant-admin-password')).toBeNull();
-    expect(dialog().isEdit()).toBeTrue();
-    expect(dialog().tenantForm().invalid()).toBeFalse();
+    expect(dialog().isEdit()).toBe(true);
+    expect(dialog().tenantForm().invalid()).toBe(false);
     expect(dialog().tenantForm.name().value()).toBe('acme');
     expect(dialog().tenantForm.displayName().value()).toBe('Acme Inc.');
   });
 
-  it('新建提交带上管理员账号，名称去除首尾空白、空显示名转 undefined', async () => {
+  it('lets an existing tenant with a pre-rule name be edited, but checks a changed name', async () => {
+    host.tenant.set({ ...existing, name: 'acme_corp' });
+    await fixture.whenStable();
+
+    // 存量名称不合规、没改名：只改显示名照常可保存
+    dialog().tenantForm.displayName().value.set('Acme Corp');
+    await fixture.whenStable();
+    expect(dialog().tenantForm.name().errors()).toEqual([]);
+
+    // 改成另一个不合规的名称就按规则拦下
+    dialog().tenantForm.name().value.set('acme corp');
+    await fixture.whenStable();
+    expect(
+      dialog()
+        .tenantForm.name()
+        .errors()
+        .map((error) => error.kind),
+    ).toEqual(['tenantNamePattern']);
+  });
+
+  // 规则之前的名字可能恰为 64 个字符、或带首尾空白：不改名时既不按新规则拦，也原样送回（trim 会变成改名）
+  it('keeps a pre-rule name exactly as it is when only other fields change', async () => {
+    for (const legacyName of [`${'a'.repeat(62)}_x`, ' acme_corp ']) {
+      host.saved.length = 0;
+      host.tenant.set({ ...existing, name: legacyName });
+      await fixture.whenStable();
+
+      dialog().tenantForm.displayName().value.set('Legacy Inc.');
+      await fixture.whenStable();
+      expect(dialog().tenantForm.name().errors()).toEqual([]);
+
+      dialog().onSubmit();
+      expect((host.saved[0] as UpdateTenantInputDto).name).toBe(legacyName);
+    }
+  });
+
+  it('sends the admin on create, trims the name and omits a blank display name', async () => {
     dialog().tenantForm.name().value.set('  acme  ');
     dialog().tenantForm.displayName().value.set('   ');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');
@@ -129,7 +235,7 @@ describe('TenantEditDialog', () => {
 
   // 分库只在新建时定案，所以连接串是新建载荷的一部分：登记先于播种，种子才会落进那个库。
   // 建好之后再登记第一条连接，后端会以 409 拒绝——那时数据已经在回落库里，登记不会把它们搬过去。
-  it('新建载荷带上连接串', async () => {
+  it('includes the connection string in the create payload', async () => {
     dialog().tenantForm.name().value.set('acme');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');
     dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
@@ -154,7 +260,7 @@ describe('TenantEditDialog', () => {
 
   // 留空必须是空数组而不是一条空连接串：后端对"给了连接但连接串是空的"按 400 拒绝，
   // 而这里表达的是"不分库"，两者不能长成同一个请求。
-  it('连接串留空即不分库，传空数组而不是空连接条目', async () => {
+  it('sends no connections for a blank connection string (no dedicated database)', async () => {
     dialog().tenantForm.name().value.set('acme');
     dialog().tenantForm.adminEmail().value.set('admin@example.test');
     dialog().tenantForm.adminPassword().value.set('TenantSpec!Pw1');
@@ -165,7 +271,7 @@ describe('TenantEditDialog', () => {
     expect((host.saved[0] as CreateTenantInputDto).connections).toEqual([]);
   });
 
-  it('编辑提交只带标识字段，不夹带管理员字段', async () => {
+  it('submits only the tenant identity fields on edit, without admin fields', async () => {
     await switchToEdit();
 
     dialog().tenantForm.name().value.set('acme-renamed');
@@ -184,7 +290,7 @@ describe('TenantEditDialog', () => {
     });
   });
 
-  it('编辑时改描述随载荷一起提交', async () => {
+  it('includes the edited description in the update payload', async () => {
     await switchToEdit();
 
     dialog().tenantForm.description().value.set('华东区自营资金账户');
@@ -192,6 +298,6 @@ describe('TenantEditDialog', () => {
 
     dialog().onSubmit();
 
-    expect(host.saved[0]).toEqual(jasmine.objectContaining({ description: '华东区自营资金账户' }));
+    expect(host.saved[0]).toEqual(expect.objectContaining({ description: '华东区自营资金账户' }));
   });
 });

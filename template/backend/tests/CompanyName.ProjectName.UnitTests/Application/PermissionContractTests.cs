@@ -35,14 +35,12 @@ public class PermissionContractTests
 
     /// <summary>可授予的权限名。</summary>
     /// <remarks>
-    /// 排除三类非权限常量：分组标识符（模块那一级）、权限名前缀本身，
-    /// 以及用 <c>|</c> 表达"任一满足"的策略名——策略不落库，也没有父权限。
+    /// 排除两类非权限常量：分组标识符（模块那一级）与权限名前缀本身。
     /// </remarks>
     private static (string Path, string Value)[] Permissions() =>
         [.. AllPermissionConstants(typeof(PermissionConstant))
             .Where(x => !x.Path.Contains(".Groups.")
-                        && x.Value != PermissionConstant.Prefix
-                        && !x.Value.Contains('|'))];
+                        && x.Value != PermissionConstant.Prefix)];
 
     [Fact]
     public void Every_permission_starts_with_the_app_prefix()
@@ -73,18 +71,6 @@ public class PermissionContractTests
 
         Assert.NotEmpty(groups);
         Assert.All(groups, g => Assert.DoesNotContain(Permissions(), p => p.Value == g));
-    }
-
-    // "任一满足"的策略用 | 连接，两侧都必须是真实存在的权限名——
-    // 拼错一侧的表现是该侧永远不生效，而策略整体仍然工作。
-    [Fact]
-    public void Or_policies_reference_only_real_permissions()
-    {
-        var names = Permissions().Select(p => p.Value).ToHashSet(StringComparer.Ordinal);
-
-        Assert.All(
-            PermissionConstant.Permissions.ReadPolicy.Split('|'),
-            part => Assert.Contains(part, names));
     }
 
     // 动作权限一律是"资源.动作"两段，且资源那一段本身也是一个权限（可授予的默认项）。

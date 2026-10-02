@@ -8,7 +8,7 @@
 
 这一条必须明确，因为两种读法都讲得通，而选错会拿到不存在的包：
 
-- `VERSION` 的内容 **等于最近一次 stable 发布的版本号**，由 `release.yml` 在发版成功后回写；
+- `VERSION` 的内容 **等于最近一次 stable 已上传的版本号**，由 `release.yml` 在包上传后推送回写；包源索引和 Release 验收可能稍后完成；
 - **下一版由流水线按提交算出**（见下一节），`VERSION` 里不会提前出现；
 - 因此在 `main` 上读到 `0.12.0`，含义是"nuget.org 上最新的正式版是 0.12.0"，
   而不是"正在做 0.12.0"。
@@ -44,7 +44,7 @@
 
 ## 提交规范决定版本递增（Conventional Commits）
 
-发版时流水线（`release.yml`）分析"自上个 `v*` tag 以来"的提交信息，算出下一个版本（默认"优先最小版本"）：
+发版时流水线（`release.yml`）分析自上个稳定版 `vX.Y.Z` tag 以来的提交信息，算出下一个版本（默认优先最小版本）：
 
 | 提交 | 递增 | 例 |
 | --- | --- | --- |
@@ -53,6 +53,44 @@
 | `feat!:` / 任意类型带 `!` / 含 `BREAKING CHANGE` | Major | `0.12.0` → **`0.13.0`**（见下方 0.x 规则）；`1.4.2` → `2.0.0` |
 
 > **提交信息务必遵循 [Conventional Commits](https://www.conventionalcommits.org/)** —— 它直接决定版本如何递增。
+
+### 标了 `!` 就必须有 `BREAKING CHANGE:` 脚注
+
+`!` 只让流水线知道"这是破坏性的"，它不告诉适配方**破坏了什么**。而适配方是**按脚注检索**的：
+`git log --grep='BREAKING CHANGE'` 是他们确认"这一版要改哪些地方"的入口，
+标题里的 `!` 不在这个结果里。少一条脚注，对应的那次改动就会在适配时被整体漏掉。
+
+因此带 `!` 的提交必须带脚注，且脚注与升级清单一致：
+
+```
+refactor!: 异常响应统一走 Problem Details 管道
+
+BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/errors，
+组件异常映射由各组件的 AddXxx 自行登记。详见 docs/framework/upgrade-0.13.0.md §9。
+```
+
+脚注不必复述全部细节——**指向升级清单的具体小节**即可，但那一句指路不能省。
+
+**发布时会拦。** `release.yml` 推算版本那一步逐条解析本次范围内的提交：标了 `!` 却没有脚注就中止发布，
+并列出是哪几条。升版判定与这道检查**共用同一个解析**——`!` 看标题前缀，脚注看行首
+`BREAKING CHANGE:` / `BREAKING-CHANGE:`（Conventional Commits 的真脚注，两种写法等价）。
+
+**脚注不能是空的**：`BREAKING CHANGE:` 后面什么都不写不算数——适配方检索到了也读不出改了什么。
+识别口径在三处出现（脚注闸门、升版推算、发布说明提取），三处必须一致：
+只在一处接受连字符写法，会出现"过了闸门却不进发布说明"。
+
+> 此前升版判定用的是无锚点的 `BREAKING CHANGE`，正文里任何位置出现这串字样都会被判成 major——
+> 一条只在正文解释"这次不算 BREAKING CHANGE"的 `docs:` 提交足以触发一次错误升版。现已修正。
+
+**这道检查有一个写死的起点。** 闸门落地时，上一个稳定 tag（`v0.12.0`）到 `HEAD` 之间已经有
+**20 条**带 `!` 缺脚注的提交（最早一条是 `46a5555c`）。不设起点的话第一次发布就会被自己拦下，
+而已推的历史不原地改写，所以 `release.yml` 里的 `$footnoteAnchor` 固定为
+`802b4dca`——**只检查它之后的提交**。这一批旧提交的破坏性内容统一由
+`docs/framework/upgrade-0.13.0.md` 承载；按脚注检索不到时以那份升级清单为准。
+
+起点是一次性的切换点，不是可开可关的开关：它不随时间推移扩大豁免范围，`802b4dca` 之后的每一条提交
+都要守这条规则。只有分支历史被重构（起点不再是 `HEAD` 的祖先）时才更新它，那时发布会直接报错提示，
+不会静默跳过检查。升版推算仍然用完整范围，只有脚注检查用这个起点。
 
 ### 0.x 期间的破坏性变更按 Minor 递增
 
@@ -74,27 +112,31 @@
 | --- | --- | --- | --- |
 | push `main` | `x.y.z`（正式，自动递增） | nuget.org | `release.yml`（stable 通道） |
 | push `develop` | `x.y.z-beta.<N>` | nuget.org（预发布） | `release.yml`（beta 通道） |
-| 每工作日定时（develop） | `x.y.z-preview.<yyyyMMdd>` | GitHub Packages（内部） | `release.yml`（nightly 通道） |
+| 每工作日定时（develop） | `x.y.z-preview.<yyyyMMdd>.<run_number>` | GitHub Packages（内部） | `release.yml`（nightly 通道） |
 
 > 三个通道由**单个** `release.yml` 内部按 `github.ref` / `github.event_name` 自动判定。
 
-> 预发布后缀用**点分数字**（`-beta.12`、`-preview.20260623`），保证 NuGet 数值排序正确。
+> 预发布后缀用**点分数字**（`-beta.12`、`-preview.20260623.123`），保证 NuGet 数值排序正确。
 
 ## 正式版发布（全自动）
 
 **push 到 `main` 即自动发布**，无需手动打 tag：
 
-1. 按提交推算新正式版本；
-2. 回写 `VERSION` + 同步模板，提交 `chore: 发布 vX.Y.Z [skip ci]`；
-3. 打 tag `vX.Y.Z`；
-4. 打包 → 经 Trusted Publishing 推 nuget.org；
-5. 创建 GitHub Release（自动生成 release notes）。
+1. 对同一候选提交复用 CI 的静态、Framework、Template 矩阵和真实 PostgreSQL 验证；全部通过后按提交推算新正式版本；
+2. 在本地回写 `VERSION`、同步模板，创建 `chore: 发布 vX.Y.Z [skip ci]` 提交和 tag；
+3. 打包并隔离消费最终版本，随后经 Trusted Publishing 推 nuget.org；
+4. 包源写入后立即推送 tag 和版本提交，记录已发布产物；
+5. 等待目标包源可还原精确版本和全部包，验证通过后创建 GitHub Release（自动生成 release notes）。
 
 机制要点：
 - 触发发版的变更：`VERSION`、**`framework/` 源码**（框架内非 docs 的 `.md` 除外）、或 **`framework/docs/` 组件文档**（文档随包分发，故文档更新也发一版送达）。
 - **不**触发 stable 正式版：`docs/framework/`、`template/` 与仓库根的 `*.md`（内部开发规范、模板文档、仓库元文档），避免非交付内容改动误发。develop 分支仍按 beta 通道策略执行。
 - 回写提交带 `[skip ci]` 且过滤 `github-actions[bot]`，避免死循环。
 - ⚠️ NuGet 包不可删（只能 unlist）。框架源码每次有效变更都会产出一个正式版，请把控合入 main 的节奏。
+
+### 部分发布恢复
+
+失败时先核对目标包源中已发布和缺失的包、tag 指向、`VERSION` 回写提交及 GitHub Release。tag 记录已发布版本，不能因消费验证失败而删除后复用版本号。只从原候选产物补齐缺失包；候选或产物改变时使用新版本并说明旧版本状态。恢复后从目标包源还原全部精确版本，并补齐缺失的 Release。不要用 `--skip-duplicate` 掩盖不同产物。
 
 ## 破坏性变更怎么让下游知道
 
@@ -177,5 +219,5 @@ pwsh framework/build/pack-local-feed.ps1
 ## 注意
 
 - CPM 下第三方包版本集中在 `framework/Directory.Packages.props`；升级第三方依赖按提交规范评估影响。
-- monorepo 统一版本：所有可发布框架包共享同一版本，要么全发要么全不发；`--skip-duplicate` 保证重跑幂等。
+- monorepo 统一版本：所有可发布框架包共享同一版本。推包途中失败可能留下部分已发布的包；同版本不可覆盖，恢复前须核对实际包集合和 tag，不用 `--skip-duplicate` 掩盖不同候选产物。
 - 整个机制零外部版本工具（纯 git + PowerShell + MSBuild 读文件），与团队其它项目（如 ai-relay）的 VERSION 文件范式一致。

@@ -84,7 +84,7 @@ public class TimingInterceptor(ILogger<TimingInterceptor> logger) : BaseAsyncInt
 
 ## 注意事项
 
-- `Order` 语义是**数值越小越先执行（越靠外层）**，可为负数。内置 `CorrelationIdInterceptor`（链路追踪）取 `Order = -1000` 以确保位于最外层、最先初始化上下文。
+- `Order` 语义是**数值越小越先执行（越靠外层）**，可为负数。需要最先建立上下文的拦截器取较小的负值，确保位于最外层。
 - 必须重写两个 `InterceptAsync` 重载：有返回值的方法走泛型重载，无返回值的方法走非泛型重载，二者逻辑通常一致，需分别实现。
 - 不要忘记在两个重载里都调用 `proceed(invocation, proceedInfo)`；不调用则原方法不会执行。
 - 本包仅是拦截器基类，自身不会让任何服务“自动被拦截”。织入需配合 [依赖注入](./dependency-injection.md) 组件完成；类代理要求被拦截方法为 `virtual`，接口代理则无此限制。

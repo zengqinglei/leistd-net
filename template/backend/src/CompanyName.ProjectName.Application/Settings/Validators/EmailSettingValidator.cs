@@ -1,16 +1,20 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Settings.Errors;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.ExceptionHandling;
 using Leistd.Settings.Validation;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
 namespace CompanyName.ProjectName.Application.Settings.Validators;
 
 /// <summary>
 /// 邮件相关设置的业务取值：开启邮箱验证的运行前提、发件地址的写法。
 /// </summary>
-internal sealed class EmailSettingValidator(IOptions<VerificationCodeOptions> verificationCodeOptions) : ISettingValueValidator
+internal sealed class EmailSettingValidator(
+    IOptions<VerificationCodeOptions> verificationCodeOptions,
+    ILogger<EmailSettingValidator> logger) : ISettingValueValidator
 {
     public Task ValidateAsync(SettingValueValidationContext context, CancellationToken cancellationToken = default)
     {
@@ -21,26 +25,17 @@ internal sealed class EmailSettingValidator(IOptions<VerificationCodeOptions> ve
             // 不在这里拦，管理员随后在设置页打开，直到真的发码时才在摘要计算处抛 500。
             case SettingConstant.Registration.EnableEmailVerification
                 when context.Value == "true" && !verificationCodeOptions.Value.IsKeyUsable:
-                throw new BadRequestException(
-                        "Email verification cannot be enabled: this deployment has no usable "
-                        + $"{VerificationCodeOptions.SectionName}:Key. Provide a stable Base64 key of at "
-                        + $"least {VerificationCodeOptions.MinimumKeyBytes} bytes from the deployment and restart.")
-#if (IncludeLocalization)
-                    .WithCode("Setting:EmailVerificationKeyMissing")
-                    .WithData("Section", VerificationCodeOptions.SectionName)
-                    .WithData("MinimumKeyBytes", VerificationCodeOptions.MinimumKeyBytes)
-#endif
-                    ;
+                logger.LogWarning(
+                    "Email verification cannot be enabled: {Section}:Key is missing or shorter than {MinimumKeyBytes} bytes.",
+                    VerificationCodeOptions.SectionName, VerificationCodeOptions.MinimumKeyBytes);
+                throw new BusinessException(AppSettingErrorCodes.EmailVerificationKeyMissing,
+                    "Email verification cannot be enabled in the current deployment. Please contact your administrator.");
 
             // 只收裸地址：带显示名的写法（"Acme <a@b.c>"）在这里放行，发信时才因为解析不出而失败
             case SettingConstant.Email.DefaultFromAddress
                 when !System.Net.Mail.MailAddress.TryCreate(context.Value, out var address) || address.Address != context.Value:
-                throw new BadRequestException($"'{context.Value}' is not a valid email address.")
-#if (IncludeLocalization)
-                    .WithCode("Setting:EmailAddressInvalid")
-                    .WithData("Value", context.Value)
-#endif
-                    ;
+                throw new BusinessException(AppSettingErrorCodes.EmailAddressInvalid, $"'{context.Value}' is not a valid email address.")
+                    .WithData("Value", context.Value);
         }
 
         return Task.CompletedTask;

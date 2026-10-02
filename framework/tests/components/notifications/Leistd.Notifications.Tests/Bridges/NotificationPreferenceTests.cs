@@ -1,16 +1,10 @@
 using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
-using Leistd.Notifications.Stores;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Filters;
 using Leistd.Notifications.Settings;
 using Leistd.Notifications.Settings.Options;
 using Leistd.Settings;
 using Leistd.Settings.Definitions;
-using Leistd.Settings.Errors;
-using Leistd.Settings.Management;
-using Leistd.Settings.Resolution;
 using Leistd.Settings.Stores;
 using Leistd.Security.Users;
 using Leistd.TestBase.Doubles;

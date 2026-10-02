@@ -78,7 +78,7 @@ export function getUsers(params: any): PagedResultDto<any> {
 export function getUserById(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
-    throw new MockException(404, { code: 'Error:NotFound', message: 'User not found' });
+    throw new MockException(404, { code: 'User:NotFound', message: 'User not found' });
   }
   return toUserManagementOutput(user);
 }
@@ -86,11 +86,16 @@ export function getUserById(id: string) {
 export function addUser(value: any) {
   const username = String(value.username ?? '').trim();
   const email = String(value.email ?? '').trim();
-  const userExists = USERS.some((w) => w.username === username || w.email === email);
-  if (userExists) {
-    throw new MockException(400, {
-      code: 'Error:BadRequest',
-      message: 'Username or email already exists',
+  if (USERS.some((w) => w.username === username)) {
+    throw new MockException(409, {
+      code: 'User:UsernameTaken',
+      message: `Username '${username}' already exists.`,
+    });
+  }
+  if (USERS.some((w) => w.email === email)) {
+    throw new MockException(409, {
+      code: 'User:EmailTaken',
+      message: `Email '${email}' is already in use.`,
     });
   }
   //#if (LocalIdentity)
@@ -101,7 +106,7 @@ export function addUser(value: any) {
   // 复刻后端 CreateUserInputDto：SubjectId 必填，且就是本服务 Membership 的主键。
   const subjectId = String(value.subjectId ?? '').trim();
   if (!subjectId) {
-    throw new MockException(400, { code: 'Error:BadRequest', message: 'SubjectId is required.' });
+    throw new MockException(400, { message: 'SubjectId is required.' });
   }
 
   //#endif
@@ -145,8 +150,15 @@ export function updateUser(id: string, value: any) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
+      code: 'User:NotFound',
       message: 'User does not exist or has been deleted',
+    });
+  }
+  // 与后端一致：邮箱被其他用户占用时 409，不静默覆盖
+  if (value.email && USERS.some((w) => w.id !== id && w.email === value.email)) {
+    throw new MockException(409, {
+      code: 'User:EmailAlreadyUsed',
+      message: `Email '${value.email}' is already in use.`,
     });
   }
 
@@ -165,7 +177,7 @@ export function enableUser(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
+      code: 'User:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
@@ -176,7 +188,7 @@ export function disableUser(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
+      code: 'User:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
@@ -188,13 +200,13 @@ export function resetPassword(id: string, value: any) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
+      code: 'User:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
   if (user.isSuperAdmin) {
-    throw new MockException(400, {
-      code: 'Error:BadRequest',
+    throw new MockException(403, {
+      code: 'User:SuperAdminResetPasswordForbidden',
       message:
         "The built-in super administrator's password cannot be reset by other administrators.",
     });
@@ -207,7 +219,7 @@ export function unlockUser(id: string) {
   const user = USERS.find((w) => w.id === id);
   if (!user) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
+      code: 'User:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
@@ -219,13 +231,13 @@ export function deleteUser(id: string) {
   const index = USERS.findIndex((w) => w.id === id);
   if (index < 0) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
+      code: 'User:NotFound',
       message: 'User does not exist or has been deleted',
     });
   }
   if (USERS[index].isSuperAdmin) {
-    throw new MockException(400, {
-      code: 'Error:BadRequest',
+    throw new MockException(403, {
+      code: 'User:SuperAdminDeleteForbidden',
       message: 'The built-in super administrator cannot be deleted',
     });
   }

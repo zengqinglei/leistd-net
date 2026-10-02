@@ -18,7 +18,7 @@ public sealed class SmtpDependencyInjectionTests
     public void Registration_resolves_the_smtp_sender()
     {
         var services = new ServiceCollection();
-        services.AddLogging();
+        services.AddLogging().AddSingleton(EmptyConfiguration);
 
         services.AddSmtpEmailSender(o =>
         {
@@ -47,7 +47,7 @@ public sealed class SmtpDependencyInjectionTests
     public void The_interface_and_the_implementation_are_the_same_instance()
     {
         var services = new ServiceCollection();
-        services.AddLogging();
+        services.AddLogging().AddSingleton(EmptyConfiguration);
         services.AddSmtpEmailSender(o =>
         {
             o.Host = "127.0.0.1";
@@ -60,7 +60,7 @@ public sealed class SmtpDependencyInjectionTests
     }
 
     [Fact]
-    public void The_configuration_overload_binds_the_documented_section()
+    public void Registration_binds_the_documented_section()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -72,8 +72,8 @@ public sealed class SmtpDependencyInjectionTests
             .Build();
 
         var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSmtpEmailSender(configuration);
+        services.AddLogging().AddSingleton<IConfiguration>(configuration);
+        services.AddSmtpEmailSender();
         using var provider = services.BuildServiceProvider();
 
         var options = provider.GetRequiredService<IOptions<SmtpOptions>>().Value;
@@ -88,7 +88,7 @@ public sealed class SmtpDependencyInjectionTests
     public void Invalid_options_fail_the_host_at_startup()
     {
         var services = new ServiceCollection();
-        services.AddLogging();
+        services.AddLogging().AddSingleton(EmptyConfiguration);
         services.AddSmtpEmailSender(o => o.Host = string.Empty);
 
         using var provider = services.BuildServiceProvider();
@@ -101,7 +101,43 @@ public sealed class SmtpDependencyInjectionTests
         Assert.All(failure.Failures, message => Assert.StartsWith(SmtpOptions.SectionName, message, StringComparison.Ordinal));
     }
 
+    // 编程式配置在配置节之后应用：同一键两边都给时以代码为准
     [Fact]
-    public void The_configuration_overload_rejects_a_null_configuration()
-        => Assert.Throws<ArgumentNullException>(() => new ServiceCollection().AddSmtpEmailSender((IConfiguration)null!));
+    public void Programmatic_configuration_overrides_the_section()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{SmtpOptions.SectionName}:Host"] = "smtp.internal",
+                [$"{SmtpOptions.SectionName}:DefaultFromAddress"] = "noreply@internal",
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging().AddSingleton<IConfiguration>(configuration);
+        services.AddSmtpEmailSender(o => o.Host = "smtp.override");
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<SmtpOptions>>().Value;
+
+        Assert.Equal("smtp.override", options.Host);
+        Assert.Equal("noreply@internal", options.DefaultFromAddress);
+    }
+
+    // 改了配置节路径，报错里的键名也得跟着走：照着默认节名去补配置，启动仍会失败
+    [Fact]
+    public void Validation_failures_name_the_configured_section()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging().AddSingleton(EmptyConfiguration);
+        services.AddSmtpEmailSender(configSectionPath: "Mail");
+
+        using var provider = services.BuildServiceProvider();
+
+        var failure = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<SmtpOptions>>().Value);
+        Assert.All(failure.Failures, message => Assert.StartsWith("Mail:", message, StringComparison.Ordinal));
+    }
+
+    private static readonly IConfiguration EmptyConfiguration = new ConfigurationBuilder().Build();
 }

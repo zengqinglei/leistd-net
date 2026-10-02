@@ -1,4 +1,3 @@
-using Leistd.EventBus;
 using Leistd.UnitOfWork.Events;
 using Leistd.UnitOfWork.Database;
 using Leistd.UnitOfWork.Options;
@@ -6,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.EventBus.Events;
-using Leistd.ExceptionHandling;
 using Leistd.EventBus.Abstractions;
 
 namespace Leistd.UnitOfWork;
@@ -127,6 +125,8 @@ public class DefaultUnitOfWork : IUnitOfWork
 
         PreventMultipleComplete();
 
+        // 调用方取消只在提交开始之前降级；提交及提交后阶段（AfterCommit 处理器）的任何失败都是真故障
+        var commitStarted = false;
         try
         {
             _isCompleting = true;
@@ -175,6 +175,7 @@ public class DefaultUnitOfWork : IUnitOfWork
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
+            commitStarted = true;
             await CommitTransactionsAsync();
 
             // 提交后先置为完成，阻止回滚并让 AfterCommit 处理器脱离已提交的环境工作单元。
@@ -183,6 +184,24 @@ public class DefaultUnitOfWork : IUnitOfWork
             _logger?.LogDebug("Unit of work {UowId} committed", Id);
 
             await OnCompletedAsync();
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested && !commitStarted)
+        {
+            // 调用方主动取消（典型是客户端断开），且发生在提交开始之前。与框架其余处一致：调用方取消不记为失败。
+            // 事务型：此前的保存都在事务里，什么都没提交。非事务型：每次保存都已各自落库，不会回滚——这要让人看见
+            _exception = ex;
+            if (Options.IsTransactional)
+            {
+                _logger?.LogDebug("Unit of work {UowId} was cancelled by the caller before commit; nothing was committed", Id);
+            }
+            else
+            {
+                _logger?.LogWarning(
+                    "Unit of work {UowId} was cancelled by the caller; any changes already saved by this non-transactional unit of work are not rolled back",
+                    Id);
+            }
+
+            throw;
         }
         catch (Exception ex)
         {
@@ -204,7 +223,8 @@ public class DefaultUnitOfWork : IUnitOfWork
         }
 
         _isRolledback = true;
-        _logger?.LogWarning("Unit of work {UowId} rolling back", Id);
+        // Debug：回滚是结果不是原因。每一次业务拒绝都会走到这里，原因已由异常处理（或上面的提交失败日志）记下
+        _logger?.LogDebug("Unit of work {UowId} rolling back", Id);
 
         await RollbackAllAsync(cancellationToken);
     }
@@ -402,7 +422,7 @@ public class DefaultUnitOfWork : IUnitOfWork
     /// 依次提交本工作单元登记的事务。
     /// </summary>
     /// <remarks>
-    /// 不提供跨事务原子性；后续提交失败时抛出包含已提交项的 <see cref="InternalServerException"/>。
+    /// 不提供跨事务原子性；后续提交失败时抛出包含已提交项的 <see cref="InvalidOperationException"/>。
     /// </remarks>
     protected virtual async Task CommitTransactionsAsync()
     {
@@ -416,7 +436,7 @@ public class DefaultUnitOfWork : IUnitOfWork
             }
             catch (Exception exception) when (committed.Count > 0)
             {
-                throw new InternalServerException(
+                throw new InvalidOperationException(
                     $"The unit of work partially committed: {committed.Count} transaction(s) " +
                     $"[{string.Join(", ", committed)}] were already committed when '{key}' failed. " +
                     "Those commits cannot be rolled back; the data requires manual reconciliation.",

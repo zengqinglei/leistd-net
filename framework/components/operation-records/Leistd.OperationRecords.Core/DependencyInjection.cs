@@ -1,5 +1,4 @@
 using Leistd.OperationRecords.Definitions;
-using Leistd.OperationRecords.Models;
 using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
@@ -37,11 +36,14 @@ public static class DependencyInjection
     /// <param name="services">服务集合。</param>
     public static IServiceCollection AddOperationRecords(this IServiceCollection services)
     {
-        // 显式建立选项，宿主不调配置重载时 IOptions<OperationRecordOptions> 也解析得出默认值。
+        // 显式建立选项，宿主不传配置委托时 IOptions<OperationRecordOptions> 也解析得出默认值。
         services.AddOptions<OperationRecordOptions>();
 
         // 幂等：EF 包的注册入口会调到这里，宿主自己也可能显式调一次。
         // 不幂等会让 IOperationRecorder 出现两条，按 IEnumerable 解析时重复记录。
+        // 失败记录去重的作用域状态：应用服务在拒绝处记下的那条胜出，端点兜底遇到同一动作码就跳过。
+        // 必须是 Scoped——记录器是 Transient，状态放在它身上会随每次解析重置，去重就失效了。
+        services.TryAddScoped<RecordedFailureTracker>();
         services.TryAddTransient<IOperationRecorder, OperationRecorder>();
         services.TryAddTransient<IOperationRecordQueryService, OperationRecordQueryService>();
 

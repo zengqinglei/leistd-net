@@ -7,6 +7,7 @@ import {
   CreateOpenApplicationInputDto,
   GetOpenApplicationsInputDto,
   OpenApplicationOutputDto,
+  OpenApplicationScopeOutputDto,
   ResetOpenApplicationSecretOutputDto,
   UpdateOpenApplicationInputDto,
 } from '../models/open-application.dto';
@@ -43,6 +44,10 @@ export class OpenApplicationService {
     }
 
     return this.http.get<PagedResultDto<OpenApplicationOutputDto>>(this.baseUrl, { params });
+  }
+
+  getScopes(): Observable<OpenApplicationScopeOutputDto[]> {
+    return this.http.get<OpenApplicationScopeOutputDto[]>(`${this.baseUrl}/scopes`);
   }
 
   getOpenApplication(id: string): Observable<OpenApplicationOutputDto> {

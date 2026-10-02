@@ -1,28 +1,16 @@
-// prettier-ignore
 import {
   ChangeDetectionStrategy,
   Component,
   computed,
   effect,
-  //#if (IncludeLocalization)
-  inject,
-  //#endif
   input,
   model,
   output,
   signal,
 } from '@angular/core';
-import {
-  FormField,
-  disabled,
-  form,
-  maxLength,
-  minLength,
-  pattern,
-  required,
-} from '@angular/forms/signals';
+import { FormField, disabled, form, maxLength, pattern, required } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
@@ -30,8 +18,8 @@ import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../../../core/i18n/translation-ready';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
 //#endif
 import { CreateRoleInputDto, RoleOutputDto, UpdateRoleInputDto } from '../../../../models/role.dto';
 
@@ -43,8 +31,8 @@ interface RoleEditFormModel {
   isDefault: boolean;
 }
 
-/** 与服务端 CreateRoleInputDto.Name 的 [RegularExpression] 一致。 */
-const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]+$/;
+/** 与服务端 CreateRoleInputDto.Name 一致：长度 2~64 与 [RegularExpression] 的字符集。 */
+const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]{2,64}$/;
 
 /**
  * 角色新建 / 编辑对话框。
@@ -53,6 +41,7 @@ const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]+$/;
  */
 @Component({
   selector: 'app-role-edit-dialog',
+  // prettier-ignore
   imports: [
     FormField,
     HlmButton,
@@ -60,6 +49,9 @@ const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_]+$/;
     ...HlmDialogImports,
     ...HlmFieldImports,
     ...HlmCheckboxImports,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
   ],
   templateUrl: './role-edit-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -68,9 +60,8 @@ export class RoleEditDialog {
   readonly open = model(false);
   readonly role = input<RoleOutputDto | null>(null);
   readonly save = output<CreateRoleInputDto | UpdateRoleInputDto>();
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly isEdit = computed(() => this.role() !== null);
@@ -88,35 +79,12 @@ export class RoleEditDialog {
     disabled(path.name, () => this.isEdit());
     // 与 CreateRoleInputDto 的规则逐条对应（长度 2~64、字母数字下划线；显示名 128；描述 512）。
     // 只校验"必填"时，格式不对要等提交后由服务端拒绝，用户才第一次知道规则。
-    //#if (IncludeLocalization)
-    required(path.name, { message: this.transloco.translate('common.validation.required') });
-    minLength(path.name, 2, {
-      message: this.transloco.translate('common.validation.roleNamePattern'),
-    });
-    maxLength(path.name, 64, {
-      message: this.transloco.translate('common.validation.roleNamePattern'),
-    });
-    pattern(path.name, ROLE_NAME_PATTERN, {
-      message: this.transloco.translate('common.validation.roleNamePattern'),
-    });
-    required(path.displayName, { message: this.transloco.translate('common.validation.required') });
-    maxLength(path.displayName, 128, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 128 }),
-    });
-    maxLength(path.description, 512, {
-      message: this.transloco.translate('common.validation.maxLength', { max: 512 }),
-    });
-    //#else
-    required(path.name, { message: 'This field is required.' });
-    minLength(path.name, 2, { message: 'Must be 2–64 letters, digits, or underscores.' });
-    maxLength(path.name, 64, { message: 'Must be 2–64 letters, digits, or underscores.' });
-    pattern(path.name, ROLE_NAME_PATTERN, {
-      message: 'Must be 2–64 letters, digits, or underscores.',
-    });
-    required(path.displayName, { message: 'This field is required.' });
-    maxLength(path.displayName, 128, { message: 'Must not exceed 128 characters.' });
-    maxLength(path.description, 512, { message: 'Must not exceed 512 characters.' });
-    //#endif
+    required(path.name);
+    // 长度与字符集共用一句提示，合成一条规则：分开校验会把同一句话报出几遍
+    pattern(path.name, ROLE_NAME_PATTERN, { error: { kind: 'roleNamePattern' } });
+    required(path.displayName);
+    maxLength(path.displayName, 128);
+    maxLength(path.description, 512);
   });
 
   constructor() {
@@ -163,44 +131,19 @@ export class RoleEditDialog {
       isDefault: model.isDefault,
     } satisfies CreateRoleInputDto);
   }
-
-  //#if (IncludeLocalization)
-  readonly title = computed(() => {
-    this.translationReady();
-    return this.transloco.translate(this.isEdit() ? 'roles.editTitle' : 'roles.createTitle');
-  });
-
-  readonly description = () => this.transloco.translate('roles.editDescription');
-  readonly cancelLabel = () => this.transloco.translate('common.cancel');
-  readonly saveLabel = () => this.transloco.translate('common.save');
-  //#else
-  readonly title = computed(() => (this.isEdit() ? 'Edit role' : 'New role'));
-
-  readonly description = () =>
-    'Name is the stable identifier and cannot be changed after creation.';
-  readonly cancelLabel = () => 'Cancel';
-  readonly saveLabel = () => 'Save';
-  //#endif
-
-  // 条件收在方法体内而不是写两个同名方法：模板源码本身也要能通过 lint，
-  // 两份声明会触发 adjacent-overload-signatures——生成产物没事，坏的是贡献者的本地反馈。
-  fieldLabel(field: 'name' | 'displayName' | 'description' | 'isDefault'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      name: 'roles.fieldName',
-      displayName: 'roles.fieldDisplayName',
-      description: 'roles.fieldDescription',
-      isDefault: 'roles.fieldIsDefault',
-    } as const;
-    return this.transloco.translate(keys[field]);
-    //#else
-    const labels = {
-      name: 'Name',
-      displayName: 'Display name',
-      description: 'Description',
-      isDefault: 'Assign to new users by default',
-    } as const;
-    return labels[field];
-    //#endif
-  }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'roles.editTitle': 'Edit role',
+  'roles.createTitle': 'New role',
+  'roles.editDescription': 'Name is the stable identifier and cannot be changed after creation.',
+  'roles.fieldName': 'Name',
+  'roles.fieldDisplayName': 'Display name',
+  'roles.fieldDescription': 'Description',
+  'roles.fieldIsDefault': 'Assign to new users by default',
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+};
+//#endif

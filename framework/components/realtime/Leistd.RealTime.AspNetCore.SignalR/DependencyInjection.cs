@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Leistd.AspNetCore.SignalR;
-using Leistd.RealTime.Options;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
 using Leistd.RealTime.AspNetCore.SignalR.Publishing;
 using Leistd.RealTime.Publishing;
@@ -17,6 +15,9 @@ namespace Leistd.RealTime.AspNetCore.SignalR;
 /// </summary>
 public static class DependencyInjection
 {
+    /// <summary>业务事件 Hub 的默认路径。</summary>
+    public const string DefaultRealTimeHubPath = "/hubs/realtime";
+
     /// <summary>
     /// 注册 SignalR 实时基础设施：业务事件推送器。
     /// </summary>
@@ -26,21 +27,13 @@ public static class DependencyInjection
     /// </remarks>
     /// <example>
     /// <code>
-    /// builder.Services.AddRealTimeSignalR(builder.Configuration);
+    /// builder.Services.AddRealTimeSignalR();
     ///
     /// app.MapRealTimeHub();   // 默认 /hubs/realtime
     /// </code>
     /// </example>
-    public static IServiceCollection AddRealTimeSignalR(
-        this IServiceCollection services,
-        Action<RealTimeOptions>? configure = null)
+    public static IServiceCollection AddRealTimeSignalR(this IServiceCollection services)
     {
-        services.AddOptions<RealTimeOptions>();
-        if (configure is not null)
-        {
-            services.Configure(configure);
-        }
-
         services.AddRealTime();
         // 走 SignalR 基座而不是裸 AddSignalR：Hub 方法调用不经中间件，
         // 主体/租户/链路标识与 UserIdentifier 解析全靠基座。
@@ -54,7 +47,19 @@ public static class DependencyInjection
     }
 
     /// <summary>映射实时业务事件 Hub 端点（需登录）。</summary>
-    public static IEndpointRouteBuilder MapRealTimeHub(this IEndpointRouteBuilder endpoints)
+    /// <remarks>
+    /// 返回官方的 <see cref="HubEndpointConventionBuilder"/>：宿主可继续链式追加授权策略、CORS 等端点约定。
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// app.MapRealTimeHub().RequireAuthorization("Realtime");
+    /// </code>
+    /// </example>
+    /// <param name="endpoints">端点路由构建器。</param>
+    /// <param name="pattern">Hub 路径，默认 <see cref="DefaultRealTimeHubPath"/>。</param>
+    public static HubEndpointConventionBuilder MapRealTimeHub(
+        this IEndpointRouteBuilder endpoints,
+        string pattern = DefaultRealTimeHubPath)
     {
         // 授权器缺失即失败关闭：Subscribe 无条件走授权器，没有它连接会在首次订阅时
         // 因解析不到依赖而失败——那太晚且信息含糊。这里明确指出该注册什么。
@@ -67,8 +72,8 @@ public static class DependencyInjection
                 "authenticated client may subscribe to any resource key.");
         }
 
-        var options = endpoints.ServiceProvider.GetService<IOptions<RealTimeOptions>>()?.Value ?? new RealTimeOptions();
-        endpoints.MapHub<RealTimeHub>(options.RealTimeHubPath).RequireAuthorization();
-        return endpoints;
+        var hub = endpoints.MapHub<RealTimeHub>(pattern);
+        hub.RequireAuthorization();
+        return hub;
     }
 }

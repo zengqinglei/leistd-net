@@ -1,17 +1,14 @@
 using System.Security.Claims;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.Options;
 using Leistd.OperationRecords.Tests.TestDoubles;
 using Leistd.Security.Claims;
+using Leistd.Security.Users;
 using Leistd.Timing;
 using Leistd.TestBase.Doubles;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -32,7 +29,9 @@ public sealed class OperationRecordingTests
         string? username = "grace",
         OperationRecordOptions? options = null,
         FakeOperationActionDefinitionManager? definitions = null,
-        bool inHostContext = false)
+        bool inHostContext = false,
+        bool hostActor = false,
+        bool anonymous = false)
     {
         var store = new RecordingOperationRecordStore();
         var collector = new FakeLogCollector();
@@ -40,13 +39,18 @@ public sealed class OperationRecordingTests
             store,
             definitions ?? new FakeOperationActionDefinitionManager(),
             new FakeCurrentTenant(inHostContext ? null : TenantId),
-            new FakeCurrentUser(id: UserId, username: username, name: displayName, claims: claims),
+            // 操作人所属租户来自其主体；默认是身处该租户上下文的租户用户
+            anonymous
+                ? new FakeCurrentUser()
+                : new FakeCurrentUser(id: UserId, username: username, name: displayName, claims: claims,
+                    tenantId: inHostContext || hostActor ? null : TenantId),
             new FakeCorrelationIdProvider("0af7651916cd43dd8448eb211c80319c"),
             // 官方 FakeTimeProvider 驱动真实的 IClock 实现：断言钉的是生产代码的时间口径，
             // 而不是某个手写时钟替身自己的行为。
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(options ?? new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(collector));
+            new FakeLogger<OperationRecorder>(collector),
+            new RecordedFailureTracker());
 
         return (recorder, store, collector);
     }
@@ -159,13 +163,69 @@ public sealed class OperationRecordingTests
             new FakeCorrelationIdProvider(null),
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()),
+            new RecordedFailureTracker());
 
         await recorder.RecordSucceededAsync("a", OperationTarget.For("t"), "b");
 
         var written = Assert.Single(store.Written);
         Assert.Equal(subject, written.ActorId);
         Assert.Equal("Nightly cleanup", written.ActorName);
+    }
+
+    /// <summary>
+    /// 只有后续身份已认证的主体，按真实的当前用户补齐出完整的操作人
+    /// </summary>
+    /// <remarks>
+    /// 回归点：HttpContext 扩展按"任一身份已认证"放行，而当前用户曾只看第一个身份，
+    /// 于是记录写下了、操作人标识与名字却为空，所属租户退回请求租户。
+    /// </remarks>
+    [Fact]
+    public async Task A_principal_authenticated_only_by_a_later_identity_yields_the_full_actor()
+    {
+        var store = new RecordingOperationRecordStore();
+        var principals = new CurrentPrincipalAccessor();
+        var actorTenantId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var recorder = new OperationRecorder(
+            store,
+            new FakeOperationActionDefinitionManager(),
+            new FakeCurrentTenant(TenantId),
+            new CurrentUser(principals, Microsoft.Extensions.Options.Options.Create(new ClaimTypeOptions())),
+            new FakeCorrelationIdProvider(null),
+            new UtcClockProvider(new FakeTimeProvider(FixedNow)),
+            Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()),
+            new RecordedFailureTracker());
+
+        using (principals.Change(new ClaimsPrincipal(
+        [
+            new ClaimsIdentity(),
+            new ClaimsIdentity(
+            [
+                new Claim(CustomClaimTypes.Subject, UserId.ToString()),
+                new Claim("name", "Grace Hopper"),
+                new Claim(CustomClaimTypes.TenantId, actorTenantId.ToString())
+            ], authenticationType: "Test")
+        ])))
+        {
+            await recorder.RecordFailedAsync("a", OperationTarget.For("t"), "b", OperationFailure.FromCode("X:Y"));
+        }
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(UserId.ToString(), written.ActorId);
+        Assert.Equal("Grace Hopper", written.ActorName);
+        Assert.Equal(actorTenantId, written.ActorTenantId);
+    }
+
+    // 操作人标识按 ClaimTypeOptions 的共享顺序读：没有 sub 的主体回落到 NameIdentifier
+    [Fact]
+    public async Task By_default_the_actor_id_follows_the_shared_claim_order()
+    {
+        var (recorder, store, _) = Create(claims: [new Claim(ClaimTypes.NameIdentifier, "client:reporting-svc")]);
+
+        await recorder.RecordSucceededAsync("a", OperationTarget.For("t"), "b");
+
+        Assert.Equal("client:reporting-svc", Assert.Single(store.Written).ActorId);
     }
 
     [Fact]
@@ -199,7 +259,8 @@ public sealed class OperationRecordingTests
             new FakeCorrelationIdProvider(null),
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(collector));
+            new FakeLogger<OperationRecorder>(collector),
+            new RecordedFailureTracker());
 
         await recorder.RecordFailedAsync("a", OperationTarget.For("t"), "b");
 
@@ -226,7 +287,8 @@ public sealed class OperationRecordingTests
             new FakeCorrelationIdProvider(null),
             new UtcClockProvider(new FakeTimeProvider(FixedNow)),
             Microsoft.Extensions.Options.Options.Create(new OperationRecordOptions()),
-            new FakeLogger<OperationRecorder>(new FakeLogCollector()));
+            new FakeLogger<OperationRecorder>(new FakeLogCollector()),
+            new RecordedFailureTracker());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => recorder.RecordSucceededAsync("a", OperationTarget.For("t"), "b"));
@@ -299,7 +361,10 @@ public sealed class OperationRecordingTests
             "order.deleted",
             OperationTarget.For("o-1", "A001"),
             "App.Orders.Delete",
-            OperationFailure.Create("Order:AlreadyShipped", """{"No":"A001"}""", "payment gateway timed out"));
+            OperationFailure.Create(
+                "Order:AlreadyShipped",
+                new Dictionary<string, object?> { ["No"] = "A001" },
+                "payment gateway timed out"));
 
         var written = Assert.Single(store.Written);
         Assert.Equal("Order:AlreadyShipped", written.FailureCode);
@@ -408,6 +473,59 @@ public sealed class OperationRecordingTests
         var written = Assert.Single(store.Written);
         Assert.Equal(OperationVisibility.Host, written.Visibility);
         Assert.Null(written.TenantId);
+        Assert.Equal(TenantId, written.ActorTenantId);
+    }
+
+    /// <summary>
+    /// 宿主操作人进入租户上下文（模拟登录、代管租户）：记录落在该租户层，操作人租户仍是宿主
+    /// </summary>
+    /// <remarks>操作人标识只在它所属的租户里有意义，记成上下文租户就把宿主管理员错认成了租户里的某个人。</remarks>
+    [Fact]
+    public async Task A_host_actor_inside_a_tenant_keeps_the_host_as_actor_tenant()
+    {
+        var (recorder, store, _) = Create(definitions: Registered("user.created", OperationVisibility.Tenant), hostActor: true);
+
+        await recorder.RecordSucceededAsync("user.created", OperationTarget.For("u-1"), "b");
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(TenantId, written.TenantId);
+        Assert.Null(written.ActorTenantId);
+    }
+
+    /// <summary>
+    /// 自证类动作（登录、注册）在匿名请求里完成：操作人取目标，所属租户取请求的租户上下文
+    /// </summary>
+    /// <remarks>
+    /// 没有操作人的话，这条 Actor 层记录对"本人"永远不可见——租户用户看不到自己的登录记录，
+    /// 而宿主读者整层可见，只在租户用户身上暴露。
+    /// </remarks>
+    [Fact]
+    public async Task An_anonymous_self_proving_action_takes_the_target_as_its_actor()
+    {
+        var definitions = new FakeOperationActionDefinitionManager(
+            new Dictionary<string, OperationVisibility> { ["auth.login.succeeded"] = OperationVisibility.Actor },
+            otherCodes: null,
+            selfProvingCodes: new HashSet<string> { "auth.login.succeeded" });
+        var (recorder, store, _) = Create(definitions: definitions, anonymous: true);
+
+        await recorder.RecordSucceededAsync("auth.login.succeeded", OperationTarget.For(UserId.ToString(), "Grace Hopper"), "b");
+
+        var written = Assert.Single(store.Written);
+        Assert.Equal(UserId.ToString(), written.ActorId);
+        Assert.Equal("Grace Hopper", written.ActorName);
+        Assert.Equal(TenantId, written.ActorTenantId);
+    }
+
+    // 匿名且不是自证的动作（如登录失败）：操作人未经证实，不能把调用方提交的目标当成操作人
+    [Fact]
+    public async Task An_anonymous_action_that_is_not_self_proving_has_no_actor()
+    {
+        var (recorder, store, _) = Create(definitions: Registered("auth.login.failed", OperationVisibility.Tenant), anonymous: true);
+
+        await recorder.RecordFailedAsync("auth.login.failed", OperationTarget.For("someone"), "b");
+
+        var written = Assert.Single(store.Written);
+        Assert.Null(written.ActorId);
         Assert.Equal(TenantId, written.ActorTenantId);
     }
 

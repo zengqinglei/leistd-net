@@ -9,6 +9,7 @@
   <ItemGroup>
 <!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.Abstractions" />
+    <PackageReference Include="Leistd.ServiceClient.Core" />
 <!--#endif-->
 <!--#if (IncludeLocalization)-->
     <!-- 权限定义的显示名按请求 culture 在响应阶段翻译，需要本地化抽象。 -->
@@ -26,6 +27,8 @@
     <PackageReference Include="Leistd.MultiTenancy.Core" />
     <PackageReference Include="Leistd.Lock.Core" />
 <!--#if (LocalIdentity)-->
+    <PackageReference Include="Leistd.BackgroundJobs.Core" />
+    <PackageReference Include="Leistd.MultiTenancy.Management" />
     <PackageReference Include="Leistd.Email.Core" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
@@ -40,6 +43,13 @@
     <PackageReference Include="Leistd.Ddd.Application" />
     <PackageReference Include="Leistd.Ddd.Application.Contracts" />
     <PackageReference Include="Leistd.UnitOfWork.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IReauthenticationGuard 是应用层的内部件（宿主不该直接调它），但它的正确性有一条
+         从外部看不出来的性质：计数写在独立工作单元里，不随调用方的事务回滚。
+         要钉住这一条只能自己开一个工作单元再释放，端点做不到，所以按生产注册装配后直接测。 -->
+    <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
   </ItemGroup>
 
   <!-- 业务项目内部引用 -->

@@ -45,7 +45,7 @@ export function getTenants(params: any): PagedResultDto<any> {
 export function getTenantById(id: string) {
   const tenant = TENANTS.find((t) => t.id === id);
   if (!tenant) {
-    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Tenant:NotFound', message: 'Tenant not found' });
   }
   return toTenantOutput(tenant);
 }
@@ -64,7 +64,7 @@ export function getTenantByHost(): TenantByHostOutputDto {
 function findTenantOrThrow(tenantId: string): MockTenant {
   const tenant = TENANTS.find((t) => t.id === tenantId);
   if (!tenant) {
-    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Tenant:NotFound', message: 'Tenant not found' });
   }
   return tenant;
 }
@@ -95,14 +95,13 @@ export function setTenantConnection(tenantId: string, rawName: string, value: an
   const name = normalizeConnectionName(rawName);
   if (!CONNECTION_NAME_PATTERN.test(name)) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
+      code: 'TenantConnection:NameInvalid',
       message: 'Connection name must match ^[a-z0-9-]{1,64}$.',
     });
   }
 
   if (!value || !('expectedVersion' in value)) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
       message: 'Expected version is required; pass null for the first registration.',
     });
   }
@@ -110,7 +109,7 @@ export function setTenantConnection(tenantId: string, rawName: string, value: an
   // 想让某个名字回到"用服务自己的库"，删掉这一条，而不是提交空连接串。
   if (!String(value.connectionString ?? '').trim()) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
+      code: 'TenantConnection:ConnectionStringInvalid',
       message: 'Connection string is required.',
     });
   }
@@ -121,7 +120,7 @@ export function setTenantConnection(tenantId: string, rawName: string, value: an
   // 首次登记预期这一条尚不存在，改已有的那条则必须带上读到的版本；两种落空都是 409。
   if (existing ? expectedVersion !== existing.version : expectedVersion !== null) {
     throw new MockException(409, {
-      code: 'Error:Conflict',
+      code: 'TenantConnection:VersionConflict',
       message: 'Tenant connection version mismatch',
     });
   }
@@ -147,14 +146,13 @@ export function removeTenantConnection(
   const index = tenant.connections.findIndex((connection) => connection.name === name);
   if (index < 0) {
     throw new MockException(404, {
-      code: 'Error:NotFound',
       message: 'Tenant connection not found',
     });
   }
 
   if (Number(expectedVersion) !== tenant.connections[index].version) {
     throw new MockException(409, {
-      code: 'Error:Conflict',
+      code: 'TenantConnection:VersionConflict',
       message: 'Tenant connection version mismatch',
     });
   }
@@ -166,7 +164,10 @@ export function createTenant(value: any) {
   const name = String(value.name ?? '').trim();
   // 名称冲突复刻后端 409 形状。
   if (TENANTS.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-    throw new MockException(409, { code: 'Error:Conflict', message: 'Tenant name already exists' });
+    throw new MockException(409, {
+      code: 'Tenant:DuplicateName',
+      message: 'Tenant name already exists',
+    });
   }
   // 复刻后端租户播种路径的口令策略（主体措辞与后端一致）。
   ensureAcceptablePassword(value.adminPassword, 'Tenant admin password');
@@ -219,12 +220,15 @@ function normalizeCreateConnections(raw: unknown): MockTenantConnection[] {
 export function updateTenant(id: string, value: any) {
   const tenant = TENANTS.find((t) => t.id === id);
   if (!tenant) {
-    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Tenant:NotFound', message: 'Tenant not found' });
   }
 
   const name = String(value.name ?? '').trim();
   if (TENANTS.some((t) => t.id !== id && t.name.toLowerCase() === name.toLowerCase())) {
-    throw new MockException(409, { code: 'Error:Conflict', message: 'Tenant name already exists' });
+    throw new MockException(409, {
+      code: 'Tenant:DuplicateName',
+      message: 'Tenant name already exists',
+    });
   }
 
   tenant.name = name;
@@ -237,7 +241,7 @@ export function updateTenant(id: string, value: any) {
 export function setTenantActivation(id: string, value: any) {
   const tenant = TENANTS.find((t) => t.id === id);
   if (!tenant) {
-    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Tenant:NotFound', message: 'Tenant not found' });
   }
   tenant.isActive = value.isActive === true;
   return toTenantOutput(tenant);
@@ -246,7 +250,7 @@ export function setTenantActivation(id: string, value: any) {
 export function deleteTenant(id: string) {
   const index = TENANTS.findIndex((t) => t.id === id);
   if (index < 0) {
-    throw new MockException(404, { code: 'Error:NotFound', message: 'Tenant not found' });
+    throw new MockException(404, { code: 'Tenant:NotFound', message: 'Tenant not found' });
   }
   TENANTS.splice(index, 1);
 }

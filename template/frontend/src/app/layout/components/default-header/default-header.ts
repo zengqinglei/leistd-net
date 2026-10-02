@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, input } from '@angular/core';
 //#if (IncludeLocalization)
 //#if (LocalIdentity)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#else
-import { TranslocoModule } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 //#endif
 //#if (LocalIdentity)
@@ -31,6 +31,9 @@ import { LanguageSwitcher } from '../../../shared/components/language-switcher/l
 import { ThemeModeToggle } from '../../../shared/components/theme-mode-toggle/theme-mode-toggle';
 //#if (LocalIdentity)
 import { PopoverAria } from '../../../shared/directives/popover-aria';
+//#endif
+//#if (!IncludeLocalization)
+import { englishText } from '../../../shared/utils/english-text';
 //#endif
 import { LayoutService } from '../../services/layout-service';
 //#if (IncludeNotifications)
@@ -63,7 +66,7 @@ import { WorkspaceNav } from '../workspace-nav/workspace-nav';
     //#endif
     //#if (IncludeLocalization)
     LanguageSwitcher,
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   //#if (LocalIdentity)
@@ -80,13 +83,22 @@ export class DefaultHeader {
   readonly layout = input<'sidebar' | 'topbar'>('sidebar');
 
   readonly layoutService = inject(LayoutService);
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
+  //#endif
   //#if (LocalIdentity)
   readonly impersonation = inject(ImpersonationService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
   //#endif
+  //#endif
 
   constructor() {
+    // 页面标题只在带页头的布局里有意义，离开布局时清掉：登录页、落地页等不设标题，
+    // 不清的话浏览器标签页会一直挂着上一个布局页的标题。页头随布局销毁，早于下一页设置标题
+    inject(DestroyRef).onDestroy(() => this.layoutService.title.set(''));
+    //#if (LocalIdentity)
+
     // 退出模拟是整页跳转，提示只能在新页面上补（见 ImpersonationService 的一次性标记）。
     //#if (IncludeLocalization)
     this.impersonation.notifyAfterRenderIfJustExited(() =>
@@ -97,7 +109,9 @@ export class DefaultHeader {
       toast.success('Returned to your own account.'),
     );
     //#endif
+    //#endif
   }
+  //#if (LocalIdentity)
 
   /**
    * 结束模拟。失败时不跳转，让顶栏里的模拟状态留在原处，并说明原因——
@@ -118,15 +132,18 @@ export class DefaultHeader {
     }
   }
   //#endif
-
-  // 面包屑首级文案：随当前区段（平台/工作区）切换；首页路由由 layoutService.homeRoute() 提供。
-  //#if (IncludeLocalization)
-  readonly homeLabel = computed(() =>
-    this.layoutService.isPlatform() ? 'menu.platform' : 'menu.workspace',
-  );
-  //#else
-  readonly homeLabel = computed(() =>
-    this.layoutService.isPlatform() ? 'Admin platform' : 'Workspace',
-  );
-  //#endif
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'common.toggleSidebar': 'Toggle sidebar',
+  'menu.platform': 'Admin platform',
+  'menu.workspace': 'Workspace',
+  'impersonation.banner': 'Acting as tenant {{tenant}} · started by {{impersonator}}',
+  'impersonation.badge': 'Impersonating · {{tenant}}',
+  'impersonation.title': 'Impersonating a tenant',
+  'impersonation.note': "Everything you do now is recorded under this tenant's account.",
+  'impersonation.exit': 'Exit impersonation',
+};
+//#endif

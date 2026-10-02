@@ -4,6 +4,7 @@ using Leistd.EventBus.EventHandlers;
 using Leistd.EventBus.Events;
 using Leistd.EventBus.Local;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -28,7 +29,7 @@ public sealed class UnitOfWorkEventPhaseTests
         await using var provider = Build();
         var recorder = provider.GetRequiredService<PhaseRecorder>();
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync();
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin();
         uow.AddPendingEvents([new ProbeEvent()]);
         await uow.CompleteAsync();
         uow.Dispose();
@@ -42,7 +43,7 @@ public sealed class UnitOfWorkEventPhaseTests
         await using var provider = Build();
         var recorder = provider.GetRequiredService<PhaseRecorder>();
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync();
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin();
         uow.AddPendingEvents([new ProbeEvent()]);
         await uow.CompleteAsync();
         uow.Dispose();
@@ -90,7 +91,7 @@ public sealed class UnitOfWorkEventPhaseTests
         await using var provider = Build();
         var recorder = provider.GetRequiredService<PhaseRecorder>();
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync();
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin();
         uow.AddPendingEvents([new ProbeEvent()]);
         await uow.CompleteAsync();
         uow.Dispose();
@@ -114,7 +115,7 @@ public sealed class UnitOfWorkEventPhaseTests
         var recorder = provider.GetRequiredService<PhaseRecorder>();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        var outer = await manager.BeginAsync(requiresNew: true);
+        var outer = manager.Begin(requiresNew: true);
         outer.AddPendingEvents([new NestingEvent()]);
         await outer.CompleteAsync();
         outer.Dispose();
@@ -140,8 +141,8 @@ public sealed class UnitOfWorkEventPhaseTests
         var recorder = provider.GetRequiredService<PhaseRecorder>();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var outer = await manager.BeginAsync(requiresNew: true);
-        var inner = await manager.BeginAsync(requiresNew: true);
+        using var outer = manager.Begin(requiresNew: true);
+        var inner = manager.Begin(requiresNew: true);
         inner.AddPendingEvents([new ProbeEvent()]);
         await inner.CompleteAsync();
         inner.Dispose();
@@ -167,7 +168,7 @@ public sealed class UnitOfWorkEventPhaseTests
         var recorder = provider.GetRequiredService<PhaseRecorder>();
         var bus = provider.GetRequiredService<ILocalEventBus>();
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
         await bus.PublishAsync(new ProbeEvent());
 
         // 发布调用返回时还什么都没跑：事件已进入待发队列
@@ -187,6 +188,7 @@ public sealed class UnitOfWorkEventPhaseTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddLocalEventBus();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddSingleton<PhaseRecorder>();
         services.AddTransient<IEventHandler<ProbeEvent>, UnannotatedHandler>();
@@ -260,7 +262,7 @@ public sealed class UnitOfWorkEventPhaseTests
     {
         public async Task HandleAsync(NestingEvent @event, CancellationToken cancellationToken = default)
         {
-            var inner = await manager.BeginAsync(requiresNew: true);
+            var inner = manager.Begin(requiresNew: true);
             inner.AddPendingEvents([new ProbeEvent()]);
             await inner.CompleteAsync(cancellationToken);
             inner.Dispose();

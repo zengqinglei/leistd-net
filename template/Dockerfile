@@ -52,6 +52,8 @@ RUN dotnet publish "CompanyName.ProjectName.DbMigrator.csproj" -c Release -o /ap
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS migrator
 WORKDIR /app
 COPY --from=backend-build /app/migrator .
+# 以镜像自带的非 root 用户（UID 1654）运行；程序目录只读即可
+USER $APP_UID
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.DbMigrator.dll"]
 
 # -----------------------------------
@@ -69,4 +71,7 @@ COPY --from=backend-build /app/api .
 # Angular >= 17 生产构建会输出到 dist/<project>/browser 目录
 COPY --from=frontend-build /app/dist/companyname-projectname-web/browser ./wwwroot
 
+# 3. 以镜像自带的非 root 用户（UID 1654）运行：程序与静态文件只读；挂进来的证书要对它可读，
+#    用文件目录保存 Data Protection 密钥时该目录要对它可写（见 docs/deploy/README.md）
+USER $APP_UID
 ENTRYPOINT ["dotnet", "CompanyName.ProjectName.Api.dll"]

@@ -1,8 +1,5 @@
 using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
@@ -13,6 +10,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -36,6 +34,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connection));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
@@ -63,7 +62,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _manager.SetAsync(tenant.Id, Name, connectionString, expectedVersion: null));
         Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
     }
@@ -73,7 +72,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(() => _manager.SetAsync(
+        var error = await Assert.ThrowsAsync<BusinessException>(() => _manager.SetAsync(
             tenant.Id,
             Name,
             new string('x', TenantConnectionConfiguration.MaxConnectionStringLength + 1),
@@ -87,7 +86,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
     {
         var tenant = await CreateTenantAsync();
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _manager.SetAsync(tenant.Id, Name, "Host=a;=secret-value", expectedVersion: null));
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
@@ -130,7 +129,7 @@ public class TenantConnectionConfigurationManagerTests : IAsyncLifetime
         var tenant = await CreateTenantAsync();
 
         // 名字来自管理员输入：400 而不是 500
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _manager.SetAsync(tenant.Id, name, "Host=tenant", expectedVersion: null));
         Assert.Equal(MultiTenancyErrorCodes.ConnectionNameInvalid, error.Code);
     }

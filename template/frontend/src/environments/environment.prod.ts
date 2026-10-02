@@ -8,9 +8,9 @@ const apiGateway = '__API_GATEWAY__';
 export const environment: Environment = {
   ...environmentBase,
   production: true,
+  // 生产构建另经 fileReplacements 移除 Mock 代码与数据（见 angular.json）
   useMock: {
     enable: false,
-    include: '^/api/v1/public-content(/.*)?$',
     delay: 0,
     log: false,
   },

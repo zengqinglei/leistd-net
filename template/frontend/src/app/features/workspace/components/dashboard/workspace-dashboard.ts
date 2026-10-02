@@ -11,22 +11,22 @@ import {
   //#endif
 } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, translateSignal } from '@jsverse/transloco';
 //#endif
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthService } from '../../../../core/services/auth-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 
 @Component({
   selector: 'app-workspace-dashboard',
   standalone: true,
   //#if (IncludeLocalization)
-  imports: [...HlmCardImports, HlmBadge, TranslocoModule],
+  imports: [...HlmCardImports, HlmBadge, TranslocoDirective],
   //#else
   imports: [...HlmCardImports, HlmBadge],
   //#endif
@@ -37,26 +37,32 @@ import { LayoutService } from '../../../../layout/services/layout-service';
 export class WorkspaceDashboard {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
-  private readonly transloco = inject(TranslocoService);
-
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
 
   constructor() {
-    // 读取 translationReady 建立依赖：资源就绪 / 语言切换时本 effect 重跑，标题随之更新。
-    effect(() => {
-      this.translationReady();
-      this.layoutService.title.set(this.transloco.translate('workspace.dashboard.title'));
-    });
+    const title = translateSignal('workspace.dashboard.title', {}, { scope: 'workspace' });
+    effect(() => this.layoutService.title.set(title()));
   }
 }
 //#else
 export class WorkspaceDashboard implements OnInit {
   private readonly layoutService = inject(LayoutService);
   readonly authService = inject(AuthService);
+  protected readonly t = englishText(ENGLISH);
 
   ngOnInit() {
     this.layoutService.title.set('Workbench');
   }
 }
+//#endif
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'workspace.dashboard.title': 'Workbench',
+  'workspace.dashboard.username': 'Username',
+  'workspace.dashboard.displayName': 'Display name',
+  'workspace.dashboard.email': 'Email',
+  'workspace.dashboard.roles': 'Roles',
+  'workspace.dashboard.noUserInfo': 'No user information available',
+};
 //#endif

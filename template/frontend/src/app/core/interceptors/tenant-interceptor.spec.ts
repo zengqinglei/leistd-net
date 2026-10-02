@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 
 import { tenantInterceptor } from './tenant-interceptor';
 import { TenantContextService } from '../services/tenant-context-service';
+import { TENANT_HEADER } from '../services/tenant-protocol';
 
 /**
  * 直接以 runInInjectionContext 驱动拦截器（与 http-error-interceptor.spec 同形态），
@@ -39,20 +40,20 @@ describe('tenantInterceptor', () => {
     return sent;
   }
 
-  it('已选租户时为 /api/ 请求附加 X-Tenant-Id', () => {
+  it('adds the tenant hint header to /api/ requests when a tenant is selected', () => {
     context.set(tenantName);
 
-    expect(send('/api/v1/users').headers.get('X-Tenant-Id')).toBe(tenantName);
+    expect(send('/api/v1/users').headers.get(TENANT_HEADER)).toBe(tenantName);
   });
 
-  it('未选租户（宿主）时不附加租户头', () => {
-    expect(send('/api/v1/users').headers.has('X-Tenant-Id')).toBe(false);
+  it('adds no tenant header when no tenant is selected (host)', () => {
+    expect(send('/api/v1/users').headers.has(TENANT_HEADER)).toBe(false);
   });
 
-  it('非 /api/ 请求不附加租户头', () => {
+  it('adds no tenant header to non-/api/ requests', () => {
     context.set(tenantName);
 
-    expect(send('/assets/config.json').headers.has('X-Tenant-Id')).toBe(false);
+    expect(send('/assets/config.json').headers.has(TENANT_HEADER)).toBe(false);
   });
 
   /**
@@ -63,10 +64,10 @@ describe('tenantInterceptor', () => {
    * 失效的本地租户谁也清不掉。
    */
   for (const url of ['/api/v1/tenants/by-host'] as const) {
-    it(`租户探测端点不附加租户头：${url}`, () => {
+    it(`adds no tenant header to the tenant probe endpoint: ${url}`, () => {
       context.set(tenantName);
 
-      expect(send(url).headers.has('X-Tenant-Id')).toBe(false);
+      expect(send(url).headers.has(TENANT_HEADER)).toBe(false);
     });
   }
 });

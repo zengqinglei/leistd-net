@@ -10,7 +10,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
@@ -39,9 +39,6 @@ import { TenantEditDialog } from './widgets/tenant-edit-dialog/tenant-edit-dialo
 import { TenantTable } from './widgets/tenant-table/tenant-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { refreshOnLanguageChange, translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { ImpersonationService } from '../../../../core/services/impersonation-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
@@ -52,6 +49,9 @@ import {
   UpdateTenantInputDto,
 } from '../../../../shared/dtos/tenant.dto';
 import { PERMISSIONS } from '../../../../shared/models/permission';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { paginationFromQuery, tableStateToQuery } from '../../../../shared/utils/table-query-state';
 import { TenantService } from '../../services/tenant-service';
 
@@ -73,7 +73,7 @@ import { TenantService } from '../../services/tenant-service';
     TenantDetailDialog,
     TenantEditDialog,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
@@ -91,7 +91,8 @@ export class Tenants {
   private readonly router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   private readonly searchSubject = new Subject<string>();
@@ -154,17 +155,10 @@ export class Tenants {
         this.totalCount.set(result.totalCount);
       });
 
-    //#if (IncludeLocalization)
-    // 页面按钮文案走 transloco.translate()，语言变化不会把视图标脏，需显式接上。
-    refreshOnLanguageChange(this.transloco);
-
-    //#endif
     // 面包屑末级文案由页面自行设置，与其他平台页保持同一约定。
     //#if (IncludeLocalization)
-    effect(() => {
-      this.translationReady();
-      this.layoutService.title.set(this.transloco.translate('tenants.title'));
-    });
+    const title = translateSignal('tenants.title', {}, { scope: 'tenants' });
+    effect(() => this.layoutService.title.set(title()));
     //#else
     this.layoutService.title.set('Tenant Management');
     //#endif
@@ -313,9 +307,6 @@ export class Tenants {
   }
 
   //#if (IncludeLocalization)
-  readonly searchPlaceholder = () => this.transloco.translate('tenants.searchPlaceholder');
-  readonly refreshLabel = () => this.transloco.translate('common.refresh');
-  readonly newTenantLabel = () => this.transloco.translate('tenants.create');
   private savedMessage = () => this.transloco.translate('tenants.saved');
   private deletedMessage = () => this.transloco.translate('tenants.deleted');
   private deleteTitle = () => this.transloco.translate('tenants.deleteTitle');
@@ -329,16 +320,15 @@ export class Tenants {
   private toggleDescription = (tenant: TenantOutputDto, nextActive: boolean) =>
     this.transloco.translate(
       nextActive ? 'tenants.activateDescription' : 'tenants.deactivateDescription',
-      { name: tenant.displayName || tenant.name },
+      {
+        name: tenant.displayName || tenant.name,
+      },
     );
   private toggleConfirmLabel = (nextActive: boolean) =>
     this.transloco.translate(nextActive ? 'tenants.activate' : 'tenants.deactivate');
   private toggledMessage = (nextActive: boolean) =>
     this.transloco.translate(nextActive ? 'tenants.activated' : 'tenants.deactivated');
   //#else
-  readonly searchPlaceholder = () => 'Search tenants';
-  readonly refreshLabel = () => 'Refresh';
-  readonly newTenantLabel = () => 'New tenant';
   private savedMessage = () => 'Tenant saved';
   private deletedMessage = () => 'Tenant deleted';
   private deleteTitle = () => 'Delete tenant';
@@ -374,3 +364,12 @@ export class Tenants {
     });
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'tenants.searchPlaceholder': 'Search tenants',
+  'common.refresh': 'Refresh',
+  'tenants.create': 'New tenant',
+};
+//#endif

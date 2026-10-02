@@ -1,397 +1,303 @@
-<hlm-dialog
-  [state]="visible() ? 'open' : 'closed'"
-  (stateChanged)="onDialogStateChange($event)"
-  [closeOnOutsidePointerEvents]="!saving()"
->
-  <hlm-dialog-content
-    *hlmDialogPortal
-    class="flex max-h-[calc(100dvh-2rem)] min-w-[min(64rem,calc(100vw_-_2rem))] flex-col overflow-hidden"
-    [showCloseButton]="!saving()"
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <hlm-dialog
+    [state]="visible() ? 'open' : 'closed'"
+    (stateChanged)="onDialogStateChange($event)"
+    [closeOnOutsidePointerEvents]="!saving()"
   >
-    <hlm-dialog-header>
-      <h3 hlmDialogTitle>{{ dialogHeader() }}</h3>
-      <!--#if (IncludeLocalization)-->
-      <p hlmDialogDescription>{{ 'openApp.dialog.description' | transloco }}</p>
-      <!--#else-->
-      <p hlmDialogDescription>Configure the client's identity, type, and OAuth capabilities.</p>
-      <!--#endif-->
-    </hlm-dialog-header>
+    <hlm-dialog-content
+      *hlmDialogPortal
+      class="flex max-h-[calc(100dvh-2rem)] min-w-[min(64rem,calc(100vw_-_2rem))] flex-col overflow-hidden"
+      [showCloseButton]="!saving()"
+    >
+      <hlm-dialog-header>
+        <h3 hlmDialogTitle>
+          {{ isEditMode() ? t('openApp.dialog.editHeader') : t('openApp.dialog.createHeader') }}
+        </h3>
+        <p hlmDialogDescription>{{ t('openApp.dialog.description') }}</p>
+      </hlm-dialog-header>
 
-    @if (loading()) {
-      <!--#if (IncludeLocalization)-->
-      <app-dialog-loading [text]="'openApp.dialog.loading' | transloco" />
-      <!--#else-->
-      <app-dialog-loading text="Loading open application..." />
-      <!--#endif-->
-    } @else {
-      <form
-        novalidate
-        (submit)="$event.preventDefault(); save()"
-        class="flex min-h-0 flex-1 flex-col gap-4"
-      >
-        <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
-          @if (!isEditMode()) {
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-template">{{
-                'openApp.field.template' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-template">Application template</label>
-              <!--#endif-->
-              <hlm-select
-                class="w-full"
-                [value]="selectedTemplate()"
-                [itemToString]="templateToLabel"
-                (valueChange)="applyTemplate($event)"
-              >
-                <hlm-select-trigger buttonId="application-template" class="w-full">
-                  <hlm-select-value [placeholder]="templatePlaceholder()" />
-                </hlm-select-trigger>
-                <hlm-select-content *hlmSelectPortal>
-                  @for (opt of templateOptions(); track opt.value) {
-                    <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
-                  }
-                </hlm-select-content>
-              </hlm-select>
-            </div>
-          }
+      @if (loading()) {
+        <app-dialog-loading [text]="t('openApp.dialog.loading')" />
+      } @else {
+        <form
+          novalidate
+          (submit)="$event.preventDefault(); save()"
+          class="flex min-h-0 flex-1 flex-col gap-4"
+        >
+          <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto -mx-4 -my-1 px-4 py-1">
+            @if (!isEditMode()) {
+              <div hlmField>
+                <label hlmFieldLabel for="application-template">{{
+                  t('openApp.field.template')
+                }}</label>
+                <hlm-select
+                  class="w-full"
+                  [value]="selectedTemplate()"
+                  [itemToString]="templateToLabel"
+                  (valueChange)="applyTemplate($event)"
+                >
+                  <hlm-select-trigger buttonId="application-template" class="w-full">
+                    <hlm-select-value [placeholder]="t('openApp.field.templatePlaceholder')" />
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (opt of templateOptions(); track opt.value) {
+                      <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
+                    }
+                  </hlm-select-content>
+                </hlm-select>
+              </div>
+            }
 
-          <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-display-name">{{
-                'openApp.field.displayName' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-display-name">Application name</label>
-              <!--#endif-->
-              <input
-                hlmInput
-                id="application-display-name"
-                class="w-full"
-                [formField]="applicationForm.displayName"
-                [placeholder]="displayNamePlaceholder()"
-              />
-            </div>
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-client-id">{{
-                'openApp.field.clientId' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-client-id">Client ID</label>
-              <!--#endif-->
-              <input
-                hlmInput
-                id="application-client-id"
-                class="w-full font-mono"
-                [formField]="applicationForm.clientId"
-                [placeholder]="clientIdPlaceholder()"
-              />
-              @for (error of applicationForm.clientId().errors(); track error.kind) {
-                @if (error.message) {
-                  <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
+            <section class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div hlmField>
+                <label hlmFieldLabel for="application-display-name">{{
+                  t('openApp.field.displayName')
+                }}</label>
+                <input
+                  hlmInput
+                  id="application-display-name"
+                  class="w-full"
+                  [formField]="applicationForm.displayName"
+                  [placeholder]="t('openApp.field.displayNamePlaceholder')"
+                />
+              </div>
+              <div hlmField>
+                <label hlmFieldLabel for="application-client-id">{{
+                  t('openApp.field.clientId')
+                }}</label>
+                <input
+                  hlmInput
+                  id="application-client-id"
+                  class="w-full font-mono"
+                  [formField]="applicationForm.clientId"
+                  [placeholder]="t('openApp.field.clientIdPlaceholder')"
+                />
+                @for (error of applicationForm.clientId().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{
+                    t('validation.' + error.kind, error)
+                  }}</hlm-field-error>
                 }
-              }
-            </div>
-          </section>
+              </div>
+            </section>
 
-          <section class="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-type">{{
-                'openApp.field.applicationType' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-type">Application type</label>
-              <!--#endif-->
-              @if (isTemplateLocked()) {
-                <span hlmBadge variant="secondary">{{
-                  applicationTypeLabels()[formModel().applicationType]
-                }}</span>
-              } @else {
-                <hlm-select
-                  class="w-full"
-                  [value]="formModel().applicationType"
-                  [itemToString]="applicationTypeToLabel"
-                  (valueChange)="onApplicationTypeChange($event)"
-                >
-                  <hlm-select-trigger buttonId="application-type" class="w-full">
-                    <hlm-select-value />
-                  </hlm-select-trigger>
-                  <hlm-select-content *hlmSelectPortal>
-                    @for (opt of applicationTypeOptions(); track opt.value) {
-                      <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
-                    }
-                  </hlm-select-content>
-                </hlm-select>
-              }
-            </div>
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-client-type">{{
-                'openApp.field.clientType' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-client-type">Client type</label>
-              <!--#endif-->
-              @if (isTemplateLocked()) {
-                <span hlmBadge [variant]="isConfidentialClient() ? 'default' : 'secondary'">{{
-                  clientTypeLabels()[formModel().clientType]
-                }}</span>
-              } @else {
-                <hlm-select
-                  class="w-full"
-                  [value]="formModel().clientType"
-                  [itemToString]="clientTypeToLabel"
-                  (valueChange)="onClientTypeSelect($event)"
-                >
-                  <hlm-select-trigger buttonId="application-client-type" class="w-full">
-                    <hlm-select-value />
-                  </hlm-select-trigger>
-                  <hlm-select-content *hlmSelectPortal>
-                    @for (opt of clientTypeOptions(); track opt.value) {
-                      <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
-                    }
-                  </hlm-select-content>
-                </hlm-select>
-              }
-            </div>
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-consent-type">{{
-                'openApp.field.consentType' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-consent-type">Consent</label>
-              <!--#endif-->
-              @if (isTemplateLocked()) {
-                <span hlmBadge variant="outline">{{
-                  consentTypeLabels()[formModel().consentType]
-                }}</span>
-              } @else {
-                <hlm-select
-                  class="w-full"
-                  [value]="formModel().consentType"
-                  [itemToString]="consentTypeToLabel"
-                  (valueChange)="onConsentTypeChange($event)"
-                >
-                  <hlm-select-trigger buttonId="application-consent-type" class="w-full">
-                    <hlm-select-value />
-                  </hlm-select-trigger>
-                  <hlm-select-content *hlmSelectPortal>
-                    @for (opt of consentTypeOptions(); track opt.value) {
-                      <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
-                    }
-                  </hlm-select-content>
-                </hlm-select>
-              }
-            </div>
-          </section>
+            <section class="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div hlmField>
+                <label hlmFieldLabel for="application-type">{{
+                  t('openApp.field.applicationType')
+                }}</label>
+                @if (isTemplateLocked()) {
+                  <span hlmBadge variant="secondary">{{
+                    applicationTypeLabels()[formModel().applicationType]
+                  }}</span>
+                } @else {
+                  <hlm-select
+                    class="w-full"
+                    [value]="formModel().applicationType"
+                    [itemToString]="applicationTypeToLabel"
+                    (valueChange)="onApplicationTypeChange($event)"
+                  >
+                    <hlm-select-trigger buttonId="application-type" class="w-full">
+                      <hlm-select-value />
+                    </hlm-select-trigger>
+                    <hlm-select-content *hlmSelectPortal>
+                      @for (opt of applicationTypeOptions(); track opt.value) {
+                        <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
+                      }
+                    </hlm-select-content>
+                  </hlm-select>
+                }
+              </div>
+              <div hlmField>
+                <label hlmFieldLabel for="application-client-type">{{
+                  t('openApp.field.clientType')
+                }}</label>
+                @if (isTemplateLocked()) {
+                  <span hlmBadge [variant]="isConfidentialClient() ? 'default' : 'secondary'">{{
+                    clientTypeLabels()[formModel().clientType]
+                  }}</span>
+                } @else {
+                  <hlm-select
+                    class="w-full"
+                    [value]="formModel().clientType"
+                    [itemToString]="clientTypeToLabel"
+                    (valueChange)="onClientTypeSelect($event)"
+                  >
+                    <hlm-select-trigger buttonId="application-client-type" class="w-full">
+                      <hlm-select-value />
+                    </hlm-select-trigger>
+                    <hlm-select-content *hlmSelectPortal>
+                      @for (opt of clientTypeOptions(); track opt.value) {
+                        <hlm-select-item [value]="opt.value">{{ opt.label }}</hlm-select-item>
+                      }
+                    </hlm-select-content>
+                  </hlm-select>
+                }
+              </div>
+            </section>
 
-          @if (formModel().applicationType !== 'service') {
+            @if (formModel().applicationType !== 'service') {
+              <div class="flex items-center gap-3">
+                <hlm-separator class="flex-1" />
+                <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">{{
+                  t('openApp.section.callback')
+                }}</span>
+                <hlm-separator class="flex-1" />
+              </div>
+
+              <div class="grid grid-cols-1 gap-4">
+                <app-uri-list-editor
+                  inputId="application-redirect-uri"
+                  [label]="t('openApp.field.redirectUris')"
+                  [hint]="t('openApp.redirectUri.hint')"
+                  [placeholder]="t('openApp.redirectUri.placeholder')"
+                  [addLabel]="t('common.add')"
+                  [invalidText]="t('openApp.redirectUri.invalid')"
+                  [emptyText]="t('openApp.redirectUri.empty')"
+                  [removeLabel]="t('common.remove')"
+                  [uris]="formModel().redirectUris"
+                  badgeVariant="secondary"
+                  (add)="addRedirectUri($event)"
+                  (remove)="removeRedirectUri($event)"
+                />
+
+                <app-uri-list-editor
+                  inputId="application-post-logout-uri"
+                  [label]="t('openApp.field.postLogoutRedirectUris')"
+                  [hint]="t('openApp.postLogoutUri.hint')"
+                  placeholder="https://example.com/logout-callback"
+                  [addLabel]="t('common.add')"
+                  [invalidText]="t('openApp.redirectUri.invalid')"
+                  [emptyText]="t('openApp.postLogoutUri.empty')"
+                  [removeLabel]="t('common.remove')"
+                  [uris]="formModel().postLogoutRedirectUris"
+                  badgeVariant="outline"
+                  (add)="addPostLogoutRedirectUri($event)"
+                  (remove)="removePostLogoutRedirectUri($event)"
+                />
+              </div>
+            }
+
             <div class="flex items-center gap-3">
               <hlm-separator class="flex-1" />
-              <!--#if (IncludeLocalization)-->
               <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">{{
-                'openApp.section.callback' | transloco
+                t('openApp.section.authorization')
               }}</span>
-              <!--#else-->
-              <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap"
-                >Callback URIs</span
-              >
-              <!--#endif-->
               <hlm-separator class="flex-1" />
             </div>
 
-            <div class="grid grid-cols-1 gap-4">
-              <app-uri-list-editor
-                inputId="application-redirect-uri"
-                [label]="redirectUrisLabel()"
-                [hint]="redirectUriHint()"
-                [placeholder]="redirectUriPlaceholder()"
-                [addLabel]="addLabel()"
-                [invalidText]="redirectUriInvalid()"
-                [emptyText]="redirectUriEmpty()"
-                [removeLabel]="removeUriLabel()"
-                [uris]="formModel().redirectUris"
-                badgeVariant="secondary"
-                (add)="addRedirectUri($event)"
-                (remove)="removeRedirectUri($event)"
-              />
+            @if (isServiceType()) {
+              <!-- service 类型：简化显示 -->
+              <div class="rounded-lg border border-border bg-muted/40 p-4">
+                <div class="mb-2 flex items-center gap-2">
+                  <ng-icon name="lucideCircleCheck" class="text-success" />
+                  <span class="text-sm font-medium">{{ t('openApp.service.autoConfigured') }}</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  @for (p of formModel().permissions; track p) {
+                    <span hlmBadge variant="default">{{ permissionLabels()[p] ?? p }}</span>
+                  }
+                </div>
+                <p class="mt-2 text-xs text-muted-foreground">
+                  {{ t('openApp.service.description') }}
+                </p>
+              </div>
+            } @else {
+              <!-- web/desktop 类型：完整编辑 -->
+              <div hlmField>
+                <label hlmFieldLabel for="application-permissions">{{
+                  t('openApp.field.permissions')
+                }}</label>
+                <hlm-select-multiple class="w-full" [formField]="applicationForm.permissions">
+                  <hlm-select-trigger buttonId="application-permissions" class="w-full">
+                    <hlm-select-placeholder>{{
+                      t('openApp.permissions.placeholder')
+                    }}</hlm-select-placeholder>
+                    <ng-template hlmSelectValues let-values>
+                      <hlm-select-values-content>
+                        {{ permissionLabels()[values[0]] ?? values[0] }}
+                        @if (values.length > 1) {
+                          (+{{ values.length - 1 }})
+                        }
+                      </hlm-select-values-content>
+                    </ng-template>
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    <hlm-select-group>
+                      @for (option of permissionOptions(); track option.value) {
+                        <hlm-select-item [value]="option.value">
+                          <div class="flex w-full items-center justify-between gap-3">
+                            <span>{{ option.label }}</span>
+                            <span class="text-xs text-muted-foreground">{{ option.value }}</span>
+                          </div>
+                        </hlm-select-item>
+                      }
+                    </hlm-select-group>
+                  </hlm-select-content>
+                </hlm-select-multiple>
+              </div>
 
-              <app-uri-list-editor
-                inputId="application-post-logout-uri"
-                [label]="postLogoutUrisLabel()"
-                [hint]="postLogoutUriHint()"
-                placeholder="https://example.com/logout-callback"
-                [addLabel]="addLabel()"
-                [invalidText]="redirectUriInvalid()"
-                [emptyText]="postLogoutUriEmpty()"
-                [removeLabel]="removeUriLabel()"
-                [uris]="formModel().postLogoutRedirectUris"
-                badgeVariant="outline"
-                (add)="addPostLogoutRedirectUri($event)"
-                (remove)="removePostLogoutRedirectUri($event)"
-              />
-            </div>
-          }
-
-          <div class="flex items-center gap-3">
-            <hlm-separator class="flex-1" />
-            <!--#if (IncludeLocalization)-->
-            <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap">{{
-              'openApp.section.authorization' | transloco
-            }}</span>
-            <!--#else-->
-            <span class="text-sm font-semibold text-muted-foreground whitespace-nowrap"
-              >Authorization capabilities</span
-            >
-            <!--#endif-->
-            <hlm-separator class="flex-1" />
+              <div hlmField>
+                <label hlmFieldLabel for="application-requirements">{{
+                  t('openApp.field.requirements')
+                }}</label>
+                <hlm-select-multiple class="w-full" [formField]="applicationForm.requirements">
+                  <hlm-select-trigger buttonId="application-requirements" class="w-full">
+                    <hlm-select-placeholder>{{
+                      t('openApp.requirements.placeholder')
+                    }}</hlm-select-placeholder>
+                    <ng-template hlmSelectValues let-values>
+                      <hlm-select-values-content>
+                        {{
+                          values[0] === 'ft:pkce' ? t('openApp.requirement.forcePkce') : values[0]
+                        }}
+                        @if (values.length > 1) {
+                          (+{{ values.length - 1 }})
+                        }
+                      </hlm-select-values-content>
+                    </ng-template>
+                  </hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    <hlm-select-group>
+                      @for (option of requirementOptions(); track option.value) {
+                        <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
+                      }
+                    </hlm-select-group>
+                  </hlm-select-content>
+                </hlm-select-multiple>
+                @for (error of applicationForm.requirements().errors(); track error.kind) {
+                  <hlm-field-error [validator]="error.kind">{{
+                    t('validation.' + error.kind, error)
+                  }}</hlm-field-error>
+                }
+                @if (
+                  formModel().permissions.includes('gt:refresh_token') &&
+                  !formModel().permissions.includes('scp:offline_access')
+                ) {
+                  <p class="text-sm text-warning">
+                    {{ t('openApp.requirements.offlineAccessHint') }}
+                  </p>
+                }
+              </div>
+            }
           </div>
 
-          @if (isServiceType()) {
-            <!-- service 类型：简化显示 -->
-            <div class="rounded-lg border border-border bg-muted/40 p-4">
-              <div class="mb-2 flex items-center gap-2">
-                <ng-icon name="lucideCircleCheck" class="text-success" />
-                <!--#if (IncludeLocalization)-->
-                <span class="text-sm font-medium">{{
-                  'openApp.service.autoConfigured' | transloco
-                }}</span>
-                <!--#else-->
-                <span class="text-sm font-medium">Configured automatically from the template</span>
-                <!--#endif-->
-              </div>
-              <div class="flex flex-wrap gap-2">
-                @for (p of formModel().permissions; track p) {
-                  <span hlmBadge variant="default">{{ getPermissionLabel(p) }}</span>
-                }
-              </div>
-              <!--#if (IncludeLocalization)-->
-              <p class="mt-2 text-xs text-muted-foreground">
-                {{ 'openApp.service.description' | transloco }}
-              </p>
-              <!--#else-->
-              <p class="mt-2 text-xs text-muted-foreground">
-                Server-side client credentials flow; no callback URIs or PKCE required.
-              </p>
-              <!--#endif-->
-            </div>
-          } @else {
-            <!-- web/desktop 类型：完整编辑 -->
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-permissions">{{
-                'openApp.field.permissions' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-permissions">Permissions</label>
-              <!--#endif-->
-              <hlm-select-multiple class="w-full" [formField]="applicationForm.permissions">
-                <hlm-select-trigger buttonId="application-permissions" class="w-full">
-                  <hlm-select-placeholder>{{ permissionsPlaceholder() }}</hlm-select-placeholder>
-                  <ng-template hlmSelectValues let-values>
-                    <hlm-select-values-content>
-                      {{ getPermissionLabel(values[0]) }}
-                      @if (values.length > 1) {
-                        (+{{ values.length - 1 }})
-                      }
-                    </hlm-select-values-content>
-                  </ng-template>
-                </hlm-select-trigger>
-                <hlm-select-content *hlmSelectPortal>
-                  <hlm-select-group>
-                    @for (option of permissionOptions(); track option.value) {
-                      <hlm-select-item [value]="option.value">
-                        <div class="flex w-full items-center justify-between gap-3">
-                          <span>{{ option.label }}</span>
-                          <span class="text-xs text-muted-foreground">{{ option.value }}</span>
-                        </div>
-                      </hlm-select-item>
-                    }
-                  </hlm-select-group>
-                </hlm-select-content>
-              </hlm-select-multiple>
-            </div>
-
-            <div hlmField>
-              <!--#if (IncludeLocalization)-->
-              <label hlmFieldLabel for="application-requirements">{{
-                'openApp.field.requirements' | transloco
-              }}</label>
-              <!--#else-->
-              <label hlmFieldLabel for="application-requirements">Requirements</label>
-              <!--#endif-->
-              <hlm-select-multiple class="w-full" [formField]="applicationForm.requirements">
-                <hlm-select-trigger buttonId="application-requirements" class="w-full">
-                  <hlm-select-placeholder>{{ requirementsPlaceholder() }}</hlm-select-placeholder>
-                  <ng-template hlmSelectValues let-values>
-                    <hlm-select-values-content>
-                      {{ getRequirementLabel(values[0]) }}
-                      @if (values.length > 1) {
-                        (+{{ values.length - 1 }})
-                      }
-                    </hlm-select-values-content>
-                  </ng-template>
-                </hlm-select-trigger>
-                <hlm-select-content *hlmSelectPortal>
-                  <hlm-select-group>
-                    @for (option of requirementOptions(); track option.value) {
-                      <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item>
-                    }
-                  </hlm-select-group>
-                </hlm-select-content>
-              </hlm-select-multiple>
-              @for (error of applicationForm.requirements().errors(); track error.kind) {
-                @if (error.message) {
-                  <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-                }
+          <hlm-dialog-footer>
+            <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
+              {{ t('common.cancel') }}
+            </button>
+            <button hlmBtn type="submit" [disabled]="saving()">
+              @if (saving()) {
+                <hlm-spinner class="text-base" data-icon="inline-start" />
               }
-              @if (
-                formModel().permissions.includes('gt:refresh_token') &&
-                !formModel().permissions.includes('scp:offline_access')
-              ) {
-                <!--#if (IncludeLocalization)-->
-                <p class="text-sm text-warning">
-                  {{ 'openApp.requirements.offlineAccessHint' | transloco }}
-                </p>
-                <!--#else-->
-                <p class="text-sm text-warning">
-                  refresh_token is allowed; consider also granting the offline_access scope.
-                </p>
-                <!--#endif-->
-              }
-            </div>
-          }
-        </div>
-
-        <hlm-dialog-footer>
-          <!--#if (IncludeLocalization)-->
-          <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
-            {{ 'common.cancel' | transloco }}
-          </button>
-          <button hlmBtn type="submit" [disabled]="saving()">
-            @if (saving()) {
-              <hlm-spinner class="text-base" data-icon="inline-start" />
-            }
-            {{ 'common.save' | transloco }}
-          </button>
-          <!--#else-->
-          <button hlmBtn type="button" variant="outline" [disabled]="saving()" (click)="onHide()">
-            Cancel
-          </button>
-          <button hlmBtn type="submit" [disabled]="saving()">
-            @if (saving()) {
-              <hlm-spinner class="text-base" data-icon="inline-start" />
-            }
-            Save
-          </button>
-          <!--#endif-->
-        </hlm-dialog-footer>
-      </form>
-    }
-  </hlm-dialog-content>
-</hlm-dialog>
+              {{ t('common.save') }}
+            </button>
+          </hlm-dialog-footer>
+        </form>
+      }
+    </hlm-dialog-content>
+  </hlm-dialog>
+</ng-container>

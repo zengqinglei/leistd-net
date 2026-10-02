@@ -4,6 +4,7 @@ using Leistd.EventBus.EventHandlers;
 using Leistd.EventBus.Events;
 using Leistd.EventBus.Local;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -40,7 +41,7 @@ public sealed class UnitOfWorkRegistrationValidationTests
         await using var provider = (ServiceProvider)new DynamicProxyServiceRegistrationCallbackFactory()
             .CreateServiceProvider(services);
 
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
         uow.AddPendingEvents([new ProbeEvent()]);
         await uow.CompleteAsync();
         uow.Dispose();
@@ -105,17 +106,18 @@ public sealed class UnitOfWorkRegistrationValidationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();   // 刻意不装本地事件总线
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
         // 没有事件时照常完成
-        using (var quiet = await manager.BeginAsync(requiresNew: true))
+        using (var quiet = manager.Begin(requiresNew: true))
         {
             await quiet.CompleteAsync();
         }
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
         uow.AddPendingEvents([new ProbeEvent()]);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => uow.CompleteAsync());
@@ -127,6 +129,7 @@ public sealed class UnitOfWorkRegistrationValidationTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddLocalEventBus();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         return services;
     }

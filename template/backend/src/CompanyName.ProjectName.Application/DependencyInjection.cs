@@ -22,12 +22,15 @@ using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Application.Settings.Timing;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.AppServices;
+using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Auth.EventHandlers;
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 using CompanyName.ProjectName.Domain.Auth.Events;
+using Leistd.BackgroundJobs;
+using Leistd.BackgroundJobs.Recurring;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.OpenApplications.AppServices;
 #endif
@@ -43,8 +46,9 @@ using CompanyName.ProjectName.Application.Roles.AppServices;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.AppServices;
-using Leistd.MultiTenancy.Events;
-using Leistd.MultiTenancy.Provisioning;
+using Leistd.MultiTenancy.Management;
+using Leistd.MultiTenancy.Management.Events;
+using Leistd.MultiTenancy.Management.Provisioning;
 #endif
 using Leistd.EventBus.EventHandlers;
 using Microsoft.Extensions.DependencyInjection;
@@ -64,7 +68,8 @@ public static class DependencyInjection
     {
         services.AddMapsterObjectMapper(options =>
         {
-            options.AddProfiles(typeof(DependencyInjection).Assembly);
+            // 各模块 Mappings/ 下实现 IRegister 的映射配置，登记到组件自己的 TypeAdapterConfig
+            options.Configurators.Add(config => config.Scan(typeof(DependencyInjection).Assembly));
         });
 
         services.AddTransient<ISystemInitializer, SystemInitializer>();
@@ -80,10 +85,17 @@ public static class DependencyInjection
         // 安全提醒默认不发；启用通知时宿主换成经通知组件发布的实现
         services.TryAddTransient<ISecurityAlertPublisher, NullSecurityAlertPublisher>();
         services.AddTransient<TwoFactorChallengeStore>();
+        // 不再登录的用户没有"登录时顺手清理"的时机，过期会话与其中的原始 IP 由这个作业每天清掉
+        services.AddRecurringJob<ExpiredUserSessionCleanupJob>(
+            ExpiredUserSessionCleanupJob.Name,
+            RecurringJobSchedule.DailyAt(new TimeOnly(3, 0)),
+            RecurringJobScope.Cluster);
         services.AddTransient<ITwoFactorAppService, TwoFactorAppService>();
         services.AddTransient<IAuthAppService, AuthAppService>();
 
 #if (OpenIddictServer)
+        services.AddRecurringJob<OpenIddictPruningJob>(OpenIddictPruningJob.Name,
+            RecurringJobSchedule.DailyAt(new TimeOnly(3, 30)), RecurringJobScope.Cluster);
         // OAuth 主体工厂与开放应用管理仅供自签发令牌模式使用。
         services.AddTransient<IAuthPrincipalFactory, AuthPrincipalFactory>();
         services.AddTransient<IOpenApplicationAppService, OpenApplicationAppService>();
@@ -123,10 +135,15 @@ public static class DependencyInjection
         // 注册策略按租户从设置里解析；appsettings 仍是部署基线（设置定义的默认值取自它）。
         services.AddTransient<IUserRegistrationPolicyProvider, UserRegistrationPolicyProvider>();
         services.AddTransient<ILoginSecurityPolicyProvider, LoginSecurityPolicyProvider>();
+        // 口令登录、两步验证登录、再认证三条路径共用同一份失败计数与锁定
+        services.AddTransient<IAccessFailureCounter, AccessFailureCounter>();
+        services.AddTransient<IReauthenticationGuard, ReauthenticationGuard>();
 #endif
 
 #if (LocalIdentity)
-        // 租户管理的编排与补偿在多租户组件里；本项目只负责开通内容与启用前置条件
+        // 租户管理的编排与补偿在多租户组件里（存储由 Infrastructure 的 AddMultiTenancyEfCore 提供）；
+        // 本项目只负责开通内容与启用前置条件
+        services.AddTenantManagement();
         services.AddTransient<ITenantProvisioner, TenantSeeder>();
         services.AddTransient<ITenantActivationGuard, TenantHasUsersActivationGuard>();
         services.AddTransient<IEventHandler<TenantChangedEvent>, TenantChangedAuditHandler>();

@@ -10,7 +10,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -32,7 +32,7 @@ import {
 } from '@spartan-ng/helm/input-group';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { PaginationState, SortingState } from '@tanstack/angular-table';
-import { combineLatest, EMPTY, Subject } from 'rxjs';
+import { combineLatest, EMPTY, of, Subject } from 'rxjs';
 import {
   catchError,
   debounceTime,
@@ -45,13 +45,13 @@ import {
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { FacetedFilter } from '../../../../shared/components/faceted-filter/faceted-filter';
 import { PERMISSIONS } from '../../../../shared/models/permission';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import {
   paginationFromQuery,
   sortingFromQuery,
@@ -85,7 +85,7 @@ const DEFAULT_APPLICATION_SORTING: SortingState = [{ id: 'clientId', desc: false
     ...HlmTooltipImports,
     FacetedFilter,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     OpenApplicationTable,
     OpenApplicationEditDialog,
@@ -116,6 +116,8 @@ export class OpenApplications {
   private readonly authorizationService = inject(AuthorizationService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   private readonly searchSubject = new Subject<string>();
@@ -152,6 +154,10 @@ export class OpenApplications {
   editDialogLoading = signal(false);
   editDialogSaving = signal(false);
   selectedApplication = signal<OpenApplicationOutputDto | null>(null);
+  // 可授予的 scope：取不到时编辑框里只是没有 scope 选项，列表照常可用
+  readonly scopes = toSignal(this.service.getScopes().pipe(catchError(() => of([]))), {
+    initialValue: [],
+  });
 
   // 揭示密钥弹窗（重置 / 新建后复用同一实例）。
   secretDialogVisible = signal(false);
@@ -191,46 +197,49 @@ export class OpenApplications {
   );
 
   //#if (IncludeLocalization)
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
+  private readonly applicationTypeOptionsTexts = {
+    web: translateSignal('openApp.appType.web', {}, { scope: 'openApp' }),
+    native: translateSignal('openApp.appType.native', {}, { scope: 'openApp' }),
+    service: translateSignal('openApp.appType.service', {}, { scope: 'openApp' }),
+  };
+  readonly applicationTypeOptions = computed(() => [
+    {
+      label: this.applicationTypeOptionsTexts.web(),
+      value: 'web' as const,
+      icon: 'lucideGlobe',
+    },
+    {
+      label: this.applicationTypeOptionsTexts.native(),
+      value: 'native' as const,
+      icon: 'lucideMonitor',
+    },
+    {
+      label: this.applicationTypeOptionsTexts.service(),
+      value: 'service' as const,
+      icon: 'lucideServer',
+    },
+  ]);
 
-  // 读取 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，选项标签重新翻译。
-  readonly applicationTypeOptions = computed(() => {
-    this.translationReady();
-    return [
-      {
-        label: this.transloco.translate('openApp.appType.web'),
-        value: 'web' as const,
-        icon: 'lucideGlobe',
-      },
-      {
-        label: this.transloco.translate('openApp.appType.native'),
-        value: 'native' as const,
-        icon: 'lucideMonitor',
-      },
-      {
-        label: this.transloco.translate('openApp.appType.service'),
-        value: 'service' as const,
-        icon: 'lucideServer',
-      },
-    ];
-  });
-
-  readonly clientTypeOptions = computed(() => {
-    this.translationReady();
-    return [
-      {
-        label: this.transloco.translate('openApp.clientType.publicLabel'),
-        value: 'public' as const,
-        icon: 'lucideUnlock',
-      },
-      {
-        label: this.transloco.translate('openApp.clientType.confidentialLabel'),
-        value: 'confidential' as const,
-        icon: 'lucideLockKeyhole',
-      },
-    ];
-  });
+  private readonly clientTypeOptionsTexts = {
+    publicLabel: translateSignal('openApp.clientType.publicLabel', {}, { scope: 'openApp' }),
+    confidentialLabel: translateSignal(
+      'openApp.clientType.confidentialLabel',
+      {},
+      { scope: 'openApp' },
+    ),
+  };
+  readonly clientTypeOptions = computed(() => [
+    {
+      label: this.clientTypeOptionsTexts.publicLabel(),
+      value: 'public' as const,
+      icon: 'lucideUnlock',
+    },
+    {
+      label: this.clientTypeOptionsTexts.confidentialLabel(),
+      value: 'confidential' as const,
+      icon: 'lucideLockKeyhole',
+    },
+  ]);
   //#else
   readonly applicationTypeOptions = computed(() => [
     { label: 'Web', value: 'web' as const, icon: 'lucideGlobe' },
@@ -244,31 +253,14 @@ export class OpenApplications {
   ]);
   //#endif
 
+  // 揭示密钥弹窗的标题在事件发生时取一次：弹窗开着时不会切语言
   //#if (IncludeLocalization)
-  readonly allAppTypesPlaceholder = () => this.transloco.translate('openApp.filter.allAppTypes');
-  readonly allClientTypesPlaceholder = () =>
-    this.transloco.translate('openApp.filter.allClientTypes');
-  readonly searchPlaceholder = () => this.transloco.translate('openApp.filter.searchPlaceholder');
-  readonly refreshLabel = () => this.transloco.translate('common.refresh');
-  readonly createLabel = () => this.transloco.translate('openApp.action.create');
-  readonly resetSecretHeader = () => this.transloco.translate('openApp.secret.resetHeader');
-  readonly createdSecretHeader = () => this.transloco.translate('openApp.secret.createdHeader');
-  readonly appTypeFilterLabel = () => this.transloco.translate('openApp.filter.appTypeLabel');
-  readonly clientTypeFilterLabel = () => this.transloco.translate('openApp.filter.clientTypeLabel');
-  readonly filterClearLabel = () => this.transloco.translate('common.clearFilter');
-  readonly filterEmptyLabel = () => this.transloco.translate('common.noResults');
+  private readonly resetSecretHeader = () => this.transloco.translate('openApp.secret.resetHeader');
+  private readonly createdSecretHeader = () =>
+    this.transloco.translate('openApp.secret.createdHeader');
   //#else
-  readonly allAppTypesPlaceholder = () => 'All application types';
-  readonly allClientTypesPlaceholder = () => 'All client types';
-  readonly searchPlaceholder = () => 'Search by name / Client ID...';
-  readonly refreshLabel = () => 'Refresh';
-  readonly createLabel = () => 'New Open Application';
-  readonly resetSecretHeader = () => 'Client Secret reset';
-  readonly createdSecretHeader = () => 'Client secret';
-  readonly appTypeFilterLabel = () => 'Application type';
-  readonly clientTypeFilterLabel = () => 'Client type';
-  readonly filterClearLabel = () => 'Clear filter';
-  readonly filterEmptyLabel = () => 'No results';
+  private readonly resetSecretHeader = () => 'Client Secret reset';
+  private readonly createdSecretHeader = () => 'Client secret';
   //#endif
 
   constructor() {
@@ -300,11 +292,8 @@ export class OpenApplications {
       });
 
     //#if (IncludeLocalization)
-    // 读取 translationReady 建立依赖：资源就绪 / 语言切换时重设标题，随语言更新。
-    effect(() => {
-      this.translationReady();
-      this.layoutService.title.set(this.transloco.translate('openApp.page.title'));
-    });
+    const title = translateSignal('openApp.page.title', {}, { scope: 'openApp' });
+    effect(() => this.layoutService.title.set(title()));
     //#else
     this.layoutService.title.set('Open Applications');
     //#endif
@@ -504,3 +493,16 @@ export class OpenApplications {
     //#endif
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'openApp.filter.searchPlaceholder': 'Search by name / Client ID...',
+  'openApp.filter.appTypeLabel': 'Application type',
+  'common.clearFilter': 'Clear filter',
+  'common.noResults': 'No results',
+  'openApp.filter.clientTypeLabel': 'Client type',
+  'common.refresh': 'Refresh',
+  'openApp.action.create': 'New Open Application',
+};
+//#endif

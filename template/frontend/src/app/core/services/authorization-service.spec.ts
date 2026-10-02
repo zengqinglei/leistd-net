@@ -28,50 +28,51 @@ describe('AuthorizationService', () => {
 
   afterEach(() => httpMock.verify());
 
-  it('未加载前一律按无权限处理，避免闪现受保护入口', () => {
-    expect(service.loaded()).toBeFalse();
-    expect(service.has(PERMISSIONS.users.default)).toBeFalse();
-    expect(service.canAccessPlatform()).toBeFalse();
+  // 避免闪现受保护入口
+  it('treats every permission as denied until loaded', () => {
+    expect(service.loaded()).toBe(false);
+    expect(service.has(PERMISSIONS.users.default)).toBe(false);
+    expect(service.canAccessPlatform()).toBe(false);
   });
 
-  it('setPermissions 之后 has / hasAny / hasAll 一致生效', () => {
+  it('applies has / hasAny / hasAll consistently after setPermissions', () => {
     service.setPermissions({
       permissions: [PERMISSIONS.users.default, PERMISSIONS.users.create],
       isSuperAdmin: false,
       versionToken: 'r1',
     });
 
-    expect(service.loaded()).toBeTrue();
+    expect(service.loaded()).toBe(true);
     expect(service.versionToken()).toBe('r1');
 
-    expect(service.has(PERMISSIONS.users.default)).toBeTrue();
-    expect(service.has(PERMISSIONS.roles.default)).toBeFalse();
+    expect(service.has(PERMISSIONS.users.default)).toBe(true);
+    expect(service.has(PERMISSIONS.roles.default)).toBe(false);
 
-    expect(service.hasAny(PERMISSIONS.roles.default, PERMISSIONS.users.create)).toBeTrue();
-    expect(service.hasAny(PERMISSIONS.roles.default)).toBeFalse();
+    expect(service.hasAny(PERMISSIONS.roles.default, PERMISSIONS.users.create)).toBe(true);
+    expect(service.hasAny(PERMISSIONS.roles.default)).toBe(false);
 
-    expect(service.hasAll(PERMISSIONS.users.default, PERMISSIONS.users.create)).toBeTrue();
-    expect(service.hasAll(PERMISSIONS.users.default, PERMISSIONS.roles.default)).toBeFalse();
+    expect(service.hasAll(PERMISSIONS.users.default, PERMISSIONS.users.create)).toBe(true);
+    expect(service.hasAll(PERMISSIONS.users.default, PERMISSIONS.roles.default)).toBe(false);
   });
 
-  it('超级管理员标记不构成第二套放行规则', () => {
+  it('does not treat the super admin flag as a second grant rule', () => {
     service.setPermissions({ permissions: [], isSuperAdmin: true, versionToken: 'r1' });
 
-    expect(service.isSuperAdmin()).toBeTrue();
+    expect(service.isSuperAdmin()).toBe(true);
 
     // 标记是展示信息；能不能看由权限集合决定，与后端同一判据。
-    expect(service.has(PERMISSIONS.users.default)).toBeFalse();
-    expect(service.canAccessPlatform()).toBeFalse();
+    expect(service.has(PERMISSIONS.users.default)).toBe(false);
+    expect(service.canAccessPlatform()).toBe(false);
   });
 
-  it('拥有任一平台入口权限即可进入平台区', () => {
+  it('grants platform access with any single platform entry permission', () => {
     service.setPermissions({
       permissions: [PERMISSIONS.roles.default],
       isSuperAdmin: false,
       versionToken: 'r1',
     });
 
-    expect(service.canAccessPlatform()).toBeTrue();
+    expect(service.canAccessPlatform()).toBe(true);
   });
 
   /**
@@ -82,10 +83,10 @@ describe('AuthorizationService', () => {
    * 只把两处改成引用同一常量还不够——下一个人仍可能在路由里手写补一项，
    * 所以这里断言"同源"，让分叉在 CI 里立刻失败。
    */
-  it('/platform 路由白名单与 canAccessPlatform 同源', () => {
+  it('shares the /platform route allowlist with canAccessPlatform', () => {
     const platformRoute = routes.find((route) => route.path === 'platform');
 
-    expect(platformRoute).withContext('/platform 路由不存在').toBeDefined();
+    expect(platformRoute, '/platform 路由不存在').toBeDefined();
     expect(platformRoute?.data?.['permissions']).toEqual([...PLATFORM_ENTRY_PERMISSIONS]);
   });
 
@@ -95,7 +96,7 @@ describe('AuthorizationService', () => {
    * 上一条锁住两处同源，但同源的清单若漏了某个模块，那个模块的专属角色照样进不去。
    * 这一条逐项验证，新增模块时忘记加入集合就会红。
    */
-  it('平台入口权限集里每一项都能单独放行', () => {
+  it('grants platform access for each platform entry permission on its own', () => {
     for (const permission of PLATFORM_ENTRY_PERMISSIONS) {
       service.setPermissions({
         permissions: [permission],
@@ -103,13 +104,11 @@ describe('AuthorizationService', () => {
         versionToken: 'r1',
       });
 
-      expect(service.canAccessPlatform())
-        .withContext(`仅持有 ${permission} 时应可进入平台区`)
-        .toBeTrue();
+      expect(service.canAccessPlatform(), `仅持有 ${permission} 时应可进入平台区`).toBe(true);
     }
   });
 
-  it('clear 之后回到未加载状态', () => {
+  it('returns to the unloaded state after clear', () => {
     service.setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: true,
@@ -118,13 +117,13 @@ describe('AuthorizationService', () => {
 
     service.clear();
 
-    expect(service.loaded()).toBeFalse();
-    expect(service.isSuperAdmin()).toBeFalse();
+    expect(service.loaded()).toBe(false);
+    expect(service.isSuperAdmin()).toBe(false);
     expect(service.permissions()).toEqual([]);
-    expect(service.has(PERMISSIONS.users.default)).toBeFalse();
+    expect(service.has(PERMISSIONS.users.default)).toBe(false);
   });
 
-  it('reload 成功时替换权限集合', async () => {
+  it('replaces the permission set when reload succeeds', async () => {
     service.setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: false,
@@ -139,12 +138,12 @@ describe('AuthorizationService', () => {
     });
     await reloaded;
 
-    expect(service.has(PERMISSIONS.users.default)).toBeFalse();
-    expect(service.has(PERMISSIONS.roles.default)).toBeTrue();
+    expect(service.has(PERMISSIONS.users.default)).toBe(false);
+    expect(service.has(PERMISSIONS.roles.default)).toBe(true);
     expect(service.versionToken()).toBe('r2');
   });
 
-  it('reload 失败时保持原有权限，不把用户降权成空集合', async () => {
+  it('keeps the existing permissions instead of emptying them when reload fails', async () => {
     service.setPermissions({
       permissions: [PERMISSIONS.users.default],
       isSuperAdmin: false,
@@ -161,7 +160,7 @@ describe('AuthorizationService', () => {
     await reloaded;
 
     // 刷新失败就清空权限，会让界面上的入口无缘无故整片消失。
-    expect(service.has(PERMISSIONS.users.default)).toBeTrue();
+    expect(service.has(PERMISSIONS.users.default)).toBe(true);
     expect(service.versionToken()).toBe('r1');
   });
 });

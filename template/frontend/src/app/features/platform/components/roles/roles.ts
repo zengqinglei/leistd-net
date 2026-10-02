@@ -10,7 +10,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucidePlus, lucideRefreshCw, lucideSearch } from '@ng-icons/lucide';
@@ -38,12 +38,12 @@ import { RoleEditDialog } from './widgets/role-edit-dialog/role-edit-dialog';
 import { RoleTable } from './widgets/role-table/role-table';
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { refreshOnLanguageChange, translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { LayoutService } from '../../../../layout/services/layout-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import {
   paginationFromQuery,
   sortingFromQuery,
@@ -82,7 +82,7 @@ const DEFAULT_ROLE_SORTING: SortingState = [{ id: 'sort', desc: false }];
     RoleEditDialog,
     PermissionGrantDialog,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucidePlus, lucideRefreshCw, lucideSearch })],
@@ -99,7 +99,8 @@ export class Roles {
   private readonly router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   private readonly searchSubject = new Subject<string>();
@@ -164,18 +165,10 @@ export class Roles {
         this.totalCount.set(result.totalCount);
       });
 
-    //#if (IncludeLocalization)
-    // 页面按钮文案走 transloco.translate()，本页没有筛选下拉这类读了 translationReady 的
-    // computed 被渲染，语言变化不会把视图标脏，需显式接上。
-    refreshOnLanguageChange(this.transloco);
-
-    //#endif
     // 面包屑末级文案由页面自行设置，与其他平台页保持同一约定。
     //#if (IncludeLocalization)
-    effect(() => {
-      this.translationReady();
-      this.layoutService.title.set(this.transloco.translate('roles.title'));
-    });
+    const title = translateSignal('roles.title', {}, { scope: 'roles' });
+    effect(() => this.layoutService.title.set(title()));
     //#else
     this.layoutService.title.set('Role Management');
     //#endif
@@ -226,7 +219,11 @@ export class Roles {
       next: () => {
         this.editDialogOpen.set(false);
         this.reload();
-        toast.success(this.savedMessage());
+        //#if (IncludeLocalization)
+        toast.success(this.transloco.translate('roles.saved'));
+        //#else
+        toast.success('Role saved');
+        //#endif
       },
       error: (error) => toast.error(applicationErrorMessage(error)),
     });
@@ -234,9 +231,15 @@ export class Roles {
 
   async onDelete(role: RoleOutputDto): Promise<void> {
     const confirmed = await this.confirmService.open({
-      header: this.deleteTitle(),
-      message: this.deleteDescription(role),
-      confirmText: this.deleteConfirmLabel(),
+      //#if (IncludeLocalization)
+      header: this.transloco.translate('roles.deleteTitle'),
+      message: this.transloco.translate('roles.deleteDescription', { name: role.displayName }),
+      confirmText: this.transloco.translate('common.delete'),
+      //#else
+      header: 'Delete role',
+      message: `Delete "${role.displayName}"? Its permission grants will be removed as well.`,
+      confirmText: 'Delete',
+      //#endif
       variant: 'destructive',
     });
 
@@ -250,7 +253,11 @@ export class Roles {
       .subscribe({
         next: () => {
           this.reload();
-          toast.success(this.deletedMessage());
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('roles.deleted'));
+          //#else
+          toast.success('Role deleted');
+          //#endif
         },
         error: (error) => toast.error(applicationErrorMessage(error)),
       });
@@ -262,28 +269,6 @@ export class Roles {
     this.reload();
     this.authorizationService.reload().subscribe({ error: () => undefined });
   }
-
-  //#if (IncludeLocalization)
-  readonly searchPlaceholder = () => this.transloco.translate('roles.searchPlaceholder');
-  readonly refreshLabel = () => this.transloco.translate('common.refresh');
-  readonly newRoleLabel = () => this.transloco.translate('roles.create');
-  private savedMessage = () => this.transloco.translate('roles.saved');
-  private deletedMessage = () => this.transloco.translate('roles.deleted');
-  private deleteTitle = () => this.transloco.translate('roles.deleteTitle');
-  private deleteDescription = (role: RoleOutputDto) =>
-    this.transloco.translate('roles.deleteDescription', { name: role.displayName });
-  private deleteConfirmLabel = () => this.transloco.translate('common.delete');
-  //#else
-  readonly searchPlaceholder = () => 'Search roles';
-  readonly refreshLabel = () => 'Refresh';
-  readonly newRoleLabel = () => 'New role';
-  private savedMessage = () => 'Role saved';
-  private deletedMessage = () => 'Role deleted';
-  private deleteTitle = () => 'Delete role';
-  private deleteDescription = (role: RoleOutputDto) =>
-    `Delete "${role.displayName}"? Its permission grants will be removed as well.`;
-  private deleteConfirmLabel = () => 'Delete';
-  //#endif
 
   private queryFromParams(params: ParamMap): GetRolesInputDto {
     const pagination = paginationFromQuery(params);
@@ -304,3 +289,12 @@ export class Roles {
     });
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'roles.searchPlaceholder': 'Search roles',
+  'common.refresh': 'Refresh',
+  'roles.create': 'New role',
+};
+//#endif

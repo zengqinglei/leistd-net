@@ -54,7 +54,7 @@ HTTP/1.1 200 OK
 
 ### 2.4 错误响应
 
-失败统一返回 RFC 9457 `ProblemDetails`，`Content-Type: application/problem+json`，由 `Leistd.ExceptionHandling.AspNetCore` 的全局异常处理（`BusinessExceptionHandler`）产出。除 RFC 标准字段外，固定附带 `code`、`message`、`traceId` 三个扩展字段。
+失败统一返回 RFC 9457 `ProblemDetails`，`Content-Type: application/problem+json`，由 `Leistd.ExceptionHandling.AspNetCore` 的全局异常处理（`BusinessExceptionHandler`）产出。除 RFC 标准字段外，所有失败都带 `traceId` 扩展字段；业务错误另带稳定错误码 `code`，公开文案在标准字段 `detail`。输入校验、未预期异常、上游故障等协议层失败的契约就是 HTTP 状态码（RFC 9457 §4），只带本地化 `title` 与 `traceId`（校验另带 `errors`），不带 `code` 与 `detail`。
 
 ```json
 {
@@ -64,8 +64,7 @@ HTTP/1.1 200 OK
   "detail": "用户名 'admin' 已存在",
   "instance": "/api/v1/users",
   "code": "User:UsernameTaken",
-  "message": "用户名 'admin' 已存在",
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 
@@ -73,30 +72,26 @@ HTTP/1.1 200 OK
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| type | string | 稳定问题类型 URI；校验错误为 `urn:leistd:problem:validation-error`，其他业务错误为 `urn:leistd:problem:business-error` |
-| title | string | 错误标题（英文短语，与 status 对应，如 `Bad Request`、`Not Found`） |
+| type | string | 稳定问题类型 URI；校验与业务错误分别为 `validation-error`、`business-error`，其余按状态码使用 ASP.NET Core 默认值 |
+| title | string | 与 status 对应的错误标题，按当前语言本地化（如 `请求无效`、`Not Found`） |
 | status | number | HTTP 状态码 |
-| detail | string | 面向用户的错误说明；与 `message` 相同，按错误码本地化或回落为安全文案 |
+| detail | string | 业务错误面向用户的说明，按错误码本地化或回落为安全文案；协议层失败不带 |
 | instance | string | 出错的请求路径 |
-| code | string | **业务错误码扩展字段**：`BusinessException.Code`，形如 `User:UsernameTaken`。既是稳定机器契约（前端可据此分支），也是本地化词条键。未显式 `WithCode` 时为状态码通用码（`Error:BadRequest` 等），因此**恒有值** |
-| message | string | 错误消息扩展字段，与 `detail` 同值，便于前端统一读取 |
-| traceId | string | 链路追踪 ID；优先取 `Activity.Current?.TraceId` 的 32 位小写十六进制值，无 `Activity` 时回落 `HttpContext.TraceIdentifier` |
+| code | string | **稳定错误码**：只出现在业务错误上，`BusinessException` 在构造时必填，形如 `User:UsernameTaken`；也是本地化词条键 |
+| traceId | string | ASP.NET Core 写出的链路标识（当前 `Activity.Id`），W3C 格式 `00-<TraceId>-<SpanId>-<flags>`，第二段是 TraceId，用它检索日志与链路；没有 Activity 时为请求标识。业务关联标识另在响应头 `X-Correlation-Id` |
 
-> `GlobalExceptionOptions.IncludeExceptionDetails` 默认为 `false`；关闭时不输出 `details` 或 `stackTrace`。开启后，`WithDetails` 设置的业务诊断信息以 `details` 返回，实际捕获异常的堆栈以 `stackTrace` 返回；不得在业务诊断信息中放入密钥、Token 或连接串。
+> `GlobalExceptionOptions.IncludeExceptionDetails` 默认为 `false`；开启后仅额外输出 `stackTrace`，只用于本地调试，生产环境不开启。
 
 ### 2.5 验证错误响应
 
-业务或应用层抛出 `UnprocessableEntityException` 时返回 HTTP **422**（默认 `code` = `Error:UnprocessableEntity`）；`System.ComponentModel.DataAnnotations.ValidationException` 也会被转换为该 422 响应。`[ApiController]` 自动模型校验返回 HTTP **400**。两条路径都使用 `urn:leistd:problem:validation-error` 问题类型，并将字段错误写入 Leistd 自定义的 `errors` 对象数组，而不是 `ValidationProblemDetails` 字典。
+`[ApiController]` 自动模型校验和内部调用抛出的 `System.ComponentModel.DataAnnotations.ValidationException` 都返回 HTTP **400**，使用 `urn:leistd:problem:validation-error` 与 Leistd `errors` 对象数组。跨字段或用例规则失败抛 `BusinessException`，未配置状态时同样默认为 400。
 
 ```json
 {
   "type": "urn:leistd:problem:validation-error",
-  "title": "Unprocessable Entity",
-  "status": 422,
-  "detail": "输入的信息有误",
+  "title": "Bad Request",
+  "status": 400,
   "instance": "/api/v1/products",
-  "code": "Error:UnprocessableEntity",
-  "message": "输入的信息有误",
   "errors": [
     {
       "detail": "名称不能为空",
@@ -108,7 +103,7 @@ HTTP/1.1 200 OK
       "field": "price"
     }
   ],
-  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736"
+  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 
@@ -118,43 +113,39 @@ HTTP/1.1 200 OK
 | --- | --- |
 | 200 | 查询或操作成功 |
 | 201 | 创建成功 |
-| 400 | 参数格式错误或业务规则校验失败 |
+| 400 | 服务端认为是客户端导致的请求错误；包括结构、字段、协议参数和默认业务拒绝 |
 | 401 | 未认证 |
 | 403 | 无权限 |
 | 404 | 资源不存在 |
 | 409 | 状态冲突或幂等冲突 |
 | 415 | 请求媒体类型不受支持 |
-| 422 | 实体字段校验失败（按字段聚合 `errors`） |
+| 422 | 可选：内容语法成立，但无法按其指令处理；只在客户端需区分时按错误码显式映射 |
+| 429 | 请求触发明确的频率限制 |
 | 500 | 服务端异常 |
-| 503 | 上游服务超时 / 连接失败 |
+| 502 | 未处理的上游拒绝、无效或提前中断的响应；不透传远端状态 |
+| 503 | 本服务连接上游失败，或明确知道所依赖能力暂时不可用 |
+| 504 | 本服务等待上游响应超时 |
 
-> **业务规则校验**（如「用户名已存在」）用 400（`BadRequestException`）；**结构化字段校验**用 422（`UnprocessableEntityException`）和 `errors` 数组。
+> **请求结构/字段校验**用 400 + `errors`；**业务规则失败**用 `BusinessException`，默认 400。仅对特殊状态在 API 组合根按错误码显式映射，不重复登记 400。
 
-## 4. 异常类型映射
+## 4. 异常与 HTTP 映射
 
-后端使用 `Leistd.ExceptionHandling.Core` 提供的异常类型（均继承 `BusinessException`），由 `Leistd.ExceptionHandling.AspNetCore` 的全局异常处理转换为对应 HTTP 状态码的 `ProblemDetails`。每个异常声明对外 HTTP 状态码，并自带一个默认错误码。
+后端只保留一个业务异常 `BusinessException(code, safeMessage, innerException?)`。错误码是必填且不可变的机器契约；各 API 业务模块只登记自己的非默认 HTTP 状态，由组合根汇总；框架组件的默认状态由组件在自己的 `AddXxx` 里登记，需要改时在组合根用 `MapCode` / `MapException` 覆盖：
 
-| 异常类型 | HTTP | 默认 `code` | 使用场景 |
-| --- | --- | --- | --- |
-| `BadRequestException` | 400 | `Error:BadRequest` | 参数/请求结构错误、业务规则验证失败 |
-| `UnauthorizedException` | 401 | `Error:Unauthorized` | 未登录、Token 无效 |
-| `ForbiddenException` | 403 | `Error:Forbidden` | 已登录但权限不足 |
-| `NotFoundException` | 404 | `Error:NotFound` | 资源不存在 |
-| `ConflictException` | 409 | `Error:Conflict` | 状态冲突、重复提交 |
-| `UnsupportedMediaTypeException` | 415 | `Error:UnsupportedMediaType` | 请求媒体类型不受支持 |
-| `UnprocessableEntityException` | 422 | `Error:UnprocessableEntity` | 实体字段校验失败（按字段聚合 `errors`） |
-| `InternalServerException` | 500 | `Error:InternalServer` | 未预期异常，`detail` 不暴露内部细节 |
-| `ServiceUnavailableException` | 503 | `Error:ServiceUnavailable` | 上游服务超时 / 连接失败 |
+| 来源 | 默认 HTTP | 说明 |
+| --- | --- | --- |
+| `BusinessException` 命中错误码映射 | 400 / 401 / 403 / 404 / 409 等 | 宿主按稳定业务语义精确决定 |
+| 未命中的 `BusinessException` | 400 | 广义的客户端请求错误；防止新错误码意外变成稀有状态 |
+| DataAnnotations 自动校验 / `ValidationException` | 400 | 请求字段或结构不合法，返回 `errors` |
+| 未捕获的 BCL/技术异常 | 500 | 只返回通用安全文案，细节记日志 |
+| 框架判定的请求错误（请求体无法解析、请求体过大、内容类型不符、路由不存在、未认证、限流） | 400 / 413 / 415 / 404 / 401 / 429 | `/api` 下统一返回 Problem Details，只有状态码、本地化标题与 `traceId`，不带业务错误码；开发与生产环境一致。前端按状态码处理这类失败 |
+| `ServiceClientException` | 按本地观测的失败来源返回 500/502/503/504（注册客户端时自动登记） | 本地配置或未分类故障默认 500，远端明确失败、响应无效或提前中断默认 502；不从远端状态推断本地状态。原始 URL、响应片段只留服务端诊断，已知上游契约可由宿主覆盖 |
 
-框架还会**自动转换**下列常见异常，无需手动 catch：`System.ComponentModel.DataAnnotations.ValidationException` → 422；`OperationCanceledException` / `TimeoutException` / `HttpRequestException` → 400 或 503；其余未捕获异常 → 500。
+`ArgumentException`、`InvalidOperationException`、`HttpRequestException` 等优先按 .NET 语义抛出，框架不根据类型猜测为 400/503。认证和授权拒绝优先交给 ASP.NET Core 管道，不用业务异常模拟。
 
-`BusinessException` 支持链式细化：
+`WithData("Name", value)` 为本地化文案的 `{Name}` 占位符传值，无论是否启用多语言都可保留。不提供 `WithCode` 或 `WithDetails`：错误码必须在构造时完整，技术详情只进入 `InnerException` 和日志。
 
-- `WithCode("User:UsernameTaken")`：指定错误码，它同时是本地化词条键。不调用则为状态码通用码。
-- `WithDetails("...")`：补充可对外返回的业务详情；该内容不受开发环境限制，不得包含敏感或内部诊断信息。
-- `WithData("Name", value)`：为本地化文案的具名占位符 `{Name}` 提供值（仅启用多语言时用）。
-
-前端要据以分支的错误码（据此跳转、切换界面状态，而不只是显示消息）是机器契约：无论是否启用多语言都要 `WithCode`，改名按破坏性变更处理，并有集成测试断言它。
+公开文案只写用户能采取的下一步。非敏感且确有帮助的输入可以保留，例如已登录管理员操作中的订单号；密码、令牌、连接串以及登录/找回密码等匿名场景中可用于枚举账号的用户名、邮箱不回显。未预期 5xx 只展示通用文案与 `traceId`。
 
 <!--#if (IncludeLocalization)-->
 ### 4.1 异常本地化
@@ -163,44 +154,39 @@ HTTP/1.1 200 OK
 
 | 职责 | 载体 | 说明 |
 | --- | --- | --- |
-| 日志/诊断 | `Message`（构造参数） | 永远是可读**英文**，进日志便于跨语言检索，**默认不给终端用户看** |
-| 身份 + 展示 | `Code`（`WithCode`） | 既是稳定机器契约（前端可据此分支），也是本地化词条键。未设置时为状态码通用码 |
+| 安全回落 | `Message`（构造参数） | 可读英文，资源未命中或未启用多语言时会直接给用户，不得含内部细节 |
+| 身份 + 展示 | `Code`（构造参数） | 必填的稳定机器契约，也是本地化词条键 |
 
 - **throw 处写法**：
   ```csharp
-  throw new BadRequestException("Username already exists")          // Message：英文诊断，只进日志
-      .WithCode("User:UsernameTaken")                              // Code：对外契约 + 词条键
-      .WithData("Username", username);                             // 具名占位 {Username}
+  throw new BusinessException(
+          "User:UsernameTaken",
+          $"Username '{username}' already exists.")
+      .WithData("Username", username);
   ```
   资源 `Resources/{en,zh-CN}.json` 的 `texts` 段按错误码给出各语言文案（`en` 为默认/回落）：`"User:UsernameTaken": "Username '{Username}' already exists."`。
 - **`Code` 一经对外即为契约**，重命名它是破坏性变更。这是"一个标识符同时承担机器身份与词条键"的代价，换来的是不必为每个错误维护两个必须同步的字符串。
-- 全局处理器解析顺序：**`Code` 词条 → 直出 `Message`（默认只放 4xx）→ 状态码通用码词条（`Error:NotFound` 等）→ 状态短语**，绝不把裸键漏给用户；查询全程 `try/catch` 隔离，本地化失败不覆盖原始 `code`。**响应结构不变**，仅 `message`/`detail`/`title` 随语言变，`code`/`traceId` 不变。
-- **"能不能给用户看"是宿主的统一策略，不是抛出点的决定。** 由 `Leistd:GlobalException:MessageExposure`（`None` / `ClientErrors`（默认）/ `All`）按状态码类别一次定死，经 `IOptionsMonitor` 热加载。抛出点只负责把原因说清楚。
-- **未启用多语言（off-mode）时**：没有 `IStringLocalizer`，没有词条可查，按上面的策略直出 `Message`——所以 off-mode 下的 `Message` 也是用户会看到的句子，别往里塞内部标识。
-- **直出 `Message` 不能替代 `WithCode`。** 直出的是构造时的英文诊断串：中文界面上会冒出一句英文，而且收紧到 `None` 的部署里连它都没有。要让原因既说得清、又随语言走，只有一条路：带码 + 配词条。
-- 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等）。前端**直接显示后端 `message`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §9.2）。
-- **400 / 409 / 422 必须带码。** 这三类的状态本身说不清原因（"你的输入有问题"，但哪条规则没过只有消息知道），不带码就没有词条可查，中文界面上只会冒出构造时那句英文诊断串；而收紧到 `MessageExposure = None` 的部署里连它都没有，只剩"请求无效。"。两种结果都不该出现在产品里，而这既不报错也不影响任何测试，所以有静态闸门 `scripts/check-error-codes.py` 守着。401 / 403 / 404 不在此列：状态本身即原因；500 / 503 更不在此列：那些消息是内部诊断，默认就不外露。
+- 全局处理器按 **`Code` 词条 → 安全 `Message`** 解析，本地化失败不改写 `code` 或 HTTP 语义。
+- **未启用多语言时**会直接返回 `Message`，因此必须从抛出点就是安全、可展示的文案；原始技术异常放在 `InnerException` 中。
+- 错误码命名 `模块:语义`（`User:*`、`Auth:*`、`OpenApp:*`、`Security:*` 等），前缀由一个模块独占，常量成员名与语义后缀一致；码定义在所属模块的 `Errors/`，而非集中到 `Domain/Shared/Errors`。前端**直接显示后端 `detail`**，不重复翻译业务错误（见 [`coding-frontend.md`](./coding-frontend.md) §9.2）。
+- **所有 `BusinessException` 都必须带码**，并由构造函数强制；不需要根据是否启用多语言加条件编译。
 - **DataAnnotations 校验消息**也随 culture 本地化：DTO 的 `ErrorMessage`/`Display` 用英文句子作键（`"{0} is required."`），`zh-CN.json` 按同一句子映射中文；`Program.cs` 已接线 `AddDataAnnotationsLocalization(...DataAnnotationLocalizerProvider...)`。这样参数校验与业务异常在同一请求下**同语言**。
 
-**示例（`Message` 恒为英文诊断，`Code` 给出身份）**：
+**示例（`Message` 是安全英文回落，`Code` 给出稳定身份）**：
 
 ```csharp
-// 业务规则验证失败（400，未设 Code 时为 Error:BadRequest）
+// 业务规则验证失败；该码在 API 组合根映射为 409
 if (await userRepository.AnyAsync(u => u.Username == username, cancellationToken))
-    throw new BadRequestException($"Username '{username}' already exists.")
-        .WithCode("User:UsernameTaken")
+    throw new BusinessException("User:UsernameTaken", $"Username '{username}' already exists.")
         .WithData("Username", username);
 
-// 资源不存在（404，未设 Code 时为 Error:NotFound）
+// 资源不存在；该码在 API 组合根映射为 404
 var user = await userRepository.GetAsync(id, cancellationToken);
 if (user is null)
-    throw new NotFoundException($"User {id} not found.");
+    throw new BusinessException("User:NotFound", $"User {id} not found.")
+        .WithData("Id", id);
 
-// 实体字段校验（422，按字段聚合）
-throw new UnprocessableEntityException("email", "Invalid email format.");
-
-// 前端需按具体错误分支时，给出错误码；它同时是词条键
-throw new BadRequestException("Insufficient balance.").WithCode("Wallet:InsufficientBalance");
+// 请求字段校验由 DTO DataAnnotations 与 [ApiController] 统一产生 400 + errors
 ```
 <!--#endif-->
 
@@ -213,6 +199,7 @@ throw new BadRequestException("Insufficient balance.").WithCode("Wallet:Insuffic
 - Cookie 会话在服务端登记（`UserSessions`，即个人设置里的「登录设备」）：每个请求都确认会话仍然有效，所以撤销——退出某台设备、退出其他所有设备、修改密码、管理员重置密码、退出登录——对已发出的 Cookie 立即生效。确认结果缓存 1 分钟；多实例部署未配 Redis 时，其他实例上的撤销至多滞后这么久。
 <!--#if (OpenIddictServer)-->
 - 自签发的访问令牌不在会话撤销的范围内，按有效期自然失效。
+- 访问令牌是只签名、不加密的 JWT：资源服务经 discovery/JWKS 本地验签，不需要分发解密密钥。令牌中的 claim 对每个持有者可读（包括获准的 public/native 客户端），不要放入业务机密；授权码与 refresh token 不受此影响，仍然加密。要改为加密令牌，须删除 `DisableAccessTokenEncryption()` 并为每个资源服务配置解密凭据；要改用 introspection，须启用签发端点，并让资源服务以客户端身份调用。两者都要同时改动签发端与资源端。
 <!--#endif-->
 <!--#endif-->
 - 所有需要用户身份的接口必须校验认证状态。
@@ -269,3 +256,50 @@ throw new BadRequestException("Insufficient balance.").WithCode("Wallet:Insuffic
 - 新增字段默认向后兼容。
 - 删除字段、修改字段含义、修改错误码属于破坏性变更。
 - 破坏性变更必须明确迁移方案并获得相关使用者确认。
+
+## 浏览器认证
+
+浏览器与所属 API 必须同源；开发期 Angular 代理转发 `/api/**`。页面由前端渲染，认证协议由后端处理。浏览器只持有 HttpOnly 会话引用，OAuth access/refresh/id token 留在服务端 `ITicketStore`，不写 URL、前端存储、JSON 响应或 SignalR 参数。SignalR 浏览器连接使用同源 Cookie；机器令牌仅走 Authorization 头，Hub 仅接受请求头中的 Bearer。
+
+### 会话与部署
+
+`DistributedTicketStore` 使用已有分布式缓存与 Data Protection 保护完整票据。多实例必须共享缓存与 Data Protection 密钥；没有 Redis 的本地开发使用内存缓存，重启后需重新登录。缓存票据删除后，复制的旧 Cookie 失效。显式登录更换引用版本，滑动续期保留版本；旧请求不能把已撤销票据重新写回，也不能删除再次登录的新版本。
+
+会话 Cookie 在部署环境名为 `__Host-Http-CompanyName.ProjectName.Auth`，Secure、HttpOnly、`Path=/`、不带 Domain；浏览器只接受经 HTTPS 写入的这个名字，因此对外源必须是 HTTPS，站点不能挂在子路径下。Development 环境为了支持 HTTP 同源调试，名字不带前缀，Secure 跟随请求协议。
+
+`SessionCookie:SameSite` 只控制应用会话 Cookie；默认 Lax。OAuth correlation 与 OIDC nonce Cookie 保持官方 SameSite=None、Secure=Always，HTTPS 回调不可省略。开发回调在 `/api/**` 下，由开发代理转发。
+
+浏览器写 API 请求检查 Origin，接受本源及显式 `Cors:AllowedOrigins`。没有 Origin 时看 `Sec-Fetch-Site`：值为 `cross-site` 或 `same-site` 的拒绝，`same-origin`、`none` 放行；两个头都没有的非浏览器调用保持支持。模板没有启用 ASP.NET Core antiforgery，也不把 Angular 默认 XSRF 拦截器当成完整防护。浏览器认证不支持独立跨源 API 地址；进程分离须由部署代理将页面、认证导航、协议回调与 API 暴露在同一个外部源。`environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。整页认证导航不经过 HTTP 拦截器；不要将任意源加入允许列表。OIDC form_post 回调由官方处理器消费，依靠 state、correlation 与 nonce 校验。
+
+<!--#if (LocalIdentity)-->
+### 本地账号
+
+账号密码与第二步验证走 `/api/v1/auth/session-login` 等现有会话接口。`GET /api/v1/auth/me` 读取已验证用户，退出撤销服务端会话。第二步完成前不签发最终会话，第二步凭据由 JSON 与前端导航状态传递。
+<!--#endif-->
+<!--#if (ExternalLogin)-->
+### 外部账号
+
+Google 使用微软官方 AddGoogle（UserInfo v3）；GitHub 使用 aspnet-contrib 的 AddGitHub（`AspNet.Security.OAuth.GitHub`），显式启用 S256 PKCE。处理器自带的邮箱补取已关闭，因为它只给地址、不给 verified，且失败即中断登录；主邮箱及其 verified 由 `OnCreatingTicket` 查询 `/user/emails` 取得，查询失败时只是不按邮箱关联。定制 github scheme 时用 `Configure<GitHubAuthenticationOptions>`，不是 `OAuthOptions`。添加提供商时在组合根注册官方远程处理器：scheme 名为 `AuthenticationSchemeNames.ExternalProviderPrefix + provider`（provider 使用小写），`SignInScheme` 指向 `ExternalCookie`，`CallbackPath` 在 `/api/**` 下，并在 `OnCreatingTicket` 把规范化 `ExternalUserInfo` 序列化到 `context.Properties.Items[ExternalAuthenticationExtensions.UserInfoKey]`。目录从该专用前缀的远程 scheme 得出，Cookie/Bearer/策略 scheme 均不开放。注册时明确协议失败响应、所需 PKCE 与资料验证；账号关联、锁定、用户名生成与第二步验证仍由领域/应用层决定。
+
+0. 登录页匿名读取 `GET /api/v1/external-auth/providers`，只为已登记的提供商显示入口；读取失败时单独提示并可重试（5xx 附追踪 ID），不当作"未配置"。登录页只内置 GitHub、Google 两个入口，新增提供商时要同时补前端入口和 `getExternalLoginUrl` 的提供商类型。
+1. 浏览器导航至 `GET /api/v1/external-auth/{provider}/challenge`，可带站内 `returnUrl`（外站地址返回 400）。绑定使用 `GET /api/v1/external-auth/{provider}/link/challenge`，要求通过自然人策略的非受限会话。
+2. 提供商回调至 `/api/v1/external-auth/{provider}/signin`，官方处理器完成 code/state/correlation/PKCE 与 UserInfo，签发五分钟外部票据引用，然后重定向前端 `/auth/external-callback/{provider}?intent=...`。用户在提供商处取消或协议校验失败（state、correlation 等）时，不签发外部票据，重定向前端 `/auth/external-callback/{provider}?intent=...&error=cancelled|failed`：登录意图显示原因并提供返回登录入口（会话仍有效时直接回到应用，例如后退键重放旧回调），绑定意图回到安全设置页并提示。业务提示中的提供商名使用官方 scheme 的显示名（`ExternalUserInfo.ProviderDisplayName`）。
+3. 前端 `POST /api/v1/external-auth/{provider}/complete` 或受保护的 `POST /api/v1/external-auth/{provider}/link/complete`，请求体为空对象。后端匹配受保护的提供商、意图、绑定发起者与租户，先一次消费外部票据，再执行账号政策；登录返回最终会话结果或第二步凭据及受保护的 `returnUrl`，前端在登录或第二步成功后接续该地址；绑定返回 `{ linked: true }`。
+
+完成端点失败也不能重用票据，须重新 challenge；查询参数不能改变保护过的登录/绑定意图。提供商后台需分别登记上述完整 HTTPS signin 地址。Google v3 使用 `sub/email_verified`。邮箱接口失败或未验证邮箱不允许按邮箱关联账号。
+<!--#endif-->
+<!--#if (RemoteTokenAuth)-->
+### Resource 依赖方
+
+后端是 OIDC 机密客户端，使用 code、PKCE、SaveTokens 与服务端票据。配置 `Authentication:Issuer`、`Audience`、`ClientId`、`ClientSecret`，缺键启动失败；`Scope` 可省略，默认与 Audience 同名。密钥只放后端机密配置。
+
+Identity 登记 web/confidential 客户端，允许 authorization code、refresh token、PKCE、openid/profile/email/roles/offline_access 和本 API scope。登录回调登记完整 `/api/v1/auth/signin`，退出回调登记完整 `/api/v1/auth/signout`。
+
+前端导航至 `GET /api/v1/auth/login?returnUrl=...`，仅接受站内 returnUrl；回调后 `GET /api/v1/auth/me` 还原用户、角色与租户。`POST /api/v1/auth/logout` 用整页表单完成官方 OIDC 退出重定向；不发送 id_token_hint，删除本服务端票据后旧 Cookie 立即失效。
+
+有 Authorization 头的请求只选官方 Bearer 验证，失败不回退到 Cookie；无头时选 Cookie。角色与租户取已验证访问令牌的声明，不能假定 ID token 具有资源声明。`OnValidatePrincipal` 在过期前一分钟于服务端刷新，同一会话由分布式锁串行化，采用最新 refresh token；失败注销会话。访问令牌保存在服务器，模板自己的 `IUserAccessTokenAccessor` 为下游 Token Exchange 提供经过验证的请求令牌。
+
+访问令牌按只签名的 JWT 本地验签（issuer、audience、签名、有效期），本服务不持有解密凭据；签发方若改为加密令牌或 introspection，这里要同步配置。
+
+退出 Resource 会话不会撤销签发方所有既有令牌；注销 Identity Cookie 与撤销 OAuth 授权/令牌也是不同边界。账号或租户停用后的本地验签窗口由访问令牌有效期决定，后续刷新失败收敛会话。
+<!--#endif-->

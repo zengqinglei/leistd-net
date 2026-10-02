@@ -1,13 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Leistd.RealTime.AspNetCore.SignalR;
 using Xunit;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
-using Leistd.RealTime.AspNetCore.SignalR.Publishing;
-using Leistd.RealTime.Options;
 using Leistd.RealTime.Subscriptions;
 using Leistd.RealTime.Publishing;
 using Leistd.TestBase.Doubles;
@@ -75,10 +72,9 @@ public class RealTimeSignalRTests
             .AddLogging()
             .AddSignalR(hub => hub.KeepAliveInterval = TimeSpan.FromSeconds(3))
             .Services
-            .AddRealTimeSignalR(options => options.RealTimeHubPath = "/rt")
+            .AddRealTimeSignalR()
             .BuildServiceProvider();
 
-        Assert.Equal("/rt", sp.GetRequiredService<IOptions<RealTimeOptions>>().Value.RealTimeHubPath);
         Assert.NotNull(sp.GetRequiredService<IBusinessEventPublisher>());
 
         // 宿主用标准方式配的 HubOptions 不被组件覆盖。

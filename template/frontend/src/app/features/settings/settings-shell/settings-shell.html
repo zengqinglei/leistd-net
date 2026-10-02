@@ -18,6 +18,9 @@
           </button>
           <hlm-sheet-content *hlmSheetPortal="let ctx">
             <h2 hlmSheetTitle class="px-4 pt-4 text-base font-semibold">{{ heading() }}</h2>
+            <!-- 抽屉必须有描述：组件会无条件指一个 aria-describedby，缺了它就是悬空引用。
+                 复用页面说明：它本来就是"这里面有什么"的一句话，本组件也不引入 Transloco。 -->
+            <p hlmSheetDescription class="sr-only">{{ description() }}</p>
             <nav class="flex flex-col gap-1 p-4" [attr.aria-label]="navLabel()">
               @for (panel of panels(); track panel.path) {
                 <!-- hlmSheetClose 只能挂在 button 上；链接在点选后由抽屉上下文关闭 -->

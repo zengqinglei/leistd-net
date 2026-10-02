@@ -23,24 +23,26 @@ describe('ImpersonationService', () => {
 
   afterEach(() => sessionStorage.removeItem(key));
 
-  it('退出提示标记只消费一次', () => {
+  it('consumes the exit notice flag only once', () => {
     const service = create();
     sessionStorage.setItem(key, '1');
 
-    expect(service.consumeExitedNotice()).toBeTrue();
-    expect(service.consumeExitedNotice()).toBeFalse();
+    expect(service.consumeExitedNotice()).toBe(true);
+    expect(service.consumeExitedNotice()).toBe(false);
     expect(sessionStorage.getItem(key)).toBeNull();
   });
 
-  it('没有标记时不提示', () => {
-    expect(create().consumeExitedNotice()).toBeFalse();
+  it('shows no notice without the flag', () => {
+    expect(create().consumeExitedNotice()).toBe(false);
   });
 
-  it('存储不可用时不抛出，只是不提示', () => {
+  it('does not throw when storage is unavailable and just shows no notice', () => {
     const service = create();
-    spyOn(Storage.prototype, 'getItem').and.throwError('SecurityError');
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
 
-    expect(service.consumeExitedNotice()).toBeFalse();
+    expect(service.consumeExitedNotice()).toBe(false);
   });
 });
 //#endif

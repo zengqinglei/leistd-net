@@ -11,10 +11,6 @@ using Leistd.MultiTenancy.EntityFrameworkCore.EntityConfigurations;
 using Leistd.MultiTenancy.EntityFrameworkCore.Managers;
 using Leistd.MultiTenancy.EntityFrameworkCore.Stores;
 using Leistd.MultiTenancy.Stores;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore;
 
@@ -30,8 +26,9 @@ public static class DependencyInjection
     /// <para>不注册租户落值组件；DDD 基座在实体进入跟踪时写入 <c>TenantId</c>。</para>
     /// <para>连接按 <c>(租户, 连接名)</c> 逐行登记：一个租户可以在 identity、foundation、crm 各有一条，
     /// 一条都没有即该租户不单独分库。</para>
-    /// <para>同时注册租户管理与连接管理两个用例（<c>ITenantManagementService</c>、<c>ITenantConnectionManagementService</c>），
-    /// 它们需要宿主注册工作单元；开通新租户的数据经宿主实现的 <c>ITenantProvisioner</c>。</para>
+    /// <para>只注册存储：只读控制库的宿主（租户连接解析、迁移作业）到此为止。要租户管理与连接管理用例的宿主
+    /// 再调用 <c>Leistd.MultiTenancy.Management</c> 的 <c>AddTenantManagement()</c>（需要工作单元；
+    /// 开通新租户的数据经宿主实现的 <c>ITenantProvisioner</c>）。</para>
     /// <para>连接的存储与写入口依赖 <c>IDataProtectionProvider</c>：连接串写入时加密、读取时解密。
     /// 宿主须自行 <c>AddDataProtection()</c> 并配置持久化、可共享的密钥环（本组件不管理密钥）；
     /// 读写同一控制库的所有进程（API、迁移作业）必须使用同一密钥环与应用名。</para>
@@ -70,8 +67,6 @@ public static class DependencyInjection
         // （自己不分库、却要对外提供库清单端点）不会调用 AddLocalTenantConnectionResolution，
         // 目录缺席时那个端点曾静默返回空清单，逐库作业于是只处理宿主库。
         services.TryAddTransient<ITenantDatabaseDirectory, EfCoreTenantDatabaseDirectory<TDbContext>>();
-        // 管理用例在 Core（只依赖契约与工作单元）：这里注册完存储后接上
-        services.AddTenantManagement();
         return services;
     }
 
@@ -88,7 +83,7 @@ public static class DependencyInjection
     /// <para>宿主须注册：控制库上下文（<c>AddDbContext</c>，直接注入、不经工作单元）；
     /// 迁移目标需要的 <see cref="AddMultiTenancyEfCore{TDbContext}"/>；
     /// 与写入方共享密钥环的 <c>AddDataProtection()</c>——连接串在这里解密，解不开即拒绝，不静默回落。</para>
-    /// <para>同时注册 <see cref="ITenantMigrationTargetProvider"/>（读控制库）。均以 <c>TryAdd</c> 注册，宿主可替换。
+    /// <para>同时注册多租户核心服务（<c>AddMultiTenancyCore()</c>）与 <see cref="ITenantMigrationTargetProvider"/>（读控制库）。均以 <c>TryAdd</c> 注册，宿主可替换。
     /// 逐库作业的库目录 <c>ITenantDatabaseDirectory</c> <b>不在这里</b>：它是控制库的存储，由
     /// <see cref="AddMultiTenancyEfCore{TDbContext}"/> 注册。
     /// 连接配置在另一个服务时改用 Core 包的 <c>AddRemoteTenantConnectionResolution</c>，两者二选一。</para>
@@ -110,6 +105,8 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);
 
+        // 解析器按当前租户取连接；只做迁移等不经 Web 集成的宿主也要能单独使用本入口
+        services.AddMultiTenancyCore();
         services.Configure(configure);
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<LocalTenantConnectionOptions>, LocalTenantConnectionOptionsValidator>());

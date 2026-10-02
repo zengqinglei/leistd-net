@@ -4,7 +4,6 @@ using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Auth.Entities;
@@ -77,6 +76,7 @@ public class UserSession : CreationAuditedEntity<Guid>, IMultiTenant
     public void Revoke(DateTime now) => AddLocalEvent(new UserSessionRevokedEvent(Id, now));
 
     /// <summary>空闲超过 <paramref name="idleTimeout"/> 即视为已结束（与会话 Cookie 的滑动过期同一口径）。</summary>
+    // 改判据时同步改 ExpiredUserSessionCleanupJob 与 UserSessionDomainService.StartAsync 里的查询形式
     public bool IsExpired(DateTime now, TimeSpan idleTimeout) => LastSeenTime + idleTimeout <= now;
 
     /// <summary>

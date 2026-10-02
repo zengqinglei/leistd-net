@@ -13,6 +13,9 @@ import {
   setMockSessionTenantKey,
   setMockSessionUserId,
 } from '../../../../_mock/utils/current-user';
+//#if (LocalIdentity)
+import { TENANT_HEADER } from '../services/tenant-protocol';
+//#endif
 
 type MockHandler = (req: { body: unknown }) => unknown;
 
@@ -180,7 +183,7 @@ describe('settings mock', () => {
 
     auth['POST /api/v1/auth/session-login']({
       body: { usernameOrEmail: 'admin', password: 'Admin@123456' },
-      headers: new HttpHeaders({ 'X-Tenant-Id': acme }),
+      headers: new HttpHeaders({ [TENANT_HEADER]: acme }),
     });
 
     api[putUser](request({ name: 'Display.TimeZone', value: 'UTC' }));
@@ -200,9 +203,9 @@ describe('settings mock', () => {
     >;
     const acme = 'tenant_acme';
 
-    auth['POST /api/v1/external-auth/:provider/callback']({
-      body: { code: 'code', state: 'state' },
-      headers: new HttpHeaders({ 'X-Tenant-Id': acme }),
+    auth['POST /api/v1/external-auth/:provider/complete']({
+      body: {},
+      headers: new HttpHeaders({ [TENANT_HEADER]: acme }),
       params: { provider: 'github' },
     });
 

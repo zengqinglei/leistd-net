@@ -5,7 +5,7 @@ using Leistd.Tracing.Abstractions;
 namespace Leistd.Tracing.Services;
 
 /// <summary>
-/// 从显式作用域或当前 <see cref="Activity"/> 提供 TraceId。
+/// 从显式作用域或当前 <see cref="Activity"/> 提供关联标识。
 /// </summary>
 /// <remarks>
 /// 显式 <see cref="Change"/> 的值优先；否则返回当前 Activity 的 32 位十六进制 TraceId。
@@ -26,11 +26,6 @@ public class CorrelationIdProvider : ICorrelationIdProvider
         var activity = Activity.Current;
         return activity is null ? null : activity.TraceId.ToHexString();
     }
-
-    /// <inheritdoc />
-    public string Create()
-        // 复用 Activity 标识，避免同一请求产生第二个 TraceId。
-        => Activity.Current?.TraceId.ToHexString() ?? ActivityTraceId.CreateRandom().ToHexString();
 
     /// <inheritdoc />
     public IDisposable Change(string correlationId)

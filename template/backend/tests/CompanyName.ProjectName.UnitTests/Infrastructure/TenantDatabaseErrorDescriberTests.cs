@@ -4,7 +4,6 @@ using CompanyName.ProjectName.Infrastructure.TenantConnections;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.UnitTests.Infrastructure;
@@ -25,12 +24,11 @@ public sealed class TenantDatabaseErrorDescriberTests
     [InlineData("42P01", MultiTenancyErrorCodes.DedicatedDatabaseNotMigrated)]
     [InlineData("28000", MultiTenancyErrorCodes.DedicatedDatabaseRejected)]
     [InlineData("28P01", MultiTenancyErrorCodes.DedicatedDatabaseRejected)]
-    public void Caller_fixable_states_are_translated_to_coded_400(string sqlState, string expectedCode)
+    public void Caller_fixable_states_are_translated_to_coded_business_failures(string sqlState, string expectedCode)
     {
         var described = _describer.Describe(new FakeDbException(sqlState));
 
         Assert.NotNull(described);
-        Assert.Equal(400, described.StatusCode);
         Assert.Equal(expectedCode, described.Code);
     }
 

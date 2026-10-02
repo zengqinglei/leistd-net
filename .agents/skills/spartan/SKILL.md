@@ -1,11 +1,8 @@
 ---
 name: spartan
 description: >-
-  Manages spartan/ui, the Angular UI library - adding, composing, fixing, debugging, and styling UI
-  with the Brain (headless primitives) and Helm (styled) layers. Provides project context, component
-  APIs, and usage examples. Applies when working with spartan/ui, @spartan-ng/brain, @spartan-ng/helm,
-  the @spartan-ng/cli generators, or any Angular project with a components.json file. Also triggers
-  for "spartan init", "add a spartan component", or "set up spartan/ui".
+  Add, modify, or debug spartan/ui components, themes, @spartan-ng/brain,
+  @spartan-ng/helm, components.json, or @spartan-ng/cli generators in Angular projects.
 user-invocable: false
 allowed-tools:
   - Bash(npx nx g @spartan-ng/cli:*)
@@ -32,7 +29,7 @@ All CLI commands run through the workspace's runner. Detect it from the project:
 
 ## Current project context
 
-Before generating any code, gather the project context:
+When first working on Spartan components or after its configuration changes, gather the project context:
 
 ```bash
 npx nx g @spartan-ng/cli:info --json     # Nx
@@ -51,15 +48,15 @@ This is read-only and prints JSON with:
 - `installedComponents` - components already present (do not re-add these).
 - `availableComponents` - everything the CLI can generate.
 
-If `components.json` does not exist, the project is not set up yet - run `@spartan-ng/cli:init`
-first (it installs dependencies and the theme). `components.json` itself is created when you add the
-first component with `ui` (see `cli.md`).
+`components.json` is created by the first `ui` run, not by `init`. If it is absent,
+check the dependencies and theme configuration before deciding whether `init` is needed.
+See `cli.md`.
 
 ## Principles
 
-1. **Use existing components first.** Check `installedComponents`, then `availableComponents`. Find
-   docs via the MCP server (`spartan_components_list` / `spartan_components_get`) or the live docs at
-   `https://www.spartan.ng/components/<name>`. See `mcp.md`.
+1. **Use existing components first.** Check `installedComponents`, then `availableComponents`.
+   Confirm copied Helm code locally and check the locked Brain/CLI versions. Use matching
+   official docs or the MCP server when local information is insufficient. See `mcp.md`.
 2. **Compose, do not reinvent.** Build dashboards, forms, and dialogs from existing Helm + Brain
    pieces rather than custom markup.
 3. **Use built-in variants before custom styles.** Buttons, badges, alerts, etc. ship `variant` and
@@ -137,14 +134,15 @@ Read the rule file before doing the related work:
 
 ## Workflow
 
-1. **Get context.** Run `@spartan-ng/cli:info --json`. If the project is not set up, run `:init`,
-   then add components with `:ui` (the first `:ui` run creates `components.json`).
+1. **Get context when needed.** For Spartan work, run `@spartan-ng/cli:info --json`
+   if current component configuration is unknown or changed. Check dependencies and theme
+   before using `:init`; the first `:ui` run creates `components.json`.
 2. **Check what is installed.** Do not re-add anything in `installedComponents`.
-3. **Find the component.** Use the MCP tools or `https://www.spartan.ng/components/<name>` for the
-   API and examples (`mcp.md`). Never guess selectors - confirm them.
+3. **Find the component.** Check local Helm code and locked versions first. Use matching
+   official docs or MCP tools when needed (`mcp.md`). Never guess selectors.
 4. **Add it.** `npx nx g @spartan-ng/cli:ui --name=<component>` (Nx) or
    `ng g @spartan-ng/cli:ui --name=<component>` (Angular CLI). This installs the Brain dependency and
-   copies the Helm code. Omit `--name` to get an interactive multiselect.
+   copies the Helm code. Agents should specify `--name`; the interactive multiselect is for manual use.
 5. **Compose correctly.** Import the `*Imports` const (e.g. `HlmDialogImports`) or the individual
    classes from the import alias, add them to the standalone component's `imports`, and follow the
    composition rules.
@@ -157,15 +155,14 @@ Read the rule file before doing the related work:
 ## Quick reference
 
 ```bash
-# Initialize (creates components.json, wires Tailwind + preset)
+# Initialize (wires Tailwind + preset; first ui run creates components.json)
 npx nx g @spartan-ng/cli:init
 ng g @spartan-ng/cli:init
 
 # Project context as JSON
 npx nx g @spartan-ng/cli:info --json
 
-# Add components (interactive, or pass --name)
-npx nx g @spartan-ng/cli:ui
+# Add one component without an interactive selection
 npx nx g @spartan-ng/cli:ui --name=dialog
 
 # Generate theme variables

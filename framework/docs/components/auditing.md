@@ -95,7 +95,7 @@ await dbContext.SaveChangesAsync();
 ### 字段更新
 
 - 创建和删除字段仅在尚未设置时填充。
-- `LastModificationTime` 在每次修改时刷新；当前用户存在时同步更新 `LastModifierId`。
+- `LastModificationTime` 在每次修改时刷新，`LastModifierId` 同步写为当前用户；没有当前用户（后台作业、机器主体）时置空，不保留上一次的修改人。
 - 时间经 `IClock.Normalize` 归一化。
 - EF Core 的 `IAuditPropertySetter` 实现只接受 `EntityEntry`，其他类型抛 `ArgumentException`。
 

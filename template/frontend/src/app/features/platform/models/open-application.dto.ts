@@ -2,7 +2,6 @@ import { PagedRequestDto } from '../../../shared/models/paged-request.dto';
 
 export type OpenApplicationType = 'web' | 'native' | 'service';
 export type OpenApplicationClientType = 'public' | 'confidential';
-export type OpenApplicationConsentType = 'implicit' | 'explicit' | 'external' | 'systematic';
 
 export interface OpenApplicationOutputDto {
   id: string;
@@ -10,7 +9,6 @@ export interface OpenApplicationOutputDto {
   displayName?: string;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
-  consentType: OpenApplicationConsentType;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   permissions: string[];
@@ -27,7 +25,6 @@ export interface CreateOpenApplicationInputDto {
   displayName?: string;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
-  consentType: OpenApplicationConsentType;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   permissions: string[];
@@ -38,11 +35,20 @@ export interface UpdateOpenApplicationInputDto {
   displayName?: string;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
-  consentType: OpenApplicationConsentType;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   permissions: string[];
   requirements: string[];
+}
+
+/** 可授予开放应用的 scope；授予时的权限值为 `scp:` 加上 name。 */
+export interface OpenApplicationScopeOutputDto {
+  name: string;
+  displayName: string;
+  /** 只能授予 client_credentials 的机器客户端 */
+  machineOnly: boolean;
+  /** API 受众；标准和机器 scope 没有此值。 */
+  audience?: string | null;
 }
 
 export interface ResetOpenApplicationSecretOutputDto {

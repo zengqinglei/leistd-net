@@ -1,21 +1,18 @@
 // 授权结果处理器在所有服务形态下都存在（被拒的写端点要留痕），因此本 using 无条件
 using CompanyName.ProjectName.Api.Auth;
-#if (LocalIdentity)
-using CompanyName.ProjectName.Application.Auth.Constants;
-#endif
+using CompanyName.ProjectName.Application.Shared;
+using Leistd.Security.Claims;
 #if (OpenIddictServer)
 using CompanyName.ProjectName.Application.TenantConnections.Constants;
-using Leistd.Security.Claims;
 #endif
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
 #endif
-#if (LocalIdentity)
 using System.Security.Claims;
-#endif
-#if (OpenIddictServer || !LocalIdentity)
+#if (OpenIddictServer || RemoteTokenAuth)
 using OpenIddict.Validation.AspNetCore;
 #endif
 
@@ -35,7 +32,7 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// 两种形态都在这里定案，组合根只有一行调用：本地身份形态的主体来自 Bearer 或会话 Cookie
-    /// 并要求账号可用；资源服务形态只有 Bearer、账号状态由签发方负责。
+    /// 并要求账号可用；资源服务形态来自 Bearer 或服务端 Cookie、账号状态由签发方负责。
     /// </remarks>
     public static IServiceCollection AddApiAuthorization(this IServiceCollection services)
     {
@@ -44,13 +41,17 @@ public static class DependencyInjection
         // 放进 LocalIdentity 守卫会让那半边静默没有授权阶段的审计。
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, ApiAuthorizationResultHandler>();
 
-        services.AddAuthorization(options =>
+        services.AddAuthorization();
+        // 默认策略要按宿主配置的主体标识 claim 判定自然人，因此经 Options 管道取 ClaimTypeOptions
+        services.AddOptions<AuthorizationOptions>().Configure<IOptions<ClaimTypeOptions>>((options, claimTypeOptions) =>
         {
-#if (!LocalIdentity)
-            // 资源服务只认签发方的 Bearer：这里没有用户表，账号是否可用由签发方在发令牌时判定
+            var claimTypes = claimTypeOptions.Value;
+#if (RemoteTokenAuth)
+            // 资源服务按请求选择 Bearer 或 Cookie，默认策略要求自然人；机器端点另设策略。
             var currentUser = new AuthorizationPolicyBuilder(
-                    OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+                    AuthenticationSchemeNames.Smart)
                 .RequireAuthenticatedUser()
+                .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
                 .Build();
             options.DefaultPolicy = currentUser;
             // 组件的自用端点按名字要这条策略，见 ApiPolicies.CurrentUser
@@ -60,9 +61,10 @@ public static class DependencyInjection
             var humanSchemes = new[]
             {
 #if (OpenIddictServer)
-                OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme,
-#endif
+                AuthenticationSchemeNames.Smart
+#else
                 AuthenticationSchemeNames.SessionCookie
+#endif
             };
 
             // 默认策略表达的是"一个自然人"，而不是"任何通过了认证的东西"：client_credentials 的令牌
@@ -72,7 +74,7 @@ public static class DependencyInjection
             var currentUser = new AuthorizationPolicyBuilder()
                 .AddAuthenticationSchemes(humanSchemes)
                 .RequireAuthenticatedUser()
-                .RequireAssertion(context => IsNaturalPerson(context.User))
+                .RequireAssertion(context => IsNaturalPerson(context.User, claimTypes))
                 .Build();
             options.DefaultPolicy = currentUser;
             // 组件的自用端点（读设置、读自己的权限、通知中心）按名字要这条策略：
@@ -80,8 +82,8 @@ public static class DependencyInjection
             options.AddPolicy(ApiPolicies.CurrentUser, currentUser);
 
 #if (OpenIddictServer)
-            AddMachineScopePolicy(options, TenantConnectionPolicies.RuntimeRead, TenantConnectionScopes.RuntimeRead);
-            AddMachineScopePolicy(options, TenantConnectionPolicies.MigrationRead, TenantConnectionScopes.MigrationRead);
+            AddMachineScopePolicy(options, claimTypes, TenantConnectionPolicies.RuntimeRead, TenantConnectionScopes.RuntimeRead);
+            AddMachineScopePolicy(options, claimTypes, TenantConnectionPolicies.MigrationRead, TenantConnectionScopes.MigrationRead);
 #endif
 #endif
         });
@@ -89,12 +91,10 @@ public static class DependencyInjection
         return services;
     }
 
-#if (LocalIdentity)
-    // 与 ICurrentUser.Id 同一口径：sub（或 NameIdentifier）是用户 Id 才是自然人
-    private static bool IsNaturalPerson(ClaimsPrincipal user) =>
-        Guid.TryParse(user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out _);
+    // 与 ICurrentUser.Id 同一口径：主体标识（按 ClaimTypeOptions.UserIds 读取）是用户 Id 才是自然人
+    private static bool IsNaturalPerson(ClaimsPrincipal user, ClaimTypeOptions claimTypes) =>
+        Guid.TryParse(claimTypes.FindUserId(user), out _);
 
-#endif
 #if (OpenIddictServer)
     /// <summary>
     /// 注册一条只对<b>机器主体</b>开放的内部控制面策略
@@ -106,6 +106,7 @@ public static class DependencyInjection
     /// </remarks>
     private static void AddMachineScopePolicy(
         AuthorizationOptions options,
+        ClaimTypeOptions claimTypes,
         string policyName,
         string requiredScope)
     {
@@ -113,7 +114,7 @@ public static class DependencyInjection
             .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
             .RequireAuthenticatedUser()
             .RequireAssertion(context =>
-                ClientSubject.IsMachine(context.User.FindFirst(OpenIddictConstants.Claims.Subject)?.Value) &&
+                ClientSubject.IsMachine(claimTypes.FindUserId(context.User)) &&
                 HasScope(context.User, requiredScope)));
     }
 

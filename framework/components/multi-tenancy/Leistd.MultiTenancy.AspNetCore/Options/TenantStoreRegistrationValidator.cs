@@ -5,8 +5,10 @@ using Microsoft.Extensions.Options;
 namespace Leistd.MultiTenancy.AspNetCore.Options;
 
 // 在所有注册完成后校验 ITenantStore，避免组合顺序造成误报。
-// 只查注册表，不从根容器解析 Scoped Store。
-internal sealed class TenantStoreRegistrationValidator(IServiceProvider serviceProvider)
+// 只查注册表，不从根容器解析 Scoped Store。报错键名按实际绑定的配置节给出。
+internal sealed class TenantStoreRegistrationValidator(
+    IServiceProvider serviceProvider,
+    string sectionPath = MultiTenancyOptions.SectionName)
     : IValidateOptions<MultiTenancyOptions>
 {
     /// <inheritdoc />
@@ -25,7 +27,7 @@ internal sealed class TenantStoreRegistrationValidator(IServiceProvider serviceP
         }
 
         return ValidateOptionsResult.Fail(
-            $"{MultiTenancyOptions.SectionName}:ValidateResolvedTenant is true but no ITenantStore is registered. " +
+            $"{sectionPath}:ValidateResolvedTenant is true but no ITenantStore is registered. " +
             "Hosts that own the tenant registry should call AddMultiTenancyEfCore<TDbContext>(); " +
             "resource services that only " +
             "consume the tenant claim should set ValidateResolvedTenant to false — the resolve chain then " +

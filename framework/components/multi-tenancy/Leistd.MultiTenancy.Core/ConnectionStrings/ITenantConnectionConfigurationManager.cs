@@ -27,7 +27,7 @@ public interface ITenantConnectionConfigurationManager
     /// </param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除。</exception>
-    /// <exception cref="ExceptionHandling.BadRequestException">
+    /// <exception cref="ExceptionHandling.BusinessException">
     /// 名字不合法（<c>TenantConnection:NameInvalid</c>），或连接串为空、超长、不是键值对语法（<c>TenantConnection:ConnectionStringInvalid</c>）。
     /// 名字与连接串通常来自管理员输入，是调用方能改对的错误。
     /// </exception>
@@ -54,7 +54,7 @@ public interface ITenantConnectionConfigurationManager
     /// <param name="expectedVersion">调用方读到的该行版本</param>
     /// <param name="cancellationToken">取消令牌</param>
     /// <exception cref="TenantNotFoundException">租户不存在或已删除。</exception>
-    /// <exception cref="ExceptionHandling.BadRequestException">名字不合法（<c>TenantConnection:NameInvalid</c>）。</exception>
+    /// <exception cref="ExceptionHandling.BusinessException">名字不合法（<c>TenantConnection:NameInvalid</c>）。</exception>
     /// <exception cref="TenantConnectionVersionConflictException">该行不存在，或版本与实际不符。</exception>
     /// <exception cref="TenantConnectionChangeRequiresInactiveTenantException">租户仍处于启用状态。</exception>
     Task RemoveAsync(

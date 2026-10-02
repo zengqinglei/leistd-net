@@ -20,7 +20,7 @@ import {
 } from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideEye, lucideEyeOff } from '@ng-icons/lucide';
@@ -38,7 +38,13 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { lastValueFrom } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
-import { PASSWORD_RULE } from '../../../../core/validation/password-rule';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '../../../../core/validation/password-rule';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { CaptchaOutputDto, SecurityConfigOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
@@ -59,7 +65,7 @@ import { AuthShell } from '../auth-shell/auth-shell';
     ...HlmFieldImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     AuthShell,
   ],
@@ -78,21 +84,9 @@ export class Register implements OnInit {
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
   //#if (IncludeLocalization)
-  public readonly transloco = inject(TranslocoService);
-  // 属性位置的文案（无法在标签属性里用条件指令分支）经此对象绑定
-  readonly i18n = {
-    captcha: () => this.transloco.translate('account.register.captcha'),
-    captchaPlaceholder: () => this.transloco.translate('account.register.captchaPlaceholder'),
-    captchaRefresh: () => this.transloco.translate('account.register.captchaRefresh'),
-    captchaAlt: () => this.transloco.translate('account.register.captchaAlt'),
-  };
+  private readonly transloco = inject(TranslocoService);
   //#else
-  readonly i18n = {
-    captcha: () => 'Captcha',
-    captchaPlaceholder: () => 'Enter the captcha on the right',
-    captchaRefresh: () => "Can't see clearly? Click to refresh",
-    captchaAlt: () => 'Captcha',
-  };
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   // returnUrl：注册成功后跳转 login 时传递
@@ -103,6 +97,7 @@ export class Register implements OnInit {
 
   // 密码可见性
   protected readonly showPassword = signal(false);
+
   protected readonly showConfirmPassword = signal(false);
 
   public securityConfig = signal<SecurityConfigOutputDto | null>(null);
@@ -128,81 +123,28 @@ export class Register implements OnInit {
     confirmPassword: '',
   });
 
-  //#if (IncludeLocalization)
   readonly registerForm = form(this.model, (path) => {
-    required(path.email, { message: this.transloco.translate('common.validation.required') });
-    emailValidator(path.email, {
-      message: this.transloco.translate('common.validation.email'),
-    });
-    maxLength(path.email, 256, { message: '' });
-    required(path.username, { message: this.transloco.translate('common.validation.required') });
-    minLength(path.username, 3, {
-      message: this.transloco.translate('common.validation.minLength', { min: 3 }),
-    });
-    maxLength(path.username, 64, { message: '' });
-    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: this.transloco.translate('common.validation.usernamePattern'),
-    });
-    required(path.captchaCode, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    maxLength(path.captchaCode, 10, { message: '' });
+    required(path.email);
+    emailValidator(path.email);
+    maxLength(path.email, 256);
+    required(path.username);
+    // 长度与字符集共用一句提示，合成一条规则：分开校验会把同一句话报出几遍
+    pattern(path.username, /^[a-zA-Z0-9_]{3,64}$/, { error: { kind: 'usernamePattern' } });
+    required(path.captchaCode);
+    maxLength(path.captchaCode, 10);
     required(path.emailVerificationCode, {
-      message: this.transloco.translate('common.validation.required'),
       when: () => this.securityConfig()?.enableEmailVerification === true,
     });
-    required(path.password, { message: this.transloco.translate('common.validation.required') });
-    pattern(path.password, PASSWORD_RULE, {
-      message: this.transloco.translate('common.validation.passwordRule'),
-    });
-    required(path.confirmPassword, {
-      message: this.transloco.translate('common.validation.required'),
-    });
+    required(path.password);
+    minLength(path.password, PASSWORD_MIN_LENGTH);
+    maxLength(path.password, PASSWORD_MAX_LENGTH);
+    required(path.confirmPassword);
     validate(path.confirmPassword, (ctx) => {
       const confirm = ctx.value();
       const password = ctx.valueOf(path.password);
-      if (password && confirm && password !== confirm) {
-        return {
-          kind: 'passwordMismatch',
-          message: this.transloco.translate('common.validation.passwordMismatch'),
-        };
-      }
-      return null;
+      return password && confirm && password !== confirm ? { kind: 'passwordMismatch' } : null;
     });
   });
-  //#else
-  readonly registerForm = form(this.model, (path) => {
-    required(path.email, { message: 'This field is required.' });
-    emailValidator(path.email, { message: 'Please enter a valid email address.' });
-    maxLength(path.email, 256, { message: '' });
-    required(path.username, { message: 'This field is required.' });
-    minLength(path.username, 3, { message: 'Must be at least 3 characters.' });
-    maxLength(path.username, 64, { message: '' });
-    pattern(path.username, /^[a-zA-Z0-9_]+$/, {
-      message: 'Must be 3–64 letters, digits, or underscores.',
-    });
-    required(path.captchaCode, { message: 'This field is required.' });
-    maxLength(path.captchaCode, 10, { message: '' });
-    required(path.emailVerificationCode, {
-      message: 'This field is required.',
-      when: () => this.securityConfig()?.enableEmailVerification === true,
-    });
-    required(path.password, { message: 'This field is required.' });
-    pattern(path.password, PASSWORD_RULE, {
-      message:
-        'Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.',
-    });
-    required(path.confirmPassword, { message: 'This field is required.' });
-    validate(path.confirmPassword, (ctx) => {
-      const confirm = ctx.value();
-      const password = ctx.valueOf(path.password);
-      if (password && confirm && password !== confirm) {
-        return { kind: 'passwordMismatch', message: 'The two passwords do not match.' };
-      }
-      return null;
-    });
-  });
-  //#endif
 
   // 用户名是否被用户手动编辑过（一旦手动改动，停止从邮箱自动推导）
   private usernameManuallyEdited = false;
@@ -429,3 +371,34 @@ export class Register implements OnInit {
     return email.trim().toLowerCase();
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'account.register.title': 'Sign Up',
+  'account.register.subtitle':
+    'Welcome aboard, please fill in the following information to create your account',
+  'account.register.email': 'Email',
+  'account.register.emailPlaceholder': 'Enter your email address',
+  'account.register.username': 'Username',
+  'account.register.usernamePlaceholder':
+    'Extracted from email prefix, letters, digits and underscores allowed',
+  'account.register.captcha': 'Captcha',
+  'account.register.captchaPlaceholder': 'Enter the captcha on the right',
+  'account.register.captchaRefresh': "Can't see clearly? Click to refresh",
+  'account.register.captchaAlt': 'Captcha',
+  'account.register.emailCode': 'Email Verification Code',
+  'account.register.emailCodePlaceholder': 'Enter the 6-digit code',
+  'account.register.resendCountdown': 'Resend in {{seconds}}s',
+  'account.register.sendCode': 'Get Code',
+  'account.register.password': 'Password',
+  'account.register.passwordPlaceholder': 'At least 12 characters',
+  'common.hidePassword': 'Hide password',
+  'common.showPassword': 'Show password',
+  'account.register.confirmPassword': 'Confirm Password',
+  'account.register.confirmPasswordPlaceholder': 'Enter the password again',
+  'account.register.submit': 'Sign Up',
+  'account.register.haveAccount': 'Already have an account?',
+  'account.register.loginNow': 'Sign in directly',
+};
+//#endif

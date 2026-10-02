@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLogOut, lucideMonitor, lucideSmartphone, lucideTablet } from '@ng-icons/lucide';
@@ -13,11 +13,11 @@ import { finalize } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { DeviceKind, describeUserAgent } from '../../../../shared/utils/user-agent';
 import { UserSessionOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
@@ -38,7 +38,17 @@ const OTHERS = 'others';
  */
 @Component({
   selector: 'app-login-devices',
-  imports: [NgIcon, HlmBadge, HlmButton, HlmSpinner, ...HlmItemImports],
+  // prettier-ignore
+  imports: [
+    NgIcon,
+    HlmBadge,
+    HlmButton,
+    HlmSpinner,
+    ...HlmItemImports,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
   providers: [provideIcons({ lucideLogOut, lucideMonitor, lucideSmartphone, lucideTablet })],
   templateUrl: './login-devices.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -49,16 +59,8 @@ export class LoginDevices {
   private readonly settingContext = inject(SettingContextService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  protected readonly t = (key: string, params?: Record<string, unknown>) => {
-    this.translationReady();
-    return this.transloco.translate(key, params);
-  };
   //#else
-  protected readonly t = (key: string, params?: Record<string, unknown>) =>
-    ENGLISH[key]?.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params?.[name] ?? '')) ??
-    key;
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   /** null 表示尚未取回。 */
@@ -70,12 +72,10 @@ export class LoginDevices {
 
   protected readonly hasOthers = computed(() => (this.sessions() ?? []).some((s) => !s.isCurrent));
 
+  /** 文案在模板里经 t 组装，这里只给出设备与时间等数据。 */
   protected readonly rows = computed(() =>
     (this.sessions() ?? []).map((session) => {
       const device = describeUserAgent(session.userAgent);
-      const title =
-        [device.browser, device.os].filter(Boolean).join(' · ') ||
-        this.t('account.sessions.unknownDevice');
       const when = (value: string) =>
         formatAppDate(
           value,
@@ -83,21 +83,16 @@ export class LoginDevices {
           this.settingContext.timeZone(),
           this.settingContext.displayLocale(),
         );
-      const details = [
-        session.ipAddress ? this.t('account.sessions.ip', { ip: session.ipAddress }) : null,
-        this.t('account.sessions.lastSeen', { time: when(session.lastSeenTime) }),
-        this.t('account.sessions.signedInAt', { time: when(session.creationTime) }),
-      ];
 
       return {
         id: session.id,
         isCurrent: session.isCurrent,
         icon: DEVICE_ICONS[device.kind],
-        title,
-        detail: details.filter(Boolean).join(' · '),
-        impersonation: session.impersonatorName
-          ? this.t('account.sessions.impersonatedBy', { name: session.impersonatorName })
-          : null,
+        device: [device.browser, device.os].filter(Boolean).join(' · '),
+        ipAddress: session.ipAddress,
+        lastSeen: when(session.lastSeenTime),
+        signedInAt: when(session.creationTime),
+        impersonatorName: session.impersonatorName,
       };
     }),
   );
@@ -117,8 +112,13 @@ export class LoginDevices {
 
   protected async revoke(id: string): Promise<void> {
     const confirmed = await this.confirmService.open({
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('account.sessions.revokeConfirm'),
+      confirmText: this.transloco.translate('account.sessions.revoke'),
+      //#else
       message: this.t('account.sessions.revokeConfirm'),
       confirmText: this.t('account.sessions.revoke'),
+      //#endif
       variant: 'destructive',
     });
     if (!confirmed) {
@@ -132,7 +132,11 @@ export class LoginDevices {
       .subscribe({
         next: () => {
           this.sessions.update((list) => list?.filter((s) => s.id !== id) ?? null);
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('account.sessions.revoked'));
+          //#else
           toast.success(this.t('account.sessions.revoked'));
+          //#endif
         },
         error: (error) => this.showError(error),
       });
@@ -140,8 +144,13 @@ export class LoginDevices {
 
   protected async revokeOthers(): Promise<void> {
     const confirmed = await this.confirmService.open({
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('account.sessions.revokeOthersConfirm'),
+      confirmText: this.transloco.translate('account.sessions.revokeOthers'),
+      //#else
       message: this.t('account.sessions.revokeOthersConfirm'),
       confirmText: this.t('account.sessions.revokeOthers'),
+      //#endif
       variant: 'destructive',
     });
     if (!confirmed) {
@@ -155,21 +164,31 @@ export class LoginDevices {
       .subscribe({
         next: (count) => {
           this.sessions.update((list) => list?.filter((s) => s.isCurrent) ?? null);
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('account.sessions.revokedOthers', { count }));
+          //#else
           toast.success(this.t('account.sessions.revokedOthers', { count }));
+          //#endif
         },
         error: (error) => this.showError(error),
       });
   }
 
   private showError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
     toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
+    //#endif
   }
 }
 //#if (!IncludeLocalization)
 
-/** 不含本地化时的界面文案，与 `en.json` 的 `account.sessions` 同步。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'common.requestError': 'Request failed',
+  'common.requestError': 'Request error',
   'common.retry': 'Retry',
   'account.sessions.header': 'Signed-in devices',
   'account.sessions.subtitle':

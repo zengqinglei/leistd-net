@@ -1,4 +1,3 @@
-using Leistd.Auditing;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.Auditing.Abstractions;
 

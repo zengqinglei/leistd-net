@@ -39,16 +39,16 @@ describe('UriListEditor', () => {
     const fixture = createEditor();
     const button = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
 
-    expect(button.disabled).toBeTrue();
+    expect(button.disabled).toBe(true);
 
     enterValue(fixture, 'not-a-uri');
-    expect(button.disabled).toBeTrue();
+    expect(button.disabled).toBe(true);
 
     enterValue(fixture, 'https://example.com/callback#fragment');
-    expect(button.disabled).toBeTrue();
+    expect(button.disabled).toBe(true);
 
     enterValue(fixture, 'https://example.com/callback');
-    expect(button.disabled).toBeFalse();
+    expect(button.disabled).toBe(false);
   });
 
   it('emits the removed URI when its chip button is clicked', () => {

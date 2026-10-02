@@ -1,4 +1,6 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Tenants.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using System.Security.Claims;
 using CompanyName.ProjectName.Application.Auth.AppServices;
@@ -19,7 +21,6 @@ using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Stores;
 using Leistd.Security.Claims;
@@ -58,18 +59,18 @@ internal sealed class TenantImpersonationAppService(
         // 嵌套后"结束模拟"只能回退一层，顶栏模拟提示里的发起人会与实际回退目标不符。
         if (currentUser.FindClaim(ImpersonationClaimTypes.ImpersonatorUserId) is not null)
         {
-            throw new ForbiddenException("Already impersonating; end the current impersonation first.");
+            throw new BusinessException(TenantErrorCodes.AlreadyImpersonating, "Already impersonating; end the current impersonation first.");
         }
 
         var impersonatorId = currentUser.Id
-            ?? throw new ForbiddenException("Only an authenticated user can start impersonation.");
+            ?? throw new BusinessException(TenantErrorCodes.ImpersonationRequiresAuthentication, "Only an authenticated user can start impersonation.");
 
         var tenant = await tenantStore.FindAsync(tenantId, cancellationToken)
-                     ?? throw new NotFoundException($"Tenant '{tenantId}' not found.");
+                     ?? throw new BusinessException(MultiTenancyErrorCodes.NotFound, $"Tenant '{tenantId}' not found.");
 
         if (!tenant.IsActive)
         {
-            throw new ForbiddenException($"Tenant '{tenant.Name}' is deactivated.");
+            throw new BusinessException(MultiTenancyErrorCodes.NotActive, $"Tenant '{tenant.Name}' is deactivated.");
         }
 
         ClaimsPrincipal principal;
@@ -81,13 +82,13 @@ internal sealed class TenantImpersonationAppService(
         // 都必须落进这个租户自己的库并同生共死。只切 Change 不够——本方法没有环境工作单元，仓储取到的是
         // 请求作用域里早已绑定宿主库的 DbContext；分库租户的管理员在它自己的库里，于是报"没有可模拟的 admin"。
         using (currentTenant.Change(tenant.Id, tenant.Name))
-        using (var tenantUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var tenantUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             var admin = await userRepository.GetFirstAsync(
                 u => u.Username == AdminConstant.TenantAdminUsername,
                 q => q.OrderBy(u => u.Id),
                 cancellationToken)
-                ?? throw new NotFoundException(
+                ?? throw new BusinessException(TenantErrorCodes.AdministratorNotFound,
                     $"Tenant '{tenant.Name}' has no '{AdminConstant.TenantAdminUsername}' user to impersonate.");
 
             var claims = new List<Claim>
@@ -135,7 +136,7 @@ internal sealed class TenantImpersonationAppService(
         //
         // 放在租户那一步提交之后：租户侧失败（没有 admin、库连不上）时宿主侧不留"已进入"的假记录。
         // 反过来这一步失败时请求整体报错、不下发 Cookie，租户侧多出的那条仍是一次真实的尝试。
-        using (var impersonatorUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var impersonatorUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             await operationRecorder.RecordSucceededAsync(
                 OperationRecordActions.TenantImpersonationStarted,
@@ -156,7 +157,7 @@ internal sealed class TenantImpersonationAppService(
     public async Task<ClaimsPrincipal> EndImpersonationAsync(CancellationToken cancellationToken = default)
     {
         var impersonatorId = ReadImpersonatorId()
-            ?? throw new ForbiddenException("The current session is not impersonating.");
+            ?? throw new BusinessException(TenantErrorCodes.NotImpersonating, "The current session is not impersonating.");
 
         var impersonatorTenantId = ReadImpersonatorTenantId();
 
@@ -185,13 +186,13 @@ internal sealed class TenantImpersonationAppService(
         // 请求作用域里的 DbContext 绑的是租户的库，切回宿主后若复用它，就会在租户库里找宿主管理员，
         // 得出"发起模拟的用户已不存在"——分库租户进得去、出不来。
         using (currentTenant.Change(impersonatorTenantId))
-        using (var impersonatorUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var impersonatorUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             var impersonator = await userRepository.GetFirstAsync(
                 u => u.Id == impersonatorId,
                 q => q.OrderBy(u => u.Id),
                 cancellationToken)
-                ?? throw new NotFoundException("The impersonating user no longer exists.");
+                ?? throw new BusinessException(UserErrorCodes.NotFound, "The impersonating user no longer exists.");
 
             principal = await sessionSignInService.SignInAsync(
                 impersonator, cancellationToken: cancellationToken);
@@ -219,7 +220,7 @@ internal sealed class TenantImpersonationAppService(
         // 被模拟的租户一侧：让租户看得到那次进来的人什么时候走的。此刻仍在租户上下文、仍是模拟态主体，
         // 所以操作人是被模拟者、模拟者名来自声明，与模拟期间的其他记录同一口径。
         // 放在发起人一侧之后：发起人已不存在等失败会让模拟态保持原样，这时不该留"已结束"。
-        using (var impersonatedUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var impersonatedUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             await operationRecorder.RecordSucceededAsync(
                 OperationRecordActions.ImpersonationEnded,
@@ -257,7 +258,7 @@ internal sealed class TenantImpersonationAppService(
         string? impersonatorName;
         // 与结束模拟同理：会话是租户身份，回到发起人上下文查人必须新开工作单元。
         using (currentTenant.Change(ReadImpersonatorTenantId()))
-        using (var impersonatorUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var impersonatorUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             var impersonator = await userRepository.GetFirstAsync(
                 u => u.Id == impersonatorId, q => q.OrderBy(u => u.Id), cancellationToken);

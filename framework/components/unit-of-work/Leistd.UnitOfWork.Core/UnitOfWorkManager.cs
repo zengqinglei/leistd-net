@@ -16,7 +16,7 @@ public class UnitOfWorkManager(
     public IUnitOfWork? Current => GetCurrentUnitOfWork();
 
     /// <inheritdoc />
-    public Task<IUnitOfWork> BeginAsync(UnitOfWorkOptions? options = null, bool requiresNew = false)
+    public IUnitOfWork Begin(UnitOfWorkOptions? options = null, bool requiresNew = false)
     {
         // 新建工作单元前定案本次选项，避免修改共享的默认实例。
         var effectiveOptions = options?.Clone() ?? defaultUowOptions.Value.Clone();
@@ -24,14 +24,14 @@ public class UnitOfWorkManager(
         if (currentUow != null && !requiresNew)
         {
             logger?.LogDebug("Reusing existing unit of work {UowId} (creating a child unit of work)", currentUow.Id);
-            return Task.FromResult<IUnitOfWork>(new ChildUnitOfWork(currentUow));
+            return new ChildUnitOfWork(currentUow);
         }
 
         var unitOfWork = CreateNewUnitOfWork(effectiveOptions);
 
         logger?.LogDebug("Created new unit of work {UowId}", unitOfWork.Id);
 
-        return Task.FromResult(unitOfWork);
+        return unitOfWork;
     }
 
     private IUnitOfWork? GetCurrentUnitOfWork()

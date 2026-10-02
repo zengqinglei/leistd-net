@@ -5,12 +5,10 @@ using Xunit;
 namespace Leistd.Tracing.Tests.Core;
 
 /// <summary>
-/// 链路标识以 <see cref="Activity"/> 为唯一身份；显式切换优先。
+/// 关联标识优先使用显式作用域；否则取当前 <see cref="Activity"/> 的 TraceId。
 /// </summary>
 /// <remarks>
-/// 回归点：此前本组件自造一套 AsyncLocal 标识，与 .NET 原生 W3C Trace Context 平行存在，
-/// 于是同一请求有两个追踪 Id——日志 Scope 与出站头是自造 GUID，
-/// 而 RFC 9457 错误响应里的 traceId 取自 Activity。客户端拿错误响应里的 Id 去日志里搜，搜不到。
+/// 默认情况下关联标识就是官方的 TraceId，不另造第二个；显式值用于跨链路的业务关联。
 /// </remarks>
 public class CorrelationIdTests
 {
@@ -35,28 +33,6 @@ public class CorrelationIdTests
 
         Assert.NotNull(activity);
         Assert.Equal(activity.TraceId.ToHexString(), provider.Get());
-    }
-
-    [Fact]
-    public void Create_reuses_the_ambient_activity_trace_id()
-    {
-        var provider = new CorrelationIdProvider();
-        using var activity = StartActivity();
-
-        // 不能生成第二个标识：同一请求出现两个 traceId 正是要修的问题
-        Assert.Equal(activity.TraceId.ToHexString(), provider.Create());
-    }
-
-    [Fact]
-    public void Create_without_an_activity_produces_a_w3c_shaped_trace_id()
-    {
-        var provider = new CorrelationIdProvider();
-
-        var id = provider.Create();
-
-        // 32 位小写十六进制：与 W3C TraceId 一致，也与旧的 Guid("N") 等长
-        Assert.Equal(32, id.Length);
-        Assert.True(id.All(c => char.IsAsciiDigit(c) || (c >= 'a' && c <= 'f')), id);
     }
 
     [Fact]

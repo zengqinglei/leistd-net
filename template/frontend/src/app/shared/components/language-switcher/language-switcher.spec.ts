@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { toast } from '@spartan-ng/brain/sonner';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { LanguageSwitcher } from './language-switcher';
 //#if (IncludeLocalization)
@@ -13,6 +13,8 @@ import { LanguageService } from '../../../core/services/language-service';
 import { SettingContextService } from '../../../core/settings/setting-context-service';
 import { SettingService } from '../../../core/settings/setting-service';
 
+import type { MockedObject } from 'vitest';
+
 /**
  * 语言选择的归属：切换器是唯一决定「这次选择算谁的」的地方。
  *
@@ -22,14 +24,18 @@ import { SettingService } from '../../../core/settings/setting-service';
  */
 describe('LanguageSwitcher', () => {
   let component: LanguageSwitcher;
-  let authService: jasmine.SpyObj<AuthService>;
-  let settingService: jasmine.SpyObj<SettingService>;
+  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated'>;
+  let settingService: Pick<MockedObject<SettingService>, 'setForCurrentUser'>;
 
   function setUp(authenticated: boolean): void {
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['isAuthenticated']);
-    authService.isAuthenticated.and.returnValue(authenticated);
-    settingService = jasmine.createSpyObj<SettingService>('SettingService', ['setForCurrentUser']);
-    settingService.setForCurrentUser.and.returnValue(of(undefined));
+    authService = {
+      isAuthenticated: vi.fn().mockName('AuthService.isAuthenticated'),
+    };
+    authService.isAuthenticated.mockReturnValue(authenticated);
+    settingService = {
+      setForCurrentUser: vi.fn().mockName('SettingService.setForCurrentUser'),
+    };
+    settingService.setForCurrentUser.mockReturnValue(of(undefined));
 
     TestBed.configureTestingModule({
       imports: [LanguageSwitcher],
@@ -48,10 +54,11 @@ describe('LanguageSwitcher', () => {
 
   afterEach(() => localStorage.removeItem(LanguageService.STORAGE_KEY));
 
-  it('writes an authenticated choice to the account without touching the device preference', () => {
+  it('writes an authenticated choice to the account without touching the device preference', async () => {
     setUp(true);
 
     component.select('zh-CN');
+    await vi.waitFor(() => expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN'));
 
     expect(settingService.setForCurrentUser).toHaveBeenCalledWith({
       name: 'Display.Language',
@@ -65,55 +72,54 @@ describe('LanguageSwitcher', () => {
   /**
    * 切语言之后，文案与日期必须同时换。
    *
-   * 这是"文案变成中文、列表里的日期还是 Sep 4, 2026 6:16 PM"那类不一致的闸门。
    * 日期的书写方式取自**活动语言**（见 SettingContextService.displayLocale），
-   * 与切换器改的是同一个东西，所以不存在"等服务端确认后才跟上"的中间态；
-   * 若哪天又改回从设置快照推导，这条就会红。
+   * 与切换器改的是同一个东西；若哪天又改回从设置快照推导，这条就会红。
    */
-  it('切语言后日期的书写方式立刻跟着变，不必等设置写回', () => {
+  it('switches text and dates together once the account write succeeds', async () => {
     setUp(true);
     const settingContext = TestBed.inject(SettingContextService);
     expect(settingContext.displayLocale()).toBe('en');
 
     component.select('zh-CN');
+    await vi.waitFor(() => expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN'));
 
     expect(settingContext.displayLocale()).toBe('zh-CN');
   });
 
-  // 写回失败同理：界面已经切了，日期不能留在旧语言上——那会是永久性的分叉，
-  // 而不是一瞬间的不同步。
-  it('账户写回失败也不让文案与日期分叉', () => {
+  /**
+   * 先写回、成功后再切换。先切换的话，切换触发的设置页重取早于写入完成，
+   * 偏好页显示旧值（全功能端到端发现）。
+   */
+  it('does not switch before the account write completes', () => {
     setUp(true);
-    settingService.setForCurrentUser.and.returnValue(throwError(() => new Error('network down')));
-    spyOn(toast, 'error');
+    const pending = new Subject<void>();
+    settingService.setForCurrentUser.mockReturnValue(pending);
 
     component.select('zh-CN');
 
-    expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
-    expect(TestBed.inject(SettingContextService).displayLocale()).toBe('zh-CN');
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
   });
 
-  it('says so when the account write fails, instead of swallowing it', () => {
+  it('keeps the current language and says so when the account write fails', () => {
     setUp(true);
-    settingService.setForCurrentUser.and.returnValue(throwError(() => new Error('network down')));
-    const error = spyOn(toast, 'error');
+    settingService.setForCurrentUser.mockReturnValue(throwError(() => new Error('network down')));
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     component.select('zh-CN');
 
-    // 界面已经切了，不回滚；但静默吞掉的话，用户会以为账户偏好存好了，
-    // 下次登录却发现回到旧语言——那正是最难被发现的一类假保存。
-    expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
+    // 不切换，界面与账户偏好就不会分叉；但必须说出来，否则用户以为存好了。
+    expect(TestBed.inject(LanguageService).activeLang()).toBe('en');
     expect(error).toHaveBeenCalled();
   });
 
-  it('records an anonymous choice as the device preference and writes no setting', () => {
+  it('records an anonymous choice as the device preference and writes no setting', async () => {
     setUp(false);
 
     component.select('zh-CN');
 
     // 访客没有账户可写；不落盘的话这次选择一刷新就没了。
     expect(localStorage.getItem(LanguageService.STORAGE_KEY)).toBe('zh-CN');
-    expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN');
+    await vi.waitFor(() => expect(TestBed.inject(LanguageService).activeLang()).toBe('zh-CN'));
     expect(settingService.setForCurrentUser).not.toHaveBeenCalled();
   });
 });

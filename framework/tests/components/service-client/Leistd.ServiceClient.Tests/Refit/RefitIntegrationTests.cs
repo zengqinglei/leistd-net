@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using System.Text;
 using Leistd.Security.Users;
 using Leistd.ServiceClient.Exceptions;
@@ -6,9 +7,7 @@ using Leistd.ServiceClient.Options;
 using Leistd.ServiceClient.Refit;
 using Leistd.TestBase.Doubles;
 using Leistd.Tracing;
-using Leistd.Tracing.Services;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -132,7 +131,8 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddCorrelationIdCore(_ => { });
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddCorrelationIdCore();
         if (currentUser is not null)
         {
             services.AddSingleton(currentUser);
@@ -174,7 +174,7 @@ public sealed class RefitIntegrationTests : IAsyncLifetime
             echo = await api.EchoHeadersAsync();
         }
 
-        Assert.Equal(userId.ToString(), echo.UserId);
+        Assert.Null(echo.UserId);
         Assert.Equal("trace-refit-1", echo.TraceId);
     }
 

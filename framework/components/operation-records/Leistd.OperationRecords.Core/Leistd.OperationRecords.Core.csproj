@@ -13,8 +13,9 @@
     <!-- CorrelationId 让记录可以保持窄：细节留在日志里，按同一个链路标识回查 -->
     <ProjectReference Include="..\..\tracing\Leistd.Tracing.Core\Leistd.Tracing.Core.csproj" />
     <ProjectReference Include="..\..\core\Leistd.Core\Leistd.Core.csproj" />
-    <!-- 查询用例：分页契约与带字段错误的校验异常 -->
+    <!-- 查询用例：分页契约 -->
     <ProjectReference Include="..\..\data\Leistd.Data\Leistd.Data.csproj" />
+    <!-- 失败原因按错误码渲染：占位符填充与错误响应共用 LocalizationPlaceholders，同一个码两处句子一致 -->
     <ProjectReference Include="..\..\exception-handling\Leistd.ExceptionHandling.Core\Leistd.ExceptionHandling.Core.csproj" />
   </ItemGroup>
 
@@ -30,6 +31,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>

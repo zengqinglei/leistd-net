@@ -1,13 +1,7 @@
+using Leistd.MultiTenancy.Extensions;
 using Microsoft.EntityFrameworkCore;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.Settings.Definitions;
-using Leistd.Settings.Errors;
-using Leistd.Settings.Management;
-using Leistd.Settings.Resolution;
 using Leistd.Settings.Stores;
 using Leistd.Settings.EntityFrameworkCore.Entities;
 using Leistd.Settings.Exceptions;
@@ -22,7 +16,7 @@ namespace Leistd.Settings.EntityFrameworkCore.Stores;
 /// 通过 <see cref="IDbContextProvider{TDbContext}"/> 获取当前边界的上下文与连接。
 /// <see cref="SettingRecord.ScopeKey"/> 保证各层级唯一性；租户隔离仍由查询过滤器承担。
 /// <para>
-/// <see cref="SettingScopes.Host"/> 与宿主的租户级共用同一行（<c>h:t</c>）：宿主视角本就走租户层，
+/// <see cref="SettingScopes.Host"/> 与宿主的租户级共用同一行（<c>host:t</c>）：宿主视角本就走租户层，
 /// 而设置名全局唯一，两者不会撞在一起。它的意义在于<b>禁止</b>租户各存一份。
 /// </para>
 /// </remarks>
@@ -117,25 +111,24 @@ public class EfCoreSettingStore<TDbContext>(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    // 用独立层级段区分租户与用户设置，避免用户标识与租户级保留值冲突。
+    // 用独立层级段区分租户与用户设置，避免用户标识与租户级保留值冲突。租户段与框架其他按租户隔离的键
+    // 同一写法（CurrentTenantKeyExtensions.ScopeKey）：
     //
-    //   {tenant}:t            租户级（宿主为 h:t）
+    //   {tenant}:t            租户级（宿主为 host:t）
     //   {tenant}:u:{userId}   用户级
     // userId 跟随 ISettingStore 的签名保持可空——租户级本就传 null。它只在 scope 为 User
     // 时必需，这种「取值取决于另一个参数」的约束类型系统表达不了，只能在下面就地校验。
     private string BuildScopeKey(SettingScopes scope, string? userId)
     {
-        var tenantSegment = currentTenant.Id?.ToString("N") ?? "h";
-
         switch (scope)
         {
             case SettingScopes.Tenant:
-                return $"{tenantSegment}:t";
+                return currentTenant.ScopeKey("t");
 
             case SettingScopes.User:
                 // 直接消费 Store 时也须校验用户标识，保持 UserId 与 ScopeKey 层级一致。
                 ArgumentException.ThrowIfNullOrWhiteSpace(userId);
-                return $"{tenantSegment}:u:{userId}";
+                return currentTenant.ScopeKey($"u:{userId}");
 
             case SettingScopes.Host:
                 // 进程级设置只有宿主那一行，因此必须在宿主上下文读写：租户上下文下
@@ -147,7 +140,7 @@ public class EfCoreSettingStore<TDbContext>(
                     throw new HostScopeUnavailableException(tenantId: currentTenant.Id?.ToString());
                 }
 
-                return $"{tenantSegment}:t";
+                return currentTenant.ScopeKey("t");
 
             default:
                 // None 与 All 不对应任何一行：前者不是层级，后者是「两层都允许」的定义侧标记。

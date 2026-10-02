@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
@@ -135,7 +136,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
         var email = $"rate-{Guid.NewGuid():N}@example.test";
 
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(hostClient, email)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await SendChallengeResponseAsync(hostClient, email)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await SendChallengeResponseAsync(hostClient, email)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientA, email)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await SendChallengeResponseAsync(clientB, email)).StatusCode);
     }
@@ -167,7 +168,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
 
         // 已验证时不再发码
         using var alreadyVerified = await user.Client.PostAsync("/api/v1/auth/me/email-verification", null);
-        Assert.Equal(HttpStatusCode.BadRequest, alreadyVerified.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, alreadyVerified.StatusCode);
 
         var newEmail = $"new-{username}@example.test";
         using var change = await user.Client.PutAsJsonAsync("/api/v1/auth/me", new { Username = username, Email = newEmail });
@@ -298,7 +299,7 @@ public sealed partial class EmailVerificationChallengeTests(ProjectWebApplicatio
     private static HttpClient CreateTenantClient(WebApplicationFactory<Program> host, Guid tenantId)
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(host);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         return client;
     }
 

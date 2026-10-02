@@ -47,16 +47,21 @@
                 }
               ]
             },
-            "debug": {
+            "development": {
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true,
               "fileReplacements": [
                 {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.debug.ts"
+                  "replace": "_mock/core/providers.ts",
+                  "with": "_mock/core/providers.mock.ts"
                 }
               ]
+            },
+            "unit-test": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
             },
             "dev": {
               "fileReplacements": [
@@ -87,12 +92,15 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.mjs"
+          },
           "configurations": {
             "production": {
               "buildTarget": "companyname-projectname-web:build:production"
             },
-            "debug": {
-              "buildTarget": "companyname-projectname-web:build:debug"
+            "development": {
+              "buildTarget": "companyname-projectname-web:build:development"
             },
             "dev": {
               "buildTarget": "companyname-projectname-web:build:dev"
@@ -104,24 +112,22 @@
               "buildTarget": "companyname-projectname-web:build:uat"
             }
           },
-          "defaultConfiguration": "debug"
+          "defaultConfiguration": "development"
         },
         "extract-i18n": {
           "builder": "@angular/build:extract-i18n"
         },
         "test": {
-          "builder": "@angular/build:karma",
+          "builder": "@angular/build:unit-test",
           "options": {
-            "polyfills": [],
+            "buildTarget": "::unit-test",
             "tsConfig": "tsconfig.spec.json",
-            "assets": [
-              {
-                "glob": "**/*",
-                "input": "public"
-              }
-            ],
-            "styles": ["src/styles.css"],
-            "karmaConfig": "karma.conf.js"
+            "runner": "vitest",
+            "runnerConfig": "vitest-base.config.ts",
+            "browsers": ["chromiumHeadless"],
+            "browserViewport": "1280x800",
+            "isolate": true,
+            "include": ["src/**/*.spec.ts", "../_mock/**/*.spec.ts"]
           }
         }
       }

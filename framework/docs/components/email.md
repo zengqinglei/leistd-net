@@ -32,11 +32,11 @@ if (builder.Environment.IsDevelopment())
 }
 else
 {
-    builder.Services.AddSmtpEmailSender(builder.Configuration);
+    builder.Services.AddSmtpEmailSender();
 }
 ```
 
-两者都绑定 `IEmailSender`。`AddSmtpEmailSender` 另有委托重载，并把配置校验挂到 `ValidateOnStart`——配置非法时宿主起不来，而不是等到第一次发信。实现类型只注册一次，接口是别名转发，重复调用不会产生两个实例。
+两者都绑定 `IEmailSender`。`AddSmtpEmailSender` 绑定 `Leistd:Email:Smtp` 配置节，可选的委托在绑定之后应用（代码覆盖配置），另可传入自定义配置节路径；它还把配置校验挂到 `ValidateOnStart`——配置非法时宿主起不来，而不是等到第一次发信。实现类型只注册一次，接口是别名转发，重复调用不会产生两个实例。
 
 ## 使用
 
@@ -139,6 +139,16 @@ SMTP 连接、认证或投递失败均原样抛出；重试和补偿由调用方
 - `IsBodyHtml` 取错不会报错，只会让收件人看到转义后的 HTML 源码或没有排版的信。
 - 组件不排队、不重试、不退避。一次 `SendAsync` 就是一次同步投递尝试，耗时受 SMTP 往返影响；放在请求路径上时需要考虑它对响应时间的贡献。
 - `Password` 属于凭据。它不该出现在随代码分发的配置文件里，也不该经由任何面向界面的设置接口读写。
+- **投递日志记脱敏后的收件人，不记完整地址。** 字段名仍是 `{To}`，值经
+  `TextRedactor.RedactEmail` 处理：`zhangsan@example.com` 记成 `zha***@example.com`
+  （本地部保开头几位 + 完整域名，规则见[核心原语](core.md)）。邮箱是个人数据，而日志通常被集中采集、
+  保留更久、可见范围更大；保住域名是为了能按域名聚合，看出"某个租户或某个邮件服务商整体收不到"。
+  地址取不出域名（配错了）时记成 `not***` 这样的形态，**不回落成原文**。
+  要按收件人逐一追查时用操作记录或业务侧的标识，不要把地址加回日志。
+- **主题原样记录，不脱敏。** 脱敏了就失去"这封是什么信"的排障价值，而那正是这条日志的用途。
+  本组件与模板产出的主题都是固定或本地化文案，不含个人数据；**宿主若把人名之类放进主题，
+  它会原样进日志**——那是宿主的显式选择，自行改用标识符或不要放进主题。
+  通知类邮件的主题来自 `NotificationInputDto.Title`，同样受这条约束。
 
 ## 相关
 

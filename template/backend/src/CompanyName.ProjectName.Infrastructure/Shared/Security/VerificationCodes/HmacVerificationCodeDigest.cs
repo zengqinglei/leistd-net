@@ -29,7 +29,7 @@ internal sealed class HmacVerificationCodeDigest(IOptions<VerificationCodeOption
     private byte[] Key =>
         options.Value.TryGetKeyBytes(out var key)
             ? key
-            : throw new InternalServerException(
+            : throw new InvalidOperationException(
                 $"{VerificationCodeOptions.SectionName}:Key is not configured or is too short; " +
                 $"provide at least {VerificationCodeOptions.MinimumKeyBytes} base64-encoded bytes. " +
                 "It is required whenever UserRegistration:EnableEmailVerification is true.");

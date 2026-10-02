@@ -30,10 +30,6 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("AccessToken")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone");
 
@@ -46,9 +42,6 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         .HasColumnType("character varying(64)");
 
                     b.Property<DateTime?>("DeletionTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
@@ -82,13 +75,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("ProviderUsername")
+                    b.Property<string>("ProviderAccountLabel")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
-
-                    b.Property<string>("RefreshToken")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
@@ -300,6 +289,11 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
 
@@ -326,7 +320,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
                     b.HasIndex("Email")
                         .IsUnique()
-                        .HasFilter("\"TenantId\" IS NULL");
+                        .HasFilter("\"TenantId\" IS NULL AND \"Email\" <> ''");
 
                     b.HasIndex("Username")
                         .IsUnique()
@@ -334,7 +328,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
 
                     b.HasIndex("TenantId", "Email")
                         .IsUnique()
-                        .HasFilter("\"TenantId\" IS NOT NULL");
+                        .HasFilter("\"TenantId\" IS NOT NULL AND \"Email\" <> ''");
 
                     b.HasIndex("TenantId", "Username")
                         .IsUnique()

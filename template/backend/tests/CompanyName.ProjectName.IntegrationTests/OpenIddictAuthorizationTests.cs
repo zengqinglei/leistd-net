@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using CompanyName.ProjectName.Application.OpenApplications.Dtos;
+using CompanyName.ProjectName.Domain.Auth.Options;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Entities;
@@ -31,6 +32,9 @@ namespace CompanyName.ProjectName.IntegrationTests;
 public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory factory)
     : AuthorizationTestBase(factory), IClassFixture<ProjectWebApplicationFactory>
 {
+    // 调用本服务 API 的令牌必须申请它的 scope：受众由授予的 scope 推出，API 只接受受众是自己的令牌
+    private static readonly string ApiScope = new OAuthOptions().Resource;
+
     [Fact]
     public async Task Creating_an_application_rejects_scopes_this_server_does_not_register()
     {
@@ -46,7 +50,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Probe",
                 applicationType = "web",
                 clientType = "confidential",
-                consentType = "explicit",
                 permissions = new[] { "scp:openid", "scp:not_registered" },
                 requirements = Array.Empty<string>(),
                 redirectUris = Array.Empty<string>(),
@@ -102,7 +105,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Probe",
                 applicationType = "service",
                 clientType = "confidential",
-                consentType = "explicit",
                 // 缺 ept:token：与创建时同样必须被拒
                 permissions = new[] { "gt:client_credentials", "scp:tenant-routing.read" },
                 requirements = Array.Empty<string>(),
@@ -120,7 +122,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             displayName = "Probe",
             applicationType = "service",
             clientType,
-            consentType = "explicit",
             permissions,
             requirements = Array.Empty<string>(),
             redirectUris = Array.Empty<string>(),
@@ -223,18 +224,17 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
 
 
     [Fact]
-    public async Task A_stray_bearer_header_does_not_break_a_cookie_session()
+    public async Task An_invalid_bearer_header_is_rejected_even_with_a_valid_cookie_session()
     {
         using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
 
         var user = await CreateUserAsync(superAdmin.Client);
         using var session = await Factory.LoginAsync(user.Username, TestPassword);
 
-        // Cookie 认证的请求顺带挂一个无关的 Bearer 头：默认策略同时接受两个方案，
-        // 无效的 Bearer 不能把本来有效的 Cookie 会话拖成 401。
+        // 显式 Authorization 头选择 Bearer；失败不能回退到 Cookie。
         session.Client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", "not-a-real-token");
-        Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await session.Client.GetAsync("/api/v1/auth/me")).StatusCode);
 
         Assert.Equal(
             HttpStatusCode.OK,
@@ -323,7 +323,6 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Secret probe",
                 applicationType = "service",
                 clientType = "confidential",
-                consentType = "explicit",
                 permissions = new[] { "ept:token", "gt:client_credentials" },
                 requirements = Array.Empty<string>(),
                 redirectUris = Array.Empty<string>(),
@@ -357,8 +356,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Workload",
                 applicationType = "service",
                 clientType = "confidential",
-                consentType = "explicit",
-                permissions = new[] { "ept:token", "gt:client_credentials" },
+                permissions = new[] { "ept:token", "gt:client_credentials", $"scp:{ApiScope}" },
                 requirements = Array.Empty<string>(),
                 redirectUris = Array.Empty<string>(),
                 postLogoutRedirectUris = Array.Empty<string>()
@@ -380,7 +378,9 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
         [
             new KeyValuePair<string, string>("grant_type", "client_credentials"),
             new KeyValuePair<string, string>("client_id", clientId),
-            new KeyValuePair<string, string>("client_secret", secret.ClientSecret)
+            new KeyValuePair<string, string>("client_secret", secret.ClientSecret),
+            // 申请本服务 API 的 scope：令牌的受众是本服务，才轮得到后面的授权策略判定
+            new KeyValuePair<string, string>("scope", ApiScope)
         ]));
         Assert.Equal(HttpStatusCode.OK, token.StatusCode);
 
@@ -404,10 +404,9 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
                 displayName = "Bearer probe",
                 applicationType = "web",
                 clientType = "confidential",
-                consentType = "explicit",
                 permissions = new[]
                 {
-                    "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid"
+                    "ept:authorization", "ept:token", "gt:authorization_code", "rst:code", "scp:openid", $"scp:{ApiScope}"
                 },
                 requirements = Array.Empty<string>(),
                 redirectUris = new[] { RedirectUri },
@@ -450,7 +449,7 @@ public sealed class OpenIddictAuthorizationTests(ProjectWebApplicationFactory fa
             "/connect/authorize" +
             $"?client_id={Uri.EscapeDataString(clientId)}" +
             $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}" +
-            "&response_type=code&scope=openid" +
+            $"&response_type=code&scope=openid%20{ApiScope}" +
             $"&code_challenge={challenge}&code_challenge_method=S256");
 
         Assert.Equal(HttpStatusCode.Found, authorize.StatusCode);

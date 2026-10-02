@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -254,7 +255,7 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
 
         var rejected = await WriteAsync(
             admin.Client, SettingConstant.Registration.EnableEmailVerification, "true");
-        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
 
         // 关闭仍然允许：没有密钥的部署本来就不需要它，不能连关都关不掉
         var accepted = await WriteAsync(
@@ -282,12 +283,12 @@ public sealed class SettingsContractTests(ProjectWebApplicationFactory factory)
         }
     }
 
-    /// <summary>租户管理员登录：登录请求与后续请求都携带 X-Tenant-Id。</summary>
+    /// <summary>租户管理员登录：登录请求与后续请求都携带租户提示头。</summary>
     private async Task<HttpClient> LoginTenantAdminAsync(Guid tenantId)
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(factory);
         _disposables.Add(client);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
 
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/session-login",

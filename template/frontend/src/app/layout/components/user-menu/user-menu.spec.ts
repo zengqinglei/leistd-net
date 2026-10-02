@@ -8,9 +8,6 @@ import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthService } from '../../../core/services/auth-service';
 import { AuthorizationService } from '../../../core/services/authorization-service';
-//#if (IncludeLocalization)
-import { LanguageService } from '../../../core/services/language-service';
-//#endif
 import { TenantContextService } from '../../../core/services/tenant-context-service';
 import { LayoutService } from '../../services/layout-service';
 
@@ -37,7 +34,7 @@ const LOGOUT = 'Sign out';
  *    cookie claim 定案，换租户只能重新登录。所以用例按**完整序列**断言而不是逐项存在，
  *    多出一项就会红。
  */
-describe('UserMenu 菜单构成', () => {
+describe('UserMenu items', () => {
   /**
    * `platform`（此刻在哪个区）与 `canAccessPlatform`（有没有权限进管理侧）是两个独立输入。
    *
@@ -66,9 +63,6 @@ describe('UserMenu 菜单构成', () => {
         { provide: TenantContextService, useValue: { current: signal(null) } },
         //#if (IncludeLocalization)
         ...provideTranslocoTesting(),
-        // 真实 LanguageService 会读设备语言并回写 document/transloco；这里只需要"活动语言"
-        // 这一个可依赖的信号。
-        { provide: LanguageService, useValue: { activeLang: signal('en') } },
         //#endif
       ],
     });
@@ -85,18 +79,18 @@ describe('UserMenu 菜单构成', () => {
 
   const personalItems = [PERSONAL_SETTINGS];
 
-  it('普通用户：个人一簇 + 退出，没有别的入口', () => {
+  it('shows only the personal group and sign-out to a regular user', () => {
     expect(labelsOf(build({ platform: false }))).toEqual([...personalItems, LOGOUT]);
   });
 
-  it('平台侧多一个回工作空间的入口', () => {
+  it('adds an entry back to the workspace on the platform', () => {
     expect(labelsOf(build({ platform: true }))).toEqual([WORKSPACE, ...personalItems, LOGOUT]);
   });
 
-  it('管理员待在工作空间时多一个回管理平台的入口', () => {
+  it('adds an entry to the admin platform for an admin in the workspace', () => {
     const menu = build({ platform: false, canAccessPlatform: true });
     const router = TestBed.inject(Router);
-    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     expect(labelsOf(menu)).toEqual([PLATFORM, ...personalItems, LOGOUT]);
 
@@ -104,10 +98,10 @@ describe('UserMenu 菜单构成', () => {
     expect(navigate).toHaveBeenCalledWith(['/platform']);
   });
 
-  it('个人设置指向工作空间的个人设置页，在管理平台上也一样', () => {
+  it('points personal settings to the workspace settings page, even on the admin platform', () => {
     const menu = build({ platform: true });
     const router = TestBed.inject(Router);
-    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     menu.userMenuItems().find((item) => item.label === PERSONAL_SETTINGS)!.action!();
 

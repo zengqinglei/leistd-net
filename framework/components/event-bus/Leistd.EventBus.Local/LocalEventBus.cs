@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Leistd.EventBus.Events;
 using Leistd.EventBus.Local.Wrappers;
-using Leistd.EventBus.EventHandlers;
 using Leistd.EventBus.Abstractions;
 
 namespace Leistd.EventBus.Local;

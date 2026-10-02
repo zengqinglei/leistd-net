@@ -40,8 +40,7 @@ const LOG_LEVEL_CHOICES: readonly SettingChoice[] = [
  * 选完在下面显示对应说明：级别名本身（Verbose / Debug / …）说不出"选了它会多打多少日志"，
  * 而那恰恰是做这个选择时唯一想知道的事。级别名不翻译（见上），说明要翻译——它是给人读的句子。
  */
-//#if (IncludeLocalization)
-// 值是词条键（settings.logLevelHints.*），由设置页按当前语言翻译。
+// 值是词条键（settings.logLevelHints.*），由设置页的模板按当前语言取文案。
 // 先前直接写中文，英文界面下照样显示中文。
 export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   Verbose: 'settings.logLevelHints.Verbose',
@@ -51,17 +50,6 @@ export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   Error: 'settings.logLevelHints.Error',
   Fatal: 'settings.logLevelHints.Fatal',
 };
-//#else
-export const LOG_LEVEL_DESCRIPTIONS: Readonly<Record<string, string>> = {
-  Verbose:
-    'Logs everything, including every SQL statement and request detail. For short troubleshooting only; left on, it fills the disk quickly.',
-  Debug: 'Logs debugging details. Turn it on while investigating; not recommended day to day.',
-  Information: 'Logs the normal business flow. The default level.',
-  Warning: 'Logs only warnings and errors; the normal flow is not written.',
-  Error: 'Logs only errors. You may miss clues that are wrong without raising an error.',
-  Fatal: 'Logs only failures that stop the process. Almost the same as turning logging off.',
-};
-//#endif
 
 export const SETTING_CHOICES: Readonly<Record<string, readonly SettingChoice[]>> = {
   //#if (IncludeLocalization)

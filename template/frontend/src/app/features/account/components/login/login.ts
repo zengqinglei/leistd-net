@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { form, minLength, maxLength, required, FormField } from '@angular/forms/signals';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 // prettier-ignore
@@ -19,10 +19,14 @@ import {
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { lastValueFrom } from 'rxjs';
 
+import { isMockedUrl } from '../../../../../../_mock/core/providers';
 import { environment } from '../../../../../environments/environment';
 // prettier-ignore
 import {
   applicationErrorMessage,
+  //#if (ExternalLogin)
+  ApplicationHttpError,
+  //#endif
 } from '../../../../core/errors/application-http-error';
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
@@ -30,6 +34,9 @@ import { SessionContextService } from '../../../../core/services/session-context
 import { TenantContextService } from '../../../../core/services/tenant-context-service';
 import { PASSWORD_MAX_LENGTH } from '../../../../core/validation/password-rule';
 import { HostTenantDecision } from '../../../../shared/dtos/tenant.dto';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { TenantService } from '../../../platform/services/tenant-service';
 import { AccountService } from '../../services/account-service';
 import { AuthShell } from '../auth-shell/auth-shell';
@@ -54,7 +61,7 @@ const githubIcon =
     HlmInputGroupButton,
     ...HlmFieldImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     AuthShell,
     TwoFactorChallenge,
@@ -81,6 +88,8 @@ export class Login {
   private router = inject(Router);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
   private readonly tenantService = inject(TenantService);
   protected readonly tenantContext = inject(TenantContextService);
@@ -91,12 +100,17 @@ export class Login {
 
   // 密码可见性
   protected readonly showPassword = signal(false);
+  //#if (ExternalLogin)
 
-  // Mock状态：useMock 支持布尔与对象两种形态（与 MockInterceptor 的解析一致）。
-  public readonly isMockEnabled = signal(
-    environment.useMock === true ||
-      (typeof environment.useMock === 'object' && environment.useMock.enable === true),
-  );
+  /** 部署已配置的外部登录提供商；null 表示还在加载，此时不显示任何入口。 */
+  protected readonly externalProviders = signal<readonly string[] | null>(null);
+  protected readonly externalProvidersFailed = signal(false);
+  /** 5xx 失败时带上本地化的追踪 ID，供支持人员关联服务端日志。 */
+  protected readonly externalProvidersTrace = signal<string | null>(null);
+  //#endif
+
+  // 登录接口由 Mock 应答时才提示演示账号：只 Mock 了别的模块时，演示账号登不进真实后端
+  public readonly isMockEnabled = signal(isMockedUrl(environment.useMock, AuthService.loginUrl));
 
   // 登录表单模型（Signal Forms）
   private readonly model = signal({
@@ -104,50 +118,40 @@ export class Login {
     password: '',
   });
 
-  //#if (IncludeLocalization)
   readonly loginForm = form(this.model, (path) => {
-    required(path.usernameOrEmail, {
-      message: this.transloco.translate('common.validation.required'),
-    });
-    minLength(path.usernameOrEmail, 3, {
-      message: this.transloco.translate('common.validation.minLength', { min: 3 }),
-    });
-    maxLength(path.usernameOrEmail, 256, { message: '' });
-    required(path.password, { message: this.transloco.translate('common.validation.required') });
-    minLength(path.password, 6, {
-      message: this.transloco.translate('common.validation.minLength', { min: 6 }),
-    });
+    required(path.usernameOrEmail);
+    minLength(path.usernameOrEmail, 3);
+    maxLength(path.usernameOrEmail, 256);
+    required(path.password);
     // 登录只设防滥用上限，不校验口令策略：策略生效前设置的旧口令也必须能登录。
-    maxLength(path.password, PASSWORD_MAX_LENGTH, { message: '' });
+    maxLength(path.password, PASSWORD_MAX_LENGTH);
   });
-  //#else
-  readonly loginForm = form(this.model, (path) => {
-    required(path.usernameOrEmail, { message: 'This field is required.' });
-    minLength(path.usernameOrEmail, 3, { message: 'Must be at least 3 characters.' });
-    maxLength(path.usernameOrEmail, 256, { message: '' });
-    required(path.password, { message: 'This field is required.' });
-    maxLength(path.password, PASSWORD_MAX_LENGTH, { message: '' });
-  });
-  //#endif
 
   /**
    * 第二步凭据：密码已通过、尚待验证码。有值时登录页换成验证码那一步。
    *
    * 外部登录回调遇到已启用两步验证的账号时，经导航状态把凭据带过来（不放进地址栏）。
    */
+  private readonly callbackReturnUrl = (
+    this.router.currentNavigation()?.extras.state as { returnUrl?: string } | undefined
+  )?.returnUrl;
+
   protected readonly twoFactorToken = signal<string | null>(
     (this.router.currentNavigation()?.extras.state as { twoFactorToken?: string } | undefined)
       ?.twoFactorToken ?? null,
   );
 
   constructor() {
-    // 进入登录页时清理上一个主体的全部痕迹：认证数据、权限、设置。
-    // 只清认证数据不够——已登录用户在 SPA 内导航到这里不会重跑应用初始化器，
-    // 旧权限和设置会留在内存里，新用户登录后若权限加载失败就会看到上一个人的偏好。
-    this.sessionContext.clear();
+    // 普通登录清理旧主体；重新认证保留当前上下文并始终显示表单，凭据成功后再替换。
+    if (this.route.snapshot.queryParamMap.get('reauthenticate') !== 'true') {
+      this.sessionContext.clear();
+    }
 
     // 子域名部署下按主机名把租户定住，用户完全不必填；未命中则保持原状（上次记住的或空白）。
     void this.resolveTenantFromHost();
+    //#if (ExternalLogin)
+    this.loadExternalProviders();
+    //#endif
   }
 
   /**
@@ -197,7 +201,9 @@ export class Login {
   protected async onTwoFactorCompleted(): Promise<void> {
     this._isLoading.set(true);
     try {
-      await this.finishLogin(this.route.snapshot.queryParamMap.get('returnUrl'));
+      await this.finishLogin(
+        this.route.snapshot.queryParamMap.get('returnUrl') ?? this.callbackReturnUrl ?? null,
+      );
     } catch (error) {
       //#if (IncludeLocalization)
       toast.error(this.transloco.translate('account.login.loginFailed'), {
@@ -213,6 +219,8 @@ export class Login {
 
   /** 会话已下发之后的共同收尾：取当前用户、建立会话上下文、提示并跳转。 */
   private async finishLogin(returnUrl: string | null): Promise<void> {
+    // 此时凭据（含所需 MFA）已经通过，才能清理旧主体；加载失败也不能沿用旧权限与设置。
+    this.sessionContext.clear();
     await lastValueFrom(this.authService.loadUser());
 
     // 受限会话（组织要求两步验证而本人尚未启用）：先去设置，别的页面都进不去
@@ -221,7 +229,7 @@ export class Login {
       return;
     }
 
-    // 会话上下文必须在任何跳转之前建立完成。进登录页时它已被清空，此时直接跳 returnUrl：
+    // 会话上下文必须在任何跳转之前建立完成。旧主体已被清空，此时直接跳 returnUrl：
     // permissionGuard 会在空权限下判定并把人踢到 403——从受保护页面的深链登录，
     // 本该落到那个页面，却落在拒绝页。设置也在这里就位，否则保存过的显示偏好
     // 要到下一次硬刷新才生效（SPA 内跳转不会重跑应用初始化器）。
@@ -239,6 +247,13 @@ export class Login {
     //#endif
 
     if (this.isSafeLocalReturnUrl(returnUrl)) {
+      //#if (OpenIddictServer)
+      // 授权端点把未登录的授权请求送来这里；登录后整页回到服务端的授权端点继续签发，它不是前端路由
+      if (returnUrl.startsWith('/connect/')) {
+        window.location.href = returnUrl;
+        return;
+      }
+      //#endif
       await this.router.navigateByUrl(returnUrl);
       return;
     }
@@ -256,12 +271,14 @@ export class Login {
       !!returnUrl &&
       returnUrl.startsWith('/') &&
       !returnUrl.startsWith('//') &&
-      !returnUrl.includes('://')
+      !returnUrl.includes('://') &&
+      !returnUrl.includes('\\')
     );
   }
 
-  // 租户选择：确认后写入本地上下文，登录请求由拦截器附 X-Tenant-Id；不选即宿主登录。
+  // 租户选择：确认后写入本地上下文，登录请求由拦截器附租户提示头；不选即宿主登录。
   readonly tenantName = signal('');
+  /** 租户区的错误说明，存词条键、由模板按当前语言取：存成文字的话切换语言时它不会跟着变。 */
   readonly tenantError = signal<string | null>(null);
 
   /**
@@ -329,7 +346,7 @@ export class Login {
             this.tenantContext.set(result.tenant.name);
           } else {
             this.tenantContext.clear();
-            this.tenantError.set(this.tenantUnavailableMessage());
+            this.tenantError.set('account.login.tenantUnavailable');
           }
           break;
 
@@ -349,7 +366,7 @@ export class Login {
       // 能走到这里的是"域名指向的租户解析不了"（中间件 404）或后端不可达，两者都不能
       // 推断成"域名不表态"，所以不开放手选、也不放行登录，只给出原因和重试。
       this.hostProbe.set('failed');
-      this.tenantError.set(this.tenantProbeFailedMessage());
+      this.tenantError.set('account.login.tenantProbeFailed');
     }
   }
 
@@ -393,19 +410,33 @@ export class Login {
     this.tenantContext.clear();
     this.tenantError.set(null);
   }
-
-  //#if (IncludeLocalization)
-  private tenantUnavailableMessage = () =>
-    this.transloco.translate('account.login.tenantUnavailable');
-  private tenantProbeFailedMessage = () =>
-    this.transloco.translate('account.login.tenantProbeFailed');
-  //#else
-  private tenantUnavailableMessage = () =>
-    'The tenant this address points to is unavailable. Contact your administrator.';
-  private tenantProbeFailedMessage = () =>
-    'Could not determine the tenant for this address. Check your connection and try again.';
-  //#endif
   //#if (ExternalLogin)
+
+  /** 读取已配置的提供商。失败单独提示并可重试，不当作"未配置"；本地登录不受影响。 */
+  protected loadExternalProviders(): void {
+    this.externalProvidersFailed.set(false);
+    this.externalProvidersTrace.set(null);
+    this.accountService.getExternalLoginProviders().subscribe({
+      next: (result) => this.externalProviders.set(result.providers),
+      error: (error: unknown) => {
+        this.externalProvidersTrace.set(
+          error instanceof ApplicationHttpError && error.status >= 500 && error.traceId
+            ? `${error.traceIdLabel}: ${error.traceId}`
+            : null,
+        );
+        this.externalProvidersFailed.set(true);
+      },
+    });
+  }
+
+  protected hasExternalProvider(provider: string): boolean {
+    return this.externalProviders()?.includes(provider) ?? false;
+  }
+
+  /** 页面只内置 GitHub、Google 入口；目录里只有其他提供商时不显示空的分隔区。 */
+  protected hasRenderableExternalProvider(): boolean {
+    return this.hasExternalProvider('github') || this.hasExternalProvider('google');
+  }
 
   loginWithGitHub() {
     this.loginWithExternalProvider('github', 'GitHub');
@@ -418,7 +449,7 @@ export class Login {
   /**
    * 通用第三方登录
    */
-  private async loginWithExternalProvider(provider: 'github' | 'google', label: string) {
+  private loginWithExternalProvider(provider: 'github' | 'google', label: string) {
     // 与本地登录同一条约束：第三方回调最终也落在按主机名解析出的那个上下文里。
     if (this.authBlocked()) {
       return;
@@ -426,13 +457,10 @@ export class Login {
 
     this._isLoading.set(true);
     try {
-      const response = await lastValueFrom(this.accountService.getExternalLoginUrl(provider));
-
-      if (!response.loginUrl) {
-        throw new Error('No valid login URL was returned');
-      }
-
-      window.location.href = response.loginUrl;
+      window.location.href = this.accountService.getExternalLoginUrl(
+        provider,
+        this.route.snapshot.queryParamMap.get('returnUrl'),
+      );
     } catch (error) {
       console.error(`${label} login failed`, error);
       //#if (IncludeLocalization)
@@ -453,3 +481,38 @@ export class Login {
   }
   //#endif
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'account.login.title': 'Sign In',
+  'account.login.subtitle': 'Welcome back, please enter your account information',
+  'account.login.tenant': 'Tenant',
+  'account.login.tenantClear': 'Clear tenant',
+  'account.login.tenantFromDomain': 'Determined by the site address.',
+  'account.login.tenantPlaceholder': 'Tenant name, leave empty for host',
+  'account.login.tenantConfirm': 'Confirm',
+  'account.login.tenantResolving': 'Identifying tenant from the site address…',
+  'account.login.tenantProbeRetry': 'Retry',
+  'account.login.usernameOrEmail': 'Username or Email',
+  'account.login.usernameOrEmailPlaceholder': 'Please enter your username or email',
+  'account.login.password': 'Password',
+  'account.login.passwordPlaceholder': 'Please enter your password',
+  'common.hidePassword': 'Hide password',
+  'common.showPassword': 'Show password',
+  'account.login.noAccount': "Don't have an account?",
+  'account.login.registerNow': 'Sign up now',
+  'account.login.submit': 'Sign In',
+  'account.login.or': 'OR',
+  'account.login.testAccount': 'Test Account',
+  'account.login.adminRole': 'Administrator',
+  'account.login.tenantUnavailable':
+    'The tenant this address points to is unavailable. Contact your administrator.',
+  'account.login.tenantProbeFailed':
+    'Could not determine the tenant for this address. Check your connection and try again.',
+  //#if (ExternalLogin)
+  'account.login.externalProvidersLoadFailed': 'Third-party sign-in options could not be loaded.',
+  'common.retry': 'Retry',
+  //#endif
+};
+//#endif

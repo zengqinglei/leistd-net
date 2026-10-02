@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import {
   HttpContext,
   HttpErrorResponse,
@@ -9,18 +10,27 @@ import {
 import { Injector, provideZonelessChangeDetection, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { Observable, throwError } from 'rxjs';
 
 import { SILENT_AUTH } from './http-context-tokens';
 import { httpErrorInterceptor } from './http-error-interceptor';
-import { ApplicationHttpError } from '../errors/application-http-error';
+import { applicationErrorMessage, ApplicationHttpError } from '../errors/application-http-error';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../i18n/transloco.testing';
 //#endif
-import { entryRouteUrl } from '../routing/entry-route';
 import { AuthService } from '../services/auth-service';
 import { SessionContextService } from '../services/session-context-service';
 import { TenantContextService } from '../services/tenant-context-service';
+import { TENANT_INVALID_HEADER } from '../services/tenant-protocol';
+
+//#if (LocalIdentity)
+import type { Mock, MockedObject } from 'vitest';
+//#else
+import type { MockedObject } from 'vitest';
+//#endif
 
 /**
  * 直接以 runInInjectionContext 驱动拦截器：next 用 throwError 同步发射错误，
@@ -30,44 +40,65 @@ describe('httpErrorInterceptor', () => {
   let injector: Injector;
   let router: Router;
   //#if (LocalIdentity)
-  let navigate: jasmine.Spy;
+  let navigate: Mock;
   //#endif
-  let sessionContext: jasmine.SpyObj<SessionContextService>;
-  let authService: jasmine.SpyObj<AuthService>;
+  let sessionContext: Pick<MockedObject<SessionContextService>, 'clear'>;
+  //#if (LocalIdentity)
+  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated'>;
+  //#else
+  let authService: Pick<MockedObject<AuthService>, 'isAuthenticated' | 'startLogin'>;
+  //#endif
 
   beforeEach(() => {
     // 拦截器的契约就是「调统一清理入口」，真实实例只会连带拉起整条会话依赖链。
-    sessionContext = jasmine.createSpyObj<SessionContextService>('SessionContextService', [
-      'clear',
-    ]);
+    sessionContext = {
+      clear: vi.fn().mockName('SessionContextService.clear'),
+    };
     //#if (LocalIdentity)
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['isAuthenticated']);
+    authService = {
+      isAuthenticated: vi.fn().mockName('AuthService.isAuthenticated'),
+    };
     //#else
-    authService = jasmine.createSpyObj<AuthService>('AuthService', ['isAuthenticated', 'login']);
+    authService = {
+      isAuthenticated: vi.fn().mockName('AuthService.isAuthenticated'),
+      startLogin: vi.fn().mockName('AuthService.startLogin'),
+    };
     //#endif
-    authService.isAuthenticated.and.returnValue(true);
+    authService.isAuthenticated.mockReturnValue(true);
     // 清理是同步的，清完就没有主体了——并发 401 的收敛全靠这一点，替身必须照实模拟。
-    sessionContext.clear.and.callFake(() => authService.isAuthenticated.and.returnValue(false));
+    sessionContext.clear.mockImplementation(() =>
+      authService.isAuthenticated.mockReturnValue(false),
+    );
     TestBed.configureTestingModule({
       // prettier-ignore
       providers: [
-        provideZonelessChangeDetection(),
-        provideRouter([]),
-        { provide: SessionContextService, useValue: sessionContext },
-        { provide: AuthService, useValue: authService },
-        //#if (IncludeLocalization)
-        ...provideTranslocoTesting(),
-        //#endif
-      ],
+                provideZonelessChangeDetection(),
+                provideRouter([]),
+                { provide: SessionContextService, useValue: sessionContext },
+                { provide: AuthService, useValue: authService },
+                //#if (IncludeLocalization)
+                ...provideTranslocoTesting(),
+                //#endif
+            ],
     });
     injector = TestBed.inject(Injector);
     router = TestBed.inject(Router);
     //#if (LocalIdentity)
-    navigate = spyOn(router, 'navigate');
+    navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     //#endif
   });
 
-  function runInterceptor(error: unknown, options?: { context?: HttpContext }): unknown {
+  /** 设定地址栏但不导航：Router.url 保持 '/'，对应启动流跑在初始导航之前。 */
+  function openAt(url: string): void {
+    TestBed.inject(Location).replaceState(url);
+  }
+
+  function runInterceptor(
+    error: unknown,
+    options?: {
+      context?: HttpContext;
+    },
+  ): unknown {
     const req = new HttpRequest('GET', '/api/test', { context: options?.context });
     const next: HttpHandlerFn = () => throwError(() => error) as Observable<HttpEvent<unknown>>;
 
@@ -101,18 +132,36 @@ describe('httpErrorInterceptor', () => {
   }
 
   it('normalizes a network failure (status 0) to an ApplicationHttpError', () => {
+    //#if (IncludeLocalization)
+    TestBed.inject(TranslocoService).setTranslation(
+      { common: { networkError: '无法连接服务器' } },
+      'en',
+    );
+    //#endif
     const caught = runInterceptor(httpError(0, new ProgressEvent('error')));
     expect(caught).toBeInstanceOf(ApplicationHttpError);
     expect((caught as ApplicationHttpError).status).toBe(0);
-    // 展示的是本地化的"连不上服务器"，不是浏览器给开发者看的原始异常文本（空词条下回落成键名）。
+    // 展示的是本地化的"连不上服务器"，不是浏览器给开发者看的原始异常文本。
     //#if (IncludeLocalization)
-    expect((caught as ApplicationHttpError).message).toBe('common.networkError');
+    expect((caught as ApplicationHttpError).message).toBe('无法连接服务器');
     //#else
     expect((caught as ApplicationHttpError).message).toBe(
       'Unable to reach the server. Check your connection and try again.',
     );
     //#endif
   });
+  //#if (IncludeLocalization)
+
+  // 错误对象带的是现成文字，事后不会随词条更新：词条未到时（首帧前的启动请求）写进去的裸键会一直留着
+  it('falls back to built-in English, not bare keys, while translations have not arrived', () => {
+    const caught = runInterceptor(httpError(0, new ProgressEvent('error')));
+
+    expect((caught as ApplicationHttpError).message).toBe(
+      'Unable to reach the server. Check your connection and try again.',
+    );
+    expect((caught as ApplicationHttpError).traceIdLabel).toBe('Trace ID');
+  });
+  //#endif
 
   it('parses an RFC 9457 errors array (code + details)', () => {
     const caught = runInterceptor(
@@ -123,6 +172,34 @@ describe('httpErrorInterceptor', () => {
     expect(applicationError.code).toBe('name_required');
     expect(applicationError.message).toBe('Name is required.');
     expect(applicationError.details.length).toBe(1);
+  });
+
+  it('reads the business error code from problem details', () => {
+    const caught = runInterceptor(
+      httpError(409, {
+        code: 'Role:NameExists',
+        detail: 'Role name already exists.',
+        traceId: 'trace-1',
+      }),
+    );
+    const applicationError = caught as ApplicationHttpError;
+    expect(applicationError).toBeInstanceOf(ApplicationHttpError);
+    expect(applicationError.status).toBe(409);
+    expect(applicationError.code).toBe('Role:NameExists');
+    expect(applicationError.message).toBe('Role name already exists.');
+    expect(applicationError.traceId).toBe('trace-1');
+  });
+
+  it('uses the active localization label for a reportable trace ID', () => {
+    //#if (IncludeLocalization)
+    TestBed.inject(TranslocoService).setTranslation({ common: { traceId: '追踪号' } }, 'en');
+    //#endif
+    const caught = runInterceptor(httpError(503, { detail: 'Unavailable', traceId: 'trace-5' }));
+    //#if (IncludeLocalization)
+    expect(applicationErrorMessage(caught)).toBe('Unavailable (追踪号: trace-5)');
+    //#else
+    expect(applicationErrorMessage(caught)).toBe('Unavailable (Trace ID: trace-5)');
+    //#endif
   });
 
   it('lets a non-HTTP error pass through unchanged toward the GlobalErrorHandler', () => {
@@ -140,16 +217,18 @@ describe('httpErrorInterceptor', () => {
     //#if (LocalIdentity)
     expect(navigate).toHaveBeenCalledWith(['/auth/login'], { queryParams: { returnUrl } });
     //#else
-    expect(authService.login).toHaveBeenCalledWith(returnUrl);
+    expect(authService.startLogin).toHaveBeenCalledWith(returnUrl);
     //#endif
   }
 
   /** 恢复只能发生一次，且带着最初那个落地地址。 */
   function expectSingleReauthentication(returnUrl: string): void {
     //#if (LocalIdentity)
-    expect(navigate.calls.allArgs()).toEqual([[['/auth/login'], { queryParams: { returnUrl } }]]);
+    expect(vi.mocked(navigate).mock.calls).toEqual([
+      [['/auth/login'], { queryParams: { returnUrl } }],
+    ]);
     //#else
-    expect(authService.login.calls.allArgs()).toEqual([[returnUrl]]);
+    expect(vi.mocked(authService.startLogin).mock.calls).toEqual([[returnUrl]]);
     //#endif
   }
 
@@ -157,7 +236,7 @@ describe('httpErrorInterceptor', () => {
     //#if (LocalIdentity)
     expect(navigate).not.toHaveBeenCalled();
     //#else
-    expect(authService.login).not.toHaveBeenCalled();
+    expect(authService.startLogin).not.toHaveBeenCalled();
     //#endif
   }
 
@@ -171,71 +250,85 @@ describe('httpErrorInterceptor', () => {
     const caught = runInterceptor(httpError(401));
 
     expect(sessionContext.clear).toHaveBeenCalled();
-    expectReauthentication(entryRouteUrl());
+    expectReauthentication('/');
     expect(caught).toBeInstanceOf(ApplicationHttpError);
     expect((caught as ApplicationHttpError).status).toBe(401);
   });
 
+  //#if (LocalIdentity)
+  // 401 有两种含义，恰好共用一个状态码。再认证（改口令、停用两步验证、重发恢复码）连续失败
+  // 触发的临时锁定是"这次操作被拒"，服务端并不踢会话——把人清掉再送去登录页，
+  // 而登录页在锁定期内恰恰进不去，用户就卡死了。服务端那半由 ReauthenticationLockoutTests 守，
+  // 这一条守的是前端不要把仍然有效的会话扔掉。
+  it('keeps the session on a 401 that only means this attempt was refused', () => {
+    const caught = runInterceptor(
+      httpError(401, { code: 'Auth:UserTemporarilyLockedOut', detail: 'Too many attempts.' }),
+    );
+
+    expect(sessionContext.clear).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    // 错误照常抛给页面，由它就地显示后端给的原因
+    expect(caught).toBeInstanceOf(ApplicationHttpError);
+    expect((caught as ApplicationHttpError).message).toBe('Too many attempts.');
+  });
+
+  // 只豁免临时锁定一个码：管理员锁定没有截止时间，那种会话本就该结束（User.AllowsExistingSessions）。
+  it('still signs out on an administrator lockout', () => {
+    runInterceptor(httpError(401, { code: 'Auth:UserLockedOut', detail: 'Account locked.' }));
+
+    expect(sessionContext.clear).toHaveBeenCalled();
+    expectReauthentication('/');
+  });
+
+  //#endif
   // 直接打开深链时，启动流跑在初始导航之前——那时 Router.url 是 '/'，
   // 用它记落地地址会把用户重新登录后送去首页，而不是他点开的那一页。
   it('records the deep link that has not been navigated to yet', () => {
-    history.replaceState(null, '', '/platform/users?page=2');
+    openAt('/platform/users?page=2');
 
-    try {
-      runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
 
-      expect(router.url).toBe('/');
-      expectSingleReauthentication('/platform/users?page=2');
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    expect(router.url).toBe('/');
+    expectSingleReauthentication('/platform/users?page=2');
   });
 
   // 认证路由上不能再发起一次认证：OIDC 形态下那是死循环——回调页上再授权一次，
   // IdP 侧已有会话，立刻带着新 code 跳回来，而 401 的原因一点没变。
   // 只把落地地址丢掉是不够的，authorize() 本身就不能再发生。
   it('leaves the 401 entirely to the running auth flow while on an auth route', () => {
-    history.replaceState(null, '', '/auth/callback?code=abc');
+    openAt('/auth/callback?code=abc');
 
-    try {
-      const caught = runInterceptor(httpError(401));
+    const caught = runInterceptor(httpError(401));
 
-      // 会话清理都不能做：回调这一刻主体刚建立，清掉之后启动流照常判成功、
-      // 回调页照常跳进受保护路由，Guard 发现没有主体又发起一次授权——
-      // callback → 清主体 → workspace → authorize → callback，循环只是多绕一跳。
-      expect(sessionContext.clear).not.toHaveBeenCalled();
-      expectNoReauthentication();
-      // 归一化照做：调用方（这里是启动流）要靠它判断状态码。
-      expect(caught).toBeInstanceOf(ApplicationHttpError);
-      expect((caught as ApplicationHttpError).status).toBe(401);
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    // 会话清理都不能做：回调这一刻主体刚建立，清掉之后启动流照常判成功、
+    // 回调页照常跳进受保护路由，Guard 发现没有主体又发起一次授权——
+    // callback → 清主体 → workspace → authorize → callback，循环只是多绕一跳。
+    expect(sessionContext.clear).not.toHaveBeenCalled();
+    expectNoReauthentication();
+    // 归一化照做：调用方（这里是启动流）要靠它判断状态码。
+    expect(caught).toBeInstanceOf(ApplicationHttpError);
+    expect((caught as ApplicationHttpError).status).toBe(401);
   });
 
   // 令牌到期时一屏的并发请求会一起 401，这是常规场景。第一条恢复之后，
   // 后到的那些不能把最初的落地地址覆盖成认证页自己或默认页。
   it('recovers only once when a batch of 401s arrives', () => {
-    history.replaceState(null, '', '/platform/users');
+    openAt('/platform/users');
 
-    try {
-      runInterceptor(httpError(401));
-      runInterceptor(httpError(401));
-      runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
+    runInterceptor(httpError(401));
 
-      // 恢复跑两遍不是"多导航一次"这么轻：OIDC 客户端的 authorize() 是异步的，
-      // 每条流程都会重新生成并覆盖 PKCE codeVerifier，两条交叉后回调换 token 会失败。
-      // 收敛靠的是第一条已经同步清掉主体，后面的到闸门处就没有主体可清了。
-      expectSingleReauthentication('/platform/users');
-      expect(sessionContext.clear).toHaveBeenCalledTimes(1);
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    // 恢复跑两遍不是"多导航一次"这么轻：OIDC 客户端的 authorize() 是异步的，
+    // 每条流程都会重新生成并覆盖 PKCE codeVerifier，两条交叉后回调换 token 会失败。
+    // 收敛靠的是第一条已经同步清掉主体，后面的到闸门处就没有主体可清了。
+    expectSingleReauthentication('/platform/users');
+    expect(sessionContext.clear).toHaveBeenCalledTimes(1);
   });
 
   // 本来就没有主体时，这里没有东西要清，重新认证也该由 Guard 或启动流按自己的时机发起。
   it('does nothing but normalize when there is no subject to drop', () => {
-    authService.isAuthenticated.and.returnValue(false);
+    authService.isAuthenticated.mockReturnValue(false);
 
     const caught = runInterceptor(httpError(401));
 
@@ -247,29 +340,25 @@ describe('httpErrorInterceptor', () => {
   // 「租户没了」与「要不要重新认证」是两件正交的事。这条把它们钉开：认证路由上、
   // 静默请求、外加这个头——租户必须清，而会话与认证一动都不能动。
   // 登录页的启动探测正是最容易撞上它的地方（旧 Cookie 带着已停用租户的 tenant_id），
-  // 不清的话后续登录请求继续携带失效的 X-Tenant-Id，用户一直登不进来。
+  // 不清的话后续登录请求继续携带失效的租户提示头，用户一直登不进来。
   it('clears an invalid tenant even on an auth route, without touching the session', () => {
-    history.replaceState(null, '', '/auth/login');
+    openAt('/auth/login');
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
     const context = new HttpContext().set(SILENT_AUTH, true);
 
-    try {
-      runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }), { context });
+    runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });
 
-      expect(clearTenantSpy).toHaveBeenCalled();
-      expect(sessionContext.clear).not.toHaveBeenCalled();
-      expectNoReauthentication();
-    } finally {
-      history.replaceState(null, '', '/context.html');
-    }
+    expect(clearTenantSpy).toHaveBeenCalled();
+    expect(sessionContext.clear).not.toHaveBeenCalled();
+    expectNoReauthentication();
   });
 
   it('clears the selected tenant on a 401 marked X-Tenant-Invalid', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
 
-    runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }));
+    runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }));
 
     // 不清的话，重新认证后会带着这个已失效的租户再次被拒——用户换个地方卡住
     expect(clearTenantSpy).toHaveBeenCalled();
@@ -277,7 +366,7 @@ describe('httpErrorInterceptor', () => {
 
   it('does not treat an ordinary 401 as an invalid tenant', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
 
     runInterceptor(httpError(401));
 
@@ -290,10 +379,10 @@ describe('httpErrorInterceptor', () => {
 
   it('clears the tenant on a silent 401 marked X-Tenant-Invalid, without touching auth or routing', () => {
     const tenantContext = TestBed.inject(TenantContextService);
-    const clearTenantSpy = spyOn(tenantContext, 'clear');
+    const clearTenantSpy = vi.spyOn(tenantContext, 'clear').mockReturnValue(undefined);
     const context = new HttpContext().set(SILENT_AUTH, true);
 
-    runInterceptor(httpError(401, null, { 'X-Tenant-Invalid': '1' }), { context });
+    runInterceptor(httpError(401, null, { [TENANT_INVALID_HEADER]: '1' }), { context });
 
     // 静默只表达"别为后台请求打断用户"，与"这个租户已经没了"是两件事：
     // /auth/me 与 /permissions/current 同样会撞上失效租户，不清就留到重新认证后再次被拒

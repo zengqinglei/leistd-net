@@ -3,11 +3,9 @@ import { InjectionToken, inject } from '@angular/core';
 import { from, of, throwError } from 'rxjs';
 import { catchError, delay, mergeMap, tap } from 'rxjs/operators';
 
+import { getUrlPath, isMockedUrl } from './matching';
 import { MockConfig, MockException, MockRequest, MockResponse } from './models';
 import { environment } from '../../src/environments/environment';
-//#if (!LocalIdentity)
-import { syncMockSubjectFromBearer } from '../utils/current-user';
-//#endif
 
 type MockApiHandler = (request: MockRequest) => unknown;
 type MockApiRegistry = Record<string, MockApiHandler | unknown>;
@@ -21,13 +19,15 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
   const matchingRule = findMatchingRule(method, url, apis);
 
   if (!matchingRule) {
-    if (shouldMock(url, mockConfig) && getUrlPath(url).startsWith('/api/')) {
+    if (isMockedUrl(environment.useMock, url) && getUrlPath(url).startsWith('/api/')) {
       return throwError(
         () =>
           new HttpErrorResponse({
             error: {
+              title: 'Mock Route Not Found',
+              status: 501,
               code: 'MOCK_ROUTE_NOT_FOUND',
-              message: `Mock API is not defined: ${method.toUpperCase()} ${getUrlPath(url)}`,
+              detail: `Mock API is not defined: ${method.toUpperCase()} ${getUrlPath(url)}`,
             },
             headers: headers.set('Content-Type', 'application/json'),
             status: 501,
@@ -40,7 +40,7 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  if (!shouldMock(url, mockConfig)) {
+  if (!isMockedUrl(environment.useMock, url)) {
     return next(req);
   }
 
@@ -53,12 +53,6 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
     params: matchingRule.urlParams,
   };
 
-  //#if (!LocalIdentity)
-  // 没有本地身份的形态没有任何 Mock 请求会建立会话（登录走远端 OIDC，不经 HttpClient）。
-  // 在分发前从浏览器已持有的令牌把主体补进会话，各 Mock 照原样按会话取主体即可。
-  syncMockSubjectFromBearer(mockRequest);
-
-  //#endif
   if (mockConfig.log) {
     logMock('Mock intercepted', method, url, mockRequest);
   }
@@ -87,8 +81,8 @@ export const mockInterceptor: HttpInterceptorFn = (req, next) => {
         return throwError(
           () =>
             new HttpErrorResponse({
-              error: error.error,
-              headers: req.headers.set('Content-Type', 'application/json'),
+              error: toProblemDetails(error, getUrlPath(url)),
+              headers: req.headers.set('Content-Type', 'application/problem+json'),
               status: error.status,
               statusText: 'Mock Error',
               url: req.url,
@@ -137,29 +131,45 @@ function findMatchingRule(
   return null;
 }
 
-function getUrlPath(url: string): string {
-  const urlWithoutQuery = url.split('?')[0];
+// 后端失败统一是 RFC 9457 Problem Details（见 docs/standards/api.md §2.4）。Mock 里按 { code, message, errors }
+// 书写，这里换成同一形状，前端走与真实后端相同的解析路径：message 进 detail，业务码进 code 扩展。
+const STATUS_TITLES: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Not Found',
+  409: 'Conflict',
+  422: 'Unprocessable Entity',
+  429: 'Too Many Requests',
+  500: 'Internal Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+  504: 'Gateway Timeout',
+};
 
-  try {
-    return new URL(urlWithoutQuery).pathname;
-  } catch {
-    return urlWithoutQuery;
-  }
-}
+function toProblemDetails(exception: MockException, instance: string): Record<string, unknown> {
+  const payload: Record<string, unknown> =
+    typeof exception.error === 'object' && exception.error !== null
+      ? (exception.error as Record<string, unknown>)
+      : { message: exception.error };
+  const { message, code, errors, ...rest } = payload;
+  const hasErrors = Array.isArray(errors) && errors.length > 0;
 
-function shouldMock(url: string, mockConfig: Partial<MockConfig>): boolean {
-  const urlPath = getUrlPath(url);
-  const includeMatched = mockConfig.include
-    ? matchesPatterns(urlPath, mockConfig.include)
-    : Boolean(mockConfig.enable);
-  const excludeMatched = mockConfig.exclude ? matchesPatterns(urlPath, mockConfig.exclude) : false;
-
-  return includeMatched && !excludeMatched;
-}
-
-function matchesPatterns(urlPath: string, patterns: string | string[]): boolean {
-  const normalizedPatterns = Array.isArray(patterns) ? patterns : [patterns];
-  return normalizedPatterns.some((pattern) => new RegExp(pattern).test(urlPath));
+  return {
+    type: hasErrors
+      ? 'urn:leistd:problem:validation-error'
+      : code
+        ? 'urn:leistd:problem:business-error'
+        : undefined,
+    title: STATUS_TITLES[exception.status] ?? 'Error',
+    status: exception.status,
+    detail: typeof message === 'string' ? message : undefined,
+    instance,
+    ...(code ? { code } : {}),
+    ...(hasErrors ? { errors } : {}),
+    ...rest,
+    traceId: `mock-${Date.now().toString(16)}`,
+  };
 }
 
 function getMockConfig(): Partial<MockConfig> {

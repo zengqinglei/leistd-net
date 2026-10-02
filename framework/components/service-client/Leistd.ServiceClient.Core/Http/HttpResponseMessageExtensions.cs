@@ -157,10 +157,20 @@ public static class HttpResponseMessageExtensions
         JsonSerializerOptions? jsonOptions,
         CancellationToken cancellationToken)
     {
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        string body;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            throw new ServiceClientException($"{Describe(response)} response body could not be read: {ex.Message}", ex,
+                ServiceClientFailureClassifier.Classify(ex));
+        }
         if (string.IsNullOrWhiteSpace(body))
         {
-            throw new ServiceClientException($"{Describe(response)} response body is empty");
+            throw new ServiceClientException($"{Describe(response)} response body is empty",
+                failureKind: ServiceClientFailureKind.InvalidResponse);
         }
 
         T? value;
@@ -170,10 +180,12 @@ public static class HttpResponseMessageExtensions
         }
         catch (JsonException ex)
         {
-            throw new ServiceClientException($"{Describe(response)} response deserialization failed: {ex.Message}", ex);
+            throw new ServiceClientException($"{Describe(response)} response deserialization failed: {ex.Message}", ex,
+                ServiceClientFailureKind.InvalidResponse);
         }
 
-        return value ?? throw new ServiceClientException($"{Describe(response)} response body is empty");
+        return value ?? throw new ServiceClientException($"{Describe(response)} response body is empty",
+            failureKind: ServiceClientFailureKind.InvalidResponse);
     }
 
     private static void EnsureEnvelopeSuccess<T>(HttpResponseMessage response, ResultEnvelope<T> envelope)
@@ -199,7 +211,7 @@ public static class HttpResponseMessageExtensions
 
         public T? Data { get; init; }
 
-        // 信封的失败形态（ErrorResult）带字段级明细，形状与 Problem Details 的 errors 一致。
+        // 信封的失败形态带字段级明细，形状与 Problem Details 的 errors 一致。
         public List<ErrorItem>? Errors { get; init; }
     }
 
@@ -212,21 +224,19 @@ public static class HttpResponseMessageExtensions
     private static string Truncate(string value) =>
         value.Length <= MaxBodySnippetLength ? value : value[..MaxBodySnippetLength];
 
-    // 错误码两种形态都要认：Problem Details 里是字符串词条键（Error:NotFound），
-    // 统一响应信封里是数字。丢掉任一种，调用方就分支不了。
+    // Problem Details 把业务码放在字符串 code，数字信封放在 errorCode。
+    // 信封里的数字 code 是 HTTP 状态，不是业务码，不参与还原。
     private static string? TryGetErrorCode(JsonElement root)
     {
-        if (!root.TryGetProperty("code", out var code))
+        if (root.TryGetProperty("errorCode", out var envelopeCode) &&
+            envelopeCode.ValueKind == JsonValueKind.String)
         {
-            return null;
+            return envelopeCode.GetString();
         }
 
-        return code.ValueKind switch
-        {
-            JsonValueKind.String => code.GetString(),
-            JsonValueKind.Number => code.GetRawText(),
-            _ => null
-        };
+        return root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
+            ? code.GetString()
+            : null;
     }
 
     private static string? TryGetString(JsonElement element, string propertyName) =>
@@ -234,15 +244,28 @@ public static class HttpResponseMessageExtensions
             ? property.GetString()
             : null;
 
+    // 两种形状都认：Leistd 的数组 [{field, detail, code}]（逐字段带错误码），
+    // 与官方 HttpValidationProblemDetails 的字典 {字段: [消息…]}（AddValidation、MVC 默认校验产出）。
+    // 字典的每条消息各成一项，保留字段名与全部消息，不在解析时取舍。
     private static List<ErrorItem>? TryGetErrors(JsonElement root)
     {
-        if (!root.TryGetProperty("errors", out var errorsElement) || errorsElement.ValueKind != JsonValueKind.Array)
+        if (!root.TryGetProperty("errors", out var errorsElement))
         {
             return null;
         }
 
+        return errorsElement.ValueKind switch
+        {
+            JsonValueKind.Array => ReadArray(errorsElement),
+            JsonValueKind.Object => ReadDictionary(errorsElement),
+            _ => null
+        };
+    }
+
+    private static List<ErrorItem> ReadArray(JsonElement errors)
+    {
         var items = new List<ErrorItem>();
-        foreach (var item in errorsElement.EnumerateArray())
+        foreach (var item in errors.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object)
             {
@@ -255,6 +278,30 @@ public static class HttpResponseMessageExtensions
                 TryGetString(item, "detail") ?? string.Empty,
                 TryGetString(item, "field") ?? string.Empty,
                 TryGetString(item, "code")));
+        }
+
+        return items;
+    }
+
+    private static List<ErrorItem> ReadDictionary(JsonElement errors)
+    {
+        var items = new List<ErrorItem>();
+        foreach (var field in errors.EnumerateObject())
+        {
+            if (field.Value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var message in field.Value.EnumerateArray())
+                {
+                    if (message.ValueKind == JsonValueKind.String)
+                    {
+                        items.Add(new ErrorItem(message.GetString() ?? string.Empty, field.Name, null));
+                    }
+                }
+            }
+            else if (field.Value.ValueKind == JsonValueKind.String)
+            {
+                items.Add(new ErrorItem(field.Value.GetString() ?? string.Empty, field.Name, null));
+            }
         }
 
         return items;

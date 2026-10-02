@@ -29,7 +29,6 @@ public sealed class ExternalAuthOptionsValidatorTests
 
         Assert.True(result.Failed);
         Assert.Contains(result.Failures, failure => failure.StartsWith("ExternalAuth:Github:ClientSecret", StringComparison.Ordinal));
-        Assert.Contains(result.Failures, failure => failure.StartsWith("ExternalAuth:Github:RedirectUri", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -38,7 +37,6 @@ public sealed class ExternalAuthOptionsValidatorTests
         var options = new ExternalAuthOptions();
         options.Github.ClientId = "client-id";
         options.Github.ClientSecret = "client-secret";
-        options.Github.RedirectUri = "https://client.example.test/auth/callback";
 
         var result = _validator.Validate(null, options);
 
@@ -46,18 +44,5 @@ public sealed class ExternalAuthOptionsValidatorTests
         Assert.True(options.Github.IsAvailable);
     }
 
-    [Fact]
-    public void Redirect_uri_must_be_an_absolute_http_uri()
-    {
-        var options = new ExternalAuthOptions();
-        options.Github.ClientId = "client-id";
-        options.Github.ClientSecret = "client-secret";
-        options.Github.RedirectUri = "/auth/callback";
-
-        var result = _validator.Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, failure => failure.StartsWith("ExternalAuth:Github:RedirectUri", StringComparison.Ordinal));
-    }
 }
 #endif

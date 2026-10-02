@@ -1,10 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 
 namespace Leistd.Authorization.AspNetCore.Permissions;
 
@@ -20,10 +15,12 @@ public class PermissionAuthorizationHandler(IPermissionChecker permissionChecker
         AuthorizationHandlerContext context,
         PermissionRequirement requirement)
     {
+        // 评估被授权的主体本身（context.User），而不是环境里的当前用户：
+        // 经 IAuthorizationService 为别的主体判权时，两者并不相同。
         // 单权限走单权限重载；多权限时任一满足即通过。
         var isGranted = requirement.PermissionNames.Count == 1
-            ? await permissionChecker.IsGrantedAsync(requirement.PermissionNames[0])
-            : (await permissionChecker.IsGrantedAsync([.. requirement.PermissionNames])).AnyGranted;
+            ? await permissionChecker.IsGrantedAsync(context.User, requirement.PermissionNames[0])
+            : (await permissionChecker.IsGrantedAsync(context.User, [.. requirement.PermissionNames])).AnyGranted;
 
         if (isGranted)
         {

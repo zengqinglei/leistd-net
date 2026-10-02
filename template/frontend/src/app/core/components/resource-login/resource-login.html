@@ -1,0 +1,12 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <main class="mx-auto max-w-sm p-8">
+    <h1>{{ t('common.signIn') }}</h1>
+    <button class="mt-4 rounded border px-4 py-2" (click)="signIn()">
+      {{ t('common.continueToSignIn') }}
+    </button>
+  </main>
+</ng-container>

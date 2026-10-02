@@ -1,8 +1,5 @@
 using Leistd.Data.Paging;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Stores;
@@ -11,6 +8,7 @@ using Leistd.TestBase.Doubles;
 using Leistd.UnitOfWork;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -38,7 +36,7 @@ public sealed class OperationRecordStoreTests : IDisposable
         _db.Database.EnsureCreated();
         // 本组只关心表结构与查询：上下文固定成同一个，失败记录的独立工作单元因此落回同一张表。
         // 事务边界与跨层写入由 FailedRecordIsolationTests 在真实路由下验证。
-        _services = new ServiceCollection().AddLogging().AddUnitOfWork().BuildServiceProvider();
+        _services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(new ConfigurationBuilder().Build()).AddUnitOfWork().BuildServiceProvider();
         _store = new EfCoreOperationRecordStore<TestDbContext>(
             new FixedDbContextProvider<TestDbContext>(_db),
             _services.GetRequiredService<IUnitOfWorkManager>(),
@@ -84,7 +82,8 @@ public sealed class OperationRecordStoreTests : IDisposable
         // 默认沿用 OperationRecordInfo 自身的安全默认（Host）：不关心可见性的用例
         // 因此都落在最严格的一档，查询时显式传 Unrestricted 照常查得到。
         OperationVisibility visibility = OperationVisibility.Host,
-        string? actorId = null) => new()
+        string? actorId = null,
+        Guid? actorTenantId = null) => new()
         {
             Id = id ?? Guid.CreateVersion7(),
             Action = action,
@@ -94,6 +93,7 @@ public sealed class OperationRecordStoreTests : IDisposable
             Visibility = visibility,
             CreationTime = creationTime ?? new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc),
             ActorId = actorId,
+            ActorTenantId = actorTenantId,
             ActorName = actorName
         };
 
@@ -299,18 +299,38 @@ public sealed class OperationRecordStoreTests : IDisposable
     [Fact]
     public async Task A_tenant_reader_sees_neither_host_records_nor_other_peoples_actor_records()
     {
+        var tenantId = Guid.CreateVersion7();
         await _store.InsertAsync(Info(action: "host.only", visibility: OperationVisibility.Host));
         await _store.InsertAsync(Info(action: "tenant.visible", visibility: OperationVisibility.Tenant));
         await _store.InsertAsync(
-            Info(action: "actor.mine", visibility: OperationVisibility.Actor, actorId: "me"));
+            Info(action: "actor.mine", visibility: OperationVisibility.Actor, actorId: "me", actorTenantId: tenantId));
         await _store.InsertAsync(
-            Info(action: "actor.someone-else", visibility: OperationVisibility.Actor, actorId: "other"));
+            Info(action: "actor.someone-else", visibility: OperationVisibility.Actor, actorId: "other", actorTenantId: tenantId));
+        // 宿主主体进入租户留下的记录：标识相同，所属租户不同，不是本人
+        await _store.InsertAsync(
+            Info(action: "actor.host-namesake", visibility: OperationVisibility.Actor, actorId: "me"));
 
         var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10,
-            scope: OperationRecordVisibilityScope.ForTenantReader("me"));
+            scope: OperationRecordVisibilityScope.ForTenantReader("me", tenantId));
 
         Assert.Equal(["actor.mine", "tenant.visible"], page.Items.Select(x => x.Action).Order());
+    }
+
+    /// <summary>宿主主体在租户里读自己留下的 <c>Actor</c> 层记录：所属租户同为宿主，仍是本人。</summary>
+    [Fact]
+    public async Task A_host_subject_inside_a_tenant_still_sees_its_own_actor_records()
+    {
+        await _store.InsertAsync(
+            Info(action: "actor.mine", visibility: OperationVisibility.Actor, actorId: "me"));
+        await _store.InsertAsync(
+            Info(action: "actor.tenant-namesake", visibility: OperationVisibility.Actor, actorId: "me", actorTenantId: Guid.CreateVersion7()));
+
+        var page = await QueryAsync(
+            keyword: null, startTime: null, endTime: null, skip: 0, take: 10,
+            scope: OperationRecordVisibilityScope.ForTenantReader("me", actorTenantId: null));
+
+        Assert.Equal("actor.mine", Assert.Single(page.Items).Action);
     }
 
     /// <summary>宿主读者看得到全部三层，含不属于自己、乃至没有操作人的 <c>Actor</c> 层记录。</summary>
@@ -357,7 +377,7 @@ public sealed class OperationRecordStoreTests : IDisposable
 
         var page = await QueryAsync(
             keyword: null, startTime: null, endTime: null, skip: 0, take: 10,
-            scope: OperationRecordVisibilityScope.ForTenantReader(actorId: null));
+            scope: OperationRecordVisibilityScope.ForTenantReader(actorId: null, actorTenantId: null));
 
         Assert.Equal("tenant.visible", Assert.Single(page.Items).Action);
     }

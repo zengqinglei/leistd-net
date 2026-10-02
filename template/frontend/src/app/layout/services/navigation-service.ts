@@ -1,16 +1,18 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { translateObjectSignal, translateSignal } from '@jsverse/transloco';
 //#endif
 
 import { LayoutService } from './layout-service';
-//#if (IncludeLocalization)
-import { translationReady } from '../../core/i18n/translation-ready';
-//#endif
 import { AuthorizationService } from '../../core/services/authorization-service';
 import { PERMISSIONS } from '../../shared/models/permission';
 
+//#if (IncludeLocalization)
+/** 本地化形态下菜单项的 label 是这个前缀下的词条键。 */
+const SIDEBAR_PREFIX = 'layout.sidebar.';
+
+//#endif
 export interface MenuItem {
   label: string;
   icon: string;
@@ -49,10 +51,13 @@ export class NavigationService {
   private readonly authorizationService = inject(AuthorizationService);
   private readonly router = inject(Router);
   //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
+  private readonly workspaceLabel = translateSignal('menu.workspace');
+  private readonly platformLabel = translateSignal('menu.platform');
+  /** 菜单文案都在 `layout.sidebar` 下：整段取成对象，词条到达与语言切换时菜单随之重算。 */
+  private readonly sidebarTexts = translateObjectSignal('layout.sidebar');
   //#endif
   //#if (IncludeLocalization)
-  // 存词条键，展示时按 translationReady 响应式翻译；资源就绪 / 语言切换时 menuGroups computed 重算，标签随之更新。
+  // 存词条键，展示时再翻译：menuGroups 读了活动语言，切换语言时重算，标签随之更新。
   private readonly platformMenuGroups: MenuGroup[] = [
     {
       label: 'layout.sidebar.groupWork',
@@ -144,19 +149,7 @@ export class NavigationService {
         },
       ],
     },
-    // 关于"我自己"的：个人资料、账户安全、偏好、通知。每个登录用户都有，所以放在工作空间；
-    // 管理人员也是用户，从头像菜单进同一处，管理平台不另放一份。
-    {
-      label: 'layout.sidebar.groupPersonal',
-      placement: 'end',
-      items: [
-        { label: 'layout.sidebar.settings', icon: 'lucideSettings', route: '/workspace/settings' },
-      ],
-    },
   ];
-
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
   //#else
   private readonly platformMenuGroups: MenuGroup[] = [
     {
@@ -195,7 +188,7 @@ export class NavigationService {
       label: 'Developer',
       items: [
         {
-          label: 'Developer Apps',
+          label: 'Open Applications',
           icon: 'lucideIdCard',
           route: '/platform/open-applications',
           permissions: [PERMISSIONS.openApplications.default],
@@ -240,12 +233,6 @@ export class NavigationService {
       label: 'Business',
       items: [{ label: 'Example module', icon: 'lucideLayers', route: '/workspace/placeholder' }],
     },
-    // 关于"我自己"的：个人资料、账户安全、偏好、通知。管理人员也从头像菜单进同一处。
-    {
-      label: 'Personal',
-      placement: 'end',
-      items: [{ label: 'Settings', icon: 'lucideSettings', route: '/workspace/settings' }],
-    },
   ];
   //#endif
 
@@ -256,16 +243,13 @@ export class NavigationService {
    * 给一个只有当前项的下拉，点开只会让人以为坏了。
    */
   readonly areaOptions = computed(() => {
-    //#if (IncludeLocalization)
-    this.translationReady();
-    //#endif
     const isPlatform = this.layoutService.isPlatform();
     const areas = [
       {
         route: '/workspace/dashboard',
         icon: 'lucideHouse',
         //#if (IncludeLocalization)
-        label: this.transloco.translate('menu.workspace'),
+        label: this.workspaceLabel(),
         //#else
         label: 'Workspace',
         //#endif
@@ -279,7 +263,7 @@ export class NavigationService {
         route: '/platform',
         icon: 'lucideCog',
         //#if (IncludeLocalization)
-        label: this.transloco.translate('menu.platform'),
+        label: this.platformLabel(),
         //#else
         label: 'Admin platform',
         //#endif
@@ -294,21 +278,6 @@ export class NavigationService {
     () => this.areaOptions().find((area) => area.current)?.label ?? '',
   );
 
-  //#if (IncludeLocalization)
-  readonly appTitle = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('layout.sidebar.appTitle');
-  });
-
-  readonly switchAreaLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('layout.sidebar.switchArea');
-  });
-  //#else
-  readonly appTitle = () => 'Template Project';
-  readonly switchAreaLabel = () => 'Switch area';
-  //#endif
-
   goToArea(route: string): void {
     void this.router.navigate([route]);
   }
@@ -318,40 +287,24 @@ export class NavigationService {
       ? this.platformMenuGroups
       : this.workspaceMenuGroups;
     //#if (IncludeLocalization)
-    // 读取 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，标签重新翻译。
-    this.translationReady();
+    const texts = this.sidebarTexts();
+    const label = (key: string): string => texts[key.slice(SIDEBAR_PREFIX.length)] ?? key;
     //#endif
 
     return groups
       .map((group) => ({
         ...group,
         //#if (IncludeLocalization)
-        label: this.transloco.translate(group.label),
+        label: label(group.label),
         items: group.items
           .filter((item) => this.isItemVisible(item))
-          .map((item) => ({ ...item, label: this.transloco.translate(item.label) })),
+          .map((item) => ({ ...item, label: label(item.label) })),
         //#else
         items: group.items.filter((item) => this.isItemVisible(item)),
         //#endif
       }))
       .filter((group) => group.items.length > 0);
   });
-  //#if (IncludeLocalization)
-  // 移动端侧栏 Sheet 的可访问名（视觉隐藏），随语言切换重算。
-  readonly navLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('layout.sidebar.navigation');
-  });
-
-  // 手机端侧栏抽屉的可访问说明（视觉隐藏）。
-  readonly navDescription = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('layout.sidebar.navigationDescription');
-  });
-  //#else
-  readonly navLabel = computed(() => 'Navigation');
-  readonly navDescription = computed(() => 'Browse the sections of this area.');
-  //#endif
 
   /**
    * 菜单可见性只按权限判断。

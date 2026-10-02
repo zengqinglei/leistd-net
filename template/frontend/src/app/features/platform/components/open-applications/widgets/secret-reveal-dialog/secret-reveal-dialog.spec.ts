@@ -1,16 +1,18 @@
 import { TestBed } from '@angular/core/testing';
-//#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
-//#endif
 import { toast } from '@spartan-ng/brain/sonner';
 
 import { SecretRevealDialog } from './secret-reveal-dialog';
+//#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../../../../core/i18n/transloco.testing';
+//#endif
+
+import type { Mock } from 'vitest';
 
 describe('SecretRevealDialog', () => {
-  let writeText: jasmine.Spy;
+  let writeText: Mock;
 
   beforeEach(() => {
-    writeText = jasmine.createSpy('writeText').and.resolveTo(undefined);
+    writeText = vi.fn().mockName('writeText').mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText },
       configurable: true,
@@ -20,10 +22,10 @@ describe('SecretRevealDialog', () => {
       imports: [SecretRevealDialog],
       // prettier-ignore
       providers: [
-        //#if (IncludeLocalization)
-        { provide: TranslocoService, useValue: { translate: (key: string) => key } },
-        //#endif
-      ],
+                //#if (IncludeLocalization)
+                ...provideTranslocoTesting(['en']),
+                //#endif
+            ],
     });
   });
 
@@ -37,14 +39,14 @@ describe('SecretRevealDialog', () => {
     const dialog = createDialog();
 
     dialog.onStateChange('open');
-    expect(dialog.visible()).toBeTrue();
+    expect(dialog.visible()).toBe(true);
 
     dialog.onStateChange('closed');
-    expect(dialog.visible()).toBeFalse();
+    expect(dialog.visible()).toBe(false);
   });
 
   it('copies the secret to the clipboard and notifies on success', async () => {
-    const successSpy = spyOn(toast, 'success');
+    const successSpy = vi.spyOn(toast, 'success').mockImplementation(() => '');
     const dialog = createDialog();
 
     dialog.copy();

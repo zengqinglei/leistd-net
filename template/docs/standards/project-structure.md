@@ -59,6 +59,6 @@ frontend/
 
 `docs/README.md` 是唯一文档索引。`docs/standards/` 保存长期规则；`docs/modules/`、`docs/requirements/` 和额外部署文档按需创建。
 
-项目协作能力位于 `.agents/skills/leistd-project-workflow/`。`SKILL.md` 定义通用闭环，`references/` 按场景加载细节；不依赖 `CLAUDE.md`、`AGENTS.md` 等工具专属入口，也不携带固定文档模板。
+业务开发与环境交付由 `.agents/skills/leistd-project-workflow/` 按场景加载对应 reference。Skill 不依赖 `CLAUDE.md`、`AGENTS.md` 等工具专属入口，也不携带固定文档模板。
 
 目录和普通 Markdown 文件使用小写 kebab-case；目录入口统一命名为 `README.md`。代码命名遵循对应语言规范。调整现有目录时同步检查项目引用、导入、构建、部署、测试和文档链接。

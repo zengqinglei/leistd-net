@@ -38,12 +38,10 @@ import { injectHlmSidebarConfig } from './hlm-sidebar.token';
           class="bg-sidebar text-sidebar-foreground h-svh w-(--sidebar-width) p-0 [&>button]:hidden"
           [style.--sidebar-width]="sidebarWidthMobile()"
         >
-          <!-- 本项目定制（登记见 coding-frontend.md §4.7）：手机端抽屉是对话框，需要读屏器可读的名称与说明。
-               上游 shadcn 的 Sidebar 在这里有一段 sr-only 的 SheetHeader，spartan 移植时缺了（spartan-ng/spartan#1758）；上游补上后删掉本段。 -->
-          <div hlmSheetHeader class="sr-only">
-            <h2 hlmSheetTitle>{{ mobileTitle() }}</h2>
-            <p hlmSheetDescription>{{ mobileDescription() }}</p>
-          </div>
+          <hlm-sheet-header class="sr-only">
+            <h2 hlmSheetTitle>{{ srOnlySheetTitle() }}</h2>
+            <p hlmSheetDescription>{{ srOnlySheetDescription() }}</p>
+          </hlm-sheet-header>
           <div class="flex h-full w-full flex-col">
             <ng-container *ngTemplateOutlet="contentContainer" />
           </div>
@@ -74,14 +72,11 @@ export class HlmSidebar {
   public readonly sidebarWidthMobile = input<string>(this._config.sidebarWidthMobile);
 
   public readonly side = input<'left' | 'right'>('left');
-
-  /** 本项目定制：手机端抽屉的可访问名称（视觉隐藏）。 */
-  public readonly mobileTitle = input<string>('Sidebar');
-
-  /** 本项目定制：手机端抽屉的可访问说明（视觉隐藏）。 */
-  public readonly mobileDescription = input<string>('Displays the mobile sidebar.');
   public readonly variant = input<SidebarVariant>(this._sidebarService.variant());
   public readonly collapsible = input<'offcanvas' | 'icon' | 'none'>('offcanvas');
+
+  public readonly srOnlySheetTitle = input<string>('Sidebar');
+  public readonly srOnlySheetDescription = input<string>('Displays the mobile sidebar.');
 
   protected readonly _sidebarGapComputedClass = computed(() =>
     hlm(

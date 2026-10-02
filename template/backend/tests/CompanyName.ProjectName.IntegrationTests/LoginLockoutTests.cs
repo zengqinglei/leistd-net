@@ -22,13 +22,13 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
 
         for (var i = 1; i < SettingConstant.Security.DefaultLockoutMaxFailedAttempts; i++)
         {
-            Assert.Equal(ExpectedErrorCode.Of("Auth:InvalidCredentials", "Error:Unauthorized"), await LoginErrorCodeAsync(username, WrongPassword));
+            Assert.Equal("Auth:InvalidCredentials", await LoginErrorCodeAsync(username, WrongPassword));
         }
 
         // 触发锁定的那一次就告知已锁定，而不是再报一次"密码错误"
-        Assert.Equal(ExpectedErrorCode.Of("Auth:UserTemporarilyLockedOut", "Error:Unauthorized"), await LoginErrorCodeAsync(username, WrongPassword));
+        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, WrongPassword));
         // 锁定期间不看密码：正确密码得到的也是同一个结果，试不出哪个是对的
-        Assert.Equal(ExpectedErrorCode.Of("Auth:UserTemporarilyLockedOut", "Error:Unauthorized"), await LoginErrorCodeAsync(username, Password));
+        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, Password));
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
             var username = await CreateUserAsync("lock_off");
             for (var i = 0; i < SettingConstant.Security.DefaultLockoutMaxFailedAttempts * 2; i++)
             {
-                Assert.Equal(ExpectedErrorCode.Of("Auth:InvalidCredentials", "Error:Unauthorized"), await LoginErrorCodeAsync(username, WrongPassword));
+                Assert.Equal("Auth:InvalidCredentials", await LoginErrorCodeAsync(username, WrongPassword));
             }
 
             using var session = await ProjectWebApplicationFactory.LoginAsync(factory, username, Password);
@@ -101,7 +101,7 @@ public sealed class LoginLockoutTests(ProjectWebApplicationFactory factory) : IC
             await LoginErrorCodeAsync(username, WrongPassword);
         }
 
-        Assert.Equal(ExpectedErrorCode.Of("Auth:UserTemporarilyLockedOut", "Error:Unauthorized"), await LoginErrorCodeAsync(username, Password));
+        Assert.Equal("Auth:UserTemporarilyLockedOut", await LoginErrorCodeAsync(username, Password));
     }
 
     private async Task<string?> LoginErrorCodeAsync(string username, string password)

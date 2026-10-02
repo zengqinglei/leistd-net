@@ -51,7 +51,16 @@ public static class DependencyInjection
             serviceName,
             configuration);
 
-        // 同一个客户端也服务逐库作业的库目录：解析出的实现就是上面那一个，不另建 HttpClient
+        // 回源全用相对地址：缺 BaseAddress 时组合照常成功，要到首个租户请求才以不带键名的 URI 错误暴露。
+        // 只约束本存储自己的客户端，ServiceClient 通用选项仍允许留空（只用绝对地址的客户端存在）。
+        var baseAddressKey = $"{Leistd.ServiceClient.DependencyInjection.ConfigurationSectionPrefix}:{serviceName}:BaseAddress";
+        services.AddOptions<RemoteTenantConnectionClientOptions>()
+            .Validate(
+                options => Uri.TryCreate(options.BaseAddress, UriKind.Absolute, out _),
+                $"The remote tenant connection store requires {baseAddressKey} (an absolute URI of the control plane).")
+            .ValidateOnStart();
+
+        // 同一个客户端也服务逐库作业的库目录，不另建认证与 HTTP 管道。
         services.TryAddTransient<ITenantDatabaseDirectory>(provider =>
             (ITenantDatabaseDirectory)provider.GetRequiredService<ITenantConnectionConfigurationStore>());
 

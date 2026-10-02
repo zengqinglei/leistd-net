@@ -1,8 +1,6 @@
 using Leistd.Timing;
 using Leistd.Notifications.Dtos;
 using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
 using Leistd.Notifications.Filters;
 using Microsoft.Extensions.Logging;

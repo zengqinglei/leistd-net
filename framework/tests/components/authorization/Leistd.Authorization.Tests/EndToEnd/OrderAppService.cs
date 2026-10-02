@@ -1,15 +1,8 @@
-using Leistd.Authorization.DataScope;
-using Leistd.Authorization.Resource;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Leistd.Authorization.Resource.Grants;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Abstractions;
 using Leistd.Authorization.DataScope.Abstractions;
@@ -99,7 +92,7 @@ public sealed class OrderAppService(
             return false;
         }
 
-        if (!await resourceAuthorization.IsGrantedAsync(order, ResourceOperations.Update, ct))
+        if (!await resourceAuthorization.IsGrantedAsync(order, ResourceOperations.Update))
         {
             return false;
         }
@@ -126,7 +119,7 @@ public sealed class OrderAppService(
         // 逐项跑实例授权，任一拒绝整批拒绝——静默跳过越权项会让调用方以为全做完了。
         foreach (var order in targets)
         {
-            if (!await resourceAuthorization.IsGrantedAsync(order, ResourceOperations.Update, ct))
+            if (!await resourceAuthorization.IsGrantedAsync(order, ResourceOperations.Update))
             {
                 return false;
             }

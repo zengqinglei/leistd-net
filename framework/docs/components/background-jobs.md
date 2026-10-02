@@ -8,7 +8,7 @@
 | --- | --- |
 | 定期清理、归档、扫描共享数据，多副本只该跑一份 | `AddRecurringJob<TJob>(name, schedule, RecurringJobScope.Cluster)` |
 | 定期刷新本进程内状态（缓存、配置），每个副本都要跑 | `RecurringJobScope.EveryInstance` |
-| 组件自带维护任务 | 组件在自己的 `Add*` 里登记，宿主只注册调度器 |
+| 组件自带维护任务 | 组件在自己的 `Add*` 里登记，宿主只注册调度器；登记了任务而没有调度器时，宿主启动记一条 Warning |
 | 请求里触发、丢了也只是少做一次的工作（非关键通知、缓存预热） | 注入 `IBackgroundTaskQueue` 入队 |
 | 必须完成、失败要重试的作业 | 不用本组件的队列：与业务同事务写库，或引入持久化作业调度器 |
 
@@ -83,6 +83,7 @@ if (!queue.TryQueue((services, ct) => services.GetRequiredService<WelcomeMailer>
 | `IRecurringJobStateStore` | 集群任务的完成水位 |
 | `IBackgroundTaskQueue.QueueAsync` / `TryQueue` | 入队；满时等待或返回 `false` |
 | `AddInProcessBackgroundJobs(configure?)` | InProcess 包：注册调度器、队列与进程内水位；幂等 |
+| `RecurringJobSchedulerMarker` | Core 包：调度器实现登记的标记（`TryAddSingleton<RecurringJobSchedulerMarker>()`）；自研调度器不登记时，启动检查会误报"没有调度器" |
 | `AddBackgroundJobsEfCore<TDbContext>()` / `ConfigureBackgroundJobs(modelBuilder)` | EF 包：共享水位存储，与注册顺序无关地替换进程内实现 |
 
 ## 配置项（Leistd:BackgroundJobs）
@@ -100,7 +101,8 @@ if (!queue.TryQueue((services, ct) => services.GetRequiredService<WelcomeMailer>
 - **失败不记水位。** 异常只记日志，本轮不重试：同一时段内若还有触发（短周期任务、或另一个尚未试过的副本）会再做一次，否则**最迟在下一个调度时段重做**——每日任务通常就是第二天。因此任务必须幂等，并按截止时间扫描历史积压，而不是只处理"今天到期的那一批"。要分钟级恢复就把该任务排成短周期，不要指望失败重试。
 - **启动即校验。** 登记了集群任务却没有 `IDistributedLock` 时宿主启动失败，不静默退化成每副本执行。
 - **首次执行。** 按间隔排期的任务启动后在不超过 30 秒（或一个间隔）的随机延迟内先执行一次；按每日时刻排期的只在排定时刻执行。
-- **队列上下文。** 入队时经 `IAmbientContext.Capture()` 捕获主体、租户与链路标识，执行时还原；工作单元与请求对象不随行。未注册环境上下文时工作项在空上下文里执行。
+- **队列上下文。** 入队时经 `IAmbientContext.Capture()` 捕获主体、租户与关联标识，执行时还原；工作单元与请求对象不随行。未注册环境上下文时工作项在空上下文里执行。
+- **链路。** 入队时捕获当前 `Activity` 的上下文，工作项在自己的 Activity 与还原后的环境上下文里执行（失败日志也在其中，带着入队时的关联标识），父链路是入队时的那一条；入队时没有链路就开新的根链路。有监听者时经 `ActivitySource` `Leistd.BackgroundJobs` 创建，OpenTelemetry 订阅这个名字即可导出；没有监听者时仍建 Activity，日志里的 TraceId 照样延续。
 - **停机。** 队列先关写入口；正在执行的工作项收到取消令牌，尚未开始的项被丢弃。
 
 ## 注意事项

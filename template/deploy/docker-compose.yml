@@ -1,6 +1,7 @@
 services:
   db-migrator:
-    image: ghcr.io/zengqinglei/companyname-projectname-migrator:latest
+    # 默认本地标签，`up --build` 即可；发布时经 MIGRATOR_IMAGE 传入仓库地址与版本
+    image: ${MIGRATOR_IMAGE:-companyname-projectname-migrator:latest}
     build:
       context: ..
       dockerfile: Dockerfile
@@ -15,7 +16,7 @@ services:
 #if (RemoteTokenAuth)
       # Resource 的迁移目标清单存在 Identity 的控制库里，必须回源查询。
       # 这些值没有可用默认值：`:?` 让缺配在 compose 阶段就带着变量名失败，
-      # 而不是让 DbMigrator 打到 identity.example.com 再收 401
+      # 而不是等 DbMigrator 回源时才失败
       - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}
       - Leistd__ServiceAuth__Authority=${IDENTITY_AUTHORITY:?IDENTITY_AUTHORITY is required for a Resource service}
       - Leistd__ServiceAuth__ClientId=${MIGRATOR_CLIENT_ID:?MIGRATOR_CLIENT_ID is required for a Resource service}
@@ -23,15 +24,25 @@ services:
       # 迁移身份只授予迁移元数据 scope，不给运行时路由
       - Leistd__ServiceClients__Identity__Scope=tenant-migration.read
 #endif
+#if (LocalIdentity)
+      # 独立库连接串在控制库里加密存储：迁移作业必须与 backend 共用同一个 Data Protection 密钥环（Redis），
+      # 否则解不开；开发环境以外没有可用的密钥位置时它会在启动期失败
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false
+#endif
     depends_on:
       db:
         condition: service_healthy
+#if (LocalIdentity)
+      redis:
+        condition: service_healthy
+#endif
     restart: "no"
     networks:
       - companyname-projectname-network
 
   backend:
-    image: ghcr.io/zengqinglei/companyname-projectname:latest
+    # 默认本地标签，`up --build` 即可；发布时经 BACKEND_IMAGE 传入仓库地址与版本
+    image: ${BACKEND_IMAGE:-companyname-projectname:latest}
     container_name: companyname-projectname
     build:
       context: ..
@@ -41,17 +52,16 @@ services:
       - "80:8080"
     environment:
       # Environment
-      - TZ=Asia/Shanghai
+      # 进程本地时区，只影响未显式指定时区的本地时间换算与日志时间戳；业务时间按 UTC 存储
+      - TZ=${TZ:-UTC}
       - ASPNETCORE_ENVIRONMENT=Production
 
       # Database Configuration (PostgreSQL)
       - ConnectionStrings__Default=Host=db;Port=5432;Database=MyProject;Username=${APP_DB_USER:?APP_DB_USER is required};Password=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required};GSS Encryption Mode=Disable
 #if (RemoteTokenAuth)
       # Resource 校验远端签发的令牌，并回源 Identity 解析租户路由。
-      # 全部无默认值：漏配时 compose 立刻带变量名失败，
-      # 而不是静默落到 appsettings 里的 identity.example.com 占位值
+      # 全部无默认值：漏配时 compose 立刻带变量名失败，不必等到容器启动才由 API 报缺键
       - Authentication__Issuer=${IDENTITY_ISSUER:?IDENTITY_ISSUER is required for a Resource service}
-      - Authentication__Audience=${RESOURCE_AUDIENCE:?RESOURCE_AUDIENCE is required for a Resource service}
       - Leistd__ServiceClients__Identity__BaseAddress=${IDENTITY_BASE_ADDRESS:?IDENTITY_BASE_ADDRESS is required for a Resource service}
       - Leistd__ServiceAuth__Authority=${IDENTITY_AUTHORITY:?IDENTITY_AUTHORITY is required for a Resource service}
       - Leistd__ServiceAuth__ClientId=${RESOURCE_CLIENT_ID:?RESOURCE_CLIENT_ID is required for a Resource service}
@@ -73,24 +83,39 @@ services:
 #if (LocalIdentity)
       # 首次启动创建的超级管理员。Resource 不持有本地用户，因此这一段只在本地身份形态生成
       - DefaultAdmin__Username=admin # optional
-      # 必须由部署环境提供（.env 或 CI secret）。`:?` 让缺失时 compose 直接报错而不是
-      # 用一个能登录的已知密码把服务拉起来
-      - DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:?set DEFAULT_ADMIN_PASSWORD before deploying}
+      # 由部署环境提供（.env 或 CI secret），只在库里还没有超级管理员时用于创建：
+      # 首次部署缺失即启动失败并报出键名；已有管理员的部署可以不再提供
+      - DefaultAdmin__Password=${DEFAULT_ADMIN_PASSWORD:-}
       - DefaultAdmin__Email=admin@companyname-projectname.com # optional
       - DefaultAdmin__DisplayName=System Administrator # optional
 #endif
+#if (IncludeNotifications && LocalIdentity)
+      # 可选：站点对外地址，通知邮件据此把站内链接拼成绝对地址；不配则邮件不附站内链接
+      - Leistd__Notifications__Email__PublicBaseUrl=${PUBLIC_BASE_URL:-}
+#endif
+#if (OpenIddictServer)
+
+      # 令牌签名与加密证书（PKCS#12）。文件以 Docker secrets 挂载到 /run/secrets，口令由部署注入；
+      # 开发证书只用于本机，这里没有、也不应打开 OAuth__UseDevelopmentCertificates
+      - OAuth__SigningCertificatePath=/run/secrets/oauth-signing-certificate
+      - OAuth__SigningCertificatePassword=${OAUTH_SIGNING_CERTIFICATE_PASSWORD:?OAUTH_SIGNING_CERTIFICATE_PASSWORD is required}
+      - OAuth__EncryptionCertificatePath=/run/secrets/oauth-encryption-certificate
+      - OAuth__EncryptionCertificatePassword=${OAUTH_ENCRYPTION_CERTIFICATE_PASSWORD:?OAUTH_ENCRYPTION_CERTIFICATE_PASSWORD is required}
+      # 由本服务签发令牌的下游 API（每项登记为同名 scope；下游服务的 Authentication:Audience 取同一个值）
+      # - OAuth__ApiResources__0=orders-api
+#endif
 
       # CORS Configuration (optional)
-      - Cors__AllowAnyLocalhost=false
       # - Cors__AllowedOrigins__0=https://your-domain.com
 
       # External OAuth (Optional - uncomment and configure if needed)
       # - ExternalAuth__GitHub__ClientId=your-github-client-id
       # - ExternalAuth__GitHub__ClientSecret=your-github-client-secret
-      # - ExternalAuth__GitHub__RedirectUri=https://your-domain.com/api/external-auth/github/callback
+      # 回调地址是前端页面（它再把授权码提交给 API），与提供商后台登记的回调逐字一致
+      # - ExternalAuth__GitHub__RedirectUri=https://your-domain.com/auth/external-callback/github
       # - ExternalAuth__Google__ClientId=your-google-client-id
       # - ExternalAuth__Google__ClientSecret=your-google-client-secret
-      # - ExternalAuth__Google__RedirectUri=https://your-domain.com/api/external-auth/google/callback
+      # - ExternalAuth__Google__RedirectUri=https://your-domain.com/auth/external-callback/google
 
       # Logging (optional)
       - Serilog__MinimumLevel__Default=Information
@@ -98,8 +123,11 @@ services:
       - Serilog__MinimumLevel__Override__Microsoft.AspNetCore=Warning
       - Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore=Warning
 
-    volumes:
-      - feedback-uploads:/app/wwwroot/uploads
+#if (OpenIddictServer)
+    secrets:
+      - oauth-signing-certificate
+      - oauth-encryption-certificate
+#endif
 
     depends_on:
       db:
@@ -107,7 +135,7 @@ services:
       db-migrator:
         condition: service_completed_successfully
       redis:
-        condition: service_started
+        condition: service_healthy
 
     healthcheck:
       # aspnet:10.0 不包含 wget/curl，使用 Bash /dev/tcp 请求就绪端点。
@@ -134,7 +162,7 @@ services:
     image: postgres:15-alpine
     container_name: companyname-projectname-db
     environment:
-      TZ: Asia/Shanghai
+      TZ: ${TZ:-UTC}
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required}
       POSTGRES_DB: MyProject
@@ -162,7 +190,7 @@ services:
     image: redis:7-alpine
     container_name: companyname-projectname-redis
     environment:
-      TZ: Asia/Shanghai
+      TZ: ${TZ:-UTC}
     command: redis-server --appendonly yes
 
     volumes:
@@ -185,9 +213,15 @@ volumes:
     driver: local
   redis-data:
     driver: local
-  feedback-uploads:
-    driver: local
 
 networks:
   companyname-projectname-network:
     driver: bridge
+#if (OpenIddictServer)
+
+secrets:
+  oauth-signing-certificate:
+    file: ${OAUTH_SIGNING_CERTIFICATE_FILE:?OAUTH_SIGNING_CERTIFICATE_FILE is required (path to the signing .pfx)}
+  oauth-encryption-certificate:
+    file: ${OAUTH_ENCRYPTION_CERTIFICATE_FILE:?OAUTH_ENCRYPTION_CERTIFICATE_FILE is required (path to the encryption .pfx)}
+#endif

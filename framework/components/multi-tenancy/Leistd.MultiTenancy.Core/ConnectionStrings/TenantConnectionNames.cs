@@ -2,11 +2,7 @@ using System.Data.Common;
 using System.Text.RegularExpressions;
 using Leistd.Data.Connections;
 using Leistd.ExceptionHandling;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;
 
@@ -30,9 +26,8 @@ internal static class TenantConnectionNames
 
     // 管理员填的、URL 里带来的名字不合法是调用方能改对的输入错误：400 而不是 500
     public static string NormalizeInput(string? name)
-        => TryNormalize(name) ?? throw new BadRequestException(
+        => TryNormalize(name) ?? throw new BusinessException(MultiTenancyErrorCodes.ConnectionNameInvalid,
                 $"Connection name '{name}' is invalid. After lowercasing it must match {TenantConnectionConfiguration.NamePattern}.")
-            .WithCode(MultiTenancyErrorCodes.ConnectionNameInvalid)
             .WithData("Name", name)
             .WithData("Pattern", TenantConnectionConfiguration.NamePattern);
 
@@ -81,5 +76,5 @@ internal static class TenantConnectionStrings
     }
 
     private static BusinessException Invalid(string message)
-        => new BadRequestException(message).WithCode(MultiTenancyErrorCodes.ConnectionStringInvalid);
+        => new BusinessException(MultiTenancyErrorCodes.ConnectionStringInvalid, message);
 }

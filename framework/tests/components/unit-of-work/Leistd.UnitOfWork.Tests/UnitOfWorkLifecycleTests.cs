@@ -5,6 +5,7 @@ using Leistd.EventBus.Local;
 using Leistd.UnitOfWork.Attributes;
 using Leistd.UnitOfWork.Database;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -14,7 +15,7 @@ namespace Leistd.UnitOfWork.Tests;
 /// 工作单元的终结生命周期：作用域释放、阶段调度与 exactly-once。
 /// </summary>
 /// <remarks>
-/// <para>这一组钉的是<b>拦截器路径</b>。显式 <c>using (await BeginAsync())</c> 的调用点由
+/// <para>这一组钉的是<b>拦截器路径</b>。显式 <c>using (await Begin())</c> 的调用点由
 /// <c>using</c> 保证释放，而 <c>[UnitOfWork]</c> 特性的调用点完全依赖拦截器——
 /// 此前它的成功路径只调 <c>CompleteAsync()</c>、从不 <c>Dispose()</c>，
 /// 于是管理器为每个工作单元创建的 DI 作用域在正常路径上永不释放。</para>
@@ -29,7 +30,7 @@ public sealed class UnitOfWorkLifecycleTests
         var services = BaseServices(new ScopeProbeRegistry());
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        var uow = await manager.BeginAsync();
+        var uow = manager.Begin();
         var failure = new InvalidOperationException("commit failed");
         uow.AddTransactionApi("failing", new FailingCommitTransactionApi(failure));
         UnitOfWorkFailedEventArgs? reported = null;
@@ -50,7 +51,7 @@ public sealed class UnitOfWorkLifecycleTests
     {
         var services = BaseServices(new ScopeProbeRegistry());
         await using var provider = services.BuildServiceProvider();
-        var uow = await provider.GetRequiredService<IUnitOfWorkManager>().BeginAsync();
+        var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin();
         var secondHandlerRan = false;
         uow.Failed += (_, _) => throw new InvalidOperationException("observer failed");
         uow.Failed += (_, _) => secondHandlerRan = true;
@@ -67,8 +68,8 @@ public sealed class UnitOfWorkLifecycleTests
         var services = BaseServices(new ScopeProbeRegistry());
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
         UnitOfWorkFailedEventArgs? reported = null;
         child.Failed += (_, args) => reported = args;
 
@@ -216,7 +217,7 @@ public sealed class UnitOfWorkLifecycleTests
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        var uow = await manager.BeginAsync();
+        var uow = manager.Begin();
         await uow.RollbackAsync();
         await uow.RollbackAsync();
         uow.Dispose();
@@ -233,7 +234,7 @@ public sealed class UnitOfWorkLifecycleTests
         await using var provider = services.BuildServiceProvider();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync();
+        using var uow = manager.Begin();
         await uow.CompleteAsync();
         await uow.RollbackAsync();
 
@@ -245,6 +246,7 @@ public sealed class UnitOfWorkLifecycleTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddLocalEventBus();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddSingleton(probes);
         services.AddSingleton<CallLog>();

@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
 using CompanyName.ProjectName.Application.Settings.Provider;
 using CompanyName.ProjectName.Domain.Shared.Security.OneTimeCodes;
 using CompanyName.ProjectName.Domain.Shared.Text;
@@ -70,6 +71,63 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             await SecondStepErrorAsync(host, new { Token = replayToken, Code = code }));
     }
 
+    /// <summary>
+    /// 第一步通过之后凭据变了，未完成的挑战随之作废
+    /// </summary>
+    /// <remarks>
+    /// 回归点：挑战不绑定账号安全版本时，管理员在这段窗口里重置了口令，凭旧口令换来的第一步
+    /// 仍能配合有效验证码完成登录。撤销会话挡不住它——挑战不是会话。
+    /// </remarks>
+    [Fact]
+    public async Task A_password_reset_after_the_first_step_voids_the_pending_challenge()
+    {
+        var (host, clock) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_stamp");
+        var secret = await EnableForAsync(host, username, clock);
+
+        clock.Advance();
+        var (_, token) = await PasswordStepAsync(host, username);
+
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var users = await admin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/users?offset=0&limit=10&keyword={username}");
+        var userId = users.GetProperty("items").EnumerateArray()
+            .Single(u => u.GetProperty("username").GetString() == username).GetProperty("id").GetGuid();
+        using var reset = await admin.Client.PostAsJsonAsync($"/api/v1/users/{userId}/reset-password", new { Password = Password + "2" });
+        Assert.True(reset.IsSuccessStatusCode);
+
+        Assert.Equal("Auth:TwoFactorChallengeExpired",
+            await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
+    }
+
+    /// <summary>
+    /// 输错不延长挑战的有效期
+    /// </summary>
+    /// <remarks>
+    /// 回归点：每次输错都把有效期重新算满，最多 5 次尝试把 5 分钟的挑战拉长到约 25 分钟。
+    /// 这里在第 4 分钟输错一次，第 6 分钟的正确验证码必须按原时刻过期。
+    /// </remarks>
+    [Fact]
+    public async Task A_wrong_code_does_not_extend_the_challenge()
+    {
+        var (host, clock) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_expiry");
+        var secret = await EnableForAsync(host, username, clock);
+
+        clock.Advance();
+        var (_, token) = await PasswordStepAsync(host, username);
+
+        for (var i = 0; i < 8; i++) clock.Advance();   // 4 分钟
+        var valid = Code(secret, clock);
+        var wrong = valid[..^1] + (valid[^1] == '0' ? '1' : '0');
+        Assert.Equal("Auth:TwoFactorCodeInvalid", await SecondStepErrorAsync(host, new { Token = token, Code = wrong }));
+
+        for (var i = 0; i < 4; i++) clock.Advance();   // 再过 2 分钟：签发后第 6 分钟
+        Assert.Equal("Auth:TwoFactorChallengeExpired",
+            await SecondStepErrorAsync(host, new { Token = token, Code = Code(secret, clock) }));
+    }
+
     [Fact]
     public async Task Recovery_code_replaces_a_code_only_once()
     {
@@ -106,7 +164,7 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             last = await SecondStepErrorAsync(host, new { Token = token, Code = "000000" });
         }
 
-        Assert.Equal(ExpectedErrorCode.Of("Auth:UserTemporarilyLockedOut", "Error:Unauthorized"), last);
+        Assert.Equal("Auth:UserTemporarilyLockedOut", last);
     }
 
     [Fact]
@@ -174,7 +232,41 @@ public sealed class TwoFactorTests(ProjectWebApplicationFactory factory) : IClas
             clock.Advance();
             using var disable = await reissued.PostAsJsonAsync("/api/v1/auth/me/two-factor/disable",
                 new { Password, Code = Code(secret, clock) });
-            Assert.Equal(ExpectedErrorCode.Of("Auth:TwoFactorRequiredByPolicy", "Error:BadRequest"), await ErrorCodeAsync(disable));
+            Assert.Equal("Auth:TwoFactorRequiredByPolicy", await ErrorCodeAsync(disable));
+        }
+        finally
+        {
+            await WriteSettingAsync(admin.Client, SettingConstant.Security.RequireTwoFactor, null);
+        }
+    }
+
+    /// <summary>
+    /// 两步验证限制在授权之前拒绝，不能被记成"授权通过之后的业务拒绝"
+    /// </summary>
+    /// <remarks>
+    /// 限制中间件在 <c>UseAuthorization()</c> 之前抛业务异常。补记业务拒绝的中间件紧接授权之后，
+    /// 这类请求到不了它；若改放到全局异常处理器里，会把端点的权限策略当成已通过的依据写进记录。
+    /// </remarks>
+    [Fact]
+    public async Task A_restricted_session_rejected_before_authorization_leaves_no_business_failure_record()
+    {
+        var (host, _) = CreateHost();
+        using var _ = host;
+        var username = await CreateUserAsync(host, "tfa_noaudit");
+        using var admin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        await WriteSettingAsync(admin.Client, SettingConstant.Security.RequireTwoFactor, "true");
+        try
+        {
+            using var restricted = await ProjectWebApplicationFactory.LoginAsync(host, username, Password);
+            var roleId = Guid.NewGuid();
+
+            using var blocked = await restricted.Client.PutAsJsonAsync(
+                $"/api/v1/permissions/grants/roles/{roleId}",
+                new { expectedVersion = 0, permissionNames = Array.Empty<string>() });
+            Assert.Equal("Auth:TwoFactorSetupRequired", await ErrorCodeAsync(blocked));
+
+            Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
+                admin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{roleId}"));
         }
         finally
         {

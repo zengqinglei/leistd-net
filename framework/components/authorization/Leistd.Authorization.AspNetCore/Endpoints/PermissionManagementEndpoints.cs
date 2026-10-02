@@ -1,9 +1,4 @@
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Grants;
 using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Dtos;
 using Microsoft.AspNetCore.Builder;
@@ -52,7 +47,8 @@ public static class PermissionManagementEndpoints
     /// <code>
     /// app.MapGroup("/api/v1/permissions").MapPermissionManagement(options =&gt;
     /// {
-    ///     options.DefinitionsPolicy = "App.Permissions|App.Roles.ManagePermissions";
+    ///     // 权限树只为授予而读：能配置角色权限的人才需要它
+    ///     options.DefinitionsPolicy = "App.Roles.ManagePermissions";
     ///     options.GrantPolicies[PermissionGrantProviderNames.Role] = "App.Roles.ManagePermissions";
     /// });
     /// </code>

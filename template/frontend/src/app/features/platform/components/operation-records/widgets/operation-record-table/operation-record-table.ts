@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, translateObjectSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronRight, lucideDatabase, lucideSearchX, lucideUserPen } from '@ng-icons/lucide';
@@ -10,18 +10,20 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { ColumnDef, PaginationState } from '@tanstack/angular-table';
 
+//#if (IncludeLocalization)
+import { textAt } from '../../../../../../core/i18n/translation-text';
+//#endif
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
-import {
-  TablePaginator,
-  TablePaginatorLabels,
-} from '../../../../../../shared/components/table-paginator/table-paginator';
+import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { tableColumnVisibility } from '../../../../../../shared/models/table-column-meta';
 import {
   injectAppTable,
   type AppTableFeatures,
 } from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
-import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
 import { OperationRecordOutputDto } from '../../../../models/operation-record.dto';
@@ -33,7 +35,7 @@ import { OperationRecordOutputDto } from '../../../../models/operation-record.dt
  * **与 `public/i18n/en.json` 的 `operationRecords.actions` 是两个事实源，必须同步改。**
  * 这是模板条件裁剪的固有代价：启用多语言的场景走词条，不启用的场景没有词条文件
  * （`template.json` 在 `!IncludeLocalization` 时整个排除 `public/i18n/**`），
- * 句子只能内联。组件里 `actorDisplay`、`impersonationHint`、`outcomeLabel` 已是同一形态。
+ * 句子只能内联。
  *
  * 不内联的话，三分之一的场景（identity／resource／standalone）会退回显示裸动作码——
  * 而句子化正是这张表改造的全部价值。
@@ -42,6 +44,9 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'user.created': (t) => `Created user ${t}`,
   'user.updated': (t) => `Updated user ${t}`,
   'user.deleted': (t) => `Deleted user ${t}`,
+  'user.enabled': (t) => `Enabled user ${t}`,
+  'user.disabled': (t) => `Disabled user ${t}`,
+  'user.password-reset': (t) => `Reset the password of user ${t}`,
   'user.unlocked': (t) => `Unlocked user ${t}`,
   'user.two-factor-reset': (t) => `Reset two-factor authentication for user ${t}`,
   'user.roles-replaced': (t) => `Changed roles for user ${t}`,
@@ -69,8 +74,10 @@ const ACTION_SENTENCES: Record<string, (target: string) => string> = {
   'auth.two-factor.disabled': () => 'Turned off two-factor authentication',
   'auth.two-factor.recovery-codes-regenerated': () => 'Regenerated recovery codes',
   'auth.two-factor.recovery-code-used': (t) => `Account ${t} signed in with a recovery code`,
+  //#if (ExternalLogin)
   'auth.external-login.linked': (t) => `Linked external account ${t}`,
   'auth.external-login.unlinked': (t) => `Unlinked external account ${t}`,
+  //#endif
   'auth.registered': (t) => `Registered account ${t}`,
   'impersonation.started': (t) => `Started acting as ${t}`,
   'impersonation.ended': () => 'Ended impersonation',
@@ -85,16 +92,36 @@ const ACTION_SENTENCES_NO_TARGET: Record<string, string> = {
   'role.created': 'Created a role',
 };
 
-/** 失败原因的英文文案，与 `en.json` 的 `operationRecords.failures` 同步。 */
+/**
+ * 失败原因的英文文案，键是失败码。
+ *
+ * 不启用多语言时后端没有本地化器，`failureMessage` 恒为空，常见的失败码只能在这里备英文句子；
+ * 与后端 `Api/Resources/en.json` 同步：有 `{码}:Record` 的取它，否则取码本身。
+ * 占位符 `{name}` 与后端同一写法，用记录的 `failureData` 填，键名区分大小写。
+ */
 const FAILURE_REASONS: Record<string, string> = {
-  Auth_InvalidCredentials: 'Incorrect username or password',
-  Auth_UserTemporarilyLockedOut: 'Too many failed sign-in attempts',
+  'Auth:InvalidCredentials':
+    'Incorrect username or password (failed attempts in the last {windowMinutes} minutes: {attempts})',
+  'Auth:UserTemporarilyLockedOut':
+    'Locked out for {minutes} minutes after {maxFailedAttempts} failed sign-in attempts',
+  // 框架唯一自产的失败码（RecordDeniedOperationAsync 的默认原因），没有这条会显示裸码
+  'Error:Forbidden': 'Not allowed to perform this action.',
+  // 再认证失败：改口令、停用两步验证、重发恢复码这三处
+  'Security:CurrentPasswordIncorrect': 'The current password is incorrect.',
+  'Auth:TwoFactorCodeInvalid': 'The verification code is incorrect.',
 };
 //#endif
 
+/** 「操作内容」那句话：`key` 非空时模板经 t 取词条并填 `params`，否则直接显示 `text`。 */
+interface ActionSentence {
+  key: string | null;
+  params: Record<string, string>;
+  text: string;
+}
+
 @Component({
   selector: 'app-operation-record-table',
-  // 不启用多语言时 TranslocoModule 被守卫剥掉，剩下的 7 项刚好缩到 98 字符（< printWidth 100），
+  // 不启用多语言时 TranslocoDirective 被守卫剥掉，剩下的 7 项刚好缩到 98 字符（< printWidth 100），
   // prettier 就要求折成一行；带上它又超行、要求展开。同一份源码满足不了两种生成物，
   // 所以固定书写形态——与 default-sidebar 的同类数组一致。
   // prettier-ignore
@@ -107,7 +134,7 @@ const FAILURE_REASONS: Record<string, string> = {
     TablePaginator,
     ...HlmTableImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [
@@ -127,7 +154,19 @@ export class OperationRecordTable {
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
   //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
+  /** 动作句子模板整段取成对象，只用来判断动作码登记了没有：句子本身在模板里经 t 带参数取。 */
+  private readonly actionTexts = translateObjectSignal(
+    'operationRecords.actions',
+    {},
+    { scope: 'operationRecords' },
+  );
+  private readonly actionNoTargetTexts = translateObjectSignal(
+    'operationRecords.actionsNoTarget',
+    {},
+    { scope: 'operationRecords' },
+  );
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly records = input<OperationRecordOutputDto[]>([]);
@@ -188,24 +227,6 @@ export class OperationRecordTable {
     tableColumnVisibility(this.columns, this.tableViewport()),
   );
 
-  private readonly expandableRows = createExpandableRows();
-
-  /**
-   * 行展开**始终**可用——这一点与用户列表不同，是有意的。
-   *
-   * 用户列表的展开只是移动端裁剪的补偿，桌面端无列可补就不给箭头。这里不一样：
-   * `correlationId` 和 `actorId` 从不占列（列宽有限，而它们只在追查时才有人看），
-   * 所以桌面端同样有内容要展开。跟着 `hasCollapsedColumns` 走的话，
-   * 桌面端就永远看不到链路标识——而那恰恰是把这条记录接到日志上的唯一钥匙。
-   */
-  isRowExpanded(id: string): boolean {
-    return this.expandableRows.isExpanded(id);
-  }
-
-  toggleRow(id: string): void {
-    this.expandableRows.toggle(id);
-  }
-
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
   }
@@ -213,6 +234,7 @@ export class OperationRecordTable {
   protected readonly table = injectAppTable(() => ({
     data: this.records(),
     columns: this.columns,
+    getRowId: (row) => row.id,
     manualPagination: true,
     rowCount: this.totalCount(),
     onPaginationChange: (updater) =>
@@ -231,81 +253,71 @@ export class OperationRecordTable {
   }
 
   /**
-   * 操作人名可能缺失：宿主没下发 name claim 时只留得下标识。
+   * 操作人；都缺失时为 undefined，模板显示"匿名"。名字可能缺失：宿主没下发 name claim 时只留得下标识。
    *
    * `actorIsTarget` 为真时回落到目标名——登录这类自证动作发生在认证之前，
    * 请求主体当时确实是匿名的（见 `AuthAppService` 的说明），"什么人"由目标承载。
    * **这个判定来自服务端**：此处不按动作码前缀猜，否则前端就复制了一份服务端的动作登记；
    * 更要紧的是 `auth.login.failed` 的目标是调用方提交的用户名，未经验证。
    */
-  actorDisplay(record: OperationRecordOutputDto): string {
+  actorOf(record: OperationRecordOutputDto): string | undefined {
     const fromTarget = record.actorIsTarget ? record.targetName : undefined;
-    //#if (IncludeLocalization)
-    return (
-      record.actorName ??
-      record.actorId ??
-      fromTarget ??
-      this.transloco.translate('operationRecords.table.unknownActor')
-    );
-    //#else
-    return record.actorName ?? record.actorId ?? fromTarget ?? 'Anonymous';
-    //#endif
+    return record.actorName ?? record.actorId ?? fromTarget;
   }
 
   /**
-   * 模拟登录提示语。
+   * 每条记录的操作句子与失败原因，按记录 Id 取。
    *
-   * 与操作人名**同格显示**，不放进展开区：`actorName` 是被模拟的租户用户，
-   * 真正按下按钮的是这里的人。只显示前者会把责任指向一个什么都没做的人。
+   * 句子要在词条缺失时降级为裸码，模板里的 t 表达不了"缺词条"，所以在这里判定取哪条词条；
+   * 本地化形态下句子本身由模板经 t 取，词条到达与语言切换时随之更新。
    */
-  impersonationHint(record: OperationRecordOutputDto): string | null {
-    if (!record.impersonatorName) {
-      return null;
-    }
-    //#if (IncludeLocalization)
-    return this.transloco.translate('operationRecords.table.impersonatedBy', {
-      name: record.impersonatorName,
-    });
-    //#else
-    return `acting on behalf, by ${record.impersonatorName}`;
-    //#endif
-  }
+  protected readonly recordTexts = computed(
+    () =>
+      new Map(
+        this.records().map((record) => [
+          record.id,
+          { sentence: this.actionSentence(record), failure: this.failureReason(record) },
+        ]),
+      ),
+  );
 
   /**
-   * 把一条记录渲染成「操作内容」那一句话。
+   * 把一条记录渲染成「操作内容」那一句话：给出词条键与参数，或（未登记时）原样的文字。
    *
    * **整句进语言包，绝不在代码里拼片段。** Discourse 的中文译文把占位符顺序整个翻转
    * （en 是"动词+宾语+时间"，zh 是"时间+动词+宾语"），任何 join 片段的写法在那里必然出错。
    *
    * 目标三级降级：有名字用名字 → 只有标识用截断标识 → 无目标（`-`）走 `actionsNoTarget` 变体。
-   * 动作码未登记时原样显示裸码——见 {@link translateOrNull} 为什么不能直接用返回值判断。
+   * 动作码未登记时原样显示裸码：造一个假句子比显示机器码更糟——读者会以为自己看懂了。
    */
-  actionSentence(record: OperationRecordOutputDto): string {
+  private actionSentence(record: OperationRecordOutputDto): ActionSentence {
     //#if (IncludeLocalization)
-    const hasTarget = record.targetId !== '-';
-    if (!hasTarget) {
-      const noTarget = this.translateOrNull(`operationRecords.actionsNoTarget.${record.action}`);
-      if (noTarget) {
-        return noTarget;
-      }
+    if (
+      record.targetId === '-' &&
+      textAt(this.actionNoTargetTexts(), record.action) !== undefined
+    ) {
+      return { key: `operationRecords.actionsNoTarget.${record.action}`, params: {}, text: '' };
     }
 
-    const sentence = this.translateOrNull(`operationRecords.actions.${record.action}`, {
-      target: this.targetDisplay(record),
-    });
-    // 未登记的动作码（下游业务自定义、尚未补词条）原样显示裸码：
-    // 造一个假句子比显示机器码更糟——读者会以为自己看懂了。
-    return sentence ?? record.action;
+    // 未登记的动作码（下游业务自定义、尚未补词条）原样显示裸码
+    return textAt(this.actionTexts(), record.action) === undefined
+      ? { key: null, params: {}, text: record.action }
+      : {
+          key: `operationRecords.actions.${record.action}`,
+          params: { target: this.targetDisplay(record) },
+          text: '',
+        };
     //#else
     if (record.targetId === '-') {
       const noTarget = ACTION_SENTENCES_NO_TARGET[record.action];
       if (noTarget) {
-        return noTarget;
+        return { key: null, params: {}, text: noTarget };
       }
     }
 
     const template = ACTION_SENTENCES[record.action];
-    return template ? template(this.targetDisplay(record)) : record.action;
+    const text = template ? template(this.targetDisplay(record)) : record.action;
+    return { key: null, params: {}, text };
     //#endif
   }
 
@@ -324,26 +336,35 @@ export class OperationRecordTable {
   }
 
   /**
-   * 失败原因：按错误码查词条，查不到就显示原始码。
+   * 失败原因：显示后端按当前语言渲染的 `failureMessage`，取不到时回落到原始码。
    *
-   * 后端错误码形如 `Auth:InvalidCredentials`，而冒号在词条键里没有先例，
-   * 统一换成下划线再查。`failureData` 是后端序列化的 JSON 参数对象，解析失败就当作无参数——
-   * 一条审计记录不该因为参数解析不了而整行渲染不出来。
+   * 审计专用的措辞与参数（登录失败次数、锁定时长）也由后端的 `{码}:Record` 词条给出，前端不再备词条。
    */
-  failureReason(record: OperationRecordOutputDto): string | null {
+  private failureReason(record: OperationRecordOutputDto): string | null {
     if (!record.failureCode) {
       return null;
     }
     //#if (IncludeLocalization)
-    const key = `operationRecords.failures.${record.failureCode.replace(/:/g, '_')}`;
-    return (
-      this.translateOrNull(key, this.parseFailureData(record.failureData)) ?? record.failureCode
-    );
+    return record.failureMessage ?? record.failureCode;
     //#else
-    return FAILURE_REASONS[record.failureCode.replace(/:/g, '_')] ?? record.failureCode;
+    const text = FAILURE_REASONS[record.failureCode];
+    return (
+      record.failureMessage ??
+      (text ? this.fillPlaceholders(text, this.parseFailureData(record.failureData)) : null) ??
+      record.failureCode
+    );
     //#endif
   }
+  //#if (!IncludeLocalization)
 
+  /** 与后端 `LocalizationPlaceholders.Fill` 同一规则：按名替换 `{name}`，没有对应参数的原样保留。 */
+  private fillPlaceholders(text: string, data: Record<string, unknown>): string {
+    return text.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
+      Object.hasOwn(data, name) ? String(data[name] ?? '') : placeholder,
+    );
+  }
+
+  /** `failureData` 是后端序列化的 JSON 参数对象；解析失败按无参数处理，一条坏记录不该整行渲染不出来。 */
   private parseFailureData(raw: string | undefined): Record<string, unknown> {
     if (!raw) {
       return {};
@@ -355,110 +376,42 @@ export class OperationRecordTable {
       return {};
     }
   }
-  //#if (IncludeLocalization)
-
-  /**
-   * 查词条，缺失时返回 `null` 而不是键本身。
-   *
-   * **transloco 的 `DefaultMissingHandler` 缺键时返回 key 原样**（已核官方源码），
-   * 所以不能直接用返回值——否则界面会显示成 `operationRecords.actions.foo.bar` 这种丑键。
-   * 用"返回值是否等于传入键"来识别缺失。
-   */
-  private translateOrNull(key: string, params?: Record<string, unknown>): string | null {
-    const value = this.transloco.translate(key, params);
-    return value === key ? null : value;
-  }
   //#endif
-
-  outcomeLabel(record: OperationRecordOutputDto): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate(
-      this.isSucceeded(record)
-        ? 'operationRecords.outcome.succeeded'
-        : 'operationRecords.outcome.failed',
-    );
-    //#else
-    return this.isSucceeded(record) ? 'Succeeded' : 'Rejected';
-    //#endif
-  }
-
-  detailLabel(
-    field:
-      | 'actor'
-      | 'target'
-      | 'time'
-      | 'basis'
-      | 'correlationId'
-      | 'actorTenantId'
-      | 'failure'
-      | 'failureDetail',
-  ): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      actor: 'operationRecords.table.colActor',
-      target: 'operationRecords.table.colTarget',
-      time: 'operationRecords.table.colTime',
-      basis: 'operationRecords.table.colBasis',
-      correlationId: 'operationRecords.table.colCorrelationId',
-      actorTenantId: 'operationRecords.table.colActorTenantId',
-      failure: 'operationRecords.table.colFailure',
-      failureDetail: 'operationRecords.table.colFailureDetail',
-    } as const;
-    return this.transloco.translate(keys[field]);
-    //#else
-    const labels = {
-      actor: 'Operator',
-      target: 'Target',
-      time: 'Time',
-      basis: 'Authorized by',
-      correlationId: 'Trace ID',
-      actorTenantId: 'Operator tenant',
-      failure: 'Reason',
-      failureDetail: 'Technical detail',
-    } as const;
-    return labels[field];
-    //#endif
-  }
-
-  detailsLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('common.details');
-    //#else
-    return 'View details';
-    //#endif
-  }
 
   /** 每页条数变化：回到第一页并广播新的分页状态。 */
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
-
-  paginatorLabels(): TablePaginatorLabels {
-    //#if (IncludeLocalization)
-    return {
-      currentPageReport: this.transloco.translate('operationRecords.table.currentPageReport', {
-        total: this.totalCount(),
-      }),
-      rowsPerPage: this.transloco.translate('common.rowsPerPage'),
-      page: this.transloco.translate('common.pageOf', {
-        page: this.currentPage(),
-        total: this.totalPages(),
-      }),
-      first: this.transloco.translate('common.pagination.first'),
-      previous: this.transloco.translate('common.pagination.previous'),
-      next: this.transloco.translate('common.pagination.next'),
-      last: this.transloco.translate('common.pagination.last'),
-    };
-    //#else
-    return {
-      currentPageReport: `${this.totalCount()} in total`,
-      rowsPerPage: 'Items per page',
-      page: `Page ${this.currentPage()} of ${this.totalPages()}`,
-      first: 'First page',
-      previous: 'Previous page',
-      next: 'Next page',
-      last: 'Last page',
-    };
-    //#endif
-  }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'operationRecords.table.colAction': 'Action',
+  'operationRecords.table.colOutcome': 'Outcome',
+  'operationRecords.table.colActor': 'Operator',
+  'operationRecords.table.colTime': 'Time',
+  'common.details': 'View details',
+  'operationRecords.outcome.succeeded': 'Succeeded',
+  'operationRecords.outcome.failed': 'Rejected',
+  'operationRecords.table.unknownActor': 'Anonymous',
+  'operationRecords.table.impersonatedBy': 'acting on behalf, by {{name}}',
+  'operationRecords.table.colTarget': 'Target',
+  'operationRecords.table.colFailure': 'Reason',
+  'operationRecords.table.colFailureDetail': 'Technical detail',
+  'operationRecords.table.colBasis': 'Authorized by',
+  'operationRecords.table.colActorTenantId': 'Operator tenant',
+  'operationRecords.table.colCorrelationId': 'Trace ID',
+  'operationRecords.table.emptyFilteredTitle': 'No matching records',
+  'operationRecords.table.emptyFilteredHint': 'Adjust the search',
+  'operationRecords.table.emptyTitle': 'No operation records yet',
+  'operationRecords.table.emptyHint': 'Records appear here as soon as an audited operation runs',
+  'operationRecords.table.currentPageReport': '{{total}} in total',
+  'common.rowsPerPage': 'Items per page',
+  'common.pageOf': 'Page {{page}} of {{total}}',
+  'common.pagination.first': 'First page',
+  'common.pagination.previous': 'Previous page',
+  'common.pagination.next': 'Next page',
+  'common.pagination.last': 'Last page',
+};
+//#endif

@@ -17,6 +17,41 @@
     "type": "project"
   },
   "sourceName": "CompanyName.ProjectName",
+  "guids": [
+    "7f3c2a1e-4b5d-4e6f-9a8b-0c1d2e3f4a5b"
+  ],
+  "SpecialCustomOperations": {
+    "**/*.mjs": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if": [ "//#if" ],
+            "else": [ "//#else" ],
+            "elseif": [ "//#elseif" ],
+            "endif": [ "//#endif" ],
+            "trim": "true",
+            "wholeLine": "true"
+          }
+        }
+      ]
+    },
+    "**/.env.example": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if": [ "#if" ],
+            "else": [ "#else" ],
+            "elseif": [ "#elseif" ],
+            "endif": [ "#endif" ],
+            "trim": "true",
+            "wholeLine": "true"
+          }
+        }
+      ]
+    }
+  },
   "preferNameDirectory": true,
   "forms": {
     "LastSegment": {
@@ -83,10 +118,6 @@
       "type": "computed",
       "value": "(ServiceRole == \"Resource\")"
     },
-    "ServiceUserContextEnabled": {
-      "type": "computed",
-      "value": "(ServiceRole != \"Standalone\")"
-    },
     "ExternalLogin": {
       "type": "computed",
       "value": "(LocalIdentity && IncludeExternalLogin)"
@@ -121,6 +152,7 @@
         "frontend/node_modules/**",
         "frontend/node_modules*/**",
         "frontend/.angular/**",
+        "frontend/.cache/lint/**",
         "frontend/.tmp/**",
         "frontend/dist/**",
         "test-scenarios/**",
@@ -131,7 +163,9 @@
           "condition": "IncludeLocalization",
           "exclude": [
             "frontend/package.json",
-            "frontend/package-lock.json"
+            "frontend/package-lock.json",
+            "frontend/src/app/shared/utils/english-text.ts",
+            "frontend/src/app/shared/utils/english-text.spec.ts"
           ]
         },
         {
@@ -150,12 +184,13 @@
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Persistence/EntityConfigurations/IdentityEntityConfiguration.cs",
             "backend/src/CompanyName.ProjectName.Infrastructure/TenantConnections/PostgresTenantDatabaseErrorDescriber.cs",
-            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/**",
+            "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/TenantDatabaseErrorDescriberTests.cs",
             "backend/src/CompanyName.ProjectName.Client/Dtos/WhoAmIDto.cs",
-            "frontend/src/app/shared/dtos/auth.dto.ts",
             "frontend/src/app/features/account/**",
             "frontend/src/app/features/platform/components/users/widgets/reset-user-password-dialog/**",
+            "frontend/src/app/features/platform/components/users/widgets/user-edit-dialog/**",
             "frontend/src/app/core/guards/super-admin-guard.ts",
+            "frontend/src/app/core/errors/api-error-codes.ts",
             "frontend/_mock/api/auth.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/AuthorizationAndAuditingTests.cs",
             "backend/src/CompanyName.ProjectName.Application/Tenants/**",
@@ -171,7 +206,12 @@
             "frontend/_mock/api/tenant.spec.ts",
             "frontend/_mock/data/tenant.ts",
             "frontend/src/app/features/platform/components/tenants/tenants.spec.ts",
+            "frontend/src/app/core/interceptors/tenant-interceptor.spec.ts",
+            "frontend/src/app/core/services/impersonation-service.spec.ts",
+            "frontend/src/app/core/services/tenant-context-service.spec.ts",
+            "frontend/src/app/core/settings/auth-mock-subject.spec.ts",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/SecureDefaultsTests.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/UserUniquenessTests.cs",
             "backend/tests/CompanyName.ProjectName.IntegrationTests/VerificationCodeDigestTests.cs"
           ]
         },
@@ -190,15 +230,29 @@
           ]
         },
         {
+          "condition": "!RemoteTokenAuth",
+          "exclude": [
+            "frontend/src/app/core/settings/mock-subject.spec.ts",
+            "frontend/src/app/core/components/resource-login/**",
+            "frontend/_mock/api/resource-auth.ts",
+            "backend/src/CompanyName.ProjectName.Api/Auth/ResourceSessionAuthentication.cs",
+            "backend/src/CompanyName.ProjectName.Api/Controllers/ResourceAuthController.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/ResourceBrowserSessionTests.cs"
+          ]
+        },
+        {
           "condition": "!ExternalLogin",
           "exclude": [
+            "backend/src/CompanyName.ProjectName.Api/Auth/ExternalAuthenticationExtensions.cs",
+            "backend/src/CompanyName.ProjectName.Infrastructure/Auth/OAuth/Options/ExternalAuthOptions.cs",
+            "backend/tests/CompanyName.ProjectName.IntegrationTests/Fixtures/ExternalOAuthTestHost.cs",
             "backend/src/CompanyName.ProjectName.Api/Controllers/ExternalAuthController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/ExternalAuthAppService.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/AppServices/IExternalAuthAppService.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginCallbackInputDto.cs",
-            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginUrlOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginLinkDtos.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/Dtos/ExternalLoginProvidersOutputDto.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/DomainServices/ExternalAuthDomainService.cs",
+            "backend/src/CompanyName.ProjectName.Domain/Auth/Errors/ExternalAuthErrorCodes.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Entities/ExternalLoginConnection.cs",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Abstractions/**",
             "backend/src/CompanyName.ProjectName.Infrastructure/Auth/**",
@@ -206,7 +260,8 @@
             "backend/tests/CompanyName.ProjectName.IntegrationTests/ExternalLoginLinkTests.cs",
             "backend/tests/CompanyName.ProjectName.UnitTests/Infrastructure/ExternalAuthOptionsValidatorTests.cs",
             "frontend/src/app/features/account/components/external-auth-callback/**",
-            "frontend/src/app/features/account/components/external-logins/**"
+            "frontend/src/app/features/account/components/external-logins/**",
+            "frontend/src/app/features/account/services/account-service.spec.ts"
           ]
         },
         {
@@ -223,6 +278,7 @@
             "frontend/public/i18n/**",
             "frontend/src/app/core/i18n/**",
             "frontend/src/app/core/services/language-service.ts",
+            "frontend/src/app/core/services/language-service.spec.ts",
             "frontend/src/app/core/interceptors/accept-language-interceptor.ts",
             "frontend/src/app/shared/components/language-switcher/**"
           ]
@@ -240,6 +296,7 @@
             "backend/src/CompanyName.ProjectName.Api/Controllers/OpenApplicationController.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/AuthPrincipalFactory.cs",
             "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/IAuthPrincipalFactory.cs",
+            "backend/src/CompanyName.ProjectName.Application/Auth/SignIn/SubjectClaims.cs",
             "backend/src/CompanyName.ProjectName.Application/OpenApplications/**",
             "backend/src/CompanyName.ProjectName.Domain/Auth/Options/OAuthOptions.cs",
             "frontend/src/app/features/platform/components/open-applications/**",

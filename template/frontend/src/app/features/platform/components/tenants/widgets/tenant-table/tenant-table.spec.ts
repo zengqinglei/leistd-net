@@ -69,7 +69,7 @@ describe('TenantTable', () => {
     fixture.detectChanges();
   });
 
-  it('当前页与总页数按父级传入的分页状态派生', () => {
+  it('derives the current page and total pages from the parent pagination state', () => {
     expect(component.currentPage()).toBe(1);
     expect(component.totalPages()).toBe(3); // 45 条 / 每页 20
 
@@ -79,7 +79,7 @@ describe('TenantTable', () => {
     expect(component.currentPage()).toBe(3);
   });
 
-  it('没有数据时总页数仍为 1', () => {
+  it('keeps total pages at 1 when there is no data', () => {
     fixture.componentRef.setInput('tenants', []);
     fixture.componentRef.setInput('totalCount', 0);
     fixture.detectChanges();
@@ -88,7 +88,7 @@ describe('TenantTable', () => {
     expect(component.totalPages()).toBe(1);
   });
 
-  it('改每页条数时回到第一页', () => {
+  it('returns to the first page when the page size changes', () => {
     fixture.componentRef.setInput('pagination', { pageIndex: 2, pageSize: 20 } as PaginationState);
     fixture.detectChanges();
 
@@ -104,7 +104,7 @@ describe('TenantTable', () => {
   // 租户表的溢出菜单里有一项只读的"详情"，因此它不随修改权限消失——
   // 能看到这张列表就能看详情。按 canUpdate||canDelete 藏起来时，只有查看权限的人
   // 反而完全没有详情入口，那才是真正的功能缺口。
-  it('只有查看权限时每一行仍然有操作菜单入口', async () => {
+  it('still shows the row action menu trigger with view-only permission', async () => {
     fixture.componentRef.setInput('canUpdate', false);
     fixture.componentRef.setInput('canDelete', false);
 
@@ -126,7 +126,7 @@ describe('TenantTable', () => {
 
   // 后端对停用租户直接拒绝模拟登录，留一个点得动的入口就是「能看见但调不通」。
   // 这条钉的是禁用本身：改成隐藏或恢复可点都会红。
-  it('停用的租户不能模拟登录，入口保留但禁用', async () => {
+  it('keeps the impersonate item for inactive tenants but disables it', async () => {
     const inactive = { ...tenant('2', 'globex'), isActive: false } as TenantOutputDto;
     fixture.componentRef.setInput('tenants', [tenant('1', 'acme'), inactive]);
     fixture.componentRef.setInput('canImpersonate', true);
@@ -156,51 +156,73 @@ describe('TenantTable', () => {
       await fixture.whenStable();
     }
 
-    expect((await impersonateItem(1)).disabled).toBeTrue();
+    expect((await impersonateItem(1)).disabled).toBe(true);
     await closeMenu();
 
-    expect((await impersonateItem(0)).disabled).toBeFalse();
+    expect((await impersonateItem(0)).disabled).toBe(false);
     await closeMenu();
   });
 
-  it('窄视口下标记存在被折叠的列，桌面端不标记', () => {
-    expect(component.hasCollapsedColumns()).toBeFalse();
+  it('flags collapsed columns on narrow viewports but not on desktop', () => {
+    expect(component.hasCollapsedColumns()).toBe(false);
 
     viewport.next(viewportState(false, false));
     fixture.detectChanges();
 
     // 列被藏起来却不给展开入口，那些字段就等于从界面上消失了。
-    expect(component.hasCollapsedColumns()).toBeTrue();
+    expect(component.hasCollapsedColumns()).toBe(true);
   });
 
-  it('列按优先级逐级收起，锁定列在任何视口都保留', () => {
-    expect(component.isColumnHidden('displayName')).toBeFalse();
-    expect(component.isColumnHidden('creationTime')).toBeFalse();
+  it('collapses columns by priority while keeping locked columns at every viewport', () => {
+    expect(component.isColumnHidden('displayName')).toBe(false);
+    expect(component.isColumnHidden('creationTime')).toBe(false);
 
     viewport.next(viewportState(true, false));
     fixture.detectChanges();
 
     // 平板先让三级列（创建时间）出局，二级列还留着。
-    expect(component.isColumnHidden('creationTime')).toBeTrue();
-    expect(component.isColumnHidden('displayName')).toBeFalse();
+    expect(component.isColumnHidden('creationTime')).toBe(true);
+    expect(component.isColumnHidden('displayName')).toBe(false);
 
     viewport.next(viewportState(false, false));
     fixture.detectChanges();
 
-    expect(component.isColumnHidden('displayName')).toBeTrue();
+    expect(component.isColumnHidden('displayName')).toBe(true);
     // 名称是租户的业务标识、操作列是唯一入口，两者收起来这张表就没用了。
-    expect(component.isColumnHidden('name')).toBeFalse();
-    expect(component.isColumnHidden('actions')).toBeFalse();
+    expect(component.isColumnHidden('name')).toBe(false);
+    expect(component.isColumnHidden('actions')).toBe(false);
   });
 
-  it('行展开状态按行独立记录', () => {
-    expect(component.isRowExpanded('1')).toBeFalse();
+  // 展开状态用 TanStack 的行展开，按行 id 记：数据刷新（同一批行换了新对象、换了顺序）后
+  // 展开的仍是原来那一行。按下标记会让展开跟着位置走，数据一换就默认全部收起。
+  it('keeps a row expanded by its id across data refreshes', async () => {
+    viewport.next(viewportState(false, false));
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
 
-    component.toggleRow('1');
-    expect(component.isRowExpanded('1')).toBeTrue();
-    expect(component.isRowExpanded('2')).toBeFalse();
+    expandButtons()[0].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['true', 'false']);
 
-    component.toggleRow('1');
-    expect(component.isRowExpanded('1')).toBeFalse();
+    fixture.componentRef.setInput('tenants', [tenant('2', 'globex'), tenant('1', 'acme')]);
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'true']);
+
+    expandButtons()[1].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'false']);
   });
+
+  function expandButtons(): HTMLButtonElement[] {
+    const host = fixture.nativeElement as HTMLElement;
+    return Array.from(host.querySelectorAll('tbody ng-icon[name="lucideChevronRight"]')).map(
+      (icon) => icon.closest('button')!,
+    );
+  }
+
+  function expandedStates(): (string | null)[] {
+    return expandButtons().map((button) => button.getAttribute('aria-expanded'));
+  }
 });

@@ -9,6 +9,8 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 //#endif
 import { AccountService } from '../../services/account-service';
 
+import type { MockedObject } from 'vitest';
+
 function rejection(code: string): ApplicationHttpError {
   return ApplicationHttpError.from(
     new HttpErrorResponse({ status: 401, error: { status: 401, code, title: code } }),
@@ -17,7 +19,7 @@ function rejection(code: string): ApplicationHttpError {
 
 describe('TwoFactorChallenge', () => {
   let fixture: ComponentFixture<TwoFactorChallenge>;
-  let account: jasmine.SpyObj<AccountService>;
+  let account: Pick<MockedObject<AccountService>, 'completeTwoFactorLogin'>;
   let completed: number;
   let cancelled: number;
 
@@ -37,16 +39,18 @@ describe('TwoFactorChallenge', () => {
   }
 
   beforeEach(() => {
-    account = jasmine.createSpyObj<AccountService>('AccountService', ['completeTwoFactorLogin']);
+    account = {
+      completeTwoFactorLogin: vi.fn().mockName('AccountService.completeTwoFactorLogin'),
+    };
     TestBed.configureTestingModule({
       imports: [TwoFactorChallenge],
       // prettier-ignore
       providers: [
-        { provide: AccountService, useValue: account },
-        //#if (IncludeLocalization)
-        ...provideTranslocoTesting(['en']),
-        //#endif
-      ],
+                { provide: AccountService, useValue: account },
+                //#if (IncludeLocalization)
+                ...provideTranslocoTesting(['en']),
+                //#endif
+            ],
     });
     fixture = TestBed.createComponent(TwoFactorChallenge);
     fixture.componentRef.setInput('token', 'challenge-token');
@@ -57,13 +61,15 @@ describe('TwoFactorChallenge', () => {
     fixture.detectChanges();
   });
 
-  it('提交验证码，通过后通知登录页', async () => {
-    account.completeTwoFactorLogin.and.returnValue(of(undefined));
+  it('submits the code and notifies the login page on success', async () => {
+    account.completeTwoFactorLogin.mockReturnValue(of(undefined));
 
     type('123456');
     await submit();
 
-    expect(account.completeTwoFactorLogin).toHaveBeenCalledOnceWith({
+    expect(account.completeTwoFactorLogin).toHaveBeenCalledTimes(1);
+
+    expect(account.completeTwoFactorLogin).toHaveBeenCalledWith({
       token: 'challenge-token',
       code: '123456',
     });
@@ -71,8 +77,8 @@ describe('TwoFactorChallenge', () => {
   });
 
   // 验证器应用与短信常把验证码显示成"123 456"，整段粘贴进来也要能直接提交
-  it('粘贴带分隔的验证码时只保留数字，输满即提交', async () => {
-    account.completeTwoFactorLogin.and.returnValue(of(undefined));
+  it('keeps only digits from a pasted separated code and submits once complete', async () => {
+    account.completeTwoFactorLogin.mockReturnValue(of(undefined));
 
     const input = (fixture.nativeElement as HTMLElement).querySelector('input') as HTMLInputElement;
     const clipboardData = new DataTransfer();
@@ -81,22 +87,24 @@ describe('TwoFactorChallenge', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(account.completeTwoFactorLogin).toHaveBeenCalledOnceWith({
+    expect(account.completeTwoFactorLogin).toHaveBeenCalledTimes(1);
+
+    expect(account.completeTwoFactorLogin).toHaveBeenCalledWith({
       token: 'challenge-token',
       code: '123456',
     });
     expect(completed).toBe(1);
   });
 
-  it('验证码错误时留在这一步；凭据失效时回到密码那一步', async () => {
-    account.completeTwoFactorLogin.and.returnValue(
+  it('stays on a wrong code and returns to the password step on expired credentials', async () => {
+    account.completeTwoFactorLogin.mockReturnValue(
       throwError(() => rejection('Auth:TwoFactorCodeInvalid')),
     );
     type('000000');
     await submit();
     expect(cancelled).toBe(0);
 
-    account.completeTwoFactorLogin.and.returnValue(
+    account.completeTwoFactorLogin.mockReturnValue(
       throwError(() => rejection('Auth:TwoFactorChallengeExpired')),
     );
     type('000000');

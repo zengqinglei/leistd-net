@@ -4,7 +4,8 @@ using Microsoft.Extensions.Options;
 namespace Leistd.Email.Smtp.Options;
 
 // 只校验本地配置；连通性与认证由发送路径验证。
-internal sealed class SmtpOptionsValidator : IValidateOptions<SmtpOptions>
+// 报错里的键名按实际绑定的配置节给出，宿主改了节路径时照提示去改才对得上
+internal sealed class SmtpOptionsValidator(string sectionPath = SmtpOptions.SectionName) : IValidateOptions<SmtpOptions>
 {
     /// <inheritdoc />
     public ValidateOptionsResult Validate(string? name, SmtpOptions options)
@@ -13,22 +14,22 @@ internal sealed class SmtpOptionsValidator : IValidateOptions<SmtpOptions>
 
         if (string.IsNullOrWhiteSpace(options.Host))
         {
-            failures.Add($"{SmtpOptions.SectionName}:Host is required.");
+            failures.Add($"{sectionPath}:Host is required.");
         }
 
         if (options.Port is < 1 or > 65535)
         {
-            failures.Add($"{SmtpOptions.SectionName}:Port must be between 1 and 65535 (was {options.Port}).");
+            failures.Add($"{sectionPath}:Port must be between 1 and 65535 (was {options.Port}).");
         }
 
         if (string.IsNullOrWhiteSpace(options.DefaultFromAddress))
         {
-            failures.Add($"{SmtpOptions.SectionName}:DefaultFromAddress is required; it is the sender identity used when a message does not set one.");
+            failures.Add($"{sectionPath}:DefaultFromAddress is required; it is the sender identity used when a message does not set one.");
         }
         else if (!IsAddrSpec(options.DefaultFromAddress))
         {
             failures.Add(
-                $"{SmtpOptions.SectionName}:DefaultFromAddress '{options.DefaultFromAddress}' is not a bare mailbox address. " +
+                $"{sectionPath}:DefaultFromAddress '{options.DefaultFromAddress}' is not a bare mailbox address. " +
                 "Expected just 'user@host'; if you meant to set a display name, use DefaultFromName.");
         }
 
@@ -37,7 +38,7 @@ internal sealed class SmtpOptionsValidator : IValidateOptions<SmtpOptions>
         if (hasUser != hasPassword)
         {
             failures.Add(
-                $"{SmtpOptions.SectionName}: Username and Password must be set together or both left empty. " +
+                $"{sectionPath}: Username and Password must be set together or both left empty. " +
                 "Setting only one makes the sender skip authentication while looking configured, " +
                 "so the server either relays anonymously or refuses the message.");
         }

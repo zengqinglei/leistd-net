@@ -4,9 +4,8 @@ using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Provisioning;
+using Leistd.MultiTenancy.Management.Provisioning;
 
 namespace CompanyName.ProjectName.Infrastructure.TenantConnections;
 
@@ -68,6 +67,6 @@ internal sealed class PostgresTenantDatabaseErrorDescriber : ITenantDatabaseErro
     }
 
     private static BusinessException Describe(string message, string code)
-        => new BadRequestException(message).WithCode(code);
+        => new BusinessException(code, message);
 }
 #endif

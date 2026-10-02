@@ -33,13 +33,6 @@ public static class DatabaseSchemaVerificationExtensions
 
     private static async Task VerifyAsync(DbContext dbContext, string scope)
     {
-        // 迁移是关系型专属概念：集成测试的内存库上调用会抛 "Relational-specific methods"，
-        // 而那不是配置错误，只是"这个存储没有迁移"
-        if (!dbContext.Database.IsRelational())
-        {
-            return;
-        }
-
         var pending = (await dbContext.Database.GetPendingMigrationsAsync()).ToList();
         if (pending.Count == 0)
         {

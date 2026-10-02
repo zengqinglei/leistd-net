@@ -1,6 +1,6 @@
 {
   "culture": "en",
   "texts": {
-    "Error:BadRequest": "Host wording wins."
+    "Title:400": "Host wording wins."
   }
 }

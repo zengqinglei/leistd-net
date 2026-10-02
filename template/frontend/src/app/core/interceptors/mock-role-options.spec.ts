@@ -50,7 +50,8 @@ describe('getRoleOptions', () => {
     setMockSessionUserId(null);
   });
 
-  it('排序号相同时按名称升序，与后端 GetAllAsync 同口径', () => {
+  // 与后端 GetAllAsync 同口径。
+  it('sorts by name ascending when sort numbers tie', () => {
     const tied = getRoleOptions()
       .filter((option) => temporaryIds.includes(option.id))
       .map((option) => option.name);
@@ -58,7 +59,7 @@ describe('getRoleOptions', () => {
     expect(tied).toEqual(['Alpha', 'Zeta']);
   });
 
-  it('不改动全局 ROLES 的顺序', () => {
+  it('does not reorder the global ROLES', () => {
     getRoleOptions();
 
     expect(ROLES.map((role) => role.id)).toEqual([...originalOrder, ...temporaryIds]);

@@ -1,11 +1,14 @@
 {
   "common": {
+    "signIn": "Sign In",
+    "continueToSignIn": "Continue to sign in",
     "workspace": "Workspace",
     "unknownError": "Unknown error",
     "appError": "Application error",
     "unexpectedError": "An unexpected error occurred. Please refresh the page and try again.",
     "networkError": "Unable to reach the server. Check your connection and try again.",
     "requestError": "Request error",
+    "traceId": "Trace ID",
     "authFailedReLogin": "Authentication failed. Please sign in again.",
     "retry": "Retry",
     "cancel": "Cancel",
@@ -37,18 +40,6 @@
     "toggleSidebar": "Toggle sidebar",
     "clearFilter": "Clear filter",
     "noResults": "No results",
-    "validation": {
-      "required": "This field is required.",
-      "email": "Please enter a valid email address.",
-      "minLength": "Must be at least {{min}} characters.",
-      "maxLength": "Must not exceed {{max}} characters.",
-      "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
-      "roleNamePattern": "Must be 2–64 letters, digits, or underscores.",
-      "passwordRule": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
-      "passwordMismatch": "The two passwords do not match.",
-      "passwordSameAsCurrent": "The new password must differ from the current one.",
-      "phonePattern": "Only digits, spaces, and + - ( ) are allowed."
-    },
     "noData": "No data",
     "paginator": {
       "report": "{{from}}-{{to}} of {{total}}",
@@ -58,13 +49,29 @@
       "previous": "Previous page",
       "next": "Next page",
       "last": "Last page"
-    }
+    },
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
+  },
+  "validation": {
+    "required": "This field is required.",
+    "email": "Please enter a valid email address.",
+    "minLength": "Must be at least {{minLength}} characters.",
+    "maxLength": "Must not exceed {{maxLength}} characters.",
+    "usernamePattern": "Must be 3–64 letters, digits, or underscores.",
+    "roleNamePattern": "Must be 2–64 letters, digits, or underscores.",
+    "phonePattern": "Only digits, spaces, and + - ( ) are allowed.",
+    "passwordMismatch": "The two passwords do not match.",
+    "passwordSameAsCurrent": "The new password must differ from the current one.",
+    "tenantNamePattern": "Use letters, digits and hyphens only, not starting or ending with a hyphen, up to 63 characters.",
+    "connectionNamePattern": "Use lowercase letters, digits and hyphens only, 1 to 64 characters.",
+    "connectionNameTaken": "This connection name is already registered; change its connection string instead.",
+    "pkceRequired": "Native/Public clients must enable PKCE."
   },
   "menu": {
     "workspace": "Workspace",
     "platform": "Admin platform",
     "logout": "Sign out",
-    "hostTenant": "Host",
     "personalSettings": "Personal settings"
   },
   "language": {
@@ -78,7 +85,7 @@
     "404": "The requested record does not exist; the server took no action.",
     "406": "The requested format is not available.",
     "410": "The requested resource has been permanently deleted.",
-    "422": "A validation error occurred while creating the object.",
+    "422": "The request could not be processed.",
     "500": "A server error occurred. Please check the server.",
     "502": "Bad gateway.",
     "503": "Service unavailable; the server is temporarily overloaded or under maintenance.",
@@ -100,17 +107,16 @@
       "roles": "Role Management",
       "tenants": "Tenant Management",
       "groupDeveloper": "Developer",
-      "openApplications": "Developer Apps",
+      "openApplications": "Open Applications",
       "systemSettings": "System settings",
       "operationRecords": "Operation records",
       "groupIdentity": "Identity & access",
       "groupAudit": "Audit",
-      "groupPersonal": "Personal",
-      "settings": "Settings",
       "toggle": "Toggle sidebar"
     },
     "topbar": {
-      "openNavigation": "Open navigation"
+      "openNavigation": "Open navigation",
+      "navigationDescription": "Choose a page to open"
     },
     "notifications": {
       "title": "Notifications",
@@ -120,101 +126,6 @@
       "empty": "No notifications",
       "clearAllConfirm": "Clear all notifications? This cannot be undone.",
       "unreadAria": "Notifications ({{count}} unread)"
-    }
-  },
-  "platform": {
-    "dashboard": {
-      "welcome": "Welcome to the Admin Console",
-      "currentUser": "Currently signed in as: {{name}}",
-      "intro": "This is a starter template project. You can manage users under \"User Management\" and extend more feature modules from the left-hand menu.",
-      "title": "Dashboard"
-    }
-  },
-  "workspace": {
-    "dashboard": {
-      "title": "Workspace",
-      "username": "Username",
-      "displayName": "Display name",
-      "email": "Email",
-      "roles": "Roles",
-      "noUserInfo": "No user information available"
-    },
-    "placeholder": {
-      "title": "Example module",
-      "comingSoon": "A placeholder for your own business modules — replace this page and its menu entry under \"Business\"."
-    }
-  },
-  "settings": {
-    "reset": "Reset to default",
-    "empty": "No configurable items in this section",
-    "timeZoneSearch": "Search city or UTC offset",
-    "timeZoneEmpty": "No matching time zone",
-    "timeZoneToggle": "Show time zones",
-    "browserTimeZone": "browser",
-    "followSystem": "Follows your system",
-    "hostScopeHint": "Applies to all instances (~30s)",
-    "saved": "Saved",
-    "saving": "Saving…",
-    "logLevelHints": {
-      "Verbose": "Logs everything, including every SQL statement and request detail. For short troubleshooting only; left on, it fills the disk quickly.",
-      "Debug": "Logs debugging details. Turn it on while investigating; not recommended day to day.",
-      "Information": "Logs the normal business flow. The default level.",
-      "Warning": "Logs only warnings and errors; the normal flow is not written.",
-      "Error": "Logs only errors. You may miss clues that are wrong without raising an error.",
-      "Fatal": "Logs only failures that stop the process. Almost the same as turning logging off."
-    },
-    "personal": {
-      "title": "Personal settings",
-      "description": "Manage your profile, account security and preferences"
-    },
-    "system": {
-      "title": "System settings",
-      "description": "Defaults and policies for everyone here; each user may override their own preferences"
-    },
-    "navigation": "Settings navigation",
-    "openNavigation": "Open settings navigation",
-    "panels": {
-      "profile": {
-        "title": "Profile",
-        "description": "Your avatar, name and contact details"
-      },
-      "security": {
-        "title": "Account & security",
-        "description": "Your password and how you sign in"
-      },
-      "notifications": {
-        "title": "Notifications",
-        "description": "Choose where each kind of notification reaches you. In-app security alerts are always on; email only goes to a verified address"
-      },
-      "preferences": {
-        "title": "Preferences",
-        "description": "Language and time zone. Applies to you only; leave blank to follow your system"
-      }
-    },
-    "secretSet": "Set (type a new value to replace it)",
-    "secretUnset": "Not set",
-    "emailTest": {
-      "title": "Send a test email",
-      "description": "Uses the settings above as they are now. Save your changes first.",
-      "recipient": "Recipient",
-      "send": "Send test email",
-      "sent": "Test email sent to {{to}}"
-    }
-  },
-  "landing": {
-    "hero": {
-      "title": "Template Project",
-      "subtitle": "A full-stack application development template based on Angular + Spartan UI + .NET 10 DDD architecture",
-      "login": "Sign In",
-      "register": "Sign Up"
-    },
-    "feature": {
-      "authTitle": "Authentication",
-      "authDesc": "Cookie-based authentication with role and permission management",
-      "usersTitle": "User Management",
-      "usersDesc": "Full CRUD operations with permission control",
-      "themeTitle": "Theme System",
-      "themeDesc": "Dark mode + Tailwind CSS + Spartan UI"
     }
   },
   "theme": {
@@ -227,6 +138,7 @@
     }
   },
   "app": {
+    "name": "Template Project",
     "startup": {
       "loading": "Loading...",
       "failed": "Application Failed to Load",
@@ -236,669 +148,6 @@
       "unknownErrorDetail": "An unknown error occurred: {{message}}",
       "unknownError": "An unknown error occurred. Please try again later."
     }
-  },
-  "account": {
-    "changePassword": {
-      "header": "Change Password",
-      "subtitle": "Enter your current password and set a new sign-in password. Other devices will be signed out.",
-      "rules": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
-      "currentPassword": "Current Password",
-      "newPassword": "New Password",
-      "confirmPassword": "Confirm New Password",
-      "submit": "Update Password",
-      "updateSuccess": "Password updated. Other devices have been signed out."
-    },
-    "sessions": {
-      "header": "Signed-in devices",
-      "subtitle": "These devices are signed in to your account. If you don't recognize one, sign it out and change your password.",
-      "current": "This device",
-      "unknownDevice": "Unknown device",
-      "ip": "IP {{ip}}",
-      "lastSeen": "Last active {{time}}",
-      "signedInAt": "Signed in {{time}}",
-      "impersonatedBy": "Signed in by {{name}} via impersonation",
-      "revoke": "Sign out",
-      "revokeOthers": "Sign out other devices",
-      "revokeConfirm": "Sign this device out? It will need to sign in again.",
-      "revokeOthersConfirm": "Sign out every device except this one? They will need to sign in again.",
-      "revoked": "The device has been signed out",
-      "revokedOthers": "Signed out {{count}} device(s)",
-      "loadFailed": "Couldn't load your devices."
-    },
-    "twoFactor": {
-      "header": "Two-factor authentication",
-      "subtitleOff": "Besides your password, sign-in also asks for a code from an authenticator app on your phone.",
-      "subtitleOn": "Sign-in asks for a code from your authenticator app after your password.",
-      "on": "On",
-      "turnOn": "Turn on",
-      "turnOff": "Turn off",
-      "regenerate": "Regenerate recovery codes",
-      "recoveryCodesLeft": "{{count}} unused recovery code(s) left",
-      "requiredByPolicy": "Your organization requires two-factor authentication, so it cannot be turned off.",
-      "disableHint": "Enter your password and a code from the authenticator app to turn it off.",
-      "regenerateHint": "Enter a code from the authenticator app. The old recovery codes stop working.",
-      "passwordLabel": "Current password",
-      "codeLabel": "Verification code",
-      "confirmDisable": "Turn off",
-      "confirmRegenerate": "Regenerate",
-      "enabledToast": "Two-factor authentication is on. Other devices were signed out.",
-      "disabledToast": "Two-factor authentication is off. Other devices were signed out.",
-      "loadFailed": "Couldn't load the two-factor status.",
-      "scanTitle": "1. Add this account to your authenticator app",
-      "scanHint": "Scan the QR code with an app such as Google Authenticator, Microsoft Authenticator or Tencent Authenticator.",
-      "manualHint": "Can't scan it? Enter this key instead:",
-      "copyKey": "Copy key",
-      "copied": "Copied",
-      "qrAlt": "QR code for the authenticator app",
-      "verifyTitle": "2. Enter the 6-digit code shown in the app",
-      "enable": "Verify and turn on",
-      "setupLoadFailed": "Couldn't start the setup.",
-      "recoveryCodesWarning": "Save these recovery codes somewhere safe. Each one signs you in once if you lose your phone. They will not be shown again.",
-      "copyCodes": "Copy",
-      "downloadCodes": "Download",
-      "savedCodes": "I've saved them"
-    },
-    "twoFactorLogin": {
-      "title": "Two-factor authentication",
-      "codeHint": "Enter the 6-digit code from your authenticator app.",
-      "recoveryHint": "Enter one of the recovery codes you saved.",
-      "codeLabel": "Verification code",
-      "recoveryLabel": "Recovery code",
-      "submit": "Verify",
-      "useRecovery": "Can't use your phone? Use a recovery code",
-      "useCode": "Use a verification code instead",
-      "back": "Back to sign in"
-    },
-    "twoFactorRequired": {
-      "title": "Turn on two-factor authentication",
-      "description": "Your organization requires two-factor authentication. Set it up to continue.",
-      "signOut": "Sign out"
-    },
-    "externalLogins": {
-      "header": "Linked accounts",
-      "subtitle": "Sign in with these accounts as well as your password. Keep at least one way to sign in.",
-      "notLinked": "Not linked",
-      "linkedAs": "Linked as {{name}} on {{time}}",
-      "link": "Link",
-      "unlink": "Unlink",
-      "unlinkConfirm": "Unlink your {{provider}} account? You will no longer be able to sign in with it.",
-      "unlinked": "Account unlinked",
-      "linked": "Account linked",
-      "lastMethod": "Your only way to sign in",
-      "loadFailed": "Couldn't load linked accounts.",
-      "none": "No external sign-in providers are configured."
-    },
-    "profile": {
-      "superAdminTag": "Super Admin",
-      "adminTag": "Admin",
-      "avatarHint": "PNG, JPG or WebP; cropped to a square",
-      "username": "Username",
-      "usernamePlaceholder": "Please enter a username",
-      "email": "Email",
-      "emailPlaceholder": "Please enter an email",
-      "displayName": "Display name",
-      "displayNamePlaceholder": "Enter a display name",
-      "phoneNumber": "Phone Number",
-      "phoneNumberPlaceholder": "Please enter a phone number",
-      "guestUser": "Guest user",
-      "updateSuccess": "Profile updated",
-      "discardChanges": "Discard changes",
-      "removeAvatar": "Remove avatar",
-      "avatarUpdated": "Avatar updated",
-      "avatarRemoved": "Avatar removed",
-      "avatarRejectedSummary": "Cannot use this image",
-      "avatarRejected": {
-        "type": "Please choose a PNG, JPG or WebP image.",
-        "size": "The image cannot exceed 10 MB.",
-        "decode": "This image could not be read. Try another one."
-      },
-      "emailVerified": "Verified",
-      "emailUnverified": "Not verified",
-      "emailChangeHint": "Save first, then verify the new email address.",
-      "sendCode": "Send verification code",
-      "resendCode": "Resend code",
-      "resendIn": "Resend in {{seconds}}s",
-      "codeLabel": "Verification code",
-      "codePlaceholder": "6-digit code from the email",
-      "confirmCode": "Verify",
-      "codeSent": "A verification code was sent to {{email}}",
-      "emailVerifiedSuccess": "Email address verified",
-      "emailVerificationUnavailable": "Email verification is not set up on this deployment yet."
-    },
-    "brand": {
-      "title": "Template Project",
-      "subtitle": "Full-stack development template based on Angular + .NET"
-    },
-    "login": {
-      "title": "Sign In",
-      "subtitle": "Welcome back, please enter your account information",
-      "usernameOrEmail": "Username or Email",
-      "usernameOrEmailPlaceholder": "Please enter your username or email",
-      "password": "Password",
-      "passwordPlaceholder": "Please enter your password",
-      "noAccount": "Don't have an account?",
-      "registerNow": "Sign up now",
-      "submit": "Sign In",
-      "or": "OR",
-      "testAccount": "Test Account",
-      "adminRole": "Administrator",
-      "badgeFastDev": "Fast Development",
-      "badgeModernArch": "Modern Architecture",
-      "loginSuccess": "Signed in successfully",
-      "welcomeBack": "Welcome back!",
-      "loginFailed": "Sign-in failed",
-      "externalLoginFailed": "Unable to connect to the {{provider}} sign-in service, please try again later",
-      "badgeReadyMain": "Ready",
-      "badgeReadySub": "to use",
-      "tenant": "Tenant",
-      "tenantPlaceholder": "Tenant name, leave empty for host",
-      "tenantConfirm": "Confirm",
-      "tenantClear": "Clear tenant",
-      "tenantFromDomain": "Determined by the site address.",
-      "tenantResolving": "Identifying tenant from the site address…",
-      "tenantUnavailable": "The tenant this address points to is unavailable. Contact your administrator.",
-      "tenantProbeFailed": "Could not determine the tenant for this address. Check your connection and try again.",
-      "tenantProbeRetry": "Retry"
-    },
-    "register": {
-      "title": "Sign Up",
-      "subtitle": "Welcome aboard, please fill in the following information to create your account",
-      "badgeFastRegister": "Quick Sign-up",
-      "badgeSecure": "Security Guaranteed",
-      "email": "Email",
-      "emailPlaceholder": "Enter your email address",
-      "username": "Username",
-      "usernamePlaceholder": "Extracted from email prefix, letters, digits and underscores allowed",
-      "captcha": "Captcha",
-      "captchaPlaceholder": "Enter the captcha on the right",
-      "captchaRefresh": "Can't see clearly? Click to refresh",
-      "captchaAlt": "Captcha",
-      "emailCode": "Email Verification Code",
-      "emailCodePlaceholder": "Enter the 6-digit code",
-      "resendCountdown": "Resend in {{seconds}}s",
-      "sendCode": "Get Code",
-      "password": "Password",
-      "passwordPlaceholder": "At least 12 characters",
-      "confirmPassword": "Confirm Password",
-      "confirmPasswordPlaceholder": "Enter the password again",
-      "submit": "Sign Up",
-      "haveAccount": "Already have an account?",
-      "loginNow": "Sign in directly",
-      "emailRequired": "Please enter a valid email first",
-      "captchaRequired": "Please enter the captcha first",
-      "emailCodeSent": "Verification code sent, please check your email",
-      "captchaTokenMissing": "Please refresh to get the captcha",
-      "registerSuccess": "Account created",
-      "registerSuccessDetail": "Account created successfully, please sign in"
-    },
-    "externalCallback": {
-      "processingAria": "Completing sign-in",
-      "processing": "Processing third-party sign-in",
-      "missingParams": "Missing required callback parameters",
-      "failed": "Third-party sign-in failed. Please go back and try again."
-    }
-  },
-  "users": {
-    "page": {
-      "title": "User management"
-    },
-    "filter": {
-      "allStatus": "All statuses",
-      "allEmailStatus": "All email statuses",
-      "emailLabel": "Email status",
-      "allRoles": "All roles",
-      "searchPlaceholder": "Search username / email / display name..."
-    },
-    "actions": {
-      "newUser": "New user",
-      "manageRoles": "Assign roles"
-    },
-    "status": {
-      "active": "Active",
-      "inactive": "Disabled",
-      "emailVerified": "Email verified",
-      "emailUnverified": "Email not verified",
-      "locked": "Locked",
-      "lockedUntil": "Locked until {{time}}",
-      "lockedIndefinitely": "Locked until an administrator unlocks it"
-    },
-    "toast": {
-      "created": "User created successfully",
-      "updated": "User updated successfully",
-      "enabled": "User enabled",
-      "disabled": "User disabled",
-      "deleted": "User deleted",
-      "passwordReset": "Password has been reset",
-      "cannotDeleteSummary": "Cannot delete",
-      "cannotDeleteSuperAdmin": "The built-in super administrator cannot be deleted",
-      "unlocked": "User unlocked",
-      "twoFactorReset": "Two-factor authentication reset"
-    },
-    "confirm": {
-      "enableMessage": "Are you sure you want to enable user {{name}}?",
-      "disableMessage": "Are you sure you want to disable user {{name}}?",
-      "enableHeader": "Confirm enable",
-      "disableHeader": "Confirm disable",
-      "deleteMessage": "Are you sure you want to delete user {{name}}? Once deleted, the user will no longer be able to sign in.",
-      "deleteHeader": "Confirm delete",
-      "unlockMessage": "Unlock user {{name}}? The failed sign-in count will also be reset.",
-      "unlockHeader": "Confirm unlock",
-      "resetTwoFactorMessage": "Reset two-factor authentication for {{name}}? They will be signed out everywhere and can sign in with just their password.",
-      "resetTwoFactorHeader": "Confirm reset"
-    },
-    "table": {
-      "currentPageReport": "{{total}} in total",
-      "colUser": "User",
-      "colEmail": "Email",
-      "colRole": "Role",
-      "colStatus": "Status",
-      "colLastLogin": "Last sign-in",
-      "colCreatedAt": "Created at",
-      "colActions": "Actions",
-      "emptyTitle": "No users yet",
-      "emptyHint": "Create a new user",
-      "emptyFilteredTitle": "No matching users",
-      "emptyFilteredHint": "Adjust the search or filters"
-    },
-    "popover": {
-      "noRoles": "No roles",
-      "rolesTitle": "Roles ({{count}})"
-    },
-    "tooltip": {
-      "superAdminNoEdit": "The built-in super administrator cannot be updated by other administrators",
-      "superAdminNoDisable": "The built-in super administrator cannot be disabled by other administrators",
-      "superAdminNoDisableSelf": "The built-in super administrator cannot disable itself",
-      "disable": "Disable",
-      "enable": "Enable",
-      "superAdminNoReset": "The built-in super administrator's password cannot be reset by other administrators",
-      "resetPassword": "Reset password",
-      "superAdminNoDelete": "The built-in super administrator cannot be deleted",
-      "unlock": "Unlock",
-      "resetTwoFactor": "Reset two-factor authentication"
-    },
-    "editDialog": {
-      "editHeader": "Edit user",
-      "createHeader": "New user",
-      "description": "Manage the account profile, roles, and status.",
-      "loading": "Loading user information...",
-      "unnamedUser": "Unnamed user",
-      "noEmail": "No email set",
-      "avatarHint": "PNG, JPG or WebP",
-      "avatarTooLargeSummary": "File too large",
-      "avatarTooLargeDetail": "The image cannot exceed 10 MB",
-      "avatarBadTypeSummary": "Unsupported format",
-      "avatarBadTypeDetail": "Please upload a PNG, JPG or WEBP image",
-      "usernameLabel": "Username",
-      "usernamePlaceholder": "Enter a username",
-      "emailLabel": "Email",
-      "emailPlaceholder": "Enter an email",
-      "displayNameLabel": "Display name",
-      "displayNamePlaceholder": "Enter a display name",
-      "passwordLabel": "Initial password",
-      "passwordPlaceholder": "At least 12 characters",
-      "passwordRequired": "Enter an initial password",
-      "rolesLabel": "Roles",
-      "rolesPlaceholder": "Select roles",
-      "activeTitle": "Enable user",
-      "activeHint": "When disabled, the user cannot sign in or call protected endpoints",
-      "emailVerifiedTitle": "Email verified",
-      "emailVerifiedHint": "Used to manage the email verification status",
-      "avatarDecodeFailed": "This image could not be read. Try another one."
-    },
-    "resetDialog": {
-      "header": "Reset user password",
-      "warning": "After the reset, the user must sign in with the new password.",
-      "ruleHint": "Password must be at least 12 characters (up to 256). A longer passphrase is stronger than a short complex one.",
-      "newPasswordLabel": "New password",
-      "newPasswordPlaceholder": "Enter a new password",
-      "confirmButton": "Confirm reset"
-    },
-    "rolesDialog": {
-      "title": "Roles · {{name}}",
-      "description": "The user inherits every permission granted to the selected roles.",
-      "saved": "Roles updated"
-    }
-  },
-  "operationRecords": {
-    "page": {
-      "title": "Operation records"
-    },
-    "filter": {
-      "searchPlaceholder": "Search action / target / operator...",
-      "dateRange": "Date range",
-      "category": "Category",
-      "action": "Action",
-      "outcome": "Outcome",
-      "export": "Export",
-      "exportFailed": "Export failed"
-    },
-    "categories": {
-      "authentication": "Authentication",
-      "account": "Accounts",
-      "authorization": "Authorization",
-      "tenant": "Tenants",
-      "configuration": "Configuration",
-      "data": "Data"
-    },
-    "outcome": {
-      "succeeded": "Succeeded",
-      "failed": "Rejected"
-    },
-    "actions": {
-      "user.created": "Created user {{target}}",
-      "user.updated": "Updated user {{target}}",
-      "user.deleted": "Deleted user {{target}}",
-      "user.unlocked": "Unlocked user {{target}}",
-      "user.two-factor-reset": "Reset two-factor authentication for user {{target}}",
-      "user.roles-replaced": "Changed roles for user {{target}}",
-      "role.created": "Created role {{target}}",
-      "role.deleted": "Deleted role {{target}}",
-      "permission-grants.replaced": "Changed permissions for {{target}}",
-      "tenant.created": "Created tenant {{target}}",
-      "tenant.updated": "Updated tenant {{target}}",
-      "tenant.activation-changed": "Changed activation of tenant {{target}}",
-      "tenant.deleted": "Deleted tenant {{target}}",
-      "tenant.connection-changed": "Changed the database connection of tenant {{target}}",
-      "setting.changed": "Changed setting {{target}}",
-      "operation-records.exported": "Exported operation records",
-      "auth.login.succeeded": "Signed in",
-      "auth.login.failed": "Failed to sign in ({{target}})",
-      "auth.locked-out": "Account {{target}} was locked after repeated failed sign-ins",
-      "auth.password.changed": "Changed their own password",
-      "auth.avatar.changed": "Changed their avatar",
-      "auth.email.verified": "Verified their email address",
-      "auth.session.revoked": "Signed out a device ({{target}})",
-      "auth.sessions.others-revoked": "Signed out all other devices",
-      "auth.two-factor.enabled": "Turned on two-factor authentication",
-      "auth.two-factor.disabled": "Turned off two-factor authentication",
-      "auth.two-factor.recovery-codes-regenerated": "Regenerated recovery codes",
-      "auth.two-factor.recovery-code-used": "Account {{target}} signed in with a recovery code",
-      "auth.external-login.linked": "Linked external account {{target}}",
-      "auth.external-login.unlinked": "Unlinked external account {{target}}",
-      "auth.registered": "Registered account {{target}}",
-      "impersonation.started": "Started acting as {{target}}",
-      "impersonation.ended": "Ended impersonation",
-      "tenant.impersonation-started": "Signed in as the administrator of tenant {{target}}",
-      "tenant.impersonation-ended": "Ended impersonation of tenant {{target}}",
-      "auth.token.issued": "Issued an access token",
-      "tenant.connection-registered": "Registered a database connection for tenant {{target}}",
-      "tenant.connection-removed": "Removed the database connection of tenant {{target}}"
-    },
-    "actionsNoTarget": {
-      "user.created": "Created a user",
-      "role.created": "Created a role"
-    },
-    "failures": {
-      "Auth_InvalidCredentials": "Incorrect username or password",
-      "Auth_UserTemporarilyLockedOut": "Too many failed sign-in attempts"
-    },
-    "table": {
-      "currentPageReport": "{{total}} in total",
-      "colAction": "Action",
-      "colOutcome": "Outcome",
-      "colActor": "Operator",
-      "colTarget": "Target",
-      "colTime": "Time",
-      "colBasis": "Authorized by",
-      "colCorrelationId": "Trace ID",
-      "colActorTenantId": "Operator tenant",
-      "colFailure": "Reason",
-      "colFailureDetail": "Technical detail",
-      "impersonatedBy": "acting on behalf, by {{name}}",
-      "unknownActor": "Anonymous",
-      "emptyTitle": "No operation records yet",
-      "emptyHint": "Records appear here as soon as an audited operation runs",
-      "emptyFilteredTitle": "No matching records",
-      "emptyFilteredHint": "Adjust the search"
-    }
-  },
-  "openApp": {
-    "page": {
-      "title": "Open Applications"
-    },
-    "action": {
-      "create": "New Open Application",
-      "resetSecret": "Reset secret"
-    },
-    "filter": {
-      "allAppTypes": "All application types",
-      "allClientTypes": "All client types",
-      "appTypeLabel": "Application type",
-      "clientTypeLabel": "Client type",
-      "searchPlaceholder": "Search by name / Client ID..."
-    },
-    "toast": {
-      "created": "Open application created successfully",
-      "updated": "Open application updated successfully",
-      "deleted": "Open application deleted",
-      "secretCopied": "Secret copied"
-    },
-    "confirm": {
-      "deleteHeader": "Confirm deletion",
-      "deleteMessage": "Are you sure you want to delete this open application? Clients using this Client ID will no longer be able to sign in.",
-      "resetSecretHeader": "Confirm secret reset",
-      "resetSecretMessage": "Are you sure you want to reset this open application's Client Secret? The old secret will be invalidated immediately."
-    },
-    "secret": {
-      "resetHeader": "Client Secret reset",
-      "createdHeader": "Client secret",
-      "warning": "Please copy and store it securely now; the secret will not be shown in plain text again.",
-      "copyAndClose": "Copy and close"
-    },
-    "appType": {
-      "web": "Web",
-      "native": "Desktop/Native",
-      "service": "Service"
-    },
-    "dialog": {
-      "editHeader": "Edit Open Application",
-      "createHeader": "New Open Application",
-      "description": "Configure the client's identity, type, and OAuth capabilities.",
-      "loading": "Loading open application..."
-    },
-    "field": {
-      "template": "Application template",
-      "templatePlaceholder": "Select a template to quickly fill in",
-      "displayName": "Application name",
-      "displayNamePlaceholder": "e.g. My Desktop App",
-      "clientIdPlaceholder": "e.g. my-desktop-app",
-      "applicationType": "Application type",
-      "clientType": "Client type",
-      "consentType": "Consent",
-      "clientId": "Client ID",
-      "redirectUris": "Redirect URIs",
-      "postLogoutRedirectUris": "Post Logout Redirect URIs",
-      "permissions": "Permissions",
-      "requirements": "Requirements"
-    },
-    "template": {
-      "web": "Web PKCE client",
-      "desktop": "Desktop PKCE client",
-      "service": "Service confidential client",
-      "desktopDisplayName": "My Desktop App"
-    },
-    "consentType": {
-      "implicit": "Implicit consent",
-      "explicit": "Explicit consent",
-      "external": "External consent",
-      "systematic": "Systematic consent"
-    },
-    "clientType": {
-      "publicLabel": "Public",
-      "confidentialLabel": "Confidential"
-    },
-    "permission": {
-      "authorizationEndpoint": "Authorization endpoint",
-      "tokenEndpoint": "Token endpoint",
-      "endSessionEndpoint": "End session endpoint",
-      "authorizationCode": "Authorization code",
-      "authorizationCodeFlow": "Authorization code flow",
-      "refreshToken": "Refresh token",
-      "clientCredentials": "Client credentials",
-      "codeResponse": "Code response",
-      "scopeOpenid": "Identity",
-      "scopeProfile": "Profile",
-      "scopeEmail": "Email",
-      "scopeRoles": "Roles",
-      "scopeOfflineAccess": "Offline access",
-      "notConfigured": "Not configured"
-    },
-    "requirement": {
-      "forcePkce": "Force PKCE"
-    },
-    "section": {
-      "callback": "Callback URIs",
-      "authorization": "Authorization capabilities"
-    },
-    "redirectUri": {
-      "hint": "Callback URI after sign-in completes",
-      "placeholder": "https://example.com/callback or my-desktop-app://oauth/callback",
-      "invalid": "Please enter a valid absolute URI without a fragment.",
-      "empty": "No Redirect URI configured yet"
-    },
-    "postLogoutUri": {
-      "hint": "Redirect URI after logout",
-      "empty": "No Post Logout Redirect URI configured yet"
-    },
-    "service": {
-      "autoConfigured": "Configured automatically from the template",
-      "description": "Server-side client credentials flow; no callback URIs or PKCE required."
-    },
-    "permissions": {
-      "placeholder": "Select authorization capabilities"
-    },
-    "requirements": {
-      "placeholder": "Select security requirements",
-      "pkceRequired": "Native/Public clients must enable PKCE.",
-      "offlineAccessHint": "refresh_token is allowed; consider also granting the offline_access scope."
-    },
-    "table": {
-      "currentPageReport": "{{total}} total",
-      "colApp": "Application",
-      "colType": "Type",
-      "colPermissions": "Capabilities",
-      "colSecurity": "Security",
-      "colRedirectUris": "Redirect URIs",
-      "colPostLogoutRedirectUris": "Post logout redirect URIs",
-      "colCreatedAt": "Created at",
-      "noPkce": "No PKCE",
-      "secretSet": "Secret set",
-      "noSecret": "No secret",
-      "emptyTitle": "No open applications yet",
-      "emptyHint": "Create a new open application",
-      "emptyFilteredTitle": "No matching open applications",
-      "emptyFilteredHint": "Adjust the search or filters"
-    },
-    "popover": {
-      "empty": "Nothing configured"
-    }
-  },
-  "forbidden": {
-    "title": "Access denied",
-    "description": "You are signed in, but you do not have permission to view this page. Ask an administrator to grant it.",
-    "backToWorkspace": "Back to workspace",
-    "backHome": "Go home"
-  },
-  "roles": {
-    "searchPlaceholder": "Search roles",
-    "create": "New role",
-    "colName": "Role",
-    "colUsers": "Users",
-    "colPermissions": "Permissions",
-    "static": "Built-in",
-    "default": "Default",
-    "staticRoleHint": "Built-in roles cannot be deleted",
-    "createTitle": "New role",
-    "editTitle": "Edit role",
-    "editDescription": "Name is the stable identifier and cannot be changed after creation.",
-    "fieldName": "Name",
-    "fieldDisplayName": "Display name",
-    "fieldDescription": "Description",
-    "fieldIsDefault": "Assign to new users by default",
-    "saved": "Role saved",
-    "deleted": "Role deleted",
-    "deleteTitle": "Delete role",
-    "deleteDescription": "Delete \"{{name}}\"? Its permission grants will be removed as well.",
-    "configurePermissions": "Configure permissions",
-    "title": "Role Management",
-    "colSort": "Sort",
-    "colCreatedAt": "Created at",
-    "table": {
-      "currentPageReport": "{{total}} in total",
-      "emptyTitle": "No roles yet",
-      "emptyHint": "Create a new role",
-      "emptyFilteredTitle": "No matching roles",
-      "emptyFilteredHint": "Adjust the search keyword"
-    }
-  },
-  "permissions": {
-    "dialogTitle": "Permissions · {{name}}",
-    "searchPlaceholder": "Search permissions",
-    "grantedCount": "{{count}} granted",
-    "groupSummary": "{{granted}}/{{total}}",
-    "saved": "Permissions saved",
-    "conflict": "Someone else changed these permissions. The latest values have been reloaded.",
-    "description": "Check a permission to grant it. The top-level entry of each block is its read access; granting an action grants that read access too — creating users requires viewing the user list. To take an ability away from someone, change their roles.",
-    "viewAccessHint": "view list"
-  },
-  "tenants": {
-    "title": "Tenant Management",
-    "searchPlaceholder": "Search tenants",
-    "create": "New tenant",
-    "colName": "Name",
-    "colDisplayName": "Display name",
-    "colDescription": "Description",
-    "colStatus": "Status",
-    "colCreatedAt": "Created at",
-    "active": "Active",
-    "inactive": "Inactive",
-    "activate": "Activate",
-    "deactivate": "Deactivate",
-    "activated": "Tenant activated",
-    "deactivated": "Tenant deactivated",
-    "activateTitle": "Activate tenant",
-    "deactivateTitle": "Deactivate tenant",
-    "activateDescription": "Activate \"{{name}}\"? Its users will be able to sign in again.",
-    "deactivateDescription": "Deactivate \"{{name}}\"? Its users will not be able to sign in.",
-    "createTitle": "New tenant",
-    "editTitle": "Edit tenant",
-    "editDescription": "Name identifies the tenant at sign-in; users enter it to select their tenant.",
-    "fieldName": "Name",
-    "fieldDisplayName": "Display name",
-    "fieldDescription": "Description",
-    "fieldAdminEmail": "Admin email",
-    "fieldAdminPassword": "Admin password",
-    "fieldConnectionName": "Connection name",
-    "fieldConnectionString": "Connection string",
-    "createConnectionHint": "Optional. Leave empty to keep this tenant in the database each service is already configured with. Sharding can only be decided here: the database must already exist and be migrated, and it cannot be changed afterwards without migrating the data.",
-    "shardRequiresInactive": "To give this tenant a database of its own, deactivate it first: its data currently lives in the database each service is configured with, and registering a connection does not move it.",
-    "addConnection": "Add connection",
-    "changeConnectionString": "Change connection string",
-    "connectionsEmpty": "This tenant has no database of its own; every service uses the database it is configured with.",
-    "connectionNameInvalid": "Use lowercase letters, digits and hyphens only, 1 to 64 characters.",
-    "connectionNameTaken": "This connection name is already registered; change its connection string instead.",
-    "deleteConnectionTitle": "Delete connection",
-    "deleteConnectionDescription": "Delete connection \"{{name}}\"? That service will go back to the database it is configured with.",
-    "saved": "Tenant saved",
-    "deleted": "Tenant deleted",
-    "deleteTitle": "Delete tenant",
-    "deleteDescription": "Delete \"{{name}}\"? Users of this tenant will no longer be able to sign in.",
-    "table": {
-      "currentPageReport": "{{total}} in total",
-      "emptyTitle": "No tenants yet",
-      "emptyHint": "Create a new tenant",
-      "emptyFilteredTitle": "No matching tenants",
-      "emptyFilteredHint": "Adjust the search keyword"
-    },
-    "detailTitle": "Tenant detail",
-    "detailSectionIdentity": "Identity",
-    "detailSectionConnections": "Database connections",
-    "detailSecretHint": "The connection string is stored encrypted and never returned; saving replaces it in full.",
-    "fieldConnectionVersion": "Version",
-    "impersonate": "Sign in as tenant",
-    "impersonateConfirm": "Sign in as the administrator of “{{name}}”? You will leave the host context until you exit.",
-    "impersonateFailed": "Could not sign in as this tenant.",
-    "impersonateInactiveHint": "Deactivated tenants cannot be signed in to"
   },
   "impersonation": {
     "banner": "Acting as tenant {{tenant}} · started by {{impersonator}}",

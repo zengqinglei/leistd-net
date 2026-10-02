@@ -1,14 +1,7 @@
 using Leistd.Data.Connections;
 using Leistd.MultiTenancy;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
@@ -18,6 +11,7 @@ using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -53,6 +47,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
         services.AddMultiTenancyCore();
         services.AddSingleton<IConnectionStringResolver>(provider => new TenantRoutingResolver(
             provider.GetRequiredService<ICurrentTenantAccessor>(), _hostConnectionString, _tenantConnectionString));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddDbContext<TestDbContext>((_, options) =>
@@ -86,7 +81,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
     public async Task A_failed_record_survives_the_callers_rollback()
     {
         using (_services.GetRequiredService<ICurrentTenant>().Change(TenantId))
-        using (await _services.GetRequiredService<IUnitOfWorkManager>().BeginAsync())
+        using (_services.GetRequiredService<IUnitOfWorkManager>().Begin())
         {
             await Store.InsertAsync(Record(OperationRecordOutcome.Failed, TenantId));
             // 不 Complete：离开作用域即回滚
@@ -100,7 +95,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
     public async Task A_succeeded_record_rolls_back_with_the_caller()
     {
         using (_services.GetRequiredService<ICurrentTenant>().Change(TenantId))
-        using (await _services.GetRequiredService<IUnitOfWorkManager>().BeginAsync())
+        using (_services.GetRequiredService<IUnitOfWorkManager>().Begin())
         {
             await Store.InsertAsync(Record(OperationRecordOutcome.Succeeded, TenantId));
         }
@@ -116,7 +111,7 @@ public sealed class FailedRecordIsolationTests : IAsyncLifetime
     public async Task A_host_layer_failed_record_lands_in_the_host_database_from_a_tenant_context()
     {
         using (_services.GetRequiredService<ICurrentTenant>().Change(TenantId))
-        using (await _services.GetRequiredService<IUnitOfWorkManager>().BeginAsync())
+        using (_services.GetRequiredService<IUnitOfWorkManager>().Begin())
         {
             await Store.InsertAsync(Record(OperationRecordOutcome.Failed, tenantId: null));
         }

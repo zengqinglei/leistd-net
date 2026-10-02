@@ -1,4 +1,3 @@
-using System.Reflection;
 using Mapster;
 using MapsterMapper;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,26 +5,39 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.ObjectMapping.Mapster.Options;
-using Leistd.ObjectMapping.Mapster.Mapping;
 using Leistd.ObjectMapping.Mapster.Services;
 using Leistd.ObjectMapping.Abstractions;
 
 namespace Leistd.ObjectMapping.Mapster;
 
 /// <summary>
-/// Mapster 对象映射的注册入口：注册 <c>IObjectMapper</c> 与按程序集扫描到的 <c>MapsterProfile</c>。
+/// Mapster 对象映射的注册入口：注册 <c>IObjectMapper</c> 与组件自己的 <see cref="TypeAdapterConfig"/>。
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
     /// 注册 Mapster 对象映射器。
     /// </summary>
+    /// <remarks>
+    /// 映射配置用 Mapster 官方的 <see cref="IRegister"/> 书写，经 <c>Configurators</c> 扫描登记到组件的
+    /// <see cref="TypeAdapterConfig"/>（不是 <c>TypeAdapterConfig.GlobalSettings</c>）。业务代码只注入
+    /// <c>IObjectMapper</c>；配置里的嵌套映射交给 Mapster 按同一份配置完成，不调用无参 <c>Adapt&lt;T&gt;()</c>——
+    /// 那会改用全局配置，本组件登记的规则在嵌套处静默失效。
+    /// </remarks>
     /// <example>
     /// <code>
     /// builder.Services.AddMapsterObjectMapper(options =&gt;
     /// {
+    ///     options.Configurators.Add(config =&gt; config.Scan(typeof(OrderMappings).Assembly));
     ///     options.ValidateMappings = true;   // 开发/测试环境尽早暴露未配置的映射
     /// });
+    ///
+    /// public class OrderMappings : IRegister
+    /// {
+    ///     public void Register(TypeAdapterConfig config) =&gt;
+    ///         config.NewConfig&lt;Order, OrderOutputDto&gt;()
+    ///             .Map(dest =&gt; dest.CustomerName, src =&gt; src.Customer.Name);
+    /// }
     /// </code>
     /// </example>
     public static IServiceCollection AddMapsterObjectMapper(
@@ -62,28 +74,5 @@ public static class DependencyInjection
         services.TryAddSingleton<IObjectMapper, MapsterObjectMapper>();
 
         return services;
-    }
-
-    /// <summary>
-    /// 扫描程序集并添加 Mapster 配置文件。
-    /// </summary>
-    public static MapsterOptions AddProfiles(this MapsterOptions options, params Assembly[] assemblies)
-    {
-        foreach (var assembly in assemblies)
-        {
-            var profileTypes = assembly.GetTypes()
-                .Where(t => t.IsClass && !t.IsAbstract && t.IsSubclassOf(typeof(MapsterProfile)));
-
-            foreach (var profileType in profileTypes)
-            {
-                options.Configurators.Add(config =>
-                {
-                    var profile = (MapsterProfile)Activator.CreateInstance(profileType)!;
-                    profile.Configure(config);
-                });
-            }
-        }
-
-        return options;
     }
 }

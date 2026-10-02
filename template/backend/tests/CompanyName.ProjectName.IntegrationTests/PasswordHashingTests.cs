@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using CompanyName.ProjectName.Infrastructure.Shared.Security.PasswordHash;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using Microsoft.Extensions.Options;
 
 namespace CompanyName.ProjectName.IntegrationTests;
 
@@ -17,7 +18,8 @@ namespace CompanyName.ProjectName.IntegrationTests;
 /// </remarks>
 public class PasswordHashingTests
 {
-    private readonly PasswordHasher _hasher = new();
+    // 按生产默认值构造：测试宿主为提速调低了工作因子，这里钉住的是发货默认
+    private readonly PasswordHasher _hasher = new(Options.Create(new PasswordHashOptions()));
 
     [Fact]
     public void The_same_password_hashes_differently_every_time()
@@ -54,6 +56,19 @@ public class PasswordHashingTests
 
         var iterations = BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(1, 4));
         Assert.Equal(600_000, iterations);
+    }
+
+    /// <summary>
+    /// 调整工作因子后，旧参数算出的密文照常校验
+    /// </summary>
+    [Fact]
+    public void A_hash_from_another_cost_still_verifies_after_the_cost_changes()
+    {
+        var older = new PasswordHasher(Options.Create(new PasswordHashOptions { IterationCount = 1_000 }));
+        var hash = older.HashPassword("PasswordHashingTests!Pw");
+
+        Assert.True(_hasher.VerifyPassword(hash, "PasswordHashingTests!Pw"));
+        Assert.False(_hasher.VerifyPassword(hash, "PasswordHashingTests!Px"));
     }
 
     /// <summary>

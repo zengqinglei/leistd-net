@@ -15,9 +15,12 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 import { AuthService } from '../../../../core/services/auth-service';
 import { AuthorizationService } from '../../../../core/services/authorization-service';
 import { StartupService } from '../../../../core/services/startup-service';
+import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { PERMISSIONS } from '../../../../shared/models/permission';
 import { GetUsersInputDto } from '../../models/user-management.dto';
 import { UserManagementService } from '../../services/user-management-service';
+
+import type { MockedObject } from 'vitest';
 
 /**
  * 用户页面的查询闭环：子表事件 → URL query → 列表请求参数。
@@ -25,16 +28,16 @@ import { UserManagementService } from '../../services/user-management-service';
  * 子表用例只证明组件内部计算正确，证明不了父页面这一层——模板绑定接错、
  * query 键写错、DTO 映射漏字段，子表照样全绿，而界面上翻页翻不动、筛选不生效。
  */
-describe('Users 页面查询闭环', () => {
+describe('Users page query round trip', () => {
   let fixture: ComponentFixture<Users>;
   let component: Users;
   let router: Router;
-  let service: jasmine.SpyObj<UserManagementService>;
+  let service: Pick<MockedObject<UserManagementService>, 'getUsers'>;
 
   /** 最近一次列表请求的参数。 */
   function lastQuery(): GetUsersInputDto {
-    const calls = service.getUsers.calls.all();
-    const query = calls[calls.length - 1]?.args[0];
+    const calls = vi.mocked(service.getUsers).mock.calls;
+    const query = calls.at(-1)?.[0];
     if (!query) {
       throw new Error('列表请求从未发出');
     }
@@ -48,8 +51,10 @@ describe('Users 页面查询闭环', () => {
   }
 
   beforeEach(async () => {
-    service = jasmine.createSpyObj<UserManagementService>('UserManagementService', ['getUsers']);
-    service.getUsers.and.returnValue(of({ items: [], totalCount: 0 }) as never);
+    service = {
+      getUsers: vi.fn().mockName('UserManagementService.getUsers'),
+    };
+    service.getUsers.mockReturnValue(of({ items: [], totalCount: 0 }) as never);
 
     await TestBed.configureTestingModule({
       imports: [Users],
@@ -75,12 +80,16 @@ describe('Users 页面查询闭环', () => {
       versionToken: 'r1',
     });
 
+    // 应用里设置上下文（连带语言服务）在启动流中就已创建，首帧之前语言已经激活。
+    // 这里同样先建好：否则它要到页面首次渲染途中才被子表格注入，构造时激活语言会让
+    // 页面外层的 *transloco 在视图还没建完时再建一次。
+    TestBed.inject(SettingContextService);
     fixture = TestBed.createComponent(Users);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
 
-  it('翻页写进 URL，并按新页码重新请求', async () => {
+  it('writes paging to the URL and refetches the new page', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -90,7 +99,7 @@ describe('Users 页面查询闭环', () => {
     expect(lastQuery().limit).toBe(20);
   });
 
-  it('改每页条数回到第一页，请求的 offset 随之归零', async () => {
+  it('resets to the first page and offset 0 when rows per page changes', async () => {
     table().paginationChange.emit({ pageIndex: 3, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -101,7 +110,7 @@ describe('Users 页面查询闭环', () => {
     expect(lastQuery().limit).toBe(50);
   });
 
-  it('排序写进 URL 并回到第一页，转成接口排序参数', async () => {
+  it('writes sorting to the URL, resets to page one and maps it to the API sort', async () => {
     table().paginationChange.emit({ pageIndex: 2, pageSize: 20 } as PaginationState);
     await fixture.whenStable();
 
@@ -114,16 +123,14 @@ describe('Users 页面查询闭环', () => {
     expect(lastQuery().sorting).toBeTruthy();
   });
 
-  it('URL 状态回填组件：刷新与前进后退可复原', async () => {
+  it('restores component state from the URL on reload and back/forward navigation', async () => {
     await router.navigate(['/platform/users'], {
       queryParams: { page: 2, pageSize: 50, keyword: 'alice' },
     });
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(component.pagination()).toEqual(
-      jasmine.objectContaining({ pageIndex: 1, pageSize: 50 }),
-    );
+    expect(component.pagination()).toEqual(expect.objectContaining({ pageIndex: 1, pageSize: 50 }));
     expect(lastQuery().keyword).toBe('alice');
   });
 });

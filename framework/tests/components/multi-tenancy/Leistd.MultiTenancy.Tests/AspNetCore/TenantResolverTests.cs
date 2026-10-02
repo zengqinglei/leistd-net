@@ -1,7 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.MultiTenancy.AspNetCore.Resolution;
-using Leistd.MultiTenancy.AspNetCore;
-using Microsoft.Extensions.Options;
 using Xunit;
 using Leistd.MultiTenancy.Resolution;
 using MsOptions = Microsoft.Extensions.Options.Options;

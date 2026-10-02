@@ -1,12 +1,14 @@
 using CompanyName.ProjectName.Domain.Users.Entities;
+using Leistd.MultiTenancy.Management.Provisioning;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Tenants.Errors;
+#endif
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Provisioning;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 
@@ -30,7 +32,7 @@ internal sealed class TenantHasUsersActivationGuard(
     {
         long userCount;
         using (currentTenant.Change(tenant.Id, tenant.Name))
-        using (var tenantUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var tenantUnitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             userCount = await userRepository.CountAsync(cancellationToken: cancellationToken);
             await tenantUnitOfWork.CompleteAsync(cancellationToken);
@@ -38,11 +40,8 @@ internal sealed class TenantHasUsersActivationGuard(
 
         if (userCount == 0)
         {
-            throw new BadRequestException(
+            throw new BusinessException(TenantErrorCodes.ActivateWithoutUsers,
                     "This tenant has no users yet; activating it would let nobody in. Finish provisioning first.")
-#if (IncludeLocalization)
-                .WithCode("Tenant:ActivateWithoutUsers")
-#endif
                 ;
         }
     }

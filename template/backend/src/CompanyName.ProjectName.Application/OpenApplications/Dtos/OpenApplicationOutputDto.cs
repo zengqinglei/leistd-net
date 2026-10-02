@@ -33,10 +33,6 @@ public record OpenApplicationOutputDto
     /// </summary>
     public required string ClientType { get; init; }
 
-    /// <summary>
-    /// 同意类型
-    /// </summary>
-    public required string ConsentType { get; init; }
 
     /// <summary>
     /// Redirect URIs

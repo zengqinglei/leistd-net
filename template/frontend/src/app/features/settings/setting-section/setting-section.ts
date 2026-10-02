@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCircleCheck, lucideCircleX, lucideRotateCcw } from '@ng-icons/lucide';
@@ -17,15 +17,15 @@ import { firstValueFrom } from 'rxjs';
 
 import { applicationErrorMessage } from '../../../core/errors/application-http-error';
 //#if (IncludeLocalization)
-import { translationReady } from '../../../core/i18n/translation-ready';
-//#endif
-//#if (IncludeLocalization)
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
 import { SessionContextService } from '../../../core/services/session-context-service';
 import { SettingService } from '../../../core/settings/setting-service';
 import { SETTINGS } from '../../../core/settings/setting.constants';
 import { SettingOutputDto } from '../../../core/settings/setting.dto';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../shared/utils/english-text';
+//#endif
 //#if (LocalIdentity)
 import { EmailTest } from '../email-test/email-test';
 //#endif
@@ -95,7 +95,7 @@ export const SAVING_MIN_MS = 400;
     ...HlmSelectImports,
     ...HlmSwitchImports,
     ...HlmTooltipImports,
-    TranslocoModule,
+    TranslocoDirective,
     //#if (LocalIdentity)
     EmailTest,
     //#endif
@@ -127,10 +127,8 @@ export class SettingSection {
   private readonly pageState = inject(SettingsPageState);
   //#if (IncludeLocalization)
   private readonly languageService = inject(LanguageService);
-  //#endif
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
+  //#else
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   /**
@@ -185,77 +183,6 @@ export class SettingSection {
     const excluded = new Set(this.exclude());
     return groups.filter((group) => !excluded.has(group.key));
   });
-
-  //#if (IncludeLocalization)
-  // 重置按钮只有图标，可访问名称必须显式给出，否则读屏软件只能念出"按钮"。
-  protected readonly resetLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.reset');
-  });
-
-  protected readonly timeZoneSearchLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.timeZoneSearch');
-  });
-
-  protected readonly timeZoneEmptyLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.timeZoneEmpty');
-  });
-
-  protected readonly timeZoneToggleLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.timeZoneToggle');
-  });
-
-  protected readonly browserTimeZoneLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.browserTimeZone');
-  });
-
-  protected readonly followSystemLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.followSystem');
-  });
-
-  protected readonly hostScopeHint = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.hostScopeHint');
-  });
-
-  protected readonly savedLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.saved');
-  });
-
-  protected readonly savingLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.saving');
-  });
-
-  protected readonly secretSetLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.secretSet');
-  });
-
-  protected readonly secretUnsetLabel = computed(() => {
-    this.translationReady();
-    return this.transloco.translate('settings.secretUnset');
-  });
-  //#else
-  protected readonly resetLabel = computed(() => 'Reset to default');
-
-  protected readonly timeZoneSearchLabel = computed(() => 'Search city or UTC offset');
-  protected readonly timeZoneEmptyLabel = computed(() => 'No matching time zone');
-  protected readonly timeZoneToggleLabel = computed(() => 'Show time zones');
-  protected readonly browserTimeZoneLabel = computed(() => 'browser');
-  protected readonly followSystemLabel = computed(() => 'Follows your system');
-  protected readonly hostScopeHint = computed(() => 'Applies to all instances (~30s)');
-  protected readonly savedLabel = computed(() => 'Saved');
-  protected readonly savingLabel = computed(() => 'Saving…');
-  protected readonly secretSetLabel = computed(() => 'Set (type a new value to replace it)');
-  protected readonly secretUnsetLabel = computed(() => 'Not set');
-  //#endif
 
   /**
    * 输入框显示的是**本层的覆盖值**，不是回落后的生效值。
@@ -346,14 +273,6 @@ export class SettingSection {
     return this.isNumeric(setting) ? 'number' : 'text';
   }
 
-  /** 占位符：机密设置只说"设过没有"，其余显示继承来的值或系统默认值。 */
-  protected placeholderOf(setting: SettingOutputDto, scope: SettingScope): string {
-    if (setting.isSecret) {
-      return setting.hasSecretValue ? this.secretSetLabel() : this.secretUnsetLabel();
-    }
-    return this.inheritedOf(setting, scope) || this.systemDefaultOf(setting);
-  }
-
   /** 带取值区间的设置用数字输入框，并把上下界交给浏览器。 */
   protected isNumeric(setting: SettingOutputDto): boolean {
     // 按"是不是数"判定，不按"是不是 null"：服务端省掉值为 null 的属性，非数值型设置根本不带这两个字段
@@ -437,8 +356,14 @@ export class SettingSection {
    *
    * 占位符直接显示原始值会让下拉里挑「中文」、没选中时却显示 <c>zh-CN</c>，
    * 同一个值在同一个控件上两种写法。
+   *
+   * @param followSystemLabel 「跟随系统」的文案，由模板按当前语言取好传入。
    */
-  protected inheritedLabelOf(setting: SettingOutputDto, scope: SettingScope): string {
+  protected inheritedLabelOf(
+    setting: SettingOutputDto,
+    scope: SettingScope,
+    followSystemLabel: string,
+  ): string {
     const inherited = this.inheritedOf(setting, scope);
     if (inherited.length > 0) {
       return this.labelOf(setting, inherited);
@@ -446,9 +371,7 @@ export class SettingSection {
 
     // 没有继承值时看有没有"跟随系统"探测到的值：空占位符会让正在生效的值看不见。
     const system = this.systemDefaultOf(setting);
-    return system.length === 0
-      ? ''
-      : `${this.followSystemLabel()} · ${this.labelOf(setting, system)}`;
+    return system.length === 0 ? '' : `${followSystemLabel} · ${this.labelOf(setting, system)}`;
   }
 
   protected onInput(setting: SettingOutputDto, scope: SettingScope, event: Event): void {
@@ -477,8 +400,8 @@ export class SettingSection {
     void this.write(setting, checked ? 'true' : 'false', scope);
   }
 
-  /** 选中的日志级别的说明；不是日志级别或认不出的取值返回空串。 */
-  protected levelDescriptionOf(setting: SettingOutputDto, scope: SettingScope): string {
+  /** 选中的日志级别的说明文案键；不是日志级别或认不出的取值返回空串。 */
+  protected levelHintKeyOf(setting: SettingOutputDto, scope: SettingScope): string {
     if (
       setting.name !== SETTINGS.logging.minimumLevel &&
       setting.name !== SETTINGS.logging.requestLevel
@@ -487,12 +410,7 @@ export class SettingSection {
     }
 
     const effective = this.draftOf(setting, scope) || this.systemOrInheritedValue(setting, scope);
-    const description = LOG_LEVEL_DESCRIPTIONS[effective];
-    //#if (IncludeLocalization)
-    return description ? this.transloco.translate(description) : '';
-    //#else
-    return description ?? '';
-    //#endif
+    return LOG_LEVEL_DESCRIPTIONS[effective] ?? '';
   }
 
   /** 本层没设值时实际生效的那个值（继承来的，或跟随系统探测到的）。 */
@@ -599,3 +517,32 @@ export class SettingSection {
     }, SAVED_HINT_MS);
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'settings.followSystem': 'Follows your system',
+  'settings.timeZoneSearch': 'Search city or UTC offset',
+  'settings.timeZoneToggle': 'Show time zones',
+  'settings.timeZoneEmpty': 'No matching time zone',
+  'settings.browserTimeZone': 'browser',
+  'settings.secretSet': 'Set (type a new value to replace it)',
+  'settings.secretUnset': 'Not set',
+  'settings.reset': 'Reset to default',
+  'settings.hostScopeHint': 'Applies to all instances (~30s)',
+  'settings.saving': 'Saving…',
+  'settings.saved': 'Saved',
+  'settings.empty': 'No configurable items in this section',
+  'settings.logLevelHints.Verbose':
+    'Logs everything, including every SQL statement and request detail. For short troubleshooting only; left on, it fills the disk quickly.',
+  'settings.logLevelHints.Debug':
+    'Logs debugging details. Turn it on while investigating; not recommended day to day.',
+  'settings.logLevelHints.Information': 'Logs the normal business flow. The default level.',
+  'settings.logLevelHints.Warning':
+    'Logs only warnings and errors; the normal flow is not written.',
+  'settings.logLevelHints.Error':
+    'Logs only errors. You may miss clues that are wrong without raising an error.',
+  'settings.logLevelHints.Fatal':
+    'Logs only failures that stop the process. Almost the same as turning logging off.',
+};
+//#endif

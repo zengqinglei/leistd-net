@@ -5,7 +5,6 @@ using Leistd.Ddd.Domain.Entities.Auditing;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Auth.Entities;
@@ -41,9 +40,13 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
     public string ProviderUserId { get; private set; }
 
     /// <summary>
-    /// 外部身份提供商的用户名
+    /// 外部账号在提供商侧的展示标签（GitHub 的句柄、Google 的邮箱）
     /// </summary>
-    public string? ProviderUsername { get; private set; }
+    /// <remarks>
+    /// 只用于在"已绑定哪些登录方式"里显示是哪个账号，不是本地用户名，也不是身份标识：
+    /// 身份按 <c>Provider</c> + <see cref="ProviderUserId"/> 认，本地用户名由外部登录领域服务生成。
+    /// </remarks>
+    public string? ProviderAccountLabel { get; private set; }
 
     /// <summary>
     /// 外部身份提供商的邮箱
@@ -54,21 +57,6 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
     /// 外部身份提供商的头像 URL
     /// </summary>
     public string? ProviderAvatarUrl { get; private set; }
-
-    /// <summary>
-    /// Access Token（加密存储）
-    /// </summary>
-    public string? AccessToken { get; private set; }
-
-    /// <summary>
-    /// Refresh Token（加密存储）
-    /// </summary>
-    public string? RefreshToken { get; private set; }
-
-    /// <summary>
-    /// Token 过期时间
-    /// </summary>
-    public DateTime? ExpiresAt { get; private set; }
 
     /// <summary>
     /// 最后同步时间
@@ -91,7 +79,7 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
         string provider,
         string providerUserId,
         DateTime syncedAt,
-        string? providerUsername = null,
+        string? providerAccountLabel = null,
         string? providerEmail = null,
         string? providerAvatarUrl = null)
     {
@@ -99,7 +87,7 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
         UserId = userId;
         Provider = provider ?? throw new ArgumentNullException(nameof(provider));
         ProviderUserId = providerUserId ?? throw new ArgumentNullException(nameof(providerUserId));
-        ProviderUsername = providerUsername;
+        ProviderAccountLabel = providerAccountLabel;
         ProviderEmail = providerEmail;
         ProviderAvatarUrl = providerAvatarUrl;
         LastSyncTime = syncedAt;
@@ -107,26 +95,15 @@ public class ExternalLoginConnection : DeletionAuditedEntity<Guid>, IMultiTenant
 
     public void Update(
         DateTime syncedAt,
-        string? providerUsername = null,
+        string? providerAccountLabel = null,
         string? providerEmail = null,
         string? providerAvatarUrl = null)
     {
-        ProviderUsername = providerUsername;
+        ProviderAccountLabel = providerAccountLabel;
         ProviderEmail = providerEmail;
         ProviderAvatarUrl = providerAvatarUrl;
         LastSyncTime = syncedAt;
     }
 
-    public void UpdateTokens(
-        DateTime syncedAt,
-        string? accessToken,
-        string? refreshToken = null,
-        DateTime? expiresAt = null)
-    {
-        AccessToken = accessToken;
-        RefreshToken = refreshToken;
-        ExpiresAt = expiresAt;
-        LastSyncTime = syncedAt;
-    }
 }
 #endif

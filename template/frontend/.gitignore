@@ -29,10 +29,13 @@ yarn-error.log
 .history/*
 
 # Miscellaneous
+/.cache/lint/
 /.angular/cache
 .sass-cache/
 /connect.lock
 /coverage
+# Vitest 浏览器模式在用例失败时截的图
+__screenshots__/
 /libpeerconnection.log
 testem.log
 /typings
@@ -40,8 +43,3 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
-
-# Local environment settings
-# 本机调试配置从 environment.dev.ts 复制而来，不进版本库（见 README.md 快速开始）。
-src/environments/environment.debug.ts
-src/environments/environment.local.ts

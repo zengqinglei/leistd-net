@@ -10,6 +10,8 @@ import { provideTranslocoTesting } from '../../../../core/i18n/transloco.testing
 //#endif
 import { AccountService } from '../../services/account-service';
 
+import type { MockedObject } from 'vitest';
+
 /**
  * 注册提交路径。
  *
@@ -20,22 +22,25 @@ describe('Register', () => {
   let fixture: ComponentFixture<Register>;
   let component: Register;
   let router: Router;
-  let accountService: jasmine.SpyObj<AccountService>;
+  let accountService: Pick<
+    MockedObject<AccountService>,
+    'register' | 'getCaptcha' | 'getSecurityConfig' | 'sendEmailCode'
+  >;
   let queryParams: Record<string, string>;
 
   async function setUp(enableEmailVerification = false): Promise<void> {
-    accountService = jasmine.createSpyObj<AccountService>('AccountService', [
-      'register',
-      'getCaptcha',
-      'getSecurityConfig',
-      'sendEmailCode',
-    ]);
-    accountService.register.and.returnValue(of(undefined));
-    accountService.getCaptcha.and.returnValue(
+    accountService = {
+      register: vi.fn().mockName('AccountService.register'),
+      getCaptcha: vi.fn().mockName('AccountService.getCaptcha'),
+      getSecurityConfig: vi.fn().mockName('AccountService.getSecurityConfig'),
+      sendEmailCode: vi.fn().mockName('AccountService.sendEmailCode'),
+    };
+    accountService.register.mockReturnValue(of(undefined));
+    accountService.getCaptcha.mockReturnValue(
       of({ captchaToken: 'token-1', captchaImage: 'data:image/png;base64,' }) as never,
     );
-    accountService.getSecurityConfig.and.returnValue(of({ enableEmailVerification }) as never);
-    accountService.sendEmailCode.and.returnValue(
+    accountService.getSecurityConfig.mockReturnValue(of({ enableEmailVerification }) as never);
+    accountService.sendEmailCode.mockReturnValue(
       of({
         challengeId: '11111111-1111-1111-1111-111111111111',
         expiresInSeconds: 300,
@@ -64,7 +69,7 @@ describe('Register', () => {
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
 
-    spyOn(router, 'navigate').and.resolveTo(true);
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
     fixture.detectChanges();
   }
 
@@ -80,17 +85,17 @@ describe('Register', () => {
     queryParams = {};
   });
 
-  it('表单非法时不提交注册请求', async () => {
+  it('does not submit the registration request when the form is invalid', async () => {
     await setUp();
 
     await component.onSubmit();
 
     expect(accountService.register).not.toHaveBeenCalled();
-    expect(component.registerForm().touched()).toBeTrue();
-    expect(component.isLoading()).toBeFalse();
+    expect(component.registerForm().touched()).toBe(true);
+    expect(component.isLoading()).toBe(false);
   });
 
-  it('两次密码不一致时表单非法', async () => {
+  it('treats the form as invalid when the two passwords differ', async () => {
     await setUp();
     fillValidForm();
     // 长度合法但与上面不同：本用例测的是"两次不一致"，
@@ -102,7 +107,7 @@ describe('Register', () => {
     expect(accountService.register).not.toHaveBeenCalled();
   });
 
-  it('缺少验证码令牌时不提交，并复位加载状态', async () => {
+  it('does not submit without a captcha token and resets loading', async () => {
     await setUp();
     fillValidForm();
     component.captchaData.set(null);
@@ -111,10 +116,10 @@ describe('Register', () => {
 
     // 没有令牌就提交，服务端必然拒绝；本地先拦下来才不会白跑一趟并把按钮卡在加载态。
     expect(accountService.register).not.toHaveBeenCalled();
-    expect(component.isLoading()).toBeFalse();
+    expect(component.isLoading()).toBe(false);
   });
 
-  it('注册成功后跳转登录页并带上 returnUrl', async () => {
+  it('navigates to the login page with returnUrl after a successful registration', async () => {
     queryParams = { returnUrl: '/platform/users' };
     await setUp();
     fillValidForm();
@@ -127,7 +132,7 @@ describe('Register', () => {
     });
   });
 
-  it('没有 returnUrl 时不带空查询参数', async () => {
+  it('omits empty query params when there is no returnUrl', async () => {
     await setUp();
     fillValidForm();
 
@@ -136,21 +141,21 @@ describe('Register', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/auth/login'], { queryParams: undefined });
   });
 
-  it('注册失败时刷新验证码、不跳转，并复位加载状态', async () => {
+  it('refreshes the captcha and resets loading without navigating on failure', async () => {
     await setUp();
     fillValidForm();
-    accountService.register.and.returnValue(throwError(() => new Error('captcha mismatch')));
-    accountService.getCaptcha.calls.reset();
+    accountService.register.mockReturnValue(throwError(() => new Error('captcha mismatch')));
+    accountService.getCaptcha.mockClear();
 
     await component.onSubmit();
 
     // 验证码是一次性的：失败后不换一张，用户只能一直提交同一个必然失败的组合。
     expect(accountService.getCaptcha).toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
-    expect(component.isLoading()).toBeFalse();
+    expect(component.isLoading()).toBe(false);
   });
 
-  it('发送邮箱验证码后保存 challenge，并按服务端返回值倒计时', async () => {
+  it('keeps the challenge and uses the server countdown after sending the email code', async () => {
     await setUp(true);
     fillValidForm();
 
@@ -159,7 +164,7 @@ describe('Register', () => {
     expect(component.countdown()).toBe(37);
   });
 
-  it('开启邮箱验证时以嵌套 challenge 契约提交注册', async () => {
+  it('submits the nested challenge contract when email verification is on', async () => {
     await setUp(true);
     fillValidForm();
     await component.sendEmailCode();
@@ -168,7 +173,7 @@ describe('Register', () => {
     await component.onSubmit();
 
     expect(accountService.register).toHaveBeenCalledWith(
-      jasmine.objectContaining({
+      expect.objectContaining({
         emailVerification: {
           challengeId: '11111111-1111-1111-1111-111111111111',
           code: '123456',
@@ -177,7 +182,7 @@ describe('Register', () => {
     );
   });
 
-  it('发送 challenge 后修改邮箱会作废原 challenge 并拒绝提交', async () => {
+  it('invalidates the challenge and blocks submit when the email changes afterwards', async () => {
     await setUp(true);
     fillValidForm();
     await component.sendEmailCode();

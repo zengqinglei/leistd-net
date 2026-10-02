@@ -47,7 +47,7 @@ internal sealed class OperationRecordArchiveService<TDbContext>(
             cancellationToken.ThrowIfCancellationRequested();
 
             // 每批一个工作单元：事务有界，跟踪的实体随工作单元释放
-            using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+            using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
             var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
             // IgnoreQueryFilters 是必需的：租户过滤器只放行当前上下文那一个租户，同库其余租户的记录不加就永远留着

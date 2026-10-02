@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -26,10 +26,7 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-table';
 
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
-import {
-  TablePaginator,
-  TablePaginatorLabels,
-} from '../../../../../../shared/components/table-paginator/table-paginator';
+import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import { PopoverAria } from '../../../../../../shared/directives/popover-aria';
 import {
   ACTIONS_COLUMN_META,
@@ -40,7 +37,9 @@ import {
   type AppTableFeatures,
 } from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
-import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -48,9 +47,16 @@ import {
   toggleTableSort,
 } from '../../../../../../shared/utils/table-sorting';
 import { tableViewportSignal } from '../../../../../../shared/utils/table-viewport';
-import { OpenApplicationOutputDto } from '../../../../models/open-application.dto';
+import {
+  OpenApplicationOutputDto,
+  OpenApplicationType,
+} from '../../../../models/open-application.dto';
 
-type PopoverMode = 'permissions' | 'redirectUris';
+const APPLICATION_TYPE_KEYS: Record<OpenApplicationType, string> = {
+  web: 'openApp.appType.web',
+  native: 'openApp.appType.native',
+  service: 'openApp.appType.service',
+};
 
 /** Badge 变体。 */
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
@@ -70,7 +76,7 @@ type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [
@@ -96,8 +102,8 @@ export class OpenApplicationTable {
   // 会让同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly applications = input<OpenApplicationOutputDto[]>([]);
@@ -173,18 +179,7 @@ export class OpenApplicationTable {
     tableColumnVisibility(this.columns, this.tableViewport()),
   );
 
-  // 移动端/平板端「行展开」补偿：被隐藏的列不会丢数据，点行首箭头即可展开查看。
-  private readonly expandableRows = createExpandableRows();
-
   readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
-
-  isRowExpanded(id: string): boolean {
-    return this.expandableRows.isExpanded(id);
-  }
-
-  toggleRow(id: string): void {
-    this.expandableRows.toggle(id);
-  }
 
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
@@ -193,6 +188,7 @@ export class OpenApplicationTable {
   protected readonly table = injectAppTable(() => ({
     data: this.applications(),
     columns: this.columns,
+    getRowId: (row) => row.id,
     manualPagination: true,
     manualSorting: true,
     rowCount: this.totalCount(),
@@ -211,17 +207,8 @@ export class OpenApplicationTable {
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
-  //#if (IncludeLocalization)
-  popoverTitle(mode: PopoverMode): string {
-    return mode === 'redirectUris'
-      ? 'Redirect URIs'
-      : this.transloco.translate('openApp.section.authorization');
-  }
-  //#else
-  popoverTitle(mode: PopoverMode): string {
-    return mode === 'redirectUris' ? 'Redirect URIs' : 'Authorization capabilities';
-  }
-  //#endif
+  /** 应用类型与同意方式的词条键：取值是封闭联合，模板里经 t 取文案。 */
+  protected readonly applicationTypeKeys = APPLICATION_TYPE_KEYS;
 
   toggleSort(columnId: string): void {
     toggleTableSort(this.table, columnId);
@@ -248,164 +235,55 @@ export class OpenApplicationTable {
     return application.redirectUris.slice(1);
   }
 
-  paginatorLabels(): TablePaginatorLabels {
-    //#if (IncludeLocalization)
-    return {
-      currentPageReport: this.transloco.translate('openApp.table.currentPageReport', {
-        total: this.totalCount(),
-      }),
-      rowsPerPage: this.transloco.translate('common.rowsPerPage'),
-      page: this.transloco.translate('common.pageOf', {
-        page: this.currentPage(),
-        total: this.totalPages(),
-      }),
-      first: this.transloco.translate('common.pagination.first'),
-      previous: this.transloco.translate('common.pagination.previous'),
-      next: this.transloco.translate('common.pagination.next'),
-      last: this.transloco.translate('common.pagination.last'),
-    };
-    //#else
-    return {
-      currentPageReport: `${this.totalCount()} total`,
-      rowsPerPage: 'Items per page',
-      page: `Page ${this.currentPage()} of ${this.totalPages()}`,
-      first: 'First page',
-      previous: 'Previous page',
-      next: 'Next page',
-      last: 'Last page',
-    };
-    //#endif
-  }
-
-  actionsLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('common.actions');
-    //#else
-    return 'Actions';
-    //#endif
-  }
-
-  detailsLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('common.details');
-    //#else
-    return 'View details';
-    //#endif
-  }
-
-  detailLabel(field: 'permissions' | 'redirectUris' | 'security' | 'created'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      permissions: 'openApp.table.colPermissions',
-      redirectUris: 'openApp.table.colRedirectUris',
-      security: 'openApp.table.colSecurity',
-      created: 'openApp.table.colCreatedAt',
-    } as const;
-    return this.transloco.translate(keys[field]);
-    //#else
-    return {
-      permissions: 'Capabilities',
-      redirectUris: 'Redirect URI',
-      security: 'Security',
-      created: 'Created at',
-    }[field];
-    //#endif
-  }
-
-  pkceBadgeLabel(application: OpenApplicationOutputDto): string {
-    if (this.hasPkce(application)) {
-      return 'PKCE';
-    }
-    //#if (IncludeLocalization)
-    return this.transloco.translate('openApp.table.noPkce');
-    //#else
-    return 'No PKCE';
-    //#endif
-  }
-
-  secretBadgeLabel(application: OpenApplicationOutputDto): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate(
-      application.hasClientSecret ? 'openApp.table.secretSet' : 'openApp.table.noSecret',
-    );
-    //#else
-    return application.hasClientSecret ? 'Secret set' : 'No secret';
-    //#endif
-  }
-
-  actionLabel(action: 'details' | 'edit' | 'reset' | 'delete'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      details: 'common.details',
-      edit: 'common.edit',
-      reset: 'openApp.action.resetSecret',
-      delete: 'common.delete',
-    } as const;
-    return this.transloco.translate(keys[action]);
-    //#else
-    return {
-      details: 'View details',
-      edit: 'Edit',
-      reset: 'Reset secret',
-      delete: 'Delete',
-    }[action];
-    //#endif
-  }
-
-  getApplicationTypeLabel(value: string): string {
-    //#if (IncludeLocalization)
-    const labels: Record<string, string> = {
-      web: 'Web',
-      native: this.transloco.translate('openApp.appType.native'),
-      service: this.transloco.translate('openApp.appType.service'),
-    };
-    //#else
-    const labels: Record<string, string> = {
-      web: 'Web',
-      native: 'Desktop/Native',
-      service: 'Service',
-    };
-    //#endif
-    return labels[value] ?? value;
-  }
-
   getClientTypeVariant(value: string): BadgeVariant {
     return value === 'public' ? 'secondary' : 'default';
   }
 
-  getConsentTypeLabel(value: string): string {
-    //#if (IncludeLocalization)
-    const labels: Record<string, string> = {
-      implicit: this.transloco.translate('openApp.consentType.implicit'),
-      explicit: this.transloco.translate('openApp.consentType.explicit'),
-      external: this.transloco.translate('openApp.consentType.external'),
-      systematic: this.transloco.translate('openApp.consentType.systematic'),
-    };
-    //#else
-    const labels: Record<string, string> = {
-      implicit: 'Implicit consent',
-      explicit: 'Explicit consent',
-      external: 'External consent',
-      systematic: 'Systematic consent',
-    };
-    //#endif
-    return labels[value] ?? value;
-  }
-
-  getPermissionSummary(application: OpenApplicationOutputDto): string {
-    const grants = application.permissions
+  /** 已授予的授权方式摘要；一个都没有时为空串，由模板给出"未配置"。 */
+  grantSummary(application: OpenApplicationOutputDto): string {
+    return application.permissions
       .filter((permission) => permission.startsWith('gt:'))
-      .map((permission) => permission.replace('gt:', ''));
-    //#if (IncludeLocalization)
-    return grants.length
-      ? grants.join(' / ')
-      : this.transloco.translate('openApp.permission.notConfigured');
-    //#else
-    return grants.length ? grants.join(' / ') : 'Not configured';
-    //#endif
+      .map((permission) => permission.replace('gt:', ''))
+      .join(' / ');
   }
 
   hasPkce(application: OpenApplicationOutputDto): boolean {
     return application.requirements.includes('ft:pkce');
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'openApp.table.colApp': 'Application',
+  'openApp.table.colType': 'Type',
+  'openApp.table.colPermissions': 'Capabilities',
+  'openApp.table.colSecurity': 'Security',
+  'openApp.table.colCreatedAt': 'Created at',
+  'common.actions': 'Actions',
+  'common.details': 'View details',
+  'openApp.permission.notConfigured': 'Not configured',
+  'openApp.section.authorization': 'Authorization capabilities',
+  'openApp.table.colRedirectUris': 'Redirect URIs',
+  'openApp.table.noPkce': 'No PKCE',
+  'openApp.table.secretSet': 'Secret set',
+  'openApp.table.noSecret': 'No secret',
+  'common.edit': 'Edit',
+  'openApp.action.resetSecret': 'Reset secret',
+  'common.delete': 'Delete',
+  'openApp.table.emptyFilteredTitle': 'No matching open applications',
+  'openApp.table.emptyFilteredHint': 'Adjust the search or filters',
+  'openApp.table.emptyTitle': 'No open applications yet',
+  'openApp.table.emptyHint': 'Create a new open application',
+  'openApp.table.currentPageReport': '{{total}} total',
+  'common.rowsPerPage': 'Items per page',
+  'common.pageOf': 'Page {{page}} of {{total}}',
+  'common.pagination.first': 'First page',
+  'common.pagination.previous': 'Previous page',
+  'common.pagination.next': 'Next page',
+  'common.pagination.last': 'Last page',
+  'openApp.appType.web': 'Web',
+  'openApp.appType.native': 'Desktop/Native',
+  'openApp.appType.service': 'Service',
+};
+//#endif

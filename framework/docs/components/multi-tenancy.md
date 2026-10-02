@@ -9,7 +9,7 @@
 | SaaS 服务按租户隔离数据 | `Core` + `AspNetCore` + `EntityFrameworkCore` |
 | Resource 服务只信任已验证 token 中的租户 claim | `Core` + `AspNetCore`，关闭本地租户校验 |
 | 后台任务需在指定租户下执行 | `ICurrentTenant.Change()`；带主体时用 `IAmbientContext.Begin()` 一次建立各维度（贡献者在 `AspNetCore` 包） |
-| 服务间需传递租户 | 使用 `Leistd.ServiceClient`；本家族恢复并解析上下文 |
+| 服务间需传递租户 | 使用 ServiceClient Token Exchange；本家族从已验证令牌解析上下文 |
 | 租户管理界面（查询、创建开通与补偿、启停、删除、连接登记） | `MapTenantManagement()`、`MapTenantConnections()`，宿主实现 `ITenantProvisioner` |
 | 资源服务回源控制面取租户连接 | `Leistd.MultiTenancy.ServiceClient` 的 `AddRemoteTenantConnectionStore()` |
 | 非多租户项目 | 不引用、不注册 |
@@ -22,6 +22,7 @@
 dotnet add package Leistd.MultiTenancy.Core
 dotnet add package Leistd.MultiTenancy.AspNetCore
 dotnet add package Leistd.MultiTenancy.EntityFrameworkCore
+dotnet add package Leistd.MultiTenancy.Management    # 租户管理用例（管理界面、开通编排）
 dotnet add package Leistd.MultiTenancy.ServiceClient   # 资源服务回源控制面
 ```
 
@@ -30,7 +31,7 @@ dotnet add package Leistd.MultiTenancy.ServiceClient   # 资源服务回源控�
 Identity 持有租户注册表，解析匿名请求并校验租户状态：
 
 ```csharp
-builder.Services.AddMultiTenancy(builder.Configuration);
+builder.Services.AddMultiTenancy();   // 绑定 Leistd:MultiTenancy
 builder.Services.AddMultiTenancyEfCore<IdentityControlDbContext>();
 
 var app = builder.Build();
@@ -42,14 +43,13 @@ app.UseAuthorization();
 Resource 不复制租户注册表，只从已验证主体恢复租户：
 
 ```csharp
-builder.Services.AddMultiTenancy(options =>
-{
-    builder.Configuration.GetSection("Leistd:MultiTenancy").Bind(options);
-    options.ValidateResolvedTenant = false;
-});
+// 先绑定 Leistd:MultiTenancy，再应用这里的覆盖
+builder.Services.AddMultiTenancy(options => options.ValidateResolvedTenant = false);
 ```
 
 `ValidateResolvedTenant = false` 会同时停止查询 `ITenantStore` 并将解析链强制收窄为主体 claim。这防止未经校验的请求头、查询串或域名选择租户。两种角色的中间件顺序相同。
+
+`AddMultiTenancyCore()` 已登记本组件错误码的非默认 HTTP 状态（具体映射见[接口参考](#接口参考)），宿主不需要另行组合。
 
 控制面 DbContext 映射租户表：
 
@@ -61,7 +61,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 }
 ```
 
-`AddMultiTenancyEfCore<TDbContext>()` 注册租户与连接配置的 Store/Manager，均可通过 `TryAdd` 替换。它不注册业务实体的租户落值拦截器；该行为属于 DDD 基座的 `BaseDbContext`。
+`AddMultiTenancyEfCore<TDbContext>()` 只注册租户与连接配置的 Store/Manager，均可通过 `TryAdd` 替换；只读控制库的宿主（租户连接解析、迁移作业）到此为止。租户管理与连接管理用例在 `Leistd.MultiTenancy.Management` 包，由提供管理界面的宿主另行 `AddTenantManagement()`（需要工作单元）。它不注册业务实体的租户落值拦截器；该行为属于 DDD 基座的 `BaseDbContext`。
 
 普通 `DbContext` 若需为 `TenantConnectionRecord` 记录创建审计，应显式启用创建审计：
 
@@ -143,12 +143,22 @@ var cacheKey = currentTenant.ScopeKey($"catalog:category:{id:N}");
 
 | 顺序 | 来源 | 契约 |
 | --- | --- | --- |
-| 1 | 已认证主体 | `tenant_id` claim 定案；无 claim 也定案为宿主 |
+| 1 | 已认证主体 | 租户 claim（`ClaimTypeOptions.TenantId`，默认 `tenant_id`）定案；无 claim 也定案为宿主 |
 | 2 | 子域名 | 仅配置 `DomainFormat` 时启用；受管域内定案 |
-| 3 | 请求头 | 默认 `X-Tenant-Id` |
+| 3 | 请求头 | 默认 `X-Tenant`，值可为租户 Id 或名称 |
 | 4 | 查询串 | 默认 `tenant` |
 
-主体排在首位，因此请求头与查询串无法改写已登录用户的租户。租户 claim 必须是单个非空 Guid；多个 claim 即使值相同也抛 `AmbiguousTenantClaimException`。非法 claim 失败关闭，不回退到宿主。
+主体排在首位，因此请求头与查询串无法改写已登录用户的租户。租户 claim 按 `ClaimTypeOptions.ReadTenant` 解析：值必须是租户 GUID（租户名只经请求头、查询串这类匿名提示传递，不进身份），租户与用户标识取自同一个身份，规则见 [安全组件](./security.md) 的 `ReadTenant`；非法一律抛 `InvalidTenantClaimException`，失败关闭，不回退到宿主。
+
+三种租户通道刻意分开命名，信任性质各不相同：
+
+| 通道 | 键 | 可信性 |
+| --- | --- | --- |
+| 身份 claim | `ClaimTypeOptions.TenantId`（默认 `tenant_id`） | 已认证，定案 |
+| 匿名请求提示 | `MultiTenancyOptions.HeaderName`（默认 `X-Tenant`）、`QueryStringParameterName`（默认 `tenant`） | 不可信，只对匿名请求生效，启用校验时须指向存在且启用的租户 |
+| Token Exchange | Token Exchange JWT 的租户 claim | 身份服务确认用户所属租户，资源端从同一主体解析 |
+
+`ICurrentTenant.Change` 在切换租户的同时打开日志作用域，键为 `TenantLogKeys.TenantId`（`leistd.tenantId`），切回宿主时值为 `null`：HTTP 解析、Hub 与后台任务的环境上下文、逐库作业等所有切换入口的日志都能按同一个键过滤。
 
 未解析出租户表示宿主上下文。启用校验时的响应按请求是否已认证分两档：
 
@@ -177,6 +187,8 @@ builder.Services.AddMultiTenancy(options =>
 
 `DomainFormat` 必须包含一个 `{0}`、使用纯 ASCII 主机名、不含 scheme/路径/端口，且占位符之后必须有固定基础域。错误配置在启动时抛 `OptionsValidationException`。
 
+租户名就是主机名里的那一段，因此组件要求租户名是单个 DNS 标签（见"管理租户"）。规则在创建与改名时校验，不回头检查已有数据：规则引入之前建出的不合规名字（含空格、`!`、下划线等）拼不成合法主机名，经子域名访问不到，要先改成合规名字。
+
 受管域内的基础域、多级子域或不匹配前后缀的主机名定案为宿主，不再读请求头。受管域外的内部服务名继续交给后续贡献者。
 
 反向代理使用 `X-Forwarded-Host` 时，必须通过 `KnownProxies`/`KnownIPNetworks` 限定可信代理。同时需配置授权服务器 issuer、资源服务验签、出站链接与 DNS；框架只负责入站解析。
@@ -202,6 +214,7 @@ await tenantManager.SetActiveAsync(tenant.Id, true);
 管理界面直接用组件的用例与端点，宿主只实现开通与启用前置条件：
 
 ```csharp
+builder.Services.AddTenantManagement();                                  // Leistd.MultiTenancy.Management
 builder.Services.AddScoped<ITenantProvisioner, TenantSeeder>();          // 在新租户里写初始数据，失败时清掉
 builder.Services.AddScoped<ITenantActivationGuard, TenantHasUsersGuard>(); // 可选，可注册多个
 
@@ -214,9 +227,11 @@ app.MapGroup("/api/v1/tenants").MapTenantManagement<CreateTenantWithAdminInputDt
 });
 ```
 
-`ITenantManagementService.CreateAsync` 的顺序是硬的：先**整批校验** `Connections`（名字归一化后查重、连接串语法），再以停用态登记租户并在**同一控制面工作单元**里把**全部命名连接**一次登记（分库在开通之前定案，开通钩子第一次执行时看到的就是完整集合），然后在新租户上下文与新工作单元里调用 `ITenantProvisioner.ProvisionAsync`，最后启用。多服务部署一次给多条（`default`、`crm`……），不要建完租户再逐条补登记——那会留下"租户已启用、某条连接还没登记"的中间状态，那一刻用该名字的服务解析到的是回落库。`connections` 传空数组或显式 `null` 都表示不分库；数组里有 `null` 元素返回 422，重名返回带 `TenantConnection:NameDuplicated` 的 400。任一步失败按"`PurgeAsync` → **逐条**删连接登记 → 删租户"补偿（删连接必须在删租户之前，每条独立捕获），每步独立作用域、独立令牌、各自记录失败；数据库原因经 `ITenantDatabaseErrorDescriber` 翻成带码的 400，不回显连接串；**默认实现不翻译**（错误码表是各数据库的方言），宿主注册自己的实现把本引擎的码映射到 `MultiTenancyErrorCodes` 的四个码（不可达、库不存在、未迁移、凭据被拒）。认不出来的错误返回 `null` 走统一 5xx——库重启、连接数耗尽、序列化失败不是调用方改连接串能解决的，报成 400 会让客户端既不重试也不告警。开通需要更多信息（如管理员邮箱）时派生 `CreateTenantInputDto`，端点按派生类型绑定请求体，开通器从 `TenantProvisioningContext.Input` 取回。成功的创建、更新、启停、删除发布 `TenantChangedEvent`（带显示名快照），宿主据此记审计。
+`ITenantManagementService.CreateAsync` 的顺序是硬的：先**整批校验** `Connections`（名字归一化后查重、连接串语法），再以停用态登记租户并在**同一控制面工作单元**里把**全部命名连接**一次登记（分库在开通之前定案，开通钩子第一次执行时看到的就是完整集合），然后在新租户上下文与新工作单元里调用 `ITenantProvisioner.ProvisionAsync`，最后启用。多服务部署一次给多条（`default`、`crm`……），不要建完租户再逐条补登记——那会留下"租户已启用、某条连接还没登记"的中间状态，那一刻用该名字的服务解析到的是回落库。`connections` 传空数组或显式 `null` 都表示不分库；数组里有 `null` 元素按输入校验返回 400，重名返回带 `TenantConnection:NameDuplicated` 的 400。任一步失败按"`PurgeAsync` → **逐条**删连接登记 → 删租户"补偿（删连接必须在删租户之前，每条独立捕获），每步独立作用域、独立令牌、各自记录失败；数据库原因经 `ITenantDatabaseErrorDescriber` 翻成带码的 400，不回显连接串；**默认实现不翻译**（错误码表是各数据库的方言），宿主注册自己的实现把本引擎的码映射到 `MultiTenancyErrorCodes` 的四个码（不可达、库不存在、未迁移、凭据被拒）。认不出来的错误返回 `null` 走统一 5xx——库重启、连接数耗尽、序列化失败不是调用方改连接串能解决的，报成 400 会让客户端既不重试也不告警。开通需要更多信息（如管理员邮箱）时派生 `CreateTenantInputDto`，端点按派生类型绑定请求体，开通器从 `TenantProvisioningContext.Input` 取回。成功的创建、更新、启停、删除发布 `TenantChangedEvent`（带显示名快照），宿主据此记审计。
 
-租户名在未删除行内唯一；名称冲突抛 `DuplicateTenantNameException`。租户修改与连接配置共享 `TenantRecord.Version`，并发冲突抛 `TenantConcurrencyConflictException`。
+租户名须是单个 DNS 标签：匹配 `TenantConfiguration.NamePattern`（`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`），即字母、数字与连字符，不以连字符开头或结尾，最长 `TenantConfiguration.MaxNameLength`（63）个字符。`ITenantManager` 在创建与改名时校验（更新时名称逐字不变不校验，存量不合规的租户照常编辑其他字段；更新入参按存储容量 `MaxStoredNameLength`（64）接受原名），不合法时抛 `BusinessException`（`Tenant:NameInvalid`，占位 `Name`、`Pattern`，默认 400），租户不落库、原名不变。规则按子域名解析的需要定：名字进不了主机名，配置 `DomainFormat` 后这个租户建得出来却永远访问不到；没配子域名也照样校验，免得日后启用子域名时才发现存量名字用不了。大小写不限，落库的是原值。
+
+租户名在未删除行内大小写不敏感唯一；名称冲突抛 `DuplicateTenantNameException`。租户修改与连接配置共享 `TenantRecord.Version`，并发冲突抛 `TenantConcurrencyConflictException`。
 
 `displayName`（≤128）与 `description`（≤256）都是可选的展示字段，只供管理界面呈现，不参与解析与唯一性判定。两者按传入值覆盖——传 `null` 即清空，因此调用方要区分"不改"与"清空"时必须自己先读一次当前值。
 
@@ -264,13 +279,13 @@ await connectionManager.RemoveAsync(tenantId, "crm", expectedVersion);
 1. 用 `AddDataProtection()` 配置**持久化、可共享**的密钥环（如存 Redis），并固定应用名。读写同一控制库的所有进程（API、迁移作业）必须使用同一密钥环；密钥丢失等于所有独立库连接串丢失，要纳入备份。
 2. 在租户管理里填写连接串。
 
-解不开（密钥环不同或密钥已丢失）时抛 `InternalServerException`，不回退共享库。
+解不开（密钥环不同或密钥已丢失）时抛 `InvalidOperationException`，不回退共享库。
 
 `expectedVersion: null` 表示预期配置不存在；更新时必须传入读到的版本。预期与实际不一致时抛 `TenantConnectionVersionConflictException`，不提供跳过并发检查的入口。
 
 修改已有连接（包括轮换数据库密码）前必须停用租户，否则抛 `TenantConnectionChangeRequiresInactiveTenantException`。宿主还需在变更前排空仍使用旧路由的请求。
 
-名字与连接串通常来自管理员输入：不合法时抛带码的 `BadRequestException`（`TenantConnection:NameInvalid`、`TenantConnection:ConnectionStringInvalid`，后者覆盖空、超长与"不是 键=值; 语法"），不以 500 出去，也不回显连接串。
+名字与连接串通常来自管理员输入：不合法时抛带码的 `BusinessException`（`TenantConnection:NameInvalid`、`TenantConnection:ConnectionStringInvalid`），由宿主映射为 400，也不回显连接串。
 
 管理面与机器端点：
 
@@ -297,14 +312,14 @@ app.MapGroup("/api/v1/tenant-connections").MapTenantConnections(options =>
 | 宿主形态 | 注册 | 宿主提供 |
 | --- | --- | --- |
 | 自己持有控制库（租户注册表与连接配置就在本服务） | `AddLocalTenantConnectionResolution<TControlDbContext>(o => o.ControlPlaneConnectionStringName = "IdentityControl")`（EF 包） | 持久化的 Data Protection 密钥环 |
-| 连接配置在另一个服务的控制库里 | `AddRemoteTenantConnectionResolution()`（Core 包）+ `AddRemoteTenantConnectionStore(serviceName, configuration)`（ServiceClient 包） | 机器身份（如 client credentials）、`TenantRouting:CacheLifetime` |
+| 连接配置在另一个服务的控制库里 | `AddRemoteTenantConnectionResolution()`（Core 包）+ `AddRemoteTenantConnectionStore(serviceName, configuration)`（ServiceClient 包） | 控制面地址 `Leistd:ServiceClients:{serviceName}:BaseAddress`、机器身份（如 client credentials）；`TenantRouting:CacheLifetime` 可选（默认 10 分钟） |
 
 远端存储回源控制面经 `MapTenantConnections` 映射的机器端点，与端点共用 Core 里的线上 DTO；路由前缀默认 `/api/v1/tenant-connections`，经 `Leistd:ServiceClients:{serviceName}:RoutePrefix` 改。控制面下发**解密后**的连接串，远端服务不持有控制面的密钥环。鉴权与弹性策略加在返回的构建器上：
 
 ```csharp
 builder.Services.AddRemoteTenantConnectionResolution();
 builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuration)
-    .AddClientCredentials(builder.Configuration)
+    .AddClientCredentials()
     .AddStandardResilienceHandler();
 ```
 
@@ -319,17 +334,23 @@ builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuratio
 | 租户一条连接都没登记 | 同上——该租户不单独分库 |
 | 命中这个名字的登记 | 该行的连接串（本地解析时为解密后的值） |
 | 命中默认名的登记 | 默认名那一行的连接串 |
-| 登记过连接、却缺这个名字且无默认名 | 抛 `InternalServerException`，**不回落本服务的库** |
-| 租户不存在或已删除 | 抛 `NotFoundException` |
-| 本地解析时解密失败 | 抛 `InternalServerException`，不回落 |
+| 登记过连接、却缺这个名字且无默认名 | 抛 `InvalidOperationException`，**不回落本服务的库** |
+| 租户不存在或已删除 | 抛 `TenantNotFoundException`（带 `Tenant:NotFound` 错误码） |
+| 本地解析时解密失败 | 抛 `InvalidOperationException`，不回落 |
 | 连接名不合法（不匹配 `NamePattern`，来自 `[ConnectionStringName]` 的编程错误） | 抛 `ArgumentException` |
 
 失败关闭只有一处：倒数第四行。租户明明登记过连接（说明它是分库租户），却偏偏缺了这个服务的、也没有默认名可回落——这时静默连到本服务的公共库是事故，那个库里没有它的数据，它的写入会落进别人的库。宿主连接的 `?? ConnectionStrings:Default` 回落则是有意的：业务项目把上下文改名为 `Crm` 之后，部署里仍然只配 `ConnectionStrings__Default`，不用改部署。
 
-- **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `NotFoundException`。控制库上下文直接注入、不经 `IDbContextProvider`——Provider 创建任何上下文前都会调用解析器，经 Provider 取控制库会形成递归。
-- **远端解析**：结果按 `TenantRouting:CacheLifetime`（必填，0 到 1 小时，缺省即启动失败）缓存；同租户并发请求合并为一次回源，调用方取消只取消自己的等待；回源在独立服务作用域里执行；响应的 `TenantId` 与请求不一致时抛 `InternalServerException`，校验在使用连接串和写缓存之前。
+**根本没注册租户连接解析时，上表都不适用**：`DbContext` 一律沿用宿主自己配置的连接。共享库的多租户本该如此；有独立库租户的系统漏装了路由，独立库租户的数据就会静默写进共享库，既不报错也没有日志。框架推断不出"有没有独立库租户"（那是控制库里的运行期数据），所以这是组合规范：
+
+- 有独立库租户的系统，**每个**访问租户数据的宿主（Web、迁移作业、后台服务）都要注册路由（本地或远端二选一）。
+- 多个宿主时，把路由注册放进它们共用的组合方法，不要在各宿主入口里各写一份——新加的宿主只复制一半组合代码，是这类事故的典型来源。
+- 业务项目需要硬保证时，在自己的 `DbContext` 里加守卫：它知道自己分库，框架不知道。
+
+- **本地解析**：控制库连接名解析为 `ConnectionStrings:{名称}`，未配置时回落 `Default`；租户配置从"未删除租户"入口查询，已软删或无配置的租户抛 `TenantNotFoundException`。控制库上下文直接注入、不经 `IDbContextProvider`。
+- **远端解析**：结果按 `TenantRouting:CacheLifetime` 缓存；同租户并发请求合并为一次回源；响应的 `TenantId` 与请求不一致时抛 `InvalidOperationException`，校验在使用连接串和写缓存之前。
 - **迁移目标**：两种注册都附带 `ITenantMigrationTargetProvider`，按迁移作业所属服务的连接名枚举。结果按物理库去重（同一连接串只出现一次，代表租户取标识最小者）。**它与运行时逐库作业不是同一份清单，也不是同一档权限**：迁移目标带明文连接串、要 DDL 身份（`MigrationReadPolicy`），运行时清单只回指纹与租户归属（`RuntimeReadPolicy`），见下一条；一条连接都没登记的租户不出现（它们跟着宿主自己的库迁移）；登记过却解析不出这个名字的租户会让作业整体停下（`InvalidOperationException`），不跳过——跳过的库会停在旧结构上，下一次发版才炸。本地迁移作业同样要解密，必须与 API 共享密钥环。
-- **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是独立库，结果里没有连接串。**停用租户的库算不算由调用方用 `activeOnly` 显式决定**，框架不替它选：保留期作业要连停用租户一起处理（合规义务不随停用消失），刷新进程内状态一类作业则不该去连可能已下线的库。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `BeginAsync(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余——`ITenantDatabaseRunner.ForEachDatabaseAsync` 封装了切租户与逐库隔离，回调里按需开工作单元。登记成与宿主完全相同的连接串时，该项会并进宿主库，不会让同一个物理库出现两次。但指纹判的是**连接配置相同**而非物理库相同：同一个库用不同凭据连、或键值对顺序不同，仍会被当成两个库，因此逐库逻辑仍须能重复执行。
+- **运行时逐库处理**：`AddMultiTenancyCore()` 注册 `ITenantDatabaseEnumerator`；没有注册租户连接解析时清单只有宿主库，注册了本地或远端解析时再列出独立库。它给归档、清理、扫描这类后台作业列出物理库——宿主库在第一个，其后是独立库，结果里没有连接串。**停用租户的库算不算由调用方用 `activeOnly` 显式决定**，框架不替它选：保留期作业要连停用租户一起处理（合规义务不随停用消失），刷新进程内状态一类作业则不该去连可能已下线的库。无租户上下文里的 `IgnoreQueryFilters()` 只放开同一个库里的租户，独立库要逐个进去：先 `ICurrentTenant.Change(database.TenantId)`，再 `Begin(requiresNew: true)`，然后经 `IDbContextProvider` 取上下文；直接注入的 `DbContext` 不跟随租户路由。每个库单独捕获异常，一个库失败不影响其余——`ITenantDatabaseRunner.ForEachDatabaseAsync` 封装了切租户与逐库隔离，回调里按需开工作单元。登记成与宿主完全相同的连接串时，该项会并进宿主库，不会让同一个物理库出现两次。但指纹判的是**连接配置相同**而非物理库相同：同一个库用不同凭据连、或键值对顺序不同，仍会被当成两个库，因此逐库逻辑仍须能重复执行。
 
 ```json
 {
@@ -337,7 +358,7 @@ builder.Services.AddRemoteTenantConnectionStore("Identity", builder.Configuratio
 }
 ```
 
-`CacheLifetime` 同时决定改租户路由前的排空等待：`max(Access Token 有效期, CacheLifetime)`。
+`CacheLifetime` 默认 10 分钟，同时决定改租户路由前的排空等待：`max(Access Token 有效期, CacheLifetime)`。
 
 固定在控制库的 DbContext 声明专属连接名，与 `ControlPlaneConnectionStringName` 一致：
 
@@ -363,15 +384,18 @@ public sealed class IdentityControlDbContext : DbContext;
 | `ITenantConnectionManagementService` | 连接管理用例：`GetListAsync`、`GetRuntimeAsync`、`GetMigrationListAsync`、`SetAsync`、`RemoveAsync`；EF 包注册 |
 | `ITenantConnectionDirectory` | 列出租户已登记的连接名与版本；租户不存在返回 `null`，不分库返回空列表 |
 | `MultiTenancyErrorCodes` | 组件错误码，默认中英译文随包分发 |
-| `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名 |
-| `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
-| `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一 |
+| `TenantConfiguration.NamePattern` / `MaxNameLength` | 租户名规则（单个 DNS 标签，≤63）；前端表单可直接复用这个模式 |
+| 默认 HTTP 状态 | 组件默认状态：租户停用 → 403，不存在 → 404，版本与命名冲突 → 409。其余（如 `Tenant:NameInvalid`、`TenantConnection:NameInvalid`）按业务异常默认 400。由 `AddMultiTenancyCore()` 自动登记；宿主 `MapCode` 可覆盖 |
+| `MapTenantManagement<TCreateInput>(configure)` / `MapTenantConnections(configure)` | AspNetCore 包：租户管理与连接端点；策略名必填，端点名前缀 `TenantManagementEndpoints.NamePrefix`；只有 `by-host` 匿名，它跑宿主配置的解析链，与真实请求给出同一个答案 |
+| `UseTenantSessionRecovery(configure?)` | AspNetCore 包：租户会话自恢复中间件；按 `ClaimTypeOptions.ReadTenant` 判定租户会话（主体属于某个租户；声明非法时保留原始错误）；`SignOutScheme`、`TenantInvalidHeader`（默认 `X-Tenant-Invalid`） |
+| `AddRemoteTenantConnectionStore(serviceName, configuration)` | ServiceClient 包：远端连接存储，返回 `IHttpClientBuilder`；与控制库的 EF 存储二选一；`BaseAddress` 缺失或不是绝对地址时启动失败并报出键名；该客户端不转发用户与租户上下文（控制面查询，租户 Id 在路径里） |
 | `ITenantConnectionConfigurationManager` | `SetAsync(tenantId, name, connectionString, expectedVersion, ct)` 登记或更新一条；`RemoveAsync(tenantId, name, expectedVersion, ct)` 删除一条（该名字随即回落到服务自己的配置）。**会改变数据落点的写入要求租户已停用**，判据见上文表格 |
-| `AddLocalTenantConnectionResolution<TControlDbContext>(configure)` | EF 包：注册本地连接解析与本地迁移目标；`LocalTenantConnectionOptions.ControlPlaneConnectionStringName` 必填且不能是 `Default` |
-| `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、单飞协调器、内存缓存与远端迁移目标；绑定 `TenantRouting` 配置节 |
+| `AddTenantManagement()` | Management 包：注册 `ITenantManagementService`、`ITenantConnectionManagementService` 与开通错误翻译的默认实现（不翻译），并调用 `AddMultiTenancyCore()`；存储契约与工作单元由调用方先就位 |
+| `AddLocalTenantConnectionResolution<TControlDbContext>(configure)` | EF 包：注册本地连接解析与本地迁移目标，并调用 `AddMultiTenancyCore()`；`LocalTenantConnectionOptions.ControlPlaneConnectionStringName` 必填且不能是 `Default` |
+| `AddRemoteTenantConnectionResolution()` | Core 包：注册远端连接解析、`HybridCache`（只用进程内一级，并发回源合并为一次，连接串不进分布式缓存）与远端迁移目标，并调用 `AddMultiTenancyCore()`；绑定 `TenantRouting` 配置节 |
 | `ITenantConnectionConfigurationStore` | 按名字读连接：`FindAsync(tenantId, name, ct)` 返回 `TenantConnectionLookupResult`（租户不存在或已删除时为 `null`），"精确名 → 默认名"的回落由实现完成；`GetListAsync(name, ct)` 供迁移作业枚举。EF 包提供控制库实现，ServiceClient 包提供远端实现，**按名字问、按名字答，一次只出一条** |
 | `TenantConnectionLookupResult` | `HasAnyConnection` 区分"不分库"与"缺这个名字"；`Connection` 是命中的那一条 |
-| `TenantRouteCacheOptions` | `CacheLifetime`（必填，不超过 `MaximumCacheLifetime` 1 小时） |
+| `TenantRouteCacheOptions` | `CacheLifetime`（默认 10 分钟，不超过 `MaximumCacheLifetime` 1 小时） |
 | `ITenantMigrationTargetProvider` | `GetDedicatedTargetsAsync(name, ct)` 按连接名枚举独立物理库 `TenantMigrationTarget(TenantId, ConnectionString)`，每个库一条，`Fingerprint` 为连接串的 SHA-256 |
 | `ITenantDatabaseDirectory` | 控制库侧的库目录：按连接名回 `TenantDatabaseListResult(Databases, FailedTenants)`，不含连接串。EF 实现随 `AddMultiTenancyEfCore` 注册（它读的就是控制库），ServiceClient 的远端存储同时实现它；自定义存储的宿主要自己注册，`AddTenantManagement` 少了它解析不出连接管理用例 |
 | `ITenantDatabaseEnumerator` | `GetDatabasesAsync(name, activeOnly, ct)` 列出运行时要逐库处理的物理库 `TenantDatabase(TenantId, Fingerprint, TenantIds)`；`TenantId` 为 `null` 即宿主库，宿主项的 `TenantIds` 为空（那份清单等于共享库的租户数，且要跨 HTTP 边界；进宿主库用宿主配置，不需要某个租户）。宿主库与独立库用同一套指纹算法，与宿主同配置的登记会被合并掉，不会让同一个物理库出现两次 |
@@ -393,9 +417,8 @@ public sealed class IdentityControlDbContext : DbContext;
 
 | 属性 | 默认值 | 说明 |
 | --- | --- | --- |
-| `HeaderName` | `X-Tenant-Id` | 租户请求头名 |
-| `QueryStringParameterName` | `tenant` | 租户查询参数名 |
-| `TenantClaimType` | `tenant_id` | 主体租户 claim 类型 |
+| `HeaderName` | `X-Tenant`（`DefaultHeaderName`） | 匿名请求的租户提示头名 |
+| `QueryStringParameterName` | `tenant` | 匿名请求的租户提示查询参数名 |
 | `ValidateResolvedTenant` | `true` | 是否查租户注册表校验存在且启用 |
 | `DomainFormat` | `null` | 子域名解析格式，如 `{0}.example.com` |
 
@@ -403,12 +426,12 @@ public sealed class IdentityControlDbContext : DbContext;
 
 - 中间件顺序必须是 `UseAuthentication()` →（`UseTenantSessionRecovery()`）→ `UseMultiTenancy()` → `UseAuthorization()`。不挂会话自恢复时，被停用租户的用户连登录页与注销端点都访问不了；跨域部署要把恢复标记头加进 CORS 暴露头。
 - **连接的机器端点只对机器主体开放，但三条的敏感度不同**：`GET /migration?name=` 下发**全部租户**的明文连接串，只给一次性迁移作业的 DDL 身份；`GET /runtime/{tenantId}?name=` 下发**被问到的那一条**明文；`GET /databases?name=` **不下发连接串**，只回指纹与租户归属，因此它与 `/runtime` 同属 `RuntimeReadPolicy`，常驻服务的逐库作业走它即可，不必申请迁移权限。不签发机器令牌的部署不要配置 `RuntimeReadPolicy` / `MigrationReadPolicy`。
-- 认证端必须向租户用户签发单一、有效的 `tenant_id` claim；漏写会将 Resource 请求当作宿主上下文。
+- 认证端必须向租户用户签发单一、有效的租户 claim（类型见 `ClaimTypeOptions.TenantId`，签发与读取两端同一配置）；漏写会将 Resource 请求当作宿主上下文。
 - `IgnoreQueryFilters()` 与 raw SQL 会绕过租户隔离。合法的跨租户操作使用 `IDataFilter.Disable<IMultiTenant>()` 显式表达。
 - 租户实体的唯一索引需分别覆盖 `TenantId IS NULL` 的宿主行和 `TenantId IS NOT NULL` 的租户行；单一 `(TenantId, X)` 索引无法限制多个 NULL。
 - **承载租户业务数据**的外部标识（缓存 key、锁 key 等）必须带 tenant/host 作用域，用 `ScopeKey` 产出；**控制面标识**（租户注册表、租户连接配置这类「用来判断你是哪个租户」的数据）保持全局——加作用域反而会按调用时机分裂成多份。
 - 超级管理员只可旁路功能权限，不可旁路租户数据隔离。
-- 多服务系统的租户注册表应归 Identity 所有。Resource 在 token 有效期内信任经验证的 claim，不复制租户状态。
+- 多服务系统的租户注册表应归 Identity 所有。Resource 在 token 有效期内信任经验证的 claim，不复制租户状态。因此租户停用或删除在 Identity 立即生效，在 Resource 要等已签发的 Access Token 过期：传播窗口就是 Access Token 有效期。要缩短，调短有效期。要即时生效需要两步，框架都不内置：停用时撤销该租户已签发的令牌，并让 Resource 对令牌做内省（每个请求回 Identity 校验，多一次往返）。只开内省不够，内省只认令牌是否被撤销，不查租户状态。
 - `EfCoreTenantStore` 默认不缓存，使启停和删除在提交后立即生效。自行加缓存时必须显式承担撤销延迟。
 
 ## 相关

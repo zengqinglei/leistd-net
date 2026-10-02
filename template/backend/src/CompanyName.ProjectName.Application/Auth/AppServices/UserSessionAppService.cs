@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Mappings;
 using CompanyName.ProjectName.Application.Auth.Sessions;
@@ -45,7 +46,7 @@ internal sealed class UserSessionAppService(
 
         var context = new Dictionary<string, object>();
         if (currentSessionId is { } current)
-            context[AuthProfile.CurrentSessionIdKey] = current;
+            context[AuthMappings.CurrentSessionIdKey] = current;
 
         return sessions
             .Select(s => objectMapper.Map<UserSession, UserSessionOutputDto>(s, context))
@@ -60,10 +61,7 @@ internal sealed class UserSessionAppService(
     {
         if (sessionId == currentUser.GetSessionId())
         {
-            throw new BadRequestException("Use sign-out to end the current session.")
-#if (IncludeLocalization)
-                .WithCode("Auth:CannotRevokeCurrentSession")
-#endif
+            throw new BusinessException(AuthErrorCodes.CannotRevokeCurrentSession, "Use sign-out to end the current session.")
                 ;
         }
 
@@ -109,7 +107,7 @@ internal sealed class UserSessionAppService(
         if (currentUser.Id is not { } userId || currentUser.GetSessionId() is not { } sessionId)
             return;
 
-        using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+        using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
         await userSessionDomainService.RevokeAsync(userId, sessionId, cancellationToken);
         await unitOfWork.CompleteAsync(cancellationToken);
     }

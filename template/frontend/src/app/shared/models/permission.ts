@@ -39,9 +39,6 @@ export const PERMISSIONS = {
     resetSecret: 'App.OpenApplications.ResetSecret',
   },
   //#endif
-  permissions: {
-    default: 'App.Permissions',
-  },
   settings: {
     default: 'App.Settings',
   },
@@ -62,7 +59,8 @@ export const PERMISSIONS = {
  * 登录后被重定向到别处，但直接敲 `/platform/tenants` 却能进。
  * 表现为"后端通、前端不通"，最容易被误判成权限没生效。
  *
- * 新增平台模块时只改这里；`authorization-service.spec.ts` 里有一条断言锁住两处同源。
+ * 新增平台模块时只改这里；`authorization-service.spec.ts` 里有一条断言锁住两处同源，
+ * 后端契约测试另外核对它恰好覆盖平台菜单的全部菜单项权限。
  */
 export const PLATFORM_ENTRY_PERMISSIONS = [
   PERMISSIONS.users.default,
@@ -73,10 +71,10 @@ export const PLATFORM_ENTRY_PERMISSIONS = [
   //#if (OpenIddictServer)
   PERMISSIONS.openApplications.default,
   //#endif
-  PERMISSIONS.permissions.default,
   // 只持有审计查看权限的岗位（安全、合规）也要进得来：漏了这一项，
   // 那个角色的账号菜单里看不到入口、登录后还会被重定向走。
   PERMISSIONS.operationRecords.default,
+  PERMISSIONS.settings.default,
 ] as const;
 
 /** 当前用户的有效权限。 */

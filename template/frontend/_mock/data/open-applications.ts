@@ -1,4 +1,7 @@
-import { OpenApplicationOutputDto } from '../../src/app/features/platform/models/open-application.dto';
+import {
+  OpenApplicationOutputDto,
+  OpenApplicationScopeOutputDto,
+} from '../../src/app/features/platform/models/open-application.dto';
 
 export interface MockOpenApplication extends OpenApplicationOutputDto {
   clientSecret?: string;
@@ -11,7 +14,6 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     displayName: 'MyProject Web',
     applicationType: 'web',
     clientType: 'public',
-    consentType: 'explicit',
     redirectUris: ['http://localhost:4200/auth/callback'],
     postLogoutRedirectUris: ['http://localhost:4200/auth/logout-callback'],
     permissions: [
@@ -39,7 +41,6 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     displayName: 'MyProject Desktop',
     applicationType: 'native',
     clientType: 'public',
-    consentType: 'explicit',
     redirectUris: ['companyname-projectname-desktop://oauth/callback'],
     postLogoutRedirectUris: ['companyname-projectname-desktop://oauth/logout-callback'],
     permissions: [
@@ -67,7 +68,6 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     displayName: 'MyProject Service Client',
     applicationType: 'service',
     clientType: 'confidential',
-    consentType: 'systematic',
     redirectUris: [],
     postLogoutRedirectUris: [],
     permissions: ['ept:token', 'gt:client_credentials'],
@@ -77,5 +77,30 @@ export const OPEN_APPLICATIONS: MockOpenApplication[] = [
     hasClientSecret: true,
     creationTime: '2026-05-03T14:15:00Z',
     clientSecret: 'mock-service-secret',
+  },
+];
+
+/** 服务端 scope 目录：OIDC 标准 scope、本服务 API、仅限机器的内部 scope。 */
+export const OPEN_APPLICATION_SCOPES: OpenApplicationScopeOutputDto[] = [
+  { name: 'openid', displayName: 'OpenID', machineOnly: false },
+  { name: 'profile', displayName: 'Profile', machineOnly: false },
+  { name: 'email', displayName: 'Email', machineOnly: false },
+  { name: 'roles', displayName: 'Roles', machineOnly: false },
+  { name: 'offline_access', displayName: 'Offline access', machineOnly: false },
+  {
+    name: 'companyname-projectname-api',
+    displayName: 'API',
+    machineOnly: false,
+    audience: 'companyname-projectname-api',
+  },
+  {
+    name: 'tenant-routing.read',
+    displayName: 'Read tenant connection routing metadata',
+    machineOnly: true,
+  },
+  {
+    name: 'tenant-migration.read',
+    displayName: 'Read tenant connection migration metadata',
+    machineOnly: true,
   },
 ];

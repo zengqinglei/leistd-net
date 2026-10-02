@@ -32,6 +32,7 @@
     <PackageVersion Include="Leistd.MultiTenancy.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.EntityFrameworkCore" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Leistd.MultiTenancy.Management" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.MultiTenancy.ServiceClient" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.UnitOfWork.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Auditing.Core" Version="$(LeistdFrameworkVersion)" />
@@ -55,7 +56,6 @@
     <PackageVersion Include="Leistd.RealTime.Core" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.RealTime.AspNetCore.SignalR" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ObjectMapping.Mapster" Version="$(LeistdFrameworkVersion)" />
-    <PackageVersion Include="Leistd.EventBus.Local" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.AspNetCore" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Tracing.HttpClient" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.ServiceClient.Core" Version="$(LeistdFrameworkVersion)" />
@@ -66,15 +66,19 @@
     <PackageVersion Include="Leistd.Ddd.Application" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Application.Contracts" Version="$(LeistdFrameworkVersion)" />
     <PackageVersion Include="Leistd.Ddd.Infrastructure" Version="$(LeistdFrameworkVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
   </ItemGroup>
 
   <!-- 业务第三方包 -->
   <ItemGroup>
+    <PackageVersion Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Testing" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="10.0.11" />
@@ -104,6 +108,7 @@
     <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.7.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="StackExchange.Redis" Version="3.1.31" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
   </ItemGroup>

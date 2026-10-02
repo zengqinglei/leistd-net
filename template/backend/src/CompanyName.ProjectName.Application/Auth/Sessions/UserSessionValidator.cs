@@ -7,7 +7,6 @@ using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.MultiTenancy.Stores;
 using Leistd.Security.Claims;
@@ -34,6 +33,7 @@ internal sealed class UserSessionValidator(
     IDistributedCache distributedCache,
     IRequestClientInfo clientInfo,
     IOptions<UserSessionOptions> options,
+    IOptions<ClaimTypeOptions> claimTypes,
     IClock clock) : IUserSessionValidator
 {
     private const string CacheKeyPrefix = "auth:session:";
@@ -43,14 +43,19 @@ internal sealed class UserSessionValidator(
     {
         // 没有会话声明的主体一律无效：不留"旧 Cookie 免检"的口子，否则撤销对它们不起作用
         if (ReadGuid(principal.FindFirst(CustomClaimTypes.SessionId)?.Value) is not { } sessionId ||
-            ReadGuid(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value) is not { } userId)
+            ReadGuid(claimTypes.Value.FindUserId(principal)) is not { } userId)
             return false;
 
         var cacheKey = CacheKey(sessionId);
         if (await distributedCache.GetStringAsync(cacheKey, cancellationToken) is not null)
             return true;
 
-        var tenantId = ReadGuid(principal.FindFirst(CustomClaimTypes.TenantId)?.Value);
+        // 租户声明非法的会话一律无效：按宿主处理等于让租户会话进到宿主库
+        var tenantClaim = claimTypes.Value.ReadTenant(principal);
+        if (!tenantClaim.IsValid)
+            return false;
+
+        var tenantId = tenantClaim.TenantId;
         string? tenantName = null;
         if (tenantId is { } id)
         {
@@ -65,7 +70,7 @@ internal sealed class UserSessionValidator(
 
         // 认证发生在多租户中间件之前，环境租户还没设：按主体的租户进到它的库里查
         using (currentTenant.Change(tenantId, tenantName))
-        using (var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             var now = clock.Now;
             var session = await sessionRepository.GetByIdAsync(sessionId, cancellationToken);

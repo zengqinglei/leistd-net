@@ -1,4 +1,9 @@
+using Leistd.MultiTenancy.Extensions;
 using CompanyName.ProjectName.Application.Auth.SignIn;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
+#endif
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
 using Leistd.UnitOfWork.Attributes;
 using CompanyName.ProjectName.Application.Auth.Constants;
@@ -16,6 +21,7 @@ using Leistd.ObjectMapping.Abstractions;
 using CompanyName.ProjectName.Application.Auth.Dtos;
 using CompanyName.ProjectName.Application.Auth.Policies;
 using CompanyName.ProjectName.Domain.Users.DomainServices;
+using CompanyName.ProjectName.Domain.Shared.Security.Errors;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Domain.Repositories;
@@ -31,7 +37,6 @@ using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.Timing;
 using Leistd.Lock.Abstractions;
@@ -55,7 +60,8 @@ internal sealed class AuthAppService(
     IDistributedCache distributedCache,
     IObjectMapper objectMapper,
     IUserRegistrationPolicyProvider registrationPolicy,
-    ILoginSecurityPolicyProvider loginSecurityPolicy,
+    IReauthenticationGuard reauthenticationGuard,
+    IAccessFailureCounter accessFailureCounter,
     ISecurityAlertPublisher securityAlerts,
     ICurrentTenant currentTenant,
     IClock clock,
@@ -66,25 +72,28 @@ internal sealed class AuthAppService(
         LoginInputDto input,
         CancellationToken cancellationToken = default)
     {
-        var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
         var now = clock.Now;
         var result = await userDomainService.ValidateCredentialsAsync(
             input.UsernameOrEmail,
             input.Password,
-            policy.Lockout,
             now,
             cancellationToken);
 
         if (result.Status == CredentialValidationStatus.LockedOut)
         {
-            var lockedUser = result.User!;
-            // 锁定期间的每次尝试都记一条的话，又是一个匿名刷表的面
-            if (result.LockoutTriggered)
-            {
-                await RecordLockedOutAsync(lockedUser, policy, cancellationToken);
-            }
+            // 已在锁定中：不计数也不再记一条，否则锁定期内的每次尝试都是一个匿名刷表的面
+            throw SessionSignInService.LockedOut(result.User!, now);
+        }
 
-            throw SessionSignInService.LockedOut(lockedUser, now);
+        if (result.Countable)
+        {
+            // 计数走与再认证同一份实现：独立工作单元提交，不随下面的抛出回滚
+            var counted = await accessFailureCounter.CountAsync(result.User!.Id, cancellationToken);
+            if (counted is { LockoutTriggered: true, User: { } lockedUser })
+            {
+                await RecordLockedOutAsync(lockedUser, cancellationToken);
+                throw SessionSignInService.LockedOut(lockedUser, now);
+            }
         }
 
         if (result.Status == CredentialValidationStatus.InvalidCredentials)
@@ -103,17 +112,14 @@ internal sealed class AuthAppService(
                     OperationRecordActions.AuthLoginFailed,
                     OperationTarget.For(input.UsernameOrEmail),
                     OperationRecordAuthorizations.CredentialsPresented,
-                    OperationFailure.FromCode(
-                        "Auth:InvalidCredentials",
-                        $$"""{"attempts":{{attempts}},"windowMinutes":{{FailedLoginWindowMinutes}}}"""));
+                    OperationFailure.FromCode(AuthErrorCodes.InvalidCredentials, new Dictionary<string, object?>
+                    {
+                        ["attempts"] = attempts,
+                        ["windowMinutes"] = FailedLoginWindowMinutes
+                    }));
             }
 
-            throw new UnauthorizedException($"Login failed: user not found or incorrect password - {input.UsernameOrEmail}")
-#if (IncludeLocalization)
-                .WithCode("Auth:InvalidCredentials")
-                .WithData("UsernameOrEmail", input.UsernameOrEmail)
-#endif
-                ;
+            throw new BusinessException(AuthErrorCodes.InvalidCredentials, "The username or password is incorrect.");
         }
 
         var user = result.User!;
@@ -159,6 +165,14 @@ internal sealed class AuthAppService(
             throw TwoFactorChallengeExpired();
         }
 
+        // 第一步之后凭据变了（改口令、管理员重置、启用或停用两步验证、解绑外部登录）：
+        // 这个挑战凭的是旧凭据，作废。撤销会话挡不住它——挑战不是会话
+        if (!string.Equals(user.SecurityStamp, challenge.SecurityStamp, StringComparison.Ordinal))
+        {
+            await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
+            throw TwoFactorChallengeExpired();
+        }
+
         var now = clock.Now;
         try
         {
@@ -182,24 +196,19 @@ internal sealed class AuthAppService(
         }
         else
         {
-            throw new BadRequestException("Enter the verification code or a recovery code.")
-#if (IncludeLocalization)
-                .WithCode("Auth:TwoFactorCodeRequired")
-#endif
+            throw new BusinessException(AuthErrorCodes.TwoFactorCodeRequired, "Enter the verification code or a recovery code.")
                 ;
         }
 
         if (!verified)
         {
-            var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
-            var lockedOut = user.RecordAccessFailed(now, policy.Lockout);
-            await userRepository.UpdateAsync(user, cancellationToken);
-
-            if (lockedOut)
+            // 与口令登录、再认证同一份计数实现：独立工作单元提交，不随下面的抛出回滚
+            var counted = await accessFailureCounter.CountAsync(user.Id, cancellationToken);
+            if (counted is { LockoutTriggered: true, User: { } lockedUser })
             {
                 await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
-                await RecordLockedOutAsync(user, policy, cancellationToken);
-                throw SessionSignInService.LockedOut(user, now);
+                await RecordLockedOutAsync(lockedUser, cancellationToken);
+                throw SessionSignInService.LockedOut(lockedUser, now);
             }
 
             if (!await twoFactorChallengeStore.RecordFailureAsync(input.Token, challenge, cancellationToken))
@@ -207,9 +216,7 @@ internal sealed class AuthAppService(
                 throw TwoFactorChallengeExpired();
             }
 
-            throw new UnauthorizedException("The verification code is incorrect.")
-                // 错误码在不含本地化的形态下也要带：界面按它区分"重输"与"回到密码那一步"
-                .WithCode("Auth:TwoFactorCodeInvalid");
+            throw new BusinessException(AuthErrorCodes.TwoFactorCodeInvalid, "The verification code is incorrect.");
         }
 
         await twoFactorChallengeStore.RemoveAsync(input.Token, cancellationToken);
@@ -249,27 +256,14 @@ internal sealed class AuthAppService(
             OperationRecordAuthorizations.CredentialsPresented,
             cancellationToken);
 
-    // 只在"这一次恰好触发锁定"时记：一个锁定期内至多一条，写入量有界。本人同时收到一条安全提醒
-    private async Task RecordLockedOutAsync(User user, LoginSecurityPolicy policy, CancellationToken cancellationToken)
-    {
-        await securityAlerts.PublishAsync(
-            user.Id,
-            new SecurityAlert(SecurityAlertKind.LockedOut, Until: user.LockoutEnd),
-            cancellationToken);
-        await operationRecorder.RecordFailedAsync(
-            OperationRecordActions.AuthLockedOut,
-            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
-            OperationRecordAuthorizations.CredentialsPresented,
-            OperationFailure.FromCode(
-                "Auth:UserTemporarilyLockedOut",
-                $$"""{"maxFailedAttempts":{{policy.Lockout.MaxFailedAttempts}},"minutes":{{(int)policy.Lockout.Duration.TotalMinutes}}}"""));
-    }
+    // 登录侧的授权依据是"出示了凭据"：此刻还没有主体，与再认证侧的"本人"不同。
+    // 提醒与审计的其余部分两侧一致，收在 IAccessFailureCounter 里。
+    private Task RecordLockedOutAsync(User user, CancellationToken cancellationToken)
+        => accessFailureCounter.RecordLockoutAsync(
+            user, OperationRecordAuthorizations.CredentialsPresented, cancellationToken);
 
     private static BusinessException TwoFactorChallengeExpired() =>
-        new UnauthorizedException("The sign-in attempt has expired. Sign in again.")
-#if (IncludeLocalization)
-            .WithCode("Auth:TwoFactorChallengeExpired")
-#endif
+        new BusinessException(AuthErrorCodes.TwoFactorChallengeExpired, "The sign-in attempt has expired. Sign in again.")
         ;
 
     /// <summary>失败登录的计数窗口（分钟）。</summary>
@@ -319,18 +313,22 @@ internal sealed class AuthAppService(
         return attempts;
     }
 
-    private static string FailedLoginCacheKey(string identifier)
+    // 按租户隔离：登录名只在租户内唯一，共用一个计数会让一个租户里的爆破把另一个租户的同名用户挡在门外
+    private string FailedLoginCacheKey(string identifier)
     {
         var normalized = identifier.Trim().ToLowerInvariant();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-        return $"auth:login-failures:{Convert.ToHexString(hash)}";
+        return currentTenant.ScopeKey($"auth:login-failures:{Convert.ToHexString(hash)}");
     }
 
     /// <remarks>建用户与分配默认角色必须同生共死：拆开后注册失败会留下没有任何角色的用户。</remarks>
     [UnitOfWork]
     public async Task<UserOutputDto> RegisterAsync(RegisterInputDto input, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Registering user {Username} with email {Email}", input.Username, input.Email);
+        // 不与用户名同行记邮箱（哪怕已脱敏）：用户名常常就是邮箱本地部
+        // （本地注册时用户自己这么取，外部登录更是按本地部生成），
+        // 同一行给出本地部与域名等于把脱敏拼回去。要查地址用操作记录或按用户查库。
+        logger.LogInformation("Registering user {Username}", input.Username);
 
         var options = await registrationPolicy.GetAsync(cancellationToken);
 
@@ -338,10 +336,7 @@ internal sealed class AuthAppService(
         {
             if (input.EmailVerification is null || input.EmailVerification.ChallengeId == Guid.Empty)
             {
-                throw new BadRequestException("Please enter the email verification code.")
-#if (IncludeLocalization)
-                    .WithCode("Auth:EmailCodeRequired")
-#endif
+                throw new BusinessException(AuthErrorCodes.EmailCodeRequired, "Please enter the email verification code.")
                     ;
             }
 
@@ -351,10 +346,7 @@ internal sealed class AuthAppService(
                 cancellationToken);
             if (!isValidEmailCode)
             {
-                throw new BadRequestException("The email verification code is incorrect or has expired.")
-#if (IncludeLocalization)
-                    .WithCode("Auth:EmailCodeInvalid")
-#endif
+                throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
                     ;
             }
         }
@@ -363,10 +355,7 @@ internal sealed class AuthAppService(
             var isValidCaptcha = await captchaAppService.ValidateCaptchaAsync(input.CaptchaToken ?? string.Empty, input.CaptchaCode ?? string.Empty, cancellationToken);
             if (!isValidCaptcha)
             {
-                throw new BadRequestException("The image captcha is incorrect or has expired.")
-#if (IncludeLocalization)
-                    .WithCode("Auth:CaptchaInvalid")
-#endif
+                throw new BusinessException(AuthErrorCodes.CaptchaInvalid, "The image captcha is incorrect or has expired.")
                     ;
             }
         }
@@ -408,12 +397,8 @@ internal sealed class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
         }
 
         logger.LogInformation("Updating current user profile (ID: {UserId})", user.Id);
@@ -441,17 +426,34 @@ internal sealed class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
         }
 
         logger.LogInformation("Changing current user password (ID: {UserId})", user.Id);
 
-        await userDomainService.ChangePasswordAsync(user, input.CurrentPassword, input.NewPassword, cancellationToken);
+        // 改口令要再证明一次自己知道当前口令，这就是一次再认证：锁定期内不给试，失败按登录的同一套计数。
+        // 少了这一道，持有被盗会话的人能在这个接口上无限次猜当前口令，把登录页的锁定整个绕过去。
+        await reauthenticationGuard.EnsureAllowedAsync(user, cancellationToken);
+
+        switch (userDomainService.ChangePassword(user, input.CurrentPassword, input.NewPassword))
+        {
+            case ChangePasswordStatus.NoLocalPassword:
+                // 没有本地口令就没什么可猜的，不计入失败次数
+                throw new BusinessException(
+                    SecurityErrorCodes.LocalPasswordNotSet,
+                    "The current account has no local password set and cannot change the password.");
+
+            case ChangePasswordStatus.CurrentPasswordIncorrect:
+                // 这一次恰好把次数用完时，守卫返回的是"已锁定"而不是"口令不正确"
+                throw await reauthenticationGuard.RejectAsync(
+                    user,
+                    OperationRecordActions.AuthPasswordChanged,
+                    SecurityErrorCodes.CurrentPasswordIncorrect,
+                    "The current password is incorrect.",
+                    cancellationToken);
+        }
+
         await userRepository.UpdateAsync(user, cancellationToken);
 
         // 凭据换了，以旧密码建立的其他会话随之失效；发起修改的这台保留，免得改完密码自己也被踢出去
@@ -482,10 +484,7 @@ internal sealed class AuthAppService(
         {
             AvatarPolicy.EnsureValid(input.Avatar);
             // 外部地址本身合法，但不是本人上传的入口能写的东西
-            throw new BadRequestException("The avatar must be a PNG, JPEG or WebP image.")
-#if (IncludeLocalization)
-                .WithCode("User:AvatarInvalid")
-#endif
+            throw new BusinessException(UserErrorCodes.AvatarInvalid, "The avatar must be a PNG, JPEG or WebP image.")
                 ;
         }
 
@@ -509,10 +508,7 @@ internal sealed class AuthAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         if (user.EmailConfirmed)
         {
-            throw new BadRequestException("This email address has already been verified.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailAlreadyVerified")
-#endif
+            throw new BusinessException(AuthErrorCodes.EmailAlreadyVerified, "This email address has already been verified.")
                 ;
         }
 
@@ -531,10 +527,7 @@ internal sealed class AuthAppService(
         var user = await GetCurrentUserEntityAsync(cancellationToken);
         if (!await emailVerificationAppService.ValidateAccountEmailChallengeAsync(user.Email, input, cancellationToken))
         {
-            throw new BadRequestException("The email verification code is incorrect or has expired.")
-#if (IncludeLocalization)
-                .WithCode("Auth:EmailCodeInvalid")
-#endif
+            throw new BusinessException(AuthErrorCodes.EmailCodeInvalid, "The email verification code is incorrect or has expired.")
                 ;
         }
 
@@ -554,12 +547,8 @@ internal sealed class AuthAppService(
     {
         var userId = currentUser.Id!.Value;
         return await userRepository.GetByIdAsync(userId, cancellationToken)
-            ?? throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            ?? throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
     }
 
     private async Task<UserOutputDto> GetCurrentUserOutputAsync(Guid userId, CancellationToken cancellationToken)
@@ -567,12 +556,8 @@ internal sealed class AuthAppService(
         var user = await userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
         {
-            throw new NotFoundException($"User {userId} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", userId)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {userId} not found.")
+                .WithData("Id", userId);
         }
 
         var roleNames = await userDomainService.GetUserRoleNamesAsync(userId, cancellationToken);
@@ -582,12 +567,12 @@ internal sealed class AuthAppService(
 
     /// <remarks>
     /// 角色名由调用方给出：写路径刚分配完角色、关联行尚未落库，映射配置里的实体连接查不到。
-    /// 经 <see cref="UserProfile.RoleNamesKey"/> 传入，仍走已注册的 <c>User → UserOutputDto</c> 映射。
+    /// 经 <see cref="UserMappings.RoleNamesKey"/> 传入，仍走已注册的 <c>User → UserOutputDto</c> 映射。
     /// </remarks>
     private UserOutputDto ToOutput(User user, List<string> roleNames)
     {
         return objectMapper.Map<User, UserOutputDto>(
             user,
-            new Dictionary<string, object> { [UserProfile.RoleNamesKey] = roleNames });
+            new Dictionary<string, object> { [UserMappings.RoleNamesKey] = roleNames });
     }
 }

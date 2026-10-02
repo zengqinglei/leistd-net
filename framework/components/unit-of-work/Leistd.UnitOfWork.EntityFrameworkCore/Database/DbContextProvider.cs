@@ -5,7 +5,6 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.Data;
 using Leistd.Data.Connections;
 
 namespace Leistd.UnitOfWork.EntityFrameworkCore.Database;
@@ -181,7 +180,7 @@ public class DbContextProvider<TDbContext>(
     // 一刀切会逼着这些路径都包一层工作单元。这里只拒绝"解析出的连接与实例实际连接不一致"这一种情形，
     // 它正是唯一会静默连错库的情形。判据与工作单元路径同一把尺（CreateTargetKey），不另立等价规则。
     //
-    // 修正方式：在目标租户上下文内新开工作单元（BeginAsync(requiresNew: true)）。工作单元自带独立作用域，
+    // 修正方式：在目标租户上下文内新开工作单元（Begin(requiresNew: true)）。工作单元自带独立作用域，
     // DbContext 会按解析出的连接重新创建。
     private static void EnsureResolvedTargetIsUsed(TDbContext dbContext, string? resolvedConnectionString)
     {
@@ -204,7 +203,7 @@ public class DbContextProvider<TDbContext>(
             $"different database than the one now resolved for '{ConnectionStringName}' (typically after " +
             "ICurrentTenant.Change). Outside a unit of work the scoped instance cannot be re-targeted, so using it " +
             "would silently read and write the wrong database. Begin a new unit of work inside the target tenant " +
-            "scope (IUnitOfWorkManager.BeginAsync(requiresNew: true)); it owns its own scope and creates the " +
+            "scope (IUnitOfWorkManager.Begin(requiresNew: true)); it owns its own scope and creates the " +
             "DbContext for the resolved connection.");
     }
 

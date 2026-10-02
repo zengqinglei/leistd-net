@@ -7,79 +7,72 @@ import { Router, provideRouter } from '@angular/router';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
-//#if (IncludeLocalization)
-import { BehaviorSubject } from 'rxjs';
-//#endif
 
 import { NotificationOutputDto, NotificationService } from './notification-service';
 import { Notifications } from './notifications';
 import { ApplicationHttpError } from '../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../core/feedback/confirm-service';
 //#if (IncludeLocalization)
+import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 import { LanguageService } from '../../../core/services/language-service';
 //#endif
+
+import type { Mock, MockedObject } from 'vitest';
 //#if (IncludeLocalization)
 
-const EN: Record<string, string> = {
-  'layout.notifications.title': 'Notifications',
-  'layout.notifications.unreadAria': 'Notifications ({{count}} unread)',
-};
-const ZH: Record<string, string> = {
-  'layout.notifications.title': '通知',
-  'layout.notifications.unreadAria': '通知（{{count}} 条未读）',
+const TRANSLATIONS = {
+  en: {
+    layout: {
+      notifications: { title: 'Notifications', unreadAria: 'Notifications ({{count}} unread)' },
+    },
+  },
+  'zh-CN': { layout: { notifications: { title: '通知', unreadAria: '通知（{{count}} 条未读）' } } },
 };
 //#endif
 
 describe('Notifications', () => {
-  let service: jasmine.SpyObj<NotificationService>;
-  //#if (IncludeLocalization)
-  let translations: BehaviorSubject<Record<string, string>>;
-  let transloco: {
-    translate: (key: string, params?: Record<string, unknown>) => string;
-    selectTranslation: () => unknown;
-  };
-  //#endif
-  let confirmService: jasmine.SpyObj<ConfirmService>;
-  let errorToast: jasmine.Spy;
+  let service: Pick<
+    MockedObject<NotificationService>,
+    'init' | 'markAsRead' | 'markAllAsRead' | 'clearAll' | 'clearOne' | 'getIcon'
+  > &
+    Pick<NotificationService, 'notifications' | 'unreadCount' | 'loading'>;
+  let confirmService: Pick<MockedObject<ConfirmService>, 'open'>;
+  let errorToast: Mock;
 
   beforeEach(() => {
-    service = jasmine.createSpyObj<NotificationService>(
-      'NotificationService',
-      ['init', 'markAsRead', 'markAllAsRead', 'clearAll', 'clearOne', 'getIcon'],
-      { notifications: signal([]), unreadCount: signal(0), loading: signal(false) },
-    );
-    service.init.and.resolveTo();
-    confirmService = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['open']);
-    confirmService.open.and.resolveTo(true);
-    errorToast = spyOn(toast, 'error');
-    //#if (IncludeLocalization)
-    // 最小 Transloco 桩：translationReady 依赖 selectTranslation() 在语言切换时再次发射。
-    translations = new BehaviorSubject<Record<string, string>>(EN);
-    transloco = {
-      translate: (key: string, params?: Record<string, unknown>) => {
-        const text = translations.value[key] ?? key;
-        return params ? text.replace('{{count}}', String(params['count'])) : text;
-      },
-      selectTranslation: () => translations.asObservable(),
+    service = {
+      init: vi.fn().mockName('NotificationService.init'),
+      markAsRead: vi.fn().mockName('NotificationService.markAsRead'),
+      markAllAsRead: vi.fn().mockName('NotificationService.markAllAsRead'),
+      clearAll: vi.fn().mockName('NotificationService.clearAll'),
+      clearOne: vi.fn().mockName('NotificationService.clearOne'),
+      getIcon: vi.fn().mockName('NotificationService.getIcon'),
+      notifications: signal<NotificationOutputDto[]>([]),
+      unreadCount: signal(0),
+      loading: signal(false),
     };
-    //#endif
+    service.init.mockResolvedValue();
+    confirmService = {
+      open: vi.fn().mockName('ConfirmService.open'),
+    };
+    confirmService.open.mockResolvedValue(true);
+    errorToast = vi.spyOn(toast, 'error').mockImplementation(() => '');
 
     TestBed.configureTestingModule({
       imports: [Notifications],
       // prettier-ignore
       providers: [
-        provideRouter([]),
-        { provide: NotificationService, useValue: service },
-        { provide: ConfirmService, useValue: confirmService },
-        //#if (IncludeLocalization)
-        { provide: TranslocoService, useValue: transloco },
-        // 面板里的时间要一个书写 locale，它取自活动语言（见 SettingContextService）。
-        // 真实 LanguageService 会在构造时调 transloco.setActiveLang——上面那个最小桩
-        // 撑不住它，而本组用例要的是"能在测试里换翻译"，不是验语言那条链路，
-        // 所以这里给语言服务一个定值替身。
-        { provide: LanguageService, useValue: { activeLang: signal('en') } },
-        //#endif
-      ],
+                provideRouter([]),
+                { provide: NotificationService, useValue: service },
+                { provide: ConfirmService, useValue: confirmService },
+                //#if (IncludeLocalization)
+                ...provideTranslocoTesting(['en', 'zh-CN']),
+                // 面板里的时间要一个书写 locale，它取自活动语言（见 SettingContextService）。
+                // 本组用例要的是"能在测试里换翻译"，不是验语言那条链路，
+                // 所以给语言服务一个定值替身，免得它按设备语言去改活动语言。
+                { provide: LanguageService, useValue: { activeLang: signal('en') } },
+                //#endif
+            ],
     });
   });
 
@@ -100,20 +93,18 @@ describe('Notifications', () => {
   }
 
   it('keeps the panel open and surfaces an error when clearing all fails', async () => {
-    service.clearAll.and.rejectWith(httpError(500));
+    service.clearAll.mockRejectedValue(httpError(500));
     const component = createComponent();
     component.notificationOpen.set('open');
 
     await component.clearAllNotifications();
 
     expect(errorToast).toHaveBeenCalled();
-    expect(component.notificationOpen())
-      .withContext('a failed delete must not look successful')
-      .toBe('open');
+    expect(component.notificationOpen(), 'a failed delete must not look successful').toBe('open');
   });
 
   it('closes the panel only after clearing all succeeds', async () => {
-    service.clearAll.and.resolveTo();
+    service.clearAll.mockResolvedValue();
     const component = createComponent();
     component.notificationOpen.set('open');
 
@@ -124,26 +115,35 @@ describe('Notifications', () => {
   });
   //#if (IncludeLocalization)
 
-  it('re-evaluates ARIA labels when the language changes at runtime', () => {
-    (service.unreadCount as unknown as { set(v: number): void }).set(2);
-    const component = createComponent();
+  it('re-renders ARIA labels when the language changes at runtime', async () => {
+    const transloco = TestBed.inject(TranslocoService);
+    transloco.setTranslation(TRANSLATIONS.en, 'en');
+    transloco.setTranslation(TRANSLATIONS['zh-CN'], 'zh-CN');
+    (
+      service.unreadCount as unknown as {
+        set(v: number): void;
+      }
+    ).set(2);
+    const fixture = TestBed.createComponent(Notifications);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('[hlmPopoverTrigger]')!;
 
-    expect(component.panelLabel()).toBe('Notifications');
-    expect(component.triggerLabel()).toBe('Notifications (2 unread)');
+    expect(trigger.getAttribute('aria-label')).toBe('Notifications (2 unread)');
 
-    translations.next(ZH);
+    transloco.setActiveLang('zh-CN');
+    await fixture.whenStable();
 
-    expect(component.panelLabel()).withContext('panel name must follow the language').toBe('通知');
-    expect(component.triggerLabel())
-      .withContext('trigger name must follow the language')
-      .toBe('通知（2 条未读）');
+    expect(trigger.getAttribute('aria-label'), 'trigger name must follow the language').toBe(
+      '通知（2 条未读）',
+    );
   });
   //#endif
 
   it('still navigates when marking as read fails', async () => {
     const router = TestBed.inject(Router);
-    const navigate = spyOn(router, 'navigateByUrl');
-    service.markAsRead.and.rejectWith(httpError(500));
+    const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    service.markAsRead.mockRejectedValue(httpError(500));
     const component = createComponent();
     component.notificationOpen.set('open');
 
@@ -157,15 +157,16 @@ describe('Notifications', () => {
       creationTime: new Date().toISOString(),
     } as NotificationOutputDto);
 
-    expect(errorToast).withContext('failure must still be surfaced').toHaveBeenCalled();
-    expect(navigate)
-      .withContext('navigation is the primary action and must not be blocked')
-      .toHaveBeenCalledWith('/platform/users');
+    expect(errorToast, 'failure must still be surfaced').toHaveBeenCalled();
+    expect(
+      navigate,
+      'navigation is the primary action and must not be blocked',
+    ).toHaveBeenCalledWith('/platform/users');
     expect(component.notificationOpen()).toBe('closed');
   });
 
   it('surfaces an error when dismissing a single notification fails', async () => {
-    service.clearOne.and.rejectWith(httpError(503));
+    service.clearOne.mockRejectedValue(httpError(503));
     const component = createComponent();
 
     await component.clearOneNotification('n-1');

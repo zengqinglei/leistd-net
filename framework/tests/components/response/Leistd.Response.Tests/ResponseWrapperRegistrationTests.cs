@@ -1,5 +1,8 @@
 using Leistd.Response.AspNetCore;
 using Leistd.Response.AspNetCore.Filters;
+using Leistd.ExceptionHandling.AspNetCore;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -77,5 +80,34 @@ public class ResponseWrapperRegistrationTests
 
         Assert.Single(filters, f =>
             f is TypeFilterAttribute t && t.ImplementationType == typeof(ResultWrapperFilter));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Envelope_writer_goes_first_independent_of_registration_order(bool wrapperFirst)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var mvc = services.AddControllers();
+        if (wrapperFirst)
+        {
+            mvc.AddResponseWrapper();
+            mvc.ConfigureApiValidation();
+        }
+        else
+        {
+            mvc.ConfigureApiValidation();
+            mvc.AddResponseWrapper();
+        }
+
+        // 宿主在包装器之后才注册默认写入器（AddGlobalExceptionHandler 内部调 AddProblemDetails）也不能抢到前面
+        services.AddProblemDetails();
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal("ResultProblemDetailsWriter",
+            provider.GetServices<IProblemDetailsWriter>().First().GetType().Name);
+        Assert.Single(provider.GetRequiredService<IOptions<MvcOptions>>().Value.ModelMetadataDetailsProviders,
+            metadata => metadata is SystemTextJsonValidationMetadataProvider);
     }
 }

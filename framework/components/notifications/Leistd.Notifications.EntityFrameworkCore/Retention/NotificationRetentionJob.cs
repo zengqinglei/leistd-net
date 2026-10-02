@@ -69,7 +69,7 @@ internal sealed class NotificationRetentionJob<TDbContext>(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+            using var unitOfWork = unitOfWorkManager.Begin(requiresNew: true);
             var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
             // 租户过滤器只放行当前上下文那一个租户，同库其余租户的通知不加 IgnoreQueryFilters 就永远留着

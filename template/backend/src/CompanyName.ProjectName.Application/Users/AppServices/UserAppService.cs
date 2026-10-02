@@ -1,8 +1,11 @@
 using Leistd.UnitOfWork.Attributes;
+using CompanyName.ProjectName.Application.Roles.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Application.OperationRecords.Provider;
 #if (LocalIdentity)
 using CompanyName.ProjectName.Application.Auth.Sessions;
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
+using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Auth.SecurityAlerts;
 using CompanyName.ProjectName.Application.Users.Mappings;
 using Leistd.Timing;
@@ -12,7 +15,6 @@ using CompanyName.ProjectName.Application.Roles.Dtos;
 using CompanyName.ProjectName.Application.Users.Avatars;
 using CompanyName.ProjectName.Application.Users.Dtos;
 using CompanyName.ProjectName.Domain.Users.Policies;
-using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Application.Shared.Paging;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using Leistd.Authorization;
@@ -57,9 +59,11 @@ public class UserAppService(
     IRepository<Role, Guid> roleRepository,
     IRepository<UserRole, Guid> userRoleRepository,
     IPermissionChecker permissionChecker,
-    UserDomainService userDomainService,
     IOperationRecorder operationRecorder,
 #if (LocalIdentity)
+    // 资源服务形态下用户由令牌投影而来：没有新建、改邮箱、重置口令这些入口，
+    // 这个依赖的三处用法全在本形态内，那边留着只会是一个未读参数
+    UserDomainService userDomainService,
     UserSessionDomainService userSessionDomainService,
     ISecurityAlertPublisher securityAlerts,
 #endif
@@ -117,12 +121,9 @@ public class UserAppService(
                 .ToList();
             if (roleNames.Exists(r => r.Length > RoleNameMaxLength))
             {
-                throw new BadRequestException(
+                throw new BusinessException(RoleErrorCodes.NameTooLong,
                     $"Role name cannot exceed {RoleNameMaxLength} characters.")
-#if (IncludeLocalization)
-                    .WithCode("Role:NameTooLong").WithData("MaximumLength", RoleNameMaxLength)
-#endif
-                    ;
+                    .WithData("MaximumLength", RoleNameMaxLength);
             }
             if (roleNames.Count > 0)
             {
@@ -181,6 +182,7 @@ public class UserAppService(
         return await MapToOutputAsync(user, cancellationToken);
     }
 
+#if (LocalIdentity)
     /// <summary>
     /// 创建用户
     /// </summary>
@@ -192,7 +194,9 @@ public class UserAppService(
         var email = input.Email.Trim();
         var displayName = input.DisplayName?.Trim();
 
-        logger.LogInformation("Creating user {Username} with email {Email}", username, email);
+        // 不与用户名同行记邮箱，理由同 AuthAppService：用户名常常就是邮箱本地部，
+        // 同一行给出本地部与域名等于把脱敏拼回去
+        logger.LogInformation("Creating user {Username}", username);
 
         // 创建时携带角色等同于一次角色分配，因此除创建权限外还必须持有 ManageRoles，
         // 否则只拥有创建权限的主体可以直接造出一个管理员账号。
@@ -200,14 +204,9 @@ public class UserAppService(
             ? await GetRolesWithManageRolesCheckAsync(input.RoleIds, cancellationToken)
             : await GetDefaultRolesAsync(cancellationToken);
         AvatarPolicy.EnsureValid(input.Avatar?.Trim());
-#if (LocalIdentity)
         var user = await userDomainService.CreateUserAsync(
             username, email, input.Password, displayName, cancellationToken: cancellationToken);
         user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, input.IsEmailVerified);
-#else
-        var user = await userDomainService.CreateUserAsync(input.SubjectId, username, email, displayName, cancellationToken);
-        user.UpdateManagement(email, displayName, input.Avatar?.Trim(), input.IsActive, false);
-#endif
         await userRepository.UpdateAsync(user, cancellationToken);
         var userRoles = await AssignRolesAsync(user.Id, roles, cancellationToken);
 
@@ -226,6 +225,10 @@ public class UserAppService(
     /// <summary>
     /// 更新用户
     /// </summary>
+    /// <remarks>
+    /// 资源服务形态下没有这个入口：用户名、邮箱、显示名归签发方所有，本地改了没有回写通道，
+    /// 只会与签发方漂移。那一侧的资料由 <c>ResourceUserProvisioningMiddleware</c> 每次访问按令牌刷新。
+    /// </remarks>
     public async Task<UserManagementOutputDto> UpdateAsync(Guid id, UpdateUserInputDto input, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Updating user {Id}", id);
@@ -233,22 +236,15 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be updated by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminUpdateForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
                 ;
         }
 
         var email = input.Email.Trim();
         if (!await userDomainService.IsEmailAvailableAsync(id, email, cancellationToken))
         {
-            throw new BadRequestException($"Email '{email}' is already in use.")
-#if (IncludeLocalization)
-                .WithCode("User:EmailAlreadyUsed")
-                .WithData("Email", email)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.EmailAlreadyUsed, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         // 编辑表单会把读到的头像地址原样送回，那表示"没改"，换回存储的原值再校验。
@@ -256,16 +252,12 @@ public class UserAppService(
         AvatarPolicy.EnsureValid(avatar);
 
         // 启用状态原样带过：它只由 Enable/Disable 两个命令写入，那里才有"超管不得禁用自己"的保护。
-#if (LocalIdentity)
         user.UpdateManagement(
             email,
             input.DisplayName?.Trim(),
             avatar,
             user.IsActive,
             input.IsEmailVerified);
-#else
-        user.UpdateManagement(email, input.DisplayName?.Trim(), avatar, user.IsActive, false);
-#endif
         // 角色不在此处变更：普通资料更新与角色分配是两个命令、两个权限。
         await userRepository.UpdateAsync(user, cancellationToken);
 
@@ -283,23 +275,34 @@ public class UserAppService(
         return await MapToOutputAsync(user, cancellationToken);
     }
 
+#endif
     /// <summary>
     /// 启用用户
     /// </summary>
+    /// <remarks>两种形态都保留：即使身份由签发方发放，本服务仍要能就地停掉一个人的访问。</remarks>
     public async Task EnableAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be operated on by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminOperationForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
                 ;
+        }
+
+        // 已启用时静默成功、不留记录（同解锁）：重复点击不该留下一串没发生过的事
+        if (user.IsActive)
+        {
+            return;
         }
 
         user.Enable();
         await userRepository.UpdateAsync(user, cancellationToken);
+
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserEnabled,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
     }
 
     /// <summary>
@@ -310,21 +313,16 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be disabled by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminDisableForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableForbidden, "The built-in super administrator cannot be disabled by other administrators.")
                 ;
         }
         if (!user.CanBeDisabled())
         {
-            throw new BadRequestException("The built-in super administrator cannot disable itself.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminDisableSelfForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminDisableSelfForbidden, "The built-in super administrator cannot disable itself.")
                 ;
         }
 
+        var wasActive = user.IsActive;
         user.Disable();
         await userRepository.UpdateAsync(user, cancellationToken);
 #if (LocalIdentity)
@@ -332,6 +330,16 @@ public class UserAppService(
         // 已在线的会话与已签发的令牌随之作废：登录时的启用检查挡不住它们
         await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
 #endif
+
+        // 撤销照做（兜住此前遗留的会话），记录只在状态真正变化时写
+        if (wasActive)
+        {
+            await operationRecorder.RecordSucceededAsync(
+                OperationRecordActions.UserDisabled,
+                OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+                PermissionConstant.Users.Update,
+                cancellationToken);
+        }
     }
 
 #if (LocalIdentity)
@@ -343,10 +351,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator's password cannot be reset by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminResetPasswordForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminResetPasswordForbidden, "The built-in super administrator's password cannot be reset by other administrators.")
                 ;
         }
 
@@ -360,6 +365,11 @@ public class UserAppService(
             user.Id == currentUser.Id ? currentUser.GetSessionId() : null,
             cancellationToken);
         await securityAlerts.PublishAsync(user.Id, new SecurityAlert(SecurityAlertKind.PasswordReset), cancellationToken);
+        await operationRecorder.RecordSucceededAsync(
+            OperationRecordActions.UserPasswordReset,
+            OperationTarget.For(user.Id, user.DisplayName ?? user.Username),
+            PermissionConstant.Users.Update,
+            cancellationToken);
     }
 
     /// <summary>
@@ -398,10 +408,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be operated on by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminOperationForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminOperationForbidden, "The built-in super administrator cannot be operated on by other administrators.")
                 ;
         }
 
@@ -426,6 +433,7 @@ public class UserAppService(
     }
 #endif
 
+#if (LocalIdentity)
     /// <summary>
     /// 删除用户（软删除）
     /// </summary>
@@ -443,16 +451,11 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeDeleted())
         {
-            throw new BadRequestException("The built-in super administrator cannot be deleted.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminDeleteForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminDeleteForbidden, "The built-in super administrator cannot be deleted.")
                 ;
         }
 
-#if (LocalIdentity)
         await RevokeAllAccessAsync(user.Id, keepSessionId: null, cancellationToken);
-#endif
         await userRepository.DeleteAsync(user, cancellationToken);
 #if (IncludeNotifications)
         await notificationStore.DeleteAllAsync(id.ToString(), cancellationToken);
@@ -468,17 +471,14 @@ public class UserAppService(
             cancellationToken);
     }
 
+#endif
     private async Task<User> GetUserOrThrowAsync(Guid id, CancellationToken cancellationToken)
     {
         var user = await userRepository.GetByIdAsync(id, cancellationToken);
         if (user is null)
         {
-            throw new NotFoundException($"User {id} not found.")
-#if (IncludeLocalization)
-                .WithCode("User:NotFound")
-                .WithData("Id", id)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.NotFound, $"User {id} not found.")
+                .WithData("Id", id);
         }
 
         return user;
@@ -526,10 +526,7 @@ public class UserAppService(
         var user = await GetUserOrThrowAsync(id, cancellationToken);
         if (!user.CanBeManagedBy(currentUser.Id))
         {
-            throw new BadRequestException("The built-in super administrator cannot be updated by other administrators.")
-#if (IncludeLocalization)
-                .WithCode("User:SuperAdminUpdateForbidden")
-#endif
+            throw new BusinessException(UserErrorCodes.SuperAdminUpdateForbidden, "The built-in super administrator cannot be updated by other administrators.")
                 ;
         }
 
@@ -558,10 +555,7 @@ public class UserAppService(
     {
         if (!await permissionChecker.IsGrantedAsync(PermissionConstant.Users.ManageRoles, cancellationToken))
         {
-            throw new ForbiddenException("Assigning roles requires the user role management permission.")
-#if (IncludeLocalization)
-                .WithCode("User:ManageRolesRequired")
-#endif
+            throw new BusinessException(UserErrorCodes.ManageRolesRequired, "Assigning roles requires the user role management permission.")
                 ;
         }
 
@@ -583,12 +577,8 @@ public class UserAppService(
         var missing = normalized.Except(roles.Select(r => r.Id)).ToList();
         if (missing.Count != 0)
         {
-            throw new BadRequestException($"Roles not found: {string.Join(", ", missing)}")
-#if (IncludeLocalization)
-                .WithCode("User:RolesNotFound")
-                .WithData("Roles", string.Join(", ", missing))
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.RolesNotFound, $"Roles not found: {string.Join(", ", missing)}")
+                .WithData("Roles", string.Join(", ", missing));
         }
 
         return roles;
@@ -679,7 +669,7 @@ public class UserAppService(
             ["UserRoles"] = userRoles,
             ["Roles"] = roles,
 #if (LocalIdentity)
-            [UserProfile.NowKey] = clock.Now,
+            [UserMappings.NowKey] = clock.Now,
 #endif
         };
     }
@@ -699,13 +689,8 @@ public class UserAppService(
     {
         await userSessionDomainService.RevokeAllAsync(userId, keepSessionId, cancellationToken);
 #if (OpenIddictServer)
-        // 逐个撤销而不是 RevokeBySubjectAsync：后者在 EF 存储里是批量 ExecuteUpdate，只有关系型提供程序支持，
-        // 而未配连接串时本模板跑在 EF InMemory 上。先取全再逐个改，也避免边读边写占着同一个连接
-        var tokens = await tokenManager.FindBySubjectAsync(userId.ToString(), cancellationToken).ToListAsync(cancellationToken);
-        foreach (var token in tokens)
-        {
-            await tokenManager.TryRevokeAsync(token, cancellationToken);
-        }
+        // 官方批量撤销：EF 存储里是一条 ExecuteUpdate，不必先把该主体的令牌全部读进内存
+        await tokenManager.RevokeBySubjectAsync(userId.ToString(), cancellationToken);
 #endif
     }
 #endif

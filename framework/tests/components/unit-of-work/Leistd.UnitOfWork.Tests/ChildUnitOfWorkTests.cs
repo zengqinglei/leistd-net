@@ -2,6 +2,7 @@ using Leistd.EventBus.Events;
 using Leistd.UnitOfWork.Database;
 using Leistd.UnitOfWork.Options;
 using Leistd.UnitOfWork.Events;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -13,7 +14,7 @@ namespace Leistd.UnitOfWork.Tests;
 /// <remarks>
 /// <para>这是工作单元里最容易出错、后果最重的一段：子级若真的提交，内层方法一返回
 /// 事务就落地了，外层再回滚也追不回来；子级若真的释放，父级的连接会在外层还在用时被关掉。</para>
-/// <para>子级类型是 <c>internal</c>，这里一律经 <c>IUnitOfWorkManager.BeginAsync(requiresNew: false)</c>
+/// <para>子级类型是 <c>internal</c>，这里一律经 <c>IUnitOfWorkManager.Begin(requiresNew: false)</c>
 /// 取得——那正是调用方唯一能拿到它的途径，也是真正需要被钉住的路径。</para>
 /// </remarks>
 public sealed class ChildUnitOfWorkTests
@@ -21,6 +22,7 @@ public sealed class ChildUnitOfWorkTests
     private static ServiceProvider Build() =>
         new ServiceCollection()
             .AddLogging()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddUnitOfWork()
             .BuildServiceProvider();
 
@@ -54,8 +56,8 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        using var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
 
         Assert.Equal(parent.Id, child.Id);
         Assert.Same(parent.Options, child.Options);
@@ -70,11 +72,11 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
+        using var parent = manager.Begin();
         var transaction = new RecordingTransactionApi();
         parent.AddTransactionApi("db", transaction);
 
-        var child = await manager.BeginAsync(requiresNew: false);
+        var child = manager.Begin(requiresNew: false);
         await child.CompleteAsync();
 
         Assert.Equal(0, transaction.Commits);
@@ -87,11 +89,11 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
+        using var parent = manager.Begin();
         var transaction = new RecordingTransactionApi();
         parent.AddTransactionApi("db", transaction);
 
-        (await manager.BeginAsync(requiresNew: false)).Dispose();
+        (manager.Begin(requiresNew: false)).Dispose();
 
         Assert.False(parent.IsDisposed);
         Assert.False(transaction.Disposed);
@@ -104,11 +106,11 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
+        using var parent = manager.Begin();
         var transaction = new RecordingTransactionApi();
         parent.AddTransactionApi("db", transaction);
 
-        var child = await manager.BeginAsync(requiresNew: false);
+        var child = manager.Begin(requiresNew: false);
         await child.RollbackAsync();
         await parent.CompleteAsync();
 
@@ -121,8 +123,8 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        using var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
 
         var transaction = new RecordingTransactionApi();
         child.AddTransactionApi("db", transaction);
@@ -139,8 +141,8 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        using var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
 
         var exception = Record.Exception(() => child.AddPendingEvents([new Placed()]));
 
@@ -155,8 +157,8 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
         var calls = 0;
 
         void Handler(object? _, UnitOfWorkFailedEventArgs __) => calls++;
@@ -175,8 +177,8 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
 
         Assert.False(child.IsCompleted);
         Assert.False(child.IsDisposed);
@@ -195,8 +197,8 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        using var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
 
         var database = new RecordingDatabaseApi();
         child.AddDatabaseApi("db", database);
@@ -229,8 +231,8 @@ public sealed class ChildUnitOfWorkTests
     {
         await using var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
-        using var parent = await manager.BeginAsync();
-        var child = await manager.BeginAsync(requiresNew: false);
+        using var parent = manager.Begin();
+        var child = manager.Begin(requiresNew: false);
 
         Assert.Equal($"[ChildUnitOfWork {parent.Id}]", child.ToString());
         Assert.Contains(parent.Id.ToString(), parent.ToString());

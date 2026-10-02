@@ -21,6 +21,7 @@ type HlmDialogContentContext = {
   $component?: ComponentType<unknown>;
   $dynamicComponentClass?: string;
   $showCloseButton?: boolean;
+  $closeLabel?: string;
 };
 
 @Component({
@@ -41,15 +42,13 @@ type HlmDialogContentContext = {
 
     @if (showCloseButton()) {
       <button hlmBtn variant="ghost" size="icon-sm" class="absolute end-2 top-2" hlmDialogClose>
-        <span class="sr-only">{{ a11y.close() }}</span>
+        <span class="sr-only">{{ closeLabel() ?? a11y.close() }}</span>
         <ng-icon name="lucideX" />
       </button>
     }
   `,
 })
 export class HlmDialogContent {
-  protected readonly a11y = injectHlmA11yLabels();
-
   private readonly _dialogRef = inject(BrnDialogRef);
   private readonly _dialogContext = injectBrnDialogContext<HlmDialogContentContext | null>({
     optional: true,
@@ -61,6 +60,11 @@ export class HlmDialogContent {
       transform: booleanAttribute,
     },
   );
+  // 未显式传入时取令牌里的译文，而不是写死英文：宿主接触不到这段文案，
+  // 写死的话多语言项目整页中文只有这个按钮被读成 Close。取值放在模板里而不是 input 默认值，
+  // 因为 input 的默认值只在构造时求一次，译文异步到达、语言切换后都不会重算。
+  public readonly closeLabel = input<string | undefined>(this._dialogContext?.$closeLabel);
+  protected readonly a11y = injectHlmA11yLabels();
 
   public readonly state = computed(() => this._dialogRef?.state() ?? 'closed');
 

@@ -1,6 +1,3 @@
-using Leistd.RealTime.Publishing;
-using Leistd.RealTime.Subscriptions;
-
 namespace Leistd.RealTime.Subscriptions;
 
 /// <summary>

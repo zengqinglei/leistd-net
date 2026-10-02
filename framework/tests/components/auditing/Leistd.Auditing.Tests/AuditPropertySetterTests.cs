@@ -91,6 +91,18 @@ public class AuditPropertySetterTests : IDisposable
         Assert.Equal(UserId.ToString(), entity.LastModifierId);
     }
 
+    // 后台作业或机器主体做的修改：修改人必须清空，否则"新时间 + 上一个人"会把这次修改算到别人头上
+    [Fact]
+    public void Anonymous_modification_clears_the_previous_modifier()
+    {
+        var entity = new AuditedEntity { LastModifierId = "someone-else" };
+
+        Setter(userId: null).SetModificationProperties(_db.Attach(entity));
+
+        Assert.Equal(Now, entity.LastModificationTime);
+        Assert.Null(entity.LastModifierId);
+    }
+
     [Fact]
     public void Deletion_marks_the_flag_and_records_who_and_when()
     {

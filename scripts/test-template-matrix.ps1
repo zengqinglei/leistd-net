@@ -2,18 +2,30 @@ param(
     # 不给就跑全量：全量清单是 $AllScenarios（见下），不写死在这里，
     # 否则「加了场景定义却忘了加进清单」会让新场景静默不跑——下面有断言兜住
     [string[]]$Scenarios = @(),
+    # 档位：full 为全集，pr 为 PR 档子集（归属见 template-matrix-scenarios.ps1）。不能与人工场景选择混用；
+    # 都不给时等同 full。
+    [ValidateSet("pr", "full")]
+    [string]$Tier,
+    # 该档里的一个具名分片（见 template-matrix-scenarios.ps1 的 $MatrixSlices），须与 -Tier 同用。
+    [string]$Slice,
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
-    [ValidateSet("ChromeHeadless", "Chrome")]
-    [string]$FrontendBrowser = "ChromeHeadless",
+    [ValidateSet("chromiumHeadless", "chromium")]
+    [string]$FrontendBrowser = "chromiumHeadless",
     [switch]$SkipPack,
+    [string]$LocalFeedPath,
     [switch]$SkipFrontend,
-    [switch]$SkipRuntime
+    [switch]$SkipRuntime,
+    # 只为选中的场景构建并运行容器入口；Dockerfile/Compose 变化时使用，不随每个普通代码修改运行。
+    [string[]]$ContainerSmokeScenarios = @(),
+    # 在登记的容器场景（若在本片）上执行容器检查；CI 用它，不在 workflow 重抄场景名。
+    [switch]$ContainerSmoke
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $tempRoot = Join-Path $repoRoot ".tmp"
+$tempPrefix = [IO.Path]::GetFullPath($tempRoot).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 
 # 每次运行独立的工作根：generated/hive/feed 都放在唯一 run 目录下，使上一轮残留的被锁目录
 # （MSBuild 复用节点仍持有 *.Tasks.dll 句柄等）永不阻断本轮，也让多个 AI/终端可并行执行——
@@ -34,7 +46,13 @@ $packagesRoot = Join-Path $runRoot "nuget-cache"
 #  - 正常模式（本轮 pack）：per-run 独立目录，两个并行 run 各 pack 各的，杜绝共享目录重置竞争（发现#1）。
 #  - -SkipPack：消费预先 pack 到共享 .tmp/local-feed 的包（CI 先 `pack-local-feed.ps1` 再 -SkipPack），
 #    只读复用、并发安全。
-$sharedFeedRoot = Join-Path $tempRoot "local-feed"
+$sharedFeedRoot = if ($LocalFeedPath) { [IO.Path]::GetFullPath($LocalFeedPath, $repoRoot) } else { Join-Path $tempRoot "local-feed" }
+if ($LocalFeedPath -and -not $SkipPack) { throw "-LocalFeedPath requires -SkipPack." }
+if ($LocalFeedPath) {
+    if (-not $sharedFeedRoot.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "-LocalFeedPath must remain inside .tmp: $sharedFeedRoot"
+    }
+}
 $feedRoot = if ($SkipPack) { $sharedFeedRoot } else { Join-Path $runRoot "local-feed" }
 $generatedRoot = Join-Path $runRoot "generated-template"
 $hiveRoot = Join-Path $runRoot "template-hive"
@@ -106,6 +124,23 @@ function Invoke-ExternalWithClosedInput([string]$Command, [string[]]$Arguments, 
     }
 }
 
+# 与 Invoke-External 同形，但把标准输出交回调用方（用于要读取命令结果的自检）。
+function Invoke-ExternalCapture([string]$Command, [string[]]$Arguments, [string]$WorkingDirectory = $repoRoot) {
+    Write-Host "> $Command $($Arguments -join ' ')" -ForegroundColor DarkGray
+    Push-Location $WorkingDirectory
+    try {
+        $output = & $Command @Arguments 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw ("Command failed with exit code ${LASTEXITCODE}: $Command $($Arguments -join ' ')`n" +
+                ($output -join "`n"))
+        }
+        return ($output | ForEach-Object { [string]$_ })
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Get-ScenarioProjectName([string]$Scenario) {
     $suffix = (($Scenario -split '-') | ForEach-Object {
         if ($_.Length -eq 0) { return }
@@ -163,9 +198,9 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     $requiredFiles = @(
         ".agents/skills/leistd-project-workflow/SKILL.md",
         ".agents/skills/leistd-project-workflow/references/bootstrap.md",
+        ".agents/skills/leistd-project-workflow/references/delivery.md",
         ".agents/skills/leistd-project-workflow/references/development.md",
         ".agents/skills/leistd-project-workflow/references/quality.md",
-        ".agents/skills/leistd-project-workflow/references/delivery.md",
         ".agents/skills/leistd-project-workflow/references/documentation.md",
         ".agents/skills/spartan/SKILL.md",
         "docs/README.md",
@@ -189,10 +224,10 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
 
     $skillRoot = Join-Path $ProjectRoot ".agents/skills"
     $skillNames = @(Get-ChildItem -LiteralPath $skillRoot -Directory | ForEach-Object Name)
-    # 生成项目预期携带 leistd-project-workflow（项目协作）与 spartan（前端 UI 库 CLI 用法）。
+    # 生成项目携带项目协作和前端 UI 两个独立入口。
     $allowedSkills = @("leistd-project-workflow", "spartan")
-    if (-not ($skillNames -contains "leistd-project-workflow")) {
-        throw "Generated project must contain leistd-project-workflow in $skillRoot"
+    if (@($allowedSkills | Where-Object { $skillNames -notcontains $_ }).Count -gt 0) {
+        throw "Generated project is missing a required skill in $skillRoot"
     }
     $unexpectedSkills = @($skillNames | Where-Object { $allowedSkills -notcontains $_ })
     if ($unexpectedSkills.Count -gt 0) {
@@ -200,7 +235,7 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
     }
 
     $projectReadme = Get-Content -LiteralPath (Join-Path $ProjectRoot "README.md") -Raw -Encoding UTF8
-    foreach ($marker in @("npx skills add ./.agents/skills/leistd-project-workflow", "--agent claude-code", "--copy", "skills-lock.json")) {
+    foreach ($marker in @("ln -s ../.agents/skills .claude/skills", "mklink /D", ".agents/skills/leistd-project-workflow/SKILL.md")) {
         if (-not $projectReadme.Contains($marker)) {
             throw "Generated project README is missing AI CLI compatibility guidance: $marker"
         }
@@ -273,6 +308,82 @@ function Assert-GeneratedProject([string]$ProjectRoot) {
 
     Assert-MarkdownLinks $ProjectRoot
 }
+
+# 本地化产物与生成源码一一对应，递归核对 scope 文件都已由 postbuild 展平。
+
+function Assert-OptimizedTranslations([string]$FrontendRoot) {
+    $source = Join-Path $FrontendRoot "public/i18n"
+    if (-not (Test-Path $source)) { return }
+    $package = Get-Content -LiteralPath (Join-Path $FrontendRoot "package.json") -Raw | ConvertFrom-Json
+    $output = Join-Path $FrontendRoot "dist/$($package.name)/browser/i18n"
+    $sourceFiles = @(Get-ChildItem -LiteralPath $source -Recurse -File -Filter '*.json')
+    $outputFiles = @(Get-ChildItem -LiteralPath $output -Recurse -File -Filter '*.json')
+    if ($sourceFiles.Count -ne $outputFiles.Count) { throw "Translation file count changed during production build." }
+    function Get-TranslationKeys($Node, [string]$Prefix = '') {
+        foreach ($property in $Node.PSObject.Properties) {
+            $key = if ($Prefix) { "$Prefix.$($property.Name)" } else { $property.Name }
+            if ($property.Value -is [pscustomobject]) { Get-TranslationKeys $property.Value $key }
+            else { $key }
+        }
+    }
+    foreach ($file in $sourceFiles) {
+        $relative = [IO.Path]::GetRelativePath($source, $file.FullName)
+        $built = Get-Content -LiteralPath (Join-Path $output $relative) -Raw | ConvertFrom-Json
+        if (@($built.PSObject.Properties | Where-Object { $_.Value -isnot [string] }).Count -gt 0) {
+            throw "Translation file was not flattened: $relative"
+        }
+        $original = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+        $expected = @(Get-TranslationKeys $original | Sort-Object)
+        $actual = @($built.PSObject.Properties.Name | Sort-Object)
+        if (Compare-Object $expected $actual -CaseSensitive) { throw "Translation keys changed during optimization: $relative" }
+    }
+    Write-Host "Validated $($sourceFiles.Count) flattened global/scope translation files."
+}
+
+# 磁盘上的每个 spec 文件都必须被测试发现。
+#
+# 这一条防的是"恒绿"：`_mock/**/*.spec.ts` 从加进模板那天起就没被执行过
+# （builder 的 findTests 以 sourceRoot 为 glob 工作目录，`_mock/**` 被解析成不存在的 `src/_mock/**`），
+# 而测试照样全绿——比一条失败的用例更坏，因为它让人以为那一层有覆盖。Karma 时代同样如此，
+# 不是 Vitest 迁移引入的。
+#
+# 用 builder 自己的 --list-tests：判据与真实运行共用同一套发现逻辑，不另写一份 glob 去猜。
+# 判据是**路径集合**而不是文件数：数量相等而集合不同是可能的（同时改名与挪目录）。
+# 只报缺失项——报告里出现磁盘上没有的文件属于工具问题，不是模板要守的约定。
+function Assert-EveryFrontendSpecDiscovered([string]$FrontendRoot) {
+    $onDisk = @(
+        Get-ChildItem -LiteralPath $FrontendRoot -Recurse -File -Filter "*.spec.ts" |
+            Where-Object { $_.FullName -notmatch "[\\/]node_modules[\\/]" } |
+            ForEach-Object { [IO.Path]::GetRelativePath($FrontendRoot, $_.FullName).Replace('\', '/') }
+    )
+    if ($onDisk.Count -eq 0) {
+        throw "No *.spec.ts found under $FrontendRoot; the self-check would pass vacuously."
+    }
+
+    $listed = Invoke-ExternalCapture "npm" @("test", "--", "--list-tests") $FrontendRoot
+    $discovered = @(
+        $listed | ForEach-Object { $_.Trim() } | Where-Object { $_ -like "*.spec.ts" } |
+            ForEach-Object {
+                $path = $_
+                if ([IO.Path]::IsPathRooted($path)) {
+                    [IO.Path]::GetRelativePath($FrontendRoot, $path).Replace('\', '/')
+                } else {
+                    $path.Replace('\', '/')
+                }
+            }
+    )
+
+    $discoveredSet = [System.Collections.Generic.HashSet[string]]::new([string[]]$discovered, [StringComparer]::Ordinal)
+    $missing = @($onDisk | Where-Object { -not $discoveredSet.Contains($_) })
+    if ($missing.Count -gt 0) {
+        throw ("These spec files exist on disk but are not discovered by the test builder. The `include` " +
+            "patterns in angular.json resolve relative to sourceRoot, so paths outside it need `../`:`n  " +
+            ($missing -join "`n  "))
+    }
+
+    Write-Host ("  每个 spec 都会被发现（{0} 个）。" -f $onDisk.Count)
+}
+
 
 function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hashtable]$Definition) {
     foreach ($relativePath in $Definition.Present) {
@@ -347,7 +458,7 @@ function Assert-ScenarioShape([string]$ProjectRoot, [string]$ProjectName, [hasht
     $notificationServicePath = Join-Path $ProjectRoot "frontend/src/app/layout/components/notifications/notification-service.ts"
     if (Test-Path -LiteralPath $notificationServicePath) {
         $notificationService = Get-Content -LiteralPath $notificationServicePath -Raw -Encoding UTF8
-        foreach ($marker in @("environment.useMock", "useMock.enable", "await this.signalR.connect()")) {
+        foreach ($marker in @("environment.useMock", "isMockedUrl(", "await this.signalR.connect()")) {
             if (-not $notificationService.Contains($marker)) {
                 throw "Scenario '$($Definition.Name)' notification service is missing Mock isolation marker: $marker"
             }
@@ -366,12 +477,96 @@ function Get-FreeTcpPort {
     }
 }
 
-function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
+# 运行时冒烟走克隆后的真实路径：迁移入口建库，再启动 API。本次运行共用一个 PostgreSQL 容器、每个场景一个库；
+# 容器按 run id 命名，结束时只删本次创建的这一个。口令随机生成，只在本机回环地址上监听。
+$runtimeDatabaseContainer = "leistd-matrix-db-$runId"
+$runtimeDatabasePassword = [Guid]::NewGuid().ToString("N")
+$runtimeDatabasePort = $null
+$runtimeDatabaseStarted = $false
+
+function Start-RuntimeDatabase {
+    Write-Host "> docker run postgres:15-alpine as $runtimeDatabaseContainer" -ForegroundColor DarkGray
+    & docker run -d --name $runtimeDatabaseContainer -e "POSTGRES_PASSWORD=$runtimeDatabasePassword" -p "127.0.0.1::5432" `
+        postgres:15-alpine -c fsync=off -c synchronous_commit=off | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to start the runtime smoke database container." }
+    # 容器已存在就必须由收尾删除，即使下面取端口或等待就绪失败
+    $script:runtimeDatabaseStarted = $true
+    $script:runtimeDatabasePort = [int](((& docker port $runtimeDatabaseContainer 5432) | Select-Object -First 1) -split ':')[-1]
+
+    # 镜像初始化时先起一个临时实例再重启：pg_isready 会在中途短暂成功，紧接着连接被切断。
+    # 以"就绪日志出现第二次"为准（Testcontainers 的同一判据）
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds(90)
+    while (@((& docker logs $runtimeDatabaseContainer 2>&1) -match 'database system is ready to accept connections').Count -lt 2) {
+        if ([DateTimeOffset]::UtcNow -gt $deadline) { throw "The runtime smoke database did not become ready within 90 seconds." }
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+function Stop-RuntimeDatabase {
+    if ($script:runtimeDatabaseStarted) {
+        & docker rm -fv $runtimeDatabaseContainer 2>$null | Out-Null
+        $global:LASTEXITCODE = 0
+    }
+}
+
+function New-RuntimeDatabase([string]$Name) {
+    if (-not $script:runtimeDatabaseStarted) { Start-RuntimeDatabase }
+    & docker exec $runtimeDatabaseContainer psql -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE `"$Name`"" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create runtime smoke database $Name." }
+    return "Host=127.0.0.1;Port=$($script:runtimeDatabasePort);Database=$Name;Username=postgres;Password=$runtimeDatabasePassword"
+}
+
+function Invoke-WithEnvironment([hashtable]$Variables, [scriptblock]$Action) {
+    $previous = @{}
+    foreach ($key in $Variables.Keys) {
+        $previous[$key] = [Environment]::GetEnvironmentVariable($key)
+        [Environment]::SetEnvironmentVariable($key, [string]$Variables[$key])
+    }
+    try { & $Action }
+    finally {
+        foreach ($key in $Variables.Keys) {
+            # 原本不存在的变量必须删除而不是置空：PowerShell 把 $null 传给 string 形参时会变成 ""，
+            # 残留的空 DOTNET_ENVIRONMENT 会让随后启动的 API 不再是开发环境
+            if ($null -eq $previous[$key]) {
+                [Environment]::SetEnvironmentVariable($key, [NullString]::Value)
+            }
+            else {
+                [Environment]::SetEnvironmentVariable($key, [string]$previous[$key])
+            }
+        }
+    }
+}
+
+function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration, [string]$Scenario) {
     $apiProject = Get-ChildItem -LiteralPath (Join-Path $ProjectRoot "backend/src") -Filter "*.Api.csproj" -Recurse | Select-Object -First 1
     $assemblyName = [IO.Path]::GetFileNameWithoutExtension($apiProject.Name)
     $apiAssembly = Join-Path $apiProject.DirectoryName "bin/$Configuration/net10.0/$assemblyName.dll"
     if (-not (Test-Path -LiteralPath $apiAssembly)) {
         throw "Built API assembly was not found: $apiAssembly"
+    }
+
+    # 先按发布流程用本场景自己的迁移入口建库：API 启动时只校验、不施加迁移
+    $connectionString = New-RuntimeDatabase ("smoke_" + ($Scenario -replace '[^a-z0-9]', '_'))
+    $migratorProject = Get-ChildItem -LiteralPath (Join-Path $ProjectRoot "backend/src") -Filter "*.DbMigrator.csproj" -Recurse | Select-Object -First 1
+    $migratorAssembly = Join-Path $migratorProject.DirectoryName "bin/$Configuration/net10.0/$([IO.Path]::GetFileNameWithoutExtension($migratorProject.Name)).dll"
+    $keysPath = Join-Path $runRoot "smoke-keys/$Scenario"
+    New-Item -ItemType Directory -Path $keysPath -Force | Out-Null
+    $migratorEnvironment = @{
+        DOTNET_ENVIRONMENT = 'Production'
+        DataProtection__KeysPath = $keysPath
+    }
+    if ($scenarioMap[$Scenario].Arguments -contains 'Resource') {
+        # Resource 的迁移作业默认向 Identity 枚举独立库租户；冒烟没有 Identity，按单一目标迁移（与首次建独立库同一入口）。
+        # 远端存储的地址在组合期就校验，给一个不可达的地址
+        $migratorEnvironment['ConnectionStrings__MigrationTarget'] = $connectionString
+        $migratorEnvironment['Leistd__ServiceClients__Identity__BaseAddress'] = 'https://identity.matrix.test/'
+    }
+    else {
+        # 持有控制库的形态用默认连接，连同控制面 schema 一起迁移
+        $migratorEnvironment['ConnectionStrings__Default'] = $connectionString
+    }
+    Invoke-WithEnvironment $migratorEnvironment {
+        Invoke-External "dotnet" @($migratorAssembly, "--apply")
     }
 
     $port = Get-FreeTcpPort
@@ -386,14 +581,21 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
     $startInfo.ArgumentList.Add($apiAssembly)
     $startInfo.Environment['ASPNETCORE_ENVIRONMENT'] = 'Development'
     $startInfo.Environment['ASPNETCORE_URLS'] = $baseUrl
-    $startInfo.Environment['ConnectionStrings__Default'] = ''
-    $startInfo.Environment['Database__InMemoryName'] = "MatrixRuntime-$([Guid]::NewGuid().ToString('N'))"
-    $startInfo.Environment['SpaProxy__Enabled'] = 'false'
+    $startInfo.Environment['ConnectionStrings__Default'] = $connectionString
+    $startInfo.Environment['DataProtection__KeysPath'] = $keysPath
     $startInfo.Environment['OAuth__DisableHttpsRequirement'] = 'true'
-    # 超级管理员密码现在是启动期必填（基础配置里刻意不放可用密码）。
-    # 不用模板曾发布过的示例值：那些会被校验拒绝，正是要验证的行为
-    $startInfo.Environment['DefaultAdmin__Password'] = 'MatrixRuntime!Adm1n'
+    # 不注入管理员口令：新库首次启动要建管理员，口令取自生成项目的 appsettings.Development.json，
+    # 这正是克隆后首次运行的路径
     $startInfo.Environment['VerificationCodes__Key'] = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
+    # Resource 形态的签发方在基线配置里刻意留空、组合期必填；其余形态不读这一项。
+    # 冒烟只探存活，不回源，给一个不可达的地址即可
+    $startInfo.Environment['Authentication__Issuer'] = 'https://identity.matrix.test/'
+    $startInfo.Environment['Authentication__ClientId'] = 'matrix-resource'
+    $startInfo.Environment['Authentication__ClientSecret'] = 'matrix-resource-secret'
+    $startInfo.Environment['Leistd__ServiceClients__Identity__BaseAddress'] = 'https://identity.matrix.test/'
+    # Resource 的开发配置声明了回源 Identity 的机器身份，启动校验要求凭据齐全；冒烟只探存活，不换令牌
+    $startInfo.Environment['Leistd__ServiceAuth__ClientId'] = 'matrix-resource-worker'
+    $startInfo.Environment['Leistd__ServiceAuth__ClientSecret'] = 'matrix-resource-worker-secret'
 
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
@@ -459,174 +661,19 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
     }
 }
 
-$scenarioMap = [ordered]@{
-    "identity" = @{
-        Arguments = @(); Frontend = $true; Lint = $true
-        Present = @(
-            "backend/src/{name}.Api/Controllers/AuthController.cs",
-            "backend/src/{name}.Api/Controllers/TenantController.cs",
-            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
-            "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
-            "backend/src/{name}.DbMigrator"
-        )
-        Absent = @(
-            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs",
-            "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
-            "backend/src/{name}.Api/Notifications"
-        )
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-        # Identity 侧自己是租户连接的来源，映射机器端点而不是消费远端存储
-        RequiredTokens = @{
-            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapTenantManagement<", "MapTenantConnections(")
-        }
-        # 外部登录关闭：Mock 路由、客户端方法与 DTO 都不得留下。
-        # 这类残留编译、lint、单测全都放得过——Mock 会对一个后端返回 404 的端点回成功。
-        ForbiddenTokens = @("external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto")
-    }
-    "resource" = @{
-        Arguments = @("--service-role","Resource"); Frontend = $true; Lint = $true
-        Present = @(
-            "backend/src/{name}.Infrastructure/Persistence/Migrations/Resource",
-            "backend/src/{name}.DbMigrator"
-        )
-        Absent = @(
-            "backend/src/{name}.Api/Controllers/AuthController.cs",
-            "backend/src/{name}.Api/Controllers/TenantController.cs",
-            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs",
-            "backend/src/{name}.Infrastructure/Persistence/Migrations/Control",
-            "frontend/src/app/features/account",
-            "frontend/src/app/shared/dtos/auth.dto.ts",
-            "backend/src/{name}.Infrastructure/TenantConnections/IdentityTenantConnectionStore.cs"
-        )
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-        # 租户连接由框架的远端存储包回源 Identity，模板不再手写客户端
-        RequiredTokens = @{
-            "backend/src/{name}.Infrastructure/{name}.Infrastructure.csproj" = @("Leistd.MultiTenancy.ServiceClient")
-            "backend/src/{name}.Infrastructure/DependencyInjection.cs" = @("AddRemoteTenantConnectionStore(")
-        }
-        # 哈希路由与 OIDC 回调不能共存：回调地址是无 fragment 的普通路径，
-        # 而哈希路由只从 fragment 读路由，回调组件不会被渲染。这个组合运行期不成立，
-        # 因此不是"默认关掉的开关"，而是根本不生成——留着开关等于留一个开了就坏的东西。
-        ForbiddenTokens = @("App.Tenants", "useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
-    }
-    "standalone" = @{
-        # Cookie 会话形态：有本地用户与租户控制面，但不签发 OIDC 令牌。
-        # 目的是不让内部系统带着用不到的授权服务器上线——未使用的 /connect/* 端点
-        # 与 OpenIddict 存储不是"多余代码"，是需要防护、打补丁、审计的攻击面
-        Arguments = @("--service-role","Standalone"); Frontend = $true; Lint = $true
-        Present = @(
-            "backend/src/{name}.Api/Controllers/AuthController.cs",
-            "backend/src/{name}.Api/Controllers/UserController.cs",
-            "backend/src/{name}.Api/Controllers/TenantController.cs",
-            "backend/src/{name}.Infrastructure/Persistence/IdentityControlDbContext.cs"
-        )
-        Absent = @(
-            "backend/src/{name}.Api/Controllers/ConnectController.cs",
-            "backend/src/{name}.Api/Controllers/OpenApplicationController.cs",
-            "backend/src/{name}.Application/OpenApplications",
-            "backend/src/{name}.Domain/Auth/Options/OAuthOptions.cs",
-            "frontend/src/app/features/platform/components/open-applications"
-        )
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-        # OIDC 契约不得残留：端点路径与 OpenIddict 类型都不该出现在产物里
-        ForbiddenTokens = @(
-            "connect/token", "connect/authorize", "OpenIddict", "App.OpenApplications",
-            # 外部登录同样关闭（见 identity 场景的同组断言）
-            "external-auth", "ExternalLoginUrlOutputDto", "ExternalLoginCallbackInputDto"
-        )
-    }
-    "identity-notifications" = @{
-        Arguments = @("--include-notifications"); Frontend = $true; Lint = $true
-        Present = @(
-            "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
-            "frontend/src/app/layout/components/notifications/notification-service.ts"
-        )
-        Absent = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs")
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-        RequiredTokens = @{
-            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapNotifications(")
-        }
-    }
-    "resource-notifications" = @{
-        Arguments = @("--service-role","Resource","--include-notifications"); Frontend = $true; Lint = $true
-        Present = @(
-            "backend/src/{name}.Application/Notifications/AppNotificationTypes.cs",
-            "frontend/src/app/layout/components/notifications/notification-service.ts"
-        )
-        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-        RequiredTokens = @{
-            "backend/src/{name}.Api/Hosting/ComponentEndpoints.cs" = @("MapNotifications(")
-        }
-        # 同 resource：哈希路由与 OIDC 回调不可共存；本地登录契约也不属于这种形态
-        ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
-    }
-    "identity-external-login" = @{
-        Arguments = @("--include-external-login"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
-        Absent = @()
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-    }
-    "identity-localization" = @{
-        Arguments = @("--include-localization"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
-        Absent = @()
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-    }
-    # 全开组合：三个可选特性两两之间的条件块会互相影响，而单开场景各自都能编过。
-    # 曾漏过的实例：ExternalAuthController 的 InvalidState 工厂在「外部登录 + 本地化」
-    # 同时开启时才编译失败（只开外部登录时 WithCode 那行被裁掉，只开本地化时整个文件被裁掉）。
-    "identity-all-features" = @{
-        Arguments = @("--include-notifications","--include-external-login","--include-localization")
-        Frontend = $true; Lint = $true
-        Present = @(
-            "backend/src/{name}.Api/Notifications/NotificationSecurityAlertPublisher.cs",
-            "backend/src/{name}.Api/Controllers/ExternalAuthController.cs",
-            "backend/src/{name}.Api/Resources/en.json",
-            "frontend/public/i18n/en.json",
-            "frontend/src/app/features/account/components/external-auth-callback",
-            "frontend/src/app/layout/components/notifications/notification-service.ts"
-        )
-        Absent = @()
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-    }
-    "resource-localization" = @{
-        Arguments = @("--service-role","Resource","--include-localization"); Frontend = $true; Lint = $true
-        Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
-        Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
-        ReadmeContains = @()
-        ReadmeExcludes = @()
-        # 同 resource：哈希路由与 OIDC 回调不可共存；本地登录契约也不属于这种形态
-        ForbiddenTokens = @("useHash", "withHashLocation", "LoginInputDto", "usernameOrEmail")
-    }
-}
+. (Join-Path $PSScriptRoot "template-matrix-scenarios.ps1")
 
-# 全量清单显式排序：定义用哈希表（无序），执行顺序要稳定才便于比对历史日志
-$AllScenarios = @(
-    "identity", "resource", "standalone",
-    "identity-notifications", "resource-notifications",
-    "identity-external-login",
-    "identity-localization", "resource-localization",
-    "identity-all-features"
-)
-
-# 定义与全量清单必须一一对应。只加定义不加清单，新场景会静默不跑——
-# 那比没加更糟：CI 绿着，而它本该覆盖的东西一直没被覆盖。
-$definedOnly = @($scenarioMap.Keys | Where-Object { $_ -notin $AllScenarios })
-$listedOnly = @($AllScenarios | Where-Object { -not $scenarioMap.Contains($_) })
-if ($definedOnly.Count -gt 0) {
-    throw "These scenarios are defined but absent from `$AllScenarios, so they would never run: $($definedOnly -join ', ')"
-}
-if ($listedOnly.Count -gt 0) {
-    throw "These scenarios are listed in `$AllScenarios but have no definition: $($listedOnly -join ', ')"
+if ($Slice -and -not $Tier) { throw "-Slice requires -Tier." }
+if ($ContainerSmoke -and -not $Tier) { throw "-ContainerSmoke requires -Tier." }
+if ($Tier) {
+    if ($Scenarios.Count -gt 0) { throw "-Tier and -Scenarios cannot be combined." }
+    if ($Slice -and -not $MatrixSlices[$Tier].Contains($Slice)) {
+        throw "Unknown $Tier-tier slice '$Slice'. Valid slices: $($MatrixSlices[$Tier].Keys -join ', ')"
+    }
+    $Scenarios = Get-TierScenarios $Tier $Slice
+    if ($ContainerSmoke -and $ContainerScenario -in $Scenarios) {
+        $ContainerSmokeScenarios += $ContainerScenario
+    }
 }
 
 if ($Scenarios.Count -eq 0) {
@@ -638,11 +685,16 @@ foreach ($scenario in $Scenarios) {
         throw "Unknown scenario '$scenario'. Valid scenarios: $($AllScenarios -join ', ')"
     }
 }
+foreach ($scenario in $ContainerSmokeScenarios) {
+    if ($scenario -notin $Scenarios) {
+        throw "Container smoke scenario '$scenario' must also be selected with -Scenarios."
+    }
+}
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 [IO.File]::WriteAllText($lockFile, ("pid={0} started={1}" -f $PID, (Get-Date -Format "o")), [Text.UTF8Encoding]::new($false))
 
-# 安全门禁：生产依赖闭包不得含 high 及以上漏洞。10 个场景共用模板的两份 lockfile，
+# 安全门禁：生产依赖闭包不得含 high 及以上漏洞。所有场景共用模板的两份 lockfile，
 # 故在循环前各审计一次即可；advisory 端点偶发抖动，用重试消化（完整审计属依赖治理任务）。
 if (-not $SkipFrontend) {
     $auditTargets = @(
@@ -708,7 +760,7 @@ if (-not $SkipPack) {
     Invoke-External "dotnet" @("pack", "framework/Leistd.Framework.slnx", "-c", $Configuration, "-o", $feedRoot)
 }
 elseif (-not (Test-Path -LiteralPath $feedRoot)) {
-    throw "-SkipPack requires an existing shared feed at '$feedRoot'（先 `pwsh framework/build/pack-local-feed.ps1`，或省略 -SkipPack 以重新 pack）."
+    throw "-SkipPack requires an existing feed at '$feedRoot'（先 `pwsh framework/build/pack-local-feed.ps1`，或省略 -SkipPack 以重新 pack）."
 }
 
 # 生成前先校验符号一致性：悬空引用、注释里的指令字面形式、恒真嵌套这三类问题，
@@ -735,71 +787,124 @@ Invoke-External $pythonCmd @((Join-Path $repoRoot "scripts/check-async-boundarie
 Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", $templateRoot, "--force")
 
 $results = [System.Collections.Generic.List[object]]::new()
-foreach ($scenario in $Scenarios) {
-    # 心跳：刷新锁文件时间戳，防止长时间运行的 run 被并行进程按 stale 目录清理。
-    [IO.File]::SetLastWriteTimeUtc($lockFile, [DateTime]::UtcNow)
-    $definition = $scenarioMap[$scenario]
-    $definition["Name"] = $scenario
-    $projectName = Get-ScenarioProjectName $scenario
-    $projectRoot = Join-Path $generatedRoot $scenario
-    $newArguments = @("new", "--debug:custom-hive", $hiveRoot, "fullstack-app", "-n", $projectName, "-o", $projectRoot, "--force") + $definition.Arguments
-    Invoke-External "dotnet" $newArguments
-    Assert-GeneratedProject $projectRoot
-    Assert-ScenarioShape $projectRoot $projectName $definition
+try {
+    foreach ($scenario in $Scenarios) {
+        # 心跳：刷新锁文件时间戳，防止长时间运行的 run 被并行进程按 stale 目录清理。
+        [IO.File]::SetLastWriteTimeUtc($lockFile, [DateTime]::UtcNow)
+        $definition = $scenarioMap[$scenario]
+        $definition["Name"] = $scenario
+        $projectName = Get-ScenarioProjectName $scenario
+        $projectRoot = Join-Path $generatedRoot $scenario
+        $newArguments = @("new", "--debug:custom-hive", $hiveRoot, "fullstack-app", "-n", $projectName, "-o", $projectRoot, "--force") + $definition.Arguments
+        Invoke-External "dotnet" $newArguments
+        Assert-GeneratedProject $projectRoot
+        Assert-ScenarioShape $projectRoot $projectName $definition
 
-    $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-    # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
-    Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
-    Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
+        $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
+        # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
+        Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
+        Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
-    $runtimeValidated = $false
-    if (-not $SkipRuntime) {
-        Invoke-RuntimeSmoke $projectRoot $Configuration
-        $runtimeValidated = $true
-    }
-
-    $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
-    foreach ($testProject in $testProjects) {
-        Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
-    }
-
-    $frontendValidated = $false
-    $lintValidated = $false
-    $testValidated = $false
-    if (-not $SkipFrontend -and $definition.Frontend) {
-        $frontendRoot = Join-Path $projectRoot "frontend"
-        $env:HUSKY = "0"
-        Invoke-External "npm" @("ci") $frontendRoot
-        Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
-        # healthcheck 末尾会无条件询问"是否升级依赖"，默认 N。
-        # 该 CLI 没有能覆盖这个提示的非交互开关——实测 --interactive=false、--defaults
-        # 与 CI=true 三者都不生效（提示由它自带的提示库发出，不走 Angular schematic 提示）。
-        # 因此显式把 stdin 关掉：拿到 EOF 就取默认值 N，有无 TTY 行为一致，
-        # 不依赖"调用方恰好重定向了 stdin"
-        Invoke-ExternalWithClosedInput "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
-        if ($definition.Lint) {
-            Invoke-External "npm" @("run", "lint") $frontendRoot
-            $lintValidated = $true
+        $runtimeValidated = $false
+        if (-not $SkipRuntime) {
+            Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
+            $runtimeValidated = $true
         }
-        Invoke-External "npm" @("run", "build") $frontendRoot
-        $frontendValidated = $true
 
-        # 前端单测（单次）：CI 默认 ChromeHeadless，人工验收可传 -FrontendBrowser Chrome 观看有头浏览器。
-        # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含 translationReady 首帧回归测试。
-        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
-        $testValidated = $true
+        $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
+        foreach ($testProject in $testProjects) {
+            Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
+        }
+
+        $frontendValidated = $false
+        $lintValidated = $false
+        $testValidated = $false
+        if (-not $SkipFrontend -and $definition.Frontend) {
+            $frontendRoot = Join-Path $projectRoot "frontend"
+            $env:HUSKY = "0"
+            Invoke-External "npm" @("ci") $frontendRoot
+            Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
+            # healthcheck 末尾会无条件询问"是否升级依赖"，默认 N。
+            # 该 CLI 没有能覆盖这个提示的非交互开关——实测 --interactive=false、--defaults
+            # 与 CI=true 三者都不生效（提示由它自带的提示库发出，不走 Angular schematic 提示）。
+            # 因此显式把 stdin 关掉：拿到 EOF 就取默认值 N，有无 TTY 行为一致，
+            # 不依赖"调用方恰好重定向了 stdin"
+            Invoke-ExternalWithClosedInput "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
+            if ($definition.Lint) {
+                Invoke-External "npm" @("run", "lint") $frontendRoot
+                $lintValidated = $true
+            }
+            Invoke-External "npm" @("run", "build") $frontendRoot
+            Assert-OptimizedTranslations $frontendRoot
+            $frontendValidated = $true
+
+            # 前端单测（单次）：CI 默认 chromiumHeadless，人工验收可传 -FrontendBrowser chromium 观看有头浏览器。
+            # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含语言切换「先加载再激活」与首帧词条的回归测试。
+            # 先核对"磁盘上的每个 spec 都会被发现"，再真的跑。放在前面是因为它更快（--list-tests 不构建也不执行），
+            # 而且这条不通过时后面那轮绿灯是假的。
+            Assert-EveryFrontendSpecDiscovered $frontendRoot
+            Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
+            $testValidated = $true
+        }
+
+        $containerValidated = $false
+        if ($scenario -in $ContainerSmokeScenarios) {
+            # 候选 Framework 包可能尚未发布。只在本轮生成目录注入本地包和 NuGet.Config，
+            # 让镜像验证消费的仍是同一候选源码；交付模板不包含这个临时包源。
+            $containerFeed = Join-Path $projectRoot "backend/.local-feed"
+            New-Item -ItemType Directory -Path $containerFeed -Force | Out-Null
+            Copy-Item -Path (Join-Path $feedRoot "*.nupkg") -Destination $containerFeed
+            $containerNuGetConfig = @'
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="candidate" value="/src/backend/.local-feed" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="candidate"><package pattern="Leistd.*" /></packageSource>
+    <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+  </packageSourceMapping>
+</configuration>
+'@
+            [IO.File]::WriteAllText((Join-Path $projectRoot "backend/NuGet.Config"), $containerNuGetConfig)
+            $apiImage = "leistd-template-smoke-api:$runId"
+            $migratorImage = "leistd-template-smoke-migrator:$runId"
+            try {
+                Invoke-External "docker" @("build", "--target", "api", "-t", $apiImage, $projectRoot)
+                Invoke-External "docker" @("build", "--target", "migrator", "-t", $migratorImage, $projectRoot)
+                Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $apiImage, "--info")
+                Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $migratorImage, "--info")
+                $containerValidated = $true
+            }
+            finally {
+                & docker image rm $apiImage $migratorImage 2>$null | Out-Null
+                $global:LASTEXITCODE = 0
+            }
+        }
+
+        $results.Add([PSCustomObject]@{
+            Scenario = $scenario
+            Backend = "pass"
+            Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
+            Lint = if ($lintValidated) { "pass" } else { "skipped" }
+            Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
+            Test = if ($testValidated) { "pass" } else { "skipped" }
+            Container = if ($containerValidated) { "pass" } else { "skipped" }
+            Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
+        })
     }
-
-    $results.Add([PSCustomObject]@{
-        Scenario = $scenario
-        Backend = "pass"
-        Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
-        Lint = if ($lintValidated) { "pass" } else { "skipped" }
-        Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
-        Test = if ($testValidated) { "pass" } else { "skipped" }
-        Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
-    })
+}
+finally {
+    Stop-RuntimeDatabase
 }
 
 $results | Format-Table -AutoSize
 Write-Host "Template matrix passed for $($results.Count) scenario(s)." -ForegroundColor Green
+
+# 只在所有阶段成功后产出证明；汇总作业核对场景全集和阶段，缺片不得假绿。
+$resultFile = Join-Path $runRoot "matrix-$(if ($Slice) { $Slice } else { 'local' }).json"
+[PSCustomObject]@{ Tier = $Tier; Slice = $Slice; Results = @($results) } |
+    ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultFile -Encoding utf8
+if ($env:GITHUB_OUTPUT) { "results_path=$resultFile" | Out-File $env:GITHUB_OUTPUT -Append }

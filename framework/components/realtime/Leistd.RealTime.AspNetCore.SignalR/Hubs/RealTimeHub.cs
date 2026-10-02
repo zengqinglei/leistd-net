@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Leistd.Security.Users;
-using Leistd.RealTime.AspNetCore.SignalR.Publishing;
-using Leistd.RealTime.Publishing;
 using Leistd.RealTime.Subscriptions;
 
 namespace Leistd.RealTime.AspNetCore.SignalR.Hubs;

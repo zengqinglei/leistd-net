@@ -13,9 +13,11 @@ using Microsoft.Extensions.Hosting;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using CompanyName.ProjectName.Api.Auth;
+using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 #endif
@@ -24,15 +26,13 @@ using CompanyName.ProjectName.Domain.Users.Policies;
 namespace CompanyName.ProjectName.IntegrationTests;
 
 /// <summary>
-/// 集成测试宿主：单一内存库。
+/// 集成测试宿主：每个实例一份从已迁移模板库克隆出的 PostgreSQL 库（见 <see cref="PostgreSqlTestDatabase"/>）。
 /// </summary>
 /// <remarks>
-/// <para>本夹具覆盖不分库形态下的业务逻辑。<b>它不覆盖租户专属数据库的路由</b>——
-/// <c>Infrastructure/DependencyInjection.cs</c> 按"有没有连接串"二选一：有就 <c>UseNpgsql</c>，
-/// 没有就内存库。因此在这里给租户登记连接会走到 <c>UseNpgsql</c> 去连一个不存在的库，
-/// 不要那样写用例。</para>
-/// <para>租户分库的路由与隔离要用真实 PostgreSQL 的集成测试覆盖：
-/// 断言共享租户的数据落在默认库、专属租户的数据落在自己的库，且两边互不泄漏。</para>
+/// <para>走生产的 Npgsql 注册路径：唯一约束、查询翻译、事务与独立事务都与生产一致。
+/// <see cref="WebApplicationFactory{TEntryPoint}.WithWebHostBuilder"/> 派生的宿主共用父实例的库。</para>
+/// <para>本夹具一个服务一个库。控制库与业务库拆到不同实例、DbMigrator 命令行、跨进程共用的密钥环
+/// 属于部署形态，在部署环境验收。</para>
 /// </remarks>
 public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program>
 {
@@ -45,37 +45,83 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
     /// </remarks>
     public const string TestAdminPassword = "IntegrationTests!Adm1n";
 
-    private readonly string databaseName = $"ProjectTests-{Guid.NewGuid():N}";
+    /// <summary>
+    /// 测试宿主（非 Development 环境）的会话 Cookie 名。写明期望值而不是读取实现的配置，
+    /// 前缀一旦被改掉，所有取会话 Cookie 的用例都会失败。
+    /// </summary>
+    public const string SessionCookieName = "__Host-Http-CompanyName.ProjectName.Auth";
+
+    /// <summary>
+    /// 校验签发会话 Cookie 的 Set-Cookie 满足 <c>__Host-Http-</c> 前缀的全部条件：
+    /// 浏览器对不满足的同名 Cookie 直接丢弃，只看名字测不出来。
+    /// </summary>
+    public static string AssertSessionCookieContract(HttpResponseMessage response)
+    {
+        var header = response.Headers.GetValues("Set-Cookie")
+            .Single(value => value.StartsWith(SessionCookieName + "=", StringComparison.Ordinal));
+        var attributes = header.Split(';').Skip(1).Select(part => part.Trim().ToLowerInvariant()).ToArray();
+        Assert.Contains("secure", attributes);
+        Assert.Contains("httponly", attributes);
+        Assert.Contains("path=/", attributes);
+        Assert.DoesNotContain(attributes, attribute => attribute.StartsWith("domain=", StringComparison.Ordinal));
+        return header.Split(';', 2)[0];
+    }
+
+#if (RemoteTokenAuth)
+    // 协议测试保留生产认证与自然人策略，其他业务用例使用专用主体替身。
+    internal bool UseProductionAuthentication { get; init; }
+#endif
+
+    private string? connectionString;
+
+    // 每个宿主一份密钥目录：开发环境以外 Data Protection 要求显式的持久位置，测试给临时目录
+    private readonly string dataProtectionKeysPath = Path.Combine(Path.GetTempPath(), $"ProjectTests-keys-{Guid.NewGuid():N}");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        // 专用环境而不是 Development：开发环境会自动加载开发者本机的 user-secrets 与 appsettings.Development.json，
+        // 测试结果就随机器变化。测试需要的配置全部在下面显式给出
+        builder.UseEnvironment("Testing");
 
-        // 注册阶段就被读取的键（选数据库分支、选锁实现）必须经 UseSetting 注入：
+        // 注册阶段就被读取的键（选锁与缓存实现、密钥位置）必须经 UseSetting 注入：
         // 下面 ConfigureAppConfiguration 加的配置在 Program 注册服务时还不可见，
-        // 放在那里会被静默忽略——测试宿主会走真实库分支、按开发机的环境变量去连 Redis，
-        // 而不是走生产里同一套内存库注册路径。
-        builder.UseSetting("ConnectionStrings:Default", "");
+        // 放在那里会被静默忽略——测试宿主会按开发机的环境变量去连 Redis。
+        // 派生宿主会再次进入本方法，复用同一个库
+        connectionString ??= PostgreSqlTestDatabase.CreateDatabase();
+        builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("ConnectionStrings:Redis", "");
-        builder.UseSetting("Database:InMemoryName", databaseName);
+        builder.UseSetting("DataProtection:KeysPath", dataProtectionKeysPath);
+#if (OpenIddictServer)
+        builder.UseSetting("OAuth:UseDevelopmentCertificates", "true");
+#endif
+#if (RemoteTokenAuth)
+        // 组合期即校验的签发方地址：基线配置刻意留空，缺失即启动失败
+        builder.UseSetting("Authentication:Issuer", "https://identity.test/");
+        builder.UseSetting("Authentication:ClientId", "resource-test");
+        builder.UseSetting("Authentication:ClientSecret", "resource-test-secret");
+        // 租户连接以机器身份向 Identity 回源：组合与生产一致（含工作负载身份），
+        // 测试宿主里没有 Identity，回源存储换成下面的共享库替身，不会真的换令牌
+        builder.UseSetting("Leistd:ServiceClients:Identity:BaseAddress", "https://identity.test/");
+        builder.UseSetting("Leistd:ServiceAuth:Authority", "https://identity.test/");
+        builder.UseSetting("Leistd:ServiceAuth:ClientId", "resource-test-worker");
+        builder.UseSetting("Leistd:ServiceAuth:ClientSecret", "resource-test-worker-secret");
+#endif
 
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["SpaProxy:Enabled"] = "false",
                 ["OAuth:DisableHttpsRequirement"] = "true",
                 ["DefaultAdmin:Username"] = "admin",
                 ["DefaultAdmin:Password"] = TestAdminPassword,
+                // 每个宿主都要播种管理员、每次登录都要校验口令；生产工作因子让这两步占去集成测试的大半 CPU。
+                // 哈希格式与默认值的契约由 PasswordHashingTests 按生产默认值验证
+                ["PasswordHash:IterationCount"] = "1000",
 #if (LocalIdentity)
                 // 固定值即可：测试要的是确定性，不是保密性
                 ["VerificationCodes:Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
 #endif
                 ["UserRegistration:EnableEmailVerification"] = "false",
-#if (RemoteTokenAuth)
-                // 启动期校验要求它存在（它决定改路由前的排空等待），测试宿主给个确定值
-                ["TenantRouting:CacheLifetime"] = "00:10:00",
-#endif
             });
         });
 
@@ -101,28 +147,37 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
             var openedGate = new RemoteIdentityReadinessHealthCheck();
             openedGate.MarkReady();
             services.AddSingleton(openedGate);
+
+            services.RemoveAll<ITenantConnectionConfigurationStore>();
+            services.RemoveAll<ITenantDatabaseDirectory>();
+            services.AddSingleton<SharedTenantConnectionStore>();
+            services.AddSingleton<ITenantConnectionConfigurationStore>(sp => sp.GetRequiredService<SharedTenantConnectionStore>());
+            services.AddSingleton<ITenantDatabaseDirectory>(sp => sp.GetRequiredService<SharedTenantConnectionStore>());
 #endif
 #if (!LocalIdentity)
-            // Resource 模板不托管登录端点。集成测试以专用方案注入已验证主体，
-            // 不伪造生产 Bearer 验签，也不让 Resource 回退为本地 Cookie 登录。
-            services.AddAuthentication(options =>
-                {
-                    options.DefaultAuthenticateScheme = ResourceTestAuthenticationHandler.SchemeName;
-                    options.DefaultChallengeScheme = ResourceTestAuthenticationHandler.SchemeName;
-                })
-                .AddScheme<AuthenticationSchemeOptions, ResourceTestAuthenticationHandler>(
-                    ResourceTestAuthenticationHandler.SchemeName,
-                    _ => { });
-            services.AddAuthorization(options =>
+            if (!UseProductionAuthentication)
             {
-                var testPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
-                    .RequireAuthenticatedUser()
-                    .Build();
-                options.DefaultPolicy = testPolicy;
-                // 组件端点按名字要这条策略（不套默认策略），替身方案必须把它一起换掉，
-                // 否则通知中心、读设置这些自用端点仍然要求生产 Bearer，测试里一律 401
-                options.AddPolicy(ApiPolicies.CurrentUser, testPolicy);
-            });
+                // Resource 模板不托管登录端点。集成测试以专用方案注入已验证主体，
+                // 不伪造生产 Bearer 验签，也不让 Resource 回退为本地 Cookie 登录。
+                services.AddAuthentication(options =>
+                    {
+                        options.DefaultAuthenticateScheme = ResourceTestAuthenticationHandler.SchemeName;
+                        options.DefaultChallengeScheme = ResourceTestAuthenticationHandler.SchemeName;
+                    })
+                    .AddScheme<AuthenticationSchemeOptions, ResourceTestAuthenticationHandler>(
+                        ResourceTestAuthenticationHandler.SchemeName,
+                        _ => { });
+                services.AddAuthorization(options =>
+                {
+                    var testPolicy = new AuthorizationPolicyBuilder(ResourceTestAuthenticationHandler.SchemeName)
+                        .RequireAuthenticatedUser()
+                        .Build();
+                    options.DefaultPolicy = testPolicy;
+                    // 组件端点按名字要这条策略（不套默认策略），替身方案必须把它一起换掉，
+                    // 否则通知中心、读设置这些自用端点仍然要求生产 Bearer，测试里一律 401
+                    options.AddPolicy(ApiPolicies.CurrentUser, testPolicy);
+                });
+            }
 #endif
             services.Configure<HostOptions>(options =>
             {
@@ -130,6 +185,25 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 options.ServicesStopConcurrently = false;
             });
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (!disposing)
+        {
+            return;
+        }
+
+        if (connectionString is not null)
+        {
+            PostgreSqlTestDatabase.DropDatabase(connectionString);
+        }
+
+        if (Directory.Exists(dataProtectionKeysPath))
+        {
+            Directory.Delete(dataProtectionKeysPath, recursive: true);
+        }
     }
 
     public HttpClient CreateProjectClient() => CreateProjectClient(this);
@@ -212,6 +286,25 @@ public sealed class AuthenticatedSession(
 }
 
 #if (!LocalIdentity)
+/// <summary>
+/// 远端租户连接存储的替身：所有租户都没有登记独立连接，落在宿主的共享库上。
+/// </summary>
+/// <remarks>
+/// 回源协议本身（缓存分区、取消不牵连搭车者）按生产注册方式单独装配后测试；
+/// 这里只让业务用例在没有 Identity 的测试宿主里拿到确定的路由。
+/// </remarks>
+internal sealed class SharedTenantConnectionStore : ITenantConnectionConfigurationStore, ITenantDatabaseDirectory
+{
+    public Task<TenantConnectionLookupResult?> FindAsync(Guid tenantId, string name, CancellationToken cancellationToken = default) =>
+        Task.FromResult<TenantConnectionLookupResult?>(new TenantConnectionLookupResult { TenantId = tenantId, HasAnyConnection = false });
+
+    public Task<IReadOnlyList<TenantMigrationConnection>> GetListAsync(string name, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TenantMigrationConnection>>([]);
+
+    public Task<TenantDatabaseListResult> GetDatabasesAsync(string name, bool activeOnly, CancellationToken cancellationToken = default) =>
+        Task.FromResult(TenantDatabaseListResult.Empty);
+}
+
 internal sealed class ResourceTestAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,

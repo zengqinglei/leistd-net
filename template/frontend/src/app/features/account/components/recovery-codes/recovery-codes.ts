@@ -1,18 +1,16 @@
-//#if (IncludeLocalization)
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
-import { TranslocoService } from '@jsverse/transloco';
-//#else
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+//#if (IncludeLocalization)
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideCopy, lucideDownload, lucideTriangleAlert } from '@ng-icons/lucide';
 import { HlmButton } from '@spartan-ng/helm/button';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { injectCopyToClipboard } from '../../../../shared/utils/clipboard';
 import { saveBlob } from '../../../../shared/utils/download-file';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 
 /**
  * 一次性展示新生成的恢复码，并提供复制与下载。
@@ -21,57 +19,22 @@ import { saveBlob } from '../../../../shared/utils/download-file';
  */
 @Component({
   selector: 'app-recovery-codes',
-  imports: [NgIcon, HlmButton],
+  // prettier-ignore
+  imports: [
+    NgIcon,
+    HlmButton,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
   providers: [provideIcons({ lucideCheck, lucideCopy, lucideDownload, lucideTriangleAlert })],
-  template: `
-    <div class="flex flex-col gap-4" data-testid="recovery-codes">
-      <div
-        class="border-border bg-muted/50 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
-      >
-        <ng-icon name="lucideTriangleAlert" class="text-warning mt-0.5 shrink-0" />
-        <span>{{ t('account.twoFactor.recoveryCodesWarning') }}</span>
-      </div>
-      <ol class="grid grid-cols-1 gap-2 font-mono text-sm sm:grid-cols-2">
-        @for (code of codes(); track code) {
-          <li class="bg-muted rounded-lg px-3 py-1.5 text-center select-all">{{ code }}</li>
-        }
-      </ol>
-      <div class="flex flex-wrap gap-2">
-        <button hlmBtn variant="outline" size="sm" type="button" (click)="copy()">
-          <ng-icon [name]="copied() ? 'lucideCheck' : 'lucideCopy'" data-icon="inline-start" />
-          {{ copied() ? t('account.twoFactor.copied') : t('account.twoFactor.copyCodes') }}
-        </button>
-        <button hlmBtn variant="outline" size="sm" type="button" (click)="download()">
-          <ng-icon name="lucideDownload" data-icon="inline-start" />
-          {{ t('account.twoFactor.downloadCodes') }}
-        </button>
-        <button
-          hlmBtn
-          size="sm"
-          type="button"
-          class="sm:ml-auto"
-          data-testid="recovery-codes-done"
-          (click)="done.emit()"
-        >
-          {{ t('account.twoFactor.savedCodes') }}
-        </button>
-      </div>
-    </div>
-  `,
+  templateUrl: './recovery-codes.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RecoveryCodes {
   private readonly clipboard = injectCopyToClipboard();
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  protected readonly t = (key: string) => {
-    this.translationReady();
-    return this.transloco.translate(key);
-  };
-  //#else
-  protected readonly t = (key: string) => ENGLISH[key] ?? key;
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   readonly codes = input.required<string[]>();
@@ -94,7 +57,7 @@ export class RecoveryCodes {
 }
 //#if (!IncludeLocalization)
 
-/** 不含本地化时的界面文案，与 `en.json` 的 `account.twoFactor` 同步。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
   'account.twoFactor.recoveryCodesWarning':
     'Save these recovery codes somewhere safe. Each one signs you in once if you lose your phone. They will not be shown again.',

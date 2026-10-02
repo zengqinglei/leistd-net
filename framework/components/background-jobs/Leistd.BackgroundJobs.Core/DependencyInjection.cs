@@ -1,6 +1,7 @@
 using Leistd.BackgroundJobs.Recurring;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Leistd.BackgroundJobs;
 
@@ -14,7 +15,7 @@ public static class DependencyInjection
     /// </summary>
     /// <remarks>
     /// <para>只登记描述，不启动调度：宿主还需注册一个调度器实现（如 <c>AddInProcessBackgroundJobs()</c>）。
-    /// 组件在自己的 <c>Add*</c> 里登记维护任务，调度器由宿主选。</para>
+    /// 组件在自己的 <c>Add*</c> 里登记维护任务，调度器由宿主选；宿主启动时没有调度器会记一条 Warning。</para>
     /// <para>任务名全局唯一：同名同类型重复登记是幂等的，同名不同类型在登记时抛出——
     /// 名字同时是集群锁与水位的键，两个任务共用一个名字会互相跳过。</para>
     /// </remarks>
@@ -83,6 +84,7 @@ public static class DependencyInjection
 
         services.TryAddTransient<TJob>();
         services.AddSingleton(new RecurringJobDefinition(name, typeof(TJob), scope, scheduleFactory));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, RecurringJobSchedulerCheck>());
         return services;
     }
 }

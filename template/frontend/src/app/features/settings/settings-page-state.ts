@@ -4,7 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslocoService } from '@jsverse/transloco';
 //#endif
 import { toast } from '@spartan-ng/brain/sonner';
-import { catchError, EMPTY, finalize } from 'rxjs';
+import { catchError, EMPTY, finalize, Subscription } from 'rxjs';
 
 import { applicationErrorMessage } from '../../core/errors/application-http-error';
 import { SettingService } from '../../core/settings/setting-service';
@@ -104,9 +104,13 @@ export class SettingsPageState {
     //#endif
   }
 
+  /** 尚未返回的上一次读取。新一次开始时取消它：晚到的旧响应不能覆盖新快照。 */
+  private pending?: Subscription;
+
   load(): void {
+    this.pending?.unsubscribe();
     this.loading.set(true);
-    this.settingService
+    this.pending = this.settingService
       .getSettings()
       .pipe(
         catchError((error: unknown) => {

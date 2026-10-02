@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCheck, lucideCopy } from '@ng-icons/lucide';
@@ -19,10 +19,10 @@ import { toDataURL } from 'qrcode';
 import { finalize } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { injectCopyToClipboard } from '../../../../shared/utils/clipboard';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { AccountService } from '../../services/account-service';
 import { OtpCodeInput } from '../otp-code-input/otp-code-input';
 
@@ -34,7 +34,16 @@ import { OtpCodeInput } from '../otp-code-input/otp-code-input';
  */
 @Component({
   selector: 'app-two-factor-setup',
-  imports: [NgIcon, HlmButton, HlmSpinner, OtpCodeInput],
+  // prettier-ignore
+  imports: [
+    NgIcon,
+    HlmButton,
+    HlmSpinner,
+    OtpCodeInput,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
   providers: [provideIcons({ lucideCheck, lucideCopy })],
   templateUrl: './two-factor-setup.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,16 +53,8 @@ export class TwoFactorSetup {
   private readonly clipboard = injectCopyToClipboard();
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  protected readonly t = (key: string, params?: Record<string, unknown>) => {
-    this.translationReady();
-    return this.transloco.translate(key, params);
-  };
   //#else
-  protected readonly t = (key: string, params?: Record<string, unknown>) =>
-    ENGLISH[key]?.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params?.[name] ?? '')) ??
-    key;
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   /** 确认启用后发出恢复码（明文只有这一次）。 */
@@ -120,18 +121,25 @@ export class TwoFactorSetup {
       .pipe(finalize(() => this.submitting.set(false)))
       .subscribe({
         next: (result) => this.enabled.emit(result.recoveryCodes),
-        error: (error) =>
+        error: (error) => {
+          //#if (IncludeLocalization)
+          toast.error(this.transloco.translate('common.requestError'), {
+            description: applicationErrorMessage(error),
+          });
+          //#else
           toast.error(this.t('common.requestError'), {
             description: applicationErrorMessage(error),
-          }),
+          });
+          //#endif
+        },
       });
   }
 }
 //#if (!IncludeLocalization)
 
-/** 不含本地化时的界面文案，与 `en.json` 的 `account.twoFactor` 同步。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'common.requestError': 'Request failed',
+  'common.requestError': 'Request error',
   'common.retry': 'Retry',
   'common.cancel': 'Cancel',
   'account.twoFactor.scanTitle': '1. Add this account to your authenticator app',

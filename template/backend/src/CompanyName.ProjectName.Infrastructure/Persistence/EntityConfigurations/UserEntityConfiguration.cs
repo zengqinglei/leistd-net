@@ -1,5 +1,5 @@
+using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
@@ -30,9 +30,7 @@ internal static class BaseEntityConfiguration
     {
         builder.Entity<User>(b =>
         {
-            b.ConfigureByConvention();
-
-            b.Property(e => e.Username).IsRequired().HasMaxLength(64);
+            b.Property(e => e.Username).IsRequired().HasMaxLength(UsernameRules.MaxLength);
             b.Property(e => e.Email).IsRequired().HasMaxLength(256);
             b.Property(e => e.Avatar).HasColumnType("text");
             b.Property(e => e.DisplayName).HasMaxLength(128);
@@ -51,16 +49,19 @@ internal static class BaseEntityConfiguration
             b.HasIndex(e => e.Username)
                 .IsUnique()
                 .HasFilter($"\"{nameof(User.TenantId)}\" IS NULL");
+            // 邮箱可缺席：资源服务形态下它来自签发方令牌，令牌没有 email 声明时存空串。
+            // 空串不参与唯一性——否则同一租户里第二个没有邮箱的用户就撞键，
+            // 而那是一次正常的投影，不是重复数据。本地身份形态下注册必填邮箱，这个过滤条件恒真。
             b.HasIndex(e => e.Email)
                 .IsUnique()
-                .HasFilter($"\"{nameof(User.TenantId)}\" IS NULL");
+                .HasFilter($"\"{nameof(User.TenantId)}\" IS NULL AND \"{nameof(User.Email)}\" <> ''");
 
             b.HasIndex(e => new { e.TenantId, e.Username })
                 .IsUnique()
                 .HasFilter($"\"{nameof(User.TenantId)}\" IS NOT NULL");
             b.HasIndex(e => new { e.TenantId, e.Email })
                 .IsUnique()
-                .HasFilter($"\"{nameof(User.TenantId)}\" IS NOT NULL");
+                .HasFilter($"\"{nameof(User.TenantId)}\" IS NOT NULL AND \"{nameof(User.Email)}\" <> ''");
         });
     }
 }

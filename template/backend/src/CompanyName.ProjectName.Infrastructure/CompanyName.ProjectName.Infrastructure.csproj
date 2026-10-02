@@ -8,10 +8,8 @@
 
   <ItemGroup>
     <!-- 测试程序集可见内部类型。Identity 连接配置的适配器与 Refit 客户端契约刻意是 internal——
-         它们是基础设施的实现细节，不该出现在应用层的可选面上。但集成测试宿主会
-         RemoveAll<IConnectionStringResolver>() 换成 EF InMemory，因此解析链
-         在集成测试里根本不被执行；要钉住"缓存按租户分区"和"一个调用方取消不牵连搭车者"
-         这两条，只能按生产注册方式单独装配后测试。 -->
+         它们是基础设施的实现细节，不该出现在应用层的可选面上。集成测试按生产注册方式
+         单独装配它们，钉住"缓存按租户分区"和"一个调用方取消不牵连搭车者"这两条。 -->
     <InternalsVisibleTo Include="CompanyName.ProjectName.IntegrationTests" />
     <!-- 数据库错误翻译是纯映射，不需要宿主：按 SQLSTATE 逐条钉住，尤其是"认不出来就不翻译" -->
     <InternalsVisibleTo Include="CompanyName.ProjectName.UnitTests" />
@@ -24,7 +22,6 @@
 <!--#if (OpenIddictServer)-->
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
 <!--#endif-->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <!-- Data Protection 密钥环：认证 Cookie 与控制库里租户连接串的加密共用，API 与 DbMigrator 必须一致 -->
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
@@ -64,12 +61,13 @@
     <PackageReference Include="Leistd.BackgroundJobs.EntityFrameworkCore" />
 <!--#if (LocalIdentity)-->
     <PackageReference Include="Leistd.MultiTenancy.EntityFrameworkCore" />
+    <!-- 开通失败的数据库错误翻译契约（ITenantDatabaseErrorDescriber）在租户管理用例包 -->
+    <PackageReference Include="Leistd.MultiTenancy.Management" />
     <PackageReference Include="Leistd.Email.Smtp" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->
     <PackageReference Include="Leistd.Notifications.EntityFrameworkCore" />
 <!--#endif-->
-    <PackageReference Include="Leistd.EventBus.Local" />
     <PackageReference Include="Leistd.Lock.Redis" />
     <PackageReference Include="Leistd.Lock.Memory" />
 <!--#if (!LocalIdentity)-->

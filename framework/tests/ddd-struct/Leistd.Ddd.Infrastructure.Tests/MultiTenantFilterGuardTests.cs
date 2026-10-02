@@ -1,4 +1,3 @@
-using Leistd.Auditing;
 using Leistd.Ddd.Infrastructure.Persistence;
 using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
@@ -10,10 +9,6 @@ using Leistd.DependencyInjection.Registration;
 using Leistd.EventBus.Local;
 using Xunit;
 using Leistd.Auditing.Abstractions;
-using Leistd.MultiTenancy.ConnectionStrings;
-using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Ddd.Infrastructure.Tests;
@@ -134,14 +129,15 @@ public class MultiTenantFilterGuardTests
     }
 
     /// <summary>
-    /// 经 <see cref="Leistd.DependencyInjection.Registration.ServiceRegistrationCallbackFactory"/>
-    /// 构建：上下文清单由 <c>AddDddDbContext&lt;T&gt;()</c> 显式登记，
-    /// 但"注册了却没登记"的校验器要靠这个工厂才会执行
+    /// 按宿主的调用顺序经代理工厂构建：上下文清单由 <c>AddDddDbContext&lt;T&gt;()</c> 显式登记，
+    /// 但"注册了却没登记"的校验器要靠工厂才会执行；工作单元的启动检查还要求工厂登记的织入标记
     /// </summary>
-    private static ServiceProvider BuildFrom(IServiceCollection services) =>
-        (ServiceProvider)new Leistd.DependencyInjection.Registration
-            .ServiceRegistrationCallbackFactory()
-            .CreateServiceProvider(services);
+    private static ServiceProvider BuildFrom(IServiceCollection services)
+    {
+        var factory = new Leistd.DependencyInjection.DynamicProxy.Registration
+            .DynamicProxyServiceRegistrationCallbackFactory();
+        return (ServiceProvider)factory.CreateServiceProvider(factory.CreateBuilder(services));
+    }
 
     private static async Task StartHostedServicesAsync(IServiceProvider provider)
     {
@@ -166,7 +162,7 @@ public class MultiTenantFilterGuardTests
 
     /// <summary>同样的实体，但经 BaseDbContext——过滤器与落值都在</summary>
     private sealed class GuardedTenantDbContext(DbContextOptions<GuardedTenantDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<TenantScopedOrder> Orders => Set<TenantScopedOrder>();
     }
@@ -182,14 +178,14 @@ public class MultiTenantFilterGuardTests
 
     /// <summary>映射 SharedEntity 的上下文之一</summary>
     private sealed class FirstRepoDbContext(DbContextOptions<FirstRepoDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<SharedEntity> Items => Set<SharedEntity>();
     }
 
     /// <summary>映射同一个 SharedEntity——用于验证跨上下文重复被拒</summary>
     private sealed class SecondRepoDbContext(DbContextOptions<SecondRepoDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<SharedEntity> Items => Set<SharedEntity>();
     }
@@ -295,7 +291,7 @@ public class MultiTenantFilterGuardTests
 
     /// <summary>只在 <c>OnModelCreating</c> 里映射实体，不暴露 <c>DbSet</c>。</summary>
     private sealed class MappedOnlyDbContext(DbContextOptions<MappedOnlyDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         protected override void ConfigureModel(ModelBuilder modelBuilder) =>
             modelBuilder.Entity<MappedOnlyEntity>().HasKey(x => x.Id);

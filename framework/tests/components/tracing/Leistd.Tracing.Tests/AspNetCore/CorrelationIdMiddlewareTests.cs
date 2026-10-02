@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Leistd.Tracing.AspNetCore;
 using Leistd.Tracing.Constants;
-using Leistd.Tracing.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
@@ -15,7 +14,7 @@ using Leistd.Tracing.Abstractions;
 namespace Leistd.Tracing.Tests.AspNetCore;
 
 /// <summary>
-/// 中间件对入站头的校验，以及与 <c>HttpContext.TraceIdentifier</c> 的对齐。
+/// 中间件的取值顺序（合法入站头 → Activity → 新建）、入站校验与日志作用域。
 /// </summary>
 public class CorrelationIdMiddlewareTests : IAsyncLifetime
 {
@@ -31,7 +30,7 @@ public class CorrelationIdMiddlewareTests : IAsyncLifetime
                 .UseTestServer()
                 .ConfigureServices(services =>
                 {
-                    services.AddCorrelationId(_ => { });
+                    services.AddCorrelationId();
                     services.AddSingleton(_scopes);
                     services.AddSingleton<ILoggerProvider>(new ScopeCapturingLoggerProvider(_scopes));
                 })
@@ -102,6 +101,14 @@ public class CorrelationIdMiddlewareTests : IAsyncLifetime
         Assert.Equal("0af7651916cd43dd8448eb211c80319c", correlation);
     }
 
+    [Fact]
+    public async Task A_custom_inbound_id_is_preserved()
+    {
+        var (correlation, _, _) = await CallAsync("request-ABC_123");
+
+        Assert.Equal("request-ABC_123", correlation);
+    }
+
     [Theory]
     [InlineData("has space")]
     [InlineData("has\nnewline")]          // 日志注入
@@ -117,134 +124,77 @@ public class CorrelationIdMiddlewareTests : IAsyncLifetime
         Assert.Equal(32, correlation.Length);
     }
 
+    /// <summary>上限与操作记录的列宽一致：采信的值落库时不会被截断，按它仍能搜到日志。</summary>
     [Fact]
-    public async Task An_over_long_inbound_id_is_discarded()
+    public async Task The_length_limit_matches_the_stored_column()
     {
-        var tooLong = new string('a', 129);
+        var longest = new string('a', CorrelationIdConstants.MaxLength);
+        var tooLong = new string('a', CorrelationIdConstants.MaxLength + 1);
 
-        var (correlation, _, _) = await CallAsync(tooLong);
-
-        Assert.NotEqual(tooLong, correlation);
+        Assert.Equal(longest, (await CallAsync(longest)).Correlation);
+        Assert.NotEqual(tooLong, (await CallAsync(tooLong)).Correlation);
     }
 
+    /// <summary>
+    /// 不改写 <c>TraceIdentifier</c>：错误响应的 <c>traceId</c> 保持官方的链路标识，
+    /// 关联标识只进日志作用域与响应头。
+    /// </summary>
     [Fact]
-    public async Task The_resolved_id_is_written_back_to_TraceIdentifier()
+    public async Task TraceIdentifier_is_left_to_the_host()
     {
-        // 全局异常处理器按 Activity.TraceId ?? TraceIdentifier 取 traceId，
-        // 未接入 OpenTelemetry 时靠这条对齐让两边给出同一个值
-        var (correlation, traceIdentifier, _) = await CallAsync("0af7651916cd43dd8448eb211c80319c");
+        var (correlation, traceIdentifier, _) = await CallAsync("request-ABC_123");
 
-        Assert.Equal(correlation, traceIdentifier);
+        Assert.Equal("request-ABC_123", correlation);
+        Assert.NotEqual(correlation, traceIdentifier);
     }
 
     [Fact]
     public async Task A_missing_inbound_header_yields_a_generated_id()
     {
-        var (correlation, traceIdentifier, _) = await CallAsync(headerValue: null);
+        var (correlation, _, activityTraceId) = await CallAsync(headerValue: null);
 
-        Assert.NotEmpty(correlation);
-        Assert.Equal(correlation, traceIdentifier);
-    }
-
-
-    [Fact]
-    public async Task Without_an_activity_the_inbound_id_is_the_identity()
-    {
-        // 未接入 OpenTelemetry 的部署：入站头就是身份，三方仍一致
-        var (correlation, traceIdentifier, activityTraceId) =
-            await CallAsync("0af7651916cd43dd8448eb211c80319c");
-
-        Assert.Equal("0af7651916cd43dd8448eb211c80319c", correlation);
-        Assert.Equal(correlation, traceIdentifier);
         Assert.Equal(string.Empty, activityTraceId);   // 无 Listener → 无 Activity
+        Assert.Equal(32, correlation.Length);
     }
 
+    /// <summary>
+    /// 入站值优先于 Activity：上游显式指定的关联标识经出站转发传到下游时不能被丢掉，
+    /// 否则跨多条链路的业务关联在第一跳就断了。链路追踪仍由 traceparent 负责。
+    /// </summary>
     [Fact]
-    public async Task An_active_activity_wins_over_a_different_inbound_id()
+    public async Task A_well_formed_inbound_id_wins_over_the_activity()
     {
-        // 回归点：此前入站头优先，于是日志/响应头是一个值、ProblemDetails 的 traceId 是另一个，
-        // 客户端拿错误响应里的 Id 去日志里搜不到——正是统一标识要解决的那件事
         using var listener = ListenToAspNetCore();
+        const string Inbound = "order-7d1c_retry-2";
 
-        var (correlation, traceIdentifier, activityTraceId) =
-            await CallAsync(headerValue: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        var (correlation, _, activityTraceId) = await CallAsync(Inbound);
 
         Assert.NotEqual(string.Empty, activityTraceId);
-        Assert.Equal(activityTraceId, correlation);
-        Assert.Equal(activityTraceId, traceIdentifier);
-        Assert.NotEqual("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", correlation);
+        Assert.Equal(Inbound, correlation);
     }
 
     [Fact]
-    public async Task A_traceparent_makes_all_three_sources_agree()
+    public async Task Without_an_inbound_id_the_activity_trace_id_is_used()
     {
-        // 调用方按 W3C 传播时：它控制 trace id，三方一致——这是推荐用法
         using var listener = ListenToAspNetCore();
         const string TraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
 
-        var (correlation, traceIdentifier, activityTraceId) =
+        var (correlation, _, activityTraceId) =
             await CallAsync(headerValue: null, traceParent: $"00-{TraceId}-00f067aa0ba902b7-01");
 
         Assert.Equal(TraceId, activityTraceId);
         Assert.Equal(TraceId, correlation);
-        Assert.Equal(TraceId, traceIdentifier);
     }
 
     [Fact]
-    public async Task A_matching_inbound_id_alongside_an_activity_is_not_treated_as_superseded()
+    public async Task The_correlation_id_is_written_to_the_log_scope()
     {
-        using var listener = ListenToAspNetCore();
-        const string TraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
-
-        // 入站头与 traceparent 的 trace id 相同：不产生"被取代"的诊断字段，行为等同上一条
-        var (correlation, traceIdentifier, activityTraceId) =
-            await CallAsync(headerValue: TraceId, traceParent: $"00-{TraceId}-00f067aa0ba902b7-01");
-
-        Assert.Equal(TraceId, activityTraceId);
-        Assert.Equal(TraceId, correlation);
-        Assert.Equal(TraceId, traceIdentifier);
-    }
-
-
-    [Fact]
-    public async Task A_superseded_inbound_id_is_recorded_in_the_log_scope()
-    {
-        // 有 Activity 时入站头不再是身份，但它不能就此消失——
-        // 否则"客户端报的那个 Id 查不到任何东西"，只是把问题从一处挪到另一处
-        using var listener = ListenToAspNetCore();
-        const string Inbound = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-
         _scopes.Clear();
-        var (correlation, _, activityTraceId) = await CallAsync(headerValue: Inbound);
 
-        Assert.Equal(activityTraceId, correlation);
-        Assert.Equal(Inbound, _scopes.Find(CorrelationIdConstants.InboundTraceIdLogKey));
-        Assert.Equal(correlation, _scopes.Find(CorrelationIdConstants.TraceIdLogKey));
+        var (correlation, _, _) = await CallAsync("request-ABC_123");
+
+        Assert.Equal(correlation, _scopes.Find(CorrelationIdConstants.LogKey));
     }
-
-    [Fact]
-    public async Task A_matching_inbound_id_produces_no_superseded_field()
-    {
-        // 相同值不算"被取代"：多一个恒等字段只会放大日志体积、并暗示发生过冲突
-        using var listener = ListenToAspNetCore();
-        const string TraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
-
-        _scopes.Clear();
-        await CallAsync(headerValue: TraceId, traceParent: $"00-{TraceId}-00f067aa0ba902b7-01");
-
-        Assert.Null(_scopes.Find(CorrelationIdConstants.InboundTraceIdLogKey));
-    }
-
-    [Fact]
-    public async Task Without_an_activity_there_is_no_superseded_field_either()
-    {
-        // 无 Activity 时入站头本身就是身份，谈不上被取代
-        _scopes.Clear();
-        await CallAsync(headerValue: "0af7651916cd43dd8448eb211c80319c");
-
-        Assert.Null(_scopes.Find(CorrelationIdConstants.InboundTraceIdLogKey));
-    }
-
 
     private sealed class CapturedScopes
     {

@@ -9,9 +9,9 @@
 | Web API 需按 Accept-Language 请求头返回本地化文案 | 引用 `Leistd.Localization.AspNetCore`，`AddJsonLocalization` + `UseJsonRequestLocalization` |
 | 领域/类库层只需注入 `IStringLocalizer` 查文案，不依赖 ASP.NET Core | 只引用 `Leistd.Localization.Core` |
 | 业务项目要覆盖或追加框架默认文案 | 在自己的程序集放同名键的 `{culture}.json` 并登记该程序集 |
-| 与 `Leistd.ExceptionHandling` 配合，让错误消息本地化 | 异常用 `WithCode("模块:键")` 给出错误码（它同时是词条键）、`WithData` 传占位参数（`Message` 始终是英文诊断，见 [`exception-handling`](./exception-handling.md)） |
+| 与 `Leistd.ExceptionHandling` 配合，让错误消息本地化 | `BusinessException("模块:键", safeMessage)` 在构造时给出词条键，`WithData` 传占位参数 |
 
-未注册本地化时没有词条可用，业务异常按宿主的 `MessageExposure` 策略直出 `Message`（默认只放 4xx），再不行才回落到 HTTP 状态标题。字段校验错误仍使用自身消息。
+未注册本地化或词条未命中时，业务异常直接回落到构造时的安全 `Message`。字段校验错误使用自身消息。
 
 ## 安装
 

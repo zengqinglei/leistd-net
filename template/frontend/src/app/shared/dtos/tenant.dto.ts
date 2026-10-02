@@ -1,5 +1,15 @@
 import { PagedRequestDto } from '../models/paged-request.dto';
 
+/**
+ * 租户名的合法形态：单个 DNS 标签，与后端 `TenantConfiguration.NamePattern` 同源。
+ *
+ * 按子域名解析租户时名字就是主机名里的一段，不合规的名字建得出来却经子域名访问不到。
+ */
+export const TENANT_NAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
+
+/** 租户名长度上限（DNS 标签上限），与后端 `TenantConfiguration.MaxNameLength` 一致。 */
+export const TENANT_NAME_MAX_LENGTH = 63;
+
 export interface TenantOutputDto {
   id: string;
   /** 租户名称，唯一，作为稳定的业务标识（登录时按名称解析租户）。 */
@@ -58,7 +68,7 @@ export type HostTenantDecision = 'undecided' | 'host' | 'tenant';
  * 匿名响应里的租户：只有名字。
  *
  * 刻意不含标识与启用状态——未认证者不该读出租户主键，也不该分辨出某个租户是否存在、是否启用。
- * 名字放进 `X-Tenant-Id` 头即可，服务端按名字同样能解析。
+ * 名字放进租户提示头（`TENANT_HEADER`）即可，服务端按名字同样能解析。
  */
 export interface AnonymousTenantOutputDto {
   name: string;

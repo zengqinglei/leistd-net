@@ -8,7 +8,11 @@ import { PagedResultDto } from '../../src/app/shared/models/paged-result.dto';
 import { PERMISSIONS } from '../../src/app/shared/models/permission';
 import { MockException, MockRequest } from '../core/models';
 import { parseMockSorting } from '../core/sorting';
-import { MockOpenApplication, OPEN_APPLICATIONS } from '../data/open-applications';
+import {
+  MockOpenApplication,
+  OPEN_APPLICATION_SCOPES,
+  OPEN_APPLICATIONS,
+} from '../data/open-applications';
 
 const applications = OPEN_APPLICATIONS;
 
@@ -84,7 +88,10 @@ function getOpenApplication(req: MockRequest) {
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
-    throw new MockException(404, 'Open application not found');
+    throw new MockException(404, {
+      code: 'OpenApp:NotFound',
+      message: 'Open application not found',
+    });
   }
   return toOutput(application);
 }
@@ -96,12 +103,49 @@ function validateApplication(
   if ('clientId' in input) {
     const clientId = input.clientId.trim();
     if (!clientId) {
-      throw new MockException(400, { message: 'Client ID is required' });
+      throw new MockException(400, {
+        code: 'OpenApp:ClientIdRequired',
+        message: 'Client ID is required',
+      });
     }
     if (
       applications.some((item: MockOpenApplication) => item.clientId === clientId && item.id !== id)
     ) {
-      throw new MockException(400, { message: `Client ID already exists: ${clientId}` });
+      throw new MockException(409, {
+        code: 'OpenApp:ClientIdTaken',
+        message: `Client ID already exists: ${clientId}`,
+      });
+    }
+  }
+
+  const exchange = 'gt:urn:ietf:params:oauth:grant-type:token-exchange';
+  const userGrants = [
+    'gt:authorization_code',
+    'gt:refresh_token',
+    'gt:implicit',
+    'gt:password',
+    'gt:device_code',
+  ];
+  if (
+    input.permissions.includes(exchange) &&
+    (input.clientType !== 'confidential' ||
+      !input.permissions.includes('ept:token') ||
+      input.permissions.some((permission) => userGrants.includes(permission)))
+  ) {
+    throw new MockException(400, {
+      code: 'OpenApp:ExchangeClientInvalid',
+      message:
+        'Token Exchange requires a confidential service client with token permission and no user-facing grants.',
+    });
+  }
+  for (const permission of input.permissions.filter((permission) =>
+    permission.startsWith('aud:'),
+  )) {
+    if (!OPEN_APPLICATION_SCOPES.some((scope) => `aud:${scope.audience}` === permission)) {
+      throw new MockException(400, {
+        code: 'OpenApp:AudienceUnsupported',
+        message: 'Unsupported audience.',
+      });
     }
   }
 
@@ -113,7 +157,10 @@ function validateApplication(
     (input.applicationType === 'native' || input.clientType === 'public') &&
     !input.requirements.includes('ft:pkce')
   ) {
-    throw new MockException(400, { message: 'Native/Public clients must enable PKCE' });
+    throw new MockException(400, {
+      code: 'OpenApp:PkceRequired',
+      message: 'Native/Public clients must enable PKCE',
+    });
   }
 }
 
@@ -128,7 +175,6 @@ function createOpenApplication(req: MockRequest) {
     displayName: body.displayName,
     applicationType: body.applicationType,
     clientType: body.clientType,
-    consentType: body.consentType,
     redirectUris: body.redirectUris || [],
     postLogoutRedirectUris: body.postLogoutRedirectUris || [],
     permissions: body.permissions || [],
@@ -152,7 +198,10 @@ function updateOpenApplication(req: MockRequest) {
   const body = req.body as UpdateOpenApplicationInputDto;
   const index = applications.findIndex((item: MockOpenApplication) => item.id === id);
   if (index === -1) {
-    throw new MockException(404, 'Open application not found');
+    throw new MockException(404, {
+      code: 'OpenApp:NotFound',
+      message: 'Open application not found',
+    });
   }
 
   validateApplication(body, id);
@@ -162,7 +211,6 @@ function updateOpenApplication(req: MockRequest) {
     displayName: body.displayName,
     applicationType: body.applicationType,
     clientType: body.clientType,
-    consentType: body.consentType,
     redirectUris: body.redirectUris || [],
     postLogoutRedirectUris: body.postLogoutRedirectUris || [],
     permissions: body.permissions || [],
@@ -189,10 +237,16 @@ function resetOpenApplicationSecret(req: MockRequest) {
   const id = req.params['id'];
   const application = applications.find((item: MockOpenApplication) => item.id === id);
   if (!application) {
-    throw new MockException(404, 'Open application not found');
+    throw new MockException(404, {
+      code: 'OpenApp:NotFound',
+      message: 'Open application not found',
+    });
   }
   if (application.clientType !== 'confidential') {
-    throw new MockException(400, { message: 'Only confidential clients can reset their secret' });
+    throw new MockException(409, {
+      code: 'OpenApp:SecretResetConfidentialOnly',
+      message: 'Only confidential clients can reset their secret',
+    });
   }
 
   const clientSecret = `mock_secret_${Math.random().toString(36).slice(2, 14)}`;
@@ -203,6 +257,7 @@ function resetOpenApplicationSecret(req: MockRequest) {
 
 export const OPEN_APPLICATION_API = {
   'GET /api/v1/open-applications': (req: MockRequest) => getOpenApplications(req),
+  'GET /api/v1/open-applications/scopes': () => OPEN_APPLICATION_SCOPES,
   'GET /api/v1/open-applications/:id': (req: MockRequest) => getOpenApplication(req),
   'POST /api/v1/open-applications': (req: MockRequest) => createOpenApplication(req),
   'PUT /api/v1/open-applications/:id': (req: MockRequest) => updateOpenApplication(req),

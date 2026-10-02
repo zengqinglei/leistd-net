@@ -1,6 +1,7 @@
 node_modules*/
 .angular/
 .tmp/
+.cache/lint/
 coverage/
 dist/
 package-lock.json

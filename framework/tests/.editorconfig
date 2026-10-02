@@ -1,0 +1,6 @@
+# 测试项目不生成 XML 文档（GenerateDocumentationFile=false），而构建期的 IDE0005 需要它；
+# 未使用 using 的构建期检查只约束随包分发的组件与 DDD 基座，测试里交给 IDE 提示。
+root = false
+
+[*.cs]
+dotnet_diagnostic.IDE0005.severity = none

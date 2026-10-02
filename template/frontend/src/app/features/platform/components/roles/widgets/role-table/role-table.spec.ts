@@ -1,8 +1,11 @@
 import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { TranslocoService } from '@jsverse/transloco';
+//#endif
 import { PaginationState, SortingState } from '@tanstack/angular-table';
 import { BehaviorSubject } from 'rxjs';
 
@@ -53,7 +56,7 @@ describe('RoleTable', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         //#if (IncludeLocalization)
-        ...provideTranslocoTesting(['en']),
+        ...provideTranslocoTesting(['en', 'zh-CN']),
         //#endif
         {
           provide: BreakpointObserver,
@@ -71,7 +74,7 @@ describe('RoleTable', () => {
     fixture.detectChanges();
   });
 
-  it('当前页与总页数按父级传入的分页状态派生', () => {
+  it("derives the current page and page count from the parent's paging state", () => {
     expect(component.currentPage()).toBe(1);
     expect(component.totalPages()).toBe(3); // 25 条 / 每页 10
 
@@ -81,7 +84,7 @@ describe('RoleTable', () => {
     expect(component.currentPage()).toBe(2);
   });
 
-  it('改每页条数时回到第一页', () => {
+  it('returns to the first page when rows per page changes', () => {
     fixture.componentRef.setInput('pagination', { pageIndex: 2, pageSize: 10 } as PaginationState);
     fixture.detectChanges();
 
@@ -93,7 +96,7 @@ describe('RoleTable', () => {
     expect(emitted).toEqual([{ pageIndex: 0, pageSize: 100 }]);
   });
 
-  it('点击排序在升序与降序之间切换，并回传排序意图', () => {
+  it('toggles between ascending and descending on sort click and emits the sort intent', () => {
     const emitted: SortingState[] = [];
     component.sortingChange.subscribe((value) => emitted.push(value));
 
@@ -107,32 +110,85 @@ describe('RoleTable', () => {
     expect(emitted[1]).toEqual([{ id: 'displayName', desc: true }]);
   });
 
-  it('一个可用操作都没有时不渲染溢出菜单', () => {
+  it('does not render the overflow menu when no action is available', () => {
     fixture.componentRef.setInput('canUpdate', false);
     fixture.componentRef.setInput('canDelete', false);
     fixture.componentRef.setInput('canManagePermissions', false);
     fixture.detectChanges();
 
-    expect(component.hasRowActions()).toBeFalse();
+    expect(component.hasRowActions()).toBe(false);
 
     fixture.componentRef.setInput('canManagePermissions', true);
     fixture.detectChanges();
-    expect(component.hasRowActions()).toBeTrue();
+    expect(component.hasRowActions()).toBe(true);
   });
 
-  it('窄视口下标记存在被折叠的列', () => {
-    expect(component.hasCollapsedColumns()).toBeFalse();
+  it('flags collapsed columns on a narrow viewport', () => {
+    expect(component.hasCollapsedColumns()).toBe(false);
 
     viewport.next(desktop(false));
     fixture.detectChanges();
 
-    expect(component.hasCollapsedColumns()).toBeTrue();
+    expect(component.hasCollapsedColumns()).toBe(true);
   });
 
-  it('行展开状态按行独立记录', () => {
-    component.toggleRow('1');
+  // 展开状态用 TanStack 的行展开，按行 id 记：数据刷新（同一批行换了新对象、换了顺序）后
+  // 展开的仍是原来那一行。按下标记会让展开跟着位置走，数据一换就默认全部收起。
+  it('keeps a row expanded by its id across data refreshes', async () => {
+    viewport.next(desktop(false));
+    // 表格包在 @defer 里，测试环境不会自己渲染它
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
 
-    expect(component.isRowExpanded('1')).toBeTrue();
-    expect(component.isRowExpanded('2')).toBeFalse();
+    expandButtons()[0].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['true', 'false']);
+
+    fixture.componentRef.setInput('roles', [role('2', 'member'), role('1', 'admin')]);
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'true']);
+
+    expandButtons()[1].click();
+    await fixture.whenStable();
+    expect(expandedStates()).toEqual(['false', 'false']);
   });
+
+  function expandButtons(): HTMLButtonElement[] {
+    const host = fixture.nativeElement as HTMLElement;
+    return Array.from(host.querySelectorAll('tbody ng-icon[name="lucideChevronRight"]')).map(
+      (icon) => icon.closest('button')!,
+    );
+  }
+
+  function expandedStates(): (string | null)[] {
+    return expandButtons().map((button) => button.getAttribute('aria-expanded'));
+  }
+  //#if (IncludeLocalization)
+
+  // 表头与分页文案都经模板结构指令的 t 取得：切换语言后已渲染的表格要换成新语言，
+  // OnPush 视图不会因为别的原因被标脏，停在旧语言就说明文案没有走结构指令。
+  it('re-renders header and paginator labels when the language changes', async () => {
+    const [table] = await fixture.getDeferBlocks();
+    await table.render(DeferBlockState.Complete);
+    fixture.detectChanges();
+
+    const transloco = TestBed.inject(TranslocoService);
+    transloco.setTranslation(
+      { common: { rowsPerPage: '每页条数' }, roles: { colName: '角色' } },
+      'zh-CN',
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    const headers = () =>
+      Array.from(host.querySelectorAll('th')).map((th) => th.textContent!.trim());
+    expect(headers()).toContain('roles.colName');
+    expect(host.textContent).not.toContain('每页条数');
+
+    transloco.setActiveLang('zh-CN');
+    await fixture.whenStable();
+
+    expect(headers()).toContain('角色');
+    expect(host.textContent).toContain('每页条数');
+  });
+  //#endif
 });

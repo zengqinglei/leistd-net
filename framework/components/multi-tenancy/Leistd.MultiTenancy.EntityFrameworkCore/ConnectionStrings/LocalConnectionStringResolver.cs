@@ -1,10 +1,7 @@
 using Leistd.Data.Connections;
-using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
+using Leistd.MultiTenancy.Exceptions;
 using Leistd.MultiTenancy.EntityFrameworkCore.Extensions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -54,7 +51,7 @@ internal sealed class LocalConnectionStringResolver<TControlDbContext>(
         if (!tenantExists)
         {
             // 租户不存在或已删除，不可通过重试恢复，因此是 404 而不是 503
-            throw new NotFoundException($"Tenant '{tenantId}' was not found.");
+            throw new TenantNotFoundException(tenantId.ToString());
         }
 
         var defaultName = TenantConnectionNames.Default;

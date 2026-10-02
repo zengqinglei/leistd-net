@@ -1,10 +1,8 @@
-using System.Reflection;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Leistd.AmbientContext;
 using Leistd.AspNetCore.SignalR.Filters;
 using Leistd.AspNetCore.SignalR.Options;
@@ -81,6 +79,24 @@ public class AmbientContextHubFilterTests
 
         Assert.True(context.Aborted);
         Assert.False(invoked);
+    }
+
+    /// <summary>只有后续身份已认证的连接按已认证复评：策略不通过照样中止，不被当成匿名放过。</summary>
+    [Fact]
+    public async Task A_connection_authenticated_only_by_a_later_identity_is_revalidated()
+    {
+        var principal = new ClaimsPrincipal(
+        [
+            new ClaimsIdentity(),
+            new ClaimsIdentity([new Claim("sub", "user-1")], authenticationType: "Test")
+        ]);
+        var (filter, provider, context) = Build(principal, new HubIdentityOptions { PolicyName = DenyPolicy });
+
+        await Assert.ThrowsAsync<HubException>(async () => await filter.InvokeMethodAsync(
+            Invocation(provider, context),
+            _ => ValueTask.FromResult<object?>(null)));
+
+        Assert.True(context.Aborted);
     }
 
     // 匿名连接照样建立环境上下文（链路标识、宿主自定义贡献者仍需要），但没有身份可复评。

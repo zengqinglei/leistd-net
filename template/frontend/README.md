@@ -32,82 +32,66 @@ ng version
 npm install
 ```
 
-### 2. 创建本机调试配置
+### 2. 启动开发服务器
 
-`npm start`（`ng serve -c debug`）加载 `src/environments/environment.debug.ts`。这个文件**不在版本库里**——每个人的后端地址和联调模式都不一样，跟踪它只会让大家互相覆盖。首次克隆后从 `environment.dev.ts` 复制一份：
+先按根目录 README 启动本机后端（默认 `http://localhost:5240`），再启动前端：
 
 ```bash
-cp src/environments/environment.dev.ts src/environments/environment.debug.ts
+npm start
 ```
 
-之后随便改，改动不会被提交。**没有这个文件 `npm start` 会直接失败**，这一步不能跳过。
+浏览器打开 `http://localhost:4200`。`npm start` 即 `ng serve`，使用 `development` 构建配置与 `src/environments/environment.ts`，
+不需要复制或创建任何环境文件。
 
-### 3. 填写 api.gateway 并选择联调模式
+<!--#if (OpenIddictServer)-->
+开发服务器按 `proxy.conf.mjs` 把 `/api`、`/hubs`（SignalR，含 WebSocket）以及授权服务的 `/connect`、`/.well-known` 转发给本机后端：
+<!--#else-->
+开发服务器按 `proxy.conf.mjs` 把 `/api`、`/hubs`（SignalR，含 WebSocket）转发给本机后端：
+<!--#endif-->
 
-**关键是 `api.gateway` 怎么填，取决于你用哪种前后端联调模式**：
+浏览器只和 4200 打交道，前后端同源，Cookie 与回调地址都按 4200 生成，不需要跨域配置；热更新照常可用。
+后端不在默认端口时，启动前设置 `API_PROXY_TARGET`：
 
-#### 模式一：SPA 同源访问（推荐）
-
-后端开启内置 SPA 代理（`SpaProxy`），浏览器**只访问后端地址**，前端请求由后端代理转发到 Angular dev server。前后端同源，**没有跨域、cookie 正常**。
-
-```typescript
-export const environment = {
-  ...environmentBase,
-  useMock: {
-    enable: false,
-    delay: 500,
-    exclude: '',
-    include: '',
-  },
-  api: {
-    ...environmentBase.api,
-    gateway: '', // 留空 = 同源相对路径，请求经后端 SPA 代理
-  },
-};
+```bash
+API_PROXY_TARGET=http://localhost:5300 npm start
 ```
 
-> 配套：后端需开启 `SpaProxy.Enabled=true`、`SpaProxy.Target=http://localhost:4200`，详见 [后端 README · 前后端联调](../backend/README.md)。
-> 访问方式：浏览器打开**后端地址**（如 `http://localhost:5240/`），不是 4200。
->
-> 代价：**热更新（HMR）在这个模式下不可用**。dev server 的 live-reload 走 WebSocket 升级，而 SPA 代理基于 `HttpClient`，转发不了 upgrade（浏览器控制台会反复出现 `WebSocket connection to 'ws://<后端地址>/?token=...' failed`）。改代码后手动刷新即可；需要热更新时临时切模式二。应用自身的 SignalR 不受影响——它直连后端，不经这个代理。
+PowerShell：
 
-#### 模式二：CORS 分离访问
+```powershell
+$env:API_PROXY_TARGET = "http://localhost:5300"; npm start
+```
+<!--#if (RemoteTokenAuth)-->
 
-浏览器直接访问前端 dev server（4200），API 跨域打到后端。需后端开启 CORS 放行本地端口。
+### 3. 联调本机 Identity 服务
 
-```typescript
-export const environment = {
-  ...environmentBase,
-  useMock: { enable: false, delay: 500, exclude: '', include: '' },
-  api: {
-    ...environmentBase.api,
-    gateway: 'http://localhost:5240', // 后端完整地址，跨域访问
-  },
-};
+本服务的登录在 Identity 服务上完成。本机联调时先按 Identity 服务自己的说明启动它（默认后端 5240、前端开发服务器 4200），
+本服务改用其他端口：
+
+```bash
+# 后端（在 backend 目录）
+dotnet run --project src/CompanyName.ProjectName.Api --urls http://localhost:5250
+# 前端（在 frontend 目录；PowerShell 写 $env:API_PROXY_TARGET = "http://localhost:5250"; npm start -- --port 4201）
+API_PROXY_TARGET=http://localhost:5250 npm start -- --port 4201
 ```
 
-> 配套：后端需设 `Cors.AllowAnyLocalhost=true`（开发用）。访问方式：浏览器打开 `http://localhost:4200/`。
-> 注意：跨域携带 cookie 对 SameSite/Secure 要求更严，若登录后 cookie 不生效，优先改用模式一。
+后端 `appsettings.Development.json` 的 `Authentication:Issuer` 默认指向 `http://localhost:4200/`，
+即 Identity 的前端开发服务器；浏览器在那里登录，令牌的签发方也是这个地址。
+在 Identity 那边还需要：
 
-### 4. 启动开发服务器
+- 在 `OAuth:ApiResources` 登记资源对象，例如 `{ "Name": "orders-api", "OwnerClientId": "orders-worker" }`，
+  本服务后端的 `Authentication:Audience` 对应资源 Name；Scope 默认 Name，也可独立配置。
+- 在「开放应用」登记本服务后端的 web/confidential 客户端，启用 authorization code、refresh token、PKCE，
+  授予 `openid`、`profile`、`email`、`roles`、`offline_access` 与本 API scope。
+  登录回调 `http://localhost:4201/api/v1/auth/signin`，退出回调 `http://localhost:4201/api/v1/auth/signout`。
+- 将登记的 ClientId/ClientSecret 放入本服务后端机密配置；`Authentication:Scope` 与登记的 scope 一致，可省略同名值。
+  默认浏览器只向本服务同源 API 发送 Cookie，授权通过整页跳转完成。
+<!--#endif-->
 
-本项目已预置了多套环境配置，您可以根据需要启动对应的开发服务器。
+### Mock
 
-- **启动本地调试环境**（默认使用 `environment.debug.ts` 配置）：
-
-  ```bash
-  npm start
-  ```
-
-- **启动其他环境**：
-  ```bash
-  ng serve -c dev     # 开发环境
-  ng serve -c test    # 测试环境
-  ng serve -c uat     # UAT 环境
-  ng serve -c production  # 生产环境
-  ```
-
-服务器启动后：**模式一**（SPA 同源）在浏览器打开后端地址 `http://localhost:5240/`；**模式二**（CORS 分离）打开 `http://localhost:4200/`。应用支持热重载，任何对源文件的修改都会自动刷新页面。
+`environment.ts` 的 `useMock` 控制 Mock：`true` 全部由 Mock 应答；对象形态按接口开关，`include` 列出的接口走 Mock（列了 `include` 时以它为准），
+命中 `exclude` 的一律走真实后端。只有 `development` 构建会把 Mock 编进包里，其他构建里 `useMock` 不起作用。
 
 ---
 
@@ -115,7 +99,7 @@ export const environment = {
 
 项目使用 Angular 的环境配置系统。配置文件位于 `src/environments/`：
 
-- `environment.debug.ts` - 本地调试（`npm start` 默认使用）
+- `environment.ts` - 本机开发（`npm start` 使用，Mock 只在这个配置下可用）
 - `environment.dev.ts` - 开发环境
 - `environment.test.ts` - 测试环境
 - `environment.uat.ts` - UAT 环境
@@ -131,31 +115,41 @@ export const environment: Environment = {
   production: false,
   useMock: false, // true 开启全部 Mock；也可按模块传对象
   api: {
-    ...environmentBase.api, // authService、envService 等其余必填项沿用基础配置
-    gateway: '', // 网关地址；留空表示各服务地址即完整地址
-    appService: { url: 'http://localhost:5240' },
+    ...environmentBase.api,
+    gateway: '', // 网关地址；留空时请求保持相对路径，由同源部署或开发代理转发
   },
 };
 ```
 
-> `api` 是必填对象，直接重写会漏掉其中的其他必填项——展开 `...environmentBase.api` 再覆盖要改的那几个。
+经网关访问、且网关按服务名分流时，给请求带上服务名（`GATEWAY_SERVICE_NAME` 由 `src/app/core/interceptors/url-format-interceptor.ts` 导出），拦截器会把它插在网关地址与路径之间：
+
+```typescript
+http.get('/api/v1/orders', {
+  context: new HttpContext().set(GATEWAY_SERVICE_NAME, 'order-service'),
+});
+// → {gateway}/order-service/api/v1/orders
+```
 <!--#if (LocalIdentity)-->
 
 哈希路由用 `useHash: true`（部署在无法配置回退规则的静态宿主时用得上）。
+<!--#if (ExternalLogin)-->
+
+**外部登录要求普通路径路由**：回调地址是无 fragment 的 `/auth/external-callback/{provider}`（OAuth 不允许回调地址带 fragment），
+反向代理或静态宿主要把它与其余 SPA 深链一并回退到 `index.html`。启用 `useHash: true` 时外部登录不可用。
+<!--#endif-->
 <!--#else-->
 
-OIDC 授权服务器地址、客户端 ID 与 scope 在 `oidc` 下配置。
-
-**部署要求**：回调地址是无 fragment 的普通路径 `/auth/callback`，反向代理或静态宿主
-必须把它与其余 SPA 深链一并回退到 `index.html`，否则授权服务器跳回来时会命中 404。
-本形态不提供哈希路由——哈希路由只从 fragment 读路由，回调组件不会被渲染。
+前端不配置 OAuth 客户端，也不持有 access/refresh/id token。OIDC 的 Issuer、Audience、ClientId、ClientSecret 和 Scope 只在后端配置。
+登录导航至 `/api/v1/auth/login`，回调由后端 `/api/v1/auth/signin` 消费；前端通过 `/api/v1/auth/me` 读取同源 Cookie 会话。
+本形态固定使用普通路径路由，同源后端托管与开发代理仍保留；部署需为 SPA 深链回退到 `index.html`。
+详见 [浏览器认证](../docs/standards/api.md#浏览器认证)。
 <!--#endif-->
 
 使用特定环境：
 
 ```bash
 ng serve -c <环境名称>
-ng build -c <环境名称>
+npm run build -- -c <环境名称>
 ```
 
 ---
@@ -165,11 +159,16 @@ ng build -c <环境名称>
 您可以根据目标环境构建项目。构建产物将存放在 `dist/` 目录下。
 
 ```bash
-ng build -c dev         # 开发环境
-ng build -c test        # 测试环境
-ng build -c uat         # UAT 环境
-ng build -c production  # 生产环境（已优化性能）
+npm run build -- -c dev         # 开发环境
+npm run build -- -c test        # 测试环境
+npm run build -- -c uat         # UAT 环境
+npm run build                   # 生产环境（默认配置，已优化性能）
 ```
+<!--#if (IncludeLocalization)-->
+
+构建要走 `npm run build`，不要直接 `ng build`：构建完成后 `postbuild` 会用 `transloco-optimize` 预先展平并压缩词条，
+生产配置据此开启 `flatten.aot`，运行时不再展平。直接 `ng build -c production` 产出的是未展平的原文件，界面上的词条会全部找不到。
+<!--#endif-->
 
 ### Docker 构建
 
@@ -183,22 +182,44 @@ ng build -c production  # 生产环境（已优化性能）
 docker build -t company-name-project-name .
 ```
 
-#### 2. 前后端分离部署
+#### 2. 分进程同源部署
 
-前端独立部署，需要指定后端 API 地址：
-
-```bash
-# 构建时传入后端 API Gateway 地址
-docker build --build-arg API_GATEWAY=https://api.example.com -t company-name-project-name .
-```
-
-**说明**：
-
-- `API_GATEWAY` 为后端 API 网关地址
-- 构建时会替换 `environment.prod.ts` 中的占位符
-- 如果不传入该参数，默认使用空字符串（相对路径）
+前端与后端可分进程部署，由网关或反向代理统一外部源，并将 `/api/**` 与服务端授权端点路由到后端。浏览器认证导航和回调均使用此同源地址。`API_GATEWAY` 构建参数保持空值；其他服务通过同源微服务路由前缀访问。独立跨源 API 地址不属于当前浏览器认证契约。完整 Cookie 与 TLS 转发规则见 [部署说明](../docs/deploy/README.md)。
 
 ---
+<!--#if (IncludeLocalization)-->
+
+## 多语言
+
+全局文案位于 `public/i18n/{en,zh-CN}.json`，功能文案位于 `public/i18n/<scope>/{en,zh-CN}.json`。功能路由用 `provideTranslocoScope` 注册完整 scope 信息，并通过 `resolveTranslationScopes` 等待词条后进入；语言切换复用 alias、inline loader，等待全局和已访问 scope 的目标语言词条，失败保留当前语言。已有页面时功能加载失败保留原页面；首次导航（含根地址 `/`）失败显示启动失败卡片，重试重新执行解析器并进入原目标地址；inline loader 拒绝后，重试重新调用加载函数。生产构建的 `postbuild` 递归展平这些文件。
+
+文案归属、模板 prefix、信号与事件文案用法见 [前端规范 §9](../docs/standards/coding-frontend.md#9-多语言i18n)。
+
+---
+<!--#endif-->
+<!--#if (IncludeNotifications)-->
+
+## 实时连接（SignalR）
+
+`core/services/signalr-service.ts` 建立到 `/hubs` 的连接，默认日志等级是 **`Warning`**，不是官方示例里的 `Information`。
+
+原因是**访问令牌会进浏览器控制台**：WebSocket 传输没法带请求头，令牌只能拼在 URL 查询串里（`access_token=`），而 `@microsoft/signalr` 连接成功那条日志以 `Information` 打印**整个 URL**。控制台里的东西会被截图、被前端错误上报采集、被浏览器扩展读到，所以默认不打。
+
+排障要看协商与重连细节时，可以临时把这一行调成 `Information` 或 `Debug`，**但要知道调高之后日志里可能带出凭据**。
+
+<!--#if (RemoteTokenAuth)-->
+> ⚠️ **日志等级管不到浏览器自己打的那条。** 连接握手失败时，浏览器会以它自己的格式输出
+> `WebSocket connection to 'wss://…?access_token=…' failed`，这条不经过 `@microsoft/signalr` 的日志管道，
+> 调等级、装过滤器都拦不住。也就是说**连接失败场景下令牌仍可能出现在控制台里**。
+> 要彻底避免，只能让**访问令牌本身从一开始就不进入浏览器发起的连接 URL**——也就是改变客户端的认证方式，
+> 例如在协商阶段换一张短时效的一次性连接票据，用它代替访问令牌。
+> 注意票据自身仍会出现在 URL 里，这么做只是把泄露面从长期令牌缩小到一次性票据。
+> 在反向代理层改写**没有用**：浏览器已经用带令牌的 URL 发起了连接，改写上游请求改不掉浏览器自己看到的那个地址。
+> 本模板没有实现票据这一层，按你的威胁模型决定是否需要。
+
+<!--#endif-->
+---
+<!--#endif-->
 
 ## 代码质量
 
@@ -240,10 +261,21 @@ npm run format:fix     # 自动格式化代码
   npm test
   ```
 
-  > 单元测试跑在 Karma + Jasmine 4.6 上，`@types/jasmine` 与之保持同一主版本——这是
-  > `karma-jasmine@5.1.0` 的依赖范围（`jasmine-core: ^4.1.0`）之内的组合。调整测试依赖时，
-  > 要核对浏览器里实际加载的版本，以及通过 / 失败 / 跳过三种报告语义；只看根依赖的版本号
-  > 判断不出实际运行的是哪一份。
+  > 单元测试由 Angular 的 `@angular/build:unit-test` 构建器驱动 Vitest，在 Playwright 的无头
+  > Chromium 里运行（浏览器模式，不是 jsdom 模拟）。新机器首次运行前安装一次浏览器：
+  > `npx playwright install chromium`。
+  >
+  > - 单次运行：`npm test -- --watch=false`；覆盖率：`npm test -- --watch=false --coverage`
+  > - 观看有头浏览器：`npm test -- --browsers=chromium`
+  > - 单测使用专用构建配置 `unit-test`（`angular.json`），不做开发构建的 Mock 替换，
+  >   `_mock/core/providers.ts` 保持部署形态，Mock 相关用例才测得到两种构建的差别
+  > - `vitest-base.config.ts` 开启 `restoreMocks` 与 `unstubGlobals`：每条用例开始前还原
+  >   `vi.spyOn` 创建的替身与 `vi.stubGlobal` 替换的全局值，这两种不必手写清理；
+  >   `Object.defineProperty` 等直接修改与假计时器仍由用例自己还原
+  > - 每个 spec 文件在独立的页面里运行（`isolate: true`，构建器默认为了贴近 Karma 而共用一页）。
+  >   共用一页时多个文件并发执行，一个文件在途用例对全局对象打的桩（如 `Storage.prototype`）
+  >   会作用到另一个文件的模块初始化上，表现为偶发的"整个文件导入失败"
+  > - 用例失败时 Vitest 在 spec 旁生成 `__screenshots__/`，已被 `.gitignore` 忽略
 
 - **端到端 (E2E) 测试**：
   ```bash

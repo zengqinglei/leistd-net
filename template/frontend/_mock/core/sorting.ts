@@ -29,14 +29,12 @@ export function parseMockSorting<TField extends string>(
     (direction !== undefined && direction !== 'asc' && direction !== 'desc')
   ) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
       message: `Invalid sorting expression: ${text}`,
     });
   }
 
   if (!allowedFields.includes(field as TField)) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
       message: `Unsupported sorting field: ${field}`,
     });
   }

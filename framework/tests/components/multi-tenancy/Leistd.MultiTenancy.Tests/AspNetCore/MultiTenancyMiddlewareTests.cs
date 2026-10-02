@@ -10,11 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Xunit;
 using Leistd.MultiTenancy.Exceptions;
 using Leistd.MultiTenancy.Stores;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.MultiTenancy.Tests.AspNetCore;
 
@@ -69,7 +65,11 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
                                 claims.Add(new Claim(CustomClaimTypes.TenantId, tenantClaim.ToString()));
                             }
 
-                            context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
+                            var authenticated = new ClaimsIdentity(claims, "Test");
+                            // X-Test-Anonymous-First：已认证身份前面还有一个未认证的空身份
+                            context.User = context.Request.Headers.ContainsKey("X-Test-Anonymous-First")
+                                ? new ClaimsPrincipal([new ClaimsIdentity(), authenticated])
+                                : new ClaimsPrincipal(authenticated);
                         }
 
                         await next(context);
@@ -116,14 +116,14 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
     [Fact]
     public async Task Header_resolves_active_tenant_and_change_covers_pipeline()
     {
-        var body = await GetAsync("/", ("X-Tenant-Id", ActiveTenantId.ToString()));
+        var body = await GetAsync("/", ("X-Tenant", ActiveTenantId.ToString()));
         Assert.Equal(ActiveTenantId.ToString(), body);
     }
 
     [Fact]
     public async Task Header_resolves_by_name_case_insensitively()
     {
-        var body = await GetAsync("/", ("X-Tenant-Id", "AcMe"));
+        var body = await GetAsync("/", ("X-Tenant", "AcMe"));
         Assert.Equal(ActiveTenantId.ToString(), body);
     }
 
@@ -166,13 +166,12 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
     public async Task An_anonymous_request_cannot_tell_unknown_from_inactive()
     {
         var unknown = await Assert.ThrowsAsync<TenantNotFoundException>(
-            () => GetAsync("/", ("X-Tenant-Id", Guid.NewGuid().ToString())));
+            () => GetAsync("/", ("X-Tenant", Guid.NewGuid().ToString())));
         var inactive = await Assert.ThrowsAsync<TenantNotFoundException>(
-            () => GetAsync("/", ("X-Tenant-Id", InactiveTenantId.ToString())));
+            () => GetAsync("/", ("X-Tenant", InactiveTenantId.ToString())));
 
         Assert.Equal(unknown.GetType(), inactive.GetType());
         Assert.Equal(unknown.Code, inactive.Code);
-        Assert.Equal(unknown.StatusCode, inactive.StatusCode);
     }
 
     [Fact]
@@ -182,7 +181,7 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
         var body = await GetAsync("/",
             ("X-Test-Auth", "u1"),
             ("X-Test-Tenant-Claim", ClaimTenantId.ToString()),
-            ("X-Tenant-Id", Guid.NewGuid().ToString()));
+            ("X-Tenant", Guid.NewGuid().ToString()));
 
         Assert.Equal(ClaimTenantId.ToString(), body);
     }
@@ -193,8 +192,37 @@ public class MultiTenancyMiddlewareTests : IAsyncLifetime
         // 宿主用户（无 tenant_id claim）同样有定论：头不能把宿主会话改写成租户
         var body = await GetAsync("/",
             ("X-Test-Auth", "host-admin"),
-            ("X-Tenant-Id", ActiveTenantId.ToString()));
+            ("X-Tenant", ActiveTenantId.ToString()));
 
         Assert.Equal("host", body);
+    }
+
+    /// <summary>
+    /// 只有后续身份已认证的主体同样由 claim 定案租户，请求头改写不了
+    /// </summary>
+    /// <remarks>
+    /// 回归点：租户解析曾只看第一个身份，这样的主体被当成匿名，解析继续交给请求头——
+    /// 而授权管线与当前用户都认为它已认证，于是它在一个由请求头选中的租户里被判权、被留痕。
+    /// </remarks>
+    [Fact]
+    public async Task A_later_authenticated_identity_still_pins_the_tenant_to_its_claim()
+    {
+        var body = await GetAsync("/",
+            ("X-Test-Auth", "u1"),
+            ("X-Test-Anonymous-First", "1"),
+            ("X-Test-Tenant-Claim", ClaimTenantId.ToString()),
+            ("X-Tenant", Guid.NewGuid().ToString()));
+
+        Assert.Equal(ClaimTenantId.ToString(), body);
+    }
+
+    /// <summary>这样的主体按已认证处理：停用的租户报"已停用"，而不是给匿名者的"不存在"。</summary>
+    [Fact]
+    public async Task A_later_authenticated_identity_is_told_the_tenant_is_inactive()
+    {
+        await Assert.ThrowsAsync<TenantNotActiveException>(() => GetAsync("/",
+            ("X-Test-Auth", "u1"),
+            ("X-Test-Anonymous-First", "1"),
+            ("X-Test-Tenant-Claim", InactiveTenantId.ToString())));
     }
 }

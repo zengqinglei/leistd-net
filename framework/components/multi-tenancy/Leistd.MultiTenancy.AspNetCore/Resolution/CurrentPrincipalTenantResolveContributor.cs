@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Leistd.MultiTenancy.Resolution;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Leistd.MultiTenancy.AspNetCore.Options;
+using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.Resolution;
 
@@ -23,14 +23,14 @@ public class CurrentPrincipalTenantResolveContributor : ITenantResolveContributo
         var httpContext = context.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext;
         var user = httpContext?.User;
 
-        if (user?.Identity?.IsAuthenticated == true)
+        if (user.HasAuthenticatedIdentity())
         {
-            var options = context.ServiceProvider.GetRequiredService<IOptions<MultiTenancyOptions>>().Value;
+            var claimTypes = context.ServiceProvider.GetRequiredService<IOptions<ClaimTypeOptions>>().Value;
 
             // 认证主体即使没有租户声明也必须终止解析，防止请求参数改写宿主身份。
             context.Handled = true;
             // 判定与非 HTTP 入口共用 TenantClaimReader，避免两处漂移。
-            context.TenantIdOrName = TenantClaimReader.Read(user, options.TenantClaimType);
+            context.TenantIdOrName = TenantClaimReader.Read(user, claimTypes)?.ToString();
         }
 
         return Task.CompletedTask;

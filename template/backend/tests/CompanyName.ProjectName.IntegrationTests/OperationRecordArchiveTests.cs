@@ -5,7 +5,6 @@ using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
@@ -135,7 +134,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
             Assert.Equal((true, 90), (monitor.CurrentValue.Enabled, monitor.CurrentValue.RetentionDays));
 
             // 写入端按定义上的区间拒绝过小值
-            await Assert.ThrowsAsync<BadRequestException>(() => SetHostAsync(SettingConstant.Audit.RetentionDays, "5"));
+            await Assert.ThrowsAsync<BusinessException>(() => SetHostAsync(SettingConstant.Audit.RetentionDays, "5"));
 
             // 绕过写入端直接落库的过小值（脚本、迁移数据）：应用不报错，按 Options 的区间校验被拒、整组不生效——
             // 归档照旧按上一组合规值运行，不会把最近的记录搬走，也不会在有人改正之前每次取值都抛异常
@@ -171,7 +170,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        using var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true);
+        using var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
         await services.GetRequiredService<ISettingManager>().SetAsync(name, value, SettingScopes.Host);
         await unitOfWork.CompleteAsync();
     }
@@ -181,7 +180,7 @@ public sealed class OperationRecordArchiveTests(ProjectWebApplicationFactory fac
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var services = scope.ServiceProvider;
-        using (var unitOfWork = await services.GetRequiredService<IUnitOfWorkManager>().BeginAsync(requiresNew: true))
+        using (var unitOfWork = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
         {
             await services.GetRequiredService<ISettingStore>().SetAsync(name, value, SettingScopes.Host, userId: null);
             await unitOfWork.CompleteAsync();

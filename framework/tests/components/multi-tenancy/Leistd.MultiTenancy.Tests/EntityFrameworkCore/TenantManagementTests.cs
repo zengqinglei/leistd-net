@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Data.Common;
 using Leistd.EventBus.Abstractions;
 using Leistd.EventBus.Events;
@@ -6,20 +7,20 @@ using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Dtos;
 using Leistd.MultiTenancy.EntityFrameworkCore;
-using Leistd.MultiTenancy.Events;
 using Leistd.MultiTenancy.Exceptions;
-using Leistd.MultiTenancy.Provisioning;
 using Leistd.MultiTenancy.Stores;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Leistd.MultiTenancy.Management.Dtos;
+using Leistd.MultiTenancy.Management.Events;
+using Leistd.MultiTenancy.Management.Provisioning;
 
 namespace Leistd.MultiTenancy.Tests.EntityFrameworkCore;
 
@@ -47,10 +48,12 @@ public sealed class TenantManagementTests : IAsyncLifetime
         // 验的是"开通失败时编排会把驱动异常交给描述器、并把它的结果抛出去"这条接缝
         services.AddSingleton<ITenantDatabaseErrorDescriber>(new FakeErrorDescriber());
         services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connection));
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
         services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
         services.AddMultiTenancyEfCore<TestDbContext>();
+        services.AddTenantManagement();
         services.AddSingleton<ITenantProvisioner>(_provisioner);
         services.AddSingleton<ITenantActivationGuard>(_guard);
         services.AddSingleton<ILocalEventBus>(_events);
@@ -131,7 +134,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         Assert.Empty(await Connections().GetListAsync(tenant.Id));
     }
 
-    /// <summary>数组里的 null 元素返回 422，而不是解引用成 500——DataAnnotations 不递归进集合。</summary>
+    /// <summary>数组里的 null 元素是调用契约错误，而不是解引用成 500——DataAnnotations 不递归进集合。</summary>
     [Fact]
     public async Task A_null_connection_entry_is_rejected_as_a_validation_error()
     {
@@ -141,47 +144,17 @@ public sealed class TenantManagementTests : IAsyncLifetime
             Connections = [null!]
         };
 
-        var error = await Assert.ThrowsAsync<UnprocessableEntityException>(() => _service.CreateAsync(input));
+        var error = await Assert.ThrowsAsync<ValidationException>(() => _service.CreateAsync(input));
 
-        Assert.Equal("connections", Assert.Single(error.ValidationErrors).Field);
+        Assert.Contains("connections", error.ValidationResult.MemberNames);
         Assert.Empty(await NamedAsync("acme"));
-    }
-
-    /// <summary>
-    /// 播种可以指定租户标识：夹具要预先知道它。
-    /// </summary>
-    /// <remarks>
-    /// 标识是编排参数、不是请求体字段——端点调的是不带它的形态，HTTP 调用方挑不了主键。
-    /// EF Core 自己的 HasData 同样要求显式主键，确定性标识是播种的常规需求。
-    /// </remarks>
-    [Fact]
-    public async Task Seeding_can_pin_the_tenant_id()
-    {
-        var pinned = Guid.Parse("01a0be99-0000-7000-8000-000000000001");
-
-        var tenant = await _service.CreateAsync(Create("seeded"), pinned);
-
-        Assert.Equal(pinned, tenant.Id);
-        Assert.Equal(pinned, (await _service.GetAsync(pinned)).Id);
-    }
-
-    /// <summary>播种重载拒绝空标识：多半是调用方漏传了变量。</summary>
-    /// <remarks>放过去就是一条主键为 <c>Guid.Empty</c> 的记录，此后谁也查不到它。</remarks>
-    [Fact]
-    public async Task Seeding_rejects_an_empty_id()
-    {
-        var error = await Assert.ThrowsAsync<ArgumentException>(
-            () => _service.CreateAsync(Create("empty-id"), Guid.Empty));
-
-        Assert.Equal("id", error.ParamName);
-        Assert.Empty(await NamedAsync("empty-id"));
     }
 
     /// <summary>重名在写库前拒绝：否则第二条会以"改已有登记"的语义覆盖第一条。</summary>
     [Fact]
     public async Task A_duplicated_connection_name_is_rejected_before_anything_is_written()
     {
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _service.CreateAsync(Create("acme", ("crm", "Host=a"), ("CRM", "Host=b"))));
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionNameDuplicated, error.Code);
@@ -193,7 +166,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     {
         _provisioner.OnProvision = (_, _) => throw new FakeDbException("3D000");
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _service.CreateAsync(
                 Create("acme", ("default", "Host=acme;Database=missing"), ("crm", "Host=crm;Database=missing"))));
 
@@ -226,7 +199,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     [Fact]
     public async Task A_malformed_connection_string_is_rejected_before_anything_is_written()
     {
-        var error = await Assert.ThrowsAsync<BadRequestException>(
+        var error = await Assert.ThrowsAsync<BusinessException>(
             () => _service.CreateAsync(Create("acme", ("default", "Host=a;=b"))));
 
         Assert.Equal(MultiTenancyErrorCodes.ConnectionStringInvalid, error.Code);
@@ -237,10 +210,10 @@ public sealed class TenantManagementTests : IAsyncLifetime
     [Fact]
     public async Task An_invalid_input_is_unprocessable()
     {
-        var error = await Assert.ThrowsAsync<UnprocessableEntityException>(
+        var error = await Assert.ThrowsAsync<System.ComponentModel.DataAnnotations.ValidationException>(
             () => _service.CreateAsync(new CreateTenantInputDto { Name = new string('x', 65) }));
 
-        Assert.Equal("name", Assert.Single(error.ValidationErrors).Field);
+        Assert.Contains(nameof(CreateTenantInputDto.Name), error.ValidationResult?.MemberNames ?? []);
     }
 
     [Fact]
@@ -250,7 +223,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         await _service.SetActivationAsync(tenant.Id, new UpdateTenantActivationInputDto { IsActive = false });
         _guard.Reject = true;
 
-        await Assert.ThrowsAsync<BadRequestException>(
+        await Assert.ThrowsAsync<BusinessException>(
             () => _service.SetActivationAsync(tenant.Id, new UpdateTenantActivationInputDto { IsActive = true }));
 
         Assert.False((await _service.GetAsync(tenant.Id)).IsActive);
@@ -313,7 +286,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
     {
         var tenant = await _service.CreateAsync(new CreateTenantInputDto { Name = "acme" });
 
-        var error = await Assert.ThrowsAsync<BadRequestException>(() => entry switch
+        var error = await Assert.ThrowsAsync<BusinessException>(() => entry switch
         {
             "runtime" => Connections().GetRuntimeAsync(tenant.Id, "crm_db"),
             "databases" => Connections().GetDatabaseListAsync("crm_db", activeOnly: true),
@@ -391,7 +364,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
         {
             Calls++;
             return Reject
-                ? throw new BadRequestException("This tenant has no users yet.").WithCode("Tenant:ActivateWithoutUsers")
+                ? throw new BusinessException("Tenant:ActivateWithoutUsers", "This tenant has no users yet.")
                 : Task.CompletedTask;
         }
     }
@@ -426,8 +399,7 @@ public sealed class TenantManagementTests : IAsyncLifetime
             {
                 if (current is DbException { SqlState: "3D000" })
                 {
-                    return new BadRequestException("The database does not exist.")
-                        .WithCode(MultiTenancyErrorCodes.DedicatedDatabaseMissing);
+                    return new BusinessException(MultiTenancyErrorCodes.DedicatedDatabaseMissing, "The database does not exist.");
                 }
             }
 

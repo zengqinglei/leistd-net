@@ -9,9 +9,13 @@
 /* 正文字体：Geist（对齐参考站）。业务项目可替换为品牌字体或改回系统字体栈。 */
 @import '@fontsource/geist';
 
+/*
+ * 不要给 html/body 加 scrollbar-gutter: stable：常规滚动条（Windows 默认）下它让 CDK 浮层容器比
+ * documentElement.clientWidth 窄一个槽位，而 CDK 按 clientWidth 摆放右对齐的浮层，下拉菜单会整体偏移。
+ * 主布局在内部容器里滚动，文档本身不滚动，这条样式也没有要防的跳动。
+ */
 html,
 body {
-  scrollbar-gutter: stable;
   height: 100%;
 }
 
@@ -140,6 +144,15 @@ body {
 
   body {
     @apply bg-background text-foreground font-sans;
+  }
+
+  /*
+   * 校验不通过时只标红输入框与错误提示，标签保持正文色。spartan 的 Field 会把整个字段容器染成
+   * destructive，标签自身不设颜色、随之继承变红；这里直接给标签定色，不改按上游维护的 libs/ui。
+   */
+  [data-slot='field'][data-matches-spartan-invalid='true']
+    :is([data-slot='label'], [data-slot='field-label']) {
+    color: var(--color-foreground);
   }
 
   /* Tailwind v4 preflight 不再给 button 默认手型光标，这里补回（对齐参考站）。 */

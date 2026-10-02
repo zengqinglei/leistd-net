@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 开发环境的机密（管理员密码、本机数据库口令）存 user-secrets；与 DbMigrator 共用同一份，设置一次两边都能读 -->
+    <UserSecretsId>7f3c2a1e-4b5d-4e6f-9a8b-0c1d2e3f4a5b</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,13 +24,13 @@
 
 
   <ItemGroup>
-<!--#if (ServiceUserContextEnabled)-->
+<!--#if (OpenIddictServer || RemoteTokenAuth)-->
     <PackageReference Include="OpenIddict.AspNetCore" />
 <!--#endif-->
-<!--#if (!LocalIdentity)-->
+<!--#if (RemoteTokenAuth)-->
     <PackageReference Include="OpenIddict.Validation.SystemNetHttp" />
 <!--#endif-->
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -42,10 +44,21 @@
     <ProjectReference Include="..\CompanyName.ProjectName.Infrastructure\CompanyName.ProjectName.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+<!--#if (ExternalLogin)-->
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" />
+<!--#endif-->
+<!--#if (RemoteTokenAuth)-->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+<!--#endif-->
+  </ItemGroup>
+
   <!-- Leistd 框架引用 -->
   <ItemGroup>
     <PackageReference Include="Leistd.Data" />
     <PackageReference Include="Leistd.ExceptionHandling.AspNetCore" />
+    <PackageReference Include="Leistd.ServiceClient.Core" />
 <!--#if (IncludeLocalization)-->
     <PackageReference Include="Leistd.Localization.AspNetCore" />
 <!--#endif-->
@@ -62,9 +75,8 @@
     <PackageReference Include="Leistd.Settings.AspNetCore" />
     <!-- 宿主级设置经配置源覆盖部署配置（日志级别、发信参数、审计保留期） -->
     <PackageReference Include="Leistd.Settings.Hosting" />
-<!--#if (ServiceUserContextEnabled)-->
-    <!-- 服务间用户/租户上下文的受信恢复是**消费侧**能力：Identity 与 Resource 都要，
-         Standalone 没有机器令牌这回事。条件必须与 Program.cs 的 using 和调用点一致 -->
+<!--#if (RemoteTokenAuth)-->
+    <!-- 用户令牌读取只适用于已验证 Bearer 的资源服务。 -->
     <PackageReference Include="Leistd.ServiceClient.AspNetCore" />
 <!--#endif-->
 <!--#if (IncludeNotifications)-->

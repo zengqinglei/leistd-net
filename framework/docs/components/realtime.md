@@ -42,9 +42,9 @@ builder.Services.AddAllowAllRealTimeSubscriptions();
 app.MapRealTimeHub();
 ```
 
-`AddRealTimeSignalR` 注册 SignalR 基座（Hub 调用的环境上下文与用户标识解析）与事件发布，**不注册任何授权器**；`MapRealTimeHub` 在 `RealTimeHubPath` 映射需登录的 Hub，并在授权器缺失时抛异常。
+`AddRealTimeSignalR` 注册 SignalR 基座（Hub 调用的环境上下文与用户标识解析）与事件发布，**不注册任何授权器**；`MapRealTimeHub(pattern = "/hubs/realtime")` 映射需登录的 Hub，返回官方的 `HubEndpointConventionBuilder`（可继续链式追加授权策略、CORS 等），并在授权器缺失时抛异常。
 
-心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；解析 `UserIdentifier` 的 claim 顺序在 SignalR 基座的 `HubIdentityOptions.UserIdClaimTypes`。
+心跳、超时、详细错误用 `AddSignalR(o => ...)` 配；解析 `UserIdentifier` 的 claim 顺序是 `ClaimTypeOptions.UserIds`（Security.Core），与框架其他组件读主体标识同一处配置。
 
 ## 使用
 
@@ -86,11 +86,7 @@ public class ProductProfileService(IBusinessEventPublisher eventPublisher)
 
 ## 配置项
 
-`RealTimeOptions`（`Leistd.RealTime.Core` 包）：
-
-| 属性 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `RealTimeHubPath` | `string` | `"/hubs/realtime"` | 业务事件 Hub 路径 |
+本组件没有自己的配置项：业务事件 Hub 路径在 `MapRealTimeHub(pattern)` 给出，默认 `/hubs/realtime`。
 
 SignalR 传输层的配置不在本组件：心跳、超时、详细错误是 SignalR 的 `HubOptions`，用户标识解析在 [SignalR 基座](./aspnetcore-signalr.md)的 `HubIdentityOptions`。
 
@@ -118,7 +114,7 @@ app.Use(async (context, next) =>
 });
 ```
 
-该中间件必须放在 `UseAuthentication()` 之前，路径必须与 `RealTimeHubPath` 一致。只接受单个非空令牌，且仅在缺少 `Authorization` 头时采信 query；不要将范围放宽到全部 API 或所有 Hub。
+该中间件必须放在 `UseAuthentication()` 之前，路径必须与 `MapRealTimeHub` 映射的路径一致。只接受单个非空令牌，且仅在缺少 `Authorization` 头时采信 query；不要将范围放宽到全部 API 或所有 Hub。
 
 ## 注意事项
 

@@ -23,8 +23,8 @@ export const authGuard: CanActivateFn = (_route, state) => {
     return true;
   }
 
-  //#if (!LocalIdentity)
-  authService.login(state.url);
+  //#if (RemoteTokenAuth)
+  authService.startLogin(state.url);
   return false;
   //#else
   return router.createUrlTree(['/auth/login'], {

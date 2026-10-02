@@ -1,10 +1,5 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
-using Leistd.RealTime.AspNetCore.SignalR;
-using Leistd.Security.Users;
 using Leistd.RealTime.AspNetCore.SignalR.Hubs;
-using Leistd.RealTime.Publishing;
 using Leistd.RealTime.Subscriptions;
 
 namespace Leistd.RealTime.Tests;

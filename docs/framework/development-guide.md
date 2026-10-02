@@ -45,6 +45,9 @@
   `Abstractions/` / `Services/`（如 `Leistd.Response.AspNetCore.Filters`、`Leistd.Notifications.Filters`）。
 - 事件类型（以 `Event` 结尾）放 `Events/`，事件处理器（以 `EventHandler` 结尾）放 `EventHandlers/`，
   与 `Leistd.EventBus.Events`、`Leistd.EventBus.EventHandlers` 同一写法。
+- 周期任务（`*Job`）与常驻消费者（`*Worker`）**不单设 `Jobs/` / `Workers/`**，放在它服务的内容目录里，与同一功能的选项、服务同处
+  （如 `Leistd.Notifications.EntityFrameworkCore` 的 `Retention/NotificationRetentionJob`、`Leistd.BackgroundJobs.InProcess` 的 `Queues/BackgroundTaskQueueWorker`）；
+  同类成熟框架的清理任务也跟随所属功能目录。模板业务项目的归类见模板后端规范。
 
 - `DependencyInjection.cs` 始终留在包根。
 
@@ -110,6 +113,12 @@ dotnet sln framework/Leistd.Framework.slnx add framework/components/<分组>/Lei
 
 - `GenerateDocumentationFile` 已全局开启，**公共 API 必须写 XML 文档注释**（`///`）。缺注释（CS1591）是构建错误。
 - **语言约定**：XML 与代码注释用**中文**；异常消息与日志消息面向运维，**统一用英文**。
+- **联系方式不进日志**：邮箱、手机号这类能直接触达到人的值，写进日志前先经
+  `Leistd.Redaction.TextRedactor` 脱敏（`zhangsan@example.com` → `zha***@example.com`），
+  或改记标识符。日志通常被集中采集、保留更久、可见范围更大，还会被前端错误上报之类的旁路带走。
+  **也不要与标识符同行记**：用户名常常就是邮箱本地部，同一行给出本地部与域名等于把脱敏拼回去。
+  账号名本身可以记——它不是联系方式，且是这些日志可读性的来源。
+  由 `scripts/check-contact-info-logging.py` 守住（判据是实参表达式，不是占位符名）。
 - `cref` 必须可解析（避免 CS1574）。
 - 组件用法文档位于 `framework/docs/components/` 与 `framework/docs/ddd-struct/`，骨架见 §4.3。
 
@@ -192,9 +201,9 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - `Leistd.<...>.Core` / `Leistd.Ddd.Domain` 是底层，**不得**反向依赖上层或具体实现。
 - `components` 可被 `ddd-struct` 依赖；**`components` 不得依赖 `ddd-struct`**（单向）。`ddd-struct` 内部 `Domain ← Application(.Contracts) ← Infrastructure` 单向。
 - **`*.Core` 不得依赖"可替换的"具体技术**：Web 宿主（ASP.NET Core）、ORM（EF Core）、消息中间件等只能出现在对应实现层（`*.AspNetCore*`、`*.EntityFrameworkCore`）。判据是**能不能换掉而组件仍成立**——工作单元不接 EF 仍能提供边界与阶段，授权不接 ASP.NET 仍能判权，所以那些必须外移。
-  - **例外：某项技术就是该组件主要 API 的实现机制本身时，它属于 Core。** 目前只有动态代理属于这一类，且只涉及两个包：`Leistd.UnitOfWork.Core`（`[UnitOfWork]`、`[UnitOfWorkEventHandler]`）与 `Leistd.Tracing.Core`（`[CorrelationId]`）。这些声明式特性的语义**就是**"由拦截器织入"，把代理拆出去会得到一个无法提供其主要能力的 Core——命名会更整齐，但包不再自洽。
+  - **例外：某项技术就是该组件主要 API 的实现机制本身时，它属于 Core。** 目前只有动态代理属于这一类，且只涉及一个包：`Leistd.UnitOfWork.Core`（`[UnitOfWork]`、`[UnitOfWorkEventHandler]`）。这些声明式特性的语义**就是**"由拦截器织入"，把代理拆出去会得到一个无法提供其主要能力的 Core——命名会更整齐，但包不再自洽。
   - 例外是**闭集**，不是逃生门：新增组件不得自行扩列。确有需要时先改本条规范并说明为什么该技术不可替换，再落代码。
-  - 例外不放宽平台无关：这两个包依旧不引 Web 与 ORM。
+  - 例外不放宽平台无关：这个包依旧不引 Web 与 ORM。
   - 身份等概念在 `*.Core` 抽象里用中立类型（`string userId` / `ClaimsPrincipal`），不要把富身份模型（如 `ICurrentUser`）焊进核心接口签名；带技术细节的默认值（如 claim 类型）由宿主层注入而非写死在 Core。
 - 一个组件**不得替另一个组件做端点映射 / 基础设施注册**（如通知组件不代映射实时 Hub）；跨组件复用通过显式调用各自的 `Add*/Map*` 完成。
 - 新增跨域依赖前先评估是否会引入环，框架解决方案编译会暴露环依赖。
@@ -223,21 +232,32 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 - 默认值必须可读、可用，并与 Options 验证和运行时行为一致。
 - 共享映射与常量放在所有消费者可引用的最低层，派生值不得维护第二份。
 - 公共接口优先保持最小；仅一个实现且没有替换需求时，不为形式一致额外抽象。
+- **组件不改写官方类型。** 官方类型的形状与语义属于普通宿主的标准行为，组件不认领、不改写（如不把 `HttpValidationProblemDetails` 改成自己的数组形、不覆盖 `HttpContext.TraceIdentifier`）。组件自己产出的类型可以有自己的形状；需要同时消费两者的一方（服务客户端、模板前端）两种都识别。
+- **行为差异按类型契约区分，不加选项开关。** 能从类型判断的就按类型判断：`AddDddDbContext<T>()` 只在 `T : BaseDbContext` 时挂 DDD 拦截器，控制库这类普通上下文自然不挂，不需要 `EnableDddInterceptors` 之类的选项。也不要拿"某个服务注册了没有"推断模式——那是代理变量，换个依赖就会推错；确需模式标记时由注册方显式登记标记服务（如锁组件的"本地锁充当分布式锁"标记）。
+- **由宿主配置的组件，注册入口只有一种形态：** `AddXxx(Action<TOptions>? configure = null, string configSectionPath = TOptions.SectionName)`。内部先 `AddOptions<TOptions>().BindConfiguration(configSectionPath)`，再应用 `configure`，并挂上 `ValidateOnStart()`；校验消息按实际传入的配置节报键名（§6.2）。
+  - 不另设 `IConfiguration` 重载：只传委托的宿主也要拿到配置文件里的值，两个入口并存时总有一个会漏绑定。
+  - 没有主机的纯 `ServiceCollection`（测试、工具）由调用方注册 `IConfiguration`。
+  - 不适合放进配置文件的选项（如签发方决定的 claim 名）不绑定配置节，只走委托，并在选项类注释里写明。
 - 名字归实现它的一方：框架只定义自己实现的名字，并放在拥有它的契约上（如 `INotificationChannel.InAppName`、`NotificationInputDto.DefaultType`）；通知类别、渠道名这类业务取值由消费方定义，框架不预置业务常量清单。
-- **组件发出的错误码自带默认译文**：业务异常无条件 `WithCode`（界面按码分支，不能只在含本地化的宿主里才有码）；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件（组件登记恒插在最前）。
-  - **例外：通用 HTTP 兜底错误（`Error:*`）的译文放 `Leistd.Localization.Core`**，而不是定义这些码的 `Leistd.ExceptionHandling.Core`。异常组件不依赖本地化，这个方向是对的；为 23 条兜底文案让它反向依赖、或另立桥接包都不划算。这是闭集，新增组件不得援引本条把自己的错误码文案外移。
+- **组件发出的错误码自带默认译文**：业务异常在 `new BusinessException(code, safeMessage)` 时无条件给码；中英默认文案作为嵌入资源放在发出错误码的包里（`Resources/en.json`、`Resources/zh-CN.json`），在该包的 `Add*` 里调 `AddJsonLocalizationResources(typeof(...).Assembly)` 登记。宿主要改文案时在自己的资源里写同名键，登记顺序保证宿主覆盖组件。
+  - Core 层错误码和异常只描述语义，XML 注释不写固定 HTTP 状态。组件拥有的非默认 HTTP 语义在组件 Core 包里用 `MapDefaultCode` / `MapDefaultException` 声明，并在组件自己的 `AddXxx` 里经 `services.Configure<GlobalExceptionOptions>(...)` 自动登记——交给宿主逐个调用的话，漏一个不会有编译或启动错误，只会静默回落成 400。登记映射的类型保持 `internal`，默认状态写进组件文档。宿主通过 `MapCode` / `MapException` 覆盖，与调用顺序无关。Core 里的状态码写成 `(int)HttpStatusCode.X`，不为 `StatusCodes` 常量引入 Web 依赖。代价是组件 Core 要依赖 `ExceptionHandling.Core`——多数组件本就为 `BusinessException` 引用它；HTTP 默认状态以 int 表达，Core 仍不依赖 ASP.NET Core 程序集。
+  - 新增错误码时只为非默认 HTTP 语义在组件 Core 里登记默认映射（或在宿主映射）并补针对性测试；未映射的 `BusinessException` 故意回落 400，不登记冗余的 400 映射。422 只在协议确有区分价值时显式使用。
+  - **协议层失败不发错误码**：输入校验、未预期异常、上游故障等只有状态码语义的失败只返回状态码、本地化标题（`Title:{status}`，译文在 `Leistd.Localization.Core`）与 `traceId`，不合成 `Error:*` 这类与状态码一一对应的码（RFC 9457 §4）。错误码只用于调用方需要据以分支的业务语义。
   - **占位符的名字与基数属于公共契约**：`{Name}` 改成 `{Names}`、或由单值改为多值拼接，都要按破坏性变更处理并写进脚注——宿主的译文是照着占位符写的，改了它等于让宿主的句子渲染错乱（`权限"A, B, C"未定义`）。
   - 宿主**不要**复制组件的译文：一字不差的副本会在组件改文案时把旧文案静默钉死。只写确实要改的那几条。
 - 需要可还原的加密时直接用宿主的 Data Protection：注入 `IDataProtectionProvider`（只引用 `Microsoft.AspNetCore.DataProtection.Abstractions`），在构造函数里 `CreateProtector` 一次并复用；用途字符串固定、带命名空间与版本号，改它等于让已存密文全部不可解；要按名称隔离时由同一个保护器 `CreateProtector(名称)` 派生子用途；解密只捕获 `CryptographicException`。不另立加密接口或静态包装——换密钥设施在 Data Protection 这一层换（密钥存储与密钥加密都可替换）。
 
 ### 6.2 参数与配置校验
 
-判据来自 FDG（参数不合法抛 `ArgumentException` 系并设 `ParamName`，**对象状态**不对才抛 `InvalidOperationException`）与 ASP.NET Core 自身的选项类（`Validate()` + `ArgumentException.ThrowIfNullOrEmpty`）。四条：
+判据来自 FDG（参数不合法抛 `ArgumentException` 系并设 `ParamName`，**对象状态**不对才抛 `InvalidOperationException`）与 ASP.NET Core 自身的选项类（`Validate()` + `ArgumentException.ThrowIfNullOrEmpty`）。五条：
 
 1. **方法参数用 BCL 守卫**：`ArgumentNullException.ThrowIfNull`、`ArgumentException.ThrowIfNullOrWhiteSpace`、`ArgumentOutOfRangeException.ThrowIf*`。不手写 `if + throw` 重复它们已有的判断，**也不自建 `Check` 一类的守卫工具类**——那是 BCL 提供这些方法之前的写法，再包一层只会让参数名要手写。枚举这类没有对应守卫的，手写 `throw new ArgumentOutOfRangeException(nameof(x), x, "…")`。
 2. **`Map*` / `Add*` / `Use*` 的选项对象，校验写在选项类自己的 `internal void Validate()` 里**，入口只调 `options.Validate()`。缺必填项抛 `ArgumentException`（`ThrowIfNullOrWhiteSpace` 借 `CallerArgumentExpression` 把 `ParamName` 填成属性名）。**不要每个类再写一个私有的"为空就抛"辅助方法**：同一段逻辑复制到每个组件后，消息格式会各走各的。
 3. **走配置绑定的 Options 用 `IValidateOptions<T>` + `ValidateOnStart()`**，验证器单独成文件、与选项类同目录。失败一律 `ValidateOptionsResult.Fail(IEnumerable<string>)`（一条失败一项，运维一次能看全），每条消息以**配置键**开头（`Leistd:Email:Smtp:Host is required.`）；由宿主在代码里配置、没有配置节的选项，改以**类型名.属性名**开头。
 4. **异常类型按原因分**：值不合法 → `ArgumentException` 系；宿主没注册、重复注册、组合非法 → `InvalidOperationException`；运行期依赖缺失 → 组件自己的业务异常。同一个条件只在一处校验：启动期已经拒绝的，运行期不再写一遍。
+5. **宿主组合错误：能从已登记的事实推断就在启动期校验，推断不了就写组合规范，不加声明式 API。**
+   - 可以校验的，判据都来自框架自己的注册：代理工厂登记的标记（`UnitOfWorkWeavingCheck`）、登记了周期任务却没有调度器（`RecurringJobSchedulerCheck`）、开了注册表校验却没注册存储（`TenantStoreRegistrationValidator`）、同一存储被注册两次（`EnsureSingleAuthoritative`）。标记由注册方自己放（见 §6.1），同 ASP.NET Core"端点带授权元数据却没有授权中间件"时报错。
+   - 要宿主**先声明意图**才能校验的，不加（如"声明本系统分库、再校验是否装了租户连接路由"）：会漏调注册的宿主同样会漏调声明；把声明与注册放在一起，声明又是多余的。这类错误写进组件文档的组合规范——该注册什么、多宿主时放进共用的组合方法、业务侧需要硬保证时自加守卫——理由同设计原则 §5 第 4、5 条。
 
 配置缺失**不静默兜底**：不 clamp（`Math.Max(1, capacity)` 会把配错的 0 变成 1，日志上看不出来）、不静默跳过。确有"可以不配"的项，在 XML 注释和组件文档里写明它可以不配、以及都不配时在哪里失败。唯一的例外是运行期热更新：新值校验不过时记错误日志并保留上一组有效值，不让一次错误配置把正在跑的实例打挂。
 
@@ -274,6 +294,26 @@ Microsoft 没有规定注释密度、`<remarks>` 行数或示例配额。本仓�
 
 周期任务注册时必填 `RecurringJobScope`，不提供通用的 AOP 锁特性：锁只保效率，正确性靠作业幂等与水位（Kleppmann）。保留期默认值按数据性质定：审计类默认关闭、启用时天数必填（期限受法律合同约束，类库无从知道）；运营类默认开启。
 
+### 6.5 替换与删除
+
+优先官方机制，但替换的对象是**平行实现**，不是面向业务的抽象。删除或替换一项能力前回答三个问题：
+
+1. **官方能否完全覆盖？** 逐项比语义、作用范围（HTTP 之外的后台任务、消息、外部系统）、替换点。只覆盖默认情况的不算。
+2. **成熟框架为何保留？** 查同类成熟框架的当前做法；它们保留的，要说出为什么我们不需要。
+3. **没有调用方是不是扩展点？** 接口、`TryAdd` 注册、选项、组件的 `AddXxx` 入口是给宿主和未来实现用的，零引用不是删除理由；删前问"替换者要多写什么"。
+
+三问是删除前的检查，**不是保留的理由**。零引用不能单独证明该删；同样，"是个抽象""将来可能用到""别的框架也保留"也不能单独证明该留。保留要说出本框架支持的具体语义或替换场景（谁会替换、替换时写什么），并掂量维护成本。"官方完全覆盖"针对的是决定继续支持的场景；主动收缩一项能力时，写明是能力删除及其影响，不说成等价替换。
+
+据此分三种做法：
+
+| 情形 | 做法 | 例 |
+| --- | --- | --- |
+| 官方完全覆盖，封装不带额外语义 | 删除，升级说明写明官方入口 | `MapsterProfile` → Mapster `IRegister`；自建单飞 → `HybridCache` |
+| 抽象有官方没有的语义或替换点 | **保留抽象，默认实现取官方值，只删内部的平行实现** | `ICorrelationIdProvider` 默认取 `Activity.TraceId`；资源授权保留业务入口，判定走 `IAuthorizationService` |
+| 没有读取方的配置键、死代码、无扩展意义的工具函数 | 删除 | 无人读取的选项字段 |
+
+删除仍在使用的能力时，组件文档和升级说明必须给出**具体的替代入口**（类型、方法或配置键），不能只写"改用官方机制"；死代码不必虚构替代。
+
 ---
 
 ## 7. 测试
@@ -297,7 +337,7 @@ framework/tests/
 - **家族没有独立测试项目时目录不存在**，并在 `check-test-layout.py` 的 `WAIVERS` 里写明理由。
   这道闸门补的是覆盖率阈值的盲区：程序集从未被任何测试加载时根本不出现在覆盖率报告里，
   任何百分比门槛都对它无效。
-- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。
+- **测试方法名用英文句子、单词以下划线分隔**，写出行为与条件、力求简短（如 `Endpoint_error_throws_ServiceClientException`）；不用中文标识符，背景说明写进 XML 注释。`DisplayName` 同样用英文。由 `scripts/check-test-names.py` 机械保证（同时覆盖模板前后端测试名）。
 - **csproj 只写自己的东西**：`FrameworkReference`、特有 `PackageReference`、`ProjectReference`。
   共享属性和测试包已在 `tests/Directory.Build.props` 注入，重复声明会被闸门拦下。
 
@@ -386,6 +426,8 @@ dotnet test framework/Leistd.Framework.slnx -c Release \
 
 ## 8. 提交前自检
 
+以下是各类验证入口，按变更范围选择；文档、XML、行为与包契约变更分别执行相关检查，无需每次全部运行。
+
 ```bash
 dotnet build framework/Leistd.Framework.slnx -c Release                         # 0 错误
 dotnet test  framework/Leistd.Framework.slnx -c Release                         # 全绿
@@ -397,6 +439,8 @@ pwsh framework/build/test-package-consumption.ps1                               
 `check-all.ps1` 是**闸门清单的唯一权威来源**（文档/API 漂移、Skill、退役符号、i18n、XML 注释形态、组件文档骨架、模板三道），
 CI 也只调它一处；新增闸门加进那个脚本即可，本文件与 `ci.yml` 都不必跟着改。
 需要构建产物或跑起来才能验的不在它里面——矩阵、PostgreSQL E2E、包消费各有自己的入口。
+
+提交前代码里不留待办标记（`TODO` / `FIXME` / `HACK`），工具生成的也一样：在当期按终局做法改完，推迟的事写进计划（见[设计原则](../architecture/design-principles.md) §4）。
 
 本地 NuGet 包统一输出到仓库根 `.tmp/local-feed`，不要临时发明其它产物目录；CI 发布产物仍使用 `framework/artifacts`。包消费检查会验证 DLL、XML、随包文档和依赖闭包，并在 `.tmp/package-consumer/` 使用隔离 NuGet 配置构建最小消费项目；本地可用 `-PackageIds Leistd.Xxx` 只检查受影响包。新增第三方包时确认已在 `framework/Directory.Packages.props` 登记；新增包发布前确认 `PackageId` 唯一。
 

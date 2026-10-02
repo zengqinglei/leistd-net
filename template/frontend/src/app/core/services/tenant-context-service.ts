@@ -7,10 +7,10 @@ const TENANT_STORAGE_KEY = 'app.tenant';
 //#if (LocalIdentity)
 /** 本地持久化的租户上下文（登录页选定，拦截器读取）。 */
 //#else
-/** 认证后的租户上下文（来源是已验证 Access Token 中的 tenant_id）。 */
+/** 认证后的租户上下文（来源是后端已验证会话中的 tenant_id）。 */
 //#endif
 export interface TenantContext {
-  /** 放进 X-Tenant-Id 头的值：本地身份形态是租户名，资源服务形态是令牌里的租户 id。 */
+  /** 租户键：本地身份形态是登录入口选定的租户名（放进租户提示头），资源服务形态是后端会话里的租户 id。 */
   key: string;
 }
 
@@ -18,14 +18,14 @@ export interface TenantContext {
 /**
  * 前端租户上下文：signal + localStorage 双写。
  *
- * 仅影响匿名请求（登录等）的 X-Tenant-Id 头；已登录用户的租户
+ * 仅影响匿名请求（登录等）的租户提示头；已登录用户的租户
  * 由服务端 cookie claim 定案，前端上下文只是登录入口的路由提示。
  */
 //#else
 /**
  * 前端租户上下文：仅内存 signal。
  *
- * 唯一来源是已验证 Access Token 中的 tenant_id；不做本地持久化，
+ * 唯一来源是后端已验证会话中的 tenant_id；不做本地持久化，
  * 也不接受任何本地线索改写已认证的租户。
  */
 //#endif
@@ -36,7 +36,22 @@ export class TenantContextService {
   //#else
   private readonly _current = signal<TenantContext | null>(null);
   //#endif
-  /** 当前已选租户；null 表示宿主（未选租户）。 */
+  //#if (LocalIdentity)
+  /**
+   * 登录入口选定的租户。
+   *
+   * **不能用它判断已认证会话在哪一侧。** 它只是登录页写下的路由提示（localStorage，同站点各标签页
+   * 共享），已登录用户的租户由服务端 cookie claim 定案；两者可以不一致——宿主超管在另一个标签页的
+   * 登录页确认过一个租户名，这里就有值了，而他的会话仍然是宿主。反过来从子域名入口登录的租户用户，
+   * 这里可能是空的。
+   *
+   * 需要按侧别分支时：**按能力判**（服务端下发的权限列表已按侧别过滤，例如宿主专属的
+   * `App.Tenants` 不会出现在租户用户的列表里），或由拥有那个页面的业务端点下发结论
+   * （"你能选哪些库"、"这个租户叫什么"）。见 docs/standards/coding-frontend.md §8。
+   */
+  //#else
+  /** 当前租户；null 表示宿主。来源是后端已验证会话中的 tenant_id。 */
+  //#endif
   public readonly current = this._current.asReadonly();
 
   //#if (LocalIdentity)
@@ -50,9 +65,9 @@ export class TenantContextService {
     }
   }
   //#else
-  /** Resource 只接受 OIDC 库已验证 Access Token 中的 tenant_id。 */
-  setAuthenticatedTenant(tenantId: string): void {
-    this._current.set({ key: tenantId });
+  /** Resource 只接受 OIDC 库后端已验证会话中的租户声明；null 表示宿主用户。 */
+  setAuthenticatedTenant(tenantId: string | null): void {
+    this._current.set(tenantId ? { key: tenantId } : null);
   }
   //#endif
 

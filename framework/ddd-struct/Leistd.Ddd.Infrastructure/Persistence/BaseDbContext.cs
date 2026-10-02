@@ -1,17 +1,12 @@
-using Leistd.Auditing;
-using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Ddd.Domain.DataFilters;
+using Leistd.Ddd.Infrastructure.Persistence.Conventions;
 using Leistd.Ddd.Infrastructure.Persistence.Extensions;
-using Leistd.MultiTenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.Auditing.EntityFrameworkCore.Extensions;
 using Leistd.Auditing.Abstractions;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace Leistd.Ddd.Infrastructure.Persistence;
@@ -22,8 +17,9 @@ namespace Leistd.Ddd.Infrastructure.Persistence;
 /// <remarks>
 /// 提供三件事：新增实体的环境值（<c>TenantId</c> / 创建审计）在进入跟踪时落定、
 /// 软删除与租户隔离的全局查询过滤器、领域事件的收集。
-/// <c>OnModelCreating</c> 被封闭，派生类改覆盖 <c>ConfigureModel</c> 且无需调 <c>base</c>。
-/// 修改/删除审计与领域事件发布依赖两个 SaveChanges 拦截器，须在配置 DbContext 时显式挂载。
+/// <c>OnModelCreating</c> 与 <c>ConfigureConventions</c> 被封闭，派生类改覆盖 <c>ConfigureModel</c> 与
+/// <c>ConfigureModelConventions</c>，且无需调 <c>base</c>。审计字段与并发标记列由 <see cref="DddEntityConvention"/> 按约定配置。
+/// 修改/删除审计、领域事件发布与并发标记换发依赖 SaveChanges 拦截器，由 <c>AddDddDbContext&lt;TDbContext&gt;()</c> 挂载。
 /// </remarks>
 public abstract class BaseDbContext : DbContext
 {
@@ -111,21 +107,12 @@ public abstract class BaseDbContext : DbContext
     protected virtual Guid? CurrentTenantId => CurrentTenant?.Id;
 
     /// <summary>
-    /// 使用固定启用的全局过滤器创建上下文。
-    /// </summary>
-    /// <remarks>需要运行时关闭过滤器时，请使用接收 <see cref="IServiceProvider"/> 的重载。</remarks>
-    /// <param name="options">EF Core 上下文选项。</param>
-    protected BaseDbContext(DbContextOptions options) : base(options)
-    {
-        SubscribeTrackingHooks();
-    }
-
-    /// <summary>
     /// 创建上下文并接入容器，使 <c>IDataFilter</c> 的运行时开关、当前租户与审计原语可用。
     /// </summary>
     /// <param name="options">EF Core 上下文选项。</param>
     /// <param name="serviceProvider">
-    /// 作用域容器。为 <see langword="null"/>（设计时工具、迁移）时退化为与单参数重载相同的行为。
+    /// 作用域容器。仅设计时工具与迁移传 <see langword="null"/>：此时没有当前租户与用户，
+    /// 租户过滤器按宿主视角、全局过滤器固定启用。运行时传 <see langword="null"/> 会让租户用户看到宿主数据。
     /// </param>
     protected BaseDbContext(
         DbContextOptions options,
@@ -176,6 +163,23 @@ public abstract class BaseDbContext : DbContext
         modelBuilder.ApplyGlobalFilters<IMultiTenant>(MultiTenantFilterName, e =>
             !IsMultiTenantFilterEnabled ||
             EF.Property<Guid?>(e, nameof(IMultiTenant.TenantId)) == CurrentTenantId);
+    }
+
+    /// <summary>
+    /// 注册 <see cref="DddEntityConvention"/>，再交由 <see cref="ConfigureModelConventions"/> 追加宿主约定。
+    /// </summary>
+    protected sealed override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
+        ConfigureModelConventions(configurationBuilder);
+    }
+
+    /// <summary>
+    /// 配置模型约定（如枚举统一存为字符串）；基类的实体约定已先行注册。
+    /// </summary>
+    protected virtual void ConfigureModelConventions(ModelConfigurationBuilder configurationBuilder)
+    {
     }
 
     /// <summary>

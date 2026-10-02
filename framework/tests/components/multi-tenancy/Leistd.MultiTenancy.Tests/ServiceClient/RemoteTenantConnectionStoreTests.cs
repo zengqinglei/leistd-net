@@ -10,6 +10,7 @@ using Leistd.TestBase.Doubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Leistd.MultiTenancy.Tests.ServiceClient;
@@ -91,6 +92,53 @@ public sealed class RemoteTenantConnectionStoreTests
             () => services.AddRemoteTenantConnectionStore("Identity", new ConfigurationBuilder().Build()));
 
         Assert.Contains("exactly one authoritative source", error.Message);
+    }
+
+    // 路由全靠相对地址回源：没有 BaseAddress 时组合照常成功，要到首个租户请求才以不带键名的 URI 错误暴露
+    [Theory]
+    [InlineData(null)]
+    [InlineData("identity")]
+    public void Missing_or_relative_base_address_is_rejected_with_the_configuration_key(string? baseAddress)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Leistd:ServiceClients:Identity:BaseAddress"] = baseAddress })
+            .Build();
+        using var provider = new ServiceCollection().AddLogging()
+            .AddRemoteTenantConnectionStore("Identity", configuration).Services
+            .BuildServiceProvider();
+
+        var error = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<RemoteTenantConnectionClientOptions>>().Value);
+
+        Assert.Contains("Leistd:ServiceClients:Identity:BaseAddress", error.Message);
+    }
+
+    // 正例：校验落在注册路径实际绑定的那份选项上，而不是恒失败
+    [Fact]
+    public void An_absolute_base_address_passes_validation()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.test" })
+            .Build();
+        using var provider = new ServiceCollection().AddLogging()
+            .AddRemoteTenantConnectionStore("Identity", configuration).Services
+            .BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<RemoteTenantConnectionClientOptions>>().Value;
+
+        Assert.Equal("https://identity.test", options.BaseAddress);
+    }
+
+    [Fact]
+    public void Database_directory_resolves_the_registered_control_plane_client()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Leistd:ServiceClients:Identity:BaseAddress"] = "https://identity.test"
+        }).Build();
+        using var provider = new ServiceCollection().AddLogging()
+            .AddRemoteTenantConnectionStore("Identity", configuration).Services.BuildServiceProvider();
+        Assert.IsAssignableFrom<ITenantConnectionConfigurationStore>(provider.GetRequiredService<ITenantDatabaseDirectory>());
     }
 
     private RemoteTenantConnectionStore Store(string prefix = RemoteTenantConnectionClientOptions.DefaultRoutePrefix)

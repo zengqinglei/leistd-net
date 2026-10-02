@@ -9,12 +9,14 @@ import { AuthService } from '../../../../core/services/auth-service';
 import { TwoFactorStatusOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 
+import type { MockedObject } from 'vitest';
+
 describe('TwoFactorSettings', () => {
   let fixture: ComponentFixture<TwoFactorSettings>;
-  let account: jasmine.SpyObj<AccountService>;
+  let account: Pick<MockedObject<AccountService>, 'getTwoFactorStatus' | 'beginTwoFactorSetup'>;
 
   async function render(status: TwoFactorStatusOutputDto): Promise<HTMLElement> {
-    account.getTwoFactorStatus.and.returnValue(of(status));
+    account.getTwoFactorStatus.mockReturnValue(of(status));
     fixture = TestBed.createComponent(TwoFactorSettings);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -23,10 +25,10 @@ describe('TwoFactorSettings', () => {
   }
 
   beforeEach(() => {
-    account = jasmine.createSpyObj<AccountService>('AccountService', [
-      'getTwoFactorStatus',
-      'beginTwoFactorSetup',
-    ]);
+    account = {
+      getTwoFactorStatus: vi.fn().mockName('AccountService.getTwoFactorStatus'),
+      beginTwoFactorSetup: vi.fn().mockName('AccountService.beginTwoFactorSetup'),
+    };
     TestBed.configureTestingModule({
       imports: [TwoFactorSettings],
       providers: [
@@ -39,14 +41,14 @@ describe('TwoFactorSettings', () => {
     });
   });
 
-  it('未启用时给出启用入口，没有停用入口', async () => {
+  it('offers enable but not disable when not enabled', async () => {
     const host = await render({ enabled: false, recoveryCodesLeft: 0, requiredByPolicy: false });
 
     expect(host.querySelector('[data-testid="two-factor-turn-on"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="two-factor-turn-off"]')).toBeNull();
   });
 
-  it('组织要求两步验证时不给停用入口', async () => {
+  it('offers no disable entry when the organization requires two-factor', async () => {
     const host = await render({ enabled: true, recoveryCodesLeft: 8, requiredByPolicy: true });
 
     expect(host.querySelector('[data-testid="two-factor-on"]')).not.toBeNull();

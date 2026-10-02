@@ -2,9 +2,8 @@ using Leistd.Timing;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Leistd.Notifications.Channels;
-using Leistd.Notifications.Errors;
 using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
 using Leistd.Notifications.EntityFrameworkCore;
@@ -69,6 +68,7 @@ public class NotificationStoreRegistrationTests
     {
         var services = new ServiceCollection()
             .AddLogging()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddUnitOfWork()
             .AddUnitOfWorkEfCore()
             .AddSingleton<IClock, UtcClockProvider>()

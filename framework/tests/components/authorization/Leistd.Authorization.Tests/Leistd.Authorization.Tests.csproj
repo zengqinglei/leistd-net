@@ -26,6 +26,8 @@
     <ProjectReference Include="..\..\..\..\components\authorization\Leistd.Authorization.EntityFrameworkCore\Leistd.Authorization.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\components\authorization-resource\Leistd.Authorization.Resource.Core\Leistd.Authorization.Resource.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\authorization-resource\Leistd.Authorization.Resource.EntityFrameworkCore\Leistd.Authorization.Resource.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\authorization-resource\Leistd.Authorization.Resource.AspNetCore\Leistd.Authorization.Resource.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\security\Leistd.Security.AspNetCore\Leistd.Security.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\components\authorization-data-scope\Leistd.Authorization.DataScope.Core\Leistd.Authorization.DataScope.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\multi-tenancy\Leistd.MultiTenancy.Core\Leistd.MultiTenancy.Core.csproj" />
     <ProjectReference Include="..\..\..\..\components\unit-of-work\Leistd.UnitOfWork.Core\Leistd.UnitOfWork.Core.csproj" />

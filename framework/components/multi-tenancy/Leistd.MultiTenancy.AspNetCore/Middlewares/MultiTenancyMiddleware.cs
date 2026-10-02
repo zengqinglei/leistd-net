@@ -6,11 +6,8 @@ using Leistd.MultiTenancy.Stores;
 using Leistd.MultiTenancy.Exceptions;
 using Leistd.MultiTenancy.AspNetCore.Options;
 using Leistd.MultiTenancy.Resolution;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
+using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 
@@ -18,7 +15,7 @@ namespace Leistd.MultiTenancy.AspNetCore.Middlewares;
 /// 解析并校验租户，然后在租户上下文中执行后续管道。
 /// </summary>
 /// <remarks>
-/// 放置顺序：<c>UseAuthentication()</c>（及 <c>UseServiceUserContext()</c>）之后、<c>UseAuthorization()</c> 之前。
+/// 放置顺序：<c>UseAuthentication()</c>之后、<c>UseAuthorization()</c> 之前。
 /// 解析出的租户不存在抛 <see cref="TenantNotFoundException"/>（404）。已停用<b>分两档</b>：
 /// 已认证主体抛 <see cref="TenantNotActiveException"/>（403，明确报错对运维有价值），
 /// <b>未认证请求一律按 404</b>——"这个租户停用了"本身就是外部可观察的业务情报。
@@ -70,7 +67,7 @@ public class MultiTenancyMiddleware(RequestDelegate next, ILogger<MultiTenancyMi
             // 比泄露存在性更糟。这是有意接受的残留，理由与边界写在组件文档里，别当缺陷"修"掉。
             if (tenant is null || !tenant.IsActive)
             {
-                if (context.User.Identity?.IsAuthenticated != true)
+                if (!context.User.HasAuthenticatedIdentity())
                 {
                     throw new TenantNotFoundException(result.TenantIdOrName);
                 }
@@ -95,9 +92,8 @@ public class MultiTenancyMiddleware(RequestDelegate next, ILogger<MultiTenancyMi
 
         var currentTenant = context.RequestServices.GetRequiredService<ICurrentTenant>();
 
-        // 租户上下文必须覆盖整个下游管道。
+        // 租户上下文必须覆盖整个下游管道；日志作用域随 Change 一起打开。
         using (currentTenant.Change(tenantId, tenantName))
-        using (logger.BeginScope(new Dictionary<string, object> { ["leistd.tenantId"] = tenantId }))
         {
             await next(context);
         }

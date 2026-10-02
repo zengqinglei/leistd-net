@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Leistd.ServiceClient.Exceptions;
 using Leistd.ServiceClient.Http;
+using Leistd.ServiceClient.Tests.TestDoubles;
 using Xunit;
 
 namespace Leistd.ServiceClient.Tests.Core;
@@ -53,7 +54,7 @@ public class ResultUnwrapTests
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Equal("50001", exception.ErrorCode);   // 信封的 code 是数字，按不变文化转字符串
+        Assert.Equal("50001", exception.ErrorCode);   // 2xx 信封的非零 code 是业务码，按不变文化转字符串
         Assert.Contains("库存不足", exception.Message);
     }
 
@@ -77,19 +78,53 @@ public class ResultUnwrapTests
         Assert.Equal(("name", "必填", "Required"), (error.Field, error.Detail, error.Code));
     }
 
+    /// <summary>
+    /// 官方 <c>HttpValidationProblemDetails</c> 的字典形 <c>errors</c>：每条消息各成一项，字段名与全部消息都保留。
+    /// </summary>
     [Fact]
-    public async Task Numeric_remote_error_code_is_kept_as_is()
+    public async Task Dictionary_shaped_errors_keep_every_message_per_field()
     {
-        // 互操作：Problem Details 的错误码是字符串词条键，统一响应信封的是数字。
-        // 两种都要认——丢掉任一种，调用方就无法按错误码分支。
-        using var response = Response(HttpStatusCode.NotFound,
-            """{"status":404,"code":404001,"message":"不存在","traceId":"t-2"}""");
+        using var response = Response(HttpStatusCode.BadRequest,
+            """
+            {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.",
+             "status":400,"traceId":"00-abc-def-01",
+             "errors":{"Name":["The Name field is required.","Name is too short."],"Quantity":["Must be positive."]}}
+            """);
 
         var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
 
-        Assert.Equal("404001", exception.ErrorCode);
+        Assert.Equal(
+            [("Name", "The Name field is required."), ("Name", "Name is too short."), ("Quantity", "Must be positive.")],
+            exception.Errors.Select(error => (error.Field, error.Detail)));
+        Assert.All(exception.Errors, error => Assert.Null(error.Code));
+    }
+
+    [Fact]
+    public async Task Numeric_code_is_not_taken_as_a_business_error_code()
+    {
+        // 信封模式下协议层失败只有数字 code（即 HTTP 状态）、没有 errorCode；
+        // 把它当业务码会让调用方按 "404" 这种字符串分支
+        using var response = Response(HttpStatusCode.NotFound,
+            """{"status":404,"code":404,"message":"不存在","traceId":"t-2"}""");
+
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
+
+        Assert.Null(exception.ErrorCode);
         Assert.Equal("t-2", exception.RemoteTraceId);
         Assert.Contains("不存在", exception.Message);
+    }
+
+    [Fact]
+    public async Task Optional_numeric_envelope_restores_errorCode_instead_of_status_code()
+    {
+        using var response = Response(HttpStatusCode.Conflict,
+            """{"code":409,"errorCode":"Order:Conflict","message":"订单状态冲突","traceId":"t-3"}""");
+
+        var exception = await Assert.ThrowsAsync<RemoteServiceException>(() => response.ReadResultAsync<OrderDto>());
+
+        Assert.Equal(409, exception.RemoteStatusCode);
+        Assert.Equal("Order:Conflict", exception.ErrorCode);
+        Assert.Equal("t-3", exception.RemoteTraceId);
     }
 
     [Fact]
@@ -112,6 +147,7 @@ public class ResultUnwrapTests
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadResultAsync<OrderDto>());
 
         Assert.Contains("response body is empty", exception.Message);
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
     }
 
     [Fact]
@@ -122,6 +158,22 @@ public class ResultUnwrapTests
         var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadResultAsync<OrderDto>());
 
         Assert.Contains("deserialization failed", exception.Message);
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.InvalidResponse)]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    public async Task Interrupted_response_body_is_classified_as_invalid_response(HttpRequestError error)
+    {
+        using var response = Response(HttpStatusCode.OK, null);
+        response.Content = new ThrowingHttpContent(new HttpIOException(error, "response body ended"));
+
+        var exception = await Assert.ThrowsAsync<ServiceClientException>(() => response.ReadContentAsync<OrderDto>());
+
+        Assert.Equal(ServiceClientFailureKind.InvalidResponse, exception.FailureKind);
+        var transportException = Assert.IsType<HttpRequestException>(exception.InnerException);
+        Assert.IsType<HttpIOException>(transportException.InnerException);
     }
 
     [Fact]

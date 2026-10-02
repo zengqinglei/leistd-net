@@ -1,9 +1,13 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
 using CompanyName.ProjectName.Application.Auth.SignIn;
 using Leistd.ExceptionHandling;
 using System.Security.Claims;
-using CompanyName.ProjectName.Application.Auth.Constants;
+using Leistd.Timing;
+using System.Text.Json.Nodes;
+using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.AppServices;
+using CompanyName.ProjectName.Application.Auth.OAuth;
 using CompanyName.ProjectName.Domain.Auth.Options;
 using Leistd.Security.Claims;
 using Microsoft.AspNetCore;
@@ -33,7 +37,10 @@ namespace CompanyName.ProjectName.Api.Controllers;
 public sealed class ConnectController(
     IAuthPrincipalFactory principalFactory,
     IUserSessionAppService sessionAppService,
-    IOptions<OAuthOptions> oauthOptions) : Controller
+    IOptions<OAuthOptions> oauthOptions,
+    IOptions<ClaimTypeOptions> claimTypes,
+    IOpenIddictApplicationManager applications,
+    IClock clock) : Controller
 {
     [HttpGet("~/connect/authorize")]
     [HttpPost("~/connect/authorize")]
@@ -41,23 +48,32 @@ public sealed class ConnectController(
     public async Task<IActionResult> AuthorizeAsync(CancellationToken cancellationToken)
     {
         var request = HttpContext.GetOpenIddictServerRequest()
-            ?? throw new InternalServerException(
+            ?? throw new InvalidOperationException(
                 "The OpenID Connect authorization request is unavailable. "
                 + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
         var result = await HttpContext.AuthenticateAsync(AuthenticationSchemeNames.SessionCookie);
-        if (!result.Succeeded || result.Principal == null)
+        var authenticationTime = result.Principal?.GetClaim(Claims.AuthenticationTime);
+        var fresh = long.TryParse(authenticationTime, out var authenticatedAt);
+        var reauthenticate = request.HasPromptValue(PromptValues.Login) ||
+            request.MaxAge is { } maxAge && (!fresh || new DateTimeOffset(DateTime.SpecifyKind(clock.Now, DateTimeKind.Utc)).ToUnixTimeSeconds() - authenticatedAt >= maxAge);
+        if (!result.Succeeded || result.Principal == null || reauthenticate)
         {
-            var returnUrl = Request.PathBase + Request.Path + QueryString.Create(
-                Request.HasFormContentType
-                    ? Request.Form.Select(parameter => new KeyValuePair<string, string?>(parameter.Key, parameter.Value))
-                    : Request.Query.Select(parameter => new KeyValuePair<string, string?>(parameter.Key, parameter.Value)));
+            if (request.HasPromptValue(PromptValues.None))
+                return ProtocolError(Errors.LoginRequired);
+            // 去掉已兑现的重新认证参数，登录完成后的回跳不会再次要求登录。
+            var parameters = Request.HasFormContentType ? Request.Form.AsEnumerable() : Request.Query.AsEnumerable();
+            var returnUrl = Request.PathBase + Request.Path + QueryString.Create(parameters
+                .Where(parameter => parameter.Key is not ("prompt" or "max_age"))
+                .Select(parameter => new KeyValuePair<string, string?>(parameter.Key, parameter.Value)));
+            var prompts = request.GetPromptValues().Where(prompt => prompt != PromptValues.Login).ToArray();
+            if (prompts.Length > 0) returnUrl += QueryString.Create("prompt", string.Join(' ', prompts)).Value?.Replace('?', '&');
 
-            return Redirect($"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
+            return Redirect($"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}" +
+                (reauthenticate ? "&reauthenticate=true" : string.Empty));
         }
 
-        var subject = result.Principal.GetClaim(Claims.Subject) ??
-                      result.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var subject = claimTypes.Value.FindUserId(result.Principal);
         if (!Guid.TryParse(subject, out var userId))
         {
             return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
@@ -69,6 +85,10 @@ public sealed class ConnectController(
             return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
+        if (fresh)
+            principal.SetClaim(Claims.AuthenticationTime, authenticatedAt)
+                .SetDestinations(claim => claim.Type == Claims.AuthenticationTime
+                    ? [Destinations.IdentityToken] : claim.GetDestinations());
         return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
@@ -88,28 +108,58 @@ public sealed class ConnectController(
     public async Task<IActionResult> ExchangeAsync(CancellationToken cancellationToken)
     {
         var request = HttpContext.GetOpenIddictServerRequest()
-            ?? throw new InternalServerException(
+            ?? throw new InvalidOperationException(
                 "The OpenID Connect token request is unavailable. "
                 + "This means the OpenIddict server middleware is not wired for this endpoint.");
 
         if (request.IsAuthorizationCodeGrantType() || request.IsRefreshTokenGrantType())
         {
             var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-            var subject = result.Principal?.GetClaim(Claims.Subject);
-            if (!result.Succeeded || !Guid.TryParse(subject, out var userId))
+            if (!result.Succeeded || result.Principal is null)
             {
                 return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 
             var scopes = request.GetScopes().Any()
                 ? request.GetScopes()
-                : result.Principal?.GetScopes() ?? [];
-            var principal = await principalFactory.CreateAsync(userId, scopes, cancellationToken);
+                : result.Principal.GetScopes();
+            // 用户与租户都取自授权码/刷新令牌的主体：本请求没有用户身份，解析链只能得出宿主
+            var principal = await principalFactory.CreateFromTokenAsync(result.Principal, scopes, cancellationToken);
             if (principal == null)
             {
                 return Forbid(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
             }
 
+            return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+
+        if (request.IsTokenExchangeGrantType())
+        {
+            var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            var subject = result.Principal;
+            var app = await applications.FindByClientIdAsync(request.ClientId!, cancellationToken);
+            // 官方验证管线完成归属验证后，仍保留控制器的严格单跳约束。
+            if (subject is null || app is null ||
+                !await applications.HasClientTypeAsync(app, ClientTypes.Confidential, cancellationToken) ||
+                subject.HasClaim(claim => claim.Type == "act") ||
+                request.GetAudiences().Length != 1 ||
+                request.GetScopes().Length != 1 ||
+                !OAuthScopes.ResourcesOf(oauthOptions.Value, request.GetScopes()).SequenceEqual(request.GetAudiences()) ||
+                !OAuthScopes.All(oauthOptions.Value).Any(scope => !scope.MachineOnly &&
+                    scope.Name == request.GetScopes()[0] && scope.Resources.Count == 1) ||
+                subject.GetExpirationDate() is not { } expiry)
+                return ProtocolError(Errors.InvalidGrant);
+            var principal = await principalFactory.CreateFromTokenAsync(subject, request.GetScopes(), cancellationToken);
+            if (principal is null) return ProtocolError(Errors.InvalidGrant);
+            var identity = (ClaimsIdentity)principal.Identity!;
+            foreach (var claim in identity.Claims.Where(claim => claim.Type is Claims.Role or CustomClaimTypes.IsSuperAdmin or Claims.AuthenticationTime).ToArray())
+                identity.RemoveClaim(claim);
+            identity.SetClaim("act", new JsonObject { [Claims.Subject] = ClientSubject.Format(request.ClientId!) });
+            // 用户资料重新取自身份库，目标 scope 不含 profile/email 时仍保留投影所需的资料。
+            principal.SetResources(request.GetAudiences());
+            principal.SetDestinations(_ => [Destinations.AccessToken]);
+            principal.SetAccessTokenLifetime(TimeSpan.FromSeconds(120));
+            principal.SetExpirationDate(expiry);
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
@@ -122,26 +172,25 @@ public sealed class ConnectController(
                 Claims.Role);
 
             // 机器主体的 sub 契约由框架 ClientSubject 定义（client:<client_id>），签发端与
-            // 消费端（服务间调用的用户上下文恢复）共用同一处定义，理由见该类型的注释。
-            identity.AddClaim(new Claim(Claims.Subject, ClientSubject.Format(request.ClientId!)));
+            // 消费端（机器端点授权）共用同一处定义，理由见该类型的注释。
+            SubjectClaims.Set(identity, claimTypes.Value, ClientSubject.Format(request.ClientId!));
             identity.AddClaim(new Claim(Claims.Name, request.ClientId!));
 
             var principal = new ClaimsPrincipal(identity);
             principal.SetScopes(request.GetScopes());
-
-            var resources = new[] { oauthOptions.Value.Resource };
-            principal.SetResources(resources);
+            principal.SetResources(OAuthScopes.ResourcesOf(oauthOptions.Value, principal.GetScopes()));
 
             return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        throw new BadRequestException($"Unsupported grant type: {request.GrantType}")
-#if (IncludeLocalization)
-            .WithCode("Auth:UnsupportedGrantType")
-            .WithData("GrantType", request.GrantType)
-#endif
-            ;
+        throw new BusinessException(AuthErrorCodes.UnsupportedGrantType, $"Unsupported grant type: {request.GrantType}")
+            .WithData("GrantType", request.GrantType);
     }
+
+    private ForbidResult ProtocolError(string error) => Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+    {
+        [OpenIddictServerAspNetCoreConstants.Properties.Error] = error
+    }), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
 
     [Authorize(AuthenticationSchemes = OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)]
     [HttpGet("~/connect/userinfo")]
@@ -149,13 +198,7 @@ public sealed class ConnectController(
     [Produces("application/json")]
     public async Task<IActionResult> UserInfoAsync(CancellationToken cancellationToken)
     {
-        var subject = User.FindFirst(Claims.Subject)?.Value;
-        if (!Guid.TryParse(subject, out var userId))
-        {
-            return Challenge(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
-        }
-
-        var claims = await principalFactory.CreateUserInfoAsync(userId, User, cancellationToken);
+        var claims = await principalFactory.CreateUserInfoAsync(User, cancellationToken);
         if (claims == null)
         {
             return Challenge(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);

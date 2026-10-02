@@ -27,9 +27,20 @@ dotnet add package Leistd.ObjectMapping.Mapster
 ```csharp
 builder.Services.AddMapsterObjectMapper(options =>
 {
-    options.AddProfiles(typeof(OrderMapsterProfile).Assembly);
+    options.Configurators.Add(config => config.Scan(typeof(OrderMappings).Assembly));
     options.ValidateMappings = true;
 });
+```
+
+映射配置用 Mapster 官方的 `IRegister` 书写，`config.Scan(...)` 把程序集里的注册类登记到组件自己的 `TypeAdapterConfig`：
+
+```csharp
+public class OrderMappings : IRegister
+{
+    public void Register(TypeAdapterConfig config) =>
+        config.NewConfig<Order, OrderDto>()
+            .Map(dest => dest.CustomerName, src => src.Customer.Name);
+}
 ```
 
 `configure` 参数可选，省略时使用默认配置（无映射规则）。
@@ -64,6 +75,13 @@ IQueryable<OrderDto> query = orders
 
 查询投影使用显式 `Select`，避免映射配置静默改变 SQL 列清单。
 
+书写规则：
+
+- 业务服务只注入 `IObjectMapper`。
+- 能按名称约定映射的不写配置；只为不同名、需计算或需忽略的成员写 `IRegister`。
+- 复杂转换（跨多个来源、带业务判断）写普通方法，不塞进映射表达式。
+- 配置里的嵌套映射交给 Mapster：目标成员直接映射源集合或对象即可，它按同一份配置递归完成。**不要在配置里调用无参 `Adapt<T>()`**——它用的是 `TypeAdapterConfig.GlobalSettings`，组件登记的规则在那里不存在，会静默失效。
+
 ## 接口参考
 
 `Leistd.ObjectMapping.Core` 包的 API 位于 `Leistd.ObjectMapping.Abstractions` 与 `Leistd.ObjectMapping.Extensions`：
@@ -82,8 +100,7 @@ IQueryable<OrderDto> query = orders
 
 - 以 Singleton 注册 `IMapper`（`new Mapper(config)`）：基础配置 `config.Default.PreserveReference(true)` 启用循环引用保护。
 - `MapsterOptions.Configurators` 中的每个委托接收 `TypeAdapterConfig`；`ValidateMappings = true` 时在启动阶段调用 `config.Compile()` 提前编译并校验。
-- 提供 `MapsterProfile` 抽象基类：子类重写 `ConfigureMappings()`，用 `CreateMap<TSource, TDestination>()` 声明映射。
-- `options.AddProfiles(assemblies)` 扫描非抽象的 `MapsterProfile` 子类。
+- 映射配置在组件自己的 `TypeAdapterConfig` 上，不修改 `TypeAdapterConfig.GlobalSettings`；程序集扫描只在宿主显式 `config.Scan(...)` 时发生。
 - 带上下文的 `Map(source, contextItems)` 通过 `MapContextScope` 将上下文写入 `MapContext.Current.Parameters`。
 - 额外提供 `MapsterObjectMapper.Map<TDestination>(object source)`（按运行时类型映射），不属于 `IObjectMapper` 接口，需引用具体类型才能调用。
 

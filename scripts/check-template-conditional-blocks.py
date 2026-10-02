@@ -27,6 +27,9 @@ SKIP_DIRS = {"node_modules", "obj", "bin", ".angular", "dist", ".git"}
 SCANNED_SUFFIXES = {
     ".ts", ".html", ".cs", ".css", ".json", ".md", ".mjs", ".js",
     ".props", ".csproj", ".slnx", ".sln", ".ps1", ".yml", ".yaml",
+    # template/scripts/ 随模板分发，同样会过生成引擎：在散文里写出 `//#if` 这个记号，
+    # 引擎会当成真指令，从那一行起把文件剩下的部分整个吞掉，而生成物直到运行才报语法错。
+    ".py",
 }
 
 # 三种注释载体：C# 预处理指令（行首 #if）、TS/JS 的 //#if、HTML 的 <!--#if -->

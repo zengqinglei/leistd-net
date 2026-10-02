@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Leistd.Auditing;
 using Leistd.MultiTenancy.EntityFrameworkCore.Entities;
-using Leistd.Auditing.Abstractions;
 
 namespace Leistd.MultiTenancy.EntityFrameworkCore.Extensions;
 

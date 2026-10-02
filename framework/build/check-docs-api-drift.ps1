@@ -9,7 +9,6 @@
 #   - 判定“存在”：该标识符作为一个词出现在 framework 任一 .cs 源码（排除 bin/obj）中；
 #   - 不存在 → 记为疑似臆造，CI 失败。
 # 用法：pwsh framework/build/check-docs-api-drift.ps1  （从仓库根运行）
-param([switch]$SelfTest)
 
 $ErrorActionPreference = 'Stop'
 
@@ -21,7 +20,7 @@ $docGlobs = @(
 # 收集全部框架源码符号（排除 bin/obj）。用“定义处”正则提取 public 类型/成员名，作为真实 API 集合。
 $srcFiles = Get-ChildItem -Recurse -File -Include *.cs framework/components, framework/ddd-struct |
     Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
-$srcText = ($srcFiles | Get-Content -Raw) -join "`n"
+$sourceTexts = [System.Collections.Generic.List[string]]::new()
 
 # 完整限定名必须匹配真实包、命名空间或公共类型。短标识符存在并不能证明
 # `Leistd.Core.Timing.IClock` 这类旧限定名仍然有效。
@@ -36,6 +35,7 @@ $typeSources = @{}
 $qualifiedTypeSources = @{}
 foreach ($srcFile in $srcFiles) {
     $text = Get-Content $srcFile.FullName -Raw
+    $sourceTexts.Add($text)
     $namespaceMatch = [regex]::Match($text, '(?m)^\s*namespace\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;')
     if (-not $namespaceMatch.Success) { continue }
 
@@ -50,6 +50,8 @@ foreach ($srcFile in $srcFiles) {
         $qualifiedTypeSources[$qualifiedType] = @($qualifiedTypeSources[$qualifiedType]) + $text
     }
 }
+
+$srcText = $sourceTexts -join "`n"
 
 function Test-MemberInSources([string]$Member, [object[]]$Sources) {
     return [bool]($Sources | Where-Object { $_ -match "\b$([regex]::Escape($Member))\b" } | Select-Object -First 1)
@@ -75,27 +77,25 @@ function Test-QualifiedReference([string]$Reference) {
     return $false
 }
 
-if ($SelfTest) {
-    $cases = @(
-        @{ Reference = 'Leistd.Core'; Expected = $true },
-        @{ Reference = 'Leistd.Timing'; Expected = $true },
-        @{ Reference = 'Leistd.Timing.IClock'; Expected = $true },
-        @{ Reference = 'Leistd.Timing.IClock.Now'; Expected = $true },
-        @{ Reference = 'Leistd.Core.Timing.IClock'; Expected = $false },
-        @{ Reference = 'Leistd.Response.Wrappers.Result.Details'; Expected = $false }
-    )
-    $failed = @($cases | Where-Object { (Test-QualifiedReference $_.Reference) -ne $_.Expected })
-    $memberCases = @(
-        @{ Reference = 'IClock.Now'; Expected = $true },
-        @{ Reference = 'Result.Details'; Expected = $false }
-    )
-    $failedMembers = @($memberCases | Where-Object { (Test-MemberReference $_.Reference) -ne $_.Expected })
-    if ($failed.Count -gt 0 -or $failedMembers.Count -gt 0) {
-        throw "文档 API 规则自检失败: $(@($failed.Reference) + @($failedMembers.Reference) -join ', ')"
-    }
-    Write-Host "✅ 文档 API 规则自检通过（$($cases.Count + $memberCases.Count) 例）。" -ForegroundColor Green
-    exit 0
+# 自检与正文扫描使用同一份本次源码索引；规则失效时不继续给出正文通过。
+$cases = @(
+    @{ Reference = 'Leistd.Core'; Expected = $true },
+    @{ Reference = 'Leistd.Timing'; Expected = $true },
+    @{ Reference = 'Leistd.Timing.IClock'; Expected = $true },
+    @{ Reference = 'Leistd.Timing.IClock.Now'; Expected = $true },
+    @{ Reference = 'Leistd.Core.Timing.IClock'; Expected = $false },
+    @{ Reference = 'Leistd.Response.Wrappers.Result.Details'; Expected = $false }
+)
+$failed = @($cases | Where-Object { (Test-QualifiedReference $_.Reference) -ne $_.Expected })
+$memberCases = @(
+    @{ Reference = 'IClock.Now'; Expected = $true },
+    @{ Reference = 'Result.Details'; Expected = $false }
+)
+$failedMembers = @($memberCases | Where-Object { (Test-MemberReference $_.Reference) -ne $_.Expected })
+if ($failed.Count -gt 0 -or $failedMembers.Count -gt 0) {
+    throw "文档 API 规则自检失败: $(@($failed.Reference) + @($failedMembers.Reference) -join ', ')"
 }
+Write-Host "✅ 文档 API 规则自检通过（$($cases.Count + $memberCases.Count) 例）。" -ForegroundColor Green
 
 # 已知非 Leistd 自有的标识符白名单（.NET BCL / EF Core / ASP.NET / 第三方）。
 # 这些即使文档用反引号包裹也不校验——它们本就不该在框架源码里定义。
@@ -109,6 +109,7 @@ $allow = @(
     'Assembly','Type','ClaimsPrincipal','ClaimTypes','IServiceProvider','IServiceCollection','IServiceScopeFactory',
     'AddValidation',   # ASP.NET Core Minimal API 内置校验：分页契约的文档要求宿主启用它
     'JsonHttpResult',   # ASP.NET Core 的结果类型：响应包装文档要说明它不被改写
+    'LoggingOptions',   # Microsoft.Extensions.Http.Diagnostics：服务客户端文档给出官方正文日志的入口
     # EF Core
     'DbContext','DbContextOptions','DbContextOptionsBuilder','DbSet','ModelBuilder','EntityEntry','ChangeTracker',
     'EntityState','SaveChangesInterceptor','IEntityTypeConfiguration','IServiceProviderFactory',
@@ -117,11 +118,14 @@ $allow = @(
     'UseForwardedHeaders','ForwardedHeadersOptions','KnownProxies','KnownIPNetworks',
     'OptionsValidationException','IValidateOptions',
     'IExceptionHandler','AuthorizationPolicyBuilder','DefaultAuthorizationPolicyProvider','ProblemDetails',
+    'IExceptionHandlerFeature',   # 操作记录文档要说明它保留了端点与路由值、却保留不了租户作用域
     'AuthenticateAsync','IClaimsTransformation','PolicyEvaluator',
     'ValidationProblemDetails','IProxyGenerator',   # IProxyGenerator=Castle 类型：文档不该引它，但它不是 Leistd 自有，靠源码存在性判定
     # 第三方基类（Castle / Mapster / AutoMapper）
     'AsyncInterceptorBase','IMapperConfigurationExpression','TypeAdapterConfig','Profile','IInterceptor',
     'AddProfile','CreateMap',
+    # Polly（service-client 文档说明宿主弹性管道的超时异常如何被归类）
+    'TimeoutRejectedException',
     # Refit（service-client 文档引用的第三方类型/特性；AttachmentName 为已废弃特性，文档明确禁用）
     'StreamPart','ByteArrayPart','FileInfoPart','ApiResponse','ApiException','RefitSettings',
     'BodySerializationMethod','AttachmentName',

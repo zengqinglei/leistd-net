@@ -26,29 +26,16 @@
 
 ### 维护本仓库
 
-仓库内部 Skill 位于 [`.agents/skills/`](.agents/skills/)，[Codex](https://developers.openai.com/codex/skills) 等原生发现该目录的 AI CLI 无需安装。使用只识别其他项目目录的 CLI 时，按需生成本地适配；例如项目 Skill 位于 `.claude/skills/` 的 [Claude Code](https://code.claude.com/docs/en/skills#where-skills-live) 执行：
+仓库内部 Skill 位于 [`.agents/skills/`](.agents/skills/)，这是唯一权威源。[Codex](https://developers.openai.com/codex/skills) 等原生发现该目录的 AI CLI 直接使用；[Claude Code](https://code.claude.com/docs/en/skills#where-skills-live) 读取的 `.claude/skills` 是随仓库提交的目录符号链接（`-> ../.agents/skills`），克隆或新建工作树即可用，修改、新增、删除 Skill 都无需同步。
 
-```bash
-npx skills add ./.agents/skills --agent claude-code --skill developing-leistd-framework developing-leistd-template maintaining-leistd-repository -y
-```
-
-`npx skills` 会根据平台能力选择链接或复制，并在结果中标明实际方式。需要强制复制时执行：
-
-```bash
-npx skills add ./.agents/skills --agent claude-code --skill developing-leistd-framework developing-leistd-template maintaining-leistd-repository --copy -y
-```
-
-复制的适配不会自动跟随权威源更新，修改 `.agents/skills/` 后应重新执行命令。生成的 `.claude/skills/` 和 `skills-lock.json` 是本地适配产物，不提交到仓库。
+Windows 检出符号链接需要开启开发者模式并设置 `git config --global core.symlinks true`；未开启时 `.claude/skills` 会检出成一个文本文件，可在仓库根执行 `mklink /D .claude\skills ..\.agents\skills` 手动重建。不要用 `npx skills add ./.agents/skills --agent claude-code` 生成适配：源目录就是 `.agents/skills` 本身时它会复制而不是链接，副本不随权威源更新。
 
 #### 引入第三方 Skill
 
-引入外部 Skill（如前端 UI 库 `spartan`）时，先将其拉取到 `.agents/skills/` 作为权威源（随仓库提交），再按上面的方式生成本地适配，与自有 Skill 统一管理：
+引入外部 Skill（如前端 UI 库 `spartan`）时，拉取到 `.agents/skills/` 作为权威源并随仓库提交，经上面的链接自动对 Claude Code 可见：
 
 ```bash
-# 拉取第三方 Skill 到 .agents/skills/（权威源，提交）
 npx skills add spartan-ng/spartan
-# 生成 Claude Code 本地适配（.claude/skills/，不提交）
-npx skills add ./.agents/skills --agent claude-code --skill spartan -y
 ```
 
 配套的 MCP server 在仓库根 [`.mcp.json`](.mcp.json) 声明（如 `@spartan-ng/mcp`），随仓库提交、开箱可用。

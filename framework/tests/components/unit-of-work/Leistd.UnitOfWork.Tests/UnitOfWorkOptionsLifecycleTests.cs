@@ -1,4 +1,5 @@
 using Leistd.UnitOfWork.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,12 +12,13 @@ public class UnitOfWorkOptionsLifecycleTests
 {
     private static IServiceProvider Build(Action<UnitOfWorkOptions>? configure = null)
         => new ServiceCollection()
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddUnitOfWork(configure)
             .AddLogging()
             .BuildServiceProvider();
 
     /// <summary>
-    /// <c>BeginAsync</c> 默认<b>并入</b>当前工作单元，不新建。
+    /// <c>Begin</c> 默认<b>并入</b>当前工作单元，不新建。
     /// </summary>
     /// <remarks>
     /// 默认新建的那一支代价不对称：独立 DI 作用域、独立 DbContext、同一个库上的第二个事务，
@@ -24,53 +26,53 @@ public class UnitOfWorkOptionsLifecycleTests
     /// 默认值必须与它一致，否则手动路径的默认恰好是危险的那个。
     /// </remarks>
     [Fact]
-    public async Task BeginAsync_joins_the_current_unit_of_work_by_default()
+    public async Task Begin_joins_the_current_unit_of_work_by_default()
     {
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var outer = await manager.BeginAsync(requiresNew: true);
-        using var joined = await manager.BeginAsync();
-        using var independent = await manager.BeginAsync(requiresNew: true);
+        using var outer = manager.Begin(requiresNew: true);
+        using var joined = manager.Begin();
+        using var independent = manager.Begin(requiresNew: true);
 
         Assert.Equal(outer.Id, joined.Id);
         Assert.NotEqual(outer.Id, independent.Id);
     }
 
     [Fact]
-    public async Task BeginAsync_without_options_works_in_both_requiresNew_modes()
+    public async Task Begin_without_options_works_in_both_requiresNew_modes()
     {
-        // 回归点：Initialize 改为拒绝 null 之后，BeginAsync(requiresNew: false) 不带选项
-        // 且无环境工作单元时会把 null 递进去。选项必须在 BeginAsync 里定案。
+        // 回归点：Initialize 改为拒绝 null 之后，Begin(requiresNew: false) 不带选项
+        // 且无环境工作单元时会把 null 递进去。选项必须在 Begin 里定案。
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var reused = await manager.BeginAsync(requiresNew: false);
+        using var reused = manager.Begin(requiresNew: false);
         Assert.NotNull(reused.Options);
         Assert.True(reused.Options.IsTransactional);
 
-        using var fresh = await manager.BeginAsync(requiresNew: true);
+        using var fresh = manager.Begin(requiresNew: true);
         Assert.NotNull(fresh.Options);
     }
 
     [Fact]
-    public async Task BeginAsync_without_options_and_requiresNew_defaults_to_transactional()
+    public async Task Begin_without_options_and_requiresNew_defaults_to_transactional()
     {
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
 
         Assert.True(uow.Options.IsTransactional);
     }
 
     [Fact]
-    public async Task BeginAsync_without_options_respects_the_configured_transaction_mode()
+    public async Task Begin_without_options_respects_the_configured_transaction_mode()
     {
         var provider = Build(options => options.IsTransactional = false);
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
 
         Assert.False(uow.Options.IsTransactional);
     }
@@ -81,9 +83,9 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build(options => options.IsTransactional = false);
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var outer = await manager.BeginAsync();
-        using var reused = await manager.BeginAsync(requiresNew: false);
-        using var fresh = await manager.BeginAsync(requiresNew: true);
+        using var outer = manager.Begin();
+        using var reused = manager.Begin(requiresNew: false);
+        using var fresh = manager.Begin(requiresNew: true);
 
         Assert.Equal(outer.Id, reused.Id);
         Assert.NotEqual(outer.Id, fresh.Id);
@@ -118,7 +120,7 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build(options => options.Timeout = TimeSpan.FromSeconds(42));
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
 
         Assert.Equal(TimeSpan.FromSeconds(42), uow.Options.Timeout);
     }
@@ -131,7 +133,7 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
 
         Assert.Throws<InvalidOperationException>(() => uow.Initialize(new UnitOfWorkOptions()));
     }
@@ -142,7 +144,7 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
 
         Assert.Throws<ArgumentNullException>(() => uow.Initialize(null!));
     }
@@ -154,7 +156,7 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
 
         Assert.NotNull(uow.ServiceProvider);
         Assert.NotSame(provider, uow.ServiceProvider);
@@ -172,7 +174,7 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
         Assert.True(uow.Options.IsTransactional);
 
         var log = new UnitOfWorkLifecycleTests.CallLog();
@@ -197,7 +199,7 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(new UnitOfWorkOptions { IsTransactional = false });
+        using var uow = manager.Begin(new UnitOfWorkOptions { IsTransactional = false });
         Assert.False(uow.Options.IsTransactional);
 
         var log = new UnitOfWorkLifecycleTests.CallLog();
@@ -219,7 +221,7 @@ public class UnitOfWorkOptionsLifecycleTests
         var provider = Build();
         var manager = provider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var uow = await manager.BeginAsync(requiresNew: true);
+        using var uow = manager.Begin(requiresNew: true);
         using var cts = new CancellationTokenSource();
 
         await uow.CompleteAsync(cts.Token);

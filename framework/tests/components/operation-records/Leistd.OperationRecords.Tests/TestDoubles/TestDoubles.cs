@@ -1,12 +1,7 @@
 using Leistd.Data.Paging;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
 using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore;
@@ -49,14 +44,15 @@ internal sealed class FakeOperationActionDefinition(
 /// </remarks>
 internal sealed class FakeOperationActionDefinitionManager(
     IReadOnlyDictionary<string, OperationVisibility>? registered = null,
-    OperationVisibility? otherCodes = OperationVisibility.Tenant) : IOperationActionDefinitionManager
+    OperationVisibility? otherCodes = OperationVisibility.Tenant,
+    IReadOnlySet<string>? selfProvingCodes = null) : IOperationActionDefinitionManager
 {
     private readonly IReadOnlyDictionary<string, OperationVisibility> _registered =
         registered ?? new Dictionary<string, OperationVisibility>(StringComparer.Ordinal);
 
     public IOperationActionDefinition? GetOrNull(string code)
         => _registered.TryGetValue(code, out var visibility)
-            ? new FakeOperationActionDefinition(code, visibility)
+            ? new FakeOperationActionDefinition(code, visibility, targetIsActor: selfProvingCodes?.Contains(code) == true)
             : otherCodes is { } fallback ? new FakeOperationActionDefinition(code, fallback) : null;
 
     public IReadOnlyList<IOperationActionDefinition> GetAll()
@@ -126,4 +122,37 @@ internal sealed class SecondDbContext(DbContextOptions<SecondDbContext> options)
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)
         => modelBuilder.ConfigureOperationRecords();
+}
+
+/// <summary>把失败调用原样转成一条记录，避免 HttpContext 扩展的用例依赖记录器的上下文补齐逻辑。</summary>
+// 写出之后登记去重标记，与真实 OperationRecorder 同构。
+// 真实记录器自己的登记时机由 FailedOperationRecordingTests 里走真实 DI 的用例钉住，
+// 这个替身只服务于"扩展拿到已登记状态之后怎么做"。
+internal sealed class PassThroughRecorder(IOperationRecordStore store, RecordedFailureTracker recordedFailures)
+    : IOperationRecorder
+{
+    public Task RecordSucceededAsync(string action, OperationTarget target, string basis, CancellationToken ct = default)
+        => throw new NotSupportedException();
+
+    public async Task RecordFailedAsync(
+        string action,
+        OperationTarget target,
+        string basis,
+        OperationFailure failure = default)
+    {
+        await store.InsertAsync(new OperationRecordInfo
+        {
+            Action = action,
+            TargetId = target.Id,
+            TargetName = target.Name,
+            AuthorizationBasis = basis,
+            Outcome = OperationRecordOutcome.Failed,
+            Visibility = OperationVisibility.Tenant,
+            FailureCode = failure.Code,
+            FailureData = failure.Data,
+            FailureDetail = failure.Detail
+        });
+
+        recordedFailures.MarkRecorded(action, target.Id);
+    }
 }

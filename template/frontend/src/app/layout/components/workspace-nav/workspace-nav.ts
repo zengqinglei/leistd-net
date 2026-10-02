@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 //#if (IncludeLocalization)
-import { TranslocoModule } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideGauge, lucideLayers, lucideMenu, lucideSettings } from '@ng-icons/lucide';
@@ -11,6 +11,9 @@ import { HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 
 import { Logo } from '../../../shared/components/logo/logo';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../shared/utils/english-text';
+//#endif
 import { LayoutService } from '../../services/layout-service';
 import { MenuItem, NavigationService } from '../../services/navigation-service';
 
@@ -35,7 +38,7 @@ import { MenuItem, NavigationService } from '../../services/navigation-service';
     ...HlmTooltipImports,
     Logo,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [provideIcons({ lucideGauge, lucideLayers, lucideMenu, lucideSettings })],
@@ -48,8 +51,10 @@ export class WorkspaceNav {
 
   readonly layoutService = inject(LayoutService);
   private readonly navigation = inject(NavigationService);
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
+  //#endif
 
-  readonly appTitle = this.navigation.appTitle;
   readonly groups = this.navigation.menuGroups;
 
   private readonly ownGroups = computed(() =>
@@ -58,16 +63,24 @@ export class WorkspaceNav {
 
   readonly items = computed(() => this.ownGroups().flatMap((group) => group.items));
 
-  /** 左右两个导航区不能同名，否则读屏器听到两个"导航"；右侧用它自己的分组名。 */
-  readonly ariaLabel = computed(() =>
-    this.placement() === 'start'
-      ? this.navigation.navLabel()
-      : this.ownGroups()
-          .map((group) => group.label)
-          .join(' / '),
+  /** 右侧导航区的可访问名。左右两个导航区不能同名，否则读屏器听到两个"导航"；右侧用它自己的分组名。 */
+  readonly endNavLabel = computed(() =>
+    this.ownGroups()
+      .map((group) => group.label)
+      .join(' / '),
   );
 
   isItemActive(item: MenuItem): boolean {
     return this.navigation.isItemActive(item);
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'layout.topbar.openNavigation': 'Open navigation',
+  'layout.sidebar.appTitle': 'Template Project',
+  'layout.topbar.navigationDescription': 'Choose a page to open',
+  'layout.sidebar.navigation': 'Navigation',
+};
+//#endif

@@ -14,7 +14,7 @@ import {
 } from '@angular/core';
 import { form, required, disabled, validate, FormField } from '@angular/forms/signals';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService, translateSignal } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideCircleCheck } from '@ng-icons/lucide';
@@ -28,15 +28,15 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparator } from '@spartan-ng/helm/separator';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
 
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../../../core/i18n/translation-ready';
-//#endif
 import { DialogLoading } from '../../../../../../shared/components/dialog-loading/dialog-loading';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import {
   CreateOpenApplicationInputDto,
   OpenApplicationClientType,
-  OpenApplicationConsentType,
   OpenApplicationOutputDto,
+  OpenApplicationScopeOutputDto,
   OpenApplicationType,
   UpdateOpenApplicationInputDto,
 } from '../../../../models/open-application.dto';
@@ -49,7 +49,6 @@ interface OpenApplicationEditFormModel {
   displayName: string;
   applicationType: OpenApplicationType;
   clientType: OpenApplicationClientType;
-  consentType: OpenApplicationConsentType;
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   permissions: string[];
@@ -84,7 +83,7 @@ const authorizationCodePermissions = [
     ...HlmFieldImports,
     ...HlmSelectImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
     DialogLoading,
     UriListEditor,
@@ -96,59 +95,25 @@ const authorizationCodePermissions = [
 export class OpenApplicationEditDialog {
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  // 追踪「翻译就绪」：资源加载完成与语言切换时重算，含首帧避免裸键。
-  private readonly translationReady = translationReady(this.transloco);
-  readonly dialogHeader = () =>
-    this.transloco.translate(
-      this.isEditMode() ? 'openApp.dialog.editHeader' : 'openApp.dialog.createHeader',
-    );
-  readonly templatePlaceholder = () =>
-    this.transloco.translate('openApp.field.templatePlaceholder');
-  readonly displayNamePlaceholder = () =>
-    this.transloco.translate('openApp.field.displayNamePlaceholder');
-  readonly clientIdPlaceholder = () =>
-    this.transloco.translate('openApp.field.clientIdPlaceholder');
-  readonly redirectUriPlaceholder = () =>
-    this.transloco.translate('openApp.redirectUri.placeholder');
-  readonly addLabel = () => this.transloco.translate('common.add');
-  readonly removeUriLabel = () => this.transloco.translate('common.remove');
-  readonly permissionsPlaceholder = () =>
-    this.transloco.translate('openApp.permissions.placeholder');
-  readonly requirementsPlaceholder = () =>
-    this.transloco.translate('openApp.requirements.placeholder');
-  readonly redirectUrisLabel = () => this.transloco.translate('openApp.field.redirectUris');
-  readonly postLogoutUrisLabel = () =>
-    this.transloco.translate('openApp.field.postLogoutRedirectUris');
-  readonly redirectUriHint = () => this.transloco.translate('openApp.redirectUri.hint');
-  readonly postLogoutUriHint = () => this.transloco.translate('openApp.postLogoutUri.hint');
-  readonly redirectUriInvalid = () => this.transloco.translate('openApp.redirectUri.invalid');
-  readonly redirectUriEmpty = () => this.transloco.translate('openApp.redirectUri.empty');
-  readonly postLogoutUriEmpty = () => this.transloco.translate('openApp.postLogoutUri.empty');
   //#else
-  readonly dialogHeader = () =>
-    this.isEditMode() ? 'Edit Open Application' : 'New Open Application';
-  readonly templatePlaceholder = () => 'Select a template to quickly fill in';
-  readonly displayNamePlaceholder = () => 'e.g. My Desktop App';
-  readonly clientIdPlaceholder = () => 'e.g. my-desktop-app';
-  readonly redirectUriPlaceholder = () =>
-    'https://example.com/callback or my-desktop-app://oauth/callback';
-  readonly addLabel = () => 'Add';
-  readonly removeUriLabel = () => 'Remove';
-  readonly permissionsPlaceholder = () => 'Select authorization capabilities';
-  readonly requirementsPlaceholder = () => 'Select security requirements';
-  readonly redirectUrisLabel = () => 'Redirect URIs';
-  readonly postLogoutUrisLabel = () => 'Post Logout Redirect URIs';
-  readonly redirectUriHint = () => 'Callback URI after sign-in completes';
-  readonly postLogoutUriHint = () => 'Redirect URI after logout';
-  readonly redirectUriInvalid = () => 'Please enter a valid absolute URI without a fragment.';
-  readonly redirectUriEmpty = () => 'No Redirect URI configured yet';
-  readonly postLogoutUriEmpty = () => 'No Post Logout Redirect URI configured yet';
+  protected readonly t = englishText(ENGLISH);
   //#endif
   readonly visible = model(false);
   readonly loading = input(false);
   readonly saving = input(false);
   readonly application = input<OpenApplicationOutputDto | null>(null);
+  /** 可授予的 scope，由父页面从服务端取得：服务端能签发哪些 scope（含配置的下游 API）只有它知道。 */
+  readonly scopes = input<OpenApplicationScopeOutputDto[]>([]);
   readonly saved = output<CreateOpenApplicationInputDto | UpdateOpenApplicationInputDto>();
+
+  // 标准 scope 用本地译名，其余（本服务与下游 API、机器 scope）用服务端给的展示名
+  private readonly scopeOptions = computed(() =>
+    this.scopes().map((scope) => ({
+      label: this.permissionLabels()[`scp:${scope.name}`] ?? scope.displayName,
+      value: `scp:${scope.name}`,
+      group: 'Scopes',
+    })),
+  );
 
   protected readonly formModel = signal<OpenApplicationEditFormModel>(this.createEmptyModel());
   selectedTemplate = signal<OpenApplicationTemplate | null>(null);
@@ -158,12 +123,8 @@ export class OpenApplicationEditDialog {
   isConfidentialClient = computed(() => this.formModel().clientType === 'confidential');
   isServiceType = computed(() => this.formModel().applicationType === 'service');
 
-  //#if (IncludeLocalization)
   readonly applicationForm = form(this.formModel, (path) => {
-    required(path.clientId, {
-      message: this.transloco.translate('common.validation.required'),
-      when: () => !this.isEditMode(),
-    });
+    required(path.clientId, { when: () => !this.isEditMode() });
     // 编辑模式禁用 Client ID（不可改）。
     disabled(path.clientId, { when: () => this.isEditMode() });
     // 跨字段：Native / Public 客户端必须启用 PKCE。
@@ -171,193 +132,139 @@ export class OpenApplicationEditDialog {
       const requirements = ctx.value();
       const applicationType = ctx.valueOf(path.applicationType);
       const clientType = ctx.valueOf(path.clientType);
-      if (
-        (applicationType === 'native' || clientType === 'public') &&
+      return (applicationType === 'native' || clientType === 'public') &&
         !requirements.includes('ft:pkce')
-      ) {
-        return {
-          kind: 'pkceRequired',
-          message: this.transloco.translate('openApp.requirements.pkceRequired'),
-        };
-      }
-      return null;
+        ? { kind: 'pkceRequired' }
+        : null;
     });
   });
-  //#else
-  readonly applicationForm = form(this.formModel, (path) => {
-    required(path.clientId, {
-      message: 'This field is required.',
-      when: () => !this.isEditMode(),
-    });
-    // 编辑模式禁用 Client ID（不可改）。
-    disabled(path.clientId, { when: () => this.isEditMode() });
-    // 跨字段：Native / Public 客户端必须启用 PKCE。
-    validate(path.requirements, (ctx) => {
-      const requirements = ctx.value();
-      const applicationType = ctx.valueOf(path.applicationType);
-      const clientType = ctx.valueOf(path.clientType);
-      if (
-        (applicationType === 'native' || clientType === 'public') &&
-        !requirements.includes('ft:pkce')
-      ) {
-        return { kind: 'pkceRequired', message: 'Native/Public clients must enable PKCE.' };
-      }
-      return null;
-    });
-  });
-  //#endif
 
   //#if (IncludeLocalization)
-  // 读一次 translationReady 建立依赖：资源就绪 / 语言切换时本 computed 重算，选项标签重新翻译。
-  readonly templateOptions = computed(() => {
-    this.translationReady();
-    return [
-      { label: this.transloco.translate('openApp.template.web'), value: 'web' as const },
-      { label: this.transloco.translate('openApp.template.desktop'), value: 'desktop' as const },
-      { label: this.transloco.translate('openApp.template.service'), value: 'service' as const },
-    ];
-  });
+  // 这些文案不经模板直接交给下拉与触发器：取成翻译信号，词条到达与语言切换时随之重算
+  private readonly texts = {
+    templateWeb: translateSignal('openApp.template.web', {}, { scope: 'openApp' }),
+    templateDesktop: translateSignal('openApp.template.desktop', {}, { scope: 'openApp' }),
+    templateService: translateSignal('openApp.template.service', {}, { scope: 'openApp' }),
+    appTypeWeb: translateSignal('openApp.appType.web', {}, { scope: 'openApp' }),
+    appTypeNative: translateSignal('openApp.appType.native', {}, { scope: 'openApp' }),
+    appTypeService: translateSignal('openApp.appType.service', {}, { scope: 'openApp' }),
+    clientTypePublic: translateSignal('openApp.clientType.publicLabel', {}, { scope: 'openApp' }),
+    clientTypeConfidential: translateSignal(
+      'openApp.clientType.confidentialLabel',
+      {},
+      { scope: 'openApp' },
+    ),
+    authorizationEndpoint: translateSignal(
+      'openApp.permission.authorizationEndpoint',
+      {},
+      { scope: 'openApp' },
+    ),
+    tokenEndpoint: translateSignal('openApp.permission.tokenEndpoint', {}, { scope: 'openApp' }),
+    endSessionEndpoint: translateSignal(
+      'openApp.permission.endSessionEndpoint',
+      {},
+      { scope: 'openApp' },
+    ),
+    authorizationCode: translateSignal(
+      'openApp.permission.authorizationCode',
+      {},
+      { scope: 'openApp' },
+    ),
+    authorizationCodeFlow: translateSignal(
+      'openApp.permission.authorizationCodeFlow',
+      {},
+      { scope: 'openApp' },
+    ),
+    refreshToken: translateSignal('openApp.permission.refreshToken', {}, { scope: 'openApp' }),
+    tokenExchange: translateSignal('openApp.permission.tokenExchange', {}, { scope: 'openApp' }),
+    clientCredentials: translateSignal(
+      'openApp.permission.clientCredentials',
+      {},
+      { scope: 'openApp' },
+    ),
+    codeResponse: translateSignal('openApp.permission.codeResponse', {}, { scope: 'openApp' }),
+    scopeOpenid: translateSignal('openApp.permission.scopeOpenid', {}, { scope: 'openApp' }),
+    scopeProfile: translateSignal('openApp.permission.scopeProfile', {}, { scope: 'openApp' }),
+    scopeEmail: translateSignal('openApp.permission.scopeEmail', {}, { scope: 'openApp' }),
+    scopeRoles: translateSignal('openApp.permission.scopeRoles', {}, { scope: 'openApp' }),
+    scopeOfflineAccess: translateSignal(
+      'openApp.permission.scopeOfflineAccess',
+      {},
+      { scope: 'openApp' },
+    ),
+    forcePkce: translateSignal('openApp.requirement.forcePkce', {}, { scope: 'openApp' }),
+  };
 
-  readonly applicationTypeOptions = computed(() => {
-    this.translationReady();
-    return [
-      { label: this.transloco.translate('openApp.appType.web'), value: 'web' as const },
-      { label: this.transloco.translate('openApp.appType.native'), value: 'native' as const },
-      { label: this.transloco.translate('openApp.appType.service'), value: 'service' as const },
-    ];
-  });
+  readonly templateOptions = computed(() => [
+    { label: this.texts.templateWeb(), value: 'web' as const },
+    { label: this.texts.templateDesktop(), value: 'desktop' as const },
+    { label: this.texts.templateService(), value: 'service' as const },
+  ]);
 
-  readonly clientTypeOptions = computed(() => {
-    this.translationReady();
-    return [
-      {
-        label: this.transloco.translate('openApp.clientType.publicLabel'),
-        value: 'public' as const,
-      },
-      {
-        label: this.transloco.translate('openApp.clientType.confidentialLabel'),
-        value: 'confidential' as const,
-      },
-    ];
-  });
+  readonly applicationTypeOptions = computed(() => [
+    { label: this.texts.appTypeWeb(), value: 'web' as const },
+    { label: this.texts.appTypeNative(), value: 'native' as const },
+    { label: this.texts.appTypeService(), value: 'service' as const },
+  ]);
 
-  readonly consentTypeOptions = computed(() => {
-    this.translationReady();
-    return [
-      {
-        label: this.transloco.translate('openApp.consentType.implicit'),
-        value: 'implicit' as const,
-      },
-      {
-        label: this.transloco.translate('openApp.consentType.explicit'),
-        value: 'explicit' as const,
-      },
-      {
-        label: this.transloco.translate('openApp.consentType.external'),
-        value: 'external' as const,
-      },
-      {
-        label: this.transloco.translate('openApp.consentType.systematic'),
-        value: 'systematic' as const,
-      },
-    ];
-  });
+  readonly clientTypeOptions = computed(() => [
+    { label: this.texts.clientTypePublic(), value: 'public' as const },
+    { label: this.texts.clientTypeConfidential(), value: 'confidential' as const },
+  ]);
 
-  readonly permissionOptions = computed(() => {
-    this.translationReady();
-    return [
-      {
-        label: this.transloco.translate('openApp.permission.authorizationEndpoint'),
-        value: 'ept:authorization',
-        group: 'Endpoints',
-      },
-      {
-        label: this.transloco.translate('openApp.permission.tokenEndpoint'),
-        value: 'ept:token',
-        group: 'Endpoints',
-      },
-      {
-        label: this.transloco.translate('openApp.permission.endSessionEndpoint'),
-        value: 'ept:end_session',
-        group: 'Endpoints',
-      },
-      {
-        label: this.transloco.translate('openApp.permission.authorizationCode'),
-        value: 'gt:authorization_code',
-        group: 'Grant Types',
-      },
-      {
-        label: this.transloco.translate('openApp.permission.refreshToken'),
-        value: 'gt:refresh_token',
-        group: 'Grant Types',
-      },
-      {
-        label: this.transloco.translate('openApp.permission.clientCredentials'),
-        value: 'gt:client_credentials',
-        group: 'Grant Types',
-      },
-      {
-        label: this.transloco.translate('openApp.permission.codeResponse'),
-        value: 'rst:code',
-        group: 'Response Types',
-      },
-      { label: 'openid', value: 'scp:openid', group: 'Scopes' },
-      { label: 'profile', value: 'scp:profile', group: 'Scopes' },
-      { label: 'email', value: 'scp:email', group: 'Scopes' },
-      { label: 'roles', value: 'scp:roles', group: 'Scopes' },
-      { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
-    ];
-  });
+  readonly permissionOptions = computed(() => [
+    { label: this.texts.authorizationEndpoint(), value: 'ept:authorization', group: 'Endpoints' },
+    { label: this.texts.tokenEndpoint(), value: 'ept:token', group: 'Endpoints' },
+    { label: this.texts.endSessionEndpoint(), value: 'ept:end_session', group: 'Endpoints' },
+    { label: this.texts.authorizationCode(), value: 'gt:authorization_code', group: 'Grant Types' },
+    { label: this.texts.refreshToken(), value: 'gt:refresh_token', group: 'Grant Types' },
+    { label: this.texts.clientCredentials(), value: 'gt:client_credentials', group: 'Grant Types' },
+    {
+      label: this.texts.tokenExchange(),
+      value: 'gt:urn:ietf:params:oauth:grant-type:token-exchange',
+      group: 'Grant Types',
+    },
+    { label: this.texts.codeResponse(), value: 'rst:code', group: 'Response Types' },
+    ...this.scopeOptions(),
+    ...this.scopes()
+      .filter((scope) => !!scope.audience)
+      .map((scope) => ({
+        label: scope.displayName,
+        value: `aud:${scope.audience}`,
+        group: 'Audiences',
+      })),
+  ]);
 
-  readonly requirementOptions = computed(() => {
-    this.translationReady();
-    return [{ label: this.transloco.translate('openApp.requirement.forcePkce'), value: 'ft:pkce' }];
-  });
+  readonly requirementOptions = computed(() => [
+    { label: this.texts.forcePkce(), value: 'ft:pkce' },
+  ]);
 
-  readonly permissionLabels = computed<Record<string, string>>(() => {
-    this.translationReady();
-    return {
-      'ept:authorization': this.transloco.translate('openApp.permission.authorizationEndpoint'),
-      'ept:token': this.transloco.translate('openApp.permission.tokenEndpoint'),
-      'ept:end_session': this.transloco.translate('openApp.permission.endSessionEndpoint'),
-      'gt:authorization_code': this.transloco.translate('openApp.permission.authorizationCodeFlow'),
-      'gt:refresh_token': this.transloco.translate('openApp.permission.refreshToken'),
-      'gt:client_credentials': this.transloco.translate('openApp.permission.clientCredentials'),
-      'rst:code': this.transloco.translate('openApp.permission.codeResponse'),
-      'scp:openid': this.transloco.translate('openApp.permission.scopeOpenid'),
-      'scp:profile': this.transloco.translate('openApp.permission.scopeProfile'),
-      'scp:email': this.transloco.translate('openApp.permission.scopeEmail'),
-      'scp:roles': this.transloco.translate('openApp.permission.scopeRoles'),
-      'scp:offline_access': this.transloco.translate('openApp.permission.scopeOfflineAccess'),
-    };
-  });
+  readonly permissionLabels = computed<Record<string, string>>(() => ({
+    'ept:authorization': this.texts.authorizationEndpoint(),
+    'ept:token': this.texts.tokenEndpoint(),
+    'ept:end_session': this.texts.endSessionEndpoint(),
+    'gt:authorization_code': this.texts.authorizationCodeFlow(),
+    'gt:refresh_token': this.texts.refreshToken(),
+    'gt:client_credentials': this.texts.clientCredentials(),
+    'gt:urn:ietf:params:oauth:grant-type:token-exchange': this.texts.tokenExchange(),
+    'rst:code': this.texts.codeResponse(),
+    'scp:openid': this.texts.scopeOpenid(),
+    'scp:profile': this.texts.scopeProfile(),
+    'scp:email': this.texts.scopeEmail(),
+    'scp:roles': this.texts.scopeRoles(),
+    'scp:offline_access': this.texts.scopeOfflineAccess(),
+  }));
 
-  readonly applicationTypeLabels = computed<Record<string, string>>(() => {
-    this.translationReady();
-    return {
-      web: this.transloco.translate('openApp.appType.web'),
-      native: this.transloco.translate('openApp.appType.native'),
-      service: this.transloco.translate('openApp.appType.service'),
-    };
-  });
+  readonly applicationTypeLabels = computed<Record<string, string>>(() => ({
+    web: this.texts.appTypeWeb(),
+    native: this.texts.appTypeNative(),
+    service: this.texts.appTypeService(),
+  }));
 
-  readonly clientTypeLabels = computed<Record<string, string>>(() => {
-    this.translationReady();
-    return {
-      public: this.transloco.translate('openApp.clientType.publicLabel'),
-      confidential: this.transloco.translate('openApp.clientType.confidentialLabel'),
-    };
-  });
-
-  readonly consentTypeLabels = computed<Record<string, string>>(() => {
-    this.translationReady();
-    return {
-      implicit: this.transloco.translate('openApp.consentType.implicit'),
-      explicit: this.transloco.translate('openApp.consentType.explicit'),
-      external: this.transloco.translate('openApp.consentType.external'),
-      systematic: this.transloco.translate('openApp.consentType.systematic'),
-    };
-  });
+  readonly clientTypeLabels = computed<Record<string, string>>(() => ({
+    public: this.texts.clientTypePublic(),
+    confidential: this.texts.clientTypeConfidential(),
+  }));
   //#else
   readonly templateOptions = computed(() => [
     { label: 'Web PKCE client', value: 'web' as const },
@@ -376,13 +283,6 @@ export class OpenApplicationEditDialog {
     { label: 'Confidential', value: 'confidential' as const },
   ]);
 
-  readonly consentTypeOptions = computed(() => [
-    { label: 'Implicit consent', value: 'implicit' as const },
-    { label: 'Explicit consent', value: 'explicit' as const },
-    { label: 'External consent', value: 'external' as const },
-    { label: 'Systematic consent', value: 'systematic' as const },
-  ]);
-
   readonly permissionOptions = computed(() => [
     { label: 'Authorization endpoint', value: 'ept:authorization', group: 'Endpoints' },
     { label: 'Token endpoint', value: 'ept:token', group: 'Endpoints' },
@@ -390,12 +290,20 @@ export class OpenApplicationEditDialog {
     { label: 'Authorization code', value: 'gt:authorization_code', group: 'Grant Types' },
     { label: 'Refresh token', value: 'gt:refresh_token', group: 'Grant Types' },
     { label: 'Client credentials', value: 'gt:client_credentials', group: 'Grant Types' },
+    {
+      label: 'Token Exchange',
+      value: 'gt:urn:ietf:params:oauth:grant-type:token-exchange',
+      group: 'Grant Types',
+    },
     { label: 'Code response', value: 'rst:code', group: 'Response Types' },
-    { label: 'openid', value: 'scp:openid', group: 'Scopes' },
-    { label: 'profile', value: 'scp:profile', group: 'Scopes' },
-    { label: 'email', value: 'scp:email', group: 'Scopes' },
-    { label: 'roles', value: 'scp:roles', group: 'Scopes' },
-    { label: 'offline_access', value: 'scp:offline_access', group: 'Scopes' },
+    ...this.scopeOptions(),
+    ...this.scopes()
+      .filter((scope) => !!scope.audience)
+      .map((scope) => ({
+        label: scope.displayName,
+        value: `aud:${scope.audience}`,
+        group: 'Audiences',
+      })),
   ]);
 
   readonly requirementOptions = computed(() => [{ label: 'Force PKCE', value: 'ft:pkce' }]);
@@ -407,6 +315,7 @@ export class OpenApplicationEditDialog {
     'gt:authorization_code': 'Authorization code flow',
     'gt:refresh_token': 'Refresh token',
     'gt:client_credentials': 'Client credentials',
+    'gt:urn:ietf:params:oauth:grant-type:token-exchange': 'Token Exchange',
     'rst:code': 'Code response',
     'scp:openid': 'Identity',
     'scp:profile': 'Profile',
@@ -425,13 +334,6 @@ export class OpenApplicationEditDialog {
     public: 'Public',
     confidential: 'Confidential',
   }));
-
-  readonly consentTypeLabels = computed<Record<string, string>>(() => ({
-    implicit: 'Implicit consent',
-    explicit: 'Explicit consent',
-    external: 'External consent',
-    systematic: 'Systematic consent',
-  }));
   //#endif
 
   /**
@@ -446,18 +348,8 @@ export class OpenApplicationEditDialog {
 
   readonly clientTypeToLabel = (value: string): string => this.clientTypeLabels()[value] ?? value;
 
-  readonly consentTypeToLabel = (value: string): string => this.consentTypeLabels()[value] ?? value;
-
   readonly templateToLabel = (value: string): string =>
     this.templateOptions().find((option) => option.value === value)?.label ?? value;
-
-  getPermissionLabel(value: string): string {
-    return this.permissionLabels()[value] ?? value;
-  }
-
-  getRequirementLabel(value: string): string {
-    return this.requirementOptions().find((option) => option.value === value)?.label ?? value;
-  }
 
   constructor() {
     // 同时依赖 visible 与 application：每次对话框打开都重置表单，避免新建模式残留上次输入
@@ -473,7 +365,6 @@ export class OpenApplicationEditDialog {
           displayName: application.displayName ?? '',
           applicationType: application.applicationType,
           clientType: application.clientType,
-          consentType: application.consentType,
           redirectUris: [...application.redirectUris],
           postLogoutRedirectUris: [...application.postLogoutRedirectUris],
           permissions: [...application.permissions],
@@ -491,7 +382,6 @@ export class OpenApplicationEditDialog {
       displayName: '',
       applicationType: 'web',
       clientType: 'public',
-      consentType: 'explicit',
       redirectUris: [],
       postLogoutRedirectUris: [],
       permissions: [...authorizationCodePermissions],
@@ -517,7 +407,6 @@ export class OpenApplicationEditDialog {
         //#endif
         applicationType: 'native',
         clientType: 'public',
-        consentType: 'explicit',
         redirectUris: ['my-desktop-app://oauth/callback'],
         postLogoutRedirectUris: ['my-desktop-app://oauth/logout-callback'],
         permissions: [...authorizationCodePermissions],
@@ -531,7 +420,6 @@ export class OpenApplicationEditDialog {
         ...model,
         applicationType: 'service',
         clientType: 'confidential',
-        consentType: 'systematic',
         redirectUris: [],
         postLogoutRedirectUris: [],
         permissions: ['ept:token', 'gt:client_credentials'],
@@ -544,7 +432,6 @@ export class OpenApplicationEditDialog {
       ...model,
       applicationType: 'web',
       clientType: 'public',
-      consentType: 'explicit',
       permissions: [...authorizationCodePermissions],
       requirements: ['ft:pkce'],
     }));
@@ -555,13 +442,6 @@ export class OpenApplicationEditDialog {
       return;
     }
     this.formModel.update((model) => ({ ...model, applicationType: value }));
-  }
-
-  onConsentTypeChange(value: OpenApplicationConsentType | null | undefined) {
-    if (!value) {
-      return;
-    }
-    this.formModel.update((model) => ({ ...model, consentType: value }));
   }
 
   onClientTypeSelect(clientType: OpenApplicationClientType | null | undefined) {
@@ -636,7 +516,6 @@ export class OpenApplicationEditDialog {
         displayName: model.displayName,
         applicationType: model.applicationType,
         clientType: model.clientType,
-        consentType: model.consentType,
         redirectUris: model.redirectUris,
         postLogoutRedirectUris: model.postLogoutRedirectUris,
         permissions: model.permissions,
@@ -650,7 +529,6 @@ export class OpenApplicationEditDialog {
       displayName: model.displayName,
       applicationType: model.applicationType,
       clientType: model.clientType,
-      consentType: model.consentType,
       redirectUris: model.redirectUris,
       postLogoutRedirectUris: model.postLogoutRedirectUris,
       permissions: model.permissions,
@@ -662,3 +540,46 @@ export class OpenApplicationEditDialog {
     return requirements.includes('ft:pkce') ? requirements : [...requirements, 'ft:pkce'];
   }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'openApp.dialog.editHeader': 'Edit Open Application',
+  'openApp.dialog.createHeader': 'New Open Application',
+  'openApp.dialog.description': "Configure the client's identity, type, and OAuth capabilities.",
+  'openApp.dialog.loading': 'Loading open application...',
+  'openApp.field.template': 'Application template',
+  'openApp.field.templatePlaceholder': 'Select a template to quickly fill in',
+  'openApp.field.displayName': 'Application name',
+  'openApp.field.displayNamePlaceholder': 'e.g. My Desktop App',
+  'openApp.field.clientId': 'Client ID',
+  'openApp.field.clientIdPlaceholder': 'e.g. my-desktop-app',
+  'openApp.field.applicationType': 'Application type',
+  'openApp.field.clientType': 'Client type',
+  'openApp.section.callback': 'Callback URIs',
+  'openApp.field.redirectUris': 'Redirect URIs',
+  'openApp.redirectUri.hint': 'Callback URI after sign-in completes',
+  'openApp.redirectUri.placeholder':
+    'https://example.com/callback or my-desktop-app://oauth/callback',
+  'common.add': 'Add',
+  'openApp.redirectUri.invalid': 'Please enter a valid absolute URI without a fragment.',
+  'openApp.redirectUri.empty': 'No Redirect URI configured yet',
+  'common.remove': 'Remove',
+  'openApp.field.postLogoutRedirectUris': 'Post Logout Redirect URIs',
+  'openApp.postLogoutUri.hint': 'Redirect URI after logout',
+  'openApp.postLogoutUri.empty': 'No Post Logout Redirect URI configured yet',
+  'openApp.section.authorization': 'Authorization capabilities',
+  'openApp.service.autoConfigured': 'Configured automatically from the template',
+  'openApp.service.description':
+    'Server-side client credentials flow; no callback URIs or PKCE required.',
+  'openApp.field.permissions': 'Permissions',
+  'openApp.permissions.placeholder': 'Select authorization capabilities',
+  'openApp.field.requirements': 'Requirements',
+  'openApp.requirements.placeholder': 'Select security requirements',
+  'openApp.requirement.forcePkce': 'Force PKCE',
+  'openApp.requirements.offlineAccessHint':
+    'refresh_token is allowed; consider also granting the offline_access scope.',
+  'common.cancel': 'Cancel',
+  'common.save': 'Save',
+};
+//#endif

@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Leistd.AmbientContext;
-using Leistd.Security;
 using Leistd.Security.Claims;
 using Leistd.Security.Users;
 using Xunit;

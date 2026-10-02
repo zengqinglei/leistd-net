@@ -9,7 +9,7 @@ Hub 握手是一次 HTTP 请求，会走完整中间件管道；WebSocket 升级
 | 场景 | 推荐 |
 | --- | --- |
 | 宿主映射了任何 Hub，且 Hub 方法里要读当前用户、租户或写日志 | 引入本包 |
-| 需要按用户寻址推送（`Clients.User(...)`） | 引入本包，按需配置 `UserIdClaimTypes` |
+| 需要按用户寻址推送（`Clients.User(...)`） | 引入本包；用户标识按 `ClaimTypeOptions.UserIds` 解析 |
 | 需要让"账号被禁用/锁定"在**已建立连接的下一次 Hub 方法调用**上生效 | 引入本包，并在宿主默认策略里表达账号有效性 |
 | 用 JWT 等请求头认证，浏览器连接 Hub 只能把令牌放在查询串 | 在路由之后、认证之前 `app.UseHubAccessToken()` |
 | 使用 `Leistd.RealTime` 或 `Leistd.Notifications` 的 SignalR 包 | 无需直接引入，它们已依赖本包 |
@@ -33,7 +33,6 @@ builder.Services.AddSignalRAmbientContext(options =>
 {
     options.PolicyName = "HubAccess";                        // 默认用宿主的 DefaultPolicy
     options.RevalidationInterval = TimeSpan.FromSeconds(30); // 默认每次调用都复评
-    options.UserIdClaimTypes = ["user_id"];                  // 默认 ["sub", ClaimTypes.NameIdentifier]
 });
 ```
 
@@ -77,13 +76,13 @@ options.DefaultPolicy = new AuthorizationPolicyBuilder()
 | `AddSignalRAmbientContext(services, configure?)` | 注册 SignalR、`AmbientContextHubFilter` 与 `ClaimsSignalRUserIdProvider`；幂等 |
 | `UseHubAccessToken(app)` | 只在 Hub 端点上把查询串 `access_token` 转成 Bearer 头并从查询串移除；按端点元数据识别 Hub，与映射路径无关；已带 `Authorization` 头时放行 |
 | `AmbientContextHubFilter : IHubFilter` | 全局过滤器，覆盖方法调用、连接建立与断开 |
-| `ClaimsSignalRUserIdProvider : IUserIdProvider` | 按 `UserIdClaimTypes` 顺序解析 SignalR `UserIdentifier`；**只替换** SignalR 自带的 `DefaultUserIdProvider`（后者只认 `ClaimTypes.NameIdentifier`），宿主已注册的实现保持不动，注册在本方法之前或之后都可以 |
+| `ClaimsSignalRUserIdProvider : IUserIdProvider` | 按 `ClaimTypeOptions.UserIds` 解析 SignalR `UserIdentifier`，与框架其他组件读主体标识同一规则；另需不同寻址时替换官方 `IUserIdProvider`；**只替换** SignalR 自带的 `DefaultUserIdProvider`（后者只认 `ClaimTypes.NameIdentifier`），宿主已注册的实现保持不动，注册在本方法之前或之后都可以 |
 
 ## 实现行为
 
 ### 用户标识
 
-- 按 `UserIdClaimTypes` 顺序取第一个非空 claim 作为 `Context.UserIdentifier`，供 `Clients.User(...)` 寻址。
+- 按 `ClaimTypeOptions.UserIds` 顺序取第一个非空白 claim 作为 `Context.UserIdentifier`，供 `Clients.User(...)` 寻址。
 - 读的是连接主体（`HubConnectionContext.User`）——`IUserIdProvider` 是 SignalR 基础设施边界；业务代码仍用 `ICurrentUser`。
 
 ### 环境上下文
@@ -108,7 +107,6 @@ options.DefaultPolicy = new AuthorizationPolicyBuilder()
 | --- | --- | --- | --- |
 | `PolicyName` | `string?` | `null` | 复评所用策略名；`null` 时取 `IAuthorizationPolicyProvider.GetDefaultPolicyAsync()` |
 | `RevalidationInterval` | `TimeSpan?` | `null` | 两次复评的最小间隔；`null` 表示每次调用都复评 |
-| `UserIdClaimTypes` | `IReadOnlyList<string>` | `["sub", ClaimTypes.NameIdentifier]` | 解析 `UserIdentifier` 的 claim 顺序，取第一个非空值 |
 
 ## 多实例部署
 
@@ -129,7 +127,6 @@ builder.Services.AddSignalR().AddStackExchangeRedis(redisConnectionString);
 - 复评评估的是策略的 `Requirements`，不涉及认证方案——身份来自握手时已认证的连接主体。
 - 本包只提供基座，不映射任何 Hub 端点，也不注册背板。
 - 本包不配置 `HubOptions`：心跳、超时、详细错误是 SignalR 自身的选项，由宿主用 `AddSignalR(o => ...)` 直接配置。
-- 显式把 `UserIdClaimTypes` 配成空集合即表示不解析用户标识，此时按用户寻址的推送全部落空。
 
 ## 相关
 

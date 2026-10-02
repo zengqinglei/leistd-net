@@ -6,7 +6,6 @@ using CompanyName.ProjectName.Domain.Users.Policies;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.Entities;
@@ -116,12 +115,24 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     /// 最近一次校验通过的验证码所在步序号；不大于它的步一律拒绝，防止同一个码被重放
     /// </summary>
     public long? TwoFactorLastUsedStep { get; private set; }
+
+    /// <summary>
+    /// 账号安全版本：凭据（口令、两步验证、外部登录绑定）每变一次就换一个新值
+    /// </summary>
+    /// <remarks>
+    /// 登录第二步的挑战记下签发时的值，完成前比对：第一步通过之后改了口令、重置或解绑了凭据，
+    /// 旧挑战随之作废。挑战不是会话，撤销会话挡不住它。
+    /// </remarks>
+    public string SecurityStamp { get; private set; }
 #endif
 
     private User()
     {
         Username = null!;
         Email = null!;
+#if (LocalIdentity)
+        SecurityStamp = null!;
+#endif
     }
 
     public User(
@@ -143,6 +154,7 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         Email = email;
 #if (LocalIdentity)
         PasswordHash = passwordHash;
+        SecurityStamp = NewSecurityStamp();
 #endif
         DisplayName = displayName ?? username;
     }
@@ -156,6 +168,21 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         Avatar = avatar;
     }
 
+#if (!LocalIdentity)
+    /// <summary>按签发方令牌刷新资料字段。</summary>
+    /// <remarks>
+    /// 资源服务形态下这三个字段归签发方所有，本地没有编辑入口，只有这一条刷新通道。
+    /// <b>刻意不碰 <see cref="IsActive"/> 与角色</b>：那是本服务自己的授权决定，
+    /// 跟着刷新走会把管理员刚做的启停与授权冲掉，而且每个请求冲一次。
+    /// </remarks>
+    public void ProjectFromIssuer(string username, string email, string? displayName)
+    {
+        Username = username;
+        Email = email;
+        DisplayName = displayName;
+    }
+
+#endif
     public void UpdateManagement(string email, string? displayName, string? avatar, bool isActive, bool emailConfirmed)
     {
         Email = email;
@@ -228,7 +255,17 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
     public void UpdatePasswordHash(string passwordHash)
     {
         PasswordHash = passwordHash;
+        RotateSecurityStamp();
     }
+
+    /// <summary>换一个新的安全版本，使此前签发、尚未完成的登录挑战作废。</summary>
+    /// <remarks>改口令、启用或停用两步验证时自动调用；其余凭据变化（解绑外部登录）由调用方显式调用。</remarks>
+    public void RotateSecurityStamp()
+    {
+        SecurityStamp = NewSecurityStamp();
+    }
+
+    private static string NewSecurityStamp() => Guid.NewGuid().ToString("N");
 
     public void ConfirmEmail()
     {
@@ -324,6 +361,7 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         TwoFactorSecret = protectedSecret;
         TwoFactorRecoveryCodes = string.Join(';', recoveryCodeHashes);
         TwoFactorLastUsedStep = usedStep;
+        RotateSecurityStamp();
     }
 
     /// <summary>停用两步验证，并清掉密钥与恢复码。</summary>
@@ -333,6 +371,7 @@ public class User : FullAuditedEntity<Guid>, IMultiTenant
         TwoFactorSecret = null;
         TwoFactorRecoveryCodes = null;
         TwoFactorLastUsedStep = null;
+        RotateSecurityStamp();
     }
 
     /// <summary>换一组恢复码，旧的全部作废。</summary>

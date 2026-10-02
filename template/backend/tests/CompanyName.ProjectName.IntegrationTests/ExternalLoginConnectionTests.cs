@@ -24,19 +24,7 @@ public sealed class ExternalLoginConnectionTests
         connection.Update(updatedAt, "updated-user", "updated@example.com", "https://example.com/avatar.png");
 
         Assert.Equal(updatedAt, connection.LastSyncTime);
-        Assert.Equal("updated-user", connection.ProviderUsername);
-    }
-
-    [Fact]
-    public void Token_update_records_the_callers_time()
-    {
-        var connection = CreateConnection(InitialSync);
-        var updatedAt = InitialSync.AddMinutes(2);
-
-        connection.UpdateTokens(updatedAt, "access-token", "refresh-token", updatedAt.AddHours(1));
-
-        Assert.Equal(updatedAt, connection.LastSyncTime);
-        Assert.Equal("access-token", connection.AccessToken);
+        Assert.Equal("updated-user", connection.ProviderAccountLabel);
     }
 
     private static ExternalLoginConnection CreateConnection(DateTime syncedAt) =>

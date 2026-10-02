@@ -1,3 +1,4 @@
+using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.AspNetCore.Endpoints;
 using Leistd.MultiTenancy.EntityFrameworkCore;
 using Microsoft.AspNetCore.Builder;
@@ -113,6 +114,7 @@ public sealed class TenantEndpointMappingTests
             .AddRouting()
             .AddLogging()
             .AddMultiTenancyEfCore<DbContext>()
+            .AddTenantManagement()
             .BuildServiceProvider();
 
         public ICollection<EndpointDataSource> DataSources { get; } = [];

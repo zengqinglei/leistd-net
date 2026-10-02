@@ -20,7 +20,16 @@ public static class OperationRecordActions
     /// <summary>删除用户。</summary>
     public const string UserDeleted = "user.deleted";
 
+    /// <summary>管理员启用了用户。</summary>
+    public const string UserEnabled = "user.enabled";
+
+    /// <summary>管理员停用了用户：该用户的会话与令牌随之作废。</summary>
+    public const string UserDisabled = "user.disabled";
+
 #if (LocalIdentity)
+    /// <summary>管理员重置了用户的密码：该用户的会话与令牌随之作废。</summary>
+    public const string UserPasswordReset = "user.password-reset";
+
     /// <summary>管理员提前解除了用户的登录锁定。</summary>
     public const string UserUnlocked = "user.unlocked";
 

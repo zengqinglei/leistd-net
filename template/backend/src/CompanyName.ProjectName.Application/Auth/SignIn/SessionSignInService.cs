@@ -1,4 +1,7 @@
 using CompanyName.ProjectName.Application.Auth.TwoFactor;
+#if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
+#endif
 using CompanyName.ProjectName.Domain.Auth.DomainServices;
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Auth.Options;
@@ -14,6 +17,7 @@ using Leistd.Security.Claims;
 using Leistd.Timing;
 using Leistd.ExceptionHandling;
 using CompanyName.ProjectName.Application.Auth.Constants;
+using CompanyName.ProjectName.Application.Shared;
 using CompanyName.ProjectName.Application.Auth.Abstractions;
 
 namespace CompanyName.ProjectName.Application.Auth.SignIn;
@@ -28,11 +32,15 @@ internal sealed class SessionSignInService(
     ILoginSecurityPolicyProvider loginSecurityPolicy,
     ISecurityAlertPublisher securityAlerts,
     IRequestClientInfo clientInfo,
+    IOptions<ClaimTypeOptions> claimTypes,
     IClock clock)
 {
     // OIDC 标准声明名，ICurrentUser 按它们分别读用户名与显示名。
     private const string PreferredUsernameClaimType = "preferred_username";
     private const string DisplayNameClaimType = "name";
+    // OIDC 标准角色声明名。身份的 RoleClaimType 必须随之设为它，
+    // 否则官方 IsInRole / RequireRole 按默认的 ClaimTypes.Role 去找，静默判为不在角色中。
+    private const string RoleClaimType = "role";
 
     /// <summary>
     /// 登录第一步（密码或外部登录）通过之后决定去向。
@@ -59,7 +67,7 @@ internal sealed class SessionSignInService(
         if (user.TwoFactorEnabled)
         {
             return SessionLoginResult.TwoFactorRequired(
-                await twoFactorChallengeStore.CreateAsync(user.Id, user.TenantId, cancellationToken));
+                await twoFactorChallengeStore.CreateAsync(user.Id, user.TenantId, user.SecurityStamp, cancellationToken));
         }
 
         var policy = await loginSecurityPolicy.GetAsync(cancellationToken);
@@ -115,9 +123,12 @@ internal sealed class SessionSignInService(
                 cancellationToken);
         }
 
-        var identity = new ClaimsIdentity(AuthenticationSchemeNames.SessionCookie);
-        identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+        var identity = new ClaimsIdentity(AuthenticationSchemeNames.SessionCookie, ClaimTypes.Name, RoleClaimType);
+        identity.AddClaim(new Claim(claimTypes.Value.UserIds[0], user.Id.ToString()));
         identity.AddClaim(new Claim(CustomClaimTypes.SessionId, session.Id.ToString()));
+        // 真正认证时记录，Cookie 滑动续期不能更新 OIDC max_age 的基准。
+        identity.AddClaim(new Claim("auth_time", new DateTimeOffset(DateTime.SpecifyKind(now, DateTimeKind.Utc))
+            .ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         identity.AddClaim(new Claim(ClaimTypes.Name, user.Username));
         // ICurrentUser 的约定：Username 取 preferred_username，Name 是显示名、取 name。
         // 只写 ClaimTypes.Name 时两者都读到登录名，操作记录的操作人列就与目标列口径不一——
@@ -132,13 +143,13 @@ internal sealed class SessionSignInService(
 
         if (user.TenantId is { } tenantId)
         {
-            identity.AddClaim(new Claim(CustomClaimTypes.TenantId, tenantId.ToString()));
+            identity.AddClaim(new Claim(claimTypes.Value.TenantId, tenantId.ToString()));
         }
 
         foreach (var roleName in roleNames
             ?? await userDomainService.GetUserRoleNamesAsync(user.Id, cancellationToken))
         {
-            identity.AddClaim(new Claim("role", roleName));
+            identity.AddClaim(new Claim(RoleClaimType, roleName));
         }
 
         foreach (var claim in extraClaims)
@@ -187,19 +198,12 @@ internal sealed class SessionSignInService(
         if (user.IsTemporarilyLockedOut(now))
         {
             var minutes = (int)Math.Ceiling((user.LockoutEnd!.Value - now).TotalMinutes);
-            return new UnauthorizedException(
-                $"Too many failed sign-in attempts. Try again in {minutes} minute(s).")
-#if (IncludeLocalization)
-                .WithCode("Auth:UserTemporarilyLockedOut")
-                .WithData("Minutes", minutes)
-#endif
-                ;
+            return new BusinessException(AuthErrorCodes.UserTemporarilyLockedOut,
+                    $"Too many failed sign-in attempts. Try again in {minutes} minute(s).")
+                .WithData("Minutes", minutes);
         }
 
-        return new UnauthorizedException("This account is locked. Contact your administrator.")
-#if (IncludeLocalization)
-            .WithCode("Auth:UserLockedOut")
-#endif
+        return new BusinessException(AuthErrorCodes.UserLockedOut, "This account is locked. Contact your administrator.")
             ;
     }
 
@@ -211,12 +215,7 @@ internal sealed class SessionSignInService(
             case UserAccessStatus.Allowed:
                 return;
             case UserAccessStatus.Disabled:
-                throw new UnauthorizedException($"Login failed: user is disabled - user: {user.Username}")
-#if (IncludeLocalization)
-                    .WithCode("Auth:UserDisabled")
-                    .WithData("Username", user.Username)
-#endif
-                    ;
+                throw new BusinessException(AuthErrorCodes.UserDisabled, "This account is disabled. Contact your administrator.");
             case UserAccessStatus.LockedOut:
                 throw LockedOut(user, now);
             default:

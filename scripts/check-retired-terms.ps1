@@ -68,12 +68,13 @@ $retiredSymbols = @(
     "PermissionRequirement\.PermissionName",
     "PermissionGrantRecord\.ForUser",
     "PermissionGrantRecord\.ForRole",
-    # 异常消息的可见性从"抛出点自己声明"改成了宿主的 MessageExposure 统一策略。
-    # 这两个名字会复发：62 处抛出点是围绕旧模型写的，而"给这条异常加个 AsUserFacing"
-    # 是照训练记忆最容易写出的那一行——它现在编译不过，但文档与注释不会。
+    # 业务异常的 Message 必须安全可展示，技术异常始终回落通用 500；
+    # 不再保留抛出点或宿主可见性开关，避免同一错误随配置泄露内部消息。
     "\bAsUserFacing\b",
     "\bIsUserFacingMessage\b",
-    "\bFallbackToExceptionMessage\b"
+    "\bFallbackToExceptionMessage\b",
+    "\bBusinessMessageExposure\b",
+    "\.MessageExposure\b"
 )
 
 # 外部参考框架的痕迹。设计时参考过别的框架是正常的，但**交付面里不该留下指向它的引用**：
@@ -113,6 +114,18 @@ $roadmapPhrases = @(
     "未来版本",
     "将来支持"
 )
+
+# 待办标记。交付的代码不留"以后再改"：工具（迁移 schematic、代码生成器）留下的待办与自己写的
+# 待办一样，要在当期按终局做法改掉——留下来就会被遗忘，也会被读者当成当前仍未完成的约定。
+# 作用于 framework/ 与 template/（含测试）；docs/ 里的计划与评估本来就在记录未完成的事。
+# 豁免只给第三方生成、按上游原样维护的代码：libs/ui 是 spartan 生成的组件库。
+# 只认注释里的大写标记（`//`、`/*`、块注释续行 `*`、`#`、`<!--`、`@*`），以及 Markdown 行首的标记：
+# 待办是写给维护者的话，只会出现在注释与说明文字里。字符串与数据里的 'TODO'（任务状态之类）
+# 是正常的值，不拦；普通单词（todos、TodoList）靠单词边界排除。
+# 注释起始符与标记之间不允许出现引号；URL 里的 `://` 不算注释起始。
+$todoScopes = @("framework/", "template/")
+$todoExemptPaths = @("template/frontend/libs/ui/")
+$todoMarker = '(?-i:(?:(?<!:)//|/\*|<!--|@\*|^\s*\*|^\s*#|^\s*(?:[-*]\s+)?(?=(?:TODO|FIXME|HACK)\b))[^''"`]*?\b(?<marker>TODO|FIXME|HACK)\b)'
 
 # 短语 → 豁免路径片段。资源实例授权那一层保留了 ResourceGrantEffect，
 # "显式拒绝优先"在那里是当前正确的描述，不是漂移。
@@ -155,7 +168,7 @@ if ($SelfTest) {
         @{ Rule = "symbol"; Text = "ResourceGrantEffect.Granted";                     ShouldMatch = $false }
         @{ Rule = "symbol"; Text = ".AsUserFacing()";                                ShouldMatch = $true }
         @{ Rule = "symbol"; Text = "FallbackToExceptionMessage = true";              ShouldMatch = $true }
-        @{ Rule = "symbol"; Text = "options.MessageExposure = All";                  ShouldMatch = $false }
+        @{ Rule = "symbol"; Text = "options.MessageExposure = All";                  ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "任一来源三态组合后取并集";                        ShouldMatch = $true }
         @{ Rule = "phrase"; Text = "亮/暗/跟随系统三态";                              ShouldMatch = $false }
         @{ Rule = "foreign"; Text = "参考 ABP 的多租户实现";                          ShouldMatch = $true }
@@ -168,6 +181,22 @@ if ($SelfTest) {
         @{ Rule = "roadmap"; Text = "需把存储改成 1:N，届时第 3、4 级按名字查";              ShouldMatch = $true }
         @{ Rule = "roadmap"; Text = "升级到本版本需要一次 EF 迁移";                        ShouldMatch = $true }
         @{ Rule = "roadmap"; Text = "当前每租户一条配置，业务 DbContext 解析到 Default";     ShouldMatch = $false }
+        @{ Rule = "todo"; Text = "// TODO: vitest-migration: Please migrate manually.";           ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "/// FIXME 以后再处理";                                         ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "// HACK: 临时绕过";                                           ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "const todos = listTodoItems();";                              ShouldMatch = $false }
+        @{ Rule = "todo"; Text = "export class TodoList {}";                                    ShouldMatch = $false }
+        @{ Rule = "todo"; Text = "/* TODO: 拆分 */";                                           ShouldMatch = $true; Marker = "TODO" }
+        @{ Rule = "todo"; Text = " * FIXME 边界未处理";                                          ShouldMatch = $true; Marker = "FIXME" }
+        @{ Rule = "todo"; Text = "# TODO 换成正式镜像";                                          ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "<!-- TODO: 补截图 -->";                                        ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "@* HACK 临时样式 *@";                                          ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "TODO: 补充部署步骤";                                           ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "- TODO 补充部署步骤";                                          ShouldMatch = $true }
+        @{ Rule = "todo"; Text = "expect(task.status).toBe('TODO');";                          ShouldMatch = $false }
+        @{ Rule = "todo"; Text = '{ "status": "TODO" }';                                        ShouldMatch = $false }
+        @{ Rule = "todo"; Text = "const next = Status.TODO;";                                   ShouldMatch = $false }
+        @{ Rule = "todo"; Text = 'var url = "http://host/TODO";';                              ShouldMatch = $false }
     )
 
     $failures = New-Object System.Collections.Generic.List[string]
@@ -182,6 +211,13 @@ if ($SelfTest) {
         elseif ($case.Rule -eq "foreign") {
             foreach ($symbol in $foreignFrameworkSymbols) {
                 if ($case.Text -match $symbol) { $matched = $true; break }
+            }
+        }
+        elseif ($case.Rule -eq "todo") {
+            $matched = $case.Text -match $todoMarker
+            # 诊断信息要能说出命中的是哪个标记
+            if ($matched -and $case.Marker -and $Matches['marker'] -ne $case.Marker) {
+                $failures.Add("[todo] ""$($case.Text)"" 命中的标记是 '$($Matches['marker'])'，应为 '$($case.Marker)'")
             }
         }
         elseif ($case.Rule -eq "roadmap") {
@@ -211,25 +247,24 @@ if ($SelfTest) {
     exit 0
 }
 
-$scanRoots = @("framework", "template", "docs") |
-    ForEach-Object { Join-Path $RepoRoot $_ } |
-    Where-Object { Test-Path -LiteralPath $_ }
-
-# 也扫 .html 与 .json：页面文案和 i18n 词条同样会讲解旧模型，只扫代码与文档会漏掉它们。
-$files = Get-ChildItem -LiteralPath $scanRoots -Recurse -File -Include *.cs, *.ts, *.md, *.html, *.json -ErrorAction SilentlyContinue |
-    Where-Object {
-        $_.FullName -notmatch "[\\/](bin|obj|node_modules|dist|\.angular)[\\/]" -and
-        $_.Name -notlike "package-lock.json"
-    }
+# 清单取 Git 已跟踪与未跟踪但未忽略的文件：新建未提交的文件照样被扫，node_modules 等忽略目录不必先遍历再过滤，
+# .agents 这类隐藏目录也不会漏掉。也扫 .html 与 .json：页面文案和 i18n 词条同样会讲解旧模型。
+$listed = @(git -C $RepoRoot -c core.quotepath=off ls-files --cached --others --exclude-standard -- framework template docs)
+if ($LASTEXITCODE -ne 0) { throw "git ls-files 失败，无法确定扫描范围。" }
+$files = $listed | Where-Object {
+    $_ -match '\.(cs|ts|md|html|json)$' -and
+    $_ -notmatch '(^|/)(bin|obj|node_modules|dist|\.angular)/' -and
+    $_ -notlike '*package-lock.json' -and
+    (Test-Path -LiteralPath (Join-Path $RepoRoot $_) -PathType Leaf)
+}
 
 $scanned = 0
-foreach ($file in $files) {
-    $relative = $file.FullName.Substring($RepoRoot.Length).TrimStart('/', '\')
+foreach ($relative in $files) {
     if (Test-Historical $relative) { continue }
 
     $scanned++
     # 强制成数组：单行文件下 Get-Content 返回字符串，按下标取到的是字符而不是整行。
-    $lines = @(Get-Content -LiteralPath $file.FullName -Encoding UTF8)
+    $lines = @(Get-Content -LiteralPath (Join-Path $RepoRoot $relative) -Encoding UTF8)
 
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index]
@@ -258,6 +293,17 @@ foreach ($file in $files) {
                     $problems.Add("$relative`:$($index + 1) 分发面出现路线图/升级动作表述 '$phrase'；归 docs/framework/versioning.md")
                 }
             }
+        }
+
+        $inTodoScope = $false
+        foreach ($scope in $todoScopes) {
+            if ($normalizedPath.StartsWith($scope)) { $inTodoScope = $true; break }
+        }
+        foreach ($exemptPath in $todoExemptPaths) {
+            if ($normalizedPath.StartsWith($exemptPath)) { $inTodoScope = $false; break }
+        }
+        if ($inTodoScope -and $line -match $todoMarker) {
+            $problems.Add("$relative`:$($index + 1) 留下了待办标记 '$($Matches['marker'])'；在当期按终局做法完成，不留待办")
         }
 
         foreach ($phrase in $retiredPhrases.Keys) {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading.Channels;
 using Leistd.AmbientContext;
 using Leistd.BackgroundJobs.InProcess.Options;
@@ -8,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace Leistd.BackgroundJobs.InProcess.Queues;
 
 // 有界通道：满了就等（QueueAsync）或返回 false（TryQueue），不丢也不抛。
-// 入队时捕获环境上下文；未注册环境上下文（没有安全组件）时工作项在空上下文里执行。
+// 入队时捕获环境上下文与当前链路；未注册环境上下文（没有安全组件）时工作项在空上下文里执行。
 internal sealed class BackgroundTaskQueue(
     IServiceProvider rootProvider,
     IOptions<InProcessBackgroundJobOptions> options) : IBackgroundTaskQueue
@@ -40,9 +41,10 @@ internal sealed class BackgroundTaskQueue(
     internal void Complete() => _channel.Writer.TryComplete();
 
     private QueuedWorkItem Capture(Func<IServiceProvider, CancellationToken, ValueTask> workItem)
-        => new(workItem, rootProvider.GetService<IAmbientContext>()?.Capture());
+        => new(workItem, rootProvider.GetService<IAmbientContext>()?.Capture(), Activity.Current?.Context);
 }
 
 internal sealed record QueuedWorkItem(
     Func<IServiceProvider, CancellationToken, ValueTask> WorkItem,
-    AmbientContextSnapshot? Context);
+    AmbientContextSnapshot? Context,
+    ActivityContext? Parent);

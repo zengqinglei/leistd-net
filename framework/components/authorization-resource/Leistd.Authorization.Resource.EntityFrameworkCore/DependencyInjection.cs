@@ -17,7 +17,7 @@ public static class DependencyInjection
     /// <summary>
     /// 注册基于指定 DbContext 的资源 ACL 存储与管理器。
     /// </summary>
-    /// <remarks>内部已调用 <c>AddResourceAuthorizationCore()</c>。</remarks>
+    /// <remarks>只注册 ACL 存储；判定入口在 <c>Leistd.Authorization.Resource.AspNetCore</c> 的 <c>AddResourceAuthorization()</c>。</remarks>
     /// <remarks>
     /// <b>前置</b>：宿主须已注册 <c>AddUnitOfWork()</c> 与 <c>AddUnitOfWorkEfCore()</c>——
     /// 本家族的存储与管理器经 <c>IDbContextProvider&lt;TDbContext&gt;</c> 取上下文
@@ -26,14 +26,15 @@ public static class DependencyInjection
     /// </remarks>
     /// <example>
     /// <code>
-    /// builder.Services.AddResourceAuthorizationEfCore&lt;AppDbContext&gt;();   // 已内含 Core 注册
+    /// builder.Services.AddResourceAuthorizationEfCore&lt;AppDbContext&gt;();
+    /// builder.Services.AddResourceAuthorization();   // Leistd.Authorization.Resource.AspNetCore
     /// </code>
     /// </example>
     public static IServiceCollection AddResourceAuthorizationEfCore<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
         // 同权限授予：资源 ACL 只有一个权威存储，落错库的症状是越权而不是报错。
-        // 同样只断言 Store——Manager 允许宿主替换，理由见 AddAuthorizationEfCore。
+        // 同样只断言 Store——Manager 允许宿主替换，理由见 AddPermissionAuthorizationEfCore。
         services.EnsureSingleAuthoritative<IResourceGrantStore, EfCoreResourceGrantStore<TDbContext>>(
             ServiceLifetime.Scoped,
             "Resource grants have a single authoritative store; map the resource ACL tables in one DbContext.");

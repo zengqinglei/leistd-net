@@ -4,9 +4,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Leistd.Data.Paging;
 using Leistd.ExceptionHandling;
-using Leistd.Notifications.Channels;
 using Leistd.Notifications.Errors;
-using Leistd.Notifications.Publishing;
 using Leistd.Notifications.Stores;
 using Leistd.Notifications.AspNetCore.Endpoints;
 using Leistd.Notifications.Dtos;
@@ -66,7 +64,9 @@ public sealed class NotificationEndpointTests : IAsyncLifetime
                         }
                         catch (BusinessException exception)
                         {
-                            context.Response.StatusCode = exception.StatusCode;
+                            context.Response.StatusCode = exception.Code == NotificationErrorCodes.IdentityCannotOperate
+                                ? StatusCodes.Status403Forbidden
+                                : StatusCodes.Status400BadRequest;
                             context.Response.Headers["X-Error-Code"] = exception.Code;
                         }
                     });

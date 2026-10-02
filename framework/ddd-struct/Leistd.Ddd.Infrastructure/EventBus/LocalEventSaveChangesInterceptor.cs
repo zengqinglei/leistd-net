@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using Leistd.Ddd.Domain.Entities;
-using Leistd.EventBus;
 using Leistd.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -19,20 +18,19 @@ namespace Leistd.Ddd.Infrastructure.EventBus;
 /// </remarks>
 public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
 {
-    private readonly ILocalEventBus? _localEventBus;
-    private readonly IUnitOfWorkManager? _unitOfWorkManager;
+    private readonly ILocalEventBus _localEventBus;
+    private readonly IUnitOfWorkManager _unitOfWorkManager;
     private readonly ILogger<LocalEventSaveChangesInterceptor> _logger;
 
     // 弱引用按 DbContext 隔离待发布事件，避免延长上下文生命周期。
     private static readonly ConditionalWeakTable<DbContext, List<ILocalEvent>> _pendingByContext = new();
 
     /// <summary>
-    /// 创建拦截器。<paramref name="localEventBus"/> 与 <paramref name="unitOfWorkManager"/> 均为可选依赖：
-    /// 未注册时收集照常进行但不发布，宿主不会因缺少事件设施而启动失败。
+    /// 创建拦截器。两个依赖都由 <c>AddDddInfrastructure</c> 注册。
     /// </summary>
     public LocalEventSaveChangesInterceptor(
-        ILocalEventBus? localEventBus,
-        IUnitOfWorkManager? unitOfWorkManager,
+        ILocalEventBus localEventBus,
+        IUnitOfWorkManager unitOfWorkManager,
         ILogger<LocalEventSaveChangesInterceptor> logger)
     {
         _localEventBus = localEventBus;
@@ -126,14 +124,14 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
         if (localEvents.Count == 0)
             return;
 
-        var currentUow = _unitOfWorkManager?.Current;
+        var currentUow = _unitOfWorkManager.Current;
 
         if (currentUow != null)
         {
             currentUow.AddPendingEvents(localEvents);
             _logger.LogDebug("Collected {Count} event(s); queued in the unit of work for publication", localEvents.Count);
         }
-        else if (_localEventBus != null)
+        else
         {
             _logger.LogWarning("Publishing {Count} local event(s) inside synchronous SaveChanges. This may cause thread starvation (sync-over-async). Prefer SaveChangesAsync.", localEvents.Count);
 
@@ -153,14 +151,14 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
         if (localEvents.Count == 0)
             return;
 
-        var currentUow = _unitOfWorkManager?.Current;
+        var currentUow = _unitOfWorkManager.Current;
 
         if (currentUow != null)
         {
             currentUow.AddPendingEvents(localEvents);
             _logger.LogDebug("Collected {Count} event(s); queued in the unit of work for publication", localEvents.Count);
         }
-        else if (_localEventBus != null)
+        else
         {
             _logger.LogDebug("No unit of work; publishing {Count} event(s) immediately (default AfterCommit phase)", localEvents.Count);
             foreach (var @event in localEvents)
@@ -170,11 +168,11 @@ public class LocalEventSaveChangesInterceptor : SaveChangesInterceptor
         }
     }
 
+    // 与清空同一范围：只改了子实体或只登记事件的聚合根保存时是 Unchanged，按状态过滤会清掉却不发布
     private static List<ILocalEvent> CollectLocalEvents(DbContext context)
     {
         return context.ChangeTracker
             .Entries<Entity>()
-            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
             .SelectMany(e => e.Entity.GetLocalEvents())
             .ToList();
     }

@@ -1,32 +1,20 @@
+import { HttpInterceptorFn } from '@angular/common/http';
 import { Provider } from '@angular/core';
 
-import { MOCK_APIS } from './interceptor';
 import { MockConfig } from './models';
-import * as allApis from '../index';
 
-/**
- * 提供 Mock 服务的核心函数。
- *
- * @param config Mock 配置对象，通常来自环境文件。
- * @returns 返回一个 Provider 数组，可直接在 app.config.ts 的 providers 中使用。
- */
-export function provideMock(config: boolean | MockConfig): Provider[] {
-  if (!shouldProvideMock(config)) {
-    return [];
-  }
+// 默认不带 Mock：只有本机开发构建经 angular.json 的 fileReplacements 换成 providers.mock.ts。
+// 反过来写（默认带、部署构建逐个替换掉）时，新增一个部署环境漏配一条替换，Mock 数据就会静默进包。
+// 导出须与 providers.mock.ts 一致。
 
-  // 动态地将所有导入的 *_API 对象合并到一个 APIS 对象中
-  const apis = Object.values(allApis)
-    .filter((value) => typeof value === 'object' && value !== null)
-    .reduce((acc, current) => ({ ...acc, ...current }), {});
-
-  return [{ provide: MOCK_APIS, useValue: apis }];
+export function provideMock(_config: boolean | MockConfig): Provider[] {
+  return [];
 }
 
-export function shouldProvideMock(config: boolean | MockConfig): boolean {
-  return typeof config === 'boolean' ? config : config.enable || hasPatterns(config.include);
+export function mockInterceptors(_config: boolean | MockConfig): HttpInterceptorFn[] {
+  return [];
 }
 
-function hasPatterns(patterns?: string | string[]): boolean {
-  return Array.isArray(patterns) ? patterns.length > 0 : Boolean(patterns);
+export function isMockedUrl(_config: boolean | MockConfig, _url: string): boolean {
+  return false;
 }

@@ -20,11 +20,12 @@ namespace Leistd.OperationRecords.Models;
 /// </remarks>
 public sealed class OperationRecordVisibilityScope
 {
-    private OperationRecordVisibilityScope(bool restricted, bool includesHostRecords, string? actorId)
+    private OperationRecordVisibilityScope(bool restricted, bool includesHostRecords, string? actorId, Guid? actorTenantId)
     {
         IsRestricted = restricted;
         IncludesHostRecords = includesHostRecords;
         ActorId = actorId;
+        ActorTenantId = actorTenantId;
     }
 
     /// <summary>是否施加可见性限制；仅 <see cref="Unrestricted"/> 为 <see langword="false"/>。</summary>
@@ -42,19 +43,29 @@ public sealed class OperationRecordVisibilityScope
     /// </remarks>
     public string? ActorId { get; }
 
+    /// <summary>
+    /// 读者自身所属的租户（宿主主体为 <see langword="null"/>），与 <see cref="ActorId"/> 一起认定"本人"。
+    /// </summary>
+    /// <remarks>
+    /// 主体标识只在签发它的那一层内唯一：宿主主体进入租户操作时记录留在租户层，操作人所属租户却是宿主，
+    /// 只比标识的话，租户里恰好同标识的主体会把它当成自己的记录。
+    /// </remarks>
+    public Guid? ActorTenantId { get; }
+
     /// <summary>宿主视角：所有层级都可见。</summary>
-    public static OperationRecordVisibilityScope Host { get; } = new(true, true, null);
+    public static OperationRecordVisibilityScope Host { get; } = new(true, true, null, null);
 
     /// <summary>
     /// 不加可见性限制，供不代表某个读者的内部任务使用（如归档、导出到运维系统）。
     /// </summary>
     /// <remarks>面向用户的查询应使用 <see cref="Host"/> 或 <see cref="ForTenantReader"/>。</remarks>
-    public static OperationRecordVisibilityScope Unrestricted { get; } = new(false, true, null);
+    public static OperationRecordVisibilityScope Unrestricted { get; } = new(false, true, null, null);
 
     /// <summary>
-    /// 租户视角：看不到 <c>Host</c> 层；<c>Actor</c> 层仅当记录的操作人是本人。
+    /// 租户视角：看不到 <c>Host</c> 层；<c>Actor</c> 层仅当记录的操作人是本人（标识与所属租户都相同）。
     /// </summary>
     /// <param name="actorId">读者自身的操作人标识；未知时传 <see langword="null"/>。</param>
-    public static OperationRecordVisibilityScope ForTenantReader(string? actorId)
-        => new(true, false, string.IsNullOrWhiteSpace(actorId) ? null : actorId.Trim());
+    /// <param name="actorTenantId">读者自身所属的租户；宿主主体传 <see langword="null"/>。</param>
+    public static OperationRecordVisibilityScope ForTenantReader(string? actorId, Guid? actorTenantId)
+        => new(true, false, string.IsNullOrWhiteSpace(actorId) ? null : actorId.Trim(), actorTenantId);
 }

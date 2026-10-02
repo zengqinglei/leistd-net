@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -7,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Leistd.AmbientContext;
 using Leistd.AspNetCore.SignalR.Options;
+using Leistd.Security.Claims;
 
 namespace Leistd.AspNetCore.SignalR.Filters;
 
@@ -28,8 +28,7 @@ public sealed class AmbientContextHubFilter(
     // 匿名连接也建立上下文，但只对 IsAuthenticated 主体复评；非 null 不代表已认证。
     private static ClaimsPrincipal Principal(HubCallerContext context) => context.User ?? new ClaimsPrincipal();
 
-    private static bool IsAuthenticated(ClaimsPrincipal principal) =>
-        principal.Identity?.IsAuthenticated == true;
+    private static bool IsAuthenticated(ClaimsPrincipal principal) => principal.HasAuthenticatedIdentity();
 
     private const string LastRevalidatedKey = "Leistd.AspNetCore.SignalR.LastRevalidated";
 

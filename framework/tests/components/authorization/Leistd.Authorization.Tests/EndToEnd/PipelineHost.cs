@@ -1,16 +1,17 @@
+using Leistd.Security.AspNetCore;
+using Leistd.Authorization.Resource.AspNetCore;
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork;
+using Leistd.DependencyInjection.DynamicProxy.Registration;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Leistd.Authorization.AspNetCore;
 using Leistd.Authorization.DataScope;
 using Leistd.Authorization.EntityFrameworkCore;
-using Leistd.Authorization.Resource;
 using Leistd.Authorization.Resource.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
@@ -22,9 +23,6 @@ using Leistd.Authorization.Definitions;
 using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Grants;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.Tests.EndToEnd;
@@ -58,6 +56,7 @@ public sealed class PipelineHost : IAsyncDisposable
         await connection.OpenAsync();
 
         var builder = WebApplication.CreateSlimBuilder();
+        builder.Host.UseServiceProviderFactory(new DynamicProxyServiceRegistrationCallbackFactory());
         builder.Logging.ClearProviders();
         builder.WebHost.UseTestServer();
 
@@ -87,7 +86,7 @@ public sealed class PipelineHost : IAsyncDisposable
 
         // 第一层：功能权限。AddPermissionAuthorization 让 [Authorize(Policy = "权限名")] 生效。
         builder.Services.AddPermissionAuthorization();
-        builder.Services.AddAuthorizationEfCore<PipelineDbContext>();
+        builder.Services.AddPermissionAuthorizationEfCore<PipelineDbContext>();
         builder.Services.AddSingleton<IPermissionDefinitionProvider, OrderPermissionDefinitionProvider>();
         builder.Services.AddScoped<IPermissionSubjectProvider, TestPermissionSubjectProvider>();
 
@@ -99,8 +98,10 @@ public sealed class PipelineHost : IAsyncDisposable
 
         // 第三层：资源实例授权。
         builder.Services.AddResourceAuthorizationEfCore<PipelineDbContext>();
-        builder.Services.AddResourceAuthorizationHandler<Order, OrderOwnerHandler>();
-        builder.Services.AddResourceAuthorizationHandler<Order, ArchivedOrderHandler>();
+        builder.Services.AddSecurity();
+        builder.Services.AddResourceAuthorization();
+        builder.Services.AddScoped<IAuthorizationHandler, OrderOwnerHandler>();
+        builder.Services.AddScoped<IAuthorizationHandler, ArchivedOrderHandler>();
 
         builder.Services.AddScoped<OrderAppService>();
 
@@ -204,15 +205,19 @@ public sealed class TestAuthenticationHandler(
 public sealed class TestPermissionSubjectProvider(IHttpContextAccessor accessor) : IPermissionSubjectProvider
 {
     public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+        => accessor.HttpContext?.User is { } user
+            ? GetSubjectAsync(user, cancellationToken)
+            : Task.FromResult<PermissionSubject?>(null);
+
+    public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal user, CancellationToken cancellationToken = default)
     {
-        var user = accessor.HttpContext?.User;
-        var userId = user?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Task.FromResult<PermissionSubject?>(null);
         }
 
-        var roleIds = user!.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
+        var roleIds = user.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
         var isSuperAdmin = user.HasClaim(PipelineFixtures.SuperAdminClaim, "true");
 
         return Task.FromResult<PermissionSubject?>(new PermissionSubject(userId, roleIds, isSuperAdmin));

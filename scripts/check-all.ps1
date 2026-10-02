@@ -2,7 +2,7 @@
 
 <#
 .SYNOPSIS
-    跑完本仓库的全部静态闸门（约 40 秒），并汇总结果。
+    跑完本仓库的全部静态闸门，并汇总结果。
 
 .DESCRIPTION
     **这里是闸门清单的唯一权威来源。** 新增闸门只需加进下面的 $gates，CI 与文档都不必再改——
@@ -13,8 +13,9 @@
       - dotnet build / test                             框架源码
       - framework/build/pack-local-feed.ps1
         + framework/build/test-package-consumption.ps1  NuGet 隔离消费
-      - scripts/test-template-matrix.ps1                8 场景生成 + 构建 + 前后端测试
+      - scripts/test-template-matrix.ps1                场景生成 + 构建 + 前后端测试（-Tier pr 为 PR 档子集）
       - scripts/test-template-postgresql-e2e.ps1        真实 PostgreSQL 端到端
+      - scripts/test-template-oidc-e2e.ps1              真实 OIDC 跨服务 HTTP 端到端
 
     模板那三道（symbols / using-guards / async-boundaries）test-template-matrix.ps1 内部也会跑一遍：
     它必须在生成之前先验模板源码，那里是生成流程的一环，不是重复配置。
@@ -44,20 +45,23 @@ if (-not $pythonCmd) { throw "未找到 Python 3 解释器（python3/python）�
 
 $gates = @(
     @{ Name = "组件文档与索引一致";        Cmd = "pwsh"; Args = @("framework/build/check-docs-sync.ps1") }
-    @{ Name = "文档 API 规则自检";          Cmd = "pwsh"; Args = @("framework/build/check-docs-api-drift.ps1", "-SelfTest") }
-    @{ Name = "文档 API 引用不漂移";       Cmd = "pwsh"; Args = @("framework/build/check-docs-api-drift.ps1") }
+    @{ Name = "文档 API 自检与引用不漂移";       Cmd = "pwsh"; Args = @("framework/build/check-docs-api-drift.ps1") }
     @{ Name = "Skill 与文档引用";          Cmd = "pwsh"; Args = @("scripts/validate-skills.ps1") }
     # 自检先跑：退役符号规则本身失效时，紧随其后的那次"通过"没有意义
     @{ Name = "退役符号规则自检";          Cmd = "pwsh"; Args = @("scripts/check-retired-terms.ps1", "-SelfTest") }
     @{ Name = "无已删除符号/旧表述残留";   Cmd = "pwsh"; Args = @("scripts/check-retired-terms.ps1") }
+    @{ Name = "i18n scope 规则自检";        Cmd = "pwsh"; Args = @("scripts/check-i18n-keys.ps1", "-SelfTest") }
     @{ Name = "i18n 词条键一致";           Cmd = "pwsh"; Args = @("scripts/check-i18n-keys.ps1") }
-    @{ Name = "动作码词条规则自检";        Cmd = $pythonCmd; Args = @("scripts/check-operation-action-i18n.py", "--self-test") }
-    @{ Name = "动作码有句子模板";          Cmd = $pythonCmd; Args = @("scripts/check-operation-action-i18n.py") }
-    @{ Name = "错误码闸门规则自检";        Cmd = $pythonCmd; Args = @("scripts/check-error-codes.py", "--self-test") }
-    @{ Name = "业务异常带错误码";          Cmd = $pythonCmd; Args = @("scripts/check-error-codes.py") }
+    # 这道闸门随模板分发（template/scripts/），本仓直接跑那一份：
+    # 实现只有一处，生成项目拿到的与这里跑的是同一个判据，不会各自漂移。
+    @{ Name = "动作码词条规则自检";        Cmd = $pythonCmd; Args = @("template/scripts/check-operation-action-i18n.py", "--self-test") }
+    @{ Name = "动作码有句子模板";          Cmd = $pythonCmd; Args = @("template/scripts/check-operation-action-i18n.py") }
     @{ Name = "模板条件符号";              Cmd = "pwsh"; Args = @("scripts/check-template-symbols.ps1") }
     @{ Name = "条件块规则自检";            Cmd = $pythonCmd; Args = @("scripts/check-template-conditional-blocks.py", "--self-test") }
     @{ Name = "模板条件块结构";            Cmd = $pythonCmd; Args = @("scripts/check-template-conditional-blocks.py") }
+    # PR 档只跑场景子集；子集能否代表全集，由逐行求值判定，不靠人记
+    @{ Name = "场景覆盖规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-template-scenario-coverage.py", "--self-test") }
+    @{ Name = "PR 档场景覆盖全部条件行";   Cmd = $pythonCmd; Args = @("scripts/check-template-scenario-coverage.py") }
     @{ Name = "模板 using/import 守卫";    Cmd = $pythonCmd; Args = @("scripts/check-using-guards.py") }
     @{ Name = "动态连接路径异步边界";      Cmd = $pythonCmd; Args = @("scripts/check-async-boundaries.py") }
     # 自检先跑：豁免机制本身失效时，紧随其后的那次"通过"没有意义
@@ -65,9 +69,15 @@ $gates = @(
     @{ Name = "时间源可替换";              Cmd = $pythonCmd; Args = @("scripts/check-clock-access.py") }
     @{ Name = "DbContext 访问口径";        Cmd = $pythonCmd; Args = @("scripts/check-dbcontext-access.py") }
     @{ Name = "csproj 约定";               Cmd = $pythonCmd; Args = @("scripts/check-csproj-conventions.py") }
+    # 日志调用点改回记原文不会让任何用例变红（调用点在要连 SMTP 的方法里），判据只能放在这里
+    @{ Name = "联系方式日志规则自检";      Cmd = $pythonCmd; Args = @("scripts/check-contact-info-logging.py", "--self-test") }
+    @{ Name = "联系方式不进日志";          Cmd = $pythonCmd; Args = @("scripts/check-contact-info-logging.py") }
     # 覆盖率报告发现不了"程序集从未被任何测试加载"——那种包根本不出现在报告里
     @{ Name = "测试布局规则自检";          Cmd = $pythonCmd; Args = @("scripts/check-test-layout.py", "--self-test") }
     @{ Name = "测试布局与家族对应";        Cmd = $pythonCmd; Args = @("scripts/check-test-layout.py") }
+    # 测试报告、CI 日志与 IDE 测试树里的名字统一用英文；中文只在注释与测试数据里
+    @{ Name = "测试名规则自检";            Cmd = $pythonCmd; Args = @("scripts/check-test-names.py", "--self-test") }
+    @{ Name = "测试名用英文";              Cmd = $pythonCmd; Args = @("scripts/check-test-names.py") }
     @{ Name = "XML 注释形态规则自检";      Cmd = $pythonCmd; Args = @("scripts/check-doc-comment-shape.py", "--self-test") }
     @{ Name = "XML 注释形态";              Cmd = $pythonCmd; Args = @("scripts/check-doc-comment-shape.py") }
     @{ Name = "组件文档骨架规则自检";      Cmd = $pythonCmd; Args = @("scripts/check-docs-skeleton.py", "--self-test") }

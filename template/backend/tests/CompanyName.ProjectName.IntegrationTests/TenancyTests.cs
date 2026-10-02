@@ -1,11 +1,21 @@
+using Leistd.MultiTenancy.AspNetCore.Options;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using Microsoft.Extensions.Options;
+using Leistd.BackgroundJobs.Recurring;
+using CompanyName.ProjectName.Domain.Auth.Options;
+using CompanyName.ProjectName.Application.Auth.BackgroundJobs;
 using CompanyName.ProjectName.Application.Tenants;
 using CompanyName.ProjectName.Application.Tenants.Dtos;
+using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
+using Npgsql;
 using Leistd.Authorization;
+using Leistd.Authorization.Errors;
 using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Repositories;
 using Leistd.MultiTenancy;
@@ -20,6 +30,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.Settings.EntityFrameworkCore.Entities;
+using Leistd.MultiTenancy.Management.Provisioning;
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore.Entities;
 #endif
@@ -30,7 +41,6 @@ using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
 using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
-using Leistd.MultiTenancy.Provisioning;
 using Leistd.Data.Paging;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
@@ -99,7 +109,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         return body.RootElement.GetProperty("id").GetGuid();
     }
 
-    /// <summary>租户管理员登录：登录请求与后续请求都携带 X-Tenant-Id。</summary>
+    /// <summary>租户管理员登录：登录请求与后续请求都携带租户提示头。</summary>
     private Task<HttpClient> LoginTenantAdminAsync(Guid tenantId, string password = "Tenant@123456")
         => LoginTenantAdminAsync(_factory, tenantId, password);
 
@@ -109,7 +119,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     {
         var client = ProjectWebApplicationFactory.CreateProjectClient(host);
         _disposables.Add(client);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
 
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/session-login",
@@ -127,13 +137,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     /// </summary>
     /// <remarks>
     /// 注册是匿名端点，正是"半成品租户"最现实的入侵面：租户一旦启用，
-    /// 任何人带上它的 X-Tenant-Id 就能在还没有管理员的租户里注册出第一个用户。
+    /// 任何人带上它的租户提示头 就能在还没有管理员的租户里注册出第一个用户。
     /// </remarks>
     private static async Task<HttpStatusCode> ProbeAnonymousRegistrationAsync(
         WebApplicationFactory<Program> host, Guid tenantId)
     {
         using var client = ProjectWebApplicationFactory.CreateProjectClient(host);
-        client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
 
         var response = await client.PostAsJsonAsync("/api/v1/auth/register", new
         {
@@ -209,9 +219,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
     /// <summary>领域服务拒绝在租户上下文里造超管</summary>
     /// <remarks>
-    /// 这一条只覆盖领域服务这道关。数据库那道兜底（检查约束 <c>CK_User_SuperAdminIsHostOnly</c>，
-    /// 挡的是数据修复脚本、批量导入与直接 SQL）用的是真实 PostgreSQL 才生效的 DDL，
-    /// 本套用例跑在内存提供程序上，验证它的地方是 <c>test-template-postgresql-e2e.ps1</c>。
+    /// 这一条只覆盖领域服务这道关；数据库那道兜底见
+    /// <see cref="Database_refuses_to_move_a_super_admin_into_a_tenant"/>。
     /// </remarks>
     [Fact]
     public async Task Domain_service_refuses_to_create_a_super_admin_in_a_tenant()
@@ -235,6 +244,102 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
                     passwordSubject: "test"));
 
             Assert.Contains(tenantId.ToString(), error.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>数据库拒绝把超管挪进租户</summary>
+    /// <remarks>
+    /// 检查约束 <c>CK_User_SuperAdminIsHostOnly</c> 挡的是不经领域入口的写入：数据修复脚本、批量导入、直接 SQL。
+    /// 用宿主种子产出的真实超管，不另造行。
+    /// </remarks>
+    [Fact]
+    public async Task Database_refuses_to_move_a_super_admin_into_a_tenant()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        // 确有宿主超管行，否则下面的 UPDATE 命中 0 行，会假装"约束生效"
+        Assert.True(await db.Set<User>().IgnoreQueryFilters().AnyAsync(user => user.IsSuperAdmin && user.TenantId == null));
+
+        var users = db.Model.FindEntityType(typeof(User))!;
+        var sql = $"UPDATE \"{users.GetSchema()}\".\"{users.GetTableName()}\" " +
+            $"SET \"{nameof(User.TenantId)}\" = {{0}} WHERE \"{nameof(User.IsSuperAdmin)}\"";
+        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(sql, Guid.NewGuid()));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+        Assert.Equal(UserCheckConstraints.SuperAdminIsHostOnly, error.ConstraintName);
+    }
+
+    /// <summary>
+    /// 租户内被业务规则拒绝的写操作，失败记录留在该租户
+    /// </summary>
+    /// <remarks>
+    /// 回归点：留痕若放在全局异常处理器里，租户中间件的作用域已随异常退出，记录会写进宿主层——
+    /// 租户读者看不到自己租户里发生的失败，宿主反倒多出一条归属错误的记录。
+    /// </remarks>
+    [Fact]
+    public async Task A_rejected_permission_save_inside_a_tenant_is_recorded_in_that_tenant()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "failaudit");
+        var tenantClient = await LoginTenantAdminAsync(tenantId);
+
+        using var roles = JsonDocument.Parse(await tenantClient.GetStringAsync("/api/v1/roles?offset=0&limit=50"));
+        var roleId = roles.RootElement.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == AdminConstant.RoleName)
+            .GetProperty("id").GetGuid();
+
+        var stale = await tenantClient.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{roleId}",
+            new { expectedVersion = 999, permissionNames = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+        var target = $"Role/{roleId}";
+        var inTenant = await OperationRecordQueries.GetFailuresAsync(
+            tenantClient, OperationRecordActions.PermissionGrantsReplaced, target);
+        Assert.Equal(PermissionErrorCodes.ConcurrencyConflict, Assert.Single(inTenant).FailureCode);
+        Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
+            hostAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, target));
+    }
+
+    /// <summary>
+    /// 过期会话清理作业也删掉共享库里租户用户的过期会话
+    /// </summary>
+    /// <remarks>
+    /// 作业按物理库逐个执行，同一个库里有多个租户；删除时不关租户过滤，宿主上下文里只看得到宿主的会话，
+    /// 共享库租户的过期会话会永远留下。
+    /// </remarks>
+    [Fact]
+    public async Task The_session_cleanup_job_reaches_tenant_users_in_the_shared_database()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "sesscleanup");
+        var tenantClient = await LoginTenantAdminAsync(tenantId);
+        using var me = JsonDocument.Parse(await tenantClient.GetStringAsync("/api/v1/auth/me"));
+        var userId = me.RootElement.GetProperty("id").GetGuid();
+
+        Guid expiredId;
+        using (var scope = _factory.Services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        {
+            var idleTimeout = scope.ServiceProvider.GetRequiredService<IOptions<UserSessionOptions>>().Value.IdleTimeout;
+            using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var session = await scope.ServiceProvider.GetRequiredService<IRepository<UserSession, Guid>>().InsertAsync(
+                new UserSession(userId, DateTime.UtcNow - idleTimeout - TimeSpan.FromDays(1), "203.0.113.9", "stale device"));
+            await unitOfWork.CompleteAsync();
+            expiredId = session.Id;
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ExpiredUserSessionCleanupJob>().ExecuteAsync(
+                new RecurringJobContext(ExpiredUserSessionCleanupJob.Name, DateTimeOffset.UtcNow), CancellationToken.None);
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        {
+            using var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            Assert.Null(await scope.ServiceProvider.GetRequiredService<IRepository<UserSession, Guid>>().GetByIdAsync(expiredId));
         }
     }
 
@@ -269,7 +374,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // 已认证会话携带伪造租户头：claim 定案为宿主，头无法把会话挪进租户
         using var forged = _factory.CreateProjectClient();
         forged.DefaultRequestHeaders.Add("Cookie", hostAdmin.Cookie);
-        forged.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        forged.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         var forgedUsernames = await GetUsernamesAsync(forged);
         Assert.Equal(hostUsernames.Order(), forgedUsernames.Order());
     }
@@ -340,6 +445,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var tenantId = await CreateTenantAsync(hostAdmin, "frozen");
 
         var tenantClient = await LoginTenantAdminAsync(tenantId);
+        using var navigationSession = await LoginTenantAdminAsync(tenantId);
         Assert.Single(await GetUsernamesAsync(tenantClient));
 
         // 停用在提交那一刻生效（存储直接读库），在途会话的下一个请求就被拒
@@ -364,7 +470,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // HTML 导航：注销后重定向回原地址，下一次请求已匿名、SPA 可正常加载——用户不会死锁在错误页
         using var navRequest = new HttpRequestMessage(HttpMethod.Get, "/platform/users");
         navRequest.Headers.Accept.ParseAdd("text/html");
-        foreach (var header in tenantClient.DefaultRequestHeaders)
+        foreach (var header in navigationSession.DefaultRequestHeaders)
         {
             navRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
@@ -374,7 +480,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.Redirect, navResponse.StatusCode);
 
         using var relogin = _factory.CreateProjectClient();
-        relogin.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        relogin.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         var loginResponse = await relogin.PostAsJsonAsync(
             "/api/v1/auth/session-login",
             new { UsernameOrEmail = "admin", Password = "Tenant@123456" });
@@ -397,6 +503,62 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     }
 
     /// <summary>
+    /// 租户名须是单个 DNS 标签：按子域名解析时名字就是主机名的一段，<c>Invalid Name!</c> 这类名字
+    /// 建得出来却经子域名永远访问不到。经 API 创建与改名都按带码的 400 拒绝，不落库、原名不变。
+    /// </summary>
+    [Fact]
+    public async Task A_tenant_name_that_is_not_a_dns_label_is_a_coded_bad_request()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+
+        var create = await hostAdmin.Client.PostAsJsonAsync("/api/v1/tenants", new
+        {
+            Name = "Invalid Name!",
+            AdminEmail = "admin@invalid-name.example.com",
+            AdminPassword = "Tenant@123456"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
+        Assert.Equal(MultiTenancyErrorCodes.NameInvalid, await ErrorCodeAsync(create));
+        await AssertTenantAbsentAsync(_factory, "Invalid Name!");
+
+        var tenantId = await CreateTenantAsync(hostAdmin, "dns-label");
+        var rename = await hostAdmin.Client.PutAsJsonAsync($"/api/v1/tenants/{tenantId}", new { Name = "dns-label-" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, rename.StatusCode);
+        Assert.Equal(MultiTenancyErrorCodes.NameInvalid, await ErrorCodeAsync(rename));
+        var detail = await hostAdmin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/tenants/{tenantId}");
+        Assert.Equal("dns-label", detail.GetProperty("name").GetString());
+    }
+
+    /// <summary>
+    /// 名称规则只管新名称：规则之前建出的租户（这里是 64 个字符且带下划线）不改名时照常编辑其他字段，
+    /// 端点入参按存储容量 64 接受原名，不因新规则的上限 63 被拒
+    /// </summary>
+    [Fact]
+    public async Task A_pre_rule_tenant_name_can_be_kept_while_editing_other_fields()
+    {
+        var hostAdmin = await LoginHostAdminAsync();
+        var tenantId = await CreateTenantAsync(hostAdmin, "legacy");
+        var legacyName = new string('a', 62) + "_x";
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var control = scope.ServiceProvider.GetRequiredService<IdentityControlDbContext>();
+            var record = await control.Set<TenantRecord>().SingleAsync(t => t.Id == tenantId);
+            record.Name = legacyName;
+            record.NormalizedName = scope.ServiceProvider.GetRequiredService<ITenantNormalizer>().NormalizeName(legacyName)!;
+            await control.SaveChangesAsync();
+        }
+
+        var edit = await hostAdmin.Client.PutAsJsonAsync($"/api/v1/tenants/{tenantId}", new { Name = legacyName, DisplayName = "Legacy Inc." });
+
+        Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        var detail = await hostAdmin.Client.GetFromJsonAsync<JsonElement>($"/api/v1/tenants/{tenantId}");
+        Assert.Equal(legacyName, detail.GetProperty("name").GetString());
+        Assert.Equal("Legacy Inc.", detail.GetProperty("displayName").GetString());
+    }
+
+    /// <summary>
     /// 跨域响应必须把 <c>X-Tenant-Invalid</c> 列入 Access-Control-Expose-Headers。
     /// </summary>
     /// <remarks>
@@ -410,13 +572,13 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
     [Fact]
     public async Task Cors_response_exposes_the_tenant_invalid_header()
     {
-        // 复刻"模式二：CORS 分离访问"的配置：默认 AllowAnyLocalhost=false 时不放行任何来源，
+        // 前端部署在另一个源、经 Cors:AllowedOrigins 放行的形态：默认不放行任何来源时，
         // CORS 中间件不会写任何响应头，这条断言也就无从谈起
         using var corsHost = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureAppConfiguration((_, configuration) =>
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Cors:AllowAnyLocalhost"] = "true"
+                    ["Cors:AllowedOrigins:0"] = "http://localhost:4200"
                 })));
 
         using var hostAdmin = await ProjectWebApplicationFactory.LoginAsync(corsHost, "admin", ProjectWebApplicationFactory.TestAdminPassword);
@@ -637,9 +799,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         }
 
         using var unknownClient = _factory.CreateProjectClient();
-        unknownClient.DefaultRequestHeaders.Add("X-Tenant-Id", Guid.NewGuid().ToString());
+        unknownClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, Guid.NewGuid().ToString());
         using var inactiveClient = _factory.CreateProjectClient();
-        inactiveClient.DefaultRequestHeaders.Add("X-Tenant-Id", inactiveId.ToString());
+        inactiveClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, inactiveId.ToString());
 
         var unknown = await unknownClient.GetAsync("/api/v1/auth/security-config");
         var inactive = await inactiveClient.GetAsync("/api/v1/auth/security-config");
@@ -667,9 +829,9 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         await CreateTenantAsync(hostAdmin, "present");
 
         using var existingClient = _factory.CreateProjectClient();
-        existingClient.DefaultRequestHeaders.Add("X-Tenant-Id", "present");
+        existingClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, "present");
         using var unknownClient = _factory.CreateProjectClient();
-        unknownClient.DefaultRequestHeaders.Add("X-Tenant-Id", "no-such-tenant");
+        unknownClient.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, "no-such-tenant");
 
         var existing = await existingClient.PostAsJsonAsync(
             "/api/v1/auth/session-login",
@@ -725,7 +887,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
         using var scope = host.Services.CreateScope();
         var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-        using var outerUnitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true);
+        using var outerUnitOfWork = unitOfWorkManager.Begin(requiresNew: true);
 
         var name = $"outer-{Guid.NewGuid():N}";
         var tenant = await scope.ServiceProvider.GetRequiredService<ITenantManagementService>().CreateAsync(
@@ -862,9 +1024,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var failedTenantId = FailAfterRolesTenantSeeder.LastTenantId;
         Assert.NotNull(failedTenantId);
 
-        // EF InMemory 不提供真实事务，不用它证明授权记录回滚；
-        // 这里只回归补偿后租户主体不可访问。事务原子性要在真实关系型数据库上验收，
-        // 属于本项目自己的集成/端到端环境，不由这个用例承担。
+        // 播种在独立工作单元里执行，失败时它回滚，补偿再按租户清理一遍；两步之后租户下不得残留主体。
         using (var scope = brokenHost.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
@@ -1054,7 +1214,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         // 抢先启用：租户内还没有任何用户，被业务规则挡住
         var activate = await racer.Client.PutAsJsonAsync(
             $"/api/v1/tenants/{tenantId}/activation", new { IsActive = true });
-        Assert.Equal(HttpStatusCode.BadRequest, activate.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, activate.StatusCode);
 
         Assert.Equal(
             HttpStatusCode.NotFound,
@@ -1181,7 +1341,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
             if (Probe is not null)
             {
-                // 探测请求走另一个 HttpClient，与本请求的租户上下文无关——它只带 X-Tenant-Id
+                // 探测请求走另一个 HttpClient，与本请求的租户上下文无关——它只带租户提示头
                 ProbedStatus = await Probe(tenantId);
             }
 
@@ -1235,18 +1395,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         {
             probe.Record("control", unitOfWorkManager);
             return inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
-        }
-
-        public Task<TenantConfiguration> CreateAsync(
-            string name,
-            string? displayName,
-            bool isActive,
-            Guid id,
-            string? description = null,
-            CancellationToken cancellationToken = default)
-        {
-            probe.Record("control", unitOfWorkManager);
-            return inner.CreateAsync(name, displayName, isActive, id, description, cancellationToken);
         }
 
         public Task<TenantConfiguration> SetActiveAsync(
@@ -1326,19 +1474,6 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
             CancellationToken cancellationToken = default)
         {
             var created = await inner.CreateAsync(name, displayName, isActive, description, cancellationToken);
-            LastCreatedId = created.Id;
-            return created;
-        }
-
-        public async Task<TenantConfiguration> CreateAsync(
-            string name,
-            string? displayName,
-            bool isActive,
-            Guid id,
-            string? description = null,
-            CancellationToken cancellationToken = default)
-        {
-            var created = await inner.CreateAsync(name, displayName, isActive, id, description, cancellationToken);
             LastCreatedId = created.Id;
             return created;
         }
@@ -1437,7 +1572,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
 
         using var stale = _factory.CreateProjectClient();
-        stale.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        stale.DefaultRequestHeaders.Add(MultiTenancyOptions.DefaultHeaderName, tenantId.ToString());
         var staleRequest = await stale.GetAsync("/api/v1/auth/security-config");
         Assert.Equal(HttpStatusCode.NotFound, staleRequest.StatusCode);
 

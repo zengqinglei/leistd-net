@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Leistd.RealTime.Publishing;
 using Leistd.RealTime.Subscriptions;
 
 namespace Leistd.RealTime;

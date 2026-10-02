@@ -24,7 +24,7 @@ public static class LoggingExtensions
         builder.Services.AddOptions<RequestLoggingOptions>()
             .Bind(builder.Configuration.GetSection(RequestLoggingOptions.SectionName));
 
-        builder.Services.AddCorrelationId(builder.Configuration);
+        builder.Services.AddCorrelationId();
 
         return builder;
     }

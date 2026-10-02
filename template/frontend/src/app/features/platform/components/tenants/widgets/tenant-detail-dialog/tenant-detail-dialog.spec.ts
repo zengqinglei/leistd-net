@@ -13,6 +13,8 @@ import { TenantConnectionDto } from '../../../../../../shared/dtos/tenant-connec
 import { TenantOutputDto } from '../../../../../../shared/dtos/tenant.dto';
 import { TenantConnectionService } from '../../../../services/tenant-connection-service';
 
+import type { Mock, MockedObject } from 'vitest';
+
 /**
  * 详情弹窗的连接段是一张可增删改的表，几处只在"操作顺序不寻常"时才暴露的问题由这组用例钉住：
  *
@@ -32,9 +34,9 @@ describe('TenantDetailDialog', () => {
   let component: TenantDetailDialog;
   let pending: Map<string, Subject<TenantConnectionDto[]>>;
   let requested: string[];
-  let setConnection: jasmine.Spy;
-  let removeConnection: jasmine.Spy;
-  let confirm: jasmine.SpyObj<ConfirmService>;
+  let setConnection: Mock;
+  let removeConnection: Mock;
+  let confirm: Pick<MockedObject<ConfirmService>, 'open'>;
 
   function tenant(id: string, name: string): TenantOutputDto {
     return {
@@ -53,13 +55,16 @@ describe('TenantDetailDialog', () => {
   async function setUp(): Promise<void> {
     pending = new Map();
     requested = [];
-    setConnection = jasmine
-      .createSpy('setConnection')
-      .and.returnValue(of(connectionOf('t-a', 'crm')));
-    removeConnection = jasmine.createSpy('removeConnection').and.returnValue(of(undefined));
+    setConnection = vi
+      .fn()
+      .mockName('setConnection')
+      .mockReturnValue(of(connectionOf('t-a', 'crm')));
+    removeConnection = vi.fn().mockName('removeConnection').mockReturnValue(of(undefined));
 
-    confirm = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['open']);
-    confirm.open.and.resolveTo(true);
+    confirm = {
+      open: vi.fn().mockName('ConfirmService.open'),
+    };
+    confirm.open.mockResolvedValue(true);
 
     TestBed.configureTestingModule({
       imports: [TenantDetailDialog],
@@ -109,6 +114,12 @@ describe('TenantDetailDialog', () => {
   // 断言得看 document，否则永远拿到空串（那会让所有断言都"通过"成假的）。
   const dialogHost = () => document.querySelector('[role="dialog"]') as HTMLElement | null;
   const text = () => dialogHost()?.textContent ?? '';
+  /** 某个键在界面上的文案：用例词条为空时就是键名，不含本地化时取组件自带的英文表。 */
+  //#if (IncludeLocalization)
+  const label = (key: string) => key;
+  //#else
+  const label = (key: string) => component['t'](key);
+  //#endif
   const connectionStringField = () =>
     document.getElementById('tenant-connection-string') as HTMLInputElement | null;
 
@@ -128,7 +139,7 @@ describe('TenantDetailDialog', () => {
     await resolve(target.id, connections);
   }
 
-  it('换到另一个租户后，前一个租户的慢响应不再影响界面', async () => {
+  it('ignores a slow response for the previous tenant after switching to another tenant', async () => {
     await setUp();
     const acme = tenant('t-a', 'acme');
     const globex = tenant('t-b', 'globex');
@@ -152,15 +163,15 @@ describe('TenantDetailDialog', () => {
 
   // 一条登记都没有就是"不单独分库"这一档。这句话是界面上唯一能看出当前状态的东西：
   // 没有它，"故意不分库"与"漏登记"就长得一模一样。
-  it('列表为空时显式说明该租户不单独分库', async () => {
+  it('states explicitly that the tenant has no separate database when the list is empty', async () => {
     await setUp();
 
     await openWith(tenant('t-a', 'acme'), []);
 
-    expect(text()).toContain(component.label('connectionsEmpty'));
+    expect(text()).toContain(label('tenants.connectionsEmpty'));
   });
 
-  it('已登记的连接按名字与版本列出，不显示连接串', async () => {
+  it('lists registered connections by name and version without showing connection strings', async () => {
     await setUp();
 
     await openWith(tenant('t-a', 'acme'), [
@@ -170,12 +181,12 @@ describe('TenantDetailDialog', () => {
 
     expect(text()).toContain('default');
     expect(text()).toContain('crm');
-    expect(text()).toContain(component.label('version'));
-    expect(text()).not.toContain(component.label('connectionsEmpty'));
+    expect(text()).toContain(label('tenants.fieldConnectionVersion'));
+    expect(text()).not.toContain(label('tenants.connectionsEmpty'));
     expect(text()).not.toMatch(/Host=|Password=|User ID=/i);
   });
 
-  it('添加连接：名字归一化为小写，首次登记预期版本为 null', async () => {
+  it('add connection: normalizes the name to lowercase and sends a null expected version on first registration', async () => {
     await setUp();
     await openWith(tenant('t-a', 'acme'), []);
 
@@ -193,7 +204,7 @@ describe('TenantDetailDialog', () => {
     });
   });
 
-  it('改连接串：沿用原名并带上读到的版本，输入框从不预填', async () => {
+  it('change connection string: keeps the name, sends the version read, and never prefills the input', async () => {
     await setUp();
     const existing = connectionOf('t-a', 'crm', 5);
     await openWith(tenant('t-a', 'acme'), [existing]);
@@ -217,7 +228,7 @@ describe('TenantDetailDialog', () => {
   });
 
   // PUT 是整串覆盖，后端没有"不传即保留原值"这一档：留空静默不提交会让人以为已经保存
-  it('连接串留空时表单非法，不提交', async () => {
+  it('marks the form invalid and does not submit when the connection string is empty', async () => {
     await setUp();
     const existing = connectionOf('t-a', 'crm', 5);
     await openWith(tenant('t-a', 'acme'), [existing]);
@@ -225,13 +236,13 @@ describe('TenantDetailDialog', () => {
     component.startEdit(existing);
     await fixture.whenStable();
 
-    expect(component.connectionForm().invalid()).toBeTrue();
+    expect(component.connectionForm().invalid()).toBe(true);
     component.submitEditor();
 
     expect(setConnection).not.toHaveBeenCalled();
   });
 
-  it('连接名不合规时表单非法，不提交', async () => {
+  it('marks the form invalid and does not submit when the connection name is malformed', async () => {
     await setUp();
     await openWith(tenant('t-a', 'acme'), []);
 
@@ -240,20 +251,20 @@ describe('TenantDetailDialog', () => {
     component.connectionForm.connectionString().value.set('Host=db;Password=spec');
     await fixture.whenStable();
 
-    expect(component.connectionForm().invalid()).toBeTrue();
+    expect(component.connectionForm().invalid()).toBe(true);
     expect(
       component.connectionForm
         .name()
         .errors()
-        .map((error) => error.message),
-    ).toContain(component.label('connectionNameInvalid'));
+        .map((error) => error.kind),
+    ).toContain('connectionNamePattern');
     component.submitEditor();
 
     expect(setConnection).not.toHaveBeenCalled();
   });
 
   // 同名再"添加"一次会被后端按版本冲突拒掉，在提交前就说清楚该走"改连接串"
-  it('连接名已登记时表单非法，不提交', async () => {
+  it('marks the form invalid and does not submit when the connection name is already registered', async () => {
     await setUp();
     await openWith(tenant('t-a', 'acme'), [connectionOf('t-a', 'crm', 2)]);
 
@@ -262,19 +273,19 @@ describe('TenantDetailDialog', () => {
     component.connectionForm.connectionString().value.set('Host=db;Password=spec');
     await fixture.whenStable();
 
-    expect(component.connectionForm().invalid()).toBeTrue();
+    expect(component.connectionForm().invalid()).toBe(true);
     expect(
       component.connectionForm
         .name()
         .errors()
-        .map((error) => error.message),
-    ).toContain(component.label('connectionNameTaken'));
+        .map((error) => error.kind),
+    ).toContain('connectionNameTaken');
     component.submitEditor();
 
     expect(setConnection).not.toHaveBeenCalled();
   });
 
-  it('删除连接先确认，确认后带上读到的版本', async () => {
+  it('confirms before deleting a connection, then sends the version read', async () => {
     await setUp();
     const existing = connectionOf('t-a', 'crm', 7);
     await openWith(tenant('t-a', 'acme'), [existing]);
@@ -285,32 +296,32 @@ describe('TenantDetailDialog', () => {
     expect(removeConnection).toHaveBeenCalledWith('t-a', 'crm', 7);
   });
 
-  it('取消删除确认时不发请求', async () => {
+  it('does not send a request when the delete confirmation is cancelled', async () => {
     await setUp();
     const existing = connectionOf('t-a', 'crm', 7);
     await openWith(tenant('t-a', 'acme'), [existing]);
-    confirm.open.and.resolveTo(false);
+    confirm.open.mockResolvedValue(false);
 
     await component.removeConnection(existing);
 
     expect(removeConnection).not.toHaveBeenCalled();
   });
 
-  it('关闭弹窗即取消在途的连接查询，不把加载态留在原地', async () => {
+  it('cancels the in-flight connection query on close without leaving the loading state behind', async () => {
     await setUp();
     await open(tenant('t-a', 'acme'));
 
     const subject = pending.get('t-a')!;
-    expect(subject.observed).toBeTrue();
+    expect(subject.observed).toBe(true);
 
     await close();
 
-    expect(subject.observed).toBeFalse();
+    expect(subject.observed).toBe(false);
   });
 
   // 连续两次编辑同一个租户：第二次也必须发出事件。
   // 用 model 表达这个动作时，第二次 set 拿到同一个对象引用，signal 判等后静默不发。
-  it('同一个租户连续两次点编辑都会发出事件', async () => {
+  it('emits the event on each of two consecutive edit clicks for the same tenant', async () => {
     await setUp();
     const acme = tenant('t-a', 'acme');
     const seen: TenantOutputDto[] = [];
@@ -330,18 +341,18 @@ describe('TenantDetailDialog', () => {
 
   // 连接接口要求 App.Tenants.Update：没有这个权限就别发那些必然 403 的请求，
   // 也别渲染一个点不动的编辑按钮。
-  it('没有更新权限时不请求连接列表，也不渲染编辑按钮', async () => {
+  it('does not request the connection list or render the edit button without update permission', async () => {
     await setUp();
     fixture.componentRef.setInput('canManage', false);
     await open(tenant('t-a', 'acme'));
 
     expect(requested).toEqual([]);
     // 连接段与编辑按钮都不该出现（弹窗自带的关闭按钮不算）
-    expect(text()).not.toContain(component.label('sectionConnections'));
+    expect(text()).not.toContain(label('tenants.detailSectionConnections'));
     const labels = [...(dialogHost()?.querySelectorAll('button') ?? [])].map((button) =>
       (button.textContent ?? '').trim(),
     );
-    expect(labels).not.toContain(component.label('edit'));
-    expect(labels).toContain(component.label('close'));
+    expect(labels).not.toContain(label('common.edit'));
+    expect(labels).toContain(label('common.close'));
   });
 });

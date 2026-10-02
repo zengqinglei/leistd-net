@@ -7,6 +7,11 @@ namespace Leistd.UnitOfWork.Options;
 /// </summary>
 public class UnitOfWorkOptions : IUnitOfWorkOptions
 {
+    /// <summary>
+    /// 默认配置节路径。
+    /// </summary>
+    public const string SectionName = "Leistd:UnitOfWork";
+
     /// <inheritdoc />
     public bool IsTransactional { get; set; } = true;
 

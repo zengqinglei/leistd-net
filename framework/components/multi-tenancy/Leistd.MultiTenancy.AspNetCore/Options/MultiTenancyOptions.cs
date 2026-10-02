@@ -1,4 +1,3 @@
-using Leistd.Security.Claims;
 
 namespace Leistd.MultiTenancy.AspNetCore.Options;
 
@@ -10,20 +9,22 @@ public class MultiTenancyOptions
     /// <summary>获取配置节名称 <c>Leistd:MultiTenancy</c>。</summary>
     public const string SectionName = "Leistd:MultiTenancy";
 
+    /// <summary>默认的租户线索请求头名称 <c>X-Tenant</c>。</summary>
+    public const string DefaultHeaderName = "X-Tenant";
+
     /// <summary>
-    /// 获取或设置承载租户线索的请求头名称。
+    /// 获取或设置承载租户线索的请求头名称。默认 <see cref="DefaultHeaderName"/>。
     /// </summary>
-    public string HeaderName { get; set; } = "X-Tenant-Id";
+    /// <remarks>
+    /// 匿名请求的提示通道：值可以是租户 Id 或名称，是否采信由校验决定。
+    /// 已认证请求的租户由验证后的主体声明确定，此提示不能改写它。
+    /// </remarks>
+    public string HeaderName { get; set; } = DefaultHeaderName;
 
     /// <summary>
     /// 获取或设置承载租户线索的查询参数名称。
     /// </summary>
     public string QueryStringParameterName { get; set; } = "tenant";
-
-    /// <summary>
-    /// 获取或设置认证主体中的租户声明类型。
-    /// </summary>
-    public string TenantClaimType { get; set; } = CustomClaimTypes.TenantId;
 
     /// <summary>
     /// 获取或设置是否校验解析出的租户存在且启用。

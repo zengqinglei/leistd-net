@@ -31,7 +31,7 @@ public static class PasswordPolicy
     public static bool IsAcceptable(string? password) => Describe(password) is null;
 
     /// <summary>
-    /// 校验密码，不通过则抛 <see cref="BadRequestException"/>（400）
+    /// 校验密码，不通过则抛 <see cref="BusinessException"/>
     /// </summary>
     /// <remarks>
     /// 每种不通过的原因带自己的错误码与占位参数，界面上看到的才是"密码长度至少 12 个字符"
@@ -51,14 +51,11 @@ public static class PasswordPolicy
             return;
         }
 
-        var exception = new BadRequestException($"{subject} {problem.Value.Message}");
-#if (IncludeLocalization)
-        exception.WithCode(problem.Value.Code);
+        var exception = new BusinessException(problem.Value.Code, $"{subject} {problem.Value.Message}");
         foreach (var (name, value) in problem.Value.Data)
         {
             exception.WithData(name, value);
         }
-#endif
         throw exception;
     }
 

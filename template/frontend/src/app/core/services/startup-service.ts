@@ -11,7 +11,7 @@ import { ImpersonationService } from './impersonation-service';
 //#endif
 import { SessionContextService } from './session-context-service';
 import { ApplicationHttpError } from '../errors/application-http-error';
-import { entryRoutePath } from '../routing/entry-route';
+import { EntryRouteService } from '../routing/entry-route-service';
 
 export type StartupStatus = 'loading' | 'success' | 'failed';
 
@@ -25,6 +25,7 @@ export const PROTECTED_ROUTE_PREFIXES = ['/workspace', '/platform'] as const;
 export class StartupService {
   private authService = inject(AuthService);
   private readonly sessionContext = inject(SessionContextService);
+  private readonly entryRoute = inject(EntryRouteService);
   //#if (LocalIdentity)
   private readonly impersonation = inject(ImpersonationService);
   //#endif
@@ -42,15 +43,11 @@ export class StartupService {
     // 不在这里校验记住的租户：匿名确认"这个租户还在不在"等于给任何人一个枚举接口。
     // 租户失效由服务端在会话恢复中间件里处置（X-Tenant-Invalid 头），前端据此清上下文。
     //#endif
-    // 入口路由只认一份读法（见 entryRoutePath）：路径按边界比对，不拿整条 URL 去
-    // includes——查询串或锚点里出现 `/auth/callback` 不代表人在回调页，误判会让普通
-    // 会话过期走进回调专用的处置分支。
-    const route = entryRoutePath();
-    //#if (!LocalIdentity)
-    const isOidcCallback = route === '/auth/callback';
-    //#endif
-
+    // 入口路由只认一份读法（见 EntryRouteService.path）：路径按边界比对，不拿整条 URL 去
+    // includes——查询串或锚点里的认证路由不代表当前入口，不能影响启动分支。
     //#if (LocalIdentity)
+    const route = this.entryRoute.path();
+
     if (route === '/auth/login') {
       this.sessionContext.clear();
       this._status.set('success');
@@ -59,17 +56,13 @@ export class StartupService {
 
     //#endif
     //#if (LocalIdentity)
-    if (route === '/auth/callback' || route === '/auth/external-callback') {
+    if (route === '/auth/callback' || route.startsWith('/auth/external-callback/')) {
       this._status.set('success');
       return;
     }
 
     //#endif
-    //#if (!LocalIdentity)
-    if (!this.isProtectedRoute() && !isOidcCallback) {
-    //#else
     if (!this.isProtectedRoute()) {
-    //#endif
       this._status.set('success');
       return;
     }
@@ -86,19 +79,6 @@ export class StartupService {
       this._status.set('success');
     } catch (err: unknown) {
       if (err instanceof ApplicationHttpError && err.status === 401) {
-        //#if (!LocalIdentity)
-        // 回调页上的 401 不能当作「未登录」：这一刻刚从授权服务器换到令牌，是 API 拒了它。
-        // 按未登录继续走下去，会跳进受保护路由，Guard 发现没有主体又发起一次授权，而
-        // 授权服务器那边会话还在、立刻带着新 code 回到回调页，同样被拒——绕成死循环，
-        // 而且每一圈都在浏览器和 IdP 之间来回。停下来把错误亮出来：重来一次不会有不同
-        // 结果，至少有人看得见原因（配置错的受众、时钟偏移、账号被停用……）。
-        if (isOidcCallback) {
-          this._error.set(err);
-          this._status.set('failed');
-          return;
-        }
-
-        //#endif
         this.sessionContext.clear();
         this._status.set('success');
       } else {
@@ -112,7 +92,7 @@ export class StartupService {
     await this.load();
   }
   private isProtectedRoute(): boolean {
-    const route = entryRoutePath();
+    const route = this.entryRoute.path();
     return PROTECTED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));
   }
 }

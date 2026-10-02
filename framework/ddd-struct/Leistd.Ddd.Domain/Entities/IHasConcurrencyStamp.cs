@@ -4,7 +4,7 @@ namespace Leistd.Ddd.Domain.Entities;
 /// 标记具有乐观并发标记的实体。
 /// </summary>
 /// <remarks>
-/// <c>ConfigureByConvention()</c> 把本属性配成必填的 EF 并发令牌，更新语句自动带
+/// 基础设施的实体约定（<c>DddEntityConvention</c>）把本属性配成必填的 EF 并发令牌，更新语句自动带
 /// <c>WHERE ConcurrencyStamp = @原值</c>，落败方得到 <c>DbUpdateConcurrencyException</c>。
 /// 初值写 <see cref="ConcurrencyStamps.New"/>，漏写时由拦截器在插入前补种。
 /// 仅覆盖经变更跟踪器的读改写；断开连接的更新见 ddd-struct 组件文档。

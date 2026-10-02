@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideShieldCheck } from '@ng-icons/lucide';
@@ -19,10 +19,10 @@ import { HlmSpinner } from '@spartan-ng/helm/spinner';
 import { finalize } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { AuthService } from '../../../../core/services/auth-service';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { TwoFactorStatusOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
 import { OtpCodeInput } from '../otp-code-input/otp-code-input';
@@ -38,6 +38,7 @@ type Mode = 'idle' | 'setup' | 'codes' | 'disable' | 'regenerate';
  */
 @Component({
   selector: 'app-two-factor-settings',
+  // prettier-ignore
   imports: [
     NgIcon,
     HlmBadge,
@@ -47,6 +48,9 @@ type Mode = 'idle' | 'setup' | 'codes' | 'disable' | 'regenerate';
     OtpCodeInput,
     RecoveryCodes,
     TwoFactorSetup,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
   ],
   providers: [provideIcons({ lucideShieldCheck })],
   templateUrl: './two-factor-settings.html',
@@ -57,16 +61,8 @@ export class TwoFactorSettings {
   private readonly authService = inject(AuthService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  protected readonly t = (key: string, params?: Record<string, unknown>) => {
-    this.translationReady();
-    return this.transloco.translate(key, params);
-  };
   //#else
-  protected readonly t = (key: string, params?: Record<string, unknown>) =>
-    ENGLISH[key]?.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params?.[name] ?? '')) ??
-    key;
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   /** 本人的其他会话被服务端撤销了（启用、停用两步验证时）。 */
@@ -110,7 +106,11 @@ export class TwoFactorSettings {
     this.reload();
     this.refreshCurrentUser();
     this.sessionsChanged.emit();
+    //#if (IncludeLocalization)
+    toast.success(this.transloco.translate('account.twoFactor.enabledToast'));
+    //#else
     toast.success(this.t('account.twoFactor.enabledToast'));
+    //#endif
   }
 
   protected finishCodes(): void {
@@ -133,7 +133,11 @@ export class TwoFactorSettings {
           this.reload();
           this.refreshCurrentUser();
           this.sessionsChanged.emit();
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('account.twoFactor.disabledToast'));
+          //#else
           toast.success(this.t('account.twoFactor.disabledToast'));
+          //#endif
         },
         error: (error) => this.showError(error),
       });
@@ -164,14 +168,20 @@ export class TwoFactorSettings {
   }
 
   private showError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
     toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
+    //#endif
   }
 }
 //#if (!IncludeLocalization)
 
-/** 不含本地化时的界面文案，与 `en.json` 的 `account.twoFactor` 同步。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'common.requestError': 'Request failed',
+  'common.requestError': 'Request error',
   'common.retry': 'Retry',
   'common.cancel': 'Cancel',
   'account.twoFactor.header': 'Two-factor authentication',

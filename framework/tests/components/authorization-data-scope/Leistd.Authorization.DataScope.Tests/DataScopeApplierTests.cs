@@ -1,15 +1,11 @@
+using System.Security.Claims;
 using System.Linq.Expressions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Authorization.DataScope.Services;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Grants;
 using Leistd.Authorization.Subjects;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Errors;
-using Leistd.Authorization.Management;
 using Leistd.Authorization.DataScope.Abstractions;
 
 namespace Leistd.Authorization.DataScope.Tests;
@@ -205,6 +201,9 @@ public class DataScopeApplierTests : IAsyncLifetime
     private sealed class FakeSubjectProvider(PermissionSubject? subject) : IPermissionSubjectProvider
     {
         public Task<PermissionSubject?> GetCurrentSubjectAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(subject);
+
+        public Task<PermissionSubject?> GetSubjectAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
             => Task.FromResult(subject);
     }
 

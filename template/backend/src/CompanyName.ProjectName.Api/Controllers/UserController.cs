@@ -42,6 +42,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         return await userAppService.GetAsync(id, cancellationToken);
     }
 
+#if (LocalIdentity)
     /// <summary>
     /// 创建用户（需要用户创建权限）
     /// </summary>
@@ -70,11 +71,13 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
         return await userAppService.UpdateAsync(id, input, cancellationToken);
     }
 
+#endif
     /// <summary>
     /// 启用用户（需要用户更新权限）
     /// </summary>
     [HttpPatch("{id}/enable")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserEnabled, "id")]
     public async Task EnableAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.EnableAsync(id, cancellationToken);
@@ -85,6 +88,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     /// </summary>
     [HttpPatch("{id}/disable")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserDisabled, "id")]
     public async Task DisableAsync(Guid id, CancellationToken cancellationToken)
     {
         await userAppService.DisableAsync(id, cancellationToken);
@@ -96,6 +100,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
 #if (LocalIdentity)
     [HttpPost("{id}/reset-password")]
     [Authorize(Policy = PermissionConstant.Users.Update)]
+    [OperationRecordAction(OperationRecordActions.UserPasswordReset, "id")]
     public async Task ResetPasswordAsync(
         Guid id,
         [FromBody] ResetUserPasswordInputDto input,
@@ -127,6 +132,7 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     }
 #endif
 
+#if (LocalIdentity)
     /// <summary>
     /// 删除用户（需要用户删除权限）
     /// </summary>
@@ -138,6 +144,8 @@ public sealed class UserController(IUserAppService userAppService) : BaseControl
     {
         await userAppService.DeleteAsync(id, cancellationToken);
     }
+
+#endif
 
     /// <summary>
     /// 取用户上传的头像图片（已登录即可）

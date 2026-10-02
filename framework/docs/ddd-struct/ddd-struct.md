@@ -69,25 +69,21 @@ builder.Services.AddDddInfrastructure(options =>
     options.IsTransactional = true;
 });
 
-// 3. 每个 DbContext 显式登记一次；不需要仓储的调无参重载
+// 3. DbContext 只配置连接
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+
+// 4. 每个 DbContext 显式登记一次；不需要仓储的调无参重载
 builder.Services.AddDddDbContext<AppDbContext>(o => o.AddDefaultRepositories());
 builder.Services.AddDddDbContext<ControlPlaneDbContext>();
-
-// 4. 修改/删除审计与领域事件需要显式挂载拦截器
-builder.Services.AddDbContext<AppDbContext>((sp, options) =>
-{
-    options.UseNpgsql(connectionString);
-    options.AddDddInterceptors(sp);
-});
 ```
 
-`AddDddInfrastructure()` 注册工作单元、EF Core 支持和数据过滤器；仓储由 `AddDddDbContext<TDbContext>()` 按上下文显式注册。`AddDddInterceptors(sp)` 为业务 DbContext 挂载：
+`AddDddInfrastructure()` 注册工作单元、本地事件总线、EF Core 支持和数据过滤器，工作单元选项绑定 `Leistd:UnitOfWork` 配置节，传入的委托在绑定之后应用；仓储由 `AddDddDbContext<TDbContext>()` 按上下文显式注册。登记派生自 `BaseDbContext` 的上下文时，它经官方 `ConfigureDbContext<TDbContext>` 挂载三个保存拦截器（与 `AddDbContext` 的先后无关，重复登记不会挂第二层）：
 
 - `AuditSaveChangesInterceptor`：修改/删除审计与软删除转换。
 - `LocalEventSaveChangesInterceptor`：收集并发布实体本地事件。
 - `ConcurrencyStampSaveChangesInterceptor`：配置并换发乐观并发标记。
 
-拦截器不会自动挂到所有 DbContext。控制面上下文若只需审计，应单独挂载 `AuditSaveChangesInterceptor`。
+不继承 `BaseDbContext` 的上下文不挂载。控制面上下文若只需审计，在 `AddDbContext` 中单独添加 `AuditSaveChangesInterceptor`。拦截器按作用域解析，因此不支持 DbContext 池与默认（单例）生命周期的 `AddDbContextFactory`：其选项为单例，解析拦截器与 `BaseDbContext` 所用的都是根容器。
 
 ## 使用
 
@@ -125,6 +121,10 @@ public class OrderManager(IRepository<Order, Guid> repository)
 
 仓储写入在工作单元内延迟到统一提交，在工作单元外立即调用 `SaveChangesAsync`。`GetByIdAsync` 使用过滤查询而非 `FindAsync`，不会绕过软删除或租户隔离。
 
+延迟提交有一个后果值得单列：**唯一索引等约束冲突在冲刷时才抛出，不在 `InsertAsync` 抛出**。
+所以工作单元内的 `try { InsertAsync } catch` 是永不触发的死代码，要就地处理并发首次写入
+必须先 `IUnitOfWork.SaveChangesAsync`（见[工作单元](../components/unit-of-work.md#在事务内提前冲刷)）。
+
 ### 分页映射
 
 ```csharp
@@ -157,13 +157,19 @@ public class AppDbContext(
 
     protected override void ConfigureModel(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Order>(entity => entity.ConfigureByConvention());
-        modelBuilder.ConfigureAuthorization();
+        modelBuilder.ConfigurePermissionAuthorization();
     }
 }
 ```
 
-`BaseDbContext.OnModelCreating` 已封闭；派生类只覆盖 `ConfigureModel`。基类在派生配置完成后为所有已进入模型的实体添加命名过滤器，防止未声明 `DbSet` 的组件实体逃逸软删除或租户隔离。
+`BaseDbContext.OnModelCreating` 与 `ConfigureConventions` 已封闭；派生类覆盖 `ConfigureModel` 配置实体、覆盖 `ConfigureModelConventions` 追加模型约定（如枚举统一存为字符串）。基类在派生配置完成后为所有已进入模型的实体添加命名过滤器，防止未声明 `DbSet` 的组件实体逃逸软删除或租户隔离。
+
+基类注册 EF Core 约定 `DddEntityConvention`：审计人字段（`CreatorId`、`LastModifierId`、`DeleterId`）最长 64，`ConcurrencyStamp` 见[乐观并发标记](#乐观并发标记)。约定以约定来源写入，实体上的显式 Fluent 配置优先。不继承基类的上下文可在 `ConfigureConventions` 中注册同一约定：
+
+```csharp
+protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    => configurationBuilder.Conventions.Add(_ => new DddEntityConvention());
+```
 
 需要审计、租户上下文或运行时过滤开关时，DbContext 必须接收 `IServiceProvider` 并传给基类。否则它固定为宿主视角，创建审计与 `IDataFilter` 作用域均无法生效。
 
@@ -176,7 +182,7 @@ public class AppDbContext(
 | `Leistd.Ddd.Domain` | `Entity<TKey>`、审计实体基类、`IRepository<TEntity, TKey>`、`IDataFilter` |
 | `Leistd.Ddd.Application.Contracts` | `AppServices.IAppService`、`EntityDto<TKey>`、`PageRequest`、`PagedResult<T>` |
 | `Leistd.Ddd.Application` | `AppServices.BaseAppService`、`MapPagedResult<TSource, TDestination>` |
-| `Leistd.Ddd.Infrastructure` | `AddDddInfrastructure`、`BaseDbContext`、`EfCoreRepository`、`AddDddInterceptors` |
+| `Leistd.Ddd.Infrastructure` | `AddDddInfrastructure`、`AddDddDbContext`、`BaseDbContext`、`DddEntityConvention`、`EfCoreRepository` |
 
 `IRepository<TEntity>` 提供查询、计数、存在性与批量写入；带主键的接口另提供按 Id 读取和删除。`IQueryableAsyncExecuter` 使 Domain 可异步执行 `IQueryable`，而不直接依赖 EF Core。
 
@@ -232,13 +238,30 @@ public class Document : Entity<Guid>, IHasConcurrencyStamp
 }
 ```
 
-`ConfigureByConvention()` 将该属性配置为必填、最长 40 的并发令牌。`ConcurrencyStampSaveChangesInterceptor` 在新增时补种空值，在修改时换发；并发更新的落败方收到 `DbUpdateConcurrencyException`。
+`DddEntityConvention` 将该属性配置为必填、最长 40 的并发令牌。`ConcurrencyStampSaveChangesInterceptor` 在新增时补种空值，在修改时换发；并发更新的落败方收到 `DbUpdateConcurrencyException`。
 
 断开连接更新时，应将客户端回传的标记设置为 EF Core `OriginalValue`。
 
+## 迁移快照检查
+
+模型约定和组件实体配置随框架版本演进。升级会改变模型的框架版本（升级说明会注明）后，必须确认迁移快照与当前模型一致，否则真实库上执行迁移时会因模型存在未迁移的变更而失败，而 InMemory 测试察觉不到。
+
+在测试中经设计时工厂检查，不连库、不装 `dotnet-ef`：
+
+```csharp
+[Fact]
+public void The_migration_snapshot_matches_the_model()
+{
+    using var dbContext = new AppDbContextFactory().CreateDbContext([]);
+    Assert.False(dbContext.Database.HasPendingModelChanges());
+}
+```
+
+或在命令行执行 `dotnet ef migrations has-pending-model-changes --context AppDbContext`。有差异时用 `dotnet ef migrations add` 生成迁移。
+
 ## 注意事项
 
-- 业务 DbContext 必须显式调用 `AddDddInterceptors(sp)`；漏挂会使修改/删除审计、软删除转换、本地事件或并发标记静默失效。
+- 业务 DbContext 必须继承 `BaseDbContext` 并经 `AddDddDbContext<TDbContext>()` 登记；否则修改/删除审计、软删除转换、本地事件与并发标记都不生效。
 - 实现 `ISoftDelete` 的实体在删除时转为逻辑删除，查询默认不可见；临时读取使用 `IDataFilter.Disable<ISoftDelete>()`。
 - `AddLocalEvent` 只由实体内部调用；`GetLocalEvents()` 与 `ClearLocalEvents()` 仅供基础设施使用。
 - `PagedResult<T>` 将 `null` items 视为空集合；`MapPagedResult` 对空 mapper 或 source 抛 `ArgumentNullException`。

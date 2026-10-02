@@ -3,23 +3,14 @@ using Leistd.Data.Connections;
 using Leistd.MultiTenancy;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
-using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.OperationRecords.EntityFrameworkCore.Options;
 using Leistd.OperationRecords.EntityFrameworkCore.Retention;
 using Leistd.OperationRecords.Tests.TestDoubles;
 using Leistd.Security;
-using Leistd.Security.Users;
 using Leistd.Tracing;
-using Leistd.Tracing.Abstractions;
 using Leistd.TestBase.Doubles;
 using Leistd.Timing;
 using Leistd.UnitOfWork;
@@ -193,7 +184,7 @@ public sealed class OperationRecordRetentionTests : IAsyncLifetime
             .AddSingleton<IClock, UtcClockProvider>()
             .AddMultiTenancyCore()
             .AddAmbientContext()
-            .AddCorrelationIdCore(configuration)
+            .AddCorrelationIdCore()
             .AddOperationRecordsEfCore<TestDbContext>()
             .AddOperationRecordRetention<TestDbContext>()
             .BuildServiceProvider();

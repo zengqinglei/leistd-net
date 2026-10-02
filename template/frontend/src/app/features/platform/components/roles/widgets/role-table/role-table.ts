@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
@@ -23,14 +23,8 @@ import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { ColumnDef, PaginationState, SortingState } from '@tanstack/angular-table';
 
-//#if (IncludeLocalization)
-import { refreshOnLanguageChange } from '../../../../../../core/i18n/translation-ready';
-//#endif
 import { SettingContextService } from '../../../../../../core/settings/setting-context-service';
-import {
-  TablePaginator,
-  TablePaginatorLabels,
-} from '../../../../../../shared/components/table-paginator/table-paginator';
+import { TablePaginator } from '../../../../../../shared/components/table-paginator/table-paginator';
 import {
   ACTIONS_COLUMN_META,
   tableColumnVisibility,
@@ -40,7 +34,9 @@ import {
   type AppTableFeatures,
 } from '../../../../../../shared/models/table-features';
 import { AppDate } from '../../../../../../shared/pipes/app-date-pipe';
-import { createExpandableRows } from '../../../../../../shared/utils/expandable-rows';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../../../shared/utils/english-text';
+//#endif
 import { resolveTableUpdater } from '../../../../../../shared/utils/table-query-state';
 import {
   tableSortAria,
@@ -69,7 +65,7 @@ import { RoleOutputDto } from '../../../../models/role.dto';
     ...HlmTableImports,
     ...HlmTooltipImports,
     //#if (IncludeLocalization)
-    TranslocoModule,
+    TranslocoDirective,
     //#endif
   ],
   providers: [
@@ -94,14 +90,8 @@ export class RoleTable {
   // 会让同一时刻在不同页面显示成不同时间。
   protected readonly displayTimeZone = inject(SettingContextService).timeZone;
   protected readonly displayLocale = inject(SettingContextService).displayLocale;
-  //#if (IncludeLocalization)
-  private readonly transloco = inject(TranslocoService);
-
-  constructor() {
-    // 表头与分页文案走 transloco.translate()，没有任何被渲染的表达式依赖语言，
-    // 需要显式把语言变化接到变更检测上，否则切换语言后整张表停在旧语言。
-    refreshOnLanguageChange(this.transloco);
-  }
+  //#if (!IncludeLocalization)
+  protected readonly t = englishText(ENGLISH);
 
   //#endif
   readonly roles = input<RoleOutputDto[]>([]);
@@ -165,6 +155,7 @@ export class RoleTable {
   protected readonly table = injectAppTable(() => ({
     data: this.roles(),
     columns: this.columns,
+    getRowId: (row) => row.id,
     manualPagination: true,
     manualSorting: true,
     rowCount: this.totalCount(),
@@ -182,18 +173,7 @@ export class RoleTable {
   readonly currentPage = computed(() => this.pagination().pageIndex + 1);
   readonly totalPages = computed(() => Math.max(1, this.table.getPageCount()));
 
-  // 移动端/平板端「行展开」补偿：被隐藏的列不会丢数据，点行首箭头即可展开查看。
-  private readonly expandableRows = createExpandableRows();
-
   readonly hasCollapsedColumns = computed(() => this.tableViewport() !== 'desktop');
-
-  isRowExpanded(id: string): boolean {
-    return this.expandableRows.isExpanded(id);
-  }
-
-  toggleRow(id: string): void {
-    this.expandableRows.toggle(id);
-  }
 
   isColumnHidden(id: string): boolean {
     return this.table.getColumn(id)?.getIsVisible() === false;
@@ -215,93 +195,34 @@ export class RoleTable {
   changePageSize(pageSize: number): void {
     this.paginationChange.emit({ pageIndex: 0, pageSize });
   }
-
-  columnLabel(field: 'role' | 'users' | 'permissions' | 'sort' | 'created'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      role: 'roles.colName',
-      users: 'roles.colUsers',
-      permissions: 'roles.colPermissions',
-      sort: 'roles.colSort',
-      created: 'roles.colCreatedAt',
-    } as const;
-    return this.transloco.translate(keys[field]);
-    //#else
-    const labels = {
-      role: 'Role',
-      users: 'Users',
-      permissions: 'Permissions',
-      sort: 'Sort',
-      created: 'Created at',
-    } as const;
-    return labels[field];
-    //#endif
-  }
-
-  actionLabel(action: 'details' | 'permissions' | 'edit' | 'delete' | 'staticHint'): string {
-    //#if (IncludeLocalization)
-    const keys = {
-      details: 'common.details',
-      permissions: 'roles.configurePermissions',
-      edit: 'common.edit',
-      delete: 'common.delete',
-      staticHint: 'roles.staticRoleHint',
-    } as const;
-    return this.transloco.translate(keys[action]);
-    //#else
-    const labels = {
-      details: 'View details',
-      permissions: 'Configure permissions',
-      edit: 'Edit',
-      delete: 'Delete',
-      staticHint: 'Built-in roles cannot be deleted',
-    } as const;
-    return labels[action];
-    //#endif
-  }
-
-  actionsLabel(): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate('common.actions');
-    //#else
-    return 'Actions';
-    //#endif
-  }
-
-  badgeLabel(kind: 'static' | 'default'): string {
-    //#if (IncludeLocalization)
-    return this.transloco.translate(kind === 'static' ? 'roles.static' : 'roles.default');
-    //#else
-    return kind === 'static' ? 'Built-in' : 'Default';
-    //#endif
-  }
-
-  paginatorLabels(): TablePaginatorLabels {
-    //#if (IncludeLocalization)
-    return {
-      currentPageReport: this.transloco.translate('roles.table.currentPageReport', {
-        total: this.totalCount(),
-      }),
-      rowsPerPage: this.transloco.translate('common.rowsPerPage'),
-      page: this.transloco.translate('common.pageOf', {
-        page: this.currentPage(),
-        total: this.totalPages(),
-      }),
-      first: this.transloco.translate('common.pagination.first'),
-      previous: this.transloco.translate('common.pagination.previous'),
-      next: this.transloco.translate('common.pagination.next'),
-      last: this.transloco.translate('common.pagination.last'),
-    };
-    //#else
-    return {
-      currentPageReport: `${this.totalCount()} in total`,
-      rowsPerPage: 'Items per page',
-      page: `Page ${this.currentPage()} of ${this.totalPages()}`,
-      first: 'First page',
-      previous: 'Previous page',
-      next: 'Next page',
-      last: 'Last page',
-    };
-    //#endif
-  }
 }
+//#if (!IncludeLocalization)
+
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
+const ENGLISH: Record<string, string> = {
+  'roles.colName': 'Role',
+  'roles.colUsers': 'Users',
+  'roles.colPermissions': 'Permissions',
+  'roles.colSort': 'Sort',
+  'roles.colCreatedAt': 'Created at',
+  'common.actions': 'Actions',
+  'common.details': 'View details',
+  'roles.static': 'Built-in',
+  'roles.default': 'Default',
+  'roles.configurePermissions': 'Configure permissions',
+  'common.edit': 'Edit',
+  'roles.staticRoleHint': 'Built-in roles cannot be deleted',
+  'common.delete': 'Delete',
+  'roles.table.emptyFilteredTitle': 'No matching roles',
+  'roles.table.emptyFilteredHint': 'Adjust the search keyword',
+  'roles.table.emptyTitle': 'No roles yet',
+  'roles.table.emptyHint': 'Create a new role',
+  'roles.table.currentPageReport': '{{total}} in total',
+  'common.rowsPerPage': 'Items per page',
+  'common.pageOf': 'Page {{page}} of {{total}}',
+  'common.pagination.first': 'First page',
+  'common.pagination.previous': 'Previous page',
+  'common.pagination.next': 'Next page',
+  'common.pagination.last': 'Last page',
+};
+//#endif

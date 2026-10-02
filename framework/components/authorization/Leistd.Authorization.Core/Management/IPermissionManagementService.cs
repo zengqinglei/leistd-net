@@ -16,8 +16,11 @@ namespace Leistd.Authorization.Management;
 public interface IPermissionManagementService
 {
     /// <summary>获取当前用户的有效权限；超级管理员返回全部可用权限。</summary>
+    /// <remarks>
+    /// 当前身份不在本权限主体空间里时返回<b>空集合</b>，不抛异常：端点已要求认证，回 401 是在说假话，
+    /// 而客户端据此重新登录、再问、再拿到 401 就是死循环。空集合下任何权限判定都不通过，拒绝效果一致。
+    /// </remarks>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="ExceptionHandling.UnauthorizedException">当前身份不是可做权限检查的主体。</exception>
     Task<CurrentPermissionsOutputDto> GetCurrentAsync(CancellationToken cancellationToken = default);
 
     /// <summary>获取权限定义树，剔除停用项、当前侧别不可用的项与因此变空的分组。</summary>
@@ -28,7 +31,7 @@ public interface IPermissionManagementService
     /// <param name="providerName">授予对象类型。</param>
     /// <param name="providerKey">授予对象 Key。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="ExceptionHandling.NotFoundException">主体不存在。</exception>
+    /// <exception cref="ExceptionHandling.BusinessException">主体不存在。</exception>
     Task<PermissionGrantsOutputDto> GetGrantsAsync(
         string providerName,
         string providerKey,
@@ -41,7 +44,7 @@ public interface IPermissionManagementService
     /// <param name="providerKey">授予对象 Key。</param>
     /// <param name="input">目标权限集合与期望版本。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <exception cref="ExceptionHandling.NotFoundException">主体不存在。</exception>
+    /// <exception cref="ExceptionHandling.BusinessException">主体不存在。</exception>
     /// <exception cref="Exceptions.PermissionGrantConcurrencyException">版本不一致。</exception>
     /// <exception cref="Exceptions.UndefinedPermissionException">包含未定义或已禁用的权限。</exception>
     Task<PermissionGrantsOutputDto> ReplaceGrantsAsync(

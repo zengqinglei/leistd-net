@@ -1,13 +1,6 @@
 using Leistd.Data.Paging;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.OperationRecords.Definitions;
 using Leistd.OperationRecords.Models;
-using Leistd.OperationRecords.Queries;
-using Leistd.OperationRecords.Recording;
 using Leistd.OperationRecords.Stores;
 using Leistd.OperationRecords.EntityFrameworkCore.Entities;
 using Leistd.UnitOfWork;
@@ -61,7 +54,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
 
         // 同层时不切：切换会丢掉当前上下文里的租户名
         using (record.TenantId == currentTenant.Id ? null : currentTenant.Change(record.TenantId))
-        using (var unitOfWork = await unitOfWorkManager.BeginAsync(requiresNew: true))
+        using (var unitOfWork = unitOfWorkManager.Begin(requiresNew: true))
         {
             await AddAsync(record, cancellationToken);
             await unitOfWork.CompleteAsync(cancellationToken);
@@ -109,10 +102,12 @@ public class EfCoreOperationRecordStore<TDbContext>(
         if (scope.IsRestricted)
         {
             var actorId = scope.ActorId;
+            var actorTenantId = scope.ActorTenantId;
             var includesHostRecords = scope.IncludesHostRecords;
             // 两个值都先落成局部变量再进表达式树：直接写 scope.XXX 会把整个对象
             // 捕获进查询，EF 需要把成员访问翻译成 SQL，翻不动时报的是很难对上号的运行期错。
-            // Actor 层对宿主整层放行，对其余读者只放行"本人"。
+            // Actor 层对宿主整层放行，对其余读者只放行"本人"：标识与所属租户都相同——
+            // 主体标识只在签发它的那一层内唯一，宿主主体进入租户留下的记录不能被租户里同标识的主体认领。
             //
             // **能看 Host 层的读者就是宿主**，这里复用 includesHostRecords 表达这件事，
             // 而不是再加一个恒等于它的布尔——那种冗余状态迟早会与它漂移。
@@ -125,7 +120,7 @@ public class EfCoreOperationRecordStore<TDbContext>(
                 x.Visibility == OperationVisibility.Tenant
                 || (x.Visibility == OperationVisibility.Host && includesHostRecords)
                 || (x.Visibility == OperationVisibility.Actor
-                    && (includesHostRecords || (actorId != null && x.ActorId == actorId))));
+                    && (includesHostRecords || (actorId != null && x.ActorId == actorId && x.ActorTenantId == actorTenantId))));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Keyword))

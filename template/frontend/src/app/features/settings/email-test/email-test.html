@@ -1,0 +1,36 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <section class="border-border flex flex-col gap-3 rounded-lg border p-4" data-testid="email-test">
+    <div class="flex flex-col gap-1">
+      <h4 class="text-sm font-medium">{{ t('settings.emailTest.title') }}</h4>
+      <p class="text-muted-foreground text-xs">{{ t('settings.emailTest.description') }}</p>
+    </div>
+    <form
+      class="flex flex-col gap-2 sm:flex-row"
+      novalidate
+      (submit)="$event.preventDefault(); send()"
+    >
+      <input
+        hlmInput
+        type="email"
+        class="sm:max-w-sm sm:flex-1"
+        data-testid="email-test-to"
+        [attr.aria-label]="t('settings.emailTest.recipient')"
+        [placeholder]="t('settings.emailTest.recipient')"
+        [value]="to()"
+        (input)="to.set($any($event.target).value)"
+      />
+      <button hlmBtn type="submit" data-testid="email-test-send" [disabled]="!canSend()">
+        @if (sending()) {
+          <hlm-spinner class="text-base" data-icon="inline-start" />
+        } @else {
+          <ng-icon name="lucideSend" data-icon="inline-start" />
+        }
+        {{ t('settings.emailTest.send') }}
+      </button>
+    </form>
+  </section>
+</ng-container>

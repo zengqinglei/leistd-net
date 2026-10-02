@@ -206,6 +206,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     PasswordHash = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     PhoneNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
                     PhoneNumberConfirmed = table.Column<bool>(type: "boolean", nullable: false),
+                    SecurityStamp = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     Avatar = table.Column<string>(type: "text", nullable: true),
                     DisplayName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
@@ -244,12 +245,9 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Provider = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     ProviderUserId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    ProviderUsername = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    ProviderAccountLabel = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     ProviderEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     ProviderAvatarUrl = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
-                    AccessToken = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
-                    RefreshToken = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
-                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     LastSyncTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     CreatorId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     CreationTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -492,7 +490,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "Users",
                 column: "Email",
                 unique: true,
-                filter: "\"TenantId\" IS NULL");
+                filter: "\"TenantId\" IS NULL AND \"Email\" <> ''");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_TenantId_Email",
@@ -500,7 +498,7 @@ namespace CompanyName.ProjectName.Infrastructure.Persistence.Migrations.Identity
                 table: "Users",
                 columns: new[] { "TenantId", "Email" },
                 unique: true,
-                filter: "\"TenantId\" IS NOT NULL");
+                filter: "\"TenantId\" IS NOT NULL AND \"Email\" <> ''");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_TenantId_Username",

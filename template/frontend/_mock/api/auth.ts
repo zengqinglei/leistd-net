@@ -1,3 +1,4 @@
+import { TENANT_HEADER } from '../../src/app/core/services/tenant-protocol';
 import {
   ChangePasswordInputDto,
   UpdateCurrentUserInputDto,
@@ -13,7 +14,11 @@ import {
   TwoFactorSetupOutputDto,
   TwoFactorStatusOutputDto,
 } from '../../src/app/features/account/models/account.dto';
+//#if (ExternalLogin)
+import { SessionLoginOutputDto, UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
+//#else
 import { UserOutputDto } from '../../src/app/shared/dtos/auth.dto';
+//#endif
 import { MockException, MockRequest } from '../core/models';
 import { ensureAcceptablePassword } from '../data/password-policy';
 import { TENANTS } from '../data/tenant';
@@ -49,26 +54,29 @@ const emailRateLimitStore = new Map<string, number>();
 function ensureUsernameAvailable(username: string, currentUserId: string): void {
   const exists = USERS.some((user) => user.username === username && user.id !== currentUserId);
   if (exists) {
-    throw new MockException(400, { code: 'Error:BadRequest', message: 'Username already exists' });
+    throw new MockException(409, {
+      code: 'User:UsernameTaken',
+      message: 'Username already exists',
+    });
   }
 }
 
 function ensureEmailAvailable(email: string, currentUserId: string): void {
   const exists = USERS.some((user) => user.email === email && user.id !== currentUserId);
   if (exists) {
-    throw new MockException(400, { code: 'Error:BadRequest', message: 'Email is already in use' });
+    throw new MockException(409, { code: 'User:EmailTaken', message: 'Email is already in use' });
   }
 }
 
-/** 复刻后端行为：X-Tenant-Id 指向已停用租户时登录被 403 拒绝。 */
+/** 复刻后端行为：租户提示头指向已停用租户时登录被 403 拒绝。 */
 function ensureTenantActive(req: MockRequest): void {
-  const tenantId = req.headers.get('X-Tenant-Id');
+  const tenantId = req.headers.get(TENANT_HEADER);
   if (!tenantId) {
     return;
   }
   const tenant = TENANTS.find((t) => t.id === tenantId);
   if (tenant && !tenant.isActive) {
-    throw new MockException(403, { code: 'Error:Forbidden', message: 'Tenant is deactivated' });
+    throw new MockException(403, { code: 'Tenant:NotActive', message: 'Tenant is deactivated' });
   }
 }
 
@@ -78,13 +86,13 @@ function sessionLogin(usernameOrEmail: string, password: string, tenantKey: stri
   if (user && user.password === password) {
     setMockSessionUserId(user.id);
     // 租户在登录这一刻定案，之后由会话（真实环境是 cookie 里的租户声明）说话；
-    // 认证后的接口不再看 X-Tenant-Id，与后端的解析链一致。
+    // 认证后的接口不再看租户提示头，与后端的解析链一致。
     setMockSessionTenantKey(tenantKey);
     return 'ok';
   }
 
   throw new MockException(401, {
-    code: 'Error:Unauthorized',
+    code: 'Auth:InvalidCredentials',
     message: 'Incorrect username or password',
   });
 }
@@ -100,7 +108,7 @@ function sessionLogin(usernameOrEmail: string, password: string, tenantKey: stri
 function requireCurrentMockUser(): MockUser {
   const user = MOCK_SESSION_USER_ID ? USERS.find((u) => u.id === MOCK_SESSION_USER_ID) : undefined;
   if (!user) {
-    throw new MockException(401, { code: 'Error:Unauthorized', message: 'Not authenticated' });
+    throw new MockException(401, { message: 'Not authenticated' });
   }
   return user;
 }
@@ -118,11 +126,11 @@ function updateCurrentUser(req: MockRequest): UserOutputDto {
   const email = body.email.trim();
 
   if (!username) {
-    throw new MockException(400, { code: 'Error:BadRequest', message: 'Username is required' });
+    throw new MockException(400, { message: 'Username is required' });
   }
 
   if (!email) {
-    throw new MockException(400, { code: 'Error:BadRequest', message: 'Email is required' });
+    throw new MockException(400, { message: 'Email is required' });
   }
 
   ensureUsernameAvailable(username, user.id);
@@ -151,7 +159,7 @@ function setCurrentUserAvatar(req: MockRequest): UserOutputDto {
 function sendCurrentUserEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   const user = requireCurrentMockUser();
   if (user.isEmailVerified) {
-    throw new MockException(400, {
+    throw new MockException(409, {
       code: 'Auth:EmailAlreadyVerified',
       message: 'This email address has already been verified.',
     });
@@ -201,21 +209,19 @@ function changePassword(req: MockRequest): 'ok' {
 
   if (user.password !== body.currentPassword) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
+      code: 'Security:CurrentPasswordIncorrect',
       message: 'Current password is incorrect',
     });
   }
 
   if (body.newPassword !== body.confirmPassword) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
       message: 'The new passwords do not match',
     });
   }
 
   if (body.currentPassword === body.newPassword) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
       message: 'The new password must be different from the current password',
     });
   }
@@ -337,7 +343,7 @@ function revokeSession(req: MockRequest): 'ok' {
   requireCurrentMockUser();
   const id = String(req.params.id);
   if (mockSessions.some((s) => s.id === id && s.isCurrent)) {
-    throw new MockException(400, {
+    throw new MockException(409, {
       code: 'Auth:CannotRevokeCurrentSession',
       message: 'Use sign-out to end the current session.',
     });
@@ -406,7 +412,7 @@ function validateCaptcha(captchaToken: string | undefined, captchaCode: string |
 
   if (!code || !captchaCode || code.toLowerCase() !== captchaCode.trim().toLowerCase()) {
     throw new MockException(400, {
-      code: 'Error:BadRequest',
+      code: 'Auth:CaptchaInvalid',
       message: 'The captcha is incorrect, please try again',
     });
   }
@@ -422,8 +428,8 @@ function sendEmailCode(req: MockRequest): EmailVerificationChallengeOutputDto {
   const rateKey = `${scope}:${email}`;
   const now = Date.now();
   if ((emailRateLimitStore.get(rateKey) ?? 0) > now) {
-    throw new MockException(400, {
-      code: 'Error:BadRequest',
+    throw new MockException(429, {
+      code: 'Auth:EmailCodeSendTooFrequent',
       message: 'Verification codes are being sent too frequently',
     });
   }
@@ -513,13 +519,13 @@ function validateEmailChallenge(req: MockRequest, email: string, body: RegisterI
 
 function invalidEmailChallenge(): MockException {
   return new MockException(400, {
-    code: 'Error:BadRequest',
+    code: 'Auth:EmailCodeInvalid',
     message: 'The email verification code is incorrect or has expired',
   });
 }
 
 function getRequestScope(req: MockRequest): string {
-  return req.headers.get('X-Tenant-Id') ?? 'host';
+  return req.headers.get(TENANT_HEADER) ?? 'host';
 }
 
 function normalizeEmail(email: string): string {
@@ -527,26 +533,35 @@ function normalizeEmail(email: string): string {
 }
 //#if (ExternalLogin)
 
+/** mock 部署"已配置"的提供商：登录页入口与绑定列表读同一份。 */
+const MOCK_EXTERNAL_PROVIDERS = ['github', 'google'];
+
 /** mock 下的外部账号绑定：只演示列表与解绑；绑定要跳真实的提供商，mock 走不通。 */
 let mockExternalLinks: {
   id: string;
   provider: string;
-  providerUsername: string;
+  providerAccountLabel: string;
   creationTime: string;
 }[] = [
   {
     id: 'mock-link-github',
     provider: 'github',
-    providerUsername: 'octocat',
+    providerAccountLabel: 'octocat',
     creationTime: '2026-06-01T00:00:00Z',
   },
 ];
+
+function externalLoginCallback(req: MockRequest): SessionLoginOutputDto {
+  setMockSessionUserId(USERS[0].id);
+  setMockSessionTenantKey(getRequestScope(req));
+  return {};
+}
 
 function getExternalLinks() {
   const user = requireCurrentMockUser();
   return {
     hasPassword: !!user.password,
-    providers: ['github', 'google'].map((provider) => ({
+    providers: MOCK_EXTERNAL_PROVIDERS.map((provider) => ({
       provider,
       link: mockExternalLinks.find((l) => l.provider === provider) ?? null,
     })),
@@ -556,37 +571,6 @@ function getExternalLinks() {
 function unlinkExternalLogin(req: MockRequest): 'ok' {
   requireCurrentMockUser();
   mockExternalLinks = mockExternalLinks.filter((l) => l.id !== String(req.params.id));
-  return 'ok';
-}
-
-function getExternalLoginUrl(provider: string): { loginUrl: string } {
-  const state = Math.random().toString(36).substring(7);
-  const redirectUri = encodeURIComponent(`${window.location.origin}/#/auth/external-callback`);
-
-  const urls: Record<string, string> = {
-    github: `https://github.com/login/oauth/authorize?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&scope=user:email`,
-    google: `https://accounts.google.com/o/oauth2/v2/auth?client_id=mock_client_id&redirect_uri=${redirectUri}&state=${state}&response_type=code&scope=email%20profile`,
-  };
-
-  const loginUrl = urls[provider];
-  if (!loginUrl) {
-    throw new MockException(400, {
-      code: 'Error:BadRequest',
-      message: `Unsupported login provider: ${provider}`,
-    });
-  }
-
-  // state 只编在 loginUrl 里，与真实后端一致：绑定靠 HttpOnly Cookie，不回传给客户端
-  return { loginUrl };
-}
-
-function externalLoginCallback(req: MockRequest): 'ok' {
-  // Mock: 直接登录为第一个测试用户。
-  // 回调仍是匿名请求，会带上登录前选定的租户头（tenantInterceptor 给所有 /api/ 请求附加），
-  // 真实后端在这一步进入该租户上下文并把租户写进认证主体——所以这里也要按头定案，
-  // 固定成宿主会让后续所有设置读写落到错误的作用域。
-  setMockSessionUserId(USERS[0].id);
-  setMockSessionTenantKey(getRequestScope(req));
   return 'ok';
 }
 //#endif
@@ -599,11 +583,11 @@ export const AUTH_API = {
   'POST /api/v1/auth/logout': () => logout(),
   'POST /api/v1/auth/session-login': (req: MockRequest) => {
     ensureTenantActive(req);
-    // 登录是匿名阶段，此时 X-Tenant-Id 决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
+    // 登录是匿名阶段，此时租户提示头决定「凭据在哪个租户内校验」——这是它唯一起作用的地方。
     return sessionLogin(
       req.body.usernameOrEmail,
       req.body.password,
-      req.headers.get('X-Tenant-Id') ?? 'host',
+      req.headers.get(TENANT_HEADER) ?? 'host',
     );
   },
   'GET /api/v1/auth/me': (req: MockRequest) => getCurrentUser(req),
@@ -623,12 +607,9 @@ export const AUTH_API = {
   'POST /api/v1/auth/me/sessions/revoke-others': () => revokeOtherSessions(),
   'POST /api/v1/auth/change-password': (req: MockRequest) => changePassword(req),
   //#if (ExternalLogin)
-  'GET /api/v1/external-auth/:provider/login-url': (req: MockRequest) =>
-    getExternalLoginUrl(req.params.provider),
-  'POST /api/v1/external-auth/:provider/callback': (req: MockRequest) => externalLoginCallback(req),
+  'POST /api/v1/external-auth/:provider/complete': (req: MockRequest) => externalLoginCallback(req),
+  'GET /api/v1/external-auth/providers': () => ({ providers: MOCK_EXTERNAL_PROVIDERS }),
   'GET /api/v1/external-auth/links': () => getExternalLinks(),
-  'GET /api/v1/external-auth/:provider/link-url': (req: MockRequest) =>
-    getExternalLoginUrl(req.params.provider),
   'DELETE /api/v1/external-auth/links/:id': (req: MockRequest) => unlinkExternalLogin(req),
   //#endif
 };

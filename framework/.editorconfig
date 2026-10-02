@@ -18,3 +18,10 @@ root = false
 # 设成 error 而非 warning：框架构建线是 0 警告，warning 在这里等于没有约束力。
 dotnet_style_namespace_match_folder = true:error
 dotnet_diagnostic.IDE0130.severity = error
+
+# ── 未使用的 using ────────────────────────────────────────────────────────────
+#
+# 搬包、改命名空间之后，旧 using 会原样留在几十个文件里，编译照样通过，读者却被引向
+# 已不存在或无关的命名空间。IDE0005 在构建期报出（需要 GenerateDocumentationFile，common.props 已开），
+# Release 下随 TreatWarningsAsErrors 升为错误。
+dotnet_diagnostic.IDE0005.severity = warning

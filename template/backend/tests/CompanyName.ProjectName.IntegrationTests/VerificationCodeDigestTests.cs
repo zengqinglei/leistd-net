@@ -62,8 +62,7 @@ public class VerificationCodeDigestTests
             Options.Create(new VerificationCodeOptions { Key = key }));
 
         // 构造本身必须成功：无关的依赖解析不该被它挡住
-        // 显式 InternalServerException 而非 BCL 异常：这条路径在请求上（注册/发验证码），
-        // 让兜底处理器替它决定会把"密钥没配"变成无信息的"系统错误"
-        Assert.Throws<InternalServerException>(() => digest.Compute("123456"));
+        // 技术配置错误使用 BCL 异常；API 边界统一转为不泄露细节的 500。
+        Assert.Throws<InvalidOperationException>(() => digest.Compute("123456"));
     }
 }

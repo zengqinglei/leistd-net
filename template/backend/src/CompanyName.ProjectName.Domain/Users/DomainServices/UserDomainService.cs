@@ -2,8 +2,12 @@
 using CompanyName.ProjectName.Domain.Users.Policies;
 using CompanyName.ProjectName.Domain.Users.ValueObjects;
 #endif
+using CompanyName.ProjectName.Domain.Shared.Security.Errors;
+using CompanyName.ProjectName.Domain.Users.Errors;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 using CompanyName.ProjectName.Domain.Users.Entities;
+using Leistd.Auditing.Abstractions;
+using Leistd.Ddd.Domain.DataFilters;
 using Leistd.Ddd.Domain.Repositories;
 #if (LocalIdentity)
 using Leistd.MultiTenancy;
@@ -13,7 +17,6 @@ using Leistd.ExceptionHandling;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 
 namespace CompanyName.ProjectName.Domain.Users.DomainServices;
@@ -23,6 +26,7 @@ namespace CompanyName.ProjectName.Domain.Users.DomainServices;
 /// </summary>
 public class UserDomainService(
     IRepository<User, Guid> userRepository,
+    IDataFilter dataFilter,
 #if (LocalIdentity)
     // 只有 CreateSuperAdminAsync 用它挡"租户上下文里造超管"，而那个方法只在本地身份形态存在
     ICurrentTenant currentTenant,
@@ -32,35 +36,105 @@ public class UserDomainService(
 #endif
     ILogger<UserDomainService> logger)
 {
+#if (!LocalIdentity)
+    /// <summary>
+    /// 把签发方的主体投影成本地用户行：不存在就建，存在就按令牌刷新资料字段。
+    /// </summary>
+    /// <remarks>
+    /// <para>本形态下用户行的主键<b>就是</b>签发方的 <c>sub</c>（见 <see cref="User"/> 的构造函数），
+    /// 所以这条投影不可能"对错人"——而让人手填主体标识就可能，且抄错时不报错。</para>
+    /// <para><b>资料字段每次刷新，不做本地编辑。</b>用户名、邮箱、显示名归签发方所有；
+    /// 本服务没有回写通道，允许本地改只会积累与签发方的漂移。</para>
+    /// <para><b>角色与启停不碰。</b>那两样是本服务自己的授权决定，刷新资料时必须原样保留，
+    /// 否则每次请求都会把管理员刚做的授权冲掉。</para>
+    /// <para>首次访问的并发不在这里处理：撞主键要到冲刷时才抛，本方法内接不到。
+    /// 由持有事务边界的调用方重试一次，见 <c>ResourceUserProvisioningMiddleware</c>。</para>
+    /// </remarks>
+    /// <param name="subjectId">签发方主体标识，取自令牌的 <c>sub</c>。</param>
+    /// <param name="username">令牌里的用户名；缺失时回落为主体标识，保证非空且可检索。</param>
+    /// <param name="email">令牌里的邮箱；缺失时留空串。</param>
+    /// <param name="displayName">令牌里的展示名。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    public async Task<User> EnsureProjectedAsync(
+        Guid subjectId,
+        string? username,
+        string? email,
+        string? displayName,
+        CancellationToken cancellationToken = default)
+    {
+        var name = string.IsNullOrWhiteSpace(username) ? subjectId.ToString() : username.Trim();
+        var mail = email?.Trim() ?? string.Empty;
+        var display = displayName?.Trim();
+
+        var existing = await userRepository.GetByIdAsync(subjectId, cancellationToken);
+        if (existing is not null)
+        {
+            // 没变就不写：这条路径在每个已认证请求上都会走到
+            if (existing.Username == name && existing.Email == mail && existing.DisplayName == display)
+            {
+                return existing;
+            }
+
+            existing.ProjectFromIssuer(name, mail, display);
+            await userRepository.UpdateAsync(existing, cancellationToken);
+            return existing;
+        }
+
+        // 这里不包 try/catch：工作单元内 InsertAsync 只登记实体、不访问数据库，
+        // 撞主键要到冲刷时才抛，catch 在这里是永不触发的死代码（见工作单元文档）。
+        // 并发首访由调用方重试一次收口——它持有事务边界，也只有它能重开一个干净的工作单元。
+        var user = new User(subjectId, name, mail, displayName: display);
+        await userRepository.InsertAsync(user, cancellationToken);
+
+        logger.LogInformation("Projected issuer subject {SubjectId} into a local user row.", subjectId);
+        return user;
+    }
+
+#endif
     /// <summary>
     /// 检查用户名是否可用
     /// </summary>
+    /// <remarks>
+    /// 查重要看见被软删除的行：用户名与邮箱的唯一索引都没有排除 <c>IsDeleted</c>，
+    /// 软删除的用户仍然占着它们，而仓储默认把这些行过滤掉。不关掉过滤，这里会答"可用"，
+    /// 随后落库撞唯一索引——用户看到的是 500，而不是"该用户名已被占用"。
+    /// <para>
+    /// 保留租户过滤：跨租户允许同名同邮箱，唯一索引也是按租户分开的。
+    /// </para>
+    /// </remarks>
     public async Task<bool> IsUsernameAvailableAsync(string username, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Username == username, cancellationToken);
     }
 
     /// <summary>
     /// 检查用户名是否可用（排除指定用户）
     /// </summary>
+    /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsUsernameAvailableAsync(Guid excludeUserId, string username, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Id != excludeUserId && u.Username == username, cancellationToken);
     }
 
     /// <summary>
     /// 检查邮箱是否可用
     /// </summary>
+    /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsEmailAvailableAsync(string email, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Email == email, cancellationToken);
     }
 
     /// <summary>
     /// 检查邮箱是否可用（排除指定用户）
     /// </summary>
+    /// <inheritdoc cref="IsUsernameAvailableAsync(string, CancellationToken)" path="/remarks"/>
     public async Task<bool> IsEmailAvailableAsync(Guid excludeUserId, string email, CancellationToken cancellationToken = default)
     {
+        using var _ = dataFilter.Disable<ISoftDelete>();
         return !await userRepository.AnyAsync(u => u.Id != excludeUserId && u.Email == email, cancellationToken);
     }
 
@@ -122,61 +196,49 @@ public class UserDomainService(
         user.UpdatePasswordHash(HashWithPolicy(newPassword));
 #endif
 
+#if (LocalIdentity)
     /// <summary>
     /// 创建用户
     /// </summary>
+    /// <remarks>
+    /// 资源服务形态没有这个方法：那一侧的用户行由 <see cref="EnsureProjectedAsync"/> 按令牌投影，
+    /// 不存在"由本服务决定一个新主体的标识"这回事。
+    /// </remarks>
     /// <param name="passwordSubject">
     /// 口令策略错误消息里的主体描述。内部调用（种子、租户初始化）应传入可辨识的值，
     /// 否则失败消息只会说"Password"，看不出是哪一处的口令不合规
     /// </param>
     public async Task<User> CreateUserAsync(
-#if (!LocalIdentity)
-        Guid subjectId,
-#endif
         string username,
         string email,
-#if (LocalIdentity)
         string password,
-#endif
         string? displayName,
-#if (LocalIdentity)
         string passwordSubject = "Password",
-#endif
         CancellationToken cancellationToken = default)
     {
         // 检查用户名唯一性
         if (!await IsUsernameAvailableAsync(username, cancellationToken))
         {
-            throw new BadRequestException($"Username '{username}' already exists.")
-#if (IncludeLocalization)
-                .WithCode("User:UsernameTaken")
-                .WithData("Username", username)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.UsernameTaken, $"Username '{username}' already exists.")
+                .WithData("Username", username);
         }
 
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(email, cancellationToken))
         {
-            throw new BadRequestException($"Email '{email}' is already in use.")
-#if (IncludeLocalization)
-                .WithCode("User:EmailTaken")
-                .WithData("Email", email)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         // 创建用户
-#if (LocalIdentity)
         var user = new User(username, email, HashWithPolicy(password, passwordSubject), displayName);
-#else
-        var user = new User(subjectId, username, email, displayName: displayName);
-#endif
         await userRepository.InsertAsync(user, cancellationToken);
 
         logger.LogInformation("User created: {Username} (ID: {UserId})", user.Username, user.Id);
         return user;
     }
+
+#endif
 
     /// <summary>
     /// 更新个人信息
@@ -192,23 +254,15 @@ public class UserDomainService(
         // 检查用户名唯一性
         if (!await IsUsernameAvailableAsync(user.Id, username, cancellationToken))
         {
-            throw new BadRequestException($"Username '{username}' already exists.")
-#if (IncludeLocalization)
-                .WithCode("User:UsernameTaken")
-                .WithData("Username", username)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.UsernameTaken, $"Username '{username}' already exists.")
+                .WithData("Username", username);
         }
 
         // 检查邮箱唯一性
         if (!await IsEmailAvailableAsync(user.Id, email, cancellationToken))
         {
-            throw new BadRequestException($"Email '{email}' is already in use.")
-#if (IncludeLocalization)
-                .WithCode("User:EmailTaken")
-                .WithData("Email", email)
-#endif
-                ;
+            throw new BusinessException(UserErrorCodes.EmailTaken, $"Email '{email}' is already in use.")
+                .WithData("Email", email);
         }
 
         user.UpdateProfile(username, email, displayName, phoneNumber);
@@ -216,34 +270,32 @@ public class UserDomainService(
 
 #if (LocalIdentity)
     /// <summary>
-    /// 修改密码
+    /// 本人修改口令：校验当前口令，通过则写入新口令的哈希。
     /// </summary>
-    public Task ChangePasswordAsync(
-        User user,
-        string currentPassword,
-        string newPassword,
-        CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// <b>失败返回状态而不是抛异常</b>，与 <see cref="ValidateCredentialsAsync"/> 同型：
+    /// 当前口令不对是一次<b>再认证失败</b>，应用层要先计入失败次数、留下审计，然后才抛。
+    /// 这里直接抛的话，应用层拿不到那个时机（见 <c>IReauthenticationGuard</c>）。
+    /// 新口令的强度校验仍在这里，失败照常抛——那是输入不合格，不是认证失败。
+    /// </remarks>
+    /// <param name="user">当前用户。</param>
+    /// <param name="currentPassword">待校验的当前口令。</param>
+    /// <param name="newPassword">新口令。</param>
+    public ChangePasswordStatus ChangePassword(User user, string currentPassword, string newPassword)
     {
+        ArgumentNullException.ThrowIfNull(user);
         if (user.PasswordHash == null)
         {
-            throw new BadRequestException("The current account has no local password set and cannot change the password.")
-#if (IncludeLocalization)
-                .WithCode("Security:LocalPasswordNotSet")
-#endif
-                ;
+            return ChangePasswordStatus.NoLocalPassword;
         }
 
         if (!passwordHasher.VerifyPassword(user.PasswordHash, currentPassword))
         {
-            throw new BadRequestException("The current password is incorrect.")
-#if (IncludeLocalization)
-                .WithCode("Security:CurrentPasswordIncorrect")
-#endif
-                ;
+            return ChangePasswordStatus.CurrentPasswordIncorrect;
         }
 
         user.UpdatePasswordHash(HashWithPolicy(newPassword, "New password"));
-        return Task.CompletedTask;
+        return ChangePasswordStatus.Succeeded;
     }
 
     public async Task<User> CreateUserWithRolesAsync(
@@ -318,18 +370,20 @@ public class UserDomainService(
     }
 
     /// <summary>
-    /// 校验用户名密码，并按 <paramref name="lockout"/> 累计失败、触发锁定。
+    /// 校验用户名密码，只给判定。
     /// </summary>
     /// <remarks>
+    /// <para><b>失败返回状态而不是抛异常，也不在这里累计失败</b>：累计要落在独立的工作单元里，
+    /// 那是事务编排、属于应用层（见 <c>IAccessFailureCounter</c>）。领域只回答"口令对不对"。</para>
     /// <para>锁定中的账号<b>不校验密码</b>，直接返回 <see cref="CredentialValidationStatus.LockedOut"/>：
     /// 锁定期间若仍按密码对错给出不同结果，攻击者照样能一个个试，锁定就只是换了一种报错。</para>
-    /// <para>没有密码的账号（只经外部登录）输错不计数：那里没有可猜的密码，
-    /// 计数只会让别人能把它锁住，连外部登录一起挡在外面。</para>
+    /// <para>没有密码的账号（只经外部登录）按凭据无效处理且<b>不应计数</b>：那里没有可猜的密码，
+    /// 计数只会让别人能把它锁住，连外部登录一起挡在外面。调用方据
+    /// <see cref="CredentialValidationResult.Countable"/> 判断。</para>
     /// </remarks>
     public async Task<CredentialValidationResult> ValidateCredentialsAsync(
         string usernameOrEmail,
         string password,
-        LoginLockoutPolicy lockout,
         DateTime now,
         CancellationToken cancellationToken = default)
     {
@@ -353,12 +407,7 @@ public class UserDomainService(
             return new CredentialValidationResult(CredentialValidationStatus.Succeeded, user);
         }
 
-        var lockedOut = user.RecordAccessFailed(now, lockout);
-        await userRepository.UpdateAsync(user, cancellationToken);
-
-        return lockedOut
-            ? new CredentialValidationResult(CredentialValidationStatus.LockedOut, user, LockoutTriggered: true)
-            : new CredentialValidationResult(CredentialValidationStatus.InvalidCredentials, user);
+        return new CredentialValidationResult(CredentialValidationStatus.InvalidCredentials, user, Countable: true);
     }
 #endif
 }

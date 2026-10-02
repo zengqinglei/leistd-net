@@ -1,9 +1,6 @@
-using Leistd.ExceptionHandling;
 using Leistd.Settings.Definitions;
-using Leistd.Settings.Errors;
 using Leistd.Settings.Management;
 using Leistd.Settings.Resolution;
-using Leistd.Settings.Stores;
 using Leistd.TestBase.Doubles;
 using Microsoft.AspNetCore.DataProtection;
 using Xunit;
@@ -56,7 +53,7 @@ public class SettingEncryptionTests
         await Manager(store, _dataProtection).SetAsync("Email.Password", "s3cret", SettingScopes.Host);
         store.Tenant["Api.Token"] = Assert.Single(store.Writes).Value!;
 
-        await Assert.ThrowsAsync<InternalServerException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => Provider(store, _dataProtection).GetOrNullAsync("Api.Token"));
     }
 

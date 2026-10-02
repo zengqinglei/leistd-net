@@ -1,13 +1,17 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+//#if (IncludeLocalization)
+import { Translation } from '@jsverse/transloco';
+import { Subject } from 'rxjs';
+//#endif
 
 import { DefaultSidebar } from './default-sidebar';
 //#if (IncludeLocalization)
 import { provideTranslocoTesting } from '../../../core/i18n/transloco.testing';
 //#endif
 import { AuthorizationService } from '../../../core/services/authorization-service';
-import { PERMISSIONS } from '../../../shared/models/permission';
+import { PERMISSIONS, PLATFORM_ENTRY_PERMISSIONS } from '../../../shared/models/permission';
 import { LayoutService } from '../../services/layout-service';
 
 //#if (IncludeLocalization)
@@ -15,7 +19,6 @@ import { LayoutService } from '../../services/layout-service';
 // 改一句中文不该让这组用例变红。
 const WORK = 'layout.sidebar.groupWork';
 const BUSINESS = 'layout.sidebar.groupBusiness';
-const PERSONAL = 'layout.sidebar.groupPersonal';
 const IDENTITY = 'layout.sidebar.groupIdentity';
 //#if (OpenIddictServer)
 const DEVELOPER = 'layout.sidebar.groupDeveloper';
@@ -25,7 +28,6 @@ const SYSTEM = 'layout.sidebar.groupSystem';
 //#else
 const WORK = 'Work';
 const BUSINESS = 'Business';
-const PERSONAL = 'Personal';
 const IDENTITY = 'Identity & access';
 //#if (OpenIddictServer)
 const DEVELOPER = 'Developer';
@@ -41,7 +43,7 @@ const SYSTEM = 'System';
  * 这里钉住两个区各自的分组骨架，以及判据里能自动验的部分：不留兜底组、
  * 个人设置只在工作空间（管理平台不另放一份）、权限不足的组整组消失。
  */
-describe('DefaultSidebar 菜单分组', () => {
+describe('DefaultSidebar menu groups', () => {
   /**
    * 只构造类，不渲染模板。
    *
@@ -82,27 +84,25 @@ describe('DefaultSidebar 菜单分组', () => {
   const routesOf = (sidebar: DefaultSidebar) =>
     sidebar.menuGroups().flatMap((group) => group.items.map((item) => item.route));
 
-  it('工作空间侧：工作 → 业务 → 个人，不含兜底组', () => {
+  it('orders workspace groups as work → business with no fallback group', () => {
     const sidebar = build({ platform: false });
 
-    expect(groupsOf(sidebar)).toEqual([WORK, BUSINESS, PERSONAL]);
-    expect(routesOf(sidebar)).toEqual([
-      '/workspace/dashboard',
-      '/workspace/placeholder',
-      '/workspace/settings',
-    ]);
+    expect(groupsOf(sidebar)).toEqual([WORK, BUSINESS]);
+    expect(routesOf(sidebar)).toEqual(['/workspace/dashboard', '/workspace/placeholder']);
   });
 
-  // 个人设置每个用户都有，只放工作空间一处；管理人员也是用户，从头像菜单进同一处。
-  // 管理平台再放一份，就会出现两个入口、两份状态。
-  it('管理平台侧不放个人设置入口', () => {
+  // 个人设置只有一个入口：头像菜单。菜单树里再放一份，顶栏会多出一个齿轮、侧栏会多出一组，
+  // 而它们和头像菜单里的那一项去的是同一个地址。
+  // 工作空间侧由上一条的精确 toEqual 覆盖；这里只查权限开满的平台侧。
+  it('leaves the personal settings entry out of the menu tree', () => {
     const everything = Object.values(PERMISSIONS).map((group) => group.default);
+
     expect(routesOf(build({ platform: true, permissions: everything }))).not.toContain(
       '/workspace/settings',
     );
   });
 
-  it('平台侧：工作 → 身份与访问 → 开发者 → 审计 → 系统', () => {
+  it('orders platform groups work → identity & access → developer → audit → system', () => {
     const permissions = [
       PERMISSIONS.users.default,
       PERMISSIONS.roles.default,
@@ -127,11 +127,66 @@ describe('DefaultSidebar 菜单分组', () => {
     expect(routesOf(sidebar)).toContain('/platform/settings');
   });
 
+  // 能看到任一平台菜单项的账号都必须进得了 /platform，反之入口权限也不能放进一个看不到任何菜单的空平台：
+  // 少一项，那个岗位的账号菜单为空、还会被重定向走；多一项，进来只看到工作组。
+  it('matches platform entry permissions one-to-one with platform menu items', () => {
+    const everything = Object.values(PERMISSIONS).map((group) => group.default);
+    const allRoutes = routesOf(build({ platform: true, permissions: everything }));
+    TestBed.resetTestingModule();
+
+    expect(routesOf(build({ platform: true, permissions: PLATFORM_ENTRY_PERMISSIONS }))).toEqual(
+      allRoutes,
+    );
+    for (const permission of PLATFORM_ENTRY_PERMISSIONS) {
+      TestBed.resetTestingModule();
+      expect(
+        routesOf(build({ platform: true, permissions: [permission] })).length,
+        permission,
+      ).toBeGreaterThan(1);
+    }
+  });
+
   // 权限不足时整组消失，不留一个空标题——空标题看起来像加载失败。
-  it('平台侧无管理权限时只剩工作组', () => {
+  it('shows only the work group on the platform without admin permissions', () => {
     const sidebar = build({ platform: true });
 
     expect(groupsOf(sidebar)).toEqual([WORK]);
     expect(routesOf(sidebar)).toEqual(['/platform']);
   });
 });
+//#if (IncludeLocalization)
+
+/**
+ * 菜单文案随词条到达更新。
+ *
+ * 语言切换不再等词条加载完才激活，首次读菜单时词条可能还在路上。文案若靠「读活动语言 + 同步 translate()」，
+ * 那一刻会把键名缓存下来，之后语言不再变化，键名就一直留在菜单上。
+ */
+describe('DefaultSidebar menu labels', () => {
+  it('shows the translated labels once translations arrive after the first read', () => {
+    const translations = new Subject<Translation>();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: LayoutService,
+          useValue: { isPlatform: signal(false), currentUrl: signal('/workspace/dashboard') },
+        },
+        {
+          provide: AuthorizationService,
+          useValue: { hasAny: () => true, canAccessPlatform: () => false },
+        },
+        ...provideTranslocoTesting(['en'], { getTranslation: () => translations }),
+      ],
+    });
+    const sidebar = TestBed.runInInjectionContext(() => new DefaultSidebar());
+    const labels = () => sidebar.menuGroups().map((group) => group.label);
+    expect(labels()).not.toContain('Work');
+
+    translations.next({ layout: { sidebar: { groupWork: 'Work', groupBusiness: 'Business' } } });
+    translations.complete();
+
+    expect(labels()).toEqual(['Work', 'Business']);
+  });
+});
+//#endif

@@ -1,75 +1,46 @@
 # 服务间调用客户端
 
-服务调用统一处理日志、链路识别、用户与租户上下文、OAuth2 认证以及远程错误还原。Refit 是默认的业务客户端编写方式。
+服务调用统一处理链路标识、OAuth 机器认证、用户令牌交换与远程错误还原。Refit 是默认的业务客户端编写方式；身份由签发方令牌证明。
 
 ## 何时使用
 
 | 场景 | 入口 | 包 |
 | --- | --- | --- |
-| 声明 Refit 业务客户端 | `AddRefitServiceClient` | `Leistd.ServiceClient.Refit` |
-| 为手写客户端装配标准管道 | `AddServiceClient` | `Leistd.ServiceClient.Core` |
-| 使用 client credentials 认证 | `AddClientCredentials` | `Leistd.ServiceClient.OAuth` |
-| 被调方恢复委托用户上下文 | `AddServiceUserContext` + `UseServiceUserContext` | `Leistd.ServiceClient.AspNetCore` |
-| 读取响应或还原远程错误 | `ReadContentAsync` / `EnsureRemoteSuccessAsync` | `Leistd.ServiceClient.Core` |
+| Refit 业务客户端 | `AddRefitServiceClient` | `Leistd.ServiceClient.Refit` |
+| 手写客户端与错误读取 | `AddServiceClient`、`ReadContentAsync`、`EnsureRemoteSuccessAsync` | `Leistd.ServiceClient.Core` |
+| 工作负载身份与机器令牌 | `AddServiceAuthentication`、`AddClientCredentials` | `Leistd.ServiceClient.OAuth` |
+| 单跳用户委托 | `AddTokenExchange` | `Leistd.ServiceClient.OAuth` |
+| 当前请求的用户访问令牌 | `AddUserAccessTokenAccessor` | `Leistd.ServiceClient.AspNetCore` |
 
-`Core` 不依赖 ASP.NET Core。OAuth、AspNetCore 和 Refit 包均传递引用 Core。
+Core 的 `IUserAccessTokenAccessor` 只定义证明来源，不依赖 ASP.NET Core 或 OpenIddict。OAuth 复用官方 OpenIddict.Client 7.7 的发现文档与客户端认证，不推导令牌端点；机器回源与用户交换使用同一工作负载注册。
 
 ## 安装
 
 ```bash
-dotnet add package Leistd.ServiceClient.Refit      # 推荐的调用方入口
-dotnet add package Leistd.ServiceClient.OAuth      # client credentials
-dotnet add package Leistd.ServiceClient.AspNetCore # 被调方用户上下文恢复
+dotnet add package Leistd.ServiceClient.Refit
+dotnet add package Leistd.ServiceClient.OAuth
+dotnet add package Leistd.ServiceClient.AspNetCore
 ```
 
-声明 Refit 接口的项目还需直接引用 `Refit` 以激活源生成器。接口应为 public；internal 接口需配置 `InternalsVisibleTo`。
+声明 Refit 接口的项目直接引用 Refit，以激活源生成器；接口为 public。
 
 ## 注册
 
-调用方优先声明 Refit 接口：
+工作负载身份由宿主显式注册一次。机器端点和用户端点使用不同命名客户端：
 
 ```csharp
-public class OrderServiceClientOptions : ServiceClientOptions;
-
-public interface IOrderServiceClient
-{
-    [Get("/api/v1/orders/{id}")]
-    Task<OrderDto> GetAsync(
-        Guid id,
-        CancellationToken cancellationToken = default);
-}
-
-builder.Services
-    .AddRefitServiceClient<IOrderServiceClient, OrderServiceClientOptions>(
-        "OrderService",
-        builder.Configuration)
-    .AddClientCredentials(builder.Configuration);
+builder.Services.AddServiceAuthentication();
+builder.Services.AddRefitServiceClient<IIdentityApi, IdentityOptions>("Identity", builder.Configuration)
+    .AddClientCredentials();
+builder.Services.AddRefitServiceClient<IBillingApi, BillingOptions>("Billing", builder.Configuration)
+    .AddTokenExchange();
+// 资源宿主传入实际的 Bearer 验证方案。Identity/Standalone 的 Cookie 不提供此证明。
+builder.Services.AddUserAccessTokenAccessor("OpenIddict.Validation.AspNetCore");
 ```
 
-不要用裸 `AddRefitClient`；它会跳过标准管道，并将远程错误退回 Refit 的 `ApiException`。需要手写实现时改用：
+新认证入口统一先绑定配置，再应用可选委托，并在启动时验证。`AddServiceAuthentication` 默认绑定 Leistd:ServiceAuth，可通过 configSectionPath 指定其他路径；`AddClientCredentials` 的默认路径由 builder.Name 派生为 Leistd:ServiceClients:{Name}；`AddTokenExchange` 派生为 Leistd:ServiceClients:{Name}:TokenExchange。每个命名客户端只能安装一个认证处理器。
 
-```csharp
-builder.Services.AddServiceClient<
-    IOrderServiceClient,
-    OrderServiceClient,
-    OrderServiceClientOptions>("OrderService", builder.Configuration);
-```
-
-`AddServiceClient` 和 `AddRefitServiceClient` 都返回 `IHttpClientBuilder`，可继续追加宿主的 resilience handler。本家族不内置通用重试或熔断策略。
-
-被调方在认证与授权之间恢复上下文：
-
-```csharp
-builder.Services.AddServiceUserContext(builder.Configuration);
-
-var app = builder.Build();
-app.UseAuthentication();
-app.UseServiceUserContext();
-app.UseMultiTenancy(); // 使用多租户时
-app.UseAuthorization();
-```
-
-Bearer token 验证不属于本家族，宿主需自行配置 OpenIddict Validation 或等价 JWT 验证。
+宿主自行配置 OpenIddict Validation 或等价 JWT Bearer 验证；令牌读取适配器只读取指定方案认证票据中保存的 access_token，不以 Cookie 的已认证状态采信任意 Authorization 头。OpenIddict Validation 自动保存此令牌；使用 JwtBearer 时应启用 SaveToken。适配器在发送请求时读取 HttpContext，池化 handler 不捕获请求作用域。非 Web 宿主可实现 `IUserAccessTokenAccessor`，但返回值必须是真实的已验证用户访问令牌。
 
 ## 使用
 
@@ -102,111 +73,75 @@ var order = await response.ReadContentAsync<OrderDto>();
 | --- | --- |
 | 2xx 且 `code = 0` | 返回 `data` |
 | 2xx 且 `code != 0` | 抛 `RemoteServiceException` |
-| 非 2xx ProblemDetails | 还原 `code`、`message`、`traceId` 和 `errors` |
+| 非 2xx ProblemDetails | 还原 `code`、`detail`、`traceId` 和 `errors`。`errors` 认两种形状：Leistd 的数组 `[{field, detail, code}]`，与官方 `HttpValidationProblemDetails` 的字典 `{字段: [消息…]}`（`AddValidation()`、MVC 默认校验，键为属性名）；字典的每条消息各成一项 `ErrorItem`，`Code` 为空 |
+| 非 2xx 数字信封 | 从 `errorCode` 还原稳定业务码；数字 `code` 是 HTTP 状态，不作为业务码 |
 | 非 2xx 非 JSON | 保留最多 4096 字符的 `ResponseBody` |
 | 网络、超时或反序列化失败 | 抛 `ServiceClientException`；调用方主动取消原样上抛 |
 
-不要将远程状态直接当作本地业务结果。需要转换时，捕获 `RemoteServiceException` 并使用 `RemoteStatusCode`、`ErrorCode` 和 `RemoteTraceId`。未处理的远程 5xx/408/429 对外映射为 503，其它 4xx 映射为 502。
+不要将远程状态直接当作本地业务结果。需要转换时，捕获 `RemoteServiceException` 并使用 `RemoteStatusCode`、`ErrorCode` 和 `RemoteTraceId` 做显式决策。未处理的远端拒绝及无效或提前中断的响应默认返回安全的 502，不透传上游状态或消息；本地配置及未分类故障返回 500，连接不可达返回 503，等待超时返回 504。宿主知道某个上游的稳定契约时，可用 `MapException<RemoteServiceException>` 显式分类。502 是未处理依赖失败的通用 API 边界策略，不表示远端每个 HTTP 错误都是协议格式错误。
 
-### 调用管道
+超时由宿主在返回的 `IHttpClientBuilder` 上叠加的弹性管道负责（如 `AddStandardResilienceHandler()`，按官方建议只加一个）。管道的超时在委托处理器之内生效，抛出的 `TimeoutRejectedException` 被包装为 `FailureKind = Timeout` 的 `ServiceClientException`，API 边界返回 504。组件不设置 `HttpClient.Timeout`，它保持 .NET 默认的 100 秒作外层兜底；它在全部处理器之外生效，到期时按 .NET 原生契约抛出 `TaskCanceledException`（`InnerException` 为 `TimeoutException`），组件不包装、也不在 API 边界认领。需要调整兜底时长时用 `ConfigureHttpClient`，并保持它大于弹性管道的总超时。
+
+### 身份与调用管道
 
 ```text
-业务代码 → 日志 → TraceId → 用户头 → 租户头 → Bearer 认证 → 网络
+业务代码 → 传输故障分类 → 关联标识 → 机器认证或用户交换 → 网络
 ```
 
-- TraceId 复用 `Leistd.Tracing.HttpClient`；未注册追踪组件时直通。
-- 用户头读取发送时的 `ICurrentUser`；未注册 Security 时直通。
-- 租户头读取 `ICurrentTenant`，与用户转发开关独立。
-- `AddClientCredentials` 只在请求没有 `Authorization` 头时介入。收到 401 后使 token 失效、重取并重试一次。
+关联标识经追踪组件透传，未注册时直通。Core 不转发用户或租户请求头；下游从已验证 JWT 的主体读取用户与租户。
 
-OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发获取合并为一次；token 请求使用独立客户端。
+机器模式只代表 client credentials 的工作负载，不恢复自然人身份。用户模式通过 `IUserAccessTokenAccessor` 获取当前请求的访问令牌作为 subject；默认 ASP.NET Core accessor 只读取已验证 Bearer 方案保存的令牌，普通 Cookie 与后台用户上下文本身不能提供证明。宿主可显式替换 accessor，例如从经官方 Cookie 处理器验证的服务端票据读取保存的访问令牌。没有令牌或请求预设 Authorization 时拒绝调用，不回退为机器身份。来源资源与交换发起方的授权关系、目标 audience/scope 均由签发方策略决定，组件不要求 client ID 等于来源 audience。来源用户令牌无需含目标 scope，下游仍按本地权限判定能执行的业务。
 
-### 委托用户上下文
+用户交换目标通过命名客户端的 Audience、Scope 指定。输出主体、声明与令牌有效期由身份服务决定；组件提交用户访问令牌作为 subject，不从环境用户或租户构造证明。
 
-调用方可传递：
+### 缓存与故障
 
-| 头 | 来源 | 默认 |
-| --- | --- | --- |
-| `X-User-Id` | `ICurrentUser.Id` | 开启 |
-| `X-Username` | `ICurrentUser.Username` | 开启，UTF-8 URL 编码 |
-| `X-Tenant-Id` | `ICurrentTenant.Id` | 开启，独立于用户头开关 |
-| 自定义 | `ClaimHeaderMap` | 关闭 |
+组件默认关闭官方客户端令牌存储。HybridCache 合并同键并发，按官方客户端返回的到期时间缓存：机器令牌提前 60 秒失效，为网络传输和时钟差留余量；短寿命用户交换令牌提前 10 秒失效，避免缓冲过大而过早放弃缓存。键含签发方、工作负载、命名客户端、目标范围及完整 subject 令牌的 SHA-256 摘要。所有 Bearer 缓存读写设置 DisableDistributedCache，凭据只留在进程内。
 
-角色与权限不通过请求头传递。被调方应根据调用方 scope 授权，或按用户 Id 在本地判定。
-
-被调方只在以下条件同时成立时恢复用户上下文：
-
-1. 当前主体已通过认证且包含 `client_id`。
-2. `sub` 等于 `ClientSubject.Format(clientId)`，即 `client:<client_id>`。
-3. token 持有 `RequiredScope`，默认 `svc.delegate`。
-
-恢复后用户身份作为主身份，原调用方身份仍保留，`ICurrentUser` 与 `ICurrentClient` 可同时使用。不可信调用默认移除用户头；租户头继续由多租户组件约束。
-
-### 调用日志
-
-日志类别为 `Leistd.ServiceClient.<服务名>`。每次调用记录方法、URI、状态码与耗时；非 2xx 为 Warning，传输异常为 Error。
-
-`LogPayloads = true` 时以 Debug 级别记录截断后的请求/响应体。`Authorization`、`Cookie` 和 `X-User-*` 头始终脱敏。
+401 清除对应内存缓存，下次调用重新获取；HybridCache 的后端删除故障记录 Warning，不覆盖原响应，日志不包含令牌或缓存键原值；请求取消仍传播。组件不自动重放业务请求；调用方按幂等性决定重试。令牌请求的协议拒绝归类为 RemoteFailure，API 默认安全返回 502；诊断保留官方错误码。发现与客户端认证方式协商交给官方客户端。日志策略由宿主配置，官方客户端对协议中的敏感令牌与密钥字段脱敏。
 
 ## 接口参考
 
-| 类型或入口 | 用途 |
+| 入口或契约 | 作用 |
 | --- | --- |
-| `AddRefitServiceClient<TApi, TOptions>` | 注册 Refit 客户端并装配标准管道 |
-| `AddServiceClient<TClient, TImpl, TOptions>` | 注册手写强类型客户端 |
-| `AddServiceClientPipeline<TOptions>` | 为已有 `IHttpClientBuilder` 装配标准管道 |
-| `AddClientCredentials` | 追加 client credentials 认证 |
-| `AddServiceUserContext` / `UseServiceUserContext` | 注册并启用被调方上下文恢复 |
-| `ReadContentAsync` / `ReadResultAsync` | 读取裸载荷（常规）或 `{code, message, data}` 信封（互操作） |
-| `EnsureRemoteSuccessAsync` | 将原始非 2xx 响应还原为远程异常 |
-| `ServiceClientException` | 网络、超时或反序列化等客户端故障 |
-| `RemoteServiceException` | 远程错误及其状态码、业务码和 TraceId |
+| `AddServiceAuthentication` | 全局工作负载注册 |
+| `AddClientCredentials` | 命名客户端机器认证 |
+| `AddTokenExchange` | 命名客户端用户委托 |
+| `AddUserAccessTokenAccessor` | 当前请求的 Bearer 证明适配 |
+| `IUserAccessTokenAccessor.GetAccessTokenAsync` | 非 Web 宿主的证明来源接缝 |
+| `AddServiceClient` / `AddServiceClientPipeline` | 手写客户端与标准管道 |
+| `AddRefitServiceClient` | Refit 客户端、序列化与统一远端异常 |
+| `ReadContentAsync` / `ReadResultAsync` / `EnsureRemoteSuccessAsync` | 裸载荷、信封互操作与错误读取 |
 
 ## 配置项
 
-`Leistd:ServiceClients:<服务名>`：
-
-| 属性 | 默认值 | 说明 |
+| 配置节 | 属性 | 说明 |
 | --- | --- | --- |
-| `BaseAddress` | `null` | 下游服务基础地址，结尾自动补 `/`；留空不报错——宿主可在返回的 `IHttpClientBuilder` 上自行设置，两处都没设时调用在发请求时失败 |
-| `Timeout` | 30s | 单次调用超时 |
-| `LogPayloads` | `false` | 是否记录脱敏且截断的载荷 |
-| `MaxPayloadLength` | 4096 | 载荷最大记录长度 |
-| `UserContext.Enabled` | `true` | 用户头转发开关 |
-| `UserContext.ForwardUsername` | `true` | 是否转发用户名 |
-| `UserContext.ForwardTenantId` | `true` | 是否转发租户 Id，独立于 `Enabled` |
-| `UserContext.ClaimHeaderMap` | 空 | 额外 claim 到请求头的映射 |
+| Leistd:ServiceAuth | Authority、ClientId、ClientSecret | 绝对签发者 URI、工作负载 ID、密钥，启动必填 |
+| Leistd:ServiceClients:{Name} | BaseAddress | 可由宿主通过 HttpClient 构建器设置；没有地址时调用失败 |
+| Leistd:ServiceClients:{Name} | Scope | 机器范围（空格分隔） |
+| Leistd:ServiceClients:{Name}:TokenExchange | Audience、Scope | 用户委托目标，两者必填 |
 
-`Leistd:ServiceAuth`：
-
-| 属性 | 默认值 | 说明 |
-| --- | --- | --- |
-| `Authority` | `null` | 身份服务基础地址 |
-| `TokenEndpoint` | `{Authority}/connect/token` | token 端点 |
-| `ClientId` / `ClientSecret` | 空 | 本服务的调用凭据 |
-| `Scope` | `null` | 全局默认 scope；客户端节可覆盖 |
-| `ExpirationBuffer` | 60s | token 提前刷新缓冲 |
-
-`Leistd:ServiceUserContext`：
-
-| 属性 | 默认值 | 说明 |
-| --- | --- | --- |
-| `Enabled` | `true` | 恢复与头移除总开关 |
-| `UserIdHeader` / `UsernameHeader` | `X-User-Id` / `X-Username` | 用户标识头 |
-| `TenantIdHeader` | `X-Tenant-Id` | 租户头；空字符串关闭恢复 |
-| `HeaderClaimMap` | 空 | 额外请求头到 claim 的映射 |
-| `RemoveUntrustedHeaders` | `true` | 是否移除不可信用户头 |
-| `RequiredScope` | `svc.delegate` | 委托 scope；置空会允许任意机器令牌代表用户 |
-| `AuthenticationType` | `ServiceUserContext` | 恢复身份的认证类型 |
+```json
+{
+  "Leistd": {
+    "ServiceAuth": { "Authority": "https://login.example.com/", "ClientId": "orders-api" },
+    "ServiceClients": {
+      "Identity": { "BaseAddress": "https://login.example.com/", "Scope": "tenant-routing.read" },
+      "Billing": { "BaseAddress": "https://billing.example.com/", "TokenExchange": { "Audience": "billing-api", "Scope": "billing-api" } }
+    }
+  }
+}
+```
 
 ## 注意事项
 
-- Ingress/网关必须移除外部来源的 `X-User-*` 头；中间件的默认移除是最后防线。
-- 认证服务必须用 `ClientSubject.Format(clientId)` 生成机器主体，并显式授予 `svc.delegate`。
-- `ClientSecret` 从环境变量或密钥管理注入，不进入源码或提交的配置。
-- 401 自愈只重试一次；第二次 401 作为远程错误返回。
-- `LogPayloads` 会缓冲响应体，不应在文件下载等大响应客户端上启用。
-- 追踪、当前用户与当前租户都是宿主显式组合的可选能力；未注册时相应 handler 直通。
+- ClientSecret 由密钥管理或环境变量注入，不进入源码或已提交配置。
+- 默认 ASP.NET Core 适配器不把 Cookie 或后台用户上下文当作交换证明；用户委托必须提供已验证的用户访问令牌。
+- 机器范围按命名客户端配置，令牌端点由签发者发现文档提供。
+- 机器认证不自动传递环境租户；租户业务端点以路由或请求参数显式接收租户，并自行校验调用权限与租户有效性。
+- `AddServiceAuthentication` 设置官方 OpenIddict.Client 的全局 `DisableTokenStorage`，同一宿主的交互式登录也会关闭 state 令牌存储。需要存储的宿主在所有组件注册之后调用 `services.Configure<OpenIddict.Client.OpenIddictClientOptions>(options => options.DisableTokenStorage = false)`，并接入官方 Core、令牌存储及交互式客户端所需的证书和宿主集成。此覆写必须晚于 `AddServiceAuthentication`，其后再调用组件注册会重新关闭存储；不要求分开部署，也无需新增框架开关。
+- 身份服务仍是交换与新机器令牌获取的依赖；热缓存可用不代表新令牌能获取成功。
 
 ## 相关
 
@@ -215,3 +150,4 @@ OAuth token 按具名客户端缓存至 `expires_in - ExpirationBuffer`，并发
 - [多租户](./multi-tenancy.md)
 - [统一 API 响应](./response.md)
 - [业务异常与全局异常处理](./exception-handling.md)
+- [官方 Geonosis Token Exchange 示例](https://github.com/openiddict/openiddict-samples/tree/dev/samples/Geonosis)

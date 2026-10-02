@@ -1,17 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
-using Leistd.Authorization.Resource;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.Resource.Grants;
-using Leistd.Authorization.Checking;
-using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.Authorization.Resource.Abstractions;
 
 namespace Leistd.Authorization.Tests.EndToEnd;

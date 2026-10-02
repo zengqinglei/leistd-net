@@ -1,5 +1,4 @@
 using Leistd.Data.Connections;
-using Leistd.ExceptionHandling;
 using Microsoft.Extensions.Configuration;
 
 namespace Leistd.MultiTenancy.ConnectionStrings;
@@ -41,7 +40,7 @@ internal static class TenantConnectionTargets
 
         // 租户登记过连接（说明它是分库租户），却偏偏缺了这个服务的、也没有默认名可回落。
         // 这时静默连到公共库是事故：那个库里没有它的数据，而它的写入会落进别人的库。
-        throw new InternalServerException(
+        throw new InvalidOperationException(
             $"Tenant '{tenantId}' has tenant-specific connections registered but none for " +
             $"'{connectionStringName}', and no default-named connection to fall back to. " +
             "Refusing to fall back to this service's own database.");

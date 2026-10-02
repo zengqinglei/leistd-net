@@ -1,28 +1,19 @@
 using Leistd.Authorization.Constants;
 using Leistd.Authorization.EntityFrameworkCore;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
-using Leistd.Data;
 using Leistd.MultiTenancy;
 using Leistd.UnitOfWork;
 using Leistd.UnitOfWork.EntityFrameworkCore;
 using Leistd.UnitOfWork.EntityFrameworkCore.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Leistd.Authorization.Checking;
 using Leistd.Authorization.Definitions;
-using Leistd.Authorization.Errors;
 using Leistd.Authorization.Grants;
-using Leistd.Authorization.Management;
-using Leistd.Authorization.Subjects;
 using Leistd.Data.Connections;
-using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
-using Leistd.TestBase.Doubles;
 using Leistd.Authorization.Tests.TestDoubles;
 
 namespace Leistd.Authorization.Tests.EntityFrameworkCore;
@@ -66,9 +57,10 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMultiTenancyCore();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
-        services.AddAuthorizationEfCore<RoutedDbContext>();
+        services.AddPermissionAuthorizationEfCore<RoutedDbContext>();
         services.AddSingleton<IPermissionDefinitionProvider, TestPermissionDefinitionProvider>();
 
         // 租户感知解析器：有租户上下文就给租户库，否则宿主库
@@ -113,7 +105,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
 
         using (currentTenant.Change(_tenantId))
         {
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
 
             // 在工作单元内解析：管理器必须拿到工作单元绑定的那个上下文
             await scope.ServiceProvider
@@ -139,7 +131,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
 
         using (currentTenant.Change(_tenantId))
         {
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
 
             await scope.ServiceProvider
                 .GetRequiredService<IPermissionGrantManager>()
@@ -161,7 +153,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         await using var scope = _services.CreateAsyncScope();
         var manager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 
-        using var unitOfWork = await manager.BeginAsync();
+        using var unitOfWork = manager.Begin();
 
         await scope.ServiceProvider
             .GetRequiredService<IPermissionGrantManager>()
@@ -185,9 +177,10 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMultiTenancyCore();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddUnitOfWork();
         services.AddUnitOfWorkEfCore();
-        services.AddAuthorizationEfCore<RoutedDbContext>();
+        services.AddPermissionAuthorizationEfCore<RoutedDbContext>();
         services.AddSingleton<IPermissionDefinitionProvider, TestPermissionDefinitionProvider>();
         services.AddSingleton<IConnectionStringResolver>(
             new TenantAwareResolver(_hostConnectionString, _tenantConnectionString));
@@ -205,7 +198,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
 
         using (currentTenant.Change(_tenantId))
         {
-            using var unitOfWork = await manager.BeginAsync();
+            using var unitOfWork = manager.Begin();
             await scope.ServiceProvider
                 .GetRequiredService<IPermissionGrantManager>()
                 .GrantAsync(TestPermissionDefinitionProvider.OrdersRead,
@@ -249,7 +242,7 @@ public sealed class TenantRoutedGrantStoreTests : IAsyncLifetime
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            modelBuilder.ConfigureAuthorization();
+            modelBuilder.ConfigurePermissionAuthorization();
         }
     }
 }

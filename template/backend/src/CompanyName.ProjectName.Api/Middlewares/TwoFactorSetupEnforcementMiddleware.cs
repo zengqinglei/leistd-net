@@ -1,4 +1,5 @@
 #if (LocalIdentity)
+using CompanyName.ProjectName.Application.Auth.Errors;
 using CompanyName.ProjectName.Api.Auth;
 using CompanyName.ProjectName.Application.Auth.Constants;
 using Leistd.ExceptionHandling;
@@ -31,8 +32,7 @@ public sealed class TwoFactorSetupEnforcementMiddleware(RequestDelegate next)
             endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null)
         {
             // 错误码在不含本地化的形态下也要带：界面按它把人带去设置页
-            throw new ForbiddenException("Set up two-factor authentication before continuing.")
-                .WithCode("Auth:TwoFactorSetupRequired");
+            throw new BusinessException(AuthErrorCodes.TwoFactorSetupRequired, "Set up two-factor authentication before continuing.");
         }
 
         return next(context);

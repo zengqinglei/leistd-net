@@ -1,6 +1,4 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Leistd.AmbientContext;
 using Leistd.Security.Claims;

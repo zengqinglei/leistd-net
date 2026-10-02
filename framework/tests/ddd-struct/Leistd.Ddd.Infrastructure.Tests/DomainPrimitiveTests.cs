@@ -1,9 +1,7 @@
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Domain.Entities.Auditing;
-using Leistd.Auditing;
 using Leistd.Ddd.Domain.Values;
 using Leistd.Ddd.Infrastructure.Persistence;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Leistd.Ddd.Infrastructure.Persistence.Interceptors;
 using Microsoft.EntityFrameworkCore;
 
@@ -113,7 +111,7 @@ public class DomainPrimitiveTests
     }
 
     private sealed class PrimitiveDbContext(DbContextOptions<PrimitiveDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<Document> Documents => Set<Document>();
 
@@ -122,13 +120,12 @@ public class DomainPrimitiveTests
             modelBuilder.Entity<Document>(b =>
             {
                 b.HasKey(x => x.Id);
-                b.ConfigureByConvention();
             });
         }
     }
 
     [Fact]
-    public void ConfigureByConvention_marks_the_concurrency_stamp_as_a_token()
+    public void The_entity_convention_marks_the_concurrency_stamp_as_a_token()
     {
         var options = new DbContextOptionsBuilder<PrimitiveDbContext>()
             .UseInMemoryDatabase($"primitives-{Guid.NewGuid()}")
@@ -143,8 +140,7 @@ public class DomainPrimitiveTests
         Assert.True(property.IsConcurrencyToken);
         Assert.Equal(40, property.GetMaxLength());
 
-        // 可空列会让 EF 对 null 原值生成 WHERE ... IS NULL，匹配到所有同样为 null 的行，
-        // 并发校验静默失效；必填是这套机制的一部分
+        // 必填使每一行都带标记参与并发比较
         Assert.False(property.IsNullable);
     }
 
@@ -227,7 +223,7 @@ public class DomainPrimitiveTests
     }
 
     private sealed class UnstampedDbContext(DbContextOptions<UnstampedDbContext> options)
-        : BaseDbContext(options)
+        : BaseDbContext(options, serviceProvider: null)
     {
         public DbSet<Unstamped> Items => Set<Unstamped>();
 
@@ -236,7 +232,6 @@ public class DomainPrimitiveTests
             modelBuilder.Entity<Unstamped>(b =>
             {
                 b.HasKey(x => x.Id);
-                b.ConfigureByConvention();
             });
         }
     }

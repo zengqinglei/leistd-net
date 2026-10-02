@@ -1,6 +1,6 @@
 # 分布式锁与本地锁
 
-协调多个执行者对**同一资源**的并发访问，确保同一时刻只有一个进入临界区。统一的 `ILock` 抽象屏蔽底层实现，内存（单机）与 Redis（分布式）之间切换只改 DI 注册，不改调用代码。
+协调多个执行者对**同一资源**的并发访问，确保同一时刻只有一个进入临界区。业务按意图注入 `IDistributedLock`（跨副本互斥）或 `ILocalLock`（进程内互斥），内存（单机）与 Redis（分布式）之间切换只改 DI 注册，不改调用代码。
 
 ## 何时使用
 
@@ -25,21 +25,27 @@ dotnet add package Leistd.Lock.Memory
 
 ## 注册
 
-在 `Program.cs` 注册其中一种实现：
+在 `Program.cs` 按部署形态注册：
 
 ```csharp
-builder.Services.AddRedisDistributedLock("localhost:6379", builder.Configuration);
+// 单副本：内存锁同时充当 IDistributedLock 的兜底
+builder.Services.AddMemoryLocalLock();
 
+// 多副本：Redis 提供 IDistributedLock；需要进程内互斥时再加内存锁，两者可共存
+builder.Services.AddRedisDistributedLock("localhost:6379"); // 绑定 Leistd:Lock:Redis，可选委托在绑定后应用
 builder.Services.AddMemoryLocalLock();
 ```
 
-两种注册均把实现绑定到 `ILock`：`AddRedisDistributedLock` 额外绑定 `IDistributedLock`；`AddMemoryLocalLock` 额外绑定 `ILocalLock` 与 `IDistributedLock`。按需注入对应接口即可表达依赖意图。每个实现类型只注册一次，其余接口是别名转发——同一进程内拿到的是同一个实例。
+- `AddMemoryLocalLock` 绑定 `ILocalLock`；此时尚无 `IDistributedLock` 实现的话，也用它兜底 `IDistributedLock`。
+- `AddRedisDistributedLock` 绑定 `IDistributedLock`，并替换内存锁的兜底，与两者的调用顺序无关。
+- 宿主自己注册了 `IDistributedLock` 时，两者都不覆盖它，无论注册在内存锁之前还是之后：Redis 只移除内存锁登记的那一条兜底。
+- `ILock` 只是两个接口的基接口，不注册为服务：注入它看不出拿到的是进程内锁还是跨副本锁。
 
-内存实现首次以 `IDistributedLock` 解析时会记录 Warning，提示它不提供跨进程互斥。
+内存锁兜底 `IDistributedLock` 时，首次解析会记录 Warning，提示它不提供跨进程互斥。
 
 ## 使用
 
-注入 `ILock`（或语义更明确的 `IDistributedLock` / `ILocalLock`），通过 `await using` 让锁在离开作用域时自动释放：
+按意图注入 `IDistributedLock` 或 `ILocalLock`，通过 `await using` 让锁在离开作用域时自动释放：
 
 ```csharp
 public class OrderService(IDistributedLock distributedLock)
@@ -67,7 +73,7 @@ public class OrderService(IDistributedLock distributedLock)
 
 | 成员 | 说明 |
 | --- | --- |
-| `ILock` | 锁服务统一接口，下列三个方法的定义方 |
+| `ILock` | 两个锁接口的基接口（下列方法的定义方），不注册为服务 |
 | `ILock.LockAsync(key, ct)` | 阻塞加锁直到成功，返回 `ILockHandle`；取消时抛 `OperationCanceledException` |
 | `ILock.TryLockAsync(key, timeout, ct)` | 尝试加锁，超时返回 `null`（非异常） |
 | `ILockHandle.LockLost` | 持锁资格失效时被取消（租约续期失败）；长临界区应并入自己的 `CancellationToken` |

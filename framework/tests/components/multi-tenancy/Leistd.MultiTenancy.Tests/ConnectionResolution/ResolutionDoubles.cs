@@ -1,8 +1,5 @@
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
-using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
-using Leistd.MultiTenancy.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -67,7 +64,7 @@ public sealed class ScriptedRemoteSource : ITenantConnectionConfigurationStore
 
         if (Gate is not null)
         {
-            await Gate.Task;
+            await Gate.Task.WaitAsync(cancellationToken);
         }
 
         return Lookup(tenantId, name);
@@ -114,13 +111,18 @@ public sealed class RemoteHost : IDisposable
         string? cacheLifetime = "00:05:00",
         string? defaultConnection = DefaultConnection,
         string? namedConnection = null,
-        string namedConnectionName = "Crm")
+        string namedConnectionName = "Crm",
+        Action<IServiceCollection>? configure = null)
     {
         var settings = new Dictionary<string, string?>
         {
-            ["ConnectionStrings:Default"] = defaultConnection,
-            ["TenantRouting:CacheLifetime"] = cacheLifetime
+            ["ConnectionStrings:Default"] = defaultConnection
         };
+        // null 表示未配置：不写这个键，而不是写一个空值（空值会绑定成 00:00:00）
+        if (cacheLifetime is not null)
+        {
+            settings["TenantRouting:CacheLifetime"] = cacheLifetime;
+        }
         if (namedConnection is not null)
         {
             settings[$"ConnectionStrings:{namedConnectionName}"] = namedConnection;
@@ -130,6 +132,7 @@ public sealed class RemoteHost : IDisposable
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
         services.AddSingleton<ICurrentTenant>(Tenant);
         services.AddSingleton<ITenantConnectionConfigurationStore>(Source);
+        configure?.Invoke(services);
         services.AddRemoteTenantConnectionResolution();
         Provider = services.BuildServiceProvider();
     }

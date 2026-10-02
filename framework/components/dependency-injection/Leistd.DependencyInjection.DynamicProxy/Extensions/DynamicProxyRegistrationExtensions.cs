@@ -1,4 +1,3 @@
-using Castle.DynamicProxy;
 using Leistd.DependencyInjection.Abstractions;
 
 namespace Leistd.DependencyInjection.DynamicProxy.Extensions;
@@ -11,8 +10,9 @@ public static class DynamicProxyRegistrationExtensions
     private const string InterceptorsKey = "Leistd.DependencyInjection.DynamicProxy.Interceptors";
 
     /// <summary>
-    /// 为当前服务注册追加拦截器类型。
+    /// 为当前服务注册追加拦截器类型；同一类型只追加一次。
     /// </summary>
+    /// <remarks>组件的 <c>AddXxx</c> 被重复调用时会重复登记回调，去重避免同一拦截器被织入两层。</remarks>
     public static IOnServiceRegisteredContext AddInterceptor(
         this IOnServiceRegisteredContext context,
         Type interceptorType)
@@ -20,7 +20,12 @@ public static class DynamicProxyRegistrationExtensions
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(interceptorType);
 
-        context.GetInterceptorTypes().Add(interceptorType);
+        var interceptors = context.GetInterceptorTypes();
+        if (!interceptors.Contains(interceptorType))
+        {
+            interceptors.Add(interceptorType);
+        }
+
         return context;
     }
 

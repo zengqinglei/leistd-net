@@ -1,307 +1,209 @@
-<app-auth-shell>
-  <!-- Form Header -->
-  <div class="flex flex-col gap-2">
-    <!--#if (IncludeLocalization)-->
-    <h2 class="text-2xl font-semibold tracking-tight">
-      {{ 'account.register.title' | transloco }}
-    </h2>
-    <p class="text-muted-foreground text-sm">{{ 'account.register.subtitle' | transloco }}</p>
-    <!--#else-->
-    <h2 class="text-2xl font-semibold tracking-tight">Sign Up</h2>
-    <p class="text-muted-foreground text-sm">
-      Welcome aboard, please fill in the following information to create your account
-    </p>
-    <!--#endif-->
-  </div>
-
-  <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
-    <!-- Email -->
-    <div hlmField>
-      <!--#if (IncludeLocalization)-->
-      <label hlmFieldLabel for="email">{{ 'account.register.email' | transloco }}</label>
-      <input
-        hlmInput
-        id="email"
-        class="w-full"
-        [formField]="registerForm.email"
-        [placeholder]="'account.register.emailPlaceholder' | transloco"
-      />
-      <!--#else-->
-      <label hlmFieldLabel for="email">Email</label>
-      <input
-        hlmInput
-        id="email"
-        class="w-full"
-        [formField]="registerForm.email"
-        placeholder="Enter your email address"
-      />
-      <!--#endif-->
-      @for (error of registerForm.email().errors(); track error.kind) {
-        @if (error.message) {
-          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-        }
-      }
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <app-auth-shell>
+    <!-- Form Header -->
+    <div class="flex flex-col gap-2">
+      <h2 class="text-2xl font-semibold tracking-tight">
+        {{ t('account.register.title') }}
+      </h2>
+      <p class="text-muted-foreground text-sm">{{ t('account.register.subtitle') }}</p>
     </div>
 
-    <!-- Username -->
-    <div hlmField>
-      <!--#if (IncludeLocalization)-->
-      <label hlmFieldLabel for="username">{{ 'account.register.username' | transloco }}</label>
-      <input
-        hlmInput
-        id="username"
-        class="w-full"
-        [formField]="registerForm.username"
-        [placeholder]="'account.register.usernamePlaceholder' | transloco"
-      />
-      <!--#else-->
-      <label hlmFieldLabel for="username">Username</label>
-      <input
-        hlmInput
-        id="username"
-        class="w-full"
-        [formField]="registerForm.username"
-        placeholder="Extracted from email prefix, letters, digits and underscores allowed"
-      />
-      <!--#endif-->
-      @for (error of registerForm.username().errors(); track error.kind) {
-        @if (error.message) {
-          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-        }
-      }
-    </div>
-
-    <!-- Captcha -->
-    <div hlmField>
-      <label hlmFieldLabel for="captchaCode">{{ i18n.captcha() }}</label>
-      <div class="flex gap-3 h-8 items-center">
+    <form novalidate (submit)="$event.preventDefault(); onSubmit()" class="flex flex-col gap-5">
+      <!-- Email -->
+      <div hlmField>
+        <label hlmFieldLabel for="email">{{ t('account.register.email') }}</label>
         <input
           hlmInput
-          id="captchaCode"
-          class="w-full flex-1"
-          [formField]="registerForm.captchaCode"
-          [placeholder]="i18n.captchaPlaceholder()"
+          id="email"
+          class="w-full"
+          [formField]="registerForm.email"
+          [placeholder]="t('account.register.emailPlaceholder')"
         />
-        @if (captchaData(); as captcha) {
-          <button
-            type="button"
-            class="h-8 w-[95px] rounded-lg overflow-hidden border border-border p-0 shadow-sm shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all bg-muted flex items-center justify-center"
-            (click)="refreshCaptcha()"
-            [hlmTooltip]="i18n.captchaRefresh()"
-            position="top"
-          >
-            <img
-              [src]="captcha.captchaImageBase64"
-              class="block w-full h-full"
-              [alt]="i18n.captchaAlt()"
+        @for (error of registerForm.email().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{
+            t('validation.' + error.kind, error)
+          }}</hlm-field-error>
+        }
+      </div>
+
+      <!-- Username -->
+      <div hlmField>
+        <label hlmFieldLabel for="username">{{ t('account.register.username') }}</label>
+        <input
+          hlmInput
+          id="username"
+          class="w-full"
+          [formField]="registerForm.username"
+          [placeholder]="t('account.register.usernamePlaceholder')"
+        />
+        @for (error of registerForm.username().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{
+            t('validation.' + error.kind, error)
+          }}</hlm-field-error>
+        }
+      </div>
+
+      <!-- Captcha -->
+      <div hlmField>
+        <label hlmFieldLabel for="captchaCode">{{ t('account.register.captcha') }}</label>
+        <div class="flex gap-3 h-8 items-center">
+          <input
+            hlmInput
+            id="captchaCode"
+            class="w-full flex-1"
+            [formField]="registerForm.captchaCode"
+            [placeholder]="t('account.register.captchaPlaceholder')"
+          />
+          @if (captchaData(); as captcha) {
+            <button
+              type="button"
+              class="h-8 w-[95px] rounded-lg overflow-hidden border border-border p-0 shadow-sm shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all bg-muted flex items-center justify-center"
+              (click)="refreshCaptcha()"
+              [hlmTooltip]="t('account.register.captchaRefresh')"
+              position="top"
+            >
+              <img
+                [src]="captcha.captchaImageBase64"
+                class="block w-full h-full"
+                [alt]="t('account.register.captchaAlt')"
+              />
+            </button>
+          }
+        </div>
+        @for (error of registerForm.captchaCode().errors(); track error.kind) {
+          <hlm-field-error [validator]="error.kind">{{
+            t('validation.' + error.kind, error)
+          }}</hlm-field-error>
+        }
+      </div>
+
+      <!-- Email Code (Optional) -->
+      @if (securityConfig()?.enableEmailVerification) {
+        <div hlmField>
+          <label hlmFieldLabel for="emailVerificationCode">{{
+            t('account.register.emailCode')
+          }}</label>
+          <div class="flex gap-2">
+            <input
+              hlmInput
+              id="emailVerificationCode"
+              class="w-full flex-1"
+              [formField]="registerForm.emailVerificationCode"
+              [placeholder]="t('account.register.emailCodePlaceholder')"
             />
-          </button>
-        }
-      </div>
-      @for (error of registerForm.captchaCode().errors(); track error.kind) {
-        @if (error.message) {
-          <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-        }
-      }
-    </div>
-
-    <!-- Email Code (Optional) -->
-    @if (securityConfig()?.enableEmailVerification) {
-      <div hlmField>
-        <!--#if (IncludeLocalization)-->
-        <label hlmFieldLabel for="emailVerificationCode">{{
-          'account.register.emailCode' | transloco
-        }}</label>
-        <div class="flex gap-2">
-          <input
-            hlmInput
-            id="emailVerificationCode"
-            class="w-full flex-1"
-            [formField]="registerForm.emailVerificationCode"
-            [placeholder]="'account.register.emailCodePlaceholder' | transloco"
-          />
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            class="w-[120px] whitespace-nowrap px-0 shrink-0"
-            [disabled]="countdown() > 0 || isSendingEmailCode()"
-            (click)="sendEmailCode()"
-          >
-            {{
-              countdown() > 0
-                ? transloco.translate('account.register.resendCountdown', {
-                    seconds: countdown(),
-                  })
-                : transloco.translate('account.register.sendCode')
-            }}
-          </button>
+            <button
+              hlmBtn
+              type="button"
+              variant="outline"
+              class="w-[120px] whitespace-nowrap px-0 shrink-0"
+              [disabled]="countdown() > 0 || isSendingEmailCode()"
+              (click)="sendEmailCode()"
+            >
+              {{
+                countdown() > 0
+                  ? t('account.register.resendCountdown', {
+                      seconds: countdown(),
+                    })
+                  : t('account.register.sendCode')
+              }}
+            </button>
+          </div>
+          @for (error of registerForm.emailVerificationCode().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{
+              t('validation.' + error.kind, error)
+            }}</hlm-field-error>
+          }
         </div>
-        <!--#else-->
-        <label hlmFieldLabel for="emailVerificationCode">Email Verification Code</label>
-        <div class="flex gap-2">
-          <input
-            hlmInput
-            id="emailVerificationCode"
-            class="w-full flex-1"
-            [formField]="registerForm.emailVerificationCode"
-            placeholder="Enter the 6-digit code"
-          />
-          <button
-            hlmBtn
-            type="button"
-            variant="outline"
-            class="w-[120px] whitespace-nowrap px-0 shrink-0"
-            [disabled]="countdown() > 0 || isSendingEmailCode()"
-            (click)="sendEmailCode()"
-          >
-            {{ countdown() > 0 ? 'Resend in ' + countdown() + 's' : 'Get Code' }}
-          </button>
-        </div>
-        <!--#endif-->
-        @for (error of registerForm.emailVerificationCode().errors(); track error.kind) {
-          @if (error.message) {
-            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-          }
-        }
-      </div>
-    }
-
-    <!-- Password -->
-    <div class="flex flex-col gap-5">
-      <div hlmField>
-        <!--#if (IncludeLocalization)-->
-        <label hlmFieldLabel for="password">{{ 'account.register.password' | transloco }}</label>
-        <hlm-input-group>
-          <input
-            hlmInputGroupInput
-            id="password"
-            [type]="showPassword() ? 'text' : 'password'"
-            [formField]="registerForm.password"
-            [placeholder]="'account.register.passwordPlaceholder' | transloco"
-          />
-          <button
-            hlmInputGroupButton
-            type="button"
-            size="icon-sm"
-            align="inline-end"
-            (click)="showPassword.set(!showPassword())"
-          >
-            <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
-          </button>
-        </hlm-input-group>
-        <!--#else-->
-        <label hlmFieldLabel for="password">Password</label>
-        <hlm-input-group>
-          <input
-            hlmInputGroupInput
-            id="password"
-            [type]="showPassword() ? 'text' : 'password'"
-            [formField]="registerForm.password"
-            placeholder="At least 12 characters"
-          />
-          <button
-            hlmInputGroupButton
-            type="button"
-            size="icon-sm"
-            align="inline-end"
-            (click)="showPassword.set(!showPassword())"
-          >
-            <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
-          </button>
-        </hlm-input-group>
-        <!--#endif-->
-        @for (error of registerForm.password().errors(); track error.kind) {
-          @if (error.message) {
-            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-          }
-        }
-      </div>
-
-      <!-- Confirm Password -->
-      <div hlmField>
-        <!--#if (IncludeLocalization)-->
-        <label hlmFieldLabel for="confirmPassword">{{
-          'account.register.confirmPassword' | transloco
-        }}</label>
-        <hlm-input-group>
-          <input
-            hlmInputGroupInput
-            id="confirmPassword"
-            [type]="showConfirmPassword() ? 'text' : 'password'"
-            [formField]="registerForm.confirmPassword"
-            [placeholder]="'account.register.confirmPasswordPlaceholder' | transloco"
-          />
-          <button
-            hlmInputGroupButton
-            type="button"
-            size="icon-sm"
-            align="inline-end"
-            (click)="showConfirmPassword.set(!showConfirmPassword())"
-          >
-            <ng-icon [name]="showConfirmPassword() ? 'lucideEyeOff' : 'lucideEye'" />
-          </button>
-        </hlm-input-group>
-        <!--#else-->
-        <label hlmFieldLabel for="confirmPassword">Confirm Password</label>
-        <hlm-input-group>
-          <input
-            hlmInputGroupInput
-            id="confirmPassword"
-            [type]="showConfirmPassword() ? 'text' : 'password'"
-            [formField]="registerForm.confirmPassword"
-            placeholder="Enter the password again"
-          />
-          <button
-            hlmInputGroupButton
-            type="button"
-            size="icon-sm"
-            align="inline-end"
-            (click)="showConfirmPassword.set(!showConfirmPassword())"
-          >
-            <ng-icon [name]="showConfirmPassword() ? 'lucideEyeOff' : 'lucideEye'" />
-          </button>
-        </hlm-input-group>
-        <!--#endif-->
-        @for (error of registerForm.confirmPassword().errors(); track error.kind) {
-          @if (error.message) {
-            <hlm-field-error [validator]="error.kind">{{ error.message }}</hlm-field-error>
-          }
-        }
-      </div>
-    </div>
-
-    <!-- Submit Button -->
-    <button hlmBtn type="submit" class="w-full mt-3" [disabled]="isLoading()">
-      @if (isLoading()) {
-        <hlm-spinner class="text-base" data-icon="inline-start" />
       }
-      <!--#if (IncludeLocalization)-->
-      {{ 'account.register.submit' | transloco }}
-      <!--#else-->
-      Sign Up
-      <!--#endif-->
-    </button>
-  </form>
 
-  <!-- Bottom Login Link -->
-  <div class="text-center text-sm">
-    <!--#if (IncludeLocalization)-->
-    {{ 'account.register.haveAccount' | transloco }}
-    <a
-      [routerLink]="['/auth/login']"
-      [queryParams]="returnUrl ? { returnUrl: returnUrl } : null"
-      class="font-semibold text-primary hover:underline transition-colors"
-      >{{ 'account.register.loginNow' | transloco }}</a
-    >
-    <!--#else-->
-    Already have an account?
-    <a
-      [routerLink]="['/auth/login']"
-      [queryParams]="returnUrl ? { returnUrl: returnUrl } : null"
-      class="font-semibold text-primary hover:underline transition-colors"
-      >Sign in directly</a
-    >
-    <!--#endif-->
-  </div>
-</app-auth-shell>
+      <!-- Password -->
+      <div class="flex flex-col gap-5">
+        <div hlmField>
+          <label hlmFieldLabel for="password">{{ t('account.register.password') }}</label>
+          <hlm-input-group>
+            <input
+              hlmInputGroupInput
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              [formField]="registerForm.password"
+              [placeholder]="t('account.register.passwordPlaceholder')"
+            />
+            <button
+              hlmInputGroupButton
+              type="button"
+              size="icon-sm"
+              align="inline-end"
+              [attr.aria-label]="
+                showPassword() ? t('common.hidePassword') : t('common.showPassword')
+              "
+              (click)="showPassword.set(!showPassword())"
+            >
+              <ng-icon [name]="showPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+            </button>
+          </hlm-input-group>
+          @for (error of registerForm.password().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{
+              t('validation.' + error.kind, error)
+            }}</hlm-field-error>
+          }
+        </div>
+
+        <!-- Confirm Password -->
+        <div hlmField>
+          <label hlmFieldLabel for="confirmPassword">{{
+            t('account.register.confirmPassword')
+          }}</label>
+          <hlm-input-group>
+            <input
+              hlmInputGroupInput
+              id="confirmPassword"
+              [type]="showConfirmPassword() ? 'text' : 'password'"
+              [formField]="registerForm.confirmPassword"
+              [placeholder]="t('account.register.confirmPasswordPlaceholder')"
+            />
+            <button
+              hlmInputGroupButton
+              type="button"
+              size="icon-sm"
+              align="inline-end"
+              [attr.aria-label]="
+                showConfirmPassword() ? t('common.hidePassword') : t('common.showPassword')
+              "
+              (click)="showConfirmPassword.set(!showConfirmPassword())"
+            >
+              <ng-icon [name]="showConfirmPassword() ? 'lucideEyeOff' : 'lucideEye'" />
+            </button>
+          </hlm-input-group>
+          @for (error of registerForm.confirmPassword().errors(); track error.kind) {
+            <hlm-field-error [validator]="error.kind">{{
+              t('validation.' + error.kind, error)
+            }}</hlm-field-error>
+          }
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <button hlmBtn type="submit" class="w-full mt-3" [disabled]="isLoading()">
+        @if (isLoading()) {
+          <hlm-spinner class="text-base" data-icon="inline-start" />
+        }
+        {{ t('account.register.submit') }}
+      </button>
+    </form>
+
+    <!-- Bottom Login Link -->
+    <div class="text-center text-sm">
+      {{ t('account.register.haveAccount') }}
+      <a
+        [routerLink]="['/auth/login']"
+        [queryParams]="returnUrl ? { returnUrl: returnUrl } : null"
+        class="font-semibold text-primary hover:underline transition-colors"
+        >{{ t('account.register.loginNow') }}</a
+      >
+    </div>
+  </app-auth-shell>
+</ng-container>

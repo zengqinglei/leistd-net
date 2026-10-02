@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 //#if (IncludeLocalization)
-import { TranslocoService } from '@jsverse/transloco';
+import { TranslocoDirective, TranslocoService } from '@jsverse/transloco';
 //#endif
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLink } from '@ng-icons/lucide';
@@ -8,33 +8,38 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmItemImports } from '@spartan-ng/helm/item';
 import { HlmSpinner } from '@spartan-ng/helm/spinner';
-import { lastValueFrom } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { applicationErrorMessage } from '../../../../core/errors/application-http-error';
 import { ConfirmService } from '../../../../core/feedback/confirm-service';
-//#if (IncludeLocalization)
-import { translationReady } from '../../../../core/i18n/translation-ready';
-//#endif
 import { SettingContextService } from '../../../../core/settings/setting-context-service';
 import { formatAppDate } from '../../../../shared/pipes/app-date-pipe';
+//#if (!IncludeLocalization)
+import { englishText } from '../../../../shared/utils/english-text';
+//#endif
 import { ExternalLoginsOutputDto } from '../../models/account.dto';
 import { AccountService } from '../../services/account-service';
-
-/** 外部授权回来时据它判断这是一次"绑定"而不是登录（授权地址只能带 state，带不了别的）。 */
-export const EXTERNAL_LINK_PENDING_KEY = 'app.auth.externalLinkProvider';
 
 const PROVIDER_LABELS: Record<string, string> = { github: 'GitHub', google: 'Google' };
 
 /**
  * 「账户与安全」面板的一节：已绑定的外部账号，可以绑定或解绑。
  *
- * 绑定走一次完整的外部授权：跳到提供商、回到回调页，回调页据 {@link EXTERNAL_LINK_PENDING_KEY}
+ * 绑定走完整外部授权，后端票据保护提供商、意图、发起人与租户。
  * 走绑定端点。至少要留一种登录方式，服务端会拒绝解绑最后一个（没有密码时）。
  */
 @Component({
   selector: 'app-external-logins',
-  imports: [NgIcon, HlmButton, HlmSpinner, ...HlmItemImports],
+  // prettier-ignore
+  imports: [
+    NgIcon,
+    HlmButton,
+    HlmSpinner,
+    ...HlmItemImports,
+    //#if (IncludeLocalization)
+    TranslocoDirective,
+    //#endif
+  ],
   providers: [provideIcons({ lucideLink })],
   templateUrl: './external-logins.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,16 +50,8 @@ export class ExternalLogins {
   private readonly settingContext = inject(SettingContextService);
   //#if (IncludeLocalization)
   private readonly transloco = inject(TranslocoService);
-  private readonly translationReady = translationReady(this.transloco);
-
-  protected readonly t = (key: string, params?: Record<string, unknown>) => {
-    this.translationReady();
-    return this.transloco.translate(key, params);
-  };
   //#else
-  protected readonly t = (key: string, params?: Record<string, unknown>) =>
-    ENGLISH[key]?.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params?.[name] ?? '')) ??
-    key;
+  protected readonly t = englishText(ENGLISH);
   //#endif
 
   protected readonly data = signal<ExternalLoginsOutputDto | null>(null);
@@ -72,17 +69,16 @@ export class ExternalLogins {
       provider: p.provider,
       label: PROVIDER_LABELS[p.provider] ?? p.provider,
       link: p.link ?? null,
-      detail: p.link
-        ? this.t('account.externalLogins.linkedAs', {
-            name: p.link.providerUsername ?? p.link.providerEmail ?? '',
-            time: formatAppDate(
-              p.link.creationTime,
-              'date',
-              this.settingContext.timeZone(),
-              this.settingContext.displayLocale(),
-            ),
-          })
-        : this.t('account.externalLogins.notLinked'),
+      // 文案在模板里经 t 组装，这里只给出绑定的账号名与时间
+      linkedName: p.link ? (p.link.providerAccountLabel ?? p.link.providerEmail ?? '') : '',
+      linkedAt: p.link
+        ? formatAppDate(
+            p.link.creationTime,
+            'date',
+            this.settingContext.timeZone(),
+            this.settingContext.displayLocale(),
+          )
+        : '',
       // 没有密码时最后一个绑定就是唯一的登录方式
       canUnlink: !!p.link && (data.hasPassword || linkedCount > 1),
     }));
@@ -100,12 +96,10 @@ export class ExternalLogins {
     });
   }
 
-  protected async link(provider: string): Promise<void> {
+  protected link(provider: string): void {
     this.busy.set(provider);
     try {
-      const { loginUrl } = await lastValueFrom(this.accountService.getExternalLinkUrl(provider));
-      sessionStorage.setItem(EXTERNAL_LINK_PENDING_KEY, provider);
-      window.location.href = loginUrl;
+      window.location.href = this.accountService.getExternalLinkUrl(provider);
     } catch (error) {
       this.busy.set(null);
       this.showError(error);
@@ -113,11 +107,17 @@ export class ExternalLogins {
   }
 
   protected async unlink(provider: string, id: string): Promise<void> {
+    const providerLabel = PROVIDER_LABELS[provider] ?? provider;
     const confirmed = await this.confirmService.open({
-      message: this.t('account.externalLogins.unlinkConfirm', {
-        provider: PROVIDER_LABELS[provider] ?? provider,
+      //#if (IncludeLocalization)
+      message: this.transloco.translate('account.externalLogins.unlinkConfirm', {
+        provider: providerLabel,
       }),
+      confirmText: this.transloco.translate('account.externalLogins.unlink'),
+      //#else
+      message: this.t('account.externalLogins.unlinkConfirm', { provider: providerLabel }),
       confirmText: this.t('account.externalLogins.unlink'),
+      //#endif
       variant: 'destructive',
     });
     if (!confirmed) {
@@ -130,7 +130,11 @@ export class ExternalLogins {
       .pipe(finalize(() => this.busy.set(null)))
       .subscribe({
         next: () => {
+          //#if (IncludeLocalization)
+          toast.success(this.transloco.translate('account.externalLogins.unlinked'));
+          //#else
           toast.success(this.t('account.externalLogins.unlinked'));
+          //#endif
           this.reload();
         },
         error: (error) => this.showError(error),
@@ -138,14 +142,20 @@ export class ExternalLogins {
   }
 
   private showError(error: unknown): void {
+    //#if (IncludeLocalization)
+    toast.error(this.transloco.translate('common.requestError'), {
+      description: applicationErrorMessage(error),
+    });
+    //#else
     toast.error(this.t('common.requestError'), { description: applicationErrorMessage(error) });
+    //#endif
   }
 }
 //#if (!IncludeLocalization)
 
-/** 不含本地化时的界面文案，与 `en.json` 的 `account.externalLogins` 同步。 */
+/** 不含本地化时的界面文案，与 `en.json` 同步。 */
 const ENGLISH: Record<string, string> = {
-  'common.requestError': 'Request failed',
+  'common.requestError': 'Request error',
   'common.retry': 'Retry',
   'account.externalLogins.header': 'Linked accounts',
   'account.externalLogins.subtitle':

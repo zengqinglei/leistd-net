@@ -1,0 +1,39 @@
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <div class="flex flex-col gap-4" data-testid="recovery-codes">
+    <div
+      class="border-border bg-muted/50 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
+    >
+      <ng-icon name="lucideTriangleAlert" class="text-warning mt-0.5 shrink-0" />
+      <span>{{ t('account.twoFactor.recoveryCodesWarning') }}</span>
+    </div>
+    <ol class="grid grid-cols-1 gap-2 font-mono text-sm sm:grid-cols-2">
+      @for (code of codes(); track code) {
+        <li class="bg-muted rounded-lg px-3 py-1.5 text-center select-all">{{ code }}</li>
+      }
+    </ol>
+    <div class="flex flex-wrap gap-2">
+      <button hlmBtn variant="outline" size="sm" type="button" (click)="copy()">
+        <ng-icon [name]="copied() ? 'lucideCheck' : 'lucideCopy'" data-icon="inline-start" />
+        {{ copied() ? t('account.twoFactor.copied') : t('account.twoFactor.copyCodes') }}
+      </button>
+      <button hlmBtn variant="outline" size="sm" type="button" (click)="download()">
+        <ng-icon name="lucideDownload" data-icon="inline-start" />
+        {{ t('account.twoFactor.downloadCodes') }}
+      </button>
+      <button
+        hlmBtn
+        size="sm"
+        type="button"
+        class="sm:ml-auto"
+        data-testid="recovery-codes-done"
+        (click)="done.emit()"
+      >
+        {{ t('account.twoFactor.savedCodes') }}
+      </button>
+    </div>
+  </div>
+</ng-container>

@@ -1,7 +1,6 @@
 #if (LocalIdentity)
 using CompanyName.ProjectName.Domain.Auth.Entities;
 using CompanyName.ProjectName.Domain.Users.Entities;
-using Leistd.Ddd.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
@@ -29,6 +28,8 @@ internal static class IdentityEntityConfiguration
             b.Property(e => e.TwoFactorSecret).HasMaxLength(512);
             // 十个 SHA-256 十六进制摘要加分隔符
             b.Property(e => e.TwoFactorRecoveryCodes).HasMaxLength(1024);
+            // Guid 的 32 位十六进制
+            b.Property(e => e.SecurityStamp).IsRequired().HasMaxLength(32);
         });
     }
 
@@ -36,8 +37,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<Role>(b =>
         {
-            b.ConfigureByConvention();
-
             b.Property(e => e.Name).IsRequired().HasMaxLength(64);
             b.Property(e => e.DisplayName).IsRequired().HasMaxLength(128);
             b.Property(e => e.Description).HasMaxLength(512);
@@ -58,8 +57,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<UserSession>(b =>
         {
-            b.ConfigureByConvention();
-
             b.Property(e => e.IpAddress).HasMaxLength(UserSession.IpAddressMaxLength);
             b.Property(e => e.UserAgent).HasMaxLength(UserSession.UserAgentMaxLength);
             b.Property(e => e.ImpersonatorName).HasMaxLength(UserSession.ImpersonatorNameMaxLength);
@@ -76,15 +73,11 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<ExternalLoginConnection>(b =>
         {
-            b.ConfigureByConvention();
-
             b.Property(e => e.Provider).IsRequired().HasMaxLength(50);
             b.Property(e => e.ProviderUserId).IsRequired().HasMaxLength(256);
-            b.Property(e => e.ProviderUsername).HasMaxLength(256);
+            b.Property(e => e.ProviderAccountLabel).HasMaxLength(256);
             b.Property(e => e.ProviderEmail).HasMaxLength(256);
             b.Property(e => e.ProviderAvatarUrl).HasMaxLength(1024);
-            b.Property(e => e.AccessToken).HasMaxLength(2048);
-            b.Property(e => e.RefreshToken).HasMaxLength(2048);
 
             // 租户内唯一：同一外部身份可在不同租户各自绑定。
             // 宿主行（TenantId 为 NULL）在 PostgreSQL/SQLite 中 NULL 互不相等，
@@ -108,8 +101,6 @@ internal static class IdentityEntityConfiguration
     {
         builder.Entity<UserRole>(b =>
         {
-            b.ConfigureByConvention();
-
             b.HasIndex(e => new { e.UserId, e.RoleId, e.DeletionTime }).IsUnique();
             b.HasIndex(e => e.RoleId);
 

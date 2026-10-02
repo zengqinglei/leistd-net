@@ -24,6 +24,15 @@ public class DynamicProxyServiceRegistrationCallbackFactory : ServiceRegistratio
     {
     }
 
+    /// <summary>
+    /// 登记 <see cref="DynamicProxyWeavingMarker"/>，供依赖织入的组件在启动时确认本工厂已接入。
+    /// </summary>
+    public override IServiceCollection CreateBuilder(IServiceCollection services)
+    {
+        services.TryAddSingleton<DynamicProxyWeavingMarker>();
+        return base.CreateBuilder(services);
+    }
+
     /// <inheritdoc />
     protected override void OnRegistrationProcessed(
         IServiceCollection services,

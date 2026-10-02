@@ -4,6 +4,7 @@ using Leistd.MultiTenancy.EntityFrameworkCore.ConnectionStrings;
 using Leistd.Data.Connections;
 using Leistd.TestBase.Assertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -13,13 +14,13 @@ namespace Leistd.MultiTenancy.Tests.ConnectionResolution;
 public class RegistrationAndOptionsTests
 {
     [Fact]
-    public void Remote_resolution_registers_a_scoped_resolver_and_a_host_singleton_coordinator()
+    public void Remote_resolution_registers_a_scoped_resolver_and_a_hybrid_cache()
     {
         var services = new ServiceCollection().AddRemoteTenantConnectionResolution();
 
         services.AssertSingle<IConnectionStringResolver>(ServiceLifetime.Scoped);
         services.AssertImplementedBy<IConnectionStringResolver, RemoteConnectionStringResolver>();
-        services.AssertSingle<TenantRouteResolutionCoordinator>(ServiceLifetime.Singleton);
+        services.AssertSingle<Microsoft.Extensions.Caching.Hybrid.HybridCache>(ServiceLifetime.Singleton);
         services.AssertImplementedBy<ITenantMigrationTargetProvider, TenantMigrationTargetProvider>();
     }
 
@@ -76,6 +77,38 @@ public class RegistrationAndOptionsTests
         Assert.Equal(expected, services.Any(service => service.ServiceType == typeof(TenantConnectionRouting)));
     }
 
+    /// <summary>两个解析入口单独使用即自闭环：解析器依赖的当前租户由入口自己登记。</summary>
+    /// <remarks>
+    /// 迁移作业只注册持久化、不经 Web 集成；开发环境的宿主在构建期校验依赖，缺 <c>ICurrentTenant</c> 就起不来。
+    /// 这里只补宿主本就要给的前提：配置、日志、连接配置存储，本地解析另加控制库与密钥环。
+    /// </remarks>
+    [Theory]
+    [InlineData("local")]
+    [InlineData("remote")]
+    public void Each_resolution_entry_point_is_self_contained(string registration)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<ITenantConnectionConfigurationStore>(new ScriptedRemoteSource());
+        if (registration == "local")
+        {
+            services.AddDbContext<ControlDbContext>(options => options.UseSqlite("DataSource=:memory:"));
+            services.AddDataProtection();
+            services.AddLocalTenantConnectionResolution<ControlDbContext>(o => o.ControlPlaneConnectionStringName = "Control");
+        }
+        else
+        {
+            services.AddRemoteTenantConnectionResolution();
+        }
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+    }
+
     // 远端宿主不持有控制面的密钥环：远端解析的注册面里不能冒出任何 Data Protection 依赖
     [Fact]
     public void Remote_resolution_does_not_require_a_data_protection_key_ring()
@@ -86,12 +119,21 @@ public class RegistrationAndOptionsTests
             .ServiceProvider.GetRequiredService<IConnectionStringResolver>());
     }
 
-    // TTL 必须显式写在配置里：藏在代码默认值里，执行排空流程的人就无从知道该等多久
+    // 未配置时取默认值：远端解析不应为了一个有默认意义的 TTL 多一个必填项
+    [Fact]
+    public void An_unset_cache_lifetime_falls_back_to_the_default()
+    {
+        using var host = new RemoteHost(cacheLifetime: null);
+
+        Assert.Equal(TenantRouteCacheOptions.DefaultCacheLifetime,
+            host.Provider.GetRequiredService<IOptions<TenantRouteCacheOptions>>().Value.CacheLifetime);
+    }
+
+    // 越界值启动即失败：它决定改路由前的排空等待
     [Theory]
-    [InlineData(null)]
     [InlineData("00:00:00")]
     [InlineData("01:00:01")]
-    public void An_unset_or_unusable_cache_lifetime_fails_validation(string? lifetime)
+    public void An_unusable_cache_lifetime_fails_validation(string? lifetime)
     {
         using var host = new RemoteHost(cacheLifetime: lifetime);
 

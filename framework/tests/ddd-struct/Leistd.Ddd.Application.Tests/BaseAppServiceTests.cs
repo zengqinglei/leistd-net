@@ -1,7 +1,6 @@
 using System.Reflection;
 using Leistd.Ddd.Application.AppServices;
 using Leistd.Ddd.Application.Contracts.AppServices;
-using Leistd.Ddd.Application.Contracts.Dtos;
 using Leistd.Ddd.Application.Extensions;
 using Leistd.ObjectMapping.Abstractions;
 using Xunit;

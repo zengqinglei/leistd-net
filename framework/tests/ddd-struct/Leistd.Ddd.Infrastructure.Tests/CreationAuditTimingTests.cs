@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Leistd.Auditing;
 using Leistd.Auditing.EntityFrameworkCore;
 using Leistd.Ddd.Domain.Entities;
 using Leistd.Ddd.Infrastructure.Persistence;
@@ -350,7 +349,7 @@ public class CreationAuditTimingTests
         var sp = new ServiceCollection()
             .AddSingleton<IClock, UtcClockProvider>()
             .AddSingleton<ICurrentPrincipalAccessor, CurrentPrincipalAccessor>()
-            .AddSingleton<ICurrentUser, CurrentUser>()
+            .AddOptions().AddSingleton<ICurrentUser, CurrentUser>()
             .AddAuditingEfCore()
             .BuildServiceProvider();
 
@@ -397,7 +396,7 @@ public class CreationAuditTimingTests
         var sp = new ServiceCollection()
             .AddSingleton<IClock, UtcClockProvider>()
             .AddSingleton<ICurrentPrincipalAccessor, CurrentPrincipalAccessor>()
-            .AddSingleton<ICurrentUser, CurrentUser>()
+            .AddOptions().AddSingleton<ICurrentUser, CurrentUser>()
             .AddAuditingEfCore()
             .BuildServiceProvider();
 
@@ -429,7 +428,7 @@ public class CreationAuditTimingTests
         var sp = new ServiceCollection()
             .AddSingleton<IClock, UtcClockProvider>()
             .AddSingleton<ICurrentPrincipalAccessor, CurrentPrincipalAccessor>()
-            .AddSingleton<ICurrentUser, CurrentUser>()
+            .AddOptions().AddSingleton<ICurrentUser, CurrentUser>()
             .AddAuditingEfCore()
             .BuildServiceProvider();
 

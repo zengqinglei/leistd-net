@@ -1,0 +1,16 @@
+{
+  "hero": {
+    "title": "模板项目",
+    "subtitle": "基于 Angular + Spartan UI + .NET 10 DDD 架构的全栈应用开发模板",
+    "login": "登录",
+    "register": "注册"
+  },
+  "feature": {
+    "authTitle": "身份认证",
+    "authDesc": "基于 Cookie 的认证与角色权限管理",
+    "usersTitle": "用户管理",
+    "usersDesc": "完整的 CRUD 操作与权限控制",
+    "themeTitle": "主题系统",
+    "themeDesc": "深色模式 + Tailwind CSS + Spartan UI"
+  }
+}

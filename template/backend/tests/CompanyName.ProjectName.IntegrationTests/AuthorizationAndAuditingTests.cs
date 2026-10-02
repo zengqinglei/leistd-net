@@ -1,10 +1,16 @@
 #if (LocalIdentity)
 using Leistd.Authorization;
 using Leistd.Authorization.Constants;
+using Leistd.Authorization.Dtos;
 using Leistd.Authorization.EntityFrameworkCore.Entities;
 using Leistd.Lock;
+using Leistd.OperationRecords.Models;
+using Leistd.OperationRecords.Recording;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using CompanyName.ProjectName.Application.OperationRecords.Provider;
+using CompanyName.ProjectName.Application.Roles.Errors;
 using CompanyName.ProjectName.Application.Initialization;
 using CompanyName.ProjectName.Application.Permissions.Provider;
 using CompanyName.ProjectName.Application.Roles.Dtos;
@@ -229,7 +235,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
             HttpStatusCode.Forbidden,
             (await session.Client.GetAsync("/api/v1/permissions/definitions")).StatusCode);
 
-        // 只授予「配置角色权限」，不授予 App.Permissions：定义树是配置权限的前置条件，
+        // 只授予「配置角色权限」：权限树只为授予而读，不另设「查看权限目录」权限——
         // 要求额外记得授一个根权限只会制造「有权限却打不开界面」的无用状态。
         await GrantAsync(
             PermissionGrantProviderNames.User,
@@ -319,8 +325,8 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     [Fact]
     public async Task Concurrent_initializers_are_serialized_by_the_initialization_lock()
     {
-        // 断言的是"初始化确实在锁内执行"，不是"并发时会崩"：测试宿主是单进程 + InMemory
-        // Provider，InMemory 不强制唯一索引，多实例真正的失败形态在这里复现不出来，
+        // 断言的是"初始化确实在锁内执行"，不是"并发时会崩"：测试宿主是单进程，
+        // 多实例同时初始化的真实竞争在这里复现不出来，
         // 写成"不抛异常即通过"的用例无论有没有锁都会绿，等于没测。
         // 跨进程互斥由部署侧保证——多副本必须配置 Redis，那条路径不在集成测试范围内。
         //
@@ -544,6 +550,62 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         Assert.False(current.Grants.Single(x => x.Name == PermissionConstant.Roles.Default).Granted);
     }
 
+    /// <summary>
+    /// 组件端点在授权之后被业务规则拒绝，也留下一条失败记录
+    /// </summary>
+    /// <remarks>
+    /// 权限管理端点由组件映射，拒绝发生在组件内部，由紧接授权之后、租户作用域之内的中间件补记。
+    /// 目标标识与授权依据要与成功路径写下的逐字一致，按目标、按依据检索才查得全。
+    /// </remarks>
+    [Fact]
+    public async Task A_rejected_permission_save_leaves_a_failure_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var role = await CreateRoleAsync(superAdmin.Client);
+
+        await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 0, permissionNames = new[] { PermissionConstant.Users.Default } });
+        var stale = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 0, permissionNames = new[] { PermissionConstant.Roles.Default } });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+        var undefined = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 1, permissionNames = new[] { "App.NotDefined" } });
+        Assert.Equal(HttpStatusCode.BadRequest, undefined.StatusCode);
+
+        var failures = await OperationRecordQueries.GetFailuresAsync(
+            superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}");
+        Assert.Equal(
+            [PermissionErrorCodes.UndefinedPermission, PermissionErrorCodes.ConcurrencyConflict],
+            failures.Select(item => item.FailureCode));
+        Assert.All(failures, item => Assert.Equal(PermissionConstant.Roles.ManagePermissions, item.AuthorizationBasis));
+    }
+
+    /// <summary>参数校验失败没有业务码，无从按原因聚合，不进操作记录。</summary>
+    [Fact]
+    public async Task A_permission_save_rejected_by_input_validation_leaves_no_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var role = await CreateRoleAsync(superAdmin.Client);
+
+        var tooMany = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new
+            {
+                expectedVersion = 0,
+                permissionNames = Enumerable.Range(0, ReplacePermissionGrantsInputDto.MaximumPermissionCount + 1)
+                    .Select(index => $"App.Permission{index}")
+                    .ToArray()
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
+
+        Assert.Empty(await OperationRecordQueries.GetFailuresAsync(
+            superAdmin.Client, OperationRecordActions.PermissionGrantsReplaced, $"Role/{role.Id}"));
+    }
+
     [Fact]
     public async Task Current_permissions_reflect_grants_and_change_version()
     {
@@ -572,13 +634,132 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         var adminRoleId = await GetRoleIdAsync(AdminConstant.RoleName);
         var staticDelete = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{adminRoleId}");
-        Assert.Equal(HttpStatusCode.BadRequest, staticDelete.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, staticDelete.StatusCode);
 
         var role = await CreateRoleAsync(superAdmin.Client);
         await CreateUserAsync(superAdmin.Client, [role.Id]);
 
         var assignedDelete = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}");
-        Assert.Equal(HttpStatusCode.BadRequest, assignedDelete.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, assignedDelete.StatusCode);
+    }
+
+    /// <summary>
+    /// 删除用户是软删除、关联行保留；只分配给已删除用户的角色不能因此永久删不掉，删除时连带清掉这些关联。
+    /// </summary>
+    [Fact]
+    public async Task A_role_assigned_only_to_deleted_users_counts_no_users_and_can_be_deleted()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var role = await CreateRoleAsync(superAdmin.Client);
+        var user = await CreateUserAsync(superAdmin.Client, [role.Id]);
+        Assert.Equal(1, (await ReadRoleAsync(superAdmin.Client, role.Id)).GetProperty("userCount").GetInt32());
+
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).StatusCode);
+        Assert.Equal(0, (await ReadRoleAsync(superAdmin.Client, role.Id)).GetProperty("userCount").GetInt32());
+
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}")).StatusCode);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        Assert.False(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+    }
+
+    /// <summary>
+    /// 删角色、清关联、清授权与成功记录同在一个工作单元：最后一步失败时整体回滚，不留"接口报错但角色已删"的半成品。
+    /// </summary>
+    [Fact]
+    public async Task A_failed_role_deletion_rolls_back_the_role_and_its_assignments()
+    {
+        using var host = Factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            var inner = services.Last(descriptor => descriptor.ServiceType == typeof(IOperationRecorder));
+            services.Remove(inner);
+            services.Add(ServiceDescriptor.Describe(
+                typeof(IOperationRecorder),
+                provider => new RoleDeletionRecordFails((IOperationRecorder)(inner.ImplementationFactory?.Invoke(provider)
+                    ?? ActivatorUtilities.CreateInstance(provider, inner.ImplementationType!))),
+                inner.Lifetime));
+        }));
+        using var superAdmin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
+        // 带上授予：授予清理会在工作单元内先自行 SaveChanges，回滚必须连它一起撤回
+        var role = await CreateRoleAsync(superAdmin.Client);
+        var seeded = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 0, permissionNames = new[] { PermissionConstant.Users.Default } });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
+        var user = await CreateUserAsync(superAdmin.Client, [role.Id]);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, (await superAdmin.Client.DeleteAsync($"/api/v1/roles/{role.Id}")).StatusCode);
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        Assert.True(await db.Roles.AnyAsync(existing => existing.Id == role.Id));
+        Assert.True(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+        var providerKey = role.Id.ToString();
+        Assert.True(await db.Set<PermissionGrantRecord>()
+            .AnyAsync(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey));
+        Assert.True(await db.Set<AuthorizationVersionRecord>()
+            .AnyAsync(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey));
+    }
+
+    private sealed class RoleDeletionRecordFails(IOperationRecorder inner) : IOperationRecorder
+    {
+        public Task RecordSucceededAsync(
+            string action, OperationTarget target, string authorizationBasis, CancellationToken cancellationToken = default) =>
+            action == OperationRecordActions.RoleDeleted
+                ? throw new InvalidOperationException("Injected failure after the role was deleted.")
+                : inner.RecordSucceededAsync(action, target, authorizationBasis, cancellationToken);
+
+        public Task RecordFailedAsync(
+            string action, OperationTarget target, string authorizationBasis, OperationFailure failure = default) =>
+            inner.RecordFailedAsync(action, target, authorizationBasis, failure);
+    }
+
+    /// <summary>
+    /// 管理员启停账号与重置密码改变的是"这个人能不能进来"，与其他账号管理操作一样留痕；
+    /// 状态没变的重复操作不留记录。
+    /// </summary>
+    [Fact]
+    public async Task Enabling_disabling_and_resetting_a_password_leave_operation_records()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var user = await CreateUserAsync(superAdmin.Client);
+        var targetId = user.Id.ToString();
+
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/disable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/enable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PatchAsync($"/api/v1/users/{user.Id}/enable", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.PostAsJsonAsync(
+            $"/api/v1/users/{user.Id}/reset-password", new { Password = "IntegrationTests!Reset1" })).StatusCode);
+
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserDisabled, targetId));
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserEnabled, targetId));
+        Assert.Equal(1, await OperationRecordQueries.CountSucceededAsync(superAdmin.Client, OperationRecordActions.UserPasswordReset, targetId));
+    }
+
+    private static async Task<JsonElement> ReadRoleAsync(HttpClient client, Guid roleId)
+    {
+        using var body = JsonDocument.Parse(await client.GetStringAsync($"/api/v1/roles/{roleId}"));
+        return body.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// 控制器端点的业务拒绝走同一个中间件，与组件的 Minimal API 端点一致
+    /// </summary>
+    /// <remarks>删除内置角色被规则拒绝：目标取路由上的 id，依据取控制器动作上的删除策略。</remarks>
+    [Fact]
+    public async Task A_rejected_role_deletion_leaves_a_failure_record()
+    {
+        using var superAdmin = await Factory.LoginAsync("admin", ProjectWebApplicationFactory.TestAdminPassword);
+        var adminRoleId = await GetRoleIdAsync(AdminConstant.RoleName);
+
+        var rejected = await superAdmin.Client.DeleteAsync($"/api/v1/roles/{adminRoleId}");
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+
+        var failures = await OperationRecordQueries.GetFailuresAsync(
+            superAdmin.Client, OperationRecordActions.RoleDeleted, adminRoleId.ToString());
+        Assert.Contains((RoleErrorCodes.StaticRoleCannotBeDeleted, PermissionConstant.Roles.Delete), failures);
     }
 
     [Fact]
@@ -672,7 +853,7 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
 
         // 打 negotiate 而不是引 SignalR.Client：Hub 端点的授权就发生在这一步，
         // 走的是同一条 RequireAuthorization() → 默认策略的路径，不必为一条测试加包依赖。
-        const string Negotiate = "/hubs/notifications/negotiate?negotiateVersion=1";
+        const string Negotiate = "/hubs/realtime/negotiate?negotiateVersion=1";
         Assert.Equal(HttpStatusCode.OK, (await session.Client.PostAsync(Negotiate, null)).StatusCode);
 
         Assert.Equal(

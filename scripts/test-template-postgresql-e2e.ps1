@@ -8,6 +8,11 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $runId = "{0}-{1}" -f $PID, (Get-Date -Format "yyyyMMddHHmmssfff")
 $runRoot = Join-Path $repoRoot ".tmp/postgresql-e2e/$runId"
+# 开发环境以外（迁移作业默认即是）Data Protection 要求显式的持久密钥位置；API 与各 DbMigrator 也必须共用
+# 同一密钥环，否则一方加密的租户连接串另一方解不开。子进程继承这个变量；结束时在 finally 里恢复原值，
+# 同一 PowerShell 进程内用 & 调用本脚本时不影响后续命令。
+$previousDataProtectionKeysPath = [Environment]::GetEnvironmentVariable("DataProtection__KeysPath")
+$env:DataProtection__KeysPath = Join-Path $runRoot "data-protection-keys"
 $feedRoot = if ($SkipPack) { Join-Path $repoRoot ".tmp/local-feed" } else { Join-Path $runRoot "local-feed" }
 $hiveRoot = Join-Path $runRoot "template-hive"
 $generatedRoot = Join-Path $runRoot "generated"
@@ -135,8 +140,7 @@ try {
     Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", (Join-Path $repoRoot "template"), "--force")
     $projects = @(
         # 参数以能力布尔表达：Identity 形态两者皆开，Resource 形态两者皆关。
-        # Identity 侧把三个可选特性全开：矩阵的运行时冒烟跑在 EF InMemory 上（不建表），
-        # 只有这里会把迁移真的应用到 PostgreSQL，因此模型与迁移是否对齐只能在这条路上验。
+        # Identity 侧把三个可选特性全开，经 DbMigrator 命令行把迁移应用到多库拆分的真实拓扑。
         # 曾漏过的实例：ExternalLoginConnections 表不在初始迁移里，开启外部登录的项目
         # 用自己的迁移建不出库（EF 报 PendingModelChangesWarning），而单场景编译一切正常。
         @{ Name = "E2E.Identity"
@@ -205,9 +209,18 @@ try {
     }
 
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__Default = $adminShared } -Apply
-    Invoke-Migrator $resourceMigrator @{ ConnectionStrings__MigrationTarget = $adminShared } -Apply
+    # 资源服务的部署配置里总有控制面地址（远端租户连接存储启动时校验它）；显式目标模式不回源，
+    # 这里给一个不会被访问的地址，与真实部署的配置形态一致
+    $resourceControlPlane = "http://identity.invalid"
+    Invoke-Migrator $resourceMigrator @{
+        ConnectionStrings__MigrationTarget = $adminShared
+        Leistd__ServiceClients__Identity__BaseAddress = $resourceControlPlane
+    } -Apply
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__MigrationTarget = $adminDedicated } -Apply
-    Invoke-Migrator $resourceMigrator @{ ConnectionStrings__MigrationTarget = $adminDedicated } -Apply
+    Invoke-Migrator $resourceMigrator @{
+        ConnectionStrings__MigrationTarget = $adminDedicated
+        Leistd__ServiceClients__Identity__BaseAddress = $resourceControlPlane
+    } -Apply
     # A second pass proves that both initial and explicit-target modes are idempotent.
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__Default = $adminShared } -Apply
     Invoke-Migrator $identityMigrator @{ ConnectionStrings__MigrationTarget = $adminDedicated } -Apply
@@ -327,7 +340,6 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
     $startInfo.Environment["ASPNETCORE_URLS"] = $baseUrl
     $startInfo.Environment["ConnectionStrings__Default"] = $identityRuntimeShared
     $startInfo.Environment["ConnectionStrings__Redis"] = ""
-    $startInfo.Environment["SpaProxy__Enabled"] = "false"
     $startInfo.Environment["OAuth__Issuer"] = "$baseUrl/"
     $startInfo.Environment["OAuth__DisableHttpsRequirement"] = "true"
     $startInfo.Environment["DefaultAdmin__Username"] = "admin"
@@ -423,9 +435,8 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA "e2e-resource" TO e2e_res
         throw "The dedicated tenant's connection string was stored in plaintext."
     }
 
-    # 超管只属于宿主：CK_User_SuperAdminIsHostOnly。领域服务那道关由集成测试覆盖，但那套跑在
-    # 内存提供程序上——检查约束是 PostgreSQL 才生效的 DDL，只有真库能证明它拦得住数据修复脚本、
-    # 批量导入和直接 SQL。用刚种出来的真实数据断言，不另造行：
+    # 超管只属于宿主：CK_User_SuperAdminIsHostOnly。领域服务那道关由集成测试覆盖；
+    # 这里用直接 SQL 证明数据库约束本身拦得住数据修复脚本与批量导入。用刚种出来的真实数据断言，不另造行：
     #   1. 宿主种子确实产出了一个超管（否则下面的 UPDATE 命中 0 行，会假装"约束生效"）；
     #   2. 租户种子产出的管理员没有被标成超管；
     #   3. 把那个超管挪进租户必须被数据库拒绝。
@@ -497,4 +508,5 @@ finally {
         $apiProcess.Dispose()
     }
     & docker rm --force $containerName *> $null
+    [Environment]::SetEnvironmentVariable("DataProtection__KeysPath", $previousDataProtectionKeysPath)
 }

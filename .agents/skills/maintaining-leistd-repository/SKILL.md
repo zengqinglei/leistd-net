@@ -7,18 +7,18 @@ description: 在 leistd-net 仓库中处理跨 framework、template、skills、d
 
 ## 先确定交付面
 
-读取 `docs/architecture/collaboration-scenarios.md`，再按变更范围选择：
+涉及跨层边界时读取 `docs/architecture/collaboration-scenarios.md`，再按变更范围选择：
 
 | 范围 | 同时使用 | 主要事实 |
 | --- | --- | --- |
 | `framework/` | `developing-leistd-framework` | 源码、测试、`framework/docs/`、`docs/framework/` |
 | `template/` | `developing-leistd-template` | `template.json`、模板源码、实际生成结果 |
 | 任一 Skill | 官方 `skill-creator` | `SKILL.md`、所属交付面的当前事实 |
-| CI、发布或根文档 | 本 Skill | workflow、脚本、`docs/` 稳定入口 |
+| CI、根文档或版本发布 | 本 Skill | workflow、脚本、`docs/` 稳定入口、候选 SHA 和包源状态 |
 
-跨多个交付面时使用一个实施计划，但分别完成各层验证。
+跨多个交付面且需要任务分解时使用一份实施计划，分别完成受影响层的验证。
 
-只有一个交付面受影响时直接使用对应专项 Skill，不额外加载本 Skill。
+仅影响 Framework 或 Template 时使用对应专项 Skill；跨层、CI、根文档和版本发布任务使用本 Skill。
 
 ## 方案与实施计划
 
@@ -43,6 +43,10 @@ description: 在 leistd-net 仓库中处理跨 framework、template、skills、d
 4. 实施聚焦变更，并分别完成构建、测试、文档检查、打包或模板生成验证。
 5. 汇总各交付面的真实结果、未验证项和残余风险；只有长期共享信息才更新稳定文档。
 
+要求 Git 提交或推送时只暂存本任务文件，核对相关验证、`docs/framework/versioning.md` 的提交格式及目标分支触发的 workflow；不把实现完成当作已经提交或发布。等待具体 CI run 或外部状态到达明确结果，不按固定时长等待或重复运行已成功的相同验证。
+
+实际发布或恢复时，按 `docs/framework/versioning.md` 和 `.github/workflows/release.yml` 核对候选 SHA、版本、同一 SHA 的质量结果、包源、tag 与 Release；部分发布先查实际状态，再按版本规范恢复。
+
 没有同类文档且信息需跨会话复用时，按 `docs/README.md` 创建最小权威文档；归属或关键决策不明确时询问用户。
 
-发布正式包、生产操作、真实数据修改、密钥变更和破坏性 Git 操作必须先获得用户明确确认。
+发布正式包、生产操作、真实数据修改、密钥变更和破坏性 Git 操作前核对现有授权是否覆盖目标与动作；未授权或范围扩大时再询问。

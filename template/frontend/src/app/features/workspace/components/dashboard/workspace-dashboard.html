@@ -1,55 +1,37 @@
-<div class="p-4 md:p-6">
-  <section hlmCard>
-    <div hlmCardHeader>
-      <!--#if (IncludeLocalization)-->
-      <h2 hlmCardTitle class="text-2xl">{{ 'workspace.dashboard.title' | transloco }}</h2>
-      <!--#else-->
-      <h2 hlmCardTitle class="text-2xl">Workspace</h2>
-      <!--#endif-->
-    </div>
-    <div hlmCardContent>
-      @if (authService.currentUser(); as user) {
-        <!-- 标签列按最长标签取宽（各语言长度不同），不写死宽度 -->
-        <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] items-baseline gap-x-4 gap-y-3">
-          <!--#if (IncludeLocalization)-->
-          <dt class="text-muted-foreground">{{ 'workspace.dashboard.username' | transloco }}</dt>
-          <!--#else-->
-          <dt class="text-muted-foreground">Username</dt>
-          <!--#endif-->
-          <dd class="min-w-0 font-medium break-words">{{ user.username }}</dd>
+<!--#if (IncludeLocalization)-->
+<ng-container *transloco="let t">
+<!--#else-->
+<ng-container>
+<!--#endif-->
+  <div class="p-4 md:p-6">
+    <section hlmCard>
+      <div hlmCardHeader>
+        <h2 hlmCardTitle class="text-2xl">{{ t('workspace.dashboard.title') }}</h2>
+      </div>
+      <div hlmCardContent>
+        @if (authService.currentUser(); as user) {
+          <!-- 标签列按最长标签取宽（各语言长度不同），不写死宽度 -->
+          <dl class="grid grid-cols-[minmax(6rem,auto)_1fr] items-baseline gap-x-4 gap-y-3">
+            <dt class="text-muted-foreground">{{ t('workspace.dashboard.username') }}</dt>
+            <dd class="min-w-0 font-medium break-words">{{ user.username }}</dd>
 
-          <!--#if (IncludeLocalization)-->
-          <dt class="text-muted-foreground">{{ 'workspace.dashboard.displayName' | transloco }}</dt>
-          <!--#else-->
-          <dt class="text-muted-foreground">Display name</dt>
-          <!--#endif-->
-          <dd class="min-w-0 font-medium break-words">{{ user.displayName || '-' }}</dd>
+            <dt class="text-muted-foreground">{{ t('workspace.dashboard.displayName') }}</dt>
+            <dd class="min-w-0 font-medium break-words">{{ user.displayName || '-' }}</dd>
 
-          <!--#if (IncludeLocalization)-->
-          <dt class="text-muted-foreground">{{ 'workspace.dashboard.email' | transloco }}</dt>
-          <!--#else-->
-          <dt class="text-muted-foreground">Email</dt>
-          <!--#endif-->
-          <dd class="min-w-0 font-medium break-words">{{ user.email || '-' }}</dd>
+            <dt class="text-muted-foreground">{{ t('workspace.dashboard.email') }}</dt>
+            <dd class="min-w-0 font-medium break-words">{{ user.email || '-' }}</dd>
 
-          <!--#if (IncludeLocalization)-->
-          <dt class="text-muted-foreground">{{ 'workspace.dashboard.roles' | transloco }}</dt>
-          <!--#else-->
-          <dt class="text-muted-foreground">Roles</dt>
-          <!--#endif-->
-          <dd class="flex min-w-0 flex-wrap gap-1">
-            @for (role of user.roles; track role) {
-              <span hlmBadge variant="secondary">{{ role }}</span>
-            }
-          </dd>
-        </dl>
-      } @else {
-        <!--#if (IncludeLocalization)-->
-        <p class="text-muted-foreground">{{ 'workspace.dashboard.noUserInfo' | transloco }}</p>
-        <!--#else-->
-        <p class="text-muted-foreground">No user information available</p>
-        <!--#endif-->
-      }
-    </div>
-  </section>
-</div>
+            <dt class="text-muted-foreground">{{ t('workspace.dashboard.roles') }}</dt>
+            <dd class="flex min-w-0 flex-wrap gap-1">
+              @for (role of user.roles; track role) {
+                <span hlmBadge variant="secondary">{{ role }}</span>
+              }
+            </dd>
+          </dl>
+        } @else {
+          <p class="text-muted-foreground">{{ t('workspace.dashboard.noUserInfo') }}</p>
+        }
+      </div>
+    </section>
+  </div>
+</ng-container>

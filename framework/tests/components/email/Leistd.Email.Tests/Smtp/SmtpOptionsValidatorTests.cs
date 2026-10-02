@@ -32,7 +32,7 @@ public sealed class SmtpOptionsValidatorTests
         // 经容器取校验器，同时钉住"AddSmtpEmailSender 真的把它登记上了"
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSmtpEmailSender(_ => { });
+        services.AddSmtpEmailSender();
         using var provider = services.BuildServiceProvider();
 
         var validator = Assert.Single(provider.GetServices<IValidateOptions<SmtpOptions>>());

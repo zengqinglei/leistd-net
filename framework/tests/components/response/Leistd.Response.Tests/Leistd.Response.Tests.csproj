@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\components\response\Leistd.Response.AspNetCore\Leistd.Response.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\components\exception-handling\Leistd.ExceptionHandling.AspNetCore\Leistd.ExceptionHandling.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

@@ -29,8 +29,8 @@ public sealed class ServiceInfoController(IClock clock) : BaseController
 
 #if (LocalIdentity)
     /// <summary>
-    /// 返回「本次调用以谁的身份进入」：用户（可能经服务调用头恢复）与调用方客户端。
-    /// 默认授权策略要求可用的自然人用户——服务间调用须携带受信的 X-User-Id 才能通过；
+    /// 返回「本次调用以谁的身份进入」：已认证用户与调用方客户端。
+    /// 默认授权策略要求可用的自然人用户，资源服务间调用通过 Token Exchange 令牌证明用户；
     /// 面向纯工作负载（无用户上下文）的端点应单独声明自己的策略。
     /// </summary>
     [Authorize]
@@ -54,8 +54,8 @@ public sealed record ServiceInfoOutputDto(string Service, string Version, DateTi
 /// <summary>
 /// 当前调用身份。
 /// </summary>
-/// <param name="UserId">当前用户 Id（服务间调用时来自受信恢复的 X-User-Id）</param>
+/// <param name="UserId">当前用户 Id（服务间调用时来自已验证的交换令牌）</param>
 /// <param name="Username">当前用户名</param>
-/// <param name="ClientId">调用方客户端 Id（client credentials 调用时存在）</param>
+/// <param name="ClientId">令牌中的调用方客户端 Id</param>
 public sealed record WhoAmIOutputDto(Guid? UserId, string? Username, string? ClientId);
 #endif

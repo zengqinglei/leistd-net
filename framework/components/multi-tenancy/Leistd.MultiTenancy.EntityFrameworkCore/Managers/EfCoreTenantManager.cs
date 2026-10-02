@@ -27,41 +27,14 @@ public class EfCoreTenantManager<TDbContext>(
     where TDbContext : DbContext
 {
     /// <inheritdoc />
-    public Task<TenantConfiguration> CreateAsync(
+    public async Task<TenantConfiguration> CreateAsync(
         string name,
         string? displayName,
         bool isActive,
         string? description = null,
         CancellationToken cancellationToken = default)
-        => CreateCoreAsync(name, displayName, isActive, id: null, description, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<TenantConfiguration> CreateAsync(
-        string name,
-        string? displayName,
-        bool isActive,
-        Guid id,
-        string? description = null,
-        CancellationToken cancellationToken = default)
     {
-        // 空标识多半是调用方漏传了变量，落库后是一条永远查不到的记录
-        if (id == Guid.Empty)
-        {
-            throw new ArgumentException("The tenant id must not be empty.", nameof(id));
-        }
-
-        return CreateCoreAsync(name, displayName, isActive, id, description, cancellationToken);
-    }
-
-    private async Task<TenantConfiguration> CreateCoreAsync(
-        string name,
-        string? displayName,
-        bool isActive,
-        Guid? id,
-        string? description,
-        CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        TenantNames.EnsureValid(name);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
         var normalizedName = normalizer.NormalizeName(name)!;
@@ -69,8 +42,7 @@ public class EfCoreTenantManager<TDbContext>(
 
         var record = new TenantRecord
         {
-            // 给定标识即播种/夹具路径：主键由调用方定，其余校验一视同仁
-            Id = id ?? Guid.CreateVersion7(),
+            Id = Guid.CreateVersion7(),
             Name = name,
             NormalizedName = normalizedName,
             DisplayName = displayName,
@@ -92,10 +64,16 @@ public class EfCoreTenantManager<TDbContext>(
         string? description = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var dbContext = await dbContextProvider.GetDbContextAsync(cancellationToken);
 
         var record = await GetAsync(dbContext, id, cancellationToken);
+        // 名称变了才按规则校验（只改大小写也算改名）：存量租户的名称可能早于这条规则，
+        // 只改显示名或描述不该被它挡住
+        if (!string.Equals(record.Name, name, StringComparison.Ordinal))
+        {
+            TenantNames.EnsureValid(name);
+        }
+
         var normalizedName = normalizer.NormalizeName(name)!;
 
         if (!string.Equals(record.NormalizedName, normalizedName, StringComparison.Ordinal))

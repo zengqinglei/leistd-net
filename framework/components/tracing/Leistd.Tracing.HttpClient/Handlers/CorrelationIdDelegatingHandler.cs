@@ -1,12 +1,11 @@
 using Leistd.Tracing.Options;
-using Leistd.Tracing.Services;
 using Microsoft.Extensions.Options;
 using Leistd.Tracing.Abstractions;
 
 namespace Leistd.Tracing.HttpClient.Handlers;
 
 /// <summary>
-/// 出站链路标识处理器：把当前 TraceId 写入 <c>HttpClient</c> 请求头，向下游透传。
+/// 出站关联标识处理器：把当前关联标识写入 <c>HttpClient</c> 请求头，向下游透传。
 /// </summary>
 public class CorrelationIdDelegatingHandler(
     ICorrelationIdProvider correlationIdProvider,
@@ -22,15 +21,9 @@ public class CorrelationIdDelegatingHandler(
         }
 
         var correlationId = correlationIdProvider.Get();
-        if (!string.IsNullOrEmpty(correlationId))
+        if (!string.IsNullOrEmpty(correlationId) && !request.Headers.Contains(options.HeaderName))
         {
-            foreach (var headerName in options.HeaderNames)
-            {
-                if (!request.Headers.Contains(headerName))
-                {
-                    request.Headers.Add(headerName, correlationId);
-                }
-            }
+            request.Headers.Add(options.HeaderName, correlationId);
         }
 
         return await base.SendAsync(request, cancellationToken);

@@ -2,7 +2,8 @@
 using CompanyName.ProjectName.Domain.Users.DomainServices;
 using CompanyName.ProjectName.Domain.Shared.Security.PasswordHash;
 #if (OpenIddictServer)
-using CompanyName.ProjectName.Application.TenantConnections.Constants;
+using CompanyName.ProjectName.Application.Auth.OAuth;
+using CompanyName.ProjectName.Domain.Auth.Options;
 #endif
 #endif
 using CompanyName.ProjectName.Domain.Users.Constants;
@@ -26,11 +27,9 @@ using Leistd.Lock.Abstractions;
 using Leistd.MultiTenancy.ConnectionStrings;
 using Leistd.MultiTenancy.Context;
 using Leistd.MultiTenancy.Errors;
-using Leistd.MultiTenancy.Management;
 using Leistd.MultiTenancy.Tenancy;
 #if (OpenIddictServer)
 using OpenIddict.Abstractions;
-using static OpenIddict.Abstractions.OpenIddictConstants;
 #endif
 
 namespace CompanyName.ProjectName.Application.Initialization;
@@ -50,6 +49,7 @@ public class SystemInitializer(
     IPermissionGrantSeeder permissionGrantSeeder,
 #if (OpenIddictServer)
     IOpenIddictScopeManager scopeManager,
+    IOptions<OAuthOptions> oauthOptions,
 #endif
 #if (LocalIdentity)
     IOptions<DefaultAdminOptions> adminOptions,
@@ -145,6 +145,15 @@ public class SystemInitializer(
             adminUser = await userRepository.GetFirstAsync(u => u.Username == options.Username, q => q.OrderBy(u => u.Id), cancellationToken);
             if (adminUser == null)
             {
+                // 只有这一步需要口令：缺失时报出键名与提供方式；不合格由领域服务按口令策略报出键名
+                if (string.IsNullOrWhiteSpace(options.Password))
+                {
+                    throw new InvalidOperationException(
+                        $"{DefaultAdminOptions.SectionName}:Password is required to create the initial super admin " +
+                        $"'{options.Username}'. Provide it through the environment variable " +
+                        $"{DefaultAdminOptions.SectionName}__Password or user-secrets.");
+                }
+
                 // 实体创建的核心逻辑（口令策略、哈希、超管标记、落库）在领域服务里，
                 // 应用层只负责判断"是否需要创建"
                 adminUser = await userDomainService.CreateSuperAdminAsync(
@@ -208,33 +217,50 @@ public class SystemInitializer(
     }
 
 #if (OpenIddictServer)
+    // scope 表按目录对齐：目录是唯一来源（见 OAuthScopes），配置里增删下游 API 或改了资源标识，重启后即生效。
+    // 不在目录里的 scope 一并删除：留着的话，曾被授予它的客户端仍能申请到一个没有对应受众的 scope
     private async Task InitializeOpenIddictAsync(CancellationToken cancellationToken)
     {
-        await EnsureScopeAsync(Scopes.OpenId, "OpenID", cancellationToken);
-        await EnsureScopeAsync(Scopes.Profile, "Profile", cancellationToken);
-        await EnsureScopeAsync(Scopes.Email, "Email", cancellationToken);
-        await EnsureScopeAsync(Scopes.Roles, "Roles", cancellationToken);
-        await EnsureScopeAsync(Scopes.OfflineAccess, "Offline access", cancellationToken);
-        await EnsureScopeAsync(
-            TenantConnectionScopes.RuntimeRead,
-            "Read tenant connection routing metadata",
-            cancellationToken);
-        await EnsureScopeAsync(
-            TenantConnectionScopes.MigrationRead,
-            "Read tenant connection migration metadata",
-            cancellationToken);
+        var catalog = OAuthScopes.All(oauthOptions.Value);
+        foreach (var scope in catalog)
+        {
+            await EnsureScopeAsync(scope, cancellationToken);
+        }
+
+        var names = catalog.Select(scope => scope.Name).ToHashSet(StringComparer.Ordinal);
+        var stale = new List<object>();
+        await foreach (var scope in scopeManager.ListAsync(count: null, offset: null, cancellationToken))
+        {
+            if (!names.Contains(await scopeManager.GetNameAsync(scope, cancellationToken) ?? string.Empty))
+            {
+                stale.Add(scope);
+            }
+        }
+
+        foreach (var scope in stale)
+        {
+            await scopeManager.DeleteAsync(scope, cancellationToken);
+        }
     }
 
-    private async Task EnsureScopeAsync(string name, string displayName, CancellationToken cancellationToken)
+    private async Task EnsureScopeAsync(OAuthScope scope, CancellationToken cancellationToken)
     {
-        if (await scopeManager.FindByNameAsync(name, cancellationToken) != null)
-            return;
+        var descriptor = new OpenIddictScopeDescriptor { Name = scope.Name, DisplayName = scope.DisplayName };
+        descriptor.Resources.UnionWith(scope.Resources);
 
-        await scopeManager.CreateAsync(new OpenIddictScopeDescriptor
+        var existing = await scopeManager.FindByNameAsync(scope.Name, cancellationToken);
+        if (existing == null)
         {
-            Name = name,
-            DisplayName = displayName
-        }, cancellationToken);
+            await scopeManager.CreateAsync(descriptor, cancellationToken);
+            return;
+        }
+
+        var current = new OpenIddictScopeDescriptor();
+        await scopeManager.PopulateAsync(current, existing, cancellationToken);
+        if (current.DisplayName != descriptor.DisplayName || !current.Resources.SetEquals(descriptor.Resources))
+        {
+            await scopeManager.UpdateAsync(existing, descriptor, cancellationToken);
+        }
     }
 #endif
 }
