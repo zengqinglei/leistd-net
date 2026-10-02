@@ -520,7 +520,9 @@ var apiKeys = await query
 
 #### 配置错误在启动期失败，不要留到运行期
 
-缺连接串、格式写错的 `DomainFormat` 这类**部署配置错误**，若留到运行期，表现是每个请求失败一次、而进程"健康"地跑着。用 `AddOptions<T>().Validate(...).ValidateOnStart()`。
+格式写错的 `DomainFormat`、缺必填凭据这类**部署配置错误**，若留到运行期，表现是每个请求失败一次、而进程"健康"地跑着。用 `AddOptions<T>().Validate(...).ValidateOnStart()`。
+
+`ValidateOnStart` 在宿主启动时才执行，晚于 `app.Run()` 之前的步骤。数据库连接串属于这一类之前就要用到的配置：API 在接流量前校验迁移、DbMigrator 从不启动宿主，因此缺连接串由创建 DbContext 时直接抛出并指明键名，不另建选项类。
 
 > **组合期不能直接读配置来做判断。**`Add*Services(configuration)` 拿到的配置还不是最终值——集成测试通过 `WebApplicationFactory` 追加的覆盖此刻尚未合入，直接判断会误伤测试。要用 `.Configure<IConfiguration>((o, c) => ...)` 从 DI 取，让求值发生在配置定案之后。
 

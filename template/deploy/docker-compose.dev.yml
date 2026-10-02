@@ -1,7 +1,7 @@
 # 本机开发用的外部依赖：只起数据库、Redis 与邮件捕获器，应用本身用 dotnet run / npm start 在本机跑。
 #   docker compose -f deploy/docker-compose.dev.yml up -d
 # 端口只绑定 127.0.0.1，口令是仅供本机的开发值；不要把这份文件用于任何共享环境。
-# 应用侧的连接串写进 user-secrets（见 README「本地运行」），不写进 appsettings。
+# Api 与 DbMigrator 的 appsettings.Development.json 已指向这里；连其他库时用 user-secrets 覆盖（见 README「本地运行」）。
 services:
   db:
     image: postgres:15-alpine

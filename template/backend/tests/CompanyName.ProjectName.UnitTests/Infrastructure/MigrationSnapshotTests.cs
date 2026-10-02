@@ -7,9 +7,9 @@ namespace CompanyName.ProjectName.UnitTests.Infrastructure;
 /// 当前模型与已提交的迁移快照一致：改了实体或框架配置却没有生成迁移时在这里失败。
 /// </summary>
 /// <remarks>
-/// <para>运行时的冒烟测试用 EF InMemory，不看迁移，这类漂移要到真实库执行
-/// <c>Migrate</c> 才抛 <c>PendingModelChangesWarning</c>。这里用设计时工厂按关系型
-/// Provider 构建模型并与快照比对，不连接数据库。</para>
+/// <para>这类漂移在真实库执行 <c>Migrate</c> 时才抛 <c>PendingModelChangesWarning</c>
+/// （集成测试准备模板库时也会撞上，但要先起数据库容器）。这里用设计时工厂按关系型
+/// Provider 构建模型并与快照比对，不连接数据库，几毫秒给出结论。</para>
 /// <para>结论能代表运行时，前提是设计时工厂与运行时的 Npgsql 配置在模型层面一致；
 /// 运行时若加了影响模型的选项，须同步到设计时工厂。</para>
 /// <para>OIDC 存储上下文不在此检查：其实体由 <c>UseOpenIddict()</c> 动态注入、不在快照中，

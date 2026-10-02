@@ -660,3 +660,22 @@ GitHub 两个都填 `login`；Google 没有句柄，标签放完整邮箱、`Sug
   由前端显示原因与返回入口。派生项目若自建提供商，`OnRemoteFailure`/`OnAccessDenied` 按同样方式重定向。
 - **跨源写请求更严格**：`/api` 下不带 Authorization 头的写请求如果没有 Origin，`Sec-Fetch-Site` 为
   `cross-site` 或 `same-site` 时返回 403。依赖同站其他子域无 Origin 提交的派生前端要改为同源；非浏览器调用不受影响。
+
+## 25. 测试与开发只用 PostgreSQL
+
+模板移除 EF InMemory：开发、集成测试与运行时只有 Npgsql 一个提供程序。依据与原型实测见
+[模板开发规范 §9](../template/development-guide.md#9-测试与开发只用-postgresql为什么不用-inmemory-或-sqlite)。
+
+- **没有内存库回退**：删除 `Database:InMemoryName` 与 `Microsoft.EntityFrameworkCore.InMemory` 包；`ConnectionStrings:Default` 必填，
+  缺失时 API 在接流量前（迁移校验创建上下文时）启动失败并指明键名。删除只服务于"连接串与内存库二选一"的
+  `TenantConnectionResolutionOptions`。
+- **本机开发改为起依赖再迁移**：Api 与 DbMigrator 各有一份 `appsettings.Development.json`，指向
+  `deploy/docker-compose.dev.yml` 的本机库（公开的本机开发值）；流程是 `docker compose … up -d` →
+  `dotnet run --project …DbMigrator -- --apply` → 启动 API。DbMigrator 新增 `RunWorkingDirectory`，从 `backend/` 运行也读得到自己的开发配置。
+- **Resource 本机开发需要机器身份**：开发配置补上 `Leistd:ServiceAuth:Authority` 与回源地址，DbMigrator 用 `tenant-migration.read`；
+  在 Identity 登记 client credentials 客户端，把 `Leistd:ServiceAuth:ClientId/ClientSecret` 写进 user-secrets，缺失时启动失败并指明键名。
+- **集成测试跑在真实 PostgreSQL 上，需要本机 Docker**：新增 `PostgreSqlTestDatabase`（Testcontainers），每次测试运行迁移一次模板库，
+  每个 `ProjectWebApplicationFactory` 克隆一份、释放时删除；Resource 测试宿主用共享库替身代替远端租户连接存储。
+  派生项目沿用这套夹具时，删除测试里依赖内存库语义的写法（如按 `Database:InMemoryName` 切换新库，改为克隆新库）；
+  批量 `ExecuteUpdate`/`ExecuteDelete` 后的断言换一个作用域读库。
+- **撤销令牌改用官方批量接口**：`UserAppService` 用 `RevokeBySubjectAsync` 替代逐个 `TryRevokeAsync`；并发撤销失败不再被吞掉，会让整个操作失败。

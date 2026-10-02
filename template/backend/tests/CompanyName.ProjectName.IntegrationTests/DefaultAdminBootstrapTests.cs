@@ -21,7 +21,7 @@ public sealed class DefaultAdminBootstrapTests(ProjectWebApplicationFactory fact
 {
     private const string PasswordKey = $"{DefaultAdminOptions.SectionName}:Password";
 
-    // 开发配置自带的演示口令满足策略，新内存库用它建出管理员并能登录——这就是克隆后直接运行的路径
+    // 开发配置自带的演示口令满足策略，新库用它建出管理员并能登录——这就是克隆后首次运行的路径
     [Fact]
     public async Task A_fresh_database_creates_the_admin_from_the_development_password()
     {
@@ -89,7 +89,8 @@ public sealed class DefaultAdminBootstrapTests(ProjectWebApplicationFactory fact
         {
             if (freshDatabase)
             {
-                builder.UseSetting("Database:InMemoryName", $"AdminBootstrap-{Guid.NewGuid():N}");
+                // 派生宿主默认沿用父宿主的库；要"还没有管理员"的库就另克隆一份
+                builder.UseSetting("ConnectionStrings:Default", PostgreSqlTestDatabase.CreateDatabase());
             }
 
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(

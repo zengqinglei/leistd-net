@@ -234,28 +234,33 @@ pwsh scripts/test-template-matrix.ps1 -SkipPack -FrontendBrowser chromium
 
 **收紧侧别不会撤销已经授出去的记录。** `SeedAdminRolePermissionsAsync` 只在授权版本为 0 时播种，既不自动补齐也不自动撤销——因此把某条权限从 `Both` 改成 `Host` 时，必须同时给既有部署一条撤销 SQL，否则已建租户仍持有该权限。
 
-## 9. 集成测试夹具只用内存库（为什么不做双库夹具）
+## 9. 测试与开发只用 PostgreSQL（为什么不用 InMemory 或 SQLite）
 
-模板的 `ProjectWebApplicationFactory` 只有一个内存库，租户专属库的路由不在它的覆盖范围内。
-这是有意的划分，被反复提出过，结论记在这里，不写进模板载荷：
+生成项目只有 Npgsql 一个提供程序：开发连接 `deploy/docker-compose.dev.yml` 的本机库，集成测试由
+`PostgreSqlTestDatabase` 用 Testcontainers 起容器、迁移一次模板库、每个测试宿主克隆一份。
+这条被反复讨论过，结论与依据记在这里：
 
-1. **覆盖已经在了，而且更真。** `scripts/test-template-postgresql-e2e.ps1` 在真实 PostgreSQL 上
-   逐条断言共享租户的数据落在默认库、专属租户落在自己的库、两边互不泄漏，外加连接登记、
-   事后分库被拒 409、连接串静态加密。再加一份内存版是重复，不是补缺。
-2. **做了就得在生产组合根里开一个只服务于测试的口子。** `Infrastructure/DependencyInjection.cs`
-   按"有没有连接串"二选一：有就 `UseNpgsql`，没有就内存库——全项目只有 Npgsql 一个真实提供程序。
-   要让测试选别的，得往那里加分支，或引入一层提供程序选择抽象，而那层抽象唯一的消费者是测试夹具。
-3. **绿灯会给假信心。** 模板声明了默认 schema，迁移历史表是 schema 限定的；SQLite 没有 schema，
-   夹具只能走 `EnsureCreated`，物理形态与生产不同，而租户路由的正确性恰恰依赖这些。
+1. **InMemory 让生产代码迁就测试。** 它没有事务、不强制唯一约束、不支持 `ExecuteUpdate`/`ExecuteDelete`；
+   为它绕开批量写法、刻意不写回滚断言，都是在为测试降低生产代码与测试的质量。EF Core 官方也不建议用它测试。
+2. **SQLite 与工作单元的独立事务冲突。** 框架与模板大量使用 `Begin(requiresNew: true)`；SQLite 每个库只有一个写者，
+   外层事务写入后再开独立事务写入会互相等待到超时。原型实测 364 个集成用例中有 2 个因此锁死，
+   而 PostgreSQL 是行级锁，这种写法在生产上完全正常。SQLite 还没有 schema、执行不了 Npgsql 迁移，
+   `decimal`/`DateTimeOffset` 的排序与比较也受限，业务项目加金额字段就会撞上。
+3. **代价可接受。** 同一生成项目上，集成测试墙钟约为 InMemory 的 1.5 倍，换来与生产一致的约束、翻译、事务和迁移；
+   单元测试不连库，不受影响。
+
+分工：集成测试覆盖单个服务在真实库上的全部行为；`scripts/test-template-postgresql-e2e.ps1` 覆盖必须跨进程、
+跨库验证的部分——`DbMigrator` 命令行与预演、控制库与业务库拆到不同实例、共享与专属租户库的物理隔离、
+跨进程共用的 Data Protection 密钥环。专属租户库的路由也可以在集成测试里另克隆一个库来验证，
+但不为此在生产组合根里加只服务于测试的分支。
 
 下游仓库各自维护多连接测试宿主这件事，**解法不在模板**：模板是 `dotnet new` 的一次性脚手架，
-已生成的项目不跟随模板更新，往这里加夹具只对将来新建的项目有效。若那份重复确实成立，
-载体应是框架侧的测试支撑包（随版本升级下发）——当前 `framework/tests` 全部 `IsPackable=false`，
-那会是一个新的交付面，动手前先看各处宿主真正共用的是什么，不要先建包再找用途。
+已生成的项目不跟随模板更新。若那份重复确实成立，载体应是框架侧的测试支撑包（随版本升级下发）——
+当前 `framework/tests` 全部 `IsPackable=false`，那会是一个新的交付面，动手前先看各处宿主真正共用的是什么。
 
 ## 10. 验证
 
-测试分层、内存库可信度与 lint 缓存口径见[模板质量验证](./quality-assurance.md)。检查删除/替换必须逐项完成接替与变异验收。
+测试分层、真实库与端到端的分工、lint 缓存口径见[模板质量验证](./quality-assurance.md)。检查删除/替换必须逐项完成接替与变异验收。
 
 以下按改动选择，不要求每次全部运行；矩阵和 PostgreSQL 示例默认各自打包当前 Framework 源码。
 

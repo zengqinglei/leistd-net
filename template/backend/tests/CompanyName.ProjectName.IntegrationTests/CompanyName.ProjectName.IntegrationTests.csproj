@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
 <!--#endif-->
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <!-- 集成测试跑在真实 PostgreSQL 上：每次测试运行一个容器，需要本机 Docker -->
+    <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

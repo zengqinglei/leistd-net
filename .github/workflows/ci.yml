@@ -294,8 +294,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      # 矩阵的运行时冒烟跑在 EF InMemory 上：不建表、不翻译查询，
-      # 因而验不到迁移路由、租户跨库隔离、Secret 分离这几类"不报错只给错结果"的失效。
+      # 矩阵的集成测试与冒烟各自只用一个库，验不到多库拆分、共享与专属租户库的物理隔离、
+      # DbMigrator 命令行与跨进程密钥环这几类"不报错只给错结果"的失效。
       # 脚本自带 postgres:15-alpine 容器与清理；不加 -SkipPack，作业自包含、不依赖其它作业的 feed
       - name: 打包 + 生成 + 迁移 + 真实库隔离验证
         shell: pwsh

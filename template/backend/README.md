@@ -27,18 +27,18 @@ src/
 | 层 | 放什么 | 是否进仓库 |
 | --- | --- | --- |
 | `appsettings.json` | 与环境无关的基线；凭据位置留空 | 是 |
-| `appsettings.Development.json` | 所有开发者共用的开发配置：内存库名、开发证书开关、公开的演示管理员口令 | 是 |
-| `dotnet user-secrets` | 机密与只属于本机的覆盖：本机连接串、连接共享库时的管理员口令 | 否，只在开发环境加载 |
+| `appsettings.Development.json` | 所有开发者共用的开发配置：指向本机开发 compose 的连接串、开发证书开关、公开的演示管理员口令 | 是 |
+| `dotnet user-secrets` | 机密与只属于本机的覆盖：共享开发库的连接串、连接共享库时的管理员口令、机器客户端密钥 | 否，只在开发环境加载 |
 | 环境变量 / 密钥系统 | 部署环境的全部机密与差异 | 否 |
 
-Api 与 `DbMigrator` 共用同一个 `UserSecretsId`。配了 `ConnectionStrings:Default` 就走真实数据库，否则用 `Database:InMemoryName` 指定的内存库：
+Api 与 `DbMigrator` 共用同一个 `UserSecretsId`，两边各有一份指向 `deploy/docker-compose.dev.yml` 本机库的开发连接串。连接其他开发库时用 user-secrets 覆盖，两边都会读到：
 
 ```bash
-dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=companyname-projectname;Username=postgres;Password=postgres" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "ConnectionStrings:Default" "<共享开发库的连接串>" --project src/CompanyName.ProjectName.Api
 dotnet user-secrets list --project src/CompanyName.ProjectName.Api
 ```
 
-不要把密码、证书或生产连接字符串写进任何 `appsettings*.json`。集成测试宿主跑在 `Testing` 环境，不加载 user-secrets 与 `appsettings.Development.json`，所需配置由测试夹具显式给出。
+除开发 compose 的本机口令与演示管理员口令这类公开的本机开发值外，不要把密码、证书或生产连接字符串写进任何 `appsettings*.json`。集成测试宿主跑在 `Testing` 环境，不加载 user-secrets 与 `appsettings.Development.json`，所需配置由测试夹具显式给出；数据库由夹具在 Docker 里起 PostgreSQL（Testcontainers），运行集成测试需要本机 Docker。
 
 开发环境以外，下列只在单机上成立的回落不再生效，缺配即启动失败：
 

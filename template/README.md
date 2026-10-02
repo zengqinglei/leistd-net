@@ -42,10 +42,19 @@ CompanyName.ProjectName/
 
 ### 后端
 
-配置分三层：`appsettings.json` 是与环境无关的基线；随仓库提交的 `appsettings.Development.json` 放所有开发者共用的开发配置（内存库名、本机演示管理员口令等）；机密与只属于本机的覆盖放 `dotnet user-secrets`，开发环境自动加载、不进仓库。Api 与 `DbMigrator` 共用同一份 user-secrets，设置一次两边都能读。
+配置分三层：`appsettings.json` 是与环境无关的基线；随仓库提交的 `appsettings.Development.json` 放所有开发者共用的开发配置（指向本机开发库的连接串、本机演示管理员口令等）；机密与只属于本机的覆盖放 `dotnet user-secrets`，开发环境自动加载、不进仓库。Api 与 `DbMigrator` 共用同一份 user-secrets，设置一次两边都能读。
+
+本机依赖用 `deploy/docker-compose.dev.yml` 起（只绑定 127.0.0.1）。Api 与 `DbMigrator` 各自的 `appsettings.Development.json` 都指向这个库，克隆后起依赖、迁移一次即可启动；连接共享开发库时用 user-secrets 覆盖 `ConnectionStrings:Default`，不改配置文件。
+
+```bash
+docker compose -f deploy/docker-compose.dev.yml up -d
+cd backend
+dotnet run --project src/CompanyName.ProjectName.DbMigrator -- --apply   # 首次启动前、拉到新迁移后
+dotnet run --project src/CompanyName.ProjectName.Api
+```
 
 <!--#if (LocalIdentity)-->
-克隆后可直接运行：未配置连接串时使用内存库，首次启动按 `appsettings.Development.json` 里的演示口令创建管理员。
+首次启动按 `appsettings.Development.json` 里的演示口令创建管理员。
 
 <!--#endif-->
 <!--#if (RemoteTokenAuth)-->
@@ -59,15 +68,15 @@ dotnet user-secrets set "Authentication:ClientId" "<已登记的机密客户端>
 dotnet user-secrets set "Authentication:ClientSecret" "<机密客户端密钥>" --project src/CompanyName.ProjectName.Api
 ```
 
-改用真实数据库后，租户路由要回源 Identity，还需设置 `Leistd:ServiceClients:Identity:BaseAddress`（没有默认值）。
-
-<!--#endif-->
-不配置连接串时使用内存库，直接启动：
+租户路由与迁移作业以机器身份回源同一个 Identity（开发配置的 `Leistd:ServiceAuth:Authority` 与 `Leistd:ServiceClients:Identity:BaseAddress` 同样指向 `http://localhost:4200/`，联调别处时一并覆盖）。在 Identity「开放应用」登记一个 client credentials 机器客户端，授予 `tenant-routing.read`（运行时回源）与 `tenant-migration.read`（`DbMigrator` 枚举独立库租户），登记方式见 [服务调用规范](docs/standards/service-invocation.md)；把凭据写进 user-secrets，Api 与 `DbMigrator` 共用。本机可用一个客户端同时持有两个 scope，部署环境按 `deploy/docker-compose.yml` 分开。迁移前先启动本机 Identity：
 
 ```bash
 cd backend
-dotnet run --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "Leistd:ServiceAuth:ClientId" "<机器客户端>" --project src/CompanyName.ProjectName.Api
+dotnet user-secrets set "Leistd:ServiceAuth:ClientSecret" "<机器客户端密钥>" --project src/CompanyName.ProjectName.Api
 ```
+
+<!--#endif-->
 <!--#if (OpenIddictServer)-->
 
 默认配置只监听 HTTP（`http://localhost:5240`）。本机的 OIDC 流程（开放应用的授权码流程、资源服务联调）经前端开发服务器 `http://localhost:4200` 访问授权端点，签发方地址即为它；`appsettings.Development.json` 因此关闭了授权端点的 HTTPS 要求，只作用于开发环境。
@@ -78,22 +87,12 @@ dotnet run --project src/CompanyName.ProjectName.Api
 
 ### 邮件
 
-`Leistd:Email:Smtp` 默认指向本机邮件捕获器，本地起一个即可看到真实投出去的信：
-
-```bash
-docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit   # 收件箱在 http://localhost:8025
-```
+`Leistd:Email:Smtp` 默认指向本机邮件捕获器，开发 compose 已经带上它，收件箱在 `http://localhost:8025`。
 
 邮箱验证默认关闭（`UserRegistration:EnableEmailVerification`）。开启后没有可达的 SMTP 会**发信失败并向调用方报错**，不会静默跳过——注册流程据此撤回已占用的限流槽位。生产环境须覆盖 `Host`/`Port`/`EnableSsl`/`DefaultFromAddress`，`Username`/`Password` 属于凭据，用环境变量或 user-secrets 注入。配置文件是部署基线：宿主管理员可以在「系统设置 → 邮件发送」里在运行期覆盖这些参数（口令加密落库、界面只写不读），并在同一面板发送测试邮件；清除覆盖值即回到配置文件里的值。
 <!--#endif-->
 
-如需 PostgreSQL 与 Redis，用 `deploy/docker-compose.dev.yml` 在本机起依赖（只绑定 127.0.0.1），再把连接串写进 user-secrets；配了连接串就自动改用真实数据库：
-
-```bash
-docker compose -f deploy/docker-compose.dev.yml up -d
-cd backend
-dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=companyname-projectname;Username=postgres;Password=postgres" --project src/CompanyName.ProjectName.Api
-```
+Redis 不配置时用进程内缓存与本机锁；多副本部署必须配置 `ConnectionStrings:Redis`，开发 compose 已起一个可供本机验证。
 <!--#if (LocalIdentity)-->
 
 API 与 `DbMigrator` 必须共用 Data Protection 密钥环（租户独立库连接串加密存放在控制库里）。本机两边的内容根不同，需要时把密钥目录指向同一处：`dotnet user-secrets set "DataProtection:KeysPath" "<本机目录>" --project src/CompanyName.ProjectName.Api`。

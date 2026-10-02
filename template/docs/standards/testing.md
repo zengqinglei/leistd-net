@@ -42,10 +42,16 @@ backend/tests/
 │   ├── Application/     应用层契约与纯逻辑，依赖用假实现从构造函数传入
 │   ├── Infrastructure/  基础设施里的纯映射（如数据库错误翻译），不连库
 │   └── Registration/    在 IServiceCollection 上断言注册结果
-└── CompanyName.ProjectName.IntegrationTests/   经真实宿主验证端到端行为
-    ├── Fixtures/        ProjectWebApplicationFactory、共享装配基类
+└── CompanyName.ProjectName.IntegrationTests/   经真实宿主与真实 PostgreSQL 验证端到端行为
+    ├── Fixtures/        ProjectWebApplicationFactory、PostgreSqlTestDatabase、共享装配基类
     └── <各 *Tests.cs>
 ```
+
+集成测试跑在真实 PostgreSQL 上，需要本机 Docker：`PostgreSqlTestDatabase` 每次测试运行起一个容器，
+用项目自己的迁移建好模板库，每个 `ProjectWebApplicationFactory` 克隆一份独立的库，工厂释放时删除；
+容器在测试进程结束后整体回收。需要本机 Docker 引擎。
+唯一约束、查询翻译、事务回滚与独立事务因此与生产一致，迁移每次运行都实际执行一遍。
+单元测试不连库，不需要 Docker。
 
 **一个 `WebApplicationFactory` 宿主约 0.5–0.8 秒**，集成测试的时长几乎全在这上面，
 且它随测试类数量和配置变体数量线性增长。因此：
@@ -63,9 +69,12 @@ backend/tests/
 ### 2.2 通用要求
 
 - 测试方法名用英文句子、单词以下划线分隔，写出行为与条件，力求简短（如 `Revoked_device_cookie_stops_working_immediately`）；不用中文标识符。名字装不下的前因后果写进 XML 注释。
-- 数据库测试使用隔离数据库、独立 schema 或可靠清理机制。
-- 实体配置、唯一索引与全局查询过滤器必须用关系型 Provider 验证；
-  EF InMemory 全内存求值，会让被违反的约束和不可翻译的查询静默通过。
+- 数据库测试使用隔离数据库、独立 schema 或可靠清理机制；集成测试的每个宿主已经各有一份库。
+- 实体配置、唯一索引与全局查询过滤器在集成测试里验证。不用 EF InMemory 或 SQLite 代替：
+  前者全内存求值，会让被违反的约束和不可翻译的查询静默通过；后者只有一个写者，
+  "已写入后再开独立事务写入"这种生产上合法的写法会在测试里锁死。
+- 批量 `ExecuteUpdate` / `ExecuteDelete` 不经过变更跟踪器：断言删除或更新结果时换一个作用域读，
+  否则读到的是同一 DbContext 里仍被跟踪的旧实体。
 - 外部服务使用 fake、mock 或明确的测试环境。
   时间用 `FakeTimeProvider`、日志用 `FakeLogger`，不手写替身。
 - 领域规则、状态变化、权限和错误语义应通过可观察行为断言。

@@ -477,12 +477,96 @@ function Get-FreeTcpPort {
     }
 }
 
-function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
+# 运行时冒烟走克隆后的真实路径：迁移入口建库，再启动 API。本次运行共用一个 PostgreSQL 容器、每个场景一个库；
+# 容器按 run id 命名，结束时只删本次创建的这一个。口令随机生成，只在本机回环地址上监听。
+$runtimeDatabaseContainer = "leistd-matrix-db-$runId"
+$runtimeDatabasePassword = [Guid]::NewGuid().ToString("N")
+$runtimeDatabasePort = $null
+$runtimeDatabaseStarted = $false
+
+function Start-RuntimeDatabase {
+    Write-Host "> docker run postgres:15-alpine as $runtimeDatabaseContainer" -ForegroundColor DarkGray
+    & docker run -d --name $runtimeDatabaseContainer -e "POSTGRES_PASSWORD=$runtimeDatabasePassword" -p "127.0.0.1::5432" `
+        postgres:15-alpine -c fsync=off -c synchronous_commit=off | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to start the runtime smoke database container." }
+    # 容器已存在就必须由收尾删除，即使下面取端口或等待就绪失败
+    $script:runtimeDatabaseStarted = $true
+    $script:runtimeDatabasePort = [int](((& docker port $runtimeDatabaseContainer 5432) | Select-Object -First 1) -split ':')[-1]
+
+    # 镜像初始化时先起一个临时实例再重启：pg_isready 会在中途短暂成功，紧接着连接被切断。
+    # 以"就绪日志出现第二次"为准（Testcontainers 的同一判据）
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds(90)
+    while (@((& docker logs $runtimeDatabaseContainer 2>&1) -match 'database system is ready to accept connections').Count -lt 2) {
+        if ([DateTimeOffset]::UtcNow -gt $deadline) { throw "The runtime smoke database did not become ready within 90 seconds." }
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+function Stop-RuntimeDatabase {
+    if ($script:runtimeDatabaseStarted) {
+        & docker rm -fv $runtimeDatabaseContainer 2>$null | Out-Null
+        $global:LASTEXITCODE = 0
+    }
+}
+
+function New-RuntimeDatabase([string]$Name) {
+    if (-not $script:runtimeDatabaseStarted) { Start-RuntimeDatabase }
+    & docker exec $runtimeDatabaseContainer psql -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE `"$Name`"" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create runtime smoke database $Name." }
+    return "Host=127.0.0.1;Port=$($script:runtimeDatabasePort);Database=$Name;Username=postgres;Password=$runtimeDatabasePassword"
+}
+
+function Invoke-WithEnvironment([hashtable]$Variables, [scriptblock]$Action) {
+    $previous = @{}
+    foreach ($key in $Variables.Keys) {
+        $previous[$key] = [Environment]::GetEnvironmentVariable($key)
+        [Environment]::SetEnvironmentVariable($key, [string]$Variables[$key])
+    }
+    try { & $Action }
+    finally {
+        foreach ($key in $Variables.Keys) {
+            # 原本不存在的变量必须删除而不是置空：PowerShell 把 $null 传给 string 形参时会变成 ""，
+            # 残留的空 DOTNET_ENVIRONMENT 会让随后启动的 API 不再是开发环境
+            if ($null -eq $previous[$key]) {
+                [Environment]::SetEnvironmentVariable($key, [NullString]::Value)
+            }
+            else {
+                [Environment]::SetEnvironmentVariable($key, [string]$previous[$key])
+            }
+        }
+    }
+}
+
+function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration, [string]$Scenario) {
     $apiProject = Get-ChildItem -LiteralPath (Join-Path $ProjectRoot "backend/src") -Filter "*.Api.csproj" -Recurse | Select-Object -First 1
     $assemblyName = [IO.Path]::GetFileNameWithoutExtension($apiProject.Name)
     $apiAssembly = Join-Path $apiProject.DirectoryName "bin/$Configuration/net10.0/$assemblyName.dll"
     if (-not (Test-Path -LiteralPath $apiAssembly)) {
         throw "Built API assembly was not found: $apiAssembly"
+    }
+
+    # 先按发布流程用本场景自己的迁移入口建库：API 启动时只校验、不施加迁移
+    $connectionString = New-RuntimeDatabase ("smoke_" + ($Scenario -replace '[^a-z0-9]', '_'))
+    $migratorProject = Get-ChildItem -LiteralPath (Join-Path $ProjectRoot "backend/src") -Filter "*.DbMigrator.csproj" -Recurse | Select-Object -First 1
+    $migratorAssembly = Join-Path $migratorProject.DirectoryName "bin/$Configuration/net10.0/$([IO.Path]::GetFileNameWithoutExtension($migratorProject.Name)).dll"
+    $keysPath = Join-Path $runRoot "smoke-keys/$Scenario"
+    New-Item -ItemType Directory -Path $keysPath -Force | Out-Null
+    $migratorEnvironment = @{
+        DOTNET_ENVIRONMENT = 'Production'
+        DataProtection__KeysPath = $keysPath
+    }
+    if ($scenarioMap[$Scenario].Arguments -contains 'Resource') {
+        # Resource 的迁移作业默认向 Identity 枚举独立库租户；冒烟没有 Identity，按单一目标迁移（与首次建独立库同一入口）。
+        # 远端存储的地址在组合期就校验，给一个不可达的地址
+        $migratorEnvironment['ConnectionStrings__MigrationTarget'] = $connectionString
+        $migratorEnvironment['Leistd__ServiceClients__Identity__BaseAddress'] = 'https://identity.matrix.test/'
+    }
+    else {
+        # 持有控制库的形态用默认连接，连同控制面 schema 一起迁移
+        $migratorEnvironment['ConnectionStrings__Default'] = $connectionString
+    }
+    Invoke-WithEnvironment $migratorEnvironment {
+        Invoke-External "dotnet" @($migratorAssembly, "--apply")
     }
 
     $port = Get-FreeTcpPort
@@ -497,17 +581,21 @@ function Invoke-RuntimeSmoke([string]$ProjectRoot, [string]$Configuration) {
     $startInfo.ArgumentList.Add($apiAssembly)
     $startInfo.Environment['ASPNETCORE_ENVIRONMENT'] = 'Development'
     $startInfo.Environment['ASPNETCORE_URLS'] = $baseUrl
-    $startInfo.Environment['ConnectionStrings__Default'] = ''
-    $startInfo.Environment['Database__InMemoryName'] = "MatrixRuntime-$([Guid]::NewGuid().ToString('N'))"
+    $startInfo.Environment['ConnectionStrings__Default'] = $connectionString
+    $startInfo.Environment['DataProtection__KeysPath'] = $keysPath
     $startInfo.Environment['OAuth__DisableHttpsRequirement'] = 'true'
-    # 不注入管理员口令：新内存库首次启动要建管理员，口令取自生成项目的 appsettings.Development.json，
-    # 这正是克隆后直接运行的路径
+    # 不注入管理员口令：新库首次启动要建管理员，口令取自生成项目的 appsettings.Development.json，
+    # 这正是克隆后首次运行的路径
     $startInfo.Environment['VerificationCodes__Key'] = 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8='
     # Resource 形态的签发方在基线配置里刻意留空、组合期必填；其余形态不读这一项。
     # 冒烟只探存活，不回源，给一个不可达的地址即可
     $startInfo.Environment['Authentication__Issuer'] = 'https://identity.matrix.test/'
     $startInfo.Environment['Authentication__ClientId'] = 'matrix-resource'
     $startInfo.Environment['Authentication__ClientSecret'] = 'matrix-resource-secret'
+    $startInfo.Environment['Leistd__ServiceClients__Identity__BaseAddress'] = 'https://identity.matrix.test/'
+    # Resource 的开发配置声明了回源 Identity 的机器身份，启动校验要求凭据齐全；冒烟只探存活，不换令牌
+    $startInfo.Environment['Leistd__ServiceAuth__ClientId'] = 'matrix-resource-worker'
+    $startInfo.Environment['Leistd__ServiceAuth__ClientSecret'] = 'matrix-resource-worker-secret'
 
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
@@ -699,73 +787,74 @@ Invoke-External $pythonCmd @((Join-Path $repoRoot "scripts/check-async-boundarie
 Invoke-External "dotnet" @("new", "--debug:custom-hive", $hiveRoot, "install", $templateRoot, "--force")
 
 $results = [System.Collections.Generic.List[object]]::new()
-foreach ($scenario in $Scenarios) {
-    # 心跳：刷新锁文件时间戳，防止长时间运行的 run 被并行进程按 stale 目录清理。
-    [IO.File]::SetLastWriteTimeUtc($lockFile, [DateTime]::UtcNow)
-    $definition = $scenarioMap[$scenario]
-    $definition["Name"] = $scenario
-    $projectName = Get-ScenarioProjectName $scenario
-    $projectRoot = Join-Path $generatedRoot $scenario
-    $newArguments = @("new", "--debug:custom-hive", $hiveRoot, "fullstack-app", "-n", $projectName, "-o", $projectRoot, "--force") + $definition.Arguments
-    Invoke-External "dotnet" $newArguments
-    Assert-GeneratedProject $projectRoot
-    Assert-ScenarioShape $projectRoot $projectName $definition
+try {
+    foreach ($scenario in $Scenarios) {
+        # 心跳：刷新锁文件时间戳，防止长时间运行的 run 被并行进程按 stale 目录清理。
+        [IO.File]::SetLastWriteTimeUtc($lockFile, [DateTime]::UtcNow)
+        $definition = $scenarioMap[$scenario]
+        $definition["Name"] = $scenario
+        $projectName = Get-ScenarioProjectName $scenario
+        $projectRoot = Join-Path $generatedRoot $scenario
+        $newArguments = @("new", "--debug:custom-hive", $hiveRoot, "fullstack-app", "-n", $projectName, "-o", $projectRoot, "--force") + $definition.Arguments
+        Invoke-External "dotnet" $newArguments
+        Assert-GeneratedProject $projectRoot
+        Assert-ScenarioShape $projectRoot $projectName $definition
 
-    $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
-    # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
-    Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
-    Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
+        $solution = Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*.sln" | Select-Object -First 1
+        # --force 重建 project.assets.json；globalPackagesFolder 是本 run 私有目录，不会命中其他 run 的同版本 Leistd 内容。
+        Invoke-External "dotnet" @("restore", $solution.FullName, "--configfile", $nugetConfigPath, "--force")
+        Invoke-External "dotnet" @("build", $solution.FullName, "-c", $Configuration, "--no-restore")
 
-    $runtimeValidated = $false
-    if (-not $SkipRuntime) {
-        Invoke-RuntimeSmoke $projectRoot $Configuration
-        $runtimeValidated = $true
-    }
-
-    $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
-    foreach ($testProject in $testProjects) {
-        Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
-    }
-
-    $frontendValidated = $false
-    $lintValidated = $false
-    $testValidated = $false
-    if (-not $SkipFrontend -and $definition.Frontend) {
-        $frontendRoot = Join-Path $projectRoot "frontend"
-        $env:HUSKY = "0"
-        Invoke-External "npm" @("ci") $frontendRoot
-        Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
-        # healthcheck 末尾会无条件询问"是否升级依赖"，默认 N。
-        # 该 CLI 没有能覆盖这个提示的非交互开关——实测 --interactive=false、--defaults
-        # 与 CI=true 三者都不生效（提示由它自带的提示库发出，不走 Angular schematic 提示）。
-        # 因此显式把 stdin 关掉：拿到 EOF 就取默认值 N，有无 TTY 行为一致，
-        # 不依赖"调用方恰好重定向了 stdin"
-        Invoke-ExternalWithClosedInput "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
-        if ($definition.Lint) {
-            Invoke-External "npm" @("run", "lint") $frontendRoot
-            $lintValidated = $true
+        $runtimeValidated = $false
+        if (-not $SkipRuntime) {
+            Invoke-RuntimeSmoke $projectRoot $Configuration $scenario
+            $runtimeValidated = $true
         }
-        Invoke-External "npm" @("run", "build") $frontendRoot
-        Assert-OptimizedTranslations $frontendRoot
-        $frontendValidated = $true
 
-        # 前端单测（单次）：CI 默认 chromiumHeadless，人工验收可传 -FrontendBrowser chromium 观看有头浏览器。
-        # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含语言切换「先加载再激活」与首帧词条的回归测试。
-        # 先核对"磁盘上的每个 spec 都会被发现"，再真的跑。放在前面是因为它更快（--list-tests 不构建也不执行），
-        # 而且这条不通过时后面那轮绿灯是假的。
-        Assert-EveryFrontendSpecDiscovered $frontendRoot
-        Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
-        $testValidated = $true
-    }
+        $testProjects = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "backend") -Filter "*Tests.csproj" -Recurse)
+        foreach ($testProject in $testProjects) {
+            Invoke-External "dotnet" @("test", $testProject.FullName, "-c", $Configuration, "--no-build")
+        }
 
-    $containerValidated = $false
-    if ($scenario -in $ContainerSmokeScenarios) {
-        # 候选 Framework 包可能尚未发布。只在本轮生成目录注入本地包和 NuGet.Config，
-        # 让镜像验证消费的仍是同一候选源码；交付模板不包含这个临时包源。
-        $containerFeed = Join-Path $projectRoot "backend/.local-feed"
-        New-Item -ItemType Directory -Path $containerFeed -Force | Out-Null
-        Copy-Item -Path (Join-Path $feedRoot "*.nupkg") -Destination $containerFeed
-        $containerNuGetConfig = @'
+        $frontendValidated = $false
+        $lintValidated = $false
+        $testValidated = $false
+        if (-not $SkipFrontend -and $definition.Frontend) {
+            $frontendRoot = Join-Path $projectRoot "frontend"
+            $env:HUSKY = "0"
+            Invoke-External "npm" @("ci") $frontendRoot
+            Invoke-External "npx" @("ng", "g", "@spartan-ng/cli:info", "--json") $frontendRoot
+            # healthcheck 末尾会无条件询问"是否升级依赖"，默认 N。
+            # 该 CLI 没有能覆盖这个提示的非交互开关——实测 --interactive=false、--defaults
+            # 与 CI=true 三者都不生效（提示由它自带的提示库发出，不走 Angular schematic 提示）。
+            # 因此显式把 stdin 关掉：拿到 EOF 就取默认值 N，有无 TTY 行为一致，
+            # 不依赖"调用方恰好重定向了 stdin"
+            Invoke-ExternalWithClosedInput "npx" @("ng", "g", "@spartan-ng/cli:healthcheck") $frontendRoot
+            if ($definition.Lint) {
+                Invoke-External "npm" @("run", "lint") $frontendRoot
+                $lintValidated = $true
+            }
+            Invoke-External "npm" @("run", "build") $frontendRoot
+            Assert-OptimizedTranslations $frontendRoot
+            $frontendValidated = $true
+
+            # 前端单测（单次）：CI 默认 chromiumHeadless，人工验收可传 -FrontendBrowser chromium 观看有头浏览器。
+            # 每个场景都含一条不受本地化裁剪的基础 smoke spec；本地化场景另含语言切换「先加载再激活」与首帧词条的回归测试。
+            # 先核对"磁盘上的每个 spec 都会被发现"，再真的跑。放在前面是因为它更快（--list-tests 不构建也不执行），
+            # 而且这条不通过时后面那轮绿灯是假的。
+            Assert-EveryFrontendSpecDiscovered $frontendRoot
+            Invoke-External "npm" @("test", "--", "--watch=false", "--browsers=$FrontendBrowser") $frontendRoot
+            $testValidated = $true
+        }
+
+        $containerValidated = $false
+        if ($scenario -in $ContainerSmokeScenarios) {
+            # 候选 Framework 包可能尚未发布。只在本轮生成目录注入本地包和 NuGet.Config，
+            # 让镜像验证消费的仍是同一候选源码；交付模板不包含这个临时包源。
+            $containerFeed = Join-Path $projectRoot "backend/.local-feed"
+            New-Item -ItemType Directory -Path $containerFeed -Force | Out-Null
+            Copy-Item -Path (Join-Path $feedRoot "*.nupkg") -Destination $containerFeed
+            $containerNuGetConfig = @'
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
@@ -779,32 +868,36 @@ foreach ($scenario in $Scenarios) {
   </packageSourceMapping>
 </configuration>
 '@
-        [IO.File]::WriteAllText((Join-Path $projectRoot "backend/NuGet.Config"), $containerNuGetConfig)
-        $apiImage = "leistd-template-smoke-api:$runId"
-        $migratorImage = "leistd-template-smoke-migrator:$runId"
-        try {
-            Invoke-External "docker" @("build", "--target", "api", "-t", $apiImage, $projectRoot)
-            Invoke-External "docker" @("build", "--target", "migrator", "-t", $migratorImage, $projectRoot)
-            Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $apiImage, "--info")
-            Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $migratorImage, "--info")
-            $containerValidated = $true
+            [IO.File]::WriteAllText((Join-Path $projectRoot "backend/NuGet.Config"), $containerNuGetConfig)
+            $apiImage = "leistd-template-smoke-api:$runId"
+            $migratorImage = "leistd-template-smoke-migrator:$runId"
+            try {
+                Invoke-External "docker" @("build", "--target", "api", "-t", $apiImage, $projectRoot)
+                Invoke-External "docker" @("build", "--target", "migrator", "-t", $migratorImage, $projectRoot)
+                Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $apiImage, "--info")
+                Invoke-External "docker" @("run", "--rm", "--entrypoint", "dotnet", $migratorImage, "--info")
+                $containerValidated = $true
+            }
+            finally {
+                & docker image rm $apiImage $migratorImage 2>$null | Out-Null
+                $global:LASTEXITCODE = 0
+            }
         }
-        finally {
-            & docker image rm $apiImage $migratorImage 2>$null | Out-Null
-            $global:LASTEXITCODE = 0
-        }
-    }
 
-    $results.Add([PSCustomObject]@{
-        Scenario = $scenario
-        Backend = "pass"
-        Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
-        Lint = if ($lintValidated) { "pass" } else { "skipped" }
-        Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
-        Test = if ($testValidated) { "pass" } else { "skipped" }
-        Container = if ($containerValidated) { "pass" } else { "skipped" }
-        Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
-    })
+        $results.Add([PSCustomObject]@{
+            Scenario = $scenario
+            Backend = "pass"
+            Runtime = if ($runtimeValidated) { "pass" } else { "skipped" }
+            Lint = if ($lintValidated) { "pass" } else { "skipped" }
+            Frontend = if ($frontendValidated) { "pass" } else { "skipped" }
+            Test = if ($testValidated) { "pass" } else { "skipped" }
+            Container = if ($containerValidated) { "pass" } else { "skipped" }
+            Output = [IO.Path]::GetRelativePath($repoRoot, $projectRoot)
+        })
+    }
+}
+finally {
+    Stop-RuntimeDatabase
 }
 
 $results | Format-Table -AutoSize

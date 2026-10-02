@@ -26,7 +26,7 @@ L1 按改动路径选择入口：
 | Dockerfile、部署资产 | `-Scenarios standalone -ContainerSmokeScenarios standalone` | — |
 | CI、矩阵或闸门脚本 | `check-all.ps1` + 被改脚本的自检与夹具 | 影响调度时用一次远端 CI 验收 |
 
-`full` 档在本地只在需要复现合入后失败时执行。未执行的档位与入口须在交付说明里列出。
+模板矩阵与生成项目的集成测试需要 Docker：集成测试用 Testcontainers 起 PostgreSQL，运行时冒烟先迁移再启动 API。`full` 档在本地只在需要复现合入后失败时执行。未执行的档位与入口须在交付说明里列出。
 
 ## 编译器、分析器与静态闸门
 

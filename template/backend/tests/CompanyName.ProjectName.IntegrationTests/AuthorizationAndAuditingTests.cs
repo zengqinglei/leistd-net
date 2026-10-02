@@ -325,8 +325,8 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
     [Fact]
     public async Task Concurrent_initializers_are_serialized_by_the_initialization_lock()
     {
-        // 断言的是"初始化确实在锁内执行"，不是"并发时会崩"：测试宿主是单进程 + InMemory
-        // Provider，InMemory 不强制唯一索引，多实例真正的失败形态在这里复现不出来，
+        // 断言的是"初始化确实在锁内执行"，不是"并发时会崩"：测试宿主是单进程，
+        // 多实例同时初始化的真实竞争在这里复现不出来，
         // 写成"不抛异常即通过"的用例无论有没有锁都会绿，等于没测。
         // 跨进程互斥由部署侧保证——多副本必须配置 Redis，那条路径不在集成测试范围内。
         //
@@ -680,9 +680,12 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
                 inner.Lifetime));
         }));
         using var superAdmin = await ProjectWebApplicationFactory.LoginAsync(host, "admin", ProjectWebApplicationFactory.TestAdminPassword);
-        // 本用例刻意不创建角色授予：存在授予时，授予清理会在工作单元内自行 SaveChanges，
-        // EF InMemory 没有事务，那一步会把删除一并落盘、回滚不了；授予行的回滚只在关系型库的事务里成立
+        // 带上授予：授予清理会在工作单元内先自行 SaveChanges，回滚必须连它一起撤回
         var role = await CreateRoleAsync(superAdmin.Client);
+        var seeded = await superAdmin.Client.PutAsJsonAsync(
+            $"/api/v1/permissions/grants/roles/{role.Id}",
+            new { expectedVersion = 0, permissionNames = new[] { PermissionConstant.Users.Default } });
+        Assert.Equal(HttpStatusCode.OK, seeded.StatusCode);
         var user = await CreateUserAsync(superAdmin.Client, [role.Id]);
         Assert.Equal(HttpStatusCode.OK, (await superAdmin.Client.DeleteAsync($"/api/v1/users/{user.Id}")).StatusCode);
 
@@ -692,6 +695,11 @@ public sealed class AuthorizationAndAuditingTests(ProjectWebApplicationFactory f
         var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
         Assert.True(await db.Roles.AnyAsync(existing => existing.Id == role.Id));
         Assert.True(await db.UserRoles.AnyAsync(userRole => userRole.RoleId == role.Id));
+        var providerKey = role.Id.ToString();
+        Assert.True(await db.Set<PermissionGrantRecord>()
+            .AnyAsync(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey));
+        Assert.True(await db.Set<AuthorizationVersionRecord>()
+            .AnyAsync(x => x.ProviderName == PermissionGrantProviderNames.Role && x.ProviderKey == providerKey));
     }
 
     private sealed class RoleDeletionRecordFails(IOperationRecorder inner) : IOperationRecorder

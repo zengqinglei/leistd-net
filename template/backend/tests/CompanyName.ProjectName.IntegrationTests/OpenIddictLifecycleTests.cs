@@ -17,7 +17,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 using OpenIddict.Core;
-using OpenIddict.EntityFrameworkCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace CompanyName.ProjectName.IntegrationTests;
@@ -181,12 +180,10 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
     [Fact]
     public async Task Pruning_uses_registered_cluster_job_and_keeps_young_or_valid_records()
     {
-        // 测试内存提供程序选择官方逐行实现，仍调用实际管理器和存储。
+        // 走官方的批量清理（ExecuteDelete），与生产一致。批量删除不经过变更跟踪器，
+        // 同一作用域里仍能读到已删的实体，因此清理后换一个作用域读库里的真实状态
         using var host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        {
-            services.Configure<OpenIddictEntityFrameworkCoreOptions>(options => options.DisableBulkOperations = true);
-            services.Configure<OpenIddictCoreOptions>(options => options.DisableEntityCaching = true);
-        }));
+            services.Configure<OpenIddictCoreOptions>(options => options.DisableEntityCaching = true)));
         using var scope = host.Services.CreateScope();
         var tokens = scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
         var authorizations = scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>();
@@ -210,14 +207,25 @@ public sealed class OpenIddictLifecycleTests(ProjectWebApplicationFactory factor
         var definition = scope.ServiceProvider.GetServices<RecurringJobDefinition>().Single(job => job.Name == "auth.openiddict.prune");
         Assert.Equal(RecurringJobScope.Cluster, definition.Scope);
         var job = (IRecurringJob)scope.ServiceProvider.GetRequiredService(definition.JobType);
+        var oldExpiredId = (await tokens.GetIdAsync(oldExpired))!;
+        var youngExpiredId = (await tokens.GetIdAsync(youngExpired))!;
+        var oldValidId = (await tokens.GetIdAsync(oldValid))!;
+        var oldRevokedId = (await authorizations.GetIdAsync(oldRevoked))!;
+        var youngRevokedId = (await authorizations.GetIdAsync(youngRevoked))!;
+        var oldPermanentId = (await authorizations.GetIdAsync(oldPermanent))!;
+        var oldAdHocId = (await authorizations.GetIdAsync(oldAdHoc))!;
         await job.ExecuteAsync(new RecurringJobContext(definition.Name, now), default);
-        Assert.Null(await tokens.FindByIdAsync((await tokens.GetIdAsync(oldExpired))!));
-        Assert.Null(await authorizations.FindByIdAsync((await authorizations.GetIdAsync(oldRevoked))!));
-        Assert.Null(await authorizations.FindByIdAsync((await authorizations.GetIdAsync(oldAdHoc))!));
-        Assert.NotNull(await tokens.FindByIdAsync((await tokens.GetIdAsync(youngExpired))!));
-        Assert.NotNull(await tokens.FindByIdAsync((await tokens.GetIdAsync(oldValid))!));
-        Assert.NotNull(await authorizations.FindByIdAsync((await authorizations.GetIdAsync(youngRevoked))!));
-        Assert.NotNull(await authorizations.FindByIdAsync((await authorizations.GetIdAsync(oldPermanent))!));
+
+        using var verify = host.Services.CreateScope();
+        var storedTokens = verify.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
+        var storedAuthorizations = verify.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>();
+        Assert.Null(await storedTokens.FindByIdAsync(oldExpiredId));
+        Assert.Null(await storedAuthorizations.FindByIdAsync(oldRevokedId));
+        Assert.Null(await storedAuthorizations.FindByIdAsync(oldAdHocId));
+        Assert.NotNull(await storedTokens.FindByIdAsync(youngExpiredId));
+        Assert.NotNull(await storedTokens.FindByIdAsync(oldValidId));
+        Assert.NotNull(await storedAuthorizations.FindByIdAsync(youngRevokedId));
+        Assert.NotNull(await storedAuthorizations.FindByIdAsync(oldPermanentId));
     }
 }
 #endif

@@ -12,6 +12,8 @@ using CompanyName.ProjectName.Application.Tenants.Dtos;
 using CompanyName.ProjectName.Domain.Users.Constants;
 using CompanyName.ProjectName.Domain.Users.Entities;
 using CompanyName.ProjectName.Infrastructure.Persistence;
+using CompanyName.ProjectName.Infrastructure.Persistence.EntityConfigurations;
+using Npgsql;
 using Leistd.Authorization;
 using Leistd.Authorization.Errors;
 using Leistd.Authorization.EntityFrameworkCore;
@@ -217,9 +219,8 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
     /// <summary>领域服务拒绝在租户上下文里造超管</summary>
     /// <remarks>
-    /// 这一条只覆盖领域服务这道关。数据库那道兜底（检查约束 <c>CK_User_SuperAdminIsHostOnly</c>，
-    /// 挡的是数据修复脚本、批量导入与直接 SQL）用的是真实 PostgreSQL 才生效的 DDL，
-    /// 本套用例跑在内存提供程序上，验证它的地方是 <c>test-template-postgresql-e2e.ps1</c>。
+    /// 这一条只覆盖领域服务这道关；数据库那道兜底见
+    /// <see cref="Database_refuses_to_move_a_super_admin_into_a_tenant"/>。
     /// </remarks>
     [Fact]
     public async Task Domain_service_refuses_to_create_a_super_admin_in_a_tenant()
@@ -244,6 +245,28 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
 
             Assert.Contains(tenantId.ToString(), error.Message, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>数据库拒绝把超管挪进租户</summary>
+    /// <remarks>
+    /// 检查约束 <c>CK_User_SuperAdminIsHostOnly</c> 挡的是不经领域入口的写入：数据修复脚本、批量导入、直接 SQL。
+    /// 用宿主种子产出的真实超管，不另造行。
+    /// </remarks>
+    [Fact]
+    public async Task Database_refuses_to_move_a_super_admin_into_a_tenant()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();
+        // 确有宿主超管行，否则下面的 UPDATE 命中 0 行，会假装"约束生效"
+        Assert.True(await db.Set<User>().IgnoreQueryFilters().AnyAsync(user => user.IsSuperAdmin && user.TenantId == null));
+
+        var users = db.Model.FindEntityType(typeof(User))!;
+        var sql = $"UPDATE \"{users.GetSchema()}\".\"{users.GetTableName()}\" " +
+            $"SET \"{nameof(User.TenantId)}\" = {{0}} WHERE \"{nameof(User.IsSuperAdmin)}\"";
+        var error = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync(sql, Guid.NewGuid()));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+        Assert.Equal(UserCheckConstraints.SuperAdminIsHostOnly, error.ConstraintName);
     }
 
     /// <summary>
@@ -1001,9 +1024,7 @@ public sealed class TenancyTests : IClassFixture<ProjectWebApplicationFactory>, 
         var failedTenantId = FailAfterRolesTenantSeeder.LastTenantId;
         Assert.NotNull(failedTenantId);
 
-        // EF InMemory 不提供真实事务，不用它证明授权记录回滚；
-        // 这里只回归补偿后租户主体不可访问。事务原子性要在真实关系型数据库上验收，
-        // 属于本项目自己的集成/端到端环境，不由这个用例承担。
+        // 播种在独立工作单元里执行，失败时它回滚，补偿再按租户清理一遍；两步之后租户下不得残留主体。
         using (var scope = brokenHost.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<MyProjectDbContext>();

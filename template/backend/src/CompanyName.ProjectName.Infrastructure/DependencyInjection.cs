@@ -25,7 +25,9 @@ using Leistd.MultiTenancy.ServiceClient;
 using Leistd.ServiceClient.OAuth;
 using Leistd.ServiceClient.OAuth.Options;
 #endif
+#if (LocalIdentity)
 using CompanyName.ProjectName.Infrastructure.TenantConnections;
+#endif
 #if (IncludeNotifications)
 using Leistd.Notifications.EntityFrameworkCore;
 #endif
@@ -147,56 +149,34 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // 所有上下文共用内存库命名和事务警告策略。
-
-        void UseInMemoryFallback(DbContextOptionsBuilder options, string? suffix)
-        {
-            var databaseName = configuration["Database:InMemoryName"];
-            var baseName = string.IsNullOrWhiteSpace(databaseName) ? "MyProject" : databaseName;
-            options.UseInMemoryDatabase(suffix is null ? baseName : baseName + suffix);
-            options.ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning));
-        }
+        // 缺连接串在首次创建上下文时失败并指明键名。API 在接流量之前校验迁移（会创建全部上下文），
+        // 因此这个错误发生在启动期，不会变成每个请求一次的 500。
+        string RequireConnection(string? connectionString) =>
+            string.IsNullOrWhiteSpace(connectionString)
+                ? throw new InvalidOperationException(
+                    $"No database is configured. Set ConnectionStrings:{ConnectionStringNames.Default}; " +
+                    "for local development start deploy/docker-compose.dev.yml (appsettings.Development.json points at it).")
+                : connectionString;
 
         services.AddMemoryCache();
-        // 连接串优先：配了 ConnectionStrings:Default 就走真实数据库，Database:InMemoryName 只在没有连接串时生效。
-        // 与下面各 DbContext 的选择口径一致；开发配置里的内存库名因此不会挡住本机用 user-secrets 配的数据库。
-        var useInMemoryDatabase =
-            string.IsNullOrWhiteSpace(configuration.GetConnectionString(ConnectionStringNames.Default))
-            && !string.IsNullOrWhiteSpace(configuration["Database:InMemoryName"]);
-
-        if (!useInMemoryDatabase)
-        {
-            // 真实数据库模式必须有共享库目标；在最终配置合并后执行启动校验。
-            services.AddOptions<TenantConnectionResolutionOptions>()
-                .Configure<IConfiguration>((options, config) =>
-                {
-                    options.DefaultConnectionString = config.GetConnectionString(ConnectionStringNames.Default);
-                    options.InMemoryName = config["Database:InMemoryName"];
-                })
-                .Validate(
-                    options => options.HasDatabaseTarget,
-                    "No database target is configured. Set ConnectionStrings:Default, " +
-                    "or set Database:InMemoryName to run against an in-memory store.")
-                .ValidateOnStart();
 
 #if (!LocalIdentity)
-            // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（默认 10 分钟，
-            // 它决定租户改路由前的排空等待，可按环境覆盖）；同租户并发回源合并为一次。
-            // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
-            services.AddRemoteTenantConnectionResolution();
-            var identityClient = services.AddRemoteTenantConnectionStore("Identity", configuration);
-            if (configuration.GetSection(ServiceAuthenticationOptions.SectionName).Exists())
-            {
-                services.AddServiceAuthentication();
-                identityClient.AddClientCredentials();
-            }
-            identityClient.AddStandardResilienceHandler();
-#else
-            // 本地解析：直接读本服务的控制库；控制库固定在宿主连接上，不参与租户路由。
-            services.AddLocalTenantConnectionResolution<IdentityControlDbContext>(
-                options => options.ControlPlaneConnectionStringName = IdentityControlDbContext.ConnectionStringName);
-#endif
+        // 远端解析：向 Identity 回源租户连接配置，按 TenantRouting:CacheLifetime 缓存（默认 10 分钟，
+        // 它决定租户改路由前的排空等待，可按环境覆盖）；同租户并发回源合并为一次。
+        // 远端存储由框架提供，回源 Identity 经 MapTenantConnections 暴露的机器端点（配置节 Leistd:ServiceClients:Identity）。
+        services.AddRemoteTenantConnectionResolution();
+        var identityClient = services.AddRemoteTenantConnectionStore("Identity", configuration);
+        if (configuration.GetSection(ServiceAuthenticationOptions.SectionName).Exists())
+        {
+            services.AddServiceAuthentication();
+            identityClient.AddClientCredentials();
         }
+        identityClient.AddStandardResilienceHandler();
+#else
+        // 本地解析：直接读本服务的控制库；控制库固定在宿主连接上，不参与租户路由。
+        services.AddLocalTenantConnectionResolution<IdentityControlDbContext>(
+            options => options.ControlPlaneConnectionStringName = IdentityControlDbContext.ConnectionStringName);
+#endif
 
 #if (LocalIdentity)
         services.AddDbContext<IdentityControlDbContext>((sp, options) =>
@@ -204,18 +184,9 @@ public static class DependencyInjection
             // 控制面不继承 BaseDbContext，必须显式挂载修改和删除审计拦截器。
             options.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
 
-            var connectionString = configuration.GetControlPlaneConnectionString();
-            if (!string.IsNullOrWhiteSpace(connectionString))
-            {
-                options.UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable(
-                        DatabaseSchema.ControlMigrationsHistoryTable, DatabaseSchema.Name));
-            }
-            else
-            {
-                UseInMemoryFallback(options, "-control");
-            }
-
+            options.UseNpgsql(RequireConnection(configuration.GetControlPlaneConnectionString()), npgsql =>
+                npgsql.MigrationsHistoryTable(
+                    DatabaseSchema.ControlMigrationsHistoryTable, DatabaseSchema.Name));
         });
 #endif
 
@@ -224,17 +195,9 @@ public static class DependencyInjection
         // 动态注入的 OIDC 实体不在快照中，因此只在此处抑制模型差异警告。
         services.AddDbContext<OpenIddictDbContext>(options =>
         {
-            var connectionString = configuration.GetControlPlaneConnectionString();
-            if (!string.IsNullOrWhiteSpace(connectionString))
-            {
-                options.UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable(
-                        OpenIddictDbContext.MigrationsHistoryTable, DatabaseSchema.Name));
-            }
-            else
-            {
-                UseInMemoryFallback(options, "-openiddict");
-            }
+            options.UseNpgsql(RequireConnection(configuration.GetControlPlaneConnectionString()), npgsql =>
+                npgsql.MigrationsHistoryTable(
+                    OpenIddictDbContext.MigrationsHistoryTable, DatabaseSchema.Name));
 
             options.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
             options.UseOpenIddict();
@@ -244,28 +207,23 @@ public static class DependencyInjection
         services.AddDbContext<MyProjectDbContext>(options =>
         {
             var creationContext = DbContextCreationContext.Current;
-            var connectionString = creationContext?.ConnectionString ?? configuration.GetConnectionString(ConnectionStringNames.Default);
-            if (!string.IsNullOrEmpty(connectionString))
+            void ConfigureNpgsql(NpgsqlDbContextOptionsBuilder npgsql)
             {
-                void ConfigureNpgsql(NpgsqlDbContextOptionsBuilder npgsql)
-                {
-                    npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-                    npgsql.MigrationsHistoryTable(
-                        DatabaseSchema.BusinessMigrationsHistoryTable, DatabaseSchema.Name);
-                }
+                npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                npgsql.MigrationsHistoryTable(
+                    DatabaseSchema.BusinessMigrationsHistoryTable, DatabaseSchema.Name);
+            }
 
-                if (creationContext?.ExistingConnection is NpgsqlConnection existingConnection)
-                {
-                    options.UseNpgsql(existingConnection, ConfigureNpgsql);
-                }
-                else
-                {
-                    options.UseNpgsql(connectionString, ConfigureNpgsql);
-                }
+            if (creationContext?.ExistingConnection is NpgsqlConnection existingConnection)
+            {
+                options.UseNpgsql(existingConnection, ConfigureNpgsql);
             }
             else
             {
-                UseInMemoryFallback(options, suffix: null);
+                options.UseNpgsql(
+                    RequireConnection(creationContext?.ConnectionString
+                        ?? configuration.GetConnectionString(ConnectionStringNames.Default)),
+                    ConfigureNpgsql);
             }
 
             // SplitQuery 已处理多集合查询；模型与迁移不一致仍必须失败。

@@ -689,13 +689,8 @@ public class UserAppService(
     {
         await userSessionDomainService.RevokeAllAsync(userId, keepSessionId, cancellationToken);
 #if (OpenIddictServer)
-        // 逐个撤销而不是 RevokeBySubjectAsync：后者在 EF 存储里是批量 ExecuteUpdate，只有关系型提供程序支持，
-        // 而未配连接串时本模板跑在 EF InMemory 上。先取全再逐个改，也避免边读边写占着同一个连接
-        var tokens = await tokenManager.FindBySubjectAsync(userId.ToString(), cancellationToken).ToListAsync(cancellationToken);
-        foreach (var token in tokens)
-        {
-            await tokenManager.TryRevokeAsync(token, cancellationToken);
-        }
+        // 官方批量撤销：EF 存储里是一条 ExecuteUpdate，不必先把该主体的令牌全部读进内存
+        await tokenManager.RevokeBySubjectAsync(userId.ToString(), cancellationToken);
 #endif
     }
 #endif

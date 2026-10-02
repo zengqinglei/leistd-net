@@ -8,7 +8,7 @@ UnitTests 验证隔离规则和边界、注册生命周期/幂等；IntegrationT
 
 测试宿主把 `PasswordHash:IterationCount` 调到 1000：每个宿主都要播种管理员、每次登录都要校验口令，生产工作因子曾占集成测试一半以上的 CPU。默认值与密文格式由 `PasswordHashingTests` 按生产默认值钉住；PostgreSQL 与 OIDC 端到端使用生产默认值。宿主数量不靠合并测试类来压：多个类的用例依赖空库（精确用户名、全库计数、租户设置），共享宿主须改写断言，收益不抵风险。
 
-模板的内存库 fixture 只认证它实际覆盖的应用组合、状态与跟踪行为；唯一约束、SQL 翻译、事务、schema、migration 执行及 Shared/Dedicated 物理隔离必须有关系型或真实 PostgreSQL 证据。设计时 Npgsql 模型/快照比对不能替代实际 migration。真实库闭环已覆盖某个路由断言，不代表全部内存 fixture 断言都能删除；逐项接替仍需变异证据。不能为了测试新建只有测试调用的生产 Provider 选择抽象。
+集成测试与矩阵运行时冒烟都跑在真实 PostgreSQL 上（选型依据见[模板开发规范 §9](./development-guide.md#9-测试与开发只用-postgresql为什么不用-inmemory-或-sqlite)）：集成测试由 Testcontainers 起容器、迁移一次模板库后每个宿主克隆一份；冒烟在本次矩阵运行共用的容器里为每个场景建库，先用该场景构建出的 `DbMigrator --apply` 迁移（Resource 用 `MigrationTarget` 单目标，不回源 Identity），再启动 API。矩阵与集成测试因此都需要本机 Docker 引擎（数据库端口绑定在 127.0.0.1，远端上下文不适用），CI 的 ubuntu runner 自带。设计时快照比对仍保留在单元测试里，它不需要 Docker、几毫秒给出结论。PostgreSQL 端到端承担跨进程与多库拆分；真实库集成测试覆盖了某个路由断言，不代表端到端里的对应断言都能删除，逐项接替仍需变异证据。不能为了测试新建只有测试调用的生产 Provider 选择抽象。
 
 条件 using 守卫覆盖 24 个符号赋值，生成矩阵覆盖登记场景，范围不同。默认前端保留真实 Chromium、隔离与完整 spec 发现；未经等价反例验证，不关闭隔离、改 jsdom 或删除发现/翻译/形态断言来提速。新增场景要验证特性组合，不能只测 Identity/Resource 正常路径。
 
