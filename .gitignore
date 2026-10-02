@@ -129,7 +129,6 @@ Desktop.ini
 .DS_Store
 
 # ---------- AI CLI local adapters ----------
-.claude/skills/
 .claude/settings.local.json
 skills-lock.json
 .superpowers/
