@@ -108,6 +108,9 @@ public sealed class ProjectWebApplicationFactory : WebApplicationFactory<Program
                 ["OAuth:DisableHttpsRequirement"] = "true",
                 ["DefaultAdmin:Username"] = "admin",
                 ["DefaultAdmin:Password"] = TestAdminPassword,
+                // 每个宿主都要播种管理员、每次登录都要校验口令；生产工作因子让这两步占去集成测试的大半 CPU。
+                // 哈希格式与默认值的契约由 PasswordHashingTests 按生产默认值验证
+                ["PasswordHash:IterationCount"] = "1000",
 #if (LocalIdentity)
                 // 固定值即可：测试要的是确定性，不是保密性
                 ["VerificationCodes:Key"] = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",

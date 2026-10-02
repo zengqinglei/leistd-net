@@ -106,6 +106,10 @@ public static class DependencyInjection
             services.AddMemoryLocalLock();
         }
 
+        services.AddOptions<PasswordHashOptions>()
+            .Bind(configuration.GetSection(PasswordHashOptions.SectionName))
+            .Validate(options => options.IterationCount > 0, $"{PasswordHashOptions.SectionName}:IterationCount must be greater than 0.")
+            .ValidateOnStart();
         services.AddTransient<IPasswordHasher, PasswordHasher>();
 #if (LocalIdentity)
         // 验证码摘要与口令哈希具有不同的密钥和成本契约。

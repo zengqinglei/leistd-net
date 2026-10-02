@@ -15,12 +15,22 @@
 
 修改共享组件、公共契约或基础设施时扩大回归范围；局部低风险改动先运行最小相关测试。
 
+按时机分层执行，不在每次改动后跑全量：
+
+| 时机 | 目标耗时 | 运行 |
+| --- | --- | --- |
+| 编辑中 | ≤ 1 分钟 | 受影响的单个测试类或 spec（见 §2、§3 的收窄命令） |
+| 提交前 | 几分钟 | 受影响测试项目全量、`npm run lint`（暂存文件另由提交钩子检查）、改动涉及的构建 |
+| CI | 由流水线定 | 全部测试、lint 与构建 |
+
 ## 2. 后端
 
 从 `backend/` 的解决方案或目标测试项目执行：
 
 ```bash
-dotnet test
+dotnet test                                                       # 全部
+dotnet test tests/CompanyName.ProjectName.UnitTests               # 只跑单元测试，秒级
+dotnet test tests/CompanyName.ProjectName.IntegrationTests --filter "FullyQualifiedName~<测试类名>"
 ```
 
 ### 2.1 两个测试项目，分工由成本决定
@@ -44,6 +54,11 @@ backend/tests/
 - 集成测试每类一个 `IClassFixture<ProjectWebApplicationFactory>`，**不要每个用例建宿主**。
 - 需要改配置的用例用 `WithWebHostBuilder` 派生宿主，但**同类配置变体应当归组复用**，
   而不是每个用例一个——一个测试类里起七八个派生宿主，这个类就会独占整套测试的大部分时间。
+  前提是用例不依赖空库：断言精确用户名、全表计数或修改租户级设置的用例共享宿主会互相干扰，
+  这类用例保留独立宿主。
+- 宿主里与被测行为无关的固定成本要压低。`ProjectWebApplicationFactory` 把口令哈希的工作因子
+  （`PasswordHash:IterationCount`）调到 1000：每个宿主都要播种管理员、每次登录都要校验口令，
+  生产默认值会让这两步占去集成测试一半以上的 CPU。默认值本身由 `PasswordHashingTests` 钉住。
 
 ### 2.2 通用要求
 
@@ -62,7 +77,8 @@ backend/tests/
 从 `frontend/` 使用项目已声明的脚本：
 
 ```bash
-npm test
+npm test                                            # 全部 spec
+npm test -- --include src/app/core                  # 只跑某个目录或文件
 npm run lint
 npm run build
 ```

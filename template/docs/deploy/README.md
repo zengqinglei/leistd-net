@@ -7,6 +7,8 @@
 各环境共用同一套配置键，只换值的来源。浏览器页面与所属 API 必须同源，支持同镜像托管，也支持分进程经部署代理统一外部源。认证导航、`/api/**` 协议回调与前端回跳都以该外部源为准；独立跨源 API 地址不属于模板浏览器认证的部署契约。`API_GATEWAY` 构建参数与 `environment.api.gateway` 保持空值，以相对路径访问同源 API；其他服务通过同源微服务路由前缀访问。
 
 会话 Cookie 默认 `SameSite=Lax`。外部 OAuth correlation 与 OIDC nonce Cookie 保持官方 `SameSite=None`、`Secure=Always`，协议回调须 HTTPS。第三方站点以顶层 POST 进入授权或退出端点时，若需要附带已有会话，应评估 `SessionCookie__SameSite=None` 与对应请求来源防护；模板未启用 antiforgery。该设置不会补齐跨源浏览器认证导航。
+
+口令哈希默认 PBKDF2-HMAC-SHA256 600,000 次迭代（OWASP 现行建议）。硬件基准表明可以承受更高成本时用 `PasswordHash__IterationCount` 调高；新值只作用于此后设置或修改的口令，存量密文按自身记录的迭代数校验，照常可用。
 <!--#if (OpenIddictServer)-->
 
 多系统退出不会自动撤销已经签发的下游令牌。需要即时联动时须实现按已验证令牌 `sid` 查询会话或 OIDC back-channel logout，模板没有这些端点。
