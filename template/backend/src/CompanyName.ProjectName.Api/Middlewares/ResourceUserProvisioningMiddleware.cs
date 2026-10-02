@@ -29,7 +29,7 @@ namespace CompanyName.ProjectName.Api.Middlewares;
 /// <list type="bullet">
 /// <item><description><b>权限授予可以先落。</b><c>PermissionGrantRecord</c> 只存
 /// <c>ProviderName</c> + <c>ProviderKey</c> 两个字符串，对 <c>Users</c> 没有外键，
-/// 因此写一条 <c>("U", sub)</c> 的授予不需要用户行先存在；等这个人第一次带令牌来，
+/// 因此写一条 <c>(PermissionGrantProviderNames.User, sub)</c> 的授予不需要用户行先存在；等这个人第一次带令牌来，
 /// 投影建行，授予立刻生效。</description></item>
 /// <item><description><b>角色授予不行。</b><c>UserRole.UserId</c> 对 <c>Users</c> 有外键，
 /// 用户行不存在时插入直接违反外键。要给角色，只能等投影之后。</description></item>

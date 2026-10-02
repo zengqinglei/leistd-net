@@ -277,10 +277,27 @@ function Wait-BrowserElement([string]$Selector) {
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
     throw "浏览器元素未就绪：$Selector。"
 }
+# 页面刚启动时 Angular 可能仍在替换节点，点击落到被换下的元素上会被静默丢弃（实测偶发）。
+# 点击后确认地址确实离开当前页；没离开才重试，不对真实断言放宽。
+function Invoke-BrowserNavigationClick([string]$Role, [string]$Name) {
+    $from = (Invoke-Browser @('get','url')).url
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Invoke-Browser @('find','role',$Role,'click','--name',$Name) | Out-Null
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(5)
+        do {
+            if ((Invoke-Browser @('get','url')).url -ne $from) {
+                if ($attempt -gt 1) { [IO.File]::AppendAllText((Join-Path $browserEvidence 'click-retries.log'), "$Role $Name attempt=$attempt`n", $utf8) }
+                return
+            }
+            Start-Sleep -Milliseconds 200
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+    }
+}
+
 function Start-BrowserResource {
     Invoke-Browser @('open', $urls.orders) | Out-Null
     Wait-BrowserElement 'a[href="/workspace"]'
-    Invoke-Browser @('find','role','link','click','--name','Sign In') | Out-Null
+    Invoke-BrowserNavigationClick 'link' 'Sign In'
     # Resource 首页的 Sign In 指向受保护工作台，authGuard 直接发起后端 challenge。
     Wait-BrowserUrl ($urls.idp + '/auth/login*')
 }
@@ -428,7 +445,7 @@ function Invoke-BrowserScenarios {
             $expectedBrowserAuthorizes[$provider] = Invoke-BrowserJs '(new URL(location.href)).searchParams.get("returnUrl")'
             Assert-Value "$provider-authorize-return-present" $true ([bool]$expectedBrowserAuthorizes[$provider])
             Wait-BrowserButton $(if ($provider -eq 'google') { 'Google' } else { 'GitHub' })
-            Invoke-Browser @('find','role','button','click','--name',$(if ($provider -eq 'google') { 'Google' } else { 'GitHub' })) | Out-Null
+            Invoke-BrowserNavigationClick 'button' $(if ($provider -eq 'google') { 'Google' } else { 'GitHub' })
             Wait-BrowserUrl ($urls.idp + "/api/e2e/provider/$provider/authorize*")
             Invoke-Browser @('find','role','link','click','--name','Approve sign in','--exact') | Out-Null
             Wait-BrowserUrl ($urls.orders + '/workspace*')

@@ -9,6 +9,8 @@
     默认不等待真实十分钟过期；-IncludeExpiryWait 执行完整撤销到期边界。
     -IncludeBrowserScenarios 追加有头浏览器 S1/S9/S11 与官方外部登录协议闭环。
     -BrowserOnly 只运行浏览器场景，不重复 HTTP 场景；另需 Node.js、npm 与 agent-browser。
+    -IncludeMultiTenantScenarios 在浏览器场景后追加多租户验收 MT0–MT5（隐含浏览器场景）：
+    租户行级/库级隔离、Resource 本地授权、委托调用的租户传递、两个 Resource 单点登录、退出与租户停用。
 .PARAMETER DockerContext
     显式 Docker 上下文；其次使用 DOCKER_CONTEXT。未指定时本机优先 windows/orbstack，
     Linux 使用当前上下文，并可回落 default。不切换全局上下文。
@@ -21,10 +23,11 @@ param(
     [string]$DockerContext,
     [switch]$IncludeExpiryWait,
     [switch]$IncludeBrowserScenarios,
-    [switch]$BrowserOnly
+    [switch]$BrowserOnly,
+    [switch]$IncludeMultiTenantScenarios
 )
 
-$IncludeBrowserScenarios = $IncludeBrowserScenarios -or $BrowserOnly
+$IncludeBrowserScenarios = $IncludeBrowserScenarios -or $BrowserOnly -or $IncludeMultiTenantScenarios
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -354,9 +357,12 @@ function Get-CodeToken([Net.Http.HttpClient]$Session, [string]$Scope, [string]$C
     $form.code_verifier = $verifier
     $data = (Assert-Http "code-exchange" 200 ($urls.idp + "/connect/token") -Method POST -Body (ConvertTo-Form $form)).Data
     Assert-Value "spa-no-refresh-token" $false $data.ContainsKey("refresh_token")
-    Assert-Value "access-token-lifetime" $true ($data.expires_in -ge 599 -and $data.expires_in -le 600)
+    # 浏览器阶段把签发方的访问令牌缩短为真实可等待的时长，期望值跟随当前配置。
+    $configured = $services.idp.Environment
+    $lifetime = if ($configured.ContainsKey("E2E__BrowserAccessTokenSeconds")) { [int]$configured["E2E__BrowserAccessTokenSeconds"] } else { 600 }
+    Assert-Value "access-token-lifetime" $true ($data.expires_in -ge ($lifetime - 1) -and $data.expires_in -le $lifetime)
     $claims = Read-TokenClaims $data.access_token
-    Assert-Value "jwt-exp-minus-iat" 600 ($claims.exp - $claims.iat)
+    Assert-Value "jwt-exp-minus-iat" $lifetime ($claims.exp - $claims.iat)
     return $data.access_token
 }
 
@@ -737,7 +743,8 @@ function Initialize-Environment {
             $environment.Leistd__ServiceAuth__Authority = $urls.idp
             $environment.TenantRouting__CacheLifetime = "00:00:01"
         }
-        if ($IncludeBrowserScenarios -and $name -in @("idp", "orders")) { Build-BrowserFrontend $name $generated $apiDirectory }
+        $frontends = if ($IncludeMultiTenantScenarios) { @("idp", "orders", "billing") } else { @("idp", "orders") }
+        if ($IncludeBrowserScenarios -and $name -in $frontends) { Build-BrowserFrontend $name $generated $apiDirectory }
         $services[$name] = @{
             Root = $generated; Environment = $environment
             Api = Join-Path $apiDirectory "bin/$Configuration/net10.0/E2E.$title.Api.dll"
@@ -1115,6 +1122,7 @@ function Invoke-Scenario([string]$Name, [scriptblock]$Action) {
 # 共用矩阵事实；浏览器辅助文件只被本入口加载，不另建场景生成清单。
 . (Join-Path $PSScriptRoot "template-matrix-scenarios.ps1")
 if ($IncludeBrowserScenarios) { . (Join-Path $PSScriptRoot "test-template-oidc-browser.ps1") }
+if ($IncludeMultiTenantScenarios) { . (Join-Path $PSScriptRoot "test-template-oidc-multitenant.ps1") }
 $postgresPassword = New-RandomValue "Pg!1"
 $adminPassword = New-RandomValue "Adm!1"
 $tenantPassword = New-RandomValue "Tnt!1"
@@ -1139,6 +1147,7 @@ try {
     Invoke-Scenario "S7" { Test-S7 }
     }
     if ($IncludeBrowserScenarios) { Invoke-BrowserScenarios }
+    if ($IncludeMultiTenantScenarios) { Invoke-MultiTenantScenarios }
 }
 catch {
     $results.Add(@{ scenario = "setup"; status = "fail"; error = $_.Exception.Message })
