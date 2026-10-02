@@ -121,7 +121,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "standalone-external-login" = @{
-        Shards = @{ full = 2; pr = 1 }
+        Shards = @{ full = 1; pr = 1 }
         Arguments = @("--service-role", "Standalone", "--include-external-login"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Controllers/ExternalAuthController.cs", "frontend/src/app/features/account/components/external-auth-callback")
         Absent = @("backend/src/{name}.Api/Controllers/ConnectController.cs", "backend/src/{name}.Domain/Auth/Options/OAuthOptions.cs")
@@ -144,7 +144,7 @@ $scenarioMap = [ordered]@{
     # 曾漏过的实例：ExternalAuthController 的 InvalidState 工厂在「外部登录 + 本地化」
     # 同时开启时才编译失败（只开外部登录时 WithCode 那行被裁掉，只开本地化时整个文件被裁掉）。
     "identity-all-features" = @{
-        Shards = @{ full = 2; pr = 1 }
+        Shards = @{ full = 2; pr = 2 }
         Arguments = @("--include-notifications","--include-external-login","--include-localization")
         Frontend = $true; Lint = $true
         Present = @(
@@ -160,7 +160,7 @@ $scenarioMap = [ordered]@{
         ReadmeExcludes = @()
     }
     "resource-localization" = @{
-        Shards = @{ full = 1; pr = 2 }
+        Shards = @{ full = 1; pr = 1 }
         Arguments = @("--service-role","Resource","--include-localization"); Frontend = $true; Lint = $true
         Present = @("backend/src/{name}.Api/Resources/en.json", "frontend/public/i18n/en.json", "frontend/src/app/core/services/language-service.ts")
         Absent = @("backend/src/{name}.Api/Controllers/AuthController.cs", "frontend/src/app/features/account")
