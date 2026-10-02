@@ -126,7 +126,7 @@ BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/error
 2. 在本地回写 `VERSION`、同步模板，创建 `chore: 发布 vX.Y.Z [skip ci]` 提交和 tag；
 3. 打包并隔离消费最终版本，随后经 Trusted Publishing 推 nuget.org；
 4. 包源写入后立即推送 tag 和版本提交，记录已发布产物；
-5. 等待目标包源可还原精确版本和全部包，验证通过后创建 GitHub Release（自动生成 release notes）。
+5. 推送成功后直接创建 GitHub Release（自动生成 release notes）。推送接口返回 201/202 即表示已接收，`dotnet nuget push` 据此以退出码判定；nuget.org 随后异步校验并建索引（官方说明通常 15 分钟内），校验失败由 nuget.org 邮件通知所有者，流水线不等待包可见。包内容与依赖在推送前已用同一批 `.nupkg` 隔离消费验证。
 
 机制要点：
 - 触发发版的变更：`VERSION`、**`framework/` 源码**（框架内非 docs 的 `.md` 除外）、或 **`framework/docs/` 组件文档**（文档随包分发，故文档更新也发一版送达）。
@@ -136,7 +136,7 @@ BREAKING CHANGE: 失败响应的 message/details 改为标准字段 detail/error
 
 ### 部分发布恢复
 
-失败时先核对目标包源中已发布和缺失的包、tag 指向、`VERSION` 回写提交及 GitHub Release。tag 记录已发布版本，不能因消费验证失败而删除后复用版本号。只从原候选产物补齐缺失包；候选或产物改变时使用新版本并说明旧版本状态。恢复后从目标包源还原全部精确版本，并补齐缺失的 Release。不要用 `--skip-duplicate` 掩盖不同产物。
+失败时先核对目标包源中已发布和缺失的包、tag 指向、`VERSION` 回写提交及 GitHub Release。tag 记录已发布版本，不能因发布后发现的问题而删除后复用版本号。只从原候选产物补齐缺失包；候选或产物改变时使用新版本并说明旧版本状态。恢复后手工确认目标包源能还原全部精确版本，并补齐缺失的 Release。不要用 `--skip-duplicate` 掩盖不同产物。
 
 ## 破坏性变更怎么让下游知道
 

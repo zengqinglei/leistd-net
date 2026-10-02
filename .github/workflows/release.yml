@@ -427,20 +427,6 @@ jobs:
           git push origin '${{ steps.ver.outputs.tag }}'
           if ($LASTEXITCODE -ne 0) { throw '预发布 tag 推送失败；检查包源与远端 tag 后恢复' }
 
-      - name: 从目标包源消费精确版本
-        shell: pwsh
-        env:
-          PACKAGE_SOURCE_TOKEN: ${{ steps.ch.outputs.channel == 'nightly' && secrets.GITHUB_TOKEN || '' }}
-        run: |
-          if ('${{ steps.ch.outputs.channel }}' -eq 'nightly') {
-            pwsh scripts/test-published-package.ps1 -Version '${{ steps.ver.outputs.version }}' `
-              -Source 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json' `
-              -Username '${{ github.actor }}' -Token $env:PACKAGE_SOURCE_TOKEN -MaxWaitMinutes 30
-          } else {
-            pwsh scripts/test-published-package.ps1 -Version '${{ steps.ver.outputs.version }}' `
-              -Source 'https://api.nuget.org/v3/index.json' -MaxWaitMinutes 30
-          }
-
       - name: 创建 GitHub Release（stable）
         if: steps.ch.outputs.channel == 'stable'
         uses: softprops/action-gh-release@v2
