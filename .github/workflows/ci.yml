@@ -128,7 +128,8 @@ jobs:
         id: matrix
         shell: pwsh
         run: |
-          $containerArgs = if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { @('-ContainerSmoke') } else { @() }
+          # @(...) 包住整个 if：单元素数组经 if 输出会展开成字符串，@ 展开字符串会把它拆成单个字符
+          $containerArgs = @(if ('${{ steps.container_scope.outputs.needed }}' -eq 'true') { '-ContainerSmoke' })
           pwsh scripts/test-template-matrix.ps1 -SkipPack -Tier $env:MATRIX_TIER -Shard ${{ matrix.shard }} @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵失败' }
       - name: 保留完整场景结果
@@ -214,7 +215,7 @@ jobs:
           CONTAINER_NEEDED: ${{ needs.template-shards.outputs.container_needed }}
         run: |
           if ($env:CONTAINER_NEEDED -notin @('true', 'false')) { throw '缺少容器范围判定结果' }
-          $containerArgs = if ($env:CONTAINER_NEEDED -eq 'true') { @('-ContainerSmoke') } else { @() }
+          $containerArgs = @(if ($env:CONTAINER_NEEDED -eq 'true') { '-ContainerSmoke' })
           pwsh scripts/check-template-matrix-results.ps1 -ResultsPath .tmp/matrix-receipts -Tier $env:MATRIX_TIER @containerArgs
           if ($LASTEXITCODE -ne 0) { throw '模板矩阵证明不完整' }
 
